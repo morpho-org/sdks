@@ -1,4 +1,4 @@
-import { mulDivDown, WAD } from "@morpho-org/morpho-ts";
+import { MathLib } from "@morpho-org/morpho-ts";
 import { type Address, encodeAbiParameters, type Hex, keccak256 } from "viem";
 import {
   ALLOWED_LLTVS,
@@ -120,9 +120,14 @@ export namespace MarketUtils {
     const normalizedLltv = BigInt(lltv);
     const normalizedCursor = BigInt(cursor);
     const denominator =
-      WAD - mulDivDown(normalizedCursor, WAD - normalizedLltv, WAD);
+      MathLib.WAD -
+      MathLib.mulDivDown(
+        normalizedCursor,
+        MathLib.WAD - normalizedLltv,
+        MathLib.WAD,
+      );
 
-    return mulDivDown(WAD, WAD, denominator);
+    return MathLib.mulDivDown(MathLib.WAD, MathLib.WAD, denominator);
   }
 
   /**

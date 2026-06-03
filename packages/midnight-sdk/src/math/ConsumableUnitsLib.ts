@@ -1,4 +1,4 @@
-import { zeroFloorSub } from "@morpho-org/morpho-ts";
+import { MathLib } from "@morpho-org/morpho-ts";
 
 import { type IOffer, normalizeOffer, type Offer } from "../offers/index.js";
 import type { BigIntish } from "../types.js";
@@ -42,9 +42,10 @@ export namespace ConsumableUnitsLib {
     const offer = normalizeOffer(params.offer);
     const consumed = BigInt(params.consumed);
 
-    if (offer.maxUnits > 0n) return zeroFloorSub(offer.maxUnits, consumed);
+    if (offer.maxUnits > 0n)
+      return MathLib.zeroFloorSub(offer.maxUnits, consumed);
 
-    const maxAssets = zeroFloorSub(offer.maxAssets, consumed);
+    const maxAssets = MathLib.zeroFloorSub(offer.maxAssets, consumed);
     return offer.buy
       ? TakeAmountsLib.buyerAssetsToUnits({
           offer,

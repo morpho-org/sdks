@@ -1,4 +1,4 @@
-import { zeroFloorSub } from "@morpho-org/morpho-ts";
+import { MathLib } from "@morpho-org/morpho-ts";
 import type { Address, Client, Hex } from "viem";
 import { getBytecode, readContract } from "viem/actions";
 
@@ -479,7 +479,7 @@ export async function fetchConsumableUnits(
   },
 ) {
   const offer = normalizeOffer(params.offer);
-  const timeToMaturity = zeroFloorSub(
+  const timeToMaturity = MathLib.zeroFloorSub(
     offer.market.maturity,
     BigInt(params.now),
   );

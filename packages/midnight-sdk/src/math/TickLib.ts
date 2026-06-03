@@ -1,4 +1,4 @@
-import { mulDivDown, mulDivUp, WAD } from "@morpho-org/morpho-ts";
+import { MathLib } from "@morpho-org/morpho-ts";
 
 import {
   DEFAULT_TICK_SPACING,
@@ -24,9 +24,9 @@ const wExp = (x: bigint): bigint => {
 
   const q = (x + EXP_OFFSET) / LN_2;
   const r = x - q * LN_2;
-  const secondTerm = (r * r) / (2n * WAD);
-  const thirdTerm = (secondTerm * r) / (3n * WAD);
-  const expR = WAD + r + secondTerm + thirdTerm;
+  const secondTerm = (r * r) / (2n * MathLib.WAD);
+  const thirdTerm = (secondTerm * r) / (3n * MathLib.WAD);
+  const expR = MathLib.WAD + r + secondTerm + thirdTerm;
 
   return expR << q;
 };
@@ -65,7 +65,7 @@ export namespace TickLib {
     const exponent = LN_ONE_PLUS_DELTA * (MAX_TICK / 2n - normalizedTick);
     const rawPrice = divHalfDownUnchecked(
       1_000000000000000000000000000000000000n,
-      WAD + wExp(exponent),
+      MathLib.WAD + wExp(exponent),
     );
 
     return (
@@ -96,7 +96,7 @@ export namespace TickLib {
     const normalizedPrice = BigInt(price);
     const normalizedSpacing = BigInt(spacing);
 
-    if (normalizedPrice > WAD)
+    if (normalizedPrice > MathLib.WAD)
       throw new PriceGreaterThanOneError(normalizedPrice);
     if (normalizedSpacing <= 0n || MAX_TICK % normalizedSpacing !== 0n) {
       throw new InvalidTickSpacingError(0n, normalizedSpacing);
@@ -151,7 +151,11 @@ export namespace TickLib {
    */
   export function rateToPrice(rate: BigIntish) {
     const normalizedRate = BigInt(rate);
-    return mulDivDown(WAD, WAD, WAD + normalizedRate);
+    return MathLib.mulDivDown(
+      MathLib.WAD,
+      MathLib.WAD,
+      MathLib.WAD + normalizedRate,
+    );
   }
 
   /**
@@ -172,7 +176,7 @@ export namespace TickLib {
     const price = tickToPrice(tick);
     if (price === 0n) throw new DivisionByZeroError("price");
 
-    return mulDivUp(WAD, WAD, price) - WAD;
+    return MathLib.mulDivUp(MathLib.WAD, MathLib.WAD, price) - MathLib.WAD;
   }
 
   /**
