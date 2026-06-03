@@ -1,8 +1,9 @@
+import { WAD } from "@morpho-org/morpho-ts";
 import fc from "fast-check";
 import { describe, expect, test } from "vitest";
 
 import { baseOffer } from "../__test__/fixtures.js";
-import { MAX_TICK, WAD } from "../constants.js";
+import { MAX_TICK } from "../constants.js";
 import { DivisionByZeroError } from "../errors.js";
 import { ConsumableUnitsLib } from "./ConsumableUnitsLib.js";
 import { TakeAmountsLib } from "./TakeAmountsLib.js";

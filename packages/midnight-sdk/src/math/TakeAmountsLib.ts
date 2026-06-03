@@ -1,6 +1,5 @@
-import { mulDivDown, mulDivUp } from "@morpho-org/morpho-ts";
+import { mulDivDown, mulDivUp, WAD } from "@morpho-org/morpho-ts";
 
-import { WAD } from "../constants.js";
 import {
   DivisionByZeroError,
   PriceGreaterThanOneError,
@@ -127,7 +126,8 @@ export namespace TakeAmountsLib {
    * @throws DivisionByZeroError when price is zero.
    * @example
    * ```ts
-   * import { TakeAmountsLib, WAD } from "@morpho-org/midnight-sdk";
+   * import { WAD } from "@morpho-org/morpho-ts";
+   * import { TakeAmountsLib } from "@morpho-org/midnight-sdk";
    *
    * const units = TakeAmountsLib.toUnits({ assets: 100n, price: WAD, rounding: "Down" });
    * console.log(units);
