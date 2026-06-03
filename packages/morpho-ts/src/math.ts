@@ -1,4 +1,3 @@
-import { WAD as SHARED_WAD } from "./constants.js";
 import type { BigIntish } from "./types.js";
 
 /**
@@ -25,7 +24,7 @@ export type RoundingDirection = "Up" | "Down";
  */
 export namespace MathLib {
   /** WAD fixed-point scale, equal to 1e18. */
-  export const WAD = SHARED_WAD;
+  export const WAD = 1_000000000000000000n;
   /** RAY fixed-point scale, equal to 1e27. */
   export const RAY = 1_000000000000000000000000000n;
 
