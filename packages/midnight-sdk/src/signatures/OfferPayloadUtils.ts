@@ -15,12 +15,7 @@ import {
 } from "../errors.js";
 import { deepFreeze } from "../internal.js";
 import { MarketUtils } from "../market/index.js";
-import {
-  type IOffer,
-  normalizeOffer,
-  type Offer,
-  type OfferStruct,
-} from "../offers/index.js";
+import { type IOffer, Offer, type OfferStruct } from "../offers/index.js";
 import type { BigIntish, MidnightCall } from "../types.js";
 
 const offerTreeTypeHashes = [
@@ -111,13 +106,13 @@ const heightOf = (length: number) => {
   return height;
 };
 
-const normalizeOffers = (offers: readonly (IOffer | Offer)[]) => {
+const toOfferStructs = (offers: readonly (IOffer | Offer)[]) => {
   if (offers.length === 0) {
     throw new InvalidOfferPayloadError("Offer payload must not be empty.");
   }
 
   heightOf(offers.length);
-  return offers.map((offer) => normalizeOffer(offer).toStruct());
+  return offers.map((offer) => Offer.from(offer).toStruct());
 };
 
 const buildTreeValue = (offers: readonly OfferStruct[]): unknown => {
@@ -198,7 +193,7 @@ export interface EcrecoverSignature {
  * ```
  */
 export interface OfferPayload {
-  /** Normalized offers in leaf order. */
+  /** Offer structs in leaf order. */
   readonly offers: readonly OfferStruct[];
   /** Leaf hashes. */
   readonly leaves: readonly Hex[];
@@ -304,25 +299,25 @@ export namespace OfferPayloadUtils {
    * ```
    */
   export function hashOffer(offer: IOffer | Offer) {
-    const normalized = normalizeOffer(offer).toStruct();
+    const offerStruct = Offer.from(offer).toStruct();
 
     return keccak256(
       encodeAbiParameters(offerHashParams, [
         OFFER_TYPEHASH,
-        MarketUtils.hashMarket(normalized.market),
-        normalized.buy,
-        normalized.maker,
-        normalized.start,
-        normalized.expiry,
-        normalized.tick,
-        normalized.group,
-        normalized.callback,
-        keccak256(normalized.callbackData),
-        normalized.receiverIfMakerIsSeller,
-        normalized.ratifier,
-        normalized.reduceOnly,
-        normalized.maxUnits,
-        normalized.maxAssets,
+        MarketUtils.hashMarket(offerStruct.market),
+        offerStruct.buy,
+        offerStruct.maker,
+        offerStruct.start,
+        offerStruct.expiry,
+        offerStruct.tick,
+        offerStruct.group,
+        offerStruct.callback,
+        keccak256(offerStruct.callbackData),
+        offerStruct.receiverIfMakerIsSeller,
+        offerStruct.ratifier,
+        offerStruct.reduceOnly,
+        offerStruct.maxUnits,
+        offerStruct.maxAssets,
       ]),
     );
   }
@@ -349,7 +344,7 @@ export namespace OfferPayloadUtils {
   }
 
   /**
-   * Builds a normalized offer payload and Merkle root.
+   * Builds an offer payload and Merkle root.
    *
    * @param offers - Offers in leaf order.
    * @returns Offer payload descriptor.
@@ -365,9 +360,9 @@ export namespace OfferPayloadUtils {
   export function buildOfferPayload(
     offers: readonly (IOffer | Offer)[],
   ): OfferPayload {
-    const normalizedOffers = normalizeOffers(offers);
-    const height = heightOf(normalizedOffers.length);
-    let level = normalizedOffers.map((offer) => hashOffer(offer));
+    const offerStructs = toOfferStructs(offers);
+    const height = heightOf(offerStructs.length);
+    let level = offerStructs.map((offer) => hashOffer(offer));
     const leaves = [...level];
 
     while (level.length > 1) {
@@ -379,7 +374,7 @@ export namespace OfferPayloadUtils {
     }
 
     return deepFreeze({
-      offers: normalizedOffers,
+      offers: offerStructs,
       leaves,
       root: level[0]!,
       height,

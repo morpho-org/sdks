@@ -45,7 +45,7 @@ export interface IMarketState {
 }
 
 /**
- * Normalized Midnight market state.
+ * Immutable Midnight market state.
  *
  * @example
  * ```ts

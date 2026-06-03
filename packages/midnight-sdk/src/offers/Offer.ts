@@ -1,12 +1,7 @@
 import type { Address, Hex } from "viem";
 
 import { deepFreeze } from "../internal.js";
-import {
-  type IMarket,
-  type Market,
-  type MarketStruct,
-  normalizeMarket,
-} from "../market/index.js";
+import { type IMarket, Market, type MarketStruct } from "../market/index.js";
 import type { BigIntish } from "../types.js";
 
 /**
@@ -149,7 +144,7 @@ export class Offer {
   public readonly maxAssets: bigint;
 
   public constructor(offer: IOffer) {
-    this.market = normalizeMarket(offer.market);
+    this.market = Market.from(offer.market);
     this.buy = offer.buy;
     this.maker = offer.maker as Address;
     this.start = BigInt(offer.start);
@@ -189,6 +184,45 @@ export class Offer {
     getRandomValues(bytes);
 
     return `0x${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+  }
+
+  /**
+   * Returns an immutable offer instance from plain or class input.
+   *
+   * @param offer - Plain or class offer.
+   * @returns Offer instance.
+   * @example
+   * ```ts
+   * import { Offer } from "@morpho-org/midnight-sdk";
+   *
+   * const offer = Offer.from({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000000001",
+   *     collateralParams: [],
+   *     maturity: 1n,
+   *     rcfThreshold: 0n,
+   *     enterGate: "0x0000000000000000000000000000000000000000",
+   *     liquidatorGate: "0x0000000000000000000000000000000000000000",
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000000002",
+   *   start: 0n,
+   *   expiry: 2n,
+   *   tick: 100n,
+   *   group: "0x0000000000000000000000000000000000000000000000000000000000000000",
+   *   callback: "0x0000000000000000000000000000000000000000",
+   *   callbackData: "0x",
+   *   receiverIfMakerIsSeller: "0x0000000000000000000000000000000000000000",
+   *   ratifier: "0x0000000000000000000000000000000000000003",
+   *   reduceOnly: false,
+   *   maxUnits: 0n,
+   *   maxAssets: 100n,
+   * });
+   * console.log(offer.buy);
+   * ```
+   */
+  public static from(offer: IOffer | Offer) {
+    return offer instanceof Offer ? offer : new Offer(offer);
   }
 
   /**
@@ -329,43 +363,4 @@ export interface BuildOfferParams {
   readonly ratifier: Address | string;
   /** Whether the offer can only reduce maker exposure. */
   readonly reduceOnly?: boolean;
-}
-
-/**
- * Normalizes an offer into an immutable class.
- *
- * @param offer - Plain or class offer.
- * @returns Normalized offer.
- * @example
- * ```ts
- * import { normalizeOffer } from "@morpho-org/midnight-sdk";
- *
- * const offer = normalizeOffer({
- *   market: {
- *     loanToken: "0x0000000000000000000000000000000000000001",
- *     collateralParams: [],
- *     maturity: 1n,
- *     rcfThreshold: 0n,
- *     enterGate: "0x0000000000000000000000000000000000000000",
- *     liquidatorGate: "0x0000000000000000000000000000000000000000",
- *   },
- *   buy: true,
- *   maker: "0x0000000000000000000000000000000000000002",
- *   start: 0n,
- *   expiry: 2n,
- *   tick: 100n,
- *   group: "0x0000000000000000000000000000000000000000000000000000000000000000",
- *   callback: "0x0000000000000000000000000000000000000000",
- *   callbackData: "0x",
- *   receiverIfMakerIsSeller: "0x0000000000000000000000000000000000000000",
- *   ratifier: "0x0000000000000000000000000000000000000003",
- *   reduceOnly: false,
- *   maxUnits: 0n,
- *   maxAssets: 100n,
- * });
- * console.log(offer.buy);
- * ```
- */
-export function normalizeOffer(offer: IOffer | Offer) {
-  return offer instanceof Offer ? offer : new Offer(offer);
 }

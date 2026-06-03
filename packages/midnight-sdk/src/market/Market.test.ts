@@ -5,7 +5,19 @@ import {
   baseMarket,
   baseMarketInput,
 } from "../__test__/fixtures.js";
+import { CollateralParams } from "./CollateralParams.js";
+import { Market } from "./Market.js";
 import { MarketUtils } from "./MarketUtils.js";
+
+describe("CollateralParams", () => {
+  test("behavior: from", () => {
+    const [input] = baseMarketInput().collateralParams;
+    const params = new CollateralParams(input!);
+
+    expect(CollateralParams.from(params)).toBe(params);
+    expect(CollateralParams.from(input!)).toBeInstanceOf(CollateralParams);
+  });
+});
 
 describe("Market", () => {
   test("default", () => {
@@ -15,6 +27,15 @@ describe("Market", () => {
       addresses.collateralToken,
     );
     expect(Object.isFrozen(market)).toBe(true);
+  });
+
+  test("behavior: from", () => {
+    const market = baseMarket();
+    const fromPlain = Market.from(baseMarketInput());
+
+    expect(Market.from(market)).toBe(market);
+    expect(fromPlain).toBeInstanceOf(Market);
+    expect(fromPlain.collateralParams[0]).toBeInstanceOf(CollateralParams);
   });
 
   test("error: invalid bigint input", () => {

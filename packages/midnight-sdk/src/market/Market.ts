@@ -8,10 +8,9 @@ import {
 import { deepFreeze } from "../internal.js";
 import type { BigIntish } from "../types.js";
 import {
-  type CollateralParams,
+  CollateralParams,
   type CollateralParamsStruct,
   type ICollateralParams,
-  normalizeCollateralParams,
 } from "./CollateralParams.js";
 
 const SSTORE2_PREFIX = "0x600b380380600b5f395ff3" as const;
@@ -88,13 +87,37 @@ export class Market {
   public constructor(market: IMarket) {
     this.loanToken = market.loanToken as Address;
     this.collateralParams = deepFreeze(
-      market.collateralParams.map(normalizeCollateralParams),
+      market.collateralParams.map(CollateralParams.from),
     );
     this.maturity = BigInt(market.maturity);
     this.rcfThreshold = BigInt(market.rcfThreshold);
     this.enterGate = market.enterGate as Address;
     this.liquidatorGate = market.liquidatorGate as Address;
     deepFreeze(this);
+  }
+
+  /**
+   * Returns an immutable market instance from plain or class input.
+   *
+   * @param market - Plain or class market.
+   * @returns Market instance.
+   * @example
+   * ```ts
+   * import { Market } from "@morpho-org/midnight-sdk";
+   *
+   * const market = Market.from({
+   *   loanToken: "0x0000000000000000000000000000000000000001",
+   *   collateralParams: [],
+   *   maturity: 1n,
+   *   rcfThreshold: 0n,
+   *   enterGate: "0x0000000000000000000000000000000000000000",
+   *   liquidatorGate: "0x0000000000000000000000000000000000000000",
+   * });
+   * console.log(market.loanToken);
+   * ```
+   */
+  public static from(market: IMarket | Market) {
+    return market instanceof Market ? market : new Market(market);
   }
 
   /**
@@ -187,30 +210,6 @@ export interface MarketStruct {
   readonly liquidatorGate: Address;
 }
 
-/**
- * Normalizes a market into an immutable class.
- *
- * @param market - Plain or class market.
- * @returns Normalized market.
- * @example
- * ```ts
- * import { normalizeMarket } from "@morpho-org/midnight-sdk";
- *
- * const market = normalizeMarket({
- *   loanToken: "0x0000000000000000000000000000000000000001",
- *   collateralParams: [],
- *   maturity: 1n,
- *   rcfThreshold: 0n,
- *   enterGate: "0x0000000000000000000000000000000000000000",
- *   liquidatorGate: "0x0000000000000000000000000000000000000000",
- * });
- * console.log(market.loanToken);
- * ```
- */
-export function normalizeMarket(market: IMarket | Market) {
-  return market instanceof Market ? market : new Market(market);
-}
-
 const marketAbiParameter = {
   type: "tuple",
   components: [
@@ -265,7 +264,7 @@ export function computeMarketId(params: {
 }) {
   const encodedMarket = encodeAbiParameters(
     [marketAbiParameter],
-    [normalizeMarket(params.market).toStruct()],
+    [Market.from(params.market).toStruct()],
   );
   const creationHash = keccak256(`${SSTORE2_PREFIX}${encodedMarket.slice(2)}`);
 

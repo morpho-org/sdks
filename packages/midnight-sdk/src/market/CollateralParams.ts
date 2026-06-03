@@ -67,6 +67,30 @@ export class CollateralParams {
   }
 
   /**
+   * Returns an immutable collateral params instance from plain or class input.
+   *
+   * @param params - Plain or class collateral params.
+   * @returns Collateral params instance.
+   * @example
+   * ```ts
+   * import { CollateralParams } from "@morpho-org/midnight-sdk";
+   *
+   * const params = CollateralParams.from({
+   *   token: "0x0000000000000000000000000000000000000001",
+   *   lltv: 1n,
+   *   maxLif: 1n,
+   *   oracle: "0x0000000000000000000000000000000000000002",
+   * });
+   * console.log(params.token);
+   * ```
+   */
+  public static from(params: ICollateralParams | CollateralParams) {
+    return params instanceof CollateralParams
+      ? params
+      : new CollateralParams(params);
+  }
+
+  /**
    * Converts the class into the tuple object expected by viem ABI encoders.
    *
    * @returns ABI-compatible collateral params.
@@ -117,30 +141,4 @@ export interface CollateralParamsStruct {
   readonly maxLif: bigint;
   /** Oracle address. */
   readonly oracle: Address;
-}
-
-/**
- * Normalizes collateral params into an immutable class.
- *
- * @param params - Plain or class collateral params.
- * @returns Normalized collateral params.
- * @example
- * ```ts
- * import { normalizeCollateralParams } from "@morpho-org/midnight-sdk";
- *
- * const params = normalizeCollateralParams({
- *   token: "0x0000000000000000000000000000000000000001",
- *   lltv: 1n,
- *   maxLif: 1n,
- *   oracle: "0x0000000000000000000000000000000000000002",
- * });
- * console.log(params.token);
- * ```
- */
-export function normalizeCollateralParams(
-  params: ICollateralParams | CollateralParams,
-) {
-  return params instanceof CollateralParams
-    ? params
-    : new CollateralParams(params);
 }

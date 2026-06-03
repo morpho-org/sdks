@@ -2,12 +2,7 @@ import type { Hex } from "viem";
 
 import { deepFreeze } from "../internal.js";
 import type { BigIntish } from "../types.js";
-import {
-  type IOffer,
-  normalizeOffer,
-  type Offer,
-  type OfferStruct,
-} from "./Offer.js";
+import { type IOffer, Offer, type OfferStruct } from "./Offer.js";
 
 /**
  * Plain input accepted by {@link Take}.
@@ -52,9 +47,26 @@ export class Take {
 
   public constructor(take: ITake) {
     this.units = BigInt(take.units);
-    this.offer = normalizeOffer(take.offer);
+    this.offer = Offer.from(take.offer);
     this.ratifierData = take.ratifierData as Hex;
     deepFreeze(this);
+  }
+
+  /**
+   * Returns an immutable take instance from plain or class input.
+   *
+   * @param take - Plain or class take.
+   * @returns Take instance.
+   * @example
+   * ```ts
+   * import { Take } from "@morpho-org/midnight-sdk";
+   *
+   * const take = Take.from({ units: 1n, offer: {} as never, ratifierData: "0x" });
+   * console.log(take.units);
+   * ```
+   */
+  public static from(take: ITake | Take) {
+    return take instanceof Take ? take : new Take(take);
   }
 
   /**
@@ -96,21 +108,4 @@ export interface TakeStruct {
   readonly offer: OfferStruct;
   /** Ratifier data payload. */
   readonly ratifierData: Hex;
-}
-
-/**
- * Normalizes a take into an immutable class.
- *
- * @param take - Plain or class take.
- * @returns Normalized take.
- * @example
- * ```ts
- * import { normalizeTake } from "@morpho-org/midnight-sdk";
- *
- * const take = normalizeTake({ units: 1n, offer: {} as never, ratifierData: "0x" });
- * console.log(take.units);
- * ```
- */
-export function normalizeTake(take: ITake | Take) {
-  return take instanceof Take ? take : new Take(take);
 }

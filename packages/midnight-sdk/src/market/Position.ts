@@ -37,7 +37,7 @@ export interface IPosition {
 }
 
 /**
- * Normalized Midnight user position.
+ * Immutable Midnight user position.
  *
  * @example
  * ```ts

@@ -82,7 +82,7 @@ export namespace TickLib {
    * Asserts that a tick is non-negative and within Midnight's deployed range.
    *
    * @param tick - Tick to validate.
-   * @returns The normalized tick.
+   * @returns Tick as a bigint.
    * @throws NegativeValueError when `tick` is negative.
    * @throws TickOutOfRangeError when `tick` exceeds `MAX_TICK`.
    * @example
@@ -94,12 +94,12 @@ export namespace TickLib {
    * ```
    */
   export const assertTickInRange = (tick: BigIntish) => {
-    const normalizedTick = BigInt(tick);
-    assertNonNegative("tick", normalizedTick);
-    if (normalizedTick > MAX_TICK)
-      throw new TickOutOfRangeError(normalizedTick, MAX_TICK);
+    const tickValue = BigInt(tick);
+    assertNonNegative("tick", tickValue);
+    if (tickValue > MAX_TICK)
+      throw new TickOutOfRangeError(tickValue, MAX_TICK);
 
-    return normalizedTick;
+    return tickValue;
   };
 
   /**
@@ -143,9 +143,9 @@ export namespace TickLib {
    * ```
    */
   export function tickToPrice(tick: BigIntish) {
-    const normalizedTick = assertTickInRange(tick);
+    const tickValue = assertTickInRange(tick);
 
-    const exponent = LN_ONE_PLUS_DELTA * (MAX_TICK / 2n - normalizedTick);
+    const exponent = LN_ONE_PLUS_DELTA * (MAX_TICK / 2n - tickValue);
     const rawPrice = divHalfDownUnchecked(
       1_000000000000000000000000000000000000n,
       MathLib.WAD + wExp(exponent),
@@ -177,27 +177,25 @@ export namespace TickLib {
     price: BigIntish,
     spacing: BigIntish = DEFAULT_TICK_SPACING,
   ) {
-    const normalizedPrice = BigInt(price);
-    const normalizedSpacing = BigInt(spacing);
+    const priceValue = BigInt(price);
+    const spacingValue = BigInt(spacing);
 
-    assertNonNegative("price", normalizedPrice);
-    if (normalizedPrice > MathLib.WAD)
-      throw new PriceGreaterThanOneError(normalizedPrice);
-    if (normalizedSpacing <= 0n || MAX_TICK % normalizedSpacing !== 0n) {
-      throw new InvalidTickSpacingError(normalizedSpacing);
+    assertNonNegative("price", priceValue);
+    if (priceValue > MathLib.WAD)
+      throw new PriceGreaterThanOneError(priceValue);
+    if (spacingValue <= 0n || MAX_TICK % spacingValue !== 0n) {
+      throw new InvalidTickSpacingError(spacingValue);
     }
 
     let low = 0n;
     let high = MAX_TICK;
     while (low !== high) {
       const mid = (low + high) / 2n;
-      if (tickToPrice(mid) < normalizedPrice) low = mid + 1n;
+      if (tickToPrice(mid) < priceValue) low = mid + 1n;
       else high = mid;
     }
 
-    return (
-      ((low + normalizedSpacing - 1n) / normalizedSpacing) * normalizedSpacing
-    );
+    return ((low + spacingValue - 1n) / spacingValue) * spacingValue;
   }
 
   /**
@@ -243,13 +241,13 @@ export namespace TickLib {
    * ```
    */
   export function rateToPrice(rate: BigIntish) {
-    const normalizedRate = BigInt(rate);
-    assertNonNegative("rate", normalizedRate);
+    const rateValue = BigInt(rate);
+    assertNonNegative("rate", rateValue);
 
     return MathLib.mulDiv(
       MathLib.WAD,
       MathLib.WAD,
-      MathLib.WAD + normalizedRate,
+      MathLib.WAD + rateValue,
       "Down",
     );
   }
@@ -286,7 +284,7 @@ export namespace TickLib {
    *
    * @param tick - Tick to validate.
    * @param spacing - Market tick spacing.
-   * @returns The normalized tick.
+   * @returns Tick as a bigint.
    * @throws NegativeValueError when `tick` is negative.
    * @throws TickOutOfRangeError when `tick` exceeds `MAX_TICK`.
    * @throws InvalidTickSpacingError when spacing is invalid or the tick is not aligned.
@@ -301,15 +299,15 @@ export namespace TickLib {
     tick: BigIntish,
     spacing: BigIntish = DEFAULT_TICK_SPACING,
   ) {
-    const normalizedTick = assertTickInRange(tick);
-    const normalizedSpacing = BigInt(spacing);
-    if (normalizedSpacing <= 0n || MAX_TICK % normalizedSpacing !== 0n) {
-      throw new InvalidTickSpacingError(normalizedSpacing);
+    const tickValue = assertTickInRange(tick);
+    const spacingValue = BigInt(spacing);
+    if (spacingValue <= 0n || MAX_TICK % spacingValue !== 0n) {
+      throw new InvalidTickSpacingError(spacingValue);
     }
-    if (normalizedTick % normalizedSpacing !== 0n) {
-      throw new InvalidTickSpacingError(normalizedTick, normalizedSpacing);
+    if (tickValue % spacingValue !== 0n) {
+      throw new InvalidTickSpacingError(tickValue, spacingValue);
     }
 
-    return normalizedTick;
+    return tickValue;
   }
 }

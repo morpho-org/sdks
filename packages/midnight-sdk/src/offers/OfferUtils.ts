@@ -9,12 +9,7 @@ import {
 import { deepFreeze } from "../internal.js";
 import { MarketUtils } from "../market/index.js";
 import type { BigIntish } from "../types.js";
-import {
-  type BuildOfferParams,
-  type IOffer,
-  normalizeOffer,
-  Offer,
-} from "./Offer.js";
+import { type BuildOfferParams, type IOffer, Offer } from "./Offer.js";
 import { Take, type TakeStruct } from "./Take.js";
 
 /**
@@ -78,10 +73,10 @@ export namespace OfferUtils {
   };
 
   /**
-   * Builds a normalized offer from make-offer parameters.
+   * Builds an offer from make-offer parameters.
    *
    * @param params - Offer parameters.
-   * @returns Normalized offer.
+   * @returns Offer instance.
    * @throws MissingOfferGroupError when neither `group` nor `getRandomValues` is supplied.
    * @example
    * ```ts
@@ -134,7 +129,7 @@ export namespace OfferUtils {
     if (params.entries.length === 0) throw new NoMatchingOffersError();
 
     const takes = params.entries.map((entry) => {
-      const offer = normalizeOffer(entry.offer);
+      const offer = Offer.from(entry.offer);
       if (params.expectedOfferSide != null) {
         const actual = offer.buy ? "buy" : "sell";
         if (actual !== params.expectedOfferSide) {
@@ -176,6 +171,6 @@ export namespace OfferUtils {
    * ```
    */
   export function getOfferExpiry(offer: IOffer | Offer) {
-    return normalizeOffer(offer).expiry;
+    return Offer.from(offer).expiry;
   }
 }

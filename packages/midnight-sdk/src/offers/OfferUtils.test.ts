@@ -3,6 +3,7 @@ import {
   addresses,
   baseMarketInput,
   baseOffer,
+  baseOfferInput,
   group,
 } from "../__test__/fixtures.js";
 import {
@@ -11,7 +12,37 @@ import {
   NoMatchingOffersError,
   UnexpectedOfferSideError,
 } from "../errors.js";
+import { Offer } from "./Offer.js";
 import { OfferUtils } from "./OfferUtils.js";
+import { Take } from "./Take.js";
+
+describe("Offer", () => {
+  test("behavior: from", () => {
+    const offer = baseOffer();
+
+    expect(Offer.from(offer)).toBe(offer);
+    expect(Offer.from(baseOfferInput())).toBeInstanceOf(Offer);
+  });
+});
+
+describe("Take", () => {
+  test("behavior: from", () => {
+    const take = new Take({
+      units: 1n,
+      offer: baseOffer(),
+      ratifierData: "0x",
+    });
+    const fromPlain = Take.from({
+      units: "2",
+      offer: baseOfferInput(),
+      ratifierData: "0x",
+    });
+
+    expect(Take.from(take)).toBe(take);
+    expect(fromPlain).toBeInstanceOf(Take);
+    expect(fromPlain.offer).toBeInstanceOf(Offer);
+  });
+});
 
 describe("OfferUtils.buildOffer", () => {
   test("default", () => {
