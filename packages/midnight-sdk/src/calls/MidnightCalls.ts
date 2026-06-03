@@ -2,7 +2,7 @@ import { type Address, encodeFunctionData, type Hex, zeroAddress } from "viem";
 
 import { midnightAbi } from "../abis.js";
 import { deepFreeze } from "../internal.js";
-import { type IMarket, type Market, normalizeMarket } from "../market/index.js";
+import { type IMarket, Market } from "../market/index.js";
 import type { BigIntish, MidnightCall } from "../types.js";
 
 const call = (to: Address | string, data: Hex): MidnightCall =>
@@ -139,7 +139,7 @@ export namespace MidnightCalls {
         abi: midnightAbi,
         functionName: "supplyCollateral",
         args: [
-          normalizeMarket(params.market).toStruct(),
+          Market.from(params.market).toStruct(),
           BigInt(params.collateralIndex),
           BigInt(params.assets),
           params.onBehalf as Address,
@@ -170,7 +170,7 @@ export namespace MidnightCalls {
         abi: midnightAbi,
         functionName: "withdrawCollateral",
         args: [
-          normalizeMarket(params.market).toStruct(),
+          Market.from(params.market).toStruct(),
           BigInt(params.collateralIndex),
           BigInt(params.assets),
           params.onBehalf as Address,
@@ -200,7 +200,7 @@ export namespace MidnightCalls {
         abi: midnightAbi,
         functionName: "repay",
         args: [
-          normalizeMarket(params.market).toStruct(),
+          Market.from(params.market).toStruct(),
           BigInt(params.units),
           params.onBehalf as Address,
           (params.callback ?? zeroAddress) as Address,

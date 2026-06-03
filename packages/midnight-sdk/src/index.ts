@@ -95,8 +95,6 @@ export {
   Market,
   MarketState,
   MarketUtils,
-  normalizeCollateralParams,
-  normalizeMarket,
   Position,
 } from "./market/index.js";
 export {
@@ -114,8 +112,6 @@ export type {
   TakeStruct,
 } from "./offers/index.js";
 export {
-  normalizeOffer,
-  normalizeTake,
   Offer,
   OfferUtils,
   Take,
