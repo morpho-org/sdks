@@ -1,3 +1,4 @@
+import type { RoundingDirection as SharedRoundingDirection } from "@morpho-org/morpho-ts";
 import type { Address, Hex } from "viem";
 
 /**
@@ -22,7 +23,7 @@ export type BigIntish = bigint | number | string;
  * const rounding: RoundingDirection = "Down";
  * ```
  */
-export type RoundingDirection = "Up" | "Down";
+export type RoundingDirection = SharedRoundingDirection;
 
 /**
  * Neutral transaction-call descriptor returned by Midnight encoders.
