@@ -3,11 +3,11 @@ import {
   type DottedKeys,
   deepFreeze,
   entries,
+  UnsupportedChainIdError,
 } from "@morpho-org/morpho-ts";
 import isPlainObject from "lodash.isplainobject";
 import mergeWith from "lodash.mergewith";
 import { ChainId } from "./chain.js";
-import { UnsupportedChainIdError } from "./errors.js";
 import type { Address } from "./types.js";
 
 /** Address used to replicate an erc20-behaviour for native token.
