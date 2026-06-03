@@ -26,7 +26,7 @@ import {
  * - `calls[i]` → per-tx raw backend output (`logs`, `status`, `returnData`, `gasUsed`).
  *   Aligned 1:1 with `simulationTxs[i]`.
  * - `assetChanges` → sender's net per-asset balance change over the whole bundle,
- *   normalized identically across backends.
+ *   normalized to the same shape across backends.
  * - `transfers[k].txIdx` → index into `simulationTxs` of the tx that emitted the
  *   underlying log; consumers map back via `simulationTxs[transfer.txIdx]`.
  *

@@ -79,8 +79,8 @@ export type SimulationAuthorization =
 
 /**
  * Net balance change of the sender for a single asset over the whole bundle.
- * Backends normalize their native payloads to this identical shape. Native ETH
- * uses viem's `ethAddress` sentinel as `token`.
+ * Backends normalize their native payloads to this same shape. Native ETH uses
+ * viem's `ethAddress` sentinel as `token`.
  */
 export interface AssetChange {
   readonly token: Address;
@@ -116,7 +116,7 @@ export interface Transfer {
  * - `calls[i]` corresponds 1:1 with `simulationTxs[i]` — read raw logs,
  *   status, returnData/gasUsed.
  * - `assetChanges` is the sender's net per-asset balance change over the whole
- *   bundle, normalized identically across backends.
+ *   bundle, normalized to the same shape across backends.
  * - `transfers[k].txIdx` indexes into `simulationTxs` to attribute each
  *   transfer to its emitting transaction.
  */
