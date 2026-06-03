@@ -1,10 +1,9 @@
-import { mulDivDown, mulDivUp } from "@morpho-org/morpho-ts";
+import { mulDivDown, mulDivUp, WAD } from "@morpho-org/morpho-ts";
 
 import {
   DEFAULT_TICK_SPACING,
   MAX_TICK,
   PRICE_ROUNDING_STEP,
-  WAD,
 } from "../constants.js";
 import {
   DivisionByZeroError,

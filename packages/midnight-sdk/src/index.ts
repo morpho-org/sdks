@@ -43,9 +43,7 @@ export {
   MAX_SETTLEMENT_FEES,
   MAX_TICK,
   OFFER_TYPEHASH,
-  ORACLE_PRICE_SCALE,
   PRICE_ROUNDING_STEP,
-  WAD,
 } from "./constants.js";
 export {
   DivisionByZeroError,

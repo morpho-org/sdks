@@ -1,4 +1,4 @@
-import { mulDivDown } from "@morpho-org/morpho-ts";
+import { mulDivDown, WAD } from "@morpho-org/morpho-ts";
 import { type Address, encodeAbiParameters, type Hex, keccak256 } from "viem";
 import {
   ALLOWED_LLTVS,
@@ -6,7 +6,6 @@ import {
   LIQUIDATION_CURSOR_LOW,
   MARKET_TYPEHASH,
   MAX_SETTLEMENT_FEES,
-  WAD,
 } from "../constants.js";
 import { InvalidSettlementFeeIndexError } from "../errors.js";
 import type { BigIntish } from "../types.js";
