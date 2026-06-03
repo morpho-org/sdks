@@ -1,4 +1,4 @@
-import { deepFreeze, toBigInt } from "../internal.js";
+import { deepFreeze } from "../internal.js";
 import type { BigIntish } from "../types.js";
 
 /**
@@ -78,19 +78,14 @@ export class Position {
   public readonly collateral: readonly bigint[];
 
   public constructor(position: IPosition) {
-    this.credit = toBigInt(position.credit, "credit");
-    this.pendingFee = toBigInt(position.pendingFee, "pendingFee");
-    this.lastLossFactor = toBigInt(position.lastLossFactor, "lastLossFactor");
-    this.lastAccrual = toBigInt(position.lastAccrual, "lastAccrual");
-    this.debt = toBigInt(position.debt, "debt");
-    this.collateralBitmap = toBigInt(
-      position.collateralBitmap,
-      "collateralBitmap",
-    );
+    this.credit = BigInt(position.credit);
+    this.pendingFee = BigInt(position.pendingFee);
+    this.lastLossFactor = BigInt(position.lastLossFactor);
+    this.lastAccrual = BigInt(position.lastAccrual);
+    this.debt = BigInt(position.debt);
+    this.collateralBitmap = BigInt(position.collateralBitmap);
     this.collateral = deepFreeze(
-      position.collateral.map((assets, index) =>
-        toBigInt(assets, `collateral[${index}]`),
-      ),
+      position.collateral.map((assets) => BigInt(assets)),
     );
     deepFreeze(this);
   }

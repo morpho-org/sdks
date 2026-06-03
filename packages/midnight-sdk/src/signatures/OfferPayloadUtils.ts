@@ -13,13 +13,7 @@ import {
   InvalidOfferPayloadError,
   InvalidOfferTreeHeightError,
 } from "../errors.js";
-import {
-  deepFreeze,
-  normalizeAddress,
-  normalizeBytes32,
-  normalizeHex,
-  toBigInt,
-} from "../internal.js";
+import { deepFreeze } from "../internal.js";
 import { MarketUtils } from "../market/index.js";
 import {
   type IOffer,
@@ -351,12 +345,7 @@ export namespace OfferPayloadUtils {
    * ```
    */
   export function hashNode(left: Hex, right: Hex) {
-    return keccak256(
-      concat([
-        normalizeBytes32(left, "left"),
-        normalizeBytes32(right, "right"),
-      ]),
-    );
+    return keccak256(concat([left as Hex, right as Hex]));
   }
 
   /**
@@ -433,7 +422,7 @@ export namespace OfferPayloadUtils {
     readonly leafIndex: BigIntish;
   }): OfferProof {
     const payload = buildOfferPayload(params.offers);
-    const leafIndex = toBigInt(params.leafIndex, "leafIndex");
+    const leafIndex = BigInt(params.leafIndex);
     if (leafIndex < 0n || leafIndex >= BigInt(payload.offers.length)) {
       throw new InvalidOfferPayloadError(
         `Leaf index "${leafIndex}" is outside the offer tree.`,
@@ -484,11 +473,8 @@ export namespace OfferPayloadUtils {
 
     return deepFreeze({
       domain: {
-        chainId: toBigInt(params.chainId, "chainId"),
-        verifyingContract: normalizeAddress(
-          params.verifyingContract,
-          "verifyingContract",
-        ),
+        chainId: BigInt(params.chainId),
+        verifyingContract: params.verifyingContract as Address,
       },
       types: {
         ...typedDataTypes,
@@ -528,14 +514,14 @@ export namespace OfferPayloadUtils {
     const domainSeparator = keccak256(
       encodeAbiParameters(domainSeparatorAbi, [
         EIP712_DOMAIN_TYPEHASH,
-        toBigInt(params.chainId, "chainId"),
-        normalizeAddress(params.verifyingContract, "verifyingContract"),
+        BigInt(params.chainId),
+        params.verifyingContract as Address,
       ]),
     );
     const structHash = keccak256(
       encodeAbiParameters(treeStructHashAbi, [
         offerTreeTypeHash(params.height),
-        normalizeBytes32(params.root, "root"),
+        params.root as Hex,
       ]),
     );
 
@@ -608,12 +594,12 @@ export namespace OfferPayloadUtils {
     return encodeAbiParameters(signatureAbi, [
       {
         v: params.signature.v,
-        r: normalizeBytes32(params.signature.r, "signature.r"),
-        s: normalizeBytes32(params.signature.s, "signature.s"),
+        r: params.signature.r as Hex,
+        s: params.signature.s as Hex,
       },
-      normalizeBytes32(params.root, "root"),
-      toBigInt(params.leafIndex, "leafIndex"),
-      params.proof.map((node) => normalizeBytes32(node, "proof")),
+      params.root as Hex,
+      BigInt(params.leafIndex),
+      params.proof.map((node) => node as Hex),
     ]);
   }
 
@@ -640,9 +626,9 @@ export namespace OfferPayloadUtils {
     readonly proof: readonly Hex[];
   }) {
     return encodeAbiParameters(setterRatifierDataAbi, [
-      normalizeBytes32(params.root, "root"),
-      toBigInt(params.leafIndex, "leafIndex"),
-      params.proof.map((node) => normalizeBytes32(node, "proof")),
+      params.root as Hex,
+      BigInt(params.leafIndex),
+      params.proof.map((node) => node as Hex),
     ]);
   }
 
@@ -669,18 +655,14 @@ export namespace OfferPayloadUtils {
     readonly root: Hex;
     readonly newIsRootRatified?: boolean;
   }): MidnightCall {
-    const to = normalizeAddress(params.setterRatifier, "setterRatifier");
-    const root = normalizeBytes32(params.root, "root");
+    const to = params.setterRatifier as Address;
+    const root = params.root as Hex;
     return deepFreeze({
       to,
       data: encodeFunctionData({
         abi: setterRatifierAbi,
         functionName: "setIsRootRatified",
-        args: [
-          normalizeAddress(params.maker, "maker"),
-          root,
-          params.newIsRootRatified ?? true,
-        ],
+        args: [params.maker as Address, root, params.newIsRootRatified ?? true],
       }),
     });
   }
@@ -706,8 +688,8 @@ export namespace OfferPayloadUtils {
     readonly payload: Hex;
   }): MidnightCall {
     return deepFreeze({
-      to: normalizeAddress(params.midnightMempool, "midnightMempool"),
-      data: normalizeHex(params.payload, "payload"),
+      to: params.midnightMempool as Address,
+      data: params.payload as Hex,
     });
   }
 }

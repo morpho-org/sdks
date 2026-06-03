@@ -1,5 +1,5 @@
+import { mulDivDown } from "@morpho-org/morpho-ts";
 import { type Address, encodeAbiParameters, type Hex, keccak256 } from "viem";
-
 import {
   ALLOWED_LLTVS,
   COLLATERAL_PARAMS_TYPEHASH,
@@ -9,7 +9,6 @@ import {
   WAD,
 } from "../constants.js";
 import { InvalidSettlementFeeIndexError } from "../errors.js";
-import { mulDivDown, toBigInt } from "../internal.js";
 import type { BigIntish } from "../types.js";
 import {
   type IMarket,
@@ -97,7 +96,7 @@ export namespace MarketUtils {
    * ```
    */
   export function isLltvAllowed(lltv: BigIntish) {
-    const normalized = toBigInt(lltv, "lltv");
+    const normalized = BigInt(lltv);
     return ALLOWED_LLTVS.some((allowed) => allowed === normalized);
   }
 
@@ -119,8 +118,8 @@ export namespace MarketUtils {
     lltv: BigIntish,
     cursor: BigIntish = LIQUIDATION_CURSOR_LOW,
   ) {
-    const normalizedLltv = toBigInt(lltv, "lltv");
-    const normalizedCursor = toBigInt(cursor, "cursor");
+    const normalizedLltv = BigInt(lltv);
+    const normalizedCursor = BigInt(cursor);
     const denominator =
       WAD - mulDivDown(normalizedCursor, WAD - normalizedLltv, WAD);
 

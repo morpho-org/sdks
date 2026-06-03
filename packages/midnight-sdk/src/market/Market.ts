@@ -5,7 +5,7 @@ import {
   keccak256,
 } from "viem";
 
-import { deepFreeze, normalizeAddress, toBigInt } from "../internal.js";
+import { deepFreeze } from "../internal.js";
 import type { BigIntish } from "../types.js";
 import {
   type CollateralParams,
@@ -86,14 +86,14 @@ export class Market {
   public readonly liquidatorGate: Address;
 
   public constructor(market: IMarket) {
-    this.loanToken = normalizeAddress(market.loanToken);
+    this.loanToken = market.loanToken as Address;
     this.collateralParams = deepFreeze(
       market.collateralParams.map(normalizeCollateralParams),
     );
-    this.maturity = toBigInt(market.maturity, "maturity");
-    this.rcfThreshold = toBigInt(market.rcfThreshold, "rcfThreshold");
-    this.enterGate = normalizeAddress(market.enterGate);
-    this.liquidatorGate = normalizeAddress(market.liquidatorGate);
+    this.maturity = BigInt(market.maturity);
+    this.rcfThreshold = BigInt(market.rcfThreshold);
+    this.enterGate = market.enterGate as Address;
+    this.liquidatorGate = market.liquidatorGate as Address;
     deepFreeze(this);
   }
 
@@ -272,12 +272,7 @@ export function computeMarketId(params: {
   return keccak256(
     encodePacked(
       ["uint8", "address", "uint256", "bytes32"],
-      [
-        255,
-        normalizeAddress(params.midnight),
-        toBigInt(params.chainId, "chainId"),
-        creationHash,
-      ],
+      [255, params.midnight as Address, BigInt(params.chainId), creationHash],
     ),
   );
 }

@@ -1,6 +1,5 @@
 import type { Address, Hex } from "viem";
 
-import { normalizeAddress, normalizeHex } from "../internal.js";
 import type { RatifierInfo } from "../types.js";
 
 /**
@@ -68,18 +67,10 @@ export namespace RatifierUtils {
    * ```
    */
   export function getRatifierInfo(params: GetRatifierInfoParams): RatifierInfo {
-    const ecrecoverRatifier = normalizeAddress(
-      params.ecrecoverRatifier,
-      "ecrecoverRatifier",
-    );
-    const setterRatifier = normalizeAddress(
-      params.setterRatifier,
-      "setterRatifier",
-    );
+    const ecrecoverRatifier = params.ecrecoverRatifier as Address;
+    const setterRatifier = params.setterRatifier as Address;
     const bytecode =
-      params.bytecode == null
-        ? params.bytecode
-        : normalizeHex(params.bytecode, "bytecode");
+      params.bytecode == null ? params.bytecode : (params.bytecode as Hex);
     if (
       bytecode == null ||
       bytecode === "0x" ||

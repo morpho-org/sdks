@@ -2,7 +2,6 @@ import { decodeFunctionData } from "viem";
 import { describe, expect, test } from "vitest";
 import { addresses, baseOffer } from "../__test__/fixtures.js";
 import { setterRatifierAbi } from "../abis.js";
-import { InvalidMidnightHexError } from "../errors.js";
 import { OfferPayloadUtils } from "./OfferPayloadUtils.js";
 import { RatifierUtils } from "./RatifierUtils.js";
 
@@ -104,13 +103,13 @@ describe("OfferPayloadUtils.buildSetterRootApprovalCall", () => {
     expect(decoded.args[2]).toBe(true);
   });
 
-  test("error: InvalidMidnightHexError", () => {
+  test("error: invalid bytes32 root", () => {
     expect(() =>
       OfferPayloadUtils.buildSetterRootApprovalCall({
         setterRatifier: addresses.setterRatifier,
         maker: addresses.maker,
         root: "0x1234",
       }),
-    ).toThrow(InvalidMidnightHexError);
+    ).toThrow();
   });
 });

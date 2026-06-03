@@ -1,3 +1,5 @@
+import { mulDivDown, mulDivUp } from "@morpho-org/morpho-ts";
+
 import {
   DEFAULT_TICK_SPACING,
   MAX_TICK,
@@ -10,7 +12,6 @@ import {
   PriceGreaterThanOneError,
   TickOutOfRangeError,
 } from "../errors.js";
-import { mulDivDown, mulDivUp, toBigInt } from "../internal.js";
 import type { BigIntish } from "../types.js";
 
 const LN_ONE_PLUS_DELTA = 4_987_541_511_039_073n;
@@ -57,7 +58,7 @@ export namespace TickLib {
    * ```
    */
   export function tickToPrice(tick: BigIntish) {
-    const normalizedTick = toBigInt(tick, "tick");
+    const normalizedTick = BigInt(tick);
     if (normalizedTick > MAX_TICK) {
       throw new TickOutOfRangeError(normalizedTick, MAX_TICK);
     }
@@ -93,8 +94,8 @@ export namespace TickLib {
     price: BigIntish,
     spacing: BigIntish = DEFAULT_TICK_SPACING,
   ) {
-    const normalizedPrice = toBigInt(price, "price");
-    const normalizedSpacing = toBigInt(spacing, "spacing");
+    const normalizedPrice = BigInt(price);
+    const normalizedSpacing = BigInt(spacing);
 
     if (normalizedPrice > WAD)
       throw new PriceGreaterThanOneError(normalizedPrice);
@@ -150,7 +151,7 @@ export namespace TickLib {
    * ```
    */
   export function rateToPrice(rate: BigIntish) {
-    const normalizedRate = toBigInt(rate, "rate");
+    const normalizedRate = BigInt(rate);
     return mulDivDown(WAD, WAD, WAD + normalizedRate);
   }
 
@@ -193,8 +194,8 @@ export namespace TickLib {
     tick: BigIntish,
     spacing: BigIntish = DEFAULT_TICK_SPACING,
   ) {
-    const normalizedTick = toBigInt(tick, "tick");
-    const normalizedSpacing = toBigInt(spacing, "spacing");
+    const normalizedTick = BigInt(tick);
+    const normalizedSpacing = BigInt(spacing);
     if (normalizedSpacing <= 0n || normalizedTick % normalizedSpacing !== 0n) {
       throw new InvalidTickSpacingError(normalizedTick, normalizedSpacing);
     }

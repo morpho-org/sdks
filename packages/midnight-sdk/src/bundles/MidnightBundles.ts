@@ -2,12 +2,7 @@ import { type Address, encodeFunctionData, type Hex, zeroAddress } from "viem";
 
 import { midnightBundlesAbi } from "../abis.js";
 import { NoMatchingOffersError } from "../errors.js";
-import {
-  deepFreeze,
-  normalizeAddress,
-  normalizeHex,
-  toBigInt,
-} from "../internal.js";
+import { deepFreeze } from "../internal.js";
 import { type IMarket, type Market, normalizeMarket } from "../market/index.js";
 import { type ITake, normalizeTake, type TakeStruct } from "../offers/index.js";
 import {
@@ -238,45 +233,43 @@ export interface RepayAndWithdrawCollateralParams {
 
 const emptyPermit = (): TokenPermit => ({ kind: PermitKind.None, data: "0x" });
 
-const normalizePermit = (permit?: TokenPermit): TokenPermit =>
+const toPermit = (permit?: TokenPermit): TokenPermit =>
   permit == null
     ? emptyPermit()
-    : { kind: permit.kind, data: normalizeHex(permit.data, "permit.data") };
+    : { kind: permit.kind, data: permit.data as Hex };
 
-const normalizeWithdrawals = (
+const toWithdrawals = (
   withdrawals: readonly CollateralWithdrawalInput[] = [],
 ): readonly CollateralWithdrawal[] =>
   deepFreeze(
     withdrawals.map((withdrawal) => ({
-      collateralIndex: toBigInt(withdrawal.collateralIndex, "collateralIndex"),
-      assets: toBigInt(withdrawal.assets, "assets"),
+      collateralIndex: BigInt(withdrawal.collateralIndex),
+      assets: BigInt(withdrawal.assets),
     })),
   );
 
-const normalizeSupplies = (
+const toSupplies = (
   supplies: readonly CollateralSupplyInput[] = [],
 ): readonly CollateralSupply[] =>
   deepFreeze(
     supplies.map((supply) => ({
-      collateralIndex: toBigInt(supply.collateralIndex, "collateralIndex"),
-      assets: toBigInt(supply.assets, "assets"),
-      permit: normalizePermit(supply.permit),
+      collateralIndex: BigInt(supply.collateralIndex),
+      assets: BigInt(supply.assets),
+      permit: toPermit(supply.permit),
     })),
   );
 
-const normalizeTakes = (takes: readonly BundleTakeInput[]) => {
+const toTakes = (takes: readonly BundleTakeInput[]) => {
   if (takes.length === 0) throw new NoMatchingOffersError();
 
   return deepFreeze(takes.map((take) => normalizeTake(take).toStruct()));
 };
 
-const normalizeReferralRecipient = (recipient?: Address | string) =>
-  recipient == null
-    ? zeroAddress
-    : normalizeAddress(recipient, "referralFeeRecipient");
+const referralRecipientOrZero = (recipient?: Address | string) =>
+  recipient == null ? zeroAddress : (recipient as Address);
 
 const call = (to: Address | string, data: Hex): MidnightCall =>
-  deepFreeze({ to: normalizeAddress(to, "midnightBundles"), data });
+  deepFreeze({ to: to as Address, data });
 
 /**
  * Namespaced calldata encoders for MidnightBundles periphery entrypoints.
@@ -312,15 +305,15 @@ export namespace MidnightBundles {
         abi: midnightBundlesAbi,
         functionName: "buyWithUnitsTargetAndWithdrawCollateral",
         args: [
-          toBigInt(params.targetUnits, "targetUnits"),
-          toBigInt(params.maxBuyerAssets, "maxBuyerAssets"),
-          normalizeAddress(params.taker, "taker"),
-          normalizePermit(params.loanTokenPermit),
-          normalizeTakes(params.takes),
-          normalizeWithdrawals(params.collateralWithdrawals),
-          normalizeAddress(params.collateralReceiver, "collateralReceiver"),
-          toBigInt(params.referralFeePct ?? 0n, "referralFeePct"),
-          normalizeReferralRecipient(params.referralFeeRecipient),
+          BigInt(params.targetUnits),
+          BigInt(params.maxBuyerAssets),
+          params.taker as Address,
+          toPermit(params.loanTokenPermit),
+          toTakes(params.takes),
+          toWithdrawals(params.collateralWithdrawals),
+          params.collateralReceiver as Address,
+          BigInt(params.referralFeePct ?? 0n),
+          referralRecipientOrZero(params.referralFeeRecipient),
         ],
       }),
     );
@@ -349,17 +342,14 @@ export namespace MidnightBundles {
         abi: midnightBundlesAbi,
         functionName: "supplyCollateralAndSellWithUnitsTarget",
         args: [
-          toBigInt(params.targetUnits, "targetUnits"),
-          toBigInt(params.minSellerAssets, "minSellerAssets"),
-          normalizeAddress(params.taker, "taker"),
-          normalizeAddress(
-            params.receiverIfTakerIsSeller,
-            "receiverIfTakerIsSeller",
-          ),
-          normalizeSupplies(params.collateralSupplies),
-          normalizeTakes(params.takes),
-          toBigInt(params.referralFeePct ?? 0n, "referralFeePct"),
-          normalizeReferralRecipient(params.referralFeeRecipient),
+          BigInt(params.targetUnits),
+          BigInt(params.minSellerAssets),
+          params.taker as Address,
+          params.receiverIfTakerIsSeller as Address,
+          toSupplies(params.collateralSupplies),
+          toTakes(params.takes),
+          BigInt(params.referralFeePct ?? 0n),
+          referralRecipientOrZero(params.referralFeeRecipient),
         ],
       }),
     );
@@ -388,15 +378,15 @@ export namespace MidnightBundles {
         abi: midnightBundlesAbi,
         functionName: "buyWithAssetsTargetAndWithdrawCollateral",
         args: [
-          toBigInt(params.targetBuyerAssets, "targetBuyerAssets"),
-          toBigInt(params.minUnits, "minUnits"),
-          normalizeAddress(params.taker, "taker"),
-          normalizePermit(params.loanTokenPermit),
-          normalizeTakes(params.takes),
-          normalizeWithdrawals(params.collateralWithdrawals),
-          normalizeAddress(params.collateralReceiver, "collateralReceiver"),
-          toBigInt(params.referralFeePct ?? 0n, "referralFeePct"),
-          normalizeReferralRecipient(params.referralFeeRecipient),
+          BigInt(params.targetBuyerAssets),
+          BigInt(params.minUnits),
+          params.taker as Address,
+          toPermit(params.loanTokenPermit),
+          toTakes(params.takes),
+          toWithdrawals(params.collateralWithdrawals),
+          params.collateralReceiver as Address,
+          BigInt(params.referralFeePct ?? 0n),
+          referralRecipientOrZero(params.referralFeeRecipient),
         ],
       }),
     );
@@ -425,17 +415,14 @@ export namespace MidnightBundles {
         abi: midnightBundlesAbi,
         functionName: "supplyCollateralAndSellWithAssetsTarget",
         args: [
-          toBigInt(params.targetSellerAssets, "targetSellerAssets"),
-          toBigInt(params.maxUnits, "maxUnits"),
-          normalizeAddress(params.taker, "taker"),
-          normalizeAddress(
-            params.receiverIfTakerIsSeller,
-            "receiverIfTakerIsSeller",
-          ),
-          normalizeSupplies(params.collateralSupplies),
-          normalizeTakes(params.takes),
-          toBigInt(params.referralFeePct ?? 0n, "referralFeePct"),
-          normalizeReferralRecipient(params.referralFeeRecipient),
+          BigInt(params.targetSellerAssets),
+          BigInt(params.maxUnits),
+          params.taker as Address,
+          params.receiverIfTakerIsSeller as Address,
+          toSupplies(params.collateralSupplies),
+          toTakes(params.takes),
+          BigInt(params.referralFeePct ?? 0n),
+          referralRecipientOrZero(params.referralFeeRecipient),
         ],
       }),
     );
@@ -464,13 +451,13 @@ export namespace MidnightBundles {
         functionName: "repayAndWithdrawCollateral",
         args: [
           normalizeMarket(params.market).toStruct(),
-          toBigInt(params.assets, "assets"),
-          normalizeAddress(params.onBehalf, "onBehalf"),
-          normalizePermit(params.loanTokenPermit),
-          normalizeWithdrawals(params.collateralWithdrawals),
-          normalizeAddress(params.collateralReceiver, "collateralReceiver"),
-          toBigInt(params.referralFeePct ?? 0n, "referralFeePct"),
-          normalizeReferralRecipient(params.referralFeeRecipient),
+          BigInt(params.assets),
+          params.onBehalf as Address,
+          toPermit(params.loanTokenPermit),
+          toWithdrawals(params.collateralWithdrawals),
+          params.collateralReceiver as Address,
+          BigInt(params.referralFeePct ?? 0n),
+          referralRecipientOrZero(params.referralFeeRecipient),
         ],
       }),
     );

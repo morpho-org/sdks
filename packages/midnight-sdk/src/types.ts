@@ -1,7 +1,7 @@
 import type { Address, Hex } from "viem";
 
 /**
- * Bigint-compatible SDK input accepted at normalization boundaries.
+ * Bigint-compatible SDK input accepted by fields converted with `BigInt`.
  *
  * @example
  * ```ts

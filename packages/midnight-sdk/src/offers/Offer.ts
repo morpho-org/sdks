@@ -1,12 +1,6 @@
 import type { Address, Hex } from "viem";
 
-import {
-  deepFreeze,
-  normalizeAddress,
-  normalizeBytes32,
-  normalizeHex,
-  toBigInt,
-} from "../internal.js";
+import { deepFreeze } from "../internal.js";
 import {
   type IMarket,
   type Market,
@@ -157,21 +151,18 @@ export class Offer {
   public constructor(offer: IOffer) {
     this.market = normalizeMarket(offer.market);
     this.buy = offer.buy;
-    this.maker = normalizeAddress(offer.maker, "maker");
-    this.start = toBigInt(offer.start, "start");
-    this.expiry = toBigInt(offer.expiry, "expiry");
-    this.tick = toBigInt(offer.tick, "tick");
-    this.group = normalizeBytes32(offer.group, "group");
-    this.callback = normalizeAddress(offer.callback, "callback");
-    this.callbackData = normalizeHex(offer.callbackData, "callbackData");
-    this.receiverIfMakerIsSeller = normalizeAddress(
-      offer.receiverIfMakerIsSeller,
-      "receiverIfMakerIsSeller",
-    );
-    this.ratifier = normalizeAddress(offer.ratifier, "ratifier");
+    this.maker = offer.maker as Address;
+    this.start = BigInt(offer.start);
+    this.expiry = BigInt(offer.expiry);
+    this.tick = BigInt(offer.tick);
+    this.group = offer.group as Hex;
+    this.callback = offer.callback as Address;
+    this.callbackData = offer.callbackData as Hex;
+    this.receiverIfMakerIsSeller = offer.receiverIfMakerIsSeller as Address;
+    this.ratifier = offer.ratifier as Address;
     this.reduceOnly = offer.reduceOnly;
-    this.maxUnits = toBigInt(offer.maxUnits, "maxUnits");
-    this.maxAssets = toBigInt(offer.maxAssets, "maxAssets");
+    this.maxUnits = BigInt(offer.maxUnits);
+    this.maxAssets = BigInt(offer.maxAssets);
     deepFreeze(this);
   }
 
