@@ -1,4 +1,8 @@
 export {
+  NegativeValueError,
+  UnsupportedChainIdError,
+} from "@morpho-org/morpho-ts";
+export {
   ecrecoverRatifierAbi,
   erc20Abi,
   midnightAbi,
@@ -62,14 +66,12 @@ export {
   InvalidTickSpacingError,
   MidnightAddressAlreadyRegisteredError,
   MissingOfferGroupError,
-  NegativeValueError,
   NoMatchingOffersError,
   PayloadValidationFailedError,
   PriceGreaterThanOneError,
   SettlementFeeExceedsPriceError,
   TickOutOfRangeError,
   UnexpectedOfferSideError,
-  UnsupportedMidnightChainError,
 } from "./errors.js";
 export type { MidnightFetchParams } from "./fetch/index.js";
 export {

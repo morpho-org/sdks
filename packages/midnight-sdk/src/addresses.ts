@@ -2,11 +2,11 @@ import {
   type DeepPartial,
   type DottedKeys,
   deepFreeze,
+  UnsupportedChainIdError,
 } from "@morpho-org/morpho-ts";
 import {
   IncompleteMidnightAddressesError,
   MidnightAddressAlreadyRegisteredError,
-  UnsupportedMidnightChainError,
 } from "./errors.js";
 import type { MidnightAddresses } from "./types.js";
 
@@ -125,7 +125,7 @@ export let midnightAddresses = midnightAddressRegistry;
  *
  * @param chainId - Chain id to resolve.
  * @returns Registered Midnight addresses.
- * @throws UnsupportedMidnightChainError when the chain has no registered deployment.
+ * @throws UnsupportedChainIdError when the chain has no registered deployment.
  * @example
  * ```ts
  * import { getMidnightAddresses } from "@morpho-org/midnight-sdk";
@@ -139,7 +139,7 @@ export let midnightAddresses = midnightAddressRegistry;
  */
 export function getMidnightAddresses(chainId: number) {
   const addresses = midnightAddressRegistry[chainId];
-  if (addresses == null) throw new UnsupportedMidnightChainError(chainId);
+  if (addresses == null) throw new UnsupportedChainIdError(chainId);
 
   return addresses;
 }
