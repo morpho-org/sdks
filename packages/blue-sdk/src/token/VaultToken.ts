@@ -4,11 +4,13 @@ import type { IVaultConfig } from "../vault/VaultConfig.js";
 import { VaultUtils } from "../vault/VaultUtils.js";
 import { WrappedToken } from "./WrappedToken.js";
 
+/** Plain input shape for ERC-4626-like vault token totals. */
 export interface IVaultToken {
   totalAssets: bigint;
   totalSupply: bigint;
 }
 
+/** Represents an ERC-4626-like vault token with share and asset conversion math. */
 export class VaultToken extends WrappedToken implements IVaultToken {
   public readonly asset: Address;
   public readonly decimalsOffset: bigint;

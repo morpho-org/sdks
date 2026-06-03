@@ -1,5 +1,17 @@
 # @morpho-org/bundler-sdk-viem
 
+## 5.0.3
+
+### Patch Changes
+
+- [#740](https://github.com/morpho-org/sdks/pull/740) [`43e6cfc`](https://github.com/morpho-org/sdks/commit/43e6cfcf7eaab0355dccbe3f9f55c59cdac72f0a) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Include DEPRECATION.md in published package files so npm tarballs contain the migration guidance.
+
+- Updated dependencies [[`401cf32`](https://github.com/morpho-org/sdks/commit/401cf3244b32fcb00f6c7676b2a43e34a0283cad), [`738421e`](https://github.com/morpho-org/sdks/commit/738421e4a428ce361d2fe551746b0c406a0fe31f), [`95b07ef`](https://github.com/morpho-org/sdks/commit/95b07ef56b8146f1084a35834243df4a7399a51d), [`6d59b5a`](https://github.com/morpho-org/sdks/commit/6d59b5abdcdab7f5da3df826ea4556899a5b765d), [`43e6cfc`](https://github.com/morpho-org/sdks/commit/43e6cfcf7eaab0355dccbe3f9f55c59cdac72f0a), [`43e6cfc`](https://github.com/morpho-org/sdks/commit/43e6cfcf7eaab0355dccbe3f9f55c59cdac72f0a)]:
+  - @morpho-org/blue-sdk@6.1.0
+  - @morpho-org/blue-sdk-viem@5.1.0
+  - @morpho-org/morpho-ts@2.6.0
+  - @morpho-org/simulation-sdk@4.0.3
+
 ## 5.0.2
 
 ### Patch Changes

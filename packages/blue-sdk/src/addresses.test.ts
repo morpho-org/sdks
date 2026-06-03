@@ -258,6 +258,22 @@ describe("addresses helpers", () => {
     );
   });
 
+  test("exposes era-2 addresses and deployments without wNative for chain 5042", () => {
+    const chainAddresses = getChainAddresses(5_042);
+    expect(chainAddresses).toMatchObject({
+      morpho: "0x34CD04070dD72b14E241112F6d83812Df5Af7fCD",
+    });
+    expect(chainAddresses.wNative).toBeUndefined();
+    expect(
+      (deployments as Record<number, ChainDeployments>)[5_042],
+    ).toMatchObject({
+      morpho: 1_208_685n,
+    });
+    expect(
+      (deployments as Record<number, Record<string, unknown>>)[5_042]?.wNative,
+    ).toBeUndefined();
+  });
+
   test("registerCustomAddresses rejects overriding existing addresses and unwrapped tokens", () => {
     const address = randomAddress();
 

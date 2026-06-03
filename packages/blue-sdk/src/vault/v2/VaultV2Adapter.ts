@@ -2,6 +2,7 @@ import type { Address, Hash, Hex } from "viem";
 import type { BigIntish } from "../../types.js";
 import type { CapacityLimit } from "../../utils.js";
 
+/** Plain input shape for a Morpho Vault V2 adapter. */
 export interface IVaultV2Adapter {
   type: string;
   address: Address;
@@ -10,6 +11,7 @@ export interface IVaultV2Adapter {
   skimRecipient: Address;
 }
 
+/** Base class for Morpho Vault V2 adapters. */
 export abstract class VaultV2Adapter implements IVaultV2Adapter {
   public readonly type: string;
   public readonly address: Address;
@@ -32,6 +34,7 @@ export abstract class VaultV2Adapter implements IVaultV2Adapter {
   }
 }
 
+/** Adapter interface with accrued asset and capacity methods. */
 export interface IAccrualVaultV2Adapter extends IVaultV2Adapter {
   realAssets(timestamp: BigIntish): bigint;
 

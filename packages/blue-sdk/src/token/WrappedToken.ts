@@ -3,6 +3,7 @@ import type { Address } from "../types.js";
 
 import { type IToken, Token } from "./Token.js";
 
+/** Base class for tokens that wrap and unwrap another token. */
 export abstract class WrappedToken extends Token {
   constructor(
     token: IToken,

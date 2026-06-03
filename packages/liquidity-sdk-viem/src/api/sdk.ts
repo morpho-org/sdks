@@ -14,7 +14,7 @@ export const GetMarketsDocument = gql`
         vault {
           address
         }
-        allocationMarket {
+        allocationMarket: withdrawMarket {
           uniqueKey: marketId
         }
         assets

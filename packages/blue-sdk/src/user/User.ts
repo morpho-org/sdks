@@ -1,5 +1,6 @@
 import type { Address } from "../types.js";
 
+/** Represents a Morpho Blue user authorization and nonce state. */
 export class User {
   /**
    * The user's address.

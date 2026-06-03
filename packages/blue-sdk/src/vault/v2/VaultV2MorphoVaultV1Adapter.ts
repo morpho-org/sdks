@@ -2,6 +2,7 @@ import { type Address, encodeAbiParameters, type Hex, keccak256 } from "viem";
 
 import { VaultV2Adapter } from "./VaultV2Adapter.js";
 
+/** Plain input shape for a Vault V2 adapter investing in a MetaMorpho V1 vault. */
 export interface IVaultV2MorphoVaultV1Adapter
   extends Omit<IVaultV2Adapter, "adapterId" | "type"> {
   type?: "VaultV2MorphoVaultV1Adapter";
@@ -15,6 +16,7 @@ import type {
   IVaultV2Adapter,
 } from "./VaultV2Adapter.js";
 
+/** Represents a Vault V2 adapter investing in a MetaMorpho V1 vault. */
 export class VaultV2MorphoVaultV1Adapter
   extends VaultV2Adapter
   implements IVaultV2MorphoVaultV1Adapter
@@ -50,9 +52,11 @@ export class VaultV2MorphoVaultV1Adapter
   }
 }
 
+/** Plain input shape for an accrued Vault V2 MetaMorpho V1 adapter. */
 export interface IAccrualVaultV2MorphoVaultV1Adapter
   extends IVaultV2MorphoVaultV1Adapter {}
 
+/** Represents an accrued Vault V2 MetaMorpho V1 adapter. */
 export class AccrualVaultV2MorphoVaultV1Adapter
   extends VaultV2MorphoVaultV1Adapter
   implements IAccrualVaultV2MorphoVaultV1Adapter, IAccrualVaultV2Adapter

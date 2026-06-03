@@ -16,6 +16,7 @@ import type { Address } from "./types.js";
  */
 export const NATIVE_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 
+/** Registry entry for protocol, adapter, factory, and token addresses on one chain. */
 export interface ChainAddresses {
   morpho: Address;
   permit2?: Address;
@@ -813,8 +814,24 @@ const _addressesRegistry = {
     preLiquidationFactory: "0xe8eCe452F04117e5Fe1Ea4403097215443225440",
     wNative: "0x19Aac5f612f524B754CA7e7c41cbFa2E981A4432",
   },
+  [ChainId.ArcMainnet]: {
+    morpho: "0x34CD04070dD72b14E241112F6d83812Df5Af7fCD",
+    permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    bundler3: {
+      bundler3: "0x855dbe13C409Df75CAF6a985Cf6993a4D0319Feb",
+      generalAdapter1: "0x0AF5BE7BD7B615e94e1d9275414482D028952466",
+    },
+    adaptiveCurveIrm: "0xF02615d094Fc02fC031C35fe705e175aA4653f20",
+    vaultV2Factory: "0x3b0eefaBfa22ec7CF2c73877ac16e78D76749f12",
+    morphoMarketV1AdapterV2Factory:
+      "0x6C2FF5114E45b50bc7195c2F1f87C98cbdad62Cc",
+    registryList: "0xdEBC92370Cd74d55DA144116138681dbbb528765",
+    chainlinkOracleFactory: "0xbFc8D6167a02889D5EB08a023d9aB712B44f7dE8",
+    preLiquidationFactory: "0x8edf6Ac769a7E7D81d571aC0FB8733aD724f6922",
+  },
 } as const;
 
+/** Deployment block registry with the same shape as `ChainAddresses`. */
 export type ChainDeployments<Addresses = ChainAddresses> = {
   [key in keyof Addresses]: Address extends Addresses[key]
     ? bigint
@@ -1416,10 +1433,39 @@ const _deployments = {
     preLiquidationFactory: 213462907n,
     wNative: 104802159n,
   },
+  [ChainId.ArcMainnet]: {
+    morpho: 1208685n,
+    permit2: 0n,
+    bundler3: {
+      bundler3: 1208685n,
+      generalAdapter1: 1208685n,
+    },
+    adaptiveCurveIrm: 1208685n,
+    vaultV2Factory: 1208931n,
+    morphoMarketV1AdapterV2Factory: 1208978n,
+    registryList: 1208978n,
+    chainlinkOracleFactory: 1208882n,
+    preLiquidationFactory: 1208882n,
+  },
 } as const satisfies Record<ChainId, ChainDeployments>;
 
+/** Dot-separated label for an address entry in the chain registry. */
 export type AddressLabel = DottedKeys<(typeof _addressesRegistry)[ChainId]>;
 
+/**
+ * Returns the protocol address registry for a chain.
+ *
+ * @param chainId - The EIP-155 chain id.
+ * @returns The configured protocol, adapter, factory, and token addresses for `chainId`.
+ * @throws {UnsupportedChainIdError} when no address registry exists for `chainId`.
+ * @example
+ * ```ts
+ * import { ChainId, getChainAddresses } from "@morpho-org/blue-sdk";
+ *
+ * const chainAddresses = getChainAddresses(ChainId.EthMainnet);
+ * // chainAddresses satisfies ChainAddresses
+ * ```
+ */
 export const getChainAddresses = (chainId: number): ChainAddresses => {
   const chainAddresses = addresses[chainId];
   if (chainAddresses == null) throw new UnsupportedChainIdError(chainId);
@@ -1563,6 +1609,20 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   },
 };
 
+/**
+ * Returns the unwrapped token mapped to a wrapped token on a chain.
+ *
+ * @param wrappedToken - The wrapped token address to resolve.
+ * @param chainId - The EIP-155 chain id.
+ * @returns The unwrapped token address, or `undefined` when no mapping is registered.
+ * @example
+ * ```ts
+ * import { ChainId, getUnwrappedToken, NATIVE_ADDRESS, addresses } from "@morpho-org/blue-sdk";
+ *
+ * const unwrapped = getUnwrappedToken(addresses[ChainId.EthMainnet].wNative!, ChainId.EthMainnet);
+ * // unwrapped === NATIVE_ADDRESS
+ * ```
+ */
 export function getUnwrappedToken(wrappedToken: Address, chainId: number) {
   return unwrappedTokensMapping[chainId]?.[wrappedToken];
 }
@@ -1603,6 +1663,19 @@ export const permissionedCoinbaseTokens: Record<number, Set<Address>> = {
   ]),
 };
 
+/**
+ * Returns the known Coinbase-attested wrapped tokens for a chain.
+ *
+ * @param chainId - The EIP-155 chain id.
+ * @returns A set of permissioned wrapped token addresses, or an empty set when none are registered.
+ * @example
+ * ```ts
+ * import { ChainId, getPermissionedCoinbaseTokens } from "@morpho-org/blue-sdk";
+ *
+ * const tokens = getPermissionedCoinbaseTokens(ChainId.BaseMainnet);
+ * // tokens satisfies Set<Address>
+ * ```
+ */
 export const getPermissionedCoinbaseTokens = (chainId: number) =>
   permissionedCoinbaseTokens[chainId] ?? new Set();
 
@@ -1638,9 +1711,13 @@ export const convexWrapperTokens: Record<number, Set<Address>> = {
   ]),
 };
 
+/** Deep-frozen registry of known chain addresses, keyed by chain id. */
 export let addressesRegistry = deepFreeze(_addressesRegistry);
+/** Address registry keyed by numeric chain id. */
 export let addresses = addressesRegistry as Record<number, ChainAddresses>;
+/** Deep-frozen registry of deployment blocks, keyed by chain id. */
 export let deployments = deepFreeze(_deployments);
+/** Deep-frozen registry of wrapped token to unwrapped token mappings. */
 export let unwrappedTokensMapping = deepFreeze(_unwrappedTokensMapping);
 
 /**
@@ -1658,6 +1735,7 @@ export let unwrappedTokensMapping = deepFreeze(_unwrappedTokensMapping);
  *                              Must provide all required deployments if chain is unknown.
  *
  * @throws {Error} If attempting to override an existing address.
+ * @returns Nothing.
  *
  * @example
  * ```ts

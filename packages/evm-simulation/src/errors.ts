@@ -42,18 +42,6 @@ export class BlacklistViolationError extends SimulationPackageError {
   }
 }
 
-/** Sanctioned or compromised address detected. Never bypassable. */
-export class AddressScreeningError extends SimulationPackageError {
-  readonly code = "SCREENING_ERROR";
-
-  constructor(
-    message: string,
-    public readonly addresses: string[],
-  ) {
-    super(message);
-  }
-}
-
 /** Tenderly or RPC service is down. Bypassable — user can proceed. */
 export class ExternalServiceError extends SimulationPackageError {
   readonly code = "EXTERNAL_SERVICE_ERROR";

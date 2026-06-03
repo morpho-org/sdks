@@ -31,10 +31,10 @@ Per AGENTS.md §3 — type discipline inside the body:
 - Discriminated unions with obvious `type` tags where an options-bag was reached for.
 - `bigint` used correctly for onchain quantities and WAD-scaled rates (e.g. `92_0000000000000000n`) — not `number`.
 
-Code smells (not codified in AGENTS.md but reviewer-time conventions):
+Code smells (mostly reviewer-time conventions; the early-return / deep-nesting rule is codified in AGENTS.md §1):
 
 - Duplicated logic across functions in the diff — extract or reuse an existing helper.
-- Overly complex functions / deep nesting — prefer early returns over nested conditionals.
+- Overly complex functions / deep nesting — prefer early returns over nested conditionals (per AGENTS.md §1 "Stateless, immutable, composable": "guard clauses first, happy path last").
 - Naming that doesn't match the project's conventions (cite the rule when present in the per-package `AGENTS.md`).
 - Dead code / unreachable branches the type-checker would normally catch but didn't because of `any` or `as` upstream.
 

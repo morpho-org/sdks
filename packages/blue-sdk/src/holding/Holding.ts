@@ -3,27 +3,32 @@ import { entries, fromEntries } from "@morpho-org/morpho-ts";
 import type { AddressLabel } from "../addresses.js";
 import type { Address, BigIntish } from "../types.js";
 
+/** Address registry labels that may receive ERC-20 allowances from a user. */
 export const ERC20_ALLOWANCE_RECIPIENTS = [
   "morpho",
   "permit2",
   "bundler3.generalAdapter1",
 ] as const satisfies readonly AddressLabel[];
 
+/** Address registry label that may receive an ERC-20 allowance from a user. */
 export type Erc20AllowanceRecipient =
   (typeof ERC20_ALLOWANCE_RECIPIENTS)[number];
 
+/** Normalized Permit2 allowance values. */
 export interface Permit2Allowance {
   amount: bigint;
   expiration: bigint;
   nonce: bigint;
 }
 
+/** Input shape for Permit2 allowance values before bigint normalization. */
 export interface IPermit2Allowance {
   amount: BigIntish;
   expiration: BigIntish;
   nonce: BigIntish;
 }
 
+/** Input shape for a user's token holding and allowance state. */
 export interface IHolding {
   user: Address;
   token: Address;
@@ -36,6 +41,7 @@ export interface IHolding {
   balance: bigint;
 }
 
+/** Represents a user's balance and allowance state for one token. */
 export class Holding implements IHolding {
   /**
    * The user of this holding.

@@ -12,6 +12,36 @@ import { abi, code } from "../queries/GetMarket.js";
 import type { DeploylessFetchParameters } from "../types.js";
 import { readContractRestructured } from "../utils.js";
 
+/**
+ * Fetches Morpho Blue market state, params, oracle price, and adaptive IRM rate.
+ *
+ * Reads `Morpho.idToMarketParams(id)`, `Morpho.market(id)`, the market oracle price when configured,
+ * and `AdaptiveCurveIRM.rateAtTarget(id)` when the market uses the adaptive curve IRM. Uses the
+ * deployless `GetMarket` query by default and falls back to individual reads when allowed.
+ *
+ * @param id - Market id to fetch.
+ * @param client - Viem client used for deployless reads or multicalls.
+ * @param parameters.account - Optional account passed to viem calls.
+ * @param parameters.blockNumber - Optional block number for historical reads.
+ * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.stateOverride - Optional viem state override.
+ * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
+ * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
+ * @returns The hydrated `Market` entity.
+ * @example
+ * ```ts
+ * import type { Market, MarketId } from "@morpho-org/blue-sdk";
+ * import { fetchMarket } from "@morpho-org/blue-sdk-viem";
+ * import { createPublicClient, http } from "viem";
+ * import { mainnet } from "viem/chains";
+ *
+ * const client = createPublicClient({ chain: mainnet, transport: http() });
+ * const marketId =
+ *   "0xdba352c33d64fc9bff091d505dbfcbc6c41b89986c2193b22a90031e9dac7f76" as MarketId;
+ *
+ * const market: Market = await fetchMarket(marketId, client);
+ * ```
+ */
 // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchMarket(
   id: MarketId,

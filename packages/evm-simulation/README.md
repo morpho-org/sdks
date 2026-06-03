@@ -2,8 +2,8 @@
 
 ## Overview
 
-EVM transaction simulation engine for Morpho — bundle execution preview,
-transfer parsing, and compliance screening.
+EVM transaction simulation engine for Morpho — bundle execution preview
+and transfer parsing.
 
 ## Installation
 
@@ -22,37 +22,29 @@ Add to the consuming app's `package.json`:
 ```ts
 import {
   simulate,
-  screenAddresses,
   type SimulationConfig,
   SimulationRevertedError
 } from "@morpho-org/evm-simulation";
 
 const config: SimulationConfig = {
-  tenderlyRest: {
-    apiUrl:
-      "https://api.tenderly.co/api/v1/account/my-account/project/my-project",
-    accessToken: process.env.TENDERLY_ACCESS_TOKEN!,
-    supportedChainIds: new Set([1]),
-  },
-  chains: new Map([[1, { simulateV1Url: process.env.MAINNET_RPC_URL }]]),
+  chains: new Map([
+    [
+      1,
+      {
+        tenderlyRpc: { rpcUrl: process.env.TENDERLY_RPC_URL! },
+        simulateV1Url: process.env.MAINNET_RPC_URL,
+      },
+    ],
+  ]),
   timeoutMs: 5000,
 };
 
 try {
-  // Pass { shareable: true } when you want a shareable Tenderly URL (user-facing preview).
-  // Omit it for server-side verification — the same function, same return shape.
-  const { transfers, simulationTxs, tenderlyUrl } = await simulate(
-    config,
-    {
-      chainId: 1,
-      transactions: [{ from: user, to: vault, data: encodedDeposit }],
-      authorizations: [{ type: "signature", token: usdc, spender: vault }],
-    },
-    { shareable: true }
-  );
-
-  // For server-side flows, pipe into screenAddresses:
-  await screenAddresses({ simulationTxs, transfers });
+  const { transfers, simulationTxs } = await simulate(config, {
+    chainId: 1,
+    transactions: [{ from: user, to: vault, data: encodedDeposit }],
+    authorizations: [{ type: "signature", token: usdc, spender: vault }],
+  });
 } catch (err) {
   if (err instanceof SimulationRevertedError) {
     // show err.reason to the user
@@ -61,20 +53,21 @@ try {
 }
 ```
 
+Each chain entry must declare at least one backend — `tenderlyRpc` (primary), `simulateV1Url` (fallback), or both. The type system enforces this.
+
 ### API surface
 
 All symbols below are re-exported from the package root.
 
-- `simulate(config, params, options?)` — run a bundle through the simulation pipeline. Pass `{ shareable: true }` for a shareable Tenderly URL; omit for server-side verification.
-- `screenAddresses({ simulationTxs, transfers, chainalysisApiKey? })` — static sanctioned-set + optional Chainalysis screening.
-- Config types: `SimulationConfig`, `TenderlyRestConfig`, `ChainSimulationConfig`, `SimulationLogger`.
+- `simulate(config, params)` — run a bundle through the simulation pipeline.
+- Config types: `SimulationConfig`, `TenderlyRpcConfig`, `ChainSimulationConfig`, `SimulationLogger`.
 - Data types: `SimulationTransaction`, `SimulationAuthorization`, `Transfer`, `SimulateParams`, `SimulationResult`.
-- Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `BlacklistViolationError`, `AddressScreeningError`, `ExternalServiceError`, `SimulationValidationError`, `UnsupportedChainError`.
+- Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `BlacklistViolationError`, `ExternalServiceError`, `SimulationValidationError`, `UnsupportedChainError`.
 
 ### Deeper docs
 
 See [`CLAUDE.md`](./CLAUDE.md) in this directory for the execution flow diagram,
-backend tradeoffs, authorizations model, screening design, error-handling table,
+backend tradeoffs, authorizations model, error-handling table,
 and recipes for adding a chain or a new backend.
 
 ## Development

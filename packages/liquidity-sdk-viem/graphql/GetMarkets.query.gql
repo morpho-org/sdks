@@ -7,7 +7,7 @@ query getMarkets($chainId: Int!, $marketIds: [String!]) {
         vault {
           address
         }
-        allocationMarket {
+        allocationMarket: withdrawMarket {
           uniqueKey: marketId
         }
         assets

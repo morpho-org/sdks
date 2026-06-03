@@ -13,12 +13,14 @@ import type {
 } from "./VaultV2Adapter.js";
 import { VaultV2Adapter } from "./VaultV2Adapter.js";
 
+/** Plain input shape for a Vault V2 adapter investing in Morpho Blue markets. */
 export interface IVaultV2MorphoMarketV1Adapter
   extends Omit<IVaultV2Adapter, "adapterId" | "type"> {
   type?: "VaultV2MorphoMarketV1Adapter";
   marketParamsList: IMarketParams[];
 }
 
+/** Represents a Vault V2 adapter investing in Morpho Blue markets. */
 export class VaultV2MorphoMarketV1Adapter
   extends VaultV2Adapter
   implements IVaultV2MorphoMarketV1Adapter
@@ -78,9 +80,11 @@ export class VaultV2MorphoMarketV1Adapter
   }
 }
 
+/** Plain input shape for an accrued Morpho Blue market Vault V2 adapter. */
 export interface IAccrualVaultV2MorphoMarketV1Adapter
   extends IVaultV2MorphoMarketV1Adapter {}
 
+/** Represents an accrued Morpho Blue market Vault V2 adapter. */
 export class AccrualVaultV2MorphoMarketV1Adapter
   extends VaultV2MorphoMarketV1Adapter
   implements IAccrualVaultV2MorphoMarketV1Adapter, IAccrualVaultV2Adapter

@@ -1,5 +1,34 @@
 # @morpho-org/evm-simulation
 
+## 3.0.0
+
+### Major Changes
+
+- [#754](https://github.com/morpho-org/sdks/pull/754) [`e17a050`](https://github.com/morpho-org/sdks/commit/e17a0507ceaa348ec23e4f6884441723c080a7bf) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Remove the address screening surface. The `screenAddresses` function, the `AddressScreeningError` class, and the bundled static sanctioned-addresses list are no longer exported. Callers that need compliance screening should run it externally on the `simulationTxs` and `transfers` returned by `simulate()`.
+
+- [#756](https://github.com/morpho-org/sdks/pull/756) [`ea25f7f`](https://github.com/morpho-org/sdks/commit/ea25f7fcad8f82bb59a7ab0edbc2867ebb908aaf) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Replace the Tenderly REST API backend with the Tenderly Node RPC
+  (`tenderly_simulateTransaction` and `tenderly_simulateBundle`).
+
+  - `TenderlyRestConfig` is removed; use `TenderlyRpcConfig` (`{ rpcUrl }`)
+    embedded per-chain in `ChainSimulationConfig`. The chain-level type is now
+    a discriminated union enforcing at least one of `tenderlyRpc` (primary) or
+    `simulateV1Url` (fallback).
+  - `SimulationConfig.tenderlyRest` (and its `supportedChainIds`) is removed —
+    Tenderly support is declared per chain.
+  - The `shareable` option on `simulate()` and the `tenderlyUrl` field on
+    `SimulationResult` are removed; Tenderly Node RPC has no persistence /
+    shareable-URL concept.
+
+### Patch Changes
+
+- [#746](https://github.com/morpho-org/sdks/pull/746) [`401cf32`](https://github.com/morpho-org/sdks/commit/401cf3244b32fcb00f6c7676b2a43e34a0283cad) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Add Arc chain metadata, deployment addresses, deployment block lower bounds, and native-token mapping.
+
+  Patch maintained packages that depend directly on `@morpho-org/blue-sdk` so their latest releases resolve the new address registry.
+
+- Updated dependencies [[`401cf32`](https://github.com/morpho-org/sdks/commit/401cf3244b32fcb00f6c7676b2a43e34a0283cad), [`738421e`](https://github.com/morpho-org/sdks/commit/738421e4a428ce361d2fe551746b0c406a0fe31f), [`6d59b5a`](https://github.com/morpho-org/sdks/commit/6d59b5abdcdab7f5da3df826ea4556899a5b765d), [`43e6cfc`](https://github.com/morpho-org/sdks/commit/43e6cfcf7eaab0355dccbe3f9f55c59cdac72f0a)]:
+  - @morpho-org/blue-sdk@6.1.0
+  - @morpho-org/morpho-ts@2.6.0
+
 ## 2.0.2
 
 ### Patch Changes

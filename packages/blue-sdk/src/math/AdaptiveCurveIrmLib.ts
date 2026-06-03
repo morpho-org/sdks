@@ -7,11 +7,17 @@ import { MathLib } from "./MathLib.js";
  * JS implementation of {@link https://github.com/morpho-org/morpho-blue-irm/blob/main/src/libraries/adaptive-curve/ExpLib.sol ExpLib} used by the Adaptive Curve IRM.
  */
 export namespace AdaptiveCurveIrmLib {
+  /** Curve steepness constant, scaled by WAD. */
   export const CURVE_STEEPNESS = 4_000000000000000000n;
+  /** Target utilization for the Adaptive Curve IRM, scaled by WAD. */
   export const TARGET_UTILIZATION = 90_0000000000000000n;
+  /** Initial per-second rate at target utilization, scaled by WAD. */
   export const INITIAL_RATE_AT_TARGET = 4_0000000000000000n / SECONDS_PER_YEAR;
+  /** Per-second speed used to adjust the rate at target utilization. */
   export const ADJUSTMENT_SPEED = 50_000000000000000000n / SECONDS_PER_YEAR;
+  /** Minimum per-second rate at target utilization, scaled by WAD. */
   export const MIN_RATE_AT_TARGET = 10_00000000000000n / SECONDS_PER_YEAR;
+  /** Maximum per-second rate at target utilization, scaled by WAD. */
   export const MAX_RATE_AT_TARGET = 2_000000000000000000n / SECONDS_PER_YEAR;
 
   /**
@@ -38,7 +44,15 @@ export namespace AdaptiveCurveIrmLib {
 
   /**
    * Returns an approximation of exp(x) used by the Adaptive Curve IRM.
-   * @param x
+   * @param x - The WAD-scaled exponent.
+   * @returns The WAD-scaled exponential approximation.
+   * @example
+   * ```ts
+   * import { AdaptiveCurveIrmLib } from "@morpho-org/blue-sdk";
+   *
+   * const value = AdaptiveCurveIrmLib.wExp(0n);
+   * // value === 1000000000000000000n
+   * ```
    */
   export function wExp(x: BigIntish) {
     // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
@@ -63,6 +77,25 @@ export namespace AdaptiveCurveIrmLib {
     return expR >> -q;
   }
 
+  /**
+   * Computes Adaptive Curve IRM borrow rates from utilization and elapsed time.
+   *
+   * @param startUtilization - The market utilization at the start of the period, scaled by WAD.
+   * @param startRateAtTarget - The rate at target utilization at the start of the period, scaled by WAD.
+   * @param elapsed - The elapsed time in seconds.
+   * @returns The average borrow rate, end borrow rate, and end rate at target, all scaled by WAD.
+   * @example
+   * ```ts
+   * import { AdaptiveCurveIrmLib } from "@morpho-org/blue-sdk";
+   *
+   * const rates = AdaptiveCurveIrmLib.getBorrowRate(
+   *   AdaptiveCurveIrmLib.TARGET_UTILIZATION,
+   *   AdaptiveCurveIrmLib.INITIAL_RATE_AT_TARGET,
+   *   12n,
+   * );
+   * // rates satisfies { avgBorrowRate: bigint; endBorrowRate: bigint; endRateAtTarget: bigint }
+   * ```
+   */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function getBorrowRate(
     startUtilization: BigIntish,
@@ -156,6 +189,23 @@ export namespace AdaptiveCurveIrmLib {
     };
   }
 
+  /**
+   * Finds the utilization corresponding to a borrow rate and rate at target.
+   *
+   * @param borrowRate - The borrow rate to invert, scaled by WAD.
+   * @param rateAtTarget - The rate at target utilization, scaled by WAD.
+   * @returns The utilization corresponding to `borrowRate`, scaled by WAD.
+   * @example
+   * ```ts
+   * import { AdaptiveCurveIrmLib } from "@morpho-org/blue-sdk";
+   *
+   * const utilization = AdaptiveCurveIrmLib.getUtilizationAtBorrowRate(
+   *   AdaptiveCurveIrmLib.INITIAL_RATE_AT_TARGET,
+   *   AdaptiveCurveIrmLib.INITIAL_RATE_AT_TARGET,
+   * );
+   * // utilization === AdaptiveCurveIrmLib.TARGET_UTILIZATION
+   * ```
+   */
   export function getUtilizationAtBorrowRate(
     borrowRate: BigIntish,
     rateAtTarget: BigIntish,

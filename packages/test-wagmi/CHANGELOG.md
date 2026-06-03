@@ -1,5 +1,11 @@
 # @morpho-org/test-wagmi
 
+## 3.0.3
+
+### Patch Changes
+
+- [#740](https://github.com/morpho-org/sdks/pull/740) [`43e6cfc`](https://github.com/morpho-org/sdks/commit/43e6cfcf7eaab0355dccbe3f9f55c59cdac72f0a) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Include DEPRECATION.md in published package files so npm tarballs contain the migration guidance.
+
 ## 3.0.2
 
 ### Patch Changes
