@@ -121,13 +121,14 @@ export namespace MarketUtils {
     const normalizedCursor = BigInt(cursor);
     const denominator =
       MathLib.WAD -
-      MathLib.mulDivDown(
+      MathLib.mulDiv(
         normalizedCursor,
         MathLib.WAD - normalizedLltv,
         MathLib.WAD,
+        "Down",
       );
 
-    return MathLib.mulDivDown(MathLib.WAD, MathLib.WAD, denominator);
+    return MathLib.mulDiv(MathLib.WAD, MathLib.WAD, denominator, "Down");
   }
 
   /**

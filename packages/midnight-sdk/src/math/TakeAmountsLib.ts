@@ -22,42 +22,6 @@ import { TickLib } from "./TickLib.js";
  */
 export namespace TakeAmountsLib {
   /**
-   * Dispatches to the selected `MathLib.mulDiv` rounding direction.
-   *
-   * This is an SDK-only arithmetic convenience.
-   *
-   * @param params - Multiplication/division parameters.
-   * @returns `x * y / denominator` with the requested rounding direction.
-   * @throws NegativeValueError when `x`, `y`, or `denominator` is negative.
-   * @throws DivisionByZeroError when `denominator` is zero.
-   * @example
-   * ```ts
-   * import { TakeAmountsLib } from "@morpho-org/midnight-sdk";
-   *
-   * const units = TakeAmountsLib.mulDiv({ x: 5n, y: 1n, denominator: 2n, rounding: "Up" });
-   * console.log(units);
-   * ```
-   */
-  export function mulDiv(params: {
-    readonly x: BigIntish;
-    readonly y: BigIntish;
-    readonly denominator: BigIntish;
-    readonly rounding: RoundingDirection;
-  }) {
-    const x = BigInt(params.x);
-    const y = BigInt(params.y);
-    const denominator = BigInt(params.denominator);
-    assertNonNegative("x", x);
-    assertNonNegative("y", y);
-    assertNonNegative("denominator", denominator);
-    if (denominator === 0n) throw new DivisionByZeroError("denominator");
-
-    return params.rounding === "Up"
-      ? MathLib.mulDivUp(x, y, denominator)
-      : MathLib.mulDivDown(x, y, denominator);
-  }
-
-  /**
    * Computes buyer and seller prices for an offer and settlement fee.
    *
    * @param params - Price parameters.
@@ -178,9 +142,12 @@ export namespace TakeAmountsLib {
     if (buyerPrice > MathLib.WAD)
       throw new PriceGreaterThanOneError(buyerPrice);
 
-    return offer.buy
-      ? MathLib.mulDivUp(targetBuyerAssets, MathLib.WAD, buyerPrice)
-      : MathLib.mulDivDown(targetBuyerAssets, MathLib.WAD, buyerPrice);
+    return MathLib.mulDiv(
+      targetBuyerAssets,
+      MathLib.WAD,
+      buyerPrice,
+      offer.buy ? "Up" : "Down",
+    );
   }
 
   /**
@@ -243,9 +210,12 @@ export namespace TakeAmountsLib {
     const { sellerPrice } = prices({ offer, settlementFee });
     if (sellerPrice === 0n) throw new DivisionByZeroError("sellerPrice");
 
-    return offer.buy
-      ? MathLib.mulDivUp(targetSellerAssets, MathLib.WAD, sellerPrice)
-      : MathLib.mulDivDown(targetSellerAssets, MathLib.WAD, sellerPrice);
+    return MathLib.mulDiv(
+      targetSellerAssets,
+      MathLib.WAD,
+      sellerPrice,
+      offer.buy ? "Up" : "Down",
+    );
   }
 
   /**
@@ -277,12 +247,7 @@ export namespace TakeAmountsLib {
     assertNonNegative("price", price);
     if (price === 0n) throw new DivisionByZeroError("price");
 
-    return mulDiv({
-      x: assets,
-      y: MathLib.WAD,
-      denominator: price,
-      rounding: params.rounding,
-    });
+    return MathLib.mulDiv(assets, MathLib.WAD, price, params.rounding);
   }
 
   /**
