@@ -110,7 +110,7 @@ export namespace TickLib {
     if (normalizedPrice > MathLib.WAD)
       throw new PriceGreaterThanOneError(normalizedPrice);
     if (normalizedSpacing <= 0n || MAX_TICK % normalizedSpacing !== 0n) {
-      throw new InvalidTickSpacingError(0n, normalizedSpacing);
+      throw new InvalidTickSpacingError(normalizedSpacing);
     }
 
     let low = 0n;
@@ -127,7 +127,7 @@ export namespace TickLib {
   }
 
   /**
-   * Snaps a WAD price to the price of the lowest spacing-aligned tick above it.
+   * Snaps a WAD price to the price of the lowest spacing-aligned tick at or above it.
    *
    * This is an SDK-only convenience around `priceToTick` and `tickToPrice`.
    *
@@ -229,11 +229,10 @@ export namespace TickLib {
     const normalizedTick = BigInt(tick);
     const normalizedSpacing = BigInt(spacing);
     assertTickInRange(normalizedTick);
-    if (
-      normalizedSpacing <= 0n ||
-      MAX_TICK % normalizedSpacing !== 0n ||
-      normalizedTick % normalizedSpacing !== 0n
-    ) {
+    if (normalizedSpacing <= 0n || MAX_TICK % normalizedSpacing !== 0n) {
+      throw new InvalidTickSpacingError(normalizedSpacing);
+    }
+    if (normalizedTick % normalizedSpacing !== 0n) {
       throw new InvalidTickSpacingError(normalizedTick, normalizedSpacing);
     }
 

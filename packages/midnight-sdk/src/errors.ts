@@ -146,7 +146,7 @@ export class NegativeValueError extends Error {
 }
 
 /**
- * Thrown when a tick is not aligned or spacing is not valid.
+ * Thrown when tick spacing is invalid or a tick is not aligned to it.
  *
  * @example
  * ```ts
@@ -156,9 +156,13 @@ export class NegativeValueError extends Error {
  * ```
  */
 export class InvalidTickSpacingError extends Error {
-  public constructor(tick: bigint, spacing: bigint) {
+  public constructor(spacing: bigint);
+  public constructor(tick: bigint, spacing: bigint);
+  public constructor(tickOrSpacing: bigint, spacing?: bigint) {
     super(
-      `Tick "${tick}" is not valid for spacing "${spacing}". Use a positive spacing that divides the maximum tick and a tick aligned to it.`,
+      spacing == null
+        ? `Tick spacing "${tickOrSpacing}" is invalid. Use a positive spacing that divides the maximum tick.`
+        : `Tick "${tickOrSpacing}" is not aligned to spacing "${spacing}". Use a tick aligned to the market spacing.`,
     );
     this.name = "InvalidTickSpacingError";
   }
