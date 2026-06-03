@@ -62,15 +62,6 @@ export interface BuildTakesFromOffersParams {
  * ```
  */
 export namespace OfferUtils {
-  const resolveGroup = (params: BuildOfferParams) => {
-    if (params.group != null) return params.group;
-    if (params.getRandomValues != null) {
-      return Offer.randomGroup(params.getRandomValues);
-    }
-
-    throw new MissingOfferGroupError();
-  };
-
   /**
    * Builds an offer from make-offer parameters.
    *
@@ -87,6 +78,11 @@ export namespace OfferUtils {
    */
   export function buildOffer(params: BuildOfferParams) {
     const maker = params.maker as Address;
+    let group = params.group;
+    if (group == null) {
+      if (params.getRandomValues == null) throw new MissingOfferGroupError();
+      group = Offer.randomGroup(params.getRandomValues);
+    }
 
     return new Offer({
       market: params.market,
@@ -95,7 +91,7 @@ export namespace OfferUtils {
       start: params.start ?? 0n,
       expiry: params.expiry,
       tick: params.tick,
-      group: resolveGroup(params),
+      group,
       callback: params.callback ?? zeroAddress,
       callbackData: params.callbackData ?? "0x",
       receiverIfMakerIsSeller: params.receiverIfMakerIsSeller ?? maker,

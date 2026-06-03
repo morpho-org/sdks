@@ -90,30 +90,6 @@ const treeStructHashAbi = [
   { name: "root", type: "bytes32" },
 ] as const;
 
-const isPowerOfTwo = (value: number) =>
-  value > 0 && (value & (value - 1)) === 0;
-
-const heightOf = (length: number) => {
-  if (!isPowerOfTwo(length)) {
-    throw new InvalidOfferPayloadError(
-      `Offer payload size "${length}" must be a power of two.`,
-    );
-  }
-  const height = Math.log2(length);
-  if (height > 20) throw new InvalidOfferTreeHeightError(height);
-
-  return height;
-};
-
-const toOfferStructs = (offers: readonly (IOffer | Offer)[]) => {
-  if (offers.length === 0) {
-    throw new InvalidOfferPayloadError("Offer payload must not be empty.");
-  }
-
-  heightOf(offers.length);
-  return offers.map((offer) => Offer.from(offer).toStruct());
-};
-
 const buildTreeValue = (offers: readonly OfferStruct[]): unknown => {
   if (offers.length === 1) return offers[0]!;
   const mid = offers.length / 2;
@@ -359,8 +335,19 @@ export namespace OfferPayloadUtils {
   export function buildOfferPayload(
     offers: readonly (IOffer | Offer)[],
   ): OfferPayload {
-    const offerStructs = toOfferStructs(offers);
-    const height = heightOf(offerStructs.length);
+    if (offers.length === 0) {
+      throw new InvalidOfferPayloadError("Offer payload must not be empty.");
+    }
+    if ((offers.length & (offers.length - 1)) !== 0) {
+      throw new InvalidOfferPayloadError(
+        `Offer payload size "${offers.length}" must be a power of two.`,
+      );
+    }
+
+    const height = Math.log2(offers.length);
+    if (height > 20) throw new InvalidOfferTreeHeightError(height);
+
+    const offerStructs = offers.map((offer) => Offer.from(offer).toStruct());
     let level = offerStructs.map((offer) => hashOffer(offer));
     const leaves = [...level];
 
