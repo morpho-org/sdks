@@ -321,6 +321,46 @@ export interface OfferStruct {
 }
 
 /**
+ * @internal ABI parameter components for the canonical Solidity `Offer` tuple.
+ */
+export const offerStructAbiComponents = [
+  {
+    name: "market",
+    type: "tuple",
+    components: [
+      { name: "loanToken", type: "address" },
+      {
+        name: "collateralParams",
+        type: "tuple[]",
+        components: [
+          { name: "token", type: "address" },
+          { name: "lltv", type: "uint256" },
+          { name: "maxLif", type: "uint256" },
+          { name: "oracle", type: "address" },
+        ],
+      },
+      { name: "maturity", type: "uint256" },
+      { name: "rcfThreshold", type: "uint256" },
+      { name: "enterGate", type: "address" },
+      { name: "liquidatorGate", type: "address" },
+    ],
+  },
+  { name: "buy", type: "bool" },
+  { name: "maker", type: "address" },
+  { name: "start", type: "uint256" },
+  { name: "expiry", type: "uint256" },
+  { name: "tick", type: "uint256" },
+  { name: "group", type: "bytes32" },
+  { name: "callback", type: "address" },
+  { name: "callbackData", type: "bytes" },
+  { name: "receiverIfMakerIsSeller", type: "address" },
+  { name: "ratifier", type: "address" },
+  { name: "reduceOnly", type: "bool" },
+  { name: "maxUnits", type: "uint256" },
+  { name: "maxAssets", type: "uint256" },
+] as const;
+
+/**
  * Parameters for {@link OfferUtils.buildOffer}.
  *
  * @example
