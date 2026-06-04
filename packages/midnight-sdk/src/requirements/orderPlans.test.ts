@@ -66,7 +66,6 @@ describe("planMakeOfferRequirements", () => {
         type: "setter",
         ratifier: addresses.setterRatifier,
       },
-      isRatifierAuthorized: true,
       root: "0x0000000000000000000000000000000000000000000000000000000000000000",
       payload: "0x1234",
     });
@@ -81,7 +80,7 @@ describe("planMakeOfferRequirements", () => {
     });
   });
 
-  test("behavior: plans ratifier authorization", () => {
+  test("behavior: plans ratifier operator authorization", () => {
     const requirements = planMakeOfferRequirements({
       midnight: addresses.midnight,
       maker: addresses.maker,
@@ -89,14 +88,30 @@ describe("planMakeOfferRequirements", () => {
         type: "ecrecover",
         ratifier: addresses.ecrecoverRatifier,
       },
-      isRatifierAuthorized: false,
+      ratifierOperator: addresses.receiver,
+      isRatifierOperatorAuthorized: false,
     });
 
     expect(requirements).toHaveLength(1);
     expect(requirements[0]).toMatchObject({
       type: "authorization",
-      authorized: addresses.ecrecoverRatifier,
+      authorized: addresses.receiver,
     });
+  });
+
+  test("behavior: skips authorized ratifier operator", () => {
+    const requirements = planMakeOfferRequirements({
+      midnight: addresses.midnight,
+      maker: addresses.maker,
+      ratifierInfo: {
+        type: "ecrecover",
+        ratifier: addresses.ecrecoverRatifier,
+      },
+      ratifierOperator: addresses.receiver,
+      isRatifierOperatorAuthorized: true,
+    });
+
+    expect(requirements).toEqual([]);
   });
 
   test("behavior: skips already ratified setter root", () => {
@@ -107,7 +122,6 @@ describe("planMakeOfferRequirements", () => {
         type: "setter",
         ratifier: addresses.setterRatifier,
       },
-      isRatifierAuthorized: true,
       root: "0x0000000000000000000000000000000000000000000000000000000000000000",
       isRootRatified: true,
     });

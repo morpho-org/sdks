@@ -239,6 +239,40 @@ export class InvalidSettlementFeeIndexError extends Error {
 }
 
 /**
+ * Thrown when an offer builder receives a parameter that cannot satisfy Midnight protocol rules.
+ *
+ * @example
+ * ```ts
+ * import { InvalidOfferParameterError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new InvalidOfferParameterError({ parameter: "tick", value: 5821n });
+ * ```
+ * @param params - Invalid parameter descriptor.
+ */
+export class InvalidOfferParameterError extends Error {
+  /** Invalid offer parameter name. */
+  public readonly parameter: string;
+
+  /** Invalid offer parameter value. */
+  public readonly value: unknown;
+
+  public constructor(params: {
+    readonly parameter: string;
+    readonly value: unknown;
+    readonly instruction?: string;
+    readonly cause?: unknown;
+  }) {
+    super(
+      `Invalid offer parameter "${params.parameter}" with value "${String(params.value)}".${params.instruction == null ? "" : ` ${params.instruction}`}`,
+      params.cause === undefined ? undefined : { cause: params.cause },
+    );
+    this.name = "InvalidOfferParameterError";
+    this.parameter = params.parameter;
+    this.value = params.value;
+  }
+}
+
+/**
  * Thrown when an offer tree height exceeds the ratifier typehash table.
  *
  * @example
@@ -273,18 +307,65 @@ export class InvalidOfferPayloadError extends Error {
 }
 
 /**
- * Thrown when an injected offer-payload validator rejects a payload.
+ * Thrown when the Midnight router API returns a non-2xx response.
  *
  * @example
  * ```ts
- * import { PayloadValidationFailedError } from "@morpho-org/midnight-sdk";
+ * import { MidnightRouterApiError } from "@morpho-org/midnight-sdk";
  *
- * throw new PayloadValidationFailedError("Router rejected payload.");
+ * throw new MidnightRouterApiError({
+ *   status: 400,
+ *   code: "BAD_REQUEST",
+ *   message: "Limit must be greater than 0.",
+ *   details: [{ field: "limit", issue: "Limit must be greater than 0." }],
+ *   requestId: "req-123",
+ * });
  * ```
  */
-export class PayloadValidationFailedError extends Error {
+export class MidnightRouterApiError extends Error {
+  /** HTTP response status from the router. */
+  public readonly status: number;
+  /** Router error code, when the response body includes one. */
+  public readonly code?: string;
+  /** Router error details, when the response body includes them. */
+  public readonly details?: unknown;
+  /** Router request id, when the response body includes one. */
+  public readonly requestId?: string;
+
+  public constructor(params: {
+    readonly status: number;
+    readonly code?: string;
+    readonly message?: string;
+    readonly details?: unknown;
+    readonly requestId?: string;
+    readonly cause?: unknown;
+  }) {
+    super(
+      params.message ??
+        `Midnight router request failed with HTTP status "${params.status}".`,
+      params.cause === undefined ? undefined : { cause: params.cause },
+    );
+    this.name = "MidnightRouterApiError";
+    this.status = params.status;
+    this.code = params.code;
+    this.details = params.details;
+    this.requestId = params.requestId;
+  }
+}
+
+/**
+ * Thrown when the Midnight router API returns a malformed successful response.
+ *
+ * @example
+ * ```ts
+ * import { InvalidMidnightRouterResponseError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new InvalidMidnightRouterResponseError("Router response is missing data.");
+ * ```
+ */
+export class InvalidMidnightRouterResponseError extends Error {
   public constructor(message: string, options?: ErrorOptions) {
     super(message, options);
-    this.name = "PayloadValidationFailedError";
+    this.name = "InvalidMidnightRouterResponseError";
   }
 }

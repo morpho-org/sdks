@@ -61,14 +61,16 @@ export {
   DivisionByZeroError,
   IncompleteMidnightAddressesError,
   InconsistentMarketError,
+  InvalidMidnightRouterResponseError,
+  InvalidOfferParameterError,
   InvalidOfferPayloadError,
   InvalidOfferTreeHeightError,
   InvalidSettlementFeeIndexError,
   InvalidTickSpacingError,
   MidnightAddressAlreadyRegisteredError,
+  MidnightRouterApiError,
   MissingOfferGroupError,
   NoMatchingOffersError,
-  PayloadValidationFailedError,
   PriceGreaterThanOneError,
   SettlementFeeExceedsPriceError,
   TickOutOfRangeError,
@@ -122,6 +124,7 @@ export type {
   OfferStruct,
   QuoteTakeInput,
   TakeStruct,
+  ValidatedOfferParams,
 } from "./offers/index.js";
 export {
   Offer,
@@ -156,16 +159,27 @@ export {
   planSupplyCollateralRequirements,
 } from "./requirements/index.js";
 export type {
+  FetchMempoolRulesParams,
+  MempoolPayloadValidationIssue,
+  MempoolPayloadValidationResult,
+  MempoolRule,
+  MempoolRulesResult,
+  MidnightRouterApiConfig,
+  MidnightRouterFetch,
+  MidnightRouterRequestOptions,
+  ValidateMempoolItemsParams,
+  ValidateMempoolPayloadParams,
+} from "./router/index.js";
+export { MidnightRouterApi } from "./router/index.js";
+export type {
   EcrecoverRatificationTypedData,
   EcrecoverSignature,
   GetRatifierInfoParams,
   OfferPayload,
   OfferProof,
-  ValidateOfferPayloadParams,
 } from "./signatures/index.js";
 export {
   OfferPayloadUtils,
-  OfferValidationUtils,
   RatifierUtils,
 } from "./signatures/index.js";
 export * as Payload from "./signatures/Payload.js";
@@ -180,3 +194,4 @@ export type {
   TokenPermit,
 } from "./types.js";
 export { PermitKind } from "./types.js";
+export { MIDNIGHT_SDK_VERSION } from "./version.js";

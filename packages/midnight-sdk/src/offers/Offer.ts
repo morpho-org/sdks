@@ -380,9 +380,11 @@ export interface BuildOfferParams {
   readonly maker: Address | string;
   /** Tick. */
   readonly tick: BigIntish;
-  /** Maximum units; defaults to zero. */
+  /** Market tick spacing; defaults to the protocol's default spacing. */
+  readonly tickSpacing?: BigIntish;
+  /** Maximum units; defaults to zero. Exactly one of `maxUnits` and `maxAssets` must be non-zero. */
   readonly maxUnits?: BigIntish;
-  /** Maximum buyer or seller assets; defaults to zero. */
+  /** Maximum buyer or seller assets; defaults to zero. Exactly one of `maxUnits` and `maxAssets` must be non-zero. */
   readonly maxAssets?: BigIntish;
   /** Offer start timestamp; defaults to zero. */
   readonly start?: BigIntish;
@@ -396,7 +398,7 @@ export interface BuildOfferParams {
   readonly callback?: Address | string;
   /** Callback payload; defaults to `0x`. */
   readonly callbackData?: Hex;
-  /** Receiver used when maker is seller; defaults to maker. */
+  /** Receiver used when maker is seller; defaults to zero for buy offers and maker for sell offers. */
   readonly receiverIfMakerIsSeller?: Address | string;
   /** Ratifier contract. */
   readonly ratifier: Address | string;

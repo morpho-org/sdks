@@ -52,20 +52,33 @@ export interface MidnightRootApprovalRequirement {
 }
 
 /**
- * Payload-validation requirement descriptor.
+ * Payload-validation requirement descriptor. Apps satisfy this descriptor by
+ * calling `MidnightRouterApi.validateMempoolPayload` or
+ * `MidnightRouterApi.validateMempoolItems` before publishing the onchain
+ * mempool submission call.
  *
  * @example
  * ```ts
- * import type { MidnightPayloadValidationRequirement } from "@morpho-org/midnight-sdk";
+ * import {
+ *   MidnightRouterApi,
+ *   type MidnightPayloadValidationRequirement,
+ * } from "@morpho-org/midnight-sdk";
  *
- * const requirement = {} as MidnightPayloadValidationRequirement;
- * console.log(requirement.payload);
+ * const requirement: MidnightPayloadValidationRequirement = {
+ *   type: "payloadValidation",
+ *   payload: "0x0100000000",
+ * };
+ * const validation = await MidnightRouterApi.validateMempoolPayload({
+ *   chainId: 8453,
+ *   payload: requirement.payload,
+ * });
+ * console.log(validation.valid);
  * ```
  */
 export interface MidnightPayloadValidationRequirement {
   /** Requirement discriminator. */
   readonly type: "payloadValidation";
-  /** Payload to validate. */
+  /** Payload to validate with `MidnightRouterApi`. */
   readonly payload: Hex;
 }
 
@@ -167,6 +180,41 @@ export interface PlanSupplyCollateralRequirementsParams {
   readonly collateralAllowance: BigIntish;
 }
 
+interface PlanMakeOfferRequirementsBaseParams {
+  /** Core Midnight contract address. */
+  readonly midnight: Address | string;
+  /** Maker account creating the offer. */
+  readonly maker: Address | string;
+  /** Ratifier route selected for the maker. */
+  readonly ratifierInfo: RatifierInfo;
+  /** Typed data required by Ecrecover ratification. */
+  readonly typedData?: EcrecoverRatificationTypedData;
+  /** Root used by Setter ratification. */
+  readonly root?: Hex;
+  /** Whether the Setter root has already been ratified. */
+  readonly isRootRatified?: boolean;
+  /** Setter root-approval call. */
+  readonly rootApprovalCall?: MidnightCall;
+  /** Router/app payload requiring validation with `MidnightRouterApi`. */
+  readonly payload?: Hex;
+  /** Whether payload validation is already complete. */
+  readonly payloadValidated?: boolean;
+}
+
+type PlanMakeOfferRatifierOperatorParams =
+  | {
+      /** Signer/operator that must be authorized by the maker for ratification. */
+      readonly ratifierOperator: Address | string;
+      /** Current maker authorization for `ratifierOperator`. */
+      readonly isRatifierOperatorAuthorized: boolean;
+    }
+  | {
+      /** Omit when the maker signs or submits ratifier operations directly. */
+      readonly ratifierOperator?: undefined;
+      /** Omit when no delegated ratifier operator is supplied. */
+      readonly isRatifierOperatorAuthorized?: undefined;
+    };
+
 /**
  * Parameters for {@link planMakeOfferRequirements}.
  *
@@ -178,28 +226,8 @@ export interface PlanSupplyCollateralRequirementsParams {
  * console.log(params.ratifierInfo.type);
  * ```
  */
-export interface PlanMakeOfferRequirementsParams {
-  /** Core Midnight contract address. */
-  readonly midnight: Address | string;
-  /** Maker account creating the offer. */
-  readonly maker: Address | string;
-  /** Ratifier route selected for the maker. */
-  readonly ratifierInfo: RatifierInfo;
-  /** Current maker authorization for the selected ratifier signer/operator. */
-  readonly isRatifierAuthorized: boolean;
-  /** Typed data required by Ecrecover ratification. */
-  readonly typedData?: EcrecoverRatificationTypedData;
-  /** Root used by Setter ratification. */
-  readonly root?: Hex;
-  /** Whether the Setter root has already been ratified. */
-  readonly isRootRatified?: boolean;
-  /** Setter root-approval call. */
-  readonly rootApprovalCall?: MidnightCall;
-  /** Router/app payload requiring validation. */
-  readonly payload?: Hex;
-  /** Whether payload validation is already complete. */
-  readonly payloadValidated?: boolean;
-}
+export type PlanMakeOfferRequirementsParams =
+  PlanMakeOfferRequirementsBaseParams & PlanMakeOfferRatifierOperatorParams;
 
 const push = (
   requirements: MidnightRequirement[],
@@ -316,7 +344,8 @@ export function planSupplyCollateralRequirements(
 }
 
 /**
- * Plans make-offer signature, root approval, and payload-validation requirements.
+ * Plans make-offer delegated-operator authorization, signature, root approval,
+ * and payload-validation requirements.
  *
  * @param params - Requirement planning inputs.
  * @returns Neutral requirement descriptors.
@@ -332,15 +361,17 @@ export function planMakeOfferRequirements(
   params: PlanMakeOfferRequirementsParams,
 ): readonly MidnightRequirement[] {
   const requirements: MidnightRequirement[] = [];
-  push(
-    requirements,
-    planAuthorizationRequirement({
-      midnight: params.midnight,
-      authorizer: params.maker,
-      authorized: params.ratifierInfo.ratifier,
-      isAuthorized: params.isRatifierAuthorized,
-    }),
-  );
+  if (params.ratifierOperator != null) {
+    push(
+      requirements,
+      planAuthorizationRequirement({
+        midnight: params.midnight,
+        authorizer: params.maker,
+        authorized: params.ratifierOperator,
+        isAuthorized: params.isRatifierOperatorAuthorized,
+      }),
+    );
+  }
 
   if (params.ratifierInfo.type === "ecrecover" && params.typedData != null) {
     requirements.push({ type: "signature", typedData: params.typedData });
