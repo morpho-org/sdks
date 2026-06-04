@@ -51,6 +51,7 @@ export {
   MAX_COLLATERALS,
   MAX_COLLATERALS_PER_BORROWER,
   MAX_CONTINUOUS_FEE,
+  MAX_OFFERS_PER_TREE,
   MAX_SETTLEMENT_FEES,
   MAX_TICK,
   OFFER_TYPEHASH,
@@ -167,6 +168,7 @@ export {
   OfferValidationUtils,
   RatifierUtils,
 } from "./signatures/index.js";
+export * as Payload from "./signatures/Payload.js";
 export type {
   BigIntish,
   CollateralSupply,
