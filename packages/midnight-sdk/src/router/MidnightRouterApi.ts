@@ -50,19 +50,13 @@ export type MidnightRouterRequestOptions = Omit<RequestInit, "method" | "body">;
  * import type { MidnightRouterApiConfig } from "@morpho-org/midnight-sdk";
  *
  * const config: MidnightRouterApiConfig = {
- *   url: "https://router.morpho.org",
+ *   baseUrl: "https://router.morpho.org",
  * };
- * console.log(config.url);
+ * console.log(config.baseUrl);
  * ```
  */
 export interface MidnightRouterApiConfig {
   /** Router API base URL. Defaults to `https://router.morpho.org`. */
-  readonly url?: string | URL;
-  /**
-   * Router API base URL.
-   *
-   * @deprecated Use `url` instead.
-   */
   readonly baseUrl?: string | URL;
   /** Fetch implementation. Defaults to the global `fetch`. */
   readonly fetch?: MidnightRouterFetch;
@@ -392,7 +386,6 @@ export namespace MidnightRouterApi {
 
 async function requestRouter(params: RouterRequestParams): Promise<unknown> {
   const url = buildRouterUrl({
-    url: params.url,
     baseUrl: params.baseUrl,
     path: params.path,
     query: params.query,
@@ -428,12 +421,11 @@ async function requestRouter(params: RouterRequestParams): Promise<unknown> {
 }
 
 function buildRouterUrl(params: {
-  readonly url?: string | URL;
   readonly baseUrl?: string | URL;
   readonly path: string;
   readonly query?: Readonly<Record<string, QueryValue>>;
 }) {
-  const baseUrl = buildRouterBaseUrl(params.url ?? params.baseUrl);
+  const baseUrl = buildRouterBaseUrl(params.baseUrl);
   const relativePath = params.path.startsWith("/")
     ? params.path.slice(1)
     : params.path;
@@ -450,8 +442,8 @@ function buildRouterUrl(params: {
   return url;
 }
 
-function buildRouterBaseUrl(url?: string | URL) {
-  const baseUrl = new URL(url ?? DEFAULT_ROUTER_API_URL);
+function buildRouterBaseUrl(input?: string | URL) {
+  const baseUrl = new URL(input ?? DEFAULT_ROUTER_API_URL);
   baseUrl.search = "";
   baseUrl.hash = "";
   if (!baseUrl.pathname.endsWith("/")) {

@@ -254,6 +254,28 @@ describe("OfferPayloadUtils.verifyOfferProof", () => {
       }),
     ).toBe(false);
   });
+
+  test("behavior: rejects out-of-range leaf index", () => {
+    const offer = baseOffer();
+    const offerRoot = OfferPayloadUtils.hashOffer(offer);
+
+    expect(
+      OfferPayloadUtils.verifyOfferProof({
+        offer,
+        root: offerRoot,
+        leafIndex: 1n,
+        proof: [],
+      }),
+    ).toBe(false);
+    expect(
+      OfferPayloadUtils.verifyOfferProof({
+        offer,
+        root: offerRoot,
+        leafIndex: -1n,
+        proof: [],
+      }),
+    ).toBe(false);
+  });
 });
 
 describe("OfferPayloadUtils.buildSetterRootApprovalCall", () => {

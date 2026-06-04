@@ -830,14 +830,18 @@ export namespace OfferPayloadUtils {
     readonly proof: readonly Hex[];
   }) {
     let node = hashOffer(params.offer);
-    let leafIndex = BigInt(params.leafIndex);
+    const leafIndex = BigInt(params.leafIndex);
+    if (leafIndex < 0n || leafIndex >> BigInt(params.proof.length) !== 0n) {
+      return false;
+    }
+    let remainingLeafIndex = leafIndex;
 
     for (const sibling of params.proof) {
       node =
-        (leafIndex & 1n) === 0n
+        (remainingLeafIndex & 1n) === 0n
           ? hashNode(node, sibling as Hex)
           : hashNode(sibling as Hex, node);
-      leafIndex >>= 1n;
+      remainingLeafIndex >>= 1n;
     }
 
     return node === params.root;

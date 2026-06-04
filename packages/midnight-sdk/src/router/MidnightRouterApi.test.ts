@@ -108,7 +108,7 @@ describe("MidnightRouterApi.validateMempoolPayload", () => {
     expect(headers.get("x-app")).toBe("markets-v2");
   });
 
-  test("behavior: uses url override", async () => {
+  test("behavior: uses baseUrl override", async () => {
     const { calls, fetch } = createJsonFetch({
       data: { issues: [] },
     });
@@ -116,7 +116,7 @@ describe("MidnightRouterApi.validateMempoolPayload", () => {
     await MidnightRouterApi.validateMempoolPayload({
       chainId: 8453,
       payload: "0x0100000000" as Payload.Payload,
-      url: "https://router.example/base/",
+      baseUrl: "https://router.example/base/",
       fetch,
     });
 
@@ -226,7 +226,7 @@ describe("MidnightRouterApi.fetchMempoolRules", () => {
       timestamp,
       limit: 100,
       cursor: "previous",
-      url: new URL("https://router.example"),
+      baseUrl: new URL("https://router.example"),
       fetch,
       request: {
         headers: { "x-app": "markets-v2" },
@@ -276,7 +276,7 @@ describe("MidnightRouterApi.fetchMempoolRules", () => {
     expect(headers.get("x-app")).toBe("markets-v2");
   });
 
-  test("behavior: accepts deprecated baseUrl override", async () => {
+  test("behavior: appends paths to baseUrl path", async () => {
     const { calls, fetch } = createJsonFetch({
       cursor: null,
       data: [],
@@ -290,23 +290,6 @@ describe("MidnightRouterApi.fetchMempoolRules", () => {
     const url = getRequestUrl(calls[0]!);
     expect(url.origin).toBe("https://router.example");
     expect(url.pathname).toBe("/base/v1/midnight/mempool/rules");
-  });
-
-  test("behavior: prefers url over deprecated baseUrl", async () => {
-    const { calls, fetch } = createJsonFetch({
-      cursor: null,
-      data: [],
-    });
-
-    await MidnightRouterApi.fetchMempoolRules({
-      url: new URL("https://router.example/current/"),
-      baseUrl: "https://legacy-router.example/legacy/",
-      fetch,
-    });
-
-    const url = getRequestUrl(calls[0]!);
-    expect(url.origin).toBe("https://router.example");
-    expect(url.pathname).toBe("/current/v1/midnight/mempool/rules");
   });
 
   test("error: MidnightRouterApiError", async () => {
