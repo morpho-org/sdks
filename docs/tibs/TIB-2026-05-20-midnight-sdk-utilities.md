@@ -27,7 +27,7 @@ Keeping those details only in app code makes every downstream integration re-lea
 **Goals**
 
 - Add `@morpho-org/midnight-sdk` as the source of truth for Midnight addresses, ABI literals, constants, protocol value types, classes, typed errors, and deterministic helper functions.
-- Provide utilities that directly support the current markets-v2 app action flows without importing app code: market struct conversion, offer/take conversion, tick/price math, units/assets rounding helpers grouped under utility namespaces, `MidnightBundles` namespaced calldata encoders, requirement planning, Blue-style aggregate fetchers that return populated classes, and make-offer signature/validation helpers.
+- Provide utilities that directly support the current markets-v2 app action flows without importing app code: market struct conversion, offer/take conversion, tick/price math, units/assets rounding helpers grouped under utility namespaces, requirement planning, Blue-style aggregate fetchers that return populated classes, and make-offer signature/validation helpers.
 - Keep the package framework-free: no React, wagmi, Redux, app router state, UI action-flow types, or app-specific error classes.
 - Keep I/O isolated in explicit boundary modules such as `fetch/` and `router/`. Requirement planners stay pure once current state is supplied, and pure protocol helpers remain testable without mocks.
 - Pin the Midnight ABI surface in package source and expose an address-registry contract for `Midnight`, `MidnightBundles`, `MidnightMempool`, `EcrecoverRatifier`, `SetterRatifier`, and Permit2. Production addresses are added only when reviewed deployment artifacts are available.
@@ -42,6 +42,7 @@ Keeping those details only in app code makes every downstream integration re-lea
 - No React, wagmi, app `ActionFlow`, toast, label, analytics, or UI-state abstractions in `midnight-sdk`.
 - No quoter or orderbook client in this package. The package can define quote/take input shapes and build on-chain `Take[]`, but executable offers still come from the app or a future orderbook SDK.
 - No protocol/admin operations beyond utility support for user-facing order, requirement, fetch, and signature flows.
+- No standalone `MidnightBundles` namespace or individual periphery bundle-call encoders. Those helpers are write-oriented one-wrapper-per-Solidity-function calldata utilities, so they do not add enough SDK value to be public API.
 - No standalone `MidnightCalls` namespace or individual direct core-call encoders. One-wrapper-per-Solidity-function calldata utilities are not a useful SDK surface; direct `Midnight` calls should be produced by the higher-level helper that owns the workflow, or stay app-local until a higher-level action/entity surface exists.
 - No exported one-wrapper-per-Solidity-function fetchers. Public fetchers should return populated SDK classes or grouped requirement-input classes, not loose primitive values from individual protocol getters.
 - No runtime ABI fetch. ABI literals and address-registry fields are pinned in source; production address values are added only from reviewed deployment artifacts.
@@ -92,9 +93,6 @@ packages/midnight-sdk/
     |   +-- TakeAmountsLib.ts
     |   +-- TickLib.ts
     |   +-- index.ts
-    +-- bundles/
-    |   +-- MidnightBundles.ts
-    |   +-- index.ts
     +-- fetch/
     |   +-- Market.ts
     |   +-- Position.ts
@@ -118,8 +116,8 @@ packages/midnight-sdk/
 ```
 
 The root barrel exports the stable package surface explicitly, including `MarketUtils`,
-`OfferUtils`, `TickLib`, `TakeAmountsLib`, `ConsumableUnitsLib`, `MidnightBundles`,
-`Payload`, `MidnightRouterApi`, `MIDNIGHT_SDK_VERSION`, typed errors such as
+`OfferUtils`, `TickLib`, `TakeAmountsLib`, `ConsumableUnitsLib`, `Payload`,
+`MidnightRouterApi`, `MIDNIGHT_SDK_VERSION`, typed errors such as
 `InvalidOfferGroupError`, aggregate class fetchers such as `fetchMarket`, `fetchPosition`, and
 `fetchOfferStatus`, grouped requirement-input fetchers, and their supporting parameter types. The
 initial implementation keeps viem-backed aggregate fetch helpers in the root export; a separate
@@ -150,14 +148,16 @@ const addresses = getMidnightAddresses(chainId);
 `abis.ts` owns pinned ABI literals:
 
 - `midnightAbi`
-- `midnightBundlesAbi`
+- `midnightBundlesAbi` for integrators that intentionally encode periphery bundle calls themselves
 - `erc20Abi` for allowance reads
 - `ecrecoverRatifierAbi`
 - `setterRatifierAbi`
 
 Mempool submission remains a raw `to` + payload call descriptor rather than an ABI-backed
-`midnightMempoolAbi`. Each pinned ABI literal documents the `morpho-org/midnight` source commit and
-artifact path. Runtime ABI fetches are out of scope.
+`midnightMempoolAbi`. Periphery bundle calls remain app-local or integrator-owned through
+`midnightBundlesAbi` rather than SDK-owned `MidnightBundles` one-function encoder helpers. Each
+pinned ABI literal documents the `morpho-org/midnight` source commit and artifact path. Runtime ABI
+fetches are out of scope.
 
 ### Types, Classes, and Constants
 
@@ -225,8 +225,8 @@ Pure helpers should follow the same naming shape as `blue-sdk`: Solidity librari
 derived helpers live in domain `*Utils` namespaces. Narrow SDK conveniences may live in an
 onchain-named library only when they are clearly part of that library's domain and are documented as
 SDK additions. Do not create a broad `Midnight` namespace that mixes market math, offers,
-signatures, and calldata, and do not create a `MidnightCalls` namespace that simply mirrors direct
-core contract entrypoints one by one.
+signatures, and calldata. Do not create `MidnightBundles` or `MidnightCalls` namespaces that simply
+mirror write-oriented Solidity entrypoints one by one.
 
 Expose deterministic library methods:
 
@@ -253,8 +253,8 @@ The pure helpers that mirror `TakeAmountsLib` should accept `settlementFee` as a
 
 Rounding names should match local SDK convention: `"Up"` and `"Down"`. Tests must cover the app-known boundary cases:
 
-- borrow market orders round max units up for `MidnightBundles.supplyCollateralAndSellWithAssetsTarget`;
-- lend market orders round min units down for `MidnightBundles.buyWithAssetsTargetAndWithdrawCollateral`;
+- borrow market orders round max units up for the periphery `supplyCollateralAndSellWithAssetsTarget` route;
+- lend market orders round min units down for the periphery `buyWithAssetsTargetAndWithdrawCollateral` route;
 - `TickLib` prices are rounded to `PRICE_ROUNDING_STEP`;
 - `TickLib.priceToTick` returns the lowest spacing-aligned tick with price greater than or equal to the input price.
 
@@ -282,56 +282,17 @@ Make-offer helpers should support the limit-order path without importing app cod
 - keep offer publication/submission onchain through `OfferPayloadUtils.buildMempoolSubmissionCall`; the current Router API does not expose a submit endpoint.
 - do not add router gatekeeper policy to the protocol helpers: no ratifier allowlists, content-addressed group requirement, full-payload inclusion rule, same-ratifier tree policy, minimum duration, callback policy, or validation timestamp logic.
 
-### MidnightBundles Namespace
+### Periphery Bundle Calls
 
-The package should centralize every `MidnightBundles` periphery encoder in one namespace, mirroring
-the `BundlerAction` pattern used by existing Morpho bundle encoders. The namespace is the public API;
-do not export free-floating `build*Call` functions for individual periphery routes.
+The package should not expose `MidnightBundles` periphery encoders. Individual encoders such as
+`buyWithUnitsTargetAndWithdrawCollateral`, `supplyCollateralAndSellWithUnitsTarget`,
+`buyWithAssetsTargetAndWithdrawCollateral`, `supplyCollateralAndSellWithAssetsTarget`, and
+`repayAndWithdrawCollateral` only mirror the Solidity ABI one function at a time, so they do not add
+enough SDK value to be public API.
 
-```ts
-export namespace MidnightBundles {
-  export function buyWithUnitsTargetAndWithdrawCollateral(
-    params: BuyWithUnitsTargetAndWithdrawCollateralParams,
-  ): MidnightCall;
-
-  export function supplyCollateralAndSellWithUnitsTarget(
-    params: SupplyCollateralAndSellWithUnitsTargetParams,
-  ): MidnightCall;
-
-  export function buyWithAssetsTargetAndWithdrawCollateral(
-    params: BuyWithAssetsTargetAndWithdrawCollateralParams,
-  ): MidnightCall;
-
-  export function supplyCollateralAndSellWithAssetsTarget(
-    params: SupplyCollateralAndSellWithAssetsTargetParams,
-  ): MidnightCall;
-
-  export function repayAndWithdrawCollateral(
-    params: RepayAndWithdrawCollateralParams,
-  ): MidnightCall;
-}
-```
-
-The namespace methods should use the Solidity entrypoint names because the periphery contract does
-not expose a generic multicall-style action dispatcher. Each method returns a neutral call
-descriptor:
-
-```ts
-interface MidnightCall {
-  readonly to: Address;
-  readonly data: Hex;
-}
-```
-
-The namespace should cover the five public periphery entrypoints exactly:
-
-| Namespace method | Solidity entrypoint |
-| --- | --- |
-| `MidnightBundles.buyWithUnitsTargetAndWithdrawCollateral` | `buyWithUnitsTargetAndWithdrawCollateral` |
-| `MidnightBundles.supplyCollateralAndSellWithUnitsTarget` | `supplyCollateralAndSellWithUnitsTarget` |
-| `MidnightBundles.buyWithAssetsTargetAndWithdrawCollateral` | `buyWithAssetsTargetAndWithdrawCollateral` |
-| `MidnightBundles.supplyCollateralAndSellWithAssetsTarget` | `supplyCollateralAndSellWithAssetsTarget` |
-| `MidnightBundles.repayAndWithdrawCollateral` | `repayAndWithdrawCollateral` |
+When a higher-level Midnight helper needs a periphery bundle call, that helper owns the neutral call
+descriptor it returns. Market-order bundle calldata remains app-local for this TIB, or moves to a
+future high-level `morpho-sdk`/Midnight action surface once action and entity names are settled.
 
 ### Direct Core Calls
 
@@ -402,8 +363,8 @@ Initial planners:
 
 - `planApprovalRequirement` from required amount and current allowance;
 - `planAuthorizationRequirement` from authorizer, authorized contract, and current `isAuthorized`;
-- `planBorrowMarketOrderRequirements` for collateral approval to `MidnightBundles` and bundler authorization;
-- `planLendMarketOrderRequirements` for loan-token approval to `MidnightBundles` and bundler authorization;
+- `planBorrowMarketOrderRequirements` for collateral approval to the periphery bundler and bundler authorization;
+- `planLendMarketOrderRequirements` for loan-token approval to the periphery bundler and bundler authorization;
 - `planSupplyCollateralRequirements` for collateral approval to the core Midnight contract;
 - `planMakeOfferRequirements` for optional delegated signer/operator authorization, Ecrecover signature, Setter root approval, and payload validation.
 
@@ -446,10 +407,10 @@ The package should make these current app flows straightforward without becoming
 
 | Current app flow | Midnight SDK support |
 | --- | --- |
-| Borrow market order with collateral | `TickLib.rateToPrice`/tick helpers, `TakeAmountsLib` max-units rounding, `OfferUtils.buildTakesFromOffers`, `planBorrowMarketOrderRequirements`, `MidnightBundles.supplyCollateralAndSellWithAssetsTarget` |
+| Borrow market order with collateral | `TickLib.rateToPrice`/tick helpers, `TakeAmountsLib` max-units rounding, `OfferUtils.buildTakesFromOffers`, `planBorrowMarketOrderRequirements`; periphery bundle calldata stays app-local until a higher-level action surface exists |
 | Borrow against existing collateral | Same bundle call with empty `CollateralSupply[]`; skip collateral allowance planning when collateral amount is zero |
 | Supply collateral only | `planSupplyCollateralRequirements`; direct `Midnight.supplyCollateral` encoding stays app-local until a higher-level action surface exists |
-| Lend market order | `TakeAmountsLib` min-units rounding, `planLendMarketOrderRequirements`, `MidnightBundles.buyWithAssetsTargetAndWithdrawCollateral` with empty withdrawals |
+| Lend market order | `TakeAmountsLib` min-units rounding, `planLendMarketOrderRequirements`; periphery bundle calldata stays app-local until a higher-level action surface exists |
 | Borrow limit order | optional app-local collateral supply call, `OfferUtils.buildOffer` with `buy: false`, `RatifierUtils`, `MidnightRouterApi`, `OfferPayloadUtils` signature/root approval helpers |
 | Lend/multi-limit order | loan-token approval to the core Midnight contract, `OfferUtils.buildOffer` with `buy: true`, grouped payload construction, `RatifierUtils`, `MidnightRouterApi`, `OfferPayloadUtils` signature/root approval helpers |
 
@@ -460,7 +421,7 @@ Status as of the 2026-06-04 implementation review:
 - **Phase 1 - Package skeleton: completed.** `packages/midnight-sdk` has package metadata, TypeScript configs, package-level `AGENTS.md`, public barrel exports, test project wiring, and a changeset.
 - **Phase 2 - Contract surface: completed with address deployment deferred.** ABI literals, constants, types/classes, typed errors, and address-registry helpers are in package source. ABI literals pin `morpho-org/midnight` commit `a7c6da7e70cb216982f6c5d20b46f40b943e67e4`. Production address entries remain empty until reviewed deployment artifacts are available; custom registration covers local and fork deployments meanwhile.
 - **Phase 3 - Math and offer utilities: completed.** `TickLib`, `TakeAmountsLib`, `ConsumableUnitsLib`, `MarketUtils`, `Offer`, `Take`, and `OfferUtils` landed with colocated unit tests and property-based tests for tick/price, unit conversion, offer-group creation, and protocol-only offer-group validation behavior.
-- **Phase 4 - Bundle encoders: completed; direct encoders rejected.** `MidnightBundles` remains the only standalone calldata namespace. `MidnightCalls` and one-wrapper-per-core-entrypoint encoders should be removed from the public surface.
+- **Phase 4 - Write-oriented encoders rejected.** `MidnightBundles`, `MidnightCalls`, and one-wrapper-per-entrypoint encoders should be removed from the public surface. Workflow-owned helpers may still return neutral call descriptors when the call is part of a higher-value SDK workflow.
 - **Phase 5 - Fetch and requirements: needs aggregate-fetch revision.** Fetch helpers use named `viem/actions` imports and mock-transport tests, but the public fetch surface should be collapsed into aggregate class fetchers (`fetchMarket`, `fetchPosition`, `fetchOfferStatus`) and grouped requirement-input fetchers. Requirement planners remain pure once current allowance, authorization, ratifier, root, signature, and validation inputs are supplied.
 - **Phase 6 - Signatures, validation, and payloads: completed.** `RatifierUtils`, `OfferPayloadUtils`, `Payload`, and `MidnightRouterApi` landed. Router validation/rules are a lightweight `fetch` boundary rather than a runtime router dependency, and offer publication remains onchain through the existing Midnight mempool call descriptor. Maker-side payload utilities include Ecrecover/Setter ratifier-data decoding, local proof verification, Setter root approval descriptors, and Ecrecover root cancellation descriptors.
 - **Phase 7 - App adoption: deferred.** Updating the markets-v2 app in `morpho-org/morpho-apps` remains a separate repository change and is not required to land this SDK repo PR.
@@ -516,8 +477,8 @@ Expose app-style labels, call requests, signature requests, and success callback
 
 ## Security
 
-- User bounds are first-class. Bundle builders must preserve `maxBuyerAssets`, `minSellerAssets`, `minUnits`, `maxUnits`, referral fee handling, and empty-withdrawal/empty-collateral semantics exactly.
-- Bundler skip semantics are documented and tested. Individual failed `take` calls may be skipped by `MidnightBundles`, but aggregate fills must still satisfy the user's bound.
+- User bounds are first-class. Unit/asset conversion helpers and take construction must preserve `maxBuyerAssets`, `minSellerAssets`, `minUnits`, `maxUnits`, referral fee handling, and empty-withdrawal/empty-collateral semantics expected by app-local bundle calls.
+- Bundler skip semantics remain an app or future action-surface concern. Individual failed `take` calls may be skipped by `MidnightBundles`, but aggregate fills must still satisfy the user's bound.
 - Authorization is explicit. `setIsAuthorized` calls are returned only as requirement descriptors; no helper silently grants authorization.
 - Permit helpers must distinguish `PermitKind.None`, `PermitKind.ERC2612`, and `PermitKind.Permit2`; tests cover encoded `TokenPermit` shapes.
 - Signature helpers must never own wallet state. They accept injected signing callbacks or return typed data descriptors.
