@@ -1,4 +1,7 @@
-import type { RoundingDirection as SharedRoundingDirection } from "@morpho-org/morpho-ts";
+import type {
+  BigIntish as SharedBigIntish,
+  RoundingDirection as SharedRoundingDirection,
+} from "@morpho-org/morpho-ts";
 import type { Address, Hex } from "viem";
 
 /**
@@ -11,7 +14,7 @@ import type { Address, Hex } from "viem";
  * const assets: BigIntish = 1_000n;
  * ```
  */
-export type BigIntish = bigint | number | string;
+export type BigIntish = SharedBigIntish;
 
 /**
  * Rounding direction used by Midnight fixed-point helpers.

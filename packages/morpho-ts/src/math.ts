@@ -1,3 +1,4 @@
+import { DivisionByZeroError, InvalidBitLengthError } from "./errors.js";
 import type { BigIntish } from "./types.js";
 
 /**
@@ -42,10 +43,10 @@ export namespace MathLib {
    *
    * @param nBits - Nibble-aligned bit length.
    * @returns Maximum unsigned integer for the bit length.
-   * @throws Error when `nBits` is not divisible by four.
+   * @throws InvalidBitLengthError when `nBits` is not positive or not divisible by four.
    */
   export function maxUint(nBits: number) {
-    if (nBits % 4 !== 0) throw Error(`Invalid number of bits: ${nBits}`);
+    if (nBits <= 0 || nBits % 4 !== 0) throw new InvalidBitLengthError(nBits);
 
     return BigInt(`0x${"f".repeat(nBits / 4)}`);
   }
@@ -148,7 +149,7 @@ export namespace MathLib {
    * @param x - The numerator accepted by `BigInt`.
    * @param y - The denominator accepted by `BigInt`.
    * @returns The rounded-down WAD quotient.
-   * @throws Error when `y` is zero.
+   * @throws DivisionByZeroError when `y` is zero.
    * @throws When `BigInt` cannot convert an input.
    */
   export function wDivDown(x: BigIntish, y: BigIntish) {
@@ -161,7 +162,7 @@ export namespace MathLib {
    * @param x - The numerator accepted by `BigInt`.
    * @param y - The denominator accepted by `BigInt`.
    * @returns The rounded-up WAD quotient.
-   * @throws Error when `y` is zero.
+   * @throws DivisionByZeroError when `y` is zero.
    * @throws When `BigInt` cannot convert an input.
    */
   export function wDivUp(x: BigIntish, y: BigIntish) {
@@ -175,7 +176,7 @@ export namespace MathLib {
    * @param y - The denominator accepted by `BigInt`.
    * @param rounding - Rounding direction.
    * @returns The rounded WAD quotient.
-   * @throws Error when `y` is zero.
+   * @throws DivisionByZeroError when `y` is zero.
    * @throws When `BigInt` cannot convert an input.
    */
   // biome-ignore lint/complexity/useMaxParams: Mirrors Solidity MathLib helper shape.
@@ -194,7 +195,7 @@ export namespace MathLib {
    * @param y - The second number accepted by `BigInt`.
    * @param denominator - The denominator accepted by `BigInt`.
    * @returns The rounded-down quotient.
-   * @throws Error when `denominator` is zero.
+   * @throws DivisionByZeroError when `denominator` is zero.
    * @throws When `BigInt` cannot convert an input.
    */
   // biome-ignore lint/complexity/useMaxParams: Mirrors Solidity MathLib helper shape.
@@ -206,7 +207,8 @@ export namespace MathLib {
     const normalizedX = BigInt(x);
     const normalizedY = BigInt(y);
     const normalizedDenominator = BigInt(denominator);
-    if (normalizedDenominator === 0n) throw Error("MathLib: DIVISION_BY_ZERO");
+    if (normalizedDenominator === 0n)
+      throw new DivisionByZeroError("denominator");
 
     return (normalizedX * normalizedY) / normalizedDenominator;
   }
@@ -218,7 +220,7 @@ export namespace MathLib {
    * @param y - The second number accepted by `BigInt`.
    * @param denominator - The denominator accepted by `BigInt`.
    * @returns The rounded-up quotient.
-   * @throws Error when `denominator` is zero.
+   * @throws DivisionByZeroError when `denominator` is zero.
    * @throws When `BigInt` cannot convert an input.
    */
   // biome-ignore lint/complexity/useMaxParams: Mirrors Solidity MathLib helper shape.
@@ -226,7 +228,8 @@ export namespace MathLib {
     const normalizedX = BigInt(x);
     const normalizedY = BigInt(y);
     const normalizedDenominator = BigInt(denominator);
-    if (normalizedDenominator === 0n) throw Error("MathLib: DIVISION_BY_ZERO");
+    if (normalizedDenominator === 0n)
+      throw new DivisionByZeroError("denominator");
 
     const product = normalizedX * normalizedY;
     const roundup = product % normalizedDenominator > 0n ? 1n : 0n;
@@ -242,7 +245,7 @@ export namespace MathLib {
    * @param denominator - The denominator accepted by `BigInt`.
    * @param rounding - Rounding direction.
    * @returns The rounded quotient.
-   * @throws Error when `denominator` is zero.
+   * @throws DivisionByZeroError when `denominator` is zero.
    * @throws When `BigInt` cannot convert an input.
    */
   // biome-ignore lint/complexity/useMaxParams: Mirrors Solidity MathLib helper shape.

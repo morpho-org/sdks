@@ -1,11 +1,14 @@
-import { MathLib, NegativeValueError } from "@morpho-org/morpho-ts";
+import {
+  DivisionByZeroError,
+  MathLib,
+  NegativeValueError,
+} from "@morpho-org/morpho-ts";
 import fc from "fast-check";
 import { describe, expect, test } from "vitest";
 
 import { baseOffer } from "../__test__/fixtures.js";
 import { MAX_TICK } from "../constants.js";
 import {
-  DivisionByZeroError,
   PriceGreaterThanOneError,
   SettlementFeeExceedsPriceError,
 } from "../errors.js";

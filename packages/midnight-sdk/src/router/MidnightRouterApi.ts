@@ -9,7 +9,7 @@ import type {
 import { encode as encodePayload } from "../signatures/Payload.js";
 import { MIDNIGHT_SDK_VERSION } from "../version.js";
 
-const DEFAULT_BASE_URL = "https://router.morpho.dev";
+const DEFAULT_ROUTER_API_URL = new URL("https://router.morpho.org");
 
 /**
  * Fetch implementation used by Midnight router API helpers.
@@ -50,13 +50,19 @@ export type MidnightRouterRequestOptions = Omit<RequestInit, "method" | "body">;
  * import type { MidnightRouterApiConfig } from "@morpho-org/midnight-sdk";
  *
  * const config: MidnightRouterApiConfig = {
- *   baseUrl: "https://router.morpho.dev",
+ *   url: "https://router.morpho.org",
  * };
- * console.log(config.baseUrl);
+ * console.log(config.url);
  * ```
  */
 export interface MidnightRouterApiConfig {
-  /** Router base URL. Defaults to `https://router.morpho.dev`. */
+  /** Router API base URL. Defaults to `https://router.morpho.org`. */
+  readonly url?: string | URL;
+  /**
+   * Router API base URL.
+   *
+   * @deprecated Use `url` instead.
+   */
   readonly baseUrl?: string | URL;
   /** Fetch implementation. Defaults to the global `fetch`. */
   readonly fetch?: MidnightRouterFetch;
@@ -386,6 +392,7 @@ export namespace MidnightRouterApi {
 
 async function requestRouter(params: RouterRequestParams): Promise<unknown> {
   const url = buildRouterUrl({
+    url: params.url,
     baseUrl: params.baseUrl,
     path: params.path,
     query: params.query,
@@ -403,10 +410,7 @@ async function requestRouter(params: RouterRequestParams): Promise<unknown> {
   init.body =
     params.body === undefined ? undefined : JSON.stringify(params.body);
 
-  const response = await (params.fetch ?? globalThis.fetch)(
-    url.toString(),
-    init,
-  );
+  const response = await (params.fetch ?? globalThis.fetch)(url, init);
   const json = await readJson(response);
 
   if (!response.ok) {
@@ -424,14 +428,18 @@ async function requestRouter(params: RouterRequestParams): Promise<unknown> {
 }
 
 function buildRouterUrl(params: {
+  readonly url?: string | URL;
   readonly baseUrl?: string | URL;
   readonly path: string;
   readonly query?: Readonly<Record<string, QueryValue>>;
 }) {
-  const url = new URL(params.baseUrl ?? DEFAULT_BASE_URL);
-  const basePath = url.pathname === "/" ? "" : url.pathname.replace(/\/$/, "");
-  url.pathname = `${basePath}${params.path}`;
+  const baseUrl = buildRouterBaseUrl(params.url ?? params.baseUrl);
+  const relativePath = params.path.startsWith("/")
+    ? params.path.slice(1)
+    : params.path;
+  const url = new URL(relativePath, baseUrl);
   url.search = "";
+  url.hash = "";
 
   if (params.query == null) return url;
 
@@ -440,6 +448,17 @@ function buildRouterUrl(params: {
   }
 
   return url;
+}
+
+function buildRouterBaseUrl(url?: string | URL) {
+  const baseUrl = new URL(url ?? DEFAULT_ROUTER_API_URL);
+  baseUrl.search = "";
+  baseUrl.hash = "";
+  if (!baseUrl.pathname.endsWith("/")) {
+    baseUrl.pathname = `${baseUrl.pathname}/`;
+  }
+
+  return baseUrl;
 }
 
 function appendQueryParam(params: {

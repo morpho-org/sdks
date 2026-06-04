@@ -21,6 +21,7 @@
   ],
   "scripts": {
     "prepublish": "$npm_execpath build",
+    "compile": "node ../../scripts/compile-solidity.js midnight-sdk",
     "sync:version": "node scripts/sync-version.mjs",
     "build": "$npm_execpath sync:version && tsc --noEmit && $npm_execpath build:cjs && $npm_execpath build:esm",
     "build:cjs": "tsc --build tsconfig.build.cjs.json && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",

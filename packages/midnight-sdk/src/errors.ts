@@ -203,23 +203,6 @@ export class InvalidTickSpacingError extends Error {
 }
 
 /**
- * Thrown when a computation would divide by zero.
- *
- * @example
- * ```ts
- * import { DivisionByZeroError } from "@morpho-org/midnight-sdk";
- *
- * throw new DivisionByZeroError("price");
- * ```
- */
-export class DivisionByZeroError extends Error {
-  public constructor(field: string) {
-    super(`${field} must be non-zero.`);
-    this.name = "DivisionByZeroError";
-  }
-}
-
-/**
  * Thrown when a buy offer's settlement fee exceeds its tick price.
  *
  * @example

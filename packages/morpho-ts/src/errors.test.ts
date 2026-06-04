@@ -1,6 +1,11 @@
 import { describe, expect, test } from "vitest";
 
-import { UnsupportedChainIdError } from "./errors.js";
+import {
+  DivisionByZeroError,
+  InvalidBitLengthError,
+  NegativeValueError,
+  UnsupportedChainIdError,
+} from "./errors.js";
 
 describe("UnsupportedChainIdError", () => {
   test("default", () => {
@@ -11,5 +16,38 @@ describe("UnsupportedChainIdError", () => {
     expect(error.code).toBe("UNSUPPORTED_CHAIN");
     expect(error.chainId).toBe(999);
     expect(error.message).toContain("999");
+  });
+});
+
+describe("InvalidBitLengthError", () => {
+  test("default", () => {
+    const error = new InvalidBitLengthError(7);
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe("InvalidBitLengthError");
+    expect(error.nBits).toBe(7);
+    expect(error.message).toContain("7");
+  });
+});
+
+describe("DivisionByZeroError", () => {
+  test("default", () => {
+    const error = new DivisionByZeroError("denominator");
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe("DivisionByZeroError");
+    expect(error.field).toBe("denominator");
+    expect(error.message).toContain("denominator");
+  });
+});
+
+describe("NegativeValueError", () => {
+  test("default", () => {
+    const error = new NegativeValueError("assets", -1n);
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe("NegativeValueError");
+    expect(error.message).toContain("assets");
+    expect(error.message).toContain("-1");
   });
 });

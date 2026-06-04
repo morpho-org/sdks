@@ -38,6 +38,11 @@ function parseRequestBody(call: FetchCall) {
   >;
 }
 
+function getRequestUrl(call: FetchCall) {
+  expect(call.input).toBeInstanceOf(URL);
+  return call.input as URL;
+}
+
 describe("MIDNIGHT_SDK_VERSION", () => {
   test("default", () => {
     const packageJson = JSON.parse(
@@ -61,7 +66,6 @@ describe("MidnightRouterApi.validateMempoolPayload", () => {
       chainId: 8453,
       payload,
       timestamp,
-      baseUrl: "https://router.example/base/",
       fetch,
       request: {
         headers: {
@@ -84,9 +88,9 @@ describe("MidnightRouterApi.validateMempoolPayload", () => {
     expect(calls).toHaveLength(1);
 
     const call = calls[0]!;
-    const url = new URL(String(call.input));
-    expect(url.origin).toBe("https://router.example");
-    expect(url.pathname).toBe("/base/v1/midnight/mempool/validate");
+    const url = getRequestUrl(call);
+    expect(url.origin).toBe("https://router.morpho.org");
+    expect(url.pathname).toBe("/v1/midnight/mempool/validate");
     expect(url.searchParams.get("timestamp")).toBe(timestamp);
     expect(call.init?.method).toBe("POST");
     expect(call.init?.signal).toBe(controller.signal);
@@ -102,6 +106,23 @@ describe("MidnightRouterApi.validateMempoolPayload", () => {
     expect(headers.get("sdk-version")).toBe(MIDNIGHT_SDK_VERSION);
     expect(headers.get("content-type")).toBe("application/json");
     expect(headers.get("x-app")).toBe("markets-v2");
+  });
+
+  test("behavior: uses url override", async () => {
+    const { calls, fetch } = createJsonFetch({
+      data: { issues: [] },
+    });
+
+    await MidnightRouterApi.validateMempoolPayload({
+      chainId: 8453,
+      payload: "0x0100000000" as Payload.Payload,
+      url: "https://router.example/base/",
+      fetch,
+    });
+
+    const url = getRequestUrl(calls[0]!);
+    expect(url.origin).toBe("https://router.example");
+    expect(url.pathname).toBe("/base/v1/midnight/mempool/validate");
   });
 
   test.each([400, 503])("error: MidnightRouterApiError %s", async (status) => {
@@ -205,7 +226,7 @@ describe("MidnightRouterApi.fetchMempoolRules", () => {
       timestamp,
       limit: 100,
       cursor: "previous",
-      baseUrl: new URL("https://router.example"),
+      url: new URL("https://router.example"),
       fetch,
       request: {
         headers: { "x-app": "markets-v2" },
@@ -237,7 +258,8 @@ describe("MidnightRouterApi.fetchMempoolRules", () => {
     });
 
     const call = calls[0]!;
-    const url = new URL(String(call.input));
+    const url = getRequestUrl(call);
+    expect(url.origin).toBe("https://router.example");
     expect(url.pathname).toBe("/v1/midnight/mempool/rules");
     expect(url.searchParams.get("chain_ids")).toBe("1,8453");
     expect(url.searchParams.get("types")).toBe("tick_spacing,collateral_lltv");
@@ -252,6 +274,39 @@ describe("MidnightRouterApi.fetchMempoolRules", () => {
     expect(headers.get("sdk-version")).toBe(MIDNIGHT_SDK_VERSION);
     expect(headers.get("content-type")).toBe(null);
     expect(headers.get("x-app")).toBe("markets-v2");
+  });
+
+  test("behavior: accepts deprecated baseUrl override", async () => {
+    const { calls, fetch } = createJsonFetch({
+      cursor: null,
+      data: [],
+    });
+
+    await MidnightRouterApi.fetchMempoolRules({
+      baseUrl: "https://router.example/base/",
+      fetch,
+    });
+
+    const url = getRequestUrl(calls[0]!);
+    expect(url.origin).toBe("https://router.example");
+    expect(url.pathname).toBe("/base/v1/midnight/mempool/rules");
+  });
+
+  test("behavior: prefers url over deprecated baseUrl", async () => {
+    const { calls, fetch } = createJsonFetch({
+      cursor: null,
+      data: [],
+    });
+
+    await MidnightRouterApi.fetchMempoolRules({
+      url: new URL("https://router.example/current/"),
+      baseUrl: "https://legacy-router.example/legacy/",
+      fetch,
+    });
+
+    const url = getRequestUrl(calls[0]!);
+    expect(url.origin).toBe("https://router.example");
+    expect(url.pathname).toBe("/current/v1/midnight/mempool/rules");
   });
 
   test("error: MidnightRouterApiError", async () => {

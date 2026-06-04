@@ -1,10 +1,13 @@
-import { MathLib, NegativeValueError } from "@morpho-org/morpho-ts";
+import {
+  DivisionByZeroError,
+  MathLib,
+  NegativeValueError,
+} from "@morpho-org/morpho-ts";
 import fc from "fast-check";
 import { describe, expect, test } from "vitest";
 
 import { MAX_TICK, PRICE_ROUNDING_STEP } from "../constants.js";
 import {
-  DivisionByZeroError,
   InvalidTickSpacingError,
   PriceGreaterThanOneError,
   TickOutOfRangeError,

@@ -1,6 +1,7 @@
 import type { Address } from "viem";
 
 import {
+  type DeploylessFetchParameters,
   fetchErc20Allowance,
   fetchIsAuthorized,
   type MidnightFetchParams,
@@ -52,13 +53,15 @@ export interface AuthorizationRequirementInputs {
  * console.log(inputs.currentAllowance);
  * ```
  */
-export async function fetchApprovalRequirementInputs(params: {
-  readonly client: MidnightFetchParams["client"];
-  readonly token: Address;
-  readonly owner: Address;
-  readonly spender: Address;
-  readonly requiredAmount: BigIntish;
-}): Promise<ApprovalRequirementInputs> {
+export async function fetchApprovalRequirementInputs(
+  params: {
+    readonly client: MidnightFetchParams["client"];
+    readonly token: Address;
+    readonly owner: Address;
+    readonly spender: Address;
+    readonly requiredAmount: BigIntish;
+  } & DeploylessFetchParameters,
+): Promise<ApprovalRequirementInputs> {
   return {
     currentAllowance: await fetchErc20Allowance(params),
   };

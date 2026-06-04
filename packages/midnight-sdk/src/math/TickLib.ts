@@ -1,4 +1,8 @@
-import { assertNonNegative, MathLib } from "@morpho-org/morpho-ts";
+import {
+  assertNonNegative,
+  DivisionByZeroError,
+  MathLib,
+} from "@morpho-org/morpho-ts";
 
 import {
   DEFAULT_TICK_SPACING,
@@ -6,7 +10,6 @@ import {
   PRICE_ROUNDING_STEP,
 } from "../constants.js";
 import {
-  DivisionByZeroError,
   InvalidTickSpacingError,
   PriceGreaterThanOneError,
   TickOutOfRangeError,

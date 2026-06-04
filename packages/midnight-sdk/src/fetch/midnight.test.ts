@@ -1,5 +1,16 @@
 import { NegativeValueError } from "@morpho-org/morpho-ts";
-import { createMockClient, mockRead } from "@morpho-org/test/mock";
+import {
+  createMockClient,
+  type MockClientHandle,
+  mockRead,
+} from "@morpho-org/test/mock";
+import {
+  type Abi,
+  type Address,
+  type ContractFunctionName,
+  encodeFunctionResult,
+  type Hex,
+} from "viem";
 import { base } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { addresses, baseMarket, baseOffer } from "../__test__/fixtures.js";
@@ -12,6 +23,8 @@ import {
 import { MAX_TICK } from "../constants.js";
 import { SettlementFeeExceedsPriceError } from "../errors.js";
 import { TickLib } from "../math/index.js";
+import { abi as getConsumableUnitsInputsAbi } from "../queries/GetConsumableUnitsInputs.js";
+import { abi as getPositionAbi } from "../queries/GetPosition.js";
 import {
   fetchConsumableUnits,
   fetchErc20Allowance,
@@ -30,6 +43,51 @@ const marketId =
   "0x2222222222222222222222222222222222222222222222222222222222222222" as const;
 const root =
   "0x3333333333333333333333333333333333333333333333333333333333333333" as const;
+
+function mockDeploylessRead<
+  const abi extends Abi,
+  fn extends ContractFunctionName<abi, "view" | "pure">,
+>(
+  handle: MockClientHandle,
+  params: {
+    readonly abi: abi;
+    readonly functionName: fn;
+    readonly result: unknown;
+  },
+) {
+  const defaultRequest = handle.request.getMockImplementation();
+  const result = encodeFunctionResult({
+    abi: params.abi,
+    functionName: params.functionName,
+    result: params.result,
+  });
+
+  handle.request.mockImplementation(async (call) => {
+    if (call.method === "eth_call") {
+      const [tx] = (call.params ?? []) as [{ to?: Address; data?: Hex }];
+      if (tx?.to == null && typeof tx?.data === "string") return result;
+    }
+
+    if (defaultRequest != null) return defaultRequest(call);
+    throw new TypeError("missing default mock request implementation");
+  });
+}
+
+function mockDeploylessFailure(handle: MockClientHandle) {
+  const defaultRequest = handle.request.getMockImplementation();
+
+  handle.request.mockImplementation(async (call) => {
+    if (call.method === "eth_call") {
+      const [tx] = (call.params ?? []) as [{ to?: Address; data?: Hex }];
+      if (tx?.to == null && typeof tx?.data === "string") {
+        throw new TypeError("deployless unavailable");
+      }
+    }
+
+    if (defaultRequest != null) return defaultRequest(call);
+    throw new TypeError("missing default mock request implementation");
+  });
+}
 
 describe("fetchIsAuthorized", () => {
   test("default", async () => {
@@ -123,6 +181,78 @@ describe("fetchMarket", () => {
 describe("fetchPosition", () => {
   test("default", async () => {
     const handle = createMockClient(base);
+    mockDeploylessRead(handle, {
+      abi: getPositionAbi,
+      functionName: "query",
+      result: {
+        credit: 1n,
+        pendingFee: 2n,
+        lastLossFactor: 3n,
+        lastAccrual: 4n,
+        debt: 5n,
+        collateralBitmap: 6n,
+        collateral: Array.from({ length: 128 }, (_, index) =>
+          index === 0 ? 7n : 0n,
+        ),
+      },
+    });
+
+    const position = await fetchPosition({
+      client: handle.client,
+      midnight: addresses.midnight,
+      marketId,
+      user: addresses.taker,
+    });
+
+    expect(position.credit).toBe(1n);
+    expect(position.debt).toBe(5n);
+    expect(position.collateral).toHaveLength(128);
+    expect(position.collateral[0]).toBe(7n);
+    expect(position.collateral[127]).toBe(0n);
+  });
+
+  test("behavior: direct reads when deployless is disabled", async () => {
+    const handle = createMockClient(base);
+    mockRead(handle, {
+      address: addresses.midnight,
+      abi: midnightAbi,
+      functionName: "position",
+      args: [marketId, addresses.taker],
+      result: [1n, 2n, 3n, 4n, 5n, 6n],
+    });
+    mockRead(handle, {
+      address: addresses.midnight,
+      abi: midnightAbi,
+      functionName: "collateral",
+      args: [marketId, addresses.taker, 0n],
+      result: 7n,
+    });
+
+    const position = await fetchPosition({
+      client: handle.client,
+      midnight: addresses.midnight,
+      marketId,
+      user: addresses.taker,
+      blockNumber: 123n,
+      deployless: false,
+    });
+
+    expect(position.credit).toBe(1n);
+    expect(position.debt).toBe(5n);
+    expect(position.collateral).toHaveLength(128);
+    expect(position.collateral[0]).toBe(7n);
+    expect(position.collateral[127]).toBe(7n);
+    expect(
+      handle.request.mock.calls
+        .map(([call]) => call)
+        .filter((call) => call.method === "eth_call")
+        .every((call) => call.params?.[1] === "0x7b"),
+    ).toBe(true);
+  });
+
+  test("behavior: falls back when deployless fails", async () => {
+    const handle = createMockClient(base);
+    mockDeploylessFailure(handle);
     mockRead(handle, {
       address: addresses.midnight,
       abi: midnightAbi,
@@ -146,10 +276,22 @@ describe("fetchPosition", () => {
     });
 
     expect(position.credit).toBe(1n);
-    expect(position.debt).toBe(5n);
-    expect(position.collateral).toHaveLength(128);
-    expect(position.collateral[0]).toBe(7n);
     expect(position.collateral[127]).toBe(7n);
+  });
+
+  test("error: forced deployless failure", async () => {
+    const handle = createMockClient(base);
+    mockDeploylessFailure(handle);
+
+    await expect(
+      fetchPosition({
+        client: handle.client,
+        midnight: addresses.midnight,
+        marketId,
+        user: addresses.taker,
+        deployless: "force",
+      }),
+    ).rejects.toThrow("deployless unavailable");
   });
 });
 
@@ -192,12 +334,13 @@ describe("fetchConsumableUnits", () => {
   test("default: max-unit offers only read consumed", async () => {
     const handle = createMockClient(base);
     const offer = baseOffer({ maxUnits: 100n });
-    mockRead(handle, {
-      address: addresses.midnight,
-      abi: midnightAbi,
-      functionName: "consumed",
-      args: [addresses.maker, offer.group],
-      result: 40n,
+    mockDeploylessRead(handle, {
+      abi: getConsumableUnitsInputsAbi,
+      functionName: "query",
+      result: {
+        consumed: 40n,
+        settlementFee: 0n,
+      },
     });
 
     await expect(
@@ -219,19 +362,13 @@ describe("fetchConsumableUnits", () => {
       maxUnits: 0n,
       maxAssets: 100n,
     });
-    mockRead(handle, {
-      address: addresses.midnight,
-      abi: midnightAbi,
-      functionName: "consumed",
-      args: [addresses.maker, offer.group],
-      result: 40n,
-    });
-    mockRead(handle, {
-      address: addresses.midnight,
-      abi: midnightAbi,
-      functionName: "settlementFee",
-      args: [marketId, 1000n],
-      result: 0n,
+    mockDeploylessRead(handle, {
+      abi: getConsumableUnitsInputsAbi,
+      functionName: "query",
+      result: {
+        consumed: 40n,
+        settlementFee: 0n,
+      },
     });
 
     await expect(
@@ -248,19 +385,13 @@ describe("fetchConsumableUnits", () => {
   test("error: SettlementFeeExceedsPriceError from fetched settlement fee", async () => {
     const handle = createMockClient(base);
     const offer = baseOffer({ buy: true, tick: 2n, maxUnits: 0n });
-    mockRead(handle, {
-      address: addresses.midnight,
-      abi: midnightAbi,
-      functionName: "consumed",
-      args: [addresses.maker, offer.group],
-      result: 0n,
-    });
-    mockRead(handle, {
-      address: addresses.midnight,
-      abi: midnightAbi,
-      functionName: "settlementFee",
-      args: [marketId, 1000n],
-      result: TickLib.tickToPrice(offer.tick) + 1n,
+    mockDeploylessRead(handle, {
+      abi: getConsumableUnitsInputsAbi,
+      functionName: "query",
+      result: {
+        consumed: 0n,
+        settlementFee: TickLib.tickToPrice(offer.tick) + 1n,
+      },
     });
 
     await expect(

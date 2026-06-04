@@ -1,11 +1,11 @@
 import {
   assertNonNegative,
+  DivisionByZeroError,
   MathLib,
   type RoundingDirection,
 } from "@morpho-org/morpho-ts";
 
 import {
-  DivisionByZeroError,
   PriceGreaterThanOneError,
   SettlementFeeExceedsPriceError,
 } from "../errors.js";

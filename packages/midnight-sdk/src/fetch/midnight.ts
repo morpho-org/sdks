@@ -1,5 +1,12 @@
 import { assertNonNegative } from "@morpho-org/morpho-ts";
-import type { Address, Client, Hex } from "viem";
+import type {
+  Account,
+  Address,
+  BlockTag,
+  Client,
+  Hex,
+  StateOverride,
+} from "viem";
 import { getBytecode, readContract } from "viem/actions";
 
 import {
@@ -17,8 +24,62 @@ import {
 } from "../market/index.js";
 import { ConsumableUnitsLib } from "../math/index.js";
 import { type IOffer, Offer } from "../offers/index.js";
+import {
+  abi as getConsumableUnitsInputsAbi,
+  code as getConsumableUnitsInputsCode,
+} from "../queries/GetConsumableUnitsInputs.js";
+import {
+  abi as getPositionAbi,
+  code as getPositionCode,
+} from "../queries/GetPosition.js";
 import { RatifierUtils } from "../signatures/index.js";
 import type { BigIntish, RatifierInfo } from "../types.js";
+
+/**
+ * Shared viem call parameters accepted by Midnight fetch helpers.
+ *
+ * @example
+ * ```ts
+ * import type { MidnightCallParameters } from "@morpho-org/midnight-sdk";
+ *
+ * const params: MidnightCallParameters = { blockTag: "latest" };
+ * console.log(params.blockTag);
+ * ```
+ */
+export interface MidnightCallParameters {
+  /** Account used as the `from` field for the read. */
+  readonly account?: Account | Address;
+  /** Block number used for the read. */
+  readonly blockNumber?: bigint;
+  /** Block tag used for the read. */
+  readonly blockTag?: BlockTag;
+  /** State override set used for the read. */
+  readonly stateOverride?: StateOverride;
+}
+
+/**
+ * Deployless read mode accepted by composite Midnight fetch helpers.
+ *
+ * @example
+ * ```ts
+ * import type { DeploylessFetchParameters } from "@morpho-org/midnight-sdk";
+ *
+ * const params: DeploylessFetchParameters = { deployless: "force" };
+ * console.log(params.deployless);
+ * ```
+ */
+export interface DeploylessFetchParameters extends MidnightCallParameters {
+  /**
+   * If `true`, composite fetchers use deployless reads and fall back to direct reads if they fail.
+   *
+   * If `"force"`, composite fetchers use deployless reads without fallback.
+   *
+   * If `false`, composite fetchers use direct reads.
+   *
+   * Default is `true`.
+   */
+  readonly deployless?: boolean | "force";
+}
 
 /**
  * Shared viem fetch parameters for Midnight helpers.
@@ -31,12 +92,31 @@ import type { BigIntish, RatifierInfo } from "../types.js";
  * console.log(params.midnight);
  * ```
  */
-export interface MidnightFetchParams {
+export interface MidnightFetchParams extends DeploylessFetchParameters {
   /** Viem client. */
   readonly client: Client;
   /** Core Midnight contract address. */
   readonly midnight: Address;
 }
+
+const callParameters = (
+  params: MidnightCallParameters,
+): MidnightCallParameters => ({
+  account: params.account,
+  blockNumber: params.blockNumber,
+  blockTag: params.blockTag,
+  stateOverride: params.stateOverride,
+});
+
+const shouldUseDeployless = (params: DeploylessFetchParameters) =>
+  params.deployless ?? true;
+
+const bytecodeCallParameters = (params: MidnightCallParameters) => {
+  if (params.blockNumber != null) return { blockNumber: params.blockNumber };
+  if (params.blockTag != null) return { blockTag: params.blockTag };
+
+  return {};
+};
 
 /**
  * Fetches whether an account has authorized a contract/account on Midnight.
@@ -58,6 +138,7 @@ export function fetchIsAuthorized(
   },
 ) {
   return readContract(params.client, {
+    ...callParameters(params),
     address: params.midnight,
     abi: midnightAbi,
     functionName: "isAuthorized",
@@ -78,13 +159,16 @@ export function fetchIsAuthorized(
  * console.log(allowance);
  * ```
  */
-export function fetchErc20Allowance(params: {
-  readonly client: Client;
-  readonly token: Address;
-  readonly owner: Address;
-  readonly spender: Address;
-}) {
+export function fetchErc20Allowance(
+  params: {
+    readonly client: Client;
+    readonly token: Address;
+    readonly owner: Address;
+    readonly spender: Address;
+  } & DeploylessFetchParameters,
+) {
   return readContract(params.client, {
+    ...callParameters(params),
     address: params.token,
     abi: erc20Abi,
     functionName: "allowance",
@@ -111,6 +195,7 @@ export function fetchMarketId(
   },
 ) {
   return readContract(params.client, {
+    ...callParameters(params),
     address: params.midnight,
     abi: midnightAbi,
     functionName: "toId",
@@ -137,6 +222,7 @@ export async function fetchMarket(
   },
 ) {
   const market = await readContract(params.client, {
+    ...callParameters(params),
     address: params.midnight,
     abi: midnightAbi,
     functionName: "toMarket",
@@ -165,6 +251,7 @@ export async function fetchMarketState(
   },
 ) {
   const state = await readContract(params.client, {
+    ...callParameters(params),
     address: params.midnight,
     abi: midnightAbi,
     functionName: "marketState",
@@ -212,7 +299,33 @@ export async function fetchPosition(
     readonly user: Address;
   },
 ) {
+  if (shouldUseDeployless(params)) {
+    try {
+      const position = await readContract(params.client, {
+        ...callParameters(params),
+        abi: getPositionAbi,
+        code: getPositionCode,
+        functionName: "query",
+        args: [params.midnight, params.marketId, params.user],
+      });
+
+      return new Position({
+        credit: position.credit,
+        pendingFee: position.pendingFee,
+        lastLossFactor: position.lastLossFactor,
+        lastAccrual: position.lastAccrual,
+        debt: position.debt,
+        collateralBitmap: position.collateralBitmap,
+        collateral: position.collateral as readonly BigIntish[],
+      });
+    } catch (error) {
+      if (params.deployless === "force") throw error;
+      // Fallback to direct reads if deployless execution is unavailable.
+    }
+  }
+
   const position = await readContract(params.client, {
+    ...callParameters(params),
     address: params.midnight,
     abi: midnightAbi,
     functionName: "position",
@@ -226,6 +339,8 @@ export async function fetchPosition(
         marketId: params.marketId,
         user: params.user,
         collateralIndex: BigInt(collateralIndex),
+        ...callParameters(params),
+        deployless: false,
       }),
     ),
   );
@@ -262,6 +377,7 @@ export function fetchCollateral(
   },
 ) {
   return readContract(params.client, {
+    ...callParameters(params),
     address: params.midnight,
     abi: midnightAbi,
     functionName: "collateral",
@@ -289,6 +405,7 @@ export function fetchCredit(
   },
 ) {
   return readContract(params.client, {
+    ...callParameters(params),
     address: params.midnight,
     abi: midnightAbi,
     functionName: "creditOf",
@@ -316,6 +433,7 @@ export function fetchDebt(
   },
 ) {
   return readContract(params.client, {
+    ...callParameters(params),
     address: params.midnight,
     abi: midnightAbi,
     functionName: "debtOf",
@@ -342,6 +460,7 @@ export function fetchWithdrawable(
   },
 ) {
   return readContract(params.client, {
+    ...callParameters(params),
     address: params.midnight,
     abi: midnightAbi,
     functionName: "withdrawable",
@@ -370,6 +489,7 @@ export function fetchIsHealthy(
   },
 ) {
   return readContract(params.client, {
+    ...callParameters(params),
     address: params.midnight,
     abi: midnightAbi,
     functionName: "isHealthy",
@@ -400,6 +520,7 @@ export function fetchTickSpacing(
   },
 ) {
   return readContract(params.client, {
+    ...callParameters(params),
     address: params.midnight,
     abi: midnightAbi,
     functionName: "tickSpacing",
@@ -431,6 +552,7 @@ export function fetchSettlementFee(
   assertNonNegative("timeToMaturity", timeToMaturity);
 
   return readContract(params.client, {
+    ...callParameters(params),
     address: params.midnight,
     abi: midnightAbi,
     functionName: "settlementFee",
@@ -458,6 +580,7 @@ export function fetchConsumed(
   },
 ) {
   return readContract(params.client, {
+    ...callParameters(params),
     address: params.midnight,
     abi: midnightAbi,
     functionName: "consumed",
@@ -495,31 +618,72 @@ export async function fetchConsumableUnits(
   const offer = Offer.from(params.offer);
   assertNonNegative("offer.maxUnits", offer.maxUnits);
   assertNonNegative("offer.maxAssets", offer.maxAssets);
+  const needsSettlementFee = offer.maxUnits === 0n;
+  const timeToMaturity = needsSettlementFee
+    ? BigInt(params.timeToMaturity)
+    : 0n;
+  if (needsSettlementFee) {
+    assertNonNegative("timeToMaturity", timeToMaturity);
+  }
 
   const consumedParams = {
     client: params.client,
     midnight: params.midnight,
     user: offer.maker,
     group: offer.group,
+    ...callParameters(params),
   };
 
-  if (offer.maxUnits > 0n) {
-    return ConsumableUnitsLib.consumableUnits({
-      offer,
-      consumed: await fetchConsumed(consumedParams),
-      settlementFee: 0n,
-    });
+  if (shouldUseDeployless(params)) {
+    let inputs:
+      | {
+          readonly consumed: bigint;
+          readonly settlementFee: bigint;
+        }
+      | undefined;
+
+    try {
+      inputs = await readContract(params.client, {
+        ...callParameters(params),
+        abi: getConsumableUnitsInputsAbi,
+        code: getConsumableUnitsInputsCode,
+        functionName: "query",
+        args: [
+          params.midnight,
+          params.marketId,
+          offer.maker,
+          offer.group,
+          timeToMaturity,
+          needsSettlementFee,
+        ],
+      });
+    } catch (error) {
+      if (params.deployless === "force") throw error;
+      // Fallback to direct reads if deployless execution is unavailable.
+    }
+
+    if (inputs != null) {
+      return ConsumableUnitsLib.consumableUnits({
+        offer,
+        consumed: inputs.consumed,
+        settlementFee: inputs.settlementFee,
+      });
+    }
   }
 
-  const [consumed, settlementFee] = await Promise.all([
-    fetchConsumed(consumedParams),
-    fetchSettlementFee({
-      client: params.client,
-      midnight: params.midnight,
-      marketId: params.marketId,
-      timeToMaturity: params.timeToMaturity,
-    }),
-  ]);
+  const [consumed, settlementFee] = needsSettlementFee
+    ? await Promise.all([
+        fetchConsumed({ ...consumedParams, deployless: false }),
+        fetchSettlementFee({
+          client: params.client,
+          midnight: params.midnight,
+          marketId: params.marketId,
+          timeToMaturity,
+          ...callParameters(params),
+          deployless: false,
+        }),
+      ])
+    : [await fetchConsumed({ ...consumedParams, deployless: false }), 0n];
 
   return ConsumableUnitsLib.consumableUnits({
     offer,
@@ -541,13 +705,18 @@ export async function fetchConsumableUnits(
  * console.log(info.type);
  * ```
  */
-export async function fetchRatifierInfo(params: {
-  readonly client: Client;
-  readonly maker: Address;
-  readonly ecrecoverRatifier: Address;
-  readonly setterRatifier: Address;
-}): Promise<RatifierInfo> {
-  const bytecode = await getBytecode(params.client, { address: params.maker });
+export async function fetchRatifierInfo(
+  params: {
+    readonly client: Client;
+    readonly maker: Address;
+    readonly ecrecoverRatifier: Address;
+    readonly setterRatifier: Address;
+  } & MidnightCallParameters,
+): Promise<RatifierInfo> {
+  const bytecode = await getBytecode(params.client, {
+    ...bytecodeCallParameters(params),
+    address: params.maker,
+  });
 
   return RatifierUtils.getRatifierInfo({
     bytecode,
@@ -569,13 +738,16 @@ export async function fetchRatifierInfo(params: {
  * console.log(canceled);
  * ```
  */
-export function fetchIsRootCanceled(params: {
-  readonly client: Client;
-  readonly ecrecoverRatifier: Address;
-  readonly maker: Address;
-  readonly root: Hex;
-}) {
+export function fetchIsRootCanceled(
+  params: {
+    readonly client: Client;
+    readonly ecrecoverRatifier: Address;
+    readonly maker: Address;
+    readonly root: Hex;
+  } & MidnightCallParameters,
+) {
   return readContract(params.client, {
+    ...callParameters(params),
     address: params.ecrecoverRatifier,
     abi: ecrecoverRatifierAbi,
     functionName: "isRootCanceled",
@@ -596,13 +768,16 @@ export function fetchIsRootCanceled(params: {
  * console.log(ratified);
  * ```
  */
-export function fetchIsRootRatified(params: {
-  readonly client: Client;
-  readonly setterRatifier: Address;
-  readonly maker: Address;
-  readonly root: Hex;
-}) {
+export function fetchIsRootRatified(
+  params: {
+    readonly client: Client;
+    readonly setterRatifier: Address;
+    readonly maker: Address;
+    readonly root: Hex;
+  } & MidnightCallParameters,
+) {
   return readContract(params.client, {
+    ...callParameters(params),
     address: params.setterRatifier,
     abi: setterRatifierAbi,
     functionName: "isRootRatified",

@@ -1,3 +1,4 @@
+import { NegativeValueError } from "./errors.js";
 import { Time } from "./time/index.js";
 import type { FieldType, PartialDottedKeys } from "./types.js";
 
@@ -493,23 +494,6 @@ export function getLastDefined<T>(
  */
 export function getLastDefined<T>(array: T[]) {
   return getLast(filterDefined(array));
-}
-
-/**
- * Thrown when a uint-like value is negative.
- *
- * @example
- * ```ts
- * import { NegativeValueError } from "@morpho-org/morpho-ts";
- *
- * throw new NegativeValueError("assets", -1n);
- * ```
- */
-export class NegativeValueError extends Error {
-  public constructor(field: string, value: bigint) {
-    super(`${field} "${value}" must be non-negative.`);
-    this.name = "NegativeValueError";
-  }
 }
 
 /**

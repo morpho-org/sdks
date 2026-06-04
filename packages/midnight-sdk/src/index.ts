@@ -1,8 +1,4 @@
 export {
-  NegativeValueError,
-  UnsupportedChainIdError,
-} from "@morpho-org/morpho-ts";
-export {
   ecrecoverRatifierAbi,
   erc20Abi,
   midnightAbi,
@@ -48,7 +44,6 @@ export {
   PRICE_ROUNDING_STEP,
 } from "./constants.js";
 export {
-  DivisionByZeroError,
   IncompleteMidnightAddressesError,
   InconsistentMarketError,
   InvalidMidnightRouterResponseError,
@@ -67,7 +62,11 @@ export {
   TickOutOfRangeError,
   UnexpectedOfferSideError,
 } from "./errors.js";
-export type { MidnightFetchParams } from "./fetch/index.js";
+export type {
+  DeploylessFetchParameters,
+  MidnightCallParameters,
+  MidnightFetchParams,
+} from "./fetch/index.js";
 export {
   fetchCollateral,
   fetchConsumableUnits,

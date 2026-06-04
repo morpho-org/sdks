@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 
+import { DivisionByZeroError, InvalidBitLengthError } from "./errors.js";
 import { MathLib } from "./math.js";
 
 describe("MathLib constants", () => {
@@ -20,12 +21,12 @@ describe("MathLib.maxUint", () => {
   });
 
   test("error: invalid bit length", () => {
-    expect(() => MathLib.maxUint(7)).toThrow(/Invalid number of bits/);
-    expect(() => MathLib.maxUint(33)).toThrow(/Invalid number of bits/);
+    expect(() => MathLib.maxUint(7)).toThrow(InvalidBitLengthError);
+    expect(() => MathLib.maxUint(33)).toThrow(InvalidBitLengthError);
   });
 
-  test("behavior: nBits=0 keeps the previous BigInt boundary behavior", () => {
-    expect(() => MathLib.maxUint(0)).toThrow(SyntaxError);
+  test("error: InvalidBitLengthError for zero bit length", () => {
+    expect(() => MathLib.maxUint(0)).toThrow(InvalidBitLengthError);
   });
 });
 
@@ -90,8 +91,8 @@ describe("MathLib.mulDivDown / MathLib.mulDivUp", () => {
   });
 
   test("error: division by zero", () => {
-    expect(() => MathLib.mulDivDown(1n, 1n, 0n)).toThrow(/DIVISION_BY_ZERO/);
-    expect(() => MathLib.mulDivUp(1n, 1n, 0n)).toThrow(/DIVISION_BY_ZERO/);
+    expect(() => MathLib.mulDivDown(1n, 1n, 0n)).toThrow(DivisionByZeroError);
+    expect(() => MathLib.mulDivUp(1n, 1n, 0n)).toThrow(DivisionByZeroError);
   });
 });
 
@@ -143,7 +144,7 @@ describe("MathLib.wDiv / MathLib.wDivDown / MathLib.wDivUp", () => {
   });
 
   test("error: division by zero", () => {
-    expect(() => MathLib.wDivDown(1n, 0n)).toThrow(/DIVISION_BY_ZERO/);
+    expect(() => MathLib.wDivDown(1n, 0n)).toThrow(DivisionByZeroError);
   });
 });
 

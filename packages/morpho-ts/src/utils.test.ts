@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
+import { NegativeValueError } from "./errors.js";
 import {
   assertNonNegative,
   bigIntComparator,
@@ -17,7 +18,6 @@ import {
   isNotUndefined,
   keys,
   mergeEntries,
-  NegativeValueError,
   retryPromiseLinearBackoff,
   transformValue,
   values,
