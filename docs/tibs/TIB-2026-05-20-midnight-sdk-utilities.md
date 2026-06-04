@@ -29,7 +29,7 @@ Keeping those details only in app code makes every downstream integration re-lea
 - Add `@morpho-org/midnight-sdk` as the source of truth for Midnight addresses, ABI literals, constants, protocol value types, classes, typed errors, and deterministic helper functions.
 - Provide utilities that directly support the current markets-v2 app action flows without importing app code: market struct conversion, offer/take conversion, tick/price math, units/assets rounding helpers grouped under utility namespaces, `MidnightBundles` namespaced calldata encoders, direct core call encoders, requirement planning, fetch helpers, and make-offer signature/validation helpers.
 - Keep the package framework-free: no React, wagmi, Redux, app router state, UI action-flow types, or app-specific error classes.
-- Keep I/O isolated in explicit boundary modules such as `fetch/`, `requirements/`, and `signatures/`. Pure protocol helpers remain testable without mocks.
+- Keep I/O isolated in explicit boundary modules such as `fetch/` and `router/`. Requirement planners stay pure once current state is supplied, and pure protocol helpers remain testable without mocks.
 - Pin the Midnight ABI surface in package source and expose an address-registry contract for `Midnight`, `MidnightBundles`, `MidnightMempool`, `EcrecoverRatifier`, `SetterRatifier`, and Permit2. Production addresses are added only when reviewed deployment artifacts are available.
 - Export typed errors for integrators to pattern-match on instead of throwing plain `Error`.
 - Cover the package with colocated unit tests, property-based tests for tick/price and unit/asset conversion, and viem mock-transport tests for fetch and requirement readers.
@@ -98,6 +98,9 @@ packages/midnight-sdk/
     +-- fetch/
     |   +-- midnight.ts
     |   +-- index.ts
+    +-- router/
+    |   +-- MidnightRouterApi.ts
+    |   +-- index.ts
     +-- requirements/
     |   +-- approval.ts
     |   +-- authorization.ts
@@ -106,7 +109,6 @@ packages/midnight-sdk/
     |   +-- index.ts
     +-- signatures/
         +-- OfferPayloadUtils.ts
-        +-- OfferValidationUtils.ts
         +-- Payload.ts
         +-- RatifierUtils.ts
         +-- index.ts
@@ -114,7 +116,7 @@ packages/midnight-sdk/
 
 The root barrel exports the stable package surface explicitly, including `MarketUtils`,
 `OfferUtils`, `TickLib`, `TakeAmountsLib`, `ConsumableUnitsLib`, `MidnightBundles`,
-`MidnightCalls`, `Payload`, and their supporting parameter types. The initial implementation keeps
+`MidnightCalls`, `Payload`, `MidnightRouterApi`, `MIDNIGHT_SDK_VERSION`, and their supporting parameter types. The initial implementation keeps
 viem-backed fetch and encoding helpers in the root export; a separate `./viem` subpath or package can
 be introduced later if the I/O surface grows.
 
@@ -251,8 +253,9 @@ Make-offer helpers should support the limit-order path without importing app cod
 
 - `OfferUtils.buildOffer` builds `Offer` values from market, side, tick, max assets, expiry, group, callback, receiver, and ratifier inputs;
 - generate or accept a group id via an injected random byte source;
-- expose offer payload, Merkle root, proof, ratifier-data, root-approval, mempool-submission, and payload-validation helpers behind stable SDK functions;
-- keep router/API validation injected through `OfferValidationUtils.validateOfferPayload`; the initial implementation does not add a runtime `@morpho-dev/router` dependency.
+- expose offer payload, Merkle root, proof, ratifier-data, root-approval, mempool-submission, and router-validation helpers behind stable SDK functions;
+- validate maker payloads through `MidnightRouterApi.validateMempoolPayload` or `MidnightRouterApi.validateMempoolItems`; the implementation uses a lightweight `fetch` boundary and does not add a runtime `@morpho-dev/router` dependency;
+- keep offer publication/submission onchain through `OfferPayloadUtils.buildMempoolSubmissionCall`; the current Router API does not expose a submit endpoint.
 
 ### MidnightBundles Namespace
 
@@ -368,11 +371,11 @@ Initial planners:
 - `planBorrowMarketOrderRequirements` for collateral approval to `MidnightBundles` and bundler authorization;
 - `planLendMarketOrderRequirements` for loan-token approval to `MidnightBundles` and bundler authorization;
 - `planSupplyCollateralRequirements` for collateral approval to the core Midnight contract;
-- `planMakeOfferRequirements` for ratifier authorization, Ecrecover signature, Setter root approval, and payload validation.
+- `planMakeOfferRequirements` for optional delegated signer/operator authorization, Ecrecover signature, Setter root approval, and payload validation.
 
 Requirement planners should be pure once their current state inputs are supplied. Companion `fetch...RequirementInputs` helpers may gather current allowance, authorization, settlement fee, consumed amounts, and ratifier info.
 
-### Signatures and Validation
+### Signatures, Payloads, and Router Validation
 
 Make-offer flows need reusable utilities, but the SDK should not own a wallet or a UI wizard. It should expose grouped helpers:
 
@@ -385,10 +388,16 @@ Make-offer flows need reusable utilities, but the SDK should not own a wallet or
 - `OfferPayloadUtils.encodeSetterRatifierData`
 - `OfferPayloadUtils.buildSetterRootApprovalCall`
 - `OfferPayloadUtils.buildMempoolSubmissionCall`
-- `OfferValidationUtils.validateOfferPayload` with an injected router/API validator.
 - `Payload.encode` / `Payload.decode` for versioned Midnight mempool payload bytes.
+- `MidnightRouterApi.validateMempoolPayload` for `POST /v1/midnight/mempool/validate`.
+- `MidnightRouterApi.validateMempoolItems`, which encodes `Payload.Item[]` with `Payload.encode` before validation.
+- `MidnightRouterApi.fetchMempoolRules` for `GET /v1/midnight/mempool/rules`.
 
 The app remains responsible for sequencing prompts. The SDK returns typed descriptors for "sign this typed data", "call this contract", "submit this payload", and "validate this payload". `Payload` encodes and decodes the raw mempool wire format as `version || uint32(gzipLen) || gzip(abi(items))`, with bounded compressed bytes, bounded decoded bytes, a small attribution-suffix allowance, canonical ABI-byte validation, and a typed `Payload.DecodeError`.
+
+`MidnightRouterApi` is the router HTTP boundary. It accepts an optional `baseUrl`, injected `fetch`, and `request` options for headers, abort signals, credentials, cache, and similar fetch settings. SDK-controlled fields remain fixed: URL path/query, HTTP method, JSON body, `Content-Type: application/json` on POST requests, and an exact `sdk-version` header equal to the `@morpho-org/midnight-sdk` package version. Validation returns SDK camelCase data `{ payload, valid, issues }`, where `valid` is derived from `issues.length === 0`. Rules are returned as `{ cursor, data }` with camelCase fields such as `chainId`, `callbackType`, `minTick`, `tickSpacing`, and `allowedLltvs`.
+
+The current Router API exposes Books, Maker takes, Mempool validate, and Mempool rules. This TIB implements only the maker-relevant validation/rules endpoints first. No generator is introduced for now because the SDK only needs lightweight API calls; type names stay close to the OpenAPI schema names so a future dev-only generator can replace or verify them if a stable spec URL appears.
 
 ### App Action Mapping
 
@@ -400,8 +409,8 @@ The package should make these current app flows straightforward without becoming
 | Borrow against existing collateral | Same bundle call with empty `CollateralSupply[]`; skip collateral allowance planning when collateral amount is zero |
 | Supply collateral only | `planSupplyCollateralRequirements`, `MidnightCalls.supplyCollateral` |
 | Lend market order | `TakeAmountsLib` min-units rounding, `planLendMarketOrderRequirements`, `MidnightBundles.buyWithAssetsTargetAndWithdrawCollateral` with empty withdrawals |
-| Borrow limit order | `MidnightCalls.supplyCollateral`, `OfferUtils.buildOffer` with `buy: false`, `RatifierUtils`, `OfferValidationUtils`, `OfferPayloadUtils` signature/root approval helpers |
-| Lend/multi-limit order | loan-token approval to the core Midnight contract, `OfferUtils.buildOffer` with `buy: true`, grouped payload construction, `RatifierUtils`, `OfferValidationUtils`, `OfferPayloadUtils` signature/root approval helpers |
+| Borrow limit order | `MidnightCalls.supplyCollateral`, `OfferUtils.buildOffer` with `buy: false`, `RatifierUtils`, `MidnightRouterApi`, `OfferPayloadUtils` signature/root approval helpers |
+| Lend/multi-limit order | loan-token approval to the core Midnight contract, `OfferUtils.buildOffer` with `buy: true`, grouped payload construction, `RatifierUtils`, `MidnightRouterApi`, `OfferPayloadUtils` signature/root approval helpers |
 
 ## Implementation Phases
 
@@ -412,7 +421,7 @@ Status as of the 2026-06-04 implementation review:
 - **Phase 3 - Math and offer utilities: completed.** `TickLib`, `TakeAmountsLib`, `ConsumableUnitsLib`, `MarketUtils`, `Offer`, `Take`, and `OfferUtils` landed with colocated unit tests and property-based tests for tick/price and unit conversion behavior.
 - **Phase 4 - Bundle/direct encoders: completed.** `MidnightBundles` and `MidnightCalls` landed with inline-snapshot tests for each supported route.
 - **Phase 5 - Fetch and requirements: completed.** Fetch helpers use named `viem/actions` imports and mock-transport tests; requirement planners remain pure once current allowance, authorization, ratifier, root, signature, and validation inputs are supplied.
-- **Phase 6 - Signatures, validation, and payloads: completed.** `RatifierUtils`, `OfferPayloadUtils`, `OfferValidationUtils`, and `Payload` landed. Router validation is injected rather than pulled in through a runtime router dependency.
+- **Phase 6 - Signatures, validation, and payloads: completed.** `RatifierUtils`, `OfferPayloadUtils`, `Payload`, and `MidnightRouterApi` landed. Router validation/rules are a lightweight `fetch` boundary rather than a runtime router dependency, and offer publication remains onchain through the existing Midnight mempool call descriptor.
 - **Phase 7 - App adoption: deferred.** Updating the markets-v2 app in `morpho-org/morpho-apps` remains a separate repository change and is not required to land this SDK repo PR.
 
 ## Considered Alternatives
@@ -452,7 +461,7 @@ Expose app-style labels, call requests, signature requests, and success callback
 - Midnight production addresses are pinned only after a reviewed deployment artifact is available. Additional chains are additive address-registry updates unless the ABI changes.
 - The package pins the ABI revision used by the app and contracts. If `morpho-org/midnight` `main` differs from the deployed artifact, implementation pins the deployed artifact and documents the source.
 - App quote/order sources continue to provide executable offers or takeable offers. `midnight-sdk` does not fetch an orderbook.
-- Router/API payload validation remains injected through SDK wrappers. If a future PR adds `@morpho-dev/router`, it must justify the dependency and keep it wrapped behind `midnight-sdk` APIs.
+- Router/API payload validation and rule inspection are wrapped by `MidnightRouterApi`. If a future PR adds `@morpho-dev/router`, it must justify the dependency and keep it wrapped behind `midnight-sdk` APIs.
 - Fetch helpers use transport-bound unit tests via `createMockClient` from `@morpho-org/test/mock`. Fork tests are required when a helper's correctness depends on live contract behavior rather than request/response shape.
 - All exported symbols require JSDoc and explicit `src/index.ts` re-exports.
 
@@ -462,7 +471,7 @@ Expose app-style labels, call requests, signature requests, and success callback
 - `@morpho-org/morpho-ts` as a workspace peer dependency for shared SDK primitives, `MathLib`, shared constants, typed errors, assertions, and `deepFreeze`.
 - `@morpho-org/test` as a dev dependency for mock-transport tests.
 - `fast-check` as a dev dependency for property-based tests.
-- No runtime `@morpho-dev/router` dependency in the initial implementation; payload validation is injected by callers.
+- No runtime `@morpho-dev/router` dependency in the initial implementation; payload validation/rules use the router HTTP API through global or injected `fetch`.
 
 ## Security
 
@@ -498,6 +507,7 @@ Expose app-style labels, call requests, signature requests, and success callback
 - `TakeAmountsLib.sol`: <https://github.com/morpho-org/midnight/blob/main/src/periphery/TakeAmountsLib.sol>
 - `ConsumableUnitsLib.sol`: <https://github.com/morpho-org/midnight/blob/main/src/periphery/ConsumableUnitsLib.sol>
 - Markets-v2 app order actions: <https://github.com/morpho-org/morpho-apps/tree/main/apps/markets-v2-app/lib/modules/order/actions>
+- Router API mempool validation docs: <https://router.morpho.dev/docs/api#tag/mempool/POST/v1/midnight/mempool/validate>
 - AGENTS.md section 1 (layering), section 2 (forbidden patterns), section 3 (type discipline), section 5 (testing), section 6 (JSDoc)
 - [TIB-2026-04-27](./TIB-2026-04-27-maximize-unit-test-coverage.md) (mock-transport unit-test boundary)
 - [TIB-2026-05-04](./TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md) (JSDoc coverage on exported symbols)
