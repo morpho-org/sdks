@@ -22,17 +22,6 @@ export {
   registerCustomMidnightAddresses,
 } from "./addresses.js";
 export type {
-  BundleTakeInput,
-  BuyWithAssetsTargetAndWithdrawCollateralParams,
-  BuyWithUnitsTargetAndWithdrawCollateralParams,
-  CollateralSupplyInput,
-  CollateralWithdrawalInput,
-  RepayAndWithdrawCollateralParams,
-  SupplyCollateralAndSellWithAssetsTargetParams,
-  SupplyCollateralAndSellWithUnitsTargetParams,
-} from "./bundles/index.js";
-export { MidnightBundles } from "./bundles/index.js";
-export type {
   RepayCallParams,
   SetConsumedCallParams,
   SetIsAuthorizedCallParams,

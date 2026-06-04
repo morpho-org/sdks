@@ -43,7 +43,7 @@ export interface MidnightCall {
 }
 
 /**
- * Kind tag for token permit payloads accepted by `MidnightBundles`.
+ * Kind tag for Midnight token permit payloads.
  *
  * @example
  * ```ts
@@ -62,7 +62,7 @@ export enum PermitKind {
 }
 
 /**
- * ABI-compatible token permit tuple used by `MidnightBundles`.
+ * ABI-compatible Midnight token permit tuple.
  *
  * @example
  * ```ts

@@ -114,7 +114,7 @@ export type MidnightRequirement =
 export interface PlanBorrowMarketOrderRequirementsParams {
   /** Core Midnight contract address. */
   readonly midnight: Address | string;
-  /** MidnightBundles contract address. */
+  /** Periphery bundler contract address. */
   readonly midnightBundles: Address | string;
   /** Borrower/taker account. */
   readonly borrower: Address | string;
@@ -142,7 +142,7 @@ export interface PlanBorrowMarketOrderRequirementsParams {
 export interface PlanLendMarketOrderRequirementsParams {
   /** Core Midnight contract address. */
   readonly midnight: Address | string;
-  /** MidnightBundles contract address. */
+  /** Periphery bundler contract address. */
   readonly midnightBundles: Address | string;
   /** Lender/taker account. */
   readonly lender: Address | string;
