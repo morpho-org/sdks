@@ -45,7 +45,7 @@
     "@commitlint/config-conventional": "^21.0.1",
     "@types/node": "^25.9.1",
     "@vitest/coverage-v8": "^4.1.7",
-    "@vitest/ui": "^4.1.7",
+    "@vitest/ui": "^4.1.8",
     "dotenv-cli": "^11.0.0",
     "happy-dom": "^20.9.0",
     "husky": "^9.1.7",
