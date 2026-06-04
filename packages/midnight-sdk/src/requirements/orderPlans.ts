@@ -1,7 +1,7 @@
 import type { Address, Hex } from "viem";
 import {
   type EcrecoverRatificationTypedData,
-  OfferPayloadUtils,
+  OfferTreeUtils,
 } from "../signatures/index.js";
 import type { BigIntish, MidnightCall, RatifierInfo } from "../types.js";
 import {
@@ -388,7 +388,7 @@ export function planMakeOfferRequirements(
       root,
       call:
         params.rootApprovalCall ??
-        OfferPayloadUtils.buildSetterRootApprovalCall({
+        OfferTreeUtils.buildSetterRootApprovalCall({
           setterRatifier: params.ratifierInfo.ratifier,
           maker: params.maker,
           root,
@@ -431,6 +431,6 @@ export function buildRootApprovalRequirement(params: {
   return {
     type: "rootApproval",
     root: params.root as Hex,
-    call: OfferPayloadUtils.buildSetterRootApprovalCall(params),
+    call: OfferTreeUtils.buildSetterRootApprovalCall(params),
   };
 }

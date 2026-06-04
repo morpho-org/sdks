@@ -1,4 +1,6 @@
+import { deepFreeze } from "@morpho-org/morpho-ts";
 import {
+  type Address,
   bytesToHex,
   decodeAbiParameters,
   encodeAbiParameters,
@@ -6,13 +8,14 @@ import {
   hexToBytes,
 } from "viem";
 
-import { MAX_OFFERS_PER_TREE } from "../constants.js";
+import { ALLOWED_LLTVS, MAX_TICK } from "../constants.js";
 import {
   type IOffer,
   Offer,
   type OfferStruct,
   offerStructAbiComponents,
 } from "../offers/Offer.js";
+import type { MidnightCall } from "../types.js";
 
 /**
  * Raw onchain mempool payload bytes.
@@ -32,7 +35,7 @@ export type Payload = Hex;
  * `ratifierData` blob a taker hands to `Midnight.take(..., ratifierData)`.
  *
  * `ratifierData` is owned by the ratifier scheme the maker used (e.g.
- * `EcrecoverRatifier.encodeRatifierData`). The payload codec treats it as
+ * `EcrecoverRatifier.ratifierData`). The payload codec treats it as
  * opaque bytes — simulators that only need to forward `ratifierData` can
  * stay completely ratifier-agnostic.
  */
@@ -100,7 +103,8 @@ const VERSION_PREFIX_BYTES = 1;
 const LENGTH_PREFIX_BYTES = 4;
 const HEADER_BYTES = VERSION_PREFIX_BYTES + LENGTH_PREFIX_BYTES;
 const ABI_ARRAY_HEAD_BYTES = 64;
-const ABI_LENGTH_LOW_OFFSET = 60;
+const MAX_TIMESTAMP_SECONDS = 1_000_000_000_000n - 1n;
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 /**
  * Largest fully framed wire payload, in bytes: the version byte, the 4-byte
@@ -165,7 +169,7 @@ const itemsAbi = [
  * sees on decode.
  *
  * @param items - Per-leaf items in the order the maker committed to. Must
- *   contain at least one item and at most `MAX_OFFERS_PER_TREE`.
+ *   contain at least one item.
  * @returns The encoded payload as a hex string.
  * @throws DecodeError when the item count or encoded size exceeds protocol limits.
  * @example
@@ -180,15 +184,16 @@ export async function encode(items: readonly Item[]): Promise<Payload> {
   if (CURRENT_VERSION > 0xff) {
     throw new DecodeError(`version overflow: ${CURRENT_VERSION} exceeds 255`);
   }
-  assertItemCountWithinLimit(items.length);
-  const itemBytes = hexToBytes(
-    encodeAbiParameters(itemsAbi, [
-      items.map((item) => ({
-        offer: Offer.from(item.offer).toStruct(),
-        ratifierData: item.ratifierData,
-      })),
-    ]),
-  );
+  assertItemsNotEmpty(items.length);
+  const payloadItems = items.map((item) => {
+    const offer = Offer.from(item.offer).toStruct();
+    assertRouterValidOfferStruct(offer);
+    return {
+      offer,
+      ratifierData: item.ratifierData,
+    };
+  });
+  const itemBytes = hexToBytes(encodeAbiParameters(itemsAbi, [payloadItems]));
   const compressed = await compressItemsPayload(itemBytes);
   const encoded = new Uint8Array(HEADER_BYTES + compressed.length);
   encoded[0] = CURRENT_VERSION;
@@ -250,11 +255,37 @@ export async function decode(payload: Payload): Promise<Item[]> {
   }
   const compressed = bytes.subarray(HEADER_BYTES, compressedEnd);
   const decoded = await decompressItemsPayload(compressed);
-  assertAbiItemCountWithinLimit(decoded);
+  assertAbiItemsHeaderWithinBounds(decoded);
   const items = decodeItemsBytes(decoded);
-  assertItemCountWithinLimit(items.length);
+  assertItemsNotEmpty(items.length);
   assertCanonicalItemsBytes(items, decoded);
   return items;
+}
+
+/**
+ * Builds a raw mempool submission call descriptor.
+ *
+ * @param params - Mempool submission parameters.
+ * @returns Neutral call descriptor.
+ * @example
+ * ```ts
+ * import { Payload } from "@morpho-org/midnight-sdk";
+ *
+ * const call = Payload.buildSubmissionCall({
+ *   midnightMempool: "0x0000000000000000000000000000000000000001",
+ *   payload: "0x",
+ * });
+ * console.log(call.to);
+ * ```
+ */
+export function buildSubmissionCall(params: {
+  readonly midnightMempool: Address | string;
+  readonly payload: Payload;
+}): MidnightCall {
+  return deepFreeze({
+    to: params.midnightMempool as Address,
+    data: params.payload,
+  });
 }
 
 function decodeItemsBytes(decoded: Uint8Array): Item[] {
@@ -268,26 +299,30 @@ function decodeItemsBytes(decoded: Uint8Array): Item[] {
     );
   }
   try {
-    return raw.map((entry) => ({
-      offer: new Offer({
-        market: entry.offer.market,
-        buy: entry.offer.buy,
-        maker: entry.offer.maker,
-        start: entry.offer.start,
-        expiry: entry.offer.expiry,
-        tick: entry.offer.tick,
-        group: entry.offer.group,
-        callback: entry.offer.callback,
-        callbackData: entry.offer.callbackData,
-        receiverIfMakerIsSeller: entry.offer.receiverIfMakerIsSeller,
-        ratifier: entry.offer.ratifier,
-        reduceOnly: entry.offer.reduceOnly,
-        maxUnits: entry.offer.maxUnits,
-        maxAssets: entry.offer.maxAssets,
-      }),
-      ratifierData: entry.ratifierData,
-    }));
+    return raw.map((entry) => {
+      assertRouterValidOfferStruct(entry.offer);
+      return {
+        offer: new Offer({
+          market: entry.offer.market,
+          buy: entry.offer.buy,
+          maker: entry.offer.maker,
+          start: entry.offer.start,
+          expiry: entry.offer.expiry,
+          tick: entry.offer.tick,
+          group: entry.offer.group,
+          callback: entry.offer.callback,
+          callbackData: entry.offer.callbackData,
+          receiverIfMakerIsSeller: entry.offer.receiverIfMakerIsSeller,
+          ratifier: entry.offer.ratifier,
+          reduceOnly: entry.offer.reduceOnly,
+          maxUnits: entry.offer.maxUnits,
+          maxAssets: entry.offer.maxAssets,
+        }),
+        ratifierData: entry.ratifierData,
+      };
+    });
   } catch (error) {
+    if (error instanceof DecodeError) throw error;
     if (error instanceof Error) {
       throw new DecodeError(`invalid offer bytes: ${error.message}`, error);
     }
@@ -310,11 +345,115 @@ function assertCanonicalItemsBytes(
   }
 }
 
-function assertItemCountWithinLimit(count: number): void {
-  if (count === 0) throw new DecodeError("items payload is empty");
-  if (count > MAX_OFFERS_PER_TREE) {
-    throw new DecodeError(`items payload exceeds ${MAX_OFFERS_PER_TREE} items`);
+function assertRouterValidOfferStruct(offer: OfferStruct): void {
+  if (isEmptyOfferStruct(offer)) return;
+
+  assertCollateralParams(offer);
+  assertSafeTimestamp("market.maturity", offer.market.maturity);
+  assertMaturityAt15Utc(offer.market.maturity);
+  assertSafeTimestamp("start", offer.start);
+  assertSafeTimestamp("expiry", offer.expiry);
+
+  if (offer.start >= offer.expiry) {
+    throw new DecodeError("invalid offer bytes: start must be before expiry");
   }
+  if (offer.expiry > offer.market.maturity) {
+    throw new DecodeError(
+      "invalid offer bytes: expiry must be before or equal to maturity",
+    );
+  }
+  if (offer.tick > MAX_TICK) {
+    throw new DecodeError(
+      `invalid offer bytes: tick exceeds maximum ${MAX_TICK}`,
+    );
+  }
+  if (offer.maxUnits > 0n && offer.maxAssets > 0n) {
+    throw new DecodeError(
+      "invalid offer bytes: at most one of maxUnits and maxAssets can be non-zero",
+    );
+  }
+}
+
+function assertCollateralParams(offer: OfferStruct): void {
+  const collateralParams = offer.market.collateralParams;
+  if (collateralParams.length === 0) {
+    throw new DecodeError(
+      "invalid offer bytes: at least one collateral required",
+    );
+  }
+
+  let previousToken: string | undefined;
+  for (const params of collateralParams) {
+    if (
+      !ALLOWED_LLTVS.includes(params.lltv as (typeof ALLOWED_LLTVS)[number])
+    ) {
+      throw new DecodeError(
+        `invalid offer bytes: invalid collateral lltv ${params.lltv}`,
+      );
+    }
+
+    const token = params.token.toLowerCase();
+    if (previousToken != null && previousToken >= token) {
+      throw new DecodeError(
+        "invalid offer bytes: collaterals must be sorted and unique",
+      );
+    }
+    previousToken = token;
+  }
+}
+
+function assertSafeTimestamp(field: string, value: bigint): void {
+  if (value > MAX_TIMESTAMP_SECONDS) {
+    throw new DecodeError(
+      `invalid offer bytes: ${field} exceeds ${MAX_TIMESTAMP_SECONDS}`,
+    );
+  }
+}
+
+function assertMaturityAt15Utc(value: bigint): void {
+  const date = new Date(Number(value) * 1000);
+  if (
+    date.getUTCHours() !== 15 ||
+    date.getUTCMinutes() !== 0 ||
+    date.getUTCSeconds() !== 0 ||
+    date.getUTCMilliseconds() !== 0
+  ) {
+    throw new DecodeError(
+      "invalid offer bytes: maturity must be at 15:00:00 UTC",
+    );
+  }
+}
+
+function isEmptyOfferStruct(offer: OfferStruct): boolean {
+  return (
+    isZeroAddress(offer.maker) &&
+    isZeroAddress(offer.market.loanToken) &&
+    isZeroAddress(offer.market.enterGate) &&
+    isZeroAddress(offer.market.liquidatorGate) &&
+    isZeroAddress(offer.receiverIfMakerIsSeller) &&
+    isZeroAddress(offer.ratifier) &&
+    offer.maxUnits === 0n &&
+    offer.maxAssets === 0n &&
+    offer.tick === 0n &&
+    offer.market.maturity === 0n &&
+    offer.market.rcfThreshold === 0n &&
+    offer.expiry === 0n &&
+    offer.start === 0n &&
+    /^0x0*$/i.test(offer.group) &&
+    offer.buy === false &&
+    offer.market.collateralParams.length === 0 &&
+    isZeroAddress(offer.callback) &&
+    /^0x0*$/i.test(offer.callbackData) &&
+    offer.reduceOnly === false
+  );
+}
+
+function isZeroAddress(value: string): boolean {
+  return value.toLowerCase() === ZERO_ADDRESS;
+}
+
+function assertItemsNotEmpty(count: number): void {
+  if (count === 0) throw new DecodeError("items payload is empty");
 }
 
 async function compressItemsPayload(payload: Uint8Array): Promise<Uint8Array> {
@@ -392,31 +531,25 @@ function singleChunkStream(bytes: Uint8Array): ReadableStream<BufferSource> {
 }
 
 /**
- * Reads the items array length from the ABI head and rejects payloads
- * declaring more than `MAX_OFFERS_PER_TREE` entries before invoking the full
- * decoder. The head is `[offset(32 bytes), length(32 bytes)]`; any non-zero
- * byte in the high 28 bytes of the length word implies a count far above the
- * cap, so we treat it as an early reject.
+ * Reads the items array length from the ABI head and rejects payloads whose
+ * declared length cannot fit inside the decoded byte array before invoking the
+ * full decoder. The head is `[offset(32 bytes), length(32 bytes)]`; each array
+ * entry needs at least one 32-byte head word, so larger declarations are
+ * malformed rather than merely large.
  */
-function assertAbiItemCountWithinLimit(decoded: Uint8Array): void {
+function assertAbiItemsHeaderWithinBounds(decoded: Uint8Array): void {
   if (decoded.length < ABI_ARRAY_HEAD_BYTES) {
     throw new DecodeError("items payload truncated before ABI array head");
   }
-  for (let i = 32; i < ABI_LENGTH_LOW_OFFSET; i++) {
-    if (decoded[i] !== 0) {
-      throw new DecodeError(
-        `items payload exceeds ${MAX_OFFERS_PER_TREE} items`,
-      );
-    }
+  let length = 0n;
+  for (let i = 32; i < 64; i++) {
+    length = (length << 8n) | BigInt(decoded[i]!);
   }
-  const view = new DataView(
-    decoded.buffer,
-    decoded.byteOffset,
-    decoded.byteLength,
+  const maxLengthFromHead = BigInt(
+    (decoded.length - ABI_ARRAY_HEAD_BYTES) / 32,
   );
-  const length = view.getUint32(ABI_LENGTH_LOW_OFFSET);
-  if (length > MAX_OFFERS_PER_TREE) {
-    throw new DecodeError(`items payload exceeds ${MAX_OFFERS_PER_TREE} items`);
+  if (length > maxLengthFromHead) {
+    throw new DecodeError("items payload declares an impossible array length");
   }
 }
 

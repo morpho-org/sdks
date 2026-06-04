@@ -1,7 +1,6 @@
 import {
   type DeepPartial,
   type DottedKeys,
-  deepFreeze,
   UnsupportedChainIdError,
 } from "@morpho-org/morpho-ts";
 import {
@@ -32,7 +31,7 @@ const MIDNIGHT_ADDRESS_LABELS = [
 export type MidnightAddressLabel = DottedKeys<MidnightAddresses>;
 
 /**
- * Immutable Midnight address registry keyed by chain id.
+ * Midnight address registry keyed by chain id.
  *
  * The initial registry is intentionally empty until deployed Base addresses are
  * pinned from a reviewed deployment artifact.
@@ -90,7 +89,7 @@ export type MidnightAddressRegistryOverrides = Record<
 >;
 
 /**
- * Immutable Midnight address registry keyed by chain id.
+ * Midnight address registry keyed by chain id.
  *
  * The initial registry is intentionally empty until deployed Base addresses are
  * pinned from a reviewed deployment artifact. The binding is updated when
@@ -103,9 +102,7 @@ export type MidnightAddressRegistryOverrides = Record<
  * console.log(Object.keys(midnightAddressRegistry).length);
  * ```
  */
-export let midnightAddressRegistry: MidnightAddressRegistry = deepFreeze(
-  {} satisfies Record<number, MidnightAddresses>,
-);
+export let midnightAddressRegistry: MidnightAddressRegistry = {};
 
 /**
  * Alias of {@link midnightAddressRegistry} matching the object-style registry
@@ -241,7 +238,7 @@ export function registerCustomMidnightAddresses({
       if (requestedAddress == null) continue;
 
       const registeredAddress = registeredAddresses[label];
-      if (registeredAddress !== requestedAddress)
+      if (registeredAddress.toLowerCase() !== requestedAddress.toLowerCase())
         throw new MidnightAddressAlreadyRegisteredError({
           chainId,
           label,
@@ -251,5 +248,5 @@ export function registerCustomMidnightAddresses({
     }
   }
 
-  midnightAddresses = midnightAddressRegistry = deepFreeze(nextRegistry);
+  midnightAddresses = midnightAddressRegistry = nextRegistry;
 }

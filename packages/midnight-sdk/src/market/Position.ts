@@ -1,4 +1,3 @@
-import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { BigIntish } from "../types.js";
 
 /**
@@ -37,13 +36,13 @@ export interface IPosition {
 }
 
 /**
- * Immutable Midnight user position.
+ * Midnight user position.
  *
  * @example
  * ```ts
- * import { Position } from "@morpho-org/midnight-sdk";
+ * import type { Position } from "@morpho-org/midnight-sdk";
  *
- * const position = new Position({
+ * const position: Position = {
  *   credit: 0n,
  *   pendingFee: 0n,
  *   lastLossFactor: 0n,
@@ -51,42 +50,23 @@ export interface IPosition {
  *   debt: 0n,
  *   collateralBitmap: 0n,
  *   collateral: Array.from({ length: 128 }, () => 0n),
- * });
+ * };
  * console.log(position.debt);
  * ```
  */
-export class Position {
+export interface Position {
   /** User credit. */
-  public readonly credit: bigint;
-
+  readonly credit: bigint;
   /** Pending fee. */
-  public readonly pendingFee: bigint;
-
+  readonly pendingFee: bigint;
   /** Last loss factor seen by the position. */
-  public readonly lastLossFactor: bigint;
-
+  readonly lastLossFactor: bigint;
   /** Last accrual timestamp. */
-  public readonly lastAccrual: bigint;
-
+  readonly lastAccrual: bigint;
   /** User debt. */
-  public readonly debt: bigint;
-
+  readonly debt: bigint;
   /** Collateral bitmap. */
-  public readonly collateralBitmap: bigint;
-
+  readonly collateralBitmap: bigint;
   /** Collateral balances by index. */
-  public readonly collateral: readonly bigint[];
-
-  public constructor(position: IPosition) {
-    this.credit = BigInt(position.credit);
-    this.pendingFee = BigInt(position.pendingFee);
-    this.lastLossFactor = BigInt(position.lastLossFactor);
-    this.lastAccrual = BigInt(position.lastAccrual);
-    this.debt = BigInt(position.debt);
-    this.collateralBitmap = BigInt(position.collateralBitmap);
-    this.collateral = deepFreeze(
-      position.collateral.map((assets) => BigInt(assets)),
-    );
-    deepFreeze(this);
-  }
+  readonly collateral: readonly bigint[];
 }

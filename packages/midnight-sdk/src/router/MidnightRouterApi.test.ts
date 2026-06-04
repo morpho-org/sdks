@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import type { Hex } from "viem";
 import { describe, expect, test } from "vitest";
 
-import { baseOffer } from "../__test__/fixtures.js";
+import { baseMarketInput, baseOffer } from "../__test__/fixtures.js";
 import {
   InvalidMidnightRouterResponseError,
   MidnightRouterApiError,
@@ -10,6 +10,7 @@ import {
 import * as Payload from "../signatures/Payload.js";
 import { MIDNIGHT_SDK_VERSION } from "../version.js";
 import {
+  Api,
   MidnightRouterApi,
   type MidnightRouterFetch,
 } from "./MidnightRouterApi.js";
@@ -18,6 +19,20 @@ type FetchCall = {
   readonly input: Parameters<MidnightRouterFetch>[0];
   readonly init: Parameters<MidnightRouterFetch>[1];
 };
+
+const ROUTER_VALID_MATURITY = 1_767_279_600n;
+
+function routerValidOffer() {
+  return baseOffer({
+    market: {
+      ...baseMarketInput(),
+      maturity: ROUTER_VALID_MATURITY,
+    },
+    expiry: ROUTER_VALID_MATURITY - 60n,
+    maxUnits: 0n,
+    maxAssets: 1_000n,
+  });
+}
 
 function createJsonFetch(body: unknown, status = 200) {
   const calls: FetchCall[] = [];
@@ -177,7 +192,7 @@ describe("MidnightRouterApi.validateMempoolItems", () => {
 
     const result = await MidnightRouterApi.validateMempoolItems({
       chainId: 8453,
-      items: [{ offer: baseOffer(), ratifierData: "0x1234" as Hex }],
+      items: [{ offer: routerValidOffer(), ratifierData: "0x1234" as Hex }],
       fetch,
     });
 
@@ -191,6 +206,44 @@ describe("MidnightRouterApi.validateMempoolItems", () => {
     const decoded = await Payload.decode(body.payload as Payload.Payload);
     expect(decoded).toHaveLength(1);
     expect(decoded[0]!.ratifierData).toBe("0x1234");
+  });
+});
+
+describe("MidnightRouterApi.validateMempoolTree", () => {
+  test("default", async () => {
+    const { calls, fetch } = createJsonFetch({
+      data: { issues: [] },
+    });
+
+    const result = await MidnightRouterApi.validateMempoolTree({
+      chainId: 8453,
+      tree: { groups: [[routerValidOffer()]] },
+      fetch,
+    });
+
+    const body = parseRequestBody(calls[0]!);
+    const decoded = await Payload.decode(body.payload as Payload.Payload);
+
+    expect(result.valid).toBe(true);
+    expect(decoded).toHaveLength(1);
+    expect(decoded[0]!.ratifierData).toBe("0x");
+  });
+});
+
+describe("Api.validate", () => {
+  test("default", async () => {
+    const { calls, fetch } = createJsonFetch({
+      data: { issues: [] },
+    });
+    const api = Api.init({ fetch });
+
+    const result = await api.validate({
+      chainId: 8453,
+      tree: { groups: [[routerValidOffer()]] },
+    });
+
+    expect(result.valid).toBe(true);
+    expect(calls).toHaveLength(1);
   });
 });
 

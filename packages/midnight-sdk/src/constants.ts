@@ -73,18 +73,6 @@ export const MAX_COLLATERALS = 128n;
 export const MAX_COLLATERALS_PER_BORROWER = 16n;
 
 /**
- * Maximum offer entries accepted by a Midnight mempool payload.
- *
- * @example
- * ```ts
- * import { MAX_OFFERS_PER_TREE } from "@morpho-org/midnight-sdk";
- *
- * console.log(MAX_OFFERS_PER_TREE);
- * ```
- */
-export const MAX_OFFERS_PER_TREE = 64;
-
-/**
  * Allowed LLTV tiers copied from Midnight ConstantsLib.
  *
  * @example

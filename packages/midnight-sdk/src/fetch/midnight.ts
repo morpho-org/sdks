@@ -19,8 +19,8 @@ import { MAX_COLLATERALS } from "../constants.js";
 import {
   type IMarket,
   Market,
-  MarketState,
-  Position,
+  type MarketState,
+  type Position,
 } from "../market/index.js";
 import { ConsumableUnitsLib } from "../math/index.js";
 import { type IOffer, Offer } from "../offers/index.js";
@@ -249,7 +249,7 @@ export async function fetchMarketState(
   params: MidnightFetchParams & {
     readonly marketId: Hex;
   },
-) {
+): Promise<MarketState> {
   const state = await readContract(params.client, {
     ...callParameters(params),
     address: params.midnight,
@@ -258,7 +258,7 @@ export async function fetchMarketState(
     args: [params.marketId],
   });
 
-  return new MarketState({
+  return {
     totalUnits: state[0],
     lossFactor: state[1],
     withdrawable: state[2],
@@ -274,7 +274,7 @@ export async function fetchMarketState(
     ],
     continuousFee: state[11],
     tickSpacing: state[12],
-  });
+  };
 }
 
 /**
@@ -284,7 +284,7 @@ export async function fetchMarketState(
  * this helper reads each collateral slot before returning the position.
  *
  * @param params - Fetch parameters.
- * @returns Position instance.
+ * @returns Normalized position object.
  * @example
  * ```ts
  * import { fetchPosition } from "@morpho-org/midnight-sdk";
@@ -298,7 +298,7 @@ export async function fetchPosition(
     readonly marketId: Hex;
     readonly user: Address;
   },
-) {
+): Promise<Position> {
   if (shouldUseDeployless(params)) {
     try {
       const position = await readContract(params.client, {
@@ -309,15 +309,17 @@ export async function fetchPosition(
         args: [params.midnight, params.marketId, params.user],
       });
 
-      return new Position({
+      const collateral = position.collateral as readonly BigIntish[];
+
+      return {
         credit: position.credit,
         pendingFee: position.pendingFee,
         lastLossFactor: position.lastLossFactor,
         lastAccrual: position.lastAccrual,
         debt: position.debt,
         collateralBitmap: position.collateralBitmap,
-        collateral: position.collateral as readonly BigIntish[],
-      });
+        collateral: collateral.map((assets) => BigInt(assets)),
+      };
     } catch (error) {
       if (params.deployless === "force") throw error;
       // Fallback to direct reads if deployless execution is unavailable.
@@ -345,15 +347,15 @@ export async function fetchPosition(
     ),
   );
 
-  return new Position({
+  return {
     credit: position[0],
     pendingFee: position[1],
     lastLossFactor: position[2],
     lastAccrual: position[3],
     debt: position[4],
     collateralBitmap: position[5],
-    collateral,
-  });
+    collateral: [...collateral],
+  };
 }
 
 /**

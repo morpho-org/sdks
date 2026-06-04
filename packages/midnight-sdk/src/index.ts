@@ -17,14 +17,6 @@ export {
   midnightAddressRegistry,
   registerCustomMidnightAddresses,
 } from "./addresses.js";
-export type {
-  RepayCallParams,
-  SetConsumedCallParams,
-  SetIsAuthorizedCallParams,
-  SupplyCollateralCallParams,
-  WithdrawCollateralCallParams,
-} from "./calls/index.js";
-export { MidnightCalls } from "./calls/index.js";
 export {
   ALLOWED_LLTVS,
   CBP,
@@ -37,7 +29,6 @@ export {
   MAX_COLLATERALS,
   MAX_COLLATERALS_PER_BORROWER,
   MAX_CONTINUOUS_FEE,
-  MAX_OFFERS_PER_TREE,
   MAX_SETTLEMENT_FEES,
   MAX_TICK,
   OFFER_TYPEHASH,
@@ -49,7 +40,7 @@ export {
   InvalidMidnightRouterResponseError,
   InvalidOfferGroupError,
   InvalidOfferParameterError,
-  InvalidOfferPayloadError,
+  InvalidOfferTreeError,
   InvalidOfferTreeHeightError,
   InvalidSettlementFeeIndexError,
   InvalidTickSpacingError,
@@ -88,20 +79,20 @@ export {
   fetchWithdrawable,
 } from "./fetch/index.js";
 export type {
+  CollateralParams,
   CollateralParamsStruct,
   ICollateralParams,
   IMarket,
   IMarketState,
   IPosition,
+  MarketState,
   MarketStruct,
+  Position,
 } from "./market/index.js";
 export {
-  CollateralParams,
   computeMarketId,
   Market,
-  MarketState,
   MarketUtils,
-  Position,
 } from "./market/index.js";
 export {
   ConsumableUnitsLib,
@@ -111,19 +102,19 @@ export {
 export type {
   BuildOfferGroupParams,
   BuildOfferParams,
-  BuildTakesFromOffersParams,
+  BuildTakeableOffersFromOffersParams,
   IOffer,
-  ITake,
+  ITakeableOffer,
   OfferStruct,
-  QuoteTakeInput,
-  TakeStruct,
+  QuoteTakeableOfferInput,
+  TakeableOffer,
+  TakeableOfferStruct,
   ValidatedOfferParams,
   ValidateOfferGroupParams,
 } from "./offers/index.js";
 export {
   Offer,
   OfferUtils,
-  Take,
 } from "./offers/index.js";
 export type {
   ApprovalRequirementInputs,
@@ -163,20 +154,34 @@ export type {
   MidnightRouterRequestOptions,
   ValidateMempoolItemsParams,
   ValidateMempoolPayloadParams,
+  ValidateMempoolTreeParams,
 } from "./router/index.js";
-export { MidnightRouterApi } from "./router/index.js";
+export { Api, MidnightRouterApi } from "./router/index.js";
 export type {
   DecodedEcrecoverRatifierData,
   DecodedSetterRatifierData,
   EcrecoverRatificationTypedData,
+  EcrecoverRatifierDataParams,
+  EcrecoverRatifierRatifyParams,
+  EcrecoverRatifierTypedDataParams,
   EcrecoverSignature,
+  EcrecoverSignatureInput,
+  EcrecoverSignTypedData,
   GetRatifierInfoParams,
-  OfferPayload,
-  OfferProof,
+  GroupCreateParams,
+  OfferTreeDescriptor,
+  OfferTreeProof,
+  SetterRatifierDataParams,
+  TreeCreateParams,
+  TreeInput,
 } from "./signatures/index.js";
 export {
-  OfferPayloadUtils,
+  EcrecoverRatifier,
+  Group,
+  OfferTreeUtils,
   RatifierUtils,
+  SetterRatifier,
+  Tree,
 } from "./signatures/index.js";
 export * as Payload from "./signatures/Payload.js";
 export type {

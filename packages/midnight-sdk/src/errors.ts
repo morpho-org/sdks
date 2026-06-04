@@ -290,19 +290,19 @@ export class InvalidOfferTreeHeightError extends Error {
 }
 
 /**
- * Thrown when an offer tree payload cannot be represented by the ratifiers.
+ * Thrown when an offer tree cannot be represented by the ratifiers.
  *
  * @example
  * ```ts
- * import { InvalidOfferPayloadError } from "@morpho-org/midnight-sdk";
+ * import { InvalidOfferTreeError } from "@morpho-org/midnight-sdk";
  *
- * throw new InvalidOfferPayloadError("Offer payload must not be empty.");
+ * throw new InvalidOfferTreeError("Offer tree must not be empty.");
  * ```
  */
-export class InvalidOfferPayloadError extends Error {
+export class InvalidOfferTreeError extends Error {
   public constructor(message: string) {
     super(message);
-    this.name = "InvalidOfferPayloadError";
+    this.name = "InvalidOfferTreeError";
   }
 }
 

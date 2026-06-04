@@ -1,4 +1,3 @@
-import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Address, Hex } from "viem";
 import { type IMarket, Market, type MarketStruct } from "../market/index.js";
 import type { BigIntish } from "../types.js";
@@ -157,7 +156,6 @@ export class Offer {
     this.reduceOnly = offer.reduceOnly;
     this.maxUnits = BigInt(offer.maxUnits);
     this.maxAssets = BigInt(offer.maxAssets);
-    deepFreeze(this);
   }
 
   /**

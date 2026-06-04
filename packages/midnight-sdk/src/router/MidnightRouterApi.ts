@@ -2,6 +2,7 @@ import {
   InvalidMidnightRouterResponseError,
   MidnightRouterApiError,
 } from "../errors.js";
+import { Tree, type TreeInput } from "../signatures/OfferTree.js";
 import type {
   Payload as MidnightPayload,
   Item as MidnightPayloadItem,
@@ -106,6 +107,29 @@ export interface ValidateMempoolItemsParams extends MidnightRouterApiConfig {
   readonly chainId: number;
   /** SDK-native payload items to encode before router validation. */
   readonly items: readonly MidnightPayloadItem[];
+  /** Optional ISO-8601 timestamp or `Date` selecting the router policy snapshot. */
+  readonly timestamp?: string | Date;
+}
+
+/**
+ * Parameters for {@link MidnightRouterApi.validateMempoolTree}.
+ *
+ * @example
+ * ```ts
+ * import type { ValidateMempoolTreeParams } from "@morpho-org/midnight-sdk";
+ *
+ * const params: ValidateMempoolTreeParams = {
+ *   chainId: 8453,
+ *   tree: { groups: [[{} as never]] },
+ * };
+ * console.log(params.chainId);
+ * ```
+ */
+export interface ValidateMempoolTreeParams extends MidnightRouterApiConfig {
+  /** Chain id whose router policy should validate the tree. */
+  readonly chainId: number;
+  /** Offer tree to validate before ratifier data or payload publication exists. */
+  readonly tree: TreeInput;
   /** Optional ISO-8601 timestamp or `Date` selecting the router policy snapshot. */
   readonly timestamp?: string | Date;
 }
@@ -347,6 +371,39 @@ export namespace MidnightRouterApi {
   }
 
   /**
+   * Validates an offer tree before wallet signature or root approval.
+   *
+   * Router policy only inspects offer contents, so this helper encodes each
+   * tree leaf with empty `ratifierData` and keeps payload bytes at the edge.
+   *
+   * @param params - Validation parameters and optional request configuration.
+   * @returns The encoded validation payload plus router issues and `valid` summary.
+   * @throws Payload.DecodeError when validation payload encoding fails.
+   * @throws MidnightRouterApiError when the router returns a non-2xx response.
+   * @throws InvalidMidnightRouterResponseError when the router returns malformed success JSON.
+   * @example
+   * ```ts
+   * import { MidnightRouterApi } from "@morpho-org/midnight-sdk";
+   *
+   * const validation = await MidnightRouterApi.validateMempoolTree({
+   *   chainId: 8453,
+   *   tree: { groups: [[{} as never]] },
+   * });
+   * console.log(validation.valid);
+   * ```
+   */
+  export async function validateMempoolTree(
+    params: ValidateMempoolTreeParams,
+  ): Promise<MempoolPayloadValidationResult> {
+    const tree = Tree.from(params.tree);
+
+    return validateMempoolItems({
+      ...params,
+      items: tree.offers.map((offer) => ({ offer, ratifierData: "0x" })),
+    });
+  }
+
+  /**
    * Fetches inspectable Midnight router mempool policy rules.
    *
    * @param params - Rule filters, pagination, and optional request configuration.
@@ -381,6 +438,134 @@ export namespace MidnightRouterApi {
     });
 
     return parseRulesResponse(response);
+  }
+}
+
+/**
+ * Stateful convenience wrapper for Midnight router API calls.
+ *
+ * @example
+ * ```ts
+ * import { Api } from "@morpho-org/midnight-sdk";
+ *
+ * const api = Api.init();
+ * const validation = await api.validate({ chainId: 8453, tree: { groups: [[{} as never]] } });
+ * console.log(validation.valid);
+ * ```
+ */
+export class Api {
+  private readonly config: MidnightRouterApiConfig;
+
+  private constructor(config: MidnightRouterApiConfig = {}) {
+    this.config = config;
+  }
+
+  /**
+   * Creates a configured Midnight router API wrapper.
+   *
+   * @param config - Router API configuration shared by instance methods.
+   * @returns API wrapper.
+   * @example
+   * ```ts
+   * import { Api } from "@morpho-org/midnight-sdk";
+   *
+   * const api = Api.init({ baseUrl: "https://router.morpho.org" });
+   * console.log(api);
+   * ```
+   */
+  public static init(config: MidnightRouterApiConfig = {}): Api {
+    return new Api(config);
+  }
+
+  /**
+   * Validates an offer tree before ratifier data or payload publication exists.
+   *
+   * @param params - Tree validation parameters.
+   * @returns The encoded validation payload plus router issues and `valid` summary.
+   * @example
+   * ```ts
+   * import { Api } from "@morpho-org/midnight-sdk";
+   *
+   * const validation = await Api.init().validate({ chainId: 8453, tree: { groups: [[{} as never]] } });
+   * console.log(validation.valid);
+   * ```
+   */
+  public validate(
+    params: Omit<ValidateMempoolTreeParams, keyof MidnightRouterApiConfig>,
+  ): Promise<MempoolPayloadValidationResult> {
+    return MidnightRouterApi.validateMempoolTree({
+      ...this.config,
+      ...params,
+    });
+  }
+
+  /**
+   * Validates an already encoded mempool payload.
+   *
+   * @param params - Payload validation parameters.
+   * @returns Router validation result.
+   * @example
+   * ```ts
+   * import { Api } from "@morpho-org/midnight-sdk";
+   *
+   * const validation = await Api.init().validatePayload({ chainId: 8453, payload: "0x0100000000" });
+   * console.log(validation.valid);
+   * ```
+   */
+  public validatePayload(
+    params: Omit<ValidateMempoolPayloadParams, keyof MidnightRouterApiConfig>,
+  ): Promise<MempoolPayloadValidationResult> {
+    return MidnightRouterApi.validateMempoolPayload({
+      ...this.config,
+      ...params,
+    });
+  }
+
+  /**
+   * Validates payload-ready items.
+   *
+   * @param params - Item validation parameters.
+   * @returns Router validation result.
+   * @example
+   * ```ts
+   * import { Api } from "@morpho-org/midnight-sdk";
+   *
+   * const validation = await Api.init().validateItems({
+   *   chainId: 8453,
+   *   items: [{ offer: {} as never, ratifierData: "0x" }],
+   * });
+   * console.log(validation.valid);
+   * ```
+   */
+  public validateItems(
+    params: Omit<ValidateMempoolItemsParams, keyof MidnightRouterApiConfig>,
+  ): Promise<MempoolPayloadValidationResult> {
+    return MidnightRouterApi.validateMempoolItems({
+      ...this.config,
+      ...params,
+    });
+  }
+
+  /**
+   * Fetches inspectable Midnight router mempool policy rules.
+   *
+   * @param params - Rule filters and pagination.
+   * @returns Paginated router rules mapped to SDK camelCase fields.
+   * @example
+   * ```ts
+   * import { Api } from "@morpho-org/midnight-sdk";
+   *
+   * const rules = await Api.init().fetchRules({ chainIds: [8453] });
+   * console.log(rules.data.length);
+   * ```
+   */
+  public fetchRules(
+    params: Omit<FetchMempoolRulesParams, keyof MidnightRouterApiConfig> = {},
+  ): Promise<MempoolRulesResult> {
+    return MidnightRouterApi.fetchMempoolRules({
+      ...this.config,
+      ...params,
+    });
   }
 }
 

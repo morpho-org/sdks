@@ -12,7 +12,7 @@ import {
 import { MarketUtils } from "../market/index.js";
 import type { BigIntish } from "../types.js";
 import { type BuildOfferParams, type IOffer, Offer } from "./Offer.js";
-import { Take, type TakeStruct } from "./Take.js";
+import type { TakeableOfferStruct } from "./TakeableOffer.js";
 
 const comparableHex = (value: string) => value.toLowerCase();
 
@@ -30,17 +30,17 @@ const readBigIntParameter = (parameter: string, value: BigIntish) => {
 };
 
 /**
- * Quote entry shape converted by {@link OfferUtils.buildTakesFromOffers}.
+ * Quote entry shape converted by {@link OfferUtils.buildTakeableOffersFromOffers}.
  *
  * @example
  * ```ts
- * import type { QuoteTakeInput } from "@morpho-org/midnight-sdk";
+ * import type { QuoteTakeableOfferInput } from "@morpho-org/midnight-sdk";
  *
- * const input = {} as QuoteTakeInput;
+ * const input = {} as QuoteTakeableOfferInput;
  * console.log(input.ratifierData);
  * ```
  */
-export interface QuoteTakeInput {
+export interface QuoteTakeableOfferInput {
   /** Units suggested by the quote/router. */
   readonly units: BigIntish;
   /** Ratifier data suggested by the quote/router. */
@@ -50,19 +50,19 @@ export interface QuoteTakeInput {
 }
 
 /**
- * Parameters for {@link OfferUtils.buildTakesFromOffers}.
+ * Parameters for {@link OfferUtils.buildTakeableOffersFromOffers}.
  *
  * @example
  * ```ts
- * import type { BuildTakesFromOffersParams } from "@morpho-org/midnight-sdk";
+ * import type { BuildTakeableOffersFromOffersParams } from "@morpho-org/midnight-sdk";
  *
- * const params: BuildTakesFromOffersParams = { entries: [] };
+ * const params: BuildTakeableOffersFromOffersParams = { entries: [] };
  * console.log(params.entries.length);
  * ```
  */
-export interface BuildTakesFromOffersParams {
+export interface BuildTakeableOffersFromOffersParams {
   /** Quote entries to convert. */
-  readonly entries: readonly QuoteTakeInput[];
+  readonly entries: readonly QuoteTakeableOfferInput[];
   /** Expected maker side. */
   readonly expectedOfferSide?: "buy" | "sell";
   /** Whether every offer must reference the same market. */
@@ -518,14 +518,14 @@ export namespace OfferUtils {
       }
     }
 
-    return deepFreeze([...offers]);
+    return [...offers];
   }
 
   /**
-   * Converts quote entries into ABI-compatible `Take[]`.
+   * Converts quote entries into ABI-compatible takeable offers.
    *
    * @param params - Quote conversion parameters.
-   * @returns ABI-compatible takes.
+   * @returns ABI-compatible takeable offers.
    * @throws NoMatchingOffersError when `entries` is empty.
    * @throws UnexpectedOfferSideError when an entry has the wrong side.
    * @throws InconsistentMarketError when market consistency is enforced and differs.
@@ -533,16 +533,16 @@ export namespace OfferUtils {
    * ```ts
    * import { OfferUtils } from "@morpho-org/midnight-sdk";
    *
-   * const takes = OfferUtils.buildTakesFromOffers({ entries: [] });
-   * console.log(takes);
+   * const takeableOffers = OfferUtils.buildTakeableOffersFromOffers({ entries: [] });
+   * console.log(takeableOffers);
    * ```
    */
-  export function buildTakesFromOffers(
-    params: BuildTakesFromOffersParams,
-  ): readonly TakeStruct[] {
+  export function buildTakeableOffersFromOffers(
+    params: BuildTakeableOffersFromOffersParams,
+  ): readonly TakeableOfferStruct[] {
     if (params.entries.length === 0) throw new NoMatchingOffersError();
 
-    const takes = params.entries.map((entry) => {
+    const takeableOffers = params.entries.map((entry) => {
       const offer = Offer.from(entry.offer);
       if (params.expectedOfferSide != null) {
         const actual = offer.buy ? "buy" : "sell";
@@ -551,24 +551,24 @@ export namespace OfferUtils {
         }
       }
 
-      return new Take({
-        units: entry.units,
-        offer,
+      return {
+        units: BigInt(entry.units),
+        offer: offer.toStruct(),
         ratifierData: entry.ratifierData,
-      }).toStruct();
+      };
     });
 
     if (params.enforceSameMarket === true) {
-      const [first, ...rest] = takes;
+      const [first, ...rest] = takeableOffers;
       const firstHash = MarketUtils.hashMarket(first!.offer.market);
-      for (const take of rest) {
-        if (MarketUtils.hashMarket(take.offer.market) !== firstHash) {
+      for (const takeableOffer of rest) {
+        if (MarketUtils.hashMarket(takeableOffer.offer.market) !== firstHash) {
           throw new InconsistentMarketError();
         }
       }
     }
 
-    return deepFreeze(takes);
+    return deepFreeze(takeableOffers);
   }
 
   /**

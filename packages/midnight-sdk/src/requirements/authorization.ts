@@ -1,9 +1,7 @@
-import type { Address } from "viem";
+import { deepFreeze } from "@morpho-org/morpho-ts";
+import { type Address, encodeFunctionData } from "viem";
 
-import {
-  MidnightCalls,
-  type SetIsAuthorizedCallParams,
-} from "../calls/index.js";
+import { midnightAbi } from "../abis.js";
 import type { MidnightCall } from "../types.js";
 
 /**
@@ -75,18 +73,22 @@ export function planAuthorizationRequirement(
 ): MidnightAuthorizationRequirement | undefined {
   if (params.isAuthorized) return;
 
-  const callParams: SetIsAuthorizedCallParams = {
-    midnight: params.midnight,
-    authorized: params.authorized,
-    newIsAuthorized: true,
-    onBehalf: params.authorizer,
-  };
-
   return {
     type: "authorization",
     authorizer: params.authorizer as Address,
     authorized: params.authorized as Address,
     isAuthorized: false,
-    call: MidnightCalls.setIsAuthorized(callParams),
+    call: deepFreeze({
+      to: params.midnight as Address,
+      data: encodeFunctionData({
+        abi: midnightAbi,
+        functionName: "setIsAuthorized",
+        args: [
+          params.authorized as Address,
+          true,
+          params.authorizer as Address,
+        ],
+      }),
+    }),
   };
 }

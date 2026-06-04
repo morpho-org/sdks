@@ -1,4 +1,3 @@
-import { deepFreeze } from "@morpho-org/morpho-ts";
 import {
   type Address,
   encodeAbiParameters,
@@ -6,10 +5,10 @@ import {
   keccak256,
 } from "viem";
 import type { BigIntish } from "../types.js";
-import {
+import type {
   CollateralParams,
-  type CollateralParamsStruct,
-  type ICollateralParams,
+  CollateralParamsStruct,
+  ICollateralParams,
 } from "./CollateralParams.js";
 
 const SSTORE2_PREFIX = "0x600b380380600b5f395ff3" as const;
@@ -85,14 +84,16 @@ export class Market {
 
   public constructor(market: IMarket) {
     this.loanToken = market.loanToken as Address;
-    this.collateralParams = deepFreeze(
-      market.collateralParams.map(CollateralParams.from),
-    );
+    this.collateralParams = market.collateralParams.map((params) => ({
+      token: params.token as Address,
+      lltv: BigInt(params.lltv),
+      maxLif: BigInt(params.maxLif),
+      oracle: params.oracle as Address,
+    }));
     this.maturity = BigInt(market.maturity);
     this.rcfThreshold = BigInt(market.rcfThreshold);
     this.enterGate = market.enterGate as Address;
     this.liquidatorGate = market.liquidatorGate as Address;
-    deepFreeze(this);
   }
 
   /**
@@ -141,9 +142,12 @@ export class Market {
   public toStruct(): MarketStruct {
     return {
       loanToken: this.loanToken,
-      collateralParams: this.collateralParams.map((params) =>
-        params.toStruct(),
-      ),
+      collateralParams: this.collateralParams.map((params) => ({
+        token: params.token,
+        lltv: params.lltv,
+        maxLif: params.maxLif,
+        oracle: params.oracle,
+      })),
       maturity: this.maturity,
       rcfThreshold: this.rcfThreshold,
       enterGate: this.enterGate,

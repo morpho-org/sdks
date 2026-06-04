@@ -1,4 +1,3 @@
-import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
 import type { BigIntish } from "../types.js";
 
@@ -29,91 +28,30 @@ export interface ICollateralParams {
 }
 
 /**
- * ABI-compatible Midnight collateral params.
+ * Normalized Midnight collateral params.
  *
  * @example
  * ```ts
- * import { CollateralParams } from "@morpho-org/midnight-sdk";
+ * import type { CollateralParams } from "@morpho-org/midnight-sdk";
  *
- * const params = new CollateralParams({
+ * const params: CollateralParams = {
  *   token: "0x0000000000000000000000000000000000000001",
  *   lltv: 770000000000000000n,
  *   maxLif: 1298701298701298701n,
  *   oracle: "0x0000000000000000000000000000000000000002",
- * });
- * console.log(params.toStruct().lltv);
+ * };
+ * console.log(params.lltv);
  * ```
  */
-export class CollateralParams {
+export interface CollateralParams {
   /** Collateral token address. */
-  public readonly token: Address;
-
+  readonly token: Address;
   /** WAD-scaled liquidation loan-to-value. */
-  public readonly lltv: bigint;
-
+  readonly lltv: bigint;
   /** WAD-scaled maximum liquidation incentive factor. */
-  public readonly maxLif: bigint;
-
+  readonly maxLif: bigint;
   /** Oracle address for this collateral. */
-  public readonly oracle: Address;
-
-  public constructor(params: ICollateralParams) {
-    this.token = params.token as Address;
-    this.lltv = BigInt(params.lltv);
-    this.maxLif = BigInt(params.maxLif);
-    this.oracle = params.oracle as Address;
-    deepFreeze(this);
-  }
-
-  /**
-   * Returns an immutable collateral params instance from plain or class input.
-   *
-   * @param params - Plain or class collateral params.
-   * @returns Collateral params instance.
-   * @example
-   * ```ts
-   * import { CollateralParams } from "@morpho-org/midnight-sdk";
-   *
-   * const params = CollateralParams.from({
-   *   token: "0x0000000000000000000000000000000000000001",
-   *   lltv: 1n,
-   *   maxLif: 1n,
-   *   oracle: "0x0000000000000000000000000000000000000002",
-   * });
-   * console.log(params.token);
-   * ```
-   */
-  public static from(params: ICollateralParams | CollateralParams) {
-    return params instanceof CollateralParams
-      ? params
-      : new CollateralParams(params);
-  }
-
-  /**
-   * Converts the class into the tuple object expected by viem ABI encoders.
-   *
-   * @returns ABI-compatible collateral params.
-   * @example
-   * ```ts
-   * import { CollateralParams } from "@morpho-org/midnight-sdk";
-   *
-   * const tuple = new CollateralParams({
-   *   token: "0x0000000000000000000000000000000000000001",
-   *   lltv: 770000000000000000n,
-   *   maxLif: 1298701298701298701n,
-   *   oracle: "0x0000000000000000000000000000000000000002",
-   * }).toStruct();
-   * console.log(tuple.token);
-   * ```
-   */
-  public toStruct(): CollateralParamsStruct {
-    return {
-      token: this.token,
-      lltv: this.lltv,
-      maxLif: this.maxLif,
-      oracle: this.oracle,
-    };
-  }
+  readonly oracle: Address;
 }
 
 /**

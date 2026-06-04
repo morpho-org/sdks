@@ -1,14 +1,64 @@
-import { bytesToHex, type Hex } from "viem";
+import { bytesToHex, encodeAbiParameters, type Hex, hexToBytes } from "viem";
 import { describe, expect, test } from "vitest";
-import { baseOffer } from "../__test__/fixtures.js";
-import { MAX_OFFERS_PER_TREE } from "../constants.js";
-import { Offer } from "../offers/index.js";
+import { addresses, baseMarketInput, baseOffer } from "../__test__/fixtures.js";
+import {
+  type IOffer,
+  Offer,
+  type OfferStruct,
+  offerStructAbiComponents,
+} from "../offers/index.js";
 import * as Payload from "./Payload.js";
 import { MAX_ATTRIBUTION_SUFFIX_BYTES } from "./Payload.js";
 
+const ROUTER_VALID_MATURITY = 1_767_279_600n;
+
+const itemsAbi = [
+  {
+    name: "items",
+    type: "tuple[]",
+    components: [
+      { name: "offer", type: "tuple", components: offerStructAbiComponents },
+      { name: "ratifierData", type: "bytes" },
+    ],
+  },
+] as const;
+
+function routerValidOffer(overrides: Partial<IOffer> = {}) {
+  return baseOffer({
+    market: {
+      ...baseMarketInput(),
+      maturity: ROUTER_VALID_MATURITY,
+    },
+    expiry: ROUTER_VALID_MATURITY - 60n,
+    maxUnits: 0n,
+    maxAssets: 1_000n,
+    ...overrides,
+  });
+}
+
+async function encodeUncheckedPayload(
+  offer: OfferStruct,
+): Promise<Payload.Payload> {
+  const itemBytes = hexToBytes(
+    encodeAbiParameters(itemsAbi, [[{ offer, ratifierData: "0x1234" as Hex }]]),
+  );
+  const stream = new ReadableStream<BufferSource>({
+    start(controller) {
+      controller.enqueue(itemBytes);
+      controller.close();
+    },
+  }).pipeThrough(new CompressionStream("gzip"));
+  const compressed = new Uint8Array(await new Response(stream).arrayBuffer());
+  const encoded = new Uint8Array(5 + compressed.length);
+  encoded[0] = Payload.CURRENT_VERSION;
+  new DataView(encoded.buffer).setUint32(1, compressed.length);
+  encoded.set(compressed, 5);
+  return bytesToHex(encoded);
+}
+
 describe("Payload.encode", () => {
   test("default", async () => {
-    const offer = baseOffer();
+    const offer = routerValidOffer();
     const encoded = await Payload.encode([
       { offer, ratifierData: "0x1234" as Hex },
     ]);
@@ -26,22 +76,37 @@ describe("Payload.encode", () => {
     );
   });
 
-  test("error: item cap", async () => {
+  test("error: router-invalid offer", async () => {
     await expect(
-      Payload.encode(
-        Array.from({ length: MAX_OFFERS_PER_TREE + 1 }, () => ({
-          offer: baseOffer(),
-          ratifierData: "0x" as Hex,
-        })),
-      ),
+      Payload.encode([
+        {
+          offer: routerValidOffer({ expiry: ROUTER_VALID_MATURITY + 60n }),
+          ratifierData: "0x1234" as Hex,
+        },
+      ]),
     ).rejects.toBeInstanceOf(Payload.DecodeError);
+  });
+});
+
+describe("Payload.buildSubmissionCall", () => {
+  test("default", () => {
+    const payload = "0x1234" as Payload.Payload;
+    const call = Payload.buildSubmissionCall({
+      midnightMempool: addresses.midnightMempool,
+      payload,
+    });
+
+    expect(call).toEqual({
+      to: addresses.midnightMempool,
+      data: payload,
+    });
   });
 });
 
 describe("Payload.decode", () => {
   test("behavior: ignores small attribution suffix", async () => {
     const encoded = await Payload.encode([
-      { offer: baseOffer(), ratifierData: "0x1234" as Hex },
+      { offer: routerValidOffer(), ratifierData: "0x1234" as Hex },
     ]);
     const tagged = `${encoded}ff` as Hex;
 
@@ -58,13 +123,23 @@ describe("Payload.decode", () => {
 
   test("error: attribution suffix cap", async () => {
     const encoded = await Payload.encode([
-      { offer: baseOffer(), ratifierData: "0x1234" as Hex },
+      { offer: routerValidOffer(), ratifierData: "0x1234" as Hex },
     ]);
     const suffix = "ff".repeat(MAX_ATTRIBUTION_SUFFIX_BYTES + 1);
 
     await expect(
       Payload.decode(`${encoded}${suffix}` as Hex),
     ).rejects.toBeInstanceOf(Payload.DecodeError);
+  });
+
+  test("error: router-invalid offer bytes", async () => {
+    const encoded = await encodeUncheckedPayload(
+      routerValidOffer({ expiry: ROUTER_VALID_MATURITY + 60n }).toStruct(),
+    );
+
+    await expect(Payload.decode(encoded)).rejects.toBeInstanceOf(
+      Payload.DecodeError,
+    );
   });
 });
 

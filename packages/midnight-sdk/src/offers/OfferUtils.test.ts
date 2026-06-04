@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
@@ -19,7 +20,6 @@ import {
 import type { BuildOfferParams } from "./Offer.js";
 import { Offer } from "./Offer.js";
 import { OfferUtils } from "./OfferUtils.js";
-import { Take } from "./Take.js";
 
 const buildOfferParams = (overrides: Partial<BuildOfferParams> = {}) => ({
   market: baseMarketInput(),
@@ -55,25 +55,6 @@ describe("Offer", () => {
 
     expect(Offer.from(offer)).toBe(offer);
     expect(Offer.from(baseOfferInput())).toBeInstanceOf(Offer);
-  });
-});
-
-describe("Take", () => {
-  test("behavior: from", () => {
-    const take = new Take({
-      units: 1n,
-      offer: baseOffer(),
-      ratifierData: "0x",
-    });
-    const fromPlain = Take.from({
-      units: "2",
-      offer: baseOfferInput(),
-      ratifierData: "0x",
-    });
-
-    expect(Take.from(take)).toBe(take);
-    expect(fromPlain).toBeInstanceOf(Take);
-    expect(fromPlain.offer).toBeInstanceOf(Offer);
   });
 });
 
@@ -249,7 +230,6 @@ describe("OfferUtils.buildOfferGroup", () => {
     expect(offers).toHaveLength(2);
     expect(offers[0]!.group).toBe(group);
     expect(offers[1]!.group).toBe(group);
-    expect(Object.isFrozen(offers)).toBe(true);
   });
 
   test("behavior: generated group id is shared", () => {
@@ -284,6 +264,28 @@ describe("OfferUtils.buildOfferGroup", () => {
     });
 
     expect(offers.map((offer) => offer.tick)).toEqual([5_008n, 5_000n, 5_004n]);
+  });
+
+  test("behavior: preserves arbitrary input order and shared group", () => {
+    fc.assert(
+      fc.property(
+        fc.uniqueArray(fc.integer({ min: 0, max: Number(MAX_TICK / 4n) }), {
+          minLength: 1,
+          maxLength: 12,
+        }),
+        (tickSteps) => {
+          const ticks = tickSteps.map((step) => BigInt(step) * 4n);
+          const offers = OfferUtils.buildOfferGroup({
+            group,
+            offers: ticks.map((tick) => buildOfferGroupEntry({ tick })),
+          });
+
+          expect(offers.map((offer) => offer.tick)).toEqual(ticks);
+          expect(offers.every((offer) => offer.group === group)).toBe(true);
+        },
+      ),
+      { numRuns: 100 },
+    );
   });
 
   test("error: InvalidOfferGroupError for empty groups", () => {
@@ -334,6 +336,42 @@ describe("OfferUtils.validateOfferGroup", () => {
     expect(offers[0]!.ratifier).toBe(addresses.ecrecoverRatifier);
     expect(offers[1]!.ratifier).toBe(addresses.setterRatifier);
     expect(offers[1]!.callback).toBe(addresses.callback);
+  });
+
+  test("behavior: accepts arbitrary protocol-valid groups", () => {
+    fc.assert(
+      fc.property(
+        fc.array(
+          fc.record({
+            tickStep: fc.integer({ min: 0, max: Number(MAX_TICK / 4n) }),
+            start: fc.integer({ min: 0, max: 1_000 }),
+            duration: fc.integer({ min: 0, max: 1_000 }),
+            useCallback: fc.boolean(),
+            useSetterRatifier: fc.boolean(),
+          }),
+          { minLength: 1, maxLength: 12 },
+        ),
+        (entries) => {
+          const offers = entries.map((entry) =>
+            OfferUtils.buildOffer(
+              buildOfferParams({
+                tick: BigInt(entry.tickStep) * 4n,
+                start: BigInt(entry.start),
+                expiry: BigInt(entry.start + entry.duration),
+                callback: entry.useCallback ? addresses.callback : undefined,
+                callbackData: entry.useCallback ? "0x1234" : undefined,
+                ratifier: entry.useSetterRatifier
+                  ? addresses.setterRatifier
+                  : addresses.ecrecoverRatifier,
+              }),
+            ),
+          );
+
+          expect(OfferUtils.validateOfferGroup({ offers })).toEqual(offers);
+        },
+      ),
+      { numRuns: 100 },
+    );
   });
 
   test.each([
@@ -396,9 +434,9 @@ describe("OfferUtils.validateOfferGroup", () => {
   });
 });
 
-describe("OfferUtils.buildTakesFromOffers", () => {
+describe("OfferUtils.buildTakeableOffersFromOffers", () => {
   test("default", () => {
-    const takes = OfferUtils.buildTakesFromOffers({
+    const takeableOffers = OfferUtils.buildTakeableOffersFromOffers({
       entries: [
         {
           units: "42",
@@ -410,19 +448,19 @@ describe("OfferUtils.buildTakesFromOffers", () => {
       enforceSameMarket: true,
     });
 
-    expect(takes[0]!.units).toBe(42n);
-    expect(takes[0]!.offer.buy).toBe(true);
+    expect(takeableOffers[0]!.units).toBe(42n);
+    expect(takeableOffers[0]!.offer.buy).toBe(true);
   });
 
   test("error: NoMatchingOffersError", () => {
-    expect(() => OfferUtils.buildTakesFromOffers({ entries: [] })).toThrow(
-      NoMatchingOffersError,
-    );
+    expect(() =>
+      OfferUtils.buildTakeableOffersFromOffers({ entries: [] }),
+    ).toThrow(NoMatchingOffersError);
   });
 
   test("error: UnexpectedOfferSideError", () => {
     expect(() =>
-      OfferUtils.buildTakesFromOffers({
+      OfferUtils.buildTakeableOffersFromOffers({
         entries: [
           { units: 1n, ratifierData: "0x", offer: baseOffer({ buy: false }) },
         ],
@@ -433,7 +471,7 @@ describe("OfferUtils.buildTakesFromOffers", () => {
 
   test("error: InconsistentMarketError", () => {
     expect(() =>
-      OfferUtils.buildTakesFromOffers({
+      OfferUtils.buildTakeableOffersFromOffers({
         entries: [
           { units: 1n, ratifierData: "0x", offer: baseOffer() },
           {

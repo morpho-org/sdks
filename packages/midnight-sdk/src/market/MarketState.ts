@@ -1,4 +1,3 @@
-import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { BigIntish } from "../types.js";
 
 /**
@@ -45,13 +44,13 @@ export interface IMarketState {
 }
 
 /**
- * Immutable Midnight market state.
+ * Midnight market state.
  *
  * @example
  * ```ts
- * import { MarketState } from "@morpho-org/midnight-sdk";
+ * import type { MarketState } from "@morpho-org/midnight-sdk";
  *
- * const state = new MarketState({
+ * const state: MarketState = {
  *   totalUnits: 0n,
  *   lossFactor: 0n,
  *   withdrawable: 0n,
@@ -59,25 +58,21 @@ export interface IMarketState {
  *   settlementFeeCbps: [0, 0, 0, 0, 0, 0, 0],
  *   continuousFee: 0,
  *   tickSpacing: 4,
- * });
+ * };
  * console.log(state.tickSpacing);
  * ```
  */
-export class MarketState {
+export interface MarketState {
   /** Total market units. */
-  public readonly totalUnits: bigint;
-
+  readonly totalUnits: bigint;
   /** Current loss factor. */
-  public readonly lossFactor: bigint;
-
+  readonly lossFactor: bigint;
   /** Withdrawable assets. */
-  public readonly withdrawable: bigint;
-
+  readonly withdrawable: bigint;
   /** Continuous-fee credit. */
-  public readonly continuousFeeCredit: bigint;
-
+  readonly continuousFeeCredit: bigint;
   /** Seven settlement-fee cbp buckets. */
-  public readonly settlementFeeCbps: readonly [
+  readonly settlementFeeCbps: readonly [
     number,
     number,
     number,
@@ -86,29 +81,8 @@ export class MarketState {
     number,
     number,
   ];
-
   /** Continuous fee per second. */
-  public readonly continuousFee: number;
-
+  readonly continuousFee: number;
   /** Market tick spacing. */
-  public readonly tickSpacing: number;
-
-  public constructor(state: IMarketState) {
-    this.totalUnits = BigInt(state.totalUnits);
-    this.lossFactor = BigInt(state.lossFactor);
-    this.withdrawable = BigInt(state.withdrawable);
-    this.continuousFeeCredit = BigInt(state.continuousFeeCredit);
-    this.settlementFeeCbps = deepFreeze([...state.settlementFeeCbps] as [
-      number,
-      number,
-      number,
-      number,
-      number,
-      number,
-      number,
-    ]);
-    this.continuousFee = state.continuousFee;
-    this.tickSpacing = state.tickSpacing;
-    deepFreeze(this);
-  }
+  readonly tickSpacing: number;
 }

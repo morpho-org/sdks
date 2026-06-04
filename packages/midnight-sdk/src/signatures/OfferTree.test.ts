@@ -2,9 +2,15 @@ import { decodeFunctionData, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import { addresses, baseOffer } from "../__test__/fixtures.js";
 import { ecrecoverRatifierAbi, setterRatifierAbi } from "../abis.js";
-import { InvalidOfferPayloadError } from "../errors.js";
+import { InvalidOfferTreeError } from "../errors.js";
 import { Offer } from "../offers/index.js";
-import { OfferPayloadUtils } from "./OfferPayloadUtils.js";
+import {
+  EcrecoverRatifier,
+  Group,
+  OfferTreeUtils,
+  SetterRatifier,
+  Tree,
+} from "./OfferTree.js";
 import { RatifierUtils } from "./RatifierUtils.js";
 
 const root =
@@ -59,9 +65,82 @@ describe("RatifierUtils.getRatifierInfo", () => {
   });
 });
 
-describe("OfferPayloadUtils.buildOfferPayload", () => {
+describe("Group.create", () => {
   test("default", () => {
-    const payload = OfferPayloadUtils.buildOfferPayload([baseOffer()]);
+    const offer = baseOffer({ maxAssets: 0n });
+    const group = Group.create([offer]);
+
+    expect(group.offers).toHaveLength(1);
+    expect(group.offers[0]).toBe(offer);
+  });
+});
+
+describe("Tree.create", () => {
+  test("default", () => {
+    const offer = baseOffer({ maxAssets: 0n });
+    const tree = Tree.create({ groups: [Group.create([offer])] });
+
+    expect(tree.offers).toEqual([offer]);
+    expect(tree.root).toBe(OfferTreeUtils.buildOfferTreeRoot([offer]));
+    expect(tree.proof(0n)).toEqual(
+      OfferTreeUtils.buildOfferTreeProof({ offers: [offer], leafIndex: 0n }),
+    );
+  });
+});
+
+describe("EcrecoverRatifier.ratify", () => {
+  test("default", async () => {
+    const offer = baseOffer({ maxAssets: 0n });
+    const tree = Tree.create({ groups: [Group.create([offer])] });
+    const signature = {
+      v: 27,
+      r: "0x0000000000000000000000000000000000000000000000000000000000000000",
+      s: "0x0000000000000000000000000000000000000000000000000000000000000000",
+    } as const;
+
+    const items = await EcrecoverRatifier.ratify({ tree, signature });
+    const decoded = EcrecoverRatifier.decodeRatifierData(
+      items[0]!.ratifierData,
+    );
+
+    expect(items).toHaveLength(1);
+    expect(items[0]!.offer).toBe(offer);
+    expect(decoded.signature).toEqual(signature);
+    expect(
+      OfferTreeUtils.verifyOfferTreeProof({
+        offer,
+        root: decoded.root,
+        leafIndex: decoded.leafIndex,
+        proof: decoded.proof,
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("SetterRatifier.ratify", () => {
+  test("default", () => {
+    const offer = baseOffer({ maxAssets: 0n });
+    const tree = Tree.create({ groups: [Group.create([offer])] });
+
+    const items = SetterRatifier.ratify({ tree });
+    const decoded = SetterRatifier.decodeRatifierData(items[0]!.ratifierData);
+
+    expect(items).toHaveLength(1);
+    expect(items[0]!.offer).toBe(offer);
+    expect(
+      OfferTreeUtils.verifyOfferTreeProof({
+        offer,
+        root: decoded.root,
+        leafIndex: decoded.leafIndex,
+        proof: decoded.proof,
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("OfferTreeUtils.buildOfferTreeDescriptor", () => {
+  test("default", () => {
+    const payload = OfferTreeUtils.buildOfferTreeDescriptor([baseOffer()]);
 
     expect(payload.height).toBe(0);
     expect(payload.root).toMatchInlineSnapshot(
@@ -80,10 +159,10 @@ describe("OfferPayloadUtils.buildOfferPayload", () => {
           "0x2222222222222222222222222222222222222222222222222222222222222222",
       }),
     ];
-    const proof = OfferPayloadUtils.buildOfferProof({ offers, leafIndex: 1n });
+    const proof = OfferTreeUtils.buildOfferTreeProof({ offers, leafIndex: 1n });
 
     expect(proof.proof).toHaveLength(1);
-    expect(proof.root).toBe(OfferPayloadUtils.buildOfferTreeRoot(offers));
+    expect(proof.root).toBe(OfferTreeUtils.buildOfferTreeRoot(offers));
   });
 
   test("behavior: pads non-power-of-two batches", () => {
@@ -101,8 +180,8 @@ describe("OfferPayloadUtils.buildOfferPayload", () => {
           "0x3333333333333333333333333333333333333333333333333333333333333333",
       }),
     ];
-    const payload = OfferPayloadUtils.buildOfferPayload(offers);
-    const proof = OfferPayloadUtils.buildOfferProof({ offers, leafIndex: 2n });
+    const payload = OfferTreeUtils.buildOfferTreeDescriptor(offers);
+    const proof = OfferTreeUtils.buildOfferTreeProof({ offers, leafIndex: 2n });
 
     expect(payload.offers).toHaveLength(4);
     expect(payload.height).toBe(2);
@@ -112,7 +191,7 @@ describe("OfferPayloadUtils.buildOfferPayload", () => {
     expect(payload.offers[3]).toEqual(emptyOffer().toStruct());
     expect(proof.proof).toHaveLength(2);
     expect(
-      OfferPayloadUtils.verifyOfferProof({
+      OfferTreeUtils.verifyOfferTreeProof({
         offer: offers[2]!,
         root: proof.root,
         leafIndex: proof.leafIndex,
@@ -124,21 +203,21 @@ describe("OfferPayloadUtils.buildOfferPayload", () => {
   test("error: duplicate offer hash", () => {
     const offer = baseOffer();
 
-    expect(() => OfferPayloadUtils.buildOfferPayload([offer, offer])).toThrow(
-      InvalidOfferPayloadError,
-    );
+    expect(() =>
+      OfferTreeUtils.buildOfferTreeDescriptor([offer, offer]),
+    ).toThrow(InvalidOfferTreeError);
   });
 
   test("error: all padding", () => {
-    expect(() => OfferPayloadUtils.buildOfferPayload([emptyOffer()])).toThrow(
-      InvalidOfferPayloadError,
-    );
+    expect(() =>
+      OfferTreeUtils.buildOfferTreeDescriptor([emptyOffer()]),
+    ).toThrow(InvalidOfferTreeError);
   });
 });
 
-describe("OfferPayloadUtils.buildEcrecoverRatificationTypedData", () => {
+describe("OfferTreeUtils.buildEcrecoverRatificationTypedData", () => {
   test("default", () => {
-    const typedData = OfferPayloadUtils.buildEcrecoverRatificationTypedData({
+    const typedData = OfferTreeUtils.buildEcrecoverRatificationTypedData({
       offers: [baseOffer()],
       chainId: 8453n,
       verifyingContract: addresses.ecrecoverRatifier,
@@ -153,9 +232,9 @@ describe("OfferPayloadUtils.buildEcrecoverRatificationTypedData", () => {
   });
 });
 
-describe("OfferPayloadUtils.encodeEcrecoverRatifierData", () => {
+describe("OfferTreeUtils.encodeEcrecoverRatifierData", () => {
   test("default", () => {
-    const data = OfferPayloadUtils.encodeEcrecoverRatifierData({
+    const data = OfferTreeUtils.encodeEcrecoverRatifierData({
       signature: {
         v: 27,
         r: "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -175,14 +254,14 @@ describe("OfferPayloadUtils.encodeEcrecoverRatifierData", () => {
       r: "0x1111111111111111111111111111111111111111111111111111111111111111",
       s: "0x2222222222222222222222222222222222222222222222222222222222222222",
     } as const;
-    const data = OfferPayloadUtils.encodeEcrecoverRatifierData({
+    const data = OfferTreeUtils.encodeEcrecoverRatifierData({
       signature,
       root,
       leafIndex: 2n,
       proof: [proofNode],
     });
 
-    expect(OfferPayloadUtils.decodeEcrecoverRatifierData(data)).toEqual({
+    expect(OfferTreeUtils.decodeEcrecoverRatifierData(data)).toEqual({
       signature,
       root,
       leafIndex: 2n,
@@ -191,15 +270,15 @@ describe("OfferPayloadUtils.encodeEcrecoverRatifierData", () => {
   });
 });
 
-describe("OfferPayloadUtils.encodeSetterRatifierData", () => {
+describe("OfferTreeUtils.encodeSetterRatifierData", () => {
   test("behavior: decode round trip", () => {
-    const data = OfferPayloadUtils.encodeSetterRatifierData({
+    const data = OfferTreeUtils.encodeSetterRatifierData({
       root,
       leafIndex: 3n,
       proof: [proofNode],
     });
 
-    expect(OfferPayloadUtils.decodeSetterRatifierData(data)).toEqual({
+    expect(OfferTreeUtils.decodeSetterRatifierData(data)).toEqual({
       root,
       leafIndex: 3n,
       proof: [proofNode],
@@ -207,7 +286,7 @@ describe("OfferPayloadUtils.encodeSetterRatifierData", () => {
   });
 });
 
-describe("OfferPayloadUtils.verifyOfferProof", () => {
+describe("OfferTreeUtils.verifyOfferTreeProof", () => {
   test("default", () => {
     const offers = [
       baseOffer({
@@ -219,10 +298,10 @@ describe("OfferPayloadUtils.verifyOfferProof", () => {
           "0x2222222222222222222222222222222222222222222222222222222222222222",
       }),
     ];
-    const proof = OfferPayloadUtils.buildOfferProof({ offers, leafIndex: 1n });
+    const proof = OfferTreeUtils.buildOfferTreeProof({ offers, leafIndex: 1n });
 
     expect(
-      OfferPayloadUtils.verifyOfferProof({
+      OfferTreeUtils.verifyOfferTreeProof({
         offer: offers[1]!,
         root: proof.root,
         leafIndex: proof.leafIndex,
@@ -230,7 +309,7 @@ describe("OfferPayloadUtils.verifyOfferProof", () => {
       }),
     ).toBe(true);
     expect(
-      OfferPayloadUtils.verifyOfferProof({
+      OfferTreeUtils.verifyOfferTreeProof({
         offer: offers[1]!,
         root: root,
         leafIndex: proof.leafIndex,
@@ -238,7 +317,7 @@ describe("OfferPayloadUtils.verifyOfferProof", () => {
       }),
     ).toBe(false);
     expect(
-      OfferPayloadUtils.verifyOfferProof({
+      OfferTreeUtils.verifyOfferTreeProof({
         offer: offers[1]!,
         root: proof.root,
         leafIndex: 0n,
@@ -246,7 +325,7 @@ describe("OfferPayloadUtils.verifyOfferProof", () => {
       }),
     ).toBe(false);
     expect(
-      OfferPayloadUtils.verifyOfferProof({
+      OfferTreeUtils.verifyOfferTreeProof({
         offer: offers[1]!,
         root: proof.root,
         leafIndex: proof.leafIndex,
@@ -257,10 +336,10 @@ describe("OfferPayloadUtils.verifyOfferProof", () => {
 
   test("behavior: rejects out-of-range leaf index", () => {
     const offer = baseOffer();
-    const offerRoot = OfferPayloadUtils.hashOffer(offer);
+    const offerRoot = OfferTreeUtils.hashOffer(offer);
 
     expect(
-      OfferPayloadUtils.verifyOfferProof({
+      OfferTreeUtils.verifyOfferTreeProof({
         offer,
         root: offerRoot,
         leafIndex: 1n,
@@ -268,7 +347,7 @@ describe("OfferPayloadUtils.verifyOfferProof", () => {
       }),
     ).toBe(false);
     expect(
-      OfferPayloadUtils.verifyOfferProof({
+      OfferTreeUtils.verifyOfferTreeProof({
         offer,
         root: offerRoot,
         leafIndex: -1n,
@@ -278,9 +357,9 @@ describe("OfferPayloadUtils.verifyOfferProof", () => {
   });
 });
 
-describe("OfferPayloadUtils.buildSetterRootApprovalCall", () => {
+describe("OfferTreeUtils.buildSetterRootApprovalCall", () => {
   test("default", () => {
-    const call = OfferPayloadUtils.buildSetterRootApprovalCall({
+    const call = OfferTreeUtils.buildSetterRootApprovalCall({
       setterRatifier: addresses.setterRatifier,
       maker: addresses.maker,
       root: "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -296,7 +375,7 @@ describe("OfferPayloadUtils.buildSetterRootApprovalCall", () => {
 
   test("error: invalid bytes32 root", () => {
     expect(() =>
-      OfferPayloadUtils.buildSetterRootApprovalCall({
+      OfferTreeUtils.buildSetterRootApprovalCall({
         setterRatifier: addresses.setterRatifier,
         maker: addresses.maker,
         root: "0x1234",
@@ -305,9 +384,9 @@ describe("OfferPayloadUtils.buildSetterRootApprovalCall", () => {
   });
 });
 
-describe("OfferPayloadUtils.buildEcrecoverRootCancellationCall", () => {
+describe("OfferTreeUtils.buildEcrecoverRootCancellationCall", () => {
   test("default", () => {
-    const call = OfferPayloadUtils.buildEcrecoverRootCancellationCall({
+    const call = OfferTreeUtils.buildEcrecoverRootCancellationCall({
       ecrecoverRatifier: addresses.ecrecoverRatifier,
       maker: addresses.maker,
       root,

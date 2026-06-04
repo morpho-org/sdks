@@ -58,9 +58,10 @@ describe("midnightAddressRegistry", () => {
     expect(midnightAddresses[chainId]).toEqual(chainAddresses);
   });
 
-  test("behavior: freezes registered entries", () => {
+  test("behavior: copies registered entries", () => {
     const chainId = 31_337_003;
     const chainAddresses = createMidnightAddresses();
+    const registeredMidnight = chainAddresses.midnight;
 
     registerCustomMidnightAddresses({
       addresses: {
@@ -68,16 +69,9 @@ describe("midnightAddressRegistry", () => {
       },
     });
 
-    expect(() => {
-      Object.assign(midnightAddressRegistry, {
-        [chainId + 1]: createMidnightAddresses(),
-      });
-    }).toThrow(TypeError);
-    expect(() => {
-      Object.assign(getMidnightAddresses(chainId), {
-        midnight: randomAddress(),
-      });
-    }).toThrow(TypeError);
+    Object.assign(chainAddresses, { midnight: randomAddress() });
+
+    expect(getMidnightAddresses(chainId).midnight).toBe(registeredMidnight);
   });
 });
 
@@ -110,6 +104,29 @@ describe("registerCustomMidnightAddresses", () => {
         addresses: {
           [chainId]: {
             midnight: chainAddresses.midnight,
+          },
+        },
+      }),
+    ).not.toThrow();
+  });
+
+  test("behavior: accepts repeated registration of the same address with different casing", () => {
+    const chainId = 31_337_008;
+    const chainAddresses = createMidnightAddresses();
+    const lowercasedMidnight =
+      chainAddresses.midnight.toLowerCase() as MidnightAddresses["midnight"];
+
+    registerCustomMidnightAddresses({
+      addresses: {
+        [chainId]: chainAddresses,
+      },
+    });
+
+    expect(() =>
+      registerCustomMidnightAddresses({
+        addresses: {
+          [chainId]: {
+            midnight: lowercasedMidnight,
           },
         },
       }),
