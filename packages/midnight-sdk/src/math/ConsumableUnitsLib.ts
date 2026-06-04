@@ -1,6 +1,7 @@
 import { assertNonNegative, MathLib } from "@morpho-org/morpho-ts";
 
-import { type IOffer, Offer } from "../offers/index.js";
+import type { IOffer, Offer } from "../offers/index.js";
+import { normalizeOffer } from "../offers/Offer.js";
 import type { BigIntish } from "../types.js";
 import { TakeAmountsLib } from "./TakeAmountsLib.js";
 
@@ -65,7 +66,7 @@ export namespace ConsumableUnitsLib {
     readonly consumed: BigIntish;
     readonly settlementFee: BigIntish;
   }) {
-    const offer = Offer.from(params.offer);
+    const offer = normalizeOffer(params.offer);
     const consumed = BigInt(params.consumed);
     assertNonNegative("consumed", consumed);
     assertNonNegative("offer.maxUnits", offer.maxUnits);

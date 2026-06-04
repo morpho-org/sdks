@@ -9,7 +9,13 @@ import {
 } from "../constants.js";
 import { InvalidSettlementFeeIndexError } from "../errors.js";
 import type { BigIntish } from "../types.js";
-import { type IMarket, Market } from "./Market.js";
+import {
+  computeMarketId,
+  type IMarketParams,
+  type Market,
+  type MarketParams,
+  marketParamsToStruct,
+} from "./Market.js";
 
 const collateralParamsHashParams = [
   { name: "typehash", type: "bytes32" },
@@ -106,7 +112,7 @@ export namespace MarketUtils {
   }
 
   /**
-   * Computes the HashLib market struct hash.
+   * Computes the HashLib market params struct hash.
    *
    * @param market - Market to hash.
    * @returns EIP-712 market struct hash.
@@ -125,8 +131,8 @@ export namespace MarketUtils {
    * console.log(hash);
    * ```
    */
-  export function hashMarket(market: IMarket | Market) {
-    const marketStruct = Market.from(market).toStruct();
+  export function hashMarket(market: IMarketParams | MarketParams | Market) {
+    const marketStruct = marketParamsToStruct(market);
     const collateralParamHashes = marketStruct.collateralParams.map((params) =>
       keccak256(
         encodeAbiParameters(collateralParamsHashParams, [
@@ -182,10 +188,10 @@ export namespace MarketUtils {
    * ```
    */
   export function toId(params: {
-    readonly market: IMarket | Market;
+    readonly market: IMarketParams | MarketParams | Market;
     readonly chainId: BigIntish;
     readonly midnight: Address | string;
   }) {
-    return Market.from(params.market).toId(params.chainId, params.midnight);
+    return computeMarketId(params);
   }
 }

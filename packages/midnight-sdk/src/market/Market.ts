@@ -1,9 +1,12 @@
+import { assertNonNegative } from "@morpho-org/morpho-ts";
 import {
   type Address,
   encodeAbiParameters,
   encodePacked,
+  type Hex,
   keccak256,
 } from "viem";
+import { CBP } from "../constants.js";
 import type { BigIntish } from "../types.js";
 import type {
   CollateralParams,
@@ -13,14 +16,45 @@ import type {
 
 const SSTORE2_PREFIX = "0x600b380380600b5f395ff3" as const;
 
+const SETTLEMENT_FEE_BREAKPOINTS = [
+  0n,
+  1n * 24n * 60n * 60n,
+  7n * 24n * 60n * 60n,
+  30n * 24n * 60n * 60n,
+  90n * 24n * 60n * 60n,
+  180n * 24n * 60n * 60n,
+  360n * 24n * 60n * 60n,
+] as const;
+
 /**
- * Plain input accepted by {@link Market}.
+ * Seven settlement-fee centibip buckets stored on a Midnight market.
  *
  * @example
  * ```ts
- * import type { IMarket } from "@morpho-org/midnight-sdk";
+ * import type { SettlementFeeCbps } from "@morpho-org/midnight-sdk";
  *
- * const market: IMarket = {
+ * const cbps: SettlementFeeCbps = [0, 0, 0, 0, 0, 0, 0];
+ * console.log(cbps.length);
+ * ```
+ */
+export type SettlementFeeCbps = readonly [
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+];
+
+/**
+ * Plain input accepted by {@link MarketParams}.
+ *
+ * @example
+ * ```ts
+ * import type { IMarketParams } from "@morpho-org/midnight-sdk";
+ *
+ * const params: IMarketParams = {
  *   loanToken: "0x0000000000000000000000000000000000000001",
  *   collateralParams: [],
  *   maturity: 1n,
@@ -30,7 +64,7 @@ const SSTORE2_PREFIX = "0x600b380380600b5f395ff3" as const;
  * };
  * ```
  */
-export interface IMarket {
+export interface IMarketParams {
   /** Loan token address. */
   readonly loanToken: Address | string;
   /** Collateral definitions sorted as expected by Midnight. */
@@ -46,13 +80,13 @@ export interface IMarket {
 }
 
 /**
- * ABI-compatible Midnight market.
+ * Immutable Midnight market configuration.
  *
  * @example
  * ```ts
- * import { Market } from "@morpho-org/midnight-sdk";
+ * import { MarketParams } from "@morpho-org/midnight-sdk";
  *
- * const market = new Market({
+ * const params = new MarketParams({
  *   loanToken: "0x0000000000000000000000000000000000000001",
  *   collateralParams: [],
  *   maturity: 1n,
@@ -60,10 +94,10 @@ export interface IMarket {
  *   enterGate: "0x0000000000000000000000000000000000000000",
  *   liquidatorGate: "0x0000000000000000000000000000000000000000",
  * });
- * console.log(market.toStruct().maturity);
+ * console.log(params.loanToken);
  * ```
  */
-export class Market {
+export class MarketParams {
   /** Loan token address. */
   public readonly loanToken: Address;
 
@@ -82,113 +116,26 @@ export class Market {
   /** Liquidator gate address. */
   public readonly liquidatorGate: Address;
 
-  public constructor(market: IMarket) {
-    this.loanToken = market.loanToken as Address;
-    this.collateralParams = market.collateralParams.map((params) => ({
-      token: params.token as Address,
-      lltv: BigInt(params.lltv),
-      maxLif: BigInt(params.maxLif),
-      oracle: params.oracle as Address,
-    }));
-    this.maturity = BigInt(market.maturity);
-    this.rcfThreshold = BigInt(market.rcfThreshold);
-    this.enterGate = market.enterGate as Address;
-    this.liquidatorGate = market.liquidatorGate as Address;
-  }
-
-  /**
-   * Returns an immutable market instance from plain or class input.
-   *
-   * @param market - Plain or class market.
-   * @returns Market instance.
-   * @example
-   * ```ts
-   * import { Market } from "@morpho-org/midnight-sdk";
-   *
-   * const market = Market.from({
-   *   loanToken: "0x0000000000000000000000000000000000000001",
-   *   collateralParams: [],
-   *   maturity: 1n,
-   *   rcfThreshold: 0n,
-   *   enterGate: "0x0000000000000000000000000000000000000000",
-   *   liquidatorGate: "0x0000000000000000000000000000000000000000",
-   * });
-   * console.log(market.loanToken);
-   * ```
-   */
-  public static from(market: IMarket | Market) {
-    return market instanceof Market ? market : new Market(market);
-  }
-
-  /**
-   * Converts the class into the tuple object expected by viem ABI encoders.
-   *
-   * @returns ABI-compatible market.
-   * @example
-   * ```ts
-   * import { Market } from "@morpho-org/midnight-sdk";
-   *
-   * const tuple = new Market({
-   *   loanToken: "0x0000000000000000000000000000000000000001",
-   *   collateralParams: [],
-   *   maturity: 1n,
-   *   rcfThreshold: 0n,
-   *   enterGate: "0x0000000000000000000000000000000000000000",
-   *   liquidatorGate: "0x0000000000000000000000000000000000000000",
-   * }).toStruct();
-   * console.log(tuple.loanToken);
-   * ```
-   */
-  public toStruct(): MarketStruct {
-    return {
-      loanToken: this.loanToken,
-      collateralParams: this.collateralParams.map((params) => ({
-        token: params.token,
-        lltv: params.lltv,
-        maxLif: params.maxLif,
-        oracle: params.oracle,
-      })),
-      maturity: this.maturity,
-      rcfThreshold: this.rcfThreshold,
-      enterGate: this.enterGate,
-      liquidatorGate: this.liquidatorGate,
-    };
-  }
-
-  /**
-   * Computes the Midnight id for this market.
-   *
-   * @param chainId - Chain id used by Midnight's `INITIAL_CHAIN_ID`.
-   * @param midnight - Core Midnight contract address.
-   * @returns Market id matching `IdLib.toId`.
-   * @example
-   * ```ts
-   * import { Market } from "@morpho-org/midnight-sdk";
-   *
-   * const id = new Market({
-   *   loanToken: "0x0000000000000000000000000000000000000001",
-   *   collateralParams: [],
-   *   maturity: 1n,
-   *   rcfThreshold: 0n,
-   *   enterGate: "0x0000000000000000000000000000000000000000",
-   *   liquidatorGate: "0x0000000000000000000000000000000000000000",
-   * }).toId(8453, "0x0000000000000000000000000000000000000002");
-   * console.log(id);
-   * ```
-   */
-  public toId(chainId: BigIntish, midnight: Address | string) {
-    return computeMarketId({ market: this, chainId, midnight });
+  public constructor(params: IMarketParams) {
+    this.loanToken = params.loanToken as Address;
+    this.collateralParams = params.collateralParams.map(
+      normalizeCollateralParams,
+    );
+    this.maturity = BigInt(params.maturity);
+    this.rcfThreshold = BigInt(params.rcfThreshold);
+    this.enterGate = params.enterGate as Address;
+    this.liquidatorGate = params.liquidatorGate as Address;
   }
 }
 
 /**
- * ABI tuple shape for `Market`.
+ * ABI tuple shape for Midnight market params.
  *
  * @example
  * ```ts
- * import type { MarketStruct } from "@morpho-org/midnight-sdk";
+ * import type { MarketParamsStruct } from "@morpho-org/midnight-sdk";
  *
- * const market: MarketStruct = {
+ * const params: MarketParamsStruct = {
  *   loanToken: "0x0000000000000000000000000000000000000001",
  *   collateralParams: [],
  *   maturity: 1n,
@@ -196,9 +143,10 @@ export class Market {
  *   enterGate: "0x0000000000000000000000000000000000000000",
  *   liquidatorGate: "0x0000000000000000000000000000000000000000",
  * };
+ * console.log(params.maturity);
  * ```
  */
-export interface MarketStruct {
+export interface MarketParamsStruct {
   /** Loan token address. */
   readonly loanToken: Address;
   /** Collateral definitions. */
@@ -213,7 +161,325 @@ export interface MarketStruct {
   readonly liquidatorGate: Address;
 }
 
-const marketAbiParameter = {
+/**
+ * Plain input accepted by {@link Market}.
+ *
+ * @example
+ * ```ts
+ * import type { IMarket } from "@morpho-org/midnight-sdk";
+ *
+ * const market: IMarket = {
+ *   id: "0x0000000000000000000000000000000000000000000000000000000000000000",
+ *   params: {
+ *     loanToken: "0x0000000000000000000000000000000000000001",
+ *     collateralParams: [],
+ *     maturity: 1n,
+ *     rcfThreshold: 0n,
+ *     enterGate: "0x0000000000000000000000000000000000000000",
+ *     liquidatorGate: "0x0000000000000000000000000000000000000000",
+ *   },
+ *   totalUnits: 0n,
+ *   lossFactor: 0n,
+ *   withdrawable: 0n,
+ *   continuousFeeCredit: 0n,
+ *   settlementFeeCbps: [0, 0, 0, 0, 0, 0, 0],
+ *   continuousFee: 0,
+ *   tickSpacing: 4,
+ * };
+ * ```
+ */
+export interface IMarket {
+  /** Market id. */
+  readonly id: Hex;
+  /** Immutable market configuration. */
+  readonly params: IMarketParams | MarketParams;
+  /** Total market units. */
+  readonly totalUnits: BigIntish;
+  /** Current loss factor. */
+  readonly lossFactor: BigIntish;
+  /** Withdrawable assets. */
+  readonly withdrawable: BigIntish;
+  /** Continuous-fee credit. */
+  readonly continuousFeeCredit: BigIntish;
+  /** Seven settlement-fee cbp buckets. */
+  readonly settlementFeeCbps: SettlementFeeCbps;
+  /** Continuous fee per second. */
+  readonly continuousFee: number;
+  /** Market tick spacing. */
+  readonly tickSpacing: number;
+}
+
+/**
+ * Hydrated Midnight market configuration plus state.
+ *
+ * @example
+ * ```ts
+ * import { Market } from "@morpho-org/midnight-sdk";
+ *
+ * const market = new Market({} as never);
+ * console.log(market.timeToMaturity(0n));
+ * ```
+ */
+export class Market {
+  /** Market id. */
+  public readonly id: Hex;
+
+  /** Immutable market configuration. */
+  public readonly params: MarketParams;
+
+  /** Total market units. */
+  public readonly totalUnits: bigint;
+
+  /** Current loss factor. */
+  public readonly lossFactor: bigint;
+
+  /** Withdrawable assets. */
+  public readonly withdrawable: bigint;
+
+  /** Continuous-fee credit. */
+  public readonly continuousFeeCredit: bigint;
+
+  /** Seven settlement-fee cbp buckets. */
+  public readonly settlementFeeCbps: SettlementFeeCbps;
+
+  /** Continuous fee per second. */
+  public readonly continuousFee: number;
+
+  /** Market tick spacing. */
+  public readonly tickSpacing: number;
+
+  public constructor(market: IMarket) {
+    this.id = market.id;
+    this.params = normalizeMarketParams(market.params);
+    this.totalUnits = BigInt(market.totalUnits);
+    this.lossFactor = BigInt(market.lossFactor);
+    this.withdrawable = BigInt(market.withdrawable);
+    this.continuousFeeCredit = BigInt(market.continuousFeeCredit);
+    this.settlementFeeCbps = [...market.settlementFeeCbps] as SettlementFeeCbps;
+    this.continuousFee = market.continuousFee;
+    this.tickSpacing = market.tickSpacing;
+  }
+
+  /**
+   * Computes the Midnight id for this market's params.
+   *
+   * @param chainId - Chain id used by Midnight's `INITIAL_CHAIN_ID`.
+   * @param midnight - Core Midnight contract address.
+   * @returns Market id matching `IdLib.toId`.
+   * @example
+   * ```ts
+   * import { Market } from "@morpho-org/midnight-sdk";
+   *
+   * const id = new Market({} as never).toId(8453, "0x0000000000000000000000000000000000000002");
+   * console.log(id);
+   * ```
+   */
+  public toId(chainId: BigIntish, midnight: Address | string) {
+    return computeMarketId({ market: this.params, chainId, midnight });
+  }
+
+  /**
+   * Returns whether a timestamp is at or past maturity.
+   *
+   * @param timestamp - Timestamp to compare.
+   * @returns Whether the market has reached maturity.
+   * @example
+   * ```ts
+   * import { Market } from "@morpho-org/midnight-sdk";
+   *
+   * console.log(new Market({} as never).isMature(0n));
+   * ```
+   */
+  public isMature(timestamp: BigIntish) {
+    const normalizedTimestamp = BigInt(timestamp);
+    assertNonNegative("timestamp", normalizedTimestamp);
+
+    return normalizedTimestamp >= this.params.maturity;
+  }
+
+  /**
+   * Returns the non-negative time remaining before maturity.
+   *
+   * @param timestamp - Timestamp to compare.
+   * @returns Seconds until maturity, floored to zero.
+   * @example
+   * ```ts
+   * import { Market } from "@morpho-org/midnight-sdk";
+   *
+   * console.log(new Market({} as never).timeToMaturity(0n));
+   * ```
+   */
+  public timeToMaturity(timestamp: BigIntish) {
+    const normalizedTimestamp = BigInt(timestamp);
+    assertNonNegative("timestamp", normalizedTimestamp);
+
+    return normalizedTimestamp >= this.params.maturity
+      ? 0n
+      : this.params.maturity - normalizedTimestamp;
+  }
+
+  /**
+   * Computes the settlement fee for a time to maturity from the hydrated market state.
+   *
+   * @param timeToMaturity - Seconds until maturity.
+   * @returns WAD-scaled settlement fee.
+   * @example
+   * ```ts
+   * import { Market } from "@morpho-org/midnight-sdk";
+   *
+   * console.log(new Market({} as never).getSettlementFee(0n));
+   * ```
+   */
+  public getSettlementFee(timeToMaturity: BigIntish) {
+    const ttm = BigInt(timeToMaturity);
+    assertNonNegative("timeToMaturity", ttm);
+
+    const lastIndex = SETTLEMENT_FEE_BREAKPOINTS.length - 1;
+    const lastBreakpoint = SETTLEMENT_FEE_BREAKPOINTS[lastIndex]!;
+    if (ttm >= lastBreakpoint) return this.getSettlementFeeAtIndex(lastIndex);
+
+    const upperIndex = SETTLEMENT_FEE_BREAKPOINTS.findIndex(
+      (breakpoint) => ttm < breakpoint,
+    );
+    const lowerIndex = upperIndex - 1;
+    const start = SETTLEMENT_FEE_BREAKPOINTS[lowerIndex]!;
+    const end = SETTLEMENT_FEE_BREAKPOINTS[upperIndex]!;
+    const feeLower = this.getSettlementFeeAtIndex(lowerIndex);
+    const feeUpper = this.getSettlementFeeAtIndex(upperIndex);
+
+    return (feeLower * (end - ttm) + feeUpper * (ttm - start)) / (end - start);
+  }
+
+  /**
+   * Returns collateral params by numeric index.
+   *
+   * @param index - Collateral index.
+   * @returns Collateral params, or undefined when the index is not configured.
+   * @example
+   * ```ts
+   * import { Market } from "@morpho-org/midnight-sdk";
+   *
+   * const params = new Market({} as never).getCollateralParamsByIndex(0);
+   * console.log(params?.token);
+   * ```
+   */
+  public getCollateralParamsByIndex(index: BigIntish) {
+    const normalizedIndex = BigInt(index);
+    if (
+      normalizedIndex < 0n ||
+      normalizedIndex > BigInt(Number.MAX_SAFE_INTEGER)
+    )
+      return undefined;
+
+    return this.params.collateralParams[Number(normalizedIndex)];
+  }
+
+  /**
+   * Returns the configured collateral index for a token.
+   *
+   * @param token - Collateral token address.
+   * @returns Collateral index, or undefined when the token is not configured.
+   * @example
+   * ```ts
+   * import { Market } from "@morpho-org/midnight-sdk";
+   *
+   * const index = new Market({} as never).getCollateralIndexByToken("0x0000000000000000000000000000000000000001");
+   * console.log(index);
+   * ```
+   */
+  public getCollateralIndexByToken(token: Address | string) {
+    const expectedToken = token.toLowerCase();
+    const index = this.params.collateralParams.findIndex(
+      (params) => params.token.toLowerCase() === expectedToken,
+    );
+
+    return index === -1 ? undefined : index;
+  }
+
+  /**
+   * Returns collateral params by token address.
+   *
+   * @param token - Collateral token address.
+   * @returns Collateral params, or undefined when the token is not configured.
+   * @example
+   * ```ts
+   * import { Market } from "@morpho-org/midnight-sdk";
+   *
+   * const params = new Market({} as never).getCollateralParamsByToken("0x0000000000000000000000000000000000000001");
+   * console.log(params?.lltv);
+   * ```
+   */
+  public getCollateralParamsByToken(token: Address | string) {
+    const index = this.getCollateralIndexByToken(token);
+
+    return index == null ? undefined : this.params.collateralParams[index];
+  }
+
+  private getSettlementFeeAtIndex(index: number) {
+    return BigInt(this.settlementFeeCbps[index]!) * CBP;
+  }
+}
+
+/**
+ * @internal Normalizes a collateral params input.
+ *
+ * @param params - Collateral params input.
+ * @returns Normalized collateral params.
+ */
+export function normalizeCollateralParams(
+  params: ICollateralParams | CollateralParams,
+): CollateralParams {
+  return {
+    token: params.token as Address,
+    lltv: BigInt(params.lltv),
+    maxLif: BigInt(params.maxLif),
+    oracle: params.oracle as Address,
+  };
+}
+
+/**
+ * @internal Normalizes market params from config or hydrated market input.
+ *
+ * @param market - Market params or hydrated market.
+ * @returns Market params instance.
+ */
+export function normalizeMarketParams(
+  market: IMarketParams | MarketParams | Market,
+) {
+  if (market instanceof Market) return market.params;
+  return market instanceof MarketParams ? market : new MarketParams(market);
+}
+
+/**
+ * @internal Converts market params into the tuple object expected by viem ABI encoders.
+ *
+ * @param market - Market params or hydrated market.
+ * @returns ABI-compatible market params.
+ */
+export function marketParamsToStruct(
+  market: IMarketParams | MarketParams | Market,
+): MarketParamsStruct {
+  const params = normalizeMarketParams(market);
+
+  return {
+    loanToken: params.loanToken,
+    collateralParams: params.collateralParams.map((collateralParams) => ({
+      token: collateralParams.token,
+      lltv: collateralParams.lltv,
+      maxLif: collateralParams.maxLif,
+      oracle: collateralParams.oracle,
+    })),
+    maturity: params.maturity,
+    rcfThreshold: params.rcfThreshold,
+    enterGate: params.enterGate,
+    liquidatorGate: params.liquidatorGate,
+  };
+}
+
+/**
+ * @internal ABI parameter for the canonical Solidity `Market` tuple.
+ */
+export const marketParamsAbiParameter = {
   type: "tuple",
   components: [
     { name: "loanToken", type: "address" },
@@ -235,9 +501,9 @@ const marketAbiParameter = {
 } as const;
 
 /**
- * Computes the Midnight id for a market using Solidity `IdLib.toId`.
+ * Computes the Midnight id for market params using Solidity `IdLib.toId`.
  *
- * @param market - Market to hash.
+ * @param market - Market params to hash.
  * @param chainId - Chain id used by Midnight.
  * @param midnight - Midnight contract address.
  * @returns Market id.
@@ -261,13 +527,13 @@ const marketAbiParameter = {
  * ```
  */
 export function computeMarketId(params: {
-  readonly market: IMarket | Market;
+  readonly market: IMarketParams | MarketParams | Market;
   readonly chainId: BigIntish;
   readonly midnight: Address | string;
 }) {
   const encodedMarket = encodeAbiParameters(
-    [marketAbiParameter],
-    [Market.from(params.market).toStruct()],
+    [marketParamsAbiParameter],
+    [marketParamsToStruct(params.market)],
   );
   const creationHash = keccak256(`${SSTORE2_PREFIX}${encodedMarket.slice(2)}`);
 

@@ -19,10 +19,11 @@ import { MarketUtils } from "../market/index.js";
 import {
   type BuildOfferGroupParams,
   type IOffer,
-  Offer,
+  type Offer,
   type OfferStruct,
   OfferUtils,
 } from "../offers/index.js";
+import { offerToStruct } from "../offers/Offer.js";
 import type { BigIntish, MidnightCall } from "../types.js";
 import type { Item as PayloadItem } from "./Payload.js";
 
@@ -589,23 +590,16 @@ export class Group {
 
     return new Group(offers);
   }
+}
 
-  /**
-   * Returns a group instance from class or plain input.
-   *
-   * @param group - Group class or creation input.
-   * @returns Group instance.
-   * @example
-   * ```ts
-   * import { Group } from "@morpho-org/midnight-sdk";
-   *
-   * const group = Group.from([{} as never]);
-   * console.log(group.offers.length);
-   * ```
-   */
-  public static from(group: Group | GroupCreateParams): Group {
-    return group instanceof Group ? group : Group.create(group);
-  }
+/**
+ * @internal Returns a group instance from class or plain input.
+ *
+ * @param group - Group class or creation input.
+ * @returns Group instance.
+ */
+export function normalizeGroup(group: Group | GroupCreateParams): Group {
+  return group instanceof Group ? group : Group.create(group);
 }
 
 /**
@@ -665,24 +659,7 @@ export class Tree {
    * ```
    */
   public static create(params: TreeCreateParams): Tree {
-    return new Tree(params.groups.map((group) => Group.from(group)));
-  }
-
-  /**
-   * Returns a tree instance from class or plain input.
-   *
-   * @param tree - Tree class or creation input.
-   * @returns Tree instance.
-   * @example
-   * ```ts
-   * import { Tree } from "@morpho-org/midnight-sdk";
-   *
-   * const tree = Tree.from({ groups: [[{} as never]] });
-   * console.log(tree.root);
-   * ```
-   */
-  public static from(tree: TreeInput): Tree {
-    return tree instanceof Tree ? tree : Tree.create(tree);
+    return new Tree(params.groups.map((group) => normalizeGroup(group)));
   }
 
   /**
@@ -695,7 +672,7 @@ export class Tree {
    * ```ts
    * import { Tree } from "@morpho-org/midnight-sdk";
    *
-   * const proof = Tree.from({ groups: [[{} as never]] }).proof(0n);
+   * const proof = Tree.create({ groups: [[{} as never]] }).proof(0n);
    * console.log(proof.root);
    * ```
    */
@@ -705,6 +682,16 @@ export class Tree {
       leafIndex,
     });
   }
+}
+
+/**
+ * @internal Returns a tree instance from class or plain input.
+ *
+ * @param tree - Tree class or creation input.
+ * @returns Tree instance.
+ */
+export function normalizeTree(tree: TreeInput): Tree {
+  return tree instanceof Tree ? tree : Tree.create(tree);
 }
 
 /**
@@ -747,7 +734,7 @@ export class EcrecoverRatifier {
   public static typedData(
     params: EcrecoverRatifierTypedDataParams,
   ): EcrecoverRatificationTypedData {
-    const tree = Tree.from(params.tree);
+    const tree = normalizeTree(params.tree);
 
     return OfferTreeUtils.buildEcrecoverRatificationTypedData({
       offers: tree.offers,
@@ -770,7 +757,7 @@ export class EcrecoverRatifier {
    * ```
    */
   public static ratifierData(params: EcrecoverRatifierDataParams): Hex {
-    const tree = Tree.from(params.tree);
+    const tree = normalizeTree(params.tree);
     const proof = tree.proof(params.leafIndex);
 
     return OfferTreeUtils.encodeEcrecoverRatifierData({
@@ -807,7 +794,7 @@ export class EcrecoverRatifier {
   public static async ratify(
     params: EcrecoverRatifierRatifyParams,
   ): Promise<readonly PayloadItem[]> {
-    const tree = Tree.from(params.tree);
+    const tree = normalizeTree(params.tree);
     const signature =
       params.signature != null
         ? normalizeEcrecoverSignature(params.signature)
@@ -897,7 +884,7 @@ export class SetterRatifier {
    * ```
    */
   public static ratifierData(params: SetterRatifierDataParams): Hex {
-    const tree = Tree.from(params.tree);
+    const tree = normalizeTree(params.tree);
     const proof = tree.proof(params.leafIndex);
 
     return OfferTreeUtils.encodeSetterRatifierData({
@@ -926,7 +913,7 @@ export class SetterRatifier {
   public static ratify(params: {
     readonly tree: TreeInput;
   }): readonly PayloadItem[] {
-    const tree = Tree.from(params.tree);
+    const tree = normalizeTree(params.tree);
 
     return tree.offers.map((offer, leafIndex) => ({
       offer,
@@ -1032,7 +1019,7 @@ export namespace OfferTreeUtils {
    * ```
    */
   export function hashOffer(offer: IOffer | Offer) {
-    const offerStruct = Offer.from(offer).toStruct();
+    const offerStruct = offerToStruct(offer);
 
     return hashOfferStruct(offerStruct);
   }
@@ -1081,7 +1068,7 @@ export namespace OfferTreeUtils {
     }
 
     const offerStructs = padOfferStructs(
-      offers.map((offer) => Offer.from(offer).toStruct()),
+      offers.map((offer) => offerToStruct(offer)),
     );
     assertLeafOffers(offerStructs);
 

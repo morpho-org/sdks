@@ -14,6 +14,7 @@ import {
   Offer,
   type OfferStruct,
   offerStructAbiComponents,
+  offerToStruct,
 } from "../offers/Offer.js";
 import type { MidnightCall } from "../types.js";
 
@@ -186,7 +187,7 @@ export async function encode(items: readonly Item[]): Promise<Payload> {
   }
   assertItemsNotEmpty(items.length);
   const payloadItems = items.map((item) => {
-    const offer = Offer.from(item.offer).toStruct();
+    const offer = offerToStruct(item.offer);
     assertRouterValidOfferStruct(offer);
     return {
       offer,
@@ -336,7 +337,7 @@ function assertCanonicalItemsBytes(
 ): void {
   const canonical = encodeAbiParameters(itemsAbi, [
     items.map((item) => ({
-      offer: Offer.from(item.offer).toStruct(),
+      offer: offerToStruct(item.offer),
       ratifierData: item.ratifierData,
     })),
   ]);

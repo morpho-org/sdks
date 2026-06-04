@@ -11,7 +11,13 @@ import {
 } from "../errors.js";
 import { MarketUtils } from "../market/index.js";
 import type { BigIntish } from "../types.js";
-import { type BuildOfferParams, type IOffer, Offer } from "./Offer.js";
+import {
+  type BuildOfferParams,
+  type IOffer,
+  normalizeOffer,
+  Offer,
+  offerToStruct,
+} from "./Offer.js";
 import type { TakeableOfferStruct } from "./TakeableOffer.js";
 
 const comparableHex = (value: string) => value.toLowerCase();
@@ -458,7 +464,7 @@ export namespace OfferUtils {
       );
     }
 
-    const offers = params.offers.map((offer) => Offer.from(offer));
+    const offers = params.offers.map((offer) => normalizeOffer(offer));
     const first = offers[0]!;
 
     if (
@@ -543,7 +549,7 @@ export namespace OfferUtils {
     if (params.entries.length === 0) throw new NoMatchingOffersError();
 
     const takeableOffers = params.entries.map((entry) => {
-      const offer = Offer.from(entry.offer);
+      const offer = normalizeOffer(entry.offer);
       if (params.expectedOfferSide != null) {
         const actual = offer.buy ? "buy" : "sell";
         if (actual !== params.expectedOfferSide) {
@@ -553,7 +559,7 @@ export namespace OfferUtils {
 
       return {
         units: BigInt(entry.units),
-        offer: offer.toStruct(),
+        offer: offerToStruct(offer),
         ratifierData: entry.ratifierData,
       };
     });
@@ -585,6 +591,6 @@ export namespace OfferUtils {
    * ```
    */
   export function getOfferExpiry(offer: IOffer | Offer) {
-    return Offer.from(offer).expiry;
+    return normalizeOffer(offer).expiry;
   }
 }

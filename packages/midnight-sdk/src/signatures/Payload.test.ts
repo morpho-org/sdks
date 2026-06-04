@@ -1,12 +1,12 @@
 import { bytesToHex, encodeAbiParameters, type Hex, hexToBytes } from "viem";
 import { describe, expect, test } from "vitest";
-import { addresses, baseMarketInput, baseOffer } from "../__test__/fixtures.js";
 import {
-  type IOffer,
-  Offer,
-  type OfferStruct,
-  offerStructAbiComponents,
-} from "../offers/index.js";
+  addresses,
+  baseMarketParamsInput,
+  baseOffer,
+} from "../__test__/fixtures.js";
+import type { IOffer, OfferStruct } from "../offers/index.js";
+import { offerStructAbiComponents, offerToStruct } from "../offers/Offer.js";
 import * as Payload from "./Payload.js";
 import { MAX_ATTRIBUTION_SUFFIX_BYTES } from "./Payload.js";
 
@@ -26,7 +26,7 @@ const itemsAbi = [
 function routerValidOffer(overrides: Partial<IOffer> = {}) {
   return baseOffer({
     market: {
-      ...baseMarketInput(),
+      ...baseMarketParamsInput(),
       maturity: ROUTER_VALID_MATURITY,
     },
     expiry: ROUTER_VALID_MATURITY - 60n,
@@ -66,7 +66,7 @@ describe("Payload.encode", () => {
     const decoded = await Payload.decode(encoded);
 
     expect(decoded).toHaveLength(1);
-    expect(Offer.from(decoded[0]!.offer).toStruct()).toEqual(offer.toStruct());
+    expect(offerToStruct(decoded[0]!.offer)).toEqual(offerToStruct(offer));
     expect(decoded[0]!.ratifierData).toBe("0x1234");
   });
 
@@ -134,7 +134,7 @@ describe("Payload.decode", () => {
 
   test("error: router-invalid offer bytes", async () => {
     const encoded = await encodeUncheckedPayload(
-      routerValidOffer({ expiry: ROUTER_VALID_MATURITY + 60n }).toStruct(),
+      offerToStruct(routerValidOffer({ expiry: ROUTER_VALID_MATURITY + 60n })),
     );
 
     await expect(Payload.decode(encoded)).rejects.toBeInstanceOf(

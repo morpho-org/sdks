@@ -13,7 +13,12 @@ import {
 } from "viem";
 import { base } from "viem/chains";
 import { describe, expect, test } from "vitest";
-import { addresses, baseMarket, baseOffer } from "../__test__/fixtures.js";
+import {
+  addresses,
+  baseMarket,
+  baseMarketParams,
+  baseOffer,
+} from "../__test__/fixtures.js";
 import {
   ecrecoverRatifierAbi,
   erc20Abi,
@@ -22,10 +27,12 @@ import {
 } from "../abis.js";
 import { MAX_TICK } from "../constants.js";
 import { SettlementFeeExceedsPriceError } from "../errors.js";
+import { marketParamsToStruct } from "../market/Market.js";
 import { TickLib } from "../math/index.js";
 import { abi as getConsumableUnitsInputsAbi } from "../queries/GetConsumableUnitsInputs.js";
 import { abi as getPositionAbi } from "../queries/GetPosition.js";
 import {
+  fetchAccrualPosition,
   fetchConsumableUnits,
   fetchErc20Allowance,
   fetchIsAuthorized,
@@ -33,7 +40,7 @@ import {
   fetchIsRootRatified,
   fetchMarket,
   fetchMarketId,
-  fetchMarketState,
+  fetchMarketParams,
   fetchPosition,
   fetchRatifierInfo,
   fetchSettlementFee,
@@ -133,26 +140,25 @@ describe("fetchErc20Allowance", () => {
   });
 });
 
-describe("fetchMarketState", () => {
+describe("fetchMarketParams", () => {
   test("default", async () => {
     const handle = createMockClient(base);
     mockRead(handle, {
       address: addresses.midnight,
       abi: midnightAbi,
-      functionName: "marketState",
+      functionName: "toMarket",
       args: [marketId],
-      result: [1n, 2n, 3n, 4n, 5, 6, 7, 8, 9, 10, 11, 12, 4],
+      result: marketParamsToStruct(baseMarketParams()),
     });
 
-    const state = await fetchMarketState({
+    const params = await fetchMarketParams({
       client: handle.client,
       midnight: addresses.midnight,
       marketId,
     });
 
-    expect(state.totalUnits).toBe(1n);
-    expect(state.settlementFeeCbps).toEqual([5, 6, 7, 8, 9, 10, 11]);
-    expect(state.tickSpacing).toBe(4);
+    expect(params.loanToken).toBe(addresses.loanToken);
+    expect(params.collateralParams[0]?.token).toBe(addresses.collateralToken);
   });
 });
 
@@ -164,7 +170,14 @@ describe("fetchMarket", () => {
       abi: midnightAbi,
       functionName: "toMarket",
       args: [marketId],
-      result: baseMarket().toStruct(),
+      result: marketParamsToStruct(baseMarketParams()),
+    });
+    mockRead(handle, {
+      address: addresses.midnight,
+      abi: midnightAbi,
+      functionName: "marketState",
+      args: [marketId],
+      result: [1n, 2n, 3n, 4n, 5, 6, 7, 8, 9, 10, 11, 12, 4],
     });
 
     const market = await fetchMarket({
@@ -173,8 +186,10 @@ describe("fetchMarket", () => {
       marketId,
     });
 
-    expect(market.loanToken).toBe(addresses.loanToken);
-    expect(market.collateralParams).toHaveLength(1);
+    expect(market.params.loanToken).toBe(addresses.loanToken);
+    expect(market.params.collateralParams).toHaveLength(1);
+    expect(market.totalUnits).toBe(1n);
+    expect(market.settlementFeeCbps).toEqual([5, 6, 7, 8, 9, 10, 11]);
   });
 });
 
@@ -292,6 +307,51 @@ describe("fetchPosition", () => {
         deployless: "force",
       }),
     ).rejects.toThrow("deployless unavailable");
+  });
+});
+
+describe("fetchAccrualPosition", () => {
+  test("behavior: returns a position that locally matches updatePositionView", async () => {
+    const handle = createMockClient(base);
+    mockDeploylessRead(handle, {
+      abi: getPositionAbi,
+      functionName: "query",
+      result: {
+        credit: 1_000n,
+        pendingFee: 100n,
+        lastLossFactor: 0n,
+        lastAccrual: 1_000n,
+        debt: 0n,
+        collateralBitmap: 0n,
+        collateral: Array.from({ length: 128 }, () => 0n),
+      },
+    });
+    mockRead(handle, {
+      address: addresses.midnight,
+      abi: midnightAbi,
+      functionName: "toMarket",
+      args: [marketId],
+      result: marketParamsToStruct(baseMarketParams()),
+    });
+    mockRead(handle, {
+      address: addresses.midnight,
+      abi: midnightAbi,
+      functionName: "marketState",
+      args: [marketId],
+      result: [1_000n, 0n, 0n, 0n, 1, 2, 3, 4, 5, 6, 7, 10, 4],
+    });
+
+    const position = await fetchAccrualPosition({
+      client: handle.client,
+      midnight: addresses.midnight,
+      marketId,
+      user: addresses.taker,
+    });
+    const accrued = position.accrueInterest(1_500n);
+
+    expect(accrued.credit).toBe(950n);
+    expect(accrued.pendingFee).toBe(50n);
+    expect(accrued.market.continuousFeeCredit).toBe(50n);
   });
 });
 
@@ -491,7 +551,7 @@ describe("fetchMarketId", () => {
       address: addresses.midnight,
       abi: midnightAbi,
       functionName: "toId",
-      args: [baseMarket().toStruct()],
+      args: [marketParamsToStruct(baseMarket())],
       result: marketId,
     });
 

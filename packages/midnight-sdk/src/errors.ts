@@ -239,6 +239,61 @@ export class InvalidSettlementFeeIndexError extends Error {
 }
 
 /**
+ * Thrown when a local position accrual is requested for an impossible timestamp.
+ *
+ * @example
+ * ```ts
+ * import { InvalidPositionAccrualTimestampError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new InvalidPositionAccrualTimestampError(1n, 2n);
+ * ```
+ */
+export class InvalidPositionAccrualTimestampError extends Error {
+  public constructor(timestamp: bigint, lastAccrual: bigint) {
+    super(
+      `Position accrual timestamp "${timestamp}" is before last accrual "${lastAccrual}". Use a timestamp greater than or equal to last accrual.`,
+    );
+    this.name = "InvalidPositionAccrualTimestampError";
+  }
+}
+
+/**
+ * Thrown when a local position accrual sees a market loss factor older than the position.
+ *
+ * @example
+ * ```ts
+ * import { InvalidPositionLossFactorError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new InvalidPositionLossFactorError(1n, 2n);
+ * ```
+ */
+export class InvalidPositionLossFactorError extends Error {
+  public constructor(marketLossFactor: bigint, positionLossFactor: bigint) {
+    super(
+      `Market loss factor "${marketLossFactor}" is below position loss factor "${positionLossFactor}". Fetch a consistent market and position at the same block.`,
+    );
+    this.name = "InvalidPositionLossFactorError";
+  }
+}
+
+/**
+ * Thrown when local position accrual inputs violate Midnight accounting invariants.
+ *
+ * @example
+ * ```ts
+ * import { InvalidPositionAccrualStateError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new InvalidPositionAccrualStateError("Pending fee exceeds credit.");
+ * ```
+ */
+export class InvalidPositionAccrualStateError extends Error {
+  public constructor(reason: string) {
+    super(`Invalid Midnight position accrual state. ${reason}`);
+    this.name = "InvalidPositionAccrualStateError";
+  }
+}
+
+/**
  * Thrown when an offer builder receives a parameter that cannot satisfy Midnight protocol rules.
  *
  * @example

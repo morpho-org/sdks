@@ -1,6 +1,11 @@
 import type { Address, Hex } from "viem";
 
-import { type IMarket, Market } from "../market/index.js";
+import {
+  type IMarket,
+  type IMarketParams,
+  Market,
+  MarketParams,
+} from "../market/index.js";
 import { type IOffer, Offer } from "../offers/index.js";
 
 export const addresses = {
@@ -21,7 +26,10 @@ export const addresses = {
 export const group =
   "0x1111111111111111111111111111111111111111111111111111111111111111" as Hex;
 
-export const baseMarketInput = (): IMarket => ({
+export const marketId =
+  "0x2222222222222222222222222222222222222222222222222222222222222222" as Hex;
+
+export const baseMarketParamsInput = (): IMarketParams => ({
   loanToken: addresses.loanToken,
   collateralParams: [
     {
@@ -37,10 +45,24 @@ export const baseMarketInput = (): IMarket => ({
   liquidatorGate: "0x0000000000000000000000000000000000000000",
 });
 
+export const baseMarketParams = () => new MarketParams(baseMarketParamsInput());
+
+export const baseMarketInput = (): IMarket => ({
+  id: marketId,
+  params: baseMarketParams(),
+  totalUnits: 1_000n,
+  lossFactor: 0n,
+  withdrawable: 500n,
+  continuousFeeCredit: 0n,
+  settlementFeeCbps: [1, 2, 3, 4, 5, 6, 7],
+  continuousFee: 10,
+  tickSpacing: 4,
+});
+
 export const baseMarket = () => new Market(baseMarketInput());
 
 export const baseOfferInput = (overrides: Partial<IOffer> = {}): IOffer => ({
-  market: overrides.market ?? baseMarket(),
+  market: overrides.market ?? baseMarketParams(),
   buy: overrides.buy ?? true,
   maker: overrides.maker ?? addresses.maker,
   start: overrides.start ?? 0n,

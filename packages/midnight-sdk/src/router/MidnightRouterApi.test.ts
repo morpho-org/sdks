@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import type { Hex } from "viem";
 import { describe, expect, test } from "vitest";
 
-import { baseMarketInput, baseOffer } from "../__test__/fixtures.js";
+import { baseMarketParamsInput, baseOffer } from "../__test__/fixtures.js";
 import {
   InvalidMidnightRouterResponseError,
   MidnightRouterApiError,
@@ -25,7 +25,7 @@ const ROUTER_VALID_MATURITY = 1_767_279_600n;
 function routerValidOffer() {
   return baseOffer({
     market: {
-      ...baseMarketInput(),
+      ...baseMarketParamsInput(),
       maturity: ROUTER_VALID_MATURITY,
     },
     expiry: ROUTER_VALID_MATURITY - 60n,

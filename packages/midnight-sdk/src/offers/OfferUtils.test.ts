@@ -3,7 +3,7 @@ import { zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   addresses,
-  baseMarketInput,
+  baseMarketParamsInput,
   baseOffer,
   baseOfferInput,
   group,
@@ -22,7 +22,7 @@ import { Offer } from "./Offer.js";
 import { OfferUtils } from "./OfferUtils.js";
 
 const buildOfferParams = (overrides: Partial<BuildOfferParams> = {}) => ({
-  market: baseMarketInput(),
+  market: baseMarketParamsInput(),
   buy: true,
   maker: addresses.maker,
   tick: 5_000n,
@@ -36,7 +36,7 @@ const buildOfferParams = (overrides: Partial<BuildOfferParams> = {}) => ({
 const buildOfferGroupEntry = (
   overrides: Partial<Omit<BuildOfferParams, "group" | "getRandomValues">> = {},
 ): Omit<BuildOfferParams, "group" | "getRandomValues"> => ({
-  market: baseMarketInput(),
+  market: baseMarketParamsInput(),
   buy: true,
   maker: addresses.maker,
   tick: 5_000n,
@@ -50,18 +50,18 @@ const otherGroup =
   "0x2222222222222222222222222222222222222222222222222222222222222222" as const;
 
 describe("Offer", () => {
-  test("behavior: from", () => {
-    const offer = baseOffer();
+  test("default", () => {
+    const offer = new Offer(baseOfferInput());
 
-    expect(Offer.from(offer)).toBe(offer);
-    expect(Offer.from(baseOfferInput())).toBeInstanceOf(Offer);
+    expect(offer).toBeInstanceOf(Offer);
+    expect(offer.market.loanToken).toBe(addresses.loanToken);
   });
 });
 
 describe("OfferUtils.buildOffer", () => {
   test("default", () => {
     const offer = OfferUtils.buildOffer({
-      market: baseMarketInput(),
+      market: baseMarketParamsInput(),
       buy: true,
       maker: addresses.maker,
       tick: 5_000n,
@@ -78,7 +78,7 @@ describe("OfferUtils.buildOffer", () => {
 
   test("behavior: generates a group from an injected random source", () => {
     const offer = OfferUtils.buildOffer({
-      market: baseMarketInput(),
+      market: baseMarketParamsInput(),
       buy: true,
       maker: addresses.maker,
       tick: 5_000n,
@@ -164,7 +164,7 @@ describe("OfferUtils.buildOffer", () => {
   test("error: MissingOfferGroupError", () => {
     expect(() =>
       OfferUtils.buildOffer({
-        market: baseMarketInput(),
+        market: baseMarketParamsInput(),
         buy: true,
         maker: addresses.maker,
         tick: 5_000n,
@@ -412,7 +412,7 @@ describe("OfferUtils.validateOfferGroup", () => {
         OfferUtils.buildOffer(
           buildOfferParams({
             market: {
-              ...baseMarketInput(),
+              ...baseMarketParamsInput(),
               loanToken: "0x0000000000000000000000000000000000006100",
             },
           }),
@@ -479,7 +479,7 @@ describe("OfferUtils.buildTakeableOffersFromOffers", () => {
             ratifierData: "0x",
             offer: baseOffer({
               market: {
-                ...baseMarketInput(),
+                ...baseMarketParamsInput(),
                 maturity: 3_000n,
               },
             }),

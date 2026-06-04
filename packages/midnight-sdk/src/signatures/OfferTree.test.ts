@@ -4,6 +4,7 @@ import { addresses, baseOffer } from "../__test__/fixtures.js";
 import { ecrecoverRatifierAbi, setterRatifierAbi } from "../abis.js";
 import { InvalidOfferTreeError } from "../errors.js";
 import { Offer } from "../offers/index.js";
+import { offerToStruct } from "../offers/Offer.js";
 import {
   EcrecoverRatifier,
   Group,
@@ -186,9 +187,9 @@ describe("OfferTreeUtils.buildOfferTreeDescriptor", () => {
     expect(payload.offers).toHaveLength(4);
     expect(payload.height).toBe(2);
     expect(payload.offers.slice(0, 3)).toEqual(
-      offers.map((offer) => offer.toStruct()),
+      offers.map((offer) => offerToStruct(offer)),
     );
-    expect(payload.offers[3]).toEqual(emptyOffer().toStruct());
+    expect(payload.offers[3]).toEqual(offerToStruct(emptyOffer()));
     expect(proof.proof).toHaveLength(2);
     expect(
       OfferTreeUtils.verifyOfferTreeProof({

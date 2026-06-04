@@ -42,6 +42,9 @@ export {
   InvalidOfferParameterError,
   InvalidOfferTreeError,
   InvalidOfferTreeHeightError,
+  InvalidPositionAccrualStateError,
+  InvalidPositionAccrualTimestampError,
+  InvalidPositionLossFactorError,
   InvalidSettlementFeeIndexError,
   InvalidTickSpacingError,
   MidnightAddressAlreadyRegisteredError,
@@ -59,6 +62,7 @@ export type {
   MidnightFetchParams,
 } from "./fetch/index.js";
 export {
+  fetchAccrualPosition,
   fetchCollateral,
   fetchConsumableUnits,
   fetchConsumed,
@@ -71,7 +75,7 @@ export {
   fetchIsRootRatified,
   fetchMarket,
   fetchMarketId,
-  fetchMarketState,
+  fetchMarketParams,
   fetchPosition,
   fetchRatifierInfo,
   fetchSettlementFee,
@@ -83,15 +87,17 @@ export type {
   CollateralParamsStruct,
   ICollateralParams,
   IMarket,
-  IMarketState,
+  IMarketParams,
   IPosition,
-  MarketState,
-  MarketStruct,
+  MarketParamsStruct,
   Position,
+  SettlementFeeCbps,
 } from "./market/index.js";
 export {
+  AccrualPosition,
   computeMarketId,
   Market,
+  MarketParams,
   MarketUtils,
 } from "./market/index.js";
 export {

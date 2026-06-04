@@ -1,5 +1,14 @@
 import type { Address, Hex } from "viem";
-import { type IMarket, Market, type MarketStruct } from "../market/index.js";
+import type {
+  IMarketParams,
+  Market,
+  MarketParamsStruct,
+} from "../market/index.js";
+import {
+  type MarketParams,
+  marketParamsToStruct,
+  normalizeMarketParams,
+} from "../market/Market.js";
 import type { BigIntish } from "../types.js";
 
 /**
@@ -36,7 +45,7 @@ import type { BigIntish } from "../types.js";
  */
 export interface IOffer {
   /** Market this offer trades. */
-  readonly market: IMarket | Market;
+  readonly market: IMarketParams | MarketParams | Market;
   /** Whether the maker buys units. */
   readonly buy: boolean;
   /** Offer maker. */
@@ -66,7 +75,7 @@ export interface IOffer {
 }
 
 /**
- * ABI-compatible Midnight offer.
+ * Midnight offer.
  *
  * @example
  * ```ts
@@ -95,12 +104,12 @@ export interface IOffer {
  *   maxUnits: 100n,
  *   maxAssets: 0n,
  * });
- * console.log(offer.toStruct().buy);
+ * console.log(offer.buy);
  * ```
  */
 export class Offer {
   /** Market this offer trades. */
-  public readonly market: Market;
+  public readonly market: MarketParams;
 
   /** Whether the maker buys units. */
   public readonly buy: boolean;
@@ -142,7 +151,7 @@ export class Offer {
   public readonly maxAssets: bigint;
 
   public constructor(offer: IOffer) {
-    this.market = Market.from(offer.market);
+    this.market = normalizeMarketParams(offer.market);
     this.buy = offer.buy;
     this.maker = offer.maker as Address;
     this.start = BigInt(offer.start);
@@ -182,98 +191,6 @@ export class Offer {
 
     return `0x${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
   }
-
-  /**
-   * Returns an immutable offer instance from plain or class input.
-   *
-   * @param offer - Plain or class offer.
-   * @returns Offer instance.
-   * @example
-   * ```ts
-   * import { Offer } from "@morpho-org/midnight-sdk";
-   *
-   * const offer = Offer.from({
-   *   market: {
-   *     loanToken: "0x0000000000000000000000000000000000000001",
-   *     collateralParams: [],
-   *     maturity: 1n,
-   *     rcfThreshold: 0n,
-   *     enterGate: "0x0000000000000000000000000000000000000000",
-   *     liquidatorGate: "0x0000000000000000000000000000000000000000",
-   *   },
-   *   buy: true,
-   *   maker: "0x0000000000000000000000000000000000000002",
-   *   start: 0n,
-   *   expiry: 2n,
-   *   tick: 100n,
-   *   group: "0x0000000000000000000000000000000000000000000000000000000000000000",
-   *   callback: "0x0000000000000000000000000000000000000000",
-   *   callbackData: "0x",
-   *   receiverIfMakerIsSeller: "0x0000000000000000000000000000000000000000",
-   *   ratifier: "0x0000000000000000000000000000000000000003",
-   *   reduceOnly: false,
-   *   maxUnits: 0n,
-   *   maxAssets: 100n,
-   * });
-   * console.log(offer.buy);
-   * ```
-   */
-  public static from(offer: IOffer | Offer) {
-    return offer instanceof Offer ? offer : new Offer(offer);
-  }
-
-  /**
-   * Converts the class into the tuple object expected by viem ABI encoders.
-   *
-   * @returns ABI-compatible offer.
-   * @example
-   * ```ts
-   * import { Offer } from "@morpho-org/midnight-sdk";
-   *
-   * const offer = new Offer({
-   *   market: {
-   *     loanToken: "0x0000000000000000000000000000000000000001",
-   *     collateralParams: [],
-   *     maturity: 1n,
-   *     rcfThreshold: 0n,
-   *     enterGate: "0x0000000000000000000000000000000000000000",
-   *     liquidatorGate: "0x0000000000000000000000000000000000000000",
-   *   },
-   *   buy: true,
-   *   maker: "0x0000000000000000000000000000000000000002",
-   *   start: 0n,
-   *   expiry: 2n,
-   *   tick: 100n,
-   *   group: "0x0000000000000000000000000000000000000000000000000000000000000000",
-   *   callback: "0x0000000000000000000000000000000000000000",
-   *   callbackData: "0x",
-   *   receiverIfMakerIsSeller: "0x0000000000000000000000000000000000000000",
-   *   ratifier: "0x0000000000000000000000000000000000000003",
-   *   reduceOnly: false,
-   *   maxUnits: 0n,
-   *   maxAssets: 100n,
-   * }).toStruct();
-   * console.log(offer.market.loanToken);
-   * ```
-   */
-  public toStruct(): OfferStruct {
-    return {
-      market: this.market.toStruct(),
-      buy: this.buy,
-      maker: this.maker,
-      start: this.start,
-      expiry: this.expiry,
-      tick: this.tick,
-      group: this.group,
-      callback: this.callback,
-      callbackData: this.callbackData,
-      receiverIfMakerIsSeller: this.receiverIfMakerIsSeller,
-      ratifier: this.ratifier,
-      reduceOnly: this.reduceOnly,
-      maxUnits: this.maxUnits,
-      maxAssets: this.maxAssets,
-    };
-  }
 }
 
 /**
@@ -289,7 +206,7 @@ export class Offer {
  */
 export interface OfferStruct {
   /** Market this offer trades. */
-  readonly market: MarketStruct;
+  readonly market: MarketParamsStruct;
   /** Whether the maker buys units. */
   readonly buy: boolean;
   /** Offer maker. */
@@ -359,6 +276,43 @@ export const offerStructAbiComponents = [
 ] as const;
 
 /**
+ * @internal Returns an offer instance from class or plain input.
+ *
+ * @param offer - Offer class or plain input.
+ * @returns Offer instance.
+ */
+export function normalizeOffer(offer: IOffer | Offer) {
+  return offer instanceof Offer ? offer : new Offer(offer);
+}
+
+/**
+ * @internal Converts an offer into the tuple object expected by viem ABI encoders.
+ *
+ * @param offer - Offer class or plain input.
+ * @returns ABI-compatible offer.
+ */
+export function offerToStruct(offer: IOffer | Offer): OfferStruct {
+  const normalizedOffer = normalizeOffer(offer);
+
+  return {
+    market: marketParamsToStruct(normalizedOffer.market),
+    buy: normalizedOffer.buy,
+    maker: normalizedOffer.maker,
+    start: normalizedOffer.start,
+    expiry: normalizedOffer.expiry,
+    tick: normalizedOffer.tick,
+    group: normalizedOffer.group,
+    callback: normalizedOffer.callback,
+    callbackData: normalizedOffer.callbackData,
+    receiverIfMakerIsSeller: normalizedOffer.receiverIfMakerIsSeller,
+    ratifier: normalizedOffer.ratifier,
+    reduceOnly: normalizedOffer.reduceOnly,
+    maxUnits: normalizedOffer.maxUnits,
+    maxAssets: normalizedOffer.maxAssets,
+  };
+}
+
+/**
  * Parameters for {@link OfferUtils.buildOffer}.
  *
  * @example
@@ -371,7 +325,7 @@ export const offerStructAbiComponents = [
  */
 export interface BuildOfferParams {
   /** Market this offer trades. */
-  readonly market: IMarket | Market;
+  readonly market: IMarketParams | MarketParams | Market;
   /** Whether the maker buys units. */
   readonly buy: boolean;
   /** Maker address. */

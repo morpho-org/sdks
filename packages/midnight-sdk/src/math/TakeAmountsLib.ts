@@ -9,7 +9,8 @@ import {
   PriceGreaterThanOneError,
   SettlementFeeExceedsPriceError,
 } from "../errors.js";
-import { type IOffer, Offer } from "../offers/index.js";
+import type { IOffer, Offer } from "../offers/index.js";
+import { normalizeOffer } from "../offers/Offer.js";
 import type { BigIntish } from "../types.js";
 import { TickLib } from "./TickLib.js";
 
@@ -68,7 +69,7 @@ export namespace TakeAmountsLib {
     readonly offer: IOffer | Offer;
     readonly settlementFee: BigIntish;
   }) {
-    const offer = Offer.from(params.offer);
+    const offer = normalizeOffer(params.offer);
     const settlementFee = BigInt(params.settlementFee);
     assertNonNegative("settlementFee", settlementFee);
 
@@ -135,7 +136,7 @@ export namespace TakeAmountsLib {
     readonly targetBuyerAssets: BigIntish;
     readonly settlementFee: BigIntish;
   }) {
-    const offer = Offer.from(params.offer);
+    const offer = normalizeOffer(params.offer);
     const settlementFee = BigInt(params.settlementFee);
     const targetBuyerAssets = BigInt(params.targetBuyerAssets);
     assertNonNegative("targetBuyerAssets", targetBuyerAssets);
@@ -205,7 +206,7 @@ export namespace TakeAmountsLib {
     readonly targetSellerAssets: BigIntish;
     readonly settlementFee: BigIntish;
   }) {
-    const offer = Offer.from(params.offer);
+    const offer = normalizeOffer(params.offer);
     const settlementFee = BigInt(params.settlementFee);
     const targetSellerAssets = BigInt(params.targetSellerAssets);
     assertNonNegative("targetSellerAssets", targetSellerAssets);

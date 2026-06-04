@@ -2,7 +2,7 @@ import {
   InvalidMidnightRouterResponseError,
   MidnightRouterApiError,
 } from "../errors.js";
-import { Tree, type TreeInput } from "../signatures/OfferTree.js";
+import { normalizeTree, type TreeInput } from "../signatures/OfferTree.js";
 import type {
   Payload as MidnightPayload,
   Item as MidnightPayloadItem,
@@ -395,7 +395,7 @@ export namespace MidnightRouterApi {
   export async function validateMempoolTree(
     params: ValidateMempoolTreeParams,
   ): Promise<MempoolPayloadValidationResult> {
-    const tree = Tree.from(params.tree);
+    const tree = normalizeTree(params.tree);
 
     return validateMempoolItems({
       ...params,

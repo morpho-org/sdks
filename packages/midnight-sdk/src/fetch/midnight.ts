@@ -17,13 +17,16 @@ import {
 } from "../abis.js";
 import { MAX_COLLATERALS } from "../constants.js";
 import {
-  type IMarket,
+  AccrualPosition,
+  type IMarketParams,
   Market,
-  type MarketState,
-  type Position,
+  MarketParams,
+  Position,
 } from "../market/index.js";
+import { marketParamsToStruct } from "../market/Market.js";
 import { ConsumableUnitsLib } from "../math/index.js";
-import { type IOffer, Offer } from "../offers/index.js";
+import type { IOffer, Offer } from "../offers/index.js";
+import { normalizeOffer } from "../offers/Offer.js";
 import {
   abi as getConsumableUnitsInputsAbi,
   code as getConsumableUnitsInputsCode,
@@ -118,6 +121,40 @@ const bytecodeCallParameters = (params: MidnightCallParameters) => {
   return {};
 };
 
+const marketStateFields = (
+  state: readonly [
+    bigint,
+    bigint,
+    bigint,
+    bigint,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+  ],
+) => ({
+  totalUnits: state[0],
+  lossFactor: state[1],
+  withdrawable: state[2],
+  continuousFeeCredit: state[3],
+  settlementFeeCbps: [
+    state[4],
+    state[5],
+    state[6],
+    state[7],
+    state[8],
+    state[9],
+    state[10],
+  ] as const,
+  continuousFee: state[11],
+  tickSpacing: state[12],
+});
+
 /**
  * Fetches whether an account has authorized a contract/account on Midnight.
  *
@@ -191,7 +228,7 @@ export function fetchErc20Allowance(
  */
 export function fetchMarketId(
   params: MidnightFetchParams & {
-    readonly market: IMarket | Market;
+    readonly market: IMarketParams | MarketParams | Market;
   },
 ) {
   return readContract(params.client, {
@@ -199,24 +236,24 @@ export function fetchMarketId(
     address: params.midnight,
     abi: midnightAbi,
     functionName: "toId",
-    args: [Market.from(params.market).toStruct()],
+    args: [marketParamsToStruct(params.market)],
   });
 }
 
 /**
- * Fetches a market struct by id.
+ * Fetches immutable market params by id.
  *
  * @param params - Fetch parameters.
- * @returns Market instance.
+ * @returns Market params instance.
  * @example
  * ```ts
- * import { fetchMarket } from "@morpho-org/midnight-sdk";
+ * import { fetchMarketParams } from "@morpho-org/midnight-sdk";
  *
- * const market = await fetchMarket({} as never);
- * console.log(market.loanToken);
+ * const params = await fetchMarketParams({} as never);
+ * console.log(params.loanToken);
  * ```
  */
-export async function fetchMarket(
+export async function fetchMarketParams(
   params: MidnightFetchParams & {
     readonly marketId: Hex;
   },
@@ -229,52 +266,43 @@ export async function fetchMarket(
     args: [params.marketId],
   });
 
-  return new Market(market);
+  return new MarketParams(market);
 }
 
 /**
- * Fetches a Midnight market state by id.
+ * Fetches a hydrated market by id.
  *
  * @param params - Fetch parameters.
- * @returns Market state instance.
+ * @returns Market instance.
  * @example
  * ```ts
- * import { fetchMarketState } from "@morpho-org/midnight-sdk";
+ * import { fetchMarket } from "@morpho-org/midnight-sdk";
  *
- * const state = await fetchMarketState({} as never);
- * console.log(state.tickSpacing);
+ * const market = await fetchMarket({} as never);
+ * console.log(market.params.loanToken);
  * ```
  */
-export async function fetchMarketState(
+export async function fetchMarket(
   params: MidnightFetchParams & {
     readonly marketId: Hex;
   },
-): Promise<MarketState> {
-  const state = await readContract(params.client, {
-    ...callParameters(params),
-    address: params.midnight,
-    abi: midnightAbi,
-    functionName: "marketState",
-    args: [params.marketId],
-  });
+) {
+  const [marketParams, state] = await Promise.all([
+    fetchMarketParams(params),
+    readContract(params.client, {
+      ...callParameters(params),
+      address: params.midnight,
+      abi: midnightAbi,
+      functionName: "marketState",
+      args: [params.marketId],
+    }),
+  ]);
 
-  return {
-    totalUnits: state[0],
-    lossFactor: state[1],
-    withdrawable: state[2],
-    continuousFeeCredit: state[3],
-    settlementFeeCbps: [
-      state[4],
-      state[5],
-      state[6],
-      state[7],
-      state[8],
-      state[9],
-      state[10],
-    ],
-    continuousFee: state[11],
-    tickSpacing: state[12],
-  };
+  return new Market({
+    id: params.marketId,
+    params: marketParams,
+    ...marketStateFields(state),
+  });
 }
 
 /**
@@ -311,7 +339,7 @@ export async function fetchPosition(
 
       const collateral = position.collateral as readonly BigIntish[];
 
-      return {
+      return new Position({
         credit: position.credit,
         pendingFee: position.pendingFee,
         lastLossFactor: position.lastLossFactor,
@@ -319,7 +347,7 @@ export async function fetchPosition(
         debt: position.debt,
         collateralBitmap: position.collateralBitmap,
         collateral: collateral.map((assets) => BigInt(assets)),
-      };
+      });
     } catch (error) {
       if (params.deployless === "force") throw error;
       // Fallback to direct reads if deployless execution is unavailable.
@@ -347,7 +375,7 @@ export async function fetchPosition(
     ),
   );
 
-  return {
+  return new Position({
     credit: position[0],
     pendingFee: position[1],
     lastLossFactor: position[2],
@@ -355,7 +383,34 @@ export async function fetchPosition(
     debt: position[4],
     collateralBitmap: position[5],
     collateral: [...collateral],
-  };
+  });
+}
+
+/**
+ * Fetches a Midnight position paired with its hydrated market.
+ *
+ * @param params - Fetch parameters.
+ * @returns Accrual position instance.
+ * @example
+ * ```ts
+ * import { fetchAccrualPosition } from "@morpho-org/midnight-sdk";
+ *
+ * const position = await fetchAccrualPosition({} as never);
+ * console.log(position.market.id);
+ * ```
+ */
+export async function fetchAccrualPosition(
+  params: MidnightFetchParams & {
+    readonly marketId: Hex;
+    readonly user: Address;
+  },
+) {
+  const [position, market] = await Promise.all([
+    fetchPosition(params),
+    fetchMarket(params),
+  ]);
+
+  return new AccrualPosition(position, market);
 }
 
 /**
@@ -485,7 +540,7 @@ export function fetchWithdrawable(
  */
 export function fetchIsHealthy(
   params: MidnightFetchParams & {
-    readonly market: IMarket | Market;
+    readonly market: IMarketParams | MarketParams | Market;
     readonly marketId: Hex;
     readonly borrower: Address;
   },
@@ -496,7 +551,7 @@ export function fetchIsHealthy(
     abi: midnightAbi,
     functionName: "isHealthy",
     args: [
-      Market.from(params.market).toStruct(),
+      marketParamsToStruct(params.market),
       params.marketId,
       params.borrower,
     ],
@@ -617,7 +672,7 @@ export async function fetchConsumableUnits(
     readonly timeToMaturity: BigIntish;
   },
 ) {
-  const offer = Offer.from(params.offer);
+  const offer = normalizeOffer(params.offer);
   assertNonNegative("offer.maxUnits", offer.maxUnits);
   assertNonNegative("offer.maxAssets", offer.maxAssets);
   const needsSettlementFee = offer.maxUnits === 0n;
