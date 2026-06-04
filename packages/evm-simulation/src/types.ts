@@ -79,8 +79,15 @@ export type SimulationAuthorization =
 
 /**
  * Net balance change of the sender for a single asset over the whole bundle.
- * Backends normalize their native payloads to this same shape. Native ETH uses
- * viem's `ethAddress` sentinel as `token`.
+ * Backends normalize their native payloads to this same shape, sorted by
+ * `token` address. Native ETH uses viem's `ethAddress` sentinel as `token`.
+ *
+ * Native-ETH coverage differs by backend: Tenderly reports the full net ETH
+ * delta (including ETH received via internal calls), while the `eth_simulateV1`
+ * fallback derives native ETH only from the top-level `value` the sender sends
+ * out — ETH the sender receives internally (e.g. a `WETH.withdraw` refund) is
+ * not captured there. `symbol`/`decimals` are best-effort and may be absent,
+ * notably on the fallback path.
  */
 export interface AssetChange {
   readonly token: Address;
@@ -116,7 +123,8 @@ export interface Transfer {
  * - `calls[i]` corresponds 1:1 with `simulationTxs[i]` — read raw logs,
  *   status, returnData/gasUsed.
  * - `assetChanges` is the sender's net per-asset balance change over the whole
- *   bundle, normalized to the same shape across backends.
+ *   bundle, normalized to the same shape across backends and sorted by token
+ *   address. Native-ETH coverage differs by backend — see `AssetChange`.
  * - `transfers[k].txIdx` indexes into `simulationTxs` to attribute each
  *   transfer to its emitting transaction.
  */

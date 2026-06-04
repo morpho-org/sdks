@@ -28,7 +28,8 @@
     "build": "tsc --noEmit && $npm_execpath build:cjs && $npm_execpath build:esm",
     "build:cjs": "tsc --build tsconfig.build.cjs.json && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json",
-    "test": "vitest --root ../.. --project evm-simulation"
+    "test": "vitest --root ../.. --project evm-simulation",
+    "test:fork": "dotenv -- vitest --root ../.. --project evm-simulation-fork"
   },
   "dependencies": {
     "@morpho-org/blue-sdk": "workspace:^",

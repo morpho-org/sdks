@@ -2,6 +2,7 @@ import {
   type Address,
   encodeFunctionData,
   erc20Abi,
+  ethAddress,
   parseEther,
   parseUnits,
 } from "viem";
@@ -41,11 +42,11 @@ describe.sequential("simulateV1 — assetChanges on a mainnet fork", () => {
     ]);
   });
 
-  test("native ETH transfer: emits no log, so no assetChanges are reported", async ({
+  test("native ETH transfer: sender's ETH diff equals the value sent out", async ({
     client,
   }) => {
-    // Native ETH has no transfer log; the fallback derives assetChanges from
-    // logs, so a plain ETH send yields none (and must not throw).
+    // Native ETH emits no transfer log; the fallback derives it from the
+    // top-level `value` the sender sends out, reported under viem's `ethAddress`.
     const result = await simulateV1({
       rpcUrl: client.transport.url!,
       chainId: mainnet.id,
@@ -59,6 +60,8 @@ describe.sequential("simulateV1 — assetChanges on a mainnet fork", () => {
       ],
     });
 
-    expect(result.assetChanges).toEqual([]);
+    expect(result.assetChanges).toEqual([
+      { token: ethAddress, diff: -parseEther("1") },
+    ]);
   });
 });

@@ -267,7 +267,11 @@ function toRawCall(data: SimResult): RawCall {
   };
 }
 
-/** Reduce Tenderly's per-transfer asset changes to the sender's net per-token delta. */
+/**
+ * Reduce Tenderly's per-transfer asset changes to the sender's net per-token
+ * delta. The result is sorted by token address for deterministic, cross-backend
+ * output.
+ */
 function toAssetChanges(results: SimResult[], sender: Address): AssetChange[] {
   const account = getAddress(sender);
   const byToken = new Map<Address, AssetChange>();
@@ -290,5 +294,7 @@ function toAssetChanges(results: SimResult[], sender: Address): AssetChange[] {
       });
     }
   }
-  return [...byToken.values()].filter((c) => c.diff !== 0n);
+  return [...byToken.values()]
+    .filter((c) => c.diff !== 0n)
+    .sort((a, b) => a.token.toLowerCase().localeCompare(b.token.toLowerCase()));
 }

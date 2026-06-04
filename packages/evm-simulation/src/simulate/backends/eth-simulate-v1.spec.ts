@@ -1,7 +1,9 @@
 import {
   type Address,
+  ethAddress,
   type Hex,
   maxUint256,
+  parseEther,
   type SimulateCallsParameters,
 } from "viem";
 import { vi } from "vitest";
@@ -413,5 +415,59 @@ describe.sequential("simulateV1", () => {
     });
 
     expect(result.assetChanges).toEqual([]);
+  });
+
+  it("reports native ETH outflow from top-level tx values under ethAddress", async () => {
+    mockSimulateCalls.mockResolvedValueOnce({
+      results: [
+        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
+        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
+      ],
+    });
+
+    const result = await simulateV1({
+      rpcUrl: "http://rpc.local",
+      chainId: 1,
+      transactions: [
+        { ...BASIC_TX, value: parseEther("1") },
+        { ...BASIC_TX, value: parseEther("2") },
+      ],
+    });
+
+    expect(result.assetChanges).toEqual([
+      { token: ethAddress, diff: -parseEther("3") },
+    ]);
+  });
+
+  it("merges native ETH and ERC20 deltas, sorted by token address", async () => {
+    mockSimulateCalls.mockResolvedValueOnce({
+      results: [
+        {
+          status: "success",
+          gasUsed: 0n,
+          data: "0x" as Hex,
+          logs: [
+            makeTransferLog({
+              token: USDC,
+              from: USER,
+              to: VAULT,
+              amount: 1_000_000n,
+            }),
+          ],
+        },
+      ],
+    });
+
+    const result = await simulateV1({
+      rpcUrl: "http://rpc.local",
+      chainId: 1,
+      transactions: [{ ...BASIC_TX, value: parseEther("1") }],
+    });
+
+    // USDC (0xa0b8…) sorts before the ethAddress sentinel (0xeeee…).
+    expect(result.assetChanges).toEqual([
+      { token: USDC, diff: -1_000_000n },
+      { token: ethAddress, diff: -parseEther("1") },
+    ]);
   });
 });

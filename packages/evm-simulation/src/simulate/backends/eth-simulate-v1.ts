@@ -2,6 +2,7 @@ import {
   type Address,
   type BlockTag,
   createPublicClient,
+  ethAddress,
   getAddress,
   http,
   maxUint256,
@@ -27,8 +28,14 @@ import { parseTransfers } from "../parsing/index.js";
  * false "insufficient balance for gas" reverts.
  *
  * Derives `assetChanges` (the sender's net per-token delta) from the emitted
- * transfer logs, matching the Tenderly backend's shape. Native ETH has no log
- * and is not reported on this path.
+ * transfer logs, plus the sender's net native ETH outflow from the top-level
+ * `value` of each transaction (reported under viem's `ethAddress` sentinel).
+ *
+ * Coverage on this path is therefore narrower than the Tenderly backend:
+ * native ETH the sender *receives* through internal calls (e.g. a
+ * `WETH.withdraw` refund, a swap that pays out ETH) emits no log and is not
+ * reflected in `value`, so it is not captured. Only top-level ETH the sender
+ * sends out is accounted for. For full native-ETH accounting use Tenderly.
  */
 export async function simulateV1(params: {
   rpcUrl: string;
@@ -117,7 +124,11 @@ export async function simulateV1(params: {
 
     return {
       calls: rawCalls,
-      assetChanges: toAssetChanges(parseTransfers(rawCalls), sender),
+      assetChanges: toAssetChanges({
+        transfers: parseTransfers(rawCalls),
+        transactions,
+        sender,
+      }),
     };
   } catch (error) {
     if (error instanceof SimulationRevertedError) throw error;
@@ -129,9 +140,27 @@ export async function simulateV1(params: {
   }
 }
 
-/** Reduce parsed transfer logs to the sender's net per-token delta. */
-function toAssetChanges(transfers: Transfer[], sender: Address): AssetChange[] {
+/**
+ * Reduce parsed transfer logs and top-level transaction values to the sender's
+ * net per-token delta. Native ETH is the sender's total `value` outflow over the
+ * bundle (sent ETH only — see `simulateV1` for the coverage caveat). The result
+ * is sorted by token address for deterministic, cross-backend output.
+ */
+function toAssetChanges(params: {
+  transfers: Transfer[];
+  transactions: SimulationTransaction[];
+  sender: Address;
+}): AssetChange[] {
+  const { transfers, transactions, sender } = params;
   const byToken = new Map<Address, bigint>();
+
+  // Native ETH: the sender funds every top-level `value` in the bundle.
+  let nativeOut = 0n;
+  for (const { value } of transactions) {
+    if (value) nativeOut += value;
+  }
+  if (nativeOut !== 0n) byToken.set(ethAddress, -nativeOut);
+
   for (const { token, from, to, amount } of transfers) {
     let diff = 0n;
     if (to === sender) diff += amount;
@@ -141,5 +170,6 @@ function toAssetChanges(transfers: Transfer[], sender: Address): AssetChange[] {
   }
   return [...byToken]
     .map(([token, diff]) => ({ token, diff }))
-    .filter((c) => c.diff !== 0n);
+    .filter((c) => c.diff !== 0n)
+    .sort((a, b) => a.token.toLowerCase().localeCompare(b.token.toLowerCase()));
 }
