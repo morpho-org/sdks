@@ -52,7 +52,7 @@
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "dataloader": "^2.2.3",
-    "graphql": "^16.14.0",
+    "graphql": "^16.14.1",
     "nock": "^14.0.15",
     "typescript": "^6.0.3",
     "viem": "^2.50.4",
