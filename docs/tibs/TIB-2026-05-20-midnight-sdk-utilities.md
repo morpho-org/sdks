@@ -27,12 +27,12 @@ Keeping those details only in app code makes every downstream integration re-lea
 **Goals**
 
 - Add `@morpho-org/midnight-sdk` as the source of truth for Midnight addresses, ABI literals, constants, protocol value types, classes, typed errors, and deterministic helper functions.
-- Provide utilities that directly support the current markets-v2 app action flows without importing app code: market struct conversion, offer/take conversion, tick/price math, units/assets rounding helpers grouped under utility namespaces, `MidnightBundles` namespaced calldata encoders, direct core call encoders, requirement planning, fetch helpers, and make-offer signature/validation helpers.
+- Provide utilities that directly support the current markets-v2 app action flows without importing app code: market struct conversion, offer/take conversion, tick/price math, units/assets rounding helpers grouped under utility namespaces, `MidnightBundles` namespaced calldata encoders, requirement planning, Blue-style aggregate fetchers that return populated classes, and make-offer signature/validation helpers.
 - Keep the package framework-free: no React, wagmi, Redux, app router state, UI action-flow types, or app-specific error classes.
 - Keep I/O isolated in explicit boundary modules such as `fetch/` and `router/`. Requirement planners stay pure once current state is supplied, and pure protocol helpers remain testable without mocks.
 - Pin the Midnight ABI surface in package source and expose an address-registry contract for `Midnight`, `MidnightBundles`, `MidnightMempool`, `EcrecoverRatifier`, `SetterRatifier`, and Permit2. Production addresses are added only when reviewed deployment artifacts are available.
 - Export typed errors for integrators to pattern-match on instead of throwing plain `Error`.
-- Cover the package with colocated unit tests, property-based tests for tick/price and unit/asset conversion, and viem mock-transport tests for fetch and requirement readers.
+- Cover the package with colocated unit tests, property-based tests for tick/price and unit/asset conversion, and viem mock-transport tests for aggregate fetchers and requirement readers.
 
 **Non-Goals**
 
@@ -42,6 +42,8 @@ Keeping those details only in app code makes every downstream integration re-lea
 - No React, wagmi, app `ActionFlow`, toast, label, analytics, or UI-state abstractions in `midnight-sdk`.
 - No quoter or orderbook client in this package. The package can define quote/take input shapes and build on-chain `Take[]`, but executable offers still come from the app or a future orderbook SDK.
 - No protocol/admin operations beyond utility support for user-facing order, requirement, fetch, and signature flows.
+- No standalone `MidnightCalls` namespace or individual direct core-call encoders. One-wrapper-per-Solidity-function calldata utilities are not a useful SDK surface; direct `Midnight` calls should be produced by the higher-level helper that owns the workflow, or stay app-local until a higher-level action/entity surface exists.
+- No exported one-wrapper-per-Solidity-function fetchers. Public fetchers should return populated SDK classes or grouped requirement-input classes, not loose primitive values from individual protocol getters.
 - No runtime ABI fetch. ABI literals and address-registry fields are pinned in source; production address values are added only from reviewed deployment artifacts.
 - No deprecated package updates.
 
@@ -81,6 +83,7 @@ packages/midnight-sdk/
     |   +-- index.ts
     +-- offers/
     |   +-- Offer.ts
+    |   +-- OfferStatus.ts
     |   +-- Take.ts
     |   +-- OfferUtils.ts
     |   +-- index.ts
@@ -92,11 +95,11 @@ packages/midnight-sdk/
     +-- bundles/
     |   +-- MidnightBundles.ts
     |   +-- index.ts
-    +-- calls/
-    |   +-- MidnightCalls.ts
-    |   +-- index.ts
     +-- fetch/
-    |   +-- midnight.ts
+    |   +-- Market.ts
+    |   +-- Position.ts
+    |   +-- OfferStatus.ts
+    |   +-- RequirementInputs.ts
     |   +-- index.ts
     +-- router/
     |   +-- MidnightRouterApi.ts
@@ -116,9 +119,11 @@ packages/midnight-sdk/
 
 The root barrel exports the stable package surface explicitly, including `MarketUtils`,
 `OfferUtils`, `TickLib`, `TakeAmountsLib`, `ConsumableUnitsLib`, `MidnightBundles`,
-`MidnightCalls`, `Payload`, `MidnightRouterApi`, `MIDNIGHT_SDK_VERSION`, and their supporting parameter types. The initial implementation keeps
-viem-backed fetch and encoding helpers in the root export; a separate `./viem` subpath or package can
-be introduced later if the I/O surface grows.
+`Payload`, `MidnightRouterApi`, `MIDNIGHT_SDK_VERSION`, typed errors such as
+`InvalidOfferGroupError`, aggregate class fetchers such as `fetchMarket`, `fetchPosition`, and
+`fetchOfferStatus`, grouped requirement-input fetchers, and their supporting parameter types. The
+initial implementation keeps viem-backed aggregate fetch helpers in the root export; a separate
+`./viem` subpath or package can be introduced later if the I/O surface grows.
 
 ### Contract Data
 
@@ -156,11 +161,13 @@ artifact path. Runtime ABI fetches are out of scope.
 
 ### Types, Classes, and Constants
 
-`midnight-sdk` should model the Solidity structs as readonly TypeScript types/classes:
+`midnight-sdk` should model the Solidity structs and fetchable domain aggregates as readonly
+TypeScript types/classes:
 
 - `Market`
 - `CollateralParams`
 - `Offer`
+- `OfferStatus`
 - `Take`
 - `TokenPermit`
 - `CollateralSupply`
@@ -194,8 +201,22 @@ Generic constants and primitives such as `MathLib.WAD`, `ORACLE_PRICE_SCALE`,
 deployment-registry field rather than a standalone `PERMIT2_ADDRESS` constant.
 
 Classes copy nested values, convert `BigIntish` inputs to `bigint`, deep-freeze public state, and
-expose `from(...)` factories and `toStruct()` helpers for ABI-compatible objects. They must not fetch
-or sign. Plain interfaces may still be exported for call sites that already have normalized data.
+expose `from(...)` factories and `toStruct()` helpers for ABI-compatible objects. Constructors and
+pure class methods must not fetch or sign. Fetchers populate class fields the way `blue-sdk-viem`
+fetchers populate `blue-sdk` classes: callers should receive a useful aggregate class, not a bag of
+primitive protocol reads they have to stitch together themselves. Plain interfaces may still be
+exported for call sites that already have normalized data.
+
+For fetched aggregates, model complete domain state as class fields:
+
+- `fetchMarket` returns a `Market` with its id, market struct fields, and a populated `MarketState`
+  containing total units, loss factor, withdrawable assets, continuous-fee credit, settlement-fee
+  cbps, continuous fee, and tick spacing.
+- `fetchPosition` returns a `Position` with user, market id, credit, pending fee, last loss factor,
+  last accrual, debt, collateral bitmap, and the full collateral array populated.
+- `fetchOfferStatus` returns an `OfferStatus` with the offer, consumed amount, computed consumable
+  units when requested, the settlement fee used for that computation, ratifier route, and root
+  ratification/cancellation state when requested.
 
 ### Utility Libraries and Namespaces
 
@@ -204,7 +225,8 @@ Pure helpers should follow the same naming shape as `blue-sdk`: Solidity librari
 derived helpers live in domain `*Utils` namespaces. Narrow SDK conveniences may live in an
 onchain-named library only when they are clearly part of that library's domain and are documented as
 SDK additions. Do not create a broad `Midnight` namespace that mixes market math, offers,
-signatures, and calldata.
+signatures, and calldata, and do not create a `MidnightCalls` namespace that simply mirrors direct
+core contract entrypoints one by one.
 
 Expose deterministic library methods:
 
@@ -253,9 +275,12 @@ Make-offer helpers should support the limit-order path without importing app cod
 
 - `OfferUtils.buildOffer` builds `Offer` values from market, side, tick, max assets, expiry, group, callback, receiver, and ratifier inputs;
 - generate or accept a group id via an injected random byte source;
+- `OfferUtils.buildOfferGroup` builds multiple offers with one shared group id, preserving order and validating only protocol group mechanics;
+- `OfferUtils.validateOfferGroup` enforces non-empty groups, same maker, same group, same side, same unit/asset caps with exactly one non-zero cap, and same loan token;
 - expose offer payload, Merkle root, proof, ratifier-data, root-approval, mempool-submission, and router-validation helpers behind stable SDK functions;
 - validate maker payloads through `MidnightRouterApi.validateMempoolPayload` or `MidnightRouterApi.validateMempoolItems`; the implementation uses a lightweight `fetch` boundary and does not add a runtime `@morpho-dev/router` dependency;
 - keep offer publication/submission onchain through `OfferPayloadUtils.buildMempoolSubmissionCall`; the current Router API does not expose a submit endpoint.
+- do not add router gatekeeper policy to the protocol helpers: no ratifier allowlists, content-addressed group requirement, full-payload inclusion rule, same-ratifier tree policy, minimum duration, callback policy, or validation timestamp logic.
 
 ### MidnightBundles Namespace
 
@@ -308,44 +333,53 @@ The namespace should cover the five public periphery entrypoints exactly:
 | `MidnightBundles.supplyCollateralAndSellWithAssetsTarget` | `supplyCollateralAndSellWithAssetsTarget` |
 | `MidnightBundles.repayAndWithdrawCollateral` | `repayAndWithdrawCollateral` |
 
-### MidnightCalls Namespace
+### Direct Core Calls
 
-The package should expose direct core contract encoders under a narrow `MidnightCalls` namespace.
-This namespace only encodes user-facing calls to the core `Midnight` contract; it is not a
-catch-all protocol namespace. Method names should match the Solidity entrypoints exactly.
+The package should not expose direct core contract encoders under a `MidnightCalls` namespace.
+Individual encoders such as `supplyCollateral`, `withdrawCollateral`, `repay`, `setIsAuthorized`,
+and `setConsumed` only mirror the Solidity ABI one function at a time, so they do not add enough SDK
+value to be public API.
 
-```ts
-export namespace MidnightCalls {
-  export function supplyCollateral(params: SupplyCollateralCallParams): MidnightCall;
-  export function withdrawCollateral(params: WithdrawCollateralCallParams): MidnightCall;
-  export function repay(params: RepayCallParams): MidnightCall;
-  export function setIsAuthorized(params: SetIsAuthorizedCallParams): MidnightCall;
-}
-```
+When a higher-level Midnight helper needs a direct core call, that helper owns the neutral call
+descriptor it returns. Examples:
 
-These are calldata utilities, not high-level SDK actions. They do not decide labels, button text, analytics, or app flow state.
+- authorization requirement planners may return a `setIsAuthorized` descriptor because the
+  authorization requirement owns that workflow;
+- offer payload helpers may return root approval, root cancellation, and mempool submission call
+  descriptors because those calls are part of the offer-publication workflow;
+- direct supply/withdraw/repay flows remain app-local or move to a future high-level
+  `morpho-sdk`/Midnight action surface once action and entity names are settled.
 
 ### Fetch Methods
 
-Fetch helpers live in `src/fetch/` and are the only modules that read chain state. They accept a viem `Client` or a minimal reader interface and use named `viem/actions` imports, so tests can use `createMockClient` from `@morpho-org/test/mock`.
+Fetch helpers live in `src/fetch/` and are the only modules that read chain state. They accept a
+viem `Client` or a minimal reader interface and use named `viem/actions` imports, so tests can use
+`createMockClient` from `@morpho-org/test/mock`.
 
-Initial fetch helpers:
+Public fetchers should follow the `blue-sdk-viem` pattern: fetch by domain aggregate and return an
+exported class with its fields populated. Primitive protocol reads may exist as private
+implementation details, but they should not be exported as public helpers. Do not export
+`fetchCollateral`, `fetchCredit`, `fetchDebt`, `fetchWithdrawable`, `fetchTickSpacing`,
+`fetchSettlementFee`, `fetchConsumed`, `fetchIsAuthorized`, `fetchErc20Allowance`,
+`fetchIsRootCanceled`, `fetchIsRootRatified`, or similar one-function wrappers.
 
-- `fetchIsAuthorized`
-- `fetchErc20Allowance`
-- `fetchMarketId`
-- `fetchMarketState`
-- `fetchPosition`
-- `fetchCollateral`
-- `fetchCredit`
-- `fetchDebt`
-- `fetchWithdrawable`
-- `fetchIsHealthy`
-- `fetchTickSpacing`
-- `fetchSettlementFee`
-- `fetchConsumed`
-- `fetchConsumableUnits`
-- `fetchRatifierInfo`, which reads bytecode and delegates classification to `RatifierUtils.getRatifierInfo`; it must preserve the EIP-7702 designator rule from the app: no code, `0x`, or `0xef0100...` routes through Ecrecover; other code routes through Setter.
+Initial public aggregate fetchers:
+
+- `fetchMarket`, which reads the market struct and market state and returns a populated `Market`.
+  The caller should not need separate public `fetchMarketId`, `fetchMarketState`,
+  `fetchWithdrawable`, `fetchTickSpacing`, or settlement-fee getter wrappers.
+- `fetchPosition`, which reads the position and required collateral slots and returns a populated
+  `Position`. The caller should not need separate public `fetchCollateral`, `fetchCredit`, or
+  `fetchDebt` wrappers.
+- `fetchOfferStatus`, which reads consumed amount, the settlement-fee context needed for
+  `ConsumableUnitsLib`, maker bytecode, and optional root state, then returns `OfferStatus`.
+  Ratifier classification must preserve the EIP-7702 designator rule from the app: no code, `0x`, or
+  `0xef0100...` routes through Ecrecover; other code routes through Setter.
+- grouped requirement-input fetchers such as `fetchBorrowMarketOrderRequirementInputs`,
+  `fetchLendMarketOrderRequirementInputs`, `fetchSupplyCollateralRequirementInputs`, and
+  `fetchMakeOfferRequirementInputs`. These gather allowance, authorization, settlement-fee,
+  consumed, ratifier, root, signature, and validation state as needed for their planner and return a
+  typed class/value object for that planner, not loose primitive reads.
 
 Fetch helpers must not mutate state, sign, submit transactions, or import UI/app code.
 
@@ -373,7 +407,10 @@ Initial planners:
 - `planSupplyCollateralRequirements` for collateral approval to the core Midnight contract;
 - `planMakeOfferRequirements` for optional delegated signer/operator authorization, Ecrecover signature, Setter root approval, and payload validation.
 
-Requirement planners should be pure once their current state inputs are supplied. Companion `fetch...RequirementInputs` helpers may gather current allowance, authorization, settlement fee, consumed amounts, and ratifier info.
+Requirement planners should be pure once their current state inputs are supplied. Companion grouped
+`fetch...RequirementInputs` helpers may gather current allowance, authorization, settlement fee,
+consumed amounts, root state, and ratifier info, but they return a planner-specific input aggregate
+rather than exporting individual allowance, authorization, or root-status fetchers.
 
 ### Signatures, Payloads, and Router Validation
 
@@ -386,6 +423,10 @@ Make-offer flows need reusable utilities, but the SDK should not own a wallet or
 - `OfferPayloadUtils.buildEcrecoverRatificationTypedData` or `OfferPayloadUtils.signEcrecoverRatification` with an injected `signTypedData` callback;
 - `OfferPayloadUtils.encodeEcrecoverRatifierData`
 - `OfferPayloadUtils.encodeSetterRatifierData`
+- `OfferPayloadUtils.decodeEcrecoverRatifierData`
+- `OfferPayloadUtils.decodeSetterRatifierData`
+- `OfferPayloadUtils.verifyOfferProof`
+- `OfferPayloadUtils.buildEcrecoverRootCancellationCall`
 - `OfferPayloadUtils.buildSetterRootApprovalCall`
 - `OfferPayloadUtils.buildMempoolSubmissionCall`
 - `Payload.encode` / `Payload.decode` for versioned Midnight mempool payload bytes.
@@ -407,9 +448,9 @@ The package should make these current app flows straightforward without becoming
 | --- | --- |
 | Borrow market order with collateral | `TickLib.rateToPrice`/tick helpers, `TakeAmountsLib` max-units rounding, `OfferUtils.buildTakesFromOffers`, `planBorrowMarketOrderRequirements`, `MidnightBundles.supplyCollateralAndSellWithAssetsTarget` |
 | Borrow against existing collateral | Same bundle call with empty `CollateralSupply[]`; skip collateral allowance planning when collateral amount is zero |
-| Supply collateral only | `planSupplyCollateralRequirements`, `MidnightCalls.supplyCollateral` |
+| Supply collateral only | `planSupplyCollateralRequirements`; direct `Midnight.supplyCollateral` encoding stays app-local until a higher-level action surface exists |
 | Lend market order | `TakeAmountsLib` min-units rounding, `planLendMarketOrderRequirements`, `MidnightBundles.buyWithAssetsTargetAndWithdrawCollateral` with empty withdrawals |
-| Borrow limit order | `MidnightCalls.supplyCollateral`, `OfferUtils.buildOffer` with `buy: false`, `RatifierUtils`, `MidnightRouterApi`, `OfferPayloadUtils` signature/root approval helpers |
+| Borrow limit order | optional app-local collateral supply call, `OfferUtils.buildOffer` with `buy: false`, `RatifierUtils`, `MidnightRouterApi`, `OfferPayloadUtils` signature/root approval helpers |
 | Lend/multi-limit order | loan-token approval to the core Midnight contract, `OfferUtils.buildOffer` with `buy: true`, grouped payload construction, `RatifierUtils`, `MidnightRouterApi`, `OfferPayloadUtils` signature/root approval helpers |
 
 ## Implementation Phases
@@ -418,10 +459,10 @@ Status as of the 2026-06-04 implementation review:
 
 - **Phase 1 - Package skeleton: completed.** `packages/midnight-sdk` has package metadata, TypeScript configs, package-level `AGENTS.md`, public barrel exports, test project wiring, and a changeset.
 - **Phase 2 - Contract surface: completed with address deployment deferred.** ABI literals, constants, types/classes, typed errors, and address-registry helpers are in package source. ABI literals pin `morpho-org/midnight` commit `a7c6da7e70cb216982f6c5d20b46f40b943e67e4`. Production address entries remain empty until reviewed deployment artifacts are available; custom registration covers local and fork deployments meanwhile.
-- **Phase 3 - Math and offer utilities: completed.** `TickLib`, `TakeAmountsLib`, `ConsumableUnitsLib`, `MarketUtils`, `Offer`, `Take`, and `OfferUtils` landed with colocated unit tests and property-based tests for tick/price and unit conversion behavior.
-- **Phase 4 - Bundle/direct encoders: completed.** `MidnightBundles` and `MidnightCalls` landed with inline-snapshot tests for each supported route.
-- **Phase 5 - Fetch and requirements: completed.** Fetch helpers use named `viem/actions` imports and mock-transport tests; requirement planners remain pure once current allowance, authorization, ratifier, root, signature, and validation inputs are supplied.
-- **Phase 6 - Signatures, validation, and payloads: completed.** `RatifierUtils`, `OfferPayloadUtils`, `Payload`, and `MidnightRouterApi` landed. Router validation/rules are a lightweight `fetch` boundary rather than a runtime router dependency, and offer publication remains onchain through the existing Midnight mempool call descriptor.
+- **Phase 3 - Math and offer utilities: completed.** `TickLib`, `TakeAmountsLib`, `ConsumableUnitsLib`, `MarketUtils`, `Offer`, `Take`, and `OfferUtils` landed with colocated unit tests and property-based tests for tick/price, unit conversion, offer-group creation, and protocol-only offer-group validation behavior.
+- **Phase 4 - Bundle encoders: completed; direct encoders rejected.** `MidnightBundles` remains the only standalone calldata namespace. `MidnightCalls` and one-wrapper-per-core-entrypoint encoders should be removed from the public surface.
+- **Phase 5 - Fetch and requirements: needs aggregate-fetch revision.** Fetch helpers use named `viem/actions` imports and mock-transport tests, but the public fetch surface should be collapsed into aggregate class fetchers (`fetchMarket`, `fetchPosition`, `fetchOfferStatus`) and grouped requirement-input fetchers. Requirement planners remain pure once current allowance, authorization, ratifier, root, signature, and validation inputs are supplied.
+- **Phase 6 - Signatures, validation, and payloads: completed.** `RatifierUtils`, `OfferPayloadUtils`, `Payload`, and `MidnightRouterApi` landed. Router validation/rules are a lightweight `fetch` boundary rather than a runtime router dependency, and offer publication remains onchain through the existing Midnight mempool call descriptor. Maker-side payload utilities include Ecrecover/Setter ratifier-data decoding, local proof verification, Setter root approval descriptors, and Ecrecover root cancellation descriptors.
 - **Phase 7 - App adoption: deferred.** Updating the markets-v2 app in `morpho-org/morpho-apps` remains a separate repository change and is not required to land this SDK repo PR.
 
 ## Considered Alternatives
@@ -462,12 +503,12 @@ Expose app-style labels, call requests, signature requests, and success callback
 - The package pins the ABI revision used by the app and contracts. If `morpho-org/midnight` `main` differs from the deployed artifact, implementation pins the deployed artifact and documents the source.
 - App quote/order sources continue to provide executable offers or takeable offers. `midnight-sdk` does not fetch an orderbook.
 - Router/API payload validation and rule inspection are wrapped by `MidnightRouterApi`. If a future PR adds `@morpho-dev/router`, it must justify the dependency and keep it wrapped behind `midnight-sdk` APIs.
-- Fetch helpers use transport-bound unit tests via `createMockClient` from `@morpho-org/test/mock`. Fork tests are required when a helper's correctness depends on live contract behavior rather than request/response shape.
+- Aggregate fetch helpers use transport-bound unit tests via `createMockClient` from `@morpho-org/test/mock`. Fork tests are required when a fetched class field's correctness depends on live contract behavior rather than request/response shape.
 - All exported symbols require JSDoc and explicit `src/index.ts` re-exports.
 
 ## Dependencies
 
-- `viem` as a peer dependency for ABI encoding, typed data, bytecode reads, and explicit fetch-boundary helpers.
+- `viem` as a peer dependency for ABI encoding, typed data, bytecode reads, and explicit aggregate fetch-boundary helpers.
 - `@morpho-org/morpho-ts` as a workspace peer dependency for shared SDK primitives, `MathLib`, shared constants, typed errors, assertions, and `deepFreeze`.
 - `@morpho-org/test` as a dev dependency for mock-transport tests.
 - `fast-check` as a dev dependency for property-based tests.
@@ -485,7 +526,7 @@ Expose app-style labels, call requests, signature requests, and success callback
 
 ## Future Considerations
 
-- A future `@morpho-org/midnight-sdk-viem` package if fetch/read helpers grow beyond a small boundary surface.
+- A future `@morpho-org/midnight-sdk-viem` package if aggregate fetch helpers grow beyond a small boundary surface.
 - A future high-level `@morpho-org/morpho-sdk/midnight` entrypoint once action/entity names and requirement semantics stabilize.
 - A typed quoter/orderbook SDK for fetching executable offers.
 - Multi-chain Midnight address entries.
@@ -494,7 +535,7 @@ Expose app-style labels, call requests, signature requests, and success callback
 ## Open Questions
 
 - What exact reviewed deployed addresses should populate the first production registry entry for `Midnight`, `MidnightBundles`, `MidnightMempool`, `EcrecoverRatifier`, and `SetterRatifier`?
-- Once production addresses are pinned, which fetch helpers need fork tests because their correctness depends on live contract behavior rather than request/response shape?
+- Once production addresses are pinned, which aggregate fetchers or fetched class fields need fork tests because their correctness depends on live contract behavior rather than request/response shape?
 - After app adoption, is the root-export viem boundary still small enough, or should it move to a `./viem` subpath or future `@morpho-org/midnight-sdk-viem` package?
 
 ## References
