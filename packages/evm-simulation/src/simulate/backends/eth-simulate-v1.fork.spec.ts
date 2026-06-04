@@ -15,10 +15,10 @@ const USDC: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const RECIPIENT: Address = "0x000000000000000000000000000000000000dEaD";
 
 describe.sequential("simulateV1 — assetChanges on a mainnet fork", () => {
-  test("ERC20 transfer: sender's USDC diff equals the amount sent out", async ({
+  test("ERC20 transfer: sender debited and recipient credited the amount", async ({
     client,
   }) => {
-    // Sender holds 1000 USDC, transfers 100 → net diff must be -100 USDC.
+    // Sender holds 1000 USDC, transfers 100 → sender -100, recipient +100.
     await client.deal({ erc20: USDC, amount: parseUnits("1000", 6) });
 
     const result = await simulateV1({
@@ -37,16 +37,24 @@ describe.sequential("simulateV1 — assetChanges on a mainnet fork", () => {
       ],
     });
 
+    // Sorted by account: RECIPIENT (0x000…dead) before the sender (0xf39f…).
     expect(result.assetChanges).toEqual([
-      { token: USDC, diff: -parseUnits("100", 6) },
+      {
+        account: RECIPIENT,
+        changes: [{ token: USDC, diff: parseUnits("100", 6) }],
+      },
+      {
+        account: client.account.address,
+        changes: [{ token: USDC, diff: -parseUnits("100", 6) }],
+      },
     ]);
   });
 
-  test("native ETH transfer: sender's ETH diff equals the value sent out", async ({
+  test("native ETH transfer: sender debited and recipient credited the value", async ({
     client,
   }) => {
-    // Native ETH emits no transfer log; the fallback derives it from the
-    // top-level `value` the sender sends out, reported under viem's `ethAddress`.
+    // Native ETH emits no log; the fallback derives both sides from the
+    // top-level `value`, reported under viem's `ethAddress` sentinel.
     const result = await simulateV1({
       rpcUrl: client.transport.url!,
       chainId: mainnet.id,
@@ -61,7 +69,14 @@ describe.sequential("simulateV1 — assetChanges on a mainnet fork", () => {
     });
 
     expect(result.assetChanges).toEqual([
-      { token: ethAddress, diff: -parseEther("1") },
+      {
+        account: RECIPIENT,
+        changes: [{ token: ethAddress, diff: parseEther("1") }],
+      },
+      {
+        account: client.account.address,
+        changes: [{ token: ethAddress, diff: -parseEther("1") }],
+      },
     ]);
   });
 });

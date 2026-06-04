@@ -1,4 +1,4 @@
-import { type Address, ethAddress, type Hex } from "viem";
+import { type Address, ethAddress, type Hex, zeroAddress } from "viem";
 import { vi } from "vitest";
 import {
   ExternalServiceError,
@@ -167,14 +167,19 @@ describe.sequential("simulateTenderlyRpc — single tx", () => {
     expect(result.calls[0]!.gasUsed).toBe(0x5208n);
   });
 
-  it("normalizes assetChanges to the sender's net per-token delta", async () => {
+  it("groups assetChanges by account (both transfer endpoints)", async () => {
     const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
       ok: true,
       json: async () =>
         envelope(
           successResult({
             assetChanges: [
-              assetChange({ token: USDC, to: USER, rawAmount: "0xf4240" }),
+              assetChange({
+                token: USDC,
+                from: VAULT,
+                to: USER,
+                rawAmount: "0xf4240",
+              }),
             ],
           }),
         ),
@@ -187,7 +192,54 @@ describe.sequential("simulateTenderlyRpc — single tx", () => {
     });
 
     expect(result.assetChanges).toEqual([
-      { token: USDC, symbol: "USDC", decimals: 6, diff: 1_000_000n },
+      {
+        account: USER,
+        changes: [
+          { token: USDC, symbol: "USDC", decimals: 6, diff: 1_000_000n },
+        ],
+      },
+      {
+        account: VAULT,
+        changes: [
+          { token: USDC, symbol: "USDC", decimals: 6, diff: -1_000_000n },
+        ],
+      },
+    ]);
+  });
+
+  it("keeps the zero address for mints (from 0x0)", async () => {
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: true,
+      json: async () =>
+        envelope(
+          successResult({
+            assetChanges: [
+              assetChange({
+                token: USDC,
+                from: zeroAddress,
+                to: USER,
+                rawAmount: "0x5",
+              }),
+            ],
+          }),
+        ),
+    });
+    installFetchMock(fetchMock);
+
+    const result = await simulateTenderlyRpc({
+      config: CONFIG,
+      transactions: [TX1],
+    });
+
+    expect(result.assetChanges).toEqual([
+      {
+        account: zeroAddress,
+        changes: [{ token: USDC, symbol: "USDC", decimals: 6, diff: -5n }],
+      },
+      {
+        account: USER,
+        changes: [{ token: USDC, symbol: "USDC", decimals: 6, diff: 5n }],
+      },
     ]);
   });
 
@@ -217,10 +269,15 @@ describe.sequential("simulateTenderlyRpc — single tx", () => {
 
     expect(result.assetChanges).toEqual([
       {
-        token: ethAddress,
-        symbol: "ETH",
-        decimals: 18,
-        diff: -1_000_000_000_000_000_000n,
+        account: USER,
+        changes: [
+          {
+            token: ethAddress,
+            symbol: "ETH",
+            decimals: 18,
+            diff: -1_000_000_000_000_000_000n,
+          },
+        ],
       },
     ]);
   });
@@ -430,7 +487,7 @@ describe.sequential("simulateTenderlyRpc — bundle", () => {
     expect(result.calls[1]!.returnData).toBe("0x2222");
   });
 
-  it("nets assetChanges for the sender across all bundle steps", async () => {
+  it("nets assetChanges per account across all bundle steps", async () => {
     const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
       ok: true,
       json: async () =>
@@ -456,7 +513,14 @@ describe.sequential("simulateTenderlyRpc — bundle", () => {
     });
 
     expect(result.assetChanges).toEqual([
-      { token: USDC, symbol: "USDC", decimals: 6, diff: 2n },
+      {
+        account: USER,
+        changes: [{ token: USDC, symbol: "USDC", decimals: 6, diff: 2n }],
+      },
+      {
+        account: VAULT,
+        changes: [{ token: USDC, symbol: "USDC", decimals: 6, diff: 9n }],
+      },
     ]);
   });
 

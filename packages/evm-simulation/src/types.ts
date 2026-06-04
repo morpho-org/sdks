@@ -78,23 +78,32 @@ export type SimulationAuthorization =
     };
 
 /**
- * Net balance change of the sender for a single asset over the whole bundle.
- * Backends normalize their native payloads to this same shape, sorted by
- * `token` address. Native ETH uses viem's `ethAddress` sentinel as `token`.
- *
- * Native-ETH coverage differs by backend: Tenderly reports the full net ETH
- * delta (including ETH received via internal calls), while the `eth_simulateV1`
- * fallback derives native ETH only from the top-level `value` the sender sends
- * out — ETH the sender receives internally (e.g. a `WETH.withdraw` refund) is
- * not captured there. `symbol`/`decimals` are best-effort and may be absent,
- * notably on the fallback path.
+ * Net balance change for a single asset (one token) within an account's entry.
+ * Native ETH uses viem's `ethAddress` sentinel as `token`. `symbol`/`decimals`
+ * are best-effort and may be absent, notably on the `eth_simulateV1` fallback.
  */
 export interface AssetChange {
   readonly token: Address;
   readonly symbol?: string;
   readonly decimals?: number;
-  /** Signed net change of the sender's balance, in raw token units. */
+  /** Signed net change of the account's balance, in raw token units. */
   readonly diff: bigint;
+}
+
+/**
+ * Net per-token balance changes for one account over the whole bundle. Returned
+ * for every account that nets a non-zero change, the sender and counterparties
+ * alike (the zero address is kept for mints/burns). Accounts and their `changes`
+ * are sorted by address for deterministic, cross-backend output.
+ *
+ * Native-ETH coverage differs by backend: Tenderly reports the full net ETH
+ * delta (including ETH moved via internal calls), while the `eth_simulateV1`
+ * fallback derives native ETH only from the top-level transaction `value`s —
+ * ETH moved internally (e.g. a `WETH.withdraw` refund) is not captured there.
+ */
+export interface AccountAssetChanges {
+  readonly account: Address;
+  readonly changes: readonly AssetChange[];
 }
 
 /**
@@ -122,9 +131,9 @@ export interface Transfer {
  *   prepended authorization txs).
  * - `calls[i]` corresponds 1:1 with `simulationTxs[i]` — read raw logs,
  *   status, returnData/gasUsed.
- * - `assetChanges` is the sender's net per-asset balance change over the whole
- *   bundle, normalized to the same shape across backends and sorted by token
- *   address. Native-ETH coverage differs by backend — see `AssetChange`.
+ * - `assetChanges` is the net per-asset balance change over the whole bundle,
+ *   grouped by account (sender and counterparties), normalized to the same
+ *   shape across backends — see `AccountAssetChanges`.
  * - `transfers[k].txIdx` indexes into `simulationTxs` to attribute each
  *   transfer to its emitting transaction.
  */
@@ -138,8 +147,8 @@ export interface SimulationResult {
   readonly calls: readonly SimulationCall[];
   /** Parsed ERC-20 / WETH9 transfers from the simulation. */
   readonly transfers: readonly Transfer[];
-  /** Sender's net per-asset balance changes over the whole bundle. */
-  readonly assetChanges: readonly AssetChange[];
+  /** Net per-asset balance changes, grouped by account, over the whole bundle. */
+  readonly assetChanges: readonly AccountAssetChanges[];
 }
 
 /** Minimal structured logger the package calls for warnings and info. */
@@ -165,11 +174,11 @@ export interface SimulateParams {
 /**
  * Internal raw result from a simulation adapter before normalization.
  * `calls[i]` corresponds 1:1 with the i-th transaction passed to the
- * backend; `assetChanges` is the bundle-level normalized aggregate.
+ * backend; `assetChanges` is the bundle-level aggregate grouped by account.
  */
 export interface RawSimulationResult {
   calls: RawCall[];
-  assetChanges: AssetChange[];
+  assetChanges: AccountAssetChanges[];
 }
 
 /**

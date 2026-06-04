@@ -5,20 +5,20 @@
 Harmonize `assetChanges` across both simulation backends into a single canonical
 shape, exposed as `SimulationResult.assetChanges`.
 
-- New exported `AssetChange` type: `{ token, symbol?, decimals?, diff }`, the
-  sender's net per-asset balance change over the whole bundle (native ETH uses
-  viem's `ethAddress` sentinel as `token`).
-- `eth_simulateV1` now derives `assetChanges` from the emitted transfer logs
-  (sender's net per-token delta) plus the sender's net native-ETH outflow from
-  the top-level `value` of each transaction (reported under `ethAddress`),
-  matching the Tenderly shape; previously `assetChanges` was Tenderly-only and
-  lost on the fallback path. Native ETH the sender *receives* through internal
-  calls (e.g. a `WETH.withdraw` refund) emits no log and is not captured on the
-  fallback path — use Tenderly for full native-ETH accounting.
+- New exported types: `AssetChange` (`{ token, symbol?, decimals?, diff }`, a
+  single asset's net delta; native ETH uses viem's `ethAddress` sentinel as
+  `token`) and `AccountAssetChanges` (`{ account, changes }`). `assetChanges` is
+  now the net per-token balance change **grouped by account** over the whole
+  bundle — the sender and every counterparty (the zero address is kept for
+  mints/burns), sorted by address for deterministic, cross-backend output.
+- `eth_simulateV1` derives `assetChanges` from the emitted transfer logs plus
+  native ETH from each transaction's top-level `value` (payer debited, recipient
+  credited, under `ethAddress`); previously `assetChanges` was Tenderly-only and
+  lost on the fallback path. Native ETH moved through internal calls (e.g. a
+  `WETH.withdraw` refund) emits no log and is not captured on the fallback path —
+  use Tenderly for full native-ETH accounting.
 - Tenderly's per-transfer `assetChanges` payload is now schema-validated and
-  reduced to the same `AssetChange[]` (net per token for the sender).
-- `assetChanges` is now sorted by token address on both backends for
-  deterministic, cross-backend output.
+  reduced to the same `AccountAssetChanges[]`.
 
 **Breaking:** the opaque per-call `SimulationCall.assetChanges?: unknown` field is
-removed. Read the normalized bundle-level `SimulationResult.assetChanges` instead.
+removed. Read the bundle-level `SimulationResult.assetChanges` instead.

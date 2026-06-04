@@ -16,13 +16,14 @@ import {
   SimulationValidationError,
 } from "../../errors.js";
 import type {
-  AssetChange,
+  AccountAssetChanges,
   RawCall,
   RawLog,
   RawSimulationResult,
   SimulationTransaction,
   TenderlyRpcConfig,
 } from "../../types.js";
+import { type AssetChangeEntry, groupAssetChanges } from "../asset-changes.js";
 
 interface TenderlyRpcCall {
   from: Address;
@@ -152,7 +153,7 @@ export async function simulateTenderlyRpc(params: {
       const result = unwrapResult(singleEnvelope.parse(json));
       return {
         calls: [toRawCall(result)],
-        assetChanges: toAssetChanges([result], firstTx.from),
+        assetChanges: toAssetChanges([result]),
       };
     }
 
@@ -165,7 +166,7 @@ export async function simulateTenderlyRpc(params: {
     const results = unwrapResult(bundleEnvelope.parse(json));
     return {
       calls: results.map(toRawCall),
-      assetChanges: toAssetChanges(results, firstTx.from),
+      assetChanges: toAssetChanges(results),
     };
   } catch (error) {
     if (error instanceof SimulationRevertedError) throw error;
@@ -268,33 +269,36 @@ function toRawCall(data: SimResult): RawCall {
 }
 
 /**
- * Reduce Tenderly's per-transfer asset changes to the sender's net per-token
- * delta. The result is sorted by token address for deterministic, cross-backend
- * output.
+ * Reduce Tenderly's per-transfer asset changes to net per-token balance changes
+ * grouped by account. Both endpoints of each transfer are accounted (sender,
+ * counterparties, and the zero address for mints/burns).
  */
-function toAssetChanges(results: SimResult[], sender: Address): AssetChange[] {
-  const account = getAddress(sender);
-  const byToken = new Map<Address, AssetChange>();
+function toAssetChanges(results: SimResult[]): AccountAssetChanges[] {
+  const entries: AssetChangeEntry[] = [];
   for (const result of results) {
     for (const change of result.assetChanges ?? []) {
       const amount = BigInt(change.rawAmount);
-      let diff = 0n;
-      if (change.to && getAddress(change.to) === account) diff += amount;
-      if (change.from && getAddress(change.from) === account) diff -= amount;
-      if (diff === 0n) continue;
       const token = change.assetInfo.contractAddress
         ? getAddress(change.assetInfo.contractAddress)
         : ethAddress;
-      const prev = byToken.get(token);
-      byToken.set(token, {
-        token,
-        symbol: prev?.symbol ?? change.assetInfo.symbol,
-        decimals: prev?.decimals ?? change.assetInfo.decimals,
-        diff: (prev?.diff ?? 0n) + diff,
-      });
+      const { symbol, decimals } = change.assetInfo;
+      if (change.to)
+        entries.push({
+          account: change.to,
+          token,
+          diff: amount,
+          symbol,
+          decimals,
+        });
+      if (change.from)
+        entries.push({
+          account: change.from,
+          token,
+          diff: -amount,
+          symbol,
+          decimals,
+        });
     }
   }
-  return [...byToken.values()]
-    .filter((c) => c.diff !== 0n)
-    .sort((a, b) => a.token.toLowerCase().localeCompare(b.token.toLowerCase()));
+  return groupAssetChanges(entries);
 }

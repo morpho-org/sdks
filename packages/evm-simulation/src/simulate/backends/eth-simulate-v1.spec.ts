@@ -349,7 +349,7 @@ describe.sequential("simulateV1", () => {
     expect(result.calls[0]!.returnData).toBe("0x");
   });
 
-  it("derives assetChanges from transfer logs as the sender's net per-token delta", async () => {
+  it("groups assetChanges by account from transfer logs (both endpoints)", async () => {
     mockSimulateCalls.mockResolvedValueOnce({
       results: [
         {
@@ -374,7 +374,10 @@ describe.sequential("simulateV1", () => {
       transactions: [BASIC_TX],
     });
 
-    expect(result.assetChanges).toEqual([{ token: USDC, diff: -1_000_000n }]);
+    expect(result.assetChanges).toEqual([
+      { account: USER, changes: [{ token: USDC, diff: -1_000_000n }] },
+      { account: VAULT, changes: [{ token: USDC, diff: 1_000_000n }] },
+    ]);
   });
 
   it("nets inbound and outbound transfers of the same token to zero and drops it", async () => {
@@ -417,7 +420,7 @@ describe.sequential("simulateV1", () => {
     expect(result.assetChanges).toEqual([]);
   });
 
-  it("reports native ETH outflow from top-level tx values under ethAddress", async () => {
+  it("accounts native ETH from top-level tx values (payer debited, recipient credited)", async () => {
     mockSimulateCalls.mockResolvedValueOnce({
       results: [
         { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
@@ -435,7 +438,14 @@ describe.sequential("simulateV1", () => {
     });
 
     expect(result.assetChanges).toEqual([
-      { token: ethAddress, diff: -parseEther("3") },
+      {
+        account: USER,
+        changes: [{ token: ethAddress, diff: -parseEther("3") }],
+      },
+      {
+        account: VAULT,
+        changes: [{ token: ethAddress, diff: parseEther("3") }],
+      },
     ]);
   });
 
@@ -466,8 +476,20 @@ describe.sequential("simulateV1", () => {
 
     // USDC (0xa0b8…) sorts before the ethAddress sentinel (0xeeee…).
     expect(result.assetChanges).toEqual([
-      { token: USDC, diff: -1_000_000n },
-      { token: ethAddress, diff: -parseEther("1") },
+      {
+        account: USER,
+        changes: [
+          { token: USDC, diff: -1_000_000n },
+          { token: ethAddress, diff: -parseEther("1") },
+        ],
+      },
+      {
+        account: VAULT,
+        changes: [
+          { token: USDC, diff: 1_000_000n },
+          { token: ethAddress, diff: parseEther("1") },
+        ],
+      },
     ]);
   });
 });

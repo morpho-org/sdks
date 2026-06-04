@@ -12,6 +12,7 @@ export {
 export { simulate } from "./simulate/index.js";
 // Types
 export type {
+  AccountAssetChanges,
   AssetChange,
   ChainSimulationConfig,
   RawLog,

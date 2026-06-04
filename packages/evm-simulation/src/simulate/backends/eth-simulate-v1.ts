@@ -1,5 +1,4 @@
 import {
-  type Address,
   type BlockTag,
   createPublicClient,
   ethAddress,
@@ -13,12 +12,13 @@ import {
   SimulationValidationError,
 } from "../../errors.js";
 import type {
-  AssetChange,
+  AccountAssetChanges,
   RawCall,
   RawSimulationResult,
   SimulationTransaction,
   Transfer,
 } from "../../types.js";
+import { type AssetChangeEntry, groupAssetChanges } from "../asset-changes.js";
 import { parseTransfers } from "../parsing/index.js";
 
 /**
@@ -27,15 +27,14 @@ import { parseTransfers } from "../parsing/index.js";
  * Uses stateOverride to set the user's ETH balance high enough to avoid
  * false "insufficient balance for gas" reverts.
  *
- * Derives `assetChanges` (the sender's net per-token delta) from the emitted
- * transfer logs, plus the sender's net native ETH outflow from the top-level
- * `value` of each transaction (reported under viem's `ethAddress` sentinel).
+ * Derives `assetChanges` (net per-token deltas grouped by account) from the
+ * emitted transfer logs, plus native ETH from each transaction's top-level
+ * `value` (payer debited, recipient credited, under viem's `ethAddress`).
  *
  * Coverage on this path is therefore narrower than the Tenderly backend:
- * native ETH the sender *receives* through internal calls (e.g. a
- * `WETH.withdraw` refund, a swap that pays out ETH) emits no log and is not
- * reflected in `value`, so it is not captured. Only top-level ETH the sender
- * sends out is accounted for. For full native-ETH accounting use Tenderly.
+ * native ETH moved through internal calls (e.g. a `WETH.withdraw` refund, a
+ * swap that pays out ETH) emits no log and is not reflected in `value`, so it
+ * is not captured. For full native-ETH accounting use Tenderly.
  */
 export async function simulateV1(params: {
   rpcUrl: string;
@@ -127,7 +126,6 @@ export async function simulateV1(params: {
       assetChanges: toAssetChanges({
         transfers: parseTransfers(rawCalls),
         transactions,
-        sender,
       }),
     };
   } catch (error) {
@@ -141,35 +139,28 @@ export async function simulateV1(params: {
 }
 
 /**
- * Reduce parsed transfer logs and top-level transaction values to the sender's
- * net per-token delta. Native ETH is the sender's total `value` outflow over the
- * bundle (sent ETH only — see `simulateV1` for the coverage caveat). The result
- * is sorted by token address for deterministic, cross-backend output.
+ * Reduce parsed transfer logs and top-level transaction values to net per-token
+ * balance changes grouped by account. Native ETH is taken from the top-level
+ * `value`s (payer debited, recipient credited — internal moves are not logged,
+ * see `simulateV1` for the coverage caveat).
  */
 function toAssetChanges(params: {
   transfers: Transfer[];
   transactions: SimulationTransaction[];
-  sender: Address;
-}): AssetChange[] {
-  const { transfers, transactions, sender } = params;
-  const byToken = new Map<Address, bigint>();
+}): AccountAssetChanges[] {
+  const { transfers, transactions } = params;
+  const entries: AssetChangeEntry[] = [];
 
-  // Native ETH: the sender funds every top-level `value` in the bundle.
-  let nativeOut = 0n;
-  for (const { value } of transactions) {
-    if (value) nativeOut += value;
+  for (const tx of transactions) {
+    if (!tx.value) continue;
+    entries.push({ account: tx.from, token: ethAddress, diff: -tx.value });
+    entries.push({ account: tx.to, token: ethAddress, diff: tx.value });
   }
-  if (nativeOut !== 0n) byToken.set(ethAddress, -nativeOut);
 
   for (const { token, from, to, amount } of transfers) {
-    let diff = 0n;
-    if (to === sender) diff += amount;
-    if (from === sender) diff -= amount;
-    if (diff === 0n) continue;
-    byToken.set(token, (byToken.get(token) ?? 0n) + diff);
+    entries.push({ account: to, token, diff: amount });
+    entries.push({ account: from, token, diff: -amount });
   }
-  return [...byToken]
-    .map(([token, diff]) => ({ token, diff }))
-    .filter((c) => c.diff !== 0n)
-    .sort((a, b) => a.token.toLowerCase().localeCompare(b.token.toLowerCase()));
+
+  return groupAssetChanges(entries);
 }
