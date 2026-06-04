@@ -80,7 +80,6 @@ packages/midnight-sdk/
     +-- market/
     |   +-- CollateralParams.ts
     |   +-- Market.ts
-    |   +-- MarketState.ts
     |   +-- MarketUtils.ts
     |   +-- Position.ts
     |   +-- index.ts
@@ -121,12 +120,12 @@ The root barrel exports the stable package surface explicitly, including `Market
 `OfferUtils`, `OfferTreeUtils`, `TickLib`, `TakeAmountsLib`, `ConsumableUnitsLib`, `Payload`,
 `Group`, `Tree`, `EcrecoverRatifier`, `SetterRatifier`, `MidnightRouterApi`, `Api`,
 `MIDNIGHT_SDK_VERSION`, typed errors such as `InvalidOfferGroupError` and
-`InvalidOfferTreeError`, fetch helpers such as `fetchMarket`, `fetchMarketState`,
-`fetchPosition`, `fetchConsumableUnits`, and `fetchRatifierInfo`, generic requirement-input
-fetchers such as `fetchApprovalRequirementInputs` and `fetchAuthorizationRequirementInputs`, and
-their supporting parameter types. The initial implementation keeps viem-backed fetch/router helpers
-in the root export; a separate `./viem` subpath or package can be introduced later if the I/O
-surface grows.
+`InvalidOfferTreeError`, fetch helpers such as `fetchMarketParams`, `fetchMarket`,
+`fetchPosition`, `fetchAccrualPosition`, `fetchConsumableUnits`, and `fetchRatifierInfo`, generic
+requirement-input fetchers such as `fetchApprovalRequirementInputs` and
+`fetchAuthorizationRequirementInputs`, and their supporting parameter types. The initial
+implementation keeps viem-backed fetch/router helpers in the root export; a separate `./viem`
+subpath or package can be introduced later if the I/O surface grows.
 
 ### Contract Data
 
@@ -178,6 +177,7 @@ helper. The initial generated queries are:
 types by default, with classes reserved for typed errors and behavior-bearing domain or boundary objects:
 
 - `Market`
+- `MarketParams`
 - `CollateralParams`
 - `Offer`
 - `TakeableOffer`
@@ -189,8 +189,8 @@ types by default, with classes reserved for typed errors and behavior-bearing do
 - `TokenPermit`
 - `CollateralSupply`
 - `CollateralWithdrawal`
-- `MarketState`
 - `Position`
+- `AccrualPosition`
 - `RatifierInfo`
 - `MidnightAddresses`
 - `MidnightAddressRegistry`
@@ -216,12 +216,26 @@ Generic constants and primitives such as `MathLib.WAD`, `ORACLE_PRICE_SCALE`,
 `@morpho-org/morpho-ts`; `midnight-sdk` consumes them instead of duplicating them. Permit2 is a
 deployment-registry field rather than a standalone `PERMIT2_ADDRESS` constant.
 
+Midnight follows Blue SDK's market split. `MarketParams` / `IMarketParams` are the immutable
+Solidity `Market` config fields: loan token, collateral params, maturity, RCF threshold, entry gate,
+and liquidator gate. `Market` is the hydrated object `{ id, params, totalUnits, lossFactor,
+withdrawable, continuousFeeCredit, settlementFeeCbps, continuousFee, tickSpacing }`. It exposes
+domain behavior such as maturity/time-to-maturity checks, settlement-fee interpolation, collateral
+lookup helpers, and id computation from params. `Position` is the raw user storage object: credit,
+pending fee, last loss factor, last accrual, debt, collateral bitmap, and collateral balances.
+`AccrualPosition extends Position` pairs a raw position with a `Market` and locally mirrors
+`updatePositionView` in `accrueInterest(timestamp)`: slash by the market loss factor, slash pending
+fee proportionally, accrue pending continuous fee until `min(timestamp, market.params.maturity)`,
+sync `lastLossFactor`, and return a new `AccrualPosition` with the market's continuous-fee credit
+increased by the accrued fee.
+
 Low-value value wrappers should stay as interfaces/types rather than classes. Constructors and pure
-class methods must not fetch, sign, or deep-freeze instances. Fetch helpers return normalized
-readonly objects for state surfaces such as `MarketState` and `Position`, populated domain objects
-only where the class has meaningful behavior, and primitive protocol values for narrower reads such
-as allowance, authorization, consumed amount, settlement fee, root status, and ratifier
-classification.
+class methods must not fetch, sign, or deep-freeze instances. Classes must not expose public
+`from(...)` or `toStruct()` methods whose only job is reshaping values for viem. ABI-compatible
+plain objects are built by internal helpers in the modules that encode or call contracts. Fetch
+helpers return populated domain objects where the class has meaningful behavior, and primitive
+protocol values for narrower reads such as allowance, authorization, consumed amount, settlement fee,
+root status, and ratifier classification.
 
 There is no protocol-level `MAX_OFFERS_PER_TREE` constant. Router capacity is a policy boundary and
 can increase independently as traffic grows. The SDK therefore does not export a fixed offer-count
@@ -339,10 +353,12 @@ Initial fetch helpers:
 - `fetchIsAuthorized`
 - `fetchErc20Allowance`
 - `fetchMarketId`
-- `fetchMarket`, which returns a `Market`
-- `fetchMarketState`, which returns a `MarketState`
+- `fetchMarketParams`, which returns immutable `MarketParams`
+- `fetchMarket`, which reads `toMarket` plus `marketState` and returns a hydrated `Market`
 - `fetchPosition`, which reads the Solidity position getter plus every fixed collateral slot and
   returns a `Position`
+- `fetchAccrualPosition`, which fetches `Position` and hydrated `Market` in parallel and returns an
+  `AccrualPosition`
 - `fetchCollateral`
 - `fetchCredit`
 - `fetchDebt`
@@ -489,7 +505,7 @@ Status as of the 2026-06-04 implementation review:
 - **Phase 2 - Contract surface: completed with address deployment deferred.** ABI literals, constants, types/interfaces, typed errors, and address-registry helpers are in package source. ABI literals pin `morpho-org/midnight` commit `a7c6da7e70cb216982f6c5d20b46f40b943e67e4`. Production address entries remain empty until reviewed deployment artifacts are available; custom registration covers local and fork deployments meanwhile.
 - **Phase 3 - Math and offer utilities: completed.** `TickLib`, `TakeAmountsLib`, `ConsumableUnitsLib`, `MarketUtils`, `Offer`, `TakeableOffer`, and `OfferUtils` landed with colocated unit tests and property-based tests for tick/price, unit conversion, offer-group creation, and protocol-only offer-group validation behavior.
 - **Phase 4 - Standalone call wrappers: removed from scope.** The package does not export direct core or periphery calldata namespaces. Requirement, signature, and payload helpers still return neutral `MidnightCall` descriptors when they own workflow context beyond raw ABI encoding.
-- **Phase 5 - Fetch and requirements: completed with deployless composite reads.** Fetch helpers use named `viem/actions` imports and mock-transport tests; `fetchMarket` returns the domain `Market` object, `fetchMarketState` and `fetchPosition` return normalized readonly objects, while narrower helpers expose primitive reads for allowance, authorization, market/user state, settlement fee, consumption, ratifier route, and root state. `fetchPosition` and `fetchConsumableUnits` default to deployless reads with direct-read fallback unless callers pass `deployless: "force"` or `deployless: false`. Requirement planners remain pure once current allowance, authorization, ratifier, root, signature, and validation inputs are supplied.
+- **Phase 5 - Fetch and requirements: completed with deployless composite reads.** Fetch helpers use named `viem/actions` imports and mock-transport tests; `fetchMarketParams` returns immutable market config, `fetchMarket` returns the hydrated domain `Market` object, `fetchPosition` returns the raw `Position` class, and `fetchAccrualPosition` returns `AccrualPosition` for local `updatePositionView`-equivalent accrual. Narrower helpers expose primitive reads for allowance, authorization, market/user state, settlement fee, consumption, ratifier route, and root state. `fetchPosition` and `fetchConsumableUnits` default to deployless reads with direct-read fallback unless callers pass `deployless: "force"` or `deployless: false`. Requirement planners remain pure once current allowance, authorization, ratifier, root, signature, and validation inputs are supplied.
 - **Phase 6 - Signatures, validation, and payloads: completed.** `RatifierUtils`, `OfferTreeUtils`, `Group`, `Tree`, `EcrecoverRatifier`, `SetterRatifier`, `Payload`, `MidnightRouterApi`, and `Api` landed. Router validation/rules are a lightweight `fetch` boundary rather than a runtime router dependency, tree validation is available before signature/root approval, and offer publication remains onchain through `Payload.buildSubmissionCall`. Maker-side utilities include Ecrecover/Setter ratifier-data generation and decoding without constructing payload bytes, local proof verification, Setter root approval descriptors, and Ecrecover root cancellation descriptors.
 - **Phase 7 - App adoption: deferred.** Updating the markets-v2 app in `morpho-org/morpho-apps` remains a separate repository change and is not required to land this SDK repo PR.
 
