@@ -211,7 +211,8 @@ export interface RawCall {
  *
  * `SimulationResult.calls[i]` corresponds 1:1 with
  * `SimulationResult.simulationTxs[i]`. Use this to read raw logs, status,
- * return data, gas used, and (Tenderly only) asset changes per transaction.
+ * return data, and gas used. Net asset changes are reported at the bundle
+ * level — see `SimulationResult.assetChanges`.
  */
 export interface SimulationCall {
   readonly logs: readonly RawLog[];

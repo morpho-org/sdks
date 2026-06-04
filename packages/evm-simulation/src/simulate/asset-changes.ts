@@ -10,8 +10,12 @@ export interface AssetChangeEntry {
   decimals?: number;
 }
 
-const byAddress = (a: { token: Address }, b: { token: Address }) =>
-  a.token.toLowerCase().localeCompare(b.token.toLowerCase());
+// Locale-independent byte-order compare on lowercased hex, matching `sortTransfers`.
+const compareAddress = (a: Address, b: Address) => {
+  const al = a.toLowerCase();
+  const bl = b.toLowerCase();
+  return al < bl ? -1 : al > bl ? 1 : 0;
+};
 
 /**
  * Net signed per-(account, token) contributions into balance changes grouped by
@@ -46,10 +50,8 @@ export function groupAssetChanges(
       account,
       changes: [...tokens.values()]
         .filter((c) => c.diff !== 0n)
-        .sort(byAddress),
+        .sort((x, y) => compareAddress(x.token, y.token)),
     }))
     .filter((a) => a.changes.length > 0)
-    .sort((a, b) =>
-      a.account.toLowerCase().localeCompare(b.account.toLowerCase()),
-    );
+    .sort((a, b) => compareAddress(a.account, b.account));
 }
