@@ -1,9 +1,43 @@
-import { decodeFunctionData } from "viem";
+import { decodeFunctionData, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import { addresses, baseOffer } from "../__test__/fixtures.js";
-import { setterRatifierAbi } from "../abis.js";
+import { ecrecoverRatifierAbi, setterRatifierAbi } from "../abis.js";
+import { InvalidOfferPayloadError } from "../errors.js";
+import { Offer } from "../offers/index.js";
 import { OfferPayloadUtils } from "./OfferPayloadUtils.js";
 import { RatifierUtils } from "./RatifierUtils.js";
+
+const root =
+  "0x3333333333333333333333333333333333333333333333333333333333333333" as const;
+const proofNode =
+  "0x4444444444444444444444444444444444444444444444444444444444444444" as const;
+const zeroBytes32 =
+  "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
+
+const emptyOffer = () =>
+  new Offer({
+    market: {
+      loanToken: zeroAddress,
+      collateralParams: [],
+      maturity: 0n,
+      rcfThreshold: 0n,
+      enterGate: zeroAddress,
+      liquidatorGate: zeroAddress,
+    },
+    buy: false,
+    maker: zeroAddress,
+    start: 0n,
+    expiry: 0n,
+    tick: 0n,
+    group: zeroBytes32,
+    callback: zeroAddress,
+    callbackData: "0x",
+    receiverIfMakerIsSeller: zeroAddress,
+    ratifier: zeroAddress,
+    reduceOnly: false,
+    maxUnits: 0n,
+    maxAssets: 0n,
+  });
 
 describe("RatifierUtils.getRatifierInfo", () => {
   test("default", () => {
@@ -51,6 +85,55 @@ describe("OfferPayloadUtils.buildOfferPayload", () => {
     expect(proof.proof).toHaveLength(1);
     expect(proof.root).toBe(OfferPayloadUtils.buildOfferTreeRoot(offers));
   });
+
+  test("behavior: pads non-power-of-two batches", () => {
+    const offers = [
+      baseOffer({
+        group:
+          "0x1111111111111111111111111111111111111111111111111111111111111111",
+      }),
+      baseOffer({
+        group:
+          "0x2222222222222222222222222222222222222222222222222222222222222222",
+      }),
+      baseOffer({
+        group:
+          "0x3333333333333333333333333333333333333333333333333333333333333333",
+      }),
+    ];
+    const payload = OfferPayloadUtils.buildOfferPayload(offers);
+    const proof = OfferPayloadUtils.buildOfferProof({ offers, leafIndex: 2n });
+
+    expect(payload.offers).toHaveLength(4);
+    expect(payload.height).toBe(2);
+    expect(payload.offers.slice(0, 3)).toEqual(
+      offers.map((offer) => offer.toStruct()),
+    );
+    expect(payload.offers[3]).toEqual(emptyOffer().toStruct());
+    expect(proof.proof).toHaveLength(2);
+    expect(
+      OfferPayloadUtils.verifyOfferProof({
+        offer: offers[2]!,
+        root: proof.root,
+        leafIndex: proof.leafIndex,
+        proof: proof.proof,
+      }),
+    ).toBe(true);
+  });
+
+  test("error: duplicate offer hash", () => {
+    const offer = baseOffer();
+
+    expect(() => OfferPayloadUtils.buildOfferPayload([offer, offer])).toThrow(
+      InvalidOfferPayloadError,
+    );
+  });
+
+  test("error: all padding", () => {
+    expect(() => OfferPayloadUtils.buildOfferPayload([emptyOffer()])).toThrow(
+      InvalidOfferPayloadError,
+    );
+  });
 });
 
 describe("OfferPayloadUtils.buildEcrecoverRatificationTypedData", () => {
@@ -85,6 +168,92 @@ describe("OfferPayloadUtils.encodeEcrecoverRatifierData", () => {
 
     expect(data.startsWith("0x")).toBe(true);
   });
+
+  test("behavior: decode round trip", () => {
+    const signature = {
+      v: 28,
+      r: "0x1111111111111111111111111111111111111111111111111111111111111111",
+      s: "0x2222222222222222222222222222222222222222222222222222222222222222",
+    } as const;
+    const data = OfferPayloadUtils.encodeEcrecoverRatifierData({
+      signature,
+      root,
+      leafIndex: 2n,
+      proof: [proofNode],
+    });
+
+    expect(OfferPayloadUtils.decodeEcrecoverRatifierData(data)).toEqual({
+      signature,
+      root,
+      leafIndex: 2n,
+      proof: [proofNode],
+    });
+  });
+});
+
+describe("OfferPayloadUtils.encodeSetterRatifierData", () => {
+  test("behavior: decode round trip", () => {
+    const data = OfferPayloadUtils.encodeSetterRatifierData({
+      root,
+      leafIndex: 3n,
+      proof: [proofNode],
+    });
+
+    expect(OfferPayloadUtils.decodeSetterRatifierData(data)).toEqual({
+      root,
+      leafIndex: 3n,
+      proof: [proofNode],
+    });
+  });
+});
+
+describe("OfferPayloadUtils.verifyOfferProof", () => {
+  test("default", () => {
+    const offers = [
+      baseOffer({
+        group:
+          "0x1111111111111111111111111111111111111111111111111111111111111111",
+      }),
+      baseOffer({
+        group:
+          "0x2222222222222222222222222222222222222222222222222222222222222222",
+      }),
+    ];
+    const proof = OfferPayloadUtils.buildOfferProof({ offers, leafIndex: 1n });
+
+    expect(
+      OfferPayloadUtils.verifyOfferProof({
+        offer: offers[1]!,
+        root: proof.root,
+        leafIndex: proof.leafIndex,
+        proof: proof.proof,
+      }),
+    ).toBe(true);
+    expect(
+      OfferPayloadUtils.verifyOfferProof({
+        offer: offers[1]!,
+        root: root,
+        leafIndex: proof.leafIndex,
+        proof: proof.proof,
+      }),
+    ).toBe(false);
+    expect(
+      OfferPayloadUtils.verifyOfferProof({
+        offer: offers[1]!,
+        root: proof.root,
+        leafIndex: 0n,
+        proof: proof.proof,
+      }),
+    ).toBe(false);
+    expect(
+      OfferPayloadUtils.verifyOfferProof({
+        offer: offers[1]!,
+        root: proof.root,
+        leafIndex: proof.leafIndex,
+        proof: [root],
+      }),
+    ).toBe(false);
+  });
 });
 
 describe("OfferPayloadUtils.buildSetterRootApprovalCall", () => {
@@ -111,5 +280,24 @@ describe("OfferPayloadUtils.buildSetterRootApprovalCall", () => {
         root: "0x1234",
       }),
     ).toThrow();
+  });
+});
+
+describe("OfferPayloadUtils.buildEcrecoverRootCancellationCall", () => {
+  test("default", () => {
+    const call = OfferPayloadUtils.buildEcrecoverRootCancellationCall({
+      ecrecoverRatifier: addresses.ecrecoverRatifier,
+      maker: addresses.maker,
+      root,
+    });
+    const decoded = decodeFunctionData({
+      abi: ecrecoverRatifierAbi,
+      data: call.data,
+    });
+
+    expect(call.to).toBe(addresses.ecrecoverRatifier);
+    expect(decoded.functionName).toBe("cancelRoot");
+    expect(decoded.args[0]).toBe(addresses.maker);
+    expect(decoded.args[1]).toBe(root);
   });
 });

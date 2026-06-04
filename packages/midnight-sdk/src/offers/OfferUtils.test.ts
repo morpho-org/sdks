@@ -10,6 +10,7 @@ import {
 import { MAX_TICK } from "../constants.js";
 import {
   InconsistentMarketError,
+  InvalidOfferGroupError,
   InvalidOfferParameterError,
   MissingOfferGroupError,
   NoMatchingOffersError,
@@ -31,6 +32,22 @@ const buildOfferParams = (overrides: Partial<BuildOfferParams> = {}) => ({
   maxAssets: 100n,
   ...overrides,
 });
+
+const buildOfferGroupEntry = (
+  overrides: Partial<Omit<BuildOfferParams, "group" | "getRandomValues">> = {},
+): Omit<BuildOfferParams, "group" | "getRandomValues"> => ({
+  market: baseMarketInput(),
+  buy: true,
+  maker: addresses.maker,
+  tick: 5_000n,
+  expiry: 2_100n,
+  ratifier: addresses.ecrecoverRatifier,
+  maxAssets: 100n,
+  ...overrides,
+});
+
+const otherGroup =
+  "0x2222222222222222222222222222222222222222222222222222222222222222" as const;
 
 describe("Offer", () => {
   test("behavior: from", () => {
@@ -216,6 +233,166 @@ describe("OfferUtils.buildOffer", () => {
     }
 
     expect.unreachable("Expected invalid offer parameter.");
+  });
+});
+
+describe("OfferUtils.buildOfferGroup", () => {
+  test("default: explicit group id", () => {
+    const offers = OfferUtils.buildOfferGroup({
+      group,
+      offers: [
+        buildOfferGroupEntry({ tick: 5_000n }),
+        buildOfferGroupEntry({ tick: 5_004n }),
+      ],
+    });
+
+    expect(offers).toHaveLength(2);
+    expect(offers[0]!.group).toBe(group);
+    expect(offers[1]!.group).toBe(group);
+    expect(Object.isFrozen(offers)).toBe(true);
+  });
+
+  test("behavior: generated group id is shared", () => {
+    let randomCalls = 0;
+    const offers = OfferUtils.buildOfferGroup({
+      getRandomValues: (array) => {
+        randomCalls += 1;
+        array.fill(0x33);
+        return array;
+      },
+      offers: [
+        buildOfferGroupEntry({ tick: 5_000n }),
+        buildOfferGroupEntry({ tick: 5_004n }),
+      ],
+    });
+
+    expect(randomCalls).toBe(1);
+    expect(offers.map((offer) => offer.group)).toEqual([
+      "0x3333333333333333333333333333333333333333333333333333333333333333",
+      "0x3333333333333333333333333333333333333333333333333333333333333333",
+    ]);
+  });
+
+  test("behavior: keeps input order stable", () => {
+    const offers = OfferUtils.buildOfferGroup({
+      group,
+      offers: [
+        buildOfferGroupEntry({ tick: 5_008n }),
+        buildOfferGroupEntry({ tick: 5_000n }),
+        buildOfferGroupEntry({ tick: 5_004n }),
+      ],
+    });
+
+    expect(offers.map((offer) => offer.tick)).toEqual([5_008n, 5_000n, 5_004n]);
+  });
+
+  test("error: InvalidOfferGroupError for empty groups", () => {
+    expect(() => OfferUtils.buildOfferGroup({ group, offers: [] })).toThrow(
+      InvalidOfferGroupError,
+    );
+  });
+
+  test("error: MissingOfferGroupError", () => {
+    expect(() =>
+      OfferUtils.buildOfferGroup({ offers: [buildOfferGroupEntry()] }),
+    ).toThrow(MissingOfferGroupError);
+  });
+});
+
+describe("OfferUtils.validateOfferGroup", () => {
+  test("default", () => {
+    const offers = [
+      OfferUtils.buildOffer(buildOfferParams({ tick: 5_000n })),
+      OfferUtils.buildOffer(buildOfferParams({ tick: 5_004n })),
+    ];
+
+    expect(OfferUtils.validateOfferGroup({ offers })).toEqual(offers);
+  });
+
+  test("behavior: allows router-only differences", () => {
+    const offers = OfferUtils.validateOfferGroup({
+      offers: [
+        OfferUtils.buildOffer(
+          buildOfferParams({
+            start: 10n,
+            expiry: 2_200n,
+            ratifier: addresses.ecrecoverRatifier,
+          }),
+        ),
+        OfferUtils.buildOffer(
+          buildOfferParams({
+            start: 20n,
+            expiry: 2_300n,
+            callback: addresses.callback,
+            callbackData: "0x1234",
+            ratifier: addresses.setterRatifier,
+          }),
+        ),
+      ],
+    });
+
+    expect(offers[0]!.ratifier).toBe(addresses.ecrecoverRatifier);
+    expect(offers[1]!.ratifier).toBe(addresses.setterRatifier);
+    expect(offers[1]!.callback).toBe(addresses.callback);
+  });
+
+  test.each([
+    [
+      "maker",
+      [
+        OfferUtils.buildOffer(buildOfferParams()),
+        OfferUtils.buildOffer(buildOfferParams({ maker: addresses.taker })),
+      ],
+    ],
+    [
+      "group",
+      [
+        OfferUtils.buildOffer(buildOfferParams()),
+        OfferUtils.buildOffer(buildOfferParams({ group: otherGroup })),
+      ],
+    ],
+    [
+      "side",
+      [
+        OfferUtils.buildOffer(buildOfferParams()),
+        OfferUtils.buildOffer(
+          buildOfferParams({ buy: false, receiverIfMakerIsSeller: undefined }),
+        ),
+      ],
+    ],
+    [
+      "caps",
+      [
+        OfferUtils.buildOffer(buildOfferParams()),
+        OfferUtils.buildOffer(buildOfferParams({ maxAssets: 101n })),
+      ],
+    ],
+    [
+      "loan token",
+      [
+        OfferUtils.buildOffer(buildOfferParams()),
+        OfferUtils.buildOffer(
+          buildOfferParams({
+            market: {
+              ...baseMarketInput(),
+              loanToken: "0x0000000000000000000000000000000000006100",
+            },
+          }),
+        ),
+      ],
+    ],
+  ] as const)("error: InvalidOfferGroupError mixed %s", (_field, offers) => {
+    expect(() => OfferUtils.validateOfferGroup({ offers })).toThrow(
+      InvalidOfferGroupError,
+    );
+  });
+
+  test("error: InvalidOfferGroupError for invalid caps", () => {
+    expect(() =>
+      OfferUtils.validateOfferGroup({
+        offers: [baseOffer({ maxUnits: 0n, maxAssets: 0n })],
+      }),
+    ).toThrow(InvalidOfferGroupError);
   });
 });
 

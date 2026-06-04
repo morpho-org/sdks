@@ -2,13 +2,18 @@ import { deepFreeze } from "@morpho-org/morpho-ts";
 import {
   type Address,
   concat,
+  decodeAbiParameters,
   encodeAbiParameters,
   encodeFunctionData,
   type Hex,
   keccak256,
 } from "viem";
-import { setterRatifierAbi } from "../abis.js";
-import { EIP712_DOMAIN_TYPEHASH, OFFER_TYPEHASH } from "../constants.js";
+import { ecrecoverRatifierAbi, setterRatifierAbi } from "../abis.js";
+import {
+  EIP712_DOMAIN_TYPEHASH,
+  MAX_OFFERS_PER_TREE,
+  OFFER_TYPEHASH,
+} from "../constants.js";
 import {
   InvalidOfferPayloadError,
   InvalidOfferTreeHeightError,
@@ -90,6 +95,34 @@ const treeStructHashAbi = [
   { name: "root", type: "bytes32" },
 ] as const;
 
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
+const ZERO_BYTES32 =
+  "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
+
+const EMPTY_OFFER_STRUCT: OfferStruct = {
+  market: {
+    loanToken: ZERO_ADDRESS,
+    collateralParams: [],
+    maturity: 0n,
+    rcfThreshold: 0n,
+    enterGate: ZERO_ADDRESS,
+    liquidatorGate: ZERO_ADDRESS,
+  },
+  buy: false,
+  maker: ZERO_ADDRESS,
+  start: 0n,
+  expiry: 0n,
+  tick: 0n,
+  group: ZERO_BYTES32,
+  callback: ZERO_ADDRESS,
+  callbackData: "0x",
+  receiverIfMakerIsSeller: ZERO_ADDRESS,
+  ratifier: ZERO_ADDRESS,
+  reduceOnly: false,
+  maxUnits: 0n,
+  maxAssets: 0n,
+};
+
 const buildTreeValue = (offers: readonly OfferStruct[]): unknown => {
   if (offers.length === 1) return offers[0]!;
   const mid = offers.length / 2;
@@ -136,6 +169,97 @@ const typedDataTypes = {
   ],
 } as const;
 
+function hashOfferStruct(offerStruct: OfferStruct) {
+  return keccak256(
+    encodeAbiParameters(offerHashParams, [
+      OFFER_TYPEHASH,
+      MarketUtils.hashMarket(offerStruct.market),
+      offerStruct.buy,
+      offerStruct.maker,
+      offerStruct.start,
+      offerStruct.expiry,
+      offerStruct.tick,
+      offerStruct.group,
+      offerStruct.callback,
+      keccak256(offerStruct.callbackData),
+      offerStruct.receiverIfMakerIsSeller,
+      offerStruct.ratifier,
+      offerStruct.reduceOnly,
+      offerStruct.maxUnits,
+      offerStruct.maxAssets,
+    ]),
+  );
+}
+
+function isEmptyOfferStruct(offer: OfferStruct): boolean {
+  return (
+    offer.market.loanToken === ZERO_ADDRESS &&
+    offer.market.collateralParams.length === 0 &&
+    offer.market.maturity === 0n &&
+    offer.market.rcfThreshold === 0n &&
+    offer.market.enterGate === ZERO_ADDRESS &&
+    offer.market.liquidatorGate === ZERO_ADDRESS &&
+    offer.buy === false &&
+    offer.maker === ZERO_ADDRESS &&
+    offer.start === 0n &&
+    offer.expiry === 0n &&
+    offer.tick === 0n &&
+    offer.group === ZERO_BYTES32 &&
+    offer.callback === ZERO_ADDRESS &&
+    offer.callbackData === "0x" &&
+    offer.receiverIfMakerIsSeller === ZERO_ADDRESS &&
+    offer.ratifier === ZERO_ADDRESS &&
+    offer.reduceOnly === false &&
+    offer.maxUnits === 0n &&
+    offer.maxAssets === 0n
+  );
+}
+
+function isPowerOfTwo(value: number): boolean {
+  return value > 0 && (value & (value - 1)) === 0;
+}
+
+function nextPowerOfTwo(value: number): number {
+  return 2 ** Math.ceil(Math.log2(value));
+}
+
+function padOfferStructs(offers: readonly OfferStruct[]): OfferStruct[] {
+  if (isPowerOfTwo(offers.length)) return [...offers];
+  const paddedLength = nextPowerOfTwo(offers.length);
+  if (paddedLength > MAX_OFFERS_PER_TREE) {
+    throw new InvalidOfferPayloadError(
+      `Offer payload padded size "${paddedLength}" exceeds ${MAX_OFFERS_PER_TREE}.`,
+    );
+  }
+
+  return [
+    ...offers,
+    ...Array.from(
+      { length: paddedLength - offers.length },
+      () => EMPTY_OFFER_STRUCT,
+    ),
+  ];
+}
+
+function assertLeafOffers(offers: readonly OfferStruct[]): void {
+  const seen = new Set<Hex>();
+  for (const offer of offers) {
+    if (isEmptyOfferStruct(offer)) continue;
+
+    const leafHash = hashOfferStruct(offer);
+    if (seen.has(leafHash)) {
+      throw new InvalidOfferPayloadError(
+        `Duplicate offer hash "${leafHash}" in offer payload.`,
+      );
+    }
+    seen.add(leafHash);
+  }
+
+  if (seen.size === 0) {
+    throw new InvalidOfferPayloadError("Offer payload must not be empty.");
+  }
+}
+
 /**
  * Signature tuple accepted by EcrecoverRatifier.
  *
@@ -168,9 +292,9 @@ export interface EcrecoverSignature {
  * ```
  */
 export interface OfferPayload {
-  /** Offer structs in leaf order. */
+  /** Offer structs in leaf order, including trailing empty padding. */
   readonly offers: readonly OfferStruct[];
-  /** Leaf hashes. */
+  /** Leaf hashes for the padded offer tree. */
   readonly leaves: readonly Hex[];
   /** Merkle root. */
   readonly root: Hex;
@@ -197,6 +321,35 @@ export interface OfferProof {
   /** Sibling hashes from leaf to root. */
   readonly proof: readonly Hex[];
 }
+
+/**
+ * Decoded EcrecoverRatifier ratifier data.
+ *
+ * @example
+ * ```ts
+ * import type { DecodedEcrecoverRatifierData } from "@morpho-org/midnight-sdk";
+ *
+ * const decoded = {} as DecodedEcrecoverRatifierData;
+ * console.log(decoded.signature.v);
+ * ```
+ */
+export interface DecodedEcrecoverRatifierData extends OfferProof {
+  /** Ecrecover signature tuple. */
+  readonly signature: EcrecoverSignature;
+}
+
+/**
+ * Decoded SetterRatifier ratifier data.
+ *
+ * @example
+ * ```ts
+ * import type { DecodedSetterRatifierData } from "@morpho-org/midnight-sdk";
+ *
+ * const decoded = {} as DecodedSetterRatifierData;
+ * console.log(decoded.root);
+ * ```
+ */
+export interface DecodedSetterRatifierData extends OfferProof {}
 
 /**
  * Ecrecover typed-data descriptor returned to signing code.
@@ -276,25 +429,7 @@ export namespace OfferPayloadUtils {
   export function hashOffer(offer: IOffer | Offer) {
     const offerStruct = Offer.from(offer).toStruct();
 
-    return keccak256(
-      encodeAbiParameters(offerHashParams, [
-        OFFER_TYPEHASH,
-        MarketUtils.hashMarket(offerStruct.market),
-        offerStruct.buy,
-        offerStruct.maker,
-        offerStruct.start,
-        offerStruct.expiry,
-        offerStruct.tick,
-        offerStruct.group,
-        offerStruct.callback,
-        keccak256(offerStruct.callbackData),
-        offerStruct.receiverIfMakerIsSeller,
-        offerStruct.ratifier,
-        offerStruct.reduceOnly,
-        offerStruct.maxUnits,
-        offerStruct.maxAssets,
-      ]),
-    );
+    return hashOfferStruct(offerStruct);
   }
 
   /**
@@ -319,11 +454,12 @@ export namespace OfferPayloadUtils {
   }
 
   /**
-   * Builds an offer payload and Merkle root.
+   * Builds an offer payload and Merkle root. Non-power-of-two batches are
+   * padded with protocol-zero offers at the highest leaf indices.
    *
    * @param offers - Offers in leaf order.
    * @returns Offer payload descriptor.
-   * @throws InvalidOfferPayloadError when the offer count is empty or not a power of two.
+   * @throws InvalidOfferPayloadError when the offer count is empty, all padding, duplicated, or above the tree cap.
    * @example
    * ```ts
    * import { OfferPayloadUtils } from "@morpho-org/midnight-sdk";
@@ -338,17 +474,21 @@ export namespace OfferPayloadUtils {
     if (offers.length === 0) {
       throw new InvalidOfferPayloadError("Offer payload must not be empty.");
     }
-    if ((offers.length & (offers.length - 1)) !== 0) {
+    if (offers.length > MAX_OFFERS_PER_TREE) {
       throw new InvalidOfferPayloadError(
-        `Offer payload size "${offers.length}" must be a power of two.`,
+        `Offer payload exceeds ${MAX_OFFERS_PER_TREE} offers.`,
       );
     }
 
-    const height = Math.log2(offers.length);
+    const offerStructs = padOfferStructs(
+      offers.map((offer) => Offer.from(offer).toStruct()),
+    );
+    assertLeafOffers(offerStructs);
+
+    const height = Math.log2(offerStructs.length);
     if (height > 20) throw new InvalidOfferTreeHeightError(height);
 
-    const offerStructs = offers.map((offer) => Offer.from(offer).toStruct());
-    let level = offerStructs.map((offer) => hashOffer(offer));
+    let level = offerStructs.map(hashOfferStruct);
     const leaves = [...level];
 
     while (level.length > 1) {
@@ -585,6 +725,39 @@ export namespace OfferPayloadUtils {
   }
 
   /**
+   * Decodes EcrecoverRatifier ratifier data.
+   *
+   * @param data - ABI-encoded ratifier data.
+   * @returns Decoded Ecrecover ratifier data.
+   * @example
+   * ```ts
+   * import { OfferPayloadUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const decoded = OfferPayloadUtils.decodeEcrecoverRatifierData("0x" as never);
+   * console.log(decoded.leafIndex);
+   * ```
+   */
+  export function decodeEcrecoverRatifierData(
+    data: Hex,
+  ): DecodedEcrecoverRatifierData {
+    const [signature, root, leafIndex, proof] = decodeAbiParameters(
+      signatureAbi,
+      data,
+    );
+
+    return deepFreeze({
+      signature: {
+        v: signature.v,
+        r: signature.r,
+        s: signature.s,
+      },
+      root,
+      leafIndex,
+      proof: [...proof],
+    });
+  }
+
+  /**
    * Encodes SetterRatifier ratifier data.
    *
    * @param params - Ratifier-data parameters.
@@ -611,6 +784,63 @@ export namespace OfferPayloadUtils {
       BigInt(params.leafIndex),
       params.proof.map((node) => node as Hex),
     ]);
+  }
+
+  /**
+   * Decodes SetterRatifier ratifier data.
+   *
+   * @param data - ABI-encoded ratifier data.
+   * @returns Decoded Setter ratifier data.
+   * @example
+   * ```ts
+   * import { OfferPayloadUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const decoded = OfferPayloadUtils.decodeSetterRatifierData("0x" as never);
+   * console.log(decoded.proof);
+   * ```
+   */
+  export function decodeSetterRatifierData(
+    data: Hex,
+  ): DecodedSetterRatifierData {
+    const [root, leafIndex, proof] = decodeAbiParameters(
+      setterRatifierDataAbi,
+      data,
+    );
+
+    return deepFreeze({ root, leafIndex, proof: [...proof] });
+  }
+
+  /**
+   * Verifies a local offer Merkle proof against a root.
+   *
+   * @param params - Offer proof verification parameters.
+   * @returns Whether the proof reconstructs the supplied root.
+   * @example
+   * ```ts
+   * import { OfferPayloadUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const valid = OfferPayloadUtils.verifyOfferProof({} as never);
+   * console.log(valid);
+   * ```
+   */
+  export function verifyOfferProof(params: {
+    readonly offer: IOffer | Offer;
+    readonly root: Hex;
+    readonly leafIndex: BigIntish;
+    readonly proof: readonly Hex[];
+  }) {
+    let node = hashOffer(params.offer);
+    let leafIndex = BigInt(params.leafIndex);
+
+    for (const sibling of params.proof) {
+      node =
+        (leafIndex & 1n) === 0n
+          ? hashNode(node, sibling as Hex)
+          : hashNode(sibling as Hex, node);
+      leafIndex >>= 1n;
+    }
+
+    return node === params.root;
   }
 
   /**
@@ -644,6 +874,38 @@ export namespace OfferPayloadUtils {
         abi: setterRatifierAbi,
         functionName: "setIsRootRatified",
         args: [params.maker as Address, root, params.newIsRootRatified ?? true],
+      }),
+    });
+  }
+
+  /**
+   * Builds an EcrecoverRatifier root cancellation call.
+   *
+   * @param params - Cancellation parameters.
+   * @returns Neutral call descriptor.
+   * @example
+   * ```ts
+   * import { OfferPayloadUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const call = OfferPayloadUtils.buildEcrecoverRootCancellationCall({
+   *   ecrecoverRatifier: "0x0000000000000000000000000000000000000001",
+   *   maker: "0x0000000000000000000000000000000000000002",
+   *   root: "0x0000000000000000000000000000000000000000000000000000000000000000",
+   * });
+   * console.log(call.to);
+   * ```
+   */
+  export function buildEcrecoverRootCancellationCall(params: {
+    readonly ecrecoverRatifier: Address | string;
+    readonly maker: Address | string;
+    readonly root: Hex;
+  }): MidnightCall {
+    return deepFreeze({
+      to: params.ecrecoverRatifier as Address,
+      data: encodeFunctionData({
+        abi: ecrecoverRatifierAbi,
+        functionName: "cancelRoot",
+        args: [params.maker as Address, params.root as Hex],
       }),
     });
   }

@@ -74,3 +74,23 @@ describe("MidnightCalls.setIsAuthorized", () => {
     expect(decoded.args[1]).toBe(true);
   });
 });
+
+describe("MidnightCalls.setConsumed", () => {
+  test("default", () => {
+    const group =
+      "0x1111111111111111111111111111111111111111111111111111111111111111" as const;
+    const call = MidnightCalls.setConsumed({
+      midnight: addresses.midnight,
+      group,
+      amount: 42n,
+      onBehalf: addresses.maker,
+    });
+    const decoded = decodeFunctionData({ abi: midnightAbi, data: call.data });
+
+    expect(call.to).toBe(addresses.midnight);
+    expect(decoded.functionName).toMatchInlineSnapshot(`"setConsumed"`);
+    expect(decoded.args[0]).toBe(group);
+    expect(decoded.args[1]).toBe(42n);
+    expect(decoded.args[2]).toBe(addresses.maker);
+  });
+});

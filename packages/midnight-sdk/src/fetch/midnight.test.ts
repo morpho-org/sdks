@@ -3,7 +3,12 @@ import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import { base } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { addresses, baseMarket, baseOffer } from "../__test__/fixtures.js";
-import { erc20Abi, midnightAbi } from "../abis.js";
+import {
+  ecrecoverRatifierAbi,
+  erc20Abi,
+  midnightAbi,
+  setterRatifierAbi,
+} from "../abis.js";
 import { MAX_TICK } from "../constants.js";
 import { SettlementFeeExceedsPriceError } from "../errors.js";
 import { TickLib } from "../math/index.js";
@@ -11,6 +16,8 @@ import {
   fetchConsumableUnits,
   fetchErc20Allowance,
   fetchIsAuthorized,
+  fetchIsRootCanceled,
+  fetchIsRootRatified,
   fetchMarket,
   fetchMarketId,
   fetchMarketState,
@@ -21,6 +28,8 @@ import {
 
 const marketId =
   "0x2222222222222222222222222222222222222222222222222222222222222222" as const;
+const root =
+  "0x3333333333333333333333333333333333333333333333333333333333333333" as const;
 
 describe("fetchIsAuthorized", () => {
   test("default", async () => {
@@ -297,6 +306,50 @@ describe("fetchRatifierInfo", () => {
     });
 
     expect(info.type).toBe("ecrecover");
+  });
+});
+
+describe("fetchIsRootCanceled", () => {
+  test("default", async () => {
+    const handle = createMockClient(base);
+    mockRead(handle, {
+      address: addresses.ecrecoverRatifier,
+      abi: ecrecoverRatifierAbi,
+      functionName: "isRootCanceled",
+      args: [addresses.maker, root],
+      result: true,
+    });
+
+    await expect(
+      fetchIsRootCanceled({
+        client: handle.client,
+        ecrecoverRatifier: addresses.ecrecoverRatifier,
+        maker: addresses.maker,
+        root,
+      }),
+    ).resolves.toBe(true);
+  });
+});
+
+describe("fetchIsRootRatified", () => {
+  test("default", async () => {
+    const handle = createMockClient(base);
+    mockRead(handle, {
+      address: addresses.setterRatifier,
+      abi: setterRatifierAbi,
+      functionName: "isRootRatified",
+      args: [addresses.maker, root],
+      result: false,
+    });
+
+    await expect(
+      fetchIsRootRatified({
+        client: handle.client,
+        setterRatifier: addresses.setterRatifier,
+        maker: addresses.maker,
+        root,
+      }),
+    ).resolves.toBe(false);
   });
 });
 

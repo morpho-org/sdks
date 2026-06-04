@@ -2,7 +2,12 @@ import { assertNonNegative } from "@morpho-org/morpho-ts";
 import type { Address, Client, Hex } from "viem";
 import { getBytecode, readContract } from "viem/actions";
 
-import { erc20Abi, midnightAbi } from "../abis.js";
+import {
+  ecrecoverRatifierAbi,
+  erc20Abi,
+  midnightAbi,
+  setterRatifierAbi,
+} from "../abis.js";
 import { MAX_COLLATERALS } from "../constants.js";
 import {
   type IMarket,
@@ -548,5 +553,59 @@ export async function fetchRatifierInfo(params: {
     bytecode,
     ecrecoverRatifier: params.ecrecoverRatifier,
     setterRatifier: params.setterRatifier,
+  });
+}
+
+/**
+ * Fetches whether an EcrecoverRatifier root has been canceled for a maker.
+ *
+ * @param params - Fetch parameters.
+ * @returns Root cancellation state.
+ * @example
+ * ```ts
+ * import { fetchIsRootCanceled } from "@morpho-org/midnight-sdk";
+ *
+ * const canceled = await fetchIsRootCanceled({} as never);
+ * console.log(canceled);
+ * ```
+ */
+export function fetchIsRootCanceled(params: {
+  readonly client: Client;
+  readonly ecrecoverRatifier: Address;
+  readonly maker: Address;
+  readonly root: Hex;
+}) {
+  return readContract(params.client, {
+    address: params.ecrecoverRatifier,
+    abi: ecrecoverRatifierAbi,
+    functionName: "isRootCanceled",
+    args: [params.maker, params.root],
+  });
+}
+
+/**
+ * Fetches whether a SetterRatifier root has been ratified for a maker.
+ *
+ * @param params - Fetch parameters.
+ * @returns Root ratification state.
+ * @example
+ * ```ts
+ * import { fetchIsRootRatified } from "@morpho-org/midnight-sdk";
+ *
+ * const ratified = await fetchIsRootRatified({} as never);
+ * console.log(ratified);
+ * ```
+ */
+export function fetchIsRootRatified(params: {
+  readonly client: Client;
+  readonly setterRatifier: Address;
+  readonly maker: Address;
+  readonly root: Hex;
+}) {
+  return readContract(params.client, {
+    address: params.setterRatifier,
+    abi: setterRatifierAbi,
+    functionName: "isRootRatified",
+    args: [params.maker, params.root],
   });
 }

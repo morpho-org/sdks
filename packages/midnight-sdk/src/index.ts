@@ -34,6 +34,7 @@ export type {
 export { MidnightBundles } from "./bundles/index.js";
 export type {
   RepayCallParams,
+  SetConsumedCallParams,
   SetIsAuthorizedCallParams,
   SupplyCollateralCallParams,
   WithdrawCollateralCallParams,
@@ -62,6 +63,7 @@ export {
   IncompleteMidnightAddressesError,
   InconsistentMarketError,
   InvalidMidnightRouterResponseError,
+  InvalidOfferGroupError,
   InvalidOfferParameterError,
   InvalidOfferPayloadError,
   InvalidOfferTreeHeightError,
@@ -86,6 +88,8 @@ export {
   fetchErc20Allowance,
   fetchIsAuthorized,
   fetchIsHealthy,
+  fetchIsRootCanceled,
+  fetchIsRootRatified,
   fetchMarket,
   fetchMarketId,
   fetchMarketState,
@@ -117,6 +121,7 @@ export {
   TickLib,
 } from "./math/index.js";
 export type {
+  BuildOfferGroupParams,
   BuildOfferParams,
   BuildTakesFromOffersParams,
   IOffer,
@@ -125,6 +130,7 @@ export type {
   QuoteTakeInput,
   TakeStruct,
   ValidatedOfferParams,
+  ValidateOfferGroupParams,
 } from "./offers/index.js";
 export {
   Offer,
@@ -172,6 +178,8 @@ export type {
 } from "./router/index.js";
 export { MidnightRouterApi } from "./router/index.js";
 export type {
+  DecodedEcrecoverRatifierData,
+  DecodedSetterRatifierData,
   EcrecoverRatificationTypedData,
   EcrecoverSignature,
   GetRatifierInfoParams,

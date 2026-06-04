@@ -93,6 +93,23 @@ export class MissingOfferGroupError extends Error {
 }
 
 /**
+ * Thrown when a Midnight offer group violates protocol-level group mechanics.
+ *
+ * @example
+ * ```ts
+ * import { InvalidOfferGroupError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new InvalidOfferGroupError("All offers in a group must use the same maker.");
+ * ```
+ */
+export class InvalidOfferGroupError extends Error {
+  public constructor(reason: string) {
+    super(`Invalid Midnight offer group. ${reason}`);
+    this.name = "InvalidOfferGroupError";
+  }
+}
+
+/**
  * Thrown when a quote contains an offer side that does not match the requested route.
  *
  * @example

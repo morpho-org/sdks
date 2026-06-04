@@ -3,6 +3,7 @@ import { type Address, type Hex, zeroAddress } from "viem";
 import { DEFAULT_TICK_SPACING, MAX_TICK } from "../constants.js";
 import {
   InconsistentMarketError,
+  InvalidOfferGroupError,
   InvalidOfferParameterError,
   MissingOfferGroupError,
   NoMatchingOffersError,
@@ -12,6 +13,8 @@ import { MarketUtils } from "../market/index.js";
 import type { BigIntish } from "../types.js";
 import { type BuildOfferParams, type IOffer, Offer } from "./Offer.js";
 import { Take, type TakeStruct } from "./Take.js";
+
+const comparableHex = (value: string) => value.toLowerCase();
 
 const readBigIntParameter = (parameter: string, value: BigIntish) => {
   try {
@@ -64,6 +67,45 @@ export interface BuildTakesFromOffersParams {
   readonly expectedOfferSide?: "buy" | "sell";
   /** Whether every offer must reference the same market. */
   readonly enforceSameMarket?: boolean;
+}
+
+/**
+ * Parameters for {@link OfferUtils.buildOfferGroup}.
+ *
+ * @example
+ * ```ts
+ * import type { BuildOfferGroupParams } from "@morpho-org/midnight-sdk";
+ *
+ * const params = {} as BuildOfferGroupParams;
+ * console.log(params.offers.length);
+ * ```
+ */
+export interface BuildOfferGroupParams {
+  /** Offer builder parameters without per-offer group resolution. */
+  readonly offers: readonly Omit<
+    BuildOfferParams,
+    "group" | "getRandomValues"
+  >[];
+  /** Shared consumption group for every offer. */
+  readonly group?: Hex;
+  /** Random source used once to generate a shared group when {@link group} is omitted. */
+  readonly getRandomValues?: (array: Uint8Array) => Uint8Array;
+}
+
+/**
+ * Parameters for {@link OfferUtils.validateOfferGroup}.
+ *
+ * @example
+ * ```ts
+ * import type { ValidateOfferGroupParams } from "@morpho-org/midnight-sdk";
+ *
+ * const params = {} as ValidateOfferGroupParams;
+ * console.log(params.offers.length);
+ * ```
+ */
+export interface ValidateOfferGroupParams {
+  /** Offers to validate as one protocol consumption group. */
+  readonly offers: readonly (IOffer | Offer)[];
 }
 
 /**
@@ -350,6 +392,133 @@ export namespace OfferUtils {
       maxUnits: validated.maxUnits,
       maxAssets: validated.maxAssets,
     });
+  }
+
+  /**
+   * Builds a protocol-valid group of offers with one shared consumption group id.
+   *
+   * @param params - Offer group builder parameters.
+   * @returns Immutable offers in the same order as the input entries.
+   * @throws MissingOfferGroupError when non-empty input has neither `group` nor `getRandomValues`.
+   * @throws InvalidOfferGroupError when the built offers violate group mechanics.
+   * @throws InvalidOfferParameterError when an individual offer parameter cannot satisfy protocol rules.
+   * @example
+   * ```ts
+   * import { OfferUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const offers = OfferUtils.buildOfferGroup({
+   *   offers: [{} as never],
+   *   group: "0x0000000000000000000000000000000000000000000000000000000000000000",
+   * });
+   * console.log(offers.length);
+   * ```
+   */
+  export function buildOfferGroup(
+    params: BuildOfferGroupParams,
+  ): readonly Offer[] {
+    if (params.offers.length === 0) {
+      return validateOfferGroup({ offers: [] });
+    }
+
+    let group = params.group;
+    if (group == null) {
+      if (params.getRandomValues == null) throw new MissingOfferGroupError();
+      group = Offer.randomGroup(params.getRandomValues);
+    }
+
+    return validateOfferGroup({
+      offers: params.offers.map((offer) => buildOffer({ ...offer, group })),
+    });
+  }
+
+  /**
+   * Validates protocol-level mechanics for one Midnight offer consumption group.
+   *
+   * This intentionally checks only shared group mechanics. It does not apply
+   * router policy such as ratifier allowlists, callbacks, validation windows,
+   * content-addressed groups, or full-payload inclusion rules.
+   *
+   * @param params - Offer group validation parameters.
+   * @returns Immutable offers in the same order as the input entries.
+   * @throws InvalidOfferGroupError when the group violates protocol mechanics.
+   * @example
+   * ```ts
+   * import { OfferUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const offers = OfferUtils.validateOfferGroup({ offers: [{} as never] });
+   * console.log(offers.length);
+   * ```
+   */
+  export function validateOfferGroup(
+    params: ValidateOfferGroupParams,
+  ): readonly Offer[] {
+    if (params.offers.length === 0) {
+      throw new InvalidOfferGroupError(
+        "Provide at least one offer in the group.",
+      );
+    }
+
+    const offers = params.offers.map((offer) => Offer.from(offer));
+    const first = offers[0]!;
+
+    if (
+      first.maxUnits < 0n ||
+      first.maxAssets < 0n ||
+      (first.maxAssets === 0n) === (first.maxUnits === 0n)
+    ) {
+      throw new InvalidOfferGroupError(
+        "Every offer must set exactly one non-zero non-negative cap.",
+      );
+    }
+
+    const expectedMaker = comparableHex(first.maker);
+    const expectedGroup = comparableHex(first.group);
+    const expectedBuy = first.buy;
+    const expectedMaxUnits = first.maxUnits;
+    const expectedMaxAssets = first.maxAssets;
+    const expectedLoanToken = comparableHex(first.market.loanToken);
+
+    for (const offer of offers) {
+      if (comparableHex(offer.maker) !== expectedMaker) {
+        throw new InvalidOfferGroupError(
+          "All offers in a group must use the same maker.",
+        );
+      }
+      if (comparableHex(offer.group) !== expectedGroup) {
+        throw new InvalidOfferGroupError(
+          "All offers in a group must use the same group id.",
+        );
+      }
+      if (offer.buy !== expectedBuy) {
+        throw new InvalidOfferGroupError(
+          "All offers in a group must use the same maker side.",
+        );
+      }
+      if (
+        offer.maxUnits < 0n ||
+        offer.maxAssets < 0n ||
+        (offer.maxAssets === 0n) === (offer.maxUnits === 0n)
+      ) {
+        throw new InvalidOfferGroupError(
+          "Every offer must set exactly one non-zero non-negative cap.",
+        );
+      }
+      if (
+        offer.maxUnits !== expectedMaxUnits ||
+        offer.maxAssets !== expectedMaxAssets
+      ) {
+        throw new InvalidOfferGroupError(
+          "All offers in a group must use the same unit and asset caps.",
+        );
+      }
+      if (comparableHex(offer.market.loanToken) !== expectedLoanToken) {
+        throw new InvalidOfferGroupError(
+          "All offers in a group must use the same loan token.",
+        );
+      }
+    }
+
+    return deepFreeze([...offers]);
   }
 
   /**

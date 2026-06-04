@@ -1,4 +1,4 @@
-import type { Hex } from "viem";
+import { bytesToHex, type Hex } from "viem";
 import { describe, expect, test } from "vitest";
 import { baseOffer } from "../__test__/fixtures.js";
 import { MAX_OFFERS_PER_TREE } from "../constants.js";
@@ -65,5 +65,24 @@ describe("Payload.decode", () => {
     await expect(
       Payload.decode(`${encoded}${suffix}` as Hex),
     ).rejects.toBeInstanceOf(Payload.DecodeError);
+  });
+});
+
+describe("Payload size limits", () => {
+  test("default", () => {
+    expect(Payload.MAX_PAYLOAD_BYTES).toBe(
+      5 +
+        Payload.MAX_COMPRESSED_ITEMS_BYTES +
+        Payload.MAX_ATTRIBUTION_SUFFIX_BYTES,
+    );
+    expect(Payload.MAX_PAYLOAD_HEX_LENGTH).toBe(
+      "0x".length + Payload.MAX_PAYLOAD_BYTES * 2,
+    );
+    expect(Payload.MAX_REQUEST_BODY_BYTES).toBe(
+      Payload.MAX_PAYLOAD_HEX_LENGTH + 1_024,
+    );
+    expect(bytesToHex(new Uint8Array(Payload.MAX_PAYLOAD_BYTES)).length).toBe(
+      Payload.MAX_PAYLOAD_HEX_LENGTH,
+    );
   });
 });

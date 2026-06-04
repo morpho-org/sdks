@@ -106,6 +106,28 @@ export interface SetIsAuthorizedCallParams {
 }
 
 /**
+ * Parameters for `Midnight.setConsumed`.
+ *
+ * @example
+ * ```ts
+ * import type { SetConsumedCallParams } from "@morpho-org/midnight-sdk";
+ *
+ * const params = {} as SetConsumedCallParams;
+ * console.log(params.amount);
+ * ```
+ */
+export interface SetConsumedCallParams {
+  /** Core Midnight contract address. */
+  readonly midnight: Address | string;
+  /** Consumption group id. */
+  readonly group: Hex;
+  /** Consumed amount to set. */
+  readonly amount: BigIntish;
+  /** Account whose group consumption is updated. */
+  readonly onBehalf: Address | string;
+}
+
+/**
  * Namespaced calldata encoders for direct user-facing Midnight calls.
  *
  * @example
@@ -233,6 +255,34 @@ export namespace MidnightCalls {
         args: [
           params.authorized as Address,
           params.newIsAuthorized,
+          params.onBehalf as Address,
+        ],
+      }),
+    );
+  }
+
+  /**
+   * Encodes `Midnight.setConsumed`.
+   *
+   * @param params - Call parameters.
+   * @returns Neutral call descriptor.
+   * @example
+   * ```ts
+   * import { MidnightCalls } from "@morpho-org/midnight-sdk";
+   *
+   * const call = MidnightCalls.setConsumed({} as never);
+   * console.log(call.data);
+   * ```
+   */
+  export function setConsumed(params: SetConsumedCallParams): MidnightCall {
+    return call(
+      params.midnight,
+      encodeFunctionData({
+        abi: midnightAbi,
+        functionName: "setConsumed",
+        args: [
+          params.group as Hex,
+          BigInt(params.amount),
           params.onBehalf as Address,
         ],
       }),

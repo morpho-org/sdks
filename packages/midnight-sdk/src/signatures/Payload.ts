@@ -102,6 +102,46 @@ const HEADER_BYTES = VERSION_PREFIX_BYTES + LENGTH_PREFIX_BYTES;
 const ABI_ARRAY_HEAD_BYTES = 64;
 const ABI_LENGTH_LOW_OFFSET = 60;
 
+/**
+ * Largest fully framed wire payload, in bytes: the version byte, the 4-byte
+ * gzip length prefix, the largest accepted gzip stream, and the largest
+ * accepted attribution suffix.
+ *
+ * @example
+ * ```ts
+ * import { Payload } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(Payload.MAX_PAYLOAD_BYTES);
+ * ```
+ */
+export const MAX_PAYLOAD_BYTES =
+  HEADER_BYTES + MAX_COMPRESSED_ITEMS_BYTES + MAX_ATTRIBUTION_SUFFIX_BYTES;
+
+/**
+ * Largest `0x`-prefixed hex string that can encode a wire payload.
+ *
+ * @example
+ * ```ts
+ * import { Payload } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(Payload.MAX_PAYLOAD_HEX_LENGTH);
+ * ```
+ */
+export const MAX_PAYLOAD_HEX_LENGTH = "0x".length + MAX_PAYLOAD_BYTES * 2;
+
+/**
+ * Largest inbound HTTP request body, in bytes, accepted by the router and
+ * gatekeeper APIs.
+ *
+ * @example
+ * ```ts
+ * import { Payload } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(Payload.MAX_REQUEST_BODY_BYTES);
+ * ```
+ */
+export const MAX_REQUEST_BODY_BYTES = MAX_PAYLOAD_HEX_LENGTH + 1_024;
+
 const itemsAbi = [
   {
     name: "items",
