@@ -40,7 +40,7 @@ Keeping those details only in app code makes every downstream integration re-lea
 - No Blue-style `client.midnight.market(...)` instance in this TIB.
 - No Blue protocol-surface changes. Any Blue edits are limited to shared primitive compatibility, such as re-exporting shared `MathLib`.
 - No React, wagmi, app `ActionFlow`, toast, label, analytics, or UI-state abstractions in `midnight-sdk`.
-- No quoter or orderbook client in this package. The package can define quote/take input shapes and build on-chain `Take[]`, but executable offers still come from the app or a future orderbook SDK.
+- No quoter or orderbook client in this package. The package can convert caller-provided executable offers into on-chain `Take[]`, but executable offers still come from the app or a future orderbook SDK.
 - No protocol/admin operations beyond utility support for user-facing order, requirement, fetch, and signature flows.
 - No runtime ABI fetch. ABI literals and address-registry fields are pinned in source; production address values are added only from reviewed deployment artifacts.
 - No deprecated package updates.
@@ -168,7 +168,6 @@ artifact path. Runtime ABI fetches are out of scope.
 - `RatifierInfo`
 - `MidnightAddresses`
 - `MidnightAddressRegistry`
-- quote-facing raw input shapes for converting app/router responses into `Offer` and `Take`
 
 `midnight-sdk` exports Midnight-specific constants that app actions currently need or will need to
 validate inputs:
@@ -237,12 +236,10 @@ Rounding names should match local SDK convention: `"Up"` and `"Down"`. Tests mus
 ### Offer and Take Utilities
 
 `OfferUtils.buildTakesFromOffers` should replace the app-local conversion in
-`market-order.utils.ts`. It should:
+`market-order.utils.ts`. It should own the business behavior for normalizing caller-provided
+executable offers into on-chain `Take[]` without making `midnight-sdk` a quoter or
+orderbook client. It should:
 
-- accept router/app quote entries that include `units`, `ratifierData`, and the inline offer;
-- copy address and hex fields into ABI-compatible objects;
-- convert numeric string fields to `bigint`;
-- produce the on-chain `Take` shape: `{ units, offer, ratifierData }`;
 - reject an empty input with a typed `NoMatchingOffersError`;
 - validate offer side where the caller expects one side (`buy` offers for borrower market-orders, `sell` offers for lender market-orders);
 - validate a consistent market when callers choose to enforce it before encoding a bundle.
