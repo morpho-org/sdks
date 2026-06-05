@@ -58,8 +58,8 @@
   },
   "peerDependencies": {
     "@playwright/test": "^1.48.1",
-    "viem": "^2.21.10",
-    "vitest": ">=2.0.0 <5.0.0"
+    "viem": "catalog:test-peer",
+    "vitest": "catalog:test-peer"
   },
   "peerDependenciesMeta": {
     "@playwright/test": {
@@ -72,9 +72,9 @@
   "devDependencies": {
     "@playwright/test": "^1.60.0",
     "@types/lodash.kebabcase": "^4.1.9",
-    "typescript": "^6.0.3",
-    "viem": "^2.50.4",
-    "vitest": "4.1.7"
+    "typescript": "catalog:",
+    "viem": "catalog:",
+    "vitest": "catalog:"
   },
   "publishConfig": {
     "exports": {

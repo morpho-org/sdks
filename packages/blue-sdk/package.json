@@ -37,14 +37,14 @@
     "lodash.mergewith": "^4.6.2"
   },
   "peerDependencies": {
-    "@morpho-org/morpho-ts": "^2.5.1"
+    "@morpho-org/morpho-ts": "catalog:"
   },
   "devDependencies": {
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
-    "typescript": "^6.0.3",
-    "viem": "^2.50.4",
-    "vitest": "^4.1.7"
+    "typescript": "catalog:",
+    "viem": "catalog:",
+    "vitest": "catalog:"
   },
   "publishConfig": {
     "exports": {

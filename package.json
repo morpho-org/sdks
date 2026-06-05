@@ -28,6 +28,7 @@
     "build:ci": "pnpm -r --if-present --filter './packages/**' --filter='!@morpho-org/liquidation-sdk-viem' --filter='!@morpho-org/bundler-sdk-viem' --filter='!@morpho-org/migration-sdk-viem' --filter='!@morpho-org/simulation-sdk' --filter='!@morpho-org/blue-sdk-wagmi' --filter='!@morpho-org/simulation-sdk-wagmi' --filter='!@morpho-org/test-wagmi' build",
     "lint": "biome check && $npm_execpath jsdoc:coverage:check && $npm_execpath lint:address",
     "lint:ci": "biome check --config-path=biome.ci.json && $npm_execpath jsdoc:coverage:check && $npm_execpath lint:address -- --exclude-deprecated",
+    "lint:catalog": "node scripts/lint/catalog-consistency.js",
     "lint:address": "node --no-warnings=ExperimentalWarning scripts/lint/checksum-address.js",
     "jsdoc:coverage": "node --no-warnings=ExperimentalWarning scripts/jsdoc-coverage.js",
     "jsdoc:coverage:check": "node --no-warnings=ExperimentalWarning scripts/jsdoc-coverage.js --self-check",
@@ -55,11 +56,11 @@
     "lint-staged": "^17.0.5",
     "solc": "0.8.35",
     "typedoc": "^0.28.19",
-    "typescript": "^6.0.3",
+    "typescript": "catalog:",
     "undici": "^8.3.0",
-    "viem": "^2.50.4",
+    "viem": "catalog:",
     "vite": "^8.0.14",
-    "vitest": "^4.1.7"
+    "vitest": "catalog:"
   },
   "lint-staged": {
     "*.{json,gql}": "biome check --write --no-errors-on-unmatched",

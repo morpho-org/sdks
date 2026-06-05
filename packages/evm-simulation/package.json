@@ -34,16 +34,16 @@
   "dependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
-    "zod": "^4.4.3"
+    "zod": "catalog:"
   },
   "peerDependencies": {
-    "viem": "^2.0.0"
+    "viem": "catalog:peer"
   },
   "devDependencies": {
     "@morpho-org/test": "workspace:^",
-    "typescript": "^6.0.3",
-    "viem": "^2.50.4",
-    "vitest": "^4.1.7"
+    "typescript": "catalog:",
+    "viem": "catalog:",
+    "vitest": "catalog:"
   },
   "publishConfig": {
     "exports": {
