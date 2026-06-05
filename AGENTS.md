@@ -51,6 +51,12 @@ Cross-layer leaks (entities encoding calldata, actions reading state, helpers de
 - Small primitives that combine. No kitchen-sink helpers; no boolean-prop explosions.
 - Prefer early returns over deep nesting — guard clauses first, happy path last.
 
+### Class APIs over utility factories
+
+- If a public helper would primarily return an instance of a public class, expose it as a static class method instead of a `*Utils` factory: prefer `Offer.create(...)`, `Offer.createGroup(...)`, `Tree.create(...)` over `OfferUtils.buildOffer(...)` or `OfferUtils.buildTree(...)` returning class instances.
+- Class-specific methods and getters delegate to pure `*Utils` namespace functions that accept readonly plain JavaScript objects compatible with the class's public shape. This keeps the user-facing API composable and class-based while preserving broad compatibility for object-first integrations.
+- `*Utils` namespaces own deterministic object-compatible behavior, validation, encoding math, and struct reshaping. They should not be the primary user-facing constructor surface for a class instance.
+
 > Applied by personas: [`module-api-architecture`](./.agents/personas/module-api-architecture.md), [`morpho-protocol`](./.agents/personas/morpho-protocol.md) (protocol routing + ABI/address source of truth), [`web3-security`](./.agents/personas/web3-security.md) (Action-layer purity), [`silent-failure-hunter`](./.agents/personas/silent-failure-hunter.md) (testability).
 
 ---

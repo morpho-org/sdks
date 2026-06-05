@@ -20,6 +20,8 @@ Per AGENTS.md §1 and §4 — package boundaries and the public surface:
 - A new deep import across packages — e.g. `from "@morpho-org/foo/src/internal/..."` instead of going through `@morpho-org/foo`'s `src/index.ts`. The receiving package's `src/index.ts` is the only public entry point.
 - A new export from `src/index.ts` (or removal/rename of an existing one) — flag for cross-file impact on consumers; check that downstream code in the monorepo and the JSDoc still match.
 - A layering reversal — entity reading state when it should be lazy, action encoding calldata that should belong to a helper, helper depending on an entity, etc. (See the §1 Layering table.)
+- A public `*Utils` factory whose main job is returning a public class instance. Prefer a static method on the class (`Offer.create`, `Offer.createGroup`, `Tree.create`) and keep the `*Utils` namespace for pure object-compatible implementation.
+- A class-specific getter or method that reimplements domain logic instead of delegating to a pure `*Utils` function that accepts readonly plain objects compatible with the class shape.
 - A new framework import (`react`, `wagmi`, `redux`, `ethers`) in a core SDK package. Framework adapters live in explicitly named packages (`*-wagmi`, `*-viem`); core packages stay framework-free.
 
 Per AGENTS.md §3 — type discipline at the boundary:
@@ -37,7 +39,7 @@ Per AGENTS.md §8 — NodeNext compatibility on imports (mechanical compliance l
 ## Severity guidance
 
 - **High** — public-surface break (changed/removed export without a deprecation flow), framework import in a core package, deep cross-package import.
-- **Medium** — layering reversal that compiles but violates §1; missing `readonly` on a public field; generic `Error` thrown from an exported path.
+- **Medium** — layering reversal that compiles but violates §1; public `*Utils` factory returning a class instance instead of a static class constructor; class-specific logic duplicated instead of delegating to object-compatible utils; missing `readonly` on a public field; generic `Error` thrown from an exported path.
 - **Low** — internal-only suggestions about how a private helper could be reshaped (often out of scope — defer to `code-quality`).
 
 ## Out-of-scope reminders (for the sub-agent)
