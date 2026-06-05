@@ -10,6 +10,7 @@ import {
 } from "../errors.js";
 import { makeTransferLog } from "../test-helpers/index.js";
 import type {
+  AccountAssetChanges,
   RawLog,
   RawSimulationResult,
   SimulateParams,
@@ -40,10 +41,13 @@ const USER: Address = "0x1111111111111111111111111111111111111111";
 const VAULT: Address = "0x2222222222222222222222222222222222222222";
 const SPENDER: Address = "0x3333333333333333333333333333333333333333";
 
-function makeSuccessResult(logs: RawLog[] = []): RawSimulationResult {
+function makeSuccessResult(
+  logs: RawLog[] = [],
+  assetChanges: AccountAssetChanges[] = [],
+): RawSimulationResult {
   return {
     calls: [{ logs, status: true, returnData: "0x", gasUsed: 0n }],
-    assetChanges: [],
+    assetChanges,
   };
 }
 
@@ -91,6 +95,31 @@ describe.sequential("simulate — success", () => {
     expect(result.transfers).toHaveLength(1);
     expect(result.transfers[0]!.amount).toBe(1000000n);
     expect(result.simulationTxs).toEqual(params.transactions);
+  });
+
+  it("surfaces non-empty assetChanges from the backend unchanged", async () => {
+    const logs = [
+      makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 1000000n }),
+    ];
+    const assetChanges: AccountAssetChanges[] = [
+      {
+        account: USER,
+        changes: [
+          { token: USDC, symbol: "USDC", decimals: 6, diff: -1000000n },
+        ],
+      },
+      {
+        account: VAULT,
+        changes: [{ token: USDC, symbol: "USDC", decimals: 6, diff: 1000000n }],
+      },
+    ];
+    mockTenderlyRpc.mockResolvedValueOnce(
+      makeSuccessResult(logs, assetChanges),
+    );
+
+    const result = await simulate(makeConfig(), makeParams());
+
+    expect(result.assetChanges).toEqual(assetChanges);
   });
 
   it("attributes Transfer.txIdx to the emitting tx in a multi-tx bundle", async () => {
