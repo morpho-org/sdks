@@ -10,6 +10,7 @@ import {
 } from "../errors.js";
 import { makeTransferLog } from "../test-helpers/index.js";
 import type {
+  AccountAssetChanges,
   RawLog,
   RawSimulationResult,
   SimulateParams,
@@ -40,9 +41,13 @@ const USER: Address = "0x1111111111111111111111111111111111111111";
 const VAULT: Address = "0x2222222222222222222222222222222222222222";
 const SPENDER: Address = "0x3333333333333333333333333333333333333333";
 
-function makeSuccessResult(logs: RawLog[] = []): RawSimulationResult {
+function makeSuccessResult(
+  logs: RawLog[] = [],
+  assetChanges: AccountAssetChanges[] = [],
+): RawSimulationResult {
   return {
     calls: [{ logs, status: true, returnData: "0x", gasUsed: 0n }],
+    assetChanges,
   };
 }
 
@@ -92,6 +97,31 @@ describe.sequential("simulate — success", () => {
     expect(result.simulationTxs).toEqual(params.transactions);
   });
 
+  it("surfaces non-empty assetChanges from the backend unchanged", async () => {
+    const logs = [
+      makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 1000000n }),
+    ];
+    const assetChanges: AccountAssetChanges[] = [
+      {
+        account: USER,
+        changes: [
+          { token: USDC, symbol: "USDC", decimals: 6, diff: -1000000n },
+        ],
+      },
+      {
+        account: VAULT,
+        changes: [{ token: USDC, symbol: "USDC", decimals: 6, diff: 1000000n }],
+      },
+    ];
+    mockTenderlyRpc.mockResolvedValueOnce(
+      makeSuccessResult(logs, assetChanges),
+    );
+
+    const result = await simulate(makeConfig(), makeParams());
+
+    expect(result.assetChanges).toEqual(assetChanges);
+  });
+
   it("attributes Transfer.txIdx to the emitting tx in a multi-tx bundle", async () => {
     const APPROVE_AMOUNT = 1_000_000n;
     const TRANSFER_AMOUNT = 500_000n;
@@ -125,6 +155,7 @@ describe.sequential("simulate — success", () => {
           gasUsed: 0n,
         },
       ],
+      assetChanges: [],
     });
 
     const result = await simulate(
@@ -188,6 +219,7 @@ describe.sequential("simulate — authorizations", () => {
         { logs: [], status: true, returnData: "0x", gasUsed: 0n },
         { logs: [transferLog], status: true, returnData: "0x", gasUsed: 0n },
       ],
+      assetChanges: [],
     });
 
     const auths: SimulationAuthorization[] = [
@@ -226,6 +258,7 @@ describe.sequential("simulate — authorizations", () => {
         { logs: [], status: true, returnData: "0x", gasUsed: 0n },
         { logs: [transferLog], status: true, returnData: "0x", gasUsed: 0n },
       ],
+      assetChanges: [],
     });
 
     const resetApproveTx = {
@@ -282,6 +315,7 @@ describe.sequential("simulate — error handling", () => {
   it("error: ExternalServiceError when backend returns fewer calls than transactions", async () => {
     mockTenderlyRpc.mockResolvedValueOnce({
       calls: [{ logs: [], status: true, returnData: "0x", gasUsed: 0n }],
+      assetChanges: [],
     });
 
     const auths: SimulationAuthorization[] = [
@@ -445,6 +479,7 @@ describe.sequential("simulate — validation", () => {
         { logs: [], status: true, returnData: "0x", gasUsed: 0n },
         { logs: [], status: true, returnData: "0x", gasUsed: 0n },
       ],
+      assetChanges: [],
     });
 
     await expect(
