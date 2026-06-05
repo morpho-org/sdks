@@ -1,4 +1,14 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
+
+const deprecatedPackageVitestProjects = new Set([
+  "migration-sdk-viem",
+  "blue-sdk-wagmi-e2e",
+  "blue-sdk-wagmi-unit",
+  "simulation-sdk",
+  "simulation-sdk-wagmi",
+  "bundler-sdk-viem",
+  "liquidation-sdk-viem",
+]);
 
 export default defineConfig({
   test: {
@@ -9,7 +19,15 @@ export default defineConfig({
         "scripts/release/**/*.{js,mjs}",
       ],
       exclude: [
+        "packages/liquidation-sdk-viem/**",
+        "packages/bundler-sdk-viem/**",
+        "packages/migration-sdk-viem/**",
+        "packages/simulation-sdk/**",
+        "packages/blue-sdk-wagmi/**",
+        "packages/simulation-sdk-wagmi/**",
         "packages/test-wagmi/**",
+        "packages/test/**",
+        "packages/morpho-test/**",
         "packages/**/*.md",
         "packages/**/src/**/*.test.ts",
         "packages/**/src/**/__test__/**",
@@ -78,6 +96,26 @@ export default defineConfig({
             "packages/evm-simulation/src/**/*.spec.ts",
             "packages/evm-simulation/src/**/*.test.ts",
           ],
+          // Fork specs require MAINNET_RPC_URL (parsed at module load via
+          // test/setup.ts) and a live RPC. Keep them out of the default unit
+          // project so `pnpm --filter @morpho-org/evm-simulation test` runs
+          // offline; they run in the opt-in `evm-simulation-fork` project.
+          exclude: [
+            ...configDefaults.exclude,
+            "packages/evm-simulation/src/**/*.fork.spec.ts",
+          ],
+          globals: true,
+          environment: "node",
+          sequence: {
+            concurrent: false,
+          },
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "evm-simulation-fork",
+          include: ["packages/evm-simulation/src/**/*.fork.spec.ts"],
           globals: true,
           environment: "node",
           sequence: {
@@ -195,6 +233,9 @@ export default defineConfig({
           testTimeout: 120_000,
         },
       },
-    ],
+    ].filter(
+      ({ test }) =>
+        !process.env.CI || !deprecatedPackageVitestProjects.has(test.name),
+    ),
   },
 });

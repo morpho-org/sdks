@@ -23,6 +23,7 @@ Per AGENTS.md §2 — forbidden patterns:
 - `any`, `as unknown as`, `@ts-ignore`, `@ts-expect-error` without a linked issue and a deletion plan.
 - `throw new Error(...)` in SDK source — every failure mode must be a named, exported class. (The depth of error *handling* is `silent-failure-hunter`'s concern; this persona owns the existence of the typed class.)
 - Mutation of input arguments.
+- Feature, address, ABI, dependency, test, JSDoc, refactor, or changeset updates under frozen deprecated packages (`liquidation-sdk-viem`, `bundler-sdk-viem`, `migration-sdk-viem`, `simulation-sdk`, `blue-sdk-wagmi`, `simulation-sdk-wagmi`, `test-wagmi`) unless the PR is explicitly scoped to deprecation metadata or source deletion.
 
 Per AGENTS.md §3 — type discipline inside the body:
 
@@ -53,7 +54,7 @@ Cross-file impact (SDK-critical):
 ## Severity guidance
 
 - **Critical** — hardcoded secret in source; `eval` / dynamic `Function` on user input.
-- **High** — `any` / `as unknown as` / `@ts-ignore` without deletion plan; `throw new Error` instead of a typed class; mutation of input args; signature change that breaks callers in the repo.
+- **High** — `any` / `as unknown as` / `@ts-ignore` without deletion plan; `throw new Error` instead of a typed class; mutation of input args; updates to frozen deprecated packages outside deprecation/removal housekeeping; signature change that breaks callers in the repo.
 - **Medium** — code smells (duplication, deep nesting, magic numbers); naming drift; missing generics on a generic-friendly function.
 - **Low** — stylistic preferences that don't change correctness.
 

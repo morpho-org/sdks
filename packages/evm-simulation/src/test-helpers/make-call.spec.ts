@@ -15,7 +15,6 @@ describe("makeCall", () => {
     expect(result.status).toBe(true);
     expect(result.returnData).toBe("0x");
     expect(result.gasUsed).toBe(0n);
-    expect(result.assetChanges).toBeUndefined();
   });
 
   test("behavior: overrides take precedence over defaults", () => {
@@ -23,12 +22,10 @@ describe("makeCall", () => {
       status: false,
       returnData: "0xabcd" as Hex,
       gasUsed: 21_000n,
-      assetChanges: { foo: "bar" },
     });
     expect(result.status).toBe(false);
     expect(result.returnData).toBe("0xabcd");
     expect(result.gasUsed).toBe(21_000n);
-    expect(result.assetChanges).toEqual({ foo: "bar" });
   });
 
   test("behavior: empty logs array", () => {

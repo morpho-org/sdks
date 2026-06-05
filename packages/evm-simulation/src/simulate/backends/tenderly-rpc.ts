@@ -1,6 +1,8 @@
 import {
   type Address,
   type BlockTag,
+  ethAddress,
+  getAddress,
   type Hex,
   isAddress,
   isHex,
@@ -14,12 +16,14 @@ import {
   SimulationValidationError,
 } from "../../errors.js";
 import type {
+  AccountAssetChanges,
   RawCall,
   RawLog,
   RawSimulationResult,
   SimulationTransaction,
   TenderlyRpcConfig,
 } from "../../types.js";
+import { type AssetChangeEntry, groupAssetChanges } from "../asset-changes.js";
 
 interface TenderlyRpcCall {
   from: Address;
@@ -56,13 +60,28 @@ const logSchema = z
   })
   .passthrough();
 
+const assetChangeSchema = z
+  .object({
+    assetInfo: z
+      .object({
+        contractAddress: addressSchema.optional(),
+        symbol: z.string().optional(),
+        decimals: z.number().optional(),
+      })
+      .passthrough(),
+    from: addressSchema.optional(),
+    to: addressSchema.optional(),
+    rawAmount: hexSchema,
+  })
+  .passthrough();
+
 const simResultSchema = z
   .object({
     status: z.boolean(),
     gasUsed: hexSchema,
     logs: z.array(logSchema).optional(),
     trace: z.array(traceFrameSchema).optional(),
-    assetChanges: z.unknown().optional(),
+    assetChanges: z.array(assetChangeSchema).optional(),
     error: z.string().optional(),
     errorMessage: z.string().optional(),
   })
@@ -132,7 +151,10 @@ export async function simulateTenderlyRpc(params: {
         signal,
       });
       const result = unwrapResult(singleEnvelope.parse(json));
-      return { calls: [toRawCall(result)] };
+      return {
+        calls: [toRawCall(result)],
+        assetChanges: toAssetChanges([result]),
+      };
     }
 
     const json = await rpcRequest({
@@ -141,8 +163,11 @@ export async function simulateTenderlyRpc(params: {
       params: [transactions.map(buildCall), block, stateOverrides],
       signal,
     });
-    const result = unwrapResult(bundleEnvelope.parse(json));
-    return { calls: result.map(toRawCall) };
+    const results = unwrapResult(bundleEnvelope.parse(json));
+    return {
+      calls: results.map(toRawCall),
+      assetChanges: toAssetChanges(results),
+    };
   } catch (error) {
     if (error instanceof SimulationRevertedError) throw error;
     if (error instanceof ExternalServiceError) throw error;
@@ -240,6 +265,40 @@ function toRawCall(data: SimResult): RawCall {
     status: true,
     returnData: data.trace?.[0]?.output ?? "0x",
     gasUsed: BigInt(data.gasUsed),
-    assetChanges: data.assetChanges,
   };
+}
+
+/**
+ * Reduce Tenderly's per-transfer asset changes to net per-token balance changes
+ * grouped by account. Both endpoints of each transfer are accounted (sender,
+ * counterparties, and the zero address for mints/burns).
+ */
+function toAssetChanges(results: SimResult[]): AccountAssetChanges[] {
+  const entries: AssetChangeEntry[] = [];
+  for (const result of results) {
+    for (const change of result.assetChanges ?? []) {
+      const amount = BigInt(change.rawAmount);
+      const token = change.assetInfo.contractAddress
+        ? getAddress(change.assetInfo.contractAddress)
+        : ethAddress;
+      const { symbol, decimals } = change.assetInfo;
+      if (change.to)
+        entries.push({
+          account: change.to,
+          token,
+          diff: amount,
+          symbol,
+          decimals,
+        });
+      if (change.from)
+        entries.push({
+          account: change.from,
+          token,
+          diff: -amount,
+          symbol,
+          decimals,
+        });
+    }
+  }
+  return groupAssetChanges(entries);
 }

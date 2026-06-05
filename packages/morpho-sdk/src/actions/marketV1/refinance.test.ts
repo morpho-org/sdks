@@ -1,0 +1,508 @@
+import { getChainAddresses, MarketParams } from "@morpho-org/blue-sdk";
+import { type Address, maxUint256, parseUnits, toFunctionSelector } from "viem";
+import { mainnet } from "viem/chains";
+import { describe, expect, test } from "vitest";
+import {
+  NegativeBorrowSharesError,
+  NegativeMaxRepaySharePriceError,
+  NonPositiveAssetAmountError,
+  NonPositiveMinBorrowSharePriceError,
+  NonPositiveRepayMaxSharePriceError,
+  ReallocationWithdrawalOnTargetMarketError,
+  RefinanceSameMarketError,
+  RefinanceSharesMissingBorrowAssetsError,
+  RefinanceTokenMismatchError,
+  type VaultReallocation,
+  ZeroCollateralAmountError,
+} from "../../types/index.js";
+import { marketV1Refinance } from "./refinance.js";
+
+// Two markets sharing loanToken + collateralToken but differing on oracle/lltv — the valid refinance topology.
+const source = new MarketParams({
+  collateralToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", // WETH
+  loanToken: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", // USDC
+  oracle: "0x1111111111111111111111111111111111111111",
+  irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
+  lltv: 860000000000000000n,
+});
+
+const target = new MarketParams({
+  collateralToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", // WETH
+  loanToken: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", // USDC
+  oracle: "0x2222222222222222222222222222222222222222",
+  irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
+  lltv: 915000000000000000n,
+});
+
+const USER: Address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+
+const baseArgs = {
+  user: USER,
+  collateralAmount: parseUnits("1", 18),
+  minBorrowSharePrice: 0n,
+  maxRepaySharePrice: 1_500_000_000_000_000_000_000_000_000n, // 1.5 ray
+};
+
+describe("marketV1Refinance", () => {
+  test("default: shares mode bundle includes target dust sweep", () => {
+    const tx = marketV1Refinance({
+      source: { chainId: mainnet.id, marketParams: source },
+      target: { marketParams: target },
+      args: {
+        ...baseArgs,
+        borrowShares: parseUnits("1000", 24),
+        borrowAssets: parseUnits("1001", 6), // entity-computed overshoot
+      },
+    });
+
+    expect(tx.action.type).toBe("marketV1Refinance");
+    expect(tx.action.args.sourceMarket).toBe(source.id);
+    expect(tx.action.args.targetMarket).toBe(target.id);
+    expect(tx.action.args.collateralAmount).toBe(baseArgs.collateralAmount);
+    expect(tx.action.args.borrowAssets).toBe(parseUnits("1001", 6));
+    expect(tx.action.args.borrowShares).toBe(parseUnits("1000", 24));
+    expect(tx.action.args.user).toBe(USER);
+    expect(tx.to).toBe(getChainAddresses(mainnet.id).bundler3.bundler3);
+    expect(tx.value).toBe(0n);
+    expect(Object.isFrozen(tx)).toBe(true);
+    expect(Object.isFrozen(tx.action)).toBe(true);
+    expect(Object.isFrozen(tx.action.args)).toBe(true);
+  });
+
+  test("behavior: assets mode produces a bundle without a target dust sweep", () => {
+    const tx = marketV1Refinance({
+      source: { chainId: mainnet.id, marketParams: source },
+      target: { marketParams: target },
+      args: {
+        ...baseArgs,
+        borrowAssets: parseUnits("1000", 6),
+      },
+    });
+
+    expect(tx.action.args.borrowAssets).toBe(parseUnits("1000", 6));
+    expect(tx.action.args.borrowShares).toBe(0n);
+  });
+
+  test("behavior: collat-only refinance omits borrow/repay legs", () => {
+    const tx = marketV1Refinance({
+      source: { chainId: mainnet.id, marketParams: source },
+      target: { marketParams: target },
+      args: {
+        ...baseArgs,
+        borrowAssets: 0n,
+        borrowShares: 0n,
+      },
+    });
+
+    expect(tx.action.args.borrowAssets).toBe(0n);
+    expect(tx.action.args.borrowShares).toBe(0n);
+    expect(tx.to).toBe(getChainAddresses(mainnet.id).bundler3.bundler3);
+    expect(tx.value).toBe(0n);
+  });
+
+  test("behavior: shares-mode sweep is encoded BEFORE source withdrawCollateral", () => {
+    // In same-token markets a sweep after the withdraw would drain the collateral; emit it before.
+    const tx = marketV1Refinance({
+      source: { chainId: mainnet.id, marketParams: source },
+      target: { marketParams: target },
+      args: {
+        ...baseArgs,
+        borrowShares: parseUnits("1000", 24),
+        borrowAssets: parseUnits("1001", 6),
+      },
+    });
+
+    const data = tx.data.toLowerCase();
+    const sweepHex = maxUint256.toString(16); // 64 'f's — first occurrence is the sweep repay
+    // Anchor on the unique source oracle address; its last occurrence is the source withdrawCollateral leg.
+    const sourceOracleHex = source.oracle.slice(2).toLowerCase();
+
+    const sweepIdx = data.indexOf(sweepHex);
+    const sourceWithdrawIdx = data.lastIndexOf(sourceOracleHex);
+
+    expect(sweepIdx).toBeGreaterThan(-1);
+    expect(sourceWithdrawIdx).toBeGreaterThan(-1);
+    expect(sweepIdx).toBeLessThan(sourceWithdrawIdx);
+  });
+
+  test("behavior: maxUint256 sweep arg is encoded for shares-mode bundles", () => {
+    // Re-encode without the sweep and assert the calldata diverges.
+    const txShares = marketV1Refinance({
+      source: { chainId: mainnet.id, marketParams: source },
+      target: { marketParams: target },
+      args: {
+        ...baseArgs,
+        borrowShares: parseUnits("1000", 24),
+        borrowAssets: parseUnits("1001", 6),
+      },
+    });
+    const txAssets = marketV1Refinance({
+      source: { chainId: mainnet.id, marketParams: source },
+      target: { marketParams: target },
+      args: {
+        ...baseArgs,
+        borrowAssets: parseUnits("1001", 6),
+      },
+    });
+    expect(txShares.data).not.toBe(txAssets.data);
+    // The shares-mode calldata embeds maxUint256 (encoded as 64 hex `f`s).
+    expect(txShares.data.toLowerCase()).toContain(maxUint256.toString(16));
+  });
+
+  test("behavior: shares mode skims residual loan tokens to the user, before the withdraw", () => {
+    const skimSelector = toFunctionSelector(
+      "function erc20Transfer(address, address, uint256)",
+    )
+      .slice(2)
+      .toLowerCase();
+
+    const txShares = marketV1Refinance({
+      source: { chainId: mainnet.id, marketParams: source },
+      target: { marketParams: target },
+      args: {
+        ...baseArgs,
+        borrowShares: parseUnits("1000", 24),
+        borrowAssets: parseUnits("1001", 6),
+      },
+    });
+
+    const data = txShares.data.toLowerCase();
+    const skimIdx = data.indexOf(skimSelector);
+    const sourceWithdrawIdx = data.lastIndexOf(
+      source.oracle.slice(2).toLowerCase(),
+    );
+
+    expect(skimIdx).toBeGreaterThan(-1);
+    // Same ordering constraint as the sweep: skim before the source withdraw.
+    expect(skimIdx).toBeLessThan(sourceWithdrawIdx);
+  });
+
+  test("behavior: assets and collat-only modes encode no skim", () => {
+    const skimSelector = toFunctionSelector(
+      "function erc20Transfer(address, address, uint256)",
+    )
+      .slice(2)
+      .toLowerCase();
+
+    const txAssets = marketV1Refinance({
+      source: { chainId: mainnet.id, marketParams: source },
+      target: { marketParams: target },
+      args: { ...baseArgs, borrowAssets: parseUnits("1000", 6) },
+    });
+    const txCollatOnly = marketV1Refinance({
+      source: { chainId: mainnet.id, marketParams: source },
+      target: { marketParams: target },
+      args: { ...baseArgs, borrowAssets: 0n, borrowShares: 0n },
+    });
+
+    expect(txAssets.data.toLowerCase()).not.toContain(skimSelector);
+    expect(txCollatOnly.data.toLowerCase()).not.toContain(skimSelector);
+  });
+
+  test("error: ZeroCollateralAmountError when collateralAmount === 0n", () => {
+    expect(() =>
+      marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: { ...baseArgs, collateralAmount: 0n },
+      }),
+    ).toThrow(ZeroCollateralAmountError);
+  });
+
+  test("error: ZeroCollateralAmountError when collateralAmount is negative", () => {
+    expect(() =>
+      marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: { ...baseArgs, collateralAmount: -1n },
+      }),
+    ).toThrow(ZeroCollateralAmountError);
+  });
+
+  test("error: NonPositiveAssetAmountError when borrowAssets is negative", () => {
+    expect(() =>
+      marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: { ...baseArgs, borrowAssets: -1n },
+      }),
+    ).toThrow(NonPositiveAssetAmountError);
+  });
+
+  test("error: NegativeBorrowSharesError when borrowShares is negative", () => {
+    expect(() =>
+      marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: { ...baseArgs, borrowShares: -1n },
+      }),
+    ).toThrow(NegativeBorrowSharesError);
+  });
+
+  test("error: NonPositiveMinBorrowSharePriceError when minBorrowSharePrice is negative", () => {
+    expect(() =>
+      marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: { ...baseArgs, minBorrowSharePrice: -1n },
+      }),
+    ).toThrow(NonPositiveMinBorrowSharePriceError);
+  });
+
+  test("error: NegativeMaxRepaySharePriceError when maxRepaySharePrice is negative", () => {
+    expect(() =>
+      marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: { ...baseArgs, maxRepaySharePrice: -1n },
+      }),
+    ).toThrow(NegativeMaxRepaySharePriceError);
+  });
+
+  test("error: RefinanceSameMarketError when source.id === target.id", () => {
+    expect(() =>
+      marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: source },
+        args: baseArgs,
+      }),
+    ).toThrow(RefinanceSameMarketError);
+  });
+
+  test("error: RefinanceTokenMismatchError when loanToken differs", () => {
+    const mismatched = new MarketParams({
+      collateralToken: source.collateralToken,
+      loanToken: "0xdAC17F958D2ee523a2206206994597C13D831ec7", // USDT
+      oracle: target.oracle,
+      irm: target.irm,
+      lltv: target.lltv,
+    });
+    expect(() =>
+      marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: mismatched },
+        args: baseArgs,
+      }),
+    ).toThrow(RefinanceTokenMismatchError);
+  });
+
+  test("error: RefinanceTokenMismatchError when collateralToken differs", () => {
+    const mismatched = new MarketParams({
+      collateralToken: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", // WBTC
+      loanToken: source.loanToken,
+      oracle: target.oracle,
+      irm: target.irm,
+      lltv: target.lltv,
+    });
+    expect(() =>
+      marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: mismatched },
+        args: baseArgs,
+      }),
+    ).toThrow(RefinanceTokenMismatchError);
+  });
+
+  test("error: NonPositiveRepayMaxSharePriceError when debt is migrated with zero maxRepaySharePrice", () => {
+    expect(() =>
+      marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: {
+          ...baseArgs,
+          borrowAssets: parseUnits("1000", 6),
+          maxRepaySharePrice: 0n,
+        },
+      }),
+    ).toThrow(NonPositiveRepayMaxSharePriceError);
+  });
+
+  test("behavior: collat-only refinance accepts zero maxRepaySharePrice", () => {
+    // Zero sentinel is legitimate in collat-only mode (no repay leg encoded).
+    expect(() =>
+      marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: {
+          ...baseArgs,
+          maxRepaySharePrice: 0n,
+        },
+      }),
+    ).not.toThrow();
+  });
+
+  test("error: RefinanceSharesMissingBorrowAssetsError when shares mode passes no overshoot", () => {
+    expect(() =>
+      marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: {
+          ...baseArgs,
+          borrowShares: parseUnits("1000", 24),
+          // borrowAssets omitted — direct callers must provide the entity-computed overshoot.
+        },
+      }),
+    ).toThrow(RefinanceSharesMissingBorrowAssetsError);
+  });
+
+  test("error: RefinanceSharesMissingBorrowAssetsError when shares mode passes zero overshoot", () => {
+    expect(() =>
+      marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: {
+          ...baseArgs,
+          borrowShares: parseUnits("1000", 24),
+          borrowAssets: 0n,
+        },
+      }),
+    ).toThrow(RefinanceSharesMissingBorrowAssetsError);
+  });
+
+  test("behavior: metadata is appended to tx.data when provided", () => {
+    const txWithout = marketV1Refinance({
+      source: { chainId: mainnet.id, marketParams: source },
+      target: { marketParams: target },
+      args: { ...baseArgs, borrowAssets: parseUnits("1000", 6) },
+    });
+    const txWith = marketV1Refinance({
+      source: { chainId: mainnet.id, marketParams: source },
+      target: { marketParams: target },
+      args: { ...baseArgs, borrowAssets: parseUnits("1000", 6) },
+      metadata: { origin: "a1b2c3d4" },
+    });
+    expect(txWith.data.length).toBeGreaterThan(txWithout.data.length);
+    expect(txWith.data.includes("a1b2c3d4")).toBe(true);
+  });
+
+  describe("targetReallocations", () => {
+    const reallocSource = new MarketParams({
+      collateralToken: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", // WBTC
+      loanToken: source.loanToken,
+      oracle: "0x3333333333333333333333333333333333333333",
+      irm: source.irm,
+      lltv: 860000000000000000n,
+    });
+    const VAULT: Address = "0xBEEf5aFE88eF73337e5070aB2855d37dBF5493A4";
+    const REALLOC_FEE = parseUnits("0.01", 18);
+
+    const makeReallocations = (): readonly VaultReallocation[] => [
+      {
+        vault: VAULT,
+        fee: REALLOC_FEE,
+        withdrawals: [
+          { marketParams: reallocSource, amount: parseUnits("2000", 6) },
+        ],
+      },
+    ];
+
+    test("default: accumulates the reallocation fee in tx.value and the action discriminator", () => {
+      const tx = marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: {
+          ...baseArgs,
+          borrowAssets: parseUnits("1000", 6),
+          targetReallocations: makeReallocations(),
+        },
+      });
+
+      expect(tx.value).toBe(REALLOC_FEE);
+      expect(tx.action.args.reallocationFee).toBe(REALLOC_FEE);
+    });
+
+    test("behavior: omitted or empty reallocations leave tx.value and reallocationFee at zero", () => {
+      const txOmitted = marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: { ...baseArgs, borrowAssets: parseUnits("1000", 6) },
+      });
+      const txEmpty = marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: {
+          ...baseArgs,
+          borrowAssets: parseUnits("1000", 6),
+          targetReallocations: [],
+        },
+      });
+
+      expect(txOmitted.value).toBe(0n);
+      expect(txOmitted.action.args.reallocationFee).toBe(0n);
+      expect(txEmpty.value).toBe(0n);
+      expect(txEmpty.action.args.reallocationFee).toBe(0n);
+      expect(txEmpty.data).toBe(txOmitted.data);
+    });
+
+    test("behavior: reallocateTo is encoded BEFORE morphoSupplyCollateral", () => {
+      const txPlain = marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: { ...baseArgs, borrowAssets: parseUnits("1000", 6) },
+      });
+      const txWithRealloc = marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: {
+          ...baseArgs,
+          borrowAssets: parseUnits("1000", 6),
+          targetReallocations: makeReallocations(),
+        },
+      });
+
+      expect(txWithRealloc.data.length).toBeGreaterThan(txPlain.data.length);
+
+      const vaultHex = VAULT.slice(2).toLowerCase();
+      const reallocVaultIdx = txWithRealloc.data
+        .toLowerCase()
+        .indexOf(vaultHex);
+      const targetOracleHex = target.oracle.slice(2).toLowerCase();
+      const supplyIdx = txWithRealloc.data
+        .toLowerCase()
+        .indexOf(targetOracleHex);
+
+      expect(reallocVaultIdx).toBeGreaterThan(-1);
+      expect(supplyIdx).toBeGreaterThan(-1);
+      expect(reallocVaultIdx).toBeLessThan(supplyIdx);
+    });
+
+    test("behavior: collat-only refinance accepts reallocations", () => {
+      const tx = marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: {
+          ...baseArgs,
+          targetReallocations: makeReallocations(),
+        },
+      });
+
+      expect(tx.value).toBe(REALLOC_FEE);
+      expect(tx.action.args.reallocationFee).toBe(REALLOC_FEE);
+      expect(tx.action.args.borrowAssets).toBe(0n);
+      expect(tx.action.args.borrowShares).toBe(0n);
+    });
+
+    test("error: ReallocationWithdrawalOnTargetMarketError when a withdrawal references the target", () => {
+      const reallocations: readonly VaultReallocation[] = [
+        {
+          vault: VAULT,
+          fee: REALLOC_FEE,
+          withdrawals: [
+            { marketParams: target, amount: parseUnits("2000", 6) },
+          ],
+        },
+      ];
+      expect(() =>
+        marketV1Refinance({
+          source: { chainId: mainnet.id, marketParams: source },
+          target: { marketParams: target },
+          args: {
+            ...baseArgs,
+            borrowAssets: parseUnits("1000", 6),
+            targetReallocations: reallocations,
+          },
+        }),
+      ).toThrow(ReallocationWithdrawalOnTargetMarketError);
+    });
+  });
+});
