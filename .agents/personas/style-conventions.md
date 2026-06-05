@@ -27,14 +27,15 @@ Per AGENTS.md §8 — mechanical style (Biome enforces what it can; this persona
 Per AGENTS.md §7 — changeset relevance (the policy lives in §7; this persona checks the diff matches):
 
 - Behavior-affecting changes to published package source **without** a `.changeset/*.md` entry.
-- Changesets that bump a package without auditing downstream internal `peerDependencies`. Internal peer ranges are explicit semver ranges, not `workspace:` ranges, so Changesets will not auto-bump peer dependents; flag missing peer range updates and missing explicit changeset entries for affected dependent packages.
+- Changesets that bump a package without auditing downstream direct runtime `dependencies` and internal `peerDependencies`. Direct maintained dependents need explicit patch changeset entries when their latest published version should resolve the bumped dependency (for example `blue-sdk` address/ABI/constant updates should patch maintained packages that depend directly on `@morpho-org/blue-sdk`). Internal peer ranges are explicit semver ranges, not `workspace:` ranges, so Changesets will not auto-bump peer dependents; flag missing peer range updates and missing explicit changeset entries for affected maintained dependent packages.
+- Changesets that include frozen deprecated packages (`liquidation-sdk-viem`, `bundler-sdk-viem`, `migration-sdk-viem`, `simulation-sdk`, `blue-sdk-wagmi`, `simulation-sdk-wagmi`, `test-wagmi`) outside PRs explicitly scoped to deprecation metadata or source deletion.
 - JSDoc-only changes to published package source may ship a patch changeset when maintainers want them in release notes — flag the absence only as **low** unless the export's contract changed.
 - Unnecessary changesets on repo metadata, non-API doc-only diffs, fixtures, generated outputs, or tests-only diffs.
 - Changeset whose declared bump (patch/minor/major) doesn't match the diff's contract impact.
 
 ## Severity guidance
 
-- **High** — missing changeset on a behavior-affecting source change in a published package, or a package bump whose downstream internal peer ranges were not updated when required (CI release will undercount, integrators get a surprise).
+- **High** — missing changeset on a behavior-affecting source change in a published package, a changeset that bumps a frozen deprecated package outside deprecation/removal housekeeping, a missing patch bump for a maintained direct runtime dependent that should publish against the bumped dependency, or a package bump whose downstream maintained internal peer ranges were not updated when required (CI release will undercount, integrators get a surprise).
 - **Medium** — Biome violation surviving `pnpm lint`, missing `.js` suffix, runtime import where type-only would do.
 - **Low** — local re-declaration of an SDK type, JSDoc-only diff without a patch changeset, unnecessary changeset.
 

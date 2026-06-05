@@ -1,5 +1,15 @@
 import { configDefaults, defineConfig } from "vitest/config";
 
+const deprecatedPackageVitestProjects = new Set([
+  "migration-sdk-viem",
+  "blue-sdk-wagmi-e2e",
+  "blue-sdk-wagmi-unit",
+  "simulation-sdk",
+  "simulation-sdk-wagmi",
+  "bundler-sdk-viem",
+  "liquidation-sdk-viem",
+]);
+
 export default defineConfig({
   test: {
     coverage: {
@@ -9,7 +19,15 @@ export default defineConfig({
         "scripts/release/**/*.{js,mjs}",
       ],
       exclude: [
+        "packages/liquidation-sdk-viem/**",
+        "packages/bundler-sdk-viem/**",
+        "packages/migration-sdk-viem/**",
+        "packages/simulation-sdk/**",
+        "packages/blue-sdk-wagmi/**",
+        "packages/simulation-sdk-wagmi/**",
         "packages/test-wagmi/**",
+        "packages/test/**",
+        "packages/morpho-test/**",
         "packages/**/*.md",
         "packages/**/src/**/*.test.ts",
         "packages/**/src/**/__test__/**",
@@ -215,6 +233,9 @@ export default defineConfig({
           testTimeout: 120_000,
         },
       },
-    ],
+    ].filter(
+      ({ test }) =>
+        !process.env.CI || !deprecatedPackageVitestProjects.has(test.name),
+    ),
   },
 });
