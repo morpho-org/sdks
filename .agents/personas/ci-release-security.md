@@ -71,6 +71,7 @@ Per AGENTS.md §10 — release commits and annotated tags MUST have a valid sign
 - `.changeset/config.json` changes — fixed-version, linked-package, baseBranch, or commit changes alter what gets shipped. Flag for human review on every change.
 - New release workflows or release-bot actions — they typically hold elevated tokens; require pinned SHAs and explicit `permissions:`.
 - Removed gating: if a previously-required check (lint, test, fork-suite) is dropped from the release workflow's `needs:`, flag as **high**.
+- Frozen deprecated package CI exclusion: CI must not build, lint, or select Vitest projects for `liquidation-sdk-viem`, `bundler-sdk-viem`, `migration-sdk-viem`, `simulation-sdk`, `blue-sdk-wagmi`, `simulation-sdk-wagmi`, and `test-wagmi` unless the PR is explicitly scoped to deprecation metadata or source deletion for that package. Flag CI changes that remove the local ability to run those deprecated Vitest projects, or that exclude maintained-package tests merely because they import deprecated packages for parity coverage.
 
 ### Lockfile drift / dependency hygiene
 

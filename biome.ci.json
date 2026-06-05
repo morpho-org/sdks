@@ -1,0 +1,22 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
+  "extends": ["./biome.json"],
+  "files": {
+    "includes": [
+      "**",
+      "!**/lib",
+      "!**/.vscode",
+      "!**/cache",
+      "!**/coverage",
+      "!**/artifacts",
+      "!**/packages/liquidation-sdk-viem",
+      "!**/packages/bundler-sdk-viem",
+      "!**/packages/migration-sdk-viem",
+      "!**/packages/simulation-sdk",
+      "!**/packages/blue-sdk-wagmi",
+      "!**/packages/simulation-sdk-wagmi",
+      "!**/packages/test-wagmi",
+      "!**/packages/liquidity-sdk-viem/src/api/sdk.ts"
+    ]
+  }
+}

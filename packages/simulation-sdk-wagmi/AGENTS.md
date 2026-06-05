@@ -1,5 +1,11 @@
 # simulation-sdk-wagmi Conventions
 
+## Deprecated package freeze
+
+- `@morpho-org/simulation-sdk-wagmi` is frozen/deprecated. Do not make feature, address, ABI, dependency, test, JSDoc, refactor, or changeset updates in this package.
+- Only PRs explicitly scoped to deprecation metadata or source deletion may touch this package, and those PRs must not add new supported behavior.
+- If requested work appears to require this package, stop and move the maintained surface to `@morpho-org/morpho-sdk`, `@morpho-org/blue-sdk`, or `@morpho-org/blue-sdk-viem` as appropriate, or leave this package unchanged.
+
 - `useSimulationState` composes state from `blue-sdk-wagmi` hooks and constructs the final `SimulationState`.
 - Entity queries require a known block before enabling: `enabled: block != null && query.enabled`.
 - Invalidate Blue SDK queries when `block.number` changes so query closures refetch at the new block.

@@ -398,6 +398,7 @@ Use these npm deprecation messages:
 | Package | Replacement | npm deprecation message |
 | --- | --- | --- |
 | `@morpho-org/bundler-sdk-viem` | `@morpho-org/morpho-sdk` | `Deprecated: use @morpho-org/morpho-sdk. Bundler action helpers are consolidated under @morpho-org/morpho-sdk and ABIs are under @morpho-org/morpho-sdk/abis.` |
+| `@morpho-org/liquidation-sdk-viem` | `@morpho-org/morpho-sdk` | `Deprecated: use @morpho-org/morpho-sdk for maintained Morpho protocol primitives. Liquidation bot assembly, swap integrations, Flashbots helpers, and liquidation-specific GraphQL helpers are no longer a supported public SDK surface.` |
 | `@morpho-org/migration-sdk-viem` | None | `Deprecated: no replacement package. Migration SDK workflows are no longer a supported public SDK surface.` |
 | `@morpho-org/simulation-sdk` | `@morpho-org/morpho-sdk` | `Deprecated: use @morpho-org/morpho-sdk for supported reallocation helpers. The broad simulation engine has no replacement package.` |
 | `@morpho-org/blue-sdk-wagmi` | None | `Deprecated: no replacement package. First-party Wagmi hooks are no longer a supported public SDK surface.` |
@@ -543,14 +544,29 @@ still allowing explicit helper imports for consumers who prefer side-effect-free
   data is equivalent.
 - Published packages do not bundle internal dependencies; they publish dependency ranges. The
   changeset author owns cross-package version-bump coordination.
+- Direct-dependency cascade rule: when `@morpho-org/blue-sdk`, `@morpho-org/blue-sdk-viem`, or
+  `@morpho-org/morpho-ts` gets a semver bump that downstream consumers expect through a maintained
+  package's latest version, include patch bumps for maintained packages with direct runtime
+  `dependencies` on that package. For example, `blue-sdk` address, ABI, or constant updates must
+  patch maintained direct dependents such as `@morpho-org/morpho-sdk` so `morpho-sdk@latest`
+  resolves the new registry.
 - Changeset cascade rule: when `@morpho-org/morpho-sdk` gets a minor changeset because it
   re-exports a new public class, utility, type, fetcher, ABI, or signature from
   `@morpho-org/blue-sdk`, `@morpho-org/blue-sdk-viem`, or `@morpho-org/morpho-ts`, the same
-  changeset must include patch bumps for `@morpho-org/liquidity-sdk-viem`,
-  `@morpho-org/liquidation-sdk-viem`, and `@morpho-org/migration-sdk-viem`.
-- The same patch cascade is required when `morpho-sdk` changes the dependency range for
-  `@morpho-org/blue-sdk`, `@morpho-org/blue-sdk-viem`, or `@morpho-org/morpho-ts`, even if the
-  dependent package source code does not change. This prevents downstream lockfiles from silently
+  changeset must include patch bumps only for maintained dependents such as
+  `@morpho-org/liquidity-sdk-viem` when their peer ranges or release notes need to move.
+  Frozen deprecated packages (`@morpho-org/liquidation-sdk-viem`,
+  `@morpho-org/bundler-sdk-viem`, `@morpho-org/migration-sdk-viem`,
+  `@morpho-org/simulation-sdk`, `@morpho-org/blue-sdk-wagmi`,
+  `@morpho-org/simulation-sdk-wagmi`, and `@morpho-org/test-wagmi`) must not receive cascade
+  changeset entries.
+- Frozen deprecated packages must be excluded from CI build, lint, and Vitest execution. Keep their
+  Vitest projects configured so contributors can still run deprecated package tests locally through
+  the standard `pnpm test` command. Maintained-package tests must stay in CI even when they import a
+  deprecated package for parity coverage.
+- The same maintained-dependent patch cascade is required when `morpho-sdk` changes the dependency
+  range for `@morpho-org/blue-sdk`, `@morpho-org/blue-sdk-viem`, or `@morpho-org/morpho-ts`, even if
+  the dependent package source code does not change. This prevents downstream lockfiles from silently
   pinning stale transitive internal SDK versions.
 - Release reviewers must block the release PR when the required cascade changeset entries are
   missing. No separate CI graph check is required by this TIB.

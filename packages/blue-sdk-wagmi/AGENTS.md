@@ -1,5 +1,11 @@
 # blue-sdk-wagmi Conventions
 
+## Deprecated package freeze
+
+- `@morpho-org/blue-sdk-wagmi` is frozen/deprecated. Do not make feature, address, ABI, dependency, test, JSDoc, refactor, or changeset updates in this package.
+- Only PRs explicitly scoped to deprecation metadata or source deletion may touch this package, and those PRs must not add new supported behavior.
+- If requested work appears to require this package, stop and move the maintained surface to `@morpho-org/morpho-sdk`, `@morpho-org/blue-sdk`, or `@morpho-org/blue-sdk-viem` as appropriate, or leave this package unchanged.
+
 - Hooks wrap query option helpers: `useMarket` calls `fetchMarketQueryOptions`.
 - Hook parameters compose fetch params, `ConfigParameter`, and `QueryParameter`.
 - Keep query keys prefixed with `BLUE_SDK_QUERY_KEY_PREFIX` and use `hashFn` for bigint support.
