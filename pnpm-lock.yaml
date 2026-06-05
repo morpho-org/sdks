@@ -530,19 +530,19 @@ importers:
       '@morpho-org/blue-sdk-viem':
         specifier: workspace:^
         version: link:../blue-sdk-viem
-      '@morpho-org/bundler-sdk-viem':
-        specifier: workspace:^
-        version: link:../bundler-sdk-viem
       '@morpho-org/morpho-ts':
         specifier: workspace:^
         version: link:../morpho-ts
-      '@morpho-org/simulation-sdk':
-        specifier: workspace:^
-        version: link:../simulation-sdk
       zod:
         specifier: 'catalog:'
         version: 4.4.3
     devDependencies:
+      '@morpho-org/bundler-sdk-viem':
+        specifier: workspace:^
+        version: link:../bundler-sdk-viem
+      '@morpho-org/simulation-sdk':
+        specifier: workspace:^
+        version: link:../simulation-sdk
       '@morpho-org/test':
         specifier: workspace:^
         version: link:../test

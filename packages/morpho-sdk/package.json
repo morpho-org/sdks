@@ -93,15 +93,15 @@
   "dependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/blue-sdk-viem": "workspace:^",
-    "@morpho-org/bundler-sdk-viem": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
-    "@morpho-org/simulation-sdk": "workspace:^",
     "zod": "catalog:"
   },
   "peerDependencies": {
     "viem": "catalog:peer"
   },
   "devDependencies": {
+    "@morpho-org/bundler-sdk-viem": "workspace:^",
+    "@morpho-org/simulation-sdk": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "dotenv": "^17.4.2",
     "fast-check": "^4.8.0",
