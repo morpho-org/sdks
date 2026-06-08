@@ -1,5 +1,11 @@
 # bundler-sdk-viem Conventions
 
+## Deprecated package freeze
+
+- `@morpho-org/bundler-sdk-viem` is frozen/deprecated. Do not make feature, address, ABI, dependency, test, JSDoc, refactor, or changeset updates in this package.
+- Only PRs explicitly scoped to deprecation metadata or source deletion may touch this package, and those PRs must not add new supported behavior.
+- If requested work appears to require this package, stop and move the maintained surface to `@morpho-org/morpho-sdk`, `@morpho-org/blue-sdk`, or `@morpho-org/blue-sdk-viem` as appropriate, or leave this package unchanged.
+
 - Convert simulation operations (input language) into bundler actions (output language) before encoding transactions.
 - `ActionBundle` and bundle helpers own action ordering and nested bundle sequencing.
 - Keep action encoders pure where possible: `BundlerAction.encode(chainId, action)`.

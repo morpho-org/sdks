@@ -12,11 +12,11 @@ import {
   BorrowExceedsSafeLtvError,
   isRequirementAuthorization,
   MissingAccrualPositionError,
-  MorphoClient,
+  morphoViemExtension,
 } from "../../../src/index.js";
 import { WethUsdsBlue } from "../../fixtures/blue.js";
-import { supplyCollateral } from "../../helpers/blue.js";
 import { testInvariants } from "../../helpers/invariants.js";
+import { supplyCollateral } from "../../helpers/blue.js";
 import { test } from "../../setup.js";
 
 describe("BorrowBlue", () => {
@@ -35,7 +35,7 @@ describe("BorrowBlue", () => {
       collateralAmount,
     });
 
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -80,7 +80,7 @@ describe("BorrowBlue", () => {
         markets: { WethUsdsBlue },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -140,7 +140,7 @@ describe("BorrowBlue", () => {
       collateralAmount,
     });
 
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -156,7 +156,7 @@ describe("BorrowBlue", () => {
   test("should revert when positionData is not provided", async ({
     client,
   }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
 
     expect(() =>

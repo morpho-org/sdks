@@ -78,6 +78,35 @@ export type SimulationAuthorization =
     };
 
 /**
+ * Net balance change for a single asset (one token) within an account's entry.
+ * Native ETH uses viem's `ethAddress` sentinel as `token`. `symbol`/`decimals`
+ * are best-effort and may be absent, notably on the `eth_simulateV1` fallback.
+ */
+export interface AssetChange {
+  readonly token: Address;
+  readonly symbol?: string;
+  readonly decimals?: number;
+  /** Signed net change of the account's balance, in raw token units. */
+  readonly diff: bigint;
+}
+
+/**
+ * Net per-token balance changes for one account over the whole bundle. Returned
+ * for every account that nets a non-zero change, the sender and counterparties
+ * alike (the zero address is kept for mints/burns). Accounts and their `changes`
+ * are sorted by address for deterministic, cross-backend output.
+ *
+ * Native-ETH coverage differs by backend: Tenderly reports the full net ETH
+ * delta (including ETH moved via internal calls), while the `eth_simulateV1`
+ * fallback derives native ETH only from the top-level transaction `value`s —
+ * ETH moved internally (e.g. a `WETH.withdraw` refund) is not captured there.
+ */
+export interface AccountAssetChanges {
+  readonly account: Address;
+  readonly changes: readonly AssetChange[];
+}
+
+/**
  * A parsed ERC20 / WETH9 transfer extracted from simulation logs. Returned in
  * `SimulationResult.transfers`.
  */
@@ -101,7 +130,10 @@ export interface Transfer {
  * - `simulationTxs` is the full resolved transaction list (including
  *   prepended authorization txs).
  * - `calls[i]` corresponds 1:1 with `simulationTxs[i]` — read raw logs,
- *   status, returnData/gasUsed, and (Tenderly only) assetChanges per tx.
+ *   status, returnData/gasUsed.
+ * - `assetChanges` is the net per-asset balance change over the whole bundle,
+ *   grouped by account (sender and counterparties), normalized to the same
+ *   shape across backends — see `AccountAssetChanges`.
  * - `transfers[k].txIdx` indexes into `simulationTxs` to attribute each
  *   transfer to its emitting transaction.
  */
@@ -110,12 +142,13 @@ export interface SimulationResult {
   readonly simulationTxs: readonly SimulationTransaction[];
   /**
    * Per-transaction normalized output. `calls[i]` corresponds 1:1 with
-   * `simulationTxs[i]`. Use this to read raw logs, status, return data, gas
-   * used, and (Tenderly only) asset changes per transaction.
+   * `simulationTxs[i]`. Use this to read raw logs, status, return data, gas used.
    */
   readonly calls: readonly SimulationCall[];
   /** Parsed ERC-20 / WETH9 transfers from the simulation. */
   readonly transfers: readonly Transfer[];
+  /** Net per-asset balance changes, grouped by account, over the whole bundle. */
+  readonly assetChanges: readonly AccountAssetChanges[];
 }
 
 /** Minimal structured logger the package calls for warnings and info. */
@@ -141,10 +174,11 @@ export interface SimulateParams {
 /**
  * Internal raw result from a simulation adapter before normalization.
  * `calls[i]` corresponds 1:1 with the i-th transaction passed to the
- * backend.
+ * backend; `assetChanges` is the bundle-level aggregate grouped by account.
  */
 export interface RawSimulationResult {
   calls: RawCall[];
+  assetChanges: AccountAssetChanges[];
 }
 
 /**
@@ -170,8 +204,6 @@ export interface RawCall {
   status: boolean;
   returnData: Hex;
   gasUsed: bigint;
-  /** Tenderly-only `assetChanges` payload. Absent on `eth_simulateV1`. */
-  assetChanges?: unknown;
 }
 
 /**
@@ -179,7 +211,8 @@ export interface RawCall {
  *
  * `SimulationResult.calls[i]` corresponds 1:1 with
  * `SimulationResult.simulationTxs[i]`. Use this to read raw logs, status,
- * return data, gas used, and (Tenderly only) asset changes per transaction.
+ * return data, and gas used. Net asset changes are reported at the bundle
+ * level — see `SimulationResult.assetChanges`.
  */
 export interface SimulationCall {
   readonly logs: readonly RawLog[];
@@ -194,9 +227,4 @@ export interface SimulationCall {
   readonly returnData: Hex;
   /** Gas used by this call (root frame). */
   readonly gasUsed: bigint;
-  /**
-   * Tenderly-only `assetChanges` payload for this tx. Opaque `unknown` —
-   * do not destructure without validation. Absent on `eth_simulateV1`.
-   */
-  readonly assetChanges?: unknown;
 }

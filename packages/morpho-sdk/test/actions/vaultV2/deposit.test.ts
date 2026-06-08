@@ -1,7 +1,10 @@
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { isRequirementApproval, MorphoClient } from "../../../src/index.js";
+import {
+  isRequirementApproval,
+  morphoViemExtension,
+} from "../../../src/index.js";
 import { KeyrockUsdcVaultV2 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
@@ -24,7 +27,7 @@ describe("DepositVaultV2", () => {
         vaults: { KeyrockUsdcVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client);
+        const morpho = client.extend(morphoViemExtension()).morpho;
         const vaultV2 = morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
         const vaultData = await vaultV2.getData();
         const deposit = vaultV2.deposit({

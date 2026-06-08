@@ -5,13 +5,20 @@ import { describe, expect } from "vitest";
 import {
   isRequirementAuthorization,
   MAX_SLIPPAGE_TOLERANCE,
-  MorphoClient,
+  morphoViemExtension,
   type VaultReallocation,
 } from "../../../src/index.js";
-import { CbbtcUsdcBlue, CbbtcUsdcBlueAlt } from "../../fixtures/blue.js";
+import {
+  CbbtcUsdcBlue,
+  CbbtcUsdcBlueAlt,
+} from "../../fixtures/blue.js";
 import { YearnUsdcVaultV1 } from "../../fixtures/vaultV1.js";
-import { borrow, supplyCollateral, supplyLoan } from "../../helpers/blue.js";
 import { testInvariants } from "../../helpers/invariants.js";
+import {
+  borrow,
+  supplyCollateral,
+  supplyLoan,
+} from "../../helpers/blue.js";
 import { test } from "../../setup.js";
 
 // Two real wstETH/wNative markets sharing the loan + collateral pair but differing oracles, at the pinned fork.
@@ -71,7 +78,7 @@ describe("RefinanceBlue (fork)", () => {
       client,
       params: { markets: { source: wstEthWeth_v2, target: wstEthWeth_v1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const sourceEntity = morphoClient.blue(wstEthWeth_v2, mainnet.id);
         const sourcePosition = await sourceEntity.getPositionData(
           client.account.address,
@@ -153,7 +160,7 @@ describe("RefinanceBlue (fork)", () => {
       client,
       params: { markets: { source: wstEthWeth_v2, target: wstEthWeth_v1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const sourceEntity = morphoClient.blue(wstEthWeth_v2, mainnet.id);
         const sourcePosition = await sourceEntity.getPositionData(
           client.account.address,
@@ -220,7 +227,7 @@ describe("RefinanceBlue (fork)", () => {
       client,
       params: { markets: { source: wstEthWeth_v2, target: wstEthWeth_v1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const sourceEntity = morphoClient.blue(wstEthWeth_v2, mainnet.id);
         const sourcePosition = await sourceEntity.getPositionData(
           client.account.address,
@@ -317,12 +324,18 @@ describe("RefinanceBlue (fork)", () => {
         },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
-        const sourceEntity = morphoClient.blue(CbbtcUsdcBlue, mainnet.id);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
+        const sourceEntity = morphoClient.blue(
+          CbbtcUsdcBlue,
+          mainnet.id,
+        );
         const sourcePosition = await sourceEntity.getPositionData(
           client.account.address,
         );
-        const targetEntity = morphoClient.blue(CbbtcUsdcBlueAlt, mainnet.id);
+        const targetEntity = morphoClient.blue(
+          CbbtcUsdcBlueAlt,
+          mainnet.id,
+        );
         const targetPosition = await targetEntity.getPositionData(
           client.account.address,
         );

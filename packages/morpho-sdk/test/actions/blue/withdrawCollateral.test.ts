@@ -4,14 +4,14 @@ import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
   MissingAccrualPositionError,
-  MorphoClient,
+  morphoViemExtension,
   NonPositiveWithdrawCollateralAmountError,
   WithdrawExceedsCollateralError,
   WithdrawMakesPositionUnhealthyError,
 } from "../../../src/index.js";
 import { WethUsdsBlue } from "../../fixtures/blue.js";
-import { borrow, supplyCollateral } from "../../helpers/blue.js";
 import { testInvariants } from "../../helpers/invariants.js";
+import { borrow, supplyCollateral } from "../../helpers/blue.js";
 import { test } from "../../setup.js";
 
 describe("WithdrawCollateralBlue", () => {
@@ -36,7 +36,7 @@ describe("WithdrawCollateralBlue", () => {
         markets: { WethUsdsBlue },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -85,7 +85,7 @@ describe("WithdrawCollateralBlue", () => {
       client,
       params: { markets: { WethUsdsBlue } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -124,7 +124,7 @@ describe("WithdrawCollateralBlue", () => {
       borrowAmount,
     });
 
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -156,7 +156,7 @@ describe("WithdrawCollateralBlue", () => {
       borrowAmount: parseUnits("100", 18),
     });
 
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -172,7 +172,7 @@ describe("WithdrawCollateralBlue", () => {
   test("should throw when withdraw amount is non-positive", async ({
     client,
   }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -188,7 +188,7 @@ describe("WithdrawCollateralBlue", () => {
   test("should revert when positionData is not provided", async ({
     client,
   }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
 
     expect(() =>

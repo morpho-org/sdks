@@ -1,5 +1,0 @@
----
-"@morpho-org/morpho-sdk": minor
----
-
-Add `Blue.refinance()` to migrate a position (collateral + debt) atomically from one Morpho Blue market to another sharing the same loan and collateral tokens. Implemented as a flash-collateral bundle via `onMorphoSupplyCollateral`: GA1 deposits on the target, borrows inside the callback, repays the source, then withdraws the source collateral to settle the deferred transfer — no user-side prefunding required. Shares mode is immune to mid-tx accrual; collat-only and partial migrations are supported. Optional `targetReallocations` propagates PublicAllocator `reallocateTo` calls onto the target market so the in-callback borrow can find on-chain liquidity (parity with `borrow()` / `supplyCollateralBorrow()`). Adds nine typed errors (`NegativeBorrowSharesError`, `BorrowAmountAndSharesExclusiveError`, `NegativeMaxRepaySharePriceError`, `RefinanceSameMarketError`, `RefinanceTokenMismatchError`, `RefinanceExceedsCollateralError`, `RefinanceExceedsBorrowSharesError`, `RefinanceExceedsBorrowAssetsError`, `RefinanceSharesMissingBorrowAssetsError`) and the `BlueRefinanceAction` discriminant (now including `reallocationFee`).

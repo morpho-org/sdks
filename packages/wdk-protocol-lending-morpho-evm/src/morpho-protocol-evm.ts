@@ -8,7 +8,8 @@ import {
   type ERC20ApprovalAction,
   type Metadata,
   type MorphoAuthorizationAction,
-  MorphoClient,
+  type MorphoClientType,
+  morphoViemExtension,
   type Requirement,
   type RequirementSignature,
   type Transaction,
@@ -411,7 +412,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   private _chainId: number | undefined = undefined;
   private _viemClient: ViemPublicClient | undefined = undefined;
   private _viemClientAccount: Address | undefined = undefined;
-  private _morphoClient: MorphoClient | undefined = undefined;
+  private _morphoClient: MorphoClientType | undefined = undefined;
   private _marketParams: MarketParams | undefined = undefined;
 
   /**
@@ -1098,7 +1099,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
 
   private async _getVault(): Promise<{
     address: Address;
-    entity: ReturnType<MorphoClient["vaultV2"]>;
+    entity: ReturnType<MorphoClientType["vaultV2"]>;
   }> {
     const target = this._resolveVaultTarget();
     const { address } = target;
@@ -1112,7 +1113,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
 
   private async _getMarket(): Promise<{
     params: MarketParams;
-    entity: ReturnType<MorphoClient["blue"]>;
+    entity: ReturnType<MorphoClientType["blue"]>;
   }> {
     const params = await this._getMarketParams();
     const chainId = await this._getChainId();
@@ -1155,15 +1156,17 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     return this._marketParams;
   }
 
-  private async _getMorphoClient(): Promise<MorphoClient> {
+  private async _getMorphoClient(): Promise<MorphoClientType> {
     const viemClient = await this._getViemClient();
 
     if (!this._morphoClient) {
-      this._morphoClient = new MorphoClient(viemClient, {
-        supportSignature: this._options.supportSignature ?? false,
-        supportDeployless: this._options.supportDeployless,
-        metadata: this._options.metadata,
-      });
+      this._morphoClient = viemClient.extend(
+        morphoViemExtension({
+          supportSignature: this._options.supportSignature ?? false,
+          supportDeployless: this._options.supportDeployless,
+          metadata: this._options.metadata,
+        }),
+      ).morpho;
     }
 
     return this._morphoClient;

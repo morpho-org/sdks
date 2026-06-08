@@ -3,7 +3,7 @@ import type { AnvilTestClient } from "@morpho-org/test";
 import { type Address, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { MorphoClient, vaultV2ForceRedeem } from "../../../src/index.js";
+import { morphoViemExtension, vaultV2ForceRedeem } from "../../../src/index.js";
 import { ReEcosystemUsdcVaultV2 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
@@ -42,7 +42,7 @@ describe("ForceRedeem VaultV2", () => {
   test("should create force redeem transaction from adapter market V1", async ({
     client,
   }) => {
-    const morpho = new MorphoClient(client);
+    const morpho = client.extend(morphoViemExtension()).morpho;
     const assetsDeallocate = parseUnits("100", 6);
 
     const vaultV2 = morpho.vaultV2(ReEcosystemUsdcVaultV2.address, mainnet.id);
@@ -108,7 +108,7 @@ describe("ForceRedeem VaultV2", () => {
   test("should force redeem transaction from adapter vault V1", async ({
     client,
   }) => {
-    const morpho = new MorphoClient(client);
+    const morpho = client.extend(morphoViemExtension()).morpho;
     const assets = 100n;
 
     const vaultV2 = morpho.vaultV2(ReEcosystemUsdcVaultV2.address, mainnet.id);
@@ -166,7 +166,7 @@ describe("ForceRedeem VaultV2", () => {
   test("should force redeem transaction with multiple deallocations", async ({
     client,
   }) => {
-    const morpho = new MorphoClient(client);
+    const morpho = client.extend(morphoViemExtension()).morpho;
     const assetsDeallocate1 = parseUnits("1", 6);
     const assetsDeallocate2 = 100n;
     const totalDeallocated = assetsDeallocate1 + assetsDeallocate2;

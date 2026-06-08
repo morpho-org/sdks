@@ -1,6 +1,7 @@
 import {
   type BlockTag,
   createPublicClient,
+  ethAddress,
   getAddress,
   http,
   maxUint256,
@@ -11,16 +12,29 @@ import {
   SimulationValidationError,
 } from "../../errors.js";
 import type {
+  AccountAssetChanges,
   RawCall,
   RawSimulationResult,
   SimulationTransaction,
+  Transfer,
 } from "../../types.js";
+import { type AssetChangeEntry, groupAssetChanges } from "../asset-changes.js";
+import { parseTransfers } from "../parsing/index.js";
 
 /**
  * Simulate transactions using eth_simulateV1 (viem simulateCalls).
  *
  * Uses stateOverride to set the user's ETH balance high enough to avoid
  * false "insufficient balance for gas" reverts.
+ *
+ * Derives `assetChanges` (net per-token deltas grouped by account) from the
+ * emitted transfer logs, plus native ETH from each transaction's top-level
+ * `value` (payer debited, recipient credited, under viem's `ethAddress`).
+ *
+ * Coverage on this path is therefore narrower than the Tenderly backend:
+ * native ETH moved through internal calls (e.g. a `WETH.withdraw` refund, a
+ * swap that pays out ETH) emits no log and is not reflected in `value`, so it
+ * is not captured. For full native-ETH accounting use Tenderly.
  */
 export async function simulateV1(params: {
   rpcUrl: string;
@@ -107,7 +121,13 @@ export async function simulateV1(params: {
       gasUsed: r.gasUsed,
     }));
 
-    return { calls: rawCalls };
+    return {
+      calls: rawCalls,
+      assetChanges: toAssetChanges({
+        transfers: parseTransfers(rawCalls),
+        transactions,
+      }),
+    };
   } catch (error) {
     if (error instanceof SimulationRevertedError) throw error;
     if (error instanceof ExternalServiceError) throw error;
@@ -116,4 +136,31 @@ export async function simulateV1(params: {
       { cause: error },
     );
   }
+}
+
+/**
+ * Reduce parsed transfer logs and top-level transaction values to net per-token
+ * balance changes grouped by account. Native ETH is taken from the top-level
+ * `value`s (payer debited, recipient credited — internal moves are not logged,
+ * see `simulateV1` for the coverage caveat).
+ */
+function toAssetChanges(params: {
+  transfers: Transfer[];
+  transactions: SimulationTransaction[];
+}): AccountAssetChanges[] {
+  const { transfers, transactions } = params;
+  const entries: AssetChangeEntry[] = [];
+
+  for (const tx of transactions) {
+    if (!tx.value) continue;
+    entries.push({ account: tx.from, token: ethAddress, diff: -tx.value });
+    entries.push({ account: tx.to, token: ethAddress, diff: tx.value });
+  }
+
+  for (const { token, from, to, amount } of transfers) {
+    entries.push({ account: to, token, diff: amount });
+    entries.push({ account: from, token, diff: -amount });
+  }
+
+  return groupAssetChanges(entries);
 }

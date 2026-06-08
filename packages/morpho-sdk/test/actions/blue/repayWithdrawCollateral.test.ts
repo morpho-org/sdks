@@ -10,7 +10,7 @@ import {
   isRequirementApproval,
   isRequirementAuthorization,
   MissingAccrualPositionError,
-  MorphoClient,
+  morphoViemExtension,
   NonPositiveRepayAmountError,
   NonPositiveWithdrawCollateralAmountError,
   RepayExceedsDebtError,
@@ -18,8 +18,8 @@ import {
   WithdrawMakesPositionUnhealthyError,
 } from "../../../src/index.js";
 import { WethUsdsBlue } from "../../fixtures/blue.js";
-import { borrow, supplyCollateral } from "../../helpers/blue.js";
 import { testInvariants } from "../../helpers/invariants.js";
+import { borrow, supplyCollateral } from "../../helpers/blue.js";
 import { test } from "../../setup.js";
 
 describe("RepayWithdrawCollateralBlue", () => {
@@ -57,9 +57,11 @@ describe("RepayWithdrawCollateralBlue", () => {
         markets: { WethUsdsBlue },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client, {
-          supportSignature: false,
-        });
+        const morphoClient = client.extend(
+          morphoViemExtension({
+            supportSignature: false,
+          }),
+        ).morpho;
         const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -125,9 +127,11 @@ describe("RepayWithdrawCollateralBlue", () => {
         markets: { WethUsdsBlue },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client, {
-          supportSignature: false,
-        });
+        const morphoClient = client.extend(
+          morphoViemExtension({
+            supportSignature: false,
+          }),
+        ).morpho;
         const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -220,9 +224,11 @@ describe("RepayWithdrawCollateralBlue", () => {
       client,
       params: { markets: { WethUsdsBlue } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client, {
-          supportSignature: false,
-        });
+        const morphoClient = client.extend(
+          morphoViemExtension({
+            supportSignature: false,
+          }),
+        ).morpho;
         const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -281,7 +287,7 @@ describe("RepayWithdrawCollateralBlue", () => {
       borrowAmount,
     });
 
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -313,7 +319,7 @@ describe("RepayWithdrawCollateralBlue", () => {
       borrowAmount,
     });
 
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -356,7 +362,7 @@ describe("RepayWithdrawCollateralBlue", () => {
 
     expect(positionData.market.toBorrowShares(1n, "Down")).toBe(0n);
 
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
 
     expect(() =>
@@ -370,7 +376,7 @@ describe("RepayWithdrawCollateralBlue", () => {
   });
 
   test("should throw when repay amount is non-positive", async ({ client }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -403,7 +409,7 @@ describe("RepayWithdrawCollateralBlue", () => {
       borrowAmount,
     });
 
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -420,7 +426,7 @@ describe("RepayWithdrawCollateralBlue", () => {
   test("should revert when positionData is not provided", async ({
     client,
   }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
 
     expect(() =>

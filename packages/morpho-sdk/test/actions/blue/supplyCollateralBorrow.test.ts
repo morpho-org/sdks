@@ -12,11 +12,14 @@ import {
   isRequirementAuthorization,
   isRequirementSignature,
   MissingAccrualPositionError,
-  MorphoClient,
+  morphoViemExtension,
 } from "../../../src/index.js";
-import { UsdcEurcvBlue, WethUsdsBlue } from "../../fixtures/blue.js";
-import { supplyCollateral } from "../../helpers/blue.js";
+import {
+  UsdcEurcvBlue,
+  WethUsdsBlue,
+} from "../../fixtures/blue.js";
 import { testInvariants } from "../../helpers/invariants.js";
+import { supplyCollateral } from "../../helpers/blue.js";
 import { test } from "../../setup.js";
 
 describe("SupplyCollateralBorrowBlue", () => {
@@ -36,7 +39,7 @@ describe("SupplyCollateralBorrowBlue", () => {
       client,
       params: { markets: { WethUsdsBlue } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -111,7 +114,7 @@ describe("SupplyCollateralBorrowBlue", () => {
       client,
       params: { markets: { WethUsdsBlue } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -183,7 +186,7 @@ describe("SupplyCollateralBorrowBlue", () => {
       client,
       params: { markets: { WethUsdsBlue } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -269,7 +272,7 @@ describe("SupplyCollateralBorrowBlue", () => {
       client,
       params: { markets: { WethUsdsBlue } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -329,9 +332,11 @@ describe("SupplyCollateralBorrowBlue", () => {
       client,
       params: { markets: { UsdcEurcvBlue } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client, {
-          supportSignature: true,
-        });
+        const morphoClient = client.extend(
+          morphoViemExtension({
+            supportSignature: true,
+          }),
+        ).morpho;
         const market = morphoClient.blue(UsdcEurcvBlue, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -410,9 +415,11 @@ describe("SupplyCollateralBorrowBlue", () => {
       client,
       params: { markets: { WethUsdsBlue } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client, {
-          supportSignature: true,
-        });
+        const morphoClient = client.extend(
+          morphoViemExtension({
+            supportSignature: true,
+          }),
+        ).morpho;
         const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -484,7 +491,7 @@ describe("SupplyCollateralBorrowBlue", () => {
     test("should throw MissingAccrualPositionError when positionData is not provided", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client);
+      const morphoClient = client.extend(morphoViemExtension()).morpho;
       const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
 
       expect(() =>
@@ -500,7 +507,7 @@ describe("SupplyCollateralBorrowBlue", () => {
     test("should throw BorrowExceedsSafeLtvError when borrow exceeds LLTV buffer", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client);
+      const morphoClient = client.extend(morphoViemExtension()).morpho;
       const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
       const positionData = await market.getPositionData(client.account.address);
 
@@ -517,7 +524,7 @@ describe("SupplyCollateralBorrowBlue", () => {
     test("should throw BorrowExceedsSafeLtvError when borrow exceeds LLTV buffer on existing position", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client);
+      const morphoClient = client.extend(morphoViemExtension()).morpho;
       const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
 
       await supplyCollateral({
@@ -544,7 +551,7 @@ describe("SupplyCollateralBorrowBlue", () => {
     test("should throw ExcessiveSlippageToleranceError for slippage above maximum", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client);
+      const morphoClient = client.extend(morphoViemExtension()).morpho;
       const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
       const positionData = await market.getPositionData(client.account.address);
 

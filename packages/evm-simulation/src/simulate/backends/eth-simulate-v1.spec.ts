@@ -1,7 +1,9 @@
 import {
   type Address,
+  ethAddress,
   type Hex,
   maxUint256,
+  parseEther,
   type SimulateCallsParameters,
 } from "viem";
 import { vi } from "vitest";
@@ -10,6 +12,7 @@ import {
   SimulationRevertedError,
   SimulationValidationError,
 } from "../../errors.js";
+import { makeTransferLog } from "../../test-helpers/index.js";
 import type { SimulationTransaction } from "../../types.js";
 import { simulateV1 } from "./eth-simulate-v1.js";
 
@@ -344,5 +347,149 @@ describe.sequential("simulateV1", () => {
 
     expect(result.calls[0]!.logs).toEqual([]);
     expect(result.calls[0]!.returnData).toBe("0x");
+  });
+
+  it("groups assetChanges by account from transfer logs (both endpoints)", async () => {
+    mockSimulateCalls.mockResolvedValueOnce({
+      results: [
+        {
+          status: "success",
+          gasUsed: 0n,
+          data: "0x" as Hex,
+          logs: [
+            makeTransferLog({
+              token: USDC,
+              from: USER,
+              to: VAULT,
+              amount: 1_000_000n,
+            }),
+          ],
+        },
+      ],
+    });
+
+    const result = await simulateV1({
+      rpcUrl: "http://rpc.local",
+      chainId: 1,
+      transactions: [BASIC_TX],
+    });
+
+    expect(result.assetChanges).toEqual([
+      { account: USER, changes: [{ token: USDC, diff: -1_000_000n }] },
+      { account: VAULT, changes: [{ token: USDC, diff: 1_000_000n }] },
+    ]);
+  });
+
+  it("nets inbound and outbound transfers of the same token to zero and drops it", async () => {
+    mockSimulateCalls.mockResolvedValueOnce({
+      results: [
+        {
+          status: "success",
+          gasUsed: 0n,
+          data: "0x" as Hex,
+          logs: [
+            makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 5n }),
+            makeTransferLog({ token: USDC, from: VAULT, to: USER, amount: 5n }),
+          ],
+        },
+      ],
+    });
+
+    const result = await simulateV1({
+      rpcUrl: "http://rpc.local",
+      chainId: 1,
+      transactions: [BASIC_TX],
+    });
+
+    expect(result.assetChanges).toEqual([]);
+  });
+
+  it("returns empty assetChanges when no transfer logs are emitted", async () => {
+    mockSimulateCalls.mockResolvedValueOnce({
+      results: [
+        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
+      ],
+    });
+
+    const result = await simulateV1({
+      rpcUrl: "http://rpc.local",
+      chainId: 1,
+      transactions: [BASIC_TX],
+    });
+
+    expect(result.assetChanges).toEqual([]);
+  });
+
+  it("accounts native ETH from top-level tx values (payer debited, recipient credited)", async () => {
+    mockSimulateCalls.mockResolvedValueOnce({
+      results: [
+        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
+        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
+      ],
+    });
+
+    const result = await simulateV1({
+      rpcUrl: "http://rpc.local",
+      chainId: 1,
+      transactions: [
+        { ...BASIC_TX, value: parseEther("1") },
+        { ...BASIC_TX, value: parseEther("2") },
+      ],
+    });
+
+    expect(result.assetChanges).toEqual([
+      {
+        account: USER,
+        changes: [{ token: ethAddress, diff: -parseEther("3") }],
+      },
+      {
+        account: VAULT,
+        changes: [{ token: ethAddress, diff: parseEther("3") }],
+      },
+    ]);
+  });
+
+  it("merges native ETH and ERC20 deltas, sorted by token address", async () => {
+    mockSimulateCalls.mockResolvedValueOnce({
+      results: [
+        {
+          status: "success",
+          gasUsed: 0n,
+          data: "0x" as Hex,
+          logs: [
+            makeTransferLog({
+              token: USDC,
+              from: USER,
+              to: VAULT,
+              amount: 1_000_000n,
+            }),
+          ],
+        },
+      ],
+    });
+
+    const result = await simulateV1({
+      rpcUrl: "http://rpc.local",
+      chainId: 1,
+      transactions: [{ ...BASIC_TX, value: parseEther("1") }],
+    });
+
+    // USDC (0xa0b8…) sorts before the ethAddress sentinel (0xeeee…).
+    expect(result.assetChanges).toEqual([
+      {
+        account: USER,
+        changes: [
+          { token: USDC, diff: -1_000_000n },
+          { token: ethAddress, diff: -parseEther("1") },
+        ],
+      },
+      {
+        account: VAULT,
+        changes: [
+          { token: USDC, diff: 1_000_000n },
+          { token: ethAddress, diff: parseEther("1") },
+        ],
+      },
+    ]);
   });
 });
