@@ -1,14 +1,14 @@
 /**
- * Example: Using Morpho SDK with MorphoClient
+ * Example: Using Morpho SDK via the viem extension
  *
- * This example demonstrates how to use the Morpho SDK
- * by creating a MorphoClient instance.
+ * This example demonstrates how to use the Morpho SDK by extending a viem
+ * client with `morphoViemExtension()` to expose the `client.morpho` namespace.
  */
 
 import dotenv from "dotenv";
 import { type Address, createWalletClient, http, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
-import { MorphoClient } from "../src/client/index.js";
+import { morphoViemExtension } from "../src/client/index.js";
 import { env } from "../test/env.js";
 
 // Load environment variables
@@ -33,10 +33,10 @@ async function main() {
     transport: http(MAINNET_RPC_URL),
   });
 
-  // Create Morpho client
-  const morpho = new MorphoClient(walletClient);
+  // Extend the viem client with the Morpho namespace
+  const morpho = walletClient.extend(morphoViemExtension()).morpho;
 
-  console.log("🔷 Morpho SDK Example - MorphoClient");
+  console.log("🔷 Morpho SDK Example - viem extension");
   console.log("====================================\n");
   console.log(`Chain: ${mainnet.name} (${mainnet.id})`);
   console.log(`Vault: ${VAULT_ADDRESS}\n`);

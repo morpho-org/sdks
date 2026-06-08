@@ -5,7 +5,7 @@ import { describe, expect } from "vitest";
 import {
   isRequirementAuthorization,
   MAX_SLIPPAGE_TOLERANCE,
-  MorphoClient,
+  morphoViemExtension,
   type VaultReallocation,
 } from "../../../src/index.js";
 import {
@@ -78,7 +78,7 @@ describe("RefinanceMarketV1 (fork)", () => {
       client,
       params: { markets: { source: wstEthWeth_v2, target: wstEthWeth_v1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const sourceEntity = morphoClient.marketV1(wstEthWeth_v2, mainnet.id);
         const sourcePosition = await sourceEntity.getPositionData(
           client.account.address,
@@ -160,7 +160,7 @@ describe("RefinanceMarketV1 (fork)", () => {
       client,
       params: { markets: { source: wstEthWeth_v2, target: wstEthWeth_v1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const sourceEntity = morphoClient.marketV1(wstEthWeth_v2, mainnet.id);
         const sourcePosition = await sourceEntity.getPositionData(
           client.account.address,
@@ -227,7 +227,7 @@ describe("RefinanceMarketV1 (fork)", () => {
       client,
       params: { markets: { source: wstEthWeth_v2, target: wstEthWeth_v1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const sourceEntity = morphoClient.marketV1(wstEthWeth_v2, mainnet.id);
         const sourcePosition = await sourceEntity.getPositionData(
           client.account.address,
@@ -324,7 +324,7 @@ describe("RefinanceMarketV1 (fork)", () => {
         },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const sourceEntity = morphoClient.marketV1(
           CbbtcUsdcMarketV1,
           mainnet.id,

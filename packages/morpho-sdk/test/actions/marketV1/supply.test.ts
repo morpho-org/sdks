@@ -7,7 +7,7 @@ import {
   isRequirementApproval,
   isRequirementSignature,
   MarketIdMismatchError,
-  MorphoClient,
+  morphoViemExtension,
   NativeAmountOnNonWNativeAssetError,
   NegativeNativeAmountError,
   NegativeSlippageToleranceError,
@@ -39,7 +39,7 @@ describe("SupplyMarketV1", () => {
       client,
       params: { markets: { CbbtcUsdcMarketV1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
         const marketData = await market.getMarketData();
 
@@ -80,7 +80,7 @@ describe("SupplyMarketV1", () => {
     client,
   }) => {
     const supplyAmount = parseUnits("100", 6);
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
     const marketData = await market.getMarketData();
 
@@ -101,7 +101,7 @@ describe("SupplyMarketV1", () => {
     client,
   }) => {
     const supplyAmount = parseUnits("100", 6);
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
     const marketData = await market.getMarketData();
 
@@ -140,9 +140,11 @@ describe("SupplyMarketV1", () => {
       client,
       params: { markets: { CbbtcUsdcMarketV1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client, {
-          supportSignature: true,
-        });
+        const morphoClient = client.extend(
+          morphoViemExtension({
+            supportSignature: true,
+          }),
+        ).morpho;
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
         const marketData = await market.getMarketData();
 
@@ -208,7 +210,7 @@ describe("SupplyMarketV1", () => {
       client,
       params: { markets: { WstethWethMarketV1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const market = morphoClient.marketV1(WstethWethMarketV1, mainnet.id);
         const marketData = await market.getMarketData();
 
@@ -261,7 +263,7 @@ describe("SupplyMarketV1", () => {
       client,
       params: { markets: { WstethWethMarketV1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const market = morphoClient.marketV1(WstethWethMarketV1, mainnet.id);
         const marketData = await market.getMarketData();
 
@@ -296,7 +298,7 @@ describe("SupplyMarketV1", () => {
   test("error: MarketIdMismatchError when marketData is for a different market", async ({
     client,
   }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
     const otherMarket = morphoClient.marketV1(WbtcUsdcSourceMarket, mainnet.id);
     const wrongMarketData = await otherMarket.getMarketData();
@@ -313,7 +315,7 @@ describe("SupplyMarketV1", () => {
   test("error: NegativeSupplyAmountError when amount is negative", async ({
     client,
   }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
     const marketData = await market.getMarketData();
 
@@ -329,7 +331,7 @@ describe("SupplyMarketV1", () => {
   test("error: NegativeNativeAmountError when nativeAmount is negative", async ({
     client,
   }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
     const marketData = await market.getMarketData();
 
@@ -346,7 +348,7 @@ describe("SupplyMarketV1", () => {
   test("error: ZeroSupplyAmountError when both amount and nativeAmount are zero", async ({
     client,
   }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
     const marketData = await market.getMarketData();
 
@@ -362,7 +364,7 @@ describe("SupplyMarketV1", () => {
   test("error: NegativeSlippageToleranceError when slippageTolerance is negative", async ({
     client,
   }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
     const marketData = await market.getMarketData();
 
@@ -379,7 +381,7 @@ describe("SupplyMarketV1", () => {
   test("error: ExcessiveSlippageToleranceError when slippageTolerance is too high", async ({
     client,
   }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
     const marketData = await market.getMarketData();
 
@@ -396,7 +398,7 @@ describe("SupplyMarketV1", () => {
   test("error: NativeAmountOnNonWNativeAssetError when loan token is not wNative", async ({
     client,
   }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
     const marketData = await market.getMarketData();
 

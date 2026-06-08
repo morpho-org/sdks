@@ -118,13 +118,15 @@ Rules for examples:
  * ```ts
  * import { createWalletClient, http } from "viem";
  * import { mainnet } from "viem/chains";
- * import { MorphoClient } from "@morpho-org/morpho-sdk";
+ * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
  *
- * const client = new MorphoClient(
- *   createWalletClient({ chain: mainnet, transport: http(), account: borrower }),
- * );
+ * const client = createWalletClient({
+ *   chain: mainnet,
+ *   transport: http(),
+ *   account: borrower,
+ * }).extend(morphoViemExtension());
  *
- * const market = client.marketV1(marketParams, 1);
+ * const market = client.morpho.marketV1(marketParams, 1);
  * const positionData = await market.getPositionData(borrower);
  * const { buildTx } = market.borrow({
  *   userAddress: borrower,

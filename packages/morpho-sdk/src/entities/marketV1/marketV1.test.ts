@@ -12,7 +12,7 @@ import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import { CbbtcUsdcMarketV1 } from "../../../test/fixtures/marketV1.js";
 import { test } from "../../../test/setup.js";
-import { MorphoClient } from "../../client/index.js";
+import { morphoViemExtension } from "../../client/index.js";
 import {
   MutuallyExclusiveRepayAmountsError,
   NegativeNativeAmountError,
@@ -65,7 +65,7 @@ describe("MorphoMarketV1 builder = signer freedom", () => {
   test("supplyCollateral: builds tx with userAddress different from client.account", async ({
     client,
   }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
 
     const supplyCollateral = market.supplyCollateral({
@@ -84,7 +84,7 @@ describe("MorphoMarketV1 builder = signer freedom", () => {
       chain: mainnet,
       transport: http(client.transport.url),
     });
-    const morphoClient = new MorphoClient(publicClient);
+    const morphoClient = publicClient.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
 
     const supplyCollateral = market.supplyCollateral({
@@ -99,10 +99,9 @@ describe("MorphoMarketV1 builder = signer freedom", () => {
 
 describe("MorphoMarketV1 validation", () => {
   test("supplyCollateral rejects invalid amounts", async ({ client }) => {
-    const market = new MorphoClient(client).marketV1(
-      CbbtcUsdcMarketV1,
-      mainnet.id,
-    );
+    const market = client
+      .extend(morphoViemExtension())
+      .morpho.marketV1(CbbtcUsdcMarketV1, mainnet.id);
 
     expect(() =>
       market.supplyCollateral({ userAddress: USER, amount: -1n }),
@@ -120,10 +119,9 @@ describe("MorphoMarketV1 validation", () => {
   });
 
   test("borrow rejects non-positive amounts", async ({ client }) => {
-    const market = new MorphoClient(client).marketV1(
-      CbbtcUsdcMarketV1,
-      mainnet.id,
-    );
+    const market = client
+      .extend(morphoViemExtension())
+      .morpho.marketV1(CbbtcUsdcMarketV1, mainnet.id);
 
     expect(() =>
       market.borrow({
@@ -137,9 +135,13 @@ describe("MorphoMarketV1 validation", () => {
   test("withdraw getRequirements includes Morpho authorization when missing", async ({
     client,
   }) => {
-    const market = new MorphoClient(client, {
-      supportSignature: false,
-    }).marketV1(CbbtcUsdcMarketV1, mainnet.id);
+    const market = client
+      .extend(
+        morphoViemExtension({
+          supportSignature: false,
+        }),
+      )
+      .morpho.marketV1(CbbtcUsdcMarketV1, mainnet.id);
 
     const requirements = await market
       .withdraw({
@@ -161,9 +163,13 @@ describe("MorphoMarketV1 validation", () => {
       functionName: "isAuthorized",
       result: true,
     });
-    const market = new MorphoClient(handle.client, {
-      supportSignature: false,
-    }).marketV1(CbbtcUsdcMarketV1, mainnet.id);
+    const market = handle.client
+      .extend(
+        morphoViemExtension({
+          supportSignature: false,
+        }),
+      )
+      .morpho.marketV1(CbbtcUsdcMarketV1, mainnet.id);
 
     const requirements = await market
       .withdraw({
@@ -179,10 +185,9 @@ describe("MorphoMarketV1 validation", () => {
   test("repay rejects conflicting and non-positive share amounts", async ({
     client,
   }) => {
-    const market = new MorphoClient(client).marketV1(
-      CbbtcUsdcMarketV1,
-      mainnet.id,
-    );
+    const market = client
+      .extend(morphoViemExtension())
+      .morpho.marketV1(CbbtcUsdcMarketV1, mainnet.id);
 
     expect(() =>
       market.repay({
@@ -204,10 +209,9 @@ describe("MorphoMarketV1 validation", () => {
   test("repayWithdrawCollateral rejects conflicting repay modes and excessive collateral withdrawal", async ({
     client,
   }) => {
-    const market = new MorphoClient(client).marketV1(
-      CbbtcUsdcMarketV1,
-      mainnet.id,
-    );
+    const market = client
+      .extend(morphoViemExtension())
+      .morpho.marketV1(CbbtcUsdcMarketV1, mainnet.id);
 
     expect(() =>
       market.repayWithdrawCollateral({
@@ -239,9 +243,13 @@ describe("MorphoMarketV1 validation", () => {
   test("repayWithdrawCollateral getRequirements includes Morpho authorization when missing", async ({
     client,
   }) => {
-    const market = new MorphoClient(client, {
-      supportSignature: false,
-    }).marketV1(CbbtcUsdcMarketV1, mainnet.id);
+    const market = client
+      .extend(
+        morphoViemExtension({
+          supportSignature: false,
+        }),
+      )
+      .morpho.marketV1(CbbtcUsdcMarketV1, mainnet.id);
 
     const requirements = await market
       .repayWithdrawCollateral({
@@ -258,10 +266,9 @@ describe("MorphoMarketV1 validation", () => {
   test("supplyCollateralBorrow rejects invalid collateral and borrow amounts", async ({
     client,
   }) => {
-    const market = new MorphoClient(client).marketV1(
-      CbbtcUsdcMarketV1,
-      mainnet.id,
-    );
+    const market = client
+      .extend(morphoViemExtension())
+      .morpho.marketV1(CbbtcUsdcMarketV1, mainnet.id);
 
     expect(() =>
       market.supplyCollateralBorrow({
@@ -301,10 +308,9 @@ describe("MorphoMarketV1 validation", () => {
   test("getReallocations accepts the operation/amount parameter shape", async ({
     client,
   }) => {
-    const market = new MorphoClient(client).marketV1(
-      CbbtcUsdcMarketV1,
-      mainnet.id,
-    );
+    const market = client
+      .extend(morphoViemExtension())
+      .morpho.marketV1(CbbtcUsdcMarketV1, mainnet.id);
 
     expect(
       market.getReallocations({

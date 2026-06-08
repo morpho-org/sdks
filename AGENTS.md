@@ -46,7 +46,7 @@ Cross-layer leaks (entities encoding calldata, actions reading state, helpers de
 
 ### Stateless, immutable, composable
 
-- `MorphoClient` wraps a viem client + readonly options. No `init()`, no cache, no warm-up — those couple us to a host runtime and break statelessness.
+- `morphoViemExtension()` rides on top of a viem client the integrator owns, exposing a stateless `morpho` namespace under `client.morpho` plus readonly options. No `init()`, no cache, no warm-up — those couple us to a host runtime and break statelessness.
 - Every returned `Transaction` is `deepFreeze`d. Public fields are `readonly`. Helpers return new objects, never mutate inputs.
 - Small primitives that combine. No kitchen-sink helpers; no boolean-prop explosions.
 - Prefer early returns over deep nesting — guard clauses first, happy path last.
