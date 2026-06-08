@@ -1,24 +1,25 @@
-import { deepFreeze } from "@morpho-org/morpho-ts";
-import { type Address, type Hex, zeroAddress } from "viem";
+import {
+  type Address,
+  encodeAbiParameters,
+  type Hex,
+  keccak256,
+  zeroAddress,
+  zeroHash,
+} from "viem";
 import { DEFAULT_TICK_SPACING, MAX_TICK } from "../constants.js";
 import {
-  InconsistentMarketError,
   InvalidOfferGroupError,
   InvalidOfferParameterError,
-  MissingOfferGroupError,
-  NoMatchingOffersError,
-  UnexpectedOfferSideError,
 } from "../errors.js";
-import { MarketUtils } from "../market/index.js";
 import type { BigIntish } from "../types.js";
 import {
   type BuildOfferParams,
   type IOffer,
   normalizeOffer,
   Offer,
+  offerStructAbiComponents,
   offerToStruct,
 } from "./Offer.js";
-import type { TakeableOfferStruct } from "./TakeableOffer.js";
 
 const comparableHex = (value: string) => value.toLowerCase();
 
@@ -36,47 +37,7 @@ const readBigIntParameter = (parameter: string, value: BigIntish) => {
 };
 
 /**
- * Quote entry shape converted by {@link OfferUtils.buildTakeableOffersFromOffers}.
- *
- * @example
- * ```ts
- * import type { QuoteTakeableOfferInput } from "@morpho-org/midnight-sdk";
- *
- * const input = {} as QuoteTakeableOfferInput;
- * console.log(input.ratifierData);
- * ```
- */
-export interface QuoteTakeableOfferInput {
-  /** Units suggested by the quote/router. */
-  readonly units: BigIntish;
-  /** Ratifier data suggested by the quote/router. */
-  readonly ratifierData: Hex;
-  /** Inline executable offer. */
-  readonly offer: IOffer | Offer;
-}
-
-/**
- * Parameters for {@link OfferUtils.buildTakeableOffersFromOffers}.
- *
- * @example
- * ```ts
- * import type { BuildTakeableOffersFromOffersParams } from "@morpho-org/midnight-sdk";
- *
- * const params: BuildTakeableOffersFromOffersParams = { entries: [] };
- * console.log(params.entries.length);
- * ```
- */
-export interface BuildTakeableOffersFromOffersParams {
-  /** Quote entries to convert. */
-  readonly entries: readonly QuoteTakeableOfferInput[];
-  /** Expected maker side. */
-  readonly expectedOfferSide?: "buy" | "sell";
-  /** Whether every offer must reference the same market. */
-  readonly enforceSameMarket?: boolean;
-}
-
-/**
- * Parameters for {@link OfferUtils.buildOfferGroup}.
+ * Parameters for {@link Offer.createGroup}.
  *
  * @example
  * ```ts
@@ -88,14 +49,7 @@ export interface BuildTakeableOffersFromOffersParams {
  */
 export interface BuildOfferGroupParams {
   /** Offer builder parameters without per-offer group resolution. */
-  readonly offers: readonly Omit<
-    BuildOfferParams,
-    "group" | "getRandomValues"
-  >[];
-  /** Shared consumption group for every offer. */
-  readonly group?: Hex;
-  /** Random source used once to generate a shared group when {@link group} is omitted. */
-  readonly getRandomValues?: (array: Uint8Array) => Uint8Array;
+  readonly offers: readonly Omit<BuildOfferParams, "group">[];
 }
 
 /**
@@ -358,29 +312,24 @@ export namespace OfferUtils {
   }
 
   /**
-   * Builds an offer from make-offer parameters.
+   * Creates an offer from validated make-offer parameters.
+   *
+   * This is the object-compatible implementation behind {@link Offer.create}.
    *
    * @param params - Offer parameters.
    * @returns Offer instance.
-   * @throws MissingOfferGroupError when neither `group` nor `getRandomValues` is supplied.
    * @throws InvalidOfferParameterError when a deterministic offer parameter cannot satisfy protocol rules.
    * @example
    * ```ts
    * import { OfferUtils } from "@morpho-org/midnight-sdk";
    *
-   * const offer = OfferUtils.buildOffer({} as never);
+   * const offer = OfferUtils.createOffer({} as never);
    * console.log(offer instanceof Object);
    * ```
    */
-  export function buildOffer(params: BuildOfferParams) {
+  export function createOffer(params: BuildOfferParams) {
     const maker = params.maker as Address;
     const validated = validateOfferParams(params);
-
-    let group = params.group;
-    if (group == null) {
-      if (params.getRandomValues == null) throw new MissingOfferGroupError();
-      group = Offer.randomGroup(params.getRandomValues);
-    }
 
     return new Offer({
       market: params.market,
@@ -389,7 +338,7 @@ export namespace OfferUtils {
       start: validated.start,
       expiry: validated.expiry,
       tick: validated.tick,
-      group,
+      group: params.group,
       callback: params.callback ?? zeroAddress,
       callbackData: params.callbackData ?? "0x",
       receiverIfMakerIsSeller: validated.receiverIfMakerIsSeller,
@@ -401,48 +350,79 @@ export namespace OfferUtils {
   }
 
   /**
-   * Builds a protocol-valid group of offers with one shared consumption group id.
+   * Derives the deterministic group id for a group of offers.
+   *
+   * The group field itself is zeroed before hashing so the resulting group id
+   * is content-addressed by the offer contents it commits to.
+   *
+   * @param offers - Offers to hash.
+   * @returns Content-addressed group id.
+   * @example
+   * ```ts
+   * import { OfferUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const group = OfferUtils.deriveOfferGroup([{} as never]);
+   * console.log(group);
+   * ```
+   */
+  export function deriveOfferGroup(offers: readonly (IOffer | Offer)[]): Hex {
+    const structs = offers.map((offer) => ({
+      ...offerToStruct(offer),
+      group: zeroHash,
+    }));
+
+    return keccak256(
+      encodeAbiParameters(
+        [
+          {
+            name: "offers",
+            type: "tuple[]",
+            components: offerStructAbiComponents,
+          },
+        ],
+        [structs],
+      ),
+    );
+  }
+
+  /**
+   * Creates a protocol-valid group of offers with one content-addressed group id.
    *
    * @param params - Offer group builder parameters.
    * @returns Immutable offers in the same order as the input entries.
-   * @throws MissingOfferGroupError when non-empty input has neither `group` nor `getRandomValues`.
    * @throws InvalidOfferGroupError when the built offers violate group mechanics.
    * @throws InvalidOfferParameterError when an individual offer parameter cannot satisfy protocol rules.
    * @example
    * ```ts
    * import { OfferUtils } from "@morpho-org/midnight-sdk";
    *
-   * const offers = OfferUtils.buildOfferGroup({
-   *   offers: [{} as never],
-   *   group: "0x0000000000000000000000000000000000000000000000000000000000000000",
-   * });
+   * const offers = OfferUtils.createOfferGroup({ offers: [{} as never] });
    * console.log(offers.length);
    * ```
    */
-  export function buildOfferGroup(
+  export function createOfferGroup(
     params: BuildOfferGroupParams,
   ): readonly Offer[] {
     if (params.offers.length === 0) {
       return validateOfferGroup({ offers: [] });
     }
 
-    let group = params.group;
-    if (group == null) {
-      if (params.getRandomValues == null) throw new MissingOfferGroupError();
-      group = Offer.randomGroup(params.getRandomValues);
-    }
+    const ungroupedOffers = params.offers.map((offer) =>
+      createOffer({ ...offer, group: zeroHash }),
+    );
+    const group = deriveOfferGroup(ungroupedOffers);
 
     return validateOfferGroup({
-      offers: params.offers.map((offer) => buildOffer({ ...offer, group })),
+      offers: params.offers.map((offer) => createOffer({ ...offer, group })),
     });
   }
 
   /**
    * Validates protocol-level mechanics for one Midnight offer consumption group.
    *
-   * This intentionally checks only shared group mechanics. It does not apply
-   * router policy such as ratifier allowlists, callbacks, validation windows,
-   * content-addressed groups, or full-payload inclusion rules.
+   * This intentionally checks only protocol mechanics. API-publication policy
+   * such as content-addressed groups lives in
+   * {@link validateOfferGroupForApiPublication}.
    *
    * @param params - Offer group validation parameters.
    * @returns Immutable offers in the same order as the input entries.
@@ -480,8 +460,6 @@ export namespace OfferUtils {
     const expectedMaker = comparableHex(first.maker);
     const expectedGroup = comparableHex(first.group);
     const expectedBuy = first.buy;
-    const expectedMaxUnits = first.maxUnits;
-    const expectedMaxAssets = first.maxAssets;
     const expectedLoanToken = comparableHex(first.market.loanToken);
 
     for (const offer of offers) {
@@ -509,17 +487,18 @@ export namespace OfferUtils {
           "Every offer must set exactly one non-zero non-negative cap.",
         );
       }
-      if (
-        offer.maxUnits !== expectedMaxUnits ||
-        offer.maxAssets !== expectedMaxAssets
-      ) {
-        throw new InvalidOfferGroupError(
-          "All offers in a group must use the same unit and asset caps.",
-        );
-      }
       if (comparableHex(offer.market.loanToken) !== expectedLoanToken) {
         throw new InvalidOfferGroupError(
           "All offers in a group must use the same loan token.",
+        );
+      }
+      if (
+        offer.buy &&
+        comparableHex(offer.receiverIfMakerIsSeller) !==
+          comparableHex(zeroAddress)
+      ) {
+        throw new InvalidOfferGroupError(
+          "Buy offers must use the zero address as receiverIfMakerIsSeller.",
         );
       }
     }
@@ -528,53 +507,50 @@ export namespace OfferUtils {
   }
 
   /**
-   * Converts quote entries into ABI-compatible takeable offers.
+   * Validates the public API publication rules known locally.
    *
-   * @param params - Quote conversion parameters.
-   * @returns ABI-compatible takeable offers.
-   * @throws NoMatchingOffersError when `entries` is empty.
-   * @throws UnexpectedOfferSideError when an entry has the wrong side.
-   * @throws InconsistentMarketError when market consistency is enforced and differs.
+   * This helper intentionally stays narrow: changing public policy should be
+   * surfaced by `MidnightApi.validateMempoolTree` when possible. The stable
+   * local checks are protocol group validity and content-addressed group ids.
+   *
+   * @param params - Offer group validation parameters.
+   * @returns Immutable offers in the same order as the input entries.
+   * @throws InvalidOfferGroupError when the group cannot be published through the public API.
    * @example
    * ```ts
    * import { OfferUtils } from "@morpho-org/midnight-sdk";
    *
-   * const takeableOffers = OfferUtils.buildTakeableOffersFromOffers({ entries: [] });
-   * console.log(takeableOffers);
+   * const offers = OfferUtils.validateOfferGroupForApiPublication({
+   *   offers: [{} as never],
+   * });
+   * console.log(offers.length);
    * ```
    */
-  export function buildTakeableOffersFromOffers(
-    params: BuildTakeableOffersFromOffersParams,
-  ): readonly TakeableOfferStruct[] {
-    if (params.entries.length === 0) throw new NoMatchingOffersError();
+  export function validateOfferGroupForApiPublication(
+    params: ValidateOfferGroupParams,
+  ): readonly Offer[] {
+    const offers = validateOfferGroup(params);
+    const expectedGroup = comparableHex(deriveOfferGroup(offers));
+    const expectedCallback = comparableHex(offers[0]!.callback);
+    const expectedCallbackData = comparableHex(offers[0]!.callbackData);
 
-    const takeableOffers = params.entries.map((entry) => {
-      const offer = normalizeOffer(entry.offer);
-      if (params.expectedOfferSide != null) {
-        const actual = offer.buy ? "buy" : "sell";
-        if (actual !== params.expectedOfferSide) {
-          throw new UnexpectedOfferSideError(params.expectedOfferSide, actual);
-        }
+    for (const offer of offers) {
+      if (comparableHex(offer.group) !== expectedGroup) {
+        throw new InvalidOfferGroupError(
+          "All offers in an API-published group must use the content-addressed group id.",
+        );
       }
-
-      return {
-        units: BigInt(entry.units),
-        offer: offerToStruct(offer),
-        ratifierData: entry.ratifierData,
-      };
-    });
-
-    if (params.enforceSameMarket === true) {
-      const [first, ...rest] = takeableOffers;
-      const firstHash = MarketUtils.hashMarket(first!.offer.market);
-      for (const takeableOffer of rest) {
-        if (MarketUtils.hashMarket(takeableOffer.offer.market) !== firstHash) {
-          throw new InconsistentMarketError();
-        }
+      if (
+        comparableHex(offer.callback) !== expectedCallback ||
+        comparableHex(offer.callbackData) !== expectedCallbackData
+      ) {
+        throw new InvalidOfferGroupError(
+          "All offers in an API-published group must use the same callback address and data.",
+        );
       }
     }
 
-    return deepFreeze(takeableOffers);
+    return offers;
   }
 
   /**

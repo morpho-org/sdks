@@ -11,7 +11,7 @@ import {
   OfferTreeUtils,
   SetterRatifier,
   Tree,
-} from "./OfferTree.js";
+} from "./OfferTreeUtils.js";
 import { RatifierUtils } from "./RatifierUtils.js";
 
 const root =
@@ -145,7 +145,7 @@ describe("OfferTreeUtils.buildOfferTreeDescriptor", () => {
 
     expect(payload.height).toBe(0);
     expect(payload.root).toMatchInlineSnapshot(
-      `"0x5724782130140d1f138aa3d5830e65bdc4014a0c4fbc8b4ae2b6f8b54d4723f4"`,
+      `"0xadd41ed6da66787f94302862f0a5291ee6acec94dcf22da0d59574cbba755d21"`,
     );
   });
 

@@ -1,4 +1,4 @@
-import type { Address, Hex } from "viem";
+import { type Address, type Hex, zeroAddress } from "viem";
 import type {
   IMarketParams,
   Market,
@@ -10,6 +10,7 @@ import {
   normalizeMarketParams,
 } from "../market/Market.js";
 import type { BigIntish } from "../types.js";
+import { type BuildOfferGroupParams, OfferUtils } from "./OfferUtils.js";
 
 /**
  * Plain input accepted by {@link Offer}.
@@ -81,7 +82,7 @@ export interface IOffer {
  * ```ts
  * import { Offer } from "@morpho-org/midnight-sdk";
  *
- * const offer = new Offer({
+ * const offer = Offer.create({
  *   market: {
  *     loanToken: "0x0000000000000000000000000000000000000001",
  *     collateralParams: [],
@@ -95,7 +96,7 @@ export interface IOffer {
  *   start: 0n,
  *   expiry: 2n,
  *   tick: 100n,
- *   group: Offer.randomGroup(crypto.getRandomValues.bind(crypto)),
+ *   group: "0x0000000000000000000000000000000000000000000000000000000000000000",
  *   callback: "0x0000000000000000000000000000000000000000",
  *   callbackData: "0x",
  *   receiverIfMakerIsSeller: "0x0000000000000000000000000000000000000002",
@@ -168,28 +169,57 @@ export class Offer {
   }
 
   /**
-   * Generates an offer group id from an injected random byte source.
+   * Creates a raw Midnight offer with an explicit protocol group id.
    *
-   * The random source is supplied by the caller so this class does not read
-   * wallet, runtime, or host globals implicitly.
-   *
-   * @param getRandomValues - Callback that fills a 32-byte array with random values.
-   * @returns Random 32-byte group id.
+   * @param params - Offer creation parameters.
+   * @returns Offer instance.
+   * @throws InvalidOfferParameterError when the offer cannot satisfy protocol parameter rules.
    * @example
    * ```ts
    * import { Offer } from "@morpho-org/midnight-sdk";
    *
-   * const group = Offer.randomGroup(crypto.getRandomValues.bind(crypto));
-   * console.log(group.length);
+   * const offer = Offer.create({} as never);
+   * console.log(offer.group);
    * ```
    */
-  public static randomGroup(
-    getRandomValues: (array: Uint8Array) => Uint8Array,
-  ): Hex {
-    const bytes = new Uint8Array(32);
-    getRandomValues(bytes);
+  public static create(params: BuildOfferParams): Offer {
+    const validated = OfferUtils.validateOfferParams(params);
 
-    return `0x${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+    return new Offer({
+      market: params.market,
+      buy: params.buy,
+      maker: params.maker,
+      start: validated.start,
+      expiry: validated.expiry,
+      tick: validated.tick,
+      group: params.group,
+      callback: params.callback ?? zeroAddress,
+      callbackData: params.callbackData ?? "0x",
+      receiverIfMakerIsSeller: validated.receiverIfMakerIsSeller,
+      ratifier: params.ratifier,
+      reduceOnly: params.reduceOnly ?? false,
+      maxUnits: validated.maxUnits,
+      maxAssets: validated.maxAssets,
+    });
+  }
+
+  /**
+   * Creates offers that share a deterministic content-addressed group id.
+   *
+   * @param params - Offer group creation parameters.
+   * @returns Immutable offers in caller order.
+   * @throws InvalidOfferGroupError when the group cannot satisfy protocol mechanics.
+   * @throws InvalidOfferParameterError when an offer cannot satisfy parameter rules.
+   * @example
+   * ```ts
+   * import { Offer } from "@morpho-org/midnight-sdk";
+   *
+   * const offers = Offer.createGroup({ offers: [{} as never] });
+   * console.log(offers[0]?.group);
+   * ```
+   */
+  public static createGroup(params: BuildOfferGroupParams): readonly Offer[] {
+    return OfferUtils.createOfferGroup(params);
   }
 }
 
@@ -313,7 +343,7 @@ export function offerToStruct(offer: IOffer | Offer): OfferStruct {
 }
 
 /**
- * Parameters for {@link OfferUtils.buildOffer}.
+ * Parameters for {@link Offer.create}.
  *
  * @example
  * ```ts
@@ -342,10 +372,8 @@ export interface BuildOfferParams {
   readonly start?: BigIntish;
   /** Offer expiry timestamp. */
   readonly expiry: BigIntish;
-  /** Consumption group. When omitted, {@link getRandomValues} is used to generate one. */
-  readonly group?: Hex;
-  /** Random source used to generate a group when {@link group} is omitted. */
-  readonly getRandomValues?: (array: Uint8Array) => Uint8Array;
+  /** Explicit protocol consumption group. */
+  readonly group: Hex;
   /** Callback address; defaults to zero address. */
   readonly callback?: Address | string;
   /** Callback payload; defaults to `0x`. */

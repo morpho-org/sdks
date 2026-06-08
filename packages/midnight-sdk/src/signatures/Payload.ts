@@ -89,7 +89,7 @@ export const MAX_DECOMPRESSED_ITEMS_BYTES = 4_000_000;
  * larger one: this keeps the `MAX_COMPRESSED_ITEMS_BYTES` ceiling meaningful for
  * the whole input. Without it a tiny declared `gzipLen` could smuggle an
  * arbitrarily large suffix past validation and into the indexer while still
- * forcing the router to receive and hex-decode the whole blob.
+ * forcing the API to receive and hex-decode the whole blob.
  *
  * @example
  * ```ts
@@ -135,7 +135,7 @@ export const MAX_PAYLOAD_BYTES =
 export const MAX_PAYLOAD_HEX_LENGTH = "0x".length + MAX_PAYLOAD_BYTES * 2;
 
 /**
- * Largest inbound HTTP request body, in bytes, accepted by the router and
+ * Largest inbound HTTP request body, in bytes, accepted by the API and
  * gatekeeper APIs.
  *
  * @example
@@ -188,7 +188,7 @@ export async function encode(items: readonly Item[]): Promise<Payload> {
   assertItemsNotEmpty(items.length);
   const payloadItems = items.map((item) => {
     const offer = offerToStruct(item.offer);
-    assertRouterValidOfferStruct(offer);
+    assertApiValidOfferStruct(offer);
     return {
       offer,
       ratifierData: item.ratifierData,
@@ -301,7 +301,7 @@ function decodeItemsBytes(decoded: Uint8Array): Item[] {
   }
   try {
     return raw.map((entry) => {
-      assertRouterValidOfferStruct(entry.offer);
+      assertApiValidOfferStruct(entry.offer);
       return {
         offer: new Offer({
           market: entry.offer.market,
@@ -346,7 +346,7 @@ function assertCanonicalItemsBytes(
   }
 }
 
-function assertRouterValidOfferStruct(offer: OfferStruct): void {
+function assertApiValidOfferStruct(offer: OfferStruct): void {
   if (isEmptyOfferStruct(offer)) return;
 
   assertCollateralParams(offer);

@@ -1,7 +1,7 @@
 # midnight-sdk Conventions
 
 - Keep this package framework-free. Source may import `viem` for ABI encoding, typed data, and explicit fetch boundary helpers, but it must not import React, wagmi, Redux, or app code.
-- Pure protocol helpers live in `market/`, `offers/`, `math/`, `requirements/`, and `signatures/`. Chain reads live only in `fetch/`; router HTTP calls live only in `router/`; requirement planners stay pure once current state is supplied.
+- Pure protocol helpers live in `market/`, `offers/`, `math/`, and `signatures/`. Chain reads live only in `fetch/`; public API HTTP calls live only in `api/`.
 - Model data as readonly interfaces/types by default. Use classes only for typed errors or domain objects with meaningful behavior; do not create classes that only copy fields, normalize `BigIntish`, or expose a trivial `toStruct()`.
 - Never deep-freeze class instances. Only use `deepFreeze` for function outputs that are intended as immutable onchain or signature descriptors immediately after construction.
 - Keep onchain quantities as `bigint`; API edges may accept `BigIntish` for caller ergonomics.

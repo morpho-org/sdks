@@ -10,7 +10,7 @@ import { offerStructAbiComponents, offerToStruct } from "../offers/Offer.js";
 import * as Payload from "./Payload.js";
 import { MAX_ATTRIBUTION_SUFFIX_BYTES } from "./Payload.js";
 
-const ROUTER_VALID_MATURITY = 1_767_279_600n;
+const API_VALID_MATURITY = 1_767_279_600n;
 
 const itemsAbi = [
   {
@@ -23,13 +23,13 @@ const itemsAbi = [
   },
 ] as const;
 
-function routerValidOffer(overrides: Partial<IOffer> = {}) {
+function apiValidOffer(overrides: Partial<IOffer> = {}) {
   return baseOffer({
     market: {
       ...baseMarketParamsInput(),
-      maturity: ROUTER_VALID_MATURITY,
+      maturity: API_VALID_MATURITY,
     },
-    expiry: ROUTER_VALID_MATURITY - 60n,
+    expiry: API_VALID_MATURITY - 60n,
     maxUnits: 0n,
     maxAssets: 1_000n,
     ...overrides,
@@ -58,7 +58,7 @@ async function encodeUncheckedPayload(
 
 describe("Payload.encode", () => {
   test("default", async () => {
-    const offer = routerValidOffer();
+    const offer = apiValidOffer();
     const encoded = await Payload.encode([
       { offer, ratifierData: "0x1234" as Hex },
     ]);
@@ -76,11 +76,11 @@ describe("Payload.encode", () => {
     );
   });
 
-  test("error: router-invalid offer", async () => {
+  test("error: API-invalid offer", async () => {
     await expect(
       Payload.encode([
         {
-          offer: routerValidOffer({ expiry: ROUTER_VALID_MATURITY + 60n }),
+          offer: apiValidOffer({ expiry: API_VALID_MATURITY + 60n }),
           ratifierData: "0x1234" as Hex,
         },
       ]),
@@ -106,7 +106,7 @@ describe("Payload.buildSubmissionCall", () => {
 describe("Payload.decode", () => {
   test("behavior: ignores small attribution suffix", async () => {
     const encoded = await Payload.encode([
-      { offer: routerValidOffer(), ratifierData: "0x1234" as Hex },
+      { offer: apiValidOffer(), ratifierData: "0x1234" as Hex },
     ]);
     const tagged = `${encoded}ff` as Hex;
 
@@ -123,7 +123,7 @@ describe("Payload.decode", () => {
 
   test("error: attribution suffix cap", async () => {
     const encoded = await Payload.encode([
-      { offer: routerValidOffer(), ratifierData: "0x1234" as Hex },
+      { offer: apiValidOffer(), ratifierData: "0x1234" as Hex },
     ]);
     const suffix = "ff".repeat(MAX_ATTRIBUTION_SUFFIX_BYTES + 1);
 
@@ -132,9 +132,9 @@ describe("Payload.decode", () => {
     ).rejects.toBeInstanceOf(Payload.DecodeError);
   });
 
-  test("error: router-invalid offer bytes", async () => {
+  test("error: API-invalid offer bytes", async () => {
     const encoded = await encodeUncheckedPayload(
-      offerToStruct(routerValidOffer({ expiry: ROUTER_VALID_MATURITY + 60n })),
+      offerToStruct(apiValidOffer({ expiry: API_VALID_MATURITY + 60n })),
     );
 
     await expect(Payload.decode(encoded)).rejects.toBeInstanceOf(

@@ -17,6 +17,20 @@ export {
   midnightAddressRegistry,
   registerCustomMidnightAddresses,
 } from "./addresses.js";
+export type {
+  FetchMempoolRulesParams,
+  MempoolPayloadValidationIssue,
+  MempoolPayloadValidationResult,
+  MempoolRule,
+  MempoolRulesResult,
+  MidnightApiConfig,
+  MidnightApiFetch,
+  MidnightApiRequestOptions,
+  ValidateMempoolItemsParams,
+  ValidateMempoolPayloadParams,
+  ValidateMempoolTreeParams,
+} from "./api/index.js";
+export { Api, MidnightApi } from "./api/index.js";
 export {
   ALLOWED_LLTVS,
   CBP,
@@ -37,7 +51,7 @@ export {
 export {
   IncompleteMidnightAddressesError,
   InconsistentMarketError,
-  InvalidMidnightRouterResponseError,
+  InvalidMidnightApiResponseError,
   InvalidOfferGroupError,
   InvalidOfferParameterError,
   InvalidOfferTreeError,
@@ -48,8 +62,7 @@ export {
   InvalidSettlementFeeIndexError,
   InvalidTickSpacingError,
   MidnightAddressAlreadyRegisteredError,
-  MidnightRouterApiError,
-  MissingOfferGroupError,
+  MidnightApiError,
   NoMatchingOffersError,
   PriceGreaterThanOneError,
   SettlementFeeExceedsPriceError,
@@ -108,12 +121,11 @@ export {
 export type {
   BuildOfferGroupParams,
   BuildOfferParams,
-  BuildTakeableOffersFromOffersParams,
+  CreateManyTakeableOffersParams,
   IOffer,
   ITakeableOffer,
   OfferStruct,
   QuoteTakeableOfferInput,
-  TakeableOffer,
   TakeableOfferStruct,
   ValidatedOfferParams,
   ValidateOfferGroupParams,
@@ -121,48 +133,10 @@ export type {
 export {
   Offer,
   OfferUtils,
+  TakeableOffer,
+  TakeableOfferUtils,
+  takeableOfferToStruct,
 } from "./offers/index.js";
-export type {
-  ApprovalRequirementInputs,
-  AuthorizationRequirementInputs,
-  MidnightApprovalRequirement,
-  MidnightAuthorizationRequirement,
-  MidnightPayloadValidationRequirement,
-  MidnightRequirement,
-  MidnightRootApprovalRequirement,
-  MidnightSignatureRequirement,
-  PlanApprovalRequirementParams,
-  PlanAuthorizationRequirementParams,
-  PlanBorrowMarketOrderRequirementsParams,
-  PlanLendMarketOrderRequirementsParams,
-  PlanMakeOfferRequirementsParams,
-  PlanSupplyCollateralRequirementsParams,
-} from "./requirements/index.js";
-export {
-  buildRootApprovalRequirement,
-  fetchApprovalRequirementInputs,
-  fetchAuthorizationRequirementInputs,
-  planApprovalRequirement,
-  planAuthorizationRequirement,
-  planBorrowMarketOrderRequirements,
-  planLendMarketOrderRequirements,
-  planMakeOfferRequirements,
-  planSupplyCollateralRequirements,
-} from "./requirements/index.js";
-export type {
-  FetchMempoolRulesParams,
-  MempoolPayloadValidationIssue,
-  MempoolPayloadValidationResult,
-  MempoolRule,
-  MempoolRulesResult,
-  MidnightRouterApiConfig,
-  MidnightRouterFetch,
-  MidnightRouterRequestOptions,
-  ValidateMempoolItemsParams,
-  ValidateMempoolPayloadParams,
-  ValidateMempoolTreeParams,
-} from "./router/index.js";
-export { Api, MidnightRouterApi } from "./router/index.js";
 export type {
   DecodedEcrecoverRatifierData,
   DecodedSetterRatifierData,
@@ -184,10 +158,12 @@ export type {
 export {
   EcrecoverRatifier,
   Group,
+  GroupUtils,
   OfferTreeUtils,
   RatifierUtils,
   SetterRatifier,
   Tree,
+  TreeUtils,
 } from "./signatures/index.js";
 export * as Payload from "./signatures/Payload.js";
 export type {

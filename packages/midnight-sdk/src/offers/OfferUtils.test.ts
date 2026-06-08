@@ -13,13 +13,14 @@ import {
   InconsistentMarketError,
   InvalidOfferGroupError,
   InvalidOfferParameterError,
-  MissingOfferGroupError,
   NoMatchingOffersError,
   UnexpectedOfferSideError,
 } from "../errors.js";
 import type { BuildOfferParams } from "./Offer.js";
 import { Offer } from "./Offer.js";
 import { OfferUtils } from "./OfferUtils.js";
+import { TakeableOffer } from "./TakeableOffer.js";
+import { TakeableOfferUtils } from "./TakeableOfferUtils.js";
 
 const buildOfferParams = (overrides: Partial<BuildOfferParams> = {}) => ({
   market: baseMarketParamsInput(),
@@ -33,9 +34,9 @@ const buildOfferParams = (overrides: Partial<BuildOfferParams> = {}) => ({
   ...overrides,
 });
 
-const buildOfferGroupEntry = (
-  overrides: Partial<Omit<BuildOfferParams, "group" | "getRandomValues">> = {},
-): Omit<BuildOfferParams, "group" | "getRandomValues"> => ({
+const offerGroupEntry = (
+  overrides: Partial<Omit<BuildOfferParams, "group">> = {},
+): Omit<BuildOfferParams, "group"> => ({
   market: baseMarketParamsInput(),
   buy: true,
   maker: addresses.maker,
@@ -58,9 +59,9 @@ describe("Offer", () => {
   });
 });
 
-describe("OfferUtils.buildOffer", () => {
+describe("Offer.create", () => {
   test("default", () => {
-    const offer = OfferUtils.buildOffer({
+    const offer = Offer.create({
       market: baseMarketParamsInput(),
       buy: true,
       maker: addresses.maker,
@@ -76,28 +77,8 @@ describe("OfferUtils.buildOffer", () => {
     expect(offer.receiverIfMakerIsSeller).toBe(zeroAddress);
   });
 
-  test("behavior: generates a group from an injected random source", () => {
-    const offer = OfferUtils.buildOffer({
-      market: baseMarketParamsInput(),
-      buy: true,
-      maker: addresses.maker,
-      tick: 5_000n,
-      expiry: 2_100n,
-      getRandomValues: (array) => {
-        array.fill(0x11);
-        return array;
-      },
-      ratifier: addresses.ecrecoverRatifier,
-      maxAssets: 100n,
-    });
-
-    expect(offer.group).toBe(
-      "0x1111111111111111111111111111111111111111111111111111111111111111",
-    );
-  });
-
   test("behavior: defaults maker seller receiver for sell offers", () => {
-    const offer = OfferUtils.buildOffer(
+    const offer = Offer.create(
       buildOfferParams({
         buy: false,
         maxUnits: 100n,
@@ -109,7 +90,7 @@ describe("OfferUtils.buildOffer", () => {
   });
 
   test("behavior: accepts ticks aligned to a refined market spacing", () => {
-    const offer = OfferUtils.buildOffer(
+    const offer = Offer.create(
       buildOfferParams({
         tick: 2n,
         tickSpacing: 2n,
@@ -161,23 +142,9 @@ describe("OfferUtils.buildOffer", () => {
     ).toBe(addresses.maker);
   });
 
-  test("error: MissingOfferGroupError", () => {
-    expect(() =>
-      OfferUtils.buildOffer({
-        market: baseMarketParamsInput(),
-        buy: true,
-        maker: addresses.maker,
-        tick: 5_000n,
-        expiry: 2_100n,
-        ratifier: addresses.ecrecoverRatifier,
-        maxAssets: 100n,
-      }),
-    ).toThrow(MissingOfferGroupError);
-  });
-
   test("error: InvalidOfferParameterError fields", () => {
     try {
-      OfferUtils.buildOffer(buildOfferParams({ tick: "not-a-tick" }));
+      Offer.create(buildOfferParams({ tick: "not-a-tick" }));
     } catch (error) {
       if (!(error instanceof InvalidOfferParameterError)) throw error;
 
@@ -205,7 +172,7 @@ describe("OfferUtils.buildOffer", () => {
     ],
   ] as const)("error: InvalidOfferParameterError %s", (parameter, overrides) => {
     try {
-      OfferUtils.buildOffer(buildOfferParams(overrides));
+      Offer.create(buildOfferParams(overrides));
     } catch (error) {
       if (!(error instanceof InvalidOfferParameterError)) throw error;
 
@@ -217,49 +184,45 @@ describe("OfferUtils.buildOffer", () => {
   });
 });
 
-describe("OfferUtils.buildOfferGroup", () => {
-  test("default: explicit group id", () => {
-    const offers = OfferUtils.buildOfferGroup({
-      group,
+describe("Offer.createGroup", () => {
+  test("default: derives a content-addressed group id", () => {
+    const offers = Offer.createGroup({
       offers: [
-        buildOfferGroupEntry({ tick: 5_000n }),
-        buildOfferGroupEntry({ tick: 5_004n }),
+        offerGroupEntry({ tick: 5_000n }),
+        offerGroupEntry({ tick: 5_004n }),
       ],
     });
 
     expect(offers).toHaveLength(2);
-    expect(offers[0]!.group).toBe(group);
-    expect(offers[1]!.group).toBe(group);
+    expect(offers[0]!.group).toBe(offers[1]!.group);
+    expect(offers[0]!.group).toBe(OfferUtils.deriveOfferGroup(offers));
   });
 
-  test("behavior: generated group id is shared", () => {
-    let randomCalls = 0;
-    const offers = OfferUtils.buildOfferGroup({
-      getRandomValues: (array) => {
-        randomCalls += 1;
-        array.fill(0x33);
-        return array;
-      },
+  test("behavior: derived group id is deterministic", () => {
+    const offers = Offer.createGroup({
       offers: [
-        buildOfferGroupEntry({ tick: 5_000n }),
-        buildOfferGroupEntry({ tick: 5_004n }),
+        offerGroupEntry({ tick: 5_000n }),
+        offerGroupEntry({ tick: 5_004n }),
+      ],
+    });
+    const repeated = Offer.createGroup({
+      offers: [
+        offerGroupEntry({ tick: 5_000n }),
+        offerGroupEntry({ tick: 5_004n }),
       ],
     });
 
-    expect(randomCalls).toBe(1);
-    expect(offers.map((offer) => offer.group)).toEqual([
-      "0x3333333333333333333333333333333333333333333333333333333333333333",
-      "0x3333333333333333333333333333333333333333333333333333333333333333",
-    ]);
+    expect(offers.map((offer) => offer.group)).toEqual(
+      repeated.map((offer) => offer.group),
+    );
   });
 
   test("behavior: keeps input order stable", () => {
-    const offers = OfferUtils.buildOfferGroup({
-      group,
+    const offers = Offer.createGroup({
       offers: [
-        buildOfferGroupEntry({ tick: 5_008n }),
-        buildOfferGroupEntry({ tick: 5_000n }),
-        buildOfferGroupEntry({ tick: 5_004n }),
+        offerGroupEntry({ tick: 5_008n }),
+        offerGroupEntry({ tick: 5_000n }),
+        offerGroupEntry({ tick: 5_004n }),
       ],
     });
 
@@ -275,13 +238,14 @@ describe("OfferUtils.buildOfferGroup", () => {
         }),
         (tickSteps) => {
           const ticks = tickSteps.map((step) => BigInt(step) * 4n);
-          const offers = OfferUtils.buildOfferGroup({
-            group,
-            offers: ticks.map((tick) => buildOfferGroupEntry({ tick })),
+          const offers = Offer.createGroup({
+            offers: ticks.map((tick) => offerGroupEntry({ tick })),
           });
 
           expect(offers.map((offer) => offer.tick)).toEqual(ticks);
-          expect(offers.every((offer) => offer.group === group)).toBe(true);
+          expect(
+            offers.every((offer) => offer.group === offers[0]!.group),
+          ).toBe(true);
         },
       ),
       { numRuns: 100 },
@@ -289,39 +253,33 @@ describe("OfferUtils.buildOfferGroup", () => {
   });
 
   test("error: InvalidOfferGroupError for empty groups", () => {
-    expect(() => OfferUtils.buildOfferGroup({ group, offers: [] })).toThrow(
+    expect(() => Offer.createGroup({ offers: [] })).toThrow(
       InvalidOfferGroupError,
     );
-  });
-
-  test("error: MissingOfferGroupError", () => {
-    expect(() =>
-      OfferUtils.buildOfferGroup({ offers: [buildOfferGroupEntry()] }),
-    ).toThrow(MissingOfferGroupError);
   });
 });
 
 describe("OfferUtils.validateOfferGroup", () => {
   test("default", () => {
     const offers = [
-      OfferUtils.buildOffer(buildOfferParams({ tick: 5_000n })),
-      OfferUtils.buildOffer(buildOfferParams({ tick: 5_004n })),
+      Offer.create(buildOfferParams({ tick: 5_000n })),
+      Offer.create(buildOfferParams({ tick: 5_004n })),
     ];
 
     expect(OfferUtils.validateOfferGroup({ offers })).toEqual(offers);
   });
 
-  test("behavior: allows router-only differences", () => {
+  test("behavior: allows API-publication-only differences", () => {
     const offers = OfferUtils.validateOfferGroup({
       offers: [
-        OfferUtils.buildOffer(
+        Offer.create(
           buildOfferParams({
             start: 10n,
             expiry: 2_200n,
             ratifier: addresses.ecrecoverRatifier,
           }),
         ),
-        OfferUtils.buildOffer(
+        Offer.create(
           buildOfferParams({
             start: 20n,
             expiry: 2_300n,
@@ -353,7 +311,7 @@ describe("OfferUtils.validateOfferGroup", () => {
         ),
         (entries) => {
           const offers = entries.map((entry) =>
-            OfferUtils.buildOffer(
+            Offer.create(
               buildOfferParams({
                 tick: BigInt(entry.tickStep) * 4n,
                 start: BigInt(entry.start),
@@ -378,38 +336,31 @@ describe("OfferUtils.validateOfferGroup", () => {
     [
       "maker",
       [
-        OfferUtils.buildOffer(buildOfferParams()),
-        OfferUtils.buildOffer(buildOfferParams({ maker: addresses.taker })),
+        Offer.create(buildOfferParams()),
+        Offer.create(buildOfferParams({ maker: addresses.taker })),
       ],
     ],
     [
       "group",
       [
-        OfferUtils.buildOffer(buildOfferParams()),
-        OfferUtils.buildOffer(buildOfferParams({ group: otherGroup })),
+        Offer.create(buildOfferParams()),
+        Offer.create(buildOfferParams({ group: otherGroup })),
       ],
     ],
     [
       "side",
       [
-        OfferUtils.buildOffer(buildOfferParams()),
-        OfferUtils.buildOffer(
+        Offer.create(buildOfferParams()),
+        Offer.create(
           buildOfferParams({ buy: false, receiverIfMakerIsSeller: undefined }),
         ),
       ],
     ],
     [
-      "caps",
-      [
-        OfferUtils.buildOffer(buildOfferParams()),
-        OfferUtils.buildOffer(buildOfferParams({ maxAssets: 101n })),
-      ],
-    ],
-    [
       "loan token",
       [
-        OfferUtils.buildOffer(buildOfferParams()),
-        OfferUtils.buildOffer(
+        Offer.create(buildOfferParams()),
+        Offer.create(
           buildOfferParams({
             market: {
               ...baseMarketParamsInput(),
@@ -434,9 +385,35 @@ describe("OfferUtils.validateOfferGroup", () => {
   });
 });
 
-describe("OfferUtils.buildTakeableOffersFromOffers", () => {
+describe("OfferUtils.validateOfferGroupForApiPublication", () => {
   test("default", () => {
-    const takeableOffers = OfferUtils.buildTakeableOffersFromOffers({
+    const offers = Offer.createGroup({
+      offers: [
+        offerGroupEntry({ tick: 5_000n }),
+        offerGroupEntry({ tick: 5_004n }),
+      ],
+    });
+
+    expect(OfferUtils.validateOfferGroupForApiPublication({ offers })).toEqual(
+      offers,
+    );
+  });
+
+  test("error: InvalidOfferGroupError for non-content-addressed group", () => {
+    const offers = [
+      Offer.create(buildOfferParams({ tick: 5_000n })),
+      Offer.create(buildOfferParams({ tick: 5_004n })),
+    ];
+
+    expect(() =>
+      OfferUtils.validateOfferGroupForApiPublication({ offers }),
+    ).toThrow(InvalidOfferGroupError);
+  });
+});
+
+describe("TakeableOfferUtils.createMany", () => {
+  test("default", () => {
+    const takeableOffers = TakeableOfferUtils.createMany({
       entries: [
         {
           units: "42",
@@ -453,14 +430,14 @@ describe("OfferUtils.buildTakeableOffersFromOffers", () => {
   });
 
   test("error: NoMatchingOffersError", () => {
-    expect(() =>
-      OfferUtils.buildTakeableOffersFromOffers({ entries: [] }),
-    ).toThrow(NoMatchingOffersError);
+    expect(() => TakeableOfferUtils.createMany({ entries: [] })).toThrow(
+      NoMatchingOffersError,
+    );
   });
 
   test("error: UnexpectedOfferSideError", () => {
     expect(() =>
-      OfferUtils.buildTakeableOffersFromOffers({
+      TakeableOfferUtils.createMany({
         entries: [
           { units: 1n, ratifierData: "0x", offer: baseOffer({ buy: false }) },
         ],
@@ -471,7 +448,7 @@ describe("OfferUtils.buildTakeableOffersFromOffers", () => {
 
   test("error: InconsistentMarketError", () => {
     expect(() =>
-      OfferUtils.buildTakeableOffersFromOffers({
+      TakeableOfferUtils.createMany({
         entries: [
           { units: 1n, ratifierData: "0x", offer: baseOffer() },
           {
@@ -488,5 +465,23 @@ describe("OfferUtils.buildTakeableOffersFromOffers", () => {
         enforceSameMarket: true,
       }),
     ).toThrow(InconsistentMarketError);
+  });
+});
+
+describe("TakeableOffer.createMany", () => {
+  test("default", () => {
+    const takeableOffers = TakeableOffer.createMany({
+      entries: [
+        {
+          units: "42",
+          ratifierData: "0x",
+          offer: baseOffer({ buy: true }),
+        },
+      ],
+    });
+
+    expect(takeableOffers[0]).toBeInstanceOf(TakeableOffer);
+    expect(takeableOffers[0]!.offer).toBeInstanceOf(Offer);
+    expect(takeableOffers[0]!.units).toBe(42n);
   });
 });

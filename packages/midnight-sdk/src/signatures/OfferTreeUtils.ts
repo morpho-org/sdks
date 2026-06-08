@@ -571,10 +571,10 @@ export class Group {
   /**
    * Creates a protocol-valid offer group.
    *
-   * @param params - Existing offers, or offer builder parameters sharing one group id.
+   * @param params - Existing offers, or offer builder parameters for a derived group id.
    * @returns Group instance.
    * @throws InvalidOfferGroupError when group mechanics are invalid.
-   * @throws MissingOfferGroupError when builder params omit both `group` and `getRandomValues`.
+   * @throws InvalidOfferParameterError when an offer cannot satisfy parameter rules.
    * @example
    * ```ts
    * import { Group } from "@morpho-org/midnight-sdk";
@@ -586,7 +586,7 @@ export class Group {
   public static create(params: GroupCreateParams): Group {
     const offers = isOfferList(params)
       ? OfferUtils.validateOfferGroup({ offers: params })
-      : OfferUtils.buildOfferGroup(params);
+      : OfferUtils.createOfferGroup(params);
 
     return new Group(offers);
   }
@@ -712,7 +712,7 @@ export function normalizeTree(tree: TreeInput): Tree {
  * console.log(items.length);
  * ```
  */
-// biome-ignore lint/complexity/noStaticOnlyClass: Mirrors router DX with a behavior-bearing class API.
+// biome-ignore lint/complexity/noStaticOnlyClass: Provides a behavior-bearing class API.
 export class EcrecoverRatifier {
   /**
    * Builds the EIP-712 typed data for a tree.
@@ -868,7 +868,7 @@ export class EcrecoverRatifier {
  * console.log(items.length);
  * ```
  */
-// biome-ignore lint/complexity/noStaticOnlyClass: Mirrors router DX with a behavior-bearing class API.
+// biome-ignore lint/complexity/noStaticOnlyClass: Provides a behavior-bearing class API.
 export class SetterRatifier {
   /**
    * Builds one ratifier-data value for a tree leaf.

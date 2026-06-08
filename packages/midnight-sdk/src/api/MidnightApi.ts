@@ -1,72 +1,72 @@
 import {
-  InvalidMidnightRouterResponseError,
-  MidnightRouterApiError,
+  InvalidMidnightApiResponseError,
+  MidnightApiError,
 } from "../errors.js";
-import { normalizeTree, type TreeInput } from "../signatures/OfferTree.js";
 import type {
   Payload as MidnightPayload,
   Item as MidnightPayloadItem,
 } from "../signatures/Payload.js";
 import { encode as encodePayload } from "../signatures/Payload.js";
+import { normalizeTree, type TreeInput } from "../signatures/Tree.js";
 import { MIDNIGHT_SDK_VERSION } from "../version.js";
 
-const DEFAULT_ROUTER_API_URL = new URL("https://router.morpho.org");
+const DEFAULT_MIDNIGHT_API_URL = new URL("https://api.morpho.org");
 
 /**
- * Fetch implementation used by Midnight router API helpers.
+ * Fetch implementation used by Midnight API helpers.
  *
  * @example
  * ```ts
- * import type { MidnightRouterFetch } from "@morpho-org/midnight-sdk";
+ * import type { MidnightApiFetch } from "@morpho-org/midnight-sdk";
  *
- * const routerFetch: MidnightRouterFetch = fetch;
- * console.log(typeof routerFetch);
+ * const apiFetch: MidnightApiFetch = fetch;
+ * console.log(typeof apiFetch);
  * ```
  */
-export type MidnightRouterFetch = typeof fetch;
+export type MidnightApiFetch = typeof fetch;
 
 /**
- * Request options forwarded to Midnight router API calls.
+ * Request options forwarded to Midnight API calls.
  *
  * The SDK owns `method` and `body`; callers can still pass headers, abort
  * signals, credentials, cache settings, and other fetch options.
  *
  * @example
  * ```ts
- * import type { MidnightRouterRequestOptions } from "@morpho-org/midnight-sdk";
+ * import type { MidnightApiRequestOptions } from "@morpho-org/midnight-sdk";
  *
- * const request: MidnightRouterRequestOptions = {
+ * const request: MidnightApiRequestOptions = {
  *   credentials: "include",
  * };
  * console.log(request.credentials);
  * ```
  */
-export type MidnightRouterRequestOptions = Omit<RequestInit, "method" | "body">;
+export type MidnightApiRequestOptions = Omit<RequestInit, "method" | "body">;
 
 /**
- * Shared configuration for Midnight router API calls.
+ * Shared configuration for Midnight API calls.
  *
  * @example
  * ```ts
- * import type { MidnightRouterApiConfig } from "@morpho-org/midnight-sdk";
+ * import type { MidnightApiConfig } from "@morpho-org/midnight-sdk";
  *
- * const config: MidnightRouterApiConfig = {
- *   baseUrl: "https://router.morpho.org",
+ * const config: MidnightApiConfig = {
+ *   baseUrl: "https://api.morpho.org",
  * };
  * console.log(config.baseUrl);
  * ```
  */
-export interface MidnightRouterApiConfig {
-  /** Router API base URL. Defaults to `https://router.morpho.org`. */
+export interface MidnightApiConfig {
+  /** Public Morpho API base URL. Defaults to `https://api.morpho.org`. */
   readonly baseUrl?: string | URL;
   /** Fetch implementation. Defaults to the global `fetch`. */
-  readonly fetch?: MidnightRouterFetch;
+  readonly fetch?: MidnightApiFetch;
   /** Additional fetch options forwarded to the request. */
-  readonly request?: MidnightRouterRequestOptions;
+  readonly request?: MidnightApiRequestOptions;
 }
 
 /**
- * Parameters for {@link MidnightRouterApi.validateMempoolPayload}.
+ * Parameters for {@link MidnightApi.validateMempoolPayload}.
  *
  * @example
  * ```ts
@@ -79,17 +79,17 @@ export interface MidnightRouterApiConfig {
  * console.log(params.chainId);
  * ```
  */
-export interface ValidateMempoolPayloadParams extends MidnightRouterApiConfig {
-  /** Chain id whose router policy should validate the payload. */
+export interface ValidateMempoolPayloadParams extends MidnightApiConfig {
+  /** Chain id whose API policy should validate the payload. */
   readonly chainId: number;
   /** Encoded Midnight mempool payload bytes. */
   readonly payload: MidnightPayload;
-  /** Optional ISO-8601 timestamp or `Date` selecting the router policy snapshot. */
+  /** Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot. */
   readonly timestamp?: string | Date;
 }
 
 /**
- * Parameters for {@link MidnightRouterApi.validateMempoolItems}.
+ * Parameters for {@link MidnightApi.validateMempoolItems}.
  *
  * @example
  * ```ts
@@ -102,17 +102,17 @@ export interface ValidateMempoolPayloadParams extends MidnightRouterApiConfig {
  * console.log(params.items.length);
  * ```
  */
-export interface ValidateMempoolItemsParams extends MidnightRouterApiConfig {
-  /** Chain id whose router policy should validate the payload. */
+export interface ValidateMempoolItemsParams extends MidnightApiConfig {
+  /** Chain id whose API policy should validate the payload. */
   readonly chainId: number;
-  /** SDK-native payload items to encode before router validation. */
+  /** SDK-native payload items to encode before API validation. */
   readonly items: readonly MidnightPayloadItem[];
-  /** Optional ISO-8601 timestamp or `Date` selecting the router policy snapshot. */
+  /** Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot. */
   readonly timestamp?: string | Date;
 }
 
 /**
- * Parameters for {@link MidnightRouterApi.validateMempoolTree}.
+ * Parameters for {@link MidnightApi.validateMempoolTree}.
  *
  * @example
  * ```ts
@@ -125,17 +125,17 @@ export interface ValidateMempoolItemsParams extends MidnightRouterApiConfig {
  * console.log(params.chainId);
  * ```
  */
-export interface ValidateMempoolTreeParams extends MidnightRouterApiConfig {
-  /** Chain id whose router policy should validate the tree. */
+export interface ValidateMempoolTreeParams extends MidnightApiConfig {
+  /** Chain id whose API policy should validate the tree. */
   readonly chainId: number;
   /** Offer tree to validate before ratifier data or payload publication exists. */
   readonly tree: TreeInput;
-  /** Optional ISO-8601 timestamp or `Date` selecting the router policy snapshot. */
+  /** Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot. */
   readonly timestamp?: string | Date;
 }
 
 /**
- * Parameters for {@link MidnightRouterApi.fetchMempoolRules}.
+ * Parameters for {@link MidnightApi.fetchMempoolRules}.
  *
  * @example
  * ```ts
@@ -148,12 +148,12 @@ export interface ValidateMempoolTreeParams extends MidnightRouterApiConfig {
  * console.log(params.types?.[0]);
  * ```
  */
-export interface FetchMempoolRulesParams extends MidnightRouterApiConfig {
+export interface FetchMempoolRulesParams extends MidnightApiConfig {
   /** Optional chain-id filter. Serialized as comma-separated `chain_ids`. */
   readonly chainIds?: readonly number[];
-  /** Optional router rule type filter. Serialized as comma-separated `types`. */
+  /** Optional API rule type filter. Serialized as comma-separated `types`. */
   readonly types?: readonly string[];
-  /** Optional ISO-8601 timestamp or `Date` selecting the router policy snapshot. */
+  /** Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot. */
   readonly timestamp?: string | Date;
   /** Maximum number of rules to return. */
   readonly limit?: number;
@@ -162,7 +162,7 @@ export interface FetchMempoolRulesParams extends MidnightRouterApiConfig {
 }
 
 /**
- * One router validation issue.
+ * One API validation issue.
  *
  * @example
  * ```ts
@@ -173,7 +173,7 @@ export interface FetchMempoolRulesParams extends MidnightRouterApiConfig {
  * ```
  */
 export interface MempoolPayloadValidationIssue {
-  /** Router rule violated by the payload. */
+  /** API rule violated by the payload. */
   readonly rule: string;
 }
 
@@ -184,25 +184,19 @@ export interface MempoolPayloadValidationIssue {
  * ```ts
  * import type { MempoolPayloadValidationResult } from "@morpho-org/midnight-sdk";
  *
- * const result: MempoolPayloadValidationResult = {
- *   payload: "0x0100000000",
- *   valid: true,
- *   issues: [],
- * };
+ * const result: MempoolPayloadValidationResult = { valid: true, issues: [] };
  * console.log(result.valid);
  * ```
  */
 export interface MempoolPayloadValidationResult {
-  /** Encoded payload that was validated. */
-  readonly payload: MidnightPayload;
-  /** Whether the router returned zero validation issues. */
+  /** Whether the API returned zero validation issues. */
   readonly valid: boolean;
-  /** Payload-level router issues. */
+  /** Payload-level API issues. */
   readonly issues: readonly MempoolPayloadValidationIssue[];
 }
 
 /**
- * One SDK-shaped Midnight router mempool rule.
+ * One SDK-shaped Midnight API mempool rule.
  *
  * @example
  * ```ts
@@ -213,13 +207,13 @@ export interface MempoolPayloadValidationResult {
  * ```
  */
 export interface MempoolRule {
-  /** Router rule type. */
+  /** API rule type. */
   readonly type: string;
   /** Chain id the rule applies to. */
   readonly chainId: number;
-  /** Rule name, when returned by the router. */
+  /** Rule name, when returned by the API. */
   readonly name?: string;
-  /** Rule timestamp, when returned by the router. */
+  /** Rule timestamp, when returned by the API. */
   readonly timestamp?: number;
   /** Address value, when returned by address-based rules. */
   readonly address?: string;
@@ -239,12 +233,12 @@ export interface MempoolRule {
   readonly minSeconds?: number;
   /** Allowed LLTV values, when returned by collateral LLTV rules. */
   readonly allowedLltvs?: readonly string[];
-  /** Rule description, when returned by the router. */
+  /** Rule description, when returned by the API. */
   readonly description?: string;
 }
 
 /**
- * SDK-shaped paginated Midnight router mempool rules result.
+ * SDK-shaped paginated Midnight API mempool rules result.
  *
  * @example
  * ```ts
@@ -260,11 +254,11 @@ export interface MempoolRule {
 export interface MempoolRulesResult {
   /** Opaque pagination cursor, or `null` when no next page exists. */
   readonly cursor: string | null;
-  /** Router rules mapped to SDK camelCase fields. */
+  /** API rules mapped to SDK camelCase fields. */
   readonly data: readonly MempoolRule[];
 }
 
-type RouterMethod = "GET" | "POST";
+type ApiMethod = "GET" | "POST";
 
 type QueryValue =
   | string
@@ -274,14 +268,14 @@ type QueryValue =
   | readonly number[]
   | undefined;
 
-type RouterRequestParams = MidnightRouterApiConfig & {
-  readonly method: RouterMethod;
+type ApiRequestParams = MidnightApiConfig & {
+  readonly method: ApiMethod;
   readonly path: string;
   readonly query?: Readonly<Record<string, QueryValue>>;
   readonly body?: unknown;
 };
 
-type RouterErrorEnvelope = {
+type ApiErrorEnvelope = {
   readonly code?: string;
   readonly message?: string;
   readonly details?: unknown;
@@ -289,32 +283,32 @@ type RouterErrorEnvelope = {
 };
 
 /**
- * API helpers for the Midnight router mempool validation surface.
+ * API helpers for the Midnight API mempool validation surface.
  *
  * @example
  * ```ts
- * import { MidnightRouterApi } from "@morpho-org/midnight-sdk";
+ * import { MidnightApi } from "@morpho-org/midnight-sdk";
  *
- * const result = await MidnightRouterApi.validateMempoolPayload({
+ * const result = await MidnightApi.validateMempoolPayload({
  *   chainId: 8453,
  *   payload: "0x0100000000",
  * });
  * console.log(result.valid);
  * ```
  */
-export namespace MidnightRouterApi {
+export namespace MidnightApi {
   /**
-   * Validates an encoded Midnight mempool payload against router policy.
+   * Validates an encoded Midnight mempool payload against API policy.
    *
    * @param params - Validation parameters and optional request configuration.
-   * @returns The validated payload plus router issues and `valid` summary.
-   * @throws MidnightRouterApiError when the router returns a non-2xx response.
-   * @throws InvalidMidnightRouterResponseError when the router returns malformed success JSON.
+   * @returns API issues and `valid` summary.
+   * @throws MidnightApiError when the API returns a non-2xx response.
+   * @throws InvalidMidnightApiResponseError when the API returns malformed success JSON.
    * @example
    * ```ts
-   * import { MidnightRouterApi } from "@morpho-org/midnight-sdk";
+   * import { MidnightApi } from "@morpho-org/midnight-sdk";
    *
-   * const validation = await MidnightRouterApi.validateMempoolPayload({
+   * const validation = await MidnightApi.validateMempoolPayload({
    *   chainId: 8453,
    *   payload: "0x0100000000",
    * });
@@ -324,7 +318,7 @@ export namespace MidnightRouterApi {
   export async function validateMempoolPayload(
     params: ValidateMempoolPayloadParams,
   ): Promise<MempoolPayloadValidationResult> {
-    const response = await requestRouter({
+    const response = await requestMidnightApi({
       ...params,
       method: "POST",
       path: "/v1/midnight/mempool/validate",
@@ -337,26 +331,26 @@ export namespace MidnightRouterApi {
       },
     });
 
-    return parseValidationResponse(response, params.payload);
+    return parseValidationResponse(response);
   }
 
   /**
-   * Encodes SDK-native payload items and validates them against router policy.
+   * Encodes SDK-native payload items and validates them against API policy.
    *
    * @param params - Validation parameters and optional request configuration.
-   * @returns The encoded payload plus router issues and `valid` summary.
+   * @returns API issues and `valid` summary.
    * @throws Payload.DecodeError when item encoding fails.
-   * @throws MidnightRouterApiError when the router returns a non-2xx response.
-   * @throws InvalidMidnightRouterResponseError when the router returns malformed success JSON.
+   * @throws MidnightApiError when the API returns a non-2xx response.
+   * @throws InvalidMidnightApiResponseError when the API returns malformed success JSON.
    * @example
    * ```ts
-   * import { MidnightRouterApi } from "@morpho-org/midnight-sdk";
+   * import { MidnightApi } from "@morpho-org/midnight-sdk";
    *
-   * const validation = await MidnightRouterApi.validateMempoolItems({
+   * const validation = await MidnightApi.validateMempoolItems({
    *   chainId: 8453,
    *   items: [{ offer: {} as never, ratifierData: "0x" }],
    * });
-   * console.log(validation.payload);
+   * console.log(validation.valid);
    * ```
    */
   export async function validateMempoolItems(
@@ -373,19 +367,19 @@ export namespace MidnightRouterApi {
   /**
    * Validates an offer tree before wallet signature or root approval.
    *
-   * Router policy only inspects offer contents, so this helper encodes each
+   * API policy only inspects offer contents, so this helper encodes each
    * tree leaf with empty `ratifierData` and keeps payload bytes at the edge.
    *
    * @param params - Validation parameters and optional request configuration.
-   * @returns The encoded validation payload plus router issues and `valid` summary.
+   * @returns API issues and `valid` summary.
    * @throws Payload.DecodeError when validation payload encoding fails.
-   * @throws MidnightRouterApiError when the router returns a non-2xx response.
-   * @throws InvalidMidnightRouterResponseError when the router returns malformed success JSON.
+   * @throws MidnightApiError when the API returns a non-2xx response.
+   * @throws InvalidMidnightApiResponseError when the API returns malformed success JSON.
    * @example
    * ```ts
-   * import { MidnightRouterApi } from "@morpho-org/midnight-sdk";
+   * import { MidnightApi } from "@morpho-org/midnight-sdk";
    *
-   * const validation = await MidnightRouterApi.validateMempoolTree({
+   * const validation = await MidnightApi.validateMempoolTree({
    *   chainId: 8453,
    *   tree: { groups: [[{} as never]] },
    * });
@@ -404,17 +398,17 @@ export namespace MidnightRouterApi {
   }
 
   /**
-   * Fetches inspectable Midnight router mempool policy rules.
+   * Fetches inspectable Midnight API mempool policy rules.
    *
    * @param params - Rule filters, pagination, and optional request configuration.
-   * @returns Paginated router rules mapped to SDK camelCase fields.
-   * @throws MidnightRouterApiError when the router returns a non-2xx response.
-   * @throws InvalidMidnightRouterResponseError when the router returns malformed success JSON.
+   * @returns Paginated API rules mapped to SDK camelCase fields.
+   * @throws MidnightApiError when the API returns a non-2xx response.
+   * @throws InvalidMidnightApiResponseError when the API returns malformed success JSON.
    * @example
    * ```ts
-   * import { MidnightRouterApi } from "@morpho-org/midnight-sdk";
+   * import { MidnightApi } from "@morpho-org/midnight-sdk";
    *
-   * const rules = await MidnightRouterApi.fetchMempoolRules({
+   * const rules = await MidnightApi.fetchMempoolRules({
    *   chainIds: [8453],
    *   types: ["tick_spacing"],
    * });
@@ -424,7 +418,7 @@ export namespace MidnightRouterApi {
   export async function fetchMempoolRules(
     params: FetchMempoolRulesParams = {},
   ): Promise<MempoolRulesResult> {
-    const response = await requestRouter({
+    const response = await requestMidnightApi({
       ...params,
       method: "GET",
       path: "/v1/midnight/mempool/rules",
@@ -442,7 +436,7 @@ export namespace MidnightRouterApi {
 }
 
 /**
- * Stateful convenience wrapper for Midnight router API calls.
+ * Stateful convenience wrapper for Midnight API calls.
  *
  * @example
  * ```ts
@@ -454,26 +448,26 @@ export namespace MidnightRouterApi {
  * ```
  */
 export class Api {
-  private readonly config: MidnightRouterApiConfig;
+  private readonly config: MidnightApiConfig;
 
-  private constructor(config: MidnightRouterApiConfig = {}) {
+  private constructor(config: MidnightApiConfig = {}) {
     this.config = config;
   }
 
   /**
-   * Creates a configured Midnight router API wrapper.
+   * Creates a configured Midnight API wrapper.
    *
-   * @param config - Router API configuration shared by instance methods.
+   * @param config - API configuration shared by instance methods.
    * @returns API wrapper.
    * @example
    * ```ts
    * import { Api } from "@morpho-org/midnight-sdk";
    *
-   * const api = Api.init({ baseUrl: "https://router.morpho.org" });
+   * const api = Api.init({ baseUrl: "https://api.morpho.org" });
    * console.log(api);
    * ```
    */
-  public static init(config: MidnightRouterApiConfig = {}): Api {
+  public static init(config: MidnightApiConfig = {}): Api {
     return new Api(config);
   }
 
@@ -481,7 +475,7 @@ export class Api {
    * Validates an offer tree before ratifier data or payload publication exists.
    *
    * @param params - Tree validation parameters.
-   * @returns The encoded validation payload plus router issues and `valid` summary.
+   * @returns API issues and `valid` summary.
    * @example
    * ```ts
    * import { Api } from "@morpho-org/midnight-sdk";
@@ -491,9 +485,9 @@ export class Api {
    * ```
    */
   public validate(
-    params: Omit<ValidateMempoolTreeParams, keyof MidnightRouterApiConfig>,
+    params: Omit<ValidateMempoolTreeParams, keyof MidnightApiConfig>,
   ): Promise<MempoolPayloadValidationResult> {
-    return MidnightRouterApi.validateMempoolTree({
+    return MidnightApi.validateMempoolTree({
       ...this.config,
       ...params,
     });
@@ -503,7 +497,7 @@ export class Api {
    * Validates an already encoded mempool payload.
    *
    * @param params - Payload validation parameters.
-   * @returns Router validation result.
+   * @returns API validation result.
    * @example
    * ```ts
    * import { Api } from "@morpho-org/midnight-sdk";
@@ -513,9 +507,9 @@ export class Api {
    * ```
    */
   public validatePayload(
-    params: Omit<ValidateMempoolPayloadParams, keyof MidnightRouterApiConfig>,
+    params: Omit<ValidateMempoolPayloadParams, keyof MidnightApiConfig>,
   ): Promise<MempoolPayloadValidationResult> {
-    return MidnightRouterApi.validateMempoolPayload({
+    return MidnightApi.validateMempoolPayload({
       ...this.config,
       ...params,
     });
@@ -525,7 +519,7 @@ export class Api {
    * Validates payload-ready items.
    *
    * @param params - Item validation parameters.
-   * @returns Router validation result.
+   * @returns API validation result.
    * @example
    * ```ts
    * import { Api } from "@morpho-org/midnight-sdk";
@@ -538,19 +532,19 @@ export class Api {
    * ```
    */
   public validateItems(
-    params: Omit<ValidateMempoolItemsParams, keyof MidnightRouterApiConfig>,
+    params: Omit<ValidateMempoolItemsParams, keyof MidnightApiConfig>,
   ): Promise<MempoolPayloadValidationResult> {
-    return MidnightRouterApi.validateMempoolItems({
+    return MidnightApi.validateMempoolItems({
       ...this.config,
       ...params,
     });
   }
 
   /**
-   * Fetches inspectable Midnight router mempool policy rules.
+   * Fetches inspectable Midnight API mempool policy rules.
    *
    * @param params - Rule filters and pagination.
-   * @returns Paginated router rules mapped to SDK camelCase fields.
+   * @returns Paginated API rules mapped to SDK camelCase fields.
    * @example
    * ```ts
    * import { Api } from "@morpho-org/midnight-sdk";
@@ -560,17 +554,17 @@ export class Api {
    * ```
    */
   public fetchRules(
-    params: Omit<FetchMempoolRulesParams, keyof MidnightRouterApiConfig> = {},
+    params: Omit<FetchMempoolRulesParams, keyof MidnightApiConfig> = {},
   ): Promise<MempoolRulesResult> {
-    return MidnightRouterApi.fetchMempoolRules({
+    return MidnightApi.fetchMempoolRules({
       ...this.config,
       ...params,
     });
   }
 }
 
-async function requestRouter(params: RouterRequestParams): Promise<unknown> {
-  const url = buildRouterUrl({
+async function requestMidnightApi(params: ApiRequestParams): Promise<unknown> {
+  const url = buildApiUrl({
     baseUrl: params.baseUrl,
     path: params.path,
     query: params.query,
@@ -592,8 +586,8 @@ async function requestRouter(params: RouterRequestParams): Promise<unknown> {
   const json = await readJson(response);
 
   if (!response.ok) {
-    const envelope = parseRouterErrorEnvelope(json);
-    throw new MidnightRouterApiError({
+    const envelope = parseApiErrorEnvelope(json);
+    throw new MidnightApiError({
       status: response.status,
       code: envelope.code,
       message: envelope.message,
@@ -605,12 +599,12 @@ async function requestRouter(params: RouterRequestParams): Promise<unknown> {
   return json;
 }
 
-function buildRouterUrl(params: {
+function buildApiUrl(params: {
   readonly baseUrl?: string | URL;
   readonly path: string;
   readonly query?: Readonly<Record<string, QueryValue>>;
 }) {
-  const baseUrl = buildRouterBaseUrl(params.baseUrl);
+  const baseUrl = buildApiBaseUrl(params.baseUrl);
   const relativePath = params.path.startsWith("/")
     ? params.path.slice(1)
     : params.path;
@@ -627,8 +621,8 @@ function buildRouterUrl(params: {
   return url;
 }
 
-function buildRouterBaseUrl(input?: string | URL) {
-  const baseUrl = new URL(input ?? DEFAULT_ROUTER_API_URL);
+function buildApiBaseUrl(input?: string | URL) {
+  const baseUrl = new URL(input ?? DEFAULT_MIDNIGHT_API_URL);
   baseUrl.search = "";
   baseUrl.hash = "";
   if (!baseUrl.pathname.endsWith("/")) {
@@ -662,8 +656,8 @@ async function readJson(response: Response) {
     return (await response.json()) as unknown;
   } catch (error) {
     if (response.ok) {
-      throw new InvalidMidnightRouterResponseError(
-        "Midnight router success response did not contain valid JSON.",
+      throw new InvalidMidnightApiResponseError(
+        "Midnight API success response did not contain valid JSON.",
         { cause: error },
       );
     }
@@ -671,18 +665,18 @@ async function readJson(response: Response) {
   }
 }
 
-function parseRouterErrorEnvelope(json: unknown): RouterErrorEnvelope {
+function parseApiErrorEnvelope(json: unknown): ApiErrorEnvelope {
   if (!isRecord(json) || !isRecord(json.error)) return {};
 
   return {
-    code: readRouterErrorString(json.error, "code"),
-    message: readRouterErrorString(json.error, "message"),
+    code: readApiErrorString(json.error, "code"),
+    message: readApiErrorString(json.error, "message"),
     details: "details" in json.error ? json.error.details : undefined,
-    requestId: readRouterErrorString(json.error, "request_id"),
+    requestId: readApiErrorString(json.error, "request_id"),
   };
 }
 
-function readRouterErrorString(
+function readApiErrorString(
   record: Readonly<Record<string, unknown>>,
   key: string,
 ) {
@@ -692,20 +686,18 @@ function readRouterErrorString(
 
 function parseValidationResponse(
   json: unknown,
-  payload: MidnightPayload,
 ): MempoolPayloadValidationResult {
   const response = requireRecord(json, "validation response");
   const data = requireRecord(response.data, "validation response data");
   if (!Array.isArray(data.issues)) {
-    throw new InvalidMidnightRouterResponseError(
-      'Midnight router validation response is missing "data.issues".',
+    throw new InvalidMidnightApiResponseError(
+      'Midnight API validation response is missing "data.issues".',
     );
   }
 
   const issues = data.issues.map(parseValidationIssue);
 
   return {
-    payload,
     valid: issues.length === 0,
     issues,
   };
@@ -715,8 +707,8 @@ function parseValidationIssue(issue: unknown): MempoolPayloadValidationIssue {
   const record = requireRecord(issue, "validation issue");
   const rule = record.rule;
   if (typeof rule !== "string") {
-    throw new InvalidMidnightRouterResponseError(
-      'Midnight router validation issue is missing "rule".',
+    throw new InvalidMidnightApiResponseError(
+      'Midnight API validation issue is missing "rule".',
     );
   }
 
@@ -727,13 +719,13 @@ function parseRulesResponse(json: unknown): MempoolRulesResult {
   const response = requireRecord(json, "rules response");
   const cursor = response.cursor;
   if (cursor !== null && typeof cursor !== "string") {
-    throw new InvalidMidnightRouterResponseError(
-      'Midnight router rules response has invalid "cursor".',
+    throw new InvalidMidnightApiResponseError(
+      'Midnight API rules response has invalid "cursor".',
     );
   }
   if (!Array.isArray(response.data)) {
-    throw new InvalidMidnightRouterResponseError(
-      'Midnight router rules response is missing "data".',
+    throw new InvalidMidnightApiResponseError(
+      'Midnight API rules response is missing "data".',
     );
   }
 
@@ -775,8 +767,8 @@ function requireRecord(
   context: string,
 ): Readonly<Record<string, unknown>> {
   if (isRecord(value)) return value;
-  throw new InvalidMidnightRouterResponseError(
-    `Midnight router ${context} is malformed.`,
+  throw new InvalidMidnightApiResponseError(
+    `Midnight API ${context} is malformed.`,
   );
 }
 
@@ -791,8 +783,8 @@ function requireString(params: {
 }) {
   const value = params.record[params.key];
   if (typeof value === "string") return value;
-  throw new InvalidMidnightRouterResponseError(
-    `Midnight router ${params.context} is missing "${params.key}".`,
+  throw new InvalidMidnightApiResponseError(
+    `Midnight API ${params.context} is missing "${params.key}".`,
   );
 }
 
@@ -803,8 +795,8 @@ function requireNumber(params: {
 }) {
   const value = params.record[params.key];
   if (typeof value === "number") return value;
-  throw new InvalidMidnightRouterResponseError(
-    `Midnight router ${params.context} is missing "${params.key}".`,
+  throw new InvalidMidnightApiResponseError(
+    `Midnight API ${params.context} is missing "${params.key}".`,
   );
 }
 
@@ -815,8 +807,8 @@ function readOptionalString(
   const value = record[key];
   if (value === undefined) return undefined;
   if (typeof value === "string") return value;
-  throw new InvalidMidnightRouterResponseError(
-    `Midnight router response field "${key}" must be a string.`,
+  throw new InvalidMidnightApiResponseError(
+    `Midnight API response field "${key}" must be a string.`,
   );
 }
 
@@ -827,8 +819,8 @@ function readOptionalNumber(
   const value = record[key];
   if (value === undefined) return undefined;
   if (typeof value === "number") return value;
-  throw new InvalidMidnightRouterResponseError(
-    `Midnight router response field "${key}" must be a number.`,
+  throw new InvalidMidnightApiResponseError(
+    `Midnight API response field "${key}" must be a number.`,
   );
 }
 
@@ -841,8 +833,8 @@ function readOptionalStringArray(
   if (isStringArray(value)) {
     return value;
   }
-  throw new InvalidMidnightRouterResponseError(
-    `Midnight router response field "${key}" must be a string array.`,
+  throw new InvalidMidnightApiResponseError(
+    `Midnight API response field "${key}" must be a string array.`,
   );
 }
 

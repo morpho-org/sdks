@@ -1,4 +1,4 @@
-import type { Address, Hex } from "viem";
+import { type Address, type Hex, zeroAddress } from "viem";
 
 import {
   type IMarket,
@@ -61,22 +61,28 @@ export const baseMarketInput = (): IMarket => ({
 
 export const baseMarket = () => new Market(baseMarketInput());
 
-export const baseOfferInput = (overrides: Partial<IOffer> = {}): IOffer => ({
-  market: overrides.market ?? baseMarketParams(),
-  buy: overrides.buy ?? true,
-  maker: overrides.maker ?? addresses.maker,
-  start: overrides.start ?? 0n,
-  expiry: overrides.expiry ?? 2_100n,
-  tick: overrides.tick ?? 5_000n,
-  group: overrides.group ?? group,
-  callback: overrides.callback ?? "0x0000000000000000000000000000000000000000",
-  callbackData: overrides.callbackData ?? "0x",
-  receiverIfMakerIsSeller: overrides.receiverIfMakerIsSeller ?? addresses.maker,
-  ratifier: overrides.ratifier ?? addresses.ecrecoverRatifier,
-  reduceOnly: overrides.reduceOnly ?? false,
-  maxUnits: overrides.maxUnits ?? 100n,
-  maxAssets: overrides.maxAssets ?? 1_000n,
-});
+export const baseOfferInput = (overrides: Partial<IOffer> = {}): IOffer => {
+  const buy = overrides.buy ?? true;
+
+  return {
+    market: overrides.market ?? baseMarketParams(),
+    buy,
+    maker: overrides.maker ?? addresses.maker,
+    start: overrides.start ?? 0n,
+    expiry: overrides.expiry ?? 2_100n,
+    tick: overrides.tick ?? 5_000n,
+    group: overrides.group ?? group,
+    callback: overrides.callback ?? zeroAddress,
+    callbackData: overrides.callbackData ?? "0x",
+    receiverIfMakerIsSeller:
+      overrides.receiverIfMakerIsSeller ??
+      (buy ? zeroAddress : addresses.maker),
+    ratifier: overrides.ratifier ?? addresses.ecrecoverRatifier,
+    reduceOnly: overrides.reduceOnly ?? false,
+    maxUnits: overrides.maxUnits ?? 100n,
+    maxAssets: overrides.maxAssets ?? 1_000n,
+  };
+};
 
 export const baseOffer = (overrides: Partial<IOffer> = {}) =>
   new Offer(baseOfferInput(overrides));

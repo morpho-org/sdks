@@ -4,31 +4,27 @@ import { describe, expect, test } from "vitest";
 
 import { baseMarketParamsInput, baseOffer } from "../__test__/fixtures.js";
 import {
-  InvalidMidnightRouterResponseError,
-  MidnightRouterApiError,
+  InvalidMidnightApiResponseError,
+  MidnightApiError,
 } from "../errors.js";
 import * as Payload from "../signatures/Payload.js";
 import { MIDNIGHT_SDK_VERSION } from "../version.js";
-import {
-  Api,
-  MidnightRouterApi,
-  type MidnightRouterFetch,
-} from "./MidnightRouterApi.js";
+import { Api, MidnightApi, type MidnightApiFetch } from "./MidnightApi.js";
 
 type FetchCall = {
-  readonly input: Parameters<MidnightRouterFetch>[0];
-  readonly init: Parameters<MidnightRouterFetch>[1];
+  readonly input: Parameters<MidnightApiFetch>[0];
+  readonly init: Parameters<MidnightApiFetch>[1];
 };
 
-const ROUTER_VALID_MATURITY = 1_767_279_600n;
+const API_VALID_MATURITY = 1_767_279_600n;
 
-function routerValidOffer() {
+function apiValidOffer() {
   return baseOffer({
     market: {
       ...baseMarketParamsInput(),
-      maturity: ROUTER_VALID_MATURITY,
+      maturity: API_VALID_MATURITY,
     },
-    expiry: ROUTER_VALID_MATURITY - 60n,
+    expiry: API_VALID_MATURITY - 60n,
     maxUnits: 0n,
     maxAssets: 1_000n,
   });
@@ -36,7 +32,7 @@ function routerValidOffer() {
 
 function createJsonFetch(body: unknown, status = 200) {
   const calls: FetchCall[] = [];
-  const routerFetch: MidnightRouterFetch = async (input, init) => {
+  const apiFetch: MidnightApiFetch = async (input, init) => {
     calls.push({ input, init });
     return new Response(JSON.stringify(body), {
       status,
@@ -44,7 +40,7 @@ function createJsonFetch(body: unknown, status = 200) {
     });
   };
 
-  return { calls, fetch: routerFetch };
+  return { calls, fetch: apiFetch };
 }
 
 function parseRequestBody(call: FetchCall) {
@@ -68,7 +64,7 @@ describe("MIDNIGHT_SDK_VERSION", () => {
   });
 });
 
-describe("MidnightRouterApi.validateMempoolPayload", () => {
+describe("MidnightApi.validateMempoolPayload", () => {
   test("default", async () => {
     const payload = "0x0100000000" as Payload.Payload;
     const timestamp = "2026-06-01T16:00:00Z";
@@ -77,7 +73,7 @@ describe("MidnightRouterApi.validateMempoolPayload", () => {
       data: { issues: [] },
     });
 
-    const result = await MidnightRouterApi.validateMempoolPayload({
+    const result = await MidnightApi.validateMempoolPayload({
       chainId: 8453,
       payload,
       timestamp,
@@ -96,7 +92,6 @@ describe("MidnightRouterApi.validateMempoolPayload", () => {
     });
 
     expect(result).toEqual({
-      payload,
       valid: true,
       issues: [],
     });
@@ -104,7 +99,7 @@ describe("MidnightRouterApi.validateMempoolPayload", () => {
 
     const call = calls[0]!;
     const url = getRequestUrl(call);
-    expect(url.origin).toBe("https://router.morpho.org");
+    expect(url.origin).toBe("https://api.morpho.org");
     expect(url.pathname).toBe("/v1/midnight/mempool/validate");
     expect(url.searchParams.get("timestamp")).toBe(timestamp);
     expect(call.init?.method).toBe("POST");
@@ -128,24 +123,24 @@ describe("MidnightRouterApi.validateMempoolPayload", () => {
       data: { issues: [] },
     });
 
-    await MidnightRouterApi.validateMempoolPayload({
+    await MidnightApi.validateMempoolPayload({
       chainId: 8453,
       payload: "0x0100000000" as Payload.Payload,
-      baseUrl: "https://router.example/base/",
+      baseUrl: "https://api.example/base/",
       fetch,
     });
 
     const url = getRequestUrl(calls[0]!);
-    expect(url.origin).toBe("https://router.example");
+    expect(url.origin).toBe("https://api.example");
     expect(url.pathname).toBe("/base/v1/midnight/mempool/validate");
   });
 
-  test.each([400, 503])("error: MidnightRouterApiError %s", async (status) => {
+  test.each([400, 503])("error: MidnightApiError %s", async (status) => {
     const { fetch } = createJsonFetch(
       {
         error: {
           code: status === 400 ? "BAD_REQUEST" : "SERVICE_UNAVAILABLE",
-          message: "Router rejected request.",
+          message: "API rejected request.",
           details: [{ field: "limit", issue: "Limit must be greater than 0." }],
           request_id: "req-123",
         },
@@ -154,51 +149,50 @@ describe("MidnightRouterApi.validateMempoolPayload", () => {
     );
 
     await expect(
-      MidnightRouterApi.validateMempoolPayload({
+      MidnightApi.validateMempoolPayload({
         chainId: 8453,
         payload: "0x0100000000" as Payload.Payload,
         fetch,
       }),
     ).rejects.toMatchObject({
-      name: "MidnightRouterApiError",
+      name: "MidnightApiError",
       status,
       code: status === 400 ? "BAD_REQUEST" : "SERVICE_UNAVAILABLE",
-      message: "Router rejected request.",
+      message: "API rejected request.",
       details: [{ field: "limit", issue: "Limit must be greater than 0." }],
       requestId: "req-123",
     });
   });
 
-  test("error: InvalidMidnightRouterResponseError", async () => {
+  test("error: InvalidMidnightApiResponseError", async () => {
     const { fetch } = createJsonFetch({
       data: { issues: [{ field: "rule" }] },
     });
 
     await expect(
-      MidnightRouterApi.validateMempoolPayload({
+      MidnightApi.validateMempoolPayload({
         chainId: 8453,
         payload: "0x0100000000" as Payload.Payload,
         fetch,
       }),
-    ).rejects.toBeInstanceOf(InvalidMidnightRouterResponseError);
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
   });
 });
 
-describe("MidnightRouterApi.validateMempoolItems", () => {
+describe("MidnightApi.validateMempoolItems", () => {
   test("default", async () => {
     const { calls, fetch } = createJsonFetch({
       data: { issues: [{ rule: "tick_spacing" }] },
     });
 
-    const result = await MidnightRouterApi.validateMempoolItems({
+    const result = await MidnightApi.validateMempoolItems({
       chainId: 8453,
-      items: [{ offer: routerValidOffer(), ratifierData: "0x1234" as Hex }],
+      items: [{ offer: apiValidOffer(), ratifierData: "0x1234" as Hex }],
       fetch,
     });
 
     const body = parseRequestBody(calls[0]!);
     expect(body.chain_id).toBe(8453);
-    expect(body.payload).toBe(result.payload);
     expect(result.valid).toBe(false);
     expect(result.issues).toEqual([{ rule: "tick_spacing" }]);
 
@@ -209,15 +203,15 @@ describe("MidnightRouterApi.validateMempoolItems", () => {
   });
 });
 
-describe("MidnightRouterApi.validateMempoolTree", () => {
+describe("MidnightApi.validateMempoolTree", () => {
   test("default", async () => {
     const { calls, fetch } = createJsonFetch({
       data: { issues: [] },
     });
 
-    const result = await MidnightRouterApi.validateMempoolTree({
+    const result = await MidnightApi.validateMempoolTree({
       chainId: 8453,
-      tree: { groups: [[routerValidOffer()]] },
+      tree: { groups: [[apiValidOffer()]] },
       fetch,
     });
 
@@ -239,7 +233,7 @@ describe("Api.validate", () => {
 
     const result = await api.validate({
       chainId: 8453,
-      tree: { groups: [[routerValidOffer()]] },
+      tree: { groups: [[apiValidOffer()]] },
     });
 
     expect(result.valid).toBe(true);
@@ -247,7 +241,7 @@ describe("Api.validate", () => {
   });
 });
 
-describe("MidnightRouterApi.fetchMempoolRules", () => {
+describe("MidnightApi.fetchMempoolRules", () => {
   test("default", async () => {
     const timestamp = new Date("2026-06-01T16:00:00.000Z");
     const { calls, fetch } = createJsonFetch({
@@ -273,13 +267,13 @@ describe("MidnightRouterApi.fetchMempoolRules", () => {
       ],
     });
 
-    const result = await MidnightRouterApi.fetchMempoolRules({
+    const result = await MidnightApi.fetchMempoolRules({
       chainIds: [1, 8453],
       types: ["tick_spacing", "collateral_lltv"],
       timestamp,
       limit: 100,
       cursor: "previous",
-      baseUrl: new URL("https://router.example"),
+      baseUrl: new URL("https://api.example"),
       fetch,
       request: {
         headers: { "x-app": "markets-v2" },
@@ -312,7 +306,7 @@ describe("MidnightRouterApi.fetchMempoolRules", () => {
 
     const call = calls[0]!;
     const url = getRequestUrl(call);
-    expect(url.origin).toBe("https://router.example");
+    expect(url.origin).toBe("https://api.example");
     expect(url.pathname).toBe("/v1/midnight/mempool/rules");
     expect(url.searchParams.get("chain_ids")).toBe("1,8453");
     expect(url.searchParams.get("types")).toBe("tick_spacing,collateral_lltv");
@@ -335,22 +329,22 @@ describe("MidnightRouterApi.fetchMempoolRules", () => {
       data: [],
     });
 
-    await MidnightRouterApi.fetchMempoolRules({
-      baseUrl: "https://router.example/base/",
+    await MidnightApi.fetchMempoolRules({
+      baseUrl: "https://api.example/base/",
       fetch,
     });
 
     const url = getRequestUrl(calls[0]!);
-    expect(url.origin).toBe("https://router.example");
+    expect(url.origin).toBe("https://api.example");
     expect(url.pathname).toBe("/base/v1/midnight/mempool/rules");
   });
 
-  test("error: MidnightRouterApiError", async () => {
+  test("error: MidnightApiError", async () => {
     const { fetch } = createJsonFetch(
       {
         error: {
           code: "SERVICE_UNAVAILABLE",
-          message: "Router unavailable.",
+          message: "API unavailable.",
           details: null,
           request_id: "req-503",
         },
@@ -359,18 +353,18 @@ describe("MidnightRouterApi.fetchMempoolRules", () => {
     );
 
     await expect(
-      MidnightRouterApi.fetchMempoolRules({ fetch }),
-    ).rejects.toBeInstanceOf(MidnightRouterApiError);
+      MidnightApi.fetchMempoolRules({ fetch }),
+    ).rejects.toBeInstanceOf(MidnightApiError);
   });
 
-  test("error: InvalidMidnightRouterResponseError", async () => {
+  test("error: InvalidMidnightApiResponseError", async () => {
     const { fetch } = createJsonFetch({
       cursor: null,
       data: [{ type: "tick_spacing", tick_spacing: 4 }],
     });
 
     await expect(
-      MidnightRouterApi.fetchMempoolRules({ fetch }),
-    ).rejects.toBeInstanceOf(InvalidMidnightRouterResponseError);
+      MidnightApi.fetchMempoolRules({ fetch }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
   });
 });

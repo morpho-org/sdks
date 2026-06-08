@@ -74,25 +74,6 @@ export class NoMatchingOffersError extends Error {
 }
 
 /**
- * Thrown when an offer builder cannot resolve an offer group id.
- *
- * @example
- * ```ts
- * import { MissingOfferGroupError } from "@morpho-org/midnight-sdk";
- *
- * throw new MissingOfferGroupError();
- * ```
- */
-export class MissingOfferGroupError extends Error {
-  public constructor() {
-    super(
-      "Offer group must be provided or generated with an injected random byte source.",
-    );
-    this.name = "MissingOfferGroupError";
-  }
-}
-
-/**
  * Thrown when a Midnight offer group violates protocol-level group mechanics.
  *
  * @example
@@ -362,13 +343,13 @@ export class InvalidOfferTreeError extends Error {
 }
 
 /**
- * Thrown when the Midnight router API returns a non-2xx response.
+ * Thrown when the Midnight API returns a non-2xx response.
  *
  * @example
  * ```ts
- * import { MidnightRouterApiError } from "@morpho-org/midnight-sdk";
+ * import { MidnightApiError } from "@morpho-org/midnight-sdk";
  *
- * throw new MidnightRouterApiError({
+ * throw new MidnightApiError({
  *   status: 400,
  *   code: "BAD_REQUEST",
  *   message: "Limit must be greater than 0.",
@@ -377,14 +358,14 @@ export class InvalidOfferTreeError extends Error {
  * });
  * ```
  */
-export class MidnightRouterApiError extends Error {
-  /** HTTP response status from the router. */
+export class MidnightApiError extends Error {
+  /** HTTP response status from the API. */
   public readonly status: number;
-  /** Router error code, when the response body includes one. */
+  /** API error code, when the response body includes one. */
   public readonly code?: string;
-  /** Router error details, when the response body includes them. */
+  /** API error details, when the response body includes them. */
   public readonly details?: unknown;
-  /** Router request id, when the response body includes one. */
+  /** API request id, when the response body includes one. */
   public readonly requestId?: string;
 
   public constructor(params: {
@@ -397,10 +378,10 @@ export class MidnightRouterApiError extends Error {
   }) {
     super(
       params.message ??
-        `Midnight router request failed with HTTP status "${params.status}".`,
+        `Midnight API request failed with HTTP status "${params.status}".`,
       params.cause === undefined ? undefined : { cause: params.cause },
     );
-    this.name = "MidnightRouterApiError";
+    this.name = "MidnightApiError";
     this.status = params.status;
     this.code = params.code;
     this.details = params.details;
@@ -409,18 +390,18 @@ export class MidnightRouterApiError extends Error {
 }
 
 /**
- * Thrown when the Midnight router API returns a malformed successful response.
+ * Thrown when the Midnight API returns a malformed successful response.
  *
  * @example
  * ```ts
- * import { InvalidMidnightRouterResponseError } from "@morpho-org/midnight-sdk";
+ * import { InvalidMidnightApiResponseError } from "@morpho-org/midnight-sdk";
  *
- * throw new InvalidMidnightRouterResponseError("Router response is missing data.");
+ * throw new InvalidMidnightApiResponseError("API response is missing data.");
  * ```
  */
-export class InvalidMidnightRouterResponseError extends Error {
+export class InvalidMidnightApiResponseError extends Error {
   public constructor(message: string, options?: ErrorOptions) {
     super(message, options);
-    this.name = "InvalidMidnightRouterResponseError";
+    this.name = "InvalidMidnightApiResponseError";
   }
 }

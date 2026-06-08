@@ -1,6 +1,15 @@
 import type { Hex } from "viem";
 import type { BigIntish } from "../types.js";
-import type { IOffer, Offer, OfferStruct } from "./Offer.js";
+import {
+  type IOffer,
+  Offer,
+  type OfferStruct,
+  offerToStruct,
+} from "./Offer.js";
+import {
+  type CreateManyTakeableOffersParams,
+  TakeableOfferUtils,
+} from "./TakeableOfferUtils.js";
 
 /**
  * Plain input accepted by {@link TakeableOffer}.
@@ -33,13 +42,46 @@ export interface ITakeableOffer {
  * console.log(takeableOffer.units);
  * ```
  */
-export interface TakeableOffer {
+export class TakeableOffer {
   /** Units to take from this offer. */
-  readonly units: bigint;
+  public readonly units: bigint;
   /** Inline offer. */
-  readonly offer: Offer;
+  public readonly offer: Offer;
   /** Ratifier data payload. */
-  readonly ratifierData: Hex;
+  public readonly ratifierData: Hex;
+
+  public constructor(takeableOffer: ITakeableOffer) {
+    this.units = BigInt(takeableOffer.units);
+    this.offer =
+      takeableOffer.offer instanceof Offer
+        ? takeableOffer.offer
+        : new Offer(takeableOffer.offer);
+    this.ratifierData = takeableOffer.ratifierData;
+  }
+
+  /**
+   * Converts API/app quote entries into takeable-offer class instances.
+   *
+   * @param params - Quote conversion parameters.
+   * @returns Takeable offers in caller order.
+   * @throws NoMatchingOffersError when `entries` is empty.
+   * @throws UnexpectedOfferSideError when an entry has the wrong side.
+   * @throws InconsistentMarketError when market consistency is enforced and differs.
+   * @example
+   * ```ts
+   * import { TakeableOffer } from "@morpho-org/midnight-sdk";
+   *
+   * const offers = TakeableOffer.createMany({ entries: [{} as never] });
+   * console.log(offers.length);
+   * ```
+   */
+  public static createMany(
+    params: CreateManyTakeableOffersParams,
+  ): readonly TakeableOffer[] {
+    return TakeableOfferUtils.createMany(params).map(
+      (takeableOffer) => new TakeableOffer(takeableOffer),
+    );
+  }
 }
 
 /**
@@ -60,4 +102,32 @@ export interface TakeableOfferStruct {
   readonly offer: OfferStruct;
   /** Ratifier data payload. */
   readonly ratifierData: Hex;
+}
+
+/**
+ * Converts a takeable offer into the tuple object expected by viem ABI encoders.
+ *
+ * @param takeableOffer - Takeable offer class or plain input.
+ * @returns ABI-compatible takeable offer.
+ * @example
+ * ```ts
+ * import { takeableOfferToStruct } from "@morpho-org/midnight-sdk";
+ *
+ * const takeableOffer = takeableOfferToStruct({} as never);
+ * console.log(takeableOffer.units);
+ * ```
+ */
+export function takeableOfferToStruct(
+  takeableOffer: ITakeableOffer | TakeableOffer,
+): TakeableOfferStruct {
+  const normalized =
+    takeableOffer instanceof TakeableOffer
+      ? takeableOffer
+      : new TakeableOffer(takeableOffer);
+
+  return {
+    units: normalized.units,
+    offer: offerToStruct(normalized.offer),
+    ratifierData: normalized.ratifierData,
+  };
 }
