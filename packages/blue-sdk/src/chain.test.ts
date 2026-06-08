@@ -108,6 +108,24 @@ describe("ChainUtils explorer URL helpers", () => {
         nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
       },
     ],
+    [
+      2_818,
+      {
+        name: "Morph",
+        explorerUrl: "https://explorer.morphl2.io",
+        identifier: "morph",
+        nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      },
+    ],
+    [
+      4_326,
+      {
+        name: "MegaETH",
+        explorerUrl: "https://mega.etherscan.io",
+        identifier: "megaeth",
+        nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      },
+    ],
   ])("exposes era-2 metadata for chain %i", (chainId, expectedMetadata) => {
     expect(
       (ChainUtils.CHAIN_METADATA as Record<number, unknown>)[chainId],
