@@ -14,3 +14,6 @@ onlyBuiltDependencies:
   - secp256k1
   - utf-8-validate
 
+patchedDependencies:
+  ox@0.14.29: patches/ox@0.14.29.patch
+
