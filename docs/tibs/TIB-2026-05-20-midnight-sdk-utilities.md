@@ -5,7 +5,7 @@
 | **Status** | Accepted                                                                                   |
 | **Date**   | 2026-05-20 (updated 2026-06-08)                                                            |
 | **Author** | @0xbulma                                                                                   |
-| **Scope**  | Packages: `@morpho-org/midnight-sdk`, `@morpho-org/morpho-ts`, `@morpho-org/blue-sdk` shim |
+| **Scope**  | Packages: `@morpho-org/midnight-sdk`, `@morpho-org/morpho-sdk`, `@morpho-org/morpho-ts`, `@morpho-org/blue-sdk` shim |
 
 ---
 
@@ -20,25 +20,26 @@ The current app implementation in `morpho-org/morpho-apps` builds Midnight order
 - supply-only collateral calls `Midnight.supplyCollateral` directly because the periphery bundler indexes `takes[0]` and cannot handle an empty take list;
 - limit-order flows use public API payload validation, Ecrecover-vs-Setter ratifier selection, `setIsAuthorized`, offer-root signing or root approval, and mempool submission.
 
-Keeping those details only in app code makes every downstream integration re-learn the same protocol edges. Folding them into `@morpho-org/morpho-sdk` is too premature: the action/entity shape, Blue-parity naming, and release contract for a high-level SDK integration still need more product and protocol mileage. The immediate decision is narrower: create a dedicated `@morpho-org/midnight-sdk` package that owns stable Midnight protocol utilities and can be used by the app today and by higher-level SDK packages later.
+Keeping those details only in app code makes every downstream integration re-learn the same protocol edges. A high-level `@morpho-org/morpho-sdk` Midnight client is still too premature: the action/entity shape, Blue-parity naming, and release contract need more product and protocol mileage. Static contract data is narrower and belongs in `@morpho-org/morpho-sdk`'s existing contract-data subpaths, so this TIB creates a dedicated `@morpho-org/midnight-sdk` package for Midnight protocol utilities while extracting Midnight ABIs and addresses to `@morpho-org/morpho-sdk`.
 
 ## Goals / Non-Goals
 
 **Goals**
 
-- Add `@morpho-org/midnight-sdk` as the source of truth for Midnight-specific ABI literals, constants, protocol value types/interfaces, typed errors, deterministic helper functions, and Midnight address accessors.
-- Extract generic SDK primitives that Midnight and Blue share into `@morpho-org/morpho-ts`, including fixed-point math, bigint input helpers, shared typed errors, shared constants, address registries, ABI fragments/descriptors, and validation helpers; continue using existing generic `morpho-ts` helpers such as `deepFreeze` directly.
+- Add `@morpho-org/midnight-sdk` as the source of truth for Midnight-specific constants, protocol value types/interfaces, typed errors, deterministic helper functions, fetch/API helpers, and signature/payload utilities.
+- Extract Midnight-specific ABI literals and Midnight address accessors to `@morpho-org/morpho-sdk` under its existing `./abis` and `./addresses` public subpaths. `midnight-sdk` consumes those symbols; it does not define or re-export them.
+- Extract generic SDK primitives that Midnight and Blue share into `@morpho-org/morpho-ts`, including fixed-point math, bigint input helpers, shared typed errors, shared constants, and validation helpers; continue using existing generic `morpho-ts` helpers such as `deepFreeze` directly.
 - Preserve existing Blue import paths for extracted symbols by re-exporting each one from the same `@morpho-org/blue-sdk` module where it was previously defined.
-- Provide utilities that directly support the current markets-v2 app action flows without importing app code: market struct conversion, offer/takeable-offer conversion, tick/price math, units/assets rounding helpers grouped under utility namespaces, fetch helpers, and make-offer signature/validation helpers. Core and periphery ABI literals stay pinned and exported so integrators can encode standalone calls themselves; standalone one-function calldata wrapper namespaces are out of scope. Higher-level helpers may return call descriptors only when they own workflow context beyond raw ABI encoding.
+- Provide utilities that directly support the current markets-v2 app action flows without importing app code: market struct conversion, offer/takeable-offer conversion, tick/price math, units/assets rounding helpers grouped under utility namespaces, fetch helpers, and make-offer signature/validation helpers. Core and periphery ABI literals stay pinned and exported from `@morpho-org/morpho-sdk/abis` so integrators can encode standalone calls themselves; standalone one-function calldata wrapper namespaces are out of scope. Higher-level helpers may return call descriptors only when they own workflow context beyond raw ABI encoding.
 - Keep the package framework-free: no React, wagmi, Redux, app router state, UI action-flow types, or app-specific error classes.
 - Keep I/O isolated in explicit boundary modules such as `fetch/` and `api/`, while pure protocol helpers remain testable without mocks.
-- Pin the Midnight ABI surface in package source and expose Midnight address accessors for the core Midnight contract, periphery bundler, Midnight mempool, Ecrecover ratifier, Setter ratifier, and the shared Permit2 address. Production addresses are added only when reviewed deployment artifacts are available.
+- Pin the Midnight ABI surface and expose Midnight address accessors from `@morpho-org/morpho-sdk` for the core Midnight contract, periphery bundler, Midnight mempool, Ecrecover ratifier, Setter ratifier, and Permit2 address. Production addresses are added only when reviewed deployment artifacts are available.
 - Export typed errors for integrators to pattern-match on instead of throwing plain `Error`.
 - Cover the package with colocated unit tests, property-based tests for tick/price and unit/asset conversion, and viem mock-transport tests for fetch/API boundary helpers.
 
 **Non-Goals**
 
-- No `@morpho-org/morpho-sdk` source, package export, action, entity, or dependency changes in this TIB.
+- No `@morpho-org/morpho-sdk` Midnight action, entity, client namespace, or workflow-helper changes in this TIB. `morpho-sdk` changes are limited to static contract data in `./abis`, `./addresses`, and the typed errors needed by address registration.
 - No Blue-style `client.midnight.market(...)` instance in this TIB.
 - No Blue protocol-surface behavior changes. Blue edits are limited to shared primitive compatibility, such as re-exporting extracted math, constants, errors, address registries, and ABI fragments/descriptors from their old `blue-sdk` paths.
 - No `midnight-sdk` compatibility facade for generic `morpho-ts` utilities. `midnight-sdk` is not published yet, so its own source, docs, and downstream app rewires should import shared primitives directly from `@morpho-org/morpho-ts` instead of preserving temporary `midnight-sdk` re-export paths.
@@ -68,6 +69,7 @@ Accepted source shape:
 ```text
 packages/midnight-sdk/
 +-- AGENTS.md
++-- README.md
 +-- contracts/
 |   +-- GetConsumableUnitsInputs.sol
 |   +-- GetPosition.sol
@@ -76,14 +78,11 @@ packages/midnight-sdk/
 +-- package.json
 +-- tsconfig*.json
 +-- src/
-    +-- abis.ts
-    +-- addresses.ts
     +-- constants.ts
     +-- errors.ts
     +-- index.ts
     +-- types.ts
     +-- market/
-    |   +-- CollateralParams.ts
     |   +-- Market.ts
     |   +-- MarketUtils.ts
     |   +-- Position.ts
@@ -123,13 +122,18 @@ packages/midnight-sdk/
 The root barrel exports the stable package surface explicitly, including `MarketUtils`,
 `OfferUtils`, `TakeableOfferUtils`, `GroupUtils`, `OfferTreeUtils`, `TreeUtils`, `TickLib`,
 `TakeAmountsLib`, `ConsumableUnitsLib`, `Payload`, `Offer`, `TakeableOffer`, `Group`, `Tree`,
-`EcrecoverRatifier`, `SetterRatifier`, `MidnightApi`, `Api`,
+`EcrecoverRatifier`, `SetterRatifier`, `MidnightApi`,
 `MIDNIGHT_SDK_VERSION`, typed errors such as `InvalidOfferGroupError` and
 `InvalidOfferTreeError`, fetch helpers such as `fetchMarketParams`, `fetchMarket`,
 `fetchPosition`, `fetchAccrualPosition`, `fetchConsumableUnits`, and `fetchRatifierInfo`, and their
 supporting parameter types. The initial implementation keeps viem-backed fetch/API helpers in the
 root export; a separate `./viem` subpath or package can be introduced later if the I/O surface
 grows.
+
+`midnight-sdk` does not export Midnight ABI literals, generic ERC-20 ABI fragments, Midnight address
+registries, or Midnight address registration helpers. Those symbols are part of
+`@morpho-org/morpho-sdk/abis`, `@morpho-org/morpho-sdk/addresses`, and
+`@morpho-org/morpho-sdk/errors`.
 
 ### Shared Morpho TS Extraction
 
@@ -143,13 +147,6 @@ protocol package:
   `NegativeValueError` live in `morpho-ts/src/errors.ts`.
 - `assertNonNegative`, `deepFreeze`, and generic object/array helpers live in
   `morpho-ts/src/utils.ts`.
-- Shared address-registry data and mechanics live in `morpho-ts/src/addresses.ts`, including the
-  Blue-extracted chain address registry, deployment-block registry, `NATIVE_ADDRESS`, Permit2
-  deployment metadata, unwrapped-token mappings, address-label typing, no-overwrite custom
-  registration, and chain lookup helpers.
-- Shared ABI literals and ABI parameter descriptors live in `morpho-ts/src/abis.ts` when they are
-  not Midnight-specific, including generic ERC-20 fragments and Blue-extracted ABI descriptors such
-  as Blue market-params tuple definitions.
 
 `@morpho-org/blue-sdk` keeps compatibility for existing consumers by re-exporting extracted symbols
 from the same module where they were previously defined:
@@ -168,28 +165,17 @@ from the same module where they were previously defined:
 
 `@morpho-org/midnight-sdk` does not provide old-path compatibility for shared primitives because it
 has not been published. Midnight source, tests, examples, and app adoption work import shared
-utilities/errors/helpers/constants/address-registry helpers/ABI fragments directly from
-`@morpho-org/morpho-ts` when the symbol is defined there. The Midnight root export is reserved for
-Midnight-owned ABI literals, Midnight address accessors, protocol types, typed errors, math
-libraries, fetch/API helpers, and signature/payload utilities.
+utilities/errors/helpers/constants directly from `@morpho-org/morpho-ts` when the symbol is defined
+there. Midnight source imports ABI literals and address helpers from `@morpho-org/morpho-sdk`
+subpaths. The Midnight root export is reserved for protocol types, typed errors, math libraries,
+fetch/API helpers, and signature/payload utilities.
 
 ### Contract Data
 
-`morpho-ts/src/addresses.ts` owns the shared chain-level address registry. The registry keeps the
-Blue SDK DX while allowing Midnight to add a protocol-specific slice to the same chain entry:
-
-- Existing Blue fields such as `morpho`, `bundler3`, `adaptiveCurveIrm`, `publicAllocator`,
-  factories, token metadata, `wNative`, and deployment blocks remain available from the same
-  `@morpho-org/blue-sdk` paths through re-export shims.
-- Shared fields such as `permit2` live once on the chain entry and are reused by every protocol
-  package that needs them.
-- Midnight deployment fields live in a dedicated Midnight slice on the shared chain entry:
-  `midnight`, `midnightBundles`, `midnightMempool`, `ecrecoverRatifier`, and `setterRatifier`.
-
-`MidnightAddresses` is the resolved Midnight view returned to callers. It contains the five
-Midnight-specific deployment addresses plus the resolved shared `permit2` address. The unresolved
-registry shape may store `permit2` at the shared chain level, while `getMidnightAddresses(chainId)`
-merges the shared `permit2` field with the Midnight slice before returning:
+`@morpho-org/morpho-sdk` owns Midnight contract data. `packages/morpho-sdk/src/addresses.ts`
+continues to expose the existing Blue address exports and additionally owns the Midnight address
+registry. `MidnightAddresses` is the resolved Midnight view returned to callers. It contains the
+five Midnight-specific deployment addresses plus the Permit2 address:
 
 ```ts
 interface MidnightDeploymentAddresses {
@@ -205,14 +191,14 @@ interface MidnightAddresses extends MidnightDeploymentAddresses {
 }
 ```
 
-`packages/midnight-sdk/src/addresses.ts` is a Midnight facade over the shared `morpho-ts` registry,
-not an independent source of chain metadata. It preserves the expected package DX:
+`getMidnightAddresses` and `registerCustomMidnightAddresses` are exported from
+`@morpho-org/morpho-sdk/addresses`, not from `@morpho-org/midnight-sdk`:
 
 ```ts
 import {
   getMidnightAddresses,
   registerCustomMidnightAddresses,
-} from "@morpho-org/midnight-sdk";
+} from "@morpho-org/morpho-sdk/addresses";
 
 const midnightAddresses = getMidnightAddresses(chainId);
 
@@ -230,35 +216,30 @@ registerCustomMidnightAddresses({
 });
 ```
 
-`registerCustomMidnightAddresses` forwards into the shared registry merge path. Known chains may
-provide partial Midnight entries, but existing values from either the shared root fields or the
-Midnight slice cannot be overwritten with a different address. Unknown chains must provide every
-Midnight-specific address and either a Midnight `permit2` override or a shared chain-level `permit2`
-entry. The object-style `midnightAddresses` / `midnightAddressRegistry` exports remain available for
-compatibility, but they are selectors over the shared registry rather than separate mutable
-registries.
+Known chains may provide partial Midnight entries, but existing values cannot be overwritten with a
+different address. Unknown chains must provide every Midnight-specific address and `permit2`. The
+object-style `midnightAddresses` / `midnightAddressRegistry` exports remain available from
+`@morpho-org/morpho-sdk/addresses` for compatibility with the object-registry DX.
 
 Production Midnight addresses are intentionally absent until a reviewed deployment artifact pins
-them. Adding production addresses updates the shared chain registry by chain id; no runtime address
-fetches are introduced.
+them. Adding production addresses updates the `morpho-sdk` Midnight registry by chain id; no runtime
+address fetches are introduced.
 
-`morpho-ts/src/abis.ts` owns shared ABI fragments and ABI-parameter descriptors, including generic
-ERC-20 fragments used for allowance reads. `midnight-sdk` consumes those shared ABI fragments
-directly from `@morpho-org/morpho-ts` instead of re-exporting them as Midnight API.
-
-`packages/midnight-sdk/src/abis.ts` owns pinned Midnight-specific ABI literals that remain part of
-the public root export:
+`packages/morpho-sdk/src/abis.ts` exports the ABI literals consumed by Midnight utilities, backed by
+`packages/morpho-sdk/src/midnight/abis.ts`:
 
 - `midnightAbi`
 - `midnightBundlesAbi`
 - `ecrecoverRatifierAbi`
 - `setterRatifierAbi`
+- `erc20Abi`
 
 Mempool submission remains a raw `to` + payload call descriptor rather than an ABI-backed
 `midnightMempoolAbi`. Each pinned ABI literal documents the `morpho-org/midnight` source commit and
 artifact path. Runtime ABI fetches are out of scope. Integrators that only need a single contract
-call can import these ABI literals and use their viem encoder directly instead of going through SDK
-wrapper functions.
+call can import these ABI literals from `@morpho-org/morpho-sdk/abis` and use their viem encoder
+directly instead of going through SDK wrapper functions. `midnight-sdk` imports these ABIs for
+fetch/signature helpers but does not re-export them.
 
 Deployless fetcher bytecode is kept as generated `abi` and `code` constants under `src/queries/`,
 matching the `blue-sdk-viem` pattern. The Solidity inputs live under `contracts/` and are compiled by
@@ -271,7 +252,10 @@ helper. The initial generated queries are:
 ### Types, Classes, and Constants
 
 `midnight-sdk` should model Solidity structs and fetchable state as readonly TypeScript
-types by default, with classes reserved for typed errors and behavior-bearing domain or boundary objects:
+types by default, with classes reserved for typed errors and behavior-bearing domain or boundary objects.
+Types stay colocated with the module that owns the relevant behavior; small one-concept interfaces do
+not get dedicated files. When a domain interface and ABI struct shape are identical, the SDK exports
+one interface and reuses it instead of publishing duplicate `Foo`/`FooStruct` names:
 
 - `Market`
 - `MarketParams`
@@ -282,16 +266,13 @@ types by default, with classes reserved for typed errors and behavior-bearing do
 - `Tree`
 - `EcrecoverRatifier`
 - `SetterRatifier`
-- `Api`
+- `MidnightApi`
 - `TokenPermit`
 - `CollateralSupply`
 - `CollateralWithdrawal`
 - `Position`
 - `AccrualPosition`
 - `RatifierInfo`
-- `MidnightDeploymentAddresses`
-- `MidnightAddresses`
-- `MidnightAddressRegistry`
 - quote-facing raw input shapes for converting app/API responses into `Offer` and `TakeableOffer`
 
 `TakeableOffer` is the SDK/orderbook-facing alias for the Solidity periphery `Take` tuple
@@ -313,13 +294,14 @@ validate inputs:
 - HashLib typehash constants for markets, collateral params, offers, and the EIP-712 domain
 - `PermitKind`
 
-Generic constants, helpers, typed errors, address-registry helpers, and ABI fragments such as
+Generic constants, helpers, and typed errors such as
 `MathLib.WAD`, `ORACLE_PRICE_SCALE`, `BigIntish`, `RoundingDirection`, `UnsupportedChainIdError`,
 `DivisionByZeroError`, `InvalidBitLengthError`, `NegativeValueError`, `assertNonNegative`,
-`deepFreeze`, shared address registries, and generic ABI literals live in
-`@morpho-org/morpho-ts`; `midnight-sdk` consumes them directly instead of duplicating or
-re-exporting them as Midnight API. Permit2 is a shared chain-registry field rather than a standalone
-`PERMIT2_ADDRESS` constant or a Midnight-only address value.
+and `deepFreeze` live in `@morpho-org/morpho-ts`; `midnight-sdk` consumes them directly instead of
+duplicating or re-exporting them as Midnight API. Midnight ABI literals and address-registry helpers
+live in `@morpho-org/morpho-sdk`; `midnight-sdk` consumes them directly instead of duplicating or
+re-exporting them as Midnight API. Permit2 is an address-registry field rather than a standalone
+`PERMIT2_ADDRESS` constant.
 
 Midnight follows Blue SDK's market split. `MarketParams` / `IMarketParams` are the immutable
 Solidity `Market` config fields: loan token, collateral params, maturity, RCF threshold, entry gate,
@@ -421,7 +403,7 @@ Make-offer helpers should support the limit-order path without importing app cod
 - `OfferUtils.validateOfferGroup` exposes protocol checks and API-publication checks separately. Protocol checks enforce non-empty groups, same maker, same group, same side, same loan token, valid receiver zeroing, and exactly one non-zero unit/asset cap. API-publication checks additionally mirror the current public validation policy for maker trees, including content-addressed group identity, same callback address/data where required, non-overlapping active windows per market, and current capacity/rule constraints fetched from the API;
 - `Tree.create({ groups })` builds a Merkle tree from `Group` instances or plain group inputs, preserving offer order across groups, and delegates tree hashing/proof logic to pure `TreeUtils` helpers that accept object-compatible group inputs;
 - expose offer-tree, Merkle root, proof, ratifier-data, root-approval, mempool-submission, and API-validation helpers behind stable SDK classes and class methods where the return value is class-shaped;
-- validate maker trees through `MidnightApi.validateMempoolTree` or `Api.init().validate(...)` before wallet signature/root approval; validation encodes empty per-leaf `ratifierData` because the API endpoint inspects offer contents, not ratifier data;
+- validate maker trees through `MidnightApi` before wallet signature/root approval; validation encodes empty per-leaf `ratifierData` because the API endpoint inspects offer contents, not ratifier data;
 - keep offer publication/submission onchain through `Payload.buildSubmissionCall`; the current public API does not expose a submit endpoint.
 - keep gatekeeper policy out of raw protocol helpers. API-publication helpers may mirror the public API rules as boundary validation, but should prefer surfaced API issues over hard-coded policy when rules are fetched or still changing.
 
@@ -507,18 +489,18 @@ JavaScript objects:
 
 ```ts
 import {
-  Api,
   EcrecoverRatifier,
   Group,
+  MidnightApi,
   Payload,
   Tree,
 } from "@morpho-org/midnight-sdk";
 
-const api = Api.init();
+const api = new MidnightApi();
 const group = Group.create(offers);
 const tree = Tree.create({ groups: [group] });
 
-const validation = await api.validate({ tree, chainId });
+const validation = await api.validateMempoolTree({ tree, chainId });
 if (!validation.valid) {
   // App code maps API validation issues to its own UX/error handling.
 }
@@ -558,11 +540,7 @@ Pure utility namespaces stay available for object-first integrations:
 - `SetterRatifier.ratify`
 - `Payload.encode` / `Payload.decode` for versioned Midnight mempool payload bytes.
 - `Payload.buildSubmissionCall` for the final raw `to` + payload call descriptor.
-- `MidnightApi.validateMempoolPayload` for `POST /v1/midnight/mempool/validate`.
-- `MidnightApi.validateMempoolItems`, which encodes `Payload.Item[]` with `Payload.encode` before validation.
-- `MidnightApi.validateMempoolTree`, which encodes tree offers with empty `ratifierData` before signature/root approval.
-- `Api.init().validate`, the stateful convenience wrapper for tree validation.
-- `MidnightApi.fetchMempoolRules` for `GET /v1/midnight/mempool/rules`.
+- `MidnightApi` for payload/item/tree validation and mempool-rule reads, callable directly with the default API URL or as a configured instance.
 
 The app remains responsible for sequencing prompts. The SDK returns typed descriptors for "sign this
 typed data", "call this contract", "submit this payload", and "validate this tree/payload".
@@ -571,7 +549,7 @@ typed data", "call this contract", "submit this payload", and "validate this tre
 bytes, a small attribution-suffix allowance, canonical ABI-byte validation, and a typed
 `Payload.DecodeError`.
 
-`MidnightApi` is the public Morpho API HTTP boundary. It accepts an optional string-or-`URL` `baseUrl`, defaulting to `https://api.morpho.org`, plus injected `fetch` and `request` options for headers, abort signals, credentials, cache, and similar fetch settings. Custom base URLs are parsed with the standard `URL` API, normalized by clearing search/hash, and joined with SDK-owned endpoint paths. SDK-controlled fields remain fixed: URL path/query, HTTP method, JSON body, `Content-Type: application/json` on POST requests, and an exact `sdk-version` header equal to the `@morpho-org/midnight-sdk` package version. Validation normalizes the current API response `{ data: { issues } }` to SDK camelCase data `{ valid, issues }`, where `valid` is derived from `issues.length === 0`; it does not rely on the API echoing a payload. Mempool-rules support is a thin, explicitly version-tolerant boundary: `fetchMempoolRules` may expose the raw paginated `{ cursor, data }` response or a lightly normalized equivalent, but the TIB does not freeze rule field names such as `callbackType`, `tickSpacing`, or `allowedLltvs` until the public rules schema is finalized.
+`MidnightApi` is the public Morpho API HTTP boundary. Direct calls default to `https://api.morpho.org`; configured instances share a custom string-or-`URL` `baseUrl`, injected `fetch`, and `request` options for headers, abort signals, credentials, cache, and similar fetch settings. Custom base URLs are parsed with the standard `URL` API, normalized by clearing search/hash, and joined with SDK-owned endpoint paths. SDK-controlled fields remain fixed: URL path/query, HTTP method, JSON body, `Content-Type: application/json` on POST requests, and an exact `sdk-version` header equal to the `@morpho-org/midnight-sdk` package version. Validation normalizes the current API response `{ data: { issues } }` to SDK camelCase data `{ valid, issues }`, where `valid` is derived from `issues.length === 0`; it does not rely on the API echoing a payload. Mempool-rules support is a thin, explicitly version-tolerant boundary: `fetchMempoolRules` may expose the raw paginated `{ cursor, data }` response or a lightly normalized equivalent, but the TIB does not freeze rule field names such as `callbackType`, `tickSpacing`, or `allowedLltvs` until the public rules schema is finalized.
 
 The current public API exposes Books, Maker takes, Mempool validate, and Mempool rules. This TIB implements only the maker-relevant validation/rules endpoints first. No generator is introduced for now because the SDK only needs lightweight API calls; type names stay close to the OpenAPI schema names so a future dev-only generator can replace or verify them if a stable spec URL appears.
 
@@ -583,10 +561,10 @@ The package should make these current app flows straightforward without becoming
 | --- | --- |
 | Borrow market order with collateral | `TickLib.rateToPrice`/tick helpers, `TakeAmountsLib` max-units rounding, and `TakeableOffer.createMany`; collateral approval, bundler authorization, and standalone periphery calldata remain caller-owned unless a future helper owns route selection or bound computation |
 | Borrow against existing collateral | Same periphery route with empty `CollateralSupply[]`; caller skips collateral approval when collateral amount is zero |
-| Supply collateral only | Address/ABI constants and caller-owned `supplyCollateral` calldata |
+| Supply collateral only | Address/ABI constants from `@morpho-org/morpho-sdk` and caller-owned `supplyCollateral` calldata |
 | Lend market order | `TakeAmountsLib` min-units rounding and `TakeableOffer.createMany`; loan-token approval, bundler authorization, and standalone periphery calldata remain caller-owned unless a future helper owns route selection or bound computation |
-| Borrow limit order | optional caller-owned `supplyCollateral` calldata, `Offer.create` with `buy: false`, `Offer.createGroup`/`Group.create`/`Tree.create`, `RatifierUtils`, `Api`/`MidnightApi`, `EcrecoverRatifier`/`SetterRatifier`, `OfferTreeUtils` proof/root helpers, and `Payload` only for final mempool publication |
-| Lend/multi-limit order | caller-owned loan-token approval to the core Midnight contract, `Offer.create` with `buy: true`, `Offer.createGroup`/`Group.create`/`Tree.create`, `RatifierUtils`, `Api`/`MidnightApi`, `EcrecoverRatifier`/`SetterRatifier`, `OfferTreeUtils` proof/root helpers, and `Payload` only for final mempool publication |
+| Borrow limit order | optional caller-owned `supplyCollateral` calldata, `Offer.create` with `buy: false`, `Offer.createGroup`/`Group.create`/`Tree.create`, `RatifierUtils`, `MidnightApi`, `EcrecoverRatifier`/`SetterRatifier`, `OfferTreeUtils` proof/root helpers, and `Payload` only for final mempool publication |
+| Lend/multi-limit order | caller-owned loan-token approval to the core Midnight contract, `Offer.create` with `buy: true`, `Offer.createGroup`/`Group.create`/`Tree.create`, `RatifierUtils`, `MidnightApi`, `EcrecoverRatifier`/`SetterRatifier`, `OfferTreeUtils` proof/root helpers, and `Payload` only for final mempool publication |
 
 ## Implementation Phases
 
@@ -595,18 +573,16 @@ Status as of the 2026-06-08 implementation review:
 - **Shared Morpho TS extraction: expanded.** `MathLib`, `RoundingDirection`, `BigIntish`,
   `ORACLE_PRICE_SCALE`, `UnsupportedChainIdError`, `InvalidBitLengthError`, `DivisionByZeroError`,
   `NegativeValueError`, and `assertNonNegative` live in `@morpho-org/morpho-ts`.
-  The accepted target also moves Blue-extracted address registry data/mechanics and shared ABI
-  fragments/descriptors into `@morpho-org/morpho-ts`. `@morpho-org/blue-sdk` re-exports extracted
-  symbols from their previous Blue locations where compatibility matters, while
-  `@morpho-org/midnight-sdk` imports shared primitives directly from `@morpho-org/morpho-ts` and
-  exposes only Midnight-specific facades.
+  `@morpho-org/blue-sdk` re-exports extracted symbols from their previous Blue locations where
+  compatibility matters, while `@morpho-org/midnight-sdk` imports shared primitives directly from
+  `@morpho-org/morpho-ts` and exposes only Midnight-specific utility APIs.
 
 - **Phase 1 - Package skeleton: completed.** `packages/midnight-sdk` has package metadata, TypeScript configs, package-level `AGENTS.md`, public barrel exports, test project wiring, and a changeset.
-- **Phase 2 - Contract surface: completed with address deployment deferred and shared-registry merge specified.** Midnight-specific ABI literals, constants, types/interfaces, typed errors, and address accessors are in package source. ABI literals pin `morpho-org/midnight` commit `a7c6da7e70cb216982f6c5d20b46f40b943e67e4`. Shared ABI fragments such as ERC-20 and shared address-registry mechanics live in `morpho-ts`; Midnight address helpers resolve the Midnight slice plus shared `permit2` from that registry. Production address entries remain empty until reviewed deployment artifacts are available; custom registration covers local and fork deployments meanwhile.
+- **Phase 2 - Contract surface: completed with address deployment deferred and `morpho-sdk` contract-data ownership.** Midnight-specific ABI literals and address accessors live in `@morpho-org/morpho-sdk` under `./abis`, `./addresses`, and the address-registration errors in `./errors`. `midnight-sdk` owns constants, types/interfaces, typed errors, and utility behavior, and imports ABIs/addresses from `morpho-sdk` instead of defining or re-exporting them. ABI literals pin `morpho-org/midnight` commit `a7c6da7e70cb216982f6c5d20b46f40b943e67e4`. Production address entries remain empty until reviewed deployment artifacts are available; custom registration covers local and fork deployments meanwhile.
 - **Phase 3 - Math and offer utilities: completed.** `TickLib`, `TakeAmountsLib`, `ConsumableUnitsLib`, `MarketUtils`, `Offer`, `TakeableOffer`, `OfferUtils`, and `TakeableOfferUtils` landed with colocated unit tests and property-based tests for tick/price, unit conversion, offer creation through static class methods, offer-group creation, protocol offer-group validation, and API-publication group validation behavior.
 - **Phase 4 - Standalone call wrappers: removed from scope.** The package does not export direct core or periphery calldata namespaces. Signature and payload helpers still return neutral `MidnightCall` descriptors when they own workflow context beyond raw ABI encoding.
 - **Phase 5 - Fetch: completed with deployless composite reads.** Fetch helpers use named `viem/actions` imports and mock-transport tests; `fetchMarketParams` returns immutable market config, `fetchMarket` returns the hydrated domain `Market` object, `fetchPosition` returns the raw `Position` class, and `fetchAccrualPosition` returns `AccrualPosition` for local `updatePositionView`-equivalent accrual. Narrower helpers expose primitive reads for allowance, authorization, market/user state, settlement fee, consumption, ratifier route, and root state. `fetchPosition` and `fetchConsumableUnits` default to deployless reads with direct-read fallback unless callers pass `deployless: "force"` or `deployless: false`.
-- **Phase 6 - Signatures, validation, and payloads: completed.** `RatifierUtils`, `OfferTreeUtils`, `TreeUtils`, `Group`, `Tree`, `EcrecoverRatifier`, `SetterRatifier`, `Payload`, `MidnightApi`, and `Api` landed. Public API validation/rules are a lightweight `fetch` boundary rather than a runtime router dependency, tree validation is available before signature/root approval, and offer publication remains onchain through `Payload.buildSubmissionCall`. Maker-side utilities include Ecrecover/Setter ratifier-data generation and decoding without constructing payload bytes, local proof verification, Setter root approval descriptors, and Ecrecover root cancellation descriptors.
+- **Phase 6 - Signatures, validation, and payloads: completed.** `RatifierUtils`, `OfferTreeUtils`, `TreeUtils`, `Group`, `Tree`, `EcrecoverRatifier`, `SetterRatifier`, `Payload`, and `MidnightApi` landed. Public API validation/rules are a lightweight `fetch` boundary rather than a runtime router dependency, tree validation is available before signature/root approval, and offer publication remains onchain through `Payload.buildSubmissionCall`. Maker-side utilities include Ecrecover/Setter ratifier-data generation and decoding without constructing payload bytes, local proof verification, Setter root approval descriptors, and Ecrecover root cancellation descriptors.
 - **Phase 7 - App adoption: deferred.** Updating the markets-v2 app in `morpho-org/morpho-apps` remains a separate repository change and is not required to land this SDK repo PR.
 
 ## Considered Alternatives
@@ -615,7 +591,7 @@ Status as of the 2026-06-08 implementation review:
 
 Add `morpho-sdk` actions, entities, client namespaces, and package exports immediately.
 
-**Why rejected:** the high-level action/entity shape is not settled enough. The app still needs lower-level utilities first, and those utilities are useful even if a future `morpho-sdk` integration chooses a different action vocabulary.
+**Why rejected:** the high-level action/entity shape is not settled enough. The app still needs lower-level utilities first, and those utilities are useful even if a future `morpho-sdk` integration chooses a different action vocabulary. This does not conflict with extracting static ABI/address contract data to `morpho-sdk`.
 
 ### Alternative 2: Keep all utilities in the markets-v2 app
 
@@ -643,8 +619,8 @@ Expose app-style labels, call requests, signature requests, and success callback
 
 ## Assumptions & Constraints
 
-- Midnight production addresses are pinned only after a reviewed deployment artifact is available. Additional chains are additive updates to the shared address registry unless the ABI changes.
-- The package pins the ABI revision used by the app and contracts. If `morpho-org/midnight` `main` differs from the deployed artifact, implementation pins the deployed artifact and documents the source.
+- Midnight production addresses are pinned only after a reviewed deployment artifact is available. Additional chains are additive updates to the `morpho-sdk` Midnight address registry unless the ABI changes.
+- `morpho-sdk` pins the ABI revision used by the app and contracts. If `morpho-org/midnight` `main` differs from the deployed artifact, implementation pins the deployed artifact and documents the source.
 - App quote/order sources continue to provide executable offers or takeable offers. `midnight-sdk` does not fetch an orderbook.
 - Public API payload validation and rule inspection are wrapped by `MidnightApi`. If a future PR adds `@morpho-dev/router`, it must justify the dependency and keep it wrapped behind `midnight-sdk` APIs.
 - Fetch helpers use transport-bound unit tests via `createMockClient` from `@morpho-org/test/mock`. Fork tests are required when a helper's correctness depends on live contract behavior rather than request/response shape.
@@ -653,7 +629,8 @@ Expose app-style labels, call requests, signature requests, and success callback
 ## Dependencies
 
 - `viem` as a peer dependency for ABI encoding, typed data, bytecode reads, and explicit fetch-boundary helpers.
-- `@morpho-org/morpho-ts` as a workspace peer dependency for directly imported shared SDK primitives, `MathLib`, shared constants, typed errors, assertions, generic helpers, shared address registries, and shared ABI fragments/descriptors. `midnight-sdk` does not depend on `blue-sdk` for these symbols and does not ask app consumers to import them through `midnight-sdk`.
+- `@morpho-org/morpho-sdk` as a workspace dependency for Midnight ABI literals and Midnight address helpers. `midnight-sdk` does not define or re-export those symbols.
+- `@morpho-org/morpho-ts` as a workspace peer dependency for directly imported shared SDK primitives, `MathLib`, shared constants, typed errors, assertions, and generic helpers. `midnight-sdk` does not depend on `blue-sdk` for these symbols and does not ask app consumers to import them through `midnight-sdk`.
 - `@morpho-org/test` as a dev dependency for mock-transport tests.
 - `fast-check` as a dev dependency for property-based tests.
 - No runtime `@morpho-dev/router` dependency in the initial implementation; payload validation/rules use the public Morpho API HTTP boundary through global or injected `fetch`.
