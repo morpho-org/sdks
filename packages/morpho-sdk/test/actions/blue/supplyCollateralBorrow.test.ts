@@ -14,12 +14,9 @@ import {
   MissingAccrualPositionError,
   morphoViemExtension,
 } from "../../../src/index.js";
-import {
-  UsdcEurcvBlue,
-  WethUsdsBlue,
-} from "../../fixtures/blue.js";
-import { testInvariants } from "../../helpers/invariants.js";
+import { UsdcEurcvBlue, WethUsdsBlue } from "../../fixtures/blue.js";
 import { supplyCollateral } from "../../helpers/blue.js";
+import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
 
 describe("SupplyCollateralBorrowBlue", () => {

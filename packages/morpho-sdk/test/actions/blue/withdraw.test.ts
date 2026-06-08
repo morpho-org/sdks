@@ -16,13 +16,10 @@ import {
   WithdrawExceedsSupplyError,
   WithdrawSharesExceedSupplyError,
 } from "../../../src/index.js";
-import {
-  CbbtcUsdcBlue,
-  WbtcUsdcSourceMarket,
-} from "../../fixtures/blue.js";
+import { CbbtcUsdcBlue, WbtcUsdcSourceMarket } from "../../fixtures/blue.js";
 import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
-import { testInvariants } from "../../helpers/invariants.js";
 import { supplyLoan } from "../../helpers/blue.js";
+import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
 
 describe("WithdrawBlue", () => {

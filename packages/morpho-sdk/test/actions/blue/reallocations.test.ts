@@ -5,12 +5,12 @@ import { type Address, encodeFunctionData, parseUnits } from "viem";
 import { base, mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
+  blueBorrow,
+  blueSupplyCollateralBorrow,
   ChainIdMismatchError,
   EmptyReallocationWithdrawalsError,
   isRequirementApproval,
   isRequirementAuthorization,
-  blueBorrow,
-  blueSupplyCollateralBorrow,
   morphoViemExtension,
   NegativeReallocationFeeError,
   NonPositiveReallocationAmountError,
@@ -23,8 +23,8 @@ import {
   WstethUsdcSourceMarket,
 } from "../../fixtures/blue.js";
 import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
-import { testInvariants } from "../../helpers/invariants.js";
 import { supplyCollateral } from "../../helpers/blue.js";
+import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
 
 /** PublicAllocator admin for the Steakhouse vault at the fork block. */

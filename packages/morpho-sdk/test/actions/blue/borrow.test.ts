@@ -15,8 +15,8 @@ import {
   morphoViemExtension,
 } from "../../../src/index.js";
 import { WethUsdsBlue } from "../../fixtures/blue.js";
-import { testInvariants } from "../../helpers/invariants.js";
 import { supplyCollateral } from "../../helpers/blue.js";
+import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
 
 describe("BorrowBlue", () => {

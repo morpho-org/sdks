@@ -8,17 +8,10 @@ import {
   morphoViemExtension,
   type VaultReallocation,
 } from "../../../src/index.js";
-import {
-  CbbtcUsdcBlue,
-  CbbtcUsdcBlueAlt,
-} from "../../fixtures/blue.js";
+import { CbbtcUsdcBlue, CbbtcUsdcBlueAlt } from "../../fixtures/blue.js";
 import { YearnUsdcVaultV1 } from "../../fixtures/vaultV1.js";
+import { borrow, supplyCollateral, supplyLoan } from "../../helpers/blue.js";
 import { testInvariants } from "../../helpers/invariants.js";
-import {
-  borrow,
-  supplyCollateral,
-  supplyLoan,
-} from "../../helpers/blue.js";
 import { test } from "../../setup.js";
 
 // Two real wstETH/wNative markets sharing the loan + collateral pair but differing oracles, at the pinned fork.
@@ -325,17 +318,11 @@ describe("RefinanceBlue (fork)", () => {
       },
       actionFn: async () => {
         const morphoClient = client.extend(morphoViemExtension()).morpho;
-        const sourceEntity = morphoClient.blue(
-          CbbtcUsdcBlue,
-          mainnet.id,
-        );
+        const sourceEntity = morphoClient.blue(CbbtcUsdcBlue, mainnet.id);
         const sourcePosition = await sourceEntity.getPositionData(
           client.account.address,
         );
-        const targetEntity = morphoClient.blue(
-          CbbtcUsdcBlueAlt,
-          mainnet.id,
-        );
+        const targetEntity = morphoClient.blue(CbbtcUsdcBlueAlt, mainnet.id);
         const targetPosition = await targetEntity.getPositionData(
           client.account.address,
         );

@@ -1,11 +1,7 @@
 import { type MarketParams, MarketUtils } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Address, Client } from "viem";
-import {
-  MorphoBlue,
-  MorphoVaultV1,
-  MorphoVaultV2,
-} from "../entities/index.js";
+import { MorphoBlue, MorphoVaultV1, MorphoVaultV2 } from "../entities/index.js";
 import {
   MarketIdMismatchError,
   type Metadata,
