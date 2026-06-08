@@ -77,7 +77,7 @@ export const safeParseUnits = (strValue: string, decimals = 18) => {
  * ```ts
  * import { safeGetAddress } from "@morpho-org/blue-sdk-viem";
  *
- * const address = safeGetAddress("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48");
+ * const address = safeGetAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
  * ```
  */
 export const safeGetAddress = (address: string) =>

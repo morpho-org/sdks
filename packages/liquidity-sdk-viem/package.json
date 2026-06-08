@@ -40,11 +40,11 @@
     "viem": "^2.0.0"
   },
   "devDependencies": {
-    "@graphql-codegen/cli": "^7.0.0",
+    "@graphql-codegen/cli": "^7.1.2",
     "@graphql-codegen/import-types-preset": "^4.0.1",
-    "@graphql-codegen/typescript": "^6.0.1",
-    "@graphql-codegen/typescript-graphql-request": "^7.0.1",
-    "@graphql-codegen/typescript-operations": "^6.0.2",
+    "@graphql-codegen/typescript": "^6.0.2",
+    "@graphql-codegen/typescript-graphql-request": "^7.1.0",
+    "@graphql-codegen/typescript-operations": "^6.0.3",
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/blue-sdk-viem": "workspace:^",
     "@morpho-org/morpho-sdk": "workspace:^",
@@ -52,11 +52,11 @@
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "dataloader": "^2.2.3",
-    "graphql": "^16.14.0",
+    "graphql": "^16.14.1",
     "nock": "^14.0.15",
     "typescript": "^6.0.3",
-    "viem": "^2.50.4",
-    "vitest": "^4.1.7"
+    "viem": "2.52.2",
+    "vitest": "^4.1.8"
   },
   "publishConfig": {
     "exports": {
