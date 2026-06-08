@@ -11,7 +11,7 @@ import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
 
 describe("ForceWithdraw VaultV2", () => {
-  // MarketV1 adapter addresses
+  // Blue adapter addresses
   const adapterAddress1: Address = "0xBf3a9504d555752ae12d2c482E957C66C4A32131";
   const marketParams = new MarketParams({
     loanToken: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",

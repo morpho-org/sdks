@@ -37,10 +37,10 @@ the consuming application decides when and how to send it.
               │  on a viem Client)  │
               └───┬────────┬────┬───┘
                   │        │    │
-        .vaultV1()│        │    │.marketV1()
+        .vaultV1()│        │    │.blue()
                   │        │    │
         ┌─────────▼──┐     │   ┌▼──────────────┐
-        │MorphoVaultV1│    │   │MorphoMarketV1 │  ← Entity layer
+        │MorphoVaultV1│    │   │MorphoBlue     │  ← Entity layer
         │(MetaMorpho) │    │   │(Morpho Blue)  │
         └──────┬──────┘    │   └──────┬────────┘
                │           │          │
@@ -65,7 +65,7 @@ Each layer has a single responsibility and a strict boundary:
 | Layer      | Responsibility                                                                                                                                  | What it must NOT do                           |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
 | **Client** | Wrap a viem `Client`, normalize SDK options (`supportSignature`, `metadata`, `supportDeployless`), produce vault/market entities                | Call actions directly, hold mutable state     |
-| **Entity** | Fetch on-chain data (vault accrual data for V1/V2, market/position data for MarketV1), compute derived values (e.g. `maxSharePrice`, LLTV buffer), delegate to actions | Encode calldata, know about bundler internals |
+| **Entity** | Fetch on-chain data (vault accrual data for V1/V2, market/position data for Blue), compute derived values (e.g. `maxSharePrice`, LLTV buffer), delegate to actions | Encode calldata, know about bundler internals |
 | **Action** | Validate inputs, encode calldata, deep-freeze the result, return a `Transaction<TAction>`                                                       | Fetch data, hold state, mutate anything       |
 
 **Calls flow strictly downward**: Client → Entity → Action. An action never calls an entity;
@@ -107,10 +107,12 @@ at the SDK level. The differences are at the protocol layer:
 - **Contract**: Uses `vaultV2Abi` from `@morpho-org/blue-sdk-viem`.
 - **SDK data**: Fetched via `fetchVaultV2` / `fetchAccrualVaultV2`.
 
-### MarketV1 (Morpho Blue)
+### Blue (Morpho Blue)
 
-- **Market-based lending**: MarketV1 represents Morpho Blue isolated lending markets. Each market
-  has a loan token, collateral token, oracle, IRM, and LLTV (liquidation loan-to-value).
+- **Market-based lending**: Blue (a.k.a. Morpho Blue) is Morpho's immutable, variable-rate
+  lending primitive — isolated markets whose borrow rate floats with utilization via the market's
+  IRM. Each market has a loan token, collateral token, oracle, IRM, and LLTV (liquidation
+  loan-to-value). Formerly referred to as "MarketV1" in this SDK.
 - **Supply collateral**: Users deposit collateral tokens into a market position. Routed through
   bundler3 via GeneralAdapter1 (`erc20TransferFrom` + `morphoSupplyCollateral`). Supports native
   token wrapping when collateral is wNative.
@@ -183,9 +185,9 @@ on the vault contract itself.
 | Redeem (V1 & V2)                      | Direct vault call          | No attack surface, no approval needed                                                                      |
 | Force Withdraw (V2)                   | VaultV2 `multicall`        | Atomic deallocation + withdrawal on the vault contract                                                     |
 | Force Redeem (V2)                     | VaultV2 `multicall`        | Atomic deallocation + redemption on the vault contract                                                     |
-| Supply Collateral (MarketV1)          | Bundler3 (general adapter) | `erc20TransferFrom` + `morphoSupplyCollateral`. Optional native wrapping for wNative collateral.           |
-| Borrow (MarketV1)                     | Bundler3 (general adapter) | `morphoBorrow` with `minSharePrice` slippage protection. Requires GA1 authorization on Morpho.             |
-| Supply Collateral + Borrow (MarketV1) | Bundler3 (general adapter) | Atomic collateral supply + borrow. LLTV buffer prevents instant liquidation.                               |
+| Supply Collateral (Blue)          | Bundler3 (general adapter) | `erc20TransferFrom` + `morphoSupplyCollateral`. Optional native wrapping for wNative collateral.           |
+| Borrow (Blue)                     | Bundler3 (general adapter) | `morphoBorrow` with `minSharePrice` slippage protection. Requires GA1 authorization on Morpho.             |
+| Supply Collateral + Borrow (Blue) | Bundler3 (general adapter) | Atomic collateral supply + borrow. LLTV buffer prevents instant liquidation.                               |
 
 ## Dependency Map
 

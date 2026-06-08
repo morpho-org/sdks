@@ -13,7 +13,7 @@
 
 ### ⭐ [`@morpho-org/morpho-sdk`](./packages/morpho-sdk/) — the recommended entry point
 
-**Start here.** `@morpho-org/morpho-sdk` is the abstraction layer that simplifies the Morpho protocol: it builds ready-to-send transactions for **VaultV1** (MetaMorpho), **VaultV2**, and **MarketV1** (Morpho Blue) on any EVM-compatible chain.
+**Start here.** `@morpho-org/morpho-sdk` is the abstraction layer that simplifies the Morpho protocol: it builds ready-to-send transactions for **VaultV1** (MetaMorpho), **VaultV2**, and **Blue** (Morpho Blue) on any EVM-compatible chain.
 
 ---
 

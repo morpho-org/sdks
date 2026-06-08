@@ -14,7 +14,7 @@ import {
  * the `setAuthorization(generalAdapter1, true)` transaction when it does.
  *
  * Reads `Morpho.isAuthorized(userAddress, generalAdapter1)` on the target chain. Required before
- * any bundled MarketV1 path that operates on behalf of the user (`borrow`,
+ * any bundled Blue path that operates on behalf of the user (`borrow`,
  * `supplyCollateralBorrow`, `repayWithdrawCollateral`).
  *
  * @param params.viemClient - Connected viem `Client` whose `chain.id` matches `params.chainId`.

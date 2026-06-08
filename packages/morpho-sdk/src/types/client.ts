@@ -1,7 +1,7 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
 import type { Address, Client } from "viem";
 import type {
-  MarketV1Actions,
+  BlueActions,
   VaultV1Actions,
   VaultV2Actions,
 } from "../actions/index.js";
@@ -22,5 +22,5 @@ export interface MorphoClientType {
 
   vaultV1: (vault: Address, chainId: number) => VaultV1Actions;
   vaultV2: (vault: Address, chainId: number) => VaultV2Actions;
-  marketV1: (marketParams: MarketParams, chainId: number) => MarketV1Actions;
+  blue: (marketParams: MarketParams, chainId: number) => BlueActions;
 }

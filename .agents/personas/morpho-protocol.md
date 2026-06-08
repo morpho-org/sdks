@@ -38,7 +38,7 @@ This persona complements `web3-security`: `web3-security` asks whether the walle
 ### Morpho operation routing
 
 - A bundled path encoded as a direct call, or a direct vault/market call routed through bundler3 contrary to `packages/morpho-sdk/AGENTS.md` and `src/actions/AGENTS.md`.
-- Wrong `to` contract, spender, operator, or adapter: e.g. approval to a caller-provided address instead of `GeneralAdapter1`, missing Morpho authorization for a bundled MarketV1 path, or `forceDeallocate` targeting the wrong adapter data shape.
+- Wrong `to` contract, spender, operator, or adapter: e.g. approval to a caller-provided address instead of `GeneralAdapter1`, missing Morpho authorization for a bundled Blue path, or `forceDeallocate` targeting the wrong adapter data shape.
 - Incorrect ordering inside bundles: native transfer/wrap after the consuming action, `reallocateTo` after `morphoBorrow`, repay/withdraw sequencing reversed, or nested callback sender semantics lost.
 - V1/V2/Market terminology drift that makes the code call a VaultV1/MetaMorpho concept with a VaultV2 adapter assumption, or vice versa.
 

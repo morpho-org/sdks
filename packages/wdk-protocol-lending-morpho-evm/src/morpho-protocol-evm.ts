@@ -1113,7 +1113,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
 
   private async _getMarket(): Promise<{
     params: MarketParams;
-    entity: ReturnType<MorphoClientType["marketV1"]>;
+    entity: ReturnType<MorphoClientType["blue"]>;
   }> {
     const params = await this._getMarketParams();
     const chainId = await this._getChainId();
@@ -1121,7 +1121,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
 
     return {
       params,
-      entity: client.marketV1(params, chainId),
+      entity: client.blue(params, chainId),
     };
   }
 

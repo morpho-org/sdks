@@ -28,7 +28,7 @@ The value of the Bundler3 + GeneralAdapter1 pairing rests on three properties:
 2. **Atomicity.** The entire bundle either succeeds or reverts as one. No intermediate state is exposed to MEV bots or other transactions.
 3. **Simplified approval UX.** A user approves _a single spender_ (GeneralAdapter1) for the entire protocol surface — rather than one approval per V1/V2 vault or per Morpho contract.
 
-Concretely, `marketV1SupplyCollateralBorrow` is not a new contract: it is simply the composition `erc20TransferFrom` + `morphoSupplyCollateral` + `morphoBorrow` inside a single bundle. Same story for `repayWithdrawCollateral`, or for a borrow that must first trigger `reallocateTo` calls through the PublicAllocator. The business logic lives in the **order and selection of actions**, not in a dedicated contract.
+Concretely, `blueSupplyCollateralBorrow` is not a new contract: it is simply the composition `erc20TransferFrom` + `morphoSupplyCollateral` + `morphoBorrow` inside a single bundle. Same story for `repayWithdrawCollateral`, or for a borrow that must first trigger `reallocateTo` calls through the PublicAllocator. The business logic lives in the **order and selection of actions**, not in a dedicated contract.
 
 ## Flows overview
 
@@ -36,14 +36,14 @@ Concretely, `marketV1SupplyCollateralBorrow` is not a new contract: it is simply
 | --------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | VaultV1 `deposit`                       | Bundler3 → GeneralAdapter1   | _(opt)_ `nativeTransfer` + `wrapNative` → `erc20TransferFrom` / `permit` / `approve2`+`transferFrom2` → `erc4626Deposit` |
 | VaultV2 `deposit`                       | Bundler3 → GeneralAdapter1   | same as VaultV1                                                                                                          |
-| MarketV1 `supplyCollateral`             | Bundler3 → GeneralAdapter1   | _(opt)_ `nativeTransfer` + `wrapNative` → `erc20TransferFrom` → `morphoSupplyCollateral`                                 |
-| MarketV1 `borrow`                       | Bundler3 → GeneralAdapter1   | _(opt)_ `reallocateTo`×N → `morphoBorrow` _(requires `setAuthorization` for GA1 on Morpho)_                              |
-| MarketV1 `supplyCollateralBorrow`       | Bundler3 → GeneralAdapter1   | `erc20TransferFrom` → `morphoSupplyCollateral` → _(opt)_ `reallocateTo`×N → `morphoBorrow`                               |
-| MarketV1 `repay`                        | Bundler3 → GeneralAdapter1   | `erc20TransferFrom` → `morphoRepay` (by `assets` or by `shares`)                                                         |
-| MarketV1 `repayWithdrawCollateral`      | Bundler3 → GeneralAdapter1   | `erc20TransferFrom` → `morphoRepay` → `morphoWithdrawCollateral` _(repay **before** withdraw, order is critical)_        |
+| Blue `supplyCollateral`             | Bundler3 → GeneralAdapter1   | _(opt)_ `nativeTransfer` + `wrapNative` → `erc20TransferFrom` → `morphoSupplyCollateral`                                 |
+| Blue `borrow`                       | Bundler3 → GeneralAdapter1   | _(opt)_ `reallocateTo`×N → `morphoBorrow` _(requires `setAuthorization` for GA1 on Morpho)_                              |
+| Blue `supplyCollateralBorrow`       | Bundler3 → GeneralAdapter1   | `erc20TransferFrom` → `morphoSupplyCollateral` → _(opt)_ `reallocateTo`×N → `morphoBorrow`                               |
+| Blue `repay`                        | Bundler3 → GeneralAdapter1   | `erc20TransferFrom` → `morphoRepay` (by `assets` or by `shares`)                                                         |
+| Blue `repayWithdrawCollateral`      | Bundler3 → GeneralAdapter1   | `erc20TransferFrom` → `morphoRepay` → `morphoWithdrawCollateral` _(repay **before** withdraw, order is critical)_        |
 | VaultV1 `withdraw` / `redeem`           | **Direct vault call**        | _(no bundler, no adapter)_                                                                                               |
 | VaultV2 `withdraw` / `redeem`           | **Direct vault call**        | _(no bundler, no adapter)_                                                                                               |
-| MarketV1 `withdrawCollateral`           | **Direct Morpho Blue call**  | _(no bundler, no GA1 auth required — `msg.sender` = `onBehalf`)_                                                         |
+| Blue `withdrawCollateral`           | **Direct Morpho Blue call**  | _(no bundler, no GA1 auth required — `msg.sender` = `onBehalf`)_                                                         |
 | VaultV2 `forceWithdraw` / `forceRedeem` | VaultV2 `multicall` (native) | `forceDeallocate`×N + `withdraw` / `redeem` — **on the vault contract itself**, not through Bundler3                     |
 
 ## Strengths
@@ -82,12 +82,12 @@ This is the main design caveat. For the following operations the SDK emits a **d
 | ----------------------------------- | ---------------- |
 | `vaultV1Withdraw` / `vaultV1Redeem` | MetaMorpho vault |
 | `vaultV2Withdraw` / `vaultV2Redeem` | VaultV2          |
-| `marketV1WithdrawCollateral`        | Morpho Blue      |
+| `blueWithdrawCollateral`        | Morpho Blue      |
 
 **Consequences:**
 
 - **No on-chain share-price check.** There is no equivalent of `maxSharePrice` / `minSharePrice` passed to the ERC-4626. A share price manipulated between transaction construction and inclusion can adversely impact the number of assets received (withdraw by shares) or shares burned (withdraw by assets), **without the transaction reverting**.
-- **No automatic LLTV guard** on the adapter side. `marketV1WithdrawCollateral` validates position health SDK-side (LLTV buffer) _before_ building the tx, but that check is _off-chain_ — if on-chain state moves between simulation and inclusion (oracle price, interest, other borrows), nothing stops the transaction. It is up to the caller to ensure data freshness.
+- **No automatic LLTV guard** on the adapter side. `blueWithdrawCollateral` validates position health SDK-side (LLTV buffer) _before_ building the tx, but that check is _off-chain_ — if on-chain state moves between simulation and inclusion (oracle price, interest, other borrows), nothing stops the transaction. It is up to the caller to ensure data freshness.
 - **No cross-action atomicity.** A `withdraw` cannot be composed with another call inside the same bundle using the standard flow — by definition it steps out of bundler composition.
 
 **Design rationale** (cf. [ARCHITECTURE.md](ARCHITECTURE.md#withdrawals-and-redeems-direct-vault-calls)): a withdraw does not transfer tokens _from_ the user to the protocol, it burns shares. There is therefore no _inflation_ attack surface to close, and no approval to grant to GA1 — hence the direct call, simpler from a UX standpoint. **But the trade-off is real**: the absence of an on-chain share-price check still leaves the caller exposed to share-price manipulation, to be weighed case by case.
@@ -106,7 +106,7 @@ This is the main design caveat. For the following operations the SDK emits a **d
 
 ## Code references
 
-- Bundle encoding: [src/actions/vaultV1/deposit.ts](src/actions/vaultV1/deposit.ts), [src/actions/vaultV2/deposit.ts](src/actions/vaultV2/deposit.ts), [src/actions/marketV1/](src/actions/marketV1/)
+- Bundle encoding: [src/actions/vaultV1/deposit.ts](src/actions/vaultV1/deposit.ts), [src/actions/vaultV2/deposit.ts](src/actions/vaultV2/deposit.ts), [src/actions/blue/](src/actions/blue/)
 - Approval resolution (spender = GA1): [src/actions/requirements/](src/actions/requirements/)
 - Morpho authorization for GA1: [src/actions/requirements/getMorphoAuthorizationRequirement.ts](src/actions/requirements/getMorphoAuthorizationRequirement.ts)
 - Reallocations / PublicAllocator: [src/types/sharedLiquidity.ts](src/types/sharedLiquidity.ts)

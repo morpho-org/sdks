@@ -1,11 +1,7 @@
 import { type MarketParams, MarketUtils } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Address, Client } from "viem";
-import {
-  MorphoMarketV1,
-  MorphoVaultV1,
-  MorphoVaultV2,
-} from "../entities/index.js";
+import { MorphoBlue, MorphoVaultV1, MorphoVaultV2 } from "../entities/index.js";
 import {
   MarketIdMismatchError,
   type Metadata,
@@ -17,7 +13,7 @@ import {
  * viem `Client` plus a frozen options bag and exposes factory methods for the protocol entities.
  *
  * Holds no state beyond configuration: no cache, no `init()`, no warm-up. Each factory call
- * (`vaultV1`, `vaultV2`, `marketV1`) returns a fresh entity bound to this client.
+ * (`vaultV1`, `vaultV2`, `blue`) returns a fresh entity bound to this client.
  *
  * @internal
  */
@@ -47,13 +43,13 @@ function createMorphoNamespace(
       return new MorphoVaultV2(namespace, vault, chainId);
     },
 
-    marketV1(marketParams: MarketParams, chainId: number) {
+    blue(marketParams: MarketParams, chainId: number) {
       const derivedId = MarketUtils.getMarketId(marketParams);
       // Can happen with one-time/hardcoded/agent-written possibly inconsistent input market params.
       if (marketParams.id !== derivedId) {
         throw new MarketIdMismatchError(marketParams.id, derivedId);
       }
-      return new MorphoMarketV1(namespace, marketParams, chainId);
+      return new MorphoBlue(namespace, marketParams, chainId);
     },
   };
 
@@ -66,7 +62,7 @@ function createMorphoNamespace(
  * protocol entity factories under `client.morpho`, so reads and writes share one client.
  *
  * Holds no state beyond configuration: no cache, no `init()`, no warm-up. Each factory call
- * (`client.morpho.vaultV1`, `vaultV2`, `marketV1`) returns a fresh entity bound to the client.
+ * (`client.morpho.vaultV1`, `vaultV2`, `blue`) returns a fresh entity bound to the client.
  *
  * @param _options - Optional SDK-wide options forwarded to the `morpho` namespace.
  * @param _options.metadata - Optional analytics metadata applied to every transaction the

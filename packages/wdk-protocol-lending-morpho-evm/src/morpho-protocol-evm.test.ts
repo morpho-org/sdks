@@ -108,10 +108,10 @@ const marketEntity = {
 };
 
 const vaultV2Mock = vi.fn().mockReturnValue(vaultV2Entity);
-const marketV1Mock = vi.fn().mockReturnValue(marketEntity);
+const blueMock = vi.fn().mockReturnValue(marketEntity);
 const morphoNamespaceMock = {
   vaultV2: vaultV2Mock,
-  marketV1: marketV1Mock,
+  blue: blueMock,
 };
 // The SDK is now consumed via `client.extend(morphoViemExtension(...)).morpho`,
 // so the extended viem client exposes the morpho namespace directly.
@@ -454,7 +454,7 @@ describe.sequential("MorphoProtocolEvm", () => {
 
       const result = await protocol.borrow({ token: TOKEN, amount: 100_000n });
 
-      expect(marketV1Mock).toHaveBeenCalledWith(
+      expect(blueMock).toHaveBeenCalledWith(
         expect.objectContaining({
           loanToken: TOKEN,
           collateralToken: COLLATERAL,
@@ -750,14 +750,14 @@ describe.sequential("MorphoProtocolEvm", () => {
 
     test("should invalidate chain-bound caches when the provider chain changes", async () => {
       await protocol.getMarketPosition();
-      expect(marketV1Mock).toHaveBeenCalledWith(expect.any(Object), 1);
+      expect(blueMock).toHaveBeenCalledWith(expect.any(Object), 1);
 
       mockGetChainId.mockResolvedValue(8453);
 
       await expect(protocol.getMarketPosition()).rejects.toThrow(
         "Morpho target is configured for chain 1, but the connected provider is on chain 8453.",
       );
-      expect(marketV1Mock).toHaveBeenCalledTimes(1);
+      expect(blueMock).toHaveBeenCalledTimes(1);
     });
   });
 

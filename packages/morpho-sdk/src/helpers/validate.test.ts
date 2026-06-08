@@ -10,10 +10,7 @@ import {
 import type { Address } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
-import {
-  CbbtcUsdcMarketV1,
-  WethUsdsMarketV1,
-} from "../../test/fixtures/marketV1.js";
+import { CbbtcUsdcBlue, WethUsdsBlue } from "../../test/fixtures/blue.js";
 import {
   AccrualPositionUserMismatchError,
   AddressMismatchError,
@@ -81,7 +78,7 @@ describe("validateUserAddress", () => {
   });
 });
 
-const marketParams = new MarketParams(WethUsdsMarketV1);
+const marketParams = new MarketParams(WethUsdsBlue);
 
 /** Builds a Market with configurable price. */
 function makeMarket(overrides?: { price?: bigint }) {
@@ -134,7 +131,7 @@ describe("validateAccrualPosition", () => {
 
   test("should throw MarketIdMismatchError when market IDs differ", () => {
     const pos = makePosition();
-    const otherMarketId = new MarketParams(CbbtcUsdcMarketV1).id;
+    const otherMarketId = new MarketParams(CbbtcUsdcBlue).id;
     expect(() =>
       validateAccrualPosition({
         positionData: pos,
@@ -161,7 +158,7 @@ describe("validateAccrualPosition", () => {
 // ---------------------------------------------------------------------------
 
 describe("validatePositionHealth", () => {
-  const lltv = WethUsdsMarketV1.lltv; // 86%
+  const lltv = WethUsdsBlue.lltv; // 86%
 
   test("should pass when borrow is within safe LTV", () => {
     const pos = makePosition({
@@ -309,7 +306,7 @@ describe("validateNativeAsset", () => {
 // ---------------------------------------------------------------------------
 
 describe("validatePositionHealthAfterWithdraw", () => {
-  const lltv = WethUsdsMarketV1.lltv;
+  const lltv = WethUsdsBlue.lltv;
 
   test("should return immediately when borrowAssets is zero (no debt)", () => {
     // Position with no debt and no price — would throw MissingMarketPriceError
@@ -384,7 +381,7 @@ describe("validatePositionHealthAfterWithdraw", () => {
 
   test("should throw MarketIdMismatchError when the position market differs", () => {
     const pos = makePosition();
-    const otherMarketId = new MarketParams(CbbtcUsdcMarketV1).id;
+    const otherMarketId = new MarketParams(CbbtcUsdcBlue).id;
 
     expect(() =>
       validatePositionHealthAfterWithdraw({
@@ -506,7 +503,7 @@ describe("validateRepayShares", () => {
 
 describe("validateReallocations", () => {
   const targetMarketId = marketParams.id;
-  const sourceMarketA = new MarketParams(CbbtcUsdcMarketV1);
+  const sourceMarketA = new MarketParams(CbbtcUsdcBlue);
   const marketParamsWithId = (id: MarketId) => ({
     ...sourceMarketA,
     id,
