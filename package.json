@@ -69,5 +69,10 @@
     "extends": [
       "@commitlint/config-conventional"
     ]
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "ox@0.14.29": "patches/ox@0.14.29.patch"
+    }
   }
 }
