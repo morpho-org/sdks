@@ -1,0 +1,20 @@
+diff --git a/package.json b/package.json
+index c12a00ae5e5a69977a52848c03624da06af301da..9c81ba4576944e509d517866839f72b2686910aa 100644
+--- a/package.json
++++ b/package.json
+@@ -653,5 +653,15 @@
+       "import": "./_esm/window/index.js",
+       "default": "./_cjs/window/index.js"
+     }
++  },
++  "typesVersions": {
++    "*": {
++      "tempo": [
++        "_types/tempo/index.d.ts"
++      ],
++      "tempo/*": [
++        "_types/tempo/*"
++      ]
++    }
+   }
+ }
