@@ -1,4 +1,5 @@
 import { Time } from "@morpho-org/morpho-ts";
+import { UnknownMarketAllocationError } from "../errors.js";
 import { MarketUtils } from "../market/index.js";
 import { MathLib, type RoundingDirection } from "../math/index.js";
 import { VaultToken } from "../token/index.js";
@@ -428,14 +429,24 @@ export class AccrualVault extends Vault implements IAccrualVault {
   /**
    * Returns a new vault derived from this vault, whose interest has been accrued up to the given timestamp.
    * @param timestamp The timestamp at which to accrue interest. Must be greater than or equal to each of the vault's market's `lastUpdate`.
+   * @returns A new vault whose market positions and fee accounting reflect accrued interest.
+   * @throws {UnknownMarketAllocationError} when the withdraw queue references a market without an allocation.
    */
   public accrueInterest(timestamp?: BigIntish) {
     const vault = new AccrualVault(
       this,
       // Keep withdraw queue order.
       this.withdrawQueue.map((marketId) => {
-        const { config, position } = this.allocations.get(marketId)!;
+        const allocation = this.allocations.get(marketId);
+        // Fail loudly rather than silently dropping the market: a stale
+        // `withdrawQueue` entry (e.g., one mutated after construction to
+        // reference a market that is no longer allocated) would otherwise
+        // crash with an opaque "Cannot destructure property 'config' of
+        // 'undefined'" via the non-null assertion below.
+        if (allocation == null)
+          throw new UnknownMarketAllocationError(marketId);
 
+        const { config, position } = allocation;
         return {
           config,
           position: position.accrueInterest(timestamp),

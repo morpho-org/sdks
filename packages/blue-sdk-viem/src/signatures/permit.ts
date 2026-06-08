@@ -149,7 +149,7 @@ const daiPermitTypes = {
  * const typedData = getDaiPermitTypedData(
  *   {
  *     owner: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
- *     spender: "0x6566194141Ff46B819C55E7137d8329898EcD06c",
+ *     spender: "0x6566194141fF46b819c55E7137D8329898eCd06C",
  *     allowance: 1_000_000_000_000_000_000n,
  *     nonce: 0n,
  *     deadline: 1_900_000_000n,

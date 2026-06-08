@@ -8,6 +8,7 @@ import {
   vaultInput,
   vaultMarketConfig,
 } from "../__test__/fixtures.js";
+import { UnknownMarketAllocationError } from "../errors.js";
 import { Market } from "../market/Market.js";
 import { MathLib } from "../math/MathLib.js";
 import { AccrualPosition } from "../position/Position.js";
@@ -271,5 +272,24 @@ describe("AccrualVault", () => {
 
     expect(accrued.lostAssets).toBeGreaterThanOrEqual(1n);
     expect(accrued.totalAssets).toBeGreaterThanOrEqual(accrued.lastTotalAssets);
+  });
+
+  test("accrueInterest throws UnknownMarketAllocationError when withdrawQueue references a market not in allocations", () => {
+    const vault = accrualVault();
+    const ghostMarketId = "0x1234" as MarketId;
+    // Mutate the public `withdrawQueue` after construction so it references a
+    // market that has no corresponding entry in `allocations`. Without this
+    // mutation the bug cannot be reached, because the AccrualVault constructor
+    // rebuilds `withdrawQueue` from the allocations argument.
+    vault.withdrawQueue = [...vault.withdrawQueue, ghostMarketId];
+
+    let error: unknown;
+    try {
+      vault.accrueInterest(200n);
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(UnknownMarketAllocationError);
   });
 });
