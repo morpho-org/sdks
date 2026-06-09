@@ -16,13 +16,12 @@ import {
   RegistryValueAlreadyRegisteredError,
   UnsupportedChainIdError,
 } from "./errors.js";
-import type { Address } from "./types.js";
 
 let nextAddressIndex = 1n;
 
-const randomAddress = (): Address => {
+const randomAddress = (): `0x${string}` => {
   const address =
-    `0x${nextAddressIndex.toString(16).padStart(40, "0")}` as Address;
+    `0x${nextAddressIndex.toString(16).padStart(40, "0")}` as `0x${string}`;
   nextAddressIndex += 1n;
 
   return address;

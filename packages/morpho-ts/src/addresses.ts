@@ -4,7 +4,7 @@ import {
   RegistryValueAlreadyRegisteredError,
   UnsupportedChainIdError,
 } from "./errors.js";
-import type { Address, DeepPartial, DottedKeys } from "./types.js";
+import type { DeepPartial, DottedKeys } from "./types.js";
 import { deepFreeze, entries } from "./utils.js";
 
 /** Address used to replicate an erc20-behaviour for native token.
@@ -15,47 +15,47 @@ export const NATIVE_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 
 /** Registry entry for protocol, adapter, factory, and token addresses on one chain. */
 export interface ChainAddresses {
-  morpho: Address;
-  permit2?: Address;
+  morpho: `0x${string}`;
+  permit2?: `0x${string}`;
   bundler3: {
-    bundler3: Address;
-    generalAdapter1: Address;
-    paraswapAdapter?: Address;
-    erc20WrapperAdapter?: Address;
-    compoundV2MigrationAdapter?: Address;
-    compoundV3MigrationAdapter?: Address;
-    aaveV2MigrationAdapter?: Address;
-    aaveV3CoreMigrationAdapter?: Address;
-    aaveV3PrimeMigrationAdapter?: Address;
-    aaveV3EtherFiMigrationAdapter?: Address;
-    aaveV3OptimizerMigrationAdapter?: Address;
+    bundler3: `0x${string}`;
+    generalAdapter1: `0x${string}`;
+    paraswapAdapter?: `0x${string}`;
+    erc20WrapperAdapter?: `0x${string}`;
+    compoundV2MigrationAdapter?: `0x${string}`;
+    compoundV3MigrationAdapter?: `0x${string}`;
+    aaveV2MigrationAdapter?: `0x${string}`;
+    aaveV3CoreMigrationAdapter?: `0x${string}`;
+    aaveV3PrimeMigrationAdapter?: `0x${string}`;
+    aaveV3EtherFiMigrationAdapter?: `0x${string}`;
+    aaveV3OptimizerMigrationAdapter?: `0x${string}`;
   };
-  adaptiveCurveIrm: Address;
-  publicAllocator?: Address;
-  metaMorphoFactory?: Address;
-  vaultV2Factory?: Address;
-  morphoMarketV1AdapterFactory?: Address;
-  morphoMarketV1AdapterV2Factory?: Address;
-  morphoVaultV1AdapterFactory?: Address;
-  registryList?: Address;
-  chainlinkOracleFactory?: Address;
-  preLiquidationFactory?: Address;
-  wNative?: Address;
-  morphoToken?: Address;
+  adaptiveCurveIrm: `0x${string}`;
+  publicAllocator?: `0x${string}`;
+  metaMorphoFactory?: `0x${string}`;
+  vaultV2Factory?: `0x${string}`;
+  morphoMarketV1AdapterFactory?: `0x${string}`;
+  morphoMarketV1AdapterV2Factory?: `0x${string}`;
+  morphoVaultV1AdapterFactory?: `0x${string}`;
+  registryList?: `0x${string}`;
+  chainlinkOracleFactory?: `0x${string}`;
+  preLiquidationFactory?: `0x${string}`;
+  wNative?: `0x${string}`;
+  morphoToken?: `0x${string}`;
   /**
    * Must implement DAI specific permit (otherwise breaks permit signatures).
    */
-  dai?: Address;
+  dai?: `0x${string}`;
   /**
    * Must implement USDC permit version 2 (otherwise breaks permit signatures).
    */
-  usdc?: Address;
+  usdc?: `0x${string}`;
   /**
    * Must implement EURC permit version 2 (otherwise breaks permit signatures).
    */
-  eurc?: Address;
-  stEth?: Address;
-  wstEth?: Address;
+  eurc?: `0x${string}`;
+  stEth?: `0x${string}`;
+  wstEth?: `0x${string}`;
 }
 
 const _addressesRegistry = {
@@ -830,7 +830,7 @@ const _addressesRegistry = {
 
 /** Deployment block registry with the same shape as `ChainAddresses`. */
 export type ChainDeployments<Addresses = ChainAddresses> = {
-  [key in keyof Addresses]: Address extends Addresses[key]
+  [key in keyof Addresses]: `0x${string}` extends Addresses[key]
     ? bigint
     : ChainDeployments<Addresses[key]>;
 };
@@ -1476,17 +1476,17 @@ export type BlueDeploymentRegistry = typeof _deployments &
  */
 export interface MidnightAddresses {
   /** Core Midnight contract. */
-  readonly midnight: Address;
+  readonly midnight: `0x${string}`;
   /** Midnight periphery bundle contract. */
-  readonly midnightBundles: Address;
+  readonly midnightBundles: `0x${string}`;
   /** Mempool submission endpoint used by app/orderbook flows. */
-  readonly midnightMempool: Address;
+  readonly midnightMempool: `0x${string}`;
   /** EOA signature ratifier. */
-  readonly ecrecoverRatifier: Address;
+  readonly ecrecoverRatifier: `0x${string}`;
   /** Smart-account root ratifier. */
-  readonly setterRatifier: Address;
+  readonly setterRatifier: `0x${string}`;
   /** Permit2 contract used by the periphery. */
-  readonly permit2: Address;
+  readonly permit2: `0x${string}`;
 }
 
 /**
@@ -1626,7 +1626,10 @@ export const getChainAddresses = (chainId: number): ChainAddresses => {
  * Assumptions:
  * - unwrapped token has same number of decimals than wrapped tokens.
  */
-const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
+const _unwrappedTokensMapping: Record<
+  number,
+  Record<`0x${string}`, `0x${string}`>
+> = {
   [ChainId.EthMainnet]: {
     [_addressesRegistry[ChainId.EthMainnet].wbIB01]:
       _addressesRegistry[ChainId.EthMainnet].bIB01,
@@ -1772,20 +1775,23 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
  * // unwrapped === NATIVE_ADDRESS
  * ```
  */
-export function getUnwrappedToken(wrappedToken: Address, chainId: number) {
+export function getUnwrappedToken(
+  wrappedToken: `0x${string}`,
+  chainId: number,
+) {
   return unwrappedTokensMapping[chainId]?.[wrappedToken];
 }
 
 /**
  * The registry of all known ERC20Wrapper tokens.
  */
-export const erc20WrapperTokens: Record<number, Set<Address>> = {};
+export const erc20WrapperTokens: Record<number, Set<`0x${string}`>> = {};
 
 /**
  * The registry of all known PermissionedERC20Wrapper with a `hasPermission` getter.
  * All permissioned wrapper tokens are considered ERC20Wrapper and automatically added to the erc20WrapperTokens registry.
  */
-export const permissionedWrapperTokens: Record<number, Set<Address>> = {
+export const permissionedWrapperTokens: Record<number, Set<`0x${string}`>> = {
   [ChainId.BaseMainnet]: new Set([
     _addressesRegistry[ChainId.BaseMainnet].testUsdc,
   ]),
@@ -1795,7 +1801,7 @@ export const permissionedWrapperTokens: Record<number, Set<Address>> = {
  * The registry of all known permissioned wrapped Backed tokens.
  * All permissioned Backed tokens are considered ERC20Wrapper and automatically added to the erc20WrapperTokens registry.
  */
-export const permissionedBackedTokens: Record<number, Set<Address>> = {
+export const permissionedBackedTokens: Record<number, Set<`0x${string}`>> = {
   [ChainId.EthMainnet]: new Set([
     _addressesRegistry[ChainId.EthMainnet].wbIB01,
     _addressesRegistry[ChainId.EthMainnet].wbC3M,
@@ -1806,7 +1812,7 @@ export const permissionedBackedTokens: Record<number, Set<Address>> = {
  * The registry of all known permissioned wrapped tokens that require a Coinbase attestation.
  * All permissioned Coinbase tokens are considered PermissionedERC20Wrapper and automatically added to the permissionedWrapperTokens registry.
  */
-export const permissionedCoinbaseTokens: Record<number, Set<Address>> = {
+export const permissionedCoinbaseTokens: Record<number, Set<`0x${string}`>> = {
   [ChainId.BaseMainnet]: new Set([
     _addressesRegistry[ChainId.BaseMainnet].verUsdc,
   ]),
@@ -1822,7 +1828,7 @@ export const permissionedCoinbaseTokens: Record<number, Set<Address>> = {
  * import { ChainId, getPermissionedCoinbaseTokens } from "@morpho-org/morpho-ts";
  *
  * const tokens = getPermissionedCoinbaseTokens(ChainId.BaseMainnet);
- * // tokens satisfies Set<Address>
+ * // tokens satisfies Set<`0x${string}`>
  * ```
  */
 export const getPermissionedCoinbaseTokens = (chainId: number) =>
@@ -1849,7 +1855,7 @@ entries(permissionedWrapperTokens).forEach(([chainId, tokens]) => {
 /** /!\  These tokens can not be listed in `erc20WrapperTokens` because the following specs are different:
  * - calling `depositFor` supplies on blue instead of minting wrapped token to the user
  */
-export const convexWrapperTokens: Record<number, Set<Address>> = {
+export const convexWrapperTokens: Record<number, Set<`0x${string}`>> = {
   [ChainId.EthMainnet]: new Set([
     _addressesRegistry[ChainId.EthMainnet]["stkcvxcrvUSDTWBTCWETH-morpho"],
     _addressesRegistry[ChainId.EthMainnet]["stkcvxcrvUSDCWBTCWETH-morpho"],
@@ -2158,7 +2164,7 @@ export function registerCustomAddresses({
   addresses: customAddresses,
   deployments: customDeployments,
 }: {
-  unwrappedTokens?: Record<number, Record<Address, Address>>;
+  unwrappedTokens?: Record<number, Record<`0x${string}`, `0x${string}`>>;
   addresses?:
     | MorphoAddressRegistryOverrides
     | DeepPartial<Record<keyof typeof _addressesRegistry, ChainAddresses>>
