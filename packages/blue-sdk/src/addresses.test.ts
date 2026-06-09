@@ -1,3 +1,10 @@
+import {
+  blueAddresses,
+  blueAddressRegistry,
+  blueDeployments,
+  addresses as morphoAddresses,
+  registerCustomAddresses as registerCustomMorphoAddresses,
+} from "@morpho-org/morpho-ts";
 import { randomAddress } from "@morpho-org/test/fixtures";
 import { describe, expect, test } from "vitest";
 import {
@@ -11,6 +18,7 @@ import {
   getPermissionedCoinbaseTokens,
   getUnwrappedToken,
   NATIVE_ADDRESS,
+  RegistryValueAlreadyRegisteredError,
   registerCustomAddresses,
   UnsupportedChainIdError,
 } from "./index.js";
@@ -48,6 +56,15 @@ describe("addresses helpers", () => {
     expect(first.size).toBe(0);
     expect(second.size).toBe(0);
     expect(first).not.toBe(second);
+  });
+
+  test("legacy Blue registry exports are live aliases of the shared Blue views", () => {
+    expect(addresses).toBe(blueAddresses);
+    expect(addressesRegistry).toBe(blueAddressRegistry);
+    expect(deployments).toBe(blueDeployments);
+    expect(morphoAddresses[ChainId.EthMainnet]?.blue).toBe(
+      addressesRegistry[ChainId.EthMainnet],
+    );
   });
 
   test("registerCustomAddresses extends deployment metadata", () => {
@@ -138,6 +155,29 @@ describe("addresses helpers", () => {
     expect(getChainAddresses(chainId)).toStrictEqual(chainAddresses);
   });
 
+  test("shared registration updates legacy Blue live aliases", () => {
+    const chainId = 888_000_006;
+    const chainAddresses = {
+      morpho: randomAddress(),
+      bundler3: {
+        bundler3: randomAddress(),
+        generalAdapter1: randomAddress(),
+      },
+      adaptiveCurveIrm: randomAddress(),
+    } satisfies ChainAddresses;
+
+    registerCustomMorphoAddresses({
+      addresses: {
+        [chainId]: chainAddresses,
+      },
+    });
+
+    expect(getChainAddresses(chainId)).toStrictEqual(chainAddresses);
+    expect(addresses[chainId]).toStrictEqual(chainAddresses);
+    expect(addressesRegistry[chainId]).toStrictEqual(chainAddresses);
+    expect(morphoAddresses[chainId]?.blue).toStrictEqual(chainAddresses);
+  });
+
   test("registerCustomAddresses extends a custom chain and unwrapped token mapping together", () => {
     const chainId = 888_000_004;
     const chainAddresses = {
@@ -193,7 +233,7 @@ describe("addresses helpers", () => {
           },
         },
       }),
-    ).toThrow("Cannot override existing deployment: morpho");
+    ).toThrow(RegistryValueAlreadyRegisteredError);
   });
 
   test.each([

@@ -1,6 +1,6 @@
 # morpho-ts Conventions
 
-- Keep this package framework-free; export generic time, format, URL, and object helpers only.
+- Keep this package framework-free and dependency-light; export generic helpers plus cross-protocol SDK primitives that Blue and Midnight both need, including shared math, typed errors, constants, address/hex/call descriptor types, non-protocol-specific ABI literals, and address/deployment registries.
 - Preserve nullability through helpers, e.g. `transformValue(value, fn)` returns nullish input unchanged.
 - Helpers should preserve input type shape unless their name explicitly signals formatting or conversion.
 - Use type guards for filtering, e.g. `array.filter(isDefined)`.
@@ -12,7 +12,7 @@
 
 ## Continuous Improvement
 
-- Keep this package generic, dependency-free where possible, and unrelated to protocol or framework state.
+- Keep this package dependency-free where possible and unrelated to framework state. Protocol data is allowed only when it is shared cross-protocol source-of-truth data such as the unified Morpho address/deployment registries or non-protocol-specific ABI literals.
 - Existing code may predate current conventions; do not widen divergence when touching it.
 - Prefer deleting unclear helpers, dependencies, exports, or duplicated logic before adding abstractions.
 - If a convention cannot yet be met, keep the exception local and make the touched surface closer to the target design.
