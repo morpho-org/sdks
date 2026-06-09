@@ -1,5 +1,3 @@
-import type { Address } from "./types.js";
-
 /**
  * Thrown when a chain id is not supported by a package helper.
  *
@@ -107,107 +105,39 @@ export class RegistryValueAlreadyRegisteredError extends Error {
 }
 
 /**
- * Thrown when a custom Midnight address registration is missing required entries.
+ * Thrown when a custom registry entry is missing required labels.
  *
  * @example
  * ```ts
- * import { IncompleteMidnightAddressesError } from "@morpho-org/morpho-ts";
+ * import { IncompleteRegistryEntryError } from "@morpho-org/morpho-ts";
  *
- * throw new IncompleteMidnightAddressesError(8453, ["midnight"]);
- * ```
- */
-export class IncompleteMidnightAddressesError extends Error {
-  public constructor(chainId: number, missingLabels: readonly string[]) {
-    super(
-      `Midnight addresses for chain id "${chainId}" are missing "${missingLabels.join('", "')}". Provide a complete deployment entry.`,
-    );
-    this.name = "IncompleteMidnightAddressesError";
-  }
-}
-
-/**
- * Thrown when a custom Midnight deployment registration is missing required entries.
- *
- * @example
- * ```ts
- * import { IncompleteMidnightDeploymentsError } from "@morpho-org/morpho-ts";
- *
- * throw new IncompleteMidnightDeploymentsError(8453, ["midnight"]);
- * ```
- */
-export class IncompleteMidnightDeploymentsError extends Error {
-  public constructor(chainId: number, missingLabels: readonly string[]) {
-    super(
-      `Midnight deployments for chain id "${chainId}" are missing "${missingLabels.join('", "')}". Provide a complete deployment entry.`,
-    );
-    this.name = "IncompleteMidnightDeploymentsError";
-  }
-}
-
-/**
- * Thrown when a custom Midnight address registration attempts to change an existing value.
- *
- * @example
- * ```ts
- * import { MidnightAddressAlreadyRegisteredError } from "@morpho-org/morpho-ts";
- *
- * throw new MidnightAddressAlreadyRegisteredError({
- *   chainId: 8453,
- *   label: "midnight",
- *   registeredAddress: "0x0000000000000000000000000000000000000001",
- *   requestedAddress: "0x0000000000000000000000000000000000000002",
+ * throw new IncompleteRegistryEntryError({
+ *   label: "8453.midnight",
+ *   missingLabels: ["midnightBundles"],
+ *   type: "address",
  * });
  * ```
  */
-export class MidnightAddressAlreadyRegisteredError extends Error {
-  public constructor({
-    chainId,
-    label,
-    registeredAddress,
-    requestedAddress,
-  }: {
-    chainId: number;
-    label: string;
-    registeredAddress: Address;
-    requestedAddress: Address;
-  }) {
-    super(
-      `Midnight address "${chainId}.${label}" is already registered as "${registeredAddress}", got "${requestedAddress}". Use the registered address or choose an unregistered chain id.`,
-    );
-    this.name = "MidnightAddressAlreadyRegisteredError";
-  }
-}
+export class IncompleteRegistryEntryError extends Error {
+  public readonly label: string;
+  public readonly missingLabels: readonly string[];
+  public readonly type: string;
 
-/**
- * Thrown when a custom Midnight deployment registration attempts to change an existing value.
- *
- * @example
- * ```ts
- * import { MidnightDeploymentAlreadyRegisteredError } from "@morpho-org/morpho-ts";
- *
- * throw new MidnightDeploymentAlreadyRegisteredError({
- *   chainId: 8453,
- *   label: "midnight",
- *   registeredDeployment: 1n,
- *   requestedDeployment: 2n,
- * });
- * ```
- */
-export class MidnightDeploymentAlreadyRegisteredError extends Error {
   public constructor({
-    chainId,
     label,
-    registeredDeployment,
-    requestedDeployment,
+    missingLabels,
+    type,
   }: {
-    chainId: number;
     label: string;
-    registeredDeployment: bigint;
-    requestedDeployment: bigint;
+    missingLabels: readonly string[];
+    type: string;
   }) {
     super(
-      `Midnight deployment "${chainId}.${label}" is already registered as "${registeredDeployment}", got "${requestedDeployment}". Use the registered deployment or choose an unregistered chain id.`,
+      `Registry ${type} "${label}" is missing "${missingLabels.join('", "')}". Provide a complete registry entry.`,
     );
-    this.name = "MidnightDeploymentAlreadyRegisteredError";
+    this.label = label;
+    this.missingLabels = missingLabels;
+    this.type = type;
+    this.name = "IncompleteRegistryEntryError";
   }
 }

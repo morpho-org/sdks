@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import {
   DivisionByZeroError,
+  IncompleteRegistryEntryError,
   InvalidBitLengthError,
   NegativeValueError,
   UnsupportedChainIdError,
@@ -49,5 +50,23 @@ describe("NegativeValueError", () => {
     expect(error.name).toBe("NegativeValueError");
     expect(error.message).toContain("assets");
     expect(error.message).toContain("-1");
+  });
+});
+
+describe("IncompleteRegistryEntryError", () => {
+  test("default", () => {
+    const error = new IncompleteRegistryEntryError({
+      label: "31337.midnight",
+      missingLabels: ["midnightBundles"],
+      type: "address",
+    });
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe("IncompleteRegistryEntryError");
+    expect(error.label).toBe("31337.midnight");
+    expect(error.missingLabels).toEqual(["midnightBundles"]);
+    expect(error.type).toBe("address");
+    expect(error.message).toContain("31337.midnight");
+    expect(error.message).toContain("midnightBundles");
   });
 });

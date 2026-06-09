@@ -1,20 +1,19 @@
 import { describe, expect, test } from "vitest";
+
 import {
+  addresses,
+  addressesRegistry,
+  deployments,
   getMidnightAddresses,
   getMidnightDeployments,
   type MidnightAddresses,
   type MidnightDeployments,
-  midnightAddresses,
-  midnightAddressRegistry,
-  midnightDeploymentRegistry,
-  midnightDeployments,
-  registerCustomMidnightAddresses,
+  registerCustomAddresses,
 } from "./addresses.js";
+import { ChainId } from "./chain.js";
 import {
-  IncompleteMidnightAddressesError,
-  IncompleteMidnightDeploymentsError,
-  MidnightAddressAlreadyRegisteredError,
-  MidnightDeploymentAlreadyRegisteredError,
+  IncompleteRegistryEntryError,
+  RegistryValueAlreadyRegisteredError,
   UnsupportedChainIdError,
 } from "./errors.js";
 import type { Address } from "./types.js";
@@ -47,6 +46,21 @@ const createMidnightDeployments = (): MidnightDeployments => ({
   permit2: 6n,
 });
 
+const getMainnetBlueAddresses = () => {
+  const blueAddresses = addressesRegistry[ChainId.EthMainnet]?.blue;
+  if (blueAddresses == null) throw new Error("missing mainnet Blue addresses");
+
+  return blueAddresses;
+};
+
+const getMainnetBlueDeployments = () => {
+  const blueDeployments = deployments[ChainId.EthMainnet]?.blue;
+  if (blueDeployments == null)
+    throw new Error("missing mainnet Blue deployments");
+
+  return blueDeployments;
+};
+
 describe("getMidnightAddresses", () => {
   test("error: UnsupportedChainIdError", () => {
     expect(() => getMidnightAddresses(1)).toThrow(UnsupportedChainIdError);
@@ -56,9 +70,11 @@ describe("getMidnightAddresses", () => {
     const chainId = 31_337_001;
     const chainAddresses = createMidnightAddresses();
 
-    registerCustomMidnightAddresses({
+    registerCustomAddresses({
       addresses: {
-        [chainId]: chainAddresses,
+        [chainId]: {
+          midnight: chainAddresses,
+        },
       },
     });
 
@@ -75,9 +91,11 @@ describe("getMidnightDeployments", () => {
     const chainId = 31_337_101;
     const chainDeployments = createMidnightDeployments();
 
-    registerCustomMidnightAddresses({
+    registerCustomAddresses({
       deployments: {
-        [chainId]: chainDeployments,
+        [chainId]: {
+          midnight: chainDeployments,
+        },
       },
     });
 
@@ -85,23 +103,25 @@ describe("getMidnightDeployments", () => {
   });
 });
 
-describe("midnightAddressRegistry", () => {
+describe("addressesRegistry", () => {
   test("default", () => {
-    expect(midnightAddressRegistry[1]).toBeUndefined();
+    expect(addressesRegistry[1]?.midnight).toBeUndefined();
   });
 
-  test("behavior: exposes object-style registry aliases", () => {
+  test("behavior: exposes Midnight entries through the unified registry", () => {
     const chainId = 31_337_002;
     const chainAddresses = createMidnightAddresses();
 
-    registerCustomMidnightAddresses({
+    registerCustomAddresses({
       addresses: {
-        [chainId]: chainAddresses,
+        [chainId]: {
+          midnight: chainAddresses,
+        },
       },
     });
 
-    expect(midnightAddressRegistry[chainId]).toEqual(chainAddresses);
-    expect(midnightAddresses[chainId]).toEqual(chainAddresses);
+    expect(addressesRegistry[chainId]?.midnight).toEqual(chainAddresses);
+    expect(addresses[chainId]?.midnight).toEqual(chainAddresses);
   });
 
   test("behavior: copies registered entries", () => {
@@ -109,9 +129,11 @@ describe("midnightAddressRegistry", () => {
     const chainAddresses = createMidnightAddresses();
     const registeredMidnight = chainAddresses.midnight;
 
-    registerCustomMidnightAddresses({
+    registerCustomAddresses({
       addresses: {
-        [chainId]: chainAddresses,
+        [chainId]: {
+          midnight: chainAddresses,
+        },
       },
     });
 
@@ -119,36 +141,60 @@ describe("midnightAddressRegistry", () => {
 
     expect(getMidnightAddresses(chainId).midnight).toBe(registeredMidnight);
   });
-});
 
-describe("midnightDeploymentRegistry", () => {
-  test("default", () => {
-    expect(midnightDeploymentRegistry[1]).toBeUndefined();
-  });
+  test("behavior: registers Blue and Midnight addresses alongside each other", () => {
+    const chainId = 31_337_004;
+    const blueAddresses = getMainnetBlueAddresses();
+    const chainAddresses = createMidnightAddresses();
 
-  test("behavior: exposes object-style registry aliases", () => {
-    const chainId = 31_337_102;
-    const chainDeployments = createMidnightDeployments();
-
-    registerCustomMidnightAddresses({
-      deployments: {
-        [chainId]: chainDeployments,
+    registerCustomAddresses({
+      addresses: {
+        [chainId]: {
+          blue: blueAddresses,
+          midnight: chainAddresses,
+        },
       },
     });
 
-    expect(midnightDeploymentRegistry[chainId]).toEqual(chainDeployments);
-    expect(midnightDeployments[chainId]).toEqual(chainDeployments);
+    expect(addressesRegistry[chainId]?.blue).toEqual(blueAddresses);
+    expect(addressesRegistry[chainId]?.midnight).toEqual(chainAddresses);
   });
 });
 
-describe("registerCustomMidnightAddresses", () => {
+describe("deployments", () => {
   test("default", () => {
-    const chainId = 31_337_004;
+    expect(deployments[1]?.midnight).toBeUndefined();
+  });
+
+  test("behavior: registers Blue and Midnight deployments alongside each other", () => {
+    const chainId = 31_337_102;
+    const blueDeployments = getMainnetBlueDeployments();
+    const chainDeployments = createMidnightDeployments();
+
+    registerCustomAddresses({
+      deployments: {
+        [chainId]: {
+          blue: blueDeployments,
+          midnight: chainDeployments,
+        },
+      },
+    });
+
+    expect(deployments[chainId]?.blue).toEqual(blueDeployments);
+    expect(deployments[chainId]?.midnight).toEqual(chainDeployments);
+  });
+});
+
+describe("registerCustomAddresses", () => {
+  test("default", () => {
+    const chainId = 31_337_005;
     const chainAddresses = createMidnightAddresses();
 
-    registerCustomMidnightAddresses({
+    registerCustomAddresses({
       addresses: {
-        [chainId]: chainAddresses,
+        [chainId]: {
+          midnight: chainAddresses,
+        },
       },
     });
 
@@ -156,117 +202,141 @@ describe("registerCustomMidnightAddresses", () => {
   });
 
   test("behavior: accepts repeated registration of the same value", () => {
-    const chainId = 31_337_005;
+    const chainId = 31_337_006;
     const chainAddresses = createMidnightAddresses();
 
-    registerCustomMidnightAddresses({
+    registerCustomAddresses({
       addresses: {
-        [chainId]: chainAddresses,
+        [chainId]: {
+          midnight: chainAddresses,
+        },
       },
     });
 
     expect(() =>
-      registerCustomMidnightAddresses({
+      registerCustomAddresses({
         addresses: {
           [chainId]: {
-            midnight: chainAddresses.midnight,
+            midnight: {
+              midnight: chainAddresses.midnight,
+            },
           },
         },
       }),
     ).not.toThrow();
-  });
-
-  test("behavior: accepts repeated registration of the same address with different casing", () => {
-    const chainId = 31_337_008;
-    const chainAddresses = createMidnightAddresses();
-    const lowercasedMidnight =
-      chainAddresses.midnight.toLowerCase() as MidnightAddresses["midnight"];
-
-    registerCustomMidnightAddresses({
-      addresses: {
-        [chainId]: chainAddresses,
-      },
-    });
-
-    expect(() =>
-      registerCustomMidnightAddresses({
-        addresses: {
-          [chainId]: {
-            midnight: lowercasedMidnight,
-          },
-        },
-      }),
-    ).not.toThrow();
-  });
-
-  test("error: IncompleteMidnightAddressesError", () => {
-    expect(() =>
-      registerCustomMidnightAddresses({
-        addresses: {
-          31337006: {
-            midnight: randomAddress(),
-          },
-        },
-      }),
-    ).toThrow(IncompleteMidnightAddressesError);
-  });
-
-  test("error: MidnightAddressAlreadyRegisteredError", () => {
-    const chainId = 31_337_007;
-    const chainAddresses = createMidnightAddresses();
-
-    registerCustomMidnightAddresses({
-      addresses: {
-        [chainId]: chainAddresses,
-      },
-    });
-
-    expect(() =>
-      registerCustomMidnightAddresses({
-        addresses: {
-          [chainId]: {
-            midnight: randomAddress(),
-          },
-        },
-      }),
-    ).toThrow(MidnightAddressAlreadyRegisteredError);
 
     expect(getMidnightAddresses(chainId).midnight).toBe(
       chainAddresses.midnight,
     );
   });
 
-  test("error: IncompleteMidnightDeploymentsError", () => {
-    expect(() =>
-      registerCustomMidnightAddresses({
-        deployments: {
-          31337103: {
-            midnight: 1n,
-          },
+  test("behavior: accepts repeated registration of the same address with different casing", () => {
+    const chainId = 31_337_007;
+    const chainAddresses = createMidnightAddresses();
+    const lowercasedMidnight =
+      chainAddresses.midnight.toLowerCase() as MidnightAddresses["midnight"];
+
+    registerCustomAddresses({
+      addresses: {
+        [chainId]: {
+          midnight: chainAddresses,
         },
-      }),
-    ).toThrow(IncompleteMidnightDeploymentsError);
-  });
-
-  test("error: MidnightDeploymentAlreadyRegisteredError", () => {
-    const chainId = 31_337_104;
-    const chainDeployments = createMidnightDeployments();
-
-    registerCustomMidnightAddresses({
-      deployments: {
-        [chainId]: chainDeployments,
       },
     });
 
     expect(() =>
-      registerCustomMidnightAddresses({
-        deployments: {
+      registerCustomAddresses({
+        addresses: {
           [chainId]: {
-            midnight: chainDeployments.midnight + 1n,
+            midnight: {
+              midnight: lowercasedMidnight,
+            },
           },
         },
       }),
-    ).toThrow(MidnightDeploymentAlreadyRegisteredError);
+    ).not.toThrow();
+  });
+
+  test("error: IncompleteRegistryEntryError for addresses", () => {
+    expect(() =>
+      registerCustomAddresses({
+        addresses: {
+          31337008: {
+            midnight: {
+              midnight: randomAddress(),
+            },
+          },
+        },
+      }),
+    ).toThrow(IncompleteRegistryEntryError);
+  });
+
+  test("error: RegistryValueAlreadyRegisteredError for addresses", () => {
+    const chainId = 31_337_009;
+    const chainAddresses = createMidnightAddresses();
+
+    registerCustomAddresses({
+      addresses: {
+        [chainId]: {
+          midnight: chainAddresses,
+        },
+      },
+    });
+
+    expect(() =>
+      registerCustomAddresses({
+        addresses: {
+          [chainId]: {
+            midnight: {
+              midnight: randomAddress(),
+            },
+          },
+        },
+      }),
+    ).toThrow(RegistryValueAlreadyRegisteredError);
+
+    expect(getMidnightAddresses(chainId).midnight).toBe(
+      chainAddresses.midnight,
+    );
+  });
+
+  test("error: IncompleteRegistryEntryError for deployments", () => {
+    expect(() =>
+      registerCustomAddresses({
+        deployments: {
+          31337103: {
+            midnight: {
+              midnight: 1n,
+            },
+          },
+        },
+      }),
+    ).toThrow(IncompleteRegistryEntryError);
+  });
+
+  test("error: RegistryValueAlreadyRegisteredError for deployments", () => {
+    const chainId = 31_337_104;
+    const chainDeployments = createMidnightDeployments();
+
+    registerCustomAddresses({
+      deployments: {
+        [chainId]: {
+          midnight: chainDeployments,
+        },
+      },
+    });
+
+    expect(() =>
+      registerCustomAddresses({
+        deployments: {
+          [chainId]: {
+            midnight: {
+              midnight: chainDeployments.midnight + 1n,
+            },
+          },
+        },
+      }),
+    ).toThrow(RegistryValueAlreadyRegisteredError);
 
     expect(getMidnightDeployments(chainId).midnight).toBe(
       chainDeployments.midnight,
