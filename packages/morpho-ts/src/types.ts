@@ -8,7 +8,7 @@
  * const value: BigIntish = "1000000000000000000";
  * ```
  */
-export type BigIntish = bigint | string | number;
+export type BigIntish = bigint | string | number | boolean;
 
 /**
  * Hex-encoded EVM address.
