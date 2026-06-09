@@ -27,6 +27,9 @@ describe("addresses helpers", () => {
   test("getChainAddresses returns known chain addresses", () => {
     const chainAddresses = getChainAddresses(ChainId.BaseMainnet);
 
+    expect(chainAddresses.blue).toBe(
+      "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
+    );
     expect(chainAddresses.morpho).toBe(
       "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
     );
@@ -62,7 +65,8 @@ describe("addresses helpers", () => {
     expect(addresses).toBe(blueAddresses);
     expect(addressesRegistry).toBe(blueAddressRegistry);
     expect(deployments).toBe(blueDeployments);
-    expect(morphoAddresses[ChainId.EthMainnet]?.blue).toBe(
+    expect(morphoAddresses).toBe(addressesRegistry);
+    expect(morphoAddresses[ChainId.EthMainnet]).toBe(
       addressesRegistry[ChainId.EthMainnet],
     );
   });
@@ -137,6 +141,7 @@ describe("addresses helpers", () => {
   test("registerCustomAddresses extends address metadata", () => {
     const chainId = 888_000_002;
     const chainAddresses = {
+      blue: "0x0000000000000000000000000000000000000001",
       morpho: "0x0000000000000000000000000000000000000001",
       bundler3: {
         bundler3: "0x0000000000000000000000000000000000000002",
@@ -157,8 +162,10 @@ describe("addresses helpers", () => {
 
   test("shared registration updates legacy Blue live aliases", () => {
     const chainId = 888_000_006;
+    const blue = randomAddress();
     const chainAddresses = {
-      morpho: randomAddress(),
+      blue,
+      morpho: blue,
       bundler3: {
         bundler3: randomAddress(),
         generalAdapter1: randomAddress(),
@@ -175,13 +182,15 @@ describe("addresses helpers", () => {
     expect(getChainAddresses(chainId)).toStrictEqual(chainAddresses);
     expect(addresses[chainId]).toStrictEqual(chainAddresses);
     expect(addressesRegistry[chainId]).toStrictEqual(chainAddresses);
-    expect(morphoAddresses[chainId]?.blue).toStrictEqual(chainAddresses);
+    expect(morphoAddresses[chainId]).toStrictEqual(chainAddresses);
   });
 
   test("registerCustomAddresses extends a custom chain and unwrapped token mapping together", () => {
     const chainId = 888_000_004;
+    const blue = randomAddress();
     const chainAddresses = {
-      morpho: randomAddress(),
+      blue,
+      morpho: blue,
       bundler3: {
         bundler3: randomAddress(),
         generalAdapter1: randomAddress(),
@@ -286,10 +295,15 @@ describe("addresses helpers", () => {
     morphoDeployment,
     wNativeDeployment,
   }) => {
-    expect(getChainAddresses(chainId)).toMatchObject({ morpho, wNative });
+    expect(getChainAddresses(chainId)).toMatchObject({
+      blue: morpho,
+      morpho,
+      wNative,
+    });
     expect(
       (deployments as Record<number, ChainDeployments>)[chainId],
     ).toMatchObject({
+      blue: morphoDeployment,
       morpho: morphoDeployment,
       wNative: wNativeDeployment,
     });
@@ -301,12 +315,14 @@ describe("addresses helpers", () => {
   test("exposes era-2 addresses and deployments without wNative for chain 5042", () => {
     const chainAddresses = getChainAddresses(5_042);
     expect(chainAddresses).toMatchObject({
+      blue: "0x34CD04070dD72b14E241112F6d83812Df5Af7fCD",
       morpho: "0x34CD04070dD72b14E241112F6d83812Df5Af7fCD",
     });
     expect(chainAddresses.wNative).toBeUndefined();
     expect(
       (deployments as Record<number, ChainDeployments>)[5_042],
     ).toMatchObject({
+      blue: 1_208_685n,
       morpho: 1_208_685n,
     });
     expect(
@@ -380,8 +396,10 @@ describe("addresses helpers", () => {
   });
 
   test("addresses registry prevents manual overrides", () => {
+    const blue = randomAddress();
     const chainAddresses = {
-      morpho: randomAddress(),
+      blue,
+      morpho: blue,
       bundler3: {
         bundler3: randomAddress(),
         generalAdapter1: randomAddress(),

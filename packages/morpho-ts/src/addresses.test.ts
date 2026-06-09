@@ -6,8 +6,6 @@ import {
   deployments,
   getMidnightAddresses,
   getMidnightDeployments,
-  type MidnightAddresses,
-  type MidnightDeployments,
   registerCustomAddresses,
 } from "./addresses.js";
 import { ChainId } from "./chain.js";
@@ -27,7 +25,7 @@ const randomAddress = (): `0x${string}` => {
   return address;
 };
 
-const createMidnightAddresses = (): MidnightAddresses => ({
+const createMidnightAddresses = () => ({
   midnight: randomAddress(),
   midnightBundles: randomAddress(),
   midnightMempool: randomAddress(),
@@ -36,7 +34,7 @@ const createMidnightAddresses = (): MidnightAddresses => ({
   permit2: randomAddress(),
 });
 
-const createMidnightDeployments = (): MidnightDeployments => ({
+const createMidnightDeployments = () => ({
   midnight: 1n,
   midnightBundles: 2n,
   midnightMempool: 3n,
@@ -46,16 +44,13 @@ const createMidnightDeployments = (): MidnightDeployments => ({
 });
 
 const getMainnetBlueAddresses = () => {
-  const blueAddresses = addressesRegistry[ChainId.EthMainnet]?.blue;
-  if (blueAddresses == null) throw new Error("missing mainnet Blue addresses");
+  const blueAddresses = addressesRegistry[ChainId.EthMainnet];
 
   return blueAddresses;
 };
 
 const getMainnetBlueDeployments = () => {
-  const blueDeployments = deployments[ChainId.EthMainnet]?.blue;
-  if (blueDeployments == null)
-    throw new Error("missing mainnet Blue deployments");
+  const blueDeployments = deployments[ChainId.EthMainnet];
 
   return blueDeployments;
 };
@@ -71,9 +66,7 @@ describe("getMidnightAddresses", () => {
 
     registerCustomAddresses({
       addresses: {
-        [chainId]: {
-          midnight: chainAddresses,
-        },
+        [chainId]: chainAddresses,
       },
     });
 
@@ -92,9 +85,7 @@ describe("getMidnightDeployments", () => {
 
     registerCustomAddresses({
       deployments: {
-        [chainId]: {
-          midnight: chainDeployments,
-        },
+        [chainId]: chainDeployments,
       },
     });
 
@@ -104,7 +95,7 @@ describe("getMidnightDeployments", () => {
 
 describe("addressesRegistry", () => {
   test("default", () => {
-    expect(addressesRegistry[1]?.midnight).toBeUndefined();
+    expect("midnight" in addressesRegistry[1]).toBe(false);
   });
 
   test("behavior: exposes Midnight entries through the unified registry", () => {
@@ -113,14 +104,13 @@ describe("addressesRegistry", () => {
 
     registerCustomAddresses({
       addresses: {
-        [chainId]: {
-          midnight: chainAddresses,
-        },
+        [chainId]: chainAddresses,
       },
     });
 
-    expect(addressesRegistry[chainId]?.midnight).toEqual(chainAddresses);
-    expect(addresses[chainId]?.midnight).toEqual(chainAddresses);
+    expect(getMidnightAddresses(chainId)).toEqual(chainAddresses);
+    expect(addressesRegistry[chainId]).toMatchObject(chainAddresses);
+    expect(addresses[chainId]).toMatchObject(chainAddresses);
   });
 
   test("behavior: copies registered entries", () => {
@@ -130,9 +120,7 @@ describe("addressesRegistry", () => {
 
     registerCustomAddresses({
       addresses: {
-        [chainId]: {
-          midnight: chainAddresses,
-        },
+        [chainId]: chainAddresses,
       },
     });
 
@@ -144,43 +132,111 @@ describe("addressesRegistry", () => {
   test("behavior: registers Blue and Midnight addresses alongside each other", () => {
     const chainId = 31_337_004;
     const blueAddresses = getMainnetBlueAddresses();
-    const chainAddresses = createMidnightAddresses();
+    const chainAddresses = {
+      ...createMidnightAddresses(),
+      permit2: blueAddresses.permit2,
+    };
 
     registerCustomAddresses({
       addresses: {
         [chainId]: {
-          blue: blueAddresses,
-          midnight: chainAddresses,
+          ...blueAddresses,
+          ...chainAddresses,
         },
       },
     });
 
-    expect(addressesRegistry[chainId]?.blue).toEqual(blueAddresses);
-    expect(addressesRegistry[chainId]?.midnight).toEqual(chainAddresses);
+    expect(addressesRegistry[chainId]).toMatchObject(blueAddresses);
+    expect(addressesRegistry[chainId]).toMatchObject(chainAddresses);
+  });
+
+  test("behavior: duplicates blue to deprecated morpho for custom addresses", () => {
+    const chainId = 31_337_010;
+    const blue = randomAddress();
+
+    registerCustomAddresses({
+      addresses: {
+        [chainId]: {
+          blue,
+          bundler3: {
+            bundler3: randomAddress(),
+            generalAdapter1: randomAddress(),
+          },
+          adaptiveCurveIrm: randomAddress(),
+        },
+      },
+    });
+
+    expect(addressesRegistry[chainId]?.blue).toBe(blue);
+    expect(addressesRegistry[chainId]?.morpho).toBe(blue);
+  });
+
+  test("behavior: duplicates deprecated morpho to blue for custom addresses", () => {
+    const chainId = 31_337_011;
+    const morpho = randomAddress();
+
+    registerCustomAddresses({
+      addresses: {
+        [chainId]: {
+          morpho,
+          bundler3: {
+            bundler3: randomAddress(),
+            generalAdapter1: randomAddress(),
+          },
+          adaptiveCurveIrm: randomAddress(),
+        },
+      },
+    });
+
+    expect(addressesRegistry[chainId]?.blue).toBe(morpho);
+    expect(addressesRegistry[chainId]?.morpho).toBe(morpho);
   });
 });
 
 describe("deployments", () => {
   test("default", () => {
-    expect(deployments[1]?.midnight).toBeUndefined();
+    expect("midnight" in deployments[1]).toBe(false);
   });
 
   test("behavior: registers Blue and Midnight deployments alongside each other", () => {
     const chainId = 31_337_102;
     const blueDeployments = getMainnetBlueDeployments();
-    const chainDeployments = createMidnightDeployments();
+    const chainDeployments = {
+      ...createMidnightDeployments(),
+      permit2: blueDeployments.permit2,
+    };
 
     registerCustomAddresses({
       deployments: {
         [chainId]: {
-          blue: blueDeployments,
-          midnight: chainDeployments,
+          ...blueDeployments,
+          ...chainDeployments,
         },
       },
     });
 
-    expect(deployments[chainId]?.blue).toEqual(blueDeployments);
-    expect(deployments[chainId]?.midnight).toEqual(chainDeployments);
+    expect(deployments[chainId]).toMatchObject(blueDeployments);
+    expect(deployments[chainId]).toMatchObject(chainDeployments);
+  });
+
+  test("behavior: duplicates blue to deprecated morpho for custom deployments", () => {
+    const chainId = 31_337_105;
+
+    registerCustomAddresses({
+      deployments: {
+        [chainId]: {
+          blue: 1n,
+          bundler3: {
+            bundler3: 2n,
+            generalAdapter1: 3n,
+          },
+          adaptiveCurveIrm: 4n,
+        },
+      },
+    });
+
+    expect(deployments[chainId]?.blue).toBe(1n);
+    expect(deployments[chainId]?.morpho).toBe(1n);
   });
 });
 
@@ -191,9 +247,7 @@ describe("registerCustomAddresses", () => {
 
     registerCustomAddresses({
       addresses: {
-        [chainId]: {
-          midnight: chainAddresses,
-        },
+        [chainId]: chainAddresses,
       },
     });
 
@@ -206,9 +260,7 @@ describe("registerCustomAddresses", () => {
 
     registerCustomAddresses({
       addresses: {
-        [chainId]: {
-          midnight: chainAddresses,
-        },
+        [chainId]: chainAddresses,
       },
     });
 
@@ -216,9 +268,7 @@ describe("registerCustomAddresses", () => {
       registerCustomAddresses({
         addresses: {
           [chainId]: {
-            midnight: {
-              midnight: chainAddresses.midnight,
-            },
+            midnight: chainAddresses.midnight,
           },
         },
       }),
@@ -233,13 +283,11 @@ describe("registerCustomAddresses", () => {
     const chainId = 31_337_007;
     const chainAddresses = createMidnightAddresses();
     const lowercasedMidnight =
-      chainAddresses.midnight.toLowerCase() as MidnightAddresses["midnight"];
+      chainAddresses.midnight.toLowerCase() as typeof chainAddresses.midnight;
 
     registerCustomAddresses({
       addresses: {
-        [chainId]: {
-          midnight: chainAddresses,
-        },
+        [chainId]: chainAddresses,
       },
     });
 
@@ -247,9 +295,7 @@ describe("registerCustomAddresses", () => {
       registerCustomAddresses({
         addresses: {
           [chainId]: {
-            midnight: {
-              midnight: lowercasedMidnight,
-            },
+            midnight: lowercasedMidnight,
           },
         },
       }),
@@ -261,9 +307,7 @@ describe("registerCustomAddresses", () => {
       registerCustomAddresses({
         addresses: {
           31337008: {
-            midnight: {
-              midnight: randomAddress(),
-            },
+            midnight: randomAddress(),
           },
         },
       }),
@@ -276,9 +320,7 @@ describe("registerCustomAddresses", () => {
 
     registerCustomAddresses({
       addresses: {
-        [chainId]: {
-          midnight: chainAddresses,
-        },
+        [chainId]: chainAddresses,
       },
     });
 
@@ -286,9 +328,7 @@ describe("registerCustomAddresses", () => {
       registerCustomAddresses({
         addresses: {
           [chainId]: {
-            midnight: {
-              midnight: randomAddress(),
-            },
+            midnight: randomAddress(),
           },
         },
       }),
@@ -304,9 +344,7 @@ describe("registerCustomAddresses", () => {
       registerCustomAddresses({
         deployments: {
           31337103: {
-            midnight: {
-              midnight: 1n,
-            },
+            midnight: 1n,
           },
         },
       }),
@@ -319,9 +357,7 @@ describe("registerCustomAddresses", () => {
 
     registerCustomAddresses({
       deployments: {
-        [chainId]: {
-          midnight: chainDeployments,
-        },
+        [chainId]: chainDeployments,
       },
     });
 
@@ -329,9 +365,7 @@ describe("registerCustomAddresses", () => {
       registerCustomAddresses({
         deployments: {
           [chainId]: {
-            midnight: {
-              midnight: chainDeployments.midnight + 1n,
-            },
+            midnight: chainDeployments.midnight + 1n,
           },
         },
       }),
