@@ -3,7 +3,6 @@ packages:
 
 overrides:
   axios: 1.15.2
-  viem: 2.52.2
   ws: 8.20.1
 
 onlyBuiltDependencies:
