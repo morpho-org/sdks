@@ -9,8 +9,6 @@
  * ```
  */
 export class UnsupportedChainIdError extends Error {
-  public readonly code = "UNSUPPORTED_CHAIN";
-
   public constructor(public readonly chainId: number) {
     super(`Chain id "${chainId}" is not supported.`);
     this.name = "UnsupportedChainIdError";
@@ -105,39 +103,31 @@ export class RegistryValueAlreadyRegisteredError extends Error {
 }
 
 /**
- * Thrown when a custom registry entry is missing required labels.
+ * Thrown when a supported chain has no address registered for a requested label.
  *
  * @example
  * ```ts
- * import { IncompleteRegistryEntryError } from "@morpho-org/morpho-ts";
+ * import { MissingAddressError } from "@morpho-org/morpho-ts";
  *
- * throw new IncompleteRegistryEntryError({
- *   label: "8453.midnight",
- *   missingLabels: ["midnightBundles"],
- *   type: "address",
- * });
+ * throw new MissingAddressError({ chainId: 1, label: "midnight" });
  * ```
  */
-export class IncompleteRegistryEntryError extends Error {
+export class MissingAddressError extends Error {
+  public readonly chainId: number;
   public readonly label: string;
-  public readonly missingLabels: readonly string[];
-  public readonly type: string;
 
   public constructor({
+    chainId,
     label,
-    missingLabels,
-    type,
   }: {
+    chainId: number;
     label: string;
-    missingLabels: readonly string[];
-    type: string;
   }) {
     super(
-      `Registry ${type} "${label}" is missing "${missingLabels.join('", "')}". Provide a complete registry entry.`,
+      `Address "${label}" is not registered for chain id "${chainId}". Register the address or use a supported chain.`,
     );
+    this.chainId = chainId;
     this.label = label;
-    this.missingLabels = missingLabels;
-    this.type = type;
-    this.name = "IncompleteRegistryEntryError";
+    this.name = "MissingAddressError";
   }
 }

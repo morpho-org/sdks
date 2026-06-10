@@ -69,7 +69,7 @@ describe("getRequirements", () => {
           morpho: addressesRegistry[mainnet.id].morpho,
           bundler3: addressesRegistry[mainnet.id].bundler3,
           adaptiveCurveIrm: addressesRegistry[mainnet.id].adaptiveCurveIrm,
-        } satisfies ChainAddresses,
+        } satisfies Partial<ChainAddresses>,
       },
     });
   });

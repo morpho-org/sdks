@@ -2,8 +2,8 @@ import { describe, expect, test } from "vitest";
 
 import {
   DivisionByZeroError,
-  IncompleteRegistryEntryError,
   InvalidBitLengthError,
+  MissingAddressError,
   NegativeValueError,
   UnsupportedChainIdError,
 } from "./errors.js";
@@ -14,7 +14,6 @@ describe("UnsupportedChainIdError", () => {
 
     expect(error).toBeInstanceOf(Error);
     expect(error.name).toBe("UnsupportedChainIdError");
-    expect(error.code).toBe("UNSUPPORTED_CHAIN");
     expect(error.chainId).toBe(999);
     expect(error.message).toContain("999");
   });
@@ -53,20 +52,18 @@ describe("NegativeValueError", () => {
   });
 });
 
-describe("IncompleteRegistryEntryError", () => {
+describe("MissingAddressError", () => {
   test("default", () => {
-    const error = new IncompleteRegistryEntryError({
-      label: "31337.midnight",
-      missingLabels: ["midnightBundles"],
-      type: "address",
+    const error = new MissingAddressError({
+      chainId: 31_337,
+      label: "midnight",
     });
 
     expect(error).toBeInstanceOf(Error);
-    expect(error.name).toBe("IncompleteRegistryEntryError");
-    expect(error.label).toBe("31337.midnight");
-    expect(error.missingLabels).toEqual(["midnightBundles"]);
-    expect(error.type).toBe("address");
-    expect(error.message).toContain("31337.midnight");
-    expect(error.message).toContain("midnightBundles");
+    expect(error.name).toBe("MissingAddressError");
+    expect(error.chainId).toBe(31_337);
+    expect(error.label).toBe("midnight");
+    expect(error.message).toContain("31337");
+    expect(error.message).toContain("midnight");
   });
 });

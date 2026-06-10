@@ -1,6 +1,7 @@
 export {
   DivisionByZeroError,
   InvalidBitLengthError,
+  MissingAddressError,
   RegistryValueAlreadyRegisteredError,
   UnsupportedChainIdError,
 } from "@morpho-org/morpho-ts";
