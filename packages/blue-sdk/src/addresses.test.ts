@@ -141,7 +141,6 @@ describe("addresses helpers", () => {
   test("registerCustomAddresses extends address metadata", () => {
     const chainId = 888_000_002;
     const chainAddresses = {
-      blue: "0x0000000000000000000000000000000000000001",
       morpho: "0x0000000000000000000000000000000000000001",
       bundler3: {
         bundler3: "0x0000000000000000000000000000000000000002",
@@ -157,7 +156,8 @@ describe("addresses helpers", () => {
       },
     });
 
-    expect(getChainAddresses(chainId)).toStrictEqual(chainAddresses);
+    expect(getChainAddresses(chainId)).toMatchObject(chainAddresses);
+    expect(getChainAddresses(chainId).blue).toBe(chainAddresses.morpho);
   });
 
   test("shared registration updates legacy Blue live aliases", () => {

@@ -15,8 +15,12 @@ export const NATIVE_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 
 /** Registry entry for protocol, adapter, factory, and token addresses on one chain. */
 export interface ChainAddresses {
-  /** Morpho Blue core contract for isolated lending markets, positions, authorization, and liquidations. */
-  blue: `0x${string}`;
+  /**
+   * Morpho Blue core contract for isolated lending markets, positions, authorization, and liquidations.
+   *
+   * TODO(vNext-major): make `blue` required when the deprecated `morpho` alias is removed.
+   */
+  blue?: `0x${string}`;
   /**
    * Deprecated alias for the Morpho Blue core contract.
    *
@@ -1616,6 +1620,33 @@ export type AddressRegistry = typeof _addressesRegistry &
 export type DeploymentRegistry = typeof _deployments &
   Record<number, ChainDeployments>;
 
+type ChainAddressRegistration =
+  | ChainAddresses
+  | (Omit<ChainAddresses, "morpho"> & {
+      blue: `0x${string}`;
+      morpho?: `0x${string}`;
+    });
+
+type ChainDeploymentRegistration =
+  | ChainDeployments
+  | (Omit<ChainDeployments, "morpho"> & {
+      blue: bigint;
+      morpho?: bigint;
+    });
+
+type RegistryInput<
+  Input extends Record<number, unknown>,
+  KnownKey extends PropertyKey,
+  KnownValue,
+  CustomValue,
+> = {
+  [Key in keyof Input]: Key extends KnownKey
+    ? DeepPartial<KnownValue>
+    : Key extends `${Extract<KnownKey, string | number>}`
+      ? DeepPartial<KnownValue>
+      : CustomValue;
+};
+
 /**
  * Returns the protocol address registry for a chain.
  *
@@ -1945,6 +1976,17 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isRegistryPrimitive = (value: unknown): value is RegistryPrimitive =>
   ["string", "bigint", "number", "boolean"].includes(typeof value);
 
+const cloneRegistryValue = <T>(value: T): T => {
+  if (!isRecord(value)) return value;
+
+  const next: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value)) {
+    next[key] = cloneRegistryValue(child);
+  }
+
+  return next as T;
+};
+
 const areRegistryValuesEqual = ({
   base,
   patch,
@@ -2015,7 +2057,7 @@ const mergeRegistry = <T>({
     return base;
   }
 
-  return patch as T;
+  return cloneRegistryValue(patch) as T;
 };
 
 const refreshAddressViews = () => {
@@ -2068,9 +2110,13 @@ const withBlueAlias = <T extends { blue?: unknown; morpho?: unknown }>({
  * @param options.unwrappedTokens - A mapping of chain IDs to token address maps,
  *                                  where each entry maps wrapped tokens to their unwrapped equivalents.
  * @param options.addresses - Custom address entries to merge into the default registry.
- *                            Midnight fields live beside `blue`, `bundler3`, and other periphery addresses.
+ *                            Known-chain entries may be partial; custom-chain entries must include the required
+ *                            Blue addresses and may add Midnight fields beside `blue`, `bundler3`, and other
+ *                            periphery addresses.
  * @param options.deployments - Custom deployment entries to merge into the default registry.
- *                              Midnight fields live beside `blue`, `bundler3`, and other periphery deployments.
+ *                              Known-chain entries may be partial; custom-chain entries must include the required
+ *                              Blue deployments and may add Midnight fields beside `blue`, `bundler3`, and other
+ *                              periphery deployments.
  *
  * @throws RegistryValueAlreadyRegisteredError when registration attempts to override an existing value.
  * @returns Nothing.
@@ -2104,18 +2150,27 @@ const withBlueAlias = <T extends { blue?: unknown; morpho?: unknown }>({
  * });
  * ```
  */
-export function registerCustomAddresses({
+export function registerCustomAddresses<
+  const TAddresses extends Record<number, unknown> = Record<never, never>,
+  const TDeployments extends Record<number, unknown> = Record<never, never>,
+>({
   unwrappedTokens,
   addresses: customAddresses,
   deployments: customDeployments,
 }: {
   unwrappedTokens?: Record<number, Record<`0x${string}`, `0x${string}`>>;
-  addresses?:
-    | DeepPartial<Record<keyof typeof _addressesRegistry, ChainAddresses>>
-    | Record<number, DeepPartial<ChainAddresses>>;
-  deployments?:
-    | DeepPartial<Record<keyof typeof _deployments, ChainDeployments>>
-    | Record<number, DeepPartial<ChainDeployments>>;
+  addresses?: RegistryInput<
+    TAddresses,
+    keyof typeof _addressesRegistry,
+    ChainAddresses,
+    ChainAddressRegistration
+  >;
+  deployments?: RegistryInput<
+    TDeployments,
+    keyof typeof _deployments,
+    ChainDeployments,
+    ChainDeploymentRegistration
+  >;
 } = {}) {
   if (customAddresses) {
     const nextRegistry: Record<number, ChainAddresses> = {
@@ -2127,11 +2182,13 @@ export function registerCustomAddresses({
     )) {
       const chainId = Number(chainIdString);
       const registeredEntry = nextRegistry[chainId];
-      const requestedEntry = withBlueAlias({
-        entry: requestedAddresses,
-        label: String(chainId),
-        type: "address",
-      });
+      const requestedEntry = cloneRegistryValue(
+        withBlueAlias({
+          entry: requestedAddresses,
+          label: String(chainId),
+          type: "address",
+        }),
+      );
 
       nextRegistry[chainId] =
         registeredEntry == null
@@ -2158,11 +2215,13 @@ export function registerCustomAddresses({
     )) {
       const chainId = Number(chainIdString);
       const registeredEntry = nextRegistry[chainId];
-      const requestedEntry = withBlueAlias({
-        entry: requestedDeployments,
-        label: String(chainId),
-        type: "deployment",
-      });
+      const requestedEntry = cloneRegistryValue(
+        withBlueAlias({
+          entry: requestedDeployments,
+          label: String(chainId),
+          type: "deployment",
+        }),
+      );
 
       nextRegistry[chainId] =
         registeredEntry == null
