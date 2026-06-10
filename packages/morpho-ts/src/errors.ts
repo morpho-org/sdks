@@ -107,12 +107,12 @@ export class RegistryValueAlreadyRegisteredError extends Error {
  *
  * @example
  * ```ts
- * import { MissingAddressError } from "@morpho-org/morpho-ts";
+ * import { UnknownAddressError } from "@morpho-org/morpho-ts";
  *
- * throw new MissingAddressError({ chainId: 1, label: "midnight" });
+ * throw new UnknownAddressError({ chainId: 1, label: "midnight" });
  * ```
  */
-export class MissingAddressError extends Error {
+export class UnknownAddressError extends Error {
   public readonly chainId: number;
   public readonly label: string;
 
@@ -128,6 +128,6 @@ export class MissingAddressError extends Error {
     );
     this.chainId = chainId;
     this.label = label;
-    this.name = "MissingAddressError";
+    this.name = "UnknownAddressError";
   }
 }

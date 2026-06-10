@@ -9,8 +9,8 @@ import {
 } from "./addresses.js";
 import { ChainId } from "./chain.js";
 import {
-  MissingAddressError,
   RegistryValueAlreadyRegisteredError,
+  UnknownAddressError,
   UnsupportedChainIdError,
 } from "./errors.js";
 
@@ -82,7 +82,7 @@ describe("getChainAddress", () => {
     );
   });
 
-  test("error: MissingAddressError", () => {
+  test("error: UnknownAddressError", () => {
     let error: unknown;
 
     try {
@@ -91,7 +91,7 @@ describe("getChainAddress", () => {
       error = caught;
     }
 
-    expect(error).toBeInstanceOf(MissingAddressError);
+    expect(error).toBeInstanceOf(UnknownAddressError);
     expect(error).toMatchObject({
       chainId: ChainId.EthMainnet,
       label: "midnight",
@@ -320,7 +320,7 @@ describe("registerCustomAddresses", () => {
 
     expect(getChainAddress(chainId, "midnight")).toBe(midnight);
     expect(() => getChainAddress(chainId, "midnightBundles")).toThrow(
-      MissingAddressError,
+      UnknownAddressError,
     );
   });
 

@@ -3,7 +3,7 @@ export {
   _try,
   BlueErrors,
   InvalidMarketParamsError,
-  MissingAddressError,
+  UnknownAddressError,
   UnknownDataError,
   UnknownFactory,
   UnknownMarketParamsError,

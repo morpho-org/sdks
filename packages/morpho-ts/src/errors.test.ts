@@ -3,8 +3,8 @@ import { describe, expect, test } from "vitest";
 import {
   DivisionByZeroError,
   InvalidBitLengthError,
-  MissingAddressError,
   NegativeValueError,
+  UnknownAddressError,
   UnsupportedChainIdError,
 } from "./errors.js";
 
@@ -52,15 +52,15 @@ describe("NegativeValueError", () => {
   });
 });
 
-describe("MissingAddressError", () => {
+describe("UnknownAddressError", () => {
   test("default", () => {
-    const error = new MissingAddressError({
+    const error = new UnknownAddressError({
       chainId: 31_337,
       label: "midnight",
     });
 
     expect(error).toBeInstanceOf(Error);
-    expect(error.name).toBe("MissingAddressError");
+    expect(error.name).toBe("UnknownAddressError");
     expect(error.chainId).toBe(31_337);
     expect(error.label).toBe("midnight");
     expect(error.message).toContain("31337");

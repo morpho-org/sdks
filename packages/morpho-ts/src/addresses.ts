@@ -1,7 +1,7 @@
 import { ChainId } from "./chain.js";
 import {
-  MissingAddressError,
   RegistryValueAlreadyRegisteredError,
+  UnknownAddressError,
   UnsupportedChainIdError,
 } from "./errors.js";
 import type { DeepPartial, DottedKeys } from "./types.js";
@@ -1644,7 +1644,7 @@ export const getChainAddresses = (chainId: number): ChainAddresses => {
  * @param label - Dot-separated address label to resolve.
  * @returns The configured address at `label`.
  * @throws UnsupportedChainIdError when no address registry exists for `chainId`.
- * @throws MissingAddressError when `chainId` is supported but `label` has no registered address.
+ * @throws UnknownAddressError when `chainId` is supported but `label` has no registered address.
  * @example
  * ```ts
  * import { getChainAddress } from "@morpho-org/morpho-ts";
@@ -1671,7 +1671,7 @@ export const getChainAddress = (
   }
 
   if (typeof address !== "string")
-    throw new MissingAddressError({ chainId, label: String(label) });
+    throw new UnknownAddressError({ chainId, label: String(label) });
 
   return address as `0x${string}`;
 };
