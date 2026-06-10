@@ -1,5 +1,6 @@
 import { ChainId } from "./chain.js";
 import {
+  IncompleteChainRegistryError,
   RegistryValueAlreadyRegisteredError,
   UnknownAddressError,
   UnsupportedChainIdError,
@@ -2006,6 +2007,33 @@ const areRegistryValuesEqual = ({
   return base === patch;
 };
 
+const assertRequiredBlueRegistry = ({
+  chainId,
+  entry,
+  type,
+}: {
+  chainId: number;
+  entry: unknown;
+  type: "address" | "deployment";
+}) => {
+  const requiredValueType = type === "address" ? "string" : "bigint";
+
+  if (
+    isRecord(entry) &&
+    typeof entry.morpho === requiredValueType &&
+    isRecord(entry.bundler3) &&
+    typeof entry.bundler3.bundler3 === requiredValueType &&
+    typeof entry.bundler3.generalAdapter1 === requiredValueType &&
+    typeof entry.adaptiveCurveIrm === requiredValueType
+  )
+    return;
+
+  throw new IncompleteChainRegistryError({
+    chainId,
+    type,
+  });
+};
+
 const mergeRegistry = <T>({
   base,
   patch,
@@ -2119,6 +2147,7 @@ const withBlueAlias = <T extends { blue?: unknown; morpho?: unknown }>({
  *                              periphery deployments.
  *
  * @throws RegistryValueAlreadyRegisteredError when registration attempts to override an existing value.
+ * @throws IncompleteChainRegistryError when a custom-chain entry does not include the required Blue registry fields.
  * @returns Nothing.
  *
  * @example
@@ -2190,6 +2219,14 @@ export function registerCustomAddresses<
         }),
       );
 
+      if (registeredEntry == null) {
+        assertRequiredBlueRegistry({
+          chainId,
+          entry: requestedEntry,
+          type: "address",
+        });
+      }
+
       nextRegistry[chainId] =
         registeredEntry == null
           ? (requestedEntry as ChainAddresses)
@@ -2222,6 +2259,14 @@ export function registerCustomAddresses<
           type: "deployment",
         }),
       );
+
+      if (registeredEntry == null) {
+        assertRequiredBlueRegistry({
+          chainId,
+          entry: requestedEntry,
+          type: "deployment",
+        });
+      }
 
       nextRegistry[chainId] =
         registeredEntry == null

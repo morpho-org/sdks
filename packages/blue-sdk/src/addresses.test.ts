@@ -363,12 +363,21 @@ describe("addresses helpers", () => {
   test("registerCustomAddresses accepts identical custom addresses and rejects later changes", () => {
     const chainId = 888_000_005;
     const address = randomAddress();
+    const blue = randomAddress();
+    const chainAddresses = {
+      blue,
+      morpho: blue,
+      bundler3: {
+        bundler3: randomAddress(),
+        generalAdapter1: randomAddress(),
+      },
+      adaptiveCurveIrm: randomAddress(),
+      wNative: address,
+    } satisfies ChainAddresses;
 
     registerCustomAddresses({
       addresses: {
-        [chainId]: {
-          wNative: address,
-        },
+        [chainId]: chainAddresses,
       },
     });
 

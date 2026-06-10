@@ -12,6 +12,7 @@ import {
 } from "./addresses.js";
 import { ChainId } from "./chain.js";
 import {
+  IncompleteChainRegistryError,
   RegistryValueAlreadyRegisteredError,
   UnknownAddressError,
   UnsupportedChainIdError,
@@ -384,6 +385,32 @@ describe("registerCustomAddresses", () => {
     expect(getChainAddress(chainId, "midnight")).toBe(chainAddresses.midnight);
   });
 
+  test("error: IncompleteChainRegistryError for custom-chain addresses", () => {
+    const chainId = 31_337_012;
+    const partialAddresses = createMidnightAddresses() as ChainAddresses;
+
+    let error: unknown;
+
+    try {
+      registerCustomAddresses({
+        addresses: {
+          [chainId]: partialAddresses,
+        },
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(IncompleteChainRegistryError);
+    expect(error).toMatchObject({
+      chainId,
+      type: "address",
+    });
+    expect(() => getChainAddress(chainId, "midnight")).toThrow(
+      UnsupportedChainIdError,
+    );
+  });
+
   test("behavior: accepts custom Midnight deployment entries", () => {
     const chainId = 31_337_103;
     const chainDeployments = createChainDeployments();
@@ -395,6 +422,30 @@ describe("registerCustomAddresses", () => {
     });
 
     expect(deployments[chainId]?.midnight).toBe(chainDeployments.midnight);
+  });
+
+  test("error: IncompleteChainRegistryError for custom-chain deployments", () => {
+    const chainId = 31_337_107;
+    const partialDeployments = createMidnightDeployments() as ChainDeployments;
+
+    let error: unknown;
+
+    try {
+      registerCustomAddresses({
+        deployments: {
+          [chainId]: partialDeployments,
+        },
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(IncompleteChainRegistryError);
+    expect(error).toMatchObject({
+      chainId,
+      type: "deployment",
+    });
+    expect(deployments[chainId]).toBeUndefined();
   });
 
   test("error: RegistryValueAlreadyRegisteredError for deployments", () => {

@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import {
   DivisionByZeroError,
+  IncompleteChainRegistryError,
   InvalidBitLengthError,
   NegativeValueError,
   UnknownAddressError,
@@ -49,6 +50,22 @@ describe("NegativeValueError", () => {
     expect(error.name).toBe("NegativeValueError");
     expect(error.message).toContain("assets");
     expect(error.message).toContain("-1");
+  });
+});
+
+describe("IncompleteChainRegistryError", () => {
+  test("default", () => {
+    const error = new IncompleteChainRegistryError({
+      chainId: 31_337,
+      type: "address",
+    });
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe("IncompleteChainRegistryError");
+    expect(error.chainId).toBe(31_337);
+    expect(error.type).toBe("address");
+    expect(error.message).toContain("31337");
+    expect(error.message).toContain("Blue entries");
   });
 });
 

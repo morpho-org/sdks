@@ -1,5 +1,6 @@
 export {
   DivisionByZeroError,
+  IncompleteChainRegistryError,
   InvalidBitLengthError,
   RegistryValueAlreadyRegisteredError,
   UnknownAddressError,

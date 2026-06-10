@@ -103,6 +103,39 @@ export class RegistryValueAlreadyRegisteredError extends Error {
 }
 
 /**
+ * Thrown when a custom registry entry does not include the minimum Blue fields required by SDK consumers.
+ *
+ * @example
+ * ```ts
+ * import { IncompleteChainRegistryError } from "@morpho-org/morpho-ts";
+ *
+ * throw new IncompleteChainRegistryError({
+ *   chainId: 31337,
+ *   type: "address",
+ * });
+ * ```
+ */
+export class IncompleteChainRegistryError extends Error {
+  public readonly chainId: number;
+  public readonly type: string;
+
+  public constructor({
+    chainId,
+    type,
+  }: {
+    chainId: number;
+    type: string;
+  }) {
+    super(
+      `Registry ${type} for chain id "${chainId}" is missing required Blue entries. Register morpho/blue, Bundler3 executor and general adapter, and AdaptiveCurveIrm, or use a supported chain.`,
+    );
+    this.chainId = chainId;
+    this.type = type;
+    this.name = "IncompleteChainRegistryError";
+  }
+}
+
+/**
  * Thrown when a supported chain has no address registered for a requested label.
  *
  * @example
