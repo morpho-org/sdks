@@ -19,7 +19,7 @@ export {
   whitelistControllerAggregatorV2Abi,
   wrappedBackedTokenAbi,
   wstEthAbi,
-} from "@morpho-org/morpho-ts";
+} from "@morpho-org/morpho-ts/abis";
 
 /** Morpho Blue ABI used for market, position, authorization, and nonce reads. */
 export const blueAbi = [

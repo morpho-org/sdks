@@ -1,13 +1,15 @@
 ---
 "@morpho-org/morpho-ts": minor
 "@morpho-org/morpho-sdk": minor
-"@morpho-org/blue-sdk": patch
+"@morpho-org/blue-sdk": minor
 "@morpho-org/blue-sdk-viem": patch
 "@morpho-org/liquidity-sdk-viem": patch
 "@morpho-org/morpho-test": patch
 ---
 
-Move shared Blue and Midnight SDK primitives to `@morpho-org/morpho-ts`: chain metadata, address/deployment registries, shared ABI literals, fixed-point math helpers, shared bigint/address/call descriptor types, typed registry/math errors, `ORACLE_PRICE_SCALE`, and `assertNonNegative`.
+Move shared Blue and Midnight SDK primitives to `@morpho-org/morpho-ts`: chain metadata, address/deployment registries, fixed-point math helpers, shared bigint/address/call descriptor types, typed registry/math errors, `ORACLE_PRICE_SCALE`, and `assertNonNegative`.
+
+Expose shared ABI literals through `@morpho-org/morpho-ts/abis` so root utility imports do not load the ABI table.
 
 Add `getChainAddress` and `UnknownAddressError` for checked, label-based address access without protocol-specific registry getters.
 
