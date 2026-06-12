@@ -186,9 +186,10 @@ describe("assertNoBundlerRetention", () => {
     ).not.toThrow();
   });
 
-  it("throws when bundler is DRAINED (net negative) above dust", () => {
-    // Bundler sends more than it receives in this bundle — implies a
-    // pre-existing balance is being drawn down. Red flag.
+  it("warns instead of throwing when bundler is swept (net negative) above dust", () => {
+    // Bundler sends more than it receives in this bundle — a pre-existing
+    // balance is being drawn down, not retained by the current bundle.
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     const transfers = parseTransfers([
       makeCall([
         makeTransferLog({
@@ -200,8 +201,21 @@ describe("assertNoBundlerRetention", () => {
         // No corresponding inbound — bundler had pre-existing balance.
       ]),
     ]);
-    expect(() => assertNoBundlerRetention({ chainId: 1, transfers })).toThrow(
-      BlacklistViolationError,
+
+    expect(() =>
+      assertNoBundlerRetention({ chainId: 1, transfers, logger }),
+    ).not.toThrow();
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Simulation detected pre-existing bundler balance being swept",
+      {
+        changes: [
+          {
+            address: BUNDLER,
+            token: USDC,
+            netSwept: "1000000",
+          },
+        ],
+      },
     );
   });
 

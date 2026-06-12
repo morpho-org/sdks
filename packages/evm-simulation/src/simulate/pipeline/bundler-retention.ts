@@ -70,11 +70,11 @@ interface AssertNoBundlerRetentionParams {
  *
  * Uses net flow (inbound minus outbound) per (bundler address, token) pair.
  * Bundler3 legitimately receives tokens as an intermediary (user → bundler3 →
- * vault), so gross inbound would fire false positives. We only flag when
- * `|net| > DUST_THRESHOLD` — catching both **retention** (tokens stuck in
- * bundler, positive net) and **drain** (bundler sending more than it received
- * in this bundle, negative net — which implies a pre-existing or state-override
- * balance is being drawn down, a red flag for pre-broadcast integrity).
+ * vault), so gross inbound would fire false positives. We only block positive
+ * net flow above `DUST_THRESHOLD` — tokens stuck in a bundler address. Negative
+ * net flow means the simulated bundle sweeps a pre-existing or state-overridden
+ * bundler balance. That is useful telemetry, but not current-bundle retention,
+ * so it is warned instead of raising a blacklist violation.
  */
 export function assertNoBundlerRetention(
   params: AssertNoBundlerRetentionParams,
@@ -106,22 +106,31 @@ export function assertNoBundlerRetention(
     if (bundlerAddresses.has(t.from)) recordFlow(t.from, t.token, -t.amount);
   }
 
-  const flagged = [...flow.values()].filter(
-    (e) => absBigInt(e.netChange) > DUST_THRESHOLD,
-  );
+  const entries = [...flow.values()];
+  const drained = entries.filter((e) => e.netChange < -DUST_THRESHOLD);
+  if (drained.length > 0) {
+    logger?.warn(
+      "Simulation detected pre-existing bundler balance being swept",
+      {
+        changes: drained.map((e) => ({
+          address: e.address,
+          token: e.token,
+          netSwept: (-e.netChange).toString(),
+        })),
+      },
+    );
+  }
 
-  if (flagged.length > 0) {
+  const retained = entries.filter((e) => e.netChange > DUST_THRESHOLD);
+
+  if (retained.length > 0) {
     throw new BlacklistViolationError(
-      "Simulation detected asset transfers retained or drained by restricted bundler contracts",
-      flagged.map((e) => ({
+      "Simulation detected asset transfers retained by restricted bundler contracts",
+      retained.map((e) => ({
         address: e.address,
         token: e.token,
         netRetained: e.netChange.toString(),
       })),
     );
   }
-}
-
-function absBigInt(x: bigint): bigint {
-  return x < 0n ? -x : x;
 }
