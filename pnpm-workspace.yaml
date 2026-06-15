@@ -2,6 +2,13 @@ packages:
   - packages/*
 
 overrides:
+  '@morpho-org/blue-sdk-wagmi>viem': 2.49.3
+  '@morpho-org/bundler-sdk-viem>viem': 2.49.3
+  '@morpho-org/liquidation-sdk-viem>viem': 2.49.3
+  '@morpho-org/migration-sdk-viem>viem': 2.49.3
+  '@morpho-org/simulation-sdk-wagmi>viem': 2.49.3
+  '@morpho-org/simulation-sdk>viem': 2.49.3
+  '@morpho-org/test-wagmi>viem': 2.49.3
   axios: 1.15.2
   ws: 8.20.1
 
