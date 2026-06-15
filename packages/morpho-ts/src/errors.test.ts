@@ -2,13 +2,11 @@ import { describe, expect, test } from "vitest";
 
 import {
   DivisionByZeroError,
-  IncompleteMidnightAddressesError,
-  IncompleteMidnightDeploymentsError,
+  IncompleteChainRegistryError,
   InvalidBitLengthError,
-  MidnightAddressAlreadyRegisteredError,
-  MidnightDeploymentAlreadyRegisteredError,
   NegativeValueError,
   RegistryValueAlreadyRegisteredError,
+  UnknownAddressError,
   UnsupportedChainIdError,
 } from "./errors.js";
 
@@ -73,54 +71,33 @@ describe("RegistryValueAlreadyRegisteredError", () => {
   });
 });
 
-describe("IncompleteMidnightAddressesError", () => {
+describe("IncompleteChainRegistryError", () => {
   test("default", () => {
-    const error = new IncompleteMidnightAddressesError(31_337, ["midnight"]);
+    const error = new IncompleteChainRegistryError({
+      chainId: 31_337,
+      type: "address",
+    });
 
     expect(error).toBeInstanceOf(Error);
-    expect(error.name).toBe("IncompleteMidnightAddressesError");
+    expect(error.name).toBe("IncompleteChainRegistryError");
+    expect(error.chainId).toBe(31_337);
+    expect(error.type).toBe("address");
+    expect(error.message).toContain("31337");
+  });
+});
+
+describe("UnknownAddressError", () => {
+  test("default", () => {
+    const error = new UnknownAddressError({
+      chainId: 31_337,
+      label: "midnight",
+    });
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe("UnknownAddressError");
+    expect(error.chainId).toBe(31_337);
+    expect(error.label).toBe("midnight");
     expect(error.message).toContain("31337");
     expect(error.message).toContain("midnight");
-  });
-});
-
-describe("IncompleteMidnightDeploymentsError", () => {
-  test("default", () => {
-    const error = new IncompleteMidnightDeploymentsError(31_337, ["permit2"]);
-
-    expect(error).toBeInstanceOf(Error);
-    expect(error.name).toBe("IncompleteMidnightDeploymentsError");
-    expect(error.message).toContain("31337");
-    expect(error.message).toContain("permit2");
-  });
-});
-
-describe("MidnightAddressAlreadyRegisteredError", () => {
-  test("default", () => {
-    const error = new MidnightAddressAlreadyRegisteredError({
-      chainId: 31_337,
-      label: "midnight",
-      registeredAddress: "0x0000000000000000000000000000000000000001",
-      requestedAddress: "0x0000000000000000000000000000000000000002",
-    });
-
-    expect(error).toBeInstanceOf(Error);
-    expect(error.name).toBe("MidnightAddressAlreadyRegisteredError");
-    expect(error.message).toContain("31337.midnight");
-  });
-});
-
-describe("MidnightDeploymentAlreadyRegisteredError", () => {
-  test("default", () => {
-    const error = new MidnightDeploymentAlreadyRegisteredError({
-      chainId: 31_337,
-      label: "midnight",
-      registeredDeployment: 1n,
-      requestedDeployment: 2n,
-    });
-
-    expect(error).toBeInstanceOf(Error);
-    expect(error.name).toBe("MidnightDeploymentAlreadyRegisteredError");
-    expect(error.message).toContain("31337.midnight");
   });
 });

@@ -1,10 +1,8 @@
 import { ChainId } from "./chain.js";
 import {
-  IncompleteMidnightAddressesError,
-  IncompleteMidnightDeploymentsError,
-  MidnightAddressAlreadyRegisteredError,
-  MidnightDeploymentAlreadyRegisteredError,
+  IncompleteChainRegistryError,
   RegistryValueAlreadyRegisteredError,
+  UnknownAddressError,
   UnsupportedChainIdError,
 } from "./errors.js";
 import type { Address, DeepPartial, DottedKeys } from "./types.js";
@@ -18,6 +16,17 @@ export const NATIVE_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 
 /** Registry entry for protocol, adapter, factory, and token addresses on one chain. */
 export interface ChainAddresses {
+  /**
+   * Morpho Blue core contract for isolated lending markets, positions, authorization, and liquidations.
+   *
+   * TODO(vNext-major): make `blue` required when the deprecated `morpho` alias is removed.
+   */
+  blue?: Address;
+  /**
+   * Deprecated alias for the Morpho Blue core contract.
+   *
+   * @deprecated Use `blue` instead.
+   */
   morpho: Address;
   permit2?: Address;
   bundler3: {
@@ -59,6 +68,16 @@ export interface ChainAddresses {
   eurc?: Address;
   stEth?: Address;
   wstEth?: Address;
+  /** Midnight core contract for fixed-maturity credit/debt markets, offers, collateral, and liquidations. */
+  midnight?: Address;
+  /** MidnightBundles periphery contract for batched take, repay, collateral, permit, and referral workflows. */
+  midnightBundles?: Address;
+  /** Midnight mempool submission endpoint used by app and orderbook flows for offchain offer payloads. */
+  midnightMempool?: Address;
+  /** EcrecoverRatifier contract that validates EIP-712 signed Merkle roots of Midnight offers. */
+  ecrecoverRatifier?: Address;
+  /** SetterRatifier contract that validates Midnight offer Merkle roots ratified onchain by the maker or delegate. */
+  setterRatifier?: Address;
 }
 
 const _addressesRegistry = {
@@ -1516,159 +1535,44 @@ const _deployments = {
 } as const satisfies Record<ChainId, ChainDeployments>;
 
 /** Dot-separated label for an address entry in the chain registry. */
-export type AddressLabel = DottedKeys<(typeof _addressesRegistry)[ChainId]>;
+export type AddressLabel =
+  | DottedKeys<ChainAddresses>
+  | DottedKeys<(typeof _addressesRegistry)[ChainId]>;
 
-/** Blue address registry keyed by chain id, preserving known-chain key types. */
-export type BlueAddressRegistry = typeof _addressesRegistry &
+/** Address registry keyed by chain id, preserving known-chain key types. */
+export type AddressRegistry = typeof _addressesRegistry &
   Record<number, ChainAddresses>;
 
-/** Blue deployment registry keyed by chain id, preserving known-chain key types. */
-export type BlueDeploymentRegistry = typeof _deployments &
+/** Deployment registry keyed by chain id, preserving known-chain key types. */
+export type DeploymentRegistry = typeof _deployments &
   Record<number, ChainDeployments>;
 
-/**
- * Midnight-specific addresses for one chain.
- *
- * @example
- * ```ts
- * import type { MidnightAddresses } from "@morpho-org/morpho-ts";
- *
- * const addresses: MidnightAddresses = {
- *   midnight: "0x0000000000000000000000000000000000000001",
- *   midnightBundles: "0x0000000000000000000000000000000000000002",
- *   midnightMempool: "0x0000000000000000000000000000000000000003",
- *   ecrecoverRatifier: "0x0000000000000000000000000000000000000004",
- *   setterRatifier: "0x0000000000000000000000000000000000000005",
- *   permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
- * };
- * ```
- */
-export interface MidnightAddresses {
-  /** Core Midnight contract. */
-  readonly midnight: Address;
-  /** Midnight periphery bundle contract. */
-  readonly midnightBundles: Address;
-  /** Mempool submission endpoint used by app/orderbook flows. */
-  readonly midnightMempool: Address;
-  /** EOA signature ratifier. */
-  readonly ecrecoverRatifier: Address;
-  /** Smart-account root ratifier. */
-  readonly setterRatifier: Address;
-  /** Permit2 contract used by the periphery. */
-  readonly permit2: Address;
-}
+type ChainAddressRegistration =
+  | ChainAddresses
+  | (Omit<ChainAddresses, "morpho"> & {
+      blue: Address;
+      morpho?: Address;
+    });
 
-/**
- * Deployment block registry with the same shape as `MidnightAddresses`.
- *
- * @example
- * ```ts
- * import type { MidnightDeployments } from "@morpho-org/morpho-ts";
- *
- * const deployments: MidnightDeployments = {
- *   midnight: 1n,
- *   midnightBundles: 2n,
- *   midnightMempool: 3n,
- *   ecrecoverRatifier: 4n,
- *   setterRatifier: 5n,
- *   permit2: 6n,
- * };
- * ```
- */
-export type MidnightDeployments = ChainDeployments<MidnightAddresses>;
+type ChainDeploymentRegistration =
+  | ChainDeployments
+  | (Omit<ChainDeployments, "morpho"> & {
+      blue: bigint;
+      morpho?: bigint;
+    });
 
-/**
- * Dot-separated label for a Midnight address or deployment entry.
- *
- * @example
- * ```ts
- * import type { MidnightAddressLabel } from "@morpho-org/morpho-ts";
- *
- * const label: MidnightAddressLabel = "midnight";
- * ```
- */
-export type MidnightAddressLabel = DottedKeys<MidnightAddresses>;
-
-/**
- * Unified Morpho address registry entry for one chain.
- *
- * @example
- * ```ts
- * import type { MorphoChainAddresses } from "@morpho-org/morpho-ts";
- *
- * const entry: MorphoChainAddresses = {};
- * ```
- */
-export interface MorphoChainAddresses {
-  /** Morpho Blue addresses for the chain. */
-  readonly blue?: ChainAddresses;
-  /** Morpho Midnight addresses for the chain. */
-  readonly midnight?: MidnightAddresses;
-}
-
-/**
- * Unified Morpho deployment registry entry for one chain.
- *
- * @example
- * ```ts
- * import type { MorphoChainDeployments } from "@morpho-org/morpho-ts";
- *
- * const entry: MorphoChainDeployments = {};
- * ```
- */
-export interface MorphoChainDeployments {
-  /** Morpho Blue deployment blocks for the chain. */
-  readonly blue?: ChainDeployments;
-  /** Morpho Midnight deployment blocks for the chain. */
-  readonly midnight?: MidnightDeployments;
-}
-
-/** Unified Morpho address registry keyed by chain id. */
-export type MorphoAddressRegistry = Readonly<
-  Record<number, MorphoChainAddresses>
->;
-
-/** Unified Morpho deployment registry keyed by chain id. */
-export type MorphoDeploymentRegistry = Readonly<
-  Record<number, MorphoChainDeployments>
->;
-
-/** Midnight address registry keyed by chain id. */
-export type MidnightAddressRegistry = Readonly<
-  Record<number, MidnightAddresses>
->;
-
-/** Midnight deployment registry keyed by chain id. */
-export type MidnightDeploymentRegistry = Readonly<
-  Record<number, MidnightDeployments>
->;
-
-/** Type alias for user supplied Midnight address overrides. */
-export type MidnightAddressOverrides = DeepPartial<MidnightAddresses>;
-
-/** Type alias for user supplied Midnight deployment overrides. */
-export type MidnightDeploymentOverrides = DeepPartial<MidnightDeployments>;
-
-/** Type alias for custom Midnight address registry entries. */
-export type MidnightAddressRegistryOverrides = Record<
-  number,
-  MidnightAddressOverrides
->;
-
-/** Type alias for custom Midnight deployment registry entries. */
-export type MidnightDeploymentRegistryOverrides = Record<
-  number,
-  MidnightDeploymentOverrides
->;
-
-const MIDNIGHT_ADDRESS_LABELS = [
-  "midnight",
-  "midnightBundles",
-  "midnightMempool",
-  "ecrecoverRatifier",
-  "setterRatifier",
-  "permit2",
-] as const satisfies readonly (keyof MidnightAddresses)[];
+type RegistryInput<
+  Input extends Record<number, unknown>,
+  KnownKey extends PropertyKey,
+  KnownValue,
+  CustomValue,
+> = {
+  [Key in keyof Input]: Key extends KnownKey
+    ? DeepPartial<KnownValue>
+    : Key extends `${Extract<KnownKey, string | number>}`
+      ? DeepPartial<KnownValue>
+      : DeepPartial<KnownValue> | CustomValue;
+};
 
 /**
  * Returns the protocol address registry for a chain.
@@ -1685,10 +1589,49 @@ const MIDNIGHT_ADDRESS_LABELS = [
  * ```
  */
 export const getChainAddresses = (chainId: number): ChainAddresses => {
-  const chainAddresses = blueAddresses[chainId];
+  const chainAddresses = addressesRegistry[chainId];
   if (chainAddresses == null) throw new UnsupportedChainIdError(chainId);
 
   return chainAddresses;
+};
+
+/**
+ * Returns one configured address from a chain registry entry.
+ *
+ * @param chainId - The EIP-155 chain id.
+ * @param label - Dot-separated address label to resolve.
+ * @returns The configured address at `label`.
+ * @throws UnsupportedChainIdError when no address registry exists for `chainId`.
+ * @throws UnknownAddressError when `chainId` is supported but `label` has no registered address.
+ * @example
+ * ```ts
+ * import { getChainAddress } from "@morpho-org/morpho-ts";
+ *
+ * const midnight = getChainAddress(31337, "midnight");
+ * // midnight satisfies `0x${string}`
+ * ```
+ */
+export const getChainAddress = (
+  chainId: number,
+  label: AddressLabel,
+): Address => {
+  const chainAddresses = addressesRegistry[chainId];
+  if (chainAddresses == null) throw new UnsupportedChainIdError(chainId);
+
+  let address: unknown = chainAddresses;
+  for (const key of label.split(".")) {
+    if (!isRecord(address)) {
+      address = undefined;
+      break;
+    }
+
+    address = address[key];
+  }
+
+  if (typeof address !== "string")
+    throw new UnknownAddressError({ chainId, label: String(label) });
+
+  return address as Address;
 };
 
 /**
@@ -1936,95 +1879,43 @@ export const convexWrapperTokens: Record<number, Set<Address>> = {
 };
 
 const createInitialAddressRegistry = () => {
-  const registry: Record<number, MorphoChainAddresses> = {};
+  const registry: Record<number, ChainAddresses> = {};
 
   for (const [chainId, chainAddresses] of Object.entries(_addressesRegistry)) {
-    registry[Number(chainId)] = { blue: chainAddresses };
+    const entry = chainAddresses as ChainAddresses;
+    registry[Number(chainId)] = {
+      ...entry,
+      blue: entry.blue ?? entry.morpho,
+    } as ChainAddresses;
   }
 
   return registry;
 };
 
 const createInitialDeploymentRegistry = () => {
-  const registry: Record<number, MorphoChainDeployments> = {};
+  const registry: Record<number, ChainDeployments> = {};
 
   for (const [chainId, chainDeployments] of Object.entries(_deployments)) {
-    registry[Number(chainId)] = { blue: chainDeployments };
+    const entry = chainDeployments as ChainDeployments;
+    registry[Number(chainId)] = {
+      ...entry,
+      blue: entry.blue ?? entry.morpho,
+    } as ChainDeployments;
   }
 
   return registry;
 };
 
-const selectBlueAddresses = (registry: MorphoAddressRegistry) => {
-  const selected: Record<number, ChainAddresses> = {};
-
-  for (const [chainId, chainAddresses] of Object.entries(registry)) {
-    if (chainAddresses.blue != null)
-      selected[Number(chainId)] = chainAddresses.blue;
-  }
-
-  return deepFreeze(selected) as BlueAddressRegistry;
-};
-
-const selectBlueDeployments = (registry: MorphoDeploymentRegistry) => {
-  const selected: Record<number, ChainDeployments> = {};
-
-  for (const [chainId, chainDeployments] of Object.entries(registry)) {
-    if (chainDeployments.blue != null)
-      selected[Number(chainId)] = chainDeployments.blue;
-  }
-
-  return deepFreeze(selected) as BlueDeploymentRegistry;
-};
-
-const selectMidnightAddresses = (registry: MorphoAddressRegistry) => {
-  const selected: Record<number, MidnightAddresses> = {};
-
-  for (const [chainId, chainAddresses] of Object.entries(registry)) {
-    if (chainAddresses.midnight != null)
-      selected[Number(chainId)] = chainAddresses.midnight;
-  }
-
-  return deepFreeze(selected);
-};
-
-const selectMidnightDeployments = (registry: MorphoDeploymentRegistry) => {
-  const selected: Record<number, MidnightDeployments> = {};
-
-  for (const [chainId, chainDeployments] of Object.entries(registry)) {
-    if (chainDeployments.midnight != null)
-      selected[Number(chainId)] = chainDeployments.midnight;
-  }
-
-  return deepFreeze(selected);
-};
-
-/** Deep-frozen unified registry of known Morpho protocol addresses, keyed by chain id. */
-export let addressesRegistry: MorphoAddressRegistry = deepFreeze(
+/** Deep-frozen registry of known Morpho protocol addresses, keyed by chain id. */
+export let addressesRegistry: AddressRegistry = deepFreeze(
   createInitialAddressRegistry(),
-);
+) as AddressRegistry;
 /** Alias of `addressesRegistry` keyed by numeric chain id. */
 export let addresses = addressesRegistry;
-/** Deep-frozen unified registry of deployment blocks, keyed by chain id. */
-export let deployments: MorphoDeploymentRegistry = deepFreeze(
+/** Deep-frozen registry of deployment blocks, keyed by chain id. */
+export let deployments: DeploymentRegistry = deepFreeze(
   createInitialDeploymentRegistry(),
-);
-/** Deep-frozen Blue address registry keyed by chain id. */
-export let blueAddressRegistry: BlueAddressRegistry =
-  selectBlueAddresses(addressesRegistry);
-/** Alias of `blueAddressRegistry` matching the previous Blue object-style export. */
-export let blueAddresses = blueAddressRegistry;
-/** Deep-frozen Blue deployment registry keyed by chain id. */
-export let blueDeployments: BlueDeploymentRegistry =
-  selectBlueDeployments(deployments);
-/** Deep-frozen Midnight address registry keyed by chain id. */
-export let midnightAddressRegistry = selectMidnightAddresses(addressesRegistry);
-/** Alias of `midnightAddressRegistry` matching the object-style registry DX. */
-export let midnightAddresses = midnightAddressRegistry;
-/** Deep-frozen Midnight deployment registry keyed by chain id. */
-export let midnightDeploymentRegistry = selectMidnightDeployments(deployments);
-/** Alias of `midnightDeploymentRegistry` matching the object-style registry DX. */
-export let midnightDeployments = midnightDeploymentRegistry;
+) as DeploymentRegistry;
 /** Deep-frozen registry of wrapped token to unwrapped token mappings. */
 export let unwrappedTokensMapping = deepFreeze(_unwrappedTokensMapping);
 
@@ -2037,6 +1928,63 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isRegistryPrimitive = (value: unknown): value is RegistryPrimitive =>
   ["string", "bigint", "number", "boolean"].includes(typeof value);
+
+const cloneRegistryValue = <T>(value: T): T => {
+  if (!isRecord(value)) return value;
+
+  const next: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value)) {
+    next[key] = cloneRegistryValue(child);
+  }
+
+  return next as T;
+};
+
+const areRegistryValuesEqual = ({
+  base,
+  patch,
+  type,
+}: {
+  base: unknown;
+  patch: unknown;
+  type: string;
+}) => {
+  if (
+    type === "address" &&
+    typeof base === "string" &&
+    typeof patch === "string"
+  )
+    return base.toLowerCase() === patch.toLowerCase();
+
+  return base === patch;
+};
+
+const assertRequiredRegistry = ({
+  chainId,
+  entry,
+  type,
+}: {
+  chainId: number;
+  entry: unknown;
+  type: "address" | "deployment";
+}) => {
+  const requiredValueType = type === "address" ? "string" : "bigint";
+
+  if (
+    isRecord(entry) &&
+    typeof entry.morpho === requiredValueType &&
+    isRecord(entry.bundler3) &&
+    typeof entry.bundler3.bundler3 === requiredValueType &&
+    typeof entry.bundler3.generalAdapter1 === requiredValueType &&
+    typeof entry.adaptiveCurveIrm === requiredValueType
+  )
+    return;
+
+  throw new IncompleteChainRegistryError({
+    chainId,
+    type,
+  });
+};
 
 const mergeRegistry = <T>({
   base,
@@ -2067,137 +2015,86 @@ const mergeRegistry = <T>({
     return next as T;
   }
 
-  if (base !== undefined && base !== patch) {
-    if (!isRegistryPrimitive(base) || !isRegistryPrimitive(patch)) {
+  if (base !== undefined) {
+    if (!areRegistryValuesEqual({ base, patch, type })) {
+      if (!isRegistryPrimitive(base) || !isRegistryPrimitive(patch)) {
+        throw new RegistryValueAlreadyRegisteredError({
+          label,
+          registeredValue: String(base),
+          requestedValue: String(patch),
+          type,
+        });
+      }
+
       throw new RegistryValueAlreadyRegisteredError({
         label,
-        registeredValue: String(base),
-        requestedValue: String(patch),
+        registeredValue: base,
+        requestedValue: patch,
         type,
       });
     }
 
-    throw new RegistryValueAlreadyRegisteredError({
-      label,
-      registeredValue: base,
-      requestedValue: patch,
-      type,
-    });
+    return base;
   }
 
-  return patch as T;
-};
-
-const requireCompleteMidnightAddresses = (
-  chainId: number,
-  requestedAddresses: MidnightAddressOverrides,
-): MidnightAddresses => {
-  const missingLabels = MIDNIGHT_ADDRESS_LABELS.filter(
-    (label) => requestedAddresses[label] == null,
-  );
-  if (missingLabels.length > 0)
-    throw new IncompleteMidnightAddressesError(chainId, missingLabels);
-
-  return {
-    midnight: requestedAddresses.midnight!,
-    midnightBundles: requestedAddresses.midnightBundles!,
-    midnightMempool: requestedAddresses.midnightMempool!,
-    ecrecoverRatifier: requestedAddresses.ecrecoverRatifier!,
-    setterRatifier: requestedAddresses.setterRatifier!,
-    permit2: requestedAddresses.permit2!,
-  };
-};
-
-const requireCompleteMidnightDeployments = (
-  chainId: number,
-  requestedDeployments: MidnightDeploymentOverrides,
-): MidnightDeployments => {
-  const missingLabels = MIDNIGHT_ADDRESS_LABELS.filter(
-    (label) => requestedDeployments[label] == null,
-  );
-  if (missingLabels.length > 0)
-    throw new IncompleteMidnightDeploymentsError(chainId, missingLabels);
-
-  return {
-    midnight: requestedDeployments.midnight!,
-    midnightBundles: requestedDeployments.midnightBundles!,
-    midnightMempool: requestedDeployments.midnightMempool!,
-    ecrecoverRatifier: requestedDeployments.ecrecoverRatifier!,
-    setterRatifier: requestedDeployments.setterRatifier!,
-    permit2: requestedDeployments.permit2!,
-  };
+  return cloneRegistryValue(patch) as T;
 };
 
 const refreshAddressViews = () => {
   addresses = addressesRegistry;
-  blueAddresses = blueAddressRegistry = selectBlueAddresses(addressesRegistry);
-  midnightAddresses = midnightAddressRegistry =
-    selectMidnightAddresses(addressesRegistry);
 };
 
-const refreshDeploymentViews = () => {
-  blueDeployments = selectBlueDeployments(deployments);
-  midnightDeployments = midnightDeploymentRegistry =
-    selectMidnightDeployments(deployments);
+const withBlueAlias = <T extends { blue?: unknown; morpho?: unknown }>({
+  entry,
+  label,
+  type,
+}: {
+  entry: T;
+  label: string;
+  type: string;
+}) => {
+  if (entry.blue == null && entry.morpho == null) return { ...entry } as T;
+
+  if (
+    entry.blue != null &&
+    entry.morpho != null &&
+    !areRegistryValuesEqual({ base: entry.blue, patch: entry.morpho, type })
+  )
+    throw new RegistryValueAlreadyRegisteredError({
+      label: `${label}.morpho`,
+      registeredValue: isRegistryPrimitive(entry.blue)
+        ? entry.blue
+        : String(entry.blue),
+      requestedValue: isRegistryPrimitive(entry.morpho)
+        ? entry.morpho
+        : String(entry.morpho),
+      type,
+    });
+
+  return {
+    ...entry,
+    blue: entry.blue ?? entry.morpho,
+    morpho: entry.morpho ?? entry.blue,
+  } as T;
 };
 
 /**
- * Resolves pinned Midnight addresses for a chain.
- *
- * @param chainId - Chain id to resolve.
- * @returns Registered Midnight addresses.
- * @throws UnsupportedChainIdError when the chain has no registered Midnight addresses.
- * @example
- * ```ts
- * import { getMidnightAddresses } from "@morpho-org/morpho-ts";
- *
- * const addresses = getMidnightAddresses(31337);
- * // addresses satisfies MidnightAddresses
- * ```
- */
-export function getMidnightAddresses(chainId: number) {
-  const chainAddresses = midnightAddressRegistry[chainId];
-  if (chainAddresses == null) throw new UnsupportedChainIdError(chainId);
-
-  return chainAddresses;
-}
-
-/**
- * Resolves pinned Midnight deployment blocks for a chain.
- *
- * @param chainId - Chain id to resolve.
- * @returns Registered Midnight deployment blocks.
- * @throws UnsupportedChainIdError when the chain has no registered Midnight deployments.
- * @example
- * ```ts
- * import { getMidnightDeployments } from "@morpho-org/morpho-ts";
- *
- * const deployments = getMidnightDeployments(31337);
- * // deployments satisfies MidnightDeployments
- * ```
- */
-export function getMidnightDeployments(chainId: number) {
-  const chainDeployments = midnightDeploymentRegistry[chainId];
-  if (chainDeployments == null) throw new UnsupportedChainIdError(chainId);
-
-  return chainDeployments;
-}
-
-/**
- * Registers custom addresses and unwrapped token mappings to extend
- * the default Blue registry on existing or unknown chains.
+ * Registers custom addresses, deployment blocks, and unwrapped token mappings.
  *
  * @param options - Optional configuration object
  * @param options.unwrappedTokens - A mapping of chain IDs to token address maps,
  *                                  where each entry maps wrapped tokens to their unwrapped equivalents.
  * @param options.addresses - Custom address entries to merge into the default registry.
- *                            Can be a subset of `ChainAddresses` if chain is already known.
- *                            Must provide all required addresses if chain is unknown.
+ *                            Known-chain entries may be partial; custom-chain entries must include the required
+ *                            Blue addresses and may add Midnight fields beside `blue`, `bundler3`, and other
+ *                            periphery addresses.
  * @param options.deployments - Custom deployment entries to merge into the default registry.
- *                              Can be a subset of `ChainDeployments` if chain is already known.
- *                              Must provide all required deployments if chain is unknown.
+ *                              Known-chain entries may be partial; custom-chain entries must include the required
+ *                              Blue deployments and may add Midnight fields beside `blue`, `bundler3`, and other
+ *                              periphery deployments.
  *
  * @throws RegistryValueAlreadyRegisteredError when registration attempts to override an existing value.
+ * @throws IncompleteChainRegistryError when a custom-chain entry does not include the required registry fields.
  * @returns Nothing.
  *
  * @example
@@ -2207,12 +2104,18 @@ export function getMidnightDeployments(chainId: number) {
  * registerCustomAddresses({
  *   addresses: {
  *     31337: {
- *       morpho: "0x0000000000000000000000000000000000000001",
+ *       blue: "0x0000000000000000000000000000000000000001",
  *       bundler3: {
  *         bundler3: "0x0000000000000000000000000000000000000002",
  *         generalAdapter1: "0x0000000000000000000000000000000000000003",
  *       },
  *       adaptiveCurveIrm: "0x0000000000000000000000000000000000000004",
+ *       midnight: "0x0000000000000000000000000000000000000005",
+ *       midnightBundles: "0x0000000000000000000000000000000000000006",
+ *       midnightMempool: "0x0000000000000000000000000000000000000007",
+ *       ecrecoverRatifier: "0x0000000000000000000000000000000000000008",
+ *       setterRatifier: "0x0000000000000000000000000000000000000009",
+ *       permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
  *     },
  *   },
  *   unwrappedTokens: {
@@ -2223,21 +2126,30 @@ export function getMidnightDeployments(chainId: number) {
  * });
  * ```
  */
-export function registerCustomAddresses({
+export function registerCustomAddresses<
+  const TAddresses extends Record<number, unknown> = Record<never, never>,
+  const TDeployments extends Record<number, unknown> = Record<never, never>,
+>({
   unwrappedTokens,
   addresses: customAddresses,
   deployments: customDeployments,
 }: {
   unwrappedTokens?: Record<number, Record<Address, Address>>;
-  addresses?:
-    | DeepPartial<Record<keyof typeof _addressesRegistry, ChainAddresses>>
-    | Record<number, ChainAddresses>;
-  deployments?:
-    | DeepPartial<Record<keyof typeof _deployments, ChainDeployments>>
-    | Record<number, ChainDeployments>;
+  addresses?: RegistryInput<
+    TAddresses,
+    keyof typeof _addressesRegistry,
+    ChainAddresses,
+    ChainAddressRegistration
+  >;
+  deployments?: RegistryInput<
+    TDeployments,
+    keyof typeof _deployments,
+    ChainDeployments,
+    ChainDeploymentRegistration
+  >;
 } = {}) {
   if (customAddresses) {
-    const nextRegistry: Record<number, MorphoChainAddresses> = {
+    const nextRegistry: Record<number, ChainAddresses> = {
       ...addressesRegistry,
     };
 
@@ -2245,28 +2157,40 @@ export function registerCustomAddresses({
       customAddresses,
     )) {
       const chainId = Number(chainIdString);
-      const registeredEntry = nextRegistry[chainId] ?? {};
+      const registeredEntry = nextRegistry[chainId];
+      const requestedEntry = cloneRegistryValue(
+        withBlueAlias({
+          entry: requestedAddresses,
+          label: String(chainId),
+          type: "address",
+        }),
+      );
 
-      nextRegistry[chainId] = {
-        ...registeredEntry,
-        blue:
-          registeredEntry.blue == null
-            ? (requestedAddresses as ChainAddresses)
-            : mergeRegistry({
-                base: registeredEntry.blue,
-                patch: requestedAddresses,
-                label: `${chainId}.blue`,
-                type: "address",
-              }),
-      };
+      if (registeredEntry == null) {
+        assertRequiredRegistry({
+          chainId,
+          entry: requestedEntry,
+          type: "address",
+        });
+      }
+
+      nextRegistry[chainId] =
+        registeredEntry == null
+          ? (requestedEntry as ChainAddresses)
+          : mergeRegistry({
+              base: registeredEntry,
+              patch: requestedEntry,
+              label: String(chainId),
+              type: "address",
+            });
     }
 
-    addressesRegistry = deepFreeze(nextRegistry);
+    addressesRegistry = deepFreeze(nextRegistry) as AddressRegistry;
     refreshAddressViews();
   }
 
   if (customDeployments) {
-    const nextRegistry: Record<number, MorphoChainDeployments> = {
+    const nextRegistry: Record<number, ChainDeployments> = {
       ...deployments,
     };
 
@@ -2274,24 +2198,35 @@ export function registerCustomAddresses({
       customDeployments,
     )) {
       const chainId = Number(chainIdString);
-      const registeredEntry = nextRegistry[chainId] ?? {};
+      const registeredEntry = nextRegistry[chainId];
+      const requestedEntry = cloneRegistryValue(
+        withBlueAlias({
+          entry: requestedDeployments,
+          label: String(chainId),
+          type: "deployment",
+        }),
+      );
 
-      nextRegistry[chainId] = {
-        ...registeredEntry,
-        blue:
-          registeredEntry.blue == null
-            ? (requestedDeployments as ChainDeployments)
-            : mergeRegistry({
-                base: registeredEntry.blue,
-                patch: requestedDeployments,
-                label: `${chainId}.blue`,
-                type: "deployment",
-              }),
-      };
+      if (registeredEntry == null) {
+        assertRequiredRegistry({
+          chainId,
+          entry: requestedEntry,
+          type: "deployment",
+        });
+      }
+
+      nextRegistry[chainId] =
+        registeredEntry == null
+          ? (requestedEntry as ChainDeployments)
+          : mergeRegistry({
+              base: registeredEntry,
+              patch: requestedEntry,
+              label: String(chainId),
+              type: "deployment",
+            });
     }
 
-    deployments = deepFreeze(nextRegistry);
-    refreshDeploymentViews();
+    deployments = deepFreeze(nextRegistry) as DeploymentRegistry;
   }
 
   if (unwrappedTokens) {
@@ -2303,130 +2238,5 @@ export function registerCustomAddresses({
         type: "unwrapped token",
       }),
     );
-  }
-}
-
-/**
- * Registers custom Midnight addresses and deployment blocks without overriding existing values.
- *
- * Unknown chains must provide a complete `MidnightAddresses` or `MidnightDeployments` entry.
- * Known chains may receive partial entries, but a field that is already registered can only
- * be repeated with the same value.
- *
- * @param options - Optional registration options.
- * @param options.addresses - Custom Midnight address entries keyed by chain id.
- * @param options.deployments - Custom Midnight deployment entries keyed by chain id.
- * @returns Nothing.
- * @throws IncompleteMidnightAddressesError when a new chain address entry is missing required addresses.
- * @throws IncompleteMidnightDeploymentsError when a new chain deployment entry is missing required deployments.
- * @throws MidnightAddressAlreadyRegisteredError when registration attempts to change an existing address.
- * @throws MidnightDeploymentAlreadyRegisteredError when registration attempts to change an existing deployment.
- * @example
- * ```ts
- * import { registerCustomMidnightAddresses } from "@morpho-org/morpho-ts";
- *
- * registerCustomMidnightAddresses({
- *   addresses: {
- *     31337: {
- *       midnight: "0x0000000000000000000000000000000000000001",
- *       midnightBundles: "0x0000000000000000000000000000000000000002",
- *       midnightMempool: "0x0000000000000000000000000000000000000003",
- *       ecrecoverRatifier: "0x0000000000000000000000000000000000000004",
- *       setterRatifier: "0x0000000000000000000000000000000000000005",
- *       permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
- *     },
- *   },
- * });
- * ```
- */
-export function registerCustomMidnightAddresses({
-  addresses: customAddresses,
-  deployments: customDeployments,
-}: {
-  addresses?: MidnightAddressRegistryOverrides;
-  deployments?: MidnightDeploymentRegistryOverrides;
-} = {}) {
-  if (customAddresses) {
-    const nextRegistry: Record<number, MorphoChainAddresses> = {
-      ...addressesRegistry,
-    };
-
-    for (const [chainIdString, requestedAddresses] of Object.entries(
-      customAddresses,
-    )) {
-      const chainId = Number(chainIdString);
-      const registeredEntry = nextRegistry[chainId] ?? {};
-      const registeredAddresses = registeredEntry.midnight;
-
-      if (registeredAddresses == null) {
-        nextRegistry[chainId] = {
-          ...registeredEntry,
-          midnight: requireCompleteMidnightAddresses(
-            chainId,
-            requestedAddresses,
-          ),
-        };
-        continue;
-      }
-
-      for (const label of MIDNIGHT_ADDRESS_LABELS) {
-        const requestedAddress = requestedAddresses[label];
-        if (requestedAddress == null) continue;
-
-        const registeredAddress = registeredAddresses[label];
-        if (registeredAddress.toLowerCase() !== requestedAddress.toLowerCase())
-          throw new MidnightAddressAlreadyRegisteredError({
-            chainId,
-            label,
-            registeredAddress,
-            requestedAddress,
-          });
-      }
-    }
-
-    addressesRegistry = deepFreeze(nextRegistry);
-    refreshAddressViews();
-  }
-
-  if (customDeployments) {
-    const nextRegistry: Record<number, MorphoChainDeployments> = {
-      ...deployments,
-    };
-
-    for (const [chainIdString, requestedDeployments] of Object.entries(
-      customDeployments,
-    )) {
-      const chainId = Number(chainIdString);
-      const registeredEntry = nextRegistry[chainId] ?? {};
-      const registeredDeployments = registeredEntry.midnight;
-
-      if (registeredDeployments == null) {
-        nextRegistry[chainId] = {
-          ...registeredEntry,
-          midnight: requireCompleteMidnightDeployments(
-            chainId,
-            requestedDeployments,
-          ),
-        };
-        continue;
-      }
-
-      for (const label of MIDNIGHT_ADDRESS_LABELS) {
-        const requestedDeployment = requestedDeployments[label];
-        if (requestedDeployment == null) continue;
-
-        const registeredDeployment = registeredDeployments[label];
-        if (registeredDeployment !== requestedDeployment)
-          throw new MidnightDeploymentAlreadyRegisteredError({
-            chainId,
-            label,
-            registeredDeployment,
-            requestedDeployment,
-          });
-      }
-    }
-
-    deployments = deepFreeze(nextRegistry);
-    refreshDeploymentViews();
   }
 }
