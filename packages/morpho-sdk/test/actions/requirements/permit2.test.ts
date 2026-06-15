@@ -156,7 +156,7 @@ describe("Permit2", () => {
 
         await client.sendTransaction(approval);
 
-        // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
+        // biome-ignore lint/suspicious/noShadow: TODO rename to avoid shadowing
         const permit2 = requirements[1];
 
         if (!isRequirementSignature(permit2)) {

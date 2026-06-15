@@ -300,7 +300,7 @@ export async function fetchVault(
         functionName: "accruedFee",
         args: [address],
       }),
-      // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
+      // biome-ignore lint/suspicious/noShadow: TODO rename to avoid shadowing
     ]).then(([admin, fee, accruedFee]) => ({ admin, fee, accruedFee }));
 
   const [supplyQueue, withdrawQueue, publicAllocatorConfig, isMetaMorphoV1_0] =

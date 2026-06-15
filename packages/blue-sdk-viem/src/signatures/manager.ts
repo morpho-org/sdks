@@ -34,7 +34,7 @@ const authorizationTypes = {
  * const typedData = getAuthorizationTypedData(
  *   {
  *     authorizer: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
- *     authorized: "0x6566194141Ff46B819C55E7137d8329898EcD06c",
+ *     authorized: "0x6566194141fF46b819c55E7137D8329898eCd06C",
  *     isAuthorized: true,
  *     nonce: 0n,
  *     deadline: 1_900_000_000n,

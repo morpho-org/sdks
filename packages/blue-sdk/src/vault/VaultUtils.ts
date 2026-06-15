@@ -46,7 +46,7 @@ export namespace VaultUtils {
     {
       totalAssets,
       totalSupply,
-      // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
+      // biome-ignore lint/suspicious/noShadow: TODO rename to avoid shadowing
       decimalsOffset,
     }: {
       totalAssets: BigIntish;
@@ -86,7 +86,7 @@ export namespace VaultUtils {
     {
       totalAssets,
       totalSupply,
-      // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
+      // biome-ignore lint/suspicious/noShadow: TODO rename to avoid shadowing
       decimalsOffset,
     }: {
       totalAssets: BigIntish;

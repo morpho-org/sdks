@@ -166,7 +166,7 @@ export async function fetchToken(
       .then(
         ([
           fields,
-          // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
+          // biome-ignore lint/suspicious/noShadow: TODO rename to avoid shadowing
           name,
           version,
           chainId,
