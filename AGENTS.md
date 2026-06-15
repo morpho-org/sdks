@@ -33,7 +33,9 @@ Cross-layer leaks (entities encoding calldata, actions reading state, helpers de
 
 - Every package has one clear job. If a package needs a paragraph to describe, split it.
 - Every module has one responsibility. Files grow by *adding* exports of the same kind, never by stretching scope.
+- Do not extract a local, non-exported helper unless it has at least three call sites. Inline one-off and two-use helpers.
 - **Single source of truth** per concept: one place per ABI, one place per address registry, one place per error class. Duplication is a refactor, not a feature.
+- Do not export duplicate TypeScript shapes for the same concept. If a domain interface and ABI struct are identical, export one interface and reuse it; only introduce a distinct `*Struct` type when the shapes actually differ.
 - Framework adapters live in explicitly named packages (`*-wagmi`, `*-viem`). Core packages stay framework-free.
 - Public API = barrel re-exports from `src/index.ts`. No deep imports across packages, ever.
 
@@ -48,6 +50,8 @@ Cross-layer leaks (entities encoding calldata, actions reading state, helpers de
 
 - `morphoViemExtension()` rides on top of a viem client the integrator owns, exposing a stateless `morpho` namespace under `client.morpho` plus readonly options. No `init()`, no cache, no warm-up — those couple us to a host runtime and break statelessness.
 - Every returned `Transaction` is `deepFreeze`d. Public fields are `readonly`. Helpers return new objects, never mutate inputs.
+- Do not use classes as value bags. If a type has no meaningful behavior beyond construction, copying, or a one-line conversion, model it as a `type`/`interface` and use local pure conversion where needed. Classes are for typed errors and domain objects with real behavior.
+- Never `deepFreeze` a class instance. Use readonly fields/types for API intent. `deepFreeze` is reserved for function outputs that are expected to be immutable descriptors submitted onchain or signed immediately after construction.
 - Small primitives that combine. No kitchen-sink helpers; no boolean-prop explosions.
 - Prefer early returns over deep nesting — guard clauses first, happy path last.
 

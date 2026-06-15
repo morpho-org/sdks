@@ -8,7 +8,51 @@
  * const value: BigIntish = "1000000000000000000";
  * ```
  */
-export type BigIntish = bigint | string | number | boolean;
+export type BigIntish = bigint | string | number;
+
+/**
+ * Hex-encoded EVM address.
+ *
+ * @example
+ * ```ts
+ * import type { Address } from "@morpho-org/morpho-ts";
+ *
+ * const address: Address = "0x0000000000000000000000000000000000000000";
+ * ```
+ */
+export type Address = `0x${string}`;
+
+/**
+ * Hex-encoded EVM byte string.
+ *
+ * @example
+ * ```ts
+ * import type { Hex } from "@morpho-org/morpho-ts";
+ *
+ * const data: Hex = "0x";
+ * ```
+ */
+export type Hex = `0x${string}`;
+
+/**
+ * Minimal encoded call descriptor shared by SDK helpers that return calldata.
+ *
+ * @example
+ * ```ts
+ * import type { EncodedCall } from "@morpho-org/morpho-ts";
+ *
+ * const call: EncodedCall = {
+ *   to: "0x0000000000000000000000000000000000000000",
+ *   data: "0x",
+ * };
+ * ```
+ */
+export interface EncodedCall {
+  /** Contract address to call. */
+  readonly to: Address;
+  /** ABI-encoded calldata. */
+  readonly data: Hex;
+}
 
 /**
  * Adds a string `id` field to a type.

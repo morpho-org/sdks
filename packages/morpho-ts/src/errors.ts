@@ -1,3 +1,5 @@
+import type { Address } from "./types.js";
+
 /**
  * Thrown when a chain id is not supported by a package helper.
  *
@@ -9,6 +11,8 @@
  * ```
  */
 export class UnsupportedChainIdError extends Error {
+  public readonly code = "UNSUPPORTED_CHAIN";
+
   public constructor(public readonly chainId: number) {
     super(`Chain id "${chainId}" is not supported.`);
     this.name = "UnsupportedChainIdError";
@@ -103,64 +107,107 @@ export class RegistryValueAlreadyRegisteredError extends Error {
 }
 
 /**
- * Thrown when a custom registry entry does not include the minimum Blue fields required by SDK consumers.
+ * Thrown when a custom Midnight address registration is missing required entries.
  *
  * @example
  * ```ts
- * import { IncompleteChainRegistryError } from "@morpho-org/morpho-ts";
+ * import { IncompleteMidnightAddressesError } from "@morpho-org/morpho-ts";
  *
- * throw new IncompleteChainRegistryError({
- *   chainId: 31337,
- *   type: "address",
- * });
+ * throw new IncompleteMidnightAddressesError(8453, ["midnight"]);
  * ```
  */
-export class IncompleteChainRegistryError extends Error {
-  public readonly chainId: number;
-  public readonly type: string;
-
-  public constructor({
-    chainId,
-    type,
-  }: {
-    chainId: number;
-    type: string;
-  }) {
+export class IncompleteMidnightAddressesError extends Error {
+  public constructor(chainId: number, missingLabels: readonly string[]) {
     super(
-      `Registry ${type} for chain id "${chainId}" is missing required Blue entries. Register morpho/blue, Bundler3 executor and general adapter, and AdaptiveCurveIrm, or use a supported chain.`,
+      `Midnight addresses for chain id "${chainId}" are missing "${missingLabels.join('", "')}". Provide a complete deployment entry.`,
     );
-    this.chainId = chainId;
-    this.type = type;
-    this.name = "IncompleteChainRegistryError";
+    this.name = "IncompleteMidnightAddressesError";
   }
 }
 
 /**
- * Thrown when a supported chain has no address registered for a requested label.
+ * Thrown when a custom Midnight deployment registration is missing required entries.
  *
  * @example
  * ```ts
- * import { UnknownAddressError } from "@morpho-org/morpho-ts";
+ * import { IncompleteMidnightDeploymentsError } from "@morpho-org/morpho-ts";
  *
- * throw new UnknownAddressError({ chainId: 1, label: "midnight" });
+ * throw new IncompleteMidnightDeploymentsError(8453, ["midnight"]);
  * ```
  */
-export class UnknownAddressError extends Error {
-  public readonly chainId: number;
-  public readonly label: string;
+export class IncompleteMidnightDeploymentsError extends Error {
+  public constructor(chainId: number, missingLabels: readonly string[]) {
+    super(
+      `Midnight deployments for chain id "${chainId}" are missing "${missingLabels.join('", "')}". Provide a complete deployment entry.`,
+    );
+    this.name = "IncompleteMidnightDeploymentsError";
+  }
+}
 
+/**
+ * Thrown when a custom Midnight address registration attempts to change an existing value.
+ *
+ * @example
+ * ```ts
+ * import { MidnightAddressAlreadyRegisteredError } from "@morpho-org/morpho-ts";
+ *
+ * throw new MidnightAddressAlreadyRegisteredError({
+ *   chainId: 8453,
+ *   label: "midnight",
+ *   registeredAddress: "0x0000000000000000000000000000000000000001",
+ *   requestedAddress: "0x0000000000000000000000000000000000000002",
+ * });
+ * ```
+ */
+export class MidnightAddressAlreadyRegisteredError extends Error {
   public constructor({
     chainId,
     label,
+    registeredAddress,
+    requestedAddress,
   }: {
     chainId: number;
     label: string;
+    registeredAddress: Address;
+    requestedAddress: Address;
   }) {
     super(
-      `Address "${label}" is not registered for chain id "${chainId}". Register the address or use a supported chain.`,
+      `Midnight address "${chainId}.${label}" is already registered as "${registeredAddress}", got "${requestedAddress}". Use the registered address or choose an unregistered chain id.`,
     );
-    this.chainId = chainId;
-    this.label = label;
-    this.name = "UnknownAddressError";
+    this.name = "MidnightAddressAlreadyRegisteredError";
+  }
+}
+
+/**
+ * Thrown when a custom Midnight deployment registration attempts to change an existing value.
+ *
+ * @example
+ * ```ts
+ * import { MidnightDeploymentAlreadyRegisteredError } from "@morpho-org/morpho-ts";
+ *
+ * throw new MidnightDeploymentAlreadyRegisteredError({
+ *   chainId: 8453,
+ *   label: "midnight",
+ *   registeredDeployment: 1n,
+ *   requestedDeployment: 2n,
+ * });
+ * ```
+ */
+export class MidnightDeploymentAlreadyRegisteredError extends Error {
+  public constructor({
+    chainId,
+    label,
+    registeredDeployment,
+    requestedDeployment,
+  }: {
+    chainId: number;
+    label: string;
+    registeredDeployment: bigint;
+    requestedDeployment: bigint;
+  }) {
+    super(
+      `Midnight deployment "${chainId}.${label}" is already registered as "${registeredDeployment}", got "${requestedDeployment}". Use the registered deployment or choose an unregistered chain id.`,
+    );
+    this.name = "MidnightDeploymentAlreadyRegisteredError";
   }
 }
