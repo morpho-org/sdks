@@ -206,7 +206,7 @@ describe.sequential("MorphoProtocolEvm", () => {
     });
 
     test("should use vaultV2 when an explicit vault is configured", async () => {
-      // biome-ignore lint/nursery/noShadow: test-local protocol shadowing the suite default
+      // biome-ignore lint/suspicious/noShadow: test-local protocol shadowing the suite default
       const protocol = new MorphoProtocolEvm(account, {
         chainId: 1,
         earnVaultAddress: VAULT,
@@ -224,7 +224,7 @@ describe.sequential("MorphoProtocolEvm", () => {
     });
 
     test("should default explicit vault configuration to Morpho Vault V2", async () => {
-      // biome-ignore lint/nursery/noShadow: test-local protocol shadowing the suite default
+      // biome-ignore lint/suspicious/noShadow: test-local protocol shadowing the suite default
       const protocol = new MorphoProtocolEvm(account, {
         chainId: 1,
         earnVaultAddress: VAULT,
@@ -249,7 +249,7 @@ describe.sequential("MorphoProtocolEvm", () => {
         earnVaultAddress: VAULT as string,
         borrowMarketParams: mutableParams,
       };
-      // biome-ignore lint/nursery/noShadow: test-local protocol shadowing the suite default
+      // biome-ignore lint/suspicious/noShadow: test-local protocol shadowing the suite default
       const protocol = new MorphoProtocolEvm(
         account,
         options as unknown as ConstructorParameters<
@@ -306,7 +306,7 @@ describe.sequential("MorphoProtocolEvm", () => {
     });
 
     test("should use vaultV2 when the selected preset is configured", async () => {
-      // biome-ignore lint/nursery/noShadow: test-local protocol shadowing the suite default
+      // biome-ignore lint/suspicious/noShadow: test-local protocol shadowing the suite default
       const protocol = new MorphoProtocolEvm(account, {
         chainId: 1,
         presets: { earn: "sky-money-usdt-savings" },
@@ -325,7 +325,7 @@ describe.sequential("MorphoProtocolEvm", () => {
 
     test("should reject earn presets on the wrong chain", async () => {
       mockGetChainId.mockResolvedValue(8453);
-      // biome-ignore lint/nursery/noShadow: test-local protocol shadowing the suite default
+      // biome-ignore lint/suspicious/noShadow: test-local protocol shadowing the suite default
       const protocol = new MorphoProtocolEvm(account, {
         chainId: 1,
         presets: { earn: "sky-money-usdt-savings" },
@@ -462,7 +462,7 @@ describe.sequential("MorphoProtocolEvm", () => {
     });
 
     test("should fetch market params when only borrowMarketId is configured", async () => {
-      // biome-ignore lint/nursery/noShadow: test-local protocol shadowing the suite default
+      // biome-ignore lint/suspicious/noShadow: test-local protocol shadowing the suite default
       const protocol = new MorphoProtocolEvm(account, {
         chainId: 1,
         earnVaultAddress: VAULT,
@@ -487,7 +487,7 @@ describe.sequential("MorphoProtocolEvm", () => {
 
     test("should reject borrow presets on the wrong chain", async () => {
       mockGetChainId.mockResolvedValue(8453);
-      // biome-ignore lint/nursery/noShadow: test-local protocol shadowing the suite default
+      // biome-ignore lint/suspicious/noShadow: test-local protocol shadowing the suite default
       const protocol = new MorphoProtocolEvm(account, {
         chainId: 1,
         earnVaultAddress: VAULT,
@@ -670,7 +670,7 @@ describe.sequential("MorphoProtocolEvm", () => {
 
   describe("erc-4337", () => {
     test("should send through an erc-4337 account with config", async () => {
-      // biome-ignore lint/nursery/noShadow: test-local account shadowing the suite default
+      // biome-ignore lint/suspicious/noShadow: test-local account shadowing the suite default
       const account = new WalletAccountEvmErc4337(SEED, "0'/0/0", {
         chainId: 1,
         provider: "https://dummy-rpc-url.com",
@@ -686,7 +686,7 @@ describe.sequential("MorphoProtocolEvm", () => {
         .fn()
         .mockResolvedValue({ hash: "dummy-user-operation-hash", fee: 12_345n });
 
-      // biome-ignore lint/nursery/noShadow: test-local protocol shadowing the suite default
+      // biome-ignore lint/suspicious/noShadow: test-local protocol shadowing the suite default
       const protocol = new MorphoProtocolEvm(account, {
         chainId: 1,
         earnVaultAddress: VAULT,
@@ -751,11 +751,11 @@ describe.sequential("MorphoProtocolEvm", () => {
 
   describe("read-only accounts", () => {
     test("should reject write methods", async () => {
-      // biome-ignore lint/nursery/noShadow: test-local account shadowing the suite default
+      // biome-ignore lint/suspicious/noShadow: test-local account shadowing the suite default
       const account = new WalletAccountReadOnlyEvm(ADDRESS, {
         provider: "https://dummy-rpc-url.com",
       });
-      // biome-ignore lint/nursery/noShadow: test-local protocol shadowing the suite default
+      // biome-ignore lint/suspicious/noShadow: test-local protocol shadowing the suite default
       const protocol = new MorphoProtocolEvm(account, {
         chainId: 1,
         earnVaultAddress: VAULT,

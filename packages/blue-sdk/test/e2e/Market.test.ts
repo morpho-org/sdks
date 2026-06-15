@@ -23,7 +23,7 @@ const params = new MarketParams({
 });
 
 describe("Market", () => {
-  // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
+  // biome-ignore lint/suspicious/noShadow: TODO rename to avoid shadowing
   test("should borrow borrowable assets", async ({ client, expect }) => {
     const collateral = parseUnits("1", 18);
     await client.deal({
