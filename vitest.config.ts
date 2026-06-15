@@ -55,6 +55,9 @@ export default defineConfig({
           name: "scripts",
           include: ["scripts/**/*.test.{js,mjs}"],
           environment: "node",
+          sequence: {
+            concurrent: false,
+          },
         },
       },
       {
@@ -75,6 +78,7 @@ export default defineConfig({
             "packages/blue-sdk/test/**/*.test.ts",
             "packages/blue-sdk/src/**/*.test.ts",
           ],
+          testTimeout: 60_000,
         },
       },
       {
@@ -85,7 +89,7 @@ export default defineConfig({
             "packages/morpho-sdk/src/**/*.test.ts",
             "packages/morpho-sdk/test/**/*.test.ts",
           ],
-          testTimeout: 60_000,
+          testTimeout: 90_000,
         },
       },
       {
@@ -131,7 +135,7 @@ export default defineConfig({
             "packages/blue-sdk-viem/test/**/*.test.ts",
             "packages/blue-sdk-viem/src/**/*.test.ts",
           ],
-          testTimeout: 60_000,
+          testTimeout: 90_000,
         },
       },
       {

@@ -15,6 +15,7 @@ export const test = createViemTest(mainnet, {
   forkUrl: process.env.MAINNET_RPC_URL,
   chainId: mainnet.id,
   forkBlockNumber: 24_593_903n,
+  noStorageCaching: true,
 }).extend<{ client: AnvilTestClient<typeof mainnet> }>({
   client: async ({ client }, use) => {
     // The test account carries EIP-7702 delegation code at this block; wipe it

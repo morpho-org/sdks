@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.0/schema.json",
   "files": {
     "includes": [
       "**",
@@ -45,13 +45,13 @@
         "noAssignInExpressions": "off",
         "noFallthroughSwitchClause": "off",
         "noNonNullAssertedOptionalChain": "off",
-        "useIterableCallbackReturn": "off"
+        "useIterableCallbackReturn": "off",
+        "noShadow": "error"
       },
       "nursery": {
         "noFloatingPromises": "error",
         "noMisusedPromises": "error",
-        "useExhaustiveSwitchCases": "error",
-        "noShadow": "error"
+        "useExhaustiveSwitchCases": "error"
       }
     }
   }

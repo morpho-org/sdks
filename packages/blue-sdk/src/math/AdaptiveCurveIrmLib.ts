@@ -137,7 +137,7 @@ export namespace AdaptiveCurveIrmLib {
         endRateAtTarget = startRateAtTarget;
       } else {
         // Non negative because MIN_RATE_AT_TARGET > 0.
-        // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
+        // biome-ignore lint/suspicious/noShadow: TODO rename to avoid shadowing
         const _newRateAtTarget = (linearAdaptation: BigIntish) =>
           MathLib.min(
             MathLib.max(

@@ -7,6 +7,7 @@ import { base, mainnet } from "viem/chains";
 export const test = createViemTest(mainnet, {
   forkUrl: process.env.MAINNET_RPC_URL,
   forkBlockNumber: 19_530_000,
+  noStorageCaching: true,
 });
 
 /**
@@ -15,6 +16,7 @@ export const test = createViemTest(mainnet, {
 export const test2 = createViemTest(mainnet, {
   forkUrl: process.env.MAINNET_RPC_URL,
   forkBlockNumber: 21_595_000,
+  noStorageCaching: true,
 });
 
 /**
@@ -23,6 +25,7 @@ export const test2 = createViemTest(mainnet, {
 export const testTreehouseEth = createViemTest(mainnet, {
   forkUrl: process.env.MAINNET_RPC_URL,
   forkBlockNumber: 24_671_815,
+  noStorageCaching: true,
 });
 
 /**
@@ -31,10 +34,12 @@ export const testTreehouseEth = createViemTest(mainnet, {
 export const preLiquidationTest = createViemTest(mainnet, {
   forkUrl: process.env.MAINNET_RPC_URL,
   forkBlockNumber: 21_950_000,
+  noStorageCaching: true,
 });
 
 export const vaultV2Test = createViemTest(base, {
   forkUrl: process.env.BASE_RPC_URL,
   forkBlockNumber: 41_290_768,
+  noStorageCaching: true,
   stepsTracing: false,
 });

@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterAll, afterEach, describe, expect, test, vi } from "vitest";
 
 import {
   collectVersionChanges,
@@ -24,7 +24,9 @@ const tempDirs = [];
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
 
+afterAll(() => {
   for (const tempDir of tempDirs.splice(0)) {
     rmSync(tempDir, { force: true, recursive: true });
   }
