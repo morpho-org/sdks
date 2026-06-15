@@ -1,3 +1,12 @@
+export {
+  DivisionByZeroError,
+  IncompleteChainRegistryError,
+  InvalidBitLengthError,
+  RegistryValueAlreadyRegisteredError,
+  UnknownAddressError,
+  UnsupportedChainIdError,
+} from "@morpho-org/morpho-ts";
+
 import { formatUnits, type Hex } from "viem";
 import type { Address, MarketId } from "./types.js";
 
@@ -36,13 +45,6 @@ export class UnknownMarketParamsError extends UnknownDataError {
 export class UnknownVaultConfigError extends UnknownDataError {
   constructor(public readonly vault: Address) {
     super(`unknown config for vault ${vault}`);
-  }
-}
-
-/** Error thrown when a chain id has no configured SDK registry entry. */
-export class UnsupportedChainIdError extends Error {
-  constructor(public readonly chainId: number) {
-    super(`unsupported chain ${chainId}`);
   }
 }
 

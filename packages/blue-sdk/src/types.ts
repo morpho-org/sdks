@@ -1,3 +1,5 @@
+import type { BigIntish as SharedBigIntish } from "@morpho-org/morpho-ts";
+
 /**
  * The address of a Contract, or an EOA
  */
@@ -9,7 +11,7 @@ export type Address = `0x${string}`;
 export type MarketId = `0x${string}` & { __TYPE__: "marketId" };
 
 /** Primitive values accepted at SDK boundaries and normalized to `bigint`. */
-export type BigIntish = bigint | string | number | boolean;
+export type BigIntish = SharedBigIntish;
 
 /**
  * The possible transaction type on the Blue contract
