@@ -253,7 +253,6 @@ address fetches are introduced.
 - `midnightBundlesAbi`
 - `ecrecoverRatifierAbi`
 - `setterRatifierAbi`
-- `erc20Abi`
 
 Mempool submission remains a raw `to` + payload call descriptor rather than an ABI-backed
 `midnightMempoolAbi`. Each pinned ABI literal documents the `morpho-org/midnight` source commit and

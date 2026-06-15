@@ -8,6 +8,7 @@ import {
   type Abi,
   type ContractFunctionName,
   encodeFunctionResult,
+  erc20Abi,
 } from "viem";
 import { base } from "viem/chains";
 import { describe, expect, test } from "vitest";
@@ -19,7 +20,6 @@ import {
 } from "../__test__/fixtures.js";
 import {
   ecrecoverRatifierAbi,
-  erc20Abi,
   midnightAbi,
   setterRatifierAbi,
 } from "../abis.js";

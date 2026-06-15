@@ -1,9 +1,14 @@
 import { assertNonNegative, type BigIntish } from "@morpho-org/morpho-ts";
-import type { Account, BlockTag, Client, StateOverride } from "viem";
+import {
+  type Account,
+  type BlockTag,
+  type Client,
+  erc20Abi,
+  type StateOverride,
+} from "viem";
 import { getBytecode, readContract } from "viem/actions";
 import {
   ecrecoverRatifierAbi,
-  erc20Abi,
   midnightAbi,
   setterRatifierAbi,
 } from "../abis.js";
