@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import type { Hex } from "@morpho-org/morpho-ts";
 import { describe, expect, test } from "vitest";
 
 import { baseMarketParamsInput, baseOffer } from "../__test__/fixtures.js";
@@ -187,7 +186,9 @@ describe("MidnightApi.validateMempoolItems", () => {
 
     const result = await MidnightApi.validateMempoolItems({
       chainId: 8453,
-      items: [{ offer: apiValidOffer(), ratifierData: "0x1234" as Hex }],
+      items: [
+        { offer: apiValidOffer(), ratifierData: "0x1234" as `0x${string}` },
+      ],
       fetch,
     });
 

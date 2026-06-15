@@ -1,4 +1,4 @@
-import { type Address, type BigIntish, MathLib } from "@morpho-org/morpho-ts";
+import { type BigIntish, MathLib } from "@morpho-org/morpho-ts";
 import {
   InvalidPositionAccrualStateError,
   InvalidPositionAccrualTimestampError,
@@ -162,7 +162,7 @@ export class AccrualPosition extends Position {
    * console.log(balance);
    * ```
    */
-  public getCollateralBalanceByToken(token: Address | string) {
+  public getCollateralBalanceByToken(token: `0x${string}` | string) {
     const index = this.market.getCollateralIndexByToken(token);
 
     return index == null ? undefined : this.getCollateralBalanceByIndex(index);

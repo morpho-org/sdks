@@ -1,5 +1,3 @@
-import type { Address, Hex } from "@morpho-org/morpho-ts";
-
 /**
  * Parameters for {@link RatifierUtils.getRatifierInfo}.
  *
@@ -13,11 +11,11 @@ import type { Address, Hex } from "@morpho-org/morpho-ts";
  */
 export interface GetRatifierInfoParams {
   /** Maker account bytecode returned by viem `getBytecode`. */
-  readonly bytecode?: Hex | null;
+  readonly bytecode?: `0x${string}` | null;
   /** Ecrecover ratifier address. */
-  readonly ecrecoverRatifier: Address | string;
+  readonly ecrecoverRatifier: `0x${string}` | string;
   /** Setter ratifier address. */
-  readonly setterRatifier: Address | string;
+  readonly setterRatifier: `0x${string}` | string;
 }
 
 /**
@@ -37,7 +35,7 @@ export interface RatifierInfo {
   /** Ratifier family selected for the maker account. */
   readonly type: "ecrecover" | "setter";
   /** Ratifier contract address to put on the offer. */
-  readonly ratifier: Address;
+  readonly ratifier: `0x${string}`;
 }
 
 /**
@@ -63,7 +61,7 @@ export namespace RatifierUtils {
    * console.log(RatifierUtils.isEip7702Designator("0xef0100"));
    * ```
    */
-  export function isEip7702Designator(bytecode: Hex) {
+  export function isEip7702Designator(bytecode: `0x${string}`) {
     return bytecode.toLowerCase().startsWith("0xef0100");
   }
 
@@ -85,10 +83,12 @@ export namespace RatifierUtils {
    * ```
    */
   export function getRatifierInfo(params: GetRatifierInfoParams): RatifierInfo {
-    const ecrecoverRatifier = params.ecrecoverRatifier as Address;
-    const setterRatifier = params.setterRatifier as Address;
+    const ecrecoverRatifier = params.ecrecoverRatifier as `0x${string}`;
+    const setterRatifier = params.setterRatifier as `0x${string}`;
     const bytecode =
-      params.bytecode == null ? params.bytecode : (params.bytecode as Hex);
+      params.bytecode == null
+        ? params.bytecode
+        : (params.bytecode as `0x${string}`);
     if (
       bytecode == null ||
       bytecode === "0x" ||

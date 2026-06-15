@@ -1,4 +1,4 @@
-import type { BigIntish, Hex } from "@morpho-org/morpho-ts";
+import type { BigIntish } from "@morpho-org/morpho-ts";
 import {
   type IOffer,
   Offer,
@@ -27,7 +27,7 @@ export interface ITakeableOffer {
   /** Inline offer. */
   readonly offer: IOffer | Offer;
   /** Ratifier data payload. */
-  readonly ratifierData: Hex;
+  readonly ratifierData: `0x${string}`;
 }
 
 /**
@@ -47,7 +47,7 @@ export class TakeableOffer {
   /** Inline offer. */
   public readonly offer: Offer;
   /** Ratifier data payload. */
-  public readonly ratifierData: Hex;
+  public readonly ratifierData: `0x${string}`;
 
   public constructor(takeableOffer: ITakeableOffer) {
     this.units = BigInt(takeableOffer.units);
@@ -100,7 +100,7 @@ export interface TakeableOfferStruct {
   /** Inline offer. */
   readonly offer: OfferStruct;
   /** Ratifier data payload. */
-  readonly ratifierData: Hex;
+  readonly ratifierData: `0x${string}`;
 }
 
 /**

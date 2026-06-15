@@ -1,8 +1,4 @@
-import {
-  type Address,
-  type Hex,
-  NegativeValueError,
-} from "@morpho-org/morpho-ts";
+import { NegativeValueError } from "@morpho-org/morpho-ts";
 import {
   createMockClient,
   type MockClientHandle,
@@ -73,7 +69,9 @@ function mockDeploylessRead<
 
   handle.request.mockImplementation(async (call) => {
     if (call.method === "eth_call") {
-      const [tx] = (call.params ?? []) as [{ to?: Address; data?: Hex }];
+      const [tx] = (call.params ?? []) as [
+        { to?: `0x${string}`; data?: `0x${string}` },
+      ];
       if (tx?.to == null && typeof tx?.data === "string") return result;
     }
 
@@ -87,7 +85,9 @@ function mockDeploylessFailure(handle: MockClientHandle) {
 
   handle.request.mockImplementation(async (call) => {
     if (call.method === "eth_call") {
-      const [tx] = (call.params ?? []) as [{ to?: Address; data?: Hex }];
+      const [tx] = (call.params ?? []) as [
+        { to?: `0x${string}`; data?: `0x${string}` },
+      ];
       if (tx?.to == null && typeof tx?.data === "string") {
         throw new TypeError("deployless unavailable");
       }

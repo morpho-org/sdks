@@ -1,4 +1,4 @@
-import { type BigIntish, deepFreeze, type Hex } from "@morpho-org/morpho-ts";
+import { type BigIntish, deepFreeze } from "@morpho-org/morpho-ts";
 import {
   InconsistentMarketError,
   NoMatchingOffersError,
@@ -28,7 +28,7 @@ export interface QuoteTakeableOfferInput {
   /** Units suggested by the quote/API. */
   readonly units: BigIntish;
   /** Ratifier data suggested by the quote/API. */
-  readonly ratifierData: Hex;
+  readonly ratifierData: `0x${string}`;
   /** Inline executable offer. */
   readonly offer: IOffer | Offer;
 }

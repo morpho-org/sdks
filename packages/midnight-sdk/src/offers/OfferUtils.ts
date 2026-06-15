@@ -1,4 +1,4 @@
-import type { Address, BigIntish, Hex } from "@morpho-org/morpho-ts";
+import type { BigIntish } from "@morpho-org/morpho-ts";
 import { encodeAbiParameters, keccak256, zeroAddress, zeroHash } from "viem";
 import { DEFAULT_TICK_SPACING, MAX_TICK } from "../constants.js";
 import {
@@ -86,7 +86,7 @@ export interface ValidatedOfferParams {
   /** Maximum buyer or seller assets, with exactly one cap non-zero. */
   readonly maxAssets: bigint;
   /** Receiver used only when maker is seller. */
-  readonly receiverIfMakerIsSeller: Address;
+  readonly receiverIfMakerIsSeller: `0x${string}`;
 }
 
 /**
@@ -253,10 +253,10 @@ export namespace OfferUtils {
    */
   export function resolveReceiverIfMakerIsSeller(params: {
     readonly buy: boolean;
-    readonly maker: Address | string;
-    readonly receiverIfMakerIsSeller?: Address | string;
+    readonly maker: `0x${string}` | string;
+    readonly receiverIfMakerIsSeller?: `0x${string}` | string;
   }) {
-    const maker = params.maker as Address;
+    const maker = params.maker as `0x${string}`;
     const receiverIfMakerIsSeller =
       params.receiverIfMakerIsSeller ?? (params.buy ? zeroAddress : maker);
 
@@ -268,7 +268,7 @@ export namespace OfferUtils {
       });
     }
 
-    return receiverIfMakerIsSeller as Address;
+    return receiverIfMakerIsSeller as `0x${string}`;
   }
 
   /**
@@ -321,7 +321,7 @@ export namespace OfferUtils {
    * ```
    */
   export function createOffer(params: BuildOfferParams) {
-    const maker = params.maker as Address;
+    const maker = params.maker as `0x${string}`;
     const validated = validateOfferParams(params);
 
     return new Offer({
@@ -358,7 +358,9 @@ export namespace OfferUtils {
    * console.log(group);
    * ```
    */
-  export function deriveOfferGroup(offers: readonly (IOffer | Offer)[]): Hex {
+  export function deriveOfferGroup(
+    offers: readonly (IOffer | Offer)[],
+  ): `0x${string}` {
     const structs = offers.map((offer) => ({
       ...offerToStruct(offer),
       group: zeroHash,

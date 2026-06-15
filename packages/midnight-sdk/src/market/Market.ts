@@ -1,9 +1,4 @@
-import {
-  type Address,
-  assertNonNegative,
-  type BigIntish,
-  type Hex,
-} from "@morpho-org/morpho-ts";
+import { assertNonNegative, type BigIntish } from "@morpho-org/morpho-ts";
 import { encodeAbiParameters, encodePacked, keccak256 } from "viem";
 import { CBP } from "../constants.js";
 
@@ -57,13 +52,13 @@ export type SettlementFeeCbps = readonly [
  */
 export interface ICollateralParams {
   /** Collateral token address. */
-  readonly token: Address | string;
+  readonly token: `0x${string}` | string;
   /** WAD-scaled liquidation loan-to-value. */
   readonly lltv: BigIntish;
   /** WAD-scaled maximum liquidation incentive factor. */
   readonly maxLif: BigIntish;
   /** Oracle address for this collateral. */
-  readonly oracle: Address | string;
+  readonly oracle: `0x${string}` | string;
 }
 
 /**
@@ -84,13 +79,13 @@ export interface ICollateralParams {
  */
 export interface CollateralParams {
   /** Collateral token address. */
-  readonly token: Address;
+  readonly token: `0x${string}`;
   /** WAD-scaled liquidation loan-to-value. */
   readonly lltv: bigint;
   /** WAD-scaled maximum liquidation incentive factor. */
   readonly maxLif: bigint;
   /** Oracle address for this collateral. */
-  readonly oracle: Address;
+  readonly oracle: `0x${string}`;
 }
 
 /**
@@ -112,7 +107,7 @@ export interface CollateralParams {
  */
 export interface IMarketParams {
   /** Loan token address. */
-  readonly loanToken: Address | string;
+  readonly loanToken: `0x${string}` | string;
   /** Collateral definitions sorted as expected by Midnight. */
   readonly collateralParams: readonly (ICollateralParams | CollateralParams)[];
   /** Market maturity timestamp. */
@@ -120,9 +115,9 @@ export interface IMarketParams {
   /** Recovery close factor threshold. */
   readonly rcfThreshold: BigIntish;
   /** Optional entry gate. */
-  readonly enterGate: Address | string;
+  readonly enterGate: `0x${string}` | string;
   /** Optional liquidation gate. */
-  readonly liquidatorGate: Address | string;
+  readonly liquidatorGate: `0x${string}` | string;
 }
 
 /**
@@ -145,7 +140,7 @@ export interface IMarketParams {
  */
 export class MarketParams {
   /** Loan token address. */
-  public readonly loanToken: Address;
+  public readonly loanToken: `0x${string}`;
 
   /** Collateral definitions. */
   public readonly collateralParams: readonly CollateralParams[];
@@ -157,20 +152,20 @@ export class MarketParams {
   public readonly rcfThreshold: bigint;
 
   /** Entry gate address. */
-  public readonly enterGate: Address;
+  public readonly enterGate: `0x${string}`;
 
   /** Liquidator gate address. */
-  public readonly liquidatorGate: Address;
+  public readonly liquidatorGate: `0x${string}`;
 
   public constructor(params: IMarketParams) {
-    this.loanToken = params.loanToken as Address;
+    this.loanToken = params.loanToken as `0x${string}`;
     this.collateralParams = params.collateralParams.map(
       normalizeCollateralParams,
     );
     this.maturity = BigInt(params.maturity);
     this.rcfThreshold = BigInt(params.rcfThreshold);
-    this.enterGate = params.enterGate as Address;
-    this.liquidatorGate = params.liquidatorGate as Address;
+    this.enterGate = params.enterGate as `0x${string}`;
+    this.liquidatorGate = params.liquidatorGate as `0x${string}`;
   }
 }
 
@@ -194,7 +189,7 @@ export class MarketParams {
  */
 export interface MarketParamsStruct {
   /** Loan token address. */
-  readonly loanToken: Address;
+  readonly loanToken: `0x${string}`;
   /** Collateral definitions. */
   readonly collateralParams: readonly CollateralParams[];
   /** Market maturity timestamp. */
@@ -202,9 +197,9 @@ export interface MarketParamsStruct {
   /** Recovery close factor threshold. */
   readonly rcfThreshold: bigint;
   /** Entry gate address. */
-  readonly enterGate: Address;
+  readonly enterGate: `0x${string}`;
   /** Liquidator gate address. */
-  readonly liquidatorGate: Address;
+  readonly liquidatorGate: `0x${string}`;
 }
 
 /**
@@ -236,7 +231,7 @@ export interface MarketParamsStruct {
  */
 export interface IMarket {
   /** Market id. */
-  readonly id: Hex;
+  readonly id: `0x${string}`;
   /** Immutable market configuration. */
   readonly params: IMarketParams | MarketParams;
   /** Total market units. */
@@ -268,7 +263,7 @@ export interface IMarket {
  */
 export class Market {
   /** Market id. */
-  public readonly id: Hex;
+  public readonly id: `0x${string}`;
 
   /** Immutable market configuration. */
   public readonly params: MarketParams;
@@ -320,7 +315,7 @@ export class Market {
    * console.log(id);
    * ```
    */
-  public toId(chainId: BigIntish, midnight: Address | string) {
+  public toId(chainId: BigIntish, midnight: `0x${string}` | string) {
     return computeMarketId({ market: this.params, chainId, midnight });
   }
 
@@ -433,7 +428,7 @@ export class Market {
    * console.log(index);
    * ```
    */
-  public getCollateralIndexByToken(token: Address | string) {
+  public getCollateralIndexByToken(token: `0x${string}` | string) {
     const expectedToken = token.toLowerCase();
     const index = this.params.collateralParams.findIndex(
       (params) => params.token.toLowerCase() === expectedToken,
@@ -455,7 +450,7 @@ export class Market {
    * console.log(params?.lltv);
    * ```
    */
-  public getCollateralParamsByToken(token: Address | string) {
+  public getCollateralParamsByToken(token: `0x${string}` | string) {
     const index = this.getCollateralIndexByToken(token);
 
     return index == null ? undefined : this.params.collateralParams[index];
@@ -476,10 +471,10 @@ export function normalizeCollateralParams(
   params: ICollateralParams | CollateralParams,
 ): CollateralParams {
   return {
-    token: params.token as Address,
+    token: params.token as `0x${string}`,
     lltv: BigInt(params.lltv),
     maxLif: BigInt(params.maxLif),
-    oracle: params.oracle as Address,
+    oracle: params.oracle as `0x${string}`,
   };
 }
 
@@ -575,7 +570,7 @@ export const marketParamsAbiParameter = {
 export function computeMarketId(params: {
   readonly market: IMarketParams | MarketParams | Market;
   readonly chainId: BigIntish;
-  readonly midnight: Address | string;
+  readonly midnight: `0x${string}` | string;
 }) {
   const encodedMarket = encodeAbiParameters(
     [marketParamsAbiParameter],
@@ -586,7 +581,12 @@ export function computeMarketId(params: {
   return keccak256(
     encodePacked(
       ["uint8", "address", "uint256", "bytes32"],
-      [255, params.midnight as Address, BigInt(params.chainId), creationHash],
+      [
+        255,
+        params.midnight as `0x${string}`,
+        BigInt(params.chainId),
+        creationHash,
+      ],
     ),
   );
 }

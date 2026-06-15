@@ -1,9 +1,4 @@
-import {
-  type Address,
-  deepFreeze,
-  type EncodedCall,
-  type Hex,
-} from "@morpho-org/morpho-ts";
+import { deepFreeze } from "@morpho-org/morpho-ts";
 import {
   bytesToHex,
   decodeAbiParameters,
@@ -31,7 +26,7 @@ import {
  * console.log(payload);
  * ```
  */
-export type Payload = Hex;
+export type Payload = `0x${string}`;
 
 /**
  * One mempool payload item: a maker-side `Offer` together with the opaque
@@ -46,7 +41,7 @@ export type Item = {
   /** Maker-side offer carried by the payload. */
   readonly offer: IOffer | Offer;
   /** Opaque ratifier data passed to `Midnight.take`. */
-  readonly ratifierData: Hex;
+  readonly ratifierData: `0x${string}`;
 };
 
 /**
@@ -282,17 +277,17 @@ export async function decode(payload: Payload): Promise<Item[]> {
  * ```
  */
 export function buildSubmissionCall(params: {
-  readonly midnightMempool: Address | string;
+  readonly midnightMempool: `0x${string}` | string;
   readonly payload: Payload;
-}): EncodedCall {
+}): { readonly to: `0x${string}`; readonly data: `0x${string}` } {
   return deepFreeze({
-    to: params.midnightMempool as Address,
+    to: params.midnightMempool as `0x${string}`,
     data: params.payload,
   });
 }
 
 function decodeItemsBytes(decoded: Uint8Array): Item[] {
-  let raw: ReadonlyArray<{ offer: OfferStruct; ratifierData: Hex }>;
+  let raw: ReadonlyArray<{ offer: OfferStruct; ratifierData: `0x${string}` }>;
   try {
     [raw] = decodeAbiParameters(itemsAbi, bytesToHex(decoded));
   } catch (error) {

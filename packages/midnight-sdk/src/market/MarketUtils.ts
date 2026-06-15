@@ -1,4 +1,4 @@
-import { type Address, type BigIntish, MathLib } from "@morpho-org/morpho-ts";
+import { type BigIntish, MathLib } from "@morpho-org/morpho-ts";
 import { encodeAbiParameters, keccak256 } from "viem";
 import {
   ALLOWED_LLTVS,
@@ -189,7 +189,7 @@ export namespace MarketUtils {
   export function toId(params: {
     readonly market: IMarketParams | MarketParams | Market;
     readonly chainId: BigIntish;
-    readonly midnight: Address | string;
+    readonly midnight: `0x${string}` | string;
   }) {
     return computeMarketId(params);
   }

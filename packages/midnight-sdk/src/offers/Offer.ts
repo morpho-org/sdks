@@ -1,4 +1,4 @@
-import type { Address, BigIntish, Hex } from "@morpho-org/morpho-ts";
+import type { BigIntish } from "@morpho-org/morpho-ts";
 import { zeroAddress } from "viem";
 import type {
   IMarketParams,
@@ -50,7 +50,7 @@ export interface IOffer {
   /** Whether the maker buys units. */
   readonly buy: boolean;
   /** Offer maker. */
-  readonly maker: Address | string;
+  readonly maker: `0x${string}` | string;
   /** Start timestamp. */
   readonly start: BigIntish;
   /** Expiry timestamp. */
@@ -58,15 +58,15 @@ export interface IOffer {
   /** Midnight tick. */
   readonly tick: BigIntish;
   /** Consumption group. */
-  readonly group: Hex;
+  readonly group: `0x${string}`;
   /** Optional maker callback. */
-  readonly callback: Address | string;
+  readonly callback: `0x${string}` | string;
   /** Callback payload. */
-  readonly callbackData: Hex;
+  readonly callbackData: `0x${string}`;
   /** Receiver used when the maker is the seller. */
-  readonly receiverIfMakerIsSeller: Address | string;
+  readonly receiverIfMakerIsSeller: `0x${string}` | string;
   /** Ratifier contract. */
-  readonly ratifier: Address | string;
+  readonly ratifier: `0x${string}` | string;
   /** Whether the offer can only reduce maker exposure. */
   readonly reduceOnly: boolean;
   /** Maximum units; zero means max assets controls consumption. */
@@ -116,7 +116,7 @@ export class Offer {
   public readonly buy: boolean;
 
   /** Offer maker. */
-  public readonly maker: Address;
+  public readonly maker: `0x${string}`;
 
   /** Start timestamp. */
   public readonly start: bigint;
@@ -128,19 +128,19 @@ export class Offer {
   public readonly tick: bigint;
 
   /** Consumption group. */
-  public readonly group: Hex;
+  public readonly group: `0x${string}`;
 
   /** Optional maker callback. */
-  public readonly callback: Address;
+  public readonly callback: `0x${string}`;
 
   /** Callback payload. */
-  public readonly callbackData: Hex;
+  public readonly callbackData: `0x${string}`;
 
   /** Receiver used when maker is seller. */
-  public readonly receiverIfMakerIsSeller: Address;
+  public readonly receiverIfMakerIsSeller: `0x${string}`;
 
   /** Ratifier contract. */
-  public readonly ratifier: Address;
+  public readonly ratifier: `0x${string}`;
 
   /** Whether the offer can only reduce maker exposure. */
   public readonly reduceOnly: boolean;
@@ -154,15 +154,16 @@ export class Offer {
   public constructor(offer: IOffer) {
     this.market = normalizeMarketParams(offer.market);
     this.buy = offer.buy;
-    this.maker = offer.maker as Address;
+    this.maker = offer.maker as `0x${string}`;
     this.start = BigInt(offer.start);
     this.expiry = BigInt(offer.expiry);
     this.tick = BigInt(offer.tick);
-    this.group = offer.group as Hex;
-    this.callback = offer.callback as Address;
-    this.callbackData = offer.callbackData as Hex;
-    this.receiverIfMakerIsSeller = offer.receiverIfMakerIsSeller as Address;
-    this.ratifier = offer.ratifier as Address;
+    this.group = offer.group as `0x${string}`;
+    this.callback = offer.callback as `0x${string}`;
+    this.callbackData = offer.callbackData as `0x${string}`;
+    this.receiverIfMakerIsSeller =
+      offer.receiverIfMakerIsSeller as `0x${string}`;
+    this.ratifier = offer.ratifier as `0x${string}`;
     this.reduceOnly = offer.reduceOnly;
     this.maxUnits = BigInt(offer.maxUnits);
     this.maxAssets = BigInt(offer.maxAssets);
@@ -240,7 +241,7 @@ export interface OfferStruct {
   /** Whether the maker buys units. */
   readonly buy: boolean;
   /** Offer maker. */
-  readonly maker: Address;
+  readonly maker: `0x${string}`;
   /** Start timestamp. */
   readonly start: bigint;
   /** Expiry timestamp. */
@@ -248,15 +249,15 @@ export interface OfferStruct {
   /** Midnight tick. */
   readonly tick: bigint;
   /** Consumption group. */
-  readonly group: Hex;
+  readonly group: `0x${string}`;
   /** Optional maker callback. */
-  readonly callback: Address;
+  readonly callback: `0x${string}`;
   /** Callback payload. */
-  readonly callbackData: Hex;
+  readonly callbackData: `0x${string}`;
   /** Receiver used when maker is seller. */
-  readonly receiverIfMakerIsSeller: Address;
+  readonly receiverIfMakerIsSeller: `0x${string}`;
   /** Ratifier contract. */
-  readonly ratifier: Address;
+  readonly ratifier: `0x${string}`;
   /** Whether the offer can only reduce maker exposure. */
   readonly reduceOnly: boolean;
   /** Maximum units; zero means max assets controls consumption. */
@@ -359,7 +360,7 @@ export interface BuildOfferParams {
   /** Whether the maker buys units. */
   readonly buy: boolean;
   /** Maker address. */
-  readonly maker: Address | string;
+  readonly maker: `0x${string}` | string;
   /** Tick. */
   readonly tick: BigIntish;
   /** Market tick spacing; defaults to the protocol's default spacing. */
@@ -373,15 +374,15 @@ export interface BuildOfferParams {
   /** Offer expiry timestamp. */
   readonly expiry: BigIntish;
   /** Explicit protocol consumption group. */
-  readonly group: Hex;
+  readonly group: `0x${string}`;
   /** Callback address; defaults to zero address. */
-  readonly callback?: Address | string;
+  readonly callback?: `0x${string}` | string;
   /** Callback payload; defaults to `0x`. */
-  readonly callbackData?: Hex;
+  readonly callbackData?: `0x${string}`;
   /** Receiver used when maker is seller; defaults to zero for buy offers and maker for sell offers. */
-  readonly receiverIfMakerIsSeller?: Address | string;
+  readonly receiverIfMakerIsSeller?: `0x${string}` | string;
   /** Ratifier contract. */
-  readonly ratifier: Address | string;
+  readonly ratifier: `0x${string}` | string;
   /** Whether the offer can only reduce maker exposure. */
   readonly reduceOnly?: boolean;
 }

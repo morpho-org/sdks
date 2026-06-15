@@ -1,4 +1,3 @@
-import type { Hex } from "@morpho-org/morpho-ts";
 import { bytesToHex, encodeAbiParameters, hexToBytes } from "viem";
 import { describe, expect, test } from "vitest";
 import {
@@ -41,7 +40,9 @@ async function encodeUncheckedPayload(
   offer: OfferStruct,
 ): Promise<Payload.Payload> {
   const itemBytes = hexToBytes(
-    encodeAbiParameters(itemsAbi, [[{ offer, ratifierData: "0x1234" as Hex }]]),
+    encodeAbiParameters(itemsAbi, [
+      [{ offer, ratifierData: "0x1234" as `0x${string}` }],
+    ]),
   );
   const stream = new ReadableStream<BufferSource>({
     start(controller) {
@@ -61,7 +62,7 @@ describe("Payload.encode", () => {
   test("default", async () => {
     const offer = apiValidOffer();
     const encoded = await Payload.encode([
-      { offer, ratifierData: "0x1234" as Hex },
+      { offer, ratifierData: "0x1234" as `0x${string}` },
     ]);
 
     const decoded = await Payload.decode(encoded);
@@ -82,7 +83,7 @@ describe("Payload.encode", () => {
       Payload.encode([
         {
           offer: apiValidOffer({ expiry: API_VALID_MATURITY + 60n }),
-          ratifierData: "0x1234" as Hex,
+          ratifierData: "0x1234" as `0x${string}`,
         },
       ]),
     ).rejects.toBeInstanceOf(Payload.DecodeError);
@@ -107,9 +108,9 @@ describe("Payload.buildSubmissionCall", () => {
 describe("Payload.decode", () => {
   test("behavior: ignores small attribution suffix", async () => {
     const encoded = await Payload.encode([
-      { offer: apiValidOffer(), ratifierData: "0x1234" as Hex },
+      { offer: apiValidOffer(), ratifierData: "0x1234" as `0x${string}` },
     ]);
-    const tagged = `${encoded}ff` as Hex;
+    const tagged = `${encoded}ff` as `0x${string}`;
 
     const decoded = await Payload.decode(tagged);
 
@@ -124,12 +125,12 @@ describe("Payload.decode", () => {
 
   test("error: attribution suffix cap", async () => {
     const encoded = await Payload.encode([
-      { offer: apiValidOffer(), ratifierData: "0x1234" as Hex },
+      { offer: apiValidOffer(), ratifierData: "0x1234" as `0x${string}` },
     ]);
     const suffix = "ff".repeat(MAX_ATTRIBUTION_SUFFIX_BYTES + 1);
 
     await expect(
-      Payload.decode(`${encoded}${suffix}` as Hex),
+      Payload.decode(`${encoded}${suffix}` as `0x${string}`),
     ).rejects.toBeInstanceOf(Payload.DecodeError);
   });
 
