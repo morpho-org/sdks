@@ -43,8 +43,8 @@ import {
  *   empty transactions, malformed authorizations).
  * @throws {UnsupportedChainError} when the chain is not configured for any backend.
  * @throws {SimulationRevertedError} when the bundle reverts on either backend.
- * @throws {BlacklistViolationError} when the simulation leaves value retained by or
- *   drained from a `bundler3` address beyond the dust threshold.
+ * @throws {BlacklistViolationError} when the simulation leaves value retained by
+ *   a `bundler3` address beyond the dust threshold.
  * @throws {ExternalServiceError} (a) when both backends are unavailable within the
  *   timeout budget, or (b) when a backend returns a `calls` array whose length does
  *   not match the resolved `simulationTxs` — refusing to map transfers with mismatched
