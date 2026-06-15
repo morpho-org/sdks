@@ -1,6 +1,6 @@
 # @morpho-org/midnight-sdk
 
-Framework-agnostic protocol utilities for Morpho Midnight.
+Viem-based package for Morpho Midnight that exports protocol utilities, fetch helpers, and Midnight API validation utilities.
 
 ## Installation
 

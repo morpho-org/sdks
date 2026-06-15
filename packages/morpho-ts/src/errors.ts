@@ -9,8 +9,6 @@
  * ```
  */
 export class UnsupportedChainIdError extends Error {
-  public readonly code = "UNSUPPORTED_CHAIN";
-
   public constructor(public readonly chainId: number) {
     super(`Chain id "${chainId}" is not supported.`);
     this.name = "UnsupportedChainIdError";
