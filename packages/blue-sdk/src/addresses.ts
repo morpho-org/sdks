@@ -1,9 +1,7 @@
 export type {
   AddressLabel,
-  AddressRegistry,
   ChainAddresses,
   ChainDeployments,
-  DeploymentRegistry,
 } from "@morpho-org/morpho-ts";
 export {
   blueAddresses as addresses,
@@ -11,7 +9,6 @@ export {
   blueDeployments as deployments,
   convexWrapperTokens,
   erc20WrapperTokens,
-  getChainAddress,
   getChainAddresses,
   getPermissionedCoinbaseTokens,
   getUnwrappedToken,
