@@ -10,6 +10,10 @@ export {
 } from "./constant.js";
 export { addTransactionMetadata } from "./metadata.js";
 export {
+  computeAvailableSharedLiquidity,
+  computeMaxBorrowToUtilization,
+} from "./sharedLiquidityMetrics.js";
+export {
   computeMaxRepaySharePrice,
   computeMaxSupplySharePrice,
   computeMinBorrowSharePrice,

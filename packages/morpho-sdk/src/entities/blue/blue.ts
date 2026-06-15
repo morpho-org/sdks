@@ -32,6 +32,8 @@ import {
   getRequirements,
 } from "../../actions/index.js";
 import {
+  computeAvailableSharedLiquidity,
+  computeMaxBorrowToUtilization,
   computeMaxRepaySharePrice,
   computeMaxSupplySharePrice,
   computeMinBorrowSharePrice,
@@ -77,6 +79,7 @@ import {
   NonPositiveRepayAmountError,
   NonPositiveWithdrawAmountError,
   NonPositiveWithdrawCollateralAmountError,
+  type PublicAllocatorOptions,
   type ReallocationComputeOptions,
   RefinanceExceedsBorrowAssetsError,
   RefinanceExceedsBorrowSharesError,
@@ -479,6 +482,48 @@ export interface BlueActions {
         }
     ),
   ) => readonly VaultReallocation[];
+
+  /**
+   * Computes the total shared liquidity that the public allocator can
+   * reallocate into this market from sibling markets.
+   *
+   * Read-only metric — never throws on insufficiency, returns `0n` when no
+   * liquidity is available. Bounded by source-market withdrawal utilization
+   * caps and the target market's vault supply-cap headroom.
+   *
+   * @param params.reallocationData - State returned by {@link getReallocationData}.
+   * @param params.options - Optional allocator discovery options (timestamp, reallocatable vaults, withdrawal utilization caps).
+   * @returns The total reallocatable assets, in loan-token units.
+   * @throws {ChainIdMismatchError} when `reallocationData` belongs to a different chain than this market.
+   * @throws {UnknownReallocationMarketError} when this market is absent from the reallocation data.
+   */
+  getAvailableSharedLiquidity: (params: {
+    reallocationData: ReallocationData;
+    options?: PublicAllocatorOptions;
+  }) => bigint;
+
+  /**
+   * Computes the maximum additional borrow on this market that keeps its
+   * post-borrow utilization at or below `targetUtilization`, accounting for the
+   * shared liquidity sibling vaults can supply via the public allocator.
+   *
+   * Read-only metric — draws on the maximum available shared liquidity (source
+   * markets drained to 100% withdrawal utilization) while never pushing this
+   * market past `targetUtilization`. Returns `0n` when the target is already
+   * met without borrowing.
+   *
+   * @param params.reallocationData - State returned by {@link getReallocationData}.
+   * @param params.targetUtilization - The utilization ceiling to maintain, scaled by WAD (e.g. `900000000000000000n` for 90%).
+   * @param params.options - Optional allocator discovery options (timestamp, reallocatable vaults).
+   * @returns The maximum borrowable assets, in loan-token units.
+   * @throws {ChainIdMismatchError} when `reallocationData` belongs to a different chain than this market.
+   * @throws {UnknownReallocationMarketError} when this market is absent from the reallocation data.
+   */
+  getMaxBorrowToUtilization: (params: {
+    reallocationData: ReallocationData;
+    targetUtilization: bigint;
+    options?: PublicAllocatorOptions;
+  }) => bigint;
 }
 
 export class MorphoBlue implements BlueActions {
@@ -1633,6 +1678,57 @@ export class MorphoBlue implements BlueActions {
       operation: params.operation,
       amount: params.amount,
       options,
+    });
+  }
+
+  /**
+   * Computes the total shared liquidity reallocatable into this market.
+   *
+   * @param params - Metric computation parameters.
+   * @param params.reallocationData - State returned by {@link getReallocationData}.
+   * @param params.options - Optional allocator discovery options.
+   * @returns The total reallocatable assets, in loan-token units. `0n` when none is available.
+   * @throws {ChainIdMismatchError} when `reallocationData` belongs to a different chain than this market.
+   * @throws {UnknownReallocationMarketError} when this market is absent from the reallocation data.
+   */
+  getAvailableSharedLiquidity(params: {
+    reallocationData: ReallocationData;
+    options?: PublicAllocatorOptions;
+  }): bigint {
+    validateChainId(params.reallocationData.chainId, this.chainId);
+
+    return computeAvailableSharedLiquidity({
+      reallocationData: params.reallocationData,
+      marketId: this.marketParams.id,
+      options: params.options,
+    });
+  }
+
+  /**
+   * Computes the maximum additional borrow keeping this market's post-borrow
+   * utilization at or below `targetUtilization`, given the shared liquidity
+   * sibling vaults can supply via the public allocator.
+   *
+   * @param params - Metric computation parameters.
+   * @param params.reallocationData - State returned by {@link getReallocationData}.
+   * @param params.targetUtilization - The utilization ceiling to maintain, scaled by WAD (e.g. `900000000000000000n` for 90%).
+   * @param params.options - Optional allocator discovery options.
+   * @returns The maximum borrowable assets, in loan-token units. `0n` when already met.
+   * @throws {ChainIdMismatchError} when `reallocationData` belongs to a different chain than this market.
+   * @throws {UnknownReallocationMarketError} when this market is absent from the reallocation data.
+   */
+  getMaxBorrowToUtilization(params: {
+    reallocationData: ReallocationData;
+    targetUtilization: bigint;
+    options?: PublicAllocatorOptions;
+  }): bigint {
+    validateChainId(params.reallocationData.chainId, this.chainId);
+
+    return computeMaxBorrowToUtilization({
+      reallocationData: params.reallocationData,
+      marketId: this.marketParams.id,
+      targetUtilization: params.targetUtilization,
+      options: params.options,
     });
   }
 }
