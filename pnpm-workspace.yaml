@@ -3,7 +3,6 @@ packages:
 
 overrides:
   axios: 1.15.2
-  viem: 2.49.3
   ws: 8.20.1
 
 onlyBuiltDependencies:
@@ -13,3 +12,7 @@ onlyBuiltDependencies:
   - keccak
   - secp256k1
   - utf-8-validate
+
+patchedDependencies:
+  ox@0.14.29: patches/ox@0.14.29.patch
+

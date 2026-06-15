@@ -87,7 +87,7 @@ export async function fetchVaultV2MorphoMarketV1AdapterV2(
           ),
         ],
         supplyShares: fromEntries(
-          // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
+          // biome-ignore lint/suspicious/noShadow: TODO rename to avoid shadowing
           adapter.marketSupplyShares.map(({ marketId, supplyShares }) => [
             marketId,
             supplyShares,

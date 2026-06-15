@@ -123,7 +123,7 @@ export class AccrualVaultV2MorphoMarketV1AdapterV2
 
   maxWithdraw(data: Hex) {
     const marketId = MarketParams.fromHex(data).id;
-    // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
+    // biome-ignore lint/suspicious/noShadow: TODO rename to avoid shadowing
     const market = this.markets.find((market) => market.id === marketId);
 
     return (

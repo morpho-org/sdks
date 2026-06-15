@@ -11,12 +11,12 @@ import {
 } from "../fetch/index.js";
 
 declare module "@morpho-org/blue-sdk" {
-  // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
+  // biome-ignore lint/suspicious/noShadow: TODO rename to avoid shadowing
   namespace Position {
     let fetch: typeof fetchPosition;
   }
 
-  // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
+  // biome-ignore lint/suspicious/noShadow: TODO rename to avoid shadowing
   namespace AccrualPosition {
     let fetch: typeof fetchAccrualPosition;
     let fetchPreLiquidation: typeof fetchPreLiquidationPosition;
