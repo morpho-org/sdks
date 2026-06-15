@@ -384,6 +384,27 @@ importers:
         specifier: ^4.1.7
         version: 4.1.7(@types/node@25.9.1)(@vitest/coverage-v8@4.1.7)(@vitest/ui@4.1.7)(happy-dom@20.9.0)(vite@8.0.14(@types/node@25.9.1)(jiti@2.7.0)(yaml@2.9.0))
 
+  packages/midnight-sdk:
+    devDependencies:
+      '@morpho-org/morpho-ts':
+        specifier: workspace:^
+        version: link:../morpho-ts
+      '@morpho-org/test':
+        specifier: workspace:^
+        version: link:../test
+      fast-check:
+        specifier: ^4.4.0
+        version: 4.8.0
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      viem:
+        specifier: 2.49.3
+        version: 2.49.3(typescript@6.0.3)(zod@4.4.3)
+      vitest:
+        specifier: ^4.1.6
+        version: 4.1.7(@types/node@25.9.1)(@vitest/coverage-v8@4.1.7)(@vitest/ui@4.1.7)(happy-dom@20.9.0)(vite@8.0.14(@types/node@25.9.1)(jiti@2.7.0)(yaml@2.9.0))
+
   packages/migration-sdk-viem:
     devDependencies:
       '@morpho-org/blue-sdk':

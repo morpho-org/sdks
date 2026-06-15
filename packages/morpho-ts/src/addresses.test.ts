@@ -1,34 +1,35 @@
 import { describe, expect, test } from "vitest";
-
 import {
-  addresses,
-  addressesRegistry,
-  type ChainAddresses,
-  type ChainDeployments,
-  deployments,
-  getChainAddress,
-  getUnwrappedToken,
-  registerCustomAddresses,
+  getMidnightAddresses,
+  getMidnightDeployments,
+  type MidnightAddresses,
+  type MidnightDeployments,
+  midnightAddresses,
+  midnightAddressRegistry,
+  midnightDeploymentRegistry,
+  midnightDeployments,
+  registerCustomMidnightAddresses,
 } from "./addresses.js";
-import { ChainId } from "./chain.js";
 import {
-  IncompleteChainRegistryError,
-  RegistryValueAlreadyRegisteredError,
-  UnknownAddressError,
+  IncompleteMidnightAddressesError,
+  IncompleteMidnightDeploymentsError,
+  MidnightAddressAlreadyRegisteredError,
+  MidnightDeploymentAlreadyRegisteredError,
   UnsupportedChainIdError,
 } from "./errors.js";
+import type { Address } from "./types.js";
 
 let nextAddressIndex = 1n;
 
-const randomAddress = (): `0x${string}` => {
+const randomAddress = (): Address => {
   const address =
-    `0x${nextAddressIndex.toString(16).padStart(40, "0")}` as `0x${string}`;
+    `0x${nextAddressIndex.toString(16).padStart(40, "0")}` as Address;
   nextAddressIndex += 1n;
 
   return address;
 };
 
-const createMidnightAddresses = () => ({
+const createMidnightAddresses = (): MidnightAddresses => ({
   midnight: randomAddress(),
   midnightBundles: randomAddress(),
   midnightMempool: randomAddress(),
@@ -37,22 +38,7 @@ const createMidnightAddresses = () => ({
   permit2: randomAddress(),
 });
 
-const createBlueAddresses = () =>
-  ({
-    morpho: randomAddress(),
-    bundler3: {
-      bundler3: randomAddress(),
-      generalAdapter1: randomAddress(),
-    },
-    adaptiveCurveIrm: randomAddress(),
-  }) satisfies ChainAddresses;
-
-const createChainAddresses = () => ({
-  ...createBlueAddresses(),
-  ...createMidnightAddresses(),
-});
-
-const createMidnightDeployments = () => ({
+const createMidnightDeployments = (): MidnightDeployments => ({
   midnight: 1n,
   midnightBundles: 2n,
   midnightMempool: 3n,
@@ -61,105 +47,69 @@ const createMidnightDeployments = () => ({
   permit2: 6n,
 });
 
-const createBlueDeployments = () =>
-  ({
-    morpho: 7n,
-    bundler3: {
-      bundler3: 8n,
-      generalAdapter1: 9n,
-    },
-    adaptiveCurveIrm: 10n,
-  }) satisfies ChainDeployments;
-
-const createChainDeployments = () => ({
-  ...createBlueDeployments(),
-  ...createMidnightDeployments(),
-});
-
-const getMainnetBlueAddresses = () => {
-  const blueAddresses = addressesRegistry[ChainId.EthMainnet];
-
-  return blueAddresses;
-};
-
-const getMainnetBlueDeployments = () => {
-  const blueDeployments = deployments[ChainId.EthMainnet];
-
-  return blueDeployments;
-};
-
-describe("getChainAddress", () => {
-  test("default", () => {
-    expect(
-      getChainAddress(ChainId.EthMainnet, "bundler3.generalAdapter1"),
-    ).toBe(addressesRegistry[ChainId.EthMainnet].bundler3.generalAdapter1);
-  });
-
-  test("behavior: reads a custom Midnight address", () => {
-    const chainId = 31_337_001;
-    const chainAddresses = {
-      ...createBlueAddresses(),
-      midnight: randomAddress(),
-    };
-
-    registerCustomAddresses({
-      addresses: {
-        [chainId]: chainAddresses,
-      },
-    });
-
-    expect(getChainAddress(chainId, "midnight")).toBe(chainAddresses.midnight);
-  });
-
+describe("getMidnightAddresses", () => {
   test("error: UnsupportedChainIdError", () => {
-    expect(() => getChainAddress(999_999_999, "midnight")).toThrow(
-      UnsupportedChainIdError,
-    );
+    expect(() => getMidnightAddresses(1)).toThrow(UnsupportedChainIdError);
   });
 
-  test("error: UnknownAddressError", () => {
-    let error: unknown;
-
-    try {
-      getChainAddress(ChainId.EthMainnet, "midnight");
-    } catch (caught) {
-      error = caught;
-    }
-
-    expect(error).toBeInstanceOf(UnknownAddressError);
-    expect(error).toMatchObject({
-      chainId: ChainId.EthMainnet,
-      label: "midnight",
-    });
-  });
-});
-
-describe("addressesRegistry", () => {
   test("default", () => {
-    expect("midnight" in addressesRegistry[1]).toBe(false);
-  });
+    const chainId = 31_337_001;
+    const chainAddresses = createMidnightAddresses();
 
-  test("behavior: exposes Midnight entries through the unified registry", () => {
-    const chainId = 31_337_002;
-    const chainAddresses = createChainAddresses();
-
-    registerCustomAddresses({
+    registerCustomMidnightAddresses({
       addresses: {
         [chainId]: chainAddresses,
       },
     });
 
-    expect(getChainAddress(chainId, "midnight")).toBe(chainAddresses.midnight);
-    expect(addressesRegistry[chainId]).toMatchObject(chainAddresses);
-    expect(addresses[chainId]).toMatchObject(chainAddresses);
+    expect(getMidnightAddresses(chainId)).toEqual(chainAddresses);
+  });
+});
+
+describe("getMidnightDeployments", () => {
+  test("error: UnsupportedChainIdError", () => {
+    expect(() => getMidnightDeployments(1)).toThrow(UnsupportedChainIdError);
+  });
+
+  test("default", () => {
+    const chainId = 31_337_101;
+    const chainDeployments = createMidnightDeployments();
+
+    registerCustomMidnightAddresses({
+      deployments: {
+        [chainId]: chainDeployments,
+      },
+    });
+
+    expect(getMidnightDeployments(chainId)).toEqual(chainDeployments);
+  });
+});
+
+describe("midnightAddressRegistry", () => {
+  test("default", () => {
+    expect(midnightAddressRegistry[1]).toBeUndefined();
+  });
+
+  test("behavior: exposes object-style registry aliases", () => {
+    const chainId = 31_337_002;
+    const chainAddresses = createMidnightAddresses();
+
+    registerCustomMidnightAddresses({
+      addresses: {
+        [chainId]: chainAddresses,
+      },
+    });
+
+    expect(midnightAddressRegistry[chainId]).toEqual(chainAddresses);
+    expect(midnightAddresses[chainId]).toEqual(chainAddresses);
   });
 
   test("behavior: copies registered entries", () => {
     const chainId = 31_337_003;
-    const chainAddresses = createChainAddresses();
+    const chainAddresses = createMidnightAddresses();
     const registeredMidnight = chainAddresses.midnight;
 
-    registerCustomAddresses({
+    registerCustomMidnightAddresses({
       addresses: {
         [chainId]: chainAddresses,
       },
@@ -167,343 +117,159 @@ describe("addressesRegistry", () => {
 
     Object.assign(chainAddresses, { midnight: randomAddress() });
 
-    expect(getChainAddress(chainId, "midnight")).toBe(registeredMidnight);
-  });
-
-  test("behavior: registers Blue and Midnight addresses alongside each other", () => {
-    const chainId = 31_337_004;
-    const blueAddresses = getMainnetBlueAddresses();
-    const chainAddresses = {
-      ...createMidnightAddresses(),
-      permit2: blueAddresses.permit2,
-    };
-
-    registerCustomAddresses({
-      addresses: {
-        [chainId]: {
-          ...blueAddresses,
-          ...chainAddresses,
-        },
-      },
-    });
-
-    expect(addressesRegistry[chainId]).toMatchObject(blueAddresses);
-    expect(addressesRegistry[chainId]).toMatchObject(chainAddresses);
-  });
-
-  test("behavior: duplicates blue to deprecated morpho for custom addresses", () => {
-    const chainId = 31_337_010;
-    const blue = randomAddress();
-
-    registerCustomAddresses({
-      addresses: {
-        [chainId]: {
-          blue,
-          bundler3: {
-            bundler3: randomAddress(),
-            generalAdapter1: randomAddress(),
-          },
-          adaptiveCurveIrm: randomAddress(),
-        },
-      },
-    });
-
-    expect(addressesRegistry[chainId]?.blue).toBe(blue);
-    expect(addressesRegistry[chainId]?.morpho).toBe(blue);
-  });
-
-  test("behavior: duplicates deprecated morpho to blue for custom addresses", () => {
-    const chainId = 31_337_011;
-    const morpho = randomAddress();
-
-    registerCustomAddresses({
-      addresses: {
-        [chainId]: {
-          morpho,
-          bundler3: {
-            bundler3: randomAddress(),
-            generalAdapter1: randomAddress(),
-          },
-          adaptiveCurveIrm: randomAddress(),
-        },
-      },
-    });
-
-    expect(addressesRegistry[chainId]?.blue).toBe(morpho);
-    expect(addressesRegistry[chainId]?.morpho).toBe(morpho);
+    expect(getMidnightAddresses(chainId).midnight).toBe(registeredMidnight);
   });
 });
 
-describe("deployments", () => {
+describe("midnightDeploymentRegistry", () => {
   test("default", () => {
-    expect("midnight" in deployments[1]).toBe(false);
+    expect(midnightDeploymentRegistry[1]).toBeUndefined();
   });
 
-  test("behavior: registers Blue and Midnight deployments alongside each other", () => {
+  test("behavior: exposes object-style registry aliases", () => {
     const chainId = 31_337_102;
-    const blueDeployments = getMainnetBlueDeployments();
-    const chainDeployments = {
-      ...createMidnightDeployments(),
-      permit2: blueDeployments.permit2,
-    };
+    const chainDeployments = createMidnightDeployments();
 
-    registerCustomAddresses({
+    registerCustomMidnightAddresses({
       deployments: {
-        [chainId]: {
-          ...blueDeployments,
-          ...chainDeployments,
-        },
+        [chainId]: chainDeployments,
       },
     });
 
-    expect(deployments[chainId]).toMatchObject(blueDeployments);
-    expect(deployments[chainId]).toMatchObject(chainDeployments);
-  });
-
-  test("behavior: duplicates blue to deprecated morpho for custom deployments", () => {
-    const chainId = 31_337_105;
-
-    registerCustomAddresses({
-      deployments: {
-        [chainId]: {
-          blue: 1n,
-          bundler3: {
-            bundler3: 2n,
-            generalAdapter1: 3n,
-          },
-          adaptiveCurveIrm: 4n,
-        },
-      },
-    });
-
-    expect(deployments[chainId]?.blue).toBe(1n);
-    expect(deployments[chainId]?.morpho).toBe(1n);
+    expect(midnightDeploymentRegistry[chainId]).toEqual(chainDeployments);
+    expect(midnightDeployments[chainId]).toEqual(chainDeployments);
   });
 });
 
-describe("registerCustomAddresses", () => {
+describe("registerCustomMidnightAddresses", () => {
   test("default", () => {
-    const chainId = 31_337_005;
-    const chainAddresses = createChainAddresses();
+    const chainId = 31_337_004;
+    const chainAddresses = createMidnightAddresses();
 
-    registerCustomAddresses({
+    registerCustomMidnightAddresses({
       addresses: {
         [chainId]: chainAddresses,
       },
     });
 
-    expect(addressesRegistry[chainId]).toMatchObject(chainAddresses);
+    expect(getMidnightAddresses(chainId)).toEqual(chainAddresses);
   });
 
   test("behavior: accepts repeated registration of the same value", () => {
-    const chainId = 31_337_006;
-    const chainAddresses = createChainAddresses();
+    const chainId = 31_337_005;
+    const chainAddresses = createMidnightAddresses();
 
-    registerCustomAddresses({
+    registerCustomMidnightAddresses({
       addresses: {
         [chainId]: chainAddresses,
       },
     });
 
     expect(() =>
-      registerCustomAddresses({
+      registerCustomMidnightAddresses({
         addresses: {
-          [chainId]: chainAddresses,
+          [chainId]: {
+            midnight: chainAddresses.midnight,
+          },
         },
       }),
     ).not.toThrow();
-
-    expect(getChainAddress(chainId, "midnight")).toBe(chainAddresses.midnight);
   });
 
   test("behavior: accepts repeated registration of the same address with different casing", () => {
-    const chainId = 31_337_007;
-    const chainAddresses = createChainAddresses();
+    const chainId = 31_337_008;
+    const chainAddresses = createMidnightAddresses();
     const lowercasedMidnight =
-      chainAddresses.midnight.toLowerCase() as typeof chainAddresses.midnight;
-    const lowercasedChainAddresses = {
-      ...chainAddresses,
-      midnight: lowercasedMidnight,
-    };
+      chainAddresses.midnight.toLowerCase() as MidnightAddresses["midnight"];
 
-    registerCustomAddresses({
+    registerCustomMidnightAddresses({
       addresses: {
         [chainId]: chainAddresses,
       },
     });
 
     expect(() =>
-      registerCustomAddresses({
+      registerCustomMidnightAddresses({
         addresses: {
-          [chainId]: lowercasedChainAddresses,
+          [chainId]: {
+            midnight: lowercasedMidnight,
+          },
         },
       }),
     ).not.toThrow();
   });
 
-  test("behavior: accepts optional Midnight address entries", () => {
-    const chainId = 31_337_008;
-    const chainAddresses = {
-      ...createBlueAddresses(),
-      midnight: randomAddress(),
-    };
-
-    registerCustomAddresses({
-      addresses: {
-        [chainId]: chainAddresses,
-      },
-    });
-
-    expect(getChainAddress(chainId, "midnight")).toBe(chainAddresses.midnight);
-    expect(() => getChainAddress(chainId, "midnightBundles")).toThrow(
-      UnknownAddressError,
-    );
+  test("error: IncompleteMidnightAddressesError", () => {
+    expect(() =>
+      registerCustomMidnightAddresses({
+        addresses: {
+          31337006: {
+            midnight: randomAddress(),
+          },
+        },
+      }),
+    ).toThrow(IncompleteMidnightAddressesError);
   });
 
-  test("error: RegistryValueAlreadyRegisteredError for addresses", () => {
-    const chainId = 31_337_009;
-    const chainAddresses = createChainAddresses();
-    const conflictingChainAddresses = {
-      ...chainAddresses,
-      midnight: randomAddress(),
-    };
+  test("error: MidnightAddressAlreadyRegisteredError", () => {
+    const chainId = 31_337_007;
+    const chainAddresses = createMidnightAddresses();
 
-    registerCustomAddresses({
+    registerCustomMidnightAddresses({
       addresses: {
         [chainId]: chainAddresses,
       },
     });
 
     expect(() =>
-      registerCustomAddresses({
+      registerCustomMidnightAddresses({
         addresses: {
-          [chainId]: conflictingChainAddresses,
+          [chainId]: {
+            midnight: randomAddress(),
+          },
         },
       }),
-    ).toThrow(RegistryValueAlreadyRegisteredError);
+    ).toThrow(MidnightAddressAlreadyRegisteredError);
 
-    expect(getChainAddress(chainId, "midnight")).toBe(chainAddresses.midnight);
-  });
-
-  test("error: IncompleteChainRegistryError for custom-chain addresses", () => {
-    const chainId = 31_337_012;
-    const partialAddresses = createMidnightAddresses() as ChainAddresses;
-
-    let error: unknown;
-
-    try {
-      registerCustomAddresses({
-        addresses: {
-          [chainId]: partialAddresses,
-        },
-      });
-    } catch (caught) {
-      error = caught;
-    }
-
-    expect(error).toBeInstanceOf(IncompleteChainRegistryError);
-    expect(error).toMatchObject({
-      chainId,
-      type: "address",
-    });
-    expect(() => getChainAddress(chainId, "midnight")).toThrow(
-      UnsupportedChainIdError,
+    expect(getMidnightAddresses(chainId).midnight).toBe(
+      chainAddresses.midnight,
     );
   });
 
-  test("behavior: accepts custom Midnight deployment entries", () => {
-    const chainId = 31_337_103;
-    const chainDeployments = createChainDeployments();
-
-    registerCustomAddresses({
-      deployments: {
-        [chainId]: chainDeployments,
-      },
-    });
-
-    expect(deployments[chainId]?.midnight).toBe(chainDeployments.midnight);
-  });
-
-  test("error: IncompleteChainRegistryError for custom-chain deployments", () => {
-    const chainId = 31_337_107;
-    const partialDeployments = createMidnightDeployments() as ChainDeployments;
-
-    let error: unknown;
-
-    try {
-      registerCustomAddresses({
+  test("error: IncompleteMidnightDeploymentsError", () => {
+    expect(() =>
+      registerCustomMidnightAddresses({
         deployments: {
-          [chainId]: partialDeployments,
+          31337103: {
+            midnight: 1n,
+          },
         },
-      });
-    } catch (caught) {
-      error = caught;
-    }
-
-    expect(error).toBeInstanceOf(IncompleteChainRegistryError);
-    expect(error).toMatchObject({
-      chainId,
-      type: "deployment",
-    });
-    expect(deployments[chainId]).toBeUndefined();
+      }),
+    ).toThrow(IncompleteMidnightDeploymentsError);
   });
 
-  test("error: RegistryValueAlreadyRegisteredError for deployments", () => {
+  test("error: MidnightDeploymentAlreadyRegisteredError", () => {
     const chainId = 31_337_104;
-    const chainDeployments = createChainDeployments();
-    const conflictingChainDeployments = {
-      ...chainDeployments,
-      midnight: chainDeployments.midnight + 1n,
-    };
+    const chainDeployments = createMidnightDeployments();
 
-    registerCustomAddresses({
+    registerCustomMidnightAddresses({
       deployments: {
         [chainId]: chainDeployments,
       },
     });
 
     expect(() =>
-      registerCustomAddresses({
+      registerCustomMidnightAddresses({
         deployments: {
-          [chainId]: conflictingChainDeployments,
+          [chainId]: {
+            midnight: chainDeployments.midnight + 1n,
+          },
         },
       }),
-    ).toThrow(RegistryValueAlreadyRegisteredError);
+    ).toThrow(MidnightDeploymentAlreadyRegisteredError);
 
-    expect(deployments[chainId]?.midnight).toBe(chainDeployments.midnight);
-  });
-
-  test("behavior: does not freeze caller-owned nested inputs", () => {
-    const chainId = 31_337_106;
-    const chainAddresses = createChainAddresses();
-    const registeredBundler = chainAddresses.bundler3.bundler3;
-    const wrappedToken = randomAddress();
-    const unwrappedToken = randomAddress();
-    const unwrappedTokens = {
-      [wrappedToken]: unwrappedToken,
-    };
-
-    registerCustomAddresses({
-      addresses: {
-        [chainId]: chainAddresses,
-      },
-      unwrappedTokens: {
-        [chainId]: unwrappedTokens,
-      },
-    });
-
-    expect(Object.isFrozen(chainAddresses)).toBe(false);
-    expect(Object.isFrozen(chainAddresses.bundler3)).toBe(false);
-    expect(Object.isFrozen(unwrappedTokens)).toBe(false);
-
-    expect(() => {
-      chainAddresses.bundler3.bundler3 = randomAddress();
-      unwrappedTokens[wrappedToken] = randomAddress();
-    }).not.toThrow();
-
-    expect(addressesRegistry[chainId]?.bundler3.bundler3).toBe(
-      registeredBundler,
+    expect(getMidnightDeployments(chainId).midnight).toBe(
+      chainDeployments.midnight,
     );
-    expect(getUnwrappedToken(wrappedToken, chainId)).toBe(unwrappedToken);
   });
 });

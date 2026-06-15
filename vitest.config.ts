@@ -80,6 +80,13 @@ export default defineConfig({
       {
         extends: true,
         test: {
+          name: "midnight-sdk",
+          include: ["packages/midnight-sdk/src/**/*.test.ts"],
+        },
+      },
+      {
+        extends: true,
+        test: {
           name: "morpho-sdk",
           include: [
             "packages/morpho-sdk/src/**/*.test.ts",

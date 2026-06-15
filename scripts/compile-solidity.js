@@ -34,6 +34,20 @@ const packageConfigs = {
       );
     },
   },
+  "midnight-sdk": {
+    bytecodeExportName: "code",
+    resolveOutputPath(sourceName) {
+      if (sourceName.includes("/interfaces/")) return null;
+
+      const parsed = parse(sourceName);
+      return join(
+        packageDir,
+        "src",
+        parsed.dir.replaceAll("contracts", "queries"),
+        `${parsed.name}.ts`,
+      );
+    },
+  },
   "liquidation-sdk-viem": {
     bytecodeExportName: "bytecode",
     describeArtifact(contractName) {

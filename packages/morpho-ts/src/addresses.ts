@@ -1,11 +1,13 @@
 import { ChainId } from "./chain.js";
 import {
-  IncompleteChainRegistryError,
+  IncompleteMidnightAddressesError,
+  IncompleteMidnightDeploymentsError,
+  MidnightAddressAlreadyRegisteredError,
+  MidnightDeploymentAlreadyRegisteredError,
   RegistryValueAlreadyRegisteredError,
-  UnknownAddressError,
   UnsupportedChainIdError,
 } from "./errors.js";
-import type { DeepPartial, DottedKeys } from "./types.js";
+import type { Address, DeepPartial, DottedKeys } from "./types.js";
 import { deepFreeze, entries } from "./utils.js";
 
 /** Address used to replicate an erc20-behaviour for native token.
@@ -16,106 +18,51 @@ export const NATIVE_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 
 /** Registry entry for protocol, adapter, factory, and token addresses on one chain. */
 export interface ChainAddresses {
-  /**
-   * Morpho Blue core contract for isolated lending markets, positions, authorization, and liquidations.
-   *
-   * TODO(vNext-major): make `blue` required when the deprecated `morpho` alias is removed.
-   */
-  blue?: `0x${string}`;
-  /**
-   * Deprecated alias for the Morpho Blue core contract.
-   *
-   * @deprecated Use `blue` instead.
-   */
-  morpho: `0x${string}`;
-  /** Permit2 contract used by Bundler3 and Midnight periphery for Permit2 token approvals. */
-  permit2?: `0x${string}`;
-  /** Bundler3 batch executor and adapters for composing user workflows. */
+  morpho: Address;
+  permit2?: Address;
   bundler3: {
-    /** Bundler3 multicall executor that transiently records the bundle initiator for adapters. */
-    bundler3: `0x${string}`;
-    /** Chain-agnostic Bundler3 adapter for Morpho Blue, ERC4626, wrapped native, and token-transfer actions. */
-    generalAdapter1: `0x${string}`;
-    /** Bundler3 adapter for Paraswap Augustus swaps, including swaps sized from Morpho debt. */
-    paraswapAdapter?: `0x${string}`;
-    /** Bundler3 adapter for ERC20Wrapper deposit and withdraw flows, especially permissioned wrappers. */
-    erc20WrapperAdapter?: `0x${string}`;
-    /** Bundler3 adapter for migrating Compound V2 cToken or cETH debt and collateral positions to Morpho. */
-    compoundV2MigrationAdapter?: `0x${string}`;
-    /** Bundler3 adapter for migrating Compound V3 base debt and collateral positions to Morpho. */
-    compoundV3MigrationAdapter?: `0x${string}`;
-    /** Bundler3 adapter for migrating Aave V2 debt and aToken positions to Morpho. */
-    aaveV2MigrationAdapter?: `0x${string}`;
-    /** Bundler3 adapter for migrating positions from the core Aave V3 pool to Morpho. */
-    aaveV3CoreMigrationAdapter?: `0x${string}`;
-    /** Bundler3 adapter for migrating positions from the Aave V3 Prime pool to Morpho. */
-    aaveV3PrimeMigrationAdapter?: `0x${string}`;
-    /** Bundler3 adapter for migrating positions from the Aave V3 EtherFi pool to Morpho. */
-    aaveV3EtherFiMigrationAdapter?: `0x${string}`;
-    /** Bundler3 adapter for migrating Aave V3 Optimizer positions to Morpho. */
-    aaveV3OptimizerMigrationAdapter?: `0x${string}`;
+    bundler3: Address;
+    generalAdapter1: Address;
+    paraswapAdapter?: Address;
+    erc20WrapperAdapter?: Address;
+    compoundV2MigrationAdapter?: Address;
+    compoundV3MigrationAdapter?: Address;
+    aaveV2MigrationAdapter?: Address;
+    aaveV3CoreMigrationAdapter?: Address;
+    aaveV3PrimeMigrationAdapter?: Address;
+    aaveV3EtherFiMigrationAdapter?: Address;
+    aaveV3OptimizerMigrationAdapter?: Address;
   };
-  /** AdaptiveCurveIrm contract that lets Morpho update utilization-responsive borrow rates per market. */
-  adaptiveCurveIrm: `0x${string}`;
-  /** PublicAllocator contract for permissionless MetaMorpho reallocations subject to flow caps and vault fees. */
-  publicAllocator?: `0x${string}`;
-  /** MetaMorpho factory that creates and indexes Morpho Vault V1 ERC4626 vaults. */
-  metaMorphoFactory?: `0x${string}`;
-  /** VaultV2 factory that creates and indexes Morpho Vault V2 ERC4626/ERC2612 vaults. */
-  vaultV2Factory?: `0x${string}`;
-  /** Legacy VaultV2 Morpho Market V1 adapter factory used to create and index Blue market adapters. */
-  morphoMarketV1AdapterFactory?: `0x${string}`;
-  /** VaultV2 Morpho Market V1 adapter V2 factory for Blue market adapters constrained to AdaptiveCurveIrm markets. */
-  morphoMarketV1AdapterV2Factory?: `0x${string}`;
-  /** VaultV2 Morpho Vault V1 adapter factory for adapters that allocate VaultV2 assets into MetaMorpho vaults. */
-  morphoVaultV1AdapterFactory?: `0x${string}`;
-  /** Adapter RegistryList that delegates VaultV2 adapter validation to owner-added sub-registries. */
-  registryList?: `0x${string}`;
-  /** MorphoChainlinkOracleV2 factory that creates and indexes Morpho Blue Chainlink/ERC4626 price oracles. */
-  chainlinkOracleFactory?: `0x${string}`;
-  /** PreLiquidation factory that creates and indexes linear LIF/LCF pre-liquidation contracts for Morpho markets. */
-  preLiquidationFactory?: `0x${string}`;
-  /** Canonical wrapped native token used by adapters and unwrapped-token mappings on this chain. */
-  wNative?: `0x${string}`;
-  /** Morpho governance token. */
-  morphoToken?: `0x${string}`;
+  adaptiveCurveIrm: Address;
+  publicAllocator?: Address;
+  metaMorphoFactory?: Address;
+  vaultV2Factory?: Address;
+  morphoMarketV1AdapterFactory?: Address;
+  morphoMarketV1AdapterV2Factory?: Address;
+  morphoVaultV1AdapterFactory?: Address;
+  registryList?: Address;
+  chainlinkOracleFactory?: Address;
+  preLiquidationFactory?: Address;
+  wNative?: Address;
+  morphoToken?: Address;
   /**
-   * DAI token.
-   *
-   * Must implement DAI-specific permit, otherwise permit signatures break.
+   * Must implement DAI specific permit (otherwise breaks permit signatures).
    */
-  dai?: `0x${string}`;
+  dai?: Address;
   /**
-   * USDC token.
-   *
-   * Must implement USDC permit version 2, otherwise permit signatures break.
+   * Must implement USDC permit version 2 (otherwise breaks permit signatures).
    */
-  usdc?: `0x${string}`;
+  usdc?: Address;
   /**
-   * EURC token.
-   *
-   * Must implement EURC permit version 2, otherwise permit signatures break.
+   * Must implement EURC permit version 2 (otherwise breaks permit signatures).
    */
-  eurc?: `0x${string}`;
-  /** Lido stETH token used in Ethereum native-token wrapping and staking flows. */
-  stEth?: `0x${string}`;
-  /** Lido wstETH token mapped to stETH for unwrap-aware flows. */
-  wstEth?: `0x${string}`;
-  /** Midnight core contract for fixed-maturity credit/debt markets, offers, collateral, and liquidations. */
-  midnight?: `0x${string}`;
-  /** MidnightBundles periphery contract for batched take, repay, collateral, permit, and referral workflows. */
-  midnightBundles?: `0x${string}`;
-  /** Midnight mempool submission endpoint used by app and orderbook flows for offchain offer payloads. */
-  midnightMempool?: `0x${string}`;
-  /** EcrecoverRatifier contract that validates EIP-712 signed Merkle roots of Midnight offers. */
-  ecrecoverRatifier?: `0x${string}`;
-  /** SetterRatifier contract that validates Midnight offer Merkle roots ratified onchain by the maker or delegate. */
-  setterRatifier?: `0x${string}`;
+  eurc?: Address;
+  stEth?: Address;
+  wstEth?: Address;
 }
 
 const _addressesRegistry = {
   [ChainId.EthMainnet]: {
-    blue: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
     morpho: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
@@ -147,71 +94,45 @@ const _addressesRegistry = {
 
     wNative: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
     morphoToken: "0x9994E35Db50125E0DF82e4c2dde62496CE330999",
-    /** DAI token with the DAI-specific permit implementation required by permit flows. */
+    // Must implement DAI specific permit (otherwise breaks permit signatures).
     dai: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
-    /** Spark Savings DAI ERC4626 vault token mapped as a known Ethereum asset. */
     sDai: "0x83F20F44975D03b1b09e64809B757c47f942BEeA",
-    /** Maker token mapped as a known Ethereum asset. */
     mkr: "0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2",
     stEth: "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
     wstEth: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
-    /** StakeWise osETH token mapped as a known Ethereum liquid staking asset. */
     osEth: "0xf1C9acDc66974dFB6dEcB12aA385b9cD01190E38",
-    /** Backed bIB01 token mapped as the underlying asset for its wrapped permissioned token. */
     bIB01: "0xCA30c93B02514f86d5C86a6e375E3A330B435Fb5",
-    /**
-     * Wrapped Backed bIB01 permissioned token.
-     *
-     * If this address changes, verify whether the replacement has simple permit support.
-     */
+    // If we want to change the wbIB01 address, we have to check if the new one has simple permit or not.
+    // Currently, wbIB01 is considered to have simple permit.
     wbIB01: "0xcA2A7068e551d5C4482eb34880b194E4b945712F",
-    /** Backed bC3M token mapped as the underlying asset for its wrapped permissioned token. */
     bC3M: "0x2F123cF3F37CE3328CC9B5b8415f9EC5109b45e7",
-    /**
-     * Wrapped Backed bC3M permissioned token.
-     *
-     * If this address changes, verify whether the replacement has simple permit support.
-     */
+    // If we want to change the wbC3M address, we have to check if the new one has simple permit or not.
+    // Currently, wbC3M is considered to have simple permit.
     wbC3M: "0x95D7337d43340E2721960Dc402D9b9117f0d81a2",
-    /** USDC token with permit version 2 support required by permit flows. */
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-    /** EURC token with permit version 2 support required by permit flows. */
+    // Must implement EURC permit version 2 (otherwise breaks permit signatures).
     eurc: "0x1aBaEA1f7C830bD89Acc67eC4af516284b1bC33c",
-    /** USDT token mapped as a known Ethereum stablecoin asset. */
     usdt: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
-    /** crvUSD token mapped as a known Ethereum stablecoin asset. */
     crvUsd: "0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E",
 
-    /** Morpho-specific staked Convex wrapper for the Curve USDT/WBTC/WETH pool token. */
     "stkcvxcrvUSDTWBTCWETH-morpho":
       "0xb0Ce26C88e4e7DCa51968b6047f44646f5064278",
-    /** Curve USDT/WBTC/WETH pool token mapped as the unwrapped asset for its Morpho Convex wrapper. */
     crvUSDTWBTCWETH: "0xf5f5B97624542D72A9E06f04804Bf81baA15e2B4",
-    /** Morpho-specific staked Convex wrapper for the Curve USDC/WBTC/WETH pool token. */
     "stkcvxcrvUSDCWBTCWETH-morpho":
       "0x0ea1a65A2c255f24Ee8D81eA6AaC54Decd9d269e",
-    /** Curve USDC/WBTC/WETH pool token mapped as the unwrapped asset for its Morpho Convex wrapper. */
     crvUSDCWBTCWETH: "0x7F86Bf177Dd4F3494b841a37e810A34dD56c829B",
-    /** Morpho-specific staked Convex wrapper for the Curve CRV/USDT/BTC/wstETH pool token. */
     "stkcvxcrvCRVUSDTBTCWSTETH-morpho":
       "0x3ce8Ec9f3d89aD0A2DdbCC3FDB8991BD241Fc82E",
-    /** Curve CRV/USDT/BTC/wstETH pool token mapped as the unwrapped asset for its Morpho Convex wrapper. */
     crvCRVUSDTBTCWSTETH: "0x2889302a794dA87fBF1D6Db415C1492194663D13",
-    /** Morpho-specific staked Convex wrapper for the Curve TryLSD pool token. */
     "stkcvxTryLSD-morpho": "0x6BA072F0d22806F2C52e9792AF47f2D59103BEBE",
-    /** Curve TryLSD pool token mapped as the unwrapped asset for its Morpho Convex wrapper. */
     tryLSD: "0x2570f1bD5D2735314FC102eb12Fc1aFe9e6E7193",
-    /** Morpho-specific staked Convex wrapper for the Curve crvUSD/ETH/CRV pool token. */
     "stkcvxcrvUSDETHCRV-morpho": "0xAc904BAfBb5FB04Deb2b6198FdCEedE75a78Ce5a",
-    /** Curve crvUSD/ETH/CRV pool token mapped as the unwrapped asset for its Morpho Convex wrapper. */
     crvUSDETHCRV: "0x4eBdF703948ddCEA3B11f675B4D1Fba9d2414A14",
-    /** Morpho-specific staked Convex wrapper for the Curve 2BTC-f pool token. */
     "stkcvx2BTC-f-morpho": "0x385E12cf4040543Bc8C18e05C1298Be5B04f3f5e",
-    /** Curve 2BTC-f pool token mapped as the unwrapped asset for its Morpho Convex wrapper. */
     "2BTC-f": "0xB7ECB2AA52AA64a717180E030241bC75Cd946726",
   },
   [ChainId.BaseMainnet]: {
-    blue: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
     morpho: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
@@ -235,17 +156,14 @@ const _addressesRegistry = {
     preLiquidationFactory: "0x8cd16b62E170Ee0bA83D80e1F80E6085367e2aef",
 
     wNative: "0x4200000000000000000000000000000000000006",
-    /** USDC token with permit version 2 support required by permit flows. */
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-    /** EURC token with permit version 2 support required by permit flows. */
+    // Must implement EURC permit version 2 (otherwise breaks permit signatures).
     eurc: "0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42",
-    /** Coinbase-attested wrapped USDC token mapped to canonical USDC when unwrapped. */
     verUsdc: "0x59aaF835D34b1E3dF2170e4872B785f11E2a964b",
-    /** Permissioned test USDC wrapper mapped to canonical Base USDC when unwrapped. */
     testUsdc: "0xBC77067f829979812d795d516E523C4033b66409",
   },
   [ChainId.PolygonMainnet]: {
-    blue: "0x1bF0c2541F820E775182832f06c0B7Fc27A25f67",
     morpho: "0x1bF0c2541F820E775182832f06c0B7Fc27A25f67",
     bundler3: {
       bundler3: "0x2d9C3A9E67c966C711208cc78b34fB9E9f8db589",
@@ -269,11 +187,10 @@ const _addressesRegistry = {
     preLiquidationFactory: "0xeDadDe37D76c72b98725614d0b41C20Fe612d304",
 
     wNative: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270",
-    /** USDC token with permit version 2 support required by permit flows. */
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
   },
   [ChainId.ArbitrumMainnet]: {
-    blue: "0x6c247b1F6182318877311737BaC0844bAa518F5e",
     morpho: "0x6c247b1F6182318877311737BaC0844bAa518F5e",
     bundler3: {
       bundler3: "0x1FA4431bC113D308beE1d46B0e98Cb805FB48C13",
@@ -296,11 +213,10 @@ const _addressesRegistry = {
     preLiquidationFactory: "0x635c31B5DF1F7EFbCbC07E302335Ef4230758e3d",
 
     wNative: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
-    /** USDC token with permit version 2 support required by permit flows. */
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
   },
   [ChainId.OptimismMainnet]: {
-    blue: "0xce95AfbB8EA029495c66020883F87aaE8864AF92",
     morpho: "0xce95AfbB8EA029495c66020883F87aaE8864AF92",
     bundler3: {
       bundler3: "0xFBCd3C258feB131D8E038F2A3a670A7bE0507C05",
@@ -321,11 +237,10 @@ const _addressesRegistry = {
     preLiquidationFactory: "0x3d05C01EE8e97361b9E19D172128255eaE5F98B9",
 
     wNative: "0x4200000000000000000000000000000000000006",
-    /** USDC token with permit version 2 support required by permit flows. */
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
   },
   [ChainId.WorldChainMainnet]: {
-    blue: "0xE741BC7c34758b4caE05062794E8Ae24978AF432",
     morpho: "0xE741BC7c34758b4caE05062794E8Ae24978AF432",
     bundler3: {
       bundler3: "0x3D07BF2FFb23248034bF704F3a4786F1ffE2a448",
@@ -344,11 +259,10 @@ const _addressesRegistry = {
     preLiquidationFactory: "0xe3cE2051a24e58DBFC0eFBe4c2d9e89c5eAe4695",
 
     wNative: "0x4200000000000000000000000000000000000006",
-    /** EURC token with permit version 2 support required by permit flows. */
+    // Must implement EURC permit version 2 (otherwise breaks permit signatures).
     eurc: "0x1C60ba0A0eD1019e8Eb035E6daF4155A5cE2380B",
   },
   [ChainId.FraxtalMainnet]: {
-    blue: "0xa6030627d724bA78a59aCf43Be7550b4C5a0653b",
     morpho: "0xa6030627d724bA78a59aCf43Be7550b4C5a0653b",
     bundler3: {
       bundler3: "0xA7a414823Ef0F8CFb2c4f67f2F445DA940641d91",
@@ -363,7 +277,6 @@ const _addressesRegistry = {
     wNative: "0xFC00000000000000000000000000000000000006",
   },
   [ChainId.ScrollMainnet]: {
-    blue: "0x2d012EdbAdc37eDc2BC62791B666f9193FDF5a55",
     morpho: "0x2d012EdbAdc37eDc2BC62791B666f9193FDF5a55",
     bundler3: {
       bundler3: "0x60F9159d4dCd724e743212416FD57d8aC0B60768",
@@ -376,11 +289,10 @@ const _addressesRegistry = {
     preLiquidationFactory: "0xeD960178e4aDA0296786Fa79D84e8FDF7bd44B25",
 
     wNative: "0x5300000000000000000000000000000000000004",
-    /** USDC token with permit version 2 support required by permit flows. */
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4",
   },
   [ChainId.InkMainnet]: {
-    blue: "0x857f3EefE8cbda3Bc49367C996cd664A880d3042",
     morpho: "0x857f3EefE8cbda3Bc49367C996cd664A880d3042",
     bundler3: {
       bundler3: "0x7db0F1E2bf1f47ec82220090F388d75D8B9BB6BC",
@@ -393,11 +305,10 @@ const _addressesRegistry = {
     preLiquidationFactory: "0x30607fEa77168d2c0401B6f60F0B40E32F9339E3",
 
     wNative: "0x4200000000000000000000000000000000000006",
-    /** USDC token with permit version 2 support required by permit flows. */
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0xF1815bd50389c46847f0Bda824eC8da914045D14",
   },
   [ChainId.Unichain]: {
-    blue: "0x8f5ae9CddB9f68de460C77730b018Ae7E04a140A",
     morpho: "0x8f5ae9CddB9f68de460C77730b018Ae7E04a140A",
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
@@ -419,11 +330,10 @@ const _addressesRegistry = {
     preLiquidationFactory: "0xb04e4D3D59Ee47Ca9BA192707AF13A7D02969911",
 
     wNative: "0x4200000000000000000000000000000000000006",
-    /** USDC token with permit version 2 support required by permit flows. */
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0x078D782b760474a361dDA0AF3839290b0EF57AD6",
   },
   [ChainId.SonicMainnet]: {
-    blue: "0xd6c916eB7542D0Ad3f18AEd0FCBD50C582cfa95f",
     morpho: "0xd6c916eB7542D0Ad3f18AEd0FCBD50C582cfa95f",
     bundler3: {
       bundler3: "0xB06F1Ad8c908b958E596c42973f67F2f1d9a9afF",
@@ -438,7 +348,6 @@ const _addressesRegistry = {
     wNative: "0x039e2fB66102314Ce7b64Ce5Ce3E5183bc94aD38",
   },
   [ChainId.HemiMainnet]: {
-    blue: "0xa4Ca2c2e25b97DA19879201bA49422bc6f181f42",
     morpho: "0xa4Ca2c2e25b97DA19879201bA49422bc6f181f42",
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
@@ -452,11 +361,10 @@ const _addressesRegistry = {
     preLiquidationFactory: "0x40F2896C551194e364F7C846046C34d8a9FE97e4",
 
     wNative: "0x4200000000000000000000000000000000000006",
-    /** USDC token with permit version 2 support required by permit flows. */
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0xad11a8BEb98bbf61dbb1aa0F6d6F2ECD87b35afA",
   },
   [ChainId.ModeMainnet]: {
-    blue: "0xd85cE6BD68487E0AaFb0858FDE1Cd18c76840564",
     morpho: "0xd85cE6BD68487E0AaFb0858FDE1Cd18c76840564",
     bundler3: {
       bundler3: "0xFEA0edFa081C8D5960Ec9Bf6684981dB1834305d",
@@ -471,7 +379,6 @@ const _addressesRegistry = {
     wNative: "0x4200000000000000000000000000000000000006",
   },
   [ChainId.CornMainnet]: {
-    blue: "0xc2B1E031540e3F3271C5F3819F0cC7479a8DdD90",
     morpho: "0xc2B1E031540e3F3271C5F3819F0cC7479a8DdD90",
     bundler3: {
       bundler3: "0x086889F9bdE8349512dD77088A7114E6C1c42Af7",
@@ -484,11 +391,10 @@ const _addressesRegistry = {
     preLiquidationFactory: "0xb9065AC18d3EBdb3263B77B587f9c5CD570545D1",
 
     wNative: "0xda5dDd7270381A7C2717aD10D1c0ecB19e3CDFb2",
-    /** USDC token with permit version 2 support required by permit flows. */
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0xDF0B24095e15044538866576754F3C964e902Ee6",
   },
   [ChainId.PlumeMainnet]: {
-    blue: "0x42b18785CE0Aed7BF7Ca43a39471ED4C0A3e0bB5",
     morpho: "0x42b18785CE0Aed7BF7Ca43a39471ED4C0A3e0bB5",
     bundler3: {
       bundler3: "0x5437C8788f4CFbaA55be6FBf30379bc7dd7f69C3",
@@ -510,7 +416,6 @@ const _addressesRegistry = {
     wNative: "0xEa237441c92CAe6FC17Caaf9a7acB3f953be4bd1",
   },
   [ChainId.CampMainnet]: {
-    blue: "0xea4f2979D7A99B40404b447Cf71c008e3805760F",
     morpho: "0xea4f2979D7A99B40404b447Cf71c008e3805760F",
     bundler3: {
       bundler3: "0x88A4038BB4A14ecD7301c8Fb1f1e8732c4355D53",
@@ -523,11 +428,10 @@ const _addressesRegistry = {
     preLiquidationFactory: "0xD55fA5DF6F1A21C2B93009A702aad3a0891C1B48",
 
     wNative: "0x3bd5C81a8Adf3355078Dc5F73c41d3194B316690",
-    /** USDC token with permit version 2 support required by permit flows. */
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0x8a2B28364102Bea189D99A475C494330Ef2bDD0B",
   },
   [ChainId.KatanaMainnet]: {
-    blue: "0xD50F2DffFd62f94Ee4AEd9ca05C61d0753268aBc",
     morpho: "0xD50F2DffFd62f94Ee4AEd9ca05C61d0753268aBc",
     bundler3: {
       bundler3: "0xA8C5e23C9C0DF2b6fF716486c6bBEBB6661548C8",
@@ -548,7 +452,6 @@ const _addressesRegistry = {
     wNative: "0xEE7D8BCFb72bC1880D0Cf19822eB0A2e6577aB62",
   },
   [ChainId.EtherlinkMainnet]: {
-    blue: "0xbCE7364E63C3B13C73E9977a83c9704E2aCa876e",
     morpho: "0xbCE7364E63C3B13C73E9977a83c9704E2aCa876e",
     bundler3: {
       bundler3: "0x69dc8086191437b55775b79C730BB3876397e7D1",
@@ -563,7 +466,6 @@ const _addressesRegistry = {
     wNative: "0xc9B53AB2679f573e480d01e0f49e2B5CFB7a3EAb",
   },
   [ChainId.TacMainnet]: {
-    blue: "0x918B9F2E4B44E20c6423105BB6cCEB71473aD35c",
     morpho: "0x918B9F2E4B44E20c6423105BB6cCEB71473aD35c",
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
@@ -579,7 +481,6 @@ const _addressesRegistry = {
     wNative: "0xB63B9f0eb4A6E6f191529D71d4D88cc8900Df2C9",
   },
   [ChainId.LiskMainnet]: {
-    blue: "0x00cD58DEEbd7A2F1C55dAec715faF8aed5b27BF8",
     morpho: "0x00cD58DEEbd7A2F1C55dAec715faF8aed5b27BF8",
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
@@ -593,11 +494,10 @@ const _addressesRegistry = {
     preLiquidationFactory: "0xF2c325F26691b6556e6f66451bb38bDa37FEbaa7",
 
     wNative: "0x4200000000000000000000000000000000000006",
-    /** USDC token with permit version 2 support required by permit flows. */
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0xF242275d3a6527d877f2c927a82D9b057609cc71",
   },
   [ChainId.HyperliquidMainnet]: {
-    blue: "0x68e37dE8d93d3496ae143F2E900490f6280C57cD",
     morpho: "0x68e37dE8d93d3496ae143F2E900490f6280C57cD",
     bundler3: {
       bundler3: "0xa3F50477AfA601C771874260A3B34B40e244Fa0e",
@@ -616,11 +516,10 @@ const _addressesRegistry = {
     preLiquidationFactory: "0x1b6782Ac7A859503cE953FBf4736311CC335B8f0",
 
     wNative: "0x5555555555555555555555555555555555555555",
-    /** USDC token with permit version 2 support required by permit flows. */
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0xb88339CB7199b77E23DB6E890353E22632Ba630f",
   },
   [ChainId.SeiMainnet]: {
-    blue: "0xc9cDAc20FCeAAF616f7EB0bb6Cd2c69dcfa9094c",
     morpho: "0xc9cDAc20FCeAAF616f7EB0bb6Cd2c69dcfa9094c",
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
@@ -636,7 +535,6 @@ const _addressesRegistry = {
     usdc: "0xe15fC38F6D8c56aF07bbCBe3BAf5708A2Bf42392",
   },
   [ChainId.ZeroGMainnet]: {
-    blue: "0x9CDD13a2212D94C4f12190cA30783B743E83C89e",
     morpho: "0x9CDD13a2212D94C4f12190cA30783B743E83C89e",
     bundler3: {
       bundler3: "0xbDaFC7ceF85C5fF69164330F521089C9E15DDDae",
@@ -651,7 +549,6 @@ const _addressesRegistry = {
     wNative: "0x1Cd0690fF9a693f5EF2dD976660a8dAFc81A109c",
   },
   [ChainId.LineaMainnet]: {
-    blue: "0x6B0D716aC0A45536172308e08fC2C40387262c9F",
     morpho: "0x6B0D716aC0A45536172308e08fC2C40387262c9F",
     bundler3: {
       bundler3: "0x1Ee8Ec299E8014760D50A4E3CfC3b44Cc2242625",
@@ -671,7 +568,6 @@ const _addressesRegistry = {
     usdc: "0x176211869cA2b568f2A7D4EE941E073a821EE1ff",
   },
   [ChainId.MonadMainnet]: {
-    blue: "0xD5D960E8C380B724a48AC59E2DfF1b2CB4a1eAee",
     morpho: "0xD5D960E8C380B724a48AC59E2DfF1b2CB4a1eAee",
     bundler3: {
       bundler3: "0x82b684483e844422FD339df0b67b3B111F02c66E",
@@ -692,7 +588,6 @@ const _addressesRegistry = {
     usdc: "0x754704Bc059F8C67012fEd69BC8A327a5aafb603",
   },
   [ChainId.StableMainnet]: {
-    blue: "0xa40103088A899514E3fe474cD3cc5bf811b1102e",
     morpho: "0xa40103088A899514E3fe474cD3cc5bf811b1102e",
     bundler3: {
       bundler3: "0xA0bb114F927dF03d9a1a639b9c71F71B0FaFDf1B",
@@ -713,7 +608,6 @@ const _addressesRegistry = {
     // There is no wrapped native token because the native token USDT0 is already an ERC20.
   },
   [ChainId.CronosMainnet]: {
-    blue: "0xDF9a1DC07e5dEe5ccCCaBeC35e446C70fAF7434e",
     morpho: "0xDF9a1DC07e5dEe5ccCCaBeC35e446C70fAF7434e",
     bundler3: {
       bundler3: "0xb1c59fE6A0DCE25b804F6113C441Bf4F3a4Ab6bC",
@@ -734,7 +628,6 @@ const _addressesRegistry = {
     wNative: "0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23",
   },
   [ChainId.CeloMainnet]: {
-    blue: "0xd24ECdD8C1e0E57a4E26B1a7bbeAa3e95466A569",
     morpho: "0xd24ECdD8C1e0E57a4E26B1a7bbeAa3e95466A569",
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
@@ -750,7 +643,6 @@ const _addressesRegistry = {
     usdc: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
   },
   [ChainId.AbstractMainnet]: {
-    blue: "0xc85CE8ffdA27b646D269516B8d0Fa6ec2E958B55",
     morpho: "0xc85CE8ffdA27b646D269516B8d0Fa6ec2E958B55",
     bundler3: {
       bundler3: "0xc13A3Ca3B0120EE6121d1E0ca9Da22fDD7ed28Cd",
@@ -762,11 +654,10 @@ const _addressesRegistry = {
     chainlinkOracleFactory: "0x3585E3fD72F8d1b02250E1F6496b706c6e092884",
     preLiquidationFactory: "0x1058DA51242dF63bA3A61c838A61405ea6Edb083",
     wNative: "0x3439153EB7AF838Ad19d56E1571FBD09333C2809",
-    /** USDC token with permit version 2 support required by permit flows. */
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0x84A71ccD554Cc1b02749b35d22F684CC8ec987e1",
   },
   [ChainId.BitlayerMainnet]: {
-    blue: "0xAeA7eFF1bD3c875c18ef50F0387892dF181431C6",
     morpho: "0xAeA7eFF1bD3c875c18ef50F0387892dF181431C6",
     bundler3: {
       bundler3: "0x82b3ea7558Fc383b949fa42Db7ee3eB101447B96",
@@ -778,11 +669,10 @@ const _addressesRegistry = {
     chainlinkOracleFactory: "0xfDc69d06De855701731D142F28bD401802DA4daF",
     preLiquidationFactory: "0x4E28CAE07A008FF2D7D345992C969118eb253CD6",
     wNative: "0xfF204e2681A6fA0e2C3FaDe68a1B28fb90E4Fc5F",
-    /** USDC token with permit version 2 support required by permit flows. */
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0xf8C374CE88A3BE3d374e8888349C7768B607c755",
   },
   [ChainId.BscMainnet]: {
-    blue: "0x01b0Bd309AA75547f7a37Ad7B1219A898E67a83a",
     morpho: "0x01b0Bd309AA75547f7a37Ad7B1219A898E67a83a",
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
@@ -797,7 +687,6 @@ const _addressesRegistry = {
     wNative: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
   },
   [ChainId.SoneiumMainnet]: {
-    blue: "0xE75Fc5eA6e74B824954349Ca351eb4e671ADA53a",
     morpho: "0xE75Fc5eA6e74B824954349Ca351eb4e671ADA53a",
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
@@ -810,11 +699,10 @@ const _addressesRegistry = {
     chainlinkOracleFactory: "0x669F1A4cE3127740eCdB3E36adFC5Df6Db1EA74b",
     preLiquidationFactory: "0xcBD0710425613d666C5Ffb4dE2eE73554F21c34B",
     wNative: "0x4200000000000000000000000000000000000006",
-    /** USDC token with permit version 2 support required by permit flows. */
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0xbA9986D2381edf1DA03B0B9c1f8b00dc4AacC369",
   },
   [ChainId.TempoMainnet]: {
-    blue: "0x10EE9AAC980A180dd4DcFc96C746d60B0EA88f97",
     morpho: "0x10EE9AAC980A180dd4DcFc96C746d60B0EA88f97",
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
@@ -831,7 +719,6 @@ const _addressesRegistry = {
     preLiquidationFactory: "0xB83d2D5CAE5Fc64a408cA82447445442Fe249fe3",
   },
   [ChainId.EdenMainnet]: {
-    blue: "0xF050a2BB0468FF23cF2964AC182196C94D6815C3",
     morpho: "0xF050a2BB0468FF23cF2964AC182196C94D6815C3",
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
@@ -848,7 +735,6 @@ const _addressesRegistry = {
     wNative: "0x00000000000000000000000000000000ce1E571a",
   },
   [ChainId.PharosMainnet]: {
-    blue: "0x18573fA18fd17dDfD790B4a5B5b2977aad3b4Efb",
     morpho: "0x18573fA18fd17dDfD790B4a5B5b2977aad3b4Efb",
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
@@ -865,7 +751,6 @@ const _addressesRegistry = {
     wNative: "0x52C48d4213107b20bC583832b0d951FB9CA8F0B0",
   },
   [ChainId.GensynMainnet]: {
-    blue: "0x8c45B34999883FF4B47cD3be095D585682cd9227",
     morpho: "0x8c45B34999883FF4B47cD3be095D585682cd9227",
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
@@ -882,7 +767,6 @@ const _addressesRegistry = {
     wNative: "0x4200000000000000000000000000000000000006",
   },
   [ChainId.FlareMainnet]: {
-    blue: "0xF4346F5132e810f80a28487a79c7559d9797E8B0",
     morpho: "0xF4346F5132e810f80a28487a79c7559d9797E8B0",
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
@@ -899,7 +783,6 @@ const _addressesRegistry = {
     wNative: "0x1D80c49BbBCd1C0911346656B529DF9E5c2F783d",
   },
   [ChainId.XdcMainnet]: {
-    blue: "0xEa49B0fE898aF913A3826F9f462eE2cDcb854fD9",
     morpho: "0xEa49B0fE898aF913A3826F9f462eE2cDcb854fD9",
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
@@ -916,7 +799,6 @@ const _addressesRegistry = {
     wNative: "0x951857744785E80e2De051c32EE7b25f9c458C42",
   },
   [ChainId.KaiaMainnet]: {
-    blue: "0xA8BEebdca34d83C697c302A0594f3c41f3994cd2",
     morpho: "0xA8BEebdca34d83C697c302A0594f3c41f3994cd2",
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
@@ -933,7 +815,6 @@ const _addressesRegistry = {
     wNative: "0x19Aac5f612f524B754CA7e7c41cbFa2E981A4432",
   },
   [ChainId.ArcMainnet]: {
-    blue: "0x34CD04070dD72b14E241112F6d83812Df5Af7fCD",
     morpho: "0x34CD04070dD72b14E241112F6d83812Df5Af7fCD",
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
@@ -952,14 +833,13 @@ const _addressesRegistry = {
 
 /** Deployment block registry with the same shape as `ChainAddresses`. */
 export type ChainDeployments<Addresses = ChainAddresses> = {
-  [key in keyof Addresses]: `0x${string}` extends Addresses[key]
+  [key in keyof Addresses]: Address extends Addresses[key]
     ? bigint
     : ChainDeployments<Addresses[key]>;
 };
 
 const _deployments = {
   [ChainId.EthMainnet]: {
-    blue: 18883124n,
     morpho: 18883124n,
     permit2: 15986406n,
     bundler3: {
@@ -987,7 +867,6 @@ const _deployments = {
     preLiquidationFactory: 21414664n,
   },
   [ChainId.BaseMainnet]: {
-    blue: 13977148n,
     morpho: 13977148n,
     permit2: 1425180n,
     bundler3: {
@@ -1010,7 +889,6 @@ const _deployments = {
     preLiquidationFactory: 23779056n,
   },
   [ChainId.PolygonMainnet]: {
-    blue: 66931042n,
     morpho: 66931042n,
     bundler3: {
       bundler3: 68074185n,
@@ -1033,7 +911,6 @@ const _deployments = {
     preLiquidationFactory: 68074185n,
   },
   [ChainId.ArbitrumMainnet]: {
-    blue: 296446593n,
     morpho: 296446593n,
     bundler3: {
       bundler3: 307326238n,
@@ -1055,7 +932,6 @@ const _deployments = {
     preLiquidationFactory: 307326238n,
   },
   [ChainId.OptimismMainnet]: {
-    blue: 130770075n,
     morpho: 130770075n,
     bundler3: {
       bundler3: 132139369n,
@@ -1075,7 +951,6 @@ const _deployments = {
     preLiquidationFactory: 132139369n,
   },
   [ChainId.WorldChainMainnet]: {
-    blue: 9025669n,
     morpho: 9025669n,
     bundler3: {
       bundler3: 10273494n,
@@ -1093,7 +968,6 @@ const _deployments = {
     preLiquidationFactory: 10273494n,
   },
   [ChainId.FraxtalMainnet]: {
-    blue: 15317931n,
     morpho: 15317931n,
     bundler3: {
       bundler3: 16536231n,
@@ -1106,7 +980,6 @@ const _deployments = {
     preLiquidationFactory: 16536231n,
   },
   [ChainId.ScrollMainnet]: {
-    blue: 12842868n,
     morpho: 12842868n,
     bundler3: {
       bundler3: 13504587n,
@@ -1119,7 +992,6 @@ const _deployments = {
     preLiquidationFactory: 13504587n,
   },
   [ChainId.InkMainnet]: {
-    blue: 4078776n,
     morpho: 4078776n,
     bundler3: {
       bundler3: 6385077n,
@@ -1132,7 +1004,6 @@ const _deployments = {
     preLiquidationFactory: 6385077n,
   },
   [ChainId.Unichain]: {
-    blue: 9139027n,
     morpho: 9139027n,
     permit2: 0n,
     bundler3: {
@@ -1153,7 +1024,6 @@ const _deployments = {
     preLiquidationFactory: 9381237n,
   },
   [ChainId.SonicMainnet]: {
-    blue: 9100931n,
     morpho: 9100931n,
     bundler3: {
       bundler3: 9102286n,
@@ -1166,7 +1036,6 @@ const _deployments = {
     preLiquidationFactory: 9102286n,
   },
   [ChainId.HemiMainnet]: {
-    blue: 1188872n,
     morpho: 1188872n,
     bundler3: {
       bundler3: 1188907n,
@@ -1179,7 +1048,6 @@ const _deployments = {
     preLiquidationFactory: 1188907n,
   },
   [ChainId.ModeMainnet]: {
-    blue: 19983370n,
     morpho: 19983370n,
     bundler3: {
       bundler3: 19983599n,
@@ -1192,7 +1060,6 @@ const _deployments = {
     preLiquidationFactory: 19983599n,
   },
   [ChainId.CornMainnet]: {
-    blue: 251401n,
     morpho: 251401n,
     bundler3: {
       bundler3: 253107n,
@@ -1205,7 +1072,6 @@ const _deployments = {
     preLiquidationFactory: 253107n,
   },
   [ChainId.PlumeMainnet]: {
-    blue: 765994n,
     morpho: 765994n,
     bundler3: {
       bundler3: 789925n,
@@ -1223,7 +1089,6 @@ const _deployments = {
     preLiquidationFactory: 789925n,
   },
   [ChainId.CampMainnet]: {
-    blue: 2410315n,
     morpho: 2410315n,
     bundler3: {
       bundler3: 2471517n,
@@ -1236,7 +1101,6 @@ const _deployments = {
     preLiquidationFactory: 2471517n,
   },
   [ChainId.KatanaMainnet]: {
-    blue: 2741069n,
     morpho: 2741069n,
     bundler3: {
       bundler3: 2741993n,
@@ -1254,7 +1118,6 @@ const _deployments = {
     preLiquidationFactory: 2741993n,
   },
   [ChainId.EtherlinkMainnet]: {
-    blue: 21047448n,
     morpho: 21047448n,
     bundler3: {
       bundler3: 21050766n,
@@ -1267,7 +1130,6 @@ const _deployments = {
     preLiquidationFactory: 21050766n,
   },
   [ChainId.TacMainnet]: {
-    blue: 853025n,
     morpho: 853025n,
     permit2: 553679n,
     bundler3: {
@@ -1281,7 +1143,6 @@ const _deployments = {
     preLiquidationFactory: 978967n,
   },
   [ChainId.LiskMainnet]: {
-    blue: 15731231n,
     morpho: 15731231n,
     bundler3: {
       bundler3: 15731595n,
@@ -1294,7 +1155,6 @@ const _deployments = {
     preLiquidationFactory: 15731595n,
   },
   [ChainId.HyperliquidMainnet]: {
-    blue: 1988429n,
     morpho: 1988429n,
     bundler3: {
       bundler3: 1988956n,
@@ -1312,7 +1172,6 @@ const _deployments = {
     preLiquidationFactory: 1988956n,
   },
   [ChainId.SeiMainnet]: {
-    blue: 166036723n,
     morpho: 166036723n,
     bundler3: {
       bundler3: 168897284n,
@@ -1327,7 +1186,6 @@ const _deployments = {
     usdc: 154131168n,
   },
   [ChainId.ZeroGMainnet]: {
-    blue: 7526486n,
     morpho: 7526486n,
     bundler3: {
       bundler3: 7527649n,
@@ -1340,7 +1198,6 @@ const _deployments = {
     preLiquidationFactory: 7527649n,
   },
   [ChainId.LineaMainnet]: {
-    blue: 25072608n,
     morpho: 25072608n,
     bundler3: {
       bundler3: 25072853n,
@@ -1357,7 +1214,6 @@ const _deployments = {
     preLiquidationFactory: 25072853n,
   },
   [ChainId.MonadMainnet]: {
-    blue: 31907457n,
     morpho: 31907457n,
     bundler3: {
       bundler3: 32321504n,
@@ -1376,7 +1232,6 @@ const _deployments = {
     usdc: 22909616n,
   },
   [ChainId.StableMainnet]: {
-    blue: 1504506n,
     morpho: 1504506n,
     bundler3: {
       bundler3: 1741861n,
@@ -1394,7 +1249,6 @@ const _deployments = {
     preLiquidationFactory: 1741861n,
   },
   [ChainId.CronosMainnet]: {
-    blue: 38459435n,
     morpho: 38459435n,
     bundler3: {
       bundler3: 38460388n,
@@ -1412,7 +1266,6 @@ const _deployments = {
     preLiquidationFactory: 38460388n,
   },
   [ChainId.CeloMainnet]: {
-    blue: 40249329n,
     morpho: 40249329n,
     bundler3: {
       bundler3: 41808392n,
@@ -1426,7 +1279,6 @@ const _deployments = {
     usdc: 23412006n,
   },
   [ChainId.AbstractMainnet]: {
-    blue: 13947713n,
     morpho: 13947713n,
     bundler3: {
       bundler3: 13949482n,
@@ -1440,7 +1292,6 @@ const _deployments = {
     usdc: 53247n,
   },
   [ChainId.BitlayerMainnet]: {
-    blue: 13516997n,
     morpho: 13516997n,
     bundler3: {
       bundler3: 13638316n,
@@ -1454,7 +1305,6 @@ const _deployments = {
     usdc: 4041175n,
   },
   [ChainId.BscMainnet]: {
-    blue: 54344680n,
     morpho: 54344680n,
     permit2: 25343783n,
     bundler3: {
@@ -1468,7 +1318,6 @@ const _deployments = {
     preLiquidationFactory: 54346080n,
   },
   [ChainId.SoneiumMainnet]: {
-    blue: 6440817n,
     morpho: 6440817n,
     bundler3: {
       bundler3: 6443359n,
@@ -1481,7 +1330,6 @@ const _deployments = {
     preLiquidationFactory: 6443359n,
   },
   [ChainId.TempoMainnet]: {
-    blue: 2375189n,
     morpho: 2375189n,
     bundler3: {
       bundler3: 2375313n,
@@ -1496,7 +1344,6 @@ const _deployments = {
     preLiquidationFactory: 2375010n,
   },
   [ChainId.EdenMainnet]: {
-    blue: 53363569n,
     morpho: 53363569n,
     permit2: 52269150n,
     bundler3: {
@@ -1512,7 +1359,6 @@ const _deployments = {
     wNative: 0n,
   },
   [ChainId.PharosMainnet]: {
-    blue: 4202147n,
     morpho: 4202147n,
     permit2: 0n,
     bundler3: {
@@ -1528,7 +1374,6 @@ const _deployments = {
     wNative: 1617294n,
   },
   [ChainId.GensynMainnet]: {
-    blue: 7520470n,
     morpho: 7520470n,
     permit2: 0n,
     bundler3: {
@@ -1544,7 +1389,6 @@ const _deployments = {
     wNative: 0n,
   },
   [ChainId.FlareMainnet]: {
-    blue: 52378788n,
     morpho: 52378788n,
     permit2: 58377404n,
     bundler3: {
@@ -1560,7 +1404,6 @@ const _deployments = {
     wNative: 39n,
   },
   [ChainId.XdcMainnet]: {
-    blue: 101757515n,
     morpho: 101757515n,
     permit2: 92945178n,
     bundler3: {
@@ -1576,7 +1419,6 @@ const _deployments = {
     wNative: 42776215n,
   },
   [ChainId.KaiaMainnet]: {
-    blue: 208021118n,
     morpho: 208021118n,
     permit2: 188994815n,
     bundler3: {
@@ -1592,7 +1434,6 @@ const _deployments = {
     wNative: 104802159n,
   },
   [ChainId.ArcMainnet]: {
-    blue: 1208685n,
     morpho: 1208685n,
     permit2: 0n,
     bundler3: {
@@ -1609,44 +1450,159 @@ const _deployments = {
 } as const satisfies Record<ChainId, ChainDeployments>;
 
 /** Dot-separated label for an address entry in the chain registry. */
-export type AddressLabel =
-  | DottedKeys<ChainAddresses>
-  | DottedKeys<(typeof _addressesRegistry)[ChainId]>;
+export type AddressLabel = DottedKeys<(typeof _addressesRegistry)[ChainId]>;
 
-/** Address registry keyed by chain id, preserving known-chain key types. */
-export type AddressRegistry = typeof _addressesRegistry &
+/** Blue address registry keyed by chain id, preserving known-chain key types. */
+export type BlueAddressRegistry = typeof _addressesRegistry &
   Record<number, ChainAddresses>;
 
-/** Deployment registry keyed by chain id, preserving known-chain key types. */
-export type DeploymentRegistry = typeof _deployments &
+/** Blue deployment registry keyed by chain id, preserving known-chain key types. */
+export type BlueDeploymentRegistry = typeof _deployments &
   Record<number, ChainDeployments>;
 
-type ChainAddressRegistration =
-  | ChainAddresses
-  | (Omit<ChainAddresses, "morpho"> & {
-      blue: `0x${string}`;
-      morpho?: `0x${string}`;
-    });
+/**
+ * Midnight-specific addresses for one chain.
+ *
+ * @example
+ * ```ts
+ * import type { MidnightAddresses } from "@morpho-org/morpho-ts";
+ *
+ * const addresses: MidnightAddresses = {
+ *   midnight: "0x0000000000000000000000000000000000000001",
+ *   midnightBundles: "0x0000000000000000000000000000000000000002",
+ *   midnightMempool: "0x0000000000000000000000000000000000000003",
+ *   ecrecoverRatifier: "0x0000000000000000000000000000000000000004",
+ *   setterRatifier: "0x0000000000000000000000000000000000000005",
+ *   permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+ * };
+ * ```
+ */
+export interface MidnightAddresses {
+  /** Core Midnight contract. */
+  readonly midnight: Address;
+  /** Midnight periphery bundle contract. */
+  readonly midnightBundles: Address;
+  /** Mempool submission endpoint used by app/orderbook flows. */
+  readonly midnightMempool: Address;
+  /** EOA signature ratifier. */
+  readonly ecrecoverRatifier: Address;
+  /** Smart-account root ratifier. */
+  readonly setterRatifier: Address;
+  /** Permit2 contract used by the periphery. */
+  readonly permit2: Address;
+}
 
-type ChainDeploymentRegistration =
-  | ChainDeployments
-  | (Omit<ChainDeployments, "morpho"> & {
-      blue: bigint;
-      morpho?: bigint;
-    });
+/**
+ * Deployment block registry with the same shape as `MidnightAddresses`.
+ *
+ * @example
+ * ```ts
+ * import type { MidnightDeployments } from "@morpho-org/morpho-ts";
+ *
+ * const deployments: MidnightDeployments = {
+ *   midnight: 1n,
+ *   midnightBundles: 2n,
+ *   midnightMempool: 3n,
+ *   ecrecoverRatifier: 4n,
+ *   setterRatifier: 5n,
+ *   permit2: 6n,
+ * };
+ * ```
+ */
+export type MidnightDeployments = ChainDeployments<MidnightAddresses>;
 
-type RegistryInput<
-  Input extends Record<number, unknown>,
-  KnownKey extends PropertyKey,
-  KnownValue,
-  CustomValue,
-> = {
-  [Key in keyof Input]: Key extends KnownKey
-    ? DeepPartial<KnownValue>
-    : Key extends `${Extract<KnownKey, string | number>}`
-      ? DeepPartial<KnownValue>
-      : CustomValue;
-};
+/**
+ * Dot-separated label for a Midnight address or deployment entry.
+ *
+ * @example
+ * ```ts
+ * import type { MidnightAddressLabel } from "@morpho-org/morpho-ts";
+ *
+ * const label: MidnightAddressLabel = "midnight";
+ * ```
+ */
+export type MidnightAddressLabel = DottedKeys<MidnightAddresses>;
+
+/**
+ * Unified Morpho address registry entry for one chain.
+ *
+ * @example
+ * ```ts
+ * import type { MorphoChainAddresses } from "@morpho-org/morpho-ts";
+ *
+ * const entry: MorphoChainAddresses = {};
+ * ```
+ */
+export interface MorphoChainAddresses {
+  /** Morpho Blue addresses for the chain. */
+  readonly blue?: ChainAddresses;
+  /** Morpho Midnight addresses for the chain. */
+  readonly midnight?: MidnightAddresses;
+}
+
+/**
+ * Unified Morpho deployment registry entry for one chain.
+ *
+ * @example
+ * ```ts
+ * import type { MorphoChainDeployments } from "@morpho-org/morpho-ts";
+ *
+ * const entry: MorphoChainDeployments = {};
+ * ```
+ */
+export interface MorphoChainDeployments {
+  /** Morpho Blue deployment blocks for the chain. */
+  readonly blue?: ChainDeployments;
+  /** Morpho Midnight deployment blocks for the chain. */
+  readonly midnight?: MidnightDeployments;
+}
+
+/** Unified Morpho address registry keyed by chain id. */
+export type MorphoAddressRegistry = Readonly<
+  Record<number, MorphoChainAddresses>
+>;
+
+/** Unified Morpho deployment registry keyed by chain id. */
+export type MorphoDeploymentRegistry = Readonly<
+  Record<number, MorphoChainDeployments>
+>;
+
+/** Midnight address registry keyed by chain id. */
+export type MidnightAddressRegistry = Readonly<
+  Record<number, MidnightAddresses>
+>;
+
+/** Midnight deployment registry keyed by chain id. */
+export type MidnightDeploymentRegistry = Readonly<
+  Record<number, MidnightDeployments>
+>;
+
+/** Type alias for user supplied Midnight address overrides. */
+export type MidnightAddressOverrides = DeepPartial<MidnightAddresses>;
+
+/** Type alias for user supplied Midnight deployment overrides. */
+export type MidnightDeploymentOverrides = DeepPartial<MidnightDeployments>;
+
+/** Type alias for custom Midnight address registry entries. */
+export type MidnightAddressRegistryOverrides = Record<
+  number,
+  MidnightAddressOverrides
+>;
+
+/** Type alias for custom Midnight deployment registry entries. */
+export type MidnightDeploymentRegistryOverrides = Record<
+  number,
+  MidnightDeploymentOverrides
+>;
+
+const MIDNIGHT_ADDRESS_LABELS = [
+  "midnight",
+  "midnightBundles",
+  "midnightMempool",
+  "ecrecoverRatifier",
+  "setterRatifier",
+  "permit2",
+] as const satisfies readonly (keyof MidnightAddresses)[];
 
 /**
  * Returns the protocol address registry for a chain.
@@ -1670,52 +1626,10 @@ export const getChainAddresses = (chainId: number): ChainAddresses => {
 };
 
 /**
- * Returns one configured address from a chain registry entry.
- *
- * @param chainId - The EIP-155 chain id.
- * @param label - Dot-separated address label to resolve.
- * @returns The configured address at `label`.
- * @throws UnsupportedChainIdError when no address registry exists for `chainId`.
- * @throws UnknownAddressError when `chainId` is supported but `label` has no registered address.
- * @example
- * ```ts
- * import { getChainAddress } from "@morpho-org/morpho-ts";
- *
- * const midnight = getChainAddress(31337, "midnight");
- * // midnight satisfies `0x${string}`
- * ```
- */
-export const getChainAddress = (
-  chainId: number,
-  label: AddressLabel,
-): `0x${string}` => {
-  const chainAddresses = blueAddresses[chainId];
-  if (chainAddresses == null) throw new UnsupportedChainIdError(chainId);
-
-  let address: unknown = chainAddresses;
-  for (const key of label.split(".")) {
-    if (!isRecord(address)) {
-      address = undefined;
-      break;
-    }
-
-    address = address[key];
-  }
-
-  if (typeof address !== "string")
-    throw new UnknownAddressError({ chainId, label: String(label) });
-
-  return address as `0x${string}`;
-};
-
-/**
  * Assumptions:
  * - unwrapped token has same number of decimals than wrapped tokens.
  */
-const _unwrappedTokensMapping: Record<
-  number,
-  Record<`0x${string}`, `0x${string}`>
-> = {
+const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   [ChainId.EthMainnet]: {
     [_addressesRegistry[ChainId.EthMainnet].wbIB01]:
       _addressesRegistry[ChainId.EthMainnet].bIB01,
@@ -1861,23 +1775,20 @@ const _unwrappedTokensMapping: Record<
  * // unwrapped === NATIVE_ADDRESS
  * ```
  */
-export function getUnwrappedToken(
-  wrappedToken: `0x${string}`,
-  chainId: number,
-) {
+export function getUnwrappedToken(wrappedToken: Address, chainId: number) {
   return unwrappedTokensMapping[chainId]?.[wrappedToken];
 }
 
 /**
  * The registry of all known ERC20Wrapper tokens.
  */
-export const erc20WrapperTokens: Record<number, Set<`0x${string}`>> = {};
+export const erc20WrapperTokens: Record<number, Set<Address>> = {};
 
 /**
  * The registry of all known PermissionedERC20Wrapper with a `hasPermission` getter.
  * All permissioned wrapper tokens are considered ERC20Wrapper and automatically added to the erc20WrapperTokens registry.
  */
-export const permissionedWrapperTokens: Record<number, Set<`0x${string}`>> = {
+export const permissionedWrapperTokens: Record<number, Set<Address>> = {
   [ChainId.BaseMainnet]: new Set([
     _addressesRegistry[ChainId.BaseMainnet].testUsdc,
   ]),
@@ -1887,7 +1798,7 @@ export const permissionedWrapperTokens: Record<number, Set<`0x${string}`>> = {
  * The registry of all known permissioned wrapped Backed tokens.
  * All permissioned Backed tokens are considered ERC20Wrapper and automatically added to the erc20WrapperTokens registry.
  */
-export const permissionedBackedTokens: Record<number, Set<`0x${string}`>> = {
+export const permissionedBackedTokens: Record<number, Set<Address>> = {
   [ChainId.EthMainnet]: new Set([
     _addressesRegistry[ChainId.EthMainnet].wbIB01,
     _addressesRegistry[ChainId.EthMainnet].wbC3M,
@@ -1898,7 +1809,7 @@ export const permissionedBackedTokens: Record<number, Set<`0x${string}`>> = {
  * The registry of all known permissioned wrapped tokens that require a Coinbase attestation.
  * All permissioned Coinbase tokens are considered PermissionedERC20Wrapper and automatically added to the permissionedWrapperTokens registry.
  */
-export const permissionedCoinbaseTokens: Record<number, Set<`0x${string}`>> = {
+export const permissionedCoinbaseTokens: Record<number, Set<Address>> = {
   [ChainId.BaseMainnet]: new Set([
     _addressesRegistry[ChainId.BaseMainnet].verUsdc,
   ]),
@@ -1914,7 +1825,7 @@ export const permissionedCoinbaseTokens: Record<number, Set<`0x${string}`>> = {
  * import { ChainId, getPermissionedCoinbaseTokens } from "@morpho-org/morpho-ts";
  *
  * const tokens = getPermissionedCoinbaseTokens(ChainId.BaseMainnet);
- * // tokens satisfies Set<`0x${string}`>
+ * // tokens satisfies Set<Address>
  * ```
  */
 export const getPermissionedCoinbaseTokens = (chainId: number) =>
@@ -1941,7 +1852,7 @@ entries(permissionedWrapperTokens).forEach(([chainId, tokens]) => {
 /** /!\  These tokens can not be listed in `erc20WrapperTokens` because the following specs are different:
  * - calling `depositFor` supplies on blue instead of minting wrapped token to the user
  */
-export const convexWrapperTokens: Record<number, Set<`0x${string}`>> = {
+export const convexWrapperTokens: Record<number, Set<Address>> = {
   [ChainId.EthMainnet]: new Set([
     _addressesRegistry[ChainId.EthMainnet]["stkcvxcrvUSDTWBTCWETH-morpho"],
     _addressesRegistry[ChainId.EthMainnet]["stkcvxcrvUSDCWBTCWETH-morpho"],
@@ -1952,18 +1863,96 @@ export const convexWrapperTokens: Record<number, Set<`0x${string}`>> = {
   ]),
 };
 
-/** Deep-frozen registry of known Morpho protocol addresses, keyed by chain id. */
-export let addressesRegistry: AddressRegistry = deepFreeze(_addressesRegistry);
+const createInitialAddressRegistry = () => {
+  const registry: Record<number, MorphoChainAddresses> = {};
+
+  for (const [chainId, chainAddresses] of Object.entries(_addressesRegistry)) {
+    registry[Number(chainId)] = { blue: chainAddresses };
+  }
+
+  return registry;
+};
+
+const createInitialDeploymentRegistry = () => {
+  const registry: Record<number, MorphoChainDeployments> = {};
+
+  for (const [chainId, chainDeployments] of Object.entries(_deployments)) {
+    registry[Number(chainId)] = { blue: chainDeployments };
+  }
+
+  return registry;
+};
+
+const selectBlueAddresses = (registry: MorphoAddressRegistry) => {
+  const selected: Record<number, ChainAddresses> = {};
+
+  for (const [chainId, chainAddresses] of Object.entries(registry)) {
+    if (chainAddresses.blue != null)
+      selected[Number(chainId)] = chainAddresses.blue;
+  }
+
+  return deepFreeze(selected) as BlueAddressRegistry;
+};
+
+const selectBlueDeployments = (registry: MorphoDeploymentRegistry) => {
+  const selected: Record<number, ChainDeployments> = {};
+
+  for (const [chainId, chainDeployments] of Object.entries(registry)) {
+    if (chainDeployments.blue != null)
+      selected[Number(chainId)] = chainDeployments.blue;
+  }
+
+  return deepFreeze(selected) as BlueDeploymentRegistry;
+};
+
+const selectMidnightAddresses = (registry: MorphoAddressRegistry) => {
+  const selected: Record<number, MidnightAddresses> = {};
+
+  for (const [chainId, chainAddresses] of Object.entries(registry)) {
+    if (chainAddresses.midnight != null)
+      selected[Number(chainId)] = chainAddresses.midnight;
+  }
+
+  return deepFreeze(selected);
+};
+
+const selectMidnightDeployments = (registry: MorphoDeploymentRegistry) => {
+  const selected: Record<number, MidnightDeployments> = {};
+
+  for (const [chainId, chainDeployments] of Object.entries(registry)) {
+    if (chainDeployments.midnight != null)
+      selected[Number(chainId)] = chainDeployments.midnight;
+  }
+
+  return deepFreeze(selected);
+};
+
+/** Deep-frozen unified registry of known Morpho protocol addresses, keyed by chain id. */
+export let addressesRegistry: MorphoAddressRegistry = deepFreeze(
+  createInitialAddressRegistry(),
+);
 /** Alias of `addressesRegistry` keyed by numeric chain id. */
 export let addresses = addressesRegistry;
-/** Deep-frozen registry of deployment blocks, keyed by chain id. */
-export let deployments: DeploymentRegistry = deepFreeze(_deployments);
-/** Alias of `addressesRegistry` kept for Blue package compatibility. */
-export let blueAddressRegistry = addressesRegistry;
-/** Alias of `addressesRegistry` matching the previous Blue object-style export. */
+/** Deep-frozen unified registry of deployment blocks, keyed by chain id. */
+export let deployments: MorphoDeploymentRegistry = deepFreeze(
+  createInitialDeploymentRegistry(),
+);
+/** Deep-frozen Blue address registry keyed by chain id. */
+export let blueAddressRegistry: BlueAddressRegistry =
+  selectBlueAddresses(addressesRegistry);
+/** Alias of `blueAddressRegistry` matching the previous Blue object-style export. */
 export let blueAddresses = blueAddressRegistry;
-/** Alias of `deployments` kept for Blue package compatibility. */
-export let blueDeployments = deployments;
+/** Deep-frozen Blue deployment registry keyed by chain id. */
+export let blueDeployments: BlueDeploymentRegistry =
+  selectBlueDeployments(deployments);
+/** Deep-frozen Midnight address registry keyed by chain id. */
+export let midnightAddressRegistry = selectMidnightAddresses(addressesRegistry);
+/** Alias of `midnightAddressRegistry` matching the object-style registry DX. */
+export let midnightAddresses = midnightAddressRegistry;
+/** Deep-frozen Midnight deployment registry keyed by chain id. */
+export let midnightDeploymentRegistry = selectMidnightDeployments(deployments);
+/** Alias of `midnightDeploymentRegistry` matching the object-style registry DX. */
+export let midnightDeployments = midnightDeploymentRegistry;
 /** Deep-frozen registry of wrapped token to unwrapped token mappings. */
 export let unwrappedTokensMapping = deepFreeze(_unwrappedTokensMapping);
 
@@ -1976,63 +1965,6 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isRegistryPrimitive = (value: unknown): value is RegistryPrimitive =>
   ["string", "bigint", "number", "boolean"].includes(typeof value);
-
-const cloneRegistryValue = <T>(value: T): T => {
-  if (!isRecord(value)) return value;
-
-  const next: Record<string, unknown> = {};
-  for (const [key, child] of Object.entries(value)) {
-    next[key] = cloneRegistryValue(child);
-  }
-
-  return next as T;
-};
-
-const areRegistryValuesEqual = ({
-  base,
-  patch,
-  type,
-}: {
-  base: unknown;
-  patch: unknown;
-  type: string;
-}) => {
-  if (
-    type === "address" &&
-    typeof base === "string" &&
-    typeof patch === "string"
-  )
-    return base.toLowerCase() === patch.toLowerCase();
-
-  return base === patch;
-};
-
-const assertRequiredBlueRegistry = ({
-  chainId,
-  entry,
-  type,
-}: {
-  chainId: number;
-  entry: unknown;
-  type: "address" | "deployment";
-}) => {
-  const requiredValueType = type === "address" ? "string" : "bigint";
-
-  if (
-    isRecord(entry) &&
-    typeof entry.morpho === requiredValueType &&
-    isRecord(entry.bundler3) &&
-    typeof entry.bundler3.bundler3 === requiredValueType &&
-    typeof entry.bundler3.generalAdapter1 === requiredValueType &&
-    typeof entry.adaptiveCurveIrm === requiredValueType
-  )
-    return;
-
-  throw new IncompleteChainRegistryError({
-    chainId,
-    type,
-  });
-};
 
 const mergeRegistry = <T>({
   base,
@@ -2063,91 +1995,137 @@ const mergeRegistry = <T>({
     return next as T;
   }
 
-  if (base !== undefined) {
-    if (!areRegistryValuesEqual({ base, patch, type })) {
-      if (!isRegistryPrimitive(base) || !isRegistryPrimitive(patch)) {
-        throw new RegistryValueAlreadyRegisteredError({
-          label,
-          registeredValue: String(base),
-          requestedValue: String(patch),
-          type,
-        });
-      }
-
+  if (base !== undefined && base !== patch) {
+    if (!isRegistryPrimitive(base) || !isRegistryPrimitive(patch)) {
       throw new RegistryValueAlreadyRegisteredError({
         label,
-        registeredValue: base,
-        requestedValue: patch,
+        registeredValue: String(base),
+        requestedValue: String(patch),
         type,
       });
     }
 
-    return base;
+    throw new RegistryValueAlreadyRegisteredError({
+      label,
+      registeredValue: base,
+      requestedValue: patch,
+      type,
+    });
   }
 
-  return cloneRegistryValue(patch) as T;
+  return patch as T;
+};
+
+const requireCompleteMidnightAddresses = (
+  chainId: number,
+  requestedAddresses: MidnightAddressOverrides,
+): MidnightAddresses => {
+  const missingLabels = MIDNIGHT_ADDRESS_LABELS.filter(
+    (label) => requestedAddresses[label] == null,
+  );
+  if (missingLabels.length > 0)
+    throw new IncompleteMidnightAddressesError(chainId, missingLabels);
+
+  return {
+    midnight: requestedAddresses.midnight!,
+    midnightBundles: requestedAddresses.midnightBundles!,
+    midnightMempool: requestedAddresses.midnightMempool!,
+    ecrecoverRatifier: requestedAddresses.ecrecoverRatifier!,
+    setterRatifier: requestedAddresses.setterRatifier!,
+    permit2: requestedAddresses.permit2!,
+  };
+};
+
+const requireCompleteMidnightDeployments = (
+  chainId: number,
+  requestedDeployments: MidnightDeploymentOverrides,
+): MidnightDeployments => {
+  const missingLabels = MIDNIGHT_ADDRESS_LABELS.filter(
+    (label) => requestedDeployments[label] == null,
+  );
+  if (missingLabels.length > 0)
+    throw new IncompleteMidnightDeploymentsError(chainId, missingLabels);
+
+  return {
+    midnight: requestedDeployments.midnight!,
+    midnightBundles: requestedDeployments.midnightBundles!,
+    midnightMempool: requestedDeployments.midnightMempool!,
+    ecrecoverRatifier: requestedDeployments.ecrecoverRatifier!,
+    setterRatifier: requestedDeployments.setterRatifier!,
+    permit2: requestedDeployments.permit2!,
+  };
 };
 
 const refreshAddressViews = () => {
   addresses = addressesRegistry;
-  blueAddresses = blueAddressRegistry = addressesRegistry;
+  blueAddresses = blueAddressRegistry = selectBlueAddresses(addressesRegistry);
+  midnightAddresses = midnightAddressRegistry =
+    selectMidnightAddresses(addressesRegistry);
 };
 
 const refreshDeploymentViews = () => {
-  blueDeployments = deployments;
-};
-
-const withBlueAlias = <T extends { blue?: unknown; morpho?: unknown }>({
-  entry,
-  label,
-  type,
-}: {
-  entry: T;
-  label: string;
-  type: string;
-}) => {
-  if (entry.blue == null && entry.morpho == null) return { ...entry } as T;
-
-  if (
-    entry.blue != null &&
-    entry.morpho != null &&
-    !areRegistryValuesEqual({ base: entry.blue, patch: entry.morpho, type })
-  )
-    throw new RegistryValueAlreadyRegisteredError({
-      label: `${label}.morpho`,
-      registeredValue: isRegistryPrimitive(entry.blue)
-        ? entry.blue
-        : String(entry.blue),
-      requestedValue: isRegistryPrimitive(entry.morpho)
-        ? entry.morpho
-        : String(entry.morpho),
-      type,
-    });
-
-  return {
-    ...entry,
-    blue: entry.blue ?? entry.morpho,
-    morpho: entry.morpho ?? entry.blue,
-  } as T;
+  blueDeployments = selectBlueDeployments(deployments);
+  midnightDeployments = midnightDeploymentRegistry =
+    selectMidnightDeployments(deployments);
 };
 
 /**
- * Registers custom addresses, deployment blocks, and unwrapped token mappings.
+ * Resolves pinned Midnight addresses for a chain.
+ *
+ * @param chainId - Chain id to resolve.
+ * @returns Registered Midnight addresses.
+ * @throws UnsupportedChainIdError when the chain has no registered Midnight addresses.
+ * @example
+ * ```ts
+ * import { getMidnightAddresses } from "@morpho-org/morpho-ts";
+ *
+ * const addresses = getMidnightAddresses(31337);
+ * // addresses satisfies MidnightAddresses
+ * ```
+ */
+export function getMidnightAddresses(chainId: number) {
+  const chainAddresses = midnightAddressRegistry[chainId];
+  if (chainAddresses == null) throw new UnsupportedChainIdError(chainId);
+
+  return chainAddresses;
+}
+
+/**
+ * Resolves pinned Midnight deployment blocks for a chain.
+ *
+ * @param chainId - Chain id to resolve.
+ * @returns Registered Midnight deployment blocks.
+ * @throws UnsupportedChainIdError when the chain has no registered Midnight deployments.
+ * @example
+ * ```ts
+ * import { getMidnightDeployments } from "@morpho-org/morpho-ts";
+ *
+ * const deployments = getMidnightDeployments(31337);
+ * // deployments satisfies MidnightDeployments
+ * ```
+ */
+export function getMidnightDeployments(chainId: number) {
+  const chainDeployments = midnightDeploymentRegistry[chainId];
+  if (chainDeployments == null) throw new UnsupportedChainIdError(chainId);
+
+  return chainDeployments;
+}
+
+/**
+ * Registers custom addresses and unwrapped token mappings to extend
+ * the default Blue registry on existing or unknown chains.
  *
  * @param options - Optional configuration object
  * @param options.unwrappedTokens - A mapping of chain IDs to token address maps,
  *                                  where each entry maps wrapped tokens to their unwrapped equivalents.
  * @param options.addresses - Custom address entries to merge into the default registry.
- *                            Known-chain entries may be partial; custom-chain entries must include the required
- *                            Blue addresses and may add Midnight fields beside `blue`, `bundler3`, and other
- *                            periphery addresses.
+ *                            Can be a subset of `ChainAddresses` if chain is already known.
+ *                            Must provide all required addresses if chain is unknown.
  * @param options.deployments - Custom deployment entries to merge into the default registry.
- *                              Known-chain entries may be partial; custom-chain entries must include the required
- *                              Blue deployments and may add Midnight fields beside `blue`, `bundler3`, and other
- *                              periphery deployments.
+ *                              Can be a subset of `ChainDeployments` if chain is already known.
+ *                              Must provide all required deployments if chain is unknown.
  *
  * @throws RegistryValueAlreadyRegisteredError when registration attempts to override an existing value.
- * @throws IncompleteChainRegistryError when a custom-chain entry does not include the required Blue registry fields.
  * @returns Nothing.
  *
  * @example
@@ -2157,18 +2135,12 @@ const withBlueAlias = <T extends { blue?: unknown; morpho?: unknown }>({
  * registerCustomAddresses({
  *   addresses: {
  *     31337: {
- *       blue: "0x0000000000000000000000000000000000000001",
+ *       morpho: "0x0000000000000000000000000000000000000001",
  *       bundler3: {
  *         bundler3: "0x0000000000000000000000000000000000000002",
  *         generalAdapter1: "0x0000000000000000000000000000000000000003",
  *       },
  *       adaptiveCurveIrm: "0x0000000000000000000000000000000000000004",
- *       midnight: "0x0000000000000000000000000000000000000005",
- *       midnightBundles: "0x0000000000000000000000000000000000000006",
- *       midnightMempool: "0x0000000000000000000000000000000000000007",
- *       ecrecoverRatifier: "0x0000000000000000000000000000000000000008",
- *       setterRatifier: "0x0000000000000000000000000000000000000009",
- *       permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
  *     },
  *   },
  *   unwrappedTokens: {
@@ -2179,30 +2151,21 @@ const withBlueAlias = <T extends { blue?: unknown; morpho?: unknown }>({
  * });
  * ```
  */
-export function registerCustomAddresses<
-  const TAddresses extends Record<number, unknown> = Record<never, never>,
-  const TDeployments extends Record<number, unknown> = Record<never, never>,
->({
+export function registerCustomAddresses({
   unwrappedTokens,
   addresses: customAddresses,
   deployments: customDeployments,
 }: {
-  unwrappedTokens?: Record<number, Record<`0x${string}`, `0x${string}`>>;
-  addresses?: RegistryInput<
-    TAddresses,
-    keyof typeof _addressesRegistry,
-    ChainAddresses,
-    ChainAddressRegistration
-  >;
-  deployments?: RegistryInput<
-    TDeployments,
-    keyof typeof _deployments,
-    ChainDeployments,
-    ChainDeploymentRegistration
-  >;
+  unwrappedTokens?: Record<number, Record<Address, Address>>;
+  addresses?:
+    | DeepPartial<Record<keyof typeof _addressesRegistry, ChainAddresses>>
+    | Record<number, ChainAddresses>;
+  deployments?:
+    | DeepPartial<Record<keyof typeof _deployments, ChainDeployments>>
+    | Record<number, ChainDeployments>;
 } = {}) {
   if (customAddresses) {
-    const nextRegistry: Record<number, ChainAddresses> = {
+    const nextRegistry: Record<number, MorphoChainAddresses> = {
       ...addressesRegistry,
     };
 
@@ -2210,40 +2173,28 @@ export function registerCustomAddresses<
       customAddresses,
     )) {
       const chainId = Number(chainIdString);
-      const registeredEntry = nextRegistry[chainId];
-      const requestedEntry = cloneRegistryValue(
-        withBlueAlias({
-          entry: requestedAddresses,
-          label: String(chainId),
-          type: "address",
-        }),
-      );
+      const registeredEntry = nextRegistry[chainId] ?? {};
 
-      if (registeredEntry == null) {
-        assertRequiredBlueRegistry({
-          chainId,
-          entry: requestedEntry,
-          type: "address",
-        });
-      }
-
-      nextRegistry[chainId] =
-        registeredEntry == null
-          ? (requestedEntry as ChainAddresses)
-          : mergeRegistry({
-              base: registeredEntry,
-              patch: requestedEntry,
-              label: String(chainId),
-              type: "address",
-            });
+      nextRegistry[chainId] = {
+        ...registeredEntry,
+        blue:
+          registeredEntry.blue == null
+            ? (requestedAddresses as ChainAddresses)
+            : mergeRegistry({
+                base: registeredEntry.blue,
+                patch: requestedAddresses,
+                label: `${chainId}.blue`,
+                type: "address",
+              }),
+      };
     }
 
-    addressesRegistry = deepFreeze(nextRegistry) as AddressRegistry;
+    addressesRegistry = deepFreeze(nextRegistry);
     refreshAddressViews();
   }
 
   if (customDeployments) {
-    const nextRegistry: Record<number, ChainDeployments> = {
+    const nextRegistry: Record<number, MorphoChainDeployments> = {
       ...deployments,
     };
 
@@ -2251,35 +2202,23 @@ export function registerCustomAddresses<
       customDeployments,
     )) {
       const chainId = Number(chainIdString);
-      const registeredEntry = nextRegistry[chainId];
-      const requestedEntry = cloneRegistryValue(
-        withBlueAlias({
-          entry: requestedDeployments,
-          label: String(chainId),
-          type: "deployment",
-        }),
-      );
+      const registeredEntry = nextRegistry[chainId] ?? {};
 
-      if (registeredEntry == null) {
-        assertRequiredBlueRegistry({
-          chainId,
-          entry: requestedEntry,
-          type: "deployment",
-        });
-      }
-
-      nextRegistry[chainId] =
-        registeredEntry == null
-          ? (requestedEntry as ChainDeployments)
-          : mergeRegistry({
-              base: registeredEntry,
-              patch: requestedEntry,
-              label: String(chainId),
-              type: "deployment",
-            });
+      nextRegistry[chainId] = {
+        ...registeredEntry,
+        blue:
+          registeredEntry.blue == null
+            ? (requestedDeployments as ChainDeployments)
+            : mergeRegistry({
+                base: registeredEntry.blue,
+                patch: requestedDeployments,
+                label: `${chainId}.blue`,
+                type: "deployment",
+              }),
+      };
     }
 
-    deployments = deepFreeze(nextRegistry) as DeploymentRegistry;
+    deployments = deepFreeze(nextRegistry);
     refreshDeploymentViews();
   }
 
@@ -2292,5 +2231,130 @@ export function registerCustomAddresses<
         type: "unwrapped token",
       }),
     );
+  }
+}
+
+/**
+ * Registers custom Midnight addresses and deployment blocks without overriding existing values.
+ *
+ * Unknown chains must provide a complete `MidnightAddresses` or `MidnightDeployments` entry.
+ * Known chains may receive partial entries, but a field that is already registered can only
+ * be repeated with the same value.
+ *
+ * @param options - Optional registration options.
+ * @param options.addresses - Custom Midnight address entries keyed by chain id.
+ * @param options.deployments - Custom Midnight deployment entries keyed by chain id.
+ * @returns Nothing.
+ * @throws IncompleteMidnightAddressesError when a new chain address entry is missing required addresses.
+ * @throws IncompleteMidnightDeploymentsError when a new chain deployment entry is missing required deployments.
+ * @throws MidnightAddressAlreadyRegisteredError when registration attempts to change an existing address.
+ * @throws MidnightDeploymentAlreadyRegisteredError when registration attempts to change an existing deployment.
+ * @example
+ * ```ts
+ * import { registerCustomMidnightAddresses } from "@morpho-org/morpho-ts";
+ *
+ * registerCustomMidnightAddresses({
+ *   addresses: {
+ *     31337: {
+ *       midnight: "0x0000000000000000000000000000000000000001",
+ *       midnightBundles: "0x0000000000000000000000000000000000000002",
+ *       midnightMempool: "0x0000000000000000000000000000000000000003",
+ *       ecrecoverRatifier: "0x0000000000000000000000000000000000000004",
+ *       setterRatifier: "0x0000000000000000000000000000000000000005",
+ *       permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+ *     },
+ *   },
+ * });
+ * ```
+ */
+export function registerCustomMidnightAddresses({
+  addresses: customAddresses,
+  deployments: customDeployments,
+}: {
+  addresses?: MidnightAddressRegistryOverrides;
+  deployments?: MidnightDeploymentRegistryOverrides;
+} = {}) {
+  if (customAddresses) {
+    const nextRegistry: Record<number, MorphoChainAddresses> = {
+      ...addressesRegistry,
+    };
+
+    for (const [chainIdString, requestedAddresses] of Object.entries(
+      customAddresses,
+    )) {
+      const chainId = Number(chainIdString);
+      const registeredEntry = nextRegistry[chainId] ?? {};
+      const registeredAddresses = registeredEntry.midnight;
+
+      if (registeredAddresses == null) {
+        nextRegistry[chainId] = {
+          ...registeredEntry,
+          midnight: requireCompleteMidnightAddresses(
+            chainId,
+            requestedAddresses,
+          ),
+        };
+        continue;
+      }
+
+      for (const label of MIDNIGHT_ADDRESS_LABELS) {
+        const requestedAddress = requestedAddresses[label];
+        if (requestedAddress == null) continue;
+
+        const registeredAddress = registeredAddresses[label];
+        if (registeredAddress.toLowerCase() !== requestedAddress.toLowerCase())
+          throw new MidnightAddressAlreadyRegisteredError({
+            chainId,
+            label,
+            registeredAddress,
+            requestedAddress,
+          });
+      }
+    }
+
+    addressesRegistry = deepFreeze(nextRegistry);
+    refreshAddressViews();
+  }
+
+  if (customDeployments) {
+    const nextRegistry: Record<number, MorphoChainDeployments> = {
+      ...deployments,
+    };
+
+    for (const [chainIdString, requestedDeployments] of Object.entries(
+      customDeployments,
+    )) {
+      const chainId = Number(chainIdString);
+      const registeredEntry = nextRegistry[chainId] ?? {};
+      const registeredDeployments = registeredEntry.midnight;
+
+      if (registeredDeployments == null) {
+        nextRegistry[chainId] = {
+          ...registeredEntry,
+          midnight: requireCompleteMidnightDeployments(
+            chainId,
+            requestedDeployments,
+          ),
+        };
+        continue;
+      }
+
+      for (const label of MIDNIGHT_ADDRESS_LABELS) {
+        const requestedDeployment = requestedDeployments[label];
+        if (requestedDeployment == null) continue;
+
+        const registeredDeployment = registeredDeployments[label];
+        if (registeredDeployment !== requestedDeployment)
+          throw new MidnightDeploymentAlreadyRegisteredError({
+            chainId,
+            label,
+            registeredDeployment,
+            requestedDeployment,
+          });
+      }
+    }
+
+    deployments = deepFreeze(nextRegistry);
+    refreshDeploymentViews();
   }
 }

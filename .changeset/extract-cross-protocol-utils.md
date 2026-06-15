@@ -13,12 +13,10 @@ Move shared Blue and Midnight SDK primitives to `@morpho-org/morpho-ts`: chain m
 
 Expose shared ABI literals through `@morpho-org/morpho-ts/abis` so root utility imports do not load the ABI table.
 
-Add `getChainAddress` and `UnknownAddressError` for checked, label-based address access without protocol-specific registry getters.
-
-Reject custom-chain registry entries that omit the minimum Blue address or deployment fields required by Blue SDK consumers.
+Model addresses as a unified Morpho registry with Blue and Midnight protocol views. Add Midnight-specific registry types, `getMidnightAddresses`, `getMidnightDeployments`, `registerCustomMidnightAddresses`, and typed errors for incomplete or conflicting Midnight registrations.
 
 Keep `@morpho-org/blue-sdk` compatible by re-exporting the extracted chain, address, math, and error surfaces from `@morpho-org/morpho-ts`, and remove the now-unused lodash registry merge dependencies from `@morpho-org/blue-sdk`.
 
-Expose the shared address registry helpers, registry types, and `UnknownAddressError` through `@morpho-org/morpho-sdk` so integrators can import the cross-protocol address surface from the main SDK package.
+Expose the shared address registry helpers and registry types through `@morpho-org/morpho-sdk` so integrators can import the cross-protocol address surface from the main SDK package.
 
 Update maintained dependents of `@morpho-org/blue-sdk` and `@morpho-org/morpho-ts`, including peer dependents, so published packages resolve the extracted shared primitives used by the Blue SDK compatibility layer.

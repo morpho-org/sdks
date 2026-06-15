@@ -1,6 +1,5 @@
 export type {
   BigIntish,
-  ChainMetadata,
   CollateralAllocation,
   Eip712Field,
   Erc20AllowanceRecipient,
@@ -20,4 +19,5 @@ export type {
   DeploylessFetchParameters,
   FetchParameters,
 } from "@morpho-org/blue-sdk-viem";
+export type { ChainMetadata } from "@morpho-org/morpho-ts";
 export * from "./types/index.js";
