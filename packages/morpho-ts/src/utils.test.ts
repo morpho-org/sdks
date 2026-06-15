@@ -1,5 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
+import { NegativeValueError } from "./errors.js";
 import {
+  assertNonNegative,
   bigIntComparator,
   createGetValue,
   createHasValue,
@@ -485,6 +487,17 @@ describe("getLastDefined", () => {
 
   test("returns the only element when array has one defined value", () => {
     expect(getLastDefined([42])).toBe(42);
+  });
+});
+
+describe("assertNonNegative", () => {
+  test("default", () => {
+    expect(assertNonNegative("assets", 0n)).toBe(undefined);
+    expect(assertNonNegative("assets", 1n)).toBe(undefined);
+  });
+
+  test("error: NegativeValueError", () => {
+    expect(() => assertNonNegative("assets", -1n)).toThrow(NegativeValueError);
   });
 });
 

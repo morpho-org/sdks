@@ -1,4 +1,16 @@
 /**
+ * Primitive value accepted by helpers that coerce inputs with `BigInt`.
+ *
+ * @example
+ * ```ts
+ * import type { BigIntish } from "@morpho-org/morpho-ts";
+ *
+ * const value: BigIntish = "1000000000000000000";
+ * ```
+ */
+export type BigIntish = bigint | string | number | boolean;
+
+/**
  * Adds a string `id` field to a type.
  *
  * @deprecated This utility is unused in the monorepo. Use an explicit intersection type instead.

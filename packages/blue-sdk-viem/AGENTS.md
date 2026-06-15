@@ -10,6 +10,7 @@
 - Fetch params pass through viem call fields: `account`, `blockNumber`, `blockTag`, `stateOverride`.
 - Normalize unsafe user addresses with `safeGetAddress`, not lowercasing alone.
 - Typed-data helpers return `TypedDataDefinition`, e.g. `getPermitTypedData(...)`.
+- Re-export ABI literals from `@morpho-org/morpho-ts` when they exist there; keep local ABI declarations only for Blue-specific viem surfaces absent from `morpho-ts`.
 
 ## Continuous Improvement
 
