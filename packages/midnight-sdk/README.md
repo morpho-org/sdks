@@ -1,6 +1,6 @@
 # @morpho-org/midnight-sdk
 
-Viem-based package for Morpho Midnight that exports protocol utilities, fetch helpers, and Midnight API validation utilities.
+Viem-based package for Morpho Midnight that exports protocol utilities, fetch helpers, and Midnight API utilities.
 
 ## Installation
 
@@ -46,6 +46,10 @@ export async function validateMakerTree(tree: TreeInput) {
 export async function fetchMidnightRules() {
   return api.fetchMempoolRules({ chainIds: [8453] });
 }
+
+export async function fetchBaseBooks() {
+  return api.fetchBooks({ chainIds: [8453], limit: 10 });
+}
 ```
 
 For one-off calls, use the static `MidnightApi` methods directly. They default to
@@ -60,6 +64,15 @@ const validation = await MidnightApi.validateMempoolPayload({
 });
 
 console.log(validation.valid);
+
+const quote = await MidnightApi.fetchBookQuote({
+  marketId: "0x12590ae1aee324a005be565f3bcdd16dbf8daf7969b26c181c8b8f467dad9f67",
+  side: "asks",
+  assets: "1000000000000000000",
+  slippage: "0.5",
+});
+
+console.log(quote.data.takes.length);
 ```
 
 ## Development

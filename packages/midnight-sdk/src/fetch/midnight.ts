@@ -25,10 +25,6 @@ import { ConsumableUnitsLib } from "../math/index.js";
 import type { IOffer, Offer } from "../offers/index.js";
 import { normalizeOffer } from "../offers/Offer.js";
 import {
-  abi as getConsumableUnitsInputsAbi,
-  code as getConsumableUnitsInputsCode,
-} from "../queries/GetConsumableUnitsInputs.js";
-import {
   abi as getPositionAbi,
   code as getPositionCode,
 } from "../queries/GetPosition.js";
@@ -60,7 +56,7 @@ export interface MidnightCallParameters {
 }
 
 /**
- * Deployless read mode accepted by composite Midnight fetch helpers.
+ * Deployless read mode accepted by deployless-capable Midnight fetch helpers.
  *
  * @example
  * ```ts
@@ -72,13 +68,13 @@ export interface MidnightCallParameters {
  */
 export interface DeploylessFetchParameters extends MidnightCallParameters {
   /**
-   * If `true`, composite fetchers use deployless reads and fall back to direct reads if they fail.
+   * If `true`, deployless-capable fetchers use deployless reads and fall back to direct reads if they fail.
    *
-   * If `"force"`, composite fetchers use deployless reads without fallback.
+   * If `"force"`, deployless-capable fetchers use deployless reads without fallback.
    *
-   * If `false`, composite fetchers use direct reads.
+   * If `false`, deployless-capable fetchers use direct reads.
    *
-   * Default is `true`.
+   * Default is `true` for fetchers that implement deployless reads.
    */
   readonly deployless?: boolean | "force";
 }
@@ -690,56 +686,18 @@ export async function fetchConsumableUnits(
     ...callParameters(params),
   };
 
-  if (shouldUseDeployless(params)) {
-    let inputs:
-      | {
-          readonly consumed: bigint;
-          readonly settlementFee: bigint;
-        }
-      | undefined;
-
-    try {
-      inputs = await readContract(params.client, {
-        ...callParameters(params),
-        abi: getConsumableUnitsInputsAbi,
-        code: getConsumableUnitsInputsCode,
-        functionName: "query",
-        args: [
-          params.midnight,
-          params.marketId,
-          offer.maker,
-          offer.group,
-          timeToMaturity,
-          needsSettlementFee,
-        ],
-      });
-    } catch (error) {
-      if (params.deployless === "force") throw error;
-      // Fallback to direct reads if deployless execution is unavailable.
-    }
-
-    if (inputs != null) {
-      return ConsumableUnitsLib.consumableUnits({
-        offer,
-        consumed: inputs.consumed,
-        settlementFee: inputs.settlementFee,
-      });
-    }
-  }
-
   const [consumed, settlementFee] = needsSettlementFee
     ? await Promise.all([
-        fetchConsumed({ ...consumedParams, deployless: false }),
+        fetchConsumed(consumedParams),
         fetchSettlementFee({
           client: params.client,
           midnight: params.midnight,
           marketId: params.marketId,
           timeToMaturity,
           ...callParameters(params),
-          deployless: false,
         }),
       ])
-    : [await fetchConsumed({ ...consumedParams, deployless: false }), 0n];
+    : [await fetchConsumed(consumedParams), 0n];
 
   return ConsumableUnitsLib.consumableUnits({
     offer,

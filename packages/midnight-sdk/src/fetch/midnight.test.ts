@@ -27,7 +27,6 @@ import { MAX_TICK } from "../constants.js";
 import { SettlementFeeExceedsPriceError } from "../errors.js";
 import { marketParamsToStruct } from "../market/Market.js";
 import { TickLib } from "../math/index.js";
-import { abi as getConsumableUnitsInputsAbi } from "../queries/GetConsumableUnitsInputs.js";
 import { abi as getPositionAbi } from "../queries/GetPosition.js";
 import {
   fetchAccrualPosition,
@@ -396,13 +395,12 @@ describe("fetchConsumableUnits", () => {
   test("default: max-unit offers only read consumed", async () => {
     const handle = createMockClient(base);
     const offer = baseOffer({ maxUnits: 100n });
-    mockDeploylessRead(handle, {
-      abi: getConsumableUnitsInputsAbi,
-      functionName: "query",
-      result: {
-        consumed: 40n,
-        settlementFee: 0n,
-      },
+    mockRead(handle, {
+      address: addresses.midnight,
+      abi: midnightAbi,
+      functionName: "consumed",
+      args: [offer.maker, offer.group],
+      result: 40n,
     });
 
     await expect(
@@ -424,13 +422,19 @@ describe("fetchConsumableUnits", () => {
       maxUnits: 0n,
       maxAssets: 100n,
     });
-    mockDeploylessRead(handle, {
-      abi: getConsumableUnitsInputsAbi,
-      functionName: "query",
-      result: {
-        consumed: 40n,
-        settlementFee: 0n,
-      },
+    mockRead(handle, {
+      address: addresses.midnight,
+      abi: midnightAbi,
+      functionName: "consumed",
+      args: [offer.maker, offer.group],
+      result: 40n,
+    });
+    mockRead(handle, {
+      address: addresses.midnight,
+      abi: midnightAbi,
+      functionName: "settlementFee",
+      args: [marketId, 1000n],
+      result: 0n,
     });
 
     await expect(
@@ -447,13 +451,19 @@ describe("fetchConsumableUnits", () => {
   test("error: SettlementFeeExceedsPriceError from fetched settlement fee", async () => {
     const handle = createMockClient(base);
     const offer = baseOffer({ buy: true, tick: 2n, maxUnits: 0n });
-    mockDeploylessRead(handle, {
-      abi: getConsumableUnitsInputsAbi,
-      functionName: "query",
-      result: {
-        consumed: 0n,
-        settlementFee: TickLib.tickToPrice(offer.tick) + 1n,
-      },
+    mockRead(handle, {
+      address: addresses.midnight,
+      abi: midnightAbi,
+      functionName: "consumed",
+      args: [offer.maker, offer.group],
+      result: 0n,
+    });
+    mockRead(handle, {
+      address: addresses.midnight,
+      abi: midnightAbi,
+      functionName: "settlementFee",
+      args: [marketId, 1000n],
+      result: TickLib.tickToPrice(offer.tick) + 1n,
     });
 
     await expect(
