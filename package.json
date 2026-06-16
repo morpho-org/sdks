@@ -50,7 +50,7 @@
     "@vitest/coverage-v8": "^4.1.8",
     "@vitest/ui": "^4.1.8",
     "dotenv-cli": "^11.0.0",
-    "happy-dom": "^20.10.3",
+    "happy-dom": "^20.10.4",
     "husky": "^9.1.7",
     "lint-staged": "^17.0.7",
     "solc": "0.8.35",
