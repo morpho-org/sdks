@@ -213,7 +213,23 @@ export class MorphoVaultV1 implements VaultV1Actions {
 
     const totalAssets = amount + (nativeAmount ?? 0n);
 
-    const shares = vaultData.toShares(totalAssets);
+    // Accrue interest forward to bound the on-chain share price at execution.
+    // MetaMorpho's `deposit` calls `_accrueInterest()`, so the execution-time
+    // share price is >= the build-time one; deriving `maxSharePrice` from
+    // pre-accrue state can revert GeneralAdapter1's check with
+    // SlippageExceeded. Mirrors VaultV2 deposit and blue repay's 2h
+    // forward-accrual buffer. The timestamp must be >= each allocated market's
+    // `lastUpdate`, so clamp to the latest of them and now before adding 2h.
+    const accrualTimestamp =
+      vaultData.allocations
+        .values()
+        .reduce(
+          (max, { position }) => MathLib.max(max, position.market.lastUpdate),
+          Time.timestamp(),
+        ) + Time.s.from.h(2n);
+    const accruedVault = vaultData.accrueInterest(accrualTimestamp);
+
+    const shares = accruedVault.toShares(totalAssets);
     if (shares <= 0n) {
       throw new NonPositiveSharesAmountError(this.vault);
     }
