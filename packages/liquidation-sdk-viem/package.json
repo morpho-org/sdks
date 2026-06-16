@@ -45,7 +45,7 @@
     "viem": "^2.0.0"
   },
   "devDependencies": {
-    "@graphql-codegen/cli": "^7.0.0",
+    "@graphql-codegen/cli": "^7.1.3",
     "@graphql-codegen/import-types-preset": "^4.0.1",
     "@graphql-codegen/typescript": "^6.0.1",
     "@graphql-codegen/typescript-graphql-request": "^7.0.1",
