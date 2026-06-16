@@ -3,4 +3,4 @@ export type {
   TreeCreateParams,
   TreeInput,
 } from "./OfferTreeUtils.js";
-export { normalizeTree, Tree } from "./OfferTreeUtils.js";
+export { Tree } from "./OfferTreeUtils.js";

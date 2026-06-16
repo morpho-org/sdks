@@ -1,20 +1,23 @@
 import { type BigIntish, MathLib } from "@morpho-org/morpho-ts";
-import { encodeAbiParameters, keccak256 } from "viem";
+import type { Address } from "viem";
+import { encodeAbiParameters, encodePacked, keccak256 } from "viem";
 import {
   ALLOWED_LLTVS,
   COLLATERAL_PARAMS_TYPEHASH,
   LIQUIDATION_CURSOR_LOW,
   MARKET_TYPEHASH,
-  MAX_SETTLEMENT_FEES,
 } from "../constants.js";
-import { InvalidSettlementFeeIndexError } from "../errors.js";
 import {
-  computeMarketId,
+  type CollateralParams,
+  type ICollateralParams,
   type IMarketParams,
-  type Market,
-  type MarketParams,
-  marketParamsToStruct,
+  Market,
+  MarketParams,
+  type MarketParamsStruct,
+  marketParamsAbiParameter,
 } from "./Market.js";
+
+const SSTORE2_PREFIX = "0x600b380380600b5f395ff3" as const;
 
 const collateralParamsHashParams = [
   { name: "typehash", type: "bytes32" },
@@ -46,24 +49,85 @@ const marketHashParams = [
  */
 export namespace MarketUtils {
   /**
-   * Returns the maximum settlement fee for an index.
+   * Normalizes collateral params from a plain input or ABI tuple.
    *
-   * @param index - Settlement fee bucket index.
-   * @returns Max WAD-scaled fee.
-   * @throws InvalidSettlementFeeIndexError when the index is outside the fee table.
+   * @param params - Collateral params input.
+   * @returns Normalized collateral params.
    * @example
    * ```ts
    * import { MarketUtils } from "@morpho-org/midnight-sdk";
    *
-   * const max = MarketUtils.getMaxSettlementFee(0);
-   * console.log(max);
+   * const collateral = MarketUtils.normalizeCollateralParams({
+   *   token: "0x0000000000000000000000000000000000000001",
+   *   lltv: 770000000000000000n,
+   *   maxLif: 1298701298701298701n,
+   *   oracle: "0x0000000000000000000000000000000000000002",
+   * });
+   * console.log(collateral.lltv);
    * ```
    */
-  export function getMaxSettlementFee(index: number) {
-    const fee = MAX_SETTLEMENT_FEES[index];
-    if (fee == null) throw new InvalidSettlementFeeIndexError(index);
+  export function normalizeCollateralParams(
+    params: ICollateralParams | CollateralParams,
+  ): CollateralParams {
+    return {
+      token: params.token,
+      lltv: BigInt(params.lltv),
+      maxLif: BigInt(params.maxLif),
+      oracle: params.oracle,
+    };
+  }
 
-    return fee;
+  /**
+   * Normalizes market params from config or hydrated market input.
+   *
+   * @param market - Market params or hydrated market.
+   * @returns Market params instance.
+   * @example
+   * ```ts
+   * import { MarketUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const params = MarketUtils.normalizeMarketParams({} as never);
+   * console.log(params.loanToken);
+   * ```
+   */
+  export function normalizeMarketParams(
+    market: IMarketParams | MarketParams | Market,
+  ) {
+    if (market instanceof Market) return market.params;
+    return market instanceof MarketParams ? market : new MarketParams(market);
+  }
+
+  /**
+   * Converts market params into the tuple object expected by viem ABI encoders.
+   *
+   * @param market - Market params or hydrated market.
+   * @returns ABI-compatible market params.
+   * @example
+   * ```ts
+   * import { MarketUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const struct = MarketUtils.toStruct({} as never);
+   * console.log(struct.maturity);
+   * ```
+   */
+  export function toStruct(
+    market: IMarketParams | MarketParams | Market,
+  ): MarketParamsStruct {
+    const params = normalizeMarketParams(market);
+
+    return {
+      loanToken: params.loanToken,
+      collateralParams: params.collateralParams.map((collateralParams) => ({
+        token: collateralParams.token,
+        lltv: collateralParams.lltv,
+        maxLif: collateralParams.maxLif,
+        oracle: collateralParams.oracle,
+      })),
+      maturity: params.maturity,
+      rcfThreshold: params.rcfThreshold,
+      enterGate: params.enterGate,
+      liquidatorGate: params.liquidatorGate,
+    };
   }
 
   /**
@@ -131,7 +195,7 @@ export namespace MarketUtils {
    * ```
    */
   export function hashMarket(market: IMarketParams | MarketParams | Market) {
-    const marketStruct = marketParamsToStruct(market);
+    const marketStruct = toStruct(market);
     const collateralParamHashes = marketStruct.collateralParams.map((params) =>
       keccak256(
         encodeAbiParameters(collateralParamsHashParams, [
@@ -189,8 +253,21 @@ export namespace MarketUtils {
   export function toId(params: {
     readonly market: IMarketParams | MarketParams | Market;
     readonly chainId: BigIntish;
-    readonly midnight: `0x${string}` | string;
+    readonly midnight: Address;
   }) {
-    return computeMarketId(params);
+    const encodedMarket = encodeAbiParameters(
+      [marketParamsAbiParameter],
+      [toStruct(params.market)],
+    );
+    const creationHash = keccak256(
+      `${SSTORE2_PREFIX}${encodedMarket.slice(2)}`,
+    );
+
+    return keccak256(
+      encodePacked(
+        ["uint8", "address", "uint256", "bytes32"],
+        [255, params.midnight, BigInt(params.chainId), creationHash],
+      ),
+    );
   }
 }

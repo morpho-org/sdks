@@ -110,8 +110,6 @@ packages/midnight-sdk/
     |   +-- MidnightApi.ts
     |   +-- index.ts
     +-- signatures/
-        +-- Group.ts
-        +-- GroupUtils.ts
         +-- Tree.ts
         +-- TreeUtils.ts
         +-- OfferTreeUtils.ts
@@ -121,7 +119,7 @@ packages/midnight-sdk/
 ```
 
 The root barrel exports the stable package surface explicitly, including `MarketUtils`,
-`OfferUtils`, `TakeableOfferUtils`, `GroupUtils`, `OfferTreeUtils`, `TreeUtils`, `TickLib`,
+`OfferUtils`, `TakeableOfferUtils`, `OfferTreeUtils`, `TreeUtils`, `TickLib`,
 `TakeAmountsLib`, `ConsumableUnitsLib`, `Payload`, `Offer`, `TakeableOffer`, `Group`, `Tree`,
 `EcrecoverRatifier`, `SetterRatifier`, `MidnightApi`,
 `MIDNIGHT_SDK_VERSION`, typed errors such as `InvalidOfferGroupError` and
@@ -382,7 +380,6 @@ Expose deterministic library methods:
 SDK-only derived helpers should live beside the domain they describe:
 
 - `TickLib.assertTickAlignedToSpacing` as an SDK assertion attached to the tick domain
-- `MarketUtils.getMaxSettlementFee`
 - `MarketUtils.isLltvAllowed`
 - `MarketUtils.getMaxLif`
 - `OfferUtils.getOfferExpiry`
@@ -413,9 +410,9 @@ It should:
 Make-offer helpers should support the limit-order path without importing app code:
 
 - `Offer.create` is the user-facing constructor for raw protocol `Offer` class instances from market, side, tick, max assets, expiry, callback, receiver, ratifier, and an explicit group input;
-- `OfferUtils` owns the pure object-compatible implementation behind `Offer.create`, offer expiry helpers, receiver-zeroing checks, cap checks, and API-publication validation helpers;
+- `OfferUtils` owns pure object-compatible offer validation, struct conversion, offer expiry helpers, receiver-zeroing checks, cap checks, group hashing, and API-publication validation helpers;
 - raw protocol helpers may accept explicit groups for contract parity, but maker-publication helpers should derive content-addressed group ids from the offers they publish so the result matches current Morpho API validation;
-- `Offer.createGroup` / `Group.create` are the user-facing group factories. They build multiple offers with one derived group id, preserving caller order while using a deterministic content hash for the group identity; their implementation delegates to `OfferUtils` / `GroupUtils` functions that also accept plain offer-like objects;
+- `Offer.createGroup` / `Group.create` are the user-facing group factories. They build multiple offers with one derived group id, preserving caller order while using a deterministic content hash for the group identity; their implementation uses `OfferUtils` validation and hashing helpers that also accept plain offer-like objects;
 - `OfferUtils.validateOfferGroup` exposes protocol checks and API-publication checks separately. Protocol checks enforce non-empty groups, same maker, same group, same side, same loan token, valid receiver zeroing, and exactly one non-zero unit/asset cap. API-publication checks additionally mirror the current public validation policy for maker trees, including content-addressed group identity, same callback address/data where required, non-overlapping active windows per market, and current capacity/rule constraints fetched from the API;
 - `Tree.create({ groups })` builds a Merkle tree from `Group` instances or plain group inputs, preserving offer order across groups, and delegates tree hashing/proof logic to pure `TreeUtils` helpers that accept object-compatible group inputs;
 - expose offer-tree, Merkle root, proof, ratifier-data, root-approval, mempool-submission, and API-validation helpers behind stable SDK classes and class methods where the return value is class-shaped;

@@ -148,23 +148,6 @@ export class SettlementFeeExceedsPriceError extends Error {
 }
 
 /**
- * Thrown when a settlement-fee index is outside the deployed fee table.
- *
- * @example
- * ```ts
- * import { InvalidSettlementFeeIndexError } from "@morpho-org/midnight-sdk";
- *
- * throw new InvalidSettlementFeeIndexError(8);
- * ```
- */
-export class InvalidSettlementFeeIndexError extends Error {
-  public constructor(index: number) {
-    super(`Settlement-fee index "${index}" is not supported.`);
-    this.name = "InvalidSettlementFeeIndexError";
-  }
-}
-
-/**
  * Thrown when a local position accrual is requested for an impossible timestamp.
  *
  * @example

@@ -1,5 +1,5 @@
+import { OfferTreeUtils } from "../signatures/OfferTreeUtils.js";
 import { encode as encodePayload } from "../signatures/Payload.js";
-import { normalizeTree } from "../signatures/Tree.js";
 import {
   buildBookPath,
   buildUserPath,
@@ -583,7 +583,7 @@ export class MidnightApi {
     params: ValidateMempoolTreeParams,
   ): Promise<MempoolPayloadValidationResult> {
     const input = params;
-    const tree = normalizeTree(input.tree);
+    const tree = OfferTreeUtils.normalizeTree(input.tree);
 
     return MidnightApi.validateMempoolItems({
       baseUrl: input.baseUrl,

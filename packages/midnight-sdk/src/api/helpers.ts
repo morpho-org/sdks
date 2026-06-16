@@ -1,4 +1,4 @@
-import type { Address, Hex } from "viem";
+import type { Address, Hash, Hex } from "viem";
 import {
   InvalidMidnightApiResponseError,
   MidnightApiError,
@@ -73,7 +73,7 @@ export async function requestMidnightApi<Response = unknown>(
 
 /** @internal Builds a book endpoint path with encoded path segments. */
 export function buildBookPath(params: {
-  readonly marketId: string;
+  readonly marketId: Hash;
   readonly side?: MidnightApiBookSide;
   readonly suffix?: "quote" | "takeable-offers";
 }) {
@@ -91,7 +91,7 @@ export function buildBookPath(params: {
 
 /** @internal Builds a user endpoint path with encoded path segments. */
 export function buildUserPath(params: {
-  readonly user: string;
+  readonly user: Address;
   readonly suffix: "offers" | "groups";
 }) {
   const segments = ["v1", "users", params.user, params.suffix];

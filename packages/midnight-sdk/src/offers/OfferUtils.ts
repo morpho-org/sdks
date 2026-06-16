@@ -1,17 +1,18 @@
 import type { BigIntish } from "@morpho-org/morpho-ts";
+import type { Address, Hash } from "viem";
 import { encodeAbiParameters, keccak256, zeroAddress, zeroHash } from "viem";
 import { DEFAULT_TICK_SPACING, MAX_TICK } from "../constants.js";
 import {
   InvalidOfferGroupError,
   InvalidOfferParameterError,
 } from "../errors.js";
+import { MarketUtils } from "../market/index.js";
 import {
   type BuildOfferParams,
   type IOffer,
-  normalizeOffer,
   Offer,
+  type OfferStruct,
   offerStructAbiComponents,
-  offerToStruct,
 } from "./Offer.js";
 
 const comparableHex = (value: string) => value.toLowerCase();
@@ -86,7 +87,7 @@ export interface ValidatedOfferParams {
   /** Maximum buyer or seller assets, with exactly one cap non-zero. */
   readonly maxAssets: bigint;
   /** Receiver used only when maker is seller. */
-  readonly receiverIfMakerIsSeller: `0x${string}`;
+  readonly receiverIfMakerIsSeller: Address;
 }
 
 /**
@@ -100,6 +101,57 @@ export interface ValidatedOfferParams {
  * ```
  */
 export namespace OfferUtils {
+  /**
+   * Returns an offer instance from class or plain input.
+   *
+   * @param offer - Offer class or plain input.
+   * @returns Offer instance.
+   * @example
+   * ```ts
+   * import { OfferUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const offer = OfferUtils.normalizeOffer({} as never);
+   * console.log(offer.buy);
+   * ```
+   */
+  export function normalizeOffer(offer: IOffer | Offer) {
+    return offer instanceof Offer ? offer : new Offer(offer);
+  }
+
+  /**
+   * Converts an offer into the tuple object expected by viem ABI encoders.
+   *
+   * @param offer - Offer class or plain input.
+   * @returns ABI-compatible offer.
+   * @example
+   * ```ts
+   * import { OfferUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const struct = OfferUtils.toStruct({} as never);
+   * console.log(struct.tick);
+   * ```
+   */
+  export function toStruct(offer: IOffer | Offer): OfferStruct {
+    const normalizedOffer = normalizeOffer(offer);
+
+    return {
+      market: MarketUtils.toStruct(normalizedOffer.market),
+      buy: normalizedOffer.buy,
+      maker: normalizedOffer.maker,
+      start: normalizedOffer.start,
+      expiry: normalizedOffer.expiry,
+      tick: normalizedOffer.tick,
+      group: normalizedOffer.group,
+      callback: normalizedOffer.callback,
+      callbackData: normalizedOffer.callbackData,
+      receiverIfMakerIsSeller: normalizedOffer.receiverIfMakerIsSeller,
+      ratifier: normalizedOffer.ratifier,
+      reduceOnly: normalizedOffer.reduceOnly,
+      maxUnits: normalizedOffer.maxUnits,
+      maxAssets: normalizedOffer.maxAssets,
+    };
+  }
+
   /**
    * Validates and normalizes a Midnight offer tick and spacing.
    *
@@ -253,10 +305,10 @@ export namespace OfferUtils {
    */
   export function resolveReceiverIfMakerIsSeller(params: {
     readonly buy: boolean;
-    readonly maker: `0x${string}` | string;
-    readonly receiverIfMakerIsSeller?: `0x${string}` | string;
+    readonly maker: Address;
+    readonly receiverIfMakerIsSeller?: Address;
   }) {
-    const maker = params.maker as `0x${string}`;
+    const maker = params.maker;
     const receiverIfMakerIsSeller =
       params.receiverIfMakerIsSeller ?? (params.buy ? zeroAddress : maker);
 
@@ -268,7 +320,7 @@ export namespace OfferUtils {
       });
     }
 
-    return receiverIfMakerIsSeller as `0x${string}`;
+    return receiverIfMakerIsSeller;
   }
 
   /**
@@ -305,44 +357,6 @@ export namespace OfferUtils {
   }
 
   /**
-   * Creates an offer from validated make-offer parameters.
-   *
-   * This is the object-compatible implementation behind {@link Offer.create}.
-   *
-   * @param params - Offer parameters.
-   * @returns Offer instance.
-   * @throws InvalidOfferParameterError when a deterministic offer parameter cannot satisfy protocol rules.
-   * @example
-   * ```ts
-   * import { OfferUtils } from "@morpho-org/midnight-sdk";
-   *
-   * const offer = OfferUtils.createOffer({} as never);
-   * console.log(offer instanceof Object);
-   * ```
-   */
-  export function createOffer(params: BuildOfferParams) {
-    const maker = params.maker as `0x${string}`;
-    const validated = validateOfferParams(params);
-
-    return new Offer({
-      market: params.market,
-      buy: params.buy,
-      maker,
-      start: validated.start,
-      expiry: validated.expiry,
-      tick: validated.tick,
-      group: params.group,
-      callback: params.callback ?? zeroAddress,
-      callbackData: params.callbackData ?? "0x",
-      receiverIfMakerIsSeller: validated.receiverIfMakerIsSeller,
-      ratifier: params.ratifier,
-      reduceOnly: params.reduceOnly ?? false,
-      maxUnits: validated.maxUnits,
-      maxAssets: validated.maxAssets,
-    });
-  }
-
-  /**
    * Derives the deterministic group id for a group of offers.
    *
    * The group field itself is zeroed before hashing so the resulting group id
@@ -358,11 +372,9 @@ export namespace OfferUtils {
    * console.log(group);
    * ```
    */
-  export function deriveOfferGroup(
-    offers: readonly (IOffer | Offer)[],
-  ): `0x${string}` {
+  export function deriveOfferGroup(offers: readonly (IOffer | Offer)[]): Hash {
     const structs = offers.map((offer) => ({
-      ...offerToStruct(offer),
+      ...toStruct(offer),
       group: zeroHash,
     }));
 
@@ -378,38 +390,6 @@ export namespace OfferUtils {
         [structs],
       ),
     );
-  }
-
-  /**
-   * Creates a protocol-valid group of offers with one content-addressed group id.
-   *
-   * @param params - Offer group builder parameters.
-   * @returns Immutable offers in the same order as the input entries.
-   * @throws InvalidOfferGroupError when the built offers violate group mechanics.
-   * @throws InvalidOfferParameterError when an individual offer parameter cannot satisfy protocol rules.
-   * @example
-   * ```ts
-   * import { OfferUtils } from "@morpho-org/midnight-sdk";
-   *
-   * const offers = OfferUtils.createOfferGroup({ offers: [{} as never] });
-   * console.log(offers.length);
-   * ```
-   */
-  export function createOfferGroup(
-    params: BuildOfferGroupParams,
-  ): readonly Offer[] {
-    if (params.offers.length === 0) {
-      return validateOfferGroup({ offers: [] });
-    }
-
-    const ungroupedOffers = params.offers.map((offer) =>
-      createOffer({ ...offer, group: zeroHash }),
-    );
-    const group = deriveOfferGroup(ungroupedOffers);
-
-    return validateOfferGroup({
-      offers: params.offers.map((offer) => createOffer({ ...offer, group })),
-    });
   }
 
   /**

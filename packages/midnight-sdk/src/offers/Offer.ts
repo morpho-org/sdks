@@ -1,15 +1,13 @@
 import type { BigIntish } from "@morpho-org/morpho-ts";
-import { zeroAddress } from "viem";
+import type { Address, Hash, Hex } from "viem";
+import { zeroAddress, zeroHash } from "viem";
 import type {
   IMarketParams,
   Market,
   MarketParamsStruct,
 } from "../market/index.js";
-import {
-  type MarketParams,
-  marketParamsToStruct,
-  normalizeMarketParams,
-} from "../market/Market.js";
+import type { MarketParams } from "../market/Market.js";
+import { MarketUtils } from "../market/MarketUtils.js";
 import { type BuildOfferGroupParams, OfferUtils } from "./OfferUtils.js";
 
 /**
@@ -50,7 +48,7 @@ export interface IOffer {
   /** Whether the maker buys units. */
   readonly buy: boolean;
   /** Offer maker. */
-  readonly maker: `0x${string}` | string;
+  readonly maker: Address;
   /** Start timestamp. */
   readonly start: BigIntish;
   /** Expiry timestamp. */
@@ -58,15 +56,15 @@ export interface IOffer {
   /** Midnight tick. */
   readonly tick: BigIntish;
   /** Consumption group. */
-  readonly group: `0x${string}`;
+  readonly group: Hash;
   /** Optional maker callback. */
-  readonly callback: `0x${string}` | string;
+  readonly callback: Address;
   /** Callback payload. */
-  readonly callbackData: `0x${string}`;
+  readonly callbackData: Hex;
   /** Receiver used when the maker is the seller. */
-  readonly receiverIfMakerIsSeller: `0x${string}` | string;
+  readonly receiverIfMakerIsSeller: Address;
   /** Ratifier contract. */
-  readonly ratifier: `0x${string}` | string;
+  readonly ratifier: Address;
   /** Whether the offer can only reduce maker exposure. */
   readonly reduceOnly: boolean;
   /** Maximum units; zero means max assets controls consumption. */
@@ -116,7 +114,7 @@ export class Offer {
   public readonly buy: boolean;
 
   /** Offer maker. */
-  public readonly maker: `0x${string}`;
+  public readonly maker: Address;
 
   /** Start timestamp. */
   public readonly start: bigint;
@@ -128,19 +126,19 @@ export class Offer {
   public readonly tick: bigint;
 
   /** Consumption group. */
-  public readonly group: `0x${string}`;
+  public readonly group: Hash;
 
   /** Optional maker callback. */
-  public readonly callback: `0x${string}`;
+  public readonly callback: Address;
 
   /** Callback payload. */
-  public readonly callbackData: `0x${string}`;
+  public readonly callbackData: Hex;
 
   /** Receiver used when maker is seller. */
-  public readonly receiverIfMakerIsSeller: `0x${string}`;
+  public readonly receiverIfMakerIsSeller: Address;
 
   /** Ratifier contract. */
-  public readonly ratifier: `0x${string}`;
+  public readonly ratifier: Address;
 
   /** Whether the offer can only reduce maker exposure. */
   public readonly reduceOnly: boolean;
@@ -152,18 +150,17 @@ export class Offer {
   public readonly maxAssets: bigint;
 
   public constructor(offer: IOffer) {
-    this.market = normalizeMarketParams(offer.market);
+    this.market = MarketUtils.normalizeMarketParams(offer.market);
     this.buy = offer.buy;
-    this.maker = offer.maker as `0x${string}`;
+    this.maker = offer.maker;
     this.start = BigInt(offer.start);
     this.expiry = BigInt(offer.expiry);
     this.tick = BigInt(offer.tick);
-    this.group = offer.group as `0x${string}`;
-    this.callback = offer.callback as `0x${string}`;
-    this.callbackData = offer.callbackData as `0x${string}`;
-    this.receiverIfMakerIsSeller =
-      offer.receiverIfMakerIsSeller as `0x${string}`;
-    this.ratifier = offer.ratifier as `0x${string}`;
+    this.group = offer.group;
+    this.callback = offer.callback;
+    this.callbackData = offer.callbackData;
+    this.receiverIfMakerIsSeller = offer.receiverIfMakerIsSeller;
+    this.ratifier = offer.ratifier;
     this.reduceOnly = offer.reduceOnly;
     this.maxUnits = BigInt(offer.maxUnits);
     this.maxAssets = BigInt(offer.maxAssets);
@@ -220,7 +217,18 @@ export class Offer {
    * ```
    */
   public static createGroup(params: BuildOfferGroupParams): readonly Offer[] {
-    return OfferUtils.createOfferGroup(params);
+    if (params.offers.length === 0) {
+      return OfferUtils.validateOfferGroup({ offers: [] });
+    }
+
+    const ungroupedOffers = params.offers.map((offer) =>
+      Offer.create({ ...offer, group: zeroHash }),
+    );
+    const group = OfferUtils.deriveOfferGroup(ungroupedOffers);
+
+    return OfferUtils.validateOfferGroup({
+      offers: params.offers.map((offer) => Offer.create({ ...offer, group })),
+    });
   }
 }
 
@@ -241,7 +249,7 @@ export interface OfferStruct {
   /** Whether the maker buys units. */
   readonly buy: boolean;
   /** Offer maker. */
-  readonly maker: `0x${string}`;
+  readonly maker: Address;
   /** Start timestamp. */
   readonly start: bigint;
   /** Expiry timestamp. */
@@ -249,15 +257,15 @@ export interface OfferStruct {
   /** Midnight tick. */
   readonly tick: bigint;
   /** Consumption group. */
-  readonly group: `0x${string}`;
+  readonly group: Hash;
   /** Optional maker callback. */
-  readonly callback: `0x${string}`;
+  readonly callback: Address;
   /** Callback payload. */
-  readonly callbackData: `0x${string}`;
+  readonly callbackData: Hex;
   /** Receiver used when maker is seller. */
-  readonly receiverIfMakerIsSeller: `0x${string}`;
+  readonly receiverIfMakerIsSeller: Address;
   /** Ratifier contract. */
-  readonly ratifier: `0x${string}`;
+  readonly ratifier: Address;
   /** Whether the offer can only reduce maker exposure. */
   readonly reduceOnly: boolean;
   /** Maximum units; zero means max assets controls consumption. */
@@ -307,43 +315,6 @@ export const offerStructAbiComponents = [
 ] as const;
 
 /**
- * @internal Returns an offer instance from class or plain input.
- *
- * @param offer - Offer class or plain input.
- * @returns Offer instance.
- */
-export function normalizeOffer(offer: IOffer | Offer) {
-  return offer instanceof Offer ? offer : new Offer(offer);
-}
-
-/**
- * @internal Converts an offer into the tuple object expected by viem ABI encoders.
- *
- * @param offer - Offer class or plain input.
- * @returns ABI-compatible offer.
- */
-export function offerToStruct(offer: IOffer | Offer): OfferStruct {
-  const normalizedOffer = normalizeOffer(offer);
-
-  return {
-    market: marketParamsToStruct(normalizedOffer.market),
-    buy: normalizedOffer.buy,
-    maker: normalizedOffer.maker,
-    start: normalizedOffer.start,
-    expiry: normalizedOffer.expiry,
-    tick: normalizedOffer.tick,
-    group: normalizedOffer.group,
-    callback: normalizedOffer.callback,
-    callbackData: normalizedOffer.callbackData,
-    receiverIfMakerIsSeller: normalizedOffer.receiverIfMakerIsSeller,
-    ratifier: normalizedOffer.ratifier,
-    reduceOnly: normalizedOffer.reduceOnly,
-    maxUnits: normalizedOffer.maxUnits,
-    maxAssets: normalizedOffer.maxAssets,
-  };
-}
-
-/**
  * Parameters for {@link Offer.create}.
  *
  * @example
@@ -360,7 +331,7 @@ export interface BuildOfferParams {
   /** Whether the maker buys units. */
   readonly buy: boolean;
   /** Maker address. */
-  readonly maker: `0x${string}` | string;
+  readonly maker: Address;
   /** Tick. */
   readonly tick: BigIntish;
   /** Market tick spacing; defaults to the protocol's default spacing. */
@@ -374,15 +345,15 @@ export interface BuildOfferParams {
   /** Offer expiry timestamp. */
   readonly expiry: BigIntish;
   /** Explicit protocol consumption group. */
-  readonly group: `0x${string}`;
+  readonly group: Hash;
   /** Callback address; defaults to zero address. */
-  readonly callback?: `0x${string}` | string;
+  readonly callback?: Address;
   /** Callback payload; defaults to `0x`. */
-  readonly callbackData?: `0x${string}`;
+  readonly callbackData?: Hex;
   /** Receiver used when maker is seller; defaults to zero for buy offers and maker for sell offers. */
-  readonly receiverIfMakerIsSeller?: `0x${string}` | string;
+  readonly receiverIfMakerIsSeller?: Address;
   /** Ratifier contract. */
-  readonly ratifier: `0x${string}` | string;
+  readonly ratifier: Address;
   /** Whether the offer can only reduce maker exposure. */
   readonly reduceOnly?: boolean;
 }

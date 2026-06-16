@@ -3,8 +3,7 @@ import { describe, expect, test } from "vitest";
 import { addresses, baseOffer } from "../__test__/fixtures.js";
 import { ecrecoverRatifierAbi, setterRatifierAbi } from "../abis.js";
 import { InvalidOfferTreeError } from "../errors.js";
-import { Offer } from "../offers/index.js";
-import { offerToStruct } from "../offers/Offer.js";
+import { Offer, OfferUtils } from "../offers/index.js";
 import {
   EcrecoverRatifier,
   Group,
@@ -187,9 +186,9 @@ describe("OfferTreeUtils.buildOfferTreeDescriptor", () => {
     expect(payload.offers).toHaveLength(4);
     expect(payload.height).toBe(2);
     expect(payload.offers.slice(0, 3)).toEqual(
-      offers.map((offer) => offerToStruct(offer)),
+      offers.map((offer) => OfferUtils.toStruct(offer)),
     );
-    expect(payload.offers[3]).toEqual(offerToStruct(emptyOffer()));
+    expect(payload.offers[3]).toEqual(OfferUtils.toStruct(emptyOffer()));
     expect(proof.proof).toHaveLength(2);
     expect(
       OfferTreeUtils.verifyOfferTreeProof({

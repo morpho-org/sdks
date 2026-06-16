@@ -442,9 +442,9 @@ export interface MidnightApiBookMarket {
   /** Recovery close factor threshold. */
   readonly rcfThreshold: string;
   /** Entry gate address. */
-  readonly enterGate: string;
+  readonly enterGate: Address;
   /** Liquidator gate address. */
-  readonly liquidatorGate: string;
+  readonly liquidatorGate: Address;
   /** Ask levels sorted best first. */
   readonly asks: readonly MidnightApiPriceLevel[];
   /** Bid levels sorted best first. */
@@ -482,9 +482,9 @@ export interface MidnightApiOfferMarket {
   /** Recovery close factor threshold. */
   readonly rcfThreshold: string;
   /** Entry gate address. */
-  readonly enterGate: string;
+  readonly enterGate: Address;
   /** Liquidator gate address. */
-  readonly liquidatorGate: string;
+  readonly liquidatorGate: Address;
 }
 
 /**
@@ -727,8 +727,8 @@ export type ApiBookMarketResponse = {
   readonly collaterals: readonly ApiCollateralResponse[];
   readonly maturity: number;
   readonly rcf_threshold: string;
-  readonly enter_gate: string;
-  readonly liquidator_gate: string;
+  readonly enter_gate: Address;
+  readonly liquidator_gate: Address;
   readonly asks: readonly ApiPriceLevelResponse[];
   readonly bids: readonly ApiPriceLevelResponse[];
 };
@@ -755,8 +755,8 @@ export type ApiOfferMarketResponse = {
   readonly collaterals: readonly ApiCollateralResponse[];
   readonly maturity: number;
   readonly rcf_threshold: string;
-  readonly enter_gate: string;
-  readonly liquidator_gate: string;
+  readonly enter_gate: Address;
+  readonly liquidator_gate: Address;
 };
 
 /** @internal Inline offer response shape returned by the API. */

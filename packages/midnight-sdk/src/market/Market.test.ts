@@ -86,7 +86,6 @@ describe("MarketUtils", () => {
   test("default", () => {
     expect(MarketUtils.isLltvAllowed(770000000000000000n)).toBe(true);
     expect(MarketUtils.isLltvAllowed(123n)).toBe(false);
-    expect(MarketUtils.getMaxSettlementFee(0)).toBe(14_000000000000n);
     expect(MarketUtils.getMaxLif(770000000000000000n)).toBe(
       1061007957559681697n,
     );

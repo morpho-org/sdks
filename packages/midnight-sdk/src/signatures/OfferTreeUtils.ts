@@ -1,9 +1,12 @@
 import { type BigIntish, deepFreeze } from "@morpho-org/morpho-ts";
 import {
+  type Address,
   concat,
   decodeAbiParameters,
   encodeAbiParameters,
   encodeFunctionData,
+  type Hash,
+  type Hex,
   keccak256,
   parseSignature,
 } from "viem";
@@ -17,11 +20,10 @@ import { MarketUtils } from "../market/index.js";
 import {
   type BuildOfferGroupParams,
   type IOffer,
-  type Offer,
+  Offer,
   type OfferStruct,
   OfferUtils,
 } from "../offers/index.js";
-import { offerToStruct } from "../offers/Offer.js";
 import type { Item as PayloadItem } from "./Payload.js";
 
 const offerTreeTypeHashes = [
@@ -245,7 +247,7 @@ function padOfferStructs(offers: readonly OfferStruct[]): OfferStruct[] {
 }
 
 function assertLeafOffers(offers: readonly OfferStruct[]): void {
-  const seen = new Set<`0x${string}`>();
+  const seen = new Set<Hash>();
   for (const offer of offers) {
     if (isEmptyOfferStruct(offer)) continue;
 
@@ -278,9 +280,9 @@ export interface EcrecoverSignature {
   /** Recovery id. */
   readonly v: number;
   /** Signature `r` value. */
-  readonly r: `0x${string}`;
+  readonly r: Hex;
   /** Signature `s` value. */
-  readonly s: `0x${string}`;
+  readonly s: Hex;
 }
 
 /**
@@ -298,9 +300,9 @@ export interface OfferTreeDescriptor {
   /** Offer structs in leaf order, including trailing empty padding. */
   readonly offers: readonly OfferStruct[];
   /** Leaf hashes for the padded offer tree. */
-  readonly leaves: readonly `0x${string}`[];
+  readonly leaves: readonly Hash[];
   /** Merkle root. */
-  readonly root: `0x${string}`;
+  readonly root: Hash;
   /** Tree height. */
   readonly height: number;
 }
@@ -318,11 +320,11 @@ export interface OfferTreeDescriptor {
  */
 export interface OfferTreeProof {
   /** Merkle root. */
-  readonly root: `0x${string}`;
+  readonly root: Hash;
   /** Leaf index in the offer tree. */
   readonly leafIndex: bigint;
   /** Sibling hashes from leaf to root. */
-  readonly proof: readonly `0x${string}`[];
+  readonly proof: readonly Hash[];
 }
 
 /**
@@ -369,7 +371,7 @@ export interface EcrecoverRatificationTypedData {
   /** EIP-712 domain. */
   readonly domain: {
     readonly chainId: bigint;
-    readonly verifyingContract: `0x${string}`;
+    readonly verifyingContract: Address;
   };
   /** EIP-712 type map. */
   readonly types: typeof typedDataTypes & {
@@ -430,7 +432,7 @@ export interface TreeCreateParams {
 export type TreeInput = Tree | TreeCreateParams;
 
 /**
- * `0x${string}` or tuple signature accepted by {@link EcrecoverRatifier}.
+ * Hex string or tuple signature accepted by {@link EcrecoverRatifier}.
  *
  * @example
  * ```ts
@@ -440,7 +442,7 @@ export type TreeInput = Tree | TreeCreateParams;
  * console.log(signature);
  * ```
  */
-export type EcrecoverSignatureInput = `0x${string}` | EcrecoverSignature;
+export type EcrecoverSignatureInput = Hex | EcrecoverSignature;
 
 /**
  * Signing callback accepted by {@link EcrecoverRatifier.ratify}.
@@ -455,7 +457,7 @@ export type EcrecoverSignatureInput = `0x${string}` | EcrecoverSignature;
  */
 export type EcrecoverSignTypedData = (
   typedData: EcrecoverRatificationTypedData,
-) => `0x${string}` | Promise<`0x${string}`>;
+) => Hex | Promise<Hex>;
 
 /**
  * Parameters for {@link EcrecoverRatifier.typedData}.
@@ -474,7 +476,7 @@ export interface EcrecoverRatifierTypedDataParams {
   /** Chain id used by the EIP-712 domain. */
   readonly chainId: BigIntish;
   /** EcrecoverRatifier contract address used by the EIP-712 domain. */
-  readonly verifyingContract: `0x${string}` | string;
+  readonly verifyingContract: Address;
 }
 
 /**
@@ -583,20 +585,10 @@ export class Group {
   public static create(params: GroupCreateParams): Group {
     const offers = isOfferList(params)
       ? OfferUtils.validateOfferGroup({ offers: params })
-      : OfferUtils.createOfferGroup(params);
+      : Offer.createGroup(params);
 
     return new Group(offers);
   }
-}
-
-/**
- * @internal Returns a group instance from class or plain input.
- *
- * @param group - Group class or creation input.
- * @returns Group instance.
- */
-export function normalizeGroup(group: Group | GroupCreateParams): Group {
-  return group instanceof Group ? group : Group.create(group);
 }
 
 /**
@@ -621,10 +613,10 @@ export class Tree {
   public readonly paddedOffers: readonly OfferStruct[];
 
   /** Leaf hashes for `paddedOffers`. */
-  public readonly leaves: readonly `0x${string}`[];
+  public readonly leaves: readonly Hash[];
 
   /** Merkle root. */
-  public readonly root: `0x${string}`;
+  public readonly root: Hash;
 
   /** Tree height. */
   public readonly height: number;
@@ -656,7 +648,9 @@ export class Tree {
    * ```
    */
   public static create(params: TreeCreateParams): Tree {
-    return new Tree(params.groups.map((group) => normalizeGroup(group)));
+    return new Tree(
+      params.groups.map((group) => OfferTreeUtils.normalizeGroup(group)),
+    );
   }
 
   /**
@@ -679,16 +673,6 @@ export class Tree {
       leafIndex,
     });
   }
-}
-
-/**
- * @internal Returns a tree instance from class or plain input.
- *
- * @param tree - Tree class or creation input.
- * @returns Tree instance.
- */
-export function normalizeTree(tree: TreeInput): Tree {
-  return tree instanceof Tree ? tree : Tree.create(tree);
 }
 
 /**
@@ -731,7 +715,7 @@ export class EcrecoverRatifier {
   public static typedData(
     params: EcrecoverRatifierTypedDataParams,
   ): EcrecoverRatificationTypedData {
-    const tree = normalizeTree(params.tree);
+    const tree = OfferTreeUtils.normalizeTree(params.tree);
 
     return OfferTreeUtils.buildEcrecoverRatificationTypedData({
       offers: tree.offers,
@@ -753,10 +737,8 @@ export class EcrecoverRatifier {
    * console.log(data);
    * ```
    */
-  public static ratifierData(
-    params: EcrecoverRatifierDataParams,
-  ): `0x${string}` {
-    const tree = normalizeTree(params.tree);
+  public static ratifierData(params: EcrecoverRatifierDataParams): Hex {
+    const tree = OfferTreeUtils.normalizeTree(params.tree);
     const proof = tree.proof(params.leafIndex);
 
     return OfferTreeUtils.encodeEcrecoverRatifierData({
@@ -793,7 +775,7 @@ export class EcrecoverRatifier {
   public static async ratify(
     params: EcrecoverRatifierRatifyParams,
   ): Promise<readonly PayloadItem[]> {
-    const tree = normalizeTree(params.tree);
+    const tree = OfferTreeUtils.normalizeTree(params.tree);
     const signature =
       params.signature != null
         ? normalizeEcrecoverSignature(params.signature)
@@ -830,9 +812,7 @@ export class EcrecoverRatifier {
    * console.log(decoded.root);
    * ```
    */
-  public static decodeRatifierData(
-    data: `0x${string}`,
-  ): DecodedEcrecoverRatifierData {
+  public static decodeRatifierData(data: Hex): DecodedEcrecoverRatifierData {
     return OfferTreeUtils.decodeEcrecoverRatifierData(data);
   }
 
@@ -850,10 +830,10 @@ export class EcrecoverRatifier {
    * ```
    */
   public static cancelRoot(params: {
-    readonly ecrecoverRatifier: `0x${string}` | string;
-    readonly maker: `0x${string}` | string;
-    readonly root: `0x${string}`;
-  }): { readonly to: `0x${string}`; readonly data: `0x${string}` } {
+    readonly ecrecoverRatifier: Address;
+    readonly maker: Address;
+    readonly root: Hash;
+  }): { readonly to: Address; readonly data: Hex } {
     return OfferTreeUtils.buildEcrecoverRootCancellationCall(params);
   }
 }
@@ -884,8 +864,8 @@ export class SetterRatifier {
    * console.log(data);
    * ```
    */
-  public static ratifierData(params: SetterRatifierDataParams): `0x${string}` {
-    const tree = normalizeTree(params.tree);
+  public static ratifierData(params: SetterRatifierDataParams): Hex {
+    const tree = OfferTreeUtils.normalizeTree(params.tree);
     const proof = tree.proof(params.leafIndex);
 
     return OfferTreeUtils.encodeSetterRatifierData({
@@ -914,7 +894,7 @@ export class SetterRatifier {
   public static ratify(params: {
     readonly tree: TreeInput;
   }): readonly PayloadItem[] {
-    const tree = normalizeTree(params.tree);
+    const tree = OfferTreeUtils.normalizeTree(params.tree);
 
     return tree.offers.map((offer, leafIndex) => ({
       offer,
@@ -935,9 +915,7 @@ export class SetterRatifier {
    * console.log(decoded.root);
    * ```
    */
-  public static decodeRatifierData(
-    data: `0x${string}`,
-  ): DecodedSetterRatifierData {
+  public static decodeRatifierData(data: Hex): DecodedSetterRatifierData {
     return OfferTreeUtils.decodeSetterRatifierData(data);
   }
 
@@ -955,11 +933,11 @@ export class SetterRatifier {
    * ```
    */
   public static approveRoot(params: {
-    readonly setterRatifier: `0x${string}` | string;
-    readonly maker: `0x${string}` | string;
-    readonly root: `0x${string}`;
+    readonly setterRatifier: Address;
+    readonly maker: Address;
+    readonly root: Hash;
     readonly newIsRootRatified?: boolean;
-  }): { readonly to: `0x${string}`; readonly data: `0x${string}` } {
+  }): { readonly to: Address; readonly data: Hex } {
     return OfferTreeUtils.buildSetterRootApprovalCall(params);
   }
 }
@@ -988,6 +966,40 @@ function normalizeEcrecoverSignature(
  * ```
  */
 export namespace OfferTreeUtils {
+  /**
+   * Returns a group instance from class or plain input.
+   *
+   * @param group - Group class or creation input.
+   * @returns Group instance.
+   * @example
+   * ```ts
+   * import { OfferTreeUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const group = OfferTreeUtils.normalizeGroup([{} as never]);
+   * console.log(group.offers.length);
+   * ```
+   */
+  export function normalizeGroup(group: Group | GroupCreateParams): Group {
+    return group instanceof Group ? group : Group.create(group);
+  }
+
+  /**
+   * Returns a tree instance from class or plain input.
+   *
+   * @param tree - Tree class or creation input.
+   * @returns Tree instance.
+   * @example
+   * ```ts
+   * import { OfferTreeUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const tree = OfferTreeUtils.normalizeTree({ groups: [[{} as never]] });
+   * console.log(tree.root);
+   * ```
+   */
+  export function normalizeTree(tree: TreeInput): Tree {
+    return tree instanceof Tree ? tree : Tree.create(tree);
+  }
+
   /**
    * Returns the HashLib offer-tree typehash for a tree height.
    *
@@ -1022,7 +1034,7 @@ export namespace OfferTreeUtils {
    * ```
    */
   export function hashOffer(offer: IOffer | Offer) {
-    const offerStruct = offerToStruct(offer);
+    const offerStruct = OfferUtils.toStruct(offer);
 
     return hashOfferStruct(offerStruct);
   }
@@ -1044,8 +1056,8 @@ export namespace OfferTreeUtils {
    * console.log(root);
    * ```
    */
-  export function hashNode(left: `0x${string}`, right: `0x${string}`) {
-    return keccak256(concat([left as `0x${string}`, right as `0x${string}`]));
+  export function hashNode(left: Hash, right: Hash) {
+    return keccak256(concat([left, right]));
   }
 
   /**
@@ -1071,7 +1083,7 @@ export namespace OfferTreeUtils {
     }
 
     const offerStructs = padOfferStructs(
-      offers.map((offer) => offerToStruct(offer)),
+      offers.map((offer) => OfferUtils.toStruct(offer)),
     );
     assertLeafOffers(offerStructs);
 
@@ -1082,7 +1094,7 @@ export namespace OfferTreeUtils {
     const leaves = [...level];
 
     while (level.length > 1) {
-      const next: `0x${string}`[] = [];
+      const next: Hash[] = [];
       for (let i = 0; i < level.length; i += 2) {
         next.push(hashNode(level[i]!, level[i + 1]!));
       }
@@ -1142,10 +1154,10 @@ export namespace OfferTreeUtils {
 
     let index = Number(leafIndex);
     let level = [...payload.leaves];
-    const proof: `0x${string}`[] = [];
+    const proof: Hash[] = [];
     while (level.length > 1) {
       proof.push(level[index ^ 1]!);
-      const next: `0x${string}`[] = [];
+      const next: Hash[] = [];
       for (let i = 0; i < level.length; i += 2) {
         next.push(hashNode(level[i]!, level[i + 1]!));
       }
@@ -1176,7 +1188,7 @@ export namespace OfferTreeUtils {
   export function buildEcrecoverRatificationTypedData(params: {
     readonly offers: readonly (IOffer | Offer)[];
     readonly chainId: BigIntish;
-    readonly verifyingContract: `0x${string}` | string;
+    readonly verifyingContract: Address;
   }): EcrecoverRatificationTypedData {
     const payload = buildOfferTreeDescriptor(params.offers);
     const offerTreeType =
@@ -1185,7 +1197,7 @@ export namespace OfferTreeUtils {
     return deepFreeze({
       domain: {
         chainId: BigInt(params.chainId),
-        verifyingContract: params.verifyingContract as `0x${string}`,
+        verifyingContract: params.verifyingContract,
       },
       types: {
         ...typedDataTypes,
@@ -1217,22 +1229,22 @@ export namespace OfferTreeUtils {
    * ```
    */
   export function buildEcrecoverRatificationDigest(params: {
-    readonly root: `0x${string}`;
+    readonly root: Hash;
     readonly height: number;
     readonly chainId: BigIntish;
-    readonly verifyingContract: `0x${string}` | string;
+    readonly verifyingContract: Address;
   }) {
     const domainSeparator = keccak256(
       encodeAbiParameters(domainSeparatorAbi, [
         EIP712_DOMAIN_TYPEHASH,
         BigInt(params.chainId),
-        params.verifyingContract as `0x${string}`,
+        params.verifyingContract,
       ]),
     );
     const structHash = keccak256(
       encodeAbiParameters(treeStructHashAbi, [
         offerTreeTypeHash(params.height),
-        params.root as `0x${string}`,
+        params.root,
       ]),
     );
 
@@ -1260,10 +1272,10 @@ export namespace OfferTreeUtils {
   export async function signEcrecoverRatification(params: {
     readonly offers: readonly (IOffer | Offer)[];
     readonly chainId: BigIntish;
-    readonly verifyingContract: `0x${string}` | string;
+    readonly verifyingContract: Address;
     readonly signTypedData: (
       typedData: EcrecoverRatificationTypedData,
-    ) => `0x${string}` | Promise<`0x${string}`>;
+    ) => Hex | Promise<Hex>;
   }) {
     return params.signTypedData(
       buildEcrecoverRatificationTypedData({
@@ -1298,19 +1310,19 @@ export namespace OfferTreeUtils {
    */
   export function encodeEcrecoverRatifierData(params: {
     readonly signature: EcrecoverSignature;
-    readonly root: `0x${string}`;
+    readonly root: Hash;
     readonly leafIndex: BigIntish;
-    readonly proof: readonly `0x${string}`[];
+    readonly proof: readonly Hash[];
   }) {
     return encodeAbiParameters(signatureAbi, [
       {
         v: params.signature.v,
-        r: params.signature.r as `0x${string}`,
-        s: params.signature.s as `0x${string}`,
+        r: params.signature.r,
+        s: params.signature.s,
       },
-      params.root as `0x${string}`,
+      params.root,
       BigInt(params.leafIndex),
-      params.proof.map((node) => node as `0x${string}`),
+      params.proof,
     ]);
   }
 
@@ -1328,7 +1340,7 @@ export namespace OfferTreeUtils {
    * ```
    */
   export function decodeEcrecoverRatifierData(
-    data: `0x${string}`,
+    data: Hex,
   ): DecodedEcrecoverRatifierData {
     const [signature, root, leafIndex, proof] = decodeAbiParameters(
       signatureAbi,
@@ -1365,14 +1377,14 @@ export namespace OfferTreeUtils {
    * ```
    */
   export function encodeSetterRatifierData(params: {
-    readonly root: `0x${string}`;
+    readonly root: Hash;
     readonly leafIndex: BigIntish;
-    readonly proof: readonly `0x${string}`[];
+    readonly proof: readonly Hash[];
   }) {
     return encodeAbiParameters(setterRatifierDataAbi, [
-      params.root as `0x${string}`,
+      params.root,
       BigInt(params.leafIndex),
-      params.proof.map((node) => node as `0x${string}`),
+      params.proof,
     ]);
   }
 
@@ -1390,7 +1402,7 @@ export namespace OfferTreeUtils {
    * ```
    */
   export function decodeSetterRatifierData(
-    data: `0x${string}`,
+    data: Hex,
   ): DecodedSetterRatifierData {
     const [root, leafIndex, proof] = decodeAbiParameters(
       setterRatifierDataAbi,
@@ -1415,9 +1427,9 @@ export namespace OfferTreeUtils {
    */
   export function verifyOfferTreeProof(params: {
     readonly offer: IOffer | Offer;
-    readonly root: `0x${string}`;
+    readonly root: Hash;
     readonly leafIndex: BigIntish;
-    readonly proof: readonly `0x${string}`[];
+    readonly proof: readonly Hash[];
   }) {
     let node = hashOffer(params.offer);
     const leafIndex = BigInt(params.leafIndex);
@@ -1429,8 +1441,8 @@ export namespace OfferTreeUtils {
     for (const sibling of params.proof) {
       node =
         (remainingLeafIndex & 1n) === 0n
-          ? hashNode(node, sibling as `0x${string}`)
-          : hashNode(sibling as `0x${string}`, node);
+          ? hashNode(node, sibling)
+          : hashNode(sibling, node);
       remainingLeafIndex >>= 1n;
     }
 
@@ -1455,23 +1467,19 @@ export namespace OfferTreeUtils {
    * ```
    */
   export function buildSetterRootApprovalCall(params: {
-    readonly setterRatifier: `0x${string}` | string;
-    readonly maker: `0x${string}` | string;
-    readonly root: `0x${string}`;
+    readonly setterRatifier: Address;
+    readonly maker: Address;
+    readonly root: Hash;
     readonly newIsRootRatified?: boolean;
-  }): { readonly to: `0x${string}`; readonly data: `0x${string}` } {
-    const to = params.setterRatifier as `0x${string}`;
-    const root = params.root as `0x${string}`;
+  }): { readonly to: Address; readonly data: Hex } {
+    const to = params.setterRatifier;
+    const root = params.root;
     return deepFreeze({
       to,
       data: encodeFunctionData({
         abi: setterRatifierAbi,
         functionName: "setIsRootRatified",
-        args: [
-          params.maker as `0x${string}`,
-          root,
-          params.newIsRootRatified ?? true,
-        ],
+        args: [params.maker, root, params.newIsRootRatified ?? true],
       }),
     });
   }
@@ -1494,16 +1502,16 @@ export namespace OfferTreeUtils {
    * ```
    */
   export function buildEcrecoverRootCancellationCall(params: {
-    readonly ecrecoverRatifier: `0x${string}` | string;
-    readonly maker: `0x${string}` | string;
-    readonly root: `0x${string}`;
-  }): { readonly to: `0x${string}`; readonly data: `0x${string}` } {
+    readonly ecrecoverRatifier: Address;
+    readonly maker: Address;
+    readonly root: Hash;
+  }): { readonly to: Address; readonly data: Hex } {
     return deepFreeze({
-      to: params.ecrecoverRatifier as `0x${string}`,
+      to: params.ecrecoverRatifier,
       data: encodeFunctionData({
         abi: ecrecoverRatifierAbi,
         functionName: "cancelRoot",
-        args: [params.maker as `0x${string}`, params.root as `0x${string}`],
+        args: [params.maker, params.root],
       }),
     });
   }

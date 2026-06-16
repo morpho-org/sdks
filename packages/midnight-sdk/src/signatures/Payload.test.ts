@@ -1,12 +1,12 @@
-import { bytesToHex, encodeAbiParameters, hexToBytes } from "viem";
+import { bytesToHex, encodeAbiParameters, type Hex, hexToBytes } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   addresses,
   baseMarketParamsInput,
   baseOffer,
 } from "../__test__/fixtures.js";
-import type { IOffer, OfferStruct } from "../offers/index.js";
-import { offerStructAbiComponents, offerToStruct } from "../offers/Offer.js";
+import { type IOffer, type OfferStruct, OfferUtils } from "../offers/index.js";
+import { offerStructAbiComponents } from "../offers/Offer.js";
 import * as Payload from "./Payload.js";
 import { MAX_ATTRIBUTION_SUFFIX_BYTES } from "./Payload.js";
 
@@ -40,9 +40,7 @@ async function encodeUncheckedPayload(
   offer: OfferStruct,
 ): Promise<Payload.Payload> {
   const itemBytes = hexToBytes(
-    encodeAbiParameters(itemsAbi, [
-      [{ offer, ratifierData: "0x1234" as `0x${string}` }],
-    ]),
+    encodeAbiParameters(itemsAbi, [[{ offer, ratifierData: "0x1234" as Hex }]]),
   );
   const stream = new ReadableStream<BufferSource>({
     start(controller) {
@@ -62,13 +60,15 @@ describe("Payload.encode", () => {
   test("default", async () => {
     const offer = apiValidOffer();
     const encoded = await Payload.encode([
-      { offer, ratifierData: "0x1234" as `0x${string}` },
+      { offer, ratifierData: "0x1234" as Hex },
     ]);
 
     const decoded = await Payload.decode(encoded);
 
     expect(decoded).toHaveLength(1);
-    expect(offerToStruct(decoded[0]!.offer)).toEqual(offerToStruct(offer));
+    expect(OfferUtils.toStruct(decoded[0]!.offer)).toEqual(
+      OfferUtils.toStruct(offer),
+    );
     expect(decoded[0]!.ratifierData).toBe("0x1234");
   });
 
@@ -83,7 +83,7 @@ describe("Payload.encode", () => {
       Payload.encode([
         {
           offer: apiValidOffer({ expiry: API_VALID_MATURITY + 60n }),
-          ratifierData: "0x1234" as `0x${string}`,
+          ratifierData: "0x1234" as Hex,
         },
       ]),
     ).rejects.toBeInstanceOf(Payload.DecodeError);
@@ -108,9 +108,9 @@ describe("Payload.buildSubmissionCall", () => {
 describe("Payload.decode", () => {
   test("behavior: ignores small attribution suffix", async () => {
     const encoded = await Payload.encode([
-      { offer: apiValidOffer(), ratifierData: "0x1234" as `0x${string}` },
+      { offer: apiValidOffer(), ratifierData: "0x1234" as Hex },
     ]);
-    const tagged = `${encoded}ff` as `0x${string}`;
+    const tagged = `${encoded}ff` as Hex;
 
     const decoded = await Payload.decode(tagged);
 
@@ -125,18 +125,18 @@ describe("Payload.decode", () => {
 
   test("error: attribution suffix cap", async () => {
     const encoded = await Payload.encode([
-      { offer: apiValidOffer(), ratifierData: "0x1234" as `0x${string}` },
+      { offer: apiValidOffer(), ratifierData: "0x1234" as Hex },
     ]);
     const suffix = "ff".repeat(MAX_ATTRIBUTION_SUFFIX_BYTES + 1);
 
     await expect(
-      Payload.decode(`${encoded}${suffix}` as `0x${string}`),
+      Payload.decode(`${encoded}${suffix}` as Hex),
     ).rejects.toBeInstanceOf(Payload.DecodeError);
   });
 
   test("error: API-invalid offer bytes", async () => {
     const encoded = await encodeUncheckedPayload(
-      offerToStruct(apiValidOffer({ expiry: API_VALID_MATURITY + 60n })),
+      OfferUtils.toStruct(apiValidOffer({ expiry: API_VALID_MATURITY + 60n })),
     );
 
     await expect(Payload.decode(encoded)).rejects.toBeInstanceOf(

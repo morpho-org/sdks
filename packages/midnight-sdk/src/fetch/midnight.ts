@@ -1,9 +1,11 @@
 import { assertNonNegative, type BigIntish } from "@morpho-org/morpho-ts";
 import {
   type Account,
+  type Address,
   type BlockTag,
   type Client,
   erc20Abi,
+  type Hash,
   type StateOverride,
 } from "viem";
 import { getBytecode, readContract } from "viem/actions";
@@ -18,12 +20,11 @@ import {
   type IMarketParams,
   Market,
   MarketParams,
+  MarketUtils,
   Position,
 } from "../market/index.js";
-import { marketParamsToStruct } from "../market/Market.js";
 import { ConsumableUnitsLib } from "../math/index.js";
-import type { IOffer, Offer } from "../offers/index.js";
-import { normalizeOffer } from "../offers/Offer.js";
+import { type IOffer, type Offer, OfferUtils } from "../offers/index.js";
 import {
   abi as getPositionAbi,
   code as getPositionCode,
@@ -46,7 +47,7 @@ import {
  */
 export interface MidnightCallParameters {
   /** Account used as the `from` field for the read. */
-  readonly account?: Account | `0x${string}`;
+  readonly account?: Account | Address;
   /** Block number used for the read. */
   readonly blockNumber?: bigint;
   /** Block tag used for the read. */
@@ -94,7 +95,7 @@ export interface MidnightFetchParams extends DeploylessFetchParameters {
   /** Viem client. */
   readonly client: Client;
   /** Core Midnight contract address. */
-  readonly midnight: `0x${string}`;
+  readonly midnight: Address;
 }
 
 const callParameters = (
@@ -165,8 +166,8 @@ const marketStateFields = (
  */
 export function fetchIsAuthorized(
   params: MidnightFetchParams & {
-    readonly authorizer: `0x${string}`;
-    readonly authorized: `0x${string}`;
+    readonly authorizer: Address;
+    readonly authorized: Address;
   },
 ) {
   return readContract(params.client, {
@@ -194,9 +195,9 @@ export function fetchIsAuthorized(
 export function fetchErc20Allowance(
   params: {
     readonly client: Client;
-    readonly token: `0x${string}`;
-    readonly owner: `0x${string}`;
-    readonly spender: `0x${string}`;
+    readonly token: Address;
+    readonly owner: Address;
+    readonly spender: Address;
   } & DeploylessFetchParameters,
 ) {
   return readContract(params.client, {
@@ -231,7 +232,7 @@ export function fetchMarketId(
     address: params.midnight,
     abi: midnightAbi,
     functionName: "toId",
-    args: [marketParamsToStruct(params.market)],
+    args: [MarketUtils.toStruct(params.market)],
   });
 }
 
@@ -250,7 +251,7 @@ export function fetchMarketId(
  */
 export async function fetchMarketParams(
   params: MidnightFetchParams & {
-    readonly marketId: `0x${string}`;
+    readonly marketId: Hash;
   },
 ) {
   const market = await readContract(params.client, {
@@ -279,7 +280,7 @@ export async function fetchMarketParams(
  */
 export async function fetchMarket(
   params: MidnightFetchParams & {
-    readonly marketId: `0x${string}`;
+    readonly marketId: Hash;
   },
 ) {
   const [marketParams, state] = await Promise.all([
@@ -318,8 +319,8 @@ export async function fetchMarket(
  */
 export async function fetchPosition(
   params: MidnightFetchParams & {
-    readonly marketId: `0x${string}`;
-    readonly user: `0x${string}`;
+    readonly marketId: Hash;
+    readonly user: Address;
   },
 ): Promise<Position> {
   if (shouldUseDeployless(params)) {
@@ -396,8 +397,8 @@ export async function fetchPosition(
  */
 export async function fetchAccrualPosition(
   params: MidnightFetchParams & {
-    readonly marketId: `0x${string}`;
-    readonly user: `0x${string}`;
+    readonly marketId: Hash;
+    readonly user: Address;
   },
 ) {
   const [position, market] = await Promise.all([
@@ -423,8 +424,8 @@ export async function fetchAccrualPosition(
  */
 export function fetchCollateral(
   params: MidnightFetchParams & {
-    readonly marketId: `0x${string}`;
-    readonly user: `0x${string}`;
+    readonly marketId: Hash;
+    readonly user: Address;
     readonly collateralIndex: BigIntish;
   },
 ) {
@@ -452,8 +453,8 @@ export function fetchCollateral(
  */
 export function fetchCredit(
   params: MidnightFetchParams & {
-    readonly marketId: `0x${string}`;
-    readonly user: `0x${string}`;
+    readonly marketId: Hash;
+    readonly user: Address;
   },
 ) {
   return readContract(params.client, {
@@ -480,8 +481,8 @@ export function fetchCredit(
  */
 export function fetchDebt(
   params: MidnightFetchParams & {
-    readonly marketId: `0x${string}`;
-    readonly user: `0x${string}`;
+    readonly marketId: Hash;
+    readonly user: Address;
   },
 ) {
   return readContract(params.client, {
@@ -508,7 +509,7 @@ export function fetchDebt(
  */
 export function fetchWithdrawable(
   params: MidnightFetchParams & {
-    readonly marketId: `0x${string}`;
+    readonly marketId: Hash;
   },
 ) {
   return readContract(params.client, {
@@ -536,8 +537,8 @@ export function fetchWithdrawable(
 export function fetchIsHealthy(
   params: MidnightFetchParams & {
     readonly market: IMarketParams | MarketParams | Market;
-    readonly marketId: `0x${string}`;
-    readonly borrower: `0x${string}`;
+    readonly marketId: Hash;
+    readonly borrower: Address;
   },
 ) {
   return readContract(params.client, {
@@ -546,7 +547,7 @@ export function fetchIsHealthy(
     abi: midnightAbi,
     functionName: "isHealthy",
     args: [
-      marketParamsToStruct(params.market),
+      MarketUtils.toStruct(params.market),
       params.marketId,
       params.borrower,
     ],
@@ -568,7 +569,7 @@ export function fetchIsHealthy(
  */
 export function fetchTickSpacing(
   params: MidnightFetchParams & {
-    readonly marketId: `0x${string}`;
+    readonly marketId: Hash;
   },
 ) {
   return readContract(params.client, {
@@ -596,7 +597,7 @@ export function fetchTickSpacing(
  */
 export function fetchSettlementFee(
   params: MidnightFetchParams & {
-    readonly marketId: `0x${string}`;
+    readonly marketId: Hash;
     readonly timeToMaturity: BigIntish;
   },
 ) {
@@ -627,8 +628,8 @@ export function fetchSettlementFee(
  */
 export function fetchConsumed(
   params: MidnightFetchParams & {
-    readonly user: `0x${string}`;
-    readonly group: `0x${string}`;
+    readonly user: Address;
+    readonly group: Hash;
   },
 ) {
   return readContract(params.client, {
@@ -662,12 +663,12 @@ export function fetchConsumed(
  */
 export async function fetchConsumableUnits(
   params: MidnightFetchParams & {
-    readonly marketId: `0x${string}`;
+    readonly marketId: Hash;
     readonly offer: IOffer | Offer;
     readonly timeToMaturity: BigIntish;
   },
 ) {
-  const offer = normalizeOffer(params.offer);
+  const offer = OfferUtils.normalizeOffer(params.offer);
   assertNonNegative("offer.maxUnits", offer.maxUnits);
   assertNonNegative("offer.maxAssets", offer.maxAssets);
   const needsSettlementFee = offer.maxUnits === 0n;
@@ -722,9 +723,9 @@ export async function fetchConsumableUnits(
 export async function fetchRatifierInfo(
   params: {
     readonly client: Client;
-    readonly maker: `0x${string}`;
-    readonly ecrecoverRatifier: `0x${string}`;
-    readonly setterRatifier: `0x${string}`;
+    readonly maker: Address;
+    readonly ecrecoverRatifier: Address;
+    readonly setterRatifier: Address;
   } & MidnightCallParameters,
 ): Promise<RatifierInfo> {
   const bytecode = await getBytecode(params.client, {
@@ -755,9 +756,9 @@ export async function fetchRatifierInfo(
 export function fetchIsRootCanceled(
   params: {
     readonly client: Client;
-    readonly ecrecoverRatifier: `0x${string}`;
-    readonly maker: `0x${string}`;
-    readonly root: `0x${string}`;
+    readonly ecrecoverRatifier: Address;
+    readonly maker: Address;
+    readonly root: Hash;
   } & MidnightCallParameters,
 ) {
   return readContract(params.client, {
@@ -785,9 +786,9 @@ export function fetchIsRootCanceled(
 export function fetchIsRootRatified(
   params: {
     readonly client: Client;
-    readonly setterRatifier: `0x${string}`;
-    readonly maker: `0x${string}`;
-    readonly root: `0x${string}`;
+    readonly setterRatifier: Address;
+    readonly maker: Address;
+    readonly root: Hash;
   } & MidnightCallParameters,
 ) {
   return readContract(params.client, {

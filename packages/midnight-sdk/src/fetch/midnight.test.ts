@@ -6,9 +6,11 @@ import {
 } from "@morpho-org/test/mock";
 import {
   type Abi,
+  type Address,
   type ContractFunctionName,
   encodeFunctionResult,
   erc20Abi,
+  type Hex,
 } from "viem";
 import { base } from "viem/chains";
 import { describe, expect, test } from "vitest";
@@ -25,7 +27,7 @@ import {
 } from "../abis.js";
 import { MAX_TICK } from "../constants.js";
 import { SettlementFeeExceedsPriceError } from "../errors.js";
-import { marketParamsToStruct } from "../market/Market.js";
+import { MarketUtils } from "../market/index.js";
 import { TickLib } from "../math/index.js";
 import { abi as getPositionAbi } from "../queries/GetPosition.js";
 import {
@@ -68,9 +70,7 @@ function mockDeploylessRead<
 
   handle.request.mockImplementation(async (call) => {
     if (call.method === "eth_call") {
-      const [tx] = (call.params ?? []) as [
-        { to?: `0x${string}`; data?: `0x${string}` },
-      ];
+      const [tx] = (call.params ?? []) as [{ to?: Address; data?: Hex }];
       if (tx?.to == null && typeof tx?.data === "string") return result;
     }
 
@@ -84,9 +84,7 @@ function mockDeploylessFailure(handle: MockClientHandle) {
 
   handle.request.mockImplementation(async (call) => {
     if (call.method === "eth_call") {
-      const [tx] = (call.params ?? []) as [
-        { to?: `0x${string}`; data?: `0x${string}` },
-      ];
+      const [tx] = (call.params ?? []) as [{ to?: Address; data?: Hex }];
       if (tx?.to == null && typeof tx?.data === "string") {
         throw new TypeError("deployless unavailable");
       }
@@ -149,7 +147,7 @@ describe("fetchMarketParams", () => {
       abi: midnightAbi,
       functionName: "toMarket",
       args: [marketId],
-      result: marketParamsToStruct(baseMarketParams()),
+      result: MarketUtils.toStruct(baseMarketParams()),
     });
 
     const params = await fetchMarketParams({
@@ -171,7 +169,7 @@ describe("fetchMarket", () => {
       abi: midnightAbi,
       functionName: "toMarket",
       args: [marketId],
-      result: marketParamsToStruct(baseMarketParams()),
+      result: MarketUtils.toStruct(baseMarketParams()),
     });
     mockRead(handle, {
       address: addresses.midnight,
@@ -332,7 +330,7 @@ describe("fetchAccrualPosition", () => {
       abi: midnightAbi,
       functionName: "toMarket",
       args: [marketId],
-      result: marketParamsToStruct(baseMarketParams()),
+      result: MarketUtils.toStruct(baseMarketParams()),
     });
     mockRead(handle, {
       address: addresses.midnight,
@@ -563,7 +561,7 @@ describe("fetchMarketId", () => {
       address: addresses.midnight,
       abi: midnightAbi,
       functionName: "toId",
-      args: [marketParamsToStruct(baseMarket())],
+      args: [MarketUtils.toStruct(baseMarket())],
       result: marketId,
     });
 

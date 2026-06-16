@@ -1,3 +1,5 @@
+import type { Address, Hex } from "viem";
+
 /**
  * Parameters for {@link RatifierUtils.getRatifierInfo}.
  *
@@ -11,11 +13,11 @@
  */
 export interface GetRatifierInfoParams {
   /** Maker account bytecode returned by viem `getBytecode`. */
-  readonly bytecode?: `0x${string}` | null;
+  readonly bytecode?: Hex | null;
   /** Ecrecover ratifier address. */
-  readonly ecrecoverRatifier: `0x${string}` | string;
+  readonly ecrecoverRatifier: Address;
   /** Setter ratifier address. */
-  readonly setterRatifier: `0x${string}` | string;
+  readonly setterRatifier: Address;
 }
 
 /**
@@ -35,7 +37,7 @@ export interface RatifierInfo {
   /** Ratifier family selected for the maker account. */
   readonly type: "ecrecover" | "setter";
   /** Ratifier contract address to put on the offer. */
-  readonly ratifier: `0x${string}`;
+  readonly ratifier: Address;
 }
 
 /**
@@ -61,7 +63,7 @@ export namespace RatifierUtils {
    * console.log(RatifierUtils.isEip7702Designator("0xef0100"));
    * ```
    */
-  export function isEip7702Designator(bytecode: `0x${string}`) {
+  export function isEip7702Designator(bytecode: Hex) {
     return bytecode.toLowerCase().startsWith("0xef0100");
   }
 
@@ -83,12 +85,9 @@ export namespace RatifierUtils {
    * ```
    */
   export function getRatifierInfo(params: GetRatifierInfoParams): RatifierInfo {
-    const ecrecoverRatifier = params.ecrecoverRatifier as `0x${string}`;
-    const setterRatifier = params.setterRatifier as `0x${string}`;
-    const bytecode =
-      params.bytecode == null
-        ? params.bytecode
-        : (params.bytecode as `0x${string}`);
+    const ecrecoverRatifier = params.ecrecoverRatifier;
+    const setterRatifier = params.setterRatifier;
+    const bytecode = params.bytecode;
     if (
       bytecode == null ||
       bytecode === "0x" ||

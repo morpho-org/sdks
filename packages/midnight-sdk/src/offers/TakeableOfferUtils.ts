@@ -1,20 +1,17 @@
 import { type BigIntish, deepFreeze } from "@morpho-org/morpho-ts";
+import type { Hex } from "viem";
 import {
   InconsistentMarketError,
   NoMatchingOffersError,
   UnexpectedOfferSideError,
 } from "../errors.js";
 import { MarketUtils } from "../market/index.js";
-import {
-  type IOffer,
-  normalizeOffer,
-  type Offer,
-  offerToStruct,
-} from "./Offer.js";
-import type { TakeableOfferStruct } from "./TakeableOffer.js";
+import type { IOffer, Offer } from "./Offer.js";
+import { OfferUtils } from "./OfferUtils.js";
+import type { ITakeableOffer, TakeableOfferStruct } from "./TakeableOffer.js";
 
 /**
- * Quote entry shape converted by {@link TakeableOfferUtils.createMany}.
+ * Quote entry shape converted by {@link TakeableOfferUtils.toStructs}.
  *
  * @example
  * ```ts
@@ -28,13 +25,13 @@ export interface QuoteTakeableOfferInput {
   /** Units suggested by the quote/API. */
   readonly units: BigIntish;
   /** Ratifier data suggested by the quote/API. */
-  readonly ratifierData: `0x${string}`;
+  readonly ratifierData: Hex;
   /** Inline executable offer. */
   readonly offer: IOffer | Offer;
 }
 
 /**
- * Parameters for {@link TakeableOfferUtils.createMany}.
+ * Parameters for {@link TakeableOffer.createMany}.
  *
  * @example
  * ```ts
@@ -60,10 +57,31 @@ export interface CreateManyTakeableOffersParams {
  * ```ts
  * import { TakeableOfferUtils } from "@morpho-org/midnight-sdk";
  *
- * console.log(typeof TakeableOfferUtils.createMany);
+ * console.log(typeof TakeableOfferUtils.toStructs);
  * ```
  */
 export namespace TakeableOfferUtils {
+  /**
+   * Converts a takeable offer into the tuple object expected by viem ABI encoders.
+   *
+   * @param takeableOffer - Takeable offer class or plain input.
+   * @returns ABI-compatible takeable offer.
+   * @example
+   * ```ts
+   * import { TakeableOfferUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const takeableOffer = TakeableOfferUtils.toStruct({} as never);
+   * console.log(takeableOffer.units);
+   * ```
+   */
+  export function toStruct(takeableOffer: ITakeableOffer): TakeableOfferStruct {
+    return {
+      units: BigInt(takeableOffer.units),
+      offer: OfferUtils.toStruct(takeableOffer.offer),
+      ratifierData: takeableOffer.ratifierData,
+    };
+  }
+
   /**
    * Converts quote entries into ABI-compatible takeable offers.
    *
@@ -76,17 +94,17 @@ export namespace TakeableOfferUtils {
    * ```ts
    * import { TakeableOfferUtils } from "@morpho-org/midnight-sdk";
    *
-   * const takeableOffers = TakeableOfferUtils.createMany({ entries: [] });
+   * const takeableOffers = TakeableOfferUtils.toStructs({ entries: [] });
    * console.log(takeableOffers);
    * ```
    */
-  export function createMany(
+  export function toStructs(
     params: CreateManyTakeableOffersParams,
   ): readonly TakeableOfferStruct[] {
     if (params.entries.length === 0) throw new NoMatchingOffersError();
 
     const takeableOffers = params.entries.map((entry) => {
-      const offer = normalizeOffer(entry.offer);
+      const offer = OfferUtils.normalizeOffer(entry.offer);
       if (params.expectedOfferSide != null) {
         const actual = offer.buy ? "buy" : "sell";
         if (actual !== params.expectedOfferSide) {
@@ -96,7 +114,7 @@ export namespace TakeableOfferUtils {
 
       return {
         units: BigInt(entry.units),
-        offer: offerToStruct(offer),
+        offer: OfferUtils.toStruct(offer),
         ratifierData: entry.ratifierData,
       };
     });

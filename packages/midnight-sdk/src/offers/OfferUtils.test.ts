@@ -411,9 +411,9 @@ describe("OfferUtils.validateOfferGroupForApiPublication", () => {
   });
 });
 
-describe("TakeableOfferUtils.createMany", () => {
+describe("TakeableOfferUtils.toStructs", () => {
   test("default", () => {
-    const takeableOffers = TakeableOfferUtils.createMany({
+    const takeableOffers = TakeableOfferUtils.toStructs({
       entries: [
         {
           units: "42",
@@ -430,14 +430,14 @@ describe("TakeableOfferUtils.createMany", () => {
   });
 
   test("error: NoMatchingOffersError", () => {
-    expect(() => TakeableOfferUtils.createMany({ entries: [] })).toThrow(
+    expect(() => TakeableOfferUtils.toStructs({ entries: [] })).toThrow(
       NoMatchingOffersError,
     );
   });
 
   test("error: UnexpectedOfferSideError", () => {
     expect(() =>
-      TakeableOfferUtils.createMany({
+      TakeableOfferUtils.toStructs({
         entries: [
           { units: 1n, ratifierData: "0x", offer: baseOffer({ buy: false }) },
         ],
@@ -448,7 +448,7 @@ describe("TakeableOfferUtils.createMany", () => {
 
   test("error: InconsistentMarketError", () => {
     expect(() =>
-      TakeableOfferUtils.createMany({
+      TakeableOfferUtils.toStructs({
         entries: [
           { units: 1n, ratifierData: "0x", offer: baseOffer() },
           {

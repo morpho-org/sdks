@@ -1,19 +1,16 @@
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import {
+  type Address,
   bytesToHex,
   decodeAbiParameters,
   encodeAbiParameters,
+  type Hex,
   hexToBytes,
 } from "viem";
 
 import { ALLOWED_LLTVS, MAX_TICK } from "../constants.js";
-import {
-  type IOffer,
-  Offer,
-  type OfferStruct,
-  offerStructAbiComponents,
-  offerToStruct,
-} from "../offers/Offer.js";
+import { type IOffer, type Offer, OfferUtils } from "../offers/index.js";
+import { type OfferStruct, offerStructAbiComponents } from "../offers/Offer.js";
 
 /**
  * Raw onchain mempool payload bytes.
@@ -26,7 +23,7 @@ import {
  * console.log(payload);
  * ```
  */
-export type Payload = `0x${string}`;
+export type Payload = Hex;
 
 /**
  * One mempool payload item: a maker-side `Offer` together with the opaque
@@ -41,7 +38,7 @@ export type Item = {
   /** Maker-side offer carried by the payload. */
   readonly offer: IOffer | Offer;
   /** Opaque ratifier data passed to `Midnight.take`. */
-  readonly ratifierData: `0x${string}`;
+  readonly ratifierData: Hex;
 };
 
 /**
@@ -184,7 +181,7 @@ export async function encode(items: readonly Item[]): Promise<Payload> {
   }
   assertItemsNotEmpty(items.length);
   const payloadItems = items.map((item) => {
-    const offer = offerToStruct(item.offer);
+    const offer = OfferUtils.toStruct(item.offer);
     assertApiValidOfferStruct(offer);
     return {
       offer,
@@ -277,17 +274,17 @@ export async function decode(payload: Payload): Promise<Item[]> {
  * ```
  */
 export function buildSubmissionCall(params: {
-  readonly midnightMempool: `0x${string}` | string;
+  readonly midnightMempool: Address;
   readonly payload: Payload;
-}): { readonly to: `0x${string}`; readonly data: `0x${string}` } {
+}): { readonly to: Address; readonly data: Hex } {
   return deepFreeze({
-    to: params.midnightMempool as `0x${string}`,
+    to: params.midnightMempool,
     data: params.payload,
   });
 }
 
 function decodeItemsBytes(decoded: Uint8Array): Item[] {
-  let raw: ReadonlyArray<{ offer: OfferStruct; ratifierData: `0x${string}` }>;
+  let raw: ReadonlyArray<{ offer: OfferStruct; ratifierData: Hex }>;
   try {
     [raw] = decodeAbiParameters(itemsAbi, bytesToHex(decoded));
   } catch (error) {
@@ -300,22 +297,7 @@ function decodeItemsBytes(decoded: Uint8Array): Item[] {
     return raw.map((entry) => {
       assertApiValidOfferStruct(entry.offer);
       return {
-        offer: new Offer({
-          market: entry.offer.market,
-          buy: entry.offer.buy,
-          maker: entry.offer.maker,
-          start: entry.offer.start,
-          expiry: entry.offer.expiry,
-          tick: entry.offer.tick,
-          group: entry.offer.group,
-          callback: entry.offer.callback,
-          callbackData: entry.offer.callbackData,
-          receiverIfMakerIsSeller: entry.offer.receiverIfMakerIsSeller,
-          ratifier: entry.offer.ratifier,
-          reduceOnly: entry.offer.reduceOnly,
-          maxUnits: entry.offer.maxUnits,
-          maxAssets: entry.offer.maxAssets,
-        }),
+        offer: OfferUtils.normalizeOffer(entry.offer),
         ratifierData: entry.ratifierData,
       };
     });
@@ -334,7 +316,7 @@ function assertCanonicalItemsBytes(
 ): void {
   const canonical = encodeAbiParameters(itemsAbi, [
     items.map((item) => ({
-      offer: offerToStruct(item.offer),
+      offer: OfferUtils.toStruct(item.offer),
       ratifierData: item.ratifierData,
     })),
   ]);

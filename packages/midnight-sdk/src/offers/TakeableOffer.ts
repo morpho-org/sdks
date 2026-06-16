@@ -1,10 +1,7 @@
 import type { BigIntish } from "@morpho-org/morpho-ts";
-import {
-  type IOffer,
-  Offer,
-  type OfferStruct,
-  offerToStruct,
-} from "./Offer.js";
+import type { Hex } from "viem";
+import type { IOffer, Offer, OfferStruct } from "./Offer.js";
+import { OfferUtils } from "./OfferUtils.js";
 import {
   type CreateManyTakeableOffersParams,
   TakeableOfferUtils,
@@ -27,7 +24,7 @@ export interface ITakeableOffer {
   /** Inline offer. */
   readonly offer: IOffer | Offer;
   /** Ratifier data payload. */
-  readonly ratifierData: `0x${string}`;
+  readonly ratifierData: Hex;
 }
 
 /**
@@ -47,14 +44,11 @@ export class TakeableOffer {
   /** Inline offer. */
   public readonly offer: Offer;
   /** Ratifier data payload. */
-  public readonly ratifierData: `0x${string}`;
+  public readonly ratifierData: Hex;
 
   public constructor(takeableOffer: ITakeableOffer) {
     this.units = BigInt(takeableOffer.units);
-    this.offer =
-      takeableOffer.offer instanceof Offer
-        ? takeableOffer.offer
-        : new Offer(takeableOffer.offer);
+    this.offer = OfferUtils.normalizeOffer(takeableOffer.offer);
     this.ratifierData = takeableOffer.ratifierData;
   }
 
@@ -77,7 +71,7 @@ export class TakeableOffer {
   public static createMany(
     params: CreateManyTakeableOffersParams,
   ): readonly TakeableOffer[] {
-    return TakeableOfferUtils.createMany(params).map(
+    return TakeableOfferUtils.toStructs(params).map(
       (takeableOffer) => new TakeableOffer(takeableOffer),
     );
   }
@@ -100,33 +94,5 @@ export interface TakeableOfferStruct {
   /** Inline offer. */
   readonly offer: OfferStruct;
   /** Ratifier data payload. */
-  readonly ratifierData: `0x${string}`;
-}
-
-/**
- * Converts a takeable offer into the tuple object expected by viem ABI encoders.
- *
- * @param takeableOffer - Takeable offer class or plain input.
- * @returns ABI-compatible takeable offer.
- * @example
- * ```ts
- * import { takeableOfferToStruct } from "@morpho-org/midnight-sdk";
- *
- * const takeableOffer = takeableOfferToStruct({} as never);
- * console.log(takeableOffer.units);
- * ```
- */
-export function takeableOfferToStruct(
-  takeableOffer: ITakeableOffer | TakeableOffer,
-): TakeableOfferStruct {
-  const normalized =
-    takeableOffer instanceof TakeableOffer
-      ? takeableOffer
-      : new TakeableOffer(takeableOffer);
-
-  return {
-    units: normalized.units,
-    offer: offerToStruct(normalized.offer),
-    ratifierData: normalized.ratifierData,
-  };
+  readonly ratifierData: Hex;
 }
