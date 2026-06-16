@@ -103,6 +103,18 @@ const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 const ZERO_BYTES32 =
   "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
 
+/**
+ * Maximum number of non-padding offers committed by one Midnight offer tree.
+ *
+ * @example
+ * ```ts
+ * import { MAX_OFFERS_PER_TREE } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(MAX_OFFERS_PER_TREE);
+ * ```
+ */
+export const MAX_OFFERS_PER_TREE = 256;
+
 const EMPTY_OFFER_STRUCT: OfferStruct = {
   market: {
     loanToken: ZERO_ADDRESS,
@@ -172,12 +184,6 @@ const typedDataTypes = {
     { name: "maxAssets", type: "uint256" },
   ],
 } as const;
-
-function isOfferList(
-  params: GroupCreateParams,
-): params is readonly (IOffer | Offer)[] {
-  return Array.isArray(params);
-}
 
 function hashOfferStruct(offerStruct: OfferStruct) {
   return keccak256(
@@ -583,11 +589,9 @@ export class Group {
    * ```
    */
   public static create(params: GroupCreateParams): Group {
-    const offers = isOfferList(params)
-      ? OfferUtils.validateOfferGroup({ offers: params })
-      : Offer.createGroup(params);
+    if ("offers" in params) return new Group(Offer.createGroup(params));
 
-    return new Group(offers);
+    return new Group(OfferUtils.validateOfferGroup({ offers: params }));
   }
 }
 
@@ -1080,6 +1084,11 @@ export namespace OfferTreeUtils {
   ): OfferTreeDescriptor {
     if (offers.length === 0) {
       throw new InvalidOfferTreeError("Offer tree must not be empty.");
+    }
+    if (offers.length > MAX_OFFERS_PER_TREE) {
+      throw new InvalidOfferTreeError(
+        `Offer tree exceeds ${MAX_OFFERS_PER_TREE} offers.`,
+      );
     }
 
     const offerStructs = padOfferStructs(

@@ -23,7 +23,6 @@ import type {
   MidnightApiTakeableOffer,
   MidnightApiUserGroup,
   MidnightApiUserOffer,
-  QueryValue,
 } from "./types.js";
 
 const DEFAULT_MIDNIGHT_API_URL = new URL("https://api.morpho.org");
@@ -32,11 +31,32 @@ const DEFAULT_MIDNIGHT_API_URL = new URL("https://api.morpho.org");
 export async function requestMidnightApi<Response = unknown>(
   params: ApiRequestParams,
 ): Promise<Response> {
-  const url = buildApiUrl({
-    baseUrl: params.baseUrl,
-    path: params.path,
-    query: params.query,
-  });
+  const baseUrl = new URL(params.baseUrl ?? DEFAULT_MIDNIGHT_API_URL);
+  baseUrl.search = "";
+  baseUrl.hash = "";
+  if (!baseUrl.pathname.endsWith("/")) {
+    baseUrl.pathname = `${baseUrl.pathname}/`;
+  }
+  const relativePath = params.path.startsWith("/")
+    ? params.path.slice(1)
+    : params.path;
+  const url = new URL(relativePath, baseUrl);
+  url.search = "";
+  url.hash = "";
+  if (params.query != null) {
+    for (const [key, value] of Object.entries(params.query)) {
+      if (value === undefined) continue;
+      if (Array.isArray(value) && value.length === 0) continue;
+      url.searchParams.set(
+        key,
+        Array.isArray(value)
+          ? value.map(String).join(",")
+          : value instanceof Date
+            ? value.toISOString()
+            : String(value),
+      );
+    }
+  }
   const headers = new Headers(params.request?.headers);
   if (params.body !== undefined)
     headers.set("Content-Type", "application/json");
@@ -51,12 +71,22 @@ export async function requestMidnightApi<Response = unknown>(
     params.body === undefined ? undefined : JSON.stringify(params.body);
 
   const response = await (params.fetch ?? globalThis.fetch)(url, init);
-  const json = await readJson(response);
+  let json: unknown;
+  try {
+    json = await response.json();
+  } catch (error) {
+    if (response.ok) {
+      throw new InvalidMidnightApiResponseError(
+        "Midnight API success response did not contain valid JSON.",
+        { cause: error },
+      );
+    }
+    json = undefined;
+  }
 
   if (!response.ok) {
-    const error = isRecord(json)
-      ? readOptionalRecord(json, "error")
-      : undefined;
+    const error =
+      isRecord(json) && isRecord(json.error) ? json.error : undefined;
 
     throw new MidnightApiError({
       status: response.status,
@@ -97,72 +127,6 @@ export function buildUserPath(params: {
   const segments = ["v1", "users", params.user, params.suffix];
 
   return `/${segments.map(encodeURIComponent).join("/")}`;
-}
-
-function buildApiUrl(params: {
-  readonly baseUrl?: string | URL;
-  readonly path: string;
-  readonly query?: Readonly<Record<string, QueryValue>>;
-}) {
-  const baseUrl = buildApiBaseUrl(params.baseUrl);
-  const relativePath = params.path.startsWith("/")
-    ? params.path.slice(1)
-    : params.path;
-  const url = new URL(relativePath, baseUrl);
-  url.search = "";
-  url.hash = "";
-
-  if (params.query == null) return url;
-
-  for (const [key, value] of Object.entries(params.query)) {
-    appendQueryParam({ url, key, value });
-  }
-
-  return url;
-}
-
-function buildApiBaseUrl(input?: string | URL) {
-  const baseUrl = new URL(input ?? DEFAULT_MIDNIGHT_API_URL);
-  baseUrl.search = "";
-  baseUrl.hash = "";
-  if (!baseUrl.pathname.endsWith("/")) {
-    baseUrl.pathname = `${baseUrl.pathname}/`;
-  }
-
-  return baseUrl;
-}
-
-function appendQueryParam(params: {
-  readonly url: URL;
-  readonly key: string;
-  readonly value: QueryValue;
-}) {
-  if (params.value === undefined) return;
-  if (Array.isArray(params.value)) {
-    if (params.value.length === 0) return;
-    params.url.searchParams.set(params.key, params.value.map(String).join(","));
-    return;
-  }
-  params.url.searchParams.set(
-    params.key,
-    params.value instanceof Date
-      ? params.value.toISOString()
-      : String(params.value),
-  );
-}
-
-async function readJson(response: Response) {
-  try {
-    return (await response.json()) as unknown;
-  } catch (error) {
-    if (response.ok) {
-      throw new InvalidMidnightApiResponseError(
-        "Midnight API success response did not contain valid JSON.",
-        { cause: error },
-      );
-    }
-    return undefined;
-  }
 }
 
 /** @internal Maps a book market API payload to the SDK response shape. */
@@ -351,31 +315,43 @@ export function parseRulesResponse(response: unknown): MempoolRulesResult {
     cursor,
     data: parsedResponse.data.map((rule) => {
       const record = requireRecord(rule, "rules entry");
-      const type = requireString({
-        record,
-        key: "type",
-        context: "rules entry",
-      });
-      const chainId = requireNumber({
-        record,
-        key: "chain_id",
-        context: "rules entry",
-      });
+      const type = record.type;
+      if (typeof type !== "string") {
+        throw new InvalidMidnightApiResponseError(
+          'Midnight API rules entry is missing "type".',
+        );
+      }
+      const chainId = record.chain_id;
+      if (typeof chainId !== "number") {
+        throw new InvalidMidnightApiResponseError(
+          'Midnight API rules entry is missing "chain_id".',
+        );
+      }
+      const allowedLltvs = record.allowed_lltvs;
+      if (
+        allowedLltvs !== undefined &&
+        (!Array.isArray(allowedLltvs) ||
+          !allowedLltvs.every((item: unknown) => typeof item === "string"))
+      ) {
+        throw new InvalidMidnightApiResponseError(
+          'Midnight API response field "allowed_lltvs" must be a string array.',
+        );
+      }
 
       return {
         type,
         chainId,
         name: readOptionalString(record, "name"),
         timestamp: readOptionalNumber(record, "timestamp"),
-        address: readOptionalAddress(record, "address"),
+        address: readOptionalString(record, "address") as Address | undefined,
         callbackType: readOptionalString(record, "callback_type"),
-        data: readOptionalHex(record, "data"),
+        data: readOptionalString(record, "data") as Hex | undefined,
         minTick: readOptionalNumber(record, "min_tick"),
         maxTick: readOptionalNumber(record, "max_tick"),
         tickSpacing: readOptionalNumber(record, "tick_spacing"),
         max: readOptionalNumber(record, "max"),
         minSeconds: readOptionalNumber(record, "min_seconds"),
-        allowedLltvs: readOptionalStringArray(record, "allowed_lltvs"),
+        allowedLltvs,
         description: readOptionalString(record, "description"),
       };
     }),
@@ -392,40 +368,8 @@ function requireRecord(
   );
 }
 
-function readOptionalRecord(
-  record: Readonly<Record<string, unknown>>,
-  key: string,
-) {
-  const value = record[key];
-  return isRecord(value) ? value : undefined;
-}
-
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function requireString(params: {
-  readonly record: Readonly<Record<string, unknown>>;
-  readonly key: string;
-  readonly context: string;
-}) {
-  const value = params.record[params.key];
-  if (typeof value === "string") return value;
-  throw new InvalidMidnightApiResponseError(
-    `Midnight API ${params.context} is missing "${params.key}".`,
-  );
-}
-
-function requireNumber(params: {
-  readonly record: Readonly<Record<string, unknown>>;
-  readonly key: string;
-  readonly context: string;
-}) {
-  const value = params.record[params.key];
-  if (typeof value === "number") return value;
-  throw new InvalidMidnightApiResponseError(
-    `Midnight API ${params.context} is missing "${params.key}".`,
-  );
 }
 
 function readOptionalString(
@@ -440,20 +384,6 @@ function readOptionalString(
   );
 }
 
-function readOptionalAddress(
-  record: Readonly<Record<string, unknown>>,
-  key: string,
-) {
-  return readOptionalString(record, key) as Address | undefined;
-}
-
-function readOptionalHex(
-  record: Readonly<Record<string, unknown>>,
-  key: string,
-) {
-  return readOptionalString(record, key) as Hex | undefined;
-}
-
 function readOptionalNumber(
   record: Readonly<Record<string, unknown>>,
   key: string,
@@ -463,26 +393,5 @@ function readOptionalNumber(
   if (typeof value === "number") return value;
   throw new InvalidMidnightApiResponseError(
     `Midnight API response field "${key}" must be a number.`,
-  );
-}
-
-function readOptionalStringArray(
-  record: Readonly<Record<string, unknown>>,
-  key: string,
-) {
-  const value = record[key];
-  if (value === undefined) return undefined;
-  if (isStringArray(value)) {
-    return value;
-  }
-  throw new InvalidMidnightApiResponseError(
-    `Midnight API response field "${key}" must be a string array.`,
-  );
-}
-
-function isStringArray(value: unknown): value is readonly string[] {
-  return (
-    Array.isArray(value) &&
-    value.every((item: unknown) => typeof item === "string")
   );
 }

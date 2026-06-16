@@ -7,6 +7,7 @@ import { Offer, OfferUtils } from "../offers/index.js";
 import {
   EcrecoverRatifier,
   Group,
+  MAX_OFFERS_PER_TREE,
   OfferTreeUtils,
   SetterRatifier,
   Tree,
@@ -211,6 +212,16 @@ describe("OfferTreeUtils.buildOfferTreeDescriptor", () => {
   test("error: all padding", () => {
     expect(() =>
       OfferTreeUtils.buildOfferTreeDescriptor([emptyOffer()]),
+    ).toThrow(InvalidOfferTreeError);
+  });
+
+  test("error: offer count cap", () => {
+    const offer = baseOffer();
+
+    expect(() =>
+      OfferTreeUtils.buildOfferTreeDescriptor(
+        Array.from({ length: MAX_OFFERS_PER_TREE + 1 }, () => offer),
+      ),
     ).toThrow(InvalidOfferTreeError);
   });
 });

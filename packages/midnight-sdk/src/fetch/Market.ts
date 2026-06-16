@@ -5,40 +5,6 @@ import { Market, MarketParams } from "../market/index.js";
 import { callParameters } from "./_utils.js";
 import type { MidnightFetchParams } from "./types.js";
 
-const marketStateFields = (
-  state: readonly [
-    bigint,
-    bigint,
-    bigint,
-    bigint,
-    number,
-    number,
-    number,
-    number,
-    number,
-    number,
-    number,
-    number,
-    number,
-  ],
-) => ({
-  totalUnits: state[0],
-  lossFactor: state[1],
-  withdrawable: state[2],
-  continuousFeeCredit: state[3],
-  settlementFeeCbps: [
-    state[4],
-    state[5],
-    state[6],
-    state[7],
-    state[8],
-    state[9],
-    state[10],
-  ] as const,
-  continuousFee: state[11],
-  tickSpacing: state[12],
-});
-
 /**
  * Fetches immutable market params by id.
  *
@@ -97,10 +63,39 @@ export async function fetchMarket(
       args: [params.marketId],
     }),
   ]);
+  const [
+    totalUnits,
+    lossFactor,
+    withdrawable,
+    continuousFeeCredit,
+    settlementFeeCbps0,
+    settlementFeeCbps1,
+    settlementFeeCbps2,
+    settlementFeeCbps3,
+    settlementFeeCbps4,
+    settlementFeeCbps5,
+    settlementFeeCbps6,
+    continuousFee,
+    tickSpacing,
+  ] = state;
 
   return new Market({
     chainId,
     params: marketParams,
-    ...marketStateFields(state),
+    totalUnits,
+    lossFactor,
+    withdrawable,
+    continuousFeeCredit,
+    settlementFeeCbps: [
+      settlementFeeCbps0,
+      settlementFeeCbps1,
+      settlementFeeCbps2,
+      settlementFeeCbps3,
+      settlementFeeCbps4,
+      settlementFeeCbps5,
+      settlementFeeCbps6,
+    ],
+    continuousFee,
+    tickSpacing,
   });
 }

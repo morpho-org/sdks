@@ -8,9 +8,11 @@ import {
   hexToBytes,
 } from "viem";
 
-import { ALLOWED_LLTVS, MAX_TICK } from "../constants.js";
+import { MAX_COLLATERALS, MAX_TICK } from "../constants.js";
+import { MarketUtils } from "../market/index.js";
 import { type IOffer, type Offer, OfferUtils } from "../offers/index.js";
 import { type OfferStruct, offerStructAbiComponents } from "../offers/Offer.js";
+import { MAX_OFFERS_PER_TREE } from "./OfferTreeUtils.js";
 
 /**
  * Raw onchain mempool payload bytes.
@@ -63,7 +65,7 @@ export const CURRENT_VERSION = 1;
  * console.log(Payload.MAX_COMPRESSED_ITEMS_BYTES);
  * ```
  */
-export const MAX_COMPRESSED_ITEMS_BYTES = 1_000_000;
+export const MAX_COMPRESSED_ITEMS_BYTES = 4_000_000;
 
 /**
  * Maximum ABI-decoded item bytes accepted by the payload codec.
@@ -75,7 +77,7 @@ export const MAX_COMPRESSED_ITEMS_BYTES = 1_000_000;
  * console.log(Payload.MAX_DECOMPRESSED_ITEMS_BYTES);
  * ```
  */
-export const MAX_DECOMPRESSED_ITEMS_BYTES = 4_000_000;
+export const MAX_DECOMPRESSED_ITEMS_BYTES = 6_000_000;
 
 /**
  * Upper bound on opaque bytes appended after the gzip stream (e.g. an app
@@ -98,6 +100,7 @@ const VERSION_PREFIX_BYTES = 1;
 const LENGTH_PREFIX_BYTES = 4;
 const HEADER_BYTES = VERSION_PREFIX_BYTES + LENGTH_PREFIX_BYTES;
 const ABI_ARRAY_HEAD_BYTES = 64;
+const ABI_LENGTH_LOW_OFFSET = 60;
 const MAX_TIMESTAMP_SECONDS = 1_000_000_000_000n - 1n;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
@@ -141,6 +144,54 @@ export const MAX_PAYLOAD_HEX_LENGTH = "0x".length + MAX_PAYLOAD_BYTES * 2;
  */
 export const MAX_REQUEST_BODY_BYTES = MAX_PAYLOAD_HEX_LENGTH + 1_024;
 
+/**
+ * Mutable decode timing buckets populated when callers need hot-path profiling.
+ *
+ * @example
+ * ```ts
+ * import type { Payload } from "@morpho-org/midnight-sdk";
+ *
+ * const timings: Payload.DecodeTimings = {
+ *   hexToBytesMs: 0,
+ *   decompressMs: 0,
+ *   abiItemCountMs: 0,
+ *   itemsDecodeMs: 0,
+ *   canonicalEncodeMs: 0,
+ * };
+ * console.log(timings.hexToBytesMs);
+ * ```
+ */
+export type DecodeTimings = {
+  /** Time spent hex-decoding the wire payload. */
+  hexToBytesMs: number;
+  /** Time spent gzip-decompressing the ABI item bytes. */
+  decompressMs: number;
+  /** Time spent reading and bounding the ABI item count. */
+  abiItemCountMs: number;
+  /** Time spent ABI-decoding and normalizing payload items. */
+  itemsDecodeMs: number;
+  /** Time spent canonical-reencoding decoded items. */
+  canonicalEncodeMs: number;
+};
+
+/**
+ * Optional decode bounds and profiling controls.
+ *
+ * @example
+ * ```ts
+ * import type { Payload } from "@morpho-org/midnight-sdk";
+ *
+ * const options: Payload.DecodeOptions = { maxItems: 16 };
+ * console.log(options.maxItems);
+ * ```
+ */
+export type DecodeOptions = {
+  /** Optional item cap, bounded above by the protocol tree limit. */
+  readonly maxItems?: number;
+  /** Optional mutable timing buckets updated by `decode`. */
+  readonly timings?: DecodeTimings;
+};
+
 const itemsAbi = [
   {
     name: "items",
@@ -164,7 +215,7 @@ const itemsAbi = [
  * sees on decode.
  *
  * @param items - Per-leaf items in the order the maker committed to. Must
- *   contain at least one item.
+ *   contain at least one item and at most the tree offer limit.
  * @returns The encoded payload as a hex string.
  * @throws DecodeError when the item count or encoded size exceeds protocol limits.
  * @example
@@ -179,7 +230,7 @@ export async function encode(items: readonly Item[]): Promise<Payload> {
   if (CURRENT_VERSION > 0xff) {
     throw new DecodeError(`version overflow: ${CURRENT_VERSION} exceeds 255`);
   }
-  assertItemsNotEmpty(items.length);
+  assertItemCountWithinLimit(items.length);
   const payloadItems = items.map((item) => {
     const offer = OfferUtils.toStruct(item.offer);
     assertApiValidOfferStruct(offer);
@@ -212,6 +263,7 @@ export async function encode(items: readonly Item[]): Promise<Payload> {
  * past validation and into the indexer.
  *
  * @param payload - Payload bytes to decode.
+ * @param options - Optional decode bounds.
  * @returns The decoded items in encoded order.
  * @throws DecodeError when the payload is malformed or exceeds protocol limits.
  * @example
@@ -222,8 +274,19 @@ export async function encode(items: readonly Item[]): Promise<Payload> {
  * console.log(items.length);
  * ```
  */
-export async function decode(payload: Payload): Promise<Item[]> {
+export async function decode(
+  payload: Payload,
+  options?: DecodeOptions,
+): Promise<Item[]> {
+  const maxItems = resolveMaxItems(options?.maxItems);
+  const timings = options?.timings;
+  const hexToBytesStartedAtMs = startDecodeTiming(timings);
   const bytes = hexToBytes(payload);
+  finishDecodeTiming({
+    timings,
+    key: "hexToBytesMs",
+    startedAtMs: hexToBytesStartedAtMs,
+  });
   if (bytes.length < HEADER_BYTES) {
     throw new DecodeError("payload too short for header");
   }
@@ -249,11 +312,38 @@ export async function decode(payload: Payload): Promise<Item[]> {
     );
   }
   const compressed = bytes.subarray(HEADER_BYTES, compressedEnd);
+  const decompressStartedAtMs = startDecodeTiming(timings);
   const decoded = await decompressItemsPayload(compressed);
-  assertAbiItemsHeaderWithinBounds(decoded);
+  finishDecodeTiming({
+    timings,
+    key: "decompressMs",
+    startedAtMs: decompressStartedAtMs,
+  });
+
+  const abiItemCountStartedAtMs = startDecodeTiming(timings);
+  assertAbiItemCountWithinLimit(decoded, maxItems);
+  finishDecodeTiming({
+    timings,
+    key: "abiItemCountMs",
+    startedAtMs: abiItemCountStartedAtMs,
+  });
+
+  const itemsDecodeStartedAtMs = startDecodeTiming(timings);
   const items = decodeItemsBytes(decoded);
-  assertItemsNotEmpty(items.length);
+  finishDecodeTiming({
+    timings,
+    key: "itemsDecodeMs",
+    startedAtMs: itemsDecodeStartedAtMs,
+  });
+  assertItemCountWithinLimit(items.length, maxItems);
+
+  const canonicalEncodeStartedAtMs = startDecodeTiming(timings);
   assertCanonicalItemsBytes(items, decoded);
+  finishDecodeTiming({
+    timings,
+    key: "canonicalEncodeMs",
+    startedAtMs: canonicalEncodeStartedAtMs,
+  });
   return items;
 }
 
@@ -361,12 +451,15 @@ function assertCollateralParams(offer: OfferStruct): void {
       "invalid offer bytes: at least one collateral required",
     );
   }
+  if (collateralParams.length > Number(MAX_COLLATERALS)) {
+    throw new DecodeError(
+      `invalid offer bytes: market.collateralParams has ${collateralParams.length} collaterals, exceeding the maximum of ${MAX_COLLATERALS}`,
+    );
+  }
 
   let previousToken: string | undefined;
   for (const params of collateralParams) {
-    if (
-      !ALLOWED_LLTVS.includes(params.lltv as (typeof ALLOWED_LLTVS)[number])
-    ) {
+    if (!MarketUtils.isLltvAllowed(params.lltv)) {
       throw new DecodeError(
         `invalid offer bytes: invalid collateral lltv ${params.lltv}`,
       );
@@ -432,8 +525,38 @@ function isZeroAddress(value: string): boolean {
   return value.toLowerCase() === ZERO_ADDRESS;
 }
 
-function assertItemsNotEmpty(count: number): void {
+function startDecodeTiming(timings: DecodeTimings | undefined): number {
+  return timings === undefined ? 0 : performance.now();
+}
+
+function finishDecodeTiming(params: {
+  readonly timings: DecodeTimings | undefined;
+  readonly key: keyof DecodeTimings;
+  readonly startedAtMs: number;
+}): void {
+  if (params.timings === undefined) return;
+  params.timings[params.key] += performance.now() - params.startedAtMs;
+}
+
+function resolveMaxItems(maxItems: number | undefined): number {
+  if (maxItems === undefined) return MAX_OFFERS_PER_TREE;
+  if (!Number.isInteger(maxItems) || maxItems < 1) {
+    throw new DecodeError(
+      `maxItems must be a positive integer: got ${maxItems}`,
+    );
+  }
+
+  return Math.min(maxItems, MAX_OFFERS_PER_TREE);
+}
+
+function assertItemCountWithinLimit(
+  count: number,
+  maxItems = MAX_OFFERS_PER_TREE,
+): void {
   if (count === 0) throw new DecodeError("items payload is empty");
+  if (count > maxItems) {
+    throw new DecodeError(`items payload exceeds ${maxItems} items`);
+  }
 }
 
 async function compressItemsPayload(payload: Uint8Array): Promise<Uint8Array> {
@@ -510,26 +633,26 @@ function singleChunkStream(bytes: Uint8Array): ReadableStream<BufferSource> {
   });
 }
 
-/**
- * Reads the items array length from the ABI head and rejects payloads whose
- * declared length cannot fit inside the decoded byte array before invoking the
- * full decoder. The head is `[offset(32 bytes), length(32 bytes)]`; each array
- * entry needs at least one 32-byte head word, so larger declarations are
- * malformed rather than merely large.
- */
-function assertAbiItemsHeaderWithinBounds(decoded: Uint8Array): void {
+function assertAbiItemCountWithinLimit(
+  decoded: Uint8Array,
+  maxItems: number,
+): void {
   if (decoded.length < ABI_ARRAY_HEAD_BYTES) {
     throw new DecodeError("items payload truncated before ABI array head");
   }
-  let length = 0n;
-  for (let i = 32; i < 64; i++) {
-    length = (length << 8n) | BigInt(decoded[i]!);
+
+  for (let i = 32; i < ABI_LENGTH_LOW_OFFSET; i++) {
+    if (decoded[i] !== 0) {
+      throw new DecodeError(`items payload exceeds ${maxItems} items`);
+    }
   }
-  const maxLengthFromHead = BigInt(
-    (decoded.length - ABI_ARRAY_HEAD_BYTES) / 32,
-  );
-  if (length > maxLengthFromHead) {
-    throw new DecodeError("items payload declares an impossible array length");
+  const length = new DataView(
+    decoded.buffer,
+    decoded.byteOffset,
+    decoded.byteLength,
+  ).getUint32(ABI_LENGTH_LOW_OFFSET);
+  if (length > maxItems) {
+    throw new DecodeError(`items payload exceeds ${maxItems} items`);
   }
 }
 

@@ -1,4 +1,10 @@
-import { bytesToHex, encodeAbiParameters, type Hex, hexToBytes } from "viem";
+import {
+  type Address,
+  bytesToHex,
+  encodeAbiParameters,
+  type Hex,
+  hexToBytes,
+} from "viem";
 import { describe, expect, test } from "vitest";
 import {
   addresses,
@@ -7,6 +13,7 @@ import {
 } from "../__test__/fixtures.js";
 import { type IOffer, type OfferStruct, OfferUtils } from "../offers/index.js";
 import { offerStructAbiComponents } from "../offers/Offer.js";
+import { MAX_OFFERS_PER_TREE } from "./OfferTreeUtils.js";
 import * as Payload from "./Payload.js";
 import { MAX_ATTRIBUTION_SUFFIX_BYTES } from "./Payload.js";
 
@@ -78,6 +85,16 @@ describe("Payload.encode", () => {
     );
   });
 
+  test("error: item count cap", async () => {
+    const item = { offer: apiValidOffer(), ratifierData: "0x1234" as Hex };
+
+    await expect(
+      Payload.encode(
+        Array.from({ length: MAX_OFFERS_PER_TREE + 1 }, () => item),
+      ),
+    ).rejects.toBeInstanceOf(Payload.DecodeError);
+  });
+
   test("error: API-invalid offer", async () => {
     await expect(
       Payload.encode([
@@ -117,6 +134,27 @@ describe("Payload.decode", () => {
     expect(decoded[0]!.ratifierData).toBe("0x1234");
   });
 
+  test("behavior: records decode timings", async () => {
+    const encoded = await Payload.encode([
+      { offer: apiValidOffer(), ratifierData: "0x1234" as Hex },
+    ]);
+    const timings: Payload.DecodeTimings = {
+      hexToBytesMs: 0,
+      decompressMs: 0,
+      abiItemCountMs: 0,
+      itemsDecodeMs: 0,
+      canonicalEncodeMs: 0,
+    };
+
+    await Payload.decode(encoded, { timings });
+
+    expect(timings.hexToBytesMs).toBeGreaterThanOrEqual(0);
+    expect(timings.decompressMs).toBeGreaterThanOrEqual(0);
+    expect(timings.abiItemCountMs).toBeGreaterThanOrEqual(0);
+    expect(timings.itemsDecodeMs).toBeGreaterThanOrEqual(0);
+    expect(timings.canonicalEncodeMs).toBeGreaterThanOrEqual(0);
+  });
+
   test("error: DecodeError", async () => {
     await expect(Payload.decode("0x1234")).rejects.toBeInstanceOf(
       Payload.DecodeError,
@@ -134,6 +172,23 @@ describe("Payload.decode", () => {
     ).rejects.toBeInstanceOf(Payload.DecodeError);
   });
 
+  test("error: maxItems option", async () => {
+    const encoded = await Payload.encode([
+      { offer: apiValidOffer(), ratifierData: "0x1234" as Hex },
+      { offer: apiValidOffer(), ratifierData: "0x5678" as Hex },
+    ]);
+
+    await expect(
+      Payload.decode(encoded, { maxItems: 1 }),
+    ).rejects.toBeInstanceOf(Payload.DecodeError);
+  });
+
+  test("error: invalid maxItems option", async () => {
+    await expect(Payload.decode("0x" as Hex, { maxItems: 0 })).rejects.toThrow(
+      Payload.DecodeError,
+    );
+  });
+
   test("error: API-invalid offer bytes", async () => {
     const encoded = await encodeUncheckedPayload(
       OfferUtils.toStruct(apiValidOffer({ expiry: API_VALID_MATURITY + 60n })),
@@ -143,10 +198,32 @@ describe("Payload.decode", () => {
       Payload.DecodeError,
     );
   });
+
+  test("error: too many collateral params", async () => {
+    const offer = OfferUtils.toStruct(apiValidOffer());
+    const encoded = await encodeUncheckedPayload({
+      ...offer,
+      market: {
+        ...offer.market,
+        collateralParams: Array.from({ length: 129 }, (_, index) => ({
+          token: `0x${(index + 1).toString(16).padStart(40, "0")}` as Address,
+          lltv: 770000000000000000n,
+          maxLif: 1298701298701298701n,
+          oracle: addresses.oracle,
+        })),
+      },
+    });
+
+    await expect(Payload.decode(encoded)).rejects.toBeInstanceOf(
+      Payload.DecodeError,
+    );
+  });
 });
 
 describe("Payload size limits", () => {
   test("default", () => {
+    expect(Payload.MAX_COMPRESSED_ITEMS_BYTES).toBe(4_000_000);
+    expect(Payload.MAX_DECOMPRESSED_ITEMS_BYTES).toBe(6_000_000);
     expect(Payload.MAX_PAYLOAD_BYTES).toBe(
       5 +
         Payload.MAX_COMPRESSED_ITEMS_BYTES +
