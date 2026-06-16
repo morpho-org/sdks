@@ -277,7 +277,7 @@ export class AccrualPosition extends Position {
         collateral: this.collateral,
       },
       {
-        id: this.market.id,
+        chainId: this.market.chainId,
         params: this.market.params,
         totalUnits: this.market.totalUnits,
         lossFactor: this.market.lossFactor,

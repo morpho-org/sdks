@@ -121,9 +121,9 @@ export namespace TakeableOfferUtils {
 
     if (params.enforceSameMarket === true) {
       const [first, ...rest] = takeableOffers;
-      const firstHash = MarketUtils.hashMarket(first!.offer.market);
+      const firstHash = MarketUtils.hash(first!.offer.market);
       for (const takeableOffer of rest) {
-        if (MarketUtils.hashMarket(takeableOffer.offer.market) !== firstHash) {
+        if (MarketUtils.hash(takeableOffer.offer.market) !== firstHash) {
           throw new InconsistentMarketError();
         }
       }

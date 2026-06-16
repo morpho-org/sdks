@@ -1,5 +1,8 @@
-import { type BigIntish, MathLib } from "@morpho-org/morpho-ts";
-import type { Address } from "viem";
+import {
+  type BigIntish,
+  getChainAddress,
+  MathLib,
+} from "@morpho-org/morpho-ts";
 import { encodeAbiParameters, encodePacked, keccak256 } from "viem";
 import {
   ALLOWED_LLTVS,
@@ -183,7 +186,7 @@ export namespace MarketUtils {
    * ```ts
    * import { MarketUtils } from "@morpho-org/midnight-sdk";
    *
-   * const hash = MarketUtils.hashMarket({
+   * const hash = MarketUtils.hash({
    *   loanToken: "0x0000000000000000000000000000000000000001",
    *   collateralParams: [],
    *   maturity: 1n,
@@ -194,7 +197,7 @@ export namespace MarketUtils {
    * console.log(hash);
    * ```
    */
-  export function hashMarket(market: IMarketParams | MarketParams | Market) {
+  export function hash(market: IMarketParams | MarketParams | Market) {
     const marketStruct = toStruct(market);
     const collateralParamHashes = marketStruct.collateralParams.map((params) =>
       keccak256(
@@ -228,12 +231,22 @@ export namespace MarketUtils {
    * Computes the Midnight id for a market using `IdLib.toId`.
    *
    * @param market - Market to hash.
-   * @param chainId - Midnight initial chain id.
-   * @param midnight - Core Midnight contract address.
+   * @param chainId - EIP-155 chain id used to resolve the core Midnight address from the registry.
    * @returns Market id.
+   * @throws {UnsupportedChainIdError} when no address registry exists for `chainId`.
+   * @throws {UnknownAddressError} when the registry has no Midnight address for `chainId`.
    * @example
    * ```ts
+   * import { ChainId, registerCustomAddresses } from "@morpho-org/morpho-ts";
    * import { MarketUtils } from "@morpho-org/midnight-sdk";
+   *
+   * registerCustomAddresses({
+   *   addresses: {
+   *     [ChainId.BaseMainnet]: {
+   *       midnight: "0x0000000000000000000000000000000000000001",
+   *     },
+   *   },
+   * });
    *
    * const id = MarketUtils.toId({
    *   market: {
@@ -244,8 +257,7 @@ export namespace MarketUtils {
    *     enterGate: "0x0000000000000000000000000000000000000000",
    *     liquidatorGate: "0x0000000000000000000000000000000000000000",
    *   },
-   *   chainId: 8453,
-   *   midnight: "0x0000000000000000000000000000000000000002",
+   *   chainId: ChainId.BaseMainnet,
    * });
    * console.log(id);
    * ```
@@ -253,8 +265,9 @@ export namespace MarketUtils {
   export function toId(params: {
     readonly market: IMarketParams | MarketParams | Market;
     readonly chainId: BigIntish;
-    readonly midnight: Address;
   }) {
+    const chainId = BigInt(params.chainId);
+    const midnight = getChainAddress(Number(chainId), "midnight");
     const encodedMarket = encodeAbiParameters(
       [marketParamsAbiParameter],
       [toStruct(params.market)],
@@ -266,7 +279,7 @@ export namespace MarketUtils {
     return keccak256(
       encodePacked(
         ["uint8", "address", "uint256", "bytes32"],
-        [255, params.midnight, BigInt(params.chainId), creationHash],
+        [255, midnight, chainId, creationHash],
       ),
     );
   }

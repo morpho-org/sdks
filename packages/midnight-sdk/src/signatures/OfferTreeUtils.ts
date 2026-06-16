@@ -183,7 +183,7 @@ function hashOfferStruct(offerStruct: OfferStruct) {
   return keccak256(
     encodeAbiParameters(offerHashParams, [
       OFFER_TYPEHASH,
-      MarketUtils.hashMarket(offerStruct.market),
+      MarketUtils.hash(offerStruct.market),
       offerStruct.buy,
       offerStruct.maker,
       offerStruct.start,

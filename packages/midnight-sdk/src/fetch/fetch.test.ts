@@ -9,22 +9,17 @@ import {
   type Address,
   type ContractFunctionName,
   encodeFunctionResult,
-  erc20Abi,
   type Hex,
 } from "viem";
 import { base } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
   addresses,
-  baseMarket,
   baseMarketParams,
   baseOffer,
+  marketId,
 } from "../__test__/fixtures.js";
-import {
-  ecrecoverRatifierAbi,
-  midnightAbi,
-  setterRatifierAbi,
-} from "../abis.js";
+import { midnightAbi } from "../abis.js";
 import { MAX_TICK } from "../constants.js";
 import { SettlementFeeExceedsPriceError } from "../errors.js";
 import { MarketUtils } from "../market/index.js";
@@ -33,22 +28,11 @@ import { abi as getPositionAbi } from "../queries/GetPosition.js";
 import {
   fetchAccrualPosition,
   fetchConsumableUnits,
-  fetchErc20Allowance,
-  fetchIsAuthorized,
-  fetchIsRootCanceled,
-  fetchIsRootRatified,
   fetchMarket,
-  fetchMarketId,
   fetchMarketParams,
   fetchPosition,
   fetchRatifierInfo,
-  fetchSettlementFee,
-} from "./midnight.js";
-
-const marketId =
-  "0x2222222222222222222222222222222222222222222222222222222222222222" as const;
-const root =
-  "0x3333333333333333333333333333333333333333333333333333333333333333" as const;
+} from "./index.js";
 
 function mockDeploylessRead<
   const abi extends Abi,
@@ -94,50 +78,6 @@ function mockDeploylessFailure(handle: MockClientHandle) {
     throw new TypeError("missing default mock request implementation");
   });
 }
-
-describe("fetchIsAuthorized", () => {
-  test("default", async () => {
-    const handle = createMockClient(base);
-    mockRead(handle, {
-      address: addresses.midnight,
-      abi: midnightAbi,
-      functionName: "isAuthorized",
-      args: [addresses.taker, addresses.midnightBundles],
-      result: true,
-    });
-
-    await expect(
-      fetchIsAuthorized({
-        client: handle.client,
-        midnight: addresses.midnight,
-        authorizer: addresses.taker,
-        authorized: addresses.midnightBundles,
-      }),
-    ).resolves.toBe(true);
-  });
-});
-
-describe("fetchErc20Allowance", () => {
-  test("default", async () => {
-    const handle = createMockClient(base);
-    mockRead(handle, {
-      address: addresses.loanToken,
-      abi: erc20Abi,
-      functionName: "allowance",
-      args: [addresses.taker, addresses.midnightBundles],
-      result: 123n,
-    });
-
-    await expect(
-      fetchErc20Allowance({
-        client: handle.client,
-        token: addresses.loanToken,
-        owner: addresses.taker,
-        spender: addresses.midnightBundles,
-      }),
-    ).resolves.toBe(123n);
-  });
-});
 
 describe("fetchMarketParams", () => {
   test("default", async () => {
@@ -354,41 +294,6 @@ describe("fetchAccrualPosition", () => {
   });
 });
 
-describe("fetchSettlementFee", () => {
-  test("default", async () => {
-    const handle = createMockClient(base);
-    mockRead(handle, {
-      address: addresses.midnight,
-      abi: midnightAbi,
-      functionName: "settlementFee",
-      args: [marketId, 1000n],
-      result: 0n,
-    });
-
-    await expect(
-      fetchSettlementFee({
-        client: handle.client,
-        midnight: addresses.midnight,
-        marketId,
-        timeToMaturity: 1000n,
-      }),
-    ).resolves.toBe(0n);
-  });
-
-  test("error: NegativeValueError", () => {
-    const handle = createMockClient(base);
-
-    expect(() =>
-      fetchSettlementFee({
-        client: handle.client,
-        midnight: addresses.midnight,
-        marketId,
-        timeToMaturity: -1n,
-      }),
-    ).toThrow(NegativeValueError);
-  });
-});
-
 describe("fetchConsumableUnits", () => {
   test("default: max-unit offers only read consumed", async () => {
     const handle = createMockClient(base);
@@ -507,70 +412,5 @@ describe("fetchRatifierInfo", () => {
     });
 
     expect(info.type).toBe("ecrecover");
-  });
-});
-
-describe("fetchIsRootCanceled", () => {
-  test("default", async () => {
-    const handle = createMockClient(base);
-    mockRead(handle, {
-      address: addresses.ecrecoverRatifier,
-      abi: ecrecoverRatifierAbi,
-      functionName: "isRootCanceled",
-      args: [addresses.maker, root],
-      result: true,
-    });
-
-    await expect(
-      fetchIsRootCanceled({
-        client: handle.client,
-        ecrecoverRatifier: addresses.ecrecoverRatifier,
-        maker: addresses.maker,
-        root,
-      }),
-    ).resolves.toBe(true);
-  });
-});
-
-describe("fetchIsRootRatified", () => {
-  test("default", async () => {
-    const handle = createMockClient(base);
-    mockRead(handle, {
-      address: addresses.setterRatifier,
-      abi: setterRatifierAbi,
-      functionName: "isRootRatified",
-      args: [addresses.maker, root],
-      result: false,
-    });
-
-    await expect(
-      fetchIsRootRatified({
-        client: handle.client,
-        setterRatifier: addresses.setterRatifier,
-        maker: addresses.maker,
-        root,
-      }),
-    ).resolves.toBe(false);
-  });
-});
-
-describe("fetchMarketId", () => {
-  test("default via mockRead shape", async () => {
-    const handle = createMockClient(base);
-    mockRead(handle, {
-      address: addresses.midnight,
-      abi: midnightAbi,
-      functionName: "toId",
-      args: [MarketUtils.toStruct(baseMarket())],
-      result: marketId,
-    });
-
-    await expect(
-      fetchMarketId({
-        client: handle.client,
-        midnight: addresses.midnight,
-        market: baseMarket(),
-      }),
-    ).resolves.toBe(marketId);
   });
 });

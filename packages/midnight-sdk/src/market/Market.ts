@@ -209,7 +209,7 @@ export interface MarketParamsStruct {
  * import type { IMarket } from "@morpho-org/midnight-sdk";
  *
  * const market: IMarket = {
- *   id: "0x0000000000000000000000000000000000000000000000000000000000000000",
+ *   chainId: 31337,
  *   params: {
  *     loanToken: "0x0000000000000000000000000000000000000001",
  *     collateralParams: [],
@@ -229,8 +229,8 @@ export interface MarketParamsStruct {
  * ```
  */
 export interface IMarket {
-  /** Market id. */
-  readonly id: Hash;
+  /** EIP-155 chain id used to derive the market id. */
+  readonly chainId: BigIntish;
   /** Immutable market configuration. */
   readonly params: IMarketParams | MarketParams;
   /** Total market units. */
@@ -264,6 +264,9 @@ export class Market {
   /** Market id. */
   public readonly id: Hash;
 
+  /** EIP-155 chain id used to derive the market id. */
+  public readonly chainId: bigint;
+
   /** Immutable market configuration. */
   public readonly params: MarketParams;
 
@@ -289,8 +292,9 @@ export class Market {
   public readonly tickSpacing: number;
 
   public constructor(market: IMarket) {
-    this.id = market.id;
+    this.chainId = BigInt(market.chainId);
     this.params = MarketUtils.normalizeMarketParams(market.params);
+    this.id = MarketUtils.toId({ market: this.params, chainId: this.chainId });
     this.totalUnits = BigInt(market.totalUnits);
     this.lossFactor = BigInt(market.lossFactor);
     this.withdrawable = BigInt(market.withdrawable);
@@ -298,43 +302,6 @@ export class Market {
     this.settlementFeeCbps = [...market.settlementFeeCbps] as SettlementFeeCbps;
     this.continuousFee = market.continuousFee;
     this.tickSpacing = market.tickSpacing;
-  }
-
-  /**
-   * Computes the Midnight id for this market's params.
-   *
-   * @param chainId - Chain id used by Midnight's `INITIAL_CHAIN_ID`.
-   * @param midnight - Core Midnight contract address.
-   * @returns Market id matching `IdLib.toId`.
-   * @example
-   * ```ts
-   * import { Market } from "@morpho-org/midnight-sdk";
-   *
-   * const id = new Market({} as never).toId(8453, "0x0000000000000000000000000000000000000002");
-   * console.log(id);
-   * ```
-   */
-  public toId(chainId: BigIntish, midnight: Address) {
-    return MarketUtils.toId({ market: this.params, chainId, midnight });
-  }
-
-  /**
-   * Returns whether a timestamp is at or past maturity.
-   *
-   * @param timestamp - Timestamp to compare.
-   * @returns Whether the market has reached maturity.
-   * @example
-   * ```ts
-   * import { Market } from "@morpho-org/midnight-sdk";
-   *
-   * console.log(new Market({} as never).isMature(0n));
-   * ```
-   */
-  public isMature(timestamp: BigIntish) {
-    const normalizedTimestamp = BigInt(timestamp);
-    assertNonNegative("timestamp", normalizedTimestamp);
-
-    return normalizedTimestamp >= this.params.maturity;
   }
 
   /**
