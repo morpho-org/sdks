@@ -1,5 +1,4 @@
-import { z } from "zod";
-
+import type { Address, Hex } from "viem";
 import {
   InvalidMidnightApiResponseError,
   MidnightApiError,
@@ -28,7 +27,6 @@ import type {
 } from "./types.js";
 
 const DEFAULT_MIDNIGHT_API_URL = new URL("https://api.morpho.org");
-const recordSchema = z.record(z.string(), z.unknown());
 
 /** @internal Sends one Midnight API request and maps non-2xx responses to SDK errors. */
 export async function requestMidnightApi<Response = unknown>(
@@ -56,9 +54,8 @@ export async function requestMidnightApi<Response = unknown>(
   const json = await readJson(response);
 
   if (!response.ok) {
-    const jsonRecord = recordSchema.safeParse(json);
-    const error = jsonRecord.success
-      ? readOptionalRecord(jsonRecord.data, "error")
+    const error = isRecord(json)
+      ? readOptionalRecord(json, "error")
       : undefined;
 
     throw new MidnightApiError({
@@ -370,9 +367,9 @@ export function parseRulesResponse(response: unknown): MempoolRulesResult {
         chainId,
         name: readOptionalString(record, "name"),
         timestamp: readOptionalNumber(record, "timestamp"),
-        address: readOptionalString(record, "address"),
+        address: readOptionalAddress(record, "address"),
         callbackType: readOptionalString(record, "callback_type"),
-        data: readOptionalString(record, "data"),
+        data: readOptionalHex(record, "data"),
         minTick: readOptionalNumber(record, "min_tick"),
         maxTick: readOptionalNumber(record, "max_tick"),
         tickSpacing: readOptionalNumber(record, "tick_spacing"),
@@ -389,8 +386,7 @@ function requireRecord(
   value: unknown,
   context: string,
 ): Readonly<Record<string, unknown>> {
-  const result = recordSchema.safeParse(value);
-  if (result.success) return result.data;
+  if (isRecord(value)) return value;
   throw new InvalidMidnightApiResponseError(
     `Midnight API ${context} is malformed.`,
   );
@@ -400,8 +396,12 @@ function readOptionalRecord(
   record: Readonly<Record<string, unknown>>,
   key: string,
 ) {
-  const result = recordSchema.safeParse(record[key]);
-  return result.success ? result.data : undefined;
+  const value = record[key];
+  return isRecord(value) ? value : undefined;
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function requireString(params: {
@@ -438,6 +438,20 @@ function readOptionalString(
   throw new InvalidMidnightApiResponseError(
     `Midnight API response field "${key}" must be a string.`,
   );
+}
+
+function readOptionalAddress(
+  record: Readonly<Record<string, unknown>>,
+  key: string,
+) {
+  return readOptionalString(record, key) as Address | undefined;
+}
+
+function readOptionalHex(
+  record: Readonly<Record<string, unknown>>,
+  key: string,
+) {
+  return readOptionalString(record, key) as Hex | undefined;
 }
 
 function readOptionalNumber(

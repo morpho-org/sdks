@@ -8,4 +8,4 @@ The initial surface includes pinned Midnight ABI literals, ABI-compatible market
 
 The package consumes shared primitives, `MathLib`, typed errors, and registry data from `@morpho-org/morpho-ts`, and exposes a configurable `MidnightApi` client with a `https://api.morpho.org` default and optional string-or-`URL` `baseUrl` override.
 
-`MidnightApi` uses `zod` at the HTTP boundary to validate caller inputs before request construction while deriving the public parameter types from the same schemas.
+`MidnightApi` uses explicit TypeScript interfaces with viem `Address`, `Hash`, and `Hex` primitives for the HTTP boundary; caller inputs are trusted at runtime and forwarded according to those types.

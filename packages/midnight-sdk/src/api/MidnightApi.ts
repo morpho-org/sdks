@@ -13,22 +13,6 @@ import {
   parseValidationResponse,
   requestMidnightApi,
 } from "./helpers.js";
-import {
-  fetchBookParamsSchema,
-  fetchBookPriceLevelsParamsSchema,
-  fetchBookQuoteParamsSchema,
-  fetchBooksParamsSchema,
-  fetchBookTakeableOffersParamsSchema,
-  fetchConfigContractsParamsSchema,
-  fetchMempoolRulesParamsSchema,
-  fetchTakeableOffersParamsSchema,
-  fetchUserGroupsParamsSchema,
-  fetchUserOffersParamsSchema,
-  midnightApiConstructorConfigSchema,
-  validateMempoolItemsParamsSchema,
-  validateMempoolPayloadParamsSchema,
-  validateMempoolTreeParamsSchema,
-} from "./schemas.js";
 import type {
   ApiBookResponse,
   ApiBooksResponse,
@@ -55,6 +39,7 @@ import type {
   MidnightApiBookResult,
   MidnightApiBooksResult,
   MidnightApiBookTakeableOffersResult,
+  MidnightApiClientParams,
   MidnightApiConfig,
   MidnightApiConfigContractsResult,
   MidnightApiConstructorConfig,
@@ -67,7 +52,6 @@ import type {
   ValidateMempoolTreeParams,
 } from "./types.js";
 
-export * from "./schemas.js";
 export type {
   FetchBookParams,
   FetchBookPriceLevelsParams,
@@ -87,8 +71,12 @@ export type {
   MidnightApiBookPriceLevelsResult,
   MidnightApiBookResult,
   MidnightApiBookSide,
+  MidnightApiBookSort,
+  MidnightApiBookSortField,
+  MidnightApiBookSortTerm,
   MidnightApiBooksResult,
   MidnightApiBookTakeableOffersResult,
+  MidnightApiClientParams,
   MidnightApiCollateral,
   MidnightApiConfig,
   MidnightApiConfigContract,
@@ -100,8 +88,14 @@ export type {
   MidnightApiOfferMarket,
   MidnightApiPriceLevel,
   MidnightApiQuote,
+  MidnightApiQuoteAssetsTarget,
+  MidnightApiQuoteAverageWorstPriceGuard,
   MidnightApiQuoteResult,
+  MidnightApiQuoteSlippageGuard,
+  MidnightApiQuoteUnitsTarget,
+  MidnightApiQuoteWithoutGuard,
   MidnightApiRequestOptions,
+  MidnightApiSlippage,
   MidnightApiTakeableOffer,
   MidnightApiTakeableOffersResult,
   MidnightApiUserGroup,
@@ -121,8 +115,8 @@ export type {
  * Static methods use `https://api.morpho.org` by default and accept per-call
  * configuration. Instances keep shared `baseUrl`, `fetch`, and request options
  * for integrations that make repeated calls.
- * Successful JSON output shapes are trusted from the API and are not validated
- * at runtime; returned TypeScript types model the API contract.
+ * Caller input and successful JSON output shapes are trusted at runtime;
+ * returned TypeScript types model the API contract.
  *
  * @example
  * ```ts
@@ -150,7 +144,6 @@ export class MidnightApi {
    *
    * @param config - API base URL or full request configuration.
    * @returns Configured Midnight API client.
-   * @throws ZodError when configuration fails validation; the SDK lets Zod surface validation issues directly.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk";
@@ -162,12 +155,10 @@ export class MidnightApi {
    * ```
    */
   public constructor(config: MidnightApiConstructorConfig = {}) {
-    const parsedConfig = midnightApiConstructorConfigSchema.parse(config);
-
     this.config =
-      typeof parsedConfig === "string" || parsedConfig instanceof URL
-        ? { baseUrl: parsedConfig }
-        : { ...parsedConfig };
+      typeof config === "string" || config instanceof URL
+        ? { baseUrl: config }
+        : { ...config };
   }
 
   /**
@@ -175,7 +166,6 @@ export class MidnightApi {
    *
    * @param params - Book filters, sorting, pagination, and optional request configuration.
    * @returns Paginated books mapped to SDK camelCase fields.
-   * @throws ZodError when caller parameters fail validation; the SDK lets Zod surface validation issues directly.
    * @throws MidnightApiError when the API returns a non-2xx response.
    * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
    * @example
@@ -192,7 +182,7 @@ export class MidnightApi {
   public static async fetchBooks(
     params: FetchBooksParams = {},
   ): Promise<MidnightApiBooksResult> {
-    const input = fetchBooksParamsSchema.parse(params);
+    const input = params;
     const response = await requestMidnightApi<ApiBooksResponse>({
       ...input,
       method: "GET",
@@ -220,7 +210,6 @@ export class MidnightApi {
    *
    * @param params - Market id, optional depth, and optional request configuration.
    * @returns Book snapshot mapped to SDK camelCase fields.
-   * @throws ZodError when caller parameters fail validation; the SDK lets Zod surface validation issues directly.
    * @throws MidnightApiError when the API returns a non-2xx response.
    * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
    * @example
@@ -236,7 +225,7 @@ export class MidnightApi {
   public static async fetchBook(
     params: FetchBookParams,
   ): Promise<MidnightApiBookResult> {
-    const input = fetchBookParamsSchema.parse(params);
+    const input = params;
     const response = await requestMidnightApi<ApiBookResponse>({
       ...input,
       method: "GET",
@@ -256,7 +245,6 @@ export class MidnightApi {
    *
    * @param params - Market id, side, optional depth, and optional request configuration.
    * @returns Price levels mapped to SDK camelCase fields.
-   * @throws ZodError when caller parameters fail validation; the SDK lets Zod surface validation issues directly.
    * @throws MidnightApiError when the API returns a non-2xx response.
    * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
    * @example
@@ -273,7 +261,7 @@ export class MidnightApi {
   public static async fetchBookPriceLevels(
     params: FetchBookPriceLevelsParams,
   ): Promise<MidnightApiBookPriceLevelsResult> {
-    const input = fetchBookPriceLevelsParamsSchema.parse(params);
+    const input = params;
     const response = await requestMidnightApi<ApiPriceLevelsResponse>({
       ...input,
       method: "GET",
@@ -293,7 +281,6 @@ export class MidnightApi {
    *
    * @param params - Market id, side, and optional request configuration.
    * @returns Takeable offers mapped to SDK camelCase fields.
-   * @throws ZodError when caller parameters fail validation; the SDK lets Zod surface validation issues directly.
    * @throws MidnightApiError when the API returns a non-2xx response.
    * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
    * @example
@@ -310,7 +297,7 @@ export class MidnightApi {
   public static async fetchBookTakeableOffers(
     params: FetchBookTakeableOffersParams,
   ): Promise<MidnightApiBookTakeableOffersResult> {
-    const input = fetchBookTakeableOffersParamsSchema.parse(params);
+    const input = params;
     const response = await requestMidnightApi<ApiBookTakeableOffersResponse>({
       ...input,
       method: "GET",
@@ -331,7 +318,6 @@ export class MidnightApi {
    *
    * @param params - Market id, side, target size, price guard, and optional request configuration.
    * @returns Quote and signed takeable-offer caps mapped to SDK camelCase fields.
-   * @throws ZodError when caller parameters fail validation; the SDK lets Zod surface validation issues directly.
    * @throws MidnightApiError when the API returns a non-2xx response.
    * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
    * @example
@@ -350,7 +336,7 @@ export class MidnightApi {
   public static async fetchBookQuote(
     params: FetchBookQuoteParams,
   ): Promise<MidnightApiQuoteResult> {
-    const input = fetchBookQuoteParamsSchema.parse(params);
+    const input = params;
     const response = await requestMidnightApi<ApiQuoteResponse>({
       ...input,
       method: "GET",
@@ -385,7 +371,6 @@ export class MidnightApi {
    *
    * @param params - Maker filter, optional market/group filters, pagination, and request configuration.
    * @returns Paginated takeable offers mapped to SDK camelCase fields.
-   * @throws ZodError when caller parameters fail validation; the SDK lets Zod surface validation issues directly.
    * @throws MidnightApiError when the API returns a non-2xx response.
    * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
    * @example
@@ -401,7 +386,7 @@ export class MidnightApi {
   public static async fetchTakeableOffers(
     params: FetchTakeableOffersParams,
   ): Promise<MidnightApiTakeableOffersResult> {
-    const input = fetchTakeableOffersParamsSchema.parse(params);
+    const input = params;
     const response = await requestMidnightApi<ApiTakeableOffersResponse>({
       ...input,
       method: "GET",
@@ -426,7 +411,6 @@ export class MidnightApi {
    *
    * @param params - User address, optional filters, pagination, and request configuration.
    * @returns Paginated user offers mapped to SDK camelCase fields.
-   * @throws ZodError when caller parameters fail validation; the SDK lets Zod surface validation issues directly.
    * @throws MidnightApiError when the API returns a non-2xx response.
    * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
    * @example
@@ -443,7 +427,7 @@ export class MidnightApi {
   public static async fetchUserOffers(
     params: FetchUserOffersParams,
   ): Promise<MidnightApiUserOffersResult> {
-    const input = fetchUserOffersParamsSchema.parse(params);
+    const input = params;
     const response = await requestMidnightApi<ApiUserOffersResponse>({
       ...input,
       method: "GET",
@@ -468,7 +452,6 @@ export class MidnightApi {
    *
    * @param params - User address, optional filters, pagination, and request configuration.
    * @returns Paginated user groups mapped to SDK camelCase fields.
-   * @throws ZodError when caller parameters fail validation; the SDK lets Zod surface validation issues directly.
    * @throws MidnightApiError when the API returns a non-2xx response.
    * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
    * @example
@@ -484,7 +467,7 @@ export class MidnightApi {
   public static async fetchUserGroups(
     params: FetchUserGroupsParams,
   ): Promise<MidnightApiUserGroupsResult> {
-    const input = fetchUserGroupsParamsSchema.parse(params);
+    const input = params;
     const response = await requestMidnightApi<ApiUserGroupsResponse>({
       ...input,
       method: "GET",
@@ -506,7 +489,6 @@ export class MidnightApi {
    *
    * @param params - Validation parameters and optional request configuration.
    * @returns API issues and `valid` summary.
-   * @throws ZodError when caller parameters fail validation; the SDK lets Zod surface validation issues directly.
    * @throws MidnightApiError when the API returns a non-2xx response.
    * @throws InvalidMidnightApiResponseError when the API returns malformed success JSON.
    * @example
@@ -523,7 +505,7 @@ export class MidnightApi {
   public static async validateMempoolPayload(
     params: ValidateMempoolPayloadParams,
   ): Promise<MempoolPayloadValidationResult> {
-    const input = validateMempoolPayloadParamsSchema.parse(params);
+    const input = params;
     const response = await requestMidnightApi({
       ...input,
       method: "POST",
@@ -546,7 +528,6 @@ export class MidnightApi {
    * @param params - Validation parameters and optional request configuration.
    * @returns API issues and `valid` summary.
    * @throws Payload.DecodeError when item encoding fails.
-   * @throws ZodError when caller parameters fail validation; the SDK lets Zod surface validation issues directly.
    * @throws MidnightApiError when the API returns a non-2xx response.
    * @throws InvalidMidnightApiResponseError when the API returns malformed success JSON.
    * @example
@@ -563,7 +544,7 @@ export class MidnightApi {
   public static async validateMempoolItems(
     params: ValidateMempoolItemsParams,
   ): Promise<MempoolPayloadValidationResult> {
-    const input = validateMempoolItemsParamsSchema.parse(params);
+    const input = params;
     const payload = await encodePayload(input.items);
 
     return MidnightApi.validateMempoolPayload({
@@ -585,7 +566,6 @@ export class MidnightApi {
    * @param params - Validation parameters and optional request configuration.
    * @returns API issues and `valid` summary.
    * @throws Payload.DecodeError when validation payload encoding fails.
-   * @throws ZodError when caller parameters fail validation; the SDK lets Zod surface validation issues directly.
    * @throws MidnightApiError when the API returns a non-2xx response.
    * @throws InvalidMidnightApiResponseError when the API returns malformed success JSON.
    * @example
@@ -602,7 +582,7 @@ export class MidnightApi {
   public static async validateMempoolTree(
     params: ValidateMempoolTreeParams,
   ): Promise<MempoolPayloadValidationResult> {
-    const input = validateMempoolTreeParamsSchema.parse(params);
+    const input = params;
     const tree = normalizeTree(input.tree);
 
     return MidnightApi.validateMempoolItems({
@@ -620,7 +600,6 @@ export class MidnightApi {
    *
    * @param params - Rule filters, pagination, and optional request configuration.
    * @returns Paginated API rules mapped to SDK camelCase fields.
-   * @throws ZodError when caller parameters fail validation; the SDK lets Zod surface validation issues directly.
    * @throws MidnightApiError when the API returns a non-2xx response.
    * @throws InvalidMidnightApiResponseError when the API returns malformed success JSON.
    * @example
@@ -637,7 +616,7 @@ export class MidnightApi {
   public static async fetchMempoolRules(
     params: FetchMempoolRulesParams = {},
   ): Promise<MempoolRulesResult> {
-    const input = fetchMempoolRulesParamsSchema.parse(params);
+    const input = params;
     const response = await requestMidnightApi({
       ...input,
       method: "GET",
@@ -659,7 +638,6 @@ export class MidnightApi {
    *
    * @param params - Optional chain filters, pagination, and request configuration.
    * @returns Paginated contract address entries mapped to SDK camelCase fields.
-   * @throws ZodError when caller parameters fail validation; the SDK lets Zod surface validation issues directly.
    * @throws MidnightApiError when the API returns a non-2xx response.
    * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
    * @example
@@ -675,7 +653,7 @@ export class MidnightApi {
   public static async fetchConfigContracts(
     params: FetchConfigContractsParams = {},
   ): Promise<MidnightApiConfigContractsResult> {
-    const input = fetchConfigContractsParamsSchema.parse(params);
+    const input = params;
     const response = await requestMidnightApi<ApiConfigContractsResponse>({
       ...input,
       method: "GET",
@@ -698,7 +676,6 @@ export class MidnightApi {
    *
    * @param params - Book filters, sorting, and pagination.
    * @returns Paginated books mapped to SDK camelCase fields.
-   * @throws ZodError when caller parameters fail validation; the SDK lets Zod surface validation issues directly.
    * @throws MidnightApiError when the API returns a non-2xx response.
    * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
    * @example
@@ -711,7 +688,7 @@ export class MidnightApi {
    * ```
    */
   public fetchBooks(
-    params: Omit<FetchBooksParams, keyof MidnightApiConfig> = {},
+    params: MidnightApiClientParams<FetchBooksParams> = {},
   ): Promise<MidnightApiBooksResult> {
     return MidnightApi.fetchBooks({
       ...this.config,
@@ -724,7 +701,6 @@ export class MidnightApi {
    *
    * @param params - Market id and optional depth.
    * @returns Book snapshot mapped to SDK camelCase fields.
-   * @throws ZodError when caller parameters fail validation; the SDK lets Zod surface validation issues directly.
    * @throws MidnightApiError when the API returns a non-2xx response.
    * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
    * @example
@@ -739,7 +715,7 @@ export class MidnightApi {
    * ```
    */
   public fetchBook(
-    params: Omit<FetchBookParams, keyof MidnightApiConfig>,
+    params: MidnightApiClientParams<FetchBookParams>,
   ): Promise<MidnightApiBookResult> {
     return MidnightApi.fetchBook({
       ...this.config,
@@ -752,7 +728,6 @@ export class MidnightApi {
    *
    * @param params - Market id, side, and optional depth.
    * @returns Price levels mapped to SDK camelCase fields.
-   * @throws ZodError when caller parameters fail validation; the SDK lets Zod surface validation issues directly.
    * @throws MidnightApiError when the API returns a non-2xx response.
    * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
    * @example
@@ -768,7 +743,7 @@ export class MidnightApi {
    * ```
    */
   public fetchBookPriceLevels(
-    params: Omit<FetchBookPriceLevelsParams, keyof MidnightApiConfig>,
+    params: MidnightApiClientParams<FetchBookPriceLevelsParams>,
   ): Promise<MidnightApiBookPriceLevelsResult> {
     return MidnightApi.fetchBookPriceLevels({
       ...this.config,
@@ -781,7 +756,6 @@ export class MidnightApi {
    *
    * @param params - Market id and side.
    * @returns Takeable offers mapped to SDK camelCase fields.
-   * @throws ZodError when caller parameters fail validation; the SDK lets Zod surface validation issues directly.
    * @throws MidnightApiError when the API returns a non-2xx response.
    * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
    * @example
@@ -797,7 +771,7 @@ export class MidnightApi {
    * ```
    */
   public fetchBookTakeableOffers(
-    params: Omit<FetchBookTakeableOffersParams, keyof MidnightApiConfig>,
+    params: MidnightApiClientParams<FetchBookTakeableOffersParams>,
   ): Promise<MidnightApiBookTakeableOffersResult> {
     return MidnightApi.fetchBookTakeableOffers({
       ...this.config,
@@ -810,7 +784,6 @@ export class MidnightApi {
    *
    * @param params - Market id, side, target size, and price guard.
    * @returns Quote and signed takeable-offer caps mapped to SDK camelCase fields.
-   * @throws ZodError when caller parameters fail validation; the SDK lets Zod surface validation issues directly.
    * @throws MidnightApiError when the API returns a non-2xx response.
    * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
    * @example
@@ -827,7 +800,7 @@ export class MidnightApi {
    * ```
    */
   public fetchBookQuote(
-    params: Omit<FetchBookQuoteParams, keyof MidnightApiConfig>,
+    params: MidnightApiClientParams<FetchBookQuoteParams>,
   ): Promise<MidnightApiQuoteResult> {
     return MidnightApi.fetchBookQuote({
       ...this.config,
@@ -840,7 +813,6 @@ export class MidnightApi {
    *
    * @param params - Maker filter, optional market/group filters, and pagination.
    * @returns Paginated takeable offers mapped to SDK camelCase fields.
-   * @throws ZodError when caller parameters fail validation; the SDK lets Zod surface validation issues directly.
    * @throws MidnightApiError when the API returns a non-2xx response.
    * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
    * @example
@@ -855,7 +827,7 @@ export class MidnightApi {
    * ```
    */
   public fetchTakeableOffers(
-    params: Omit<FetchTakeableOffersParams, keyof MidnightApiConfig>,
+    params: MidnightApiClientParams<FetchTakeableOffersParams>,
   ): Promise<MidnightApiTakeableOffersResult> {
     return MidnightApi.fetchTakeableOffers({
       ...this.config,
@@ -868,7 +840,6 @@ export class MidnightApi {
    *
    * @param params - User address, optional filters, and pagination.
    * @returns Paginated user offers mapped to SDK camelCase fields.
-   * @throws ZodError when caller parameters fail validation; the SDK lets Zod surface validation issues directly.
    * @throws MidnightApiError when the API returns a non-2xx response.
    * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
    * @example
@@ -883,7 +854,7 @@ export class MidnightApi {
    * ```
    */
   public fetchUserOffers(
-    params: Omit<FetchUserOffersParams, keyof MidnightApiConfig>,
+    params: MidnightApiClientParams<FetchUserOffersParams>,
   ): Promise<MidnightApiUserOffersResult> {
     return MidnightApi.fetchUserOffers({
       ...this.config,
@@ -896,7 +867,6 @@ export class MidnightApi {
    *
    * @param params - User address and pagination.
    * @returns Paginated user groups mapped to SDK camelCase fields.
-   * @throws ZodError when caller parameters fail validation; the SDK lets Zod surface validation issues directly.
    * @throws MidnightApiError when the API returns a non-2xx response.
    * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
    * @example
@@ -911,7 +881,7 @@ export class MidnightApi {
    * ```
    */
   public fetchUserGroups(
-    params: Omit<FetchUserGroupsParams, keyof MidnightApiConfig>,
+    params: MidnightApiClientParams<FetchUserGroupsParams>,
   ): Promise<MidnightApiUserGroupsResult> {
     return MidnightApi.fetchUserGroups({
       ...this.config,
@@ -924,7 +894,6 @@ export class MidnightApi {
    *
    * @param params - Payload validation parameters.
    * @returns API validation result.
-   * @throws ZodError when caller parameters fail validation; the SDK lets Zod surface validation issues directly.
    * @throws MidnightApiError when the API returns a non-2xx response.
    * @throws InvalidMidnightApiResponseError when the API returns malformed success JSON.
    * @example
@@ -937,7 +906,7 @@ export class MidnightApi {
    * ```
    */
   public validateMempoolPayload(
-    params: Omit<ValidateMempoolPayloadParams, keyof MidnightApiConfig>,
+    params: MidnightApiClientParams<ValidateMempoolPayloadParams>,
   ): Promise<MempoolPayloadValidationResult> {
     return MidnightApi.validateMempoolPayload({
       ...this.config,
@@ -951,7 +920,6 @@ export class MidnightApi {
    * @param params - Item validation parameters.
    * @returns API validation result.
    * @throws Payload.DecodeError when item encoding fails.
-   * @throws ZodError when caller parameters fail validation; the SDK lets Zod surface validation issues directly.
    * @throws MidnightApiError when the API returns a non-2xx response.
    * @throws InvalidMidnightApiResponseError when the API returns malformed success JSON.
    * @example
@@ -967,7 +935,7 @@ export class MidnightApi {
    * ```
    */
   public validateMempoolItems(
-    params: Omit<ValidateMempoolItemsParams, keyof MidnightApiConfig>,
+    params: MidnightApiClientParams<ValidateMempoolItemsParams>,
   ): Promise<MempoolPayloadValidationResult> {
     return MidnightApi.validateMempoolItems({
       ...this.config,
@@ -981,7 +949,6 @@ export class MidnightApi {
    * @param params - Tree validation parameters.
    * @returns API issues and `valid` summary.
    * @throws Payload.DecodeError when validation payload encoding fails.
-   * @throws ZodError when caller parameters fail validation; the SDK lets Zod surface validation issues directly.
    * @throws MidnightApiError when the API returns a non-2xx response.
    * @throws InvalidMidnightApiResponseError when the API returns malformed success JSON.
    * @example
@@ -994,7 +961,7 @@ export class MidnightApi {
    * ```
    */
   public validateMempoolTree(
-    params: Omit<ValidateMempoolTreeParams, keyof MidnightApiConfig>,
+    params: MidnightApiClientParams<ValidateMempoolTreeParams>,
   ): Promise<MempoolPayloadValidationResult> {
     return MidnightApi.validateMempoolTree({
       ...this.config,
@@ -1007,7 +974,6 @@ export class MidnightApi {
    *
    * @param params - Rule filters and pagination.
    * @returns Paginated API rules mapped to SDK camelCase fields.
-   * @throws ZodError when caller parameters fail validation; the SDK lets Zod surface validation issues directly.
    * @throws MidnightApiError when the API returns a non-2xx response.
    * @throws InvalidMidnightApiResponseError when the API returns malformed success JSON.
    * @example
@@ -1020,7 +986,7 @@ export class MidnightApi {
    * ```
    */
   public fetchMempoolRules(
-    params: Omit<FetchMempoolRulesParams, keyof MidnightApiConfig> = {},
+    params: MidnightApiClientParams<FetchMempoolRulesParams> = {},
   ): Promise<MempoolRulesResult> {
     return MidnightApi.fetchMempoolRules({
       ...this.config,
@@ -1033,7 +999,6 @@ export class MidnightApi {
    *
    * @param params - Optional chain filters and pagination.
    * @returns Paginated contract address entries mapped to SDK camelCase fields.
-   * @throws ZodError when caller parameters fail validation; the SDK lets Zod surface validation issues directly.
    * @throws MidnightApiError when the API returns a non-2xx response.
    * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
    * @example
@@ -1046,7 +1011,7 @@ export class MidnightApi {
    * ```
    */
   public fetchConfigContracts(
-    params: Omit<FetchConfigContractsParams, keyof MidnightApiConfig> = {},
+    params: MidnightApiClientParams<FetchConfigContractsParams> = {},
   ): Promise<MidnightApiConfigContractsResult> {
     return MidnightApi.fetchConfigContracts({
       ...this.config,

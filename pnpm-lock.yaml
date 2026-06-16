@@ -387,10 +387,6 @@ importers:
         version: 4.1.8(@types/node@25.9.3)(@vitest/coverage-v8@4.1.8)(@vitest/ui@4.1.8)(happy-dom@20.10.3)(vite@8.0.16(@types/node@25.9.3)(jiti@2.7.0)(yaml@2.9.0))
 
   packages/midnight-sdk:
-    dependencies:
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
     devDependencies:
       '@morpho-org/morpho-ts':
         specifier: workspace:^

@@ -1,24 +1,11 @@
-import type { z } from "zod";
+import type { BigIntish } from "@morpho-org/morpho-ts";
+import type { Address, Hash, Hex } from "viem";
 
 import type {
-  fetchBookParamsSchema,
-  fetchBookPriceLevelsParamsSchema,
-  fetchBookQuoteParamsSchema,
-  fetchBooksParamsSchema,
-  fetchBookTakeableOffersParamsSchema,
-  fetchConfigContractsParamsSchema,
-  fetchMempoolRulesParamsSchema,
-  fetchTakeableOffersParamsSchema,
-  fetchUserGroupsParamsSchema,
-  fetchUserOffersParamsSchema,
-  midnightApiBookSideSchema,
-  midnightApiConfigContractNameSchema,
-  midnightApiConfigSchema,
-  midnightApiConstructorConfigSchema,
-  validateMempoolItemsParamsSchema,
-  validateMempoolPayloadParamsSchema,
-  validateMempoolTreeParamsSchema,
-} from "./schemas.js";
+  Payload as MidnightPayload,
+  Item as MidnightPayloadItem,
+} from "../signatures/Payload.js";
+import type { TreeInput } from "../signatures/Tree.js";
 
 /**
  * Fetch implementation used by Midnight API helpers.
@@ -36,107 +23,293 @@ export type MidnightApiRequestOptions = Omit<RequestInit, "method" | "body">;
 /**
  * Shared configuration for Midnight API calls.
  */
-export type MidnightApiConfig = z.infer<typeof midnightApiConfigSchema>;
+export interface MidnightApiConfig {
+  /** Public Morpho API base URL. Defaults to `https://api.morpho.org`. */
+  readonly baseUrl?: string | URL;
+  /** Fetch implementation. Defaults to the global `fetch`. */
+  readonly fetch?: MidnightApiFetch;
+  /** Additional fetch options forwarded to the request. */
+  readonly request?: MidnightApiRequestOptions;
+}
 
 /**
  * Constructor input for {@link MidnightApi}.
  */
-export type MidnightApiConstructorConfig = z.infer<
-  typeof midnightApiConstructorConfigSchema
->;
+export type MidnightApiConstructorConfig = string | URL | MidnightApiConfig;
+
+/**
+ * Removes shared instance configuration keys from a parameter union.
+ */
+export type MidnightApiClientParams<Params extends MidnightApiConfig> =
+  Params extends unknown ? Omit<Params, keyof MidnightApiConfig> : never;
 
 /**
  * Book side accepted by Midnight API book routes.
  */
-export type MidnightApiBookSide = z.infer<typeof midnightApiBookSideSchema>;
+export type MidnightApiBookSide = "asks" | "bids";
 
 /**
  * Contract names returned by the router config contracts endpoint.
  */
-export type MidnightApiConfigContractName = z.infer<
-  typeof midnightApiConfigContractNameSchema
->;
+export type MidnightApiConfigContractName =
+  | "setterRatifier"
+  | "bundler"
+  | "ecrecoverAuthorizer"
+  | "ecrecoverRatifier"
+  | "mempool"
+  | "multicall"
+  | "midnight";
+
+/**
+ * Book list sort field accepted by the Midnight API.
+ */
+export type MidnightApiBookSortField = "id" | "ask" | "bid" | "maturity";
+
+/**
+ * One Midnight API book sort term. Prefix with `-` for descending order.
+ */
+export type MidnightApiBookSortTerm =
+  | MidnightApiBookSortField
+  | `-${MidnightApiBookSortField}`;
+
+/**
+ * Book list sort input. Strings are forwarded as comma-separated API sort keys.
+ */
+export type MidnightApiBookSort = string | readonly MidnightApiBookSortTerm[];
+
+/**
+ * Quote slippage percentage accepted by the Midnight API.
+ */
+export type MidnightApiSlippage = string | number;
 
 /**
  * Parameters for {@link MidnightApi.validateMempoolPayload}.
  */
-export type ValidateMempoolPayloadParams = z.infer<
-  typeof validateMempoolPayloadParamsSchema
->;
+export interface ValidateMempoolPayloadParams extends MidnightApiConfig {
+  /** Chain id whose API policy should validate the payload. */
+  readonly chainId: number;
+  /** Encoded Midnight mempool payload bytes. */
+  readonly payload: MidnightPayload;
+  /** Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot. */
+  readonly timestamp?: string | Date;
+}
 
 /**
  * Parameters for {@link MidnightApi.validateMempoolItems}.
  */
-export type ValidateMempoolItemsParams = z.infer<
-  typeof validateMempoolItemsParamsSchema
->;
+export interface ValidateMempoolItemsParams extends MidnightApiConfig {
+  /** Chain id whose API policy should validate the payload. */
+  readonly chainId: number;
+  /** SDK-native payload items to encode before API validation. */
+  readonly items: readonly MidnightPayloadItem[];
+  /** Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot. */
+  readonly timestamp?: string | Date;
+}
 
 /**
  * Parameters for {@link MidnightApi.validateMempoolTree}.
  */
-export type ValidateMempoolTreeParams = z.infer<
-  typeof validateMempoolTreeParamsSchema
->;
+export interface ValidateMempoolTreeParams extends MidnightApiConfig {
+  /** Chain id whose API policy should validate the tree. */
+  readonly chainId: number;
+  /** Offer tree to validate before ratifier data or payload publication exists. */
+  readonly tree: TreeInput;
+  /** Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot. */
+  readonly timestamp?: string | Date;
+}
 
 /**
  * Parameters for {@link MidnightApi.fetchMempoolRules}.
  */
-export type FetchMempoolRulesParams = z.infer<
-  typeof fetchMempoolRulesParamsSchema
->;
+export interface FetchMempoolRulesParams extends MidnightApiConfig {
+  /** Chain ids to include. */
+  readonly chainIds?: readonly number[];
+  /** Rule types to include. */
+  readonly types?: readonly string[];
+  /** Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot. */
+  readonly timestamp?: string | Date;
+  /** Maximum number of rules to return. */
+  readonly limit?: number;
+  /** Opaque pagination cursor from a previous response. */
+  readonly cursor?: string;
+}
 
 /**
  * Parameters for {@link MidnightApi.fetchConfigContracts}.
  */
-export type FetchConfigContractsParams = z.infer<
-  typeof fetchConfigContractsParamsSchema
->;
+export interface FetchConfigContractsParams extends MidnightApiConfig {
+  /** Chain ids to include. */
+  readonly chainIds?: readonly number[];
+  /** Maximum number of contracts to return. */
+  readonly limit?: number;
+  /** Opaque pagination cursor from a previous response. */
+  readonly cursor?: string;
+}
 
 /**
  * Parameters for {@link MidnightApi.fetchBooks}.
  */
-export type FetchBooksParams = z.infer<typeof fetchBooksParamsSchema>;
+export interface FetchBooksParams extends MidnightApiConfig {
+  /** Sort fields, either already comma-separated or as individual terms. */
+  readonly sort?: MidnightApiBookSort;
+  /** Exact maturity timestamp filters in unix seconds. */
+  readonly maturities?: readonly number[];
+  /** Collateral token address filters. */
+  readonly collateralTokens?: readonly Address[];
+  /** Loan token address filters. */
+  readonly loanTokens?: readonly Address[];
+  /** Chain id filters. */
+  readonly chainIds?: readonly number[];
+  /** Market id filters. */
+  readonly marketIds?: readonly Hash[];
+  /** Maximum number of books to return. */
+  readonly limit?: number;
+  /** Opaque pagination cursor from a previous response. */
+  readonly cursor?: string;
+}
 
 /**
  * Parameters for {@link MidnightApi.fetchBook}.
  */
-export type FetchBookParams = z.infer<typeof fetchBookParamsSchema>;
+export interface FetchBookParams extends MidnightApiConfig {
+  /** Market id whose book to read. */
+  readonly marketId: Hash;
+  /** Maximum levels returned per side. */
+  readonly depth?: number;
+}
 
 /**
  * Parameters for {@link MidnightApi.fetchBookPriceLevels}.
  */
-export type FetchBookPriceLevelsParams = z.infer<
-  typeof fetchBookPriceLevelsParamsSchema
->;
+export interface FetchBookPriceLevelsParams extends MidnightApiConfig {
+  /** Market id whose book side to read. */
+  readonly marketId: Hash;
+  /** Book side to query. */
+  readonly side: MidnightApiBookSide;
+  /** Maximum levels returned. */
+  readonly depth?: number;
+}
 
 /**
  * Parameters for {@link MidnightApi.fetchBookTakeableOffers}.
  */
-export type FetchBookTakeableOffersParams = z.infer<
-  typeof fetchBookTakeableOffersParamsSchema
->;
+export interface FetchBookTakeableOffersParams extends MidnightApiConfig {
+  /** Market id whose book side to read. */
+  readonly marketId: Hash;
+  /** Book side to query. */
+  readonly side: MidnightApiBookSide;
+}
+
+/**
+ * Quote target specified as maker-side assets.
+ */
+export interface MidnightApiQuoteAssetsTarget {
+  /** Target assets amount. */
+  readonly assets: BigIntish;
+  /** Mutually exclusive with `assets`. */
+  readonly units?: never;
+}
+
+/**
+ * Quote target specified as units.
+ */
+export interface MidnightApiQuoteUnitsTarget {
+  /** Target unit amount. */
+  readonly units: BigIntish;
+  /** Mutually exclusive with `units`. */
+  readonly assets?: never;
+}
+
+/**
+ * Quote price guard specified directly as a WAD-scaled average worst price.
+ */
+export interface MidnightApiQuoteAverageWorstPriceGuard {
+  /** Average worst price guard. */
+  readonly averageWorstPrice: BigIntish;
+  /** Mutually exclusive with `averageWorstPrice`. */
+  readonly slippage?: never;
+}
+
+/**
+ * Quote price guard specified as a slippage percentage.
+ */
+export interface MidnightApiQuoteSlippageGuard {
+  /** Slippage percentage used to derive the guard. */
+  readonly slippage: MidnightApiSlippage;
+  /** Mutually exclusive with `slippage`. */
+  readonly averageWorstPrice?: never;
+}
+
+/**
+ * Quote request without a client-side price guard.
+ */
+export interface MidnightApiQuoteWithoutGuard {
+  /** No average worst price guard. */
+  readonly averageWorstPrice?: undefined;
+  /** No slippage guard. */
+  readonly slippage?: undefined;
+}
 
 /**
  * Parameters for {@link MidnightApi.fetchBookQuote}.
  */
-export type FetchBookQuoteParams = z.infer<typeof fetchBookQuoteParamsSchema>;
+export type FetchBookQuoteParams = MidnightApiConfig & {
+  /** Market id whose book side to quote. */
+  readonly marketId: Hash;
+  /** Book side to quote. */
+  readonly side: MidnightApiBookSide;
+} & (MidnightApiQuoteAssetsTarget | MidnightApiQuoteUnitsTarget) &
+  (
+    | MidnightApiQuoteAverageWorstPriceGuard
+    | MidnightApiQuoteSlippageGuard
+    | MidnightApiQuoteWithoutGuard
+  );
 
 /**
  * Parameters for {@link MidnightApi.fetchTakeableOffers}.
  */
-export type FetchTakeableOffersParams = z.infer<
-  typeof fetchTakeableOffersParamsSchema
->;
+export interface FetchTakeableOffersParams extends MidnightApiConfig {
+  /** Maker EVM address. */
+  readonly maker: Address;
+  /** Market id filters. */
+  readonly marketIds?: readonly Hash[];
+  /** Group id filters. */
+  readonly groups?: readonly Hash[];
+  /** Maximum number of offers to return. */
+  readonly limit?: number;
+  /** Opaque pagination cursor from a previous response. */
+  readonly cursor?: string;
+}
 
 /**
  * Parameters for {@link MidnightApi.fetchUserOffers}.
  */
-export type FetchUserOffersParams = z.infer<typeof fetchUserOffersParamsSchema>;
+export interface FetchUserOffersParams extends MidnightApiConfig {
+  /** User EVM address. */
+  readonly user: Address;
+  /** Market id filters. */
+  readonly marketIds?: readonly Hash[];
+  /** Group id filters. */
+  readonly groups?: readonly Hash[];
+  /** Whether to return only currently active offers. */
+  readonly active?: boolean;
+  /** Maximum number of offers to return. */
+  readonly limit?: number;
+  /** Opaque pagination cursor from a previous response. */
+  readonly cursor?: string;
+}
 
 /**
  * Parameters for {@link MidnightApi.fetchUserGroups}.
  */
-export type FetchUserGroupsParams = z.infer<typeof fetchUserGroupsParamsSchema>;
+export interface FetchUserGroupsParams extends MidnightApiConfig {
+  /** User EVM address. */
+  readonly user: Address;
+  /** Maximum number of groups to return. */
+  readonly limit?: number;
+  /** Opaque pagination cursor from a previous response. */
+  readonly cursor?: string;
+}
 
 /**
  * One API validation issue.
@@ -169,11 +342,11 @@ export interface MempoolRule {
   /** Rule timestamp, when returned by the API. */
   readonly timestamp?: number;
   /** Address value, when returned by address-based rules. */
-  readonly address?: string;
+  readonly address?: Address;
   /** Callback policy type, when returned by callback rules. */
   readonly callbackType?: string;
   /** Callback data, when returned by callback rules. */
-  readonly data?: string;
+  readonly data?: Hex;
   /** Minimum supported tick, when returned by min-tick rules. */
   readonly minTick?: number;
   /** Maximum supported tick, when returned by max-tick rules. */
@@ -209,7 +382,7 @@ export interface MidnightApiConfigContract {
   /** Router contract role name. */
   readonly name: MidnightApiConfigContractName;
   /** Contract address. */
-  readonly address: string;
+  readonly address: Address;
 }
 
 /**
@@ -227,13 +400,13 @@ export interface MidnightApiConfigContractsResult {
  */
 export interface MidnightApiCollateral {
   /** Collateral token address. */
-  readonly token: string;
+  readonly token: Address;
   /** WAD-scaled liquidation loan-to-value. */
   readonly lltv: string;
   /** WAD-scaled maximum liquidation incentive factor. */
   readonly maxLif: string;
   /** Oracle address used to price this collateral. */
-  readonly oracle: string;
+  readonly oracle: Address;
 }
 
 /**
@@ -257,11 +430,11 @@ export interface MidnightApiPriceLevel {
  */
 export interface MidnightApiBookMarket {
   /** Market id. */
-  readonly id: string;
+  readonly id: Hash;
   /** Chain id the market lives on. */
   readonly chainId: number;
   /** Loan token address. */
-  readonly loanToken: string;
+  readonly loanToken: Address;
   /** Collateral definitions for the market. */
   readonly collaterals: readonly MidnightApiCollateral[];
   /** Market maturity timestamp in unix seconds. */
@@ -301,7 +474,7 @@ export interface MidnightApiBookResult {
  */
 export interface MidnightApiOfferMarket {
   /** Loan token address. */
-  readonly loanToken: string;
+  readonly loanToken: Address;
   /** Collateral definitions for the market. */
   readonly collaterals: readonly MidnightApiCollateral[];
   /** Market maturity timestamp in unix seconds. */
@@ -323,7 +496,7 @@ export interface MidnightApiOffer {
   /** Whether the maker buys units. */
   readonly buy: boolean;
   /** Offer maker address. */
-  readonly maker: string;
+  readonly maker: Address;
   /** Maximum units; zero means max assets controls consumption. */
   readonly maxUnits: string;
   /** Start timestamp in unix seconds. */
@@ -333,15 +506,15 @@ export interface MidnightApiOffer {
   /** Midnight tick. */
   readonly tick: number;
   /** Consumption group id. */
-  readonly group: string;
+  readonly group: Hash;
   /** Optional maker callback. */
-  readonly callback: string;
+  readonly callback: Address;
   /** Callback payload. */
-  readonly callbackData: string;
+  readonly callbackData: Hex;
   /** Receiver used when the maker is the seller. */
-  readonly receiverIfMakerIsSeller: string;
+  readonly receiverIfMakerIsSeller: Address;
   /** Ratifier contract address. */
-  readonly ratifier: string;
+  readonly ratifier: Address;
   /** Whether the offer can only reduce maker exposure. */
   readonly reduceOnly: boolean;
   /** Maximum buyer or seller assets, depending on side. */
@@ -357,7 +530,7 @@ export interface MidnightApiTakeableOffer {
   /** Inline offer. */
   readonly offer: MidnightApiOffer;
   /** Ratifier data generated by the maker. */
-  readonly ratifierData: string;
+  readonly ratifierData: Hex;
 }
 
 /**
@@ -420,7 +593,7 @@ export interface MidnightApiTakeableOffersResult {
  */
 export interface MidnightApiUserOfferMarket extends MidnightApiOfferMarket {
   /** Market id. */
-  readonly id: string;
+  readonly id: Hash;
 }
 
 /**
@@ -428,7 +601,7 @@ export interface MidnightApiUserOfferMarket extends MidnightApiOfferMarket {
  */
 export interface MidnightApiUserOfferGroup {
   /** Consumption group id. */
-  readonly id: string;
+  readonly id: Hash;
   /** Current onchain consumed value for the group. */
   readonly consumed: string;
   /** Currently executable size in units. */
@@ -440,13 +613,13 @@ export interface MidnightApiUserOfferGroup {
  */
 export interface MidnightApiUserOffer {
   /** Offer hash. */
-  readonly hash: string;
+  readonly hash: Hash;
   /** Market this offer trades. */
   readonly market: MidnightApiUserOfferMarket;
   /** Whether the maker buys units. */
   readonly buy: boolean;
   /** Offer maker address. */
-  readonly maker: string;
+  readonly maker: Address;
   /** Start timestamp in unix seconds. */
   readonly start: number;
   /** Expiry timestamp in unix seconds. */
@@ -456,13 +629,13 @@ export interface MidnightApiUserOffer {
   /** Consumption group with current onchain usage. */
   readonly group: MidnightApiUserOfferGroup;
   /** Optional maker callback. */
-  readonly callback: string;
+  readonly callback: Address;
   /** Callback payload. */
-  readonly callbackData: string;
+  readonly callbackData: Hex;
   /** Receiver used when the maker is the seller. */
-  readonly receiverIfMakerIsSeller: string;
+  readonly receiverIfMakerIsSeller: Address;
   /** Ratifier contract address. */
-  readonly ratifier: string;
+  readonly ratifier: Address;
   /** Whether the offer can only reduce maker exposure. */
   readonly reduceOnly: boolean;
   /** Maximum units; zero means max assets controls consumption. */
@@ -486,7 +659,7 @@ export interface MidnightApiUserOffersResult {
  */
 export interface MidnightApiUserGroup {
   /** Consumption group id. */
-  readonly id: string;
+  readonly id: Hash;
   /** Chain id the group lives on. */
   readonly chainId: number;
   /** Maximum units configured for the group. */
@@ -531,10 +704,10 @@ export type ApiRequestParams = MidnightApiConfig & {
 
 /** @internal Collateral response shape returned by the API. */
 export type ApiCollateralResponse = {
-  readonly token: string;
+  readonly token: Address;
   readonly lltv: string;
   readonly max_lif: string;
-  readonly oracle: string;
+  readonly oracle: Address;
 };
 
 /** @internal Price-level response shape returned by the API. */
@@ -548,9 +721,9 @@ export type ApiPriceLevelResponse = {
 
 /** @internal Book response shape returned by the API. */
 export type ApiBookMarketResponse = {
-  readonly id: string;
+  readonly id: Hash;
   readonly chain_id: number;
-  readonly loan_token: string;
+  readonly loan_token: Address;
   readonly collaterals: readonly ApiCollateralResponse[];
   readonly maturity: number;
   readonly rcf_threshold: string;
@@ -578,7 +751,7 @@ export type ApiPriceLevelsResponse = {
 
 /** @internal Offer market response shape returned by the API. */
 export type ApiOfferMarketResponse = {
-  readonly loan_token: string;
+  readonly loan_token: Address;
   readonly collaterals: readonly ApiCollateralResponse[];
   readonly maturity: number;
   readonly rcf_threshold: string;
@@ -590,16 +763,16 @@ export type ApiOfferMarketResponse = {
 export type ApiOfferResponse = {
   readonly market: ApiOfferMarketResponse;
   readonly buy: boolean;
-  readonly maker: string;
+  readonly maker: Address;
   readonly max_units: string;
   readonly start: number;
   readonly expiry: number;
   readonly tick: number;
-  readonly group: string;
-  readonly callback: string;
-  readonly callback_data: string;
-  readonly receiver_if_maker_is_seller: string;
-  readonly ratifier: string;
+  readonly group: Hash;
+  readonly callback: Address;
+  readonly callback_data: Hex;
+  readonly receiver_if_maker_is_seller: Address;
+  readonly ratifier: Address;
   readonly reduce_only: boolean;
   readonly max_assets: string;
 };
@@ -608,7 +781,7 @@ export type ApiOfferResponse = {
 export type ApiTakeableOfferResponse = {
   readonly units: string;
   readonly offer: ApiOfferResponse;
-  readonly ratifier_data: string;
+  readonly ratifier_data: Hex;
 };
 
 /** @internal Book takeable-offers response shape returned by the API. */
@@ -637,7 +810,7 @@ export type ApiTakeableOffersResponse = {
 export type ApiConfigContractResponse = {
   readonly chain_id: number;
   readonly name: MidnightApiConfigContractName;
-  readonly address: string;
+  readonly address: Address;
 };
 
 /** @internal Config contracts response shape returned by the API. */
@@ -648,30 +821,30 @@ export type ApiConfigContractsResponse = {
 
 /** @internal User-offer market response shape returned by the API. */
 export type ApiUserOfferMarketResponse = ApiOfferMarketResponse & {
-  readonly id: string;
+  readonly id: Hash;
 };
 
 /** @internal User-offer group response shape returned by the API. */
 export type ApiUserOfferGroupResponse = {
-  readonly id: string;
+  readonly id: Hash;
   readonly consumed: string;
   readonly takeable_units: string;
 };
 
 /** @internal User offer response shape returned by the API. */
 export type ApiUserOfferResponse = {
-  readonly hash: string;
+  readonly hash: Hash;
   readonly market: ApiUserOfferMarketResponse;
   readonly buy: boolean;
-  readonly maker: string;
+  readonly maker: Address;
   readonly start: number;
   readonly expiry: number;
   readonly tick: number;
   readonly group: ApiUserOfferGroupResponse;
-  readonly callback: string;
-  readonly callback_data: string;
-  readonly receiver_if_maker_is_seller: string;
-  readonly ratifier: string;
+  readonly callback: Address;
+  readonly callback_data: Hex;
+  readonly receiver_if_maker_is_seller: Address;
+  readonly ratifier: Address;
   readonly reduce_only: boolean;
   readonly max_units: string;
   readonly max_assets: string;
@@ -685,7 +858,7 @@ export type ApiUserOffersResponse = {
 
 /** @internal User group response shape returned by the API. */
 export type ApiUserGroupResponse = {
-  readonly id: string;
+  readonly id: Hash;
   readonly chain_id: number;
   readonly max_units: string;
   readonly max_assets: string;

@@ -1,6 +1,5 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
-import { ZodError } from "zod";
 
 import { baseMarketParamsInput, baseOffer } from "../__test__/fixtures.js";
 import {
@@ -468,114 +467,6 @@ describe("MidnightApi instance", () => {
     expect(url.origin).toBe("https://api.example");
     expect(url.pathname).toBe("/base/v1/midnight/books");
     expect(url.searchParams.get("limit")).toBe("1");
-  });
-});
-
-describe("MidnightApi input validation", () => {
-  test("error: ZodError constructor", () => {
-    expect(() => new MidnightApi("not-a-url")).toThrow(ZodError);
-  });
-
-  test.each([
-    {
-      name: "validateMempoolPayload",
-      call: (fetch: MidnightApiFetch) =>
-        MidnightApi.validateMempoolPayload({
-          chainId: 0,
-          payload: "0x0100000000" as Payload.Payload,
-          fetch,
-        }),
-    },
-    {
-      name: "validateMempoolItems",
-      call: (fetch: MidnightApiFetch) =>
-        MidnightApi.validateMempoolItems({
-          chainId: 8453,
-          items: [{ offer: {}, ratifierData: "not-hex" }],
-          fetch,
-        } as never),
-    },
-    {
-      name: "validateMempoolTree",
-      call: (fetch: MidnightApiFetch) =>
-        MidnightApi.validateMempoolTree({
-          chainId: 8453,
-          tree: null,
-          fetch,
-        } as never),
-    },
-    {
-      name: "fetchBooks",
-      call: (fetch: MidnightApiFetch) =>
-        MidnightApi.fetchBooks({ marketIds: ["0x1234"], fetch }),
-    },
-    {
-      name: "fetchBook",
-      call: (fetch: MidnightApiFetch) =>
-        MidnightApi.fetchBook({ marketId: "0x1234", fetch } as never),
-    },
-    {
-      name: "fetchBookPriceLevels",
-      call: (fetch: MidnightApiFetch) =>
-        MidnightApi.fetchBookPriceLevels({
-          marketId: MARKET_ID,
-          side: "sell",
-          fetch,
-        } as never),
-    },
-    {
-      name: "fetchBookTakeableOffers",
-      call: (fetch: MidnightApiFetch) =>
-        MidnightApi.fetchBookTakeableOffers({
-          marketId: MARKET_ID,
-          side: "sell",
-          fetch,
-        } as never),
-    },
-    {
-      name: "fetchBookQuote",
-      call: (fetch: MidnightApiFetch) =>
-        MidnightApi.fetchBookQuote({
-          marketId: MARKET_ID,
-          side: "asks",
-          assets: "0",
-          fetch,
-        }),
-    },
-    {
-      name: "fetchTakeableOffers",
-      call: (fetch: MidnightApiFetch) =>
-        MidnightApi.fetchTakeableOffers({ maker: "0x1234", fetch } as never),
-    },
-    {
-      name: "fetchUserOffers",
-      call: (fetch: MidnightApiFetch) =>
-        MidnightApi.fetchUserOffers({
-          user: MAKER,
-          active: "true",
-          fetch,
-        } as never),
-    },
-    {
-      name: "fetchUserGroups",
-      call: (fetch: MidnightApiFetch) =>
-        MidnightApi.fetchUserGroups({ user: MAKER, limit: 0, fetch }),
-    },
-    {
-      name: "fetchMempoolRules",
-      call: (fetch: MidnightApiFetch) =>
-        MidnightApi.fetchMempoolRules({ chainIds: [0], fetch }),
-    },
-    {
-      name: "fetchConfigContracts",
-      call: (fetch: MidnightApiFetch) =>
-        MidnightApi.fetchConfigContracts({ chainIds: [0], fetch }),
-    },
-  ])("error: ZodError $name", async ({ call }) => {
-    const { calls, fetch } = createJsonFetch({ data: [] });
-
-    await expect(call(fetch)).rejects.toBeInstanceOf(ZodError);
-    expect(calls).toHaveLength(0);
   });
 });
 
