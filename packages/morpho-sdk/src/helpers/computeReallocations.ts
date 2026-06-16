@@ -97,7 +97,7 @@ const capVaultWithdrawals = (
  * In both cases reallocated assets are added on the supply side; `requiredAssets`
  * and `absoluteShortfall` are derived from the operation-specific post-state.
  *
- * @remarks Pass `options.timestamp` from the same block used to fetch `reallocationData`; when omitted, market accrual falls back to the target market's `lastUpdate`, which can diverge from the source rows' fetch block. Per-market `maxWithdrawalUtilization` overrides apply only to phase 1; phase 2 forces 100% utilization on every source market. Set `options.maintainSupplyTargetUtilization` to hold the target market at `supplyTargetUtilization` in phase 2 instead of relaxing it to 100% (source markets are still drained aggressively to supply that liquidity).
+ * @remarks Pass `options.timestamp` from the same block used to fetch `reallocationData`; when omitted, market accrual falls back to the target market's `lastUpdate`, which can diverge from the source rows' fetch block. Per-market `maxWithdrawalUtilization` overrides apply only to phase 1; phase 2 forces 100% utilization on every source market.
  * @param params.reallocationData - The local state containing market, vault, and position data.
  * @param params.marketId - The target market to reallocate liquidity into.
  * @param params.operation - The operation driving the reallocation (`"borrow"` or `"withdraw"`).
@@ -229,13 +229,8 @@ export const computeReallocations = ({
       : friendlyReallocationMarket.totalSupplyAssets;
 
   if (friendlyBorrow > friendlySupply) {
-    // Phase 2: "aggressive" — fully withdraw from every source market (100%
-    // withdrawal utilization) to top up the target market.
-    if (options?.maintainSupplyTargetUtilization !== true) {
-      // Default: relax the TARGET market to "just don't revert" (100% utilization).
-      // Skipped when the caller wants to hold the target at supplyTargetUtilization.
-      requiredAssets = newTotalBorrowAssets - newTotalSupplyAssets;
-    }
+    // Phase 2: "aggressive" — fully withdraw from every market (100% utilization).
+    requiredAssets = newTotalBorrowAssets - newTotalSupplyAssets;
     withdrawals.push(
       ...friendlyReallocationData.getMarketPublicReallocations(market.id, {
         ...options,

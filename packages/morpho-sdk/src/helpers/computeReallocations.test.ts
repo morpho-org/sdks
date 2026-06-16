@@ -17,7 +17,6 @@ import {
   InsufficientSharedLiquidityError,
   MissingPublicAllocatorConfigError,
   ReallocationWithdrawExceedsMarketSupplyError,
-  type VaultReallocation,
 } from "../types/index.js";
 import { computeReallocations } from "./computeReallocations.js";
 
@@ -452,125 +451,6 @@ describe("computeReallocations", () => {
         0n,
       );
       expect(totalAmount).toBe(200n * MathLib.WAD);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // Phase 2: maintainSupplyTargetUtilization opt-in
-  // ---------------------------------------------------------------------------
-
-  describe("phase 2: maintainSupplyTargetUtilization", () => {
-    // Shared fixture (round numbers at a 90% target):
-    //   tm: 800 supply / 400 borrow, borrow 500 → newBorrow 900, newSupply 800.
-    //   absoluteShortfall = 900 - 800 = 100.
-    //   requiredAssets@90% = wDivDown(900, 0.9) - 800 = 1000 - 800 = 200.
-    // Friendly adds 50 (800 → 850) but still reverts (900 > 850) → phase 2.
-    const tm = makeMarket(targetParams, {
-      totalSupplyAssets: 800n * MathLib.WAD,
-      totalBorrowAssets: 400n * MathLib.WAD,
-    });
-    const borrowAmount = 500n * MathLib.WAD;
-    const friendlyTargetMarket = makeMarket(targetParams, {
-      totalSupplyAssets: 850n * MathLib.WAD,
-      totalBorrowAssets: 400n * MathLib.WAD,
-    });
-
-    const totalWithdrawn = (result: readonly VaultReallocation[]) =>
-      result.reduce(
-        (sum, { withdrawals }) =>
-          sum + withdrawals.reduce((s, { amount }) => s + amount, 0n),
-        0n,
-      );
-
-    test("behavior: holds the target at supply target instead of relaxing to 100%", () => {
-      const data = makeMockState({
-        targetMarket: tm,
-        friendlyWithdrawals: [
-          { id: sourceA.id, vault: VAULT_A, assets: 50n * MathLib.WAD },
-        ],
-        friendlyTargetMarket,
-        aggressiveWithdrawals: [
-          { id: sourceB.id, vault: VAULT_A, assets: 300n * MathLib.WAD },
-        ],
-        vaultFees: { [VAULT_A]: 0n },
-      });
-
-      const result = computeReallocations({
-        reallocationData: data,
-        marketId: targetParams.id,
-        operation: "borrow",
-        amount: borrowAmount,
-        options: {
-          enabled: true,
-          defaultSupplyTargetUtilization: parseEther("0.9"),
-          maintainSupplyTargetUtilization: true,
-        },
-      });
-
-      // requiredAssets stays at the 90% target (200), not the 100% shortfall (100).
-      expect(totalWithdrawn(result)).toBe(200n * MathLib.WAD);
-      // Aggressive source market is still drained to supply that liquidity.
-      const ids = result.flatMap(({ withdrawals }) =>
-        withdrawals.map(({ marketParams }) => marketParams.id),
-      );
-      expect(ids).toContain(sourceB.id);
-    });
-
-    test("behavior: default relaxes the target to 100% (absolute shortfall)", () => {
-      const data = makeMockState({
-        targetMarket: tm,
-        friendlyWithdrawals: [
-          { id: sourceA.id, vault: VAULT_A, assets: 50n * MathLib.WAD },
-        ],
-        friendlyTargetMarket,
-        aggressiveWithdrawals: [
-          { id: sourceB.id, vault: VAULT_A, assets: 300n * MathLib.WAD },
-        ],
-        vaultFees: { [VAULT_A]: 0n },
-      });
-
-      const result = computeReallocations({
-        reallocationData: data,
-        marketId: targetParams.id,
-        operation: "borrow",
-        amount: borrowAmount,
-        // maintainSupplyTargetUtilization omitted → default fallback to 100%.
-        options: {
-          enabled: true,
-          defaultSupplyTargetUtilization: parseEther("0.9"),
-        },
-      });
-
-      expect(totalWithdrawn(result)).toBe(100n * MathLib.WAD);
-    });
-
-    test("error: InsufficientSharedLiquidityError when even aggressive falls short", () => {
-      const data = makeMockState({
-        targetMarket: tm,
-        friendlyWithdrawals: [
-          { id: sourceA.id, vault: VAULT_A, assets: 50n * MathLib.WAD },
-        ],
-        friendlyTargetMarket,
-        // 50 friendly + 30 aggressive = 80 < absoluteShortfall (100).
-        aggressiveWithdrawals: [
-          { id: sourceB.id, vault: VAULT_A, assets: 30n * MathLib.WAD },
-        ],
-        vaultFees: { [VAULT_A]: 0n },
-      });
-
-      expect(() =>
-        computeReallocations({
-          reallocationData: data,
-          marketId: targetParams.id,
-          operation: "borrow",
-          amount: borrowAmount,
-          options: {
-            enabled: true,
-            defaultSupplyTargetUtilization: parseEther("0.9"),
-            maintainSupplyTargetUtilization: true,
-          },
-        }),
-      ).toThrow(InsufficientSharedLiquidityError);
     });
   });
 

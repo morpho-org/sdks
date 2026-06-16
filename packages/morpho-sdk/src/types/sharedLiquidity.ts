@@ -95,15 +95,4 @@ export interface ReallocationComputeOptions extends PublicAllocatorOptions {
    * @default 90.5% (905000000000000000n)
    */
   readonly defaultSupplyTargetUtilization?: bigint;
-
-  /**
-   * When `true`, the aggressive fallback no longer relaxes the target market to
-   * 100% utilization. `requiredAssets` stays at the `supplyTargetUtilization`
-   * level, so the target market is held at its supply target (e.g. 90%) instead
-   * of being topped up only enough to avoid an on-chain revert. Source markets
-   * can still be drained aggressively (down to 100% withdrawal utilization) to
-   * provide that liquidity — this flag only governs the target market's ceiling.
-   * @default false
-   */
-  readonly maintainSupplyTargetUtilization?: boolean;
 }
