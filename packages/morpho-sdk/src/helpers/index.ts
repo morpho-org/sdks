@@ -9,10 +9,7 @@ export {
   MAX_TOKEN_APPROVALS,
 } from "./constant.js";
 export { addTransactionMetadata } from "./metadata.js";
-export {
-  computeAvailableSharedLiquidity,
-  computeMaxBorrowToUtilization,
-} from "./sharedLiquidityMetrics.js";
+export { computeAvailableSharedLiquidity } from "./sharedLiquidityMetrics.js";
 export {
   computeMaxRepaySharePrice,
   computeMaxSupplySharePrice,

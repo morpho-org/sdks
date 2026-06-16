@@ -4,15 +4,12 @@ import {
   MarketParams,
   MathLib,
 } from "@morpho-org/blue-sdk";
-import { type Address, parseEther } from "viem";
+import type { Address } from "viem";
 import { describe, expect, test } from "vitest";
 import { CbbtcUsdcBlue, WethUsdsBlue } from "../../test/fixtures/blue.js";
 import type { ReallocationData } from "../entities/reallocationData.js";
 import type { PublicAllocatorOptions } from "../types/index.js";
-import {
-  computeAvailableSharedLiquidity,
-  computeMaxBorrowToUtilization,
-} from "./sharedLiquidityMetrics.js";
+import { computeAvailableSharedLiquidity } from "./sharedLiquidityMetrics.js";
 
 // --- Constants ---
 
@@ -50,8 +47,6 @@ interface MockStateParams {
     vault: Address;
     assets: bigint;
   }>;
-  /** Captures the options passed to `getMarketPublicReallocations` for assertions. */
-  readonly onReallocations?: (options?: PublicAllocatorOptions) => void;
 }
 
 /**
@@ -64,7 +59,6 @@ interface MockStateParams {
 function makeMockState({
   targetMarket = makeMarket(),
   withdrawals = [],
-  onReallocations,
 }: MockStateParams = {}): ReallocationData {
   return {
     getMarket: (id: MarketId) => {
@@ -74,13 +68,10 @@ function makeMockState({
     getMarketPublicReallocations: (
       _id: MarketId,
       options?: PublicAllocatorOptions,
-    ) => {
-      onReallocations?.(options);
-      return {
-        withdrawals: options?.enabled === false ? [] : [...withdrawals],
-        data: {} as ReallocationData,
-      };
-    },
+    ) => ({
+      withdrawals: options?.enabled === false ? [] : [...withdrawals],
+      data: {} as ReallocationData,
+    }),
   } as unknown as ReallocationData;
 }
 
@@ -128,98 +119,5 @@ describe("computeAvailableSharedLiquidity", () => {
         options: { enabled: false },
       }),
     ).toBe(0n);
-  });
-});
-
-describe("computeMaxBorrowToUtilization", () => {
-  test("default: max borrow to 90% with shared liquidity", () => {
-    // Target market: 1000 supply, 850 borrow (85% utilization).
-    // Shared liquidity (friendly + aggressive) = 200 → supply after = 1200.
-    // maxBorrow = 1200 * 0.9 - 850 = 1080 - 850 = 230.
-    const data = makeMockState({
-      targetMarket: makeMarket({
-        totalSupplyAssets: 1000n * MathLib.WAD,
-        totalBorrowAssets: 850n * MathLib.WAD,
-      }),
-      withdrawals: [
-        { id: sourceParamsA.id, vault: VAULT_A, assets: 200n * MathLib.WAD },
-      ],
-    });
-
-    const maxBorrow = computeMaxBorrowToUtilization({
-      reallocationData: data,
-      marketId: targetParams.id,
-      targetUtilization: parseEther("0.9"),
-      options: { timestamp: TIMESTAMP },
-    });
-
-    expect(maxBorrow).toBe(230n * MathLib.WAD);
-  });
-
-  test("behavior: drains source markets to 100% (aggressive) for the metric", () => {
-    let captured: PublicAllocatorOptions | undefined;
-    const data = makeMockState({
-      withdrawals: [
-        { id: sourceParamsA.id, vault: VAULT_A, assets: 10n * MathLib.WAD },
-      ],
-      onReallocations: (options) => {
-        captured = options;
-      },
-    });
-
-    computeMaxBorrowToUtilization({
-      reallocationData: data,
-      marketId: targetParams.id,
-      targetUtilization: parseEther("0.9"),
-      // Caller passes a friendly cap; the metric must override it with WAD.
-      options: { defaultMaxWithdrawalUtilization: parseEther("0.92") },
-    });
-
-    expect(captured?.defaultMaxWithdrawalUtilization).toBe(MathLib.WAD);
-    expect(captured?.maxWithdrawalUtilization).toEqual({});
-  });
-
-  test("behavior: returns 0n when already above target even with shared liquidity", () => {
-    // 1000 supply, 1000 borrow (100% util). With 50 shared liquidity → 1050.
-    // 1050 * 0.9 = 945 < 1000 → zeroFloorSub clamps to 0.
-    const data = makeMockState({
-      targetMarket: makeMarket({
-        totalSupplyAssets: 1000n * MathLib.WAD,
-        totalBorrowAssets: 1000n * MathLib.WAD,
-      }),
-      withdrawals: [
-        { id: sourceParamsA.id, vault: VAULT_A, assets: 50n * MathLib.WAD },
-      ],
-    });
-
-    expect(
-      computeMaxBorrowToUtilization({
-        reallocationData: data,
-        marketId: targetParams.id,
-        targetUtilization: parseEther("0.9"),
-        options: { timestamp: TIMESTAMP },
-      }),
-    ).toBe(0n);
-  });
-
-  test("behavior: falls back to market liquidity when no shared liquidity", () => {
-    // 1000 supply, 500 borrow, no shared liquidity, target 90%.
-    // maxBorrow = 1000 * 0.9 - 500 = 400.
-    const data = makeMockState({
-      targetMarket: makeMarket({
-        totalSupplyAssets: 1000n * MathLib.WAD,
-        totalBorrowAssets: 500n * MathLib.WAD,
-      }),
-      withdrawals: [],
-    });
-
-    expect(
-      computeMaxBorrowToUtilization({
-        reallocationData: data,
-        marketId: targetParams.id,
-        targetUtilization: parseEther("0.9"),
-        options: { timestamp: TIMESTAMP },
-      }),
-    ).toBe(400n * MathLib.WAD);
   });
 });
