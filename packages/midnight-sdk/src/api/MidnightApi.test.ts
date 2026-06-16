@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
+import { ZodError } from "zod";
 
 import { baseMarketParamsInput, baseOffer } from "../__test__/fixtures.js";
 import {
@@ -62,7 +63,7 @@ const GROUP_ID =
 const MAKER = "0x7b093658BE7f90B63D7c359e8f408e503c2D9401";
 const LOAN_TOKEN = "0xC9A9C45C0eB717f8b5F193Af6bAa05A1c0Ac5078";
 const COLLATERAL_TOKEN = "0x34Cf890dB685FC536E05652FB41f02090c3fb751";
-const ORACLE = "0x45093658BE7f90B63D7c359e8f408e503c2D9401";
+const ORACLE = "0x45093658BE7f90b63D7c359E8F408E503C2D9401";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const RATIFIER = "0x0000000000000000000000000000000000000002";
 
@@ -182,6 +183,84 @@ const expectedTakeableOffer = {
   units: "369216000000000000000000",
   offer: expectedOffer,
   ratifierData: "0x1234",
+};
+
+const apiUserOffer = {
+  hash: "0xac4bd8318ec914f89f8af913f162230575b0ac0696a19256bc12138c5cfe1427",
+  market: {
+    id: MARKET_ID,
+    ...apiOfferMarket,
+  },
+  buy: false,
+  maker: MAKER,
+  start: 1_761_922_790,
+  expiry: 1_761_922_799,
+  tick: 495,
+  group: {
+    id: GROUP_ID,
+    consumed: "0",
+    takeable_units: "369216000000000000000000",
+  },
+  callback: ZERO_ADDRESS,
+  callback_data: "0x",
+  receiver_if_maker_is_seller: MAKER,
+  ratifier: RATIFIER,
+  reduce_only: false,
+  max_units: "369216000000000000000000",
+  max_assets: "0",
+};
+
+const expectedUserOffer = {
+  hash: "0xac4bd8318ec914f89f8af913f162230575b0ac0696a19256bc12138c5cfe1427",
+  market: {
+    id: MARKET_ID,
+    ...expectedOffer.market,
+  },
+  buy: false,
+  maker: MAKER,
+  start: 1_761_922_790,
+  expiry: 1_761_922_799,
+  tick: 495,
+  group: {
+    id: GROUP_ID,
+    consumed: "0",
+    takeableUnits: "369216000000000000000000",
+  },
+  callback: ZERO_ADDRESS,
+  callbackData: "0x",
+  receiverIfMakerIsSeller: MAKER,
+  ratifier: RATIFIER,
+  reduceOnly: false,
+  maxUnits: "369216000000000000000000",
+  maxAssets: "0",
+};
+
+const apiUserGroup = {
+  id: GROUP_ID,
+  chain_id: 1,
+  max_units: "369216000000000000000000",
+  max_assets: "0",
+  consumed: "0",
+};
+
+const expectedUserGroup = {
+  id: GROUP_ID,
+  chainId: 1,
+  maxUnits: "369216000000000000000000",
+  maxAssets: "0",
+  consumed: "0",
+};
+
+const apiConfigContract = {
+  chain_id: 8453,
+  name: "midnight",
+  address: "0x23DFBc4B8B80C14CC5e25011B8491f268395BAd6",
+};
+
+const expectedConfigContract = {
+  chainId: 8453,
+  name: "midnight",
+  address: "0x23DFBc4B8B80C14CC5e25011B8491f268395BAd6",
 };
 
 describe("MIDNIGHT_SDK_VERSION", () => {
@@ -392,6 +471,114 @@ describe("MidnightApi instance", () => {
   });
 });
 
+describe("MidnightApi input validation", () => {
+  test("error: ZodError constructor", () => {
+    expect(() => new MidnightApi("not-a-url")).toThrow(ZodError);
+  });
+
+  test.each([
+    {
+      name: "validateMempoolPayload",
+      call: (fetch: MidnightApiFetch) =>
+        MidnightApi.validateMempoolPayload({
+          chainId: 0,
+          payload: "0x0100000000" as Payload.Payload,
+          fetch,
+        }),
+    },
+    {
+      name: "validateMempoolItems",
+      call: (fetch: MidnightApiFetch) =>
+        MidnightApi.validateMempoolItems({
+          chainId: 8453,
+          items: [{ offer: {}, ratifierData: "not-hex" }],
+          fetch,
+        } as never),
+    },
+    {
+      name: "validateMempoolTree",
+      call: (fetch: MidnightApiFetch) =>
+        MidnightApi.validateMempoolTree({
+          chainId: 8453,
+          tree: null,
+          fetch,
+        } as never),
+    },
+    {
+      name: "fetchBooks",
+      call: (fetch: MidnightApiFetch) =>
+        MidnightApi.fetchBooks({ marketIds: ["0x1234"], fetch }),
+    },
+    {
+      name: "fetchBook",
+      call: (fetch: MidnightApiFetch) =>
+        MidnightApi.fetchBook({ marketId: "0x1234", fetch } as never),
+    },
+    {
+      name: "fetchBookPriceLevels",
+      call: (fetch: MidnightApiFetch) =>
+        MidnightApi.fetchBookPriceLevels({
+          marketId: MARKET_ID,
+          side: "sell",
+          fetch,
+        } as never),
+    },
+    {
+      name: "fetchBookTakeableOffers",
+      call: (fetch: MidnightApiFetch) =>
+        MidnightApi.fetchBookTakeableOffers({
+          marketId: MARKET_ID,
+          side: "sell",
+          fetch,
+        } as never),
+    },
+    {
+      name: "fetchBookQuote",
+      call: (fetch: MidnightApiFetch) =>
+        MidnightApi.fetchBookQuote({
+          marketId: MARKET_ID,
+          side: "asks",
+          assets: "0",
+          fetch,
+        }),
+    },
+    {
+      name: "fetchTakeableOffers",
+      call: (fetch: MidnightApiFetch) =>
+        MidnightApi.fetchTakeableOffers({ maker: "0x1234", fetch } as never),
+    },
+    {
+      name: "fetchUserOffers",
+      call: (fetch: MidnightApiFetch) =>
+        MidnightApi.fetchUserOffers({
+          user: MAKER,
+          active: "true",
+          fetch,
+        } as never),
+    },
+    {
+      name: "fetchUserGroups",
+      call: (fetch: MidnightApiFetch) =>
+        MidnightApi.fetchUserGroups({ user: MAKER, limit: 0, fetch }),
+    },
+    {
+      name: "fetchMempoolRules",
+      call: (fetch: MidnightApiFetch) =>
+        MidnightApi.fetchMempoolRules({ chainIds: [0], fetch }),
+    },
+    {
+      name: "fetchConfigContracts",
+      call: (fetch: MidnightApiFetch) =>
+        MidnightApi.fetchConfigContracts({ chainIds: [0], fetch }),
+    },
+  ])("error: ZodError $name", async ({ call }) => {
+    const { calls, fetch } = createJsonFetch({ data: [] });
+
+    await expect(call(fetch)).rejects.toBeInstanceOf(ZodError);
+    expect(calls).toHaveLength(0);
+  });
+});
+
 describe("MidnightApi.fetchBooks", () => {
   test("default", async () => {
     const { calls, fetch } = createJsonFetch({
@@ -510,7 +697,7 @@ describe("MidnightApi.fetchBookQuote", () => {
         average_worst_price: "1010000000000000000",
         available_assets: "1500000000000000000",
         available_units: "1500000000000000000",
-        takes: [apiTakeableOffer],
+        takeable_offers: [apiTakeableOffer],
       },
     });
 
@@ -528,9 +715,10 @@ describe("MidnightApi.fetchBookQuote", () => {
         averageWorstPrice: "1010000000000000000",
         availableAssets: "1500000000000000000",
         availableUnits: "1500000000000000000",
-        takes: [expectedTakeableOffer],
+        takeableOffers: [expectedTakeableOffer],
       },
     });
+    expect(result.data).not.toHaveProperty("takes");
 
     const call = calls[0]!;
     const url = getRequestUrl(call);
@@ -549,7 +737,7 @@ describe("MidnightApi.fetchBookQuote", () => {
         average_worst_price: "1005000000000000000",
         available_assets: "1500000000000000000",
         available_units: "1500000000000000000",
-        takes: [],
+        takeable_offers: [],
       },
     });
 
@@ -597,6 +785,99 @@ describe("MidnightApi.fetchTakeableOffers", () => {
       `${MARKET_ID},${SECOND_MARKET_ID}`,
     );
     expect(url.searchParams.get("groups")).toBe(GROUP_ID);
+    expect(url.searchParams.get("limit")).toBe("10");
+    expect(url.searchParams.get("cursor")).toBe("previous");
+    expect(call.init?.method).toBe("GET");
+  });
+});
+
+describe("MidnightApi.fetchUserOffers", () => {
+  test("default", async () => {
+    const { calls, fetch } = createJsonFetch({
+      cursor: "next",
+      data: [apiUserOffer],
+    });
+
+    const result = await MidnightApi.fetchUserOffers({
+      user: MAKER,
+      marketIds: [MARKET_ID, SECOND_MARKET_ID],
+      groups: [GROUP_ID],
+      active: true,
+      limit: 10,
+      cursor: "previous",
+      fetch,
+    });
+
+    expect(result).toEqual({
+      cursor: "next",
+      data: [expectedUserOffer],
+    });
+
+    const call = calls[0]!;
+    const url = getRequestUrl(call);
+    expect(url.pathname).toBe(`/v1/users/${MAKER}/offers`);
+    expect(url.searchParams.get("market_ids")).toBe(
+      `${MARKET_ID},${SECOND_MARKET_ID}`,
+    );
+    expect(url.searchParams.get("groups")).toBe(GROUP_ID);
+    expect(url.searchParams.get("active")).toBe("true");
+    expect(url.searchParams.get("limit")).toBe("10");
+    expect(url.searchParams.get("cursor")).toBe("previous");
+    expect(call.init?.method).toBe("GET");
+  });
+});
+
+describe("MidnightApi.fetchUserGroups", () => {
+  test("default", async () => {
+    const { calls, fetch } = createJsonFetch({
+      cursor: "next",
+      data: [apiUserGroup],
+    });
+
+    const result = await MidnightApi.fetchUserGroups({
+      user: MAKER,
+      limit: 10,
+      cursor: "previous",
+      fetch,
+    });
+
+    expect(result).toEqual({
+      cursor: "next",
+      data: [expectedUserGroup],
+    });
+
+    const call = calls[0]!;
+    const url = getRequestUrl(call);
+    expect(url.pathname).toBe(`/v1/users/${MAKER}/groups`);
+    expect(url.searchParams.get("limit")).toBe("10");
+    expect(url.searchParams.get("cursor")).toBe("previous");
+    expect(call.init?.method).toBe("GET");
+  });
+});
+
+describe("MidnightApi.fetchConfigContracts", () => {
+  test("default", async () => {
+    const { calls, fetch } = createJsonFetch({
+      cursor: "next",
+      data: [apiConfigContract],
+    });
+
+    const result = await MidnightApi.fetchConfigContracts({
+      chainIds: [1, 8453],
+      limit: 10,
+      cursor: "previous",
+      fetch,
+    });
+
+    expect(result).toEqual({
+      cursor: "next",
+      data: [expectedConfigContract],
+    });
+
+    const call = calls[0]!;
+    const url = getRequestUrl(call);
+    expect(url.pathname).toBe("/v1/config/contracts");
+    expect(url.searchParams.get("chains")).toBe("1,8453");
     expect(url.searchParams.get("limit")).toBe("10");
     expect(url.searchParams.get("cursor")).toBe("previous");
     expect(call.init?.method).toBe("GET");

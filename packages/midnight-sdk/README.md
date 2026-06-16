@@ -17,7 +17,8 @@ yarn add @morpho-org/midnight-sdk @morpho-org/morpho-ts viem
 Instantiate `MidnightApi` when an integration makes more than one Midnight API call or needs shared
 request options. The instance keeps `baseUrl`, `fetch`, headers, credentials, and abort signals in
 one place, while the SDK still owns endpoint paths, HTTP methods, request bodies, and response
-normalization.
+normalization. Successful JSON output shapes are trusted from the API and are not validated at
+runtime; returned TypeScript types model the API contract.
 
 ```ts
 import { MidnightApi, type TreeInput } from "@morpho-org/midnight-sdk";
@@ -72,7 +73,7 @@ const quote = await MidnightApi.fetchBookQuote({
   slippage: "0.5",
 });
 
-console.log(quote.data.takes.length);
+console.log(quote.data.takeableOffers.length);
 ```
 
 ## Development
