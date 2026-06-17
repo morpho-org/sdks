@@ -482,7 +482,7 @@ export class ReallocationData implements InputReallocationData {
    * @returns Total reallocatable assets in loan-token units; `0n` when none is available.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
    */
-  public getAvailableLiquidity(
+  public getPublicReallocationLiquidity(
     marketId: MarketId,
     options?: PublicAllocatorOptions,
   ): bigint {
@@ -528,7 +528,10 @@ export class ReallocationData implements InputReallocationData {
     );
     if (supplyTargetUtilization > utilization) return ownHeadroom;
 
-    const availableLiquidity = this.getAvailableLiquidity(marketId, options);
+    const availableLiquidity = this.getPublicReallocationLiquidity(
+      marketId,
+      options,
+    );
     if (utilization === market.utilization) return availableLiquidity;
 
     return ownHeadroom + availableLiquidity;

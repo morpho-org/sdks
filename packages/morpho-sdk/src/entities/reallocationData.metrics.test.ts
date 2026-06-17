@@ -62,7 +62,7 @@ function stubReallocations(
 
 // ---------------------------------------------------------------------------
 
-describe("ReallocationData.getAvailableLiquidity", () => {
+describe("ReallocationData.getPublicReallocationLiquidity", () => {
   test("default: sums reallocatable withdrawals", () => {
     const data = makeData();
     stubReallocations(data, [
@@ -70,7 +70,7 @@ describe("ReallocationData.getAvailableLiquidity", () => {
       { id: sourceParamsA.id, vault: VAULT_A, assets: 80n * MathLib.WAD },
     ]);
 
-    expect(data.getAvailableLiquidity(targetParams.id)).toBe(
+    expect(data.getPublicReallocationLiquidity(targetParams.id)).toBe(
       200n * MathLib.WAD,
     );
   });
@@ -79,7 +79,7 @@ describe("ReallocationData.getAvailableLiquidity", () => {
     const data = makeData();
     stubReallocations(data, []);
 
-    expect(data.getAvailableLiquidity(targetParams.id)).toBe(0n);
+    expect(data.getPublicReallocationLiquidity(targetParams.id)).toBe(0n);
   });
 
   test("behavior: forwards options to discovery", () => {
@@ -87,7 +87,7 @@ describe("ReallocationData.getAvailableLiquidity", () => {
     const spy = stubReallocations(data, []);
     const options = { timestamp: TIMESTAMP, enabled: true };
 
-    data.getAvailableLiquidity(targetParams.id, options);
+    data.getPublicReallocationLiquidity(targetParams.id, options);
 
     expect(spy).toHaveBeenCalledWith(targetParams.id, options);
   });
