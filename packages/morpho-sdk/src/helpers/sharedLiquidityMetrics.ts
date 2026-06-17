@@ -1,9 +1,6 @@
-import { type MarketId, MarketUtils } from "@morpho-org/blue-sdk";
+import { type MarketId, MathLib } from "@morpho-org/blue-sdk";
 import type { ReallocationData } from "../entities/reallocationData.js";
-import type {
-  PublicAllocatorOptions,
-  ReallocationComputeOptions,
-} from "../types/index.js";
+import type { PublicAllocatorOptions } from "../types/index.js";
 import { DEFAULT_SUPPLY_TARGET_UTILIZATION } from "./constant.js";
 
 /**
@@ -72,35 +69,37 @@ export const computeAvailableSharedLiquidity = ({
 };
 
 /**
- * Computes the liquidity available to bring `marketId` to `targetUtilization`,
- * combining the market's own borrow headroom with the shared liquidity sibling
- * vaults can reallocate in via the public allocator.
+ * Computes the liquidity (in loan-token assets) available to borrow from
+ * `marketId` while keeping its utilization at or below `targetUtilization`,
+ * counting both the target's own headroom and the shared liquidity the public
+ * allocator can reallocate in (draining source markets to 100% utilization).
  *
- * Read-only metric for the UI — never throws on insufficiency (returns `0n`):
- * - When `supplyTargetUtilization > targetUtilization`, shared-liquidity
- *   reallocation would not trigger at the requested target, so only the
- *   market's own headroom is returned.
- * - When `targetUtilization` equals the market's current utilization, the
- *   market has no own headroom left, so only the shared liquidity is returned.
- * - Otherwise the own headroom and the shared liquidity are summed.
+ * This is the read-only counterpart to {@link computeReallocations}: it takes no
+ * borrow/withdraw amount. The metric is only meaningful while the target market
+ * is healthy (below the ceiling); once it is at or above `targetUtilization`
+ * there is no borrowable liquidity left, so:
  *
- * Own headroom is `getBorrowToUtilization(market, targetUtilization)` on the
- * interest-accrued market; shared liquidity is {@link computeAvailableSharedLiquidity}
- * evaluated with the same `options` (no withdrawal-utilization override).
+ * - **Target utilization below the ceiling** → returns
+ *   {@link Market.getBorrowToUtilization} (the borrow amount that brings the
+ *   target up to `targetUtilization`) plus the shared liquidity drained from
+ *   source markets at 100% utilization.
+ * - **Target utilization at or above the ceiling** → returns `0n`.
+ *
+ * Like {@link computeAvailableSharedLiquidity}, it never throws on insufficiency.
  *
  * @param params.reallocationData - Local state from {@link MorphoBlue.getReallocationData}.
- * @param params.marketId - The target market to borrow from.
- * @param params.targetUtilization - The utilization to bring the market to, scaled by WAD (e.g. `900000000000000000n` for 90%).
- * @param params.options - Optional reallocation options. `supplyTargetUtilization` / `defaultSupplyTargetUtilization` set the reallocation trigger; `timestamp` accrues interest at the fetched block; withdrawal-utilization caps bound the shared liquidity.
- * @returns The available liquidity to the target utilization, in loan-token units. `0n` when none is available.
+ * @param params.marketId - The target market that would receive the shared liquidity.
+ * @param params.targetUtilization - Target-market utilization ceiling, scaled by WAD. Defaults to {@link DEFAULT_SUPPLY_TARGET_UTILIZATION} (90.5%).
+ * @param params.options - Optional allocator discovery options (timestamp, reallocatable vaults). Source withdrawal-utilization caps are overridden to drain sources to 100%.
+ * @returns The borrowable liquidity, in loan-token units, that keeps the target at or below `targetUtilization`. `0n` when the target is already at or above the ceiling.
  * @throws {UnknownReallocationMarketError} when the target market is absent from `reallocationData`.
  * @example
  * ```ts
- * import { createPublicClient, http, parseEther } from "viem";
+ * import { createPublicClient, http } from "viem";
  * import { mainnet } from "viem/chains";
  * import { markets, vaults } from "@morpho-org/morpho-test";
  * import {
- *   computeLiquidityToTargetUtilization,
+ *   computeAvailableLiquidityToTargetUtilization,
  *   morphoViemExtension,
  * } from "@morpho-org/morpho-sdk";
  *
@@ -116,62 +115,42 @@ export const computeAvailableSharedLiquidity = ({
  *   vaultAddresses: [vaults[mainnet.id].steakUsdc.address],
  *   block: { number: block.number, timestamp: block.timestamp },
  * });
- * const available = computeLiquidityToTargetUtilization({
+ * const available = computeAvailableLiquidityToTargetUtilization({
  *   reallocationData,
  *   marketId: marketParams.id,
- *   targetUtilization: parseEther("0.9"),
- *   options: {
- *     timestamp: block.timestamp,
- *     defaultSupplyTargetUtilization: parseEther("0.9"),
- *   },
+ *   options: { timestamp: block.timestamp },
  * });
  * // available satisfies bigint
  * ```
  */
-export const computeLiquidityToTargetUtilization = ({
+export const computeAvailableLiquidityToTargetUtilization = ({
   reallocationData,
   marketId,
-  targetUtilization,
+  targetUtilization = DEFAULT_SUPPLY_TARGET_UTILIZATION,
   options,
 }: {
   readonly reallocationData: ReallocationData;
   readonly marketId: MarketId;
-  readonly targetUtilization: bigint;
-  readonly options?: ReallocationComputeOptions;
+  readonly targetUtilization?: bigint;
+  readonly options?: PublicAllocatorOptions;
 }): bigint => {
-  // ReallocationData does not retain the fetch block; accrue against the same
-  // timestamp used to fetch it, otherwise Market defaults to lastUpdate.
   const market = reallocationData
     .getMarket(marketId)
     .accrueInterest(options?.timestamp);
 
-  // The market's own borrow headroom to the target utilization (no reallocation).
-  const ownHeadroom = MarketUtils.getBorrowToUtilization(
-    {
-      totalSupplyAssets: market.totalSupplyAssets,
-      totalBorrowAssets: market.totalBorrowAssets,
-    },
-    targetUtilization,
-  );
-
-  const supplyTargetUtilization =
-    options?.supplyTargetUtilization?.[marketId] ??
-    options?.defaultSupplyTargetUtilization ??
-    DEFAULT_SUPPLY_TARGET_UTILIZATION;
-
-  // Shared-liquidity reallocation only triggers once the market crosses
-  // `supplyTargetUtilization`; below it, only the market's own liquidity applies.
-  if (supplyTargetUtilization > targetUtilization) return ownHeadroom;
+  // Borrowable headroom on the target's own liquidity; 0n once util ≥ ceiling.
+  const ownHeadroom = market.getBorrowToUtilization(targetUtilization);
+  if (ownHeadroom === 0n) return 0n;
 
   const sharedLiquidity = computeAvailableSharedLiquidity({
     reallocationData,
     marketId,
-    options,
+    options: {
+      ...options,
+      defaultMaxWithdrawalUtilization: MathLib.WAD,
+      maxWithdrawalUtilization: {},
+    },
   });
-
-  // At its current utilization the market has no own headroom left; only shared
-  // liquidity can back further borrow while holding utilization steady.
-  if (targetUtilization === market.utilization) return sharedLiquidity;
 
   return ownHeadroom + sharedLiquidity;
 };

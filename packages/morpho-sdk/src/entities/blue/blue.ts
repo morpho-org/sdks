@@ -32,8 +32,6 @@ import {
   getRequirements,
 } from "../../actions/index.js";
 import {
-  computeAvailableSharedLiquidity,
-  computeLiquidityToTargetUtilization,
   computeMaxRepaySharePrice,
   computeMaxSupplySharePrice,
   computeMinBorrowSharePrice,
@@ -79,7 +77,6 @@ import {
   NonPositiveRepayAmountError,
   NonPositiveWithdrawAmountError,
   NonPositiveWithdrawCollateralAmountError,
-  type PublicAllocatorOptions,
   type ReallocationComputeOptions,
   RefinanceExceedsBorrowAssetsError,
   RefinanceExceedsBorrowSharesError,
@@ -482,48 +479,6 @@ export interface BlueActions {
         }
     ),
   ) => readonly VaultReallocation[];
-
-  /**
-   * Computes the total shared liquidity that the public allocator can
-   * reallocate into this market from sibling markets.
-   *
-   * Read-only metric — never throws on insufficiency, returns `0n` when no
-   * liquidity is available. Bounded by source-market withdrawal utilization
-   * caps and the target market's vault supply-cap headroom.
-   *
-   * @param params.reallocationData - State returned by {@link getReallocationData}.
-   * @param params.options - Optional allocator discovery options (timestamp, reallocatable vaults, withdrawal utilization caps).
-   * @returns The total reallocatable assets, in loan-token units.
-   * @throws {ChainIdMismatchError} when `reallocationData` belongs to a different chain than this market.
-   * @throws {UnknownReallocationMarketError} when this market is absent from the reallocation data.
-   */
-  getAvailableSharedLiquidity: (params: {
-    reallocationData: ReallocationData;
-    options?: PublicAllocatorOptions;
-  }) => bigint;
-
-  /**
-   * Computes the liquidity available to bring this market to `targetUtilization`,
-   * combining its own borrow headroom with the shared liquidity sibling vaults
-   * can reallocate in via the public allocator.
-   *
-   * Read-only metric — never throws on insufficiency (returns `0n`). Returns
-   * only the own headroom when `supplyTargetUtilization > targetUtilization`,
-   * only the shared liquidity when `targetUtilization` equals the current
-   * utilization, otherwise their sum.
-   *
-   * @param params.reallocationData - State returned by {@link getReallocationData}.
-   * @param params.targetUtilization - The utilization to bring this market to, scaled by WAD (e.g. `900000000000000000n` for 90%).
-   * @param params.options - Optional reallocation options (supply/withdrawal utilization targets, timestamp, reallocatable vaults).
-   * @returns The available liquidity to the target utilization, in loan-token units.
-   * @throws {ChainIdMismatchError} when `reallocationData` belongs to a different chain than this market.
-   * @throws {UnknownReallocationMarketError} when this market is absent from the reallocation data.
-   */
-  getLiquidityToTargetUtilization: (params: {
-    reallocationData: ReallocationData;
-    targetUtilization: bigint;
-    options?: ReallocationComputeOptions;
-  }) => bigint;
 }
 
 export class MorphoBlue implements BlueActions {
@@ -1678,57 +1633,6 @@ export class MorphoBlue implements BlueActions {
       operation: params.operation,
       amount: params.amount,
       options,
-    });
-  }
-
-  /**
-   * Computes the total shared liquidity reallocatable into this market.
-   *
-   * @param params - Metric computation parameters.
-   * @param params.reallocationData - State returned by {@link getReallocationData}.
-   * @param params.options - Optional allocator discovery options.
-   * @returns The total reallocatable assets, in loan-token units. `0n` when none is available.
-   * @throws {ChainIdMismatchError} when `reallocationData` belongs to a different chain than this market.
-   * @throws {UnknownReallocationMarketError} when this market is absent from the reallocation data.
-   */
-  getAvailableSharedLiquidity(params: {
-    reallocationData: ReallocationData;
-    options?: PublicAllocatorOptions;
-  }): bigint {
-    validateChainId(params.reallocationData.chainId, this.chainId);
-
-    return computeAvailableSharedLiquidity({
-      reallocationData: params.reallocationData,
-      marketId: this.marketParams.id,
-      options: params.options,
-    });
-  }
-
-  /**
-   * Computes the liquidity available to bring this market to `targetUtilization`,
-   * combining its own borrow headroom with the shared liquidity sibling vaults
-   * can reallocate in via the public allocator.
-   *
-   * @param params - Metric computation parameters.
-   * @param params.reallocationData - State returned by {@link getReallocationData}.
-   * @param params.targetUtilization - The utilization to bring this market to, scaled by WAD (e.g. `900000000000000000n` for 90%).
-   * @param params.options - Optional reallocation options (supply/withdrawal utilization targets, timestamp).
-   * @returns The available liquidity to the target utilization, in loan-token units. `0n` when none is available.
-   * @throws {ChainIdMismatchError} when `reallocationData` belongs to a different chain than this market.
-   * @throws {UnknownReallocationMarketError} when this market is absent from the reallocation data.
-   */
-  getLiquidityToTargetUtilization(params: {
-    reallocationData: ReallocationData;
-    targetUtilization: bigint;
-    options?: ReallocationComputeOptions;
-  }): bigint {
-    validateChainId(params.reallocationData.chainId, this.chainId);
-
-    return computeLiquidityToTargetUtilization({
-      reallocationData: params.reallocationData,
-      marketId: this.marketParams.id,
-      targetUtilization: params.targetUtilization,
-      options: params.options,
     });
   }
 }

@@ -2,8 +2,7 @@
 "@morpho-org/morpho-sdk": minor
 ---
 
-Add shared-liquidity metrics and a `maintainSupplyTargetUtilization` opt-in.
+Add two read-only shared-liquidity metrics.
 
-- `computeLiquidityToTargetUtilization` / `MorphoBlue.getLiquidityToTargetUtilization`: liquidity available to bring a market to a target utilization (e.g. 90%) — the market's own borrow headroom plus the shared liquidity reallocatable from sibling vaults via the PublicAllocator. Returns own headroom only when the target is below the reallocation trigger, and shared liquidity only at the current utilization.
-- `computeAvailableSharedLiquidity` / `MorphoBlue.getAvailableSharedLiquidity`: total reallocatable liquidity into a market. Both are read-only and never throw on insufficiency (return `0n`).
-- `ReallocationComputeOptions.maintainSupplyTargetUtilization`: when `true`, the aggressive phase no longer relaxes the target market to 100% utilization — it holds the target at `supplyTargetUtilization` while still draining source markets to provide that liquidity. Defaults to `false` (unchanged behavior).
+- `computeAvailableSharedLiquidity`: total reallocatable liquidity into a market from sibling markets via the PublicAllocator. Read-only and never throws on insufficiency (returns `0n`).
+- `computeAvailableLiquidityToTargetUtilization`: borrow-free read-only metric. For a target below `targetUtilization` (default `DEFAULT_SUPPLY_TARGET_UTILIZATION`) it returns the target's own borrow headroom to that ceiling plus the shared liquidity drained from source markets at 100% utilization; it returns `0n` when the target is already at or above the ceiling.

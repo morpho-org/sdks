@@ -4,14 +4,15 @@ import {
   MarketParams,
   MathLib,
 } from "@morpho-org/blue-sdk";
-import { type Address, parseEther } from "viem";
+import type { Address } from "viem";
 import { describe, expect, test } from "vitest";
 import { CbbtcUsdcBlue, WethUsdsBlue } from "../../test/fixtures/blue.js";
 import type { ReallocationData } from "../entities/reallocationData.js";
 import type { PublicAllocatorOptions } from "../types/index.js";
+import { DEFAULT_SUPPLY_TARGET_UTILIZATION } from "./constant.js";
 import {
+  computeAvailableLiquidityToTargetUtilization,
   computeAvailableSharedLiquidity,
-  computeLiquidityToTargetUtilization,
 } from "./sharedLiquidityMetrics.js";
 
 // --- Constants ---
@@ -43,15 +44,21 @@ function makeMarket(overrides?: {
 
 // --- Mock builder ---
 
+type MockWithdrawals = ReadonlyArray<{
+  id: MarketId;
+  vault: Address;
+  assets: bigint;
+}>;
+
 interface MockStateParams {
   readonly targetMarket?: Market;
-  readonly withdrawals?: ReadonlyArray<{
-    id: MarketId;
-    vault: Address;
-    assets: bigint;
-  }>;
-  /** Captures the options passed to `getMarketPublicReallocations` for assertions. */
-  readonly onReallocations?: (options?: PublicAllocatorOptions) => void;
+  /** Withdrawals returned at the friendly (default) withdrawal-utilization cap. */
+  readonly withdrawals?: MockWithdrawals;
+  /**
+   * Withdrawals returned when source markets are drained to 100% utilization
+   * (`defaultMaxWithdrawalUtilization === MathLib.WAD`). Defaults to `withdrawals`.
+   */
+  readonly aggressiveWithdrawals?: MockWithdrawals;
 }
 
 /**
@@ -60,11 +67,13 @@ interface MockStateParams {
  * Only implements the methods the metric helpers call: `getMarket` and
  * `getMarketPublicReallocations`. The discovery algorithm itself is covered by
  * `reallocationData.test.ts`; here we mock its output to test the metric math.
+ * The mock honors the withdrawal-utilization cap: passing
+ * `defaultMaxWithdrawalUtilization: MathLib.WAD` yields `aggressiveWithdrawals`.
  */
 function makeMockState({
   targetMarket = makeMarket(),
   withdrawals = [],
-  onReallocations,
+  aggressiveWithdrawals,
 }: MockStateParams = {}): ReallocationData {
   return {
     getMarket: (id: MarketId) => {
@@ -75,9 +84,18 @@ function makeMockState({
       _id: MarketId,
       options?: PublicAllocatorOptions,
     ) => {
-      onReallocations?.(options);
+      if (options?.enabled === false)
+        return { withdrawals: [], data: {} as ReallocationData };
+
+      const aggressive =
+        options?.defaultMaxWithdrawalUtilization === MathLib.WAD;
+
       return {
-        withdrawals: options?.enabled === false ? [] : [...withdrawals],
+        withdrawals: [
+          ...(aggressive
+            ? (aggressiveWithdrawals ?? withdrawals)
+            : withdrawals),
+        ],
         data: {} as ReallocationData,
       };
     },
@@ -129,133 +147,126 @@ describe("computeAvailableSharedLiquidity", () => {
       }),
     ).toBe(0n);
   });
-});
 
-describe("computeLiquidityToTargetUtilization", () => {
-  test("default: own headroom + shared liquidity", () => {
-    // 1000 supply, 850 borrow (85% util). target 90%, supplyTarget 90% (not >).
-    // ownHeadroom = 1000 * 0.9 - 850 = 50. shared = 200. → 250.
+  test("behavior: maxWithdrawalUtilization at WAD reports the aggressive amount", () => {
+    // Friendly (default 92% source cap) frees 200; draining sources to 100%
+    // (defaultMaxWithdrawalUtilization = WAD) frees 300.
     const data = makeMockState({
-      targetMarket: makeMarket({
-        totalSupplyAssets: 1000n * MathLib.WAD,
-        totalBorrowAssets: 850n * MathLib.WAD,
-      }),
       withdrawals: [
         { id: sourceParamsA.id, vault: VAULT_A, assets: 200n * MathLib.WAD },
       ],
-    });
-
-    const available = computeLiquidityToTargetUtilization({
-      reallocationData: data,
-      marketId: targetParams.id,
-      targetUtilization: parseEther("0.9"),
-      options: {
-        timestamp: TIMESTAMP,
-        defaultSupplyTargetUtilization: parseEther("0.9"),
-      },
-    });
-
-    expect(available).toBe(250n * MathLib.WAD);
-  });
-
-  test("behavior: returns only own headroom when supplyTargetUtilization > targetUtilization", () => {
-    // target 90% < default supplyTarget 90.5% → reallocation would not trigger.
-    // ownHeadroom = 1000 * 0.9 - 850 = 50; shared liquidity excluded.
-    const data = makeMockState({
-      targetMarket: makeMarket({
-        totalSupplyAssets: 1000n * MathLib.WAD,
-        totalBorrowAssets: 850n * MathLib.WAD,
-      }),
-      withdrawals: [
-        { id: sourceParamsA.id, vault: VAULT_A, assets: 200n * MathLib.WAD },
+      aggressiveWithdrawals: [
+        { id: sourceParamsA.id, vault: VAULT_A, assets: 300n * MathLib.WAD },
       ],
     });
 
+    // Default: friendly 92% ceiling.
     expect(
-      computeLiquidityToTargetUtilization({
+      computeAvailableSharedLiquidity({
         reallocationData: data,
         marketId: targetParams.id,
-        targetUtilization: parseEther("0.9"),
-        options: { timestamp: TIMESTAMP }, // default supplyTarget = 90.5%
-      }),
-    ).toBe(50n * MathLib.WAD);
-  });
-
-  test("behavior: returns only shared liquidity when target equals current utilization", () => {
-    // 1000 supply, 900 borrow → current util 90% = target. ownHeadroom is 0.
-    const data = makeMockState({
-      targetMarket: makeMarket({
-        totalSupplyAssets: 1000n * MathLib.WAD,
-        totalBorrowAssets: 900n * MathLib.WAD,
-      }),
-      withdrawals: [
-        { id: sourceParamsA.id, vault: VAULT_A, assets: 200n * MathLib.WAD },
-      ],
-    });
-
-    expect(
-      computeLiquidityToTargetUtilization({
-        reallocationData: data,
-        marketId: targetParams.id,
-        targetUtilization: parseEther("0.9"),
-        options: {
-          timestamp: TIMESTAMP,
-          defaultSupplyTargetUtilization: parseEther("0.9"),
-        },
       }),
     ).toBe(200n * MathLib.WAD);
+
+    // Aggressive: source markets drained to 100% utilization.
+    expect(
+      computeAvailableSharedLiquidity({
+        reallocationData: data,
+        marketId: targetParams.id,
+        options: { defaultMaxWithdrawalUtilization: MathLib.WAD },
+      }),
+    ).toBe(300n * MathLib.WAD);
+  });
+});
+
+describe("computeAvailableLiquidityToTargetUtilization", () => {
+  const NINETY_PERCENT = (9n * MathLib.WAD) / 10n;
+
+  // Target at 100% utilization (supply 900/borrow 900): at/above the ceiling.
+  const overTarget = makeMarket({
+    totalSupplyAssets: 900n * MathLib.WAD,
+    totalBorrowAssets: 900n * MathLib.WAD,
   });
 
-  test("behavior: passes discovery options through without forcing aggressive withdrawal", () => {
-    let captured: PublicAllocatorOptions | undefined;
+  test("default", () => {
+    // Default target sits at 50% (supply 1000/borrow 500): own headroom to 90%
+    // is 1000·0.9 − 500 = 400, plus 300 of aggressively drained shared liquidity
+    // (the friendly 120 must be ignored) → 700.
     const data = makeMockState({
-      targetMarket: makeMarket({
-        totalSupplyAssets: 1000n * MathLib.WAD,
-        totalBorrowAssets: 850n * MathLib.WAD,
-      }),
       withdrawals: [
-        { id: sourceParamsA.id, vault: VAULT_A, assets: 10n * MathLib.WAD },
+        { id: sourceParamsA.id, vault: VAULT_A, assets: 120n * MathLib.WAD },
       ],
-      onReallocations: (options) => {
-        captured = options;
-      },
-    });
-
-    computeLiquidityToTargetUtilization({
-      reallocationData: data,
-      marketId: targetParams.id,
-      targetUtilization: parseEther("0.9"),
-      options: {
-        defaultSupplyTargetUtilization: parseEther("0.9"),
-        defaultMaxWithdrawalUtilization: parseEther("0.92"),
-      },
-    });
-
-    // The caller's withdrawal cap is preserved, not overridden to WAD.
-    expect(captured?.defaultMaxWithdrawalUtilization).toBe(parseEther("0.92"));
-    expect(captured?.maxWithdrawalUtilization).toBeUndefined();
-  });
-
-  test("behavior: returns 0n when own headroom is exhausted and no shared liquidity", () => {
-    // 1000 supply, 950 borrow (95% util). target 90% < current → ownHeadroom 0.
-    const data = makeMockState({
-      targetMarket: makeMarket({
-        totalSupplyAssets: 1000n * MathLib.WAD,
-        totalBorrowAssets: 950n * MathLib.WAD,
-      }),
-      withdrawals: [],
+      aggressiveWithdrawals: [
+        { id: sourceParamsA.id, vault: VAULT_A, assets: 300n * MathLib.WAD },
+      ],
     });
 
     expect(
-      computeLiquidityToTargetUtilization({
+      computeAvailableLiquidityToTargetUtilization({
         reallocationData: data,
         marketId: targetParams.id,
-        targetUtilization: parseEther("0.9"),
-        options: {
-          timestamp: TIMESTAMP,
-          defaultSupplyTargetUtilization: parseEther("0.9"),
-        },
+        targetUtilization: NINETY_PERCENT,
+      }),
+    ).toBe(700n * MathLib.WAD);
+  });
+
+  test("behavior: own headroom only when discovery is disabled", () => {
+    // No shared liquidity, but the target's own headroom to 90% remains: 400.
+    const data = makeMockState({
+      aggressiveWithdrawals: [
+        { id: sourceParamsA.id, vault: VAULT_A, assets: 300n * MathLib.WAD },
+      ],
+    });
+
+    expect(
+      computeAvailableLiquidityToTargetUtilization({
+        reallocationData: data,
+        marketId: targetParams.id,
+        targetUtilization: NINETY_PERCENT,
+        options: { enabled: false },
+      }),
+    ).toBe(400n * MathLib.WAD);
+  });
+
+  test("behavior: returns 0n when the target is at or above the ceiling", () => {
+    // Target at 100% utilization: no borrowable liquidity, shared is ignored.
+    const data = makeMockState({
+      targetMarket: overTarget,
+      aggressiveWithdrawals: [
+        { id: sourceParamsA.id, vault: VAULT_A, assets: 300n * MathLib.WAD },
+      ],
+    });
+
+    expect(
+      computeAvailableLiquidityToTargetUtilization({
+        reallocationData: data,
+        marketId: targetParams.id,
+        targetUtilization: NINETY_PERCENT,
       }),
     ).toBe(0n);
+  });
+
+  test("behavior: default ceiling is DEFAULT_SUPPLY_TARGET_UTILIZATION", () => {
+    const targetMarket = makeMarket({
+      totalSupplyAssets: 1000n * MathLib.WAD,
+      totalBorrowAssets: 500n * MathLib.WAD,
+    });
+    const data = makeMockState({
+      targetMarket,
+      aggressiveWithdrawals: [
+        { id: sourceParamsA.id, vault: VAULT_A, assets: 300n * MathLib.WAD },
+      ],
+    });
+
+    const expected =
+      targetMarket.getBorrowToUtilization(DEFAULT_SUPPLY_TARGET_UTILIZATION) +
+      300n * MathLib.WAD;
+
+    expect(
+      computeAvailableLiquidityToTargetUtilization({
+        reallocationData: data,
+        marketId: targetParams.id,
+      }),
+    ).toBe(expected);
   });
 });
