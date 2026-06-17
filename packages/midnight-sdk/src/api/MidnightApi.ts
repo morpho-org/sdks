@@ -2,13 +2,9 @@ import { OfferTreeUtils } from "../signatures/OfferTreeUtils.js";
 import { encode as encodePayload } from "../signatures/Payload.js";
 import {
   buildBookPath,
-  buildUserPath,
   mapBookMarket,
-  mapConfigContract,
   mapPriceLevel,
   mapTakeableOffer,
-  mapUserGroup,
-  mapUserOffer,
   parseRulesResponse,
   parseValidationResponse,
   requestMidnightApi,
@@ -17,22 +13,16 @@ import type {
   ApiBookResponse,
   ApiBooksResponse,
   ApiBookTakeableOffersResponse,
-  ApiConfigContractsResponse,
   ApiPriceLevelsResponse,
   ApiQuoteResponse,
   ApiTakeableOffersResponse,
-  ApiUserGroupsResponse,
-  ApiUserOffersResponse,
   FetchBookParams,
   FetchBookPriceLevelsParams,
   FetchBookQuoteParams,
   FetchBooksParams,
   FetchBookTakeableOffersParams,
-  FetchConfigContractsParams,
   FetchMempoolRulesParams,
   FetchTakeableOffersParams,
-  FetchUserGroupsParams,
-  FetchUserOffersParams,
   MempoolPayloadValidationResult,
   MempoolRulesResult,
   MidnightApiBookPriceLevelsResult,
@@ -41,12 +31,9 @@ import type {
   MidnightApiBookTakeableOffersResult,
   MidnightApiClientParams,
   MidnightApiConfig,
-  MidnightApiConfigContractsResult,
   MidnightApiConstructorConfig,
   MidnightApiQuoteResult,
   MidnightApiTakeableOffersResult,
-  MidnightApiUserGroupsResult,
-  MidnightApiUserOffersResult,
   ValidateMempoolItemsParams,
   ValidateMempoolPayloadParams,
   ValidateMempoolTreeParams,
@@ -58,11 +45,8 @@ export type {
   FetchBookQuoteParams,
   FetchBooksParams,
   FetchBookTakeableOffersParams,
-  FetchConfigContractsParams,
   FetchMempoolRulesParams,
   FetchTakeableOffersParams,
-  FetchUserGroupsParams,
-  FetchUserOffersParams,
   MempoolPayloadValidationIssue,
   MempoolPayloadValidationResult,
   MempoolRule,
@@ -79,9 +63,6 @@ export type {
   MidnightApiClientParams,
   MidnightApiCollateral,
   MidnightApiConfig,
-  MidnightApiConfigContract,
-  MidnightApiConfigContractName,
-  MidnightApiConfigContractsResult,
   MidnightApiConstructorConfig,
   MidnightApiFetch,
   MidnightApiOffer,
@@ -98,12 +79,6 @@ export type {
   MidnightApiSlippage,
   MidnightApiTakeableOffer,
   MidnightApiTakeableOffersResult,
-  MidnightApiUserGroup,
-  MidnightApiUserGroupsResult,
-  MidnightApiUserOffer,
-  MidnightApiUserOfferGroup,
-  MidnightApiUserOfferMarket,
-  MidnightApiUserOffersResult,
   ValidateMempoolItemsParams,
   ValidateMempoolPayloadParams,
   ValidateMempoolTreeParams,
@@ -112,9 +87,9 @@ export type {
 /**
  * Midnight API client and stateless helper surface for books and mempool data.
  *
- * Static methods use `https://api.morpho.org` by default and accept per-call
- * configuration. Instances keep shared `baseUrl`, `fetch`, and request options
- * for integrations that make repeated calls.
+ * Static methods use `https://api.morpho.org/v1/midnight` by default and accept
+ * per-call configuration. Instances keep shared `baseUrl`, `fetch`, and request
+ * options for integrations that make repeated calls.
  * Caller input and successful JSON output shapes are trusted at runtime;
  * returned TypeScript types model the API contract.
  *
@@ -127,7 +102,7 @@ export type {
  *   payload: "0x0100000000",
  * });
  *
- * const api = new MidnightApi("https://api.morpho.org");
+ * const api = new MidnightApi("https://api.morpho.org/v1/midnight");
  * const configured = await api.validateMempoolPayload({
  *   chainId: 8453,
  *   payload: "0x0100000000",
@@ -149,7 +124,7 @@ export class MidnightApi {
    * import { MidnightApi } from "@morpho-org/midnight-sdk";
    *
    * const api = new MidnightApi({
-   *   baseUrl: "https://api.morpho.org",
+   *   baseUrl: "https://api.morpho.org/v1/midnight",
    * });
    * console.log(api);
    * ```
@@ -186,7 +161,7 @@ export class MidnightApi {
     const response = await requestMidnightApi<ApiBooksResponse>({
       ...input,
       method: "GET",
-      path: "/v1/midnight/books",
+      path: "books",
       query: {
         sort: input.sort,
         maturities: input.maturities,
@@ -390,7 +365,7 @@ export class MidnightApi {
     const response = await requestMidnightApi<ApiTakeableOffersResponse>({
       ...input,
       method: "GET",
-      path: "/v1/midnight/takeable-offers",
+      path: "takeable-offers",
       query: {
         maker: input.maker,
         market_ids: input.marketIds,
@@ -403,84 +378,6 @@ export class MidnightApi {
     return {
       cursor: response.cursor,
       data: response.data.map(mapTakeableOffer),
-    };
-  }
-
-  /**
-   * Fetches offers created by one user.
-   *
-   * @param params - User address, optional filters, pagination, and request configuration.
-   * @returns Paginated user offers mapped to SDK camelCase fields.
-   * @throws MidnightApiError when the API returns a non-2xx response.
-   * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
-   * @example
-   * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
-   *
-   * const offers = await MidnightApi.fetchUserOffers({
-   *   user: "0x7b093658BE7f90B63D7c359e8f408e503c2D9401",
-   *   active: true,
-   * });
-   * console.log(offers.data.length);
-   * ```
-   */
-  public static async fetchUserOffers(
-    params: FetchUserOffersParams,
-  ): Promise<MidnightApiUserOffersResult> {
-    const input = params;
-    const response = await requestMidnightApi<ApiUserOffersResponse>({
-      ...input,
-      method: "GET",
-      path: buildUserPath({ user: input.user, suffix: "offers" }),
-      query: {
-        market_ids: input.marketIds,
-        groups: input.groups,
-        active: input.active,
-        limit: input.limit,
-        cursor: input.cursor,
-      },
-    });
-
-    return {
-      cursor: response.cursor,
-      data: response.data.map(mapUserOffer),
-    };
-  }
-
-  /**
-   * Fetches groups created by one user.
-   *
-   * @param params - User address, optional filters, pagination, and request configuration.
-   * @returns Paginated user groups mapped to SDK camelCase fields.
-   * @throws MidnightApiError when the API returns a non-2xx response.
-   * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
-   * @example
-   * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
-   *
-   * const groups = await MidnightApi.fetchUserGroups({
-   *   user: "0x7b093658BE7f90B63D7c359e8f408e503c2D9401",
-   * });
-   * console.log(groups.data.length);
-   * ```
-   */
-  public static async fetchUserGroups(
-    params: FetchUserGroupsParams,
-  ): Promise<MidnightApiUserGroupsResult> {
-    const input = params;
-    const response = await requestMidnightApi<ApiUserGroupsResponse>({
-      ...input,
-      method: "GET",
-      path: buildUserPath({ user: input.user, suffix: "groups" }),
-      query: {
-        limit: input.limit,
-        cursor: input.cursor,
-      },
-    });
-
-    return {
-      cursor: response.cursor,
-      data: response.data.map(mapUserGroup),
     };
   }
 
@@ -509,7 +406,7 @@ export class MidnightApi {
     const response = await requestMidnightApi({
       ...input,
       method: "POST",
-      path: "/v1/midnight/mempool/validate",
+      path: "mempool/validate",
       query: {
         timestamp: input.timestamp,
       },
@@ -536,7 +433,7 @@ export class MidnightApi {
    *
    * const validation = await MidnightApi.validateMempoolItems({
    *   chainId: 8453,
-   *   items: [{ offer: {} as never, ratifierData: "0x" }],
+   *   items: [{ offer: {} as never, group: "0x00" as never, ratifierData: "0x" }],
    * });
    * console.log(validation.valid);
    * ```
@@ -574,7 +471,7 @@ export class MidnightApi {
    *
    * const validation = await MidnightApi.validateMempoolTree({
    *   chainId: 8453,
-   *   tree: { groups: [[{} as never]] },
+   *   tree: [{} as never],
    * });
    * console.log(validation.valid);
    * ```
@@ -591,7 +488,13 @@ export class MidnightApi {
       request: input.request,
       chainId: input.chainId,
       timestamp: input.timestamp,
-      items: tree.offers.map((offer) => ({ offer, ratifierData: "0x" })),
+      items: tree.groups.flatMap((group) =>
+        group.offers.map((offer) => ({
+          offer,
+          group: group.id,
+          ratifierData: "0x" as const,
+        })),
+      ),
     });
   }
 
@@ -620,7 +523,7 @@ export class MidnightApi {
     const response = await requestMidnightApi({
       ...input,
       method: "GET",
-      path: "/v1/midnight/mempool/rules",
+      path: "mempool/rules",
       query: {
         timestamp: input.timestamp,
         chain_ids: input.chainIds,
@@ -631,44 +534,6 @@ export class MidnightApi {
     });
 
     return parseRulesResponse(response);
-  }
-
-  /**
-   * Fetches router contract addresses configured for indexed chains.
-   *
-   * @param params - Optional chain filters, pagination, and request configuration.
-   * @returns Paginated contract address entries mapped to SDK camelCase fields.
-   * @throws MidnightApiError when the API returns a non-2xx response.
-   * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
-   * @example
-   * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
-   *
-   * const contracts = await MidnightApi.fetchConfigContracts({
-   *   chainIds: [8453],
-   * });
-   * console.log(contracts.data[0]?.address);
-   * ```
-   */
-  public static async fetchConfigContracts(
-    params: FetchConfigContractsParams = {},
-  ): Promise<MidnightApiConfigContractsResult> {
-    const input = params;
-    const response = await requestMidnightApi<ApiConfigContractsResponse>({
-      ...input,
-      method: "GET",
-      path: "/v1/config/contracts",
-      query: {
-        chains: input.chainIds,
-        limit: input.limit,
-        cursor: input.cursor,
-      },
-    });
-
-    return {
-      cursor: response.cursor,
-      data: response.data.map(mapConfigContract),
-    };
   }
 
   /**
@@ -836,60 +701,6 @@ export class MidnightApi {
   }
 
   /**
-   * Fetches offers created by one user with this client's configuration.
-   *
-   * @param params - User address, optional filters, and pagination.
-   * @returns Paginated user offers mapped to SDK camelCase fields.
-   * @throws MidnightApiError when the API returns a non-2xx response.
-   * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
-   * @example
-   * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
-   *
-   * const api = new MidnightApi();
-   * const offers = await api.fetchUserOffers({
-   *   user: "0x7b093658BE7f90B63D7c359e8f408e503c2D9401",
-   * });
-   * console.log(offers.data.length);
-   * ```
-   */
-  public fetchUserOffers(
-    params: MidnightApiClientParams<FetchUserOffersParams>,
-  ): Promise<MidnightApiUserOffersResult> {
-    return MidnightApi.fetchUserOffers({
-      ...this.config,
-      ...params,
-    });
-  }
-
-  /**
-   * Fetches groups created by one user with this client's configuration.
-   *
-   * @param params - User address and pagination.
-   * @returns Paginated user groups mapped to SDK camelCase fields.
-   * @throws MidnightApiError when the API returns a non-2xx response.
-   * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
-   * @example
-   * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
-   *
-   * const api = new MidnightApi();
-   * const groups = await api.fetchUserGroups({
-   *   user: "0x7b093658BE7f90B63D7c359e8f408e503c2D9401",
-   * });
-   * console.log(groups.data.length);
-   * ```
-   */
-  public fetchUserGroups(
-    params: MidnightApiClientParams<FetchUserGroupsParams>,
-  ): Promise<MidnightApiUserGroupsResult> {
-    return MidnightApi.fetchUserGroups({
-      ...this.config,
-      ...params,
-    });
-  }
-
-  /**
    * Validates an encoded Midnight mempool payload with this client's configuration.
    *
    * @param params - Payload validation parameters.
@@ -929,7 +740,7 @@ export class MidnightApi {
    * const api = new MidnightApi();
    * const validation = await api.validateMempoolItems({
    *   chainId: 8453,
-   *   items: [{ offer: {} as never, ratifierData: "0x" }],
+   *   items: [{ offer: {} as never, group: "0x00" as never, ratifierData: "0x" }],
    * });
    * console.log(validation.valid);
    * ```
@@ -956,7 +767,7 @@ export class MidnightApi {
    * import { MidnightApi } from "@morpho-org/midnight-sdk";
    *
    * const api = new MidnightApi();
-   * const validation = await api.validateMempoolTree({ chainId: 8453, tree: { groups: [[{} as never]] } });
+   * const validation = await api.validateMempoolTree({ chainId: 8453, tree: [{} as never] });
    * console.log(validation.valid);
    * ```
    */
@@ -989,31 +800,6 @@ export class MidnightApi {
     params: MidnightApiClientParams<FetchMempoolRulesParams> = {},
   ): Promise<MempoolRulesResult> {
     return MidnightApi.fetchMempoolRules({
-      ...this.config,
-      ...params,
-    });
-  }
-
-  /**
-   * Fetches router contract addresses with this client's configuration.
-   *
-   * @param params - Optional chain filters and pagination.
-   * @returns Paginated contract address entries mapped to SDK camelCase fields.
-   * @throws MidnightApiError when the API returns a non-2xx response.
-   * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
-   * @example
-   * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
-   *
-   * const api = new MidnightApi();
-   * const contracts = await api.fetchConfigContracts({ chainIds: [8453] });
-   * console.log(contracts.data.length);
-   * ```
-   */
-  public fetchConfigContracts(
-    params: MidnightApiClientParams<FetchConfigContractsParams> = {},
-  ): Promise<MidnightApiConfigContractsResult> {
-    return MidnightApi.fetchConfigContracts({
       ...this.config,
       ...params,
     });

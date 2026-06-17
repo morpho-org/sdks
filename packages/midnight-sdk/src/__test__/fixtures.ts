@@ -90,7 +90,6 @@ export const baseOfferInput = (overrides: Partial<IOffer> = {}): IOffer => {
     start: overrides.start ?? 0n,
     expiry: overrides.expiry ?? 2_100n,
     tick: overrides.tick ?? 5_000n,
-    group: overrides.group ?? group,
     callback: overrides.callback ?? zeroAddress,
     callbackData: overrides.callbackData ?? "0x",
     receiverIfMakerIsSeller:

@@ -24,7 +24,7 @@ export type MidnightApiRequestOptions = Omit<RequestInit, "method" | "body">;
  * Shared configuration for Midnight API calls.
  */
 export interface MidnightApiConfig {
-  /** Public Morpho API base URL. Defaults to `https://api.morpho.org`. */
+  /** Midnight API base URL. Defaults to `https://api.morpho.org/v1/midnight`. */
   readonly baseUrl?: string | URL;
   /** Fetch implementation. Defaults to the global `fetch`. */
   readonly fetch?: MidnightApiFetch;
@@ -47,18 +47,6 @@ export type MidnightApiClientParams<Params extends MidnightApiConfig> =
  * Book side accepted by Midnight API book routes.
  */
 export type MidnightApiBookSide = "asks" | "bids";
-
-/**
- * Contract names returned by the router config contracts endpoint.
- */
-export type MidnightApiConfigContractName =
-  | "setterRatifier"
-  | "bundler"
-  | "ecrecoverAuthorizer"
-  | "ecrecoverRatifier"
-  | "mempool"
-  | "multicall"
-  | "midnight";
 
 /**
  * Book list sort field accepted by the Midnight API.
@@ -129,18 +117,6 @@ export interface FetchMempoolRulesParams extends MidnightApiConfig {
   /** Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot. */
   readonly timestamp?: string | Date;
   /** Maximum number of rules to return. */
-  readonly limit?: number;
-  /** Opaque pagination cursor from a previous response. */
-  readonly cursor?: string;
-}
-
-/**
- * Parameters for {@link MidnightApi.fetchConfigContracts}.
- */
-export interface FetchConfigContractsParams extends MidnightApiConfig {
-  /** Chain ids to include. */
-  readonly chainIds?: readonly number[];
-  /** Maximum number of contracts to return. */
   readonly limit?: number;
   /** Opaque pagination cursor from a previous response. */
   readonly cursor?: string;
@@ -282,36 +258,6 @@ export interface FetchTakeableOffersParams extends MidnightApiConfig {
 }
 
 /**
- * Parameters for {@link MidnightApi.fetchUserOffers}.
- */
-export interface FetchUserOffersParams extends MidnightApiConfig {
-  /** User EVM address. */
-  readonly user: Address;
-  /** Market id filters. */
-  readonly marketIds?: readonly Hash[];
-  /** Group id filters. */
-  readonly groups?: readonly Hash[];
-  /** Whether to return only currently active offers. */
-  readonly active?: boolean;
-  /** Maximum number of offers to return. */
-  readonly limit?: number;
-  /** Opaque pagination cursor from a previous response. */
-  readonly cursor?: string;
-}
-
-/**
- * Parameters for {@link MidnightApi.fetchUserGroups}.
- */
-export interface FetchUserGroupsParams extends MidnightApiConfig {
-  /** User EVM address. */
-  readonly user: Address;
-  /** Maximum number of groups to return. */
-  readonly limit?: number;
-  /** Opaque pagination cursor from a previous response. */
-  readonly cursor?: string;
-}
-
-/**
  * One API validation issue.
  */
 export interface MempoolPayloadValidationIssue {
@@ -371,28 +317,6 @@ export interface MempoolRulesResult {
   readonly cursor: string | null;
   /** API rules mapped to SDK camelCase fields. */
   readonly data: readonly MempoolRule[];
-}
-
-/**
- * Contract address entry returned by the router config contracts endpoint.
- */
-export interface MidnightApiConfigContract {
-  /** Chain id the contract is configured on. */
-  readonly chainId: number;
-  /** Router contract role name. */
-  readonly name: MidnightApiConfigContractName;
-  /** Contract address. */
-  readonly address: Address;
-}
-
-/**
- * Paginated router config contracts result.
- */
-export interface MidnightApiConfigContractsResult {
-  /** Opaque pagination cursor, or `null` when no next page exists. */
-  readonly cursor: string | null;
-  /** Router contract address entries. */
-  readonly data: readonly MidnightApiConfigContract[];
 }
 
 /**
@@ -588,98 +512,6 @@ export interface MidnightApiTakeableOffersResult {
   readonly data: readonly MidnightApiTakeableOffer[];
 }
 
-/**
- * Market metadata returned by Midnight API user offer routes.
- */
-export interface MidnightApiUserOfferMarket extends MidnightApiOfferMarket {
-  /** Market id. */
-  readonly id: Hash;
-}
-
-/**
- * Group metadata returned inline with a Midnight API user offer.
- */
-export interface MidnightApiUserOfferGroup {
-  /** Consumption group id. */
-  readonly id: Hash;
-  /** Current onchain consumed value for the group. */
-  readonly consumed: string;
-  /** Currently executable size in units. */
-  readonly takeableUnits: string;
-}
-
-/**
- * Offer returned by Midnight API user offer routes.
- */
-export interface MidnightApiUserOffer {
-  /** Offer hash. */
-  readonly hash: Hash;
-  /** Market this offer trades. */
-  readonly market: MidnightApiUserOfferMarket;
-  /** Whether the maker buys units. */
-  readonly buy: boolean;
-  /** Offer maker address. */
-  readonly maker: Address;
-  /** Start timestamp in unix seconds. */
-  readonly start: number;
-  /** Expiry timestamp in unix seconds. */
-  readonly expiry: number;
-  /** Midnight tick. */
-  readonly tick: number;
-  /** Consumption group with current onchain usage. */
-  readonly group: MidnightApiUserOfferGroup;
-  /** Optional maker callback. */
-  readonly callback: Address;
-  /** Callback payload. */
-  readonly callbackData: Hex;
-  /** Receiver used when the maker is the seller. */
-  readonly receiverIfMakerIsSeller: Address;
-  /** Ratifier contract address. */
-  readonly ratifier: Address;
-  /** Whether the offer can only reduce maker exposure. */
-  readonly reduceOnly: boolean;
-  /** Maximum units; zero means max assets controls consumption. */
-  readonly maxUnits: string;
-  /** Maximum buyer or seller assets, depending on side. */
-  readonly maxAssets: string;
-}
-
-/**
- * Paginated Midnight API user offers result.
- */
-export interface MidnightApiUserOffersResult {
-  /** Opaque pagination cursor, or `null` when no next page exists. */
-  readonly cursor: string | null;
-  /** Offers created by the requested user. */
-  readonly data: readonly MidnightApiUserOffer[];
-}
-
-/**
- * Group returned by Midnight API user group routes.
- */
-export interface MidnightApiUserGroup {
-  /** Consumption group id. */
-  readonly id: Hash;
-  /** Chain id the group lives on. */
-  readonly chainId: number;
-  /** Maximum units configured for the group. */
-  readonly maxUnits: string;
-  /** Maximum assets configured for the group. */
-  readonly maxAssets: string;
-  /** Current onchain consumed value for the group. */
-  readonly consumed: string;
-}
-
-/**
- * Paginated Midnight API user groups result.
- */
-export interface MidnightApiUserGroupsResult {
-  /** Opaque pagination cursor, or `null` when no next page exists. */
-  readonly cursor: string | null;
-  /** Groups created by the requested user. */
-  readonly data: readonly MidnightApiUserGroup[];
-}
-
 /** @internal HTTP method owned by Midnight API helpers. */
 export type ApiMethod = "GET" | "POST";
 
@@ -804,69 +636,4 @@ export type ApiQuoteResponse = {
 export type ApiTakeableOffersResponse = {
   readonly cursor: string | null;
   readonly data: readonly ApiTakeableOfferResponse[];
-};
-
-/** @internal Config contract response shape returned by the API. */
-export type ApiConfigContractResponse = {
-  readonly chain_id: number;
-  readonly name: MidnightApiConfigContractName;
-  readonly address: Address;
-};
-
-/** @internal Config contracts response shape returned by the API. */
-export type ApiConfigContractsResponse = {
-  readonly cursor: string | null;
-  readonly data: readonly ApiConfigContractResponse[];
-};
-
-/** @internal User-offer market response shape returned by the API. */
-export type ApiUserOfferMarketResponse = ApiOfferMarketResponse & {
-  readonly id: Hash;
-};
-
-/** @internal User-offer group response shape returned by the API. */
-export type ApiUserOfferGroupResponse = {
-  readonly id: Hash;
-  readonly consumed: string;
-  readonly takeable_units: string;
-};
-
-/** @internal User offer response shape returned by the API. */
-export type ApiUserOfferResponse = {
-  readonly hash: Hash;
-  readonly market: ApiUserOfferMarketResponse;
-  readonly buy: boolean;
-  readonly maker: Address;
-  readonly start: number;
-  readonly expiry: number;
-  readonly tick: number;
-  readonly group: ApiUserOfferGroupResponse;
-  readonly callback: Address;
-  readonly callback_data: Hex;
-  readonly receiver_if_maker_is_seller: Address;
-  readonly ratifier: Address;
-  readonly reduce_only: boolean;
-  readonly max_units: string;
-  readonly max_assets: string;
-};
-
-/** @internal User offers response shape returned by the API. */
-export type ApiUserOffersResponse = {
-  readonly cursor: string | null;
-  readonly data: readonly ApiUserOfferResponse[];
-};
-
-/** @internal User group response shape returned by the API. */
-export type ApiUserGroupResponse = {
-  readonly id: Hash;
-  readonly chain_id: number;
-  readonly max_units: string;
-  readonly max_assets: string;
-  readonly consumed: string;
-};
-
-/** @internal User groups response shape returned by the API. */
-export type ApiUserGroupsResponse = {
-  readonly cursor: string | null;
-  readonly data: readonly ApiUserGroupResponse[];
 };

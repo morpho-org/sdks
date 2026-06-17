@@ -2,11 +2,12 @@ import { decodeFunctionData, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import { addresses, baseOffer } from "../__test__/fixtures.js";
 import { ecrecoverRatifierAbi, setterRatifierAbi } from "../abis.js";
-import { InvalidOfferTreeError } from "../errors.js";
+import { InvalidOfferGroupError, InvalidOfferTreeError } from "../errors.js";
 import { Offer, OfferUtils } from "../offers/index.js";
 import {
   EcrecoverRatifier,
   Group,
+  GroupUtils,
   MAX_OFFERS_PER_TREE,
   OfferTreeUtils,
   SetterRatifier,
@@ -36,7 +37,6 @@ const emptyOffer = () =>
     start: 0n,
     expiry: 0n,
     tick: 0n,
-    group: zeroBytes32,
     callback: zeroAddress,
     callbackData: "0x",
     receiverIfMakerIsSeller: zeroAddress,
@@ -73,26 +73,47 @@ describe("Group.create", () => {
 
     expect(group.offers).toHaveLength(1);
     expect(group.offers[0]).toBe(offer);
+    expect(group.id).toBe(GroupUtils.hash([offer]));
+  });
+
+  test("behavior: group id is independent of offer order", () => {
+    const first = baseOffer({ maxAssets: 0n, tick: 5_000n });
+    const second = baseOffer({ maxAssets: 0n, tick: 5_004n });
+
+    expect(GroupUtils.hash([first, second])).toBe(
+      GroupUtils.hash([second, first]),
+    );
+    expect(Group.create([first, second]).offers).toEqual([first, second]);
   });
 });
 
 describe("Tree.create", () => {
   test("default", () => {
     const offer = baseOffer({ maxAssets: 0n });
-    const tree = Tree.create({ groups: [Group.create([offer])] });
+    const group = Group.create([offer]);
+    const tree = Tree.create([group]);
 
     expect(tree.offers).toEqual([offer]);
-    expect(tree.root).toBe(OfferTreeUtils.buildOfferTreeRoot([offer]));
+    expect(tree.root).toBe(OfferTreeUtils.buildOfferTreeRoot([group]));
     expect(tree.proof(0n)).toEqual(
-      OfferTreeUtils.buildOfferTreeProof({ offers: [offer], leafIndex: 0n }),
+      OfferTreeUtils.buildOfferTreeProof({ entries: [group], leafIndex: 0n }),
     );
+  });
+
+  test("behavior: standalone offers become single-offer groups", () => {
+    const offer = baseOffer({ maxAssets: 0n });
+    const tree = Tree.create([offer]);
+
+    expect(tree.groups).toHaveLength(1);
+    expect(tree.groups[0]!.id).toBe(GroupUtils.hash([offer]));
+    expect(tree.offers).toEqual([offer]);
   });
 });
 
 describe("EcrecoverRatifier.ratify", () => {
   test("default", async () => {
     const offer = baseOffer({ maxAssets: 0n });
-    const tree = Tree.create({ groups: [Group.create([offer])] });
+    const tree = Tree.create([offer]);
     const signature = {
       v: 27,
       r: "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -110,6 +131,7 @@ describe("EcrecoverRatifier.ratify", () => {
     expect(
       OfferTreeUtils.verifyOfferTreeProof({
         offer,
+        group: items[0]!.group,
         root: decoded.root,
         leafIndex: decoded.leafIndex,
         proof: decoded.proof,
@@ -121,7 +143,7 @@ describe("EcrecoverRatifier.ratify", () => {
 describe("SetterRatifier.ratify", () => {
   test("default", () => {
     const offer = baseOffer({ maxAssets: 0n });
-    const tree = Tree.create({ groups: [Group.create([offer])] });
+    const tree = Tree.create([offer]);
 
     const items = SetterRatifier.ratify({ tree });
     const decoded = SetterRatifier.decodeRatifierData(items[0]!.ratifierData);
@@ -131,6 +153,7 @@ describe("SetterRatifier.ratify", () => {
     expect(
       OfferTreeUtils.verifyOfferTreeProof({
         offer,
+        group: items[0]!.group,
         root: decoded.root,
         leafIndex: decoded.leafIndex,
         proof: decoded.proof,
@@ -141,59 +164,65 @@ describe("SetterRatifier.ratify", () => {
 
 describe("OfferTreeUtils.buildOfferTreeDescriptor", () => {
   test("default", () => {
-    const payload = OfferTreeUtils.buildOfferTreeDescriptor([baseOffer()]);
+    const payload = OfferTreeUtils.buildOfferTreeDescriptor([
+      baseOffer({ maxAssets: 0n }),
+    ]);
 
     expect(payload.height).toBe(0);
     expect(payload.root).toMatchInlineSnapshot(
-      `"0xadd41ed6da66787f94302862f0a5291ee6acec94dcf22da0d59574cbba755d21"`,
+      `"0xc70811875043cb46f8059a075df39de9e70175f06c1ca613263d56a3d61a2838"`,
     );
   });
 
   test("behavior: proof for second leaf", () => {
     const offers = [
-      baseOffer({
-        group:
-          "0x1111111111111111111111111111111111111111111111111111111111111111",
-      }),
-      baseOffer({
-        group:
-          "0x2222222222222222222222222222222222222222222222222222222222222222",
-      }),
+      baseOffer({ maxAssets: 0n, tick: 5_000n }),
+      baseOffer({ maxAssets: 0n, tick: 5_004n }),
     ];
-    const proof = OfferTreeUtils.buildOfferTreeProof({ offers, leafIndex: 1n });
+    const groups = offers.map((offer) => Group.create([offer]));
+    const proof = OfferTreeUtils.buildOfferTreeProof({
+      entries: groups,
+      leafIndex: 1n,
+    });
 
     expect(proof.proof).toHaveLength(1);
-    expect(proof.root).toBe(OfferTreeUtils.buildOfferTreeRoot(offers));
+    expect(proof.root).toBe(OfferTreeUtils.buildOfferTreeRoot(groups));
   });
 
   test("behavior: pads non-power-of-two batches", () => {
     const offers = [
-      baseOffer({
-        group:
-          "0x1111111111111111111111111111111111111111111111111111111111111111",
-      }),
-      baseOffer({
-        group:
-          "0x2222222222222222222222222222222222222222222222222222222222222222",
-      }),
-      baseOffer({
-        group:
-          "0x3333333333333333333333333333333333333333333333333333333333333333",
-      }),
+      baseOffer({ maxAssets: 0n, tick: 5_000n }),
+      baseOffer({ maxAssets: 0n, tick: 5_004n }),
+      baseOffer({ maxAssets: 0n, tick: 5_008n }),
     ];
-    const payload = OfferTreeUtils.buildOfferTreeDescriptor(offers);
-    const proof = OfferTreeUtils.buildOfferTreeProof({ offers, leafIndex: 2n });
+    const groups = offers.map((offer) => Group.create([offer]));
+    const payload = OfferTreeUtils.buildOfferTreeDescriptor(groups);
+    const proof = OfferTreeUtils.buildOfferTreeProof({
+      entries: groups,
+      leafIndex: 2n,
+    });
 
     expect(payload.offers).toHaveLength(4);
     expect(payload.height).toBe(2);
     expect(payload.offers.slice(0, 3)).toEqual(
-      offers.map((offer) => OfferUtils.toStruct(offer)),
+      groups.flatMap(GroupUtils.toStructs),
     );
-    expect(payload.offers[3]).toEqual(OfferUtils.toStruct(emptyOffer()));
+    expect(payload.offers[3]).toEqual({
+      ...OfferUtils.toStruct({ offer: emptyOffer(), group: zeroBytes32 }),
+      market: {
+        loanToken: zeroAddress,
+        collateralParams: [],
+        maturity: 0n,
+        rcfThreshold: 0n,
+        enterGate: zeroAddress,
+        liquidatorGate: zeroAddress,
+      },
+    });
     expect(proof.proof).toHaveLength(2);
     expect(
       OfferTreeUtils.verifyOfferTreeProof({
         offer: offers[2]!,
+        group: groups[2]!.id,
         root: proof.root,
         leafIndex: proof.leafIndex,
         proof: proof.proof,
@@ -202,21 +231,21 @@ describe("OfferTreeUtils.buildOfferTreeDescriptor", () => {
   });
 
   test("error: duplicate offer hash", () => {
-    const offer = baseOffer();
+    const offer = baseOffer({ maxAssets: 0n });
 
     expect(() =>
       OfferTreeUtils.buildOfferTreeDescriptor([offer, offer]),
     ).toThrow(InvalidOfferTreeError);
   });
 
-  test("error: all padding", () => {
+  test("error: invalid empty offer", () => {
     expect(() =>
       OfferTreeUtils.buildOfferTreeDescriptor([emptyOffer()]),
-    ).toThrow(InvalidOfferTreeError);
+    ).toThrow(InvalidOfferGroupError);
   });
 
   test("error: offer count cap", () => {
-    const offer = baseOffer();
+    const offer = baseOffer({ maxAssets: 0n });
 
     expect(() =>
       OfferTreeUtils.buildOfferTreeDescriptor(
@@ -229,7 +258,7 @@ describe("OfferTreeUtils.buildOfferTreeDescriptor", () => {
 describe("OfferTreeUtils.buildEcrecoverRatificationTypedData", () => {
   test("default", () => {
     const typedData = OfferTreeUtils.buildEcrecoverRatificationTypedData({
-      offers: [baseOffer()],
+      entries: [baseOffer({ maxAssets: 0n })],
       chainId: 8453n,
       verifyingContract: addresses.ecrecoverRatifier,
     });
@@ -300,20 +329,19 @@ describe("OfferTreeUtils.encodeSetterRatifierData", () => {
 describe("OfferTreeUtils.verifyOfferTreeProof", () => {
   test("default", () => {
     const offers = [
-      baseOffer({
-        group:
-          "0x1111111111111111111111111111111111111111111111111111111111111111",
-      }),
-      baseOffer({
-        group:
-          "0x2222222222222222222222222222222222222222222222222222222222222222",
-      }),
+      baseOffer({ maxAssets: 0n, tick: 5_000n }),
+      baseOffer({ maxAssets: 0n, tick: 5_004n }),
     ];
-    const proof = OfferTreeUtils.buildOfferTreeProof({ offers, leafIndex: 1n });
+    const groups = offers.map((offer) => Group.create([offer]));
+    const proof = OfferTreeUtils.buildOfferTreeProof({
+      entries: groups,
+      leafIndex: 1n,
+    });
 
     expect(
       OfferTreeUtils.verifyOfferTreeProof({
         offer: offers[1]!,
+        group: groups[1]!.id,
         root: proof.root,
         leafIndex: proof.leafIndex,
         proof: proof.proof,
@@ -322,6 +350,7 @@ describe("OfferTreeUtils.verifyOfferTreeProof", () => {
     expect(
       OfferTreeUtils.verifyOfferTreeProof({
         offer: offers[1]!,
+        group: groups[1]!.id,
         root: root,
         leafIndex: proof.leafIndex,
         proof: proof.proof,
@@ -330,6 +359,7 @@ describe("OfferTreeUtils.verifyOfferTreeProof", () => {
     expect(
       OfferTreeUtils.verifyOfferTreeProof({
         offer: offers[1]!,
+        group: groups[1]!.id,
         root: proof.root,
         leafIndex: 0n,
         proof: proof.proof,
@@ -338,6 +368,7 @@ describe("OfferTreeUtils.verifyOfferTreeProof", () => {
     expect(
       OfferTreeUtils.verifyOfferTreeProof({
         offer: offers[1]!,
+        group: groups[1]!.id,
         root: proof.root,
         leafIndex: proof.leafIndex,
         proof: [root],
@@ -346,12 +377,14 @@ describe("OfferTreeUtils.verifyOfferTreeProof", () => {
   });
 
   test("behavior: rejects out-of-range leaf index", () => {
-    const offer = baseOffer();
-    const offerRoot = OfferTreeUtils.hashOffer(offer);
+    const offer = baseOffer({ maxAssets: 0n });
+    const group = Group.create([offer]);
+    const offerRoot = offer.hash(group.id);
 
     expect(
       OfferTreeUtils.verifyOfferTreeProof({
         offer,
+        group: group.id,
         root: offerRoot,
         leafIndex: 1n,
         proof: [],
@@ -360,6 +393,7 @@ describe("OfferTreeUtils.verifyOfferTreeProof", () => {
     expect(
       OfferTreeUtils.verifyOfferTreeProof({
         offer,
+        group: group.id,
         root: offerRoot,
         leafIndex: -1n,
         proof: [],

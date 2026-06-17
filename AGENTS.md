@@ -57,7 +57,7 @@ Cross-layer leaks (entities encoding calldata, actions reading state, helpers de
 
 ### Class APIs over utility factories
 
-- If a public helper would primarily return an instance of a public class, expose it as a static class method instead of a `*Utils` factory: prefer `Offer.create(...)`, `Offer.createGroup(...)`, `Tree.create(...)` over `OfferUtils.buildOffer(...)` or `OfferUtils.buildTree(...)` returning class instances.
+- If a public helper would primarily return an instance of a public class, expose it as a static class method instead of a `*Utils` factory: prefer `Offer.create(...)`, `Group.create(...)`, `Tree.create(...)` over `OfferUtils.buildOffer(...)` or `OfferUtils.buildTree(...)` returning class instances.
 - Class-specific methods and getters delegate to pure `*Utils` namespace functions that accept readonly plain JavaScript objects compatible with the class's public shape. This keeps the user-facing API composable and class-based while preserving broad compatibility for object-first integrations.
 - `*Utils` namespaces own deterministic object-compatible behavior, validation, encoding math, and struct reshaping. They should not be the primary user-facing constructor surface for a class instance.
 

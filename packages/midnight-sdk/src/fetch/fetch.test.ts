@@ -20,6 +20,7 @@ import {
   addresses,
   baseMarketParams,
   baseOffer,
+  group,
   marketId,
 } from "../__test__/fixtures.js";
 import { midnightAbi } from "../abis.js";
@@ -314,7 +315,7 @@ describe("fetchConsumableUnits", () => {
       address: addresses.midnight,
       abi: midnightAbi,
       functionName: "consumed",
-      args: [offer.maker, offer.group],
+      args: [offer.maker, group],
       result: 40n,
     });
 
@@ -322,6 +323,7 @@ describe("fetchConsumableUnits", () => {
       fetchConsumableUnits(handle.client, {
         marketId,
         offer,
+        group,
         timeToMaturity: 1000n,
       }),
     ).resolves.toBe(60n);
@@ -339,7 +341,7 @@ describe("fetchConsumableUnits", () => {
       address: addresses.midnight,
       abi: midnightAbi,
       functionName: "consumed",
-      args: [offer.maker, offer.group],
+      args: [offer.maker, group],
       result: 40n,
     });
     mockRead(handle, {
@@ -354,6 +356,7 @@ describe("fetchConsumableUnits", () => {
       fetchConsumableUnits(handle.client, {
         marketId,
         offer,
+        group,
         timeToMaturity: 1000n,
       }),
     ).resolves.toBe(60n);
@@ -366,7 +369,7 @@ describe("fetchConsumableUnits", () => {
       address: addresses.midnight,
       abi: midnightAbi,
       functionName: "consumed",
-      args: [offer.maker, offer.group],
+      args: [offer.maker, group],
       result: 0n,
     });
     mockRead(handle, {
@@ -381,6 +384,7 @@ describe("fetchConsumableUnits", () => {
       fetchConsumableUnits(handle.client, {
         marketId,
         offer,
+        group,
         timeToMaturity: 1000n,
       }),
     ).rejects.toBeInstanceOf(SettlementFeeExceedsPriceError);
@@ -393,6 +397,7 @@ describe("fetchConsumableUnits", () => {
       fetchConsumableUnits(handle.client, {
         marketId,
         offer: baseOffer({ maxUnits: -1n }),
+        group,
         timeToMaturity: 1000n,
       }),
     ).rejects.toBeInstanceOf(NegativeValueError);

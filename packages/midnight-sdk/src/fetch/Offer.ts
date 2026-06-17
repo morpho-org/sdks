@@ -39,6 +39,7 @@ export async function fetchConsumableUnits(
   params: MidnightFetchParams & {
     readonly marketId: Hash;
     readonly offer: IOffer | Offer;
+    readonly group: Hash;
     readonly timeToMaturity: BigIntish;
   },
 ) {
@@ -60,7 +61,7 @@ export async function fetchConsumableUnits(
     address: midnight,
     abi: midnightAbi,
     functionName: "consumed",
-    args: [offer.maker, offer.group],
+    args: [offer.maker, params.group],
   });
 
   const [consumedValue, settlementFee] = needsSettlementFee

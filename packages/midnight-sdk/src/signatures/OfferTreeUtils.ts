@@ -11,19 +11,13 @@ import {
   parseSignature,
 } from "viem";
 import { ecrecoverRatifierAbi, setterRatifierAbi } from "../abis.js";
-import { EIP712_DOMAIN_TYPEHASH, OFFER_TYPEHASH } from "../constants.js";
+import { EIP712_DOMAIN_TYPEHASH } from "../constants.js";
 import {
+  InvalidOfferGroupError,
   InvalidOfferTreeError,
   InvalidOfferTreeHeightError,
 } from "../errors.js";
-import { MarketUtils } from "../market/index.js";
-import {
-  type BuildOfferGroupParams,
-  type IOffer,
-  Offer,
-  type OfferStruct,
-  OfferUtils,
-} from "../offers/index.js";
+import { type Offer, type OfferStruct, OfferUtils } from "../offers/index.js";
 import type { Item as PayloadItem } from "./Payload.js";
 
 const offerTreeTypeHashes = [
@@ -48,24 +42,6 @@ const offerTreeTypeHashes = [
   "0x7e7d98718c0180e882e5963b9bd49810096912c273dfa38d8afdd6d39fde86ec",
   "0x8d35d491a29d846489e19688efff3c4cc7dbd54458058d49b30294074539f0b9",
   "0x824e385eea1953bcbc783bf900b18aa6fba129b6908765e986cf0968b491ec4f",
-] as const;
-
-const offerHashParams = [
-  { name: "typehash", type: "bytes32" },
-  { name: "marketHash", type: "bytes32" },
-  { name: "buy", type: "bool" },
-  { name: "maker", type: "address" },
-  { name: "start", type: "uint256" },
-  { name: "expiry", type: "uint256" },
-  { name: "tick", type: "uint256" },
-  { name: "group", type: "bytes32" },
-  { name: "callback", type: "address" },
-  { name: "callbackDataHash", type: "bytes32" },
-  { name: "receiverIfMakerIsSeller", type: "address" },
-  { name: "ratifier", type: "address" },
-  { name: "reduceOnly", type: "bool" },
-  { name: "maxUnits", type: "uint256" },
-  { name: "maxAssets", type: "uint256" },
 ] as const;
 
 const signatureAbi = [
@@ -102,6 +78,7 @@ const treeStructHashAbi = [
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 const ZERO_BYTES32 =
   "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
+const comparableHex = (value: string) => value.toLowerCase();
 
 /**
  * Maximum number of non-padding offers committed by one Midnight offer tree.
@@ -185,28 +162,6 @@ const typedDataTypes = {
   ],
 } as const;
 
-function hashOfferStruct(offerStruct: OfferStruct) {
-  return keccak256(
-    encodeAbiParameters(offerHashParams, [
-      OFFER_TYPEHASH,
-      MarketUtils.hash(offerStruct.market),
-      offerStruct.buy,
-      offerStruct.maker,
-      offerStruct.start,
-      offerStruct.expiry,
-      offerStruct.tick,
-      offerStruct.group,
-      offerStruct.callback,
-      keccak256(offerStruct.callbackData),
-      offerStruct.receiverIfMakerIsSeller,
-      offerStruct.ratifier,
-      offerStruct.reduceOnly,
-      offerStruct.maxUnits,
-      offerStruct.maxAssets,
-    ]),
-  );
-}
-
 function isEmptyOfferStruct(offer: OfferStruct): boolean {
   return (
     offer.market.loanToken === ZERO_ADDRESS &&
@@ -257,7 +212,7 @@ function assertLeafOffers(offers: readonly OfferStruct[]): void {
   for (const offer of offers) {
     if (isEmptyOfferStruct(offer)) continue;
 
-    const leafHash = hashOfferStruct(offer);
+    const leafHash = OfferUtils.hashStruct(offer);
     if (seen.has(leafHash)) {
       throw new InvalidOfferTreeError(
         `Duplicate offer hash "${leafHash}" in offer tree.`,
@@ -394,35 +349,17 @@ export interface EcrecoverRatificationTypedData {
 }
 
 /**
- * Input accepted by {@link Group.create}.
- *
- * @example
- * ```ts
- * import type { GroupCreateParams } from "@morpho-org/midnight-sdk";
- *
- * const params = {} as GroupCreateParams;
- * console.log(Array.isArray(params));
- * ```
- */
-export type GroupCreateParams =
-  | readonly (IOffer | Offer)[]
-  | BuildOfferGroupParams;
-
-/**
  * Input accepted by {@link Tree.create}.
  *
  * @example
  * ```ts
  * import type { TreeCreateParams } from "@morpho-org/midnight-sdk";
  *
- * const params = {} as TreeCreateParams;
- * console.log(params.groups.length);
+ * const params = [] as unknown as TreeCreateParams;
+ * console.log(params.length);
  * ```
  */
-export interface TreeCreateParams {
-  /** Offer groups committed to the tree, in leaf order. */
-  readonly groups: readonly (Group | GroupCreateParams)[];
-}
+export type TreeCreateParams = readonly (Group | Offer)[];
 
 /**
  * Plain or class tree input accepted by higher-level helpers.
@@ -555,6 +492,131 @@ export interface SetterRatifierDataParams {
 }
 
 /**
+ * Parameters for {@link GroupUtils.validateForApiPublication}.
+ *
+ * @example
+ * ```ts
+ * import type { ValidateGroupForApiPublicationParams } from "@morpho-org/midnight-sdk";
+ *
+ * const params = {} as ValidateGroupForApiPublicationParams;
+ * console.log(params.group.id);
+ * ```
+ */
+export interface ValidateGroupForApiPublicationParams {
+  /** Group to validate before publishing through the public API. */
+  readonly group: Group;
+}
+
+/**
+ * Domain helpers for Midnight offer groups.
+ *
+ * @example
+ * ```ts
+ * import { GroupUtils } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(typeof GroupUtils.hash);
+ * ```
+ */
+export namespace GroupUtils {
+  /**
+   * Derives the deterministic content-addressed id for a group of offers.
+   *
+   * This mirrors the router implementation: hash each offer with `group = 0`,
+   * sort those hashes, concatenate them, then keccak the result.
+   *
+   * @param offers - Offers to hash as one group.
+   * @returns Content-addressed group id.
+   * @throws InvalidOfferGroupError when `offers` is empty.
+   * @example
+   * ```ts
+   * import { GroupUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const id = GroupUtils.hash([{} as never]);
+   * console.log(id);
+   * ```
+   */
+  export function hash(offers: readonly Offer[]): Hash {
+    if (offers.length === 0) {
+      throw new InvalidOfferGroupError(
+        "Provide at least one offer in the group.",
+      );
+    }
+
+    const offerHashes = offers.map((offer) => offer.groupHash);
+    const sorted =
+      offerHashes.length > 1 ? [...offerHashes].sort() : offerHashes;
+
+    return keccak256(concat(sorted));
+  }
+
+  /**
+   * Converts a group into ABI-compatible offers carrying the group id.
+   *
+   * @param group - Group to encode.
+   * @returns ABI-compatible offers in caller order.
+   * @example
+   * ```ts
+   * import { GroupUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const structs = GroupUtils.toStructs({} as never);
+   * console.log(structs.length);
+   * ```
+   */
+  export function toStructs(group: Group): readonly OfferStruct[] {
+    return group.offers.map((offer) =>
+      OfferUtils.toStruct({ offer, group: group.id }),
+    );
+  }
+
+  /**
+   * Validates the public API publication rules known locally.
+   *
+   * This helper intentionally stays narrow: changing public policy should be
+   * surfaced by `MidnightApi.validateMempoolTree` when possible.
+   *
+   * @param params - Group validation parameters.
+   * @returns Immutable offers in the same order as the group.
+   * @throws InvalidOfferGroupError when the group cannot be published through the public API.
+   * @example
+   * ```ts
+   * import { GroupUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const offers = GroupUtils.validateForApiPublication({ group: {} as never });
+   * console.log(offers.length);
+   * ```
+   */
+  export function validateForApiPublication(
+    params: ValidateGroupForApiPublicationParams,
+  ): readonly Offer[] {
+    const offers = OfferUtils.validateOfferGroup({
+      offers: params.group.offers,
+    });
+    const expectedGroup = comparableHex(hash(offers));
+    const expectedCallback = comparableHex(offers[0]!.callback);
+    const expectedCallbackData = comparableHex(offers[0]!.callbackData);
+
+    if (comparableHex(params.group.id) !== expectedGroup) {
+      throw new InvalidOfferGroupError(
+        "API-published groups must use the content-addressed group id.",
+      );
+    }
+
+    for (const offer of offers) {
+      if (
+        comparableHex(offer.callback) !== expectedCallback ||
+        comparableHex(offer.callbackData) !== expectedCallbackData
+      ) {
+        throw new InvalidOfferGroupError(
+          "All offers in an API-published group must use the same callback address and data.",
+        );
+      }
+    }
+
+    return offers;
+  }
+}
+
+/**
  * Protocol offer group with one shared consumption group id.
  *
  * @example
@@ -569,17 +631,35 @@ export class Group {
   /** Offers in this protocol group. */
   public readonly offers: readonly Offer[];
 
-  private constructor(offers: readonly Offer[]) {
+  private readonly _id: Hash;
+
+  private constructor(id: Hash, offers: readonly Offer[]) {
+    this._id = id;
     this.offers = [...offers];
+  }
+
+  /**
+   * Content-addressed group id.
+   *
+   * @returns Group id derived from the group's offers.
+   * @example
+   * ```ts
+   * import { Group } from "@morpho-org/midnight-sdk";
+   *
+   * const group = Group.create([{} as never]);
+   * console.log(group.id);
+   * ```
+   */
+  public get id(): Hash {
+    return this._id;
   }
 
   /**
    * Creates a protocol-valid offer group.
    *
-   * @param params - Existing offers, or offer builder parameters for a derived group id.
+   * @param offers - Offers to group.
    * @returns Group instance.
    * @throws InvalidOfferGroupError when group mechanics are invalid.
-   * @throws InvalidOfferParameterError when an offer cannot satisfy parameter rules.
    * @example
    * ```ts
    * import { Group } from "@morpho-org/midnight-sdk";
@@ -588,10 +668,10 @@ export class Group {
    * console.log(group.offers.length);
    * ```
    */
-  public static create(params: GroupCreateParams): Group {
-    if ("offers" in params) return new Group(Offer.createGroup(params));
+  public static create(offers: readonly Offer[]): Group {
+    const validatedOffers = OfferUtils.validateOfferGroup({ offers });
 
-    return new Group(OfferUtils.validateOfferGroup({ offers: params }));
+    return new Group(GroupUtils.hash(validatedOffers), validatedOffers);
   }
 }
 
@@ -600,9 +680,9 @@ export class Group {
  *
  * @example
  * ```ts
- * import { Group, Tree } from "@morpho-org/midnight-sdk";
+ * import { Offer, Tree } from "@morpho-org/midnight-sdk";
  *
- * const tree = Tree.create({ groups: [Group.create([{} as never])] });
+ * const tree = Tree.create([Offer.create({} as never)]);
  * console.log(tree.root);
  * ```
  */
@@ -629,7 +709,7 @@ export class Tree {
     this.groups = [...groups];
     this.offers = groups.flatMap((group) => group.offers);
 
-    const descriptor = OfferTreeUtils.buildOfferTreeDescriptor(this.offers);
+    const descriptor = OfferTreeUtils.buildOfferTreeDescriptor(this.groups);
     this.paddedOffers = descriptor.offers;
     this.leaves = descriptor.leaves;
     this.root = descriptor.root;
@@ -637,7 +717,7 @@ export class Tree {
   }
 
   /**
-   * Creates an offer tree from validated groups.
+   * Creates an offer tree from groups or standalone offers.
    *
    * @param params - Tree creation parameters.
    * @returns Tree instance.
@@ -645,15 +725,15 @@ export class Tree {
    * @throws InvalidOfferTreeHeightError when the resulting height is unsupported.
    * @example
    * ```ts
-   * import { Group, Tree } from "@morpho-org/midnight-sdk";
+   * import { Offer, Tree } from "@morpho-org/midnight-sdk";
    *
-   * const tree = Tree.create({ groups: [Group.create([{} as never])] });
+   * const tree = Tree.create([Offer.create({} as never)]);
    * console.log(tree.height);
    * ```
    */
   public static create(params: TreeCreateParams): Tree {
     return new Tree(
-      params.groups.map((group) => OfferTreeUtils.normalizeGroup(group)),
+      params.map((entry) => OfferTreeUtils.normalizeGroup(entry)),
     );
   }
 
@@ -667,13 +747,13 @@ export class Tree {
    * ```ts
    * import { Tree } from "@morpho-org/midnight-sdk";
    *
-   * const proof = Tree.create({ groups: [[{} as never]] }).proof(0n);
+   * const proof = Tree.create([{} as never]).proof(0n);
    * console.log(proof.root);
    * ```
    */
   public proof(leafIndex: BigIntish): OfferTreeProof {
     return OfferTreeUtils.buildOfferTreeProof({
-      offers: this.offers,
+      entries: this.groups,
       leafIndex,
     });
   }
@@ -687,7 +767,7 @@ export class Tree {
  * import { EcrecoverRatifier } from "@morpho-org/midnight-sdk";
  *
  * const items = await EcrecoverRatifier.ratify({
- *   tree: { groups: [[{} as never]] },
+ *   tree: [{} as never],
  *   signature: {
  *     v: 27,
  *     r: "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -709,7 +789,7 @@ export class EcrecoverRatifier {
    * import { EcrecoverRatifier } from "@morpho-org/midnight-sdk";
    *
    * const typedData = EcrecoverRatifier.typedData({
-   *   tree: { groups: [[{} as never]] },
+   *   tree: [{} as never],
    *   chainId: 8453n,
    *   verifyingContract: "0x0000000000000000000000000000000000000001",
    * });
@@ -722,7 +802,7 @@ export class EcrecoverRatifier {
     const tree = OfferTreeUtils.normalizeTree(params.tree);
 
     return OfferTreeUtils.buildEcrecoverRatificationTypedData({
-      offers: tree.offers,
+      entries: tree.groups,
       chainId: params.chainId,
       verifyingContract: params.verifyingContract,
     });
@@ -766,7 +846,7 @@ export class EcrecoverRatifier {
    * import { EcrecoverRatifier } from "@morpho-org/midnight-sdk";
    *
    * const items = await EcrecoverRatifier.ratify({
-   *   tree: { groups: [[{} as never]] },
+   *   tree: [{} as never],
    *   signature: {
    *     v: 27,
    *     r: "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -795,6 +875,7 @@ export class EcrecoverRatifier {
 
     return tree.offers.map((offer, leafIndex) => ({
       offer,
+      group: findOfferGroupId({ groups: tree.groups, offer, leafIndex }),
       ratifierData: EcrecoverRatifier.ratifierData({
         tree,
         leafIndex,
@@ -849,7 +930,7 @@ export class EcrecoverRatifier {
  * ```ts
  * import { SetterRatifier } from "@morpho-org/midnight-sdk";
  *
- * const items = SetterRatifier.ratify({ tree: { groups: [[{} as never]] } });
+ * const items = SetterRatifier.ratify({ tree: [{} as never] });
  * console.log(items.length);
  * ```
  */
@@ -891,7 +972,7 @@ export class SetterRatifier {
    * ```ts
    * import { SetterRatifier } from "@morpho-org/midnight-sdk";
    *
-   * const items = SetterRatifier.ratify({ tree: { groups: [[{} as never]] } });
+   * const items = SetterRatifier.ratify({ tree: [{} as never] });
    * console.log(items[0]?.ratifierData);
    * ```
    */
@@ -902,6 +983,7 @@ export class SetterRatifier {
 
     return tree.offers.map((offer, leafIndex) => ({
       offer,
+      group: findOfferGroupId({ groups: tree.groups, offer, leafIndex }),
       ratifierData: SetterRatifier.ratifierData({ tree, leafIndex }),
     }));
   }
@@ -959,6 +1041,26 @@ function normalizeEcrecoverSignature(
   };
 }
 
+function findOfferGroupId(params: {
+  readonly groups: readonly Group[];
+  readonly offer: Offer;
+  readonly leafIndex: number;
+}): Hash {
+  let leafIndex = 0;
+  for (const group of params.groups) {
+    for (const offer of group.offers) {
+      if (leafIndex === params.leafIndex && offer === params.offer) {
+        return group.id;
+      }
+      leafIndex += 1;
+    }
+  }
+
+  throw new InvalidOfferTreeError(
+    `Leaf index "${params.leafIndex}" is outside the offer tree.`,
+  );
+}
+
 /**
  * Utilities for Midnight offer trees, ratifier data, and root calls.
  *
@@ -973,18 +1075,18 @@ export namespace OfferTreeUtils {
   /**
    * Returns a group instance from class or plain input.
    *
-   * @param group - Group class or creation input.
+   * @param entry - Group class or standalone offer.
    * @returns Group instance.
    * @example
    * ```ts
    * import { OfferTreeUtils } from "@morpho-org/midnight-sdk";
    *
-   * const group = OfferTreeUtils.normalizeGroup([{} as never]);
+   * const group = OfferTreeUtils.normalizeGroup({} as never);
    * console.log(group.offers.length);
    * ```
    */
-  export function normalizeGroup(group: Group | GroupCreateParams): Group {
-    return group instanceof Group ? group : Group.create(group);
+  export function normalizeGroup(entry: Group | Offer): Group {
+    return entry instanceof Group ? entry : Group.create([entry]);
   }
 
   /**
@@ -996,7 +1098,7 @@ export namespace OfferTreeUtils {
    * ```ts
    * import { OfferTreeUtils } from "@morpho-org/midnight-sdk";
    *
-   * const tree = OfferTreeUtils.normalizeTree({ groups: [[{} as never]] });
+   * const tree = OfferTreeUtils.normalizeTree([{} as never]);
    * console.log(tree.root);
    * ```
    */
@@ -1025,25 +1127,6 @@ export namespace OfferTreeUtils {
   }
 
   /**
-   * Computes the HashLib offer struct hash.
-   *
-   * @param offer - Offer to hash.
-   * @returns Offer hash.
-   * @example
-   * ```ts
-   * import { OfferTreeUtils } from "@morpho-org/midnight-sdk";
-   *
-   * const hash = OfferTreeUtils.hashOffer({} as never);
-   * console.log(hash);
-   * ```
-   */
-  export function hashOffer(offer: IOffer | Offer) {
-    const offerStruct = OfferUtils.toStruct(offer);
-
-    return hashOfferStruct(offerStruct);
-  }
-
-  /**
    * Computes HashLib node hash from left and right child hashes.
    *
    * @param left - Left child hash.
@@ -1068,7 +1151,7 @@ export namespace OfferTreeUtils {
    * Builds an offer tree and Merkle root. Non-power-of-two batches are
    * padded with protocol-zero offers at the highest leaf indices.
    *
-   * @param offers - Offers in leaf order.
+   * @param entries - Groups or standalone offers in leaf order.
    * @returns Offer tree descriptor.
    * @throws InvalidOfferTreeError when the offer count is empty, all padding, or duplicated.
    * @example
@@ -1080,8 +1163,10 @@ export namespace OfferTreeUtils {
    * ```
    */
   export function buildOfferTreeDescriptor(
-    offers: readonly (IOffer | Offer)[],
+    entries: TreeCreateParams,
   ): OfferTreeDescriptor {
+    const groups = entries.map((entry) => normalizeGroup(entry));
+    const offers = groups.flatMap((group) => group.offers);
     if (offers.length === 0) {
       throw new InvalidOfferTreeError("Offer tree must not be empty.");
     }
@@ -1091,15 +1176,13 @@ export namespace OfferTreeUtils {
       );
     }
 
-    const offerStructs = padOfferStructs(
-      offers.map((offer) => OfferUtils.toStruct(offer)),
-    );
+    const offerStructs = padOfferStructs(groups.flatMap(GroupUtils.toStructs));
     assertLeafOffers(offerStructs);
 
     const height = Math.log2(offerStructs.length);
     if (height > 20) throw new InvalidOfferTreeHeightError(height);
 
-    let level = offerStructs.map(hashOfferStruct);
+    let level = offerStructs.map(OfferUtils.hashStruct);
     const leaves = [...level];
 
     while (level.length > 1) {
@@ -1121,7 +1204,7 @@ export namespace OfferTreeUtils {
   /**
    * Builds only the offer-tree root.
    *
-   * @param offers - Offers in leaf order.
+   * @param entries - Groups or standalone offers in leaf order.
    * @returns Merkle root.
    * @example
    * ```ts
@@ -1131,8 +1214,8 @@ export namespace OfferTreeUtils {
    * console.log(root);
    * ```
    */
-  export function buildOfferTreeRoot(offers: readonly (IOffer | Offer)[]) {
-    return buildOfferTreeDescriptor(offers).root;
+  export function buildOfferTreeRoot(entries: TreeCreateParams) {
+    return buildOfferTreeDescriptor(entries).root;
   }
 
   /**
@@ -1145,15 +1228,15 @@ export namespace OfferTreeUtils {
    * ```ts
    * import { OfferTreeUtils } from "@morpho-org/midnight-sdk";
    *
-   * const proof = OfferTreeUtils.buildOfferTreeProof({ offers: [{} as never], leafIndex: 0n });
+   * const proof = OfferTreeUtils.buildOfferTreeProof({ entries: [{} as never], leafIndex: 0n });
    * console.log(proof.proof.length);
    * ```
    */
   export function buildOfferTreeProof(params: {
-    readonly offers: readonly (IOffer | Offer)[];
+    readonly entries: TreeCreateParams;
     readonly leafIndex: BigIntish;
   }): OfferTreeProof {
-    const payload = buildOfferTreeDescriptor(params.offers);
+    const payload = buildOfferTreeDescriptor(params.entries);
     const leafIndex = BigInt(params.leafIndex);
     if (leafIndex < 0n || leafIndex >= BigInt(payload.offers.length)) {
       throw new InvalidOfferTreeError(
@@ -1187,7 +1270,7 @@ export namespace OfferTreeUtils {
    * import { OfferTreeUtils } from "@morpho-org/midnight-sdk";
    *
    * const typedData = OfferTreeUtils.buildEcrecoverRatificationTypedData({
-   *   offers: [{} as never],
+   *   entries: [{} as never],
    *   chainId: 8453n,
    *   verifyingContract: "0x0000000000000000000000000000000000000001",
    * });
@@ -1195,11 +1278,11 @@ export namespace OfferTreeUtils {
    * ```
    */
   export function buildEcrecoverRatificationTypedData(params: {
-    readonly offers: readonly (IOffer | Offer)[];
+    readonly entries: TreeCreateParams;
     readonly chainId: BigIntish;
     readonly verifyingContract: Address;
   }): EcrecoverRatificationTypedData {
-    const payload = buildOfferTreeDescriptor(params.offers);
+    const payload = buildOfferTreeDescriptor(params.entries);
     const offerTreeType =
       payload.height === 0 ? "Offer" : `Offer${"[2]".repeat(payload.height)}`;
 
@@ -1270,7 +1353,7 @@ export namespace OfferTreeUtils {
    * import { OfferTreeUtils } from "@morpho-org/midnight-sdk";
    *
    * const signature = await OfferTreeUtils.signEcrecoverRatification({
-   *   offers: [{} as never],
+   *   entries: [{} as never],
    *   chainId: 8453n,
    *   verifyingContract: "0x0000000000000000000000000000000000000001",
    *   signTypedData: () => "0x",
@@ -1279,7 +1362,7 @@ export namespace OfferTreeUtils {
    * ```
    */
   export async function signEcrecoverRatification(params: {
-    readonly offers: readonly (IOffer | Offer)[];
+    readonly entries: TreeCreateParams;
     readonly chainId: BigIntish;
     readonly verifyingContract: Address;
     readonly signTypedData: (
@@ -1288,7 +1371,7 @@ export namespace OfferTreeUtils {
   }) {
     return params.signTypedData(
       buildEcrecoverRatificationTypedData({
-        offers: params.offers,
+        entries: params.entries,
         chainId: params.chainId,
         verifyingContract: params.verifyingContract,
       }),
@@ -1435,12 +1518,13 @@ export namespace OfferTreeUtils {
    * ```
    */
   export function verifyOfferTreeProof(params: {
-    readonly offer: IOffer | Offer;
+    readonly offer: Offer;
+    readonly group: Hash;
     readonly root: Hash;
     readonly leafIndex: BigIntish;
     readonly proof: readonly Hash[];
   }) {
-    let node = hashOffer(params.offer);
+    let node = params.offer.hash(params.group);
     const leafIndex = BigInt(params.leafIndex);
     if (leafIndex < 0n || leafIndex >> BigInt(params.proof.length) !== 0n) {
       return false;

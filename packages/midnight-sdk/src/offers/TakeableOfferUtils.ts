@@ -1,5 +1,5 @@
 import { type BigIntish, deepFreeze } from "@morpho-org/morpho-ts";
-import type { Hex } from "viem";
+import type { Hash, Hex } from "viem";
 import {
   InconsistentMarketError,
   NoMatchingOffersError,
@@ -28,6 +28,8 @@ export interface QuoteTakeableOfferInput {
   readonly ratifierData: Hex;
   /** Inline executable offer. */
   readonly offer: IOffer | Offer;
+  /** Protocol group id encoded into the offer. */
+  readonly group: Hash;
 }
 
 /**
@@ -77,7 +79,10 @@ export namespace TakeableOfferUtils {
   export function toStruct(takeableOffer: ITakeableOffer): TakeableOfferStruct {
     return {
       units: BigInt(takeableOffer.units),
-      offer: OfferUtils.toStruct(takeableOffer.offer),
+      offer: OfferUtils.toStruct({
+        offer: takeableOffer.offer,
+        group: takeableOffer.group,
+      }),
       ratifierData: takeableOffer.ratifierData,
     };
   }
@@ -114,7 +119,7 @@ export namespace TakeableOfferUtils {
 
       return {
         units: BigInt(entry.units),
-        offer: OfferUtils.toStruct(offer),
+        offer: OfferUtils.toStruct({ offer, group: entry.group }),
         ratifierData: entry.ratifierData,
       };
     });

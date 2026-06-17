@@ -1,7 +1,11 @@
 import type { BigIntish } from "@morpho-org/morpho-ts";
 import type { Address, Hash } from "viem";
-import { encodeAbiParameters, keccak256, zeroAddress, zeroHash } from "viem";
-import { DEFAULT_TICK_SPACING, MAX_TICK } from "../constants.js";
+import { encodeAbiParameters, keccak256, zeroAddress } from "viem";
+import {
+  DEFAULT_TICK_SPACING,
+  MAX_TICK,
+  OFFER_TYPEHASH,
+} from "../constants.js";
 import {
   InvalidOfferGroupError,
   InvalidOfferParameterError,
@@ -12,10 +16,27 @@ import {
   type IOffer,
   Offer,
   type OfferStruct,
-  offerStructAbiComponents,
 } from "./Offer.js";
 
 const comparableHex = (value: string) => value.toLowerCase();
+
+const offerHashParams = [
+  { name: "typehash", type: "bytes32" },
+  { name: "marketHash", type: "bytes32" },
+  { name: "buy", type: "bool" },
+  { name: "maker", type: "address" },
+  { name: "start", type: "uint256" },
+  { name: "expiry", type: "uint256" },
+  { name: "tick", type: "uint256" },
+  { name: "group", type: "bytes32" },
+  { name: "callback", type: "address" },
+  { name: "callbackDataHash", type: "bytes32" },
+  { name: "receiverIfMakerIsSeller", type: "address" },
+  { name: "ratifier", type: "address" },
+  { name: "reduceOnly", type: "bool" },
+  { name: "maxUnits", type: "uint256" },
+  { name: "maxAssets", type: "uint256" },
+] as const;
 
 const readBigIntParameter = (parameter: string, value: BigIntish) => {
   try {
@@ -29,22 +50,6 @@ const readBigIntParameter = (parameter: string, value: BigIntish) => {
     });
   }
 };
-
-/**
- * Parameters for {@link Offer.createGroup}.
- *
- * @example
- * ```ts
- * import type { BuildOfferGroupParams } from "@morpho-org/midnight-sdk";
- *
- * const params = {} as BuildOfferGroupParams;
- * console.log(params.offers.length);
- * ```
- */
-export interface BuildOfferGroupParams {
-  /** Offer builder parameters without per-offer group resolution. */
-  readonly offers: readonly Omit<BuildOfferParams, "group">[];
-}
 
 /**
  * Parameters for {@link OfferUtils.validateOfferGroup}.
@@ -61,6 +66,37 @@ export interface ValidateOfferGroupParams {
   /** Offers to validate as one protocol consumption group. */
   readonly offers: readonly (IOffer | Offer)[];
 }
+
+/**
+ * Parameters for {@link OfferUtils.toStruct}.
+ *
+ * @example
+ * ```ts
+ * import type { OfferStructParams } from "@morpho-org/midnight-sdk";
+ *
+ * const params = {} as OfferStructParams;
+ * console.log(params.group);
+ * ```
+ */
+export interface OfferStructParams {
+  /** Offer to encode. */
+  readonly offer: IOffer | Offer;
+  /** Protocol group id encoded into the ABI offer. */
+  readonly group: Hash;
+}
+
+/**
+ * Parameters for {@link OfferUtils.hash}.
+ *
+ * @example
+ * ```ts
+ * import type { HashOfferParams } from "@morpho-org/midnight-sdk";
+ *
+ * const params = {} as HashOfferParams;
+ * console.log(params.group);
+ * ```
+ */
+export interface HashOfferParams extends OfferStructParams {}
 
 /**
  * Deterministic make-offer parameters after protocol validation.
@@ -121,18 +157,18 @@ export namespace OfferUtils {
   /**
    * Converts an offer into the tuple object expected by viem ABI encoders.
    *
-   * @param offer - Offer class or plain input.
+   * @param params - Offer class or plain input plus the protocol group id.
    * @returns ABI-compatible offer.
    * @example
    * ```ts
    * import { OfferUtils } from "@morpho-org/midnight-sdk";
    *
-   * const struct = OfferUtils.toStruct({} as never);
+   * const struct = OfferUtils.toStruct({ offer: {} as never, group: "0x00" as never });
    * console.log(struct.tick);
    * ```
    */
-  export function toStruct(offer: IOffer | Offer): OfferStruct {
-    const normalizedOffer = normalizeOffer(offer);
+  export function toStruct(params: OfferStructParams): OfferStruct {
+    const normalizedOffer = normalizeOffer(params.offer);
 
     return {
       market: MarketUtils.toStruct(normalizedOffer.market),
@@ -141,7 +177,7 @@ export namespace OfferUtils {
       start: normalizedOffer.start,
       expiry: normalizedOffer.expiry,
       tick: normalizedOffer.tick,
-      group: normalizedOffer.group,
+      group: params.group,
       callback: normalizedOffer.callback,
       callbackData: normalizedOffer.callbackData,
       receiverIfMakerIsSeller: normalizedOffer.receiverIfMakerIsSeller,
@@ -150,6 +186,58 @@ export namespace OfferUtils {
       maxUnits: normalizedOffer.maxUnits,
       maxAssets: normalizedOffer.maxAssets,
     };
+  }
+
+  /**
+   * Computes the canonical protocol offer hash for an ABI-compatible offer.
+   *
+   * @param offerStruct - ABI-compatible offer to hash.
+   * @returns Offer hash.
+   * @example
+   * ```ts
+   * import { OfferUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const hash = OfferUtils.hashStruct({} as never);
+   * console.log(hash);
+   * ```
+   */
+  export function hashStruct(offerStruct: OfferStruct): Hash {
+    return keccak256(
+      encodeAbiParameters(offerHashParams, [
+        OFFER_TYPEHASH,
+        MarketUtils.hash(offerStruct.market),
+        offerStruct.buy,
+        offerStruct.maker,
+        offerStruct.start,
+        offerStruct.expiry,
+        offerStruct.tick,
+        offerStruct.group,
+        offerStruct.callback,
+        keccak256(offerStruct.callbackData),
+        offerStruct.receiverIfMakerIsSeller,
+        offerStruct.ratifier,
+        offerStruct.reduceOnly,
+        offerStruct.maxUnits,
+        offerStruct.maxAssets,
+      ]),
+    );
+  }
+
+  /**
+   * Computes the canonical protocol offer hash.
+   *
+   * @param params - Offer and protocol group id to hash.
+   * @returns Offer hash.
+   * @example
+   * ```ts
+   * import { OfferUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const hash = OfferUtils.hash({ offer: {} as never, group: "0x00" as never });
+   * console.log(hash);
+   * ```
+   */
+  export function hash(params: HashOfferParams): Hash {
+    return hashStruct(toStruct(params));
   }
 
   /**
@@ -357,47 +445,7 @@ export namespace OfferUtils {
   }
 
   /**
-   * Derives the deterministic group id for a group of offers.
-   *
-   * The group field itself is zeroed before hashing so the resulting group id
-   * is content-addressed by the offer contents it commits to.
-   *
-   * @param offers - Offers to hash.
-   * @returns Content-addressed group id.
-   * @example
-   * ```ts
-   * import { OfferUtils } from "@morpho-org/midnight-sdk";
-   *
-   * const group = OfferUtils.deriveOfferGroup([{} as never]);
-   * console.log(group);
-   * ```
-   */
-  export function deriveOfferGroup(offers: readonly (IOffer | Offer)[]): Hash {
-    const structs = offers.map((offer) => ({
-      ...toStruct(offer),
-      group: zeroHash,
-    }));
-
-    return keccak256(
-      encodeAbiParameters(
-        [
-          {
-            name: "offers",
-            type: "tuple[]",
-            components: offerStructAbiComponents,
-          },
-        ],
-        [structs],
-      ),
-    );
-  }
-
-  /**
    * Validates protocol-level mechanics for one Midnight offer consumption group.
-   *
-   * This intentionally checks only protocol mechanics. API-publication policy
-   * such as content-addressed groups lives in
-   * {@link validateOfferGroupForApiPublication}.
    *
    * @param params - Offer group validation parameters.
    * @returns Immutable offers in the same order as the input entries.
@@ -433,7 +481,6 @@ export namespace OfferUtils {
     }
 
     const expectedMaker = comparableHex(first.maker);
-    const expectedGroup = comparableHex(first.group);
     const expectedBuy = first.buy;
     const expectedLoanToken = comparableHex(first.market.loanToken);
 
@@ -441,11 +488,6 @@ export namespace OfferUtils {
       if (comparableHex(offer.maker) !== expectedMaker) {
         throw new InvalidOfferGroupError(
           "All offers in a group must use the same maker.",
-        );
-      }
-      if (comparableHex(offer.group) !== expectedGroup) {
-        throw new InvalidOfferGroupError(
-          "All offers in a group must use the same group id.",
         );
       }
       if (offer.buy !== expectedBuy) {
@@ -479,53 +521,6 @@ export namespace OfferUtils {
     }
 
     return [...offers];
-  }
-
-  /**
-   * Validates the public API publication rules known locally.
-   *
-   * This helper intentionally stays narrow: changing public policy should be
-   * surfaced by `MidnightApi.validateMempoolTree` when possible. The stable
-   * local checks are protocol group validity and content-addressed group ids.
-   *
-   * @param params - Offer group validation parameters.
-   * @returns Immutable offers in the same order as the input entries.
-   * @throws InvalidOfferGroupError when the group cannot be published through the public API.
-   * @example
-   * ```ts
-   * import { OfferUtils } from "@morpho-org/midnight-sdk";
-   *
-   * const offers = OfferUtils.validateOfferGroupForApiPublication({
-   *   offers: [{} as never],
-   * });
-   * console.log(offers.length);
-   * ```
-   */
-  export function validateOfferGroupForApiPublication(
-    params: ValidateOfferGroupParams,
-  ): readonly Offer[] {
-    const offers = validateOfferGroup(params);
-    const expectedGroup = comparableHex(deriveOfferGroup(offers));
-    const expectedCallback = comparableHex(offers[0]!.callback);
-    const expectedCallbackData = comparableHex(offers[0]!.callbackData);
-
-    for (const offer of offers) {
-      if (comparableHex(offer.group) !== expectedGroup) {
-        throw new InvalidOfferGroupError(
-          "All offers in an API-published group must use the content-addressed group id.",
-        );
-      }
-      if (
-        comparableHex(offer.callback) !== expectedCallback ||
-        comparableHex(offer.callbackData) !== expectedCallbackData
-      ) {
-        throw new InvalidOfferGroupError(
-          "All offers in an API-published group must use the same callback address and data.",
-        );
-      }
-    }
-
-    return offers;
   }
 
   /**

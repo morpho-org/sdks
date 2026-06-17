@@ -335,11 +335,11 @@ interest.
 
 Low-value value wrappers should stay as interfaces/types rather than classes. Constructors and pure
 class methods must not fetch, sign, or deep-freeze instances. User-facing factories that return class
-instances should live as static methods on the class: `Offer.create`, `Offer.createGroup`,
-`Group.create`, `Tree.create`, and similar APIs are preferred over public `*Utils` builders that
-return class instances. Class-specific methods and getters should delegate to pure `*Utils` namespace
-functions that accept readonly plain JavaScript objects compatible with the class public shape, so
-object-first consumers can use the same logic without constructing classes. Classes must not expose
+instances should live as static methods on the class: `Offer.create`, `Group.create`, `Tree.create`,
+and similar APIs are preferred over public `*Utils` builders that return class instances.
+Class-specific methods and getters should delegate to pure `*Utils` namespace functions that accept
+readonly plain JavaScript objects compatible with the class public shape, so object-first consumers
+can use the same logic without constructing classes. Classes must not expose
 public `from(...)` or `toStruct()` methods whose only job is reshaping values for viem.
 ABI-compatible plain objects are built by internal helpers in the modules that encode or call
 contracts. Fetch helpers return populated domain objects where the class has meaningful behavior,
@@ -409,12 +409,12 @@ It should:
 
 Make-offer helpers should support the limit-order path without importing app code:
 
-- `Offer.create` is the user-facing constructor for raw protocol `Offer` class instances from market, side, tick, max assets, expiry, callback, receiver, ratifier, and an explicit group input;
-- `OfferUtils` owns pure object-compatible offer validation, struct conversion, offer expiry helpers, receiver-zeroing checks, cap checks, group hashing, and API-publication validation helpers;
-- raw protocol helpers may accept explicit groups for contract parity, but maker-publication helpers should derive content-addressed group ids from the offers they publish so the result matches current Morpho API validation;
-- `Offer.createGroup` / `Group.create` are the user-facing group factories. They build multiple offers with one derived group id, preserving caller order while using a deterministic content hash for the group identity; their implementation uses `OfferUtils` validation and hashing helpers that also accept plain offer-like objects;
-- `OfferUtils.validateOfferGroup` exposes protocol checks and API-publication checks separately. Protocol checks enforce non-empty groups, same maker, same group, same side, same loan token, valid receiver zeroing, and exactly one non-zero unit/asset cap. API-publication checks additionally mirror the current public validation policy for maker trees, including content-addressed group identity, same callback address/data where required, non-overlapping active windows per market, and current capacity/rule constraints fetched from the API;
-- `Tree.create({ groups })` builds a Merkle tree from `Group` instances or plain group inputs, preserving offer order across groups, and delegates tree hashing/proof logic to pure `TreeUtils` helpers that accept object-compatible group inputs;
+- `Offer.create` is the user-facing constructor for raw protocol `Offer` class instances from market, side, tick, max assets, expiry, callback, receiver, and ratifier. Offers do not own their group id;
+- `Offer.hash(group)` computes the protocol offer hash for an explicit group id, while `Offer.hash()` defaults to the zero hash and `Offer.groupHash` exposes that zero-group hash for content-addressed group derivation;
+- `OfferUtils` owns pure object-compatible offer validation, struct conversion, offer hashing, offer expiry helpers, receiver-zeroing checks, and cap checks;
+- `Group.create` is the user-facing group factory. It builds a group with one derived id, preserving caller offer order while deriving identity by sorting the member offers' `groupHash` values and hashing the concatenation through `GroupUtils.hash`;
+- `OfferUtils.validateOfferGroup` enforces protocol group checks: non-empty groups, same maker, same side, same loan token, valid receiver zeroing, and exactly one non-zero unit/asset cap. `GroupUtils.validateForApiPublication` additionally mirrors local API-publication checks such as content-addressed group identity and same callback address/data where required;
+- `Tree.create([...])` builds a Merkle tree from `Group` instances or standalone `Offer` instances, preserving offer order across groups and wrapping standalone offers into single-offer groups;
 - expose offer-tree, Merkle root, proof, ratifier-data, root-approval, mempool-submission, and API-validation helpers behind stable SDK classes and class methods where the return value is class-shaped;
 - validate maker trees through `MidnightApi` before wallet signature/root approval; validation encodes empty per-leaf `ratifierData` because the API endpoint inspects offer contents, not ratifier data;
 - keep offer publication/submission onchain through `Payload.buildSubmissionCall`; the current public API does not expose a submit endpoint.
@@ -501,7 +501,7 @@ import {
 
 const api = new MidnightApi();
 const group = Group.create(offers);
-const tree = Tree.create({ groups: [group] });
+const tree = Tree.create([group]);
 
 const validation = await api.validateMempoolTree({ tree, chainId });
 if (!validation.valid) {
@@ -552,7 +552,7 @@ typed data", "call this contract", "submit this payload", and "validate this tre
 bytes, a small attribution-suffix allowance, canonical ABI-byte validation, and a typed
 `Payload.DecodeError`.
 
-`MidnightApi` is the public Morpho API HTTP boundary. Direct calls default to `https://api.morpho.org`; configured instances share a custom string-or-`URL` `baseUrl`, injected `fetch`, and `request` options for headers, abort signals, credentials, cache, and similar fetch settings. Custom base URLs are parsed with the standard `URL` API, normalized by clearing search/hash, and joined with SDK-owned endpoint paths. SDK-controlled fields remain fixed: URL path/query, HTTP method, JSON body, `Content-Type: application/json` on POST requests, and an exact `sdk-version` header equal to the `@morpho-org/midnight-sdk` package version. Book, quote, and takeable-offer routes map documented snake_case fields to SDK camelCase interfaces without adding runtime schema validation. Validation normalizes the current API response `{ data: { issues } }` to SDK camelCase data `{ valid, issues }`, where `valid` is derived from `issues.length === 0`; it does not rely on the API echoing a payload. Mempool-rules support is a thin, explicitly version-tolerant boundary: `fetchMempoolRules` may expose the raw paginated `{ cursor, data }` response or a lightly normalized equivalent, but the TIB does not freeze rule field names such as `callbackType`, `tickSpacing`, or `allowedLltvs` until the public rules schema is finalized.
+`MidnightApi` is the public Midnight API HTTP boundary. Direct calls default to `https://api.morpho.org/v1/midnight`; configured instances share a custom string-or-`URL` `baseUrl`, injected `fetch`, and `request` options for headers, abort signals, credentials, cache, and similar fetch settings. Custom base URLs are parsed with the standard `URL` API, normalized by clearing search/hash, and joined with SDK-owned endpoint paths. SDK-controlled fields remain fixed: URL path/query, HTTP method, JSON body, `Content-Type: application/json` on POST requests, and an exact `sdk-version` header equal to the `@morpho-org/midnight-sdk` package version. Book, quote, and takeable-offer routes map documented snake_case fields to SDK camelCase interfaces without adding runtime schema validation. Validation normalizes the current API response `{ data: { issues } }` to SDK camelCase data `{ valid, issues }`, where `valid` is derived from `issues.length === 0`; it does not rely on the API echoing a payload. Mempool-rules support is a thin, explicitly version-tolerant boundary: `fetchMempoolRules` may expose the raw paginated `{ cursor, data }` response or a lightly normalized equivalent, but the TIB does not freeze rule field names such as `callbackType`, `tickSpacing`, or `allowedLltvs` until the public rules schema is finalized.
 
 The current public API exposes Books, Maker takes, Mempool validate, and Mempool rules. This implementation wraps those routes directly. No generator is introduced for now because the SDK only needs lightweight API calls; type names stay close to the OpenAPI schema names so a future dev-only generator can replace or verify them if a stable spec URL appears.
 
@@ -566,8 +566,8 @@ The package should make these current app flows straightforward without becoming
 | Borrow against existing collateral | Same periphery route with empty `CollateralSupply[]`; caller skips collateral approval when collateral amount is zero |
 | Supply collateral only | Address helpers from `@morpho-org/morpho-ts`, ABI constants from `@morpho-org/midnight-sdk`, and caller-owned `supplyCollateral` calldata |
 | Lend market order | `TakeAmountsLib` min-units rounding and `TakeableOffer.createMany`; loan-token approval, bundler authorization, and standalone periphery calldata remain caller-owned unless a future helper owns route selection or bound computation |
-| Borrow limit order | optional caller-owned `supplyCollateral` calldata, `Offer.create` with `buy: false`, `Offer.createGroup`/`Group.create`/`Tree.create`, `RatifierUtils`, `MidnightApi`, `EcrecoverRatifier`/`SetterRatifier`, `OfferTreeUtils` proof/root helpers, and `Payload` only for final mempool publication |
-| Lend/multi-limit order | caller-owned loan-token approval to the core Midnight contract, `Offer.create` with `buy: true`, `Offer.createGroup`/`Group.create`/`Tree.create`, `RatifierUtils`, `MidnightApi`, `EcrecoverRatifier`/`SetterRatifier`, `OfferTreeUtils` proof/root helpers, and `Payload` only for final mempool publication |
+| Borrow limit order | optional caller-owned `supplyCollateral` calldata, `Offer.create` with `buy: false`, `Group.create`/`Tree.create`, `RatifierUtils`, `MidnightApi`, `EcrecoverRatifier`/`SetterRatifier`, `OfferTreeUtils` proof/root helpers, and `Payload` only for final mempool publication |
+| Lend/multi-limit order | caller-owned loan-token approval to the core Midnight contract, `Offer.create` with `buy: true`, `Group.create`/`Tree.create`, `RatifierUtils`, `MidnightApi`, `EcrecoverRatifier`/`SetterRatifier`, `OfferTreeUtils` proof/root helpers, and `Payload` only for final mempool publication |
 
 ## Implementation Phases
 

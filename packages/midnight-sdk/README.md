@@ -24,7 +24,7 @@ TypeScript types model the API contract.
 import { MidnightApi, type TreeInput } from "@morpho-org/midnight-sdk";
 
 const api = new MidnightApi({
-  baseUrl: "https://api.morpho.org",
+  baseUrl: "https://api.morpho.org/v1/midnight",
   request: {
     signal: AbortSignal.timeout(10_000),
   },
@@ -54,7 +54,7 @@ export async function fetchBaseBooks() {
 ```
 
 For one-off calls, use the static `MidnightApi` methods directly. They default to
-`https://api.morpho.org` unless the call passes a `baseUrl` override:
+`https://api.morpho.org/v1/midnight` unless the call passes a `baseUrl` override:
 
 ```ts
 import { MidnightApi } from "@morpho-org/midnight-sdk";

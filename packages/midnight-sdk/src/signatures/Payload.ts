@@ -4,6 +4,7 @@ import {
   bytesToHex,
   decodeAbiParameters,
   encodeAbiParameters,
+  type Hash,
   type Hex,
   hexToBytes,
 } from "viem";
@@ -39,6 +40,8 @@ export type Payload = Hex;
 export type Item = {
   /** Maker-side offer carried by the payload. */
   readonly offer: IOffer | Offer;
+  /** Protocol group id encoded into the offer. */
+  readonly group: Hash;
   /** Opaque ratifier data passed to `Midnight.take`. */
   readonly ratifierData: Hex;
 };
@@ -222,7 +225,7 @@ const itemsAbi = [
  * ```ts
  * import { Payload } from "@morpho-org/midnight-sdk";
  *
- * const encoded = await Payload.encode([{ offer: {} as never, ratifierData: "0x" }]);
+ * const encoded = await Payload.encode([{ offer: {} as never, group: "0x00" as never, ratifierData: "0x" }]);
  * console.log(encoded);
  * ```
  */
@@ -232,7 +235,7 @@ export async function encode(items: readonly Item[]): Promise<Payload> {
   }
   assertItemCountWithinLimit(items.length);
   const payloadItems = items.map((item) => {
-    const offer = OfferUtils.toStruct(item.offer);
+    const offer = OfferUtils.toStruct({ offer: item.offer, group: item.group });
     assertApiValidOfferStruct(offer);
     return {
       offer,
@@ -388,6 +391,7 @@ function decodeItemsBytes(decoded: Uint8Array): Item[] {
       assertApiValidOfferStruct(entry.offer);
       return {
         offer: OfferUtils.normalizeOffer(entry.offer),
+        group: entry.offer.group,
         ratifierData: entry.ratifierData,
       };
     });
@@ -406,7 +410,7 @@ function assertCanonicalItemsBytes(
 ): void {
   const canonical = encodeAbiParameters(itemsAbi, [
     items.map((item) => ({
-      offer: OfferUtils.toStruct(item.offer),
+      offer: OfferUtils.toStruct({ offer: item.offer, group: item.group }),
       ratifierData: item.ratifierData,
     })),
   ]);

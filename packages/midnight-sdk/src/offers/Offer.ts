@@ -8,7 +8,7 @@ import type {
 } from "../market/index.js";
 import type { MarketParams } from "../market/Market.js";
 import { MarketUtils } from "../market/MarketUtils.js";
-import { type BuildOfferGroupParams, OfferUtils } from "./OfferUtils.js";
+import { OfferUtils } from "./OfferUtils.js";
 
 /**
  * Plain input accepted by {@link Offer}.
@@ -31,7 +31,6 @@ import { type BuildOfferGroupParams, OfferUtils } from "./OfferUtils.js";
  *   start: 0n,
  *   expiry: 2n,
  *   tick: 100n,
- *   group: "0x0000000000000000000000000000000000000000000000000000000000000000",
  *   callback: "0x0000000000000000000000000000000000000000",
  *   callbackData: "0x",
  *   receiverIfMakerIsSeller: "0x0000000000000000000000000000000000000000",
@@ -55,8 +54,6 @@ export interface IOffer {
   readonly expiry: BigIntish;
   /** Midnight tick. */
   readonly tick: BigIntish;
-  /** Consumption group. */
-  readonly group: Hash;
   /** Optional maker callback. */
   readonly callback: Address;
   /** Callback payload. */
@@ -94,7 +91,6 @@ export interface IOffer {
  *   start: 0n,
  *   expiry: 2n,
  *   tick: 100n,
- *   group: "0x0000000000000000000000000000000000000000000000000000000000000000",
  *   callback: "0x0000000000000000000000000000000000000000",
  *   callbackData: "0x",
  *   receiverIfMakerIsSeller: "0x0000000000000000000000000000000000000002",
@@ -125,9 +121,6 @@ export class Offer {
   /** Midnight tick. */
   public readonly tick: bigint;
 
-  /** Consumption group. */
-  public readonly group: Hash;
-
   /** Optional maker callback. */
   public readonly callback: Address;
 
@@ -156,7 +149,6 @@ export class Offer {
     this.start = BigInt(offer.start);
     this.expiry = BigInt(offer.expiry);
     this.tick = BigInt(offer.tick);
-    this.group = offer.group;
     this.callback = offer.callback;
     this.callbackData = offer.callbackData;
     this.receiverIfMakerIsSeller = offer.receiverIfMakerIsSeller;
@@ -167,7 +159,45 @@ export class Offer {
   }
 
   /**
-   * Creates a raw Midnight offer with an explicit protocol group id.
+   * Computes the canonical protocol offer hash for this offer in `group`.
+   *
+   * @param group - Protocol group id encoded into the offer hash; defaults to zero for group derivation.
+   * @returns Offer hash.
+   * @example
+   * ```ts
+   * import { Offer } from "@morpho-org/midnight-sdk";
+   *
+   * const offer = Offer.create({} as never);
+   * const hash = offer.hash();
+   * console.log(hash);
+   * ```
+   */
+  public hash(group: Hash = zeroHash): Hash {
+    return OfferUtils.hash({ offer: this, group });
+  }
+
+  /**
+   * Computes this offer's contribution to a content-addressed group id.
+   *
+   * The offer is hashed with `group = 0x00..00`, matching router group id
+   * derivation and avoiding any circular dependency on the final group id.
+   *
+   * @returns Offer hash with the group field zeroed.
+   * @example
+   * ```ts
+   * import { Offer } from "@morpho-org/midnight-sdk";
+   *
+   * const offer = Offer.create({} as never);
+   * const hash = offer.groupHash;
+   * console.log(hash);
+   * ```
+   */
+  public get groupHash(): Hash {
+    return this.hash();
+  }
+
+  /**
+   * Creates a raw Midnight offer without assigning it to a protocol group.
    *
    * @param params - Offer creation parameters.
    * @returns Offer instance.
@@ -177,7 +207,7 @@ export class Offer {
    * import { Offer } from "@morpho-org/midnight-sdk";
    *
    * const offer = Offer.create({} as never);
-   * console.log(offer.group);
+   * console.log(offer.tick);
    * ```
    */
   public static create(params: BuildOfferParams): Offer {
@@ -190,7 +220,6 @@ export class Offer {
       start: validated.start,
       expiry: validated.expiry,
       tick: validated.tick,
-      group: params.group,
       callback: params.callback ?? zeroAddress,
       callbackData: params.callbackData ?? "0x",
       receiverIfMakerIsSeller: validated.receiverIfMakerIsSeller,
@@ -198,36 +227,6 @@ export class Offer {
       reduceOnly: params.reduceOnly ?? false,
       maxUnits: validated.maxUnits,
       maxAssets: validated.maxAssets,
-    });
-  }
-
-  /**
-   * Creates offers that share a deterministic content-addressed group id.
-   *
-   * @param params - Offer group creation parameters.
-   * @returns Immutable offers in caller order.
-   * @throws InvalidOfferGroupError when the group cannot satisfy protocol mechanics.
-   * @throws InvalidOfferParameterError when an offer cannot satisfy parameter rules.
-   * @example
-   * ```ts
-   * import { Offer } from "@morpho-org/midnight-sdk";
-   *
-   * const offers = Offer.createGroup({ offers: [{} as never] });
-   * console.log(offers[0]?.group);
-   * ```
-   */
-  public static createGroup(params: BuildOfferGroupParams): readonly Offer[] {
-    if (params.offers.length === 0) {
-      return OfferUtils.validateOfferGroup({ offers: [] });
-    }
-
-    const ungroupedOffers = params.offers.map((offer) =>
-      Offer.create({ ...offer, group: zeroHash }),
-    );
-    const group = OfferUtils.deriveOfferGroup(ungroupedOffers);
-
-    return OfferUtils.validateOfferGroup({
-      offers: params.offers.map((offer) => Offer.create({ ...offer, group })),
     });
   }
 }
@@ -344,8 +343,6 @@ export interface BuildOfferParams {
   readonly start?: BigIntish;
   /** Offer expiry timestamp. */
   readonly expiry: BigIntish;
-  /** Explicit protocol consumption group. */
-  readonly group: Hash;
   /** Callback address; defaults to zero address. */
   readonly callback?: Address;
   /** Callback payload; defaults to `0x`. */

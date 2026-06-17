@@ -1,3 +1,4 @@
+import { BLUE_API_BASE_URL } from "@morpho-org/morpho-ts";
 import type { Address, Hash, Hex } from "viem";
 import {
   InvalidMidnightApiResponseError,
@@ -7,25 +8,19 @@ import { MIDNIGHT_SDK_VERSION } from "../version.js";
 import type {
   ApiBookMarketResponse,
   ApiCollateralResponse,
-  ApiConfigContractResponse,
   ApiPriceLevelResponse,
   ApiRequestParams,
   ApiTakeableOfferResponse,
-  ApiUserGroupResponse,
-  ApiUserOfferResponse,
   MempoolPayloadValidationResult,
   MempoolRulesResult,
   MidnightApiBookMarket,
   MidnightApiBookSide,
   MidnightApiCollateral,
-  MidnightApiConfigContract,
   MidnightApiPriceLevel,
   MidnightApiTakeableOffer,
-  MidnightApiUserGroup,
-  MidnightApiUserOffer,
 } from "./types.js";
 
-const DEFAULT_MIDNIGHT_API_URL = new URL("https://api.morpho.org");
+const DEFAULT_MIDNIGHT_API_URL = new URL("/v1/midnight", BLUE_API_BASE_URL);
 
 /** @internal Sends one Midnight API request and maps non-2xx responses to SDK errors. */
 export async function requestMidnightApi<Response = unknown>(
@@ -108,25 +103,13 @@ export function buildBookPath(params: {
   readonly suffix?: "quote" | "takeable-offers";
 }) {
   const segments = [
-    "v1",
-    "midnight",
     "books",
     params.marketId,
     params.side,
     params.suffix,
   ].filter((segment): segment is string => segment !== undefined);
 
-  return `/${segments.map(encodeURIComponent).join("/")}`;
-}
-
-/** @internal Builds a user endpoint path with encoded path segments. */
-export function buildUserPath(params: {
-  readonly user: Address;
-  readonly suffix: "offers" | "groups";
-}) {
-  const segments = ["v1", "users", params.user, params.suffix];
-
-  return `/${segments.map(encodeURIComponent).join("/")}`;
+  return segments.map(encodeURIComponent).join("/");
 }
 
 /** @internal Maps a book market API payload to the SDK response shape. */
@@ -204,65 +187,6 @@ export function mapTakeableOffer(
       maxAssets: offer.max_assets,
     },
     ratifierData: takeableOffer.ratifier_data,
-  };
-}
-
-/** @internal Maps a config-contract API payload to the SDK response shape. */
-export function mapConfigContract(
-  contract: ApiConfigContractResponse,
-): MidnightApiConfigContract {
-  return {
-    chainId: contract.chain_id,
-    name: contract.name,
-    address: contract.address,
-  };
-}
-
-/** @internal Maps a user-offer API payload to the SDK response shape. */
-export function mapUserOffer(
-  offer: ApiUserOfferResponse,
-): MidnightApiUserOffer {
-  return {
-    hash: offer.hash,
-    market: {
-      id: offer.market.id,
-      loanToken: offer.market.loan_token,
-      collaterals: offer.market.collaterals.map(mapCollateral),
-      maturity: offer.market.maturity,
-      rcfThreshold: offer.market.rcf_threshold,
-      enterGate: offer.market.enter_gate,
-      liquidatorGate: offer.market.liquidator_gate,
-    },
-    buy: offer.buy,
-    maker: offer.maker,
-    start: offer.start,
-    expiry: offer.expiry,
-    tick: offer.tick,
-    group: {
-      id: offer.group.id,
-      consumed: offer.group.consumed,
-      takeableUnits: offer.group.takeable_units,
-    },
-    callback: offer.callback,
-    callbackData: offer.callback_data,
-    receiverIfMakerIsSeller: offer.receiver_if_maker_is_seller,
-    ratifier: offer.ratifier,
-    reduceOnly: offer.reduce_only,
-    maxUnits: offer.max_units,
-    maxAssets: offer.max_assets,
-  };
-}
-
-/** @internal Maps a user-group API payload to the SDK response shape. */
-export function mapUserGroup(
-  group: ApiUserGroupResponse,
-): MidnightApiUserGroup {
-  return {
-    id: group.id,
-    chainId: group.chain_id,
-    maxUnits: group.max_units,
-    maxAssets: group.max_assets,
-    consumed: group.consumed,
   };
 }
 

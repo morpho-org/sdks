@@ -185,84 +185,6 @@ const expectedTakeableOffer = {
   ratifierData: "0x1234",
 };
 
-const apiUserOffer = {
-  hash: "0xac4bd8318ec914f89f8af913f162230575b0ac0696a19256bc12138c5cfe1427",
-  market: {
-    id: MARKET_ID,
-    ...apiOfferMarket,
-  },
-  buy: false,
-  maker: MAKER,
-  start: 1_761_922_790,
-  expiry: 1_761_922_799,
-  tick: 495,
-  group: {
-    id: GROUP_ID,
-    consumed: "0",
-    takeable_units: "369216000000000000000000",
-  },
-  callback: ZERO_ADDRESS,
-  callback_data: "0x",
-  receiver_if_maker_is_seller: MAKER,
-  ratifier: RATIFIER,
-  reduce_only: false,
-  max_units: "369216000000000000000000",
-  max_assets: "0",
-};
-
-const expectedUserOffer = {
-  hash: "0xac4bd8318ec914f89f8af913f162230575b0ac0696a19256bc12138c5cfe1427",
-  market: {
-    id: MARKET_ID,
-    ...expectedOffer.market,
-  },
-  buy: false,
-  maker: MAKER,
-  start: 1_761_922_790,
-  expiry: 1_761_922_799,
-  tick: 495,
-  group: {
-    id: GROUP_ID,
-    consumed: "0",
-    takeableUnits: "369216000000000000000000",
-  },
-  callback: ZERO_ADDRESS,
-  callbackData: "0x",
-  receiverIfMakerIsSeller: MAKER,
-  ratifier: RATIFIER,
-  reduceOnly: false,
-  maxUnits: "369216000000000000000000",
-  maxAssets: "0",
-};
-
-const apiUserGroup = {
-  id: GROUP_ID,
-  chain_id: 1,
-  max_units: "369216000000000000000000",
-  max_assets: "0",
-  consumed: "0",
-};
-
-const expectedUserGroup = {
-  id: GROUP_ID,
-  chainId: 1,
-  maxUnits: "369216000000000000000000",
-  maxAssets: "0",
-  consumed: "0",
-};
-
-const apiConfigContract = {
-  chain_id: 8453,
-  name: "midnight",
-  address: "0x23DFBc4B8B80C14CC5e25011B8491f268395BAd6",
-};
-
-const expectedConfigContract = {
-  chainId: 8453,
-  name: "midnight",
-  address: "0x23DFBc4B8B80C14CC5e25011B8491f268395BAd6",
-};
-
 describe("MIDNIGHT_SDK_VERSION", () => {
   test("default", () => {
     const packageJson = JSON.parse(
@@ -341,7 +263,7 @@ describe("MidnightApi.validateMempoolPayload", () => {
 
     const url = getRequestUrl(calls[0]!);
     expect(url.origin).toBe("https://api.example");
-    expect(url.pathname).toBe("/base/v1/midnight/mempool/validate");
+    expect(url.pathname).toBe("/base/mempool/validate");
   });
 
   test.each([400, 503])("error: MidnightApiError %s", async (status) => {
@@ -396,7 +318,13 @@ describe("MidnightApi.validateMempoolItems", () => {
 
     const result = await MidnightApi.validateMempoolItems({
       chainId: 8453,
-      items: [{ offer: apiValidOffer(), ratifierData: "0x1234" as Hex }],
+      items: [
+        {
+          offer: apiValidOffer(),
+          group: GROUP_ID,
+          ratifierData: "0x1234" as Hex,
+        },
+      ],
       fetch,
     });
 
@@ -420,7 +348,7 @@ describe("MidnightApi.validateMempoolTree", () => {
 
     const result = await MidnightApi.validateMempoolTree({
       chainId: 8453,
-      tree: { groups: [[apiValidOffer()]] },
+      tree: [apiValidOffer()],
       fetch,
     });
 
@@ -442,7 +370,7 @@ describe("MidnightApi instance", () => {
 
     const result = await api.validateMempoolTree({
       chainId: 8453,
-      tree: { groups: [[apiValidOffer()]] },
+      tree: [apiValidOffer()],
     });
 
     expect(result.valid).toBe(true);
@@ -464,7 +392,7 @@ describe("MidnightApi instance", () => {
     expect(result.data).toEqual([expectedBook]);
     const url = getRequestUrl(calls[0]!);
     expect(url.origin).toBe("https://api.example");
-    expect(url.pathname).toBe("/base/v1/midnight/books");
+    expect(url.pathname).toBe("/base/books");
     expect(url.searchParams.get("limit")).toBe("1");
   });
 });
@@ -681,99 +609,6 @@ describe("MidnightApi.fetchTakeableOffers", () => {
   });
 });
 
-describe("MidnightApi.fetchUserOffers", () => {
-  test("default", async () => {
-    const { calls, fetch } = createJsonFetch({
-      cursor: "next",
-      data: [apiUserOffer],
-    });
-
-    const result = await MidnightApi.fetchUserOffers({
-      user: MAKER,
-      marketIds: [MARKET_ID, SECOND_MARKET_ID],
-      groups: [GROUP_ID],
-      active: true,
-      limit: 10,
-      cursor: "previous",
-      fetch,
-    });
-
-    expect(result).toEqual({
-      cursor: "next",
-      data: [expectedUserOffer],
-    });
-
-    const call = calls[0]!;
-    const url = getRequestUrl(call);
-    expect(url.pathname).toBe(`/v1/users/${MAKER}/offers`);
-    expect(url.searchParams.get("market_ids")).toBe(
-      `${MARKET_ID},${SECOND_MARKET_ID}`,
-    );
-    expect(url.searchParams.get("groups")).toBe(GROUP_ID);
-    expect(url.searchParams.get("active")).toBe("true");
-    expect(url.searchParams.get("limit")).toBe("10");
-    expect(url.searchParams.get("cursor")).toBe("previous");
-    expect(call.init?.method).toBe("GET");
-  });
-});
-
-describe("MidnightApi.fetchUserGroups", () => {
-  test("default", async () => {
-    const { calls, fetch } = createJsonFetch({
-      cursor: "next",
-      data: [apiUserGroup],
-    });
-
-    const result = await MidnightApi.fetchUserGroups({
-      user: MAKER,
-      limit: 10,
-      cursor: "previous",
-      fetch,
-    });
-
-    expect(result).toEqual({
-      cursor: "next",
-      data: [expectedUserGroup],
-    });
-
-    const call = calls[0]!;
-    const url = getRequestUrl(call);
-    expect(url.pathname).toBe(`/v1/users/${MAKER}/groups`);
-    expect(url.searchParams.get("limit")).toBe("10");
-    expect(url.searchParams.get("cursor")).toBe("previous");
-    expect(call.init?.method).toBe("GET");
-  });
-});
-
-describe("MidnightApi.fetchConfigContracts", () => {
-  test("default", async () => {
-    const { calls, fetch } = createJsonFetch({
-      cursor: "next",
-      data: [apiConfigContract],
-    });
-
-    const result = await MidnightApi.fetchConfigContracts({
-      chainIds: [1, 8453],
-      limit: 10,
-      cursor: "previous",
-      fetch,
-    });
-
-    expect(result).toEqual({
-      cursor: "next",
-      data: [expectedConfigContract],
-    });
-
-    const call = calls[0]!;
-    const url = getRequestUrl(call);
-    expect(url.pathname).toBe("/v1/config/contracts");
-    expect(url.searchParams.get("chains")).toBe("1,8453");
-    expect(url.searchParams.get("limit")).toBe("10");
-    expect(url.searchParams.get("cursor")).toBe("previous");
-    expect(call.init?.method).toBe("GET");
-  });
-});
-
 describe("MidnightApi.fetchMempoolRules", () => {
   test("default", async () => {
     const timestamp = new Date("2026-06-01T16:00:00.000Z");
@@ -840,7 +675,7 @@ describe("MidnightApi.fetchMempoolRules", () => {
     const call = calls[0]!;
     const url = getRequestUrl(call);
     expect(url.origin).toBe("https://api.example");
-    expect(url.pathname).toBe("/v1/midnight/mempool/rules");
+    expect(url.pathname).toBe("/mempool/rules");
     expect(url.searchParams.get("chain_ids")).toBe("1,8453");
     expect(url.searchParams.get("types")).toBe("tick_spacing,collateral_lltv");
     expect(url.searchParams.get("timestamp")).toBe(timestamp.toISOString());
@@ -869,7 +704,7 @@ describe("MidnightApi.fetchMempoolRules", () => {
 
     const url = getRequestUrl(calls[0]!);
     expect(url.origin).toBe("https://api.example");
-    expect(url.pathname).toBe("/base/v1/midnight/mempool/rules");
+    expect(url.pathname).toBe("/base/mempool/rules");
   });
 
   test("error: MidnightApiError", async () => {

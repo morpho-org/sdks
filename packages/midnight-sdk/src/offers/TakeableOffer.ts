@@ -1,5 +1,5 @@
 import type { BigIntish } from "@morpho-org/morpho-ts";
-import type { Hex } from "viem";
+import type { Hash, Hex } from "viem";
 import type { IOffer, Offer, OfferStruct } from "./Offer.js";
 import { OfferUtils } from "./OfferUtils.js";
 import {
@@ -23,6 +23,8 @@ export interface ITakeableOffer {
   readonly units: BigIntish;
   /** Inline offer. */
   readonly offer: IOffer | Offer;
+  /** Protocol group id encoded into the offer. */
+  readonly group: Hash;
   /** Ratifier data payload. */
   readonly ratifierData: Hex;
 }
@@ -43,12 +45,15 @@ export class TakeableOffer {
   public readonly units: bigint;
   /** Inline offer. */
   public readonly offer: Offer;
+  /** Protocol group id encoded into the offer. */
+  public readonly group: Hash;
   /** Ratifier data payload. */
   public readonly ratifierData: Hex;
 
   public constructor(takeableOffer: ITakeableOffer) {
     this.units = BigInt(takeableOffer.units);
     this.offer = OfferUtils.normalizeOffer(takeableOffer.offer);
+    this.group = takeableOffer.group;
     this.ratifierData = takeableOffer.ratifierData;
   }
 
@@ -72,7 +77,13 @@ export class TakeableOffer {
     params: CreateManyTakeableOffersParams,
   ): readonly TakeableOffer[] {
     return TakeableOfferUtils.toStructs(params).map(
-      (takeableOffer) => new TakeableOffer(takeableOffer),
+      (takeableOffer) =>
+        new TakeableOffer({
+          units: takeableOffer.units,
+          offer: takeableOffer.offer,
+          group: takeableOffer.offer.group,
+          ratifierData: takeableOffer.ratifierData,
+        }),
     );
   }
 }
