@@ -492,9 +492,7 @@ export namespace OfferUtils {
    *
    * Use before deriving a content-addressed group id. `Group.create` calls this
    * automatically; call it directly only when you need the normalized offers
-   * without constructing a `Group`. API publication may impose additional
-   * policy, so run `MidnightApi.validateMempoolTree` before signing or
-   * approving a tree.
+   * without constructing a `Group`.
    *
    * @param params - Offer group validation parameters.
    * @returns Normalized offers in the same order as the input entries.

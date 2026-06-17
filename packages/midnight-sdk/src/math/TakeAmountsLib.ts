@@ -10,7 +10,6 @@ import {
   PriceGreaterThanOneError,
   SettlementFeeExceedsPriceError,
 } from "../errors.js";
-import { type IOffer, OfferUtils } from "../offers/index.js";
 import { TickLib } from "./TickLib.js";
 
 /**
@@ -34,49 +33,34 @@ export namespace TakeAmountsLib {
    * @throws {SettlementFeeExceedsPriceError} when settlement fee exceeds a buy offer price.
    * @example
    * ```ts
-   * import { TakeAmountsLib, type IOffer } from "@morpho-org/midnight-sdk";
+   * import { TakeAmountsLib } from "@morpho-org/midnight-sdk";
    *
    * const offer = {
-   *   market: {
-   *     loanToken: "0x0000000000000000000000000000000000000001",
-   *     collateralParams: [],
-   *     maturity: 1_735_689_600n,
-   *     rcfThreshold: 0n,
-   *     enterGate: "0x0000000000000000000000000000000000000000",
-   *     liquidatorGate: "0x0000000000000000000000000000000000000000",
-   *   },
    *   buy: true,
-   *   maker: "0x0000000000000000000000000000000000000002",
-   *   start: 0n,
-   *   expiry: 1_735_603_200n,
    *   tick: 5_820n,
-   *   group: "0x0000000000000000000000000000000000000000000000000000000000000000",
-   *   callback: "0x0000000000000000000000000000000000000000",
-   *   callbackData: "0x",
-   *   receiverIfMakerIsSeller: "0x0000000000000000000000000000000000000002",
-   *   ratifier: "0x0000000000000000000000000000000000000003",
-   *   reduceOnly: false,
-   *   maxUnits: 0n,
-   *   maxAssets: 1_000n,
-   * } satisfies IOffer;
+   * };
    *
    * const prices = TakeAmountsLib.prices({ offer, settlementFee: 1_000000000000n });
    * console.log(prices.buyerPrice);
    * ```
    */
   export function prices(params: {
-    readonly offer: IOffer;
+    readonly offer: {
+      readonly buy: boolean;
+      readonly tick: BigIntish;
+    };
     readonly settlementFee: BigIntish;
   }) {
-    const offer = OfferUtils.normalizeOffer(params.offer);
     const settlementFee = BigInt(params.settlementFee);
     assertNonNegative("settlementFee", settlementFee);
 
-    const offerPrice = TickLib.tickToPrice(offer.tick);
-    if (offer.buy && offerPrice < settlementFee) {
+    const offerPrice = TickLib.tickToPrice(params.offer.tick);
+    if (params.offer.buy && offerPrice < settlementFee) {
       throw new SettlementFeeExceedsPriceError(settlementFee, offerPrice);
     }
-    const sellerPrice = offer.buy ? offerPrice - settlementFee : offerPrice;
+    const sellerPrice = params.offer.buy
+      ? offerPrice - settlementFee
+      : offerPrice;
     const buyerPrice = sellerPrice + settlementFee;
 
     return { buyerPrice, sellerPrice } as const;
@@ -96,31 +80,12 @@ export namespace TakeAmountsLib {
    * @throws {SettlementFeeExceedsPriceError} when settlement fee exceeds a buy offer price.
    * @example
    * ```ts
-   * import { TakeAmountsLib, type IOffer } from "@morpho-org/midnight-sdk";
+   * import { TakeAmountsLib } from "@morpho-org/midnight-sdk";
    *
    * const offer = {
-   *   market: {
-   *     loanToken: "0x0000000000000000000000000000000000000001",
-   *     collateralParams: [],
-   *     maturity: 1_735_689_600n,
-   *     rcfThreshold: 0n,
-   *     enterGate: "0x0000000000000000000000000000000000000000",
-   *     liquidatorGate: "0x0000000000000000000000000000000000000000",
-   *   },
    *   buy: true,
-   *   maker: "0x0000000000000000000000000000000000000002",
-   *   start: 0n,
-   *   expiry: 1_735_603_200n,
    *   tick: 5_820n,
-   *   group: "0x0000000000000000000000000000000000000000000000000000000000000000",
-   *   callback: "0x0000000000000000000000000000000000000000",
-   *   callbackData: "0x",
-   *   receiverIfMakerIsSeller: "0x0000000000000000000000000000000000000002",
-   *   ratifier: "0x0000000000000000000000000000000000000003",
-   *   reduceOnly: false,
-   *   maxUnits: 0n,
-   *   maxAssets: 1_000n,
-   * } satisfies IOffer;
+   * };
    *
    * const units = TakeAmountsLib.buyerAssetsToUnits({
    *   offer,
@@ -131,16 +96,18 @@ export namespace TakeAmountsLib {
    * ```
    */
   export function buyerAssetsToUnits(params: {
-    readonly offer: IOffer;
+    readonly offer: {
+      readonly buy: boolean;
+      readonly tick: BigIntish;
+    };
     readonly targetBuyerAssets: BigIntish;
     readonly settlementFee: BigIntish;
   }) {
-    const offer = OfferUtils.normalizeOffer(params.offer);
     const settlementFee = BigInt(params.settlementFee);
     const targetBuyerAssets = BigInt(params.targetBuyerAssets);
     assertNonNegative("targetBuyerAssets", targetBuyerAssets);
 
-    const { buyerPrice } = prices({ offer, settlementFee });
+    const { buyerPrice } = prices({ offer: params.offer, settlementFee });
     if (buyerPrice === 0n) throw new DivisionByZeroError("buyerPrice");
     if (buyerPrice > MathLib.WAD)
       throw new PriceGreaterThanOneError(buyerPrice);
@@ -149,7 +116,7 @@ export namespace TakeAmountsLib {
       targetBuyerAssets,
       MathLib.WAD,
       buyerPrice,
-      offer.buy ? "Up" : "Down",
+      params.offer.buy ? "Up" : "Down",
     );
   }
 
@@ -166,31 +133,12 @@ export namespace TakeAmountsLib {
    * @throws {SettlementFeeExceedsPriceError} when settlement fee exceeds a buy offer price.
    * @example
    * ```ts
-   * import { TakeAmountsLib, type IOffer } from "@morpho-org/midnight-sdk";
+   * import { TakeAmountsLib } from "@morpho-org/midnight-sdk";
    *
    * const offer = {
-   *   market: {
-   *     loanToken: "0x0000000000000000000000000000000000000001",
-   *     collateralParams: [],
-   *     maturity: 1_735_689_600n,
-   *     rcfThreshold: 0n,
-   *     enterGate: "0x0000000000000000000000000000000000000000",
-   *     liquidatorGate: "0x0000000000000000000000000000000000000000",
-   *   },
    *   buy: false,
-   *   maker: "0x0000000000000000000000000000000000000002",
-   *   start: 0n,
-   *   expiry: 1_735_603_200n,
    *   tick: 5_820n,
-   *   group: "0x0000000000000000000000000000000000000000000000000000000000000000",
-   *   callback: "0x0000000000000000000000000000000000000000",
-   *   callbackData: "0x",
-   *   receiverIfMakerIsSeller: "0x0000000000000000000000000000000000000002",
-   *   ratifier: "0x0000000000000000000000000000000000000003",
-   *   reduceOnly: false,
-   *   maxUnits: 0n,
-   *   maxAssets: 1_000n,
-   * } satisfies IOffer;
+   * };
    *
    * const units = TakeAmountsLib.sellerAssetsToUnits({
    *   offer,
@@ -201,23 +149,25 @@ export namespace TakeAmountsLib {
    * ```
    */
   export function sellerAssetsToUnits(params: {
-    readonly offer: IOffer;
+    readonly offer: {
+      readonly buy: boolean;
+      readonly tick: BigIntish;
+    };
     readonly targetSellerAssets: BigIntish;
     readonly settlementFee: BigIntish;
   }) {
-    const offer = OfferUtils.normalizeOffer(params.offer);
     const settlementFee = BigInt(params.settlementFee);
     const targetSellerAssets = BigInt(params.targetSellerAssets);
     assertNonNegative("targetSellerAssets", targetSellerAssets);
 
-    const { sellerPrice } = prices({ offer, settlementFee });
+    const { sellerPrice } = prices({ offer: params.offer, settlementFee });
     if (sellerPrice === 0n) throw new DivisionByZeroError("sellerPrice");
 
     return MathLib.mulDiv(
       targetSellerAssets,
       MathLib.WAD,
       sellerPrice,
-      offer.buy ? "Up" : "Down",
+      params.offer.buy ? "Up" : "Down",
     );
   }
 

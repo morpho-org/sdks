@@ -310,7 +310,13 @@ describe("fetchAccrualPosition", () => {
 describe("fetchConsumableUnits", () => {
   test("default: max-unit offers only read consumed", async () => {
     const handle = createMockClient(base);
-    const offer = baseOffer({ maxUnits: 100n });
+    const offer = {
+      buy: true,
+      maker: addresses.maker,
+      tick: MAX_TICK,
+      maxUnits: 100n,
+      maxAssets: 0n,
+    };
     mockRead(handle, {
       address: addresses.midnight,
       abi: midnightAbi,

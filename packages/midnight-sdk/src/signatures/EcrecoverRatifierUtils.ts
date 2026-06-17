@@ -4,14 +4,12 @@ import {
   concat,
   decodeAbiParameters,
   encodeAbiParameters,
-  encodeFunctionData,
   type Hash,
   type Hex,
   keccak256,
   parseSignature,
   type Signature,
 } from "viem";
-import { ecrecoverRatifierAbi } from "../abis.js";
 import { EIP712_DOMAIN_TYPEHASH } from "../constants.js";
 import { InvalidTreeHeightError } from "../errors.js";
 import type { OfferStruct } from "../offers/index.js";
@@ -631,40 +629,5 @@ export namespace EcrecoverRatifierUtils {
     }
 
     return items;
-  }
-
-  /**
-   * Builds an EcrecoverRatifier root-cancellation call.
-   *
-   * Use after a maker has published or signed a root and needs to invalidate it
-   * onchain. This is separate from payload submission to the mempool contract.
-   *
-   * @param params - Cancellation parameters.
-   * @returns Neutral call descriptor.
-   * @example
-   * ```ts
-   * import { EcrecoverRatifierUtils } from "@morpho-org/midnight-sdk";
-   *
-   * const call = EcrecoverRatifierUtils.buildRootCancellationCall({
-   *   ecrecoverRatifier: "0x0000000000000000000000000000000000000001",
-   *   maker: "0x0000000000000000000000000000000000000002",
-   *   root: "0x0000000000000000000000000000000000000000000000000000000000000000",
-   * });
-   * console.log(call.to);
-   * ```
-   */
-  export function buildRootCancellationCall(params: {
-    readonly ecrecoverRatifier: Address;
-    readonly maker: Address;
-    readonly root: Hash;
-  }): { readonly to: Address; readonly data: Hex } {
-    return deepFreeze({
-      to: params.ecrecoverRatifier,
-      data: encodeFunctionData({
-        abi: ecrecoverRatifierAbi,
-        functionName: "cancelRoot",
-        args: [params.maker, params.root],
-      }),
-    });
   }
 }

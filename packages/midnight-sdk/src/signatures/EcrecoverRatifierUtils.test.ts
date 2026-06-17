@@ -1,7 +1,6 @@
-import { decodeFunctionData, type Signature } from "viem";
+import type { Signature } from "viem";
 import { describe, expect, test } from "vitest";
 import { addresses, baseOffer } from "../__test__/fixtures.js";
-import { ecrecoverRatifierAbi } from "../abis.js";
 import { InvalidTreeHeightError } from "../errors.js";
 import { EcrecoverRatifierUtils } from "./EcrecoverRatifierUtils.js";
 import { Tree } from "./Tree.js";
@@ -122,24 +121,5 @@ describe("EcrecoverRatifierUtils.encodeRatifierData", () => {
       r: signature.r,
       s: signature.s,
     });
-  });
-});
-
-describe("EcrecoverRatifierUtils.buildRootCancellationCall", () => {
-  test("default", () => {
-    const call = EcrecoverRatifierUtils.buildRootCancellationCall({
-      ecrecoverRatifier: addresses.ecrecoverRatifier,
-      maker: addresses.maker,
-      root,
-    });
-    const decoded = decodeFunctionData({
-      abi: ecrecoverRatifierAbi,
-      data: call.data,
-    });
-
-    expect(call.to).toBe(addresses.ecrecoverRatifier);
-    expect(decoded.functionName).toBe("cancelRoot");
-    expect(decoded.args[0]).toBe(addresses.maker);
-    expect(decoded.args[1]).toBe(root);
   });
 });

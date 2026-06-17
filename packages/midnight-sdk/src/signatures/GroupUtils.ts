@@ -1,13 +1,6 @@
 import { concat, type Hash, keccak256, zeroHash } from "viem";
 import { InvalidOfferGroupError } from "../errors.js";
-import {
-  type IOffer,
-  type Offer,
-  type OfferStruct,
-  OfferUtils,
-} from "../offers/index.js";
-
-const comparableHex = (value: string) => value.toLowerCase();
+import { type IOffer, type OfferStruct, OfferUtils } from "../offers/index.js";
 
 /**
  * Plain offer group shape accepted by group and tree utilities.
@@ -43,22 +36,6 @@ export interface IGroup {
  * ```
  */
 export type GroupInput = IGroup | IOffer;
-
-/**
- * Parameters for {@link GroupUtils.validateForApiPublication}.
- *
- * @example
- * ```ts
- * import type { ValidateGroupForApiPublicationParams } from "@morpho-org/midnight-sdk";
- *
- * const params = {} as ValidateGroupForApiPublicationParams;
- * console.log(params.group.id);
- * ```
- */
-export interface ValidateGroupForApiPublicationParams {
-  /** Group to validate before publishing through the public API. */
-  readonly group: IGroup;
-}
 
 /**
  * Make-side helpers for Midnight offer groups.
@@ -157,123 +134,5 @@ export namespace GroupUtils {
     return group.offers.map((offer) =>
       OfferUtils.toStruct({ offer, group: group.id }),
     );
-  }
-
-  /**
-   * Validates the public API publication rules known locally.
-   *
-   * This helper intentionally stays narrow: changing public policy should be
-   * surfaced by `MidnightApi.validateMempoolTree` when possible.
-   *
-   * Use this before including a multi-offer group in a public mempool tree when
-   * you want local feedback before calling `MidnightApi.validateMempoolTree`.
-   * The API validation endpoint remains the final policy check before signing
-   * or approving a tree.
-   *
-   * @param params - Group validation parameters.
-   * @returns Offers in the same order as the group.
-   * @throws {InvalidOfferGroupError} when the group cannot be published through the public API.
-   * @example
-   * ```ts
-   * import { GroupUtils } from "@morpho-org/midnight-sdk";
-   *
-   * const offers = GroupUtils.validateForApiPublication({ group: {} as never });
-   * console.log(offers.length);
-   * ```
-   */
-  export function validateForApiPublication(
-    params: ValidateGroupForApiPublicationParams,
-  ): readonly Offer[] {
-    const offers = OfferUtils.validateOfferGroup({
-      offers: params.group.offers,
-    });
-    const expectedGroup = comparableHex(hash(offers));
-    const expectedCallback = comparableHex(offers[0]!.callback);
-    const expectedCallbackData = comparableHex(offers[0]!.callbackData);
-
-    if (comparableHex(params.group.id) !== expectedGroup) {
-      throw new InvalidOfferGroupError(
-        "API-published groups must use the content-addressed group id.",
-      );
-    }
-
-    for (const offer of offers) {
-      if (
-        comparableHex(offer.callback) !== expectedCallback ||
-        comparableHex(offer.callbackData) !== expectedCallbackData
-      ) {
-        throw new InvalidOfferGroupError(
-          "All offers in an API-published group must use the same callback address and data.",
-        );
-      }
-    }
-
-    return offers;
-  }
-}
-
-/**
- * Protocol offer group with one shared consumption group id.
- *
- * Create a group after building related offers and before building the tree to
- * publish. Offers inside one group must share maker, side, and loan token.
- *
- * @example
- * ```ts
- * import { Group } from "@morpho-org/midnight-sdk";
- *
- * const group = Group.create([{} as never]);
- * console.log(group.offers.length);
- * ```
- */
-export class Group {
-  /** Offers in this protocol group. */
-  public readonly offers: readonly Offer[];
-
-  private readonly _id: Hash;
-
-  private constructor(id: Hash, offers: readonly Offer[]) {
-    this._id = id;
-    this.offers = [...offers];
-  }
-
-  /**
-   * Content-addressed group id.
-   *
-   * @returns Group id derived from the group's offers.
-   * @example
-   * ```ts
-   * import { Group } from "@morpho-org/midnight-sdk";
-   *
-   * const group = Group.create([{} as never]);
-   * console.log(group.id);
-   * ```
-   */
-  public get id(): Hash {
-    return this._id;
-  }
-
-  /**
-   * Creates a protocol-valid offer group.
-   *
-   * Use after `Offer.create` for laddered offers that should consume from one
-   * group id. Pass the returned group into `Tree.create` alongside other groups
-   * or standalone offers.
-   *
-   * @param offers - Offers to group.
-   * @returns Group instance.
-   * @throws {InvalidOfferGroupError} when group mechanics are invalid.
-   * @example
-   * ```ts
-   * import { Group } from "@morpho-org/midnight-sdk";
-   *
-   * const group = Group.create([{} as never]);
-   * console.log(group.offers.length);
-   * ```
-   */
-  public static create(offers: readonly IOffer[]): Group {
-    const validatedOffers = OfferUtils.validateOfferGroup({ offers });
-
-    return new Group(GroupUtils.hash(validatedOffers), validatedOffers);
   }
 }

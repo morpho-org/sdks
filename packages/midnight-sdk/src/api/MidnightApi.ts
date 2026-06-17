@@ -467,7 +467,7 @@ export class MidnightApi {
    * API policy only inspects offer contents, so this helper encodes each
    * tree leaf with empty `ratifierData` and keeps payload bytes at the edge.
    * Use after `Tree.create` and before `EcrecoverRatifierUtils.ratify` or
-   * `SetterRatifierUtils.buildRootApprovalCall`.
+   * the Setter root approval transaction.
    *
    * @param params - Validation parameters and optional request configuration.
    * @returns API issues and `valid` summary.

@@ -3,7 +3,8 @@ import { describe, expect, test } from "vitest";
 import { baseOffer, baseOfferInput } from "../__test__/fixtures.js";
 import { InvalidOfferGroupError, InvalidTreeError } from "../errors.js";
 import { Offer, OfferUtils } from "../offers/index.js";
-import { Group, GroupUtils } from "./GroupUtils.js";
+import { Group } from "./Group.js";
+import { GroupUtils } from "./GroupUtils.js";
 import { Tree } from "./Tree.js";
 import { MAX_OFFERS_PER_TREE, TreeUtils } from "./TreeUtils.js";
 

@@ -3,11 +3,10 @@ import {
   type BigIntish,
   getChainAddress,
 } from "@morpho-org/morpho-ts";
-import type { Client, Hash } from "viem";
+import type { Address, Client, Hash } from "viem";
 import { readContract } from "viem/actions";
 import { midnightAbi } from "../abis.js";
 import { ConsumableUnitsLib } from "../math/index.js";
-import { type IOffer, OfferUtils } from "../offers/index.js";
 import type { MidnightFetchParams } from "./types.js";
 import { callParameters, resolveChainId } from "./utils.js";
 
@@ -38,15 +37,22 @@ export async function fetchConsumableUnits(
   client: Client,
   params: MidnightFetchParams & {
     readonly marketId: Hash;
-    readonly offer: IOffer;
+    readonly offer: {
+      readonly buy: boolean;
+      readonly maker: Address;
+      readonly tick: BigIntish;
+      readonly maxUnits: BigIntish;
+      readonly maxAssets: BigIntish;
+    };
     readonly group: Hash;
     readonly timeToMaturity: BigIntish;
   },
 ) {
-  const offer = OfferUtils.normalizeOffer(params.offer);
-  assertNonNegative("offer.maxUnits", offer.maxUnits);
-  assertNonNegative("offer.maxAssets", offer.maxAssets);
-  const needsSettlementFee = offer.maxUnits === 0n;
+  const maxUnits = BigInt(params.offer.maxUnits);
+  const maxAssets = BigInt(params.offer.maxAssets);
+  assertNonNegative("offer.maxUnits", maxUnits);
+  assertNonNegative("offer.maxAssets", maxAssets);
+  const needsSettlementFee = maxUnits === 0n;
   const timeToMaturity = needsSettlementFee
     ? BigInt(params.timeToMaturity)
     : 0n;
@@ -61,7 +67,7 @@ export async function fetchConsumableUnits(
     address: midnight,
     abi: midnightAbi,
     functionName: "consumed",
-    args: [offer.maker, params.group],
+    args: [params.offer.maker, params.group],
   });
 
   const [consumedValue, settlementFee] = needsSettlementFee
@@ -78,7 +84,7 @@ export async function fetchConsumableUnits(
     : [await consumed, 0n];
 
   return ConsumableUnitsLib.consumableUnits({
-    offer,
+    offer: params.offer,
     consumed: consumedValue,
     settlementFee,
   });

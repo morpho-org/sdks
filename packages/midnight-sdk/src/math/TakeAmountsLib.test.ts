@@ -19,7 +19,7 @@ import { TickLib } from "./TickLib.js";
 describe("TakeAmountsLib.prices", () => {
   test("default: prices", () => {
     const prices = TakeAmountsLib.prices({
-      offer: baseOffer({ buy: true, tick: MAX_TICK }),
+      offer: { buy: true, tick: MAX_TICK },
       settlementFee: 1n,
     });
 
@@ -52,7 +52,7 @@ describe("TakeAmountsLib.prices", () => {
 
 describe("TakeAmountsLib.buyerAssetsToUnits", () => {
   test("behavior: buy offers round borrower max units up", () => {
-    const offer = baseOffer({ buy: true, tick: 5_000n });
+    const offer = { buy: true, tick: 5_000n };
     const price = TickLib.tickToPrice(offer.tick);
 
     expect(
@@ -180,7 +180,7 @@ describe("TakeAmountsLib.buyerAssetsToUnits", () => {
 
 describe("TakeAmountsLib.sellerAssetsToUnits", () => {
   test("behavior: buy offers round seller units up after settlement fee", () => {
-    const offer = baseOffer({ buy: true, tick: 5_000n });
+    const offer = { buy: true, tick: 5_000n };
     const settlementFee = 1_000000000000n;
     const price = TickLib.tickToPrice(offer.tick) - settlementFee;
 
@@ -354,7 +354,12 @@ describe("ConsumableUnitsLib.consumableUnits", () => {
   test("default", () => {
     expect(
       ConsumableUnitsLib.consumableUnits({
-        offer: baseOffer({ maxUnits: 100n }),
+        offer: {
+          buy: true,
+          tick: MAX_TICK,
+          maxUnits: 100n,
+          maxAssets: 0n,
+        },
         consumed: 40n,
         settlementFee: 0n,
       }),

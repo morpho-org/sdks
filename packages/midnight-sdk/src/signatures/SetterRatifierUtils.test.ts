@@ -1,7 +1,5 @@
-import { decodeFunctionData } from "viem";
 import { describe, expect, test } from "vitest";
-import { addresses, baseOffer } from "../__test__/fixtures.js";
-import { setterRatifierAbi } from "../abis.js";
+import { baseOffer } from "../__test__/fixtures.js";
 import { SetterRatifierUtils } from "./SetterRatifierUtils.js";
 import { Tree } from "./Tree.js";
 import { TreeUtils } from "./TreeUtils.js";
@@ -48,32 +46,5 @@ describe("SetterRatifierUtils.encodeRatifierData", () => {
       leafIndex: 3n,
       proof: [proofNode],
     });
-  });
-});
-
-describe("SetterRatifierUtils.buildRootApprovalCall", () => {
-  test("default", () => {
-    const call = SetterRatifierUtils.buildRootApprovalCall({
-      setterRatifier: addresses.setterRatifier,
-      maker: addresses.maker,
-      root: "0x0000000000000000000000000000000000000000000000000000000000000000",
-    });
-    const decoded = decodeFunctionData({
-      abi: setterRatifierAbi,
-      data: call.data,
-    });
-
-    expect(decoded.functionName).toBe("setIsRootRatified");
-    expect(decoded.args[2]).toBe(true);
-  });
-
-  test("error: invalid bytes32 root", () => {
-    expect(() =>
-      SetterRatifierUtils.buildRootApprovalCall({
-        setterRatifier: addresses.setterRatifier,
-        maker: addresses.maker,
-        root: "0x1234",
-      }),
-    ).toThrow();
   });
 });

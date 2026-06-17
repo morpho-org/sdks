@@ -126,8 +126,8 @@ export async function makeBaseUsdcWethOffers(params: {
 ```
 
 Use `SetterRatifierUtils` instead when a contract maker approves the tree root onchain. In that
-route, build the `Tree`, validate it, submit `SetterRatifierUtils.buildRootApprovalCall(...)`, then
-call `SetterRatifierUtils.ratify({ tree })` before `Payload.encode(...)`.
+route, build the `Tree`, validate it, submit the root approval transaction, then call
+`SetterRatifierUtils.ratify({ tree })` before `Payload.encode(...)`.
 
 ## Taking offers
 

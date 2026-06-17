@@ -1,13 +1,10 @@
 import { type BigIntish, deepFreeze } from "@morpho-org/morpho-ts";
 import {
-  type Address,
   decodeAbiParameters,
   encodeAbiParameters,
-  encodeFunctionData,
   type Hash,
   type Hex,
 } from "viem";
-import { setterRatifierAbi } from "../abis.js";
 import type { Item as PayloadItem } from "./Payload.js";
 import type { Tree } from "./Tree.js";
 import type { TreeProof } from "./TreeUtils.js";
@@ -59,8 +56,8 @@ export interface SetterRatifierDataParams {
  *
  * Use this route for deployed-code makers. The make-side sequence is: create
  * offers with the Setter ratifier address, build the group/tree, validate the
- * tree, submit `buildRootApprovalCall`, call `ratify`, then pass the returned
- * items to `Payload.encode`.
+ * tree, approve the root onchain, call `ratify`, then pass the returned items
+ * to `Payload.encode`.
  *
  * @example
  * ```ts
@@ -158,9 +155,9 @@ export namespace SetterRatifierUtils {
   /**
    * Returns payload-ready items after a Setter root has been approved.
    *
-   * Use after `MidnightApi.validateMempoolTree` and
-   * `buildRootApprovalCall` has been submitted. The returned items can be
-   * passed directly to `Payload.encode`.
+   * Use after `MidnightApi.validateMempoolTree` and the root approval
+   * transaction has been submitted. The returned items can be passed directly
+   * to `Payload.encode`.
    *
    * @param params - Tree to ratify.
    * @returns Items containing each offer and its ratifier data.
@@ -192,44 +189,5 @@ export namespace SetterRatifierUtils {
     }
 
     return items;
-  }
-
-  /**
-   * Builds a SetterRatifier root-approval call.
-   *
-   * Use after building and validating the tree, before `ratify` and
-   * `Payload.encode`, so the Setter ratifier can accept each offer proof at
-   * take time.
-   *
-   * @param params - Approval parameters.
-   * @returns Neutral call descriptor.
-   * @example
-   * ```ts
-   * import { SetterRatifierUtils } from "@morpho-org/midnight-sdk";
-   *
-   * const call = SetterRatifierUtils.buildRootApprovalCall({
-   *   setterRatifier: "0x0000000000000000000000000000000000000001",
-   *   maker: "0x0000000000000000000000000000000000000002",
-   *   root: "0x0000000000000000000000000000000000000000000000000000000000000000",
-   * });
-   * console.log(call.data);
-   * ```
-   */
-  export function buildRootApprovalCall(params: {
-    readonly setterRatifier: Address;
-    readonly maker: Address;
-    readonly root: Hash;
-    readonly newIsRootRatified?: boolean;
-  }): { readonly to: Address; readonly data: Hex } {
-    const to = params.setterRatifier;
-    const root = params.root;
-    return deepFreeze({
-      to,
-      data: encodeFunctionData({
-        abi: setterRatifierAbi,
-        functionName: "setIsRootRatified",
-        args: [params.maker, root, params.newIsRootRatified ?? true],
-      }),
-    });
   }
 }

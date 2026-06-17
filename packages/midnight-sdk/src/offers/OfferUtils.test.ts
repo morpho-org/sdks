@@ -181,7 +181,7 @@ describe("OfferUtils.validateOfferGroup", () => {
     expect(OfferUtils.validateOfferGroup({ offers })).toEqual(offers);
   });
 
-  test("behavior: allows API-publication-only differences", () => {
+  test("behavior: allows fields outside protocol grouping mechanics to differ", () => {
     const offers = OfferUtils.validateOfferGroup({
       offers: [
         Offer.create(

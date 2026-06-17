@@ -4,7 +4,6 @@ import {
   MathLib,
 } from "@morpho-org/morpho-ts";
 
-import { type IOffer, OfferUtils } from "../offers/index.js";
 import { TakeAmountsLib } from "./TakeAmountsLib.js";
 
 /**
@@ -29,31 +28,14 @@ export namespace ConsumableUnitsLib {
    * @throws {SettlementFeeExceedsPriceError} when settlement fee exceeds a buy offer price.
    * @example
    * ```ts
-   * import { ConsumableUnitsLib, type IOffer } from "@morpho-org/midnight-sdk";
+   * import { ConsumableUnitsLib } from "@morpho-org/midnight-sdk";
    *
    * const offer = {
-   *   market: {
-   *     loanToken: "0x0000000000000000000000000000000000000001",
-   *     collateralParams: [],
-   *     maturity: 1_735_689_600n,
-   *     rcfThreshold: 0n,
-   *     enterGate: "0x0000000000000000000000000000000000000000",
-   *     liquidatorGate: "0x0000000000000000000000000000000000000000",
-   *   },
    *   buy: true,
-   *   maker: "0x0000000000000000000000000000000000000002",
-   *   start: 0n,
-   *   expiry: 1_735_603_200n,
    *   tick: 5_820n,
-   *   group: "0x0000000000000000000000000000000000000000000000000000000000000000",
-   *   callback: "0x0000000000000000000000000000000000000000",
-   *   callbackData: "0x",
-   *   receiverIfMakerIsSeller: "0x0000000000000000000000000000000000000002",
-   *   ratifier: "0x0000000000000000000000000000000000000003",
-   *   reduceOnly: false,
    *   maxUnits: 0n,
    *   maxAssets: 1_000n,
-   * } satisfies IOffer;
+   * };
    *
    * const units = ConsumableUnitsLib.consumableUnits({
    *   offer,
@@ -64,29 +46,34 @@ export namespace ConsumableUnitsLib {
    * ```
    */
   export function consumableUnits(params: {
-    readonly offer: IOffer;
+    readonly offer: {
+      readonly buy: boolean;
+      readonly tick: BigIntish;
+      readonly maxUnits: BigIntish;
+      readonly maxAssets: BigIntish;
+    };
     readonly consumed: BigIntish;
     readonly settlementFee: BigIntish;
   }) {
-    const offer = OfferUtils.normalizeOffer(params.offer);
     const consumed = BigInt(params.consumed);
+    const maxUnits = BigInt(params.offer.maxUnits);
+    const maxAssets = BigInt(params.offer.maxAssets);
     assertNonNegative("consumed", consumed);
-    assertNonNegative("offer.maxUnits", offer.maxUnits);
-    assertNonNegative("offer.maxAssets", offer.maxAssets);
+    assertNonNegative("offer.maxUnits", maxUnits);
+    assertNonNegative("offer.maxAssets", maxAssets);
 
-    if (offer.maxUnits > 0n)
-      return MathLib.zeroFloorSub(offer.maxUnits, consumed);
+    if (maxUnits > 0n) return MathLib.zeroFloorSub(maxUnits, consumed);
 
-    const maxAssets = MathLib.zeroFloorSub(offer.maxAssets, consumed);
-    return offer.buy
+    const remainingAssets = MathLib.zeroFloorSub(maxAssets, consumed);
+    return params.offer.buy
       ? TakeAmountsLib.buyerAssetsToUnits({
-          offer,
-          targetBuyerAssets: maxAssets,
+          offer: params.offer,
+          targetBuyerAssets: remainingAssets,
           settlementFee: params.settlementFee,
         })
       : TakeAmountsLib.sellerAssetsToUnits({
-          offer,
-          targetSellerAssets: maxAssets,
+          offer: params.offer,
+          targetSellerAssets: remainingAssets,
           settlementFee: params.settlementFee,
         });
   }
