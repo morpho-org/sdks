@@ -1,6 +1,4 @@
-import { deepFreeze } from "@morpho-org/morpho-ts";
 import {
-  type Address,
   bytesToHex,
   decodeAbiParameters,
   encodeAbiParameters,
@@ -11,12 +9,16 @@ import {
 
 import { MAX_COLLATERALS, MAX_TICK } from "../constants.js";
 import { MarketUtils } from "../market/index.js";
-import { type IOffer, type Offer, OfferUtils } from "../offers/index.js";
+import { type IOffer, OfferUtils } from "../offers/index.js";
 import { type OfferStruct, offerStructAbiComponents } from "../offers/Offer.js";
-import { MAX_OFFERS_PER_TREE } from "./OfferTreeUtils.js";
+import { MAX_OFFERS_PER_TREE } from "./TreeUtils.js";
 
 /**
  * Raw onchain mempool payload bytes.
+ *
+ * Makers submit this value to the Midnight mempool contract after offers have
+ * been grouped, committed to a tree, ratified, and optionally validated by the
+ * Midnight API.
  *
  * @example
  * ```ts
@@ -33,13 +35,29 @@ export type Payload = Hex;
  * `ratifierData` blob a taker hands to `Midnight.take(..., ratifierData)`.
  *
  * `ratifierData` is owned by the ratifier scheme the maker used (e.g.
- * `EcrecoverRatifier.ratifierData`). The payload codec treats it as
+ * `EcrecoverRatifierUtils.ratifierData`). The payload codec treats it as
  * opaque bytes — simulators that only need to forward `ratifierData` can
  * stay completely ratifier-agnostic.
+ *
+ * Build items with `EcrecoverRatifierUtils.ratify` or
+ * `SetterRatifierUtils.ratify` after the tree is signed or approved, then pass
+ * the items to `Payload.encode` for publication.
+ *
+ * @example
+ * ```ts
+ * import type { Payload } from "@morpho-org/midnight-sdk";
+ *
+ * const item: Payload.Item = {
+ *   offer: {} as never,
+ *   group: "0x1111111111111111111111111111111111111111111111111111111111111111",
+ *   ratifierData: "0x",
+ * };
+ * console.log(item.ratifierData);
+ * ```
  */
 export type Item = {
   /** Maker-side offer carried by the payload. */
-  readonly offer: IOffer | Offer;
+  readonly offer: IOffer;
   /** Protocol group id encoded into the offer. */
   readonly group: Hash;
   /** Opaque ratifier data passed to `Midnight.take`. */
@@ -68,7 +86,7 @@ export const CURRENT_VERSION = 1;
  * console.log(Payload.MAX_COMPRESSED_ITEMS_BYTES);
  * ```
  */
-export const MAX_COMPRESSED_ITEMS_BYTES = 4_000_000;
+export const MAX_COMPRESSED_ITEMS_BYTES = 1_000_000;
 
 /**
  * Maximum ABI-decoded item bytes accepted by the payload codec.
@@ -106,6 +124,8 @@ const ABI_ARRAY_HEAD_BYTES = 64;
 const ABI_LENGTH_LOW_OFFSET = 60;
 const MAX_TIMESTAMP_SECONDS = 1_000_000_000_000n - 1n;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const ZERO_BYTES32 =
+  "0x0000000000000000000000000000000000000000000000000000000000000000";
 
 /**
  * Largest fully framed wire payload, in bytes: the version byte, the 4-byte
@@ -217,10 +237,13 @@ const itemsAbi = [
  * a larger suffix. Item order is preserved verbatim and is the order a consumer
  * sees on decode.
  *
+ * Use after ratifier utilities have produced payload-ready items and before
+ * `MidnightApi.validateMempoolPayload` or an onchain mempool submission.
+ *
  * @param items - Per-leaf items in the order the maker committed to. Must
  *   contain at least one item and at most the tree offer limit.
  * @returns The encoded payload as a hex string.
- * @throws DecodeError when the item count or encoded size exceeds protocol limits.
+ * @throws {DecodeError} when the item count or encoded size exceeds protocol limits.
  * @example
  * ```ts
  * import { Payload } from "@morpho-org/midnight-sdk";
@@ -265,10 +288,13 @@ export async function encode(items: readonly Item[]): Promise<Payload> {
  * trailing suffix is rejected so an oversized blob cannot ride a small payload
  * past validation and into the indexer.
  *
+ * Use on the take-side, in indexers, or in diagnostics when you need to inspect
+ * the offer structs and ratifier data that a maker published.
+ *
  * @param payload - Payload bytes to decode.
  * @param options - Optional decode bounds.
  * @returns The decoded items in encoded order.
- * @throws DecodeError when the payload is malformed or exceeds protocol limits.
+ * @throws {DecodeError} when the payload is malformed or exceeds protocol limits.
  * @example
  * ```ts
  * import { Payload } from "@morpho-org/midnight-sdk";
@@ -348,32 +374,6 @@ export async function decode(
     startedAtMs: canonicalEncodeStartedAtMs,
   });
   return items;
-}
-
-/**
- * Builds a raw mempool submission call descriptor.
- *
- * @param params - Mempool submission parameters.
- * @returns Neutral call descriptor.
- * @example
- * ```ts
- * import { Payload } from "@morpho-org/midnight-sdk";
- *
- * const call = Payload.buildSubmissionCall({
- *   midnightMempool: "0x0000000000000000000000000000000000000001",
- *   payload: "0x",
- * });
- * console.log(call.to);
- * ```
- */
-export function buildSubmissionCall(params: {
-  readonly midnightMempool: Address;
-  readonly payload: Payload;
-}): { readonly to: Address; readonly data: Hex } {
-  return deepFreeze({
-    to: params.midnightMempool,
-    data: params.payload,
-  });
 }
 
 function decodeItemsBytes(decoded: Uint8Array): Item[] {
@@ -503,25 +503,25 @@ function assertMaturityAt15Utc(value: bigint): void {
 
 function isEmptyOfferStruct(offer: OfferStruct): boolean {
   return (
-    isZeroAddress(offer.maker) &&
     isZeroAddress(offer.market.loanToken) &&
-    isZeroAddress(offer.market.enterGate) &&
-    isZeroAddress(offer.market.liquidatorGate) &&
-    isZeroAddress(offer.receiverIfMakerIsSeller) &&
-    isZeroAddress(offer.ratifier) &&
-    offer.maxUnits === 0n &&
-    offer.maxAssets === 0n &&
-    offer.tick === 0n &&
+    offer.market.collateralParams.length === 0 &&
     offer.market.maturity === 0n &&
     offer.market.rcfThreshold === 0n &&
-    offer.expiry === 0n &&
-    offer.start === 0n &&
-    /^0x0*$/i.test(offer.group) &&
+    isZeroAddress(offer.market.enterGate) &&
+    isZeroAddress(offer.market.liquidatorGate) &&
     offer.buy === false &&
-    offer.market.collateralParams.length === 0 &&
+    isZeroAddress(offer.maker) &&
+    offer.start === 0n &&
+    offer.expiry === 0n &&
+    offer.tick === 0n &&
+    offer.group === ZERO_BYTES32 &&
     isZeroAddress(offer.callback) &&
-    /^0x0*$/i.test(offer.callbackData) &&
-    offer.reduceOnly === false
+    offer.callbackData === "0x" &&
+    isZeroAddress(offer.receiverIfMakerIsSeller) &&
+    isZeroAddress(offer.ratifier) &&
+    offer.reduceOnly === false &&
+    offer.maxUnits === 0n &&
+    offer.maxAssets === 0n
   );
 }
 
@@ -575,8 +575,11 @@ async function compressItemsPayload(payload: Uint8Array): Promise<Uint8Array> {
       new CompressionStream("gzip"),
     );
     compressed = new Uint8Array(await new Response(stream).arrayBuffer());
-  } catch {
-    throw new DecodeError("compression failed");
+  } catch (error) {
+    throw new DecodeError(
+      "compression failed",
+      error instanceof Error ? error : undefined,
+    );
   }
   if (compressed.length > MAX_COMPRESSED_ITEMS_BYTES) {
     throw new DecodeError(
@@ -616,7 +619,10 @@ async function decompressItemsPayload(
     }
   } catch (error) {
     if (error instanceof DecodeError) throw error;
-    throw new DecodeError("decompression failed");
+    throw new DecodeError(
+      "decompression failed",
+      error instanceof Error ? error : undefined,
+    );
   }
 
   const result = new Uint8Array(totalLength);

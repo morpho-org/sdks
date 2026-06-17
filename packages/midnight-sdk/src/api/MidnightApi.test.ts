@@ -77,7 +77,7 @@ const apiCollateral = {
 const expectedCollateral = {
   token: COLLATERAL_TOKEN,
   lltv: "860000000000000000",
-  maxLif: "0",
+  maxLiquidationIncentiveFactor: "0",
   oracle: ORACLE,
 };
 

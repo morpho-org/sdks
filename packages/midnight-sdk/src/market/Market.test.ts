@@ -19,7 +19,7 @@ describe("CollateralParams", () => {
     expect(params.collateralParams[0]).toEqual({
       token: addresses.collateralToken,
       lltv: 770000000000000000n,
-      maxLif: 1298701298701298701n,
+      maxLiquidationIncentiveFactor: 1298701298701298701n,
       oracle: addresses.oracle,
     });
   });
@@ -87,9 +87,22 @@ describe("MarketUtils", () => {
   test("default", () => {
     expect(MarketUtils.isLltvAllowed(770000000000000000n)).toBe(true);
     expect(MarketUtils.isLltvAllowed(123n)).toBe(false);
-    expect(MarketUtils.getMaxLif(770000000000000000n)).toBe(
+    expect(
+      MarketUtils.getMaxLiquidationIncentiveFactor(770000000000000000n),
+    ).toBe(1298701298701298701n);
+    expect(
+      MarketUtils.getMaxLiquidationIncentiveFactor({
+        lltv: 770000000000000000n,
+      }),
+    ).toBe(1298701298701298701n);
+    expect(MarketUtils.getLiquidationIncentiveFactor(770000000000000000n)).toBe(
       1061007957559681697n,
     );
+    expect(
+      MarketUtils.getLiquidationIncentiveFactor({
+        lltv: 770000000000000000n,
+      }),
+    ).toBe(1061007957559681697n);
   });
 
   test("behavior: hash and id are deterministic", () => {

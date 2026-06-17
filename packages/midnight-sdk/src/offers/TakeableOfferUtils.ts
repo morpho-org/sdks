@@ -1,36 +1,12 @@
-import { type BigIntish, deepFreeze } from "@morpho-org/morpho-ts";
-import type { Hash, Hex } from "viem";
+import { deepFreeze } from "@morpho-org/morpho-ts";
 import {
   InconsistentMarketError,
   NoMatchingOffersError,
   UnexpectedOfferSideError,
 } from "../errors.js";
 import { MarketUtils } from "../market/index.js";
-import type { IOffer, Offer } from "./Offer.js";
 import { OfferUtils } from "./OfferUtils.js";
 import type { ITakeableOffer, TakeableOfferStruct } from "./TakeableOffer.js";
-
-/**
- * Quote entry shape converted by {@link TakeableOfferUtils.toStructs}.
- *
- * @example
- * ```ts
- * import type { QuoteTakeableOfferInput } from "@morpho-org/midnight-sdk";
- *
- * const input = {} as QuoteTakeableOfferInput;
- * console.log(input.ratifierData);
- * ```
- */
-export interface QuoteTakeableOfferInput {
-  /** Units suggested by the quote/API. */
-  readonly units: BigIntish;
-  /** Ratifier data suggested by the quote/API. */
-  readonly ratifierData: Hex;
-  /** Inline executable offer. */
-  readonly offer: IOffer | Offer;
-  /** Protocol group id encoded into the offer. */
-  readonly group: Hash;
-}
 
 /**
  * Parameters for {@link TakeableOffer.createMany}.
@@ -45,7 +21,7 @@ export interface QuoteTakeableOfferInput {
  */
 export interface CreateManyTakeableOffersParams {
   /** Quote entries to convert. */
-  readonly entries: readonly QuoteTakeableOfferInput[];
+  readonly entries: readonly ITakeableOffer[];
   /** Expected maker side. */
   readonly expectedOfferSide?: "buy" | "sell";
   /** Whether every offer must reference the same market. */
@@ -54,6 +30,11 @@ export interface CreateManyTakeableOffersParams {
 
 /**
  * Object-compatible helpers for API/app takeable-offer conversion.
+ *
+ * These are take-side utilities. Use them after API decoding and before
+ * building take or bundle calldata. They do not fetch books or choose amounts;
+ * they only normalize quoted entries, enforce optional side/market invariants,
+ * and produce ABI-compatible structs.
  *
  * @example
  * ```ts
@@ -65,6 +46,10 @@ export interface CreateManyTakeableOffersParams {
 export namespace TakeableOfferUtils {
   /**
    * Converts a takeable offer into the tuple object expected by viem ABI encoders.
+   *
+   * Use for a single normalized takeable offer immediately before passing it to
+   * a take or bundle calldata encoder. Use `toStructs` when converting a whole
+   * quote so side and market consistency can be checked together.
    *
    * @param takeableOffer - Takeable offer class or plain input.
    * @returns ABI-compatible takeable offer.
@@ -90,11 +75,16 @@ export namespace TakeableOfferUtils {
   /**
    * Converts quote entries into ABI-compatible takeable offers.
    *
+   * Use after API responses are mapped to `ITakeableOffer`. Set
+   * `expectedOfferSide` from the requested book side (`asks` means maker
+   * `sell`, `bids` means maker `buy`) and set `enforceSameMarket` before
+   * aggregating entries into one market-order transaction.
+   *
    * @param params - Quote conversion parameters.
    * @returns ABI-compatible takeable offers.
-   * @throws NoMatchingOffersError when `entries` is empty.
-   * @throws UnexpectedOfferSideError when an entry has the wrong side.
-   * @throws InconsistentMarketError when market consistency is enforced and differs.
+   * @throws {NoMatchingOffersError} when `entries` is empty.
+   * @throws {UnexpectedOfferSideError} when an entry has the wrong side.
+   * @throws {InconsistentMarketError} when market consistency is enforced and differs.
    * @example
    * ```ts
    * import { TakeableOfferUtils } from "@morpho-org/midnight-sdk";

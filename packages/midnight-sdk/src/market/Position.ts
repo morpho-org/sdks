@@ -124,7 +124,7 @@ export class AccrualPosition extends Position {
   /** Hydrated market for this position. */
   public readonly market: Market;
 
-  public constructor(position: IPosition | Position, market: IMarket | Market) {
+  public constructor(position: IPosition, market: IMarket) {
     super(position);
     this.market = market instanceof Market ? market : new Market(market);
   }
@@ -191,9 +191,9 @@ export class AccrualPosition extends Position {
    *
    * @param timestamp - Timestamp at which to accrue. Must be greater than or equal to `lastAccrual`.
    * @returns New accrual position with updated credit, pending fee, last loss factor, last accrual, and market continuous-fee credit.
-   * @throws InvalidPositionAccrualTimestampError when timestamp is before `lastAccrual`.
-   * @throws InvalidPositionLossFactorError when the market loss factor is older than the position loss factor.
-   * @throws InvalidPositionAccrualStateError when raw inputs violate Midnight accounting invariants.
+   * @throws {InvalidPositionAccrualTimestampError} when timestamp is before `lastAccrual`.
+   * @throws {InvalidPositionLossFactorError} when the market loss factor is older than the position loss factor.
+   * @throws {InvalidPositionAccrualStateError} when raw inputs violate Midnight accounting invariants.
    * @example
    * ```ts
    * import { AccrualPosition } from "@morpho-org/midnight-sdk";

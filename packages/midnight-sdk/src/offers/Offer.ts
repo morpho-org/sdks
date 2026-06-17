@@ -2,8 +2,8 @@ import type { BigIntish } from "@morpho-org/morpho-ts";
 import type { Address, Hash, Hex } from "viem";
 import { zeroAddress, zeroHash } from "viem";
 import type {
+  IMarket,
   IMarketParams,
-  Market,
   MarketParamsStruct,
 } from "../market/index.js";
 import type { MarketParams } from "../market/Market.js";
@@ -11,7 +11,12 @@ import { MarketUtils } from "../market/MarketUtils.js";
 import { OfferUtils } from "./OfferUtils.js";
 
 /**
- * Plain input accepted by {@link Offer}.
+ * Plain make-side offer input accepted by {@link Offer}.
+ *
+ * Use this shape when app or API data is already protocol-shaped and needs to
+ * flow into `OfferUtils.normalizeOffer`, `Group.create`, `Tree.create`, or
+ * take-side conversion helpers. Use {@link Offer.create} instead for new maker
+ * offers so deterministic fields are validated before grouping or signing.
  *
  * @example
  * ```ts
@@ -43,7 +48,7 @@ import { OfferUtils } from "./OfferUtils.js";
  */
 export interface IOffer {
   /** Market this offer trades. */
-  readonly market: IMarketParams | MarketParams | Market;
+  readonly market: IMarketParams | IMarket;
   /** Whether the maker buys units. */
   readonly buy: boolean;
   /** Offer maker. */
@@ -71,7 +76,12 @@ export interface IOffer {
 }
 
 /**
- * Midnight offer.
+ * Maker-side Midnight offer.
+ *
+ * Build new maker offers with {@link Offer.create}, then pass them to
+ * `Group.create` for shared-consumption ladders or directly to `Tree.create`
+ * for standalone offers. API/take-side code can normalize a plain `IOffer`
+ * into this class before ABI encoding.
  *
  * @example
  * ```ts
@@ -161,6 +171,11 @@ export class Offer {
   /**
    * Computes the canonical protocol offer hash for this offer in `group`.
    *
+   * Use this after a standalone offer or {@link Group} has a final group id and
+   * before local proof verification or custom leaf hashing. Omit `group` only
+   * for group id derivation, where the protocol hashes offers with the zero
+   * group id.
+   *
    * @param group - Protocol group id encoded into the offer hash; defaults to zero for group derivation.
    * @returns Offer hash.
    * @example
@@ -197,11 +212,16 @@ export class Offer {
   }
 
   /**
-   * Creates a raw Midnight offer without assigning it to a protocol group.
+   * Creates a validated maker-side Midnight offer without assigning a protocol
+   * group.
+   *
+   * This is the first step of the make-side flow. After creation, pass related
+   * offers to `Group.create` when they share consumption, or pass standalone
+   * offers directly to `Tree.create`.
    *
    * @param params - Offer creation parameters.
    * @returns Offer instance.
-   * @throws InvalidOfferParameterError when the offer cannot satisfy protocol parameter rules.
+   * @throws {InvalidOfferParameterError} when the offer cannot satisfy protocol parameter rules.
    * @example
    * ```ts
    * import { Offer } from "@morpho-org/midnight-sdk";
@@ -233,6 +253,10 @@ export class Offer {
 
 /**
  * ABI tuple shape for `Offer`.
+ *
+ * This is the shape consumed by viem encoders, Merkle leaf hashing, payload
+ * encoding, and take calldata encoders. Build it with `OfferUtils.toStruct` or
+ * `GroupUtils.toStructs` after the group id is known.
  *
  * @example
  * ```ts
@@ -316,6 +340,9 @@ export const offerStructAbiComponents = [
 /**
  * Parameters for {@link Offer.create}.
  *
+ * These are make-side parameters entered by a maker or order-management app
+ * before any group, tree, ratifier data, or mempool payload exists.
+ *
  * @example
  * ```ts
  * import type { BuildOfferParams } from "@morpho-org/midnight-sdk";
@@ -326,7 +353,7 @@ export const offerStructAbiComponents = [
  */
 export interface BuildOfferParams {
   /** Market this offer trades. */
-  readonly market: IMarketParams | MarketParams | Market;
+  readonly market: IMarketParams | IMarket;
   /** Whether the maker buys units. */
   readonly buy: boolean;
   /** Maker address. */

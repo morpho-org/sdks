@@ -54,6 +54,9 @@ const readBigIntParameter = (parameter: string, value: BigIntish) => {
 /**
  * Parameters for {@link OfferUtils.validateOfferGroup}.
  *
+ * Use this lower-level shape when validating a would-be `Group` before the
+ * offers are committed to a tree.
+ *
  * @example
  * ```ts
  * import type { ValidateOfferGroupParams } from "@morpho-org/midnight-sdk";
@@ -64,11 +67,14 @@ const readBigIntParameter = (parameter: string, value: BigIntish) => {
  */
 export interface ValidateOfferGroupParams {
   /** Offers to validate as one protocol consumption group. */
-  readonly offers: readonly (IOffer | Offer)[];
+  readonly offers: readonly IOffer[];
 }
 
 /**
  * Parameters for {@link OfferUtils.toStruct}.
+ *
+ * Supply the group id produced by `Group.create` or `GroupUtils.hash` before
+ * ABI encoding, hashing, payload encoding, or take calldata construction.
  *
  * @example
  * ```ts
@@ -80,7 +86,7 @@ export interface ValidateOfferGroupParams {
  */
 export interface OfferStructParams {
   /** Offer to encode. */
-  readonly offer: IOffer | Offer;
+  readonly offer: IOffer;
   /** Protocol group id encoded into the ABI offer. */
   readonly group: Hash;
 }
@@ -127,7 +133,13 @@ export interface ValidatedOfferParams {
 }
 
 /**
- * Domain helpers for Midnight offers and takes.
+ * Object-compatible helpers for Midnight offer construction, grouping, and
+ * take-side encoding.
+ *
+ * Make-side apps usually call {@link Offer.create}, then `Group.create` or
+ * `Tree.create`. Use these helpers when you need the same validation or ABI
+ * conversion without depending on class instances, or when converting API data
+ * into the structs consumed by payload and take encoders.
  *
  * @example
  * ```ts
@@ -140,6 +152,10 @@ export namespace OfferUtils {
   /**
    * Returns an offer instance from class or plain input.
    *
+   * Use at boundaries that accept either maker-created `Offer` instances or
+   * decoded `IOffer` objects from an API response. For brand-new maker input,
+   * prefer `Offer.create` so deterministic parameters are validated first.
+   *
    * @param offer - Offer class or plain input.
    * @returns Offer instance.
    * @example
@@ -150,12 +166,15 @@ export namespace OfferUtils {
    * console.log(offer.buy);
    * ```
    */
-  export function normalizeOffer(offer: IOffer | Offer) {
+  export function normalizeOffer(offer: IOffer) {
     return offer instanceof Offer ? offer : new Offer(offer);
   }
 
   /**
    * Converts an offer into the tuple object expected by viem ABI encoders.
+   *
+   * Use after a group id is known. This is the bridge from SDK/domain objects
+   * into Merkle leaf hashing, payload items, and take calldata encoding.
    *
    * @param params - Offer class or plain input plus the protocol group id.
    * @returns ABI-compatible offer.
@@ -190,6 +209,10 @@ export namespace OfferUtils {
 
   /**
    * Computes the canonical protocol offer hash for an ABI-compatible offer.
+   *
+   * Use when you already have an `OfferStruct`, for example from
+   * `GroupUtils.toStructs`, `TreeUtils.buildDescriptor`, or decoded payload
+   * bytes. Use `hash` when you still have an `Offer` plus a group id.
    *
    * @param offerStruct - ABI-compatible offer to hash.
    * @returns Offer hash.
@@ -226,6 +249,10 @@ export namespace OfferUtils {
   /**
    * Computes the canonical protocol offer hash.
    *
+   * Use after `Group.create` has produced the group id for a published offer.
+   * For content-addressed group derivation, call `offer.groupHash` or
+   * `GroupUtils.hash`, which intentionally hash with the zero group id.
+   *
    * @param params - Offer and protocol group id to hash.
    * @returns Offer hash.
    * @example
@@ -243,9 +270,12 @@ export namespace OfferUtils {
   /**
    * Validates and normalizes a Midnight offer tick and spacing.
    *
+   * Use this for form-level validation before `Offer.create` when you want to
+   * surface a tick-specific issue. `Offer.create` calls it internally.
+   *
    * @param params - Tick and optional market spacing.
    * @returns Normalized tick and tick spacing.
-   * @throws InvalidOfferParameterError when the tick or spacing cannot be accepted by Midnight.
+   * @throws {InvalidOfferParameterError} when the tick or spacing cannot be accepted by Midnight.
    * @example
    * ```ts
    * import { OfferUtils } from "@morpho-org/midnight-sdk";
@@ -271,11 +301,11 @@ export namespace OfferUtils {
         instruction: `Use a tick between "0" and "${MAX_TICK}".`,
       });
     }
-    if (tickSpacing <= 0n || DEFAULT_TICK_SPACING % tickSpacing !== 0n) {
+    if (tickSpacing <= 0n || MAX_TICK % tickSpacing !== 0n) {
       throw new InvalidOfferParameterError({
         parameter: "tickSpacing",
         value: tickSpacing,
-        instruction: `Use a positive tick spacing that divides "${DEFAULT_TICK_SPACING}".`,
+        instruction: `Use a positive tick spacing that divides "${MAX_TICK}".`,
       });
     }
     if (tick % tickSpacing !== 0n) {
@@ -292,9 +322,12 @@ export namespace OfferUtils {
   /**
    * Validates and normalizes an offer start/expiry range.
    *
+   * Use this before `Offer.create` when a UI edits dates separately from other
+   * offer fields. `Offer.create` calls it internally.
+   *
    * @param params - Start and expiry timestamps.
    * @returns Normalized start and expiry timestamps.
-   * @throws InvalidOfferParameterError when the range is negative or inverted.
+   * @throws {InvalidOfferParameterError} when the range is negative or inverted.
    * @example
    * ```ts
    * import { OfferUtils } from "@morpho-org/midnight-sdk";
@@ -331,9 +364,12 @@ export namespace OfferUtils {
   /**
    * Validates and normalizes mutually exclusive offer caps.
    *
+   * Use this before `Offer.create` when a UI lets makers choose between a unit
+   * cap and an asset cap. `Offer.create` calls it internally.
+   *
    * @param params - Unit and asset caps.
    * @returns Normalized unit and asset caps.
-   * @throws InvalidOfferParameterError when caps are negative, both zero, or both non-zero.
+   * @throws {InvalidOfferParameterError} when caps are negative, both zero, or both non-zero.
    * @example
    * ```ts
    * import { OfferUtils } from "@morpho-org/midnight-sdk";
@@ -377,9 +413,12 @@ export namespace OfferUtils {
   /**
    * Resolves and validates the maker-seller receiver field for an offer side.
    *
+   * Use this before `Offer.create` when side-specific receiver defaults must be
+   * displayed to a maker. `Offer.create` calls it internally.
+   *
    * @param params - Offer side, maker, and optional maker-seller receiver.
    * @returns Receiver address to put on the offer.
-   * @throws InvalidOfferParameterError when a buy offer sets a non-zero maker-seller receiver.
+   * @throws {InvalidOfferParameterError} when a buy offer sets a non-zero maker-seller receiver.
    * @example
    * ```ts
    * import { OfferUtils } from "@morpho-org/midnight-sdk";
@@ -414,9 +453,13 @@ export namespace OfferUtils {
   /**
    * Validates deterministic make-offer parameters without constructing an offer.
    *
+   * Use when an app needs normalized maker input or field-level errors before
+   * instantiating an `Offer`. `Offer.create` uses the same validation and then
+   * constructs the class instance for grouping and trees.
+   *
    * @param params - Offer builder parameters.
    * @returns Normalized deterministic offer parameters.
-   * @throws InvalidOfferParameterError when a deterministic offer parameter cannot satisfy protocol rules.
+   * @throws {InvalidOfferParameterError} when a deterministic offer parameter cannot satisfy protocol rules.
    * @example
    * ```ts
    * import { OfferUtils } from "@morpho-org/midnight-sdk";
@@ -447,9 +490,15 @@ export namespace OfferUtils {
   /**
    * Validates protocol-level mechanics for one Midnight offer consumption group.
    *
+   * Use before deriving a content-addressed group id. `Group.create` calls this
+   * automatically; call it directly only when you need the normalized offers
+   * without constructing a `Group`. API publication may impose additional
+   * policy, so run `MidnightApi.validateMempoolTree` before signing or
+   * approving a tree.
+   *
    * @param params - Offer group validation parameters.
-   * @returns Immutable offers in the same order as the input entries.
-   * @throws InvalidOfferGroupError when the group violates protocol mechanics.
+   * @returns Normalized offers in the same order as the input entries.
+   * @throws {InvalidOfferGroupError} when the group violates protocol mechanics.
    * @example
    * ```ts
    * import { OfferUtils } from "@morpho-org/midnight-sdk";
@@ -526,6 +575,10 @@ export namespace OfferUtils {
   /**
    * Returns an offer expiry timestamp.
    *
+   * Use in maker UIs, API response mappers, or quote filters when accepting
+   * any plain object matching `IOffer` or an `Offer` instance. This does not validate
+   * whether the offer is still live at the current block time.
+   *
    * @param offer - Offer to inspect.
    * @returns Offer expiry.
    * @example
@@ -536,7 +589,7 @@ export namespace OfferUtils {
    * console.log(expiry);
    * ```
    */
-  export function getOfferExpiry(offer: IOffer | Offer) {
-    return normalizeOffer(offer).expiry;
+  export function getOfferExpiry(offer: IOffer) {
+    return BigInt(offer.expiry);
   }
 }

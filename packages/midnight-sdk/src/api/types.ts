@@ -328,7 +328,7 @@ export interface MidnightApiCollateral {
   /** WAD-scaled liquidation loan-to-value. */
   readonly lltv: string;
   /** WAD-scaled maximum liquidation incentive factor. */
-  readonly maxLif: string;
+  readonly maxLiquidationIncentiveFactor: string;
   /** Oracle address used to price this collateral. */
   readonly oracle: Address;
 }
@@ -413,6 +413,10 @@ export interface MidnightApiOfferMarket {
 
 /**
  * Inline offer returned by Midnight API book and quote routes.
+ *
+ * This is the API response shape, not the SDK `IOffer` input shape. Map
+ * `market.collaterals` to `market.collateralParams` before passing it to
+ * `TakeableOffer.createMany` or `TakeableOfferUtils.toStructs`.
  */
 export interface MidnightApiOffer {
   /** Market this offer trades. */
@@ -447,6 +451,11 @@ export interface MidnightApiOffer {
 
 /**
  * Executable offer returned by Midnight API book and quote routes.
+ *
+ * Use this on the take-side. Pair `units`, `offer.group`, and `ratifierData`
+ * from the same entry when converting to `TakeableOffer` or
+ * `TakeableOfferStruct`; those values together prove and execute the maker's
+ * signed or approved offer.
  */
 export interface MidnightApiTakeableOffer {
   /** Executable or currently reserved offer size in units. */

@@ -10,7 +10,7 @@ import {
   PriceGreaterThanOneError,
   SettlementFeeExceedsPriceError,
 } from "../errors.js";
-import { type IOffer, type Offer, OfferUtils } from "../offers/index.js";
+import { type IOffer, OfferUtils } from "../offers/index.js";
 import { TickLib } from "./TickLib.js";
 
 /**
@@ -29,9 +29,9 @@ export namespace TakeAmountsLib {
    *
    * @param params - Price parameters.
    * @returns Buyer and seller prices.
-   * @throws NegativeValueError when `settlementFee` or the offer tick is negative.
-   * @throws TickOutOfRangeError when the offer tick exceeds `MAX_TICK`.
-   * @throws SettlementFeeExceedsPriceError when settlement fee exceeds a buy offer price.
+   * @throws {NegativeValueError} when `settlementFee` or the offer tick is negative.
+   * @throws {TickOutOfRangeError} when the offer tick exceeds `MAX_TICK`.
+   * @throws {SettlementFeeExceedsPriceError} when settlement fee exceeds a buy offer price.
    * @example
    * ```ts
    * import { TakeAmountsLib, type IOffer } from "@morpho-org/midnight-sdk";
@@ -65,7 +65,7 @@ export namespace TakeAmountsLib {
    * ```
    */
   export function prices(params: {
-    readonly offer: IOffer | Offer;
+    readonly offer: IOffer;
     readonly settlementFee: BigIntish;
   }) {
     const offer = OfferUtils.normalizeOffer(params.offer);
@@ -89,11 +89,11 @@ export namespace TakeAmountsLib {
    *
    * @param params - Conversion parameters.
    * @returns Units that round-trip to the target buyer assets where reachable.
-   * @throws NegativeValueError when `targetBuyerAssets`, `settlementFee`, or the offer tick is negative.
-   * @throws DivisionByZeroError when the computed buyer price is zero.
-   * @throws PriceGreaterThanOneError when buyer price is above WAD.
-   * @throws TickOutOfRangeError when the offer tick exceeds `MAX_TICK`.
-   * @throws SettlementFeeExceedsPriceError when settlement fee exceeds a buy offer price.
+   * @throws {NegativeValueError} when `targetBuyerAssets`, `settlementFee`, or the offer tick is negative.
+   * @throws {DivisionByZeroError} when the computed buyer price is zero.
+   * @throws {PriceGreaterThanOneError} when buyer price is above WAD.
+   * @throws {TickOutOfRangeError} when the offer tick exceeds `MAX_TICK`.
+   * @throws {SettlementFeeExceedsPriceError} when settlement fee exceeds a buy offer price.
    * @example
    * ```ts
    * import { TakeAmountsLib, type IOffer } from "@morpho-org/midnight-sdk";
@@ -131,7 +131,7 @@ export namespace TakeAmountsLib {
    * ```
    */
   export function buyerAssetsToUnits(params: {
-    readonly offer: IOffer | Offer;
+    readonly offer: IOffer;
     readonly targetBuyerAssets: BigIntish;
     readonly settlementFee: BigIntish;
   }) {
@@ -160,10 +160,10 @@ export namespace TakeAmountsLib {
    *
    * @param params - Conversion parameters.
    * @returns Units that round-trip to the target seller assets where reachable.
-   * @throws NegativeValueError when `targetSellerAssets`, `settlementFee`, or the offer tick is negative.
-   * @throws DivisionByZeroError when the computed seller price is zero.
-   * @throws TickOutOfRangeError when the offer tick exceeds `MAX_TICK`.
-   * @throws SettlementFeeExceedsPriceError when settlement fee exceeds a buy offer price.
+   * @throws {NegativeValueError} when `targetSellerAssets`, `settlementFee`, or the offer tick is negative.
+   * @throws {DivisionByZeroError} when the computed seller price is zero.
+   * @throws {TickOutOfRangeError} when the offer tick exceeds `MAX_TICK`.
+   * @throws {SettlementFeeExceedsPriceError} when settlement fee exceeds a buy offer price.
    * @example
    * ```ts
    * import { TakeAmountsLib, type IOffer } from "@morpho-org/midnight-sdk";
@@ -201,7 +201,7 @@ export namespace TakeAmountsLib {
    * ```
    */
   export function sellerAssetsToUnits(params: {
-    readonly offer: IOffer | Offer;
+    readonly offer: IOffer;
     readonly targetSellerAssets: BigIntish;
     readonly settlementFee: BigIntish;
   }) {
@@ -228,8 +228,8 @@ export namespace TakeAmountsLib {
    *
    * @param params - Generic conversion parameters.
    * @returns Units.
-   * @throws NegativeValueError when `assets` or `price` is negative.
-   * @throws DivisionByZeroError when price is zero.
+   * @throws {NegativeValueError} when `assets` or `price` is negative.
+   * @throws {DivisionByZeroError} when price is zero.
    * @example
    * ```ts
    * import { MathLib } from "@morpho-org/morpho-ts";
@@ -260,9 +260,9 @@ export namespace TakeAmountsLib {
    *
    * @param params - Tick conversion parameters.
    * @returns Units.
-   * @throws NegativeValueError when `assets` or `tick` is negative.
-   * @throws DivisionByZeroError when the tick price is zero.
-   * @throws TickOutOfRangeError when `tick` exceeds `MAX_TICK`.
+   * @throws {NegativeValueError} when `assets` or `tick` is negative.
+   * @throws {DivisionByZeroError} when the tick price is zero.
+   * @throws {TickOutOfRangeError} when `tick` exceeds `MAX_TICK`.
    * @example
    * ```ts
    * import { TakeAmountsLib } from "@morpho-org/midnight-sdk";

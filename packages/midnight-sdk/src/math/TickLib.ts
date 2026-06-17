@@ -85,8 +85,8 @@ export namespace TickLib {
    *
    * @param tick - Tick to validate.
    * @returns Tick as a bigint.
-   * @throws NegativeValueError when `tick` is negative.
-   * @throws TickOutOfRangeError when `tick` exceeds `MAX_TICK`.
+   * @throws {NegativeValueError} when `tick` is negative.
+   * @throws {TickOutOfRangeError} when `tick` exceeds `MAX_TICK`.
    * @example
    * ```ts
    * import { TickLib } from "@morpho-org/midnight-sdk";
@@ -134,8 +134,8 @@ export namespace TickLib {
    *
    * @param tick - Tick in the deployed range.
    * @returns WAD price rounded to `PRICE_ROUNDING_STEP`.
-   * @throws NegativeValueError when `tick` is negative.
-   * @throws TickOutOfRangeError when `tick` exceeds `MAX_TICK`.
+   * @throws {NegativeValueError} when `tick` is negative.
+   * @throws {TickOutOfRangeError} when `tick` exceeds `MAX_TICK`.
    * @example
    * ```ts
    * import { TickLib } from "@morpho-org/midnight-sdk";
@@ -164,9 +164,9 @@ export namespace TickLib {
    * @param price - WAD price.
    * @param spacing - Tick spacing; defaults to `DEFAULT_TICK_SPACING`.
    * @returns Lowest aligned tick with price greater than or equal to `price`.
-   * @throws NegativeValueError when `price` is negative.
-   * @throws PriceGreaterThanOneError when price is above WAD.
-   * @throws InvalidTickSpacingError when spacing is invalid.
+   * @throws {NegativeValueError} when `price` is negative.
+   * @throws {PriceGreaterThanOneError} when price is above WAD.
+   * @throws {InvalidTickSpacingError} when spacing is invalid.
    * @example
    * ```ts
    * import { TickLib } from "@morpho-org/midnight-sdk";
@@ -208,9 +208,9 @@ export namespace TickLib {
    * @param price - WAD price.
    * @param spacing - Tick spacing.
    * @returns Snapped WAD price.
-   * @throws NegativeValueError when `price` is negative.
-   * @throws PriceGreaterThanOneError when price is above WAD.
-   * @throws InvalidTickSpacingError when spacing is invalid.
+   * @throws {NegativeValueError} when `price` is negative.
+   * @throws {PriceGreaterThanOneError} when price is above WAD.
+   * @throws {InvalidTickSpacingError} when spacing is invalid.
    * @example
    * ```ts
    * import { TickLib } from "@morpho-org/midnight-sdk";
@@ -233,7 +233,7 @@ export namespace TickLib {
    *
    * @param rate - WAD fixed rate.
    * @returns WAD price rounded down.
-   * @throws NegativeValueError when `rate` is negative.
+   * @throws {NegativeValueError} when `rate` is negative.
    * @example
    * ```ts
    * import { TickLib } from "@morpho-org/midnight-sdk";
@@ -261,9 +261,9 @@ export namespace TickLib {
    *
    * @param tick - Midnight tick.
    * @returns WAD fixed rate rounded up.
-   * @throws NegativeValueError when `tick` is negative.
-   * @throws TickOutOfRangeError when `tick` exceeds `MAX_TICK`.
-   * @throws DivisionByZeroError when the tick price is zero.
+   * @throws {NegativeValueError} when `tick` is negative.
+   * @throws {TickOutOfRangeError} when `tick` exceeds `MAX_TICK`.
+   * @throws {DivisionByZeroError} when the tick price is zero.
    * @example
    * ```ts
    * import { TickLib } from "@morpho-org/midnight-sdk";
@@ -287,9 +287,9 @@ export namespace TickLib {
    * @param tick - Tick to validate.
    * @param spacing - Market tick spacing.
    * @returns Tick as a bigint.
-   * @throws NegativeValueError when `tick` is negative.
-   * @throws TickOutOfRangeError when `tick` exceeds `MAX_TICK`.
-   * @throws InvalidTickSpacingError when spacing is invalid or the tick is not aligned.
+   * @throws {NegativeValueError} when `tick` is negative.
+   * @throws {TickOutOfRangeError} when `tick` exceeds `MAX_TICK`.
+   * @throws {InvalidTickSpacingError} when spacing is invalid or the tick is not aligned.
    * @example
    * ```ts
    * import { TickLib } from "@morpho-org/midnight-sdk";

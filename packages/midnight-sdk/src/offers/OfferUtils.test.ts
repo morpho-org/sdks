@@ -76,12 +76,12 @@ describe("Offer.create", () => {
   test("behavior: accepts ticks aligned to a refined market spacing", () => {
     const offer = Offer.create(
       buildOfferParams({
-        tick: 2n,
-        tickSpacing: 2n,
+        tick: 3n,
+        tickSpacing: 3n,
       }),
     );
 
-    expect(offer.tick).toBe(2n);
+    expect(offer.tick).toBe(3n);
   });
 
   test("behavior: validates deterministic parameters without constructing an offer", () => {
@@ -124,6 +124,9 @@ describe("Offer.create", () => {
         maker: addresses.maker,
       }),
     ).toBe(addresses.maker);
+    expect(OfferUtils.getOfferExpiry(baseOfferInput({ expiry: 2_200n }))).toBe(
+      2_200n,
+    );
   });
 
   test("error: InvalidOfferParameterError fields", () => {
@@ -143,7 +146,7 @@ describe("Offer.create", () => {
   test.each([
     ["tick", { tick: -1n }],
     ["tick", { tick: MAX_TICK + 1n }],
-    ["tickSpacing", { tickSpacing: 3n }],
+    ["tickSpacing", { tickSpacing: 7n }],
     ["tick", { tick: 2n }],
     ["expiry", { start: 20n, expiry: 19n }],
     ["maxUnits", { maxUnits: -1n, maxAssets: 0n }],
@@ -294,7 +297,7 @@ describe("TakeableOfferUtils.toStructs", () => {
         {
           units: "42",
           ratifierData: "0x",
-          offer: baseOffer({ buy: true }),
+          offer: baseOfferInput({ buy: true, maxUnits: 0n }),
           group,
         },
       ],

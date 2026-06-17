@@ -16,9 +16,9 @@ import {
 } from "../__test__/fixtures.js";
 import { type IOffer, type OfferStruct, OfferUtils } from "../offers/index.js";
 import { offerStructAbiComponents } from "../offers/Offer.js";
-import { MAX_OFFERS_PER_TREE } from "./OfferTreeUtils.js";
 import * as Payload from "./Payload.js";
 import { MAX_ATTRIBUTION_SUFFIX_BYTES } from "./Payload.js";
+import { MAX_OFFERS_PER_TREE } from "./TreeUtils.js";
 
 const API_VALID_MATURITY = 1_767_279_600n;
 
@@ -124,21 +124,6 @@ describe("Payload.encode", () => {
   });
 });
 
-describe("Payload.buildSubmissionCall", () => {
-  test("default", () => {
-    const payload = "0x1234" as Payload.Payload;
-    const call = Payload.buildSubmissionCall({
-      midnightMempool: addresses.midnightMempool,
-      payload,
-    });
-
-    expect(call).toEqual({
-      to: addresses.midnightMempool,
-      data: payload,
-    });
-  });
-});
-
 describe("Payload.decode", () => {
   test("behavior: ignores small attribution suffix", async () => {
     const encoded = await Payload.encode([
@@ -174,6 +159,32 @@ describe("Payload.decode", () => {
 
   test("error: DecodeError", async () => {
     await expect(Payload.decode("0x1234")).rejects.toBeInstanceOf(
+      Payload.DecodeError,
+    );
+  });
+
+  test("error: invalid version", async () => {
+    const encoded = await Payload.encode([
+      { offer: apiValidOffer(), group, ratifierData: "0x1234" as Hex },
+    ]);
+    const bytes = hexToBytes(encoded);
+    bytes[0] = Payload.CURRENT_VERSION + 1;
+
+    await expect(Payload.decode(bytesToHex(bytes))).rejects.toBeInstanceOf(
+      Payload.DecodeError,
+    );
+  });
+
+  test("error: truncated gzip stream", async () => {
+    const encoded = await Payload.encode([
+      { offer: apiValidOffer(), group, ratifierData: "0x1234" as Hex },
+    ]);
+    const bytes = hexToBytes(encoded);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const compressedLength = view.getUint32(1);
+    view.setUint32(1, compressedLength + 1);
+
+    await expect(Payload.decode(bytesToHex(bytes))).rejects.toBeInstanceOf(
       Payload.DecodeError,
     );
   });
@@ -244,7 +255,7 @@ describe("Payload.decode", () => {
 
 describe("Payload size limits", () => {
   test("default", () => {
-    expect(Payload.MAX_COMPRESSED_ITEMS_BYTES).toBe(4_000_000);
+    expect(Payload.MAX_COMPRESSED_ITEMS_BYTES).toBe(1_000_000);
     expect(Payload.MAX_DECOMPRESSED_ITEMS_BYTES).toBe(6_000_000);
     expect(Payload.MAX_PAYLOAD_BYTES).toBe(
       5 +

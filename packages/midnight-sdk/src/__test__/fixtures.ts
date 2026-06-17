@@ -49,7 +49,6 @@ export const baseMarketParamsInput = (): IMarketParams => ({
     {
       token: addresses.collateralToken,
       lltv: 770000000000000000n,
-      maxLif: 1298701298701298701n,
       oracle: addresses.oracle,
     },
   ],

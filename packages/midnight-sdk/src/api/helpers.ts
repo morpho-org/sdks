@@ -137,7 +137,7 @@ export function mapCollateral(
   return {
     token: collateral.token,
     lltv: collateral.lltv,
-    maxLif: collateral.max_lif,
+    maxLiquidationIncentiveFactor: collateral.max_lif,
     oracle: collateral.oracle,
   };
 }

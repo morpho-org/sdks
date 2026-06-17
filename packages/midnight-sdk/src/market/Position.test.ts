@@ -1,7 +1,13 @@
 import { MathLib } from "@morpho-org/morpho-ts";
 import { describe, expect, test } from "vitest";
 
-import { addresses, baseMarketInput, marketId } from "../__test__/fixtures.js";
+import {
+  addresses,
+  baseMarketInput,
+  baseMarketParamsInput,
+  marketId,
+} from "../__test__/fixtures.js";
+import { CBP } from "../constants.js";
 import {
   InvalidPositionAccrualTimestampError,
   InvalidPositionLossFactorError,
@@ -33,6 +39,19 @@ describe("Position", () => {
     ).toBe(123n);
     expect(position.getCollateralBalanceByIndex(1)).toBeUndefined();
     expect(position.market.id).toBe(marketId);
+  });
+});
+
+describe("AccrualPosition.getSettlementFee", () => {
+  test("default", () => {
+    const maturity = 24n * 60n * 60n;
+    const position = new AccrualPosition(basePositionInput(), {
+      ...baseMarketInput(),
+      params: { ...baseMarketParamsInput(), maturity },
+    });
+
+    expect(position.getSettlementFee(maturity)).toBe(1n * CBP);
+    expect(position.getSettlementFee(0n)).toBe(2n * CBP);
   });
 });
 

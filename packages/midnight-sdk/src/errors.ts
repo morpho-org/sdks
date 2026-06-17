@@ -237,36 +237,36 @@ export class InvalidOfferParameterError extends Error {
 }
 
 /**
- * Thrown when an offer tree height exceeds the ratifier typehash table.
+ * Thrown when a tree height exceeds the ratifier typehash table.
  *
  * @example
  * ```ts
- * import { InvalidOfferTreeHeightError } from "@morpho-org/midnight-sdk";
+ * import { InvalidTreeHeightError } from "@morpho-org/midnight-sdk";
  *
- * throw new InvalidOfferTreeHeightError(21);
+ * throw new InvalidTreeHeightError(21);
  * ```
  */
-export class InvalidOfferTreeHeightError extends Error {
+export class InvalidTreeHeightError extends Error {
   public constructor(height: number) {
-    super(`Offer tree height "${height}" is not supported.`);
-    this.name = "InvalidOfferTreeHeightError";
+    super(`Tree height "${height}" is not supported.`);
+    this.name = "InvalidTreeHeightError";
   }
 }
 
 /**
- * Thrown when an offer tree cannot be represented by the ratifiers.
+ * Thrown when a tree cannot be represented by the ratifiers.
  *
  * @example
  * ```ts
- * import { InvalidOfferTreeError } from "@morpho-org/midnight-sdk";
+ * import { InvalidTreeError } from "@morpho-org/midnight-sdk";
  *
- * throw new InvalidOfferTreeError("Offer tree must not be empty.");
+ * throw new InvalidTreeError("Tree must not be empty.");
  * ```
  */
-export class InvalidOfferTreeError extends Error {
+export class InvalidTreeError extends Error {
   public constructor(message: string) {
     super(message);
-    this.name = "InvalidOfferTreeError";
+    this.name = "InvalidTreeError";
   }
 }
 

@@ -4,7 +4,7 @@ import {
   MathLib,
 } from "@morpho-org/morpho-ts";
 
-import { type IOffer, type Offer, OfferUtils } from "../offers/index.js";
+import { type IOffer, OfferUtils } from "../offers/index.js";
 import { TakeAmountsLib } from "./TakeAmountsLib.js";
 
 /**
@@ -23,10 +23,10 @@ export namespace ConsumableUnitsLib {
    *
    * @param params - Consumption parameters.
    * @returns Remaining consumable units.
-   * @throws NegativeValueError when `consumed`, offer limits, delegated asset inputs, or the offer tick is negative.
-   * @throws DivisionByZeroError when the delegated units conversion divides by zero.
-   * @throws TickOutOfRangeError when the offer tick exceeds `MAX_TICK`.
-   * @throws SettlementFeeExceedsPriceError when settlement fee exceeds a buy offer price.
+   * @throws {NegativeValueError} when `consumed`, offer limits, delegated asset inputs, or the offer tick is negative.
+   * @throws {DivisionByZeroError} when the delegated units conversion divides by zero.
+   * @throws {TickOutOfRangeError} when the offer tick exceeds `MAX_TICK`.
+   * @throws {SettlementFeeExceedsPriceError} when settlement fee exceeds a buy offer price.
    * @example
    * ```ts
    * import { ConsumableUnitsLib, type IOffer } from "@morpho-org/midnight-sdk";
@@ -64,7 +64,7 @@ export namespace ConsumableUnitsLib {
    * ```
    */
   export function consumableUnits(params: {
-    readonly offer: IOffer | Offer;
+    readonly offer: IOffer;
     readonly consumed: BigIntish;
     readonly settlementFee: BigIntish;
   }) {

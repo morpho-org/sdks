@@ -127,7 +127,7 @@ export const MAX_SETTLEMENT_FEES = [
 export const MAX_CONTINUOUS_FEE = 317097919n;
 
 /**
- * Low liquidation cursor used by default `maxLif` helpers.
+ * Low liquidation cursor used by liquidation incentive factor helpers.
  *
  * @example
  * ```ts

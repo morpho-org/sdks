@@ -44,7 +44,6 @@ export type SettlementFeeCbps = readonly [
  * const params: ICollateralParams = {
  *   token: "0x0000000000000000000000000000000000000001",
  *   lltv: 770000000000000000n,
- *   maxLif: 1298701298701298701n,
  *   oracle: "0x0000000000000000000000000000000000000002",
  * };
  * ```
@@ -54,14 +53,14 @@ export interface ICollateralParams {
   readonly token: Address;
   /** WAD-scaled liquidation loan-to-value. */
   readonly lltv: BigIntish;
-  /** WAD-scaled maximum liquidation incentive factor. */
-  readonly maxLif: BigIntish;
+  /** WAD-scaled maximum liquidation incentive factor; defaults to `1 / lltv`. */
+  readonly maxLiquidationIncentiveFactor?: BigIntish;
   /** Oracle address for this collateral. */
   readonly oracle: Address;
 }
 
 /**
- * Normalized Midnight collateral params and ABI tuple shape.
+ * Normalized Midnight collateral params.
  *
  * @example
  * ```ts
@@ -70,7 +69,7 @@ export interface ICollateralParams {
  * const params: CollateralParams = {
  *   token: "0x0000000000000000000000000000000000000001",
  *   lltv: 770000000000000000n,
- *   maxLif: 1298701298701298701n,
+ *   maxLiquidationIncentiveFactor: 1298701298701298701n,
  *   oracle: "0x0000000000000000000000000000000000000002",
  * };
  * console.log(params.lltv);
@@ -82,6 +81,37 @@ export interface CollateralParams {
   /** WAD-scaled liquidation loan-to-value. */
   readonly lltv: bigint;
   /** WAD-scaled maximum liquidation incentive factor. */
+  readonly maxLiquidationIncentiveFactor: bigint;
+  /** Oracle address for this collateral. */
+  readonly oracle: Address;
+}
+
+/**
+ * ABI tuple shape for Midnight collateral params.
+ *
+ * Solidity names the field `maxLif`; SDK domain types expose the expanded
+ * `maxLiquidationIncentiveFactor` name and convert to this shape at ABI
+ * boundaries.
+ *
+ * @example
+ * ```ts
+ * import type { CollateralParamsStruct } from "@morpho-org/midnight-sdk";
+ *
+ * const params: CollateralParamsStruct = {
+ *   token: "0x0000000000000000000000000000000000000001",
+ *   lltv: 770000000000000000n,
+ *   maxLif: 1298701298701298701n,
+ *   oracle: "0x0000000000000000000000000000000000000002",
+ * };
+ * console.log(params.maxLif);
+ * ```
+ */
+export interface CollateralParamsStruct {
+  /** Collateral token address. */
+  readonly token: Address;
+  /** WAD-scaled liquidation loan-to-value. */
+  readonly lltv: bigint;
+  /** ABI field for the WAD-scaled maximum liquidation incentive factor. */
   readonly maxLif: bigint;
   /** Oracle address for this collateral. */
   readonly oracle: Address;
@@ -108,7 +138,11 @@ export interface IMarketParams {
   /** Loan token address. */
   readonly loanToken: Address;
   /** Collateral definitions sorted as expected by Midnight. */
-  readonly collateralParams: readonly (ICollateralParams | CollateralParams)[];
+  readonly collateralParams: readonly (
+    | ICollateralParams
+    | CollateralParams
+    | CollateralParamsStruct
+  )[];
   /** Market maturity timestamp. */
   readonly maturity: BigIntish;
   /** Recovery close factor threshold. */
@@ -190,7 +224,7 @@ export interface MarketParamsStruct {
   /** Loan token address. */
   readonly loanToken: Address;
   /** Collateral definitions. */
-  readonly collateralParams: readonly CollateralParams[];
+  readonly collateralParams: readonly CollateralParamsStruct[];
   /** Market maturity timestamp. */
   readonly maturity: bigint;
   /** Recovery close factor threshold. */
@@ -232,7 +266,7 @@ export interface IMarket {
   /** EIP-155 chain id used to derive the market id. */
   readonly chainId: BigIntish;
   /** Immutable market configuration. */
-  readonly params: IMarketParams | MarketParams;
+  readonly params: IMarketParams;
   /** Total market units. */
   readonly totalUnits: BigIntish;
   /** Current loss factor. */

@@ -7,7 +7,7 @@ import type { Client, Hash } from "viem";
 import { readContract } from "viem/actions";
 import { midnightAbi } from "../abis.js";
 import { ConsumableUnitsLib } from "../math/index.js";
-import { type IOffer, type Offer, OfferUtils } from "../offers/index.js";
+import { type IOffer, OfferUtils } from "../offers/index.js";
 import type { MidnightFetchParams } from "./types.js";
 import { callParameters, resolveChainId } from "./utils.js";
 
@@ -23,9 +23,9 @@ import { callParameters, resolveChainId } from "./utils.js";
  * @returns Consumable units.
  * @throws {UnsupportedChainIdError} when no address registry exists for the client chain id.
  * @throws {UnknownAddressError} when the registry has no Midnight address for the client chain id.
- * @throws NegativeValueError when asset-capped `timeToMaturity` or SDK math inputs are negative.
- * @throws DivisionByZeroError when the delegated units conversion divides by zero.
- * @throws SettlementFeeExceedsPriceError when settlement fee exceeds a buy offer price.
+ * @throws {NegativeValueError} when asset-capped `timeToMaturity` or SDK math inputs are negative.
+ * @throws {DivisionByZeroError} when the delegated units conversion divides by zero.
+ * @throws {SettlementFeeExceedsPriceError} when settlement fee exceeds a buy offer price.
  * @example
  * ```ts
  * import { fetchConsumableUnits } from "@morpho-org/midnight-sdk";
@@ -38,7 +38,7 @@ export async function fetchConsumableUnits(
   client: Client,
   params: MidnightFetchParams & {
     readonly marketId: Hash;
-    readonly offer: IOffer | Offer;
+    readonly offer: IOffer;
     readonly group: Hash;
     readonly timeToMaturity: BigIntish;
   },

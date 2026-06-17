@@ -1,5 +1,5 @@
-import { OfferTreeUtils } from "../signatures/OfferTreeUtils.js";
 import { encode as encodePayload } from "../signatures/Payload.js";
+import { TreeUtils } from "../signatures/TreeUtils.js";
 import {
   buildBookPath,
   mapBookMarket,
@@ -141,8 +141,8 @@ export class MidnightApi {
    *
    * @param params - Book filters, sorting, pagination, and optional request configuration.
    * @returns Paginated books mapped to SDK camelCase fields.
-   * @throws MidnightApiError when the API returns a non-2xx response.
-   * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
+   * @throws {MidnightApiError} when the API returns a non-2xx response.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk";
@@ -185,8 +185,8 @@ export class MidnightApi {
    *
    * @param params - Market id, optional depth, and optional request configuration.
    * @returns Book snapshot mapped to SDK camelCase fields.
-   * @throws MidnightApiError when the API returns a non-2xx response.
-   * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
+   * @throws {MidnightApiError} when the API returns a non-2xx response.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk";
@@ -220,8 +220,8 @@ export class MidnightApi {
    *
    * @param params - Market id, side, optional depth, and optional request configuration.
    * @returns Price levels mapped to SDK camelCase fields.
-   * @throws MidnightApiError when the API returns a non-2xx response.
-   * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
+   * @throws {MidnightApiError} when the API returns a non-2xx response.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk";
@@ -256,8 +256,8 @@ export class MidnightApi {
    *
    * @param params - Market id, side, and optional request configuration.
    * @returns Takeable offers mapped to SDK camelCase fields.
-   * @throws MidnightApiError when the API returns a non-2xx response.
-   * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
+   * @throws {MidnightApiError} when the API returns a non-2xx response.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk";
@@ -293,8 +293,8 @@ export class MidnightApi {
    *
    * @param params - Market id, side, target size, price guard, and optional request configuration.
    * @returns Quote and signed takeable-offer caps mapped to SDK camelCase fields.
-   * @throws MidnightApiError when the API returns a non-2xx response.
-   * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
+   * @throws {MidnightApiError} when the API returns a non-2xx response.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk";
@@ -346,8 +346,8 @@ export class MidnightApi {
    *
    * @param params - Maker filter, optional market/group filters, pagination, and request configuration.
    * @returns Paginated takeable offers mapped to SDK camelCase fields.
-   * @throws MidnightApiError when the API returns a non-2xx response.
-   * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
+   * @throws {MidnightApiError} when the API returns a non-2xx response.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk";
@@ -384,10 +384,13 @@ export class MidnightApi {
   /**
    * Validates an encoded Midnight mempool payload against API policy.
    *
+   * Use after `Payload.encode` and before submitting the payload onchain when a
+   * maker flow wants API feedback before publishing payload bytes onchain.
+   *
    * @param params - Validation parameters and optional request configuration.
    * @returns API issues and `valid` summary.
-   * @throws MidnightApiError when the API returns a non-2xx response.
-   * @throws InvalidMidnightApiResponseError when the API returns malformed success JSON.
+   * @throws {MidnightApiError} when the API returns a non-2xx response.
+   * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk";
@@ -422,11 +425,15 @@ export class MidnightApi {
   /**
    * Encodes SDK-native payload items and validates them against API policy.
    *
+   * Use after Ecrecover or Setter ratifier utilities have produced items and
+   * before `Payload.encode` output is submitted onchain. This helper owns the
+   * temporary payload encoding for validation only.
+   *
    * @param params - Validation parameters and optional request configuration.
    * @returns API issues and `valid` summary.
-   * @throws Payload.DecodeError when item encoding fails.
-   * @throws MidnightApiError when the API returns a non-2xx response.
-   * @throws InvalidMidnightApiResponseError when the API returns malformed success JSON.
+   * @throws {Payload.DecodeError} when item encoding fails.
+   * @throws {MidnightApiError} when the API returns a non-2xx response.
+   * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk";
@@ -455,16 +462,18 @@ export class MidnightApi {
   }
 
   /**
-   * Validates an offer tree before wallet signature or root approval.
+   * Validates a tree before wallet signature or root approval.
    *
    * API policy only inspects offer contents, so this helper encodes each
    * tree leaf with empty `ratifierData` and keeps payload bytes at the edge.
+   * Use after `Tree.create` and before `EcrecoverRatifierUtils.ratify` or
+   * `SetterRatifierUtils.buildRootApprovalCall`.
    *
    * @param params - Validation parameters and optional request configuration.
    * @returns API issues and `valid` summary.
-   * @throws Payload.DecodeError when validation payload encoding fails.
-   * @throws MidnightApiError when the API returns a non-2xx response.
-   * @throws InvalidMidnightApiResponseError when the API returns malformed success JSON.
+   * @throws {Payload.DecodeError} when validation payload encoding fails.
+   * @throws {MidnightApiError} when the API returns a non-2xx response.
+   * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk";
@@ -480,7 +489,7 @@ export class MidnightApi {
     params: ValidateMempoolTreeParams,
   ): Promise<MempoolPayloadValidationResult> {
     const input = params;
-    const tree = OfferTreeUtils.normalizeTree(input.tree);
+    const tree = TreeUtils.normalize(input.tree);
 
     return MidnightApi.validateMempoolItems({
       baseUrl: input.baseUrl,
@@ -503,8 +512,8 @@ export class MidnightApi {
    *
    * @param params - Rule filters, pagination, and optional request configuration.
    * @returns Paginated API rules mapped to SDK camelCase fields.
-   * @throws MidnightApiError when the API returns a non-2xx response.
-   * @throws InvalidMidnightApiResponseError when the API returns malformed success JSON.
+   * @throws {MidnightApiError} when the API returns a non-2xx response.
+   * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk";
@@ -541,8 +550,8 @@ export class MidnightApi {
    *
    * @param params - Book filters, sorting, and pagination.
    * @returns Paginated books mapped to SDK camelCase fields.
-   * @throws MidnightApiError when the API returns a non-2xx response.
-   * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
+   * @throws {MidnightApiError} when the API returns a non-2xx response.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk";
@@ -566,8 +575,8 @@ export class MidnightApi {
    *
    * @param params - Market id and optional depth.
    * @returns Book snapshot mapped to SDK camelCase fields.
-   * @throws MidnightApiError when the API returns a non-2xx response.
-   * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
+   * @throws {MidnightApiError} when the API returns a non-2xx response.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk";
@@ -593,8 +602,8 @@ export class MidnightApi {
    *
    * @param params - Market id, side, and optional depth.
    * @returns Price levels mapped to SDK camelCase fields.
-   * @throws MidnightApiError when the API returns a non-2xx response.
-   * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
+   * @throws {MidnightApiError} when the API returns a non-2xx response.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk";
@@ -621,8 +630,8 @@ export class MidnightApi {
    *
    * @param params - Market id and side.
    * @returns Takeable offers mapped to SDK camelCase fields.
-   * @throws MidnightApiError when the API returns a non-2xx response.
-   * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
+   * @throws {MidnightApiError} when the API returns a non-2xx response.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk";
@@ -649,8 +658,8 @@ export class MidnightApi {
    *
    * @param params - Market id, side, target size, and price guard.
    * @returns Quote and signed takeable-offer caps mapped to SDK camelCase fields.
-   * @throws MidnightApiError when the API returns a non-2xx response.
-   * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
+   * @throws {MidnightApiError} when the API returns a non-2xx response.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk";
@@ -678,8 +687,8 @@ export class MidnightApi {
    *
    * @param params - Maker filter, optional market/group filters, and pagination.
    * @returns Paginated takeable offers mapped to SDK camelCase fields.
-   * @throws MidnightApiError when the API returns a non-2xx response.
-   * @throws InvalidMidnightApiResponseError when the API success response is not JSON.
+   * @throws {MidnightApiError} when the API returns a non-2xx response.
+   * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk";
@@ -703,10 +712,12 @@ export class MidnightApi {
   /**
    * Validates an encoded Midnight mempool payload with this client's configuration.
    *
+   * Use after `Payload.encode` and before submitting the payload onchain.
+   *
    * @param params - Payload validation parameters.
    * @returns API validation result.
-   * @throws MidnightApiError when the API returns a non-2xx response.
-   * @throws InvalidMidnightApiResponseError when the API returns malformed success JSON.
+   * @throws {MidnightApiError} when the API returns a non-2xx response.
+   * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk";
@@ -728,11 +739,14 @@ export class MidnightApi {
   /**
    * Validates payload-ready items with this client's configuration.
    *
+   * Use after Ecrecover or Setter ratifier utilities have produced items and
+   * before submitting the encoded payload onchain.
+   *
    * @param params - Item validation parameters.
    * @returns API validation result.
-   * @throws Payload.DecodeError when item encoding fails.
-   * @throws MidnightApiError when the API returns a non-2xx response.
-   * @throws InvalidMidnightApiResponseError when the API returns malformed success JSON.
+   * @throws {Payload.DecodeError} when item encoding fails.
+   * @throws {MidnightApiError} when the API returns a non-2xx response.
+   * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk";
@@ -755,13 +769,16 @@ export class MidnightApi {
   }
 
   /**
-   * Validates an offer tree before ratifier data or payload publication exists.
+   * Validates a tree before ratifier data or payload publication exists.
+   *
+   * Use after `Tree.create` and before wallet signature or Setter root
+   * approval.
    *
    * @param params - Tree validation parameters.
    * @returns API issues and `valid` summary.
-   * @throws Payload.DecodeError when validation payload encoding fails.
-   * @throws MidnightApiError when the API returns a non-2xx response.
-   * @throws InvalidMidnightApiResponseError when the API returns malformed success JSON.
+   * @throws {Payload.DecodeError} when validation payload encoding fails.
+   * @throws {MidnightApiError} when the API returns a non-2xx response.
+   * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk";
@@ -785,8 +802,8 @@ export class MidnightApi {
    *
    * @param params - Rule filters and pagination.
    * @returns Paginated API rules mapped to SDK camelCase fields.
-   * @throws MidnightApiError when the API returns a non-2xx response.
-   * @throws InvalidMidnightApiResponseError when the API returns malformed success JSON.
+   * @throws {MidnightApiError} when the API returns a non-2xx response.
+   * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
    * @example
    * ```ts
    * import { MidnightApi } from "@morpho-org/midnight-sdk";

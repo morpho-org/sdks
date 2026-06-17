@@ -8,7 +8,11 @@ import {
 } from "./TakeableOfferUtils.js";
 
 /**
- * Plain input accepted by {@link TakeableOffer}.
+ * Plain take-side input accepted by {@link TakeableOffer}.
+ *
+ * Use this after a quote, book, or maker-offers API response has been mapped
+ * back into SDK offer input and paired with the API-provided `units`,
+ * `group`, and `ratifierData`.
  *
  * @example
  * ```ts
@@ -22,7 +26,7 @@ export interface ITakeableOffer {
   /** Units to take from this offer. */
   readonly units: BigIntish;
   /** Inline offer. */
-  readonly offer: IOffer | Offer;
+  readonly offer: IOffer;
   /** Protocol group id encoded into the offer. */
   readonly group: Hash;
   /** Ratifier data payload. */
@@ -30,7 +34,12 @@ export interface ITakeableOffer {
 }
 
 /**
- * Quote-facing executable offer normalized for Midnight bundle conversion.
+ * Take-side executable offer normalized for Midnight take or bundle calldata.
+ *
+ * API responses expose signed maker offers plus the amount to take. Use
+ * {@link TakeableOffer.createMany} to normalize those entries, assert the
+ * expected maker side, and keep group/ratifier data together before ABI
+ * encoding.
  *
  * @example
  * ```ts
@@ -60,11 +69,16 @@ export class TakeableOffer {
   /**
    * Converts API/app quote entries into takeable-offer class instances.
    *
+   * Use after `MidnightApi.fetchBookQuote`, `fetchBookTakeableOffers`, or
+   * `fetchTakeableOffers` has returned executable offers and after the API
+   * offer shape has been mapped into `IOffer`. Convert the returned instances
+   * with `TakeableOfferUtils.toStruct` before building take calldata.
+   *
    * @param params - Quote conversion parameters.
    * @returns Takeable offers in caller order.
-   * @throws NoMatchingOffersError when `entries` is empty.
-   * @throws UnexpectedOfferSideError when an entry has the wrong side.
-   * @throws InconsistentMarketError when market consistency is enforced and differs.
+   * @throws {NoMatchingOffersError} when `entries` is empty.
+   * @throws {UnexpectedOfferSideError} when an entry has the wrong side.
+   * @throws {InconsistentMarketError} when market consistency is enforced and differs.
    * @example
    * ```ts
    * import { TakeableOffer } from "@morpho-org/midnight-sdk";
@@ -90,6 +104,10 @@ export class TakeableOffer {
 
 /**
  * ABI tuple shape for a takeable offer.
+ *
+ * This is the take-side shape to pass into Midnight take or bundle calldata
+ * encoders after `TakeableOffer.createMany` or `TakeableOfferUtils.toStructs`
+ * has validated side and market assumptions.
  *
  * @example
  * ```ts

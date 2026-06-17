@@ -19,14 +19,6 @@ export const callParameters = (
 export const shouldUseDeployless = (params: DeploylessFetchParameters) =>
   params.deployless ?? true;
 
-/** @internal Extracts block selectors accepted by `getBytecode`. */
-export const bytecodeCallParameters = (params: MidnightCallParameters) => {
-  if (params.blockNumber != null) return { blockNumber: params.blockNumber };
-  if (params.blockTag != null) return { blockTag: params.blockTag };
-
-  return {};
-};
-
 /** @internal Returns the configured viem client chain id or fetches it from RPC. */
 export const resolveChainId = async (client: Client) =>
   client.chain?.id ?? (await getChainId(client));
