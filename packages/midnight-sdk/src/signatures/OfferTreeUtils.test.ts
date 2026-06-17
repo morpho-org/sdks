@@ -5,15 +5,19 @@ import { ecrecoverRatifierAbi, setterRatifierAbi } from "../abis.js";
 import { InvalidOfferGroupError, InvalidOfferTreeError } from "../errors.js";
 import { Offer, OfferUtils } from "../offers/index.js";
 import {
-  EcrecoverRatifier,
   Group,
   GroupUtils,
   MAX_OFFERS_PER_TREE,
   OfferTreeUtils,
-  SetterRatifier,
   Tree,
 } from "./OfferTreeUtils.js";
-import { RatifierUtils } from "./RatifierUtils.js";
+import {
+  EcrecoverRatifier,
+  EcrecoverRatifierUtils,
+  RatifierUtils,
+  SetterRatifier,
+  SetterRatifierUtils,
+} from "./RatifierUtils.js";
 
 const root =
   "0x3333333333333333333333333333333333333333333333333333333333333333" as const;
@@ -255,10 +259,10 @@ describe("OfferTreeUtils.buildOfferTreeDescriptor", () => {
   });
 });
 
-describe("OfferTreeUtils.buildEcrecoverRatificationTypedData", () => {
+describe("EcrecoverRatifierUtils.typedData", () => {
   test("default", () => {
-    const typedData = OfferTreeUtils.buildEcrecoverRatificationTypedData({
-      entries: [baseOffer({ maxAssets: 0n })],
+    const typedData = EcrecoverRatifierUtils.typedData({
+      tree: [baseOffer({ maxAssets: 0n })],
       chainId: 8453n,
       verifyingContract: addresses.ecrecoverRatifier,
     });
@@ -272,9 +276,9 @@ describe("OfferTreeUtils.buildEcrecoverRatificationTypedData", () => {
   });
 });
 
-describe("OfferTreeUtils.encodeEcrecoverRatifierData", () => {
+describe("EcrecoverRatifierUtils.encodeRatifierData", () => {
   test("default", () => {
-    const data = OfferTreeUtils.encodeEcrecoverRatifierData({
+    const data = EcrecoverRatifierUtils.encodeRatifierData({
       signature: {
         v: 27,
         r: "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -294,14 +298,14 @@ describe("OfferTreeUtils.encodeEcrecoverRatifierData", () => {
       r: "0x1111111111111111111111111111111111111111111111111111111111111111",
       s: "0x2222222222222222222222222222222222222222222222222222222222222222",
     } as const;
-    const data = OfferTreeUtils.encodeEcrecoverRatifierData({
+    const data = EcrecoverRatifierUtils.encodeRatifierData({
       signature,
       root,
       leafIndex: 2n,
       proof: [proofNode],
     });
 
-    expect(OfferTreeUtils.decodeEcrecoverRatifierData(data)).toEqual({
+    expect(EcrecoverRatifierUtils.decodeRatifierData(data)).toEqual({
       signature,
       root,
       leafIndex: 2n,
@@ -310,15 +314,15 @@ describe("OfferTreeUtils.encodeEcrecoverRatifierData", () => {
   });
 });
 
-describe("OfferTreeUtils.encodeSetterRatifierData", () => {
+describe("SetterRatifierUtils.encodeRatifierData", () => {
   test("behavior: decode round trip", () => {
-    const data = OfferTreeUtils.encodeSetterRatifierData({
+    const data = SetterRatifierUtils.encodeRatifierData({
       root,
       leafIndex: 3n,
       proof: [proofNode],
     });
 
-    expect(OfferTreeUtils.decodeSetterRatifierData(data)).toEqual({
+    expect(SetterRatifierUtils.decodeRatifierData(data)).toEqual({
       root,
       leafIndex: 3n,
       proof: [proofNode],
@@ -402,9 +406,9 @@ describe("OfferTreeUtils.verifyOfferTreeProof", () => {
   });
 });
 
-describe("OfferTreeUtils.buildSetterRootApprovalCall", () => {
+describe("SetterRatifierUtils.buildRootApprovalCall", () => {
   test("default", () => {
-    const call = OfferTreeUtils.buildSetterRootApprovalCall({
+    const call = SetterRatifierUtils.buildRootApprovalCall({
       setterRatifier: addresses.setterRatifier,
       maker: addresses.maker,
       root: "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -420,7 +424,7 @@ describe("OfferTreeUtils.buildSetterRootApprovalCall", () => {
 
   test("error: invalid bytes32 root", () => {
     expect(() =>
-      OfferTreeUtils.buildSetterRootApprovalCall({
+      SetterRatifierUtils.buildRootApprovalCall({
         setterRatifier: addresses.setterRatifier,
         maker: addresses.maker,
         root: "0x1234",
@@ -429,9 +433,9 @@ describe("OfferTreeUtils.buildSetterRootApprovalCall", () => {
   });
 });
 
-describe("OfferTreeUtils.buildEcrecoverRootCancellationCall", () => {
+describe("EcrecoverRatifierUtils.buildRootCancellationCall", () => {
   test("default", () => {
-    const call = OfferTreeUtils.buildEcrecoverRootCancellationCall({
+    const call = EcrecoverRatifierUtils.buildRootCancellationCall({
       ecrecoverRatifier: addresses.ecrecoverRatifier,
       maker: addresses.maker,
       root,
