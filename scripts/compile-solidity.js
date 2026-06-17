@@ -36,6 +36,9 @@ const packageConfigs = {
   },
   "midnight-sdk": {
     bytecodeExportName: "code",
+    describeArtifact(contractName) {
+      return `Deployless \`${contractName}\` query`;
+    },
     resolveOutputPath(sourceName) {
       if (sourceName.includes("/interfaces/")) return null;
 
