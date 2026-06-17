@@ -1,7 +1,6 @@
 import {
   type BlockTag,
   createPublicClient,
-  ethAddress,
   getAddress,
   http,
   maxUint256,
@@ -27,14 +26,13 @@ import { parseTransfers } from "../parsing/index.js";
  * Uses stateOverride to set the user's ETH balance high enough to avoid
  * false "insufficient balance for gas" reverts.
  *
- * Derives `assetChanges` (net per-token deltas grouped by account) from the
- * emitted transfer logs, plus native ETH from each transaction's top-level
- * `value` (payer debited, recipient credited, under viem's `ethAddress`).
- *
- * Coverage on this path is therefore narrower than the Tenderly backend:
- * native ETH moved through internal calls (e.g. a `WETH.withdraw` refund, a
- * swap that pays out ETH) emits no log and is not reflected in `value`, so it
- * is not captured. For full native-ETH accounting use Tenderly.
+ * Runs with `traceTransfers` enabled, so the node synthesizes native-ETH moves
+ * (the top-level `value` *and* ETH moved through internal calls — e.g. a
+ * `WETH.withdraw` refund or a swap that pays out ETH) as `Transfer` events from
+ * the native sentinel. Derives `assetChanges` (net per-token deltas grouped by
+ * account) entirely from the emitted transfer logs, with native ETH normalized
+ * to viem's `ethAddress`. Top-level `value` is intentionally *not* added on top:
+ * `traceTransfers` already logs it, so adding it would double-count.
  */
 export async function simulateV1(params: {
   rpcUrl: string;
@@ -89,6 +87,10 @@ export async function simulateV1(params: {
       account: sender,
       calls,
       ...blockParam,
+      // Synthesize native-ETH moves (top-level value + internal calls) as
+      // Transfer logs from the native sentinel, so `parseTransfers` captures
+      // ETH that emits no real log (e.g. a WETH.withdraw refund).
+      traceTransfers: true,
       // Inflate sender ETH balance to prevent false "insufficient gas" reverts.
       // Without this, valid ERC20 flows fail when the sender has low ETH.
       stateOverrides: [{ address: sender, balance: maxUint256 }],
@@ -123,10 +125,7 @@ export async function simulateV1(params: {
 
     return {
       calls: rawCalls,
-      assetChanges: toAssetChanges({
-        transfers: parseTransfers(rawCalls),
-        transactions,
-      }),
+      assetChanges: toAssetChanges(parseTransfers(rawCalls)),
     };
   } catch (error) {
     if (error instanceof SimulationRevertedError) throw error;
@@ -139,23 +138,13 @@ export async function simulateV1(params: {
 }
 
 /**
- * Reduce parsed transfer logs and top-level transaction values to net per-token
- * balance changes grouped by account. Native ETH is taken from the top-level
- * `value`s (payer debited, recipient credited — internal moves are not logged,
- * see `simulateV1` for the coverage caveat).
+ * Reduce parsed transfer logs to net per-token balance changes grouped by
+ * account. With `traceTransfers` enabled, native ETH (top-level and internal)
+ * arrives as transfer logs under viem's `ethAddress`, so no separate top-level
+ * `value` accounting is needed — doing so would double-count.
  */
-function toAssetChanges(params: {
-  transfers: Transfer[];
-  transactions: SimulationTransaction[];
-}): AccountAssetChanges[] {
-  const { transfers, transactions } = params;
+function toAssetChanges(transfers: Transfer[]): AccountAssetChanges[] {
   const entries: AssetChangeEntry[] = [];
-
-  for (const tx of transactions) {
-    if (!tx.value) continue;
-    entries.push({ account: tx.from, token: ethAddress, diff: -tx.value });
-    entries.push({ account: tx.to, token: ethAddress, diff: tx.value });
-  }
 
   for (const { token, from, to, amount } of transfers) {
     entries.push({ account: to, token, diff: amount });
