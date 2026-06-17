@@ -12,10 +12,15 @@ import {
 } from "@morpho-org/blue-sdk";
 import { bigIntComparator } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
-import { DEFAULT_WITHDRAWAL_TARGET_UTILIZATION } from "../helpers/constant.js";
+import {
+  DEFAULT_SUPPLY_TARGET_UTILIZATION,
+  DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
+} from "../helpers/constant.js";
+import { getSupplyTargetUtilization } from "../helpers/utilization.js";
 import type {
   PublicAllocatorOptions,
   PublicReallocation,
+  ReallocationComputeOptions,
 } from "../types/index.js";
 import {
   DisabledReallocationMarketError,
@@ -461,6 +466,72 @@ export class ReallocationData implements InputReallocationData {
         timestamp: accrualTimestamp,
       });
     }
+  }
+
+  /**
+   * Sums the public-allocator liquidity reallocatable into `marketId` from
+   * sibling markets.
+   *
+   * Read-only metric — never throws on insufficiency (returns `0n`). Bounded by
+   * each source market's withdrawal utilization cap and the target market's
+   * vault supply-cap headroom. Pass `options.defaultMaxWithdrawalUtilization` to
+   * widen the source ceiling (e.g. `MathLib.WAD` for the full drain).
+   *
+   * @param marketId - Target market that would receive the liquidity.
+   * @param options - Optional allocator discovery options.
+   * @returns Total reallocatable assets in loan-token units; `0n` when none is available.
+   * @throws {@link UnknownReallocationMarketError} when the target market is absent.
+   */
+  public getAvailableLiquidity(
+    marketId: MarketId,
+    options?: PublicAllocatorOptions,
+  ): bigint {
+    const { withdrawals } = this.getMarketPublicReallocations(
+      marketId,
+      options,
+    );
+
+    return withdrawals.reduce((total, { assets }) => total + assets, 0n);
+  }
+
+  /**
+   * Computes the liquidity available to bring `marketId` to `utilization`,
+   * combining its own borrow headroom with the reallocatable public-allocator
+   * liquidity.
+   *
+   * Read-only metric — never throws on insufficiency:
+   * - returns only the own headroom when `supplyTargetUtilization > utilization`
+   *   (reallocation would not trigger at that target);
+   * - returns only the available liquidity when `utilization` equals the
+   *   market's current utilization (no own headroom left);
+   * - otherwise returns their sum.
+   *
+   * @param marketId - Target market to borrow from.
+   * @param utilization - Utilization to bring the market to, scaled by WAD. Defaults to {@link DEFAULT_SUPPLY_TARGET_UTILIZATION}.
+   * @param options - Optional reallocation options (supply target utilization trigger, timestamp, withdrawal caps).
+   * @returns Available liquidity to the target utilization in loan-token units; `0n` when none is available.
+   * @throws {@link UnknownReallocationMarketError} when the target market is absent.
+   */
+  // biome-ignore lint/complexity/useMaxParams: (marketId, utilization, options) is the metric's public API
+  public getAvailableLiquidityToUtilization(
+    marketId: MarketId,
+    utilization: bigint = DEFAULT_SUPPLY_TARGET_UTILIZATION,
+    options?: ReallocationComputeOptions,
+  ): bigint {
+    const market = this.getMarket(marketId).accrueInterest(options?.timestamp);
+
+    const ownHeadroom = market.getBorrowToUtilization(utilization);
+
+    const supplyTargetUtilization = getSupplyTargetUtilization(
+      marketId,
+      options,
+    );
+    if (supplyTargetUtilization > utilization) return ownHeadroom;
+
+    const availableLiquidity = this.getAvailableLiquidity(marketId, options);
+    if (utilization === market.utilization) return availableLiquidity;
+
+    return ownHeadroom + availableLiquidity;
   }
 
   /**

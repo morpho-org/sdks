@@ -2,7 +2,7 @@
 "@morpho-org/morpho-sdk": minor
 ---
 
-Add two read-only shared-liquidity metrics.
+Add two read-only public-allocator liquidity metrics as `ReallocationData` methods.
 
-- `computeAvailableSharedLiquidity`: total reallocatable liquidity into a market from sibling markets via the PublicAllocator. Read-only and never throws on insufficiency (returns `0n`).
-- `computeAvailableLiquidityToTargetUtilization`: borrow-free read-only metric for the liquidity available to bring a market to `targetUtilization` (default `DEFAULT_SUPPLY_TARGET_UTILIZATION`). Returns the market's own borrow headroom plus the reallocatable shared liquidity; only the own headroom when `supplyTargetUtilization > targetUtilization`, and only the shared liquidity when `targetUtilization` equals the current utilization.
+- `ReallocationData.getAvailableLiquidity(marketId, options?)`: total reallocatable liquidity into a market from sibling markets via the PublicAllocator. Never throws on insufficiency (returns `0n`).
+- `ReallocationData.getAvailableLiquidityToUtilization(marketId, utilization?, options?)`: liquidity available to bring a market to `utilization` (default `DEFAULT_SUPPLY_TARGET_UTILIZATION`) — the market's own borrow headroom plus the reallocatable liquidity. Returns only the own headroom when `supplyTargetUtilization > utilization`, and only the available liquidity when `utilization` equals the current utilization.
