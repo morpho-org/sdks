@@ -7,7 +7,6 @@ import { concat, encodeAbiParameters, encodePacked, keccak256 } from "viem";
 import {
   ALLOWED_LLTVS,
   COLLATERAL_PARAMS_TYPEHASH,
-  LIQUIDATION_CURSOR_LOW,
   MARKET_TYPEHASH,
 } from "../constants.js";
 import {
@@ -51,24 +50,13 @@ type CollateralParamsInput =
  *
  * @example
  * ```ts
- * import type { MarketUtilsInput } from "@morpho-org/midnight-sdk";
+ * import type { MarketInput } from "@morpho-org/midnight-sdk";
  *
- * const market = {} as MarketUtilsInput;
+ * const market = {} as MarketInput;
  * console.log(market);
  * ```
  */
-export type MarketUtilsInput = IMarketParams | IMarket;
-
-function readMaxLiquidationIncentiveFactor(params: CollateralParamsInput) {
-  if ("maxLiquidationIncentiveFactor" in params) {
-    return params.maxLiquidationIncentiveFactor == null
-      ? undefined
-      : BigInt(params.maxLiquidationIncentiveFactor);
-  }
-  if ("maxLif" in params) return params.maxLif;
-
-  return undefined;
-}
+export type MarketInput = IMarketParams | IMarket;
 
 /**
  * Domain helpers for Midnight markets.
@@ -93,6 +81,7 @@ export namespace MarketUtils {
    * const collateral = MarketUtils.normalizeCollateralParams({
    *   token: "0x0000000000000000000000000000000000000001",
    *   lltv: 770000000000000000n,
+   *   maxLiquidationIncentiveFactor: 1061007957559681697n,
    *   oracle: "0x0000000000000000000000000000000000000002",
    * });
    * console.log(collateral.maxLiquidationIncentiveFactor);
@@ -101,14 +90,13 @@ export namespace MarketUtils {
   export function normalizeCollateralParams(
     params: CollateralParamsInput,
   ): CollateralParams {
-    const lltv = BigInt(params.lltv);
+    const maxLiquidationIncentiveFactor =
+      "maxLif" in params ? params.maxLif : params.maxLiquidationIncentiveFactor;
 
     return {
       token: params.token,
-      lltv,
-      maxLiquidationIncentiveFactor:
-        readMaxLiquidationIncentiveFactor(params) ??
-        getMaxLiquidationIncentiveFactor(lltv),
+      lltv: BigInt(params.lltv),
+      maxLiquidationIncentiveFactor: BigInt(maxLiquidationIncentiveFactor),
       oracle: params.oracle,
     };
   }
@@ -126,7 +114,7 @@ export namespace MarketUtils {
    * console.log(params.loanToken);
    * ```
    */
-  export function normalizeMarketParams(market: MarketUtilsInput) {
+  export function normalizeMarketParams(market: MarketInput) {
     if ("params" in market) return normalizeMarketParams(market.params);
     return market instanceof MarketParams ? market : new MarketParams(market);
   }
@@ -144,7 +132,7 @@ export namespace MarketUtils {
    * console.log(struct.maturity);
    * ```
    */
-  export function toStruct(market: MarketUtilsInput): MarketParamsStruct {
+  export function toStruct(market: MarketInput): MarketParamsStruct {
     const params = normalizeMarketParams(market);
 
     return {
@@ -180,49 +168,25 @@ export namespace MarketUtils {
   }
 
   /**
-   * Returns the maximum liquidation incentive factor inferred from an LLTV.
-   *
-   * This is the default `maxLiquidationIncentiveFactor` used by collateral
-   * params when callers omit the field. The ABI still carries the explicit
-   * value because the market id and offer signatures hash it onchain.
-   *
-   * @param input - WAD-scaled LLTV or collateral params carrying an LLTV.
-   * @returns WAD-scaled maximum liquidation incentive factor.
-   * @example
-   * ```ts
-   * import { MarketUtils } from "@morpho-org/midnight-sdk";
-   *
-   * const maxLiquidationIncentiveFactor =
-   *   MarketUtils.getMaxLiquidationIncentiveFactor({ lltv: 770000000000000000n } as never);
-   * console.log(maxLiquidationIncentiveFactor);
-   * ```
-   */
-  export function getMaxLiquidationIncentiveFactor(
-    input: BigIntish | Pick<CollateralParamsInput, "lltv">,
-  ) {
-    const lltv = typeof input === "object" ? input.lltv : input;
-
-    return MathLib.mulDiv(MathLib.WAD, MathLib.WAD, BigInt(lltv), "Down");
-  }
-
-  /**
    * Returns the liquidation incentive factor for an LLTV and liquidation cursor.
    *
    * @param input - WAD-scaled LLTV or collateral params carrying an LLTV.
-   * @param cursor - WAD-scaled liquidation cursor.
+   * @param cursor - WAD-scaled liquidation cursor, usually `LIQUIDATION_CURSOR_LOW` or `LIQUIDATION_CURSOR_HIGH`.
    * @returns WAD-scaled liquidation incentive factor.
    * @example
    * ```ts
-   * import { MarketUtils } from "@morpho-org/midnight-sdk";
+   * import { LIQUIDATION_CURSOR_LOW, MarketUtils } from "@morpho-org/midnight-sdk";
    *
-   * const liquidationIncentiveFactor =
-   *   MarketUtils.getLiquidationIncentiveFactor(770000000000000000n);
+   * const liquidationIncentiveFactor = MarketUtils.getLiquidationIncentiveFactor(
+   *   770000000000000000n,
+   *   LIQUIDATION_CURSOR_LOW,
+   * );
    * console.log(liquidationIncentiveFactor);
    * ```
    */
   export function getLiquidationIncentiveFactor(
     input: BigIntish | Pick<CollateralParamsInput, "lltv">,
-    cursor: BigIntish = LIQUIDATION_CURSOR_LOW,
+    cursor: BigIntish,
   ) {
     const lltv = typeof input === "object" ? input.lltv : input;
     const cursorValue = BigInt(cursor);
@@ -258,7 +222,7 @@ export namespace MarketUtils {
    * console.log(hash);
    * ```
    */
-  export function hash(market: MarketUtilsInput) {
+  export function hash(market: MarketInput) {
     const marketStruct = toStruct(market);
     const collateralParamHashes = marketStruct.collateralParams.map((params) =>
       keccak256(
@@ -322,7 +286,7 @@ export namespace MarketUtils {
    * ```
    */
   export function toId(params: {
-    readonly market: MarketUtilsInput;
+    readonly market: MarketInput;
     readonly chainId: BigIntish;
   }) {
     const chainId = BigInt(params.chainId);

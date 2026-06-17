@@ -381,8 +381,7 @@ SDK-only derived helpers should live beside the domain they describe:
 
 - `TickLib.assertTickAlignedToSpacing` as an SDK assertion attached to the tick domain
 - `MarketUtils.isLltvAllowed`
-- `MarketUtils.getMaxLiquidationIncentiveFactor`
-- `MarketUtils.getLiquidationIncentiveFactor`
+- `MarketUtils.getLiquidationIncentiveFactor` with an explicit liquidation cursor
 - `OfferUtils.getOfferExpiry`
 
 The pure helpers that mirror `TakeAmountsLib` should accept `settlementFee` as an explicit input instead of reading the chain. Fetching settlement fee remains a boundary concern; fetch helpers that compute it should accept `timeToMaturity` directly so callers do not confuse wall-clock time with Solidity's `block.timestamp`.
@@ -410,7 +409,7 @@ It should:
 
 Make-offer helpers should support the limit-order path without importing app code:
 
-- `Offer.create` is the user-facing constructor for raw protocol `Offer` class instances from market, side, tick, max assets, expiry, callback, receiver, and ratifier. Offers do not own their group id;
+- `Offer.create` is the user-facing constructor for raw protocol `Offer` class instances from market, side, tick, max assets, expiry, callback, receiver, and ratifier. Market collateral params require the onchain `maxLif` value explicitly because the same LLTV may use either supported liquidation cursor, and offers do not own their group id;
 - `Offer.hash(group)` computes the protocol offer hash for an explicit group id, while `Offer.hash()` defaults to the zero hash and `Offer.groupHash` exposes that zero-group hash for content-addressed group derivation;
 - `OfferUtils` owns pure object-compatible offer validation, struct conversion, offer hashing, offer expiry helpers, receiver-zeroing checks, and cap checks;
 - `Group.create` is the user-facing group factory. It builds a group with one derived id, preserving caller offer order while deriving identity by sorting the member offers' `groupHash` values and hashing the concatenation through `GroupUtils.hash`;

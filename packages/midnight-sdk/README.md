@@ -48,6 +48,7 @@ export async function makeBaseUsdcWethOffers(params: {
       {
         token: weth,
         lltv: 770_000000000000000000n,
+        maxLiquidationIncentiveFactor: 1_061007957559681697n,
         oracle: params.wethUsdcOracle,
       },
     ],

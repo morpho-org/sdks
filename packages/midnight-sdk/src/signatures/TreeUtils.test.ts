@@ -66,7 +66,7 @@ describe("TreeUtils.buildDescriptor", () => {
 
     expect(payload.height).toBe(0);
     expect(payload.root).toMatchInlineSnapshot(
-      `"0xc70811875043cb46f8059a075df39de9e70175f06c1ca613263d56a3d61a2838"`,
+      `"0x36695a53a5427c6ea8873cf32dba313447ba1d8b1708c8be4372235d1b8c27cb"`,
     );
   });
 

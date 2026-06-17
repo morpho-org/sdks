@@ -17,6 +17,9 @@ import { OfferUtils } from "./OfferUtils.js";
  * flow into `OfferUtils.normalizeOffer`, `Group.create`, `Tree.create`, or
  * take-side conversion helpers. Use {@link Offer.create} instead for new maker
  * offers so deterministic fields are validated before grouping or signing.
+ * Unlike the onchain `Offer` struct, this input intentionally has no `group`
+ * field: callers should not manage group ids at the offer level, and SDK
+ * helpers populate the group only when hashing or ABI encoding requires it.
  *
  * @example
  * ```ts
@@ -81,7 +84,10 @@ export interface IOffer {
  * Build new maker offers with {@link Offer.create}, then pass them to
  * `Group.create` for shared-consumption ladders or directly to `Tree.create`
  * for standalone offers. API/take-side code can normalize a plain `IOffer`
- * into this class before ABI encoding.
+ * into this class before ABI encoding. The class omits the onchain `group`
+ * field so consumers can work with offers independently; `Offer.hash`,
+ * `OfferUtils.toStruct`, and `GroupUtils.toStructs` add the group id at the
+ * latest point where the protocol actually needs it.
  *
  * @example
  * ```ts

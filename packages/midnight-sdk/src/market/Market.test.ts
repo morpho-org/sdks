@@ -8,7 +8,11 @@ import {
   chainId,
   marketId,
 } from "../__test__/fixtures.js";
-import { CBP } from "../constants.js";
+import {
+  CBP,
+  LIQUIDATION_CURSOR_HIGH,
+  LIQUIDATION_CURSOR_LOW,
+} from "../constants.js";
 import { MarketParams } from "./Market.js";
 import { MarketUtils } from "./MarketUtils.js";
 
@@ -19,7 +23,7 @@ describe("CollateralParams", () => {
     expect(params.collateralParams[0]).toEqual({
       token: addresses.collateralToken,
       lltv: 770000000000000000n,
-      maxLiquidationIncentiveFactor: 1298701298701298701n,
+      maxLiquidationIncentiveFactor: 1061007957559681697n,
       oracle: addresses.oracle,
     });
   });
@@ -88,29 +92,25 @@ describe("MarketUtils", () => {
     expect(MarketUtils.isLltvAllowed(770000000000000000n)).toBe(true);
     expect(MarketUtils.isLltvAllowed(123n)).toBe(false);
     expect(
-      MarketUtils.getMaxLiquidationIncentiveFactor(770000000000000000n),
-    ).toBe(1298701298701298701n);
-    expect(
-      MarketUtils.getMaxLiquidationIncentiveFactor({
-        lltv: 770000000000000000n,
-      }),
-    ).toBe(1298701298701298701n);
-    expect(MarketUtils.getLiquidationIncentiveFactor(770000000000000000n)).toBe(
-      1061007957559681697n,
-    );
-    expect(
-      MarketUtils.getLiquidationIncentiveFactor({
-        lltv: 770000000000000000n,
-      }),
+      MarketUtils.getLiquidationIncentiveFactor(
+        770000000000000000n,
+        LIQUIDATION_CURSOR_LOW,
+      ),
     ).toBe(1061007957559681697n);
+    expect(
+      MarketUtils.getLiquidationIncentiveFactor(
+        { lltv: 770000000000000000n },
+        LIQUIDATION_CURSOR_HIGH,
+      ),
+    ).toBe(1129943502824858757n);
   });
 
   test("behavior: hash and id are deterministic", () => {
     expect(MarketUtils.hash(baseMarketParamsInput())).toMatchInlineSnapshot(
-      `"0x1d1d0f30775dfa091c9b5ccd9e8ecfe512d65d99c2c503d3adca520b494db8db"`,
+      `"0xa0dfe829d404251173c3ca4c9da385b1d08459a8c4dee1bc86a8d747e241b653"`,
     );
     expect(MarketUtils.hash(baseMarket())).toMatchInlineSnapshot(
-      `"0x1d1d0f30775dfa091c9b5ccd9e8ecfe512d65d99c2c503d3adca520b494db8db"`,
+      `"0xa0dfe829d404251173c3ca4c9da385b1d08459a8c4dee1bc86a8d747e241b653"`,
     );
     expect(
       MarketUtils.toId({
@@ -118,7 +118,7 @@ describe("MarketUtils", () => {
         chainId,
       }),
     ).toMatchInlineSnapshot(
-      `"0xfc05bd0e11cc188fc51ebf82b7be4398e83ecebf3a6450a427c4b4305be77895"`,
+      `"0xf922c8934f33a203afd0546f9b7870f69b287a2204f2a90313e36171749409be"`,
     );
   });
 });

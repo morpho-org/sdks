@@ -241,7 +241,7 @@ describe("Payload.decode", () => {
         collateralParams: Array.from({ length: 129 }, (_, index) => ({
           token: numberToHex(index + 1, { size: 20 }) as Address,
           lltv: 770000000000000000n,
-          maxLif: 1298701298701298701n,
+          maxLif: 1061007957559681697n,
           oracle: addresses.oracle,
         })),
       },

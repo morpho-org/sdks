@@ -44,6 +44,7 @@ export type SettlementFeeCbps = readonly [
  * const params: ICollateralParams = {
  *   token: "0x0000000000000000000000000000000000000001",
  *   lltv: 770000000000000000n,
+ *   maxLiquidationIncentiveFactor: 1061007957559681697n,
  *   oracle: "0x0000000000000000000000000000000000000002",
  * };
  * ```
@@ -53,8 +54,8 @@ export interface ICollateralParams {
   readonly token: Address;
   /** WAD-scaled liquidation loan-to-value. */
   readonly lltv: BigIntish;
-  /** WAD-scaled maximum liquidation incentive factor; defaults to `1 / lltv`. */
-  readonly maxLiquidationIncentiveFactor?: BigIntish;
+  /** WAD-scaled maximum liquidation incentive factor. */
+  readonly maxLiquidationIncentiveFactor: BigIntish;
   /** Oracle address for this collateral. */
   readonly oracle: Address;
 }
