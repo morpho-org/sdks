@@ -8,8 +8,11 @@ import {
   type Abi,
   type Address,
   type ContractFunctionName,
+  createClient,
+  custom,
   encodeFunctionResult,
   type Hex,
+  numberToHex,
 } from "viem";
 import { base } from "viem/chains";
 import { describe, expect, test } from "vitest";
@@ -90,14 +93,35 @@ describe("fetchMarketParams", () => {
       result: MarketUtils.toStruct(baseMarketParams()),
     });
 
-    const params = await fetchMarketParams({
-      client: handle.client,
-      midnight: addresses.midnight,
+    const params = await fetchMarketParams(handle.client, {
       marketId,
     });
 
     expect(params.loanToken).toBe(addresses.loanToken);
     expect(params.collateralParams[0]?.token).toBe(addresses.collateralToken);
+  });
+
+  test("behavior: fetches chain id when client has no configured chain", async () => {
+    const handle = createMockClient(base);
+    const client = createClient({
+      transport: custom({ request: handle.request }),
+    });
+    mockRead(handle, {
+      address: addresses.midnight,
+      abi: midnightAbi,
+      functionName: "toMarket",
+      args: [marketId],
+      result: MarketUtils.toStruct(baseMarketParams()),
+    });
+
+    const params = await fetchMarketParams(client, {
+      marketId,
+    });
+
+    expect(params.loanToken).toBe(addresses.loanToken);
+    expect(
+      handle.request.mock.calls.some(([call]) => call.method === "eth_chainId"),
+    ).toBe(true);
   });
 });
 
@@ -119,9 +143,7 @@ describe("fetchMarket", () => {
       result: [1n, 2n, 3n, 4n, 5, 6, 7, 8, 9, 10, 11, 12, 4],
     });
 
-    const market = await fetchMarket({
-      client: handle.client,
-      midnight: addresses.midnight,
+    const market = await fetchMarket(handle.client, {
       marketId,
     });
 
@@ -151,9 +173,7 @@ describe("fetchPosition", () => {
       },
     });
 
-    const position = await fetchPosition({
-      client: handle.client,
-      midnight: addresses.midnight,
+    const position = await fetchPosition(handle.client, {
       marketId,
       user: addresses.taker,
     });
@@ -182,9 +202,7 @@ describe("fetchPosition", () => {
       result: 7n,
     });
 
-    const position = await fetchPosition({
-      client: handle.client,
-      midnight: addresses.midnight,
+    const position = await fetchPosition(handle.client, {
       marketId,
       user: addresses.taker,
       blockNumber: 123n,
@@ -222,9 +240,7 @@ describe("fetchPosition", () => {
       result: 7n,
     });
 
-    const position = await fetchPosition({
-      client: handle.client,
-      midnight: addresses.midnight,
+    const position = await fetchPosition(handle.client, {
       marketId,
       user: addresses.taker,
     });
@@ -238,9 +254,7 @@ describe("fetchPosition", () => {
     mockDeploylessFailure(handle);
 
     await expect(
-      fetchPosition({
-        client: handle.client,
-        midnight: addresses.midnight,
+      fetchPosition(handle.client, {
         marketId,
         user: addresses.taker,
         deployless: "force",
@@ -280,9 +294,7 @@ describe("fetchAccrualPosition", () => {
       result: [1_000n, 0n, 0n, 0n, 1, 2, 3, 4, 5, 6, 7, 10, 4],
     });
 
-    const position = await fetchAccrualPosition({
-      client: handle.client,
-      midnight: addresses.midnight,
+    const position = await fetchAccrualPosition(handle.client, {
       marketId,
       user: addresses.taker,
     });
@@ -307,9 +319,7 @@ describe("fetchConsumableUnits", () => {
     });
 
     await expect(
-      fetchConsumableUnits({
-        client: handle.client,
-        midnight: addresses.midnight,
+      fetchConsumableUnits(handle.client, {
         marketId,
         offer,
         timeToMaturity: 1000n,
@@ -341,9 +351,7 @@ describe("fetchConsumableUnits", () => {
     });
 
     await expect(
-      fetchConsumableUnits({
-        client: handle.client,
-        midnight: addresses.midnight,
+      fetchConsumableUnits(handle.client, {
         marketId,
         offer,
         timeToMaturity: 1000n,
@@ -370,9 +378,7 @@ describe("fetchConsumableUnits", () => {
     });
 
     await expect(
-      fetchConsumableUnits({
-        client: handle.client,
-        midnight: addresses.midnight,
+      fetchConsumableUnits(handle.client, {
         marketId,
         offer,
         timeToMaturity: 1000n,
@@ -384,9 +390,7 @@ describe("fetchConsumableUnits", () => {
     const handle = createMockClient(base);
 
     await expect(
-      fetchConsumableUnits({
-        client: handle.client,
-        midnight: addresses.midnight,
+      fetchConsumableUnits(handle.client, {
         marketId,
         offer: baseOffer({ maxUnits: -1n }),
         timeToMaturity: 1000n,
@@ -400,17 +404,15 @@ describe("fetchRatifierInfo", () => {
     const handle = createMockClient(base);
     handle.request.mockImplementation(async ({ method }) => {
       if (method === "eth_getCode") return "0xef0100";
-      if (method === "eth_chainId") return `0x${base.id.toString(16)}`;
+      if (method === "eth_chainId") return numberToHex(base.id);
       throw new TypeError("unexpected method");
     });
 
-    const info = await fetchRatifierInfo({
-      client: handle.client,
+    const info = await fetchRatifierInfo(handle.client, {
       maker: addresses.maker,
-      ecrecoverRatifier: addresses.ecrecoverRatifier,
-      setterRatifier: addresses.setterRatifier,
     });
 
     expect(info.type).toBe("ecrecover");
+    expect(info.ratifier).toBe(addresses.ecrecoverRatifier);
   });
 });

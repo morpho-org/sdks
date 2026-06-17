@@ -1,9 +1,11 @@
 import {
   type Address,
   bytesToHex,
+  concat,
   encodeAbiParameters,
   type Hex,
   hexToBytes,
+  numberToHex,
 } from "viem";
 import { describe, expect, test } from "vitest";
 import {
@@ -127,7 +129,7 @@ describe("Payload.decode", () => {
     const encoded = await Payload.encode([
       { offer: apiValidOffer(), ratifierData: "0x1234" as Hex },
     ]);
-    const tagged = `${encoded}ff` as Hex;
+    const tagged = concat([encoded, "0xff"]);
 
     const decoded = await Payload.decode(tagged);
 
@@ -165,10 +167,12 @@ describe("Payload.decode", () => {
     const encoded = await Payload.encode([
       { offer: apiValidOffer(), ratifierData: "0x1234" as Hex },
     ]);
-    const suffix = "ff".repeat(MAX_ATTRIBUTION_SUFFIX_BYTES + 1);
+    const suffix = bytesToHex(
+      new Uint8Array(MAX_ATTRIBUTION_SUFFIX_BYTES + 1).fill(255),
+    );
 
     await expect(
-      Payload.decode(`${encoded}${suffix}` as Hex),
+      Payload.decode(concat([encoded, suffix])),
     ).rejects.toBeInstanceOf(Payload.DecodeError);
   });
 
@@ -206,7 +210,7 @@ describe("Payload.decode", () => {
       market: {
         ...offer.market,
         collateralParams: Array.from({ length: 129 }, (_, index) => ({
-          token: `0x${(index + 1).toString(16).padStart(40, "0")}` as Address,
+          token: numberToHex(index + 1, { size: 20 }) as Address,
           lltv: 770000000000000000n,
           maxLif: 1298701298701298701n,
           oracle: addresses.oracle,

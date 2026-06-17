@@ -1,4 +1,4 @@
-import type { Account, Address, BlockTag, Client, StateOverride } from "viem";
+import type { Account, Address, BlockTag, StateOverride } from "viem";
 
 /**
  * Shared viem call parameters accepted by Midnight fetch helpers.
@@ -53,13 +53,8 @@ export interface DeploylessFetchParameters extends MidnightCallParameters {
  * ```ts
  * import type { MidnightFetchParams } from "@morpho-org/midnight-sdk";
  *
- * const params = {} as MidnightFetchParams;
- * console.log(params.midnight);
+ * const params: MidnightFetchParams = { blockTag: "latest" };
+ * console.log(params.blockTag);
  * ```
  */
-export interface MidnightFetchParams extends DeploylessFetchParameters {
-  /** Viem client. */
-  readonly client: Client;
-  /** Core Midnight contract address. */
-  readonly midnight: Address;
-}
+export type MidnightFetchParams = DeploylessFetchParameters;

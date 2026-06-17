@@ -3,7 +3,7 @@ import {
   getChainAddress,
   MathLib,
 } from "@morpho-org/morpho-ts";
-import { encodeAbiParameters, encodePacked, keccak256 } from "viem";
+import { concat, encodeAbiParameters, encodePacked, keccak256 } from "viem";
 import {
   ALLOWED_LLTVS,
   COLLATERAL_PARAMS_TYPEHASH,
@@ -210,9 +210,7 @@ export namespace MarketUtils {
         ]),
       ),
     );
-    const collateralParamsHash = keccak256(
-      `0x${collateralParamHashes.map((value) => value.slice(2)).join("")}`,
-    );
+    const collateralParamsHash = keccak256(concat(collateralParamHashes));
 
     return keccak256(
       encodeAbiParameters(marketHashParams, [
@@ -272,9 +270,7 @@ export namespace MarketUtils {
       [marketParamsAbiParameter],
       [toStruct(params.market)],
     );
-    const creationHash = keccak256(
-      `${SSTORE2_PREFIX}${encodedMarket.slice(2)}`,
-    );
+    const creationHash = keccak256(concat([SSTORE2_PREFIX, encodedMarket]));
 
     return keccak256(
       encodePacked(

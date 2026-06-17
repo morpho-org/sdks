@@ -1,11 +1,15 @@
-import { assertNonNegative, type BigIntish } from "@morpho-org/morpho-ts";
-import type { Hash } from "viem";
+import {
+  assertNonNegative,
+  type BigIntish,
+  getChainAddress,
+} from "@morpho-org/morpho-ts";
+import type { Client, Hash } from "viem";
 import { readContract } from "viem/actions";
 import { midnightAbi } from "../abis.js";
 import { ConsumableUnitsLib } from "../math/index.js";
 import { type IOffer, type Offer, OfferUtils } from "../offers/index.js";
-import { callParameters } from "./_utils.js";
 import type { MidnightFetchParams } from "./types.js";
+import { callParameters, resolveChainId } from "./utils.js";
 
 /**
  * Fetches and computes remaining consumable units for an offer.
@@ -14,8 +18,11 @@ import type { MidnightFetchParams } from "./types.js";
  * library's early return before any settlement-fee lookup. For asset-capped
  * offers, pass the time to maturity for the same block context as the quote.
  *
+ * @param client - Viem client used for the reads.
  * @param params - Fetch parameters.
  * @returns Consumable units.
+ * @throws {UnsupportedChainIdError} when no address registry exists for the client chain id.
+ * @throws {UnknownAddressError} when the registry has no Midnight address for the client chain id.
  * @throws NegativeValueError when asset-capped `timeToMaturity` or SDK math inputs are negative.
  * @throws DivisionByZeroError when the delegated units conversion divides by zero.
  * @throws SettlementFeeExceedsPriceError when settlement fee exceeds a buy offer price.
@@ -23,11 +30,12 @@ import type { MidnightFetchParams } from "./types.js";
  * ```ts
  * import { fetchConsumableUnits } from "@morpho-org/midnight-sdk";
  *
- * const units = await fetchConsumableUnits({} as never);
+ * const units = await fetchConsumableUnits({} as never, {} as never);
  * console.log(units);
  * ```
  */
 export async function fetchConsumableUnits(
+  client: Client,
   params: MidnightFetchParams & {
     readonly marketId: Hash;
     readonly offer: IOffer | Offer;
@@ -45,9 +53,11 @@ export async function fetchConsumableUnits(
     assertNonNegative("timeToMaturity", timeToMaturity);
   }
 
-  const consumed = readContract(params.client, {
+  const chainId = await resolveChainId(client);
+  const midnight = getChainAddress(chainId, "midnight");
+  const consumed = readContract(client, {
     ...callParameters(params),
-    address: params.midnight,
+    address: midnight,
     abi: midnightAbi,
     functionName: "consumed",
     args: [offer.maker, offer.group],
@@ -56,9 +66,9 @@ export async function fetchConsumableUnits(
   const [consumedValue, settlementFee] = needsSettlementFee
     ? await Promise.all([
         consumed,
-        readContract(params.client, {
+        readContract(client, {
           ...callParameters(params),
-          address: params.midnight,
+          address: midnight,
           abi: midnightAbi,
           functionName: "settlementFee",
           args: [params.marketId, timeToMaturity],

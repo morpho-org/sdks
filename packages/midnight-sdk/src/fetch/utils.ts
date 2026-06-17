@@ -1,3 +1,5 @@
+import type { Client } from "viem";
+import { getChainId } from "viem/actions";
 import type {
   DeploylessFetchParameters,
   MidnightCallParameters,
@@ -24,3 +26,7 @@ export const bytecodeCallParameters = (params: MidnightCallParameters) => {
 
   return {};
 };
+
+/** @internal Returns the configured viem client chain id or fetches it from RPC. */
+export const resolveChainId = async (client: Client) =>
+  client.chain?.id ?? (await getChainId(client));
