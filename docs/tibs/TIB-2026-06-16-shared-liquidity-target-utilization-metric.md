@@ -26,7 +26,7 @@ This TIB freezes the design of two read-only metrics that answer the question di
 **Goals**
 
 - Add `ReallocationData.getPublicReallocationLiquidity(marketId, options?)`: the total liquidity the PublicAllocator can reallocate **into** a market from sibling markets — a never-throws `bigint`.
-- Add `ReallocationData.getAvailableLiquidityToTargetUtilization(marketId, utilization?, options?)`: the liquidity available to bring a market to a target utilization — the market's own borrow headroom **plus** that reallocatable liquidity — also never-throws.
+- Add `ReallocationData.getAvailableLiquidityToTargetUtilization(marketId, targetUtilization?, options?)`: the liquidity available to bring a market to a target utilization — the market's own borrow headroom **plus** that reallocatable liquidity — also never-throws.
 - Reuse the existing PublicAllocator discovery (`getMarketPublicReallocations`) — no fork of the reallocation algorithm.
 - Share the supply-target-utilization resolution with `computeReallocations` instead of duplicating it.
 
@@ -48,14 +48,14 @@ Sums the source-market withdrawals discovered by `getMarketPublicReallocations` 
 
 ### `getAvailableLiquidityToTargetUtilization`
 
-The liquidity available to bring `marketId` to `utilization` (default `DEFAULT_SUPPLY_TARGET_UTILIZATION`, 90.5%), combining the market's own borrow headroom with the reallocatable liquidity. It applies **three rules**:
+The liquidity available to bring `marketId` to `targetUtilization` (default `DEFAULT_SUPPLY_TARGET_UTILIZATION`, 90.5%), combining the market's own borrow headroom with the reallocatable liquidity. It applies **three rules**:
 
 ```
-ownHeadroom            = market.getBorrowToUtilization(utilization)
+ownHeadroom            = market.getBorrowToUtilization(targetUtilization)
 supplyTargetUtilization = getSupplyTargetUtilization(marketId, options)   // per-market → default → 90.5%
 
-1. supplyTargetUtilization > utilization   → return ownHeadroom            // reallocation would not trigger
-2. utilization === market.utilization      → return reallocationLiquidity  // no own headroom left
+1. supplyTargetUtilization > targetUtilization   → return ownHeadroom            // reallocation would not trigger
+2. targetUtilization === market.utilization      → return reallocationLiquidity  // no own headroom left
 3. otherwise                               → return ownHeadroom + reallocationLiquidity
 ```
 
@@ -64,7 +64,7 @@ where `reallocationLiquidity = getPublicReallocationLiquidity(marketId, options)
 The rules encode three facts about the metric's meaning:
 
 1. **Below the reallocation trigger, only own liquidity counts.** The PublicAllocator only reallocates once a market crosses its `supplyTargetUtilization`. If the caller asks for a target *below* that trigger, no reallocation would happen, so the answer is the market's own borrow headroom alone.
-2. **At the current utilization, only reallocatable liquidity counts.** When `utilization` equals the market's current utilization, `ownHeadroom` is `0` — there is no room to borrow from the market's own supply without exceeding the target — so only the reallocatable liquidity backs further borrow at that level.
+2. **At the current utilization, only reallocatable liquidity counts.** When `targetUtilization` equals the market's current utilization, `ownHeadroom` is `0` — there is no room to borrow from the market's own supply without exceeding the target — so only the reallocatable liquidity backs further borrow at that level.
 3. **Otherwise, sum both.** Own headroom to the target plus the liquidity the PublicAllocator can pull in.
 
 > Unlike the transactional `computeReallocations` fallback, this metric never relaxes the target market toward 100% and never force-drains source markets: it honours whatever source withdrawal cap the caller configures (friendly by default).
@@ -79,13 +79,13 @@ The rules encode three facts about the metric's meaning:
 // ReallocationData.getAvailableLiquidityToTargetUtilization
 const market = this.getMarket(marketId).accrueInterest(options?.timestamp);
 
-const ownHeadroom = market.getBorrowToUtilization(utilization);
+const ownHeadroom = market.getBorrowToUtilization(targetUtilization);
 
 const supplyTargetUtilization = getSupplyTargetUtilization(marketId, options);
-if (supplyTargetUtilization > utilization) return ownHeadroom;            // rule 1
+if (supplyTargetUtilization > targetUtilization) return ownHeadroom;            // rule 1
 
 const reallocationLiquidity = this.getPublicReallocationLiquidity(marketId, options);
-if (utilization === market.utilization) return reallocationLiquidity;     // rule 2
+if (targetUtilization === market.utilization) return reallocationLiquidity;     // rule 2
 
 return ownHeadroom + reallocationLiquidity;                               // rule 3
 ```

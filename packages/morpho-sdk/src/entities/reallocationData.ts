@@ -495,44 +495,44 @@ export class ReallocationData implements InputReallocationData {
   }
 
   /**
-   * Computes the liquidity available to bring `marketId` to `utilization`,
+   * Computes the liquidity available to bring `marketId` to `targetUtilization`,
    * combining its own borrow headroom with the reallocatable public-allocator
    * liquidity.
    *
    * Read-only metric — never throws on insufficiency:
-   * - returns only the own headroom when `supplyTargetUtilization > utilization`
+   * - returns only the own headroom when `supplyTargetUtilization > targetUtilization`
    *   (reallocation would not trigger at that target);
-   * - returns only the available liquidity when `utilization` equals the
+   * - returns only the available liquidity when `targetUtilization` equals the
    *   market's current utilization (no own headroom left);
    * - otherwise returns their sum.
    *
    * @param marketId - Target market to borrow from.
-   * @param utilization - Utilization to bring the market to, scaled by WAD. Defaults to {@link DEFAULT_SUPPLY_TARGET_UTILIZATION}.
+   * @param targetUtilization - Utilization to bring the market to, scaled by WAD. Defaults to {@link DEFAULT_SUPPLY_TARGET_UTILIZATION}.
    * @param options - Optional reallocation options (supply target utilization trigger, timestamp, withdrawal caps).
    * @returns Available liquidity to the target utilization in loan-token units; `0n` when none is available.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
    */
-  // biome-ignore lint/complexity/useMaxParams: (marketId, utilization, options) is the metric's public API
+  // biome-ignore lint/complexity/useMaxParams: (marketId, targetUtilization, options) is the metric's public API
   public getAvailableLiquidityToTargetUtilization(
     marketId: MarketId,
-    utilization: bigint = DEFAULT_SUPPLY_TARGET_UTILIZATION,
+    targetUtilization: bigint = DEFAULT_SUPPLY_TARGET_UTILIZATION,
     options?: ReallocationComputeOptions,
   ): bigint {
     const market = this.getMarket(marketId).accrueInterest(options?.timestamp);
 
-    const ownHeadroom = market.getBorrowToUtilization(utilization);
+    const ownHeadroom = market.getBorrowToUtilization(targetUtilization);
 
     const supplyTargetUtilization = getSupplyTargetUtilization(
       marketId,
       options,
     );
-    if (supplyTargetUtilization > utilization) return ownHeadroom;
+    if (supplyTargetUtilization > targetUtilization) return ownHeadroom;
 
     const availableLiquidity = this.getPublicReallocationLiquidity(
       marketId,
       options,
     );
-    if (utilization === market.utilization) return availableLiquidity;
+    if (targetUtilization === market.utilization) return availableLiquidity;
 
     return ownHeadroom + availableLiquidity;
   }
