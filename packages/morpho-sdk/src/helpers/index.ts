@@ -11,7 +11,7 @@ export {
 export { addTransactionMetadata } from "./metadata.js";
 export {
   computeAvailableSharedLiquidity,
-  computeMaxBorrowToUtilization,
+  computeLiquidityToTargetUtilization,
 } from "./sharedLiquidityMetrics.js";
 export {
   computeMaxRepaySharePrice,
