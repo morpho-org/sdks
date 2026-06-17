@@ -19,134 +19,114 @@ Integrators (frontends, allocators, risk dashboards) repeatedly ask one question
 - It throws on insufficiency, so callers must wrap it in try/catch just to read a number.
 - It returns calldata, not a quantity.
 
-This TIB freezes the design of a read-only metric that answers the question directly.
+This TIB freezes the design of two read-only metrics that answer the question directly, exposed as methods on the `ReallocationData` entity the caller already holds.
 
 ## Goals / Non-Goals
 
 **Goals**
 
-- Add `computeAvailableLiquidityToTargetUtilization`: a borrow-free, never-throws read-only metric returning a single `bigint` of borrowable assets.
+- Add `ReallocationData.getPublicReallocationLiquidity(marketId, options?)`: the total liquidity the PublicAllocator can reallocate **into** a market from sibling markets — a never-throws `bigint`.
+- Add `ReallocationData.getAvailableLiquidityToTargetUtilization(marketId, utilization?, options?)`: the liquidity available to bring a market to a target utilization — the market's own borrow headroom **plus** that reallocatable liquidity — also never-throws.
 - Reuse the existing PublicAllocator discovery (`getMarketPublicReallocations`) — no fork of the reallocation algorithm.
-- Keep it a standalone helper (not a `MorphoBlue` method), pure, in the helpers layer.
+- Share the supply-target-utilization resolution with `computeReallocations` instead of duplicating it.
 
 **Non-Goals**
 
-- No calldata. This metric never produces a transaction; `computeReallocations` remains the builder.
-- No mutation of `computeReallocations` or its options. (The earlier `maintainSupplyTargetUtilization` opt-in explored for this was dropped — the standalone metric does not need it.)
-- No second-order precision. We return the literal `headroom + sharedLiquidity` sum, not the fixed-point-exact max borrow (see Assumptions).
+- No calldata. These metrics never produce a transaction; `computeReallocations` remains the builder.
+- No mutation of `computeReallocations`' behavior or its public options. (An earlier `maintainSupplyTargetUtilization` opt-in explored for this was dropped — see Considered Alternatives.)
+- No second-order precision. We return the literal `ownHeadroom + reallocationLiquidity` sum, not the fixed-point-exact max borrow (see Assumptions).
 
 ## Proposed Solution
 
-A pure helper:
+### Placement: methods on `ReallocationData`, not standalone helpers
 
-```ts
-computeAvailableLiquidityToTargetUtilization({
-  reallocationData,
-  marketId,
-  targetUtilization = DEFAULT_SUPPLY_TARGET_UTILIZATION, // 90.5%
-  options?,
-}): bigint
-```
+Both metrics only read from a `ReallocationData` instance (`getMarket`, `getMarketPublicReallocations`) and return a derived `bigint`. They live as **methods on the entity** the caller already obtains from `MorphoBlue.getReallocationData(...)`, next to the `getMarketPublicReallocations` they wrap. They stay pure (no I/O, no mutation), consistent with the entity layer's "compute derived values" role. They are intentionally **not** `MorphoBlue` methods (no chainId/fetch coupling) and **not** free helpers (they belong with the state they read).
 
-It is the sum of **two** liquidity sources, with an asymmetric utilization rule between them:
+### `getPublicReallocationLiquidity`
 
-1. **The target market's own headroom** — how much more can be borrowed on the market *as it stands today* before its utilization reaches `targetUtilization`. This is `Market.getBorrowToUtilization(targetUtilization)`. The target is **capped at the ceiling** (90.5%) — we never count borrow capacity that would push it past that line.
-2. **Shared liquidity from sibling source markets** — what the PublicAllocator can reallocate in, with **source markets drained to 100% utilization** (`defaultMaxWithdrawalUtilization = WAD`). Sources have no ceiling; only the target does.
+Sums the source-market withdrawals discovered by `getMarketPublicReallocations` — i.e. the liquidity the PublicAllocator can move into `marketId` from sibling markets. Bounded by each source's withdrawal-utilization cap (`defaultMaxWithdrawalUtilization`, default friendly 92%) and the target market's vault supply-cap headroom. The caller widens the source ceiling by passing `defaultMaxWithdrawalUtilization` (e.g. `MathLib.WAD` for the full drain). Never throws; `0n` when nothing is reallocatable.
 
-> The asymmetry is the whole point: **aggressive on the sources, conservative on the target.** Pulling a source to 100% is a curator action that is reversible and expected; pushing the *target* past 90.5% is the unhealthy state we are trying to measure the distance to.
+### `getAvailableLiquidityToTargetUtilization`
 
-### The two cases
+The liquidity available to bring `marketId` to `utilization` (default `DEFAULT_SUPPLY_TARGET_UTILIZATION`, 90.5%), combining the market's own borrow headroom with the reallocatable liquidity. It applies **three rules**:
 
 ```
-utilization
-  100% ─────────────────────────────────────
-       │   target ABOVE ceiling
- 90.5% ┝━━━━━━━━━━━━━━━━━━━━━━━━━━━ targetUtilization
-       │   target BELOW ceiling
-   0% ─────────────────────────────────────
+ownHeadroom            = market.getBorrowToUtilization(utilization)
+supplyTargetUtilization = getSupplyTargetUtilization(marketId, options)   // per-market → default → 90.5%
+
+1. supplyTargetUtilization > utilization   → return ownHeadroom            // reallocation would not trigger
+2. utilization === market.utilization      → return reallocationLiquidity  // no own headroom left
+3. otherwise                               → return ownHeadroom + reallocationLiquidity
 ```
 
-**Case A — target utilization BELOW the ceiling** (the healthy, common case):
+where `reallocationLiquidity = getPublicReallocationLiquidity(marketId, options)`.
 
-```
-  returns:  ownHeadroom  +  sharedLiquidity
-            └──────────┘    └────────────┘
-       borrow that lifts    sources drained
-       target up to 90.5%   to 100% util
-```
+The rules encode three facts about the metric's meaning:
 
-```
- target market        sources (siblings)
- ┌───────────┐        ┌────┐ ┌────┐ ┌────┐
- │███████    │ 60%    │██  │ │███ │ │█   │   each pulled
- │  ↑        │        │ ↓  │ │ ↓  │ │ ↓  │   to 100%
- │  headroom │  →90.5%└────┘ └────┘ └────┘
- └───────────┘            └─── sharedLiquidity ───┘
-```
+1. **Below the reallocation trigger, only own liquidity counts.** The PublicAllocator only reallocates once a market crosses its `supplyTargetUtilization`. If the caller asks for a target *below* that trigger, no reallocation would happen, so the answer is the market's own borrow headroom alone.
+2. **At the current utilization, only reallocatable liquidity counts.** When `utilization` equals the market's current utilization, `ownHeadroom` is `0` — there is no room to borrow from the market's own supply without exceeding the target — so only the reallocatable liquidity backs further borrow at that level.
+3. **Otherwise, sum both.** Own headroom to the target plus the liquidity the PublicAllocator can pull in.
 
-**Case B — target utilization AT OR ABOVE the ceiling** → returns `0n`.
+> Unlike the transactional `computeReallocations` fallback, this metric never relaxes the target market toward 100% and never force-drains source markets: it honours whatever source withdrawal cap the caller configures (friendly by default).
 
-```
- target market
- ┌───────────┐
- │██████████ │ 95%   already past 90.5%
- └───────────┘       → no borrowable liquidity → 0n
-```
+### Shared resolution helper
 
-There is nothing to add: the market is already at/over the line we cap on, so its own headroom is `0n`, and counting shared liquidity would be misleading (it would still leave the target over-utilized). We short-circuit and skip the (cheap but non-trivial) source discovery.
+`computeReallocations` and `getAvailableLiquidityToTargetUtilization` both need the effective supply-target utilization for a market (per-market override → default override → `DEFAULT_SUPPLY_TARGET_UTILIZATION`). That resolution is factored into one helper, `getSupplyTargetUtilization(marketId, options)`, instead of being duplicated.
 
 ### Implementation
 
 ```ts
-const market = reallocationData.getMarket(marketId).accrueInterest(options?.timestamp);
+// ReallocationData.getAvailableLiquidityToTargetUtilization
+const market = this.getMarket(marketId).accrueInterest(options?.timestamp);
 
-const ownHeadroom = market.getBorrowToUtilization(targetUtilization);
-if (ownHeadroom === 0n) return 0n; // Case B: util ≥ ceiling
+const ownHeadroom = market.getBorrowToUtilization(utilization);
 
-const sharedLiquidity = computeAvailableSharedLiquidity({
-  reallocationData,
-  marketId,
-  options: { ...options, defaultMaxWithdrawalUtilization: MathLib.WAD, maxWithdrawalUtilization: {} },
-});
+const supplyTargetUtilization = getSupplyTargetUtilization(marketId, options);
+if (supplyTargetUtilization > utilization) return ownHeadroom;            // rule 1
 
-return ownHeadroom + sharedLiquidity; // Case A
+const reallocationLiquidity = this.getPublicReallocationLiquidity(marketId, options);
+if (utilization === market.utilization) return reallocationLiquidity;     // rule 2
+
+return ownHeadroom + reallocationLiquidity;                               // rule 3
 ```
-
-`getBorrowToUtilization` returns `0n` exactly when utilization ≥ target — that single equality is what discriminates the two cases, so no separate comparison is needed.
-
-It builds on the sibling metric `computeAvailableSharedLiquidity` (sum of source withdrawals only, no target-side amount), passing the aggressive `WAD` cap to drain sources fully.
 
 ## Considered Alternatives
 
 ### Alternative 1: Add an opt-in flag to `computeReallocations`
 
-The first iteration threaded a `maintainSupplyTargetUtilization` boolean through `ReallocationComputeOptions` and `computeReallocations`.
+The first iteration threaded a `maintainSupplyTargetUtilization` boolean through `ReallocationComputeOptions` and `computeReallocations` (holding the target market at its supply target instead of relaxing it to 100% in the aggressive phase).
 
-**Why rejected:** The metric takes no borrow amount and never builds calldata, so it shares almost nothing with `computeReallocations`'s control flow. Bolting it on widened the builder's option surface and its phase-2 branch for a read-only concern. A standalone helper is smaller, purer, and easier to test. The flag was fully reverted.
+**Why rejected:** The metric takes no borrow amount and never builds calldata, so it shares almost nothing with `computeReallocations`'s control flow. Bolting it on widened the builder's option surface and its phase-2 branch for a read-only concern. A read-only metric on `ReallocationData` is smaller, purer, and easier to test. The flag was fully reverted.
 
-### Alternative 2: Cap sources at the same 90.5% ceiling as the target
+### Alternative 2: Standalone helpers in the `helpers/` layer
 
-Use the friendly 92% / configured withdrawal caps for sources too.
+The metrics were first shipped as free `compute*` helpers (`computeAvailableSharedLiquidity`, `computeAvailableLiquidityToTargetUtilization`) re-exported from the package root.
 
-**Why rejected:** Under-reports. The PublicAllocator *can* legitimately drain a source to 100% to service a borrow; a curator dashboard wants the true upper bound. Sources and target play different roles — only the target's health ceiling matters for the metric's meaning.
+**Why rejected (review feedback):** they only operate on a `ReallocationData` instance and wrap its `getMarketPublicReallocations`, so they read more naturally as methods on that class (next to the data they consume) than as helpers that take the entity as an argument. Moving them also keeps the public helper surface minimal.
 
-### Alternative 3: Return the fixed-point-exact max borrow
+### Alternative 3: Force-drain sources to 100% utilization
 
-The borrow `x` that solves `(B + x) / (S + L + x) = target` is slightly larger than `headroom + L`, because reallocated supply `L` also sits in the denominator.
+Always pass `defaultMaxWithdrawalUtilization = WAD` so the metric reports the absolute upper bound of reallocatable liquidity.
 
-**Why rejected:** Negligible difference at realistic utilizations, and the literal `headroom + L` sum is the quantity integrators reason about ("my headroom, plus the liquidity that can be pulled in"). Documented as a known approximation rather than chasing WAD-exactness for a display number.
+**Why rejected:** it over-reports for the common dashboard case and hard-codes a policy the caller may not want. Honouring the configured/default withdrawal cap (friendly 92%) and letting the caller opt into the aggressive `WAD` bound is more flexible and matches `getMarketPublicReallocations`' own default.
+
+### Alternative 4: Return the fixed-point-exact max borrow
+
+The borrow `x` that solves `(B + x) / (S + L + x) = target` is slightly larger than `ownHeadroom + L`, because reallocated supply `L` also sits in the denominator.
+
+**Why rejected:** Negligible difference at realistic utilizations, and the literal `ownHeadroom + L` sum is the quantity integrators reason about ("my headroom, plus the liquidity that can be pulled in"). Documented as a known approximation rather than chasing WAD-exactness for a display number.
 
 ## Assumptions & Constraints
 
-- **Approximation, not WAD-exact.** The return is `ownHeadroom + sharedLiquidity`. The physically-exact max borrow is marginally higher (reallocated liquidity also raises the supply denominator). This is intentional and documented in JSDoc.
+- **Approximation, not WAD-exact.** The return is `ownHeadroom + reallocationLiquidity`. The physically-exact max borrow is marginally higher (reallocated liquidity also raises the supply denominator). This is intentional and documented in JSDoc.
 - **Pass `options.timestamp` from the fetch block.** Accrual otherwise falls back to the target market's `lastUpdate`, which can diverge from the source rows' fetch block — same constraint as `computeReallocations`.
-- Pure helper, no I/O, no mutation. Additive public surface (one new export, building on `computeAvailableSharedLiquidity` shipped in the same PR). Semver: **minor**.
+- Pure entity methods, no I/O, no mutation. Additive public surface (two new `ReallocationData` methods + one internal helper). Semver: **minor**.
 - `viem` stays the only peer dep. No new runtime dependencies.
 
 ## References
 
-- `packages/morpho-sdk/src/helpers/sharedLiquidityMetrics.ts` — the two metrics.
+- `packages/morpho-sdk/src/entities/reallocationData.ts` — `getPublicReallocationLiquidity`, `getAvailableLiquidityToTargetUtilization`, and the `getMarketPublicReallocations` discovery they reuse.
+- `packages/morpho-sdk/src/helpers/utilization.ts` — `getSupplyTargetUtilization`, shared with `computeReallocations`.
 - `packages/morpho-sdk/src/helpers/computeReallocations.ts` — the transactional counterpart (builds calldata, throws on insufficiency).
-- `packages/morpho-sdk/src/entities/reallocationData.ts` — `getMarketPublicReallocations` (source-market discovery reused by both metrics).
 - `DEFAULT_SUPPLY_TARGET_UTILIZATION` (90.5%) / `DEFAULT_WITHDRAWAL_TARGET_UTILIZATION` (92%) in `src/helpers/constant.ts`.
-- Root [`AGENTS.md`](../../AGENTS.md) §1 (helpers layer / purity), §3 (types), §5 (testing), §6 (JSDoc).
+- Root [`AGENTS.md`](../../AGENTS.md) §1 (entity layer / purity), §3 (types), §5 (testing), §6 (JSDoc).
