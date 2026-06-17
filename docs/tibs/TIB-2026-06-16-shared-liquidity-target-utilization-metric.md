@@ -26,7 +26,7 @@ This TIB freezes the design of two read-only metrics that answer the question di
 **Goals**
 
 - Add `ReallocationData.getPublicReallocationLiquidity(marketId, options?)`: the total liquidity the PublicAllocator can reallocate **into** a market from sibling markets — a never-throws `bigint`.
-- Add `ReallocationData.getAvailableLiquidityToTargetUtilization(marketId, targetUtilization?, options?)`: the liquidity available to bring a market to a target utilization — the market's own borrow headroom **plus** that reallocatable liquidity — also never-throws.
+- Add `ReallocationData.getAvailableLiquidityToTargetUtilization(marketId, targetUtilization?, options?)`: the maximum additional borrow that keeps a market at or below a target utilization, counting that reallocatable liquidity — also never-throws.
 - Reuse the existing PublicAllocator discovery (`getMarketPublicReallocations`) — no fork of the reallocation algorithm.
 - Share the supply-target-utilization resolution with `computeReallocations` instead of duplicating it.
 
@@ -34,7 +34,6 @@ This TIB freezes the design of two read-only metrics that answer the question di
 
 - No calldata. These metrics never produce a transaction; `computeReallocations` remains the builder.
 - No mutation of `computeReallocations`' behavior or its public options. (An earlier `maintainSupplyTargetUtilization` opt-in explored for this was dropped — see Considered Alternatives.)
-- No second-order precision. We return the literal `ownHeadroom + reallocationLiquidity` sum, not the fixed-point-exact max borrow (see Assumptions).
 
 ## Proposed Solution
 
@@ -48,24 +47,21 @@ Sums the source-market withdrawals discovered by `getMarketPublicReallocations` 
 
 ### `getAvailableLiquidityToTargetUtilization`
 
-The liquidity available to bring `marketId` to `targetUtilization` (default `DEFAULT_SUPPLY_TARGET_UTILIZATION`, 90.5%), combining the market's own borrow headroom with the reallocatable liquidity. It applies **three rules**:
+The maximum additional borrow on `marketId` that keeps its utilization at or below `targetUtilization` (default `DEFAULT_SUPPLY_TARGET_UTILIZATION`, 90.5%), counting the liquidity the PublicAllocator can reallocate in. It has **two branches**:
 
 ```
-ownHeadroom            = market.getBorrowToUtilization(targetUtilization)
-supplyTargetUtilization = getSupplyTargetUtilization(marketId, options)   // per-market → default → 90.5%
+supplyTargetUtilization = getSupplyTargetUtilization(marketId, options)  // per-market → default → 90.5%
 
-1. supplyTargetUtilization > targetUtilization   → return ownHeadroom            // reallocation would not trigger
-2. targetUtilization === market.utilization      → return reallocationLiquidity  // no own headroom left
-3. otherwise                               → return ownHeadroom + reallocationLiquidity
+1. supplyTargetUtilization > targetUtilization
+     → market.getBorrowToUtilization(targetUtilization)                    // own headroom only
+2. otherwise, with L = getPublicReallocationLiquidity(marketId, options)
+     → getBorrowToUtilization({ supply + L, borrow }, targetUtilization)   // exact borrow to the target
 ```
 
-where `reallocationLiquidity = getPublicReallocationLiquidity(marketId, options)`.
-
-The rules encode three facts about the metric's meaning:
+Two facts about the metric's meaning:
 
 1. **Below the reallocation trigger, only own liquidity counts.** The PublicAllocator only reallocates once a market crosses its `supplyTargetUtilization`. If the caller asks for a target *below* that trigger, no reallocation would happen, so the answer is the market's own borrow headroom alone.
-2. **At the current utilization, only reallocatable liquidity counts.** When `targetUtilization` equals the market's current utilization, `ownHeadroom` is `0` — there is no room to borrow from the market's own supply without exceeding the target — so only the reallocatable liquidity backs further borrow at that level.
-3. **Otherwise, sum both.** Own headroom to the target plus the liquidity the PublicAllocator can pull in.
+2. **Otherwise the reallocatable liquidity is added to supply and the borrow headroom is measured on that augmented state** — the borrow `x` solving `(B + x) / (S + L) = targetUtilization`. Two properties fall out for free: it returns **`0n` when the market is already at or above the target** (the floor in `getBorrowToUtilization`), and it counts reallocated supply **at the target utilization, not 1:1** — adding `L` raises the limit by `targetUtilization · L`, since the borrow sits against the larger supply.
 
 > Unlike the transactional `computeReallocations` fallback, this metric never relaxes the target market toward 100% and never force-drains source markets: it honours whatever source withdrawal cap the caller configures (friendly by default).
 
@@ -79,15 +75,18 @@ The rules encode three facts about the metric's meaning:
 // ReallocationData.getAvailableLiquidityToTargetUtilization
 const market = this.getMarket(marketId).accrueInterest(options?.timestamp);
 
-const ownHeadroom = market.getBorrowToUtilization(targetUtilization);
-
 const supplyTargetUtilization = getSupplyTargetUtilization(marketId, options);
-if (supplyTargetUtilization > targetUtilization) return ownHeadroom;            // rule 1
+if (supplyTargetUtilization > targetUtilization)
+  return market.getBorrowToUtilization(targetUtilization);                 // branch 1
 
-const reallocationLiquidity = this.getPublicReallocationLiquidity(marketId, options);
-if (targetUtilization === market.utilization) return reallocationLiquidity;     // rule 2
-
-return ownHeadroom + reallocationLiquidity;                               // rule 3
+const reallocatableLiquidity = this.getPublicReallocationLiquidity(marketId, options);
+return MarketUtils.getBorrowToUtilization(                                 // branch 2
+  {
+    totalSupplyAssets: market.totalSupplyAssets + reallocatableLiquidity,
+    totalBorrowAssets: market.totalBorrowAssets,
+  },
+  targetUtilization,
+);
 ```
 
 ## Considered Alternatives
@@ -110,15 +109,9 @@ Always pass `defaultMaxWithdrawalUtilization = WAD` so the metric reports the ab
 
 **Why rejected:** it over-reports for the common dashboard case and hard-codes a policy the caller may not want. Honouring the configured/default withdrawal cap (friendly 92%) and letting the caller opt into the aggressive `WAD` bound is more flexible and matches `getMarketPublicReallocations`' own default.
 
-### Alternative 4: Return the fixed-point-exact max borrow
-
-The borrow `x` that solves `(B + x) / (S + L + x) = target` is slightly larger than `ownHeadroom + L`, because reallocated supply `L` also sits in the denominator.
-
-**Why rejected:** Negligible difference at realistic utilizations, and the literal `ownHeadroom + L` sum is the quantity integrators reason about ("my headroom, plus the liquidity that can be pulled in"). Documented as a known approximation rather than chasing WAD-exactness for a display number.
-
 ## Assumptions & Constraints
 
-- **Approximation, not WAD-exact.** The return is `ownHeadroom + reallocationLiquidity`. The physically-exact max borrow is marginally higher (reallocated liquidity also raises the supply denominator). This is intentional and documented in JSDoc.
+- **Exact borrow limit, integer-rounded.** The return is `getBorrowToUtilization` on the supply augmented by the reallocatable liquidity — the borrow that lands the market exactly at `targetUtilization` — modulo WAD integer rounding. (An earlier iteration returned the looser `ownHeadroom + reallocatableLiquidity` sum, which overstated the limit by `(1 − targetUtilization)·L`; corrected per review.)
 - **Pass `options.timestamp` from the fetch block.** Accrual otherwise falls back to the target market's `lastUpdate`, which can diverge from the source rows' fetch block — same constraint as `computeReallocations`.
 - Pure entity methods, no I/O, no mutation. Additive public surface (two new `ReallocationData` methods + one internal helper). Semver: **minor**.
 - `viem` stays the only peer dep. No new runtime dependencies.

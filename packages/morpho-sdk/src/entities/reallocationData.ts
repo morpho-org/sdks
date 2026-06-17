@@ -3,6 +3,7 @@ import {
   AccrualPosition,
   Market,
   type MarketId,
+  MarketUtils,
   MathLib,
   Position,
   UnknownDataError,
@@ -495,21 +496,23 @@ export class ReallocationData implements InputReallocationData {
   }
 
   /**
-   * Computes the liquidity available to bring `marketId` to `targetUtilization`,
-   * combining its own borrow headroom with the reallocatable public-allocator
-   * liquidity.
+   * Computes the maximum additional borrow on `marketId` that keeps its
+   * utilization at or below `targetUtilization`, counting the liquidity the
+   * PublicAllocator can reallocate in from sibling markets.
    *
    * Read-only metric — never throws on insufficiency:
-   * - returns only the own headroom when `supplyTargetUtilization > targetUtilization`
-   *   (reallocation would not trigger at that target);
-   * - returns only the available liquidity when `targetUtilization` equals the
-   *   market's current utilization (no own headroom left);
-   * - otherwise returns their sum.
+   * - returns only the market's own borrow headroom when
+   *   `supplyTargetUtilization > targetUtilization` (reallocation would not
+   *   trigger that low);
+   * - otherwise measures the borrow headroom to `targetUtilization` on the
+   *   market's supply augmented by the reallocatable liquidity, so it returns
+   *   `0n` when the market is already at or above `targetUtilization` and counts
+   *   each reallocated asset at the target utilization (not 1:1).
    *
    * @param marketId - Target market to borrow from.
-   * @param targetUtilization - Utilization to bring the market to, scaled by WAD. Defaults to {@link DEFAULT_SUPPLY_TARGET_UTILIZATION}.
+   * @param targetUtilization - Utilization ceiling to keep the market at or below, scaled by WAD. Defaults to {@link DEFAULT_SUPPLY_TARGET_UTILIZATION}.
    * @param options - Optional reallocation options (supply target utilization trigger, timestamp, withdrawal caps).
-   * @returns Available liquidity to the target utilization in loan-token units; `0n` when none is available.
+   * @returns Maximum borrowable assets in loan-token units; `0n` when none is available.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
    */
   // biome-ignore lint/complexity/useMaxParams: (marketId, targetUtilization, options) is the metric's public API
@@ -520,21 +523,30 @@ export class ReallocationData implements InputReallocationData {
   ): bigint {
     const market = this.getMarket(marketId).accrueInterest(options?.timestamp);
 
-    const ownHeadroom = market.getBorrowToUtilization(targetUtilization);
-
+    // Below the reallocation trigger the PublicAllocator would not act, so only
+    // the market's own borrow headroom counts.
     const supplyTargetUtilization = getSupplyTargetUtilization(
       marketId,
       options,
     );
-    if (supplyTargetUtilization > targetUtilization) return ownHeadroom;
+    if (supplyTargetUtilization > targetUtilization)
+      return market.getBorrowToUtilization(targetUtilization);
 
-    const availableLiquidity = this.getPublicReallocationLiquidity(
+    // Otherwise, measure the borrow headroom to the target on the supply
+    // augmented by the reallocatable liquidity: this returns `0n` when the
+    // market is already at or above the target, and counts reallocated supply at
+    // the target utilization rather than 1:1.
+    const reallocatableLiquidity = this.getPublicReallocationLiquidity(
       marketId,
       options,
     );
-    if (targetUtilization === market.utilization) return availableLiquidity;
-
-    return ownHeadroom + availableLiquidity;
+    return MarketUtils.getBorrowToUtilization(
+      {
+        totalSupplyAssets: market.totalSupplyAssets + reallocatableLiquidity,
+        totalBorrowAssets: market.totalBorrowAssets,
+      },
+      targetUtilization,
+    );
   }
 
   /**

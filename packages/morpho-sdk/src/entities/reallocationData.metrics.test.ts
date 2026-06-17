@@ -2,7 +2,6 @@ import { Market, MarketParams, MathLib } from "@morpho-org/blue-sdk";
 import { type Address, parseEther } from "viem";
 import { describe, expect, test, vi } from "vitest";
 import { CbbtcUsdcBlue, WethUsdsBlue } from "../../test/fixtures/blue.js";
-import { DEFAULT_SUPPLY_TARGET_UTILIZATION } from "../helpers/constant.js";
 import type {
   PublicAllocatorOptions,
   PublicReallocation,
@@ -94,9 +93,9 @@ describe("ReallocationData.getPublicReallocationLiquidity", () => {
 });
 
 describe("ReallocationData.getAvailableLiquidityToTargetUtilization", () => {
-  test("default: own headroom + available liquidity", () => {
-    // 1000 supply / 500 borrow (50% util). ownHeadroom to 90% = 1000·0.9 − 500 = 400.
-    // supplyTarget set to 90% (not > target) → available liquidity (200) is added → 600.
+  test("default: borrow headroom to target after reallocation", () => {
+    // 1000 supply / 500 borrow (50%). Reallocatable = 200 → supply 1200.
+    // maxBorrow = 1200·0.9 − 500 = 1080 − 500 = 580 (the 200 counted at 0.9, not 1:1).
     const data = makeData();
     stubReallocations(data, [
       { id: sourceParamsA.id, vault: VAULT_A, assets: 200n * MathLib.WAD },
@@ -111,12 +110,11 @@ describe("ReallocationData.getAvailableLiquidityToTargetUtilization", () => {
           defaultSupplyTargetUtilization: NINETY_PERCENT,
         },
       ),
-    ).toBe(600n * MathLib.WAD);
+    ).toBe(580n * MathLib.WAD);
   });
 
-  test("behavior: returns only own headroom when supplyTargetUtilization > utilization", () => {
-    // Default supplyTarget (90.5%) > target (90%) → reallocation would not
-    // trigger, so available liquidity is excluded: ownHeadroom = 400.
+  test("behavior: returns only own headroom when supplyTargetUtilization > targetUtilization", () => {
+    // Default supplyTarget (90.5%) > target (90%) → reallocation excluded: 400.
     const data = makeData();
     stubReallocations(data, [
       { id: sourceParamsA.id, vault: VAULT_A, assets: 200n * MathLib.WAD },
@@ -126,15 +124,39 @@ describe("ReallocationData.getAvailableLiquidityToTargetUtilization", () => {
       data.getAvailableLiquidityToTargetUtilization(
         targetParams.id,
         NINETY_PERCENT,
-        {
-          timestamp: TIMESTAMP,
-        },
+        { timestamp: TIMESTAMP },
       ),
     ).toBe(400n * MathLib.WAD);
   });
 
-  test("behavior: returns only available liquidity when utilization equals current utilization", () => {
-    // 1000 supply / 900 borrow → current util 90% = target. ownHeadroom is 0.
+  test("behavior: returns 0n when the market is already above the target", () => {
+    // 1000 / 950 (95%) is over the 90% target; 50 reallocatable cannot create room.
+    // supply 1050 → 1050·0.9 − 950 = 945 − 950 → 0.
+    const data = makeData(
+      makeMarket({
+        totalSupplyAssets: 1000n * MathLib.WAD,
+        totalBorrowAssets: 950n * MathLib.WAD,
+      }),
+    );
+    stubReallocations(data, [
+      { id: sourceParamsA.id, vault: VAULT_A, assets: 50n * MathLib.WAD },
+    ]);
+
+    expect(
+      data.getAvailableLiquidityToTargetUtilization(
+        targetParams.id,
+        NINETY_PERCENT,
+        {
+          timestamp: TIMESTAMP,
+          defaultSupplyTargetUtilization: NINETY_PERCENT,
+        },
+      ),
+    ).toBe(0n);
+  });
+
+  test("behavior: counts reallocated supply at the target utilization, not 1:1", () => {
+    // 1000 / 900 (90% = target). Own headroom is 0; reallocatable 200 yields
+    // 1200·0.9 − 900 = 1080 − 900 = 180 = 0.9·200, not 200.
     const data = makeData(
       makeMarket({
         totalSupplyAssets: 1000n * MathLib.WAD,
@@ -154,7 +176,7 @@ describe("ReallocationData.getAvailableLiquidityToTargetUtilization", () => {
           defaultSupplyTargetUtilization: NINETY_PERCENT,
         },
       ),
-    ).toBe(200n * MathLib.WAD);
+    ).toBe(180n * MathLib.WAD);
   });
 
   test("behavior: forwards options to discovery without forcing an aggressive drain", () => {
@@ -178,22 +200,21 @@ describe("ReallocationData.getAvailableLiquidityToTargetUtilization", () => {
     expect(spy).toHaveBeenCalledWith(targetParams.id, options);
   });
 
-  test("behavior: utilization defaults to DEFAULT_SUPPLY_TARGET_UTILIZATION", () => {
-    const targetMarket = makeMarket({
-      totalSupplyAssets: 1000n * MathLib.WAD,
-      totalBorrowAssets: 500n * MathLib.WAD,
-    });
-    const data = makeData(targetMarket);
+  test("behavior: target utilization defaults to DEFAULT_SUPPLY_TARGET_UTILIZATION", () => {
+    // 1000 / 500, reallocatable 200, default ceiling 90.5%:
+    // supply 1200 → 1200·0.905 − 500 = 1086 − 500 = 586.
+    const data = makeData(
+      makeMarket({
+        totalSupplyAssets: 1000n * MathLib.WAD,
+        totalBorrowAssets: 500n * MathLib.WAD,
+      }),
+    );
     stubReallocations(data, [
       { id: sourceParamsA.id, vault: VAULT_A, assets: 200n * MathLib.WAD },
     ]);
 
-    const expected =
-      targetMarket.getBorrowToUtilization(DEFAULT_SUPPLY_TARGET_UTILIZATION) +
-      200n * MathLib.WAD;
-
     expect(data.getAvailableLiquidityToTargetUtilization(targetParams.id)).toBe(
-      expected,
+      586n * MathLib.WAD,
     );
   });
 });
