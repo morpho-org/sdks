@@ -513,7 +513,7 @@ export class ReallocationData implements InputReallocationData {
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
    */
   // biome-ignore lint/complexity/useMaxParams: (marketId, utilization, options) is the metric's public API
-  public getAvailableLiquidityToUtilization(
+  public getAvailableLiquidityToTargetUtilization(
     marketId: MarketId,
     utilization: bigint = DEFAULT_SUPPLY_TARGET_UTILIZATION,
     options?: ReallocationComputeOptions,
