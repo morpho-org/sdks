@@ -1,5 +1,4 @@
 export * from "./abis.js";
-export * from "./api/index.js";
 export * from "./constants.js";
 export * from "./errors.js";
 export * from "./fetch/index.js";

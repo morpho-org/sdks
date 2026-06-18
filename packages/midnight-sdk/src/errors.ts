@@ -275,7 +275,7 @@ export class InvalidTreeError extends Error {
  *
  * @example
  * ```ts
- * import { MidnightApiError } from "@morpho-org/midnight-sdk";
+ * import { MidnightApiError } from "@morpho-org/midnight-sdk/api";
  *
  * throw new MidnightApiError({
  *   status: 400,
@@ -322,7 +322,7 @@ export class MidnightApiError extends Error {
  *
  * @example
  * ```ts
- * import { InvalidMidnightApiResponseError } from "@morpho-org/midnight-sdk";
+ * import { InvalidMidnightApiResponseError } from "@morpho-org/midnight-sdk/api";
  *
  * throw new InvalidMidnightApiResponseError("API response is missing data.");
  * ```

@@ -12,6 +12,10 @@ npm install @morpho-org/midnight-sdk @morpho-org/morpho-ts viem
 yarn add @morpho-org/midnight-sdk @morpho-org/morpho-ts viem
 ```
 
+## API Import Stability
+
+Midnight HTTP API helpers are exported from `@morpho-org/midnight-sdk/api`. This import path is not stable and may not respect semver versioning.
+
 ## Making offers
 
 The make-side starts with local offer construction, groups offers that should share consumption, and
@@ -21,10 +25,10 @@ payload bytes onchain.
 
 ```ts
 import { addresses } from "@morpho-org/morpho-ts";
+import { MidnightApi } from "@morpho-org/midnight-sdk/api";
 import {
   EcrecoverRatifierUtils,
   Group,
-  MidnightApi,
   Offer,
   Payload,
   Tree,
@@ -147,12 +151,14 @@ approved the bundle contract to pull the market loan token.
 import { addresses } from "@morpho-org/morpho-ts";
 import {
   MidnightApi,
+  type MidnightApiTakeableOffer,
+} from "@morpho-org/midnight-sdk/api";
+import {
   TakeableOffer,
   TakeableOfferUtils,
   midnightAbi,
   midnightBundlesAbi,
   type IOffer,
-  type MidnightApiTakeableOffer,
   type TakeableOfferStruct,
 } from "@morpho-org/midnight-sdk";
 import {

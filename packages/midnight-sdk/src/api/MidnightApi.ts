@@ -95,7 +95,7 @@ export type {
  *
  * @example
  * ```ts
- * import { MidnightApi } from "@morpho-org/midnight-sdk";
+ * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
  *
  * const direct = await MidnightApi.validateMempoolPayload({
  *   chainId: 8453,
@@ -121,7 +121,7 @@ export class MidnightApi {
    * @returns Configured Midnight API client.
    * @example
    * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
+   * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
    *
    * const api = new MidnightApi({
    *   baseUrl: "https://api.morpho.org/v1/midnight",
@@ -145,7 +145,7 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
    * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
+   * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
    *
    * const books = await MidnightApi.fetchBooks({
    *   chainIds: [8453],
@@ -189,7 +189,7 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
    * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
+   * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
    *
    * const book = await MidnightApi.fetchBook({
    *   marketId: "0x12590ae1aee324a005be565f3bcdd16dbf8daf7969b26c181c8b8f467dad9f67",
@@ -224,7 +224,7 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
    * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
+   * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
    *
    * const levels = await MidnightApi.fetchBookPriceLevels({
    *   marketId: "0x12590ae1aee324a005be565f3bcdd16dbf8daf7969b26c181c8b8f467dad9f67",
@@ -260,7 +260,7 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
    * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
+   * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
    *
    * const offers = await MidnightApi.fetchBookTakeableOffers({
    *   marketId: "0x12590ae1aee324a005be565f3bcdd16dbf8daf7969b26c181c8b8f467dad9f67",
@@ -297,7 +297,7 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
    * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
+   * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
    *
    * const quote = await MidnightApi.fetchBookQuote({
    *   marketId: "0x12590ae1aee324a005be565f3bcdd16dbf8daf7969b26c181c8b8f467dad9f67",
@@ -350,7 +350,7 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
    * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
+   * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
    *
    * const offers = await MidnightApi.fetchTakeableOffers({
    *   maker: "0x7b093658BE7f90B63D7c359e8f408e503c2D9401",
@@ -393,7 +393,7 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
    * @example
    * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
+   * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
    *
    * const validation = await MidnightApi.validateMempoolPayload({
    *   chainId: 8453,
@@ -436,7 +436,7 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
    * @example
    * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
+   * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
    *
    * const validation = await MidnightApi.validateMempoolItems({
    *   chainId: 8453,
@@ -476,7 +476,7 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
    * @example
    * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
+   * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
    *
    * const validation = await MidnightApi.validateMempoolTree({
    *   chainId: 8453,
@@ -513,7 +513,7 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
    * @example
    * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
+   * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
    *
    * const rules = await MidnightApi.fetchMempoolRules({
    *   chainIds: [8453],
@@ -551,7 +551,7 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
    * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
+   * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
    *
    * const api = new MidnightApi();
    * const books = await api.fetchBooks({ chainIds: [8453], limit: 10 });
@@ -576,7 +576,7 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
    * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
+   * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
    *
    * const api = new MidnightApi();
    * const book = await api.fetchBook({
@@ -603,7 +603,7 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
    * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
+   * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
    *
    * const api = new MidnightApi();
    * const levels = await api.fetchBookPriceLevels({
@@ -631,7 +631,7 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
    * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
+   * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
    *
    * const api = new MidnightApi();
    * const offers = await api.fetchBookTakeableOffers({
@@ -659,7 +659,7 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
    * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
+   * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
    *
    * const api = new MidnightApi();
    * const quote = await api.fetchBookQuote({
@@ -688,7 +688,7 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
    * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
+   * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
    *
    * const api = new MidnightApi();
    * const offers = await api.fetchTakeableOffers({
@@ -717,7 +717,7 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
    * @example
    * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
+   * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
    *
    * const api = new MidnightApi();
    * const validation = await api.validateMempoolPayload({ chainId: 8453, payload: "0x0100000000" });
@@ -746,7 +746,7 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
    * @example
    * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
+   * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
    *
    * const api = new MidnightApi();
    * const validation = await api.validateMempoolItems({
@@ -778,7 +778,7 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
    * @example
    * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
+   * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
    *
    * const api = new MidnightApi();
    * const validation = await api.validateMempoolTree({ chainId: 8453, tree: [{} as never] });
@@ -803,7 +803,7 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
    * @example
    * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk";
+   * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
    *
    * const api = new MidnightApi();
    * const rules = await api.fetchMempoolRules({ chainIds: [8453] });
