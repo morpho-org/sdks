@@ -1,10 +1,12 @@
 import {
+  type Address,
   type BlockTag,
   createPublicClient,
   ethAddress,
   getAddress,
   http,
   maxUint256,
+  type StateOverride,
 } from "viem";
 import {
   ExternalServiceError,
@@ -19,6 +21,10 @@ import type {
   Transfer,
 } from "../../types.js";
 import { type AssetChangeEntry, groupAssetChanges } from "../asset-changes.js";
+import {
+  buildEcrecoverShimCode,
+  ECRECOVER_PRECOMPILE_ADDRESS,
+} from "../ecrecover-override.js";
 import { parseTransfers } from "../parsing/index.js";
 
 /**
@@ -35,6 +41,12 @@ import { parseTransfers } from "../parsing/index.js";
  * native ETH moved through internal calls (e.g. a `WETH.withdraw` refund, a
  * swap that pays out ETH) emits no log and is not reflected in `value`, so it
  * is not captured. For full native-ETH accounting use Tenderly.
+ *
+ * When `ecrecoverOverride` is set, installs an `ecrecover` shim at `0x…0001`
+ * via a `code` state-override so signature-gated calls recover that address
+ * (see `buildEcrecoverShimCode`). The genuine precompile is not relocated here:
+ * viem's state-override serializer drops `movePrecompileToAddress`, which is
+ * behaviourally identical for standard contracts that call `0x…0001` directly.
  */
 export async function simulateV1(params: {
   rpcUrl: string;
@@ -42,8 +54,10 @@ export async function simulateV1(params: {
   transactions: SimulationTransaction[];
   blockNumber?: bigint | BlockTag;
   signal?: AbortSignal;
+  ecrecoverOverride?: Address;
 }): Promise<RawSimulationResult> {
-  const { rpcUrl, transactions, blockNumber, signal } = params;
+  const { rpcUrl, transactions, blockNumber, signal, ecrecoverOverride } =
+    params;
 
   const client = createPublicClient({
     transport: http(rpcUrl, {
@@ -84,14 +98,24 @@ export async function simulateV1(params: {
         ? { blockTag: blockNumber }
         : {};
 
+  // Inflate sender ETH balance to prevent false "insufficient gas" reverts.
+  // Without this, valid ERC20 flows fail when the sender has low ETH.
+  const stateOverrides: StateOverride = [
+    { address: sender, balance: maxUint256 },
+  ];
+  if (ecrecoverOverride) {
+    stateOverrides.push({
+      address: ECRECOVER_PRECOMPILE_ADDRESS,
+      code: buildEcrecoverShimCode(ecrecoverOverride),
+    });
+  }
+
   try {
     const simulationResult = await client.simulateCalls({
       account: sender,
       calls,
       ...blockParam,
-      // Inflate sender ETH balance to prevent false "insufficient gas" reverts.
-      // Without this, valid ERC20 flows fail when the sender has low ETH.
-      stateOverrides: [{ address: sender, balance: maxUint256 }],
+      stateOverrides,
     });
 
     const results = simulationResult.results;

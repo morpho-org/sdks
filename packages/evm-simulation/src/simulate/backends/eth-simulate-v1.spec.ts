@@ -175,6 +175,49 @@ describe.sequential("simulateV1", () => {
     ]);
   });
 
+  it("installs the ecrecover shim at 0x01 when ecrecoverOverride is set", async () => {
+    mockSimulateCalls.mockResolvedValueOnce({
+      results: [
+        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
+      ],
+    });
+
+    await simulateV1({
+      rpcUrl: "http://rpc.local",
+      chainId: 1,
+      transactions: [BASIC_TX],
+      ecrecoverOverride: OTHER,
+    });
+
+    const callArgs = mockSimulateCalls.mock.calls[0]![0];
+    expect(callArgs.stateOverrides).toEqual([
+      { address: USER, balance: maxUint256 },
+      {
+        address: "0x0000000000000000000000000000000000000001",
+        code: `0x73${OTHER.slice(2).toLowerCase()}60005260206000f3`,
+      },
+    ]);
+  });
+
+  it("omits the ecrecover override when ecrecoverOverride is unset", async () => {
+    mockSimulateCalls.mockResolvedValueOnce({
+      results: [
+        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
+      ],
+    });
+
+    await simulateV1({
+      rpcUrl: "http://rpc.local",
+      chainId: 1,
+      transactions: [BASIC_TX],
+    });
+
+    const callArgs = mockSimulateCalls.mock.calls[0]![0];
+    expect(callArgs.stateOverrides).toEqual([
+      { address: USER, balance: maxUint256 },
+    ]);
+  });
+
   it("passes blockNumber as bigint when provided", async () => {
     mockSimulateCalls.mockResolvedValueOnce({
       results: [

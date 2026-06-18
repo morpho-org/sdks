@@ -81,6 +81,23 @@ describe.sequential("executeSimulation — Tenderly + simulateV1 configured", ()
     );
   });
 
+  it("forwards ecrecoverOverride to Tenderly and to the simulateV1 fallback", async () => {
+    mockTenderlyRpc.mockRejectedValueOnce(
+      new ExternalServiceError("Tenderly 502"),
+    );
+    mockSimulateV1.mockResolvedValueOnce({ calls: [], assetChanges: [] });
+
+    await executeSimulation({
+      config: bothBackends(),
+      chainId: 1,
+      transactions: txs,
+      ecrecoverOverride: USER,
+    });
+
+    expect(mockTenderlyRpc.mock.calls[0]![0].ecrecoverOverride).toBe(USER);
+    expect(mockSimulateV1.mock.calls[0]![0].ecrecoverOverride).toBe(USER);
+  });
+
   it("allocates 60% of timeoutMs to Tenderly (budget-ratio pin)", async () => {
     const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
     try {

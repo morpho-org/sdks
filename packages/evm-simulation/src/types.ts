@@ -65,7 +65,12 @@ export interface SimulationTransaction {
  * How the caller expresses a token authorization that must be in place before the
  * main transactions run. The package decides HOW to simulate each one:
  * - "approval" → prepend tx as-is
- * - "signature" → today: encode approve(spender, amount); future: ecrecover override?
+ * - "signature" → encode approve(spender, amount) and prepend it
+ *
+ * To instead simulate a signature-gated call in place (e.g. an EIP-2612 `permit`
+ * already encoded in `transactions`) without a real signature, set
+ * `SimulateParams.ecrecoverOverride` to the expected signer rather than adding a
+ * `signature` authorization.
  */
 export type SimulationAuthorization =
   | { type: "approval"; transaction: SimulationTransaction }
@@ -167,6 +172,19 @@ export interface SimulateParams {
   transactions: SimulationTransaction[];
   authorizations?: SimulationAuthorization[];
   blockNumber?: bigint | BlockTag;
+  /**
+   * Override the `ecrecover` precompile (`0x…0001`) so every signature recovery
+   * in the bundle resolves to this address. Use it to simulate a signature-gated
+   * call (e.g. an EIP-2612 `permit`) without a real signature — the on-chain
+   * signature check passes as if signed by `ecrecoverOverride`.
+   *
+   * Applied as a `code` state-override on both backends. On Tenderly the genuine
+   * precompile is relocated (`movePrecompileToAddress`); the `eth_simulateV1`
+   * fallback installs the shim only — viem's state-override serializer drops the
+   * relocation field — which is behaviourally identical for standard contracts
+   * since they call `0x…0001` directly and hit the shim either way.
+   */
+  ecrecoverOverride?: Address;
 }
 
 // ─── Internal (consumed by backends / pipeline) ───────────────────────────────

@@ -97,6 +97,14 @@ describe.sequential("simulate — success", () => {
     expect(result.simulationTxs).toEqual(params.transactions);
   });
 
+  it("threads ecrecoverOverride through to the backend", async () => {
+    mockTenderlyRpc.mockResolvedValueOnce(makeSuccessResult());
+
+    await simulate(makeConfig(), makeParams({ ecrecoverOverride: SPENDER }));
+
+    expect(mockTenderlyRpc.mock.calls[0]![0].ecrecoverOverride).toBe(SPENDER);
+  });
+
   it("surfaces non-empty assetChanges from the backend unchanged", async () => {
     const logs = [
       makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 1000000n }),

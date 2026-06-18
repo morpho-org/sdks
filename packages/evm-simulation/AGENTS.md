@@ -5,6 +5,7 @@
 - Let `SimulationRevertedError` propagate; a revert belongs to the bundle, not the backend.
 - Keep backend outputs normalized to `RawSimulationResult`; add new backends under `src/simulate/backends/` with colocated parity specs.
 - Encode signature authorizations as `approve(spender, amount ?? maxUint256)` and prepend them to the simulated bundle.
+- To simulate a signature-gated call in place (e.g. an EIP-2612 `permit`) without a real signature, use `SimulateParams.ecrecoverOverride`: both backends install an `ecrecover` shim at `0x…0001` via a `code` state-override (Tenderly also relocates the genuine precompile via `movePrecompileToAddress`; `eth_simulateV1` installs the shim only — viem's serializer drops the relocation field). Build the shim bytecode via `buildEcrecoverShimCode`; the addresses are the `ECRECOVER_PRECOMPILE_ADDRESS` / `ECRECOVER_RELOCATED_ADDRESS` constants.
 - Enforce bundler retention by net `(bundler3 address, token)` balance with `DUST_THRESHOLD = 100n`; skip only unknown blue-sdk chains.
 - Keep all thrown domain errors under `SimulationPackageError`; only `ExternalServiceError` is bypassable by callers.
 - Add chains through caller `SimulationConfig.chains`; the per-chain `ChainSimulationConfig` is a discriminated union enforcing at least one of `tenderlyRpc` or `simulateV1Url`. Confirm blue-sdk bundler addresses intentionally.

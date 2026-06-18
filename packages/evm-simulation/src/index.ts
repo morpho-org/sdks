@@ -9,6 +9,11 @@ export {
   SimulationValidationError,
   UnsupportedChainError,
 } from "./errors.js";
+export {
+  buildEcrecoverShimCode,
+  ECRECOVER_PRECOMPILE_ADDRESS,
+  ECRECOVER_RELOCATED_ADDRESS,
+} from "./simulate/ecrecover-override.js";
 export { simulate } from "./simulate/index.js";
 // Types
 export type {
