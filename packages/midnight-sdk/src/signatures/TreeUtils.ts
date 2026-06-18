@@ -148,7 +148,7 @@ export interface TreeProof {
 }
 
 /**
- * Rest parameters accepted by {@link Tree.create}.
+ * Entries accepted by {@link Tree.create}.
  *
  * Entries are either explicit groups or standalone offers. Explicit groups are
  * flattened, and standalone offers are hashed with their own group ids.
@@ -158,7 +158,7 @@ export interface TreeProof {
  * import { Tree, type TreeCreateParams } from "@morpho-org/midnight-sdk";
  *
  * const params = [{} as never] satisfies TreeCreateParams;
- * const tree = Tree.create(...params);
+ * const tree = Tree.create(params);
  * console.log(tree.root);
  * ```
  */
@@ -214,7 +214,7 @@ export namespace TreeUtils {
    * ```
    */
   export function normalize(tree: TreeInput): Tree {
-    return tree instanceof Tree ? tree : Tree.create(...tree);
+    return tree instanceof Tree ? tree : Tree.create(tree);
   }
 
   /**

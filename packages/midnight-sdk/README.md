@@ -86,7 +86,7 @@ export async function makeBaseUsdcWethOffers(params: {
     maxUnits: parseUnits("50", 18),
   });
 
-  const tree = Tree.create(groupedLendOffers, standaloneBorrowOffer);
+  const tree = Tree.create([groupedLendOffers, standaloneBorrowOffer]);
 
   const treeValidation = await MidnightApi.validateMempoolTree({
     chainId,

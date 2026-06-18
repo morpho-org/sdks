@@ -31,7 +31,7 @@ import { resolveChainId } from "./utils.js";
  * const maker = "0x7b093658BE7f90B63D7c359e8f408e503c2D9401";
  * const info = await fetchRatifierInfo(client, { maker });
  * // Pass info.ratifier to Offer.create(...), then use info.type after
- * // Tree.create(...) to choose the Ecrecover or Setter ratifier flow.
+ * // Tree.create([...]) to choose the Ecrecover or Setter ratifier flow.
  * console.log(info.type, info.ratifier);
  * ```
  */

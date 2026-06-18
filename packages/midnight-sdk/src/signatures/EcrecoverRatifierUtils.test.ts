@@ -14,7 +14,7 @@ const proofNode =
 describe("EcrecoverRatifierUtils.ratify", () => {
   test("default", async () => {
     const offer = baseOffer({ maxAssets: 0n });
-    const tree = Tree.create(offer);
+    const tree = Tree.create([offer]);
     const signature = {
       v: 27,
       r: "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -40,7 +40,7 @@ describe("EcrecoverRatifierUtils.ratify", () => {
   });
 
   test("error: InvalidTreeError mixed ratifiers", async () => {
-    const tree = Tree.create(
+    const tree = Tree.create([
       baseOffer({
         maxAssets: 0n,
         ratifier: addresses.ecrecoverRatifier,
@@ -49,7 +49,7 @@ describe("EcrecoverRatifierUtils.ratify", () => {
         maxAssets: 0n,
         ratifier: addresses.setterRatifier,
       }),
-    );
+    ]);
 
     await expect(
       EcrecoverRatifierUtils.ratify({
@@ -66,7 +66,7 @@ describe("EcrecoverRatifierUtils.ratify", () => {
 
 describe("EcrecoverRatifierUtils.typedData", () => {
   test("default", () => {
-    const tree = Tree.create(baseOffer({ maxAssets: 0n }));
+    const tree = Tree.create([baseOffer({ maxAssets: 0n })]);
     const typedData = EcrecoverRatifierUtils.typedData({
       tree,
       chainId: 8453n,
@@ -82,7 +82,7 @@ describe("EcrecoverRatifierUtils.typedData", () => {
   });
 
   test("error: InvalidTreeError mixed ratifiers", () => {
-    const tree = Tree.create(
+    const tree = Tree.create([
       baseOffer({
         maxAssets: 0n,
         ratifier: addresses.ecrecoverRatifier,
@@ -91,7 +91,7 @@ describe("EcrecoverRatifierUtils.typedData", () => {
         maxAssets: 0n,
         ratifier: addresses.setterRatifier,
       }),
-    );
+    ]);
 
     expect(() =>
       EcrecoverRatifierUtils.typedData({ tree, chainId: 8453n }),
@@ -102,7 +102,7 @@ describe("EcrecoverRatifierUtils.typedData", () => {
 describe("EcrecoverRatifierUtils.digest", () => {
   test("default", () => {
     const digest = EcrecoverRatifierUtils.digest({
-      tree: Tree.create(baseOffer({ maxAssets: 0n })),
+      tree: Tree.create([baseOffer({ maxAssets: 0n })]),
       chainId: 8453n,
     });
 

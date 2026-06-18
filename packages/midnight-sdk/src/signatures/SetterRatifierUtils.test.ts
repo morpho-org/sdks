@@ -12,7 +12,7 @@ const proofNode =
 describe("SetterRatifierUtils.ratify", () => {
   test("default", () => {
     const offer = baseOffer({ maxAssets: 0n });
-    const tree = Tree.create(offer);
+    const tree = Tree.create([offer]);
 
     const items = SetterRatifierUtils.ratify({ tree });
     const decoded = SetterRatifierUtils.decodeRatifierData(

@@ -42,7 +42,7 @@ describe("Tree.create", () => {
     const offer = baseOffer({ maxAssets: 0n });
     const group = Group.create([offer]);
     const groupOffer = group.offers[0]!;
-    const tree = Tree.create(group);
+    const tree = Tree.create([group]);
 
     expect(tree.offers).toHaveLength(1);
     expect(tree.offers[0]).toBe(groupOffer);
@@ -55,7 +55,7 @@ describe("Tree.create", () => {
 
   test("behavior: standalone offers keep their own group id", () => {
     const offer = baseOffer({ maxAssets: 0n });
-    const tree = Tree.create(offer);
+    const tree = Tree.create([offer]);
 
     expect(tree.offers).toHaveLength(1);
     expect(tree.offers[0]).toBe(offer);
@@ -64,7 +64,7 @@ describe("Tree.create", () => {
 
   test("behavior: wraps plain offer input", () => {
     const offer = baseOfferInput({ maxAssets: 0n });
-    const tree = Tree.create(offer);
+    const tree = Tree.create([offer]);
 
     expect(tree.offers).toHaveLength(1);
     expect(tree.offers[0]).toBeInstanceOf(Offer);
@@ -88,7 +88,7 @@ describe("TreeUtils.buildDescriptor", () => {
       baseOffer({ maxAssets: 0n, tick: 5_004n }),
     ];
     const groups = offers.map((offer) => Group.create([offer]));
-    const tree = Tree.create(...groups);
+    const tree = Tree.create(groups);
     const proof = TreeUtils.buildProof({
       tree,
       leafIndex: 1n,
@@ -105,7 +105,7 @@ describe("TreeUtils.buildDescriptor", () => {
       baseOffer({ maxAssets: 0n, tick: 5_008n }),
     ];
     const groups = offers.map((offer) => Group.create([offer]));
-    const tree = Tree.create(...groups);
+    const tree = Tree.create(groups);
     const payload = TreeUtils.buildDescriptor(groups);
     const proof = TreeUtils.buildProof({
       tree,
@@ -172,7 +172,7 @@ describe("TreeUtils.verifyProof", () => {
       baseOffer({ maxAssets: 0n, tick: 5_004n }),
     ];
     const groups = offers.map((offer) => Group.create([offer]));
-    const tree = Tree.create(...groups);
+    const tree = Tree.create(groups);
     const proof = TreeUtils.buildProof({
       tree,
       leafIndex: 1n,
@@ -238,7 +238,7 @@ describe("TreeUtils.verifyProof", () => {
   test("behavior: verifies proofs for plain offer objects", () => {
     const offer = baseOfferInput({ maxAssets: 0n });
     const group = Group.create([offer]);
-    const tree = Tree.create(group);
+    const tree = Tree.create([group]);
     const proof = tree.proof(0n);
 
     expect(

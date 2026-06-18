@@ -342,7 +342,7 @@ export namespace EcrecoverRatifierUtils {
    * import { EcrecoverRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
    *
    * const typedData = EcrecoverRatifierUtils.typedData({
-   *   tree: Tree.create({} as never),
+   *   tree: Tree.create([{} as never]),
    *   chainId: 8453n,
    * });
    * console.log(typedData.primaryType);
@@ -385,7 +385,7 @@ export namespace EcrecoverRatifierUtils {
    * import { EcrecoverRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
    *
    * const digest = EcrecoverRatifierUtils.digest({
-   *   tree: Tree.create({} as never),
+   *   tree: Tree.create([{} as never]),
    *   chainId: 8453n,
    * });
    * console.log(digest);
@@ -426,7 +426,7 @@ export namespace EcrecoverRatifierUtils {
    * import { EcrecoverRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
    *
    * const signature = await EcrecoverRatifierUtils.sign({
-   *   tree: Tree.create({} as never),
+   *   tree: Tree.create([{} as never]),
    *   chainId: 8453n,
    *   signTypedData: () => "0x",
    * });
@@ -599,7 +599,7 @@ export namespace EcrecoverRatifierUtils {
    * import { EcrecoverRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
    *
    * const items = await EcrecoverRatifierUtils.ratify({
-   *   tree: Tree.create({} as never),
+   *   tree: Tree.create([{} as never]),
    *   signature: {
    *     v: 27,
    *     r: "0x0000000000000000000000000000000000000000000000000000000000000000",

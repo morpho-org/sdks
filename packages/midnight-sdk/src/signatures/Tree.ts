@@ -25,7 +25,7 @@ export type {
  * ```ts
  * import { Offer, Tree } from "@morpho-org/midnight-sdk";
  *
- * const tree = Tree.create(Offer.create({} as never));
+ * const tree = Tree.create([Offer.create({} as never)]);
  * console.log(tree.root);
  * ```
  */
@@ -73,11 +73,11 @@ export class Tree {
    * ```ts
    * import { Offer, Tree } from "@morpho-org/midnight-sdk";
    *
-   * const tree = Tree.create(Offer.create({} as never));
+   * const tree = Tree.create([Offer.create({} as never)]);
    * console.log(tree.height);
    * ```
    */
-  public static create(...params: TreeCreateParams): Tree {
+  public static create(params: TreeCreateParams): Tree {
     return new Tree(params);
   }
 
@@ -94,7 +94,7 @@ export class Tree {
    * ```ts
    * import { Tree } from "@morpho-org/midnight-sdk";
    *
-   * const proof = Tree.create({} as never).proof(0n);
+   * const proof = Tree.create([{} as never]).proof(0n);
    * console.log(proof.root);
    * ```
    */

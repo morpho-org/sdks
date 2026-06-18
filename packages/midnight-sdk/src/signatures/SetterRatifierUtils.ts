@@ -166,7 +166,7 @@ export namespace SetterRatifierUtils {
    * ```ts
    * import { SetterRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
    *
-   * const items = SetterRatifierUtils.ratify({ tree: Tree.create({} as never) });
+   * const items = SetterRatifierUtils.ratify({ tree: Tree.create([{} as never]) });
    * console.log(items.length);
    * ```
    */
