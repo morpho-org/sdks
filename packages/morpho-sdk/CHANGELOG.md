@@ -1,5 +1,48 @@
 # @morpho-org/morpho-sdk
 
+## 4.0.0
+
+### Major Changes
+
+- [#767](https://github.com/morpho-org/sdks/pull/767) [`ce4f5dc`](https://github.com/morpho-org/sdks/commit/ce4f5dc855b3d28d5d5f4f9857e6a7b0670fdb59) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Rename the `MarketV1` market abstraction to `Blue` (Morpho Blue, Morpho's immutable variable-rate lending primitive). This is a breaking change to the public surface — every `MarketV1` identifier is now `Blue`:
+
+  - Client factory: `client.marketV1(marketParams, chainId)` → `client.blue(marketParams, chainId)` (and `client.morpho.blue(...)` on the viem extension).
+  - Entity: `MorphoMarketV1` → `MorphoBlue`.
+  - Actions interface: `MarketV1Actions` → `BlueActions`.
+  - Transaction action types and their `type` discriminants: `MarketV1SupplyAction`/`"marketV1Supply"`, `MarketV1WithdrawAction`/`"marketV1Withdraw"`, `MarketV1SupplyCollateralAction`/`"marketV1SupplyCollateral"`, `MarketV1BorrowAction`/`"marketV1Borrow"`, `MarketV1SupplyCollateralBorrowAction`/`"marketV1SupplyCollateralBorrow"`, `MarketV1RepayAction`/`"marketV1Repay"`, `MarketV1WithdrawCollateralAction`/`"marketV1WithdrawCollateral"`, `MarketV1RepayWithdrawCollateralAction`/`"marketV1RepayWithdrawCollateral"`, `MarketV1RefinanceAction`/`"marketV1Refinance"` → the corresponding `Blue…Action` / `"blue…"` names.
+
+  Integrators must update factory calls, type imports, and any `switch`/pattern-matching on action `type` discriminants. The unrelated Vault V2 adapter types that mirror the on-chain `MorphoMarketV1Adapter` contract (`VaultV2MorphoMarketV1Adapter`, `VaultV2MorphoMarketV1AdapterV2`, their `IAccrual…`/`I…` interfaces, and `morphoMarketV1Adapter*Abi`) are unchanged — they keep matching the deployed contract names.
+
+- [#763](https://github.com/morpho-org/sdks/pull/763) [`d79a788`](https://github.com/morpho-org/sdks/commit/d79a7884bdf7a7eed7c38efa4e8456b859e2bc4f) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Remove the deprecated `MorphoClient` class. The only supported entry point is now the viem extension `morphoViemExtension()`, which adds a stateless `morpho` namespace to a viem client.
+
+  Migrate by extending your viem client instead of wrapping it:
+
+  ```ts
+  // Before
+  import { MorphoClient } from "@morpho-org/morpho-sdk";
+  const morpho = new MorphoClient(client, { supportSignature: true });
+  const vault = morpho.vaultV1(vaultAddress, 1);
+
+  // After
+  import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+  const extended = client.extend(
+    morphoViemExtension({ supportSignature: true })
+  );
+  const vault = extended.morpho.vaultV1(vaultAddress, 1);
+  ```
+
+  The entity factories (`vaultV1`, `vaultV2`, `marketV1`), their signatures, and the `MorphoClientType` structural type are unchanged — they now live under `client.morpho`.
+
+### Patch Changes
+
+- [#752](https://github.com/morpho-org/sdks/pull/752) [`229fa2e`](https://github.com/morpho-org/sdks/commit/229fa2ed33e2a55fc597dca96220ec4666fc481c) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Add Morph and MegaETH chain metadata, deployment addresses, deployment block lower bounds, and wrapped-native mappings.
+
+  Patch maintained packages that depend directly on `@morpho-org/blue-sdk` so their latest releases resolve the new address registry.
+
+- Updated dependencies [[`229fa2e`](https://github.com/morpho-org/sdks/commit/229fa2ed33e2a55fc597dca96220ec4666fc481c), [`fab0186`](https://github.com/morpho-org/sdks/commit/fab018666faef372a7f695edcd4b54e658f73118), [`bb82f64`](https://github.com/morpho-org/sdks/commit/bb82f6488986e91b228469dca12444a962922c84)]:
+  - @morpho-org/blue-sdk@6.2.0
+  - @morpho-org/blue-sdk-viem@5.1.1
+
 ## 3.2.0
 
 ### Minor Changes
