@@ -1,10 +1,7 @@
 import type { BigIntish } from "@morpho-org/morpho-ts";
 import type { Address, Hash, Hex } from "viem";
 
-import type {
-  Payload as MidnightPayload,
-  Item as MidnightPayloadItem,
-} from "../signatures/Payload.js";
+import type { Item as MidnightPayloadItem } from "../signatures/Payload.js";
 import type { TreeInput } from "../signatures/Tree.js";
 
 /**
@@ -77,7 +74,7 @@ export interface ValidateMempoolPayloadParams extends MidnightApiConfig {
   /** Chain id whose API policy should validate the payload. */
   readonly chainId: number;
   /** Encoded Midnight mempool payload bytes. */
-  readonly payload: MidnightPayload;
+  readonly payload: Hex;
   /** Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot. */
   readonly timestamp?: string | Date;
 }

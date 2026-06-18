@@ -81,9 +81,7 @@ function apiValidOffer(overrides: Partial<IOffer> = {}) {
   });
 }
 
-async function encodeUncheckedPayload(
-  offer: OfferStruct,
-): Promise<Payload.Payload> {
+async function encodeUncheckedPayload(offer: OfferStruct): Promise<Hex> {
   const itemBytes = hexToBytes(
     encodeAbiParameters(itemsAbi, [[{ offer, ratifierData: "0x1234" as Hex }]]),
   );

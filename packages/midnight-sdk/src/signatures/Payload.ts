@@ -11,23 +11,6 @@ import { MarketUtils } from "../market/index.js";
 import { type IOffer, type OfferStruct, OfferUtils } from "../offers/index.js";
 
 /**
- * Raw onchain mempool payload bytes.
- *
- * Makers submit this value to the Midnight mempool contract after offers have
- * been grouped, committed to a tree, ratified, and optionally validated by the
- * Midnight API.
- *
- * @example
- * ```ts
- * import type { Payload } from "@morpho-org/midnight-sdk";
- *
- * const payload: Payload = "0x";
- * console.log(payload);
- * ```
- */
-export type Payload = Hex;
-
-/**
  * One mempool payload item: a maker-side `Offer` together with the opaque
  * `ratifierData` blob a taker hands to `Midnight.take(..., ratifierData)`.
  *
@@ -241,7 +224,8 @@ const itemsAbi = [
  *
  * @param items - Per-leaf items in the order the maker committed to. Must
  *   contain at least one item and fit within payload byte-size limits.
- * @returns The encoded payload as a hex string.
+ * @returns The encoded payload as a `Hex` string, ready to include in onchain
+ *   mempool submission calldata.
  * @throws {DecodeError} when the item list is empty or encoded size exceeds SDK byte-size limits.
  * @example
  * ```ts
@@ -251,7 +235,7 @@ const itemsAbi = [
  * console.log(encoded);
  * ```
  */
-export async function encode(items: readonly Item[]): Promise<Payload> {
+export async function encode(items: readonly Item[]): Promise<Hex> {
   if (CURRENT_VERSION > 0xff) {
     throw new DecodeError(`version overflow: ${CURRENT_VERSION} exceeds 255`);
   }
@@ -290,7 +274,7 @@ export async function encode(items: readonly Item[]): Promise<Payload> {
  * Use on the take-side, in indexers, or in diagnostics when you need to inspect
  * the offer structs and ratifier data that a maker published.
  *
- * @param payload - Payload bytes to decode.
+ * @param payload - Hex payload bytes to decode.
  * @param options - Optional decode bounds.
  * @returns The decoded items in encoded order.
  * @throws {DecodeError} when the payload is malformed or exceeds protocol limits.
@@ -303,7 +287,7 @@ export async function encode(items: readonly Item[]): Promise<Payload> {
  * ```
  */
 export async function decode(
-  payload: Payload,
+  payload: Hex,
   options?: DecodeOptions,
 ): Promise<Item[]> {
   const maxItems = resolveMaxItems(options?.maxItems);

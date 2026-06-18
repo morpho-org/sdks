@@ -197,7 +197,7 @@ describe("MIDNIGHT_SDK_VERSION", () => {
 
 describe("MidnightApi.validateMempoolPayload", () => {
   test("default", async () => {
-    const payload = "0x0100000000" as Payload.Payload;
+    const payload = "0x0100000000" as Hex;
     const timestamp = "2026-06-01T16:00:00Z";
     const controller = new AbortController();
     const { calls, fetch } = createJsonFetch({
@@ -256,7 +256,7 @@ describe("MidnightApi.validateMempoolPayload", () => {
 
     await MidnightApi.validateMempoolPayload({
       chainId: 8453,
-      payload: "0x0100000000" as Payload.Payload,
+      payload: "0x0100000000" as Hex,
       baseUrl: "https://api.example/base/",
       fetch,
     });
@@ -282,7 +282,7 @@ describe("MidnightApi.validateMempoolPayload", () => {
     await expect(
       MidnightApi.validateMempoolPayload({
         chainId: 8453,
-        payload: "0x0100000000" as Payload.Payload,
+        payload: "0x0100000000" as Hex,
         fetch,
       }),
     ).rejects.toMatchObject({
@@ -303,7 +303,7 @@ describe("MidnightApi.validateMempoolPayload", () => {
     await expect(
       MidnightApi.validateMempoolPayload({
         chainId: 8453,
-        payload: "0x0100000000" as Payload.Payload,
+        payload: "0x0100000000" as Hex,
         fetch,
       }),
     ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
@@ -333,7 +333,7 @@ describe("MidnightApi.validateMempoolItems", () => {
     expect(result.issues).toEqual([{ rule: "tick_spacing" }]);
 
     expect(typeof body.payload).toBe("string");
-    const decoded = await Payload.decode(body.payload as Payload.Payload);
+    const decoded = await Payload.decode(body.payload as Hex);
     expect(decoded).toHaveLength(1);
     expect(decoded[0]!.ratifierData).toBe("0x1234");
   });
@@ -352,7 +352,7 @@ describe("MidnightApi.validateMempoolTree", () => {
     });
 
     const body = parseRequestBody(calls[0]!);
-    const decoded = await Payload.decode(body.payload as Payload.Payload);
+    const decoded = await Payload.decode(body.payload as Hex);
 
     expect(result.valid).toBe(true);
     expect(decoded).toHaveLength(1);
