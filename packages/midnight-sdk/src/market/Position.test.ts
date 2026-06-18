@@ -9,6 +9,7 @@ import {
 } from "../__test__/fixtures.js";
 import { CBP } from "../constants.js";
 import {
+  InvalidPositionAccrualStateError,
   InvalidPositionAccrualTimestampError,
   InvalidPositionLossFactorError,
 } from "../errors.js";
@@ -126,5 +127,14 @@ describe("AccrualPosition.accrueInterest", () => {
         baseMarketInput(),
       ).accrueInterest(1_500n),
     ).toThrow(InvalidPositionLossFactorError);
+  });
+
+  test("error: InvalidPositionAccrualStateError", () => {
+    expect(() =>
+      new AccrualPosition(
+        basePositionInput({ credit: 100n, pendingFee: 101n }),
+        baseMarketInput(),
+      ).accrueInterest(1_500n),
+    ).toThrow(InvalidPositionAccrualStateError);
   });
 });

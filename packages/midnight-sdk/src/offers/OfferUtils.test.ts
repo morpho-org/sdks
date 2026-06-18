@@ -129,18 +129,10 @@ describe("Offer.create", () => {
     );
   });
 
-  test("error: InvalidOfferParameterError fields", () => {
-    try {
-      Offer.create(buildOfferParams({ tick: "not-a-tick" }));
-    } catch (error) {
-      if (!(error instanceof InvalidOfferParameterError)) throw error;
-
-      expect(error.parameter).toBe("tick");
-      expect(error.value).toBe("not-a-tick");
-      return;
-    }
-
-    expect.unreachable("Expected invalid offer parameter.");
+  test("error: invalid bigint input", () => {
+    expect(() =>
+      Offer.create(buildOfferParams({ tick: "not-a-tick" })),
+    ).toThrow(SyntaxError);
   });
 
   test.each([

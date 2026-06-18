@@ -38,19 +38,6 @@ const offerHashParams = [
   { name: "maxAssets", type: "uint256" },
 ] as const;
 
-const readBigIntParameter = (parameter: string, value: BigIntish) => {
-  try {
-    return BigInt(value);
-  } catch (cause) {
-    throw new InvalidOfferParameterError({
-      parameter,
-      value,
-      instruction: "Use a bigint-compatible integer value.",
-      cause,
-    });
-  }
-};
-
 /**
  * Parameters for {@link OfferUtils.validateOfferGroup}.
  *
@@ -288,11 +275,8 @@ export namespace OfferUtils {
     readonly tick: BigIntish;
     readonly tickSpacing?: BigIntish;
   }) {
-    const tick = readBigIntParameter("tick", params.tick);
-    const tickSpacing = readBigIntParameter(
-      "tickSpacing",
-      params.tickSpacing ?? DEFAULT_TICK_SPACING,
-    );
+    const tick = BigInt(params.tick);
+    const tickSpacing = BigInt(params.tickSpacing ?? DEFAULT_TICK_SPACING);
 
     if (tick < 0n || tick > MAX_TICK) {
       throw new InvalidOfferParameterError({
@@ -340,8 +324,8 @@ export namespace OfferUtils {
     readonly start?: BigIntish;
     readonly expiry: BigIntish;
   }) {
-    const start = readBigIntParameter("start", params.start ?? 0n);
-    const expiry = readBigIntParameter("expiry", params.expiry);
+    const start = BigInt(params.start ?? 0n);
+    const expiry = BigInt(params.expiry);
 
     if (start < 0n) {
       throw new InvalidOfferParameterError({
@@ -382,8 +366,8 @@ export namespace OfferUtils {
     readonly maxUnits?: BigIntish;
     readonly maxAssets?: BigIntish;
   }) {
-    const maxUnits = readBigIntParameter("maxUnits", params.maxUnits ?? 0n);
-    const maxAssets = readBigIntParameter("maxAssets", params.maxAssets ?? 0n);
+    const maxUnits = BigInt(params.maxUnits ?? 0n);
+    const maxAssets = BigInt(params.maxAssets ?? 0n);
 
     if (maxUnits < 0n) {
       throw new InvalidOfferParameterError({
