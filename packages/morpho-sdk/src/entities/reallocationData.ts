@@ -3,6 +3,7 @@ import {
   AccrualPosition,
   Market,
   type MarketId,
+  MarketUtils,
   MathLib,
   Position,
   UnknownDataError,
@@ -496,17 +497,22 @@ export class ReallocationData implements InputReallocationData {
 
   /**
    * Computes the liquidity available to bring `marketId` to `targetUtilization`,
-   * combining its own borrow headroom with the reallocatable public-allocator
-   * liquidity scaled by `targetUtilization` (reallocated supply also raises the
-   * market's supply denominator, so only `targetUtilization · L` of it backs
-   * further borrow).
+   * counting the public-allocator liquidity reallocatable into it.
+   *
+   * Returns the max borrow `x` keeping post-borrow utilization
+   * `(borrow + x) / (supply + L) ≤ targetUtilization`, where `L` is the
+   * reallocatable liquidity added to the market's supply — equivalently
+   * `getBorrowToUtilization({ supply + L, borrow }, targetUtilization)`. Below
+   * the target this is the market's own borrow headroom plus `targetUtilization · L`;
+   * reallocated supply also raises the supply denominator, so only that scaled
+   * share backs further borrow.
    *
    * Read-only metric — never throws on insufficiency:
-   * - returns only the own headroom when `supplyTargetUtilization > targetUtilization`
-   *   (reallocation would not trigger at that target);
-   * - returns only the scaled available liquidity when `targetUtilization` equals
-   *   the market's current utilization (no own headroom left);
-   * - otherwise returns their sum.
+   * - returns only the market's own borrow headroom when
+   *   `supplyTargetUtilization > targetUtilization` (reallocation would not
+   *   trigger at that target);
+   * - returns `0n` when the market is already at or above the target and `L` is
+   *   too small to bring it back under.
    *
    * @param marketId - Target market to borrow from.
    * @param targetUtilization - Utilization to bring the market to, scaled by WAD. Defaults to {@link DEFAULT_SUPPLY_TARGET_UTILIZATION}.
@@ -522,25 +528,32 @@ export class ReallocationData implements InputReallocationData {
   ): bigint {
     const market = this.getMarket(marketId).accrueInterest(options?.timestamp);
 
-    const ownHeadroom = market.getBorrowToUtilization(targetUtilization);
-
+    // Below the allocator's supply-target trigger, no reallocation would happen,
+    // so only the market's own borrow headroom to the target counts.
     const supplyTargetUtilization = getSupplyTargetUtilization(
       marketId,
       options,
     );
-    if (supplyTargetUtilization > targetUtilization) return ownHeadroom;
+    if (supplyTargetUtilization > targetUtilization)
+      return market.getBorrowToUtilization(targetUtilization);
 
-    // Scale the reallocatable liquidity by the target utilization: borrowing
-    // against reallocated supply `L` only adds `targetUtilization · L` of
-    // headroom, since `L` also raises the market's supply denominator. This
-    // matches `getBorrowToUtilization({ supply + L, borrow }, targetUtilization)`.
-    const availableLiquidity = MathLib.wMulDown(
-      this.getPublicReallocationLiquidity(marketId, options),
+    // Max borrow `x` keeping post-borrow utilization `(borrow + x) / (supply + L)`
+    // at or below the target, where `L` is the reallocatable liquidity added to
+    // supply. `zeroFloorSub` clamps to `0n` when the market is already above the
+    // target and `L` is too small to bring it back under (borrowing more would
+    // push it further over). Below the target this equals own borrow headroom
+    // plus `targetUtilization · L`.
+    const availableLiquidity = this.getPublicReallocationLiquidity(
+      marketId,
+      options,
+    );
+    return MarketUtils.getBorrowToUtilization(
+      {
+        totalSupplyAssets: market.totalSupplyAssets + availableLiquidity,
+        totalBorrowAssets: market.totalBorrowAssets,
+      },
       targetUtilization,
     );
-    if (targetUtilization === market.utilization) return availableLiquidity;
-
-    return ownHeadroom + availableLiquidity;
   }
 
   /**

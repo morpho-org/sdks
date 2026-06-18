@@ -159,6 +159,57 @@ describe("ReallocationData.getAvailableLiquidityToTargetUtilization", () => {
     ).toBe(180n * MathLib.WAD);
   });
 
+  test("behavior: returns 0n when above target and reallocation is insufficient", () => {
+    // 1000 supply / 950 borrow → current util 95%, above the 90% target. A small
+    // 20 sibling withdrawal lifts supply to 1020 → util ≈ 93.1%, still above 90%,
+    // so no borrow keeps it under target: 0.9·1020 − 950 < 0 → 0n.
+    const data = makeData(
+      makeMarket({
+        totalSupplyAssets: 1000n * MathLib.WAD,
+        totalBorrowAssets: 950n * MathLib.WAD,
+      }),
+    );
+    stubReallocations(data, [
+      { id: sourceParamsA.id, vault: VAULT_A, assets: 20n * MathLib.WAD },
+    ]);
+
+    expect(
+      data.getAvailableLiquidityToTargetUtilization(
+        targetParams.id,
+        NINETY_PERCENT,
+        {
+          timestamp: TIMESTAMP,
+          defaultSupplyTargetUtilization: NINETY_PERCENT,
+        },
+      ),
+    ).toBe(0n);
+  });
+
+  test("behavior: counts reallocation that brings an above-target market back under", () => {
+    // 1000 supply / 950 borrow (95% util). A 200 withdrawal lifts supply to 1200
+    // → 0.9·1200 − 950 = 130 borrowable to return to the 90% target.
+    const data = makeData(
+      makeMarket({
+        totalSupplyAssets: 1000n * MathLib.WAD,
+        totalBorrowAssets: 950n * MathLib.WAD,
+      }),
+    );
+    stubReallocations(data, [
+      { id: sourceParamsA.id, vault: VAULT_A, assets: 200n * MathLib.WAD },
+    ]);
+
+    expect(
+      data.getAvailableLiquidityToTargetUtilization(
+        targetParams.id,
+        NINETY_PERCENT,
+        {
+          timestamp: TIMESTAMP,
+          defaultSupplyTargetUtilization: NINETY_PERCENT,
+        },
+      ),
+    ).toBe(130n * MathLib.WAD);
+  });
+
   test("behavior: forwards options to discovery without forcing an aggressive drain", () => {
     const data = makeData();
     const spy = stubReallocations(data, [
