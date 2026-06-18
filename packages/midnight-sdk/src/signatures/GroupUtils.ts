@@ -1,6 +1,11 @@
-import { concat, type Hash, keccak256, zeroHash } from "viem";
+import { concat, type Hash, keccak256 } from "viem";
 import { InvalidOfferGroupError } from "../errors.js";
-import { type IOffer, type OfferStruct, OfferUtils } from "../offers/index.js";
+import {
+  type IOffer,
+  Offer,
+  type OfferStruct,
+  OfferUtils,
+} from "../offers/index.js";
 
 /**
  * Plain offer group shape accepted by group and tree utilities.
@@ -14,7 +19,7 @@ import { type IOffer, type OfferStruct, OfferUtils } from "../offers/index.js";
  * ```
  */
 export interface IGroup {
-  /** Offers in this protocol group. */
+  /** Offers in this protocol group, each carrying this group's id. */
   readonly offers: readonly IOffer[];
   /** Protocol group id encoded into each offer. */
   readonly id: Hash;
@@ -42,8 +47,7 @@ export type GroupInput = IGroup | IOffer;
  *
  * Groups sit between `Offer.create` and `Tree.create`: they assign a
  * content-addressed group id to offers that share one consumption bucket. Tree
- * helpers also accept standalone offers and normalize them into one-offer
- * groups.
+ * helpers read the group id already stored on each offer.
  *
  * @example
  * ```ts
@@ -56,9 +60,8 @@ export namespace GroupUtils {
   /**
    * Returns a group object from group or standalone offer input.
    *
-   * Use when accepting mixed tree inputs. `Tree.create` and `TreeUtils`
-   * call this internally so callers can pass either explicit groups or
-   * standalone offers.
+   * Use at compatibility boundaries that still need an `IGroup` shape from a
+   * standalone offer. Tree helpers now read group ids directly from offers.
    *
    * @param entry - Group object or standalone offer.
    * @returns Group object.
@@ -74,9 +77,10 @@ export namespace GroupUtils {
     if ("offers" in entry) return entry;
 
     const offers = OfferUtils.validateOfferGroup({ offers: [entry] });
+    const id = hash(offers);
     return {
-      offers,
-      id: hash(offers),
+      offers: offers.map((offer) => new Offer({ ...offer, group: id })),
+      id,
     };
   }
 
@@ -97,16 +101,15 @@ export namespace GroupUtils {
    * console.log(id);
    * ```
    */
-  export function hash(offers: readonly IOffer[]): Hash {
-    if (offers.length === 0) {
+  export function hash(offers: Iterable<IOffer>): Hash {
+    const offerInputs = Array.from(offers);
+    if (offerInputs.length === 0) {
       throw new InvalidOfferGroupError(
         "Provide at least one offer in the group.",
       );
     }
 
-    const offerHashes = offers.map((offer) =>
-      OfferUtils.hash({ offer, group: zeroHash }),
-    );
+    const offerHashes = offerInputs.map((offer) => OfferUtils.hash(offer));
     const sorted =
       offerHashes.length > 1 ? [...offerHashes].sort() : offerHashes;
 
@@ -116,9 +119,9 @@ export namespace GroupUtils {
   /**
    * Converts a group into ABI-compatible offers carrying the group id.
    *
-   * Use after `Group.create` and before Merkle tree descriptor construction,
-   * payload encoding, or any custom encoder that needs offer structs with their
-   * final group id.
+   * Use after `Group.create` for custom encoders that need offer structs with
+   * their final group id. Tree and payload helpers read the group id directly
+   * from each offer.
    *
    * @param group - Group to encode.
    * @returns ABI-compatible offers in caller order.
@@ -131,8 +134,6 @@ export namespace GroupUtils {
    * ```
    */
   export function toStructs(group: IGroup): readonly OfferStruct[] {
-    return group.offers.map((offer) =>
-      OfferUtils.toStruct({ offer, group: group.id }),
-    );
+    return group.offers.map((offer) => OfferUtils.toStruct({ offer }));
   }
 }

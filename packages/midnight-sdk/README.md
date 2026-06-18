@@ -86,7 +86,7 @@ export async function makeBaseUsdcWethOffers(params: {
     maxUnits: parseUnits("50", 18),
   });
 
-  const tree = Tree.create([groupedLendOffers, standaloneBorrowOffer]);
+  const tree = Tree.create(groupedLendOffers, standaloneBorrowOffer);
 
   const treeValidation = await MidnightApi.validateMempoolTree({
     chainId,
@@ -188,6 +188,7 @@ function offerFromApi(offer: MidnightApiTakeableOffer["offer"]): IOffer {
     start: BigInt(offer.start),
     expiry: BigInt(offer.expiry),
     tick: BigInt(offer.tick),
+    group: offer.group,
     callback: offer.callback,
     callbackData: offer.callbackData,
     receiverIfMakerIsSeller: offer.receiverIfMakerIsSeller,
@@ -210,7 +211,6 @@ async function buildAskQuoteTakes(marketId: Hash, targetBuyerAssets: bigint) {
     entries: quote.data.takeableOffers.map((entry) => ({
       units: entry.units,
       offer: offerFromApi(entry.offer),
-      group: entry.offer.group,
       ratifierData: entry.ratifierData,
     })),
     expectedOfferSide: "sell",

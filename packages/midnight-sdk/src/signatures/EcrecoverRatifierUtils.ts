@@ -575,8 +575,8 @@ export namespace EcrecoverRatifierUtils {
    * Signs or consumes a tree signature and returns payload-ready items.
    *
    * Use after `MidnightApi.validateMempoolTree` and before `Payload.encode`.
-   * The returned items preserve tree leaf order and include the group id and
-   * ratifier data required by takers.
+   * The returned items preserve tree leaf order and include ratifier data
+   * required by takers. The group id is stored on each inline offer.
    *
    * @param params - Ratification parameters.
    * @returns Items containing each offer and its ratifier data.
@@ -614,18 +614,15 @@ export namespace EcrecoverRatifierUtils {
           );
     const items: PayloadItem[] = [];
 
-    for (const group of params.tree.groups) {
-      for (const offer of group.offers) {
-        items.push({
-          offer,
-          group: group.id,
-          ratifierData: ratifierData({
-            tree: params.tree,
-            leafIndex: items.length,
-            signature,
-          }),
-        });
-      }
+    for (const offer of params.tree.offers) {
+      items.push({
+        offer,
+        ratifierData: ratifierData({
+          tree: params.tree,
+          leafIndex: items.length,
+          signature,
+        }),
+      });
     }
 
     return items;

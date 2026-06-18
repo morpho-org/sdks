@@ -320,8 +320,7 @@ describe("MidnightApi.validateMempoolItems", () => {
       chainId: 8453,
       items: [
         {
-          offer: apiValidOffer(),
-          group: GROUP_ID,
+          offer: apiValidOffer({ group: GROUP_ID }),
           ratifierData: "0x1234" as Hex,
         },
       ],

@@ -1,5 +1,5 @@
 import type { BigIntish } from "@morpho-org/morpho-ts";
-import type { Hash, Hex } from "viem";
+import type { Hex } from "viem";
 import type { IOffer, Offer, OfferStruct } from "./Offer.js";
 import { OfferUtils } from "./OfferUtils.js";
 import {
@@ -11,8 +11,8 @@ import {
  * Plain take-side input accepted by {@link TakeableOffer}.
  *
  * Use this after a quote, book, or maker-offers API response has been mapped
- * back into SDK offer input and paired with the API-provided `units`,
- * `group`, and `ratifierData`.
+ * back into SDK offer input and paired with the API-provided `units` and
+ * `ratifierData`. The protocol group id belongs to the inline offer.
  *
  * @example
  * ```ts
@@ -27,8 +27,6 @@ export interface ITakeableOffer {
   readonly units: BigIntish;
   /** Inline offer. */
   readonly offer: IOffer;
-  /** Protocol group id encoded into the offer. */
-  readonly group: Hash;
   /** Ratifier data payload. */
   readonly ratifierData: Hex;
 }
@@ -38,8 +36,8 @@ export interface ITakeableOffer {
  *
  * API responses expose signed maker offers plus the amount to take. Use
  * {@link TakeableOffer.createMany} to normalize those entries, assert the
- * expected maker side, and keep group/ratifier data together before ABI
- * encoding.
+ * expected maker side, and keep the offer's group id with ratifier data before
+ * ABI encoding.
  *
  * @example
  * ```ts
@@ -54,15 +52,12 @@ export class TakeableOffer {
   public readonly units: bigint;
   /** Inline offer. */
   public readonly offer: Offer;
-  /** Protocol group id encoded into the offer. */
-  public readonly group: Hash;
   /** Ratifier data payload. */
   public readonly ratifierData: Hex;
 
   public constructor(takeableOffer: ITakeableOffer) {
     this.units = BigInt(takeableOffer.units);
     this.offer = OfferUtils.normalizeOffer(takeableOffer.offer);
-    this.group = takeableOffer.group;
     this.ratifierData = takeableOffer.ratifierData;
   }
 
@@ -95,7 +90,6 @@ export class TakeableOffer {
         new TakeableOffer({
           units: takeableOffer.units,
           offer: takeableOffer.offer,
-          group: takeableOffer.offer.group,
           ratifierData: takeableOffer.ratifierData,
         }),
     );

@@ -64,10 +64,7 @@ export namespace TakeableOfferUtils {
   export function toStruct(takeableOffer: ITakeableOffer): TakeableOfferStruct {
     return {
       units: BigInt(takeableOffer.units),
-      offer: OfferUtils.toStruct({
-        offer: takeableOffer.offer,
-        group: takeableOffer.group,
-      }),
+      offer: OfferUtils.toStruct({ offer: takeableOffer.offer }),
       ratifierData: takeableOffer.ratifierData,
     };
   }
@@ -109,7 +106,7 @@ export namespace TakeableOfferUtils {
 
       return {
         units: BigInt(entry.units),
-        offer: OfferUtils.toStruct({ offer, group: entry.group }),
+        offer: OfferUtils.toStruct({ offer }),
         ratifierData: entry.ratifierData,
       };
     });

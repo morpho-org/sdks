@@ -1,12 +1,12 @@
 import { zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import { baseOffer, baseOfferInput } from "../__test__/fixtures.js";
-import { InvalidOfferGroupError, InvalidTreeError } from "../errors.js";
+import { InvalidTreeError } from "../errors.js";
 import { Offer, OfferUtils } from "../offers/index.js";
 import { Group } from "./Group.js";
 import { GroupUtils } from "./GroupUtils.js";
 import { Tree } from "./Tree.js";
-import { MAX_OFFERS_PER_TREE, TreeUtils } from "./TreeUtils.js";
+import { TreeUtils } from "./TreeUtils.js";
 
 const root =
   "0x3333333333333333333333333333333333333333333333333333333333333333" as const;
@@ -43,20 +43,21 @@ describe("Tree.create", () => {
     const group = Group.create([offer]);
     const tree = Tree.create(group);
 
-    expect(tree.offers).toEqual([offer]);
+    expect(tree.offers).toHaveLength(1);
+    expect(tree.offers[0]).not.toBe(offer);
+    expect(tree.offers[0]!.group).toBe(group.id);
     expect(tree.root).toBe(TreeUtils.buildRoot([group]));
     expect(tree.proof(0n)).toEqual(
       TreeUtils.buildProof({ tree, leafIndex: 0n }),
     );
   });
 
-  test("behavior: standalone offers become single-offer groups", () => {
+  test("behavior: standalone offers keep their own group id", () => {
     const offer = baseOffer({ maxAssets: 0n });
     const tree = Tree.create(offer);
 
-    expect(tree.groups).toHaveLength(1);
-    expect(tree.groups[0]!.id).toBe(GroupUtils.hash([offer]));
-    expect(tree.offers).toEqual([offer]);
+    expect(tree.offers).toHaveLength(1);
+    expect(tree.offers[0]!.group).toBe(offer.group);
   });
 });
 
@@ -66,7 +67,7 @@ describe("TreeUtils.buildDescriptor", () => {
 
     expect(payload.height).toBe(0);
     expect(payload.root).toMatchInlineSnapshot(
-      `"0x36695a53a5427c6ea8873cf32dba313447ba1d8b1708c8be4372235d1b8c27cb"`,
+      `"0x185d554dc1c706dd7c51a9c41ceef0ba926a51f3c440d260a2bae06c83bcd95e"`,
     );
   });
 
@@ -119,8 +120,7 @@ describe("TreeUtils.buildDescriptor", () => {
     expect(proof.proof).toHaveLength(2);
     expect(
       TreeUtils.verifyProof({
-        offer: offers[2]!,
-        group: groups[2]!.id,
+        offer: groups[2]!.offers[0]!,
         root: proof.root,
         leafIndex: proof.leafIndex,
         proof: proof.proof,
@@ -138,18 +138,19 @@ describe("TreeUtils.buildDescriptor", () => {
 
   test("error: invalid empty offer", () => {
     expect(() => TreeUtils.buildDescriptor([emptyOffer()])).toThrow(
-      InvalidOfferGroupError,
+      InvalidTreeError,
     );
   });
 
-  test("error: offer count cap", () => {
-    const offer = baseOffer({ maxAssets: 0n });
+  test("behavior: does not enforce router offer-count policy", () => {
+    const groups = Array.from({ length: 257 }, (_, index) =>
+      Group.create([baseOffer({ maxAssets: 0n, tick: BigInt(5_000 + index) })]),
+    );
 
-    expect(() =>
-      TreeUtils.buildDescriptor(
-        Array.from({ length: MAX_OFFERS_PER_TREE + 1 }, () => offer),
-      ),
-    ).toThrow(InvalidTreeError);
+    const descriptor = TreeUtils.buildDescriptor(groups);
+
+    expect(descriptor.offers).toHaveLength(512);
+    expect(descriptor.height).toBe(9);
   });
 });
 
@@ -168,8 +169,7 @@ describe("TreeUtils.verifyProof", () => {
 
     expect(
       TreeUtils.verifyProof({
-        offer: offers[1]!,
-        group: groups[1]!.id,
+        offer: groups[1]!.offers[0]!,
         root: proof.root,
         leafIndex: proof.leafIndex,
         proof: proof.proof,
@@ -177,8 +177,7 @@ describe("TreeUtils.verifyProof", () => {
     ).toBe(true);
     expect(
       TreeUtils.verifyProof({
-        offer: offers[1]!,
-        group: groups[1]!.id,
+        offer: groups[1]!.offers[0]!,
         root: root,
         leafIndex: proof.leafIndex,
         proof: proof.proof,
@@ -186,8 +185,7 @@ describe("TreeUtils.verifyProof", () => {
     ).toBe(false);
     expect(
       TreeUtils.verifyProof({
-        offer: offers[1]!,
-        group: groups[1]!.id,
+        offer: groups[1]!.offers[0]!,
         root: proof.root,
         leafIndex: 0n,
         proof: proof.proof,
@@ -195,8 +193,7 @@ describe("TreeUtils.verifyProof", () => {
     ).toBe(false);
     expect(
       TreeUtils.verifyProof({
-        offer: offers[1]!,
-        group: groups[1]!.id,
+        offer: groups[1]!.offers[0]!,
         root: proof.root,
         leafIndex: proof.leafIndex,
         proof: [root],
@@ -207,12 +204,11 @@ describe("TreeUtils.verifyProof", () => {
   test("behavior: rejects out-of-range leaf index", () => {
     const offer = baseOffer({ maxAssets: 0n });
     const group = Group.create([offer]);
-    const offerRoot = offer.hash(group.id);
+    const offerRoot = group.offers[0]!.hash;
 
     expect(
       TreeUtils.verifyProof({
-        offer,
-        group: group.id,
+        offer: group.offers[0]!,
         root: offerRoot,
         leafIndex: 1n,
         proof: [],
@@ -220,8 +216,7 @@ describe("TreeUtils.verifyProof", () => {
     ).toBe(false);
     expect(
       TreeUtils.verifyProof({
-        offer,
-        group: group.id,
+        offer: group.offers[0]!,
         root: offerRoot,
         leafIndex: -1n,
         proof: [],
@@ -237,8 +232,7 @@ describe("TreeUtils.verifyProof", () => {
 
     expect(
       TreeUtils.verifyProof({
-        offer,
-        group: group.id,
+        offer: group.offers[0]!,
         root: proof.root,
         leafIndex: proof.leafIndex,
         proof: proof.proof,

@@ -1,5 +1,5 @@
 import fc from "fast-check";
-import { zeroAddress, zeroHash } from "viem";
+import { zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   addresses,
@@ -56,9 +56,14 @@ describe("Offer.create", () => {
 
     expect(offer.maxAssets).toBe(100n);
     expect(offer.receiverIfMakerIsSeller).toBe(zeroAddress);
-    expect(offer.hash(group)).toBe(OfferUtils.hash({ offer, group }));
-    expect(offer.hash()).toBe(OfferUtils.hash({ offer, group: zeroHash }));
-    expect(offer.groupHash).toBe(offer.hash());
+    expect(offer.group).toBe(OfferUtils.hash(offer));
+    expect(offer.hash).toBe(OfferUtils.hash(offer, offer.group));
+    expect(
+      Offer.create({
+        ...buildOfferParams(),
+        group,
+      }).group,
+    ).toBe(group);
   });
 
   test("behavior: defaults maker seller receiver for sell offers", () => {
@@ -289,8 +294,7 @@ describe("TakeableOfferUtils.toStructs", () => {
         {
           units: "42",
           ratifierData: "0x",
-          offer: baseOfferInput({ buy: true, maxUnits: 0n }),
-          group,
+          offer: baseOfferInput({ buy: true, maxUnits: 0n, group }),
         },
       ],
       expectedOfferSide: "buy",
@@ -314,8 +318,7 @@ describe("TakeableOfferUtils.toStructs", () => {
           {
             units: 1n,
             ratifierData: "0x",
-            offer: baseOffer({ buy: false }),
-            group,
+            offer: baseOffer({ buy: false, group }),
           },
         ],
         expectedOfferSide: "buy",
@@ -327,12 +330,12 @@ describe("TakeableOfferUtils.toStructs", () => {
     expect(() =>
       TakeableOfferUtils.toStructs({
         entries: [
-          { units: 1n, ratifierData: "0x", offer: baseOffer(), group },
+          { units: 1n, ratifierData: "0x", offer: baseOffer({ group }) },
           {
             units: 1n,
             ratifierData: "0x",
-            group,
             offer: baseOffer({
+              group,
               market: {
                 ...baseMarketParamsInput(),
                 maturity: 3_000n,
@@ -353,8 +356,7 @@ describe("TakeableOffer.createMany", () => {
         {
           units: "42",
           ratifierData: "0x",
-          offer: baseOffer({ buy: true }),
-          group,
+          offer: baseOffer({ buy: true, group }),
         },
       ],
     });

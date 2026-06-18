@@ -9,8 +9,18 @@ describe("Group.create", () => {
     const group = Group.create([offer]);
 
     expect(group.offers).toHaveLength(1);
-    expect(group.offers[0]).toBe(offer);
+    expect(group.offers[0]).not.toBe(offer);
+    expect(group.offers[0]!.group).toBe(group.id);
+    expect(group.offers[0]!.tick).toBe(offer.tick);
     expect(group.id).toBe(GroupUtils.hash([offer]));
+  });
+
+  test("behavior: accepts iterable offer input", () => {
+    const offer = baseOffer({ maxAssets: 0n });
+    const group = Group.create(new Set([offer]));
+
+    expect(group.offers).toHaveLength(1);
+    expect(group.offers[0]!.group).toBe(group.id);
   });
 
   test("behavior: group id is independent of offer order", () => {
@@ -20,17 +30,23 @@ describe("Group.create", () => {
     expect(GroupUtils.hash([first, second])).toBe(
       GroupUtils.hash([second, first]),
     );
-    expect(Group.create([first, second]).offers).toEqual([first, second]);
+    const group = Group.create([first, second]);
+
+    expect(group.offers.map((offer) => offer.tick)).toEqual([
+      first.tick,
+      second.tick,
+    ]);
+    expect(group.offers.every((offer) => offer.group === group.id)).toBe(true);
   });
 
-  test("behavior: group id derives from current offers", () => {
+  test("behavior: group id and offers are stable after construction", () => {
     const offer = baseOffer({ maxAssets: 0n });
     const group = Group.create([offer]);
     const initialId = group.id;
 
     Object.assign(offer, { tick: 5_004n });
 
-    expect(group.id).not.toBe(initialId);
-    expect(group.id).toBe(GroupUtils.hash([offer]));
+    expect(group.id).toBe(initialId);
+    expect(group.offers[0]!.tick).toBe(5_000n);
   });
 });

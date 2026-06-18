@@ -2,24 +2,12 @@ import { type BigIntish, deepFreeze } from "@morpho-org/morpho-ts";
 import { concat, type Hash, keccak256 } from "viem";
 import { InvalidTreeError, InvalidTreeHeightError } from "../errors.js";
 import { type IOffer, type OfferStruct, OfferUtils } from "../offers/index.js";
-import { type GroupInput, GroupUtils } from "./GroupUtils.js";
+import type { GroupInput } from "./GroupUtils.js";
 import { Tree } from "./Tree.js";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 const ZERO_BYTES32 =
   "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
-
-/**
- * Maximum number of non-padding offers committed by one Midnight tree.
- *
- * @example
- * ```ts
- * import { MAX_OFFERS_PER_TREE } from "@morpho-org/midnight-sdk";
- *
- * console.log(MAX_OFFERS_PER_TREE);
- * ```
- */
-export const MAX_OFFERS_PER_TREE = 256;
 
 const EMPTY_OFFER_STRUCT: OfferStruct = {
   market: {
@@ -45,6 +33,8 @@ const EMPTY_OFFER_STRUCT: OfferStruct = {
   maxAssets: 0n,
 };
 
+const EMPTY_OFFER_DEFAULT_GROUP = OfferUtils.hashStruct(EMPTY_OFFER_STRUCT);
+
 function isEmptyOfferStruct(offer: OfferStruct): boolean {
   return (
     offer.market.loanToken === ZERO_ADDRESS &&
@@ -58,7 +48,8 @@ function isEmptyOfferStruct(offer: OfferStruct): boolean {
     offer.start === 0n &&
     offer.expiry === 0n &&
     offer.tick === 0n &&
-    offer.group === ZERO_BYTES32 &&
+    (offer.group === ZERO_BYTES32 ||
+      offer.group === EMPTY_OFFER_DEFAULT_GROUP) &&
     offer.callback === ZERO_ADDRESS &&
     offer.callbackData === "0x" &&
     offer.receiverIfMakerIsSeller === ZERO_ADDRESS &&
@@ -159,8 +150,8 @@ export interface TreeProof {
 /**
  * Rest parameters accepted by {@link Tree.create}.
  *
- * Entries are either explicit groups or standalone offers. Standalone offers
- * are normalized into one-offer groups before leaves are hashed.
+ * Entries are either explicit groups or standalone offers. Explicit groups are
+ * flattened, and standalone offers are hashed with their own group ids.
  *
  * @example
  * ```ts
@@ -253,12 +244,14 @@ export namespace TreeUtils {
    *
    * Use after `Group.create` or standalone `Offer.create` when you need the
    * padded leaves for custom signing, root approval, or proof construction.
+   * Groups are flattened, and each offer is encoded with its own group id.
    * `Tree.create` calls this internally and is the simpler API for most
    * make-side code.
    *
    * @param entries - Groups or standalone offers in leaf order.
    * @returns Tree descriptor.
    * @throws {InvalidTreeError} when the offer count is empty, all padding, or duplicated.
+   * @throws {InvalidTreeHeightError} when the padded tree exceeds supported ratifier typehashes.
    * @example
    * ```ts
    * import { TreeUtils } from "@morpho-org/midnight-sdk";
@@ -268,16 +261,16 @@ export namespace TreeUtils {
    * ```
    */
   export function buildDescriptor(entries: TreeCreateParams): TreeDescriptor {
-    const groups = entries.map((entry) => GroupUtils.normalize(entry));
-    const offers = groups.flatMap((group) => group.offers);
+    const offers = entries.flatMap((entry) =>
+      "offers" in entry ? entry.offers : [entry],
+    );
     if (offers.length === 0) {
       throw new InvalidTreeError("Tree must not be empty.");
     }
-    if (offers.length > MAX_OFFERS_PER_TREE) {
-      throw new InvalidTreeError(`Tree exceeds ${MAX_OFFERS_PER_TREE} offers.`);
-    }
 
-    const offerStructs = padOfferStructs(groups.flatMap(GroupUtils.toStructs));
+    const offerStructs = padOfferStructs(
+      offers.map((offer) => OfferUtils.toStruct({ offer })),
+    );
     assertLeafOffers(offerStructs);
 
     const height = Math.log2(offerStructs.length);
@@ -390,12 +383,12 @@ export namespace TreeUtils {
    */
   export function verifyProof(params: {
     readonly offer: IOffer;
-    readonly group: Hash;
     readonly root: Hash;
     readonly leafIndex: BigIntish;
     readonly proof: readonly Hash[];
   }) {
-    let node = OfferUtils.hash({ offer: params.offer, group: params.group });
+    const offer = OfferUtils.normalizeOffer(params.offer);
+    let node = OfferUtils.hash(offer, offer.group);
     const leafIndex = BigInt(params.leafIndex);
     if (leafIndex < 0n || leafIndex >> BigInt(params.proof.length) !== 0n) {
       return false;

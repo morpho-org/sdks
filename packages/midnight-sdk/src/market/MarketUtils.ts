@@ -18,7 +18,6 @@ import {
   type IMarket,
   type IMarketParams,
   MarketParams,
-  marketParamsAbiParameter,
   type SettlementFeeCbps,
 } from "./Market.js";
 
@@ -41,6 +40,27 @@ const marketHashParams = [
   { name: "enterGate", type: "address" },
   { name: "liquidatorGate", type: "address" },
 ] as const;
+
+const marketParamsAbiParameter = {
+  type: "tuple",
+  components: [
+    { name: "loanToken", type: "address" },
+    {
+      name: "collateralParams",
+      type: "tuple[]",
+      components: [
+        { name: "token", type: "address" },
+        { name: "lltv", type: "uint256" },
+        { name: "maxLif", type: "uint256" },
+        { name: "oracle", type: "address" },
+      ],
+    },
+    { name: "maturity", type: "uint256" },
+    { name: "rcfThreshold", type: "uint256" },
+    { name: "enterGate", type: "address" },
+    { name: "liquidatorGate", type: "address" },
+  ],
+} as const;
 
 type CollateralParamsInput = ICollateralParams | CollateralParams;
 

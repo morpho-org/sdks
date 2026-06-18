@@ -1,12 +1,15 @@
 import type { Hash } from "viem";
-import { type IOffer, type Offer, OfferUtils } from "../offers/index.js";
+import { type IOffer, Offer, OfferUtils } from "../offers/index.js";
 import { GroupUtils, type IGroup } from "./GroupUtils.js";
 
 /**
  * Protocol offer group with one shared consumption group id.
  *
  * Create a group after building related offers and before building the tree to
- * publish. Offers inside one group must share maker, side, and loan token.
+ * publish. Offers inside one group must share maker, side, and loan token. The
+ * constructor hashes every offer to derive the group id, then copies each offer
+ * with that id; group creation is resource-intensive compared to offer
+ * construction.
  *
  * @example
  * ```ts
@@ -19,8 +22,15 @@ import { GroupUtils, type IGroup } from "./GroupUtils.js";
 export class Group implements IGroup {
   private readonly _offers: readonly Offer[];
 
-  private constructor(offers: readonly Offer[]) {
-    this._offers = [...offers];
+  /** Content-addressed group id. */
+  public readonly id: Hash;
+
+  private constructor(offers: Iterable<IOffer>) {
+    const validatedOffers = OfferUtils.validateOfferGroup({ offers });
+    this.id = GroupUtils.hash(validatedOffers);
+    this._offers = validatedOffers.map(
+      (offer) => new Offer({ ...offer, group: this.id }),
+    );
   }
 
   /**
@@ -42,29 +52,15 @@ export class Group implements IGroup {
   }
 
   /**
-   * Content-addressed group id.
-   *
-   * @returns Group id derived from the group's offers.
-   * @example
-   * ```ts
-   * import { Group } from "@morpho-org/midnight-sdk";
-   *
-   * const group = Group.create([{} as never]);
-   * console.log(group.id);
-   * ```
-   */
-  public get id(): Hash {
-    return GroupUtils.hash(this._offers);
-  }
-
-  /**
    * Creates a protocol-valid offer group.
    *
    * Use after `Offer.create` for laddered offers that should consume from one
    * group id. Pass the returned group into `Tree.create` alongside other groups
-   * or standalone offers.
+   * or standalone offers. This hashes every offer and copies the validated
+   * offers into group-owned instances, so it is resource-intensive and should
+   * be done once per group definition.
    *
-   * @param offers - Offers to group.
+   * @param offers - Iterable of offers to group.
    * @returns Group instance.
    * @throws {InvalidOfferGroupError} when group mechanics are invalid.
    * @example
@@ -75,9 +71,7 @@ export class Group implements IGroup {
    * console.log(group.offers.length);
    * ```
    */
-  public static create(offers: readonly IOffer[]): Group {
-    const validatedOffers = OfferUtils.validateOfferGroup({ offers });
-
-    return new Group(validatedOffers);
+  public static create(offers: Iterable<IOffer>): Group {
+    return new Group(offers);
   }
 }

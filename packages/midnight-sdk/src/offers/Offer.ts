@@ -1,6 +1,6 @@
 import type { BigIntish } from "@morpho-org/morpho-ts";
 import type { Address, Hash, Hex } from "viem";
-import { zeroAddress, zeroHash } from "viem";
+import { zeroAddress } from "viem";
 import type { IMarket, IMarketParams, MarketParams } from "../market/index.js";
 import { MarketUtils } from "../market/MarketUtils.js";
 import { OfferUtils } from "./OfferUtils.js";
@@ -12,9 +12,10 @@ import { OfferUtils } from "./OfferUtils.js";
  * flow into `OfferUtils.normalizeOffer`, `Group.create`, `Tree.create`, or
  * take-side conversion helpers. Use {@link Offer.create} instead for new maker
  * offers so deterministic fields are validated before grouping or signing.
- * Unlike the onchain `Offer` struct, this input intentionally has no `group`
- * field: callers should not manage group ids at the offer level, and SDK
- * helpers populate the group only when hashing or ABI encoding requires it.
+ * The `group` field is optional. When omitted, {@link Offer.group} lazily
+ * derives the standalone group id from this offer hashed with the protocol
+ * zero group id. `Group.create` copies offers into a shared group and overrides
+ * this field on the copies it owns.
  *
  * @example
  * ```ts
@@ -57,6 +58,8 @@ export interface IOffer {
   readonly expiry: BigIntish;
   /** Midnight tick. */
   readonly tick: BigIntish;
+  /** Consumption group id; defaults to the offer hash with the zero group id. */
+  readonly group?: Hash;
   /** Optional maker callback. */
   readonly callback: Address;
   /** Callback payload. */
@@ -79,10 +82,10 @@ export interface IOffer {
  * Build new maker offers with {@link Offer.create}, then pass them to
  * `Group.create` for shared-consumption ladders or directly to `Tree.create`
  * for standalone offers. API/take-side code can normalize a plain `IOffer`
- * into this class before ABI encoding. The class omits the onchain `group`
- * field so consumers can work with offers independently; `Offer.hash`,
- * `OfferUtils.toStruct`, and `GroupUtils.toStructs` add the group id at the
- * latest point where the protocol actually needs it.
+ * into this class before ABI encoding. The class resolves the onchain `group`
+ * field lazily. Standalone offers derive their group id from the offer hash
+ * with the zero group id; `Group.create` copies offers and overrides the group
+ * on those copies when several offers share one consumption bucket.
  *
  * @example
  * ```ts
@@ -132,6 +135,10 @@ export class Offer {
   /** Midnight tick. */
   public readonly tick: bigint;
 
+  private cachedGroup: Hash | undefined;
+
+  private cachedHash: Hash | undefined;
+
   /** Optional maker callback. */
   public readonly callback: Address;
 
@@ -160,6 +167,7 @@ export class Offer {
     this.start = BigInt(offer.start);
     this.expiry = BigInt(offer.expiry);
     this.tick = BigInt(offer.tick);
+    this.cachedGroup = offer.group;
     this.callback = offer.callback;
     this.callbackData = offer.callbackData;
     this.receiverIfMakerIsSeller = offer.receiverIfMakerIsSeller;
@@ -170,46 +178,44 @@ export class Offer {
   }
 
   /**
-   * Computes the canonical protocol offer hash for this offer in `group`.
+   * Consumption group id encoded into this offer.
    *
-   * Use this after a standalone offer or {@link Group} has a final group id and
-   * before local proof verification or custom leaf hashing. Omit `group` only
-   * for group id derivation, where the protocol hashes offers with the zero
-   * group id.
+   * When no group id was provided, the value is computed on first access by
+   * hashing this offer with the protocol zero group id. The computed value is
+   * cached because offer hashing is resource-intensive.
    *
-   * @param group - Protocol group id encoded into the offer hash; defaults to zero for group derivation.
+   * @returns Consumption group id.
+   * @example
+   * ```ts
+   * import { Offer } from "@morpho-org/midnight-sdk";
+   *
+   * const offer = Offer.create({} as never);
+   * console.log(offer.group);
+   * ```
+   */
+  public get group(): Hash {
+    this.cachedGroup ??= OfferUtils.hash(this);
+    return this.cachedGroup;
+  }
+
+  /**
+   * Canonical protocol offer hash for this offer.
+   *
+   * The hash includes {@link Offer.group}. It is computed lazily and cached
+   * because hashing includes market hashing and ABI encoding.
+   *
    * @returns Offer hash.
    * @example
    * ```ts
    * import { Offer } from "@morpho-org/midnight-sdk";
    *
    * const offer = Offer.create({} as never);
-   * const hash = offer.hash();
-   * console.log(hash);
+   * console.log(offer.hash);
    * ```
    */
-  public hash(group: Hash = zeroHash): Hash {
-    return OfferUtils.hash({ offer: this, group });
-  }
-
-  /**
-   * Computes this offer's contribution to a content-addressed group id.
-   *
-   * The offer is hashed with `group = 0x00..00`, matching router group id
-   * derivation and avoiding any circular dependency on the final group id.
-   *
-   * @returns Offer hash with the group field zeroed.
-   * @example
-   * ```ts
-   * import { Offer } from "@morpho-org/midnight-sdk";
-   *
-   * const offer = Offer.create({} as never);
-   * const hash = offer.groupHash;
-   * console.log(hash);
-   * ```
-   */
-  public get groupHash(): Hash {
-    return this.hash();
+  public get hash(): Hash {
+    this.cachedHash ??= OfferUtils.hash(this, this.group);
+    return this.cachedHash;
   }
 
   /**
@@ -241,6 +247,7 @@ export class Offer {
       start: validated.start,
       expiry: validated.expiry,
       tick: validated.tick,
+      group: params.group,
       callback: params.callback ?? zeroAddress,
       callbackData: params.callbackData ?? "0x",
       receiverIfMakerIsSeller: validated.receiverIfMakerIsSeller,
@@ -257,7 +264,8 @@ export class Offer {
  *
  * This is the shape consumed by viem encoders, Merkle leaf hashing, payload
  * encoding, and take calldata encoders. Build it with `OfferUtils.toStruct` or
- * `GroupUtils.toStructs` after the group id is known.
+ * `GroupUtils.toStructs`; the group id is read from the offer unless an
+ * explicit override is supplied.
  *
  * @example
  * ```ts
@@ -299,46 +307,6 @@ export interface OfferStruct {
 }
 
 /**
- * @internal ABI parameter components for the canonical Solidity `Offer` tuple.
- */
-export const offerStructAbiComponents = [
-  {
-    name: "market",
-    type: "tuple",
-    components: [
-      { name: "loanToken", type: "address" },
-      {
-        name: "collateralParams",
-        type: "tuple[]",
-        components: [
-          { name: "token", type: "address" },
-          { name: "lltv", type: "uint256" },
-          { name: "maxLif", type: "uint256" },
-          { name: "oracle", type: "address" },
-        ],
-      },
-      { name: "maturity", type: "uint256" },
-      { name: "rcfThreshold", type: "uint256" },
-      { name: "enterGate", type: "address" },
-      { name: "liquidatorGate", type: "address" },
-    ],
-  },
-  { name: "buy", type: "bool" },
-  { name: "maker", type: "address" },
-  { name: "start", type: "uint256" },
-  { name: "expiry", type: "uint256" },
-  { name: "tick", type: "uint256" },
-  { name: "group", type: "bytes32" },
-  { name: "callback", type: "address" },
-  { name: "callbackData", type: "bytes" },
-  { name: "receiverIfMakerIsSeller", type: "address" },
-  { name: "ratifier", type: "address" },
-  { name: "reduceOnly", type: "bool" },
-  { name: "maxUnits", type: "uint256" },
-  { name: "maxAssets", type: "uint256" },
-] as const;
-
-/**
  * Parameters for {@link Offer.create}.
  *
  * These are make-side parameters entered by a maker or order-management app
@@ -361,6 +329,8 @@ export interface BuildOfferParams {
   readonly maker: Address;
   /** Tick. */
   readonly tick: BigIntish;
+  /** Consumption group id; defaults to the offer hash with the zero group id. */
+  readonly group?: Hash;
   /** Market tick spacing; defaults to the protocol's default spacing. */
   readonly tickSpacing?: BigIntish;
   /** Maximum units; defaults to zero. Exactly one of `maxUnits` and `maxAssets` must be non-zero. */

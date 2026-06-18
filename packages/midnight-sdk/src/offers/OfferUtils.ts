@@ -1,6 +1,6 @@
 import type { BigIntish } from "@morpho-org/morpho-ts";
 import type { Address, Hash } from "viem";
-import { encodeAbiParameters, keccak256, zeroAddress } from "viem";
+import { encodeAbiParameters, keccak256, zeroAddress, zeroHash } from "viem";
 import {
   DEFAULT_TICK_SPACING,
   MAX_TICK,
@@ -48,48 +48,36 @@ const offerHashParams = [
  * ```ts
  * import type { ValidateOfferGroupParams } from "@morpho-org/midnight-sdk";
  *
- * const params = {} as ValidateOfferGroupParams;
- * console.log(params.offers.length);
+ * const params = { offers: [] } as ValidateOfferGroupParams;
+ * console.log(Array.from(params.offers).length);
  * ```
  */
 export interface ValidateOfferGroupParams {
   /** Offers to validate as one protocol consumption group. */
-  readonly offers: readonly IOffer[];
+  readonly offers: Iterable<IOffer>;
 }
 
 /**
  * Parameters for {@link OfferUtils.toStruct}.
  *
- * Supply the group id produced by `Group.create` or `GroupUtils.hash` before
- * ABI encoding, hashing, payload encoding, or take calldata construction.
+ * The group id is read from the offer by default. Supply `group` only when a
+ * caller intentionally needs to hash or encode the same offer with an override,
+ * such as deriving a group id from an offer hashed with the zero group id.
  *
  * @example
  * ```ts
  * import type { OfferStructParams } from "@morpho-org/midnight-sdk";
  *
  * const params = {} as OfferStructParams;
- * console.log(params.group);
+ * console.log(params.offer);
  * ```
  */
 export interface OfferStructParams {
   /** Offer to encode. */
   readonly offer: IOffer;
-  /** Protocol group id encoded into the ABI offer. */
-  readonly group: Hash;
+  /** Optional protocol group id override encoded into the ABI offer. */
+  readonly group?: Hash;
 }
-
-/**
- * Parameters for {@link OfferUtils.hash}.
- *
- * @example
- * ```ts
- * import type { HashOfferParams } from "@morpho-org/midnight-sdk";
- *
- * const params = {} as HashOfferParams;
- * console.log(params.group);
- * ```
- */
-export interface HashOfferParams extends OfferStructParams {}
 
 /**
  * Deterministic make-offer parameters after protocol validation.
@@ -160,16 +148,16 @@ export namespace OfferUtils {
   /**
    * Converts an offer into the tuple object expected by viem ABI encoders.
    *
-   * Use after a group id is known. This is the bridge from SDK/domain objects
+   * This is the bridge from SDK/domain objects
    * into Merkle leaf hashing, payload items, and take calldata encoding.
    *
-   * @param params - Offer class or plain input plus the protocol group id.
+   * @param params - Offer class or plain input plus an optional group id override.
    * @returns ABI-compatible offer.
    * @example
    * ```ts
    * import { OfferUtils } from "@morpho-org/midnight-sdk";
    *
-   * const struct = OfferUtils.toStruct({ offer: {} as never, group: "0x00" as never });
+   * const struct = OfferUtils.toStruct({ offer: {} as never });
    * console.log(struct.tick);
    * ```
    */
@@ -183,7 +171,7 @@ export namespace OfferUtils {
       start: normalizedOffer.start,
       expiry: normalizedOffer.expiry,
       tick: normalizedOffer.tick,
-      group: params.group,
+      group: params.group ?? normalizedOffer.group,
       callback: normalizedOffer.callback,
       callbackData: normalizedOffer.callbackData,
       receiverIfMakerIsSeller: normalizedOffer.receiverIfMakerIsSeller,
@@ -199,7 +187,7 @@ export namespace OfferUtils {
    *
    * Use when you already have an `OfferStruct`, for example from
    * `GroupUtils.toStructs`, `TreeUtils.buildDescriptor`, or decoded payload
-   * bytes. Use `hash` when you still have an `Offer` plus a group id.
+   * bytes. Use `hash` when you still have an `Offer` or plain offer input.
    *
    * @param offerStruct - ABI-compatible offer to hash.
    * @returns Offer hash.
@@ -236,22 +224,23 @@ export namespace OfferUtils {
   /**
    * Computes the canonical protocol offer hash.
    *
-   * Use after `Group.create` has produced the group id for a published offer.
-   * For content-addressed group derivation, call `offer.groupHash` or
-   * `GroupUtils.hash`, which intentionally hash with the zero group id.
+   * The group defaults to the protocol zero hash. Pass a group id when hashing
+   * a final tree leaf or payload offer.
    *
-   * @param params - Offer and protocol group id to hash.
+   * @param offer - Offer to hash.
+   * @param group - Protocol group id encoded into the hash.
    * @returns Offer hash.
    * @example
    * ```ts
    * import { OfferUtils } from "@morpho-org/midnight-sdk";
    *
-   * const hash = OfferUtils.hash({ offer: {} as never, group: "0x00" as never });
+   * const offer = {} as never;
+   * const hash = OfferUtils.hash(offer);
    * console.log(hash);
    * ```
    */
-  export function hash(params: HashOfferParams): Hash {
-    return hashStruct(toStruct(params));
+  export function hash(offer: IOffer, group: Hash = zeroHash): Hash {
+    return hashStruct(toStruct({ offer, group }));
   }
 
   /**
@@ -492,13 +481,14 @@ export namespace OfferUtils {
   export function validateOfferGroup(
     params: ValidateOfferGroupParams,
   ): readonly Offer[] {
-    if (params.offers.length === 0) {
+    const offerInputs = Array.from(params.offers);
+    if (offerInputs.length === 0) {
       throw new InvalidOfferGroupError(
         "Provide at least one offer in the group.",
       );
     }
 
-    const offers = params.offers.map((offer) => normalizeOffer(offer));
+    const offers = offerInputs.map((offer) => normalizeOffer(offer));
     const first = offers[0]!;
 
     if (

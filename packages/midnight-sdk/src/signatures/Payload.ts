@@ -2,16 +2,13 @@ import {
   bytesToHex,
   decodeAbiParameters,
   encodeAbiParameters,
-  type Hash,
   type Hex,
   hexToBytes,
 } from "viem";
 
 import { MAX_COLLATERALS, MAX_TICK } from "../constants.js";
 import { MarketUtils } from "../market/index.js";
-import { type IOffer, OfferUtils } from "../offers/index.js";
-import { type OfferStruct, offerStructAbiComponents } from "../offers/Offer.js";
-import { MAX_OFFERS_PER_TREE } from "./TreeUtils.js";
+import { type IOffer, type OfferStruct, OfferUtils } from "../offers/index.js";
 
 /**
  * Raw onchain mempool payload bytes.
@@ -49,7 +46,6 @@ export type Payload = Hex;
  *
  * const item: Payload.Item = {
  *   offer: {} as never,
- *   group: "0x1111111111111111111111111111111111111111111111111111111111111111",
  *   ratifierData: "0x",
  * };
  * console.log(item.ratifierData);
@@ -58,8 +54,6 @@ export type Payload = Hex;
 export type Item = {
   /** Maker-side offer carried by the payload. */
   readonly offer: IOffer;
-  /** Protocol group id encoded into the offer. */
-  readonly group: Hash;
   /** Opaque ratifier data passed to `Midnight.take`. */
   readonly ratifierData: Hex;
 };
@@ -209,11 +203,48 @@ export type DecodeTimings = {
  * ```
  */
 export type DecodeOptions = {
-  /** Optional item cap, bounded above by the protocol tree limit. */
+  /** Optional caller-provided item cap. */
   readonly maxItems?: number;
   /** Optional mutable timing buckets updated by `decode`. */
   readonly timings?: DecodeTimings;
 };
+
+const offerStructAbiComponents = [
+  {
+    name: "market",
+    type: "tuple",
+    components: [
+      { name: "loanToken", type: "address" },
+      {
+        name: "collateralParams",
+        type: "tuple[]",
+        components: [
+          { name: "token", type: "address" },
+          { name: "lltv", type: "uint256" },
+          { name: "maxLif", type: "uint256" },
+          { name: "oracle", type: "address" },
+        ],
+      },
+      { name: "maturity", type: "uint256" },
+      { name: "rcfThreshold", type: "uint256" },
+      { name: "enterGate", type: "address" },
+      { name: "liquidatorGate", type: "address" },
+    ],
+  },
+  { name: "buy", type: "bool" },
+  { name: "maker", type: "address" },
+  { name: "start", type: "uint256" },
+  { name: "expiry", type: "uint256" },
+  { name: "tick", type: "uint256" },
+  { name: "group", type: "bytes32" },
+  { name: "callback", type: "address" },
+  { name: "callbackData", type: "bytes" },
+  { name: "receiverIfMakerIsSeller", type: "address" },
+  { name: "ratifier", type: "address" },
+  { name: "reduceOnly", type: "bool" },
+  { name: "maxUnits", type: "uint256" },
+  { name: "maxAssets", type: "uint256" },
+] as const;
 
 const itemsAbi = [
   {
@@ -241,14 +272,14 @@ const itemsAbi = [
  * `MidnightApi.validateMempoolPayload` or an onchain mempool submission.
  *
  * @param items - Per-leaf items in the order the maker committed to. Must
- *   contain at least one item and at most the tree offer limit.
+ *   contain at least one item and fit within payload byte-size limits.
  * @returns The encoded payload as a hex string.
- * @throws {DecodeError} when the item count or encoded size exceeds protocol limits.
+ * @throws {DecodeError} when the item list is empty or encoded size exceeds SDK byte-size limits.
  * @example
  * ```ts
  * import { Payload } from "@morpho-org/midnight-sdk";
  *
- * const encoded = await Payload.encode([{ offer: {} as never, group: "0x00" as never, ratifierData: "0x" }]);
+ * const encoded = await Payload.encode([{ offer: {} as never, ratifierData: "0x" }]);
  * console.log(encoded);
  * ```
  */
@@ -256,9 +287,9 @@ export async function encode(items: readonly Item[]): Promise<Payload> {
   if (CURRENT_VERSION > 0xff) {
     throw new DecodeError(`version overflow: ${CURRENT_VERSION} exceeds 255`);
   }
-  assertItemCountWithinLimit(items.length);
+  assertNonEmptyItemCount(items.length);
   const payloadItems = items.map((item) => {
-    const offer = OfferUtils.toStruct({ offer: item.offer, group: item.group });
+    const offer = OfferUtils.toStruct({ offer: item.offer });
     assertApiValidOfferStruct(offer);
     return {
       offer,
@@ -350,7 +381,7 @@ export async function decode(
   });
 
   const abiItemCountStartedAtMs = startDecodeTiming(timings);
-  assertAbiItemCountWithinLimit(decoded, maxItems);
+  assertAbiItemCountWithinCallerLimit(decoded, maxItems);
   finishDecodeTiming({
     timings,
     key: "abiItemCountMs",
@@ -364,7 +395,8 @@ export async function decode(
     key: "itemsDecodeMs",
     startedAtMs: itemsDecodeStartedAtMs,
   });
-  assertItemCountWithinLimit(items.length, maxItems);
+  assertNonEmptyItemCount(items.length);
+  assertCallerItemCountLimit(items.length, maxItems);
 
   const canonicalEncodeStartedAtMs = startDecodeTiming(timings);
   assertCanonicalItemsBytes(items, decoded);
@@ -391,7 +423,6 @@ function decodeItemsBytes(decoded: Uint8Array): Item[] {
       assertApiValidOfferStruct(entry.offer);
       return {
         offer: OfferUtils.normalizeOffer(entry.offer),
-        group: entry.offer.group,
         ratifierData: entry.ratifierData,
       };
     });
@@ -410,7 +441,7 @@ function assertCanonicalItemsBytes(
 ): void {
   const canonical = encodeAbiParameters(itemsAbi, [
     items.map((item) => ({
-      offer: OfferUtils.toStruct({ offer: item.offer, group: item.group }),
+      offer: OfferUtils.toStruct({ offer: item.offer }),
       ratifierData: item.ratifierData,
     })),
   ]);
@@ -542,22 +573,26 @@ function finishDecodeTiming(params: {
   params.timings[params.key] += performance.now() - params.startedAtMs;
 }
 
-function resolveMaxItems(maxItems: number | undefined): number {
-  if (maxItems === undefined) return MAX_OFFERS_PER_TREE;
+function resolveMaxItems(maxItems: number | undefined): number | undefined {
+  if (maxItems === undefined) return undefined;
   if (!Number.isInteger(maxItems) || maxItems < 1) {
     throw new DecodeError(
       `maxItems must be a positive integer: got ${maxItems}`,
     );
   }
 
-  return Math.min(maxItems, MAX_OFFERS_PER_TREE);
+  return maxItems;
 }
 
-function assertItemCountWithinLimit(
-  count: number,
-  maxItems = MAX_OFFERS_PER_TREE,
-): void {
+function assertNonEmptyItemCount(count: number): void {
   if (count === 0) throw new DecodeError("items payload is empty");
+}
+
+function assertCallerItemCountLimit(
+  count: number,
+  maxItems: number | undefined,
+): void {
+  if (maxItems === undefined) return;
   if (count > maxItems) {
     throw new DecodeError(`items payload exceeds ${maxItems} items`);
   }
@@ -643,13 +678,14 @@ function singleChunkStream(bytes: Uint8Array): ReadableStream<BufferSource> {
   });
 }
 
-function assertAbiItemCountWithinLimit(
+function assertAbiItemCountWithinCallerLimit(
   decoded: Uint8Array,
-  maxItems: number,
+  maxItems: number | undefined,
 ): void {
   if (decoded.length < ABI_ARRAY_HEAD_BYTES) {
     throw new DecodeError("items payload truncated before ABI array head");
   }
+  if (maxItems === undefined) return;
 
   for (let i = 32; i < ABI_LENGTH_LOW_OFFSET; i++) {
     if (decoded[i] !== 0) {

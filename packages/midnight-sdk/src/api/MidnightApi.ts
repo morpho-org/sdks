@@ -440,7 +440,7 @@ export class MidnightApi {
    *
    * const validation = await MidnightApi.validateMempoolItems({
    *   chainId: 8453,
-   *   items: [{ offer: {} as never, group: "0x00" as never, ratifierData: "0x" }],
+   *   items: [{ offer: {} as never, ratifierData: "0x" }],
    * });
    * console.log(validation.valid);
    * ```
@@ -497,13 +497,10 @@ export class MidnightApi {
       request: input.request,
       chainId: input.chainId,
       timestamp: input.timestamp,
-      items: tree.groups.flatMap((group) =>
-        group.offers.map((offer) => ({
-          offer,
-          group: group.id,
-          ratifierData: "0x" as const,
-        })),
-      ),
+      items: tree.offers.map((offer) => ({
+        offer,
+        ratifierData: "0x" as const,
+      })),
     });
   }
 
@@ -754,7 +751,7 @@ export class MidnightApi {
    * const api = new MidnightApi();
    * const validation = await api.validateMempoolItems({
    *   chainId: 8453,
-   *   items: [{ offer: {} as never, group: "0x00" as never, ratifierData: "0x" }],
+   *   items: [{ offer: {} as never, ratifierData: "0x" }],
    * });
    * console.log(validation.valid);
    * ```

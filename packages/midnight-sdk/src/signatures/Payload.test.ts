@@ -15,12 +15,47 @@ import {
   group,
 } from "../__test__/fixtures.js";
 import { type IOffer, type OfferStruct, OfferUtils } from "../offers/index.js";
-import { offerStructAbiComponents } from "../offers/Offer.js";
 import * as Payload from "./Payload.js";
 import { MAX_ATTRIBUTION_SUFFIX_BYTES } from "./Payload.js";
-import { MAX_OFFERS_PER_TREE } from "./TreeUtils.js";
 
 const API_VALID_MATURITY = 1_767_279_600n;
+
+const offerStructAbiComponents = [
+  {
+    name: "market",
+    type: "tuple",
+    components: [
+      { name: "loanToken", type: "address" },
+      {
+        name: "collateralParams",
+        type: "tuple[]",
+        components: [
+          { name: "token", type: "address" },
+          { name: "lltv", type: "uint256" },
+          { name: "maxLif", type: "uint256" },
+          { name: "oracle", type: "address" },
+        ],
+      },
+      { name: "maturity", type: "uint256" },
+      { name: "rcfThreshold", type: "uint256" },
+      { name: "enterGate", type: "address" },
+      { name: "liquidatorGate", type: "address" },
+    ],
+  },
+  { name: "buy", type: "bool" },
+  { name: "maker", type: "address" },
+  { name: "start", type: "uint256" },
+  { name: "expiry", type: "uint256" },
+  { name: "tick", type: "uint256" },
+  { name: "group", type: "bytes32" },
+  { name: "callback", type: "address" },
+  { name: "callbackData", type: "bytes" },
+  { name: "receiverIfMakerIsSeller", type: "address" },
+  { name: "ratifier", type: "address" },
+  { name: "reduceOnly", type: "bool" },
+  { name: "maxUnits", type: "uint256" },
+  { name: "maxAssets", type: "uint256" },
+] as const;
 
 const itemsAbi = [
   {
@@ -68,24 +103,22 @@ async function encodeUncheckedPayload(
 
 describe("Payload.encode", () => {
   test("default", async () => {
-    const offer = apiValidOffer();
+    const offer = apiValidOffer({ group });
     const encoded = await Payload.encode([
-      { offer, group, ratifierData: "0x1234" as Hex },
+      { offer, ratifierData: "0x1234" as Hex },
     ]);
 
     const decoded = await Payload.decode(encoded);
 
     expect(decoded).toHaveLength(1);
-    expect(decoded[0]!.group).toBe(group);
+    expect(decoded[0]!.offer.group).toBe(group);
     expect(
       OfferUtils.toStruct({
         offer: decoded[0]!.offer,
-        group: decoded[0]!.group,
       }),
     ).toEqual(
       OfferUtils.toStruct({
         offer,
-        group,
       }),
     );
     expect(decoded[0]!.ratifierData).toBe("0x1234");
@@ -97,18 +130,17 @@ describe("Payload.encode", () => {
     );
   });
 
-  test("error: item count cap", async () => {
+  test("behavior: does not enforce router item-count policy", async () => {
     const item = {
-      offer: apiValidOffer(),
-      group,
+      offer: apiValidOffer({ group }),
       ratifierData: "0x1234" as Hex,
     };
 
-    await expect(
-      Payload.encode(
-        Array.from({ length: MAX_OFFERS_PER_TREE + 1 }, () => item),
-      ),
-    ).rejects.toBeInstanceOf(Payload.DecodeError);
+    const encoded = await Payload.encode(
+      Array.from({ length: 257 }, () => item),
+    );
+
+    await expect(Payload.decode(encoded)).resolves.toHaveLength(257);
   });
 
   test("error: API-invalid offer", async () => {
@@ -116,7 +148,6 @@ describe("Payload.encode", () => {
       Payload.encode([
         {
           offer: apiValidOffer({ expiry: API_VALID_MATURITY + 60n }),
-          group,
           ratifierData: "0x1234" as Hex,
         },
       ]),
@@ -127,7 +158,7 @@ describe("Payload.encode", () => {
 describe("Payload.decode", () => {
   test("behavior: ignores small attribution suffix", async () => {
     const encoded = await Payload.encode([
-      { offer: apiValidOffer(), group, ratifierData: "0x1234" as Hex },
+      { offer: apiValidOffer({ group }), ratifierData: "0x1234" as Hex },
     ]);
     const tagged = concat([encoded, "0xff"]);
 
@@ -138,7 +169,7 @@ describe("Payload.decode", () => {
 
   test("behavior: records decode timings", async () => {
     const encoded = await Payload.encode([
-      { offer: apiValidOffer(), group, ratifierData: "0x1234" as Hex },
+      { offer: apiValidOffer({ group }), ratifierData: "0x1234" as Hex },
     ]);
     const timings: Payload.DecodeTimings = {
       hexToBytesMs: 0,
@@ -165,7 +196,7 @@ describe("Payload.decode", () => {
 
   test("error: invalid version", async () => {
     const encoded = await Payload.encode([
-      { offer: apiValidOffer(), group, ratifierData: "0x1234" as Hex },
+      { offer: apiValidOffer({ group }), ratifierData: "0x1234" as Hex },
     ]);
     const bytes = hexToBytes(encoded);
     bytes[0] = Payload.CURRENT_VERSION + 1;
@@ -177,7 +208,7 @@ describe("Payload.decode", () => {
 
   test("error: truncated gzip stream", async () => {
     const encoded = await Payload.encode([
-      { offer: apiValidOffer(), group, ratifierData: "0x1234" as Hex },
+      { offer: apiValidOffer({ group }), ratifierData: "0x1234" as Hex },
     ]);
     const bytes = hexToBytes(encoded);
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -191,7 +222,7 @@ describe("Payload.decode", () => {
 
   test("error: attribution suffix cap", async () => {
     const encoded = await Payload.encode([
-      { offer: apiValidOffer(), group, ratifierData: "0x1234" as Hex },
+      { offer: apiValidOffer({ group }), ratifierData: "0x1234" as Hex },
     ]);
     const suffix = bytesToHex(
       new Uint8Array(MAX_ATTRIBUTION_SUFFIX_BYTES + 1).fill(255),
@@ -204,8 +235,8 @@ describe("Payload.decode", () => {
 
   test("error: maxItems option", async () => {
     const encoded = await Payload.encode([
-      { offer: apiValidOffer(), group, ratifierData: "0x1234" as Hex },
-      { offer: apiValidOffer(), group, ratifierData: "0x5678" as Hex },
+      { offer: apiValidOffer({ group }), ratifierData: "0x1234" as Hex },
+      { offer: apiValidOffer({ group }), ratifierData: "0x5678" as Hex },
     ]);
 
     await expect(
@@ -222,8 +253,10 @@ describe("Payload.decode", () => {
   test("error: API-invalid offer bytes", async () => {
     const encoded = await encodeUncheckedPayload(
       OfferUtils.toStruct({
-        offer: apiValidOffer({ expiry: API_VALID_MATURITY + 60n }),
-        group,
+        offer: apiValidOffer({
+          expiry: API_VALID_MATURITY + 60n,
+          group,
+        }),
       }),
     );
 
@@ -233,7 +266,7 @@ describe("Payload.decode", () => {
   });
 
   test("error: too many collateral params", async () => {
-    const offer = OfferUtils.toStruct({ offer: apiValidOffer(), group });
+    const offer = OfferUtils.toStruct({ offer: apiValidOffer({ group }) });
     const encoded = await encodeUncheckedPayload({
       ...offer,
       market: {

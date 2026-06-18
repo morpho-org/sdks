@@ -1,7 +1,6 @@
 import type { BigIntish } from "@morpho-org/morpho-ts";
 import type { Hash } from "viem";
-import type { IOffer, OfferStruct } from "../offers/index.js";
-import { GroupUtils, type IGroup } from "./GroupUtils.js";
+import { Offer, type OfferStruct } from "../offers/index.js";
 import {
   type TreeCreateParams,
   type TreeProof,
@@ -31,11 +30,8 @@ export type {
  * ```
  */
 export class Tree {
-  /** Groups committed to the tree. */
-  public readonly groups: readonly IGroup[];
-
   /** Non-padding offers in leaf order. */
-  public readonly offers: readonly IOffer[];
+  public readonly offers: readonly Offer[];
 
   /** ABI-compatible offers in leaf order, including protocol-zero padding. */
   public readonly paddedOffers: readonly OfferStruct[];
@@ -49,11 +45,12 @@ export class Tree {
   /** Tree height. */
   public readonly height: number;
 
-  private constructor(groups: readonly IGroup[]) {
-    this.groups = [...groups];
-    this.offers = groups.flatMap((group) => group.offers);
+  private constructor(params: TreeCreateParams) {
+    this.offers = params
+      .flatMap((entry) => ("offers" in entry ? entry.offers : [entry]))
+      .map((offer) => new Offer(offer));
 
-    const descriptor = TreeUtils.buildDescriptor(this.groups);
+    const descriptor = TreeUtils.buildDescriptor(this.offers);
     this.paddedOffers = descriptor.offers;
     this.leaves = descriptor.leaves;
     this.root = descriptor.root;
@@ -65,7 +62,8 @@ export class Tree {
    *
    * Use after `Offer.create` and optional `Group.create`, before
    * `MidnightApi.validateMempoolTree`, `EcrecoverRatifierUtils.ratify`, or
-   * `SetterRatifierUtils.ratify`.
+   * `SetterRatifierUtils.ratify`. Groups are flattened; the tree hashes each
+   * offer with the group id already stored on the offer.
    *
    * @param params - Groups or standalone offers in leaf order.
    * @returns Tree instance.
@@ -80,7 +78,7 @@ export class Tree {
    * ```
    */
   public static create(...params: TreeCreateParams): Tree {
-    return new Tree(params.map((entry) => GroupUtils.normalize(entry)));
+    return new Tree(params);
   }
 
   /**

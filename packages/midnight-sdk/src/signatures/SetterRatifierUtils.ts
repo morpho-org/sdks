@@ -175,17 +175,14 @@ export namespace SetterRatifierUtils {
   }): readonly PayloadItem[] {
     const items: PayloadItem[] = [];
 
-    for (const group of params.tree.groups) {
-      for (const offer of group.offers) {
-        items.push({
-          offer,
-          group: group.id,
-          ratifierData: ratifierData({
-            tree: params.tree,
-            leafIndex: items.length,
-          }),
-        });
-      }
+    for (const offer of params.tree.offers) {
+      items.push({
+        offer,
+        ratifierData: ratifierData({
+          tree: params.tree,
+          leafIndex: items.length,
+        }),
+      });
     }
 
     return items;

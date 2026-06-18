@@ -20,11 +20,10 @@ describe("SetterRatifierUtils.ratify", () => {
     );
 
     expect(items).toHaveLength(1);
-    expect(items[0]!.offer).toBe(offer);
+    expect(items[0]!.offer).toBe(tree.offers[0]);
     expect(
       TreeUtils.verifyProof({
-        offer,
-        group: items[0]!.group,
+        offer: items[0]!.offer,
         root: decoded.root,
         leafIndex: decoded.leafIndex,
         proof: decoded.proof,
