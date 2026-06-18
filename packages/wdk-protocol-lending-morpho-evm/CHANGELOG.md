@@ -1,5 +1,26 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
+## 0.0.6
+
+### Patch Changes
+
+- [#752](https://github.com/morpho-org/sdks/pull/752) [`229fa2e`](https://github.com/morpho-org/sdks/commit/229fa2ed33e2a55fc597dca96220ec4666fc481c) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Add Morph and MegaETH chain metadata, deployment addresses, deployment block lower bounds, and wrapped-native mappings.
+
+  Patch maintained packages that depend directly on `@morpho-org/blue-sdk` so their latest releases resolve the new address registry.
+
+- [#767](https://github.com/morpho-org/sdks/pull/767) [`ce4f5dc`](https://github.com/morpho-org/sdks/commit/ce4f5dc855b3d28d5d5f4f9857e6a7b0670fdb59) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Track the `morpho-sdk` `MarketV1` → `Blue` rename: the internal Morpho market entity is now obtained via `client.blue(...)` instead of `client.marketV1(...)`. No public API change.
+
+- [#763](https://github.com/morpho-org/sdks/pull/763) [`d79a788`](https://github.com/morpho-org/sdks/commit/d79a7884bdf7a7eed7c38efa4e8456b859e2bc4f) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Consume `@morpho-org/morpho-sdk` through the viem extension (`client.extend(morphoViemExtension(...)).morpho`) instead of the removed `MorphoClient` class. No change to the protocol adapter's public behavior.
+
+- [#782](https://github.com/morpho-org/sdks/pull/782) [`bb82f64`](https://github.com/morpho-org/sdks/commit/bb82f6488986e91b228469dca12444a962922c84) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Refresh direct runtime dependencies as part of the weekly SDK dependency update.
+
+  Updated the WDK wallet/runtime dependencies for `@morpho-org/wdk-protocol-lending-morpho-evm`. Peer dependency ranges did not require widening for the updated devDependencies. Deprecated packages stayed frozen. The Biome schema was synchronized with the updated Biome devDependency, and checksum-address lint refreshed `@morpho-org/blue-sdk-viem` source examples for the updated `viem` checksum output.
+
+- Updated dependencies [[`229fa2e`](https://github.com/morpho-org/sdks/commit/229fa2ed33e2a55fc597dca96220ec4666fc481c), [`ce4f5dc`](https://github.com/morpho-org/sdks/commit/ce4f5dc855b3d28d5d5f4f9857e6a7b0670fdb59), [`d79a788`](https://github.com/morpho-org/sdks/commit/d79a7884bdf7a7eed7c38efa4e8456b859e2bc4f), [`fab0186`](https://github.com/morpho-org/sdks/commit/fab018666faef372a7f695edcd4b54e658f73118), [`bb82f64`](https://github.com/morpho-org/sdks/commit/bb82f6488986e91b228469dca12444a962922c84)]:
+  - @morpho-org/blue-sdk@6.2.0
+  - @morpho-org/morpho-sdk@4.0.0
+  - @morpho-org/blue-sdk-viem@5.1.1
+
 ## 0.0.5
 
 ### Patch Changes
