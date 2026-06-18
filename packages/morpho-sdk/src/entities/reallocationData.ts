@@ -574,9 +574,9 @@ export class ReallocationData implements InputReallocationData {
    * ```
    */
   // biome-ignore lint/complexity/useMaxParams: (marketId, targetUtilization, options) is the metric's public API
-  public getAvailableLiquidityToTargetUtilization(
+  public getAvailableLiquidityToUtilization(
     marketId: MarketId,
-    targetUtilization: bigint = DEFAULT_SUPPLY_TARGET_UTILIZATION,
+    utilization: bigint = DEFAULT_SUPPLY_TARGET_UTILIZATION,
     options?: ReallocationComputeOptions,
   ): bigint {
     const market = this.getMarket(marketId).accrueInterest(options?.timestamp);
