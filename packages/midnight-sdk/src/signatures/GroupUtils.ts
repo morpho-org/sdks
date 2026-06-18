@@ -109,7 +109,7 @@ export namespace GroupUtils {
       );
     }
 
-    const offerHashes = offerInputs.map((offer) => OfferUtils.hash(offer));
+    const offerHashes = offerInputs.map((offer) => OfferUtils.groupHash(offer));
     const sorted =
       offerHashes.length > 1 ? [...offerHashes].sort() : offerHashes;
 

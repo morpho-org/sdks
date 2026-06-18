@@ -21,6 +21,9 @@ import {
  *
  * The Solidity storage getter does not return the fixed collateral array, so
  * this helper reads each collateral slot before returning the position.
+ * The deployless path is used by default. If deployless is disabled or
+ * unavailable, the direct fallback can fan out to 130 RPC calls unless the viem
+ * client has `batch.multicall` enabled.
  *
  * @param client - Viem client used for the reads.
  * @param params - Fetch parameters.

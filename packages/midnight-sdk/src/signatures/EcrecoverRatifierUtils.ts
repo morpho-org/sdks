@@ -11,7 +11,7 @@ import {
   type Signature,
 } from "viem";
 import { EIP712_DOMAIN_TYPEHASH } from "../constants.js";
-import { InvalidTreeHeightError } from "../errors.js";
+import { InvalidTreeError, InvalidTreeHeightError } from "../errors.js";
 import type { OfferStruct } from "../offers/index.js";
 import type { Item as PayloadItem } from "./Payload.js";
 import type { Tree } from "./Tree.js";
@@ -110,6 +110,26 @@ const buildTreeValue = (offers: readonly OfferStruct[]): unknown => {
     buildTreeValue(offers.slice(0, mid)),
     buildTreeValue(offers.slice(mid)),
   ];
+};
+
+const getTreeRatifier = (tree: Tree): Address => {
+  const offers = tree.offers;
+  const firstOffer = offers[0];
+  if (firstOffer == null) {
+    throw new InvalidTreeError("Tree must contain at least one offer.");
+  }
+
+  const ratifier = firstOffer.ratifier;
+  const comparableRatifier = ratifier.toLowerCase();
+  for (const offer of offers.slice(1)) {
+    if (offer.ratifier.toLowerCase() !== comparableRatifier) {
+      throw new InvalidTreeError(
+        `All offers in an Ecrecover tree must use one ratifier; expected "${ratifier}", got "${offer.ratifier}". Build separate trees per ratifier.`,
+      );
+    }
+  }
+
+  return ratifier;
 };
 
 /**
@@ -215,8 +235,6 @@ export interface EcrecoverRatifierTypedDataParams {
   readonly tree: Tree;
   /** Chain id used by the EIP-712 domain. */
   readonly chainId: BigIntish;
-  /** EcrecoverRatifier contract address used by the EIP-712 domain. */
-  readonly verifyingContract: Address;
 }
 
 /**
@@ -249,8 +267,6 @@ export type EcrecoverRatifierRatifyParams =
       readonly signTypedData?: undefined;
       /** Omit when a precomputed signature is supplied. */
       readonly chainId?: undefined;
-      /** Omit when a precomputed signature is supplied. */
-      readonly verifyingContract?: undefined;
     };
 
 /**
@@ -313,11 +329,13 @@ export namespace EcrecoverRatifierUtils {
    * Builds EcrecoverRatifier typed data for a tree.
    *
    * Use after the tree is built and validated, before requesting the maker's
-   * wallet signature. `ratify` calls this for you when given `signTypedData`.
+   * wallet signature. The EIP-712 verifier is derived from the shared ratifier
+   * address on the tree offers. `ratify` calls this for you when given
+   * `signTypedData`.
    *
    * @param params - Typed-data parameters.
    * @returns EIP-712 typed-data descriptor.
-   * @throws {InvalidTreeError} when the tree is invalid.
+   * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree height is unsupported.
    * @example
    * ```ts
@@ -326,7 +344,6 @@ export namespace EcrecoverRatifierUtils {
    * const typedData = EcrecoverRatifierUtils.typedData({
    *   tree: Tree.create({} as never),
    *   chainId: 8453n,
-   *   verifyingContract: "0x0000000000000000000000000000000000000001",
    * });
    * console.log(typedData.primaryType);
    * ```
@@ -334,6 +351,7 @@ export namespace EcrecoverRatifierUtils {
   export function typedData(
     params: EcrecoverRatifierTypedDataParams,
   ): EcrecoverRatificationTypedData {
+    const verifyingContract = getTreeRatifier(params.tree);
     const treeType =
       params.tree.height === 0
         ? "Offer"
@@ -342,7 +360,7 @@ export namespace EcrecoverRatifierUtils {
     return deepFreeze({
       domain: {
         chainId: BigInt(params.chainId),
-        verifyingContract: params.verifyingContract,
+        verifyingContract,
       },
       types: {
         ...typedDataTypes,
@@ -360,37 +378,32 @@ export namespace EcrecoverRatifierUtils {
    *
    * @param params - Digest parameters.
    * @returns EIP-712 digest.
+   * @throws {InvalidTreeError} when the tree contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when height exceeds 20.
    * @example
    * ```ts
-   * import { EcrecoverRatifierUtils } from "@morpho-org/midnight-sdk";
+   * import { EcrecoverRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
    *
    * const digest = EcrecoverRatifierUtils.digest({
-   *   root: "0x0000000000000000000000000000000000000000000000000000000000000000",
-   *   height: 0,
+   *   tree: Tree.create({} as never),
    *   chainId: 8453n,
-   *   verifyingContract: "0x0000000000000000000000000000000000000001",
    * });
    * console.log(digest);
    * ```
    */
-  export function digest(params: {
-    readonly root: Hash;
-    readonly height: number;
-    readonly chainId: BigIntish;
-    readonly verifyingContract: Address;
-  }) {
+  export function digest(params: EcrecoverRatifierTypedDataParams) {
+    const verifyingContract = getTreeRatifier(params.tree);
     const domainSeparator = keccak256(
       encodeAbiParameters(domainSeparatorAbi, [
         EIP712_DOMAIN_TYPEHASH,
         BigInt(params.chainId),
-        params.verifyingContract,
+        verifyingContract,
       ]),
     );
     const structHash = keccak256(
       encodeAbiParameters(treeStructHashAbi, [
-        treeTypeHash(params.height),
-        params.root,
+        treeTypeHash(params.tree.height),
+        params.tree.root,
       ]),
     );
 
@@ -406,7 +419,7 @@ export namespace EcrecoverRatifierUtils {
    *
    * @param params - Signing parameters.
    * @returns Signature returned by the callback.
-   * @throws {InvalidTreeError} when the tree is invalid.
+   * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree height is unsupported.
    * @example
    * ```ts
@@ -415,7 +428,6 @@ export namespace EcrecoverRatifierUtils {
    * const signature = await EcrecoverRatifierUtils.sign({
    *   tree: Tree.create({} as never),
    *   chainId: 8453n,
-   *   verifyingContract: "0x0000000000000000000000000000000000000001",
    *   signTypedData: () => "0x",
    * });
    * console.log(signature);
@@ -580,7 +592,7 @@ export namespace EcrecoverRatifierUtils {
    *
    * @param params - Ratification parameters.
    * @returns Items containing each offer and its ratifier data.
-   * @throws {InvalidTreeError} when the tree is invalid.
+   * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree height is unsupported.
    * @example
    * ```ts
@@ -600,18 +612,15 @@ export namespace EcrecoverRatifierUtils {
   export async function ratify(
     params: EcrecoverRatifierRatifyParams,
   ): Promise<readonly PayloadItem[]> {
-    const signature =
-      params.signature != null
-        ? normalizeSignature(params.signature)
-        : normalizeSignature(
-            await params.signTypedData(
-              typedData({
-                tree: params.tree,
-                chainId: params.chainId,
-                verifyingContract: params.verifyingContract,
-              }),
-            ),
-          );
+    let signature: Signature<number, number> & { readonly v: number };
+    if (params.signature != null) {
+      getTreeRatifier(params.tree);
+      signature = normalizeSignature(params.signature);
+    } else {
+      signature = normalizeSignature(
+        await params.signTypedData(typedData(params)),
+      );
+    }
     const items: PayloadItem[] = [];
 
     for (const offer of params.tree.offers) {

@@ -61,8 +61,8 @@ export interface ValidateOfferGroupParams {
  * Parameters for {@link OfferUtils.toStruct}.
  *
  * The group id is read from the offer by default. Supply `group` only when a
- * caller intentionally needs to hash or encode the same offer with an override,
- * such as deriving a group id from an offer hashed with the zero group id.
+ * caller intentionally needs to encode the same offer with an override, such as
+ * deriving a group id from an offer hashed with the zero group id.
  *
  * @example
  * ```ts
@@ -187,7 +187,9 @@ export namespace OfferUtils {
    *
    * Use when you already have an `OfferStruct`, for example from
    * `GroupUtils.toStructs`, `TreeUtils.buildDescriptor`, or decoded payload
-   * bytes. Use `hash` when you still have an `Offer` or plain offer input.
+   * bytes. Use `hash` when you still have a grouped `Offer` or grouped plain
+   * offer input, and `groupHash` when deriving a group id from the zero-group
+   * hash.
    *
    * @param offerStruct - ABI-compatible offer to hash.
    * @returns Offer hash.
@@ -222,25 +224,48 @@ export namespace OfferUtils {
   }
 
   /**
-   * Computes the canonical protocol offer hash.
+   * Computes the canonical protocol offer hash from the offer's group id.
    *
-   * The group defaults to the protocol zero hash. Pass a group id when hashing
-   * a final tree leaf or payload offer.
+   * Use this for final tree leaves and payload offers after a group has been
+   * assigned. Use `groupHash` for the zero-group hash that derives a group id.
    *
-   * @param offer - Offer to hash.
-   * @param group - Protocol group id encoded into the hash.
+   * @param offer - Offer with the protocol group id encoded into the hash.
    * @returns Offer hash.
    * @example
    * ```ts
    * import { OfferUtils } from "@morpho-org/midnight-sdk";
    *
-   * const offer = {} as never;
+   * const offer = {
+   *   group: "0x0000000000000000000000000000000000000000000000000000000000000000",
+   * } as never;
    * const hash = OfferUtils.hash(offer);
    * console.log(hash);
    * ```
    */
-  export function hash(offer: IOffer, group: Hash = zeroHash): Hash {
-    return hashStruct(toStruct({ offer, group }));
+  export function hash(offer: IOffer & { readonly group: Hash }): Hash {
+    return hashStruct(toStruct({ offer }));
+  }
+
+  /**
+   * Computes the offer hash used to derive a content-addressed group id.
+   *
+   * The encoded group is always the protocol zero hash. Use this only for
+   * standalone or grouped-offer id derivation, not for final tree leaves or
+   * payload offers.
+   *
+   * @param offer - Offer to hash without a group id.
+   * @returns Offer hash encoded with the protocol zero group id.
+   * @example
+   * ```ts
+   * import { OfferUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const offer = {} as never;
+   * const hash = OfferUtils.groupHash(offer);
+   * console.log(hash);
+   * ```
+   */
+  export function groupHash(offer: Omit<IOffer, "group">): Hash {
+    return hashStruct(toStruct({ offer, group: zeroHash }));
   }
 
   /**

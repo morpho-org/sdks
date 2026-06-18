@@ -194,7 +194,7 @@ export class Offer {
    * ```
    */
   public get group(): Hash {
-    this.cachedGroup ??= OfferUtils.hash(this);
+    this.cachedGroup ??= OfferUtils.groupHash(this);
     return this.cachedGroup;
   }
 
@@ -214,7 +214,7 @@ export class Offer {
    * ```
    */
   public get hash(): Hash {
-    this.cachedHash ??= OfferUtils.hash(this, this.group);
+    this.cachedHash ??= OfferUtils.hash(this);
     return this.cachedHash;
   }
 

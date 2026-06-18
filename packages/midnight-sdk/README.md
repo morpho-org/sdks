@@ -96,10 +96,10 @@ export async function makeBaseUsdcWethOffers(params: {
     return { ok: false as const, issues: treeValidation.issues };
   }
 
+  // EcrecoverRatifierUtils derives the verifier from offer.ratifier and rejects mixed-ratifier trees.
   const items = await EcrecoverRatifierUtils.ratify({
     tree,
     chainId,
-    verifyingContract: ecrecoverRatifier,
     signTypedData: (typedData) =>
       params.walletClient.signTypedData({
         account: params.maker,

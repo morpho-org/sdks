@@ -411,7 +411,7 @@ It should:
 Make-offer helpers should support the limit-order path without importing app code:
 
 - `Offer.create` is the user-facing constructor for raw protocol `Offer` class instances from market, side, tick, max assets, expiry, callback, receiver, and ratifier. Market collateral params require the onchain `maxLif` value explicitly because the same LLTV may use either supported liquidation cursor. Offers own an optional group id; when omitted, `Offer.group` lazily derives the standalone group id from the offer hash with the zero group id;
-- `Offer.hash` is a cached getter for the protocol offer hash using the offer's resolved group id. `OfferUtils.hash(offer, group)` remains the lower-level helper and defaults `group` to the zero hash for content-addressed group derivation;
+- `Offer.hash` is a cached getter for the protocol offer hash using the offer's resolved group id. `OfferUtils.hash(offer)` hashes offers with a required group id for final tree leaves and payloads. `OfferUtils.groupHash(offer)` is the explicit zero-group hash helper for content-addressed group derivation;
 - `OfferUtils` owns pure object-compatible offer validation, struct conversion, offer hashing, offer expiry helpers, receiver-zeroing checks, and cap checks;
 - `Group.create` is the user-facing group factory. It accepts an iterable of offers, builds a group with one derived id, preserving caller offer order while deriving identity by sorting the member offers' zero-group hashes and hashing the concatenation through `GroupUtils.hash`, then copies each offer with the derived id stored on the copy. Constructing a group is resource-intensive;
 - `OfferUtils.validateOfferGroup` enforces protocol group checks: non-empty groups, same maker, same side, same loan token, valid receiver zeroing, and exactly one non-zero unit/asset cap;
@@ -508,10 +508,10 @@ if (!validation.valid) {
   // App code maps API validation issues to its own UX/error handling.
 }
 
+// EcrecoverRatifierUtils derives the verifier from offer.ratifier and rejects mixed-ratifier trees.
 const items = await EcrecoverRatifierUtils.ratify({
   tree,
   chainId,
-  verifyingContract: addresses.ecrecoverRatifier,
   signTypedData,
 });
 

@@ -1,6 +1,6 @@
 import type { BigIntish } from "@morpho-org/morpho-ts";
 import type { Hash } from "viem";
-import { Offer, type OfferStruct } from "../offers/index.js";
+import { type Offer, type OfferStruct, OfferUtils } from "../offers/index.js";
 import {
   type TreeCreateParams,
   type TreeProof,
@@ -48,7 +48,7 @@ export class Tree {
   private constructor(params: TreeCreateParams) {
     this.offers = params
       .flatMap((entry) => ("offers" in entry ? entry.offers : [entry]))
-      .map((offer) => new Offer(offer));
+      .map(OfferUtils.normalizeOffer);
 
     const descriptor = TreeUtils.buildDescriptor(this.offers);
     this.paddedOffers = descriptor.offers;

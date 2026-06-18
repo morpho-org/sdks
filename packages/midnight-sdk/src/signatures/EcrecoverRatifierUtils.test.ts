@@ -1,7 +1,7 @@
 import type { Signature } from "viem";
 import { describe, expect, test } from "vitest";
 import { addresses, baseOffer } from "../__test__/fixtures.js";
-import { InvalidTreeHeightError } from "../errors.js";
+import { InvalidTreeError, InvalidTreeHeightError } from "../errors.js";
 import { EcrecoverRatifierUtils } from "./EcrecoverRatifierUtils.js";
 import { Tree } from "./Tree.js";
 import { TreeUtils } from "./TreeUtils.js";
@@ -38,22 +38,75 @@ describe("EcrecoverRatifierUtils.ratify", () => {
       }),
     ).toBe(true);
   });
+
+  test("error: InvalidTreeError mixed ratifiers", async () => {
+    const tree = Tree.create(
+      baseOffer({
+        maxAssets: 0n,
+        ratifier: addresses.ecrecoverRatifier,
+      }),
+      baseOffer({
+        maxAssets: 0n,
+        ratifier: addresses.setterRatifier,
+      }),
+    );
+
+    await expect(
+      EcrecoverRatifierUtils.ratify({
+        tree,
+        signature: {
+          v: 27,
+          r: "0x0000000000000000000000000000000000000000000000000000000000000000",
+          s: "0x0000000000000000000000000000000000000000000000000000000000000000",
+        },
+      }),
+    ).rejects.toThrow(InvalidTreeError);
+  });
 });
 
 describe("EcrecoverRatifierUtils.typedData", () => {
   test("default", () => {
+    const tree = Tree.create(baseOffer({ maxAssets: 0n }));
     const typedData = EcrecoverRatifierUtils.typedData({
-      tree: Tree.create(baseOffer({ maxAssets: 0n })),
+      tree,
       chainId: 8453n,
-      verifyingContract: addresses.ecrecoverRatifier,
     });
 
     expect(typedData.primaryType).toBe("OfferTree");
+    expect(typedData.domain.verifyingContract).toBe(tree.offers[0]!.ratifier);
     expect(typedData.types.EIP712Domain).toEqual([
       { name: "chainId", type: "uint256" },
       { name: "verifyingContract", type: "address" },
     ]);
     expect(typedData.types.OfferTree[0].type).toMatchInlineSnapshot(`"Offer"`);
+  });
+
+  test("error: InvalidTreeError mixed ratifiers", () => {
+    const tree = Tree.create(
+      baseOffer({
+        maxAssets: 0n,
+        ratifier: addresses.ecrecoverRatifier,
+      }),
+      baseOffer({
+        maxAssets: 0n,
+        ratifier: addresses.setterRatifier,
+      }),
+    );
+
+    expect(() =>
+      EcrecoverRatifierUtils.typedData({ tree, chainId: 8453n }),
+    ).toThrow(InvalidTreeError);
+  });
+});
+
+describe("EcrecoverRatifierUtils.digest", () => {
+  test("default", () => {
+    const digest = EcrecoverRatifierUtils.digest({
+      tree: Tree.create(baseOffer({ maxAssets: 0n })),
+      chainId: 8453n,
+    });
+
+    expect(digest).toMatch(/^0x[0-9a-f]{64}$/);
   });
 });
 

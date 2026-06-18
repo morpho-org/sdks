@@ -388,7 +388,7 @@ export namespace TreeUtils {
     readonly proof: readonly Hash[];
   }) {
     const offer = OfferUtils.normalizeOffer(params.offer);
-    let node = OfferUtils.hash(offer, offer.group);
+    let node = OfferUtils.hash(offer);
     const leafIndex = BigInt(params.leafIndex);
     if (leafIndex < 0n || leafIndex >> BigInt(params.proof.length) !== 0n) {
       return false;

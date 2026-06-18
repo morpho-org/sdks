@@ -1,5 +1,5 @@
 import fc from "fast-check";
-import { zeroAddress } from "viem";
+import { zeroAddress, zeroHash } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   addresses,
@@ -56,14 +56,26 @@ describe("Offer.create", () => {
 
     expect(offer.maxAssets).toBe(100n);
     expect(offer.receiverIfMakerIsSeller).toBe(zeroAddress);
-    expect(offer.group).toBe(OfferUtils.hash(offer));
-    expect(offer.hash).toBe(OfferUtils.hash(offer, offer.group));
+    expect(offer.group).toBe(OfferUtils.groupHash(offer));
+    expect(offer.hash).toBe(OfferUtils.hash(offer));
     expect(
       Offer.create({
         ...buildOfferParams(),
         group,
       }).group,
     ).toBe(group);
+  });
+
+  test("behavior: separates final hashes from zero-group hashes", () => {
+    const offer = { ...baseOfferInput(), group };
+
+    expect(OfferUtils.hash(offer)).toBe(
+      OfferUtils.hashStruct(OfferUtils.toStruct({ offer })),
+    );
+    expect(OfferUtils.groupHash(offer)).toBe(
+      OfferUtils.hashStruct(OfferUtils.toStruct({ offer, group: zeroHash })),
+    );
+    expect(OfferUtils.hash(offer)).not.toBe(OfferUtils.groupHash(offer));
   });
 
   test("behavior: defaults maker seller receiver for sell offers", () => {

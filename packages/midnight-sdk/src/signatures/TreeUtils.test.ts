@@ -41,10 +41,11 @@ describe("Tree.create", () => {
   test("default", () => {
     const offer = baseOffer({ maxAssets: 0n });
     const group = Group.create([offer]);
+    const groupOffer = group.offers[0]!;
     const tree = Tree.create(group);
 
     expect(tree.offers).toHaveLength(1);
-    expect(tree.offers[0]).not.toBe(offer);
+    expect(tree.offers[0]).toBe(groupOffer);
     expect(tree.offers[0]!.group).toBe(group.id);
     expect(tree.root).toBe(TreeUtils.buildRoot([group]));
     expect(tree.proof(0n)).toEqual(
@@ -57,7 +58,17 @@ describe("Tree.create", () => {
     const tree = Tree.create(offer);
 
     expect(tree.offers).toHaveLength(1);
+    expect(tree.offers[0]).toBe(offer);
     expect(tree.offers[0]!.group).toBe(offer.group);
+  });
+
+  test("behavior: wraps plain offer input", () => {
+    const offer = baseOfferInput({ maxAssets: 0n });
+    const tree = Tree.create(offer);
+
+    expect(tree.offers).toHaveLength(1);
+    expect(tree.offers[0]).toBeInstanceOf(Offer);
+    expect(tree.offers[0]).not.toBe(offer);
   });
 });
 
