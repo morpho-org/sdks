@@ -167,27 +167,6 @@ describe("Payload.decode", () => {
     expect(decoded[0]!.ratifierData).toBe("0x1234");
   });
 
-  test("behavior: records decode timings", async () => {
-    const encoded = await Payload.encode([
-      { offer: apiValidOffer({ group }), ratifierData: "0x1234" as Hex },
-    ]);
-    const timings: Payload.DecodeTimings = {
-      hexToBytesMs: 0,
-      decompressMs: 0,
-      abiItemCountMs: 0,
-      itemsDecodeMs: 0,
-      canonicalEncodeMs: 0,
-    };
-
-    await Payload.decode(encoded, { timings });
-
-    expect(timings.hexToBytesMs).toBeGreaterThanOrEqual(0);
-    expect(timings.decompressMs).toBeGreaterThanOrEqual(0);
-    expect(timings.abiItemCountMs).toBeGreaterThanOrEqual(0);
-    expect(timings.itemsDecodeMs).toBeGreaterThanOrEqual(0);
-    expect(timings.canonicalEncodeMs).toBeGreaterThanOrEqual(0);
-  });
-
   test("error: DecodeError", async () => {
     await expect(Payload.decode("0x1234")).rejects.toBeInstanceOf(
       Payload.DecodeError,

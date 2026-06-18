@@ -162,37 +162,7 @@ export const MAX_PAYLOAD_HEX_LENGTH = "0x".length + MAX_PAYLOAD_BYTES * 2;
 export const MAX_REQUEST_BODY_BYTES = MAX_PAYLOAD_HEX_LENGTH + 1_024;
 
 /**
- * Mutable decode timing buckets populated when callers need hot-path profiling.
- *
- * @example
- * ```ts
- * import type { Payload } from "@morpho-org/midnight-sdk";
- *
- * const timings: Payload.DecodeTimings = {
- *   hexToBytesMs: 0,
- *   decompressMs: 0,
- *   abiItemCountMs: 0,
- *   itemsDecodeMs: 0,
- *   canonicalEncodeMs: 0,
- * };
- * console.log(timings.hexToBytesMs);
- * ```
- */
-export type DecodeTimings = {
-  /** Time spent hex-decoding the wire payload. */
-  hexToBytesMs: number;
-  /** Time spent gzip-decompressing the ABI item bytes. */
-  decompressMs: number;
-  /** Time spent reading and bounding the ABI item count. */
-  abiItemCountMs: number;
-  /** Time spent ABI-decoding and normalizing payload items. */
-  itemsDecodeMs: number;
-  /** Time spent canonical-reencoding decoded items. */
-  canonicalEncodeMs: number;
-};
-
-/**
- * Optional decode bounds and profiling controls.
+ * Optional decode bounds.
  *
  * @example
  * ```ts
@@ -205,8 +175,6 @@ export type DecodeTimings = {
 export type DecodeOptions = {
   /** Optional caller-provided item cap. */
   readonly maxItems?: number;
-  /** Optional mutable timing buckets updated by `decode`. */
-  readonly timings?: DecodeTimings;
 };
 
 const offerStructAbiComponents = [
@@ -339,14 +307,7 @@ export async function decode(
   options?: DecodeOptions,
 ): Promise<Item[]> {
   const maxItems = resolveMaxItems(options?.maxItems);
-  const timings = options?.timings;
-  const hexToBytesStartedAtMs = startDecodeTiming(timings);
   const bytes = hexToBytes(payload);
-  finishDecodeTiming({
-    timings,
-    key: "hexToBytesMs",
-    startedAtMs: hexToBytesStartedAtMs,
-  });
   if (bytes.length < HEADER_BYTES) {
     throw new DecodeError("payload too short for header");
   }
@@ -372,39 +333,15 @@ export async function decode(
     );
   }
   const compressed = bytes.subarray(HEADER_BYTES, compressedEnd);
-  const decompressStartedAtMs = startDecodeTiming(timings);
   const decoded = await decompressItemsPayload(compressed);
-  finishDecodeTiming({
-    timings,
-    key: "decompressMs",
-    startedAtMs: decompressStartedAtMs,
-  });
 
-  const abiItemCountStartedAtMs = startDecodeTiming(timings);
   assertAbiItemCountWithinCallerLimit(decoded, maxItems);
-  finishDecodeTiming({
-    timings,
-    key: "abiItemCountMs",
-    startedAtMs: abiItemCountStartedAtMs,
-  });
 
-  const itemsDecodeStartedAtMs = startDecodeTiming(timings);
   const items = decodeItemsBytes(decoded);
-  finishDecodeTiming({
-    timings,
-    key: "itemsDecodeMs",
-    startedAtMs: itemsDecodeStartedAtMs,
-  });
   assertNonEmptyItemCount(items.length);
   assertCallerItemCountLimit(items.length, maxItems);
 
-  const canonicalEncodeStartedAtMs = startDecodeTiming(timings);
   assertCanonicalItemsBytes(items, decoded);
-  finishDecodeTiming({
-    timings,
-    key: "canonicalEncodeMs",
-    startedAtMs: canonicalEncodeStartedAtMs,
-  });
   return items;
 }
 
@@ -558,19 +495,6 @@ function isEmptyOfferStruct(offer: OfferStruct): boolean {
 
 function isZeroAddress(value: string): boolean {
   return value.toLowerCase() === ZERO_ADDRESS;
-}
-
-function startDecodeTiming(timings: DecodeTimings | undefined): number {
-  return timings === undefined ? 0 : performance.now();
-}
-
-function finishDecodeTiming(params: {
-  readonly timings: DecodeTimings | undefined;
-  readonly key: keyof DecodeTimings;
-  readonly startedAtMs: number;
-}): void {
-  if (params.timings === undefined) return;
-  params.timings[params.key] += performance.now() - params.startedAtMs;
 }
 
 function resolveMaxItems(maxItems: number | undefined): number | undefined {
