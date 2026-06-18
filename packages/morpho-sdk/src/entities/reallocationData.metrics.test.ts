@@ -3,9 +3,10 @@ import { type Address, parseEther } from "viem";
 import { describe, expect, test, vi } from "vitest";
 import { CbbtcUsdcBlue, WethUsdsBlue } from "../../test/fixtures/blue.js";
 import { DEFAULT_SUPPLY_TARGET_UTILIZATION } from "../helpers/constant.js";
-import type {
-  PublicAllocatorOptions,
-  PublicReallocation,
+import {
+  type PublicAllocatorOptions,
+  type PublicReallocation,
+  UnknownReallocationMarketError,
 } from "../types/index.js";
 import { ReallocationData } from "./reallocationData.js";
 
@@ -90,6 +91,14 @@ describe("ReallocationData.getPublicReallocationLiquidity", () => {
     data.getPublicReallocationLiquidity(targetParams.id, options);
 
     expect(spy).toHaveBeenCalledWith(targetParams.id, options);
+  });
+
+  test("error: UnknownReallocationMarketError when the market is absent", () => {
+    const data = makeData();
+
+    expect(() => data.getPublicReallocationLiquidity(sourceParamsA.id)).toThrow(
+      UnknownReallocationMarketError,
+    );
   });
 });
 
@@ -248,5 +257,13 @@ describe("ReallocationData.getAvailableLiquidityToTargetUtilization", () => {
     expect(data.getAvailableLiquidityToTargetUtilization(targetParams.id)).toBe(
       expected,
     );
+  });
+
+  test("error: UnknownReallocationMarketError when the market is absent", () => {
+    const data = makeData();
+
+    expect(() =>
+      data.getAvailableLiquidityToTargetUtilization(sourceParamsA.id),
+    ).toThrow(UnknownReallocationMarketError);
   });
 });

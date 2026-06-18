@@ -25,8 +25,8 @@ This TIB freezes the design of two read-only metrics that answer the question di
 
 **Goals**
 
-- Add `ReallocationData.getPublicReallocationLiquidity(marketId, options?)`: the total liquidity the PublicAllocator can reallocate **into** a market from sibling markets — a never-throws `bigint`.
-- Add `ReallocationData.getAvailableLiquidityToTargetUtilization(marketId, targetUtilization?, options?)`: the liquidity available to bring a market to a target utilization — the max borrow keeping post-borrow utilization at or below the target on the **post-reallocation** supply (`getBorrowToUtilization({ supply + L, borrow }, targetUtilization)`) — also never-throws.
+- Add `ReallocationData.getPublicReallocationLiquidity(marketId, options?)`: the total liquidity the PublicAllocator can reallocate **into** a market from sibling markets — a `bigint` that never throws on insufficiency (returns `0n`). It still throws `UnknownReallocationMarketError` when the target market is absent.
+- Add `ReallocationData.getAvailableLiquidityToTargetUtilization(marketId, targetUtilization?, options?)`: the liquidity available to bring a market to a target utilization — the max borrow keeping post-borrow utilization at or below the target on the **post-reallocation** supply (`getBorrowToUtilization({ supply + L, borrow }, targetUtilization)`) — also never throws on insufficiency (same absent-market exception).
 - Reuse the existing PublicAllocator discovery (`getMarketPublicReallocations`) — no fork of the reallocation algorithm.
 - Share the supply-target-utilization resolution with `computeReallocations` instead of duplicating it.
 
@@ -44,7 +44,7 @@ Both metrics only read from a `ReallocationData` instance (`getMarket`, `getMark
 
 ### `getPublicReallocationLiquidity`
 
-Sums the source-market withdrawals discovered by `getMarketPublicReallocations` — i.e. the liquidity the PublicAllocator can move into `marketId` from sibling markets. Bounded by each source's withdrawal-utilization cap (`defaultMaxWithdrawalUtilization`, default friendly 92%) and the target market's vault supply-cap headroom. The caller widens the source ceiling by passing `defaultMaxWithdrawalUtilization` (e.g. `MathLib.WAD` for the full drain). Never throws; `0n` when nothing is reallocatable.
+Sums the source-market withdrawals discovered by `getMarketPublicReallocations` — i.e. the liquidity the PublicAllocator can move into `marketId` from sibling markets. Bounded by each source's withdrawal-utilization cap (`defaultMaxWithdrawalUtilization`, default friendly 92%) and the target market's vault supply-cap headroom. The caller widens the source ceiling by passing `defaultMaxWithdrawalUtilization` (e.g. `MathLib.WAD` for the full drain). Never throws on insufficiency (`0n` when nothing is reallocatable); throws `UnknownReallocationMarketError` only when the target market is absent.
 
 ### `getAvailableLiquidityToTargetUtilization`
 
@@ -77,8 +77,6 @@ Two facts about the metric's meaning:
 ```ts
 // ReallocationData.getAvailableLiquidityToTargetUtilization
 const market = this.getMarket(marketId).accrueInterest(options?.timestamp);
-
-const ownHeadroom = market.getBorrowToUtilization(targetUtilization);
 
 const supplyTargetUtilization = getSupplyTargetUtilization(marketId, options);
 if (supplyTargetUtilization > targetUtilization)
