@@ -528,8 +528,7 @@ export class ReallocationData implements InputReallocationData {
   ): bigint {
     const market = this.getMarket(marketId).accrueInterest(options?.timestamp);
 
-    // Below the allocator's supply-target trigger, no reallocation would happen,
-    // so only the market's own borrow headroom to the target counts.
+    // Below the allocator's trigger, no reallocation happens: own headroom only.
     const supplyTargetUtilization = getSupplyTargetUtilization(
       marketId,
       options,
@@ -537,12 +536,7 @@ export class ReallocationData implements InputReallocationData {
     if (supplyTargetUtilization > targetUtilization)
       return market.getBorrowToUtilization(targetUtilization);
 
-    // Max borrow `x` keeping post-borrow utilization `(borrow + x) / (supply + L)`
-    // at or below the target, where `L` is the reallocatable liquidity added to
-    // supply. `zeroFloorSub` clamps to `0n` when the market is already above the
-    // target and `L` is too small to bring it back under (borrowing more would
-    // push it further over). Below the target this equals own borrow headroom
-    // plus `targetUtilization · L`.
+    // Borrow-to-target on the post-reallocation supply; clamps to 0n above target.
     const availableLiquidity = this.getPublicReallocationLiquidity(
       marketId,
       options,
