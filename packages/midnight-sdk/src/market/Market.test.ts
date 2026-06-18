@@ -12,6 +12,7 @@ import {
   CBP,
   LIQUIDATION_CURSOR_HIGH,
   LIQUIDATION_CURSOR_LOW,
+  SETTLEMENT_FEE_BREAKPOINTS,
 } from "../constants.js";
 import { MarketParams } from "./Market.js";
 import { MarketUtils } from "./MarketUtils.js";
@@ -103,6 +104,24 @@ describe("MarketUtils", () => {
         LIQUIDATION_CURSOR_HIGH,
       ),
     ).toBe(1129943502824858757n);
+    expect(
+      MarketUtils.getSettlementFee({
+        settlementFeeCbps: [1, 2, 3, 4, 5, 6, 7],
+        timeToMaturity: 0n,
+      }),
+    ).toBe(1n * CBP);
+    expect(
+      MarketUtils.getSettlementFee({
+        settlementFeeCbps: [1, 2, 3, 4, 5, 6, 7],
+        timeToMaturity: SETTLEMENT_FEE_BREAKPOINTS[1]! / 2n,
+      }),
+    ).toBe(1500000000000n);
+    expect(
+      MarketUtils.getSettlementFee({
+        settlementFeeCbps: [1, 2, 3, 4, 5, 6, 7],
+        timeToMaturity: SETTLEMENT_FEE_BREAKPOINTS[6]! + 1n,
+      }),
+    ).toBe(7n * CBP);
   });
 
   test("behavior: hash and id are deterministic", () => {

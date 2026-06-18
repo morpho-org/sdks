@@ -304,7 +304,7 @@ validate inputs:
 - `MAX_COLLATERALS`
 - `MAX_COLLATERALS_PER_BORROWER`
 - allowed LLTV tiers
-- max settlement fee constants
+- max settlement fee constants and settlement-fee breakpoints
 - max continuous fee and liquidation cursor constants
 - HashLib typehash constants for markets, collateral params, offers, and the EIP-712 domain
 - `PermitKind`
@@ -382,6 +382,7 @@ SDK-only derived helpers should live beside the domain they describe:
 - `TickLib.assertTickAlignedToSpacing` as an SDK assertion attached to the tick domain
 - `MarketUtils.isLltvAllowed`
 - `MarketUtils.getLiquidationIncentiveFactor` with an explicit liquidation cursor
+- `MarketUtils.getSettlementFee`
 - `OfferUtils.getOfferExpiry`
 
 The pure helpers that mirror `TakeAmountsLib` should accept `settlementFee` as an explicit input instead of reading the chain. Fetching settlement fee remains a boundary concern; fetch helpers that compute it should accept `timeToMaturity` directly so callers do not confuse wall-clock time with Solidity's `block.timestamp`.

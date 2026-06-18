@@ -1,4 +1,5 @@
 import {
+  assertNonNegative,
   type BigIntish,
   getChainAddress,
   MathLib,
@@ -6,8 +7,10 @@ import {
 import { concat, encodeAbiParameters, encodePacked, keccak256 } from "viem";
 import {
   ALLOWED_LLTVS,
+  CBP,
   COLLATERAL_PARAMS_TYPEHASH,
   MARKET_TYPEHASH,
+  SETTLEMENT_FEE_BREAKPOINTS,
 } from "../constants.js";
 import {
   type CollateralParams,
@@ -18,6 +21,7 @@ import {
   MarketParams,
   type MarketParamsStruct,
   marketParamsAbiParameter,
+  type SettlementFeeCbps,
 } from "./Market.js";
 
 const SSTORE2_PREFIX = "0x600b380380600b5f395ff3" as const;
@@ -200,6 +204,56 @@ export namespace MarketUtils {
       );
 
     return MathLib.mulDiv(MathLib.WAD, MathLib.WAD, denominator, "Down");
+  }
+
+  /**
+   * Computes the Midnight settlement fee from market cbp buckets and time to maturity.
+   *
+   * This mirrors Midnight `settlementFee`: cbp buckets are scaled by {@link CBP},
+   * values are linearly interpolated between {@link SETTLEMENT_FEE_BREAKPOINTS},
+   * and any time to maturity at or above 360 days uses the last bucket.
+   *
+   * @param params - Settlement-fee parameters.
+   * @returns WAD-scaled settlement fee.
+   * @throws {NegativeValueError} when `timeToMaturity` is negative.
+   * @example
+   * ```ts
+   * import { MarketUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const fee = MarketUtils.getSettlementFee({
+   *   settlementFeeCbps: [1, 2, 3, 4, 5, 6, 7],
+   *   timeToMaturity: 12n * 60n * 60n,
+   * });
+   * console.log(fee);
+   * ```
+   */
+  export function getSettlementFee(params: {
+    readonly settlementFeeCbps: SettlementFeeCbps;
+    readonly timeToMaturity: BigIntish;
+  }) {
+    const timeToMaturity = BigInt(params.timeToMaturity);
+    assertNonNegative("timeToMaturity", timeToMaturity);
+
+    const lastIndex = SETTLEMENT_FEE_BREAKPOINTS.length - 1;
+    const lastBreakpoint = SETTLEMENT_FEE_BREAKPOINTS[lastIndex]!;
+    if (timeToMaturity >= lastBreakpoint) {
+      return BigInt(params.settlementFeeCbps[lastIndex]!) * CBP;
+    }
+
+    const upperIndex = SETTLEMENT_FEE_BREAKPOINTS.findIndex(
+      (breakpoint) => timeToMaturity < breakpoint,
+    );
+    const lowerIndex = upperIndex - 1;
+    const start = SETTLEMENT_FEE_BREAKPOINTS[lowerIndex]!;
+    const end = SETTLEMENT_FEE_BREAKPOINTS[upperIndex]!;
+    const feeLower = BigInt(params.settlementFeeCbps[lowerIndex]!) * CBP;
+    const feeUpper = BigInt(params.settlementFeeCbps[upperIndex]!) * CBP;
+
+    return (
+      (feeLower * (end - timeToMaturity) +
+        feeUpper * (timeToMaturity - start)) /
+      (end - start)
+    );
   }
 
   /**

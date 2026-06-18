@@ -13,6 +13,29 @@ import { MathLib } from "@morpho-org/morpho-ts";
 export const CBP = 1_000000000000n;
 
 /**
+ * Settlement-fee time-to-maturity breakpoints in seconds.
+ *
+ * Midnight linearly interpolates each market's seven settlement-fee cbp
+ * buckets across these breakpoints.
+ *
+ * @example
+ * ```ts
+ * import { SETTLEMENT_FEE_BREAKPOINTS } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(SETTLEMENT_FEE_BREAKPOINTS[1]);
+ * ```
+ */
+export const SETTLEMENT_FEE_BREAKPOINTS = [
+  0n,
+  1n * 24n * 60n * 60n,
+  7n * 24n * 60n * 60n,
+  30n * 24n * 60n * 60n,
+  90n * 24n * 60n * 60n,
+  180n * 24n * 60n * 60n,
+  360n * 24n * 60n * 60n,
+] as const;
+
+/**
  * Maximum Midnight tick.
  *
  * @example

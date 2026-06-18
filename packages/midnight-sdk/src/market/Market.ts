@@ -1,17 +1,6 @@
 import { assertNonNegative, type BigIntish } from "@morpho-org/morpho-ts";
 import type { Address, Hash } from "viem";
-import { CBP } from "../constants.js";
 import { MarketUtils } from "./MarketUtils.js";
-
-const SETTLEMENT_FEE_BREAKPOINTS = [
-  0n,
-  1n * 24n * 60n * 60n,
-  7n * 24n * 60n * 60n,
-  30n * 24n * 60n * 60n,
-  90n * 24n * 60n * 60n,
-  180n * 24n * 60n * 60n,
-  360n * 24n * 60n * 60n,
-] as const;
 
 /**
  * Seven settlement-fee centibip buckets stored on a Midnight market.
@@ -373,23 +362,10 @@ export class Market {
    * ```
    */
   public getSettlementFee(timeToMaturity: BigIntish) {
-    const ttm = BigInt(timeToMaturity);
-    assertNonNegative("timeToMaturity", ttm);
-
-    const lastIndex = SETTLEMENT_FEE_BREAKPOINTS.length - 1;
-    const lastBreakpoint = SETTLEMENT_FEE_BREAKPOINTS[lastIndex]!;
-    if (ttm >= lastBreakpoint) return this.getSettlementFeeAtIndex(lastIndex);
-
-    const upperIndex = SETTLEMENT_FEE_BREAKPOINTS.findIndex(
-      (breakpoint) => ttm < breakpoint,
-    );
-    const lowerIndex = upperIndex - 1;
-    const start = SETTLEMENT_FEE_BREAKPOINTS[lowerIndex]!;
-    const end = SETTLEMENT_FEE_BREAKPOINTS[upperIndex]!;
-    const feeLower = this.getSettlementFeeAtIndex(lowerIndex);
-    const feeUpper = this.getSettlementFeeAtIndex(upperIndex);
-
-    return (feeLower * (end - ttm) + feeUpper * (ttm - start)) / (end - start);
+    return MarketUtils.getSettlementFee({
+      settlementFeeCbps: this.settlementFeeCbps,
+      timeToMaturity,
+    });
   }
 
   /**
@@ -455,10 +431,6 @@ export class Market {
     const index = this.getCollateralIndexByToken(token);
 
     return index == null ? undefined : this.params.collateralParams[index];
-  }
-
-  private getSettlementFeeAtIndex(index: number) {
-    return BigInt(this.settlementFeeCbps[index]!) * CBP;
   }
 }
 
