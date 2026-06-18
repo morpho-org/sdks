@@ -16,6 +16,8 @@ import {
   NoMatchingOffersError,
   UnexpectedOfferSideError,
 } from "../errors.js";
+import { MarketParams } from "../market/index.js";
+import { TreeUtils } from "../signatures/index.js";
 import type { BuildOfferParams } from "./Offer.js";
 import { Offer } from "./Offer.js";
 import { OfferUtils } from "./OfferUtils.js";
@@ -107,7 +109,7 @@ describe("Offer.create", () => {
         tick: 2n,
         tickSpacing: 2n,
         start: 10n,
-        expiry: 10n,
+        expiry: 11n,
       }),
     );
 
@@ -115,7 +117,7 @@ describe("Offer.create", () => {
       tick: 2n,
       tickSpacing: 2n,
       start: 10n,
-      expiry: 10n,
+      expiry: 11n,
       maxUnits: 0n,
       maxAssets: 100n,
       receiverIfMakerIsSeller: zeroAddress,
@@ -146,6 +148,12 @@ describe("Offer.create", () => {
     );
   });
 
+  test("error: InvalidOfferParameterError for equal start and expiry", () => {
+    expect(() =>
+      OfferUtils.validateOfferTimeRange({ start: 1n, expiry: 1n }),
+    ).toThrow(InvalidOfferParameterError);
+  });
+
   test("error: invalid bigint input", () => {
     expect(() =>
       Offer.create(buildOfferParams({ tick: "not-a-tick" })),
@@ -158,6 +166,7 @@ describe("Offer.create", () => {
     ["tickSpacing", { tickSpacing: 7n }],
     ["tick", { tick: 2n }],
     ["expiry", { start: 20n, expiry: 19n }],
+    ["expiry", { start: 20n, expiry: 20n }],
     ["maxUnits", { maxUnits: -1n, maxAssets: 0n }],
     ["maxAssets", { maxAssets: -1n }],
     ["maxUnits/maxAssets", { maxUnits: 0n, maxAssets: 0n }],
@@ -177,6 +186,28 @@ describe("Offer.create", () => {
     }
 
     expect.unreachable("Expected invalid offer parameter.");
+  });
+});
+
+describe("OfferUtils.toStruct", () => {
+  test("behavior: copies nested market structs before public freeze paths", () => {
+    const offer = baseOffer({ group });
+    const struct = OfferUtils.toStruct({ offer });
+
+    expect(struct.market).not.toBe(offer.market);
+    expect(struct.market).not.toBeInstanceOf(MarketParams);
+    expect(struct.market.collateralParams).not.toBe(
+      offer.market.collateralParams,
+    );
+    expect(struct.market.collateralParams[0]).not.toBe(
+      offer.market.collateralParams[0],
+    );
+
+    TreeUtils.buildDescriptor([offer]);
+
+    expect(Object.isFrozen(offer.market)).toBe(false);
+    expect(Object.isFrozen(offer.market.collateralParams)).toBe(false);
+    expect(Object.isFrozen(offer.market.collateralParams[0])).toBe(false);
   });
 });
 
@@ -224,7 +255,7 @@ describe("OfferUtils.validateOfferGroup", () => {
           fc.record({
             tickStep: fc.integer({ min: 0, max: Number(MAX_TICK / 4n) }),
             start: fc.integer({ min: 0, max: 1_000 }),
-            duration: fc.integer({ min: 0, max: 1_000 }),
+            duration: fc.integer({ min: 1, max: 1_000 }),
             useCallback: fc.boolean(),
             useSetterRatifier: fc.boolean(),
           }),

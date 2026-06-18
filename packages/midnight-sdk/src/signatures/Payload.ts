@@ -7,6 +7,7 @@ import {
 } from "viem";
 
 import { MAX_COLLATERALS, MAX_TICK } from "../constants.js";
+import { InvalidOfferParameterError } from "../errors.js";
 import { MarketUtils } from "../market/index.js";
 import { type IOffer, type OfferStruct, OfferUtils } from "../offers/index.js";
 
@@ -379,10 +380,8 @@ function assertApiValidOfferStruct(offer: OfferStruct): void {
   assertMaturityAt15Utc(offer.market.maturity);
   assertSafeTimestamp("start", offer.start);
   assertSafeTimestamp("expiry", offer.expiry);
+  assertApiValidOfferTimeRange(offer);
 
-  if (offer.start >= offer.expiry) {
-    throw new DecodeError("invalid offer bytes: start must be before expiry");
-  }
   if (offer.expiry > offer.market.maturity) {
     throw new DecodeError(
       "invalid offer bytes: expiry must be before or equal to maturity",
@@ -393,10 +392,21 @@ function assertApiValidOfferStruct(offer: OfferStruct): void {
       `invalid offer bytes: tick exceeds maximum ${MAX_TICK}`,
     );
   }
-  if (offer.maxUnits > 0n && offer.maxAssets > 0n) {
+  if ((offer.maxUnits === 0n) === (offer.maxAssets === 0n)) {
     throw new DecodeError(
-      "invalid offer bytes: at most one of maxUnits and maxAssets can be non-zero",
+      "invalid offer bytes: exactly one of maxUnits and maxAssets must be non-zero",
     );
+  }
+}
+
+function assertApiValidOfferTimeRange(offer: OfferStruct): void {
+  try {
+    OfferUtils.validateOfferTimeRange(offer);
+  } catch (error) {
+    if (error instanceof InvalidOfferParameterError) {
+      throw new DecodeError(`invalid offer bytes: ${error.message}`, error);
+    }
+    throw error;
   }
 }
 
@@ -621,6 +631,7 @@ function assertAbiItemCountWithinCallerLimit(
  * ```
  */
 export class DecodeError extends Error {
+  /** Machine-readable decode failure reason without the class message prefix. */
   public readonly reason: string;
 
   public constructor(reason: string, cause?: Error) {

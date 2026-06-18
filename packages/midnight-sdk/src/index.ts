@@ -5,7 +5,6 @@ export * from "./fetch/index.js";
 export * from "./market/index.js";
 export * from "./math/index.js";
 export * from "./offers/index.js";
-export * from "./queries/index.js";
 export * from "./signatures/index.js";
 
 /**

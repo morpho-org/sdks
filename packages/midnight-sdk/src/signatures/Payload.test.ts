@@ -151,6 +151,31 @@ describe("Payload.encode", () => {
       ]),
     ).rejects.toBeInstanceOf(Payload.DecodeError);
   });
+
+  test("error: invalid offer time range", async () => {
+    await expect(
+      Payload.encode([
+        {
+          offer: apiValidOffer({
+            start: API_VALID_MATURITY - 60n,
+            expiry: API_VALID_MATURITY - 60n,
+          }),
+          ratifierData: "0x1234" as Hex,
+        },
+      ]),
+    ).rejects.toBeInstanceOf(Payload.DecodeError);
+  });
+
+  test("error: zero offer caps", async () => {
+    await expect(
+      Payload.encode([
+        {
+          offer: apiValidOffer({ maxAssets: 0n }),
+          ratifierData: "0x1234" as Hex,
+        },
+      ]),
+    ).rejects.toBeInstanceOf(Payload.DecodeError);
+  });
 });
 
 describe("Payload.decode", () => {
@@ -233,6 +258,37 @@ describe("Payload.decode", () => {
         offer: apiValidOffer({
           expiry: API_VALID_MATURITY + 60n,
           group,
+        }),
+      }),
+    );
+
+    await expect(Payload.decode(encoded)).rejects.toBeInstanceOf(
+      Payload.DecodeError,
+    );
+  });
+
+  test("error: invalid offer time range bytes", async () => {
+    const encoded = await encodeUncheckedPayload(
+      OfferUtils.toStruct({
+        offer: apiValidOffer({
+          group,
+          start: API_VALID_MATURITY - 60n,
+          expiry: API_VALID_MATURITY - 60n,
+        }),
+      }),
+    );
+
+    await expect(Payload.decode(encoded)).rejects.toBeInstanceOf(
+      Payload.DecodeError,
+    );
+  });
+
+  test("error: zero offer caps bytes", async () => {
+    const encoded = await encodeUncheckedPayload(
+      OfferUtils.toStruct({
+        offer: apiValidOffer({
+          group,
+          maxAssets: 0n,
         }),
       }),
     );

@@ -163,9 +163,22 @@ export namespace OfferUtils {
    */
   export function toStruct(params: OfferStructParams): OfferStruct {
     const normalizedOffer = normalizeOffer(params.offer);
+    const market = MarketUtils.toStruct(normalizedOffer.market);
 
     return {
-      market: MarketUtils.toStruct(normalizedOffer.market),
+      market: {
+        loanToken: market.loanToken,
+        collateralParams: market.collateralParams.map((collateral) => ({
+          token: collateral.token,
+          lltv: collateral.lltv,
+          maxLif: collateral.maxLif,
+          oracle: collateral.oracle,
+        })),
+        maturity: market.maturity,
+        rcfThreshold: market.rcfThreshold,
+        enterGate: market.enterGate,
+        liquidatorGate: market.liquidatorGate,
+      },
       buy: normalizedOffer.buy,
       maker: normalizedOffer.maker,
       start: normalizedOffer.start,
@@ -325,7 +338,7 @@ export namespace OfferUtils {
    *
    * @param params - Start and expiry timestamps.
    * @returns Normalized start and expiry timestamps.
-   * @throws {InvalidOfferParameterError} when the range is negative or inverted.
+   * @throws {InvalidOfferParameterError} when the range is negative or not strictly increasing.
    * @example
    * ```ts
    * import { OfferUtils } from "@morpho-org/midnight-sdk";
@@ -348,11 +361,11 @@ export namespace OfferUtils {
         instruction: "Use a non-negative timestamp.",
       });
     }
-    if (expiry < 0n || expiry < start) {
+    if (expiry < 0n || expiry <= start) {
       throw new InvalidOfferParameterError({
         parameter: "expiry",
         value: expiry,
-        instruction: `Use an expiry greater than or equal to start "${start}".`,
+        instruction: `Use an expiry greater than start "${start}".`,
       });
     }
 

@@ -20,7 +20,7 @@ Per AGENTS.md §1, §2 (rule 5), and §4 — package boundaries, forbidden deep 
 - A new deep import across packages — e.g. `from "@morpho-org/foo/src/internal/..."` instead of going through `@morpho-org/foo`'s `src/index.ts`. The receiving package's `src/index.ts` is the only public entry point.
 - A new export from `src/index.ts` (or removal/rename of an existing one) — flag for cross-file impact on consumers; check that downstream code in the monorepo and the JSDoc still match.
 - A layering reversal — entity reading state when it should be lazy, action encoding calldata that should belong to a helper, helper depending on an entity, etc. (See the §1 Layering table.)
-- A public `*Utils` factory whose main job is returning a public class instance. Prefer a static method on the class (`Offer.create`, `Offer.createGroup`, `Tree.create`) and keep the `*Utils` namespace for pure object-compatible implementation.
+- A public `*Utils` factory whose main job is returning a public class instance. Prefer a static method on the class (`Offer.create`, `Group.create`, `Tree.create`) and keep the `*Utils` namespace for pure object-compatible implementation.
 - A class-specific getter or method that reimplements domain logic instead of delegating to a pure `*Utils` function that accepts readonly plain objects compatible with the class shape.
 - A local, non-exported helper introduced with fewer than three call sites. Inline one-off and two-use helpers.
 - Duplicate public TypeScript shapes for the same concept. If a domain interface and ABI struct are identical, expect one exported interface reused by both paths; a separate `*Struct` type needs a real shape difference.
