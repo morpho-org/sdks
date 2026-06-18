@@ -33,7 +33,7 @@ export type SettlementFeeCbps = readonly [
  * const params: ICollateralParams = {
  *   token: "0x0000000000000000000000000000000000000001",
  *   lltv: 770000000000000000n,
- *   maxLiquidationIncentiveFactor: 1061007957559681697n,
+ *   maxLif: 1061007957559681697n,
  *   oracle: "0x0000000000000000000000000000000000000002",
  * };
  * ```
@@ -44,7 +44,7 @@ export interface ICollateralParams {
   /** WAD-scaled liquidation loan-to-value. */
   readonly lltv: BigIntish;
   /** WAD-scaled maximum liquidation incentive factor. */
-  readonly maxLiquidationIncentiveFactor: BigIntish;
+  readonly maxLif: BigIntish;
   /** Oracle address for this collateral. */
   readonly oracle: Address;
 }
@@ -59,7 +59,7 @@ export interface ICollateralParams {
  * const params: CollateralParams = {
  *   token: "0x0000000000000000000000000000000000000001",
  *   lltv: 770000000000000000n,
- *   maxLiquidationIncentiveFactor: 1298701298701298701n,
+ *   maxLif: 1298701298701298701n,
  *   oracle: "0x0000000000000000000000000000000000000002",
  * };
  * console.log(params.lltv);
@@ -71,37 +71,6 @@ export interface CollateralParams {
   /** WAD-scaled liquidation loan-to-value. */
   readonly lltv: bigint;
   /** WAD-scaled maximum liquidation incentive factor. */
-  readonly maxLiquidationIncentiveFactor: bigint;
-  /** Oracle address for this collateral. */
-  readonly oracle: Address;
-}
-
-/**
- * ABI tuple shape for Midnight collateral params.
- *
- * Solidity names the field `maxLif`; SDK domain types expose the expanded
- * `maxLiquidationIncentiveFactor` name and convert to this shape at ABI
- * boundaries.
- *
- * @example
- * ```ts
- * import type { CollateralParamsStruct } from "@morpho-org/midnight-sdk";
- *
- * const params: CollateralParamsStruct = {
- *   token: "0x0000000000000000000000000000000000000001",
- *   lltv: 770000000000000000n,
- *   maxLif: 1298701298701298701n,
- *   oracle: "0x0000000000000000000000000000000000000002",
- * };
- * console.log(params.maxLif);
- * ```
- */
-export interface CollateralParamsStruct {
-  /** Collateral token address. */
-  readonly token: Address;
-  /** WAD-scaled liquidation loan-to-value. */
-  readonly lltv: bigint;
-  /** ABI field for the WAD-scaled maximum liquidation incentive factor. */
   readonly maxLif: bigint;
   /** Oracle address for this collateral. */
   readonly oracle: Address;
@@ -128,11 +97,7 @@ export interface IMarketParams {
   /** Loan token address. */
   readonly loanToken: Address;
   /** Collateral definitions sorted as expected by Midnight. */
-  readonly collateralParams: readonly (
-    | ICollateralParams
-    | CollateralParams
-    | CollateralParamsStruct
-  )[];
+  readonly collateralParams: readonly (ICollateralParams | CollateralParams)[];
   /** Market maturity timestamp. */
   readonly maturity: BigIntish;
   /** Recovery close factor threshold. */
@@ -190,39 +155,6 @@ export class MarketParams {
     this.enterGate = params.enterGate;
     this.liquidatorGate = params.liquidatorGate;
   }
-}
-
-/**
- * ABI tuple shape for Midnight market params.
- *
- * @example
- * ```ts
- * import type { MarketParamsStruct } from "@morpho-org/midnight-sdk";
- *
- * const params: MarketParamsStruct = {
- *   loanToken: "0x0000000000000000000000000000000000000001",
- *   collateralParams: [],
- *   maturity: 1n,
- *   rcfThreshold: 0n,
- *   enterGate: "0x0000000000000000000000000000000000000000",
- *   liquidatorGate: "0x0000000000000000000000000000000000000000",
- * };
- * console.log(params.maturity);
- * ```
- */
-export interface MarketParamsStruct {
-  /** Loan token address. */
-  readonly loanToken: Address;
-  /** Collateral definitions. */
-  readonly collateralParams: readonly CollateralParamsStruct[];
-  /** Market maturity timestamp. */
-  readonly maturity: bigint;
-  /** Recovery close factor threshold. */
-  readonly rcfThreshold: bigint;
-  /** Entry gate address. */
-  readonly enterGate: Address;
-  /** Liquidator gate address. */
-  readonly liquidatorGate: Address;
 }
 
 /**

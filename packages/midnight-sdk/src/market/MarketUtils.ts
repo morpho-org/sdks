@@ -14,12 +14,10 @@ import {
 } from "../constants.js";
 import {
   type CollateralParams,
-  type CollateralParamsStruct,
   type ICollateralParams,
   type IMarket,
   type IMarketParams,
   MarketParams,
-  type MarketParamsStruct,
   marketParamsAbiParameter,
   type SettlementFeeCbps,
 } from "./Market.js";
@@ -44,10 +42,7 @@ const marketHashParams = [
   { name: "liquidatorGate", type: "address" },
 ] as const;
 
-type CollateralParamsInput =
-  | ICollateralParams
-  | CollateralParams
-  | CollateralParamsStruct;
+type CollateralParamsInput = ICollateralParams | CollateralParams;
 
 /**
  * Plain market params or hydrated market object accepted by market utilities.
@@ -85,22 +80,19 @@ export namespace MarketUtils {
    * const collateral = MarketUtils.normalizeCollateralParams({
    *   token: "0x0000000000000000000000000000000000000001",
    *   lltv: 770000000000000000n,
-   *   maxLiquidationIncentiveFactor: 1061007957559681697n,
+   *   maxLif: 1061007957559681697n,
    *   oracle: "0x0000000000000000000000000000000000000002",
    * });
-   * console.log(collateral.maxLiquidationIncentiveFactor);
+   * console.log(collateral.maxLif);
    * ```
    */
   export function normalizeCollateralParams(
     params: CollateralParamsInput,
   ): CollateralParams {
-    const maxLiquidationIncentiveFactor =
-      "maxLif" in params ? params.maxLif : params.maxLiquidationIncentiveFactor;
-
     return {
       token: params.token,
       lltv: BigInt(params.lltv),
-      maxLiquidationIncentiveFactor: BigInt(maxLiquidationIncentiveFactor),
+      maxLif: BigInt(params.maxLif),
       oracle: params.oracle,
     };
   }
@@ -136,22 +128,8 @@ export namespace MarketUtils {
    * console.log(struct.maturity);
    * ```
    */
-  export function toStruct(market: MarketInput): MarketParamsStruct {
-    const params = normalizeMarketParams(market);
-
-    return {
-      loanToken: params.loanToken,
-      collateralParams: params.collateralParams.map((collateralParams) => ({
-        token: collateralParams.token,
-        lltv: collateralParams.lltv,
-        maxLif: collateralParams.maxLiquidationIncentiveFactor,
-        oracle: collateralParams.oracle,
-      })),
-      maturity: params.maturity,
-      rcfThreshold: params.rcfThreshold,
-      enterGate: params.enterGate,
-      liquidatorGate: params.liquidatorGate,
-    };
+  export function toStruct(market: MarketInput): MarketParams {
+    return normalizeMarketParams(market);
   }
 
   /**

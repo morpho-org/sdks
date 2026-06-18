@@ -48,7 +48,7 @@ export async function makeBaseUsdcWethOffers(params: {
       {
         token: weth,
         lltv: 770_000000000000000000n,
-        maxLiquidationIncentiveFactor: 1_061007957559681697n,
+        maxLif: 1_061007957559681697n,
         oracle: params.wethUsdcOracle,
       },
     ],
@@ -175,9 +175,7 @@ function offerFromApi(offer: MidnightApiTakeableOffer["offer"]): IOffer {
       collateralParams: offer.market.collaterals.map((collateral) => ({
         token: collateral.token,
         lltv: BigInt(collateral.lltv),
-        maxLiquidationIncentiveFactor: BigInt(
-          collateral.maxLiquidationIncentiveFactor,
-        ),
+        maxLif: BigInt(collateral.maxLiquidationIncentiveFactor),
         oracle: collateral.oracle,
       })),
       maturity: BigInt(offer.market.maturity),

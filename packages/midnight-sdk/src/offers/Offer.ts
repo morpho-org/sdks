@@ -1,12 +1,7 @@
 import type { BigIntish } from "@morpho-org/morpho-ts";
 import type { Address, Hash, Hex } from "viem";
 import { zeroAddress, zeroHash } from "viem";
-import type {
-  IMarket,
-  IMarketParams,
-  MarketParamsStruct,
-} from "../market/index.js";
-import type { MarketParams } from "../market/Market.js";
+import type { IMarket, IMarketParams, MarketParams } from "../market/index.js";
 import { MarketUtils } from "../market/MarketUtils.js";
 import { OfferUtils } from "./OfferUtils.js";
 
@@ -274,7 +269,7 @@ export class Offer {
  */
 export interface OfferStruct {
   /** Market this offer trades. */
-  readonly market: MarketParamsStruct;
+  readonly market: MarketParams;
   /** Whether the maker buys units. */
   readonly buy: boolean;
   /** Offer maker. */
