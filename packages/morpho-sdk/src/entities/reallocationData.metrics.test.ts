@@ -94,9 +94,10 @@ describe("ReallocationData.getPublicReallocationLiquidity", () => {
 });
 
 describe("ReallocationData.getAvailableLiquidityToTargetUtilization", () => {
-  test("default: own headroom + available liquidity", () => {
+  test("default: own headroom + scaled available liquidity", () => {
     // 1000 supply / 500 borrow (50% util). ownHeadroom to 90% = 1000·0.9 − 500 = 400.
-    // supplyTarget set to 90% (not > target) → available liquidity (200) is added → 600.
+    // supplyTarget set to 90% (not > target) → scaled liquidity 0.9·200 = 180 is
+    // added → 580.
     const data = makeData();
     stubReallocations(data, [
       { id: sourceParamsA.id, vault: VAULT_A, assets: 200n * MathLib.WAD },
@@ -111,7 +112,7 @@ describe("ReallocationData.getAvailableLiquidityToTargetUtilization", () => {
           defaultSupplyTargetUtilization: NINETY_PERCENT,
         },
       ),
-    ).toBe(600n * MathLib.WAD);
+    ).toBe(580n * MathLib.WAD);
   });
 
   test("behavior: returns only own headroom when supplyTargetUtilization > utilization", () => {
@@ -133,8 +134,9 @@ describe("ReallocationData.getAvailableLiquidityToTargetUtilization", () => {
     ).toBe(400n * MathLib.WAD);
   });
 
-  test("behavior: returns only available liquidity when utilization equals current utilization", () => {
-    // 1000 supply / 900 borrow → current util 90% = target. ownHeadroom is 0.
+  test("behavior: returns only scaled available liquidity when utilization equals current utilization", () => {
+    // 1000 supply / 900 borrow → current util 90% = target. ownHeadroom is 0,
+    // so only the scaled liquidity 0.9·200 = 180 backs further borrow.
     const data = makeData(
       makeMarket({
         totalSupplyAssets: 1000n * MathLib.WAD,
@@ -154,7 +156,7 @@ describe("ReallocationData.getAvailableLiquidityToTargetUtilization", () => {
           defaultSupplyTargetUtilization: NINETY_PERCENT,
         },
       ),
-    ).toBe(200n * MathLib.WAD);
+    ).toBe(180n * MathLib.WAD);
   });
 
   test("behavior: forwards options to discovery without forcing an aggressive drain", () => {
@@ -190,7 +192,7 @@ describe("ReallocationData.getAvailableLiquidityToTargetUtilization", () => {
 
     const expected =
       targetMarket.getBorrowToUtilization(DEFAULT_SUPPLY_TARGET_UTILIZATION) +
-      200n * MathLib.WAD;
+      MathLib.wMulDown(200n * MathLib.WAD, DEFAULT_SUPPLY_TARGET_UTILIZATION);
 
     expect(data.getAvailableLiquidityToTargetUtilization(targetParams.id)).toBe(
       expected,

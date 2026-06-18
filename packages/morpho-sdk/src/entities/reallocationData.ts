@@ -497,13 +497,15 @@ export class ReallocationData implements InputReallocationData {
   /**
    * Computes the liquidity available to bring `marketId` to `targetUtilization`,
    * combining its own borrow headroom with the reallocatable public-allocator
-   * liquidity.
+   * liquidity scaled by `targetUtilization` (reallocated supply also raises the
+   * market's supply denominator, so only `targetUtilization · L` of it backs
+   * further borrow).
    *
    * Read-only metric — never throws on insufficiency:
    * - returns only the own headroom when `supplyTargetUtilization > targetUtilization`
    *   (reallocation would not trigger at that target);
-   * - returns only the available liquidity when `targetUtilization` equals the
-   *   market's current utilization (no own headroom left);
+   * - returns only the scaled available liquidity when `targetUtilization` equals
+   *   the market's current utilization (no own headroom left);
    * - otherwise returns their sum.
    *
    * @param marketId - Target market to borrow from.
@@ -528,9 +530,13 @@ export class ReallocationData implements InputReallocationData {
     );
     if (supplyTargetUtilization > targetUtilization) return ownHeadroom;
 
-    const availableLiquidity = this.getPublicReallocationLiquidity(
-      marketId,
-      options,
+    // Scale the reallocatable liquidity by the target utilization: borrowing
+    // against reallocated supply `L` only adds `targetUtilization · L` of
+    // headroom, since `L` also raises the market's supply denominator. This
+    // matches `getBorrowToUtilization({ supply + L, borrow }, targetUtilization)`.
+    const availableLiquidity = MathLib.wMulDown(
+      this.getPublicReallocationLiquidity(marketId, options),
+      targetUtilization,
     );
     if (targetUtilization === market.utilization) return availableLiquidity;
 
