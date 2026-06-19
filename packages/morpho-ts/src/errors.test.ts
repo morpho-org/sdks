@@ -5,6 +5,7 @@ import {
   IncompleteChainRegistryError,
   InvalidBitLengthError,
   NegativeValueError,
+  RegistryValueAlreadyRegisteredError,
   UnknownAddressError,
   UnsupportedChainIdError,
 } from "./errors.js";
@@ -53,6 +54,22 @@ describe("NegativeValueError", () => {
   });
 });
 
+describe("RegistryValueAlreadyRegisteredError", () => {
+  test("default", () => {
+    const error = new RegistryValueAlreadyRegisteredError({
+      label: "31337.midnight",
+      registeredValue: "0x0000000000000000000000000000000000000001",
+      requestedValue: "0x0000000000000000000000000000000000000002",
+      type: "address",
+    });
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe("RegistryValueAlreadyRegisteredError");
+    expect(error.message).toContain("31337.midnight");
+    expect(error.message).toContain("address");
+  });
+});
+
 describe("IncompleteChainRegistryError", () => {
   test("default", () => {
     const error = new IncompleteChainRegistryError({
@@ -65,7 +82,6 @@ describe("IncompleteChainRegistryError", () => {
     expect(error.chainId).toBe(31_337);
     expect(error.type).toBe("address");
     expect(error.message).toContain("31337");
-    expect(error.message).toContain("Blue entries");
   });
 });
 

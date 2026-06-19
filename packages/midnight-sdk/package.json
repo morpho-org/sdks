@@ -1,0 +1,69 @@
+{
+  "name": "@morpho-org/midnight-sdk",
+  "description": "Viem-based package for Morpho Midnight that exports protocol utilities, fetch helpers, and Midnight API utilities under a dedicated API subpath.",
+  "version": "0.1.0",
+  "author": "Morpho Association <contact@morpho.org>",
+  "contributors": [
+    "Rubilmax <rmilon@gmail.com>"
+  ],
+  "repository": "github:morpho-org/sdks",
+  "homepage": "https://github.com/morpho-org/sdks",
+  "bugs": {
+    "url": "https://github.com/morpho-org/sdks/issues",
+    "email": "contact@morpho.org"
+  },
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./api": "./src/api/index.ts",
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "api": [
+        "src/api/index.ts"
+      ]
+    }
+  },
+  "sideEffects": false,
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "prepublish": "$npm_execpath build",
+    "compile": "node ../../scripts/compile-solidity.js midnight-sdk",
+    "build": "tsc --noEmit && $npm_execpath build:cjs && $npm_execpath build:esm",
+    "build:cjs": "tsc --build tsconfig.build.cjs.json && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
+    "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json",
+    "test": "vitest --root ../.. --project midnight-sdk"
+  },
+  "peerDependencies": {
+    "@morpho-org/morpho-ts": "^2.7.0",
+    "viem": "^2.0.0"
+  },
+  "devDependencies": {
+    "@morpho-org/morpho-ts": "workspace:^",
+    "@morpho-org/test": "workspace:^",
+    "fast-check": "^4.4.0",
+    "typescript": "^6.0.3",
+    "viem": "2.52.2",
+    "vitest": "^4.1.6"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./lib/esm/index.d.ts",
+        "import": "./lib/esm/index.js",
+        "require": "./lib/cjs/index.js"
+      },
+      "./api": {
+        "types": "./lib/esm/api/index.d.ts",
+        "import": "./lib/esm/api/index.js",
+        "require": "./lib/cjs/api/index.js"
+      },
+      "./package.json": "./package.json"
+    }
+  }
+}

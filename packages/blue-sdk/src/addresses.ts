@@ -6,10 +6,10 @@ export type {
   DeploymentRegistry,
 } from "@morpho-org/morpho-ts";
 export {
-  blueAddresses as addresses,
-  blueAddressRegistry as addressesRegistry,
-  blueDeployments as deployments,
+  addresses,
+  addressesRegistry,
   convexWrapperTokens,
+  deployments,
   erc20WrapperTokens,
   getChainAddress,
   getChainAddresses,
