@@ -77,7 +77,10 @@ export namespace MarketUtils {
   /**
    * Converts collateral params from a plain input or ABI tuple.
    *
-   * @param params - Collateral params input.
+   * @param params.token - Collateral token address.
+   * @param params.lltv - WAD-scaled liquidation loan-to-value.
+   * @param params.maxLif - WAD-scaled maximum liquidation incentive factor.
+   * @param params.oracle - Oracle address used to price this collateral.
    * @returns Collateral params with bigint fields.
    * @example
    * ```ts
@@ -193,7 +196,8 @@ export namespace MarketUtils {
    * values are linearly interpolated between {@link SETTLEMENT_FEE_BREAKPOINTS},
    * and any time to maturity at or above 360 days uses the last bucket.
    *
-   * @param params - Settlement-fee parameters.
+   * @param params.settlementFeeCbps - Seven settlement-fee centibip buckets from the market state.
+   * @param params.timeToMaturity - Seconds until market maturity.
    * @returns WAD-scaled settlement fee.
    * @throws {NegativeValueError} when `timeToMaturity` is negative.
    * @example
@@ -287,8 +291,8 @@ export namespace MarketUtils {
   /**
    * Computes the Midnight id for a market using `IdLib.toId`.
    *
-   * @param market - Market to hash.
-   * @param chainId - EIP-155 chain id used to resolve the core Midnight address from the registry.
+   * @param params.market - Market to hash.
+   * @param params.chainId - EIP-155 chain id used to resolve the core Midnight address from the registry.
    * @returns Market id.
    * @throws {UnsupportedChainIdError} when no address registry exists for `chainId`.
    * @throws {UnknownAddressError} when the registry has no Midnight address for `chainId`.

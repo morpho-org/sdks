@@ -47,7 +47,7 @@ Keeping those details only in app code makes every downstream integration re-lea
 - No Blue-specific ABI ownership changes. `blueAbi`, `adaptiveCurveIrmAbi`, `blueOracleAbi`, `preLiquidationFactoryAbi`, and `preLiquidationAbi` stay in `@morpho-org/blue-sdk-viem`; descriptors such as `marketParamsAbi` stay in `@morpho-org/blue-sdk`.
 - No `midnight-sdk` compatibility facade for generic `morpho-ts` utilities. `midnight-sdk` is not published yet, so its own source, docs, and downstream app rewires should import shared primitives directly from `@morpho-org/morpho-ts` instead of preserving temporary `midnight-sdk` re-export paths. This includes symbols that already exist in `morpho-ts`, plus future shared non-protocol symbols that should be added to `morpho-ts` before Midnight consumes them.
 - No React, wagmi, app `ActionFlow`, toast, label, analytics, or UI-state abstractions in `midnight-sdk`.
-- No generated router client or runtime router dependency in this package. The package owns lightweight `MidnightApi` wrappers for the current book, quote, takeable-offer, validation, and rules endpoints, while protocol conversion helpers remain independent from any app code.
+- No generated router client or runtime router dependency in this package. The package owns lightweight `MidnightApi` wrappers for documented Midnight API calls, while protocol conversion helpers remain independent from any app code.
 - No protocol/admin operations beyond utility support for user-facing order, fetch, and signature flows.
 - No runtime ABI fetch. ABI literals and address-registry fields are pinned in source; production address values are added only from reviewed deployment artifacts.
 - No deprecated package updates.
@@ -558,7 +558,7 @@ Pure utility namespaces stay available for object-first integrations:
 - `SetterRatifierUtils.encodeRatifierData`
 - `SetterRatifierUtils.decodeRatifierData`
 - `Payload.encode` / `Payload.decode` for versioned Midnight mempool payload bytes.
-- `MidnightApi` from `@morpho-org/midnight-sdk/api` for book, quote, takeable-offer, payload/item/tree validation, and mempool-rule reads, callable directly with the default API URL or as a configured instance.
+- `MidnightApi` from `@morpho-org/midnight-sdk/api` for book, quote, takeable-offer, and payload/item/tree validation helpers, callable directly with the default API URL or as a configured instance.
 
 The app remains responsible for sequencing prompts. The SDK returns typed descriptors for "sign this
 typed data", "call this contract", "submit this payload", and "validate this tree/payload".
@@ -567,9 +567,9 @@ typed data", "call this contract", "submit this payload", and "validate this tre
 bytes, a small attribution-suffix allowance, canonical ABI-byte validation, and a typed
 `Payload.DecodeError`.
 
-`MidnightApi` is the public Midnight API HTTP boundary. Direct calls default to `https://api.morpho.org/v1/midnight`; configured instances share a custom string-or-`URL` `baseUrl`, injected `fetch`, and `request` options for headers, abort signals, credentials, cache, and similar fetch settings. Custom base URLs are parsed with the standard `URL` API, normalized by clearing search/hash, and joined with SDK-owned endpoint paths. SDK-controlled fields remain fixed: URL path/query, HTTP method, JSON body, `Content-Type: application/json` on POST requests, and an exact `sdk-version` header equal to the `@morpho-org/midnight-sdk` package version. Book, quote, and takeable-offer routes map documented snake_case fields to SDK camelCase interfaces without adding runtime schema validation. Validation normalizes the current API response `{ data: { issues } }` to SDK camelCase data `{ valid, issues }`, where `valid` is derived from `issues.length === 0`; it does not rely on the API echoing a payload. Mempool-rules support is a thin, explicitly version-tolerant boundary: `fetchMempoolRules` may expose the raw paginated `{ cursor, data }` response or a lightly normalized equivalent, but the TIB does not freeze rule field names such as `callbackType`, `tickSpacing`, or `allowedLltvs` until the public rules schema is finalized.
+`MidnightApi` is the public Midnight API HTTP boundary. Direct calls default to `https://api.morpho.org/v1/midnight`; configured instances share a custom string-or-`URL` `baseUrl`, injected `fetch`, and `request` options for headers, abort signals, credentials, cache, and similar fetch settings. Custom base URLs are parsed with the standard `URL` API, normalized by clearing search/hash, and joined with SDK-owned paths. SDK-controlled fields remain fixed: URL path/query, HTTP method, JSON body, `Content-Type: application/json` on POST requests, and an exact `sdk-version` header equal to the `@morpho-org/midnight-sdk` package version. Book, quote, and takeable-offer responses map documented snake_case fields to SDK camelCase interfaces without adding runtime schema validation. Validation normalizes the current API response `{ data: { issues } }` to SDK camelCase data `{ valid, issues }`, where `valid` is derived from `issues.length === 0`; it does not rely on the API echoing a payload.
 
-The current public API exposes Books, Maker takes, Mempool validate, and Mempool rules. This implementation wraps those routes directly. No generator is introduced for now because the SDK only needs lightweight API calls; type names stay close to the OpenAPI schema names so a future dev-only generator can replace or verify them if a stable spec URL appears.
+The current public API exposes Books, Maker takes, and Mempool validate. This implementation wraps that surface directly. No generator is introduced for now because the SDK only needs lightweight API calls; type names stay close to the OpenAPI schema names so a future dev-only generator can replace or verify them if a stable spec URL appears.
 
 ### App Action Mapping
 
@@ -601,7 +601,7 @@ Status as of the 2026-06-08 implementation review:
 - **Phase 3 - Math and offer utilities: completed.** `TickLib`, `TakeAmountsLib`, `ConsumableUnitsLib`, `MarketUtils`, `Offer`, and `OfferUtils` landed with colocated unit tests and property-based tests for tick/price, unit conversion, offer creation through static class methods, offer-group creation, and protocol offer-group validation.
 - **Phase 4 - Standalone call wrappers: removed from scope.** The package does not export direct core or periphery calldata namespaces.
 - **Phase 5 - Fetch: completed with deployless position reads.** Fetch helpers use named `viem/actions` imports and mock-transport tests; `fetchMarketParams` returns immutable market config, `fetchMarket` returns the hydrated domain `Market` object, `fetchPosition` returns the raw `Position` class, and `fetchAccrualPosition` returns `AccrualPosition` for local `updatePositionView`-equivalent accrual. Primitive single-getter reads remain caller-owned direct viem calls instead of SDK fetch wrappers. `fetchPosition` defaults to deployless reads with direct-read fallback unless callers pass `deployless: "force"` or `deployless: false`; `fetchConsumableUnits` always uses the multicall/direct read path and `fetchRatifierInfo` returns structured ratifier-route metadata from bytecode classification.
-- **Phase 6 - Signatures, validation, payloads, and API routes: completed.** `RatifierUtils`, `EcrecoverRatifierUtils`, `SetterRatifierUtils`, `GroupUtils`, `TreeUtils`, `Group`, `Tree`, `Payload`, and the `MidnightApi` subpath landed. Public API book/quote/takeable-offer/validation/rules reads are lightweight `fetch` boundaries rather than a runtime router dependency, tree validation is available before signature/root approval, and offer publication remains onchain by sending encoded payload bytes to the mempool contract. Maker-side utilities include Ecrecover/Setter ratifier-data generation and decoding without constructing payload bytes and local proof verification.
+- **Phase 6 - Signatures, validation, payloads, and MidnightApi: completed.** `RatifierUtils`, `EcrecoverRatifierUtils`, `SetterRatifierUtils`, `GroupUtils`, `TreeUtils`, `Group`, `Tree`, `Payload`, and the `MidnightApi` subpath landed. Public API book/quote/takeable-offer/validation reads are lightweight `fetch` boundaries rather than a runtime router dependency, tree validation is available before signature/root approval, and offer publication remains onchain by sending encoded payload bytes to the mempool contract. Maker-side utilities include Ecrecover/Setter ratifier-data generation and decoding without constructing payload bytes and local proof verification.
 - **Phase 7 - App adoption: deferred.** Updating the markets-v2 app in `morpho-org/morpho-apps` remains a separate repository change and is not required to land this SDK repo PR.
 
 ## Considered Alternatives
@@ -640,8 +640,8 @@ Expose app-style labels, call requests, signature requests, and success callback
 
 - Midnight production addresses are pinned only after a reviewed deployment artifact is available. Additional chains are additive updates to the `morpho-ts` Midnight address and deployment registries unless the ABI changes.
 - `midnight-sdk` pins the ABI revision used by the app and contracts. If `morpho-org/midnight` `main` differs from the deployed artifact, implementation pins the deployed artifact and documents the source.
-- App quote/order sources may provide executable offers directly, or integrations may use the lightweight `MidnightApi` book/quote/takeable-offer routes. Protocol conversion helpers stay independent from app code and router runtime packages.
-- Public API payload validation and rule inspection are wrapped by `MidnightApi`. If a future PR adds `@morpho-dev/router`, it must justify the dependency and keep it wrapped behind `midnight-sdk` APIs.
+- App quote/order sources may provide executable offers directly, or integrations may use the lightweight `MidnightApi` book/quote/takeable-offer helpers. Protocol conversion helpers stay independent from app code and router runtime packages.
+- Public API payload validation is wrapped by `MidnightApi`. If a future PR adds `@morpho-dev/router`, it must justify the dependency and keep it wrapped behind `midnight-sdk` APIs.
 - Fetch helpers use transport-bound unit tests via `createMockClient` from `@morpho-org/test/mock`. Fork tests are required when a helper's correctness depends on live contract behavior rather than request/response shape.
 - All exported symbols require JSDoc and explicit `src/index.ts` re-exports.
 
@@ -651,7 +651,7 @@ Expose app-style labels, call requests, signature requests, and success callback
 - `@morpho-org/morpho-ts` as a workspace peer dependency for directly imported shared SDK primitives, `MathLib`, shared constants, typed errors, assertions, and generic helpers. `midnight-sdk` does not depend on `blue-sdk` for these symbols and does not ask app consumers to import them through `midnight-sdk`.
 - `@morpho-org/test` as a dev dependency for mock-transport tests.
 - `fast-check` as a dev dependency for property-based tests.
-- No runtime `@morpho-dev/router` dependency in the initial implementation; public API routes use the Morpho API HTTP boundary through global or injected `fetch`.
+- No runtime `@morpho-dev/router` dependency in the initial implementation; public API calls use the Morpho API HTTP boundary through global or injected `fetch`.
 
 ## Security
 
@@ -689,7 +689,6 @@ Expose app-style labels, call requests, signature requests, and success callback
 - `TakeAmountsLib.sol`: <https://github.com/morpho-org/midnight/blob/main/src/periphery/TakeAmountsLib.sol>
 - `ConsumableUnitsLib.sol`: <https://github.com/morpho-org/midnight/blob/main/src/periphery/ConsumableUnitsLib.sol>
 - Markets-v2 app order actions: <https://github.com/morpho-org/morpho-apps/tree/main/apps/markets-v2-app/lib/modules/order/actions>
-- Morpho API mempool validation endpoint: `POST https://api.morpho.org/v1/midnight/mempool/validate`
 - AGENTS.md section 1 (layering), section 2 (forbidden patterns), section 3 (type discipline), section 5 (testing), section 6 (JSDoc)
 - [TIB-2026-04-27](./TIB-2026-04-27-maximize-unit-test-coverage.md) (mock-transport unit-test boundary)
 - [TIB-2026-05-04](./TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md) (JSDoc coverage on exported symbols)

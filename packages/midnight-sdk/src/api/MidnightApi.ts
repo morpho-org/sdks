@@ -5,7 +5,6 @@ import {
   mapBookMarket,
   mapPriceLevel,
   mapTakeableOffer,
-  parseRulesResponse,
   parseValidationResponse,
   requestMidnightApi,
 } from "./helpers.js";
@@ -21,10 +20,8 @@ import type {
   FetchBookQuoteParams,
   FetchBooksParams,
   FetchBookTakeableOffersParams,
-  FetchMempoolRulesParams,
   FetchTakeableOffersParams,
   MempoolPayloadValidationResult,
-  MempoolRulesResult,
   MidnightApiBookPriceLevelsResult,
   MidnightApiBookResult,
   MidnightApiBooksResult,
@@ -45,12 +42,9 @@ export type {
   FetchBookQuoteParams,
   FetchBooksParams,
   FetchBookTakeableOffersParams,
-  FetchMempoolRulesParams,
   FetchTakeableOffersParams,
   MempoolPayloadValidationIssue,
   MempoolPayloadValidationResult,
-  MempoolRule,
-  MempoolRulesResult,
   MidnightApiBookMarket,
   MidnightApiBookPriceLevelsResult,
   MidnightApiBookResult,
@@ -116,6 +110,9 @@ export class MidnightApi {
    * Creates a Midnight API client with shared request configuration.
    *
    * @param config - API base URL or full request configuration.
+   * @param config.baseUrl - Optional Midnight API base URL.
+   * @param config.fetch - Optional fetch implementation used for all instance calls.
+   * @param config.request - Optional fetch options forwarded to all instance calls.
    * @returns Configured Midnight API client.
    * @example
    * ```ts
@@ -137,7 +134,19 @@ export class MidnightApi {
   /**
    * Fetches active Midnight books with market metadata and top price levels.
    *
-   * @param params - Book filters, sorting, pagination, and optional request configuration.
+   * Reads `GET /books` from the Midnight API. Does not read onchain RPC state.
+   *
+   * @param params.sort - Optional book sort terms.
+   * @param params.maturities - Optional exact maturity timestamp filters in unix seconds.
+   * @param params.collateralTokens - Optional collateral token address filters.
+   * @param params.loanTokens - Optional loan token address filters.
+   * @param params.chainIds - Optional chain id filters.
+   * @param params.marketIds - Optional market id filters.
+   * @param params.limit - Optional maximum number of books to return.
+   * @param params.cursor - Optional opaque pagination cursor from a previous response.
+   * @param params.baseUrl - Optional Midnight API base URL override.
+   * @param params.fetch - Optional fetch implementation override.
+   * @param params.request - Optional fetch options forwarded to this request.
    * @returns Paginated books mapped to SDK camelCase fields.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
@@ -181,7 +190,13 @@ export class MidnightApi {
   /**
    * Fetches one Midnight book with market metadata and both sides.
    *
-   * @param params - Market id, optional depth, and optional request configuration.
+   * Reads `GET /books/{marketId}` from the Midnight API. Does not read onchain RPC state.
+   *
+   * @param params.marketId - Market id whose book to read.
+   * @param params.depth - Optional maximum levels returned per side.
+   * @param params.baseUrl - Optional Midnight API base URL override.
+   * @param params.fetch - Optional fetch implementation override.
+   * @param params.request - Optional fetch options forwarded to this request.
    * @returns Book snapshot mapped to SDK camelCase fields.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
@@ -216,7 +231,14 @@ export class MidnightApi {
   /**
    * Fetches one side of a Midnight book grouped by price level.
    *
-   * @param params - Market id, side, optional depth, and optional request configuration.
+   * Reads `GET /books/{marketId}/{side}` from the Midnight API. Does not read onchain RPC state.
+   *
+   * @param params.marketId - Market id whose book side to read.
+   * @param params.side - Book side to query.
+   * @param params.depth - Optional maximum levels returned.
+   * @param params.baseUrl - Optional Midnight API base URL override.
+   * @param params.fetch - Optional fetch implementation override.
+   * @param params.request - Optional fetch options forwarded to this request.
    * @returns Price levels mapped to SDK camelCase fields.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
@@ -252,7 +274,13 @@ export class MidnightApi {
   /**
    * Fetches executable offers for one side of a Midnight book.
    *
-   * @param params - Market id, side, and optional request configuration.
+   * Reads `GET /books/{marketId}/{side}/takeable-offers` from the Midnight API. Does not read onchain RPC state.
+   *
+   * @param params.marketId - Market id whose book side to read.
+   * @param params.side - Book side to query.
+   * @param params.baseUrl - Optional Midnight API base URL override.
+   * @param params.fetch - Optional fetch implementation override.
+   * @param params.request - Optional fetch options forwarded to this request.
    * @returns ABI-ready take objects mapped from the API response.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
@@ -289,7 +317,17 @@ export class MidnightApi {
   /**
    * Fetches a bundle-ready quote for one side of a Midnight book.
    *
-   * @param params - Market id, side, target size, price guard, and optional request configuration.
+   * Reads `GET /books/{marketId}/{side}/quote` from the Midnight API. Does not read onchain RPC state.
+   *
+   * @param params.marketId - Market id whose book side to quote.
+   * @param params.side - Book side to quote.
+   * @param params.assets - Optional maker-side target assets amount. Mutually exclusive with `params.units`.
+   * @param params.units - Optional target unit amount. Mutually exclusive with `params.assets`.
+   * @param params.averageWorstPrice - Optional WAD-scaled average worst price guard. Mutually exclusive with `params.slippage`.
+   * @param params.slippage - Optional slippage percentage used to derive the guard. Mutually exclusive with `params.averageWorstPrice`.
+   * @param params.baseUrl - Optional Midnight API base URL override.
+   * @param params.fetch - Optional fetch implementation override.
+   * @param params.request - Optional fetch options forwarded to this request.
    * @returns Quote and signed ABI-ready take caps mapped from the API response.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
@@ -342,7 +380,16 @@ export class MidnightApi {
   /**
    * Fetches one maker's unexpired, unmatured takeable offers.
    *
-   * @param params - Maker filter, optional market/group filters, pagination, and request configuration.
+   * Reads `GET /takeable-offers` from the Midnight API. Does not read onchain RPC state.
+   *
+   * @param params.maker - Maker EVM address.
+   * @param params.marketIds - Optional market id filters.
+   * @param params.groups - Optional group id filters.
+   * @param params.limit - Optional maximum number of offers to return.
+   * @param params.cursor - Optional opaque pagination cursor from a previous response.
+   * @param params.baseUrl - Optional Midnight API base URL override.
+   * @param params.fetch - Optional fetch implementation override.
+   * @param params.request - Optional fetch options forwarded to this request.
    * @returns Paginated ABI-ready take objects mapped from the API response.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
@@ -385,7 +432,14 @@ export class MidnightApi {
    * Use after `Payload.encode` and before submitting the payload onchain when a
    * maker flow wants API feedback before publishing payload bytes onchain.
    *
-   * @param params - Validation parameters and optional request configuration.
+   * Sends `POST /mempool/validate` to the Midnight API. Does not read onchain RPC state.
+   *
+   * @param params.chainId - Chain id whose API policy should validate the payload.
+   * @param params.payload - Encoded Midnight mempool payload bytes.
+   * @param params.timestamp - Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot.
+   * @param params.baseUrl - Optional Midnight API base URL override.
+   * @param params.fetch - Optional fetch implementation override.
+   * @param params.request - Optional fetch options forwarded to this request.
    * @returns API issues and `valid` summary.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
@@ -427,7 +481,14 @@ export class MidnightApi {
    * before `Payload.encode` output is submitted onchain. This helper owns the
    * temporary payload encoding for validation only.
    *
-   * @param params - Validation parameters and optional request configuration.
+   * Encodes `params.items`, then sends `POST /mempool/validate` to the Midnight API. Does not read onchain RPC state.
+   *
+   * @param params.chainId - Chain id whose API policy should validate the payload.
+   * @param params.items - SDK-native payload items to encode before API validation.
+   * @param params.timestamp - Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot.
+   * @param params.baseUrl - Optional Midnight API base URL override.
+   * @param params.fetch - Optional fetch implementation override.
+   * @param params.request - Optional fetch options forwarded to this request.
    * @returns API issues and `valid` summary.
    * @throws {Payload.DecodeError} when item encoding fails.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
@@ -493,7 +554,14 @@ export class MidnightApi {
    * Use after `Tree.create` and before `EcrecoverRatifierUtils.ratify` or
    * the Setter root approval transaction.
    *
-   * @param params - Validation parameters and optional request configuration.
+   * Encodes `params.tree` with empty ratifier data, then sends `POST /mempool/validate` to the Midnight API. Does not read onchain RPC state.
+   *
+   * @param params.chainId - Chain id whose API policy should validate the tree.
+   * @param params.tree - Offer tree to validate before ratifier data or payload publication exists.
+   * @param params.timestamp - Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot.
+   * @param params.baseUrl - Optional Midnight API base URL override.
+   * @param params.fetch - Optional fetch implementation override.
+   * @param params.request - Optional fetch options forwarded to this request.
    * @returns API issues and `valid` summary.
    * @throws {Payload.DecodeError} when validation payload encoding fails.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
@@ -555,47 +623,18 @@ export class MidnightApi {
   }
 
   /**
-   * Fetches inspectable Midnight API mempool policy rules.
-   *
-   * @param params - Rule filters, pagination, and optional request configuration.
-   * @returns Paginated API rules mapped to SDK camelCase fields.
-   * @throws {MidnightApiError} when the API returns a non-2xx response.
-   * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
-   * @example
-   * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
-   *
-   * const rules = await MidnightApi.fetchMempoolRules({
-   *   chainIds: [8453],
-   *   types: ["tick_spacing"],
-   * });
-   * console.log(rules.data[0]?.type);
-   * ```
-   */
-  public static async fetchMempoolRules(
-    params: FetchMempoolRulesParams = {},
-  ): Promise<MempoolRulesResult> {
-    const input = params;
-    const response = await requestMidnightApi({
-      ...input,
-      method: "GET",
-      path: "mempool/rules",
-      query: {
-        timestamp: input.timestamp,
-        chain_ids: input.chainIds,
-        types: input.types,
-        limit: input.limit,
-        cursor: input.cursor,
-      },
-    });
-
-    return parseRulesResponse(response);
-  }
-
-  /**
    * Fetches active Midnight books with this client's configuration.
    *
-   * @param params - Book filters, sorting, and pagination.
+   * Reads `GET /books` from the Midnight API using this client's configuration. Does not read onchain RPC state.
+   *
+   * @param params.sort - Optional book sort terms.
+   * @param params.maturities - Optional exact maturity timestamp filters in unix seconds.
+   * @param params.collateralTokens - Optional collateral token address filters.
+   * @param params.loanTokens - Optional loan token address filters.
+   * @param params.chainIds - Optional chain id filters.
+   * @param params.marketIds - Optional market id filters.
+   * @param params.limit - Optional maximum number of books to return.
+   * @param params.cursor - Optional opaque pagination cursor from a previous response.
    * @returns Paginated books mapped to SDK camelCase fields.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
@@ -620,7 +659,10 @@ export class MidnightApi {
   /**
    * Fetches one Midnight book with this client's configuration.
    *
-   * @param params - Market id and optional depth.
+   * Reads `GET /books/{marketId}` from the Midnight API using this client's configuration. Does not read onchain RPC state.
+   *
+   * @param params.marketId - Market id whose book to read.
+   * @param params.depth - Optional maximum levels returned per side.
    * @returns Book snapshot mapped to SDK camelCase fields.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
@@ -647,7 +689,11 @@ export class MidnightApi {
   /**
    * Fetches one side of a Midnight book with this client's configuration.
    *
-   * @param params - Market id, side, and optional depth.
+   * Reads `GET /books/{marketId}/{side}` from the Midnight API using this client's configuration. Does not read onchain RPC state.
+   *
+   * @param params.marketId - Market id whose book side to read.
+   * @param params.side - Book side to query.
+   * @param params.depth - Optional maximum levels returned.
    * @returns Price levels mapped to SDK camelCase fields.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
@@ -675,7 +721,10 @@ export class MidnightApi {
   /**
    * Fetches executable offers for one book side with this client's configuration.
    *
-   * @param params - Market id and side.
+   * Reads `GET /books/{marketId}/{side}/takeable-offers` from the Midnight API using this client's configuration. Does not read onchain RPC state.
+   *
+   * @param params.marketId - Market id whose book side to read.
+   * @param params.side - Book side to query.
    * @returns ABI-ready take objects mapped from the API response.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
@@ -703,7 +752,14 @@ export class MidnightApi {
   /**
    * Fetches a bundle-ready quote with this client's configuration.
    *
-   * @param params - Market id, side, target size, and price guard.
+   * Reads `GET /books/{marketId}/{side}/quote` from the Midnight API using this client's configuration. Does not read onchain RPC state.
+   *
+   * @param params.marketId - Market id whose book side to quote.
+   * @param params.side - Book side to quote.
+   * @param params.assets - Optional maker-side target assets amount. Mutually exclusive with `params.units`.
+   * @param params.units - Optional target unit amount. Mutually exclusive with `params.assets`.
+   * @param params.averageWorstPrice - Optional WAD-scaled average worst price guard. Mutually exclusive with `params.slippage`.
+   * @param params.slippage - Optional slippage percentage used to derive the guard. Mutually exclusive with `params.averageWorstPrice`.
    * @returns Quote and signed ABI-ready take caps mapped from the API response.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
@@ -732,7 +788,13 @@ export class MidnightApi {
   /**
    * Fetches one maker's takeable offers with this client's configuration.
    *
-   * @param params - Maker filter, optional market/group filters, and pagination.
+   * Reads `GET /takeable-offers` from the Midnight API using this client's configuration. Does not read onchain RPC state.
+   *
+   * @param params.maker - Maker EVM address.
+   * @param params.marketIds - Optional market id filters.
+   * @param params.groups - Optional group id filters.
+   * @param params.limit - Optional maximum number of offers to return.
+   * @param params.cursor - Optional opaque pagination cursor from a previous response.
    * @returns Paginated ABI-ready take objects mapped from the API response.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
@@ -761,7 +823,11 @@ export class MidnightApi {
    *
    * Use after `Payload.encode` and before submitting the payload onchain.
    *
-   * @param params - Payload validation parameters.
+   * Sends `POST /mempool/validate` to the Midnight API using this client's configuration. Does not read onchain RPC state.
+   *
+   * @param params.chainId - Chain id whose API policy should validate the payload.
+   * @param params.payload - Encoded Midnight mempool payload bytes.
+   * @param params.timestamp - Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot.
    * @returns API validation result.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
@@ -789,7 +855,11 @@ export class MidnightApi {
    * Use after Ecrecover or Setter ratifier utilities have produced items and
    * before submitting the encoded payload onchain.
    *
-   * @param params - Item validation parameters.
+   * Encodes `params.items`, then sends `POST /mempool/validate` to the Midnight API using this client's configuration. Does not read onchain RPC state.
+   *
+   * @param params.chainId - Chain id whose API policy should validate the payload.
+   * @param params.items - SDK-native payload items to encode before API validation.
+   * @param params.timestamp - Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot.
    * @returns API validation result.
    * @throws {Payload.DecodeError} when item encoding fails.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
@@ -846,7 +916,11 @@ export class MidnightApi {
    * Use after `Tree.create` and before wallet signature or Setter root
    * approval.
    *
-   * @param params - Tree validation parameters.
+   * Encodes `params.tree` with empty ratifier data, then sends `POST /mempool/validate` to the Midnight API using this client's configuration. Does not read onchain RPC state.
+   *
+   * @param params.chainId - Chain id whose API policy should validate the tree.
+   * @param params.tree - Offer tree to validate before ratifier data or payload publication exists.
+   * @param params.timestamp - Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot.
    * @returns API issues and `valid` summary.
    * @throws {Payload.DecodeError} when validation payload encoding fails.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
@@ -892,31 +966,6 @@ export class MidnightApi {
     params: MidnightApiClientParams<ValidateMempoolTreeParams>,
   ): Promise<MempoolPayloadValidationResult> {
     return MidnightApi.validateMempoolTree({
-      ...this.config,
-      ...params,
-    });
-  }
-
-  /**
-   * Fetches inspectable Midnight API mempool policy rules.
-   *
-   * @param params - Rule filters and pagination.
-   * @returns Paginated API rules mapped to SDK camelCase fields.
-   * @throws {MidnightApiError} when the API returns a non-2xx response.
-   * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
-   * @example
-   * ```ts
-   * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
-   *
-   * const api = new MidnightApi();
-   * const rules = await api.fetchMempoolRules({ chainIds: [8453] });
-   * console.log(rules.data.length);
-   * ```
-   */
-  public fetchMempoolRules(
-    params: MidnightApiClientParams<FetchMempoolRulesParams> = {},
-  ): Promise<MempoolRulesResult> {
-    return MidnightApi.fetchMempoolRules({
       ...this.config,
       ...params,
     });

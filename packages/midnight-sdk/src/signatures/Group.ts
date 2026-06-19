@@ -8,8 +8,9 @@ import { type GroupInput, GroupUtils, type IGroup } from "./GroupUtils.js";
  * Create a group after building related offers and before building the tree to
  * publish. Offers inside one group must share maker, side, and loan token. The
  * constructor hashes every offer to derive the group id, then copies each offer
- * with that id; group creation is resource-intensive compared to offer
- * construction.
+ * with that id. Offers inside one group must also share cap mode and value
+ * because Midnight tracks one consumed scalar per maker and group; group
+ * creation is resource-intensive compared to offer construction.
  *
  * @example
  * ```ts
@@ -129,11 +130,11 @@ export class Group implements IGroup {
   /**
    * Creates a protocol-valid offer group.
    *
-   * Use after `Offer.create` for laddered offers that should consume from one
-   * group id. Pass the returned group into `Tree.create` alongside other groups
-   * or standalone offers. This hashes every offer and copies the validated
-   * offers into group-owned instances, so it is resource-intensive and should
-   * be done once per group definition.
+   * Use after `Offer.create` for laddered offers with the same cap mode and
+   * value that should consume from one group id. Pass the returned group into
+   * `Tree.create` alongside other groups or standalone offers. This hashes every
+   * offer and copies the validated offers into group-owned instances, so it is
+   * resource-intensive and should be done once per group definition.
    *
    * @param offers - Iterable of offers to group.
    * @returns Group instance.

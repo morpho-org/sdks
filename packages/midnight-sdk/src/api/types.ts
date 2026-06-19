@@ -105,22 +105,6 @@ export interface ValidateMempoolTreeParams extends MidnightApiConfig {
 }
 
 /**
- * Parameters for {@link MidnightApi.fetchMempoolRules}.
- */
-export interface FetchMempoolRulesParams extends MidnightApiConfig {
-  /** Chain ids to include. */
-  readonly chainIds?: readonly number[];
-  /** Rule types to include. */
-  readonly types?: readonly string[];
-  /** Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot. */
-  readonly timestamp?: string | Date;
-  /** Maximum number of rules to return. */
-  readonly limit?: number;
-  /** Opaque pagination cursor from a previous response. */
-  readonly cursor?: string;
-}
-
-/**
  * Parameters for {@link MidnightApi.fetchBooks}.
  */
 export interface FetchBooksParams extends MidnightApiConfig {
@@ -271,50 +255,6 @@ export interface MempoolPayloadValidationResult {
   readonly valid: boolean;
   /** Payload-level API issues. */
   readonly issues: readonly MempoolPayloadValidationIssue[];
-}
-
-/**
- * One SDK-shaped Midnight API mempool rule.
- */
-export interface MempoolRule {
-  /** API rule type. */
-  readonly type: string;
-  /** Chain id the rule applies to. */
-  readonly chainId: number;
-  /** Rule name, when returned by the API. */
-  readonly name?: string;
-  /** Rule timestamp, when returned by the API. */
-  readonly timestamp?: number;
-  /** Address value, when returned by address-based rules. */
-  readonly address?: Address;
-  /** Callback policy type, when returned by callback rules. */
-  readonly callbackType?: string;
-  /** Callback data, when returned by callback rules. */
-  readonly data?: Hex;
-  /** Minimum supported tick, when returned by min-tick rules. */
-  readonly minTick?: number;
-  /** Maximum supported tick, when returned by max-tick rules. */
-  readonly maxTick?: number;
-  /** Required tick spacing, when returned by tick-spacing rules. */
-  readonly tickSpacing?: number;
-  /** Maximum policy value, when returned by bounded rules. */
-  readonly max?: number;
-  /** Minimum seconds value, when returned by timing rules. */
-  readonly minSeconds?: number;
-  /** Allowed LLTV values, when returned by collateral LLTV rules. */
-  readonly allowedLltvs?: readonly string[];
-  /** Rule description, when returned by the API. */
-  readonly description?: string;
-}
-
-/**
- * SDK-shaped paginated Midnight API mempool rules result.
- */
-export interface MempoolRulesResult {
-  /** Opaque pagination cursor, or `null` when no next page exists. */
-  readonly cursor: string | null;
-  /** API rules mapped to SDK camelCase fields. */
-  readonly data: readonly MempoolRule[];
 }
 
 /**

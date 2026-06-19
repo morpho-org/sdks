@@ -57,7 +57,9 @@ export namespace PositionUtils {
   /**
    * Returns plain Midnight position and market objects accrued like Midnight `updatePositionView`.
    *
-   * @param params - Position, hydrated market state, and accrual timestamp.
+   * @param params.position - Position state to accrue.
+   * @param params.market - Hydrated market state used for loss factor and continuous-fee accrual.
+   * @param params.timestamp - Timestamp at which to accrue.
    * @returns New plain position and market objects with updated credit, pending fee, last loss factor, last accrual, and market continuous-fee credit.
    * @throws {InvalidPositionAccrualTimestampError} when timestamp is before `lastAccrual`.
    * @throws {InvalidPositionLossFactorError} when the market loss factor is older than the position loss factor.

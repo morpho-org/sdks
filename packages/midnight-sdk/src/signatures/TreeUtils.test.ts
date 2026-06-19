@@ -1,6 +1,10 @@
 import { zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
-import { baseOffer, baseOfferInput } from "../__test__/fixtures.js";
+import {
+  baseOffer,
+  baseOfferInput,
+  group as staleGroup,
+} from "../__test__/fixtures.js";
 import { InvalidTreeError } from "../errors.js";
 import { Offer, OfferUtils } from "../offers/index.js";
 import { Group } from "./Group.js";
@@ -69,6 +73,16 @@ describe("Tree.create", () => {
     expect(tree.offers).toHaveLength(1);
     expect(tree.offers[0]).toBeInstanceOf(Offer);
     expect(tree.offers[0]).not.toBe(offer);
+  });
+
+  test("behavior: explicit plain groups override embedded offer groups", () => {
+    const offer = baseOfferInput({ group: staleGroup, maxAssets: 0n });
+    const expectedGroup = GroupUtils.hash([offer]);
+    const tree = Tree.create([{ offers: [offer] }]);
+
+    expect(tree.offers[0]!.group).toBe(expectedGroup);
+    expect(tree.paddedOffers[0]!.group).toBe(expectedGroup);
+    expect(tree.paddedOffers[0]!.group).not.toBe(staleGroup);
   });
 });
 
@@ -146,6 +160,15 @@ describe("TreeUtils.buildDescriptor", () => {
         proof: proof.proof,
       }),
     ).toBe(true);
+  });
+
+  test("behavior: explicit plain groups encode the derived group id", () => {
+    const offer = baseOfferInput({ group: staleGroup, maxAssets: 0n });
+    const expectedGroup = GroupUtils.hash([offer]);
+    const payload = TreeUtils.buildDescriptor([{ offers: [offer] }]);
+
+    expect(payload.offers[0]!.group).toBe(expectedGroup);
+    expect(payload.offers[0]!.group).not.toBe(staleGroup);
   });
 
   test("error: duplicate offer hash", () => {

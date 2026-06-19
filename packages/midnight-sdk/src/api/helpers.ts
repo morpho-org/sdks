@@ -1,5 +1,5 @@
 import { BLUE_API_BASE_URL } from "@morpho-org/morpho-ts";
-import type { Address, Hash, Hex } from "viem";
+import type { Hash } from "viem";
 import {
   InvalidMidnightApiResponseError,
   MidnightApiError,
@@ -12,7 +12,6 @@ import type {
   ApiRequestParams,
   ApiTakeableOfferResponse,
   MempoolPayloadValidationResult,
-  MempoolRulesResult,
   MidnightApiBookMarket,
   MidnightApiBookSide,
   MidnightApiCollateral,
@@ -226,68 +225,6 @@ export function parseValidationResponse(
   };
 }
 
-/** @internal Parses the mempool rules response envelope. */
-export function parseRulesResponse(response: unknown): MempoolRulesResult {
-  const parsedResponse = requireRecord(response, "rules response");
-  const cursor = parsedResponse.cursor;
-  if (cursor !== null && typeof cursor !== "string") {
-    throw new InvalidMidnightApiResponseError(
-      'Midnight API rules response has invalid "cursor".',
-    );
-  }
-  if (!Array.isArray(parsedResponse.data)) {
-    throw new InvalidMidnightApiResponseError(
-      'Midnight API rules response is missing "data".',
-    );
-  }
-
-  return {
-    cursor,
-    data: parsedResponse.data.map((rule) => {
-      const record = requireRecord(rule, "rules entry");
-      const type = record.type;
-      if (typeof type !== "string") {
-        throw new InvalidMidnightApiResponseError(
-          'Midnight API rules entry is missing "type".',
-        );
-      }
-      const chainId = record.chain_id;
-      if (typeof chainId !== "number") {
-        throw new InvalidMidnightApiResponseError(
-          'Midnight API rules entry is missing "chain_id".',
-        );
-      }
-      const allowedLltvs = record.allowed_lltvs;
-      if (
-        allowedLltvs !== undefined &&
-        (!Array.isArray(allowedLltvs) ||
-          !allowedLltvs.every((item: unknown) => typeof item === "string"))
-      ) {
-        throw new InvalidMidnightApiResponseError(
-          'Midnight API response field "allowed_lltvs" must be a string array.',
-        );
-      }
-
-      return {
-        type,
-        chainId,
-        name: readOptionalString(record, "name"),
-        timestamp: readOptionalNumber(record, "timestamp"),
-        address: readOptionalString(record, "address") as Address | undefined,
-        callbackType: readOptionalString(record, "callback_type"),
-        data: readOptionalString(record, "data") as Hex | undefined,
-        minTick: readOptionalNumber(record, "min_tick"),
-        maxTick: readOptionalNumber(record, "max_tick"),
-        tickSpacing: readOptionalNumber(record, "tick_spacing"),
-        max: readOptionalNumber(record, "max"),
-        minSeconds: readOptionalNumber(record, "min_seconds"),
-        allowedLltvs,
-        description: readOptionalString(record, "description"),
-      };
-    }),
-  };
-}
-
 function requireRecord(
   value: unknown,
   context: string,
@@ -300,28 +237,4 @@ function requireRecord(
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function readOptionalString(
-  record: Readonly<Record<string, unknown>>,
-  key: string,
-) {
-  const value = record[key];
-  if (value === undefined) return undefined;
-  if (typeof value === "string") return value;
-  throw new InvalidMidnightApiResponseError(
-    `Midnight API response field "${key}" must be a string.`,
-  );
-}
-
-function readOptionalNumber(
-  record: Readonly<Record<string, unknown>>,
-  key: string,
-) {
-  const value = record[key];
-  if (value === undefined) return undefined;
-  if (typeof value === "number") return value;
-  throw new InvalidMidnightApiResponseError(
-    `Midnight API response field "${key}" must be a number.`,
-  );
 }

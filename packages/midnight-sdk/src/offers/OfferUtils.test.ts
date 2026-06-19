@@ -99,12 +99,12 @@ describe("Offer.create", () => {
   test("behavior: accepts ticks aligned to a refined market spacing", () => {
     const offer = Offer.create(
       buildOfferParams({
-        tick: 3n,
-        tickSpacing: 3n,
+        tick: 2n,
+        tickSpacing: 2n,
       }),
     );
 
-    expect(offer.tick).toBe(3n);
+    expect(offer.tick).toBe(2n);
   });
 
   test("behavior: validates deterministic parameters without constructing an offer", () => {
@@ -167,7 +167,7 @@ describe("Offer.create", () => {
   test.each([
     ["tick", { tick: -1n }],
     ["tick", { tick: MAX_TICK + 1n }],
-    ["tickSpacing", { tickSpacing: 7n }],
+    ["tickSpacing", { tickSpacing: 3n }],
     ["tick", { tick: 2n }],
     ["expiry", { start: 20n, expiry: 19n }],
     ["expiry", { start: 20n, expiry: 20n }],
@@ -317,6 +317,20 @@ describe("OfferUtils.validateOfferGroup", () => {
             },
           }),
         ),
+      ],
+    ],
+    [
+      "cap mode",
+      [
+        Offer.create(buildOfferParams({ maxAssets: 100n, maxUnits: 0n })),
+        Offer.create(buildOfferParams({ maxAssets: 0n, maxUnits: 100n })),
+      ],
+    ],
+    [
+      "cap value",
+      [
+        Offer.create(buildOfferParams({ maxAssets: 100n })),
+        Offer.create(buildOfferParams({ maxAssets: 101n })),
       ],
     ],
   ] as const)("error: InvalidOfferGroupError mixed %s", (_field, offers) => {

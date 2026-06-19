@@ -6,6 +6,7 @@ import {
   type Hex,
   hexToBytes,
   numberToHex,
+  zeroAddress,
 } from "viem";
 import { describe, expect, test } from "vitest";
 import {
@@ -318,6 +319,46 @@ describe("Payload.decode", () => {
           maxLif: 1061007957559681697n,
           oracle: addresses.oracle,
         })),
+      },
+    });
+
+    await expect(Payload.decode(encoded)).rejects.toBeInstanceOf(
+      Payload.DecodeError,
+    );
+  });
+
+  test("error: invalid collateral maxLif", async () => {
+    const offer = OfferUtils.toStruct({ offer: apiValidOffer({ group }) });
+    const encoded = await encodeUncheckedPayload({
+      ...offer,
+      market: {
+        ...offer.market,
+        collateralParams: [
+          {
+            ...offer.market.collateralParams[0]!,
+            maxLif: 1n,
+          },
+        ],
+      },
+    });
+
+    await expect(Payload.decode(encoded)).rejects.toBeInstanceOf(
+      Payload.DecodeError,
+    );
+  });
+
+  test("error: zero collateral token", async () => {
+    const offer = OfferUtils.toStruct({ offer: apiValidOffer({ group }) });
+    const encoded = await encodeUncheckedPayload({
+      ...offer,
+      market: {
+        ...offer.market,
+        collateralParams: [
+          {
+            ...offer.market.collateralParams[0]!,
+            token: zeroAddress,
+          },
+        ],
       },
     });
 

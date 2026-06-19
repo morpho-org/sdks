@@ -25,8 +25,20 @@ import {
  * unavailable, the direct fallback can fan out to 130 RPC calls unless the viem
  * client has `batch.multicall` enabled.
  *
+ * Reads `eth_chainId` only when the viem client has no configured chain id. In
+ * deployless mode, reads the deployless `GetPosition.query(midnight, marketId,
+ * user)` helper. If deployless is disabled or falls back, reads
+ * `Midnight.position(marketId, user)` and each
+ * `Midnight.collateral(marketId, user, index)` slot for `index` 0 through 127.
+ *
  * @param client - Viem client used for the reads.
- * @param params - Fetch parameters.
+ * @param params.marketId - Market id whose position to read.
+ * @param params.user - Position owner address.
+ * @param params.deployless - Optional deployless mode; defaults to `true` with fallback, or `"force"` without fallback.
+ * @param params.account - Optional account used as the `from` field for the reads.
+ * @param params.blockNumber - Optional block number used for the reads.
+ * @param params.blockTag - Optional block tag used for the reads.
+ * @param params.stateOverride - Optional state override set used for the reads.
  * @returns Normalized position object.
  * @throws {UnsupportedChainIdError} when no address registry exists for the client chain id.
  * @throws {UnknownAddressError} when the registry has no Midnight address for the client chain id.
@@ -113,8 +125,20 @@ export async function fetchPosition(
 /**
  * Fetches a Midnight position paired with its hydrated market.
  *
+ * Reads the full inventory of `fetchPosition` and `fetchMarket` at the same
+ * call parameters: `eth_chainId` only when needed,
+ * `Midnight.toMarket(marketId)`, `Midnight.marketState(marketId)`, and either
+ * deployless `GetPosition.query(midnight, marketId, user)` or direct
+ * `Midnight.position(marketId, user)` plus all collateral slots.
+ *
  * @param client - Viem client used for the reads.
- * @param params - Fetch parameters.
+ * @param params.marketId - Market id whose position and market state to read.
+ * @param params.user - Position owner address.
+ * @param params.deployless - Optional deployless mode for the position read; defaults to `true` with fallback, or `"force"` without fallback.
+ * @param params.account - Optional account used as the `from` field for the reads.
+ * @param params.blockNumber - Optional block number used for the reads.
+ * @param params.blockTag - Optional block tag used for the reads.
+ * @param params.stateOverride - Optional state override set used for the reads.
  * @returns Accrual position instance.
  * @throws {UnsupportedChainIdError} when no address registry exists for the client chain id.
  * @throws {UnknownAddressError} when the registry has no Midnight address for the client chain id.

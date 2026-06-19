@@ -343,7 +343,21 @@ export class Offer {
    * provide it when hydrating an offer that already has a protocol group, such
    * as an offer decoded from the API.
    *
-   * @param params - Offer creation parameters.
+   * @param params.market - Market params or hydrated market this offer trades.
+   * @param params.buy - Whether the maker buys loan assets.
+   * @param params.maker - Maker address.
+   * @param params.tick - Offer tick.
+   * @param params.group - Optional consumption group id for already-grouped offers.
+   * @param params.tickSpacing - Optional market tick spacing; defaults to `DEFAULT_TICK_SPACING`.
+   * @param params.maxUnits - Optional unit cap; defaults to zero.
+   * @param params.maxAssets - Optional buyer or seller asset cap; defaults to zero.
+   * @param params.start - Optional offer start timestamp; defaults to zero.
+   * @param params.expiry - Offer expiry timestamp.
+   * @param params.callback - Optional callback address; defaults to the zero address.
+   * @param params.callbackData - Optional callback payload; defaults to `0x`.
+   * @param params.receiverIfMakerIsSeller - Optional receiver used when maker is seller.
+   * @param params.ratifier - Ratifier contract address.
+   * @param params.reduceOnly - Optional flag restricting the offer to exposure-reducing execution.
    * @returns Offer instance.
    * @throws {InvalidOfferParameterError} when the offer cannot satisfy protocol parameter rules.
    * @example
@@ -413,7 +427,8 @@ export class Offer {
  *
  * This is the shape consumed by viem encoders, Merkle leaf hashing, payload
  * encoding, and take calldata encoders. Build it with `OfferUtils.toStruct` or
- * `GroupUtils.toStructs`; the group id is read from the offer unless an
+ * `GroupUtils.toStructs`; grouped encoders derive a shared group id from the
+ * offer list, while single-offer encoders read the offer's group unless an
  * explicit override is supplied.
  *
  * @example

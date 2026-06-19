@@ -156,7 +156,10 @@ export class InvalidPositionAccrualStateError extends Error {
  *
  * throw new InvalidOfferParameterError({ parameter: "tick", value: 5821n });
  * ```
- * @param params - Invalid parameter descriptor.
+ * @param params.parameter - Invalid offer parameter name.
+ * @param params.value - Invalid offer parameter value.
+ * @param params.instruction - Optional instruction appended to the error message.
+ * @param params.cause - Optional wrapped cause.
  */
 export class InvalidOfferParameterError extends Error {
   /** Invalid offer parameter name. */

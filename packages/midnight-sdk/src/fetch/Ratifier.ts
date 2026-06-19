@@ -19,8 +19,13 @@ import { resolveChainId } from "./utils.js";
  * `EcrecoverRatifierUtils.ratify` or `SetterRatifierUtils.ratify` after the tree
  * has been built.
  *
+ * Reads `eth_chainId` only when the viem client has no configured chain id,
+ * then reads `eth_getCode` for `params.maker`.
+ *
  * @param client - Viem client used for the bytecode read.
- * @param params - Fetch parameters.
+ * @param params.maker - Maker address whose bytecode determines the ratifier route.
+ * @param params.blockNumber - Optional block number used for the bytecode read.
+ * @param params.blockTag - Optional block tag used for the bytecode read.
  * @returns Ratifier information.
  * @throws {UnsupportedChainIdError} when no address registry exists for the client chain id.
  * @throws {UnknownAddressError} when the registry has no configured ratifier address for the client chain id.

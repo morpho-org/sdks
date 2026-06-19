@@ -6,7 +6,12 @@ import {
   hexToBytes,
 } from "viem";
 
-import { MAX_COLLATERALS, MAX_TICK } from "../constants.js";
+import {
+  LIQUIDATION_CURSOR_HIGH,
+  LIQUIDATION_CURSOR_LOW,
+  MAX_COLLATERALS,
+  MAX_TICK,
+} from "../constants.js";
 import { InvalidOfferParameterError } from "../errors.js";
 import { MarketUtils } from "../market/index.js";
 import {
@@ -516,8 +521,26 @@ function assertCollateralParams(offer: OfferStruct): void {
         `invalid offer bytes: invalid collateral lltv ${params.lltv}`,
       );
     }
+    const lowMaxLif = MarketUtils.getLiquidationIncentiveFactor(
+      params,
+      LIQUIDATION_CURSOR_LOW,
+    );
+    const highMaxLif = MarketUtils.getLiquidationIncentiveFactor(
+      params,
+      LIQUIDATION_CURSOR_HIGH,
+    );
+    if (params.maxLif !== lowMaxLif && params.maxLif !== highMaxLif) {
+      throw new DecodeError(
+        `invalid offer bytes: invalid collateral maxLif ${params.maxLif}`,
+      );
+    }
 
     const token = params.token.toLowerCase();
+    if (isZeroAddress(token)) {
+      throw new DecodeError(
+        "invalid offer bytes: collateral token must be non-zero",
+      );
+    }
     if (previousToken != null && previousToken >= token) {
       throw new DecodeError(
         "invalid offer bytes: collaterals must be sorted and unique",

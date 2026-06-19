@@ -9,8 +9,15 @@ import { callParameters, resolveChainId } from "./utils.js";
 /**
  * Fetches immutable market params by id.
  *
+ * Reads `eth_chainId` only when the viem client has no configured chain id,
+ * then reads `Midnight.toMarket(marketId)`.
+ *
  * @param client - Viem client used for the read.
- * @param params - Fetch parameters.
+ * @param params.marketId - Market id whose immutable params to read.
+ * @param params.account - Optional account used as the `from` field for the read.
+ * @param params.blockNumber - Optional block number used for the read.
+ * @param params.blockTag - Optional block tag used for the read.
+ * @param params.stateOverride - Optional state override set used for the read.
  * @returns Market params instance.
  * @throws {UnsupportedChainIdError} when no address registry exists for the client chain id.
  * @throws {UnknownAddressError} when the registry has no Midnight address for the client chain id.
@@ -49,8 +56,15 @@ export async function fetchMarketParams(
 /**
  * Fetches a hydrated market by id.
  *
+ * Reads `eth_chainId` only when the viem client has no configured chain id,
+ * then reads `Midnight.toMarket(marketId)` and `Midnight.marketState(marketId)`.
+ *
  * @param client - Viem client used for the reads.
- * @param params - Fetch parameters.
+ * @param params.marketId - Market id whose hydrated market state to read.
+ * @param params.account - Optional account used as the `from` field for the reads.
+ * @param params.blockNumber - Optional block number used for the reads.
+ * @param params.blockTag - Optional block tag used for the reads.
+ * @param params.stateOverride - Optional state override set used for the reads.
  * @returns Market instance.
  * @throws {UnsupportedChainIdError} when no address registry exists for the client chain id.
  * @throws {UnknownAddressError} when the registry has no Midnight address for the client chain id.

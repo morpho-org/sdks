@@ -8,10 +8,9 @@ import { type IOffer, type OfferStruct, OfferUtils } from "../offers/index.js";
  * @example
  * ```ts
  * import { Offer, type IGroup } from "@morpho-org/midnight-sdk";
- * import { zeroAddress, zeroHash } from "viem";
+ * import { zeroAddress } from "viem";
  *
  * const group: IGroup = {
- *   id: zeroHash,
  *   offers: [
  *     Offer.create({
  *       market: {
@@ -36,18 +35,16 @@ import { type IOffer, type OfferStruct, OfferUtils } from "../offers/index.js";
  * ```
  */
 export interface IGroup {
-  /** Offers in this protocol group, each carrying this group's id. */
+  /** Offers in this protocol group. The group id is derived from this list. */
   readonly offers: readonly IOffer[];
-  /** Protocol group id encoded into each offer. */
-  readonly id: Hash;
 }
 
 /**
  * Group object or standalone offer accepted by tree helpers.
  *
  * Use standalone offers for independent consumption groups. Use `Group.create`
- * first when multiple offers from the same maker, side, and loan token should
- * share one consumption group.
+ * first when multiple offers from the same maker, side, loan token, cap mode,
+ * and cap value should share one consumption group.
  *
  * @example
  * ```ts
@@ -79,8 +76,10 @@ export type GroupInput = IGroup | IOffer;
  * Make-side helpers for Midnight offer groups.
  *
  * Groups sit between `Offer.create` and `Tree.create`: they assign a
- * content-addressed group id to offers that share one consumption bucket. Tree
- * helpers read the group id already stored on each offer.
+ * content-addressed group id to offers that share one consumption bucket. One
+ * group must use one cap mode and value because Midnight tracks a single
+ * consumed scalar per maker and group. Tree helpers derive that id for explicit
+ * groups and preserve it on grouped offer copies.
  *
  * @example
  * ```ts
@@ -140,11 +139,11 @@ export namespace GroupUtils {
   }
 
   /**
-   * Converts a group into ABI-compatible offers carrying the group id.
+   * Converts a group into ABI-compatible offers carrying the derived group id.
    *
    * Use after `Group.create` for custom encoders that need offer structs with
-   * their final group id. Tree and payload helpers read the group id directly
-   * from each offer.
+   * their final group id. The id is derived from the full offer list and
+   * applied while encoding, so plain groups cannot drift from offer fields.
    *
    * @param group - Group to encode.
    * @returns ABI-compatible offers in caller order.
@@ -174,6 +173,10 @@ export namespace GroupUtils {
    * ```
    */
   export function toStructs(group: IGroup): readonly OfferStruct[] {
-    return group.offers.map((offer) => OfferUtils.toStruct({ offer }));
+    const groupId = hash(group.offers);
+
+    return group.offers.map((offer) =>
+      OfferUtils.toStruct({ offer, group: groupId }),
+    );
   }
 }

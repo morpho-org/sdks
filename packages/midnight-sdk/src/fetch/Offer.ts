@@ -17,8 +17,24 @@ import { callParameters, resolveChainId } from "./utils.js";
  * library's early return before any settlement-fee lookup. For asset-capped
  * offers, pass the time to maturity for the same block context as the quote.
  *
+ * Reads `eth_chainId` only when the viem client has no configured chain id,
+ * then reads `Midnight.consumed(offer.maker, group)`. For asset-capped offers
+ * where `offer.maxUnits` is zero, also reads
+ * `Midnight.settlementFee(marketId, timeToMaturity)`.
+ *
  * @param client - Viem client used for the reads.
- * @param params - Fetch parameters.
+ * @param params.marketId - Market id used for settlement-fee lookup on asset-capped offers.
+ * @param params.offer.buy - Whether the maker buys loan assets.
+ * @param params.offer.maker - Maker address whose consumed group amount is read.
+ * @param params.offer.tick - Offer tick used for asset-to-unit conversion.
+ * @param params.offer.maxUnits - Unit cap; when non-zero, settlement-fee lookup is skipped.
+ * @param params.offer.maxAssets - Asset cap used when `params.offer.maxUnits` is zero.
+ * @param params.group - Offer group id whose consumed amount is read.
+ * @param params.timeToMaturity - Time to maturity used for settlement-fee lookup on asset-capped offers.
+ * @param params.account - Optional account used as the `from` field for the reads.
+ * @param params.blockNumber - Optional block number used for the reads.
+ * @param params.blockTag - Optional block tag used for the reads.
+ * @param params.stateOverride - Optional state override set used for the reads.
  * @returns Consumable units.
  * @throws {UnsupportedChainIdError} when no address registry exists for the client chain id.
  * @throws {UnknownAddressError} when the registry has no Midnight address for the client chain id.

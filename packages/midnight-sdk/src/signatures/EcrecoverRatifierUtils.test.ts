@@ -62,6 +62,44 @@ describe("EcrecoverRatifierUtils.ratify", () => {
       }),
     ).rejects.toThrow(InvalidTreeError);
   });
+
+  test("error: InvalidTreeError mixed makers", async () => {
+    const tree = Tree.create([
+      baseOffer({ maxAssets: 0n, maker: addresses.maker }),
+      baseOffer({ maxAssets: 0n, maker: addresses.taker }),
+    ]);
+
+    await expect(
+      EcrecoverRatifierUtils.ratify({
+        tree,
+        signature: {
+          v: 27,
+          r: "0x0000000000000000000000000000000000000000000000000000000000000000",
+          s: "0x0000000000000000000000000000000000000000000000000000000000000000",
+        },
+      }),
+    ).rejects.toThrow(InvalidTreeError);
+  });
+
+  test("error: InvalidTreeError mixed makers before signing", async () => {
+    const tree = Tree.create([
+      baseOffer({ maxAssets: 0n, maker: addresses.maker }),
+      baseOffer({ maxAssets: 0n, maker: addresses.taker }),
+    ]);
+    let signed = false;
+
+    await expect(
+      EcrecoverRatifierUtils.ratify({
+        tree,
+        chainId: 8453n,
+        signTypedData: () => {
+          signed = true;
+          return "0x";
+        },
+      }),
+    ).rejects.toThrow(InvalidTreeError);
+    expect(signed).toBe(false);
+  });
 });
 
 describe("EcrecoverRatifierUtils.typedData", () => {
@@ -91,6 +129,17 @@ describe("EcrecoverRatifierUtils.typedData", () => {
         maxAssets: 0n,
         ratifier: addresses.setterRatifier,
       }),
+    ]);
+
+    expect(() =>
+      EcrecoverRatifierUtils.typedData({ tree, chainId: 8453n }),
+    ).toThrow(InvalidTreeError);
+  });
+
+  test("error: InvalidTreeError mixed makers", () => {
+    const tree = Tree.create([
+      baseOffer({ maxAssets: 0n, maker: addresses.maker }),
+      baseOffer({ maxAssets: 0n, maker: addresses.taker }),
     ]);
 
     expect(() =>
@@ -131,6 +180,27 @@ describe("EcrecoverRatifierUtils.toSignature", () => {
       r: signature.r,
       s: signature.s,
     });
+  });
+});
+
+describe("EcrecoverRatifierUtils.ratifierData", () => {
+  test("error: InvalidTreeError mixed makers", () => {
+    const tree = Tree.create([
+      baseOffer({ maxAssets: 0n, maker: addresses.maker }),
+      baseOffer({ maxAssets: 0n, maker: addresses.taker }),
+    ]);
+
+    expect(() =>
+      EcrecoverRatifierUtils.ratifierData({
+        tree,
+        leafIndex: 0n,
+        signature: {
+          v: 27,
+          r: "0x0000000000000000000000000000000000000000000000000000000000000000",
+          s: "0x0000000000000000000000000000000000000000000000000000000000000000",
+        },
+      }),
+    ).toThrow(InvalidTreeError);
   });
 });
 

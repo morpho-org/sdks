@@ -20,7 +20,12 @@ export namespace ConsumableUnitsLib {
   /**
    * Returns units that would fully consume an offer.
    *
-   * @param params - Consumption parameters.
+   * @param params.offer.buy - Whether the maker buys loan assets.
+   * @param params.offer.tick - Offer tick used for asset-capped conversion.
+   * @param params.offer.maxUnits - Unit cap; when non-zero, units are capped directly.
+   * @param params.offer.maxAssets - Asset cap used when `params.offer.maxUnits` is zero.
+   * @param params.consumed - Amount already consumed from the offer group.
+   * @param params.settlementFee - WAD-scaled settlement fee used for asset-capped conversion.
    * @returns Remaining consumable units.
    * @throws {NegativeValueError} when `consumed`, offer limits, delegated asset inputs, or the offer tick is negative.
    * @throws {DivisionByZeroError} when the delegated units conversion divides by zero.

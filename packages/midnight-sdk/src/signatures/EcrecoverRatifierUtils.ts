@@ -120,8 +120,15 @@ const getTreeRatifier = (tree: Tree): Address => {
   }
 
   const ratifier = firstOffer.ratifier;
+  const maker = firstOffer.maker;
   const comparableRatifier = ratifier.toLowerCase();
+  const comparableMaker = maker.toLowerCase();
   for (const offer of offers.slice(1)) {
+    if (offer.maker.toLowerCase() !== comparableMaker) {
+      throw new InvalidTreeError(
+        `All offers in an Ecrecover tree must use one maker; expected "${maker}", got "${offer.maker}". Build separate trees per maker.`,
+      );
+    }
     if (offer.ratifier.toLowerCase() !== comparableRatifier) {
       throw new InvalidTreeError(
         `All offers in an Ecrecover tree must use one ratifier; expected "${ratifier}", got "${offer.ratifier}". Build separate trees per ratifier.`,
@@ -385,7 +392,8 @@ export interface EcrecoverRatifierDataParams {
  * Use this route for EOA and EIP-7702 makers. The make-side sequence is:
  * create offers with the Ecrecover ratifier address, build the group/tree,
  * validate the tree, sign the typed data, call `ratify`, then pass the returned
- * items to `Payload.encode`.
+ * items to `Payload.encode`. Ecrecover trees must contain one maker and one
+ * ratifier; split trees by maker or ratifier before signing.
  *
  * @example
  * ```ts
@@ -423,9 +431,10 @@ export namespace EcrecoverRatifierUtils {
    * address on the tree offers. `ratify` calls this for you when given
    * `signTypedData`.
    *
-   * @param params - Typed-data parameters.
+   * @param params.tree - Ecrecover-ratified offer tree to sign.
+   * @param params.chainId - EIP-155 chain id included in the EIP-712 domain.
    * @returns EIP-712 typed-data descriptor.
-   * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
+   * @throws {InvalidTreeError} when the tree is invalid or contains multiple makers or ratifiers.
    * @throws {InvalidTreeHeightError} when the tree height is unsupported.
    * @example
    * ```ts
@@ -485,9 +494,10 @@ export namespace EcrecoverRatifierUtils {
   /**
    * Builds the EcrecoverRatifier digest used by the Solidity ratifier.
    *
-   * @param params - Digest parameters.
+   * @param params.tree - Ecrecover-ratified offer tree to hash.
+   * @param params.chainId - EIP-155 chain id included in the EIP-712 domain.
    * @returns EIP-712 digest.
-   * @throws {InvalidTreeError} when the tree contains multiple ratifiers.
+   * @throws {InvalidTreeError} when the tree contains multiple makers or ratifiers.
    * @throws {InvalidTreeHeightError} when height exceeds 20.
    * @example
    * ```ts
@@ -545,9 +555,11 @@ export namespace EcrecoverRatifierUtils {
    * construction. If you only need payload items, call `ratify` with the same
    * `signTypedData` callback.
    *
-   * @param params - Signing parameters.
+   * @param params.tree - Ecrecover-ratified offer tree to sign.
+   * @param params.chainId - EIP-155 chain id included in the EIP-712 domain.
+   * @param params.signTypedData - Callback that signs the typed data built from `params.tree`.
    * @returns Signature returned by the callback.
-   * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
+   * @throws {InvalidTreeError} when the tree is invalid or contains multiple makers or ratifiers.
    * @throws {InvalidTreeHeightError} when the tree height is unsupported.
    * @example
    * ```ts
@@ -634,7 +646,10 @@ export namespace EcrecoverRatifierUtils {
    * Use only when you already have a signature and proof. Most maker flows call
    * `ratifierData` for one leaf or `ratify` for every leaf in the tree.
    *
-   * @param params - Ratifier-data parameters.
+   * @param params.signature - Signature tuple encoded into the ratifier data.
+   * @param params.root - Merkle root approved by the signature.
+   * @param params.leafIndex - Leaf index proven by `params.proof`.
+   * @param params.proof - Merkle proof siblings for the leaf.
    * @returns ABI-encoded ratifier data.
    * @example
    * ```ts
@@ -720,9 +735,11 @@ export namespace EcrecoverRatifierUtils {
    * Use after a tree has been signed when a caller needs data for one offer
    * leaf. Use `ratify` to produce payload-ready items for the whole tree.
    *
-   * @param params - Ratifier-data parameters.
+   * @param params.tree - Ecrecover-ratified offer tree that produced the proof.
+   * @param params.leafIndex - Leaf index to prove.
+   * @param params.signature - Ecrecover signature for the tree root.
    * @returns ABI-encoded EcrecoverRatifier data.
-   * @throws {InvalidTreeError} when the leaf index is outside the tree.
+   * @throws {InvalidTreeError} when the leaf index is outside the tree or the tree contains multiple makers or ratifiers.
    * @example
    * ```ts
    * import { EcrecoverRatifierUtils, Offer, Tree } from "@morpho-org/midnight-sdk";
@@ -753,6 +770,7 @@ export namespace EcrecoverRatifierUtils {
    * ```
    */
   export function ratifierData(params: EcrecoverRatifierDataParams): Hex {
+    getTreeRatifier(params.tree);
     const proof = params.tree.proof(params.leafIndex);
 
     return encodeRatifierData({
@@ -770,9 +788,12 @@ export namespace EcrecoverRatifierUtils {
    * The returned items preserve tree leaf order and include ratifier data
    * required by takers. The group id is stored on each inline offer.
    *
-   * @param params - Ratification parameters.
+   * @param params.tree - Ecrecover-ratified offer tree to ratify.
+   * @param params.chainId - EIP-155 chain id used when `params.signTypedData` signs the tree.
+   * @param params.signTypedData - Optional callback that signs typed data built from `params.tree`.
+   * @param params.signature - Optional precomputed signature for `params.tree`.
    * @returns Items containing each offer and its ratifier data.
-   * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
+   * @throws {InvalidTreeError} when the tree is invalid or contains multiple makers or ratifiers.
    * @throws {InvalidTreeHeightError} when the tree height is unsupported.
    * @example
    * ```ts

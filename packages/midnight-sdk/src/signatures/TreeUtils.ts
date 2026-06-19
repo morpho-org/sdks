@@ -7,7 +7,7 @@ import {
   type OfferStruct,
   OfferUtils,
 } from "../offers/index.js";
-import type { GroupInput } from "./GroupUtils.js";
+import { type GroupInput, GroupUtils } from "./GroupUtils.js";
 import type { Tree } from "./Tree.js";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
@@ -298,7 +298,8 @@ export namespace TreeUtils {
    *
    * Use after `Group.create` or standalone `Offer.create` when you need the
    * padded leaves for custom signing, root approval, or proof construction.
-   * Groups are flattened, and each offer is encoded with its own group id.
+   * Groups are encoded with their derived shared group id, and standalone
+   * offers are encoded with their own group id.
    * `Tree.create` calls this internally and is the simpler API for most
    * make-side code.
    *
@@ -332,16 +333,16 @@ export namespace TreeUtils {
    * ```
    */
   export function buildDescriptor(entries: TreeCreateParams): TreeDescriptor {
-    const offers = entries.flatMap((entry) =>
-      "offers" in entry ? entry.offers : [entry],
+    const structs = entries.flatMap((entry) =>
+      "offers" in entry
+        ? GroupUtils.toStructs(entry)
+        : [OfferUtils.toStruct({ offer: entry })],
     );
-    if (offers.length === 0) {
+    if (structs.length === 0) {
       throw new InvalidTreeError("Tree must not be empty.");
     }
 
-    const offerStructs = padOfferStructs(
-      offers.map((offer) => OfferUtils.toStruct({ offer })),
-    );
+    const offerStructs = padOfferStructs(structs);
     assertLeafOffers(offerStructs);
 
     const height = Math.log2(offerStructs.length);
@@ -413,7 +414,8 @@ export namespace TreeUtils {
    * built-in Ecrecover and Setter helpers call this while generating
    * `ratifierData`.
    *
-   * @param params - Proof parameters.
+   * @param params.tree - Tree that contains the leaf.
+   * @param params.leafIndex - Leaf index to prove.
    * @returns Proof descriptor.
    * @throws {InvalidTreeError} when leaf index is out of range.
    * @example
@@ -481,7 +483,10 @@ export namespace TreeUtils {
    * data before forwarding it to a transaction builder. Onchain ratifiers still
    * perform the authoritative verification.
    *
-   * @param params - Proof verification parameters.
+   * @param params.offer - Offer whose hash starts proof reconstruction.
+   * @param params.root - Expected Merkle root.
+   * @param params.leafIndex - Leaf index proven by `params.proof`.
+   * @param params.proof - Merkle proof siblings for the leaf.
    * @returns Whether the proof reconstructs the supplied root.
    * @example
    * ```ts

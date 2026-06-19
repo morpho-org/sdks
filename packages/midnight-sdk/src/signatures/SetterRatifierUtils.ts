@@ -101,7 +101,9 @@ export namespace SetterRatifierUtils {
    * `ratifierData` for one leaf or `ratify` for every leaf in the approved
    * tree.
    *
-   * @param params - Ratifier-data parameters.
+   * @param params.root - Merkle root approved by the maker's Setter ratifier.
+   * @param params.leafIndex - Leaf index proven by `params.proof`.
+   * @param params.proof - Merkle proof siblings for the leaf.
    * @returns ABI-encoded ratifier data.
    * @example
    * ```ts
@@ -164,7 +166,8 @@ export namespace SetterRatifierUtils {
    * Use after root approval when a caller needs data for one offer leaf. Use
    * `ratify` to produce payload-ready items for the whole tree.
    *
-   * @param params - Ratifier-data parameters.
+   * @param params.tree - Setter-ratified offer tree that produced the proof.
+   * @param params.leafIndex - Leaf index to prove.
    * @returns ABI-encoded SetterRatifier data.
    * @throws {InvalidTreeError} when the leaf index is outside the tree.
    * @example
@@ -212,7 +215,7 @@ export namespace SetterRatifierUtils {
    * transaction has been submitted. The returned items can be passed directly
    * to `Payload.encode`.
    *
-   * @param params - Tree to ratify.
+   * @param params.tree - Setter-ratified offer tree whose root has already been approved onchain.
    * @returns Items containing each offer and its ratifier data.
    * @throws {InvalidTreeError} when the tree is invalid.
    * @example

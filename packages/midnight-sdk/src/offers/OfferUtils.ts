@@ -164,7 +164,8 @@ export namespace OfferUtils {
    * This is the bridge from SDK/domain objects
    * into Merkle leaf hashing, payload items, and take calldata encoding.
    *
-   * @param params - Offer class or plain input plus an optional group id override.
+   * @param params.offer - Offer class or plain offer input to encode.
+   * @param params.group - Optional protocol group id override encoded into the ABI offer.
    * @returns ABI-compatible offer.
    * @example
    * ```ts
@@ -395,7 +396,8 @@ export namespace OfferUtils {
    * Use this for form-level validation before `Offer.create` when you want to
    * surface a tick-specific issue. `Offer.create` calls it internally.
    *
-   * @param params - Tick and optional market spacing.
+   * @param params.tick - Offer tick to validate.
+   * @param params.tickSpacing - Optional market tick spacing; defaults to `DEFAULT_TICK_SPACING`.
    * @returns Normalized tick and tick spacing.
    * @throws {InvalidOfferParameterError} when the tick or spacing cannot be accepted by Midnight.
    * @example
@@ -420,11 +422,11 @@ export namespace OfferUtils {
         instruction: `Use a tick between "0" and "${MAX_TICK}".`,
       });
     }
-    if (tickSpacing <= 0n || MAX_TICK % tickSpacing !== 0n) {
+    if (tickSpacing <= 0n || DEFAULT_TICK_SPACING % tickSpacing !== 0n) {
       throw new InvalidOfferParameterError({
         parameter: "tickSpacing",
         value: tickSpacing,
-        instruction: `Use a positive tick spacing that divides "${MAX_TICK}".`,
+        instruction: `Use a positive tick spacing that divides "${DEFAULT_TICK_SPACING}".`,
       });
     }
     if (tick % tickSpacing !== 0n) {
@@ -444,7 +446,8 @@ export namespace OfferUtils {
    * Use this before `Offer.create` when a UI edits dates separately from other
    * offer fields. `Offer.create` calls it internally.
    *
-   * @param params - Start and expiry timestamps.
+   * @param params.start - Optional offer start timestamp; defaults to zero.
+   * @param params.expiry - Offer expiry timestamp.
    * @returns Normalized start and expiry timestamps.
    * @throws {InvalidOfferParameterError} when the range is negative or not strictly increasing.
    * @example
@@ -486,7 +489,8 @@ export namespace OfferUtils {
    * Use this before `Offer.create` when a UI lets makers choose between a unit
    * cap and an asset cap. `Offer.create` calls it internally.
    *
-   * @param params - Unit and asset caps.
+   * @param params.maxUnits - Optional unit cap; defaults to zero.
+   * @param params.maxAssets - Optional buyer or seller asset cap; defaults to zero.
    * @returns Normalized unit and asset caps.
    * @throws {InvalidOfferParameterError} when caps are negative, both zero, or both non-zero.
    * @example
@@ -535,7 +539,9 @@ export namespace OfferUtils {
    * Use this before `Offer.create` when side-specific receiver defaults must be
    * displayed to a maker. `Offer.create` calls it internally.
    *
-   * @param params - Offer side, maker, and optional maker-seller receiver.
+   * @param params.buy - Whether the maker buys loan assets.
+   * @param params.maker - Maker address used as the default sell-side receiver.
+   * @param params.receiverIfMakerIsSeller - Optional receiver used when maker is seller.
    * @returns Receiver address to put on the offer.
    * @throws {InvalidOfferParameterError} when a buy offer sets a non-zero maker-seller receiver.
    * @example
@@ -576,7 +582,21 @@ export namespace OfferUtils {
    * instantiating an `Offer`. `Offer.create` uses the same validation and then
    * constructs the class instance for grouping and trees.
    *
-   * @param params - Offer builder parameters.
+   * @param params.market - Market params or hydrated market this offer trades.
+   * @param params.buy - Whether the maker buys loan assets.
+   * @param params.maker - Maker address.
+   * @param params.tick - Offer tick.
+   * @param params.group - Optional consumption group id for already-grouped offers.
+   * @param params.tickSpacing - Optional market tick spacing; defaults to `DEFAULT_TICK_SPACING`.
+   * @param params.maxUnits - Optional unit cap; defaults to zero.
+   * @param params.maxAssets - Optional buyer or seller asset cap; defaults to zero.
+   * @param params.start - Optional offer start timestamp; defaults to zero.
+   * @param params.expiry - Offer expiry timestamp.
+   * @param params.callback - Optional callback address; defaults to the zero address.
+   * @param params.callbackData - Optional callback payload; defaults to `0x`.
+   * @param params.receiverIfMakerIsSeller - Optional receiver used when maker is seller.
+   * @param params.ratifier - Ratifier contract address.
+   * @param params.reduceOnly - Optional flag restricting the offer to exposure-reducing execution.
    * @returns Normalized deterministic offer parameters.
    * @throws {InvalidOfferParameterError} when a deterministic offer parameter cannot satisfy protocol rules.
    * @example
@@ -624,11 +644,13 @@ export namespace OfferUtils {
   /**
    * Validates protocol-level mechanics for one Midnight offer consumption group.
    *
-   * Use before deriving a content-addressed group id. `Group.create` calls this
-   * automatically; call it directly only when you need the normalized offers
-   * without constructing a `Group`.
+   * Use before deriving a content-addressed group id. Grouped offers must share
+   * maker, side, loan token, cap mode, and cap value because Midnight tracks one
+   * consumed scalar per maker and group. `Group.create` calls this automatically;
+   * call it directly only when you need the normalized offers without
+   * constructing a `Group`.
    *
-   * @param params - Offer group validation parameters.
+   * @param params.offers - Offers to validate as one protocol consumption group.
    * @returns Normalized offers in the same order as the input entries.
    * @throws {InvalidOfferGroupError} when the group violates protocol mechanics.
    * @example
@@ -682,6 +704,8 @@ export namespace OfferUtils {
     const expectedMaker = comparableHex(first.maker);
     const expectedBuy = first.buy;
     const expectedLoanToken = comparableHex(first.market.loanToken);
+    const expectedMaxUnits = first.maxUnits;
+    const expectedMaxAssets = first.maxAssets;
 
     for (const offer of offers) {
       if (comparableHex(offer.maker) !== expectedMaker) {
@@ -706,6 +730,14 @@ export namespace OfferUtils {
       if (comparableHex(offer.market.loanToken) !== expectedLoanToken) {
         throw new InvalidOfferGroupError(
           "All offers in a group must use the same loan token.",
+        );
+      }
+      if (
+        offer.maxUnits !== expectedMaxUnits ||
+        offer.maxAssets !== expectedMaxAssets
+      ) {
+        throw new InvalidOfferGroupError(
+          "All offers in a group must use the same cap mode and value.",
         );
       }
       if (

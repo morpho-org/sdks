@@ -26,7 +26,9 @@ export namespace TakeAmountsLib {
   /**
    * Computes buyer and seller prices for an offer and settlement fee.
    *
-   * @param params - Price parameters.
+   * @param params.offer.buy - Whether the maker buys loan assets.
+   * @param params.offer.tick - Offer tick used to compute the base price.
+   * @param params.settlementFee - WAD-scaled settlement fee for the market and time to maturity.
    * @returns Buyer and seller prices.
    * @throws {NegativeValueError} when `settlementFee` or the offer tick is negative.
    * @throws {TickOutOfRangeError} when the offer tick exceeds `MAX_TICK`.
@@ -71,7 +73,10 @@ export namespace TakeAmountsLib {
    *
    * `settlementFee` must be the fee for the offer market's current time to maturity.
    *
-   * @param params - Conversion parameters.
+   * @param params.offer.buy - Whether the maker buys loan assets.
+   * @param params.offer.tick - Offer tick used to compute the buyer price.
+   * @param params.targetBuyerAssets - Target buyer-side asset amount.
+   * @param params.settlementFee - WAD-scaled settlement fee for the market and time to maturity.
    * @returns Units that round-trip to the target buyer assets where reachable.
    * @throws {NegativeValueError} when `targetBuyerAssets`, `settlementFee`, or the offer tick is negative.
    * @throws {DivisionByZeroError} when the computed buyer price is zero.
@@ -125,7 +130,10 @@ export namespace TakeAmountsLib {
    *
    * `settlementFee` must be the fee for the offer market's current time to maturity.
    *
-   * @param params - Conversion parameters.
+   * @param params.offer.buy - Whether the maker buys loan assets.
+   * @param params.offer.tick - Offer tick used to compute the seller price.
+   * @param params.targetSellerAssets - Target seller-side asset amount.
+   * @param params.settlementFee - WAD-scaled settlement fee for the market and time to maturity.
    * @returns Units that round-trip to the target seller assets where reachable.
    * @throws {NegativeValueError} when `targetSellerAssets`, `settlementFee`, or the offer tick is negative.
    * @throws {DivisionByZeroError} when the computed seller price is zero.
@@ -176,7 +184,9 @@ export namespace TakeAmountsLib {
    *
    * This is an SDK-only generic conversion convenience.
    *
-   * @param params - Generic conversion parameters.
+   * @param params.assets - Asset amount to convert.
+   * @param params.price - WAD-scaled price used for the conversion.
+   * @param params.rounding - Rounding direction applied by the fixed-point conversion.
    * @returns Units.
    * @throws {NegativeValueError} when `assets` or `price` is negative.
    * @throws {DivisionByZeroError} when price is zero.
@@ -208,7 +218,9 @@ export namespace TakeAmountsLib {
    *
    * This is an SDK-only tick-priced conversion convenience.
    *
-   * @param params - Tick conversion parameters.
+   * @param params.assets - Asset amount to convert.
+   * @param params.tick - Offer tick whose price is used for the conversion.
+   * @param params.rounding - Rounding direction applied by the fixed-point conversion.
    * @returns Units.
    * @throws {NegativeValueError} when `assets` or `tick` is negative.
    * @throws {DivisionByZeroError} when the tick price is zero.

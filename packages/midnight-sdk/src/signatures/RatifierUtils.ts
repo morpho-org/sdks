@@ -95,7 +95,9 @@ export namespace RatifierUtils {
    * `EcrecoverRatifierUtils.ratify` when `type` is `ecrecover`, or approve the
    * root and call `SetterRatifierUtils.ratify` when `type` is `setter`.
    *
-   * @param params - Ratifier selection parameters.
+   * @param params.bytecode - Maker bytecode returned by `eth_getCode`.
+   * @param params.ecrecoverRatifier - Ratifier address used for EOAs and EIP-7702 accounts.
+   * @param params.setterRatifier - Ratifier address used for deployed-code accounts.
    * @returns Ratifier information for the maker.
    * @example
    * ```ts
