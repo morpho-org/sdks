@@ -149,8 +149,9 @@ so they add no statefulness to the reviewed tree — low cost for high value.
 
 - Wire `tsc -p .agents/pr-review-engine/scripts` into the root `lint` gate (currently available, run
   manually / in this PR's verification but not yet in the standing `pnpm lint`).
-- Port `pr-review-local`'s `--goal` / `--fast` loop and `pr-review-gh`'s local→GitHub ledger reuse
-  (Step 2c) for full upstream parity — deferred; the cache + ledger + intent landed now.
+- `pr-review-gh`'s local→GitHub ledger reuse (Step 2c — reuse a clean local review when the checkout
+  IS the PR head) remains deferred for full upstream parity. (`pr-review-local`'s `--goal` autonomous
+  loop + `--fast` landed — adapted to this headless SDK: repo-scoped re-gate commands, no runtime stage.)
 - A periodic re-sync from upstream `pr-review-engine/` is now cheap thanks to the mirrored layout.
 
 ## References
