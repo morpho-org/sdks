@@ -1,10 +1,4 @@
-import {
-  blueAddresses,
-  blueAddressRegistry,
-  blueDeployments,
-  addresses as morphoAddresses,
-  registerCustomAddresses as registerCustomMorphoAddresses,
-} from "@morpho-org/morpho-ts";
+import { addresses as morphoAddresses } from "@morpho-org/morpho-ts";
 import { randomAddress } from "@morpho-org/test/fixtures";
 import { describe, expect, test } from "vitest";
 import {
@@ -14,12 +8,14 @@ import {
   type ChainDeployments,
   ChainId,
   deployments,
+  getChainAddress,
   getChainAddresses,
   getPermissionedCoinbaseTokens,
   getUnwrappedToken,
   NATIVE_ADDRESS,
   RegistryValueAlreadyRegisteredError,
   registerCustomAddresses,
+  UnknownAddressError,
   UnsupportedChainIdError,
 } from "./index.js";
 
@@ -35,9 +31,21 @@ describe("addresses helpers", () => {
     );
   });
 
+  test("getChainAddress returns a flattened registry address", () => {
+    expect(getChainAddress(ChainId.BaseMainnet, "blue")).toBe(
+      getChainAddresses(ChainId.BaseMainnet).blue,
+    );
+  });
+
   test("getChainAddresses throws for unsupported chains", () => {
     expect(() => getChainAddresses(999_999_999)).toThrow(
       UnsupportedChainIdError,
+    );
+  });
+
+  test("getChainAddress throws for unknown labels", () => {
+    expect(() => getChainAddress(ChainId.BaseMainnet, "midnight")).toThrow(
+      UnknownAddressError,
     );
   });
 
@@ -61,11 +69,9 @@ describe("addresses helpers", () => {
     expect(first).not.toBe(second);
   });
 
-  test("legacy Blue registry exports are live aliases of the shared Blue views", () => {
-    expect(addresses).toBe(blueAddresses);
-    expect(addressesRegistry).toBe(blueAddressRegistry);
-    expect(deployments).toBe(blueDeployments);
-    expect(morphoAddresses).toBe(addressesRegistry);
+  test("legacy Blue registry exports are live aliases of the shared registry", () => {
+    expect(addresses).toBe(morphoAddresses);
+    expect(addressesRegistry).toBe(morphoAddresses);
     expect(morphoAddresses[ChainId.EthMainnet]).toBe(
       addressesRegistry[ChainId.EthMainnet],
     );
@@ -173,7 +179,7 @@ describe("addresses helpers", () => {
       adaptiveCurveIrm: randomAddress(),
     } satisfies ChainAddresses;
 
-    registerCustomMorphoAddresses({
+    registerCustomAddresses({
       addresses: {
         [chainId]: chainAddresses,
       },
@@ -196,6 +202,11 @@ describe("addresses helpers", () => {
         generalAdapter1: randomAddress(),
       },
       adaptiveCurveIrm: randomAddress(),
+      midnight: randomAddress(),
+      midnightBundles: randomAddress(),
+      midnightMempool: randomAddress(),
+      ecrecoverRatifier: randomAddress(),
+      setterRatifier: randomAddress(),
       wstEth: randomAddress(),
       stEth: randomAddress(),
     } satisfies ChainAddresses;
@@ -419,10 +430,8 @@ describe("addresses helpers", () => {
   });
 
   test("addresses registry prevents manual overrides", () => {
-    const blue = randomAddress();
     const chainAddresses = {
-      blue,
-      morpho: blue,
+      morpho: randomAddress(),
       bundler3: {
         bundler3: randomAddress(),
         generalAdapter1: randomAddress(),

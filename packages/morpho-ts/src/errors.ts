@@ -103,7 +103,7 @@ export class RegistryValueAlreadyRegisteredError extends Error {
 }
 
 /**
- * Thrown when a custom registry entry does not include the minimum Blue fields required by SDK consumers.
+ * Thrown when a custom registry entry does not include the minimum fields required by SDK consumers.
  *
  * @example
  * ```ts
@@ -127,7 +127,7 @@ export class IncompleteChainRegistryError extends Error {
     type: string;
   }) {
     super(
-      `Registry ${type} for chain id "${chainId}" is missing required Blue entries. Register morpho/blue, Bundler3 executor and general adapter, and AdaptiveCurveIrm, or use a supported chain.`,
+      `Registry ${type} for chain id "${chainId}" is missing required entries. Register morpho/blue, Bundler3 executor and general adapter, and AdaptiveCurveIrm, or use a supported chain.`,
     );
     this.chainId = chainId;
     this.type = type;

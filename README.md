@@ -28,6 +28,7 @@ For read-only integrations, `@morpho-org/morpho-ts` + `@morpho-org/blue-sdk` + `
 - [**`@morpho-org/blue-sdk-viem`**](./packages/blue-sdk-viem/): Viem-based augmentation of `@morpho-org/blue-sdk` that exports (and optionally injects) viem-based fetch methods
 - [**`@morpho-org/bundler-sdk-viem`**](./packages/bundler-sdk-viem/): Viem-based extension of `@morpho-org/simulation-sdk` that exports utilities to transform simple interactions on Morpho (such as `Blue_Borrow`) and Morpho Vaults (such as `MetaMorpho_Deposit`) into the required bundles (with ERC20 approvals, transfers, etc) to submit to the bundler onchain
 - [**`@morpho-org/liquidity-sdk-viem`**](./packages/liquidity-sdk-viem/): Viem-based package that helps seamlessly calculate the liquidity available through the PublicAllocator
+- [**`@morpho-org/midnight-sdk`**](./packages/midnight-sdk/): Viem-based package for Morpho Midnight that exports protocol utilities, fetch helpers, and Midnight API utilities
 
 #### WDK (Tether Wallet Development Kit)
 

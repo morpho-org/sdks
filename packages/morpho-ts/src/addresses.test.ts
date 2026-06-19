@@ -171,6 +171,43 @@ describe("addressesRegistry", () => {
     expect(getChainAddress(chainId, "midnight")).toBe(registeredMidnight);
   });
 
+  test.each([
+    {
+      chainId: ChainId.MorphMainnet,
+      morpho: "0xAd10d07901Dc3195c3cb5e78E061F4EA8D9B4905",
+      wNative: "0x5300000000000000000000000000000000000011",
+      morphoDeployment: 23_180_020n,
+      wNativeDeployment: 0n,
+    },
+    {
+      chainId: ChainId.MegaEthMainnet,
+      morpho: "0x18120312A7cf44DcfEc6dCe5632a431579ED9100",
+      wNative: "0x4200000000000000000000000000000000000006",
+      morphoDeployment: 16_408_957n,
+      wNativeDeployment: 0n,
+    },
+  ])("behavior: exposes era-2 addresses for chain $chainId", ({
+    chainId,
+    morpho,
+    wNative,
+    morphoDeployment,
+    wNativeDeployment,
+  }) => {
+    expect(addressesRegistry[chainId]).toMatchObject({
+      blue: morpho,
+      morpho,
+      wNative,
+    });
+    expect(deployments[chainId]).toMatchObject({
+      blue: morphoDeployment,
+      morpho: morphoDeployment,
+      wNative: wNativeDeployment,
+    });
+    expect(getUnwrappedToken(wNative as `0x${string}`, chainId)).toBe(
+      NATIVE_ADDRESS,
+    );
+  });
+
   test("behavior: registers Blue and Midnight addresses alongside each other", () => {
     const chainId = 31_337_004;
     const blueAddresses = getMainnetBlueAddresses();
@@ -232,43 +269,6 @@ describe("addressesRegistry", () => {
 
     expect(addressesRegistry[chainId]?.blue).toBe(morpho);
     expect(addressesRegistry[chainId]?.morpho).toBe(morpho);
-  });
-
-  test.each([
-    {
-      chainId: ChainId.MorphMainnet,
-      morpho: "0xAd10d07901Dc3195c3cb5e78E061F4EA8D9B4905",
-      wNative: "0x5300000000000000000000000000000000000011",
-      morphoDeployment: 23_180_020n,
-      wNativeDeployment: 0n,
-    },
-    {
-      chainId: ChainId.MegaEthMainnet,
-      morpho: "0x18120312A7cf44DcfEc6dCe5632a431579ED9100",
-      wNative: "0x4200000000000000000000000000000000000006",
-      morphoDeployment: 16_408_957n,
-      wNativeDeployment: 0n,
-    },
-  ])("behavior: exposes era-2 addresses for chain $chainId", ({
-    chainId,
-    morpho,
-    wNative,
-    morphoDeployment,
-    wNativeDeployment,
-  }) => {
-    expect(addressesRegistry[chainId]).toMatchObject({
-      blue: morpho,
-      morpho,
-      wNative,
-    });
-    expect(deployments[chainId]).toMatchObject({
-      blue: morphoDeployment,
-      morpho: morphoDeployment,
-      wNative: wNativeDeployment,
-    });
-    expect(getUnwrappedToken(wNative as `0x${string}`, chainId)).toBe(
-      NATIVE_ADDRESS,
-    );
   });
 });
 
