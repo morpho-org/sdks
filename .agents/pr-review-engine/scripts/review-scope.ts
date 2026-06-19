@@ -8,8 +8,9 @@
  *
  * These two computations were each shipped with a real bug found only by review
  * (the SSH->HTTPS fetch fallback's URL handling, and the cache run-hash being
- * content-blind). Extracting their pure cores here puts them under `pnpm verify`
- * so a regression fails a gate instead of riding to production. Pure functions
+ * content-blind). Extracting their pure cores here puts them under the repo's
+ * `pnpm test` gate (the `agents-engine` Vitest project; there is no `pnpm verify`
+ * script) so a regression fails a gate instead of riding to production. Pure functions
  * are unit-tested; the CLI shells to git and is integration-tested against a
  * real fixture repo (the build-changed-lines.ts pattern).
  *
@@ -18,6 +19,7 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
 
 /**
  * Rewrite a GitHub SSH remote to its HTTPS form so a fetch can retry over HTTPS
@@ -108,7 +110,5 @@ function main(): number {
   return 0;
 }
 
-const isMain =
-  process.argv[1] !== undefined &&
-  import.meta.url === `file://${process.argv[1]}`;
+const isMain = process.argv[1] === fileURLToPath(import.meta.url);
 if (isMain) process.exit(main());

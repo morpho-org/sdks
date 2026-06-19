@@ -406,7 +406,11 @@ export function validateFindingsFromText(
       }
     }
 
-    kept.push({ ...finding, snapped_line: snappedLine });
+    // Write the normalized (repo-relative) path back: PR/CI callers pass
+    // `file` straight into the GitHub review `comments[].path`, which must be
+    // repo-relative — keeping the raw absolute / `./` / `a/`-prefixed form would
+    // make the atomic review submission reject the comment.
+    kept.push({ ...finding, file: norm, snapped_line: snappedLine });
   }
 
   return { kept, dropped, counts, failed };

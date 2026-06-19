@@ -142,7 +142,7 @@ CACHE_JSON=$(node .agents/pr-review-engine/scripts/findings-ledger.ts \
 - **`cache_hit` true** → do NOT run Steps 3–6. Reprint the returned `findings` + `counts` as the Step 7 output, header marked `(cached — input unchanged since the last review of <head_sha>)`, then ask the user: **reuse this, or force a fresh review?** On *reuse* → emit the matching `REVIEW_*` sentinel from the cached counts and stop. On *force* → fall through to Steps 3–6 as a normal run.
 - **`cache_hit` false** OR `CACHE_JSON` empty/missing `cache_hit` (the check errored) → proceed to Steps 3–6 normally.
 
-Carry `RUN_HASH` forward to Step 6b so the fresh run is recorded.
+Carry `RUN_HASH` forward to Step 6b so the fresh run is recorded as the cache identity — but only when the run completes without agent failures (Step 6b gates this).
 
 ## Steps 3–6: Shared review base
 
@@ -163,11 +163,18 @@ Steps 3–6 produce: `<FINDINGS>`, `<DROPPED_FINDINGS>`, `<FAILED_AGENTS>`, `<CO
 Re-running on an evolving branch shouldn't re-surface findings you've already seen or deliberately deferred. Merge this run's findings into the persisted, branch-keyed ledger. This runs in the **single-shot path only** — goal mode tracks progress across its own iterations via `prev_findings_hash` and stamps the ledger once at convergence (see Goal mode). Write the Step 6 `<FINDINGS>` array to `/tmp/pr-review-local-findings.json`, then:
 
 ```bash
-# --write persists the updated ledger; --run-hash (from Step 2c) records this run's
-# input identity so the next unchanged re-run can short-circuit. If the merge fails,
-# fall back to the plain stateless Step 7 output — never assume unpersisted state.
+# --write persists the updated ledger. Pass --run-hash (the Step 2c input
+# identity) so the next unchanged re-run can short-circuit — but ONLY when the
+# review was complete (<FAILED_AGENTS> == 0). Stamping the cache identity for a
+# run that had agent failures would let an incomplete review (Step 7's
+# REVIEW_INCOMPLETE) be reused on the next identical run and replayed as
+# REVIEW_CLEAN — the cache stores findings/counts, not the failed-agent state.
+# Omitting the run-hash on a failed run means it never cache-hits, so it always
+# re-runs the panel until it completes cleanly.
+RUN_HASH_ARG=""
+[ "<FAILED_AGENTS>" = "0" ] && RUN_HASH_ARG="--run-hash $RUN_HASH"
 node .agents/pr-review-engine/scripts/findings-ledger.ts \
-  --ledger "$LEDGER" --findings /tmp/pr-review-local-findings.json --head-sha "$HEAD_SHA" --run-hash "$RUN_HASH" --write \
+  --ledger "$LEDGER" --findings /tmp/pr-review-local-findings.json --head-sha "$HEAD_SHA" $RUN_HASH_ARG --write \
   || echo "findings-ledger failed; continuing with the plain (stateless) Step 7 output." >&2
 ```
 
@@ -328,7 +335,7 @@ Before the first iteration, check in order; every gate aborts with a `GOAL_ABORT
 
 1. **Review.** Run Steps 3–6 (the engine) with `<DIFF_SOURCE>=local`, `<HEAD_REF>=HEAD`, `<INTENT_CONTEXT>` = the commit-messages block from the Steps 3–6 inputs, and `<EXCLUDE_AGENTS> = ["documentation"]` when `FAST=1` (otherwise empty). (There is no `runtime-validation` agent in this repo, so nothing to exclude for it.)
 2. **Partition.** `actionable` = findings with severity in `{critical, high, medium}`; set the `low` findings aside as the triage list.
-3. **Success check.** If `actionable` is empty → **break, success** (carry the lows to the summary).
+3. **Success check.** If `actionable` is empty **AND `<FAILED_AGENTS>` is 0** → **break, success** (carry the lows to the summary). If `actionable` is empty but `<FAILED_AGENTS>` > 0, the review is **incomplete** — a crashed agent may have hidden actionable findings, so this is NOT a clean pass: restore the tree (see *Leaving the branch clean*), emit `Sentinel: GOAL_INCOMPLETE — <FAILED_AGENTS> of <TOTAL_AGENTS_LAUNCHED> agent(s) failed; review incomplete, cannot declare clean. Fix the agent failure or run without --goal.`, and stop and ask the user. (This mirrors the single-shot `REVIEW_INCOMPLETE` contract — zero findings plus a failed agent is never reported as clean.)
 4. **Stuck check.** Hash `actionable` (sort by `file`, `line`, `description`; hash). If `hash == prev_findings_hash` → restore the tree (see *Leaving the branch clean*), then `Sentinel: GOAL_STUCK — identical findings on iteration <i> and <i-1>; stopping for user input.`, print the findings, and stop and ask the user.
 5. **Fix.** Apply fixes `critical → high → medium`, **batched by file** (reuse Step 7b's batch-by-file, all-or-nothing-per-file discipline). Apply the smallest change that addresses each finding. Skip any finding that is ambiguous or needs more than a localized edit; carry it to the next iteration.
 6. **Re-gate.** Run `<FORMAT_CMD>` → `<LINT_CMD>` → `<TYPECHECK_CMD>` → `<TEST_CMD>` (the scoped commands above). The latter three must end green (relative to the pre-existing baseline from gate 3, if any). **If green** → commit (step 7). **If non-green** → do **not** commit; the failing gate output becomes additional synthetic findings for the next iteration.
@@ -339,7 +346,7 @@ If `i == MAX_ITERS` and `actionable` is still non-empty → restore the tree, th
 
 ### Leaving the branch clean on a non-success exit
 
-Whenever goal mode stops **without** converging (`GOAL_STUCK`, `GOAL_MAXED`), restore the working tree to the last committed state *before* printing the sentinel:
+Whenever goal mode stops **without** converging (`GOAL_STUCK`, `GOAL_MAXED`, `GOAL_INCOMPLETE`), restore the working tree to the last committed state *before* printing the sentinel:
 
 ```bash
 git checkout -- .   # discard the current iteration's uncommitted edits to tracked files
@@ -413,3 +420,4 @@ Sentinel: GOAL_CLEAN — review passes cleanly after <i> iteration(s) on <HEAD_B
 | `GOAL_ABORTED` | Goal mode pre-flight (gate 3) | `— base gate is red (<TEST_CMD> fails before any fix); fix it or run without --goal.` |
 | `GOAL_STUCK` | Goal mode loop (stuck check) | `— identical findings on iteration <i> and <i-1>; stopping for user input.` |
 | `GOAL_MAXED` | Goal mode loop (budget exhausted) | `— <N> actionable finding(s) remain after <MAX_ITERS> iteration(s); extend, accept, or stop?` |
+| `GOAL_INCOMPLETE` | Goal mode loop (success check) | `— <FAILED_AGENTS> of <TOTAL_AGENTS_LAUNCHED> agent(s) failed; review incomplete, cannot declare clean. Fix the agent failure or run without --goal.` |

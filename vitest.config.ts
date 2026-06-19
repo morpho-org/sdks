@@ -63,9 +63,10 @@ export default defineConfig({
           name: "agents-engine",
           // Deterministic helpers behind the .agents/pr-review-engine review
           // dispatcher. Colocated *.test.ts must be matched here or they
-          // silently skip (per AGENTS.md §5). Vitest transpiles TS, so these
-          // run on any supported Node; only the live `node <script>.ts`
-          // invocation by the engine needs Node's native type-stripping.
+          // silently skip (per AGENTS.md §5). Several of these cases spawn the
+          // scripts as `node <script>.ts` (execFileSync) to integration-test the
+          // CLI, so they need Node's native type-stripping (>=22.18) just like
+          // the live engine — which is why engines.node is pinned to >=22.18.
           include: [".agents/pr-review-engine/scripts/**/*.test.ts"],
           environment: "node",
         },

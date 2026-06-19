@@ -45,6 +45,7 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const VALID_SEVERITIES = new Set(["critical", "high", "medium", "low"]);
 const VALID_STATUSES = new Set(["open", "resolved", "wontfix"]);
@@ -450,10 +451,23 @@ function main(): number {
     return 2;
   }
 
-  const findingsText =
-    cli.findings !== undefined
-      ? (readFileSafe(cli.findings) ?? "")
-      : readStdin();
+  let findingsText: string;
+  if (cli.findings !== undefined) {
+    const fileText = readFileSafe(cli.findings);
+    if (fileText === null) {
+      // A missing/unreadable --findings file must NOT be treated as an empty
+      // review: mergeLedger would then mark every open entry `resolved`, and a
+      // subsequent --write would silently corrupt the ledger (drop the
+      // operator's wontfix marks and lose open findings). Fail loudly instead.
+      process.stderr.write(
+        `findings-ledger: --findings file not found or unreadable: ${cli.findings}\n`,
+      );
+      return 2;
+    }
+    findingsText = fileText;
+  } else {
+    findingsText = readStdin();
+  }
   let parsedFindings: unknown;
   try {
     parsedFindings = JSON.parse(findingsText);
@@ -474,7 +488,5 @@ function main(): number {
   return 0;
 }
 
-const isMain =
-  process.argv[1] !== undefined &&
-  import.meta.url === `file://${process.argv[1]}`;
+const isMain = process.argv[1] === fileURLToPath(import.meta.url);
 if (isMain) process.exit(main());

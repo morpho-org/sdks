@@ -189,6 +189,14 @@ CYCLE START:
 
    The base produces: <FINDINGS> (each carrying snapped_line), <DROPPED_FINDINGS>, ${CYCLE_FAILED_AGENTS}, <COUNTS>, <TOTAL_AGENTS_LAUNCHED>.
 
+5b. APPLY THE PR-KEYED LEDGER (stateful re-review — same as the initial run's Step 6b):
+   Without this, a watched PR reposts findings already marked `wontfix` or seen before on every new commit, defeating the stateful re-review. Merge the cycle's <FINDINGS> into the PR-keyed ledger (git-only; the ledger lives outside the repo):
+   Run: slug=$(git remote get-url origin | sed -E 's#^.*github\.com[:/]##; s#\.git$##')
+   set LEDGER = ${FACETS_LEDGER_DIR:-$HOME/.claude/facets/reviews}/${slug%%/*}-${slug##*/}-pr<PR_NUMBER>.json
+   Write the cycle <FINDINGS> array to /tmp/pr-review-gh-<PR_NUMBER>-cycle-findings.json, then:
+   node <REPO_PATH>/.agents/pr-review-engine/scripts/findings-ledger.ts --ledger "$LEDGER" --findings /tmp/pr-review-gh-<PR_NUMBER>-cycle-findings.json --head-sha ${CYCLE_HEAD_SHA} --write || echo "ledger merge failed; posting the plain stateless review." >&2
+   The merge prints net_new / recurring / resolved / suppressed. Drop every `suppressed` (wontfix) finding from the comments[] built in step 6, and tag `net_new` findings as **[NEW]** in their comment body. If the merge command fails, post the plain review (no NEW/suppressed handling).
+
 6. POST REVIEW to GitHub as a single atomic call:
    Build a JSON file at /tmp/pr-review-gh-<PR_NUMBER>-cycle.json with commit_id=${CYCLE_HEAD_SHA} (NOT a CronCreate-time SHA), event="COMMENT", body (summary table), and comments[] array.
    If ${CYCLE_FAILED_AGENTS} > 0, prepend "> WARNING: ${CYCLE_FAILED_AGENTS} of <TOTAL_AGENTS_LAUNCHED> agents failed (<names>) — review may be incomplete." to the body.
