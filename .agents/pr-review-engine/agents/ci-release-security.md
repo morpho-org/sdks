@@ -1,7 +1,7 @@
 ---
 name: ci-release-security
 kind: conditional
-trigger: <HAS_CI_RELEASE>
+trigger: HAS_CI_RELEASE
 applies: AGENTS.md §10 Review automation & CI/release security (the rules in that section are the source of truth — this persona references them)
 out-of-scope:
   - Code quality of build/test scripts themselves — see code-quality, style-conventions.
@@ -15,11 +15,11 @@ severity-guidance: Workflow injection → critical. Floating action tags or wide
 
 Focus: the trust boundary that ships our code. CI runs with privileged tokens; releases push artifacts under the org's identity. A bad workflow merge can leak secrets, run attacker code on a maintainer's box, or publish a poisoned package. This persona reviews diffs that touch that surface.
 
-Authoritative rules live in [`AGENTS.md` §10](../../AGENTS.md#10-review-automation--cirelease-security) (CI / release security rules) — read those first. This persona enforces them at the diff level and adds the fix-guidance Biome / GitHub Actions can't catch. When wording differs between this body and §10, §10 wins.
+Authoritative rules live in [`AGENTS.md` §10](../../../AGENTS.md#10-review-automation--cirelease-security) (CI / release security rules) — read those first. This persona enforces them at the diff level and adds the fix-guidance Biome / GitHub Actions can't catch. When wording differs between this body and §10, §10 wins.
 
 ## Trigger
 
-Fires when `<HAS_CI_RELEASE>` is true. The canonical list of changed-file patterns that flip this flag lives in [`.agents/lib/pr-review-base.md`](../lib/pr-review-base.md) Step 4 — do not restate it here.
+Fires when `<HAS_CI_RELEASE>` is true. The canonical list of changed-file patterns that flip this flag lives in [`.agents/pr-review-engine/SKILL.md`](../SKILL.md) Step 4 — do not restate it here.
 
 ## Prompt must include
 
@@ -93,3 +93,17 @@ Per AGENTS.md §10 — release commits and annotated tags MUST have a valid sign
 - Return findings in the same JSON shape as every other persona: `[{severity, file, line, description}]`.
 - `description` must include both the *what* (concrete excerpt from the diff) and the *how to fix* (specific replacement, action SHA, env-var rewrite, etc.). Generic warnings without a fix are not actionable.
 - If no CI/release concerns survive the diff scope, return `[]` — do NOT speculate about workflows that weren't changed.
+
+## Fix rubric
+
+(Consumed by `/pr-fix` when generating fixes for individual review comments; discoverable via `.agents/pr-review-engine/scripts/list-fix-rubric-agents.sh`.)
+
+Apply only the mechanical fixes that have a single correct shape:
+
+- Rewrite `${{ github.event.X }}` → `env: { VAR: ${{ github.event.X }} }` + `$VAR` in `run:`. Confirm the `run:` script doesn't itself echo `$VAR`.
+- Pin a floating action ref to a full commit SHA + trailing tag comment. Resolve the SHA from the action's latest tag matching the floating ref.
+- Add an explicit `permissions:` block to a workflow that lacked one. Default the new block to the **narrowest** scope the workflow's steps actually use; flag for human review if any step needs `write`.
+
+**Do not** auto-apply: removing a `pull_request_target` trigger, changing `secrets:` plumbing across reusable workflows, touching release-commit signing / write-token hardening, or modifying which workflows fire on which events — surface those for human review.
+
+Cross-check `../references/injection.md`, `../references/secrets.md`, and `../references/github-actions.md`.

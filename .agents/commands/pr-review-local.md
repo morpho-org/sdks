@@ -25,8 +25,9 @@ A maintainer changing this skill should verify each outcome shape:
 | Zero findings + agent crash | `Sentinel: REVIEW_INCOMPLETE — <FAILED_AGENTS> of <TOTAL_AGENTS_LAUNCHED> agents failed (<names>); no findings does NOT mean clean.` |
 | `--fix` happy path | `Sentinel: FIX_DONE_LOCAL — <X> applied, <Y> skipped (Local-only, unstaged).` plus `git diff` shows the unstaged edits. |
 | `--fix` aborted on dirty tree | `Sentinel: FIX_ABORTED — working tree is not clean. Commit or stash before --fix.` |
+| Re-run, input unchanged (cache hit) | cached findings reprinted under a `(cached — input unchanged since <head_sha>)` header + a reuse/re-review prompt; on *reuse*, the matching `REVIEW_*` sentinel from the cached counts (Step 2c) |
 
-Idempotency: re-running with no diff change produces the same sentinel + same counts; finding *text* may drift (LLM nondeterminism). The sentinel structure is deterministic.
+Idempotency: re-running with an unchanged input (same merge-base + head SHA + worktree) short-circuits via the Step 2c cache and reprints the cached findings + sentinel without re-running agents; finding *text* never drifts on a cache hit because nothing is recomputed. A genuine change misses the cache and runs a fresh review.
 
 ## Step 1: Validate environment + arguments
 
@@ -45,7 +46,17 @@ Parse positional and flag args:
 ## Step 2: Resolve branches
 
 ```bash
-git fetch origin
+# Fetch refs. If SSH auth fails (e.g. the 1Password / ssh-agent is down), retry
+# the SAME fetch over HTTPS via `git -c remote.origin.url=…` (NOT a bare
+# `git fetch <url>`, which only moves FETCH_HEAD) so origin's refspec runs and
+# refs/remotes/origin/* actually update. Still git-only — the zero-GitHub
+# contract holds. Stop loudly if HTTPS also fails (never review on stale refs).
+if ! git fetch origin; then
+  https_url=$(node .agents/pr-review-engine/scripts/review-scope.ts --to-https "$(git remote get-url origin)")
+  echo "git fetch origin failed; retrying over HTTPS: $https_url" >&2
+  git -c remote.origin.url="$https_url" fetch origin \
+    || { echo "fetch failed over SSH and HTTPS — refs may be stale; fix auth/network before reviewing." >&2; exit 1; }
+fi
 
 HEAD_BRANCH=$(git branch --show-current)
 if [ -z "$HEAD_BRANCH" ]; then
@@ -87,14 +98,63 @@ if [ -z "$COMMIT_RANGE_FILES" ] && [ -z "$WORKTREE_DIRTY" ]; then
 fi
 ```
 
+## Step 2c: Idempotency cache (short-circuit unchanged re-runs)
+
+Before fanning out the agent panel, check whether the review input is byte-identical to the last recorded run — if so, reuse the cached findings instead of reproducing them. The ledger lives **outside** the repo, keyed by branch:
+
+```bash
+slug=$(git remote get-url origin | sed -E 's#^.*github\.com[:/]##; s#\.git$##')   # owner/repo
+LEDGER_DIR=${FACETS_LEDGER_DIR:-$HOME/.claude/facets/reviews}
+LEDGER="$LEDGER_DIR/${slug%%/*}-${slug##*/}-branch-$(printf '%s' "$HEAD_BRANCH" | tr '/ ' '-').json"
+MERGE_BASE=$(git merge-base "origin/<BASE_BRANCH>" HEAD)
+# Run identity = merge-base + head SHA + the CONTENT of the uncommitted overlay
+# (content, not porcelain — editing an already-modified file must miss the cache).
+RUN_HASH=$(node .agents/pr-review-engine/scripts/review-scope.ts --run-hash --base "$MERGE_BASE")
+
+# Fail open: on any error fall through to a normal review — never skip the review
+# on an unreadable cache result.
+CACHE_JSON=$(node .agents/pr-review-engine/scripts/findings-ledger.ts \
+  --ledger "$LEDGER" --check-cache --run-hash "$RUN_HASH") || CACHE_JSON=""
+```
+
+- **`cache_hit` true** → do NOT run Steps 3–6. Reprint the returned `findings` + `counts` as the Step 7 output, header marked `(cached — input unchanged since the last review of <head_sha>)`, then ask the user: **reuse this, or force a fresh review?** On *reuse* → emit the matching `REVIEW_*` sentinel from the cached counts and stop. On *force* → fall through to Steps 3–6 as a normal run.
+- **`cache_hit` false** OR `CACHE_JSON` empty/missing `cache_hit` (the check errored) → proceed to Steps 3–6 normally.
+
+Carry `RUN_HASH` forward to Step 6b so the fresh run is recorded.
+
 ## Steps 3–6: Shared review base
 
-**Read `.agents/lib/pr-review-base.md` and follow Steps 3–6 there**, with:
+**Read `.agents/pr-review-engine/SKILL.md` and follow Steps 3–6 there**, with:
 
 - `<DIFF_SOURCE>` = `local` (include uncommitted diff)
 - `<HEAD_REF>` = `HEAD`
+- `<INTENT_CONTEXT>` = changed-commit messages only, built locally (let agents tell a deliberate, commit-documented change from a regression). Built from `git` only — never `gh` (the zero-GitHub contract). Empty when the branch has no commits beyond the merge-base:
+  ```bash
+  git log --format='%h %s%n%b' "$MERGE_BASE..HEAD"
+  ```
 
-Steps 3–6 produce: `<FINDINGS>`, `<FAILED_AGENTS>`, `<COUNTS>`.
+Steps 3–6 produce: `<FINDINGS>`, `<DROPPED_FINDINGS>`, `<FAILED_AGENTS>`, `<COUNTS>`, `<DROPPED_COUNTS>`, `<TOTAL_AGENTS_LAUNCHED>`.
+
+## Step 6b: Findings ledger (stateful re-runs)
+
+Re-running on an evolving branch shouldn't re-surface findings you've already seen or deliberately deferred. Merge this run's findings into the persisted, branch-keyed ledger. Write the Step 6 `<FINDINGS>` array to `/tmp/pr-review-local-findings.json`, then:
+
+```bash
+# --write persists the updated ledger; --run-hash (from Step 2c) records this run's
+# input identity so the next unchanged re-run can short-circuit. If the merge fails,
+# fall back to the plain stateless Step 7 output — never assume unpersisted state.
+node .agents/pr-review-engine/scripts/findings-ledger.ts \
+  --ledger "$LEDGER" --findings /tmp/pr-review-local-findings.json --head-sha "$HEAD_SHA" --run-hash "$RUN_HASH" --write \
+  || echo "findings-ledger failed; continuing with the plain (stateless) Step 7 output." >&2
+```
+
+The merge prints `net_new` / `recurring` / `resolved` / `suppressed`. Feed them into Step 7:
+
+- **Drop every `suppressed` (wontfix) finding from the displayed list** — that is the entire point of the manual wontfix mark.
+- Tag each surfaced finding **NEW** (its id is in `net_new`) or leave untagged (in `recurring` — seen in an earlier run).
+- **If the merge command failed**, skip the ledger annotations entirely and emit the plain Step 7 output — do not invent NEW/seen tags from state that wasn't persisted.
+
+The ledger lives **outside** the repo, so the zero-GitHub and clean-tree contracts hold. **Marking a finding wontfix:** set its `status` to `"wontfix"` in the ledger JSON by hand (no flag); future runs auto-suppress it.
 
 ## Step 7: Output to terminal
 
@@ -105,6 +165,7 @@ Format directly in the conversation:
 
 **Branch:** <HEAD_BRANCH> -> <BASE_BRANCH>  |  **Files:** <count>  |  **Range:** <MERGE_BASE_SHORT>..<HEAD_SHA_SHORT>
 **Uncommitted files included:** <U>  |  **Mode:** Local-only
+**Ledger:** <net_new> new · <recurring> seen before · <resolved> resolved since last run · <suppressed> wontfix-suppressed
 
 | Severity | Count |
 |----------|-------|
@@ -125,7 +186,19 @@ Format directly in the conversation:
 ...
 ```
 
-Group findings by file (already sorted by Step 6). Within each file, list highest-severity findings first.
+Group findings by file (already sorted by Step 6). Within each file, list highest-severity findings first. Anchor each finding's `L<line>` on its `snapped_line` when present.
+
+**Ledger annotations (from Step 6b).** Drop every `suppressed` (wontfix) finding from these sections entirely. Prefix each finding whose id is in `net_new` with a `**[NEW]**` tag (findings in `recurring` carry no tag). The `**Ledger:**` header line summarizes the four counts. When Step 6b did not run (no commits, or the ledger is unreadable), omit the `**Ledger:**` line and the `[NEW]` tags rather than guessing.
+
+### Audit trail (dropped findings)
+
+If `<DROPPED_FINDINGS>` is non-empty, after the per-file sections print a one-line summary:
+
+```
+Audit: dropped <N> finding(s) by scope filter (<out_of_scope> file-level, <pre_existing> line-level, <doc_example> doc-example). Full list: /tmp/pr-review-local-dropped.json
+```
+
+Write the `<DROPPED_FINDINGS>` array to `/tmp/pr-review-local-dropped.json` (each entry tagged with `drop_reason` and, for line-level drops, `distance_to_nearest_changed_line`) so the user can `cat` it and re-introduce a finding if the filter was wrong. Skip the line entirely when zero findings were dropped.
 
 ### Sentinel lines
 

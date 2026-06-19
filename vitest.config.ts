@@ -60,6 +60,19 @@ export default defineConfig({
       {
         extends: true,
         test: {
+          name: "agents-engine",
+          // Deterministic helpers behind the .agents/pr-review-engine review
+          // dispatcher. Colocated *.test.ts must be matched here or they
+          // silently skip (per AGENTS.md §5). Vitest transpiles TS, so these
+          // run on any supported Node; only the live `node <script>.ts`
+          // invocation by the engine needs Node's native type-stripping.
+          include: [".agents/pr-review-engine/scripts/**/*.test.ts"],
+          environment: "node",
+        },
+      },
+      {
+        extends: true,
+        test: {
           name: "morpho-ts",
           include: [
             "packages/morpho-ts/test/**/*.test.ts",

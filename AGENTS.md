@@ -8,7 +8,7 @@ Every PR is measured against the rules below. A change that violates an architec
 
 > **Enforcement note.** Some rules below are enforced by tooling today (Biome formatter, fork harness in `@morpho-org/test`, Changesets generation). Most are **review-time conventions** that humans and reviewing agents apply: JSDoc on every export, layered-import bans, the §2 forbidden-patterns list (Biome's `noExplicitAny` is warn-level, `noParameterAssign` is disabled, and there's no rule banning `as unknown as` / `@ts-ignore` / async-in-actions / framework imports / mocked viem clients on RPC paths), changeset-gates-CI, full coverage thresholds. Where a rule isn't backed by an automated check, treat it as binding regardless — wiring CI gates is tracked separately.
 
-> **Review personas.** The review-time conventions above are applied at PR review by specialized personas under [`.agents/personas/`](./.agents/personas/), invoked by the `/pr-review-{ci,gh,local}` slash commands. See [§10](#10-review-automation--cirelease-security) for the full inventory and the CI/release rules they anchor. When a rule below changes, the matching persona's bullet must change with it — the backlinks on each section name the personas to update.
+> **Review personas.** The review-time conventions above are applied at PR review by specialized personas under [`.agents/pr-review-engine/agents/`](./.agents/pr-review-engine/agents/), invoked by the `/pr-review-{ci,gh,local}` slash commands. See [§10](#10-review-automation--cirelease-security) for the full inventory and the CI/release rules they anchor. When a rule below changes, the matching persona's bullet must change with it — the backlinks on each section name the personas to update.
 
 ---
 
@@ -51,7 +51,7 @@ Cross-layer leaks (entities encoding calldata, actions reading state, helpers de
 - Small primitives that combine. No kitchen-sink helpers; no boolean-prop explosions.
 - Prefer early returns over deep nesting — guard clauses first, happy path last.
 
-> Applied by personas: [`module-api-architecture`](./.agents/personas/module-api-architecture.md), [`morpho-protocol`](./.agents/personas/morpho-protocol.md) (protocol routing + ABI/address source of truth), [`web3-security`](./.agents/personas/web3-security.md) (Action-layer purity).
+> Applied by personas: [`module-api-architecture`](./.agents/pr-review-engine/agents/module-api-architecture.md), [`morpho-protocol`](./.agents/pr-review-engine/agents/morpho-protocol.md) (protocol routing + ABI/address source of truth), [`web3-security`](./.agents/pr-review-engine/agents/web3-security.md) (Action-layer purity).
 
 ---
 
@@ -71,7 +71,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 10. PRs that ship behavior-affecting package source changes without their tests, JSDoc, and semver-relevant changeset.
 11. Feature, address, ABI, dependency, test, JSDoc, refactor, or changeset updates to frozen deprecated packages. Per [`TIB-0002`](./docs/tibs/TIB-0002-consolidate-sdk-packages.md) / [`TIB-0003`](./docs/tibs/TIB-0003-sdk-package-deprecation-lifecycle.md), do not maintain `@morpho-org/liquidation-sdk-viem`, `@morpho-org/bundler-sdk-viem`, `@morpho-org/migration-sdk-viem`, `@morpho-org/simulation-sdk`, `@morpho-org/blue-sdk-wagmi`, `@morpho-org/simulation-sdk-wagmi`, or `@morpho-org/test-wagmi`. Only PRs explicitly scoped to deprecation metadata or source deletion may touch those packages, and such PRs must not add new supported behavior. Do not add new `@morpho-labs/*` references.
 
-> Applied by personas: [`code-quality`](./.agents/personas/code-quality.md) (forbidden patterns 1–4, 7–11), [`module-api-architecture`](./.agents/personas/module-api-architecture.md) (5 — deep cross-package imports), [`test-coverage`](./.agents/personas/test-coverage.md) (6 — mocked viem clients on RPC paths), [`web3-security`](./.agents/personas/web3-security.md) (3 — signing in transaction builders), [`silent-failure-hunter`](./.agents/personas/silent-failure-hunter.md) (complement to rule 2 — handling discipline once a typed error is thrown; code-quality owns the rule's existence).
+> Applied by personas: [`code-quality`](./.agents/pr-review-engine/agents/code-quality.md) (forbidden patterns 1–4, 7–11), [`module-api-architecture`](./.agents/pr-review-engine/agents/module-api-architecture.md) (5 — deep cross-package imports), [`test-coverage`](./.agents/pr-review-engine/agents/test-coverage.md) (6 — mocked viem clients on RPC paths), [`web3-security`](./.agents/pr-review-engine/agents/web3-security.md) (3 — signing in transaction builders), [`silent-failure-hunter`](./.agents/pr-review-engine/agents/silent-failure-hunter.md) (complement to rule 2 — handling discipline once a typed error is thrown; code-quality owns the rule's existence).
 
 ---
 
@@ -90,7 +90,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 - Internal symbols carry `@internal` JSDoc and do not participate in the stability contract.
 - **Absorb fragile types.** Types at risk of upstream churn are re-declared locally rather than re-exported, so the SDK's version story stays decoupled from its dependencies.
 
-> Applied by personas: [`code-quality`](./.agents/personas/code-quality.md), [`module-api-architecture`](./.agents/personas/module-api-architecture.md).
+> Applied by personas: [`code-quality`](./.agents/pr-review-engine/agents/code-quality.md), [`module-api-architecture`](./.agents/pr-review-engine/agents/module-api-architecture.md).
 
 ---
 
@@ -104,7 +104,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 - Each package has one reason to exist (see §1 Modularity). Framework adapters never live in core SDK packages.
 - Don't replace a small local helper with a transitive dep just to "reuse code".
 
-> Applied by persona: [`module-api-architecture`](./.agents/personas/module-api-architecture.md).
+> Applied by persona: [`module-api-architecture`](./.agents/pr-review-engine/agents/module-api-architecture.md).
 
 ---
 
@@ -131,7 +131,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 - **Mocked viem clients are limited to unit tests via the transport boundary.** Integration / fork tests of contract round-trips use Anvil forks at pinned blocks. Pure-function tests need neither Anvil nor a viem client. Unit tests that need a viem `Client` shape for code that internally calls `viem/actions` (`readContract`, `getChainId`, …) may use `createMockClient` from `@morpho-org/test/mock`, which installs a `vi.fn`-backed `custom()` transport — the same surface `viem/actions` resolves through, so the mock is behaviour-faithful (per TIB-2026-04-27). Do **not** stub `client.readContract` directly with `vi.spyOn`; the actions resolve through `client.transport` and the spy will silently no-op.
 - **Shared test helpers** live in `morpho-test`, `test`, `test-wagmi` — never in published runtime paths of feature packages.
 
-> Applied by personas: [`test-coverage`](./.agents/personas/test-coverage.md) (test presence + colocation), [`morpho-protocol`](./.agents/personas/morpho-protocol.md) (protocol invariant semantics), [`web3-security`](./.agents/personas/web3-security.md) (security invariants — chainId validation, authorization, accounting).
+> Applied by personas: [`test-coverage`](./.agents/pr-review-engine/agents/test-coverage.md) (test presence + colocation), [`morpho-protocol`](./.agents/pr-review-engine/agents/morpho-protocol.md) (protocol invariant semantics), [`web3-security`](./.agents/pr-review-engine/agents/web3-security.md) (security invariants — chainId validation, authorization, accounting).
 
 ---
 
@@ -149,7 +149,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 - **TypeDoc-generated reference** published per release.
 - **Feedback loop:** if the same question is asked twice, the answer goes into the relevant `AGENTS.md` or JSDoc on the export it concerns.
 
-> Applied by persona: [`documentation`](./.agents/personas/documentation.md) (also covers Markdown doc accuracy and pointer integrity across the repo, not just JSDoc).
+> Applied by persona: [`documentation`](./.agents/pr-review-engine/agents/documentation.md) (also covers Markdown doc accuracy and pointer integrity across the repo, not just JSDoc).
 
 ---
 
@@ -165,7 +165,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 - **Cantina audit on every major release**, with the public report linked from the CHANGELOG entry. Critical CVEs trigger out-of-band patches.
 - **Pre-release dogfood on every minor:** at least one internal app and one external partner before the `latest` tag flips.
 
-> Applied by personas: [`style-conventions`](./.agents/personas/style-conventions.md) (changeset relevance), [`morpho-protocol`](./.agents/personas/morpho-protocol.md) (pinned ABI/address release contract), [`ci-release-security`](./.agents/personas/ci-release-security.md) (publish-flow integrity, conditional).
+> Applied by personas: [`style-conventions`](./.agents/pr-review-engine/agents/style-conventions.md) (changeset relevance), [`morpho-protocol`](./.agents/pr-review-engine/agents/morpho-protocol.md) (pinned ABI/address release contract), [`ci-release-security`](./.agents/pr-review-engine/agents/ci-release-security.md) (publish-flow integrity, conditional).
 
 ---
 
@@ -178,7 +178,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 - Generated code: change generated inputs (`graphql/*.gql`), never edit generated outputs (`src/api/sdk.ts`). Never edit `lib/`.
 - One concern per PR. Tests, JSDoc, and any required semver-relevant changeset land with the change — not as a follow-up.
 
-> Applied by persona: [`style-conventions`](./.agents/personas/style-conventions.md).
+> Applied by persona: [`style-conventions`](./.agents/pr-review-engine/agents/style-conventions.md).
 
 ---
 
@@ -193,14 +193,16 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 
 ## 10. Review automation & CI/release security
 
-PR review is automated by the `/pr-review-{ci,gh,local}` slash commands, which fan out to the personas at [`.agents/personas/`](./.agents/personas/). This section is the canonical inventory of those personas and the source of truth for the CI/release rules one of them (`ci-release-security`) anchors on.
+PR review is automated by the `/pr-review-{ci,gh,local}` slash commands, which fan out to the personas at [`.agents/pr-review-engine/agents/`](./.agents/pr-review-engine/agents/). This section is the canonical inventory of those personas and the source of truth for the CI/release rules one of them (`ci-release-security`) anchors on.
 
 ### Orchestration
 
 | File | Role |
 |---|---|
-| [`.agents/commands/pr-review-{ci,gh,local}.md`](./.agents/commands/) | Three caller-side skills — one per use case (CI verdict / local PR / pre-PR terminal). Each parses args, resolves branches, then delegates Steps 3–6 to the shared base. |
-| [`.agents/lib/pr-review-base.md`](./.agents/lib/pr-review-base.md) | Shared review base — reads `<PROJECT_CONTEXT>`, computes conditional flags, loops over personas, aggregates and deduplicates findings. Does not encode any rule itself; it only orchestrates. |
+| [`.agents/commands/pr-review-{ci,gh,local}.md`](./.agents/commands/) + [`pr-fix.md`](./.agents/commands/pr-fix.md) | Caller-side commands (CI verdict / local PR / pre-PR terminal / fix). Each parses args, resolves branches, then delegates Steps 3–6 to the engine. Symlinked into `.claude/commands/`. |
+| [`.agents/pr-review-engine/SKILL.md`](./.agents/pr-review-engine/SKILL.md) | Shared review **engine** (Steps 3–6) — reads `<PROJECT_CONTEXT>`, computes conditional flags, fans out the agents, then aggregates / dedups / snaps findings to diff lines. Encodes no rule; orchestrates only. Not invocable directly (not symlinked into `.claude/commands/`). Supersedes the former `lib/pr-review-base.md`. |
+| [`.agents/pr-review-engine/scripts/`](./.agents/pr-review-engine/scripts/) | Deterministic helpers run by the engine / callers: `build-changed-lines`, `validate-findings`, `findings-ledger` (stateful ledger + idempotency cache), `review-scope`. Unit-tested under the `agents-engine` Vitest project. |
+| [`.agents/pr-review-engine/references/`](./.agents/pr-review-engine/references/) | Shared rubric content cited by agents (changed-lines, scope-filter, calibration, secrets, injection, github-actions, skill-authoring). |
 
 ### Persona inventory
 
@@ -208,22 +210,23 @@ Baseline personas (always fire):
 
 | Persona | Anchors | Focus |
 |---|---|---|
-| [`code-quality`](./.agents/personas/code-quality.md) | §2, §3 | Type safety, code smells, naming, cross-file impact on SDK consumers, security primitives. |
-| [`module-api-architecture`](./.agents/personas/module-api-architecture.md) | §1, §2 (rule 5), §3, §4 | Package boundaries, public surface, NodeNext import discipline, boundary-level type discipline. |
-| [`morpho-protocol`](./.agents/personas/morpho-protocol.md) | §1, §5, §7 | Morpho protocol semantics, ABI/address source-of-truth drift, operation routing, accounting/share-price/LLTV invariants. |
-| [`web3-security`](./.agents/personas/web3-security.md) | §1 (Action layer), §2, §5 (security invariants) | Contract interactions, transaction params, permit flows, race conditions. Severity defaults to critical/high. |
-| [`silent-failure-hunter`](./.agents/personas/silent-failure-hunter.md) | §2 (handling depth for rule 2 — see persona body) | Swallowed errors, missing error states, dead code paths. |
-| [`style-conventions`](./.agents/personas/style-conventions.md) | §7, §8 | Biome compliance, import discipline, changeset relevance. |
-| [`documentation`](./.agents/personas/documentation.md) | §6 | JSDoc on exports, Markdown doc accuracy, pointer integrity, AGENTS.md ↔ persona backlink consistency. |
-| [`test-coverage`](./.agents/personas/test-coverage.md) | §5, §2 (rule 6) | Missing tests for new code paths and onchain interactions. |
+| [`code-quality`](./.agents/pr-review-engine/agents/code-quality.md) | §2, §3 | Type safety, code smells, naming, cross-file impact on SDK consumers, security primitives. |
+| [`module-api-architecture`](./.agents/pr-review-engine/agents/module-api-architecture.md) | §1, §2 (rule 5), §3, §4 | Package boundaries, public surface, NodeNext import discipline, boundary-level type discipline. |
+| [`morpho-protocol`](./.agents/pr-review-engine/agents/morpho-protocol.md) | §1, §5, §7 | Morpho protocol semantics, ABI/address source-of-truth drift, operation routing, accounting/share-price/LLTV invariants. |
+| [`web3-security`](./.agents/pr-review-engine/agents/web3-security.md) | §1 (Action layer), §2, §5 (security invariants) | Contract interactions, transaction params, permit flows, race conditions. Severity defaults to critical/high. |
+| [`silent-failure-hunter`](./.agents/pr-review-engine/agents/silent-failure-hunter.md) | §2 (handling depth for rule 2 — see persona body) | Swallowed errors, missing error states, dead code paths. |
+| [`style-conventions`](./.agents/pr-review-engine/agents/style-conventions.md) | §7, §8 | Biome compliance, import discipline, changeset relevance. |
+| [`documentation`](./.agents/pr-review-engine/agents/documentation.md) | §6 | JSDoc on exports, Markdown doc accuracy, pointer integrity, AGENTS.md ↔ persona backlink consistency. |
+| [`test-coverage`](./.agents/pr-review-engine/agents/test-coverage.md) | §5, §2 (rule 6) | Missing tests for new code paths and onchain interactions. |
 
 Conditional personas (fire only when their trigger flag is true):
 
 | Persona | Trigger | Anchors |
 |---|---|---|
-| [`ci-release-security`](./.agents/personas/ci-release-security.md) | `<HAS_CI_RELEASE>` (computed in [`.agents/lib/pr-review-base.md`](./.agents/lib/pr-review-base.md) Step 4 — that file is the single source of truth for the changed-file patterns that flip this flag) | §10 (the rules below) |
+| [`ci-release-security`](./.agents/pr-review-engine/agents/ci-release-security.md) | `HAS_CI_RELEASE` (computed in [`.agents/pr-review-engine/SKILL.md`](./.agents/pr-review-engine/SKILL.md) Step 4 — the single source of truth for the changed-file patterns that flip this flag) | §10 (the rules below) |
+| [`skill-authoring`](./.agents/pr-review-engine/agents/skill-authoring.md) | `HAS_PLUGIN_SKILLS` (any change under `.agents/**`, `.claude/**`, a `SKILL.md`, or a `.claude-plugin/*.json`) | §1 (single source of truth), §10 (this inventory) |
 
-Adding a persona = drop a file under `.agents/personas/` with `applies:` frontmatter, add a row to the relevant table above, and (for a conditional persona) extend the flag detection in `.agents/lib/pr-review-base.md` Step 4.
+Adding a persona = drop a file under `.agents/pr-review-engine/agents/` with `applies:` frontmatter, add a row to the relevant table above, and (for a conditional persona) extend the flag detection in `.agents/pr-review-engine/SKILL.md` Step 4. The `skill-authoring` persona checks that these inventory invariants — engine roster, this table, and the `> Applied by personas:` backlinks — stay in sync.
 
 ### CI / release security rules (anchors `ci-release-security`)
 
@@ -244,4 +247,4 @@ These are the rules `ci-release-security` enforces. They live here as source of 
 - **`.npmrc` hardening.** `always-auth=true` or `_authToken=` committed to the repo is **critical** — credential leak. Non-`registry.npmjs.org` `registry=` or `@scope:registry=` lines require explicit human review (could redirect to a malicious registry).
 - **Workspace install behavior.** Flips of `auto-install-peers` or `strict-peer-dependencies` in `.npmrc` or `pnpm-workspace.yaml` are **medium** — surface the impact on consumer install behavior in the review comment.
 
-> Applied by persona: [`ci-release-security`](./.agents/personas/ci-release-security.md).
+> Applied by personas: [`ci-release-security`](./.agents/pr-review-engine/agents/ci-release-security.md) (the CI / release security rules above) and [`skill-authoring`](./.agents/pr-review-engine/agents/skill-authoring.md) (the persona / orchestration inventory invariants in this section).

@@ -38,12 +38,29 @@ Same as `/pr-review-ci` Step 2: `gh pr view <PR_NUMBER>`, capture and validate `
 
 ## Steps 3–6: Shared review base
 
-**Read `.agents/lib/pr-review-base.md` and follow Steps 3–6 there**, with these inputs:
+**Read `.agents/pr-review-engine/SKILL.md` and follow Steps 3–6 there**, with these inputs:
 
 - `<DIFF_SOURCE>` = `pr`
 - `<HEAD_REF>` = `origin/<HEAD_BRANCH>`
+- `<INTENT_CONTEXT>` = the PR title + body (from `gh pr view` in Step 2) followed by the changed-commit messages, so agents can tell a deliberate, documented change from a regression.
 
-Steps 3–6 produce: `<FINDINGS>`, `<FAILED_AGENTS>`, `<COUNTS>`.
+Steps 3–6 produce: `<FINDINGS>` (each carrying `snapped_line`), `<DROPPED_FINDINGS>`, `<FAILED_AGENTS>`, `<COUNTS>`, `<DROPPED_COUNTS>`, `<TOTAL_AGENTS_LAUNCHED>`.
+
+## Step 6b: Findings ledger (PR-keyed, stateful)
+
+So re-reviews of an evolving PR don't re-surface findings already seen or deferred, merge this run's `<FINDINGS>` into a persisted ledger keyed by PR number (distinct from `/pr-review-local`'s `branch-<name>` key). The ledger lives **outside** the repo:
+
+```bash
+slug=$(git remote get-url origin | sed -E 's#^.*github\.com[:/]##; s#\.git$##')   # owner/repo
+LEDGER_DIR=${FACETS_LEDGER_DIR:-$HOME/.claude/facets/reviews}
+LEDGER="$LEDGER_DIR/${slug%%/*}-${slug##*/}-pr<PR_NUMBER>.json"
+# Write the <FINDINGS> array to /tmp first, then:
+node .agents/pr-review-engine/scripts/findings-ledger.ts \
+  --ledger "$LEDGER" --findings /tmp/pr-review-gh-<PR_NUMBER>-findings.json --head-sha "<HEAD_SHA>" --write \
+  || echo "findings-ledger failed; continuing with the plain (stateless) review output." >&2
+```
+
+Drop every `suppressed` (wontfix) finding from the posted comments; tag `net_new` findings **[NEW]** in the comment body. If the merge fails, post the plain stateless review with no NEW/seen tags.
 
 ## Step 7: Post the review as `COMMENT`
 
@@ -59,6 +76,8 @@ Build a JSON object at `/tmp/pr-review-gh-<PR_NUMBER>-comments.json`:
 ```
 
 Always use `"event": "COMMENT"` — never auto-approve or request changes in local PR mode.
+
+Anchor each entry in `comments[]` on the finding's `snapped_line` (the nearest actual diff line) — the reviews API rejects any comment whose line is not an exact diff line. If `<DROPPED_FINDINGS>` is non-empty, append a collapsible `<details>` "Audit trail" section to the body summarizing `<DROPPED_COUNTS>` (file-level / line-level / doc-example) — never silently nuke dropped findings.
 
 ### Body format
 
@@ -162,13 +181,13 @@ CYCLE START:
 4. NEW COMMIT DETECTED:
    Say "New commit detected on PR #<PR_NUMBER>: ${CYCLE_HEAD_SHA}. Running full review..."
 
-5. **Read `.agents/lib/pr-review-base.md` and follow Steps 3–6 there**, with:
+5. **Read `.agents/pr-review-engine/SKILL.md` and follow Steps 3–6 there**, with:
    - <DIFF_SOURCE> = pr
    - <HEAD_REF> = origin/<HEAD_BRANCH>
    - <BASE_BRANCH> = <BASE_BRANCH>
    - re-discover PROJECT_CONTEXT per cycle (do NOT cache from earlier cycles).
 
-   The base produces: <FINDINGS>, ${CYCLE_FAILED_AGENTS}, <COUNTS>.
+   The base produces: <FINDINGS> (each carrying snapped_line), <DROPPED_FINDINGS>, ${CYCLE_FAILED_AGENTS}, <COUNTS>, <TOTAL_AGENTS_LAUNCHED>.
 
 6. POST REVIEW to GitHub as a single atomic call:
    Build a JSON file at /tmp/pr-review-gh-<PR_NUMBER>-cycle.json with commit_id=${CYCLE_HEAD_SHA} (NOT a CronCreate-time SHA), event="COMMENT", body (summary table), and comments[] array.

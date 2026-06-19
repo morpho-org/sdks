@@ -16,7 +16,7 @@ severity-guidance: |
 
 # Web3 Security
 
-The boundary between the SDK and the chain. Authoritative rules live in [`AGENTS.md`](../../AGENTS.md) §1 (the Action layer is pure encode-only, no state reads), §2 (typed errors), and §5 (security invariants — `chainId` validation, authorization, accounting, LLTV buffer, inflation-attack guard, deposit routing). The Action-layer rule and the chainId-validation invariant from §5 are the load-bearing parts; everything below is the application surface.
+The boundary between the SDK and the chain. Authoritative rules live in [`AGENTS.md`](../../../AGENTS.md) §1 (the Action layer is pure encode-only, no state reads), §2 (typed errors), and §5 (security invariants — `chainId` validation, authorization, accounting, LLTV buffer, inflation-attack guard, deposit routing). The Action-layer rule and the chainId-validation invariant from §5 are the load-bearing parts; everything below is the application surface.
 
 ## What to flag
 
@@ -76,4 +76,12 @@ The boundary between the SDK and the chain. Authoritative rules live in [`AGENTS
 - Do NOT flag generic error swallowing (`catch (_) {}`) — `silent-failure-hunter`. This persona owns **Web3-specific** failure handling (failed-tx surfacing, revert decoding, user-rejection paths).
 - Do NOT flag changeset relevance or publish-flow concerns — `style-conventions` and `ci-release-security`.
 - Do NOT propose new test coverage on Web3 paths — `test-coverage`. This persona reviews whether the *source* is correct; coverage is the other persona.
-- Reference the root [`AGENTS.md`](../../AGENTS.md), [`MISSION.md`](../../MISSION.md), the package's `AGENTS.md`, and any pinned ABI / address registry files as `<PROJECT_CONTEXT>`.
+- Reference the root [`AGENTS.md`](../../../AGENTS.md), [`MISSION.md`](../../../MISSION.md), the package's `AGENTS.md`, and any pinned ABI / address registry files as `<PROJECT_CONTEXT>`.
+
+## Fix rubric
+
+(Consumed by `/pr-fix` when generating fixes for individual review comments; discoverable via `.agents/pr-review-engine/scripts/list-fix-rubric-agents.sh`.)
+
+Apply fixes only when the suggestion is unambiguous and local — inlining a typed ABI for a `0x` literal, adding a `chainId` check before a `writeContract` / `simulateContract`, surfacing a decoded revert reason, inserting an EIP-712 domain-separator check on a permit. **Do not** auto-apply changes that re-architect a transaction flow, alter approval amounts, change signing semantics, or touch share-price/LLTV accounting — surface those for human review.
+
+Cross-check `../references/secrets.md` for wallet private keys / mnemonics that must never be committed.
