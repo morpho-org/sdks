@@ -18,7 +18,7 @@ Pre-PR local code review. Output to terminal only — no GitHub interaction. Opt
 
 `--fast` excludes the `documentation` agent via the engine's `<EXCLUDE_AGENTS>` input — the most expensive lens per launch and the most likely to return clean on code-focused diffs. Use the default (full panel) when the diff touches Markdown, the §10 inventory, or public-API docs.
 
-`--goal` is the autonomous loop: it reviews, fixes `critical`/`high`/`medium` findings, re-gates (format → lint → typecheck → test, **scoped to the changed surface** — see Goal mode), commits, and re-reviews until no actionable findings remain. It commits each iteration and therefore refuses on a dirty tree. `--goal` supersedes `--fix` (loop-and-commit beats single-shot-unstaged); if both are passed, `--goal` wins. There is **no post-convergence runtime check / `--no-runtime`** here — this is a headless SDK (`<HAS_ROUTE_UI>` is always false), so no dev server is ever booted.
+`--goal` is the autonomous loop: it reviews, fixes `critical`/`high`/`medium` findings, re-gates (format → lint → typecheck → test, **scoped to the changed surface** — see Goal mode), commits, and re-reviews until no actionable findings remain. It commits each iteration and therefore refuses on a dirty tree. `--goal` supersedes `--fix` (loop-and-commit beats single-shot-unstaged); if both are passed, `--goal` wins. There is **no post-convergence runtime check / `--no-runtime`** here — this is a headless SDK with no route-reachable UI, so no dev server is ever booted.
 
 ## Validating end-to-end
 
@@ -396,7 +396,7 @@ Sentinel: GOAL_CLEAN — review passes cleanly after <i> iteration(s) on <HEAD_B
 
 - **No GitHub interaction**. The skill never calls `gh api`. All output stays in the terminal.
 - **Refuse on dirty tree** for both `--fix` and `--goal`. Clean precondition replaces ~80 lines of stash plumbing and a class of stash-pop-conflict bugs.
-- **No runtime check.** This is a headless SDK monorepo (`<HAS_ROUTE_UI>` always false); goal mode never boots a dev server, so there is no post-convergence runtime stage and no `--no-runtime` flag.
+- **No runtime check.** This is a headless SDK monorepo with no route-reachable UI; goal mode never boots a dev server, so there is no post-convergence runtime stage and no `--no-runtime` flag.
 
 ## Sentinel grammar
 
