@@ -15,8 +15,7 @@ import {
 import {
   type CollateralParams,
   type ICollateralParams,
-  type IMarket,
-  type IMarketParams,
+  type MarketInput,
   MarketParams,
   type SettlementFeeCbps,
 } from "./Market.js";
@@ -65,19 +64,6 @@ const marketParamsAbiParameter = {
 type CollateralParamsInput = ICollateralParams | CollateralParams;
 
 /**
- * Plain market params or hydrated market object accepted by market utilities.
- *
- * @example
- * ```ts
- * import type { MarketInput } from "@morpho-org/midnight-sdk";
- *
- * const market = {} as MarketInput;
- * console.log(market);
- * ```
- */
-export type MarketInput = IMarketParams | IMarket;
-
-/**
  * Domain helpers for Midnight markets.
  *
  * @example
@@ -89,15 +75,15 @@ export type MarketInput = IMarketParams | IMarket;
  */
 export namespace MarketUtils {
   /**
-   * Normalizes collateral params from a plain input or ABI tuple.
+   * Converts collateral params from a plain input or ABI tuple.
    *
    * @param params - Collateral params input.
-   * @returns Normalized collateral params.
+   * @returns Collateral params with bigint fields.
    * @example
    * ```ts
    * import { MarketUtils } from "@morpho-org/midnight-sdk";
    *
-   * const collateral = MarketUtils.normalizeCollateralParams({
+   * const collateral = MarketUtils.toCollateralParams({
    *   token: "0x0000000000000000000000000000000000000001",
    *   lltv: 770000000000000000n,
    *   maxLif: 1061007957559681697n,
@@ -106,7 +92,7 @@ export namespace MarketUtils {
    * console.log(collateral.maxLif);
    * ```
    */
-  export function normalizeCollateralParams(
+  export function toCollateralParams(
     params: CollateralParamsInput,
   ): CollateralParams {
     return {
@@ -118,24 +104,6 @@ export namespace MarketUtils {
   }
 
   /**
-   * Normalizes market params from config or hydrated market input.
-   *
-   * @param market - Market params or hydrated market.
-   * @returns Market params instance.
-   * @example
-   * ```ts
-   * import { MarketUtils } from "@morpho-org/midnight-sdk";
-   *
-   * const params = MarketUtils.normalizeMarketParams({} as never);
-   * console.log(params.loanToken);
-   * ```
-   */
-  export function normalizeMarketParams(market: MarketInput) {
-    if ("params" in market) return normalizeMarketParams(market.params);
-    return market instanceof MarketParams ? market : new MarketParams(market);
-  }
-
-  /**
    * Converts market params into the tuple object expected by viem ABI encoders.
    *
    * @param market - Market params or hydrated market.
@@ -144,12 +112,26 @@ export namespace MarketUtils {
    * ```ts
    * import { MarketUtils } from "@morpho-org/midnight-sdk";
    *
-   * const struct = MarketUtils.toStruct({} as never);
+   * const struct = MarketUtils.toStruct({
+   *   loanToken: "0x0000000000000000000000000000000000006000",
+   *   collateralParams: [
+   *     {
+   *       token: "0x0000000000000000000000000000000000007000",
+   *       lltv: 770000000000000000n,
+   *       maxLif: 1061007957559681697n,
+   *       oracle: "0x0000000000000000000000000000000000008000",
+   *     },
+   *   ],
+   *   maturity: 54_000n,
+   *   rcfThreshold: 0n,
+   *   enterGate: "0x0000000000000000000000000000000000000000",
+   *   liquidatorGate: "0x0000000000000000000000000000000000000000",
+   * });
    * console.log(struct.maturity);
    * ```
    */
   export function toStruct(market: MarketInput): MarketParams {
-    return normalizeMarketParams(market);
+    return MarketParams.from(market);
   }
 
   /**

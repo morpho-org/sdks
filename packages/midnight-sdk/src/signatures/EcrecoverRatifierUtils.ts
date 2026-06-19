@@ -140,9 +140,17 @@ const getTreeRatifier = (tree: Tree): Address => {
  *
  * @example
  * ```ts
- * import type { DecodedEcrecoverRatifierData } from "@morpho-org/midnight-sdk";
+ * import { EcrecoverRatifierUtils, type DecodedEcrecoverRatifierData } from "@morpho-org/midnight-sdk";
+ * import { zeroHash } from "viem";
  *
- * const decoded = {} as DecodedEcrecoverRatifierData;
+ * const data = EcrecoverRatifierUtils.encodeRatifierData({
+ *   signature: { v: 27, r: zeroHash, s: zeroHash },
+ *   root: zeroHash,
+ *   leafIndex: 0n,
+ *   proof: [],
+ * });
+ * const decoded: DecodedEcrecoverRatifierData =
+ *   EcrecoverRatifierUtils.decodeRatifierData(data);
  * console.log(decoded.signature.v);
  * ```
  */
@@ -159,9 +167,30 @@ export interface DecodedEcrecoverRatifierData extends TreeProof {
  *
  * @example
  * ```ts
- * import type { EcrecoverRatificationTypedData } from "@morpho-org/midnight-sdk";
+ * import { EcrecoverRatifierUtils, Offer, Tree, type EcrecoverRatificationTypedData } from "@morpho-org/midnight-sdk";
+ * import { zeroAddress } from "viem";
  *
- * const typedData = {} as EcrecoverRatificationTypedData;
+ * const offer = Offer.create({
+ *   market: {
+ *     loanToken: "0x0000000000000000000000000000000000006000",
+ *     collateralParams: [],
+ *     maturity: 54_000n,
+ *     rcfThreshold: 0n,
+ *     enterGate: zeroAddress,
+ *     liquidatorGate: zeroAddress,
+ *   },
+ *   buy: true,
+ *   maker: "0x0000000000000000000000000000000000009000",
+ *   tick: 5_000n,
+ *   expiry: 3_600n,
+ *   ratifier: "0x0000000000000000000000000000000000004000",
+ *   maxUnits: 100n,
+ * });
+ * const typedData: EcrecoverRatificationTypedData =
+ *   EcrecoverRatifierUtils.typedData({
+ *     tree: Tree.create([offer]),
+ *     chainId: 8453n,
+ *   });
  * console.log(typedData.primaryType);
  * ```
  */
@@ -224,9 +253,29 @@ export type EcrecoverSignTypedData = (
  *
  * @example
  * ```ts
- * import type { EcrecoverRatifierTypedDataParams } from "@morpho-org/midnight-sdk";
+ * import { Offer, Tree, type EcrecoverRatifierTypedDataParams } from "@morpho-org/midnight-sdk";
+ * import { zeroAddress } from "viem";
  *
- * const params = {} as EcrecoverRatifierTypedDataParams;
+ * const offer = Offer.create({
+ *   market: {
+ *     loanToken: "0x0000000000000000000000000000000000006000",
+ *     collateralParams: [],
+ *     maturity: 54_000n,
+ *     rcfThreshold: 0n,
+ *     enterGate: zeroAddress,
+ *     liquidatorGate: zeroAddress,
+ *   },
+ *   buy: true,
+ *   maker: "0x0000000000000000000000000000000000009000",
+ *   tick: 5_000n,
+ *   expiry: 3_600n,
+ *   ratifier: "0x0000000000000000000000000000000000004000",
+ *   maxUnits: 100n,
+ * });
+ * const params: EcrecoverRatifierTypedDataParams = {
+ *   tree: Tree.create([offer]),
+ *   chainId: 8453n,
+ * };
  * console.log(params.chainId);
  * ```
  */
@@ -245,9 +294,29 @@ export interface EcrecoverRatifierTypedDataParams {
  *
  * @example
  * ```ts
- * import type { EcrecoverRatifierRatifyParams } from "@morpho-org/midnight-sdk";
+ * import { Offer, Tree, type EcrecoverRatifierRatifyParams } from "@morpho-org/midnight-sdk";
+ * import { zeroAddress, zeroHash } from "viem";
  *
- * const params = {} as EcrecoverRatifierRatifyParams;
+ * const offer = Offer.create({
+ *   market: {
+ *     loanToken: "0x0000000000000000000000000000000000006000",
+ *     collateralParams: [],
+ *     maturity: 54_000n,
+ *     rcfThreshold: 0n,
+ *     enterGate: zeroAddress,
+ *     liquidatorGate: zeroAddress,
+ *   },
+ *   buy: true,
+ *   maker: "0x0000000000000000000000000000000000009000",
+ *   tick: 5_000n,
+ *   expiry: 3_600n,
+ *   ratifier: "0x0000000000000000000000000000000000004000",
+ *   maxUnits: 100n,
+ * });
+ * const params: EcrecoverRatifierRatifyParams = {
+ *   tree: Tree.create([offer]),
+ *   signature: { v: 27, r: zeroHash, s: zeroHash },
+ * };
  * console.log(params.tree);
  * ```
  */
@@ -274,9 +343,30 @@ export type EcrecoverRatifierRatifyParams =
  *
  * @example
  * ```ts
- * import type { EcrecoverRatifierDataParams } from "@morpho-org/midnight-sdk";
+ * import { Offer, Tree, type EcrecoverRatifierDataParams } from "@morpho-org/midnight-sdk";
+ * import { zeroAddress, zeroHash } from "viem";
  *
- * const params = {} as EcrecoverRatifierDataParams;
+ * const offer = Offer.create({
+ *   market: {
+ *     loanToken: "0x0000000000000000000000000000000000006000",
+ *     collateralParams: [],
+ *     maturity: 54_000n,
+ *     rcfThreshold: 0n,
+ *     enterGate: zeroAddress,
+ *     liquidatorGate: zeroAddress,
+ *   },
+ *   buy: true,
+ *   maker: "0x0000000000000000000000000000000000009000",
+ *   tick: 5_000n,
+ *   expiry: 3_600n,
+ *   ratifier: "0x0000000000000000000000000000000000004000",
+ *   maxUnits: 100n,
+ * });
+ * const params: EcrecoverRatifierDataParams = {
+ *   tree: Tree.create([offer]),
+ *   leafIndex: 0n,
+ *   signature: { v: 27, r: zeroHash, s: zeroHash },
+ * };
  * console.log(params.leafIndex);
  * ```
  */
@@ -340,9 +430,28 @@ export namespace EcrecoverRatifierUtils {
    * @example
    * ```ts
    * import { EcrecoverRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
+   * import { Offer } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
+   *
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
    *
    * const typedData = EcrecoverRatifierUtils.typedData({
-   *   tree: Tree.create([{} as never]),
+   *   tree: Tree.create([offer]),
    *   chainId: 8453n,
    * });
    * console.log(typedData.primaryType);
@@ -383,9 +492,28 @@ export namespace EcrecoverRatifierUtils {
    * @example
    * ```ts
    * import { EcrecoverRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
+   * import { Offer } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
+   *
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
    *
    * const digest = EcrecoverRatifierUtils.digest({
-   *   tree: Tree.create([{} as never]),
+   *   tree: Tree.create([offer]),
    *   chainId: 8453n,
    * });
    * console.log(digest);
@@ -424,9 +552,28 @@ export namespace EcrecoverRatifierUtils {
    * @example
    * ```ts
    * import { EcrecoverRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
+   * import { Offer } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
+   *
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
    *
    * const signature = await EcrecoverRatifierUtils.sign({
-   *   tree: Tree.create([{} as never]),
+   *   tree: Tree.create([offer]),
    *   chainId: 8453n,
    *   signTypedData: () => "0x",
    * });
@@ -442,19 +589,24 @@ export namespace EcrecoverRatifierUtils {
   }
 
   /**
-   * Normalizes a hex ECDSA signature into the Solidity tuple shape.
+   * Converts a hex ECDSA signature into the Solidity tuple shape.
    *
    * @param signature - Hex string or tuple signature.
    * @returns Signature tuple.
    * @example
    * ```ts
    * import { EcrecoverRatifierUtils } from "@morpho-org/midnight-sdk";
+   * import { zeroHash } from "viem";
    *
-   * const signature = EcrecoverRatifierUtils.normalizeSignature("0x" as never);
+   * const signature = EcrecoverRatifierUtils.toSignature({
+   *   v: 27,
+   *   r: zeroHash,
+   *   s: zeroHash,
+   * });
    * console.log(signature.v);
    * ```
    */
-  export function normalizeSignature(
+  export function toSignature(
     signature: EcrecoverSignatureInput,
   ): Signature<number, number> & { readonly v: number } {
     if (typeof signature !== "string") {
@@ -507,7 +659,7 @@ export namespace EcrecoverRatifierUtils {
     readonly leafIndex: BigIntish;
     readonly proof: readonly Hash[];
   }) {
-    const signature = normalizeSignature(params.signature);
+    const signature = toSignature(params.signature);
 
     return encodeAbiParameters(signatureAbi, [
       {
@@ -532,8 +684,15 @@ export namespace EcrecoverRatifierUtils {
    * @example
    * ```ts
    * import { EcrecoverRatifierUtils } from "@morpho-org/midnight-sdk";
+   * import { zeroHash } from "viem";
    *
-   * const decoded = EcrecoverRatifierUtils.decodeRatifierData("0x" as never);
+   * const data = EcrecoverRatifierUtils.encodeRatifierData({
+   *   signature: { v: 27, r: zeroHash, s: zeroHash },
+   *   root: zeroHash,
+   *   leafIndex: 0n,
+   *   proof: [],
+   * });
+   * const decoded = EcrecoverRatifierUtils.decodeRatifierData(data);
    * console.log(decoded.leafIndex);
    * ```
    */
@@ -566,9 +725,30 @@ export namespace EcrecoverRatifierUtils {
    * @throws {InvalidTreeError} when the leaf index is outside the tree.
    * @example
    * ```ts
-   * import { EcrecoverRatifierUtils } from "@morpho-org/midnight-sdk";
+   * import { EcrecoverRatifierUtils, Offer, Tree } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress, zeroHash } from "viem";
    *
-   * const data = EcrecoverRatifierUtils.ratifierData({} as never);
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
+   * const data = EcrecoverRatifierUtils.ratifierData({
+   *   tree: Tree.create([offer]),
+   *   leafIndex: 0n,
+   *   signature: { v: 27, r: zeroHash, s: zeroHash },
+   * });
    * console.log(data);
    * ```
    */
@@ -576,7 +756,7 @@ export namespace EcrecoverRatifierUtils {
     const proof = params.tree.proof(params.leafIndex);
 
     return encodeRatifierData({
-      signature: normalizeSignature(params.signature),
+      signature: toSignature(params.signature),
       root: proof.root,
       leafIndex: proof.leafIndex,
       proof: proof.proof,
@@ -597,9 +777,28 @@ export namespace EcrecoverRatifierUtils {
    * @example
    * ```ts
    * import { EcrecoverRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
+   * import { Offer } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
+   *
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
    *
    * const items = await EcrecoverRatifierUtils.ratify({
-   *   tree: Tree.create([{} as never]),
+   *   tree: Tree.create([offer]),
    *   signature: {
    *     v: 27,
    *     r: "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -615,11 +814,9 @@ export namespace EcrecoverRatifierUtils {
     let signature: Signature<number, number> & { readonly v: number };
     if (params.signature != null) {
       getTreeRatifier(params.tree);
-      signature = normalizeSignature(params.signature);
+      signature = toSignature(params.signature);
     } else {
-      signature = normalizeSignature(
-        await params.signTypedData(typedData(params)),
-      );
+      signature = toSignature(await params.signTypedData(typedData(params)));
     }
     const items: PayloadItem[] = [];
 

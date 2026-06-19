@@ -10,19 +10,14 @@ import {
 } from "../__test__/fixtures.js";
 import { MAX_TICK } from "../constants.js";
 import {
-  InconsistentMarketError,
   InvalidOfferGroupError,
   InvalidOfferParameterError,
-  NoMatchingOffersError,
-  UnexpectedOfferSideError,
 } from "../errors.js";
 import { MarketParams } from "../market/index.js";
 import { TreeUtils } from "../signatures/index.js";
 import type { BuildOfferParams } from "./Offer.js";
 import { Offer } from "./Offer.js";
 import { OfferUtils } from "./OfferUtils.js";
-import { TakeableOffer } from "./TakeableOffer.js";
-import { TakeableOfferUtils } from "./TakeableOfferUtils.js";
 
 const buildOfferParams = (overrides: Partial<BuildOfferParams> = {}) => ({
   market: baseMarketParamsInput(),
@@ -41,6 +36,15 @@ describe("Offer", () => {
 
     expect(offer).toBeInstanceOf(Offer);
     expect(offer.market.loanToken).toBe(addresses.loanToken);
+  });
+});
+
+describe("Offer.from", () => {
+  test("default", () => {
+    const offer = baseOffer();
+
+    expect(Offer.from(offer)).toBe(offer);
+    expect(Offer.from(baseOfferInput())).toBeInstanceOf(Offer);
   });
 });
 
@@ -327,85 +331,5 @@ describe("OfferUtils.validateOfferGroup", () => {
         offers: [baseOffer({ maxUnits: 0n, maxAssets: 0n })],
       }),
     ).toThrow(InvalidOfferGroupError);
-  });
-});
-
-describe("TakeableOfferUtils.toStructs", () => {
-  test("default", () => {
-    const takeableOffers = TakeableOfferUtils.toStructs({
-      entries: [
-        {
-          units: "42",
-          ratifierData: "0x",
-          offer: baseOfferInput({ buy: true, maxUnits: 0n, group }),
-        },
-      ],
-      expectedOfferSide: "buy",
-      enforceSameMarket: true,
-    });
-
-    expect(takeableOffers[0]!.units).toBe(42n);
-    expect(takeableOffers[0]!.offer.buy).toBe(true);
-  });
-
-  test("error: NoMatchingOffersError", () => {
-    expect(() => TakeableOfferUtils.toStructs({ entries: [] })).toThrow(
-      NoMatchingOffersError,
-    );
-  });
-
-  test("error: UnexpectedOfferSideError", () => {
-    expect(() =>
-      TakeableOfferUtils.toStructs({
-        entries: [
-          {
-            units: 1n,
-            ratifierData: "0x",
-            offer: baseOffer({ buy: false, group }),
-          },
-        ],
-        expectedOfferSide: "buy",
-      }),
-    ).toThrow(UnexpectedOfferSideError);
-  });
-
-  test("error: InconsistentMarketError", () => {
-    expect(() =>
-      TakeableOfferUtils.toStructs({
-        entries: [
-          { units: 1n, ratifierData: "0x", offer: baseOffer({ group }) },
-          {
-            units: 1n,
-            ratifierData: "0x",
-            offer: baseOffer({
-              group,
-              market: {
-                ...baseMarketParamsInput(),
-                maturity: 3_000n,
-              },
-            }),
-          },
-        ],
-        enforceSameMarket: true,
-      }),
-    ).toThrow(InconsistentMarketError);
-  });
-});
-
-describe("TakeableOffer.createMany", () => {
-  test("default", () => {
-    const takeableOffers = TakeableOffer.createMany({
-      entries: [
-        {
-          units: "42",
-          ratifierData: "0x",
-          offer: baseOffer({ buy: true, group }),
-        },
-      ],
-    });
-
-    expect(takeableOffers[0]).toBeInstanceOf(TakeableOffer);
-    expect(takeableOffers[0]!.offer).toBeInstanceOf(Offer);
-    expect(takeableOffers[0]!.units).toBe(42n);
   });
 });

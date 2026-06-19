@@ -17,7 +17,7 @@ import type {
   MidnightApiBookSide,
   MidnightApiCollateral,
   MidnightApiPriceLevel,
-  MidnightApiTakeableOffer,
+  MidnightApiTake,
 } from "./types.js";
 
 const DEFAULT_MIDNIGHT_API_URL = new URL("/v1/midnight", BLUE_API_BASE_URL);
@@ -117,7 +117,7 @@ export function mapBookMarket(
   book: ApiBookMarketResponse,
 ): MidnightApiBookMarket {
   return {
-    id: book.id,
+    marketId: book.market_id,
     chainId: book.chain_id,
     loanToken: book.loan_token,
     collaterals: book.collaterals.map(mapCollateral),
@@ -137,7 +137,7 @@ export function mapCollateral(
   return {
     token: collateral.token,
     lltv: collateral.lltv,
-    maxLiquidationIncentiveFactor: collateral.max_lif,
+    maxLif: collateral.max_lif,
     oracle: collateral.oracle,
   };
 }
@@ -158,33 +158,39 @@ export function mapPriceLevel(
 /** @internal Maps a takeable-offer API payload to the SDK response shape. */
 export function mapTakeableOffer(
   takeableOffer: ApiTakeableOfferResponse,
-): MidnightApiTakeableOffer {
+): MidnightApiTake {
   const offer = takeableOffer.offer;
 
   return {
-    units: takeableOffer.units,
+    marketId: takeableOffer.market_id,
+    units: BigInt(takeableOffer.units),
     offer: {
       market: {
         loanToken: offer.market.loan_token,
-        collaterals: offer.market.collaterals.map(mapCollateral),
-        maturity: offer.market.maturity,
-        rcfThreshold: offer.market.rcf_threshold,
+        collateralParams: offer.market.collaterals.map((collateral) => ({
+          token: collateral.token,
+          lltv: BigInt(collateral.lltv),
+          maxLif: BigInt(collateral.max_lif),
+          oracle: collateral.oracle,
+        })),
+        maturity: BigInt(offer.market.maturity),
+        rcfThreshold: BigInt(offer.market.rcf_threshold),
         enterGate: offer.market.enter_gate,
         liquidatorGate: offer.market.liquidator_gate,
       },
       buy: offer.buy,
       maker: offer.maker,
-      maxUnits: offer.max_units,
-      start: offer.start,
-      expiry: offer.expiry,
-      tick: offer.tick,
+      start: BigInt(offer.start),
+      expiry: BigInt(offer.expiry),
+      tick: BigInt(offer.tick),
       group: offer.group,
       callback: offer.callback,
       callbackData: offer.callback_data,
       receiverIfMakerIsSeller: offer.receiver_if_maker_is_seller,
       ratifier: offer.ratifier,
       reduceOnly: offer.reduce_only,
-      maxAssets: offer.max_assets,
+      maxUnits: BigInt(offer.max_units),
+      maxAssets: BigInt(offer.max_assets),
     },
     ratifierData: takeableOffer.ratifier_data,
   };

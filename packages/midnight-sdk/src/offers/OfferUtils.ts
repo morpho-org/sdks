@@ -66,9 +66,34 @@ export interface ValidateOfferGroupParams {
  *
  * @example
  * ```ts
- * import type { OfferStructParams } from "@morpho-org/midnight-sdk";
+ * import { Offer, type OfferStructParams } from "@morpho-org/midnight-sdk";
+ * import { zeroAddress } from "viem";
  *
- * const params = {} as OfferStructParams;
+ * const params: OfferStructParams = {
+ *   offer: Offer.create({
+ *     market: {
+ *       loanToken: "0x0000000000000000000000000000000000006000",
+ *       collateralParams: [
+ *         {
+ *           token: "0x0000000000000000000000000000000000007000",
+ *           lltv: 770000000000000000n,
+ *           maxLif: 1061007957559681697n,
+ *           oracle: "0x0000000000000000000000000000000000008000",
+ *         },
+ *       ],
+ *       maturity: 54_000n,
+ *       rcfThreshold: 0n,
+ *       enterGate: zeroAddress,
+ *       liquidatorGate: zeroAddress,
+ *     },
+ *     buy: true,
+ *     maker: "0x0000000000000000000000000000000000009000",
+ *     tick: 5_000n,
+ *     expiry: 3_600n,
+ *     ratifier: "0x0000000000000000000000000000000000004000",
+ *     maxUnits: 100n,
+ *   }),
+ * };
  * console.log(params.offer);
  * ```
  */
@@ -85,8 +110,17 @@ export interface OfferStructParams {
  * @example
  * ```ts
  * import type { ValidatedOfferParams } from "@morpho-org/midnight-sdk";
+ * import { zeroAddress } from "viem";
  *
- * const params = {} as ValidatedOfferParams;
+ * const params: ValidatedOfferParams = {
+ *   tick: 5_000n,
+ *   tickSpacing: 4n,
+ *   start: 0n,
+ *   expiry: 3_600n,
+ *   maxUnits: 100n,
+ *   maxAssets: 0n,
+ *   receiverIfMakerIsSeller: zeroAddress,
+ * };
  * console.log(params.tick);
  * ```
  */
@@ -125,27 +159,6 @@ export interface ValidatedOfferParams {
  */
 export namespace OfferUtils {
   /**
-   * Returns an offer instance from class or plain input.
-   *
-   * Use at boundaries that accept either maker-created `Offer` instances or
-   * decoded `IOffer` objects from an API response. For brand-new maker input,
-   * prefer `Offer.create` so deterministic parameters are validated first.
-   *
-   * @param offer - Offer class or plain input.
-   * @returns Offer instance.
-   * @example
-   * ```ts
-   * import { OfferUtils } from "@morpho-org/midnight-sdk";
-   *
-   * const offer = OfferUtils.normalizeOffer({} as never);
-   * console.log(offer.buy);
-   * ```
-   */
-  export function normalizeOffer(offer: IOffer) {
-    return offer instanceof Offer ? offer : new Offer(offer);
-  }
-
-  /**
    * Converts an offer into the tuple object expected by viem ABI encoders.
    *
    * This is the bridge from SDK/domain objects
@@ -155,15 +168,39 @@ export namespace OfferUtils {
    * @returns ABI-compatible offer.
    * @example
    * ```ts
-   * import { OfferUtils } from "@morpho-org/midnight-sdk";
+   * import { Offer, OfferUtils } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
    *
-   * const struct = OfferUtils.toStruct({ offer: {} as never });
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
+   * const struct = OfferUtils.toStruct({ offer });
    * console.log(struct.tick);
    * ```
    */
   export function toStruct(params: OfferStructParams): OfferStruct {
-    const normalizedOffer = normalizeOffer(params.offer);
-    const market = MarketUtils.toStruct(normalizedOffer.market);
+    const offer = Offer.from(params.offer);
+    const market = MarketUtils.toStruct(offer.market);
 
     return {
       market: {
@@ -179,19 +216,19 @@ export namespace OfferUtils {
         enterGate: market.enterGate,
         liquidatorGate: market.liquidatorGate,
       },
-      buy: normalizedOffer.buy,
-      maker: normalizedOffer.maker,
-      start: normalizedOffer.start,
-      expiry: normalizedOffer.expiry,
-      tick: normalizedOffer.tick,
-      group: params.group ?? normalizedOffer.group,
-      callback: normalizedOffer.callback,
-      callbackData: normalizedOffer.callbackData,
-      receiverIfMakerIsSeller: normalizedOffer.receiverIfMakerIsSeller,
-      ratifier: normalizedOffer.ratifier,
-      reduceOnly: normalizedOffer.reduceOnly,
-      maxUnits: normalizedOffer.maxUnits,
-      maxAssets: normalizedOffer.maxAssets,
+      buy: offer.buy,
+      maker: offer.maker,
+      start: offer.start,
+      expiry: offer.expiry,
+      tick: offer.tick,
+      group: params.group ?? offer.group,
+      callback: offer.callback,
+      callbackData: offer.callbackData,
+      receiverIfMakerIsSeller: offer.receiverIfMakerIsSeller,
+      ratifier: offer.ratifier,
+      reduceOnly: offer.reduceOnly,
+      maxUnits: offer.maxUnits,
+      maxAssets: offer.maxAssets,
     };
   }
 
@@ -208,9 +245,35 @@ export namespace OfferUtils {
    * @returns Offer hash.
    * @example
    * ```ts
-   * import { OfferUtils } from "@morpho-org/midnight-sdk";
+   * import { Offer, OfferUtils } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress, zeroHash } from "viem";
    *
-   * const hash = OfferUtils.hashStruct({} as never);
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
+   * const hash = OfferUtils.hashStruct(
+   *   OfferUtils.toStruct({ offer, group: zeroHash }),
+   * );
    * console.log(hash);
    * ```
    */
@@ -246,11 +309,33 @@ export namespace OfferUtils {
    * @returns Offer hash.
    * @example
    * ```ts
-   * import { OfferUtils } from "@morpho-org/midnight-sdk";
+   * import { Offer, OfferUtils } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress, zeroHash } from "viem";
    *
-   * const offer = {
-   *   group: "0x0000000000000000000000000000000000000000000000000000000000000000",
-   * } as never;
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   group: zeroHash,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
    * const hash = OfferUtils.hash(offer);
    * console.log(hash);
    * ```
@@ -270,9 +355,32 @@ export namespace OfferUtils {
    * @returns Offer hash encoded with the protocol zero group id.
    * @example
    * ```ts
-   * import { OfferUtils } from "@morpho-org/midnight-sdk";
+   * import { Offer, OfferUtils } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
    *
-   * const offer = {} as never;
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
    * const hash = OfferUtils.groupHash(offer);
    * console.log(hash);
    * ```
@@ -475,7 +583,22 @@ export namespace OfferUtils {
    * ```ts
    * import { OfferUtils } from "@morpho-org/midnight-sdk";
    *
-   * const params = OfferUtils.validateOfferParams({} as never);
+   * const params = OfferUtils.validateOfferParams({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: "0x0000000000000000000000000000000000000000",
+   *     liquidatorGate: "0x0000000000000000000000000000000000000000",
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
    * console.log(params.maxAssets);
    * ```
    */
@@ -510,9 +633,26 @@ export namespace OfferUtils {
    * @throws {InvalidOfferGroupError} when the group violates protocol mechanics.
    * @example
    * ```ts
-   * import { OfferUtils } from "@morpho-org/midnight-sdk";
+   * import { Offer, OfferUtils } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
    *
-   * const offers = OfferUtils.validateOfferGroup({ offers: [{} as never] });
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
+   * const offers = OfferUtils.validateOfferGroup({ offers: [offer] });
    * console.log(offers.length);
    * ```
    */
@@ -526,7 +666,7 @@ export namespace OfferUtils {
       );
     }
 
-    const offers = offerInputs.map((offer) => normalizeOffer(offer));
+    const offers = offerInputs.map((offer) => Offer.from(offer));
     const first = offers[0]!;
 
     if (
@@ -593,9 +733,26 @@ export namespace OfferUtils {
    * @returns Offer expiry.
    * @example
    * ```ts
-   * import { OfferUtils } from "@morpho-org/midnight-sdk";
+   * import { Offer, OfferUtils } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
    *
-   * const expiry = OfferUtils.getOfferExpiry({ expiry: 1n } as never);
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
+   * const expiry = OfferUtils.getOfferExpiry(offer);
    * console.log(expiry);
    * ```
    */

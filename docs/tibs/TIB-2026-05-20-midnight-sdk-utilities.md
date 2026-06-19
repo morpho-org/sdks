@@ -67,7 +67,7 @@ Importing those generic primitives from `@morpho-org/blue-sdk` would couple Midn
 
 Create `packages/midnight-sdk` as a focused Midnight protocol utility package. The package should be small, side-effect-free at top level, and explicit about the boundary between pure helpers and I/O helpers.
 
-Accepted source shape:
+Accepted source shape (test files and generated output omitted):
 
 ```text
 packages/midnight-sdk/
@@ -84,16 +84,16 @@ packages/midnight-sdk/
     +-- constants.ts
     +-- errors.ts
     +-- index.ts
+    +-- version.ts
     +-- market/
     |   +-- Market.ts
     |   +-- MarketUtils.ts
     |   +-- Position.ts
+    |   +-- PositionUtils.ts
     |   +-- index.ts
     +-- offers/
     |   +-- Offer.ts
-    |   +-- TakeableOffer.ts
     |   +-- OfferUtils.ts
-    |   +-- TakeableOfferUtils.ts
     |   +-- index.ts
     +-- math/
     |   +-- ConsumableUnitsLib.ts
@@ -101,14 +101,21 @@ packages/midnight-sdk/
     |   +-- TickLib.ts
     |   +-- index.ts
     +-- fetch/
-    |   +-- midnight.ts
+    |   +-- Market.ts
+    |   +-- Offer.ts
+    |   +-- Position.ts
+    |   +-- Ratifier.ts
     |   +-- index.ts
+    |   +-- types.ts
+    |   +-- utils.ts
     +-- queries/
     |   +-- GetPosition.ts
     |   +-- index.ts
     +-- api/
     |   +-- MidnightApi.ts
+    |   +-- helpers.ts
     |   +-- index.ts
+    |   +-- types.ts
     +-- signatures/
         +-- Group.ts
         +-- GroupUtils.ts
@@ -121,9 +128,9 @@ packages/midnight-sdk/
         +-- index.ts
 ```
 
-The root barrel exports the stable package surface explicitly, including `MarketUtils`,
-`OfferUtils`, `TakeableOfferUtils`, `GroupUtils`, `TreeUtils`, `TickLib`,
-`TakeAmountsLib`, `ConsumableUnitsLib`, `Payload`, `Offer`, `TakeableOffer`, `Group`, `Tree`,
+The root barrel exports the stable package surface explicitly, including `MarketUtils`, `PositionUtils`,
+`OfferUtils`, `GroupUtils`, `TreeUtils`, `TickLib`,
+`TakeAmountsLib`, `ConsumableUnitsLib`, `Payload`, `Offer`, `Group`, `Tree`,
 `EcrecoverRatifierUtils`, `SetterRatifierUtils`, `MIDNIGHT_SDK_VERSION`, typed errors such as
 `InvalidOfferGroupError` and
 `InvalidTreeError`, fetch helpers such as `fetchMarketParams`, `fetchMarket`,
@@ -299,21 +306,22 @@ one interface and reuses it instead of publishing duplicate `Foo`/`FooStruct` na
 - `MarketParams`
 - `CollateralParams`
 - `Offer`
-- `TakeableOffer`
 - `Group`
 - `Tree`
 - `MidnightApi`
-- `TokenPermit`
-- `CollateralSupply`
-- `CollateralWithdrawal`
 - `Position`
 - `AccrualPosition`
 - `RatifierInfo`
-- quote-facing raw input shapes for converting app/API responses into `Offer` and `TakeableOffer`
 
-`TakeableOffer` is the SDK/orderbook-facing alias for the Solidity periphery `Take` tuple
-`{ units, offer, ratifierData }`; the SDK should avoid exporting a generic `Take` name for this
-offchain executable-offer shape.
+Periphery calldata structs and enums that are not yet covered by SDK helpers remain deferred:
+`TokenPermit`, `CollateralSupply`, `CollateralWithdrawal`, and `PermitKind` may appear in ABI
+`internalType` metadata, but they are not modeled or exported until permit or bundle workflow helpers
+land with tests.
+
+The API subpath maps router quote and book offer responses into ABI-ready take objects
+`{ marketId, units, offer, ratifierData }`. These objects can be passed directly to
+`IMidnight.take` or the `takes` array of target-aware `MidnightBundles` routes; no SDK class or
+conversion helper owns this shape.
 
 `midnight-sdk` exports Midnight-specific constants that app actions currently need or will need to
 validate inputs:
@@ -328,7 +336,6 @@ validate inputs:
 - max settlement fee constants and settlement-fee breakpoints
 - max continuous fee and liquidation cursor constants
 - HashLib typehash constants for markets, collateral params, offers, and the EIP-712 domain
-- `PermitKind`
 
 Generic constants, helpers, and typed errors such as
 `MathLib.WAD`, `ORACLE_PRICE_SCALE`, `BigIntish`, `RoundingDirection`, `UnsupportedChainIdError`,
@@ -404,6 +411,7 @@ SDK-only derived helpers should live beside the domain they describe:
 - `MarketUtils.isLltvAllowed`
 - `MarketUtils.getLiquidationIncentiveFactor` with an explicit liquidation cursor
 - `MarketUtils.getSettlementFee`
+- `PositionUtils.accrueInterest`
 - `OfferUtils.getOfferExpiry`
 
 The pure helpers that mirror `TakeAmountsLib` should accept `settlementFee` as an explicit input instead of reading the chain. Fetching settlement fee remains a boundary concern; fetch helpers that compute it should accept `timeToMaturity` directly so callers do not confuse wall-clock time with Solidity's `block.timestamp`.
@@ -415,19 +423,10 @@ Rounding names should match local SDK convention: `"Up"` and `"Down"`. Tests mus
 - `TickLib` prices are rounded to `PRICE_ROUNDING_STEP`;
 - `TickLib.priceToTick` returns the lowest spacing-aligned tick with price greater than or equal to the input price.
 
-### Offer and Takeable Offer Classes and Utilities
+### Offer Classes and Utilities
 
-`TakeableOffer.createMany` should be the user-facing replacement for the app-local conversion in
-`market-order.utils.ts`, while `TakeableOfferUtils` owns the pure object-compatible implementation.
-It should:
-
-- accept API/app quote entries that include `units`, `ratifierData`, and the inline offer;
-- copy address and hex fields into ABI-compatible objects;
-- convert numeric string fields to `bigint`;
-- produce the takeable-offer shape: `{ units, offer, ratifierData }`;
-- reject an empty input with a typed `NoMatchingOffersError`;
-- validate offer side where the caller expects one side (`buy` offers for borrower market-orders, `sell` offers for lender market-orders);
-- validate a consistent market when callers choose to enforce it before encoding a bundle.
+Take-side quote and book responses are handled by `MidnightApi`, which maps documented router
+responses into ABI-ready take objects. The SDK does not add a class wrapper around those API values.
 
 Make-offer helpers should support the limit-order path without importing app code:
 
@@ -512,6 +511,7 @@ Protocol-specific utility namespaces expose ratifier data, typed-data, and root-
 adding class wrappers around static-only behavior:
 
 ```ts
+import { getChainAddress } from "@morpho-org/morpho-ts";
 import {
   EcrecoverRatifierUtils,
   Group,
@@ -537,8 +537,10 @@ const items = await EcrecoverRatifierUtils.ratify({
 });
 
 const payload = await Payload.encode(items);
+// Register custom Midnight deployments before this lookup on chains without pinned addresses.
+const midnightMempool = getChainAddress(chainId, "midnightMempool");
 const call = {
-  to: addresses.midnightMempool,
+  to: midnightMempool,
   data: payload,
 };
 ```
@@ -575,10 +577,10 @@ The package should make these current app flows straightforward without becoming
 
 | Current app flow | Midnight SDK support |
 | --- | --- |
-| Borrow market order with collateral | `TickLib.rateToPrice`/tick helpers, `TakeAmountsLib` max-units rounding, and `TakeableOffer.createMany`; collateral approval, bundler authorization, and standalone periphery calldata remain caller-owned unless a future helper owns route selection or bound computation |
+| Borrow market order with collateral | `TickLib.rateToPrice`/tick helpers, `TakeAmountsLib` max-units rounding, and `MidnightApi.fetchBookQuote` ABI-ready takes; collateral approval, bundler authorization, and standalone periphery calldata remain caller-owned unless a future helper owns route selection or bound computation |
 | Borrow against existing collateral | Same periphery route with empty `CollateralSupply[]`; caller skips collateral approval when collateral amount is zero |
 | Supply collateral only | Address helpers from `@morpho-org/morpho-ts`, ABI constants from `@morpho-org/midnight-sdk`, and caller-owned `supplyCollateral` calldata |
-| Lend market order | `TakeAmountsLib` min-units rounding and `TakeableOffer.createMany`; loan-token approval, bundler authorization, and standalone periphery calldata remain caller-owned unless a future helper owns route selection or bound computation |
+| Lend market order | `TakeAmountsLib` min-units rounding and `MidnightApi.fetchBookQuote` ABI-ready takes; loan-token approval, bundler authorization, and standalone periphery calldata remain caller-owned unless a future helper owns route selection or bound computation |
 | Borrow limit order | optional caller-owned `supplyCollateral` calldata, `Offer.create` with `buy: false`, `Group.create`/`Tree.create`, `RatifierUtils`, `EcrecoverRatifierUtils`/`SetterRatifierUtils`, `MidnightApi`, `TreeUtils` proof/root helpers, and `Payload` only for final mempool publication |
 | Lend/multi-limit order | caller-owned loan-token approval to the core Midnight contract, `Offer.create` with `buy: true`, `Group.create`/`Tree.create`, `RatifierUtils`, `EcrecoverRatifierUtils`/`SetterRatifierUtils`, `MidnightApi`, `TreeUtils` proof/root helpers, and `Payload` only for final mempool publication |
 
@@ -596,7 +598,7 @@ Status as of the 2026-06-08 implementation review:
 
 - **Phase 1 - Package skeleton: completed.** `packages/midnight-sdk` has package metadata, TypeScript configs, package-level `AGENTS.md`, public barrel exports, test project wiring, and a changeset.
 - **Phase 2 - Contract surface: completed with address deployment deferred and shared registry ownership.** Midnight-specific ABI literals live in `@morpho-org/midnight-sdk`; Midnight addresses and deployment blocks are fields in the unified `@morpho-org/morpho-ts` registries. ABI literals pin `morpho-org/midnight` commit `a7c6da7e70cb216982f6c5d20b46f40b943e67e4`. Production address entries remain empty until reviewed deployment artifacts are available; custom registration covers local and fork deployments meanwhile.
-- **Phase 3 - Math and offer utilities: completed.** `TickLib`, `TakeAmountsLib`, `ConsumableUnitsLib`, `MarketUtils`, `Offer`, `TakeableOffer`, `OfferUtils`, and `TakeableOfferUtils` landed with colocated unit tests and property-based tests for tick/price, unit conversion, offer creation through static class methods, offer-group creation, and protocol offer-group validation.
+- **Phase 3 - Math and offer utilities: completed.** `TickLib`, `TakeAmountsLib`, `ConsumableUnitsLib`, `MarketUtils`, `Offer`, and `OfferUtils` landed with colocated unit tests and property-based tests for tick/price, unit conversion, offer creation through static class methods, offer-group creation, and protocol offer-group validation.
 - **Phase 4 - Standalone call wrappers: removed from scope.** The package does not export direct core or periphery calldata namespaces.
 - **Phase 5 - Fetch: completed with deployless position reads.** Fetch helpers use named `viem/actions` imports and mock-transport tests; `fetchMarketParams` returns immutable market config, `fetchMarket` returns the hydrated domain `Market` object, `fetchPosition` returns the raw `Position` class, and `fetchAccrualPosition` returns `AccrualPosition` for local `updatePositionView`-equivalent accrual. Primitive single-getter reads remain caller-owned direct viem calls instead of SDK fetch wrappers. `fetchPosition` defaults to deployless reads with direct-read fallback unless callers pass `deployless: "force"` or `deployless: false`; `fetchConsumableUnits` always uses the multicall/direct read path and `fetchRatifierInfo` returns structured ratifier-route metadata from bytecode classification.
 - **Phase 6 - Signatures, validation, payloads, and API routes: completed.** `RatifierUtils`, `EcrecoverRatifierUtils`, `SetterRatifierUtils`, `GroupUtils`, `TreeUtils`, `Group`, `Tree`, `Payload`, and the `MidnightApi` subpath landed. Public API book/quote/takeable-offer/validation/rules reads are lightweight `fetch` boundaries rather than a runtime router dependency, tree validation is available before signature/root approval, and offer publication remains onchain by sending encoded payload bytes to the mempool contract. Maker-side utilities include Ecrecover/Setter ratifier-data generation and decoding without constructing payload bytes and local proof verification.
@@ -656,7 +658,8 @@ Expose app-style labels, call requests, signature requests, and success callback
 - Future bundle workflow helpers must preserve `maxBuyerAssets`, `minSellerAssets`, `minUnits`, `maxUnits`, referral fee handling, and empty-withdrawal/empty-collateral semantics exactly.
 - Bundler skip semantics belong with any future high-level bundle workflow helper. Individual failed `take` calls may be skipped by the periphery bundler, but aggregate fills must still satisfy the user's bound; SDK tests for that behavior belong with the helper that owns route selection and bound computation.
 - Authorization is explicit. SDK helpers must not silently grant authorization; any wallet flow that needs `setIsAuthorized` must expose that call deliberately.
-- Permit data types distinguish `PermitKind.None`, `PermitKind.ERC2612`, and `PermitKind.Permit2`. Encoded `TokenPermit` shape tests are deferred until permit helpers land.
+- Future permit helpers must distinguish no permit, ERC-2612, and Permit2 modes. Encoded
+  `TokenPermit` shape tests are deferred until those helpers land.
 - Signature helpers must never own wallet state. They accept injected signing callbacks or return typed data descriptors.
 - Validation helpers must surface typed errors. No SDK source should throw plain `Error`.
 - Tick/price and units/assets helpers must be byte-for-byte compatible with the deployed Solidity math where they claim parity.

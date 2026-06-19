@@ -235,6 +235,14 @@ describe("Payload.decode", () => {
     ).rejects.toBeInstanceOf(Payload.DecodeError);
   });
 
+  test("error: payload hex length cap", async () => {
+    const payload = `0x${"zz".repeat(Payload.MAX_PAYLOAD_BYTES + 1)}` as Hex;
+
+    await expect(Payload.decode(payload)).rejects.toBeInstanceOf(
+      Payload.DecodeError,
+    );
+  });
+
   test("error: maxItems option", async () => {
     const encoded = await Payload.encode([
       { offer: apiValidOffer({ group }), ratifierData: "0x1234" as Hex },

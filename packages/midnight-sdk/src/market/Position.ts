@@ -1,11 +1,7 @@
 import { type BigIntish, MathLib } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
-import {
-  InvalidPositionAccrualStateError,
-  InvalidPositionAccrualTimestampError,
-  InvalidPositionLossFactorError,
-} from "../errors.js";
 import { type IMarket, Market } from "./Market.js";
+import { PositionUtils } from "./PositionUtils.js";
 
 /**
  * Plain input accepted by {@link Position}.
@@ -101,7 +97,16 @@ export class Position {
    * ```ts
    * import { Position } from "@morpho-org/midnight-sdk";
    *
-   * console.log(new Position({} as never).faceValue);
+   * const position = new Position({
+   *   credit: 1_000n,
+   *   pendingFee: 100n,
+   *   lastLossFactor: 0n,
+   *   lastAccrual: 0n,
+   *   debt: 0n,
+   *   collateralBitmap: 1n,
+   *   collateral: [50n],
+   * });
+   * console.log(position.faceValue);
    * ```
    */
   public get faceValue() {
@@ -114,9 +119,59 @@ export class Position {
  *
  * @example
  * ```ts
+ * import { registerCustomAddresses } from "@morpho-org/morpho-ts";
  * import { AccrualPosition } from "@morpho-org/midnight-sdk";
  *
- * const position = new AccrualPosition({} as never, {} as never);
+ * registerCustomAddresses({
+ *   addresses: {
+ *     31337: {
+ *       morpho: "0x0000000000000000000000000000000000000001",
+ *       bundler3: {
+ *         bundler3: "0x0000000000000000000000000000000000000002",
+ *         generalAdapter1: "0x0000000000000000000000000000000000000003",
+ *       },
+ *       adaptiveCurveIrm: "0x0000000000000000000000000000000000000004",
+ *       midnight: "0x0000000000000000000000000000000000001000",
+ *     },
+ *   },
+ * });
+ *
+ * const position = new AccrualPosition(
+ *   {
+ *     credit: 1_000n,
+ *     pendingFee: 100n,
+ *     lastLossFactor: 0n,
+ *     lastAccrual: 1_000n,
+ *     debt: 0n,
+ *     collateralBitmap: 1n,
+ *     collateral: [50n],
+ *   },
+ *   {
+ *     chainId: 31337,
+ *     params: {
+ *       loanToken: "0x0000000000000000000000000000000000006000",
+ *       collateralParams: [
+ *         {
+ *           token: "0x0000000000000000000000000000000000007000",
+ *           lltv: 770000000000000000n,
+ *           maxLif: 1061007957559681697n,
+ *           oracle: "0x0000000000000000000000000000000000008000",
+ *         },
+ *       ],
+ *       maturity: 54_000n,
+ *       rcfThreshold: 0n,
+ *       enterGate: "0x0000000000000000000000000000000000000000",
+ *       liquidatorGate: "0x0000000000000000000000000000000000000000",
+ *     },
+ *     totalUnits: 1_000n,
+ *     lossFactor: 0n,
+ *     withdrawable: 500n,
+ *     continuousFeeCredit: 0n,
+ *     settlementFeeCbps: [1, 2, 3, 4, 5, 6, 7],
+ *     continuousFee: 10,
+ *     tickSpacing: 4,
+ *   },
+ * );
  * console.log(position.market.id);
  * ```
  */
@@ -136,9 +191,60 @@ export class AccrualPosition extends Position {
    * @returns Collateral balance, or undefined when the index is not configured.
    * @example
    * ```ts
+   * import { registerCustomAddresses } from "@morpho-org/morpho-ts";
    * import { AccrualPosition } from "@morpho-org/midnight-sdk";
    *
-   * const balance = new AccrualPosition({} as never, {} as never).getCollateralBalanceByIndex(0);
+   * registerCustomAddresses({
+   *   addresses: {
+   *     31337: {
+   *       morpho: "0x0000000000000000000000000000000000000001",
+   *       bundler3: {
+   *         bundler3: "0x0000000000000000000000000000000000000002",
+   *         generalAdapter1: "0x0000000000000000000000000000000000000003",
+   *       },
+   *       adaptiveCurveIrm: "0x0000000000000000000000000000000000000004",
+   *       midnight: "0x0000000000000000000000000000000000001000",
+   *     },
+   *   },
+   * });
+   *
+   * const position = new AccrualPosition(
+   *   {
+   *     credit: 1_000n,
+   *     pendingFee: 100n,
+   *     lastLossFactor: 0n,
+   *     lastAccrual: 1_000n,
+   *     debt: 0n,
+   *     collateralBitmap: 1n,
+   *     collateral: [50n],
+   *   },
+   *   {
+   *     chainId: 31337,
+   *     params: {
+   *       loanToken: "0x0000000000000000000000000000000000006000",
+   *       collateralParams: [
+   *         {
+   *           token: "0x0000000000000000000000000000000000007000",
+   *           lltv: 770000000000000000n,
+   *           maxLif: 1061007957559681697n,
+   *           oracle: "0x0000000000000000000000000000000000008000",
+   *         },
+   *       ],
+   *       maturity: 54_000n,
+   *       rcfThreshold: 0n,
+   *       enterGate: "0x0000000000000000000000000000000000000000",
+   *       liquidatorGate: "0x0000000000000000000000000000000000000000",
+   *     },
+   *     totalUnits: 1_000n,
+   *     lossFactor: 0n,
+   *     withdrawable: 500n,
+   *     continuousFeeCredit: 0n,
+   *     settlementFeeCbps: [1, 2, 3, 4, 5, 6, 7],
+   *     continuousFee: 10,
+   *     tickSpacing: 4,
+   *   },
+   * );
+   * const balance = position.getCollateralBalanceByIndex(0);
    * console.log(balance);
    * ```
    */
@@ -157,9 +263,61 @@ export class AccrualPosition extends Position {
    * @returns Collateral balance, or undefined when the token is not configured.
    * @example
    * ```ts
+   * import { registerCustomAddresses } from "@morpho-org/morpho-ts";
    * import { AccrualPosition } from "@morpho-org/midnight-sdk";
    *
-   * const balance = new AccrualPosition({} as never, {} as never).getCollateralBalanceByToken("0x0000000000000000000000000000000000000001");
+   * registerCustomAddresses({
+   *   addresses: {
+   *     31337: {
+   *       morpho: "0x0000000000000000000000000000000000000001",
+   *       bundler3: {
+   *         bundler3: "0x0000000000000000000000000000000000000002",
+   *         generalAdapter1: "0x0000000000000000000000000000000000000003",
+   *       },
+   *       adaptiveCurveIrm: "0x0000000000000000000000000000000000000004",
+   *       midnight: "0x0000000000000000000000000000000000001000",
+   *     },
+   *   },
+   * });
+   *
+   * const collateralToken = "0x0000000000000000000000000000000000007000";
+   * const position = new AccrualPosition(
+   *   {
+   *     credit: 1_000n,
+   *     pendingFee: 100n,
+   *     lastLossFactor: 0n,
+   *     lastAccrual: 1_000n,
+   *     debt: 0n,
+   *     collateralBitmap: 1n,
+   *     collateral: [50n],
+   *   },
+   *   {
+   *     chainId: 31337,
+   *     params: {
+   *       loanToken: "0x0000000000000000000000000000000000006000",
+   *       collateralParams: [
+   *         {
+   *           token: collateralToken,
+   *           lltv: 770000000000000000n,
+   *           maxLif: 1061007957559681697n,
+   *           oracle: "0x0000000000000000000000000000000000008000",
+   *         },
+   *       ],
+   *       maturity: 54_000n,
+   *       rcfThreshold: 0n,
+   *       enterGate: "0x0000000000000000000000000000000000000000",
+   *       liquidatorGate: "0x0000000000000000000000000000000000000000",
+   *     },
+   *     totalUnits: 1_000n,
+   *     lossFactor: 0n,
+   *     withdrawable: 500n,
+   *     continuousFeeCredit: 0n,
+   *     settlementFeeCbps: [1, 2, 3, 4, 5, 6, 7],
+   *     continuousFee: 10,
+   *     tickSpacing: 4,
+   *   },
+   * );
+   * const balance = position.getCollateralBalanceByToken(collateralToken);
    * console.log(balance);
    * ```
    */
@@ -176,9 +334,53 @@ export class AccrualPosition extends Position {
    * @returns WAD-scaled settlement fee.
    * @example
    * ```ts
+   * import { registerCustomAddresses } from "@morpho-org/morpho-ts";
    * import { AccrualPosition } from "@morpho-org/midnight-sdk";
    *
-   * const fee = new AccrualPosition({} as never, {} as never).getSettlementFee(0n);
+   * registerCustomAddresses({
+   *   addresses: {
+   *     31337: {
+   *       morpho: "0x0000000000000000000000000000000000000001",
+   *       bundler3: {
+   *         bundler3: "0x0000000000000000000000000000000000000002",
+   *         generalAdapter1: "0x0000000000000000000000000000000000000003",
+   *       },
+   *       adaptiveCurveIrm: "0x0000000000000000000000000000000000000004",
+   *       midnight: "0x0000000000000000000000000000000000001000",
+   *     },
+   *   },
+   * });
+   *
+   * const position = new AccrualPosition(
+   *   {
+   *     credit: 1_000n,
+   *     pendingFee: 100n,
+   *     lastLossFactor: 0n,
+   *     lastAccrual: 1_000n,
+   *     debt: 0n,
+   *     collateralBitmap: 1n,
+   *     collateral: [50n],
+   *   },
+   *   {
+   *     chainId: 31337,
+   *     params: {
+   *       loanToken: "0x0000000000000000000000000000000000006000",
+   *       collateralParams: [],
+   *       maturity: 54_000n,
+   *       rcfThreshold: 0n,
+   *       enterGate: "0x0000000000000000000000000000000000000000",
+   *       liquidatorGate: "0x0000000000000000000000000000000000000000",
+   *     },
+   *     totalUnits: 1_000n,
+   *     lossFactor: 0n,
+   *     withdrawable: 500n,
+   *     continuousFeeCredit: 0n,
+   *     settlementFeeCbps: [1, 2, 3, 4, 5, 6, 7],
+   *     continuousFee: 10,
+   *     tickSpacing: 4,
+   *   },
+   * );
+   * const fee = position.getSettlementFee(0n);
    * console.log(fee);
    * ```
    */
@@ -196,97 +398,63 @@ export class AccrualPosition extends Position {
    * @throws {InvalidPositionAccrualStateError} when raw inputs violate Midnight accounting invariants.
    * @example
    * ```ts
+   * import { registerCustomAddresses } from "@morpho-org/morpho-ts";
    * import { AccrualPosition } from "@morpho-org/midnight-sdk";
    *
-   * const accrued = new AccrualPosition({} as never, {} as never).accrueInterest(0n);
+   * registerCustomAddresses({
+   *   addresses: {
+   *     31337: {
+   *       morpho: "0x0000000000000000000000000000000000000001",
+   *       bundler3: {
+   *         bundler3: "0x0000000000000000000000000000000000000002",
+   *         generalAdapter1: "0x0000000000000000000000000000000000000003",
+   *       },
+   *       adaptiveCurveIrm: "0x0000000000000000000000000000000000000004",
+   *       midnight: "0x0000000000000000000000000000000000001000",
+   *     },
+   *   },
+   * });
+   *
+   * const position = new AccrualPosition(
+   *   {
+   *     credit: 1_000n,
+   *     pendingFee: 100n,
+   *     lastLossFactor: 0n,
+   *     lastAccrual: 1_000n,
+   *     debt: 0n,
+   *     collateralBitmap: 1n,
+   *     collateral: [50n],
+   *   },
+   *   {
+   *     chainId: 31337,
+   *     params: {
+   *       loanToken: "0x0000000000000000000000000000000000006000",
+   *       collateralParams: [],
+   *       maturity: 54_000n,
+   *       rcfThreshold: 0n,
+   *       enterGate: "0x0000000000000000000000000000000000000000",
+   *       liquidatorGate: "0x0000000000000000000000000000000000000000",
+   *     },
+   *     totalUnits: 1_000n,
+   *     lossFactor: 0n,
+   *     withdrawable: 500n,
+   *     continuousFeeCredit: 0n,
+   *     settlementFeeCbps: [1, 2, 3, 4, 5, 6, 7],
+   *     continuousFee: 10,
+   *     tickSpacing: 4,
+   *   },
+   * );
+   * const accrued = position.accrueInterest(1_500n);
    * console.log(accrued.credit);
    * ```
    */
   public accrueInterest(timestamp: BigIntish) {
-    const normalizedTimestamp = BigInt(timestamp);
-    if (normalizedTimestamp < this.lastAccrual) {
-      throw new InvalidPositionAccrualTimestampError(
-        normalizedTimestamp,
-        this.lastAccrual,
-      );
-    }
-    if (this.market.lossFactor < this.lastLossFactor) {
-      throw new InvalidPositionLossFactorError(
-        this.market.lossFactor,
-        this.lastLossFactor,
-      );
-    }
-    if (this.pendingFee > this.credit) {
-      throw new InvalidPositionAccrualStateError(
-        "Pending fee must be less than or equal to credit.",
-      );
-    }
+    const { position, market } = PositionUtils.accrueInterest({
+      position: this,
+      market: this.market,
+      timestamp,
+    });
 
-    const postSlashCredit =
-      this.lastLossFactor < MathLib.MAX_UINT_128
-        ? MathLib.mulDivDown(
-            this.credit,
-            MathLib.MAX_UINT_128 - this.market.lossFactor,
-            MathLib.MAX_UINT_128 - this.lastLossFactor,
-          )
-        : 0n;
-    if (postSlashCredit > this.credit) {
-      throw new InvalidPositionAccrualStateError(
-        "Post-slash credit cannot exceed stored credit.",
-      );
-    }
-
-    const creditDecrease = this.credit - postSlashCredit;
-    const pendingFeeDecrease =
-      this.credit > 0n
-        ? MathLib.mulDivUp(this.pendingFee, creditDecrease, this.credit)
-        : 0n;
-    if (pendingFeeDecrease > this.pendingFee) {
-      throw new InvalidPositionAccrualStateError(
-        "Pending-fee decrease cannot exceed pending fee.",
-      );
-    }
-
-    const postSlashPendingFee = this.pendingFee - pendingFeeDecrease;
-    const accrualEnd =
-      normalizedTimestamp < this.market.params.maturity
-        ? normalizedTimestamp
-        : this.market.params.maturity;
-    const accruedFee =
-      this.lastAccrual < this.market.params.maturity
-        ? MathLib.mulDivDown(
-            postSlashPendingFee,
-            accrualEnd - this.lastAccrual,
-            this.market.params.maturity - this.lastAccrual,
-          )
-        : 0n;
-    if (accruedFee > postSlashCredit || accruedFee > postSlashPendingFee) {
-      throw new InvalidPositionAccrualStateError(
-        "Accrued fee cannot exceed post-slash credit or pending fee.",
-      );
-    }
-
-    return new AccrualPosition(
-      {
-        credit: postSlashCredit - accruedFee,
-        pendingFee: postSlashPendingFee - accruedFee,
-        lastLossFactor: this.market.lossFactor,
-        lastAccrual: normalizedTimestamp,
-        debt: this.debt,
-        collateralBitmap: this.collateralBitmap,
-        collateral: this.collateral,
-      },
-      {
-        chainId: this.market.chainId,
-        params: this.market.params,
-        totalUnits: this.market.totalUnits,
-        lossFactor: this.market.lossFactor,
-        withdrawable: this.market.withdrawable,
-        continuousFeeCredit: this.market.continuousFeeCredit + accruedFee,
-        settlementFeeCbps: this.market.settlementFeeCbps,
-        continuousFee: this.market.continuousFee,
-        tickSpacing: this.market.tickSpacing,
-      },
-    );
+    return new AccrualPosition(position, market);
   }
 }

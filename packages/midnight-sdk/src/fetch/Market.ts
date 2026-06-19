@@ -17,8 +17,13 @@ import { callParameters, resolveChainId } from "./utils.js";
  * @example
  * ```ts
  * import { fetchMarketParams } from "@morpho-org/midnight-sdk";
+ * import { createPublicClient, http } from "viem";
+ * import { base } from "viem/chains";
  *
- * const params = await fetchMarketParams({} as never, {} as never);
+ * const client = createPublicClient({ chain: base, transport: http() });
+ * const params = await fetchMarketParams(client, {
+ *   marketId: "0x12590ae1aee324a005be565f3bcdd16dbf8daf7969b26c181c8b8f467dad9f67",
+ * });
  * console.log(params.loanToken);
  * ```
  */
@@ -52,8 +57,13 @@ export async function fetchMarketParams(
  * @example
  * ```ts
  * import { fetchMarket } from "@morpho-org/midnight-sdk";
+ * import { createPublicClient, http } from "viem";
+ * import { base } from "viem/chains";
  *
- * const market = await fetchMarket({} as never, {} as never);
+ * const client = createPublicClient({ chain: base, transport: http() });
+ * const market = await fetchMarket(client, {
+ *   marketId: "0x12590ae1aee324a005be565f3bcdd16dbf8daf7969b26c181c8b8f467dad9f67",
+ * });
  * console.log(market.params.loanToken);
  * ```
  */

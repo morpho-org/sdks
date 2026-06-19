@@ -11,7 +11,11 @@ import type { Address, Hex } from "viem";
  * ```ts
  * import type { GetRatifierInfoParams } from "@morpho-org/midnight-sdk";
  *
- * const params = {} as GetRatifierInfoParams;
+ * const params: GetRatifierInfoParams = {
+ *   bytecode: "0x",
+ *   ecrecoverRatifier: "0x0000000000000000000000000000000000000001",
+ *   setterRatifier: "0x0000000000000000000000000000000000000002",
+ * };
  * console.log(params.bytecode);
  * ```
  */

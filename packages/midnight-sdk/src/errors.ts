@@ -1,24 +1,4 @@
 /**
- * Thrown when an order conversion receives no executable quote entries.
- *
- * @example
- * ```ts
- * import { NoMatchingOffersError } from "@morpho-org/midnight-sdk";
- *
- * const error = new NoMatchingOffersError();
- * console.log(error.message);
- * ```
- */
-export class NoMatchingOffersError extends Error {
-  public constructor() {
-    super(
-      "No matching Midnight offers were provided. Refresh the quote and retry.",
-    );
-    this.name = "NoMatchingOffersError";
-  }
-}
-
-/**
  * Thrown when a Midnight offer group violates protocol-level group mechanics.
  *
  * @example
@@ -32,41 +12,6 @@ export class InvalidOfferGroupError extends Error {
   public constructor(reason: string) {
     super(`Invalid Midnight offer group. ${reason}`);
     this.name = "InvalidOfferGroupError";
-  }
-}
-
-/**
- * Thrown when a quote contains an offer side that does not match the requested route.
- *
- * @example
- * ```ts
- * import { UnexpectedOfferSideError } from "@morpho-org/midnight-sdk";
- *
- * const error = new UnexpectedOfferSideError("buy", "sell");
- * console.log(error.name);
- * ```
- */
-export class UnexpectedOfferSideError extends Error {
-  public constructor(expected: "buy" | "sell", actual: "buy" | "sell") {
-    super(`Expected "${expected}" Midnight offers, got "${actual}".`);
-    this.name = "UnexpectedOfferSideError";
-  }
-}
-
-/**
- * Thrown when a bundle helper receives takes from different markets.
- *
- * @example
- * ```ts
- * import { InconsistentMarketError } from "@morpho-org/midnight-sdk";
- *
- * throw new InconsistentMarketError();
- * ```
- */
-export class InconsistentMarketError extends Error {
-  public constructor() {
-    super("All Midnight takes must reference the same market.");
-    this.name = "InconsistentMarketError";
   }
 }
 

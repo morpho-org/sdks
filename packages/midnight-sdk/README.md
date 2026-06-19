@@ -136,30 +136,27 @@ route, build the `Tree`, validate it, submit the root approval transaction, then
 
 ## Taking offers
 
-The take-side starts from API book, quote, or maker takeable-offer responses. Convert the API offer
-shape back into SDK offer input, then use `TakeableOffer.createMany` or `TakeableOfferUtils.toStructs`
-to validate side and market assumptions before passing each struct to `Midnight.take`. Book `asks`
-are maker sell offers, while book `bids` are maker buy offers.
-`IMidnight.take` accepts `offer`, `ratifierData`, `units`, `taker`, `receiverIfTakerIsSeller`,
-`takerCallback`, and `takerCallbackData`; `TakeableOfferUtils.toStruct` supplies the first three.
-For a quote that spans several offers, use `MidnightBundles`: it receives the same take structs,
+The take-side starts from API book, quote, or maker takeable-offer responses. `MidnightApi` maps the
+router response into ABI-ready take objects: each item has `offer`, `ratifierData`, and `units` for
+`IMidnight.take`, plus `marketId` metadata from the API. Book `asks` are maker sell offers, while
+book `bids` are maker buy offers.
+For a quote that spans several offers, use `MidnightBundles`: it receives the returned take objects,
 calls `take` internally in order, and fills toward the target in one transaction.
+When executing offers one-by-one with `Midnight.take`, clamp each take to the remaining target instead
+of submitting every returned cap blindly.
 The no-permit bundle example assumes the taker has authorized `MidnightBundles` on Midnight and has
-approved the bundle contract to pull the market loan token.
+approved the bundle contract to pull the market loan token. Set `minUnits` or `maxUnits` from your
+own price guard; the example uses `0n` to focus on the route mechanics.
 
 ```ts
 import { addresses } from "@morpho-org/morpho-ts";
 import {
   MidnightApi,
-  type MidnightApiTakeableOffer,
+  type MidnightApiTake,
 } from "@morpho-org/midnight-sdk/api";
 import {
-  TakeableOffer,
-  TakeableOfferUtils,
   midnightAbi,
   midnightBundlesAbi,
-  type IOffer,
-  type TakeableOfferStruct,
 } from "@morpho-org/midnight-sdk";
 import {
   parseUnits,
@@ -174,37 +171,6 @@ const midnight = addresses[chainId].midnight!;
 const midnightBundles = addresses[chainId].midnightBundles!;
 const tokenPermitNone = { kind: 0, data: "0x" } as const;
 
-function offerFromApi(offer: MidnightApiTakeableOffer["offer"]): IOffer {
-  return {
-    market: {
-      loanToken: offer.market.loanToken,
-      collateralParams: offer.market.collaterals.map((collateral) => ({
-        token: collateral.token,
-        lltv: BigInt(collateral.lltv),
-        maxLif: BigInt(collateral.maxLiquidationIncentiveFactor),
-        oracle: collateral.oracle,
-      })),
-      maturity: BigInt(offer.market.maturity),
-      rcfThreshold: BigInt(offer.market.rcfThreshold),
-      enterGate: offer.market.enterGate,
-      liquidatorGate: offer.market.liquidatorGate,
-    },
-    buy: offer.buy,
-    maker: offer.maker,
-    start: BigInt(offer.start),
-    expiry: BigInt(offer.expiry),
-    tick: BigInt(offer.tick),
-    group: offer.group,
-    callback: offer.callback,
-    callbackData: offer.callbackData,
-    receiverIfMakerIsSeller: offer.receiverIfMakerIsSeller,
-    ratifier: offer.ratifier,
-    reduceOnly: offer.reduceOnly,
-    maxUnits: offer.maxUnits,
-    maxAssets: offer.maxAssets,
-  };
-}
-
 async function buildAskQuoteTakes(marketId: Hash, targetBuyerAssets: bigint) {
   const quote = await MidnightApi.fetchBookQuote({
     marketId,
@@ -213,28 +179,14 @@ async function buildAskQuoteTakes(marketId: Hash, targetBuyerAssets: bigint) {
     slippage: "0.25",
   });
 
-  const takeableOffers = TakeableOffer.createMany({
-    entries: quote.data.takeableOffers.map((entry) => ({
-      units: entry.units,
-      offer: offerFromApi(entry.offer),
-      ratifierData: entry.ratifierData,
-    })),
-    expectedOfferSide: "sell",
-    enforceSameMarket: true,
-  });
-
-  const takeableOfferStructs = takeableOffers.map((takeableOffer) =>
-    TakeableOfferUtils.toStruct(takeableOffer),
-  );
-
-  return { quote: quote.data, takeableOffers, takeableOfferStructs };
+  return quote.data;
 }
 
 export async function takeOneOffer(params: {
   readonly walletClient: WalletClient;
   readonly taker: Address;
   readonly receiverIfTakerIsSeller: Address;
-  readonly takeableOffer: TakeableOfferStruct;
+  readonly take: MidnightApiTake;
 }) {
   return params.walletClient.writeContract({
     account: params.taker,
@@ -242,9 +194,9 @@ export async function takeOneOffer(params: {
     abi: midnightAbi,
     functionName: "take",
     args: [
-      params.takeableOffer.offer,
-      params.takeableOffer.ratifierData,
-      params.takeableOffer.units,
+      params.take.offer,
+      params.take.ratifierData,
+      params.take.units,
       params.taker,
       params.receiverIfTakerIsSeller,
       zeroAddress,
@@ -259,10 +211,8 @@ export async function takeAskQuoteWithBundle(params: {
   readonly marketId: Hash;
 }) {
   const targetBuyerAssets = parseUnits("10000", 6);
-  const { quote, takeableOfferStructs } = await buildAskQuoteTakes(
-    params.marketId,
-    targetBuyerAssets,
-  );
+  const minUnits = 0n;
+  const quote = await buildAskQuoteTakes(params.marketId, targetBuyerAssets);
 
   return params.walletClient.writeContract({
     account: params.taker,
@@ -271,10 +221,10 @@ export async function takeAskQuoteWithBundle(params: {
     functionName: "buyWithAssetsTargetAndWithdrawCollateral",
     args: [
       targetBuyerAssets,
-      BigInt(quote.availableUnits),
+      minUnits,
       params.taker,
       tokenPermitNone,
-      takeableOfferStructs,
+      quote.takeableOffers,
       [],
       params.taker,
       0n,

@@ -28,8 +28,22 @@ import { callParameters, resolveChainId } from "./utils.js";
  * @example
  * ```ts
  * import { fetchConsumableUnits } from "@morpho-org/midnight-sdk";
+ * import { createPublicClient, http, zeroHash } from "viem";
+ * import { base } from "viem/chains";
  *
- * const units = await fetchConsumableUnits({} as never, {} as never);
+ * const client = createPublicClient({ chain: base, transport: http() });
+ * const units = await fetchConsumableUnits(client, {
+ *   marketId: "0x12590ae1aee324a005be565f3bcdd16dbf8daf7969b26c181c8b8f467dad9f67",
+ *   offer: {
+ *     buy: true,
+ *     maker: "0x0000000000000000000000000000000000009000",
+ *     tick: 5_000n,
+ *     maxUnits: 100n,
+ *     maxAssets: 0n,
+ *   },
+ *   group: zeroHash,
+ *   timeToMaturity: 3_600n,
+ * });
  * console.log(units);
  * ```
  */

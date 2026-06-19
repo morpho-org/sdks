@@ -148,12 +148,47 @@ export class MarketParams {
   public constructor(params: IMarketParams) {
     this.loanToken = params.loanToken;
     this.collateralParams = params.collateralParams.map(
-      MarketUtils.normalizeCollateralParams,
+      MarketUtils.toCollateralParams,
     );
     this.maturity = BigInt(params.maturity);
     this.rcfThreshold = BigInt(params.rcfThreshold);
     this.enterGate = params.enterGate;
     this.liquidatorGate = params.liquidatorGate;
+  }
+
+  /**
+   * Returns market params from a params object or hydrated market.
+   *
+   * Use at boundaries that accept either a standalone market config or a full
+   * market object. Existing `MarketParams` instances are returned as-is.
+   *
+   * @param market - Market params or hydrated market.
+   * @returns Market params instance.
+   * @example
+   * ```ts
+   * import { MarketParams } from "@morpho-org/midnight-sdk";
+   *
+   * const params = MarketParams.from({
+   *   loanToken: "0x0000000000000000000000000000000000006000",
+   *   collateralParams: [
+   *     {
+   *       token: "0x0000000000000000000000000000000000007000",
+   *       lltv: 770000000000000000n,
+   *       maxLif: 1061007957559681697n,
+   *       oracle: "0x0000000000000000000000000000000000008000",
+   *     },
+   *   ],
+   *   maturity: 54_000n,
+   *   rcfThreshold: 0n,
+   *   enterGate: "0x0000000000000000000000000000000000000000",
+   *   liquidatorGate: "0x0000000000000000000000000000000000000000",
+   * });
+   * console.log(params.loanToken);
+   * ```
+   */
+  public static from(market: MarketInput): MarketParams {
+    if ("params" in market) return MarketParams.from(market.params);
+    return market instanceof MarketParams ? market : new MarketParams(market);
   }
 }
 
@@ -206,13 +241,72 @@ export interface IMarket {
 }
 
 /**
+ * Plain market params or hydrated market object accepted by market helpers.
+ *
+ * @example
+ * ```ts
+ * import type { MarketInput } from "@morpho-org/midnight-sdk";
+ *
+ * const market: MarketInput = {
+ *   loanToken: "0x0000000000000000000000000000000000006000",
+ *   collateralParams: [],
+ *   maturity: 54_000n,
+ *   rcfThreshold: 0n,
+ *   enterGate: "0x0000000000000000000000000000000000000000",
+ *   liquidatorGate: "0x0000000000000000000000000000000000000000",
+ * };
+ * console.log(market.loanToken);
+ * ```
+ */
+export type MarketInput = IMarketParams | IMarket;
+
+/**
  * Hydrated Midnight market configuration plus state.
  *
  * @example
  * ```ts
+ * import { registerCustomAddresses } from "@morpho-org/morpho-ts";
  * import { Market } from "@morpho-org/midnight-sdk";
  *
- * const market = new Market({} as never);
+ * registerCustomAddresses({
+ *   addresses: {
+ *     31337: {
+ *       morpho: "0x0000000000000000000000000000000000000001",
+ *       bundler3: {
+ *         bundler3: "0x0000000000000000000000000000000000000002",
+ *         generalAdapter1: "0x0000000000000000000000000000000000000003",
+ *       },
+ *       adaptiveCurveIrm: "0x0000000000000000000000000000000000000004",
+ *       midnight: "0x0000000000000000000000000000000000001000",
+ *     },
+ *   },
+ * });
+ *
+ * const market = new Market({
+ *   chainId: 31337,
+ *   params: {
+ *     loanToken: "0x0000000000000000000000000000000000006000",
+ *     collateralParams: [
+ *       {
+ *         token: "0x0000000000000000000000000000000000007000",
+ *         lltv: 770000000000000000n,
+ *         maxLif: 1061007957559681697n,
+ *         oracle: "0x0000000000000000000000000000000000008000",
+ *       },
+ *     ],
+ *     maturity: 54_000n,
+ *     rcfThreshold: 0n,
+ *     enterGate: "0x0000000000000000000000000000000000000000",
+ *     liquidatorGate: "0x0000000000000000000000000000000000000000",
+ *   },
+ *   totalUnits: 1_000n,
+ *   lossFactor: 0n,
+ *   withdrawable: 500n,
+ *   continuousFeeCredit: 0n,
+ *   settlementFeeCbps: [1, 2, 3, 4, 5, 6, 7],
+ *   continuousFee: 10,
+ *   tickSpacing: 4,
+ * });
  * console.log(market.timeToMaturity(0n));
  * ```
  */
@@ -249,7 +343,7 @@ export class Market {
 
   public constructor(market: IMarket) {
     this.chainId = BigInt(market.chainId);
-    this.params = MarketUtils.normalizeMarketParams(market.params);
+    this.params = MarketParams.from(market.params);
     this.id = MarketUtils.toId({ market: this.params, chainId: this.chainId });
     this.totalUnits = BigInt(market.totalUnits);
     this.lossFactor = BigInt(market.lossFactor);
@@ -265,11 +359,45 @@ export class Market {
    *
    * @param timestamp - Timestamp to compare.
    * @returns Seconds until maturity, floored to zero.
+   * @throws {NegativeValueError} when `timestamp` is negative.
    * @example
    * ```ts
+   * import { registerCustomAddresses } from "@morpho-org/morpho-ts";
    * import { Market } from "@morpho-org/midnight-sdk";
    *
-   * console.log(new Market({} as never).timeToMaturity(0n));
+   * registerCustomAddresses({
+   *   addresses: {
+   *     31337: {
+   *       morpho: "0x0000000000000000000000000000000000000001",
+   *       bundler3: {
+   *         bundler3: "0x0000000000000000000000000000000000000002",
+   *         generalAdapter1: "0x0000000000000000000000000000000000000003",
+   *       },
+   *       adaptiveCurveIrm: "0x0000000000000000000000000000000000000004",
+   *       midnight: "0x0000000000000000000000000000000000001000",
+   *     },
+   *   },
+   * });
+   *
+   * const market = new Market({
+   *   chainId: 31337,
+   *   params: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: "0x0000000000000000000000000000000000000000",
+   *     liquidatorGate: "0x0000000000000000000000000000000000000000",
+   *   },
+   *   totalUnits: 1_000n,
+   *   lossFactor: 0n,
+   *   withdrawable: 500n,
+   *   continuousFeeCredit: 0n,
+   *   settlementFeeCbps: [1, 2, 3, 4, 5, 6, 7],
+   *   continuousFee: 10,
+   *   tickSpacing: 4,
+   * });
+   * console.log(market.timeToMaturity(0n));
    * ```
    */
   public timeToMaturity(timestamp: BigIntish) {
@@ -286,11 +414,45 @@ export class Market {
    *
    * @param timeToMaturity - Seconds until maturity.
    * @returns WAD-scaled settlement fee.
+   * @throws {NegativeValueError} when `timeToMaturity` is negative.
    * @example
    * ```ts
+   * import { registerCustomAddresses } from "@morpho-org/morpho-ts";
    * import { Market } from "@morpho-org/midnight-sdk";
    *
-   * console.log(new Market({} as never).getSettlementFee(0n));
+   * registerCustomAddresses({
+   *   addresses: {
+   *     31337: {
+   *       morpho: "0x0000000000000000000000000000000000000001",
+   *       bundler3: {
+   *         bundler3: "0x0000000000000000000000000000000000000002",
+   *         generalAdapter1: "0x0000000000000000000000000000000000000003",
+   *       },
+   *       adaptiveCurveIrm: "0x0000000000000000000000000000000000000004",
+   *       midnight: "0x0000000000000000000000000000000000001000",
+   *     },
+   *   },
+   * });
+   *
+   * const market = new Market({
+   *   chainId: 31337,
+   *   params: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: "0x0000000000000000000000000000000000000000",
+   *     liquidatorGate: "0x0000000000000000000000000000000000000000",
+   *   },
+   *   totalUnits: 1_000n,
+   *   lossFactor: 0n,
+   *   withdrawable: 500n,
+   *   continuousFeeCredit: 0n,
+   *   settlementFeeCbps: [1, 2, 3, 4, 5, 6, 7],
+   *   continuousFee: 10,
+   *   tickSpacing: 4,
+   * });
+   * console.log(market.getSettlementFee(0n));
    * ```
    */
   public getSettlementFee(timeToMaturity: BigIntish) {
@@ -307,9 +469,49 @@ export class Market {
    * @returns Collateral params, or undefined when the index is not configured.
    * @example
    * ```ts
+   * import { registerCustomAddresses } from "@morpho-org/morpho-ts";
    * import { Market } from "@morpho-org/midnight-sdk";
    *
-   * const params = new Market({} as never).getCollateralParamsByIndex(0);
+   * registerCustomAddresses({
+   *   addresses: {
+   *     31337: {
+   *       morpho: "0x0000000000000000000000000000000000000001",
+   *       bundler3: {
+   *         bundler3: "0x0000000000000000000000000000000000000002",
+   *         generalAdapter1: "0x0000000000000000000000000000000000000003",
+   *       },
+   *       adaptiveCurveIrm: "0x0000000000000000000000000000000000000004",
+   *       midnight: "0x0000000000000000000000000000000000001000",
+   *     },
+   *   },
+   * });
+   *
+   * const market = new Market({
+   *   chainId: 31337,
+   *   params: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: "0x0000000000000000000000000000000000000000",
+   *     liquidatorGate: "0x0000000000000000000000000000000000000000",
+   *   },
+   *   totalUnits: 1_000n,
+   *   lossFactor: 0n,
+   *   withdrawable: 500n,
+   *   continuousFeeCredit: 0n,
+   *   settlementFeeCbps: [1, 2, 3, 4, 5, 6, 7],
+   *   continuousFee: 10,
+   *   tickSpacing: 4,
+   * });
+   * const params = market.getCollateralParamsByIndex(0);
    * console.log(params?.token);
    * ```
    */
@@ -331,9 +533,50 @@ export class Market {
    * @returns Collateral index, or undefined when the token is not configured.
    * @example
    * ```ts
+   * import { registerCustomAddresses } from "@morpho-org/morpho-ts";
    * import { Market } from "@morpho-org/midnight-sdk";
    *
-   * const index = new Market({} as never).getCollateralIndexByToken("0x0000000000000000000000000000000000000001");
+   * registerCustomAddresses({
+   *   addresses: {
+   *     31337: {
+   *       morpho: "0x0000000000000000000000000000000000000001",
+   *       bundler3: {
+   *         bundler3: "0x0000000000000000000000000000000000000002",
+   *         generalAdapter1: "0x0000000000000000000000000000000000000003",
+   *       },
+   *       adaptiveCurveIrm: "0x0000000000000000000000000000000000000004",
+   *       midnight: "0x0000000000000000000000000000000000001000",
+   *     },
+   *   },
+   * });
+   *
+   * const collateralToken = "0x0000000000000000000000000000000000007000";
+   * const market = new Market({
+   *   chainId: 31337,
+   *   params: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: collateralToken,
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: "0x0000000000000000000000000000000000000000",
+   *     liquidatorGate: "0x0000000000000000000000000000000000000000",
+   *   },
+   *   totalUnits: 1_000n,
+   *   lossFactor: 0n,
+   *   withdrawable: 500n,
+   *   continuousFeeCredit: 0n,
+   *   settlementFeeCbps: [1, 2, 3, 4, 5, 6, 7],
+   *   continuousFee: 10,
+   *   tickSpacing: 4,
+   * });
+   * const index = market.getCollateralIndexByToken(collateralToken);
    * console.log(index);
    * ```
    */
@@ -353,9 +596,50 @@ export class Market {
    * @returns Collateral params, or undefined when the token is not configured.
    * @example
    * ```ts
+   * import { registerCustomAddresses } from "@morpho-org/morpho-ts";
    * import { Market } from "@morpho-org/midnight-sdk";
    *
-   * const params = new Market({} as never).getCollateralParamsByToken("0x0000000000000000000000000000000000000001");
+   * registerCustomAddresses({
+   *   addresses: {
+   *     31337: {
+   *       morpho: "0x0000000000000000000000000000000000000001",
+   *       bundler3: {
+   *         bundler3: "0x0000000000000000000000000000000000000002",
+   *         generalAdapter1: "0x0000000000000000000000000000000000000003",
+   *       },
+   *       adaptiveCurveIrm: "0x0000000000000000000000000000000000000004",
+   *       midnight: "0x0000000000000000000000000000000000001000",
+   *     },
+   *   },
+   * });
+   *
+   * const collateralToken = "0x0000000000000000000000000000000000007000";
+   * const market = new Market({
+   *   chainId: 31337,
+   *   params: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: collateralToken,
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: "0x0000000000000000000000000000000000000000",
+   *     liquidatorGate: "0x0000000000000000000000000000000000000000",
+   *   },
+   *   totalUnits: 1_000n,
+   *   lossFactor: 0n,
+   *   withdrawable: 500n,
+   *   continuousFeeCredit: 0n,
+   *   settlementFeeCbps: [1, 2, 3, 4, 5, 6, 7],
+   *   continuousFee: 10,
+   *   tickSpacing: 4,
+   * });
+   * const params = market.getCollateralParamsByToken(collateralToken);
    * console.log(params?.lltv);
    * ```
    */

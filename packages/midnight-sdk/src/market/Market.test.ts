@@ -37,6 +37,13 @@ describe("MarketParams", () => {
     expect(params.loanToken).toBe(addresses.loanToken);
     expect(params.collateralParams[0]!.token).toBe(addresses.collateralToken);
   });
+
+  test("behavior: from returns existing params and converts market input", () => {
+    const params = baseMarketParams();
+
+    expect(MarketParams.from(params)).toBe(params);
+    expect(MarketParams.from(baseMarket()).loanToken).toBe(addresses.loanToken);
+  });
 });
 
 describe("Market", () => {
@@ -90,6 +97,19 @@ describe("Market", () => {
 
 describe("MarketUtils", () => {
   test("default", () => {
+    expect(
+      MarketUtils.toCollateralParams({
+        token: addresses.collateralToken,
+        lltv: "770000000000000000",
+        maxLif: "1061007957559681697",
+        oracle: addresses.oracle,
+      }),
+    ).toEqual({
+      token: addresses.collateralToken,
+      lltv: 770000000000000000n,
+      maxLif: 1061007957559681697n,
+      oracle: addresses.oracle,
+    });
     expect(MarketUtils.isLltvAllowed(770000000000000000n)).toBe(true);
     expect(MarketUtils.isLltvAllowed(123n)).toBe(false);
     expect(

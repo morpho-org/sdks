@@ -1,6 +1,6 @@
 import type { Hash } from "viem";
 import { type IOffer, Offer, OfferUtils } from "../offers/index.js";
-import { GroupUtils, type IGroup } from "./GroupUtils.js";
+import { type GroupInput, GroupUtils, type IGroup } from "./GroupUtils.js";
 
 /**
  * Protocol offer group with one shared consumption group id.
@@ -13,9 +13,26 @@ import { GroupUtils, type IGroup } from "./GroupUtils.js";
  *
  * @example
  * ```ts
- * import { Group } from "@morpho-org/midnight-sdk";
+ * import { Group, Offer } from "@morpho-org/midnight-sdk";
+ * import { zeroAddress } from "viem";
  *
- * const group = Group.create([{} as never]);
+ * const offer = Offer.create({
+ *   market: {
+ *     loanToken: "0x0000000000000000000000000000000000006000",
+ *     collateralParams: [],
+ *     maturity: 54_000n,
+ *     rcfThreshold: 0n,
+ *     enterGate: zeroAddress,
+ *     liquidatorGate: zeroAddress,
+ *   },
+ *   buy: true,
+ *   maker: "0x0000000000000000000000000000000000009000",
+ *   tick: 5_000n,
+ *   expiry: 3_600n,
+ *   ratifier: "0x0000000000000000000000000000000000004000",
+ *   maxUnits: 100n,
+ * });
+ * const group = Group.create([offer]);
  * console.log(group.offers.length);
  * ```
  */
@@ -41,14 +58,72 @@ export class Group implements IGroup {
    * @returns Offers in caller order.
    * @example
    * ```ts
-   * import { Group } from "@morpho-org/midnight-sdk";
+   * import { Group, Offer } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
    *
-   * const group = Group.create([{} as never]);
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
+   * const group = Group.create([offer]);
    * console.log(group.offers.length);
    * ```
    */
   public get offers(): readonly Offer[] {
     return [...this._offers];
+  }
+
+  /**
+   * Returns a group instance from group or standalone offer input.
+   *
+   * Use at boundaries that accept either a prebuilt `Group`, a plain `IGroup`,
+   * or a standalone offer that should form its own group. Existing `Group`
+   * instances are returned as-is.
+   *
+   * @param entry - Group object or standalone offer.
+   * @returns Group instance.
+   * @throws {InvalidOfferGroupError} when group mechanics are invalid.
+   * @example
+   * ```ts
+   * import { Group, Offer } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
+   *
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
+   * const group = Group.from(offer);
+   * console.log(group.offers.length);
+   * ```
+   */
+  public static from(entry: GroupInput): Group {
+    return entry instanceof Group
+      ? entry
+      : new Group("offers" in entry ? entry.offers : [entry]);
   }
 
   /**
@@ -65,9 +140,26 @@ export class Group implements IGroup {
    * @throws {InvalidOfferGroupError} when group mechanics are invalid.
    * @example
    * ```ts
-   * import { Group } from "@morpho-org/midnight-sdk";
+   * import { Group, Offer } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
    *
-   * const group = Group.create([{} as never]);
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
+   * const group = Group.create([offer]);
    * console.log(group.offers.length);
    * ```
    */

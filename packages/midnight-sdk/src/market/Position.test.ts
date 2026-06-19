@@ -14,6 +14,7 @@ import {
   InvalidPositionLossFactorError,
 } from "../errors.js";
 import { AccrualPosition, type IPosition } from "./Position.js";
+import { PositionUtils } from "./PositionUtils.js";
 
 const basePositionInput = (overrides: Partial<IPosition> = {}): IPosition => ({
   credit: overrides.credit ?? 1_000n,
@@ -136,5 +137,35 @@ describe("AccrualPosition.accrueInterest", () => {
         baseMarketInput(),
       ).accrueInterest(1_500n),
     ).toThrow(InvalidPositionAccrualStateError);
+  });
+});
+
+describe("PositionUtils.accrueInterest", () => {
+  test("default", () => {
+    const position = basePositionInput();
+    const market = baseMarketInput();
+    const result = PositionUtils.accrueInterest({
+      position,
+      market,
+      timestamp: 1_500n,
+    });
+
+    expect(result.position).not.toBe(position);
+    expect(result.position.collateral).not.toBe(position.collateral);
+    expect(result.market).not.toBe(market);
+    expect(position.credit).toBe(1_000n);
+    expect(market.continuousFeeCredit).toBe(0n);
+    expect(result).toMatchObject({
+      position: {
+        credit: 950n,
+        pendingFee: 50n,
+        lastLossFactor: 0n,
+        lastAccrual: 1_500n,
+      },
+      market: {
+        continuousFeeCredit: 50n,
+      },
+      accruedFee: 50n,
+    });
   });
 });

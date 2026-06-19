@@ -118,6 +118,22 @@ describe("EcrecoverRatifierUtils.treeTypeHash", () => {
   });
 });
 
+describe("EcrecoverRatifierUtils.toSignature", () => {
+  test("default", () => {
+    const signature = {
+      yParity: 1,
+      r: "0x1111111111111111111111111111111111111111111111111111111111111111",
+      s: "0x2222222222222222222222222222222222222222222222222222222222222222",
+    } satisfies Signature;
+
+    expect(EcrecoverRatifierUtils.toSignature(signature)).toEqual({
+      v: 28,
+      r: signature.r,
+      s: signature.s,
+    });
+  });
+});
+
 describe("EcrecoverRatifierUtils.encodeRatifierData", () => {
   test("default", () => {
     const data = EcrecoverRatifierUtils.encodeRatifierData({

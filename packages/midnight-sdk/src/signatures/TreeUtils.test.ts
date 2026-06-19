@@ -72,6 +72,15 @@ describe("Tree.create", () => {
   });
 });
 
+describe("Tree.from", () => {
+  test("default", () => {
+    const tree = Tree.create([baseOffer({ maxAssets: 0n })]);
+
+    expect(Tree.from(tree)).toBe(tree);
+    expect(Tree.from([baseOfferInput({ maxAssets: 0n })])).toBeInstanceOf(Tree);
+  });
+});
+
 describe("TreeUtils.buildDescriptor", () => {
   test("default", () => {
     const payload = TreeUtils.buildDescriptor([baseOffer({ maxAssets: 0n })]);

@@ -1,8 +1,9 @@
 import type { BigIntish } from "@morpho-org/morpho-ts";
 import type { Hash } from "viem";
-import { type Offer, type OfferStruct, OfferUtils } from "../offers/index.js";
+import { Offer, type OfferStruct } from "../offers/index.js";
 import {
   type TreeCreateParams,
+  type TreeInput,
   type TreeProof,
   TreeUtils,
 } from "./TreeUtils.js";
@@ -24,8 +25,25 @@ export type {
  * @example
  * ```ts
  * import { Offer, Tree } from "@morpho-org/midnight-sdk";
+ * import { zeroAddress } from "viem";
  *
- * const tree = Tree.create([Offer.create({} as never)]);
+ * const offer = Offer.create({
+ *   market: {
+ *     loanToken: "0x0000000000000000000000000000000000006000",
+ *     collateralParams: [],
+ *     maturity: 54_000n,
+ *     rcfThreshold: 0n,
+ *     enterGate: zeroAddress,
+ *     liquidatorGate: zeroAddress,
+ *   },
+ *   buy: true,
+ *   maker: "0x0000000000000000000000000000000000009000",
+ *   tick: 5_000n,
+ *   expiry: 3_600n,
+ *   ratifier: "0x0000000000000000000000000000000000004000",
+ *   maxUnits: 100n,
+ * });
+ * const tree = Tree.create([offer]);
  * console.log(tree.root);
  * ```
  */
@@ -48,13 +66,53 @@ export class Tree {
   private constructor(params: TreeCreateParams) {
     this.offers = params
       .flatMap((entry) => ("offers" in entry ? entry.offers : [entry]))
-      .map(OfferUtils.normalizeOffer);
+      .map((offer) => Offer.from(offer));
 
     const descriptor = TreeUtils.buildDescriptor(this.offers);
     this.paddedOffers = descriptor.offers;
     this.leaves = descriptor.leaves;
     this.root = descriptor.root;
     this.height = descriptor.height;
+  }
+
+  /**
+   * Returns a tree instance from class or plain input.
+   *
+   * Use at boundaries that accept either a prebuilt tree or raw group/offer
+   * inputs, such as API validation helpers. Existing `Tree` instances are
+   * returned as-is.
+   *
+   * @param tree - Tree class or creation input.
+   * @returns Tree instance.
+   * @throws {InvalidTreeError} when the tree is empty, all padding, or duplicated.
+   * @throws {InvalidTreeHeightError} when the resulting height is unsupported.
+   * @example
+   * ```ts
+   * import { Offer, Tree } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
+   *
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
+   * const tree = Tree.from([offer]);
+   * console.log(tree.root);
+   * ```
+   */
+  public static from(tree: TreeInput): Tree {
+    return tree instanceof Tree ? tree : Tree.create(tree);
   }
 
   /**
@@ -72,8 +130,25 @@ export class Tree {
    * @example
    * ```ts
    * import { Offer, Tree } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
    *
-   * const tree = Tree.create([Offer.create({} as never)]);
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
+   * const tree = Tree.create([offer]);
    * console.log(tree.height);
    * ```
    */
@@ -92,9 +167,26 @@ export class Tree {
    * @throws {InvalidTreeError} when the leaf index is out of range.
    * @example
    * ```ts
-   * import { Tree } from "@morpho-org/midnight-sdk";
+   * import { Offer, Tree } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
    *
-   * const proof = Tree.create([{} as never]).proof(0n);
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
+   * const proof = Tree.create([offer]).proof(0n);
    * console.log(proof.root);
    * ```
    */

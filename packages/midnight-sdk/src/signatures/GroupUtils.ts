@@ -1,20 +1,37 @@
 import { concat, type Hash, keccak256 } from "viem";
 import { InvalidOfferGroupError } from "../errors.js";
-import {
-  type IOffer,
-  Offer,
-  type OfferStruct,
-  OfferUtils,
-} from "../offers/index.js";
+import { type IOffer, type OfferStruct, OfferUtils } from "../offers/index.js";
 
 /**
  * Plain offer group shape accepted by group and tree utilities.
  *
  * @example
  * ```ts
- * import type { IGroup } from "@morpho-org/midnight-sdk";
+ * import { Offer, type IGroup } from "@morpho-org/midnight-sdk";
+ * import { zeroAddress, zeroHash } from "viem";
  *
- * const group = {} as IGroup;
+ * const group: IGroup = {
+ *   id: zeroHash,
+ *   offers: [
+ *     Offer.create({
+ *       market: {
+ *         loanToken: "0x0000000000000000000000000000000000006000",
+ *         collateralParams: [],
+ *         maturity: 54_000n,
+ *         rcfThreshold: 0n,
+ *         enterGate: zeroAddress,
+ *         liquidatorGate: zeroAddress,
+ *       },
+ *       buy: true,
+ *       maker: "0x0000000000000000000000000000000000009000",
+ *       tick: 5_000n,
+ *       group: zeroHash,
+ *       expiry: 3_600n,
+ *       ratifier: "0x0000000000000000000000000000000000004000",
+ *       maxUnits: 100n,
+ *     }),
+ *   ],
+ * };
  * console.log(group.offers.length);
  * ```
  */
@@ -34,9 +51,25 @@ export interface IGroup {
  *
  * @example
  * ```ts
- * import type { GroupInput } from "@morpho-org/midnight-sdk";
+ * import { Offer, type GroupInput } from "@morpho-org/midnight-sdk";
+ * import { zeroAddress } from "viem";
  *
- * const input = {} as GroupInput;
+ * const input: GroupInput = Offer.create({
+ *   market: {
+ *     loanToken: "0x0000000000000000000000000000000000006000",
+ *     collateralParams: [],
+ *     maturity: 54_000n,
+ *     rcfThreshold: 0n,
+ *     enterGate: zeroAddress,
+ *     liquidatorGate: zeroAddress,
+ *   },
+ *   buy: true,
+ *   maker: "0x0000000000000000000000000000000000009000",
+ *   tick: 5_000n,
+ *   expiry: 3_600n,
+ *   ratifier: "0x0000000000000000000000000000000000004000",
+ *   maxUnits: 100n,
+ * });
  * console.log(input);
  * ```
  */
@@ -58,33 +91,6 @@ export type GroupInput = IGroup | IOffer;
  */
 export namespace GroupUtils {
   /**
-   * Returns a group object from group or standalone offer input.
-   *
-   * Use at compatibility boundaries that still need an `IGroup` shape from a
-   * standalone offer. Tree helpers now read group ids directly from offers.
-   *
-   * @param entry - Group object or standalone offer.
-   * @returns Group object.
-   * @example
-   * ```ts
-   * import { GroupUtils } from "@morpho-org/midnight-sdk";
-   *
-   * const group = GroupUtils.normalize({} as never);
-   * console.log(group.offers.length);
-   * ```
-   */
-  export function normalize(entry: GroupInput): IGroup {
-    if ("offers" in entry) return entry;
-
-    const offers = OfferUtils.validateOfferGroup({ offers: [entry] });
-    const id = hash(offers);
-    return {
-      offers: offers.map((offer) => new Offer({ ...offer, group: id })),
-      id,
-    };
-  }
-
-  /**
    * Derives the deterministic content-addressed id for a group of offers.
    *
    * This mirrors the router implementation: hash each offer with `group = 0`,
@@ -95,9 +101,26 @@ export namespace GroupUtils {
    * @throws {InvalidOfferGroupError} when `offers` is empty.
    * @example
    * ```ts
-   * import { GroupUtils } from "@morpho-org/midnight-sdk";
+   * import { GroupUtils, Offer } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
    *
-   * const id = GroupUtils.hash([{} as never]);
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
+   * const id = GroupUtils.hash([offer]);
    * console.log(id);
    * ```
    */
@@ -127,9 +150,26 @@ export namespace GroupUtils {
    * @returns ABI-compatible offers in caller order.
    * @example
    * ```ts
-   * import { GroupUtils } from "@morpho-org/midnight-sdk";
+   * import { Group, GroupUtils, Offer } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
    *
-   * const structs = GroupUtils.toStructs({} as never);
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
+   * const structs = GroupUtils.toStructs(Group.create([offer]));
    * console.log(structs.length);
    * ```
    */

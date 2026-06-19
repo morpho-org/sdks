@@ -77,7 +77,7 @@ const apiCollateral = {
 const expectedCollateral = {
   token: COLLATERAL_TOKEN,
   lltv: "860000000000000000",
-  maxLiquidationIncentiveFactor: "0",
+  maxLif: "0",
   oracle: ORACLE,
 };
 
@@ -90,7 +90,7 @@ const apiPriceLevel = {
 };
 
 const apiBook = {
-  id: MARKET_ID,
+  market_id: MARKET_ID,
   chain_id: 8453,
   loan_token: LOAN_TOKEN,
   collaterals: [apiCollateral],
@@ -111,7 +111,7 @@ const expectedPriceLevel = {
 };
 
 const expectedBook = {
-  id: MARKET_ID,
+  marketId: MARKET_ID,
   chainId: 8453,
   loanToken: LOAN_TOKEN,
   collaterals: [expectedCollateral],
@@ -152,35 +152,44 @@ const apiOffer = {
 const expectedOffer = {
   market: {
     loanToken: LOAN_TOKEN,
-    collaterals: [expectedCollateral],
-    maturity: 1_761_922_799,
-    rcfThreshold: "0",
+    collateralParams: [
+      {
+        token: COLLATERAL_TOKEN,
+        lltv: 860000000000000000n,
+        maxLif: 0n,
+        oracle: ORACLE,
+      },
+    ],
+    maturity: 1_761_922_799n,
+    rcfThreshold: 0n,
     enterGate: ZERO_ADDRESS,
     liquidatorGate: ZERO_ADDRESS,
   },
   buy: false,
   maker: MAKER,
-  maxUnits: "369216000000000000000000",
-  start: 1_761_922_790,
-  expiry: 1_761_922_799,
-  tick: 495,
+  start: 1_761_922_790n,
+  expiry: 1_761_922_799n,
+  tick: 495n,
   group: GROUP_ID,
   callback: ZERO_ADDRESS,
   callbackData: "0x",
   receiverIfMakerIsSeller: MAKER,
   ratifier: RATIFIER,
   reduceOnly: false,
-  maxAssets: "0",
+  maxUnits: 369216000000000000000000n,
+  maxAssets: 0n,
 };
 
 const apiTakeableOffer = {
+  market_id: MARKET_ID,
   units: "369216000000000000000000",
   offer: apiOffer,
   ratifier_data: "0x1234",
 };
 
 const expectedTakeableOffer = {
-  units: "369216000000000000000000",
+  marketId: MARKET_ID,
+  units: 369216000000000000000000n,
   offer: expectedOffer,
   ratifierData: "0x1234",
 };

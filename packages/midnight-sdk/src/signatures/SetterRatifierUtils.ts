@@ -23,9 +23,16 @@ const setterRatifierDataAbi = [
  *
  * @example
  * ```ts
- * import type { DecodedSetterRatifierData } from "@morpho-org/midnight-sdk";
+ * import { SetterRatifierUtils, type DecodedSetterRatifierData } from "@morpho-org/midnight-sdk";
+ * import { zeroHash } from "viem";
  *
- * const decoded = {} as DecodedSetterRatifierData;
+ * const data = SetterRatifierUtils.encodeRatifierData({
+ *   root: zeroHash,
+ *   leafIndex: 0n,
+ *   proof: [],
+ * });
+ * const decoded: DecodedSetterRatifierData =
+ *   SetterRatifierUtils.decodeRatifierData(data);
  * console.log(decoded.root);
  * ```
  */
@@ -38,9 +45,29 @@ export type DecodedSetterRatifierData = TreeProof;
  *
  * @example
  * ```ts
- * import type { SetterRatifierDataParams } from "@morpho-org/midnight-sdk";
+ * import { Offer, Tree, type SetterRatifierDataParams } from "@morpho-org/midnight-sdk";
+ * import { zeroAddress } from "viem";
  *
- * const params = {} as SetterRatifierDataParams;
+ * const offer = Offer.create({
+ *   market: {
+ *     loanToken: "0x0000000000000000000000000000000000006000",
+ *     collateralParams: [],
+ *     maturity: 54_000n,
+ *     rcfThreshold: 0n,
+ *     enterGate: zeroAddress,
+ *     liquidatorGate: zeroAddress,
+ *   },
+ *   buy: true,
+ *   maker: "0x0000000000000000000000000000000000009000",
+ *   tick: 5_000n,
+ *   expiry: 3_600n,
+ *   ratifier: "0x0000000000000000000000000000000000005000",
+ *   maxUnits: 100n,
+ * });
+ * const params: SetterRatifierDataParams = {
+ *   tree: Tree.create([offer]),
+ *   leafIndex: 0n,
+ * };
  * console.log(params.leafIndex);
  * ```
  */
@@ -111,8 +138,14 @@ export namespace SetterRatifierUtils {
    * @example
    * ```ts
    * import { SetterRatifierUtils } from "@morpho-org/midnight-sdk";
+   * import { zeroHash } from "viem";
    *
-   * const decoded = SetterRatifierUtils.decodeRatifierData("0x" as never);
+   * const data = SetterRatifierUtils.encodeRatifierData({
+   *   root: zeroHash,
+   *   leafIndex: 0n,
+   *   proof: [],
+   * });
+   * const decoded = SetterRatifierUtils.decodeRatifierData(data);
    * console.log(decoded.proof);
    * ```
    */
@@ -136,9 +169,29 @@ export namespace SetterRatifierUtils {
    * @throws {InvalidTreeError} when the leaf index is outside the tree.
    * @example
    * ```ts
-   * import { SetterRatifierUtils } from "@morpho-org/midnight-sdk";
+   * import { Offer, SetterRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
    *
-   * const data = SetterRatifierUtils.ratifierData({} as never);
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000005000",
+   *   maxUnits: 100n,
+   * });
+   * const data = SetterRatifierUtils.ratifierData({
+   *   tree: Tree.create([offer]),
+   *   leafIndex: 0n,
+   * });
    * console.log(data);
    * ```
    */
@@ -165,8 +218,29 @@ export namespace SetterRatifierUtils {
    * @example
    * ```ts
    * import { SetterRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
+   * import { Offer } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
    *
-   * const items = SetterRatifierUtils.ratify({ tree: Tree.create([{} as never]) });
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000005000",
+   *   maxUnits: 100n,
+   * });
+   *
+   * const items = SetterRatifierUtils.ratify({
+   *   tree: Tree.create([offer]),
+   * });
    * console.log(items.length);
    * ```
    */

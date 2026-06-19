@@ -9,7 +9,12 @@ import {
 import { MAX_COLLATERALS, MAX_TICK } from "../constants.js";
 import { InvalidOfferParameterError } from "../errors.js";
 import { MarketUtils } from "../market/index.js";
-import { type IOffer, type OfferStruct, OfferUtils } from "../offers/index.js";
+import {
+  type IOffer,
+  Offer,
+  type OfferStruct,
+  OfferUtils,
+} from "../offers/index.js";
 
 /**
  * One mempool payload item: a maker-side `Offer` together with the opaque
@@ -26,10 +31,34 @@ import { type IOffer, type OfferStruct, OfferUtils } from "../offers/index.js";
  *
  * @example
  * ```ts
- * import type { Payload } from "@morpho-org/midnight-sdk";
+ * import { Offer, type Payload } from "@morpho-org/midnight-sdk";
+ * import { zeroAddress } from "viem";
  *
+ * const offer = Offer.create({
+ *   market: {
+ *     loanToken: "0x0000000000000000000000000000000000006000",
+ *     collateralParams: [
+ *       {
+ *         token: "0x0000000000000000000000000000000000007000",
+ *         lltv: 770000000000000000n,
+ *         maxLif: 1061007957559681697n,
+ *         oracle: "0x0000000000000000000000000000000000008000",
+ *       },
+ *     ],
+ *     maturity: 54_000n,
+ *     rcfThreshold: 0n,
+ *     enterGate: zeroAddress,
+ *     liquidatorGate: zeroAddress,
+ *   },
+ *   buy: true,
+ *   maker: "0x0000000000000000000000000000000000009000",
+ *   tick: 5_000n,
+ *   expiry: 3_600n,
+ *   ratifier: "0x0000000000000000000000000000000000004000",
+ *   maxUnits: 100n,
+ * });
  * const item: Payload.Item = {
- *   offer: {} as never,
+ *   offer,
  *   ratifierData: "0x",
  * };
  * console.log(item.ratifierData);
@@ -227,12 +256,39 @@ const itemsAbi = [
  *   contain at least one item and fit within payload byte-size limits.
  * @returns The encoded payload as a `Hex` string, ready to include in onchain
  *   mempool submission calldata.
- * @throws {DecodeError} when the item list is empty or encoded size exceeds SDK byte-size limits.
+ * @throws {DecodeError} when the item list is empty, encoding or compression
+ *   exceeds SDK byte-size limits, or a non-empty offer fails payload validation
+ *   for collateral requirements, maturity timing, expiry range, tick bounds, or
+ *   `maxUnits`/`maxAssets` cap shape.
  * @example
  * ```ts
- * import { Payload } from "@morpho-org/midnight-sdk";
+ * import { Offer, Payload } from "@morpho-org/midnight-sdk";
+ * import { zeroAddress } from "viem";
  *
- * const encoded = await Payload.encode([{ offer: {} as never, ratifierData: "0x" }]);
+ * const offer = Offer.create({
+ *   market: {
+ *     loanToken: "0x0000000000000000000000000000000000006000",
+ *     collateralParams: [
+ *       {
+ *         token: "0x0000000000000000000000000000000000007000",
+ *         lltv: 770000000000000000n,
+ *         maxLif: 1061007957559681697n,
+ *         oracle: "0x0000000000000000000000000000000000008000",
+ *       },
+ *     ],
+ *     maturity: 54_000n,
+ *     rcfThreshold: 0n,
+ *     enterGate: zeroAddress,
+ *     liquidatorGate: zeroAddress,
+ *   },
+ *   buy: true,
+ *   maker: "0x0000000000000000000000000000000000009000",
+ *   tick: 5_000n,
+ *   expiry: 3_600n,
+ *   ratifier: "0x0000000000000000000000000000000000004000",
+ *   maxUnits: 100n,
+ * });
+ * const encoded = await Payload.encode([{ offer, ratifierData: "0x" }]);
  * console.log(encoded);
  * ```
  */
@@ -281,9 +337,34 @@ export async function encode(items: readonly Item[]): Promise<Hex> {
  * @throws {DecodeError} when the payload is malformed or exceeds protocol limits.
  * @example
  * ```ts
- * import { Payload } from "@morpho-org/midnight-sdk";
+ * import { Offer, Payload } from "@morpho-org/midnight-sdk";
+ * import { zeroAddress } from "viem";
  *
- * const items = await Payload.decode("0x" as never);
+ * const offer = Offer.create({
+ *   market: {
+ *     loanToken: "0x0000000000000000000000000000000000006000",
+ *     collateralParams: [
+ *       {
+ *         token: "0x0000000000000000000000000000000000007000",
+ *         lltv: 770000000000000000n,
+ *         maxLif: 1061007957559681697n,
+ *         oracle: "0x0000000000000000000000000000000000008000",
+ *       },
+ *     ],
+ *     maturity: 54_000n,
+ *     rcfThreshold: 0n,
+ *     enterGate: zeroAddress,
+ *     liquidatorGate: zeroAddress,
+ *   },
+ *   buy: true,
+ *   maker: "0x0000000000000000000000000000000000009000",
+ *   tick: 5_000n,
+ *   expiry: 3_600n,
+ *   ratifier: "0x0000000000000000000000000000000000004000",
+ *   maxUnits: 100n,
+ * });
+ * const encoded = await Payload.encode([{ offer, ratifierData: "0x" }]);
+ * const items = await Payload.decode(encoded);
  * console.log(items.length);
  * ```
  */
@@ -292,6 +373,11 @@ export async function decode(
   options?: DecodeOptions,
 ): Promise<Item[]> {
   const maxItems = resolveMaxItems(options?.maxItems);
+  if (payload.length > MAX_PAYLOAD_HEX_LENGTH) {
+    throw new DecodeError(
+      `payload hex exceeds ${MAX_PAYLOAD_HEX_LENGTH} characters`,
+    );
+  }
   const bytes = hexToBytes(payload);
   if (bytes.length < HEADER_BYTES) {
     throw new DecodeError("payload too short for header");
@@ -344,7 +430,7 @@ function decodeItemsBytes(decoded: Uint8Array): Item[] {
     return raw.map((entry) => {
       assertApiValidOfferStruct(entry.offer);
       return {
-        offer: OfferUtils.normalizeOffer(entry.offer),
+        offer: Offer.from(entry.offer),
         ratifierData: entry.ratifierData,
       };
     });

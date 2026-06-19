@@ -33,8 +33,14 @@ import {
  * @example
  * ```ts
  * import { fetchPosition } from "@morpho-org/midnight-sdk";
+ * import { createPublicClient, http } from "viem";
+ * import { base } from "viem/chains";
  *
- * const position = await fetchPosition({} as never, {} as never);
+ * const client = createPublicClient({ chain: base, transport: http() });
+ * const position = await fetchPosition(client, {
+ *   marketId: "0x12590ae1aee324a005be565f3bcdd16dbf8daf7969b26c181c8b8f467dad9f67",
+ *   user: "0x0000000000000000000000000000000000009000",
+ * });
  * console.log(position.debt);
  * ```
  */
@@ -115,8 +121,14 @@ export async function fetchPosition(
  * @example
  * ```ts
  * import { fetchAccrualPosition } from "@morpho-org/midnight-sdk";
+ * import { createPublicClient, http } from "viem";
+ * import { base } from "viem/chains";
  *
- * const position = await fetchAccrualPosition({} as never, {} as never);
+ * const client = createPublicClient({ chain: base, transport: http() });
+ * const position = await fetchAccrualPosition(client, {
+ *   marketId: "0x12590ae1aee324a005be565f3bcdd16dbf8daf7969b26c181c8b8f467dad9f67",
+ *   user: "0x0000000000000000000000000000000000009000",
+ * });
  * console.log(position.market.id);
  * ```
  */

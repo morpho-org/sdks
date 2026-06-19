@@ -1,5 +1,5 @@
 import { encode as encodePayload } from "../signatures/Payload.js";
-import { TreeUtils } from "../signatures/TreeUtils.js";
+import { Tree } from "../signatures/Tree.js";
 import {
   buildBookPath,
   mapBookMarket,
@@ -65,8 +65,6 @@ export type {
   MidnightApiConfig,
   MidnightApiConstructorConfig,
   MidnightApiFetch,
-  MidnightApiOffer,
-  MidnightApiOfferMarket,
   MidnightApiPriceLevel,
   MidnightApiQuote,
   MidnightApiQuoteAssetsTarget,
@@ -77,7 +75,7 @@ export type {
   MidnightApiQuoteWithoutGuard,
   MidnightApiRequestOptions,
   MidnightApiSlippage,
-  MidnightApiTakeableOffer,
+  MidnightApiTake,
   MidnightApiTakeableOffersResult,
   ValidateMempoolItemsParams,
   ValidateMempoolPayloadParams,
@@ -194,7 +192,7 @@ export class MidnightApi {
    * const book = await MidnightApi.fetchBook({
    *   marketId: "0x12590ae1aee324a005be565f3bcdd16dbf8daf7969b26c181c8b8f467dad9f67",
    * });
-   * console.log(book.data.id);
+   * console.log(book.data.marketId);
    * ```
    */
   public static async fetchBook(
@@ -255,7 +253,7 @@ export class MidnightApi {
    * Fetches executable offers for one side of a Midnight book.
    *
    * @param params - Market id, side, and optional request configuration.
-   * @returns Takeable offers mapped to SDK camelCase fields.
+   * @returns ABI-ready take objects mapped from the API response.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
@@ -292,7 +290,7 @@ export class MidnightApi {
    * Fetches a bundle-ready quote for one side of a Midnight book.
    *
    * @param params - Market id, side, target size, price guard, and optional request configuration.
-   * @returns Quote and signed takeable-offer caps mapped to SDK camelCase fields.
+   * @returns Quote and signed ABI-ready take caps mapped from the API response.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
@@ -345,7 +343,7 @@ export class MidnightApi {
    * Fetches one maker's unexpired, unmatured takeable offers.
    *
    * @param params - Maker filter, optional market/group filters, pagination, and request configuration.
-   * @returns Paginated takeable offers mapped to SDK camelCase fields.
+   * @returns Paginated ABI-ready take objects mapped from the API response.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
@@ -436,11 +434,37 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
    * @example
    * ```ts
+   * import { Offer } from "@morpho-org/midnight-sdk";
    * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
+   * import { zeroAddress } from "viem";
+   *
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
    *
    * const validation = await MidnightApi.validateMempoolItems({
    *   chainId: 8453,
-   *   items: [{ offer: {} as never, ratifierData: "0x" }],
+   *   items: [{ offer, ratifierData: "0x" }],
    * });
    * console.log(validation.valid);
    * ```
@@ -476,11 +500,37 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
    * @example
    * ```ts
+   * import { Offer } from "@morpho-org/midnight-sdk";
    * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
+   * import { zeroAddress } from "viem";
+   *
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
    *
    * const validation = await MidnightApi.validateMempoolTree({
    *   chainId: 8453,
-   *   tree: [{} as never],
+   *   tree: [offer],
    * });
    * console.log(validation.valid);
    * ```
@@ -489,7 +539,7 @@ export class MidnightApi {
     params: ValidateMempoolTreeParams,
   ): Promise<MempoolPayloadValidationResult> {
     const input = params;
-    const tree = TreeUtils.normalize(input.tree);
+    const tree = Tree.from(input.tree);
 
     return MidnightApi.validateMempoolItems({
       baseUrl: input.baseUrl,
@@ -582,7 +632,7 @@ export class MidnightApi {
    * const book = await api.fetchBook({
    *   marketId: "0x12590ae1aee324a005be565f3bcdd16dbf8daf7969b26c181c8b8f467dad9f67",
    * });
-   * console.log(book.data.id);
+   * console.log(book.data.marketId);
    * ```
    */
   public fetchBook(
@@ -626,7 +676,7 @@ export class MidnightApi {
    * Fetches executable offers for one book side with this client's configuration.
    *
    * @param params - Market id and side.
-   * @returns Takeable offers mapped to SDK camelCase fields.
+   * @returns ABI-ready take objects mapped from the API response.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
@@ -654,7 +704,7 @@ export class MidnightApi {
    * Fetches a bundle-ready quote with this client's configuration.
    *
    * @param params - Market id, side, target size, and price guard.
-   * @returns Quote and signed takeable-offer caps mapped to SDK camelCase fields.
+   * @returns Quote and signed ABI-ready take caps mapped from the API response.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
@@ -683,7 +733,7 @@ export class MidnightApi {
    * Fetches one maker's takeable offers with this client's configuration.
    *
    * @param params - Maker filter, optional market/group filters, and pagination.
-   * @returns Paginated takeable offers mapped to SDK camelCase fields.
+   * @returns Paginated ABI-ready take objects mapped from the API response.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API success response is not JSON.
    * @example
@@ -746,12 +796,37 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
    * @example
    * ```ts
+   * import { Offer } from "@morpho-org/midnight-sdk";
    * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
+   * import { zeroAddress } from "viem";
    *
    * const api = new MidnightApi();
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
    * const validation = await api.validateMempoolItems({
    *   chainId: 8453,
-   *   items: [{ offer: {} as never, ratifierData: "0x" }],
+   *   items: [{ offer, ratifierData: "0x" }],
    * });
    * console.log(validation.valid);
    * ```
@@ -778,10 +853,38 @@ export class MidnightApi {
    * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
    * @example
    * ```ts
+   * import { Offer } from "@morpho-org/midnight-sdk";
    * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
+   * import { zeroAddress } from "viem";
    *
    * const api = new MidnightApi();
-   * const validation = await api.validateMempoolTree({ chainId: 8453, tree: [{} as never] });
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
+   * const validation = await api.validateMempoolTree({
+   *   chainId: 8453,
+   *   tree: [offer],
+   * });
    * console.log(validation.valid);
    * ```
    */
