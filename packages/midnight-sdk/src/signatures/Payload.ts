@@ -256,7 +256,7 @@ const itemsAbi = [
  *
  * Use after ratifier utilities have produced payload-ready items and before an
  * onchain mempool submission. Normal SDK maker flows should validate the tree
- * with `Tree.validateMempool` before ratification; use
+ * with `Tree.mempoolValidate` before ratification; use
  * `MidnightApi.validateMempoolPayload` only when validating already encoded
  * payload bytes.
  *

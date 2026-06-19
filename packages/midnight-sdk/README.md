@@ -91,7 +91,7 @@ export async function makeBaseUsdcWethOffers(params: {
 
   const tree = Tree.create([groupedLendOffers, standaloneBorrowOffer]);
 
-  const treeValidation = await tree.validateMempool({
+  const treeValidation = await tree.mempoolValidate({
     chainId,
   });
   if (!treeValidation.valid) {
@@ -232,7 +232,7 @@ one place, while the SDK still owns endpoint paths, HTTP methods, request bodies
 normalization. Caller inputs and successful JSON output shapes are trusted at runtime; returned
 TypeScript types model the API contract.
 
-Use `tree.validateMempool({ chainId })` in normal make-side flows before the maker signs or approves
+Use `tree.mempoolValidate({ chainId })` in normal make-side flows before the maker signs or approves
 the root. Pass `apiUrl` to that method when using a custom Midnight API URL. `MidnightApi` keeps the
 raw HTTP surface, including `validateMempoolPayload` for already encoded payload bytes.
 

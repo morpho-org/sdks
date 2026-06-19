@@ -784,7 +784,7 @@ export namespace EcrecoverRatifierUtils {
   /**
    * Signs or consumes a tree signature and returns payload-ready items.
    *
-   * Use after `Tree.validateMempool` and before `Payload.encode`.
+   * Use after `Tree.mempoolValidate` and before `Payload.encode`.
    * The returned items preserve tree leaf order and include ratifier data
    * required by takers. The group id is stored on each inline offer.
    *

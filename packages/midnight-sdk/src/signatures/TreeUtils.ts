@@ -267,14 +267,14 @@ export type TreeCreateParams = readonly GroupInput[];
 export type TreeInput = Tree | TreeCreateParams;
 
 /**
- * Parameters for {@link Tree.validateMempool}.
+ * Parameters for {@link Tree.mempoolValidate}.
  *
  * Use this when an already-created tree should be validated by the Midnight
  * API before wallet signature or root approval.
  *
  * @example
  * ```ts
- * import { Offer, Tree, type TreeValidateMempoolParams } from "@morpho-org/midnight-sdk";
+ * import { Offer, Tree, type TreeMempoolValidateParams } from "@morpho-org/midnight-sdk";
  * import { zeroAddress } from "viem";
  *
  * const offer = Offer.create({
@@ -294,12 +294,12 @@ export type TreeInput = Tree | TreeCreateParams;
  *   maxUnits: 100n,
  * });
  * const tree = Tree.create([offer]);
- * const params = { chainId: 8453 } satisfies TreeValidateMempoolParams;
- * const validation = await tree.validateMempool(params);
+ * const params = { chainId: 8453 } satisfies TreeMempoolValidateParams;
+ * const validation = await tree.mempoolValidate(params);
  * console.log(validation.valid);
  * ```
  */
-export interface TreeValidateMempoolParams {
+export interface TreeMempoolValidateParams {
   /** Chain id whose API policy should validate the tree. */
   readonly chainId: number;
   /** Midnight API URL used for the validation HTTP request. Defaults to `https://api.morpho.org/v1/midnight`. */
@@ -313,7 +313,7 @@ export interface TreeValidateMempoolParams {
 }
 
 /**
- * Parameters for {@link TreeUtils.validateMempool}.
+ * Parameters for {@link TreeUtils.mempoolValidate}.
  *
  * Accepts either a built `Tree` or the raw entries accepted by `Tree.create`.
  * Raw entries are normalized and validated the same way `Tree.create` does
@@ -322,7 +322,7 @@ export interface TreeValidateMempoolParams {
  *
  * @example
  * ```ts
- * import { Offer, TreeUtils, type TreeUtilsValidateMempoolParams } from "@morpho-org/midnight-sdk";
+ * import { Offer, TreeUtils, type TreeUtilsMempoolValidateParams } from "@morpho-org/midnight-sdk";
  * import { zeroAddress } from "viem";
  *
  * const offer = Offer.create({
@@ -344,13 +344,13 @@ export interface TreeValidateMempoolParams {
  * const params = {
  *   chainId: 8453,
  *   tree: [offer],
- * } satisfies TreeUtilsValidateMempoolParams;
- * const validation = await TreeUtils.validateMempool(params);
+ * } satisfies TreeUtilsMempoolValidateParams;
+ * const validation = await TreeUtils.mempoolValidate(params);
  * console.log(validation.valid);
  * ```
  */
-export interface TreeUtilsValidateMempoolParams
-  extends TreeValidateMempoolParams {
+export interface TreeUtilsMempoolValidateParams
+  extends TreeMempoolValidateParams {
   /** Offer tree to validate before ratifier data or payload publication exists. */
   readonly tree: TreeInput;
 }
@@ -413,15 +413,15 @@ export namespace TreeUtils {
    *   ratifier: "0x0000000000000000000000000000000000004000",
    *   maxUnits: 100n,
    * });
-   * const validation = await TreeUtils.validateMempool({
+   * const validation = await TreeUtils.mempoolValidate({
    *   chainId: 8453,
    *   tree: [offer],
    * });
    * console.log(validation.valid);
    * ```
    */
-  export async function validateMempool(
-    params: TreeUtilsValidateMempoolParams,
+  export async function mempoolValidate(
+    params: TreeUtilsMempoolValidateParams,
   ): Promise<MempoolPayloadValidationResult> {
     const offers =
       "offers" in params.tree

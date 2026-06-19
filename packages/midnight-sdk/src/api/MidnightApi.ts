@@ -428,7 +428,7 @@ export class MidnightApi {
    *
    * Use when an integration already has encoded payload bytes and wants API
    * feedback before publishing those bytes onchain. Normal SDK maker flows
-   * should call `Tree.validateMempool` before ratification instead of
+   * should call `Tree.mempoolValidate` before ratification instead of
    * validating again after `Payload.encode`.
    *
    * Sends `POST /mempool/validate` to the Midnight API. Does not read onchain RPC state.
@@ -477,7 +477,7 @@ export class MidnightApi {
    * Encodes SDK-native payload items and validates them against API policy.
    *
    * Use when an integration already has payload-ready items but not encoded
-   * payload bytes. Normal SDK maker flows should call `Tree.validateMempool`
+   * payload bytes. Normal SDK maker flows should call `Tree.mempoolValidate`
    * before ratification. This helper owns the temporary payload encoding for
    * validation only.
    *
@@ -747,7 +747,7 @@ export class MidnightApi {
    *
    * Use when an integration already has encoded payload bytes and wants API
    * feedback before publishing those bytes onchain. Normal SDK maker flows
-   * should call `Tree.validateMempool` before ratification instead of
+   * should call `Tree.mempoolValidate` before ratification instead of
    * validating again after `Payload.encode`.
    *
    * Sends `POST /mempool/validate` to the Midnight API using this client's configuration. Does not read onchain RPC state.
@@ -780,7 +780,7 @@ export class MidnightApi {
    * Validates payload-ready items with this client's configuration.
    *
    * Use when an integration already has payload-ready items but not encoded
-   * payload bytes. Normal SDK maker flows should call `Tree.validateMempool`
+   * payload bytes. Normal SDK maker flows should call `Tree.mempoolValidate`
    * before ratification.
    *
    * Encodes `params.items`, then sends `POST /mempool/validate` to the Midnight API using this client's configuration. Does not read onchain RPC state.

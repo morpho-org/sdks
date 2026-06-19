@@ -6,18 +6,18 @@ import { Group } from "./Group.js";
 import {
   type TreeCreateParams,
   type TreeInput,
+  type TreeMempoolValidateParams,
   type TreeProof,
   TreeUtils,
-  type TreeValidateMempoolParams,
 } from "./TreeUtils.js";
 
 export type {
   TreeCreateParams,
   TreeDescriptor,
   TreeInput,
+  TreeMempoolValidateParams,
   TreeProof,
-  TreeUtilsValidateMempoolParams,
-  TreeValidateMempoolParams,
+  TreeUtilsMempoolValidateParams,
 } from "./TreeUtils.js";
 
 /**
@@ -124,7 +124,7 @@ export class Tree {
    * Creates a tree from groups or standalone offers.
    *
    * Use after `Offer.create` and optional `Group.create`, before
-   * `Tree.validateMempool`, `EcrecoverRatifierUtils.ratify`, or
+   * `Tree.mempoolValidate`, `EcrecoverRatifierUtils.ratify`, or
    * `SetterRatifierUtils.ratify`. Groups are flattened; the tree hashes each
    * offer with the group id already stored on the offer.
    *
@@ -199,16 +199,16 @@ export class Tree {
    *   ratifier: "0x0000000000000000000000000000000000004000",
    *   maxUnits: 100n,
    * });
-   * const validation = await Tree.create([offer]).validateMempool({
+   * const validation = await Tree.create([offer]).mempoolValidate({
    *   chainId: 8453,
    * });
    * console.log(validation.valid);
    * ```
    */
-  public validateMempool(
-    params: TreeValidateMempoolParams,
+  public mempoolValidate(
+    params: TreeMempoolValidateParams,
   ): Promise<MempoolPayloadValidationResult> {
-    return TreeUtils.validateMempool({
+    return TreeUtils.mempoolValidate({
       ...params,
       tree: this,
     });

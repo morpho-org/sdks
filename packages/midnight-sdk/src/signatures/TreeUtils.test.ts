@@ -90,7 +90,7 @@ describe("Tree.create", () => {
   });
 });
 
-describe("Tree.validateMempool", () => {
+describe("Tree.mempoolValidate", () => {
   test("default", async () => {
     const calls: {
       readonly input: Parameters<MidnightApiFetch>[0];
@@ -115,7 +115,7 @@ describe("Tree.validateMempool", () => {
       }),
     ]);
 
-    const result = await tree.validateMempool({
+    const result = await tree.mempoolValidate({
       chainId: 8453,
       apiUrl: "https://api.example/base/",
       fetch,
@@ -146,7 +146,7 @@ describe("Tree.from", () => {
   });
 });
 
-describe("TreeUtils.validateMempool", () => {
+describe("TreeUtils.mempoolValidate", () => {
   test("default", async () => {
     const calls: {
       readonly input: Parameters<MidnightApiFetch>[0];
@@ -174,7 +174,7 @@ describe("TreeUtils.validateMempool", () => {
     });
     const expectedGroup = GroupUtils.hash([offer]);
 
-    const result = await TreeUtils.validateMempool({
+    const result = await TreeUtils.mempoolValidate({
       chainId: 8453,
       tree: [{ offers: [offer] }],
       fetch,
