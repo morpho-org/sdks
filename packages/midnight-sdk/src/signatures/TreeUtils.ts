@@ -86,12 +86,15 @@ function padOfferStructs(offers: readonly OfferStruct[]): OfferStruct[] {
   ];
 }
 
-function assertLeafOffers(offers: readonly OfferStruct[]): void {
+function assertLeafOffers(
+  offers: readonly OfferStruct[],
+  leafHashes: readonly Hash[],
+): void {
   const seen = new Set<Hash>();
-  for (const offer of offers) {
+  for (const [index, offer] of offers.entries()) {
     if (isEmptyOfferStruct(offer)) continue;
 
-    const leafHash = OfferUtils.hashStruct(offer);
+    const leafHash = leafHashes[index]!;
     if (seen.has(leafHash)) {
       throw new InvalidTreeError(`Duplicate offer hash "${leafHash}" in tree.`);
     }
@@ -343,13 +346,13 @@ export namespace TreeUtils {
     }
 
     const offerStructs = padOfferStructs(structs);
-    assertLeafOffers(offerStructs);
+    const leaves = offerStructs.map(OfferUtils.hashStruct);
+    assertLeafOffers(offerStructs, leaves);
 
     const height = Math.log2(offerStructs.length);
     if (height > 20) throw new InvalidTreeHeightError(height);
 
-    let level = offerStructs.map(OfferUtils.hashStruct);
-    const leaves = [...level];
+    let level = [...leaves];
 
     while (level.length > 1) {
       const next: Hash[] = [];

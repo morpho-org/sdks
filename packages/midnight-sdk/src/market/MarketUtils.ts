@@ -134,7 +134,21 @@ export namespace MarketUtils {
    * ```
    */
   export function toStruct(market: MarketInput): MarketParams {
-    return MarketParams.from(market);
+    const params = MarketParams.from(market);
+
+    return {
+      loanToken: params.loanToken,
+      collateralParams: params.collateralParams.map((collateral) => ({
+        token: collateral.token,
+        lltv: collateral.lltv,
+        maxLif: collateral.maxLif,
+        oracle: collateral.oracle,
+      })),
+      maturity: params.maturity,
+      rcfThreshold: params.rcfThreshold,
+      enterGate: params.enterGate,
+      liquidatorGate: params.liquidatorGate,
+    };
   }
 
   /**

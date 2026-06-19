@@ -145,8 +145,15 @@ export namespace GroupUtils {
    * their final group id. The id is derived from the full offer list and
    * applied while encoding, so plain groups cannot drift from offer fields.
    *
+   * This helper does not run {@link OfferUtils.validateOfferGroup} or any other
+   * protocol mechanics checks. For unvalidated plain groups, it does not
+   * guarantee that the resulting structs form an onchain-valid group. Validate
+   * with `Group.create` or {@link OfferUtils.validateOfferGroup} before relying
+   * on the output for signing, tree roots, or calldata.
+   *
    * @param group - Group to encode.
    * @returns ABI-compatible offers in caller order.
+   * @throws {InvalidOfferGroupError} when the group has no offers.
    * @example
    * ```ts
    * import { Group, GroupUtils, Offer } from "@morpho-org/midnight-sdk";

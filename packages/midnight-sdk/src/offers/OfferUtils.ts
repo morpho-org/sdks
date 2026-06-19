@@ -201,22 +201,9 @@ export namespace OfferUtils {
    */
   export function toStruct(params: OfferStructParams): OfferStruct {
     const offer = Offer.from(params.offer);
-    const market = MarketUtils.toStruct(offer.market);
 
     return {
-      market: {
-        loanToken: market.loanToken,
-        collateralParams: market.collateralParams.map((collateral) => ({
-          token: collateral.token,
-          lltv: collateral.lltv,
-          maxLif: collateral.maxLif,
-          oracle: collateral.oracle,
-        })),
-        maturity: market.maturity,
-        rcfThreshold: market.rcfThreshold,
-        enterGate: market.enterGate,
-        liquidatorGate: market.liquidatorGate,
-      },
+      market: MarketUtils.toStruct(offer.market),
       buy: offer.buy,
       maker: offer.maker,
       start: offer.start,
@@ -690,16 +677,6 @@ export namespace OfferUtils {
 
     const offers = offerInputs.map((offer) => Offer.from(offer));
     const first = offers[0]!;
-
-    if (
-      first.maxUnits < 0n ||
-      first.maxAssets < 0n ||
-      (first.maxAssets === 0n) === (first.maxUnits === 0n)
-    ) {
-      throw new InvalidOfferGroupError(
-        "Every offer must set exactly one non-zero non-negative cap.",
-      );
-    }
 
     const expectedMaker = comparableHex(first.maker);
     const expectedBuy = first.buy;

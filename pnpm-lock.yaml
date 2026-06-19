@@ -401,7 +401,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       viem:
-        specifier: ^2.49.3
+        specifier: 2.52.2
         version: 2.52.2(typescript@6.0.3)(zod@4.4.3)
       vitest:
         specifier: ^4.1.6

@@ -3,7 +3,10 @@ import type { Hex } from "viem";
 import { describe, expect, test } from "vitest";
 
 import { baseMarketParamsInput, baseOffer } from "../__test__/fixtures.js";
-import { InvalidMidnightApiResponseError } from "../errors.js";
+import {
+  InvalidMidnightApiResponseError,
+  MidnightApiError,
+} from "../errors.js";
 import * as Payload from "../signatures/Payload.js";
 import { MIDNIGHT_SDK_VERSION } from "../version.js";
 import { MidnightApi, type MidnightApiFetch } from "./MidnightApi.js";
@@ -299,6 +302,31 @@ describe("MidnightApi.validateMempoolPayload", () => {
       details: [{ field: "limit", issue: "Limit must be greater than 0." }],
       requestId: "req-123",
     });
+  });
+
+  test("error: MidnightApiError preserves malformed error body cause", async () => {
+    const fetch: MidnightApiFetch = async () =>
+      new Response("not json", {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+
+    try {
+      await MidnightApi.validateMempoolPayload({
+        chainId: 8453,
+        payload: "0x0100000000" as Hex,
+        fetch,
+      });
+    } catch (error) {
+      expect(error).toBeInstanceOf(MidnightApiError);
+      if (!(error instanceof MidnightApiError)) throw error;
+
+      expect(error.status).toBe(503);
+      expect(error.cause).toBeInstanceOf(SyntaxError);
+      return;
+    }
+
+    expect.unreachable("Expected malformed API error body to throw.");
   });
 
   test("error: InvalidMidnightApiResponseError", async () => {

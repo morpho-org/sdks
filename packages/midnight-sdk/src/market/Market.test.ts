@@ -144,6 +144,24 @@ describe("MarketUtils", () => {
     ).toBe(7n * CBP);
   });
 
+  test("behavior: toStruct returns a copied ABI object", () => {
+    const params = baseMarketParams();
+    const struct = MarketUtils.toStruct(params);
+
+    expect(struct).toEqual({
+      loanToken: params.loanToken,
+      collateralParams: params.collateralParams,
+      maturity: params.maturity,
+      rcfThreshold: params.rcfThreshold,
+      enterGate: params.enterGate,
+      liquidatorGate: params.liquidatorGate,
+    });
+    expect(struct).not.toBe(params);
+    expect(struct).not.toBeInstanceOf(MarketParams);
+    expect(struct.collateralParams).not.toBe(params.collateralParams);
+    expect(struct.collateralParams[0]).not.toBe(params.collateralParams[0]);
+  });
+
   test("behavior: hash and id are deterministic", () => {
     expect(MarketUtils.hash(baseMarketParamsInput())).toMatchInlineSnapshot(
       `"0xa0dfe829d404251173c3ca4c9da385b1d08459a8c4dee1bc86a8d747e241b653"`,

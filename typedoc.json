@@ -2,6 +2,7 @@
   "$schema": "https://typedoc.org/schema.json",
   "entryPoints": [
     "packages/morpho-sdk/src/index.ts",
+    "packages/midnight-sdk/src/index.ts",
     "packages/evm-simulation/src/index.ts",
     "packages/blue-sdk/src/index.ts",
     "packages/simulation-sdk/src/index.ts",

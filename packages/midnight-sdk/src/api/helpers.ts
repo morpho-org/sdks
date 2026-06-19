@@ -66,6 +66,7 @@ export async function requestMidnightApi<Response = unknown>(
 
   const response = await (params.fetch ?? globalThis.fetch)(url, init);
   let json: unknown;
+  let jsonParseError: unknown;
   try {
     json = await response.json();
   } catch (error) {
@@ -75,6 +76,7 @@ export async function requestMidnightApi<Response = unknown>(
         { cause: error },
       );
     }
+    jsonParseError = error;
     json = undefined;
   }
 
@@ -89,6 +91,7 @@ export async function requestMidnightApi<Response = unknown>(
       details: error != null && "details" in error ? error.details : undefined,
       requestId:
         typeof error?.request_id === "string" ? error.request_id : undefined,
+      cause: jsonParseError,
     });
   }
 
