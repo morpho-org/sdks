@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
 # list-fix-rubric-agents.sh — list agents that carry a `## Fix rubric` section.
 #
-# Used by pr-fix's confidence-gate rubric loop and by the bats invariant that
-# pins the fix-applicable set. Single source of truth: walks the engine's
-# agents/ directory and emits one path per line.
+# Used by /pr-fix's confidence-gate rubric loop. Single source of truth: walks
+# the engine's agents/ directory and emits one path per line.
 #
 # Usage:
 #   list-fix-rubric-agents.sh
-#       Defaults to ${CLAUDE_PLUGIN_ROOT}/skills/pr-review-engine/agents/ if
-#       CLAUDE_PLUGIN_ROOT is set; falls back to a path relative to the
-#       script's own location otherwise.
+#       Resolves the engine's agents/ as a fixed sibling of this script's
+#       scripts/ directory.
 #   list-fix-rubric-agents.sh <agents-dir>
 #       Use the given directory.
 
@@ -17,9 +15,12 @@ set -euo pipefail
 
 if [ $# -ge 1 ]; then
   AGENTS_DIR="$1"
-elif [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
-  AGENTS_DIR="${CLAUDE_PLUGIN_ROOT}/skills/pr-review-engine/agents"
 else
+  # In-repo layout: the engine's agents/ is always a fixed sibling of scripts/.
+  # Deliberately NO CLAUDE_PLUGIN_ROOT branch — that var points at the upstream
+  # plugin-cache `skills/pr-review-engine/agents` path, which does not exist in
+  # this repo; with the var set in a plugin host the script would resolve to a
+  # missing dir and exit 1, silently breaking /pr-fix's rubric discovery.
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   AGENTS_DIR="${SCRIPT_DIR}/../agents"
 fi
