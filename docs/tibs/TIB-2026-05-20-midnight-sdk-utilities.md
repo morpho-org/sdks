@@ -437,9 +437,9 @@ Make-offer helpers should support the limit-order path without importing app cod
 - `OfferUtils.validateOfferGroup` enforces protocol group checks: non-empty groups, same maker, same side, same loan token, valid receiver zeroing, and exactly one non-zero unit/asset cap;
 - `Tree.create([...])` builds a Merkle tree from `Group` instances or standalone `Offer` instances, preserving offer order across groups and hashing each offer with the group id already stored on the offer;
 - expose tree, Merkle root, proof, ratifier-data, root-approval, mempool-submission, and API-validation helpers behind stable SDK classes and class methods where the return value is class-shaped;
-- validate maker trees through `MidnightApi` before wallet signature/root approval; validation encodes empty per-leaf `ratifierData` because the API endpoint inspects offer contents, not ratifier data;
+- validate maker trees through `Tree.validateMempool` before wallet signature/root approval; validation encodes empty per-leaf `ratifierData` because the API endpoint inspects offer contents, not ratifier data;
 - keep offer publication/submission onchain by sending the encoded `Payload` bytes to the mempool contract; the current public API does not expose a submit endpoint.
-- keep gatekeeper policy out of raw protocol helpers and surface API validation issues through `MidnightApi`.
+- keep gatekeeper policy out of raw protocol helpers and surface tree validation issues through `Tree.validateMempool`, while raw payload validation remains on `MidnightApi`.
 
 ### Call Descriptors
 
@@ -518,13 +518,11 @@ import {
   Payload,
   Tree,
 } from "@morpho-org/midnight-sdk";
-import { MidnightApi } from "@morpho-org/midnight-sdk/api";
 
-const api = new MidnightApi();
 const group = Group.create(offers);
 const tree = Tree.create([group]);
 
-const validation = await api.validateMempoolTree({ tree, chainId });
+const validation = await tree.validateMempool({ chainId });
 if (!validation.valid) {
   // App code maps API validation issues to its own UX/error handling.
 }
@@ -558,7 +556,8 @@ Pure utility namespaces stay available for object-first integrations:
 - `SetterRatifierUtils.encodeRatifierData`
 - `SetterRatifierUtils.decodeRatifierData`
 - `Payload.encode` / `Payload.decode` for versioned Midnight mempool payload bytes.
-- `MidnightApi` from `@morpho-org/midnight-sdk/api` for book, quote, takeable-offer, and payload/item/tree validation helpers, callable directly with the default API URL or as a configured instance.
+- `Tree.validateMempool` / `TreeUtils.validateMempool` for make-side tree policy validation before ratification.
+- `MidnightApi` from `@morpho-org/midnight-sdk/api` for book, quote, takeable-offer, and raw payload/item validation helpers, callable directly with the default API URL or as a configured instance.
 
 The app remains responsible for sequencing prompts. The SDK returns typed descriptors for "sign this
 typed data", "call this contract", "submit this payload", and "validate this tree/payload".

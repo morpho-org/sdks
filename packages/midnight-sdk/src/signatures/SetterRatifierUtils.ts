@@ -211,7 +211,7 @@ export namespace SetterRatifierUtils {
   /**
    * Returns payload-ready items after a Setter root has been approved.
    *
-   * Use after `MidnightApi.validateMempoolTree` and the root approval
+   * Use after `Tree.validateMempool` and the root approval
    * transaction has been submitted. The returned items can be passed directly
    * to `Payload.encode`.
    *

@@ -1,5 +1,11 @@
 import { type BigIntish, deepFreeze } from "@morpho-org/morpho-ts";
 import { concat, type Hash, keccak256 } from "viem";
+import { MidnightApi } from "../api/MidnightApi.js";
+import type {
+  MempoolPayloadValidationResult,
+  MidnightApiFetch,
+  MidnightApiRequestOptions,
+} from "../api/types.js";
 import { InvalidTreeError, InvalidTreeHeightError } from "../errors.js";
 import {
   type IOffer,
@@ -7,7 +13,9 @@ import {
   type OfferStruct,
   OfferUtils,
 } from "../offers/index.js";
+import { Group } from "./Group.js";
 import { type GroupInput, GroupUtils } from "./GroupUtils.js";
+import { encode as encodePayload } from "./Payload.js";
 import type { Tree } from "./Tree.js";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
@@ -259,6 +267,95 @@ export type TreeCreateParams = readonly GroupInput[];
 export type TreeInput = Tree | TreeCreateParams;
 
 /**
+ * Parameters for {@link Tree.validateMempool}.
+ *
+ * Use this when an already-created tree should be validated by the Midnight
+ * API before wallet signature or root approval.
+ *
+ * @example
+ * ```ts
+ * import { Offer, Tree, type TreeValidateMempoolParams } from "@morpho-org/midnight-sdk";
+ * import { zeroAddress } from "viem";
+ *
+ * const offer = Offer.create({
+ *   market: {
+ *     loanToken: "0x0000000000000000000000000000000000006000",
+ *     collateralParams: [],
+ *     maturity: 54_000n,
+ *     rcfThreshold: 0n,
+ *     enterGate: zeroAddress,
+ *     liquidatorGate: zeroAddress,
+ *   },
+ *   buy: true,
+ *   maker: "0x0000000000000000000000000000000000009000",
+ *   tick: 5_000n,
+ *   expiry: 3_600n,
+ *   ratifier: "0x0000000000000000000000000000000000004000",
+ *   maxUnits: 100n,
+ * });
+ * const tree = Tree.create([offer]);
+ * const params = { chainId: 8453 } satisfies TreeValidateMempoolParams;
+ * const validation = await tree.validateMempool(params);
+ * console.log(validation.valid);
+ * ```
+ */
+export interface TreeValidateMempoolParams {
+  /** Chain id whose API policy should validate the tree. */
+  readonly chainId: number;
+  /** Midnight API URL used for the validation HTTP request. Defaults to `https://api.morpho.org/v1/midnight`. */
+  readonly apiUrl?: string | URL;
+  /** Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot. */
+  readonly timestamp?: string | Date;
+  /** Fetch implementation used for the API call. Defaults to the global `fetch`. */
+  readonly fetch?: MidnightApiFetch;
+  /** Additional fetch options forwarded to the API request. */
+  readonly request?: MidnightApiRequestOptions;
+}
+
+/**
+ * Parameters for {@link TreeUtils.validateMempool}.
+ *
+ * Accepts either a built `Tree` or the raw entries accepted by `Tree.create`.
+ * Raw entries are normalized and validated the same way `Tree.create` does
+ * before the temporary validation payload is encoded and sent to the Midnight
+ * API.
+ *
+ * @example
+ * ```ts
+ * import { Offer, TreeUtils, type TreeUtilsValidateMempoolParams } from "@morpho-org/midnight-sdk";
+ * import { zeroAddress } from "viem";
+ *
+ * const offer = Offer.create({
+ *   market: {
+ *     loanToken: "0x0000000000000000000000000000000000006000",
+ *     collateralParams: [],
+ *     maturity: 54_000n,
+ *     rcfThreshold: 0n,
+ *     enterGate: zeroAddress,
+ *     liquidatorGate: zeroAddress,
+ *   },
+ *   buy: true,
+ *   maker: "0x0000000000000000000000000000000000009000",
+ *   tick: 5_000n,
+ *   expiry: 3_600n,
+ *   ratifier: "0x0000000000000000000000000000000000004000",
+ *   maxUnits: 100n,
+ * });
+ * const params = {
+ *   chainId: 8453,
+ *   tree: [offer],
+ * } satisfies TreeUtilsValidateMempoolParams;
+ * const validation = await TreeUtils.validateMempool(params);
+ * console.log(validation.valid);
+ * ```
+ */
+export interface TreeUtilsValidateMempoolParams
+  extends TreeValidateMempoolParams {
+  /** Offer tree to validate before ratifier data or payload publication exists. */
+  readonly tree: TreeInput;
+}
+
+/**
  * Object-compatible tree hashing, root, proof, and verification helpers.
  *
  * Use these when you need pure tree hashing, descriptor construction, or proof
@@ -274,6 +371,79 @@ export type TreeInput = Tree | TreeCreateParams;
  * ```
  */
 export namespace TreeUtils {
+  /**
+   * Validates a tree against Midnight mempool API policy.
+   *
+   * This is an API-backed convenience: it encodes each tree leaf with empty
+   * `ratifierData`, then sends the temporary payload to the Midnight API
+   * `POST /mempool/validate` endpoint. API policy only inspects offer contents,
+   * so use this after `Tree.create` and before wallet signature or Setter root
+   * approval.
+   *
+   * @param params.chainId - Chain id whose API policy should validate the tree.
+   * @param params.tree - Offer tree to validate before ratifier data or payload publication exists.
+   * @param params.apiUrl - Optional Midnight API URL override used for the validation HTTP request.
+   * @param params.timestamp - Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot.
+   * @param params.fetch - Optional fetch implementation override used for the API call.
+   * @param params.request - Optional fetch options forwarded to the API request.
+   * @returns API issues and `valid` summary.
+   * @throws {InvalidTreeError} when the tree is empty, all padding, or duplicated.
+   * @throws {InvalidTreeHeightError} when the resulting height is unsupported.
+   * @throws {Payload.DecodeError} when validation payload encoding fails.
+   * @throws {MidnightApiError} when the API returns a non-2xx response.
+   * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
+   * @example
+   * ```ts
+   * import { Offer, TreeUtils } from "@morpho-org/midnight-sdk";
+   * import { zeroAddress } from "viem";
+   *
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: zeroAddress,
+   *     liquidatorGate: zeroAddress,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
+   * const validation = await TreeUtils.validateMempool({
+   *   chainId: 8453,
+   *   tree: [offer],
+   * });
+   * console.log(validation.valid);
+   * ```
+   */
+  export async function validateMempool(
+    params: TreeUtilsValidateMempoolParams,
+  ): Promise<MempoolPayloadValidationResult> {
+    const offers =
+      "offers" in params.tree
+        ? params.tree.offers
+        : params.tree.flatMap((entry) =>
+            "offers" in entry ? Group.from(entry).offers : [Offer.from(entry)],
+          );
+    buildDescriptor(offers);
+    const payload = await encodePayload(
+      offers.map((offer) => ({ offer, ratifierData: "0x" as const })),
+    );
+
+    return MidnightApi.validateMempoolPayload({
+      baseUrl: params.apiUrl,
+      fetch: params.fetch,
+      request: params.request,
+      chainId: params.chainId,
+      timestamp: params.timestamp,
+      payload,
+    });
+  }
+
   /**
    * Computes HashLib node hash from left and right child hashes.
    *

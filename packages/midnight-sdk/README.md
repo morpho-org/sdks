@@ -25,7 +25,6 @@ payload bytes onchain.
 
 ```ts
 import { addresses } from "@morpho-org/morpho-ts";
-import { MidnightApi } from "@morpho-org/midnight-sdk/api";
 import {
   EcrecoverRatifierUtils,
   Group,
@@ -92,9 +91,8 @@ export async function makeBaseUsdcWethOffers(params: {
 
   const tree = Tree.create([groupedLendOffers, standaloneBorrowOffer]);
 
-  const treeValidation = await MidnightApi.validateMempoolTree({
+  const treeValidation = await tree.validateMempool({
     chainId,
-    tree,
   });
   if (!treeValidation.valid) {
     return { ok: false as const, issues: treeValidation.issues };
@@ -111,14 +109,6 @@ export async function makeBaseUsdcWethOffers(params: {
       }),
   });
   const payload = await Payload.encode(items);
-
-  const payloadValidation = await MidnightApi.validateMempoolPayload({
-    chainId,
-    payload,
-  });
-  if (!payloadValidation.valid) {
-    return { ok: false as const, issues: payloadValidation.issues };
-  }
 
   const transactionHash = await params.walletClient.sendTransaction({
     account: params.maker,
@@ -241,6 +231,10 @@ request options. The instance keeps `baseUrl`, `fetch`, headers, credentials, an
 one place, while the SDK still owns endpoint paths, HTTP methods, request bodies, and response
 normalization. Caller inputs and successful JSON output shapes are trusted at runtime; returned
 TypeScript types model the API contract.
+
+Use `tree.validateMempool({ chainId })` in normal make-side flows before the maker signs or approves
+the root. Pass `apiUrl` to that method when using a custom Midnight API URL. `MidnightApi` keeps the
+raw HTTP surface, including `validateMempoolPayload` for already encoded payload bytes.
 
 ## Development
 

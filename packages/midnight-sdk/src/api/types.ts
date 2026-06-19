@@ -3,7 +3,6 @@ import type { Address, Hash, Hex } from "viem";
 
 import type { OfferStruct } from "../offers/Offer.js";
 import type { Item as MidnightPayloadItem } from "../signatures/Payload.js";
-import type { TreeInput } from "../signatures/Tree.js";
 
 /**
  * Fetch implementation used by Midnight API helpers.
@@ -88,18 +87,6 @@ export interface ValidateMempoolItemsParams extends MidnightApiConfig {
   readonly chainId: number;
   /** SDK-native payload items to encode before API validation. */
   readonly items: readonly MidnightPayloadItem[];
-  /** Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot. */
-  readonly timestamp?: string | Date;
-}
-
-/**
- * Parameters for {@link MidnightApi.validateMempoolTree}.
- */
-export interface ValidateMempoolTreeParams extends MidnightApiConfig {
-  /** Chain id whose API policy should validate the tree. */
-  readonly chainId: number;
-  /** Offer tree to validate before ratifier data or payload publication exists. */
-  readonly tree: TreeInput;
   /** Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot. */
   readonly timestamp?: string | Date;
 }

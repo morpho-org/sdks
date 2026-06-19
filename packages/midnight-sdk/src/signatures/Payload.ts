@@ -254,8 +254,11 @@ const itemsAbi = [
  * a larger suffix. Item order is preserved verbatim and is the order a consumer
  * sees on decode.
  *
- * Use after ratifier utilities have produced payload-ready items and before
- * `MidnightApi.validateMempoolPayload` or an onchain mempool submission.
+ * Use after ratifier utilities have produced payload-ready items and before an
+ * onchain mempool submission. Normal SDK maker flows should validate the tree
+ * with `Tree.validateMempool` before ratification; use
+ * `MidnightApi.validateMempoolPayload` only when validating already encoded
+ * payload bytes.
  *
  * @param items - Per-leaf items in the order the maker committed to. Must
  *   contain at least one item and fit within payload byte-size limits.

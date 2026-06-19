@@ -373,27 +373,6 @@ describe("MidnightApi.validateMempoolItems", () => {
   });
 });
 
-describe("MidnightApi.validateMempoolTree", () => {
-  test("default", async () => {
-    const { calls, fetch } = createJsonFetch({
-      data: { issues: [] },
-    });
-
-    const result = await MidnightApi.validateMempoolTree({
-      chainId: 8453,
-      tree: [apiValidOffer()],
-      fetch,
-    });
-
-    const body = parseRequestBody(calls[0]!);
-    const decoded = await Payload.decode(body.payload as Hex);
-
-    expect(result.valid).toBe(true);
-    expect(decoded).toHaveLength(1);
-    expect(decoded[0]!.ratifierData).toBe("0x");
-  });
-});
-
 describe("MidnightApi instance", () => {
   test("default", async () => {
     const { calls, fetch } = createJsonFetch({
@@ -401,9 +380,9 @@ describe("MidnightApi instance", () => {
     });
     const api = new MidnightApi({ fetch });
 
-    const result = await api.validateMempoolTree({
+    const result = await api.validateMempoolPayload({
       chainId: 8453,
-      tree: [apiValidOffer()],
+      payload: "0x0100000000" as Hex,
     });
 
     expect(result.valid).toBe(true);

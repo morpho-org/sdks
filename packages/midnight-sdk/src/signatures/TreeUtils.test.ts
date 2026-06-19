@@ -1,14 +1,17 @@
-import { zeroAddress } from "viem";
+import { type Hex, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
+  baseMarketParamsInput,
   baseOffer,
   baseOfferInput,
   group as staleGroup,
 } from "../__test__/fixtures.js";
+import type { MidnightApiFetch } from "../api/index.js";
 import { InvalidTreeError } from "../errors.js";
 import { Offer, OfferUtils } from "../offers/index.js";
 import { Group } from "./Group.js";
 import { GroupUtils } from "./GroupUtils.js";
+import * as Payload from "./Payload.js";
 import { Tree } from "./Tree.js";
 import { TreeUtils } from "./TreeUtils.js";
 
@@ -16,6 +19,7 @@ const root =
   "0x3333333333333333333333333333333333333333333333333333333333333333" as const;
 const zeroBytes32 =
   "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
+const API_VALID_MATURITY = 1_767_279_600n;
 
 const emptyOffer = () =>
   new Offer({
@@ -86,12 +90,107 @@ describe("Tree.create", () => {
   });
 });
 
+describe("Tree.validateMempool", () => {
+  test("default", async () => {
+    const calls: {
+      readonly input: Parameters<MidnightApiFetch>[0];
+      readonly init: Parameters<MidnightApiFetch>[1];
+    }[] = [];
+    const fetch: MidnightApiFetch = async (input, init) => {
+      calls.push({ input, init });
+      return new Response(JSON.stringify({ data: { issues: [] } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+    const tree = Tree.create([
+      baseOffer({
+        market: {
+          ...baseMarketParamsInput(),
+          maturity: API_VALID_MATURITY,
+        },
+        expiry: API_VALID_MATURITY - 60n,
+        maxUnits: 0n,
+        maxAssets: 1_000n,
+      }),
+    ]);
+
+    const result = await tree.validateMempool({
+      chainId: 8453,
+      apiUrl: "https://api.example/base/",
+      fetch,
+    });
+
+    const call = calls[0]!;
+    const body = JSON.parse(String(call.init?.body)) as Readonly<
+      Record<string, unknown>
+    >;
+    expect(call.input).toBeInstanceOf(URL);
+    const url = call.input as URL;
+    const decoded = await Payload.decode(body.payload as Hex);
+
+    expect(result.valid).toBe(true);
+    expect(url.origin).toBe("https://api.example");
+    expect(url.pathname).toBe("/base/mempool/validate");
+    expect(decoded).toHaveLength(1);
+    expect(decoded[0]!.ratifierData).toBe("0x");
+  });
+});
+
 describe("Tree.from", () => {
   test("default", () => {
     const tree = Tree.create([baseOffer({ maxAssets: 0n })]);
 
     expect(Tree.from(tree)).toBe(tree);
     expect(Tree.from([baseOfferInput({ maxAssets: 0n })])).toBeInstanceOf(Tree);
+  });
+});
+
+describe("TreeUtils.validateMempool", () => {
+  test("default", async () => {
+    const calls: {
+      readonly input: Parameters<MidnightApiFetch>[0];
+      readonly init: Parameters<MidnightApiFetch>[1];
+    }[] = [];
+    const fetch: MidnightApiFetch = async (input, init) => {
+      calls.push({ input, init });
+      return new Response(
+        JSON.stringify({ data: { issues: [{ rule: "tick_spacing" }] } }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    };
+    const offer = baseOfferInput({
+      market: {
+        ...baseMarketParamsInput(),
+        maturity: API_VALID_MATURITY,
+      },
+      group: staleGroup,
+      expiry: API_VALID_MATURITY - 60n,
+      maxUnits: 0n,
+      maxAssets: 1_000n,
+    });
+    const expectedGroup = GroupUtils.hash([offer]);
+
+    const result = await TreeUtils.validateMempool({
+      chainId: 8453,
+      tree: [{ offers: [offer] }],
+      fetch,
+    });
+
+    const body = JSON.parse(String(calls[0]!.init?.body)) as Readonly<
+      Record<string, unknown>
+    >;
+    const decoded = await Payload.decode(body.payload as Hex);
+
+    expect(body.chain_id).toBe(8453);
+    expect(result.valid).toBe(false);
+    expect(result.issues).toEqual([{ rule: "tick_spacing" }]);
+    expect(decoded).toHaveLength(1);
+    expect(decoded[0]!.offer.group).toBe(expectedGroup);
+    expect(decoded[0]!.ratifierData).toBe("0x");
   });
 });
 

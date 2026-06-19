@@ -1,5 +1,4 @@
 import { encode as encodePayload } from "../signatures/Payload.js";
-import { Tree } from "../signatures/Tree.js";
 import {
   buildBookPath,
   mapBookMarket,
@@ -33,7 +32,6 @@ import type {
   MidnightApiTakeableOffersResult,
   ValidateMempoolItemsParams,
   ValidateMempoolPayloadParams,
-  ValidateMempoolTreeParams,
 } from "./types.js";
 
 export type {
@@ -73,7 +71,6 @@ export type {
   MidnightApiTakeableOffersResult,
   ValidateMempoolItemsParams,
   ValidateMempoolPayloadParams,
-  ValidateMempoolTreeParams,
 } from "./types.js";
 
 /**
@@ -429,8 +426,10 @@ export class MidnightApi {
   /**
    * Validates an encoded Midnight mempool payload against API policy.
    *
-   * Use after `Payload.encode` and before submitting the payload onchain when a
-   * maker flow wants API feedback before publishing payload bytes onchain.
+   * Use when an integration already has encoded payload bytes and wants API
+   * feedback before publishing those bytes onchain. Normal SDK maker flows
+   * should call `Tree.validateMempool` before ratification instead of
+   * validating again after `Payload.encode`.
    *
    * Sends `POST /mempool/validate` to the Midnight API. Does not read onchain RPC state.
    *
@@ -477,9 +476,10 @@ export class MidnightApi {
   /**
    * Encodes SDK-native payload items and validates them against API policy.
    *
-   * Use after Ecrecover or Setter ratifier utilities have produced items and
-   * before `Payload.encode` output is submitted onchain. This helper owns the
-   * temporary payload encoding for validation only.
+   * Use when an integration already has payload-ready items but not encoded
+   * payload bytes. Normal SDK maker flows should call `Tree.validateMempool`
+   * before ratification. This helper owns the temporary payload encoding for
+   * validation only.
    *
    * Encodes `params.items`, then sends `POST /mempool/validate` to the Midnight API. Does not read onchain RPC state.
    *
@@ -543,82 +543,6 @@ export class MidnightApi {
       chainId: input.chainId,
       timestamp: input.timestamp,
       payload,
-    });
-  }
-
-  /**
-   * Validates a tree before wallet signature or root approval.
-   *
-   * API policy only inspects offer contents, so this helper encodes each
-   * tree leaf with empty `ratifierData` and keeps payload bytes at the edge.
-   * Use after `Tree.create` and before `EcrecoverRatifierUtils.ratify` or
-   * the Setter root approval transaction.
-   *
-   * Encodes `params.tree` with empty ratifier data, then sends `POST /mempool/validate` to the Midnight API. Does not read onchain RPC state.
-   *
-   * @param params.chainId - Chain id whose API policy should validate the tree.
-   * @param params.tree - Offer tree to validate before ratifier data or payload publication exists.
-   * @param params.timestamp - Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot.
-   * @param params.baseUrl - Optional Midnight API base URL override.
-   * @param params.fetch - Optional fetch implementation override.
-   * @param params.request - Optional fetch options forwarded to this request.
-   * @returns API issues and `valid` summary.
-   * @throws {Payload.DecodeError} when validation payload encoding fails.
-   * @throws {MidnightApiError} when the API returns a non-2xx response.
-   * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
-   * @example
-   * ```ts
-   * import { Offer } from "@morpho-org/midnight-sdk";
-   * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
-   * import { zeroAddress } from "viem";
-   *
-   * const offer = Offer.create({
-   *   market: {
-   *     loanToken: "0x0000000000000000000000000000000000006000",
-   *     collateralParams: [
-   *       {
-   *         token: "0x0000000000000000000000000000000000007000",
-   *         lltv: 770000000000000000n,
-   *         maxLif: 1061007957559681697n,
-   *         oracle: "0x0000000000000000000000000000000000008000",
-   *       },
-   *     ],
-   *     maturity: 54_000n,
-   *     rcfThreshold: 0n,
-   *     enterGate: zeroAddress,
-   *     liquidatorGate: zeroAddress,
-   *   },
-   *   buy: true,
-   *   maker: "0x0000000000000000000000000000000000009000",
-   *   tick: 5_000n,
-   *   expiry: 3_600n,
-   *   ratifier: "0x0000000000000000000000000000000000004000",
-   *   maxUnits: 100n,
-   * });
-   *
-   * const validation = await MidnightApi.validateMempoolTree({
-   *   chainId: 8453,
-   *   tree: [offer],
-   * });
-   * console.log(validation.valid);
-   * ```
-   */
-  public static async validateMempoolTree(
-    params: ValidateMempoolTreeParams,
-  ): Promise<MempoolPayloadValidationResult> {
-    const input = params;
-    const tree = Tree.from(input.tree);
-
-    return MidnightApi.validateMempoolItems({
-      baseUrl: input.baseUrl,
-      fetch: input.fetch,
-      request: input.request,
-      chainId: input.chainId,
-      timestamp: input.timestamp,
-      items: tree.offers.map((offer) => ({
-        offer,
-        ratifierData: "0x" as const,
-      })),
     });
   }
 
@@ -821,7 +745,10 @@ export class MidnightApi {
   /**
    * Validates an encoded Midnight mempool payload with this client's configuration.
    *
-   * Use after `Payload.encode` and before submitting the payload onchain.
+   * Use when an integration already has encoded payload bytes and wants API
+   * feedback before publishing those bytes onchain. Normal SDK maker flows
+   * should call `Tree.validateMempool` before ratification instead of
+   * validating again after `Payload.encode`.
    *
    * Sends `POST /mempool/validate` to the Midnight API using this client's configuration. Does not read onchain RPC state.
    *
@@ -852,8 +779,9 @@ export class MidnightApi {
   /**
    * Validates payload-ready items with this client's configuration.
    *
-   * Use after Ecrecover or Setter ratifier utilities have produced items and
-   * before submitting the encoded payload onchain.
+   * Use when an integration already has payload-ready items but not encoded
+   * payload bytes. Normal SDK maker flows should call `Tree.validateMempool`
+   * before ratification.
    *
    * Encodes `params.items`, then sends `POST /mempool/validate` to the Midnight API using this client's configuration. Does not read onchain RPC state.
    *
@@ -905,67 +833,6 @@ export class MidnightApi {
     params: MidnightApiClientParams<ValidateMempoolItemsParams>,
   ): Promise<MempoolPayloadValidationResult> {
     return MidnightApi.validateMempoolItems({
-      ...this.config,
-      ...params,
-    });
-  }
-
-  /**
-   * Validates a tree before ratifier data or payload publication exists.
-   *
-   * Use after `Tree.create` and before wallet signature or Setter root
-   * approval.
-   *
-   * Encodes `params.tree` with empty ratifier data, then sends `POST /mempool/validate` to the Midnight API using this client's configuration. Does not read onchain RPC state.
-   *
-   * @param params.chainId - Chain id whose API policy should validate the tree.
-   * @param params.tree - Offer tree to validate before ratifier data or payload publication exists.
-   * @param params.timestamp - Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot.
-   * @returns API issues and `valid` summary.
-   * @throws {Payload.DecodeError} when validation payload encoding fails.
-   * @throws {MidnightApiError} when the API returns a non-2xx response.
-   * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
-   * @example
-   * ```ts
-   * import { Offer } from "@morpho-org/midnight-sdk";
-   * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
-   * import { zeroAddress } from "viem";
-   *
-   * const api = new MidnightApi();
-   * const offer = Offer.create({
-   *   market: {
-   *     loanToken: "0x0000000000000000000000000000000000006000",
-   *     collateralParams: [
-   *       {
-   *         token: "0x0000000000000000000000000000000000007000",
-   *         lltv: 770000000000000000n,
-   *         maxLif: 1061007957559681697n,
-   *         oracle: "0x0000000000000000000000000000000000008000",
-   *       },
-   *     ],
-   *     maturity: 54_000n,
-   *     rcfThreshold: 0n,
-   *     enterGate: zeroAddress,
-   *     liquidatorGate: zeroAddress,
-   *   },
-   *   buy: true,
-   *   maker: "0x0000000000000000000000000000000000009000",
-   *   tick: 5_000n,
-   *   expiry: 3_600n,
-   *   ratifier: "0x0000000000000000000000000000000000004000",
-   *   maxUnits: 100n,
-   * });
-   * const validation = await api.validateMempoolTree({
-   *   chainId: 8453,
-   *   tree: [offer],
-   * });
-   * console.log(validation.valid);
-   * ```
-   */
-  public validateMempoolTree(
-    params: MidnightApiClientParams<ValidateMempoolTreeParams>,
-  ): Promise<MempoolPayloadValidationResult> {
-    return MidnightApi.validateMempoolTree({
       ...this.config,
       ...params,
     });
