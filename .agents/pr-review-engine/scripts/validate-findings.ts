@@ -383,9 +383,18 @@ export function validateFindingsFromText(
       if (nearest !== null) snappedLine = nearest;
     }
 
-    // Markdown documentation-example filter.
+    // Markdown documentation-example filter. `norm` derives from the
+    // agent-emitted finding.file, so guard the read against path traversal:
+    // confirm the resolved target stays within repoRoot before reading
+    // (defense-in-depth — `norm` is already scope-filtered against the
+    // git-produced changed-files set, which never yields a `..` path). A target
+    // that escapes repoRoot skips the fence check (the finding is then kept).
     if (norm.endsWith(".md") && FP_PATTERNS.test(finding.description)) {
-      const text = readFileText(join(opts.repoRoot, norm));
+      const target = join(opts.repoRoot, norm);
+      const rel = relative(resolve(opts.repoRoot), resolve(target));
+      const withinRepo =
+        rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+      const text = withinRepo ? readFileText(target) : null;
       if (text !== null && isInsideFence(text.split(/\r\n|\r|\n/), line)) {
         dropped.push({
           finding,
