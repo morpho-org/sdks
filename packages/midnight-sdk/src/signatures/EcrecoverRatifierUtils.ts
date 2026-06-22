@@ -17,11 +17,7 @@ import {
 } from "viem";
 import { signTypedData } from "viem/actions";
 import { EIP712_DOMAIN_TYPEHASH } from "../constants.js";
-import {
-  InvalidEcrecoverRatifierSignatureError,
-  InvalidTreeError,
-  InvalidTreeHeightError,
-} from "../errors.js";
+import { InvalidTreeError, InvalidTreeHeightError } from "../errors.js";
 import type { OfferStruct } from "../offers/index.js";
 import type { Item as PayloadItem } from "./Payload.js";
 import type { Tree } from "./Tree.js";
@@ -556,7 +552,6 @@ export namespace EcrecoverRatifierUtils {
    * @param params.client - Viem client whose transport signs the tree typed data.
    * @param params.account - Account used to sign the tree typed data.
    * @returns Signature returned by the client.
-   * @throws {InvalidEcrecoverRatifierSignatureError} when EIP-712 verification rejects the returned signature.
    * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree height is unsupported.
    * @example
@@ -619,23 +614,11 @@ export namespace EcrecoverRatifierUtils {
       ...data,
     });
 
-    let isValid: boolean;
-    try {
-      isValid = await verifyTypedData<Record<string, unknown>, "OfferTree">({
-        ...data,
-        address: signer,
-        signature,
-      });
-    } catch (cause) {
-      throw new InvalidEcrecoverRatifierSignatureError({
-        signer,
-        cause,
-      });
-    }
-
-    if (!isValid) {
-      throw new InvalidEcrecoverRatifierSignatureError({ signer });
-    }
+    await verifyTypedData<Record<string, unknown>, "OfferTree">({
+      ...data,
+      address: signer,
+      signature,
+    });
 
     return signature;
   }
@@ -833,7 +816,6 @@ export namespace EcrecoverRatifierUtils {
    * @param params.account - Optional account used to sign typed data built from `params.tree`.
    * @param params.signature - Optional precomputed signature for `params.tree`.
    * @returns Items containing each offer and its ratifier data.
-   * @throws {InvalidEcrecoverRatifierSignatureError} when EIP-712 verification rejects the returned signature.
    * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree height is unsupported.
    * @example

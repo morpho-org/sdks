@@ -3,11 +3,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { base } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { addresses, baseOffer } from "../__test__/fixtures.js";
-import {
-  InvalidEcrecoverRatifierSignatureError,
-  InvalidTreeError,
-  InvalidTreeHeightError,
-} from "../errors.js";
+import { InvalidTreeError, InvalidTreeHeightError } from "../errors.js";
 import { EcrecoverRatifierUtils } from "./EcrecoverRatifierUtils.js";
 import { Tree } from "./Tree.js";
 import { TreeUtils } from "./TreeUtils.js";
@@ -126,7 +122,7 @@ describe("EcrecoverRatifierUtils.ratify", () => {
     ).rejects.toThrow(InvalidTreeError);
   });
 
-  test("error: InvalidEcrecoverRatifierSignatureError", async () => {
+  test("error: propagates viem signature verification errors", async () => {
     const account = privateKeyToAccount(privateKey);
     const tree = Tree.create([
       baseOffer({ maker: account.address, maxAssets: 0n }),
@@ -142,7 +138,7 @@ describe("EcrecoverRatifierUtils.ratify", () => {
         client,
         account: account.address,
       }),
-    ).rejects.toThrow(InvalidEcrecoverRatifierSignatureError);
+    ).rejects.toThrow();
   });
 });
 

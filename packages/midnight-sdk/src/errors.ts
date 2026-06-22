@@ -1,5 +1,3 @@
-import type { Address } from "viem";
-
 /**
  * Thrown when a Midnight offer group violates protocol-level group mechanics.
  *
@@ -217,35 +215,6 @@ export class InvalidTreeError extends Error {
   public constructor(message: string) {
     super(message);
     this.name = "InvalidTreeError";
-  }
-}
-
-/**
- * Thrown when an Ecrecover signing client returns a signature that fails verification.
- *
- * @example
- * ```ts
- * import { InvalidEcrecoverRatifierSignatureError } from "@morpho-org/midnight-sdk";
- *
- * throw new InvalidEcrecoverRatifierSignatureError({
- *   signer: "0x0000000000000000000000000000000000000001",
- * });
- * ```
- */
-export class InvalidEcrecoverRatifierSignatureError extends Error {
-  /** Signer address the signature was expected to recover. */
-  public readonly signer: Address;
-
-  public constructor(params: {
-    readonly signer: Address;
-    readonly cause?: unknown;
-  }) {
-    super(
-      `Ecrecover signature verification failed for signer "${params.signer}". The client signed different typed data or returned a malformed signature.`,
-      params.cause === undefined ? undefined : { cause: params.cause },
-    );
-    this.name = "InvalidEcrecoverRatifierSignatureError";
-    this.signer = params.signer;
   }
 }
 
