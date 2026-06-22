@@ -22,7 +22,7 @@ export class InvalidOfferGroupError extends Error {
  * ```ts
  * import { TickOutOfRangeError } from "@morpho-org/midnight-sdk";
  *
- * const error = new TickOutOfRangeError(6000n, 5820n);
+ * const error = new TickOutOfRangeError(7000n, 6744n);
  * console.log(error.message);
  * ```
  */

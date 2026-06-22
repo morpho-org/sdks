@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import type { Hex } from "viem";
 import { describe, expect, test } from "vitest";
 
@@ -7,8 +6,8 @@ import {
   InvalidMidnightApiResponseError,
   MidnightApiError,
 } from "../errors.js";
+import type { IOffer } from "../offers/index.js";
 import * as Payload from "../signatures/Payload.js";
-import { MIDNIGHT_SDK_VERSION } from "../version.js";
 import { MidnightApi, type MidnightApiFetch } from "./MidnightApi.js";
 
 type FetchCall = {
@@ -18,7 +17,7 @@ type FetchCall = {
 
 const API_VALID_MATURITY = 1_767_279_600n;
 
-function apiValidOffer() {
+function apiValidOffer(overrides: Partial<IOffer> = {}) {
   return baseOffer({
     market: {
       ...baseMarketParamsInput(),
@@ -27,6 +26,7 @@ function apiValidOffer() {
     expiry: API_VALID_MATURITY - 60n,
     maxUnits: 0n,
     maxAssets: 1_000n,
+    ...overrides,
   });
 }
 
@@ -194,16 +194,6 @@ const expectedTakeableOffer = {
   ratifierData: "0x1234",
 };
 
-describe("MIDNIGHT_SDK_VERSION", () => {
-  test("default", () => {
-    const packageJson = JSON.parse(
-      readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
-    ) as { readonly version?: unknown };
-
-    expect(MIDNIGHT_SDK_VERSION).toBe(packageJson.version);
-  });
-});
-
 describe("MidnightApi.validateMempoolPayload", () => {
   test("default", async () => {
     const payload = "0x0100000000" as Hex;
@@ -253,7 +243,6 @@ describe("MidnightApi.validateMempoolPayload", () => {
     });
 
     const headers = new Headers(call.init?.headers);
-    expect(headers.get("sdk-version")).toBe(MIDNIGHT_SDK_VERSION);
     expect(headers.get("content-type")).toBe("application/json");
     expect(headers.get("x-app")).toBe("markets-v2");
   });
@@ -369,6 +358,7 @@ describe("MidnightApi.validateMempoolItems", () => {
     expect(typeof body.payload).toBe("string");
     const decoded = await Payload.decode(body.payload as Hex);
     expect(decoded).toHaveLength(1);
+    expect(decoded[0]!.offer.group).toBe(GROUP_ID);
     expect(decoded[0]!.ratifierData).toBe("0x1234");
   });
 });

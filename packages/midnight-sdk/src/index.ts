@@ -17,4 +17,3 @@ export * from "./signatures/index.js";
  * mempool submission calldata.
  */
 export * as Payload from "./signatures/Payload.js";
-export * from "./version.js";

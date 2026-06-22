@@ -23,7 +23,7 @@ import {
  * ```ts
  * import { TickLib } from "@morpho-org/midnight-sdk";
  *
- * console.log(TickLib.tickToPrice(5820n));
+ * console.log(TickLib.tickToPrice(6744n));
  * ```
  */
 export namespace TickLib {
@@ -140,7 +140,7 @@ export namespace TickLib {
    * ```ts
    * import { TickLib } from "@morpho-org/midnight-sdk";
    *
-   * const price = TickLib.tickToPrice(5820n);
+   * const price = TickLib.tickToPrice(6744n);
    * console.log(price);
    * ```
    */
@@ -268,7 +268,7 @@ export namespace TickLib {
    * ```ts
    * import { TickLib } from "@morpho-org/midnight-sdk";
    *
-   * const rate = TickLib.tickToRate(5820n);
+   * const rate = TickLib.tickToRate(6744n);
    * console.log(rate);
    * ```
    */

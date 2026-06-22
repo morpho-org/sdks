@@ -45,7 +45,7 @@ export const SETTLEMENT_FEE_BREAKPOINTS = [
  * console.log(MAX_TICK);
  * ```
  */
-export const MAX_TICK = 5820n;
+export const MAX_TICK = 6744n;
 
 /**
  * WAD price quantum used by Midnight tick prices.
@@ -57,7 +57,7 @@ export const MAX_TICK = 5820n;
  * console.log(PRICE_ROUNDING_STEP);
  * ```
  */
-export const PRICE_ROUNDING_STEP = 1_000000000000n;
+export const PRICE_ROUNDING_STEP = 100_000000000n;
 
 /**
  * Default Midnight tick spacing.
