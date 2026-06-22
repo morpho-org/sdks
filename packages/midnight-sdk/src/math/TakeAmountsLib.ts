@@ -229,7 +229,7 @@ export namespace TakeAmountsLib {
    * ```ts
    * import { TakeAmountsLib } from "@morpho-org/midnight-sdk";
    *
-   * const units = TakeAmountsLib.toUnitsAtTick({ assets: 100n, tick: 5820n, rounding: "Down" });
+   * const units = TakeAmountsLib.toUnitsAtTick({ assets: 100n, tick: 6744n, rounding: "Down" });
    * console.log(units);
    * ```
    */
