@@ -3,6 +3,7 @@ import {
   AccrualPosition,
   Market,
   type MarketId,
+  MarketUtils,
   MathLib,
   Position,
   UnknownDataError,
@@ -12,10 +13,15 @@ import {
 } from "@morpho-org/blue-sdk";
 import { bigIntComparator } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
-import { DEFAULT_WITHDRAWAL_TARGET_UTILIZATION } from "../helpers/constant.js";
+import {
+  DEFAULT_SUPPLY_TARGET_UTILIZATION,
+  DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
+} from "../helpers/constant.js";
+import { getSupplyTargetUtilization } from "../helpers/utilization.js";
 import type {
   PublicAllocatorOptions,
   PublicReallocation,
+  ReallocationComputeOptions,
 } from "../types/index.js";
 import {
   DisabledReallocationMarketError,
@@ -461,6 +467,140 @@ export class ReallocationData implements InputReallocationData {
         timestamp: accrualTimestamp,
       });
     }
+  }
+
+  /**
+   * Sums the public-allocator liquidity reallocatable into `marketId` from
+   * sibling markets.
+   *
+   * Read-only metric — never throws on insufficiency (returns `0n`). Bounded by
+   * each source market's withdrawal utilization cap and the target market's
+   * vault supply-cap headroom. Pass `options.defaultMaxWithdrawalUtilization` to
+   * widen the source ceiling (e.g. `MathLib.WAD` for the full drain).
+   *
+   * @param marketId - Target market that would receive the liquidity.
+   * @param options - Optional allocator discovery options.
+   * @returns Total reallocatable assets in loan-token units; `0n` when none is available.
+   * @throws {@link UnknownReallocationMarketError} when the target market is absent.
+   * @example
+   * ```ts
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import { markets, vaults } from "@morpho-org/morpho-test";
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   *
+   * const client = createPublicClient({
+   *   chain: mainnet,
+   *   transport: http(),
+   * }).extend(morphoViemExtension());
+   *
+   * const marketParams = markets[mainnet.id].usdc_wbtc;
+   * const market = client.morpho.blue(marketParams, mainnet.id);
+   * const block = await client.getBlock();
+   * const reallocationData = await market.getReallocationData({
+   *   vaultAddresses: [vaults[mainnet.id].steakUsdc.address],
+   *   block: { number: block.number, timestamp: block.timestamp },
+   * });
+   *
+   * const liquidity: bigint = reallocationData.getPublicReallocationLiquidity(
+   *   marketParams.id,
+   *   { timestamp: block.timestamp },
+   * );
+   * ```
+   */
+  public getPublicReallocationLiquidity(
+    marketId: MarketId,
+    options?: PublicAllocatorOptions,
+  ): bigint {
+    const { withdrawals } = this.getMarketPublicReallocations(
+      marketId,
+      options,
+    );
+
+    return withdrawals.reduce((total, { assets }) => total + assets, 0n);
+  }
+
+  /**
+   * Computes the liquidity available to bring `marketId` to `targetUtilization`,
+   * counting the public-allocator liquidity reallocatable into it.
+   *
+   * Returns the max borrow `x` keeping post-borrow utilization
+   * `(borrow + x) / (supply + L) ≤ targetUtilization`, where `L` is the
+   * reallocatable liquidity added to the market's supply — equivalently
+   * `getBorrowToUtilization({ supply + L, borrow }, targetUtilization)`. Below
+   * the target this is the market's own borrow headroom plus `targetUtilization · L`;
+   * reallocated supply also raises the supply denominator, so only that scaled
+   * share backs further borrow.
+   *
+   * Read-only metric — never throws on insufficiency:
+   * - returns only the market's own borrow headroom when
+   *   `supplyTargetUtilization > targetUtilization` (reallocation would not
+   *   trigger at that target);
+   * - returns `0n` when the market is already at or above the target and `L` is
+   *   too small to bring it back under.
+   *
+   * @param marketId - Target market to borrow from.
+   * @param targetUtilization - Utilization to bring the market to, scaled by WAD. Defaults to {@link DEFAULT_SUPPLY_TARGET_UTILIZATION}.
+   * @param options - Optional reallocation options (supply target utilization trigger, timestamp, withdrawal caps).
+   * @returns Available liquidity to the target utilization in loan-token units; `0n` when none is available.
+   * @throws {@link UnknownReallocationMarketError} when the target market is absent.
+   * @example
+   * ```ts
+   * import { createPublicClient, http, parseEther } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import { markets, vaults } from "@morpho-org/morpho-test";
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   *
+   * const client = createPublicClient({
+   *   chain: mainnet,
+   *   transport: http(),
+   * }).extend(morphoViemExtension());
+   *
+   * const marketParams = markets[mainnet.id].usdc_wbtc;
+   * const market = client.morpho.blue(marketParams, mainnet.id);
+   * const block = await client.getBlock();
+   * const reallocationData = await market.getReallocationData({
+   *   vaultAddresses: [vaults[mainnet.id].steakUsdc.address],
+   *   block: { number: block.number, timestamp: block.timestamp },
+   * });
+   *
+   * // Max borrow keeping utilization at or below 90%, counting shared liquidity.
+   * const available: bigint =
+   *   reallocationData.getAvailableLiquidityToTargetUtilization(
+   *     marketParams.id,
+   *     parseEther("0.9"),
+   *     { timestamp: block.timestamp },
+   *   );
+   * ```
+   */
+  // biome-ignore lint/complexity/useMaxParams: (marketId, targetUtilization, options) is the metric's public API
+  public getAvailableLiquidityToTargetUtilization(
+    marketId: MarketId,
+    targetUtilization: bigint = DEFAULT_SUPPLY_TARGET_UTILIZATION,
+    options?: ReallocationComputeOptions,
+  ): bigint {
+    const market = this.getMarket(marketId).accrueInterest(options?.timestamp);
+
+    // Below the allocator's trigger, no reallocation happens: own headroom only.
+    const supplyTargetUtilization = getSupplyTargetUtilization(
+      marketId,
+      options,
+    );
+    if (supplyTargetUtilization > targetUtilization)
+      return market.getBorrowToUtilization(targetUtilization);
+
+    // Borrow-to-target on the post-reallocation supply; clamps to 0n above target.
+    const availableLiquidity = this.getPublicReallocationLiquidity(
+      marketId,
+      options,
+    );
+    return MarketUtils.getBorrowToUtilization(
+      {
+        totalSupplyAssets: market.totalSupplyAssets + availableLiquidity,
+        totalBorrowAssets: market.totalBorrowAssets,
+      },
+      targetUtilization,
+    );
   }
 
   /**
