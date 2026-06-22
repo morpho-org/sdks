@@ -32,7 +32,15 @@ import {
   Payload,
   Tree,
 } from "@morpho-org/midnight-sdk";
-import { parseUnits, zeroAddress, type Address, type WalletClient } from "viem";
+import {
+  parseUnits,
+  zeroAddress,
+  type Account,
+  type Address,
+  type Chain,
+  type Transport,
+  type WalletClient,
+} from "viem";
 
 const chainId = 8453;
 const usdc = addresses[chainId].usdc!;
@@ -41,7 +49,7 @@ const ecrecoverRatifier = addresses[chainId].ecrecoverRatifier!;
 const midnightMempool = addresses[chainId].midnightMempool!;
 
 export async function makeBaseUsdcWethOffers(params: {
-  readonly walletClient: WalletClient;
+  readonly walletClient: WalletClient<Transport, Chain, Account>;
   readonly maker: Address;
   readonly wethUsdcOracle: Address;
 }) {
@@ -101,12 +109,7 @@ export async function makeBaseUsdcWethOffers(params: {
   // EcrecoverRatifierUtils derives the verifier from offer.ratifier and rejects mixed-ratifier trees.
   const items = await EcrecoverRatifierUtils.ratify({
     tree,
-    chainId,
-    signTypedData: (typedData) =>
-      params.walletClient.signTypedData({
-        account: params.maker,
-        ...typedData,
-      }),
+    walletClient: params.walletClient,
   });
   const payload = await Payload.encode(items);
 

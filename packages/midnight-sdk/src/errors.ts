@@ -1,3 +1,5 @@
+import type { Address } from "viem";
+
 /**
  * Thrown when a Midnight offer group violates protocol-level group mechanics.
  *
@@ -215,6 +217,65 @@ export class InvalidTreeError extends Error {
   public constructor(message: string) {
     super(message);
     this.name = "InvalidTreeError";
+  }
+}
+
+/**
+ * Thrown when an Ecrecover signing wallet client is not bound to the tree maker.
+ *
+ * @example
+ * ```ts
+ * import { EcrecoverRatifierAccountMismatchError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new EcrecoverRatifierAccountMismatchError(
+ *   "0x0000000000000000000000000000000000000001",
+ *   "0x0000000000000000000000000000000000000002",
+ * );
+ * ```
+ */
+export class EcrecoverRatifierAccountMismatchError extends Error {
+  /** Account address reported by the wallet client. */
+  public readonly clientAccount: Address;
+
+  /** Maker address expected by the tree. */
+  public readonly expectedMaker: Address;
+
+  public constructor(clientAccount: Address, expectedMaker: Address) {
+    super(
+      `Ecrecover wallet client account mismatch: expected maker "${expectedMaker}", got "${clientAccount}". Connect the maker account before signing.`,
+    );
+    this.name = "EcrecoverRatifierAccountMismatchError";
+    this.clientAccount = clientAccount;
+    this.expectedMaker = expectedMaker;
+  }
+}
+
+/**
+ * Thrown when an Ecrecover wallet returns a signature that fails verification.
+ *
+ * @example
+ * ```ts
+ * import { InvalidEcrecoverRatifierSignatureError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new InvalidEcrecoverRatifierSignatureError({
+ *   maker: "0x0000000000000000000000000000000000000001",
+ * });
+ * ```
+ */
+export class InvalidEcrecoverRatifierSignatureError extends Error {
+  /** Maker address the signature was expected to recover. */
+  public readonly maker: Address;
+
+  public constructor(params: {
+    readonly maker: Address;
+    readonly cause?: unknown;
+  }) {
+    super(
+      `Ecrecover signature verification failed for maker "${params.maker}". The wallet signed different typed data or returned a malformed signature.`,
+      params.cause === undefined ? undefined : { cause: params.cause },
+    );
+    this.name = "InvalidEcrecoverRatifierSignatureError";
+    this.maker = params.maker;
   }
 }
 

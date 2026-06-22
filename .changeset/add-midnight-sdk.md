@@ -14,6 +14,8 @@ Offer creation and payload validation require `expiry` to be strictly greater th
 
 Ecrecover ratification rejects trees whose offers span multiple makers, so one maker signature cannot produce payload items for another maker's leaves.
 
+Ecrecover ratification accepts a wallet client directly for maker-side signing and derives the EIP-712 domain chain id from that wallet while validating the wallet account and returned signature before producing payload items.
+
 Offer creation only accepts protocol-reachable tick spacings and offer groups require a shared cap mode and value, matching Midnight's tick accessibility and group consumption accounting.
 
 Tick math constants mirror the current Midnight protocol range and price quantum.

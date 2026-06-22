@@ -1,17 +1,28 @@
 import { type BigIntish, deepFreeze } from "@morpho-org/morpho-ts";
 import {
+  type Account,
   type Address,
+  type Chain,
   concat,
   decodeAbiParameters,
   encodeAbiParameters,
   type Hash,
   type Hex,
+  isAddressEqual,
   keccak256,
   parseSignature,
   type Signature,
+  type Transport,
+  verifyTypedData,
+  type WalletClient,
 } from "viem";
 import { EIP712_DOMAIN_TYPEHASH } from "../constants.js";
-import { InvalidTreeError, InvalidTreeHeightError } from "../errors.js";
+import {
+  EcrecoverRatifierAccountMismatchError,
+  InvalidEcrecoverRatifierSignatureError,
+  InvalidTreeError,
+  InvalidTreeHeightError,
+} from "../errors.js";
 import type { OfferStruct } from "../offers/index.js";
 import type { Item as PayloadItem } from "./Payload.js";
 import type { Tree } from "./Tree.js";
@@ -238,21 +249,6 @@ export type EcrecoverSignatureInput =
   | Signature<number, number>;
 
 /**
- * Signing callback accepted by Ecrecover ratifier helpers.
- *
- * @example
- * ```ts
- * import type { EcrecoverSignTypedData } from "@morpho-org/midnight-sdk";
- *
- * const signTypedData: EcrecoverSignTypedData = () => "0x";
- * console.log(signTypedData);
- * ```
- */
-export type EcrecoverSignTypedData = (
-  typedData: EcrecoverRatificationTypedData,
-) => Hex | Promise<Hex>;
-
-/**
  * Parameters for {@link EcrecoverRatifierUtils.typedData}.
  *
  * Use these after `Tree.create` and after the maker route has been classified
@@ -296,8 +292,8 @@ export interface EcrecoverRatifierTypedDataParams {
 /**
  * Parameters for {@link EcrecoverRatifierUtils.ratify}.
  *
- * Use this after tree validation. Provide either a signing callback for the
- * maker wallet or a signature that was produced from `typedData`.
+ * Use this after tree validation. Provide either the maker wallet client or a
+ * signature that was produced from `typedData`.
  *
  * @example
  * ```ts
@@ -328,19 +324,21 @@ export interface EcrecoverRatifierTypedDataParams {
  * ```
  */
 export type EcrecoverRatifierRatifyParams =
-  | (EcrecoverRatifierTypedDataParams & {
-      /** Callback that signs the typed data built from `tree`. */
-      readonly signTypedData: EcrecoverSignTypedData;
-      /** Omit when the SDK should request the signature through `signTypedData`. */
+  | {
+      /** Tree being ratified. */
+      readonly tree: Tree;
+      /** Wallet client that signs the typed data built from `tree`. */
+      readonly walletClient: WalletClient<Transport, Chain, Account>;
+      /** Omit when the SDK should request the signature through `walletClient`. */
       readonly signature?: undefined;
-    })
+    }
   | {
       /** Tree being ratified. */
       readonly tree: Tree;
       /** Precomputed signature for this tree root. */
       readonly signature: EcrecoverSignatureInput;
       /** Omit when a precomputed signature is supplied. */
-      readonly signTypedData?: undefined;
+      readonly walletClient?: undefined;
       /** Omit when a precomputed signature is supplied. */
       readonly chainId?: undefined;
     };
@@ -428,8 +426,8 @@ export namespace EcrecoverRatifierUtils {
    *
    * Use after the tree is built and validated, before requesting the maker's
    * wallet signature. The EIP-712 verifier is derived from the shared ratifier
-   * address on the tree offers. `ratify` calls this for you when given
-   * `signTypedData`.
+   * address on the tree offers. `ratify` calls this for you when given a
+   * `walletClient`.
    *
    * @param params.tree - Ecrecover-ratified offer tree to sign.
    * @param params.chainId - EIP-155 chain id included in the EIP-712 domain.
@@ -549,23 +547,25 @@ export namespace EcrecoverRatifierUtils {
   }
 
   /**
-   * Signs EcrecoverRatifier typed data through an injected signing callback.
+   * Signs EcrecoverRatifier typed data through a wallet client.
    *
    * Use when app code wants the signature separately from payload item
    * construction. If you only need payload items, call `ratify` with the same
-   * `signTypedData` callback.
+   * wallet client.
    *
    * @param params.tree - Ecrecover-ratified offer tree to sign.
-   * @param params.chainId - EIP-155 chain id included in the EIP-712 domain.
-   * @param params.signTypedData - Callback that signs the typed data built from `params.tree`.
-   * @returns Signature returned by the callback.
+   * @param params.walletClient - Wallet client that signs the tree typed data.
+   * @returns Signature returned by the wallet client.
+   * @throws {EcrecoverRatifierAccountMismatchError} when the wallet client's account is not the tree maker.
+   * @throws {InvalidEcrecoverRatifierSignatureError} when EIP-712 verification rejects the returned signature.
    * @throws {InvalidTreeError} when the tree is invalid or contains multiple makers or ratifiers.
    * @throws {InvalidTreeHeightError} when the tree height is unsupported.
    * @example
    * ```ts
    * import { EcrecoverRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
    * import { Offer } from "@morpho-org/midnight-sdk";
-   * import { zeroAddress } from "viem";
+   * import { createWalletClient, http, zeroAddress } from "viem";
+   * import { base } from "viem/chains";
    *
    * const offer = Offer.create({
    *   market: {
@@ -583,21 +583,60 @@ export namespace EcrecoverRatifierUtils {
    *   ratifier: "0x0000000000000000000000000000000000004000",
    *   maxUnits: 100n,
    * });
+   * const walletClient = createWalletClient({
+   *   account: offer.maker,
+   *   chain: base,
+   *   transport: http(),
+   * });
    *
    * const signature = await EcrecoverRatifierUtils.sign({
    *   tree: Tree.create([offer]),
-   *   chainId: 8453n,
-   *   signTypedData: () => "0x",
+   *   walletClient,
    * });
    * console.log(signature);
    * ```
    */
-  export async function sign(
-    params: EcrecoverRatifierTypedDataParams & {
-      readonly signTypedData: EcrecoverSignTypedData;
-    },
-  ) {
-    return params.signTypedData(typedData(params));
+  export async function sign(params: {
+    readonly tree: Tree;
+    readonly walletClient: WalletClient<Transport, Chain, Account>;
+  }): Promise<Hex> {
+    const data = typedData({
+      tree: params.tree,
+      chainId: params.walletClient.chain.id,
+    });
+    const account = params.walletClient.account;
+    const maker = params.tree.offers[0]!.maker;
+    if (!isAddressEqual(account.address, maker)) {
+      throw new EcrecoverRatifierAccountMismatchError(account.address, maker);
+    }
+
+    const signature = await params.walletClient.signTypedData<
+      Record<string, unknown>,
+      "OfferTree"
+    >({
+      account,
+      ...data,
+    });
+
+    let isValid: boolean;
+    try {
+      isValid = await verifyTypedData<Record<string, unknown>, "OfferTree">({
+        ...data,
+        address: maker,
+        signature,
+      });
+    } catch (cause) {
+      throw new InvalidEcrecoverRatifierSignatureError({
+        maker,
+        cause,
+      });
+    }
+
+    if (!isValid) {
+      throw new InvalidEcrecoverRatifierSignatureError({ maker });
+    }
+
+    return signature;
   }
 
   /**
@@ -789,17 +828,19 @@ export namespace EcrecoverRatifierUtils {
    * required by takers. The group id is stored on each inline offer.
    *
    * @param params.tree - Ecrecover-ratified offer tree to ratify.
-   * @param params.chainId - EIP-155 chain id used when `params.signTypedData` signs the tree.
-   * @param params.signTypedData - Optional callback that signs typed data built from `params.tree`.
+   * @param params.walletClient - Optional wallet client that signs typed data built from `params.tree`.
    * @param params.signature - Optional precomputed signature for `params.tree`.
    * @returns Items containing each offer and its ratifier data.
+   * @throws {EcrecoverRatifierAccountMismatchError} when the signing wallet client's account is not the tree maker.
+   * @throws {InvalidEcrecoverRatifierSignatureError} when EIP-712 verification rejects the returned signature.
    * @throws {InvalidTreeError} when the tree is invalid or contains multiple makers or ratifiers.
    * @throws {InvalidTreeHeightError} when the tree height is unsupported.
    * @example
    * ```ts
    * import { EcrecoverRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
    * import { Offer } from "@morpho-org/midnight-sdk";
-   * import { zeroAddress } from "viem";
+   * import { createWalletClient, http, zeroAddress } from "viem";
+   * import { base } from "viem/chains";
    *
    * const offer = Offer.create({
    *   market: {
@@ -817,14 +858,15 @@ export namespace EcrecoverRatifierUtils {
    *   ratifier: "0x0000000000000000000000000000000000004000",
    *   maxUnits: 100n,
    * });
+   * const walletClient = createWalletClient({
+   *   account: offer.maker,
+   *   chain: base,
+   *   transport: http(),
+   * });
    *
    * const items = await EcrecoverRatifierUtils.ratify({
    *   tree: Tree.create([offer]),
-   *   signature: {
-   *     v: 27,
-   *     r: "0x0000000000000000000000000000000000000000000000000000000000000000",
-   *     s: "0x0000000000000000000000000000000000000000000000000000000000000000",
-   *   },
+   *   walletClient,
    * });
    * console.log(items.length);
    * ```
@@ -837,7 +879,7 @@ export namespace EcrecoverRatifierUtils {
       getTreeRatifier(params.tree);
       signature = toSignature(params.signature);
     } else {
-      signature = toSignature(await params.signTypedData(typedData(params)));
+      signature = toSignature(await sign(params));
     }
     const items: PayloadItem[] = [];
 
