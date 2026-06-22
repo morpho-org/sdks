@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { baseOffer } from "../__test__/fixtures.js";
+import { InvalidOfferGroupError } from "../errors.js";
 import { Group } from "./Group.js";
 import { GroupUtils } from "./GroupUtils.js";
 
@@ -48,5 +49,14 @@ describe("Group.create", () => {
 
     expect(group.id).toBe(initialId);
     expect(group.offers[0]!.tick).toBe(5_000n);
+  });
+
+  test("error: InvalidOfferGroupError for mismatched cap value", () => {
+    expect(() =>
+      Group.create([
+        baseOffer({ maxAssets: 0n, maxUnits: 100n }),
+        baseOffer({ maxAssets: 0n, maxUnits: 101n }),
+      ]),
+    ).toThrow(InvalidOfferGroupError);
   });
 });

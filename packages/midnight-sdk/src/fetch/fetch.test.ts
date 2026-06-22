@@ -25,7 +25,10 @@ import {
 } from "../__test__/fixtures.js";
 import { midnightAbi } from "../abis.js";
 import { MAX_TICK } from "../constants.js";
-import { SettlementFeeExceedsPriceError } from "../errors.js";
+import {
+  InvalidOfferParameterError,
+  SettlementFeeExceedsPriceError,
+} from "../errors.js";
 import { MarketUtils } from "../market/index.js";
 import { TickLib } from "../math/index.js";
 import { abi as getPositionAbi } from "../queries/GetPosition.js";
@@ -407,6 +410,21 @@ describe("fetchConsumableUnits", () => {
         timeToMaturity: 1000n,
       }),
     ).rejects.toBeInstanceOf(NegativeValueError);
+    expect(handle.request).not.toHaveBeenCalled();
+  });
+
+  test("error: InvalidOfferParameterError before reads for invalid cap shape", async () => {
+    const handle = createMockClient(base);
+
+    await expect(
+      fetchConsumableUnits(handle.client, {
+        marketId,
+        offer: baseOffer({ maxUnits: 1n, maxAssets: 1n }),
+        group,
+        timeToMaturity: 1000n,
+      }),
+    ).rejects.toBeInstanceOf(InvalidOfferParameterError);
+    expect(handle.request).not.toHaveBeenCalled();
   });
 });
 

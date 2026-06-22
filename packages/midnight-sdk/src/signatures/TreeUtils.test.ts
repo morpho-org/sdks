@@ -7,8 +7,8 @@ import {
   group as staleGroup,
 } from "../__test__/fixtures.js";
 import type { MidnightApiFetch } from "../api/index.js";
-import { InvalidTreeError } from "../errors.js";
-import { Offer, OfferUtils } from "../offers/index.js";
+import { InvalidMarketParameterError, InvalidTreeError } from "../errors.js";
+import { type IOffer, Offer, type OfferStruct } from "../offers/index.js";
 import { Group } from "./Group.js";
 import { GroupUtils } from "./GroupUtils.js";
 import * as Payload from "./Payload.js";
@@ -21,29 +21,49 @@ const zeroBytes32 =
   "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
 const API_VALID_MATURITY = 1_767_279_600n;
 
-const emptyOffer = () =>
-  new Offer({
-    market: {
-      loanToken: zeroAddress,
-      collateralParams: [],
-      maturity: 0n,
-      rcfThreshold: 0n,
-      enterGate: zeroAddress,
-      liquidatorGate: zeroAddress,
-    },
-    buy: false,
-    maker: zeroAddress,
-    start: 0n,
-    expiry: 0n,
-    tick: 0n,
-    callback: zeroAddress,
-    callbackData: "0x",
-    receiverIfMakerIsSeller: zeroAddress,
-    ratifier: zeroAddress,
-    reduceOnly: false,
-    maxUnits: 0n,
-    maxAssets: 0n,
-  });
+const emptyMarket = () => ({
+  loanToken: zeroAddress,
+  collateralParams: [],
+  maturity: 0n,
+  rcfThreshold: 0n,
+  enterGate: zeroAddress,
+  liquidatorGate: zeroAddress,
+});
+
+const emptyOfferInput = (): IOffer => ({
+  market: emptyMarket(),
+  buy: false,
+  maker: zeroAddress,
+  start: 0n,
+  expiry: 0n,
+  tick: 0n,
+  callback: zeroAddress,
+  callbackData: "0x",
+  receiverIfMakerIsSeller: zeroAddress,
+  ratifier: zeroAddress,
+  reduceOnly: false,
+  maxUnits: 0n,
+  maxAssets: 0n,
+  continuousFeeCap: 0n,
+});
+
+const emptyOfferStruct = (): OfferStruct => ({
+  market: emptyMarket(),
+  buy: false,
+  maker: zeroAddress,
+  start: 0n,
+  expiry: 0n,
+  tick: 0n,
+  group: zeroBytes32,
+  callback: zeroAddress,
+  callbackData: "0x",
+  receiverIfMakerIsSeller: zeroAddress,
+  ratifier: zeroAddress,
+  reduceOnly: false,
+  maxUnits: 0n,
+  maxAssets: 0n,
+  continuousFeeCap: 0n,
+});
 
 describe("Tree.create", () => {
   test("default", () => {
@@ -200,7 +220,7 @@ describe("TreeUtils.buildDescriptor", () => {
 
     expect(payload.height).toBe(0);
     expect(payload.root).toMatchInlineSnapshot(
-      `"0x185d554dc1c706dd7c51a9c41ceef0ba926a51f3c440d260a2bae06c83bcd95e"`,
+      `"0x5698434bdf5a19bcbcc0d1ec0801489c6151e4bada77560ad14732f7a50bc2a6"`,
     );
   });
 
@@ -239,17 +259,7 @@ describe("TreeUtils.buildDescriptor", () => {
     expect(payload.offers.slice(0, 3)).toEqual(
       groups.flatMap(GroupUtils.toStructs),
     );
-    expect(payload.offers[3]).toEqual({
-      ...OfferUtils.toStruct({ offer: emptyOffer(), group: zeroBytes32 }),
-      market: {
-        loanToken: zeroAddress,
-        collateralParams: [],
-        maturity: 0n,
-        rcfThreshold: 0n,
-        enterGate: zeroAddress,
-        liquidatorGate: zeroAddress,
-      },
-    });
+    expect(payload.offers[3]).toEqual(emptyOfferStruct());
     expect(proof.proof).toHaveLength(2);
     expect(
       TreeUtils.verifyProof({
@@ -279,8 +289,8 @@ describe("TreeUtils.buildDescriptor", () => {
   });
 
   test("error: invalid empty offer", () => {
-    expect(() => TreeUtils.buildDescriptor([emptyOffer()])).toThrow(
-      InvalidTreeError,
+    expect(() => TreeUtils.buildDescriptor([emptyOfferInput()])).toThrow(
+      InvalidMarketParameterError,
     );
   });
 

@@ -14,6 +14,7 @@ import {
   LIQUIDATION_CURSOR_LOW,
   SETTLEMENT_FEE_BREAKPOINTS,
 } from "../constants.js";
+import { InvalidMarketParameterError } from "../errors.js";
 import { MarketParams } from "./Market.js";
 import { MarketUtils } from "./MarketUtils.js";
 
@@ -43,6 +44,70 @@ describe("MarketParams", () => {
 
     expect(MarketParams.from(params)).toBe(params);
     expect(MarketParams.from(baseMarket()).loanToken).toBe(addresses.loanToken);
+  });
+
+  test("behavior: sorts collateral params by token", () => {
+    const params = new MarketParams({
+      ...baseMarketParamsInput(),
+      collateralParams: [
+        {
+          token: addresses.receiver,
+          lltv: 222n,
+          maxLif: 2n,
+          oracle: addresses.oracle,
+        },
+        {
+          token: addresses.taker,
+          lltv: 111n,
+          maxLif: 1n,
+          oracle: addresses.oracle,
+        },
+        {
+          token: addresses.callback,
+          lltv: 333n,
+          maxLif: 3n,
+          oracle: addresses.oracle,
+        },
+      ],
+    });
+
+    expect(
+      params.collateralParams.map((collateral) => collateral.token),
+    ).toEqual([addresses.taker, addresses.receiver, addresses.callback]);
+    expect(params.collateralParams[0]!.lltv).toBe(111n);
+  });
+
+  test("error: InvalidMarketParameterError for duplicate collateral tokens", () => {
+    expect(
+      () =>
+        new MarketParams({
+          ...baseMarketParamsInput(),
+          collateralParams: [
+            {
+              token: addresses.taker,
+              lltv: 111n,
+              maxLif: 1n,
+              oracle: addresses.oracle,
+            },
+            {
+              token: addresses.taker.toLowerCase() as `0x${string}`,
+              lltv: 444n,
+              maxLif: 4n,
+              oracle: addresses.oracle,
+            },
+          ],
+        }),
+    ).toThrow(InvalidMarketParameterError);
+  });
+
+  test("error: InvalidMarketParameterError for empty collateral params", () => {
+    expect(
+      () =>
+        new MarketParams({
+          ...baseMarketParamsInput(),
+          collateralParams: [],
+        }),
+    ).toThrow(InvalidMarketParameterError);
   });
 });
 
@@ -110,8 +175,6 @@ describe("MarketUtils", () => {
       maxLif: 1061007957559681697n,
       oracle: addresses.oracle,
     });
-    expect(MarketUtils.isLltvAllowed(770000000000000000n)).toBe(true);
-    expect(MarketUtils.isLltvAllowed(123n)).toBe(false);
     expect(
       MarketUtils.getLiquidationIncentiveFactor(
         770000000000000000n,

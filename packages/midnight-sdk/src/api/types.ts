@@ -487,6 +487,7 @@ export type ApiOfferResponse = {
   readonly ratifier: Address;
   readonly reduce_only: boolean;
   readonly max_assets: string;
+  readonly continuous_fee_cap: string;
 };
 
 /** @internal Takeable-offer response shape returned by the API. */

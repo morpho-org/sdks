@@ -44,6 +44,7 @@ const EMPTY_OFFER_STRUCT: OfferStruct = {
   reduceOnly: false,
   maxUnits: 0n,
   maxAssets: 0n,
+  continuousFeeCap: 0n,
 };
 
 const EMPTY_OFFER_DEFAULT_GROUP = OfferUtils.hashStruct(EMPTY_OFFER_STRUCT);
@@ -69,7 +70,8 @@ function isEmptyOfferStruct(offer: OfferStruct): boolean {
     offer.ratifier === ZERO_ADDRESS &&
     offer.reduceOnly === false &&
     offer.maxUnits === 0n &&
-    offer.maxAssets === 0n
+    offer.maxAssets === 0n &&
+    offer.continuousFeeCap === 0n
   );
 }
 

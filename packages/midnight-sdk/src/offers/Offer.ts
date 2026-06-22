@@ -45,6 +45,7 @@ import { OfferUtils } from "./OfferUtils.js";
  *   reduceOnly: false,
  *   maxUnits: 0n,
  *   maxAssets: 100n,
+ *   continuousFeeCap: 317097919n,
  * };
  * ```
  */
@@ -77,6 +78,8 @@ export interface IOffer {
   readonly maxUnits: BigIntish;
   /** Maximum buyer or seller assets, depending on side. */
   readonly maxAssets: BigIntish;
+  /** Maximum market continuous fee accepted by this offer. */
+  readonly continuousFeeCap: BigIntish;
 }
 
 /**
@@ -116,6 +119,7 @@ export interface IOffer {
  *   reduceOnly: false,
  *   maxUnits: 100n,
  *   maxAssets: 0n,
+ *   continuousFeeCap: 317097919n,
  * });
  * console.log(offer.buy);
  * ```
@@ -164,6 +168,9 @@ export class Offer {
   /** Maximum buyer or seller assets, depending on side. */
   public readonly maxAssets: bigint;
 
+  /** Maximum market continuous fee accepted by this offer. */
+  public readonly continuousFeeCap: bigint;
+
   public constructor(offer: IOffer) {
     this.market = MarketParams.from(offer.market);
     this.buy = offer.buy;
@@ -179,6 +186,7 @@ export class Offer {
     this.reduceOnly = offer.reduceOnly;
     this.maxUnits = BigInt(offer.maxUnits);
     this.maxAssets = BigInt(offer.maxAssets);
+    this.continuousFeeCap = BigInt(offer.continuousFeeCap);
   }
 
   /**
@@ -223,6 +231,7 @@ export class Offer {
    *   reduceOnly: false,
    *   maxUnits: 100n,
    *   maxAssets: 0n,
+   *   continuousFeeCap: 317097919n,
    * });
    * console.log(offer.buy);
    * ```
@@ -351,6 +360,7 @@ export class Offer {
    * @param params.tickSpacing - Optional market tick spacing; defaults to `DEFAULT_TICK_SPACING`.
    * @param params.maxUnits - Optional unit cap; defaults to zero.
    * @param params.maxAssets - Optional buyer or seller asset cap; defaults to zero.
+   * @param params.continuousFeeCap - Optional maximum market continuous fee accepted by this offer; defaults to `MAX_CONTINUOUS_FEE`.
    * @param params.start - Optional offer start timestamp; defaults to zero.
    * @param params.expiry - Offer expiry timestamp.
    * @param params.callback - Optional callback address; defaults to the zero address.
@@ -418,6 +428,7 @@ export class Offer {
       reduceOnly: params.reduceOnly ?? false,
       maxUnits: validated.maxUnits,
       maxAssets: validated.maxAssets,
+      continuousFeeCap: validated.continuousFeeCap,
     });
   }
 }
@@ -465,6 +476,7 @@ export class Offer {
  *   reduceOnly: false,
  *   maxUnits: 0n,
  *   maxAssets: 100n,
+ *   continuousFeeCap: 317097919n,
  * };
  * console.log(offer.group);
  * ```
@@ -498,6 +510,8 @@ export interface OfferStruct {
   readonly maxUnits: bigint;
   /** Maximum buyer or seller assets, depending on side. */
   readonly maxAssets: bigint;
+  /** Maximum market continuous fee accepted by this offer. */
+  readonly continuousFeeCap: bigint;
 }
 
 /**
@@ -561,6 +575,8 @@ export interface BuildOfferParams {
   readonly maxUnits?: BigIntish;
   /** Maximum buyer or seller assets; defaults to zero. Exactly one of `maxUnits` and `maxAssets` must be non-zero. */
   readonly maxAssets?: BigIntish;
+  /** Maximum market continuous fee accepted by this offer; defaults to the protocol maximum. */
+  readonly continuousFeeCap?: BigIntish;
   /** Offer start timestamp; defaults to zero. */
   readonly start?: BigIntish;
   /** Offer expiry timestamp. */

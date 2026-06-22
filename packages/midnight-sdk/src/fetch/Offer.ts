@@ -7,6 +7,7 @@ import type { Address, Client, Hash } from "viem";
 import { readContract } from "viem/actions";
 import { midnightAbi } from "../abis.js";
 import { ConsumableUnitsLib } from "../math/index.js";
+import { OfferUtils } from "../offers/index.js";
 import type { MidnightFetchParams } from "./types.js";
 import { callParameters, resolveChainId } from "./utils.js";
 
@@ -39,6 +40,7 @@ import { callParameters, resolveChainId } from "./utils.js";
  * @throws {UnsupportedChainIdError} when no address registry exists for the client chain id.
  * @throws {UnknownAddressError} when the registry has no Midnight address for the client chain id.
  * @throws {NegativeValueError} when asset-capped `timeToMaturity` or SDK math inputs are negative.
+ * @throws {InvalidOfferParameterError} when offer caps are both zero or both non-zero.
  * @throws {DivisionByZeroError} when the delegated units conversion divides by zero.
  * @throws {SettlementFeeExceedsPriceError} when settlement fee exceeds a buy offer price.
  * @example
@@ -82,6 +84,7 @@ export async function fetchConsumableUnits(
   const maxAssets = BigInt(params.offer.maxAssets);
   assertNonNegative("offer.maxUnits", maxUnits);
   assertNonNegative("offer.maxAssets", maxAssets);
+  OfferUtils.validateOfferCaps({ maxUnits, maxAssets });
   const needsSettlementFee = maxUnits === 0n;
   const timeToMaturity = needsSettlementFee
     ? BigInt(params.timeToMaturity)

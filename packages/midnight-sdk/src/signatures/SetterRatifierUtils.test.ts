@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { baseOffer } from "../__test__/fixtures.js";
+import { addresses, baseOffer } from "../__test__/fixtures.js";
+import { InvalidTreeError } from "../errors.js";
 import { SetterRatifierUtils } from "./SetterRatifierUtils.js";
 import { Tree } from "./Tree.js";
 import { TreeUtils } from "./TreeUtils.js";
@@ -11,7 +12,10 @@ const proofNode =
 
 describe("SetterRatifierUtils.ratify", () => {
   test("default", () => {
-    const offer = baseOffer({ maxAssets: 0n });
+    const offer = baseOffer({
+      maxAssets: 0n,
+      ratifier: addresses.setterRatifier,
+    });
     const tree = Tree.create([offer]);
 
     const items = SetterRatifierUtils.ratify({ tree });
@@ -29,6 +33,23 @@ describe("SetterRatifierUtils.ratify", () => {
         proof: decoded.proof,
       }),
     ).toBe(true);
+  });
+
+  test("error: InvalidTreeError mixed ratifiers", () => {
+    const tree = Tree.create([
+      baseOffer({
+        maxAssets: 0n,
+        ratifier: addresses.setterRatifier,
+      }),
+      baseOffer({
+        maxAssets: 0n,
+        ratifier: addresses.ecrecoverRatifier,
+      }),
+    ]);
+
+    expect(() => SetterRatifierUtils.ratify({ tree })).toThrow(
+      InvalidTreeError,
+    );
   });
 });
 

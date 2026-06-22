@@ -1,5 +1,6 @@
 import { assertNonNegative, type BigIntish } from "@morpho-org/morpho-ts";
 import type { Address, Hash } from "viem";
+import { InvalidMarketParameterError } from "../errors.js";
 import { MarketUtils } from "./MarketUtils.js";
 
 /**
@@ -85,7 +86,14 @@ export interface CollateralParams {
  *
  * const params: IMarketParams = {
  *   loanToken: "0x0000000000000000000000000000000000000001",
- *   collateralParams: [],
+ *   collateralParams: [
+ *     {
+ *       token: "0x0000000000000000000000000000000000000002",
+ *       lltv: 770000000000000000n,
+ *       maxLif: 1061007957559681697n,
+ *       oracle: "0x0000000000000000000000000000000000000003",
+ *     },
+ *   ],
  *   maturity: 1n,
  *   rcfThreshold: 0n,
  *   enterGate: "0x0000000000000000000000000000000000000000",
@@ -96,7 +104,7 @@ export interface CollateralParams {
 export interface IMarketParams {
   /** Loan token address. */
   readonly loanToken: Address;
-  /** Collateral definitions sorted as expected by Midnight. */
+  /** Collateral definitions; `MarketParams` stores them sorted by token and rejects duplicate tokens. */
   readonly collateralParams: readonly (ICollateralParams | CollateralParams)[];
   /** Market maturity timestamp. */
   readonly maturity: BigIntish;
@@ -117,7 +125,14 @@ export interface IMarketParams {
  *
  * const params = new MarketParams({
  *   loanToken: "0x0000000000000000000000000000000000000001",
- *   collateralParams: [],
+ *   collateralParams: [
+ *     {
+ *       token: "0x0000000000000000000000000000000000000002",
+ *       lltv: 770000000000000000n,
+ *       maxLif: 1061007957559681697n,
+ *       oracle: "0x0000000000000000000000000000000000000003",
+ *     },
+ *   ],
  *   maturity: 1n,
  *   rcfThreshold: 0n,
  *   enterGate: "0x0000000000000000000000000000000000000000",
@@ -130,7 +145,7 @@ export class MarketParams {
   /** Loan token address. */
   public readonly loanToken: Address;
 
-  /** Collateral definitions. */
+  /** Collateral definitions sorted by token. */
   public readonly collateralParams: readonly CollateralParams[];
 
   /** Market maturity timestamp. */
@@ -145,10 +160,40 @@ export class MarketParams {
   /** Liquidator gate address. */
   public readonly liquidatorGate: Address;
 
+  /**
+   * Creates normalized market params.
+   *
+   * @param params - Market params to normalize.
+   * @throws {InvalidMarketParameterError} when the collateral list is empty or contains duplicate tokens.
+   */
   public constructor(params: IMarketParams) {
     this.loanToken = params.loanToken;
-    this.collateralParams = params.collateralParams.map(
+    const collateralParams = params.collateralParams.map(
       MarketUtils.toCollateralParams,
+    );
+    if (collateralParams.length === 0) {
+      throw new InvalidMarketParameterError({
+        parameter: "collateralParams",
+        value: params.collateralParams.length,
+        instruction: "Provide at least one collateral.",
+      });
+    }
+
+    const seenCollateralTokens = new Set<string>();
+    for (const collateral of collateralParams) {
+      const token = collateral.token.toLowerCase();
+      if (seenCollateralTokens.has(token)) {
+        throw new InvalidMarketParameterError({
+          parameter: "collateralParams",
+          value: collateral.token,
+          instruction: "Use each collateral token at most once.",
+        });
+      }
+      seenCollateralTokens.add(token);
+    }
+
+    this.collateralParams = collateralParams.sort((a, b) =>
+      a.token.toLowerCase() < b.token.toLowerCase() ? -1 : 1,
     );
     this.maturity = BigInt(params.maturity);
     this.rcfThreshold = BigInt(params.rcfThreshold);
@@ -203,7 +248,14 @@ export class MarketParams {
  *   chainId: 31337,
  *   params: {
  *     loanToken: "0x0000000000000000000000000000000000000001",
- *     collateralParams: [],
+ *     collateralParams: [
+ *       {
+ *         token: "0x0000000000000000000000000000000000000002",
+ *         lltv: 770000000000000000n,
+ *         maxLif: 1061007957559681697n,
+ *         oracle: "0x0000000000000000000000000000000000000003",
+ *       },
+ *     ],
  *     maturity: 1n,
  *     rcfThreshold: 0n,
  *     enterGate: "0x0000000000000000000000000000000000000000",
@@ -249,7 +301,14 @@ export interface IMarket {
  *
  * const market: MarketInput = {
  *   loanToken: "0x0000000000000000000000000000000000006000",
- *   collateralParams: [],
+ *   collateralParams: [
+ *     {
+ *       token: "0x0000000000000000000000000000000000007000",
+ *       lltv: 770000000000000000n,
+ *       maxLif: 1061007957559681697n,
+ *       oracle: "0x0000000000000000000000000000000000008000",
+ *     },
+ *   ],
  *   maturity: 54_000n,
  *   rcfThreshold: 0n,
  *   enterGate: "0x0000000000000000000000000000000000000000",
@@ -383,7 +442,14 @@ export class Market {
    *   chainId: 31337,
    *   params: {
    *     loanToken: "0x0000000000000000000000000000000000006000",
-   *     collateralParams: [],
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
    *     maturity: 54_000n,
    *     rcfThreshold: 0n,
    *     enterGate: "0x0000000000000000000000000000000000000000",
@@ -438,7 +504,14 @@ export class Market {
    *   chainId: 31337,
    *   params: {
    *     loanToken: "0x0000000000000000000000000000000000006000",
-   *     collateralParams: [],
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
    *     maturity: 54_000n,
    *     rcfThreshold: 0n,
    *     enterGate: "0x0000000000000000000000000000000000000000",

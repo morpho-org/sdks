@@ -8,7 +8,13 @@ The initial surface includes pinned Midnight ABI literals, ABI-compatible market
 
 The payload codec rejects non-padding offer bytes unless exactly one of `maxUnits` and `maxAssets` is non-zero.
 
+The payload codec caps the full framed wire payload at 1,000,000 bytes and derives the compressed item budget after reserving the header and maximum attribution suffix.
+
+Offers include the protocol `continuousFeeCap` field in SDK types, API mappings, payload encoding/decoding, Merkle leaf hashing, and EIP-712 ratifier typed data so maker signatures match the current Midnight contracts.
+
 Payload collateral validation mirrors `Midnight.touchMarket` by rejecting zero collateral tokens and `maxLif` values outside the low/high liquidation cursor formulas.
+
+`MarketParams` rejects empty collateral lists and duplicate collateral token entries, then normalizes collateral params into onchain token order before offer grouping, tree construction, or signing flows.
 
 Offer creation and payload validation require `expiry` to be strictly greater than `start`, so SDK-built offers cannot later fail payload encoding on a zero-duration time range.
 

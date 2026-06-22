@@ -3,6 +3,7 @@ import type { Address, Hash } from "viem";
 import { encodeAbiParameters, keccak256, zeroAddress, zeroHash } from "viem";
 import {
   DEFAULT_TICK_SPACING,
+  MAX_CONTINUOUS_FEE,
   MAX_TICK,
   OFFER_TYPEHASH,
 } from "../constants.js";
@@ -36,6 +37,7 @@ const offerHashParams = [
   { name: "reduceOnly", type: "bool" },
   { name: "maxUnits", type: "uint256" },
   { name: "maxAssets", type: "uint256" },
+  { name: "continuousFeeCap", type: "uint256" },
 ] as const;
 
 /**
@@ -137,6 +139,8 @@ export interface ValidatedOfferParams {
   readonly maxUnits: bigint;
   /** Maximum buyer or seller assets, with exactly one cap non-zero. */
   readonly maxAssets: bigint;
+  /** Maximum market continuous fee accepted by this offer. */
+  readonly continuousFeeCap: bigint;
   /** Receiver used only when maker is seller. */
   readonly receiverIfMakerIsSeller: Address;
 }
@@ -217,6 +221,7 @@ export namespace OfferUtils {
       reduceOnly: offer.reduceOnly,
       maxUnits: offer.maxUnits,
       maxAssets: offer.maxAssets,
+      continuousFeeCap: offer.continuousFeeCap,
     };
   }
 
@@ -283,6 +288,7 @@ export namespace OfferUtils {
         offerStruct.reduceOnly,
         offerStruct.maxUnits,
         offerStruct.maxAssets,
+        offerStruct.continuousFeeCap,
       ]),
     );
   }
@@ -521,6 +527,42 @@ export namespace OfferUtils {
   }
 
   /**
+   * Validates and normalizes the maximum continuous fee an offer accepts.
+   *
+   * Use this before `Offer.create` when a maker UI exposes fee tolerance.
+   * `Offer.create` calls it internally and defaults omitted values to
+   * {@link MAX_CONTINUOUS_FEE}.
+   *
+   * @param params.continuousFeeCap - Optional maximum market continuous fee accepted by this offer.
+   * @returns Normalized continuous fee cap.
+   * @throws {InvalidOfferParameterError} when the cap is negative.
+   * @example
+   * ```ts
+   * import { OfferUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const cap = OfferUtils.validateContinuousFeeCap({});
+   * console.log(cap.continuousFeeCap);
+   * ```
+   */
+  export function validateContinuousFeeCap(params: {
+    readonly continuousFeeCap?: BigIntish;
+  }) {
+    const continuousFeeCap = BigInt(
+      params.continuousFeeCap ?? MAX_CONTINUOUS_FEE,
+    );
+
+    if (continuousFeeCap < 0n) {
+      throw new InvalidOfferParameterError({
+        parameter: "continuousFeeCap",
+        value: continuousFeeCap,
+        instruction: "Use a non-negative continuous fee cap.",
+      });
+    }
+
+    return { continuousFeeCap };
+  }
+
+  /**
    * Resolves and validates the maker-seller receiver field for an offer side.
    *
    * Use this before `Offer.create` when side-specific receiver defaults must be
@@ -577,6 +619,7 @@ export namespace OfferUtils {
    * @param params.tickSpacing - Optional market tick spacing; defaults to `DEFAULT_TICK_SPACING`.
    * @param params.maxUnits - Optional unit cap; defaults to zero.
    * @param params.maxAssets - Optional buyer or seller asset cap; defaults to zero.
+   * @param params.continuousFeeCap - Optional maximum market continuous fee accepted by this offer; defaults to `MAX_CONTINUOUS_FEE`.
    * @param params.start - Optional offer start timestamp; defaults to zero.
    * @param params.expiry - Offer expiry timestamp.
    * @param params.callback - Optional callback address; defaults to the zero address.
@@ -615,6 +658,7 @@ export namespace OfferUtils {
     const { tick, tickSpacing } = validateOfferTick(params);
     const { start, expiry } = validateOfferTimeRange(params);
     const { maxUnits, maxAssets } = validateOfferCaps(params);
+    const { continuousFeeCap } = validateContinuousFeeCap(params);
     const receiverIfMakerIsSeller = resolveReceiverIfMakerIsSeller(params);
 
     return {
@@ -624,6 +668,7 @@ export namespace OfferUtils {
       expiry,
       maxUnits,
       maxAssets,
+      continuousFeeCap,
       receiverIfMakerIsSeller,
     };
   }
