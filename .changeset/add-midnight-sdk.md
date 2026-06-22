@@ -12,9 +12,9 @@ Payload collateral validation mirrors `Midnight.touchMarket` by rejecting zero c
 
 Offer creation and payload validation require `expiry` to be strictly greater than `start`, so SDK-built offers cannot later fail payload encoding on a zero-duration time range.
 
-Ecrecover ratification rejects trees whose offers span multiple makers, so one maker signature cannot produce payload items for another maker's leaves.
+Ecrecover ratification supports direct maker signatures and delegated signer signatures, including mixed-maker trees when the same signer is authorized by every maker onchain.
 
-Ecrecover ratification accepts a wallet client directly for maker-side signing and derives the EIP-712 domain chain id from that wallet while validating the wallet account and returned signature before producing payload items.
+Ecrecover ratification accepts a viem client plus explicit signer account, derives the EIP-712 domain chain id from that client, and validates the returned signature before producing payload items.
 
 Offer creation only accepts protocol-reachable tick spacings and offer groups require a shared cap mode and value, matching Midnight's tick accessibility and group consumption accounting.
 

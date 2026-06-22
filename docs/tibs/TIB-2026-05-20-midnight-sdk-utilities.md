@@ -530,7 +530,8 @@ if (!validation.valid) {
 // EcrecoverRatifierUtils derives the verifier from offer.ratifier and rejects mixed-ratifier trees.
 const items = await EcrecoverRatifierUtils.ratify({
   tree,
-  walletClient,
+  client: walletClient,
+  account: signer,
 });
 
 const payload = await Payload.encode(items);
@@ -549,7 +550,7 @@ Pure utility namespaces stay available for object-first integrations:
 - `TreeUtils.buildRoot`
 - `TreeUtils.buildProof`
 - `TreeUtils.verifyProof`
-- `EcrecoverRatifierUtils.typedData`, `EcrecoverRatifierUtils.digest`, or `EcrecoverRatifierUtils.sign` with a wallet client;
+- `EcrecoverRatifierUtils.typedData`, `EcrecoverRatifierUtils.digest`, or `EcrecoverRatifierUtils.sign` with a viem client and explicit signer account;
 - `EcrecoverRatifierUtils.encodeRatifierData`
 - `EcrecoverRatifierUtils.decodeRatifierData`
 - `SetterRatifierUtils.encodeRatifierData`
