@@ -46,12 +46,13 @@ Extract `<BASE_BRANCH>`, `<HEAD_BRANCH>`, `<HEAD_SHA>`, `state`. Validate that a
 
 ## Steps 3–6: Shared review base
 
-**Read `.agents/lib/pr-review-base.md` and follow Steps 3–6 there**, with these inputs:
+**Read `.agents/pr-review-engine/SKILL.md` and follow Steps 3–6 there**, with these inputs:
 
 - `<DIFF_SOURCE>` = `pr` (use `origin/<BASE_BRANCH>...origin/<HEAD_BRANCH>`)
 - `<HEAD_REF>` = `origin/<HEAD_BRANCH>`
+- `<INTENT_CONTEXT>` = the PR title + body (from `PR_JSON` in Step 2) followed by the changed-commit messages (`git log --format='%h %s%n%b' $(git merge-base origin/<BASE_BRANCH> origin/<HEAD_BRANCH>)..origin/<HEAD_BRANCH>`), so agents can tell a deliberate, documented change from a regression.
 
-Steps 3–6 produce: `<FINDINGS>` (sorted, deduplicated), `<FAILED_AGENTS>` (count + names), `<COUNTS>` (severity totals). These flow into Step 7.
+Steps 3–6 produce: `<FINDINGS>` (sorted, deduplicated, each carrying `snapped_line`), `<DROPPED_FINDINGS>`, `<FAILED_AGENTS>` (count + names), `<COUNTS>` (severity totals), `<DROPPED_COUNTS>`, `<TOTAL_AGENTS_LAUNCHED>`. These flow into Step 7. CI mode is stateless — it does **not** read or write the findings ledger (a fresh verdict every run).
 
 ## Step 7: Post the formal review (atomic)
 
@@ -71,13 +72,15 @@ Structure:
   "comments": [
     {
       "path": "<file>",
-      "line": <line_number>,
+      "line": <snapped_line>,
       "side": "RIGHT",
       "body": "**[SEVERITY]** <description>\n\nSuggestion: <how to fix>"
     }
   ]
 }
 ```
+
+Anchor each inline comment's `line` on the finding's `snapped_line` (the nearest actual diff line) — the reviews API rejects any comment whose line is not an exact diff line. Skip an inline comment for any finding that carries no `snapped_line` (none of CI's agents emit the `runtime` sentinel) and fold it into the body instead.
 
 ### Verdict
 

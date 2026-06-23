@@ -42,7 +42,7 @@ Files in scope (read each one whose content is in the diff OR which references s
 - `AGENTS.md` (root and per-package). `CLAUDE.md` is a symlink to `AGENTS.md` — don't double-check.
 - `MISSION.md`, `CONTRIBUTING.md`, `SECURITY.md`.
 - `docs/**/*.md` (style guides, architecture deep-dives, TIBs, templates).
-- `.agents/lib/*.md`, `.agents/personas/*.md`, `.agents/commands/*.md`.
+- `.agents/pr-review-engine/SKILL.md`, `.agents/pr-review-engine/agents/*.md`, `.agents/pr-review-engine/references/*.md`, `.agents/commands/*.md`.
 - Any `*.md` colocated with a package (`packages/<pkg>/*.md`).
 
 For each Markdown file affected, flag:
@@ -57,8 +57,8 @@ For each Markdown file affected, flag:
 For every Markdown link, path reference, or symbol pointer in the changed files (and in files that reference anything the diff renamed/moved):
 
 - **Internal Markdown links must resolve.** `[label](./path/to/file.md)` — the path must exist. Anchors `#section-name` must match a heading in the target file (slugified — GitHub's convention).
-- **Path references in prose must resolve.** Lines like `Reference \`docs/jsdoc-style.md\`` or `Read \`.agents/personas/web3-security.md\`` are pointers; the file must exist.
-- **Frontmatter references must resolve.** Persona frontmatter (`applies:`, `trigger:`, `canonical-rules:`, `out-of-scope:` mentions) must reference real `AGENTS.md` sections, real flag names from `pr-review-base.md` Step 4, and real file paths.
+- **Path references in prose must resolve.** Lines like `Reference \`docs/jsdoc-style.md\`` or `Read \`.agents/pr-review-engine/agents/web3-security.md\`` are pointers; the file must exist.
+- **Frontmatter references must resolve.** Persona frontmatter (`applies:`, `trigger:`, `canonical-rules:`, `out-of-scope:` mentions) must reference real `AGENTS.md` sections, real flag names from `.agents/pr-review-engine/SKILL.md` Step 4, and real file paths.
 - **Renames cascade.** If the diff renames or moves a file (detect via `git diff --name-status --find-renames`), every reference to the old path in any tracked Markdown / persona / skill / command file must be updated. Grep for the old basename in the repo and surface unresolved hits.
 - **Removed exports / removed files.** If the diff removes a public export or a file, grep the repo for references and flag any that survive.
 
@@ -87,3 +87,16 @@ For diffs that touch `AGENTS.md` or any persona file, flag:
 - Do NOT review test coverage — that's `test-coverage`'s job.
 - Do NOT propose new docs that don't already exist somewhere in the diff or its references. Adding "the README should also explain X" is scope creep unless the diff specifically changed X.
 - Do NOT flag missing JSDoc on internal (non-exported) symbols.
+
+## Fix rubric
+
+(Consumed by `/pr-fix` when generating fixes for individual review comments; discoverable via `.agents/pr-review-engine/scripts/list-fix-rubric-agents.sh`.)
+
+Mechanical fixes only:
+
+- Add missing JSDoc / TSDoc on a newly exported symbol, following `docs/jsdoc-style.md` (look for examples in `<PROJECT_CONTEXT>` first; otherwise follow the in-repo majority style).
+- Fix a broken `[link](path)` reference whose target file was renamed inside this same diff (the new path is unambiguous).
+- Update a stale path reference in `AGENTS.md` / `README.md` / `MISSION.md` / a persona when the file move it describes happened in this same diff.
+- Restore a missing back-link between a persona's frontmatter `applies:` callout and the corresponding `> Applied by personas:` callout in `AGENTS.md`.
+
+**Do not** auto-apply: rewording prose, restructuring a doc, adding new docs that didn't exist before, or "improving" docstrings already present — surface those for human review.
