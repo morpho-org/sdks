@@ -30,7 +30,7 @@ jobs:
           cache: pnpm
 
       - name: Restore Foundry cache
-        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        uses: actions/cache/restore@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
         with:
           path: ~/.foundry/cache/rpc
           key: foundry-${{ github.job }}-${{ github.sha }}
@@ -51,7 +51,7 @@ jobs:
 
       - name: Save Foundry cache
         if: always()
-        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        uses: actions/cache/save@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
         with:
           path: ~/.foundry/cache/rpc
           key: foundry-${{ github.job }}-${{ github.sha }}
