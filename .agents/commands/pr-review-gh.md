@@ -160,7 +160,7 @@ CYCLE START:
    set CYCLE_LAST_REVIEWED_RAW = `gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/reviews?per_page=100`
    If gh exit code != 0: abort cycle with WATCH_TRANSIENT_ERROR (do NOT fall through to "review everything").
    set CYCLE_LAST_REVIEWED_SHA = `printf '%s' "${CYCLE_LAST_REVIEWED_RAW}" | jq --arg login "<BOT_LOGIN>" -r '[.[] | select(.user.login == $login or ((.body // "") | test("Parallel PR Review|Code Review Summary")))] | sort_by(.submitted_at) | last | .commit_id // ""'`
-   set CYCLE_LAST_REVIEW_INCOMPLETE = `printf '%s' "${CYCLE_LAST_REVIEWED_RAW}" | jq --arg login "<BOT_LOGIN>" -r '[.[] | select(.user.login == $login or ((.body // "") | test("Parallel PR Review|Code Review Summary")))] | sort_by(.submitted_at) | last | if . == null then false else ((.body // "") | test("review may be incomplete")) end'` — "true" when the most recent matching review carried the agent-failure warning.
+   set CYCLE_LAST_REVIEW_INCOMPLETE = `printf '%s' "${CYCLE_LAST_REVIEWED_RAW}" | jq --arg login "<BOT_LOGIN>" -r '[.[] | select(.user.login == $login or ((.body // "") | test("Parallel PR Review|Code Review Summary")))] | sort_by(.submitted_at) | last | if . == null then false else ((.body // "") | test("review may be incomplete|REVIEW_INCOMPLETE")) end'` — "true" when the most recent matching review carried an agent-failure marker: the `review may be incomplete` warning (prepended on a with-findings or watcher-cycle post) OR the `REVIEW_INCOMPLETE` sentinel (the zero-findings-but-failures initial body, which does not carry the warning line). Match both so the zero-findings case — exactly when retry matters most — is not missed.
    If gh exit was zero AND ${CYCLE_LAST_REVIEWED_SHA} is empty: proceed with empty value (review everything on first sighting).
 
 3. COMPARE SHA:
@@ -212,4 +212,5 @@ After CronCreate returns the job ID:
 | `WATCH_TRANSIENT_ERROR` | Step 9 watcher (any cycle command) | `— step <N> (<command>): <stderr>` (any non-zero exit; permanent failures recur every cycle until CronDelete) |
 | `WATCH_PR_CLOSED` | Step 9 watcher Step 1 | `— PR #<PR_NUMBER> state=${CYCLE_PR_STATE}, watcher exiting.` |
 | `WATCH_REVIEW_CLEAN` | Step 9 watcher Step 3 | `— PR #<PR_NUMBER> still at ${CYCLE_HEAD_SHA_SHORT}, no new commits since last review.` |
+| `WATCH_RETRY_INCOMPLETE` | Step 9 watcher Step 3 | `— PR #<PR_NUMBER> re-reviewing ${CYCLE_HEAD_SHA_SHORT}: prior review was incomplete (agent failure).` (same SHA, but the last review carried an agent-failure marker — re-review instead of cache-hitting) |
 | `WATCH_REVIEW_DONE` | Step 9 watcher Step 7 | `— PR #<PR_NUMBER> commit ${CYCLE_HEAD_SHA_SHORT}: <N> findings (X critical, Y high, Z medium, W low).` |
