@@ -102,7 +102,7 @@ describe("ReallocationData.getPublicReallocationLiquidity", () => {
   });
 });
 
-describe("ReallocationData.getAvailableLiquidityToTargetUtilization", () => {
+describe("ReallocationData.getAvailableLiquidityToUtilization", () => {
   test("default: own headroom + scaled available liquidity", () => {
     // 1000 supply / 500 borrow (50% util). ownHeadroom to 90% = 1000·0.9 − 500 = 400.
     // supplyTarget set to 90% (not > target) → scaled liquidity 0.9·200 = 180 is
@@ -113,14 +113,10 @@ describe("ReallocationData.getAvailableLiquidityToTargetUtilization", () => {
     ]);
 
     expect(
-      data.getAvailableLiquidityToTargetUtilization(
-        targetParams.id,
-        NINETY_PERCENT,
-        {
-          timestamp: TIMESTAMP,
-          defaultSupplyTargetUtilization: NINETY_PERCENT,
-        },
-      ),
+      data.getAvailableLiquidityToUtilization(targetParams.id, NINETY_PERCENT, {
+        timestamp: TIMESTAMP,
+        defaultSupplyTargetUtilization: NINETY_PERCENT,
+      }),
     ).toBe(580n * MathLib.WAD);
   });
 
@@ -133,13 +129,9 @@ describe("ReallocationData.getAvailableLiquidityToTargetUtilization", () => {
     ]);
 
     expect(
-      data.getAvailableLiquidityToTargetUtilization(
-        targetParams.id,
-        NINETY_PERCENT,
-        {
-          timestamp: TIMESTAMP,
-        },
-      ),
+      data.getAvailableLiquidityToUtilization(targetParams.id, NINETY_PERCENT, {
+        timestamp: TIMESTAMP,
+      }),
     ).toBe(400n * MathLib.WAD);
   });
 
@@ -157,14 +149,10 @@ describe("ReallocationData.getAvailableLiquidityToTargetUtilization", () => {
     ]);
 
     expect(
-      data.getAvailableLiquidityToTargetUtilization(
-        targetParams.id,
-        NINETY_PERCENT,
-        {
-          timestamp: TIMESTAMP,
-          defaultSupplyTargetUtilization: NINETY_PERCENT,
-        },
-      ),
+      data.getAvailableLiquidityToUtilization(targetParams.id, NINETY_PERCENT, {
+        timestamp: TIMESTAMP,
+        defaultSupplyTargetUtilization: NINETY_PERCENT,
+      }),
     ).toBe(180n * MathLib.WAD);
   });
 
@@ -183,14 +171,10 @@ describe("ReallocationData.getAvailableLiquidityToTargetUtilization", () => {
     ]);
 
     expect(
-      data.getAvailableLiquidityToTargetUtilization(
-        targetParams.id,
-        NINETY_PERCENT,
-        {
-          timestamp: TIMESTAMP,
-          defaultSupplyTargetUtilization: NINETY_PERCENT,
-        },
-      ),
+      data.getAvailableLiquidityToUtilization(targetParams.id, NINETY_PERCENT, {
+        timestamp: TIMESTAMP,
+        defaultSupplyTargetUtilization: NINETY_PERCENT,
+      }),
     ).toBe(0n);
   });
 
@@ -208,14 +192,10 @@ describe("ReallocationData.getAvailableLiquidityToTargetUtilization", () => {
     ]);
 
     expect(
-      data.getAvailableLiquidityToTargetUtilization(
-        targetParams.id,
-        NINETY_PERCENT,
-        {
-          timestamp: TIMESTAMP,
-          defaultSupplyTargetUtilization: NINETY_PERCENT,
-        },
-      ),
+      data.getAvailableLiquidityToUtilization(targetParams.id, NINETY_PERCENT, {
+        timestamp: TIMESTAMP,
+        defaultSupplyTargetUtilization: NINETY_PERCENT,
+      }),
     ).toBe(130n * MathLib.WAD);
   });
 
@@ -230,7 +210,7 @@ describe("ReallocationData.getAvailableLiquidityToTargetUtilization", () => {
       defaultMaxWithdrawalUtilization: parseEther("0.92"),
     };
 
-    data.getAvailableLiquidityToTargetUtilization(
+    data.getAvailableLiquidityToUtilization(
       targetParams.id,
       NINETY_PERCENT,
       options,
@@ -254,7 +234,7 @@ describe("ReallocationData.getAvailableLiquidityToTargetUtilization", () => {
       targetMarket.getBorrowToUtilization(DEFAULT_SUPPLY_TARGET_UTILIZATION) +
       MathLib.wMulDown(200n * MathLib.WAD, DEFAULT_SUPPLY_TARGET_UTILIZATION);
 
-    expect(data.getAvailableLiquidityToTargetUtilization(targetParams.id)).toBe(
+    expect(data.getAvailableLiquidityToUtilization(targetParams.id)).toBe(
       expected,
     );
   });
@@ -263,7 +243,32 @@ describe("ReallocationData.getAvailableLiquidityToTargetUtilization", () => {
     const data = makeData();
 
     expect(() =>
-      data.getAvailableLiquidityToTargetUtilization(sourceParamsA.id),
+      data.getAvailableLiquidityToUtilization(sourceParamsA.id),
     ).toThrow(UnknownReallocationMarketError);
+  });
+
+  test("behavior: deprecated getAvailableLiquidityToTargetUtilization alias delegates", () => {
+    const data = makeData();
+    stubReallocations(data, [
+      { id: sourceParamsA.id, vault: VAULT_A, assets: 200n * MathLib.WAD },
+    ]);
+    const options = {
+      timestamp: TIMESTAMP,
+      defaultSupplyTargetUtilization: NINETY_PERCENT,
+    };
+
+    expect(
+      data.getAvailableLiquidityToTargetUtilization(
+        targetParams.id,
+        NINETY_PERCENT,
+        options,
+      ),
+    ).toBe(
+      data.getAvailableLiquidityToUtilization(
+        targetParams.id,
+        NINETY_PERCENT,
+        options,
+      ),
+    );
   });
 });
