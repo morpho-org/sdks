@@ -1,5 +1,22 @@
 # @morpho-org/morpho-sdk
 
+## 4.2.0
+
+### Minor Changes
+
+- [#813](https://github.com/morpho-org/sdks/pull/813) [`3af165a`](https://github.com/morpho-org/sdks/commit/3af165a3c3c12e66308e6aa77750e6f28d1ab2fe) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Add `ReallocationData.getAvailableLiquidityToUtilization` (with a `utilization` parameter) and deprecate the previous `getAvailableLiquidityToTargetUtilization` / `targetUtilization` naming.
+
+  The `target utilization` wording wrongly suggested a market's configured supply-target utilization, whereas the argument is just an arbitrary utilization ceiling the caller wants to bring the market to. The old method is kept as a `@deprecated` alias that delegates to the new one (to be removed in the next major), so existing consumers keep working. Behavior is unchanged.
+
+## 4.1.0
+
+### Minor Changes
+
+- [#796](https://github.com/morpho-org/sdks/pull/796) [`2936ffa`](https://github.com/morpho-org/sdks/commit/2936ffa5ed4c435b1593fb3e99537a95afbb12ad) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Add two read-only public-allocator liquidity metrics as `ReallocationData` methods.
+
+  - `ReallocationData.getPublicReallocationLiquidity(marketId, options?)`: total reallocatable liquidity into a market from sibling markets via the PublicAllocator. Never throws on insufficiency (returns `0n`).
+  - `ReallocationData.getAvailableLiquidityToTargetUtilization(marketId, targetUtilization?, options?)`: liquidity available to bring a market to `targetUtilization` (default `DEFAULT_SUPPLY_TARGET_UTILIZATION`) — the max borrow keeping post-borrow utilization at or below the target on the post-reallocation supply, i.e. `getBorrowToUtilization({ supply + L, borrow }, targetUtilization)`. Returns only the market's own borrow headroom when `supplyTargetUtilization > targetUtilization`, and `0n` when the market is already at or above the target and the reallocatable liquidity is too small to bring it back under.
+
 ## 4.0.0
 
 ### Major Changes
