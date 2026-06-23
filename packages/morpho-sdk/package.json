@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/morpho-sdk",
   "description": "Abstraction layer for Morpho's complexity.",
-  "version": "4.2.0",
+  "version": "4.0.0",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Foulks-Plb <https://x.com/FoulkPlb>"
@@ -100,8 +100,6 @@
     "viem": "^2.0.0"
   },
   "devDependencies": {
-    "@morpho-org/bundler-sdk-viem": "workspace:^",
-    "@morpho-org/simulation-sdk": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "dotenv": "^17.4.2",
     "fast-check": "^4.8.0",

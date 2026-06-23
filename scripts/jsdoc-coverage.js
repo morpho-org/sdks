@@ -24,13 +24,8 @@ const TIER = {
   "morpho-sdk": 1,
   "evm-simulation": 1,
   "blue-sdk": 2,
-  "simulation-sdk": 2,
   "blue-sdk-viem": 2,
-  "bundler-sdk-viem": 3,
   "liquidity-sdk-viem": 3,
-  "migration-sdk-viem": 3,
-  "blue-sdk-wagmi": 4,
-  "simulation-sdk-wagmi": 4,
   "morpho-ts": 4,
 };
 

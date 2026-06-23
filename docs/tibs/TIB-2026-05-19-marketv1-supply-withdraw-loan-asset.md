@@ -11,7 +11,7 @@
 
 ## Context
 
-`morpho-sdk` already exposes the borrower-side of every Morpho Blue MarketV1 path (`supplyCollateral`, `borrow`, `repay`, `withdrawCollateral`, and the composites `supplyCollateralBorrow` / `repayWithdrawCollateral`). The **supplier-side of the loan asset** is missing: there is no `marketV1Supply` and no `marketV1Withdraw`. `Morpho.sol` exposes these natively (`supply` / `withdraw`) and `GeneralAdapter1` already wraps them (`morphoSupply` / `morphoWithdraw`), but integrators must drop down to raw calldata or to `bundler-sdk-viem` directly — which contradicts the SDK's contract that all market operations are reachable through layered `Client → Entity → Action` builders.
+`morpho-sdk` already exposes the borrower-side of every Morpho Blue MarketV1 path (`supplyCollateral`, `borrow`, `repay`, `withdrawCollateral`, and the composites `supplyCollateralBorrow` / `repayWithdrawCollateral`). The **supplier-side of the loan asset** is missing: there is no `marketV1Supply` and no `marketV1Withdraw`. `Morpho.sol` exposes these natively (`supply` / `withdraw`) and `GeneralAdapter1` already wraps them (`morphoSupply` / `morphoWithdraw`), but integrators must drop down to raw calldata or lower-level encoding helpers — which contradicts the SDK's contract that all market operations are reachable through layered `Client → Entity → Action` builders.
 
 Two consequences:
 

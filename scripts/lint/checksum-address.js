@@ -3,16 +3,6 @@ import { join } from "node:path";
 import { getAddress } from "viem";
 import config from "../../biome.json" with { type: "json" };
 
-const excludeDeprecated = process.argv.includes("--exclude-deprecated");
-
-const deprecatedPackageDirs = new Set([
-  "packages/bundler-sdk-viem",
-  "packages/migration-sdk-viem",
-  "packages/simulation-sdk",
-  "packages/blue-sdk-wagmi",
-  "packages/simulation-sdk-wagmi",
-]);
-
 const ignored = (config.files?.includes ?? [])
   .filter((pattern) => pattern.startsWith("!"))
   .map((pattern) => pattern.replace(/^!(\*\*\/)?/, ""));
@@ -24,10 +14,7 @@ const lint = (path) => {
     if (file === ".git" || file === "node_modules") continue;
 
     const filePath = join(path, file);
-    const normalizedPath = filePath.replace(/^\.\//, "");
     if (lstatSync(filePath).isDirectory()) {
-      if (excludeDeprecated && deprecatedPackageDirs.has(normalizedPath))
-        continue;
       lint(filePath);
       continue;
     }
