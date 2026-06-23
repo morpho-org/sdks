@@ -17,7 +17,11 @@ import {
 } from "viem";
 import { signTypedData } from "viem/actions";
 import { EIP712_DOMAIN_TYPEHASH } from "../constants.js";
-import { InvalidTreeError, InvalidTreeHeightError } from "../errors.js";
+import {
+  InvalidTreeError,
+  InvalidTreeHeightError,
+  InvalidTypedDataSignatureError,
+} from "../errors.js";
 import type { OfferStruct } from "../offers/index.js";
 import type { Item as PayloadItem } from "./Payload.js";
 import type { Tree } from "./Tree.js";
@@ -555,6 +559,7 @@ export namespace EcrecoverRatifierUtils {
    * @returns Signature returned by the client.
    * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree height is unsupported.
+   * @throws {InvalidTypedDataSignatureError} when the returned signature does not recover to `params.account`.
    * @example
    * ```ts
    * import { EcrecoverRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
@@ -615,11 +620,16 @@ export namespace EcrecoverRatifierUtils {
       ...data,
     });
 
-    await verifyTypedData<Record<string, unknown>, "OfferTree">({
+    const isValidSignature = await verifyTypedData<
+      Record<string, unknown>,
+      "OfferTree"
+    >({
       ...data,
       address: signer,
       signature,
     });
+
+    if (!isValidSignature) throw new InvalidTypedDataSignatureError(signer);
 
     return signature;
   }
@@ -819,6 +829,7 @@ export namespace EcrecoverRatifierUtils {
    * @returns Items containing each offer and its ratifier data.
    * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree height is unsupported.
+   * @throws {InvalidTypedDataSignatureError} when client signing returns a signature that does not recover to `params.account`.
    * @example
    * ```ts
    * import { EcrecoverRatifierUtils, Tree } from "@morpho-org/midnight-sdk";

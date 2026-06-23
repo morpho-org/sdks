@@ -3,7 +3,11 @@ import { privateKeyToAccount } from "viem/accounts";
 import { base } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { addresses, baseOffer } from "../__test__/fixtures.js";
-import { InvalidTreeError, InvalidTreeHeightError } from "../errors.js";
+import {
+  InvalidTreeError,
+  InvalidTreeHeightError,
+  InvalidTypedDataSignatureError,
+} from "../errors.js";
 import { EcrecoverRatifierUtils } from "./EcrecoverRatifierUtils.js";
 import { Tree } from "./Tree.js";
 import { TreeUtils } from "./TreeUtils.js";
@@ -14,6 +18,8 @@ const proofNode =
   "0x4444444444444444444444444444444444444444444444444444444444444444" as const;
 const privateKey =
   "0x0000000000000000000000000000000000000000000000000000000000000001" as const;
+const wrongPrivateKey =
+  "0x0000000000000000000000000000000000000000000000000000000000000002" as const;
 const invalidSignature = `0x${"00".repeat(65)}` as Hex;
 
 describe("EcrecoverRatifierUtils.ratify", () => {
@@ -139,6 +145,32 @@ describe("EcrecoverRatifierUtils.ratify", () => {
         account: account.address,
       }),
     ).rejects.toThrow();
+  });
+
+  test("error: InvalidTypedDataSignatureError when client signs with another account", async () => {
+    const account = privateKeyToAccount(privateKey);
+    const wrongAccount = privateKeyToAccount(wrongPrivateKey);
+    const tree = Tree.create([
+      baseOffer({ maker: account.address, maxAssets: 0n }),
+    ]);
+    const typedData = EcrecoverRatifierUtils.typedData({
+      tree,
+      chainId: BigInt(base.id),
+    });
+    const client = createWalletClient({
+      chain: base,
+      transport: custom({
+        request: async () => wrongAccount.signTypedData(typedData),
+      }),
+    });
+
+    await expect(
+      EcrecoverRatifierUtils.ratify({
+        tree,
+        client,
+        account: account.address,
+      }),
+    ).rejects.toBeInstanceOf(InvalidTypedDataSignatureError);
   });
 });
 
