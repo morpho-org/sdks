@@ -521,28 +521,28 @@ export class ReallocationData implements InputReallocationData {
   }
 
   /**
-   * Computes the liquidity available to bring `marketId` to `targetUtilization`,
+   * Computes the liquidity available to bring `marketId` to `utilization`,
    * counting the public-allocator liquidity reallocatable into it.
    *
    * Returns the max borrow `x` keeping post-borrow utilization
-   * `(borrow + x) / (supply + L) ≤ targetUtilization`, where `L` is the
+   * `(borrow + x) / (supply + L) ≤ utilization`, where `L` is the
    * reallocatable liquidity added to the market's supply — equivalently
-   * `getBorrowToUtilization({ supply + L, borrow }, targetUtilization)`. Below
-   * the target this is the market's own borrow headroom plus `targetUtilization · L`;
+   * `getBorrowToUtilization({ supply + L, borrow }, utilization)`. Below
+   * `utilization` this is the market's own borrow headroom plus `utilization · L`;
    * reallocated supply also raises the supply denominator, so only that scaled
    * share backs further borrow.
    *
    * Read-only metric — never throws on insufficiency:
    * - returns only the market's own borrow headroom when
-   *   `supplyTargetUtilization > targetUtilization` (reallocation would not
-   *   trigger at that target);
-   * - returns `0n` when the market is already at or above the target and `L` is
-   *   too small to bring it back under.
+   *   `supplyTargetUtilization > utilization` (reallocation would not
+   *   trigger at that utilization);
+   * - returns `0n` when the market is already at or above `utilization` and `L`
+   *   is too small to bring it back under.
    *
    * @param marketId - Target market to borrow from.
-   * @param targetUtilization - Utilization to bring the market to, scaled by WAD. Defaults to {@link DEFAULT_SUPPLY_TARGET_UTILIZATION}.
+   * @param utilization - Utilization to bring the market to, scaled by WAD. Defaults to {@link DEFAULT_SUPPLY_TARGET_UTILIZATION}.
    * @param options - Optional reallocation options (supply target utilization trigger, timestamp, withdrawal caps).
-   * @returns Available liquidity to the target utilization in loan-token units; `0n` when none is available.
+   * @returns Available liquidity to the given utilization in loan-token units; `0n` when none is available.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
    * @example
    * ```ts
@@ -566,17 +566,17 @@ export class ReallocationData implements InputReallocationData {
    *
    * // Max borrow keeping utilization at or below 90%, counting shared liquidity.
    * const available: bigint =
-   *   reallocationData.getAvailableLiquidityToTargetUtilization(
+   *   reallocationData.getAvailableLiquidityToUtilization(
    *     marketParams.id,
    *     parseEther("0.9"),
    *     { timestamp: block.timestamp },
    *   );
    * ```
    */
-  // biome-ignore lint/complexity/useMaxParams: (marketId, targetUtilization, options) is the metric's public API
-  public getAvailableLiquidityToTargetUtilization(
+  // biome-ignore lint/complexity/useMaxParams: (marketId, utilization, options) is the metric's public API
+  public getAvailableLiquidityToUtilization(
     marketId: MarketId,
-    targetUtilization: bigint = DEFAULT_SUPPLY_TARGET_UTILIZATION,
+    utilization: bigint = DEFAULT_SUPPLY_TARGET_UTILIZATION,
     options?: ReallocationComputeOptions,
   ): bigint {
     const market = this.getMarket(marketId).accrueInterest(options?.timestamp);
@@ -586,8 +586,8 @@ export class ReallocationData implements InputReallocationData {
       marketId,
       options,
     );
-    if (supplyTargetUtilization > targetUtilization)
-      return market.getBorrowToUtilization(targetUtilization);
+    if (supplyTargetUtilization > utilization)
+      return market.getBorrowToUtilization(utilization);
 
     // Borrow-to-target on the post-reallocation supply; clamps to 0n above target.
     const availableLiquidity = this.getPublicReallocationLiquidity(
@@ -599,7 +599,7 @@ export class ReallocationData implements InputReallocationData {
         totalSupplyAssets: market.totalSupplyAssets + availableLiquidity,
         totalBorrowAssets: market.totalBorrowAssets,
       },
-      targetUtilization,
+      utilization,
     );
   }
 
