@@ -25,7 +25,7 @@
   "scripts": {
     "prepare": "husky",
     "build": "pnpm -r --if-present build",
-    "build:ci": "pnpm -r --if-present --filter './packages/**' --filter='!@morpho-org/liquidation-sdk-viem' --filter='!@morpho-org/bundler-sdk-viem' --filter='!@morpho-org/migration-sdk-viem' --filter='!@morpho-org/simulation-sdk' --filter='!@morpho-org/blue-sdk-wagmi' --filter='!@morpho-org/simulation-sdk-wagmi' --filter='!@morpho-org/test-wagmi' build",
+    "build:ci": "pnpm -r --if-present --filter './packages/**' --filter='!@morpho-org/bundler-sdk-viem' --filter='!@morpho-org/migration-sdk-viem' --filter='!@morpho-org/simulation-sdk' --filter='!@morpho-org/blue-sdk-wagmi' --filter='!@morpho-org/simulation-sdk-wagmi' build",
     "lint": "biome check && $npm_execpath jsdoc:coverage:check && $npm_execpath lint:address",
     "lint:ci": "biome check --config-path=biome.ci.json && $npm_execpath jsdoc:coverage:check && $npm_execpath lint:address -- --exclude-deprecated",
     "lint:address": "node --no-warnings=ExperimentalWarning scripts/lint/checksum-address.js",
@@ -33,7 +33,7 @@
     "jsdoc:coverage:check": "node --no-warnings=ExperimentalWarning scripts/jsdoc-coverage.js --self-check",
     "docs:build": "typedoc",
     "test": "dotenv -- vitest",
-    "test:ci": "dotenv -- vitest run --coverage --exclude 'packages/liquidation-sdk-viem/**' --exclude 'packages/bundler-sdk-viem/**' --exclude 'packages/migration-sdk-viem/**' --exclude 'packages/simulation-sdk/**' --exclude 'packages/blue-sdk-wagmi/**' --exclude 'packages/simulation-sdk-wagmi/**' --exclude 'packages/test-wagmi/**'",
+    "test:ci": "dotenv -- vitest run --coverage --exclude 'packages/bundler-sdk-viem/**' --exclude 'packages/migration-sdk-viem/**' --exclude 'packages/simulation-sdk/**' --exclude 'packages/blue-sdk-wagmi/**' --exclude 'packages/simulation-sdk-wagmi/**'",
     "test:coverage": "$npm_execpath test --coverage",
     "coverage:report": "genhtml --hierarchical --sort --prefix \"$(pwd)\" -o coverage/lcov coverage/lcov.info",
     "changeset": "changeset",

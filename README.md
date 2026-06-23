@@ -50,10 +50,8 @@ The packages below are lower-level building blocks. Use them only if `@morpho-or
 The packages below are retained for existing integrations. Prefer `@morpho-org/morpho-sdk` or the non-deprecated packages above for new work.
 
 - [**`@morpho-org/blue-sdk-wagmi`**](./packages/blue-sdk-wagmi/): Wagmi-based package that exports Wagmi (React) hooks to fetch Morpho-related entities
-- [**`@morpho-org/liquidation-sdk-viem`**](./packages/liquidation-sdk-viem/): Viem-based package that provides utilities to build viem-based liquidation bots on Morpho and examples using Flashbots and Morpho's GraphQL API
 - [**`@morpho-org/simulation-sdk`**](./packages/simulation-sdk/): Framework-agnostic package that defines methods to simulate interactions on Morpho (such as `Supply`, `Borrow`) and Morpho Vaults (such as `Deposit`, `Withdraw`)
 - [**`@morpho-org/simulation-sdk-wagmi`**](./packages/simulation-sdk-wagmi/): Wagmi-based extension of `@morpho-org/simulation-sdk` that exports Wagmi (React) hooks to fetch simulation states
-- [**`@morpho-org/test-wagmi`**](./packages/test-wagmi/): Wagmi-based extension of `@morpho-org/test` that injects a test Wagmi config as a test fixture alongside viem's anvil client
 
 ### Test coverage
 

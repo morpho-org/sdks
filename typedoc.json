@@ -7,7 +7,6 @@
     "packages/simulation-sdk/src/index.ts",
     "packages/blue-sdk-viem/src/index.ts",
     "packages/bundler-sdk-viem/src/index.ts",
-    "packages/liquidation-sdk-viem/src/index.ts",
     "packages/liquidity-sdk-viem/src/index.ts",
     "packages/migration-sdk-viem/src/index.ts",
     "packages/blue-sdk-wagmi/src/index.ts",

@@ -8,7 +8,11 @@
       "!**/cache",
       "!**/coverage",
       "!**/artifacts",
-      "!**/packages/liquidation-sdk-viem/src/api/sdk.ts",
+      "!**/packages/bundler-sdk-viem",
+      "!**/packages/migration-sdk-viem",
+      "!**/packages/simulation-sdk",
+      "!**/packages/blue-sdk-wagmi",
+      "!**/packages/simulation-sdk-wagmi",
       "!**/packages/liquidity-sdk-viem/src/api/sdk.ts"
     ]
   },
