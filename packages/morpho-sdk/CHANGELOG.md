@@ -1,5 +1,13 @@
 # @morpho-org/morpho-sdk
 
+## 4.2.0
+
+### Minor Changes
+
+- [#813](https://github.com/morpho-org/sdks/pull/813) [`3af165a`](https://github.com/morpho-org/sdks/commit/3af165a3c3c12e66308e6aa77750e6f28d1ab2fe) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Add `ReallocationData.getAvailableLiquidityToUtilization` (with a `utilization` parameter) and deprecate the previous `getAvailableLiquidityToTargetUtilization` / `targetUtilization` naming.
+
+  The `target utilization` wording wrongly suggested a market's configured supply-target utilization, whereas the argument is just an arbitrary utilization ceiling the caller wants to bring the market to. The old method is kept as a `@deprecated` alias that delegates to the new one (to be removed in the next major), so existing consumers keep working. Behavior is unchanged.
+
 ## 4.1.0
 
 ### Minor Changes
