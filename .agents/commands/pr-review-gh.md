@@ -47,7 +47,7 @@ Steps 3–6 produce: `<FINDINGS>`, `<FAILED_AGENTS>`, `<COUNTS>`.
 
 ## Step 7: Post the review as `COMMENT`
 
-Mint a per-run path for the review payload — never a shared `/tmp` literal, since parallel Conductor workspaces share the host `/tmp` and a concurrent review of the same PR would clobber it:
+Mint a per-run path for the review payload — never a shared `/tmp` literal, since concurrent reviews on the same host share `/tmp` and a parallel review of the same PR would clobber it:
 
 ```bash
 REVIEW_FILE=$(mktemp "${TMPDIR:-/tmp}/pr-review-gh-comments.XXXXXX") || { echo "mktemp failed; cannot allocate the review payload path." >&2; exit 1; }

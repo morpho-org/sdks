@@ -55,7 +55,7 @@ Steps 3–6 produce: `<FINDINGS>` (sorted, deduplicated), `<FAILED_AGENTS>` (cou
 
 ## Step 7: Post the formal review (atomic)
 
-Build a JSON object with all findings. Write it to a per-run temp file — never a shared `/tmp` literal, since parallel Conductor workspaces share the host `/tmp` and a concurrent review could clobber it:
+Build a JSON object with all findings. Write it to a per-run temp file — never a shared `/tmp` literal, since concurrent reviews on the same host share `/tmp` and a parallel review could clobber it:
 
 ```bash
 REVIEW_FILE=$(mktemp "${TMPDIR:-/tmp}/pr-review-ci-comments.XXXXXX") || { echo "mktemp failed; cannot allocate the review payload path." >&2; exit 1; }
