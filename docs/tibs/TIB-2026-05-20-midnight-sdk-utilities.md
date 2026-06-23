@@ -530,8 +530,8 @@ if (!validation.valid) {
 // EcrecoverRatifierUtils derives the verifier from offer.ratifier and rejects mixed-ratifier trees.
 const items = await EcrecoverRatifierUtils.ratify({
   tree,
-  chainId,
-  signTypedData,
+  client: walletClient,
+  account: signer,
 });
 
 const payload = await Payload.encode(items);
@@ -550,7 +550,7 @@ Pure utility namespaces stay available for object-first integrations:
 - `TreeUtils.buildRoot`
 - `TreeUtils.buildProof`
 - `TreeUtils.verifyProof`
-- `EcrecoverRatifierUtils.typedData`, `EcrecoverRatifierUtils.digest`, or `EcrecoverRatifierUtils.sign` with an injected `signTypedData` callback;
+- `EcrecoverRatifierUtils.typedData`, `EcrecoverRatifierUtils.digest`, or `EcrecoverRatifierUtils.sign` with a viem client and explicit signer account;
 - `EcrecoverRatifierUtils.encodeRatifierData`
 - `EcrecoverRatifierUtils.decodeRatifierData`
 - `SetterRatifierUtils.encodeRatifierData`
@@ -659,7 +659,7 @@ Expose app-style labels, call requests, signature requests, and success callback
 - Authorization is explicit. SDK helpers must not silently grant authorization; any wallet flow that needs `setIsAuthorized` must expose that call deliberately.
 - Future permit helpers must distinguish no permit, ERC-2612, and Permit2 modes. Encoded
   `TokenPermit` shape tests are deferred until those helpers land.
-- Signature helpers must never own wallet state. They accept injected signing callbacks or return typed data descriptors.
+- Signature helpers must never own wallet state. They accept caller-owned wallet clients for signing or return typed data descriptors.
 - Validation helpers must surface typed errors. No SDK source should throw plain `Error`.
 - Tick/price and units/assets helpers must be byte-for-byte compatible with the deployed Solidity math where they claim parity.
 
