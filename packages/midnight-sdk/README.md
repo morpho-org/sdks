@@ -19,9 +19,9 @@ Midnight HTTP API helpers are exported from `@morpho-org/midnight-sdk/api`. This
 ## Making offers
 
 The make-side starts with local offer construction, groups offers that should share consumption, and
-commits grouped and standalone offers into one tree. Validate the tree before asking the maker to
-sign or approve the root, then encode the ratified items into a mempool payload and submit the raw
-payload bytes onchain.
+commits grouped and standalone offers into one tree. Validate the tree before asking the maker or an
+authorized signer to sign, or before asking the maker contract to approve the root. Then encode the
+ratified items into a mempool payload and submit the raw payload bytes onchain.
 
 ```ts
 import { addresses } from "@morpho-org/morpho-ts";
@@ -32,7 +32,14 @@ import {
   Payload,
   Tree,
 } from "@morpho-org/midnight-sdk";
-import { parseUnits, zeroAddress, type Address, type WalletClient } from "viem";
+import {
+  parseUnits,
+  zeroAddress,
+  type Address,
+  type Chain,
+  type Transport,
+  type WalletClient,
+} from "viem";
 
 const chainId = 8453;
 const usdc = addresses[chainId].usdc!;
@@ -41,7 +48,7 @@ const ecrecoverRatifier = addresses[chainId].ecrecoverRatifier!;
 const midnightMempool = addresses[chainId].midnightMempool!;
 
 export async function makeBaseUsdcWethOffers(params: {
-  readonly walletClient: WalletClient;
+  readonly walletClient: WalletClient<Transport, Chain>;
   readonly maker: Address;
   readonly wethUsdcOracle: Address;
 }) {
@@ -99,14 +106,11 @@ export async function makeBaseUsdcWethOffers(params: {
   }
 
   // EcrecoverRatifierUtils derives the verifier from offer.ratifier and rejects mixed-ratifier trees.
+  // The account may be the maker or an authorized signer for every maker in the tree.
   const items = await EcrecoverRatifierUtils.ratify({
     tree,
-    chainId,
-    signTypedData: (typedData) =>
-      params.walletClient.signTypedData({
-        account: params.maker,
-        ...typedData,
-      }),
+    client: params.walletClient,
+    account: params.maker,
   });
   const payload = await Payload.encode(items);
 

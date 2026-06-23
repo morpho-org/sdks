@@ -1,4 +1,6 @@
-import type { Signature } from "viem";
+import { createWalletClient, custom, type Hex, type Signature } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import { base } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { addresses, baseOffer } from "../__test__/fixtures.js";
 import { InvalidTreeError, InvalidTreeHeightError } from "../errors.js";
@@ -10,6 +12,9 @@ const root =
   "0x3333333333333333333333333333333333333333333333333333333333333333" as const;
 const proofNode =
   "0x4444444444444444444444444444444444444444444444444444444444444444" as const;
+const privateKey =
+  "0x0000000000000000000000000000000000000000000000000000000000000001" as const;
+const invalidSignature = `0x${"00".repeat(65)}` as Hex;
 
 describe("EcrecoverRatifierUtils.ratify", () => {
   test("default", async () => {
@@ -39,6 +44,60 @@ describe("EcrecoverRatifierUtils.ratify", () => {
     ).toBe(true);
   });
 
+  test("behavior: signs with client and account", async () => {
+    const account = privateKeyToAccount(privateKey);
+    const tree = Tree.create([
+      baseOffer({ maker: account.address, maxAssets: 0n }),
+    ]);
+    const client = createWalletClient({
+      chain: base,
+      transport: custom({ request: async () => null }),
+    });
+
+    const items = await EcrecoverRatifierUtils.ratify({
+      tree,
+      client,
+      account,
+    });
+    const decoded = EcrecoverRatifierUtils.decodeRatifierData(
+      items[0]!.ratifierData,
+    );
+
+    expect(items).toHaveLength(1);
+    expect(items[0]!.offer).toBe(tree.offers[0]);
+    expect([27, 28]).toContain(decoded.signature.v);
+    expect(
+      TreeUtils.verifyProof({
+        offer: items[0]!.offer,
+        root: decoded.root,
+        leafIndex: decoded.leafIndex,
+        proof: decoded.proof,
+      }),
+    ).toBe(true);
+  });
+
+  test("behavior: signs mixed-maker tree with delegate account", async () => {
+    const account = privateKeyToAccount(privateKey);
+    const tree = Tree.create([
+      baseOffer({ maxAssets: 0n, maker: addresses.maker }),
+      baseOffer({ maxAssets: 0n, maker: addresses.taker }),
+    ]);
+    const client = createWalletClient({
+      chain: base,
+      transport: custom({ request: async () => null }),
+    });
+
+    const items = await EcrecoverRatifierUtils.ratify({
+      tree,
+      client,
+      account,
+    });
+
+    expect(items).toHaveLength(2);
+    expect(items[0]!.offer.maker).toBe(addresses.maker);
+    expect(items[1]!.offer.maker).toBe(addresses.taker);
+  });
+
   test("error: InvalidTreeError mixed ratifiers", async () => {
     const tree = Tree.create([
       baseOffer({
@@ -63,42 +122,23 @@ describe("EcrecoverRatifierUtils.ratify", () => {
     ).rejects.toThrow(InvalidTreeError);
   });
 
-  test("error: InvalidTreeError mixed makers", async () => {
+  test("error: propagates viem signature verification errors", async () => {
+    const account = privateKeyToAccount(privateKey);
     const tree = Tree.create([
-      baseOffer({ maxAssets: 0n, maker: addresses.maker }),
-      baseOffer({ maxAssets: 0n, maker: addresses.taker }),
+      baseOffer({ maker: account.address, maxAssets: 0n }),
     ]);
+    const client = createWalletClient({
+      chain: base,
+      transport: custom({ request: async () => invalidSignature }),
+    });
 
     await expect(
       EcrecoverRatifierUtils.ratify({
         tree,
-        signature: {
-          v: 27,
-          r: "0x0000000000000000000000000000000000000000000000000000000000000000",
-          s: "0x0000000000000000000000000000000000000000000000000000000000000000",
-        },
+        client,
+        account: account.address,
       }),
-    ).rejects.toThrow(InvalidTreeError);
-  });
-
-  test("error: InvalidTreeError mixed makers before signing", async () => {
-    const tree = Tree.create([
-      baseOffer({ maxAssets: 0n, maker: addresses.maker }),
-      baseOffer({ maxAssets: 0n, maker: addresses.taker }),
-    ]);
-    let signed = false;
-
-    await expect(
-      EcrecoverRatifierUtils.ratify({
-        tree,
-        chainId: 8453n,
-        signTypedData: () => {
-          signed = true;
-          return "0x";
-        },
-      }),
-    ).rejects.toThrow(InvalidTreeError);
-    expect(signed).toBe(false);
+    ).rejects.toThrow();
   });
 });
 
@@ -136,15 +176,15 @@ describe("EcrecoverRatifierUtils.typedData", () => {
     ).toThrow(InvalidTreeError);
   });
 
-  test("error: InvalidTreeError mixed makers", () => {
+  test("behavior: accepts mixed makers", () => {
     const tree = Tree.create([
       baseOffer({ maxAssets: 0n, maker: addresses.maker }),
       baseOffer({ maxAssets: 0n, maker: addresses.taker }),
     ]);
 
-    expect(() =>
-      EcrecoverRatifierUtils.typedData({ tree, chainId: 8453n }),
-    ).toThrow(InvalidTreeError);
+    expect(
+      EcrecoverRatifierUtils.typedData({ tree, chainId: 8453n }).primaryType,
+    ).toBe("OfferTree");
   });
 });
 
@@ -156,6 +196,27 @@ describe("EcrecoverRatifierUtils.digest", () => {
     });
 
     expect(digest).toMatch(/^0x[0-9a-f]{64}$/);
+  });
+});
+
+describe("EcrecoverRatifierUtils.sign", () => {
+  test("default", async () => {
+    const account = privateKeyToAccount(privateKey);
+    const tree = Tree.create([
+      baseOffer({ maker: account.address, maxAssets: 0n }),
+    ]);
+    const client = createWalletClient({
+      chain: base,
+      transport: custom({ request: async () => null }),
+    });
+
+    const signature = await EcrecoverRatifierUtils.sign({
+      tree,
+      client,
+      account,
+    });
+
+    expect(signature).toMatch(/^0x[0-9a-f]{130}$/);
   });
 });
 
@@ -184,13 +245,13 @@ describe("EcrecoverRatifierUtils.toSignature", () => {
 });
 
 describe("EcrecoverRatifierUtils.ratifierData", () => {
-  test("error: InvalidTreeError mixed makers", () => {
+  test("behavior: accepts mixed makers", () => {
     const tree = Tree.create([
       baseOffer({ maxAssets: 0n, maker: addresses.maker }),
       baseOffer({ maxAssets: 0n, maker: addresses.taker }),
     ]);
 
-    expect(() =>
+    expect(
       EcrecoverRatifierUtils.ratifierData({
         tree,
         leafIndex: 0n,
@@ -199,8 +260,8 @@ describe("EcrecoverRatifierUtils.ratifierData", () => {
           r: "0x0000000000000000000000000000000000000000000000000000000000000000",
           s: "0x0000000000000000000000000000000000000000000000000000000000000000",
         },
-      }),
-    ).toThrow(InvalidTreeError);
+      }).startsWith("0x"),
+    ).toBe(true);
   });
 });
 
