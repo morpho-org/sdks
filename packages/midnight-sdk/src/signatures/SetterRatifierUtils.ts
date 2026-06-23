@@ -54,7 +54,14 @@ export type DecodedSetterRatifierData = TreeProof;
  * const offer = Offer.create({
  *   market: {
  *     loanToken: "0x0000000000000000000000000000000000006000",
- *     collateralParams: [],
+ *     collateralParams: [
+ *       {
+ *         token: "0x0000000000000000000000000000000000007000",
+ *         lltv: 770000000000000000n,
+ *         maxLif: 1061007957559681697n,
+ *         oracle: "0x0000000000000000000000000000000000008000",
+ *       },
+ *     ],
  *     maturity: 54_000n,
  *     rcfThreshold: 0n,
  *     enterGate: zeroAddress,
@@ -183,7 +190,14 @@ export namespace SetterRatifierUtils {
    * const offer = Offer.create({
    *   market: {
    *     loanToken: "0x0000000000000000000000000000000000006000",
-   *     collateralParams: [],
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
    *     maturity: 54_000n,
    *     rcfThreshold: 0n,
    *     enterGate: zeroAddress,
@@ -235,7 +249,14 @@ export namespace SetterRatifierUtils {
    * const offer = Offer.create({
    *   market: {
    *     loanToken: "0x0000000000000000000000000000000000006000",
-   *     collateralParams: [],
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
    *     maturity: 54_000n,
    *     rcfThreshold: 0n,
    *     enterGate: zeroAddress,

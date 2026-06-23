@@ -27,7 +27,14 @@ import { OfferUtils } from "./OfferUtils.js";
  * const offer: IOffer = {
  *   market: {
  *     loanToken: "0x0000000000000000000000000000000000000001",
- *     collateralParams: [],
+ *     collateralParams: [
+ *       {
+ *         token: "0x0000000000000000000000000000000000007000",
+ *         lltv: 770000000000000000n,
+ *         maxLif: 1061007957559681697n,
+ *         oracle: "0x0000000000000000000000000000000000008000",
+ *       },
+ *     ],
  *     maturity: 1n,
  *     rcfThreshold: 0n,
  *     enterGate: "0x0000000000000000000000000000000000000000",
@@ -101,7 +108,14 @@ export interface IOffer {
  * const offer = Offer.create({
  *   market: {
  *     loanToken: "0x0000000000000000000000000000000000000001",
- *     collateralParams: [],
+ *     collateralParams: [
+ *       {
+ *         token: "0x0000000000000000000000000000000000007000",
+ *         lltv: 770000000000000000n,
+ *         maxLif: 1061007957559681697n,
+ *         oracle: "0x0000000000000000000000000000000000008000",
+ *       },
+ *     ],
  *     maturity: 1n,
  *     rcfThreshold: 0n,
  *     enterGate: "0x0000000000000000000000000000000000000000",
