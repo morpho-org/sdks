@@ -122,11 +122,11 @@ Persona specs live in `.agents/personas/*.md`. Each file has frontmatter declari
 
 Loop:
 
-1. Read every file in `.agents/personas/*.md`.
+1. Read **every** file in `.agents/personas/*.md` FIRST and resolve the complete launch set before issuing a single `Agent` call — never fire an agent the moment its file is read.
 2. For each persona, decide whether to launch:
    - `kind: baseline` → always launch.
    - `kind: conditional` → launch only when the flag named in `trigger:` is true (see Step 4 for flag computation).
-3. Launch ALL selected personas **in parallel** using the Agent tool (subagent_type: `"general-purpose"`).
+3. Launch ALL selected personas in **one** assistant message — every `Agent` call (subagent_type: `"general-purpose"`) issued together so they run in parallel. Splitting the launches across multiple messages serializes the panel and defeats the parallelism the review is built around.
 4. Track `<TOTAL_AGENTS_LAUNCHED>` = count of personas actually launched (baseline + any fired conditionals).
 
 Shared per-agent contract (applied uniformly to every launched persona):
@@ -167,13 +167,13 @@ Merge all agent results into a single list:
    - committed: `git diff --name-only $MERGE_BASE..<HEAD_REF>`
    - plus uncommitted: `git diff --name-only HEAD` (only when `<DIFF_SOURCE>=local`)
 
-   For every agent finding, first guard `finding.file`: if it is missing, not a string, or empty, treat the finding as malformed and route it to sub-step 2's partial-failure handling instead of dropping it here. Otherwise, compare `finding.file` against `<CHANGED_FILES>` after path normalization:
+   For every agent finding, first guard `finding.file`: if it is missing, not a string, or empty, treat the finding as malformed and route it to sub-step 2's partial-failure handling instead of dropping it here. Otherwise, compute the normalized path once and compare it against `<CHANGED_FILES>`:
    - Strip any leading `./`.
    - Strip diff prefixes `a/` and `b/` if present.
    - If the agent returned an absolute path, strip the repo-root prefix (`git rev-parse --show-toplevel`) before compare.
    - Case-sensitive compare (matches git's default).
 
-   If `finding.file` is not in `<CHANGED_FILES>`, **drop the finding** and increment `<DROPPED_OUT_OF_SCOPE>`.
+   If the normalized path is not in `<CHANGED_FILES>`, **drop the finding** and increment `<DROPPED_OUT_OF_SCOPE>`. Otherwise keep the finding and **write the normalized path back into its `file`** — this is the value the caller passes straight into the GitHub review `comments[].path`, which **must** be repo-relative. A leftover `./`, `a/`/`b/` diff prefix, or absolute path makes the GitHub reviews API reject that comment and collapse the atomic review into a plain PR-level comment.
 
    Do NOT filter by line number within a changed file. The Step 5 contract permits flagging adjacent code in a changed file when the diff materially worsens it, so line-level filtering would discard legitimate findings.
 
@@ -207,7 +207,7 @@ Severity labels (used everywhere downstream):
 
 The caller (Step 7 of `/pr-review-ci` / `/pr-review-gh` / `/pr-review-local`) consumes:
 
-- `<FINDINGS>` — sorted, deduplicated array of `{severity, file, line, description}`.
+- `<FINDINGS>` — sorted, deduplicated array of `{severity, file, line, description}`. `file` is normalized to a repo-relative path (Step 6 sub-step 1), so callers can pass it directly into the GitHub review `comments[].path`.
 - `<FAILED_AGENTS>` — count + names of agents that returned `agent_error` or malformed output.
 - `<COUNTS>` — `{critical, high, medium, low}` totals.
 - `<TOTAL_AGENTS_LAUNCHED>` — count of personas that actually fired (baseline always-fire count + any conditional personas whose trigger flag was true). Used by the caller's report to phrase "<FAILED_AGENTS> of <TOTAL_AGENTS_LAUNCHED> agents failed" correctly when conditional personas did not fire.
