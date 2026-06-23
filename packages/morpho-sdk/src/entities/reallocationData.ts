@@ -617,6 +617,34 @@ export class ReallocationData implements InputReallocationData {
    * @param options - Optional reallocation options (supply target utilization trigger, timestamp, withdrawal caps).
    * @returns Available liquidity to the given utilization in loan-token units; `0n` when none is available.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
+   * @example
+   * ```ts
+   * import { createPublicClient, http, parseEther } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import { markets, vaults } from "@morpho-org/morpho-test";
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   *
+   * const client = createPublicClient({
+   *   chain: mainnet,
+   *   transport: http(),
+   * }).extend(morphoViemExtension());
+   *
+   * const marketParams = markets[mainnet.id].usdc_wbtc;
+   * const market = client.morpho.blue(marketParams, mainnet.id);
+   * const block = await client.getBlock();
+   * const reallocationData = await market.getReallocationData({
+   *   vaultAddresses: [vaults[mainnet.id].steakUsdc.address],
+   *   block: { number: block.number, timestamp: block.timestamp },
+   * });
+   *
+   * // Deprecated: prefer reallocationData.getAvailableLiquidityToUtilization.
+   * const available: bigint =
+   *   reallocationData.getAvailableLiquidityToTargetUtilization(
+   *     marketParams.id,
+   *     parseEther("0.9"),
+   *     { timestamp: block.timestamp },
+   *   );
+   * ```
    */
   // biome-ignore lint/complexity/useMaxParams: (marketId, targetUtilization, options) is the metric's public API
   public getAvailableLiquidityToTargetUtilization(
