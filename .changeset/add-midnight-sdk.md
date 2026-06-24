@@ -24,6 +24,8 @@ Ecrecover ratification accepts a viem client plus explicit signer account, deriv
 
 Ecrecover client signing rejects typed-data signatures that do not recover to the requested signer account.
 
+`fetchConsumableUnits` reads each offer's market continuous fee and returns zero when the market fee exceeds the offer's `continuousFeeCap`.
+
 Offer creation only accepts protocol-reachable tick spacings and offer groups require a shared cap mode and value, matching Midnight's tick accessibility and group consumption accounting.
 
 Tick math constants mirror the current Midnight protocol range and price quantum.
