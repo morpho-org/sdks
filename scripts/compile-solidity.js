@@ -34,22 +34,6 @@ const packageConfigs = {
       );
     },
   },
-  "liquidation-sdk-viem": {
-    bytecodeExportName: "bytecode",
-    describeArtifact(contractName) {
-      return `Compiled \`${contractName}\` test contract`;
-    },
-    resolveOutputPath(sourceName) {
-      if (sourceName.includes("/interfaces/")) return null;
-
-      return join(
-        packageDir,
-        "test",
-        "contracts",
-        `${parse(sourceName).name}.ts`,
-      );
-    },
-  },
 };
 
 const config = packageConfigs[packageName];

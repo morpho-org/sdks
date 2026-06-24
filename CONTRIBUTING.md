@@ -167,26 +167,7 @@ Update `_unwrappedTokensMapping` in `packages/blue-sdk/src/addresses.ts`:
 },
 ```
 
-### 6. Update the Liquidation SDK
-
-Update `packages/liquidation-sdk-viem/src/addresses.ts`.
-
-Add a Midas mapping, using an empty object when the chain has no Midas configuration:
-
-```typescript
-[ChainId.YourNewChain]: {},
-```
-
-Add the pre-liquidation factory configuration:
-
-```typescript
-[ChainId.YourNewChain]: {
-  address: addressesRegistry[ChainId.YourNewChain].preLiquidationFactory,
-  startBlock: deployments[ChainId.YourNewChain].preLiquidationFactory,
-},
-```
-
-### 7. Verify the Chain Listing
+### 6. Verify the Chain Listing
 
 - The chain ID is unique and correctly formatted.
 - Contract addresses are valid and checksummed.

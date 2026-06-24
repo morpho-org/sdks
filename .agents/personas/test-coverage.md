@@ -34,7 +34,7 @@ Fork-bound tests use **`*.integration.test.ts`** naming when they stay (e.g. a t
 - New public exports without a corresponding test — in colocated layout (`src/Foo.test.ts` next to `src/Foo.ts`) for packages wired for colocation, or `packages/<pkg>/test/Foo.test.ts` for the older layout.
 - New code paths inside existing exports without test cases — branches, error paths, edge cases like `0n`, `MAX_UINT256`, negative `bigint`, empty arrays, NaN-equivalents.
 - Removed or modified public exports without their tests updated (e.g. signature change, behavior change).
-- Onchain code paths (any code calling `viem` / `wagmi` actions) — confirm at least one test exercises the path. Per current AGENTS.md §5, use Anvil forks via `@morpho-org/test` (no mocked viem clients on RPC paths). The forthcoming TIB-2026-04-27 (tracked in PR #596) introduces an opt-in transport-level mocking convention via `@morpho-org/test/mock` (`createMockClient` / `mockRead` / `expectReadCall`); until that TIB is accepted and §5 is amended, do NOT recommend mocked transports — defer to forks. Fork-bound tests should use `*.integration.test.ts` naming so unit-only test runs filter them cleanly.
+- Onchain code paths (any code calling `viem` / `wagmi` actions) — confirm at least one test exercises the path. Per current AGENTS.md §5, contract round-trips and paths whose correctness depends on real onchain state use Anvil forks via `@morpho-org/test` at pinned blocks. Unit tests for code that calls `viem/actions` but does not depend on real onchain state may use `createMockClient` from `@morpho-org/test/mock`, which mocks the `client.transport` surface those actions use. Do not recommend `vi.mock` / `vi.spyOn` of viem actions for RPC paths. Fork-bound tests should use `*.integration.test.ts` naming so unit-only test runs filter them cleanly.
 - Snapshot or schema tests not updated when generated outputs (GraphQL types, ABIs) change.
 
 ### Wrong-place findings (the colocation enforcer)
@@ -57,6 +57,6 @@ These fire only when AGENTS.md §5's colocation rule applies — i.e. either the
 
 - Do NOT review the test assertions themselves — that's `code-quality`'s job.
 - Do NOT review CI workflow / publish-flow test coverage — that's `ci-release-security`'s job.
-- Do NOT propose new test infrastructure or fixtures — point at the existing helpers in `@morpho-org/test` (and the `/mock` sub-export once TIB-2026-04-27 lands) instead.
+- Do NOT propose new test infrastructure or fixtures — point at the existing helpers in `@morpho-org/test`, including `@morpho-org/test/mock` for transport-boundary unit tests, instead.
 - Do NOT flag missing tests for internal (non-exported) symbols when the public surface covering them is tested.
 - Per AGENTS.md §5, the colocation rule applies **going forward** — do not flag the existing `packages/<pkg>/test/` layouts in non-wired packages as findings on their own. The wrong-place rules above are scoped to NEW files in colocation-wired packages or refactor-driven migrations.
