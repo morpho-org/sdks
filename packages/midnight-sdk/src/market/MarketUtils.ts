@@ -6,7 +6,6 @@ import {
 } from "@morpho-org/morpho-ts";
 import { concat, encodeAbiParameters, encodePacked, keccak256 } from "viem";
 import {
-  ALLOWED_LLTVS,
   CBP,
   COLLATERAL_PARAMS_TYPEHASH,
   MARKET_TYPEHASH,
@@ -70,7 +69,7 @@ type CollateralParamsInput = ICollateralParams | CollateralParams;
  * ```ts
  * import { MarketUtils } from "@morpho-org/midnight-sdk";
  *
- * console.log(MarketUtils.isLltvAllowed(770000000000000000n));
+ * console.log(typeof MarketUtils.hash);
  * ```
  */
 export namespace MarketUtils {
@@ -149,23 +148,6 @@ export namespace MarketUtils {
       enterGate: params.enterGate,
       liquidatorGate: params.liquidatorGate,
     };
-  }
-
-  /**
-   * Checks whether an LLTV is allowed by Midnight ConstantsLib.
-   *
-   * @param lltv - WAD-scaled LLTV.
-   * @returns Whether the LLTV is in the deployed tier list.
-   * @example
-   * ```ts
-   * import { MarketUtils } from "@morpho-org/midnight-sdk";
-   *
-   * console.log(MarketUtils.isLltvAllowed(770000000000000000n));
-   * ```
-   */
-  export function isLltvAllowed(lltv: BigIntish) {
-    const lltvValue = BigInt(lltv);
-    return ALLOWED_LLTVS.some((allowed) => allowed === lltvValue);
   }
 
   /**
@@ -257,6 +239,11 @@ export namespace MarketUtils {
   /**
    * Computes the HashLib market params struct hash.
    *
+   * Hashing canonicalizes non-empty collateral params by token order and
+   * preserves the protocol-zero empty market used for tree padding. It does
+   * not validate every market creation rule. Use {@link MarketParams} when
+   * constructing user-facing market params.
+   *
    * @param market - Market to hash.
    * @returns EIP-712 market struct hash.
    * @example
@@ -265,7 +252,14 @@ export namespace MarketUtils {
    *
    * const hash = MarketUtils.hash({
    *   loanToken: "0x0000000000000000000000000000000000000001",
-   *   collateralParams: [],
+   *   collateralParams: [
+   *     {
+   *       token: "0x0000000000000000000000000000000000000002",
+   *       lltv: 770000000000000000n,
+   *       maxLif: 1061007957559681697n,
+   *       oracle: "0x0000000000000000000000000000000000000003",
+   *     },
+   *   ],
    *   maturity: 1n,
    *   rcfThreshold: 0n,
    *   enterGate: "0x0000000000000000000000000000000000000000",
@@ -275,14 +269,20 @@ export namespace MarketUtils {
    * ```
    */
   export function hash(market: MarketInput) {
-    const marketStruct = toStruct(market);
-    const collateralParamHashes = marketStruct.collateralParams.map((params) =>
+    const marketParams = "params" in market ? market.params : market;
+    const collateralParams =
+      marketParams.collateralParams.length === 0
+        ? marketParams.collateralParams
+        : [...marketParams.collateralParams].sort((a, b) =>
+            a.token.toLowerCase() < b.token.toLowerCase() ? -1 : 1,
+          );
+    const collateralParamHashes = collateralParams.map((params) =>
       keccak256(
         encodeAbiParameters(collateralParamsHashParams, [
           COLLATERAL_PARAMS_TYPEHASH,
           params.token,
-          params.lltv,
-          params.maxLif,
+          BigInt(params.lltv),
+          BigInt(params.maxLif),
           params.oracle,
         ]),
       ),
@@ -292,12 +292,12 @@ export namespace MarketUtils {
     return keccak256(
       encodeAbiParameters(marketHashParams, [
         MARKET_TYPEHASH,
-        marketStruct.loanToken,
+        marketParams.loanToken,
         collateralParamsHash,
-        marketStruct.maturity,
-        marketStruct.rcfThreshold,
-        marketStruct.enterGate,
-        marketStruct.liquidatorGate,
+        BigInt(marketParams.maturity),
+        BigInt(marketParams.rcfThreshold),
+        marketParams.enterGate,
+        marketParams.liquidatorGate,
       ]),
     );
   }
@@ -326,7 +326,14 @@ export namespace MarketUtils {
    * const id = MarketUtils.toId({
    *   market: {
    *     loanToken: "0x0000000000000000000000000000000000000001",
-   *     collateralParams: [],
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000000002",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000000003",
+   *       },
+   *     ],
    *     maturity: 1n,
    *     rcfThreshold: 0n,
    *     enterGate: "0x0000000000000000000000000000000000000000",

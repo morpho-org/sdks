@@ -5,6 +5,7 @@ import {
   type Hash,
   type Hex,
 } from "viem";
+import { InvalidTreeError } from "../errors.js";
 import type { Item as PayloadItem } from "./Payload.js";
 import type { Tree } from "./Tree.js";
 import type { TreeProof } from "./TreeUtils.js";
@@ -41,7 +42,9 @@ export type DecodedSetterRatifierData = TreeProof;
 /**
  * Parameters for one SetterRatifier ratifier-data value.
  *
- * Use after the maker or delegate has approved the tree root onchain.
+ * Use after the offer maker or delegate has approved the tree root onchain.
+ * Setter approvals are keyed by maker and root, so a mixed-maker tree needs one
+ * approval per maker for the same root.
  *
  * @example
  * ```ts
@@ -51,7 +54,14 @@ export type DecodedSetterRatifierData = TreeProof;
  * const offer = Offer.create({
  *   market: {
  *     loanToken: "0x0000000000000000000000000000000000006000",
- *     collateralParams: [],
+ *     collateralParams: [
+ *       {
+ *         token: "0x0000000000000000000000000000000000007000",
+ *         lltv: 770000000000000000n,
+ *         maxLif: 1061007957559681697n,
+ *         oracle: "0x0000000000000000000000000000000000008000",
+ *       },
+ *     ],
  *     maturity: 54_000n,
  *     rcfThreshold: 0n,
  *     enterGate: zeroAddress,
@@ -83,8 +93,8 @@ export interface SetterRatifierDataParams {
  *
  * Use this route for deployed-code makers. The make-side sequence is: create
  * offers with the Setter ratifier address, build the group/tree, validate the
- * tree, approve the root onchain, call `ratify`, then pass the returned items
- * to `Payload.encode`.
+ * tree, approve the root onchain for every maker in the tree, call `ratify`,
+ * then pass the returned items to `Payload.encode`.
  *
  * @example
  * ```ts
@@ -164,7 +174,9 @@ export namespace SetterRatifierUtils {
    * Builds one ratifier-data value for a tree leaf.
    *
    * Use after root approval when a caller needs data for one offer leaf. Use
-   * `ratify` to produce payload-ready items for the whole tree.
+   * `ratify` to produce payload-ready items for the whole tree. Setter
+   * approvals are keyed by maker and root, so the maker for this leaf must have
+   * approved the tree root onchain.
    *
    * @param params.tree - Setter-ratified offer tree that produced the proof.
    * @param params.leafIndex - Leaf index to prove.
@@ -178,7 +190,14 @@ export namespace SetterRatifierUtils {
    * const offer = Offer.create({
    *   market: {
    *     loanToken: "0x0000000000000000000000000000000000006000",
-   *     collateralParams: [],
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
    *     maturity: 54_000n,
    *     rcfThreshold: 0n,
    *     enterGate: zeroAddress,
@@ -212,12 +231,15 @@ export namespace SetterRatifierUtils {
    * Returns payload-ready items after a Setter root has been approved.
    *
    * Use after `Tree.mempoolValidate` and the root approval
-   * transaction has been submitted. The returned items can be passed directly
-   * to `Payload.encode`.
+   * transaction has been submitted for every maker in the tree. Setter
+   * approvals are keyed by maker and root, so mixed-maker trees need one
+   * approval per maker for the same root. The returned items can be passed
+   * directly to `Payload.encode`. All offers in the tree must use one ratifier
+   * address; build separate trees per ratifier.
    *
    * @param params.tree - Setter-ratified offer tree whose root has already been approved onchain.
    * @returns Items containing each offer and its ratifier data.
-   * @throws {InvalidTreeError} when the tree is invalid.
+   * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
    * @example
    * ```ts
    * import { SetterRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
@@ -227,7 +249,14 @@ export namespace SetterRatifierUtils {
    * const offer = Offer.create({
    *   market: {
    *     loanToken: "0x0000000000000000000000000000000000006000",
-   *     collateralParams: [],
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
    *     maturity: 54_000n,
    *     rcfThreshold: 0n,
    *     enterGate: zeroAddress,
@@ -250,6 +279,21 @@ export namespace SetterRatifierUtils {
   export function ratify(params: {
     readonly tree: Tree;
   }): readonly PayloadItem[] {
+    const firstOffer = params.tree.offers[0];
+    if (firstOffer == null) {
+      throw new InvalidTreeError("Tree must contain at least one offer.");
+    }
+
+    const ratifier = firstOffer.ratifier;
+    const comparableRatifier = ratifier.toLowerCase();
+    for (const offer of params.tree.offers.slice(1)) {
+      if (offer.ratifier.toLowerCase() !== comparableRatifier) {
+        throw new InvalidTreeError(
+          `All offers in a Setter tree must use one ratifier; expected "${ratifier}", got "${offer.ratifier}". Build separate trees per ratifier.`,
+        );
+      }
+    }
+
     const items: PayloadItem[] = [];
 
     for (const offer of params.tree.offers) {

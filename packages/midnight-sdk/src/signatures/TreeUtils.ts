@@ -44,6 +44,7 @@ const EMPTY_OFFER_STRUCT: OfferStruct = {
   reduceOnly: false,
   maxUnits: 0n,
   maxAssets: 0n,
+  continuousFeeCap: 0n,
 };
 
 const EMPTY_OFFER_DEFAULT_GROUP = OfferUtils.hashStruct(EMPTY_OFFER_STRUCT);
@@ -69,7 +70,8 @@ function isEmptyOfferStruct(offer: OfferStruct): boolean {
     offer.ratifier === ZERO_ADDRESS &&
     offer.reduceOnly === false &&
     offer.maxUnits === 0n &&
-    offer.maxAssets === 0n
+    offer.maxAssets === 0n &&
+    offer.continuousFeeCap === 0n
   );
 }
 
@@ -129,7 +131,14 @@ function assertLeafOffers(
  * const offer = Offer.create({
  *   market: {
  *     loanToken: "0x0000000000000000000000000000000000006000",
- *     collateralParams: [],
+ *     collateralParams: [
+ *       {
+ *         token: "0x0000000000000000000000000000000000007000",
+ *         lltv: 770000000000000000n,
+ *         maxLif: 1061007957559681697n,
+ *         oracle: "0x0000000000000000000000000000000000008000",
+ *       },
+ *     ],
  *     maturity: 54_000n,
  *     rcfThreshold: 0n,
  *     enterGate: zeroAddress,
@@ -171,7 +180,14 @@ export interface TreeDescriptor {
  * const offer = Offer.create({
  *   market: {
  *     loanToken: "0x0000000000000000000000000000000000006000",
- *     collateralParams: [],
+ *     collateralParams: [
+ *       {
+ *         token: "0x0000000000000000000000000000000000007000",
+ *         lltv: 770000000000000000n,
+ *         maxLif: 1061007957559681697n,
+ *         oracle: "0x0000000000000000000000000000000000008000",
+ *       },
+ *     ],
  *     maturity: 54_000n,
  *     rcfThreshold: 0n,
  *     enterGate: zeroAddress,
@@ -212,7 +228,14 @@ export interface TreeProof {
  * const offer = Offer.create({
  *   market: {
  *     loanToken: "0x0000000000000000000000000000000000006000",
- *     collateralParams: [],
+ *     collateralParams: [
+ *       {
+ *         token: "0x0000000000000000000000000000000000007000",
+ *         lltv: 770000000000000000n,
+ *         maxLif: 1061007957559681697n,
+ *         oracle: "0x0000000000000000000000000000000000008000",
+ *       },
+ *     ],
  *     maturity: 54_000n,
  *     rcfThreshold: 0n,
  *     enterGate: zeroAddress,
@@ -247,7 +270,14 @@ export type TreeCreateParams = readonly GroupInput[];
  * const offer = Offer.create({
  *   market: {
  *     loanToken: "0x0000000000000000000000000000000000006000",
- *     collateralParams: [],
+ *     collateralParams: [
+ *       {
+ *         token: "0x0000000000000000000000000000000000007000",
+ *         lltv: 770000000000000000n,
+ *         maxLif: 1061007957559681697n,
+ *         oracle: "0x0000000000000000000000000000000000008000",
+ *       },
+ *     ],
  *     maturity: 54_000n,
  *     rcfThreshold: 0n,
  *     enterGate: zeroAddress,
@@ -280,7 +310,14 @@ export type TreeInput = Tree | TreeCreateParams;
  * const offer = Offer.create({
  *   market: {
  *     loanToken: "0x0000000000000000000000000000000000006000",
- *     collateralParams: [],
+ *     collateralParams: [
+ *       {
+ *         token: "0x0000000000000000000000000000000000007000",
+ *         lltv: 770000000000000000n,
+ *         maxLif: 1061007957559681697n,
+ *         oracle: "0x0000000000000000000000000000000000008000",
+ *       },
+ *     ],
  *     maturity: 54_000n,
  *     rcfThreshold: 0n,
  *     enterGate: zeroAddress,
@@ -328,7 +365,14 @@ export interface TreeMempoolValidateParams {
  * const offer = Offer.create({
  *   market: {
  *     loanToken: "0x0000000000000000000000000000000000006000",
- *     collateralParams: [],
+ *     collateralParams: [
+ *       {
+ *         token: "0x0000000000000000000000000000000000007000",
+ *         lltv: 770000000000000000n,
+ *         maxLif: 1061007957559681697n,
+ *         oracle: "0x0000000000000000000000000000000000008000",
+ *       },
+ *     ],
  *     maturity: 54_000n,
  *     rcfThreshold: 0n,
  *     enterGate: zeroAddress,
@@ -400,7 +444,14 @@ export namespace TreeUtils {
    * const offer = Offer.create({
    *   market: {
    *     loanToken: "0x0000000000000000000000000000000000006000",
-   *     collateralParams: [],
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
    *     maturity: 54_000n,
    *     rcfThreshold: 0n,
    *     enterGate: zeroAddress,
@@ -488,7 +539,14 @@ export namespace TreeUtils {
    * const offer = Offer.create({
    *   market: {
    *     loanToken: "0x0000000000000000000000000000000000006000",
-   *     collateralParams: [],
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
    *     maturity: 54_000n,
    *     rcfThreshold: 0n,
    *     enterGate: zeroAddress,
@@ -559,7 +617,14 @@ export namespace TreeUtils {
    * const offer = Offer.create({
    *   market: {
    *     loanToken: "0x0000000000000000000000000000000000006000",
-   *     collateralParams: [],
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
    *     maturity: 54_000n,
    *     rcfThreshold: 0n,
    *     enterGate: zeroAddress,
@@ -599,7 +664,14 @@ export namespace TreeUtils {
    * const offer = Offer.create({
    *   market: {
    *     loanToken: "0x0000000000000000000000000000000000006000",
-   *     collateralParams: [],
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
    *     maturity: 54_000n,
    *     rcfThreshold: 0n,
    *     enterGate: zeroAddress,
@@ -669,7 +741,14 @@ export namespace TreeUtils {
    * const offer = Offer.create({
    *   market: {
    *     loanToken: "0x0000000000000000000000000000000000006000",
-   *     collateralParams: [],
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
    *     maturity: 54_000n,
    *     rcfThreshold: 0n,
    *     enterGate: zeroAddress,

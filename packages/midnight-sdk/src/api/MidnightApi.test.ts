@@ -147,6 +147,7 @@ const apiOffer = {
   ratifier: RATIFIER,
   reduce_only: false,
   max_assets: "0",
+  continuous_fee_cap: "317097919",
 };
 
 const expectedOffer = {
@@ -178,6 +179,7 @@ const expectedOffer = {
   reduceOnly: false,
   maxUnits: 369216000000000000000000n,
   maxAssets: 0n,
+  continuousFeeCap: 317097919n,
 };
 
 const apiTakeableOffer = {

@@ -1,5 +1,3 @@
-import { MathLib } from "@morpho-org/morpho-ts";
-
 /**
  * Centibip scale used by settlement fees.
  *
@@ -96,28 +94,6 @@ export const MAX_COLLATERALS = 128n;
 export const MAX_COLLATERALS_PER_BORROWER = 16n;
 
 /**
- * Allowed LLTV tiers copied from Midnight ConstantsLib.
- *
- * @example
- * ```ts
- * import { ALLOWED_LLTVS } from "@morpho-org/midnight-sdk";
- *
- * console.log(ALLOWED_LLTVS.includes(770000000000000000n));
- * ```
- */
-export const ALLOWED_LLTVS = [
-  385000000000000000n,
-  625000000000000000n,
-  770000000000000000n,
-  860000000000000000n,
-  915000000000000000n,
-  945000000000000000n,
-  965000000000000000n,
-  980000000000000000n,
-  MathLib.WAD,
-] as const;
-
-/**
  * Maximum settlement-fee values by Midnight fee index.
  *
  * @example
@@ -210,7 +186,7 @@ export const MARKET_TYPEHASH =
  * ```
  */
 export const OFFER_TYPEHASH =
-  "0x980a4cfc9766df84667f316d76e10cefc8caf04fb4cd4a9fca00a8e7b34f619c";
+  "0x6bd2a06ec6952feb97c3e3b4f7de6c342f12b1ac769d5c91368271af636c85b7";
 
 /**
  * EcrecoverRatifier EIP-712 domain typehash.

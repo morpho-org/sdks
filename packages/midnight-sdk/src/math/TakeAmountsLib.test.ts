@@ -9,6 +9,7 @@ import { describe, expect, test } from "vitest";
 import { baseOffer } from "../__test__/fixtures.js";
 import { MAX_TICK } from "../constants.js";
 import {
+  InvalidOfferParameterError,
   PriceGreaterThanOneError,
   SettlementFeeExceedsPriceError,
 } from "../errors.js";
@@ -369,7 +370,7 @@ describe("ConsumableUnitsLib.consumableUnits", () => {
   test("behavior: max units use zero-floor subtraction", () => {
     expect(
       ConsumableUnitsLib.consumableUnits({
-        offer: baseOffer({ maxUnits: 100n }),
+        offer: baseOffer({ maxUnits: 100n, maxAssets: 0n }),
         consumed: 120n,
         settlementFee: MathLib.WAD,
       }),
@@ -434,7 +435,7 @@ describe("ConsumableUnitsLib.consumableUnits", () => {
   test("error: NegativeValueError", () => {
     expect(() =>
       ConsumableUnitsLib.consumableUnits({
-        offer: baseOffer({ maxUnits: 100n }),
+        offer: baseOffer({ maxUnits: 100n, maxAssets: 0n }),
         consumed: -1n,
         settlementFee: 0n,
       }),
@@ -446,6 +447,23 @@ describe("ConsumableUnitsLib.consumableUnits", () => {
         settlementFee: 0n,
       }),
     ).toThrow(NegativeValueError);
+  });
+
+  test("error: InvalidOfferParameterError for cap shape", () => {
+    expect(() =>
+      ConsumableUnitsLib.consumableUnits({
+        offer: baseOffer({ maxUnits: 0n, maxAssets: 0n }),
+        consumed: 0n,
+        settlementFee: 0n,
+      }),
+    ).toThrow(InvalidOfferParameterError);
+    expect(() =>
+      ConsumableUnitsLib.consumableUnits({
+        offer: baseOffer({ maxUnits: 1n, maxAssets: 1n }),
+        consumed: 0n,
+        settlementFee: 0n,
+      }),
+    ).toThrow(InvalidOfferParameterError);
   });
 
   test("error: DivisionByZeroError", () => {

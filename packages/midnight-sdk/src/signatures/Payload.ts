@@ -1,3 +1,4 @@
+import { MathLib } from "@morpho-org/morpho-ts";
 import {
   bytesToHex,
   decodeAbiParameters,
@@ -5,7 +6,6 @@ import {
   type Hex,
   hexToBytes,
 } from "viem";
-
 import {
   LIQUIDATION_CURSOR_HIGH,
   LIQUIDATION_CURSOR_LOW,
@@ -88,8 +88,46 @@ export type Item = {
  */
 export const CURRENT_VERSION = 1;
 
+const VERSION_PREFIX_BYTES = 1;
+const LENGTH_PREFIX_BYTES = 4;
+const HEADER_BYTES = VERSION_PREFIX_BYTES + LENGTH_PREFIX_BYTES;
+
+/**
+ * Upper bound on opaque bytes appended after the gzip stream (e.g. an app
+ * attribution tag). The suffix is meant to be small, so `decode` rejects a
+ * larger one: this keeps the `MAX_PAYLOAD_BYTES` ceiling meaningful for the
+ * whole input. Without it a tiny declared `gzipLen` could smuggle an
+ * arbitrarily large suffix past validation and into the indexer while still
+ * forcing the API to receive and hex-decode the whole blob.
+ *
+ * @example
+ * ```ts
+ * import { Payload } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(Payload.MAX_ATTRIBUTION_SUFFIX_BYTES);
+ * ```
+ */
+export const MAX_ATTRIBUTION_SUFFIX_BYTES = 256;
+
+/**
+ * Largest fully framed wire payload, in bytes, matching the router/onchain
+ * mempool cap.
+ *
+ * @example
+ * ```ts
+ * import { Payload } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(Payload.MAX_PAYLOAD_BYTES);
+ * ```
+ */
+export const MAX_PAYLOAD_BYTES = 1_000_000;
+
 /**
  * Maximum gzip-compressed item bytes accepted by the payload codec.
+ *
+ * The budget reserves room for the fixed header and the largest accepted
+ * attribution suffix so the full wire payload never exceeds
+ * {@link MAX_PAYLOAD_BYTES}.
  *
  * @example
  * ```ts
@@ -98,7 +136,8 @@ export const CURRENT_VERSION = 1;
  * console.log(Payload.MAX_COMPRESSED_ITEMS_BYTES);
  * ```
  */
-export const MAX_COMPRESSED_ITEMS_BYTES = 1_000_000;
+export const MAX_COMPRESSED_ITEMS_BYTES =
+  MAX_PAYLOAD_BYTES - HEADER_BYTES - MAX_ATTRIBUTION_SUFFIX_BYTES;
 
 /**
  * Maximum ABI-decoded item bytes accepted by the payload codec.
@@ -112,47 +151,12 @@ export const MAX_COMPRESSED_ITEMS_BYTES = 1_000_000;
  */
 export const MAX_DECOMPRESSED_ITEMS_BYTES = 6_000_000;
 
-/**
- * Upper bound on opaque bytes appended after the gzip stream (e.g. an app
- * attribution tag). The suffix is meant to be small, so `decode` rejects a
- * larger one: this keeps the `MAX_COMPRESSED_ITEMS_BYTES` ceiling meaningful for
- * the whole input. Without it a tiny declared `gzipLen` could smuggle an
- * arbitrarily large suffix past validation and into the indexer while still
- * forcing the API to receive and hex-decode the whole blob.
- *
- * @example
- * ```ts
- * import { Payload } from "@morpho-org/midnight-sdk";
- *
- * console.log(Payload.MAX_ATTRIBUTION_SUFFIX_BYTES);
- * ```
- */
-export const MAX_ATTRIBUTION_SUFFIX_BYTES = 256;
-
-const VERSION_PREFIX_BYTES = 1;
-const LENGTH_PREFIX_BYTES = 4;
-const HEADER_BYTES = VERSION_PREFIX_BYTES + LENGTH_PREFIX_BYTES;
 const ABI_ARRAY_HEAD_BYTES = 64;
 const ABI_LENGTH_LOW_OFFSET = 60;
 const MAX_TIMESTAMP_SECONDS = 1_000_000_000_000n - 1n;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ZERO_BYTES32 =
   "0x0000000000000000000000000000000000000000000000000000000000000000";
-
-/**
- * Largest fully framed wire payload, in bytes: the version byte, the 4-byte
- * gzip length prefix, the largest accepted gzip stream, and the largest
- * accepted attribution suffix.
- *
- * @example
- * ```ts
- * import { Payload } from "@morpho-org/midnight-sdk";
- *
- * console.log(Payload.MAX_PAYLOAD_BYTES);
- * ```
- */
-export const MAX_PAYLOAD_BYTES =
-  HEADER_BYTES + MAX_COMPRESSED_ITEMS_BYTES + MAX_ATTRIBUTION_SUFFIX_BYTES;
 
 /**
  * Largest `0x`-prefixed hex string that can encode a wire payload.
@@ -230,6 +234,7 @@ const offerStructAbiComponents = [
   { name: "reduceOnly", type: "bool" },
   { name: "maxUnits", type: "uint256" },
   { name: "maxAssets", type: "uint256" },
+  { name: "continuousFeeCap", type: "uint256" },
 ] as const;
 
 const itemsAbi = [
@@ -491,6 +496,11 @@ function assertApiValidOfferStruct(offer: OfferStruct): void {
       "invalid offer bytes: exactly one of maxUnits and maxAssets must be non-zero",
     );
   }
+  if (offer.continuousFeeCap < 0n) {
+    throw new DecodeError(
+      "invalid offer bytes: continuousFeeCap must be non-negative",
+    );
+  }
 }
 
 function assertApiValidOfferTimeRange(offer: OfferStruct): void {
@@ -519,11 +529,12 @@ function assertCollateralParams(offer: OfferStruct): void {
 
   let previousToken: string | undefined;
   for (const params of collateralParams) {
-    if (!MarketUtils.isLltvAllowed(params.lltv)) {
+    if (params.lltv < 0n || params.lltv > MathLib.WAD) {
       throw new DecodeError(
-        `invalid offer bytes: invalid collateral lltv ${params.lltv}`,
+        `invalid offer bytes: collateral lltv must be between 0 and WAD, got ${params.lltv}`,
       );
     }
+
     const lowMaxLif = MarketUtils.getLiquidationIncentiveFactor(
       params,
       LIQUIDATION_CURSOR_LOW,
@@ -595,7 +606,8 @@ function isEmptyOfferStruct(offer: OfferStruct): boolean {
     isZeroAddress(offer.ratifier) &&
     offer.reduceOnly === false &&
     offer.maxUnits === 0n &&
-    offer.maxAssets === 0n
+    offer.maxAssets === 0n &&
+    offer.continuousFeeCap === 0n
   );
 }
 

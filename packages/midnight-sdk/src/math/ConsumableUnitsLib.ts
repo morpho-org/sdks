@@ -4,6 +4,7 @@ import {
   MathLib,
 } from "@morpho-org/morpho-ts";
 
+import { OfferUtils } from "../offers/index.js";
 import { TakeAmountsLib } from "./TakeAmountsLib.js";
 
 /**
@@ -28,6 +29,7 @@ export namespace ConsumableUnitsLib {
    * @param params.settlementFee - WAD-scaled settlement fee used for asset-capped conversion.
    * @returns Remaining consumable units.
    * @throws {NegativeValueError} when `consumed`, offer limits, delegated asset inputs, or the offer tick is negative.
+   * @throws {InvalidOfferParameterError} when offer caps are both zero or both non-zero.
    * @throws {DivisionByZeroError} when the delegated units conversion divides by zero.
    * @throws {TickOutOfRangeError} when the offer tick exceeds `MAX_TICK`.
    * @throws {SettlementFeeExceedsPriceError} when settlement fee exceeds a buy offer price.
@@ -66,6 +68,7 @@ export namespace ConsumableUnitsLib {
     assertNonNegative("consumed", consumed);
     assertNonNegative("offer.maxUnits", maxUnits);
     assertNonNegative("offer.maxAssets", maxAssets);
+    OfferUtils.validateOfferCaps({ maxUnits, maxAssets });
 
     if (maxUnits > 0n) return MathLib.zeroFloorSub(maxUnits, consumed);
 

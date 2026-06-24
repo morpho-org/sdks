@@ -3,7 +3,7 @@ import type { Abi } from "viem";
 /**
  * Pinned ABI JSON for the core Midnight contract.
  *
- * Source: `morpho-org/midnight` commit `a7c6da7e70cb216982f6c5d20b46f40b943e67e4`,
+ * Source: `morpho-org/midnight` commit `615fcfa12f725df3a16d65b2c2209272eff5bc10`,
  * `src/interfaces/IMidnight.sol`, Forge artifact `out/src/interfaces/IMidnight.sol/IMidnight.json`.
  *
  * @example
@@ -46,7 +46,12 @@ export const midnightAbi = [
   },
   {
     inputs: [],
-    name: "ContinuousFeeTooHigh",
+    name: "ContinuousFeeAboveMax",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "ContinuousFeeAboveOfferCap",
     type: "error",
   },
   {
@@ -66,7 +71,17 @@ export const midnightAbi = [
   },
   {
     inputs: [],
+    name: "InvalidLltv",
+    type: "error",
+  },
+  {
+    inputs: [],
     name: "InvalidMaxLif",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "InvalidOfferCaps",
     type: "error",
   },
   {
@@ -102,11 +117,6 @@ export const midnightAbi = [
   {
     inputs: [],
     name: "MaturityTooFar",
-    type: "error",
-  },
-  {
-    inputs: [],
-    name: "MultipleNonZero",
     type: "error",
   },
   {
@@ -156,7 +166,7 @@ export const midnightAbi = [
   },
   {
     inputs: [],
-    name: "RatifierFail",
+    name: "RatifierFailed",
     type: "error",
   },
   {
@@ -186,7 +196,7 @@ export const midnightAbi = [
   },
   {
     inputs: [],
-    name: "SettlementFeeTooHigh",
+    name: "SettlementFeeAboveMax",
     type: "error",
   },
   {
@@ -217,6 +227,11 @@ export const midnightAbi = [
   {
     inputs: [],
     name: "UnhealthyBorrower",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "UnusedReceiverMustBeZero",
     type: "error",
   },
   {
@@ -252,6 +267,38 @@ export const midnightAbi = [
         internalType: "uint256",
         name: "",
         type: "uint256",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "lltv",
+        type: "uint256",
+      },
+    ],
+    name: "addLltv",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "lltv",
+        type: "uint256",
+      },
+    ],
+    name: "isLltvAllowed",
+    outputs: [
+      {
+        internalType: "bool",
+        name: "",
+        type: "bool",
       },
     ],
     stateMutability: "view",
@@ -504,7 +551,7 @@ export const midnightAbi = [
         type: "address",
       },
     ],
-    name: "creditOf",
+    name: "credit",
     outputs: [
       {
         internalType: "uint128",
@@ -528,7 +575,7 @@ export const midnightAbi = [
         type: "address",
       },
     ],
-    name: "debtOf",
+    name: "debt",
     outputs: [
       {
         internalType: "uint128",
@@ -897,12 +944,12 @@ export const midnightAbi = [
     outputs: [
       {
         internalType: "uint256",
-        name: "",
+        name: "outputSeizedAssets",
         type: "uint256",
       },
       {
         internalType: "uint256",
-        name: "",
+        name: "outputRepaidUnits",
         type: "uint256",
       },
     ],
@@ -1668,6 +1715,11 @@ export const midnightAbi = [
             name: "maxAssets",
             type: "uint256",
           },
+          {
+            internalType: "uint256",
+            name: "continuousFeeCap",
+            type: "uint256",
+          },
         ],
         internalType: "struct Offer",
         name: "offer",
@@ -1708,12 +1760,12 @@ export const midnightAbi = [
     outputs: [
       {
         internalType: "uint256",
-        name: "",
+        name: "buyerAssets",
         type: "uint256",
       },
       {
         internalType: "uint256",
-        name: "",
+        name: "sellerAssets",
         type: "uint256",
       },
     ],
@@ -2061,17 +2113,17 @@ export const midnightAbi = [
     outputs: [
       {
         internalType: "uint128",
-        name: "",
+        name: "newCredit",
         type: "uint128",
       },
       {
         internalType: "uint128",
-        name: "",
+        name: "newPendingFee",
         type: "uint128",
       },
       {
         internalType: "uint128",
-        name: "",
+        name: "accruedFee",
         type: "uint128",
       },
     ],
@@ -2154,17 +2206,17 @@ export const midnightAbi = [
     outputs: [
       {
         internalType: "uint128",
-        name: "",
+        name: "newCredit",
         type: "uint128",
       },
       {
         internalType: "uint128",
-        name: "",
+        name: "newPendingFee",
         type: "uint128",
       },
       {
         internalType: "uint128",
-        name: "",
+        name: "accruedFee",
         type: "uint128",
       },
     ],
@@ -2364,7 +2416,7 @@ export const midnightAbi = [
 /**
  * Pinned ABI JSON for the MidnightBundles.
  *
- * Source: `morpho-org/midnight` commit `a7c6da7e70cb216982f6c5d20b46f40b943e67e4`,
+ * Source: `morpho-org/midnight` commit `615fcfa12f725df3a16d65b2c2209272eff5bc10`,
  * `src/periphery/interfaces/IMidnightBundles.sol`, Forge artifact `out/src/periphery/interfaces/IMidnightBundles.sol/IMidnightBundles.json`.
  *
  * @example
@@ -2483,11 +2535,6 @@ export const midnightBundlesAbi = [
       {
         components: [
           {
-            internalType: "uint256",
-            name: "units",
-            type: "uint256",
-          },
-          {
             components: [
               {
                 components: [
@@ -2613,6 +2660,11 @@ export const midnightBundlesAbi = [
                 name: "maxAssets",
                 type: "uint256",
               },
+              {
+                internalType: "uint256",
+                name: "continuousFeeCap",
+                type: "uint256",
+              },
             ],
             internalType: "struct Offer",
             name: "offer",
@@ -2622,6 +2674,11 @@ export const midnightBundlesAbi = [
             internalType: "bytes",
             name: "ratifierData",
             type: "bytes",
+          },
+          {
+            internalType: "uint256",
+            name: "units",
+            type: "uint256",
           },
         ],
         internalType: "struct Take[]",
@@ -2703,11 +2760,6 @@ export const midnightBundlesAbi = [
       {
         components: [
           {
-            internalType: "uint256",
-            name: "units",
-            type: "uint256",
-          },
-          {
             components: [
               {
                 components: [
@@ -2833,6 +2885,11 @@ export const midnightBundlesAbi = [
                 name: "maxAssets",
                 type: "uint256",
               },
+              {
+                internalType: "uint256",
+                name: "continuousFeeCap",
+                type: "uint256",
+              },
             ],
             internalType: "struct Offer",
             name: "offer",
@@ -2842,6 +2899,11 @@ export const midnightBundlesAbi = [
             internalType: "bytes",
             name: "ratifierData",
             type: "bytes",
+          },
+          {
+            internalType: "uint256",
+            name: "units",
+            type: "uint256",
           },
         ],
         internalType: "struct Take[]",
@@ -3071,11 +3133,6 @@ export const midnightBundlesAbi = [
       {
         components: [
           {
-            internalType: "uint256",
-            name: "units",
-            type: "uint256",
-          },
-          {
             components: [
               {
                 components: [
@@ -3201,6 +3258,11 @@ export const midnightBundlesAbi = [
                 name: "maxAssets",
                 type: "uint256",
               },
+              {
+                internalType: "uint256",
+                name: "continuousFeeCap",
+                type: "uint256",
+              },
             ],
             internalType: "struct Offer",
             name: "offer",
@@ -3210,6 +3272,11 @@ export const midnightBundlesAbi = [
             internalType: "bytes",
             name: "ratifierData",
             type: "bytes",
+          },
+          {
+            internalType: "uint256",
+            name: "units",
+            type: "uint256",
           },
         ],
         internalType: "struct Take[]",
@@ -3291,11 +3358,6 @@ export const midnightBundlesAbi = [
       {
         components: [
           {
-            internalType: "uint256",
-            name: "units",
-            type: "uint256",
-          },
-          {
             components: [
               {
                 components: [
@@ -3421,6 +3483,11 @@ export const midnightBundlesAbi = [
                 name: "maxAssets",
                 type: "uint256",
               },
+              {
+                internalType: "uint256",
+                name: "continuousFeeCap",
+                type: "uint256",
+              },
             ],
             internalType: "struct Offer",
             name: "offer",
@@ -3430,6 +3497,11 @@ export const midnightBundlesAbi = [
             internalType: "bytes",
             name: "ratifierData",
             type: "bytes",
+          },
+          {
+            internalType: "uint256",
+            name: "units",
+            type: "uint256",
           },
         ],
         internalType: "struct Take[]",
@@ -3457,7 +3529,7 @@ export const midnightBundlesAbi = [
 /**
  * Pinned ABI JSON for the EcrecoverRatifier.
  *
- * Source: `morpho-org/midnight` commit `a7c6da7e70cb216982f6c5d20b46f40b943e67e4`,
+ * Source: `morpho-org/midnight` commit `615fcfa12f725df3a16d65b2c2209272eff5bc10`,
  * `src/ratifiers/interfaces/IEcrecoverRatifier.sol`, Forge artifact `out/src/ratifiers/interfaces/IEcrecoverRatifier.sol/IEcrecoverRatifier.json`.
  *
  * @example
@@ -3476,11 +3548,6 @@ export const ecrecoverRatifierAbi = [
   {
     inputs: [],
     name: "InvalidSignature",
-    type: "error",
-  },
-  {
-    inputs: [],
-    name: "NotMidnight",
     type: "error",
   },
   {
@@ -3677,6 +3744,11 @@ export const ecrecoverRatifierAbi = [
             name: "maxAssets",
             type: "uint256",
           },
+          {
+            internalType: "uint256",
+            name: "continuousFeeCap",
+            type: "uint256",
+          },
         ],
         internalType: "struct Offer",
         name: "offer",
@@ -3728,7 +3800,7 @@ export const ecrecoverRatifierAbi = [
 /**
  * Pinned ABI JSON for the SetterRatifier.
  *
- * Source: `morpho-org/midnight` commit `a7c6da7e70cb216982f6c5d20b46f40b943e67e4`,
+ * Source: `morpho-org/midnight` commit `615fcfa12f725df3a16d65b2c2209272eff5bc10`,
  * `src/ratifiers/interfaces/ISetterRatifier.sol`, Forge artifact `out/src/ratifiers/interfaces/ISetterRatifier.sol/ISetterRatifier.json`.
  *
  * @example
@@ -3742,11 +3814,6 @@ export const setterRatifierAbi = [
   {
     inputs: [],
     name: "InvalidProof",
-    type: "error",
-  },
-  {
-    inputs: [],
-    name: "NotMidnight",
     type: "error",
   },
   {
@@ -3929,6 +3996,11 @@ export const setterRatifierAbi = [
           {
             internalType: "uint256",
             name: "maxAssets",
+            type: "uint256",
+          },
+          {
+            internalType: "uint256",
+            name: "continuousFeeCap",
             type: "uint256",
           },
         ],

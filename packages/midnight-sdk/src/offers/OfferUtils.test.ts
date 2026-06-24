@@ -8,7 +8,7 @@ import {
   baseOfferInput,
   group,
 } from "../__test__/fixtures.js";
-import { MAX_TICK } from "../constants.js";
+import { MAX_CONTINUOUS_FEE, MAX_TICK } from "../constants.js";
 import {
   InvalidOfferGroupError,
   InvalidOfferParameterError,
@@ -61,6 +61,7 @@ describe("Offer.create", () => {
     });
 
     expect(offer.maxAssets).toBe(100n);
+    expect(offer.continuousFeeCap).toBe(MAX_CONTINUOUS_FEE);
     expect(offer.receiverIfMakerIsSeller).toBe(zeroAddress);
     expect(offer.group).toBe(OfferUtils.groupHash(offer));
     expect(offer.hash).toBe(OfferUtils.hash(offer));
@@ -124,6 +125,7 @@ describe("Offer.create", () => {
       expiry: 11n,
       maxUnits: 0n,
       maxAssets: 100n,
+      continuousFeeCap: MAX_CONTINUOUS_FEE,
       receiverIfMakerIsSeller: zeroAddress,
     });
   });
@@ -140,6 +142,9 @@ describe("Offer.create", () => {
     expect(OfferUtils.validateOfferCaps({ maxUnits: 1n })).toEqual({
       maxUnits: 1n,
       maxAssets: 0n,
+    });
+    expect(OfferUtils.validateContinuousFeeCap({})).toEqual({
+      continuousFeeCap: MAX_CONTINUOUS_FEE,
     });
     expect(
       OfferUtils.resolveReceiverIfMakerIsSeller({
@@ -173,6 +178,7 @@ describe("Offer.create", () => {
     ["expiry", { start: 20n, expiry: 20n }],
     ["maxUnits", { maxUnits: -1n, maxAssets: 0n }],
     ["maxAssets", { maxAssets: -1n }],
+    ["continuousFeeCap", { continuousFeeCap: -1n }],
     ["maxUnits/maxAssets", { maxUnits: 0n, maxAssets: 0n }],
     ["maxUnits/maxAssets", { maxUnits: 1n, maxAssets: 1n }],
     [

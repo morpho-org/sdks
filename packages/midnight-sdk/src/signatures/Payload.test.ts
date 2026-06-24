@@ -1,3 +1,4 @@
+import { MathLib } from "@morpho-org/morpho-ts";
 import {
   type Address,
   bytesToHex,
@@ -15,6 +16,8 @@ import {
   baseOffer,
   group,
 } from "../__test__/fixtures.js";
+import { LIQUIDATION_CURSOR_LOW } from "../constants.js";
+import { MarketUtils } from "../market/index.js";
 import { type IOffer, type OfferStruct, OfferUtils } from "../offers/index.js";
 import * as Payload from "./Payload.js";
 import { MAX_ATTRIBUTION_SUFFIX_BYTES } from "./Payload.js";
@@ -56,6 +59,7 @@ const offerStructAbiComponents = [
   { name: "reduceOnly", type: "bool" },
   { name: "maxUnits", type: "uint256" },
   { name: "maxAssets", type: "uint256" },
+  { name: "continuousFeeCap", type: "uint256" },
 ] as const;
 
 const itemsAbi = [
@@ -327,6 +331,49 @@ describe("Payload.decode", () => {
     );
   });
 
+  test("behavior: dynamic lltv values are not statically rejected", async () => {
+    const lltv = 500000000000000000n;
+    const offer = OfferUtils.toStruct({ offer: apiValidOffer({ group }) });
+    const encoded = await encodeUncheckedPayload({
+      ...offer,
+      market: {
+        ...offer.market,
+        collateralParams: [
+          {
+            ...offer.market.collateralParams[0]!,
+            lltv,
+            maxLif: MarketUtils.getLiquidationIncentiveFactor(
+              lltv,
+              LIQUIDATION_CURSOR_LOW,
+            ),
+          },
+        ],
+      },
+    });
+
+    await expect(Payload.decode(encoded)).resolves.toHaveLength(1);
+  });
+
+  test("error: collateral lltv above WAD", async () => {
+    const offer = OfferUtils.toStruct({ offer: apiValidOffer({ group }) });
+    const encoded = await encodeUncheckedPayload({
+      ...offer,
+      market: {
+        ...offer.market,
+        collateralParams: [
+          {
+            ...offer.market.collateralParams[0]!,
+            lltv: MathLib.WAD + 1n,
+          },
+        ],
+      },
+    });
+
+    await expect(Payload.decode(encoded)).rejects.toBeInstanceOf(
+      Payload.DecodeError,
+    );
+  });
+
   test("error: invalid collateral maxLif", async () => {
     const offer = OfferUtils.toStruct({ offer: apiValidOffer({ group }) });
     const encoded = await encodeUncheckedPayload({
@@ -370,13 +417,14 @@ describe("Payload.decode", () => {
 
 describe("Payload size limits", () => {
   test("default", () => {
-    expect(Payload.MAX_COMPRESSED_ITEMS_BYTES).toBe(1_000_000);
+    expect(Payload.MAX_PAYLOAD_BYTES).toBe(1_000_000);
+    expect(Payload.MAX_COMPRESSED_ITEMS_BYTES).toBe(999_739);
     expect(Payload.MAX_DECOMPRESSED_ITEMS_BYTES).toBe(6_000_000);
-    expect(Payload.MAX_PAYLOAD_BYTES).toBe(
+    expect(
       5 +
         Payload.MAX_COMPRESSED_ITEMS_BYTES +
         Payload.MAX_ATTRIBUTION_SUFFIX_BYTES,
-    );
+    ).toBe(Payload.MAX_PAYLOAD_BYTES);
     expect(Payload.MAX_PAYLOAD_HEX_LENGTH).toBe(
       "0x".length + Payload.MAX_PAYLOAD_BYTES * 2,
     );

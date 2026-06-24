@@ -8,13 +8,27 @@ The initial surface includes pinned Midnight ABI literals, ABI-compatible market
 
 The payload codec rejects non-padding offer bytes unless exactly one of `maxUnits` and `maxAssets` is non-zero.
 
+The payload codec caps the full framed wire payload at 1,000,000 bytes and derives the compressed item budget after reserving the header and maximum attribution suffix.
+
+Offers include the protocol `continuousFeeCap` field in SDK types, API mappings, payload encoding/decoding, Merkle leaf hashing, and EIP-712 ratifier typed data so maker signatures match the current Midnight contracts.
+
 Payload collateral validation mirrors `Midnight.touchMarket` by rejecting zero collateral tokens and `maxLif` values outside the low/high liquidation cursor formulas.
+
+Payload and market construction reject LLTV values outside the protocol's fixed `[0, WAD]` range while still allowing dynamically configured LLTV tiers inside that range.
+
+Market hashing canonicalizes non-empty collateral params by token order while preserving raw empty-market hashing for protocol padding.
+
+`MarketParams` rejects empty collateral lists and duplicate collateral token entries, then normalizes collateral params into onchain token order before offer grouping, tree construction, or signing flows.
 
 Offer creation and payload validation require `expiry` to be strictly greater than `start`, so SDK-built offers cannot later fail payload encoding on a zero-duration time range.
 
 Ecrecover ratification supports direct maker signatures and delegated signer signatures, including mixed-maker trees when the same signer is authorized by every maker onchain.
 
 Ecrecover ratification accepts a viem client plus explicit signer account, derives the EIP-712 domain chain id from that client, and validates the returned signature before producing payload items.
+
+Ecrecover client signing rejects typed-data signatures that do not recover to the requested signer account.
+
+`fetchConsumableUnits` reads each offer's market continuous fee and returns zero when the market fee exceeds the offer's `continuousFeeCap`.
 
 Offer creation only accepts protocol-reachable tick spacings and offer groups require a shared cap mode and value, matching Midnight's tick accessibility and group consumption accounting.
 

@@ -365,7 +365,14 @@ export class AccrualPosition extends Position {
    *     chainId: 31337,
    *     params: {
    *       loanToken: "0x0000000000000000000000000000000000006000",
-   *       collateralParams: [],
+   *       collateralParams: [
+   *         {
+   *           token: "0x0000000000000000000000000000000000007000",
+   *           lltv: 770000000000000000n,
+   *           maxLif: 1061007957559681697n,
+   *           oracle: "0x0000000000000000000000000000000000008000",
+   *         },
+   *       ],
    *       maturity: 54_000n,
    *       rcfThreshold: 0n,
    *       enterGate: "0x0000000000000000000000000000000000000000",
@@ -429,7 +436,14 @@ export class AccrualPosition extends Position {
    *     chainId: 31337,
    *     params: {
    *       loanToken: "0x0000000000000000000000000000000000006000",
-   *       collateralParams: [],
+   *       collateralParams: [
+   *         {
+   *           token: "0x0000000000000000000000000000000000007000",
+   *           lltv: 770000000000000000n,
+   *           maxLif: 1061007957559681697n,
+   *           oracle: "0x0000000000000000000000000000000000008000",
+   *         },
+   *       ],
    *       maturity: 54_000n,
    *       rcfThreshold: 0n,
    *       enterGate: "0x0000000000000000000000000000000000000000",

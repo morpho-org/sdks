@@ -2,6 +2,7 @@ import { ChainId, registerCustomAddresses } from "@morpho-org/morpho-ts";
 import type { Address, Hash } from "viem";
 import { zeroAddress } from "viem";
 
+import { MAX_CONTINUOUS_FEE } from "../constants.js";
 import {
   type IMarket,
   type IMarketParams,
@@ -100,6 +101,7 @@ export const baseOfferInput = (overrides: Partial<IOffer> = {}): IOffer => {
     reduceOnly: overrides.reduceOnly ?? false,
     maxUnits: overrides.maxUnits ?? 100n,
     maxAssets: overrides.maxAssets ?? 1_000n,
+    continuousFeeCap: overrides.continuousFeeCap ?? MAX_CONTINUOUS_FEE,
   };
 };
 

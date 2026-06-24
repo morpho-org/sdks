@@ -1,3 +1,5 @@
+import type { Address } from "viem";
+
 /**
  * Thrown when a Midnight offer group violates protocol-level group mechanics.
  *
@@ -148,6 +150,47 @@ export class InvalidPositionAccrualStateError extends Error {
 }
 
 /**
+ * Thrown when a market parameter cannot satisfy Midnight protocol rules.
+ *
+ * @example
+ * ```ts
+ * import { InvalidMarketParameterError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new InvalidMarketParameterError({
+ *   parameter: "collateralParams",
+ *   value: 0,
+ *   instruction: "Provide at least one collateral.",
+ * });
+ * ```
+ * @param params.parameter - Invalid market parameter name.
+ * @param params.value - Invalid market parameter value.
+ * @param params.instruction - Optional instruction appended to the error message.
+ * @param params.cause - Optional wrapped cause.
+ */
+export class InvalidMarketParameterError extends Error {
+  /** Invalid market parameter name. */
+  public readonly parameter: string;
+
+  /** Invalid market parameter value. */
+  public readonly value: unknown;
+
+  public constructor(params: {
+    readonly parameter: string;
+    readonly value: unknown;
+    readonly instruction?: string;
+    readonly cause?: unknown;
+  }) {
+    super(
+      `Invalid market parameter "${params.parameter}" with value "${String(params.value)}".${params.instruction == null ? "" : ` ${params.instruction}`}`,
+      params.cause === undefined ? undefined : { cause: params.cause },
+    );
+    this.name = "InvalidMarketParameterError";
+    this.parameter = params.parameter;
+    this.value = params.value;
+  }
+}
+
+/**
  * Thrown when an offer builder receives a parameter that cannot satisfy Midnight protocol rules.
  *
  * @example
@@ -215,6 +258,31 @@ export class InvalidTreeError extends Error {
   public constructor(message: string) {
     super(message);
     this.name = "InvalidTreeError";
+  }
+}
+
+/**
+ * Thrown when a typed-data signature does not recover to the expected signer.
+ *
+ * @example
+ * ```ts
+ * import { InvalidTypedDataSignatureError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new InvalidTypedDataSignatureError(
+ *   "0x0000000000000000000000000000000000000001",
+ * );
+ * ```
+ */
+export class InvalidTypedDataSignatureError extends Error {
+  /** Signer address the signature was expected to recover. */
+  public readonly signer: Address;
+
+  public constructor(signer: Address) {
+    super(
+      `Typed-data signature does not recover to signer "${signer}". Check the wallet account or signing transport.`,
+    );
+    this.name = "InvalidTypedDataSignatureError";
+    this.signer = signer;
   }
 }
 

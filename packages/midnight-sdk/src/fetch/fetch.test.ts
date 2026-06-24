@@ -24,8 +24,11 @@ import {
   marketId,
 } from "../__test__/fixtures.js";
 import { midnightAbi } from "../abis.js";
-import { MAX_TICK } from "../constants.js";
-import { SettlementFeeExceedsPriceError } from "../errors.js";
+import { MAX_CONTINUOUS_FEE, MAX_TICK } from "../constants.js";
+import {
+  InvalidOfferParameterError,
+  SettlementFeeExceedsPriceError,
+} from "../errors.js";
 import { MarketUtils } from "../market/index.js";
 import { TickLib } from "../math/index.js";
 import { abi as getPositionAbi } from "../queries/GetPosition.js";
@@ -308,7 +311,7 @@ describe("fetchAccrualPosition", () => {
 });
 
 describe("fetchConsumableUnits", () => {
-  test("default: max-unit offers only read consumed", async () => {
+  test("default: max-unit offers skip settlement fee", async () => {
     const handle = createMockClient(base);
     const offer = {
       buy: true,
@@ -316,6 +319,7 @@ describe("fetchConsumableUnits", () => {
       tick: MAX_TICK,
       maxUnits: 100n,
       maxAssets: 0n,
+      continuousFeeCap: MAX_CONTINUOUS_FEE,
     };
     mockRead(handle, {
       address: addresses.midnight,
@@ -323,6 +327,13 @@ describe("fetchConsumableUnits", () => {
       functionName: "consumed",
       args: [offer.maker, group],
       result: 40n,
+    });
+    mockRead(handle, {
+      address: addresses.midnight,
+      abi: midnightAbi,
+      functionName: "continuousFee",
+      args: [marketId],
+      result: 10,
     });
 
     await expect(
@@ -353,6 +364,13 @@ describe("fetchConsumableUnits", () => {
     mockRead(handle, {
       address: addresses.midnight,
       abi: midnightAbi,
+      functionName: "continuousFee",
+      args: [marketId],
+      result: 10,
+    });
+    mockRead(handle, {
+      address: addresses.midnight,
+      abi: midnightAbi,
       functionName: "settlementFee",
       args: [marketId, 1000n],
       result: 0n,
@@ -368,6 +386,40 @@ describe("fetchConsumableUnits", () => {
     ).resolves.toBe(60n);
   });
 
+  test("behavior: offers below market continuous fee return zero", async () => {
+    const handle = createMockClient(base);
+    const offer = baseOffer({
+      buy: true,
+      tick: MAX_TICK,
+      maxUnits: 0n,
+      maxAssets: 100n,
+      continuousFeeCap: 9n,
+    });
+    mockRead(handle, {
+      address: addresses.midnight,
+      abi: midnightAbi,
+      functionName: "consumed",
+      args: [offer.maker, group],
+      result: 40n,
+    });
+    mockRead(handle, {
+      address: addresses.midnight,
+      abi: midnightAbi,
+      functionName: "continuousFee",
+      args: [marketId],
+      result: 10,
+    });
+
+    await expect(
+      fetchConsumableUnits(handle.client, {
+        marketId,
+        offer,
+        group,
+        timeToMaturity: 1000n,
+      }),
+    ).resolves.toBe(0n);
+  });
+
   test("error: SettlementFeeExceedsPriceError from fetched settlement fee", async () => {
     const handle = createMockClient(base);
     const offer = baseOffer({ buy: true, tick: 2n, maxUnits: 0n });
@@ -377,6 +429,13 @@ describe("fetchConsumableUnits", () => {
       functionName: "consumed",
       args: [offer.maker, group],
       result: 0n,
+    });
+    mockRead(handle, {
+      address: addresses.midnight,
+      abi: midnightAbi,
+      functionName: "continuousFee",
+      args: [marketId],
+      result: 10,
     });
     mockRead(handle, {
       address: addresses.midnight,
@@ -407,6 +466,35 @@ describe("fetchConsumableUnits", () => {
         timeToMaturity: 1000n,
       }),
     ).rejects.toBeInstanceOf(NegativeValueError);
+    expect(handle.request).not.toHaveBeenCalled();
+  });
+
+  test("error: NegativeValueError before reads for negative continuous fee cap", async () => {
+    const handle = createMockClient(base);
+
+    await expect(
+      fetchConsumableUnits(handle.client, {
+        marketId,
+        offer: baseOffer({ continuousFeeCap: -1n }),
+        group,
+        timeToMaturity: 1000n,
+      }),
+    ).rejects.toBeInstanceOf(NegativeValueError);
+    expect(handle.request).not.toHaveBeenCalled();
+  });
+
+  test("error: InvalidOfferParameterError before reads for invalid cap shape", async () => {
+    const handle = createMockClient(base);
+
+    await expect(
+      fetchConsumableUnits(handle.client, {
+        marketId,
+        offer: baseOffer({ maxUnits: 1n, maxAssets: 1n }),
+        group,
+        timeToMaturity: 1000n,
+      }),
+    ).rejects.toBeInstanceOf(InvalidOfferParameterError);
+    expect(handle.request).not.toHaveBeenCalled();
   });
 });
 

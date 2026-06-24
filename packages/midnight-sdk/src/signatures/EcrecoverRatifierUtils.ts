@@ -17,34 +17,38 @@ import {
 } from "viem";
 import { signTypedData } from "viem/actions";
 import { EIP712_DOMAIN_TYPEHASH } from "../constants.js";
-import { InvalidTreeError, InvalidTreeHeightError } from "../errors.js";
+import {
+  InvalidTreeError,
+  InvalidTreeHeightError,
+  InvalidTypedDataSignatureError,
+} from "../errors.js";
 import type { OfferStruct } from "../offers/index.js";
 import type { Item as PayloadItem } from "./Payload.js";
 import type { Tree } from "./Tree.js";
 import type { TreeProof } from "./TreeUtils.js";
 
 const treeTypeHashes = [
-  "0x2b9ee710e1977dfc5778fe18c905ccc1d9e144baf3ba83be732d4da65ecb73e3",
-  "0x3cc16189b92a85898f1d5c6e87282c8ded7c1c93b2323d5e85ae10c5f4b2b220",
-  "0x6de37d3e570afa293a8107d4b6b1d9547616c04f42164d009c89194787b2ffa6",
-  "0xba3ea2ddfbf40a906fcd1b9506dbd344c062e8dcba8b5c902ceb13339f45a358",
-  "0xe5faa865e93bc1b7b8fdf91980f54682d649683b014edd6c54b642f5a0c96977",
-  "0xeda50f61dd2a827c6ff9fbfcd54335628dcaa78aaa4f2d118c60886219cdce2b",
-  "0x54e2c9cc40cdc0e9ad530cf2be298f952f57af2b18b02f88274a9bbab359d23a",
-  "0xc9d81859d60d6b21c688f4be93ca83e3be222728bb156ef5f4cf497f879f1e29",
-  "0xd59b0c4544e0c60c8611eab0aaa402575f14ee784d22289c5d57f48c422a62d6",
-  "0xccad21701f34f08bb8398a3dbc77e20e4c9c424930f3a8b31485bf059e2bdb20",
-  "0x8a42dfb49807647bfc49c906aef322aa0239d40e4cb675761e141bc7bfa530da",
-  "0x2adc0d948b2e3ecb642661590d2eec36d4e71e9acf382deb6574371800caf198",
-  "0xf5845dfaed016de272342f346346a49d4b1694f622144d420558a38e46ac9dad",
-  "0x3d7df854e6294bf433b64bbb8d0a82fa875a87b45b0016db27fc5752e54126ad",
-  "0x72a991a101708716ff427c524404ab44f4d4d1f4e7e76c0ae8b967222164b348",
-  "0x762c88fc52cf78a54401d247790f1bdb619d51d3458d1415c20d1422197cecc4",
-  "0x8ede2209e94c8d5f8379d733dc8712b71a3888c1c4b70f3d6b22285f70bf4286",
-  "0x425b18f07b3ac2f641977d2c294590565dd40b5d8414610568dca64628399975",
-  "0x7e7d98718c0180e882e5963b9bd49810096912c273dfa38d8afdd6d39fde86ec",
-  "0x8d35d491a29d846489e19688efff3c4cc7dbd54458058d49b30294074539f0b9",
-  "0x824e385eea1953bcbc783bf900b18aa6fba129b6908765e986cf0968b491ec4f",
+  "0xc27c38e446b48c820ab9c4373dc63a4a750a08165cb4bb488206ebabe045d650",
+  "0x4e15d8736f4406e07bf9844b1653474472a827130c61e899bf1f574a88b8d987",
+  "0x46d107447b480c38ef5b7f54603dba0cb23b887f302b01a998b9d8a80320dd53",
+  "0xd1f3607a8e81454bb3baf5f898274ab47541fffc690278a74f13e174e116be72",
+  "0xb2d98adca9d116c9bc02ce59ec599ac3c2d33db1c0d1217c7e411d9198d427be",
+  "0x5931e0597fcf986027f3118b2495a9ac22139d133f9ad2c2198e6738dc3886c5",
+  "0x3967d37928614a085b47e8758fbc3869a8aed63bdf60ccee8536ff2b5064da06",
+  "0xd6b9f5f45915a260f6e521d9b40f86c385730b6bc330590fcde212e2fea64263",
+  "0x080caa519dbd5328c119d9907e0fa3d9a50dc2ae4bf6dd42c93c100dbc89b51a",
+  "0x45da471048924165ea2ad1855ba940e454b486e71dcf1666c71a928c8844c419",
+  "0xa49a9434fc1836bd08097368325b31039b6a0fd44919f53e4d8f4bf814084cb0",
+  "0xd3e93e4525132f0187a6964dc01fef33fde414538ffd212e9f2f478c3263e0a0",
+  "0x25990db2d26547f92c711988300df317af57bad5cd5d9d8e787a82f95c929474",
+  "0x8e0c648afa977572ead40a1d10a6db2c425b8099545006d834a7b849c6166643",
+  "0x4b635250efa6243e277fdd0cf6df993c2943b64f10f3a0756ceb1f47ef8f9b18",
+  "0xbde1c927f6222c07c8df264e68b42b8382c7c2b85f4729e0df94297cfeebfa91",
+  "0x4d58aea1a67f94be21ab1415bf3b602592430eb9112268fd0fc4e141b1a35e76",
+  "0x14c03281bce13010b158e5a4a3378be394ac9e16118aedb17d82ced51e66836c",
+  "0x99fd3e76f43b2cc221cb9860bc6c96cda95af3fa07ef5f04e071b54aa9386d06",
+  "0x1b1c2f1a04968094d8d0453d49838f7a809d1202ae04a1c2e0964e442ff7988b",
+  "0xc8ccd3cb3267dd76f563584920ac60f2283b719917481b85fe5e10b754932455",
 ] as const;
 
 const signatureAbi = [
@@ -106,6 +110,7 @@ const typedDataTypes = {
     { name: "reduceOnly", type: "bool" },
     { name: "maxUnits", type: "uint256" },
     { name: "maxAssets", type: "uint256" },
+    { name: "continuousFeeCap", type: "uint256" },
   ],
 } as const;
 
@@ -180,7 +185,14 @@ export interface DecodedEcrecoverRatifierData extends TreeProof {
  * const offer = Offer.create({
  *   market: {
  *     loanToken: "0x0000000000000000000000000000000000006000",
- *     collateralParams: [],
+ *     collateralParams: [
+ *       {
+ *         token: "0x0000000000000000000000000000000000007000",
+ *         lltv: 770000000000000000n,
+ *         maxLif: 1061007957559681697n,
+ *         oracle: "0x0000000000000000000000000000000000008000",
+ *       },
+ *     ],
  *     maturity: 54_000n,
  *     rcfThreshold: 0n,
  *     enterGate: zeroAddress,
@@ -251,7 +263,14 @@ export type EcrecoverSignatureInput =
  * const offer = Offer.create({
  *   market: {
  *     loanToken: "0x0000000000000000000000000000000000006000",
- *     collateralParams: [],
+ *     collateralParams: [
+ *       {
+ *         token: "0x0000000000000000000000000000000000007000",
+ *         lltv: 770000000000000000n,
+ *         maxLif: 1061007957559681697n,
+ *         oracle: "0x0000000000000000000000000000000000008000",
+ *       },
+ *     ],
  *     maturity: 54_000n,
  *     rcfThreshold: 0n,
  *     enterGate: zeroAddress,
@@ -292,7 +311,14 @@ export interface EcrecoverRatifierTypedDataParams {
  * const offer = Offer.create({
  *   market: {
  *     loanToken: "0x0000000000000000000000000000000000006000",
- *     collateralParams: [],
+ *     collateralParams: [
+ *       {
+ *         token: "0x0000000000000000000000000000000000007000",
+ *         lltv: 770000000000000000n,
+ *         maxLif: 1061007957559681697n,
+ *         oracle: "0x0000000000000000000000000000000000008000",
+ *       },
+ *     ],
  *     maturity: 54_000n,
  *     rcfThreshold: 0n,
  *     enterGate: zeroAddress,
@@ -347,7 +373,14 @@ export type EcrecoverRatifierRatifyParams =
  * const offer = Offer.create({
  *   market: {
  *     loanToken: "0x0000000000000000000000000000000000006000",
- *     collateralParams: [],
+ *     collateralParams: [
+ *       {
+ *         token: "0x0000000000000000000000000000000000007000",
+ *         lltv: 770000000000000000n,
+ *         maxLif: 1061007957559681697n,
+ *         oracle: "0x0000000000000000000000000000000000008000",
+ *       },
+ *     ],
  *     maturity: 54_000n,
  *     rcfThreshold: 0n,
  *     enterGate: zeroAddress,
@@ -437,7 +470,14 @@ export namespace EcrecoverRatifierUtils {
    * const offer = Offer.create({
    *   market: {
    *     loanToken: "0x0000000000000000000000000000000000006000",
-   *     collateralParams: [],
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
    *     maturity: 54_000n,
    *     rcfThreshold: 0n,
    *     enterGate: zeroAddress,
@@ -500,7 +540,14 @@ export namespace EcrecoverRatifierUtils {
    * const offer = Offer.create({
    *   market: {
    *     loanToken: "0x0000000000000000000000000000000000006000",
-   *     collateralParams: [],
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
    *     maturity: 54_000n,
    *     rcfThreshold: 0n,
    *     enterGate: zeroAddress,
@@ -554,6 +601,7 @@ export namespace EcrecoverRatifierUtils {
    * @returns Signature returned by the client.
    * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree height is unsupported.
+   * @throws {InvalidTypedDataSignatureError} when the returned signature does not recover to `params.account`.
    * @example
    * ```ts
    * import { EcrecoverRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
@@ -564,7 +612,14 @@ export namespace EcrecoverRatifierUtils {
    * const offer = Offer.create({
    *   market: {
    *     loanToken: "0x0000000000000000000000000000000000006000",
-   *     collateralParams: [],
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
    *     maturity: 54_000n,
    *     rcfThreshold: 0n,
    *     enterGate: zeroAddress,
@@ -614,11 +669,16 @@ export namespace EcrecoverRatifierUtils {
       ...data,
     });
 
-    await verifyTypedData<Record<string, unknown>, "OfferTree">({
+    const isValidSignature = await verifyTypedData<
+      Record<string, unknown>,
+      "OfferTree"
+    >({
       ...data,
       address: signer,
       signature,
     });
+
+    if (!isValidSignature) throw new InvalidTypedDataSignatureError(signer);
 
     return signature;
   }
@@ -771,7 +831,14 @@ export namespace EcrecoverRatifierUtils {
    * const offer = Offer.create({
    *   market: {
    *     loanToken: "0x0000000000000000000000000000000000006000",
-   *     collateralParams: [],
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
    *     maturity: 54_000n,
    *     rcfThreshold: 0n,
    *     enterGate: zeroAddress,
@@ -818,6 +885,7 @@ export namespace EcrecoverRatifierUtils {
    * @returns Items containing each offer and its ratifier data.
    * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree height is unsupported.
+   * @throws {InvalidTypedDataSignatureError} when client signing returns a signature that does not recover to `params.account`.
    * @example
    * ```ts
    * import { EcrecoverRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
@@ -828,7 +896,14 @@ export namespace EcrecoverRatifierUtils {
    * const offer = Offer.create({
    *   market: {
    *     loanToken: "0x0000000000000000000000000000000000006000",
-   *     collateralParams: [],
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
    *     maturity: 54_000n,
    *     rcfThreshold: 0n,
    *     enterGate: zeroAddress,

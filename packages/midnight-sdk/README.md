@@ -27,7 +27,6 @@ ratified items into a mempool payload and submit the raw payload bytes onchain.
 import { addresses } from "@morpho-org/morpho-ts";
 import {
   EcrecoverRatifierUtils,
-  Group,
   Offer,
   Payload,
   Tree,
@@ -87,7 +86,6 @@ export async function makeBaseUsdcWethOffers(params: {
     tick: 5_012n,
     maxAssets: parseUnits("100000", 6),
   });
-  const groupedLendOffers = Group.create([lend250kUsdc, lend100kUsdc]);
 
   const standaloneBorrowOffer = Offer.create({
     ...commonOffer,
@@ -96,7 +94,11 @@ export async function makeBaseUsdcWethOffers(params: {
     maxUnits: parseUnits("50", 18),
   });
 
-  const tree = Tree.create([groupedLendOffers, standaloneBorrowOffer]);
+  const tree = Tree.create([
+    lend250kUsdc,
+    lend100kUsdc,
+    standaloneBorrowOffer,
+  ]);
 
   const treeValidation = await tree.mempoolValidate({
     chainId,
@@ -125,8 +127,8 @@ export async function makeBaseUsdcWethOffers(params: {
 ```
 
 Use `SetterRatifierUtils` instead when a contract maker approves the tree root onchain. In that
-route, build the `Tree`, validate it, submit the root approval transaction, then call
-`SetterRatifierUtils.ratify({ tree })` before `Payload.encode(...)`.
+route, build the `Tree`, validate it, submit the root approval transaction for every maker in the
+tree, then call `SetterRatifierUtils.ratify({ tree })` before `Payload.encode(...)`.
 
 ## Taking offers
 
@@ -170,7 +172,7 @@ async function buildAskQuoteTakes(marketId: Hash, targetBuyerAssets: bigint) {
     marketId,
     side: "asks",
     assets: targetBuyerAssets,
-    slippage: "0.25",
+    slippage: "0.5",
   });
 
   return quote.data;

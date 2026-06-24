@@ -195,6 +195,7 @@ export function mapTakeableOffer(
       reduceOnly: offer.reduce_only,
       maxUnits: BigInt(offer.max_units),
       maxAssets: BigInt(offer.max_assets),
+      continuousFeeCap: BigInt(offer.continuous_fee_cap),
     },
     ratifierData: takeableOffer.ratifier_data,
   };

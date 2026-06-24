@@ -15,7 +15,14 @@ import { type IOffer, type OfferStruct, OfferUtils } from "../offers/index.js";
  *     Offer.create({
  *       market: {
  *         loanToken: "0x0000000000000000000000000000000000006000",
- *         collateralParams: [],
+ *         collateralParams: [
+ *           {
+ *             token: "0x0000000000000000000000000000000000007000",
+ *             lltv: 770000000000000000n,
+ *             maxLif: 1061007957559681697n,
+ *             oracle: "0x0000000000000000000000000000000000008000",
+ *           },
+ *         ],
  *         maturity: 54_000n,
  *         rcfThreshold: 0n,
  *         enterGate: zeroAddress,
@@ -54,7 +61,14 @@ export interface IGroup {
  * const input: GroupInput = Offer.create({
  *   market: {
  *     loanToken: "0x0000000000000000000000000000000000006000",
- *     collateralParams: [],
+ *     collateralParams: [
+ *       {
+ *         token: "0x0000000000000000000000000000000000007000",
+ *         lltv: 770000000000000000n,
+ *         maxLif: 1061007957559681697n,
+ *         oracle: "0x0000000000000000000000000000000000008000",
+ *       },
+ *     ],
  *     maturity: 54_000n,
  *     rcfThreshold: 0n,
  *     enterGate: zeroAddress,
@@ -106,7 +120,14 @@ export namespace GroupUtils {
    * const offer = Offer.create({
    *   market: {
    *     loanToken: "0x0000000000000000000000000000000000006000",
-   *     collateralParams: [],
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
    *     maturity: 54_000n,
    *     rcfThreshold: 0n,
    *     enterGate: zeroAddress,
@@ -145,11 +166,9 @@ export namespace GroupUtils {
    * their final group id. The id is derived from the full offer list and
    * applied while encoding, so plain groups cannot drift from offer fields.
    *
-   * This helper does not run {@link OfferUtils.validateOfferGroup} or any other
-   * protocol mechanics checks. For unvalidated plain groups, it does not
-   * guarantee that the resulting structs form an onchain-valid group. Validate
-   * with `Group.create` or {@link OfferUtils.validateOfferGroup} before relying
-   * on the output for signing, tree roots, or calldata.
+   * This helper is encode-only and does not validate protocol group mechanics.
+   * Validate with `Group.create` or {@link OfferUtils.validateOfferGroup}
+   * before relying on the output for signing, tree roots, or calldata.
    *
    * @param group - Group to encode.
    * @returns ABI-compatible offers in caller order.
@@ -162,7 +181,14 @@ export namespace GroupUtils {
    * const offer = Offer.create({
    *   market: {
    *     loanToken: "0x0000000000000000000000000000000000006000",
-   *     collateralParams: [],
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
    *     maturity: 54_000n,
    *     rcfThreshold: 0n,
    *     enterGate: zeroAddress,
