@@ -171,6 +171,20 @@ describe("Payload.encode", () => {
     ).rejects.toBeInstanceOf(Payload.DecodeError);
   });
 
+  test("error: non-zero maker-seller receiver on buy offer", async () => {
+    await expect(
+      Payload.encode([
+        {
+          offer: {
+            ...OfferUtils.toStruct({ offer: apiValidOffer({ group }) }),
+            receiverIfMakerIsSeller: addresses.receiver,
+          },
+          ratifierData: "0x1234" as Hex,
+        },
+      ]),
+    ).rejects.toBeInstanceOf(Payload.DecodeError);
+  });
+
   test("error: zero offer caps", async () => {
     await expect(
       Payload.encode([
@@ -290,6 +304,17 @@ describe("Payload.decode", () => {
         }),
       }),
     );
+
+    await expect(Payload.decode(encoded)).rejects.toBeInstanceOf(
+      Payload.DecodeError,
+    );
+  });
+
+  test("error: non-zero maker-seller receiver on buy offer bytes", async () => {
+    const encoded = await encodeUncheckedPayload({
+      ...OfferUtils.toStruct({ offer: apiValidOffer({ group }) }),
+      receiverIfMakerIsSeller: addresses.receiver,
+    });
 
     await expect(Payload.decode(encoded)).rejects.toBeInstanceOf(
       Payload.DecodeError,

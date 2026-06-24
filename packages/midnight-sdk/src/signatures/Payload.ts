@@ -481,6 +481,11 @@ function assertApiValidOfferStruct(offer: OfferStruct): void {
   assertSafeTimestamp("expiry", offer.expiry);
   assertApiValidOfferTimeRange(offer);
 
+  if (offer.buy && !isZeroAddress(offer.receiverIfMakerIsSeller)) {
+    throw new DecodeError(
+      "invalid offer bytes: receiverIfMakerIsSeller must be zero for buy offers",
+    );
+  }
   if (offer.expiry > offer.market.maturity) {
     throw new DecodeError(
       "invalid offer bytes: expiry must be before or equal to maturity",
