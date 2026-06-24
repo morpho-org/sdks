@@ -18,7 +18,7 @@
   "license": "MIT",
   "type": "module",
   "private": true,
-  "packageManager": "pnpm@11.1.1+sha512.d1fdf5f73c617b64fa1a56a81c3c8dfe0e966e33a6010aa256b517ae77be21d93e05affc0de1a83b0e4f29d569f68b446ae8f068cd7247c0bb3df0fb4d7bdf9a",
+  "packageManager": "pnpm@11.9.0+sha512.bd682d5d03fe525ef7c9fd6780c6884d1e756ac4c9c9fe00c538782824310dcf90e3ddc4f53835f06dfaebd5085e41855e0bcbb3b60de2ac5bbab89e5036f03b",
   "engines": {
     "node": ">=22.13"
   },
@@ -41,25 +41,25 @@
     "release": "changeset publish"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.0",
+    "@biomejs/biome": "^2.5.1",
     "@changesets/changelog-github": "^0.7.0",
     "@changesets/cli": "^2.31.0",
-    "@commitlint/cli": "^21.0.2",
-    "@commitlint/config-conventional": "^21.0.2",
-    "@types/node": "^25.9.3",
-    "@vitest/coverage-v8": "^4.1.8",
-    "@vitest/ui": "^4.1.8",
+    "@commitlint/cli": "^21.1.0",
+    "@commitlint/config-conventional": "^21.1.0",
+    "@types/node": "^26.0.0",
+    "@vitest/coverage-v8": "^4.1.9",
+    "@vitest/ui": "^4.1.9",
     "dotenv-cli": "^11.0.0",
-    "happy-dom": "^20.10.3",
+    "happy-dom": "^20.10.6",
     "husky": "^9.1.7",
-    "lint-staged": "^17.0.7",
+    "lint-staged": "^17.0.8",
     "solc": "0.8.35",
     "typedoc": "^0.28.19",
     "typescript": "^6.0.3",
-    "undici": "^8.4.1",
-    "viem": "2.52.2",
-    "vite": "^8.0.16",
-    "vitest": "^4.1.8"
+    "undici": "^8.5.0",
+    "viem": "2.53.1",
+    "vite": "^8.1.0",
+    "vitest": "^4.1.9"
   },
   "lint-staged": {
     "*.{json,gql}": "biome check --write --no-errors-on-unmatched",

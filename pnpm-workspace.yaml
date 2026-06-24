@@ -2,8 +2,8 @@ packages:
   - packages/*
 
 overrides:
-  axios: 1.15.2
-  ws: 8.20.1
+  axios: 1.18.1
+  ws: 8.21.0
 
 onlyBuiltDependencies:
   - '@biomejs/biome'
@@ -16,3 +16,31 @@ onlyBuiltDependencies:
 patchedDependencies:
   ox@0.14.29: patches/ox@0.14.29.patch
 
+minimumReleaseAgeExclude:
+  - '@biomejs/biome@2.5.1'
+  - '@biomejs/cli-darwin-arm64@2.5.1'
+  - '@biomejs/cli-darwin-x64@2.5.1'
+  - '@biomejs/cli-linux-arm64-musl@2.5.1'
+  - '@biomejs/cli-linux-arm64@2.5.1'
+  - '@biomejs/cli-linux-x64-musl@2.5.1'
+  - '@biomejs/cli-linux-x64@2.5.1'
+  - '@biomejs/cli-win32-arm64@2.5.1'
+  - '@biomejs/cli-win32-x64@2.5.1'
+  - '@commitlint/cli@21.1.0'
+  - '@commitlint/config-conventional@21.1.0'
+  - '@commitlint/config-validator@21.1.0'
+  - '@commitlint/ensure@21.1.0'
+  - '@commitlint/format@21.1.0'
+  - '@commitlint/is-ignored@21.1.0'
+  - '@commitlint/lint@21.1.0'
+  - '@commitlint/load@21.1.0'
+  - '@commitlint/parse@21.1.0'
+  - '@commitlint/read@21.1.0'
+  - '@commitlint/resolve-extends@21.1.0'
+  - '@commitlint/rules@21.1.0'
+  - '@commitlint/types@21.1.0'
+  - '@playwright/test@1.61.1'
+  - '@tetherto/wdk-wallet-evm@1.0.0-beta.14'
+  - playwright-core@1.61.1
+  - playwright@1.61.1
+  - vite@8.1.0
