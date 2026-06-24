@@ -1,8 +1,22 @@
-import { createWalletClient, custom, type Hex, type Signature } from "viem";
+import {
+  createWalletClient,
+  custom,
+  type Hex,
+  hashTypedData,
+  keccak256,
+  type Signature,
+  stringToHex,
+} from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { base } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { addresses, baseOffer } from "../__test__/fixtures.js";
+import {
+  COLLATERAL_PARAMS_TYPEHASH,
+  EIP712_DOMAIN_TYPEHASH,
+  MARKET_TYPEHASH,
+  OFFER_TYPEHASH,
+} from "../constants.js";
 import {
   InvalidTreeError,
   InvalidTreeHeightError,
@@ -21,6 +35,25 @@ const privateKey =
 const wrongPrivateKey =
   "0x0000000000000000000000000000000000000000000000000000000000000002" as const;
 const invalidSignature = `0x${"00".repeat(65)}` as Hex;
+const collateralParamsType =
+  "CollateralParams(address token,uint256 lltv,uint256 maxLif,address oracle)";
+const marketType =
+  "Market(address loanToken,CollateralParams[] collateralParams,uint256 maturity,uint256 rcfThreshold,address enterGate,address liquidatorGate)";
+const offerType =
+  "Offer(Market market,bool buy,address maker,uint256 start,uint256 expiry,uint256 tick,bytes32 group,address callback,bytes callbackData,address receiverIfMakerIsSeller,address ratifier,bool reduceOnly,uint256 maxUnits,uint256 maxAssets,uint256 continuousFeeCap)";
+const eip712DomainType =
+  "EIP712Domain(uint256 chainId,address verifyingContract)";
+
+const typeHash = (type: string) => keccak256(stringToHex(type));
+const offerTreeType = (height: number) =>
+  `OfferTree(Offer${"[2]".repeat(height)} offerTree)${collateralParamsType}${marketType}${offerType}`;
+
+const ecrecoverTree = (offerCount: number) =>
+  Tree.create(
+    Array.from({ length: offerCount }, (_, index) =>
+      baseOffer({ maxAssets: 0n, maxUnits: BigInt(index + 1) }),
+    ),
+  );
 
 describe("EcrecoverRatifierUtils.ratify", () => {
   test("default", async () => {
@@ -221,13 +254,32 @@ describe("EcrecoverRatifierUtils.typedData", () => {
 });
 
 describe("EcrecoverRatifierUtils.digest", () => {
-  test("default", () => {
-    const digest = EcrecoverRatifierUtils.digest({
-      tree: Tree.create([baseOffer({ maxAssets: 0n })]),
+  test.each([
+    { name: "height 0", offerCount: 1, height: 0 },
+    { name: "height 1", offerCount: 2, height: 1 },
+    { name: "height 2", offerCount: 4, height: 2 },
+  ])("behavior: matches hashTypedData for $name", ({ offerCount, height }) => {
+    const tree = ecrecoverTree(offerCount);
+    const params = {
+      tree,
       chainId: 8453n,
-    });
+    };
 
-    expect(digest).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(tree.height).toBe(height);
+    expect(EcrecoverRatifierUtils.digest(params)).toBe(
+      hashTypedData(EcrecoverRatifierUtils.typedData(params)),
+    );
+  });
+
+  test("behavior: pinned EcrecoverRatifier digest fixture", () => {
+    const tree = ecrecoverTree(4);
+    const digest = EcrecoverRatifierUtils.digest({ tree, chainId: 8453n });
+
+    // Captured from the Solidity EcrecoverRatifier digest formula at
+    // morpho-org/midnight@615fcfa12f725df3a16d65b2c2209272eff5bc10.
+    expect(digest).toBe(
+      "0x752b171af10cdb27839ae37535b5526ac5fd27538c0e288388b2511eb2d0e953",
+    );
   });
 });
 
@@ -253,10 +305,31 @@ describe("EcrecoverRatifierUtils.sign", () => {
 });
 
 describe("EcrecoverRatifierUtils.treeTypeHash", () => {
+  test("default", () => {
+    for (let height = 0; height <= 20; height++) {
+      expect(EcrecoverRatifierUtils.treeTypeHash(height)).toBe(
+        typeHash(offerTreeType(height)),
+      );
+    }
+  });
+
   test("error: InvalidTreeHeightError", () => {
     expect(() => EcrecoverRatifierUtils.treeTypeHash(21)).toThrow(
       InvalidTreeHeightError,
     );
+  });
+});
+
+describe("EcrecoverRatifierUtils typehash constants", () => {
+  test("default", () => {
+    expect(COLLATERAL_PARAMS_TYPEHASH).toBe(typeHash(collateralParamsType));
+    expect(MARKET_TYPEHASH).toBe(
+      typeHash(`${marketType}${collateralParamsType}`),
+    );
+    expect(OFFER_TYPEHASH).toBe(
+      typeHash(`${offerType}${collateralParamsType}${marketType}`),
+    );
+    expect(EIP712_DOMAIN_TYPEHASH).toBe(typeHash(eip712DomainType));
   });
 });
 
