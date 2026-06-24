@@ -260,4 +260,35 @@ describe("MarketUtils", () => {
       `"0xf922c8934f33a203afd0546f9b7870f69b287a2204f2a90313e36171749409be"`,
     );
   });
+
+  test("behavior: hash sorts collateral params by token", () => {
+    const market = {
+      ...baseMarketParamsInput(),
+      collateralParams: [
+        {
+          token: addresses.receiver,
+          lltv: 222n,
+          maxLif: 2n,
+          oracle: addresses.oracle,
+        },
+        {
+          token: addresses.taker,
+          lltv: 111n,
+          maxLif: 1n,
+          oracle: addresses.oracle,
+        },
+        {
+          token: addresses.callback,
+          lltv: 333n,
+          maxLif: 3n,
+          oracle: addresses.oracle,
+        },
+      ],
+    };
+
+    expect(MarketUtils.hash(market)).toBe(
+      MarketUtils.hash(new MarketParams(market)),
+    );
+    expect(market.collateralParams[0]!.token).toBe(addresses.receiver);
+  });
 });

@@ -239,8 +239,10 @@ export namespace MarketUtils {
   /**
    * Computes the HashLib market params struct hash.
    *
-   * Hashing is encode-only and does not validate market creation rules. Use
-   * {@link MarketParams} when constructing user-facing market params.
+   * Hashing canonicalizes non-empty collateral params by token order and
+   * preserves the protocol-zero empty market used for tree padding. It does
+   * not validate every market creation rule. Use {@link MarketParams} when
+   * constructing user-facing market params.
    *
    * @param market - Market to hash.
    * @returns EIP-712 market struct hash.
@@ -268,7 +270,13 @@ export namespace MarketUtils {
    */
   export function hash(market: MarketInput) {
     const marketParams = "params" in market ? market.params : market;
-    const collateralParamHashes = marketParams.collateralParams.map((params) =>
+    const collateralParams =
+      marketParams.collateralParams.length === 0
+        ? marketParams.collateralParams
+        : [...marketParams.collateralParams].sort((a, b) =>
+            a.token.toLowerCase() < b.token.toLowerCase() ? -1 : 1,
+          );
+    const collateralParamHashes = collateralParams.map((params) =>
       keccak256(
         encodeAbiParameters(collateralParamsHashParams, [
           COLLATERAL_PARAMS_TYPEHASH,
