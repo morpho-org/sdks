@@ -1,3 +1,4 @@
+import { MathLib } from "@morpho-org/morpho-ts";
 import {
   type Address,
   bytesToHex,
@@ -351,6 +352,26 @@ describe("Payload.decode", () => {
     });
 
     await expect(Payload.decode(encoded)).resolves.toHaveLength(1);
+  });
+
+  test("error: collateral lltv above WAD", async () => {
+    const offer = OfferUtils.toStruct({ offer: apiValidOffer({ group }) });
+    const encoded = await encodeUncheckedPayload({
+      ...offer,
+      market: {
+        ...offer.market,
+        collateralParams: [
+          {
+            ...offer.market.collateralParams[0]!,
+            lltv: MathLib.WAD + 1n,
+          },
+        ],
+      },
+    });
+
+    await expect(Payload.decode(encoded)).rejects.toBeInstanceOf(
+      Payload.DecodeError,
+    );
   });
 
   test("error: invalid collateral maxLif", async () => {

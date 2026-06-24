@@ -1,3 +1,4 @@
+import { MathLib } from "@morpho-org/morpho-ts";
 import { describe, expect, test } from "vitest";
 
 import {
@@ -106,6 +107,24 @@ describe("MarketParams", () => {
         new MarketParams({
           ...baseMarketParamsInput(),
           collateralParams: [],
+        }),
+    ).toThrow(InvalidMarketParameterError);
+  });
+
+  test.each([
+    -1n,
+    MathLib.WAD + 1n,
+  ])("error: InvalidMarketParameterError for lltv %s", (lltv) => {
+    expect(
+      () =>
+        new MarketParams({
+          ...baseMarketParamsInput(),
+          collateralParams: [
+            {
+              ...baseMarketParamsInput().collateralParams[0]!,
+              lltv,
+            },
+          ],
         }),
     ).toThrow(InvalidMarketParameterError);
   });

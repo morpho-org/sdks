@@ -1,4 +1,8 @@
-import { assertNonNegative, type BigIntish } from "@morpho-org/morpho-ts";
+import {
+  assertNonNegative,
+  type BigIntish,
+  MathLib,
+} from "@morpho-org/morpho-ts";
 import type { Address, Hash } from "viem";
 import { InvalidMarketParameterError } from "../errors.js";
 import { MarketUtils } from "./MarketUtils.js";
@@ -164,7 +168,7 @@ export class MarketParams {
    * Creates normalized market params.
    *
    * @param params - Market params to normalize.
-   * @throws {InvalidMarketParameterError} when the collateral list is empty or contains duplicate tokens.
+   * @throws {InvalidMarketParameterError} when the collateral list is empty, contains duplicate tokens, or has LLTV outside `[0, WAD]`.
    */
   public constructor(params: IMarketParams) {
     this.loanToken = params.loanToken;
@@ -181,6 +185,14 @@ export class MarketParams {
 
     const seenCollateralTokens = new Set<string>();
     for (const collateral of collateralParams) {
+      if (collateral.lltv < 0n || collateral.lltv > MathLib.WAD) {
+        throw new InvalidMarketParameterError({
+          parameter: "collateralParams.lltv",
+          value: collateral.lltv,
+          instruction: "Use an LLTV between 0 and WAD.",
+        });
+      }
+
       const token = collateral.token.toLowerCase();
       if (seenCollateralTokens.has(token)) {
         throw new InvalidMarketParameterError({

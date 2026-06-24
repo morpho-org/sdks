@@ -1,3 +1,4 @@
+import { MathLib } from "@morpho-org/morpho-ts";
 import {
   bytesToHex,
   decodeAbiParameters,
@@ -5,7 +6,6 @@ import {
   type Hex,
   hexToBytes,
 } from "viem";
-
 import {
   LIQUIDATION_CURSOR_HIGH,
   LIQUIDATION_CURSOR_LOW,
@@ -529,6 +529,12 @@ function assertCollateralParams(offer: OfferStruct): void {
 
   let previousToken: string | undefined;
   for (const params of collateralParams) {
+    if (params.lltv < 0n || params.lltv > MathLib.WAD) {
+      throw new DecodeError(
+        `invalid offer bytes: collateral lltv must be between 0 and WAD, got ${params.lltv}`,
+      );
+    }
+
     const lowMaxLif = MarketUtils.getLiquidationIncentiveFactor(
       params,
       LIQUIDATION_CURSOR_LOW,

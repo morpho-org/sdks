@@ -14,6 +14,8 @@ Offers include the protocol `continuousFeeCap` field in SDK types, API mappings,
 
 Payload collateral validation mirrors `Midnight.touchMarket` by rejecting zero collateral tokens and `maxLif` values outside the low/high liquidation cursor formulas.
 
+Payload and market construction reject LLTV values outside the protocol's fixed `[0, WAD]` range while still allowing dynamically configured LLTV tiers inside that range.
+
 `MarketParams` rejects empty collateral lists and duplicate collateral token entries, then normalizes collateral params into onchain token order before offer grouping, tree construction, or signing flows.
 
 Offer creation and payload validation require `expiry` to be strictly greater than `start`, so SDK-built offers cannot later fail payload encoding on a zero-duration time range.
