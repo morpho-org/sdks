@@ -4,13 +4,8 @@
     "packages/morpho-sdk/src/index.ts",
     "packages/evm-simulation/src/index.ts",
     "packages/blue-sdk/src/index.ts",
-    "packages/simulation-sdk/src/index.ts",
     "packages/blue-sdk-viem/src/index.ts",
-    "packages/bundler-sdk-viem/src/index.ts",
     "packages/liquidity-sdk-viem/src/index.ts",
-    "packages/migration-sdk-viem/src/index.ts",
-    "packages/blue-sdk-wagmi/src/index.ts",
-    "packages/simulation-sdk-wagmi/src/index.ts",
     "packages/morpho-ts/src/index.ts"
   ],
   "out": "docs/api",

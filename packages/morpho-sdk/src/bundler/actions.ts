@@ -107,8 +107,7 @@ const consumeCallValue = (
  *
  * @remarks
  * The namespace covers only the Bundler3 actions required by `morpho-sdk`.
- * It does not expose operation population or simulation helpers from
- * `@morpho-org/bundler-sdk-viem`.
+ * It does not expose operation population or broad simulation helpers.
  */
 export namespace BundlerAction {
   /**

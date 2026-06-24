@@ -84,8 +84,8 @@ If the diff touches protocol-facing SDK surface — action/entity/helper code, v
 
 Do **not** dump huge ABI files wholesale. Instead, search/read narrow excerpts around the relevant symbol(s) from:
 
-1. `packages/blue-sdk-viem/src/abis.ts` — Morpho Blue, MetaMorpho, VaultV2, factories, PublicAllocator, adapter ABIs, permit ABIs, and liquidation ABIs.
-2. `packages/bundler-sdk-viem/src/abis.ts` — bundler3 and adapter ABIs.
+1. `packages/blue-sdk-viem/src/abis.ts` — Morpho Blue, MetaMorpho, VaultV2, factories, PublicAllocator, permit ABIs, and VaultV2 adapter ABIs.
+2. `packages/morpho-sdk/src/abis.ts` — Bundler3 and adapter ABIs used by morpho-sdk transaction builders.
 3. `packages/blue-sdk/src/constants.ts` and `packages/morpho-sdk/src/helpers/constant.ts` — protocol scales, limits, and fixed constants.
 4. `packages/morpho-sdk/AGENTS.md` plus nested `AGENTS.md` such as `packages/morpho-sdk/src/actions/AGENTS.md` — routing, glossary, native wrapping, and reallocation rules.
 

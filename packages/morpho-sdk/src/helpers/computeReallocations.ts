@@ -9,7 +9,7 @@ import {
   ReallocationWithdrawExceedsMarketSupplyError,
   type VaultReallocation,
 } from "../types/index.js";
-import { getSupplyTargetUtilization } from "./utilization.js";
+import { DEFAULT_SUPPLY_TARGET_UTILIZATION } from "./constant.js";
 import { compareMarketIds } from "./validate.js";
 
 type VaultWithdrawalGroup = {
@@ -188,10 +188,10 @@ export const computeReallocations = ({
       ? market.totalSupplyAssets - amount
       : market.totalSupplyAssets;
 
-  const supplyTargetUtilization = getSupplyTargetUtilization(
-    market.params.id,
-    options,
-  );
+  const supplyTargetUtilization =
+    options?.supplyTargetUtilization?.[market.params.id] ??
+    options?.defaultSupplyTargetUtilization ??
+    DEFAULT_SUPPLY_TARGET_UTILIZATION;
 
   if (
     MarketUtils.getUtilization({

@@ -4,6 +4,8 @@ This guide is the canonical shape for JSDoc on every exported symbol in this mon
 
 The guide is repo-wide. Every package follows it. Per-package `AGENTS.md` files link here rather than restating the rules.
 
+---
+
 ## What needs JSDoc
 
 Every symbol re-exported from a package's `src/index.ts`:

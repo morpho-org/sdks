@@ -19,12 +19,13 @@
 
 ### Secondary packages
 
-The packages below are lower-level building blocks. Use them only if `@morpho-org/morpho-sdk` does not cover your use case. `@morpho-org/morpho-sdk` is the single recommended entry point for all integrations, including read-only ones — it covers both reads and transaction building, and long term is the package we converge on (with tree-shaking and dedicated export paths so read-only consumers don't pay for the transaction-building surface).
+The packages below are lower-level building blocks. Use them only if `@morpho-org/morpho-sdk` does not cover your use case.
+
+For read-only integrations, `@morpho-org/morpho-ts` + `@morpho-org/blue-sdk` + `@morpho-org/blue-sdk-viem` is a strong alternative: it avoids the transaction-building surface of `@morpho-org/morpho-sdk`, minimizes bundle size and integration complexity, and keeps the integration focused on reads. The tradeoff is installing three separate packages instead of one.
 
 #### Viem
 
 - [**`@morpho-org/blue-sdk-viem`**](./packages/blue-sdk-viem/): Viem-based augmentation of `@morpho-org/blue-sdk` that exports (and optionally injects) viem-based fetch methods
-- [**`@morpho-org/bundler-sdk-viem`**](./packages/bundler-sdk-viem/): Viem-based extension of `@morpho-org/simulation-sdk` that exports utilities to transform simple interactions on Morpho (such as `Blue_Borrow`) and Morpho Vaults (such as `MetaMorpho_Deposit`) into the required bundles (with ERC20 approvals, transfers, etc) to submit to the bundler onchain
 - [**`@morpho-org/liquidity-sdk-viem`**](./packages/liquidity-sdk-viem/): Viem-based package that helps seamlessly calculate the liquidity available through the PublicAllocator
 
 #### WDK (Tether Wallet Development Kit)
@@ -44,14 +45,6 @@ The packages below are lower-level building blocks. Use them only if `@morpho-or
 - [**`@morpho-org/test`**](./packages/test/): Viem-based package that exports utilities to build Vitest & Playwright fixtures that spawn anvil forks as child processes
 
 - [**`@morpho-org/morpho-test`**](./packages/morpho-test/): Framework-agnostic extension of `@morpho-org/blue-sdk` that exports test fixtures useful for E2E tests on forks
-
-### Deprecated packages
-
-The packages below are retained for existing integrations. Prefer `@morpho-org/morpho-sdk` or the non-deprecated packages above for new work.
-
-- [**`@morpho-org/blue-sdk-wagmi`**](./packages/blue-sdk-wagmi/): Wagmi-based package that exports Wagmi (React) hooks to fetch Morpho-related entities
-- [**`@morpho-org/simulation-sdk`**](./packages/simulation-sdk/): Framework-agnostic package that defines methods to simulate interactions on Morpho (such as `Supply`, `Borrow`) and Morpho Vaults (such as `Deposit`, `Withdraw`)
-- [**`@morpho-org/simulation-sdk-wagmi`**](./packages/simulation-sdk-wagmi/): Wagmi-based extension of `@morpho-org/simulation-sdk` that exports Wagmi (React) hooks to fetch simulation states
 
 ### Test coverage
 
