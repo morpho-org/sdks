@@ -48,6 +48,8 @@ This TIB freezes the minimal SDK output-shape change needed before migrating tho
 
 That minimal change still touches shared `morpho-sdk` action-flow types and interfaces. `Requirement` can no longer mean only "signature requirement", transaction requirements can no longer mean only optional approval / authorization prerequisites, and `buildTx(...)` must accept the collected signature list the fixed-rate app already passes through its `ActionFlow` engine. Existing Blue / MarketV1 / vault methods may keep their narrower concrete return types, but the shared interfaces need to become compatible with the fixed-rate app's current execution model so the Midnight implementation does not force a bespoke integrator migration.
 
+The compatibility constraint is intentionally two-sided. For existing `morpho-sdk` consumers, implementing Midnight action flows should not turn the shared action interface into a broad breaking migration: existing flows should keep the same `{ getRequirements, buildTx }` execution model, and any shared type widening should be source-compatible wherever the current method can stay narrower. For the fixed-rate app, those same shared types must become wide enough to represent its existing signature-first `ActionFlow` model, ordered call requests, and mandatory prelude transactions. This keeps Midnight reusable for future integrators without making current SDK consumers absorb large unrelated changes, while keeping the fixed-rate app migration diff mostly limited to replacing app-owned protocol builders with SDK calls plus one adapter.
+
 ## Goals / Non-Goals
 
 **Goals**
@@ -59,6 +61,7 @@ That minimal change still touches shared `morpho-sdk` action-flow types and inte
 - Preserve the existing `Transaction` shape: `{ to, value, data, action }`.
 - Preserve action-layer purity: actions stay synchronous, encode-only, and deep-frozen.
 - Keep existing Blue / MarketV1 / vault methods source-compatible; widen shared action-flow types / interfaces only where needed for the fixed-rate app's minimum-change migration.
+- Avoid large breaking changes for existing `morpho-sdk` consumers while maximizing compatibility with the fixed-rate app's current action-flow shape.
 - Make requirement ordering explicit enough for multi-step Midnight flows.
 - Support ERC2612 and Permit2 for Midnight bundle token pulls with the same `supportSignature` / `useSimplePermit` consumer policy as Blue.
 - Support both maker consent paths: EOA / EIP-7702 signature and contract-wallet ratify-root.
