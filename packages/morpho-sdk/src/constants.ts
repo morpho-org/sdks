@@ -1,6 +1,4 @@
 export {
-  ChainId,
-  ChainUtils,
   DEFAULT_SLIPPAGE_TOLERANCE,
   EIP_712_FIELDS,
   isMarketId,
@@ -14,6 +12,8 @@ export {
   BLUE_API_BASE_URL,
   BLUE_API_GRAPHQL_URL,
   CDN_BASE_URL,
+  ChainId,
+  ChainUtils,
   DOCS_BASE_URL,
   MORPHO_DOMAIN,
   OPTIMIZERS_API_BASE_URL,

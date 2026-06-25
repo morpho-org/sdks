@@ -2,12 +2,10 @@ import { configDefaults, defineConfig } from "vitest/config";
 
 const deprecatedPackageVitestProjects = new Set([
   "migration-sdk-viem",
-  "blue-sdk-wagmi-e2e",
   "blue-sdk-wagmi-unit",
   "simulation-sdk",
   "simulation-sdk-wagmi",
   "bundler-sdk-viem",
-  "liquidation-sdk-viem",
 ]);
 
 export default defineConfig({
@@ -19,13 +17,11 @@ export default defineConfig({
         "scripts/release/**/*.{js,mjs}",
       ],
       exclude: [
-        "packages/liquidation-sdk-viem/**",
         "packages/bundler-sdk-viem/**",
         "packages/migration-sdk-viem/**",
         "packages/simulation-sdk/**",
         "packages/blue-sdk-wagmi/**",
         "packages/simulation-sdk-wagmi/**",
-        "packages/test-wagmi/**",
         "packages/test/**",
         "packages/morpho-test/**",
         "packages/**/*.md",
@@ -75,6 +71,13 @@ export default defineConfig({
             "packages/blue-sdk/test/**/*.test.ts",
             "packages/blue-sdk/src/**/*.test.ts",
           ],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "midnight-sdk",
+          include: ["packages/midnight-sdk/src/**/*.test.ts"],
         },
       },
       {
@@ -145,14 +148,6 @@ export default defineConfig({
       {
         extends: true,
         test: {
-          name: "blue-sdk-wagmi-e2e",
-          include: ["packages/blue-sdk-wagmi/test/e2e/**/*.test.ts"],
-          environment: "happy-dom",
-        },
-      },
-      {
-        extends: true,
-        test: {
           name: "blue-sdk-wagmi-unit",
           include: ["packages/blue-sdk-wagmi/test/unit/**/*.test.ts"],
         },
@@ -167,14 +162,6 @@ export default defineConfig({
       {
         extends: true,
         test: {
-          name: "simulation-sdk-wagmi",
-          include: ["packages/simulation-sdk-wagmi/test/**/*.test.ts"],
-          environment: "happy-dom",
-        },
-      },
-      {
-        extends: true,
-        test: {
           name: "bundler-sdk-viem",
           include: [
             "packages/bundler-sdk-viem/test/**/*.test.ts",
@@ -182,17 +169,6 @@ export default defineConfig({
           ],
           environment: "happy-dom",
           testTimeout: 60_000,
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: "liquidation-sdk-viem",
-          include: [
-            "packages/liquidation-sdk-viem/test/**/*.test.ts",
-            "packages/liquidation-sdk-viem/src/**/*.test.ts",
-          ],
-          testTimeout: 90_000,
         },
       },
       {

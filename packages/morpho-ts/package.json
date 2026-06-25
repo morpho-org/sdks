@@ -19,6 +19,17 @@
   "license": "MIT",
   "type": "module",
   "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./abis": "./src/abis.ts"
+  },
+  "typesVersions": {
+    "*": {
+      "abis": [
+        "src/abis.ts"
+      ]
+    }
+  },
   "files": [
     "lib"
   ],
@@ -38,6 +49,11 @@
         "types": "./lib/esm/index.d.ts",
         "import": "./lib/esm/index.js",
         "require": "./lib/cjs/index.js"
+      },
+      "./abis": {
+        "types": "./lib/esm/abis.d.ts",
+        "import": "./lib/esm/abis.js",
+        "require": "./lib/cjs/abis.js"
       }
     }
   }

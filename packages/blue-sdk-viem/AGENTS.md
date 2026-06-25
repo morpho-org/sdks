@@ -4,12 +4,14 @@
 - Default deployless reads to `true`; fall back to multicall unless `deployless === "force"`.
 - Set missing chain IDs from the client: `parameters.chainId ??= await getChainId(client)`.
 - Keep generated deployless query artifacts as `abi` and `code` constants under `src/queries`.
+- Keep non-Blue-specific ABI literals defined in `@morpho-org/morpho-ts` and re-export them from `src/abis.ts` for compatibility. Blue-specific viem ABI literals stay local.
 - Augment classes only in `src/augment`, e.g. `Market.fetch = fetchMarket`.
 - Keep `fetch/`, `queries/`, and `augment/` names aligned with the matching `blue-sdk` entity names.
 - Use `readContractRestructured` when tuple fields should map to named object properties.
 - Fetch params pass through viem call fields: `account`, `blockNumber`, `blockTag`, `stateOverride`.
 - Normalize unsafe user addresses with `safeGetAddress`, not lowercasing alone.
 - Typed-data helpers return `TypedDataDefinition`, e.g. `getPermitTypedData(...)`.
+- Re-export ABI literals from `@morpho-org/morpho-ts` when they exist there; keep local ABI declarations only for Blue-specific viem surfaces absent from `morpho-ts`.
 
 ## Continuous Improvement
 

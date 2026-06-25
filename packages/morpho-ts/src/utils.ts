@@ -1,3 +1,4 @@
+import { NegativeValueError } from "./errors.js";
 import { Time } from "./time/index.js";
 import type { FieldType, PartialDottedKeys } from "./types.js";
 
@@ -493,6 +494,23 @@ export function getLastDefined<T>(
  */
 export function getLastDefined<T>(array: T[]) {
   return getLast(filterDefined(array));
+}
+
+/**
+ * Asserts that a bigint value is non-negative.
+ *
+ * @param field - Field name used in the thrown error message.
+ * @param value - Bigint value to validate.
+ * @throws NegativeValueError when `value` is negative.
+ * @example
+ * ```ts
+ * import { assertNonNegative } from "@morpho-org/morpho-ts";
+ *
+ * assertNonNegative("assets", 0n);
+ * ```
+ */
+export function assertNonNegative(field: string, value: bigint) {
+  if (value < 0n) throw new NegativeValueError(field, value);
 }
 
 /**
