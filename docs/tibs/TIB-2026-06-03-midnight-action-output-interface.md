@@ -685,48 +685,49 @@ SDK-side outline, with no UI labels:
 ```ts
 async function borrowLimit(params): Promise<BorrowLimitActionOutput> {
   const market = MarketParams.from(params.market);
-  const requirements: ActionRequirement[] = [];
 
-  if (params.collateralAssets > 0n) {
-    requirements.push(...await getMidnightApprovalRequirements(...));
-    requirements.push(encodeMidnightSupplyCollateral(...));
-  }
-
-  if (params.loanAssets > 0n) {
-    const ratifier = await fetchRatifierInfo(...);
-    const offers = params.legs.map((leg) => Offer.create({
-      market: leg.market,
-      buy: false,
-      maker: params.accountAddress,
-      tick: leg.tick,
-      start: leg.start,
-      expiry: leg.expiry,
-      ratifier: ratifier.ratifier,
-      maxAssets: params.loanAssets,
-      receiverIfMakerIsSeller: params.accountAddress,
-    }));
-    const group = Group.create(offers);
-    const tree = Tree.create([group]);
-    await tree.mempoolValidate({ chainId });
-
-    requirements.push(...await getRatifierRequirements(...));
-
+  if (params.loanAssets === 0n) {
     return {
-      group: group.id,
-      root: tree.root,
-      ratifierType: ratifier.type,
-      getRequirements: async () => requirements,
-      buildTx: signatures => encodeMidnightSubmitOffers({
-        mempool,
-        group: group.id,
-        payload: buildSubmitPayload(signatures),
-      }),
+      getRequirements: async () => getMidnightApprovalRequirements(...),
+      buildTx: () => encodeMidnightSupplyCollateral(...),
     };
   }
 
+  const ratifier = await fetchRatifierInfo(...);
+  const offers = params.legs.map((leg) => Offer.create({
+    market: leg.market,
+    buy: false,
+    maker: params.accountAddress,
+    tick: leg.tick,
+    start: leg.start,
+    expiry: leg.expiry,
+    ratifier: ratifier.ratifier,
+    maxAssets: params.loanAssets,
+    receiverIfMakerIsSeller: params.accountAddress,
+  }));
+  const group = Group.create(offers);
+  const tree = Tree.create([group]);
+  await tree.mempoolValidate({ chainId });
+
   return {
-    getRequirements: async () => requirements,
-    buildTx: () => encodeMidnightSupplyCollateral(...),
+    group: group.id,
+    root: tree.root,
+    ratifierType: ratifier.type,
+    getRequirements: async () => {
+      const requirements: ActionRequirement[] = [];
+      if (params.collateralAssets > 0n) {
+        requirements.push(...await getMidnightApprovalRequirements(...));
+        requirements.push(encodeMidnightSupplyCollateral(...));
+      }
+      requirements.push(...await getRatifierRequirements(...));
+
+      return requirements;
+    },
+    buildTx: signatures => encodeMidnightSubmitOffers({
+      mempool,
+      group: group.id,
+      payload: buildSubmitPayload(signatures),
+    }),
   };
 }
 ```
@@ -1394,7 +1395,7 @@ Contract-wallet maker:
 
 - optional `MidnightAuthorizationAction` for `SetterRatifier`;
 - one `MidnightRatifyRootAction` transaction requirement from `getMidnightRatifyRootRequirement(...)`, calling `SetterRatifier.setIsRootRatified(maker, root, true)` only when missing;
-- `buildTx()` uses precomputed `Payload.encode(SetterRatifier.encodeItems({ tree }))` as mempool calldata.
+- `buildTx()` uses precomputed `Payload.encode(SetterRatifierUtils.ratify({ tree }))` as mempool calldata.
 
 ## Layering
 
