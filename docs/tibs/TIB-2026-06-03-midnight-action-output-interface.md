@@ -1,4 +1,4 @@
-# TIB-2026-06-03: Midnight action output interface
+# TIB-2026-06-03: Midnight action flow implementation
 
 | Field      | Value                                |
 | ---------- | ------------------------------------ |
@@ -11,7 +11,9 @@
 
 ## Context
 
-`morpho-sdk` currently models every user operation as a lazy entity result. The migration keeps that shape and only widens the requirement and signature arguments:
+This TIB specifies the implementation of Midnight action flows in `morpho-sdk`. The source behavior is the fixed-rate app (`morpho-apps/apps/markets-app`): its home-made action builders already encode the protocol paths, requirement ordering, token-pull policy, ratifier selection, and mempool submission behavior future integrators need. The SDK should lift that protocol logic into reusable Midnight entity / action flows, while keeping the fixed-rate app migration as close as possible to an adapter swap.
+
+The fixed-rate app is also the compatibility target. To minimize its diff, the SDK keeps the lazy action output shape already used by existing `morpho-sdk` action flows and widens only the requirement and signature arguments:
 
 ```ts
 {
@@ -44,15 +46,19 @@ The fixed-rate app (`morpho-apps/apps/markets-app`) already implements the Midni
 
 This TIB freezes the minimal SDK output-shape change needed before migrating those Midnight action builders into `morpho-sdk`.
 
+That minimal change still touches shared `morpho-sdk` action-flow types and interfaces. `Requirement` can no longer mean only "signature requirement", transaction requirements can no longer mean only optional approval / authorization prerequisites, and `buildTx(...)` must accept the collected signature list the fixed-rate app already passes through its `ActionFlow` engine. Existing Blue / MarketV1 / vault methods may keep their narrower concrete return types, but the shared interfaces need to become compatible with the fixed-rate app's current execution model so the Midnight implementation does not force a bespoke integrator migration.
+
 ## Goals / Non-Goals
 
 **Goals**
 
+- Implement Midnight action flows in `morpho-sdk` from the fixed-rate app's working protocol implementation, so future integrators can reuse the same paths instead of rebuilding them app-side.
+- Minimize the fixed-rate app migration by preserving its `ActionFlow` execution model, centralizing the adapter, and moving only protocol construction into the SDK.
 - Keep the public SDK contract centered on `{ getRequirements, buildTx }`.
 - Represent every currently implemented fixed-rate app flow without adding an SDK `ActionFlow` engine.
 - Preserve the existing `Transaction` shape: `{ to, value, data, action }`.
 - Preserve action-layer purity: actions stay synchronous, encode-only, and deep-frozen.
-- Keep existing MarketV1 / vault methods source-compatible; widen types only where needed.
+- Keep existing Blue / MarketV1 / vault methods source-compatible; widen shared action-flow types / interfaces only where needed for the fixed-rate app's minimum-change migration.
 - Make requirement ordering explicit enough for multi-step Midnight flows.
 - Support ERC2612 and Permit2 for Midnight bundle token pulls with the same `supportSignature` / `useSimplePermit` consumer policy as Blue.
 - Support both maker consent paths: EOA / EIP-7702 signature and contract-wallet ratify-root.
@@ -68,7 +74,9 @@ This TIB freezes the minimal SDK output-shape change needed before migrating tho
 
 ## Decision
 
-Keep `buildTx` as the final transaction builder and widen `getRequirements` into an **ordered list of pre-execution items**.
+Implement Midnight as regular `morpho-sdk` entity / action flows that return the same lazy output shape as existing SDK flows. Do not introduce a second SDK flow engine. Instead, widen the existing action output / requirement interfaces just enough for the fixed-rate app's current `ActionFlow` engine to adapt the SDK result with one shared adapter.
+
+Concretely, keep `buildTx` as the final transaction builder and widen `getRequirements` into an **ordered list of pre-execution items**.
 
 ```ts
 export interface ActionOutput<
@@ -99,7 +107,7 @@ This is the smallest compatible change: Midnight flows that are one final tx rem
 
 ## Description: fixed-rate app migration boundary
 
-The fixed-rate app can keep its UI-specific `ActionFlow` execution engine. The migration target is a thin adapter from the proposed SDK `ActionOutput` into the app's existing `signatureRequests` / `callRequests` shape, not a port of `ActionFlow` into the SDK.
+The fixed-rate app can keep its UI-specific `ActionFlow` execution engine. Because the SDK implementation is based on the app's current protocol builders, the migration target is a thin adapter from the proposed SDK `ActionOutput` into the app's existing `signatureRequests` / `callRequests` shape, not a port of `ActionFlow` into the SDK.
 
 The concrete SDK implementation in the stacked implementation PR moves protocol execution into `morpho-sdk`, while leaving rate-form and display decisions in the fixed-rate app:
 
@@ -1607,7 +1615,7 @@ Keep approval-only Midnight bundle flows for the initial migration and add token
 
 ## Implementation phases
 
-- **Phase 1 — Types only.** Add `ActionRequirement`, `TransactionRequirement`, widened `Requirement` / `RequirementSignature` unions, Midnight action interfaces, and type guards. Existing methods keep their narrow return types.
+- **Phase 1 — Shared action-flow types / interfaces.** Add `ActionRequirement`, `TransactionRequirement`, widened `Requirement` / `RequirementSignature` unions, Midnight action interfaces, and type guards. This is the compatibility layer that lets the fixed-rate app keep its existing `ActionFlow` signature / call collection model while consuming SDK-built Midnight flows. Existing Blue / MarketV1 / vault methods keep their narrow return types.
 - **Phase 2 — Requirement helpers.** Export / reuse `getRequirementsApproval` with explicit spender; add Midnight token-pull, authorization, and ratifier helpers.
 - **Phase 3 — Pure action encoders.** Add `src/actions/midnight/*` encoders for final txs and prelude txs. Every encoder returns a deep-frozen `Transaction` and has colocated unit tests.
 - **Phase 4 — Entity methods.** Add `MorphoMidnight` methods that perform RPC/off-chain reads, router validation, amount math, group generation, and return `{ getRequirements, buildTx }`.
