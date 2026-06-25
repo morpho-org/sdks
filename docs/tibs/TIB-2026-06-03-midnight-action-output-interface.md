@@ -243,7 +243,7 @@ export async function midnightActionOutputToActionFlow<
 }
 ```
 
-The adapter preserves the current fixed-rate app UX where all `SignatureRequest`s are collected before transactions are sent. ERC2612 permits, Permit2 signatures, and EOA maker offer-root signatures do not depend on prior Midnight authorization or collateral-supply transactions, so grouping signatures first is protocol-compatible. Permit2 may still require an ERC20 approval transaction to the Permit2 contract; that transaction stays in the ordered transaction requirements. Transaction requirements keep their relative order. The adapter is intentionally Midnight-specific and passes a singleton signature as a singleton; it only passes an array when several Midnight signatures were collected for the same final `buildTx(...)`. The only generic assertion is centralized in this adapter; individual fixed-rate builders pass the SDK action output as-is.
+The adapter preserves the current fixed-rate app UX where all `SignatureRequest`s are collected before transactions are sent. ERC2612 permits, Permit2 transfer signatures, and EOA maker offer-root signatures do not depend on prior Midnight authorization or collateral-supply transactions, so grouping signatures first is protocol-compatible. Permit2 may still require an ERC20 approval transaction to the Permit2 contract; that transaction stays in the ordered transaction requirements. Transaction requirements keep their relative order. The adapter is intentionally Midnight-specific and passes a singleton signature as a singleton; it only passes an array when several Midnight signatures were collected for the same final `buildTx(...)`. The only generic assertion is centralized in this adapter; individual fixed-rate builders pass the SDK action output as-is.
 
 The label mapper stays in the fixed-rate app:
 
@@ -260,6 +260,8 @@ const fixedRateRequirementLabels: Pick<
           return "Sign token permit";
         case "permit2":
           return "Sign Permit2 approval";
+        case "permit2Transfer":
+          return "Sign Permit2 transfer";
         case "midnightOfferRootSignature":
           return "Sign offer root";
       }
@@ -422,7 +424,7 @@ await action.getRequirements();
 // [
 //   maybe loan-token pull requirement for MidnightBundles:
 //     - ERC20ApprovalAction when signatures are disabled / unavailable, or
-//     - permit / permit2 signature requirement when signatures are enabled
+//     - permit / permit2Transfer signature requirement when signatures are enabled
 //       (+ optional ERC20ApprovalAction(loanToken, Permit2, assets) for Permit2),
 //   maybe MidnightAuthorizationAction(MidnightBundles, true, accountAddress),
 // ]
@@ -901,7 +903,7 @@ await action.getRequirements();
 // [
 //   maybe loan-token pull requirement for MidnightBundles when repayAssets > 0n:
 //     - ERC20ApprovalAction when signatures are disabled / unavailable, or
-//     - permit / permit2 signature requirement when signatures are enabled
+//     - permit / permit2Transfer signature requirement when signatures are enabled
 //       (+ optional ERC20ApprovalAction(loanToken, Permit2, repayAssets) for Permit2),
 //   maybe MidnightAuthorizationAction(MidnightBundles, true, accountAddress),
 // ]
@@ -994,14 +996,31 @@ Complexity for the fixed-rate app: **low**. The important migration detail is th
 Add explicit aliases, without changing the shape of existing `Requirement` objects.
 
 ```ts
+export interface Permit2TransferAction
+  extends BaseAction<
+    "permit2Transfer",
+    { spender: Address; amount: bigint; deadline: bigint }
+  > {}
+
+export interface Permit2TransferArgs {
+  readonly owner: Address;
+  readonly nonce: bigint;
+  readonly asset: Address;
+  readonly signature: Hex;
+  readonly amount: bigint;
+  readonly deadline: bigint;
+}
+
 export type SignatureRequirementAction =
   | PermitAction
   | Permit2Action
+  | Permit2TransferAction
   | MidnightOfferRootSignatureAction;
 
 export type RequirementSignatureArgs =
   | PermitArgs
   | Permit2Args
+  | Permit2TransferArgs
   | MidnightOfferRootSignatureArgs;
 
 export interface Requirement<
@@ -1034,13 +1053,13 @@ export type MidnightOfferRootSignature = RequirementSignature<
 >;
 
 export type TokenSignatureRequirement = Requirement<
-  PermitAction | Permit2Action,
-  PermitArgs | Permit2Args
+  PermitAction | Permit2Action | Permit2TransferAction,
+  PermitArgs | Permit2Args | Permit2TransferArgs
 >;
 
 export type TokenRequirementSignature = RequirementSignature<
-  PermitAction | Permit2Action,
-  PermitArgs | Permit2Args
+  PermitAction | Permit2Action | Permit2TransferAction,
+  PermitArgs | Permit2Args | Permit2TransferArgs
 >;
 
 export type AnyRequirementSignature =
@@ -1054,11 +1073,11 @@ export type SignatureRequirement =
 
 Compatibility:
 
-- Existing `permit` and `permit2` requirement objects stay structurally identical.
+- Existing `permit` and Blue `permit2` requirement objects stay structurally identical.
 - Existing consumers that check `"sign" in requirement` still work.
 - New consumers can discriminate on `requirement.action.type`.
-- Midnight bundle actions that can consume a token permit accept `AnyRequirementSignature | readonly AnyRequirementSignature[]` and select the matching `permit` / `permit2` signature for the token pull they encode. They validate the signed token and amount before producing `TokenPermit` calldata.
-- Midnight still exposes `action.type === "permit2"` to the integrator; the difference is internal to the helper: Blue signs Permit2 `PermitSingle` for Bundler3 actions, while Midnight signs Permit2 `PermitTransferFrom` and encodes the signature into `TokenPermit`.
+- Midnight bundle actions that can consume a token permit accept `AnyRequirementSignature | readonly AnyRequirementSignature[]` and select the matching `permit` / `permit2Transfer` signature for the token pull they encode. They validate the signed token and amount before producing `TokenPermit` calldata.
+- Midnight does not reuse `action.type === "permit2"` because Blue's existing `permit2` requirement signs Permit2 `PermitSingle` and returns `Permit2Args` with `expiration`. Midnight Bundles consume Permit2 `SignatureTransfer` through `permitTransferFrom`, whose signed payload has no `expiration`; it is encoded into `TokenPermit` as `(nonce, deadline, signature)`. A separate `permit2Transfer` action / args shape keeps the two public contracts distinguishable.
 
 ### Midnight bundle permit metadata
 
@@ -1082,7 +1101,7 @@ export type MidnightTokenPermit =
     };
 ```
 
-This is action-encoding metadata, not UI state. Integrators still receive neutral `permit` / `permit2` requirements and decide how to label them.
+This is action-encoding metadata, not UI state. Integrators still receive neutral `permit`, `permit2`, and `permit2Transfer` requirements and decide how to label them.
 
 ### Transaction requirements
 
@@ -1285,7 +1304,7 @@ The helper follows Blue's consumer-facing policy:
 - if the direct allowance to `spender` already covers `amount`, return `[]`;
 - if `supportSignature` is `false`, return the classic `ERC20ApprovalAction` for `token.approve(spender, approvalAmount)`;
 - if `supportSignature` is `true`, `useSimplePermit` is `true`, and the token supports ERC2612, return a `permit` signature requirement for `spender`;
-- otherwise, when Permit2 is configured on the chain, return the Permit2 prerequisites: optional `ERC20ApprovalAction` for `token.approve(Permit2, approvalAmount)` plus a `permit2` signature requirement for Midnight's SignatureTransfer payload;
+- otherwise, when Permit2 is configured on the chain, return the Permit2 prerequisites: optional `ERC20ApprovalAction` for `token.approve(Permit2, approvalAmount)` plus a `permit2Transfer` signature requirement for Midnight's SignatureTransfer payload;
 - if signatures are enabled but no permit route is available, fall back to the classic approval transaction.
 
 The paired action encoder consumes the collected signatures:
@@ -1310,7 +1329,9 @@ Encoding rules:
 
 - no matching token signature: `{ kind: PermitKind.None, data: "0x" }`;
 - ERC2612: validate `args.owner === owner`, `action.args.spender === spender`, `args.asset === token`, and `args.amount === amount`, then encode `(deadline, v, r, s)` as `PermitKind.ERC2612`;
-- Permit2: validate `args.owner === owner`, `action.args.spender === spender`, `args.asset === token`, and `args.amount === amount`, then encode Midnight's Permit2 SignatureTransfer data `(nonce, deadline, signature)` as `PermitKind.Permit2`.
+- Permit2 SignatureTransfer: validate `args.owner === owner`, `action.args.spender === spender`, `args.asset === token`, and `args.amount === amount`, then encode Midnight's Permit2 data `(nonce, deadline, signature)` as `PermitKind.Permit2`. A Blue `permit2` allowance signature is not valid here because it signs `PermitSingle` and carries an `expiration`; Midnight only accepts `permit2Transfer`.
+
+This follows the Midnight protocol source: `MidnightBundles.pullToken(...)` decodes `PermitKind.Permit2` data as `(uint256 nonce, uint256 deadline, bytes signature)` and calls `IPermit2.permitTransferFrom(...)` with `PermitTransferFrom(TokenPermissions(token, amount), nonce, deadline)`. There is no `expiration` field in the signed or encoded Midnight bundle path.
 
 Midnight's Permit2 branch uses SignatureTransfer with a randomly generated 256-bit unordered nonce. It does not read Permit2 nonce bitmaps before returning the requirement: with a random unordered nonce, collision risk is negligible, and the extra onchain read would add cost and latency to every Permit2-backed Midnight bundle flow.
 
@@ -1396,7 +1417,7 @@ Important boundary calls:
 
 `getRequirements()` returns:
 
-1. optional loan-token pull requirement for `MidnightBundles`: either `ERC20ApprovalAction(loanToken, MidnightBundles, approvalAmount)`, ERC2612 `permit`, or Permit2 SignatureTransfer `permit2` (+ optional `ERC20ApprovalAction(loanToken, Permit2, approvalAmount)`);
+1. optional loan-token pull requirement for `MidnightBundles`: either `ERC20ApprovalAction(loanToken, MidnightBundles, approvalAmount)`, ERC2612 `permit`, or Permit2 SignatureTransfer `permit2Transfer` (+ optional `ERC20ApprovalAction(loanToken, Permit2, approvalAmount)`);
 2. optional `MidnightAuthorizationAction` for `Midnight.setIsAuthorized(MidnightBundles, true, taker)`.
 
 `buildTx(signatures?)` returns `MidnightLendMarketAction`:
@@ -1415,13 +1436,13 @@ MidnightBundles.buyWithAssetsTargetAndWithdrawCollateral(
 )
 ```
 
-No offer-root signature is involved. `buildTx(signatures?)` only consumes a token signature if `getRequirements()` returned an ERC2612 or Permit2 requirement for the bundle token pull.
+No offer-root signature is involved. `buildTx(signatures?)` only consumes a token signature if `getRequirements()` returned an ERC2612 `permit` or Permit2 `permit2Transfer` requirement for the bundle token pull.
 
 ### Borrow market with `loanAssets > 0`
 
 `getRequirements()` returns:
 
-1. optional collateral-token pull requirement for `MidnightBundles` when new collateral is supplied: either `ERC20ApprovalAction(collateralToken, MidnightBundles, approvalAmount)`, ERC2612 `permit`, or Permit2 SignatureTransfer `permit2` (+ optional `ERC20ApprovalAction(collateralToken, Permit2, approvalAmount)`);
+1. optional collateral-token pull requirement for `MidnightBundles` when new collateral is supplied: either `ERC20ApprovalAction(collateralToken, MidnightBundles, approvalAmount)`, ERC2612 `permit`, or Permit2 SignatureTransfer `permit2Transfer` (+ optional `ERC20ApprovalAction(collateralToken, Permit2, approvalAmount)`);
 2. optional `MidnightAuthorizationAction` for `Midnight.setIsAuthorized(MidnightBundles, true, taker)`.
 
 `buildTx(signatures?)` returns `MidnightBorrowMarketAction`:
@@ -1439,7 +1460,7 @@ MidnightBundles.supplyCollateralAndSellWithAssetsTarget(
 )
 ```
 
-No offer-root signature is involved. `buildTx(signatures?)` only consumes a token signature if `getRequirements()` returned an ERC2612 or Permit2 requirement for the bundle collateral pull.
+No offer-root signature is involved. `buildTx(signatures?)` only consumes a token signature if `getRequirements()` returned an ERC2612 `permit` or Permit2 `permit2Transfer` requirement for the bundle collateral pull.
 
 ### Borrow market supply-only branch
 
@@ -1542,7 +1563,7 @@ All three app branches keep the current bundled execution path.
 
 Repay only:
 
-- `getRequirements()` returns optional loan-token pull requirement for `MidnightBundles` (approval, ERC2612, or Permit2), then optional `MidnightAuthorizationAction` for `MidnightBundles`;
+- `getRequirements()` returns optional loan-token pull requirement for `MidnightBundles` (approval, ERC2612 `permit`, or Permit2 `permit2Transfer`), then optional `MidnightAuthorizationAction` for `MidnightBundles`;
 - `buildTx(signatures?)` returns `MidnightRepayWithdrawCollateralAction`.
 
 Withdraw-only:
@@ -1552,7 +1573,7 @@ Withdraw-only:
 
 Repay + withdraw:
 
-- `getRequirements()` returns optional loan-token pull requirement for `MidnightBundles` (approval, ERC2612, or Permit2), then optional `MidnightAuthorizationAction` for `MidnightBundles`;
+- `getRequirements()` returns optional loan-token pull requirement for `MidnightBundles` (approval, ERC2612 `permit`, or Permit2 `permit2Transfer`), then optional `MidnightAuthorizationAction` for `MidnightBundles`;
 - `buildTx(signatures?)` returns `MidnightRepayWithdrawCollateralAction`.
 
 ```ts
@@ -1587,7 +1608,7 @@ This proposal is compatible with the current fixed-rate app flows because:
 - the `Transaction` wire shape is unchanged;
 - no app builder currently needs `before` / `after` callback semantics;
 - when `supportSignature` stays `false`, bundle token pulls keep the approval-transaction behavior the fixed-rate app uses today;
-- when `supportSignature` is `true`, bundle token pulls can return ERC2612 / Permit2 signature requirements, and the shared adapter forwards every collected `AnyRequirementSignature[]` to `buildTx(signatures)`;
+- when `supportSignature` is `true`, bundle token pulls can return ERC2612 `permit` / Permit2 `permit2Transfer` signature requirements, and the shared adapter forwards every collected `AnyRequirementSignature[]` to `buildTx(signatures)`;
 - direct core Midnight paths still return approval transactions because they do not consume `TokenPermit`;
 - EOA maker flow still needs exactly one offer-root signature, selected from the collected signature list;
 - contract-wallet maker flow needs zero signatures and one ratify-root tx;
