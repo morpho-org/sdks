@@ -125,8 +125,8 @@ The SDK may expose neutral typed metadata so an integrator can label steps, but 
 
 The migration should keep the fixed-rate app on the bundle paths it already uses:
 
-- `MidnightBundles.buyWithAssetsTargetAndWithdrawCollateral(...)` for lend-market taker flows;
-- `MidnightBundles.supplyCollateralAndSellWithAssetsTarget(...)` for borrow-market taker flows with `loanAssets > 0`;
+- `MidnightBundles.buyWithAssetsTargetAndWithdrawCollateral(...)` for take-lend taker flows;
+- `MidnightBundles.supplyCollateralAndSellWithAssetsTarget(...)` for take-borrow taker flows with `loanAssets > 0`;
 - direct `Midnight.supplyCollateral(...)` only for supply-only branches where there are no takes and the bundler would index `takes[0]`;
 - `MidnightBundles.repayAndWithdrawCollateral(...)` for repay-only, withdraw-only, and repay+withdraw position flows.
 
@@ -286,12 +286,12 @@ const fixedRateRequirementLabels: Pick<
   },
 };
 
-const lendMarketLabels: MidnightActionFlowLabels = {
+const takeLendLabels: MidnightActionFlowLabels = {
   ...fixedRateRequirementLabels,
   final: () => "Take lend offers",
 };
 
-const borrowMarketLabels: MidnightActionFlowLabels = {
+const takeBorrowLabels: MidnightActionFlowLabels = {
   ...fixedRateRequirementLabels,
   final: () => "Supply collateral and borrow",
 };
@@ -322,7 +322,7 @@ This code is intentionally app-side. It depends on display concepts (`loan token
 
 If a fixed-rate screen needs protocol metadata for follow-up behavior, the Midnight method can return a method-specific subtype that structurally extends `ActionOutput` with readonly metadata. The concrete maker flows return protocol fields such as `group`, `root`, and `ratifierType`; review-only display state such as `offerExpiry` stays in the fixed-rate app because the app still owns offer-chain construction. That does not change the core `{ getRequirements, buildTx }` interface, and the app decides how to display the metadata.
 
-### Example 1: lend-market taker flow
+### Example 1: take-lend taker flow
 
 Current fixed-rate app code mixes SDK-owned and app-owned concerns:
 
@@ -400,7 +400,7 @@ await validateMarketCapacityLimits({
   expectedUnits: minUnits,
 });
 
-const action = await client.morpho.midnight(client.chain.id).lendMarket({
+const action = await client.morpho.midnight(client.chain.id).takeLend({
   marketId,
   accountAddress,
   assets,
@@ -412,7 +412,7 @@ return midnightActionOutputToActionFlow({
   chainId: client.chain.id,
   accountAddress,
   action,
-  labels: lendMarketLabels,
+  labels: takeLendLabels,
   onSuccess,
 });
 ```
@@ -430,7 +430,7 @@ await action.getRequirements();
 // ]
 
 action.buildTx(signatures);
-// Transaction<MidnightLendMarketAction>
+// Transaction<MidnightTakeLendAction>
 // to: MidnightBundles
 // data: buyWithAssetsTargetAndWithdrawCollateral(
 //   assets,
@@ -475,7 +475,7 @@ Expected app-side diff: **small**. The app keeps the rate-to-`minUnits` calculat
 -  if (authorizeBundlerRequest) callRequests.push(authorizeBundlerRequest);
 -  callRequests.push({ label: "Take lend offers", getCall: () => encodeBundleTake(...) });
 -  return createImmutableActionFlow({ chainId: client.chain.id, label: "Confirm", signatureRequests: [], callRequests, onSuccess });
-+  const action = await client.morpho.midnight(client.chain.id).lendMarket({
++  const action = await client.morpho.midnight(client.chain.id).takeLend({
 +    marketId,
 +    accountAddress,
 +    assets,
@@ -487,7 +487,7 @@ Expected app-side diff: **small**. The app keeps the rate-to-`minUnits` calculat
 +    chainId: client.chain.id,
 +    accountAddress,
 +    action,
-+    labels: lendMarketLabels,
++    labels: takeLendLabels,
 +    onSuccess,
 +  });
  }
@@ -509,9 +509,9 @@ What stays in the app:
 - the global decision to enable signatures through `morphoViemExtension({ supportSignature: true })` and the per-call choice to pass `useSimplePermit` into the shared adapter when the app wants ERC2612 over the default Permit2 path;
 - `ActionFlow` wrapping and `onSuccess`.
 
-Complexity for the fixed-rate app: **low**. This is mostly a mechanical builder replacement. If the app keeps `supportSignature: false`, the visible execution flow stays approval-based. If the app enables signatures, the shared adapter surfaces the extra token signature request without changing the lend-market builder again. The app keeps the three existing rate/capacity lines, removes roughly the allowance / authorization / approval / take-encoding / final-call half of the builder, and updates tests to assert adapter inputs rather than raw app-built calldata.
+Complexity for the fixed-rate app: **low**. This is mostly a mechanical builder replacement. If the app keeps `supportSignature: false`, the visible execution flow stays approval-based. If the app enables signatures, the shared adapter surfaces the extra token signature request without changing the take-lend builder again. The app keeps the three existing rate/capacity lines, removes roughly the allowance / authorization / approval / take-encoding / final-call half of the builder, and updates tests to assert adapter inputs rather than raw app-built calldata.
 
-### Example 2: borrow-limit with collateral + loan offer
+### Example 2: make-borrow with collateral + loan offer
 
 This is the hardest current migration shape because it combines a mandatory prelude tx with maker consent. The app currently owns both concerns:
 
@@ -632,7 +632,7 @@ if (loanAssets > 0n) {
   }));
 }
 
-const action = await client.morpho.midnight(client.chain.id).borrowLimit({
+const action = await client.morpho.midnight(client.chain.id).makeBorrow({
   accountAddress,
   market: market.struct,
   collateralAssets,
@@ -683,7 +683,7 @@ This case intentionally stays approval-based for collateral and reserve transfer
 SDK-side outline, with no UI labels:
 
 ```ts
-async function borrowLimit(params): Promise<BorrowLimitActionOutput> {
+async function makeBorrow(params): Promise<MakeBorrowActionOutput> {
   const market = MarketParams.from(params.market);
 
   if (params.loanAssets === 0n) {
@@ -789,7 +789,7 @@ Expected app-side diff: **medium**. The app keeps form validation, offer-chain c
 +    }));
    }
 
-+  const action = await client.morpho.midnight(client.chain.id).borrowLimit({
++  const action = await client.morpho.midnight(client.chain.id).makeBorrow({
 +    accountAddress,
 +    market: market.struct,
 +    collateralAssets,
@@ -828,7 +828,7 @@ What stays in the app:
 - no token-permit UI branch for this collateral prelude; the SDK returns an approval transaction because the core Midnight call used by this migration has no `TokenPermit` argument;
 - `onSuccess(result, action.group ?? null)` and local review display of `offerExpiry`.
 
-Complexity for the fixed-rate app: **medium**. The code removal is still large, but less than the hypothetical API because rate math and offer-chain construction stay in the app. The replacement is exact: convert `OfferChainLeg[]` into `MidnightMakeOfferLeg[]`, call `borrowLimit`, adapt requirements, and use `action.group ?? null` for `onSuccess`. No fixed-rate flow requires `ActionFlow.before`, `ActionFlow.after`, a DAG, or `buildTxs()`.
+Complexity for the fixed-rate app: **medium**. The code removal is still large, but less than the hypothetical API because rate math and offer-chain construction stay in the app. The replacement is exact: convert `OfferChainLeg[]` into `MidnightMakeOfferLeg[]`, call `makeBorrow`, adapt requirements, and use `action.group ?? null` for `onSuccess`. No fixed-rate flow requires `ActionFlow.before`, `ActionFlow.after`, a DAG, or `buildTxs()`.
 
 ### Example 3: repay / withdraw through MidnightBundles
 
@@ -1125,7 +1125,7 @@ export type ActionRequirement = TransactionRequirement | SignatureRequirement;
 
 `MidnightSupplyCollateralAction` is included because it can be a mandatory prelude transaction for a currently implemented app flow:
 
-- borrow-limit with collateral + offer: supply collateral first, then submit the offer.
+- make-borrow with collateral + offer: supply collateral first, then submit the offer.
 
 Repay / withdraw collateral does **not** need a mandatory repay prelude in the app-compatible migration, because it remains one final `MidnightBundles.repayAndWithdrawCollateral(...)` transaction.
 
@@ -1179,9 +1179,9 @@ export interface MidnightOfferRootSignatureArgs {
 Add action union members only; do not change `Transaction`.
 
 ```ts
-export interface MidnightLendMarketAction
+export interface MidnightTakeLendAction
   extends BaseAction<
-    "midnightLendMarket",
+    "midnightTakeLend",
     {
       market: Hex;
       assets: bigint;
@@ -1191,9 +1191,9 @@ export interface MidnightLendMarketAction
     }
   > {}
 
-export interface MidnightBorrowMarketAction
+export interface MidnightTakeBorrowAction
   extends BaseAction<
-    "midnightBorrowMarket",
+    "midnightTakeBorrow",
     {
       market: Hex;
       collateralAssets: bigint;
@@ -1338,8 +1338,8 @@ Midnight's Permit2 branch uses SignatureTransfer with a randomly generated 256-b
 
 Midnight callers still supply the spender explicitly:
 
-- `MidnightBundles` for lend-market, borrow-market with `loanAssets > 0`, and repay / withdraw bundle flows. These bundle calls have a `TokenPermit` argument and can use ERC2612 / Permit2;
-- `Midnight` for direct `supplyCollateral` branches and maker-offer reserve approvals (lend-limit loan token approvals and borrow-limit collateral approvals). These direct / mempool paths do not have a `TokenPermit` argument in this migration and remain approval-transaction based.
+- `MidnightBundles` for take-lend, take-borrow with `loanAssets > 0`, and repay / withdraw bundle flows. These bundle calls have a `TokenPermit` argument and can use ERC2612 / Permit2;
+- `Midnight` for direct `supplyCollateral` branches and maker-offer reserve approvals (make-lend loan token approvals and make-borrow collateral approvals). These direct / mempool paths do not have a `TokenPermit` argument in this migration and remain approval-transaction based.
 
 ### Midnight authorization helper
 
@@ -1414,14 +1414,14 @@ Important boundary calls:
 
 ## Flow mapping
 
-### Lend market
+### Take lend
 
 `getRequirements()` returns:
 
 1. optional loan-token pull requirement for `MidnightBundles`: either `ERC20ApprovalAction(loanToken, MidnightBundles, approvalAmount)`, ERC2612 `permit`, or Permit2 SignatureTransfer `permit2Transfer` (+ optional `ERC20ApprovalAction(loanToken, Permit2, approvalAmount)`);
 2. optional `MidnightAuthorizationAction` for `Midnight.setIsAuthorized(MidnightBundles, true, taker)`.
 
-`buildTx(signatures?)` returns `MidnightLendMarketAction`:
+`buildTx(signatures?)` returns `MidnightTakeLendAction`:
 
 ```ts
 MidnightBundles.buyWithAssetsTargetAndWithdrawCollateral(
@@ -1439,14 +1439,14 @@ MidnightBundles.buyWithAssetsTargetAndWithdrawCollateral(
 
 No offer-root signature is involved. `buildTx(signatures?)` only consumes a token signature if `getRequirements()` returned an ERC2612 `permit` or Permit2 `permit2Transfer` requirement for the bundle token pull.
 
-### Borrow market with `loanAssets > 0`
+### Take borrow with `loanAssets > 0`
 
 `getRequirements()` returns:
 
 1. optional collateral-token pull requirement for `MidnightBundles` when new collateral is supplied: either `ERC20ApprovalAction(collateralToken, MidnightBundles, approvalAmount)`, ERC2612 `permit`, or Permit2 SignatureTransfer `permit2Transfer` (+ optional `ERC20ApprovalAction(collateralToken, Permit2, approvalAmount)`);
 2. optional `MidnightAuthorizationAction` for `Midnight.setIsAuthorized(MidnightBundles, true, taker)`.
 
-`buildTx(signatures?)` returns `MidnightBorrowMarketAction`:
+`buildTx(signatures?)` returns `MidnightTakeBorrowAction`:
 
 ```ts
 MidnightBundles.supplyCollateralAndSellWithAssetsTarget(
@@ -1463,7 +1463,7 @@ MidnightBundles.supplyCollateralAndSellWithAssetsTarget(
 
 No offer-root signature is involved. `buildTx(signatures?)` only consumes a token signature if `getRequirements()` returned an ERC2612 `permit` or Permit2 `permit2Transfer` requirement for the bundle collateral pull.
 
-### Borrow market supply-only branch
+### Take borrow supply-only branch
 
 `getRequirements()` returns optional collateral approval to `Midnight`.
 
@@ -1475,7 +1475,7 @@ Midnight.supplyCollateral(market, 0n, collateralAssets, onBehalf)
 
 This branch remains approval-based because direct `Midnight.supplyCollateral(...)` has no `TokenPermit` argument.
 
-### Lend limit / multi-limit
+### Make lend
 
 `getRequirements()` returns:
 
@@ -1493,11 +1493,11 @@ Contract wallet:
 
 `buildTx(signatures?)` returns `MidnightSubmitOffersAction` to the mempool contract.
 
-The single-market lend-limit method delegates to the same multi-limit builder with one or more precomputed `{ market, tick, start, expiry }` legs.
+The make-lend method builds one or more precomputed `{ market, tick, start, expiry }` offers.
 
 Maker reserve approvals stay transaction approvals in this migration. The final mempool submit payload does not consume ERC2612 or Permit2 token signatures, so supporting permits here would require a separate protocol entry point rather than a fixed-rate-app-only SDK migration.
 
-### Borrow limit collateral-only branch
+### Make borrow collateral-only branch
 
 `getRequirements()` returns optional collateral approval to `Midnight`.
 
@@ -1505,7 +1505,7 @@ Maker reserve approvals stay transaction approvals in this migration. The final 
 
 This branch remains approval-based because direct `Midnight.supplyCollateral(...)` has no `TokenPermit` argument.
 
-### Borrow limit loan-only branch
+### Make borrow loan-only branch
 
 `getRequirements()` returns:
 
@@ -1637,7 +1637,7 @@ Copy `signatureRequests`, `callRequests`, `before`, and `after` into the SDK.
 
 Expose only optional prerequisites and force callers to build prelude txs manually.
 
-**Why rejected:** borrow-limit collateral + loan cannot be expressed safely because the collateral supply must execute before the mempool submit transaction. Integrators would need bespoke sequencing outside the SDK, which defeats the migration goal.
+**Why rejected:** make-borrow collateral + loan cannot be expressed safely because the collateral supply must execute before the mempool submit transaction. Integrators would need bespoke sequencing outside the SDK, which defeats the migration goal.
 
 ### Alternative 4: Keep Midnight Permit / Permit2 deferred
 
