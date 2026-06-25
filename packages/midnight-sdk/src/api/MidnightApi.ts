@@ -76,7 +76,7 @@ export type {
 /**
  * Midnight API client and stateless helper surface for books and mempool data.
  *
- * Static methods use `https://api.morpho.org/v1/midnight` by default and accept
+ * Static methods use `https://api.morpho.org/v0/midnight` by default and accept
  * per-call configuration. Instances keep shared `baseUrl`, `fetch`, and request
  * options for integrations that make repeated calls.
  * Caller input and successful JSON output shapes are trusted at runtime;
@@ -91,7 +91,7 @@ export type {
  *   payload: "0x0100000000",
  * });
  *
- * const api = new MidnightApi("https://api.morpho.org/v1/midnight");
+ * const api = new MidnightApi("https://api.morpho.org/v0/midnight");
  * const configured = await api.validateMempoolPayload({
  *   chainId: 8453,
  *   payload: "0x0100000000",
@@ -116,7 +116,7 @@ export class MidnightApi {
    * import { MidnightApi } from "@morpho-org/midnight-sdk/api";
    *
    * const api = new MidnightApi({
-   *   baseUrl: "https://api.morpho.org/v1/midnight",
+   *   baseUrl: "https://api.morpho.org/v0/midnight",
    * });
    * console.log(api);
    * ```

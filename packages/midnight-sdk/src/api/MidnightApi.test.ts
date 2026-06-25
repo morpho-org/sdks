@@ -232,7 +232,7 @@ describe("MidnightApi.validateMempoolPayload", () => {
     const call = calls[0]!;
     const url = getRequestUrl(call);
     expect(url.origin).toBe("https://api.morpho.org");
-    expect(url.pathname).toBe("/v1/midnight/mempool/validate");
+    expect(url.pathname).toBe("/v0/midnight/mempool/validate");
     expect(url.searchParams.get("timestamp")).toBe(timestamp);
     expect(call.init?.method).toBe("POST");
     expect(call.init?.signal).toBe(controller.signal);
@@ -427,7 +427,7 @@ describe("MidnightApi.fetchBooks", () => {
 
     const call = calls[0]!;
     const url = getRequestUrl(call);
-    expect(url.pathname).toBe("/v1/midnight/books");
+    expect(url.pathname).toBe("/v0/midnight/books");
     expect(url.searchParams.get("sort")).toBe("-ask,maturity");
     expect(url.searchParams.get("maturities")).toBe("1761922799,1764524800");
     expect(url.searchParams.get("collateral_tokens")).toBe(COLLATERAL_TOKEN);
@@ -459,7 +459,7 @@ describe("MidnightApi.fetchBook", () => {
 
     const call = calls[0]!;
     const url = getRequestUrl(call);
-    expect(url.pathname).toBe(`/v1/midnight/books/${MARKET_ID}`);
+    expect(url.pathname).toBe(`/v0/midnight/books/${MARKET_ID}`);
     expect(url.searchParams.get("depth")).toBe("100");
     expect(call.init?.method).toBe("GET");
   });
@@ -482,7 +482,7 @@ describe("MidnightApi.fetchBookPriceLevels", () => {
 
     const call = calls[0]!;
     const url = getRequestUrl(call);
-    expect(url.pathname).toBe(`/v1/midnight/books/${MARKET_ID}/asks`);
+    expect(url.pathname).toBe(`/v0/midnight/books/${MARKET_ID}/asks`);
     expect(url.searchParams.get("depth")).toBe("50");
     expect(call.init?.method).toBe("GET");
   });
@@ -505,7 +505,7 @@ describe("MidnightApi.fetchBookTakeableOffers", () => {
     const call = calls[0]!;
     const url = getRequestUrl(call);
     expect(url.pathname).toBe(
-      `/v1/midnight/books/${MARKET_ID}/bids/takeable-offers`,
+      `/v0/midnight/books/${MARKET_ID}/bids/takeable-offers`,
     );
     expect(call.init?.method).toBe("GET");
   });
@@ -544,7 +544,7 @@ describe("MidnightApi.fetchBookQuote", () => {
 
     const call = calls[0]!;
     const url = getRequestUrl(call);
-    expect(url.pathname).toBe(`/v1/midnight/books/${MARKET_ID}/asks/quote`);
+    expect(url.pathname).toBe(`/v0/midnight/books/${MARKET_ID}/asks/quote`);
     expect(url.searchParams.get("units")).toBe("1000000000000000000");
     expect(url.searchParams.get("average_worst_price")).toBe(
       "1010000000000000000",
@@ -572,7 +572,7 @@ describe("MidnightApi.fetchBookQuote", () => {
     });
 
     const url = getRequestUrl(calls[0]!);
-    expect(url.pathname).toBe(`/v1/midnight/books/${MARKET_ID}/bids/quote`);
+    expect(url.pathname).toBe(`/v0/midnight/books/${MARKET_ID}/bids/quote`);
     expect(url.searchParams.get("assets")).toBe("1000000000000000000");
     expect(url.searchParams.get("slippage")).toBe("0.5");
   });
@@ -601,7 +601,7 @@ describe("MidnightApi.fetchTakeableOffers", () => {
 
     const call = calls[0]!;
     const url = getRequestUrl(call);
-    expect(url.pathname).toBe("/v1/midnight/takeable-offers");
+    expect(url.pathname).toBe("/v0/midnight/takeable-offers");
     expect(url.searchParams.get("maker")).toBe(MAKER);
     expect(url.searchParams.get("market_ids")).toBe(
       `${MARKET_ID},${SECOND_MARKET_ID}`,

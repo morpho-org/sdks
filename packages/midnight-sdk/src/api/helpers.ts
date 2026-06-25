@@ -18,7 +18,7 @@ import type {
   MidnightApiTake,
 } from "./types.js";
 
-const DEFAULT_MIDNIGHT_API_URL = new URL("/v1/midnight", BLUE_API_BASE_URL);
+const DEFAULT_MIDNIGHT_API_URL = new URL("/v0/midnight", BLUE_API_BASE_URL);
 // Keep this literal in source so the browser ESM build does not import package.json
 // through Node-only createRequire/module shims.
 const MIDNIGHT_SDK_VERSION = "0.1.0";
