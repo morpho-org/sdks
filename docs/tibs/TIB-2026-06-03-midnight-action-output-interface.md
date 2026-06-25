@@ -101,10 +101,11 @@ Semantics:
 
 1. `getRequirements()` returns every item that must be satisfied **before** `buildTx()`'s transaction is sent.
 2. Items are already filtered: if an approval / authorization is not needed, it is omitted.
-3. Returned items are ordered and must be processed in order.
-4. A transaction item is not necessarily an approval; it can be an authorization, contract-wallet ratify-root, or mandatory prelude transaction.
-5. A signature item returns a `RequirementSignature` value. Existing one-signature flows may pass that value directly into `buildTx(signature)`; Midnight flows use `MidnightActionSignatures` and may pass the collected `readonly AnyRequirementSignature[]` into `buildTx(signatures)` when the final bundle needs a token permit and a maker root signature can appear in the same action output.
-6. Existing methods may keep narrower return types; new Midnight methods use `ActionRequirement`.
+3. Returned transaction items are ordered and must be executed in relative order.
+4. Signature items in the initial Midnight implementation may be collected before transaction items because the signed typed data is fully determined during entity resolution and does not depend on a prerequisite transaction being mined.
+5. A transaction item is not necessarily an approval; it can be an authorization, contract-wallet ratify-root, or mandatory prelude transaction.
+6. A signature item returns a `RequirementSignature` value. Existing one-signature flows may pass that value directly into `buildTx(signature)`; Midnight flows use `MidnightActionSignatures` and may pass the collected `readonly AnyRequirementSignature[]` into `buildTx(signatures)` when the final bundle needs a token permit and a maker root signature can appear in the same action output.
+7. Existing methods may keep narrower return types; new Midnight methods use `ActionRequirement`.
 
 This is the smallest compatible change: Midnight flows that are one final tx remain one final tx, flows with required prelude txs place those prelude txs in `getRequirements()`, and the fixed-rate app can forward the signature list it already collects instead of learning a keyed SDK-owned flow engine.
 
@@ -152,6 +153,7 @@ import type {
   ActionRequirement,
   AnyRequirementSignature,
   BaseAction,
+  MidnightActionSignatures,
   SignatureRequirement,
   TransactionRequirement,
 } from "@morpho-org/morpho-sdk";
@@ -184,7 +186,6 @@ function transactionToCallRequest(
 
 export async function midnightActionOutputToActionFlow<
   TAction extends BaseAction,
-  TSignatures,
 >({
   chainId,
   accountAddress,
@@ -195,7 +196,7 @@ export async function midnightActionOutputToActionFlow<
 }: {
   readonly chainId: number;
   readonly accountAddress: Address;
-  readonly action: ActionOutput<TAction, TSignatures>;
+  readonly action: ActionOutput<TAction, MidnightActionSignatures>;
   readonly useSimplePermit?: boolean;
   readonly labels: MidnightActionFlowLabels;
   readonly onSuccess?: (result: ActionFlowResult) => void | Promise<void>;
@@ -232,7 +233,7 @@ export async function midnightActionOutputToActionFlow<
           const tx =
             signatures.length === 0
               ? action.buildTx()
-              : action.buildTx(signatures as TSignatures);
+              : action.buildTx(signatures.length === 1 ? signatures[0] : signatures);
           return { to: tx.to, value: tx.value, data: tx.data };
         },
       },
@@ -242,7 +243,7 @@ export async function midnightActionOutputToActionFlow<
 }
 ```
 
-The adapter preserves the current fixed-rate app UX where all `SignatureRequest`s are collected before transactions are sent. ERC2612 permits, Permit2 signatures, and EOA maker offer-root signatures do not depend on prior Midnight authorization or collateral-supply transactions, so grouping signatures first is protocol-compatible. Permit2 may still require an ERC20 approval transaction to the Permit2 contract; that transaction stays in the ordered transaction requirements. Transaction requirements keep their relative order. The only generic assertion is centralized in this adapter; individual fixed-rate builders pass the SDK action output as-is.
+The adapter preserves the current fixed-rate app UX where all `SignatureRequest`s are collected before transactions are sent. ERC2612 permits, Permit2 signatures, and EOA maker offer-root signatures do not depend on prior Midnight authorization or collateral-supply transactions, so grouping signatures first is protocol-compatible. Permit2 may still require an ERC20 approval transaction to the Permit2 contract; that transaction stays in the ordered transaction requirements. Transaction requirements keep their relative order. The adapter is intentionally Midnight-specific and passes a singleton signature as a singleton; it only passes an array when several Midnight signatures were collected for the same final `buildTx(...)`. The only generic assertion is centralized in this adapter; individual fixed-rate builders pass the SDK action output as-is.
 
 The label mapper stays in the fixed-rate app:
 
@@ -299,17 +300,17 @@ const submitOfferLabels: MidnightActionFlowLabels = {
 };
 
 const repayWithdrawLabels = ({
-  repayUnits,
+  repayAssets,
   withdrawCollateralAssets,
 }: {
-  repayUnits: bigint;
+  repayAssets: bigint;
   withdrawCollateralAssets: bigint;
 }): MidnightActionFlowLabels => ({
   ...fixedRateRequirementLabels,
   final: () =>
-    repayUnits > 0n && withdrawCollateralAssets > 0n
+    repayAssets > 0n && withdrawCollateralAssets > 0n
       ? "Repay and withdraw collateral"
-      : repayUnits > 0n
+      : repayAssets > 0n
         ? "Repay"
         : "Withdraw collateral",
 });
@@ -834,7 +835,7 @@ Current fixed-rate app core:
 
 ```ts
 const [allowance, authorizeBundlerRequest] = await Promise.all([
-  repayUnits > 0n
+  repayAssets > 0n
     ? readContract(client, {
         address: market.loanToken.address,
         abi: erc20Abi,
@@ -845,7 +846,7 @@ const [allowance, authorizeBundlerRequest] = await Promise.all([
   buildAuthorizeBundlerCallRequestIfNeeded({ client, accountAddress }),
 ]);
 
-if (repayUnits > 0n) {
+if (repayAssets > 0n) {
   callRequests.push(...approvalRequestsForMidnightBundles);
 }
 if (authorizeBundlerRequest) callRequests.push(authorizeBundlerRequest);
@@ -859,7 +860,7 @@ callRequests.push({
       functionName: "repayAndWithdrawCollateral",
       args: [
         market.struct,
-        repayUnits,
+        repayAssets,
         accountAddress,
         { kind: 0, data: "0x" },
         collateralWithdrawals,
@@ -880,7 +881,7 @@ const action = await client.morpho
   .repayWithdrawCollateral({
     marketId,
     accountAddress,
-    repayUnits,
+    repayAssets,
     withdrawCollateralAssets,
   });
 
@@ -888,7 +889,7 @@ return midnightActionOutputToActionFlow({
   chainId: client.chain.id,
   accountAddress,
   action,
-  labels: repayWithdrawLabels({ repayUnits, withdrawCollateralAssets }),
+  labels: repayWithdrawLabels({ repayAssets, withdrawCollateralAssets }),
   onSuccess,
 });
 ```
@@ -898,10 +899,10 @@ Expanded SDK output:
 ```ts
 await action.getRequirements();
 // [
-//   maybe loan-token pull requirement for MidnightBundles when repayUnits > 0n:
+//   maybe loan-token pull requirement for MidnightBundles when repayAssets > 0n:
 //     - ERC20ApprovalAction when signatures are disabled / unavailable, or
 //     - permit / permit2 signature requirement when signatures are enabled
-//       (+ optional ERC20ApprovalAction(loanToken, Permit2, repayUnits) for Permit2),
+//       (+ optional ERC20ApprovalAction(loanToken, Permit2, repayAssets) for Permit2),
 //   maybe MidnightAuthorizationAction(MidnightBundles, true, accountAddress),
 // ]
 
@@ -910,7 +911,7 @@ action.buildTx(signatures);
 // to: MidnightBundles
 // data: repayAndWithdrawCollateral(
 //   market,
-//   repayUnits,
+//   repayAssets,
 //   accountAddress,
 //   loanTokenPermit,
 //   withdrawCollateralAssets > 0n ? [{ collateralIndex: 0n, assets: withdrawCollateralAssets }] : [],
@@ -929,25 +930,25 @@ Expected app-side diff: **small**. This stays a bundle flow, so the app does not
    client,
    marketId,
    accountAddress,
-   repayUnits,
+   repayAssets,
    withdrawCollateralAssets,
    onSuccess,
  }: BuildRepayWithdrawActionFlowParameters): Promise<ActionFlow> {
-   validateInputs({ repayUnits, withdrawCollateralAssets });
+   validateInputs({ repayAssets, withdrawCollateralAssets });
 
 -  const { midnightBundlesAddress } = getMarketsV2ContractAddresses(client.chain.id);
 -  const market = await fetchActionFlowMarket(client, marketId);
 -  const [allowance, authorizeBundlerRequest] = await Promise.all([...]);
 -  const callRequests: CallRequest[] = [];
--  if (repayUnits > 0n) {
+-  if (repayAssets > 0n) {
 -    const approvalRequests = buildApprovalCallRequestIfNeeded({ ... });
 -    if (approvalRequests) callRequests.push(...approvalRequests);
 -  }
 -  if (authorizeBundlerRequest) callRequests.push(authorizeBundlerRequest);
 -  const collateralWithdrawals = withdrawCollateralAssets > 0n ? [{ collateralIndex: 0n, assets: withdrawCollateralAssets }] : [];
--  const label = repayUnits > 0n && withdrawCollateralAssets > 0n
+-  const label = repayAssets > 0n && withdrawCollateralAssets > 0n
 -    ? "Repay and withdraw collateral"
--    : repayUnits > 0n ? "Repay" : "Withdraw collateral";
+-    : repayAssets > 0n ? "Repay" : "Withdraw collateral";
 -  callRequests.push({ label, getCall: () => encodeRepayAndWithdrawBundle(...) });
 -  return createImmutableActionFlow({ chainId: client.chain.id, label: "Confirm", signatureRequests: [], callRequests, onSuccess });
 +  const action = await client.morpho
@@ -955,7 +956,7 @@ Expected app-side diff: **small**. This stays a bundle flow, so the app does not
 +    .repayWithdrawCollateral({
 +      marketId,
 +      accountAddress,
-+      repayUnits,
++      repayAssets,
 +      withdrawCollateralAssets,
 +    });
 +
@@ -963,7 +964,7 @@ Expected app-side diff: **small**. This stays a bundle flow, so the app does not
 +    chainId: client.chain.id,
 +    accountAddress,
 +    action,
-+    labels: repayWithdrawLabels({ repayUnits, withdrawCollateralAssets }),
++    labels: repayWithdrawLabels({ repayAssets, withdrawCollateralAssets }),
 +    onSuccess,
 +  });
  }
@@ -1151,7 +1152,7 @@ export interface MidnightOfferRootSignatureArgs {
 }
 ```
 
-`MidnightOfferRootSignatureArgs.payload` is the encoded mempool payload produced after the root signature is collected. `buildTx(signatures?)` selects that root signature from the collected signature list and uses its payload as the final submit calldata.
+`MidnightOfferRootSignatureArgs.payload` is the encoded mempool payload produced after the root signature is collected by the SDK requirement. `buildTx(signatures?)` selects the `midnightOfferRootSignature` result from the collected signature list, validates that its owner, root, ratifier, and offer count match the prepared flow, then uses its payload as the final submit calldata.
 
 ### New final action metadata
 
@@ -1224,7 +1225,7 @@ export interface MidnightRepayWithdrawCollateralAction
     "midnightRepayWithdrawCollateral",
     {
       market: Hex;
-      repayUnits: bigint;
+      repayAssets: bigint;
       withdrawCollateralAssets: bigint;
       onBehalf: Address;
       receiver: Address;
@@ -1292,10 +1293,14 @@ The paired action encoder consumes the collected signatures:
 ```ts
 function encodeMidnightTokenPermit({
   token,
+  owner,
+  spender,
   amount,
   signatures,
 }: {
   token: Address;
+  owner: Address;
+  spender: Address;
   amount: bigint;
   signatures?: AnyRequirementSignature | readonly AnyRequirementSignature[];
 }): MidnightTokenPermit
@@ -1304,8 +1309,10 @@ function encodeMidnightTokenPermit({
 Encoding rules:
 
 - no matching token signature: `{ kind: PermitKind.None, data: "0x" }`;
-- ERC2612: validate `args.asset === token` and `args.amount === amount`, then encode `(deadline, v, r, s)` as `PermitKind.ERC2612`;
-- Permit2: validate `args.asset === token` and `args.amount === amount`, then encode Midnight's Permit2 SignatureTransfer data `(nonce, deadline, signature)` as `PermitKind.Permit2`.
+- ERC2612: validate `args.owner === owner`, `action.args.spender === spender`, `args.asset === token`, and `args.amount === amount`, then encode `(deadline, v, r, s)` as `PermitKind.ERC2612`;
+- Permit2: validate `args.owner === owner`, `action.args.spender === spender`, `args.asset === token`, and `args.amount === amount`, then encode Midnight's Permit2 SignatureTransfer data `(nonce, deadline, signature)` as `PermitKind.Permit2`.
+
+Midnight's Permit2 branch uses SignatureTransfer with a randomly generated 256-bit unordered nonce. It does not read Permit2 nonce bitmaps before returning the requirement: with a random unordered nonce, collision risk is negligible, and the extra onchain read would add cost and latency to every Permit2-backed Midnight bundle flow.
 
 Midnight callers still supply the spender explicitly:
 
@@ -1360,7 +1367,7 @@ EOA / EIP-7702 maker:
 - optional `MidnightAuthorizationAction` for `EcrecoverRatifier`;
 - one private `makeOfferRootRequirement(...)` result with `action.type === "midnightOfferRootSignature"`;
 - `Requirement.sign(...)` calls the same typed-data root-signing path as the fixed-rate app and returns `{ action, args: { root, signature, payload } }`;
-- `buildTx(signatures?)` selects the `midnightOfferRootSignature` result and uses `signature.args.payload` as mempool calldata.
+- `buildTx(signatures?)` selects the `midnightOfferRootSignature` result, validates the owner / root / ratifier / offer-count metadata against the prepared flow, and uses `signature.args.payload` as mempool calldata.
 
 Contract-wallet maker:
 
@@ -1541,7 +1548,7 @@ Repay only:
 Withdraw-only:
 
 - `getRequirements()` returns optional `MidnightAuthorizationAction` for `MidnightBundles`;
-- `buildTx()` returns `MidnightRepayWithdrawCollateralAction` with `repayUnits === 0n`.
+- `buildTx()` returns `MidnightRepayWithdrawCollateralAction` with `repayAssets === 0n`.
 
 Repay + withdraw:
 
@@ -1551,7 +1558,7 @@ Repay + withdraw:
 ```ts
 MidnightBundles.repayAndWithdrawCollateral(
   market,
-  repayUnits,
+  repayAssets,
   onBehalf,
   loanTokenPermit,
   collateralWithdrawals,
