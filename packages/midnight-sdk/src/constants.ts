@@ -1,0 +1,202 @@
+/**
+ * Centibip scale used by settlement fees.
+ *
+ * @example
+ * ```ts
+ * import { CBP } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(CBP);
+ * ```
+ */
+export const CBP = 1_000000000000n;
+
+/**
+ * Settlement-fee time-to-maturity breakpoints in seconds.
+ *
+ * Midnight linearly interpolates each market's seven settlement-fee cbp
+ * buckets across these breakpoints.
+ *
+ * @example
+ * ```ts
+ * import { SETTLEMENT_FEE_BREAKPOINTS } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(SETTLEMENT_FEE_BREAKPOINTS[1]);
+ * ```
+ */
+export const SETTLEMENT_FEE_BREAKPOINTS = [
+  0n,
+  1n * 24n * 60n * 60n,
+  7n * 24n * 60n * 60n,
+  30n * 24n * 60n * 60n,
+  90n * 24n * 60n * 60n,
+  180n * 24n * 60n * 60n,
+  360n * 24n * 60n * 60n,
+] as const;
+
+/**
+ * Maximum Midnight tick.
+ *
+ * @example
+ * ```ts
+ * import { MAX_TICK } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(MAX_TICK);
+ * ```
+ */
+export const MAX_TICK = 6744n;
+
+/**
+ * WAD price quantum used by Midnight tick prices.
+ *
+ * @example
+ * ```ts
+ * import { PRICE_ROUNDING_STEP } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(PRICE_ROUNDING_STEP);
+ * ```
+ */
+export const PRICE_ROUNDING_STEP = 100_000000000n;
+
+/**
+ * Default Midnight tick spacing.
+ *
+ * @example
+ * ```ts
+ * import { DEFAULT_TICK_SPACING } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(DEFAULT_TICK_SPACING);
+ * ```
+ */
+export const DEFAULT_TICK_SPACING = 4n;
+
+/**
+ * Maximum collateral entries in a Midnight market.
+ *
+ * @example
+ * ```ts
+ * import { MAX_COLLATERALS } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(MAX_COLLATERALS);
+ * ```
+ */
+export const MAX_COLLATERALS = 128n;
+
+/**
+ * Maximum active collateral entries per borrower.
+ *
+ * @example
+ * ```ts
+ * import { MAX_COLLATERALS_PER_BORROWER } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(MAX_COLLATERALS_PER_BORROWER);
+ * ```
+ */
+export const MAX_COLLATERALS_PER_BORROWER = 16n;
+
+/**
+ * Maximum settlement-fee values by Midnight fee index.
+ *
+ * @example
+ * ```ts
+ * import { MAX_SETTLEMENT_FEES } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(MAX_SETTLEMENT_FEES[0]);
+ * ```
+ */
+export const MAX_SETTLEMENT_FEES = [
+  14000000000000n,
+  14000000000000n,
+  98000000000000n,
+  417000000000000n,
+  1250000000000000n,
+  2500000000000000n,
+  5000000000000000n,
+] as const;
+
+/**
+ * Maximum continuous fee per second.
+ *
+ * @example
+ * ```ts
+ * import { MAX_CONTINUOUS_FEE } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(MAX_CONTINUOUS_FEE);
+ * ```
+ */
+export const MAX_CONTINUOUS_FEE = 317097919n;
+
+/**
+ * Low liquidation cursor used by liquidation incentive factor helpers.
+ *
+ * @example
+ * ```ts
+ * import { LIQUIDATION_CURSOR_LOW } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(LIQUIDATION_CURSOR_LOW);
+ * ```
+ */
+export const LIQUIDATION_CURSOR_LOW = 250000000000000000n;
+
+/**
+ * High liquidation cursor from Midnight ConstantsLib.
+ *
+ * @example
+ * ```ts
+ * import { LIQUIDATION_CURSOR_HIGH } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(LIQUIDATION_CURSOR_HIGH);
+ * ```
+ */
+export const LIQUIDATION_CURSOR_HIGH = 500000000000000000n;
+
+/**
+ * HashLib collateral params typehash.
+ *
+ * @example
+ * ```ts
+ * import { COLLATERAL_PARAMS_TYPEHASH } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(COLLATERAL_PARAMS_TYPEHASH);
+ * ```
+ */
+export const COLLATERAL_PARAMS_TYPEHASH =
+  "0xaf44a88eb50ebdbbebd980e5a23045c44f61ece5f80ab708a1bbe8718102e6af";
+
+/**
+ * HashLib market typehash.
+ *
+ * @example
+ * ```ts
+ * import { MARKET_TYPEHASH } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(MARKET_TYPEHASH);
+ * ```
+ */
+export const MARKET_TYPEHASH =
+  "0x358117e98511cc3df97175dca58053b06675b43ad090b0553f8a1eff008b6e2e";
+
+/**
+ * HashLib offer typehash.
+ *
+ * @example
+ * ```ts
+ * import { OFFER_TYPEHASH } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(OFFER_TYPEHASH);
+ * ```
+ */
+export const OFFER_TYPEHASH =
+  "0x6bd2a06ec6952feb97c3e3b4f7de6c342f12b1ac769d5c91368271af636c85b7";
+
+/**
+ * EcrecoverRatifier EIP-712 domain typehash.
+ *
+ * @example
+ * ```ts
+ * import { EIP712_DOMAIN_TYPEHASH } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(EIP712_DOMAIN_TYPEHASH);
+ * ```
+ */
+export const EIP712_DOMAIN_TYPEHASH =
+  "0x47e79534a245952e8b16893a336b85a3d9ea9fa8c573f3d803afb92a79469218";

@@ -2,7 +2,9 @@ export type { ErrorClass } from "@morpho-org/blue-sdk";
 export {
   _try,
   BlueErrors,
+  IncompleteChainRegistryError,
   InvalidMarketParamsError,
+  UnknownAddressError,
   UnknownDataError,
   UnknownFactory,
   UnknownMarketParamsError,

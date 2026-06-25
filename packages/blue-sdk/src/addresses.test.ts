@@ -1,3 +1,4 @@
+import { addresses as morphoAddresses } from "@morpho-org/morpho-ts";
 import { randomAddress } from "@morpho-org/test/fixtures";
 import { describe, expect, test } from "vitest";
 import {
@@ -7,11 +8,14 @@ import {
   type ChainDeployments,
   ChainId,
   deployments,
+  getChainAddress,
   getChainAddresses,
   getPermissionedCoinbaseTokens,
   getUnwrappedToken,
   NATIVE_ADDRESS,
+  RegistryValueAlreadyRegisteredError,
   registerCustomAddresses,
+  UnknownAddressError,
   UnsupportedChainIdError,
 } from "./index.js";
 
@@ -19,14 +23,29 @@ describe("addresses helpers", () => {
   test("getChainAddresses returns known chain addresses", () => {
     const chainAddresses = getChainAddresses(ChainId.BaseMainnet);
 
+    expect(chainAddresses.blue).toBe(
+      "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
+    );
     expect(chainAddresses.morpho).toBe(
       "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
+    );
+  });
+
+  test("getChainAddress returns a flattened registry address", () => {
+    expect(getChainAddress(ChainId.BaseMainnet, "blue")).toBe(
+      getChainAddresses(ChainId.BaseMainnet).blue,
     );
   });
 
   test("getChainAddresses throws for unsupported chains", () => {
     expect(() => getChainAddresses(999_999_999)).toThrow(
       UnsupportedChainIdError,
+    );
+  });
+
+  test("getChainAddress throws for unknown labels", () => {
+    expect(() => getChainAddress(ChainId.BaseMainnet, "midnight")).toThrow(
+      UnknownAddressError,
     );
   });
 
@@ -48,6 +67,14 @@ describe("addresses helpers", () => {
     expect(first.size).toBe(0);
     expect(second.size).toBe(0);
     expect(first).not.toBe(second);
+  });
+
+  test("legacy Blue registry exports are live aliases of the shared registry", () => {
+    expect(addresses).toBe(morphoAddresses);
+    expect(addressesRegistry).toBe(morphoAddresses);
+    expect(morphoAddresses[ChainId.EthMainnet]).toBe(
+      addressesRegistry[ChainId.EthMainnet],
+    );
   });
 
   test("registerCustomAddresses extends deployment metadata", () => {
@@ -135,18 +162,51 @@ describe("addresses helpers", () => {
       },
     });
 
-    expect(getChainAddresses(chainId)).toStrictEqual(chainAddresses);
+    expect(getChainAddresses(chainId)).toMatchObject(chainAddresses);
+    expect(getChainAddresses(chainId).blue).toBe(chainAddresses.morpho);
   });
 
-  test("registerCustomAddresses extends a custom chain and unwrapped token mapping together", () => {
-    const chainId = 888_000_004;
+  test("shared registration updates legacy Blue live aliases", () => {
+    const chainId = 888_000_006;
+    const blue = randomAddress();
     const chainAddresses = {
-      morpho: randomAddress(),
+      blue,
+      morpho: blue,
       bundler3: {
         bundler3: randomAddress(),
         generalAdapter1: randomAddress(),
       },
       adaptiveCurveIrm: randomAddress(),
+    } satisfies ChainAddresses;
+
+    registerCustomAddresses({
+      addresses: {
+        [chainId]: chainAddresses,
+      },
+    });
+
+    expect(getChainAddresses(chainId)).toStrictEqual(chainAddresses);
+    expect(addresses[chainId]).toStrictEqual(chainAddresses);
+    expect(addressesRegistry[chainId]).toStrictEqual(chainAddresses);
+    expect(morphoAddresses[chainId]).toStrictEqual(chainAddresses);
+  });
+
+  test("registerCustomAddresses extends a custom chain and unwrapped token mapping together", () => {
+    const chainId = 888_000_004;
+    const blue = randomAddress();
+    const chainAddresses = {
+      blue,
+      morpho: blue,
+      bundler3: {
+        bundler3: randomAddress(),
+        generalAdapter1: randomAddress(),
+      },
+      adaptiveCurveIrm: randomAddress(),
+      midnight: randomAddress(),
+      midnightBundles: randomAddress(),
+      midnightMempool: randomAddress(),
+      ecrecoverRatifier: randomAddress(),
+      setterRatifier: randomAddress(),
       wstEth: randomAddress(),
       stEth: randomAddress(),
     } satisfies ChainAddresses;
@@ -193,7 +253,7 @@ describe("addresses helpers", () => {
           },
         },
       }),
-    ).toThrow("Cannot override existing deployment: morpho");
+    ).toThrow(RegistryValueAlreadyRegisteredError);
   });
 
   test.each([
@@ -260,10 +320,15 @@ describe("addresses helpers", () => {
     morphoDeployment,
     wNativeDeployment,
   }) => {
-    expect(getChainAddresses(chainId)).toMatchObject({ morpho, wNative });
+    expect(getChainAddresses(chainId)).toMatchObject({
+      blue: morpho,
+      morpho,
+      wNative,
+    });
     expect(
       (deployments as Record<number, ChainDeployments>)[chainId],
     ).toMatchObject({
+      blue: morphoDeployment,
       morpho: morphoDeployment,
       wNative: wNativeDeployment,
     });
@@ -275,12 +340,14 @@ describe("addresses helpers", () => {
   test("exposes era-2 addresses and deployments without wNative for chain 5042", () => {
     const chainAddresses = getChainAddresses(5_042);
     expect(chainAddresses).toMatchObject({
+      blue: "0x34CD04070dD72b14E241112F6d83812Df5Af7fCD",
       morpho: "0x34CD04070dD72b14E241112F6d83812Df5Af7fCD",
     });
     expect(chainAddresses.wNative).toBeUndefined();
     expect(
       (deployments as Record<number, ChainDeployments>)[5_042],
     ).toMatchObject({
+      blue: 1_208_685n,
       morpho: 1_208_685n,
     });
     expect(
@@ -321,12 +388,21 @@ describe("addresses helpers", () => {
   test("registerCustomAddresses accepts identical custom addresses and rejects later changes", () => {
     const chainId = 888_000_005;
     const address = randomAddress();
+    const blue = randomAddress();
+    const chainAddresses = {
+      blue,
+      morpho: blue,
+      bundler3: {
+        bundler3: randomAddress(),
+        generalAdapter1: randomAddress(),
+      },
+      adaptiveCurveIrm: randomAddress(),
+      wNative: address,
+    } satisfies ChainAddresses;
 
     registerCustomAddresses({
       addresses: {
-        [chainId]: {
-          wNative: address,
-        },
+        [chainId]: chainAddresses,
       },
     });
 
