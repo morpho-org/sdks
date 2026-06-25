@@ -1331,7 +1331,7 @@ Encoding rules:
 - ERC2612: validate `args.owner === owner`, `action.args.spender === spender`, `args.asset === token`, and `args.amount === amount`, then encode `(deadline, v, r, s)` as `PermitKind.ERC2612`;
 - Permit2 SignatureTransfer: validate `args.owner === owner`, `action.args.spender === spender`, `args.asset === token`, and `args.amount === amount`, then encode Midnight's Permit2 data `(nonce, deadline, signature)` as `PermitKind.Permit2`. A Blue `permit2` allowance signature is not valid here because it signs `PermitSingle` and carries an `expiration`; Midnight only accepts `permit2Transfer`.
 
-This follows the Midnight protocol source: `MidnightBundles.pullToken(...)` decodes `PermitKind.Permit2` data as `(uint256 nonce, uint256 deadline, bytes signature)` and calls `IPermit2.permitTransferFrom(...)` with `PermitTransferFrom(TokenPermissions(token, amount), nonce, deadline)`. There is no `expiration` field in the signed or encoded Midnight bundle path.
+This follows the Midnight protocol source: `MidnightBundles._pullToken(...)` decodes `PermitKind.Permit2` data as `(uint256 nonce, uint256 deadline, bytes signature)` and calls `IPermit2.permitTransferFrom(...)` with `PermitTransferFrom(TokenPermissions(token, amount), nonce, deadline)`. There is no `expiration` field in the signed or encoded Midnight bundle path.
 
 Midnight's Permit2 branch uses SignatureTransfer with a randomly generated 256-bit unordered nonce. It does not read Permit2 nonce bitmaps before returning the requirement: with a random unordered nonce, collision risk is negligible, and the extra onchain read would add cost and latency to every Permit2-backed Midnight bundle flow.
 
