@@ -1408,6 +1408,8 @@ describe("individual adapter fetchers", () => {
         totalSupply: 10n,
         totalAssets: 11n,
         lastTotalAssets: 12n,
+        hasLostAssets: false,
+        lostAssets: 0n,
         supplyQueue: [],
         withdrawQueue: [],
         publicAllocatorConfig: {
@@ -1462,6 +1464,8 @@ describe("individual adapter fetchers", () => {
         totalSupply: 10n,
         totalAssets: 11n,
         lastTotalAssets: 12n,
+        hasLostAssets: false,
+        lostAssets: 0n,
         supplyQueue: [],
         withdrawQueue: [],
         publicAllocatorConfig: {
