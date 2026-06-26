@@ -1,4 +1,6 @@
 import { MathLib } from "@morpho-org/morpho-ts";
+import type { Address } from "viem";
+import { numberToHex } from "viem";
 import { describe, expect, test } from "vitest";
 
 import {
@@ -9,7 +11,11 @@ import {
   chainId,
   marketId,
 } from "../__test__/fixtures.js";
-import { CBP, SETTLEMENT_FEE_BREAKPOINTS } from "../constants.js";
+import {
+  CBP,
+  MAX_COLLATERALS,
+  SETTLEMENT_FEE_BREAKPOINTS,
+} from "../constants.js";
 import { InvalidMarketParameterError } from "../errors.js";
 import { MarketParams } from "./Market.js";
 import { MarketUtils } from "./MarketUtils.js";
@@ -107,6 +113,24 @@ describe("MarketParams", () => {
         new MarketParams({
           ...baseMarketParamsInput(),
           collateralParams: [],
+        }),
+    ).toThrow(InvalidMarketParameterError);
+  });
+
+  test("error: InvalidMarketParameterError for too many collateral params", () => {
+    expect(
+      () =>
+        new MarketParams({
+          ...baseMarketParamsInput(),
+          collateralParams: Array.from(
+            { length: Number(MAX_COLLATERALS) + 1 },
+            (_, index) => ({
+              token: numberToHex(index + 1, { size: 20 }) as Address,
+              lltv: 770000000000000000n,
+              liquidationCursor: liquidationCursorLow,
+              oracle: addresses.oracle,
+            }),
+          ),
         }),
     ).toThrow(InvalidMarketParameterError);
   });

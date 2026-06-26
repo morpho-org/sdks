@@ -436,6 +436,7 @@ export type ApiPriceLevelResponse = {
 export type ApiBookMarketResponse = {
   readonly market_id: Hash;
   readonly chain_id: number;
+  readonly midnight: Address;
   readonly loan_token: Address;
   readonly collaterals: readonly ApiCollateralResponse[];
   readonly maturity: number;
@@ -465,6 +466,7 @@ export type ApiPriceLevelsResponse = {
 /** @internal Offer market response shape returned by the API. */
 export type ApiOfferMarketResponse = {
   readonly chain_id: number;
+  readonly midnight: Address;
   readonly loan_token: Address;
   readonly collaterals: readonly ApiCollateralResponse[];
   readonly maturity: number;

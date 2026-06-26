@@ -10,4 +10,4 @@ Update market params to match the new protocol struct: markets now carry `chainI
 
 Update `MarketUtils.toId` to mirror the new `IdLib.toId` behavior by encoding the full market struct and deriving the id with the embedded Midnight address and zero salt. Market hash and offer/tree signature fixtures were refreshed for the new type hashes.
 
-Mirror the new `Midnight.touchMarket` checks in SDK normalization and payload validation: reject malformed or negative chain ids, invalid liquidation cursors, computed maximum LIF above `2 WAD`, and non-WAD LLTV values whose computed maximum LIF product exceeds the protocol bound.
+Mirror the new `Midnight.touchMarket` checks in SDK normalization and payload validation: reject malformed or negative chain ids, too many collaterals, invalid liquidation cursors, computed maximum LIF above `2 WAD`, and non-WAD LLTV values whose computed maximum LIF product exceeds the protocol bound.

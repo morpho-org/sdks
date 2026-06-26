@@ -4,6 +4,7 @@ import {
   MathLib,
 } from "@morpho-org/morpho-ts";
 import type { Address, Hash } from "viem";
+import { MAX_COLLATERALS } from "../constants.js";
 import { InvalidMarketParameterError } from "../errors.js";
 import { MarketUtils } from "./MarketUtils.js";
 
@@ -182,7 +183,7 @@ export class MarketParams {
    * Creates normalized market params.
    *
    * @param params - Market params to normalize.
-   * @throws {InvalidMarketParameterError} when the chain id is malformed or negative, or when the collateral list is empty, contains duplicate tokens, has LLTV outside `[0, WAD]`, has liquidation cursor outside `[0, WAD)`, or computes an invalid maximum liquidation incentive factor.
+   * @throws {InvalidMarketParameterError} when the chain id is malformed or negative, or when the collateral list is empty, exceeds {@link MAX_COLLATERALS}, contains duplicate tokens, has LLTV outside `[0, WAD]`, has liquidation cursor outside `[0, WAD)`, or computes an invalid maximum liquidation incentive factor.
    */
   public constructor(params: IMarketParams) {
     try {
@@ -212,6 +213,13 @@ export class MarketParams {
         parameter: "collateralParams",
         value: params.collateralParams.length,
         instruction: "Provide at least one collateral.",
+      });
+    }
+    if (collateralParams.length > Number(MAX_COLLATERALS)) {
+      throw new InvalidMarketParameterError({
+        parameter: "collateralParams",
+        value: collateralParams.length,
+        instruction: `Provide at most ${MAX_COLLATERALS} collaterals.`,
       });
     }
 

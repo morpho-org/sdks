@@ -20,7 +20,7 @@ Market hashing canonicalizes non-empty collateral params by token order while pr
 
 `MarketParams` rejects empty collateral lists and duplicate collateral token entries, then normalizes collateral params into onchain token order before offer grouping, tree construction, or signing flows.
 
-Offer creation and payload validation require `expiry` to be strictly greater than `start`, so SDK-built offers cannot later fail payload encoding on a zero-duration time range.
+Offer creation and payload validation reject `expiry` before `start` while allowing zero-duration time ranges that Midnight can take onchain.
 
 Ecrecover ratification supports direct maker signatures and delegated signer signatures, including mixed-maker trees when the same signer is authorized by every maker onchain.
 

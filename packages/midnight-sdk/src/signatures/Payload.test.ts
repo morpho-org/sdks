@@ -147,6 +147,23 @@ describe("Payload.encode", () => {
     await expect(Payload.decode(encoded)).resolves.toHaveLength(257);
   });
 
+  test("behavior: allows zero-duration offer ranges", async () => {
+    const encoded = await Payload.encode([
+      {
+        offer: apiValidOffer({
+          group,
+          start: API_VALID_MATURITY - 60n,
+          expiry: API_VALID_MATURITY - 60n,
+        }),
+        ratifierData: "0x1234" as Hex,
+      },
+    ]);
+
+    const decoded = await Payload.decode(encoded);
+    expect(decoded[0]!.offer.start).toBe(API_VALID_MATURITY - 60n);
+    expect(decoded[0]!.offer.expiry).toBe(API_VALID_MATURITY - 60n);
+  });
+
   test("error: API-invalid offer", async () => {
     await expect(
       Payload.encode([
@@ -163,7 +180,7 @@ describe("Payload.encode", () => {
       Payload.encode([
         {
           offer: apiValidOffer({
-            start: API_VALID_MATURITY - 60n,
+            start: API_VALID_MATURITY - 59n,
             expiry: API_VALID_MATURITY - 60n,
           }),
           ratifierData: "0x1234" as Hex,
@@ -300,7 +317,7 @@ describe("Payload.decode", () => {
       OfferUtils.toStruct({
         offer: apiValidOffer({
           group,
-          start: API_VALID_MATURITY - 60n,
+          start: API_VALID_MATURITY - 59n,
           expiry: API_VALID_MATURITY - 60n,
         }),
       }),

@@ -1,4 +1,4 @@
-import { BLUE_API_BASE_URL, getChainAddress } from "@morpho-org/morpho-ts";
+import { BLUE_API_BASE_URL } from "@morpho-org/morpho-ts";
 import type { Hash } from "viem";
 import {
   InvalidMidnightApiResponseError,
@@ -123,7 +123,7 @@ export function mapBookMarket(
   return {
     marketId: book.market_id,
     chainId: book.chain_id,
-    midnight: getChainAddress(book.chain_id, "midnight"),
+    midnight: book.midnight,
     loanToken: book.loan_token,
     collaterals: book.collaterals.map(mapCollateral),
     maturity: book.maturity,
@@ -172,7 +172,7 @@ export function mapTakeableOffer(
     offer: {
       market: {
         chainId: BigInt(offer.market.chain_id),
-        midnight: getChainAddress(offer.market.chain_id, "midnight"),
+        midnight: offer.market.midnight,
         loanToken: offer.market.loan_token,
         collateralParams: offer.market.collaterals.map((collateral) => ({
           token: collateral.token,
