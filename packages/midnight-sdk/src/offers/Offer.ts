@@ -281,6 +281,8 @@ export class Offer {
    *
    * const offer = Offer.create({
    *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
    *     loanToken,
    *     collateralParams: [
    *       {
@@ -332,6 +334,8 @@ export class Offer {
    *
    * const offer = Offer.create({
    *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
    *     loanToken,
    *     collateralParams: [
    *       {
@@ -405,6 +409,8 @@ export class Offer {
    *
    * const offer = Offer.create({
    *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
    *     loanToken,
    *     collateralParams: [
    *       {
