@@ -146,6 +146,36 @@ describe("MarketParams", () => {
         }),
     ).toThrow(InvalidMarketParameterError);
   });
+
+  test.each([
+    {
+      name: "computed max LIF above 2 WAD",
+      lltv: 0n,
+      liquidationCursor: MathLib.WAD - 1n,
+    },
+    {
+      name: "computed max LIF product above protocol bound",
+      lltv: 999000000000000000n,
+      liquidationCursor: MathLib.WAD / 2n,
+    },
+  ])("error: InvalidMarketParameterError for $name", ({
+    lltv,
+    liquidationCursor,
+  }) => {
+    expect(
+      () =>
+        new MarketParams({
+          ...baseMarketParamsInput(),
+          collateralParams: [
+            {
+              ...baseMarketParamsInput().collateralParams[0]!,
+              lltv,
+              liquidationCursor,
+            },
+          ],
+        }),
+    ).toThrow(InvalidMarketParameterError);
+  });
 });
 
 describe("Market", () => {

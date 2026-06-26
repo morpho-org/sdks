@@ -182,7 +182,7 @@ export class MarketParams {
    * Creates normalized market params.
    *
    * @param params - Market params to normalize.
-   * @throws {InvalidMarketParameterError} when the chain id is malformed or negative, or when the collateral list is empty, contains duplicate tokens, has LLTV outside `[0, WAD]`, or has liquidation cursor outside `[0, WAD)`.
+   * @throws {InvalidMarketParameterError} when the chain id is malformed or negative, or when the collateral list is empty, contains duplicate tokens, has LLTV outside `[0, WAD]`, has liquidation cursor outside `[0, WAD)`, or computes an invalid maximum liquidation incentive factor.
    */
   public constructor(params: IMarketParams) {
     try {
@@ -233,6 +233,35 @@ export class MarketParams {
           value: collateral.liquidationCursor,
           instruction:
             "Use a liquidation cursor between 0 and WAD, exclusive of WAD.",
+        });
+      }
+      const maxLif = MathLib.mulDivDown(
+        MathLib.WAD,
+        MathLib.WAD,
+        MathLib.WAD -
+          MathLib.mulDivDown(
+            collateral.liquidationCursor,
+            MathLib.WAD - collateral.lltv,
+            MathLib.WAD,
+          ),
+      );
+      if (maxLif > 2n * MathLib.WAD) {
+        throw new InvalidMarketParameterError({
+          parameter: "collateralParams.liquidationCursor",
+          value: collateral.liquidationCursor,
+          instruction:
+            "Use a liquidation cursor whose computed maximum LIF is at most 2 WAD.",
+        });
+      }
+      if (
+        collateral.lltv !== MathLib.WAD &&
+        collateral.lltv * maxLif > 999000000000000000n * MathLib.WAD
+      ) {
+        throw new InvalidMarketParameterError({
+          parameter: "collateralParams.liquidationCursor",
+          value: collateral.liquidationCursor,
+          instruction:
+            "Use an LLTV and liquidation cursor whose computed maximum LIF product satisfies the protocol bound.",
         });
       }
 
