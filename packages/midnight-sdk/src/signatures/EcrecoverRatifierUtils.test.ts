@@ -36,9 +36,9 @@ const wrongPrivateKey =
   "0x0000000000000000000000000000000000000000000000000000000000000002" as const;
 const invalidSignature = `0x${"00".repeat(65)}` as Hex;
 const collateralParamsType =
-  "CollateralParams(address token,uint256 lltv,uint256 maxLif,address oracle)";
+  "CollateralParams(address token,uint256 lltv,uint256 liquidationCursor,address oracle)";
 const marketType =
-  "Market(address loanToken,CollateralParams[] collateralParams,uint256 maturity,uint256 rcfThreshold,address enterGate,address liquidatorGate)";
+  "Market(uint256 chainId,address midnight,address loanToken,CollateralParams[] collateralParams,uint256 maturity,uint256 rcfThreshold,address enterGate,address liquidatorGate)";
 const offerType =
   "Offer(Market market,bool buy,address maker,uint256 start,uint256 expiry,uint256 tick,bytes32 group,address callback,bytes callbackData,address receiverIfMakerIsSeller,address ratifier,bool reduceOnly,uint256 maxUnits,uint256 maxAssets,uint256 continuousFeeCap)";
 const eip712DomainType =
@@ -276,9 +276,9 @@ describe("EcrecoverRatifierUtils.digest", () => {
     const digest = EcrecoverRatifierUtils.digest({ tree, chainId: 8453n });
 
     // Captured from the Solidity EcrecoverRatifier digest formula at
-    // morpho-org/midnight@615fcfa12f725df3a16d65b2c2209272eff5bc10.
+    // morpho-org/midnight@55db096af93a8f2bc85bb67f3ccc7b92e1bfab73.
     expect(digest).toBe(
-      "0x752b171af10cdb27839ae37535b5526ac5fd27538c0e288388b2511eb2d0e953",
+      "0xfb891d1a5cb383a7235a7c7044dc2dad21a408420f2272fd9b13947895adce93",
     );
   });
 });

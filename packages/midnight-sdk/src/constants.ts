@@ -126,28 +126,17 @@ export const MAX_SETTLEMENT_FEES = [
 export const MAX_CONTINUOUS_FEE = 317097919n;
 
 /**
- * Low liquidation cursor used by liquidation incentive factor helpers.
+ * Seconds after maturity over which post-maturity LIF reaches the computed
+ * maximum liquidation incentive factor.
  *
  * @example
  * ```ts
- * import { LIQUIDATION_CURSOR_LOW } from "@morpho-org/midnight-sdk";
+ * import { TIME_TO_MAX_LIF } from "@morpho-org/midnight-sdk";
  *
- * console.log(LIQUIDATION_CURSOR_LOW);
+ * console.log(TIME_TO_MAX_LIF);
  * ```
  */
-export const LIQUIDATION_CURSOR_LOW = 250000000000000000n;
-
-/**
- * High liquidation cursor from Midnight ConstantsLib.
- *
- * @example
- * ```ts
- * import { LIQUIDATION_CURSOR_HIGH } from "@morpho-org/midnight-sdk";
- *
- * console.log(LIQUIDATION_CURSOR_HIGH);
- * ```
- */
-export const LIQUIDATION_CURSOR_HIGH = 500000000000000000n;
+export const TIME_TO_MAX_LIF = 60n * 60n;
 
 /**
  * HashLib collateral params typehash.
@@ -160,7 +149,7 @@ export const LIQUIDATION_CURSOR_HIGH = 500000000000000000n;
  * ```
  */
 export const COLLATERAL_PARAMS_TYPEHASH =
-  "0xaf44a88eb50ebdbbebd980e5a23045c44f61ece5f80ab708a1bbe8718102e6af";
+  "0x39ed3f928d24fd00574b1a02aba9c2483abcf5d9a3a366118c9a5aa29885b841";
 
 /**
  * HashLib market typehash.
@@ -173,7 +162,7 @@ export const COLLATERAL_PARAMS_TYPEHASH =
  * ```
  */
 export const MARKET_TYPEHASH =
-  "0x358117e98511cc3df97175dca58053b06675b43ad090b0553f8a1eff008b6e2e";
+  "0x510b3862f3816a109c9340b76972e8a30984246be06e034ae12ed2934220391a";
 
 /**
  * HashLib offer typehash.
@@ -186,7 +175,7 @@ export const MARKET_TYPEHASH =
  * ```
  */
 export const OFFER_TYPEHASH =
-  "0x6bd2a06ec6952feb97c3e3b4f7de6c342f12b1ac769d5c91368271af636c85b7";
+  "0xa316348449d1749c733fbf0befac14d04d6ed14ea8993956f5eb405e6191bb81";
 
 /**
  * EcrecoverRatifier EIP-712 domain typehash.

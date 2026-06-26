@@ -22,6 +22,8 @@ const zeroBytes32 =
 const API_VALID_MATURITY = 1_767_279_600n;
 
 const emptyMarket = () => ({
+  chainId: 0n,
+  midnight: zeroAddress,
   loanToken: zeroAddress,
   collateralParams: [],
   maturity: 0n,
@@ -220,7 +222,7 @@ describe("TreeUtils.buildDescriptor", () => {
 
     expect(payload.height).toBe(0);
     expect(payload.root).toMatchInlineSnapshot(
-      `"0x5698434bdf5a19bcbcc0d1ec0801489c6151e4bada77560ad14732f7a50bc2a6"`,
+      `"0xd8d57bfe5657d24007dc511ac40c1d0c3ff11f9814f8245a26947d82e4a1bf05"`,
     );
   });
 

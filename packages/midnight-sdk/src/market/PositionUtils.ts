@@ -31,14 +31,15 @@ import type { IPosition } from "./Position.js";
  *     collateral: [50n],
  *   },
  *   market: {
- *     chainId: 8453,
  *     params: {
+ *       chainId: 8453,
+ *       midnight: "0x0000000000000000000000000000000000001000",
  *       loanToken: "0x0000000000000000000000000000000000006000",
  *       collateralParams: [
  *         {
  *           token: "0x0000000000000000000000000000000000007000",
  *           lltv: 770000000000000000n,
- *           maxLif: 1061007957559681697n,
+ *           liquidationCursor: 250000000000000000n,
  *           oracle: "0x0000000000000000000000000000000000008000",
  *         },
  *       ],
@@ -86,14 +87,15 @@ export namespace PositionUtils {
    *     collateral: [50n],
    *   },
    *   market: {
-   *     chainId: 8453,
    *     params: {
+   *       chainId: 8453,
+   *       midnight: "0x0000000000000000000000000000000000001000",
    *       loanToken: "0x0000000000000000000000000000000000006000",
    *       collateralParams: [
    *         {
    *           token: "0x0000000000000000000000000000000000007000",
    *           lltv: 770000000000000000n,
-   *           maxLif: 1061007957559681697n,
+   *           liquidationCursor: 250000000000000000n,
    *           oracle: "0x0000000000000000000000000000000000008000",
    *         },
    *       ],
@@ -194,11 +196,13 @@ export namespace PositionUtils {
         ({
           token: collateralParam.token,
           lltv: BigInt(collateralParam.lltv),
-          maxLif: BigInt(collateralParam.maxLif),
+          liquidationCursor: BigInt(collateralParam.liquidationCursor),
           oracle: collateralParam.oracle,
         }) satisfies CollateralParams,
     );
     const marketParams = {
+      chainId: BigInt(params.market.params.chainId),
+      midnight: params.market.params.midnight,
       loanToken: params.market.params.loanToken,
       collateralParams,
       maturity,
@@ -227,7 +231,6 @@ export namespace PositionUtils {
         collateral,
       },
       market: {
-        chainId: BigInt(params.market.chainId),
         params: marketParams,
         totalUnits: BigInt(params.market.totalUnits),
         lossFactor: marketLossFactor,

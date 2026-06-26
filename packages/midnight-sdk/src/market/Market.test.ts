@@ -9,15 +9,13 @@ import {
   chainId,
   marketId,
 } from "../__test__/fixtures.js";
-import {
-  CBP,
-  LIQUIDATION_CURSOR_HIGH,
-  LIQUIDATION_CURSOR_LOW,
-  SETTLEMENT_FEE_BREAKPOINTS,
-} from "../constants.js";
+import { CBP, SETTLEMENT_FEE_BREAKPOINTS } from "../constants.js";
 import { InvalidMarketParameterError } from "../errors.js";
 import { MarketParams } from "./Market.js";
 import { MarketUtils } from "./MarketUtils.js";
+
+const liquidationCursorLow = 250000000000000000n;
+const liquidationCursorHigh = 500000000000000000n;
 
 describe("CollateralParams", () => {
   test("behavior: normalized by MarketParams", () => {
@@ -26,7 +24,7 @@ describe("CollateralParams", () => {
     expect(params.collateralParams[0]).toEqual({
       token: addresses.collateralToken,
       lltv: 770000000000000000n,
-      maxLif: 1061007957559681697n,
+      liquidationCursor: liquidationCursorLow,
       oracle: addresses.oracle,
     });
   });
@@ -36,6 +34,8 @@ describe("MarketParams", () => {
   test("default", () => {
     const params = new MarketParams(baseMarketParamsInput());
 
+    expect(params.chainId).toBe(BigInt(chainId));
+    expect(params.midnight).toBe(addresses.midnight);
     expect(params.loanToken).toBe(addresses.loanToken);
     expect(params.collateralParams[0]!.token).toBe(addresses.collateralToken);
   });
@@ -54,19 +54,19 @@ describe("MarketParams", () => {
         {
           token: addresses.receiver,
           lltv: 222n,
-          maxLif: 2n,
+          liquidationCursor: 2n,
           oracle: addresses.oracle,
         },
         {
           token: addresses.taker,
           lltv: 111n,
-          maxLif: 1n,
+          liquidationCursor: 1n,
           oracle: addresses.oracle,
         },
         {
           token: addresses.callback,
           lltv: 333n,
-          maxLif: 3n,
+          liquidationCursor: 3n,
           oracle: addresses.oracle,
         },
       ],
@@ -87,13 +87,13 @@ describe("MarketParams", () => {
             {
               token: addresses.taker,
               lltv: 111n,
-              maxLif: 1n,
+              liquidationCursor: 1n,
               oracle: addresses.oracle,
             },
             {
               token: addresses.taker.toLowerCase() as `0x${string}`,
               lltv: 444n,
-              maxLif: 4n,
+              liquidationCursor: 4n,
               oracle: addresses.oracle,
             },
           ],
@@ -123,6 +123,24 @@ describe("MarketParams", () => {
             {
               ...baseMarketParamsInput().collateralParams[0]!,
               lltv,
+            },
+          ],
+        }),
+    ).toThrow(InvalidMarketParameterError);
+  });
+
+  test.each([
+    -1n,
+    MathLib.WAD,
+  ])("error: InvalidMarketParameterError for liquidation cursor %s", (liquidationCursor) => {
+    expect(
+      () =>
+        new MarketParams({
+          ...baseMarketParamsInput(),
+          collateralParams: [
+            {
+              ...baseMarketParamsInput().collateralParams[0]!,
+              liquidationCursor,
             },
           ],
         }),
@@ -171,11 +189,13 @@ describe("Market", () => {
 
   test("error: invalid bigint input", () => {
     expect(() =>
-      MarketUtils.toId({
-        market: baseMarketParamsInput(),
-        chainId: "not-a-number",
+      MarketUtils.toCollateralParams({
+        token: addresses.collateralToken,
+        lltv: 770000000000000000n,
+        liquidationCursor: "not-a-number",
+        oracle: addresses.oracle,
       }),
-    ).toThrow(SyntaxError);
+    ).toThrow(InvalidMarketParameterError);
   });
 });
 
@@ -185,25 +205,25 @@ describe("MarketUtils", () => {
       MarketUtils.toCollateralParams({
         token: addresses.collateralToken,
         lltv: "770000000000000000",
-        maxLif: "1061007957559681697",
+        liquidationCursor: `${liquidationCursorLow}`,
         oracle: addresses.oracle,
       }),
     ).toEqual({
       token: addresses.collateralToken,
       lltv: 770000000000000000n,
-      maxLif: 1061007957559681697n,
+      liquidationCursor: liquidationCursorLow,
       oracle: addresses.oracle,
     });
     expect(
       MarketUtils.getLiquidationIncentiveFactor(
         770000000000000000n,
-        LIQUIDATION_CURSOR_LOW,
+        liquidationCursorLow,
       ),
     ).toBe(1061007957559681697n);
     expect(
       MarketUtils.getLiquidationIncentiveFactor(
         { lltv: 770000000000000000n },
-        LIQUIDATION_CURSOR_HIGH,
+        liquidationCursorHigh,
       ),
     ).toBe(1129943502824858757n);
     expect(
@@ -231,6 +251,8 @@ describe("MarketUtils", () => {
     const struct = MarketUtils.toStruct(params);
 
     expect(struct).toEqual({
+      chainId: params.chainId,
+      midnight: params.midnight,
       loanToken: params.loanToken,
       collateralParams: params.collateralParams,
       maturity: params.maturity,
@@ -246,18 +268,13 @@ describe("MarketUtils", () => {
 
   test("behavior: hash and id are deterministic", () => {
     expect(MarketUtils.hash(baseMarketParamsInput())).toMatchInlineSnapshot(
-      `"0xa0dfe829d404251173c3ca4c9da385b1d08459a8c4dee1bc86a8d747e241b653"`,
+      `"0xa3a2c32022b41a9af871628bdf7bd128cf4113f449cae01d4286d3a184209383"`,
     );
     expect(MarketUtils.hash(baseMarket())).toMatchInlineSnapshot(
-      `"0xa0dfe829d404251173c3ca4c9da385b1d08459a8c4dee1bc86a8d747e241b653"`,
+      `"0xa3a2c32022b41a9af871628bdf7bd128cf4113f449cae01d4286d3a184209383"`,
     );
-    expect(
-      MarketUtils.toId({
-        market: baseMarketParamsInput(),
-        chainId,
-      }),
-    ).toMatchInlineSnapshot(
-      `"0xf922c8934f33a203afd0546f9b7870f69b287a2204f2a90313e36171749409be"`,
+    expect(MarketUtils.toId(baseMarketParamsInput())).toMatchInlineSnapshot(
+      `"0xb84c376e254e575fc4bbf9f612bc68719f73d9ac8c99c02122c705d9baa15417"`,
     );
   });
 
@@ -268,19 +285,19 @@ describe("MarketUtils", () => {
         {
           token: addresses.receiver,
           lltv: 222n,
-          maxLif: 2n,
+          liquidationCursor: 2n,
           oracle: addresses.oracle,
         },
         {
           token: addresses.taker,
           lltv: 111n,
-          maxLif: 1n,
+          liquidationCursor: 1n,
           oracle: addresses.oracle,
         },
         {
           token: addresses.callback,
           lltv: 333n,
-          maxLif: 3n,
+          liquidationCursor: 3n,
           oracle: addresses.oracle,
         },
       ],

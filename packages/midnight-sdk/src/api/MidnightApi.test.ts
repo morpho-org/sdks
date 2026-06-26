@@ -1,7 +1,11 @@
 import type { Hex } from "viem";
 import { describe, expect, test } from "vitest";
 
-import { baseMarketParamsInput, baseOffer } from "../__test__/fixtures.js";
+import {
+  addresses,
+  baseMarketParamsInput,
+  baseOffer,
+} from "../__test__/fixtures.js";
 import {
   InvalidMidnightApiResponseError,
   MidnightApiError,
@@ -70,14 +74,14 @@ const RATIFIER = "0x0000000000000000000000000000000000000002";
 const apiCollateral = {
   token: COLLATERAL_TOKEN,
   lltv: "860000000000000000",
-  max_lif: "0",
+  liquidation_cursor: "0",
   oracle: ORACLE,
 };
 
 const expectedCollateral = {
   token: COLLATERAL_TOKEN,
   lltv: "860000000000000000",
-  maxLif: "0",
+  liquidationCursor: "0",
   oracle: ORACLE,
 };
 
@@ -113,6 +117,7 @@ const expectedPriceLevel = {
 const expectedBook = {
   marketId: MARKET_ID,
   chainId: 8453,
+  midnight: addresses.midnight,
   loanToken: LOAN_TOKEN,
   collaterals: [expectedCollateral],
   maturity: 1_761_922_799,
@@ -124,6 +129,7 @@ const expectedBook = {
 };
 
 const apiOfferMarket = {
+  chain_id: 8453,
   loan_token: LOAN_TOKEN,
   collaterals: [apiCollateral],
   maturity: 1_761_922_799,
@@ -152,12 +158,14 @@ const apiOffer = {
 
 const expectedOffer = {
   market: {
+    chainId: 8453n,
+    midnight: addresses.midnight,
     loanToken: LOAN_TOKEN,
     collateralParams: [
       {
         token: COLLATERAL_TOKEN,
         lltv: 860000000000000000n,
-        maxLif: 0n,
+        liquidationCursor: 0n,
         oracle: ORACLE,
       },
     ],
