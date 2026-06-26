@@ -14,6 +14,7 @@ import {
   type OfferStruct,
   OfferUtils,
 } from "../offers/index.js";
+import { isEmptyOfferStruct, isZeroAddress } from "./offerStructInternal.js";
 
 /**
  * One mempool payload item: a maker-side `Offer` together with the opaque
@@ -150,9 +151,6 @@ export const MAX_DECOMPRESSED_ITEMS_BYTES = 6_000_000;
 const ABI_ARRAY_HEAD_BYTES = 64;
 const ABI_LENGTH_LOW_OFFSET = 60;
 const MAX_TIMESTAMP_SECONDS = 1_000_000_000_000n - 1n;
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-const ZERO_BYTES32 =
-  "0x0000000000000000000000000000000000000000000000000000000000000000";
 
 /**
  * Largest `0x`-prefixed hex string that can encode a wire payload.
@@ -608,37 +606,6 @@ function assertMaturityAt15Utc(value: bigint): void {
       "invalid offer bytes: maturity must be at 15:00:00 UTC",
     );
   }
-}
-
-function isEmptyOfferStruct(offer: OfferStruct): boolean {
-  return (
-    offer.market.chainId === 0n &&
-    isZeroAddress(offer.market.midnight) &&
-    isZeroAddress(offer.market.loanToken) &&
-    offer.market.collateralParams.length === 0 &&
-    offer.market.maturity === 0n &&
-    offer.market.rcfThreshold === 0n &&
-    isZeroAddress(offer.market.enterGate) &&
-    isZeroAddress(offer.market.liquidatorGate) &&
-    offer.buy === false &&
-    isZeroAddress(offer.maker) &&
-    offer.start === 0n &&
-    offer.expiry === 0n &&
-    offer.tick === 0n &&
-    offer.group === ZERO_BYTES32 &&
-    isZeroAddress(offer.callback) &&
-    offer.callbackData === "0x" &&
-    isZeroAddress(offer.receiverIfMakerIsSeller) &&
-    isZeroAddress(offer.ratifier) &&
-    offer.reduceOnly === false &&
-    offer.maxUnits === 0n &&
-    offer.maxAssets === 0n &&
-    offer.continuousFeeCap === 0n
-  );
-}
-
-function isZeroAddress(value: string): boolean {
-  return value.toLowerCase() === ZERO_ADDRESS;
 }
 
 function resolveMaxItems(maxItems: number | undefined): number | undefined {
