@@ -47,7 +47,13 @@ Steps 3–6 produce: `<FINDINGS>`, `<FAILED_AGENTS>`, `<COUNTS>`.
 
 ## Step 7: Post the review as `COMMENT`
 
-Build a JSON object at `/tmp/pr-review-gh-<PR_NUMBER>-comments.json`:
+Mint a per-run path for the review payload — never a shared `/tmp` literal, since concurrent reviews on the same host share `/tmp` and a parallel review of the same PR would clobber it:
+
+```bash
+REVIEW_FILE=$(mktemp "${TMPDIR:-/tmp}/pr-review-gh-comments.XXXXXX") || { echo "mktemp failed; cannot allocate the review payload path." >&2; exit 1; }
+```
+
+Build this JSON object in `$REVIEW_FILE` (each `comments[].path` is the finding's already-normalized repo-relative `file` from the base Step 6 — no `./`, `a/`, `b/`, or absolute prefix, which the GitHub reviews API requires):
 
 ```json
 {
@@ -110,7 +116,7 @@ Use `CronCreate` to schedule a recurring job every 2 minutes (`*/2 * * * *`, rec
 Two kinds of placeholders in the watcher prompt:
 
 - **CronCreate-time placeholders** (substitute BEFORE CronCreate): `<PR_NUMBER>`, `<OWNER>`, `<REPO>`, `<REPO_PATH>`, `<HEAD_BRANCH>`, `<BASE_BRANCH>`, `<BOT_LOGIN>`. These seven are static.
-- **Cycle-derived** (do NOT substitute): `${CYCLE_HEAD_SHA}`, `${CYCLE_HEAD_SHA_SHORT}`, `${CYCLE_PR_STATE}`, `${CYCLE_LAST_REVIEWED_SHA}`, `${CYCLE_MERGE_BASE}`, `${CYCLE_FAILED_AGENTS}`, `${CYCLE_LAST_REVIEWED_RAW}`. Computed inside each cycle.
+- **Cycle-derived** (do NOT substitute): `${CYCLE_HEAD_SHA}`, `${CYCLE_HEAD_SHA_SHORT}`, `${CYCLE_PR_STATE}`, `${CYCLE_LAST_REVIEWED_SHA}`, `${CYCLE_LAST_REVIEW_INCOMPLETE}`, `${CYCLE_MERGE_BASE}`, `${CYCLE_FAILED_AGENTS}`, `${CYCLE_LAST_REVIEWED_RAW}`, `${CYCLE_FILE}` (the per-run cycle payload path from `mktemp`). Computed inside each cycle.
 
 **Pre-flight before CronCreate**: refuse empty/whitespace-only prompt; refuse if any of the seven static placeholders remain unsubstituted.
 
@@ -154,10 +160,13 @@ CYCLE START:
    set CYCLE_LAST_REVIEWED_RAW = `gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/reviews?per_page=100`
    If gh exit code != 0: abort cycle with WATCH_TRANSIENT_ERROR (do NOT fall through to "review everything").
    set CYCLE_LAST_REVIEWED_SHA = `printf '%s' "${CYCLE_LAST_REVIEWED_RAW}" | jq --arg login "<BOT_LOGIN>" -r '[.[] | select(.user.login == $login or ((.body // "") | test("Parallel PR Review|Code Review Summary")))] | sort_by(.submitted_at) | last | .commit_id // ""'`
+   set CYCLE_LAST_REVIEW_INCOMPLETE = `printf '%s' "${CYCLE_LAST_REVIEWED_RAW}" | jq --arg login "<BOT_LOGIN>" -r '[.[] | select(.user.login == $login or ((.body // "") | test("Parallel PR Review|Code Review Summary")))] | sort_by(.submitted_at) | last | if . == null then false else ((.body // "") | test("review may be incomplete|REVIEW_INCOMPLETE")) end'` — "true" when the most recent matching review carried an agent-failure marker: the `review may be incomplete` warning (prepended on a with-findings or watcher-cycle post) OR the `REVIEW_INCOMPLETE` sentinel (the zero-findings-but-failures initial body, which does not carry the warning line). Match both so the zero-findings case — exactly when retry matters most — is not missed.
    If gh exit was zero AND ${CYCLE_LAST_REVIEWED_SHA} is empty: proceed with empty value (review everything on first sighting).
 
 3. COMPARE SHA:
-   If ${CYCLE_HEAD_SHA} == ${CYCLE_LAST_REVIEWED_SHA}: say "Sentinel: WATCH_REVIEW_CLEAN — PR #<PR_NUMBER> still at ${CYCLE_HEAD_SHA_SHORT}, no new commits since last review." and end this cycle.
+   If ${CYCLE_HEAD_SHA} == ${CYCLE_LAST_REVIEWED_SHA}:
+   - If ${CYCLE_LAST_REVIEW_INCOMPLETE} is "true", the last review at this SHA was posted with an agent-failure warning — a failed agent is NOT a clean review (it may now succeed), so do NOT cache-hit. Say "Sentinel: WATCH_RETRY_INCOMPLETE — PR #<PR_NUMBER> re-reviewing ${CYCLE_HEAD_SHA_SHORT}: prior review was incomplete (agent failure)." and continue to step 4.
+   - Otherwise say "Sentinel: WATCH_REVIEW_CLEAN — PR #<PR_NUMBER> still at ${CYCLE_HEAD_SHA_SHORT}, no new commits since last review." and end this cycle.
 
 4. NEW COMMIT DETECTED:
    Say "New commit detected on PR #<PR_NUMBER>: ${CYCLE_HEAD_SHA}. Running full review..."
@@ -171,10 +180,10 @@ CYCLE START:
    The base produces: <FINDINGS>, ${CYCLE_FAILED_AGENTS}, <COUNTS>.
 
 6. POST REVIEW to GitHub as a single atomic call:
-   Build a JSON file at /tmp/pr-review-gh-<PR_NUMBER>-cycle.json with commit_id=${CYCLE_HEAD_SHA} (NOT a CronCreate-time SHA), event="COMMENT", body (summary table), and comments[] array.
+   Mint a per-run path — set CYCLE_FILE = `mktemp "${TMPDIR:-/tmp}/pr-review-gh-cycle.XXXXXX"` (never a shared /tmp literal — concurrent watcher cycles or parallel workspaces would clobber it). Build the JSON file in ${CYCLE_FILE} with commit_id=${CYCLE_HEAD_SHA} (NOT a CronCreate-time SHA), event="COMMENT", body (summary table), and comments[] array (each comments[].path is the finding's already-normalized repo-relative file from the base Step 6).
    If ${CYCLE_FAILED_AGENTS} > 0, prepend "> WARNING: ${CYCLE_FAILED_AGENTS} of <TOTAL_AGENTS_LAUNCHED> agents failed (<names>) — review may be incomplete." to the body.
-   Run: gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/reviews --method POST --input /tmp/pr-review-gh-<PR_NUMBER>-cycle.json — abort cycle if non-zero exit.
-   Clean up: rm -f /tmp/pr-review-gh-<PR_NUMBER>-cycle.json
+   Run: gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/reviews --method POST --input ${CYCLE_FILE} — abort cycle if non-zero exit.
+   Clean up: rm -f ${CYCLE_FILE}
 
 7. Say "Sentinel: WATCH_REVIEW_DONE — PR #<PR_NUMBER> commit ${CYCLE_HEAD_SHA_SHORT}: <N> findings (X critical, Y high, Z medium, W low)."
 
@@ -203,4 +212,5 @@ After CronCreate returns the job ID:
 | `WATCH_TRANSIENT_ERROR` | Step 9 watcher (any cycle command) | `— step <N> (<command>): <stderr>` (any non-zero exit; permanent failures recur every cycle until CronDelete) |
 | `WATCH_PR_CLOSED` | Step 9 watcher Step 1 | `— PR #<PR_NUMBER> state=${CYCLE_PR_STATE}, watcher exiting.` |
 | `WATCH_REVIEW_CLEAN` | Step 9 watcher Step 3 | `— PR #<PR_NUMBER> still at ${CYCLE_HEAD_SHA_SHORT}, no new commits since last review.` |
+| `WATCH_RETRY_INCOMPLETE` | Step 9 watcher Step 3 | `— PR #<PR_NUMBER> re-reviewing ${CYCLE_HEAD_SHA_SHORT}: prior review was incomplete (agent failure).` (same SHA, but the last review carried an agent-failure marker — re-review instead of cache-hitting) |
 | `WATCH_REVIEW_DONE` | Step 9 watcher Step 7 | `— PR #<PR_NUMBER> commit ${CYCLE_HEAD_SHA_SHORT}: <N> findings (X critical, Y high, Z medium, W low).` |

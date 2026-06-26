@@ -55,10 +55,10 @@ Steps 3–6 produce: `<FINDINGS>` (sorted, deduplicated), `<FAILED_AGENTS>` (cou
 
 ## Step 7: Post the formal review (atomic)
 
-Build a JSON object with all findings. Write to a PR-specific temp file:
+Build a JSON object with all findings. Write it to a per-run temp file — never a shared `/tmp` literal, since concurrent reviews on the same host share `/tmp` and a parallel review could clobber it:
 
 ```bash
-REVIEW_FILE="/tmp/pr-review-ci-<PR_NUMBER>-comments.json"
+REVIEW_FILE=$(mktemp "${TMPDIR:-/tmp}/pr-review-ci-comments.XXXXXX") || { echo "mktemp failed; cannot allocate the review payload path." >&2; exit 1; }
 ```
 
 Structure:
@@ -78,6 +78,8 @@ Structure:
   ]
 }
 ```
+
+Each `comments[].path` is the finding's `file` from the base output — already normalized to a repo-relative path (base Step 6 sub-step 1), which the GitHub reviews API requires (a `./`, `a/`/`b/`, or absolute prefix gets the comment rejected).
 
 ### Verdict
 
