@@ -71,7 +71,7 @@ The compatibility constraint is intentionally two-sided. For existing `morpho-sd
 - No `ActionFlowProvider`, `CallRequest`, `before`, or `after` clone in `morpho-sdk`.
 - No generic DAG / dependency graph of steps.
 - No `buildTxs()` as the primary interface.
-- No validation requirement objects. SDK-owned validation throws typed errors from entity / requirement resolution; app-owned preflights such as alpha-limit checks, quote previews, and tick-spacing assertions may continue to throw the app's user-facing errors before the SDK call.
+- No validation requirement objects. SDK-owned validation throws typed errors from entity / requirement resolution; app-owned preflights such as quote previews and tick-spacing assertions may continue to throw the app's user-facing errors before the SDK call.
 - No SDK-specific UI policy for token permits. The SDK exposes ERC2612 / Permit2 requirements with neutral metadata; the fixed-rate app still decides whether `supportSignature` is enabled, whether to request simple permits with `useSimplePermit`, and how each signature step is labeled.
 - No SDK modeling for app-only forms, dialogs, or UI copy.
 
@@ -117,7 +117,7 @@ The concrete SDK implementation in the stacked implementation PR moves protocol 
 
 - **SDK-owned protocol logic**: allowance reads, `Midnight.isAuthorized(...)` reads, ratifier selection, `Group` / `Tree` / `Payload` construction, root-signature payload generation, ratify-root calldata, Midnight API mempool validation, and `MidnightBundles` / `Midnight` calldata.
 - **Integrator-owned app logic**: `ActionFlow` construction, step labels (`"Confirm"`, `"Approve loan token"`, `"Submit offer"`), form-specific copy, review-only display values (`offerExpiry`, date labels, token role labels), `onSuccess` routing, query invalidation, analytics, EIP-5792 batching behavior, `before` / `after` waits if the app ever adds them, user-facing error presentation, and rate-derived input preparation (`minUnits`, `maxUnits`, offer-chain `legs`).
-- **Retained preflight validation in the fixed-rate app**: existing alpha-limit checks, quote/rate preview checks, and tick-spacing assertions may stay app-side because they are used to produce immediate UX errors and review data. The SDK still performs the protocol checks it needs to build safe transactions and payloads.
+- **Retained preflight validation in the fixed-rate app**: existing quote/rate preview checks and tick-spacing assertions may stay app-side because they are used to produce immediate UX errors and review data. The SDK still performs the protocol checks it needs to build safe transactions and payloads.
 
 The SDK may expose neutral typed metadata so an integrator can label steps, but it must not expose labels or UI state. For example, `MidnightAuthorizationAction.args.authorized` is SDK metadata; `"Authorize bundler"` is app copy.
 
@@ -393,13 +393,6 @@ const minUnits = computeUnitsFromAssets({
   rounding: "Down",
 });
 
-await validateMarketCapacityLimits({
-  client,
-  market,
-  amount: assets,
-  expectedUnits: minUnits,
-});
-
 const action = await client.morpho.midnight(client.chain.id).takeLend({
   marketId,
   accountAddress,
@@ -447,7 +440,7 @@ action.buildTx(signatures);
 
 #### Fixed-rate app patch shape
 
-Expected app-side diff: **small**. The app keeps the rate-to-`minUnits` calculation and its capacity preflight, then deletes requirement resolution and final calldata encoding. The screen still passes the router quote (`offers`) it already selected; the SDK accepts the API take shape directly.
+Expected app-side diff: **small**. The app keeps the rate-to-`minUnits` calculation, then deletes requirement resolution and final calldata encoding. The screen still passes the router quote (`offers`) it already selected; the SDK accepts the API take shape directly.
 
 ```diff
  export async function buildLendMarketOrderActionFlow({
@@ -466,7 +459,6 @@ Expected app-side diff: **small**. The app keeps the rate-to-`minUnits` calculat
    const market = await fetchActionFlowMarket(client, marketId);
    const maxPrice = rateToPrice({ rate: minRate, maturity: market.maturity, now });
    const minUnits = computeUnitsFromAssets({ assets, price: maxPrice, rounding: "Down" });
-   await validateMarketCapacityLimits({ client, market, amount: assets, expectedUnits: minUnits });
 -  const [allowance, authorizeBundlerRequest] = await Promise.all([...]);
 -  const takes = buildTakesFromOffers(offers, { marketId, expectedBuy: false, chainId: client.chain.id, morphoV2: midnightAddress });
 -  const callRequests: CallRequest[] = [];
@@ -503,13 +495,13 @@ What leaves the app:
 What stays in the app:
 
 - quote selection and loading state that produced `offers`;
-- `rateToPrice(...)`, `computeUnitsFromAssets(...)`, and `validateMarketCapacityLimits(...)`, because the concrete SDK API receives `minUnits` and does not own rate display math;
+- `rateToPrice(...)` and `computeUnitsFromAssets(...)`, because the concrete SDK API receives `minUnits` and does not own rate display math;
 - form guards if the app wants immediate local UX errors;
 - labels (`"Take lend offers"`, `"Approve loan token"`, `"Authorize bundler"`);
 - the global decision to enable signatures through `morphoViemExtension({ supportSignature: true })` and the per-call choice to pass `useSimplePermit` into the shared adapter when the app wants ERC2612 over the default Permit2 path;
 - `ActionFlow` wrapping and `onSuccess`.
 
-Complexity for the fixed-rate app: **low**. This is mostly a mechanical builder replacement. If the app keeps `supportSignature: false`, the visible execution flow stays approval-based. If the app enables signatures, the shared adapter surfaces the extra token signature request without changing the take-lend builder again. The app keeps the three existing rate/capacity lines, removes roughly the allowance / authorization / approval / take-encoding / final-call half of the builder, and updates tests to assert adapter inputs rather than raw app-built calldata.
+Complexity for the fixed-rate app: **low**. This is mostly a mechanical builder replacement. If the app keeps `supportSignature: false`, the visible execution flow stays approval-based. If the app enables signatures, the shared adapter surfaces the extra token signature request without changing the take-lend builder again. The app keeps the existing rate-to-units lines, removes roughly the allowance / authorization / approval / take-encoding / final-call half of the builder, and updates tests to assert adapter inputs rather than raw app-built calldata.
 
 ### Example 2: make-borrow with collateral + loan offer
 
@@ -517,16 +509,13 @@ This is the hardest current migration shape because it combines a mandatory prel
 
 ```ts
 if (collateralAssets > 0n) {
-  // SDK-owned: validation + allowance read.
-  const [, collateralAllowance] = await Promise.all([
-    validateCollateralAlphaLimits({ client, userAddress: accountAddress, market, collateralAmount: collateralAssets }),
-    readContract(client, {
-      address: market.collateralToken.address,
-      abi: erc20Abi,
-      functionName: "allowance",
-      args: [accountAddress, midnightAddress],
-    }),
-  ]);
+  // SDK-owned: allowance read.
+  const collateralAllowance = await readContract(client, {
+    address: market.collateralToken.address,
+    abi: erc20Abi,
+    functionName: "allowance",
+    args: [accountAddress, midnightAddress],
+  });
 
   // Mixed today: approval business logic plus app label.
   const approvalRequests = buildApprovalCallRequestIfNeeded({
@@ -578,15 +567,6 @@ const market = await fetchActionFlowMarket(client, marketId);
 let offerExpiry = expiry;
 let legs: MidnightMakeOfferLeg[] | undefined;
 
-if (collateralAssets > 0n) {
-  await validateCollateralAlphaLimits({
-    client,
-    userAddress: accountAddress,
-    market,
-    collateralAmount: collateralAssets,
-  });
-}
-
 if (loanAssets > 0n) {
   if (rate === null) {
     throw new UserFacingError("Rate is required");
@@ -607,22 +587,10 @@ if (loanAssets > 0n) {
 
   offerExpiry = offerChain.at(-1)!.expiryTimestamp;
 
-  await Promise.all([
-    validateMarketCapacityLimits({
-      client,
-      market,
-      amount: loanAssets,
-      expectedUnits: computeUnitsFromAssetsAtTick({
-        assets: loanAssets,
-        tick: offerChain[0]!.tick,
-        rounding: "Up",
-      }),
-    }),
-    assertTicksAlignedToSpacing({
-      client,
-      entries: offerChain.map((leg) => ({ marketId: market.id, tick: leg.tick })),
-    }),
-  ]);
+  await assertTicksAlignedToSpacing({
+    client,
+    entries: offerChain.map((leg) => ({ marketId: market.id, tick: leg.tick })),
+  });
 
   legs = offerChain.map((leg) => ({
     market: market.struct,
@@ -734,7 +702,7 @@ async function makeBorrow(params): Promise<MakeBorrowActionOutput> {
 
 #### Fixed-rate app patch shape
 
-Expected app-side diff: **medium**. The app keeps form validation, offer-chain construction, capacity/tick preflights, and `offerExpiry` review state. It deletes allowance reads, approval/supply calldata, ratifier detection, root signing/ratify-root wiring, payload construction, and the app-local maker submit transaction.
+Expected app-side diff: **medium**. The app keeps form validation, offer-chain construction, the tick-spacing preflight, and `offerExpiry` review state. It deletes allowance reads, approval/supply calldata, ratifier detection, root signing/ratify-root wiring, payload construction, and the app-local maker submit transaction.
 
 ```diff
  export async function buildBorrowLimitOrderActionFlow({
@@ -756,13 +724,12 @@ Expected app-side diff: **medium**. The app keeps form validation, offer-chain c
    let offerExpiry = expiry;
 +  let legs: MidnightMakeOfferLeg[] | undefined;
 
-   if (collateralAssets > 0n) {
-     await validateCollateralAlphaLimits(...);
+-  if (collateralAssets > 0n) {
 -    const collateralAllowance = await readContract(...);
 -    const approvalRequests = buildApprovalCallRequestIfNeeded({ ... });
 -    if (approvalRequests) callRequests.push(...approvalRequests);
 -    callRequests.push({ label: "Supply collateral", getCall: () => encodeSupplyCollateral(...) });
-   }
+-  }
 
    if (loanAssets > 0n) {
      if (rate === null) throw new UserFacingError("Rate is required");
@@ -772,7 +739,6 @@ Expected app-side diff: **medium**. The app keeps form validation, offer-chain c
 +    const offerChain = buildOfferChain(...);
 +    if (offerChain.length === 0) throw new UserFacingError(...);
 +    offerExpiry = offerChain.at(-1)!.expiryTimestamp;
-     await validateMarketCapacityLimits(...);
      await assertTicksAlignedToSpacing(...);
 -    const ratifier = await getRatifierInfo({ client, accountAddress });
 -    const offerInputs = legs.map(leg => ({ ... }));
@@ -822,7 +788,7 @@ What leaves the app:
 What stays in the app:
 
 - form-level guards and user-facing copy (`"Rate is required"`, empty amount checks) unless the app chooses to rely entirely on SDK typed errors;
-- `fetchActionFlowMarket(...)`, `buildOfferChain(...)`, `validateCollateralAlphaLimits(...)`, `validateMarketCapacityLimits(...)`, and `assertTicksAlignedToSpacing(...)`;
+- `fetchActionFlowMarket(...)`, `buildOfferChain(...)`, and `assertTicksAlignedToSpacing(...)`;
 - `ActionFlow` execution through the shared adapter;
 - final labels and requirement labels;
 - no token-permit UI branch for this collateral prelude; the SDK returns an approval transaction because the core Midnight call used by this migration has no `TokenPermit` argument;
@@ -1401,7 +1367,7 @@ Contract-wallet maker:
 
 The migration must preserve the monorepo's `Client → Entity → Action` split.
 
-- **Entity layer** performs SDK-owned reads and off-chain checks: allowances, `isAuthorized`, ratifier selection, Midnight API mempool validation, credit / withdrawable reads, and group generation. App-owned preflights such as alpha-limit checks, quote previews, rate math, and tick-spacing assertions may run before the entity call.
+- **Entity layer** performs SDK-owned reads and off-chain checks: allowances, `isAuthorized`, ratifier selection, Midnight API mempool validation, credit / withdrawable reads, and group generation. App-owned preflights such as quote previews, rate math, and tick-spacing assertions may run before the entity call.
 - **Action layer** is synchronous and encode-only: it receives already-computed amounts, offers, payloads, roots, and addresses, then returns deep-frozen `Transaction` values.
 - **Helpers** are pure unless explicitly placed in the requirement-resolution boundary.
 
