@@ -43,6 +43,7 @@ import {
 const chainId = 8453;
 const usdc = addresses[chainId].usdc!;
 const weth = addresses[chainId].wNative!;
+const midnight = addresses[chainId].midnight!;
 const ecrecoverRatifier = addresses[chainId].ecrecoverRatifier!;
 const midnightMempool = addresses[chainId].midnightMempool!;
 
@@ -52,12 +53,14 @@ export async function makeBaseUsdcWethOffers(params: {
   readonly wethUsdcOracle: Address;
 }) {
   const market = {
+    chainId,
+    midnight,
     loanToken: usdc,
     collateralParams: [
       {
         token: weth,
         lltv: 770_000000000000000000n,
-        maxLif: 1_061007957559681697n,
+        liquidationCursor: 250_000000000000000000n,
         oracle: params.wethUsdcOracle,
       },
     ],
@@ -136,13 +139,8 @@ The take-side starts from API book, quote, or maker takeable-offer responses. `M
 router response into ABI-ready take objects: each item has `offer`, `ratifierData`, and `units` for
 `IMidnight.take`, plus `marketId` metadata from the API. Book `asks` are maker sell offers, while
 book `bids` are maker buy offers.
-For a quote that spans several offers, use `MidnightBundles`: it receives the returned take objects,
-calls `take` internally in order, and fills toward the target in one transaction.
-When executing offers one-by-one with `Midnight.take`, clamp each take to the remaining target instead
-of submitting every returned cap blindly.
-The no-permit bundle example assumes the taker has authorized `MidnightBundles` on Midnight and has
-approved the bundle contract to pull the market loan token. Set `minUnits` or `maxUnits` from your
-own price guard; the example uses `0n` to focus on the route mechanics.
+For a quote that spans several offers, execute the returned takes in order with `Midnight.take` and
+clamp each take to the remaining target instead of submitting every returned cap blindly.
 
 ```ts
 import { addresses } from "@morpho-org/morpho-ts";
@@ -150,10 +148,7 @@ import {
   MidnightApi,
   type MidnightApiTake,
 } from "@morpho-org/midnight-sdk/api";
-import {
-  midnightAbi,
-  midnightBundlesAbi,
-} from "@morpho-org/midnight-sdk";
+import { midnightAbi } from "@morpho-org/midnight-sdk";
 import {
   parseUnits,
   zeroAddress,
@@ -164,14 +159,12 @@ import {
 
 const chainId = 8453;
 const midnight = addresses[chainId].midnight!;
-const midnightBundles = addresses[chainId].midnightBundles!;
-const tokenPermitNone = { kind: 0, data: "0x" } as const;
 
-async function buildAskQuoteTakes(marketId: Hash, targetBuyerAssets: bigint) {
+async function buildAskQuoteTakes(marketId: Hash, targetUnits: bigint) {
   const quote = await MidnightApi.fetchBookQuote({
     marketId,
     side: "asks",
-    assets: targetBuyerAssets,
+    units: targetUnits,
     slippage: "0.5",
   });
 
@@ -201,32 +194,35 @@ export async function takeOneOffer(params: {
   });
 }
 
-export async function takeAskQuoteWithBundle(params: {
+export async function takeAskQuoteSequentially(params: {
   readonly walletClient: WalletClient;
   readonly taker: Address;
+  readonly receiverIfTakerIsSeller: Address;
   readonly marketId: Hash;
 }) {
-  const targetBuyerAssets = parseUnits("10000", 6);
-  const minUnits = 0n;
-  const quote = await buildAskQuoteTakes(params.marketId, targetBuyerAssets);
+  const targetUnits = parseUnits("50", 18);
+  const quote = await buildAskQuoteTakes(params.marketId, targetUnits);
+  const transactionHashes: Hash[] = [];
+  let remainingUnits = targetUnits;
 
-  return params.walletClient.writeContract({
-    account: params.taker,
-    address: midnightBundles,
-    abi: midnightBundlesAbi,
-    functionName: "buyWithAssetsTargetAndWithdrawCollateral",
-    args: [
-      targetBuyerAssets,
-      minUnits,
-      params.taker,
-      tokenPermitNone,
-      quote.takeableOffers,
-      [],
-      params.taker,
-      0n,
-      zeroAddress,
-    ],
-  });
+  for (const take of quote.takeableOffers) {
+    if (remainingUnits === 0n) break;
+
+    const units = take.units < remainingUnits ? take.units : remainingUnits;
+    if (units === 0n) continue;
+
+    transactionHashes.push(
+      await takeOneOffer({
+        walletClient: params.walletClient,
+        taker: params.taker,
+        receiverIfTakerIsSeller: params.receiverIfTakerIsSeller,
+        take: { ...take, units },
+      }),
+    );
+    remainingUnits -= units;
+  }
+
+  return { remainingUnits, transactionHashes };
 }
 ```
 

@@ -74,12 +74,14 @@ export interface ValidateOfferGroupParams {
  * const params: OfferStructParams = {
  *   offer: Offer.create({
  *     market: {
+ *       chainId: 8453,
+ *       midnight: "0x0000000000000000000000000000000000001000",
  *       loanToken: "0x0000000000000000000000000000000000006000",
  *       collateralParams: [
  *         {
  *           token: "0x0000000000000000000000000000000000007000",
  *           lltv: 770000000000000000n,
- *           maxLif: 1061007957559681697n,
+ *           liquidationCursor: 250000000000000000n,
  *           oracle: "0x0000000000000000000000000000000000008000",
  *         },
  *       ],
@@ -178,12 +180,14 @@ export namespace OfferUtils {
    *
    * const offer = Offer.create({
    *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
    *     loanToken: "0x0000000000000000000000000000000000006000",
    *     collateralParams: [
    *       {
    *         token: "0x0000000000000000000000000000000000007000",
    *         lltv: 770000000000000000n,
-   *         maxLif: 1061007957559681697n,
+   *         liquidationCursor: 250000000000000000n,
    *         oracle: "0x0000000000000000000000000000000000008000",
    *       },
    *     ],
@@ -243,12 +247,14 @@ export namespace OfferUtils {
    *
    * const offer = Offer.create({
    *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
    *     loanToken: "0x0000000000000000000000000000000000006000",
    *     collateralParams: [
    *       {
    *         token: "0x0000000000000000000000000000000000007000",
    *         lltv: 770000000000000000n,
-   *         maxLif: 1061007957559681697n,
+   *         liquidationCursor: 250000000000000000n,
    *         oracle: "0x0000000000000000000000000000000000008000",
    *       },
    *     ],
@@ -308,12 +314,14 @@ export namespace OfferUtils {
    *
    * const offer = Offer.create({
    *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
    *     loanToken: "0x0000000000000000000000000000000000006000",
    *     collateralParams: [
    *       {
    *         token: "0x0000000000000000000000000000000000007000",
    *         lltv: 770000000000000000n,
-   *         maxLif: 1061007957559681697n,
+   *         liquidationCursor: 250000000000000000n,
    *         oracle: "0x0000000000000000000000000000000000008000",
    *       },
    *     ],
@@ -354,12 +362,14 @@ export namespace OfferUtils {
    *
    * const offer = Offer.create({
    *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
    *     loanToken: "0x0000000000000000000000000000000000006000",
    *     collateralParams: [
    *       {
    *         token: "0x0000000000000000000000000000000000007000",
    *         lltv: 770000000000000000n,
-   *         maxLif: 1061007957559681697n,
+   *         liquidationCursor: 250000000000000000n,
    *         oracle: "0x0000000000000000000000000000000000008000",
    *       },
    *     ],
@@ -442,7 +452,7 @@ export namespace OfferUtils {
    * @param params.start - Optional offer start timestamp; defaults to zero.
    * @param params.expiry - Offer expiry timestamp.
    * @returns Normalized start and expiry timestamps.
-   * @throws {InvalidOfferParameterError} when the range is negative or not strictly increasing.
+   * @throws {InvalidOfferParameterError} when the range is negative or expiry is before start.
    * @example
    * ```ts
    * import { OfferUtils } from "@morpho-org/midnight-sdk";
@@ -465,11 +475,11 @@ export namespace OfferUtils {
         instruction: "Use a non-negative timestamp.",
       });
     }
-    if (expiry < 0n || expiry <= start) {
+    if (expiry < 0n || expiry < start) {
       throw new InvalidOfferParameterError({
         parameter: "expiry",
         value: expiry,
-        instruction: `Use an expiry greater than start "${start}".`,
+        instruction: `Use an expiry greater than or equal to start "${start}".`,
       });
     }
 
@@ -635,12 +645,14 @@ export namespace OfferUtils {
    *
    * const params = OfferUtils.validateOfferParams({
    *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
    *     loanToken: "0x0000000000000000000000000000000000006000",
    *     collateralParams: [
    *       {
    *         token: "0x0000000000000000000000000000000000007000",
    *         lltv: 770000000000000000n,
-   *         maxLif: 1061007957559681697n,
+   *         liquidationCursor: 250000000000000000n,
    *         oracle: "0x0000000000000000000000000000000000008000",
    *       },
    *     ],
@@ -699,12 +711,14 @@ export namespace OfferUtils {
    *
    * const offer = Offer.create({
    *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
    *     loanToken: "0x0000000000000000000000000000000000006000",
    *     collateralParams: [
    *       {
    *         token: "0x0000000000000000000000000000000000007000",
    *         lltv: 770000000000000000n,
-   *         maxLif: 1061007957559681697n,
+   *         liquidationCursor: 250000000000000000n,
    *         oracle: "0x0000000000000000000000000000000000008000",
    *       },
    *     ],
@@ -806,12 +820,14 @@ export namespace OfferUtils {
    *
    * const offer = Offer.create({
    *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
    *     loanToken: "0x0000000000000000000000000000000000006000",
    *     collateralParams: [
    *       {
    *         token: "0x0000000000000000000000000000000000007000",
    *         lltv: 770000000000000000n,
-   *         maxLif: 1061007957559681697n,
+   *         liquidationCursor: 250000000000000000n,
    *         oracle: "0x0000000000000000000000000000000000008000",
    *       },
    *     ],

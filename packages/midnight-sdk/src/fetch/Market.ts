@@ -122,7 +122,6 @@ export async function fetchMarket(
   ] = state;
 
   return new Market({
-    chainId,
     params: new MarketParams(market),
     totalUnits,
     lossFactor,

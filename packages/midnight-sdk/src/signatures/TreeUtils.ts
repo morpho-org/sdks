@@ -15,65 +15,12 @@ import {
 } from "../offers/index.js";
 import { Group } from "./Group.js";
 import { type GroupInput, GroupUtils } from "./GroupUtils.js";
+import {
+  EMPTY_OFFER_STRUCT,
+  isEmptyOfferStruct,
+} from "./offerStructInternal.js";
 import { encode as encodePayload } from "./Payload.js";
 import type { Tree } from "./Tree.js";
-
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
-const ZERO_BYTES32 =
-  "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
-
-const EMPTY_OFFER_STRUCT: OfferStruct = {
-  market: {
-    loanToken: ZERO_ADDRESS,
-    collateralParams: [],
-    maturity: 0n,
-    rcfThreshold: 0n,
-    enterGate: ZERO_ADDRESS,
-    liquidatorGate: ZERO_ADDRESS,
-  },
-  buy: false,
-  maker: ZERO_ADDRESS,
-  start: 0n,
-  expiry: 0n,
-  tick: 0n,
-  group: ZERO_BYTES32,
-  callback: ZERO_ADDRESS,
-  callbackData: "0x",
-  receiverIfMakerIsSeller: ZERO_ADDRESS,
-  ratifier: ZERO_ADDRESS,
-  reduceOnly: false,
-  maxUnits: 0n,
-  maxAssets: 0n,
-  continuousFeeCap: 0n,
-};
-
-const EMPTY_OFFER_DEFAULT_GROUP = OfferUtils.hashStruct(EMPTY_OFFER_STRUCT);
-
-function isEmptyOfferStruct(offer: OfferStruct): boolean {
-  return (
-    offer.market.loanToken === ZERO_ADDRESS &&
-    offer.market.collateralParams.length === 0 &&
-    offer.market.maturity === 0n &&
-    offer.market.rcfThreshold === 0n &&
-    offer.market.enterGate === ZERO_ADDRESS &&
-    offer.market.liquidatorGate === ZERO_ADDRESS &&
-    offer.buy === false &&
-    offer.maker === ZERO_ADDRESS &&
-    offer.start === 0n &&
-    offer.expiry === 0n &&
-    offer.tick === 0n &&
-    (offer.group === ZERO_BYTES32 ||
-      offer.group === EMPTY_OFFER_DEFAULT_GROUP) &&
-    offer.callback === ZERO_ADDRESS &&
-    offer.callbackData === "0x" &&
-    offer.receiverIfMakerIsSeller === ZERO_ADDRESS &&
-    offer.ratifier === ZERO_ADDRESS &&
-    offer.reduceOnly === false &&
-    offer.maxUnits === 0n &&
-    offer.maxAssets === 0n &&
-    offer.continuousFeeCap === 0n
-  );
-}
 
 function isPowerOfTwo(value: number): boolean {
   return value > 0 && (value & (value - 1)) === 0;
@@ -102,7 +49,7 @@ function assertLeafOffers(
 ): void {
   const seen = new Set<Hash>();
   for (const [index, offer] of offers.entries()) {
-    if (isEmptyOfferStruct(offer)) continue;
+    if (isEmptyOfferStruct(offer, { allowDefaultGroup: true })) continue;
 
     const leafHash = leafHashes[index]!;
     if (seen.has(leafHash)) {
@@ -130,12 +77,14 @@ function assertLeafOffers(
  *
  * const offer = Offer.create({
  *   market: {
+ *     chainId: 8453,
+ *     midnight: "0x0000000000000000000000000000000000001000",
  *     loanToken: "0x0000000000000000000000000000000000006000",
  *     collateralParams: [
  *       {
  *         token: "0x0000000000000000000000000000000000007000",
  *         lltv: 770000000000000000n,
- *         maxLif: 1061007957559681697n,
+ *         liquidationCursor: 250000000000000000n,
  *         oracle: "0x0000000000000000000000000000000000008000",
  *       },
  *     ],
@@ -179,12 +128,14 @@ export interface TreeDescriptor {
  *
  * const offer = Offer.create({
  *   market: {
+ *     chainId: 8453,
+ *     midnight: "0x0000000000000000000000000000000000001000",
  *     loanToken: "0x0000000000000000000000000000000000006000",
  *     collateralParams: [
  *       {
  *         token: "0x0000000000000000000000000000000000007000",
  *         lltv: 770000000000000000n,
- *         maxLif: 1061007957559681697n,
+ *         liquidationCursor: 250000000000000000n,
  *         oracle: "0x0000000000000000000000000000000000008000",
  *       },
  *     ],
@@ -227,12 +178,14 @@ export interface TreeProof {
  *
  * const offer = Offer.create({
  *   market: {
+ *     chainId: 8453,
+ *     midnight: "0x0000000000000000000000000000000000001000",
  *     loanToken: "0x0000000000000000000000000000000000006000",
  *     collateralParams: [
  *       {
  *         token: "0x0000000000000000000000000000000000007000",
  *         lltv: 770000000000000000n,
- *         maxLif: 1061007957559681697n,
+ *         liquidationCursor: 250000000000000000n,
  *         oracle: "0x0000000000000000000000000000000000008000",
  *       },
  *     ],
@@ -269,12 +222,14 @@ export type TreeCreateParams = readonly GroupInput[];
  *
  * const offer = Offer.create({
  *   market: {
+ *     chainId: 8453,
+ *     midnight: "0x0000000000000000000000000000000000001000",
  *     loanToken: "0x0000000000000000000000000000000000006000",
  *     collateralParams: [
  *       {
  *         token: "0x0000000000000000000000000000000000007000",
  *         lltv: 770000000000000000n,
- *         maxLif: 1061007957559681697n,
+ *         liquidationCursor: 250000000000000000n,
  *         oracle: "0x0000000000000000000000000000000000008000",
  *       },
  *     ],
@@ -309,12 +264,14 @@ export type TreeInput = Tree | TreeCreateParams;
  *
  * const offer = Offer.create({
  *   market: {
+ *     chainId: 8453,
+ *     midnight: "0x0000000000000000000000000000000000001000",
  *     loanToken: "0x0000000000000000000000000000000000006000",
  *     collateralParams: [
  *       {
  *         token: "0x0000000000000000000000000000000000007000",
  *         lltv: 770000000000000000n,
- *         maxLif: 1061007957559681697n,
+ *         liquidationCursor: 250000000000000000n,
  *         oracle: "0x0000000000000000000000000000000000008000",
  *       },
  *     ],
@@ -364,12 +321,14 @@ export interface TreeMempoolValidateParams {
  *
  * const offer = Offer.create({
  *   market: {
+ *     chainId: 8453,
+ *     midnight: "0x0000000000000000000000000000000000001000",
  *     loanToken: "0x0000000000000000000000000000000000006000",
  *     collateralParams: [
  *       {
  *         token: "0x0000000000000000000000000000000000007000",
  *         lltv: 770000000000000000n,
- *         maxLif: 1061007957559681697n,
+ *         liquidationCursor: 250000000000000000n,
  *         oracle: "0x0000000000000000000000000000000000008000",
  *       },
  *     ],
@@ -443,12 +402,14 @@ export namespace TreeUtils {
    *
    * const offer = Offer.create({
    *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
    *     loanToken: "0x0000000000000000000000000000000000006000",
    *     collateralParams: [
    *       {
    *         token: "0x0000000000000000000000000000000000007000",
    *         lltv: 770000000000000000n,
-   *         maxLif: 1061007957559681697n,
+   *         liquidationCursor: 250000000000000000n,
    *         oracle: "0x0000000000000000000000000000000000008000",
    *       },
    *     ],
@@ -538,12 +499,14 @@ export namespace TreeUtils {
    *
    * const offer = Offer.create({
    *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
    *     loanToken: "0x0000000000000000000000000000000000006000",
    *     collateralParams: [
    *       {
    *         token: "0x0000000000000000000000000000000000007000",
    *         lltv: 770000000000000000n,
-   *         maxLif: 1061007957559681697n,
+   *         liquidationCursor: 250000000000000000n,
    *         oracle: "0x0000000000000000000000000000000000008000",
    *       },
    *     ],
@@ -616,12 +579,14 @@ export namespace TreeUtils {
    *
    * const offer = Offer.create({
    *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
    *     loanToken: "0x0000000000000000000000000000000000006000",
    *     collateralParams: [
    *       {
    *         token: "0x0000000000000000000000000000000000007000",
    *         lltv: 770000000000000000n,
-   *         maxLif: 1061007957559681697n,
+   *         liquidationCursor: 250000000000000000n,
    *         oracle: "0x0000000000000000000000000000000000008000",
    *       },
    *     ],
@@ -663,12 +628,14 @@ export namespace TreeUtils {
    *
    * const offer = Offer.create({
    *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
    *     loanToken: "0x0000000000000000000000000000000000006000",
    *     collateralParams: [
    *       {
    *         token: "0x0000000000000000000000000000000000007000",
    *         lltv: 770000000000000000n,
-   *         maxLif: 1061007957559681697n,
+   *         liquidationCursor: 250000000000000000n,
    *         oracle: "0x0000000000000000000000000000000000008000",
    *       },
    *     ],
@@ -740,12 +707,14 @@ export namespace TreeUtils {
    *
    * const offer = Offer.create({
    *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
    *     loanToken: "0x0000000000000000000000000000000000006000",
    *     collateralParams: [
    *       {
    *         token: "0x0000000000000000000000000000000000007000",
    *         lltv: 770000000000000000n,
-   *         maxLif: 1061007957559681697n,
+   *         liquidationCursor: 250000000000000000n,
    *         oracle: "0x0000000000000000000000000000000000008000",
    *       },
    *     ],

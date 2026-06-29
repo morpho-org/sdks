@@ -4,6 +4,7 @@
 /.changeset/pre.json @morpho-org/security
 /package.json @morpho-org/sdk-engineers
 /packages/*/package.json @morpho-org/sdk-engineers
+/packages/midnight-sdk/ @morpho-org/sdk-engineers @morpho-org/router-engineers
 /pnpm-lock.yaml @morpho-org/sdk-engineers
 /pnpm-workspace.yaml @morpho-org/sdk-engineers
 /.npmrc @morpho-org/sdk-engineers

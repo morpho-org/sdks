@@ -139,6 +139,12 @@ describe("Offer.create", () => {
       start: 0n,
       expiry: 1n,
     });
+    expect(
+      OfferUtils.validateOfferTimeRange({ start: 1n, expiry: 1n }),
+    ).toEqual({
+      start: 1n,
+      expiry: 1n,
+    });
     expect(OfferUtils.validateOfferCaps({ maxUnits: 1n })).toEqual({
       maxUnits: 1n,
       maxAssets: 0n,
@@ -157,12 +163,6 @@ describe("Offer.create", () => {
     );
   });
 
-  test("error: InvalidOfferParameterError for equal start and expiry", () => {
-    expect(() =>
-      OfferUtils.validateOfferTimeRange({ start: 1n, expiry: 1n }),
-    ).toThrow(InvalidOfferParameterError);
-  });
-
   test("error: invalid bigint input", () => {
     expect(() =>
       Offer.create(buildOfferParams({ tick: "not-a-tick" })),
@@ -175,7 +175,6 @@ describe("Offer.create", () => {
     ["tickSpacing", { tickSpacing: 3n }],
     ["tick", { tick: 2n }],
     ["expiry", { start: 20n, expiry: 19n }],
-    ["expiry", { start: 20n, expiry: 20n }],
     ["maxUnits", { maxUnits: -1n, maxAssets: 0n }],
     ["maxAssets", { maxAssets: -1n }],
     ["continuousFeeCap", { continuousFeeCap: -1n }],

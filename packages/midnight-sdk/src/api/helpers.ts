@@ -123,6 +123,7 @@ export function mapBookMarket(
   return {
     marketId: book.market_id,
     chainId: book.chain_id,
+    midnight: book.midnight,
     loanToken: book.loan_token,
     collaterals: book.collaterals.map(mapCollateral),
     maturity: book.maturity,
@@ -141,7 +142,7 @@ export function mapCollateral(
   return {
     token: collateral.token,
     lltv: collateral.lltv,
-    maxLif: collateral.max_lif,
+    liquidationCursor: collateral.liquidation_cursor,
     oracle: collateral.oracle,
   };
 }
@@ -170,11 +171,13 @@ export function mapTakeableOffer(
     units: BigInt(takeableOffer.units),
     offer: {
       market: {
+        chainId: BigInt(offer.market.chain_id),
+        midnight: offer.market.midnight,
         loanToken: offer.market.loan_token,
         collateralParams: offer.market.collaterals.map((collateral) => ({
           token: collateral.token,
           lltv: BigInt(collateral.lltv),
-          maxLif: BigInt(collateral.max_lif),
+          liquidationCursor: BigInt(collateral.liquidation_cursor),
           oracle: collateral.oracle,
         })),
         maturity: BigInt(offer.market.maturity),

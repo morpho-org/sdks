@@ -26,12 +26,14 @@ import { OfferUtils } from "./OfferUtils.js";
  *
  * const offer: IOffer = {
  *   market: {
+ *     chainId: 8453,
+ *     midnight: "0x0000000000000000000000000000000000001000",
  *     loanToken: "0x0000000000000000000000000000000000000001",
  *     collateralParams: [
  *       {
  *         token: "0x0000000000000000000000000000000000007000",
  *         lltv: 770000000000000000n,
- *         maxLif: 1061007957559681697n,
+ *         liquidationCursor: 250000000000000000n,
  *         oracle: "0x0000000000000000000000000000000000008000",
  *       },
  *     ],
@@ -107,12 +109,14 @@ export interface IOffer {
  *
  * const offer = Offer.create({
  *   market: {
+ *     chainId: 8453,
+ *     midnight: "0x0000000000000000000000000000000000001000",
  *     loanToken: "0x0000000000000000000000000000000000000001",
  *     collateralParams: [
  *       {
  *         token: "0x0000000000000000000000000000000000007000",
  *         lltv: 770000000000000000n,
- *         maxLif: 1061007957559681697n,
+ *         liquidationCursor: 250000000000000000n,
  *         oracle: "0x0000000000000000000000000000000000008000",
  *       },
  *     ],
@@ -219,12 +223,14 @@ export class Offer {
    *
    * const offer = Offer.from({
    *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
    *     loanToken: "0x0000000000000000000000000000000000006000",
    *     collateralParams: [
    *       {
    *         token: "0x0000000000000000000000000000000000007000",
    *         lltv: 770000000000000000n,
-   *         maxLif: 1061007957559681697n,
+   *         liquidationCursor: 250000000000000000n,
    *         oracle: "0x0000000000000000000000000000000000008000",
    *       },
    *     ],
@@ -275,12 +281,14 @@ export class Offer {
    *
    * const offer = Offer.create({
    *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
    *     loanToken,
    *     collateralParams: [
    *       {
    *         token: collateralToken,
    *         lltv: 770000000000000000n,
-   *         maxLif: 1061007957559681697n,
+   *         liquidationCursor: 250000000000000000n,
    *         oracle,
    *       },
    *     ],
@@ -326,12 +334,14 @@ export class Offer {
    *
    * const offer = Offer.create({
    *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
    *     loanToken,
    *     collateralParams: [
    *       {
    *         token: collateralToken,
    *         lltv: 770000000000000000n,
-   *         maxLif: 1061007957559681697n,
+   *         liquidationCursor: 250000000000000000n,
    *         oracle,
    *       },
    *     ],
@@ -399,12 +409,14 @@ export class Offer {
    *
    * const offer = Offer.create({
    *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
    *     loanToken,
    *     collateralParams: [
    *       {
    *         token: collateralToken,
    *         lltv: 770000000000000000n,
-   *         maxLif: 1061007957559681697n,
+   *         liquidationCursor: 250000000000000000n,
    *         oracle,
    *       },
    *     ],
@@ -463,12 +475,14 @@ export class Offer {
  *
  * const offer: OfferStruct = {
  *   market: {
+ *     chainId: 8453,
+ *     midnight: "0x0000000000000000000000000000000000001000",
  *     loanToken: "0x0000000000000000000000000000000000006000",
  *     collateralParams: [
  *       {
  *         token: "0x0000000000000000000000000000000000007000",
  *         lltv: 770000000000000000n,
- *         maxLif: 1061007957559681697n,
+ *         liquidationCursor: 250000000000000000n,
  *         oracle: "0x0000000000000000000000000000000000008000",
  *       },
  *     ],
@@ -544,12 +558,14 @@ export interface OfferStruct {
  *
  * const params: BuildOfferParams = {
  *   market: {
+ *     chainId: 8453,
+ *     midnight: "0x0000000000000000000000000000000000001000",
  *     loanToken: "0x0000000000000000000000000000000000006000",
  *     collateralParams: [
  *       {
  *         token: "0x0000000000000000000000000000000000007000",
  *         lltv: 770000000000000000n,
- *         maxLif: 1061007957559681697n,
+ *         liquidationCursor: 250000000000000000n,
  *         oracle: "0x0000000000000000000000000000000000008000",
  *       },
  *     ],
