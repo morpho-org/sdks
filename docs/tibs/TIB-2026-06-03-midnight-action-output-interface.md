@@ -1019,15 +1019,15 @@ export type MidnightOfferRootSignature = RequirementSignature<
   MidnightOfferRootSignatureArgs
 >;
 
-export type TokenSignatureRequirement = Requirement<
-  PermitAction | Permit2Action | Permit2TransferAction,
-  PermitArgs | Permit2Args | Permit2TransferArgs
->;
+export type TokenSignatureRequirement =
+  | Requirement<PermitAction, PermitArgs>
+  | Requirement<Permit2Action, Permit2Args>
+  | Requirement<Permit2TransferAction, Permit2TransferArgs>;
 
-export type TokenRequirementSignature = RequirementSignature<
-  PermitAction | Permit2Action | Permit2TransferAction,
-  PermitArgs | Permit2Args | Permit2TransferArgs
->;
+export type TokenRequirementSignature =
+  | RequirementSignature<PermitAction, PermitArgs>
+  | RequirementSignature<Permit2Action, Permit2Args>
+  | RequirementSignature<Permit2TransferAction, Permit2TransferArgs>;
 
 export type AnyRequirementSignature =
   | TokenRequirementSignature
@@ -1043,6 +1043,7 @@ Compatibility:
 - Existing `permit` and Blue `permit2` requirement objects stay structurally identical.
 - Existing consumers that check `"sign" in requirement` still work.
 - New consumers can discriminate on `requirement.action.type`.
+- Token signature aliases are unions of paired action/args instantiations, so `action.type` narrows `args` and mismatched pairs such as `permit2Transfer` with Blue `Permit2Args` are rejected at compile time.
 - Midnight bundle actions that can consume a token permit accept `AnyRequirementSignature | readonly AnyRequirementSignature[]` and select the matching `permit` / `permit2Transfer` signature for the token pull they encode. They validate the signed token and amount before producing `TokenPermit` calldata.
 - Midnight does not reuse `action.type === "permit2"` because Blue's existing `permit2` requirement signs Permit2 `PermitSingle` and returns `Permit2Args` with `expiration`. Midnight Bundles consume Permit2 `SignatureTransfer` through `permitTransferFrom`, whose signed payload has no `expiration`; it is encoded into `TokenPermit` as `(nonce, deadline, signature)`. A separate `permit2Transfer` action / args shape keeps the two public contracts distinguishable.
 
