@@ -368,6 +368,132 @@ export class Offer {
   }
 
   /**
+   * WAD zero-coupon price at this offer's tick.
+   *
+   * @returns WAD price rounded to the protocol price quantum.
+   * @throws {NegativeValueError} when `tick` is negative.
+   * @throws {TickOutOfRangeError} when `tick` exceeds `MAX_TICK`.
+   * @example
+   * ```ts
+   * import { Offer } from "@morpho-org/midnight-sdk";
+   *
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: "0x0000000000000000000000000000000000000000",
+   *     liquidatorGate: "0x0000000000000000000000000000000000000000",
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
+   * console.log(offer.price);
+   * ```
+   */
+  public get price(): bigint {
+    return OfferUtils.getPrice(this);
+  }
+
+  /**
+   * Converts this offer's tick into a WAD per-second simple rate at a timestamp.
+   *
+   * @param timestamp - Timestamp at which the rate is calculated.
+   * @returns WAD per-second simple rate rounded up.
+   * @throws {NegativeValueError} when market maturity, `timestamp`, or `tick` is negative.
+   * @throws {TickOutOfRangeError} when `tick` exceeds `MAX_TICK`.
+   * @throws {DivisionByZeroError} when the tick price is zero or `timestamp` is at or after maturity.
+   * @example
+   * ```ts
+   * import { Offer } from "@morpho-org/midnight-sdk";
+   *
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: "0x0000000000000000000000000000000000000000",
+   *     liquidatorGate: "0x0000000000000000000000000000000000000000",
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
+   * const rate = offer.getRate(1_000n);
+   * console.log(rate);
+   * ```
+   */
+  public getRate(timestamp: BigIntish): bigint {
+    return OfferUtils.getRate({ offer: this, timestamp });
+  }
+
+  /**
+   * Converts this offer's tick into a WAD simple annual percentage rate at a timestamp.
+   *
+   * @param timestamp - Timestamp at which the APR is calculated.
+   * @returns WAD simple APR rounded up.
+   * @throws {NegativeValueError} when market maturity, `timestamp`, or `tick` is negative.
+   * @throws {TickOutOfRangeError} when `tick` exceeds `MAX_TICK`.
+   * @throws {DivisionByZeroError} when the tick price is zero or `timestamp` is at or after maturity.
+   * @example
+   * ```ts
+   * import { Offer } from "@morpho-org/midnight-sdk";
+   *
+   * const offer = Offer.create({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: "0x0000000000000000000000000000000000000000",
+   *     liquidatorGate: "0x0000000000000000000000000000000000000000",
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   tick: 5_000n,
+   *   expiry: 3_600n,
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   maxUnits: 100n,
+   * });
+   * const apr = offer.getApr(1_000n);
+   * console.log(apr);
+   * ```
+   */
+  public getApr(timestamp: BigIntish): bigint {
+    return OfferUtils.getApr({ offer: this, timestamp });
+  }
+
+  /**
    * Creates a validated maker-side Midnight offer.
    *
    * This is the first step of the make-side flow. After creation, pass related

@@ -1,3 +1,8 @@
+import {
+  DivisionByZeroError,
+  MathLib,
+  NegativeValueError,
+} from "@morpho-org/morpho-ts";
 import fc from "fast-check";
 import { zeroAddress, zeroHash } from "viem";
 import { describe, expect, test } from "vitest";
@@ -14,6 +19,7 @@ import {
   InvalidOfferParameterError,
 } from "../errors.js";
 import { MarketParams } from "../market/index.js";
+import { TickLib } from "../math/index.js";
 import { TreeUtils } from "../signatures/index.js";
 import type { BuildOfferParams } from "./Offer.js";
 import { Offer } from "./Offer.js";
@@ -36,6 +42,13 @@ describe("Offer", () => {
 
     expect(offer).toBeInstanceOf(Offer);
     expect(offer.market.loanToken).toBe(addresses.loanToken);
+    expect(offer.price).toBe(TickLib.tickToPrice(offer.tick));
+    expect(offer.getRate(1_000n)).toBe(
+      OfferUtils.getRate({ offer, timestamp: 1_000n }),
+    );
+    expect(offer.getApr(1_000n)).toBe(
+      OfferUtils.getApr({ offer, timestamp: 1_000n }),
+    );
   });
 });
 
@@ -161,12 +174,34 @@ describe("Offer.create", () => {
     expect(OfferUtils.getOfferExpiry(baseOfferInput({ expiry: 2_200n }))).toBe(
       2_200n,
     );
+
+    const offer = baseOfferInput();
+    expect(OfferUtils.getPrice(offer)).toBe(TickLib.tickToPrice(offer.tick));
+    expect(OfferUtils.getRate({ offer, timestamp: 1_000n })).toBe(
+      MathLib.mulDiv(TickLib.tickToRate(offer.tick), 1n, 1_000n, "Up"),
+    );
+    expect(OfferUtils.getApr({ offer, timestamp: 1_000n })).toBe(
+      TickLib.tickToApr(offer.tick, 1_000n),
+    );
   });
 
   test("error: invalid bigint input", () => {
     expect(() =>
       Offer.create(buildOfferParams({ tick: "not-a-tick" })),
     ).toThrow(SyntaxError);
+  });
+
+  test("error: offer rate helpers reject invalid time inputs", () => {
+    const offer = baseOffer();
+
+    expect(() => offer.getRate(-1n)).toThrow(NegativeValueError);
+    expect(() => offer.getApr(-1n)).toThrow(NegativeValueError);
+    expect(() => offer.getRate(offer.market.maturity)).toThrow(
+      DivisionByZeroError,
+    );
+    expect(() => offer.getApr(offer.market.maturity)).toThrow(
+      DivisionByZeroError,
+    );
   });
 
   test.each([

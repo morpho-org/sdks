@@ -1,4 +1,9 @@
-import type { BigIntish } from "@morpho-org/morpho-ts";
+import {
+  assertNonNegative,
+  type BigIntish,
+  DivisionByZeroError,
+  MathLib,
+} from "@morpho-org/morpho-ts";
 import type { Address, Hash } from "viem";
 import { encodeAbiParameters, keccak256, zeroAddress, zeroHash } from "viem";
 import {
@@ -11,7 +16,8 @@ import {
   InvalidOfferGroupError,
   InvalidOfferParameterError,
 } from "../errors.js";
-import { MarketUtils } from "../market/index.js";
+import { MarketParams, MarketUtils } from "../market/index.js";
+import { TickLib } from "../math/index.js";
 import {
   type BuildOfferParams,
   type IOffer,
@@ -802,6 +808,165 @@ export namespace OfferUtils {
     }
 
     return [...offers];
+  }
+
+  /**
+   * Converts an offer tick into its WAD zero-coupon price.
+   *
+   * Use for display or local quote checks when accepting any plain object
+   * matching `IOffer` or an `Offer` instance.
+   *
+   * @param offer - Offer to inspect.
+   * @returns WAD price rounded to the protocol price quantum.
+   * @throws {NegativeValueError} when `offer.tick` is negative.
+   * @throws {TickOutOfRangeError} when `offer.tick` exceeds `MAX_TICK`.
+   * @example
+   * ```ts
+   * import { OfferUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const price = OfferUtils.getPrice({ tick: 5_000n });
+   * console.log(price);
+   * ```
+   */
+  export function getPrice(offer: Pick<IOffer, "tick">) {
+    return TickLib.tickToPrice(offer.tick);
+  }
+
+  /**
+   * Converts an offer tick into a WAD per-second simple rate at a timestamp.
+   *
+   * The rate is the offer's fixed period rate divided by the market's remaining
+   * time to maturity at `timestamp`, rounded up.
+   *
+   * @param params.offer - Offer to inspect.
+   * @param params.timestamp - Timestamp at which the rate is calculated.
+   * @returns WAD per-second simple rate rounded up.
+   * @throws {NegativeValueError} when `market.maturity`, `timestamp`, or `tick` is negative.
+   * @throws {TickOutOfRangeError} when `tick` exceeds `MAX_TICK`.
+   * @throws {DivisionByZeroError} when the tick price is zero or `timestamp` is at or after maturity.
+   * @example
+   * ```ts
+   * import { Offer, OfferUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const offer = Offer.from({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: "0x0000000000000000000000000000000000000000",
+   *     liquidatorGate: "0x0000000000000000000000000000000000000000",
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   start: 0n,
+   *   expiry: 3_600n,
+   *   tick: 5_000n,
+   *   callback: "0x0000000000000000000000000000000000000000",
+   *   callbackData: "0x",
+   *   receiverIfMakerIsSeller: "0x0000000000000000000000000000000000000000",
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   reduceOnly: false,
+   *   maxUnits: 100n,
+   *   maxAssets: 0n,
+   *   continuousFeeCap: 317097919n,
+   * });
+   * const rate = OfferUtils.getRate({ offer, timestamp: 1_000n });
+   * console.log(rate);
+   * ```
+   */
+  export function getRate(params: {
+    readonly offer: Pick<IOffer, "market" | "tick">;
+    readonly timestamp: BigIntish;
+  }) {
+    const market = MarketParams.from(params.offer.market);
+    const timestamp = BigInt(params.timestamp);
+    assertNonNegative("market.maturity", market.maturity);
+    assertNonNegative("timestamp", timestamp);
+
+    const timeToMaturity = MathLib.zeroFloorSub(market.maturity, timestamp);
+    if (timeToMaturity === 0n) {
+      throw new DivisionByZeroError("timeToMaturity");
+    }
+
+    return MathLib.mulDiv(
+      TickLib.tickToRate(params.offer.tick),
+      1n,
+      timeToMaturity,
+      "Up",
+    );
+  }
+
+  /**
+   * Converts an offer tick into a WAD simple annual percentage rate at a timestamp.
+   *
+   * It computes time to maturity from the offer market and delegates the final
+   * tick annualization to `TickLib.tickToApr`.
+   *
+   * @param params.offer - Offer to inspect.
+   * @param params.timestamp - Timestamp at which the APR is calculated.
+   * @returns WAD simple APR rounded up.
+   * @throws {NegativeValueError} when `market.maturity`, `timestamp`, or `tick` is negative.
+   * @throws {TickOutOfRangeError} when `tick` exceeds `MAX_TICK`.
+   * @throws {DivisionByZeroError} when the tick price is zero or `timestamp` is at or after maturity.
+   * @example
+   * ```ts
+   * import { Offer, OfferUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const offer = Offer.from({
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         maxLif: 1061007957559681697n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: "0x0000000000000000000000000000000000000000",
+   *     liquidatorGate: "0x0000000000000000000000000000000000000000",
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   start: 0n,
+   *   expiry: 3_600n,
+   *   tick: 5_000n,
+   *   callback: "0x0000000000000000000000000000000000000000",
+   *   callbackData: "0x",
+   *   receiverIfMakerIsSeller: "0x0000000000000000000000000000000000000000",
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   reduceOnly: false,
+   *   maxUnits: 100n,
+   *   maxAssets: 0n,
+   *   continuousFeeCap: 317097919n,
+   * });
+   * const apr = OfferUtils.getApr({ offer, timestamp: 1_000n });
+   * console.log(apr);
+   * ```
+   */
+  export function getApr(params: {
+    readonly offer: Pick<IOffer, "market" | "tick">;
+    readonly timestamp: BigIntish;
+  }) {
+    const market = MarketParams.from(params.offer.market);
+    const timestamp = BigInt(params.timestamp);
+    assertNonNegative("market.maturity", market.maturity);
+    assertNonNegative("timestamp", timestamp);
+
+    return TickLib.tickToApr(
+      params.offer.tick,
+      MathLib.zeroFloorSub(market.maturity, timestamp),
+    );
   }
 
   /**
