@@ -1,4 +1,4 @@
-import { getChainAddresses } from "@morpho-org/blue-sdk";
+import { addressesRegistry, getChainAddresses } from "@morpho-org/blue-sdk";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { afterEach, describe, expect, vi } from "vitest";
@@ -6,6 +6,9 @@ import { WethUsdsBlue } from "../../../test/fixtures/blue.js";
 import { test } from "../../../test/setup.js";
 import {
   MutuallyExclusiveRepayAmountsError,
+  NativeAmountExceedsTransferAmountError,
+  NativeAmountOnNonWNativeAssetError,
+  NegativeNativeAmountError,
   NonPositiveRepayAmountError,
   NonPositiveRepayMaxSharePriceError,
   NonPositiveTransferAmountError,
@@ -23,6 +26,14 @@ describe("blueRepay unit tests", () => {
   const {
     bundler3: { bundler3 },
   } = getChainAddresses(mainnet.id);
+
+  const { wNative } = addressesRegistry[mainnet.id];
+
+  /** Market params with wNative as loan token — enables native wrapping tests. */
+  const wNativeLoanMarketParams = {
+    ...WethUsdsBlue,
+    loanToken: wNative,
+  };
 
   test("should create repay-by-assets transaction", async ({ client }) => {
     const assets = parseUnits("1000", 6);
@@ -439,5 +450,162 @@ describe("blueRepay unit tests", () => {
 
     expect(txWith.data.includes("a1b2c3d4")).toBe(true);
     expect(txWith.action.type).toBe("blueRepay");
+  });
+
+  test("should fully fund repay-by-assets via native wrapping", async ({
+    client,
+  }) => {
+    const assets = parseUnits("1", 18);
+
+    const localSpy = vi.spyOn(
+      getRequirementsActionModule,
+      "getRequirementsAction",
+    );
+
+    const tx = blueRepay({
+      market: {
+        chainId: mainnet.id,
+        marketParams: wNativeLoanMarketParams,
+      },
+      args: {
+        assets,
+        shares: 0n,
+        transferAmount: assets,
+        nativeAmount: assets,
+        onBehalf: client.account.address,
+        receiver: client.account.address,
+        maxSharePrice: 1n,
+      },
+    });
+
+    expect(tx.action.type).toBe("blueRepay");
+    expect(tx.action.args.nativeAmount).toBe(assets);
+    // tx.value is derived from the nativeTransfer call by encodeBundle.
+    expect(tx.value).toBe(assets);
+    expect(tx.to).toBe(bundler3);
+    // Fully native funding — no ERC-20 transfer and no requirement actions.
+    expect(localSpy).not.toHaveBeenCalled();
+  });
+
+  test("should fund repay with mixed native and ERC-20 amounts", async ({
+    client,
+  }) => {
+    const nativeAmount = parseUnits("0.4", 18);
+    const transferAmount = parseUnits("1", 18);
+
+    const tx = blueRepay({
+      market: {
+        chainId: mainnet.id,
+        marketParams: wNativeLoanMarketParams,
+      },
+      args: {
+        assets: transferAmount,
+        shares: 0n,
+        transferAmount,
+        nativeAmount,
+        onBehalf: client.account.address,
+        receiver: client.account.address,
+        maxSharePrice: 1n,
+      },
+    });
+
+    expect(tx.action.args.nativeAmount).toBe(nativeAmount);
+    // Only the native portion carries value; the remainder is pulled via ERC-20.
+    expect(tx.value).toBe(nativeAmount);
+    expect(tx.to).toBe(bundler3);
+  });
+
+  test("should keep the shares-mode skim when funding via native", async ({
+    client,
+  }) => {
+    const shares = parseUnits("500", 6);
+    const transferAmount = parseUnits("0.6", 18);
+
+    const tx = blueRepay({
+      market: {
+        chainId: mainnet.id,
+        marketParams: wNativeLoanMarketParams,
+      },
+      args: {
+        assets: 0n,
+        shares,
+        transferAmount,
+        nativeAmount: transferAmount,
+        onBehalf: client.account.address,
+        receiver: client.account.address,
+        maxSharePrice: 1n,
+      },
+    });
+
+    expect(tx.value).toBe(transferAmount);
+    // Residual (wNative) is still skimmed back to the receiver in shares mode.
+    const maxUint256Hex = "f".repeat(64);
+    expect(tx.data.toLowerCase()).toContain(maxUint256Hex);
+  });
+
+  test("should throw NegativeNativeAmountError when nativeAmount is negative", async ({
+    client,
+  }) => {
+    expect(() =>
+      blueRepay({
+        market: {
+          chainId: mainnet.id,
+          marketParams: wNativeLoanMarketParams,
+        },
+        args: {
+          assets: parseUnits("1", 18),
+          shares: 0n,
+          transferAmount: parseUnits("1", 18),
+          nativeAmount: -1n,
+          onBehalf: client.account.address,
+          receiver: client.account.address,
+          maxSharePrice: 1n,
+        },
+      }),
+    ).toThrow(NegativeNativeAmountError);
+  });
+
+  test("should throw NativeAmountExceedsTransferAmountError when nativeAmount > transferAmount", async ({
+    client,
+  }) => {
+    expect(() =>
+      blueRepay({
+        market: {
+          chainId: mainnet.id,
+          marketParams: wNativeLoanMarketParams,
+        },
+        args: {
+          assets: parseUnits("1", 18),
+          shares: 0n,
+          transferAmount: parseUnits("1", 18),
+          nativeAmount: parseUnits("2", 18),
+          onBehalf: client.account.address,
+          receiver: client.account.address,
+          maxSharePrice: 1n,
+        },
+      }),
+    ).toThrow(NativeAmountExceedsTransferAmountError);
+  });
+
+  test("should throw NativeAmountOnNonWNativeAssetError when loan token is not wNative", async ({
+    client,
+  }) => {
+    expect(() =>
+      blueRepay({
+        market: {
+          chainId: mainnet.id,
+          marketParams: WethUsdsBlue,
+        },
+        args: {
+          assets: parseUnits("1000", 6),
+          shares: 0n,
+          transferAmount: parseUnits("1000", 6),
+          nativeAmount: parseUnits("1000", 6),
+          onBehalf: client.account.address,
+          receiver: client.account.address,
+          maxSharePrice: 1n,
+        },
+      }),
+    ).toThrow(NativeAmountOnNonWNativeAssetError);
   });
 });

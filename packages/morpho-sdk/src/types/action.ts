@@ -189,6 +189,11 @@ export interface BlueRepayAction
       onBehalf: Address;
       receiver: Address;
       maxSharePrice: bigint;
+      /**
+       * Portion of `transferAmount` funded by wrapping native into wNative.
+       * `undefined` when the repay is fully funded by an ERC-20 transfer.
+       */
+      nativeAmount?: bigint;
     }
   > {}
 

@@ -4,13 +4,16 @@ import { type Address, maxUint256 } from "viem";
 import { type Action, BundlerAction } from "../../bundler/index.js";
 import {
   addTransactionMetadata,
+  validateNativeAsset,
   validateRepayParams,
 } from "../../helpers/index.js";
-import type {
-  BlueRepayAction,
-  Metadata,
-  RequirementSignature,
-  Transaction,
+import {
+  type BlueRepayAction,
+  type Metadata,
+  NativeAmountExceedsTransferAmountError,
+  NegativeNativeAmountError,
+  type RequirementSignature,
+  type Transaction,
 } from "../../types/index.js";
 import { getRequirementsAction } from "../requirements/getRequirementsAction.js";
 
@@ -37,6 +40,13 @@ export interface BlueRepayParams {
     receiver: Address;
     /** Maximum repay share price (in ray). Protects against share price manipulation. */
     maxSharePrice: bigint;
+    /**
+     * Optional portion of `transferAmount` to fund by wrapping native into wNative
+     * (via `GeneralAdapter1.wrapNative()`) instead of pulling ERC-20. Must be
+     * `<= transferAmount`; the remainder (`transferAmount - nativeAmount`) is pulled
+     * via the ERC-20 path. Requires the loan token to be the chain's wNative.
+     */
+    nativeAmount?: bigint;
     requirementSignature?: RequirementSignature;
   };
   metadata?: Metadata;
@@ -55,6 +65,11 @@ export interface BlueRepayParams {
  * Exactly one of `assets` / `shares` must be non-zero. Uses `maxSharePrice` to protect against
  * share price manipulation between transaction construction and execution.
  *
+ * When `nativeAmount > 0`, that portion of `transferAmount` is funded by wrapping native ETH via
+ * `GeneralAdapter1.wrapNative()` (the loan token must be the chain's wNative); any remaining
+ * `transferAmount - nativeAmount` is pulled via the ERC-20 path. In shares mode the skimmed
+ * residual is returned to `receiver` as wNative, not unwrapped native.
+ *
  * @param params.market.chainId - The chain the market lives on.
  * @param params.market.marketParams - Market params (loanToken, collateralToken, oracle, irm, lltv).
  * @param params.args.assets - Repay amount in loan-token assets. Set to `0n` when repaying by shares.
@@ -67,8 +82,11 @@ export interface BlueRepayParams {
  * @param params.args.receiver - Address that receives residual loan tokens in shares mode.
  * @param params.args.maxSharePrice - Maximum acceptable repay share price (in ray). Slippage
  *   protection.
+ * @param params.args.nativeAmount - Optional portion of `transferAmount` to fund by wrapping
+ *   native into wNative. Must be `<= transferAmount`. Requires the loan token to be the chain's
+ *   wNative. The remainder is pulled via the ERC-20 path.
  * @param params.args.requirementSignature - Optional pre-signed permit/permit2 approval for the
- *   loan-token transfer.
+ *   ERC-20 portion of the loan-token transfer.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueRepayAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator the simulation layer consumes.
@@ -78,6 +96,11 @@ export interface BlueRepayParams {
  * @throws {MutuallyExclusiveRepayAmountsError} when both `assets` and `shares` are non-zero.
  * @throws {NonPositiveTransferAmountError} when `transferAmount <= 0n`.
  * @throws {TransferAmountNotEqualToAssetsError} when in assets mode and `transferAmount !== assets`.
+ * @throws {NegativeNativeAmountError} when `nativeAmount < 0n`.
+ * @throws {NativeAmountExceedsTransferAmountError} when `nativeAmount > transferAmount`.
+ * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
+ * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the loan token is not
+ *   the chain's wNative.
  * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `requirementSignature`
  *   is provided and the signed asset differs from `marketParams.loanToken`.
  * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
@@ -111,6 +134,7 @@ export const blueRepay = ({
     onBehalf,
     receiver,
     maxSharePrice,
+    nativeAmount,
     requirementSignature,
   },
   metadata,
@@ -123,26 +147,60 @@ export const blueRepay = ({
     marketId: marketParams.id,
   });
 
+  if (nativeAmount !== undefined && nativeAmount < 0n) {
+    throw new NegativeNativeAmountError(nativeAmount);
+  }
+
+  const nativeFunding = nativeAmount ?? 0n;
+
+  if (nativeFunding > transferAmount) {
+    throw new NativeAmountExceedsTransferAmountError(
+      nativeFunding,
+      transferAmount,
+    );
+  }
+
   const {
-    bundler3: { generalAdapter1 },
+    bundler3: { generalAdapter1, bundler3 },
   } = getChainAddresses(chainId);
 
   const actions: Action[] = [];
 
-  if (requirementSignature) {
+  // Wrap the native portion of transferAmount into wNative inside GeneralAdapter1.
+  if (nativeFunding > 0n) {
+    validateNativeAsset(chainId, marketParams.loanToken);
+
     actions.push(
-      ...getRequirementsAction({
-        asset: marketParams.loanToken,
-        amount: transferAmount,
-        recipient: generalAdapter1,
-        requirementSignature,
-      }),
+      {
+        type: "nativeTransfer",
+        args: [bundler3, generalAdapter1, nativeFunding, false],
+      },
+      {
+        type: "wrapNative",
+        args: [nativeFunding, generalAdapter1, false],
+      },
     );
-  } else {
-    actions.push({
-      type: "erc20TransferFrom",
-      args: [marketParams.loanToken, transferAmount, generalAdapter1, false],
-    });
+  }
+
+  // Pull the remaining (non-native) portion of transferAmount via ERC-20.
+  const erc20Funding = transferAmount - nativeFunding;
+
+  if (erc20Funding > 0n) {
+    if (requirementSignature) {
+      actions.push(
+        ...getRequirementsAction({
+          asset: marketParams.loanToken,
+          amount: erc20Funding,
+          recipient: generalAdapter1,
+          requirementSignature,
+        }),
+      );
+    } else {
+      actions.push({
+        type: "erc20TransferFrom",
+        args: [marketParams.loanToken, erc20Funding, generalAdapter1, false],
+      });
+    }
   }
 
   actions.push({
@@ -184,6 +242,7 @@ export const blueRepay = ({
         onBehalf,
         receiver,
         maxSharePrice,
+        nativeAmount,
       },
     },
   });
