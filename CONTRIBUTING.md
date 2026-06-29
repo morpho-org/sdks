@@ -6,8 +6,8 @@ This monorepo contains the TypeScript SDK packages used to interact with the Mor
 
 ### Prerequisites
 
-- Node.js `>=22`
-- pnpm `10`, declared by the root `packageManager` field
+- Node.js `>=26 <27`
+- pnpm `11`, declared by the root `packageManager` field
 - Git
 - An Ethereum mainnet RPC URL for fork-backed tests
 

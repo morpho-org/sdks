@@ -1,18 +1,25 @@
 packages:
   - packages/*
 
-overrides:
-  axios: 1.15.2
-  ws: 8.20.1
+autoInstallPeers: true
+linkWorkspacePackages: deep
+preferWorkspacePackages: true
+ignoreWorkspaceCycles: true
 
-onlyBuiltDependencies:
-  - '@biomejs/biome'
-  - bufferutil
-  - esbuild
-  - keccak
-  - secp256k1
-  - utf-8-validate
+overrides:
+  axios: 1.18.1
+  ws: 8.21.0
+
+allowBuilds:
+  '@biomejs/biome': true
+  bufferutil: true
+  esbuild: true
+  keccak: true
+  secp256k1: true
+  utf-8-validate: true
 
 patchedDependencies:
   ox@0.14.29: patches/ox@0.14.29.patch
 
+minimumReleaseAge: 4320
+minimumReleaseAgeStrict: true
