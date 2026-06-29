@@ -90,6 +90,13 @@ export class ChainIdMismatchError extends Error {
   }
 }
 
+/** Thrown when a runtime crypto API is required but unavailable. */
+export class CryptoUnavailableError extends Error {
+  constructor(feature: string) {
+    super(`Crypto API is required for ${feature} but is unavailable.`);
+  }
+}
+
 /** Thrown when the viem client is missing a property the call requires (e.g. `account.address`). */
 export class MissingClientPropertyError extends Error {
   constructor(property: string) {
@@ -152,11 +159,38 @@ export class DepositAssetMismatchError extends Error {
   }
 }
 
+/** Thrown when a deposit's owner differs from the owner the supplied permit / permit2 signature was issued for. */
+export class DepositOwnerMismatchError extends Error {
+  constructor(depositOwner: Address, signatureOwner: Address) {
+    super(
+      `Deposit owner ${depositOwner} does not match requirement signature owner ${signatureOwner}`,
+    );
+  }
+}
+
+/** Thrown when a deposit's spender differs from the spender the supplied permit / permit2 signature was issued for. */
+export class DepositSpenderMismatchError extends Error {
+  constructor(depositSpender: Address, signatureSpender: Address) {
+    super(
+      `Deposit spender ${depositSpender} does not match requirement signature spender ${signatureSpender}`,
+    );
+  }
+}
+
 /** Thrown when a `permit2` requirement signature is missing the `expiration` field. */
 export class Permit2ExpirationMissingError extends Error {
   constructor() {
     super(
       'Requirement signature with action.type === "permit2" must include args.expiration. Re-sign using the permit2 flow.',
+    );
+  }
+}
+
+/** Thrown when a Blue Permit2 allowance signature is passed to a Midnight bundle token pull. */
+export class MidnightPermit2TransferSignatureRequiredError extends Error {
+  constructor() {
+    super(
+      'Midnight token pulls require a requirement signature with action.type === "permit2Transfer". Re-sign using the Midnight Permit2 transfer flow.',
     );
   }
 }
@@ -515,6 +549,141 @@ export class UnknownReallocationPositionError extends UnknownDataError {
     public readonly marketId: MarketId,
   ) {
     super(`unknown reallocation position of "${user}" on market "${marketId}"`);
+  }
+}
+
+/** Thrown when a Midnight amount that must be positive is zero or negative. */
+export class NonPositiveMidnightAmountError extends Error {
+  constructor(label: string, amount: bigint) {
+    super(`Midnight ${label} must be positive, got "${amount}".`);
+  }
+}
+
+/** Thrown when a Midnight amount that must be non-negative is negative. */
+export class NegativeMidnightAmountError extends Error {
+  constructor(label: string, amount: bigint) {
+    super(`Midnight ${label} must not be negative, got "${amount}".`);
+  }
+}
+
+/** Thrown when a Midnight flow needs at least one executable take. */
+export class EmptyMidnightTakesError extends Error {
+  constructor() {
+    super("Midnight takes cannot be empty. Refresh the quote and try again.");
+  }
+}
+
+/** Thrown when a quoted Midnight take has the wrong maker side for the requested flow. */
+export class MidnightTakeSideMismatchError extends Error {
+  constructor(params: {
+    index: number;
+    expectedBuy: boolean;
+    actualBuy: boolean;
+  }) {
+    super(
+      `Midnight take "${params.index}" has buy="${params.actualBuy}", expected "${params.expectedBuy}". Refresh the quote and try again.`,
+    );
+  }
+}
+
+/** Thrown when a quoted Midnight take belongs to a different market than the requested flow. */
+export class MidnightTakeMarketMismatchError extends Error {
+  constructor(params: {
+    index: number;
+    expectedMarket: string;
+    actualMarket: string;
+  }) {
+    super(
+      `Midnight take "${params.index}" belongs to market "${params.actualMarket}", expected "${params.expectedMarket}". Refresh the quote and try again.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight maker flow has no offer inputs to ratify or submit. */
+export class EmptyMidnightMakeOfferInputsError extends Error {
+  constructor() {
+    super(
+      "Midnight make-offer inputs cannot be empty. Build at least one offer input before submitting.",
+    );
+  }
+}
+
+/** Thrown when a Midnight make-offer batch mixes loan tokens. */
+export class MidnightMixedLoanTokenError extends Error {
+  constructor() {
+    super(
+      "Midnight make-offer batches must use one loan token. Split mixed-token batches.",
+    );
+  }
+}
+
+/** Thrown when a Midnight flow references a collateral index not configured on the market. */
+export class UnknownMidnightCollateralError extends Error {
+  constructor(params: { market: string; collateralIndex: bigint }) {
+    super(
+      `Midnight market "${params.market}" has no collateral at index "${params.collateralIndex}". Use a configured collateral index.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight Ecrecover maker flow builds the submit transaction before signing. */
+export class MissingMidnightOfferRootSignatureError extends Error {
+  constructor() {
+    super(
+      "Midnight offer root signature is missing. Sign the offer-root requirement before building the submit transaction.",
+    );
+  }
+}
+
+/** Thrown when a Midnight offer-root signature does not match the prepared tree root. */
+export class MidnightOfferRootMismatchError extends Error {
+  constructor(params: { expectedRoot: string; actualRoot: string }) {
+    super(
+      `Midnight offer root mismatch: expected "${params.expectedRoot}", got "${params.actualRoot}". Rebuild the flow and sign again.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight offer-root signature was produced by another maker account. */
+export class MidnightOfferRootOwnerMismatchError extends Error {
+  constructor(params: { expectedOwner: Address; actualOwner: Address }) {
+    super(
+      `Midnight offer root owner mismatch: expected "${params.expectedOwner}", got "${params.actualOwner}". Rebuild the flow and sign again.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight offer-root signature targets another ratifier. */
+export class MidnightOfferRootRatifierMismatchError extends Error {
+  constructor(params: { expectedRatifier: Address; actualRatifier: Address }) {
+    super(
+      `Midnight offer root ratifier mismatch: expected "${params.expectedRatifier}", got "${params.actualRatifier}". Rebuild the flow and sign again.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight offer-root signature was produced for another offer count. */
+export class MidnightOfferRootOfferCountMismatchError extends Error {
+  constructor(params: { expectedOffers: number; actualOffers: number }) {
+    super(
+      `Midnight offer root offer-count mismatch: expected "${params.expectedOffers}", got "${params.actualOffers}". Rebuild the flow and sign again.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight redeem flow finds no credit units for the user. */
+export class NoMidnightCreditToRedeemError extends Error {
+  constructor(market: string) {
+    super(`No Midnight credit is available to redeem for market "${market}".`);
+  }
+}
+
+/** Thrown when a Midnight redeem amount exceeds the market's currently withdrawable liquidity. */
+export class InsufficientMidnightWithdrawableLiquidityError extends Error {
+  constructor(params: { market: string; units: bigint; withdrawable: bigint }) {
+    super(
+      `Midnight withdrawable liquidity is insufficient on market "${params.market}": units "${params.units}", withdrawable "${params.withdrawable}". Try again later or redeem less.`,
+    );
   }
 }
 

@@ -7,7 +7,11 @@ import {
   group as staleGroup,
 } from "../__test__/fixtures.js";
 import type { MidnightApiFetch } from "../api/index.js";
-import { InvalidMarketParameterError, InvalidTreeError } from "../errors.js";
+import {
+  InvalidMarketParameterError,
+  InvalidTreeError,
+  MidnightMempoolValidationError,
+} from "../errors.js";
 import { type IOffer, Offer, type OfferStruct } from "../offers/index.js";
 import { Group } from "./Group.js";
 import { GroupUtils } from "./GroupUtils.js";
@@ -157,6 +161,37 @@ describe("Tree.mempoolValidate", () => {
     expect(decoded).toHaveLength(1);
     expect(decoded[0]!.ratifierData).toBe("0x");
   });
+
+  test("error: MidnightMempoolValidationError", async () => {
+    const fetch: MidnightApiFetch = async () =>
+      new Response(
+        JSON.stringify({ data: { issues: [{ rule: "offer_count" }] } }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    const tree = Tree.create([
+      baseOffer({
+        market: {
+          ...baseMarketParamsInput(),
+          maturity: API_VALID_MATURITY,
+        },
+        expiry: API_VALID_MATURITY - 60n,
+        maxUnits: 0n,
+        maxAssets: 1_000n,
+      }),
+    ]);
+    const result = tree.mempoolValidate({
+      chainId: 8453,
+      fetch,
+    });
+
+    await expect(result).rejects.toBeInstanceOf(MidnightMempoolValidationError);
+    await expect(result).rejects.toMatchObject({
+      issues: [{ rule: "offer_count" }],
+    });
+  });
 });
 
 describe("Tree.from", () => {
@@ -169,7 +204,7 @@ describe("Tree.from", () => {
 });
 
 describe("TreeUtils.mempoolValidate", () => {
-  test("default", async () => {
+  test("error: MidnightMempoolValidationError", async () => {
     const calls: {
       readonly input: Parameters<MidnightApiFetch>[0];
       readonly init: Parameters<MidnightApiFetch>[1];
@@ -196,10 +231,15 @@ describe("TreeUtils.mempoolValidate", () => {
     });
     const expectedGroup = GroupUtils.hash([offer]);
 
-    const result = await TreeUtils.mempoolValidate({
+    const result = TreeUtils.mempoolValidate({
       chainId: 8453,
       tree: [{ offers: [offer] }],
       fetch,
+    });
+
+    await expect(result).rejects.toBeInstanceOf(MidnightMempoolValidationError);
+    await expect(result).rejects.toMatchObject({
+      issues: [{ rule: "tick_spacing" }],
     });
 
     const body = JSON.parse(String(calls[0]!.init?.body)) as Readonly<
@@ -208,8 +248,6 @@ describe("TreeUtils.mempoolValidate", () => {
     const decoded = await Payload.decode(body.payload as Hex);
 
     expect(body.chain_id).toBe(8453);
-    expect(result.valid).toBe(false);
-    expect(result.issues).toEqual([{ rule: "tick_spacing" }]);
     expect(decoded).toHaveLength(1);
     expect(decoded[0]!.offer.group).toBe(expectedGroup);
     expect(decoded[0]!.ratifierData).toBe("0x");

@@ -1,6 +1,6 @@
 # `entities/`
 
-`MorphoVaultV1` implements `VaultV1Actions`. `MorphoVaultV2` implements `VaultV2Actions`. `MorphoBlue` implements `BlueActions`. Inherits the rules in [`packages/morpho-sdk/AGENTS.md`](../../AGENTS.md).
+`MorphoVaultV1` implements `VaultV1Actions`. `MorphoVaultV2` implements `VaultV2Actions`. `MorphoBlue` implements `BlueActions`. `MorphoMidnight` implements `MidnightActions`. Inherits the rules in [`packages/morpho-sdk/AGENTS.md`](../../AGENTS.md).
 
 ## Responsibilities
 

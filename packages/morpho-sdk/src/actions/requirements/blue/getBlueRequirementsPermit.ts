@@ -1,6 +1,6 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import type { Address, Client } from "viem";
-import { encodeErc20Permit } from "./encode/index.js";
+import { encodeErc20Permit } from "../encode/index.js";
 
 /**
  * Computes the EIP-2612 permit `Requirement` an integrator must sign so that `GeneralAdapter1`
@@ -23,11 +23,11 @@ import { encodeErc20Permit } from "./encode/index.js";
  * ```ts
  * import { createWalletClient, http } from "viem";
  * import { mainnet } from "viem/chains";
- * import { getRequirementsPermit } from "@morpho-org/morpho-sdk";
+ * import { getBlueRequirementsPermit } from "@morpho-org/morpho-sdk";
  *
  * const client = createWalletClient({ chain: mainnet, transport: http() });
- * const reqs = await getRequirementsPermit(client, {
- *   token: USDC, // an ERC-2612-compatible token; DAI is excluded by getRequirements
+ * const reqs = await getBlueRequirementsPermit(client, {
+ *   token: USDC, // an ERC-2612-compatible token; DAI is excluded by getBlueRequirements
  *   chainId: 1,
  *   args: { amount: 1_000_000n },
  *   allowancesGeneralAdapter: 0n,
@@ -36,7 +36,7 @@ import { encodeErc20Permit } from "./encode/index.js";
  * // reqs satisfies Requirement[]
  * ```
  */
-export const getRequirementsPermit = async (
+export const getBlueRequirementsPermit = async (
   viemClient: Client,
   params: {
     token: Address;

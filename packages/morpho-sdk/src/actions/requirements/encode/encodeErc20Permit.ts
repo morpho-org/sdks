@@ -8,6 +8,7 @@ import {
   ChainIdMismatchError,
   InvalidSignatureError,
   type PermitAction,
+  type PermitArgs,
   type Requirement,
 } from "../../../types/index.js";
 
@@ -50,7 +51,7 @@ interface EncodeErc20PermitParams {
  *
  * const client = createWalletClient({ chain: mainnet, transport: http() });
  * const requirement = await encodeErc20Permit(client, {
- *   token: USDC, // L1 mainnet USDC. Bridged USDC.e on L2s often does not implement EIP-2612 — query token metadata before signing on other chains. DAI uses a non-standard permit signature.
+ *   token: USDC, // Must implement standard ERC-2612. DAI is routed through Permit2 by requirement helpers.
  *   spender: generalAdapter1,
  *   amount: 1_000_000n,
  *   chainId: 1,
@@ -62,7 +63,7 @@ interface EncodeErc20PermitParams {
 export const encodeErc20Permit = async (
   viemClient: Client,
   params: EncodeErc20PermitParams,
-): Promise<Requirement> => {
+): Promise<Requirement<PermitAction, PermitArgs>> => {
   const { token, spender, amount, chainId, nonce, supportDeployless } = params;
 
   if (viemClient.chain?.id !== chainId) {

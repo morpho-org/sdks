@@ -103,12 +103,9 @@ export async function makeBaseUsdcWethOffers(params: {
     standaloneBorrowOffer,
   ]);
 
-  const treeValidation = await tree.mempoolValidate({
+  await tree.mempoolValidate({
     chainId,
   });
-  if (!treeValidation.valid) {
-    return { ok: false as const, issues: treeValidation.issues };
-  }
 
   // EcrecoverRatifierUtils derives the verifier from offer.ratifier and rejects mixed-ratifier trees.
   // The account may be the maker or an authorized signer for every maker in the tree.
@@ -235,8 +232,10 @@ normalization. Caller inputs and successful JSON output shapes are trusted at ru
 TypeScript types model the API contract.
 
 Use `tree.mempoolValidate({ chainId })` in normal make-side flows before the maker signs or approves
-the root. Pass `apiUrl` to that method when using a custom Midnight API URL. `MidnightApi` keeps the
-raw HTTP surface, including `validateMempoolPayload` for already encoded payload bytes.
+the root. It throws `MidnightMempoolValidationError` with the API issues when policy validation
+fails. Pass `apiUrl` to that method when using a custom Midnight API URL. `MidnightApi` keeps the raw
+HTTP surface, including non-throwing `validateMempoolPayload` results for already encoded payload
+bytes.
 
 ## Development
 

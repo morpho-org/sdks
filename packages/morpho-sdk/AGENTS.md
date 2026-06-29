@@ -1,6 +1,6 @@
 # `packages/morpho-sdk/`
 
-Transaction builders for VaultV1, VaultV2, and Blue. Subfolders carry the layer-scoped detail; this file is the package overview + glossary.
+Transaction builders for VaultV1, VaultV2, Blue, and Midnight. Subfolders carry the layer-scoped detail; this file is the package overview + glossary.
 
 > Architecture / type / test / doc / release rules apply per the [root `AGENTS.md`](../../AGENTS.md). Subfolder rules: see each `src/<layer>/AGENTS.md`.
 
@@ -8,6 +8,7 @@ Transaction builders for VaultV1, VaultV2, and Blue. Subfolders carry the layer-
 
 - **VaultV1 / VaultV2 deposits** route through bundler3 via GeneralAdapter1 (which enforces `maxSharePrice`, protecting against inflation attacks). VaultV1/V2 `withdraw` and `redeem` are direct vault calls. VaultV2 `forceWithdraw` / `forceRedeem` use `multicall` with `forceDeallocate` calls before the final withdraw/redeem.
 - **Blue bundled paths** (`supply`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `repayWithdrawCollateral`, `withdraw`) route through bundler3 via GeneralAdapter1. `repay` and `withdraw` each accept assets or shares (mutually exclusive); `repayWithdrawCollateral` repays first then withdraws. Loan-asset `supply` supports native wrapping when `loanToken === wNative`; loan-asset `withdraw` supports optional PublicAllocator reallocations to top up market liquidity (same mechanism as `borrow`).
+- **Midnight paths** expose lazy action outputs under `client.morpho.midnight(chainId)`. Fixed-rate market taker flows route through Midnight Bundles, direct collateral supply/cancel/redeem route through Midnight, and maker flows return ratify-root requirements plus the mempool payload transaction. The SDK owns protocol transactions and requirements; integrators keep UI labels, rate math, and display decisions.
 - **Bundle composition, native wrapping, and reallocation rules** are canonical in [`src/actions/AGENTS.md`](./src/actions/AGENTS.md).
 
 ## Tests
@@ -21,6 +22,7 @@ Protocol terms used across this package's docs and JSDoc:
 ### Contracts and adapters
 
 - **Blue / Morpho Blue** — Morpho's immutable, **variable-rate** lending primitive (formerly called "MarketV1" in this SDK). Each market is an isolated pair whose borrow rate floats with utilization, driven by the market's IRM. A market is identified by `MarketParams { loanToken, collateralToken, oracle, irm, lltv }`. Exposed via `client.blue(marketParams, chainId) → MorphoBlue`. This is the canonical definition of "Blue" for the whole package; other docs link here rather than redefine it.
+- **Midnight** — Morpho's fixed-rate lending primitive. Takers consume signed offers through Midnight Bundles; makers submit offer groups/trees to the Midnight mempool after Ecrecover signing or Setter ratification.
 - **VaultV1 / MetaMorpho** — ERC-4626 vault layered on top of Blue.
 - **VaultV2** — successor vault with adapter-based liquidity routing and `forceDeallocate`.
 - **bundler3** — the bundler entry point; receives a sequence of adapter actions in one transaction.

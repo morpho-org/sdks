@@ -7,6 +7,7 @@ import { validateUserAddress } from "../../../helpers/validate.js";
 import {
   InvalidSignatureError,
   type Permit2Action,
+  type Permit2Args,
   type Requirement,
 } from "../../../types/index.js";
 
@@ -53,7 +54,7 @@ interface EncodeErc20Permit2Params {
  */
 export const encodeErc20Permit2 = (
   params: EncodeErc20Permit2Params,
-): Requirement => {
+): Requirement<Permit2Action, Permit2Args> => {
   const {
     token,
     amount,

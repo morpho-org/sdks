@@ -14,11 +14,11 @@ import {
   isRequirementApproval,
   isRequirementSignature,
   Permit2ExpirationMissingError,
-} from "../../types/index.js";
-import { getRequirements } from "./getRequirements.js";
-import { getRequirementsAction } from "./getRequirementsAction.js";
-import { getRequirementsApproval } from "./getRequirementsApproval.js";
-import { getRequirementsPermit } from "./getRequirementsPermit.js";
+} from "../../../types/index.js";
+import { getRequirementsAction } from "../getRequirementsAction.js";
+import { getRequirementsApproval } from "../getRequirementsApproval.js";
+import { getBlueRequirements } from "./getBlueRequirements.js";
+import { getBlueRequirementsPermit } from "./getBlueRequirementsPermit.js";
 
 vi.mock("@morpho-org/blue-sdk-viem", async (_importOriginal) => {
   return {
@@ -30,7 +30,7 @@ vi.mock("@morpho-org/blue-sdk-viem", async (_importOriginal) => {
 import { fetchHolding, fetchToken } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 
-describe("getRequirements", () => {
+describe("getBlueRequirements", () => {
   const {
     dai,
     usdc,
@@ -83,7 +83,7 @@ describe("getRequirements", () => {
       } as unknown as Client;
 
       await expect(
-        getRequirements(clientWithWrongChain, {
+        getBlueRequirements(clientWithWrongChain, {
           supportSignature: false,
           address: usdc,
           chainId: mainnet.id,
@@ -115,7 +115,7 @@ describe("getRequirements", () => {
         }),
       );
 
-      const requirements = await getRequirements(mockClient, {
+      const requirements = await getBlueRequirements(mockClient, {
         supportSignature: false,
         address: usdc,
         chainId: mainnet.id,
@@ -153,7 +153,7 @@ describe("getRequirements", () => {
         }),
       );
 
-      const requirements = await getRequirements(mockClient, {
+      const requirements = await getBlueRequirements(mockClient, {
         supportSignature: false,
         address: usdc,
         chainId: mainnet.id,
@@ -187,7 +187,7 @@ describe("getRequirements", () => {
           }),
         );
 
-        const requirements = await getRequirements(mockClient, {
+        const requirements = await getBlueRequirements(mockClient, {
           supportSignature: true,
           address: usdc,
           chainId: mainnet.id,
@@ -226,7 +226,7 @@ describe("getRequirements", () => {
           }),
         );
 
-        const requirements = await getRequirements(mockClient, {
+        const requirements = await getBlueRequirements(mockClient, {
           supportSignature: true,
           address: usdc,
           chainId: mainnet.id,
@@ -259,7 +259,7 @@ describe("getRequirements", () => {
           }),
         );
 
-        const requirements = await getRequirements(mockClient, {
+        const requirements = await getBlueRequirements(mockClient, {
           supportSignature: true,
           address: wNative,
           chainId: mainnet.id,
@@ -308,7 +308,7 @@ describe("getRequirements", () => {
           }),
         );
 
-        const requirements = await getRequirements(mockClient, {
+        const requirements = await getBlueRequirements(mockClient, {
           supportSignature: true,
           address: wNative,
           chainId: mainnet.id,
@@ -347,7 +347,7 @@ describe("getRequirements", () => {
           }),
         );
 
-        const requirements = await getRequirements(mockClient, {
+        const requirements = await getBlueRequirements(mockClient, {
           supportSignature: true,
           address: wNative,
           chainId: mainnet.id,
@@ -381,7 +381,7 @@ describe("getRequirements", () => {
           }),
         );
 
-        const requirements = await getRequirements(mockClient, {
+        const requirements = await getBlueRequirements(mockClient, {
           supportSignature: true,
           address: wNative,
           chainId: mainnet.id,
@@ -398,7 +398,7 @@ describe("getRequirements", () => {
         expect(permit2Requirement.action.args.amount).toBe(mockAmount);
       });
 
-      test("should return permit2 requirement when DAI and allowance is insufficient", async () => {
+      test("should return permit2 requirement when DAI exposes nonce and simple permit is requested", async () => {
         vi.mocked(fetchHolding).mockResolvedValue(
           new Holding({
             user: mockFrom,
@@ -419,11 +419,12 @@ describe("getRequirements", () => {
           }),
         );
 
-        const requirements = await getRequirements(mockClient, {
+        const requirements = await getBlueRequirements(mockClient, {
           supportSignature: true,
           address: dai,
           chainId: mainnet.id,
           args: { amount: mockAmount, from: mockFrom },
+          useSimplePermit: true,
         });
 
         expect(requirements).toHaveLength(2);
@@ -467,7 +468,7 @@ describe("getRequirements", () => {
         );
         mockClient = { chain: { id: noPermit2ChainId } } as unknown as Client;
 
-        const requirements = await getRequirements(mockClient, {
+        const requirements = await getBlueRequirements(mockClient, {
           supportSignature: true,
           address: usdc,
           chainId: noPermit2ChainId,
@@ -531,9 +532,9 @@ describe("getRequirements", () => {
       ).toThrow(ApprovalAmountLessThanSpendAmountError);
     });
 
-    test("getRequirementsPermit returns no requirement when allowance is sufficient", async () => {
+    test("getBlueRequirementsPermit returns no requirement when allowance is sufficient", async () => {
       await expect(
-        getRequirementsPermit(mockClient, {
+        getBlueRequirementsPermit(mockClient, {
           token: usdc,
           chainId: mainnet.id,
           args: { amount: mockAmount },

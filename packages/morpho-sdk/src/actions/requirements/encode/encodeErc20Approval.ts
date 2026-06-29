@@ -16,7 +16,7 @@ interface EncodeErc20ApprovalParams {
  * Encodes a deep-frozen ERC-20 `approve(spender, amount)` transaction.
  *
  * Caps `amount` at the per-chain, per-token maximum from `MAX_TOKEN_APPROVALS` (defaults to
- * `maxUint256`). Used by {@link getRequirementsApproval} and {@link getRequirementsPermit2}.
+ * `maxUint256`). Used by {@link getRequirementsApproval} and {@link getBlueRequirementsPermit2}.
  *
  * @param params - Encoding parameters.
  * @param params.token - ERC-20 token address to approve.

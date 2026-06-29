@@ -84,7 +84,7 @@ export interface BlueRefinanceParams {
  *   then an `erc20Transfer` skims any residual to the user if that repay is skipped.
  * - **Collat-only** (both zero/omitted): only collateral is migrated; borrow/repay legs omitted.
  *
- * Prerequisite: GA1 must be authorized on Morpho — the entity's `getRequirements()` returns the
+ * Prerequisite: GA1 must be authorized on Blue — the entity's `getRequirements()` returns the
  * `setAuthorization` transaction when needed.
  *
  * @param params.source.chainId - The chain both markets live on.

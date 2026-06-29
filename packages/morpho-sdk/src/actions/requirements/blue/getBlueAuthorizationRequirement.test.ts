@@ -2,8 +2,8 @@ import { addressesRegistry } from "@morpho-org/blue-sdk";
 import type { Address, Client } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test, vi } from "vitest";
-import { ChainIdMismatchError } from "../../types/index.js";
-import { getMorphoAuthorizationRequirement } from "./getMorphoAuthorizationRequirement.js";
+import { ChainIdMismatchError } from "../../../types/index.js";
+import { getBlueAuthorizationRequirement } from "./getBlueAuthorizationRequirement.js";
 
 const USER: Address = "0x1111111111111111111111111111111111111111";
 
@@ -16,10 +16,10 @@ function makeClient(chainId: number, isAuthorized: boolean): Client {
   } as unknown as Client;
 }
 
-describe("getMorphoAuthorizationRequirement", () => {
+describe("getBlueAuthorizationRequirement", () => {
   test("throws ChainIdMismatchError when the client chain differs", async () => {
     await expect(
-      getMorphoAuthorizationRequirement({
+      getBlueAuthorizationRequirement({
         viemClient: makeClient(mainnet.id + 1, true),
         chainId: mainnet.id,
         userAddress: USER,
@@ -29,7 +29,7 @@ describe("getMorphoAuthorizationRequirement", () => {
 
   test("returns null when GeneralAdapter1 is already authorized", async () => {
     await expect(
-      getMorphoAuthorizationRequirement({
+      getBlueAuthorizationRequirement({
         viemClient: makeClient(mainnet.id, true),
         chainId: mainnet.id,
         userAddress: USER,
@@ -38,7 +38,7 @@ describe("getMorphoAuthorizationRequirement", () => {
   });
 
   test("builds an authorization transaction when authorization is missing", async () => {
-    const tx = await getMorphoAuthorizationRequirement({
+    const tx = await getBlueAuthorizationRequirement({
       viemClient: makeClient(mainnet.id, false),
       chainId: mainnet.id,
       userAddress: USER,

@@ -1,12 +1,12 @@
 import { type Address, MathLib } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 import type {
+  BlueTokenSignatureRequirement,
   ERC20ApprovalAction,
-  Requirement,
   Transaction,
-} from "../../types/index.js";
-import { encodeErc20Permit2 } from "./encode/encodeErc20Permit2.js";
-import { getRequirementsApproval } from "./getRequirementsApproval.js";
+} from "../../../types/index.js";
+import { encodeErc20Permit2 } from "../encode/encodeErc20Permit2.js";
+import { getRequirementsApproval } from "../getRequirementsApproval.js";
 
 /**
  * Computes the Permit2 prerequisites for `GeneralAdapter1` to pull `amount` of `address`.
@@ -38,11 +38,11 @@ import { getRequirementsApproval } from "./getRequirementsApproval.js";
  * @example
  * ```ts
  * import { getChainAddresses } from "@morpho-org/blue-sdk";
- * import { getRequirementsPermit2 } from "@morpho-org/morpho-sdk";
+ * import { getBlueRequirementsPermit2 } from "@morpho-org/morpho-sdk";
  *
  * const { permit2 } = getChainAddresses(1);
  * if (!permit2) throw new Error("Permit2 not configured for this chain");
- * const requirements = getRequirementsPermit2({
+ * const requirements = getBlueRequirementsPermit2({
  *   address: USDC,
  *   chainId: 1,
  *   permit2,
@@ -53,10 +53,10 @@ import { getRequirementsApproval } from "./getRequirementsApproval.js";
  *   allowanceGeneralAdapterExpiration: 0n,
  *   nonce: 0n,
  * });
- * // requirements satisfies (Readonly<Transaction<ERC20ApprovalAction> | Requirement>)[]
+ * // requirements satisfies (Readonly<Transaction<ERC20ApprovalAction> | BlueTokenSignatureRequirement>)[]
  * ```
  */
-export const getRequirementsPermit2 = (params: {
+export const getBlueRequirementsPermit2 = (params: {
   address: Address;
   chainId: number;
   permit2: Address;
@@ -66,7 +66,9 @@ export const getRequirementsPermit2 = (params: {
   allowanceGeneralAdapterPermit2: bigint;
   allowanceGeneralAdapterExpiration: bigint;
   nonce: bigint;
-}): Readonly<Transaction<ERC20ApprovalAction> | Requirement>[] => {
+}): Readonly<
+  Transaction<ERC20ApprovalAction> | BlueTokenSignatureRequirement
+>[] => {
   const {
     address,
     chainId,
@@ -83,7 +85,10 @@ export const getRequirementsPermit2 = (params: {
     return [];
   }
 
-  const requirements: (Transaction<ERC20ApprovalAction> | Requirement)[] = [];
+  const requirements: (
+    | Transaction<ERC20ApprovalAction>
+    | BlueTokenSignatureRequirement
+  )[] = [];
 
   const approvalRequirements = getRequirementsApproval({
     address,

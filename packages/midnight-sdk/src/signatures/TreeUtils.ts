@@ -6,7 +6,11 @@ import type {
   MidnightApiFetch,
   MidnightApiRequestOptions,
 } from "../api/types.js";
-import { InvalidTreeError, InvalidTreeHeightError } from "../errors.js";
+import {
+  InvalidTreeError,
+  InvalidTreeHeightError,
+  MidnightMempoolValidationError,
+} from "../errors.js";
 import {
   type IOffer,
   Offer,
@@ -289,8 +293,7 @@ export type TreeInput = Tree | TreeCreateParams;
  * });
  * const tree = Tree.create([offer]);
  * const params = { chainId: 8453 } satisfies TreeMempoolValidateParams;
- * const validation = await tree.mempoolValidate(params);
- * console.log(validation.valid);
+ * await tree.mempoolValidate(params);
  * ```
  */
 export interface TreeMempoolValidateParams {
@@ -348,8 +351,7 @@ export interface TreeMempoolValidateParams {
  *   chainId: 8453,
  *   tree: [offer],
  * } satisfies TreeUtilsMempoolValidateParams;
- * const validation = await TreeUtils.mempoolValidate(params);
- * console.log(validation.valid);
+ * await TreeUtils.mempoolValidate(params);
  * ```
  */
 export interface TreeUtilsMempoolValidateParams
@@ -389,12 +391,13 @@ export namespace TreeUtils {
    * @param params.timestamp - Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot.
    * @param params.fetch - Optional fetch implementation override used for the API call.
    * @param params.request - Optional fetch options forwarded to the API request.
-   * @returns API issues and `valid` summary.
+   * @returns Successful API validation result.
    * @throws {InvalidTreeError} when the tree is empty, all padding, or duplicated.
    * @throws {InvalidTreeHeightError} when the resulting height is unsupported.
    * @throws {Payload.DecodeError} when validation payload encoding fails.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
+   * @throws {MidnightMempoolValidationError} when the API returns validation issues.
    * @example
    * ```ts
    * import { Offer, TreeUtils } from "@morpho-org/midnight-sdk";
@@ -425,11 +428,10 @@ export namespace TreeUtils {
    *   ratifier: "0x0000000000000000000000000000000000004000",
    *   maxUnits: 100n,
    * });
-   * const validation = await TreeUtils.mempoolValidate({
+   * await TreeUtils.mempoolValidate({
    *   chainId: 8453,
    *   tree: [offer],
    * });
-   * console.log(validation.valid);
    * ```
    */
   export async function mempoolValidate(
@@ -446,7 +448,7 @@ export namespace TreeUtils {
       offers.map((offer) => ({ offer, ratifierData: "0x" as const })),
     );
 
-    return MidnightApi.validateMempoolPayload({
+    const validation = await MidnightApi.validateMempoolPayload({
       baseUrl: params.apiUrl,
       fetch: params.fetch,
       request: params.request,
@@ -454,6 +456,12 @@ export namespace TreeUtils {
       timestamp: params.timestamp,
       payload,
     });
+
+    if (!validation.valid) {
+      throw new MidnightMempoolValidationError(validation.issues);
+    }
+
+    return validation;
   }
 
   /**

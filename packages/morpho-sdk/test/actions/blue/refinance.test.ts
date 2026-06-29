@@ -3,7 +3,7 @@ import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
-  isRequirementAuthorization,
+  isRequirementBlueAuthorization,
   MAX_SLIPPAGE_TOLERANCE,
   morphoViemExtension,
   type VaultReallocation,
@@ -98,7 +98,7 @@ describe("RefinanceBlue (fork)", () => {
         const requirements = await refi.getRequirements();
         expect(requirements.length).toBeLessThanOrEqual(1);
         for (const requirement of requirements) {
-          if (!isRequirementAuthorization(requirement)) {
+          if (!isRequirementBlueAuthorization(requirement)) {
             throw new Error("Unexpected non-authorization requirement");
           }
           await client.sendTransaction(requirement);
@@ -179,7 +179,7 @@ describe("RefinanceBlue (fork)", () => {
         const requirements = await refi.getRequirements();
         expect(requirements.length).toBeLessThanOrEqual(1);
         for (const requirement of requirements) {
-          if (!isRequirementAuthorization(requirement)) {
+          if (!isRequirementBlueAuthorization(requirement)) {
             throw new Error("Unexpected non-authorization requirement");
           }
           await client.sendTransaction(requirement);
@@ -244,7 +244,7 @@ describe("RefinanceBlue (fork)", () => {
         // Collat-only still needs GA1 authorized: the callback's withdrawCollateral runs onBehalf=user.
         expect(requirements).toHaveLength(1);
         const auth = requirements[0]!;
-        if (!isRequirementAuthorization(auth)) {
+        if (!isRequirementBlueAuthorization(auth)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(auth);
@@ -343,7 +343,7 @@ describe("RefinanceBlue (fork)", () => {
         const requirements = await refi.getRequirements();
         expect(requirements.length).toBeLessThanOrEqual(1);
         for (const requirement of requirements) {
-          if (!isRequirementAuthorization(requirement)) {
+          if (!isRequirementBlueAuthorization(requirement)) {
             throw new Error("Unexpected non-authorization requirement");
           }
           await client.sendTransaction(requirement);

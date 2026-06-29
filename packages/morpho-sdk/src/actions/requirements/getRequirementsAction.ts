@@ -48,7 +48,7 @@ interface GetRequirementsActionParams {
  *   account: borrower,
  * });
  *
- * // `requirement` comes from `getRequirements*` helpers; signing produces a `RequirementSignature`.
+ * // `requirement` comes from a requirement helper; signing produces a `RequirementSignature`.
  * const requirementSignature = await requirement.sign(walletClient, borrower);
  *
  * const actions = getRequirementsAction({

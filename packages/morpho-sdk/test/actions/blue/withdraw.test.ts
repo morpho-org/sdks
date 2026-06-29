@@ -5,7 +5,7 @@ import { describe, expect } from "vitest";
 import {
   AccrualPositionUserMismatchError,
   ExcessiveSlippageToleranceError,
-  isRequirementAuthorization,
+  isRequirementBlueAuthorization,
   MarketIdMismatchError,
   MissingAccrualPositionError,
   MutuallyExclusiveWithdrawAmountsError,
@@ -58,7 +58,7 @@ describe("WithdrawBlue", () => {
 
         const requirements = await withdraw.getRequirements();
         const authorization = requirements[0];
-        if (!isRequirementAuthorization(authorization)) {
+        if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
@@ -113,7 +113,7 @@ describe("WithdrawBlue", () => {
 
         const requirements = await withdraw.getRequirements();
         const authorization = requirements[0];
-        if (!isRequirementAuthorization(authorization)) {
+        if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
@@ -184,7 +184,7 @@ describe("WithdrawBlue", () => {
 
     const requirements = await withdraw.getRequirements();
     expect(requirements.length).toBe(1);
-    expect(isRequirementAuthorization(requirements[0])).toBe(true);
+    expect(isRequirementBlueAuthorization(requirements[0])).toBe(true);
   });
 
   test("should withdraw with single-vault reallocation", async ({ client }) => {
@@ -238,7 +238,7 @@ describe("WithdrawBlue", () => {
 
         const requirements = await withdraw.getRequirements();
         const authorization = requirements[0];
-        if (!isRequirementAuthorization(authorization)) {
+        if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
@@ -309,7 +309,7 @@ describe("WithdrawBlue", () => {
 
         const requirements = await withdraw.getRequirements();
         const authorization = requirements[0];
-        if (!isRequirementAuthorization(authorization)) {
+        if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
@@ -384,7 +384,7 @@ describe("WithdrawBlue", () => {
 
         const requirements = await withdraw.getRequirements();
         const authorization = requirements[0];
-        if (!isRequirementAuthorization(authorization)) {
+        if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
