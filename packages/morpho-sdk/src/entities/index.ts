@@ -66,6 +66,7 @@ export {
   WrappedToken,
 } from "@morpho-org/blue-sdk";
 export { MorphoBlue } from "./blue/index.js";
+export * from "./midnight/index.js";
 export {
   type InputReallocationData,
   ReallocationData,

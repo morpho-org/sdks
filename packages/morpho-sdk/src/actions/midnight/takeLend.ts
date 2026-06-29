@@ -1,0 +1,123 @@
+import {
+  type MarketInput,
+  MarketUtils,
+  midnightBundlesAbi,
+} from "@morpho-org/midnight-sdk";
+import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
+import { type Address, encodeFunctionData, zeroAddress } from "viem";
+import { addTransactionMetadata } from "../../helpers/index.js";
+import {
+  type AnyRequirementSignature,
+  EmptyMidnightTakesError,
+  type Metadata,
+  type MidnightTakeLendAction,
+  MidnightTakeMarketMismatchError,
+  MidnightTakeSideMismatchError,
+  NegativeMidnightAmountError,
+  NonPositiveMidnightAmountError,
+  type Transaction,
+} from "../../types/index.js";
+import { encodeMidnightTokenPermit } from "./encodeMidnightTokenPermit.js";
+import type { MidnightTake } from "./types.js";
+
+/** Parameters for {@link midnightTakeLend}. */
+export interface MidnightTakeLendParams {
+  readonly chainId: number;
+  readonly market: MarketInput;
+  readonly assets: bigint;
+  readonly minUnits: bigint;
+  readonly taker: Address;
+  readonly takes: readonly MidnightTake[];
+  readonly signatures?:
+    | AnyRequirementSignature
+    | readonly AnyRequirementSignature[];
+  readonly metadata?: Metadata;
+}
+
+/** Encodes the take-lend Midnight bundle. */
+export const midnightTakeLend = (
+  params: MidnightTakeLendParams,
+): Readonly<Transaction<MidnightTakeLendAction>> => {
+  if (params.assets <= 0n) {
+    throw new NonPositiveMidnightAmountError("assets", params.assets);
+  }
+  if (params.minUnits < 0n) {
+    throw new NegativeMidnightAmountError("minUnits", params.minUnits);
+  }
+  if (params.takes.length === 0) {
+    throw new EmptyMidnightTakesError();
+  }
+
+  const marketId = MarketUtils.toId({
+    market: params.market,
+    chainId: params.chainId,
+  });
+  for (const [index, take] of params.takes.entries()) {
+    if (take.offer.buy) {
+      throw new MidnightTakeSideMismatchError({
+        index,
+        expectedBuy: false,
+        actualBuy: take.offer.buy,
+      });
+    }
+
+    const actualMarketId = MarketUtils.toId({
+      market: take.offer.market,
+      chainId: params.chainId,
+    });
+    if (actualMarketId.toLowerCase() !== marketId.toLowerCase()) {
+      throw new MidnightTakeMarketMismatchError({
+        index,
+        expectedMarket: marketId,
+        actualMarket: actualMarketId,
+      });
+    }
+  }
+
+  const midnightBundles = getChainAddress(params.chainId, "midnightBundles");
+  const loanTokenPermit = encodeMidnightTokenPermit({
+    token: MarketUtils.toStruct(params.market).loanToken,
+    owner: params.taker,
+    spender: midnightBundles,
+    amount: params.assets,
+    signatures: params.signatures,
+  });
+
+  let tx = {
+    to: midnightBundles,
+    value: 0n,
+    data: encodeFunctionData({
+      abi: midnightBundlesAbi,
+      functionName: "buyWithAssetsTargetAndWithdrawCollateral",
+      args: [
+        params.assets,
+        params.minUnits,
+        params.taker,
+        loanTokenPermit,
+        params.takes,
+        [],
+        zeroAddress,
+        0n,
+        zeroAddress,
+      ],
+    }),
+  };
+
+  if (params.metadata) {
+    tx = addTransactionMetadata(tx, params.metadata);
+  }
+
+  return deepFreeze({
+    ...tx,
+    action: {
+      type: "midnightTakeLend",
+      args: {
+        market: marketId,
+        assets: params.assets,
+        minUnits: params.minUnits,
+        taker: params.taker,
+        takes: params.takes.length,
+      },
+    },
+  });
+};
