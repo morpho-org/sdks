@@ -252,8 +252,8 @@ export interface MidnightApiCollateral {
   readonly token: Address;
   /** WAD-scaled liquidation loan-to-value. */
   readonly lltv: string;
-  /** WAD-scaled maximum liquidation incentive factor. */
-  readonly maxLif: string;
+  /** WAD-scaled liquidation cursor used to compute the maximum liquidation incentive factor. */
+  readonly liquidationCursor: string;
   /** Oracle address used to price this collateral. */
   readonly oracle: Address;
 }
@@ -282,6 +282,8 @@ export interface MidnightApiBookMarket {
   readonly marketId: Hash;
   /** Chain id the market lives on. */
   readonly chainId: number;
+  /** Core Midnight contract address for the market chain. */
+  readonly midnight: Address;
   /** Loan token address. */
   readonly loanToken: Address;
   /** Collateral definitions for the market. */
@@ -322,9 +324,8 @@ export interface MidnightApiBookResult {
  * ABI-ready take returned by Midnight API book and quote routes.
  *
  * This shape matches the Midnight periphery `Take` tuple. Pass `offer`,
- * `ratifierData`, and `units` directly to `IMidnight.take`, or pass the object
- * in the `takes` array of a target-aware `MidnightBundles` call. `marketId` is
- * API metadata and is ignored by ABI encoders.
+ * `ratifierData`, and `units` directly to `IMidnight.take`. `marketId` is API
+ * metadata and is ignored by ABI encoders.
  */
 export interface MidnightApiTake {
   /** Market id the offer belongs to. */
@@ -418,7 +419,7 @@ export type ApiRequestParams = MidnightApiConfig & {
 export type ApiCollateralResponse = {
   readonly token: Address;
   readonly lltv: string;
-  readonly max_lif: string;
+  readonly liquidation_cursor: string;
   readonly oracle: Address;
 };
 
@@ -435,6 +436,7 @@ export type ApiPriceLevelResponse = {
 export type ApiBookMarketResponse = {
   readonly market_id: Hash;
   readonly chain_id: number;
+  readonly midnight: Address;
   readonly loan_token: Address;
   readonly collaterals: readonly ApiCollateralResponse[];
   readonly maturity: number;
@@ -463,6 +465,8 @@ export type ApiPriceLevelsResponse = {
 
 /** @internal Offer market response shape returned by the API. */
 export type ApiOfferMarketResponse = {
+  readonly chain_id: number;
+  readonly midnight: Address;
   readonly loan_token: Address;
   readonly collaterals: readonly ApiCollateralResponse[];
   readonly maturity: number;

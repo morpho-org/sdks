@@ -1,7 +1,6 @@
 import {
   assertNonNegative,
   type BigIntish,
-  getChainAddress,
   MathLib,
 } from "@morpho-org/morpho-ts";
 import { concat, encodeAbiParameters, encodePacked, keccak256 } from "viem";
@@ -11,6 +10,7 @@ import {
   MARKET_TYPEHASH,
   SETTLEMENT_FEE_BREAKPOINTS,
 } from "../constants.js";
+import { InvalidMarketParameterError } from "../errors.js";
 import {
   type CollateralParams,
   type ICollateralParams,
@@ -25,12 +25,14 @@ const collateralParamsHashParams = [
   { name: "typehash", type: "bytes32" },
   { name: "token", type: "address" },
   { name: "lltv", type: "uint256" },
-  { name: "maxLif", type: "uint256" },
+  { name: "liquidationCursor", type: "uint256" },
   { name: "oracle", type: "address" },
 ] as const;
 
 const marketHashParams = [
   { name: "typehash", type: "bytes32" },
+  { name: "chainId", type: "uint256" },
+  { name: "midnight", type: "address" },
   { name: "loanToken", type: "address" },
   { name: "collateralParamsHash", type: "bytes32" },
   { name: "maturity", type: "uint256" },
@@ -42,6 +44,8 @@ const marketHashParams = [
 const marketParamsAbiParameter = {
   type: "tuple",
   components: [
+    { name: "chainId", type: "uint256" },
+    { name: "midnight", type: "address" },
     { name: "loanToken", type: "address" },
     {
       name: "collateralParams",
@@ -49,7 +53,7 @@ const marketParamsAbiParameter = {
       components: [
         { name: "token", type: "address" },
         { name: "lltv", type: "uint256" },
-        { name: "maxLif", type: "uint256" },
+        { name: "liquidationCursor", type: "uint256" },
         { name: "oracle", type: "address" },
       ],
     },
@@ -78,7 +82,7 @@ export namespace MarketUtils {
    *
    * @param params.token - Collateral token address.
    * @param params.lltv - WAD-scaled liquidation loan-to-value.
-   * @param params.maxLif - WAD-scaled maximum liquidation incentive factor.
+   * @param params.liquidationCursor - WAD-scaled liquidation cursor.
    * @param params.oracle - Oracle address used to price this collateral.
    * @returns Collateral params with bigint fields.
    * @example
@@ -88,19 +92,34 @@ export namespace MarketUtils {
    * const collateral = MarketUtils.toCollateralParams({
    *   token: "0x0000000000000000000000000000000000000001",
    *   lltv: 770000000000000000n,
-   *   maxLif: 1061007957559681697n,
+   *   liquidationCursor: 250000000000000000n,
    *   oracle: "0x0000000000000000000000000000000000000002",
    * });
-   * console.log(collateral.maxLif);
+   * console.log(collateral.liquidationCursor);
    * ```
    */
   export function toCollateralParams(
     params: CollateralParamsInput,
   ): CollateralParams {
+    let lltv: bigint;
+    let liquidationCursor: bigint;
+    try {
+      lltv = BigInt(params.lltv);
+      liquidationCursor = BigInt(params.liquidationCursor);
+    } catch (cause) {
+      throw new InvalidMarketParameterError({
+        parameter: "collateralParams",
+        value: params,
+        instruction:
+          "Provide bigint-compatible lltv and liquidationCursor values.",
+        cause,
+      });
+    }
+
     return {
       token: params.token,
-      lltv: BigInt(params.lltv),
-      maxLif: BigInt(params.maxLif),
+      lltv,
+      liquidationCursor,
       oracle: params.oracle,
     };
   }
@@ -115,12 +134,14 @@ export namespace MarketUtils {
    * import { MarketUtils } from "@morpho-org/midnight-sdk";
    *
    * const struct = MarketUtils.toStruct({
+   *   chainId: 8453,
+   *   midnight: "0x0000000000000000000000000000000000001000",
    *   loanToken: "0x0000000000000000000000000000000000006000",
    *   collateralParams: [
    *     {
    *       token: "0x0000000000000000000000000000000000007000",
    *       lltv: 770000000000000000n,
-   *       maxLif: 1061007957559681697n,
+   *       liquidationCursor: 250000000000000000n,
    *       oracle: "0x0000000000000000000000000000000000008000",
    *     },
    *   ],
@@ -136,11 +157,13 @@ export namespace MarketUtils {
     const params = MarketParams.from(market);
 
     return {
+      chainId: params.chainId,
+      midnight: params.midnight,
       loanToken: params.loanToken,
       collateralParams: params.collateralParams.map((collateral) => ({
         token: collateral.token,
         lltv: collateral.lltv,
-        maxLif: collateral.maxLif,
+        liquidationCursor: collateral.liquidationCursor,
         oracle: collateral.oracle,
       })),
       maturity: params.maturity,
@@ -154,15 +177,15 @@ export namespace MarketUtils {
    * Returns the liquidation incentive factor for an LLTV and liquidation cursor.
    *
    * @param input - WAD-scaled LLTV or collateral params carrying an LLTV.
-   * @param cursor - WAD-scaled liquidation cursor, usually `LIQUIDATION_CURSOR_LOW` or `LIQUIDATION_CURSOR_HIGH`.
+   * @param cursor - WAD-scaled liquidation cursor.
    * @returns WAD-scaled liquidation incentive factor.
    * @example
    * ```ts
-   * import { LIQUIDATION_CURSOR_LOW, MarketUtils } from "@morpho-org/midnight-sdk";
+   * import { MarketUtils } from "@morpho-org/midnight-sdk";
    *
    * const liquidationIncentiveFactor = MarketUtils.getLiquidationIncentiveFactor(
    *   770000000000000000n,
-   *   LIQUIDATION_CURSOR_LOW,
+   *   250000000000000000n,
    * );
    * console.log(liquidationIncentiveFactor);
    * ```
@@ -251,12 +274,14 @@ export namespace MarketUtils {
    * import { MarketUtils } from "@morpho-org/midnight-sdk";
    *
    * const hash = MarketUtils.hash({
+   *   chainId: 8453,
+   *   midnight: "0x0000000000000000000000000000000000001000",
    *   loanToken: "0x0000000000000000000000000000000000000001",
    *   collateralParams: [
    *     {
    *       token: "0x0000000000000000000000000000000000000002",
    *       lltv: 770000000000000000n,
-   *       maxLif: 1061007957559681697n,
+   *       liquidationCursor: 250000000000000000n,
    *       oracle: "0x0000000000000000000000000000000000000003",
    *     },
    *   ],
@@ -282,7 +307,7 @@ export namespace MarketUtils {
           COLLATERAL_PARAMS_TYPEHASH,
           params.token,
           BigInt(params.lltv),
-          BigInt(params.maxLif),
+          BigInt(params.liquidationCursor),
           params.oracle,
         ]),
       ),
@@ -292,6 +317,8 @@ export namespace MarketUtils {
     return keccak256(
       encodeAbiParameters(marketHashParams, [
         MARKET_TYPEHASH,
+        BigInt(marketParams.chainId),
+        marketParams.midnight,
         marketParams.loanToken,
         collateralParamsHash,
         BigInt(marketParams.maturity),
@@ -305,61 +332,44 @@ export namespace MarketUtils {
   /**
    * Computes the Midnight id for a market using `IdLib.toId`.
    *
-   * @param params.market - Market to hash.
-   * @param params.chainId - EIP-155 chain id used to resolve the core Midnight address from the registry.
+   * @param market - Market to hash.
    * @returns Market id.
-   * @throws {UnsupportedChainIdError} when no address registry exists for `chainId`.
-   * @throws {UnknownAddressError} when the registry has no Midnight address for `chainId`.
    * @example
    * ```ts
-   * import { ChainId, registerCustomAddresses } from "@morpho-org/morpho-ts";
    * import { MarketUtils } from "@morpho-org/midnight-sdk";
    *
-   * registerCustomAddresses({
-   *   addresses: {
-   *     [ChainId.BaseMainnet]: {
-   *       midnight: "0x0000000000000000000000000000000000000001",
-   *     },
-   *   },
-   * });
-   *
    * const id = MarketUtils.toId({
-   *   market: {
-   *     loanToken: "0x0000000000000000000000000000000000000001",
-   *     collateralParams: [
-   *       {
-   *         token: "0x0000000000000000000000000000000000000002",
-   *         lltv: 770000000000000000n,
-   *         maxLif: 1061007957559681697n,
-   *         oracle: "0x0000000000000000000000000000000000000003",
-   *       },
-   *     ],
-   *     maturity: 1n,
-   *     rcfThreshold: 0n,
-   *     enterGate: "0x0000000000000000000000000000000000000000",
-   *     liquidatorGate: "0x0000000000000000000000000000000000000000",
-   *   },
-   *   chainId: ChainId.BaseMainnet,
+   *   chainId: 8453,
+   *   midnight: "0x0000000000000000000000000000000000001000",
+   *   loanToken: "0x0000000000000000000000000000000000000001",
+   *   collateralParams: [
+   *     {
+   *       token: "0x0000000000000000000000000000000000000002",
+   *       lltv: 770000000000000000n,
+   *       liquidationCursor: 250000000000000000n,
+   *       oracle: "0x0000000000000000000000000000000000000003",
+   *     },
+   *   ],
+   *   maturity: 1n,
+   *   rcfThreshold: 0n,
+   *   enterGate: "0x0000000000000000000000000000000000000000",
+   *   liquidatorGate: "0x0000000000000000000000000000000000000000",
    * });
    * console.log(id);
    * ```
    */
-  export function toId(params: {
-    readonly market: MarketInput;
-    readonly chainId: BigIntish;
-  }) {
-    const chainId = BigInt(params.chainId);
-    const midnight = getChainAddress(Number(chainId), "midnight");
+  export function toId(market: MarketInput) {
+    const marketParams = MarketParams.from(market);
     const encodedMarket = encodeAbiParameters(
       [marketParamsAbiParameter],
-      [toStruct(params.market)],
+      [toStruct(marketParams)],
     );
     const creationHash = keccak256(concat([SSTORE2_PREFIX, encodedMarket]));
 
     return keccak256(
       encodePacked(
         ["uint8", "address", "uint256", "bytes32"],
-        [255, midnight, chainId, creationHash],
+        [255, marketParams.midnight, 0n, creationHash],
       ),
     );
   }

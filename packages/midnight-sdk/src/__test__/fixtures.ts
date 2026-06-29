@@ -16,7 +16,6 @@ export const chainId = ChainId.BaseMainnet;
 
 export const addresses = {
   midnight: "0x0000000000000000000000000000000000001000" as Address,
-  midnightBundles: "0x0000000000000000000000000000000000002000" as Address,
   midnightMempool: "0x0000000000000000000000000000000000003000" as Address,
   ecrecoverRatifier: "0x0000000000000000000000000000000000004000" as Address,
   setterRatifier: "0x0000000000000000000000000000000000005000" as Address,
@@ -33,7 +32,6 @@ registerCustomAddresses({
   addresses: {
     [chainId]: {
       midnight: addresses.midnight,
-      midnightBundles: addresses.midnightBundles,
       midnightMempool: addresses.midnightMempool,
       ecrecoverRatifier: addresses.ecrecoverRatifier,
       setterRatifier: addresses.setterRatifier,
@@ -45,12 +43,14 @@ export const group =
   "0x1111111111111111111111111111111111111111111111111111111111111111" as Hash;
 
 export const baseMarketParamsInput = (): IMarketParams => ({
+  chainId,
+  midnight: addresses.midnight,
   loanToken: addresses.loanToken,
   collateralParams: [
     {
       token: addresses.collateralToken,
       lltv: 770000000000000000n,
-      maxLif: 1061007957559681697n,
+      liquidationCursor: 250000000000000000n,
       oracle: addresses.oracle,
     },
   ],
@@ -62,13 +62,9 @@ export const baseMarketParamsInput = (): IMarketParams => ({
 
 export const baseMarketParams = () => new MarketParams(baseMarketParamsInput());
 
-export const marketId = MarketUtils.toId({
-  market: baseMarketParamsInput(),
-  chainId,
-});
+export const marketId = MarketUtils.toId(baseMarketParamsInput());
 
 export const baseMarketInput = (): IMarket => ({
-  chainId,
   params: baseMarketParams(),
   totalUnits: 1_000n,
   lossFactor: 0n,

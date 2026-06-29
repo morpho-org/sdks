@@ -16,19 +16,20 @@ import {
   baseOffer,
   group,
 } from "../__test__/fixtures.js";
-import { LIQUIDATION_CURSOR_LOW } from "../constants.js";
-import { MarketUtils } from "../market/index.js";
 import { type IOffer, type OfferStruct, OfferUtils } from "../offers/index.js";
 import * as Payload from "./Payload.js";
 import { MAX_ATTRIBUTION_SUFFIX_BYTES } from "./Payload.js";
 
 const API_VALID_MATURITY = 1_767_279_600n;
+const liquidationCursor = 250000000000000000n;
 
 const offerStructAbiComponents = [
   {
     name: "market",
     type: "tuple",
     components: [
+      { name: "chainId", type: "uint256" },
+      { name: "midnight", type: "address" },
       { name: "loanToken", type: "address" },
       {
         name: "collateralParams",
@@ -36,7 +37,7 @@ const offerStructAbiComponents = [
         components: [
           { name: "token", type: "address" },
           { name: "lltv", type: "uint256" },
-          { name: "maxLif", type: "uint256" },
+          { name: "liquidationCursor", type: "uint256" },
           { name: "oracle", type: "address" },
         ],
       },
@@ -146,6 +147,23 @@ describe("Payload.encode", () => {
     await expect(Payload.decode(encoded)).resolves.toHaveLength(257);
   });
 
+  test("behavior: allows zero-duration offer ranges", async () => {
+    const encoded = await Payload.encode([
+      {
+        offer: apiValidOffer({
+          group,
+          start: API_VALID_MATURITY - 60n,
+          expiry: API_VALID_MATURITY - 60n,
+        }),
+        ratifierData: "0x1234" as Hex,
+      },
+    ]);
+
+    const decoded = await Payload.decode(encoded);
+    expect(decoded[0]!.offer.start).toBe(API_VALID_MATURITY - 60n);
+    expect(decoded[0]!.offer.expiry).toBe(API_VALID_MATURITY - 60n);
+  });
+
   test("error: API-invalid offer", async () => {
     await expect(
       Payload.encode([
@@ -162,7 +180,7 @@ describe("Payload.encode", () => {
       Payload.encode([
         {
           offer: apiValidOffer({
-            start: API_VALID_MATURITY - 60n,
+            start: API_VALID_MATURITY - 59n,
             expiry: API_VALID_MATURITY - 60n,
           }),
           ratifierData: "0x1234" as Hex,
@@ -299,7 +317,7 @@ describe("Payload.decode", () => {
       OfferUtils.toStruct({
         offer: apiValidOffer({
           group,
-          start: API_VALID_MATURITY - 60n,
+          start: API_VALID_MATURITY - 59n,
           expiry: API_VALID_MATURITY - 60n,
         }),
       }),
@@ -345,7 +363,7 @@ describe("Payload.decode", () => {
         collateralParams: Array.from({ length: 129 }, (_, index) => ({
           token: numberToHex(index + 1, { size: 20 }) as Address,
           lltv: 770000000000000000n,
-          maxLif: 1061007957559681697n,
+          liquidationCursor,
           oracle: addresses.oracle,
         })),
       },
@@ -367,10 +385,7 @@ describe("Payload.decode", () => {
           {
             ...offer.market.collateralParams[0]!,
             lltv,
-            maxLif: MarketUtils.getLiquidationIncentiveFactor(
-              lltv,
-              LIQUIDATION_CURSOR_LOW,
-            ),
+            liquidationCursor,
           },
         ],
       },
@@ -399,7 +414,7 @@ describe("Payload.decode", () => {
     );
   });
 
-  test("error: invalid collateral maxLif", async () => {
+  test("error: computed collateral maxLif too high", async () => {
     const offer = OfferUtils.toStruct({ offer: apiValidOffer({ group }) });
     const encoded = await encodeUncheckedPayload({
       ...offer,
@@ -408,7 +423,8 @@ describe("Payload.decode", () => {
         collateralParams: [
           {
             ...offer.market.collateralParams[0]!,
-            maxLif: 1n,
+            lltv: 0n,
+            liquidationCursor: 999000000000000000n,
           },
         ],
       },

@@ -28,27 +28,27 @@ import type { Tree } from "./Tree.js";
 import type { TreeProof } from "./TreeUtils.js";
 
 const treeTypeHashes = [
-  "0xc27c38e446b48c820ab9c4373dc63a4a750a08165cb4bb488206ebabe045d650",
-  "0x4e15d8736f4406e07bf9844b1653474472a827130c61e899bf1f574a88b8d987",
-  "0x46d107447b480c38ef5b7f54603dba0cb23b887f302b01a998b9d8a80320dd53",
-  "0xd1f3607a8e81454bb3baf5f898274ab47541fffc690278a74f13e174e116be72",
-  "0xb2d98adca9d116c9bc02ce59ec599ac3c2d33db1c0d1217c7e411d9198d427be",
-  "0x5931e0597fcf986027f3118b2495a9ac22139d133f9ad2c2198e6738dc3886c5",
-  "0x3967d37928614a085b47e8758fbc3869a8aed63bdf60ccee8536ff2b5064da06",
-  "0xd6b9f5f45915a260f6e521d9b40f86c385730b6bc330590fcde212e2fea64263",
-  "0x080caa519dbd5328c119d9907e0fa3d9a50dc2ae4bf6dd42c93c100dbc89b51a",
-  "0x45da471048924165ea2ad1855ba940e454b486e71dcf1666c71a928c8844c419",
-  "0xa49a9434fc1836bd08097368325b31039b6a0fd44919f53e4d8f4bf814084cb0",
-  "0xd3e93e4525132f0187a6964dc01fef33fde414538ffd212e9f2f478c3263e0a0",
-  "0x25990db2d26547f92c711988300df317af57bad5cd5d9d8e787a82f95c929474",
-  "0x8e0c648afa977572ead40a1d10a6db2c425b8099545006d834a7b849c6166643",
-  "0x4b635250efa6243e277fdd0cf6df993c2943b64f10f3a0756ceb1f47ef8f9b18",
-  "0xbde1c927f6222c07c8df264e68b42b8382c7c2b85f4729e0df94297cfeebfa91",
-  "0x4d58aea1a67f94be21ab1415bf3b602592430eb9112268fd0fc4e141b1a35e76",
-  "0x14c03281bce13010b158e5a4a3378be394ac9e16118aedb17d82ced51e66836c",
-  "0x99fd3e76f43b2cc221cb9860bc6c96cda95af3fa07ef5f04e071b54aa9386d06",
-  "0x1b1c2f1a04968094d8d0453d49838f7a809d1202ae04a1c2e0964e442ff7988b",
-  "0xc8ccd3cb3267dd76f563584920ac60f2283b719917481b85fe5e10b754932455",
+  "0x004abfc3a2bdb852bd9e193d58623de158d293bff8df82b2c73762b1449a92da",
+  "0x2b907b506023b7da998b4e05205998675021a6698538b52812412353ba1b5b07",
+  "0xf3a8fa1ea464758633ee72dfd7bc109d92c69933b1d626583d37c1adc22431f4",
+  "0xc7aee773c7436e1047be687b497f42b5d2195ebcf80278aa902f65b99ea8d5f9",
+  "0x1ccd280d009a28babd35e45c7ea1bacc4abecbace69d6ca43bd297618af0d6ea",
+  "0x976e461f282292a9fc669ed6f8642da97b0853348b8d3b64caf1a63d74535062",
+  "0xa16c55d7ca5db454b6c0466c695febf8df2b4084481546a26383a48fb573f20b",
+  "0x15fa4f24cac8ee8dbbc17465043a62700395a7c75c4cc475fe241b6a3424b8bb",
+  "0x9bf198023231a1c26072e32ee84aa2ed6a1766ca348cceab9bc1065487b6dc82",
+  "0x7d723919779d24dfca798d2847418afb9d07dccc8aeed8db0f2e54a765e59630",
+  "0xd50fde6271f599771c124dc4d2f3058693c7ef675e733ceffb870fe5f2941524",
+  "0xb1c8d8455bf9b0d65722bc605488eedaf3ca18e32f386c366083af360aed575c",
+  "0x62306a7da75b4151cbc5a8c2be14ebd9ef413988ceb26330c2b85ea75df64761",
+  "0x4c05f804d2f0a7edc5d767492018eae312b6f8f9649222f8e7a78745783cd45d",
+  "0x968c3e8fe32537b97318f74ff109f7e6efa365f25048fc48f474d10981e5d03a",
+  "0x9c4b06c4bc414cd5ffb0b3d71fd1450393e79bbe73405f2770ee4489175cf734",
+  "0xe225a68d5feb03db447cc58f3a0ff567cfe7446a73cad24e1781a33696066e90",
+  "0xa9ef83c85cdc9f01279a32350b39d1e350a51ee9f236a9e6d1be764ec67d2b12",
+  "0x083f794c8751fba472222de46673bb4386de88d05495f9d2f2c40d96020a95b3",
+  "0xdfc36aba879c79d4ce19d8620a560d41d19bc9b315758ec93c651e92115d238b",
+  "0x60f9befb3ea1715092407b29ec59829d55544c89bcd5bde861fef413f2072ddd",
 ] as const;
 
 const signatureAbi = [
@@ -84,10 +84,12 @@ const typedDataTypes = {
   CollateralParams: [
     { name: "token", type: "address" },
     { name: "lltv", type: "uint256" },
-    { name: "maxLif", type: "uint256" },
+    { name: "liquidationCursor", type: "uint256" },
     { name: "oracle", type: "address" },
   ],
   Market: [
+    { name: "chainId", type: "uint256" },
+    { name: "midnight", type: "address" },
     { name: "loanToken", type: "address" },
     { name: "collateralParams", type: "CollateralParams[]" },
     { name: "maturity", type: "uint256" },
@@ -184,12 +186,14 @@ export interface DecodedEcrecoverRatifierData extends TreeProof {
  *
  * const offer = Offer.create({
  *   market: {
+ *     chainId: 8453,
+ *     midnight: "0x0000000000000000000000000000000000001000",
  *     loanToken: "0x0000000000000000000000000000000000006000",
  *     collateralParams: [
  *       {
  *         token: "0x0000000000000000000000000000000000007000",
  *         lltv: 770000000000000000n,
- *         maxLif: 1061007957559681697n,
+ *         liquidationCursor: 250000000000000000n,
  *         oracle: "0x0000000000000000000000000000000000008000",
  *       },
  *     ],
@@ -262,12 +266,14 @@ export type EcrecoverSignatureInput =
  *
  * const offer = Offer.create({
  *   market: {
+ *     chainId: 8453,
+ *     midnight: "0x0000000000000000000000000000000000001000",
  *     loanToken: "0x0000000000000000000000000000000000006000",
  *     collateralParams: [
  *       {
  *         token: "0x0000000000000000000000000000000000007000",
  *         lltv: 770000000000000000n,
- *         maxLif: 1061007957559681697n,
+ *         liquidationCursor: 250000000000000000n,
  *         oracle: "0x0000000000000000000000000000000000008000",
  *       },
  *     ],
@@ -310,12 +316,14 @@ export interface EcrecoverRatifierTypedDataParams {
  *
  * const offer = Offer.create({
  *   market: {
+ *     chainId: 8453,
+ *     midnight: "0x0000000000000000000000000000000000001000",
  *     loanToken: "0x0000000000000000000000000000000000006000",
  *     collateralParams: [
  *       {
  *         token: "0x0000000000000000000000000000000000007000",
  *         lltv: 770000000000000000n,
- *         maxLif: 1061007957559681697n,
+ *         liquidationCursor: 250000000000000000n,
  *         oracle: "0x0000000000000000000000000000000000008000",
  *       },
  *     ],
@@ -372,12 +380,14 @@ export type EcrecoverRatifierRatifyParams =
  *
  * const offer = Offer.create({
  *   market: {
+ *     chainId: 8453,
+ *     midnight: "0x0000000000000000000000000000000000001000",
  *     loanToken: "0x0000000000000000000000000000000000006000",
  *     collateralParams: [
  *       {
  *         token: "0x0000000000000000000000000000000000007000",
  *         lltv: 770000000000000000n,
- *         maxLif: 1061007957559681697n,
+ *         liquidationCursor: 250000000000000000n,
  *         oracle: "0x0000000000000000000000000000000000008000",
  *       },
  *     ],
@@ -469,12 +479,14 @@ export namespace EcrecoverRatifierUtils {
    *
    * const offer = Offer.create({
    *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
    *     loanToken: "0x0000000000000000000000000000000000006000",
    *     collateralParams: [
    *       {
    *         token: "0x0000000000000000000000000000000000007000",
    *         lltv: 770000000000000000n,
-   *         maxLif: 1061007957559681697n,
+   *         liquidationCursor: 250000000000000000n,
    *         oracle: "0x0000000000000000000000000000000000008000",
    *       },
    *     ],
@@ -539,12 +551,14 @@ export namespace EcrecoverRatifierUtils {
    *
    * const offer = Offer.create({
    *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
    *     loanToken: "0x0000000000000000000000000000000000006000",
    *     collateralParams: [
    *       {
    *         token: "0x0000000000000000000000000000000000007000",
    *         lltv: 770000000000000000n,
-   *         maxLif: 1061007957559681697n,
+   *         liquidationCursor: 250000000000000000n,
    *         oracle: "0x0000000000000000000000000000000000008000",
    *       },
    *     ],
@@ -611,12 +625,14 @@ export namespace EcrecoverRatifierUtils {
    *
    * const offer = Offer.create({
    *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
    *     loanToken: "0x0000000000000000000000000000000000006000",
    *     collateralParams: [
    *       {
    *         token: "0x0000000000000000000000000000000000007000",
    *         lltv: 770000000000000000n,
-   *         maxLif: 1061007957559681697n,
+   *         liquidationCursor: 250000000000000000n,
    *         oracle: "0x0000000000000000000000000000000000008000",
    *       },
    *     ],
@@ -830,12 +846,14 @@ export namespace EcrecoverRatifierUtils {
    *
    * const offer = Offer.create({
    *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
    *     loanToken: "0x0000000000000000000000000000000000006000",
    *     collateralParams: [
    *       {
    *         token: "0x0000000000000000000000000000000000007000",
    *         lltv: 770000000000000000n,
-   *         maxLif: 1061007957559681697n,
+   *         liquidationCursor: 250000000000000000n,
    *         oracle: "0x0000000000000000000000000000000000008000",
    *       },
    *     ],
@@ -895,12 +913,14 @@ export namespace EcrecoverRatifierUtils {
    *
    * const offer = Offer.create({
    *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
    *     loanToken: "0x0000000000000000000000000000000000006000",
    *     collateralParams: [
    *       {
    *         token: "0x0000000000000000000000000000000000007000",
    *         lltv: 770000000000000000n,
-   *         maxLif: 1061007957559681697n,
+   *         liquidationCursor: 250000000000000000n,
    *         oracle: "0x0000000000000000000000000000000000008000",
    *       },
    *     ],
