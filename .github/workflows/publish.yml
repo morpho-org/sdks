@@ -21,13 +21,13 @@ jobs:
       TARGET_BRANCH: ${{ github.ref_name }}
 
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: pnpm/action-setup@d15e628ca66d93ee5f352c71671a7bc6a97af5c9 # v6.0.8
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
@@ -35,9 +35,8 @@ jobs:
           registry-url: https://registry.npmjs.org
           scope: '@morpho-org'
 
-      # Trusted publishing requires npm >= 11.5.1, but Node 22.22.2's bundled npm 10.9.7
-      # currently fails to self-upgrade directly to npm@latest with MODULE_NOT_FOUND
-      # (missing promise-retry). Pin a known-good npm 11 release instead.
+      # Trusted publishing requires npm >= 11.5.1. Pin a known-good npm 11 release
+      # so hosted-runner npm bundle changes do not affect release provenance.
       - run: npm install -g npm@11.11.0
 
       - name: Record privileged-step baseline
@@ -186,6 +185,8 @@ jobs:
             NPM_CONFIG_PROVENANCE=true \
             NPM_CONFIG_REGISTRY=https://registry.npmjs.org \
             PATH="${TRUSTED_PATH}" \
+            PNPM_CONFIG_PROVENANCE=true \
+            PNPM_CONFIG_REGISTRY=https://registry.npmjs.org \
             PWD="${PWD}" \
             RUNNER_ENVIRONMENT="${RUNNER_ENVIRONMENT:-}" \
             RUNNER_TEMP="${RUNNER_TEMP}" \
@@ -193,6 +194,8 @@ jobs:
             TMPDIR="${TMPDIR:-/tmp}" \
             npm_config_provenance=true \
             npm_config_registry=https://registry.npmjs.org \
+            pnpm_config_provenance=true \
+            pnpm_config_registry=https://registry.npmjs.org \
             pnpm release --tag "$publish_tag" --no-git-tag
 
       - name: Verify release helper scripts after publish
@@ -383,7 +386,7 @@ jobs:
       TARGET_BRANCH: ${{ github.ref_name }}
 
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
