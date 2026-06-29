@@ -19,4 +19,6 @@ Reshape `blueRepay` funding to match `blueSupply` / `blueSupplyCollateral`, and 
 + blueRepay({ market, args: { amount: upperBound, shares, onBehalf, receiver, maxSharePrice } })
 ```
 
-The `MorphoBlue.repay()` entity API is unchanged (`{ assets } | { shares }`). The `BlueRepayAction` result shape (`assets` / `shares` / `transferAmount`, plus `nativeAmount`) is unchanged.
+**Additive change to `MorphoBlue.repay()`:** the entity now accepts an optional `nativeAmount` alongside `{ assets } | { shares }`. It sources up to that much of the repay funding by wrapping native ETH (capped at the required transfer — pass `nativeAmount >=` the transfer to fund fully with native), pulls the remainder as ERC-20, and `getRequirements` returns an approval only for that ERC-20 remainder (empty when fully native). Requires the loan token to be the chain's wNative.
+
+The `BlueRepayAction` result shape (`assets` / `shares` / `transferAmount`, plus `nativeAmount`) is unchanged.

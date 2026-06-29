@@ -23,4 +23,4 @@
 - ERC-20 approval for **GeneralAdapter1** on the collateral token (any path that supplies collateral) or the loan token (`supply`, `repay`).
 - `morpho.setAuthorization(generalAdapter1, true)` when authorization is not yet set on Morpho — read via `publicActions`. Required for `borrow`, `supplyCollateralBorrow`, `repayWithdrawCollateral`, and `withdraw` (loan-asset).
 
-`withdrawCollateral` has no requirements. `repay` and `supply` need only loan-token approval. Loan-asset `withdraw` needs only the Morpho authorization.
+`withdrawCollateral` has no requirements. `repay` and `supply` need only loan-token approval — and only for the non-native portion: both accept an optional `nativeAmount` that wraps native ETH and shrinks (or removes) the ERC-20 approval, so a fully-native repay/supply returns no approval. Loan-asset `withdraw` needs only the Morpho authorization.

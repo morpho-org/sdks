@@ -235,12 +235,17 @@ export interface BlueActions {
    *
    * Routed through bundler3 via GeneralAdapter1.
    * Supports two modes via {@link RepayAmountArgs}:
-   * - **By assets** (`{ amount }`): repays an exact asset amount (partial repay).
+   * - **By assets** (`{ assets }`): repays an exact asset amount (partial repay).
    * - **By shares** (`{ shares }`): repays exact shares (full repay, immune to interest accrual).
+   *
+   * Optionally, `nativeAmount` sources (up to) that much of the repay funding by wrapping native
+   * ETH into wNative; the remainder is pulled as ERC-20. Requires the loan token to be the chain's
+   * wNative. Passing `nativeAmount >= ` the required transfer funds the whole repay with native.
    *
    * Computes `maxSharePrice` from market borrow state and `slippageTolerance`.
    *
-   * `getRequirements` returns ERC20 approval for loan token to GeneralAdapter1.
+   * `getRequirements` returns the ERC20 approval for the (non-native) loan-token portion to
+   * GeneralAdapter1, or an empty list when the repay is fully funded by native.
    * Does NOT require Morpho authorization (anyone can repay on behalf of anyone).
    *
    * **Shares mode:** `slippageTolerance` also caps `transferAmount`.
@@ -253,6 +258,11 @@ export interface BlueActions {
       userAddress: Address;
       positionData: AccrualPosition;
       slippageTolerance?: bigint;
+      /**
+       * Native amount to wrap toward the repay funding (capped at the required transfer).
+       * Requires the loan token to be the chain's wNative.
+       */
+      nativeAmount?: bigint;
     } & RepayAmountArgs,
   ) => {
     buildTx: (
@@ -806,6 +816,7 @@ export class MorphoBlue implements BlueActions {
       userAddress: Address;
       positionData: AccrualPosition;
       slippageTolerance?: bigint;
+      nativeAmount?: bigint;
     } & RepayAmountArgs,
   ) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
@@ -814,10 +825,19 @@ export class MorphoBlue implements BlueActions {
       userAddress,
       positionData,
       slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
+      nativeAmount,
     } = params;
 
     if ("assets" in params && "shares" in params) {
       throw new MutuallyExclusiveRepayAmountsError(this.marketParams.id);
+    }
+
+    if (nativeAmount !== undefined && nativeAmount < 0n) {
+      throw new NegativeNativeAmountError(nativeAmount);
+    }
+
+    if (nativeAmount !== undefined && nativeAmount > 0n) {
+      validateNativeAsset(this.chainId, this.marketParams.loanToken);
     }
 
     const isSharesMode = "shares" in params;
@@ -883,6 +903,15 @@ export class MorphoBlue implements BlueActions {
       slippageTolerance,
     });
 
+    // Split the funding: source up to `nativeAmount` by wrapping native (capped at
+    // the required transfer — the residual is skimmed back in shares mode), and pull
+    // the rest as ERC-20. Only the ERC-20 portion needs an approval.
+    const nativeFunding =
+      nativeAmount !== undefined
+        ? MathLib.min(nativeAmount, transferAmount)
+        : 0n;
+    const erc20Amount = transferAmount - nativeFunding;
+
     return {
       getRequirements: (reqParams?: { useSimplePermit?: boolean }) =>
         getRequirements(this.client.viemClient, {
@@ -891,7 +920,7 @@ export class MorphoBlue implements BlueActions {
           supportSignature: this.client.options.supportSignature,
           supportDeployless: this.client.options.supportDeployless,
           useSimplePermit: reqParams?.useSimplePermit,
-          args: { amount: transferAmount, from: userAddress },
+          args: { amount: erc20Amount, from: userAddress },
         }),
 
       buildTx: (requirementSignature?: RequirementSignature) =>
@@ -901,10 +930,11 @@ export class MorphoBlue implements BlueActions {
             marketParams: this.marketParams,
           },
           args: {
-            // `amount` is the ERC-20 transfer pulled into GeneralAdapter1: the
-            // repaid assets (assets mode) or the upper-bound transfer (shares
-            // mode). `blueRepay` derives `transferAmount = amount + nativeAmount`.
-            amount: transferAmount,
+            // ERC-20 portion + wrapped native sum to the transfer pulled into
+            // GeneralAdapter1: the repaid assets (assets mode) or the upper-bound
+            // transfer (shares mode). `blueRepay` derives `transferAmount`.
+            amount: erc20Amount,
+            nativeAmount: nativeFunding,
             shares,
             onBehalf: userAddress,
             receiver: userAddress,
