@@ -1,8 +1,8 @@
-import { addressesRegistry, getChainAddresses } from "@morpho-org/blue-sdk";
+import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { afterEach, describe, expect, vi } from "vitest";
-import { WethUsdsBlue } from "../../../test/fixtures/blue.js";
+import { WethUsdsBlue, WstethWethBlue } from "../../../test/fixtures/blue.js";
 import { test } from "../../../test/setup.js";
 import {
   MutuallyExclusiveRepayAmountsError,
@@ -27,13 +27,8 @@ describe("blueRepay unit tests", () => {
     bundler3: { bundler3 },
   } = getChainAddresses(mainnet.id);
 
-  const { wNative } = addressesRegistry[mainnet.id];
-
-  /** Market params with wNative as loan token — enables native wrapping tests. */
-  const wNativeLoanMarketParams = {
-    ...WethUsdsBlue,
-    loanToken: wNative,
-  };
+  // WstethWethBlue has WETH (the mainnet wNative) as its loan token, so its
+  // cached `id` matches the encoded tuple — required for native-wrapping tests.
 
   test("should create repay-by-assets transaction", async ({ client }) => {
     const assets = parseUnits("1000", 6);
@@ -465,7 +460,7 @@ describe("blueRepay unit tests", () => {
     const tx = blueRepay({
       market: {
         chainId: mainnet.id,
-        marketParams: wNativeLoanMarketParams,
+        marketParams: WstethWethBlue,
       },
       args: {
         assets,
@@ -496,7 +491,7 @@ describe("blueRepay unit tests", () => {
     const tx = blueRepay({
       market: {
         chainId: mainnet.id,
-        marketParams: wNativeLoanMarketParams,
+        marketParams: WstethWethBlue,
       },
       args: {
         assets: transferAmount,
@@ -524,7 +519,7 @@ describe("blueRepay unit tests", () => {
     const tx = blueRepay({
       market: {
         chainId: mainnet.id,
-        marketParams: wNativeLoanMarketParams,
+        marketParams: WstethWethBlue,
       },
       args: {
         assets: 0n,
@@ -550,7 +545,7 @@ describe("blueRepay unit tests", () => {
       blueRepay({
         market: {
           chainId: mainnet.id,
-          marketParams: wNativeLoanMarketParams,
+          marketParams: WstethWethBlue,
         },
         args: {
           assets: parseUnits("1", 18),
@@ -572,7 +567,7 @@ describe("blueRepay unit tests", () => {
       blueRepay({
         market: {
           chainId: mainnet.id,
-          marketParams: wNativeLoanMarketParams,
+          marketParams: WstethWethBlue,
         },
         args: {
           assets: parseUnits("1", 18),

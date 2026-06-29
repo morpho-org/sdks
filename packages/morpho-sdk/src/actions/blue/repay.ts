@@ -104,7 +104,8 @@ export interface BlueRepayParams {
  * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `requirementSignature`
  *   is provided and the signed asset differs from `marketParams.loanToken`.
  * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
- *   is provided and the signed amount differs from `args.transferAmount`.
+ *   is provided and the signed amount differs from the ERC-20 remainder that is pulled
+ *   (`transferAmount - nativeAmount`, i.e. the full `transferAmount` when `nativeAmount` is unset).
  * @throws {Permit2ExpirationMissingError} from `getRequirementsAction` when a Permit2 requirement
  *   signature is missing its expiration.
  * @example
