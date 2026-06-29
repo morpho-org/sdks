@@ -901,9 +901,11 @@ export class MorphoBlue implements BlueActions {
             marketParams: this.marketParams,
           },
           args: {
-            assets,
+            // `amount` is the ERC-20 transfer pulled into GeneralAdapter1: the
+            // repaid assets (assets mode) or the upper-bound transfer (shares
+            // mode). `blueRepay` derives `transferAmount = amount + nativeAmount`.
+            amount: transferAmount,
             shares,
-            transferAmount,
             onBehalf: userAddress,
             receiver: userAddress,
             maxSharePrice,

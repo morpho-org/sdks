@@ -29,6 +29,8 @@ ERC-20 approval spender is **GeneralAdapter1** for any bundled path — never th
 | `supplyCollateral` (native) | `nativeTransfer → wrapNative → [erc20TransferFrom?] → morphoSupplyCollateral` |
 | `borrow` | `morphoBorrow` |
 | `borrow` (with reallocations) | `[reallocateTo × N] → morphoBorrow` |
+| `repay` (ERC-20) | `[erc20TransferFrom \| permit/permit2] → morphoRepay → [erc20Transfer skim if shares]` |
+| `repay` (native) | `[nativeTransfer → wrapNative]? → [erc20TransferFrom?] → morphoRepay → [erc20Transfer skim if shares]` |
 | `supplyCollateralBorrow` | `[nativeWrap?] → [erc20Transfer?] → morphoSupplyCollateral → morphoBorrow` |
 | `supplyCollateralBorrow` (with reallocations) | `[nativeWrap?] → [erc20Transfer?] → morphoSupplyCollateral → [reallocateTo × N] → morphoBorrow` |
 | `withdraw` | `morphoWithdraw` |
@@ -38,7 +40,7 @@ ERC-20 approval spender is **GeneralAdapter1** for any bundled path — never th
 
 ## Mode and ordering rules
 
-- `repay` accepts exactly one mode: assets (partial repay) or shares (full repay, with upper-bound transfer + `maxSharePrice`).
+- `repay` funds the transfer as `amount` (ERC-20) + `nativeAmount` (wrapped), summing to `transferAmount` — same surface as `supply` / `supplyCollateral`. Mode is set by `shares`: omit/`0n` for assets mode (repays exactly `transferAmount`); `shares > 0` for full repay (`transferAmount` is the upper-bound estimate, residual skimmed to `receiver`). Uses `maxSharePrice`.
 - `withdraw` accepts exactly one mode: assets (exact asset amount) or shares (full close, immune to interest accrual). No transfer/skim needed — `morphoWithdraw` sends to `receiver` directly.
 - `repayWithdrawCollateral` repays first, then withdraws — never the other order.
 - `supply` uses `maxSharePrice` (anti-inflation upper bound, `WAD + slippage`).
@@ -49,6 +51,6 @@ ERC-20 approval spender is **GeneralAdapter1** for any bundled path — never th
 Enforced by the entity layer's `getRequirements`; see [`entities/blue/AGENTS.md`](../../entities/blue/AGENTS.md):
 
 - `borrow`, `supplyCollateralBorrow`, `repayWithdrawCollateral`, and `withdraw` require GeneralAdapter1 to be authorized on Morpho (`setAuthorization`).
-- Native wrapping requires the collateral token (collateral-supply paths) or the loan token (`supply`) to be the configured wNative for the chain.
+- Native wrapping requires the collateral token (collateral-supply paths) or the loan token (`supply`, `repay`) to be the configured wNative for the chain.
 
 Reallocation rules: see [`actions/AGENTS.md`](../AGENTS.md#shared-liquidity--reallocations-canonical-statement) for the canonical contract.

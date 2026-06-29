@@ -186,19 +186,6 @@ export class NegativeNativeAmountError extends Error {
   }
 }
 
-/**
- * Thrown when a repay's `nativeAmount` exceeds the `transferAmount` it helps
- * fund. The wrapped-native portion cannot be larger than the total amount
- * pulled into `GeneralAdapter1`.
- */
-export class NativeAmountExceedsTransferAmountError extends Error {
-  constructor(nativeAmount: bigint, transferAmount: bigint) {
-    super(
-      `Native amount ${nativeAmount} exceeds transfer amount ${transferAmount}. The wrapped native portion cannot exceed the total amount pulled into GeneralAdapter1. Reduce nativeAmount or increase transferAmount.`,
-    );
-  }
-}
-
 /** Thrown when both `amount` and `nativeAmount` resolve to zero on a vault deposit. */
 export class ZeroDepositAmountError extends Error {
   constructor(vault: Address) {

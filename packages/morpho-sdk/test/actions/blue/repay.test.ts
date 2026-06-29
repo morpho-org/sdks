@@ -448,9 +448,7 @@ describe("RepayBlue - native wrapping", () => {
         const tx = blueRepay({
           market: { chainId: mainnet.id, marketParams: WstethWethBlue },
           args: {
-            assets: repayAmount,
-            shares: 0n,
-            transferAmount: repayAmount,
+            // Fund the whole repay by wrapping native; no ERC-20 `amount`.
             nativeAmount: repayAmount,
             onBehalf: client.account.address,
             receiver: client.account.address,
@@ -541,9 +539,8 @@ describe("RepayBlue - native wrapping", () => {
         const tx = blueRepay({
           market: { chainId: mainnet.id, marketParams: WstethWethBlue },
           args: {
-            assets: repayAmount,
-            shares: 0n,
-            transferAmount: repayAmount,
+            // ERC-20 remainder + wrapped native sum to the repaid assets.
+            amount: erc20Remainder,
             nativeAmount,
             onBehalf: client.account.address,
             receiver: client.account.address,
@@ -557,8 +554,8 @@ describe("RepayBlue - native wrapping", () => {
       },
     });
 
-    // Exactly the ERC-20 remainder was pulled from the user's WETH balance —
-    // GA1 must pull `transferAmount - nativeAmount`, not the full transferAmount.
+    // Exactly the ERC-20 `amount` was pulled from the user's WETH balance —
+    // GA1 pulls only `amount`, the native portion is wrapped separately.
     expect(
       initialState.userLoanTokenBalance - finalState.userLoanTokenBalance,
     ).toEqual(erc20Remainder);
