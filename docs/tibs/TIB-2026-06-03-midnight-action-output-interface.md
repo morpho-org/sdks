@@ -1386,7 +1386,7 @@ Important boundary calls:
 - group ids are content-addressed, not random: the entity builds offers with the Midnight SDK, then uses `Group.create(offers)` / `GroupUtils.hash` so `group`, roots, payloads, cancel references, and `onSuccess` metadata all agree with the shared Midnight helpers;
 - signing is inside `Requirement.sign`, not action-level;
 - router validation through `Tree.mempoolValidate(...)` throws before a signature prompt is exposed; lower-level `MidnightApi` helpers may still return `{ valid, issues }` for raw API consumers;
-- no raw `Error`; every new failure mode gets a typed error in `src/types/error.ts`.
+- no raw `Error`; every new failure mode gets a typed error in the package that owns the failing boundary.
 
 ## Flow mapping
 
