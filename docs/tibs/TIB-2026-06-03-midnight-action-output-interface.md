@@ -1521,15 +1521,18 @@ This branch is the reason `getRequirements()` must be allowed to return mandator
 
 Pre-read / validation happens before returning the action output:
 
-- `updatePositionView(...)` gives `creditUnits`;
-- `withdrawable(marketId) >= creditUnits`.
+- `updatePositionView(...)` gives accrued `creditUnits` and remaining `pendingFeeUnits`;
+- compute `redeemUnits = creditUnits - pendingFeeUnits`, using the `midnight-sdk` `positionData.faceValue` getter when the SDK consumer provides an `AccrualPosition`;
+- `withdrawable(marketId) >= redeemUnits`.
+
+Do not default this flow to raw `positionData.credit`. `Midnight.withdraw(...)` calls `_updatePosition(...)` before burning credit, so pending continuous fees can reduce the position's credit before the withdraw amount is applied. The default SDK flow should therefore use the accrued net face value. Integrators that intentionally want a different partial withdraw amount can still pass explicit `units`.
 
 `getRequirements()` returns `[]`.
 
 `buildTx()` returns `MidnightRedeemAction`:
 
 ```ts
-Midnight.withdraw(market, creditUnits, onBehalf, receiver)
+Midnight.withdraw(market, redeemUnits, onBehalf, receiver)
 ```
 
 ### Repay / withdraw collateral
