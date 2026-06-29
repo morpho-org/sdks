@@ -4,6 +4,7 @@ import type { Address } from "viem";
 import { type Action, BundlerAction } from "../../bundler/index.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
+  type AuthorizationRequirementSignature,
   type BlueWithdrawAction,
   type Metadata,
   MutuallyExclusiveWithdrawAmountsError,
@@ -12,6 +13,7 @@ import {
   type Transaction,
   type VaultReallocation,
 } from "../../types/index.js";
+import { getAuthorizationAction } from "../requirements/getAuthorizationAction.js";
 import { buildReallocationActions } from "./buildReallocationActions.js";
 
 /** Parameters for {@link blueWithdraw}. */
@@ -35,6 +37,12 @@ export interface BlueWithdrawParams {
      * `computeReallocations({ operation: "withdraw", amount, ... })`.
      */
     reallocations?: readonly VaultReallocation[];
+    /**
+     * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
+     * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a
+     * standalone `setAuthorization` transaction.
+     */
+    authorizationSignature?: AuthorizationRequirementSignature;
   };
   metadata?: Metadata;
 }
@@ -67,6 +75,8 @@ export interface BlueWithdrawParams {
  *   protection.
  * @param params.args.reallocations - Optional vault reallocations to execute before withdrawing,
  *   computed by the entity layer.
+ * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
+ *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueWithdrawAction>` with `to`, `value`, `data`, and
  *   the typed `action` discriminator the simulation layer consumes.
@@ -96,7 +106,14 @@ export interface BlueWithdrawParams {
  */
 export const blueWithdraw = ({
   market: { chainId, marketParams },
-  args: { assets, shares, receiver, minSharePrice, reallocations },
+  args: {
+    assets,
+    shares,
+    receiver,
+    minSharePrice,
+    reallocations,
+    authorizationSignature,
+  },
   metadata,
 }: BlueWithdrawParams): Readonly<Transaction<BlueWithdrawAction>> => {
   // Mutual exclusion is detected on "both values present" (either non-zero),
@@ -116,6 +133,10 @@ export const blueWithdraw = ({
 
   const actions: Action[] = [];
   let reallocationFee = 0n;
+
+  if (authorizationSignature) {
+    actions.push(getAuthorizationAction(authorizationSignature));
+  }
 
   if (reallocations && reallocations.length > 0) {
     const result = buildReallocationActions(reallocations, marketParams);

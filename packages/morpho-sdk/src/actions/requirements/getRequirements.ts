@@ -5,6 +5,7 @@ import type { Client } from "viem";
 import {
   ChainIdMismatchError,
   type ERC20ApprovalAction,
+  type PermitRequirementSignature,
   type Requirement,
   type Transaction,
 } from "../../types/index.js";
@@ -85,7 +86,12 @@ type GetRequirementsParams =
 export const getRequirements = async (
   viemClient: Client,
   params: GetRequirementsParams,
-): Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]> => {
+): Promise<
+  (
+    | Readonly<Transaction<ERC20ApprovalAction>>
+    | Requirement<PermitRequirementSignature>
+  )[]
+> => {
   const {
     address,
     chainId,

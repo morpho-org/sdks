@@ -9,7 +9,7 @@ import {
 import type {
   BlueRepayAction,
   Metadata,
-  RequirementSignature,
+  PermitRequirementSignature,
   Transaction,
 } from "../../types/index.js";
 import { getRequirementsAction } from "../requirements/getRequirementsAction.js";
@@ -37,7 +37,7 @@ export interface BlueRepayParams {
     receiver: Address;
     /** Maximum repay share price (in ray). Protects against share price manipulation. */
     maxSharePrice: bigint;
-    requirementSignature?: RequirementSignature;
+    requirementSignature?: PermitRequirementSignature;
   };
   metadata?: Metadata;
 }

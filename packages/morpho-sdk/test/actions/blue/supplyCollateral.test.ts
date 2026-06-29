@@ -282,7 +282,7 @@ describe("SupplyCollateralBlue", () => {
           client.account.address,
         );
 
-        const tx = supplyCollateral.buildTx(requirementSignature);
+        const tx = supplyCollateral.buildTx([requirementSignature]);
         await client.sendTransaction(tx);
       },
     });
@@ -365,7 +365,7 @@ describe("SupplyCollateralBlue", () => {
           BigInt(Math.floor(Date.now() / 1000)),
         );
 
-        const tx = supplyCollateral.buildTx(requirementSignature);
+        const tx = supplyCollateral.buildTx([requirementSignature]);
         await client.sendTransaction(tx);
       },
     });

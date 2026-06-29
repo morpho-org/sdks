@@ -12,7 +12,7 @@ import {
   type Metadata,
   NegativeNativeAmountError,
   NonPositiveAssetAmountError,
-  type RequirementSignature,
+  type PermitRequirementSignature,
   type Transaction,
   ZeroCollateralAmountError,
 } from "../../types/index.js";
@@ -26,7 +26,7 @@ export interface BlueSupplyCollateralParams {
   };
   args: DepositAmountArgs & {
     onBehalf: Address;
-    requirementSignature?: RequirementSignature;
+    requirementSignature?: PermitRequirementSignature;
   };
   metadata?: Metadata;
 }

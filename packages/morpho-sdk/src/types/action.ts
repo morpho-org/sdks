@@ -316,12 +316,39 @@ export interface Permit2Args {
   expiration: bigint;
 }
 
-export interface Requirement {
-  sign: (
-    client: WalletClient,
-    userAddress: Address,
-  ) => Promise<RequirementSignature>;
-  action: PermitAction | Permit2Action;
+/**
+ * Signed Morpho Blue authorization payload produced when an integrator opts into offchain
+ * signatures (`supportSignature: true`). Consumed by the action layer to emit a
+ * `setAuthorizationWithSig` bundler call in place of a standalone `setAuthorization` transaction.
+ */
+export interface AuthorizationSignatureArgs {
+  /** Account granting the authorization (the position owner). */
+  owner: Address;
+  /** Account being authorized to operate on Morpho on the owner's behalf (GeneralAdapter1). */
+  authorized: Address;
+  /** Whether the authorization is granted (`true`) or revoked (`false`). */
+  isAuthorized: boolean;
+  /** Morpho authorization nonce consumed by the signature. */
+  nonce: bigint;
+  /** Signature deadline timestamp in seconds. */
+  deadline: bigint;
+  /** EIP-712 signature over the Morpho `Authorization` typed data. */
+  signature: Hex;
+}
+
+/**
+ * A signable approval / authorization requirement. `sign()` returns the matching
+ * {@link RequirementSignature}; `action` describes the requirement without signing.
+ *
+ * Generic over the signature it produces so permit encoders narrow to
+ * {@link PermitRequirementSignature} and the authorization encoder to
+ * {@link AuthorizationRequirementSignature}; the default keeps the broad union for mixed arrays.
+ */
+export interface Requirement<
+  TSignature extends RequirementSignature = RequirementSignature,
+> {
+  sign: (client: WalletClient, userAddress: Address) => Promise<TSignature>;
+  action: TSignature["action"];
 }
 
 export interface PermitAction
@@ -336,10 +363,36 @@ export interface Permit2Action
     { spender: Address; amount: bigint; deadline: bigint; expiration: bigint }
   > {}
 
-export interface RequirementSignature {
+/**
+ * Signable Morpho authorization requirement. Emitted by the entity layer when a bundled path
+ * needs GeneralAdapter1 authorized and the client opts into offchain signatures.
+ */
+export interface AuthorizationAction
+  extends BaseAction<
+    "authorization",
+    { authorized: Address; isAuthorized: boolean; deadline: bigint }
+  > {}
+
+/** A signed ERC-2612 permit or Permit2 approval requirement. */
+export interface PermitRequirementSignature {
   args: PermitArgs | Permit2Args;
   action: PermitAction | Permit2Action;
 }
+
+/** A signed Morpho authorization requirement (consumed via `setAuthorizationWithSig`). */
+export interface AuthorizationRequirementSignature {
+  args: AuthorizationSignatureArgs;
+  action: AuthorizationAction;
+}
+
+/**
+ * The deep-frozen output of `Requirement.sign()`. Discriminated on `action.type`:
+ * `"permit"` / `"permit2"` carry token-approval args, `"authorization"` carries the signed
+ * Morpho authorization. Narrow with {@link isPermitSignature} / {@link isAuthorizationSignature}.
+ */
+export type RequirementSignature =
+  | PermitRequirementSignature
+  | AuthorizationRequirementSignature;
 
 export function isRequirementApproval(
   requirement:
@@ -375,16 +428,44 @@ export function isRequirementAuthorization(
   );
 }
 
-export function isRequirementSignature(
+export function isRequirementSignature<
+  T extends RequirementSignature = RequirementSignature,
+>(
   requirement:
     | Transaction<ERC20ApprovalAction>
     | Transaction<MorphoAuthorizationAction>
-    | Requirement
+    | Requirement<T>
     | undefined,
-): requirement is Requirement {
+): requirement is Requirement<T> {
   return (
     requirement !== undefined &&
     "sign" in requirement &&
     typeof requirement.sign === "function"
   );
+}
+
+/**
+ * Narrows a {@link RequirementSignature} to a permit / Permit2 token-approval signature.
+ *
+ * @param signature - The signed requirement to test.
+ * @returns `true` when `signature.action.type` is `"permit"` or `"permit2"`.
+ */
+export function isPermitSignature(
+  signature: RequirementSignature,
+): signature is PermitRequirementSignature {
+  return (
+    signature.action.type === "permit" || signature.action.type === "permit2"
+  );
+}
+
+/**
+ * Narrows a {@link RequirementSignature} to a signed Morpho authorization.
+ *
+ * @param signature - The signed requirement to test.
+ * @returns `true` when `signature.action.type` is `"authorization"`.
+ */
+export function isAuthorizationSignature(
+  signature: RequirementSignature,
+): signature is AuthorizationRequirementSignature {
+  return signature.action.type === "authorization";
 }

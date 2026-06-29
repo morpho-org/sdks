@@ -49,6 +49,28 @@ export namespace BundlerErrors {
       super(`unexpected action "${type}" on chain "${chainId}"`);
     }
   }
+
+  /**
+   * Thrown when a Morpho authorization signature names a forbidden `authorized` account
+   * (for example Bundler3 itself), which would grant operator rights to an unintended address.
+   *
+   * @example
+   * ```ts
+   * import { BundlerErrors } from "@morpho-org/morpho-sdk";
+   *
+   * if (error instanceof BundlerErrors.UnexpectedSignature) {
+   *   // Re-sign the authorization targeting GeneralAdapter1.
+   * }
+   * ```
+   */
+  export class UnexpectedSignature extends Error {
+    /**
+     * @param authorized - The forbidden `authorized` address carried by the signature.
+     */
+    constructor(authorized: Address) {
+      super(`unexpected signature authorizing "${authorized}"`);
+    }
+  }
 }
 
 /** Thrown when an asset amount is required to be positive but is zero or negative. */

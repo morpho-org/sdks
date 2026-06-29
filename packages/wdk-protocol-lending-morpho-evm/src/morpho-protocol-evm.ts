@@ -556,7 +556,13 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   ): Promise<WdkTransaction> {
     const action = await this._getSupplyAction(options, depositAmounts);
 
-    return toWdkTransaction(action.buildTx(options.requirementSignature));
+    return toWdkTransaction(
+      action.buildTx(
+        options.requirementSignature
+          ? [options.requirementSignature]
+          : undefined,
+      ),
+    );
   }
 
   /**
@@ -659,7 +665,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    */
   async getBorrowRequirements(
     options: MorphoBorrowOptions,
-  ): Promise<RequirementAuthorization[]> {
+  ): Promise<(RequirementAuthorization | RequirementSignatureRequest)[]> {
     const action = await this._getBorrowAction(options);
 
     return await action.getRequirements();
@@ -817,7 +823,13 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   ): Promise<WdkTransaction> {
     const action = await this._getRepayAction(options, amount);
 
-    return toWdkTransaction(action.buildTx(options.requirementSignature));
+    return toWdkTransaction(
+      action.buildTx(
+        options.requirementSignature
+          ? [options.requirementSignature]
+          : undefined,
+      ),
+    );
   }
 
   /**
@@ -921,7 +933,13 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       depositAmounts,
     );
 
-    return toWdkTransaction(action.buildTx(options.requirementSignature));
+    return toWdkTransaction(
+      action.buildTx(
+        options.requirementSignature
+          ? [options.requirementSignature]
+          : undefined,
+      ),
+    );
   }
 
   /**

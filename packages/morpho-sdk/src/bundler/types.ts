@@ -135,6 +135,13 @@ export interface ActionArgs {
     skipRevert?: boolean,
   ];
 
+  /** Morpho Blue `setAuthorizationWithSig` call submitting a signed `authorization` and its `signature`; `skipRevert` controls Bundler3 revert handling. */
+  readonly morphoSetAuthorizationWithSig: [
+    authorization: Authorization,
+    signature: Hex | null,
+    skipRevert?: boolean,
+  ];
+
   /** Morpho Blue supply-collateral call for `market`, `assets`, `onBehalf`, and callback actions; `skipRevert` controls Bundler3 revert handling. */
   readonly morphoSupplyCollateral: [
     market: InputMarketParams,

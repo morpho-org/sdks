@@ -24,12 +24,14 @@ import {
   type DepositAmountArgs,
   type ERC20ApprovalAction,
   ExcessiveSlippageToleranceError,
+  isPermitSignature,
   type MorphoClientType,
   NativeAmountOnNonWNativeVaultError,
   NegativeNativeAmountError,
   NegativeSlippageToleranceError,
   NonPositiveAssetAmountError,
   NonPositiveSharesAmountError,
+  type PermitRequirementSignature,
   type Requirement,
   type RequirementSignature,
   type Transaction,
@@ -69,7 +71,7 @@ export interface VaultV2Actions {
    * @param {bigint} [params.nativeAmount] - Amount of native token to wrap into wNative. Vault asset must be wNative.
    * @returns {Object} The result object.
    * @returns {Readonly<Transaction<VaultV2DepositAction>>} returns.tx The prepared deposit transaction.
-   * @returns {Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]>} returns.getRequirements The function for retrieving all required approval transactions.
+   * @returns {Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement<PermitRequirementSignature>)[]>} returns.getRequirements The function for retrieving all required approval transactions.
    */
   deposit: (
     params: {
@@ -79,11 +81,16 @@ export interface VaultV2Actions {
     } & DepositAmountArgs,
   ) => {
     buildTx: (
-      requirementSignature?: RequirementSignature,
+      signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<VaultV2DepositAction>>;
     getRequirements: (params?: {
       useSimplePermit?: boolean;
-    }) => Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]>;
+    }) => Promise<
+      (
+        | Readonly<Transaction<ERC20ApprovalAction>>
+        | Requirement<PermitRequirementSignature>
+      )[]
+    >;
   };
   /**
    * Prepares a withdraw transaction for the VaultV2 contract.
@@ -279,7 +286,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
           },
         }),
 
-      buildTx: (requirementSignature?: RequirementSignature) =>
+      buildTx: (signatures?: readonly RequirementSignature[]) =>
         vaultV2Deposit({
           vault: {
             chainId: this.chainId,
@@ -290,7 +297,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
             amount,
             maxSharePrice,
             recipient: userAddress,
-            requirementSignature,
+            requirementSignature: signatures?.find(isPermitSignature),
             nativeAmount,
           },
           metadata: this.client.options.metadata,

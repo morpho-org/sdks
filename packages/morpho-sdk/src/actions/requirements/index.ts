@@ -1,4 +1,5 @@
 export * from "./encode/index.js";
+export * from "./getAuthorizationAction.js";
 export * from "./getMorphoAuthorizationRequirement.js";
 export * from "./getRequirements.js";
 export * from "./getRequirementsAction.js";

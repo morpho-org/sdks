@@ -4,6 +4,7 @@ import {
   type InputMarketParams,
 } from "@morpho-org/blue-sdk";
 import {
+  blueAbi,
   erc2612Abi,
   permit2Abi,
   publicAllocatorAbi,
@@ -34,6 +35,7 @@ import {
 describe("BundlerAction", () => {
   const chainId = ChainId.EthMainnet;
   const {
+    morpho,
     permit2,
     publicAllocator,
     bundler3: { bundler3, generalAdapter1 },
@@ -1336,6 +1338,53 @@ describe("BundlerAction", () => {
     expect(call.skipRevert).toBe(true);
     expect(decoded.functionName).toBe("permit2TransferFrom");
     expect(decoded.args).toEqual([asset, recipient, 1n]);
+  });
+
+  describe("morphoSetAuthorizationWithSig", () => {
+    const authorization = {
+      authorizer: owner,
+      authorized: generalAdapter1,
+      isAuthorized: true,
+      nonce: 0n,
+      deadline: 1_900_000_000n,
+    } as const;
+
+    test("default", () => {
+      const call = onlyCall(
+        BundlerAction.morphoSetAuthorizationWithSig(
+          chainId,
+          authorization,
+          signature,
+          false,
+        ),
+      );
+      const decoded = decodeFunctionData({ abi: blueAbi, data: call.data });
+      const { r, s, yParity } = parseSignature(signature);
+
+      expect(call.to).toBe(morpho);
+      expect(call.skipRevert).toBe(false);
+      expect(decoded.functionName).toBe("setAuthorizationWithSig");
+      expect(decoded.args).toEqual([authorization, { v: yParity + 27, r, s }]);
+    });
+
+    test("error: UnexpectedSignature when authorizing bundler3", () => {
+      expect(() =>
+        BundlerAction.morphoSetAuthorizationWithSig(
+          chainId,
+          { ...authorization, authorized: bundler3 },
+          signature,
+        ),
+      ).toThrow(BundlerErrors.UnexpectedSignature);
+    });
+
+    test("error: MissingSignature via encode", () => {
+      expect(() =>
+        BundlerAction.encode(chainId, {
+          type: "morphoSetAuthorizationWithSig",
+          args: [authorization, null, false],
+        }),
+      ).toThrow(BundlerErrors.MissingSignature);
+    });
   });
 
   test("erc4626Deposit", () => {

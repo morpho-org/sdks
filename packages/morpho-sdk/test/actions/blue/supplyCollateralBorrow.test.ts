@@ -368,7 +368,7 @@ describe("SupplyCollateralBorrowBlue", () => {
 
         await client.sendTransaction(authorization);
 
-        const tx = scb.buildTx(requirementSignature);
+        const tx = scb.buildTx([requirementSignature]);
         await client.sendTransaction(tx);
       },
     });
@@ -459,7 +459,7 @@ describe("SupplyCollateralBorrowBlue", () => {
 
         await client.sendTransaction(authorization);
 
-        const tx = scb.buildTx(requirementSignature);
+        const tx = scb.buildTx([requirementSignature]);
         await client.sendTransaction(tx);
       },
     });
