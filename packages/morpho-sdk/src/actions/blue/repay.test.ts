@@ -1,5 +1,5 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
-import { parseUnits } from "viem";
+import { parseUnits, toFunctionSelector } from "viem";
 import { mainnet } from "viem/chains";
 import { afterEach, describe, expect, vi } from "vitest";
 import { WethUsdsBlue, WstethWethBlue } from "../../../test/fixtures/blue.js";
@@ -29,6 +29,15 @@ describe("blueRepay unit tests", () => {
 
   // WstethWethBlue has WETH (the mainnet wNative) as its loan token, so its
   // cached `id` matches the encoded tuple — required for native-wrapping tests.
+
+  // GeneralAdapter1 call selectors, used to assert which funding path the
+  // bundle actually encodes (without decoding the whole bundler3 multicall).
+  const wrapNativeSelector = toFunctionSelector(
+    "wrapNative(uint256,address)",
+  ).slice(2);
+  const erc20TransferFromSelector = toFunctionSelector(
+    "erc20TransferFrom(address,address,uint256)",
+  ).slice(2);
 
   test("should create repay-by-assets transaction", async ({ client }) => {
     const assets = parseUnits("1000", 6);
@@ -478,7 +487,12 @@ describe("blueRepay unit tests", () => {
     // tx.value is derived from the nativeTransfer call by encodeBundle.
     expect(tx.value).toBe(assets);
     expect(tx.to).toBe(bundler3);
-    // Fully native funding — no ERC-20 transfer and no requirement actions.
+    // Fully native funding: the bundle wraps native and pulls NO ERC-20.
+    // (erc20Funding = transferAmount - nativeAmount = 0.)
+    const data = tx.data.toLowerCase();
+    expect(data).toContain(wrapNativeSelector);
+    expect(data).not.toContain(erc20TransferFromSelector);
+    // No permit/permit2 requirement actions either.
     expect(localSpy).not.toHaveBeenCalled();
   });
 
@@ -508,6 +522,10 @@ describe("blueRepay unit tests", () => {
     // Only the native portion carries value; the remainder is pulled via ERC-20.
     expect(tx.value).toBe(nativeAmount);
     expect(tx.to).toBe(bundler3);
+    // Mixed funding: the bundle both wraps native AND pulls the ERC-20 remainder.
+    const data = tx.data.toLowerCase();
+    expect(data).toContain(wrapNativeSelector);
+    expect(data).toContain(erc20TransferFromSelector);
   });
 
   test("should keep the shares-mode skim when funding via native", async ({
