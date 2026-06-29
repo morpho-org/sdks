@@ -1253,11 +1253,11 @@ The helper follows Blue's consumer-facing policy:
 
 - if the direct allowance to `spender` already covers `amount`, return `[]`;
 - if `supportSignature` is `false`, return the classic `ERC20ApprovalAction` for `token.approve(spender, approvalAmount)`;
-- if `supportSignature` is `true`, `useSimplePermit` is `true`, the token supports ERC2612, and the token is not the chain's configured DAI address, return a `permit` signature requirement for `spender`;
+- if `supportSignature` is `true`, `useSimplePermit` is `true`, the token supports ERC2612, and the token is not the chain's configured DAI address, return a standard ERC2612 `permit` signature requirement for `spender`;
 - otherwise, when Permit2 is configured on the chain, return the Permit2 prerequisites: optional `ERC20ApprovalAction` for `token.approve(Permit2, approvalAmount)` plus a `permit2Transfer` signature requirement for Midnight's SignatureTransfer payload;
 - if signatures are enabled but no permit route is available, fall back to the classic approval transaction.
 
-The DAI exclusion is intentionally inherited from Blue requirements: DAI exposes a readable nonce but uses a non-standard permit shape, while the shared `permit` requirement encodes ERC2612. DAI must therefore skip the simple-permit branch and continue to Permit2 SignatureTransfer or classic approval.
+The SDK must not expose or use DAI-specific permit support in the Blue or Midnight action flows. DAI exposes a readable `nonces(owner)` function and can therefore look ERC2612-compatible to a shallow nonce probe, but its permit shape is non-standard while the shared `permit` requirement encodes ERC2612. DAI must therefore skip the simple-permit branch even when `useSimplePermit` is `true` and continue to Permit2 (Permit2 allowance for Blue, Permit2 SignatureTransfer for Midnight) or classic approval when Permit2 is unavailable.
 
 The paired action encoder consumes the collected signatures:
 
