@@ -12,6 +12,7 @@ jobs:
     if: github.ref_name == 'main' || github.ref_name == 'next'
     name: Publish
     runs-on: ubuntu-latest
+    environment: prod
     outputs:
       has_tags: ${{ steps.publish-packages.outputs.has_tags }}
     env:
