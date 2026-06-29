@@ -503,7 +503,7 @@ What stays in the app:
 
 Complexity for the markets app: **low**. This is mostly a mechanical builder replacement. The app keeps the existing rate-to-units lines, removes roughly the allowance / authorization / approval / take-encoding / final-call half of the builder, and updates tests to assert adapter inputs rather than raw app-built calldata. Signature support, when already enabled at the shared SDK / adapter boundary, is surfaced by the adapter and does not require another branch inside this builder.
 
-### Example 2: supply-collateral-borrow-limit
+### Example 2: supply-collateral-make-borrow
 
 This is the hardest current migration shape because it combines a mandatory prelude tx with maker consent. The app currently owns both concerns:
 
@@ -578,7 +578,7 @@ await assertTicksAlignedToSpacing({
 
 const action = await client.morpho
   .midnight(client.chain.id)
-  .supplyCollateralBorrowLimit({
+  .supplyCollateralMakeBorrow({
     accountAddress,
     market: market.struct,
     collateralAssets,
@@ -629,8 +629,8 @@ This case intentionally stays approval-based for collateral and reserve transfer
 SDK-side outline, with no UI labels and no markets-app display concepts:
 
 ```ts
-async function supplyCollateralBorrowLimit(
-  params: SupplyCollateralBorrowLimitParams,
+async function supplyCollateralMakeBorrow(
+  params: SupplyCollateralMakeBorrowParams,
 ): Promise<MakeOffersOutput> {
   assertPositiveAmount("collateralAssets", params.collateralAssets);
   assertPositiveAmount("loanAssets", params.loanAssets);
@@ -691,7 +691,7 @@ async function supplyCollateralBorrowLimit(
 Expected app-side diff: **medium**. The app keeps form validation, the existing rate / tick / expiry preparation that already produces `offerInputs`, the tick-spacing preflight, and `offerExpiry` review state. It deletes allowance reads, approval/supply calldata, ratifier detection, root signing/ratify-root wiring, payload construction, and the app-local maker submit transaction. The `offerInputs = ...` line below represents the current inline app-owned preparation block moved before the SDK call, not a new markets-app helper.
 
 ```diff
- export async function buildBorrowLimitOrderActionFlow({
+ export async function buildMakeBorrowOrderActionFlow({
    client,
    marketId,
    accountAddress,
@@ -702,7 +702,7 @@ Expected app-side diff: **medium**. The app keeps form validation, the existing 
    expiry,
    now,
    onSuccess,
- }: BuildBorrowLimitActionFlowParameters): Promise<{ flow: ActionFlow; offerExpiry: number }> {
+ }: BuildMakeBorrowActionFlowParameters): Promise<{ flow: ActionFlow; offerExpiry: number }> {
    if (collateralAssets === 0n && loanAssets === 0n) throw new UserFacingError(...);
    if (collateralAssets < 0n || loanAssets < 0n) throw new UserFacingError(...);
 
@@ -731,7 +731,7 @@ Expected app-side diff: **medium**. The app keeps form validation, the existing 
 -    callRequests.push(...callReqs);
    }
 
-+  const action = await client.morpho.midnight(client.chain.id).supplyCollateralBorrowLimit({
++  const action = await client.morpho.midnight(client.chain.id).supplyCollateralMakeBorrow({
 +    accountAddress,
 +    market: market.struct,
 +    collateralAssets,
@@ -769,7 +769,7 @@ What stays in the app:
 - no token-permit UI branch for this collateral prelude; the SDK returns an approval transaction because the core Midnight call used by this migration has no `TokenPermit` argument;
 - `onSuccess(result, action.group ?? null)` and local review display of `offerExpiry`.
 
-Complexity for the markets app: **medium**. The code removal is still large, but the remaining app code is the code it already owns: form validation, rate / tick / expiry preparation, labels, and `offerExpiry` display. The replacement is exact: pass the existing `offerInputs` to `supplyCollateralBorrowLimit`, adapt the returned requirements through the shared adapter, and use `action.group ?? null` for `onSuccess`. No markets app flow requires `ActionFlow.before`, `ActionFlow.after`, a DAG, or `buildTxs()`.
+Complexity for the markets app: **medium**. The code removal is still large, but the remaining app code is the code it already owns: form validation, rate / tick / expiry preparation, labels, and `offerExpiry` display. The replacement is exact: pass the existing `offerInputs` to `supplyCollateralMakeBorrow`, adapt the returned requirements through the shared adapter, and use `action.group ?? null` for `onSuccess`. No markets app flow requires `ActionFlow.before`, `ActionFlow.after`, a DAG, or `buildTxs()`.
 
 ### Example 3: repay / withdraw through MidnightBundles
 
@@ -1074,7 +1074,7 @@ export type ActionRequirement = TransactionRequirement | SignatureRequirement;
 
 `MidnightSupplyCollateralAction` is included because it can be a mandatory prelude transaction for a currently implemented app flow:
 
-- `supplyCollateralBorrowLimit`: supply collateral first, then submit the maker borrow offer.
+- `supplyCollateralMakeBorrow`: supply collateral first, then submit the maker borrow offer.
 
 Repay / withdraw collateral does **not** need a mandatory repay prelude in the app-compatible migration, because it remains one final `MidnightBundles.repayAndWithdrawCollateral(...)` transaction.
 
@@ -1290,7 +1290,7 @@ Midnight's Permit2 branch uses SignatureTransfer with a randomly generated 256-b
 Midnight callers still supply the spender explicitly:
 
 - `MidnightBundles` for take-lend, take-borrow with `loanAssets > 0`, and repay / withdraw bundle flows. These bundle calls have a `TokenPermit` argument and can use ERC2612 / Permit2;
-- `Midnight` for direct `supplyCollateral` branches and maker-offer reserve approvals (make-lend loan token approvals and supply-collateral-borrow-limit collateral approvals). These direct / mempool paths do not have a `TokenPermit` argument in this migration and remain approval-transaction based.
+- `Midnight` for direct `supplyCollateral` branches and maker-offer reserve approvals (make-lend loan token approvals and supply-collateral-make-borrow collateral approvals). These direct / mempool paths do not have a `TokenPermit` argument in this migration and remain approval-transaction based.
 
 ### Midnight authorization helper
 
@@ -1591,7 +1591,7 @@ Copy `signatureRequests`, `callRequests`, `before`, and `after` into the SDK.
 
 Expose only optional prerequisites and force callers to build prelude txs manually.
 
-**Why rejected:** supply-collateral-borrow-limit cannot be expressed safely if the caller owns the prelude because the collateral supply must execute before the mempool submit transaction. Integrators would need bespoke sequencing outside the SDK, which defeats the migration goal.
+**Why rejected:** supply-collateral-make-borrow cannot be expressed safely if the caller owns the prelude because the collateral supply must execute before the mempool submit transaction. Integrators would need bespoke sequencing outside the SDK, which defeats the migration goal.
 
 ### Alternative 4: Keep Midnight Permit / Permit2 deferred
 
@@ -1629,9 +1629,9 @@ Keep approval-only Midnight bundle flows for the initial migration and add token
 - `packages/morpho-sdk/src/actions/requirements/getRequirementsApproval.ts` — lower-level approval helper to reuse with explicit spender.
 - `packages/midnight-sdk/src/signatures/{Group,Tree,Payload,EcrecoverRatifierUtils,SetterRatifierUtils}.ts` — existing framework-free Midnight group, tree, payload, and ratifier utilities that the hypothetical `morpho-sdk` flows should reuse or mirror.
 - `morpho-org/morpho-apps/apps/markets-app/lib/modules/order/actions/lend-market/buildLendMarketOrderActionFlow.ts` — lend-market app flow.
-- `morpho-org/morpho-apps/apps/markets-app/lib/modules/order/actions/borrow-market/buildBorrowMarketOrderActionFlow.ts` — borrow-market app flow.
+- `morpho-org/morpho-apps/apps/markets-app/lib/modules/order/actions/take-borrow/buildTakeBorrowOrderActionFlow.ts` — take-borrow app flow.
 - `morpho-org/morpho-apps/apps/markets-app/lib/modules/order/actions/lend-limit/buildLendLimitOrderActionFlow.ts` and `lib/modules/offer/buildMakeOffersActionFlow.ts` — lend-limit / OCA app flow.
-- `morpho-org/morpho-apps/apps/markets-app/lib/modules/order/actions/borrow-limit/buildBorrowLimitOrderActionFlow.ts` — borrow-limit app flow.
+- `morpho-org/morpho-apps/apps/markets-app/lib/modules/order/actions/make-borrow/buildMakeBorrowOrderActionFlow.ts` — make-borrow app flow.
 - `morpho-org/morpho-apps/apps/markets-app/lib/modules/order/actions/limit-order.utils.ts` — ratifier detection, root signing, and mempool submit.
 - `morpho-org/morpho-apps/apps/markets-app/lib/modules/position/actions/redeem/buildRedeemActionFlow.ts` — redeem flow.
 - `morpho-org/morpho-apps/apps/markets-app/lib/modules/position/actions/repay-withdraw/buildRepayWithdrawActionFlow.ts` — repay / withdraw collateral flow.
