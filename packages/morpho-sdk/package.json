@@ -31,6 +31,7 @@
     "./errors": "./src/errors.ts",
     "./fetch": "./src/fetch.ts",
     "./format": "./src/format.ts",
+    "./midnight-api": "./src/midnight-api.ts",
     "./types": "./src/types.ts",
     "./utils": "./src/utils.ts"
   },
@@ -66,6 +67,9 @@
       "format": [
         "src/format.ts"
       ],
+      "midnight-api": [
+        "src/midnight-api.ts"
+      ],
       "types": [
         "src/types.ts"
       ],
@@ -93,6 +97,7 @@
   "dependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/blue-sdk-viem": "workspace:^",
+    "@morpho-org/midnight-sdk": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "zod": "^4.4.3"
   },
@@ -165,6 +170,11 @@
         "types": "./lib/esm/format.d.ts",
         "import": "./lib/esm/format.js",
         "require": "./lib/cjs/format.js"
+      },
+      "./midnight-api": {
+        "types": "./lib/esm/midnight-api.d.ts",
+        "import": "./lib/esm/midnight-api.js",
+        "require": "./lib/cjs/midnight-api.js"
       },
       "./types": {
         "types": "./lib/esm/types.d.ts",

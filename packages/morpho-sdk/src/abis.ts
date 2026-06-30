@@ -26,6 +26,12 @@ export {
   wrappedBackedTokenAbi,
   wstEthAbi,
 } from "@morpho-org/blue-sdk-viem";
+export {
+  ecrecoverRatifierAbi,
+  midnightAbi,
+  midnightBundlesAbi,
+  setterRatifierAbi,
+} from "@morpho-org/midnight-sdk";
 
 /** ABI for the Bundler3 multicall contract. */
 export const bundler3Abi = [

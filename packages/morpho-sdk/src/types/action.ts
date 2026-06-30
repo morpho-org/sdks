@@ -262,6 +262,132 @@ export interface BlueAuthorizationAction
     }
   > {}
 
+/** Metadata for a Midnight authorization prerequisite transaction. */
+export interface MidnightAuthorizationAction
+  extends BaseAction<
+    "midnightAuthorization",
+    {
+      authorized: Address;
+      isAuthorized: boolean;
+      onBehalf: Address;
+    }
+  > {}
+
+/** Metadata for a SetterRatifier ratify-root prerequisite transaction. */
+export interface MidnightRatifyRootAction
+  extends BaseAction<
+    "midnightRatifyRoot",
+    {
+      maker: Address;
+      root: Hex;
+      isRootRatified: boolean;
+    }
+  > {}
+
+/** Metadata for a Midnight bundle that lends into fixed-rate offers. */
+export interface MidnightTakeLendAction
+  extends BaseAction<
+    "midnightTakeLend",
+    {
+      market: Hex;
+      assets: bigint;
+      minUnits: bigint;
+      taker: Address;
+      takeableOffers: number;
+    }
+  > {}
+
+/** Metadata for a Midnight bundle that borrows from fixed-rate offers. */
+export interface MidnightTakeBorrowAction
+  extends BaseAction<
+    "midnightTakeBorrow",
+    {
+      market: Hex;
+      loanAssets: bigint;
+      maxUnits: bigint;
+      taker: Address;
+      receiver: Address;
+      takeableOffers: number;
+    }
+  > {}
+
+/** Metadata for a Midnight bundle that supplies collateral and borrows from fixed-rate offers. */
+export interface MidnightSupplyCollateralTakeBorrowAction
+  extends BaseAction<
+    "midnightSupplyCollateralTakeBorrow",
+    {
+      market: Hex;
+      collateralAssets: bigint;
+      loanAssets: bigint;
+      maxUnits: bigint;
+      taker: Address;
+      receiver: Address;
+      takeableOffers: number;
+    }
+  > {}
+
+/** Metadata for a direct Midnight collateral-supply transaction. */
+export interface MidnightSupplyCollateralAction
+  extends BaseAction<
+    "midnightSupplyCollateral",
+    {
+      market: Hex;
+      collateralIndex: bigint;
+      assets: bigint;
+      onBehalf: Address;
+    }
+  > {}
+
+/** Metadata for a Midnight mempool payload submission. */
+export interface MidnightSubmitOffersAction
+  extends BaseAction<
+    "midnightSubmitOffers",
+    {
+      groups: readonly Hex[];
+      root: Hex;
+      maker: Address;
+      ratifier: Address;
+      ratifierType: "ecrecover" | "setter";
+      offers: number;
+    }
+  > {}
+
+/** Metadata for a direct Midnight credit redemption transaction. */
+export interface MidnightRedeemAction
+  extends BaseAction<
+    "midnightRedeem",
+    {
+      market: Hex;
+      units: bigint;
+      onBehalf: Address;
+      receiver: Address;
+    }
+  > {}
+
+/** Metadata for a Midnight bundle that repays credit and/or withdraws collateral. */
+export interface MidnightRepayWithdrawCollateralAction
+  extends BaseAction<
+    "midnightRepayWithdrawCollateral",
+    {
+      market: Hex;
+      repayAssets: bigint;
+      withdrawCollateralAssets: bigint;
+      onBehalf: Address;
+      receiver: Address;
+    }
+  > {}
+
+/** Metadata for a direct Midnight offer-cancellation transaction. */
+export interface MidnightCancelOfferAction
+  extends BaseAction<
+    "midnightCancelOffer",
+    {
+      group: Hex;
+      amount: bigint;
+      onBehalf: Address;
+    }
+  > {}
+
 export type TransactionAction =
   | ERC20ApprovalAction
   | VaultV2DepositAction
@@ -282,7 +408,17 @@ export type TransactionAction =
   | BlueWithdrawCollateralAction
   | BlueRepayWithdrawCollateralAction
   | BlueRefinanceAction
-  | BlueAuthorizationAction;
+  | BlueAuthorizationAction
+  | MidnightAuthorizationAction
+  | MidnightRatifyRootAction
+  | MidnightTakeLendAction
+  | MidnightTakeBorrowAction
+  | MidnightSupplyCollateralTakeBorrowAction
+  | MidnightSupplyCollateralAction
+  | MidnightSubmitOffersAction
+  | MidnightRedeemAction
+  | MidnightRepayWithdrawCollateralAction
+  | MidnightCancelOfferAction;
 
 export interface Transaction<TAction extends BaseAction = TransactionAction> {
   readonly to: Address;
@@ -341,19 +477,22 @@ export interface AuthorizationSignatureArgs {
   signature: Hex;
 }
 
-/**
- * A signable approval / authorization requirement. `sign()` returns the matching
- * {@link RequirementSignature}; `action` describes the requirement without signing.
- *
- * Generic over the signature it produces so permit encoders narrow to
- * {@link PermitRequirementSignature} and the authorization encoder to
- * {@link AuthorizationRequirementSignature}; the default keeps the broad union for mixed arrays.
- */
-export interface Requirement<
-  TSignature extends RequirementSignature = RequirementSignature,
-> {
-  sign: (client: WalletClient, userAddress: Address) => Promise<TSignature>;
-  action: TSignature["action"];
+/** Signed Permit2 SignatureTransfer payload returned by Midnight bundle token-pull requirements. */
+export interface Permit2TransferArgs {
+  owner: Address;
+  nonce: bigint;
+  asset: Address;
+  signature: Hex;
+  amount: bigint;
+  deadline: bigint;
+}
+
+/** Signed and encoded Ecrecover offer-root payload used by Midnight maker flows. */
+export interface MidnightOfferRootSignatureArgs {
+  owner: Address;
+  root: Hex;
+  signature: Hex;
+  payload: Hex;
 }
 
 export interface PermitAction
@@ -378,6 +517,40 @@ export interface AuthorizationAction
     { authorized: Address; isAuthorized: boolean; deadline: bigint }
   > {}
 
+/** Metadata for a Permit2 SignatureTransfer request. */
+export interface Permit2TransferAction
+  extends BaseAction<
+    "permit2Transfer",
+    { spender: Address; amount: bigint; deadline: bigint }
+  > {}
+
+/** Metadata for a Midnight offer-root signature request. */
+export interface MidnightOfferRootSignatureAction
+  extends BaseAction<
+    "midnightOfferRootSignature",
+    {
+      root: Hex;
+      ratifier: Address;
+      offers: number;
+    }
+  > {}
+
+/** Action metadata supported by signature requirements. */
+export type SignatureRequirementAction =
+  | PermitAction
+  | Permit2Action
+  | AuthorizationAction
+  | Permit2TransferAction
+  | MidnightOfferRootSignatureAction;
+
+/** Argument payloads returned by signature requirements. */
+export type RequirementSignatureArgs =
+  | PermitArgs
+  | Permit2Args
+  | AuthorizationSignatureArgs
+  | Permit2TransferArgs
+  | MidnightOfferRootSignatureArgs;
+
 /** A signed ERC-2612 permit or Permit2 approval requirement. */
 export interface PermitRequirementSignature {
   args: PermitArgs | Permit2Args;
@@ -390,18 +563,134 @@ export interface AuthorizationRequirementSignature {
   action: AuthorizationAction;
 }
 
+/** A signed Midnight Permit2 SignatureTransfer requirement. */
+export interface Permit2TransferRequirementSignature {
+  args: Permit2TransferArgs;
+  action: Permit2TransferAction;
+}
+
+/** A signed Midnight Ecrecover offer-root requirement. */
+export interface MidnightOfferRootSignature {
+  args: MidnightOfferRootSignatureArgs;
+  action: MidnightOfferRootSignatureAction;
+}
+
 /**
  * The deep-frozen output of `Requirement.sign()`. Discriminated on `action.type`:
- * `"permit"` / `"permit2"` carry token-approval args, `"authorization"` carries the signed
- * Morpho authorization. Narrow with {@link isPermitSignature} / {@link isAuthorizationSignature}.
+ * `"permit"` / `"permit2"` carry Bundler3 token-approval args, `"authorization"` carries the
+ * signed Morpho authorization, and Midnight adds `"permit2Transfer"` plus
+ * `"midnightOfferRootSignature"`.
  */
-export type RequirementSignature =
-  | PermitRequirementSignature
-  | AuthorizationRequirementSignature;
+export type RequirementSignature<
+  TAction extends SignatureRequirementAction | undefined = undefined,
+  TArgs extends RequirementSignatureArgs | undefined = undefined,
+> = TAction extends SignatureRequirementAction
+  ? TArgs extends RequirementSignatureArgs
+    ? {
+        args: TArgs;
+        action: TAction;
+      }
+    : never
+  :
+      | PermitRequirementSignature
+      | AuthorizationRequirementSignature
+      | Permit2TransferRequirementSignature
+      | MidnightOfferRootSignature;
+
+type RequirementResult<
+  TSignatureOrAction extends RequirementSignature | SignatureRequirementAction,
+  TArgs extends RequirementSignatureArgs | undefined,
+> = TSignatureOrAction extends SignatureRequirementAction
+  ? RequirementSignature<TSignatureOrAction, Extract<TArgs, RequirementSignatureArgs>>
+  : Extract<TSignatureOrAction, RequirementSignature>;
+
+/**
+ * A signable approval / authorization requirement. `sign()` returns the matching
+ * {@link RequirementSignature}; `action` describes the requirement without signing.
+ *
+ * Generic over the signature it produces so permit encoders narrow to
+ * {@link PermitRequirementSignature} and the authorization encoder to
+ * {@link AuthorizationRequirementSignature}; the two-parameter form is kept for
+ * Midnight action requirements that are parameterized by action and args.
+ */
+export interface Requirement<
+  TSignatureOrAction extends
+    | RequirementSignature
+    | SignatureRequirementAction = RequirementSignature,
+  TArgs extends RequirementSignatureArgs | undefined = undefined,
+> {
+  sign: (
+    client: WalletClient,
+    userAddress: Address,
+  ) => Promise<RequirementResult<TSignatureOrAction, TArgs>>;
+  action: RequirementResult<TSignatureOrAction, TArgs>["action"];
+}
 
 /** Bundler3 token signature requirement. */
 export type Bundler3TokenSignatureRequirement =
   Requirement<PermitRequirementSignature>;
+
+/** Midnight Ecrecover offer-root signature requirement. */
+export type MidnightOfferRootRequirement = Requirement<
+  MidnightOfferRootSignatureAction,
+  MidnightOfferRootSignatureArgs
+>;
+
+/** Permit or Permit2 token signature requirement. */
+export type TokenSignatureRequirement =
+  | Bundler3TokenSignatureRequirement
+  | Requirement<Permit2TransferAction, Permit2TransferArgs>;
+
+/** Bundler3 token signature result. */
+export type Bundler3TokenRequirementSignature = PermitRequirementSignature;
+
+/** Permit or Permit2 token signature result. */
+export type TokenRequirementSignature =
+  | Bundler3TokenRequirementSignature
+  | Permit2TransferRequirementSignature;
+
+/** Any signature result returned by an action-output signature requirement. */
+export type AnyRequirementSignature =
+  | TokenRequirementSignature
+  | MidnightOfferRootSignature;
+
+/** Any signature requirement returned by an entity action output. */
+export type SignatureRequirement =
+  | TokenSignatureRequirement
+  | MidnightOfferRootRequirement
+  | Requirement<AuthorizationRequirementSignature>;
+
+/** Transaction action metadata that can appear as an action prerequisite. */
+export type TransactionRequirementAction =
+  | ERC20ApprovalAction
+  | BlueAuthorizationAction
+  | MidnightAuthorizationAction
+  | MidnightRatifyRootAction
+  | MidnightSupplyCollateralAction;
+
+/** Transaction prerequisite returned by action-output `getRequirements()`. */
+export type TransactionRequirement = Readonly<
+  Transaction<TransactionRequirementAction>
+>;
+
+/** Transaction or signature prerequisite returned by an entity action output. */
+export type ActionRequirement = TransactionRequirement | SignatureRequirement;
+
+/** Lazy entity result exposing prerequisite resolution and synchronous transaction building. */
+export interface ActionOutput<
+  TAction extends BaseAction = TransactionAction,
+  TSignatures = RequirementSignature,
+> {
+  buildTx: (signatures?: TSignatures) => Readonly<Transaction<TAction>>;
+  getRequirements: (params?: {
+    /**
+     * Prefer the ERC-2612 simple-permit path when the SDK detects support.
+     * Leave unset or set to `false` to force the Permit2/classic approval fallback when
+     * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
+     */
+    readonly useSimplePermit?: boolean;
+  }) => Promise<readonly ActionRequirement[]>;
+}
 
 export function isRequirementApproval(
   requirement: unknown,
@@ -446,7 +735,18 @@ export function isRequirementSignature<
     | Transaction<BlueAuthorizationAction>
     | Requirement<T>
     | undefined,
-): requirement is Requirement<T> {
+): requirement is Requirement<T>;
+export function isRequirementSignature(
+  requirement:
+    | Transaction<ERC20ApprovalAction>
+    | Transaction<BlueAuthorizationAction>
+    | Requirement
+    | undefined,
+): requirement is Requirement;
+export function isRequirementSignature(
+  requirement: ActionRequirement | undefined,
+): requirement is SignatureRequirement;
+export function isRequirementSignature(requirement: unknown): boolean {
   return (
     requirement !== undefined &&
     typeof requirement === "object" &&
