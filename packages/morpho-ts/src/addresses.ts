@@ -82,8 +82,7 @@ export interface ChainAddresses {
   /**
    * DAI token.
    *
-   * Used to route DAI away from ERC-2612 simple permit flows because DAI exposes
-   * `nonces` but uses a non-standard permit shape.
+   * Must implement DAI-specific permit, otherwise permit signatures break.
    */
   dai?: `0x${string}`;
   /**
@@ -148,7 +147,7 @@ const _addressesRegistry = {
 
     wNative: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
     morphoToken: "0x9994E35Db50125E0DF82e4c2dde62496CE330999",
-    /** DAI token routed through Permit2/classic approvals rather than ERC-2612 simple permit. */
+    /** DAI token with the DAI-specific permit implementation required by permit flows. */
     dai: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
     /** Spark Savings DAI ERC4626 vault token mapped as a known Ethereum asset. */
     sDai: "0x83F20F44975D03b1b09e64809B757c47f942BEeA",

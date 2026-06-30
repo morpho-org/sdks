@@ -6,14 +6,12 @@ Centralized type definitions and error classes. Barrel-exported via `index.ts`. 
 
 - `BaseAction<TType, TArgs>` — discriminated union base, keyed on `type`.
 - `Transaction<TAction>` — immutable `{ to, value, data, action }`. Returned from every action; deep-frozen.
-- `Requirement` / `RequirementSignature` — prerequisite signing flow for permit/permit2 and Midnight offer roots.
-- `ActionOutput` — lazy entity output with `getRequirements()` plus synchronous `buildTx(...)`.
+- `Requirement` / `RequirementSignature` — prerequisite signing flow for permit/permit2.
 - `Metadata` — optional `{ origin, timestamp? }` for calldata tracing.
 - `DepositAmountArgs` — union enforcing at least one of `amount` / `nativeAmount`. Reused for vault deposits, market collateral supply, and market loan-asset supply.
 - `AssetsOrSharesArgs` — discriminated union `{ assets } | { shares }`. Used by repay (borrow-side) and withdraw (supply-side). `RepayAmountArgs` is kept as a deprecated alias.
 - `MarketParams` — Morpho Blue market params (`loanToken`, `collateralToken`, `oracle`, `irm`, `lltv`).
 - `BlueAuthorizationAction` — used for `morpho.setAuthorization()` pre-requisite transactions.
-- `Midnight*Action` — Midnight fixed-rate action metadata for bundled taker flows, direct collateral/credit flows, maker-offer submission, and maker prerequisite transactions.
 
 ## Shared liquidity (`sharedLiquidity.ts`)
 
