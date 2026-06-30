@@ -158,6 +158,8 @@ export interface MorphoBorrowOptions {
   onBehalfOf?: string;
   /** Optional Morpho Vault V2 reallocations to include in the borrow action. */
   reallocations?: readonly VaultReallocation[];
+  /** Signature returned by a Morpho SDK authorization requirement, folded into the bundle as `setAuthorizationWithSig`. */
+  requirementSignature?: RequirementSignature;
   /** Optional Morpho SDK slippage tolerance in WAD precision. */
   slippageTolerance?: bigint;
 }
@@ -639,7 +641,11 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * Borrows assets from the configured Morpho Blue market.
    *
    * Use `getBorrowRequirements(options)` first if GeneralAdapter1 has not been
-   * authorized on Morpho for this account.
+   * authorized on Morpho for this account. When offchain signatures are enabled
+   * (`supportSignature: true`), sign the returned authorization requirement and
+   * pass it back via `options.requirementSignature` to fold the
+   * `setAuthorizationWithSig` call into the same bundle; otherwise submit the
+   * returned `setAuthorization` transaction separately first.
    *
    * @param options - The borrow options.
    * @param config - ERC-4337 transaction config override.
@@ -726,7 +732,13 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   ): Promise<WdkTransaction> {
     const action = await this._getBorrowAction(options);
 
-    return toWdkTransaction(action.buildTx());
+    return toWdkTransaction(
+      action.buildTx(
+        options.requirementSignature
+          ? [options.requirementSignature]
+          : undefined,
+      ),
+    );
   }
 
   /**

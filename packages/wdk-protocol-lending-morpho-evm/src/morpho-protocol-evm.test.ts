@@ -1,3 +1,4 @@
+import type { RequirementSignature } from "@morpho-org/morpho-sdk";
 import * as viem from "viem";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -524,6 +525,33 @@ describe.sequential("MorphoProtocolEvm", () => {
         { action: { type: "morphoAuthorization" } },
       ]);
       expect(borrowAction.getRequirements).toHaveBeenCalled();
+    });
+
+    test("should build the borrow without signatures by default", async () => {
+      account.sendTransaction = vi
+        .fn()
+        .mockResolvedValue({ hash: "dummy-borrow-hash", fee: 12_345n });
+
+      await protocol.borrow({ token: TOKEN, amount: 100_000n });
+
+      expect(borrowAction.buildTx).toHaveBeenCalledWith(undefined);
+    });
+
+    test("should fold a signed authorization into the bundle when provided", async () => {
+      account.sendTransaction = vi
+        .fn()
+        .mockResolvedValue({ hash: "dummy-borrow-hash", fee: 12_345n });
+      const requirementSignature = {
+        action: { type: "authorization" },
+      } as unknown as RequirementSignature;
+
+      await protocol.borrow({
+        token: TOKEN,
+        amount: 100_000n,
+        requirementSignature,
+      });
+
+      expect(borrowAction.buildTx).toHaveBeenCalledWith([requirementSignature]);
     });
 
     test("should throw if 'onBehalfOf' differs from the wallet address", async () => {
