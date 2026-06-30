@@ -127,7 +127,7 @@ The migration should keep the markets app on the bundle paths it already uses:
 
 - `MidnightBundles.buyWithAssetsTargetAndWithdrawCollateral(...)` for take-lend taker flows;
 - `MidnightBundles.supplyCollateralAndSellWithAssetsTarget(...)` for take-borrow taker flows with `loanAssets > 0`;
-- direct `Midnight.supplyCollateral(...)` only for supply-only branches where there are no takes and the bundler would index `takes[0]`;
+- direct `Midnight.supplyCollateral(...)` only for supply-only branches where there are no takeableOffers and the bundler would index `takeableOffers[0]`;
 - `MidnightBundles.repayAndWithdrawCollateral(...)` for repay-only, withdraw-only, and repay+withdraw position flows.
 
 This is not just a UI preference. `MidnightBundles` pulls tokens once, consumes token permits when the SDK collected one, skips reverted stale offers while continuing through the provided take list, enforces exact asset / unit targets, and performs the authorized `Midnight` calls on behalf of the taker. The app already shaped its flows around those semantics, so the SDK migration should preserve them to minimize app changes.
@@ -362,7 +362,7 @@ callRequests.push({
         minUnits,
         accountAddress,
         { kind: 0, data: "0x" },
-        takes,
+        takeableOffers,
         [],
         zeroAddress,
         0n,
@@ -393,7 +393,7 @@ const minUnits = computeUnitsFromAssets({
   rounding: "Down",
 });
 
-const action = await client.morpho.midnight(client.chain.id).takeLend({
+const action = client.morpho.midnight(client.chain.id).takeLend({
   marketId,
   accountAddress,
   assets,
@@ -430,7 +430,7 @@ action.buildTx(signatures);
 //   minUnits,
 //   accountAddress,
 //   loanTokenPermit,
-//   takes,
+//   takeableOffers,
 //   [],
 //   zeroAddress,
 //   0n,
@@ -460,14 +460,14 @@ Expected app-side diff: **small**. The app keeps the rate-to-`minUnits` calculat
    const maxPrice = rateToPrice({ rate: minRate, maturity: market.maturity, now });
    const minUnits = computeUnitsFromAssets({ assets, price: maxPrice, rounding: "Down" });
 -  const [allowance, authorizeBundlerRequest] = await Promise.all([...]);
--  const takes = buildTakesFromOffers(offers, { marketId, expectedBuy: false, chainId: client.chain.id, morphoV2: midnightAddress });
+-  const takeableOffers = buildTakeableOffersFromOffers(offers, { marketId, expectedBuy: false, chainId: client.chain.id, morphoV2: midnightAddress });
 -  const callRequests: CallRequest[] = [];
 -  const approvalRequests = buildApprovalCallRequestIfNeeded({ ... });
 -  if (approvalRequests) callRequests.push(...approvalRequests);
 -  if (authorizeBundlerRequest) callRequests.push(authorizeBundlerRequest);
 -  callRequests.push({ label: "Take lend offers", getCall: () => encodeBundleTake(...) });
 -  return createImmutableActionFlow({ chainId: client.chain.id, label: "Confirm", signatureRequests: [], callRequests, onSuccess });
-+  const action = await client.morpho.midnight(client.chain.id).takeLend({
++  const action = client.morpho.midnight(client.chain.id).takeLend({
 +    marketId,
 +    accountAddress,
 +    assets,
@@ -490,7 +490,7 @@ What leaves the app:
 - allowance read for the loan token;
 - `buildApprovalCallRequestIfNeeded(...)` invocation for this flow; the SDK now resolves the loan-token pull as either an approval transaction, ERC2612 signature, or Permit2 signature through the same shared signature policy as Blue;
 - `buildAuthorizeBundlerCallRequestIfNeeded(...)` invocation for this flow;
-- `buildTakesFromOffers(...)` and `MidnightBundles` calldata encoding.
+- `buildTakeableOffersFromOffers(...)` and `MidnightBundles` calldata encoding.
 
 What stays in the app:
 
@@ -560,7 +560,7 @@ return createImmutableActionFlow({
 });
 ```
 
-Equivalent markets app code after SDK migration. `offerInputs` and `offerExpiry` below are the same app-owned values the current builder already derives from rate / tick / now / expiry before calling `buildMakeOfferRequests`; the SDK migration starts at that boundary:
+Equivalent markets app code after SDK migration. `offerEntries` and `offerExpiry` below are the app-owned values derived from rate / tick / now / expiry before calling `getOffersData`; the app creates `Offer` / `Group` entries with the ratifier address, and the SDK entity validates and submits the resulting tree:
 
 ```ts
 const market = await fetchActionFlowMarket(client, marketId);
@@ -569,22 +569,25 @@ if (rate === null) {
 }
 
 // Existing markets-app form/rate logic stays unchanged above this line:
-// it derives `offerInputs: MakeOfferInput[]`, computes `offerExpiry` for
+// it derives `offerEntries: TreeCreateParams`, computes `offerExpiry` for
 // review display, and throws the same user-facing rate errors as today.
 await assertTicksAlignedToSpacing({
   client,
-  entries: offerInputs.map((offer) => ({ marketId: market.id, tick: offer.tick })),
+  entries: offers.map((offer) => ({ marketId: market.id, tick: offer.tick })),
 });
 
-const action = await client.morpho
+const offersData = await client.morpho.midnight(client.chain.id).getOffersData({
+  accountAddress,
+  tree: offerEntries,
+});
+
+const action = client.morpho
   .midnight(client.chain.id)
   .supplyCollateralMakeBorrow({
-    accountAddress,
     market: market.struct,
     collateralAssets,
-    loanAssets,
     reservedCollateralAssets,
-    offers: offerInputs,
+    offersData,
   });
 
 const flow = await midnightActionOutputToActionFlow({
@@ -592,7 +595,7 @@ const flow = await midnightActionOutputToActionFlow({
   accountAddress,
   action,
   labels: submitOfferLabels,
-  onSuccess: (result) => onSuccess?.(result, action.group ?? null),
+  onSuccess: (result) => onSuccess?.(result, action.groups[0] ?? null),
 });
 
 return { flow, offerExpiry };
@@ -629,11 +632,10 @@ This case intentionally stays approval-based for collateral and reserve transfer
 SDK-side outline, with no UI labels and no markets-app display concepts:
 
 ```ts
-async function supplyCollateralMakeBorrow(
+function supplyCollateralMakeBorrow(
   params: SupplyCollateralMakeBorrowParams,
-): Promise<MakeOffersOutput> {
+): MakeOffersOutput {
   assertPositiveAmount("collateralAssets", params.collateralAssets);
-  assertPositiveAmount("loanAssets", params.loanAssets);
   assertNonNegativeAmount(
     "reservedCollateralAssets",
     params.reservedCollateralAssets ?? 0n,
@@ -643,23 +645,17 @@ async function supplyCollateralMakeBorrow(
   const collateral = market.collateralParams[Number(params.collateralIndex ?? 0n)];
   if (collateral == null) throw new UnknownMidnightCollateralError(...);
 
-  const prepared = await prepareOffers({
-    accountAddress: params.accountAddress,
-    buy: false,
-    loanAssets: params.loanAssets,
-    offers: params.offers,
-    validation: params.validation,
-  });
+  const data = params.offersData;
 
   return {
-    group: prepared.group.id,
-    root: prepared.tree.root,
-    ratifierType: prepared.ratifierType,
+    groups: data.groups,
+    root: data.tree.root,
+    ratifierType: data.ratifierType,
     getRequirements: async () => {
       return [
         ...await getMidnightApprovalRequirements({
           token: collateral.token,
-          owner: params.accountAddress,
+          owner: data.accountAddress,
           spender: midnight,
           amount: params.collateralAssets + (params.reservedCollateralAssets ?? 0n),
         }),
@@ -667,17 +663,14 @@ async function supplyCollateralMakeBorrow(
           market,
           collateralIndex: params.collateralIndex ?? 0n,
           assets: params.collateralAssets,
-          onBehalf: params.accountAddress,
+          onBehalf: data.accountAddress,
         }),
-        ...await getRatifierRequirements({
-          accountAddress: params.accountAddress,
-          prepared,
-        }),
+        ...await getRatifierRequirements({ offersData: data }),
       ];
     },
     buildTx: signatures => encodeMidnightSubmitOffers({
       mempool,
-      group: prepared.group.id,
+      groups: data.groups,
       payload: buildSubmitPayload(signatures),
     }),
   };
@@ -686,9 +679,11 @@ async function supplyCollateralMakeBorrow(
 
 `MidnightApi.validateMempoolPayload(...)` keeps the API-helper behavior: it returns the raw validation result as `{ valid, issues }` so low-level callers can decide how to surface policy failures. `Tree.mempoolValidate(...)` / `TreeUtils.mempoolValidate(...)` are the SDK-owned safety boundary for action flows, so they must branch on `valid` and throw a typed `MidnightMempoolValidationError` carrying the returned `issues` before the entity exposes `midnightOfferRootSignature`, ratify-root requirements, or submit calldata.
 
+`getOffersData(...)` remains side-agnostic because it prepares any valid tree. The low-level take transaction builders enforce take-side semantics: `takeLend` requires maker-sell takeable offers, and `takeBorrow` / `supplyCollateralTakeBorrow` require maker-buy takeable offers. The named maker entity flows enforce maker-side semantics: `makeLend` requires maker-buy offers, and `makeBorrow` / `supplyCollateralMakeBorrow` require maker-sell offers.
+
 #### Markets app patch shape
 
-Expected app-side diff: **medium**. The app keeps form validation, the existing rate / tick / expiry preparation that already produces `offerInputs`, the tick-spacing preflight, and `offerExpiry` review state. It deletes allowance reads, approval/supply calldata, ratifier detection, root signing/ratify-root wiring, payload construction, and the app-local maker submit transaction. The `offerInputs = ...` line below represents the current inline app-owned preparation block moved before the SDK call, not a new markets-app helper.
+Expected app-side diff: **medium**. The app keeps form validation, the existing rate / tick / expiry preparation, offer/group construction, ratifier selection, the tick-spacing preflight, and `offerExpiry` review state. It deletes allowance reads, approval/supply calldata, root signing/ratify-root wiring, payload construction, and the app-local maker submit transaction. The `offers = ...` line below represents the current inline app-owned preparation block moved before the SDK call, not a new markets-app helper.
 
 ```diff
  export async function buildMakeBorrowOrderActionFlow({
@@ -708,7 +703,8 @@ Expected app-side diff: **medium**. The app keeps form validation, the existing 
 
    const market = await fetchActionFlowMarket(client, marketId);
    let offerExpiry = expiry;
-   let offerInputs: MakeOfferInput[] = [];
+   let offers: Offer[] = [];
+   let offerEntries: TreeCreateParams = [];
 
 -  if (collateralAssets > 0n) {
 -    const collateralAllowance = await readContract(...);
@@ -719,9 +715,10 @@ Expected app-side diff: **medium**. The app keeps form validation, the existing 
 
    if (loanAssets > 0n) {
      if (rate === null) throw new UserFacingError("Rate is required");
-     offerInputs = /* existing inline rate / tick / expiry preparation */;
-     if (offerInputs.length === 0) throw new UserFacingError(...);
-     offerExpiry = offerInputs.at(-1)!.expiry;
+     offers = /* existing inline rate / tick / expiry preparation as Offer.create(...) */;
+     if (offers.length === 0) throw new UserFacingError(...);
+     offerEntries = [Group.create(offers)];
+     offerExpiry = offers.at(-1)!.expiry;
      await assertTicksAlignedToSpacing(...);
 -    const ratifier = await getRatifierInfo({ client, accountAddress });
 -    const { signatureRequests: sigReqs, callRequests: callReqs, groupId } =
@@ -731,13 +728,16 @@ Expected app-side diff: **medium**. The app keeps form validation, the existing 
 -    callRequests.push(...callReqs);
    }
 
-+  const action = await client.morpho.midnight(client.chain.id).supplyCollateralMakeBorrow({
++  const offersData = await client.morpho.midnight(client.chain.id).getOffersData({
 +    accountAddress,
++    tree: offerEntries,
++  });
++
++  const action = client.morpho.midnight(client.chain.id).supplyCollateralMakeBorrow({
 +    market: market.struct,
 +    collateralAssets,
-+    loanAssets,
 +    reservedCollateralAssets,
-+    offers: offerInputs,
++    offersData,
 +  });
 +
 +  const flow = await midnightActionOutputToActionFlow({
@@ -745,7 +745,7 @@ Expected app-side diff: **medium**. The app keeps form validation, the existing 
 +    accountAddress,
 +    action,
 +    labels: submitOfferLabels,
-+    onSuccess: (result) => onSuccess?.(result, action.group ?? null),
++    onSuccess: (result) => onSuccess?.(result, action.groups[0] ?? null),
 +  });
 +
    return { flow, offerExpiry };
@@ -756,20 +756,20 @@ What leaves the app:
 
 - collateral allowance read and collateral approval construction;
 - collateral supply calldata construction;
-- `getRatifierInfo(...)`, `buildMakeOfferRequests(...)`, `Group`, `Tree`, `Payload`, and root payload state;
+- `buildMakeOfferRequests(...)`, `Tree`, `Payload`, and root payload state;
 - ratifier authorization read / calldata;
 - EOA root-signature payload mutation and Setter ratify-root calldata.
 
 What stays in the app:
 
 - form-level guards and user-facing copy (`"Rate is required"`, empty amount checks) unless the app chooses to rely entirely on SDK typed errors;
-- `fetchActionFlowMarket(...)`, the existing rate / tick / expiry logic that produces `offerInputs`, and `assertTicksAlignedToSpacing(...)`;
+- `fetchActionFlowMarket(...)`, the existing rate / tick / expiry logic that produces `Offer` / `Group` entries, ratifier selection, and `assertTicksAlignedToSpacing(...)`;
 - `ActionFlow` execution through the shared adapter;
 - final labels and requirement labels;
 - no token-permit UI branch for this collateral prelude; the SDK returns an approval transaction because the core Midnight call used by this migration has no `TokenPermit` argument;
-- `onSuccess(result, action.group ?? null)` and local review display of `offerExpiry`.
+- `onSuccess(result, action.groups[0] ?? null)` and local review display of `offerExpiry`.
 
-Complexity for the markets app: **medium**. The code removal is still large, but the remaining app code is the code it already owns: form validation, rate / tick / expiry preparation, labels, and `offerExpiry` display. The replacement is exact: pass the existing `offerInputs` to `supplyCollateralMakeBorrow`, adapt the returned requirements through the shared adapter, and use `action.group ?? null` for `onSuccess`. No markets app flow requires `ActionFlow.before`, `ActionFlow.after`, a DAG, or `buildTxs()`.
+Complexity for the markets app: **medium**. The code removal is still large, but the remaining app code is the code it already owns: form validation, rate / tick / expiry preparation, offer/group construction, labels, and `offerExpiry` display. The replacement is exact: pass the `Tree.create` entries to `getOffersData`, pass the returned `offersData` to `supplyCollateralMakeBorrow`, adapt the returned requirements through the shared adapter, and use `action.groups[0] ?? null` for `onSuccess`. No markets app flow requires `ActionFlow.before`, `ActionFlow.after`, a DAG, or `buildTxs()`.
 
 ### Example 3: repay / withdraw through MidnightBundles
 
@@ -820,7 +820,7 @@ callRequests.push({
 Equivalent markets app code after SDK migration:
 
 ```ts
-const action = await client.morpho
+const action = client.morpho
   .midnight(client.chain.id)
   .repayWithdrawCollateral({
     marketId,
@@ -895,7 +895,7 @@ Expected app-side diff: **small**. This stays a bundle flow, so the app does not
 -    : repayAssets > 0n ? "Repay" : "Withdraw collateral";
 -  callRequests.push({ label, getCall: () => encodeRepayAndWithdrawBundle(...) });
 -  return createImmutableActionFlow({ chainId: client.chain.id, label: "Confirm", signatureRequests: [], callRequests, onSuccess });
-+  const action = await client.morpho
++  const action = client.morpho
 +    .midnight(client.chain.id)
 +    .repayWithdrawCollateral({
 +      marketId,
@@ -1136,7 +1136,7 @@ export interface MidnightTakeLendAction
       assets: bigint;
       minUnits: bigint;
       taker: Address;
-      takes: number;
+      takeableOffers: number;
     }
   > {}
 
@@ -1150,7 +1150,7 @@ export interface MidnightTakeBorrowAction
       maxUnits: bigint;
       taker: Address;
       receiver: Address;
-      takes: number;
+      takeableOffers: number;
     }
   > {}
 
@@ -1169,7 +1169,7 @@ export interface MidnightSubmitOffersAction
   extends BaseAction<
     "midnightSubmitOffers",
     {
-      group: Hex;
+      groups: readonly Hex[];
       root: Hex;
       maker: Address;
       ratifier: Address;
@@ -1321,16 +1321,14 @@ Midnight.setIsAuthorized(authorized, true, owner)
 The implementation keeps maker consent in the `MorphoMidnight` entity instead of exporting one large helper. This keeps the public helper surface comparable to Blue and keeps tree / payload construction at the entity boundary:
 
 ```ts
-private async prepareOffers(...): Promise<PreparedOffers>;
+async getOffersData(...): Promise<OffersData>;
 
 private async getRatifierRequirements({
-  accountAddress,
-  prepared,
+  offersData,
 }): Promise<readonly ActionRequirement[]>;
 
 private buildSubmitOffersTx({
-  accountAddress,
-  prepared,
+  offersData,
   signatures,
 }): Readonly<Transaction<MidnightSubmitOffersAction>>;
 ```
@@ -1380,7 +1378,7 @@ MidnightBundles.buyWithAssetsTargetAndWithdrawCollateral(
   minUnits,
   taker,
   loanTokenPermit,
-  takes,
+  takeableOffers,
   [],
   zeroAddress,
   0n,
@@ -1406,7 +1404,7 @@ MidnightBundles.supplyCollateralAndSellWithAssetsTarget(
   taker,
   receiver,
   collateralSuppliesWithPermits,
-  takes,
+  takeableOffers,
   0n,
   zeroAddress,
 )
@@ -1611,7 +1609,7 @@ Keep approval-only Midnight bundle flows for the initial migration and add token
 ## Security
 
 - **No blind signing beyond the protocol's intended root signature.** The SDK must build the offer tree locally from the SDK input and validate the router response before exposing `midnightOfferRootSignature`. The wallet signs only the root produced from those local offers.
-- **No signing inside actions.** `Requirement.sign(...)` is the only signing boundary and takes a `WalletClient` from the integrator.
+- **No signing inside actions.** `Requirement.sign(...)` is the only signing boundary and takeableOffers a `WalletClient` from the integrator.
 - **No hidden prelude txs.** Mandatory prelude transactions are visible in `getRequirements()` as typed `Transaction` values.
 - **Authorization target is explicit.** `MidnightAuthorizationAction.args.authorized` is either `MidnightBundles`, `EcrecoverRatifier`, or `SetterRatifier`; never inferred by a consumer.
 - **Approval target is explicit.** Midnight approval helper callers pass `spender`; no default to `GeneralAdapter1`.
