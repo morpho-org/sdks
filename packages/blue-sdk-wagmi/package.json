@@ -55,7 +55,7 @@
     "typescript": "^6.0.3",
     "viem": "^2.50.4",
     "vitest": "^4.1.7",
-    "wagmi": "^3.6.15"
+    "wagmi": "^3.6.21"
   },
   "publishConfig": {
     "exports": {
