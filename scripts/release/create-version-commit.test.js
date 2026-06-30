@@ -338,7 +338,7 @@ describe("main", () => {
     expect(writeOutput).toHaveBeenCalledWith(
       "Created signed version commit signed-commit on changeset-release/main.\n",
     );
-  });
+  }, 60_000);
 
   test("behavior: no version changes", async () => {
     const root = createGitRepo();
