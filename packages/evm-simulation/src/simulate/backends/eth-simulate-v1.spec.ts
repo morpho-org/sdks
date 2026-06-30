@@ -156,7 +156,7 @@ describe.sequential("simulateV1", () => {
     ).rejects.toThrow(SimulationRevertedError);
   });
 
-  it("sets sender ETH balance to maxUint256 via stateOverride", async () => {
+  it("inflates sender ETH balance to half of uint256 via stateOverride", async () => {
     mockSimulateCalls.mockResolvedValueOnce({
       results: [
         { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
@@ -170,8 +170,10 @@ describe.sequential("simulateV1", () => {
     });
 
     const callArgs = mockSimulateCalls.mock.calls[0]![0];
+    // Half of uint256 (not the ceiling) leaves headroom for inbound native ETH
+    // so a refund to the sender does not overflow and revert the transfer.
     expect(callArgs.stateOverrides).toEqual([
-      { address: USER, balance: maxUint256 },
+      { address: USER, balance: maxUint256 / 2n },
     ]);
   });
 

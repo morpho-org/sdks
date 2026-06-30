@@ -93,7 +93,11 @@ export async function simulateV1(params: {
       traceTransfers: true,
       // Inflate sender ETH balance to prevent false "insufficient gas" reverts.
       // Without this, valid ERC20 flows fail when the sender has low ETH.
-      stateOverrides: [{ address: sender, balance: maxUint256 }],
+      // Use half of uint256 (not the ceiling) so the override leaves headroom
+      // for inbound native ETH — e.g. a WETH.withdraw refund or a swap payout
+      // would overflow the recipient balance and revert the value transfer if
+      // the sender were pinned at maxUint256.
+      stateOverrides: [{ address: sender, balance: maxUint256 / 2n }],
     });
 
     const results = simulationResult.results;

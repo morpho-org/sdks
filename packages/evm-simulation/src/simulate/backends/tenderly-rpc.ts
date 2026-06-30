@@ -227,7 +227,11 @@ function buildCall(tx: SimulationTransaction): TenderlyRpcCall {
 function buildStateOverrides(
   sender: Address,
 ): Record<Address, { balance: Hex }> {
-  return { [sender]: { balance: numberToHex(maxUint256) } };
+  // Half of uint256 (not the ceiling) so the override leaves headroom for
+  // inbound native ETH — a WETH.withdraw refund or swap payout would overflow
+  // the recipient balance and revert the value transfer if the sender were
+  // pinned at maxUint256.
+  return { [sender]: { balance: numberToHex(maxUint256 / 2n) } };
 }
 
 function encodeBlock(blockNumber?: bigint | BlockTag): string {
