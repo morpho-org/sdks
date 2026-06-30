@@ -1,5 +1,215 @@
 import type { Abi } from "viem";
 
+const midnightCollateralParamsAbiComponents = [
+  {
+    name: "token",
+    type: "address",
+    internalType: "address",
+  },
+  {
+    name: "lltv",
+    type: "uint256",
+    internalType: "uint256",
+  },
+  {
+    name: "liquidationCursor",
+    type: "uint256",
+    internalType: "uint256",
+  },
+  {
+    name: "oracle",
+    type: "address",
+    internalType: "address",
+  },
+] as const;
+
+const midnightMarketAbiComponents = [
+  {
+    name: "chainId",
+    type: "uint256",
+    internalType: "uint256",
+  },
+  {
+    name: "midnight",
+    type: "address",
+    internalType: "address",
+  },
+  {
+    name: "loanToken",
+    type: "address",
+    internalType: "address",
+  },
+  {
+    name: "collateralParams",
+    type: "tuple[]",
+    internalType: "struct CollateralParams[]",
+    components: midnightCollateralParamsAbiComponents,
+  },
+  {
+    name: "maturity",
+    type: "uint256",
+    internalType: "uint256",
+  },
+  {
+    name: "rcfThreshold",
+    type: "uint256",
+    internalType: "uint256",
+  },
+  {
+    name: "enterGate",
+    type: "address",
+    internalType: "address",
+  },
+  {
+    name: "liquidatorGate",
+    type: "address",
+    internalType: "address",
+  },
+] as const;
+
+const midnightOfferAbiComponents = [
+  {
+    name: "market",
+    type: "tuple",
+    internalType: "struct Market",
+    components: midnightMarketAbiComponents,
+  },
+  {
+    name: "buy",
+    type: "bool",
+    internalType: "bool",
+  },
+  {
+    name: "maker",
+    type: "address",
+    internalType: "address",
+  },
+  {
+    name: "start",
+    type: "uint256",
+    internalType: "uint256",
+  },
+  {
+    name: "expiry",
+    type: "uint256",
+    internalType: "uint256",
+  },
+  {
+    name: "tick",
+    type: "uint256",
+    internalType: "uint256",
+  },
+  {
+    name: "group",
+    type: "bytes32",
+    internalType: "bytes32",
+  },
+  {
+    name: "callback",
+    type: "address",
+    internalType: "address",
+  },
+  {
+    name: "callbackData",
+    type: "bytes",
+    internalType: "bytes",
+  },
+  {
+    name: "receiverIfMakerIsSeller",
+    type: "address",
+    internalType: "address",
+  },
+  {
+    name: "ratifier",
+    type: "address",
+    internalType: "address",
+  },
+  {
+    name: "reduceOnly",
+    type: "bool",
+    internalType: "bool",
+  },
+  {
+    name: "maxUnits",
+    type: "uint256",
+    internalType: "uint256",
+  },
+  {
+    name: "maxAssets",
+    type: "uint256",
+    internalType: "uint256",
+  },
+  {
+    name: "continuousFeeCap",
+    type: "uint256",
+    internalType: "uint256",
+  },
+] as const;
+
+const midnightTokenPermitAbiComponents = [
+  {
+    name: "kind",
+    type: "uint8",
+    internalType: "enum PermitKind",
+  },
+  {
+    name: "data",
+    type: "bytes",
+    internalType: "bytes",
+  },
+] as const;
+
+const midnightTakeAbiComponents = [
+  {
+    name: "units",
+    type: "uint256",
+    internalType: "uint256",
+  },
+  {
+    name: "offer",
+    type: "tuple",
+    internalType: "struct Offer",
+    components: midnightOfferAbiComponents,
+  },
+  {
+    name: "ratifierData",
+    type: "bytes",
+    internalType: "bytes",
+  },
+] as const;
+
+const midnightCollateralWithdrawalAbiComponents = [
+  {
+    name: "collateralIndex",
+    type: "uint256",
+    internalType: "uint256",
+  },
+  {
+    name: "assets",
+    type: "uint256",
+    internalType: "uint256",
+  },
+] as const;
+
+const midnightCollateralSupplyAbiComponents = [
+  {
+    name: "collateralIndex",
+    type: "uint256",
+    internalType: "uint256",
+  },
+  {
+    name: "assets",
+    type: "uint256",
+    internalType: "uint256",
+  },
+  {
+    name: "permit",
+    type: "tuple",
+    internalType: "struct TokenPermit",
+    components: midnightTokenPermitAbiComponents,
+  },
+] as const;
+
 /**
  * Pinned ABI JSON for the core Midnight contract.
  *
@@ -2500,6 +2710,357 @@ export const midnightAbi = [
   {
     type: "error",
     name: "WrongSellCallbackReturnValue",
+    inputs: [],
+  },
+] as const satisfies Abi;
+
+/**
+ * ABI JSON for the Midnight Bundles periphery used by app-compatible taker and repay flows.
+ *
+ * Source: `morpho-org/morpho-apps` commit `4e903d545184a1f46b378c5c0c4ad414575a5b94`,
+ * `packages/contracts/solidity/interfaces/IMidnightBundles.sol`, adapted to the current
+ * Midnight `Market` and `Offer` struct fields exported by this package.
+ *
+ * @example
+ * ```ts
+ * import { midnightBundlesAbi } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(midnightBundlesAbi.length);
+ * ```
+ */
+export const midnightBundlesAbi = [
+  {
+    type: "function",
+    name: "PERMIT2",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "MIDNIGHT",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "buyWithUnitsTargetAndWithdrawCollateral",
+    inputs: [
+      {
+        name: "targetUnits",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "maxBuyerAssets",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "taker",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "loanTokenPermit",
+        type: "tuple",
+        internalType: "struct TokenPermit",
+        components: midnightTokenPermitAbiComponents,
+      },
+      {
+        name: "takes",
+        type: "tuple[]",
+        internalType: "struct Take[]",
+        components: midnightTakeAbiComponents,
+      },
+      {
+        name: "collateralWithdrawals",
+        type: "tuple[]",
+        internalType: "struct CollateralWithdrawal[]",
+        components: midnightCollateralWithdrawalAbiComponents,
+      },
+      {
+        name: "collateralReceiver",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "referralFeePct",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "referralFeeRecipient",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "supplyCollateralAndSellWithUnitsTarget",
+    inputs: [
+      {
+        name: "targetUnits",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "minSellerAssets",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "taker",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "receiver",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "collateralSupplies",
+        type: "tuple[]",
+        internalType: "struct CollateralSupply[]",
+        components: midnightCollateralSupplyAbiComponents,
+      },
+      {
+        name: "takes",
+        type: "tuple[]",
+        internalType: "struct Take[]",
+        components: midnightTakeAbiComponents,
+      },
+      {
+        name: "referralFeePct",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "referralFeeRecipient",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "buyWithAssetsTargetAndWithdrawCollateral",
+    inputs: [
+      {
+        name: "targetBuyerAssets",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "minUnits",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "taker",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "loanTokenPermit",
+        type: "tuple",
+        internalType: "struct TokenPermit",
+        components: midnightTokenPermitAbiComponents,
+      },
+      {
+        name: "takes",
+        type: "tuple[]",
+        internalType: "struct Take[]",
+        components: midnightTakeAbiComponents,
+      },
+      {
+        name: "collateralWithdrawals",
+        type: "tuple[]",
+        internalType: "struct CollateralWithdrawal[]",
+        components: midnightCollateralWithdrawalAbiComponents,
+      },
+      {
+        name: "collateralReceiver",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "referralFeePct",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "referralFeeRecipient",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "supplyCollateralAndSellWithAssetsTarget",
+    inputs: [
+      {
+        name: "targetSellerAssets",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "maxUnits",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "taker",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "receiver",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "collateralSupplies",
+        type: "tuple[]",
+        internalType: "struct CollateralSupply[]",
+        components: midnightCollateralSupplyAbiComponents,
+      },
+      {
+        name: "takes",
+        type: "tuple[]",
+        internalType: "struct Take[]",
+        components: midnightTakeAbiComponents,
+      },
+      {
+        name: "referralFeePct",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "referralFeeRecipient",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "repayAndWithdrawCollateral",
+    inputs: [
+      {
+        name: "market",
+        type: "tuple",
+        internalType: "struct Market",
+        components: midnightMarketAbiComponents,
+      },
+      {
+        name: "assets",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "onBehalf",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "loanTokenPermit",
+        type: "tuple",
+        internalType: "struct TokenPermit",
+        components: midnightTokenPermitAbiComponents,
+      },
+      {
+        name: "collateralWithdrawals",
+        type: "tuple[]",
+        internalType: "struct CollateralWithdrawal[]",
+        components: midnightCollateralWithdrawalAbiComponents,
+      },
+      {
+        name: "collateralReceiver",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "referralFeePct",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "referralFeeRecipient",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "error",
+    name: "ApproveReturnedFalse",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InconsistentMarket",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InconsistentSide",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "OutOfOffers",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "PctExceeded",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "SellerAssetsTooLow",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "Unauthorized",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "UnitsTooHigh",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "UnitsTooLow",
     inputs: [],
   },
 ] as const satisfies Abi;

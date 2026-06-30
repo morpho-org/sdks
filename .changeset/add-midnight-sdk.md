@@ -12,7 +12,7 @@ The payload codec caps the full framed wire payload at 1,000,000 bytes and deriv
 
 Offers include the protocol `continuousFeeCap` field in SDK types, API mappings, payload encoding/decoding, Merkle leaf hashing, and EIP-712 ratifier typed data so maker signatures match the current Midnight contracts.
 
-Payload collateral validation mirrors `Midnight.touchMarket` by rejecting zero collateral tokens and `maxLif` values outside the low/high liquidation cursor formulas.
+Payload collateral validation mirrors `Midnight.touchMarket` by rejecting zero collateral tokens and liquidation cursors whose computed max LIF violates protocol bounds.
 
 Payload and market construction reject LLTV values outside the protocol's fixed `[0, WAD]` range while still allowing dynamically configured LLTV tiers inside that range.
 
@@ -33,6 +33,8 @@ Ecrecover client signing rejects typed-data signatures that do not recover to th
 Offer creation only accepts protocol-reachable tick spacings and offer groups require a shared cap mode and value, matching Midnight's tick accessibility and group consumption accounting.
 
 Tick math constants mirror the current Midnight protocol range and price quantum, with `TickLib.tickToApr` plus offer-level price, rate, and APR helpers for simple annualization over a market's time to maturity.
+
+The package exports `midnightBundlesAbi` for app-compatible Midnight Bundles taker and repay flows, with tuple components aligned to the current Midnight `Market` and `Offer` structs.
 
 The package consumes shared primitives, `MathLib`, typed errors, and registry data from `@morpho-org/morpho-ts`, and exposes a configurable `MidnightApi` client from `@morpho-org/midnight-sdk/api` with a `https://api.morpho.org` default, optional string-or-`URL` `baseUrl` override, and parsed quote or takeable-offer payloads that can be passed directly to compatible bundle action inputs.
 
