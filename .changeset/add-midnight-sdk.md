@@ -28,7 +28,7 @@ Ecrecover ratification accepts a viem client plus explicit signer account, deriv
 
 Ecrecover client signing rejects typed-data signatures that do not recover to the requested signer account.
 
-`fetchConsumableUnits` reads each offer's market continuous fee and returns zero when the market fee exceeds the offer's `continuousFeeCap`.
+`OfferUtils.getConsumableUnits` and `Offer.getConsumableUnits` compute remaining units from hydrated market state plus a caller-provided `consumed` value, with examples inlining the single `Midnight.consumed(maker, group)` read.
 
 Asset-capped buy-offer consumable units mirror Midnight `take` cap checks by returning the largest unit amount whose rounded-down buyer assets fit within the remaining asset cap.
 

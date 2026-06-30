@@ -16,8 +16,8 @@ import {
   InvalidOfferGroupError,
   InvalidOfferParameterError,
 } from "../errors.js";
-import { MarketParams, MarketUtils } from "../market/index.js";
-import { TickLib } from "../math/index.js";
+import { Market, MarketParams, MarketUtils } from "../market/index.js";
+import { TakeAmountsLib, TickLib } from "../math/index.js";
 import {
   type BuildOfferParams,
   type IOffer,
@@ -112,6 +112,30 @@ export interface OfferStructParams {
   readonly offer: IOffer;
   /** Optional protocol group id override encoded into the ABI offer. */
   readonly group?: Hash;
+}
+
+/**
+ * Parameters for {@link OfferUtils.getConsumableUnits}.
+ *
+ * @example
+ * ```ts
+ * import type { OfferConsumableUnitsParams } from "@morpho-org/midnight-sdk";
+ *
+ * const params = {
+ *   offer: {} as OfferConsumableUnitsParams["offer"],
+ *   consumed: 0n,
+ *   timestamp: 1_000n,
+ * } satisfies OfferConsumableUnitsParams;
+ * console.log(params.consumed);
+ * ```
+ */
+export interface OfferConsumableUnitsParams {
+  /** Offer to inspect. Its market must carry hydrated market state. */
+  readonly offer: IOffer;
+  /** Amount already consumed from the offer group. */
+  readonly consumed: BigIntish;
+  /** Timestamp used to compute time to maturity for settlement fee selection. */
+  readonly timestamp: BigIntish;
 }
 
 /**
@@ -759,7 +783,9 @@ export namespace OfferUtils {
 
     const expectedMaker = comparableHex(first.maker);
     const expectedBuy = first.buy;
-    const expectedLoanToken = comparableHex(first.market.loanToken);
+    const expectedLoanToken = comparableHex(
+      MarketParams.from(first.market).loanToken,
+    );
     const expectedMaxUnits = first.maxUnits;
     const expectedMaxAssets = first.maxAssets;
 
@@ -783,7 +809,10 @@ export namespace OfferUtils {
           "Every offer must set exactly one non-zero non-negative cap.",
         );
       }
-      if (comparableHex(offer.market.loanToken) !== expectedLoanToken) {
+      if (
+        comparableHex(MarketParams.from(offer.market).loanToken) !==
+        expectedLoanToken
+      ) {
         throw new InvalidOfferGroupError(
           "All offers in a group must use the same loan token.",
         );
@@ -967,6 +996,131 @@ export namespace OfferUtils {
       params.offer.tick,
       MathLib.zeroFloorSub(market.maturity, timestamp),
     );
+  }
+
+  /**
+   * Returns remaining units accepted by an offer's cap at a timestamp.
+   *
+   * The offer must carry a hydrated {@link Market} so the current market
+   * continuous fee and settlement-fee buckets are available locally. Fetch the
+   * current `consumed(maker, group)` value separately and pass it as input.
+   *
+   * @param params.offer - Offer to inspect. Its market must be hydrated.
+   * @param params.consumed - Amount already consumed from the offer group.
+   * @param params.timestamp - Timestamp used to compute market time to maturity.
+   * @returns Remaining consumable units accepted by Midnight `take`.
+   * @throws {InvalidOfferParameterError} when the offer does not carry hydrated market state or has invalid caps.
+   * @throws {NegativeValueError} when `consumed`, `timestamp`, offer limits, or delegated math inputs are negative.
+   * @throws {TickOutOfRangeError} when `tick` exceeds `MAX_TICK`.
+   * @throws {SettlementFeeExceedsPriceError} when settlement fee exceeds a buy-offer price.
+   * @example
+   * ```ts
+   * import { OfferUtils, midnightAbi } from "@morpho-org/midnight-sdk";
+   * import { createPublicClient, http } from "viem";
+   * import { base } from "viem/chains";
+   * import { readContract } from "viem/actions";
+   *
+   * const client = createPublicClient({ chain: base, transport: http() });
+   * const offer = {
+   *   market: {
+   *     params: {
+   *       chainId: 8453,
+   *       midnight: "0x0000000000000000000000000000000000001000",
+   *       loanToken: "0x0000000000000000000000000000000000006000",
+   *       collateralParams: [
+   *         {
+   *           token: "0x0000000000000000000000000000000000007000",
+   *           lltv: 770000000000000000n,
+   *           liquidationCursor: 250000000000000000n,
+   *           oracle: "0x0000000000000000000000000000000000008000",
+   *         },
+   *       ],
+   *       maturity: 54_000n,
+   *       rcfThreshold: 0n,
+   *       enterGate: "0x0000000000000000000000000000000000000000",
+   *       liquidatorGate: "0x0000000000000000000000000000000000000000",
+   *     },
+   *     totalUnits: 1_000n,
+   *     lossFactor: 0n,
+   *     withdrawable: 500n,
+   *     continuousFeeCredit: 0n,
+   *     settlementFeeCbps: [1, 2, 3, 4, 5, 6, 7],
+   *     continuousFee: 10,
+   *     tickSpacing: 4,
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   start: 0n,
+   *   expiry: 3_600n,
+   *   tick: 5_000n,
+   *   callback: "0x0000000000000000000000000000000000000000",
+   *   callbackData: "0x",
+   *   receiverIfMakerIsSeller: "0x0000000000000000000000000000000000000000",
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   reduceOnly: false,
+   *   maxUnits: 100n,
+   *   maxAssets: 0n,
+   *   continuousFeeCap: 317097919n,
+   * } as const;
+   * const consumed = await readContract(client, {
+   *   address: "0x0000000000000000000000000000000000001000",
+   *   abi: midnightAbi,
+   *   functionName: "consumed",
+   *   args: [offer.maker, "0x1111111111111111111111111111111111111111111111111111111111111111"],
+   * });
+   * const units = OfferUtils.getConsumableUnits({ offer, consumed, timestamp: 1_000n });
+   * console.log(units);
+   * ```
+   */
+  export function getConsumableUnits(
+    params: OfferConsumableUnitsParams,
+  ): bigint {
+    const offer = Offer.from(params.offer);
+    const consumed = BigInt(params.consumed);
+    const maxUnits = BigInt(offer.maxUnits);
+    const maxAssets = BigInt(offer.maxAssets);
+    const continuousFeeCap = BigInt(offer.continuousFeeCap);
+    assertNonNegative("consumed", consumed);
+    assertNonNegative("offer.maxUnits", maxUnits);
+    assertNonNegative("offer.maxAssets", maxAssets);
+    assertNonNegative("offer.continuousFeeCap", continuousFeeCap);
+    validateOfferCaps({ maxUnits, maxAssets });
+
+    if (!("params" in offer.market)) {
+      throw new InvalidOfferParameterError({
+        parameter: "market",
+        value: offer.market,
+        instruction:
+          "Provide a hydrated Market with continuous fee and settlement fee buckets.",
+      });
+    }
+
+    const market =
+      offer.market instanceof Market ? offer.market : new Market(offer.market);
+    if (continuousFeeCap < BigInt(market.continuousFee)) return 0n;
+    if (maxUnits > 0n) return MathLib.zeroFloorSub(maxUnits, consumed);
+
+    const remainingAssets = MathLib.zeroFloorSub(maxAssets, consumed);
+    const settlementFee = market.getSettlementFee(
+      market.timeToMaturity(params.timestamp),
+    );
+    if (!offer.buy) {
+      const { sellerPrice } = TakeAmountsLib.prices({
+        offer,
+        settlementFee,
+      });
+      if (sellerPrice === 0n) return MathLib.MAX_UINT_256;
+
+      return MathLib.mulDivDown(remainingAssets, MathLib.WAD, sellerPrice);
+    }
+
+    const { buyerPrice } = TakeAmountsLib.prices({
+      offer,
+      settlementFee,
+    });
+    if (buyerPrice === 0n) return MathLib.MAX_UINT_256;
+
+    return ((remainingAssets + 1n) * MathLib.WAD - 1n) / buyerPrice;
   }
 
   /**

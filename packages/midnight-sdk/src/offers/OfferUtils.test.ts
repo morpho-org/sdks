@@ -8,6 +8,7 @@ import { zeroAddress, zeroHash } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   addresses,
+  baseMarketInput,
   baseMarketParamsInput,
   baseOffer,
   baseOfferInput,
@@ -17,9 +18,10 @@ import { MAX_CONTINUOUS_FEE, MAX_TICK } from "../constants.js";
 import {
   InvalidOfferGroupError,
   InvalidOfferParameterError,
+  SettlementFeeExceedsPriceError,
 } from "../errors.js";
-import { MarketParams } from "../market/index.js";
-import { TickLib } from "../math/index.js";
+import { Market, MarketParams } from "../market/index.js";
+import { TakeAmountsLib, TickLib } from "../math/index.js";
 import { TreeUtils } from "../signatures/index.js";
 import type { BuildOfferParams } from "./Offer.js";
 import { Offer } from "./Offer.js";
@@ -36,12 +38,22 @@ const buildOfferParams = (overrides: Partial<BuildOfferParams> = {}) => ({
   ...overrides,
 });
 
+const zeroFeeMarket = (
+  overrides: Partial<ReturnType<typeof baseMarketInput>> = {},
+) =>
+  new Market({
+    ...baseMarketInput(),
+    settlementFeeCbps: [0, 0, 0, 0, 0, 0, 0],
+    continuousFee: 0,
+    ...overrides,
+  });
+
 describe("Offer", () => {
   test("default", () => {
     const offer = new Offer(baseOfferInput());
 
     expect(offer).toBeInstanceOf(Offer);
-    expect(offer.market.loanToken).toBe(addresses.loanToken);
+    expect(MarketParams.from(offer.market).loanToken).toBe(addresses.loanToken);
     expect(offer.price).toBe(TickLib.tickToPrice(offer.tick));
     expect(offer.getRate(1_000n)).toBe(
       OfferUtils.getRate({ offer, timestamp: 1_000n }),
@@ -193,15 +205,12 @@ describe("Offer.create", () => {
 
   test("error: offer rate helpers reject invalid time inputs", () => {
     const offer = baseOffer();
+    const maturity = MarketParams.from(offer.market).maturity;
 
     expect(() => offer.getRate(-1n)).toThrow(NegativeValueError);
     expect(() => offer.getApr(-1n)).toThrow(NegativeValueError);
-    expect(() => offer.getRate(offer.market.maturity)).toThrow(
-      DivisionByZeroError,
-    );
-    expect(() => offer.getApr(offer.market.maturity)).toThrow(
-      DivisionByZeroError,
-    );
+    expect(() => offer.getRate(maturity)).toThrow(DivisionByZeroError);
+    expect(() => offer.getApr(maturity)).toThrow(DivisionByZeroError);
   });
 
   test.each([
@@ -236,22 +245,303 @@ describe("Offer.create", () => {
 describe("OfferUtils.toStruct", () => {
   test("behavior: copies nested market structs before public freeze paths", () => {
     const offer = baseOffer({ group });
+    const offerMarket = MarketParams.from(offer.market);
     const struct = OfferUtils.toStruct({ offer });
 
     expect(struct.market).not.toBe(offer.market);
     expect(struct.market).not.toBeInstanceOf(MarketParams);
     expect(struct.market.collateralParams).not.toBe(
-      offer.market.collateralParams,
+      offerMarket.collateralParams,
     );
     expect(struct.market.collateralParams[0]).not.toBe(
-      offer.market.collateralParams[0],
+      offerMarket.collateralParams[0],
     );
 
     TreeUtils.buildDescriptor([offer]);
 
     expect(Object.isFrozen(offer.market)).toBe(false);
-    expect(Object.isFrozen(offer.market.collateralParams)).toBe(false);
-    expect(Object.isFrozen(offer.market.collateralParams[0])).toBe(false);
+    expect(Object.isFrozen(offerMarket.collateralParams)).toBe(false);
+    expect(Object.isFrozen(offerMarket.collateralParams[0])).toBe(false);
+  });
+});
+
+describe("OfferUtils.getConsumableUnits", () => {
+  test("default: max-unit offers use zero-floor subtraction", () => {
+    const offer = baseOffer({
+      market: zeroFeeMarket(),
+      maxUnits: 100n,
+      maxAssets: 0n,
+    });
+
+    expect(
+      OfferUtils.getConsumableUnits({
+        offer,
+        consumed: 40n,
+        timestamp: 1_000n,
+      }),
+    ).toBe(60n);
+    expect(
+      offer.getConsumableUnits({ consumed: 120n, timestamp: 1_000n }),
+    ).toBe(0n);
+  });
+
+  test("behavior: offers below market continuous fee return zero", () => {
+    const offer = baseOffer({
+      market: zeroFeeMarket({ continuousFee: 10 }),
+      maxUnits: 100n,
+      maxAssets: 0n,
+      continuousFeeCap: 9n,
+    });
+
+    expect(
+      OfferUtils.getConsumableUnits({
+        offer,
+        consumed: 40n,
+        timestamp: 1_000n,
+      }),
+    ).toBe(0n);
+  });
+
+  test("behavior: buy max assets return max units accepted by buyer asset cap", () => {
+    const offer = baseOffer({
+      market: zeroFeeMarket(),
+      buy: true,
+      tick: MAX_TICK / 2n,
+      maxUnits: 0n,
+      maxAssets: 1n,
+    });
+
+    expect(
+      OfferUtils.getConsumableUnits({
+        offer,
+        consumed: 0n,
+        timestamp: 1_000n,
+      }),
+    ).toBe(3n);
+    expect(
+      TakeAmountsLib.buyerAssetsToUnits({
+        offer,
+        targetBuyerAssets: 1n,
+        settlementFee: 0n,
+      }),
+    ).toBe(2n);
+  });
+
+  test("behavior: sell max assets convert seller assets", () => {
+    const offer = baseOffer({
+      market: zeroFeeMarket(),
+      buy: false,
+      maxUnits: 0n,
+      maxAssets: 123n,
+    });
+
+    expect(
+      OfferUtils.getConsumableUnits({
+        offer,
+        consumed: 23n,
+        timestamp: 1_000n,
+      }),
+    ).toBe(
+      TakeAmountsLib.sellerAssetsToUnits({
+        offer,
+        targetSellerAssets: 100n,
+        settlementFee: 0n,
+      }),
+    );
+  });
+
+  test("behavior: buy max assets match onchain floor cap rounding", () => {
+    fc.assert(
+      fc.property(
+        fc.record({
+          maxAssets: fc.bigInt({ min: 1n, max: 1_000_000n }),
+          consumed: fc.bigInt({ min: 0n, max: 1_000_000n }),
+          tick: fc.bigInt({ min: 0n, max: MAX_TICK }),
+        }),
+        ({ maxAssets, consumed, tick }) => {
+          const offer = baseOffer({
+            market: zeroFeeMarket(),
+            buy: true,
+            tick,
+            maxUnits: 0n,
+            maxAssets,
+          });
+          const { buyerPrice } = TakeAmountsLib.prices({
+            offer,
+            settlementFee: 0n,
+          });
+          fc.pre(buyerPrice > 0n);
+
+          const remainingAssets = MathLib.zeroFloorSub(maxAssets, consumed);
+          const units = OfferUtils.getConsumableUnits({
+            offer,
+            consumed,
+            timestamp: 1_000n,
+          });
+
+          expect(
+            MathLib.mulDivDown(units, buyerPrice, MathLib.WAD) <=
+              remainingAssets,
+          ).toBe(true);
+          expect(
+            MathLib.mulDivDown(units + 1n, buyerPrice, MathLib.WAD) >
+              remainingAssets,
+          ).toBe(true);
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  test("behavior: sell max assets match onchain ceil cap rounding", () => {
+    fc.assert(
+      fc.property(
+        fc.record({
+          maxAssets: fc.bigInt({ min: 1n, max: 1_000_000n }),
+          consumed: fc.bigInt({ min: 0n, max: 1_000_000n }),
+          tick: fc.bigInt({ min: 0n, max: MAX_TICK }),
+        }),
+        ({ maxAssets, consumed, tick }) => {
+          const offer = baseOffer({
+            market: zeroFeeMarket(),
+            buy: false,
+            tick,
+            maxUnits: 0n,
+            maxAssets,
+          });
+          const { sellerPrice } = TakeAmountsLib.prices({
+            offer,
+            settlementFee: 0n,
+          });
+          fc.pre(sellerPrice > 0n);
+
+          const remainingAssets = MathLib.zeroFloorSub(maxAssets, consumed);
+          const units = OfferUtils.getConsumableUnits({
+            offer,
+            consumed,
+            timestamp: 1_000n,
+          });
+
+          expect(
+            MathLib.mulDivUp(units, sellerPrice, MathLib.WAD) <=
+              remainingAssets,
+          ).toBe(true);
+          expect(
+            MathLib.mulDivUp(units + 1n, sellerPrice, MathLib.WAD) >
+              remainingAssets,
+          ).toBe(true);
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  test("behavior: zero asset price leaves asset cap unbounded", () => {
+    expect(
+      OfferUtils.getConsumableUnits({
+        offer: baseOffer({
+          market: zeroFeeMarket(),
+          buy: true,
+          tick: 0n,
+          maxUnits: 0n,
+        }),
+        consumed: 0n,
+        timestamp: 1_000n,
+      }),
+    ).toBe(MathLib.MAX_UINT_256);
+    expect(
+      OfferUtils.getConsumableUnits({
+        offer: baseOffer({
+          market: zeroFeeMarket(),
+          buy: false,
+          tick: 0n,
+          maxUnits: 0n,
+        }),
+        consumed: 0n,
+        timestamp: 1_000n,
+      }),
+    ).toBe(MathLib.MAX_UINT_256);
+  });
+
+  test("error: InvalidOfferParameterError without hydrated market state", () => {
+    expect(() =>
+      OfferUtils.getConsumableUnits({
+        offer: baseOffer({
+          market: baseMarketParamsInput(),
+          maxUnits: 100n,
+          maxAssets: 0n,
+        }),
+        consumed: 0n,
+        timestamp: 1_000n,
+      }),
+    ).toThrow(InvalidOfferParameterError);
+  });
+
+  test("error: NegativeValueError", () => {
+    expect(() =>
+      OfferUtils.getConsumableUnits({
+        offer: baseOffer({
+          market: zeroFeeMarket(),
+          maxUnits: 100n,
+          maxAssets: 0n,
+        }),
+        consumed: -1n,
+        timestamp: 1_000n,
+      }),
+    ).toThrow(NegativeValueError);
+    expect(() =>
+      OfferUtils.getConsumableUnits({
+        offer: baseOffer({
+          market: zeroFeeMarket(),
+          maxUnits: -1n,
+          maxAssets: 0n,
+        }),
+        consumed: 0n,
+        timestamp: 1_000n,
+      }),
+    ).toThrow(NegativeValueError);
+  });
+
+  test("error: InvalidOfferParameterError for cap shape", () => {
+    expect(() =>
+      OfferUtils.getConsumableUnits({
+        offer: baseOffer({
+          market: zeroFeeMarket(),
+          maxUnits: 0n,
+          maxAssets: 0n,
+        }),
+        consumed: 0n,
+        timestamp: 1_000n,
+      }),
+    ).toThrow(InvalidOfferParameterError);
+    expect(() =>
+      OfferUtils.getConsumableUnits({
+        offer: baseOffer({
+          market: zeroFeeMarket(),
+          maxUnits: 1n,
+          maxAssets: 1n,
+        }),
+        consumed: 0n,
+        timestamp: 1_000n,
+      }),
+    ).toThrow(InvalidOfferParameterError);
+  });
+
+  test("error: SettlementFeeExceedsPriceError", () => {
+    expect(() =>
+      OfferUtils.getConsumableUnits({
+        offer: baseOffer({
+          market: zeroFeeMarket({
+            settlementFeeCbps: [1, 1, 1, 1, 1, 1, 1],
+          }),
+          buy: true,
+          tick: 0n,
+          maxUnits: 0n,
+        }),
+        consumed: 0n,
+        timestamp: 1_000n,
+      }),
+    ).toThrow(SettlementFeeExceedsPriceError);
   });
 });
 

@@ -1,4 +1,3 @@
-import { NegativeValueError } from "@morpho-org/morpho-ts";
 import {
   createMockClient,
   type MockClientHandle,
@@ -16,25 +15,12 @@ import {
 } from "viem";
 import { base } from "viem/chains";
 import { describe, expect, test } from "vitest";
-import {
-  addresses,
-  baseMarketParams,
-  baseOffer,
-  group,
-  marketId,
-} from "../__test__/fixtures.js";
+import { addresses, baseMarketParams, marketId } from "../__test__/fixtures.js";
 import { midnightAbi } from "../abis.js";
-import { MAX_CONTINUOUS_FEE, MAX_TICK } from "../constants.js";
-import {
-  InvalidOfferParameterError,
-  SettlementFeeExceedsPriceError,
-} from "../errors.js";
 import { MarketUtils } from "../market/index.js";
-import { TickLib } from "../math/index.js";
 import { abi as getPositionAbi } from "../queries/GetPosition.js";
 import {
   fetchAccrualPosition,
-  fetchConsumableUnits,
   fetchMarket,
   fetchMarketParams,
   fetchPosition,
@@ -307,194 +293,6 @@ describe("fetchAccrualPosition", () => {
     expect(accrued.credit).toBe(950n);
     expect(accrued.pendingFee).toBe(50n);
     expect(accrued.market.continuousFeeCredit).toBe(50n);
-  });
-});
-
-describe("fetchConsumableUnits", () => {
-  test("default: max-unit offers skip settlement fee", async () => {
-    const handle = createMockClient(base);
-    const offer = {
-      buy: true,
-      maker: addresses.maker,
-      tick: MAX_TICK,
-      maxUnits: 100n,
-      maxAssets: 0n,
-      continuousFeeCap: MAX_CONTINUOUS_FEE,
-    };
-    mockRead(handle, {
-      address: addresses.midnight,
-      abi: midnightAbi,
-      functionName: "consumed",
-      args: [offer.maker, group],
-      result: 40n,
-    });
-    mockRead(handle, {
-      address: addresses.midnight,
-      abi: midnightAbi,
-      functionName: "continuousFee",
-      args: [marketId],
-      result: 10,
-    });
-
-    await expect(
-      fetchConsumableUnits(handle.client, {
-        marketId,
-        offer,
-        group,
-        timeToMaturity: 1000n,
-      }),
-    ).resolves.toBe(60n);
-  });
-
-  test("behavior: asset-capped offers fetch settlement fee", async () => {
-    const handle = createMockClient(base);
-    const offer = baseOffer({
-      buy: true,
-      tick: MAX_TICK,
-      maxUnits: 0n,
-      maxAssets: 100n,
-    });
-    mockRead(handle, {
-      address: addresses.midnight,
-      abi: midnightAbi,
-      functionName: "consumed",
-      args: [offer.maker, group],
-      result: 40n,
-    });
-    mockRead(handle, {
-      address: addresses.midnight,
-      abi: midnightAbi,
-      functionName: "continuousFee",
-      args: [marketId],
-      result: 10,
-    });
-    mockRead(handle, {
-      address: addresses.midnight,
-      abi: midnightAbi,
-      functionName: "settlementFee",
-      args: [marketId, 1000n],
-      result: 0n,
-    });
-
-    await expect(
-      fetchConsumableUnits(handle.client, {
-        marketId,
-        offer,
-        group,
-        timeToMaturity: 1000n,
-      }),
-    ).resolves.toBe(60n);
-  });
-
-  test("behavior: offers below market continuous fee return zero", async () => {
-    const handle = createMockClient(base);
-    const offer = baseOffer({
-      buy: true,
-      tick: MAX_TICK,
-      maxUnits: 0n,
-      maxAssets: 100n,
-      continuousFeeCap: 9n,
-    });
-    mockRead(handle, {
-      address: addresses.midnight,
-      abi: midnightAbi,
-      functionName: "consumed",
-      args: [offer.maker, group],
-      result: 40n,
-    });
-    mockRead(handle, {
-      address: addresses.midnight,
-      abi: midnightAbi,
-      functionName: "continuousFee",
-      args: [marketId],
-      result: 10,
-    });
-
-    await expect(
-      fetchConsumableUnits(handle.client, {
-        marketId,
-        offer,
-        group,
-        timeToMaturity: 1000n,
-      }),
-    ).resolves.toBe(0n);
-  });
-
-  test("error: SettlementFeeExceedsPriceError from fetched settlement fee", async () => {
-    const handle = createMockClient(base);
-    const offer = baseOffer({ buy: true, tick: 2n, maxUnits: 0n });
-    mockRead(handle, {
-      address: addresses.midnight,
-      abi: midnightAbi,
-      functionName: "consumed",
-      args: [offer.maker, group],
-      result: 0n,
-    });
-    mockRead(handle, {
-      address: addresses.midnight,
-      abi: midnightAbi,
-      functionName: "continuousFee",
-      args: [marketId],
-      result: 10,
-    });
-    mockRead(handle, {
-      address: addresses.midnight,
-      abi: midnightAbi,
-      functionName: "settlementFee",
-      args: [marketId, 1000n],
-      result: TickLib.tickToPrice(offer.tick) + 1n,
-    });
-
-    await expect(
-      fetchConsumableUnits(handle.client, {
-        marketId,
-        offer,
-        group,
-        timeToMaturity: 1000n,
-      }),
-    ).rejects.toBeInstanceOf(SettlementFeeExceedsPriceError);
-  });
-
-  test("error: NegativeValueError before reads for negative offer limits", async () => {
-    const handle = createMockClient(base);
-
-    await expect(
-      fetchConsumableUnits(handle.client, {
-        marketId,
-        offer: baseOffer({ maxUnits: -1n }),
-        group,
-        timeToMaturity: 1000n,
-      }),
-    ).rejects.toBeInstanceOf(NegativeValueError);
-    expect(handle.request).not.toHaveBeenCalled();
-  });
-
-  test("error: NegativeValueError before reads for negative continuous fee cap", async () => {
-    const handle = createMockClient(base);
-
-    await expect(
-      fetchConsumableUnits(handle.client, {
-        marketId,
-        offer: baseOffer({ continuousFeeCap: -1n }),
-        group,
-        timeToMaturity: 1000n,
-      }),
-    ).rejects.toBeInstanceOf(NegativeValueError);
-    expect(handle.request).not.toHaveBeenCalled();
-  });
-
-  test("error: InvalidOfferParameterError before reads for invalid cap shape", async () => {
-    const handle = createMockClient(base);
-
-    await expect(
-      fetchConsumableUnits(handle.client, {
-        marketId,
-        offer: baseOffer({ maxUnits: 1n, maxAssets: 1n }),
-        group,
-        timeToMaturity: 1000n,
-      }),
-    ).rejects.toBeInstanceOf(InvalidOfferParameterError);
-    expect(handle.request).not.toHaveBeenCalled();
   });
 });
 

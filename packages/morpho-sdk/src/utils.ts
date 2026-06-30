@@ -21,7 +21,6 @@ export {
   safeParseUnits,
 } from "@morpho-org/blue-sdk-viem";
 export {
-  ConsumableUnitsLib,
   EcrecoverRatifierUtils,
   GroupUtils,
   OfferUtils,
