@@ -6,12 +6,12 @@ import {
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData, zeroAddress } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
+import { validateOfferSides } from "../../helpers/validateOfferSides.js";
 import {
   type AnyRequirementSignature,
   EmptyMidnightTakeableOffersError,
   type Metadata,
   MidnightTakeableOfferMarketMismatchError,
-  MidnightTakeableOfferSideMismatchError,
   type MidnightTakeLendAction,
   NegativeMidnightAmountError,
   NonPositiveMidnightAmountError,
@@ -48,23 +48,13 @@ export const midnightTakeLend = (
     throw new EmptyMidnightTakeableOffersError();
   }
 
-  const marketId = MarketUtils.toId({
-    market: params.market,
-    chainId: params.chainId,
-  });
+  const marketId = MarketUtils.toId(params.market);
+  validateOfferSides(
+    params.takeableOffers.map((take) => take.offer),
+    false,
+  );
   for (const [index, take] of params.takeableOffers.entries()) {
-    if (take.offer.buy) {
-      throw new MidnightTakeableOfferSideMismatchError({
-        index,
-        expectedBuy: false,
-        actualBuy: take.offer.buy,
-      });
-    }
-
-    const actualMarketId = MarketUtils.toId({
-      market: take.offer.market,
-      chainId: params.chainId,
-    });
+    const actualMarketId = MarketUtils.toId(take.offer.market);
     if (actualMarketId.toLowerCase() !== marketId.toLowerCase()) {
       throw new MidnightTakeableOfferMarketMismatchError({
         index,

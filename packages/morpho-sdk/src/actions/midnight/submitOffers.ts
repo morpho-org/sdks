@@ -8,7 +8,7 @@ import type {
 /** Parameters for {@link midnightSubmitOffers}. */
 export interface MidnightSubmitOffersParams {
   readonly chainId: number;
-  readonly group: Hex;
+  readonly groups: readonly Hex[];
   readonly root: Hex;
   readonly maker: Address;
   readonly ratifier: Address;
@@ -30,7 +30,7 @@ export const midnightSubmitOffers = (
     action: {
       type: "midnightSubmitOffers" as const,
       args: {
-        group: params.group,
+        groups: params.groups,
         root: params.root,
         maker: params.maker,
         ratifier: params.ratifier,

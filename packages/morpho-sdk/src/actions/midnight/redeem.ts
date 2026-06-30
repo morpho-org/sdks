@@ -31,10 +31,7 @@ export const midnightRedeem = (
     throw new NonPositiveMidnightAmountError("units", params.units);
   }
 
-  const marketId = MarketUtils.toId({
-    market: params.market,
-    chainId: params.chainId,
-  });
+  const marketId = MarketUtils.toId(params.market);
   const midnight = getChainAddress(params.chainId, "midnight");
   const receiver = params.receiver ?? params.onBehalf;
 
