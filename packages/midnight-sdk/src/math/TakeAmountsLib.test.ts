@@ -377,22 +377,28 @@ describe("ConsumableUnitsLib.consumableUnits", () => {
     ).toBe(0n);
   });
 
-  test("behavior: buy max assets convert buyer assets", () => {
-    const offer = baseOffer({ buy: true, maxUnits: 0n, maxAssets: 123n });
+  test("behavior: buy max assets return max units accepted by buyer asset cap", () => {
+    const offer = baseOffer({
+      buy: true,
+      tick: MAX_TICK / 2n,
+      maxUnits: 0n,
+      maxAssets: 1n,
+    });
 
     expect(
       ConsumableUnitsLib.consumableUnits({
         offer,
-        consumed: 23n,
+        consumed: 0n,
         settlementFee: 0n,
       }),
-    ).toBe(
+    ).toBe(3n);
+    expect(
       TakeAmountsLib.buyerAssetsToUnits({
         offer,
-        targetBuyerAssets: 100n,
+        targetBuyerAssets: 1n,
         settlementFee: 0n,
       }),
-    );
+    ).toBe(2n);
   });
 
   test("behavior: sell max assets convert seller assets", () => {
@@ -414,6 +420,90 @@ describe("ConsumableUnitsLib.consumableUnits", () => {
         targetSellerAssets: 100n,
         settlementFee: 0n,
       }),
+    );
+  });
+
+  test("behavior: buy max assets match onchain floor cap rounding", () => {
+    fc.assert(
+      fc.property(
+        fc.record({
+          maxAssets: fc.bigInt({ min: 1n, max: 1_000_000n }),
+          consumed: fc.bigInt({ min: 0n, max: 1_000_000n }),
+          tick: fc.bigInt({ min: 0n, max: MAX_TICK }),
+        }),
+        ({ maxAssets, consumed, tick }) => {
+          const offer = baseOffer({
+            buy: true,
+            tick,
+            maxUnits: 0n,
+            maxAssets,
+          });
+          const { buyerPrice } = TakeAmountsLib.prices({
+            offer,
+            settlementFee: 0n,
+          });
+          fc.pre(buyerPrice > 0n);
+
+          const remainingAssets = MathLib.zeroFloorSub(maxAssets, consumed);
+          const units = ConsumableUnitsLib.consumableUnits({
+            offer,
+            consumed,
+            settlementFee: 0n,
+          });
+
+          expect(
+            MathLib.mulDivDown(units, buyerPrice, MathLib.WAD) <=
+              remainingAssets,
+          ).toBe(true);
+          expect(
+            MathLib.mulDivDown(units + 1n, buyerPrice, MathLib.WAD) >
+              remainingAssets,
+          ).toBe(true);
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  test("behavior: sell max assets match onchain ceil cap rounding", () => {
+    fc.assert(
+      fc.property(
+        fc.record({
+          maxAssets: fc.bigInt({ min: 1n, max: 1_000_000n }),
+          consumed: fc.bigInt({ min: 0n, max: 1_000_000n }),
+          tick: fc.bigInt({ min: 0n, max: MAX_TICK }),
+        }),
+        ({ maxAssets, consumed, tick }) => {
+          const offer = baseOffer({
+            buy: false,
+            tick,
+            maxUnits: 0n,
+            maxAssets,
+          });
+          const { sellerPrice } = TakeAmountsLib.prices({
+            offer,
+            settlementFee: 0n,
+          });
+          fc.pre(sellerPrice > 0n);
+
+          const remainingAssets = MathLib.zeroFloorSub(maxAssets, consumed);
+          const units = ConsumableUnitsLib.consumableUnits({
+            offer,
+            consumed,
+            settlementFee: 0n,
+          });
+
+          expect(
+            MathLib.mulDivUp(units, sellerPrice, MathLib.WAD) <=
+              remainingAssets,
+          ).toBe(true);
+          expect(
+            MathLib.mulDivUp(units + 1n, sellerPrice, MathLib.WAD) >
+              remainingAssets,
+          ).toBe(true);
+        },
+      ),
+      { numRuns: 100 },
     );
   });
 
@@ -466,14 +556,21 @@ describe("ConsumableUnitsLib.consumableUnits", () => {
     ).toThrow(InvalidOfferParameterError);
   });
 
-  test("error: DivisionByZeroError", () => {
-    expect(() =>
+  test("behavior: zero asset price leaves asset cap unbounded", () => {
+    expect(
       ConsumableUnitsLib.consumableUnits({
         offer: baseOffer({ buy: true, tick: 0n, maxUnits: 0n }),
         consumed: 0n,
         settlementFee: 0n,
       }),
-    ).toThrow(DivisionByZeroError);
+    ).toBe(MathLib.MAX_UINT_256);
+    expect(
+      ConsumableUnitsLib.consumableUnits({
+        offer: baseOffer({ buy: false, tick: 0n, maxUnits: 0n }),
+        consumed: 0n,
+        settlementFee: 0n,
+      }),
+    ).toBe(MathLib.MAX_UINT_256);
   });
 
   test("error: SettlementFeeExceedsPriceError", () => {

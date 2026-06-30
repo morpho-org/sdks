@@ -30,6 +30,8 @@ Ecrecover client signing rejects typed-data signatures that do not recover to th
 
 `fetchConsumableUnits` reads each offer's market continuous fee and returns zero when the market fee exceeds the offer's `continuousFeeCap`.
 
+Asset-capped buy-offer consumable units mirror Midnight `take` cap checks by returning the largest unit amount whose rounded-down buyer assets fit within the remaining asset cap.
+
 Offer creation only accepts protocol-reachable tick spacings and offer groups require a shared cap mode and value, matching Midnight's tick accessibility and group consumption accounting.
 
 Tick math constants mirror the current Midnight protocol range and price quantum, with `TickLib.tickToApr` plus offer-level price, rate, and APR helpers for simple annualization over a market's time to maturity.

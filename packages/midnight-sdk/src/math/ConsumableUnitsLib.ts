@@ -8,7 +8,7 @@ import { OfferUtils } from "../offers/index.js";
 import { TakeAmountsLib } from "./TakeAmountsLib.js";
 
 /**
- * TypeScript port of Midnight `ConsumableUnitsLib`.
+ * Computes units consumable through Midnight `take`.
  *
  * @example
  * ```ts
@@ -19,7 +19,7 @@ import { TakeAmountsLib } from "./TakeAmountsLib.js";
  */
 export namespace ConsumableUnitsLib {
   /**
-   * Returns units that would fully consume an offer.
+   * Returns the maximum units accepted by an offer's cap.
    *
    * @param params.offer.buy - Whether the maker buys loan assets.
    * @param params.offer.tick - Offer tick used for asset-capped conversion.
@@ -27,10 +27,9 @@ export namespace ConsumableUnitsLib {
    * @param params.offer.maxAssets - Asset cap used when `params.offer.maxUnits` is zero.
    * @param params.consumed - Amount already consumed from the offer group.
    * @param params.settlementFee - WAD-scaled settlement fee used for asset-capped conversion.
-   * @returns Remaining consumable units.
+   * @returns Remaining consumable units accepted by Midnight `take`.
    * @throws {NegativeValueError} when `consumed`, offer limits, delegated asset inputs, or the offer tick is negative.
    * @throws {InvalidOfferParameterError} when offer caps are both zero or both non-zero.
-   * @throws {DivisionByZeroError} when the delegated units conversion divides by zero.
    * @throws {TickOutOfRangeError} when the offer tick exceeds `MAX_TICK`.
    * @throws {SettlementFeeExceedsPriceError} when settlement fee exceeds a buy offer price.
    * @example
@@ -73,16 +72,22 @@ export namespace ConsumableUnitsLib {
     if (maxUnits > 0n) return MathLib.zeroFloorSub(maxUnits, consumed);
 
     const remainingAssets = MathLib.zeroFloorSub(maxAssets, consumed);
-    return params.offer.buy
-      ? TakeAmountsLib.buyerAssetsToUnits({
-          offer: params.offer,
-          targetBuyerAssets: remainingAssets,
-          settlementFee: params.settlementFee,
-        })
-      : TakeAmountsLib.sellerAssetsToUnits({
-          offer: params.offer,
-          targetSellerAssets: remainingAssets,
-          settlementFee: params.settlementFee,
-        });
+    if (!params.offer.buy) {
+      const { sellerPrice } = TakeAmountsLib.prices({
+        offer: params.offer,
+        settlementFee: params.settlementFee,
+      });
+      if (sellerPrice === 0n) return MathLib.MAX_UINT_256;
+
+      return MathLib.mulDivDown(remainingAssets, MathLib.WAD, sellerPrice);
+    }
+
+    const { buyerPrice } = TakeAmountsLib.prices({
+      offer: params.offer,
+      settlementFee: params.settlementFee,
+    });
+    if (buyerPrice === 0n) return MathLib.MAX_UINT_256;
+
+    return ((remainingAssets + 1n) * MathLib.WAD - 1n) / buyerPrice;
   }
 }

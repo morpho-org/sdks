@@ -12,7 +12,7 @@ import type { MidnightFetchParams } from "./types.js";
 import { callParameters, resolveChainId } from "./utils.js";
 
 /**
- * Fetches and computes remaining consumable units for an offer.
+ * Fetches and computes remaining units accepted by an offer's cap.
  *
  * Unit-capped offers skip settlement-fee lookup, matching the Solidity
  * library's early return. For asset-capped offers, pass the time to maturity
@@ -39,12 +39,11 @@ import { callParameters, resolveChainId } from "./utils.js";
  * @param params.blockNumber - Optional block number used for the reads.
  * @param params.blockTag - Optional block tag used for the reads.
  * @param params.stateOverride - Optional state override set used for the reads.
- * @returns Consumable units.
+ * @returns Remaining consumable units accepted by Midnight `take`.
  * @throws {UnsupportedChainIdError} when no address registry exists for the client chain id.
  * @throws {UnknownAddressError} when the registry has no Midnight address for the client chain id.
  * @throws {NegativeValueError} when asset-capped `timeToMaturity`, offer caps, or SDK math inputs are negative.
  * @throws {InvalidOfferParameterError} when offer caps are both zero or both non-zero.
- * @throws {DivisionByZeroError} when the delegated units conversion divides by zero.
  * @throws {SettlementFeeExceedsPriceError} when settlement fee exceeds a buy offer price.
  * @example
  * ```ts
