@@ -11,6 +11,7 @@ import type { Address, Hex } from "viem";
 import { zeroAddress } from "viem";
 
 export const midnightChainId = 30_001_337;
+export const midnightLiquidationCursor = 250000000000000000n;
 
 export const midnightAddresses = {
   morpho: "0x0000000000000000000000000000000000000001" as Address,
@@ -52,12 +53,14 @@ registerCustomAddresses({
 });
 
 export const midnightMarket = new MarketParams({
+  chainId: midnightChainId,
+  midnight: midnightAddresses.midnight,
   loanToken: midnightAddresses.loanToken,
   collateralParams: [
     {
       token: midnightAddresses.collateralToken,
       lltv: 770000000000000000n,
-      maxLif: 1061007957559681697n,
+      liquidationCursor: midnightLiquidationCursor,
       oracle: midnightAddresses.oracle,
     },
   ],
@@ -68,12 +71,14 @@ export const midnightMarket = new MarketParams({
 });
 
 export const midnightOtherMarket = new MarketParams({
+  chainId: midnightChainId,
+  midnight: midnightAddresses.midnight,
   loanToken: midnightAddresses.loanToken,
   collateralParams: [
     {
       token: midnightAddresses.collateralToken,
       lltv: 770000000000000000n,
-      maxLif: 1061007957559681697n,
+      liquidationCursor: midnightLiquidationCursor,
       oracle: midnightAddresses.oracle,
     },
   ],
@@ -83,10 +88,7 @@ export const midnightOtherMarket = new MarketParams({
   liquidatorGate: zeroAddress,
 });
 
-export const midnightMarketId = MarketUtils.toId({
-  market: midnightMarket,
-  chainId: midnightChainId,
-});
+export const midnightMarketId = MarketUtils.toId(midnightMarket);
 
 export const midnightBaseOffer = (overrides: Partial<IOffer> = {}): IOffer => ({
   market: overrides.market ?? midnightMarket,
@@ -114,10 +116,7 @@ export const midnightApiTake = (
   const offer = OfferUtils.toStruct({ offer: midnightBaseOffer(overrides) });
 
   return {
-    marketId: MarketUtils.toId({
-      market: offer.market,
-      chainId: midnightChainId,
-    }),
+    marketId: MarketUtils.toId(offer.market),
     units: 100n,
     offer,
     ratifierData: "0x1234" as Hex,
