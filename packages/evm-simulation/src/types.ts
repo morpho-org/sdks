@@ -96,10 +96,10 @@ export interface AssetChange {
  * alike (the zero address is kept for mints/burns). Accounts and their `changes`
  * are sorted by address for deterministic, cross-backend output.
  *
- * Native-ETH coverage differs by backend: Tenderly reports the full net ETH
- * delta (including ETH moved via internal calls), while the `eth_simulateV1`
- * fallback derives native ETH only from the top-level transaction `value`s —
- * ETH moved internally (e.g. a `WETH.withdraw` refund) is not captured there.
+ * Both backends report the full net native-ETH delta, including ETH moved via
+ * internal calls (e.g. a `WETH.withdraw` refund): Tenderly derives it from its
+ * trace, and the `eth_simulateV1` fallback runs with `traceTransfers` so the
+ * node synthesizes native moves as transfer logs under viem's `ethAddress`.
  */
 export interface AccountAssetChanges {
   readonly account: Address;

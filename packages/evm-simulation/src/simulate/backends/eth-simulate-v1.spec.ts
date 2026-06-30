@@ -156,7 +156,7 @@ describe.sequential("simulateV1", () => {
     ).rejects.toThrow(SimulationRevertedError);
   });
 
-  it("sets sender ETH balance to maxUint256 via stateOverride", async () => {
+  it("inflates sender ETH balance to half of uint256 via stateOverride", async () => {
     mockSimulateCalls.mockResolvedValueOnce({
       results: [
         { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
@@ -170,8 +170,10 @@ describe.sequential("simulateV1", () => {
     });
 
     const callArgs = mockSimulateCalls.mock.calls[0]![0];
+    // Half of uint256 (not the ceiling) leaves headroom for inbound native ETH
+    // so a refund to the sender does not overflow and revert the transfer.
     expect(callArgs.stateOverrides).toEqual([
-      { address: USER, balance: maxUint256 },
+      { address: USER, balance: maxUint256 / 2n },
     ]);
   });
 
@@ -420,21 +422,60 @@ describe.sequential("simulateV1", () => {
     expect(result.assetChanges).toEqual([]);
   });
 
-  it("accounts native ETH from top-level tx values (payer debited, recipient credited)", async () => {
+  it("enables traceTransfers so the node synthesizes native-ETH logs", async () => {
     mockSimulateCalls.mockResolvedValueOnce({
       results: [
         { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
-        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
+      ],
+    });
+
+    await simulateV1({
+      rpcUrl: "http://rpc.local",
+      chainId: 1,
+      transactions: [BASIC_TX],
+    });
+
+    expect(mockSimulateCalls.mock.calls[0]![0].traceTransfers).toBe(true);
+  });
+
+  it("accounts native ETH from traceTransfers synthetic logs (payer debited, recipient credited)", async () => {
+    // With traceTransfers, the node logs native moves as Transfer events from
+    // the eth sentinel — including ETH moved through internal calls.
+    mockSimulateCalls.mockResolvedValueOnce({
+      results: [
+        {
+          status: "success",
+          gasUsed: 0n,
+          data: "0x" as Hex,
+          logs: [
+            makeTransferLog({
+              token: ethAddress,
+              from: USER,
+              to: VAULT,
+              amount: parseEther("1"),
+            }),
+          ],
+        },
+        {
+          status: "success",
+          gasUsed: 0n,
+          data: "0x" as Hex,
+          logs: [
+            makeTransferLog({
+              token: ethAddress,
+              from: USER,
+              to: VAULT,
+              amount: parseEther("2"),
+            }),
+          ],
+        },
       ],
     });
 
     const result = await simulateV1({
       rpcUrl: "http://rpc.local",
       chainId: 1,
-      transactions: [
-        { ...BASIC_TX, value: parseEther("1") },
-        { ...BASIC_TX, value: parseEther("2") },
-      ],
+      transactions: [BASIC_TX, BASIC_TX],
     });
 
     expect(result.assetChanges).toEqual([
@@ -447,6 +488,24 @@ describe.sequential("simulateV1", () => {
         changes: [{ token: ethAddress, diff: parseEther("3") }],
       },
     ]);
+  });
+
+  it("does not double-count: top-level value is ignored, only logs are accounted", async () => {
+    // The synthetic log already carries the top-level value, so adding `value`
+    // on top would double-count. A tx with `value` but no native log nets zero.
+    mockSimulateCalls.mockResolvedValueOnce({
+      results: [
+        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
+      ],
+    });
+
+    const result = await simulateV1({
+      rpcUrl: "http://rpc.local",
+      chainId: 1,
+      transactions: [{ ...BASIC_TX, value: parseEther("1") }],
+    });
+
+    expect(result.assetChanges).toEqual([]);
   });
 
   it("merges native ETH and ERC20 deltas, sorted by token address", async () => {
@@ -463,6 +522,12 @@ describe.sequential("simulateV1", () => {
               to: VAULT,
               amount: 1_000_000n,
             }),
+            makeTransferLog({
+              token: ethAddress,
+              from: USER,
+              to: VAULT,
+              amount: parseEther("1"),
+            }),
           ],
         },
       ],
@@ -471,7 +536,7 @@ describe.sequential("simulateV1", () => {
     const result = await simulateV1({
       rpcUrl: "http://rpc.local",
       chainId: 1,
-      transactions: [{ ...BASIC_TX, value: parseEther("1") }],
+      transactions: [BASIC_TX],
     });
 
     // USDC (0xa0b8…) sorts before the ethAddress sentinel (0xeeee…).
