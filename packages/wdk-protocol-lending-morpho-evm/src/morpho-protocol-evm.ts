@@ -661,7 +661,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * Returns Morpho SDK requirements for a borrow.
    *
    * @param options - The borrow options.
-   * @returns Authorization requirements.
+   * @returns Authorization requirements. When offchain signatures are enabled
+   *   (`supportSignature: true`), the authorization may instead be returned as a
+   *   signable `RequirementSignatureRequest` to fold into the bundle via
+   *   `setAuthorizationWithSig`.
    */
   async getBorrowRequirements(
     options: MorphoBorrowOptions,

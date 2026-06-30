@@ -1,6 +1,7 @@
 ---
 "@morpho-org/morpho-sdk": major
 "@morpho-org/wdk-protocol-lending-morpho-evm": minor
+"@morpho-org/liquidity-sdk-viem": patch
 ---
 
 Add offchain `setAuthorizationWithSig` support for Morpho Blue bundled paths and switch entity `buildTx` to accept an array of signatures.
@@ -12,3 +13,5 @@ When the client opts into offchain signatures (`supportSignature: true`), `getRe
 New public surface: `AuthorizationAction`, `AuthorizationSignatureArgs`, `AuthorizationRequirementSignature`, `PermitRequirementSignature`, `isPermitSignature`, `isAuthorizationSignature`, `encodeAuthorization`, `getAuthorizationAction`, the `morphoSetAuthorizationWithSig` bundler action, and `BundlerErrors.UnexpectedSignature`. `getMorphoAuthorizationRequirement` gains a `supportSignature` option.
 
 `@morpho-org/wdk-protocol-lending-morpho-evm` is updated to pass single signatures as arrays to `buildTx` and widens `getBorrowRequirements` to surface the new signable authorization requirement.
+
+`@morpho-org/liquidity-sdk-viem` bumps its `@morpho-org/morpho-sdk` peer-dependency range to `^5.0.0` to track the new major (the previous `^3.0.0` range no longer matched the published version).
