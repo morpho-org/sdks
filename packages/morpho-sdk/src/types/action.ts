@@ -289,7 +289,7 @@ export interface MidnightTakeLendAction
       assets: bigint;
       minUnits: bigint;
       taker: Address;
-      takes: number;
+      takeableOffers: number;
     }
   > {}
 
@@ -303,7 +303,7 @@ export interface MidnightTakeBorrowAction
       maxUnits: bigint;
       taker: Address;
       receiver: Address;
-      takes: number;
+      takeableOffers: number;
     }
   > {}
 
@@ -318,7 +318,7 @@ export interface MidnightSupplyCollateralTakeBorrowAction
       maxUnits: bigint;
       taker: Address;
       receiver: Address;
-      takes: number;
+      takeableOffers: number;
     }
   > {}
 
@@ -339,7 +339,7 @@ export interface MidnightSubmitOffersAction
   extends BaseAction<
     "midnightSubmitOffers",
     {
-      group: Hex;
+      groups: readonly Hex[];
       root: Hex;
       maker: Address;
       ratifier: Address;

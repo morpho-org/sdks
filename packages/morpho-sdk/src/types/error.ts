@@ -566,53 +566,37 @@ export class NegativeMidnightAmountError extends Error {
   }
 }
 
-/** Thrown when a Midnight flow needs at least one executable take. */
-export class EmptyMidnightTakesError extends Error {
+/** Thrown when a Midnight flow needs at least one takeable offer. */
+export class EmptyMidnightTakeableOffersError extends Error {
   constructor() {
-    super("Midnight takes cannot be empty. Refresh the quote and try again.");
+    super(
+      "Midnight takeable offers cannot be empty. Refresh the quote and try again.",
+    );
   }
 }
 
-/** Thrown when a quoted Midnight take has the wrong maker side for the requested flow. */
-export class MidnightTakeSideMismatchError extends Error {
+/** Thrown when a Midnight offer has the wrong maker side for the requested flow. */
+export class MidnightOfferSideMismatchError extends Error {
   constructor(params: {
     index: number;
     expectedBuy: boolean;
     actualBuy: boolean;
   }) {
     super(
-      `Midnight take "${params.index}" has buy="${params.actualBuy}", expected "${params.expectedBuy}". Refresh the quote and try again.`,
+      `Midnight offer "${params.index}" has buy="${params.actualBuy}", expected "${params.expectedBuy}". Use the matching flow or rebuild the offer list.`,
     );
   }
 }
 
-/** Thrown when a quoted Midnight take belongs to a different market than the requested flow. */
-export class MidnightTakeMarketMismatchError extends Error {
+/** Thrown when a quoted Midnight takeable offer belongs to a different market than the requested flow. */
+export class MidnightTakeableOfferMarketMismatchError extends Error {
   constructor(params: {
     index: number;
     expectedMarket: string;
     actualMarket: string;
   }) {
     super(
-      `Midnight take "${params.index}" belongs to market "${params.actualMarket}", expected "${params.expectedMarket}". Refresh the quote and try again.`,
-    );
-  }
-}
-
-/** Thrown when a Midnight maker flow has no offer inputs to ratify or submit. */
-export class EmptyMidnightMakeOfferInputsError extends Error {
-  constructor() {
-    super(
-      "Midnight make-offer inputs cannot be empty. Build at least one offer input before submitting.",
-    );
-  }
-}
-
-/** Thrown when a Midnight make-offer batch mixes loan tokens. */
-export class MidnightMixedLoanTokenError extends Error {
-  constructor() {
-    super(
-      "Midnight make-offer batches must use one loan token. Split mixed-token batches.",
+      `Midnight takeable offer "${params.index}" belongs to market "${params.actualMarket}", expected "${params.expectedMarket}". Refresh the quote and try again.`,
     );
   }
 }
@@ -622,6 +606,19 @@ export class UnknownMidnightCollateralError extends Error {
   constructor(params: { market: string; collateralIndex: bigint }) {
     super(
       `Midnight market "${params.market}" has no collateral at index "${params.collateralIndex}". Use a configured collateral index.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight offer tree uses an unsupported ratifier address. */
+export class UnknownMidnightRatifierError extends Error {
+  constructor(params: {
+    ratifier: Address;
+    ecrecoverRatifier: Address;
+    setterRatifier: Address;
+  }) {
+    super(
+      `Midnight offer tree uses ratifier "${params.ratifier}", expected "${params.ecrecoverRatifier}" or "${params.setterRatifier}". Rebuild the tree with a supported ratifier.`,
     );
   }
 }
