@@ -31,10 +31,7 @@ export const midnightSupplyCollateral = (
     throw new NonPositiveMidnightAmountError("assets", params.assets);
   }
 
-  const marketId = MarketUtils.toId({
-    market: params.market,
-    chainId: params.chainId,
-  });
+  const marketId = MarketUtils.toId(params.market);
   const midnight = getChainAddress(params.chainId, "midnight");
   const collateralIndex = params.collateralIndex ?? 0n;
 
