@@ -138,7 +138,7 @@ describe("MorphoMidnight", () => {
         accountAddress: midnightAddresses.taker,
         assets: 1_000n,
         minUnits: 900n,
-        offers: [midnightApiTake()],
+        takeableOffers: [midnightApiTake()],
       });
       const tx = output.buildTx();
 
@@ -147,7 +147,7 @@ describe("MorphoMidnight", () => {
         assets: 1_000n,
         minUnits: 900n,
         taker: midnightAddresses.taker,
-        takes: 1,
+        takeableOffers: 1,
       });
     });
   });

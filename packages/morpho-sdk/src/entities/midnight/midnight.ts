@@ -30,7 +30,7 @@ import {
 } from "viem";
 import { getBlock, signTypedData } from "viem/actions";
 import {
-  type MidnightTake,
+  type MidnightTakeableOffer,
   midnightCancelOffer,
   midnightRedeem,
   midnightRepayWithdrawCollateral,
@@ -146,14 +146,14 @@ export interface MarketActionParams {
 export interface TakeLendParams extends MarketActionParams {
   readonly assets: bigint;
   readonly minUnits: bigint;
-  readonly offers: readonly MidnightTake[];
+  readonly takeableOffers: readonly MidnightTakeableOffer[];
 }
 
 /** Parameters for the Midnight take-borrow taker flow. */
 export interface TakeBorrowParams extends MarketActionParams {
   readonly loanAssets: bigint;
   readonly maxUnits: bigint;
-  readonly offers: readonly MidnightTake[];
+  readonly takeableOffers: readonly MidnightTakeableOffer[];
 }
 
 /** Parameters for the Midnight supply-collateral-and-take-borrow taker flow. */
@@ -416,7 +416,7 @@ export class MorphoMidnight implements MidnightActions {
           assets: params.assets,
           minUnits: params.minUnits,
           taker: params.accountAddress,
-          takes: params.offers,
+          takeableOffers: params.takeableOffers,
           signatures,
           metadata: this.client.options.metadata,
         }),
@@ -452,7 +452,7 @@ export class MorphoMidnight implements MidnightActions {
           loanAssets: params.loanAssets,
           maxUnits: params.maxUnits,
           taker: params.accountAddress,
-          takes: params.offers,
+          takeableOffers: params.takeableOffers,
           metadata: this.client.options.metadata,
         }),
     };
@@ -502,7 +502,7 @@ export class MorphoMidnight implements MidnightActions {
           maxUnits: params.maxUnits,
           taker: params.accountAddress,
           collateralIndex,
-          takes: params.offers,
+          takeableOffers: params.takeableOffers,
           signatures,
           metadata: this.client.options.metadata,
         }),

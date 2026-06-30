@@ -39,8 +39,8 @@ export interface MidnightCollateralSupply {
   readonly permit: MidnightTokenPermit;
 }
 
-/** ABI-ready Midnight take struct used by direct and bundled take flows. */
-export interface MidnightTake {
+/** ABI-ready Midnight takeable offer used by direct and bundled take flows. */
+export interface MidnightTakeableOffer {
   readonly units: bigint;
   readonly offer: OfferStruct;
   readonly ratifierData: Hex;
