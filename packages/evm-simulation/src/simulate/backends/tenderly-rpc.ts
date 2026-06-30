@@ -24,6 +24,11 @@ import type {
   TenderlyRpcConfig,
 } from "../../types.js";
 import { type AssetChangeEntry, groupAssetChanges } from "../asset-changes.js";
+import {
+  buildEcrecoverShimCode,
+  ECRECOVER_PRECOMPILE_ADDRESS,
+  ECRECOVER_RELOCATED_ADDRESS,
+} from "../ecrecover-override.js";
 
 interface TenderlyRpcCall {
   from: Address;
@@ -115,6 +120,10 @@ const bundleEnvelope = rpcEnvelope(z.array(simResultSchema).min(1));
  * @param params.transactions - Bundle to simulate, in execution order.
  * @param params.blockNumber - Optional pinned block number or `BlockTag`. Defaults to `latest`.
  * @param params.signal - Optional `AbortSignal` for cancellation / timeout.
+ * @param params.ecrecoverOverride - Optional signer the `ecrecover` precompile
+ *   should resolve to. When set, installs the `ecrecover` shim at `0x…0001`
+ *   (relocating the genuine precompile via `movePrecompileToAddress`) so
+ *   signature-gated calls validate against that address.
  * @returns A {@link RawSimulationResult} with one `RawCall` per input transaction.
  * @throws {SimulationValidationError} when `transactions` is empty.
  * @throws {SimulationRevertedError} when any simulated tx reports `status: false`.
@@ -126,8 +135,10 @@ export async function simulateTenderlyRpc(params: {
   transactions: SimulationTransaction[];
   blockNumber?: bigint | BlockTag;
   signal?: AbortSignal;
+  ecrecoverOverride?: Address;
 }): Promise<RawSimulationResult> {
-  const { config, transactions, blockNumber, signal } = params;
+  const { config, transactions, blockNumber, signal, ecrecoverOverride } =
+    params;
 
   const firstTx = transactions[0];
   if (!firstTx) {
@@ -140,7 +151,7 @@ export async function simulateTenderlyRpc(params: {
   const block = encodeBlock(blockNumber);
   // Inflate sender ETH balance to avoid false "insufficient funds for gas"
   // reverts on wallets low on native gas token — mirrors simulateV1.
-  const stateOverrides = buildStateOverrides(firstTx.from);
+  const stateOverrides = buildStateOverrides(firstTx.from, ecrecoverOverride);
 
   try {
     if (transactions.length === 1) {
@@ -224,10 +235,26 @@ function buildCall(tx: SimulationTransaction): TenderlyRpcCall {
   };
 }
 
+interface TenderlyAccountOverride {
+  balance?: Hex;
+  code?: Hex;
+  movePrecompileToAddress?: Address;
+}
+
 function buildStateOverrides(
   sender: Address,
-): Record<Address, { balance: Hex }> {
-  return { [sender]: { balance: numberToHex(maxUint256) } };
+  ecrecoverOverride?: Address,
+): Record<Address, TenderlyAccountOverride> {
+  const overrides: Record<Address, TenderlyAccountOverride> = {
+    [sender]: { balance: numberToHex(maxUint256) },
+  };
+  if (ecrecoverOverride) {
+    overrides[ECRECOVER_PRECOMPILE_ADDRESS] = {
+      code: buildEcrecoverShimCode(ecrecoverOverride),
+      movePrecompileToAddress: ECRECOVER_RELOCATED_ADDRESS,
+    };
+  }
+  return overrides;
 }
 
 function encodeBlock(blockNumber?: bigint | BlockTag): string {

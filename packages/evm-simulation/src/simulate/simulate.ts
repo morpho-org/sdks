@@ -39,6 +39,9 @@ import {
  * @param params.authorizations - Optional token authorizations resolved into prepended approve
  *   transactions before the main bundle runs.
  * @param params.blockNumber - Optional pinned block number or `BlockTag`. Defaults to `latest`.
+ * @param params.ecrecoverOverride - Optional signer the `ecrecover` precompile should
+ *   resolve to, for simulating signature-gated calls (e.g. EIP-2612 `permit`) without a
+ *   real signature. Applied as a `code` state-override on both backends.
  * @throws {SimulationValidationError} for invalid input (mixed senders, bad addresses,
  *   empty transactions, malformed authorizations).
  * @throws {UnsupportedChainError} when the chain is not configured for any backend.
@@ -85,6 +88,7 @@ export async function simulate(
     chainId: params.chainId,
     transactions: simulationTxs,
     blockNumber: params.blockNumber,
+    ecrecoverOverride: params.ecrecoverOverride,
   });
   if (result.calls.length !== simulationTxs.length) {
     throw new ExternalServiceError(

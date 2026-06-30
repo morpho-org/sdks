@@ -198,4 +198,22 @@ describe("validateInput", () => {
       ),
     ).toThrow(SimulationValidationError);
   });
+
+  it("does not throw when ecrecoverOverride is a valid non-zero address", () => {
+    expect(() =>
+      validateInput(params({ ecrecoverOverride: OTHER })),
+    ).not.toThrow();
+  });
+
+  it("throws when ecrecoverOverride is the zero address", () => {
+    expect(() =>
+      validateInput(params({ ecrecoverOverride: zeroAddress })),
+    ).toThrow(SimulationValidationError);
+  });
+
+  it("throws when ecrecoverOverride is a malformed address", () => {
+    expect(() =>
+      validateInput(params({ ecrecoverOverride: "0xnope" as Address })),
+    ).toThrow(SimulationValidationError);
+  });
 });

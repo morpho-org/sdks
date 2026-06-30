@@ -341,6 +341,50 @@ describe.sequential("simulateTenderlyRpc — single tx", () => {
     );
   });
 
+  it("installs the ecrecover shim (with precompile relocation) when ecrecoverOverride is set", async () => {
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: true,
+      json: async () => envelope(successResult()),
+    });
+    installFetchMock(fetchMock);
+
+    await simulateTenderlyRpc({
+      config: CONFIG,
+      transactions: [TX1],
+      ecrecoverOverride: VAULT,
+    });
+
+    const body = requestBody(fetchMock.mock.calls[0]!);
+    const [, , overrides] = body.params as [
+      unknown,
+      unknown,
+      Record<Address, { code?: Hex; movePrecompileToAddress?: Address }>,
+    ];
+    const precompile = overrides["0x0000000000000000000000000000000000000001"]!;
+    expect(precompile.code).toBe(
+      `0x73${VAULT.slice(2).toLowerCase()}60005260206000f3`,
+    );
+    expect(precompile.movePrecompileToAddress).toBe(
+      "0x00000000000000000000000000000000000ec1ec",
+    );
+  });
+
+  it("omits the ecrecover override when ecrecoverOverride is unset", async () => {
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: true,
+      json: async () => envelope(successResult()),
+    });
+    installFetchMock(fetchMock);
+
+    await simulateTenderlyRpc({ config: CONFIG, transactions: [TX1] });
+
+    const body = requestBody(fetchMock.mock.calls[0]!);
+    const [, , overrides] = body.params as [unknown, unknown, object];
+    expect("0x0000000000000000000000000000000000000001" in overrides).toBe(
+      false,
+    );
+  });
+
   it("encodes tx.value as hex", async () => {
     const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
       ok: true,

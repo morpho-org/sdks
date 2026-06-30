@@ -8,8 +8,9 @@ import { validateAuthorizations } from "../authorizations/index.js";
  *
  * Throws `SimulationValidationError` with a `fieldErrors[]` list on any invalid input:
  * empty transactions, malformed / zero-addr fields, missing `data`, negative `value`,
- * bad `chainId`, or mixed senders (all txs in a bundle must share the same `from`).
- * Also runs `validateAuthorizations` on the optional authorizations array.
+ * bad `chainId`, a malformed / zero-addr `ecrecoverOverride`, or mixed senders (all txs
+ * in a bundle must share the same `from`). Also runs `validateAuthorizations` on the
+ * optional authorizations array.
  */
 export function validateInput(params: SimulateParams): void {
   const errors: string[] = [];
@@ -52,6 +53,16 @@ export function validateInput(params: SimulateParams): void {
         "transactions: all transactions must share the same from address",
       );
     }
+  }
+
+  if (
+    params.ecrecoverOverride !== undefined &&
+    (!isAddress(params.ecrecoverOverride) ||
+      params.ecrecoverOverride === zeroAddress)
+  ) {
+    errors.push(
+      `ecrecoverOverride: must be a valid non-zero address (got ${params.ecrecoverOverride})`,
+    );
   }
 
   if (params.authorizations) {
