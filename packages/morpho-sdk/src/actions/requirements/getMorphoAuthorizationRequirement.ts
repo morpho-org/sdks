@@ -70,6 +70,39 @@ export const getMorphoAuthorizationRequirement = async (params: {
   } = getChainAddresses(chainId);
 
   const pc = viemClient.extend(publicActions);
+
+  if (supportSignature) {
+    // The signable path needs the user's Morpho nonce; fetch it alongside the
+    // authorization status so both reads share a round-trip (batched into a
+    // single multicall when the client enables batching) instead of
+    // serializing the nonce read behind isAuthorized. Enabling supportSignature
+    // signals intent to authorize, so the nonce is needed in the common case.
+    const [isAuthorized, nonce] = await Promise.all([
+      pc.readContract({
+        address: morpho,
+        abi: blueAbi,
+        functionName: "isAuthorized",
+        args: [userAddress, generalAdapter1],
+      }),
+      pc.readContract({
+        address: morpho,
+        abi: blueAbi,
+        functionName: "nonce",
+        args: [userAddress],
+      }),
+    ]);
+
+    if (isAuthorized) {
+      return null;
+    }
+
+    return encodeAuthorization(viemClient, {
+      authorized: generalAdapter1,
+      chainId,
+      nonce,
+    });
+  }
+
   const isAuthorized = await pc.readContract({
     address: morpho,
     abi: blueAbi,
@@ -79,21 +112,6 @@ export const getMorphoAuthorizationRequirement = async (params: {
 
   if (isAuthorized) {
     return null;
-  }
-
-  if (supportSignature) {
-    const nonce = await pc.readContract({
-      address: morpho,
-      abi: blueAbi,
-      functionName: "nonce",
-      args: [userAddress],
-    });
-
-    return encodeAuthorization(viemClient, {
-      authorized: generalAdapter1,
-      chainId,
-      nonce,
-    });
   }
 
   return deepFreeze({
