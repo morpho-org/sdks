@@ -73,6 +73,7 @@ export type GetMidnightTokenPullRequirementsParams =
  *   fallback for tokens known to be incompatible despite passing that probe.
  * @returns Ordered approval transactions and/or signature requirements for the bundle token pull.
  * @throws {ChainIdMismatchError} when the viem client is connected to another chain.
+ * @throws {CryptoUnavailableError} when the runtime crypto API is unavailable for Permit2 nonce generation.
  * @example
  * ```ts
  * import { getMidnightTokenPullRequirements } from "@morpho-org/morpho-sdk";

@@ -1,4 +1,5 @@
 import { MathLib } from "@morpho-org/blue-sdk";
+import { registerCustomAddresses } from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import type { Chain } from "viem";
 import {
@@ -46,8 +47,34 @@ const wrongChain = {
   id: midnightChainId + 1,
 } as const satisfies Chain;
 
+const noPermit2ChainId = midnightChainId + 2;
+const noPermit2Chain = {
+  ...midnightTestChain,
+  id: noPermit2ChainId,
+  name: "Midnight Test Without Permit2",
+} as const satisfies Chain;
+
+registerCustomAddresses({
+  addresses: {
+    [noPermit2ChainId]: {
+      morpho: midnightAddresses.morpho,
+      bundler3: {
+        bundler3: midnightAddresses.bundler3,
+        generalAdapter1: midnightAddresses.generalAdapter1,
+      },
+      adaptiveCurveIrm: midnightAddresses.adaptiveCurveIrm,
+      midnight: midnightAddresses.midnight,
+      midnightBundles: midnightAddresses.midnightBundles,
+      midnightMempool: midnightAddresses.midnightMempool,
+      ecrecoverRatifier: midnightAddresses.ecrecoverRatifier,
+      setterRatifier: midnightAddresses.setterRatifier,
+    },
+  },
+});
+
 const mockAllowanceReads = (params: {
   readonly handle: ReturnType<typeof createMockClient>;
+  readonly chainId?: number;
   readonly token?: Address;
   readonly directAllowance: bigint;
   readonly permit2Allowance: bigint;
@@ -57,7 +84,9 @@ const mockAllowanceReads = (params: {
   let nonceReads = 0;
 
   params.handle.request.mockImplementation(async ({ method, params: rpc }) => {
-    if (method === "eth_chainId") return `0x${midnightChainId.toString(16)}`;
+    if (method === "eth_chainId") {
+      return `0x${(params.chainId ?? midnightChainId).toString(16)}`;
+    }
     if (method === "eth_call") {
       const [tx] = (rpc ?? []) as [{ to?: Address; data?: Hex }];
       if (tx?.to != null && isAddressEqual(tx.to, token) && tx.data != null) {
@@ -164,6 +193,23 @@ describe.sequential("getMidnightTokenPullRequirements", () => {
     expect(requirements).toEqual([]);
   });
 
+  test("behavior: returns no requirements when amount is zero", async () => {
+    const handle = createMockClient(midnightTestChain);
+
+    const requirements = await getMidnightTokenPullRequirements({
+      viemClient: handle.client,
+      chainId: midnightChainId,
+      token: midnightAddresses.loanToken,
+      owner: midnightAddresses.taker,
+      spender: midnightAddresses.midnightBundles,
+      amount: 0n,
+      supportSignature: true,
+    });
+
+    expect(requirements).toEqual([]);
+    expect(handle.request).not.toHaveBeenCalled();
+  });
+
   test("behavior: returns classic approval when signatures are disabled", async () => {
     const handle = createMockClient(midnightTestChain);
     mockRead(handle, {
@@ -264,6 +310,36 @@ describe.sequential("getMidnightTokenPullRequirements", () => {
       throw new Error("Requirement is not a Permit2 transfer signature");
     }
     expect(permit2.action.args.spender).toBe(midnightAddresses.midnightBundles);
+  });
+
+  test("behavior: returns classic approval when Permit2 is not deployed", async () => {
+    const handle = createMockClient(noPermit2Chain);
+    mockAllowanceReads({
+      handle,
+      chainId: noPermit2ChainId,
+      directAllowance: 0n,
+      permit2Allowance: 0n,
+    });
+
+    const requirements = await getMidnightTokenPullRequirements({
+      viemClient: handle.client,
+      chainId: noPermit2ChainId,
+      token: midnightAddresses.loanToken,
+      owner: midnightAddresses.taker,
+      spender: midnightAddresses.midnightBundles,
+      amount: 1_000n,
+      supportSignature: true,
+    });
+
+    expect(requirements).toHaveLength(1);
+    const approval = requirements[0];
+    expect(isRequirementApproval(approval)).toBe(true);
+    if (isRequirementApproval(approval)) {
+      expect(approval.action.args.spender).toBe(
+        midnightAddresses.midnightBundles,
+      );
+      expect(approval.action.args.amount).toBe(1_000n);
+    }
   });
 
   test("behavior: skips ERC2612 simple permit for DAI", async () => {

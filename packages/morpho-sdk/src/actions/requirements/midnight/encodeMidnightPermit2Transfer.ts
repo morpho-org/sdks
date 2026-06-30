@@ -1,11 +1,6 @@
 import { getPermit2TransferFromTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
-import {
-  type Address,
-  type Hex,
-  verifyTypedData,
-  type WalletClient,
-} from "viem";
+import { type Address, verifyTypedData, type WalletClient } from "viem";
 import { signTypedData } from "viem/actions";
 import { validateUserAddress } from "../../../helpers/index.js";
 import {
@@ -96,7 +91,7 @@ export const encodeMidnightPermit2Transfer = (
           owner: userAddress,
           nonce: params.nonce,
           asset: params.token,
-          signature: signature as Hex,
+          signature,
           amount: params.amount,
           deadline,
         },
