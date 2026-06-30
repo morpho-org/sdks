@@ -54,7 +54,7 @@
     "react-dom": "^19.2.6",
     "typescript": "^6.0.3",
     "viem": "^2.50.4",
-    "vitest": "^4.1.7",
+    "vitest": "^4.1.9",
     "wagmi": "^3.6.15"
   },
   "publishConfig": {
