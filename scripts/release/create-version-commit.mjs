@@ -298,7 +298,7 @@ export function pushReleaseBranchWithLease(options) {
 /**
  * Runs the release commit workflow step.
  *
- * @param {{ apiBaseUrl?: string, cwd?: string, env?: NodeJS.ProcessEnv, fetchImpl?: typeof fetch, outputFile?: string, pushReleaseBranch?: (options: { commitOid: string, cwd: string, releaseBranch: string, remoteUrl?: string, repository: string, tempBranch: string, token: string }) => void, writeError?: (message: string) => void, writeWarning?: (message: string) => void }} options Runtime options.
+ * @param {{ apiBaseUrl?: string, cwd?: string, env?: NodeJS.ProcessEnv, fetchImpl?: typeof fetch, outputFile?: string, pushReleaseBranch?: (options: { commitOid: string, cwd: string, releaseBranch: string, remoteUrl?: string, repository: string, tempBranch: string, token: string }) => void, writeError?: (message: string) => void, writeOutput?: (message: string) => void, writeWarning?: (message: string) => void }} options Runtime options.
  * @returns {Promise<null | { commitOid: string, tempBranch: string }>} The commit result when changes exist.
  */
 export async function main(options = {}) {
@@ -307,6 +307,8 @@ export async function main(options = {}) {
   const outputFile = options.outputFile ?? env.GITHUB_OUTPUT;
   const writeError =
     options.writeError ?? ((message) => process.stderr.write(message));
+  const writeOutput =
+    options.writeOutput ?? ((message) => process.stdout.write(message));
   const versionChanges = collectVersionChanges({ cwd });
 
   if (versionChanges.disallowedPaths.length > 0) {
@@ -316,7 +318,7 @@ export async function main(options = {}) {
   }
 
   if (versionChanges.paths.length === 0) {
-    process.stdout.write("No version changes to commit.\n");
+    writeOutput("No version changes to commit.\n");
     appendOutput(outputFile, getGitHubOutput({ hasVersionChanges: false }));
     return null;
   }
@@ -352,7 +354,7 @@ export async function main(options = {}) {
       hasVersionChanges: true,
     }),
   );
-  process.stdout.write(
+  writeOutput(
     `Created signed version commit ${result.commitOid} on ${releaseBranch}.\n`,
   );
 
