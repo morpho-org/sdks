@@ -3,3 +3,4 @@ export * from "./encode/index.js";
 export * from "./generalAdapter/index.js";
 export * from "./getRequirementsAction.js";
 export * from "./getRequirementsApproval.js";
+export * from "./midnight/index.js";
