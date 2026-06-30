@@ -4,10 +4,10 @@ import { encodeFunctionData, zeroAddress } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   type AnyRequirementSignature,
-  EmptyMidnightTakesError,
+  EmptyMidnightTakeableOffersError,
   type MidnightSupplyCollateralTakeBorrowAction,
-  MidnightTakeMarketMismatchError,
-  MidnightTakeSideMismatchError,
+  MidnightTakeableOfferMarketMismatchError,
+  MidnightTakeableOfferSideMismatchError,
   NegativeMidnightAmountError,
   NonPositiveMidnightAmountError,
   type Transaction,
@@ -43,17 +43,17 @@ export const midnightSupplyCollateralTakeBorrow = (
   if (params.maxUnits < 0n) {
     throw new NegativeMidnightAmountError("maxUnits", params.maxUnits);
   }
-  if (params.takes.length === 0) {
-    throw new EmptyMidnightTakesError();
+  if (params.takeableOffers.length === 0) {
+    throw new EmptyMidnightTakeableOffersError();
   }
 
   const marketId = MarketUtils.toId({
     market: params.market,
     chainId: params.chainId,
   });
-  for (const [index, take] of params.takes.entries()) {
+  for (const [index, take] of params.takeableOffers.entries()) {
     if (!take.offer.buy) {
-      throw new MidnightTakeSideMismatchError({
+      throw new MidnightTakeableOfferSideMismatchError({
         index,
         expectedBuy: true,
         actualBuy: take.offer.buy,
@@ -65,7 +65,7 @@ export const midnightSupplyCollateralTakeBorrow = (
       chainId: params.chainId,
     });
     if (actualMarketId.toLowerCase() !== marketId.toLowerCase()) {
-      throw new MidnightTakeMarketMismatchError({
+      throw new MidnightTakeableOfferMarketMismatchError({
         index,
         expectedMarket: marketId,
         actualMarket: actualMarketId,
@@ -110,7 +110,7 @@ export const midnightSupplyCollateralTakeBorrow = (
         params.taker,
         receiver,
         collateralSupplies,
-        params.takes,
+        params.takeableOffers,
         0n,
         zeroAddress,
       ],
@@ -132,7 +132,7 @@ export const midnightSupplyCollateralTakeBorrow = (
         maxUnits: params.maxUnits,
         taker: params.taker,
         receiver,
-        takes: params.takes.length,
+        takeableOffers: params.takeableOffers.length,
       },
     },
   });

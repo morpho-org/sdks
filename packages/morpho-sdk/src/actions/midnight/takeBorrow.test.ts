@@ -9,22 +9,22 @@ import {
   midnightOtherMarket,
 } from "../../../test/fixtures/midnight.js";
 import {
-  EmptyMidnightTakesError,
-  MidnightTakeMarketMismatchError,
-  MidnightTakeSideMismatchError,
+  EmptyMidnightTakeableOffersError,
+  MidnightTakeableOfferMarketMismatchError,
+  MidnightTakeableOfferSideMismatchError,
 } from "../../types/index.js";
 import { midnightTakeBorrow } from "./takeBorrow.js";
 
 describe("midnightTakeBorrow", () => {
   test("default", () => {
-    const takes = [midnightApiTake({ buy: true })];
+    const takeableOffers = [midnightApiTake({ buy: true })];
     const tx = midnightTakeBorrow({
       chainId: midnightChainId,
       market: midnightMarket,
       loanAssets: 1_000n,
       maxUnits: 1_100n,
       taker: midnightAddresses.taker,
-      takes,
+      takeableOffers,
     });
     const decoded = decodeFunctionData({
       abi: midnightBundlesAbi,
@@ -41,7 +41,7 @@ describe("midnightTakeBorrow", () => {
     expect(decoded.args?.[4]).toEqual([]);
   });
 
-  test("error: EmptyMidnightTakesError", () => {
+  test("error: EmptyMidnightTakeableOffersError", () => {
     expect(() =>
       midnightTakeBorrow({
         chainId: midnightChainId,
@@ -49,13 +49,13 @@ describe("midnightTakeBorrow", () => {
         loanAssets: 1_000n,
         maxUnits: 1_100n,
         taker: midnightAddresses.taker,
-        takes: [],
+        takeableOffers: [],
       }),
-    ).toThrow(EmptyMidnightTakesError);
+    ).toThrow(EmptyMidnightTakeableOffersError);
   });
 
-  test("error: MidnightTakeSideMismatchError", () => {
-    const takes = [midnightApiTake()];
+  test("error: MidnightTakeableOfferSideMismatchError", () => {
+    const takeableOffers = [midnightApiTake()];
 
     expect(() =>
       midnightTakeBorrow({
@@ -64,13 +64,15 @@ describe("midnightTakeBorrow", () => {
         loanAssets: 1_000n,
         maxUnits: 1_100n,
         taker: midnightAddresses.taker,
-        takes,
+        takeableOffers,
       }),
-    ).toThrow(MidnightTakeSideMismatchError);
+    ).toThrow(MidnightTakeableOfferSideMismatchError);
   });
 
-  test("error: MidnightTakeMarketMismatchError", () => {
-    const takes = [midnightApiTake({ buy: true, market: midnightOtherMarket })];
+  test("error: MidnightTakeableOfferMarketMismatchError", () => {
+    const takeableOffers = [
+      midnightApiTake({ buy: true, market: midnightOtherMarket }),
+    ];
 
     expect(() =>
       midnightTakeBorrow({
@@ -79,8 +81,8 @@ describe("midnightTakeBorrow", () => {
         loanAssets: 1_000n,
         maxUnits: 1_100n,
         taker: midnightAddresses.taker,
-        takes,
+        takeableOffers,
       }),
-    ).toThrow(MidnightTakeMarketMismatchError);
+    ).toThrow(MidnightTakeableOfferMarketMismatchError);
   });
 });

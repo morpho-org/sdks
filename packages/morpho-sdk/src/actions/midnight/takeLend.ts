@@ -8,17 +8,17 @@ import { type Address, encodeFunctionData, zeroAddress } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   type AnyRequirementSignature,
-  EmptyMidnightTakesError,
+  EmptyMidnightTakeableOffersError,
   type Metadata,
+  MidnightTakeableOfferMarketMismatchError,
+  MidnightTakeableOfferSideMismatchError,
   type MidnightTakeLendAction,
-  MidnightTakeMarketMismatchError,
-  MidnightTakeSideMismatchError,
   NegativeMidnightAmountError,
   NonPositiveMidnightAmountError,
   type Transaction,
 } from "../../types/index.js";
 import { encodeMidnightTokenPermit } from "./encodeMidnightTokenPermit.js";
-import type { MidnightTake } from "./types.js";
+import type { MidnightTakeableOffer } from "./types.js";
 
 /** Parameters for {@link midnightTakeLend}. */
 export interface MidnightTakeLendParams {
@@ -27,7 +27,7 @@ export interface MidnightTakeLendParams {
   readonly assets: bigint;
   readonly minUnits: bigint;
   readonly taker: Address;
-  readonly takes: readonly MidnightTake[];
+  readonly takeableOffers: readonly MidnightTakeableOffer[];
   readonly signatures?:
     | AnyRequirementSignature
     | readonly AnyRequirementSignature[];
@@ -44,17 +44,17 @@ export const midnightTakeLend = (
   if (params.minUnits < 0n) {
     throw new NegativeMidnightAmountError("minUnits", params.minUnits);
   }
-  if (params.takes.length === 0) {
-    throw new EmptyMidnightTakesError();
+  if (params.takeableOffers.length === 0) {
+    throw new EmptyMidnightTakeableOffersError();
   }
 
   const marketId = MarketUtils.toId({
     market: params.market,
     chainId: params.chainId,
   });
-  for (const [index, take] of params.takes.entries()) {
+  for (const [index, take] of params.takeableOffers.entries()) {
     if (take.offer.buy) {
-      throw new MidnightTakeSideMismatchError({
+      throw new MidnightTakeableOfferSideMismatchError({
         index,
         expectedBuy: false,
         actualBuy: take.offer.buy,
@@ -66,7 +66,7 @@ export const midnightTakeLend = (
       chainId: params.chainId,
     });
     if (actualMarketId.toLowerCase() !== marketId.toLowerCase()) {
-      throw new MidnightTakeMarketMismatchError({
+      throw new MidnightTakeableOfferMarketMismatchError({
         index,
         expectedMarket: marketId,
         actualMarket: actualMarketId,
@@ -94,7 +94,7 @@ export const midnightTakeLend = (
         params.minUnits,
         params.taker,
         loanTokenPermit,
-        params.takes,
+        params.takeableOffers,
         [],
         zeroAddress,
         0n,
@@ -116,7 +116,7 @@ export const midnightTakeLend = (
         assets: params.assets,
         minUnits: params.minUnits,
         taker: params.taker,
-        takes: params.takes.length,
+        takeableOffers: params.takeableOffers.length,
       },
     },
   });
