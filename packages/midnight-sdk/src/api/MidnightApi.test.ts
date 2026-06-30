@@ -64,20 +64,21 @@ const MAKER = "0x7b093658BE7f90B63D7c359e8f408e503c2D9401";
 const LOAN_TOKEN = "0xC9A9C45C0eB717f8b5F193Af6bAa05A1c0Ac5078";
 const COLLATERAL_TOKEN = "0x34Cf890dB685FC536E05652FB41f02090c3fb751";
 const ORACLE = "0x45093658BE7f90b63D7c359E8F408E503C2D9401";
+const API_MIDNIGHT = "0x0000000000000000000000000000000000001234";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const RATIFIER = "0x0000000000000000000000000000000000000002";
 
 const apiCollateral = {
   token: COLLATERAL_TOKEN,
   lltv: "860000000000000000",
-  max_lif: "0",
+  liquidation_cursor: "0",
   oracle: ORACLE,
 };
 
 const expectedCollateral = {
   token: COLLATERAL_TOKEN,
   lltv: "860000000000000000",
-  maxLif: "0",
+  liquidationCursor: "0",
   oracle: ORACLE,
 };
 
@@ -92,6 +93,7 @@ const apiPriceLevel = {
 const apiBook = {
   market_id: MARKET_ID,
   chain_id: 8453,
+  midnight: API_MIDNIGHT,
   loan_token: LOAN_TOKEN,
   collaterals: [apiCollateral],
   maturity: 1_761_922_799,
@@ -113,6 +115,7 @@ const expectedPriceLevel = {
 const expectedBook = {
   marketId: MARKET_ID,
   chainId: 8453,
+  midnight: API_MIDNIGHT,
   loanToken: LOAN_TOKEN,
   collaterals: [expectedCollateral],
   maturity: 1_761_922_799,
@@ -124,6 +127,8 @@ const expectedBook = {
 };
 
 const apiOfferMarket = {
+  chain_id: 8453,
+  midnight: API_MIDNIGHT,
   loan_token: LOAN_TOKEN,
   collaterals: [apiCollateral],
   maturity: 1_761_922_799,
@@ -152,12 +157,14 @@ const apiOffer = {
 
 const expectedOffer = {
   market: {
+    chainId: 8453n,
+    midnight: API_MIDNIGHT,
     loanToken: LOAN_TOKEN,
     collateralParams: [
       {
         token: COLLATERAL_TOKEN,
         lltv: 860000000000000000n,
-        maxLif: 0n,
+        liquidationCursor: 0n,
         oracle: ORACLE,
       },
     ],

@@ -6,20 +6,15 @@ import {
   type Hex,
   hexToBytes,
 } from "viem";
-import {
-  LIQUIDATION_CURSOR_HIGH,
-  LIQUIDATION_CURSOR_LOW,
-  MAX_COLLATERALS,
-  MAX_TICK,
-} from "../constants.js";
+import { MAX_COLLATERALS, MAX_TICK } from "../constants.js";
 import { InvalidOfferParameterError } from "../errors.js";
-import { MarketUtils } from "../market/index.js";
 import {
   type IOffer,
   Offer,
   type OfferStruct,
   OfferUtils,
 } from "../offers/index.js";
+import { isEmptyOfferStruct, isZeroAddress } from "./offerStructInternal.js";
 
 /**
  * One mempool payload item: a maker-side `Offer` together with the opaque
@@ -41,12 +36,14 @@ import {
  *
  * const offer = Offer.create({
  *   market: {
+ *     chainId: 8453,
+ *     midnight: "0x0000000000000000000000000000000000001000",
  *     loanToken: "0x0000000000000000000000000000000000006000",
  *     collateralParams: [
  *       {
  *         token: "0x0000000000000000000000000000000000007000",
  *         lltv: 770000000000000000n,
- *         maxLif: 1061007957559681697n,
+ *         liquidationCursor: 250000000000000000n,
  *         oracle: "0x0000000000000000000000000000000000008000",
  *       },
  *     ],
@@ -154,9 +151,6 @@ export const MAX_DECOMPRESSED_ITEMS_BYTES = 6_000_000;
 const ABI_ARRAY_HEAD_BYTES = 64;
 const ABI_LENGTH_LOW_OFFSET = 60;
 const MAX_TIMESTAMP_SECONDS = 1_000_000_000_000n - 1n;
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-const ZERO_BYTES32 =
-  "0x0000000000000000000000000000000000000000000000000000000000000000";
 
 /**
  * Largest `0x`-prefixed hex string that can encode a wire payload.
@@ -204,6 +198,8 @@ const offerStructAbiComponents = [
     name: "market",
     type: "tuple",
     components: [
+      { name: "chainId", type: "uint256" },
+      { name: "midnight", type: "address" },
       { name: "loanToken", type: "address" },
       {
         name: "collateralParams",
@@ -211,7 +207,7 @@ const offerStructAbiComponents = [
         components: [
           { name: "token", type: "address" },
           { name: "lltv", type: "uint256" },
-          { name: "maxLif", type: "uint256" },
+          { name: "liquidationCursor", type: "uint256" },
           { name: "oracle", type: "address" },
         ],
       },
@@ -280,12 +276,14 @@ const itemsAbi = [
  *
  * const offer = Offer.create({
  *   market: {
+ *     chainId: 8453,
+ *     midnight: "0x0000000000000000000000000000000000001000",
  *     loanToken: "0x0000000000000000000000000000000000006000",
  *     collateralParams: [
  *       {
  *         token: "0x0000000000000000000000000000000000007000",
  *         lltv: 770000000000000000n,
- *         maxLif: 1061007957559681697n,
+ *         liquidationCursor: 250000000000000000n,
  *         oracle: "0x0000000000000000000000000000000000008000",
  *       },
  *     ],
@@ -355,12 +353,14 @@ export async function encode(items: readonly Item[]): Promise<Hex> {
  *
  * const offer = Offer.create({
  *   market: {
+ *     chainId: 8453,
+ *     midnight: "0x0000000000000000000000000000000000001000",
  *     loanToken: "0x0000000000000000000000000000000000006000",
  *     collateralParams: [
  *       {
  *         token: "0x0000000000000000000000000000000000007000",
  *         lltv: 770000000000000000n,
- *         maxLif: 1061007957559681697n,
+ *         liquidationCursor: 250000000000000000n,
  *         oracle: "0x0000000000000000000000000000000000008000",
  *       },
  *     ],
@@ -539,18 +539,35 @@ function assertCollateralParams(offer: OfferStruct): void {
         `invalid offer bytes: collateral lltv must be between 0 and WAD, got ${params.lltv}`,
       );
     }
-
-    const lowMaxLif = MarketUtils.getLiquidationIncentiveFactor(
-      params,
-      LIQUIDATION_CURSOR_LOW,
-    );
-    const highMaxLif = MarketUtils.getLiquidationIncentiveFactor(
-      params,
-      LIQUIDATION_CURSOR_HIGH,
-    );
-    if (params.maxLif !== lowMaxLif && params.maxLif !== highMaxLif) {
+    if (
+      params.liquidationCursor < 0n ||
+      params.liquidationCursor >= MathLib.WAD
+    ) {
       throw new DecodeError(
-        `invalid offer bytes: invalid collateral maxLif ${params.maxLif}`,
+        `invalid offer bytes: collateral liquidationCursor must be between 0 and WAD, exclusive of WAD, got ${params.liquidationCursor}`,
+      );
+    }
+    const maxLif = MathLib.mulDivDown(
+      MathLib.WAD,
+      MathLib.WAD,
+      MathLib.WAD -
+        MathLib.mulDivDown(
+          params.liquidationCursor,
+          MathLib.WAD - params.lltv,
+          MathLib.WAD,
+        ),
+    );
+    if (maxLif > 2n * MathLib.WAD) {
+      throw new DecodeError(
+        `invalid offer bytes: computed collateral maxLif exceeds 2 WAD, got ${maxLif}`,
+      );
+    }
+    if (
+      params.lltv !== MathLib.WAD &&
+      params.lltv * maxLif > 999000000000000000n * MathLib.WAD
+    ) {
+      throw new DecodeError(
+        `invalid offer bytes: computed collateral maxLif ${maxLif} is too high for lltv ${params.lltv}`,
       );
     }
 
@@ -589,35 +606,6 @@ function assertMaturityAt15Utc(value: bigint): void {
       "invalid offer bytes: maturity must be at 15:00:00 UTC",
     );
   }
-}
-
-function isEmptyOfferStruct(offer: OfferStruct): boolean {
-  return (
-    isZeroAddress(offer.market.loanToken) &&
-    offer.market.collateralParams.length === 0 &&
-    offer.market.maturity === 0n &&
-    offer.market.rcfThreshold === 0n &&
-    isZeroAddress(offer.market.enterGate) &&
-    isZeroAddress(offer.market.liquidatorGate) &&
-    offer.buy === false &&
-    isZeroAddress(offer.maker) &&
-    offer.start === 0n &&
-    offer.expiry === 0n &&
-    offer.tick === 0n &&
-    offer.group === ZERO_BYTES32 &&
-    isZeroAddress(offer.callback) &&
-    offer.callbackData === "0x" &&
-    isZeroAddress(offer.receiverIfMakerIsSeller) &&
-    isZeroAddress(offer.ratifier) &&
-    offer.reduceOnly === false &&
-    offer.maxUnits === 0n &&
-    offer.maxAssets === 0n &&
-    offer.continuousFeeCap === 0n
-  );
-}
-
-function isZeroAddress(value: string): boolean {
-  return value.toLowerCase() === ZERO_ADDRESS;
 }
 
 function resolveMaxItems(maxItems: number | undefined): number | undefined {

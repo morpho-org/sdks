@@ -12,6 +12,7 @@ jobs:
     if: github.ref_name == 'main' || github.ref_name == 'next'
     name: Publish
     runs-on: ubuntu-latest
+    environment: prod
     outputs:
       has_tags: ${{ steps.publish-packages.outputs.has_tags }}
     env:
@@ -31,7 +32,6 @@ jobs:
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version-file: .nvmrc
-          cache: pnpm
           registry-url: https://registry.npmjs.org
           scope: '@morpho-org'
 

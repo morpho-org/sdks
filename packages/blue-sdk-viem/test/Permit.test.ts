@@ -68,6 +68,27 @@ describe("getPermitTypedData", () => {
     });
   });
 
+  test("uses fallback permit v2 domain for known USDC regardless of address casing", () => {
+    const worldChainUsdc =
+      "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1" as Address;
+    const token = new Token({
+      address: worldChainUsdc,
+      name: "USDC",
+    });
+
+    const typedData = getPermitTypedData(
+      permitArgs(token),
+      ChainId.WorldChainMainnet,
+    );
+
+    expect(typedData.domain).toStrictEqual({
+      name: "USDC",
+      version: "2",
+      chainId: ChainId.WorldChainMainnet,
+      verifyingContract: worldChainUsdc,
+    });
+  });
+
   test("throws when fetched EIP-5267 domain points to another token", () => {
     const token = tokenWithDomain();
     const verifyingContract = randomAddress();

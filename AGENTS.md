@@ -181,7 +181,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 
 ## 8. Code style & tooling
 
-- pnpm + Node ≥22. Root checks: `pnpm lint` and `pnpm test`.
+- pnpm + Node ≥26. Root checks: `pnpm lint` and `pnpm test`.
 - Biome owns style: 2-space indent, organized imports, no unused imports or variables.
 - NodeNext module resolution; relative imports include `.js` (`export * from "./market/index.js"`).
 - Type-only imports where possible (`import type { Address } from "viem"`).

@@ -139,4 +139,34 @@ describe("augment/Vault", () => {
 
     expect(value).toEqual(expectedData);
   });
+
+  // Regression: the deployless `GetVault` query must not revert. It previously
+  // reverted while decoding the EIP-5267 domain (high-level `eip712Domain()`
+  // struct decode hits a Solidity via-IR regression), silently falling back to
+  // multicall. `deployless: "force"` throws if the deployless path breaks again,
+  // and the strict equality guards that the deployless and multicall paths return
+  // identical state (e.g. `lostAssets` on MetaMorpho V1.1).
+  test2(
+    "behavior: forced deployless matches multicall (v1.0)",
+    async ({ client }) => {
+      const [forced, multicall] = await Promise.all([
+        Vault.fetch(steakUsdc.address, client, { deployless: "force" }),
+        Vault.fetch(steakUsdc.address, client, { deployless: false }),
+      ]);
+
+      expect(forced).toStrictEqual(multicall);
+    },
+  );
+
+  test2(
+    "behavior: forced deployless matches multicall (v1.1)",
+    async ({ client }) => {
+      const [forced, multicall] = await Promise.all([
+        Vault.fetch(steakPaxg.address, client, { deployless: "force" }),
+        Vault.fetch(steakPaxg.address, client, { deployless: false }),
+      ]);
+
+      expect(forced).toStrictEqual(multicall);
+    },
+  );
 });

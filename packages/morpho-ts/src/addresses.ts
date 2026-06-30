@@ -344,6 +344,8 @@ const _addressesRegistry = {
     preLiquidationFactory: "0xe3cE2051a24e58DBFC0eFBe4c2d9e89c5eAe4695",
 
     wNative: "0x4200000000000000000000000000000000000006",
+    /** USDC token with permit version 2 support required by permit flows. */
+    usdc: "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1",
     /** EURC token with permit version 2 support required by permit flows. */
     eurc: "0x1C60ba0A0eD1019e8Eb035E6daF4155A5cE2380B",
   },

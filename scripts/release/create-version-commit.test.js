@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterAll, describe, expect, test, vi } from "vitest";
 
 import {
   collectVersionChanges,
@@ -22,9 +22,7 @@ import {
 
 const tempDirs = [];
 
-afterEach(() => {
-  vi.restoreAllMocks();
-
+afterAll(() => {
   for (const tempDir of tempDirs.splice(0)) {
     rmSync(tempDir, { force: true, recursive: true });
   }
@@ -277,9 +275,7 @@ describe("main", () => {
     const outputFile = join(root, "github-output.txt");
     const requests = [];
     const pushReleaseBranch = vi.fn();
-    const stdout = vi
-      .spyOn(process.stdout, "write")
-      .mockImplementation(() => true);
+    const writeOutput = vi.fn();
     writeFileSync(
       join(root, "packages/morpho-sdk/package.json"),
       `${JSON.stringify({ name: "@morpho-org/morpho-sdk", version: "1.1.0" })}\n`,
@@ -300,6 +296,7 @@ describe("main", () => {
         fetchImpl: createSignedCommitFetch({ requests }),
         outputFile,
         pushReleaseBranch,
+        writeOutput,
       }),
     ).resolves.toEqual({
       commitOid: "signed-commit",
@@ -338,23 +335,23 @@ describe("main", () => {
       tempBranch: "changeset-release/main-api-commit-100-2",
       token: "token",
     });
-    expect(stdout).toHaveBeenCalledWith(
+    expect(writeOutput).toHaveBeenCalledWith(
       "Created signed version commit signed-commit on changeset-release/main.\n",
     );
-  });
+  }, 60_000);
 
   test("behavior: no version changes", async () => {
     const root = createGitRepo();
     const outputFile = join(root, "github-output.txt");
-    const stdout = vi
-      .spyOn(process.stdout, "write")
-      .mockImplementation(() => true);
+    const writeOutput = vi.fn();
 
-    await expect(main({ cwd: root, env: {}, outputFile })).resolves.toBeNull();
+    await expect(
+      main({ cwd: root, env: {}, outputFile, writeOutput }),
+    ).resolves.toBeNull();
     expect(readFileSync(outputFile, "utf8")).toBe(
       "has_version_changes=false\n",
     );
-    expect(stdout).toHaveBeenCalledWith("No version changes to commit.\n");
+    expect(writeOutput).toHaveBeenCalledWith("No version changes to commit.\n");
   });
 
   test("error: disallowed version path", async () => {

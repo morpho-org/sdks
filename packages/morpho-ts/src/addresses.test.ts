@@ -140,6 +140,13 @@ describe("addressesRegistry", () => {
     expect("midnight" in addressesRegistry[1]).toBe(false);
   });
 
+  test("behavior: exposes World Chain USDC permit v2 token", () => {
+    const usdc = "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1";
+
+    expect(addressesRegistry[ChainId.WorldChainMainnet].usdc).toBe(usdc);
+    expect(getChainAddress(ChainId.WorldChainMainnet, "usdc")).toBe(usdc);
+  });
+
   test("behavior: exposes Midnight entries through the unified registry", () => {
     const chainId = 31_337_002;
     const chainAddresses = createChainAddresses();
