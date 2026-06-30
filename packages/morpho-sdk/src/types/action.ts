@@ -1,5 +1,9 @@
 import type { Address, Hex, WalletClient } from "viem";
 import type { Deallocation } from "./deallocation.js";
+import {
+  AmbiguousRequirementSignaturesError,
+  UnexpectedRequirementSignatureError,
+} from "./error.js";
 
 export interface BaseAction<
   TType extends string = string,
@@ -468,4 +472,62 @@ export function isAuthorizationSignature(
   signature: RequirementSignature,
 ): signature is AuthorizationRequirementSignature {
   return signature.action.type === "authorization";
+}
+
+/** The typed permit / authorization slots a bundled path consumes, split from a `buildTx` array. */
+export interface SelectedRequirementSignatures {
+  /** The single permit / Permit2 signature, when present. */
+  permit?: PermitRequirementSignature;
+  /** The single Morpho authorization signature, when present. */
+  authorization?: AuthorizationRequirementSignature;
+}
+
+/**
+ * Splits a `buildTx` signature array into its typed permit / authorization slots, rejecting
+ * ambiguous or unexpected input so a path never silently consumes the wrong signature.
+ *
+ * A bundled path consumes at most one permit and one authorization signature. Passing several of
+ * the same kind, or a kind the path does not consume, is rejected with a typed error rather than
+ * silently dropping the extras — the latter could otherwise leave a required authorization or
+ * permit unsigned (and the bundle reverting on-chain) or apply the wrong signature.
+ *
+ * @param signatures - The signatures passed to `buildTx`.
+ * @param accepts - Which signature kinds this operation consumes.
+ * @param accepts.permit - Whether a permit / Permit2 signature is consumed.
+ * @param accepts.authorization - Whether a Morpho authorization signature is consumed.
+ * @returns The single permit and/or authorization signature, when present.
+ * @throws {AmbiguousRequirementSignaturesError} when more than one signature of an accepted kind is present.
+ * @throws {UnexpectedRequirementSignatureError} when a signature of a kind the operation does not consume is present.
+ * @example
+ * ```ts
+ * import { selectRequirementSignatures } from "@morpho-org/morpho-sdk";
+ *
+ * const { permit, authorization } = selectRequirementSignatures(signatures, {
+ *   permit: true,
+ *   authorization: true,
+ * });
+ * ```
+ */
+export function selectRequirementSignatures(
+  signatures: readonly RequirementSignature[] | undefined,
+  accepts: { permit?: boolean; authorization?: boolean },
+): SelectedRequirementSignatures {
+  if (signatures == null) return {};
+
+  const permits = signatures.filter(isPermitSignature);
+  const authorizations = signatures.filter(isAuthorizationSignature);
+
+  if (!accepts.permit && permits.length > 0)
+    throw new UnexpectedRequirementSignatureError("permit");
+  if (!accepts.authorization && authorizations.length > 0)
+    throw new UnexpectedRequirementSignatureError("authorization");
+  if (permits.length > 1)
+    throw new AmbiguousRequirementSignaturesError("permit", permits.length);
+  if (authorizations.length > 1)
+    throw new AmbiguousRequirementSignaturesError(
+      "authorization",
+      authorizations.length,
+    );
+
+  return { permit: permits[0], authorization: authorizations[0] };
 }

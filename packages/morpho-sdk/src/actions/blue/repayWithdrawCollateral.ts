@@ -164,7 +164,7 @@ export const blueRepayWithdrawCollateral = ({
   const actions: Action[] = [];
 
   if (authorizationSignature) {
-    actions.push(getAuthorizationAction(authorizationSignature));
+    actions.push(getAuthorizationAction(chainId, authorizationSignature));
   }
 
   if (requirementSignature) {

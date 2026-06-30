@@ -277,7 +277,7 @@ export const blueRefinance = ({
   let reallocationFee = 0n;
 
   if (authorizationSignature) {
-    actions.push(getAuthorizationAction(authorizationSignature));
+    actions.push(getAuthorizationAction(chainId, authorizationSignature));
   }
 
   if (targetReallocations && targetReallocations.length > 0) {

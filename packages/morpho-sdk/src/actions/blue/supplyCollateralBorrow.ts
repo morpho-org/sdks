@@ -169,7 +169,7 @@ export const blueSupplyCollateralBorrow = ({
   const actions: Action[] = [];
 
   if (authorizationSignature) {
-    actions.push(getAuthorizationAction(authorizationSignature));
+    actions.push(getAuthorizationAction(chainId, authorizationSignature));
   }
 
   if (nativeAmount !== undefined && nativeAmount > 0n) {

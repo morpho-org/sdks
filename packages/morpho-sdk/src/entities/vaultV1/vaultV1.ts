@@ -27,7 +27,6 @@ import {
   type DepositAmountArgs,
   type ERC20ApprovalAction,
   ExcessiveSlippageToleranceError,
-  isPermitSignature,
   type MorphoClientType,
   NativeAmountOnNonWNativeVaultError,
   NegativeNativeAmountError,
@@ -37,6 +36,7 @@ import {
   type PermitRequirementSignature,
   type Requirement,
   type RequirementSignature,
+  selectRequirementSignatures,
   type Transaction,
   VaultAddressMismatchError,
   VaultAssetMismatchError,
@@ -251,8 +251,12 @@ export class MorphoVaultV1 implements VaultV1Actions {
           },
         }),
 
-      buildTx: (signatures?: readonly RequirementSignature[]) =>
-        vaultV1Deposit({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { permit } = selectRequirementSignatures(signatures, {
+          permit: true,
+        });
+
+        return vaultV1Deposit({
           vault: {
             chainId: this.chainId,
             address: this.vault,
@@ -262,11 +266,12 @@ export class MorphoVaultV1 implements VaultV1Actions {
             amount,
             maxSharePrice,
             recipient: userAddress,
-            requirementSignature: signatures?.find(isPermitSignature),
+            requirementSignature: permit,
             nativeAmount,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 
@@ -391,8 +396,12 @@ export class MorphoVaultV1 implements VaultV1Actions {
           },
         }),
 
-      buildTx: (signatures?: readonly RequirementSignature[]) =>
-        vaultV1MigrateToV2({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { permit } = selectRequirementSignatures(signatures, {
+          permit: true,
+        });
+
+        return vaultV1MigrateToV2({
           vault: {
             chainId: this.chainId,
             address: this.vault,
@@ -405,10 +414,11 @@ export class MorphoVaultV1 implements VaultV1Actions {
             minSharePriceVaultV1,
             maxSharePriceVaultV2,
             recipient: userAddress,
-            requirementSignature: signatures?.find(isPermitSignature),
+            requirementSignature: permit,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 }

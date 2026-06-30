@@ -24,7 +24,6 @@ import {
   type DepositAmountArgs,
   type ERC20ApprovalAction,
   ExcessiveSlippageToleranceError,
-  isPermitSignature,
   type MorphoClientType,
   NativeAmountOnNonWNativeVaultError,
   NegativeNativeAmountError,
@@ -34,6 +33,7 @@ import {
   type PermitRequirementSignature,
   type Requirement,
   type RequirementSignature,
+  selectRequirementSignatures,
   type Transaction,
   VaultAddressMismatchError,
   type VaultV2DepositAction,
@@ -286,8 +286,12 @@ export class MorphoVaultV2 implements VaultV2Actions {
           },
         }),
 
-      buildTx: (signatures?: readonly RequirementSignature[]) =>
-        vaultV2Deposit({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { permit } = selectRequirementSignatures(signatures, {
+          permit: true,
+        });
+
+        return vaultV2Deposit({
           vault: {
             chainId: this.chainId,
             address: this.vault,
@@ -297,11 +301,12 @@ export class MorphoVaultV2 implements VaultV2Actions {
             amount,
             maxSharePrice,
             recipient: userAddress,
-            requirementSignature: signatures?.find(isPermitSignature),
+            requirementSignature: permit,
             nativeAmount,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 

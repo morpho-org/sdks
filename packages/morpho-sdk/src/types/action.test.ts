@@ -5,7 +5,12 @@ import {
   isAuthorizationSignature,
   isPermitSignature,
   type PermitRequirementSignature,
+  selectRequirementSignatures,
 } from "./action.js";
+import {
+  AmbiguousRequirementSignaturesError,
+  UnexpectedRequirementSignatureError,
+} from "./error.js";
 
 const OWNER: Address = "0x1111111111111111111111111111111111111111";
 const SPENDER: Address = "0x2222222222222222222222222222222222222222";
@@ -88,5 +93,60 @@ describe("isAuthorizationSignature", () => {
 
   test("behavior: false for permit2", () => {
     expect(isAuthorizationSignature(permit2Signature)).toBe(false);
+  });
+});
+
+describe("selectRequirementSignatures", () => {
+  test("default: extracts the single permit and authorization", () => {
+    expect(
+      selectRequirementSignatures([permitSignature, authorizationSignature], {
+        permit: true,
+        authorization: true,
+      }),
+    ).toEqual({
+      permit: permitSignature,
+      authorization: authorizationSignature,
+    });
+  });
+
+  test("behavior: empty object for undefined input", () => {
+    expect(selectRequirementSignatures(undefined, { permit: true })).toEqual(
+      {},
+    );
+  });
+
+  test("behavior: empty slots when nothing matches", () => {
+    expect(
+      selectRequirementSignatures([], { permit: true, authorization: true }),
+    ).toEqual({ permit: undefined, authorization: undefined });
+  });
+
+  test("error: AmbiguousRequirementSignaturesError on duplicate permits", () => {
+    expect(() =>
+      selectRequirementSignatures([permitSignature, permit2Signature], {
+        permit: true,
+      }),
+    ).toThrow(AmbiguousRequirementSignaturesError);
+  });
+
+  test("error: AmbiguousRequirementSignaturesError on duplicate authorizations", () => {
+    expect(() =>
+      selectRequirementSignatures(
+        [authorizationSignature, authorizationSignature],
+        { authorization: true },
+      ),
+    ).toThrow(AmbiguousRequirementSignaturesError);
+  });
+
+  test("error: UnexpectedRequirementSignatureError when a permit is not consumed", () => {
+    expect(() =>
+      selectRequirementSignatures([permitSignature], { authorization: true }),
+    ).toThrow(UnexpectedRequirementSignatureError);
+  });
+
+  test("error: UnexpectedRequirementSignatureError when an authorization is not consumed", () => {
+    expect(() =>
+      selectRequirementSignatures([authorizationSignature], { permit: true }),
+    ).toThrow(UnexpectedRequirementSignatureError);
   });
 });

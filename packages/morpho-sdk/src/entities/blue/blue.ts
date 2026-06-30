@@ -63,8 +63,6 @@ import {
   BorrowAmountAndSharesExclusiveError,
   type DepositAmountArgs,
   type ERC20ApprovalAction,
-  isAuthorizationSignature,
-  isPermitSignature,
   MarketIdMismatchError,
   MissingAccrualPositionError,
   type MorphoAuthorizationAction,
@@ -89,6 +87,7 @@ import {
   type RepayAmountArgs,
   type Requirement,
   type RequirementSignature,
+  selectRequirementSignatures,
   type Transaction,
   type VaultReallocation,
   WithdrawExceedsCollateralError,
@@ -594,18 +593,23 @@ export class MorphoBlue implements BlueActions {
           args: { amount, from: userAddress },
         }),
 
-      buildTx: (signatures?: readonly RequirementSignature[]) =>
-        blueSupply({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { permit } = selectRequirementSignatures(signatures, {
+          permit: true,
+        });
+
+        return blueSupply({
           market: { chainId: this.chainId, marketParams: this.marketParams },
           args: {
             amount,
             nativeAmount,
             onBehalf: userAddress,
             maxSharePrice,
-            requirementSignature: signatures?.find(isPermitSignature),
+            requirementSignature: permit,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 
@@ -688,8 +692,12 @@ export class MorphoBlue implements BlueActions {
         return authTx ? [authTx] : [];
       },
 
-      buildTx: (signatures?: readonly RequirementSignature[]) =>
-        blueWithdraw({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { authorization } = selectRequirementSignatures(signatures, {
+          authorization: true,
+        });
+
+        return blueWithdraw({
           market: { chainId: this.chainId, marketParams: this.marketParams },
           args: {
             assets,
@@ -697,10 +705,11 @@ export class MorphoBlue implements BlueActions {
             receiver,
             minSharePrice,
             reallocations,
-            authorizationSignature: signatures?.find(isAuthorizationSignature),
+            authorizationSignature: authorization,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 
@@ -739,8 +748,12 @@ export class MorphoBlue implements BlueActions {
           args: { amount, from: userAddress },
         }),
 
-      buildTx: (signatures?: readonly RequirementSignature[]) =>
-        blueSupplyCollateral({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { permit } = selectRequirementSignatures(signatures, {
+          permit: true,
+        });
+
+        return blueSupplyCollateral({
           market: {
             chainId: this.chainId,
             marketParams: this.marketParams,
@@ -749,10 +762,11 @@ export class MorphoBlue implements BlueActions {
             amount,
             nativeAmount,
             onBehalf: userAddress,
-            requirementSignature: signatures?.find(isPermitSignature),
+            requirementSignature: permit,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 
@@ -811,8 +825,12 @@ export class MorphoBlue implements BlueActions {
         return authTx ? [authTx] : [];
       },
 
-      buildTx: (signatures?: readonly RequirementSignature[]) =>
-        blueBorrow({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { authorization } = selectRequirementSignatures(signatures, {
+          authorization: true,
+        });
+
+        return blueBorrow({
           market: {
             chainId: this.chainId,
             marketParams: this.marketParams,
@@ -822,10 +840,11 @@ export class MorphoBlue implements BlueActions {
             receiver: userAddress,
             minSharePrice,
             reallocations,
-            authorizationSignature: signatures?.find(isAuthorizationSignature),
+            authorizationSignature: authorization,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 
@@ -922,8 +941,12 @@ export class MorphoBlue implements BlueActions {
           args: { amount: transferAmount, from: userAddress },
         }),
 
-      buildTx: (signatures?: readonly RequirementSignature[]) =>
-        blueRepay({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { permit } = selectRequirementSignatures(signatures, {
+          permit: true,
+        });
+
+        return blueRepay({
           market: {
             chainId: this.chainId,
             marketParams: this.marketParams,
@@ -935,10 +958,11 @@ export class MorphoBlue implements BlueActions {
             onBehalf: userAddress,
             receiver: userAddress,
             maxSharePrice,
-            requirementSignature: signatures?.find(isPermitSignature),
+            requirementSignature: permit,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 
@@ -1130,8 +1154,13 @@ export class MorphoBlue implements BlueActions {
         return [...erc20Requirements, ...(authTx ? [authTx] : [])];
       },
 
-      buildTx: (signatures?: readonly RequirementSignature[]) =>
-        blueRepayWithdrawCollateral({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { permit, authorization } = selectRequirementSignatures(
+          signatures,
+          { permit: true, authorization: true },
+        );
+
+        return blueRepayWithdrawCollateral({
           market: {
             chainId: this.chainId,
             marketParams: this.marketParams,
@@ -1144,11 +1173,12 @@ export class MorphoBlue implements BlueActions {
             onBehalf: userAddress,
             receiver: userAddress,
             maxSharePrice,
-            requirementSignature: signatures?.find(isPermitSignature),
-            authorizationSignature: signatures?.find(isAuthorizationSignature),
+            requirementSignature: permit,
+            authorizationSignature: authorization,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 
@@ -1238,8 +1268,13 @@ export class MorphoBlue implements BlueActions {
         return [...erc20Requirements, ...(authTx ? [authTx] : [])];
       },
 
-      buildTx: (signatures?: readonly RequirementSignature[]) =>
-        blueSupplyCollateralBorrow({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { permit, authorization } = selectRequirementSignatures(
+          signatures,
+          { permit: true, authorization: true },
+        );
+
+        return blueSupplyCollateralBorrow({
           market: {
             chainId: this.chainId,
             marketParams: this.marketParams,
@@ -1251,12 +1286,13 @@ export class MorphoBlue implements BlueActions {
             onBehalf: userAddress,
             receiver: userAddress,
             minSharePrice,
-            requirementSignature: signatures?.find(isPermitSignature),
-            authorizationSignature: signatures?.find(isAuthorizationSignature),
+            requirementSignature: permit,
+            authorizationSignature: authorization,
             reallocations,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 
@@ -1467,8 +1503,12 @@ export class MorphoBlue implements BlueActions {
         return authTx ? [authTx] : [];
       },
 
-      buildTx: (signatures?: readonly RequirementSignature[]) =>
-        blueRefinance({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { authorization } = selectRequirementSignatures(signatures, {
+          authorization: true,
+        });
+
+        return blueRefinance({
           source: {
             chainId: this.chainId,
             marketParams: this.marketParams,
@@ -1482,10 +1522,11 @@ export class MorphoBlue implements BlueActions {
             minBorrowSharePrice,
             maxRepaySharePrice,
             targetReallocations,
-            authorizationSignature: signatures?.find(isAuthorizationSignature),
+            authorizationSignature: authorization,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 

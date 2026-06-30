@@ -135,7 +135,7 @@ export const blueWithdraw = ({
   let reallocationFee = 0n;
 
   if (authorizationSignature) {
-    actions.push(getAuthorizationAction(authorizationSignature));
+    actions.push(getAuthorizationAction(chainId, authorizationSignature));
   }
 
   if (reallocations && reallocations.length > 0) {

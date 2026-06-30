@@ -73,6 +73,58 @@ export namespace BundlerErrors {
   }
 }
 
+/**
+ * Thrown when `buildTx` receives more than one requirement signature of the same kind.
+ *
+ * A bundled path consumes at most one permit and one authorization signature; passing several of
+ * the same kind is ambiguous and would silently drop all but the first, so it is rejected instead.
+ *
+ * @example
+ * ```ts
+ * import { AmbiguousRequirementSignaturesError } from "@morpho-org/morpho-sdk";
+ *
+ * if (error instanceof AmbiguousRequirementSignaturesError) {
+ *   // Pass a single permit (and at most one authorization) signature to buildTx.
+ * }
+ * ```
+ */
+export class AmbiguousRequirementSignaturesError extends Error {
+  /**
+   * @param kind - The over-supplied signature kind (`"permit"` or `"authorization"`).
+   * @param count - How many signatures of that kind were received.
+   */
+  constructor(kind: "permit" | "authorization", count: number) {
+    super(
+      `Expected at most one ${kind} signature but received ${count}. Pass a single ${kind} signature to buildTx.`,
+    );
+  }
+}
+
+/**
+ * Thrown when `buildTx` receives a requirement signature of a kind the operation does not consume
+ * (for example an authorization signature on a plain supply path). Surfacing it prevents a signed
+ * authorization or permit from being silently ignored.
+ *
+ * @example
+ * ```ts
+ * import { UnexpectedRequirementSignatureError } from "@morpho-org/morpho-sdk";
+ *
+ * if (error instanceof UnexpectedRequirementSignatureError) {
+ *   // Remove the signature this operation does not use from the buildTx array.
+ * }
+ * ```
+ */
+export class UnexpectedRequirementSignatureError extends Error {
+  /**
+   * @param kind - The unexpected signature kind (`"permit"` or `"authorization"`).
+   */
+  constructor(kind: "permit" | "authorization") {
+    super(
+      `Received a ${kind} signature that this operation does not consume. Remove it from the buildTx signatures array.`,
+    );
+  }
+}
+
 /** Thrown when an asset amount is required to be positive but is zero or negative. */
 export class NonPositiveAssetAmountError extends Error {
   constructor(origin: Address) {
