@@ -11,8 +11,8 @@ import {
 } from "../../../test/fixtures/midnight.js";
 import {
   EmptyMidnightTakeableOffersError,
+  MidnightOfferSideMismatchError,
   MidnightTakeableOfferMarketMismatchError,
-  MidnightTakeableOfferSideMismatchError,
   type TokenRequirementSignature,
 } from "../../types/index.js";
 import { midnightTakeLend } from "./takeLend.js";
@@ -105,7 +105,7 @@ describe("midnightTakeLend", () => {
     ).toThrow(EmptyMidnightTakeableOffersError);
   });
 
-  test("error: MidnightTakeableOfferSideMismatchError", () => {
+  test("error: MidnightOfferSideMismatchError", () => {
     const takeableOffers = [midnightApiTake({ buy: true })];
 
     expect(() =>
@@ -117,7 +117,7 @@ describe("midnightTakeLend", () => {
         taker: midnightAddresses.taker,
         takeableOffers,
       }),
-    ).toThrow(MidnightTakeableOfferSideMismatchError);
+    ).toThrow(MidnightOfferSideMismatchError);
   });
 
   test("error: MidnightTakeableOfferMarketMismatchError", () => {

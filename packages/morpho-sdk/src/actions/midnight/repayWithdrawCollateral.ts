@@ -49,10 +49,7 @@ export const midnightRepayWithdrawCollateral = (
     throw new NonPositiveMidnightAmountError("repay or withdraw amount", 0n);
   }
 
-  const marketId = MarketUtils.toId({
-    market: params.market,
-    chainId: params.chainId,
-  });
+  const marketId = MarketUtils.toId(params.market);
   const market = MarketUtils.toStruct(params.market);
   const midnightBundles = getChainAddress(params.chainId, "midnightBundles");
   const receiver = params.receiver ?? params.onBehalf;

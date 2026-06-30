@@ -3,23 +3,17 @@ import {
   EcrecoverRatifierUtils,
   fetchAccrualPosition,
   fetchMarket,
-  fetchRatifierInfo,
-  Group,
   type Market,
   type MarketInput,
   MarketParams,
   type MidnightFetchParams,
-  Offer,
   Payload,
   SetterRatifierUtils,
   Tree,
+  type TreeCreateParams,
   type TreeMempoolValidateParams,
 } from "@morpho-org/midnight-sdk";
-import {
-  type BigIntish,
-  deepFreeze,
-  getChainAddress,
-} from "@morpho-org/morpho-ts";
+import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
 import {
   type Address,
   type Hex,
@@ -47,22 +41,20 @@ import {
   getMidnightTokenPullRequirements,
 } from "../../actions/requirements/index.js";
 import { validateChainId, validateUserAddress } from "../../helpers/index.js";
+import { validateOfferSides } from "../../helpers/validateOfferSides.js";
 import type { MorphoClientType } from "../../types/client.js";
 import {
   type ActionOutput,
   type ActionRequirement,
   type AnyRequirementSignature,
-  EmptyMidnightMakeOfferInputsError,
   InsufficientMidnightWithdrawableLiquidityError,
   InvalidSignatureError,
   MarketIdMismatchError,
   type MidnightCancelOfferAction,
-  MidnightMixedLoanTokenError,
   MidnightOfferRootMismatchError,
   MidnightOfferRootOfferCountMismatchError,
   MidnightOfferRootOwnerMismatchError,
   MidnightOfferRootRatifierMismatchError,
-  type MidnightOfferRootRequirement,
   type MidnightOfferRootSignature,
   type MidnightOfferRootSignatureAction,
   type MidnightRedeemAction,
@@ -78,29 +70,38 @@ import {
   NoMidnightCreditToRedeemError,
   NonPositiveMidnightAmountError,
   UnknownMidnightCollateralError,
+  UnknownMidnightRatifierError,
 } from "../../types/index.js";
-
-/** One precomputed make-offer input retained on the integrator side. */
-export interface MakeOfferInput {
-  readonly market: MarketInput;
-  readonly tick: BigIntish;
-  readonly start: BigIntish;
-  readonly expiry: BigIntish;
-}
 
 /** Optional Midnight API validation controls for make-offer flows. */
 export type OfferValidationParams = Omit<TreeMempoolValidateParams, "chainId">;
 
+/** Parameters for building and validating Midnight offer data. */
+export interface GetOffersDataParams {
+  readonly accountAddress: Address;
+  readonly tree: TreeCreateParams;
+  readonly validation?: OfferValidationParams;
+}
+
+/** Precomputed Midnight maker-offer data consumed by synchronous maker action flows. */
+export interface OffersData {
+  readonly accountAddress: Address;
+  readonly groups: readonly Hex[];
+  readonly tree: Tree;
+  readonly ratifierType: "ecrecover" | "setter";
+  readonly ratifier: Address;
+  readonly setterPayload?: Hex;
+}
+
 /** Parameters shared by Midnight maker-offer flows. */
 export interface MakeOffersParams {
-  readonly accountAddress: Address;
-  readonly loanAssets: bigint;
-  readonly offers: readonly MakeOfferInput[];
-  readonly validation?: OfferValidationParams;
+  readonly offersData: OffersData;
 }
 
 /** Parameters for the Midnight make-lend maker flow. */
 export interface MakeLendParams extends MakeOffersParams {
+  readonly loanToken: Address;
+  readonly loanAssets: bigint;
   readonly reservedLoanAssets?: bigint;
 }
 
@@ -131,7 +132,7 @@ export type MidnightActionSignatures =
 /** Output returned by maker-offer flows. */
 export interface MakeOffersOutput
   extends ActionOutput<MidnightSubmitOffersAction, MidnightActionSignatures> {
-  readonly group: Hex;
+  readonly groups: readonly Hex[];
   readonly root: Hex;
   readonly ratifierType: "ecrecover" | "setter";
 }
@@ -197,6 +198,7 @@ export interface MidnightActions {
     parameters?: MidnightFetchParams,
   ): Promise<Market>;
   getPositionData(params: GetPositionDataParams): Promise<AccrualPosition>;
+  getOffersData(params: GetOffersDataParams): Promise<OffersData>;
   takeLend(
     params: TakeLendParams,
   ): ActionOutput<MidnightTakeLendAction, MidnightActionSignatures>;
@@ -212,11 +214,11 @@ export interface MidnightActions {
   supplyCollateral(
     params: SupplyCollateralParams,
   ): ActionOutput<MidnightSupplyCollateralAction, undefined>;
-  makeLend(params: MakeLendParams): Promise<MakeOffersOutput>;
-  makeBorrow(params: MakeOffersParams): Promise<MakeOffersOutput>;
+  makeLend(params: MakeLendParams): MakeOffersOutput;
+  makeBorrow(params: MakeOffersParams): MakeOffersOutput;
   supplyCollateralMakeBorrow(
     params: SupplyCollateralMakeBorrowParams,
-  ): Promise<MakeOffersOutput>;
+  ): MakeOffersOutput;
   redeem(params: RedeemParams): ActionOutput<MidnightRedeemAction, undefined>;
   repayWithdrawCollateral(
     params: RepayWithdrawCollateralParams,
@@ -230,14 +232,6 @@ export interface MidnightActions {
   }): ActionOutput<MidnightCancelOfferAction, undefined>;
 }
 
-interface PreparedOffers {
-  readonly group: Group;
-  readonly tree: Tree;
-  readonly ratifierType: "ecrecover" | "setter";
-  readonly ratifier: Address;
-  readonly setterPayload?: Hex;
-}
-
 const assertNonNegativeAmount = (label: string, amount: bigint) => {
   if (amount < 0n) throw new NegativeMidnightAmountError(label, amount);
 };
@@ -248,90 +242,6 @@ const assertPositiveAmount = (label: string, amount: bigint) => {
 
 const validateMarketData = (market: Market, chainId: number) => {
   validateChainId(Number(market.chainId), chainId);
-};
-
-const validatePositionMarket = (position: AccrualPosition, market: Market) => {
-  if (!sameHex(position.market.id, market.id)) {
-    throw new MarketIdMismatchError(position.market.id, market.id);
-  }
-};
-
-const findCollateralToken = (market: Market, collateralIndex: bigint) => {
-  const collateral = market.getCollateralParamsByIndex(collateralIndex);
-  if (collateral == null) {
-    throw new UnknownMidnightCollateralError({
-      market: market.id,
-      collateralIndex,
-    });
-  }
-
-  return collateral.token;
-};
-
-const sameHex = (left: Hex, right: Hex) =>
-  left.toLowerCase() === right.toLowerCase();
-
-const makeOfferRootRequirement = (params: {
-  readonly chainId: number;
-  readonly tree: Tree;
-  readonly ratifier: Address;
-}): MidnightOfferRootRequirement => {
-  const action: MidnightOfferRootSignatureAction = {
-    type: "midnightOfferRootSignature",
-    args: {
-      root: params.tree.root,
-      ratifier: params.ratifier,
-      offers: params.tree.offers.length,
-    },
-  };
-
-  return {
-    action,
-    async sign(client: WalletClient, userAddress: Address) {
-      const account = client.account;
-      validateUserAddress(account?.address, userAddress);
-      const typedData = EcrecoverRatifierUtils.typedData({
-        tree: params.tree,
-        chainId: params.chainId,
-      });
-      const typedDataDefinition: TypedDataDefinition<
-        Record<string, unknown>,
-        "OfferTree"
-      > = {
-        domain: typedData.domain,
-        types: typedData.types,
-        primaryType: typedData.primaryType,
-        message: typedData.message,
-      };
-      const signature = await signTypedData(client, {
-        ...typedDataDefinition,
-        account,
-      });
-      const isValid = await verifyTypedData({
-        ...typedDataDefinition,
-        address: userAddress,
-        signature,
-      });
-
-      if (!isValid) throw new InvalidSignatureError();
-
-      const items = await EcrecoverRatifierUtils.ratify({
-        tree: params.tree,
-        signature,
-      });
-      const payload = await Payload.encode(items);
-
-      return deepFreeze({
-        args: {
-          owner: userAddress,
-          root: params.tree.root,
-          signature,
-          payload,
-        },
-        action,
-      });
-    },
-  };
 };
 
 /** Entity facade for Midnight Midnight action flows. */
@@ -375,6 +285,68 @@ export class MorphoMidnight implements MidnightActions {
     ]);
 
     return position.accrueInterest(block.timestamp);
+  }
+
+  async getOffersData(params: GetOffersDataParams): Promise<OffersData> {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    const tree = Tree.create(params.tree);
+    const ratifier = tree.offers[0]!.ratifier;
+    const ecrecoverRatifier = getChainAddress(
+      this.chainId,
+      "ecrecoverRatifier",
+    );
+    const setterRatifier = getChainAddress(this.chainId, "setterRatifier");
+    const ratifierType = isAddressEqual(ratifier, ecrecoverRatifier)
+      ? "ecrecover"
+      : isAddressEqual(ratifier, setterRatifier)
+        ? "setter"
+        : undefined;
+    if (ratifierType == null) {
+      throw new UnknownMidnightRatifierError({
+        ratifier,
+        ecrecoverRatifier,
+        setterRatifier,
+      });
+    }
+
+    const groups: Hex[] = [];
+    const seenGroups = new Set<string>();
+    for (const offer of tree.offers) {
+      const group = offer.group;
+      const key = group.toLowerCase();
+      if (!seenGroups.has(key)) {
+        seenGroups.add(key);
+        groups.push(group);
+      }
+    }
+
+    await tree.mempoolValidate({
+      ...params.validation,
+      chainId: this.chainId,
+    });
+
+    if (ratifierType === "setter") {
+      // Setter ratifier payload generation validates that the created tree has one ratifier.
+      const items = SetterRatifierUtils.ratify({ tree });
+      return {
+        accountAddress: params.accountAddress,
+        groups,
+        tree,
+        ratifierType,
+        ratifier,
+        setterPayload: await Payload.encode(items),
+      };
+    }
+    // Ecrecover typed-data generation validates that the created tree has one ratifier.
+    EcrecoverRatifierUtils.typedData({ tree, chainId: this.chainId });
+
+    return {
+      accountAddress: params.accountAddress,
+      groups,
+      tree,
+      ratifierType,
+      ratifier,
+    };
   }
 
   takeLend(params: TakeLendParams) {
@@ -468,14 +440,20 @@ export class MorphoMidnight implements MidnightActions {
     const market = params.marketData;
     const collateralIndex = params.collateralIndex ?? 0n;
     const midnightBundles = getChainAddress(this.chainId, "midnightBundles");
-    const collateralToken = findCollateralToken(market, collateralIndex);
+    const collateral = market.getCollateralParamsByIndex(collateralIndex);
+    if (collateral == null) {
+      throw new UnknownMidnightCollateralError({
+        market: market.id,
+        collateralIndex,
+      });
+    }
 
     return {
       getRequirements: async (reqParams?: MidnightRequirementsParams) => {
         const requirements: ActionRequirement[] = [
           ...(await this.getTokenPullRequirements(
             {
-              token: collateralToken,
+              token: collateral.token,
               owner: params.accountAddress,
               spender: midnightBundles,
               amount: params.collateralAssets,
@@ -520,7 +498,13 @@ export class MorphoMidnight implements MidnightActions {
 
     const market = params.marketData;
     const collateralIndex = params.collateralIndex ?? 0n;
-    const collateralToken = findCollateralToken(market, collateralIndex);
+    const collateral = market.getCollateralParamsByIndex(collateralIndex);
+    if (collateral == null) {
+      throw new UnknownMidnightCollateralError({
+        market: market.id,
+        collateralIndex,
+      });
+    }
     const midnight = getChainAddress(this.chainId, "midnight");
 
     return {
@@ -528,7 +512,7 @@ export class MorphoMidnight implements MidnightActions {
         await getMidnightApprovalRequirements({
           viemClient: this.client.viemClient,
           chainId: this.chainId,
-          token: collateralToken,
+          token: collateral.token,
           owner: params.accountAddress,
           spender: midnight,
           amount:
@@ -546,9 +530,7 @@ export class MorphoMidnight implements MidnightActions {
     };
   }
 
-  private async makeOffers(
-    params: MakeLendParams & { readonly buy: boolean },
-  ): Promise<MakeOffersOutput> {
+  makeLend(params: MakeLendParams): MakeOffersOutput {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     assertPositiveAmount("loanAssets", params.loanAssets);
     assertNonNegativeAmount(
@@ -556,32 +538,29 @@ export class MorphoMidnight implements MidnightActions {
       params.reservedLoanAssets ?? 0n,
     );
 
-    const prepared = await this.prepareOffers(params);
+    const data = params.offersData;
+    validateOfferSides(data.tree.offers, true);
     const midnight = getChainAddress(this.chainId, "midnight");
-    const loanToken = MarketParams.from(params.offers[0]!.market).loanToken;
 
     return {
-      group: prepared.group.id,
-      root: prepared.tree.root,
-      ratifierType: prepared.ratifierType,
+      groups: data.groups,
+      root: data.tree.root,
+      ratifierType: data.ratifierType,
       getRequirements: async () => {
         const requirements: ActionRequirement[] = [];
-        if (params.buy) {
-          requirements.push(
-            ...(await getMidnightApprovalRequirements({
-              viemClient: this.client.viemClient,
-              chainId: this.chainId,
-              token: loanToken,
-              owner: params.accountAddress,
-              spender: midnight,
-              amount: params.loanAssets + (params.reservedLoanAssets ?? 0n),
-            })),
-          );
-        }
+        requirements.push(
+          ...(await getMidnightApprovalRequirements({
+            viemClient: this.client.viemClient,
+            chainId: this.chainId,
+            token: params.loanToken,
+            owner: data.accountAddress,
+            spender: midnight,
+            amount: params.loanAssets + (params.reservedLoanAssets ?? 0n),
+          })),
+        );
         requirements.push(
           ...(await this.getRatifierRequirements({
-            accountAddress: params.accountAddress,
-            prepared,
+            offersData: data,
           })),
         );
 
@@ -589,57 +568,40 @@ export class MorphoMidnight implements MidnightActions {
       },
       buildTx: (signatures?: MidnightActionSignatures) =>
         this.buildSubmitOffersTx({
-          accountAddress: params.accountAddress,
-          prepared,
+          offersData: data,
           signatures,
         }),
     };
   }
 
-  async makeLend(params: MakeLendParams) {
-    return await this.makeOffers({ ...params, buy: true });
-  }
-
-  async makeBorrow(params: MakeOffersParams): Promise<MakeOffersOutput> {
+  makeBorrow(params: MakeOffersParams): MakeOffersOutput {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    assertPositiveAmount("loanAssets", params.loanAssets);
 
-    if (params.offers.length === 0)
-      throw new EmptyMidnightMakeOfferInputsError();
-
-    const prepared = await this.prepareOffers({
-      accountAddress: params.accountAddress,
-      buy: false,
-      loanAssets: params.loanAssets,
-      offers: params.offers,
-      validation: params.validation,
-    });
+    const data = params.offersData;
+    validateOfferSides(data.tree.offers, false);
 
     return {
-      group: prepared.group.id,
-      root: prepared.tree.root,
-      ratifierType: prepared.ratifierType,
+      groups: data.groups,
+      root: data.tree.root,
+      ratifierType: data.ratifierType,
       getRequirements: async () => {
         return await this.getRatifierRequirements({
-          accountAddress: params.accountAddress,
-          prepared,
+          offersData: data,
         });
       },
       buildTx: (signatures?: MidnightActionSignatures) =>
         this.buildSubmitOffersTx({
-          accountAddress: params.accountAddress,
-          prepared,
+          offersData: data,
           signatures,
         }),
     };
   }
 
-  async supplyCollateralMakeBorrow(
+  supplyCollateralMakeBorrow(
     params: SupplyCollateralMakeBorrowParams,
-  ): Promise<MakeOffersOutput> {
+  ): MakeOffersOutput {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     assertPositiveAmount("collateralAssets", params.collateralAssets);
-    assertPositiveAmount("loanAssets", params.loanAssets);
     assertNonNegativeAmount(
       "reservedCollateralAssets",
       params.reservedCollateralAssets ?? 0n,
@@ -658,29 +620,21 @@ export class MorphoMidnight implements MidnightActions {
       });
     }
 
-    if (params.offers.length === 0)
-      throw new EmptyMidnightMakeOfferInputsError();
-
-    const prepared = await this.prepareOffers({
-      accountAddress: params.accountAddress,
-      buy: false,
-      loanAssets: params.loanAssets,
-      offers: params.offers,
-      validation: params.validation,
-    });
+    const data = params.offersData;
+    validateOfferSides(data.tree.offers, false);
     const midnight = getChainAddress(this.chainId, "midnight");
 
     return {
-      group: prepared.group.id,
-      root: prepared.tree.root,
-      ratifierType: prepared.ratifierType,
+      groups: data.groups,
+      root: data.tree.root,
+      ratifierType: data.ratifierType,
       getRequirements: async () => {
         const requirements: ActionRequirement[] = [
           ...(await getMidnightApprovalRequirements({
             viemClient: this.client.viemClient,
             chainId: this.chainId,
             token: collateral.token,
-            owner: params.accountAddress,
+            owner: data.accountAddress,
             spender: midnight,
             amount:
               params.collateralAssets + (params.reservedCollateralAssets ?? 0n),
@@ -690,12 +644,11 @@ export class MorphoMidnight implements MidnightActions {
             market,
             collateralIndex,
             assets: params.collateralAssets,
-            onBehalf: params.accountAddress,
+            onBehalf: data.accountAddress,
             metadata: this.client.options.metadata,
           }),
           ...(await this.getRatifierRequirements({
-            accountAddress: params.accountAddress,
-            prepared,
+            offersData: data,
           })),
         ];
 
@@ -703,8 +656,7 @@ export class MorphoMidnight implements MidnightActions {
       },
       buildTx: (signatures?: MidnightActionSignatures) =>
         this.buildSubmitOffersTx({
-          accountAddress: params.accountAddress,
-          prepared,
+          offersData: data,
           signatures,
         }),
     };
@@ -716,7 +668,15 @@ export class MorphoMidnight implements MidnightActions {
     if (!params.positionData) {
       throw new MissingAccrualPositionError(params.marketData.id);
     }
-    validatePositionMarket(params.positionData, params.marketData);
+    if (
+      params.positionData.market.id.toLowerCase() !==
+      params.marketData.id.toLowerCase()
+    ) {
+      throw new MarketIdMismatchError(
+        params.positionData.market.id,
+        params.marketData.id,
+      );
+    }
 
     const market = params.marketData;
     const units = params.units ?? params.positionData.faceValue;
@@ -816,95 +776,85 @@ export class MorphoMidnight implements MidnightActions {
     };
   }
 
-  private async prepareOffers(
-    params: MakeOffersParams & { readonly buy: boolean },
-  ): Promise<PreparedOffers> {
-    if (params.offers.length === 0)
-      throw new EmptyMidnightMakeOfferInputsError();
-
-    const firstLoanToken = MarketParams.from(
-      params.offers[0]!.market,
-    ).loanToken;
-    for (const offer of params.offers.slice(1)) {
-      const loanToken = MarketParams.from(offer.market).loanToken;
-      if (!isAddressEqual(loanToken, firstLoanToken)) {
-        throw new MidnightMixedLoanTokenError();
-      }
-    }
-
-    const ratifier = await fetchRatifierInfo(this.client.viemClient, {
-      maker: params.accountAddress,
-    });
-    const offers = params.offers.map((offer) =>
-      Offer.create({
-        market: offer.market,
-        buy: params.buy,
-        maker: params.accountAddress,
-        start: offer.start,
-        expiry: offer.expiry,
-        tick: offer.tick,
-        ratifier: ratifier.ratifier,
-        maxAssets: params.loanAssets,
-        ...(params.buy
-          ? {}
-          : { receiverIfMakerIsSeller: params.accountAddress }),
-      }),
-    );
-    const group = Group.create(offers);
-    const tree = Tree.create([group]);
-    await tree.mempoolValidate({
-      ...params.validation,
-      chainId: this.chainId,
-    });
-
-    if (ratifier.type === "setter") {
-      const items = SetterRatifierUtils.ratify({ tree });
-      return {
-        group,
-        tree,
-        ratifierType: ratifier.type,
-        ratifier: ratifier.ratifier,
-        setterPayload: await Payload.encode(items),
-      };
-    }
-
-    return {
-      group,
-      tree,
-      ratifierType: ratifier.type,
-      ratifier: ratifier.ratifier,
-    };
-  }
-
   private async getRatifierRequirements(params: {
-    readonly accountAddress: Address;
-    readonly prepared: PreparedOffers;
+    readonly offersData: OffersData;
   }): Promise<readonly ActionRequirement[]> {
+    const data = params.offersData;
     const requirements: ActionRequirement[] = [];
     const authorization = await getMidnightAuthorizationRequirement({
       viemClient: this.client.viemClient,
       chainId: this.chainId,
-      owner: params.accountAddress,
-      authorized: params.prepared.ratifier,
+      owner: data.accountAddress,
+      authorized: data.ratifier,
     });
     if (authorization) requirements.push(authorization);
 
-    if (params.prepared.ratifierType === "ecrecover") {
-      requirements.push(
-        makeOfferRootRequirement({
-          chainId: this.chainId,
-          tree: params.prepared.tree,
-          ratifier: params.prepared.ratifier,
-        }),
-      );
+    if (data.ratifierType === "ecrecover") {
+      const chainId = this.chainId;
+      const action: MidnightOfferRootSignatureAction = {
+        type: "midnightOfferRootSignature",
+        args: {
+          root: data.tree.root,
+          ratifier: data.ratifier,
+          offers: data.tree.offers.length,
+        },
+      };
+
+      requirements.push({
+        action,
+        async sign(client: WalletClient, userAddress: Address) {
+          const account = client.account;
+          validateUserAddress(account?.address, userAddress);
+          const typedData = EcrecoverRatifierUtils.typedData({
+            tree: data.tree,
+            chainId,
+          });
+          const typedDataDefinition: TypedDataDefinition<
+            Record<string, unknown>,
+            "OfferTree"
+          > = {
+            domain: typedData.domain,
+            types: typedData.types,
+            primaryType: typedData.primaryType,
+            message: typedData.message,
+          };
+          const signature = await signTypedData(client, {
+            ...typedDataDefinition,
+            account,
+          });
+          const isValid = await verifyTypedData({
+            ...typedDataDefinition,
+            address: userAddress,
+            signature,
+          });
+
+          if (!isValid) throw new InvalidSignatureError();
+
+          const items = await EcrecoverRatifierUtils.ratify({
+            tree: data.tree,
+            signature,
+          });
+          const payload = await Payload.encode(items);
+
+          return deepFreeze({
+            args: {
+              owner: userAddress,
+              root: data.tree.root,
+              signature,
+              payload,
+            },
+            action,
+          });
+        },
+      });
       return requirements;
     }
 
     const ratifyRoot = await getMidnightRatifyRootRequirement({
       viemClient: this.client.viemClient,
       chainId: this.chainId,
-      maker: params.accountAddress,
-      root: params.prepared.tree.root,
+      maker: data.accountAddress,
+      root: data.tree.root,
     });
     if (ratifyRoot) requirements.push(ratifyRoot);
 
@@ -941,12 +891,12 @@ export class MorphoMidnight implements MidnightActions {
   }
 
   private buildSubmitOffersTx(params: {
-    readonly accountAddress: Address;
-    readonly prepared: PreparedOffers;
+    readonly offersData: OffersData;
     readonly signatures?: MidnightActionSignatures;
   }) {
-    let payload = params.prepared.setterPayload;
-    if (params.prepared.ratifierType === "ecrecover") {
+    const data = params.offersData;
+    let payload = data.setterPayload;
+    if (data.ratifierType === "ecrecover") {
       const collectedSignatures = params.signatures;
       const signature =
         collectedSignatures == null
@@ -963,38 +913,36 @@ export class MorphoMidnight implements MidnightActions {
       if (signature == null) {
         throw new MissingMidnightOfferRootSignatureError();
       }
-      if (!isAddressEqual(signature.args.owner, params.accountAddress)) {
+      if (!isAddressEqual(signature.args.owner, data.accountAddress)) {
         throw new MidnightOfferRootOwnerMismatchError({
-          expectedOwner: params.accountAddress,
+          expectedOwner: data.accountAddress,
           actualOwner: signature.args.owner,
         });
       }
-      if (!sameHex(signature.args.root, params.prepared.tree.root)) {
+      if (signature.args.root.toLowerCase() !== data.tree.root.toLowerCase()) {
         throw new MidnightOfferRootMismatchError({
-          expectedRoot: params.prepared.tree.root,
+          expectedRoot: data.tree.root,
           actualRoot: signature.args.root,
         });
       }
-      if (!sameHex(signature.action.args.root, params.prepared.tree.root)) {
+      if (
+        signature.action.args.root.toLowerCase() !==
+        data.tree.root.toLowerCase()
+      ) {
         throw new MidnightOfferRootMismatchError({
-          expectedRoot: params.prepared.tree.root,
+          expectedRoot: data.tree.root,
           actualRoot: signature.action.args.root,
         });
       }
-      if (
-        !isAddressEqual(
-          signature.action.args.ratifier,
-          params.prepared.ratifier,
-        )
-      ) {
+      if (!isAddressEqual(signature.action.args.ratifier, data.ratifier)) {
         throw new MidnightOfferRootRatifierMismatchError({
-          expectedRatifier: params.prepared.ratifier,
+          expectedRatifier: data.ratifier,
           actualRatifier: signature.action.args.ratifier,
         });
       }
-      if (signature.action.args.offers !== params.prepared.tree.offers.length) {
+      if (signature.action.args.offers !== data.tree.offers.length) {
         throw new MidnightOfferRootOfferCountMismatchError({
-          expectedOffers: params.prepared.tree.offers.length,
+          expectedOffers: data.tree.offers.length,
           actualOffers: signature.action.args.offers,
         });
       }
@@ -1005,12 +953,12 @@ export class MorphoMidnight implements MidnightActions {
 
     return midnightSubmitOffers({
       chainId: this.chainId,
-      group: params.prepared.group.id,
-      root: params.prepared.tree.root,
-      maker: params.accountAddress,
-      ratifier: params.prepared.ratifier,
-      ratifierType: params.prepared.ratifierType,
-      offers: params.prepared.tree.offers.length,
+      groups: data.groups,
+      root: data.tree.root,
+      maker: data.accountAddress,
+      ratifier: data.ratifier,
+      ratifierType: data.ratifierType,
+      offers: data.tree.offers.length,
       payload,
     });
   }
