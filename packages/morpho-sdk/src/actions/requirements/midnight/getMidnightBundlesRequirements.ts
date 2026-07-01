@@ -17,10 +17,10 @@ import {
 } from "../../../types/index.js";
 import { encodeErc20Permit } from "../encode/index.js";
 import { getRequirementsApproval } from "../getRequirementsApproval.js";
-import { encodeMidnightPermit2Transfer } from "./encodeMidnightPermit2Transfer.js";
+import { encodeMidnightBundlesPermit2Transfer } from "./encodeMidnightBundlesPermit2Transfer.js";
 
-/** Parameters for {@link getMidnightTokenPullRequirements}. */
-export type GetMidnightTokenPullRequirementsParams =
+/** Parameters for {@link getMidnightBundlesRequirements}. */
+export type GetMidnightBundlesRequirementsParams =
   | {
       readonly viemClient: Client;
       readonly chainId: number;
@@ -76,9 +76,9 @@ export type GetMidnightTokenPullRequirementsParams =
  * @throws {CryptoUnavailableError} when the runtime crypto API is unavailable for Permit2 nonce generation.
  * @example
  * ```ts
- * import { getMidnightTokenPullRequirements } from "@morpho-org/morpho-sdk";
+ * import { getMidnightBundlesRequirements } from "@morpho-org/morpho-sdk";
  *
- * const requirements = await getMidnightTokenPullRequirements({
+ * const requirements = await getMidnightBundlesRequirements({
  *   viemClient: client,
  *   chainId: 1,
  *   token: loanToken,
@@ -89,8 +89,8 @@ export type GetMidnightTokenPullRequirementsParams =
  * });
  * ```
  */
-export const getMidnightTokenPullRequirements = async (
-  params: GetMidnightTokenPullRequirementsParams,
+export const getMidnightBundlesRequirements = async (
+  params: GetMidnightBundlesRequirementsParams,
 ): Promise<readonly ActionRequirement[]> => {
   validateChainId(params.viemClient.chain?.id, params.chainId);
 
@@ -159,7 +159,7 @@ export const getMidnightTokenPullRequirements = async (
           },
           allowances: permit2Allowance,
         }),
-        encodeMidnightPermit2Transfer({
+        encodeMidnightBundlesPermit2Transfer({
           token: params.token,
           spender: params.spender,
           amount: params.amount,
