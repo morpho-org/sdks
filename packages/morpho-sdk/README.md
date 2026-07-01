@@ -45,13 +45,13 @@ pnpm add @morpho-org/morpho-sdk
 
 Every action that touches a user's tokens or positions returns two things:
 
-- `buildTx(signature?)` — builds the final viem `Transaction` object.
+- `buildTx(signatures?)` — builds the final viem `Transaction` object. Takes an optional array of collected `RequirementSignature`s (permit / Permit2 and/or Morpho authorization).
 - `getRequirements()` — returns the list of on-chain pre-requisites that must be satisfied first.
 
 Typical requirements:
 
 - **ERC-20 approval** — the user must approve the bundler (or Morpho directly) to pull tokens. Returned as a standard `approve` transaction the consumer sends first.
-- **Permit / Permit2 signature** — off-chain approvals that go into `buildTx` as a `signature` argument, avoiding the extra approval tx. Enabled via `morphoViemExtension({ supportSignature: true })`.
+- **Permit / Permit2 signature** — off-chain approvals that go into `buildTx` in the `signatures` array, avoiding the extra approval tx. Enabled via `morphoViemExtension({ supportSignature: true })`.
 - **Morpho authorization** — `borrow`, `supplyCollateralBorrow`, and `repayWithdrawCollateral` require the user to authorize `GeneralAdapter1` on the Morpho contract once (`setAuthorization`). The SDK returns this as an extra transaction if it's missing.
 
 Usage pattern:
@@ -66,7 +66,7 @@ const requirements = await getRequirements();
 
 // Consumer satisfies each requirement (send tx / sign permit), collects the signature,
 // then calls buildTx to get the final transaction:
-const tx = buildTx(permitSignature);
+const tx = buildTx([permitSignature]);
 ```
 
 ### Integration invariant — builder = signer
@@ -114,7 +114,7 @@ const { buildTx, getRequirements } = await vault.deposit({
 });
 
 const requirements = await getRequirements();
-const tx = buildTx(requirementSignature);
+const tx = buildTx([requirementSignature]);
 ```
 
 ##### Deposit with native token wrapping
@@ -199,7 +199,7 @@ const { buildTx, getRequirements } = await vault.deposit({
 });
 
 const requirements = await getRequirements();
-const tx = buildTx(requirementSignature);
+const tx = buildTx([requirementSignature]);
 ```
 
 #### Withdraw
@@ -240,7 +240,7 @@ const { buildTx, getRequirements } = sourceVault.migrateToV2({
 });
 
 const requirements = await getRequirements();
-const tx = buildTx(requirementSignature);
+const tx = buildTx([requirementSignature]);
 ```
 
 ### Blue
@@ -275,7 +275,7 @@ const { buildTx, getRequirements } = market.supply({
 });
 
 const requirements = await getRequirements();
-const tx = buildTx(requirementSignature);
+const tx = buildTx([requirementSignature]);
 ```
 
 ##### Supply with native token wrapping
@@ -301,7 +301,7 @@ const { buildTx, getRequirements } = market.supplyCollateral({
 });
 
 const requirements = await getRequirements();
-const tx = buildTx(requirementSignature);
+const tx = buildTx([requirementSignature]);
 ```
 
 #### Borrow
@@ -332,7 +332,7 @@ const { buildTx, getRequirements } = market.supplyCollateralBorrow({
 });
 
 const requirements = await getRequirements();
-const tx = buildTx(requirementSignature);
+const tx = buildTx([requirementSignature]);
 ```
 
 #### Repay
@@ -357,7 +357,7 @@ const { buildTx, getRequirements } = market.repay({
 });
 
 const requirements = await getRequirements();
-const tx = buildTx(requirementSignature);
+const tx = buildTx([requirementSignature]);
 ```
 
 Repay does **not** require Morpho authorization (it only requires a loan token approval for `GeneralAdapter1`).
@@ -418,7 +418,7 @@ const { buildTx, getRequirements } = market.repayWithdrawCollateral({
 });
 
 const requirements = await getRequirements();
-const tx = buildTx(requirementSignature);
+const tx = buildTx([requirementSignature]);
 ```
 
 Atomically bundles repay → withdraw collateral via bundler3. Bundle order is critical: repay runs first to reduce debt, then withdraw. Requires both a loan token approval (for repay) and a Morpho authorization (for withdraw). The SDK validates combined position health by simulating the repay before checking withdrawal safety.
