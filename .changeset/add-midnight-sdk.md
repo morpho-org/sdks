@@ -28,6 +28,8 @@ Ecrecover ratification accepts a viem client plus explicit signer account, deriv
 
 Ecrecover client signing rejects typed-data signatures that do not recover to the requested signer account.
 
+`Tree.mempoolValidate` accepts optional ratification inputs so callers can validate final payload bytes with Ecrecover signature data or Setter proof data instead of only validating the pre-ratification tree with empty `ratifierData`.
+
 `OfferUtils.getConsumableUnits` and `Offer.getConsumableUnits` compute remaining units from hydrated market state plus a caller-provided `consumed` value, with examples inlining the single `Midnight.consumed(maker, group)` read.
 
 Asset-capped buy-offer consumable units mirror Midnight `take` cap checks by returning the largest unit amount whose rounded-down buyer assets fit within the remaining asset cap.

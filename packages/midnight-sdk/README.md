@@ -20,8 +20,9 @@ Midnight HTTP API helpers are exported from `@morpho-org/midnight-sdk/api`. This
 
 The make-side starts with local offer construction, groups offers that should share consumption, and
 commits grouped and standalone offers into one tree. Validate the tree before asking the maker or an
-authorized signer to sign, or before asking the maker contract to approve the root. Then encode the
-ratified items into a mempool payload and submit the raw payload bytes onchain.
+authorized signer to sign, or pass ratification inputs to validate the final payload shape after a
+signature or Setter proof is available. Then encode the ratified items into a mempool payload and
+submit the raw payload bytes onchain.
 
 ```ts
 import { addresses } from "@morpho-org/morpho-ts";
@@ -103,16 +104,22 @@ export async function makeBaseUsdcWethOffers(params: {
     standaloneBorrowOffer,
   ]);
 
-  await tree.mempoolValidate({
-    chainId,
-  });
-
   // EcrecoverRatifierUtils derives the verifier from offer.ratifier and rejects mixed-ratifier trees.
   // The account may be the maker or an authorized signer for every maker in the tree.
-  const items = await EcrecoverRatifierUtils.ratify({
+  const signature = await EcrecoverRatifierUtils.sign({
     tree,
     client: params.walletClient,
     account: params.maker,
+  });
+
+  await tree.mempoolValidate({
+    chainId,
+    ratification: { type: "ecrecover", signature },
+  });
+
+  const items = await EcrecoverRatifierUtils.ratify({
+    tree,
+    signature,
   });
   const payload = await Payload.encode(items);
 
@@ -232,10 +239,11 @@ normalization. Caller inputs and successful JSON output shapes are trusted at ru
 TypeScript types model the API contract.
 
 Use `tree.mempoolValidate({ chainId })` in normal make-side flows before the maker signs or approves
-the root. It throws `MidnightMempoolValidationError` with the API issues when policy validation
-fails. Pass `apiUrl` to that method when using a custom Midnight API URL. `MidnightApi` keeps the raw
-HTTP surface, including non-throwing `validateMempoolPayload` results for already encoded payload
-bytes.
+the root, or pass `ratification` to validate final payload bytes with real ratifier data after the
+signature or Setter proof is available. It throws `MidnightMempoolValidationError` with the API
+issues when policy validation fails. Pass `apiUrl` to that method when using a custom Midnight API
+URL. `MidnightApi` keeps the raw HTTP surface, including non-throwing `validateMempoolPayload`
+results for already encoded payload bytes.
 
 ## Development
 

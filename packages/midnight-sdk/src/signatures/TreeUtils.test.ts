@@ -1,6 +1,7 @@
 import { type Hex, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
+  addresses,
   baseMarketParamsInput,
   baseOffer,
   baseOfferInput,
@@ -13,9 +14,11 @@ import {
   MidnightMempoolValidationError,
 } from "../errors.js";
 import { type IOffer, Offer, type OfferStruct } from "../offers/index.js";
+import { EcrecoverRatifierUtils } from "./EcrecoverRatifierUtils.js";
 import { Group } from "./Group.js";
 import { GroupUtils } from "./GroupUtils.js";
 import * as Payload from "./Payload.js";
+import { SetterRatifierUtils } from "./SetterRatifierUtils.js";
 import { Tree } from "./Tree.js";
 import { TreeUtils } from "./TreeUtils.js";
 
@@ -24,6 +27,7 @@ const root =
 const zeroBytes32 =
   "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
 const API_VALID_MATURITY = 1_767_279_600n;
+const signature = { v: 27, r: zeroBytes32, s: zeroBytes32 } as const;
 
 const emptyMarket = () => ({
   chainId: 0n,
@@ -162,6 +166,59 @@ describe("Tree.mempoolValidate", () => {
     expect(decoded[0]!.ratifierData).toBe("0x");
   });
 
+  test("behavior: ecrecover ratification validates final payload", async () => {
+    const calls: {
+      readonly input: Parameters<MidnightApiFetch>[0];
+      readonly init: Parameters<MidnightApiFetch>[1];
+    }[] = [];
+    const fetch: MidnightApiFetch = async (input, init) => {
+      calls.push({ input, init });
+      return new Response(JSON.stringify({ data: { issues: [] } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+    const tree = Tree.create([
+      baseOffer({
+        market: {
+          ...baseMarketParamsInput(),
+          maturity: API_VALID_MATURITY,
+        },
+        expiry: API_VALID_MATURITY - 60n,
+        maxUnits: 0n,
+        maxAssets: 1_000n,
+      }),
+    ]);
+
+    await tree.mempoolValidate({
+      chainId: 8453,
+      fetch,
+      ratification: {
+        type: "ecrecover",
+        signature,
+      },
+    });
+
+    const body = JSON.parse(String(calls[0]!.init?.body)) as Readonly<
+      Record<string, unknown>
+    >;
+    const decoded = await Payload.decode(body.payload as Hex);
+    const ratifierData = EcrecoverRatifierUtils.decodeRatifierData(
+      decoded[0]!.ratifierData,
+    );
+
+    expect(decoded[0]!.ratifierData).not.toBe("0x");
+    expect(ratifierData.signature).toEqual(signature);
+    expect(
+      TreeUtils.verifyProof({
+        offer: decoded[0]!.offer,
+        root: ratifierData.root,
+        leafIndex: ratifierData.leafIndex,
+        proof: ratifierData.proof,
+      }),
+    ).toBe(true);
+  });
+
   test("error: MidnightMempoolValidationError", async () => {
     const fetch: MidnightApiFetch = async () =>
       new Response(
@@ -204,6 +261,55 @@ describe("Tree.from", () => {
 });
 
 describe("TreeUtils.mempoolValidate", () => {
+  test("behavior: setter ratification validates final payload from plain input", async () => {
+    const calls: {
+      readonly input: Parameters<MidnightApiFetch>[0];
+      readonly init: Parameters<MidnightApiFetch>[1];
+    }[] = [];
+    const fetch: MidnightApiFetch = async (input, init) => {
+      calls.push({ input, init });
+      return new Response(JSON.stringify({ data: { issues: [] } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+    const offer = baseOfferInput({
+      market: {
+        ...baseMarketParamsInput(),
+        maturity: API_VALID_MATURITY,
+      },
+      ratifier: addresses.setterRatifier,
+      expiry: API_VALID_MATURITY - 60n,
+      maxUnits: 0n,
+      maxAssets: 1_000n,
+    });
+
+    await TreeUtils.mempoolValidate({
+      chainId: 8453,
+      tree: [offer],
+      fetch,
+      ratification: { type: "setter" },
+    });
+
+    const body = JSON.parse(String(calls[0]!.init?.body)) as Readonly<
+      Record<string, unknown>
+    >;
+    const decoded = await Payload.decode(body.payload as Hex);
+    const ratifierData = SetterRatifierUtils.decodeRatifierData(
+      decoded[0]!.ratifierData,
+    );
+
+    expect(decoded[0]!.ratifierData).not.toBe("0x");
+    expect(
+      TreeUtils.verifyProof({
+        offer: decoded[0]!.offer,
+        root: ratifierData.root,
+        leafIndex: ratifierData.leafIndex,
+        proof: ratifierData.proof,
+      }),
+    ).toBe(true);
+  });
+
   test("error: MidnightMempoolValidationError", async () => {
     const calls: {
       readonly input: Parameters<MidnightApiFetch>[0];

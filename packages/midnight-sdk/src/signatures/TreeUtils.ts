@@ -1,5 +1,14 @@
 import { type BigIntish, deepFreeze } from "@morpho-org/morpho-ts";
-import { concat, type Hash, keccak256 } from "viem";
+import {
+  type Account,
+  type Address,
+  type Chain,
+  type Client,
+  concat,
+  type Hash,
+  keccak256,
+  type Transport,
+} from "viem";
 import { MidnightApi } from "../api/MidnightApi.js";
 import type {
   MempoolPayloadValidationResult,
@@ -17,13 +26,20 @@ import {
   type OfferStruct,
   OfferUtils,
 } from "../offers/index.js";
-import { Group } from "./Group.js";
+import {
+  EcrecoverRatifierUtils,
+  type EcrecoverSignatureInput,
+} from "./EcrecoverRatifierUtils.js";
 import { type GroupInput, GroupUtils } from "./GroupUtils.js";
 import {
   EMPTY_OFFER_STRUCT,
   isEmptyOfferStruct,
 } from "./offerStructInternal.js";
-import { encode as encodePayload } from "./Payload.js";
+import {
+  encode as encodePayload,
+  type Item as PayloadItem,
+} from "./Payload.js";
+import { SetterRatifierUtils } from "./SetterRatifierUtils.js";
 import type { Tree } from "./Tree.js";
 
 function isPowerOfTwo(value: number): boolean {
@@ -256,10 +272,58 @@ export type TreeCreateParams = readonly GroupInput[];
 export type TreeInput = Tree | TreeCreateParams;
 
 /**
+ * Optional ratification inputs for {@link Tree.mempoolValidate}.
+ *
+ * Omit this when validating offer policy before the maker signs or approves a
+ * tree. Provide it when validating the final payload shape, including real
+ * `ratifierData`, after the Ecrecover signature exists or the Setter root is
+ * ready for publication.
+ *
+ * @example
+ * ```ts
+ * import { zeroHash, type Signature } from "viem";
+ * import type { TreeMempoolValidateRatification } from "@morpho-org/midnight-sdk";
+ *
+ * const ratification: TreeMempoolValidateRatification = {
+ *   type: "ecrecover",
+ *   signature: { v: 27, r: zeroHash, s: zeroHash } satisfies Signature,
+ * };
+ * console.log(ratification.type);
+ * ```
+ */
+export type TreeMempoolValidateRatification =
+  | {
+      /** Ecrecover ratifier route. */
+      readonly type: "ecrecover";
+      /** Viem client whose transport signs typed data built from the tree. */
+      readonly client: Client<Transport, Chain, Account | undefined>;
+      /** Account that signs the tree root. */
+      readonly account: Account | Address;
+      /** Omit when the SDK should request the signature through `client`. */
+      readonly signature?: undefined;
+    }
+  | {
+      /** Ecrecover ratifier route. */
+      readonly type: "ecrecover";
+      /** Precomputed signature for this tree root. */
+      readonly signature: EcrecoverSignatureInput;
+      /** Omit when a precomputed signature is supplied. */
+      readonly client?: undefined;
+      /** Omit when a precomputed signature is supplied. */
+      readonly account?: undefined;
+    }
+  | {
+      /** Setter ratifier route. */
+      readonly type: "setter";
+    };
+
+/**
  * Parameters for {@link Tree.mempoolValidate}.
  *
  * Use this when an already-created tree should be validated by the Midnight
- * API before wallet signature or root approval.
+ * API. By default it validates the pre-ratification tree with empty
+ * `ratifierData`; pass `ratification` to validate the final payload shape with
+ * real ratifier data.
  *
  * @example
  * ```ts
@@ -307,6 +371,8 @@ export interface TreeMempoolValidateParams {
   readonly fetch?: MidnightApiFetch;
   /** Additional fetch options forwarded to the API request. */
   readonly request?: MidnightApiRequestOptions;
+  /** Optional ratification inputs used to validate final payload bytes with real ratifier data. */
+  readonly ratification?: TreeMempoolValidateRatification;
 }
 
 /**
@@ -328,18 +394,19 @@ export namespace TreeUtils {
   /**
    * Validates a tree against Midnight mempool API policy.
    *
-   * This is an API-backed convenience: it encodes each tree leaf with empty
-   * `ratifierData`, then sends the temporary payload to the Midnight API
-   * `POST /mempool/validate` endpoint. API policy only inspects offer contents,
-   * so use this after `Tree.create` and before wallet signature or Setter root
-   * approval.
+   * This is an API-backed convenience: by default it encodes each tree leaf
+   * with empty `ratifierData`, then sends the temporary payload to the Midnight
+   * API `POST /mempool/validate` endpoint. Pass `ratification` after signing or
+   * Setter root preparation to validate final payload bytes with real
+   * `ratifierData`.
    *
    * @param params.chainId - Chain id whose API policy should validate the tree.
-   * @param params.tree - Offer tree to validate before ratifier data or payload publication exists.
+   * @param params.tree - Offer tree to validate.
    * @param params.apiUrl - Optional Midnight API URL override used for the validation HTTP request.
    * @param params.timestamp - Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot.
    * @param params.fetch - Optional fetch implementation override used for the API call.
    * @param params.request - Optional fetch options forwarded to the API request.
+   * @param params.ratification - Optional ratification inputs used to validate final payload bytes with real ratifier data.
    * @returns Successful API validation result.
    * @throws {InvalidTreeError} when the tree is empty, all padding, or duplicated.
    * @throws {InvalidTreeHeightError} when the resulting height is unsupported.
@@ -389,18 +456,37 @@ export namespace TreeUtils {
       "chainId" | "apiUrl" | "timestamp" | "fetch" | "request"
     > & {
       readonly tree: TreeInput;
+      readonly ratification?: TreeMempoolValidateRatification;
     },
   ): Promise<MempoolPayloadValidationResult> {
-    const offers =
-      "offers" in params.tree
-        ? params.tree.offers
-        : params.tree.flatMap((entry) =>
-            "offers" in entry ? Group.from(entry).offers : [Offer.from(entry)],
-          );
-    buildDescriptor(offers);
-    const payload = await encodePayload(
-      offers.map((offer) => ({ offer, ratifierData: "0x" as const })),
-    );
+    const tree =
+      "proof" in params.tree
+        ? params.tree
+        : (await import("./Tree.js")).Tree.create(params.tree);
+    let items: readonly PayloadItem[];
+    if (params.ratification == null) {
+      items = tree.offers.map((offer) => ({
+        offer,
+        ratifierData: "0x" as const,
+      }));
+    } else if (params.ratification.type === "ecrecover") {
+      if (params.ratification.signature != null) {
+        items = await EcrecoverRatifierUtils.ratify({
+          tree,
+          signature: params.ratification.signature,
+        });
+      } else {
+        items = await EcrecoverRatifierUtils.ratify({
+          tree,
+          client: params.ratification.client,
+          account: params.ratification.account,
+        });
+      }
+    } else {
+      items = SetterRatifierUtils.ratify({ tree });
+    }
+
+    const payload = await encodePayload(items);
 
     const validation = await MidnightApi.validateMempoolPayload({
       baseUrl: params.apiUrl,
