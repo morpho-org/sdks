@@ -29,7 +29,7 @@ import {
   blueWithdraw,
   blueWithdrawCollateral,
   getBlueAuthorizationRequirement,
-  getBlueRequirements,
+  getGeneralAdapterRequirements,
 } from "../../actions/index.js";
 import {
   computeMaxRepaySharePrice,
@@ -586,7 +586,7 @@ export class MorphoBlue implements BlueActions {
 
     return {
       getRequirements: (params?: { useSimplePermit?: boolean }) =>
-        getBlueRequirements(this.client.viemClient, {
+        getGeneralAdapterRequirements(this.client.viemClient, {
           address: this.marketParams.loanToken,
           chainId: this.chainId,
           supportSignature: this.client.options.supportSignature,
@@ -729,7 +729,7 @@ export class MorphoBlue implements BlueActions {
 
     return {
       getRequirements: (params?: { useSimplePermit?: boolean }) =>
-        getBlueRequirements(this.client.viemClient, {
+        getGeneralAdapterRequirements(this.client.viemClient, {
           address: this.marketParams.collateralToken,
           chainId: this.chainId,
           supportSignature: this.client.options.supportSignature,
@@ -910,7 +910,7 @@ export class MorphoBlue implements BlueActions {
 
     return {
       getRequirements: (reqParams?: { useSimplePermit?: boolean }) =>
-        getBlueRequirements(this.client.viemClient, {
+        getGeneralAdapterRequirements(this.client.viemClient, {
           address: this.marketParams.loanToken,
           chainId: this.chainId,
           supportSignature: this.client.options.supportSignature,
@@ -1108,7 +1108,7 @@ export class MorphoBlue implements BlueActions {
     return {
       getRequirements: async (reqParams?: { useSimplePermit?: boolean }) => {
         const [erc20Requirements, authTx] = await Promise.all([
-          getBlueRequirements(this.client.viemClient, {
+          getGeneralAdapterRequirements(this.client.viemClient, {
             address: this.marketParams.loanToken,
             chainId: this.chainId,
             supportSignature: this.client.options.supportSignature,
@@ -1214,7 +1214,7 @@ export class MorphoBlue implements BlueActions {
     return {
       getRequirements: async (params?: { useSimplePermit?: boolean }) => {
         const [erc20Requirements, authTx] = await Promise.all([
-          getBlueRequirements(this.client.viemClient, {
+          getGeneralAdapterRequirements(this.client.viemClient, {
             address: this.marketParams.collateralToken,
             chainId: this.chainId,
             supportSignature: this.client.options.supportSignature,

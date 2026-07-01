@@ -1,4 +1,4 @@
-import { type Address, getChainAddresses, MathLib } from "@morpho-org/blue-sdk";
+import { type Address, MathLib } from "@morpho-org/blue-sdk";
 import { getPermit2PermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
 import { verifyTypedData, type WalletClient } from "viem";
@@ -11,28 +11,28 @@ import {
   type Requirement,
 } from "../../../types/index.js";
 
-/** Parameters for {@link encodeBundler3Erc20Permit2}. */
-interface EncodeBundler3Erc20Permit2Params {
+/** Parameters for {@link encodeErc20Permit2Approve}. */
+interface EncodeErc20Permit2ApproveParams {
   token: Address;
+  spender: Address;
   amount: bigint;
   chainId: number;
   nonce: bigint;
-  expiration: bigint;
+  expiration?: bigint;
 }
 
 /**
- * Builds a Permit2 `Requirement` that, once signed, lets `GeneralAdapter1` pull `amount` of
- * `token` via the Permit2 contract.
+ * Builds a Permit2 `Requirement` that, once signed, lets `spender` pull `amount` of `token` via
+ * the Permit2 contract.
  *
- * The Permit2 spender is hardcoded to `GeneralAdapter1` for the resolved chain — never another
- * address — otherwise the resulting signature could be reused independently of the Morpho
- * bundle. Deadline defaults to two hours from `Time.timestamp()`.
+ * Deadline defaults to two hours from `Time.timestamp()`.
  *
  * @param params - Permit2 encoding parameters.
  * @param params.token - ERC-20 token address.
+ * @param params.spender - Address approved as Permit2 spender.
  * @param params.amount - Permit2 allowance amount (per-call).
- * @param params.chainId - Target chain id (resolves `GeneralAdapter1`).
- * @param params.nonce - The user's current Permit2 nonce for `(token, GeneralAdapter1)`.
+ * @param params.chainId - Target chain id.
+ * @param params.nonce - The user's current Permit2 nonce for `(token, spender)`.
  * @param params.expiration - Permit2-managed allowance expiration timestamp.
  * @returns A `Requirement` whose `sign(client, userAddress)` produces the deep-frozen signature.
  * @throws {MissingClientPropertyError} from `sign()` when the client has no `account.address`.
@@ -40,10 +40,11 @@ interface EncodeBundler3Erc20Permit2Params {
  * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails.
  * @example
  * ```ts
- * import { encodeBundler3Erc20Permit2 } from "@morpho-org/morpho-sdk";
+ * import { encodeErc20Permit2Approve } from "@morpho-org/morpho-sdk";
  *
- * const requirement = encodeBundler3Erc20Permit2({
+ * const requirement = encodeErc20Permit2Approve({
  *   token: USDC,
+ *   spender: GENERAL_ADAPTER_1,
  *   amount: 1_000_000n,
  *   chainId: 1,
  *   nonce: 0n,
@@ -52,11 +53,12 @@ interface EncodeBundler3Erc20Permit2Params {
  * // requirement satisfies Requirement
  * ```
  */
-export const encodeBundler3Erc20Permit2 = (
-  params: EncodeBundler3Erc20Permit2Params,
+export const encodeErc20Permit2Approve = (
+  params: EncodeErc20Permit2ApproveParams,
 ): Requirement<Permit2Action, Permit2Args> => {
   const {
     token,
+    spender,
     amount,
     chainId,
     nonce,
@@ -66,14 +68,10 @@ export const encodeBundler3Erc20Permit2 = (
   const now = Time.timestamp();
   const deadline = now + Time.s.from.h(2n);
 
-  const {
-    bundler3: { generalAdapter1 },
-  } = getChainAddresses(chainId);
-
   const action: Permit2Action = {
     type: "permit2",
     args: {
-      spender: generalAdapter1,
+      spender,
       amount,
       deadline,
       expiration,
@@ -88,9 +86,7 @@ export const encodeBundler3Erc20Permit2 = (
 
       const typedData = getPermit2PermitTypedData(
         {
-          // Never permit any other address than the GeneralAdapter1 otherwise
-          // the signature can be used independently.
-          spender: generalAdapter1,
+          spender,
           allowance: amount,
           erc20: token,
           nonce: Number(nonce),

@@ -1,12 +1,23 @@
-import { type Address, MathLib } from "@morpho-org/blue-sdk";
+import { type Address, getChainAddresses, MathLib } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 import type {
   Bundler3TokenSignatureRequirement,
   ERC20ApprovalAction,
   Transaction,
 } from "../../../types/index.js";
-import { encodeBundler3Erc20Permit2 } from "../encode/encodeBundler3Erc20Permit2.js";
+import { encodeErc20Permit2Approve } from "../encode/encodeErc20Permit2Approve.js";
 import { getRequirementsApproval } from "../getRequirementsApproval.js";
+
+interface GeneralAdapterPermit2Allowances {
+  readonly generalAdapter1: bigint;
+  readonly permit2: bigint;
+}
+
+interface GeneralAdapterPermit2Allowance {
+  readonly amount: bigint;
+  readonly expiration: bigint;
+  readonly nonce: bigint;
+}
 
 /**
  * Computes the Permit2 prerequisites for `GeneralAdapter1` to pull `amount` of `address`.
@@ -22,15 +33,8 @@ import { getRequirementsApproval } from "../getRequirementsApproval.js";
  * @param params.chainId - The chain the bundle targets.
  * @param params.permit2 - The Permit2 contract address for the chain.
  * @param params.args.amount - Required token amount.
- * @param params.allowancesPermit2 - The user's current allowance of `address` for the Permit2
- *   contract.
- * @param params.allowancesGeneralAdapter - The user's current direct allowance of `address` for
- *   `GeneralAdapter1` (separate from the Permit2-managed allowance).
- * @param params.allowanceGeneralAdapterPermit2 - The Permit2-managed allowance for
- *   `GeneralAdapter1` to spend `address`.
- * @param params.allowanceGeneralAdapterExpiration - Expiration timestamp of the Permit2-managed
- *   allowance.
- * @param params.nonce - The user's current Permit2 nonce for `(address, GeneralAdapter1)`.
+ * @param params.allowances - Current ERC-20 allowances keyed by spender contract name.
+ * @param params.permit2Allowance - Permit2-managed allowance for `GeneralAdapter1`.
  * @returns Ordered list of approval transactions and/or `Requirement` objects to satisfy before
  *   bundling.
  * @throws {ApprovalAmountLessThanSpendAmountError} from the inner approval helper when its
@@ -38,34 +42,28 @@ import { getRequirementsApproval } from "../getRequirementsApproval.js";
  * @example
  * ```ts
  * import { getChainAddresses } from "@morpho-org/blue-sdk";
- * import { getBundler3RequirementsPermit2 } from "@morpho-org/morpho-sdk";
+ * import { getGeneralAdapterRequirementsPermit2 } from "@morpho-org/morpho-sdk";
  *
  * const { permit2 } = getChainAddresses(1);
  * if (!permit2) throw new Error("Permit2 not configured for this chain");
- * const requirements = getBundler3RequirementsPermit2({
+ * const requirements = getGeneralAdapterRequirementsPermit2({
  *   address: USDC,
  *   chainId: 1,
  *   permit2,
  *   args: { amount: 1_000_000n },
- *   allowancesPermit2: 0n,
- *   allowancesGeneralAdapter: 0n,
- *   allowanceGeneralAdapterPermit2: 0n,
- *   allowanceGeneralAdapterExpiration: 0n,
- *   nonce: 0n,
+ *   allowances: { generalAdapter1: 0n, permit2: 0n },
+ *   permit2Allowance: { amount: 0n, expiration: 0n, nonce: 0n },
  * });
  * // requirements satisfies (Readonly<Transaction<ERC20ApprovalAction> | Bundler3TokenSignatureRequirement>)[]
  * ```
  */
-export const getBundler3RequirementsPermit2 = (params: {
+export const getGeneralAdapterRequirementsPermit2 = (params: {
   address: Address;
   chainId: number;
   permit2: Address;
   args: { amount: bigint };
-  allowancesPermit2: bigint;
-  allowancesGeneralAdapter: bigint;
-  allowanceGeneralAdapterPermit2: bigint;
-  allowanceGeneralAdapterExpiration: bigint;
-  nonce: bigint;
+  allowances: GeneralAdapterPermit2Allowances;
+  permit2Allowance: GeneralAdapterPermit2Allowance;
 }): Readonly<
   Transaction<ERC20ApprovalAction> | Bundler3TokenSignatureRequirement
 >[] => {
@@ -74,14 +72,15 @@ export const getBundler3RequirementsPermit2 = (params: {
     chainId,
     permit2,
     args: { amount },
-    allowancesPermit2,
-    allowancesGeneralAdapter,
-    allowanceGeneralAdapterPermit2,
-    allowanceGeneralAdapterExpiration,
-    nonce,
+    allowances,
+    permit2Allowance,
   } = params;
 
-  if (allowancesGeneralAdapter >= amount) {
+  const {
+    bundler3: { generalAdapter1 },
+  } = getChainAddresses(chainId);
+
+  if (allowances.generalAdapter1 >= amount) {
     return [];
   }
 
@@ -98,21 +97,22 @@ export const getBundler3RequirementsPermit2 = (params: {
       spendAmount: amount,
       spender: permit2,
     },
-    allowances: allowancesPermit2,
+    allowances: allowances.permit2,
   });
 
   requirements.push(...approvalRequirements);
 
   if (
-    allowanceGeneralAdapterPermit2 < amount ||
-    allowanceGeneralAdapterExpiration < Time.timestamp() + Time.s.from.h(4n)
+    permit2Allowance.amount < amount ||
+    permit2Allowance.expiration < Time.timestamp() + Time.s.from.h(4n)
   ) {
     requirements.push(
-      encodeBundler3Erc20Permit2({
+      encodeErc20Permit2Approve({
         token: address,
+        spender: generalAdapter1,
         amount,
         chainId,
-        nonce,
+        nonce: permit2Allowance.nonce,
         expiration: MathLib.MAX_UINT_48, // Always approve indefinitely.
       }),
     );

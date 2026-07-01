@@ -19,7 +19,7 @@ import {
   VaultAssetMismatchError,
 } from "../../types/index.js";
 import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
-import { getBlueRequirements } from "../requirements/index.js";
+import { getGeneralAdapterRequirements } from "../requirements/index.js";
 import { vaultV1MigrateToV2 } from "./migrateToV2.js";
 
 describe("vaultV1MigrateToV2 unit tests", () => {
@@ -125,7 +125,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
   }) => {
     const shares = 1000000000000000000000n; // 1000 shares (18 decimals)
 
-    const requirements = await getBlueRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: SteakhouseUsdcVaultV1.address,
       chainId: mainnet.id,
       supportSignature: true,
@@ -188,7 +188,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
   }) => {
     const shares = 5000000000000000000n; // 5 shares (18 decimals)
 
-    const requirements = await getBlueRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: GauntletWethVaultV1.address,
       chainId: mainnet.id,
       supportSignature: true,
@@ -279,7 +279,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
     const shares = 1000000000000000000000n; // 1000 shares (18 decimals)
 
     // Sign permit for WETH vault shares
-    const requirements = await getBlueRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: GauntletWethVaultV1.address,
       chainId: mainnet.id,
       supportSignature: true,

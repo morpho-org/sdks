@@ -5,7 +5,7 @@
 
 Rename Blue requirement entrypoints and isolate Blue-specific requirement modules.
 
-The public Blue requirement entrypoint is now `getBlueRequirements`, and `getMorphoAuthorizationRequirement` is now `getBlueAuthorizationRequirement`. Bundler3 token permit requirement entrypoints are exported as `getBundler3RequirementsPermit` and `getBundler3RequirementsPermit2`, and the Bundler3-specific Permit2 encoder is exported as `encodeBundler3Erc20Permit2`. Protocol-agnostic approval and EIP-2612 encoding utilities remain exported from the common requirements barrel.
+The public GeneralAdapter requirement entrypoint is now `getGeneralAdapterRequirements`, and `getMorphoAuthorizationRequirement` is now `getBlueAuthorizationRequirement`. GeneralAdapter token permit requirement entrypoints are exported as `getGeneralAdapterRequirementsPermit` and `getGeneralAdapterRequirementsPermit2`, and the Permit2 approval encoder is exported as `encodeErc20Permit2Approve`. Protocol-agnostic approval and EIP-2612 encoding utilities remain exported from the common requirements barrel.
 
 Blue authorization requirement metadata is now protocol-prefixed as `BlueAuthorizationAction` with `action.type === "blueAuthorization"`. The previous `MorphoAuthorizationAction` type, `"morphoAuthorization"` discriminator, and `isRequirementAuthorization` guard are removed in favor of `isRequirementBlueAuthorization`.
 

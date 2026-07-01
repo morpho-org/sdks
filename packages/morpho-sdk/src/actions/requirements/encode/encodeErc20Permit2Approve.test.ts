@@ -9,9 +9,9 @@ import {
   AddressMismatchError,
   InvalidSignatureError,
 } from "../../../types/index.js";
-import { encodeBundler3Erc20Permit2 } from "./encodeBundler3Erc20Permit2.js";
+import { encodeErc20Permit2Approve } from "./encodeErc20Permit2Approve.js";
 
-describe("encodeBundler3Erc20Permit2", () => {
+describe("encodeErc20Permit2Approve", () => {
   const {
     usdc,
     bundler3: { generalAdapter1 },
@@ -20,6 +20,7 @@ describe("encodeBundler3Erc20Permit2", () => {
   const mockAmount = 1000000n;
   const mockNonce = 0n;
   const mockExpiration = MathLib.MAX_UINT_48;
+  const customSpender = "0x0000000000000000000000000000000000000001" as const;
 
   afterEach(() => {
     vi.restoreAllMocks();
@@ -29,8 +30,9 @@ describe("encodeBundler3Erc20Permit2", () => {
     test("should sign permit2 for token", async ({ client }) => {
       const userAddress = client.account.address;
 
-      const permit = encodeBundler3Erc20Permit2({
+      const permit = encodeErc20Permit2Approve({
         token: usdc,
+        spender: generalAdapter1,
         amount: mockAmount,
         chainId: mainnet.id,
         nonce: mockNonce,
@@ -50,8 +52,9 @@ describe("encodeBundler3Erc20Permit2", () => {
       const differentAddress: Address =
         "0x0000000000000000000000000000000000000001";
 
-      const permit = encodeBundler3Erc20Permit2({
+      const permit = encodeErc20Permit2Approve({
         token: usdc,
+        spender: generalAdapter1,
         amount: mockAmount,
         chainId: mainnet.id,
         nonce: mockNonce,
@@ -76,8 +79,9 @@ describe("encodeBundler3Erc20Permit2", () => {
           address: client.account.address,
         },
       };
-      const permit = encodeBundler3Erc20Permit2({
+      const permit = encodeErc20Permit2Approve({
         token: usdc,
+        spender: generalAdapter1,
         amount: mockAmount,
         chainId: mainnet.id,
         nonce: mockNonce,
@@ -92,8 +96,9 @@ describe("encodeBundler3Erc20Permit2", () => {
     test("should return all expected properties in signature args", async ({
       client,
     }) => {
-      const permit = encodeBundler3Erc20Permit2({
+      const permit = encodeErc20Permit2Approve({
         token: usdc,
+        spender: generalAdapter1,
         amount: mockAmount,
         chainId: mainnet.id,
         nonce: mockNonce,
@@ -128,8 +133,9 @@ describe("encodeBundler3Erc20Permit2", () => {
     }) => {
       const now = Time.timestamp();
 
-      const permit = encodeBundler3Erc20Permit2({
+      const permit = encodeErc20Permit2Approve({
         token: usdc,
+        spender: generalAdapter1,
         amount: mockAmount,
         chainId: mainnet.id,
         nonce: mockNonce,
@@ -156,8 +162,9 @@ describe("encodeBundler3Erc20Permit2", () => {
     });
 
     test("should have correct action structure", async () => {
-      const permit = encodeBundler3Erc20Permit2({
+      const permit = encodeErc20Permit2Approve({
         token: usdc,
+        spender: customSpender,
         amount: mockAmount,
         chainId: mainnet.id,
         nonce: mockNonce,
@@ -173,7 +180,7 @@ describe("encodeBundler3Erc20Permit2", () => {
       expect(permit.action.args).toHaveProperty("amount");
       expect(permit.action.args).toHaveProperty("deadline");
       expect(permit.action.args).toHaveProperty("expiration");
-      expect(permit.action.args.spender).toEqual(generalAdapter1);
+      expect(permit.action.args.spender).toEqual(customSpender);
       expect(permit.action.args.amount).toEqual(mockAmount);
       expect(permit.action.args.expiration).toEqual(mockExpiration);
     });

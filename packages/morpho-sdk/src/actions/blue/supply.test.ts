@@ -14,7 +14,7 @@ import {
   ZeroSupplyAmountError,
 } from "../../types/index.js";
 import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
-import { getBlueRequirements } from "../requirements/index.js";
+import { getGeneralAdapterRequirements } from "../requirements/index.js";
 import { blueSupply } from "./supply.js";
 
 describe("blueSupply unit tests", () => {
@@ -108,7 +108,7 @@ describe("blueSupply unit tests", () => {
   test("should create tx with permit2 signature", async ({ client }) => {
     const amount = parseUnits("1000", 6);
 
-    const requirements = await getBlueRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: CbbtcUsdcBlue.loanToken,
       chainId: mainnet.id,
       supportSignature: true,

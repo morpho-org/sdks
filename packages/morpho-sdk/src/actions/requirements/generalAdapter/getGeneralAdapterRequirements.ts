@@ -8,23 +8,23 @@ import {
   type ERC20ApprovalAction,
   type Transaction,
 } from "../../../types/index.js";
-import { getBundler3RequirementsPermit } from "../bundler3/getBundler3RequirementsPermit.js";
-import { getBundler3RequirementsPermit2 } from "../bundler3/getBundler3RequirementsPermit2.js";
 import { getRequirementsApproval } from "../getRequirementsApproval.js";
+import { getGeneralAdapterRequirementsPermit } from "./getGeneralAdapterRequirementsPermit.js";
+import { getGeneralAdapterRequirementsPermit2 } from "./getGeneralAdapterRequirementsPermit2.js";
 
-type GetBlueRequirementsBaseParams = {
+type GetGeneralAdapterRequirementsBaseParams = {
   address: Address;
   chainId: number;
   supportDeployless?: boolean;
   args: { amount: bigint; from: Address };
 };
 
-type GetBlueRequirementsParams =
-  | (GetBlueRequirementsBaseParams & {
+type GetGeneralAdapterRequirementsParams =
+  | (GetGeneralAdapterRequirementsBaseParams & {
       /** Signature-based approvals are not supported. Classic approval (transaction) will be used. */
       supportSignature: false;
     })
-  | (GetBlueRequirementsBaseParams & {
+  | (GetGeneralAdapterRequirementsBaseParams & {
       /** Signature-based approvals are supported. Will try permit (EIP-2612), else fallback to permit2. */
       supportSignature: true;
       /**
@@ -36,7 +36,7 @@ type GetBlueRequirementsParams =
     });
 
 /**
- * Resolves the approval requirements an integrator must satisfy before a Blue bundle pulls
+ * Resolves the approval requirements an integrator must satisfy before a bundled action pulls
  * tokens through `GeneralAdapter1`.
  *
  * Reads the user's current `holding` (allowances + nonces) from the chain, then picks one of
@@ -83,10 +83,10 @@ type GetBlueRequirementsParams =
  * ```ts
  * import { createPublicClient, http } from "viem";
  * import { mainnet } from "viem/chains";
- * import { getBlueRequirements } from "@morpho-org/morpho-sdk";
+ * import { getGeneralAdapterRequirements } from "@morpho-org/morpho-sdk";
  *
  * const client = createPublicClient({ chain: mainnet, transport: http() });
- * const requirements = await getBlueRequirements(client, {
+ * const requirements = await getGeneralAdapterRequirements(client, {
  *   address: USDC,
  *   chainId: 1,
  *   supportSignature: true,
@@ -95,9 +95,9 @@ type GetBlueRequirementsParams =
  * // requirements satisfies (Readonly<Transaction<ERC20ApprovalAction>> | Bundler3TokenSignatureRequirement)[]
  * ```
  */
-export const getBlueRequirements = async (
+export const getGeneralAdapterRequirements = async (
   viemClient: Client,
-  params: GetBlueRequirementsParams,
+  params: GetGeneralAdapterRequirementsParams,
 ): Promise<
   (
     | Readonly<Transaction<ERC20ApprovalAction>>
@@ -134,27 +134,29 @@ export const getBlueRequirements = async (
     const supportSimplePermit = isDefined(erc2612Nonce) && !isDai;
 
     if (supportSimplePermit && useSimplePermit) {
-      return await getBundler3RequirementsPermit(viemClient, {
+      return await getGeneralAdapterRequirementsPermit(viemClient, {
         token: address,
         chainId,
         args: { amount },
-        allowancesGeneralAdapter: erc20Allowances["bundler3.generalAdapter1"],
+        allowances: {
+          generalAdapter1: erc20Allowances["bundler3.generalAdapter1"],
+        },
         nonce: erc2612Nonce,
         supportDeployless: params.supportDeployless,
       });
     }
 
     if (permit2) {
-      return getBundler3RequirementsPermit2({
+      return getGeneralAdapterRequirementsPermit2({
         address,
         chainId,
         permit2,
         args: { amount },
-        allowancesGeneralAdapter: erc20Allowances["bundler3.generalAdapter1"],
-        allowancesPermit2: erc20Allowances.permit2,
-        allowanceGeneralAdapterPermit2: permit2BundlerAllowance.amount,
-        allowanceGeneralAdapterExpiration: permit2BundlerAllowance.expiration,
-        nonce: permit2BundlerAllowance.nonce,
+        allowances: {
+          generalAdapter1: erc20Allowances["bundler3.generalAdapter1"],
+          permit2: erc20Allowances.permit2,
+        },
+        permit2Allowance: permit2BundlerAllowance,
       });
     }
   }

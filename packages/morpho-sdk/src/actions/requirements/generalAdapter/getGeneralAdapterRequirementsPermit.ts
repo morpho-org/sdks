@@ -2,6 +2,10 @@ import { getChainAddresses } from "@morpho-org/blue-sdk";
 import type { Address, Client } from "viem";
 import { encodeErc20Permit } from "../encode/index.js";
 
+interface GeneralAdapterPermitAllowances {
+  readonly generalAdapter1: bigint;
+}
+
 /**
  * Computes the EIP-2612 permit `Requirement` an integrator must sign so that `GeneralAdapter1`
  * can pull `amount` of `token`.
@@ -13,8 +17,7 @@ import { encodeErc20Permit } from "../encode/index.js";
  * @param params.token - ERC-20 token address (must support EIP-2612).
  * @param params.chainId - The chain the bundle targets.
  * @param params.args.amount - Required token amount.
- * @param params.allowancesGeneralAdapter - The user's current allowance of `token` for
- *   `GeneralAdapter1`.
+ * @param params.allowances - Current ERC-20 allowances keyed by spender contract name.
  * @param params.nonce - The user's current EIP-2612 nonce on `token`.
  * @param params.supportDeployless - Whether to fetch token metadata via deployless multicall.
  * @returns A single-element array containing the `Requirement` to sign, or an empty array when
@@ -23,26 +26,26 @@ import { encodeErc20Permit } from "../encode/index.js";
  * ```ts
  * import { createWalletClient, http } from "viem";
  * import { mainnet } from "viem/chains";
- * import { getBundler3RequirementsPermit } from "@morpho-org/morpho-sdk";
+ * import { getGeneralAdapterRequirementsPermit } from "@morpho-org/morpho-sdk";
  *
  * const client = createWalletClient({ chain: mainnet, transport: http() });
- * const reqs = await getBundler3RequirementsPermit(client, {
- *   token: USDC, // an ERC-2612-compatible token; DAI is excluded by getBlueRequirements
+ * const reqs = await getGeneralAdapterRequirementsPermit(client, {
+ *   token: USDC, // an ERC-2612-compatible token; DAI is excluded by getGeneralAdapterRequirements
  *   chainId: 1,
  *   args: { amount: 1_000_000n },
- *   allowancesGeneralAdapter: 0n,
+ *   allowances: { generalAdapter1: 0n },
  *   nonce: 0n,
  * });
  * // reqs satisfies Requirement[]
  * ```
  */
-export const getBundler3RequirementsPermit = async (
+export const getGeneralAdapterRequirementsPermit = async (
   viemClient: Client,
   params: {
     token: Address;
     chainId: number;
     args: { amount: bigint };
-    allowancesGeneralAdapter: bigint;
+    allowances: GeneralAdapterPermitAllowances;
     nonce: bigint;
     supportDeployless?: boolean;
   },
@@ -51,7 +54,7 @@ export const getBundler3RequirementsPermit = async (
     token,
     chainId,
     args: { amount },
-    allowancesGeneralAdapter,
+    allowances,
     nonce,
     supportDeployless,
   } = params;
@@ -60,7 +63,7 @@ export const getBundler3RequirementsPermit = async (
     bundler3: { generalAdapter1 },
   } = getChainAddresses(chainId);
 
-  if (allowancesGeneralAdapter < amount) {
+  if (allowances.generalAdapter1 < amount) {
     return [
       await encodeErc20Permit(viemClient, {
         token,

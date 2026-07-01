@@ -13,7 +13,7 @@ import {
   ZeroCollateralAmountError,
 } from "../../types/index.js";
 import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
-import { getBlueRequirements } from "../requirements/index.js";
+import { getGeneralAdapterRequirements } from "../requirements/index.js";
 import { blueSupplyCollateral } from "./supplyCollateral.js";
 
 describe("blueSupplyCollateral unit tests", () => {
@@ -113,7 +113,7 @@ describe("blueSupplyCollateral unit tests", () => {
     const amount = parseUnits("0.5", 18);
     const nativeAmount = parseUnits("0.5", 18);
 
-    const requirements = await getBlueRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: wNative,
       chainId: mainnet.id,
       supportSignature: true,
