@@ -21,7 +21,7 @@ export type MidnightApiRequestOptions = Omit<RequestInit, "method" | "body">;
  * Shared configuration for Midnight API calls.
  */
 export interface MidnightApiConfig {
-  /** Midnight API base URL. Defaults to `https://api.morpho.org/v1/midnight`. */
+  /** Midnight API base URL. Defaults to `https://api.morpho.org/v0/midnight`. */
   readonly baseUrl?: string | URL;
   /** Fetch implementation. Defaults to the global `fetch`. */
   readonly fetch?: MidnightApiFetch;

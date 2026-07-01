@@ -296,7 +296,7 @@ export type TreeInput = Tree | TreeCreateParams;
 export interface TreeMempoolValidateParams {
   /** Chain id whose API policy should validate the tree. */
   readonly chainId: number;
-  /** Midnight API URL used for the validation HTTP request. Defaults to `https://api.morpho.org/v1/midnight`. */
+  /** Midnight API URL used for the validation HTTP request. Defaults to `https://api.morpho.org/v0/midnight`. */
   readonly apiUrl?: string | URL;
   /** Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot. */
   readonly timestamp?: string | Date;
