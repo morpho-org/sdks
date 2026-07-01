@@ -13,19 +13,15 @@ import {
  *
  * The signature's `authorized` is pinned to the chain's `GeneralAdapter1`: an authorization
  * targeting any other account is rejected so the bundle can never hand operator rights over the
- * user's Morpho position to an unintended address. The signature must also be a grant
- * (`isAuthorized: true`): a revocation would leave GeneralAdapter1 unauthorized and revert the
- * following on-behalf Morpho operation, so it is rejected up front. The action is emitted with
- * `skipRevert: false` so a rejected or stale authorization fails the whole bundle rather than
- * letting a later on-behalf Morpho call revert opaquely.
+ * user's Morpho position to an unintended address. The action is emitted with `skipRevert: false`
+ * so a rejected or stale authorization fails the whole bundle rather than letting a later
+ * on-behalf Morpho call revert opaquely.
  *
  * @param chainId - Chain whose `GeneralAdapter1` the signature must authorize.
  * @param signature - The signed authorization produced by `Requirement.sign()`.
  * @returns A single `morphoSetAuthorizationWithSig` bundler `Action`.
  * @throws {BundlerErrors.UnexpectedSignature} when `signature.args.authorized` is not the chain's
  *   `GeneralAdapter1`.
- * @throws {BundlerErrors.UnexpectedAuthorizationRevocation} when `signature.args.isAuthorized` is
- *   `false` (a revocation rather than a grant).
  * @example
  * ```ts
  * import { getAuthorizationAction } from "@morpho-org/morpho-sdk";
@@ -48,10 +44,6 @@ export const getAuthorizationAction = (
 
   if (!isAddressEqual(authorized, generalAdapter1)) {
     throw new BundlerErrors.UnexpectedSignature(authorized);
-  }
-
-  if (!isAuthorized) {
-    throw new BundlerErrors.UnexpectedAuthorizationRevocation();
   }
 
   return {
