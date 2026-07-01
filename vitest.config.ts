@@ -88,7 +88,10 @@ export default defineConfig({
             "packages/morpho-sdk/src/**/*.test.ts",
             "packages/morpho-sdk/test/**/*.test.ts",
           ],
-          testTimeout: 60_000,
+          // Mainnet-fork tests provision an Anvil fork per test; under CI load
+          // fork setup + RPC latency can push a test past 60s and flake. Give
+          // headroom to match the heaviest fork projects.
+          testTimeout: 120_000,
         },
       },
       {
@@ -134,7 +137,10 @@ export default defineConfig({
             "packages/blue-sdk-viem/test/**/*.test.ts",
             "packages/blue-sdk-viem/src/**/*.test.ts",
           ],
-          testTimeout: 60_000,
+          // Mainnet-fork tests provision an Anvil fork per test; under CI load
+          // fork setup + RPC latency can push a test past 60s and flake. Give
+          // headroom to match the heaviest fork projects.
+          testTimeout: 120_000,
         },
       },
       {
