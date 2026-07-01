@@ -78,4 +78,18 @@ describe("getAuthorizationAction", () => {
       BundlerErrors.UnexpectedSignature,
     );
   });
+
+  test("error: UnexpectedAuthorizationRevocation when signature revokes", () => {
+    const revocation: AuthorizationRequirementSignature = {
+      action: {
+        ...signature.action,
+        args: { ...signature.action.args, isAuthorized: false },
+      },
+      args: { ...signature.args, isAuthorized: false },
+    };
+
+    expect(() => getAuthorizationAction(mainnet.id, revocation)).toThrow(
+      BundlerErrors.UnexpectedAuthorizationRevocation,
+    );
+  });
 });
