@@ -1,7 +1,7 @@
 import { type Address, getChainAddresses } from "@morpho-org/blue-sdk";
 import { fetchHolding } from "@morpho-org/blue-sdk-viem";
 import { isDefined } from "@morpho-org/morpho-ts";
-import type { Client } from "viem";
+import { type Client, isAddressEqual } from "viem";
 import {
   type Bundler3TokenSignatureRequirement,
   ChainIdMismatchError,
@@ -130,7 +130,8 @@ export const getBlueRequirements = async (
 
   if (supportSignature) {
     const { useSimplePermit } = params;
-    const supportSimplePermit = isDefined(erc2612Nonce) && address !== dai;
+    const isDai = isDefined(dai) && isAddressEqual(address, dai);
+    const supportSimplePermit = isDefined(erc2612Nonce) && !isDai;
 
     if (supportSimplePermit && useSimplePermit) {
       return await getBundler3RequirementsPermit(viemClient, {

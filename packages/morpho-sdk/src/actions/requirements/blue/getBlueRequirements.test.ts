@@ -446,6 +446,53 @@ describe("getBlueRequirements", () => {
         expect(permit2Requirement.action.args.amount).toBe(mockAmount);
       });
 
+      test("should compare DAI case-insensitively before excluding simple permit", async () => {
+        const lowerCaseDai = dai.toLowerCase() as Address;
+        vi.mocked(fetchHolding).mockResolvedValue(
+          new Holding({
+            user: mockFrom,
+            token: lowerCaseDai,
+            erc20Allowances: {
+              morpho: 0n,
+              "bundler3.generalAdapter1": 0n,
+              permit2: 0n,
+            },
+            permit2BundlerAllowance: {
+              amount: 0n,
+              expiration: 0n,
+              nonce: 0n,
+            },
+            erc2612Nonce: 0n,
+            canTransfer: false,
+            balance: 0n,
+          }),
+        );
+
+        const requirements = await getBlueRequirements(mockClient, {
+          supportSignature: true,
+          address: lowerCaseDai,
+          chainId: mainnet.id,
+          args: { amount: mockAmount, from: mockFrom },
+          useSimplePermit: true,
+        });
+
+        expect(requirements).toHaveLength(2);
+
+        const approvalPermit2 = requirements[0];
+        if (!isRequirementApproval(approvalPermit2)) {
+          throw new Error("Requirement is not an approval transaction");
+        }
+        expect(approvalPermit2.action.type).toBe("erc20Approval");
+        expect(approvalPermit2.action.args.spender).toBe(permit2);
+
+        const permit2Requirement = requirements[1];
+        if (!isRequirementSignature(permit2Requirement)) {
+          throw new Error("Requirement is not a permit transaction");
+        }
+        expect(permit2Requirement.action.type).toBe("permit2");
+        expect(permit2Requirement.action.args.spender).toBe(generalAdapter1);
+      });
+
       test("should fall back to classic approval when a chain has no Permit2", async () => {
         vi.mocked(fetchHolding).mockResolvedValue(
           new Holding({
