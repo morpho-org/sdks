@@ -274,12 +274,7 @@ export class Offer {
    * @returns Consumption group id.
    * @example
    * ```ts
-   * import { Offer, midnightAbi } from "@morpho-org/midnight-sdk";
-   * import { createPublicClient, http } from "viem";
-   * import { base } from "viem/chains";
-   * import { readContract } from "viem/actions";
-   *
-   * const client = createPublicClient({ chain: base, transport: http() });
+   * import { Offer } from "@morpho-org/midnight-sdk";
    * import { zeroAddress } from "viem";
    *
    * const loanToken = "0x0000000000000000000000000000000000006000";
@@ -315,7 +310,7 @@ export class Offer {
    * });
    *
    * const group = offer.group;
-   * // group satisfies Hash
+   * console.log(group);
    * ```
    */
   public get group(): Hash {

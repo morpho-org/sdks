@@ -138,7 +138,7 @@ export class EmptyDeallocationsError extends Error {
 export class DepositAmountMismatchError extends Error {
   constructor(depositAmount: bigint, signatureAmount: bigint) {
     super(
-      `Deposit amount ${depositAmount} does not match requirement signature amount ${signatureAmount}`,
+      `Deposit amount "${depositAmount}" does not match requirement signature amount "${signatureAmount}"`,
     );
   }
 }
@@ -147,25 +147,7 @@ export class DepositAmountMismatchError extends Error {
 export class DepositAssetMismatchError extends Error {
   constructor(depositAsset: Address, signatureAsset: Address) {
     super(
-      `Deposit asset ${depositAsset} does not match requirement signature asset ${signatureAsset}`,
-    );
-  }
-}
-
-/** Thrown when a deposit's owner differs from the owner the supplied permit / permit2 signature was issued for. */
-export class DepositOwnerMismatchError extends Error {
-  constructor(depositOwner: Address, signatureOwner: Address) {
-    super(
-      `Deposit owner ${depositOwner} does not match requirement signature owner ${signatureOwner}`,
-    );
-  }
-}
-
-/** Thrown when a deposit's spender differs from the spender the supplied permit / permit2 signature was issued for. */
-export class DepositSpenderMismatchError extends Error {
-  constructor(depositSpender: Address, signatureSpender: Address) {
-    super(
-      `Deposit spender ${depositSpender} does not match requirement signature spender ${signatureSpender}`,
+      `Deposit asset "${depositAsset}" does not match requirement signature asset "${signatureAsset}"`,
     );
   }
 }
