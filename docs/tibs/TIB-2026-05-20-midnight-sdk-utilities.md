@@ -399,7 +399,6 @@ Expose deterministic library methods:
 - `TickLib.snapPriceToTick`
 - `TickLib.rateToPrice`
 - `TickLib.tickToRate`
-- `TickLib.tickToApr`
 - `TakeAmountsLib.buyerAssetsToUnits`
 - `TakeAmountsLib.sellerAssetsToUnits`
 - `TakeAmountsLib.toUnits` for SDK-only generic unit conversion convenience
@@ -413,9 +412,6 @@ SDK-only derived helpers should live beside the domain they describe:
 - `MarketUtils.getLiquidationIncentiveFactor` with an explicit liquidation cursor
 - `MarketUtils.getSettlementFee`
 - `PositionUtils.accrueInterest`
-- `OfferUtils.getPrice`
-- `OfferUtils.getRate`
-- `OfferUtils.getApr`
 - `OfferUtils.getOfferExpiry`
 
 The pure helpers that mirror `TakeAmountsLib` should accept `settlementFee` as an explicit input instead of reading the chain. Fetching settlement fee remains a boundary concern; fetch helpers that compute it should accept `timeToMaturity` directly so callers do not confuse wall-clock time with Solidity's `block.timestamp`.
