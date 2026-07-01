@@ -1,7 +1,7 @@
 import { type Address, MathLib } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 import type {
-  BlueTokenSignatureRequirement,
+  Bundler3TokenSignatureRequirement,
   ERC20ApprovalAction,
   Transaction,
 } from "../../../types/index.js";
@@ -38,11 +38,11 @@ import { getRequirementsApproval } from "../getRequirementsApproval.js";
  * @example
  * ```ts
  * import { getChainAddresses } from "@morpho-org/blue-sdk";
- * import { getBlueRequirementsPermit2 } from "@morpho-org/morpho-sdk";
+ * import { getBundler3RequirementsPermit2 } from "@morpho-org/morpho-sdk";
  *
  * const { permit2 } = getChainAddresses(1);
  * if (!permit2) throw new Error("Permit2 not configured for this chain");
- * const requirements = getBlueRequirementsPermit2({
+ * const requirements = getBundler3RequirementsPermit2({
  *   address: USDC,
  *   chainId: 1,
  *   permit2,
@@ -53,10 +53,10 @@ import { getRequirementsApproval } from "../getRequirementsApproval.js";
  *   allowanceGeneralAdapterExpiration: 0n,
  *   nonce: 0n,
  * });
- * // requirements satisfies (Readonly<Transaction<ERC20ApprovalAction> | BlueTokenSignatureRequirement>)[]
+ * // requirements satisfies (Readonly<Transaction<ERC20ApprovalAction> | Bundler3TokenSignatureRequirement>)[]
  * ```
  */
-export const getBlueRequirementsPermit2 = (params: {
+export const getBundler3RequirementsPermit2 = (params: {
   address: Address;
   chainId: number;
   permit2: Address;
@@ -67,7 +67,7 @@ export const getBlueRequirementsPermit2 = (params: {
   allowanceGeneralAdapterExpiration: bigint;
   nonce: bigint;
 }): Readonly<
-  Transaction<ERC20ApprovalAction> | BlueTokenSignatureRequirement
+  Transaction<ERC20ApprovalAction> | Bundler3TokenSignatureRequirement
 >[] => {
   const {
     address,
@@ -87,7 +87,7 @@ export const getBlueRequirementsPermit2 = (params: {
 
   const requirements: (
     | Transaction<ERC20ApprovalAction>
-    | BlueTokenSignatureRequirement
+    | Bundler3TokenSignatureRequirement
   )[] = [];
 
   const approvalRequirements = getRequirementsApproval({

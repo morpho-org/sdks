@@ -350,8 +350,8 @@ export interface RequirementSignature<
   action: TAction;
 }
 
-/** Blue token signature requirement. */
-export type BlueTokenSignatureRequirement =
+/** Bundler3 token signature requirement. */
+export type Bundler3TokenSignatureRequirement =
   | Requirement<PermitAction, PermitArgs>
   | Requirement<Permit2Action, Permit2Args>;
 
@@ -394,9 +394,9 @@ export function isRequirementSignature(
   requirement:
     | Transaction<ERC20ApprovalAction>
     | Transaction<BlueAuthorizationAction>
-    | BlueTokenSignatureRequirement
+    | Bundler3TokenSignatureRequirement
     | undefined,
-): requirement is BlueTokenSignatureRequirement;
+): requirement is Bundler3TokenSignatureRequirement;
 export function isRequirementSignature(
   requirement:
     | Transaction<ERC20ApprovalAction>

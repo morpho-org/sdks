@@ -15,10 +15,10 @@ import {
   isRequirementSignature,
   Permit2ExpirationMissingError,
 } from "../../../types/index.js";
+import { getBundler3RequirementsPermit } from "../bundler3/getBundler3RequirementsPermit.js";
 import { getRequirementsAction } from "../getRequirementsAction.js";
 import { getRequirementsApproval } from "../getRequirementsApproval.js";
 import { getBlueRequirements } from "./getBlueRequirements.js";
-import { getBlueRequirementsPermit } from "./getBlueRequirementsPermit.js";
 
 vi.mock("@morpho-org/blue-sdk-viem", async (_importOriginal) => {
   return {
@@ -532,9 +532,9 @@ describe("getBlueRequirements", () => {
       ).toThrow(ApprovalAmountLessThanSpendAmountError);
     });
 
-    test("getBlueRequirementsPermit returns no requirement when allowance is sufficient", async () => {
+    test("getBundler3RequirementsPermit returns no requirement when allowance is sufficient", async () => {
       await expect(
-        getBlueRequirementsPermit(mockClient, {
+        getBundler3RequirementsPermit(mockClient, {
           token: usdc,
           chainId: mainnet.id,
           args: { amount: mockAmount },

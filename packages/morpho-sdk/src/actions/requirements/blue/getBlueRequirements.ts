@@ -3,14 +3,14 @@ import { fetchHolding } from "@morpho-org/blue-sdk-viem";
 import { isDefined } from "@morpho-org/morpho-ts";
 import type { Client } from "viem";
 import {
-  type BlueTokenSignatureRequirement,
+  type Bundler3TokenSignatureRequirement,
   ChainIdMismatchError,
   type ERC20ApprovalAction,
   type Transaction,
 } from "../../../types/index.js";
+import { getBundler3RequirementsPermit } from "../bundler3/getBundler3RequirementsPermit.js";
+import { getBundler3RequirementsPermit2 } from "../bundler3/getBundler3RequirementsPermit2.js";
 import { getRequirementsApproval } from "../getRequirementsApproval.js";
-import { getBlueRequirementsPermit } from "./getBlueRequirementsPermit.js";
-import { getBlueRequirementsPermit2 } from "./getBlueRequirementsPermit2.js";
 
 type GetBlueRequirementsBaseParams = {
   address: Address;
@@ -92,14 +92,17 @@ type GetBlueRequirementsParams =
  *   supportSignature: true,
  *   args: { amount: 1_000_000n, from: user },
  * });
- * // requirements satisfies (Readonly<Transaction<ERC20ApprovalAction>> | BlueTokenSignatureRequirement)[]
+ * // requirements satisfies (Readonly<Transaction<ERC20ApprovalAction>> | Bundler3TokenSignatureRequirement)[]
  * ```
  */
 export const getBlueRequirements = async (
   viemClient: Client,
   params: GetBlueRequirementsParams,
 ): Promise<
-  (Readonly<Transaction<ERC20ApprovalAction>> | BlueTokenSignatureRequirement)[]
+  (
+    | Readonly<Transaction<ERC20ApprovalAction>>
+    | Bundler3TokenSignatureRequirement
+  )[]
 > => {
   const {
     address,
@@ -130,7 +133,7 @@ export const getBlueRequirements = async (
     const supportSimplePermit = isDefined(erc2612Nonce) && address !== dai;
 
     if (supportSimplePermit && useSimplePermit) {
-      return await getBlueRequirementsPermit(viemClient, {
+      return await getBundler3RequirementsPermit(viemClient, {
         token: address,
         chainId,
         args: { amount },
@@ -141,7 +144,7 @@ export const getBlueRequirements = async (
     }
 
     if (permit2) {
-      return getBlueRequirementsPermit2({
+      return getBundler3RequirementsPermit2({
         address,
         chainId,
         permit2,

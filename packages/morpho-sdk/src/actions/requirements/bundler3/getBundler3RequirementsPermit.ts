@@ -23,10 +23,10 @@ import { encodeErc20Permit } from "../encode/index.js";
  * ```ts
  * import { createWalletClient, http } from "viem";
  * import { mainnet } from "viem/chains";
- * import { getBlueRequirementsPermit } from "@morpho-org/morpho-sdk";
+ * import { getBundler3RequirementsPermit } from "@morpho-org/morpho-sdk";
  *
  * const client = createWalletClient({ chain: mainnet, transport: http() });
- * const reqs = await getBlueRequirementsPermit(client, {
+ * const reqs = await getBundler3RequirementsPermit(client, {
  *   token: USDC, // an ERC-2612-compatible token; DAI is excluded by getBlueRequirements
  *   chainId: 1,
  *   args: { amount: 1_000_000n },
@@ -36,7 +36,7 @@ import { encodeErc20Permit } from "../encode/index.js";
  * // reqs satisfies Requirement[]
  * ```
  */
-export const getBlueRequirementsPermit = async (
+export const getBundler3RequirementsPermit = async (
   viemClient: Client,
   params: {
     token: Address;
