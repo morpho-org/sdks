@@ -357,6 +357,98 @@ describe("TreeUtils.mempoolValidate", () => {
     ).toBe(true);
   });
 
+  test("error: InvalidTreeError for empty plain input before API validation", async () => {
+    const calls: {
+      readonly input: Parameters<MidnightApiFetch>[0];
+      readonly init: Parameters<MidnightApiFetch>[1];
+    }[] = [];
+    const fetch: MidnightApiFetch = async (input, init) => {
+      calls.push({ input, init });
+      return new Response(JSON.stringify({ data: { issues: [] } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+
+    await expect(
+      TreeUtils.mempoolValidate({
+        chainId: 8453,
+        tree: [],
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidTreeError);
+
+    expect(calls).toHaveLength(0);
+  });
+
+  test("error: InvalidTreeError for duplicate plain input before API validation", async () => {
+    const calls: {
+      readonly input: Parameters<MidnightApiFetch>[0];
+      readonly init: Parameters<MidnightApiFetch>[1];
+    }[] = [];
+    const fetch: MidnightApiFetch = async (input, init) => {
+      calls.push({ input, init });
+      return new Response(JSON.stringify({ data: { issues: [] } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+    const offer = baseOfferInput({
+      market: {
+        ...baseMarketParamsInput(),
+        maturity: API_VALID_MATURITY,
+      },
+      expiry: API_VALID_MATURITY - 60n,
+      maxUnits: 0n,
+      maxAssets: 1_000n,
+    });
+
+    await expect(
+      TreeUtils.mempoolValidate({
+        chainId: 8453,
+        tree: [offer, offer],
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidTreeError);
+
+    expect(calls).toHaveLength(0);
+  });
+
+  test("error: InvalidTreeError for duplicate ratified plain input before API validation", async () => {
+    const calls: {
+      readonly input: Parameters<MidnightApiFetch>[0];
+      readonly init: Parameters<MidnightApiFetch>[1];
+    }[] = [];
+    const fetch: MidnightApiFetch = async (input, init) => {
+      calls.push({ input, init });
+      return new Response(JSON.stringify({ data: { issues: [] } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+    const offer = baseOfferInput({
+      market: {
+        ...baseMarketParamsInput(),
+        maturity: API_VALID_MATURITY,
+      },
+      ratifier: addresses.setterRatifier,
+      expiry: API_VALID_MATURITY - 60n,
+      maxUnits: 0n,
+      maxAssets: 1_000n,
+    });
+
+    await expect(
+      TreeUtils.mempoolValidate({
+        chainId: 8453,
+        tree: [offer, offer],
+        fetch,
+        ratification: { type: "setter" },
+      }),
+    ).rejects.toBeInstanceOf(InvalidTreeError);
+
+    expect(calls).toHaveLength(0);
+  });
+
   test("error: MidnightMempoolValidationError", async () => {
     const calls: {
       readonly input: Parameters<MidnightApiFetch>[0];

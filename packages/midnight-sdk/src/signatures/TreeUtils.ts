@@ -508,13 +508,17 @@ export namespace TreeUtils {
     let items: readonly PayloadItem[];
     if (params.ratification == null) {
       const offers =
-        "offers" in params.tree
+        "paddedOffers" in params.tree
           ? params.tree.offers
           : params.tree.flatMap((entry) =>
               "offers" in entry
                 ? Group.from(entry).offers
                 : [Offer.from(entry)],
             );
+
+      if (!("paddedOffers" in params.tree)) {
+        buildTreeDescriptor(params.tree);
+      }
 
       items = offers.map((offer) => ({
         offer,
