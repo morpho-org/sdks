@@ -193,7 +193,7 @@ export class Offer {
   public constructor(offer: IOffer) {
     this.market =
       "params" in offer.market
-        ? new Market(offer.market)
+        ? Market.from(offer.market)
         : MarketParams.from(offer.market);
     this.buy = offer.buy;
     this.maker = offer.maker;

@@ -51,9 +51,13 @@ const zeroFeeMarket = (
 describe("Offer", () => {
   test("default", () => {
     const offer = new Offer(baseOfferInput());
+    const hydratedOffer = new Offer(
+      baseOfferInput({ market: baseMarketInput() }),
+    );
 
     expect(offer).toBeInstanceOf(Offer);
     expect(MarketParams.from(offer.market).loanToken).toBe(addresses.loanToken);
+    expect(hydratedOffer.market).toBeInstanceOf(Market);
     expect(offer.price).toBe(TickLib.tickToPrice(offer.tick));
     expect(offer.getRate(1_000n)).toBe(
       OfferUtils.getRate({ offer, timestamp: 1_000n }),

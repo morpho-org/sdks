@@ -969,8 +969,7 @@ export namespace OfferUtils {
       });
     }
 
-    const market =
-      offer.market instanceof Market ? offer.market : new Market(offer.market);
+    const market = Market.from(offer.market);
     if (continuousFeeCap < BigInt(market.continuousFee)) return 0n;
     if (maxUnits > 0n) return MathLib.zeroFloorSub(maxUnits, consumed);
 

@@ -510,6 +510,53 @@ export class Market {
   }
 
   /**
+   * Returns a hydrated market instance from class or plain input.
+   *
+   * Existing `Market` instances are returned as-is. Plain hydrated market objects
+   * are normalized through the constructor so nested params and bigint fields use
+   * the SDK's canonical shapes.
+   *
+   * @param market - Hydrated market class or plain market input.
+   * @returns Hydrated market instance.
+   * @throws {InvalidMarketParameterError} when nested market params are invalid.
+   * @example
+   * ```ts
+   * import { Market } from "@morpho-org/midnight-sdk";
+   *
+   * const market = Market.from({
+   *   params: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         liquidationCursor: 250000000000000000n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: "0x0000000000000000000000000000000000000000",
+   *     liquidatorGate: "0x0000000000000000000000000000000000000000",
+   *   },
+   *   totalUnits: 1_000n,
+   *   lossFactor: 0n,
+   *   withdrawable: 500n,
+   *   continuousFeeCredit: 0n,
+   *   settlementFeeCbps: [1, 2, 3, 4, 5, 6, 7],
+   *   continuousFee: 10,
+   *   tickSpacing: 4,
+   * });
+   * console.log(market.id);
+   * ```
+   */
+  public static from(market: IMarket | Market): Market {
+    return market instanceof Market ? market : new Market(market);
+  }
+
+  /**
    * Returns the non-negative time remaining before maturity.
    *
    * @param timestamp - Timestamp to compare.
