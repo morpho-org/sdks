@@ -1,6 +1,6 @@
 ---
 "@morpho-org/morpho-sdk": major
-"@morpho-org/wdk-protocol-lending-morpho-evm": patch
+"@morpho-org/wdk-protocol-lending-morpho-evm": major
 ---
 
 Rename Blue requirement entrypoints and isolate Blue-specific requirement modules.
