@@ -261,6 +261,53 @@ describe("Tree.from", () => {
 });
 
 describe("TreeUtils.mempoolValidate", () => {
+  test("behavior: ecrecover ratification validates final payload from existing tree", async () => {
+    const calls: {
+      readonly input: Parameters<MidnightApiFetch>[0];
+      readonly init: Parameters<MidnightApiFetch>[1];
+    }[] = [];
+    const fetch: MidnightApiFetch = async (input, init) => {
+      calls.push({ input, init });
+      return new Response(JSON.stringify({ data: { issues: [] } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+    const tree = Tree.create([
+      baseOffer({
+        market: {
+          ...baseMarketParamsInput(),
+          maturity: API_VALID_MATURITY,
+        },
+        expiry: API_VALID_MATURITY - 60n,
+        maxUnits: 0n,
+        maxAssets: 1_000n,
+      }),
+    ]);
+
+    await TreeUtils.mempoolValidate({
+      chainId: 8453,
+      tree,
+      fetch,
+      ratification: {
+        type: "ecrecover",
+        signature,
+      },
+    });
+
+    const body = JSON.parse(String(calls[0]!.init?.body)) as Readonly<
+      Record<string, unknown>
+    >;
+    const decoded = await Payload.decode(body.payload as Hex);
+    const ratifierData = EcrecoverRatifierUtils.decodeRatifierData(
+      decoded[0]!.ratifierData,
+    );
+
+    expect(decoded[0]!.ratifierData).not.toBe("0x");
+    expect(ratifierData.signature).toEqual(signature);
+    expect(ratifierData.root).toBe(tree.root);
+  });
+
   test("behavior: setter ratification validates final payload from plain input", async () => {
     const calls: {
       readonly input: Parameters<MidnightApiFetch>[0];
@@ -365,8 +412,8 @@ describe("TreeUtils.buildDescriptor", () => {
     const payload = TreeUtils.buildDescriptor([baseOffer({ maxAssets: 0n })]);
 
     expect(payload.height).toBe(0);
-    expect(payload.root).toMatchInlineSnapshot(
-      `"0xd8d57bfe5657d24007dc511ac40c1d0c3ff11f9814f8245a26947d82e4a1bf05"`,
+    expect(payload.root).toBe(
+      "0xd8d57bfe5657d24007dc511ac40c1d0c3ff11f9814f8245a26947d82e4a1bf05",
     );
   });
 

@@ -30,6 +30,7 @@ import {
   EcrecoverRatifierUtils,
   type EcrecoverSignatureInput,
 } from "./EcrecoverRatifierUtils.js";
+import { Group } from "./Group.js";
 import { type GroupInput, GroupUtils } from "./GroupUtils.js";
 import {
   EMPTY_OFFER_STRUCT,
@@ -459,31 +460,41 @@ export namespace TreeUtils {
       readonly ratification?: TreeMempoolValidateRatification;
     },
   ): Promise<MempoolPayloadValidationResult> {
-    const tree =
-      "proof" in params.tree
-        ? params.tree
-        : (await import("./Tree.js")).Tree.create(params.tree);
     let items: readonly PayloadItem[];
     if (params.ratification == null) {
-      items = tree.offers.map((offer) => ({
+      const offers =
+        "offers" in params.tree
+          ? params.tree.offers
+          : params.tree.flatMap((entry) =>
+              "offers" in entry
+                ? Group.from(entry).offers
+                : [Offer.from(entry)],
+            );
+
+      items = offers.map((offer) => ({
         offer,
         ratifierData: "0x" as const,
       }));
-    } else if (params.ratification.type === "ecrecover") {
-      if (params.ratification.signature != null) {
-        items = await EcrecoverRatifierUtils.ratify({
-          tree,
-          signature: params.ratification.signature,
-        });
-      } else {
-        items = await EcrecoverRatifierUtils.ratify({
-          tree,
-          client: params.ratification.client,
-          account: params.ratification.account,
-        });
-      }
     } else {
-      items = SetterRatifierUtils.ratify({ tree });
+      const { Tree: TreeClass } = await import("./Tree.js");
+      const tree = TreeClass.from(params.tree);
+
+      if (params.ratification.type === "ecrecover") {
+        if (params.ratification.signature != null) {
+          items = await EcrecoverRatifierUtils.ratify({
+            tree,
+            signature: params.ratification.signature,
+          });
+        } else {
+          items = await EcrecoverRatifierUtils.ratify({
+            tree,
+            client: params.ratification.client,
+            account: params.ratification.account,
+          });
+        }
+      } else {
+        items = SetterRatifierUtils.ratify({ tree });
+      }
     }
 
     const payload = await encodePayload(items);
