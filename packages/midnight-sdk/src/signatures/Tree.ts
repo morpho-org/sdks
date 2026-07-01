@@ -12,9 +12,11 @@ import {
 } from "./TreeUtils.js";
 
 export type {
+  RatifierTreeInput,
   TreeCreateParams,
   TreeDescriptor,
   TreeInput,
+  TreeLike,
   TreeMempoolValidateParams,
   TreeMempoolValidateRatification,
   TreeProof,

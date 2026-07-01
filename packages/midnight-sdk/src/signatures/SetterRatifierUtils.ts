@@ -5,10 +5,13 @@ import {
   type Hash,
   type Hex,
 } from "viem";
-import { InvalidTreeError } from "../errors.js";
 import type { Item as PayloadItem } from "./Payload.js";
-import type { Tree } from "./Tree.js";
-import type { TreeProof } from "./TreeUtils.js";
+import type { RatifierTreeInput, TreeProof } from "./TreeUtils.js";
+import {
+  buildTreeProof,
+  getRatifierTreeRatifier,
+  normalizeRatifierTreeInput,
+} from "./treeInternal.js";
 
 const setterRatifierDataAbi = [
   { name: "root", type: "bytes32" },
@@ -84,8 +87,8 @@ export type DecodedSetterRatifierData = TreeProof;
  * ```
  */
 export interface SetterRatifierDataParams {
-  /** Tree that produced the proof. */
-  readonly tree: Tree;
+  /** Tree-like input that produced the proof. Existing `Tree` instances reuse cached hashes and proofs. */
+  readonly tree: RatifierTreeInput;
   /** Leaf index to prove. */
   readonly leafIndex: BigIntish;
 }
@@ -97,6 +100,9 @@ export interface SetterRatifierDataParams {
  * offers with the Setter ratifier address, build the group/tree, validate the
  * tree, approve the root onchain for every maker in the tree, call `ratify`,
  * then pass the returned items to `Payload.encode`.
+ * Ratifier helpers accept tree-like inputs rather than requiring the `Tree`
+ * class. Passing an existing `Tree` remains the optimal path because its
+ * cached offers, leaves, root, and height are reused when proofs are encoded.
  *
  * @example
  * ```ts
@@ -180,7 +186,7 @@ export namespace SetterRatifierUtils {
    * approvals are keyed by maker and root, so the maker for this leaf must have
    * approved the tree root onchain.
    *
-   * @param params.tree - Setter-ratified offer tree that produced the proof.
+   * @param params.tree - Setter-ratified offer tree-like input that produced the proof.
    * @param params.leafIndex - Leaf index to prove.
    * @returns ABI-encoded SetterRatifier data.
    * @throws {InvalidTreeError} when the leaf index is outside the tree.
@@ -222,7 +228,8 @@ export namespace SetterRatifierUtils {
    * ```
    */
   export function ratifierData(params: SetterRatifierDataParams): Hex {
-    const proof = params.tree.proof(params.leafIndex);
+    const tree = normalizeRatifierTreeInput(params.tree);
+    const proof = buildTreeProof({ tree, leafIndex: params.leafIndex });
 
     return encodeRatifierData({
       root: proof.root,
@@ -241,7 +248,7 @@ export namespace SetterRatifierUtils {
    * directly to `Payload.encode`. All offers in the tree must use one ratifier
    * address; build separate trees per ratifier.
    *
-   * @param params.tree - Setter-ratified offer tree whose root has already been approved onchain.
+   * @param params.tree - Setter-ratified offer tree-like input whose root has already been approved onchain.
    * @returns Items containing each offer and its ratifier data.
    * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
    * @example
@@ -283,30 +290,18 @@ export namespace SetterRatifierUtils {
    * ```
    */
   export function ratify(params: {
-    readonly tree: Tree;
+    readonly tree: RatifierTreeInput;
   }): readonly PayloadItem[] {
-    const firstOffer = params.tree.offers[0];
-    if (firstOffer == null) {
-      throw new InvalidTreeError("Tree must contain at least one offer.");
-    }
-
-    const ratifier = firstOffer.ratifier;
-    const comparableRatifier = ratifier.toLowerCase();
-    for (const offer of params.tree.offers.slice(1)) {
-      if (offer.ratifier.toLowerCase() !== comparableRatifier) {
-        throw new InvalidTreeError(
-          `All offers in a Setter tree must use one ratifier; expected "${ratifier}", got "${offer.ratifier}". Build separate trees per ratifier.`,
-        );
-      }
-    }
+    const tree = normalizeRatifierTreeInput(params.tree);
+    getRatifierTreeRatifier({ tree, label: "Setter" });
 
     const items: PayloadItem[] = [];
 
-    for (const offer of params.tree.offers) {
+    for (const offer of tree.offers) {
       items.push({
         offer,
         ratifierData: ratifierData({
-          tree: params.tree,
+          tree,
           leafIndex: items.length,
         }),
       });
