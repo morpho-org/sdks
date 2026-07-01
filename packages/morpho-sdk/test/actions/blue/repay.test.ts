@@ -60,7 +60,7 @@ describe("RepayBlue", () => {
 
         const repay = market.repay({
           userAddress: client.account.address,
-          assets: repayAmount,
+          amount: repayAmount,
           positionData,
         });
 
@@ -265,7 +265,7 @@ describe("RepayBlue", () => {
     expect(() =>
       market.repay({
         userAddress: client.account.address,
-        assets: borrowAmount * 2n,
+        amount: borrowAmount * 2n,
         positionData,
       }),
     ).toThrow(RepayExceedsDebtError);
@@ -308,7 +308,7 @@ describe("RepayBlue", () => {
     expect(() =>
       market.repay({
         userAddress: client.account.address,
-        assets: 1n,
+        amount: 1n,
         positionData,
       }),
     ).toThrow(ShareDivideByZeroError);
@@ -354,7 +354,7 @@ describe("RepayBlue", () => {
     expect(() =>
       market.repay({
         userAddress: client.account.address,
-        assets: 0n,
+        amount: 0n,
         positionData,
       }),
     ).toThrow(NonPositiveRepayAmountError);
@@ -369,7 +369,7 @@ describe("RepayBlue", () => {
     expect(() =>
       market.repay({
         userAddress: client.account.address,
-        assets: parseUnits("100", 18),
+        amount: parseUnits("100", 18),
         positionData: undefined as unknown as AccrualPosition,
       }),
     ).toThrow(MissingAccrualPositionError);

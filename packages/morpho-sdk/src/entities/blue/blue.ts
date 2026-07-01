@@ -69,6 +69,7 @@ import {
   type MorphoClientType,
   MutuallyExclusiveRepayAmountsError,
   MutuallyExclusiveWithdrawAmountsError,
+  NativeAmountExceedsTransferAmountError,
   NegativeBorrowSharesError,
   NegativeNativeAmountError,
   NegativeSupplyAmountError,
@@ -816,20 +817,13 @@ export class MorphoBlue implements BlueActions {
       slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
     } = params;
 
-    if ("assets" in params && "shares" in params) {
+    if ("amount" in params && "shares" in params) {
       throw new MutuallyExclusiveRepayAmountsError(this.marketParams.id);
     }
 
-    const isSharesMode = "shares" in params;
-
-    if (isSharesMode) {
-      if (params.shares <= 0n) {
-        throw new NonPositiveRepayAmountError(this.marketParams.id);
-      }
-    } else {
-      if (params.assets <= 0n) {
-        throw new NonPositiveRepayAmountError(this.marketParams.id);
-      }
+    const nativeAmount = params.nativeAmount ?? 0n;
+    if (nativeAmount < 0n) {
+      throw new NegativeNativeAmountError(nativeAmount);
     }
 
     validateSlippageTolerance(slippageTolerance);
@@ -844,19 +838,28 @@ export class MorphoBlue implements BlueActions {
       expectedUser: userAddress,
     });
 
-    let assets: bigint;
-    let shares: bigint;
+    if (nativeAmount > 0n) {
+      validateNativeAsset(this.chainId, this.marketParams.loanToken);
+    }
+
+    let repayAssets: bigint;
+    let repayShares: bigint;
     let transferAmount: bigint;
+    let erc20Amount: bigint;
     let marketForRepay: Market;
 
-    if (isSharesMode) {
+    if ("shares" in params) {
+      const shares = params.shares;
+      if (shares <= 0n) {
+        throw new NonPositiveRepayAmountError(this.marketParams.id);
+      }
       validateRepayShares({
         positionData,
-        repayShares: params.shares,
+        repayShares: shares,
         marketId: this.marketParams.id,
       });
-      assets = 0n;
-      shares = params.shares;
+      repayAssets = 0n;
+      repayShares = shares;
       // 2h forward accrual upper-bounds the on-chain repay price; bundle
       // skims residual back to the receiver.
       const accrualTimestamp =
@@ -864,35 +867,53 @@ export class MorphoBlue implements BlueActions {
         Time.s.from.h(2n);
       marketForRepay = positionData.market.accrueInterest(accrualTimestamp);
       transferAmount = marketForRepay.toBorrowAssets(shares, "Up");
+      // Native funds part of the transfer; the ERC-20 pulled is the remainder.
+      if (nativeAmount > transferAmount) {
+        throw new NativeAmountExceedsTransferAmountError({
+          nativeAmount,
+          transferAmount,
+          market: this.marketParams.id,
+        });
+      }
+      erc20Amount = transferAmount - nativeAmount;
     } else {
+      // Assets mode is additive, like supply: repaid = amount + nativeAmount.
+      const amount = params.amount ?? 0n;
+      repayAssets = amount + nativeAmount;
+      if (repayAssets <= 0n) {
+        throw new NonPositiveRepayAmountError(this.marketParams.id);
+      }
       validateRepayAmount({
         positionData,
-        repayAssets: params.assets,
+        repayAssets,
         marketId: this.marketParams.id,
       });
-      assets = params.assets;
-      shares = 0n;
-      transferAmount = params.assets;
+      repayShares = 0n;
+      transferAmount = repayAssets;
+      erc20Amount = amount;
       marketForRepay = positionData.market;
     }
 
     const maxSharePrice = computeMaxRepaySharePrice({
-      repayAssets: assets,
-      repayShares: shares,
+      repayAssets,
+      repayShares,
       market: marketForRepay,
       slippageTolerance,
     });
 
     return {
-      getRequirements: (reqParams?: { useSimplePermit?: boolean }) =>
-        getRequirements(this.client.viemClient, {
+      getRequirements: (reqParams?: { useSimplePermit?: boolean }) => {
+        // Fully native repay pulls no ERC-20, so it needs no approval/permit.
+        if (erc20Amount === 0n) return Promise.resolve([]);
+        return getRequirements(this.client.viemClient, {
           address: this.marketParams.loanToken,
           chainId: this.chainId,
           supportSignature: this.client.options.supportSignature,
           supportDeployless: this.client.options.supportDeployless,
           useSimplePermit: reqParams?.useSimplePermit,
-          args: { amount: transferAmount, from: userAddress },
-        }),
+          args: { amount: erc20Amount, from: userAddress },
+        });
+      },
 
       buildTx: (requirementSignature?: RequirementSignature) =>
         blueRepay({
@@ -900,15 +921,25 @@ export class MorphoBlue implements BlueActions {
             chainId: this.chainId,
             marketParams: this.marketParams,
           },
-          args: {
-            assets,
-            shares,
-            transferAmount,
-            onBehalf: userAddress,
-            receiver: userAddress,
-            maxSharePrice,
-            requirementSignature,
-          },
+          args:
+            repayShares > 0n
+              ? {
+                  shares: repayShares,
+                  transferAmount,
+                  nativeAmount,
+                  onBehalf: userAddress,
+                  receiver: userAddress,
+                  maxSharePrice,
+                  requirementSignature,
+                }
+              : {
+                  amount: erc20Amount,
+                  nativeAmount,
+                  onBehalf: userAddress,
+                  receiver: userAddress,
+                  maxSharePrice,
+                  requirementSignature,
+                },
           metadata: this.client.options.metadata,
         }),
     };
@@ -988,20 +1019,13 @@ export class MorphoBlue implements BlueActions {
       slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
     } = params;
 
-    if ("assets" in params && "shares" in params) {
+    if ("amount" in params && "shares" in params) {
       throw new MutuallyExclusiveRepayAmountsError(this.marketParams.id);
     }
 
-    const isSharesMode = "shares" in params;
-
-    if (isSharesMode) {
-      if (params.shares <= 0n) {
-        throw new NonPositiveRepayAmountError(this.marketParams.id);
-      }
-    } else {
-      if (params.assets <= 0n) {
-        throw new NonPositiveRepayAmountError(this.marketParams.id);
-      }
+    const nativeAmount = params.nativeAmount ?? 0n;
+    if (nativeAmount < 0n) {
+      throw new NegativeNativeAmountError(nativeAmount);
     }
 
     if (withdrawAmount <= 0n) {
@@ -1020,9 +1044,14 @@ export class MorphoBlue implements BlueActions {
       expectedUser: userAddress,
     });
 
-    let assets: bigint;
-    let shares: bigint;
+    if (nativeAmount > 0n) {
+      validateNativeAsset(this.chainId, this.marketParams.loanToken);
+    }
+
+    let repayAssets: bigint;
+    let repayShares: bigint;
     let transferAmount: bigint;
+    let erc20Amount: bigint;
     let marketForRepay: Market;
 
     // 2h forward accrual upper-bounds the on-chain repay price (shares
@@ -1031,25 +1060,44 @@ export class MorphoBlue implements BlueActions {
       MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
       Time.s.from.h(2n);
 
-    if (isSharesMode) {
+    if ("shares" in params) {
+      const shares = params.shares;
+      if (shares <= 0n) {
+        throw new NonPositiveRepayAmountError(this.marketParams.id);
+      }
       validateRepayShares({
         positionData,
-        repayShares: params.shares,
+        repayShares: shares,
         marketId: this.marketParams.id,
       });
-      assets = 0n;
-      shares = params.shares;
+      repayAssets = 0n;
+      repayShares = shares;
       marketForRepay = positionData.market.accrueInterest(accrualTimestamp);
       transferAmount = marketForRepay.toBorrowAssets(shares, "Up");
+      // Native funds part of the transfer; the ERC-20 pulled is the remainder.
+      if (nativeAmount > transferAmount) {
+        throw new NativeAmountExceedsTransferAmountError({
+          nativeAmount,
+          transferAmount,
+          market: this.marketParams.id,
+        });
+      }
+      erc20Amount = transferAmount - nativeAmount;
     } else {
+      // Assets mode is additive, like supply: repaid = amount + nativeAmount.
+      const amount = params.amount ?? 0n;
+      repayAssets = amount + nativeAmount;
+      if (repayAssets <= 0n) {
+        throw new NonPositiveRepayAmountError(this.marketParams.id);
+      }
       validateRepayAmount({
         positionData,
-        repayAssets: params.assets,
+        repayAssets,
         marketId: this.marketParams.id,
       });
-      assets = params.assets;
-      shares = 0n;
-      transferAmount = params.assets;
+      repayShares = 0n;
+      transferAmount = repayAssets;
+      erc20Amount = amount;
       marketForRepay = positionData.market;
     }
 
@@ -1062,8 +1110,8 @@ export class MorphoBlue implements BlueActions {
     }
 
     const { position: positionAfterRepay } = positionData.repay(
-      assets,
-      shares,
+      repayAssets,
+      repayShares,
       accrualTimestamp,
     );
     validatePositionHealthAfterWithdraw({
@@ -1074,8 +1122,8 @@ export class MorphoBlue implements BlueActions {
     });
 
     const maxSharePrice = computeMaxRepaySharePrice({
-      repayAssets: assets,
-      repayShares: shares,
+      repayAssets,
+      repayShares,
       market: marketForRepay,
       slippageTolerance,
     });
@@ -1083,14 +1131,17 @@ export class MorphoBlue implements BlueActions {
     return {
       getRequirements: async (reqParams?: { useSimplePermit?: boolean }) => {
         const [erc20Requirements, authTx] = await Promise.all([
-          getRequirements(this.client.viemClient, {
-            address: this.marketParams.loanToken,
-            chainId: this.chainId,
-            supportSignature: this.client.options.supportSignature,
-            supportDeployless: this.client.options.supportDeployless,
-            useSimplePermit: reqParams?.useSimplePermit,
-            args: { amount: transferAmount, from: userAddress },
-          }),
+          // Fully native repay pulls no ERC-20, so it needs no approval/permit.
+          erc20Amount === 0n
+            ? Promise.resolve([])
+            : getRequirements(this.client.viemClient, {
+                address: this.marketParams.loanToken,
+                chainId: this.chainId,
+                supportSignature: this.client.options.supportSignature,
+                supportDeployless: this.client.options.supportDeployless,
+                useSimplePermit: reqParams?.useSimplePermit,
+                args: { amount: erc20Amount, from: userAddress },
+              }),
           getMorphoAuthorizationRequirement({
             viemClient: this.client.viemClient,
             chainId: this.chainId,
@@ -1107,16 +1158,27 @@ export class MorphoBlue implements BlueActions {
             chainId: this.chainId,
             marketParams: this.marketParams,
           },
-          args: {
-            assets,
-            shares,
-            transferAmount,
-            withdrawAmount,
-            onBehalf: userAddress,
-            receiver: userAddress,
-            maxSharePrice,
-            requirementSignature,
-          },
+          args:
+            repayShares > 0n
+              ? {
+                  shares: repayShares,
+                  transferAmount,
+                  nativeAmount,
+                  withdrawAmount,
+                  onBehalf: userAddress,
+                  receiver: userAddress,
+                  maxSharePrice,
+                  requirementSignature,
+                }
+              : {
+                  amount: erc20Amount,
+                  nativeAmount,
+                  withdrawAmount,
+                  onBehalf: userAddress,
+                  receiver: userAddress,
+                  maxSharePrice,
+                  requirementSignature,
+                },
           metadata: this.client.options.metadata,
         }),
     };

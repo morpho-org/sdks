@@ -16,6 +16,7 @@ export {
   computeMinWithdrawSharePrice,
 } from "./slippage.js";
 export {
+  resolveRepayAmounts,
   validateAccrualPosition,
   validateChainId,
   validateNativeAsset,
@@ -23,7 +24,6 @@ export {
   validatePositionHealthAfterWithdraw,
   validateReallocations,
   validateRepayAmount,
-  validateRepayParams,
   validateRepayShares,
   validateSlippageTolerance,
   validateUserAddress,

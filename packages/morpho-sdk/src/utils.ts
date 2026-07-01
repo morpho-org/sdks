@@ -60,6 +60,7 @@ export {
   computeMinBorrowSharePrice,
 } from "./helpers/slippage.js";
 export {
+  resolveRepayAmounts,
   validateAccrualPosition,
   validateChainId,
   validateNativeAsset,
@@ -67,7 +68,6 @@ export {
   validatePositionHealthAfterWithdraw,
   validateReallocations,
   validateRepayAmount,
-  validateRepayParams,
   validateRepayShares,
   validateSlippageTolerance,
   validateUserAddress,

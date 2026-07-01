@@ -332,6 +332,22 @@ export class TransferAmountNotEqualToAssetsError extends Error {
   }
 }
 
+/**
+ * Thrown when a shares-mode repay's `nativeAmount` exceeds `transferAmount`, which
+ * would make the ERC-20 amount to pull (`transferAmount − nativeAmount`) negative.
+ */
+export class NativeAmountExceedsTransferAmountError extends Error {
+  constructor(params: {
+    nativeAmount: bigint;
+    transferAmount: bigint;
+    market: string;
+  }) {
+    super(
+      `Native amount ${params.nativeAmount} exceeds transfer amount ${params.transferAmount} for market: ${params.market}. Reduce nativeAmount to at most transferAmount.`,
+    );
+  }
+}
+
 /** Thrown when a market repay specifies both `assets` and `shares` as non-zero (modes are mutually exclusive). */
 export class MutuallyExclusiveRepayAmountsError extends Error {
   constructor(market: string) {
