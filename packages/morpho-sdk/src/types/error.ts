@@ -319,7 +319,13 @@ export class NonPositiveTransferAmountError extends Error {
   }
 }
 
-/** Thrown when a market repay in assets mode has `transferAmount !== assets` (asset-mode requires exact transfer). */
+/**
+ * Thrown when a market repay in assets mode has `transferAmount !== assets`.
+ *
+ * @deprecated No longer thrown. Repay assets mode is now additive (`amount + nativeAmount`) and no
+ * longer takes a separate `transferAmount`, so this invariant no longer exists. Retained as
+ * exported API for back-compat; slated for removal in a future major.
+ */
 export class TransferAmountNotEqualToAssetsError extends Error {
   constructor(params: {
     transferAmount: bigint;
@@ -328,6 +334,22 @@ export class TransferAmountNotEqualToAssetsError extends Error {
   }) {
     super(
       `Transfer amount ${params.transferAmount} is not equal to repay assets ${params.assets} for market: ${params.market}`,
+    );
+  }
+}
+
+/**
+ * Thrown when a shares-mode repay's `nativeAmount` exceeds `transferAmount`, which
+ * would make the ERC-20 amount to pull (`transferAmount − nativeAmount`) negative.
+ */
+export class NativeAmountExceedsTransferAmountError extends Error {
+  constructor(params: {
+    nativeAmount: bigint;
+    transferAmount: bigint;
+    market: string;
+  }) {
+    super(
+      `Native amount ${params.nativeAmount} exceeds transfer amount ${params.transferAmount} for market: ${params.market}. Reduce nativeAmount to at most transferAmount.`,
     );
   }
 }

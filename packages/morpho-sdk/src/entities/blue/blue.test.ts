@@ -10,11 +10,13 @@ import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import { type Address, createPublicClient, http, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { CbbtcUsdcBlue } from "../../../test/fixtures/blue.js";
+import { CbbtcUsdcBlue, WstethWethBlue } from "../../../test/fixtures/blue.js";
 import { test } from "../../../test/setup.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
   MutuallyExclusiveRepayAmountsError,
+  NativeAmountExceedsTransferAmountError,
+  NativeAmountOnNonWNativeAssetError,
   NegativeNativeAmountError,
   NonPositiveAssetAmountError,
   NonPositiveBorrowAmountError,
@@ -49,6 +51,32 @@ function makePosition(
     {
       user: USER,
       supplyShares: overrides.supplyShares ?? 0n,
+      borrowShares: overrides.borrowShares ?? 10n ** 18n,
+      collateral: overrides.collateral ?? 10n ** 24n,
+    },
+    market,
+  );
+}
+
+// Position on a market whose loan token is wNative (WETH), for native-wrap repays.
+function makeWethPosition(
+  overrides: { collateral?: bigint; borrowShares?: bigint } = {},
+) {
+  const market = new Market({
+    params: new MarketParams(WstethWethBlue),
+    totalSupplyAssets: 10n ** 24n,
+    totalBorrowAssets: 10n ** 24n / 2n,
+    totalSupplyShares: 10n ** 24n,
+    totalBorrowShares: 10n ** 24n / 2n,
+    lastUpdate: 1_700_000_000n,
+    fee: 0n,
+    price: ORACLE_PRICE_SCALE,
+  });
+
+  return new AccrualPosition(
+    {
+      user: USER,
+      supplyShares: 0n,
       borrowShares: overrides.borrowShares ?? 10n ** 18n,
       collateral: overrides.collateral ?? 10n ** 24n,
     },
@@ -191,7 +219,7 @@ describe("MorphoBlue validation", () => {
 
     expect(() =>
       market.repay({
-        assets: 1n,
+        amount: 1n,
         shares: 1n,
         userAddress: USER,
         positionData: makePosition(),
@@ -215,7 +243,7 @@ describe("MorphoBlue validation", () => {
 
     expect(() =>
       market.repayWithdrawCollateral({
-        assets: 1n,
+        amount: 1n,
         shares: 1n,
         withdrawAmount: 1n,
         userAddress: USER,
@@ -232,7 +260,7 @@ describe("MorphoBlue validation", () => {
     ).toThrow(NonPositiveRepayAmountError);
     expect(() =>
       market.repayWithdrawCollateral({
-        assets: 1n,
+        amount: 1n,
         withdrawAmount: 2n,
         userAddress: USER,
         positionData: makePosition({ collateral: 1n }),
@@ -253,7 +281,7 @@ describe("MorphoBlue validation", () => {
 
     const requirements = await market
       .repayWithdrawCollateral({
-        assets: 1n,
+        amount: 1n,
         withdrawAmount: 1n,
         userAddress: USER,
         positionData: makePosition(),
@@ -261,6 +289,82 @@ describe("MorphoBlue validation", () => {
       .getRequirements();
 
     expect(requirements).toHaveLength(2);
+  });
+
+  test("repay native: rejects nativeAmount when the loan token is not wNative", async ({
+    client,
+  }) => {
+    const market = client
+      .extend(morphoViemExtension())
+      .morpho.blue(CbbtcUsdcBlue, mainnet.id); // loan token = USDC
+
+    expect(() =>
+      market.repay({
+        amount: 1n,
+        nativeAmount: 1n,
+        userAddress: USER,
+        positionData: makePosition(),
+      }),
+    ).toThrow(NativeAmountOnNonWNativeAssetError);
+  });
+
+  test("repay native: assets mode wraps native and repays amount + nativeAmount", async ({
+    client,
+  }) => {
+    const market = client
+      .extend(morphoViemExtension())
+      .morpho.blue(WstethWethBlue, mainnet.id);
+    const amount = parseUnits("0.3", 18);
+    const nativeAmount = parseUnits("0.2", 18);
+
+    const tx = market
+      .repay({
+        amount,
+        nativeAmount,
+        userAddress: USER,
+        positionData: makeWethPosition(),
+      })
+      .buildTx();
+
+    expect(tx.action.args.assets).toBe(amount + nativeAmount);
+    expect(tx.action.args.nativeAmount).toBe(nativeAmount);
+    expect(tx.value).toBe(nativeAmount);
+  });
+
+  test("repay native: a fully native repay emits no ERC-20 requirement", async ({
+    client,
+  }) => {
+    const market = client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.blue(WstethWethBlue, mainnet.id);
+    const nativeAmount = parseUnits("0.5", 18);
+
+    const requirements = await market
+      .repay({
+        nativeAmount,
+        userAddress: USER,
+        positionData: makeWethPosition(),
+      })
+      .getRequirements();
+
+    expect(requirements).toEqual([]);
+  });
+
+  test("repay native: shares mode rejects nativeAmount exceeding the computed transfer", async ({
+    client,
+  }) => {
+    const market = client
+      .extend(morphoViemExtension())
+      .morpho.blue(WstethWethBlue, mainnet.id);
+
+    expect(() =>
+      market.repay({
+        shares: 10n ** 12n,
+        nativeAmount: parseUnits("1000000", 18),
+        userAddress: USER,
+        positionData: makeWethPosition(),
+      }),
+    ).toThrow(NativeAmountExceedsTransferAmountError);
   });
 
   test("supplyCollateralBorrow rejects invalid collateral and borrow amounts", async ({

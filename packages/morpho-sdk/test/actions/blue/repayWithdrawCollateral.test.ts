@@ -69,7 +69,7 @@ describe("RepayWithdrawCollateralBlue", () => {
 
         const action = market.repayWithdrawCollateral({
           userAddress: client.account.address,
-          assets: repayAmount,
+          amount: repayAmount,
           withdrawAmount,
           positionData,
         });
@@ -295,7 +295,7 @@ describe("RepayWithdrawCollateralBlue", () => {
     expect(() =>
       market.repayWithdrawCollateral({
         userAddress: client.account.address,
-        assets: parseUnits("10", 18),
+        amount: parseUnits("10", 18),
         withdrawAmount: parseUnits("9.99", 18),
         positionData,
       }),
@@ -326,7 +326,7 @@ describe("RepayWithdrawCollateralBlue", () => {
     expect(() =>
       market.repayWithdrawCollateral({
         userAddress: client.account.address,
-        assets: borrowAmount * 2n,
+        amount: borrowAmount * 2n,
         withdrawAmount: parseUnits("1", 18),
         positionData,
       }),
@@ -368,7 +368,7 @@ describe("RepayWithdrawCollateralBlue", () => {
     expect(() =>
       market.repayWithdrawCollateral({
         userAddress: client.account.address,
-        assets: 1n,
+        amount: 1n,
         withdrawAmount: parseUnits("1", 18),
         positionData,
       }),
@@ -383,7 +383,7 @@ describe("RepayWithdrawCollateralBlue", () => {
     expect(() =>
       market.repayWithdrawCollateral({
         userAddress: client.account.address,
-        assets: 0n,
+        amount: 0n,
         withdrawAmount: parseUnits("1", 18),
         positionData,
       }),
@@ -416,7 +416,7 @@ describe("RepayWithdrawCollateralBlue", () => {
     expect(() =>
       market.repayWithdrawCollateral({
         userAddress: client.account.address,
-        assets: parseUnits("500", 18),
+        amount: parseUnits("500", 18),
         withdrawAmount: 0n,
         positionData,
       }),
@@ -432,7 +432,7 @@ describe("RepayWithdrawCollateralBlue", () => {
     expect(() =>
       market.repayWithdrawCollateral({
         userAddress: client.account.address,
-        assets: parseUnits("100", 18),
+        amount: parseUnits("100", 18),
         withdrawAmount: parseUnits("1", 18),
         positionData: undefined as unknown as AccrualPosition,
       }),

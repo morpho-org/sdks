@@ -7,6 +7,7 @@ import {
   MathLib,
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
+import fc from "fast-check";
 import type { Address } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
@@ -22,10 +23,16 @@ import {
   MarketIdMismatchError,
   MissingClientPropertyError,
   MissingMarketPriceError,
+  MutuallyExclusiveRepayAmountsError,
+  NativeAmountExceedsTransferAmountError,
   NativeAmountOnNonWNativeAssetError,
+  NegativeNativeAmountError,
   NegativeReallocationFeeError,
   NegativeSlippageToleranceError,
   NonPositiveReallocationAmountError,
+  NonPositiveRepayAmountError,
+  NonPositiveRepayMaxSharePriceError,
+  NonPositiveTransferAmountError,
   ReallocationWithdrawalOnTargetMarketError,
   RepayExceedsDebtError,
   RepaySharesExceedDebtError,
@@ -38,6 +45,7 @@ import {
 } from "../types/index.js";
 import { MAX_SLIPPAGE_TOLERANCE } from "./constant.js";
 import {
+  resolveRepayAmounts,
   validateAccrualPosition,
   validateChainId,
   validateNativeAsset,
@@ -494,6 +502,206 @@ describe("validateRepayShares", () => {
         marketId: marketParams.id,
       }),
     ).toThrow(RepaySharesExceedDebtError);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveRepayAmounts
+// ---------------------------------------------------------------------------
+
+describe("resolveRepayAmounts", () => {
+  const marketId = marketParams.id;
+
+  test("default: assets mode with only amount", () => {
+    expect(
+      resolveRepayAmounts({
+        args: { amount: 1000n },
+        maxSharePrice: 1n,
+        marketId,
+      }),
+    ).toEqual({
+      repayAssets: 1000n,
+      repayShares: 0n,
+      erc20Amount: 1000n,
+      transferAmount: 1000n,
+      nativeAmount: 0n,
+      isSharesMode: false,
+    });
+  });
+
+  test("behavior: assets mode is additive (amount + nativeAmount)", () => {
+    expect(
+      resolveRepayAmounts({
+        args: { amount: 300n, nativeAmount: 200n },
+        maxSharePrice: 1n,
+        marketId,
+      }),
+    ).toEqual({
+      repayAssets: 500n,
+      repayShares: 0n,
+      erc20Amount: 300n,
+      transferAmount: 500n,
+      nativeAmount: 200n,
+      isSharesMode: false,
+    });
+  });
+
+  test("behavior: pure native assets mode pulls no ERC-20", () => {
+    const r = resolveRepayAmounts({
+      args: { nativeAmount: 500n },
+      maxSharePrice: 1n,
+      marketId,
+    });
+    expect(r.repayAssets).toBe(500n);
+    expect(r.erc20Amount).toBe(0n);
+    expect(r.nativeAmount).toBe(500n);
+    expect(r.isSharesMode).toBe(false);
+  });
+
+  test("behavior: shares mode subtracts native from transferAmount", () => {
+    expect(
+      resolveRepayAmounts({
+        args: { shares: 500n, transferAmount: 600n, nativeAmount: 200n },
+        maxSharePrice: 1n,
+        marketId,
+      }),
+    ).toEqual({
+      repayAssets: 0n,
+      repayShares: 500n,
+      erc20Amount: 400n,
+      transferAmount: 600n,
+      nativeAmount: 200n,
+      isSharesMode: true,
+    });
+  });
+
+  test("behavior: shares mode fully funded by native pulls no ERC-20", () => {
+    const r = resolveRepayAmounts({
+      args: { shares: 5n, transferAmount: 600n, nativeAmount: 600n },
+      maxSharePrice: 1n,
+      marketId,
+    });
+    expect(r.erc20Amount).toBe(0n);
+    expect(r.isSharesMode).toBe(true);
+  });
+
+  test("error: NonPositiveRepayMaxSharePriceError when maxSharePrice <= 0", () => {
+    expect(() =>
+      resolveRepayAmounts({
+        args: { amount: 1n },
+        maxSharePrice: 0n,
+        marketId,
+      }),
+    ).toThrow(NonPositiveRepayMaxSharePriceError);
+  });
+
+  test("error: NegativeNativeAmountError when nativeAmount < 0", () => {
+    expect(() =>
+      resolveRepayAmounts({
+        args: { amount: 1n, nativeAmount: -1n },
+        maxSharePrice: 1n,
+        marketId,
+      }),
+    ).toThrow(NegativeNativeAmountError);
+  });
+
+  test("error: MutuallyExclusiveRepayAmountsError when amount and shares both present", () => {
+    expect(() =>
+      resolveRepayAmounts({
+        args: { amount: 1n, shares: 1n, transferAmount: 1n },
+        maxSharePrice: 1n,
+        marketId,
+      }),
+    ).toThrow(MutuallyExclusiveRepayAmountsError);
+  });
+
+  test("error: NonPositiveRepayAmountError when resolved assets are zero", () => {
+    expect(() =>
+      resolveRepayAmounts({
+        args: { amount: 0n },
+        maxSharePrice: 1n,
+        marketId,
+      }),
+    ).toThrow(NonPositiveRepayAmountError);
+  });
+
+  test("error: NonPositiveRepayAmountError when shares <= 0", () => {
+    expect(() =>
+      resolveRepayAmounts({
+        args: { shares: 0n, transferAmount: 1n },
+        maxSharePrice: 1n,
+        marketId,
+      }),
+    ).toThrow(NonPositiveRepayAmountError);
+  });
+
+  test("error: NonPositiveTransferAmountError in shares mode", () => {
+    expect(() =>
+      resolveRepayAmounts({
+        args: { shares: 1n, transferAmount: 0n },
+        maxSharePrice: 1n,
+        marketId,
+      }),
+    ).toThrow(NonPositiveTransferAmountError);
+  });
+
+  test("error: NativeAmountExceedsTransferAmountError when native > transferAmount", () => {
+    expect(() =>
+      resolveRepayAmounts({
+        args: { shares: 1n, transferAmount: 100n, nativeAmount: 101n },
+        maxSharePrice: 1n,
+        marketId,
+      }),
+    ).toThrow(NativeAmountExceedsTransferAmountError);
+  });
+
+  // Security invariant: funding is conserved. Removing the `transferAmount −
+  // nativeAmount` subtraction would break this property.
+  test("property: erc20Amount + nativeAmount === transferAmount (shares mode)", () => {
+    fc.assert(
+      fc.property(
+        fc.record({
+          shares: fc.bigInt({ min: 1n, max: 10n ** 30n }),
+          transferAmount: fc.bigInt({ min: 1n, max: 10n ** 30n }),
+          nativeSeed: fc.bigInt({ min: 0n, max: 10n ** 30n }),
+        }),
+        ({ shares, transferAmount, nativeSeed }) => {
+          // Keep 0 <= nativeAmount <= transferAmount.
+          const nativeAmount = nativeSeed % (transferAmount + 1n);
+          const r = resolveRepayAmounts({
+            args: { shares, transferAmount, nativeAmount },
+            maxSharePrice: 1n,
+            marketId,
+          });
+          expect(r.erc20Amount + r.nativeAmount).toBe(transferAmount);
+          expect(r.repayShares).toBe(shares);
+          expect(r.repayAssets).toBe(0n);
+        },
+      ),
+    );
+  });
+
+  test("property: assets mode repays amount + native, pulls only amount", () => {
+    fc.assert(
+      fc.property(
+        fc.record({
+          amount: fc.bigInt({ min: 0n, max: 10n ** 30n }),
+          nativeAmount: fc.bigInt({ min: 0n, max: 10n ** 30n }),
+        }),
+        ({ amount, nativeAmount }) => {
+          fc.pre(amount + nativeAmount > 0n);
+          const r = resolveRepayAmounts({
+            args: { amount, nativeAmount },
+            maxSharePrice: 1n,
+            marketId,
+          });
+          expect(r.repayAssets).toBe(amount + nativeAmount);
+          expect(r.erc20Amount).toBe(amount);
+          expect(r.transferAmount).toBe(amount + nativeAmount);
+          expect(r.isSharesMode).toBe(false);
+        },
+      ),
+    );
   });
 });
 

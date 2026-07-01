@@ -9,7 +9,8 @@ Centralized type definitions and error classes. Barrel-exported via `index.ts`. 
 - `Requirement` / `RequirementSignature` — permit/permit2 signing flow.
 - `Metadata` — optional `{ origin, timestamp? }` for calldata tracing.
 - `DepositAmountArgs` — union enforcing at least one of `amount` / `nativeAmount`. Reused for vault deposits, market collateral supply, and market loan-asset supply.
-- `AssetsOrSharesArgs` — discriminated union `{ assets } | { shares }`. Used by repay (borrow-side) and withdraw (supply-side). `RepayAmountArgs` is kept as a deprecated alias.
+- `AssetsOrSharesArgs` — discriminated union `{ assets } | { shares }`. Used by withdraw (supply-side).
+- `RepayAmountArgs` / `RepayActionAmountArgs` — repay funding unions (native-aware). `RepayAmountArgs` (entity surface) = `DepositAmountArgs | { shares }`; `RepayActionAmountArgs` (action surface) adds the caller-supplied `transferAmount` to the shares branch. Assets mode is additive like supply (`amount` + `nativeAmount`); shares mode carves native out of the transfer. Both reuse `DepositAmountArgs` for the assets branch.
 - `MarketParams` — Morpho Blue market params (`loanToken`, `collateralToken`, `oracle`, `irm`, `lltv`).
 - `MorphoAuthorizationAction` — used for `morpho.setAuthorization()` pre-requisite transactions.
 
@@ -24,7 +25,7 @@ Both map directly to `PublicAllocator.reallocateTo()` arguments.
 
 One class per error case. Never throw a generic `Error` from SDK source.
 
-- **Market-specific:** `BorrowExceedsSafeLtvError`, `MissingMarketPriceError`, `ZeroCollateralAmountError`, `NativeAmountOnNonWNativeAssetError`, `ZeroSupplyAmountError`, `NegativeSupplyAmountError`, `NegativeSupplyMaxSharePriceError`, `NonPositiveWithdrawAmountError`, `NegativeWithdrawMinSharePriceError`, `MutuallyExclusiveWithdrawAmountsError`, `WithdrawExceedsSupplyError`, `WithdrawSharesExceedSupplyError`.
+- **Market-specific:** `BorrowExceedsSafeLtvError`, `MissingMarketPriceError`, `ZeroCollateralAmountError`, `NativeAmountOnNonWNativeAssetError`, `NativeAmountExceedsTransferAmountError`, `ZeroSupplyAmountError`, `NegativeSupplyAmountError`, `NegativeSupplyMaxSharePriceError`, `NonPositiveWithdrawAmountError`, `NegativeWithdrawMinSharePriceError`, `MutuallyExclusiveWithdrawAmountsError`, `WithdrawExceedsSupplyError`, `WithdrawSharesExceedSupplyError`.
 - **Reallocation-specific:** `NegativeReallocationFeeError`, `EmptyReallocationWithdrawalsError`, `NonPositiveReallocationAmountError`, `ReallocationWithdrawalOnTargetMarketError`, `UnsortedReallocationWithdrawalsError`, `ReallocationWithdrawExceedsMarketSupplyError`.
 
 ## Adding a new operation
