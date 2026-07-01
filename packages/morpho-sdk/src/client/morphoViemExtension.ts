@@ -1,7 +1,12 @@
 import { type MarketParams, MarketUtils } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Address, Client } from "viem";
-import { MorphoBlue, MorphoVaultV1, MorphoVaultV2 } from "../entities/index.js";
+import {
+  MorphoBlue,
+  MorphoMidnight,
+  MorphoVaultV1,
+  MorphoVaultV2,
+} from "../entities/index.js";
 import {
   MarketIdMismatchError,
   type Metadata,
@@ -50,6 +55,10 @@ function createMorphoNamespace(
         throw new MarketIdMismatchError(marketParams.id, derivedId);
       }
       return new MorphoBlue(namespace, marketParams, chainId);
+    },
+
+    midnight(chainId: number) {
+      return new MorphoMidnight(namespace, chainId);
     },
   };
 

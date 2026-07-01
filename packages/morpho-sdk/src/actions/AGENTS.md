@@ -7,6 +7,7 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 - `vaultV1/` — VaultV1 (MetaMorpho) `deposit` / `withdraw` / `redeem` / `migrateToV2`.
 - `vaultV2/` — VaultV2 `deposit` / `withdraw` / `redeem` / `forceWithdraw` / `forceRedeem`.
 - `blue/` — Morpho Blue `supplyCollateral` / `borrow` / `supplyCollateralBorrow` / `repay` / `repayWithdrawCollateral` / `withdrawCollateral`. Borrow paths support optional shared liquidity via `reallocations`.
+- `midnight/` — Midnight fixed-rate direct and bundled transaction encoders plus take normalization for fixed-rate API quote outputs.
 - `requirements/` — token approvals, permit/permit2 signatures, Morpho authorization resolved before deposit/supply.
 
 ## Common builder pattern
