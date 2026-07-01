@@ -5,7 +5,7 @@ import type {
   ERC20ApprovalAction,
   Transaction,
 } from "../../../types/index.js";
-import { encodeErc20Permit2 } from "../encode/encodeErc20Permit2.js";
+import { encodeBundler3Erc20Permit2 } from "../encode/encodeBundler3Erc20Permit2.js";
 import { getRequirementsApproval } from "../getRequirementsApproval.js";
 
 /**
@@ -108,7 +108,7 @@ export const getBundler3RequirementsPermit2 = (params: {
     allowanceGeneralAdapterExpiration < Time.timestamp() + Time.s.from.h(4n)
   ) {
     requirements.push(
-      encodeErc20Permit2({
+      encodeBundler3Erc20Permit2({
         token: address,
         amount,
         chainId,

@@ -11,8 +11,8 @@ import {
   type Requirement,
 } from "../../../types/index.js";
 
-/** Parameters for {@link encodeErc20Permit2}. */
-interface EncodeErc20Permit2Params {
+/** Parameters for {@link encodeBundler3Erc20Permit2}. */
+interface EncodeBundler3Erc20Permit2Params {
   token: Address;
   amount: bigint;
   chainId: number;
@@ -40,9 +40,9 @@ interface EncodeErc20Permit2Params {
  * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails.
  * @example
  * ```ts
- * import { encodeErc20Permit2 } from "@morpho-org/morpho-sdk";
+ * import { encodeBundler3Erc20Permit2 } from "@morpho-org/morpho-sdk";
  *
- * const requirement = encodeErc20Permit2({
+ * const requirement = encodeBundler3Erc20Permit2({
  *   token: USDC,
  *   amount: 1_000_000n,
  *   chainId: 1,
@@ -52,8 +52,8 @@ interface EncodeErc20Permit2Params {
  * // requirement satisfies Requirement
  * ```
  */
-export const encodeErc20Permit2 = (
-  params: EncodeErc20Permit2Params,
+export const encodeBundler3Erc20Permit2 = (
+  params: EncodeBundler3Erc20Permit2Params,
 ): Requirement<Permit2Action, Permit2Args> => {
   const {
     token,
