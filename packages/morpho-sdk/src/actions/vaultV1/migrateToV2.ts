@@ -8,7 +8,7 @@ import {
   NegativeMinSharePriceError,
   NonPositiveMaxSharePriceError,
   NonPositiveSharesAmountError,
-  type RequirementSignature,
+  type PermitRequirementSignature,
   type Transaction,
   VaultAssetMismatchError,
   type VaultV1MigrateToV2Action,
@@ -36,7 +36,7 @@ export interface VaultV1MigrateToV2Params {
     /** Receives the V2 vault shares. */
     recipient: Address;
     /** Pre-signed permit/permit2 approval for V1 share transfer. */
-    requirementSignature?: RequirementSignature;
+    requirementSignature?: PermitRequirementSignature;
   };
   metadata?: Metadata;
 }

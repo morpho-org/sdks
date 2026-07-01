@@ -142,7 +142,7 @@ describe("MigrateToV2 VaultV1", () => {
           BigInt(Math.floor(Date.now() / 1000)),
         );
 
-        const tx = migrate.buildTx(requirementSignature);
+        const tx = migrate.buildTx([requirementSignature]);
         await client.sendTransaction(tx);
       },
     });

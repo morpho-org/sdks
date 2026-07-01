@@ -7,12 +7,14 @@ import {
   validateRepayParams,
 } from "../../helpers/index.js";
 import {
+  type AuthorizationRequirementSignature,
   type BlueRepayWithdrawCollateralAction,
   type Metadata,
   NonPositiveWithdrawCollateralAmountError,
-  type RequirementSignature,
+  type PermitRequirementSignature,
   type Transaction,
 } from "../../types/index.js";
+import { getAuthorizationAction } from "../requirements/getAuthorizationAction.js";
 import { getRequirementsAction } from "../requirements/getRequirementsAction.js";
 
 /** Parameters for {@link blueRepayWithdrawCollateral}. */
@@ -41,7 +43,14 @@ export interface BlueRepayWithdrawCollateralParams {
     receiver: Address;
     /** Maximum repay share price (in ray). Protects against share price manipulation. */
     maxSharePrice: bigint;
-    requirementSignature?: RequirementSignature;
+    /** Optional pre-signed permit/permit2 approval for the loan-token transfer. */
+    requirementSignature?: PermitRequirementSignature;
+    /**
+     * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
+     * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a
+     * standalone `setAuthorization` transaction.
+     */
+    authorizationSignature?: AuthorizationRequirementSignature;
   };
   metadata?: Metadata;
 }
@@ -82,6 +91,8 @@ export interface BlueRepayWithdrawCollateralParams {
  *   protection.
  * @param params.args.requirementSignature - Optional pre-signed permit/permit2 approval for the
  *   loan-token transfer.
+ * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
+ *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueRepayWithdrawCollateralAction>` with `to`,
  *   `value`, `data`, and the typed `action` discriminator the simulation layer consumes.
@@ -128,6 +139,7 @@ export const blueRepayWithdrawCollateral = ({
     receiver,
     maxSharePrice,
     requirementSignature,
+    authorizationSignature,
   },
   metadata,
 }: BlueRepayWithdrawCollateralParams): Readonly<
@@ -150,6 +162,10 @@ export const blueRepayWithdrawCollateral = ({
   } = getChainAddresses(chainId);
 
   const actions: Action[] = [];
+
+  if (authorizationSignature) {
+    actions.push(getAuthorizationAction(chainId, authorizationSignature));
+  }
 
   if (requirementSignature) {
     actions.push(

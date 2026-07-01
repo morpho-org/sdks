@@ -7,6 +7,7 @@ import {
   validateNativeAsset,
 } from "../../helpers/index.js";
 import {
+  type AuthorizationRequirementSignature,
   type BlueSupplyCollateralBorrowAction,
   type DepositAmountArgs,
   type Metadata,
@@ -14,11 +15,12 @@ import {
   NonPositiveAssetAmountError,
   NonPositiveBorrowAmountError,
   NonPositiveMinBorrowSharePriceError,
-  type RequirementSignature,
+  type PermitRequirementSignature,
   type Transaction,
   type VaultReallocation,
   ZeroCollateralAmountError,
 } from "../../types/index.js";
+import { getAuthorizationAction } from "../requirements/getAuthorizationAction.js";
 import { getRequirementsAction } from "../requirements/getRequirementsAction.js";
 import { buildReallocationActions } from "./buildReallocationActions.js";
 
@@ -34,9 +36,16 @@ export interface BlueSupplyCollateralBorrowParams {
     receiver: Address;
     /** Minimum borrow share price (in ray). Protects against share price manipulation. */
     minSharePrice: bigint;
-    requirementSignature?: RequirementSignature;
+    /** Optional pre-signed permit/permit2 approval for the collateral transfer. */
+    requirementSignature?: PermitRequirementSignature;
     /** Vault reallocations to execute before borrowing (computed by entity). */
     reallocations?: readonly VaultReallocation[];
+    /**
+     * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
+     * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a
+     * standalone `setAuthorization` transaction.
+     */
+    authorizationSignature?: AuthorizationRequirementSignature;
   };
   metadata?: Metadata;
 }
@@ -68,6 +77,8 @@ export interface BlueSupplyCollateralBorrowParams {
  *   collateral supply. Requires the collateral token to be the chain's wNative.
  * @param params.args.reallocations - Optional vault reallocations to execute between the supply
  *   and borrow legs, computed by the entity layer.
+ * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
+ *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueSupplyCollateralBorrowAction>` with `to`, `value`,
  *   `data`, and the typed `action` discriminator the simulation layer consumes.
@@ -123,6 +134,7 @@ export const blueSupplyCollateralBorrow = ({
     requirementSignature,
     nativeAmount,
     reallocations,
+    authorizationSignature,
   },
   metadata,
 }: BlueSupplyCollateralBorrowParams): Readonly<
@@ -155,6 +167,10 @@ export const blueSupplyCollateralBorrow = ({
   } = getChainAddresses(chainId);
 
   const actions: Action[] = [];
+
+  if (authorizationSignature) {
+    actions.push(getAuthorizationAction(chainId, authorizationSignature));
+  }
 
   if (nativeAmount !== undefined && nativeAmount > 0n) {
     validateNativeAsset(chainId, marketParams.collateralToken);

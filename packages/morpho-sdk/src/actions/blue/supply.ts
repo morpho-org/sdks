@@ -13,7 +13,7 @@ import {
   NegativeNativeAmountError,
   NegativeSupplyAmountError,
   NegativeSupplyMaxSharePriceError,
-  type RequirementSignature,
+  type PermitRequirementSignature,
   type Transaction,
   ZeroSupplyAmountError,
 } from "../../types/index.js";
@@ -29,7 +29,7 @@ export interface BlueSupplyParams {
     onBehalf: Address;
     /** Maximum supply share price (in ray). Slippage protection against inflation attacks. */
     maxSharePrice: bigint;
-    requirementSignature?: RequirementSignature;
+    requirementSignature?: PermitRequirementSignature;
   };
   metadata?: Metadata;
 }

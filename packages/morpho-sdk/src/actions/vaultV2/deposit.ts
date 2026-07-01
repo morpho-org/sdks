@@ -11,7 +11,7 @@ import {
   NegativeNativeAmountError,
   NonPositiveAssetAmountError,
   NonPositiveMaxSharePriceError,
-  type RequirementSignature,
+  type PermitRequirementSignature,
   type Transaction,
   type VaultV2DepositAction,
   ZeroDepositAmountError,
@@ -28,7 +28,7 @@ export interface VaultV2DepositParams {
   args: DepositAmountArgs & {
     maxSharePrice: bigint;
     recipient: Address;
-    requirementSignature?: RequirementSignature;
+    requirementSignature?: PermitRequirementSignature;
   };
   metadata?: Metadata;
 }

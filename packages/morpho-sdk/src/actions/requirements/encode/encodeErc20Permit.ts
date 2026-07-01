@@ -8,6 +8,7 @@ import {
   ChainIdMismatchError,
   InvalidSignatureError,
   type PermitAction,
+  type PermitRequirementSignature,
   type Requirement,
 } from "../../../types/index.js";
 
@@ -62,7 +63,7 @@ interface EncodeErc20PermitParams {
 export const encodeErc20Permit = async (
   viemClient: Client,
   params: EncodeErc20PermitParams,
-): Promise<Requirement> => {
+): Promise<Requirement<PermitRequirementSignature>> => {
   const { token, spender, amount, chainId, nonce, supportDeployless } = params;
 
   if (viemClient.chain?.id !== chainId) {

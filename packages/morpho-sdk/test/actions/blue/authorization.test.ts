@@ -41,6 +41,9 @@ describe("AuthorizationBlue", () => {
 
       expect(requirements).toHaveLength(1);
       const authTx = requirements[0]!;
+      if (!isRequirementAuthorization(authTx)) {
+        throw new Error("expected a morphoAuthorization transaction");
+      }
       expect(authTx.action.type).toBe("morphoAuthorization");
       expect(authTx.action.args.authorized).toBe(generalAdapter1);
       expect(authTx.action.args.isAuthorized).toBe(true);

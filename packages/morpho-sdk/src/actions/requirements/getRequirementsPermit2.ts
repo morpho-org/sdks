@@ -2,6 +2,7 @@ import { type Address, MathLib } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 import type {
   ERC20ApprovalAction,
+  PermitRequirementSignature,
   Requirement,
   Transaction,
 } from "../../types/index.js";
@@ -66,7 +67,9 @@ export const getRequirementsPermit2 = (params: {
   allowanceGeneralAdapterPermit2: bigint;
   allowanceGeneralAdapterExpiration: bigint;
   nonce: bigint;
-}): Readonly<Transaction<ERC20ApprovalAction> | Requirement>[] => {
+}): Readonly<
+  Transaction<ERC20ApprovalAction> | Requirement<PermitRequirementSignature>
+>[] => {
   const {
     address,
     chainId,
@@ -83,7 +86,10 @@ export const getRequirementsPermit2 = (params: {
     return [];
   }
 
-  const requirements: (Transaction<ERC20ApprovalAction> | Requirement)[] = [];
+  const requirements: (
+    | Transaction<ERC20ApprovalAction>
+    | Requirement<PermitRequirementSignature>
+  )[] = [];
 
   const approvalRequirements = getRequirementsApproval({
     address,

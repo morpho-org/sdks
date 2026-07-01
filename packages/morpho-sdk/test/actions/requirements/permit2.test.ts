@@ -101,7 +101,7 @@ describe("Permit2", () => {
           BigInt(Math.floor(Date.now() / 1000)),
         );
 
-        const tx = deposit.buildTx(requirementSignature);
+        const tx = deposit.buildTx([requirementSignature]);
 
         await client.sendTransaction(tx);
       },
@@ -179,7 +179,7 @@ describe("Permit2", () => {
           BigInt(Math.floor(Date.now() / 1000)),
         );
 
-        const tx = deposit.buildTx(requirementSignature);
+        const tx = deposit.buildTx([requirementSignature]);
 
         await client.sendTransaction(tx);
       },
@@ -330,7 +330,7 @@ describe("Permit2", () => {
           BigInt(Math.floor(Date.now() / 1000)),
         );
 
-        const tx = deposit.buildTx(requirementSignature);
+        const tx = deposit.buildTx([requirementSignature]);
 
         await client.sendTransaction(tx);
       },
@@ -417,7 +417,7 @@ describe("Permit2", () => {
           BigInt(Math.floor(Date.now() / 1000)),
         );
 
-        const tx = deposit.buildTx(requirementSignature);
+        const tx = deposit.buildTx([requirementSignature]);
 
         await client.sendTransaction(tx);
       },
