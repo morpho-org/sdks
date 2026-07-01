@@ -19,7 +19,7 @@ import {
   ZeroDepositAmountError,
 } from "../../types/index.js";
 import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
-import { getRequirements } from "../requirements/index.js";
+import { getGeneralAdapterRequirements } from "../requirements/index.js";
 import { vaultV2Deposit } from "./deposit.js";
 
 describe("depositVaultV2 unit tests", () => {
@@ -39,7 +39,7 @@ describe("depositVaultV2 unit tests", () => {
     const maxSharePrice = 1000000000000000000n; // 1:1 share price
 
     // Create DAI permit signature
-    const requirements = await getRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: dai,
       chainId: mainnet.id,
       supportSignature: true,
@@ -99,7 +99,7 @@ describe("depositVaultV2 unit tests", () => {
     const assets = parseUnits("1000", 6); // 1000 USDC
     const maxSharePrice = 1000000n;
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: usdc,
       chainId: mainnet.id,
       supportSignature: true,
@@ -160,7 +160,7 @@ describe("depositVaultV2 unit tests", () => {
     const assets = parseUnits("5", 18); // 5 WETH
     const maxSharePrice = 1000000000000000000n;
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: wNative,
       chainId: mainnet.id,
       supportSignature: true,
@@ -245,7 +245,7 @@ describe("depositVaultV2 unit tests", () => {
     const depositAmount = parseUnits("1000", 6);
     const maxSharePrice = 1000000n;
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: usdc,
       chainId: mainnet.id,
       supportSignature: true,
@@ -422,7 +422,7 @@ describe("depositVaultV2 unit tests", () => {
     const assets = parseUnits("100", 18);
     const maxSharePrice = 1000000000000000000n;
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: dai,
       chainId: mainnet.id,
       supportSignature: true,

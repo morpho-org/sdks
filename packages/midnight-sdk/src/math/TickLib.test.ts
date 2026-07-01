@@ -2,6 +2,7 @@ import {
   DivisionByZeroError,
   MathLib,
   NegativeValueError,
+  Time,
 } from "@morpho-org/morpho-ts";
 import fc from "fast-check";
 import { describe, expect, test } from "vitest";
@@ -117,24 +118,41 @@ describe("TickLib.snapPriceToTick", () => {
   });
 });
 
-describe("TickLib.rateToPrice / tickToRate", () => {
+describe("TickLib.rateToPrice / tickToRate / tickToApr", () => {
   test("default", () => {
     expect(TickLib.rateToPrice(0n)).toBe(MathLib.WAD);
     expect(TickLib.rateToPrice(1n)).toBe(MathLib.WAD - 1n);
     expect(TickLib.tickToRate(MAX_TICK)).toBe(0n);
+    expect(TickLib.tickToApr(MAX_TICK, 1n)).toBe(0n);
+  });
+
+  test("behavior: annualizes fixed tick rate over time to maturity", () => {
+    const tick = 5_000n;
+    const oneYear = Time.s.from.y(1n);
+    const halfYear = oneYear / 2n;
+    const fixedRate = TickLib.tickToRate(tick);
+
+    expect(TickLib.tickToApr(tick, oneYear)).toBe(fixedRate);
+    expect(TickLib.tickToApr(tick, halfYear)).toBe(fixedRate * 2n);
   });
 
   test("error: NegativeValueError", () => {
     expect(() => TickLib.rateToPrice(-1n)).toThrow(NegativeValueError);
     expect(() => TickLib.tickToRate(-1n)).toThrow(NegativeValueError);
+    expect(() => TickLib.tickToApr(-1n, 1n)).toThrow(NegativeValueError);
+    expect(() => TickLib.tickToApr(MAX_TICK, -1n)).toThrow(NegativeValueError);
   });
 
   test("error: DivisionByZeroError", () => {
     expect(() => TickLib.tickToRate(0n)).toThrow(DivisionByZeroError);
+    expect(() => TickLib.tickToApr(MAX_TICK, 0n)).toThrow(DivisionByZeroError);
   });
 
   test("error: TickOutOfRangeError", () => {
     expect(() => TickLib.tickToRate(MAX_TICK + 1n)).toThrow(
+      TickOutOfRangeError,
+    );
+    expect(() => TickLib.tickToApr(MAX_TICK + 1n, 1n)).toThrow(
       TickOutOfRangeError,
     );
   });

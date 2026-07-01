@@ -8,7 +8,7 @@ import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import { type Address, isAddressEqual } from "viem";
 import {
-  getRequirements,
+  getGeneralAdapterRequirements,
   vaultV2Deposit,
   vaultV2ForceRedeem,
   vaultV2ForceWithdraw,
@@ -267,7 +267,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
 
     return {
       getRequirements: async (params?: { useSimplePermit?: boolean }) =>
-        await getRequirements(this.client.viemClient, {
+        await getGeneralAdapterRequirements(this.client.viemClient, {
           address: vaultData.asset,
           chainId: this.chainId,
           supportSignature: this.client.options.supportSignature,

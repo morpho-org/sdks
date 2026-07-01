@@ -9,7 +9,7 @@ import {
   BorrowExceedsSafeLtvError,
   ExcessiveSlippageToleranceError,
   isRequirementApproval,
-  isRequirementAuthorization,
+  isRequirementBlueAuthorization,
   isRequirementSignature,
   MissingAccrualPositionError,
   morphoViemExtension,
@@ -52,14 +52,14 @@ describe("SupplyCollateralBorrowBlue", () => {
         const requirements = await scb.getRequirements();
         expect(requirements).toHaveLength(2);
         expect(requirements[0]!.action.type).toBe("erc20Approval");
-        expect(requirements[1]!.action.type).toBe("morphoAuthorization");
+        expect(requirements[1]!.action.type).toBe("blueAuthorization");
 
         const approval = requirements[0];
         if (!isRequirementApproval(approval)) {
           throw new Error("Approval requirement not found");
         }
         const authorization = requirements[1];
-        if (!isRequirementAuthorization(authorization)) {
+        if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
 
@@ -126,10 +126,10 @@ describe("SupplyCollateralBorrowBlue", () => {
 
         const requirements = await scb.getRequirements();
         expect(requirements).toHaveLength(1);
-        expect(requirements[0]!.action.type).toBe("morphoAuthorization");
+        expect(requirements[0]!.action.type).toBe("blueAuthorization");
 
         const authorization = requirements[0];
-        if (!isRequirementAuthorization(authorization)) {
+        if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
 
@@ -200,14 +200,14 @@ describe("SupplyCollateralBorrowBlue", () => {
         const requirements = await scb.getRequirements();
         expect(requirements).toHaveLength(2);
         expect(requirements[0]!.action.type).toBe("erc20Approval");
-        expect(requirements[1]!.action.type).toBe("morphoAuthorization");
+        expect(requirements[1]!.action.type).toBe("blueAuthorization");
 
         const approval = requirements[0];
         if (!isRequirementApproval(approval)) {
           throw new Error("Approval requirement not found");
         }
         const authorization = requirements[1];
-        if (!isRequirementAuthorization(authorization)) {
+        if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(approval);
@@ -362,7 +362,7 @@ describe("SupplyCollateralBorrowBlue", () => {
         );
 
         const authorization = requirements[1];
-        if (!isRequirementAuthorization(authorization)) {
+        if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
 
@@ -452,10 +452,10 @@ describe("SupplyCollateralBorrowBlue", () => {
         );
 
         const authorization = requirements[2];
-        if (!isRequirementAuthorization(authorization)) {
+        if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
-        expect(authorization.action.type).toBe("morphoAuthorization");
+        expect(authorization.action.type).toBe("blueAuthorization");
 
         await client.sendTransaction(authorization);
 

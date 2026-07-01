@@ -8,7 +8,7 @@ import { mainnet } from "viem/chains";
 import { afterEach, describe, expect, vi } from "vitest";
 import {
   isRequirementApproval,
-  isRequirementAuthorization,
+  isRequirementBlueAuthorization,
   MissingAccrualPositionError,
   morphoViemExtension,
   NonPositiveRepayAmountError,
@@ -154,7 +154,7 @@ describe("RepayWithdrawCollateralBlue", () => {
               amount: req.action.args.amount,
             });
             await client.sendTransaction(req);
-          } else if (isRequirementAuthorization(req)) {
+          } else if (isRequirementBlueAuthorization(req)) {
             await client.sendTransaction(req);
           }
         }
@@ -251,7 +251,7 @@ describe("RepayWithdrawCollateralBlue", () => {
               amount: req.action.args.amount,
             });
             await client.sendTransaction(req);
-          } else if (isRequirementAuthorization(req)) {
+          } else if (isRequirementBlueAuthorization(req)) {
             await client.sendTransaction(req);
           }
         }

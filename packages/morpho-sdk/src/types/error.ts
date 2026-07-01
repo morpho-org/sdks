@@ -138,7 +138,7 @@ export class EmptyDeallocationsError extends Error {
 export class DepositAmountMismatchError extends Error {
   constructor(depositAmount: bigint, signatureAmount: bigint) {
     super(
-      `Deposit amount ${depositAmount} does not match requirement signature amount ${signatureAmount}`,
+      `Deposit amount "${depositAmount}" does not match requirement signature amount "${signatureAmount}"`,
     );
   }
 }
@@ -147,7 +147,7 @@ export class DepositAmountMismatchError extends Error {
 export class DepositAssetMismatchError extends Error {
   constructor(depositAsset: Address, signatureAsset: Address) {
     super(
-      `Deposit asset ${depositAsset} does not match requirement signature asset ${signatureAsset}`,
+      `Deposit asset "${depositAsset}" does not match requirement signature asset "${signatureAsset}"`,
     );
   }
 }

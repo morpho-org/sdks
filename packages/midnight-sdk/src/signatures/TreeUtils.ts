@@ -1,67 +1,35 @@
-import { type BigIntish, deepFreeze } from "@morpho-org/morpho-ts";
-import { concat, type Hash, keccak256 } from "viem";
+import type { BigIntish } from "@morpho-org/morpho-ts";
+import type { Account, Address, Chain, Client, Hash, Transport } from "viem";
 import { MidnightApi } from "../api/MidnightApi.js";
 import type {
   MempoolPayloadValidationResult,
   MidnightApiFetch,
   MidnightApiRequestOptions,
 } from "../api/types.js";
-import { InvalidTreeError, InvalidTreeHeightError } from "../errors.js";
+import { MidnightMempoolValidationError } from "../errors.js";
 import {
   type IOffer,
   Offer,
   type OfferStruct,
   OfferUtils,
 } from "../offers/index.js";
-import { Group } from "./Group.js";
-import { type GroupInput, GroupUtils } from "./GroupUtils.js";
 import {
-  EMPTY_OFFER_STRUCT,
-  isEmptyOfferStruct,
-} from "./offerStructInternal.js";
-import { encode as encodePayload } from "./Payload.js";
+  EcrecoverRatifierUtils,
+  type EcrecoverSignatureInput,
+} from "./EcrecoverRatifierUtils.js";
+import { Group } from "./Group.js";
+import type { GroupInput } from "./GroupUtils.js";
+import {
+  encode as encodePayload,
+  type Item as PayloadItem,
+} from "./Payload.js";
+import { SetterRatifierUtils } from "./SetterRatifierUtils.js";
 import type { Tree } from "./Tree.js";
-
-function isPowerOfTwo(value: number): boolean {
-  return value > 0 && (value & (value - 1)) === 0;
-}
-
-function nextPowerOfTwo(value: number): number {
-  return 2 ** Math.ceil(Math.log2(value));
-}
-
-function padOfferStructs(offers: readonly OfferStruct[]): OfferStruct[] {
-  if (isPowerOfTwo(offers.length)) return [...offers];
-  const paddedLength = nextPowerOfTwo(offers.length);
-
-  return [
-    ...offers,
-    ...Array.from(
-      { length: paddedLength - offers.length },
-      () => EMPTY_OFFER_STRUCT,
-    ),
-  ];
-}
-
-function assertLeafOffers(
-  offers: readonly OfferStruct[],
-  leafHashes: readonly Hash[],
-): void {
-  const seen = new Set<Hash>();
-  for (const [index, offer] of offers.entries()) {
-    if (isEmptyOfferStruct(offer, { allowDefaultGroup: true })) continue;
-
-    const leafHash = leafHashes[index]!;
-    if (seen.has(leafHash)) {
-      throw new InvalidTreeError(`Duplicate offer hash "${leafHash}" in tree.`);
-    }
-    seen.add(leafHash);
-  }
-
-  if (seen.size === 0) {
-    throw new InvalidTreeError("Tree must not be empty.");
-  }
-}
+import {
+  buildTreeDescriptor,
+  buildTreeProof,
+  hashTreeNode,
+} from "./treeInternal.js";
 
 /**
  * Fully materialized tree descriptor.
@@ -212,8 +180,8 @@ export type TreeCreateParams = readonly GroupInput[];
  * Plain creation input or class tree accepted by {@link Tree.from}.
  *
  * Use this only at boundaries that intentionally convert caller input into a
- * `Tree`. Utilities that already need a full tree, such as proof and ratifier
- * helpers, accept `Tree` directly to avoid rebuilding.
+ * `Tree`. Ratifier helpers accept {@link RatifierTreeInput} instead, so they
+ * can reuse an existing `Tree` or normalize raw offer/group input.
  *
  * @example
  * ```ts
@@ -252,10 +220,156 @@ export type TreeCreateParams = readonly GroupInput[];
 export type TreeInput = Tree | TreeCreateParams;
 
 /**
+ * Tree-shaped data required by ratifier helpers.
+ *
+ * A `Tree` class instance satisfies this shape and is the optimal input when a
+ * caller already built one, because the cached offers, leaves, root, and height
+ * are reused for signatures and proofs. Plain objects with these fields are
+ * also accepted by ratifier helpers.
+ *
+ * @example
+ * ```ts
+ * import { Offer, Tree, type TreeLike } from "@morpho-org/midnight-sdk";
+ * import { zeroAddress } from "viem";
+ *
+ * const offer = Offer.create({
+ *   market: {
+ *     chainId: 8453,
+ *     midnight: "0x0000000000000000000000000000000000001000",
+ *     loanToken: "0x0000000000000000000000000000000000006000",
+ *     collateralParams: [
+ *       {
+ *         token: "0x0000000000000000000000000000000000007000",
+ *         lltv: 770000000000000000n,
+ *         liquidationCursor: 250000000000000000n,
+ *         oracle: "0x0000000000000000000000000000000000008000",
+ *       },
+ *     ],
+ *     maturity: 54_000n,
+ *     rcfThreshold: 0n,
+ *     enterGate: zeroAddress,
+ *     liquidatorGate: zeroAddress,
+ *   },
+ *   buy: true,
+ *   maker: "0x0000000000000000000000000000000000009000",
+ *   tick: 5_000n,
+ *   expiry: 3_600n,
+ *   ratifier: "0x0000000000000000000000000000000000004000",
+ *   maxUnits: 100n,
+ * });
+ * const tree: TreeLike = Tree.create([offer]);
+ * console.log(tree.root);
+ * ```
+ */
+export interface TreeLike {
+  /** Non-padding offers in leaf order. */
+  readonly offers: readonly IOffer[];
+  /** ABI-compatible offers in leaf order, including protocol-zero padding. */
+  readonly paddedOffers: readonly OfferStruct[];
+  /** Leaf hashes for `paddedOffers`. */
+  readonly leaves: readonly Hash[];
+  /** Merkle root. */
+  readonly root: Hash;
+  /** Tree height. */
+  readonly height: number;
+}
+
+/**
+ * Tree-like input accepted by ratifier helpers.
+ *
+ * Pass a `Tree` or {@link TreeLike} object to reuse cached hashes and proofs.
+ * Pass raw offer/group input when convenience matters more than avoiding a
+ * one-time tree materialization.
+ *
+ * @example
+ * ```ts
+ * import { Offer, type RatifierTreeInput } from "@morpho-org/midnight-sdk";
+ * import { zeroAddress } from "viem";
+ *
+ * const offer = Offer.create({
+ *   market: {
+ *     chainId: 8453,
+ *     midnight: "0x0000000000000000000000000000000000001000",
+ *     loanToken: "0x0000000000000000000000000000000000006000",
+ *     collateralParams: [
+ *       {
+ *         token: "0x0000000000000000000000000000000000007000",
+ *         lltv: 770000000000000000n,
+ *         liquidationCursor: 250000000000000000n,
+ *         oracle: "0x0000000000000000000000000000000000008000",
+ *       },
+ *     ],
+ *     maturity: 54_000n,
+ *     rcfThreshold: 0n,
+ *     enterGate: zeroAddress,
+ *     liquidatorGate: zeroAddress,
+ *   },
+ *   buy: true,
+ *   maker: "0x0000000000000000000000000000000000009000",
+ *   tick: 5_000n,
+ *   expiry: 3_600n,
+ *   ratifier: "0x0000000000000000000000000000000000004000",
+ *   maxUnits: 100n,
+ * });
+ * const tree: RatifierTreeInput = [offer];
+ * console.log(tree);
+ * ```
+ */
+export type RatifierTreeInput = TreeLike | TreeCreateParams;
+
+/**
+ * Optional ratification inputs for {@link Tree.mempoolValidate}.
+ *
+ * Omit this when validating offer policy before the maker signs or approves a
+ * tree. Provide it when validating the final payload shape, including real
+ * `ratifierData`, after the Ecrecover signature exists or the Setter root is
+ * ready for publication.
+ *
+ * @example
+ * ```ts
+ * import { zeroHash, type Signature } from "viem";
+ * import type { TreeMempoolValidateRatification } from "@morpho-org/midnight-sdk";
+ *
+ * const ratification: TreeMempoolValidateRatification = {
+ *   type: "ecrecover",
+ *   signature: { v: 27, r: zeroHash, s: zeroHash } satisfies Signature,
+ * };
+ * console.log(ratification.type);
+ * ```
+ */
+export type TreeMempoolValidateRatification =
+  | {
+      /** Ecrecover ratifier route. */
+      readonly type: "ecrecover";
+      /** Viem client whose transport signs typed data built from the tree. */
+      readonly client: Client<Transport, Chain, Account | undefined>;
+      /** Account that signs the tree root. */
+      readonly account: Account | Address;
+      /** Omit when the SDK should request the signature through `client`. */
+      readonly signature?: undefined;
+    }
+  | {
+      /** Ecrecover ratifier route. */
+      readonly type: "ecrecover";
+      /** Precomputed signature for this tree root. */
+      readonly signature: EcrecoverSignatureInput;
+      /** Omit when a precomputed signature is supplied. */
+      readonly client?: undefined;
+      /** Omit when a precomputed signature is supplied. */
+      readonly account?: undefined;
+    }
+  | {
+      /** Setter ratifier route. */
+      readonly type: "setter";
+    };
+
+/**
  * Parameters for {@link Tree.mempoolValidate}.
  *
  * Use this when an already-created tree should be validated by the Midnight
- * API before wallet signature or root approval.
+ * API. By default it validates the pre-ratification tree with empty
+ * `ratifierData`; pass `ratification` to validate the final payload shape with
+ * real ratifier data.
  *
  * @example
  * ```ts
@@ -289,8 +403,7 @@ export type TreeInput = Tree | TreeCreateParams;
  * });
  * const tree = Tree.create([offer]);
  * const params = { chainId: 8453 } satisfies TreeMempoolValidateParams;
- * const validation = await tree.mempoolValidate(params);
- * console.log(validation.valid);
+ * await tree.mempoolValidate(params);
  * ```
  */
 export interface TreeMempoolValidateParams {
@@ -304,58 +417,8 @@ export interface TreeMempoolValidateParams {
   readonly fetch?: MidnightApiFetch;
   /** Additional fetch options forwarded to the API request. */
   readonly request?: MidnightApiRequestOptions;
-}
-
-/**
- * Parameters for {@link TreeUtils.mempoolValidate}.
- *
- * Accepts either a built `Tree` or the raw entries accepted by `Tree.create`.
- * Raw entries are normalized and validated the same way `Tree.create` does
- * before the temporary validation payload is encoded and sent to the Midnight
- * API.
- *
- * @example
- * ```ts
- * import { Offer, TreeUtils, type TreeUtilsMempoolValidateParams } from "@morpho-org/midnight-sdk";
- * import { zeroAddress } from "viem";
- *
- * const offer = Offer.create({
- *   market: {
- *     chainId: 8453,
- *     midnight: "0x0000000000000000000000000000000000001000",
- *     loanToken: "0x0000000000000000000000000000000000006000",
- *     collateralParams: [
- *       {
- *         token: "0x0000000000000000000000000000000000007000",
- *         lltv: 770000000000000000n,
- *         liquidationCursor: 250000000000000000n,
- *         oracle: "0x0000000000000000000000000000000000008000",
- *       },
- *     ],
- *     maturity: 54_000n,
- *     rcfThreshold: 0n,
- *     enterGate: zeroAddress,
- *     liquidatorGate: zeroAddress,
- *   },
- *   buy: true,
- *   maker: "0x0000000000000000000000000000000000009000",
- *   tick: 5_000n,
- *   expiry: 3_600n,
- *   ratifier: "0x0000000000000000000000000000000000004000",
- *   maxUnits: 100n,
- * });
- * const params = {
- *   chainId: 8453,
- *   tree: [offer],
- * } satisfies TreeUtilsMempoolValidateParams;
- * const validation = await TreeUtils.mempoolValidate(params);
- * console.log(validation.valid);
- * ```
- */
-export interface TreeUtilsMempoolValidateParams
-  extends TreeMempoolValidateParams {
-  /** Offer tree to validate before ratifier data or payload publication exists. */
-  readonly tree: TreeInput;
+  /** Optional ratification inputs used to validate final payload bytes with real ratifier data. */
+  readonly ratification?: TreeMempoolValidateRatification;
 }
 
 /**
@@ -377,24 +440,26 @@ export namespace TreeUtils {
   /**
    * Validates a tree against Midnight mempool API policy.
    *
-   * This is an API-backed convenience: it encodes each tree leaf with empty
-   * `ratifierData`, then sends the temporary payload to the Midnight API
-   * `POST /mempool/validate` endpoint. API policy only inspects offer contents,
-   * so use this after `Tree.create` and before wallet signature or Setter root
-   * approval.
+   * This is an API-backed convenience: by default it encodes each tree leaf
+   * with empty `ratifierData`, then sends the temporary payload to the Midnight
+   * API `POST /mempool/validate` endpoint. Pass `ratification` after signing or
+   * Setter root preparation to validate final payload bytes with real
+   * `ratifierData`.
    *
    * @param params.chainId - Chain id whose API policy should validate the tree.
-   * @param params.tree - Offer tree to validate before ratifier data or payload publication exists.
+   * @param params.tree - Offer tree to validate.
    * @param params.apiUrl - Optional Midnight API URL override used for the validation HTTP request.
    * @param params.timestamp - Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot.
    * @param params.fetch - Optional fetch implementation override used for the API call.
    * @param params.request - Optional fetch options forwarded to the API request.
-   * @returns API issues and `valid` summary.
+   * @param params.ratification - Optional ratification inputs used to validate final payload bytes with real ratifier data.
+   * @returns Successful API validation result.
    * @throws {InvalidTreeError} when the tree is empty, all padding, or duplicated.
    * @throws {InvalidTreeHeightError} when the resulting height is unsupported.
    * @throws {Payload.DecodeError} when validation payload encoding fails.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
+   * @throws {MidnightMempoolValidationError} when the API returns validation issues.
    * @example
    * ```ts
    * import { Offer, TreeUtils } from "@morpho-org/midnight-sdk";
@@ -425,28 +490,60 @@ export namespace TreeUtils {
    *   ratifier: "0x0000000000000000000000000000000000004000",
    *   maxUnits: 100n,
    * });
-   * const validation = await TreeUtils.mempoolValidate({
+   * await TreeUtils.mempoolValidate({
    *   chainId: 8453,
    *   tree: [offer],
    * });
-   * console.log(validation.valid);
    * ```
    */
   export async function mempoolValidate(
-    params: TreeUtilsMempoolValidateParams,
+    params: Pick<
+      TreeMempoolValidateParams,
+      "chainId" | "apiUrl" | "timestamp" | "fetch" | "request"
+    > & {
+      readonly tree: TreeInput;
+      readonly ratification?: TreeMempoolValidateRatification;
+    },
   ): Promise<MempoolPayloadValidationResult> {
-    const offers =
-      "offers" in params.tree
-        ? params.tree.offers
-        : params.tree.flatMap((entry) =>
-            "offers" in entry ? Group.from(entry).offers : [Offer.from(entry)],
-          );
-    buildDescriptor(offers);
-    const payload = await encodePayload(
-      offers.map((offer) => ({ offer, ratifierData: "0x" as const })),
-    );
+    let items: readonly PayloadItem[];
+    if (params.ratification == null) {
+      const offers =
+        "paddedOffers" in params.tree
+          ? params.tree.offers
+          : params.tree.flatMap((entry) =>
+              "offers" in entry
+                ? Group.from(entry).offers
+                : [Offer.from(entry)],
+            );
 
-    return MidnightApi.validateMempoolPayload({
+      if (!("paddedOffers" in params.tree)) {
+        buildTreeDescriptor(params.tree);
+      }
+
+      items = offers.map((offer) => ({
+        offer,
+        ratifierData: "0x" as const,
+      }));
+    } else if (params.ratification.type === "ecrecover") {
+      if (params.ratification.signature != null) {
+        items = await EcrecoverRatifierUtils.ratify({
+          tree: params.tree,
+          signature: params.ratification.signature,
+        });
+      } else {
+        items = await EcrecoverRatifierUtils.ratify({
+          tree: params.tree,
+          client: params.ratification.client,
+          account: params.ratification.account,
+        });
+      }
+    } else {
+      items = SetterRatifierUtils.ratify({ tree: params.tree });
+    }
+
+    const payload = await encodePayload(items);
+
+    const validation = await MidnightApi.validateMempoolPayload({
       baseUrl: params.apiUrl,
       fetch: params.fetch,
       request: params.request,
@@ -454,6 +551,12 @@ export namespace TreeUtils {
       timestamp: params.timestamp,
       payload,
     });
+
+    if (!validation.valid) {
+      throw new MidnightMempoolValidationError(validation.issues);
+    }
+
+    return validation;
   }
 
   /**
@@ -474,7 +577,7 @@ export namespace TreeUtils {
    * ```
    */
   export function hashNode(left: Hash, right: Hash) {
-    return keccak256(concat([left, right]));
+    return hashTreeNode(left, right);
   }
 
   /**
@@ -527,38 +630,7 @@ export namespace TreeUtils {
    * ```
    */
   export function buildDescriptor(entries: TreeCreateParams): TreeDescriptor {
-    const structs = entries.flatMap((entry) =>
-      "offers" in entry
-        ? GroupUtils.toStructs(entry)
-        : [OfferUtils.toStruct({ offer: entry })],
-    );
-    if (structs.length === 0) {
-      throw new InvalidTreeError("Tree must not be empty.");
-    }
-
-    const offerStructs = padOfferStructs(structs);
-    const leaves = offerStructs.map(OfferUtils.hashStruct);
-    assertLeafOffers(offerStructs, leaves);
-
-    const height = Math.log2(offerStructs.length);
-    if (height > 20) throw new InvalidTreeHeightError(height);
-
-    let level = [...leaves];
-
-    while (level.length > 1) {
-      const next: Hash[] = [];
-      for (let i = 0; i < level.length; i += 2) {
-        next.push(hashNode(level[i]!, level[i + 1]!));
-      }
-      level = next;
-    }
-
-    return deepFreeze({
-      offers: offerStructs,
-      leaves,
-      root: level[0]!,
-      height,
-    });
+    return buildTreeDescriptor(entries);
   }
 
   /**
@@ -617,7 +689,7 @@ export namespace TreeUtils {
    * built-in Ecrecover and Setter helpers call this while generating
    * `ratifierData`.
    *
-   * @param params.tree - Tree that contains the leaf.
+   * @param params.tree - Tree-like data with the root and leaves that contain the leaf.
    * @param params.leafIndex - Leaf index to prove.
    * @returns Proof descriptor.
    * @throws {InvalidTreeError} when leaf index is out of range.
@@ -659,33 +731,10 @@ export namespace TreeUtils {
    * ```
    */
   export function buildProof(params: {
-    readonly tree: Tree;
+    readonly tree: Pick<TreeLike, "leaves" | "root">;
     readonly leafIndex: BigIntish;
   }): TreeProof {
-    const leafIndex = BigInt(params.leafIndex);
-    if (
-      leafIndex < 0n ||
-      leafIndex >= BigInt(params.tree.paddedOffers.length)
-    ) {
-      throw new InvalidTreeError(
-        `Leaf index "${leafIndex}" is outside the tree.`,
-      );
-    }
-
-    let index = Number(leafIndex);
-    let level = [...params.tree.leaves];
-    const proof: Hash[] = [];
-    while (level.length > 1) {
-      proof.push(level[index ^ 1]!);
-      const next: Hash[] = [];
-      for (let i = 0; i < level.length; i += 2) {
-        next.push(hashNode(level[i]!, level[i + 1]!));
-      }
-      index = Math.floor(index / 2);
-      level = next;
-    }
-
-    return deepFreeze({ root: params.tree.root, leafIndex, proof });
+    return buildTreeProof(params);
   }
 
   /**

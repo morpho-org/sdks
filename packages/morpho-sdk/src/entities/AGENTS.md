@@ -6,7 +6,7 @@
 
 - Fetch on-chain state (vault accrual data, market/position data).
 - Compute derived values (e.g. `maxSharePrice` with slippage, LLTV buffer health).
-- Validate `chainId` matches the client before any on-chain read or transaction construction. Entities do not enforce builder = signer at build time — callers MUST keep `userAddress` aligned with the signing account. The invariant is enforced at `sign()` time on the signature requirements (`encodeErc20Permit` / `encodeErc20Permit2`) via `validateUserAddress`.
+- Validate `chainId` matches the client before any on-chain read or transaction construction. Entities do not enforce builder = signer at build time — callers MUST keep `userAddress` aligned with the signing account. The invariant is enforced at `sign()` time on the signature requirements (`encodeErc20Permit` / `encodeErc20Permit2Approve`) via `validateUserAddress`.
 - Return lazy `{ buildTx, getRequirements }` handles — no side effects at construction.
 
 ## Routing

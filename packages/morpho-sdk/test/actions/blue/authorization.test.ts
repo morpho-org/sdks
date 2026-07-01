@@ -3,7 +3,7 @@ import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
-  isRequirementAuthorization,
+  isRequirementBlueAuthorization,
   morphoViemExtension,
 } from "../../../src/index.js";
 import { WethUsdsBlue } from "../../fixtures/blue.js";
@@ -41,7 +41,7 @@ describe("AuthorizationBlue", () => {
 
       expect(requirements).toHaveLength(1);
       const authTx = requirements[0]!;
-      expect(authTx.action.type).toBe("morphoAuthorization");
+      expect(authTx.action.type).toBe("blueAuthorization");
       expect(authTx.action.args.authorized).toBe(generalAdapter1);
       expect(authTx.action.args.isAuthorized).toBe(true);
       expect(authTx.to).toBe(morpho);
@@ -80,8 +80,8 @@ describe("AuthorizationBlue", () => {
 
       expect(borrowRequirements).toStrictEqual(scbRequirements);
 
-      expect(borrowRequirements[0]!.action.type).toBe("morphoAuthorization");
-      expect(scbRequirements[0]!.action.type).toBe("morphoAuthorization");
+      expect(borrowRequirements[0]!.action.type).toBe("blueAuthorization");
+      expect(scbRequirements[0]!.action.type).toBe("blueAuthorization");
     });
 
     test("should return no setAuthorization requirement when GeneralAdapter1 is already authorized", async ({
@@ -107,7 +107,7 @@ describe("AuthorizationBlue", () => {
         .getRequirements();
 
       const requirementAuthorization = requirementsBefore[0];
-      if (!isRequirementAuthorization(requirementAuthorization)) {
+      if (!isRequirementBlueAuthorization(requirementAuthorization)) {
         throw new Error("Authorization requirement not found");
       }
       await client.sendTransaction(requirementAuthorization);

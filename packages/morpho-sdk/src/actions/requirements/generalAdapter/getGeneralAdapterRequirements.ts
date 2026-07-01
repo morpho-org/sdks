@@ -1,38 +1,42 @@
 import { type Address, getChainAddresses } from "@morpho-org/blue-sdk";
 import { fetchHolding } from "@morpho-org/blue-sdk-viem";
 import { isDefined } from "@morpho-org/morpho-ts";
-import type { Client } from "viem";
+import { type Client, isAddressEqual } from "viem";
 import {
+  type Bundler3TokenSignatureRequirement,
   ChainIdMismatchError,
   type ERC20ApprovalAction,
-  type Requirement,
   type Transaction,
-} from "../../types/index.js";
-import { getRequirementsApproval } from "./getRequirementsApproval.js";
-import { getRequirementsPermit } from "./getRequirementsPermit.js";
-import { getRequirementsPermit2 } from "./getRequirementsPermit2.js";
+} from "../../../types/index.js";
+import { getRequirementsApproval } from "../getRequirementsApproval.js";
+import { getGeneralAdapterRequirementsPermit } from "./getGeneralAdapterRequirementsPermit.js";
+import { getGeneralAdapterRequirementsPermit2 } from "./getGeneralAdapterRequirementsPermit2.js";
 
-type GetRequirementsBaseParams = {
+type GetGeneralAdapterRequirementsBaseParams = {
   address: Address;
   chainId: number;
   supportDeployless?: boolean;
   args: { amount: bigint; from: Address };
 };
 
-type GetRequirementsParams =
-  | (GetRequirementsBaseParams & {
+type GetGeneralAdapterRequirementsParams =
+  | (GetGeneralAdapterRequirementsBaseParams & {
       /** Signature-based approvals are not supported. Classic approval (transaction) will be used. */
       supportSignature: false;
     })
-  | (GetRequirementsBaseParams & {
+  | (GetGeneralAdapterRequirementsBaseParams & {
       /** Signature-based approvals are supported. Will try permit (EIP-2612), else fallback to permit2. */
       supportSignature: true;
-      /** Allow simple permit if EIP-2612 is supported. Only applicable when `supportSignature` is `true`. */
+      /**
+       * Prefer the ERC-2612 simple-permit path when the SDK detects support.
+       * Leave unset or set to `false` to force the Permit2 fallback when a token is known to be
+       * incompatible despite passing the SDK's shallow nonce probe.
+       */
       useSimplePermit?: boolean;
     });
 
 /**
- * Resolves the approval requirements an integrator must satisfy before a Morpho bundle pulls
+ * Resolves the approval requirements an integrator must satisfy before a bundled action pulls
  * tokens through `GeneralAdapter1`.
  *
  * Reads the user's current `holding` (allowances + nonces) from the chain, then picks one of
@@ -40,12 +44,20 @@ type GetRequirementsParams =
  *
  * 1. **`supportSignature: false`** — classic ERC-20 `approve` transaction (or no-op when the
  *    allowance is already large enough).
- * 2. **`supportSignature: true` + EIP-2612 supported + `useSimplePermit`** — single permit
+ * 2. **`supportSignature: true` + EIP-2612 nonce detected + `useSimplePermit`** — single permit
  *    signature against the token itself. DAI is excluded from this branch (its non-standard
  *    permit signature is incompatible) and falls through to Permit2 even with
  *    `useSimplePermit: true`.
  * 3. **`supportSignature: true`, default** — Permit2 flow: classic approval to the Permit2
  *    contract (if needed), followed by a Permit2 signature against `GeneralAdapter1`.
+ *
+ * The simple-permit compatibility check is intentionally shallow: it reuses the fetched
+ * ERC-2612 nonce, which is based on whether the token exposes a readable `nonces(owner)`.
+ * Leaving `useSimplePermit` unset, or passing `false`, is the caller escape hatch for tokens
+ * that expose `nonces` but are still incompatible with the SDK's ERC-2612 encoder. This opt-out
+ * has proven useful in the past, but the SDK does not encode a token-specific example here.
+ * DAI is handled as a built-in version of that incompatibility: it exposes `nonces(owner)` but is
+ * always routed to Permit2/classic approval instead of DAI-specific permit signing.
  *
  * @param viemClient - Connected viem `Client` whose `chain.id` matches `params.chainId`.
  * @param params - Requirement resolution parameters.
@@ -57,7 +69,8 @@ type GetRequirementsParams =
  *   permit / permit2 vs. classic approval.
  * @param params.supportDeployless - Whether to fetch holdings via deployless multicall.
  * @param params.useSimplePermit - When `supportSignature` is `true`, prefer EIP-2612 permit if
- *   the token supports it.
+ *   the nonce probe detects support. Leave unset or pass `false` to force the Permit2 fallback
+ *   for tokens known to be incompatible despite passing that probe.
  * @returns Promise resolving to an array of either deep-frozen approval transactions or
  *   `Requirement` objects (signature requirements with a `sign()` method). Empty when the
  *   existing allowance already covers `amount`.
@@ -70,22 +83,27 @@ type GetRequirementsParams =
  * ```ts
  * import { createPublicClient, http } from "viem";
  * import { mainnet } from "viem/chains";
- * import { getRequirements } from "@morpho-org/morpho-sdk";
+ * import { getGeneralAdapterRequirements } from "@morpho-org/morpho-sdk";
  *
  * const client = createPublicClient({ chain: mainnet, transport: http() });
- * const requirements = await getRequirements(client, {
+ * const requirements = await getGeneralAdapterRequirements(client, {
  *   address: USDC,
  *   chainId: 1,
  *   supportSignature: true,
  *   args: { amount: 1_000_000n, from: user },
  * });
- * // requirements satisfies (Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]
+ * // requirements satisfies (Readonly<Transaction<ERC20ApprovalAction>> | Bundler3TokenSignatureRequirement)[]
  * ```
  */
-export const getRequirements = async (
+export const getGeneralAdapterRequirements = async (
   viemClient: Client,
-  params: GetRequirementsParams,
-): Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]> => {
+  params: GetGeneralAdapterRequirementsParams,
+): Promise<
+  (
+    | Readonly<Transaction<ERC20ApprovalAction>>
+    | Bundler3TokenSignatureRequirement
+  )[]
+> => {
   const {
     address,
     chainId,
@@ -112,30 +130,33 @@ export const getRequirements = async (
 
   if (supportSignature) {
     const { useSimplePermit } = params;
-    const supportSimplePermit = isDefined(erc2612Nonce) && address !== dai;
+    const isDai = isDefined(dai) && isAddressEqual(address, dai);
+    const supportSimplePermit = isDefined(erc2612Nonce) && !isDai;
 
     if (supportSimplePermit && useSimplePermit) {
-      return await getRequirementsPermit(viemClient, {
+      return await getGeneralAdapterRequirementsPermit(viemClient, {
         token: address,
         chainId,
         args: { amount },
-        allowancesGeneralAdapter: erc20Allowances["bundler3.generalAdapter1"],
+        allowances: {
+          generalAdapter1: erc20Allowances["bundler3.generalAdapter1"],
+        },
         nonce: erc2612Nonce,
         supportDeployless: params.supportDeployless,
       });
     }
 
     if (permit2) {
-      return getRequirementsPermit2({
+      return getGeneralAdapterRequirementsPermit2({
         address,
         chainId,
         permit2,
         args: { amount },
-        allowancesGeneralAdapter: erc20Allowances["bundler3.generalAdapter1"],
-        allowancesPermit2: erc20Allowances.permit2,
-        allowanceGeneralAdapterPermit2: permit2BundlerAllowance.amount,
-        allowanceGeneralAdapterExpiration: permit2BundlerAllowance.expiration,
-        nonce: permit2BundlerAllowance.nonce,
+        allowances: {
+          generalAdapter1: erc20Allowances["bundler3.generalAdapter1"],
+          permit2: erc20Allowances.permit2,
+        },
+        permit2Allowance: permit2BundlerAllowance,
       });
     }
   }

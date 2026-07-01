@@ -4,7 +4,7 @@
 
 Add `@morpho-org/midnight-sdk` as a Viem-based package for Morpho Midnight that exports protocol utilities, fetch helpers, and Midnight API utilities under a dedicated `@morpho-org/midnight-sdk/api` subpath.
 
-The initial surface includes pinned Midnight ABI literals, ABI-compatible market/position/offer values, `MarketParams.from`, `Offer.create`, `Offer.from`, `Group`, `Group.from`, `Tree`, and `Tree.from` class APIs, object-compatible `MarketUtils`, `OfferUtils`, `GroupUtils`, and `TreeUtils` helpers, tree mempool validation through `Tree.mempoolValidate`, tick and units/assets math helpers, viem-backed fetch helpers with deployless position reads, ratifier classification, Ecrecover/Setter ratifier data codecs, local offer-proof verification, raw mempool payload encoding/decoding, and Midnight public API book/quote/takeable-offer/validation helpers.
+The initial surface includes pinned Midnight ABI literals, ABI-compatible market/position/offer values, `MarketParams.from`, `Market.from`, `Offer.create`, `Offer.from`, `Group`, `Group.from`, `Tree`, and `Tree.from` class APIs, object-compatible `MarketUtils`, `OfferUtils`, `GroupUtils`, and `TreeUtils` helpers, tree mempool validation through `Tree.mempoolValidate`, tick and units/assets math helpers, viem-backed fetch helpers with deployless position reads, ratifier classification, Ecrecover/Setter ratifier data codecs, local offer-proof verification, raw mempool payload encoding/decoding, and Midnight public API book/quote/takeable-offer/validation helpers.
 
 The payload codec rejects non-padding offer bytes unless exactly one of `maxUnits` and `maxAssets` is non-zero.
 
@@ -12,7 +12,7 @@ The payload codec caps the full framed wire payload at 1,000,000 bytes and deriv
 
 Offers include the protocol `continuousFeeCap` field in SDK types, API mappings, payload encoding/decoding, Merkle leaf hashing, and EIP-712 ratifier typed data so maker signatures match the current Midnight contracts.
 
-Payload collateral validation mirrors `Midnight.touchMarket` by rejecting zero collateral tokens and `maxLif` values outside the low/high liquidation cursor formulas.
+Payload collateral validation mirrors `Midnight.touchMarket` by rejecting zero collateral tokens and liquidation cursors whose computed max LIF violates protocol bounds.
 
 Payload and market construction reject LLTV values outside the protocol's fixed `[0, WAD]` range while still allowing dynamically configured LLTV tiers inside that range.
 
@@ -28,12 +28,18 @@ Ecrecover ratification accepts a viem client plus explicit signer account, deriv
 
 Ecrecover client signing rejects typed-data signatures that do not recover to the requested signer account.
 
-`fetchConsumableUnits` reads each offer's market continuous fee and returns zero when the market fee exceeds the offer's `continuousFeeCap`.
+`Tree.mempoolValidate` accepts optional ratification inputs so callers can validate final payload bytes with Ecrecover signature data or Setter proof data instead of only validating the pre-ratification tree with empty `ratifierData`.
+
+`OfferUtils.getConsumableUnits` and `Offer.getConsumableUnits` compute remaining units from hydrated market state plus a caller-provided `consumed` value, with examples inlining the single `Midnight.consumed(maker, group)` read.
+
+Asset-capped buy-offer consumable units mirror Midnight `take` cap checks by returning the largest unit amount whose rounded-down buyer assets fit within the remaining asset cap.
 
 Offer creation only accepts protocol-reachable tick spacings and offer groups require a shared cap mode and value, matching Midnight's tick accessibility and group consumption accounting.
 
-Tick math constants mirror the current Midnight protocol range and price quantum.
+Tick math constants mirror the current Midnight protocol range and price quantum, with `TickLib.tickToApr` plus offer-level price, rate, and APR helpers for simple annualization over a market's time to maturity.
 
-The package consumes shared primitives, `MathLib`, typed errors, and registry data from `@morpho-org/morpho-ts`, and exposes a configurable `MidnightApi` client from `@morpho-org/midnight-sdk/api` with a `https://api.morpho.org` default and optional string-or-`URL` `baseUrl` override.
+The package exports `midnightBundlesAbi` for app-compatible Midnight Bundles taker and repay flows, with tuple components aligned to the current Midnight `Market` and `Offer` structs.
+
+The package consumes shared primitives, `MathLib`, typed errors, and registry data from `@morpho-org/morpho-ts`, and exposes a configurable `MidnightApi` client from `@morpho-org/midnight-sdk/api` with a `https://api.morpho.org` default, optional string-or-`URL` `baseUrl` override, and parsed quote or takeable-offer payloads that can be passed directly to compatible bundle action inputs.
 
 `MidnightApi` uses explicit TypeScript interfaces with viem `Address`, `Hash`, and `Hex` primitives for the HTTP boundary; caller inputs are trusted at runtime and forwarded according to those types.

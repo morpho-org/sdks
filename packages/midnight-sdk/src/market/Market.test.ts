@@ -6,6 +6,7 @@ import { describe, expect, test } from "vitest";
 import {
   addresses,
   baseMarket,
+  baseMarketInput,
   baseMarketParams,
   baseMarketParamsInput,
   chainId,
@@ -17,7 +18,7 @@ import {
   SETTLEMENT_FEE_BREAKPOINTS,
 } from "../constants.js";
 import { InvalidMarketParameterError } from "../errors.js";
-import { MarketParams } from "./Market.js";
+import { Market, MarketParams } from "./Market.js";
 import { MarketUtils } from "./MarketUtils.js";
 
 const liquidationCursorLow = 250000000000000000n;
@@ -211,6 +212,15 @@ describe("Market", () => {
     expect(market.params.loanToken).toBe(addresses.loanToken);
     expect(market.totalUnits).toBe(1_000n);
     expect(market.tickSpacing).toBe(4);
+  });
+
+  test("behavior: from returns existing market and converts plain input", () => {
+    const market = baseMarket();
+    const normalized = Market.from(baseMarketInput());
+
+    expect(Market.from(market)).toBe(market);
+    expect(normalized).toBeInstanceOf(Market);
+    expect(normalized.id).toBe(marketId);
   });
 
   test("behavior: maturity helpers", () => {

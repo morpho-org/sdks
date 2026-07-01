@@ -1,4 +1,5 @@
 import type { Address } from "viem";
+import type { MempoolPayloadValidationIssue } from "./api/types.js";
 
 /**
  * Thrown when a Midnight offer group violates protocol-level group mechanics.
@@ -258,6 +259,29 @@ export class InvalidTreeError extends Error {
   public constructor(message: string) {
     super(message);
     this.name = "InvalidTreeError";
+  }
+}
+
+/**
+ * Thrown when the Midnight API rejects a tree during mempool policy validation.
+ *
+ * @example
+ * ```ts
+ * import { MidnightMempoolValidationError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new MidnightMempoolValidationError([{ rule: "tick_spacing" }]);
+ * ```
+ */
+export class MidnightMempoolValidationError extends Error {
+  /** Validation issues returned by the Midnight API. */
+  public readonly issues: readonly MempoolPayloadValidationIssue[];
+
+  public constructor(issues: readonly MempoolPayloadValidationIssue[]) {
+    super(
+      `Midnight mempool validation failed with "${issues.length}" issue${issues.length === 1 ? "" : "s"}. Adjust the offer parameters and try again.`,
+    );
+    this.name = "MidnightMempoolValidationError";
+    this.issues = issues;
   }
 }
 

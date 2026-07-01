@@ -12,12 +12,14 @@ import {
 } from "./TreeUtils.js";
 
 export type {
+  RatifierTreeInput,
   TreeCreateParams,
   TreeDescriptor,
   TreeInput,
+  TreeLike,
   TreeMempoolValidateParams,
+  TreeMempoolValidateRatification,
   TreeProof,
-  TreeUtilsMempoolValidateParams,
 } from "./TreeUtils.js";
 
 /**
@@ -191,20 +193,23 @@ export class Tree {
   /**
    * Validates this tree against Midnight mempool API policy.
    *
-   * This is an API-backed convenience: it encodes each tree leaf with empty
-   * `ratifierData`, then sends the temporary payload to the Midnight API
-   * `POST /mempool/validate` endpoint. API policy only inspects offer contents,
-   * so use this before wallet signature or Setter root approval.
+   * This is an API-backed convenience: by default it encodes each tree leaf
+   * with empty `ratifierData`, then sends the temporary payload to the Midnight
+   * API `POST /mempool/validate` endpoint. Pass `ratification` after signing or
+   * Setter root preparation to validate final payload bytes with real
+   * `ratifierData`.
    *
    * @param params.chainId - Chain id whose API policy should validate this tree.
    * @param params.apiUrl - Optional Midnight API URL override used for the validation HTTP request.
    * @param params.timestamp - Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot.
    * @param params.fetch - Optional fetch implementation override used for the API call.
    * @param params.request - Optional fetch options forwarded to the API request.
-   * @returns API issues and `valid` summary.
+   * @param params.ratification - Optional ratification inputs used to validate final payload bytes with real ratifier data.
+   * @returns Successful API validation result.
    * @throws {Payload.DecodeError} when validation payload encoding fails.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
+   * @throws {MidnightMempoolValidationError} when the API returns validation issues.
    * @example
    * ```ts
    * import { Offer, Tree } from "@morpho-org/midnight-sdk";
@@ -235,10 +240,9 @@ export class Tree {
    *   ratifier: "0x0000000000000000000000000000000000004000",
    *   maxUnits: 100n,
    * });
-   * const validation = await Tree.create([offer]).mempoolValidate({
+   * await Tree.create([offer]).mempoolValidate({
    *   chainId: 8453,
    * });
-   * console.log(validation.valid);
    * ```
    */
   public mempoolValidate(

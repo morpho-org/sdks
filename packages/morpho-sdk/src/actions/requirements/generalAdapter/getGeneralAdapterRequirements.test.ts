@@ -14,11 +14,11 @@ import {
   isRequirementApproval,
   isRequirementSignature,
   Permit2ExpirationMissingError,
-} from "../../types/index.js";
-import { getRequirements } from "./getRequirements.js";
-import { getRequirementsAction } from "./getRequirementsAction.js";
-import { getRequirementsApproval } from "./getRequirementsApproval.js";
-import { getRequirementsPermit } from "./getRequirementsPermit.js";
+} from "../../../types/index.js";
+import { getRequirementsAction } from "../getRequirementsAction.js";
+import { getRequirementsApproval } from "../getRequirementsApproval.js";
+import { getGeneralAdapterRequirements } from "./getGeneralAdapterRequirements.js";
+import { getGeneralAdapterRequirementsPermit } from "./getGeneralAdapterRequirementsPermit.js";
 
 vi.mock("@morpho-org/blue-sdk-viem", async (_importOriginal) => {
   return {
@@ -30,7 +30,7 @@ vi.mock("@morpho-org/blue-sdk-viem", async (_importOriginal) => {
 import { fetchHolding, fetchToken } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 
-describe("getRequirements", () => {
+describe("getGeneralAdapterRequirements", () => {
   const {
     dai,
     usdc,
@@ -83,7 +83,7 @@ describe("getRequirements", () => {
       } as unknown as Client;
 
       await expect(
-        getRequirements(clientWithWrongChain, {
+        getGeneralAdapterRequirements(clientWithWrongChain, {
           supportSignature: false,
           address: usdc,
           chainId: mainnet.id,
@@ -115,7 +115,7 @@ describe("getRequirements", () => {
         }),
       );
 
-      const requirements = await getRequirements(mockClient, {
+      const requirements = await getGeneralAdapterRequirements(mockClient, {
         supportSignature: false,
         address: usdc,
         chainId: mainnet.id,
@@ -153,7 +153,7 @@ describe("getRequirements", () => {
         }),
       );
 
-      const requirements = await getRequirements(mockClient, {
+      const requirements = await getGeneralAdapterRequirements(mockClient, {
         supportSignature: false,
         address: usdc,
         chainId: mainnet.id,
@@ -187,7 +187,7 @@ describe("getRequirements", () => {
           }),
         );
 
-        const requirements = await getRequirements(mockClient, {
+        const requirements = await getGeneralAdapterRequirements(mockClient, {
           supportSignature: true,
           address: usdc,
           chainId: mainnet.id,
@@ -226,7 +226,7 @@ describe("getRequirements", () => {
           }),
         );
 
-        const requirements = await getRequirements(mockClient, {
+        const requirements = await getGeneralAdapterRequirements(mockClient, {
           supportSignature: true,
           address: usdc,
           chainId: mainnet.id,
@@ -259,7 +259,7 @@ describe("getRequirements", () => {
           }),
         );
 
-        const requirements = await getRequirements(mockClient, {
+        const requirements = await getGeneralAdapterRequirements(mockClient, {
           supportSignature: true,
           address: wNative,
           chainId: mainnet.id,
@@ -308,7 +308,7 @@ describe("getRequirements", () => {
           }),
         );
 
-        const requirements = await getRequirements(mockClient, {
+        const requirements = await getGeneralAdapterRequirements(mockClient, {
           supportSignature: true,
           address: wNative,
           chainId: mainnet.id,
@@ -347,7 +347,7 @@ describe("getRequirements", () => {
           }),
         );
 
-        const requirements = await getRequirements(mockClient, {
+        const requirements = await getGeneralAdapterRequirements(mockClient, {
           supportSignature: true,
           address: wNative,
           chainId: mainnet.id,
@@ -381,7 +381,7 @@ describe("getRequirements", () => {
           }),
         );
 
-        const requirements = await getRequirements(mockClient, {
+        const requirements = await getGeneralAdapterRequirements(mockClient, {
           supportSignature: true,
           address: wNative,
           chainId: mainnet.id,
@@ -398,7 +398,7 @@ describe("getRequirements", () => {
         expect(permit2Requirement.action.args.amount).toBe(mockAmount);
       });
 
-      test("should return permit2 requirement when DAI and allowance is insufficient", async () => {
+      test("should return permit2 requirement when DAI exposes nonce and simple permit is requested", async () => {
         vi.mocked(fetchHolding).mockResolvedValue(
           new Holding({
             user: mockFrom,
@@ -419,11 +419,12 @@ describe("getRequirements", () => {
           }),
         );
 
-        const requirements = await getRequirements(mockClient, {
+        const requirements = await getGeneralAdapterRequirements(mockClient, {
           supportSignature: true,
           address: dai,
           chainId: mainnet.id,
           args: { amount: mockAmount, from: mockFrom },
+          useSimplePermit: true,
         });
 
         expect(requirements).toHaveLength(2);
@@ -443,6 +444,53 @@ describe("getRequirements", () => {
         expect(permit2Requirement.action.type).toBe("permit2");
         expect(permit2Requirement.action.args.spender).toBe(generalAdapter1);
         expect(permit2Requirement.action.args.amount).toBe(mockAmount);
+      });
+
+      test("should compare DAI case-insensitively before excluding simple permit", async () => {
+        const lowerCaseDai = dai.toLowerCase() as Address;
+        vi.mocked(fetchHolding).mockResolvedValue(
+          new Holding({
+            user: mockFrom,
+            token: lowerCaseDai,
+            erc20Allowances: {
+              morpho: 0n,
+              "bundler3.generalAdapter1": 0n,
+              permit2: 0n,
+            },
+            permit2BundlerAllowance: {
+              amount: 0n,
+              expiration: 0n,
+              nonce: 0n,
+            },
+            erc2612Nonce: 0n,
+            canTransfer: false,
+            balance: 0n,
+          }),
+        );
+
+        const requirements = await getGeneralAdapterRequirements(mockClient, {
+          supportSignature: true,
+          address: lowerCaseDai,
+          chainId: mainnet.id,
+          args: { amount: mockAmount, from: mockFrom },
+          useSimplePermit: true,
+        });
+
+        expect(requirements).toHaveLength(2);
+
+        const approvalPermit2 = requirements[0];
+        if (!isRequirementApproval(approvalPermit2)) {
+          throw new Error("Requirement is not an approval transaction");
+        }
+        expect(approvalPermit2.action.type).toBe("erc20Approval");
+        expect(approvalPermit2.action.args.spender).toBe(permit2);
+
+        const permit2Requirement = requirements[1];
+        if (!isRequirementSignature(permit2Requirement)) {
+          throw new Error("Requirement is not a permit transaction");
+        }
+        expect(permit2Requirement.action.type).toBe("permit2");
+        expect(permit2Requirement.action.args.spender).toBe(generalAdapter1);
       });
 
       test("should fall back to classic approval when a chain has no Permit2", async () => {
@@ -467,7 +515,7 @@ describe("getRequirements", () => {
         );
         mockClient = { chain: { id: noPermit2ChainId } } as unknown as Client;
 
-        const requirements = await getRequirements(mockClient, {
+        const requirements = await getGeneralAdapterRequirements(mockClient, {
           supportSignature: true,
           address: usdc,
           chainId: noPermit2ChainId,
@@ -531,13 +579,13 @@ describe("getRequirements", () => {
       ).toThrow(ApprovalAmountLessThanSpendAmountError);
     });
 
-    test("getRequirementsPermit returns no requirement when allowance is sufficient", async () => {
+    test("getGeneralAdapterRequirementsPermit returns no requirement when allowance is sufficient", async () => {
       await expect(
-        getRequirementsPermit(mockClient, {
+        getGeneralAdapterRequirementsPermit(mockClient, {
           token: usdc,
           chainId: mainnet.id,
           args: { amount: mockAmount },
-          allowancesGeneralAdapter: mockAmount,
+          allowances: { generalAdapter1: mockAmount },
           nonce: 0n,
         }),
       ).resolves.toEqual([]);
