@@ -310,57 +310,6 @@ export interface TreeMempoolValidateParams {
 }
 
 /**
- * Parameters for {@link TreeUtils.mempoolValidate}.
- *
- * Accepts either a built `Tree` or the raw entries accepted by `Tree.create`.
- * Raw entries are normalized and validated the same way `Tree.create` does
- * before the temporary validation payload is encoded and sent to the Midnight
- * API.
- *
- * @example
- * ```ts
- * import { Offer, TreeUtils, type TreeUtilsMempoolValidateParams } from "@morpho-org/midnight-sdk";
- * import { zeroAddress } from "viem";
- *
- * const offer = Offer.create({
- *   market: {
- *     chainId: 8453,
- *     midnight: "0x0000000000000000000000000000000000001000",
- *     loanToken: "0x0000000000000000000000000000000000006000",
- *     collateralParams: [
- *       {
- *         token: "0x0000000000000000000000000000000000007000",
- *         lltv: 770000000000000000n,
- *         liquidationCursor: 250000000000000000n,
- *         oracle: "0x0000000000000000000000000000000000008000",
- *       },
- *     ],
- *     maturity: 54_000n,
- *     rcfThreshold: 0n,
- *     enterGate: zeroAddress,
- *     liquidatorGate: zeroAddress,
- *   },
- *   buy: true,
- *   maker: "0x0000000000000000000000000000000000009000",
- *   tick: 5_000n,
- *   expiry: 3_600n,
- *   ratifier: "0x0000000000000000000000000000000000004000",
- *   maxUnits: 100n,
- * });
- * const params = {
- *   chainId: 8453,
- *   tree: [offer],
- * } satisfies TreeUtilsMempoolValidateParams;
- * await TreeUtils.mempoolValidate(params);
- * ```
- */
-export interface TreeUtilsMempoolValidateParams
-  extends TreeMempoolValidateParams {
-  /** Offer tree to validate before ratifier data or payload publication exists. */
-  readonly tree: TreeInput;
-}
-
-/**
  * Object-compatible tree hashing, root, proof, and verification helpers.
  *
  * Use these when you need pure tree hashing, descriptor construction, or proof
@@ -435,7 +384,12 @@ export namespace TreeUtils {
    * ```
    */
   export async function mempoolValidate(
-    params: TreeUtilsMempoolValidateParams,
+    params: Pick<
+      TreeMempoolValidateParams,
+      "chainId" | "apiUrl" | "timestamp" | "fetch" | "request"
+    > & {
+      readonly tree: TreeInput;
+    },
   ): Promise<MempoolPayloadValidationResult> {
     const offers =
       "offers" in params.tree

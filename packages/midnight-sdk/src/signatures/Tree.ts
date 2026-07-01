@@ -17,7 +17,6 @@ export type {
   TreeInput,
   TreeMempoolValidateParams,
   TreeProof,
-  TreeUtilsMempoolValidateParams,
 } from "./TreeUtils.js";
 
 /**

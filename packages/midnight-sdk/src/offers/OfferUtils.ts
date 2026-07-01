@@ -47,137 +47,6 @@ const offerHashParams = [
 ] as const;
 
 /**
- * Parameters for {@link OfferUtils.validateOfferGroup}.
- *
- * Use this lower-level shape when validating a would-be `Group` before the
- * offers are committed to a tree.
- *
- * @example
- * ```ts
- * import type { ValidateOfferGroupParams } from "@morpho-org/midnight-sdk";
- *
- * const params = { offers: [] } as ValidateOfferGroupParams;
- * console.log(Array.from(params.offers).length);
- * ```
- */
-export interface ValidateOfferGroupParams {
-  /** Offers to validate as one protocol consumption group. */
-  readonly offers: Iterable<IOffer>;
-}
-
-/**
- * Parameters for {@link OfferUtils.toStruct}.
- *
- * The group id is read from the offer by default. Supply `group` only when a
- * caller intentionally needs to encode the same offer with an override, such as
- * deriving a group id from an offer hashed with the zero group id.
- *
- * @example
- * ```ts
- * import { Offer, type OfferStructParams } from "@morpho-org/midnight-sdk";
- * import { zeroAddress } from "viem";
- *
- * const params: OfferStructParams = {
- *   offer: Offer.create({
- *     market: {
- *       chainId: 8453,
- *       midnight: "0x0000000000000000000000000000000000001000",
- *       loanToken: "0x0000000000000000000000000000000000006000",
- *       collateralParams: [
- *         {
- *           token: "0x0000000000000000000000000000000000007000",
- *           lltv: 770000000000000000n,
- *           liquidationCursor: 250000000000000000n,
- *           oracle: "0x0000000000000000000000000000000000008000",
- *         },
- *       ],
- *       maturity: 54_000n,
- *       rcfThreshold: 0n,
- *       enterGate: zeroAddress,
- *       liquidatorGate: zeroAddress,
- *     },
- *     buy: true,
- *     maker: "0x0000000000000000000000000000000000009000",
- *     tick: 5_000n,
- *     expiry: 3_600n,
- *     ratifier: "0x0000000000000000000000000000000000004000",
- *     maxUnits: 100n,
- *   }),
- * };
- * console.log(params.offer);
- * ```
- */
-export interface OfferStructParams {
-  /** Offer to encode. */
-  readonly offer: IOffer;
-  /** Optional protocol group id override encoded into the ABI offer. */
-  readonly group?: Hash;
-}
-
-/**
- * Parameters for {@link OfferUtils.getConsumableUnits}.
- *
- * @example
- * ```ts
- * import type { OfferConsumableUnitsParams } from "@morpho-org/midnight-sdk";
- *
- * const params = {
- *   offer: {} as OfferConsumableUnitsParams["offer"],
- *   consumed: 0n,
- *   timestamp: 1_000n,
- * } satisfies OfferConsumableUnitsParams;
- * console.log(params.consumed);
- * ```
- */
-export interface OfferConsumableUnitsParams {
-  /** Offer to inspect. Its market must carry hydrated market state. */
-  readonly offer: IOffer;
-  /** Amount already consumed from the offer group. */
-  readonly consumed: BigIntish;
-  /** Timestamp used to compute time to maturity for settlement fee selection. */
-  readonly timestamp: BigIntish;
-}
-
-/**
- * Deterministic make-offer parameters after protocol validation.
- *
- * @example
- * ```ts
- * import type { ValidatedOfferParams } from "@morpho-org/midnight-sdk";
- * import { zeroAddress } from "viem";
- *
- * const params: ValidatedOfferParams = {
- *   tick: 5_000n,
- *   tickSpacing: 4n,
- *   start: 0n,
- *   expiry: 3_600n,
- *   maxUnits: 100n,
- *   maxAssets: 0n,
- *   receiverIfMakerIsSeller: zeroAddress,
- * };
- * console.log(params.tick);
- * ```
- */
-export interface ValidatedOfferParams {
-  /** Tick in the deployed range and aligned to `tickSpacing`. */
-  readonly tick: bigint;
-  /** Market tick spacing used to validate tick accessibility. */
-  readonly tickSpacing: bigint;
-  /** Offer start timestamp. */
-  readonly start: bigint;
-  /** Offer expiry timestamp. */
-  readonly expiry: bigint;
-  /** Maximum units, with exactly one cap non-zero. */
-  readonly maxUnits: bigint;
-  /** Maximum buyer or seller assets, with exactly one cap non-zero. */
-  readonly maxAssets: bigint;
-  /** Maximum market continuous fee accepted by this offer. */
-  readonly continuousFeeCap: bigint;
-  /** Receiver used only when maker is seller. */
-  readonly receiverIfMakerIsSeller: Address;
-}
-
-/**
  * Object-compatible helpers for Midnight offer construction, grouping, and
  * take-side encoding.
  *
@@ -237,7 +106,10 @@ export namespace OfferUtils {
    * console.log(struct.tick);
    * ```
    */
-  export function toStruct(params: OfferStructParams): OfferStruct {
+  export function toStruct(params: {
+    readonly offer: IOffer;
+    readonly group?: Hash;
+  }): OfferStruct {
     const offer = Offer.from(params.offer);
 
     return {
@@ -372,7 +244,7 @@ export namespace OfferUtils {
    * console.log(hash);
    * ```
    */
-  export function hash(offer: IOffer & { readonly group: Hash }): Hash {
+  export function hash(offer: IOffer & Required<Pick<IOffer, "group">>): Hash {
     return hashStruct(toStruct({ offer }));
   }
 
@@ -651,22 +523,16 @@ export namespace OfferUtils {
    * instantiating an `Offer`. `Offer.create` uses the same validation and then
    * constructs the class instance for grouping and trees.
    *
-   * @param params.market - Market params or hydrated market this offer trades.
    * @param params.buy - Whether the maker buys loan assets.
    * @param params.maker - Maker address.
    * @param params.tick - Offer tick.
-   * @param params.group - Optional consumption group id for already-grouped offers.
    * @param params.tickSpacing - Optional market tick spacing; defaults to `DEFAULT_TICK_SPACING`.
    * @param params.maxUnits - Optional unit cap; defaults to zero.
    * @param params.maxAssets - Optional buyer or seller asset cap; defaults to zero.
    * @param params.continuousFeeCap - Optional maximum market continuous fee accepted by this offer; defaults to `MAX_CONTINUOUS_FEE`.
    * @param params.start - Optional offer start timestamp; defaults to zero.
    * @param params.expiry - Offer expiry timestamp.
-   * @param params.callback - Optional callback address; defaults to the zero address.
-   * @param params.callbackData - Optional callback payload; defaults to `0x`.
    * @param params.receiverIfMakerIsSeller - Optional receiver used when maker is seller.
-   * @param params.ratifier - Ratifier contract address.
-   * @param params.reduceOnly - Optional flag restricting the offer to exposure-reducing execution.
    * @returns Normalized deterministic offer parameters.
    * @throws {InvalidOfferParameterError} when a deterministic offer parameter cannot satisfy protocol rules.
    * @example
@@ -674,36 +540,39 @@ export namespace OfferUtils {
    * import { OfferUtils } from "@morpho-org/midnight-sdk";
    *
    * const params = OfferUtils.validateOfferParams({
-   *   market: {
-   *     chainId: 8453,
-   *     midnight: "0x0000000000000000000000000000000000001000",
-   *     loanToken: "0x0000000000000000000000000000000000006000",
-   *     collateralParams: [
-   *       {
-   *         token: "0x0000000000000000000000000000000000007000",
-   *         lltv: 770000000000000000n,
-   *         liquidationCursor: 250000000000000000n,
-   *         oracle: "0x0000000000000000000000000000000000008000",
-   *       },
-   *     ],
-   *     maturity: 54_000n,
-   *     rcfThreshold: 0n,
-   *     enterGate: "0x0000000000000000000000000000000000000000",
-   *     liquidatorGate: "0x0000000000000000000000000000000000000000",
-   *   },
    *   buy: true,
    *   maker: "0x0000000000000000000000000000000000009000",
    *   tick: 5_000n,
    *   expiry: 3_600n,
-   *   ratifier: "0x0000000000000000000000000000000000004000",
    *   maxUnits: 100n,
    * });
    * console.log(params.maxAssets);
    * ```
    */
   export function validateOfferParams(
-    params: BuildOfferParams,
-  ): ValidatedOfferParams {
+    params: Pick<
+      BuildOfferParams,
+      | "buy"
+      | "maker"
+      | "tick"
+      | "tickSpacing"
+      | "maxUnits"
+      | "maxAssets"
+      | "continuousFeeCap"
+      | "start"
+      | "expiry"
+      | "receiverIfMakerIsSeller"
+    >,
+  ): {
+    readonly tick: bigint;
+    readonly tickSpacing: bigint;
+    readonly start: bigint;
+    readonly expiry: bigint;
+    readonly maxUnits: bigint;
+    readonly maxAssets: bigint;
+    readonly continuousFeeCap: bigint;
+    readonly receiverIfMakerIsSeller: Address;
+  } {
     const { tick, tickSpacing } = validateOfferTick(params);
     const { start, expiry } = validateOfferTimeRange(params);
     const { maxUnits, maxAssets } = validateOfferCaps(params);
@@ -768,9 +637,9 @@ export namespace OfferUtils {
    * console.log(offers.length);
    * ```
    */
-  export function validateOfferGroup(
-    params: ValidateOfferGroupParams,
-  ): readonly Offer[] {
+  export function validateOfferGroup(params: {
+    readonly offers: Iterable<IOffer>;
+  }): readonly Offer[] {
     const offerInputs = Array.from(params.offers);
     if (offerInputs.length === 0) {
       throw new InvalidOfferGroupError(
@@ -1072,10 +941,15 @@ export namespace OfferUtils {
    * console.log(units);
    * ```
    */
-  export function getConsumableUnits(
-    params: OfferConsumableUnitsParams,
-  ): bigint {
-    const offer = Offer.from(params.offer);
+  export function getConsumableUnits(params: {
+    readonly offer: Pick<
+      IOffer,
+      "market" | "buy" | "tick" | "maxUnits" | "maxAssets" | "continuousFeeCap"
+    >;
+    readonly consumed: BigIntish;
+    readonly timestamp: BigIntish;
+  }): bigint {
+    const offer = params.offer;
     const consumed = BigInt(params.consumed);
     const maxUnits = BigInt(offer.maxUnits);
     const maxAssets = BigInt(offer.maxAssets);
@@ -1166,7 +1040,7 @@ export namespace OfferUtils {
    * console.log(expiry);
    * ```
    */
-  export function getOfferExpiry(offer: IOffer) {
+  export function getOfferExpiry(offer: Pick<IOffer, "expiry">) {
     return BigInt(offer.expiry);
   }
 }
