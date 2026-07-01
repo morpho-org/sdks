@@ -3,6 +3,7 @@ import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { afterEach, describe, expect, vi } from "vitest";
 import { WethUsdsBlue, WstethWethBlue } from "../../../test/fixtures/blue.js";
+import { makePermit } from "../../../test/helpers/permit.js";
 import { test } from "../../../test/setup.js";
 import {
   MutuallyExclusiveRepayAmountsError,
@@ -12,7 +13,6 @@ import {
   NonPositiveRepayAmountError,
   NonPositiveRepayMaxSharePriceError,
   NonPositiveTransferAmountError,
-  type RequirementSignature,
 } from "../../types/index.js";
 import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
 import { blueRepay } from "./repay.js";
@@ -468,36 +468,3 @@ describe("blueRepay unit tests", () => {
     expect(txWith.action.type).toBe("blueRepay");
   });
 });
-
-function makePermit({
-  owner,
-  asset,
-  amount,
-}: {
-  owner: `0x${string}`;
-  asset: `0x${string}`;
-  amount: bigint;
-}): RequirementSignature {
-  const {
-    bundler3: { generalAdapter1 },
-  } = getChainAddresses(mainnet.id);
-  const signature = `0x${"11".repeat(64)}1b` as `0x${string}`;
-  return {
-    args: {
-      owner,
-      signature,
-      deadline: 1n,
-      amount,
-      asset,
-      nonce: 0n,
-    },
-    action: {
-      type: "permit",
-      args: {
-        spender: generalAdapter1,
-        amount,
-        deadline: 1n,
-      },
-    },
-  } satisfies RequirementSignature;
-}

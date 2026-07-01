@@ -319,7 +319,13 @@ export class NonPositiveTransferAmountError extends Error {
   }
 }
 
-/** Thrown when a market repay in assets mode has `transferAmount !== assets` (asset-mode requires exact transfer). */
+/**
+ * Thrown when a market repay in assets mode has `transferAmount !== assets`.
+ *
+ * @deprecated No longer thrown. Repay assets mode is now additive (`amount + nativeAmount`) and no
+ * longer takes a separate `transferAmount`, so this invariant no longer exists. Retained as
+ * exported API for back-compat; slated for removal in a future major.
+ */
 export class TransferAmountNotEqualToAssetsError extends Error {
   constructor(params: {
     transferAmount: bigint;
