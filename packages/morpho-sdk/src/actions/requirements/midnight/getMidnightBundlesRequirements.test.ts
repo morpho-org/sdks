@@ -21,7 +21,7 @@ import {
   isRequirementApproval,
   isRequirementSignature,
 } from "../../../types/index.js";
-import { getMidnightTokenPullRequirements } from "./getMidnightTokenPullRequirements.js";
+import { getMidnightBundlesRequirements } from "./getMidnightBundlesRequirements.js";
 
 vi.mock("@morpho-org/blue-sdk-viem", async (importOriginal) => {
   const actual =
@@ -138,7 +138,7 @@ const mockAllowanceReads = (params: {
   };
 };
 
-describe.sequential("getMidnightTokenPullRequirements", () => {
+describe.sequential("getMidnightBundlesRequirements", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(fetchToken).mockResolvedValue({
@@ -159,7 +159,7 @@ describe.sequential("getMidnightTokenPullRequirements", () => {
     const { client } = createMockClient(wrongChain);
 
     await expect(
-      getMidnightTokenPullRequirements({
+      getMidnightBundlesRequirements({
         viemClient: client,
         chainId: midnightChainId,
         token: midnightAddresses.loanToken,
@@ -180,7 +180,7 @@ describe.sequential("getMidnightTokenPullRequirements", () => {
       result: 2_000n,
     });
 
-    const requirements = await getMidnightTokenPullRequirements({
+    const requirements = await getMidnightBundlesRequirements({
       viemClient: handle.client,
       chainId: midnightChainId,
       token: midnightAddresses.loanToken,
@@ -196,7 +196,7 @@ describe.sequential("getMidnightTokenPullRequirements", () => {
   test("behavior: returns no requirements when amount is zero", async () => {
     const handle = createMockClient(midnightTestChain);
 
-    const requirements = await getMidnightTokenPullRequirements({
+    const requirements = await getMidnightBundlesRequirements({
       viemClient: handle.client,
       chainId: midnightChainId,
       token: midnightAddresses.loanToken,
@@ -219,7 +219,7 @@ describe.sequential("getMidnightTokenPullRequirements", () => {
       result: 0n,
     });
 
-    const requirements = await getMidnightTokenPullRequirements({
+    const requirements = await getMidnightBundlesRequirements({
       viemClient: handle.client,
       chainId: midnightChainId,
       token: midnightAddresses.loanToken,
@@ -255,7 +255,7 @@ describe.sequential("getMidnightTokenPullRequirements", () => {
       result: 7n,
     });
 
-    const requirements = await getMidnightTokenPullRequirements({
+    const requirements = await getMidnightBundlesRequirements({
       viemClient: handle.client,
       chainId: midnightChainId,
       token: midnightAddresses.loanToken,
@@ -285,7 +285,7 @@ describe.sequential("getMidnightTokenPullRequirements", () => {
       permit2Allowance: 0n,
     });
 
-    const requirements = await getMidnightTokenPullRequirements({
+    const requirements = await getMidnightBundlesRequirements({
       viemClient: handle.client,
       chainId: midnightChainId,
       token: midnightAddresses.loanToken,
@@ -321,7 +321,7 @@ describe.sequential("getMidnightTokenPullRequirements", () => {
       permit2Allowance: 0n,
     });
 
-    const requirements = await getMidnightTokenPullRequirements({
+    const requirements = await getMidnightBundlesRequirements({
       viemClient: handle.client,
       chainId: noPermit2ChainId,
       token: midnightAddresses.loanToken,
@@ -363,7 +363,7 @@ describe.sequential("getMidnightTokenPullRequirements", () => {
     });
 
     try {
-      const requirements = await getMidnightTokenPullRequirements({
+      const requirements = await getMidnightBundlesRequirements({
         viemClient: handle.client,
         chainId: midnightChainId,
         token: midnightAddresses.dai,
@@ -410,7 +410,7 @@ describe.sequential("getMidnightTokenPullRequirements", () => {
     vi.stubGlobal("crypto", undefined);
 
     await expect(
-      getMidnightTokenPullRequirements({
+      getMidnightBundlesRequirements({
         viemClient: handle.client,
         chainId: midnightChainId,
         token: midnightAddresses.loanToken,

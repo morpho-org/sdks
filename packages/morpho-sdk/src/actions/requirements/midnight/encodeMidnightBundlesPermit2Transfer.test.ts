@@ -9,9 +9,9 @@ import {
   AddressMismatchError,
   InvalidSignatureError,
 } from "../../../types/index.js";
-import { encodeMidnightPermit2Transfer } from "./encodeMidnightPermit2Transfer.js";
+import { encodeMidnightBundlesPermit2Transfer } from "./encodeMidnightBundlesPermit2Transfer.js";
 
-describe("encodeMidnightPermit2Transfer", () => {
+describe("encodeMidnightBundlesPermit2Transfer", () => {
   const account = privateKeyToAccount(
     "0x0000000000000000000000000000000000000000000000000000000000000001",
   );
@@ -35,7 +35,7 @@ describe("encodeMidnightPermit2Transfer", () => {
   });
 
   test("default", async () => {
-    const requirement = encodeMidnightPermit2Transfer({
+    const requirement = encodeMidnightBundlesPermit2Transfer({
       token: midnightAddresses.loanToken,
       spender: midnightAddresses.midnightBundles,
       amount: 1_000n,
@@ -61,7 +61,7 @@ describe("encodeMidnightPermit2Transfer", () => {
   test("error: AddressMismatchError", async () => {
     const differentAddress =
       "0x0000000000000000000000000000000000000001" as Address;
-    const requirement = encodeMidnightPermit2Transfer({
+    const requirement = encodeMidnightBundlesPermit2Transfer({
       token: midnightAddresses.loanToken,
       spender: midnightAddresses.midnightBundles,
       amount: 1_000n,
@@ -85,7 +85,7 @@ describe("encodeMidnightPermit2Transfer", () => {
         address: client.account.address,
       },
     };
-    const requirement = encodeMidnightPermit2Transfer({
+    const requirement = encodeMidnightBundlesPermit2Transfer({
       token: midnightAddresses.loanToken,
       spender: midnightAddresses.midnightBundles,
       amount: 1_000n,

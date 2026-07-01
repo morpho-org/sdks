@@ -10,8 +10,8 @@ import {
   type Requirement,
 } from "../../../types/index.js";
 
-/** Parameters for {@link encodeMidnightPermit2Transfer}. */
-export interface EncodeMidnightPermit2TransferParams {
+/** Parameters for {@link encodeMidnightBundlesPermit2Transfer}. */
+export interface EncodeMidnightBundlesPermit2TransferParams {
   readonly token: Address;
   readonly spender: Address;
   readonly amount: bigint;
@@ -34,9 +34,9 @@ export interface EncodeMidnightPermit2TransferParams {
  * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails.
  * @example
  * ```ts
- * import { encodeMidnightPermit2Transfer } from "@morpho-org/morpho-sdk";
+ * import { encodeMidnightBundlesPermit2Transfer } from "@morpho-org/morpho-sdk";
  *
- * const requirement = encodeMidnightPermit2Transfer({
+ * const requirement = encodeMidnightBundlesPermit2Transfer({
  *   token: loanToken,
  *   spender: midnightBundles,
  *   amount: 1_000_000n,
@@ -45,8 +45,8 @@ export interface EncodeMidnightPermit2TransferParams {
  * });
  * ```
  */
-export const encodeMidnightPermit2Transfer = (
-  params: EncodeMidnightPermit2TransferParams,
+export const encodeMidnightBundlesPermit2Transfer = (
+  params: EncodeMidnightBundlesPermit2TransferParams,
 ): Requirement<Permit2TransferAction, Permit2TransferArgs> => {
   const deadline = Time.timestamp() + Time.s.from.h(2n);
   const action: Permit2TransferAction = {

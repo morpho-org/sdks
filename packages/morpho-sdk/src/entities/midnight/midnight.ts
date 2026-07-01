@@ -37,8 +37,8 @@ import {
 import {
   getMidnightApprovalRequirements,
   getMidnightAuthorizationRequirement,
+  getMidnightBundlesRequirements,
   getMidnightRatifyRootRequirement,
-  getMidnightTokenPullRequirements,
 } from "../../actions/requirements/index.js";
 import { validateChainId, validateUserAddress } from "../../helpers/index.js";
 import { validateOfferSides } from "../../helpers/validateOfferSides.js";
@@ -871,7 +871,7 @@ export class MorphoMidnight implements MidnightActions {
     reqParams?: MidnightRequirementsParams,
   ) {
     if (this.client.options.supportSignature) {
-      return await getMidnightTokenPullRequirements({
+      return await getMidnightBundlesRequirements({
         viemClient: this.client.viemClient,
         chainId: this.chainId,
         supportDeployless: this.client.options.supportDeployless,
@@ -881,7 +881,7 @@ export class MorphoMidnight implements MidnightActions {
       });
     }
 
-    return await getMidnightTokenPullRequirements({
+    return await getMidnightBundlesRequirements({
       viemClient: this.client.viemClient,
       chainId: this.chainId,
       supportDeployless: this.client.options.supportDeployless,
