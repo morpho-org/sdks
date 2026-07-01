@@ -71,29 +71,6 @@ export namespace BundlerErrors {
       super(`unexpected signature authorizing "${authorized}"`);
     }
   }
-
-  /**
-   * Thrown when a bundled on-behalf path (borrow, withdraw, refinance, …) receives a
-   * revocation authorization signature (`isAuthorized: false`) instead of a grant. Such a
-   * signature would leave GeneralAdapter1 unauthorized and the following Morpho operation
-   * would revert, so it is rejected up front.
-   *
-   * @example
-   * ```ts
-   * import { BundlerErrors } from "@morpho-org/morpho-sdk";
-   *
-   * if (error instanceof BundlerErrors.UnexpectedAuthorizationRevocation) {
-   *   // Sign the authorization requirement as a grant (isAuthorized: true).
-   * }
-   * ```
-   */
-  export class UnexpectedAuthorizationRevocation extends Error {
-    constructor() {
-      super(
-        "authorization signature revokes operator rights (isAuthorized: false); this path requires a grant. Re-sign the authorization requirement as a grant.",
-      );
-    }
-  }
 }
 
 /**
