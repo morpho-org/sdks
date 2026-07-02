@@ -1,6 +1,7 @@
 ---
 "@morpho-org/morpho-sdk": major
 "@morpho-org/wdk-protocol-lending-morpho-evm": patch
+"@morpho-org/liquidity-sdk-viem": patch
 ---
 
 Add native (wNative) wrapping to the Blue repay flows and reshape their amount args, matching the `blueSupply` devex.
@@ -23,3 +24,5 @@ Add native (wNative) wrapping to the Blue repay flows and reshape their amount a
 - New exported error `NativeAmountExceedsTransferAmountError`, thrown when a shares-mode `nativeAmount` exceeds the loan assets to repay. The action layer validates its pre-resolved funding: assets mode requires `transferAmount === amount + nativeAmount` (`TransferAmountNotEqualToAssetsError`), shares mode requires positive funding (`transferAmount + nativeAmount > 0n`). `NonPositiveTransferAmountError` is retained as exported API but no longer thrown (deprecated, slated for removal in a future major).
 
 `@morpho-org/wdk-protocol-lending-morpho-evm` is updated to the renamed `amount` field for its Morpho repay path.
+
+`@morpho-org/liquidity-sdk-viem` bumps its `@morpho-org/morpho-sdk` peer dependency range to `^5.0.0` to track the new major.
