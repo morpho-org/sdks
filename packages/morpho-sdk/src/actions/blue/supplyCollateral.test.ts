@@ -12,8 +12,8 @@ import {
   NonPositiveAssetAmountError,
   ZeroCollateralAmountError,
 } from "../../types/index.js";
-import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
 import { getRequirements } from "../requirements/index.js";
+import * as getRequirementsActionModule from "../signatures/getRequirementsAction.js";
 import { blueSupplyCollateral } from "./supplyCollateral.js";
 
 describe("blueSupplyCollateral unit tests", () => {

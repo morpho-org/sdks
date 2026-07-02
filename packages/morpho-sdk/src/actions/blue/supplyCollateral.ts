@@ -16,7 +16,7 @@ import {
   type Transaction,
   ZeroCollateralAmountError,
 } from "../../types/index.js";
-import { getRequirementsAction } from "../requirements/getRequirementsAction.js";
+import { getRequirementsAction } from "../signatures/getRequirementsAction.js";
 
 /** Parameters for {@link blueSupplyCollateral}. */
 export interface BlueSupplyCollateralParams {
@@ -25,7 +25,9 @@ export interface BlueSupplyCollateralParams {
     readonly marketParams: MarketParams;
   };
   args: DepositAmountArgs & {
+    /** Address whose Morpho collateral position is credited. */
     onBehalf: Address;
+    /** Optional pre-signed permit/permit2 approval for the collateral transfer. */
     requirementSignature?: PermitRequirementSignature;
   };
   metadata?: Metadata;

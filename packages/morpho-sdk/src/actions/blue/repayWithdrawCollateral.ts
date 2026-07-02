@@ -14,8 +14,8 @@ import {
   type PermitRequirementSignature,
   type Transaction,
 } from "../../types/index.js";
-import { getAuthorizationAction } from "../requirements/getAuthorizationAction.js";
-import { getRequirementsAction } from "../requirements/getRequirementsAction.js";
+import { getAuthorizationAction } from "../signatures/getAuthorizationAction.js";
+import { getRequirementsAction } from "../signatures/getRequirementsAction.js";
 
 /** Parameters for {@link blueRepayWithdrawCollateral}. */
 export interface BlueRepayWithdrawCollateralParams {

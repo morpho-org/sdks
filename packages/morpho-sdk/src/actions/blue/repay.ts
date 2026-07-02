@@ -12,7 +12,7 @@ import type {
   PermitRequirementSignature,
   Transaction,
 } from "../../types/index.js";
-import { getRequirementsAction } from "../requirements/getRequirementsAction.js";
+import { getRequirementsAction } from "../signatures/getRequirementsAction.js";
 
 /** Parameters for {@link blueRepay}. */
 export interface BlueRepayParams {
@@ -37,6 +37,7 @@ export interface BlueRepayParams {
     receiver: Address;
     /** Maximum repay share price (in ray). Protects against share price manipulation. */
     maxSharePrice: bigint;
+    /** Optional pre-signed permit/permit2 approval for the loan-token transfer. */
     requirementSignature?: PermitRequirementSignature;
   };
   metadata?: Metadata;

@@ -19,7 +19,7 @@ import {
   type VaultReallocation,
   ZeroCollateralAmountError,
 } from "../../types/index.js";
-import { getAuthorizationAction } from "../requirements/getAuthorizationAction.js";
+import { getAuthorizationAction } from "../signatures/getAuthorizationAction.js";
 import { buildReallocationActions } from "./buildReallocationActions.js";
 
 /** Parameters for {@link blueRefinance}. */
@@ -32,7 +32,9 @@ export interface BlueRefinanceParams {
     readonly marketParams: MarketParams;
   };
   args: {
+    /** Address whose position is refinanced from the source to the target market. */
     user: Address;
+    /** Amount of collateral moved from the source market to the target market. */
     collateralAmount: bigint;
     /**
      * Loan assets to borrow on the target. Assets mode: the exact borrow (exclusive with

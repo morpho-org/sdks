@@ -18,8 +18,8 @@ import {
   NonPositiveMaxSharePriceError,
   ZeroDepositAmountError,
 } from "../../types/index.js";
-import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
 import { getRequirements } from "../requirements/index.js";
+import * as getRequirementsActionModule from "../signatures/getRequirementsAction.js";
 import { vaultV1Deposit } from "./deposit.js";
 
 describe("depositVaultV1 unit tests", () => {

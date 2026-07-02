@@ -17,7 +17,7 @@ import {
   type Transaction,
   ZeroSupplyAmountError,
 } from "../../types/index.js";
-import { getRequirementsAction } from "../requirements/getRequirementsAction.js";
+import { getRequirementsAction } from "../signatures/getRequirementsAction.js";
 
 /** Parameters for {@link blueSupply}. */
 export interface BlueSupplyParams {
@@ -26,9 +26,15 @@ export interface BlueSupplyParams {
     readonly marketParams: MarketParams;
   };
   args: DepositAmountArgs & {
+    /** Address whose Morpho supply position is credited. */
     onBehalf: Address;
     /** Maximum supply share price (in ray). Slippage protection against inflation attacks. */
     maxSharePrice: bigint;
+    /**
+     * Optional pre-signed permit/permit2 approval for the loan-token transfer. When absent, the
+     * bundle uses a plain `erc20TransferFrom` and assumes the user has already approved
+     * `GeneralAdapter1`.
+     */
     requirementSignature?: PermitRequirementSignature;
   };
   metadata?: Metadata;

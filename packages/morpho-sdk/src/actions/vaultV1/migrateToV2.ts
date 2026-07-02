@@ -13,7 +13,7 @@ import {
   VaultAssetMismatchError,
   type VaultV1MigrateToV2Action,
 } from "../../types/index.js";
-import { getRequirementsAction } from "../requirements/getRequirementsAction.js";
+import { getRequirementsAction } from "../signatures/getRequirementsAction.js";
 
 /** Parameters for {@link vaultV1MigrateToV2}. */
 export interface VaultV1MigrateToV2Params {

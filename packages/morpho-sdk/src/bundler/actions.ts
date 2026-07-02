@@ -16,6 +16,8 @@ import {
   isAddressEqual,
   keccak256,
   parseSignature,
+  type Signature,
+  serializeSignature,
   zeroHash,
 } from "viem";
 import { bundler3Abi, coreAdapterAbi, generalAdapter1Abi } from "../abis.js";
@@ -86,6 +88,14 @@ const addBundlerPrefund = (
   value: state.value + amount,
   availableBundlerValue: state.availableBundlerValue + amount,
 });
+
+/**
+ * Normalizes a raw ECDSA signature to its hex form. Integrators get a `Hex` from
+ * `signTypedData`/`signMessage` and a viem `Signature` object from the low-level
+ * `sign`; both are accepted so no manual conversion is required at the call site.
+ */
+const toSignatureHex = (signature: Hex | Signature): Hex =>
+  typeof signature === "string" ? signature : serializeSignature(signature);
 
 const consumeCallValue = (
   state: BundleValueState,
@@ -620,13 +630,13 @@ export namespace BundlerAction {
     asset: Address,
     amount: bigint,
     deadline: bigint,
-    signature: Hex,
+    signature: Hex | Signature,
     skipRevert = true,
   ): BundlerCall[] {
     const {
       bundler3: { generalAdapter1 },
     } = getChainAddresses(chainId);
-    const { r, s, yParity } = parseSignature(signature);
+    const { r, s, yParity } = parseSignature(toSignatureHex(signature));
 
     return [
       {
@@ -684,7 +694,7 @@ export namespace BundlerAction {
     chainId: number,
     owner: Address,
     permitSingle: Permit2PermitSingle,
-    signature: Hex,
+    signature: Hex | Signature,
     skipRevert = true,
   ): BundlerCall[] {
     const {
@@ -707,7 +717,7 @@ export namespace BundlerAction {
               ...permitSingle,
               spender: generalAdapter1,
             },
-            signature,
+            toSignatureHex(signature),
           ],
         }),
         value: 0n,
@@ -891,12 +901,13 @@ export namespace BundlerAction {
    *
    * @param chainId - Chain where the action will execute.
    * @param authorization - The Morpho authorization payload covered by the signature.
-   * @param signature - The owner's EIP-712 signature over the authorization typed data.
+   * @param signature - The owner's EIP-712 signature over the authorization typed data, as a hex
+   *   string or a viem `Signature` object.
    * @param skipRevert - Whether Bundler3 should tolerate a revert. Defaults to `true`, matching
    *   the convention for already-authorized accounts (the call reverts harmlessly).
    * @returns Encoded Bundler3 calls.
-   * @throws {BundlerErrors.UnexpectedSignature} when `authorization.authorized` is Bundler3
-   *   itself, which must never receive operator rights.
+   * @throws {BundlerErrors.UnexpectedSignature} when `authorization.authorized` is not the chain's
+   *   `GeneralAdapter1` — the only operator this bundled path may grant rights to.
    *
    * @example
    * ```ts
@@ -925,16 +936,16 @@ export namespace BundlerAction {
   export function morphoSetAuthorizationWithSig(
     chainId: number,
     authorization: Authorization,
-    signature: Hex,
+    signature: Hex | Signature,
     skipRevert = true,
   ): BundlerCall[] {
     const {
       morpho,
-      bundler3: { bundler3 },
+      bundler3: { generalAdapter1 },
     } = getChainAddresses(chainId);
-    const { r, s, yParity } = parseSignature(signature);
+    const { r, s, yParity } = parseSignature(toSignatureHex(signature));
 
-    if (isAddressEqual(authorization.authorized, bundler3)) {
+    if (!isAddressEqual(authorization.authorized, generalAdapter1)) {
       throw new BundlerErrors.UnexpectedSignature(authorization.authorized);
     }
 

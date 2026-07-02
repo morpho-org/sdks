@@ -20,8 +20,8 @@ import {
   type VaultReallocation,
   ZeroCollateralAmountError,
 } from "../../types/index.js";
-import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
 import { getRequirements } from "../requirements/index.js";
+import * as getRequirementsActionModule from "../signatures/getRequirementsAction.js";
 import { blueSupplyCollateralBorrow } from "./supplyCollateralBorrow.js";
 
 describe("blueSupplyCollateralBorrow unit tests", () => {

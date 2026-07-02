@@ -13,7 +13,7 @@ import {
   type Transaction,
   type VaultReallocation,
 } from "../../types/index.js";
-import { getAuthorizationAction } from "../requirements/getAuthorizationAction.js";
+import { getAuthorizationAction } from "../signatures/getAuthorizationAction.js";
 import { buildReallocationActions } from "./buildReallocationActions.js";
 
 /** Parameters for {@link blueWithdraw}. */

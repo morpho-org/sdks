@@ -13,7 +13,7 @@ import {
   type RequirementSignature,
   TransferAmountNotEqualToAssetsError,
 } from "../../types/index.js";
-import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
+import * as getRequirementsActionModule from "../signatures/getRequirementsAction.js";
 import { blueRepayWithdrawCollateral } from "./repayWithdrawCollateral.js";
 
 describe("blueRepayWithdrawCollateral unit tests", () => {

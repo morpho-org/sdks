@@ -12,7 +12,7 @@ import {
   type Transaction,
   type VaultReallocation,
 } from "../../types/index.js";
-import { getAuthorizationAction } from "../requirements/getAuthorizationAction.js";
+import { getAuthorizationAction } from "../signatures/getAuthorizationAction.js";
 import { buildReallocationActions } from "./buildReallocationActions.js";
 
 /** Parameters for {@link blueBorrow}. */
@@ -22,7 +22,9 @@ export interface BlueBorrowParams {
     readonly marketParams: MarketParams;
   };
   args: {
+    /** Amount of loan asset to borrow. */
     amount: bigint;
+    /** Address that receives the borrowed assets. */
     receiver: Address;
     /** Minimum borrow share price (in ray). Protects against share price manipulation. */
     minSharePrice: bigint;

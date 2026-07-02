@@ -15,8 +15,8 @@ import {
   isRequirementSignature,
   Permit2ExpirationMissingError,
 } from "../../types/index.js";
+import { getRequirementsAction } from "../signatures/getRequirementsAction.js";
 import { getRequirements } from "./getRequirements.js";
-import { getRequirementsAction } from "./getRequirementsAction.js";
 import { getRequirementsApproval } from "./getRequirementsApproval.js";
 import { getRequirementsPermit } from "./getRequirementsPermit.js";
 

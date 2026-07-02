@@ -1367,14 +1367,38 @@ describe("BundlerAction", () => {
       expect(decoded.args).toEqual([authorization, { v: yParity + 27, r, s }]);
     });
 
-    test("error: UnexpectedSignature when authorizing bundler3", () => {
-      expect(() =>
+    test("behavior: accepts a Signature object", () => {
+      const hexCall = onlyCall(
         BundlerAction.morphoSetAuthorizationWithSig(
           chainId,
-          { ...authorization, authorized: bundler3 },
+          authorization,
           signature,
+          false,
         ),
-      ).toThrow(BundlerErrors.UnexpectedSignature);
+      );
+      const objectCall = onlyCall(
+        BundlerAction.morphoSetAuthorizationWithSig(
+          chainId,
+          authorization,
+          parseSignature(signature),
+          false,
+        ),
+      );
+
+      expect(objectCall.data).toBe(hexCall.data);
+    });
+
+    test("error: UnexpectedSignature when authorized is not GeneralAdapter1", () => {
+      const notGeneralAdapter1: Address[] = [bundler3, recipient];
+      for (const authorized of notGeneralAdapter1) {
+        expect(() =>
+          BundlerAction.morphoSetAuthorizationWithSig(
+            chainId,
+            { ...authorization, authorized },
+            signature,
+          ),
+        ).toThrow(BundlerErrors.UnexpectedSignature);
+      }
     });
 
     test("error: MissingSignature via encode", () => {
@@ -1384,6 +1408,44 @@ describe("BundlerAction", () => {
           args: [authorization, null, false],
         }),
       ).toThrow(BundlerErrors.MissingSignature);
+    });
+  });
+
+  describe("signature normalization", () => {
+    test("behavior: permit accepts a Signature object", () => {
+      const hexCall = onlyCall(
+        BundlerAction.permit(chainId, owner, asset, 4n, 5n, signature, false),
+      );
+      const objectCall = onlyCall(
+        BundlerAction.permit(
+          chainId,
+          owner,
+          asset,
+          4n,
+          5n,
+          parseSignature(signature),
+          false,
+        ),
+      );
+
+      expect(objectCall.data).toBe(hexCall.data);
+    });
+
+    test("behavior: approve2 accepts a Signature object", () => {
+      const hexCall = onlyCall(
+        BundlerAction.approve2(chainId, owner, permitSingle, signature, false),
+      );
+      const objectCall = onlyCall(
+        BundlerAction.approve2(
+          chainId,
+          owner,
+          permitSingle,
+          parseSignature(signature),
+          false,
+        ),
+      );
+
+      expect(objectCall.data).toBe(hexCall.data);
     });
   });
 

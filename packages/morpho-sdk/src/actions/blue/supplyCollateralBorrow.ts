@@ -20,8 +20,8 @@ import {
   type VaultReallocation,
   ZeroCollateralAmountError,
 } from "../../types/index.js";
-import { getAuthorizationAction } from "../requirements/getAuthorizationAction.js";
-import { getRequirementsAction } from "../requirements/getRequirementsAction.js";
+import { getAuthorizationAction } from "../signatures/getAuthorizationAction.js";
+import { getRequirementsAction } from "../signatures/getRequirementsAction.js";
 import { buildReallocationActions } from "./buildReallocationActions.js";
 
 /** Parameters for {@link blueSupplyCollateralBorrow}. */
@@ -31,8 +31,11 @@ export interface BlueSupplyCollateralBorrowParams {
     readonly marketParams: MarketParams;
   };
   args: DepositAmountArgs & {
+    /** Amount of loan asset to borrow after the collateral is supplied. */
     borrowAmount: bigint;
+    /** Address whose Morpho collateral and borrow positions are credited. */
     onBehalf: Address;
+    /** Address that receives the borrowed assets. */
     receiver: Address;
     /** Minimum borrow share price (in ray). Protects against share price manipulation. */
     minSharePrice: bigint;

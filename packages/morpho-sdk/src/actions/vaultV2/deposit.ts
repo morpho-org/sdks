@@ -16,7 +16,7 @@ import {
   type VaultV2DepositAction,
   ZeroDepositAmountError,
 } from "../../types/index.js";
-import { getRequirementsAction } from "../requirements/getRequirementsAction.js";
+import { getRequirementsAction } from "../signatures/getRequirementsAction.js";
 
 /** Parameters for {@link vaultV2Deposit}. */
 export interface VaultV2DepositParams {

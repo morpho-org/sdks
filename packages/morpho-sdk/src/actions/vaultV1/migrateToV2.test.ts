@@ -18,8 +18,8 @@ import {
   NonPositiveSharesAmountError,
   VaultAssetMismatchError,
 } from "../../types/index.js";
-import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
 import { getRequirements } from "../requirements/index.js";
+import * as getRequirementsActionModule from "../signatures/getRequirementsAction.js";
 import { vaultV1MigrateToV2 } from "./migrateToV2.js";
 
 describe("vaultV1MigrateToV2 unit tests", () => {
