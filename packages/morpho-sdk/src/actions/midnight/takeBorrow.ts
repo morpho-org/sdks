@@ -4,7 +4,12 @@ import {
   midnightBundlesAbi,
 } from "@morpho-org/midnight-sdk";
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
-import { type Address, encodeFunctionData, zeroAddress } from "viem";
+import {
+  type Address,
+  encodeFunctionData,
+  maxUint256,
+  zeroAddress,
+} from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import { validateOfferSides } from "../../helpers/validateOfferSides.js";
 import {
@@ -25,7 +30,12 @@ export interface MidnightTakeBorrowParams {
   readonly loanAssets: bigint;
   readonly maxUnits: bigint;
   readonly taker: Address;
+  readonly reduceOnly?: boolean;
   readonly receiver?: Address;
+  readonly referralFeePct?: bigint;
+  readonly referralFeeRecipient?: Address;
+  readonly maxContinuousFee?: bigint;
+  readonly deadline?: bigint;
   readonly takeableOffers: readonly MidnightTakeableOffer[];
   readonly metadata?: Metadata;
 }
@@ -39,6 +49,21 @@ export const midnightTakeBorrow = (
   }
   if (params.maxUnits < 0n) {
     throw new NegativeMidnightAmountError("maxUnits", params.maxUnits);
+  }
+  if ((params.referralFeePct ?? 0n) < 0n) {
+    throw new NegativeMidnightAmountError(
+      "referralFeePct",
+      params.referralFeePct ?? 0n,
+    );
+  }
+  if ((params.maxContinuousFee ?? maxUint256) < 0n) {
+    throw new NegativeMidnightAmountError(
+      "maxContinuousFee",
+      params.maxContinuousFee ?? maxUint256,
+    );
+  }
+  if ((params.deadline ?? maxUint256) < 0n) {
+    throw new NegativeMidnightAmountError("deadline", params.deadline ?? 0n);
   }
   if (params.takeableOffers.length === 0) {
     throw new EmptyMidnightTakeableOffersError();
@@ -61,23 +86,31 @@ export const midnightTakeBorrow = (
   }
 
   const midnightBundles = getChainAddress(params.chainId, "midnightBundles");
+  const reduceOnly = params.reduceOnly ?? false;
   const receiver = params.receiver ?? params.taker;
+  const referralFeePct = params.referralFeePct ?? 0n;
+  const referralFeeRecipient = params.referralFeeRecipient ?? zeroAddress;
+  const maxContinuousFee = params.maxContinuousFee ?? maxUint256;
+  const deadline = params.deadline ?? maxUint256;
 
   let tx = {
     to: midnightBundles,
     value: 0n,
     data: encodeFunctionData({
       abi: midnightBundlesAbi,
-      functionName: "supplyCollateralAndSellWithAssetsTarget",
+      functionName: "midnightBundlesV1SupplyCollateralAndSellWithAssetsTarget",
       args: [
         params.loanAssets,
         params.maxUnits,
         params.taker,
+        reduceOnly,
         receiver,
         [],
         params.takeableOffers,
-        0n,
-        zeroAddress,
+        referralFeePct,
+        referralFeeRecipient,
+        maxContinuousFee,
+        deadline,
       ],
     }),
   };
@@ -95,8 +128,14 @@ export const midnightTakeBorrow = (
         loanAssets: params.loanAssets,
         maxUnits: params.maxUnits,
         taker: params.taker,
+        reduceOnly,
         receiver,
+        collateralSupplies: 0,
         takeableOffers: params.takeableOffers.length,
+        referralFeePct,
+        referralFeeRecipient,
+        maxContinuousFee,
+        deadline,
       },
     },
   });

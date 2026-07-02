@@ -4,7 +4,12 @@ import {
   midnightBundlesAbi,
 } from "@morpho-org/midnight-sdk";
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
-import { type Address, encodeFunctionData, zeroAddress } from "viem";
+import {
+  type Address,
+  encodeFunctionData,
+  maxUint256,
+  zeroAddress,
+} from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import { validateOfferSides } from "../../helpers/validateOfferSides.js";
 import {
@@ -18,7 +23,10 @@ import {
   type Transaction,
 } from "../../types/index.js";
 import { encodeMidnightTokenPermit } from "./encodeMidnightTokenPermit.js";
-import type { MidnightTakeableOffer } from "./types.js";
+import type {
+  MidnightCollateralWithdrawal,
+  MidnightTakeableOffer,
+} from "./types.js";
 
 /** Parameters for {@link midnightTakeLend}. */
 export interface MidnightTakeLendParams {
@@ -27,7 +35,14 @@ export interface MidnightTakeLendParams {
   readonly assets: bigint;
   readonly minUnits: bigint;
   readonly taker: Address;
+  readonly reduceOnly?: boolean;
   readonly takeableOffers: readonly MidnightTakeableOffer[];
+  readonly collateralWithdrawals?: readonly MidnightCollateralWithdrawal[];
+  readonly collateralReceiver?: Address;
+  readonly referralFeePct?: bigint;
+  readonly referralFeeRecipient?: Address;
+  readonly maxContinuousFee?: bigint;
+  readonly deadline?: bigint;
   readonly signatures?:
     | AnyRequirementSignature
     | readonly AnyRequirementSignature[];
@@ -43,6 +58,21 @@ export const midnightTakeLend = (
   }
   if (params.minUnits < 0n) {
     throw new NegativeMidnightAmountError("minUnits", params.minUnits);
+  }
+  if ((params.referralFeePct ?? 0n) < 0n) {
+    throw new NegativeMidnightAmountError(
+      "referralFeePct",
+      params.referralFeePct ?? 0n,
+    );
+  }
+  if ((params.maxContinuousFee ?? maxUint256) < 0n) {
+    throw new NegativeMidnightAmountError(
+      "maxContinuousFee",
+      params.maxContinuousFee ?? maxUint256,
+    );
+  }
+  if ((params.deadline ?? maxUint256) < 0n) {
+    throw new NegativeMidnightAmountError("deadline", params.deadline ?? 0n);
   }
   if (params.takeableOffers.length === 0) {
     throw new EmptyMidnightTakeableOffersError();
@@ -65,6 +95,27 @@ export const midnightTakeLend = (
   }
 
   const midnightBundles = getChainAddress(params.chainId, "midnightBundles");
+  const reduceOnly = params.reduceOnly ?? false;
+  const collateralWithdrawals = params.collateralWithdrawals ?? [];
+  for (const [index, withdrawal] of collateralWithdrawals.entries()) {
+    if (withdrawal.collateralIndex < 0n) {
+      throw new NegativeMidnightAmountError(
+        `collateralWithdrawals[${index}].collateralIndex`,
+        withdrawal.collateralIndex,
+      );
+    }
+    if (withdrawal.assets < 0n) {
+      throw new NegativeMidnightAmountError(
+        `collateralWithdrawals[${index}].assets`,
+        withdrawal.assets,
+      );
+    }
+  }
+  const collateralReceiver = params.collateralReceiver ?? zeroAddress;
+  const referralFeePct = params.referralFeePct ?? 0n;
+  const referralFeeRecipient = params.referralFeeRecipient ?? zeroAddress;
+  const maxContinuousFee = params.maxContinuousFee ?? maxUint256;
+  const deadline = params.deadline ?? maxUint256;
   const loanTokenPermit = encodeMidnightTokenPermit({
     token: MarketUtils.toStruct(params.market).loanToken,
     owner: params.taker,
@@ -78,17 +129,20 @@ export const midnightTakeLend = (
     value: 0n,
     data: encodeFunctionData({
       abi: midnightBundlesAbi,
-      functionName: "buyWithAssetsTargetAndWithdrawCollateral",
+      functionName: "midnightBundlesV1BuyWithAssetsTargetAndWithdrawCollateral",
       args: [
         params.assets,
         params.minUnits,
         params.taker,
+        reduceOnly,
         loanTokenPermit,
         params.takeableOffers,
-        [],
-        zeroAddress,
-        0n,
-        zeroAddress,
+        collateralWithdrawals,
+        collateralReceiver,
+        referralFeePct,
+        referralFeeRecipient,
+        maxContinuousFee,
+        deadline,
       ],
     }),
   };
@@ -106,7 +160,14 @@ export const midnightTakeLend = (
         assets: params.assets,
         minUnits: params.minUnits,
         taker: params.taker,
+        reduceOnly,
         takeableOffers: params.takeableOffers.length,
+        collateralWithdrawals: collateralWithdrawals.length,
+        collateralReceiver,
+        referralFeePct,
+        referralFeeRecipient,
+        maxContinuousFee,
+        deadline,
       },
     },
   });

@@ -4,7 +4,12 @@ import {
   midnightBundlesAbi,
 } from "@morpho-org/midnight-sdk";
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
-import { type Address, encodeFunctionData, zeroAddress } from "viem";
+import {
+  type Address,
+  encodeFunctionData,
+  maxUint256,
+  zeroAddress,
+} from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   type AnyRequirementSignature,
@@ -25,7 +30,12 @@ export interface MidnightRepayWithdrawCollateralParams {
   readonly withdrawCollateralAssets: bigint;
   readonly onBehalf: Address;
   readonly receiver?: Address;
+  readonly collateralReceiver?: Address;
   readonly collateralIndex?: bigint;
+  readonly collateralWithdrawals?: readonly MidnightCollateralWithdrawal[];
+  readonly referralFeePct?: bigint;
+  readonly referralFeeRecipient?: Address;
+  readonly deadline?: bigint;
   readonly signatures?:
     | AnyRequirementSignature
     | readonly AnyRequirementSignature[];
@@ -45,30 +55,61 @@ export const midnightRepayWithdrawCollateral = (
       params.withdrawCollateralAssets,
     );
   }
-  if (params.repayAssets === 0n && params.withdrawCollateralAssets === 0n) {
-    throw new NonPositiveMidnightAmountError("repay or withdraw amount", 0n);
+  if ((params.referralFeePct ?? 0n) < 0n) {
+    throw new NegativeMidnightAmountError(
+      "referralFeePct",
+      params.referralFeePct ?? 0n,
+    );
   }
-
-  const marketId = MarketUtils.toId(params.market);
-  const market = MarketUtils.toStruct(params.market);
-  const midnightBundles = getChainAddress(params.chainId, "midnightBundles");
-  const receiver = params.receiver ?? params.onBehalf;
-  const collateralWithdrawals: readonly MidnightCollateralWithdrawal[] =
-    params.withdrawCollateralAssets > 0n
+  if ((params.deadline ?? maxUint256) < 0n) {
+    throw new NegativeMidnightAmountError("deadline", params.deadline ?? 0n);
+  }
+  const collateralWithdrawals =
+    params.collateralWithdrawals ??
+    (params.withdrawCollateralAssets > 0n
       ? [
           {
             collateralIndex: params.collateralIndex ?? 0n,
             assets: params.withdrawCollateralAssets,
           },
         ]
-      : [];
+      : []);
+  for (const [index, withdrawal] of collateralWithdrawals.entries()) {
+    if (withdrawal.collateralIndex < 0n) {
+      throw new NegativeMidnightAmountError(
+        `collateralWithdrawals[${index}].collateralIndex`,
+        withdrawal.collateralIndex,
+      );
+    }
+    if (withdrawal.assets < 0n) {
+      throw new NegativeMidnightAmountError(
+        `collateralWithdrawals[${index}].assets`,
+        withdrawal.assets,
+      );
+    }
+  }
+  if (
+    params.repayAssets === 0n &&
+    collateralWithdrawals.every((withdrawal) => withdrawal.assets === 0n)
+  ) {
+    throw new NonPositiveMidnightAmountError("repay or withdraw amount", 0n);
+  }
+
+  const marketId = MarketUtils.toId(params.market);
+  const market = MarketUtils.toStruct(params.market);
+  const midnightBundles = getChainAddress(params.chainId, "midnightBundles");
+  const collateralReceiver =
+    params.collateralReceiver ?? params.receiver ?? params.onBehalf;
+  const referralFeePct = params.referralFeePct ?? 0n;
+  const referralFeeRecipient = params.referralFeeRecipient ?? zeroAddress;
+  const deadline = params.deadline ?? maxUint256;
 
   let tx = {
     to: midnightBundles,
     value: 0n,
     data: encodeFunctionData({
       abi: midnightBundlesAbi,
-      functionName: "repayAndWithdrawCollateral",
+      functionName: "midnightBundlesV1RepayAndWithdrawCollateral",
       args: [
         market,
         params.repayAssets,
@@ -81,9 +122,10 @@ export const midnightRepayWithdrawCollateral = (
           signatures: params.signatures,
         }),
         collateralWithdrawals,
-        receiver,
-        0n,
-        zeroAddress,
+        collateralReceiver,
+        referralFeePct,
+        referralFeeRecipient,
+        deadline,
       ],
     }),
   };
@@ -99,9 +141,12 @@ export const midnightRepayWithdrawCollateral = (
       args: {
         market: marketId,
         repayAssets: params.repayAssets,
-        withdrawCollateralAssets: params.withdrawCollateralAssets,
+        collateralWithdrawals: collateralWithdrawals.length,
         onBehalf: params.onBehalf,
-        receiver,
+        collateralReceiver,
+        referralFeePct,
+        referralFeeRecipient,
+        deadline,
       },
     },
   });

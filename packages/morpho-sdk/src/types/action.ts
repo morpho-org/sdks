@@ -341,7 +341,14 @@ export interface MidnightTakeLendAction
       assets: bigint;
       minUnits: bigint;
       taker: Address;
+      reduceOnly: boolean;
       takeableOffers: number;
+      collateralWithdrawals: number;
+      collateralReceiver: Address;
+      referralFeePct: bigint;
+      referralFeeRecipient: Address;
+      maxContinuousFee: bigint;
+      deadline: bigint;
     }
   > {}
 
@@ -354,8 +361,14 @@ export interface MidnightTakeBorrowAction
       loanAssets: bigint;
       maxUnits: bigint;
       taker: Address;
+      reduceOnly: boolean;
       receiver: Address;
+      collateralSupplies: number;
       takeableOffers: number;
+      referralFeePct: bigint;
+      referralFeeRecipient: Address;
+      maxContinuousFee: bigint;
+      deadline: bigint;
     }
   > {}
 
@@ -369,8 +382,14 @@ export interface MidnightSupplyCollateralTakeBorrowAction
       loanAssets: bigint;
       maxUnits: bigint;
       taker: Address;
+      reduceOnly: boolean;
       receiver: Address;
+      collateralSupplies: number;
       takeableOffers: number;
+      referralFeePct: bigint;
+      referralFeeRecipient: Address;
+      maxContinuousFee: bigint;
+      deadline: bigint;
     }
   > {}
 
@@ -419,9 +438,12 @@ export interface MidnightRepayWithdrawCollateralAction
     {
       market: Hex;
       repayAssets: bigint;
-      withdrawCollateralAssets: bigint;
+      collateralWithdrawals: number;
       onBehalf: Address;
-      receiver: Address;
+      collateralReceiver: Address;
+      referralFeePct: bigint;
+      referralFeeRecipient: Address;
+      deadline: bigint;
     }
   > {}
 
