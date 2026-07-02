@@ -984,6 +984,24 @@ const _addressesRegistry = {
     preLiquidationFactory: "0xF6035B231028E61cd2283651f22ecA45f8e3ADc8",
     wNative: "0x4200000000000000000000000000000000000006",
   },
+  [ChainId.RobinhoodMainnet]: {
+    blue: "0x9D53d5E3bd5E8d4Cbfa6DB1ca238AEA02E651010",
+    morpho: "0x9D53d5E3bd5E8d4Cbfa6DB1ca238AEA02E651010",
+    permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    bundler3: {
+      bundler3: "0x6478e9393d4C5bB4d53ee881d1DE78786A0344a6",
+      generalAdapter1: "0xc5E188541D107e8B79e43478bDE365F1406665D6",
+    },
+    adaptiveCurveIrm: "0x2BD3d5965B26B51814AC95127B2b80dD6CcC0fa1",
+    vaultV2Factory: "0x0FBad98595b0186dA120E41f77C102beb49f803c",
+    morphoMarketV1AdapterV2Factory:
+      "0x79370Ed003CE325C088E530d5e8655c99c2993e1",
+    morphoVaultV1AdapterFactory: "0x7a91222F3f7B927bB8fb624593Ca86e111C2F85e",
+    registryList: "0xe785a2eFD384BA7B95BaEd3851BC76aeD67C676f",
+    chainlinkOracleFactory: "0xB7c16F6F8cF531447Bf27Ca7220f981E79C9cdF2",
+    preLiquidationFactory: "0x0B0cFa151c06d2342799267754b0a2c320C43D5B",
+    wNative: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+  },
 } as const;
 
 /** Deployment block registry with the same shape as `ChainAddresses`. */
@@ -1674,6 +1692,23 @@ const _deployments = {
     preLiquidationFactory: 16409024n,
     wNative: 0n,
   },
+  [ChainId.RobinhoodMainnet]: {
+    blue: 286n,
+    morpho: 286n,
+    permit2: 0n,
+    bundler3: {
+      bundler3: 286n,
+      generalAdapter1: 286n,
+    },
+    adaptiveCurveIrm: 286n,
+    vaultV2Factory: 286n,
+    morphoMarketV1AdapterV2Factory: 286n,
+    morphoVaultV1AdapterFactory: 286n,
+    registryList: 286n,
+    chainlinkOracleFactory: 286n,
+    preLiquidationFactory: 286n,
+    wNative: 0n,
+  },
 } as const satisfies Record<ChainId, ChainDeployments>;
 
 /** Dot-separated label for an address entry in the chain registry. */
@@ -1918,6 +1953,9 @@ const _unwrappedTokensMapping: Record<
   },
   [ChainId.MegaEthMainnet]: {
     [_addressesRegistry[ChainId.MegaEthMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.RobinhoodMainnet]: {
+    [_addressesRegistry[ChainId.RobinhoodMainnet].wNative]: NATIVE_ADDRESS,
   },
 };
 

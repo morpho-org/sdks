@@ -193,6 +193,13 @@ describe("addressesRegistry", () => {
       morphoDeployment: 16_408_957n,
       wNativeDeployment: 0n,
     },
+    {
+      chainId: ChainId.RobinhoodMainnet,
+      morpho: "0x9D53d5E3bd5E8d4Cbfa6DB1ca238AEA02E651010",
+      wNative: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+      morphoDeployment: 286n,
+      wNativeDeployment: 0n,
+    },
   ])("behavior: exposes era-2 addresses for chain $chainId", ({
     chainId,
     morpho,
