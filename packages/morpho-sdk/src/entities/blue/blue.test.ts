@@ -210,7 +210,7 @@ describe("MorphoBlue validation", () => {
     expect(requirements).toEqual([]);
   });
 
-  test("repay rejects conflicting and non-positive share amounts", async ({
+  test("repay rejects conflicting and non-positive repay amounts", async ({
     client,
   }) => {
     const market = client
@@ -228,6 +228,14 @@ describe("MorphoBlue validation", () => {
     expect(() =>
       market.repay({
         shares: 0n,
+        userAddress: USER,
+        positionData: makePosition(),
+      }),
+    ).toThrow(NonPositiveRepayAmountError);
+    // Assets mode: a negative amount must not be masked by nativeAmount.
+    expect(() =>
+      market.repay({
+        amount: -1n,
         userAddress: USER,
         positionData: makePosition(),
       }),
@@ -253,6 +261,15 @@ describe("MorphoBlue validation", () => {
     expect(() =>
       market.repayWithdrawCollateral({
         shares: 0n,
+        withdrawAmount: 1n,
+        userAddress: USER,
+        positionData: makePosition(),
+      }),
+    ).toThrow(NonPositiveRepayAmountError);
+    // Assets mode: a negative amount must not be masked by nativeAmount.
+    expect(() =>
+      market.repayWithdrawCollateral({
+        amount: -1n,
         withdrawAmount: 1n,
         userAddress: USER,
         positionData: makePosition(),

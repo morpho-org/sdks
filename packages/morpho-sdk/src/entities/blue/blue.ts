@@ -878,6 +878,12 @@ export class MorphoBlue implements BlueActions {
     } else {
       // Assets mode is additive, like supply: repaid = amount + nativeAmount.
       const amount = params.amount ?? 0n;
+      // Reject a negative ERC-20 amount before it can be masked by nativeAmount
+      // in the sum below (a negative amount would otherwise yield a negative
+      // erc20Amount and a negative approval in getRequirements).
+      if (amount < 0n) {
+        throw new NonPositiveRepayAmountError(this.marketParams.id);
+      }
       repayAssets = amount + nativeAmount;
       if (repayAssets <= 0n) {
         throw new NonPositiveRepayAmountError(this.marketParams.id);
@@ -1086,6 +1092,12 @@ export class MorphoBlue implements BlueActions {
     } else {
       // Assets mode is additive, like supply: repaid = amount + nativeAmount.
       const amount = params.amount ?? 0n;
+      // Reject a negative ERC-20 amount before it can be masked by nativeAmount
+      // in the sum below (a negative amount would otherwise yield a negative
+      // erc20Amount and a negative approval in getRequirements).
+      if (amount < 0n) {
+        throw new NonPositiveRepayAmountError(this.marketParams.id);
+      }
       repayAssets = amount + nativeAmount;
       if (repayAssets <= 0n) {
         throw new NonPositiveRepayAmountError(this.marketParams.id);

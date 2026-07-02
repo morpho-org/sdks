@@ -237,6 +237,24 @@ describe("blueRepayWithdrawCollateral unit tests", () => {
     ).toThrow(NonPositiveRepayAmountError);
   });
 
+  test("error: NonPositiveRepayAmountError when shares mode transferAmount is negative", async ({
+    client,
+  }) => {
+    expect(() =>
+      blueRepayWithdrawCollateral({
+        market: { chainId: mainnet.id, marketParams: WethUsdsBlue },
+        args: {
+          shares: parseUnits("100", 6),
+          transferAmount: -1n,
+          withdrawAmount: WITHDRAW_AMOUNT,
+          onBehalf: client.account.address,
+          receiver: client.account.address,
+          maxSharePrice: 1n,
+        },
+      }),
+    ).toThrow(NonPositiveRepayAmountError);
+  });
+
   test("error: NonPositiveWithdrawCollateralAmountError when withdrawAmount is zero", async ({
     client,
   }) => {

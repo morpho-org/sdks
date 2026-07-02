@@ -73,9 +73,9 @@ export interface BlueRepayParams {
  *   `data`, and the typed `action` discriminator the simulation layer consumes.
  * @throws {NonPositiveRepayMaxSharePriceError} when `maxSharePrice <= 0n`.
  * @throws {NegativeNativeAmountError} when `nativeAmount < 0n`.
- * @throws {MutuallyExclusiveRepayAmountsError} when both `amount` and `shares` are non-positive-safe
- *   (both `> 0n`).
- * @throws {NonPositiveRepayAmountError} when in assets mode and `transferAmount <= 0n`.
+ * @throws {MutuallyExclusiveRepayAmountsError} when both `amount` and `shares` are `> 0n`.
+ * @throws {NonPositiveRepayAmountError} when `amount` or `shares` is negative, when in assets mode
+ *   and `transferAmount <= 0n`, or when in shares mode and `transferAmount < 0n`.
  * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
  * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the loan token is not
  *   the chain's wNative.
@@ -89,7 +89,7 @@ export interface BlueRepayParams {
  * ```ts
  * import { blueRepay } from "@morpho-org/morpho-sdk";
  *
- * // Repay 500 loan-asset units, 200 of them funded by wrapping native ETH.
+ * // Repay 0.5 loan-asset units, 0.2 of them funded by wrapping native ETH.
  * const tx = blueRepay({
  *   market: { chainId: 1, marketParams }, // marketParams.loanToken === wNative
  *   args: {
@@ -141,7 +141,9 @@ export const blueRepay = ({
   const repayShares = shares;
   const erc20Amount = isSharesMode ? transferAmount : amount;
 
-  if (!isSharesMode && repayAssets <= 0n) {
+  // Assets mode must repay a positive total; shares mode pulls `transferAmount`
+  // ERC-20 (0 on a fully-native repay), which must never be negative.
+  if (isSharesMode ? transferAmount < 0n : repayAssets <= 0n) {
     throw new NonPositiveRepayAmountError(marketParams.id);
   }
 
