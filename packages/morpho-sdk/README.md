@@ -411,7 +411,7 @@ Direct call to `morpho.withdrawCollateral()` — no bundler, no `GeneralAdapter1
 const positionData = await market.getPositionData("0xUser...");
 
 const { buildTx, getRequirements } = market.repayWithdrawCollateral({
-  assets: 250000000000000000n, // or shares: ...
+  amount: 250000000000000000n, // or shares: ...
   withdrawAmount: 500000000000000000n,
   userAddress: "0xUser...",
   positionData,

@@ -119,9 +119,14 @@ const repayAssets = isSharesMode ? 0n : transferAmount;
 const erc20Amount = isSharesMode ? transferAmount : amount;
 ```
 
-Guards only (no arithmetic derived from state): `maxSharePrice > 0`, `nativeAmount >= 0`,
-`amount >= 0`, `shares >= 0`, `amount`/`shares` mutual exclusivity, and a mode-aware positivity
-guard `isSharesMode ? transferAmount < 0n : repayAssets <= 0n`.
+Guards only — validation, not the state-derived arithmetic the action refuses to do: `maxSharePrice
+> 0`, `nativeAmount >= 0`, `amount >= 0`, `shares >= 0`, `amount`/`shares` mutual exclusivity, and
+mode-aware funding checks: assets mode requires `transferAmount === amount + nativeAmount`
+(`TransferAmountNotEqualToAssetsError`) and a positive total; shares mode requires a non-negative
+`transferAmount` and positive funding `transferAmount + nativeAmount > 0n`
+(`NonPositiveRepayAmountError`). These cheap equality/positivity checks protect direct callers of the
+exported builder from stranding over-pulled tokens on `GeneralAdapter1` or encoding an unfunded repay;
+the entity path always satisfies them.
 
 Bundle:
 
@@ -195,16 +200,19 @@ entity already fetches; a "pure helper" would just be the entity method with sta
 it into the entity removed a redundant layer and kept the action arithmetic-free. Matches "pas de
 logique complexe" — the action does no math at all.
 
-### Alternative 3: Validate `transferAmount === amount + nativeAmount` in the action
+### Alternative 3: Ship the flat args with no action-level consistency guard
 
-Re-introduce a cross-field consistency guard (the spiritual successor of
-`TransferAmountNotEqualToAssetsError`) so a direct caller of the exported action cannot pass
-self-inconsistent flat args.
+Rely solely on the entity always passing consistent args, and let the action encode whatever flat
+args it receives — no `transferAmount === amount + nativeAmount` (assets) or funding
+(`transferAmount + nativeAmount > 0n`, shares) check.
 
-**Why rejected (deferred):** the action is intentionally a dumb encoder that trusts the entity, which
-always passes consistent args; re-adding the check reintroduces the coupling the reshape removed. The
-happy path is fully safe. Left as a Future Consideration (defense-in-depth for direct action callers),
-surfaced by the pre-PR local review.
+**Why rejected:** `blueRepay` / `blueRepayWithdrawCollateral` are exported public API; a direct caller
+passing self-inconsistent pre-resolved args would strand over-pulled loan tokens on `GeneralAdapter1`
+(assets mode has no residual skim) or encode an under/unfunded repay that reverts. The pre-PR local
+review **and** the Codex automated review independently flagged this, and the pre-reshape code guarded
+it via `TransferAmountNotEqualToAssetsError`. The checks are cheap equality/positivity validation — not
+the state-derived arithmetic the action avoids — so they were **adopted**, not deferred. The entity
+path is unaffected because it always produces consistent, funded args.
 
 ### Alternative 4: `unwrapNative` on `repayWithdrawCollateral`
 
@@ -242,12 +250,14 @@ supply/withdraw TIB's `WithdrawNative` note).
 - **Consistent negative-input rejection.** A negative `amount` (assets mode) or a negative shares-mode
   `transferAmount` throws `NonPositiveRepayAmountError` from both `getRequirements` and `buildTx`,
   instead of the entity leaking a negative approval while only `buildTx` threw.
+- **Action-level funding validation.** The exported builders reject self-inconsistent pre-resolved
+  args: assets mode requires `transferAmount === amount + nativeAmount`
+  (`TransferAmountNotEqualToAssetsError`), shares mode requires positive funding
+  (`transferAmount + nativeAmount > 0n`) — so a direct caller cannot strand over-pulled loan tokens on
+  `GeneralAdapter1` or encode an underfunded repay that reverts.
 
 ## Future Considerations
 
-- **Action-level cross-field guard** (`transferAmount === amount + nativeAmount` in assets mode /
-  `transferAmount === erc20` in shares mode) as defense-in-depth for direct callers of the exported
-  builders (Alternative 3).
 - **Native-out withdraw** (`unwrapNative` tail) for loan-asset withdraw flows when an integrator asks
   — tracked separately from the repay legs.
 
