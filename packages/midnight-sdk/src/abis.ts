@@ -2717,9 +2717,9 @@ export const midnightAbi = [
 /**
  * ABI JSON for the Midnight Bundles periphery used by app-compatible taker and repay flows.
  *
- * Source: `morpho-org/morpho-apps` commit `4e903d545184a1f46b378c5c0c4ad414575a5b94`,
- * `packages/contracts/solidity/interfaces/IMidnightBundles.sol`, adapted to the current
- * Midnight `Market` and `Offer` struct fields exported by this package.
+ * Source: `morpho-org/bundles` commit `4c71ac5ee7254b2a448b6054e003bd81e171d86e`,
+ * `src/midnight/IMidnightBundlesV1.sol`, adapted to the current Midnight `Market`
+ * and `Offer` struct fields exported by this package.
  *
  * @example
  * ```ts
@@ -2729,19 +2729,6 @@ export const midnightAbi = [
  * ```
  */
 export const midnightBundlesAbi = [
-  {
-    type: "function",
-    name: "PERMIT2",
-    inputs: [],
-    outputs: [
-      {
-        name: "",
-        type: "address",
-        internalType: "address",
-      },
-    ],
-    stateMutability: "view",
-  },
   {
     type: "function",
     name: "MIDNIGHT",
@@ -2757,7 +2744,7 @@ export const midnightBundlesAbi = [
   },
   {
     type: "function",
-    name: "buyWithUnitsTargetAndWithdrawCollateral",
+    name: "midnightBundlesV1BuyWithUnitsTargetAndWithdrawCollateral",
     inputs: [
       {
         name: "targetUnits",
@@ -2775,6 +2762,11 @@ export const midnightBundlesAbi = [
         internalType: "address",
       },
       {
+        name: "reduceOnly",
+        type: "bool",
+        internalType: "bool",
+      },
+      {
         name: "loanTokenPermit",
         type: "tuple",
         internalType: "struct TokenPermit",
@@ -2807,13 +2799,23 @@ export const midnightBundlesAbi = [
         type: "address",
         internalType: "address",
       },
+      {
+        name: "maxContinuousFee",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "deadline",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
     outputs: [],
     stateMutability: "nonpayable",
   },
   {
     type: "function",
-    name: "supplyCollateralAndSellWithUnitsTarget",
+    name: "midnightBundlesV1SupplyCollateralAndSellWithUnitsTarget",
     inputs: [
       {
         name: "targetUnits",
@@ -2831,6 +2833,11 @@ export const midnightBundlesAbi = [
         internalType: "address",
       },
       {
+        name: "reduceOnly",
+        type: "bool",
+        internalType: "bool",
+      },
+      {
         name: "receiver",
         type: "address",
         internalType: "address",
@@ -2857,13 +2864,23 @@ export const midnightBundlesAbi = [
         type: "address",
         internalType: "address",
       },
+      {
+        name: "maxContinuousFee",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "deadline",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
     outputs: [],
     stateMutability: "nonpayable",
   },
   {
     type: "function",
-    name: "buyWithAssetsTargetAndWithdrawCollateral",
+    name: "midnightBundlesV1BuyWithAssetsTargetAndWithdrawCollateral",
     inputs: [
       {
         name: "targetBuyerAssets",
@@ -2879,6 +2896,11 @@ export const midnightBundlesAbi = [
         name: "taker",
         type: "address",
         internalType: "address",
+      },
+      {
+        name: "reduceOnly",
+        type: "bool",
+        internalType: "bool",
       },
       {
         name: "loanTokenPermit",
@@ -2913,13 +2935,23 @@ export const midnightBundlesAbi = [
         type: "address",
         internalType: "address",
       },
+      {
+        name: "maxContinuousFee",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "deadline",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
     outputs: [],
     stateMutability: "nonpayable",
   },
   {
     type: "function",
-    name: "supplyCollateralAndSellWithAssetsTarget",
+    name: "midnightBundlesV1SupplyCollateralAndSellWithAssetsTarget",
     inputs: [
       {
         name: "targetSellerAssets",
@@ -2935,6 +2967,11 @@ export const midnightBundlesAbi = [
         name: "taker",
         type: "address",
         internalType: "address",
+      },
+      {
+        name: "reduceOnly",
+        type: "bool",
+        internalType: "bool",
       },
       {
         name: "receiver",
@@ -2963,13 +3000,23 @@ export const midnightBundlesAbi = [
         type: "address",
         internalType: "address",
       },
+      {
+        name: "maxContinuousFee",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "deadline",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
     outputs: [],
     stateMutability: "nonpayable",
   },
   {
     type: "function",
-    name: "repayAndWithdrawCollateral",
+    name: "midnightBundlesV1RepayAndWithdrawCollateral",
     inputs: [
       {
         name: "market",
@@ -3014,13 +3061,23 @@ export const midnightBundlesAbi = [
         type: "address",
         internalType: "address",
       },
+      {
+        name: "deadline",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
     outputs: [],
     stateMutability: "nonpayable",
   },
   {
     type: "error",
-    name: "ApproveReturnedFalse",
+    name: "ContinuousFeeAboveMax",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "DeadlinePassed",
     inputs: [],
   },
   {
@@ -3041,6 +3098,11 @@ export const midnightBundlesAbi = [
   {
     type: "error",
     name: "PctExceeded",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "NotReduceOnly",
     inputs: [],
   },
   {

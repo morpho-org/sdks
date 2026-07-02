@@ -5,7 +5,7 @@ import {
   Offer,
   Tree,
 } from "@morpho-org/midnight-sdk";
-import type { Address } from "viem";
+import { type Address, maxUint256, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -176,7 +176,14 @@ describe("MorphoMidnight", () => {
         assets: 1_000n,
         minUnits: 900n,
         taker: midnightAddresses.taker,
+        reduceOnly: false,
         takeableOffers: 1,
+        collateralWithdrawals: 0,
+        collateralReceiver: zeroAddress,
+        referralFeePct: 0n,
+        referralFeeRecipient: zeroAddress,
+        maxContinuousFee: maxUint256,
+        deadline: maxUint256,
       });
     });
 

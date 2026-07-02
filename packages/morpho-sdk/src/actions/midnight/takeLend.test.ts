@@ -1,5 +1,5 @@
 import { midnightBundlesAbi } from "@morpho-org/midnight-sdk";
-import { decodeFunctionData } from "viem";
+import { decodeFunctionData, maxUint256, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -40,14 +40,21 @@ describe("midnightTakeLend", () => {
       assets: 1_000n,
       minUnits: 900n,
       taker: midnightAddresses.taker,
+      reduceOnly: false,
       takeableOffers: 1,
+      collateralWithdrawals: 0,
+      collateralReceiver: zeroAddress,
+      referralFeePct: 0n,
+      referralFeeRecipient: zeroAddress,
+      maxContinuousFee: maxUint256,
+      deadline: maxUint256,
     });
     expect(decoded.functionName).toBe(
-      "buyWithAssetsTargetAndWithdrawCollateral",
+      "midnightBundlesV1BuyWithAssetsTargetAndWithdrawCollateral",
     );
     expect(decoded.args[0]).toBe(1_000n);
     expect(decoded.args[1]).toBe(900n);
-    expect(decoded.args?.[3]).toEqual({
+    expect(decoded.args?.[4]).toEqual({
       kind: PermitKind.None,
       data: "0x",
     });
@@ -87,7 +94,7 @@ describe("midnightTakeLend", () => {
       data: tx.data,
     });
 
-    expect(decoded.args?.[3]).toMatchObject({
+    expect(decoded.args?.[4]).toMatchObject({
       kind: PermitKind.Permit2,
     });
   });
