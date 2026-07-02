@@ -18,18 +18,11 @@ import {
   MarketIdMismatchError,
   MissingClientPropertyError,
   MissingMarketPriceError,
-  MutuallyExclusiveRepayAmountsError,
-  NativeAmountExceedsTransferAmountError,
   NativeAmountOnNonWNativeAssetError,
-  NegativeNativeAmountError,
   NegativeReallocationFeeError,
   NegativeSlippageToleranceError,
   NonPositiveReallocationAmountError,
-  NonPositiveRepayAmountError,
-  NonPositiveRepayMaxSharePriceError,
-  NonPositiveTransferAmountError,
   ReallocationWithdrawalOnTargetMarketError,
-  type RepayActionAmountArgs,
   RepayExceedsDebtError,
   RepaySharesExceedDebtError,
   UnsortedReallocationWithdrawalsError,
@@ -305,119 +298,6 @@ export const validateRepayShares = (params: {
       market: marketId,
     });
   }
-};
-
-/**
- * Validates and resolves the repay funding args (shared by `blueRepay` and
- * `blueRepayWithdrawCollateral`) into the concrete amounts the bundle needs.
- *
- * Two modes, discriminated on the presence of `shares`:
- *
- * - **assets mode** (`amount` and/or `nativeAmount`): additive, like `blueSupply`.
- *   The exact repaid assets are `amount + nativeAmount`; the ERC-20 pulled is
- *   `amount` and `nativeAmount` is wrapped. No residual.
- * - **shares mode** (`shares` + `transferAmount`): repays exact shares. The ERC-20
- *   pulled is `transferAmount − nativeAmount` (native is carved out of the
- *   upper-bound funding envelope) and `nativeAmount` is wrapped; residual loan
- *   token is skimmed back to the receiver by the caller.
- *
- * Does not check that the asset is wNative — the caller runs {@link validateNativeAsset}
- * (it needs the chain id) only when `nativeAmount > 0n`.
- *
- * @param params - Resolution parameters.
- * @param params.args - Repay funding args ({@link RepayActionAmountArgs}).
- * @param params.maxSharePrice - Maximum repay share price (in ray). Must be positive.
- * @param params.marketId - The market identifier (for error messages).
- * @returns The resolved `repayAssets` / `repayShares` (for `morphoRepay`), the
- *   `erc20Amount` to pull, the total `transferAmount`, the `nativeAmount` to wrap,
- *   and `isSharesMode`.
- * @throws {NonPositiveRepayMaxSharePriceError} when `maxSharePrice <= 0n`.
- * @throws {NegativeNativeAmountError} when `nativeAmount < 0n`.
- * @throws {MutuallyExclusiveRepayAmountsError} when both `amount` and `shares` are present.
- * @throws {NonPositiveRepayAmountError} when the resolved repay amount is non-positive
- *   (assets mode: `amount + nativeAmount <= 0n`; shares mode: `shares <= 0n`).
- * @throws {NonPositiveTransferAmountError} when in shares mode and `transferAmount <= 0n`.
- * @throws {NativeAmountExceedsTransferAmountError} when in shares mode and
- *   `nativeAmount > transferAmount`.
- */
-export const resolveRepayAmounts = ({
-  args,
-  maxSharePrice,
-  marketId,
-}: {
-  args: RepayActionAmountArgs;
-  maxSharePrice: bigint;
-  marketId: MarketId;
-}): {
-  repayAssets: bigint;
-  repayShares: bigint;
-  erc20Amount: bigint;
-  transferAmount: bigint;
-  nativeAmount: bigint;
-  isSharesMode: boolean;
-} => {
-  if (maxSharePrice <= 0n) {
-    throw new NonPositiveRepayMaxSharePriceError(marketId);
-  }
-
-  const nativeAmount = args.nativeAmount ?? 0n;
-  if (nativeAmount < 0n) {
-    throw new NegativeNativeAmountError(nativeAmount);
-  }
-
-  const hasAmount = "amount" in args && args.amount !== undefined;
-
-  if ("shares" in args && args.shares !== undefined) {
-    if (hasAmount) {
-      throw new MutuallyExclusiveRepayAmountsError(marketId);
-    }
-
-    const { shares, transferAmount } = args;
-    if (shares <= 0n) {
-      throw new NonPositiveRepayAmountError(marketId);
-    }
-    if (transferAmount <= 0n) {
-      throw new NonPositiveTransferAmountError(marketId);
-    }
-
-    const erc20Amount = transferAmount - nativeAmount;
-    if (erc20Amount < 0n) {
-      throw new NativeAmountExceedsTransferAmountError({
-        nativeAmount,
-        transferAmount,
-        market: marketId,
-      });
-    }
-
-    return {
-      repayAssets: 0n,
-      repayShares: shares,
-      erc20Amount,
-      transferAmount,
-      nativeAmount,
-      isSharesMode: true,
-    };
-  }
-
-  // assets mode (additive): repay exactly `amount + nativeAmount`.
-  const amount = ("amount" in args ? args.amount : undefined) ?? 0n;
-  if (amount < 0n) {
-    throw new NonPositiveRepayAmountError(marketId);
-  }
-
-  const repayAssets = amount + nativeAmount;
-  if (repayAssets <= 0n) {
-    throw new NonPositiveRepayAmountError(marketId);
-  }
-
-  return {
-    repayAssets,
-    repayShares: 0n,
-    erc20Amount: amount,
-    transferAmount: repayAssets,
-    nativeAmount,
-    isSharesMode: false,
-  };
 };
 
 /**

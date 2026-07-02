@@ -844,7 +844,6 @@ export class MorphoBlue implements BlueActions {
 
     let repayAssets: bigint;
     let repayShares: bigint;
-    let transferAmount: bigint;
     let erc20Amount: bigint;
     let marketForRepay: Market;
 
@@ -866,16 +865,16 @@ export class MorphoBlue implements BlueActions {
         MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
         Time.s.from.h(2n);
       marketForRepay = positionData.market.accrueInterest(accrualTimestamp);
-      transferAmount = marketForRepay.toBorrowAssets(shares, "Up");
+      const borrowAssets = marketForRepay.toBorrowAssets(shares, "Up");
       // Native funds part of the transfer; the ERC-20 pulled is the remainder.
-      if (nativeAmount > transferAmount) {
+      if (nativeAmount > borrowAssets) {
         throw new NativeAmountExceedsTransferAmountError({
           nativeAmount,
-          transferAmount,
+          transferAmount: borrowAssets,
           market: this.marketParams.id,
         });
       }
-      erc20Amount = transferAmount - nativeAmount;
+      erc20Amount = borrowAssets - nativeAmount;
     } else {
       // Assets mode is additive, like supply: repaid = amount + nativeAmount.
       const amount = params.amount ?? 0n;
@@ -889,7 +888,6 @@ export class MorphoBlue implements BlueActions {
         marketId: this.marketParams.id,
       });
       repayShares = 0n;
-      transferAmount = repayAssets;
       erc20Amount = amount;
       marketForRepay = positionData.market;
     }
@@ -921,11 +919,13 @@ export class MorphoBlue implements BlueActions {
             chainId: this.chainId,
             marketParams: this.marketParams,
           },
+          // Shares mode: repay `shares`, ERC-20 to pull = `erc20Amount`.
+          // Assets mode: repay `repayAssets` (= amount + native), pull `erc20Amount`.
           args:
             repayShares > 0n
               ? {
                   shares: repayShares,
-                  transferAmount,
+                  transferAmount: erc20Amount,
                   nativeAmount,
                   onBehalf: userAddress,
                   receiver: userAddress,
@@ -934,6 +934,7 @@ export class MorphoBlue implements BlueActions {
                 }
               : {
                   amount: erc20Amount,
+                  transferAmount: repayAssets,
                   nativeAmount,
                   onBehalf: userAddress,
                   receiver: userAddress,
@@ -1050,7 +1051,6 @@ export class MorphoBlue implements BlueActions {
 
     let repayAssets: bigint;
     let repayShares: bigint;
-    let transferAmount: bigint;
     let erc20Amount: bigint;
     let marketForRepay: Market;
 
@@ -1073,16 +1073,16 @@ export class MorphoBlue implements BlueActions {
       repayAssets = 0n;
       repayShares = shares;
       marketForRepay = positionData.market.accrueInterest(accrualTimestamp);
-      transferAmount = marketForRepay.toBorrowAssets(shares, "Up");
+      const borrowAssets = marketForRepay.toBorrowAssets(shares, "Up");
       // Native funds part of the transfer; the ERC-20 pulled is the remainder.
-      if (nativeAmount > transferAmount) {
+      if (nativeAmount > borrowAssets) {
         throw new NativeAmountExceedsTransferAmountError({
           nativeAmount,
-          transferAmount,
+          transferAmount: borrowAssets,
           market: this.marketParams.id,
         });
       }
-      erc20Amount = transferAmount - nativeAmount;
+      erc20Amount = borrowAssets - nativeAmount;
     } else {
       // Assets mode is additive, like supply: repaid = amount + nativeAmount.
       const amount = params.amount ?? 0n;
@@ -1096,7 +1096,6 @@ export class MorphoBlue implements BlueActions {
         marketId: this.marketParams.id,
       });
       repayShares = 0n;
-      transferAmount = repayAssets;
       erc20Amount = amount;
       marketForRepay = positionData.market;
     }
@@ -1158,11 +1157,13 @@ export class MorphoBlue implements BlueActions {
             chainId: this.chainId,
             marketParams: this.marketParams,
           },
+          // Shares mode: repay `shares`, ERC-20 to pull = `erc20Amount`.
+          // Assets mode: repay `repayAssets` (= amount + native), pull `erc20Amount`.
           args:
             repayShares > 0n
               ? {
                   shares: repayShares,
-                  transferAmount,
+                  transferAmount: erc20Amount,
                   nativeAmount,
                   withdrawAmount,
                   onBehalf: userAddress,
@@ -1172,6 +1173,7 @@ export class MorphoBlue implements BlueActions {
                 }
               : {
                   amount: erc20Amount,
+                  transferAmount: repayAssets,
                   nativeAmount,
                   withdrawAmount,
                   onBehalf: userAddress,

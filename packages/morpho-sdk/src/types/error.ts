@@ -312,7 +312,14 @@ export class UnsortedReallocationWithdrawalsError extends Error {
   }
 }
 
-/** Thrown when a market repay's `transferAmount` is zero or negative. */
+/**
+ * Thrown when a market repay's `transferAmount` is zero or negative.
+ *
+ * @deprecated No longer thrown. The repay action layer no longer validates `transferAmount`
+ * directly (assets mode uses {@link NonPositiveRepayAmountError}; shares mode allows a zero
+ * ERC-20 transfer for fully-native repays). Retained as exported API for back-compat; slated
+ * for removal in a future major.
+ */
 export class NonPositiveTransferAmountError extends Error {
   constructor(market: string) {
     super(`Transfer amount must be positive for market: ${market}`);

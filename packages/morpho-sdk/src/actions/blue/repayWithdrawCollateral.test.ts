@@ -7,12 +7,10 @@ import { makePermit } from "../../../test/helpers/permit.js";
 import { test } from "../../../test/setup.js";
 import {
   MutuallyExclusiveRepayAmountsError,
-  NativeAmountExceedsTransferAmountError,
   NativeAmountOnNonWNativeAssetError,
   NegativeNativeAmountError,
   NonPositiveRepayAmountError,
   NonPositiveRepayMaxSharePriceError,
-  NonPositiveTransferAmountError,
   NonPositiveWithdrawCollateralAmountError,
 } from "../../types/index.js";
 import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
@@ -40,6 +38,7 @@ describe("blueRepayWithdrawCollateral unit tests", () => {
       },
       args: {
         amount,
+        transferAmount: amount,
         withdrawAmount: WITHDRAW_AMOUNT,
         onBehalf: client.account.address,
         receiver: client.account.address,
@@ -105,6 +104,7 @@ describe("blueRepayWithdrawCollateral unit tests", () => {
       args: {
         amount,
         nativeAmount,
+        transferAmount: amount + nativeAmount,
         withdrawAmount: WITHDRAW_AMOUNT,
         onBehalf: client.account.address,
         receiver: client.account.address,
@@ -120,11 +120,11 @@ describe("blueRepayWithdrawCollateral unit tests", () => {
     expect(tx.data.toLowerCase()).not.toContain(MAX_UINT256_HEX);
   });
 
-  test("behavior: shares mode subtracts nativeAmount from transferAmount", async ({
+  test("behavior: shares mode pulls exactly transferAmount ERC-20 (net of native)", async ({
     client,
   }) => {
     const shares = parseUnits("500", 18);
-    const transferAmount = parseUnits("0.6", 18);
+    const erc20Amount = parseUnits("0.4", 18); // transferAmount = ERC-20 net of native
     const nativeAmount = parseUnits("0.2", 18);
 
     const spy = vi.spyOn(getRequirementsActionModule, "getRequirementsAction");
@@ -136,7 +136,7 @@ describe("blueRepayWithdrawCollateral unit tests", () => {
       },
       args: {
         shares,
-        transferAmount,
+        transferAmount: erc20Amount,
         nativeAmount,
         withdrawAmount: WITHDRAW_AMOUNT,
         onBehalf: client.account.address,
@@ -145,18 +145,20 @@ describe("blueRepayWithdrawCollateral unit tests", () => {
         requirementSignature: makePermit({
           owner: client.account.address,
           asset: WstethWethBlue.loanToken,
-          amount: transferAmount - nativeAmount,
+          amount: erc20Amount,
         }),
       },
     });
 
     expect(tx.action.args.repayShares).toBe(shares);
+    // Output transferAmount = ERC-20 pulled + native wrapped (total routed to adapter).
+    expect(tx.action.args.transferAmount).toBe(erc20Amount + nativeAmount);
     expect(tx.action.args.nativeAmount).toBe(nativeAmount);
     expect(tx.value).toBe(nativeAmount);
     expect(spy).toHaveBeenCalledWith(
       expect.objectContaining({
         asset: WstethWethBlue.loanToken,
-        amount: transferAmount - nativeAmount,
+        amount: erc20Amount,
       }),
     );
     expect(tx.data.toLowerCase()).toContain(MAX_UINT256_HEX);
@@ -170,6 +172,7 @@ describe("blueRepayWithdrawCollateral unit tests", () => {
         market: { chainId: mainnet.id, marketParams: WethUsdsBlue },
         args: {
           amount: parseUnits("100", 6),
+          transferAmount: parseUnits("100", 6),
           withdrawAmount: WITHDRAW_AMOUNT,
           onBehalf: client.account.address,
           receiver: client.account.address,
@@ -206,6 +209,7 @@ describe("blueRepayWithdrawCollateral unit tests", () => {
         market: { chainId: mainnet.id, marketParams: WethUsdsBlue },
         args: {
           amount: 0n,
+          transferAmount: 0n,
           withdrawAmount: WITHDRAW_AMOUNT,
           onBehalf: client.account.address,
           receiver: client.account.address,
@@ -241,6 +245,7 @@ describe("blueRepayWithdrawCollateral unit tests", () => {
         market: { chainId: mainnet.id, marketParams: WethUsdsBlue },
         args: {
           amount: parseUnits("100", 6),
+          transferAmount: parseUnits("100", 6),
           withdrawAmount: 0n,
           onBehalf: client.account.address,
           receiver: client.account.address,
@@ -248,45 +253,6 @@ describe("blueRepayWithdrawCollateral unit tests", () => {
         },
       }),
     ).toThrow(NonPositiveWithdrawCollateralAmountError);
-  });
-
-  test("error: NonPositiveTransferAmountError when transferAmount is zero", async ({
-    client,
-  }) => {
-    expect(() =>
-      blueRepayWithdrawCollateral({
-        market: { chainId: mainnet.id, marketParams: WethUsdsBlue },
-        args: {
-          shares: parseUnits("100", 6),
-          transferAmount: 0n,
-          withdrawAmount: WITHDRAW_AMOUNT,
-          onBehalf: client.account.address,
-          receiver: client.account.address,
-          maxSharePrice: 1n,
-        },
-      }),
-    ).toThrow(NonPositiveTransferAmountError);
-  });
-
-  test("error: NativeAmountExceedsTransferAmountError when nativeAmount > transferAmount", async ({
-    client,
-  }) => {
-    const transferAmount = parseUnits("0.6", 18);
-
-    expect(() =>
-      blueRepayWithdrawCollateral({
-        market: { chainId: mainnet.id, marketParams: WstethWethBlue },
-        args: {
-          shares: parseUnits("500", 18),
-          transferAmount,
-          nativeAmount: transferAmount + 1n,
-          withdrawAmount: WITHDRAW_AMOUNT,
-          onBehalf: client.account.address,
-          receiver: client.account.address,
-          maxSharePrice: 1n,
-        },
-      }),
-    ).toThrow(NativeAmountExceedsTransferAmountError);
   });
 
   test("error: NegativeNativeAmountError when nativeAmount is negative", async ({
@@ -298,6 +264,7 @@ describe("blueRepayWithdrawCollateral unit tests", () => {
         args: {
           amount: parseUnits("1", 18),
           nativeAmount: -1n,
+          transferAmount: parseUnits("1", 18),
           withdrawAmount: WITHDRAW_AMOUNT,
           onBehalf: client.account.address,
           receiver: client.account.address,
@@ -316,6 +283,7 @@ describe("blueRepayWithdrawCollateral unit tests", () => {
         args: {
           amount: parseUnits("100", 6),
           nativeAmount: parseUnits("1", 18),
+          transferAmount: parseUnits("100", 6) + parseUnits("1", 18),
           withdrawAmount: WITHDRAW_AMOUNT,
           onBehalf: client.account.address,
           receiver: client.account.address,
@@ -334,6 +302,7 @@ describe("blueRepayWithdrawCollateral unit tests", () => {
       market: { chainId: mainnet.id, marketParams: WethUsdsBlue },
       args: {
         amount: parseUnits("100", 6),
+        transferAmount: parseUnits("100", 6),
         withdrawAmount: WITHDRAW_AMOUNT,
         onBehalf: client.account.address,
         receiver: client.account.address,
@@ -354,6 +323,7 @@ describe("blueRepayWithdrawCollateral unit tests", () => {
       market: { chainId: mainnet.id, marketParams: WethUsdsBlue },
       args: {
         amount,
+        transferAmount: amount,
         withdrawAmount: WITHDRAW_AMOUNT,
         onBehalf: client.account.address,
         receiver: client.account.address,
@@ -382,6 +352,7 @@ describe("blueRepayWithdrawCollateral unit tests", () => {
       market: { chainId: mainnet.id, marketParams: WethUsdsBlue },
       args: {
         amount: parseUnits("100", 6),
+        transferAmount: parseUnits("100", 6),
         withdrawAmount: WITHDRAW_AMOUNT,
         onBehalf: client.account.address,
         receiver: client.account.address,
@@ -401,6 +372,7 @@ describe("blueRepayWithdrawCollateral unit tests", () => {
       market: { chainId: mainnet.id, marketParams: WethUsdsBlue },
       args: {
         amount: parseUnits("100", 6),
+        transferAmount: parseUnits("100", 6),
         withdrawAmount: WITHDRAW_AMOUNT,
         onBehalf: client.account.address,
         receiver: client.account.address,

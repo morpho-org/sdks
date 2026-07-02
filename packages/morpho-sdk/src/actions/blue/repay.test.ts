@@ -7,12 +7,10 @@ import { makePermit } from "../../../test/helpers/permit.js";
 import { test } from "../../../test/setup.js";
 import {
   MutuallyExclusiveRepayAmountsError,
-  NativeAmountExceedsTransferAmountError,
   NativeAmountOnNonWNativeAssetError,
   NegativeNativeAmountError,
   NonPositiveRepayAmountError,
   NonPositiveRepayMaxSharePriceError,
-  NonPositiveTransferAmountError,
 } from "../../types/index.js";
 import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
 import { blueRepay } from "./repay.js";
@@ -38,6 +36,7 @@ describe("blueRepay unit tests", () => {
       },
       args: {
         amount,
+        transferAmount: amount,
         onBehalf: client.account.address,
         receiver: client.account.address,
         maxSharePrice: 1n,
@@ -103,6 +102,7 @@ describe("blueRepay unit tests", () => {
       args: {
         amount,
         nativeAmount,
+        transferAmount: amount + nativeAmount,
         onBehalf: client.account.address,
         receiver: client.account.address,
         maxSharePrice: 1n,
@@ -129,6 +129,7 @@ describe("blueRepay unit tests", () => {
       },
       args: {
         nativeAmount,
+        transferAmount: nativeAmount,
         onBehalf: client.account.address,
         receiver: client.account.address,
         maxSharePrice: 1n,
@@ -140,11 +141,11 @@ describe("blueRepay unit tests", () => {
     expect(tx.value).toBe(nativeAmount);
   });
 
-  test("behavior: shares mode subtracts nativeAmount from transferAmount", async ({
+  test("behavior: shares mode pulls exactly transferAmount ERC-20 (net of native)", async ({
     client,
   }) => {
     const shares = parseUnits("500", 18);
-    const transferAmount = parseUnits("0.6", 18);
+    const erc20Amount = parseUnits("0.4", 18); // transferAmount = ERC-20 net of native
     const nativeAmount = parseUnits("0.2", 18);
 
     const spy = vi.spyOn(getRequirementsActionModule, "getRequirementsAction");
@@ -156,7 +157,7 @@ describe("blueRepay unit tests", () => {
       },
       args: {
         shares,
-        transferAmount,
+        transferAmount: erc20Amount,
         nativeAmount,
         onBehalf: client.account.address,
         receiver: client.account.address,
@@ -164,20 +165,21 @@ describe("blueRepay unit tests", () => {
         requirementSignature: makePermit({
           owner: client.account.address,
           asset: WstethWethBlue.loanToken,
-          amount: transferAmount - nativeAmount,
+          amount: erc20Amount,
         }),
       },
     });
 
     expect(tx.action.args.shares).toBe(shares);
-    expect(tx.action.args.transferAmount).toBe(transferAmount);
+    // Output transferAmount = ERC-20 pulled + native wrapped (total routed to adapter).
+    expect(tx.action.args.transferAmount).toBe(erc20Amount + nativeAmount);
     expect(tx.action.args.nativeAmount).toBe(nativeAmount);
     expect(tx.value).toBe(nativeAmount);
-    // ERC-20 pulled = transferAmount − nativeAmount.
+    // ERC-20 pulled = transferAmount (already net of native).
     expect(spy).toHaveBeenCalledWith(
       expect.objectContaining({
         asset: WstethWethBlue.loanToken,
-        amount: transferAmount - nativeAmount,
+        amount: erc20Amount,
       }),
     );
     // Shares mode still skims residual.
@@ -188,7 +190,7 @@ describe("blueRepay unit tests", () => {
     client,
   }) => {
     const shares = parseUnits("500", 18);
-    const transferAmount = parseUnits("0.6", 18);
+    const nativeAmount = parseUnits("0.6", 18);
 
     const spy = vi.spyOn(getRequirementsActionModule, "getRequirementsAction");
 
@@ -199,15 +201,15 @@ describe("blueRepay unit tests", () => {
       },
       args: {
         shares,
-        transferAmount,
-        nativeAmount: transferAmount,
+        transferAmount: 0n, // fully funded by native
+        nativeAmount,
         onBehalf: client.account.address,
         receiver: client.account.address,
         maxSharePrice: 1n,
       },
     });
 
-    expect(tx.value).toBe(transferAmount);
+    expect(tx.value).toBe(nativeAmount);
     expect(spy).not.toHaveBeenCalled();
     expect(tx.data.toLowerCase()).toContain(MAX_UINT256_HEX);
   });
@@ -220,6 +222,7 @@ describe("blueRepay unit tests", () => {
         market: { chainId: mainnet.id, marketParams: WethUsdsBlue },
         args: {
           amount: parseUnits("100", 6),
+          transferAmount: parseUnits("100", 6),
           onBehalf: client.account.address,
           receiver: client.account.address,
           maxSharePrice: 0n,
@@ -236,6 +239,7 @@ describe("blueRepay unit tests", () => {
         market: { chainId: mainnet.id, marketParams: WethUsdsBlue },
         args: {
           amount: parseUnits("100", 6),
+          transferAmount: parseUnits("100", 6),
           onBehalf: client.account.address,
           receiver: client.account.address,
           maxSharePrice: -1n,
@@ -270,6 +274,7 @@ describe("blueRepay unit tests", () => {
         market: { chainId: mainnet.id, marketParams: WethUsdsBlue },
         args: {
           amount: 0n,
+          transferAmount: 0n,
           onBehalf: client.account.address,
           receiver: client.account.address,
           maxSharePrice: 1n,
@@ -286,6 +291,7 @@ describe("blueRepay unit tests", () => {
         market: { chainId: mainnet.id, marketParams: WethUsdsBlue },
         args: {
           amount: -1n,
+          transferAmount: parseUnits("100", 6),
           onBehalf: client.account.address,
           receiver: client.account.address,
           maxSharePrice: 1n,
@@ -311,43 +317,6 @@ describe("blueRepay unit tests", () => {
     ).toThrow(NonPositiveRepayAmountError);
   });
 
-  test("error: NonPositiveTransferAmountError when transferAmount is zero", async ({
-    client,
-  }) => {
-    expect(() =>
-      blueRepay({
-        market: { chainId: mainnet.id, marketParams: WethUsdsBlue },
-        args: {
-          shares: parseUnits("100", 6),
-          transferAmount: 0n,
-          onBehalf: client.account.address,
-          receiver: client.account.address,
-          maxSharePrice: 1n,
-        },
-      }),
-    ).toThrow(NonPositiveTransferAmountError);
-  });
-
-  test("error: NativeAmountExceedsTransferAmountError when nativeAmount > transferAmount", async ({
-    client,
-  }) => {
-    const transferAmount = parseUnits("0.6", 18);
-
-    expect(() =>
-      blueRepay({
-        market: { chainId: mainnet.id, marketParams: WstethWethBlue },
-        args: {
-          shares: parseUnits("500", 18),
-          transferAmount,
-          nativeAmount: transferAmount + 1n,
-          onBehalf: client.account.address,
-          receiver: client.account.address,
-          maxSharePrice: 1n,
-        },
-      }),
-    ).toThrow(NativeAmountExceedsTransferAmountError);
-  });
-
   test("error: NegativeNativeAmountError when nativeAmount is negative", async ({
     client,
   }) => {
@@ -357,6 +326,7 @@ describe("blueRepay unit tests", () => {
         args: {
           amount: parseUnits("1", 18),
           nativeAmount: -1n,
+          transferAmount: parseUnits("1", 18),
           onBehalf: client.account.address,
           receiver: client.account.address,
           maxSharePrice: 1n,
@@ -374,6 +344,7 @@ describe("blueRepay unit tests", () => {
         args: {
           amount: parseUnits("100", 6),
           nativeAmount: parseUnits("1", 18),
+          transferAmount: parseUnits("100", 6) + parseUnits("1", 18),
           onBehalf: client.account.address,
           receiver: client.account.address,
           maxSharePrice: 1n,
@@ -391,6 +362,7 @@ describe("blueRepay unit tests", () => {
       market: { chainId: mainnet.id, marketParams: WethUsdsBlue },
       args: {
         amount: parseUnits("100", 6),
+        transferAmount: parseUnits("100", 6),
         onBehalf: client.account.address,
         receiver: client.account.address,
         maxSharePrice: 1n,
@@ -410,6 +382,7 @@ describe("blueRepay unit tests", () => {
       market: { chainId: mainnet.id, marketParams: WethUsdsBlue },
       args: {
         amount,
+        transferAmount: amount,
         onBehalf: client.account.address,
         receiver: client.account.address,
         maxSharePrice: 1n,
@@ -437,6 +410,7 @@ describe("blueRepay unit tests", () => {
       market: { chainId: mainnet.id, marketParams: WethUsdsBlue },
       args: {
         amount: parseUnits("100", 6),
+        transferAmount: parseUnits("100", 6),
         onBehalf: client.account.address,
         receiver: client.account.address,
         maxSharePrice: 1n,
@@ -457,6 +431,7 @@ describe("blueRepay unit tests", () => {
       market: { chainId: mainnet.id, marketParams: WethUsdsBlue },
       args: {
         amount,
+        transferAmount: amount,
         onBehalf: client.account.address,
         receiver: client.account.address,
         maxSharePrice: 1n,

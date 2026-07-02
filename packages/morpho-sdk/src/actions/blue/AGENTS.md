@@ -42,7 +42,7 @@ ERC-20 approval spender is **GeneralAdapter1** for any bundled path — never th
 
 ## Mode and ordering rules
 
-- `repay` accepts exactly one mode: assets (partial repay) or shares (full repay, with upper-bound transfer + `maxSharePrice`). Both modes optionally wrap native ETH (loan token must be wNative): assets mode is additive like `supply` (`repaid = amount + nativeAmount`, ERC-20 pulled = `amount`), shares mode carves native out of the transfer (`erc20 = transferAmount − nativeAmount`). `repayWithdrawCollateral` mirrors this repay leg, then withdraws.
+- `repay` accepts exactly one mode: assets (partial repay) or shares (full repay, with `maxSharePrice`). Amounts are pre-resolved by the entity and passed flat (`{ amount?, shares?, nativeAmount?, transferAmount }`); the action does no arithmetic. Both modes optionally wrap native ETH (loan token must be wNative): assets mode is additive like `supply` (`transferAmount = amount + nativeAmount` is repaid, ERC-20 pulled = `amount`), shares mode repays exact shares and pulls `transferAmount` ERC-20 (the entity already carved native out via `toBorrowAssets(shares) − nativeAmount`). `repayWithdrawCollateral` mirrors this repay leg, then withdraws.
 - `withdraw` accepts exactly one mode: assets (exact asset amount) or shares (full close, immune to interest accrual). No transfer/skim needed — `morphoWithdraw` sends to `receiver` directly.
 - `repayWithdrawCollateral` repays first, then withdraws — never the other order.
 - `supply` uses `maxSharePrice` (anti-inflation upper bound, `WAD + slippage`).
