@@ -19,7 +19,7 @@ import {
   ZeroDepositAmountError,
 } from "../../types/index.js";
 import { getRequirements } from "../requirements/index.js";
-import * as getRequirementsActionModule from "../signatures/getRequirementsAction.js";
+import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
 import { vaultV1Deposit } from "./deposit.js";
 
 describe("depositVaultV1 unit tests", () => {
@@ -119,8 +119,8 @@ describe("depositVaultV1 unit tests", () => {
     expect(requirementSignature.args.asset).toEqual(usdc);
 
     const localSpy = vi.spyOn(
-      getRequirementsActionModule,
-      "getRequirementsAction",
+      getTokenRequirementActionsModule,
+      "getTokenRequirementActions",
     );
 
     const tx = vaultV1Deposit({
@@ -241,8 +241,8 @@ describe("depositVaultV1 unit tests", () => {
     const maxSharePrice = 1000000n;
 
     const localSpy = vi.spyOn(
-      getRequirementsActionModule,
-      "getRequirementsAction",
+      getTokenRequirementActionsModule,
+      "getTokenRequirementActions",
     );
 
     const tx = vaultV1Deposit({

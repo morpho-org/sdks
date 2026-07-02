@@ -21,7 +21,7 @@ import {
   ZeroCollateralAmountError,
 } from "../../types/index.js";
 import { getRequirements } from "../requirements/index.js";
-import * as getRequirementsActionModule from "../signatures/getRequirementsAction.js";
+import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
 import { blueSupplyCollateralBorrow } from "./supplyCollateralBorrow.js";
 
 describe("blueSupplyCollateralBorrow unit tests", () => {
@@ -187,8 +187,8 @@ describe("blueSupplyCollateralBorrow unit tests", () => {
     );
 
     const localSpy = vi.spyOn(
-      getRequirementsActionModule,
-      "getRequirementsAction",
+      getTokenRequirementActionsModule,
+      "getTokenRequirementActions",
     );
 
     const tx = blueSupplyCollateralBorrow({

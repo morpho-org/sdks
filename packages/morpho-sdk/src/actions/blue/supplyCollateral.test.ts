@@ -13,7 +13,7 @@ import {
   ZeroCollateralAmountError,
 } from "../../types/index.js";
 import { getRequirements } from "../requirements/index.js";
-import * as getRequirementsActionModule from "../signatures/getRequirementsAction.js";
+import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
 import { blueSupplyCollateral } from "./supplyCollateral.js";
 
 describe("blueSupplyCollateral unit tests", () => {
@@ -139,8 +139,8 @@ describe("blueSupplyCollateral unit tests", () => {
     );
 
     const localSpy = vi.spyOn(
-      getRequirementsActionModule,
-      "getRequirementsAction",
+      getTokenRequirementActionsModule,
+      "getTokenRequirementActions",
     );
 
     const tx = blueSupplyCollateral({
@@ -162,12 +162,12 @@ describe("blueSupplyCollateral unit tests", () => {
     expect(tx.value).toBe(nativeAmount);
   });
 
-  test("should not call getRequirementsAction when no requirementSignature", async ({
+  test("should not call getTokenRequirementActions when no requirementSignature", async ({
     client,
   }) => {
     const localSpy = vi.spyOn(
-      getRequirementsActionModule,
-      "getRequirementsAction",
+      getTokenRequirementActionsModule,
+      "getTokenRequirementActions",
     );
 
     blueSupplyCollateral({

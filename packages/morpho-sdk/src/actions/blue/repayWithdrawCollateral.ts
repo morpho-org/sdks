@@ -15,7 +15,7 @@ import {
   type Transaction,
 } from "../../types/index.js";
 import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
-import { getRequirementsAction } from "../signatures/getRequirementsAction.js";
+import { getTokenRequirementActions } from "../signatures/getTokenRequirementActions.js";
 
 /** Parameters for {@link blueRepayWithdrawCollateral}. */
 export interface BlueRepayWithdrawCollateralParams {
@@ -103,11 +103,11 @@ export interface BlueRepayWithdrawCollateralParams {
  * @throws {NonPositiveTransferAmountError} when `transferAmount <= 0n`.
  * @throws {TransferAmountNotEqualToAssetsError} when in assets mode and `transferAmount !== assets`.
  * @throws {NonPositiveWithdrawCollateralAmountError} when `withdrawAmount <= 0n`.
- * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `requirementSignature`
+ * @throws {DepositAssetMismatchError} from `getTokenRequirementActions` when `requirementSignature`
  *   is provided and the signed asset differs from `marketParams.loanToken`.
- * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
+ * @throws {DepositAmountMismatchError} from `getTokenRequirementActions` when `requirementSignature`
  *   is provided and the signed amount differs from `args.transferAmount`.
- * @throws {Permit2ExpirationMissingError} from `getRequirementsAction` when a Permit2 requirement
+ * @throws {Permit2ExpirationMissingError} from `getTokenRequirementActions` when a Permit2 requirement
  *   signature is missing its expiration.
  * @example
  * ```ts
@@ -169,7 +169,7 @@ export const blueRepayWithdrawCollateral = ({
 
   if (requirementSignature) {
     actions.push(
-      ...getRequirementsAction({
+      ...getTokenRequirementActions({
         asset: marketParams.loanToken,
         amount: transferAmount,
         recipient: generalAdapter1,
