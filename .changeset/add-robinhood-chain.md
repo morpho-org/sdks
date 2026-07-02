@@ -1,6 +1,5 @@
 ---
 "@morpho-org/morpho-ts": minor
-"@morpho-org/blue-sdk-viem": patch
 "@morpho-org/evm-simulation": patch
 "@morpho-org/morpho-sdk": patch
 ---
