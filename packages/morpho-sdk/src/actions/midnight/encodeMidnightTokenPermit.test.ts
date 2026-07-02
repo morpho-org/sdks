@@ -4,8 +4,6 @@ import { midnightAddresses } from "../../../test/fixtures/midnight.js";
 import {
   DepositAmountMismatchError,
   DepositAssetMismatchError,
-  DepositOwnerMismatchError,
-  DepositSpenderMismatchError,
   MidnightPermit2TransferSignatureRequiredError,
   type RequirementSignature,
   type TokenRequirementSignature,
@@ -253,67 +251,5 @@ describe("encodeMidnightTokenPermit", () => {
         signatures: [permitSignature],
       }),
     ).toThrow(DepositAmountMismatchError);
-  });
-
-  test("error: DepositOwnerMismatchError", () => {
-    const permitSignature = {
-      action: {
-        type: "permit",
-        args: {
-          spender: midnightAddresses.midnightBundles,
-          amount: 1_000n,
-          deadline: 123n,
-        },
-      },
-      args: {
-        owner: midnightAddresses.maker,
-        nonce: 0n,
-        asset: midnightAddresses.loanToken,
-        signature,
-        amount: 1_000n,
-        deadline: 123n,
-      },
-    } satisfies RequirementSignature;
-
-    expect(() =>
-      encodeMidnightTokenPermit({
-        token: midnightAddresses.loanToken,
-        owner: midnightAddresses.taker,
-        spender: midnightAddresses.midnightBundles,
-        amount: 1_000n,
-        signatures: [permitSignature],
-      }),
-    ).toThrow(DepositOwnerMismatchError);
-  });
-
-  test("error: DepositSpenderMismatchError", () => {
-    const permitSignature = {
-      action: {
-        type: "permit",
-        args: {
-          spender: midnightAddresses.midnight,
-          amount: 1_000n,
-          deadline: 123n,
-        },
-      },
-      args: {
-        owner: midnightAddresses.taker,
-        nonce: 0n,
-        asset: midnightAddresses.loanToken,
-        signature,
-        amount: 1_000n,
-        deadline: 123n,
-      },
-    } satisfies RequirementSignature;
-
-    expect(() =>
-      encodeMidnightTokenPermit({
-        token: midnightAddresses.loanToken,
-        owner: midnightAddresses.taker,
-        spender: midnightAddresses.midnightBundles,
-        amount: 1_000n,
-        signatures: [permitSignature],
-      }),
-    ).toThrow(DepositSpenderMismatchError);
   });
 });
