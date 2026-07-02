@@ -384,6 +384,113 @@ describe("MorphoBlue validation", () => {
     ).toThrow(NativeAmountExceedsTransferAmountError);
   });
 
+  test("repay native: shares mode pulls transferAmount net of native (happy path)", async ({
+    client,
+  }) => {
+    const market = client
+      .extend(morphoViemExtension())
+      .morpho.blue(WstethWethBlue, mainnet.id);
+    const positionData = makeWethPosition();
+    const nativeAmount = parseUnits("0.1", 18);
+
+    const tx = market
+      .repay({
+        shares: positionData.borrowShares,
+        nativeAmount,
+        userAddress: USER,
+        positionData,
+      })
+      .buildTx();
+
+    // Output transferAmount = ERC-20 pulled (net of native) + native wrapped,
+    // so it exceeds the native part (a positive ERC-20 remainder is pulled).
+    expect(tx.action.args.shares).toBe(positionData.borrowShares);
+    expect(tx.action.args.nativeAmount).toBe(nativeAmount);
+    expect(tx.value).toBe(nativeAmount);
+    expect(tx.action.args.transferAmount).toBeGreaterThan(nativeAmount);
+  });
+
+  test("repayWithdrawCollateral native: rejects nativeAmount when the loan token is not wNative", async ({
+    client,
+  }) => {
+    const market = client
+      .extend(morphoViemExtension())
+      .morpho.blue(CbbtcUsdcBlue, mainnet.id); // loan token = USDC
+
+    expect(() =>
+      market.repayWithdrawCollateral({
+        amount: 1n,
+        nativeAmount: 1n,
+        withdrawAmount: 1n,
+        userAddress: USER,
+        positionData: makePosition(),
+      }),
+    ).toThrow(NativeAmountOnNonWNativeAssetError);
+  });
+
+  test("repayWithdrawCollateral native: assets mode wraps native and repays amount + nativeAmount", async ({
+    client,
+  }) => {
+    const market = client
+      .extend(morphoViemExtension())
+      .morpho.blue(WstethWethBlue, mainnet.id);
+    const amount = parseUnits("0.3", 18);
+    const nativeAmount = parseUnits("0.2", 18);
+
+    const tx = market
+      .repayWithdrawCollateral({
+        amount,
+        nativeAmount,
+        withdrawAmount: parseUnits("1", 18),
+        userAddress: USER,
+        positionData: makeWethPosition(),
+      })
+      .buildTx();
+
+    expect(tx.action.args.repayAssets).toBe(amount + nativeAmount);
+    expect(tx.action.args.nativeAmount).toBe(nativeAmount);
+    expect(tx.value).toBe(nativeAmount);
+  });
+
+  test("repayWithdrawCollateral native: a fully native repay emits no ERC-20 requirement", async ({
+    client,
+  }) => {
+    const market = client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.blue(WstethWethBlue, mainnet.id);
+    const nativeAmount = parseUnits("0.5", 18);
+
+    const requirements = await market
+      .repayWithdrawCollateral({
+        nativeAmount,
+        withdrawAmount: parseUnits("1", 18),
+        userAddress: USER,
+        positionData: makeWethPosition(),
+      })
+      .getRequirements();
+
+    // Fully-native repay pulls no ERC-20 → only the Morpho authorization remains.
+    expect(requirements).toHaveLength(1);
+  });
+
+  test("repayWithdrawCollateral native: shares mode rejects nativeAmount exceeding the computed transfer", async ({
+    client,
+  }) => {
+    const market = client
+      .extend(morphoViemExtension())
+      .morpho.blue(WstethWethBlue, mainnet.id);
+
+    expect(() =>
+      market.repayWithdrawCollateral({
+        shares: 10n ** 12n,
+        nativeAmount: parseUnits("1000000", 18),
+        withdrawAmount: parseUnits("1", 18),
+        userAddress: USER,
+        positionData: makeWethPosition(),
+      }),
+    ).toThrow(NativeAmountExceedsTransferAmountError);
+  });
+
   test("supplyCollateralBorrow rejects invalid collateral and borrow amounts", async ({
     client,
   }) => {
