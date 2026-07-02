@@ -12,7 +12,7 @@ import {
   type RequirementSignature,
   TransferAmountNotEqualToAssetsError,
 } from "../../types/index.js";
-import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
+import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
 import { blueRepay } from "./repay.js";
 
 describe("blueRepay unit tests", () => {
@@ -313,12 +313,12 @@ describe("blueRepay unit tests", () => {
     ).toThrow(TransferAmountNotEqualToAssetsError);
   });
 
-  test("should not call getTokenRequirementActions when no requirementSignature", async ({
+  test("should not call getRequirementsAction when no requirementSignature", async ({
     client,
   }) => {
     const localSpy = vi.spyOn(
-      getTokenRequirementActionsModule,
-      "getTokenRequirementActions",
+      getRequirementsActionModule,
+      "getRequirementsAction",
     );
 
     blueRepay({
@@ -366,8 +366,8 @@ describe("blueRepay unit tests", () => {
       },
     } satisfies RequirementSignature;
     const localSpy = vi.spyOn(
-      getTokenRequirementActionsModule,
-      "getTokenRequirementActions",
+      getRequirementsActionModule,
+      "getRequirementsAction",
     );
 
     const tx = blueRepay({

@@ -4,15 +4,16 @@ import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Client } from "viem";
 import { type Address, encodeFunctionData, publicActions } from "viem";
 import {
+  type AuthorizationRequirementSignature,
+  type BlueAuthorizationAction,
   ChainIdMismatchError,
-  type MorphoAuthorizationAction,
   type Requirement,
   type Transaction,
-} from "../../types/index.js";
-import { encodeAuthorization } from "./encode/encodeAuthorization.js";
+} from "../../../types/index.js";
+import { encodeBlueSignatureAuthorization } from "../encode/encodeBlueSignatureAuthorization.js";
 
 /**
- * Resolves whether `GeneralAdapter1` needs Morpho authorization for the given user, and returns
+ * Resolves whether `GeneralAdapter1` needs Blue authorization for the given user, and returns
  * the requirement to satisfy it when it does.
  *
  * Reads `Morpho.isAuthorized(userAddress, generalAdapter1)` on the target chain. Required before
@@ -30,33 +31,36 @@ import { encodeAuthorization } from "./encode/encodeAuthorization.js";
  * @param params.userAddress - The user that must authorize `GeneralAdapter1`.
  * @param params.supportSignature - When `true`, return a signable `Requirement` instead of a
  *   transaction so authorization can be bundled via `setAuthorizationWithSig`.
- * @returns A deep-frozen `Transaction<MorphoAuthorizationAction>`, a signable `Requirement`
- *   (when `supportSignature` is `true`), or `null` when authorization is already in place.
+ * @returns A deep-frozen `Transaction<BlueAuthorizationAction>`, a signable authorization
+ *   `Requirement` (when `supportSignature` is `true`), or `null` when authorization is already in
+ *   place.
  * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`.
  * @example
  * ```ts
  * import { createPublicClient, http } from "viem";
  * import { mainnet } from "viem/chains";
- * import { getMorphoAuthorizationRequirement } from "@morpho-org/morpho-sdk";
+ * import { getBlueAuthorizationRequirement } from "@morpho-org/morpho-sdk";
  *
  * const client = createPublicClient({ chain: mainnet, transport: http() });
- * const requirement = await getMorphoAuthorizationRequirement({
+ * const requirement = await getBlueAuthorizationRequirement({
  *   viemClient: client,
  *   chainId: 1,
  *   userAddress: borrower,
  *   supportSignature: true,
  * });
  * // requirement is null when already authorized, a Requirement when supportSignature is true,
- * // otherwise Readonly<Transaction<MorphoAuthorizationAction>>
+ * // otherwise Readonly<Transaction<BlueAuthorizationAction>>
  * ```
  */
-export const getMorphoAuthorizationRequirement = async (params: {
+export const getBlueAuthorizationRequirement = async (params: {
   viemClient: Client;
   chainId: number;
   userAddress: Address;
   supportSignature?: boolean;
 }): Promise<
-  Readonly<Transaction<MorphoAuthorizationAction>> | Requirement | null
+  | Readonly<Transaction<BlueAuthorizationAction>>
+  | Requirement<AuthorizationRequirementSignature>
+  | null
 > => {
   const { viemClient, chainId, userAddress, supportSignature } = params;
 
@@ -75,8 +79,7 @@ export const getMorphoAuthorizationRequirement = async (params: {
     // The signable path needs the user's Morpho nonce; fetch it alongside the
     // authorization status so both reads share a round-trip (batched into a
     // single multicall when the client enables batching) instead of
-    // serializing the nonce read behind isAuthorized. Enabling supportSignature
-    // signals intent to authorize, so the nonce is needed in the common case.
+    // serializing the nonce read behind isAuthorized.
     const [isAuthorized, nonce] = await Promise.all([
       pc.readContract({
         address: morpho,
@@ -96,7 +99,7 @@ export const getMorphoAuthorizationRequirement = async (params: {
       return null;
     }
 
-    return encodeAuthorization(viemClient, {
+    return encodeBlueSignatureAuthorization(viemClient, {
       authorized: generalAdapter1,
       chainId,
       nonce,
@@ -123,7 +126,7 @@ export const getMorphoAuthorizationRequirement = async (params: {
     }),
     value: 0n,
     action: {
-      type: "morphoAuthorization" as const,
+      type: "blueAuthorization" as const,
       args: {
         authorized: generalAdapter1,
         isAuthorized: true,

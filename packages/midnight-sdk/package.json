@@ -48,7 +48,7 @@
     "@morpho-org/test": "workspace:^",
     "fast-check": "^4.4.0",
     "typescript": "^6.0.3",
-    "viem": "2.52.2",
+    "viem": "2.53.1",
     "vitest": "^4.1.6"
   },
   "publishConfig": {

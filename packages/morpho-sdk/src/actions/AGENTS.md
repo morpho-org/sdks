@@ -7,8 +7,8 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 - `vaultV1/` — VaultV1 (MetaMorpho) `deposit` / `withdraw` / `redeem` / `migrateToV2`.
 - `vaultV2/` — VaultV2 `deposit` / `withdraw` / `redeem` / `forceWithdraw` / `forceRedeem`.
 - `blue/` — Morpho Blue `supplyCollateral` / `borrow` / `supplyCollateralBorrow` / `repay` / `repayWithdrawCollateral` / `withdrawCollateral`. Borrow paths support optional shared liquidity via `reallocations`.
-- `requirements/` — async resolvers that read on-chain state and return what the user must do/sign before a deposit/supply: token approvals, permit/permit2 signature requests, Morpho authorization.
-- `signatures/` — pure encoders that turn an already-signed requirement into the bundler `Action`s prepended to a bundle (`getTokenRequirementActions` for permit/permit2, `getBlueAuthorizationAction` for `setAuthorizationWithSig`). Kept out of `requirements/` because they encode actions rather than resolve requirements.
+- `requirements/` — async resolvers that read on-chain state and return what the user must do/sign before a deposit/supply: token approvals, permit/permit2 signature requests, Morpho authorization, plus `getRequirementsAction` for consuming signed token requirements.
+- `signatures/` — pure encoders that turn non-token signed requirements into the bundler `Action`s prepended to a bundle (`getBlueAuthorizationAction` for `setAuthorizationWithSig`).
 
 ## Common builder pattern
 

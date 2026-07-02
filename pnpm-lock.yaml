@@ -322,8 +322,8 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       viem:
-        specifier: 2.52.2
-        version: 2.52.2(typescript@6.0.3)(zod@4.4.3)
+        specifier: 2.53.1
+        version: 2.53.1(typescript@6.0.3)(zod@4.4.3)
       vitest:
         specifier: ^4.1.6
         version: 4.1.9(@types/node@26.0.1)(@vitest/coverage-v8@4.1.9)(@vitest/ui@4.1.9)(happy-dom@20.10.6)(vite@8.1.0(@types/node@26.0.1)(jiti@2.7.0)(yaml@2.9.0))

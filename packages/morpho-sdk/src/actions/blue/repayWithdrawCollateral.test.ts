@@ -13,7 +13,7 @@ import {
   type RequirementSignature,
   TransferAmountNotEqualToAssetsError,
 } from "../../types/index.js";
-import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
+import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
 import { blueRepayWithdrawCollateral } from "./repayWithdrawCollateral.js";
 
 describe("blueRepayWithdrawCollateral unit tests", () => {
@@ -381,12 +381,12 @@ describe("blueRepayWithdrawCollateral unit tests", () => {
     ).toThrow(TransferAmountNotEqualToAssetsError);
   });
 
-  test("should not call getTokenRequirementActions when no requirementSignature", async ({
+  test("should not call getRequirementsAction when no requirementSignature", async ({
     client,
   }) => {
     const localSpy = vi.spyOn(
-      getTokenRequirementActionsModule,
-      "getTokenRequirementActions",
+      getRequirementsActionModule,
+      "getRequirementsAction",
     );
 
     blueRepayWithdrawCollateral({
@@ -436,8 +436,8 @@ describe("blueRepayWithdrawCollateral unit tests", () => {
       },
     } satisfies RequirementSignature;
     const localSpy = vi.spyOn(
-      getTokenRequirementActionsModule,
-      "getTokenRequirementActions",
+      getRequirementsActionModule,
+      "getRequirementsAction",
     );
 
     const tx = blueRepayWithdrawCollateral({

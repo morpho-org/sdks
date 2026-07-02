@@ -83,6 +83,35 @@ describe("EcrecoverRatifierUtils.ratify", () => {
     ).toBe(true);
   });
 
+  test("behavior: accepts plain tree input", async () => {
+    const offer = baseOffer({ maxAssets: 0n });
+    const signature = {
+      v: 27,
+      r: "0x0000000000000000000000000000000000000000000000000000000000000000",
+      s: "0x0000000000000000000000000000000000000000000000000000000000000000",
+    } as const;
+
+    const items = await EcrecoverRatifierUtils.ratify({
+      tree: [offer],
+      signature,
+    });
+    const decoded = EcrecoverRatifierUtils.decodeRatifierData(
+      items[0]!.ratifierData,
+    );
+
+    expect(items).toHaveLength(1);
+    expect(items[0]!.offer).toBe(offer);
+    expect(decoded.signature).toEqual(signature);
+    expect(
+      TreeUtils.verifyProof({
+        offer: items[0]!.offer,
+        root: decoded.root,
+        leafIndex: decoded.leafIndex,
+        proof: decoded.proof,
+      }),
+    ).toBe(true);
+  });
+
   test("behavior: signs with client and account", async () => {
     const account = privateKeyToAccount(privateKey);
     const tree = Tree.create([
@@ -250,6 +279,24 @@ describe("EcrecoverRatifierUtils.typedData", () => {
     expect(
       EcrecoverRatifierUtils.typedData({ tree, chainId: 8453n }).primaryType,
     ).toBe("OfferTree");
+  });
+
+  test("behavior: accepts tree-like data without a Tree instance", () => {
+    const tree = Tree.create([
+      baseOffer({ maxAssets: 0n, maker: addresses.maker }),
+      baseOffer({ maxAssets: 0n, maker: addresses.taker }),
+    ]);
+    const treeLike = {
+      offers: tree.offers,
+      paddedOffers: tree.paddedOffers,
+      leaves: tree.leaves,
+      root: tree.root,
+      height: tree.height,
+    } as const;
+
+    expect(
+      EcrecoverRatifierUtils.digest({ tree: treeLike, chainId: 8453n }),
+    ).toBe(EcrecoverRatifierUtils.digest({ tree, chainId: 8453n }));
   });
 });
 

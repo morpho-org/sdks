@@ -245,6 +245,29 @@ export interface MempoolPayloadValidationResult {
 }
 
 /**
+ * Successful Midnight mempool validation result.
+ *
+ * Returned by `Tree.mempoolValidate` and `TreeUtils.mempoolValidate`, which
+ * throw `MidnightMempoolValidationError` instead of returning unsuccessful API
+ * validation results.
+ *
+ * @example
+ * ```ts
+ * import type { MempoolPayloadValidationSuccess } from "@morpho-org/midnight-sdk/api";
+ *
+ * const result: MempoolPayloadValidationSuccess = {
+ *   valid: true,
+ *   issues: [],
+ * };
+ * console.log(result.valid);
+ * ```
+ */
+export type MempoolPayloadValidationSuccess = MempoolPayloadValidationResult & {
+  /** Successful tree validation always has `valid: true`. */
+  readonly valid: true;
+};
+
+/**
  * Collateral metadata returned by Midnight API book routes.
  */
 export interface MidnightApiCollateral {

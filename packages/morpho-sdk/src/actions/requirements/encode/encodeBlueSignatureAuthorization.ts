@@ -12,8 +12,8 @@ import {
   type Requirement,
 } from "../../../types/index.js";
 
-/** Parameters for {@link encodeAuthorization}. */
-interface EncodeAuthorizationParams {
+/** Parameters for {@link encodeBlueSignatureAuthorization}. */
+interface EncodeBlueSignatureAuthorizationParams {
   /** Account to authorize on Morpho (GeneralAdapter1). */
   authorized: Address;
   /** Target chain id; must match `viemClient.chain.id`. */
@@ -52,10 +52,10 @@ interface EncodeAuthorizationParams {
  * ```ts
  * import { createWalletClient, http } from "viem";
  * import { mainnet } from "viem/chains";
- * import { encodeAuthorization } from "@morpho-org/morpho-sdk";
+ * import { encodeBlueSignatureAuthorization } from "@morpho-org/morpho-sdk";
  *
  * const client = createWalletClient({ chain: mainnet, transport: http() });
- * const requirement = await encodeAuthorization(client, {
+ * const requirement = await encodeBlueSignatureAuthorization(client, {
  *   authorized: generalAdapter1,
  *   chainId: 1,
  *   nonce: 0n,
@@ -63,9 +63,9 @@ interface EncodeAuthorizationParams {
  * // requirement satisfies Requirement
  * ```
  */
-export const encodeAuthorization = async (
+export const encodeBlueSignatureAuthorization = async (
   viemClient: Client,
-  params: EncodeAuthorizationParams,
+  params: EncodeBlueSignatureAuthorizationParams,
 ): Promise<Requirement<AuthorizationRequirementSignature>> => {
   const { authorized, chainId, nonce, isAuthorized = true } = params;
 

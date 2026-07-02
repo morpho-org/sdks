@@ -3,6 +3,7 @@ import {
   type BigIntish,
   DivisionByZeroError,
   MathLib,
+  Time,
 } from "@morpho-org/morpho-ts";
 
 import {
@@ -277,6 +278,45 @@ export namespace TickLib {
     if (price === 0n) throw new DivisionByZeroError("price");
 
     return MathLib.mulDiv(MathLib.WAD, MathLib.WAD, price, "Up") - MathLib.WAD;
+  }
+
+  /**
+   * Converts a Midnight tick into a WAD simple annual percentage rate.
+   *
+   * This is an SDK-only rate display convenience. It annualizes the fixed
+   * period rate from {@link tickToRate} over `timeToMaturity` seconds.
+   *
+   * @param tick - Midnight tick.
+   * @param timeToMaturity - Seconds until the market matures.
+   * @returns WAD simple APR rounded up.
+   * @throws {NegativeValueError} when `tick` or `timeToMaturity` is negative.
+   * @throws {TickOutOfRangeError} when `tick` exceeds `MAX_TICK`.
+   * @throws {DivisionByZeroError} when the tick price or `timeToMaturity` is zero.
+   * @example
+   * ```ts
+   * import { TickLib } from "@morpho-org/midnight-sdk";
+   * import { Time } from "@morpho-org/morpho-ts";
+   *
+   * const apr = TickLib.tickToApr(6744n, Time.s.from.y(1n));
+   * console.log(apr);
+   * ```
+   */
+  export function tickToApr(
+    tick: BigIntish,
+    timeToMaturity: BigIntish,
+  ): bigint {
+    const normalizedTimeToMaturity = BigInt(timeToMaturity);
+    assertNonNegative("timeToMaturity", normalizedTimeToMaturity);
+    if (normalizedTimeToMaturity === 0n) {
+      throw new DivisionByZeroError("timeToMaturity");
+    }
+
+    return MathLib.mulDiv(
+      tickToRate(tick),
+      Time.s.from.y(1n),
+      normalizedTimeToMaturity,
+      "Up",
+    );
   }
 
   /**

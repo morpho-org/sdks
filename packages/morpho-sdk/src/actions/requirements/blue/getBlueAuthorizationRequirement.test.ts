@@ -5,8 +5,8 @@ import { describe, expect, test, vi } from "vitest";
 import {
   ChainIdMismatchError,
   isRequirementSignature,
-} from "../../types/index.js";
-import { getMorphoAuthorizationRequirement } from "./getMorphoAuthorizationRequirement.js";
+} from "../../../types/index.js";
+import { getBlueAuthorizationRequirement } from "./getBlueAuthorizationRequirement.js";
 
 const USER: Address = "0x1111111111111111111111111111111111111111";
 
@@ -29,10 +29,10 @@ function makeClient({
   } as unknown as Client;
 }
 
-describe("getMorphoAuthorizationRequirement", () => {
+describe("getBlueAuthorizationRequirement", () => {
   test("throws ChainIdMismatchError when the client chain differs", async () => {
     await expect(
-      getMorphoAuthorizationRequirement({
+      getBlueAuthorizationRequirement({
         viemClient: makeClient({ chainId: mainnet.id + 1, isAuthorized: true }),
         chainId: mainnet.id,
         userAddress: USER,
@@ -42,7 +42,7 @@ describe("getMorphoAuthorizationRequirement", () => {
 
   test("returns null when GeneralAdapter1 is already authorized", async () => {
     await expect(
-      getMorphoAuthorizationRequirement({
+      getBlueAuthorizationRequirement({
         viemClient: makeClient({ chainId: mainnet.id, isAuthorized: true }),
         chainId: mainnet.id,
         userAddress: USER,
@@ -51,7 +51,7 @@ describe("getMorphoAuthorizationRequirement", () => {
   });
 
   test("builds an authorization transaction when authorization is missing", async () => {
-    const tx = await getMorphoAuthorizationRequirement({
+    const tx = await getBlueAuthorizationRequirement({
       viemClient: makeClient({ chainId: mainnet.id, isAuthorized: false }),
       chainId: mainnet.id,
       userAddress: USER,
@@ -61,13 +61,14 @@ describe("getMorphoAuthorizationRequirement", () => {
       throw new Error("expected an authorization transaction");
     }
     expect(tx.to).toBe(addressesRegistry[mainnet.id].morpho);
+    expect(tx.action.type).toBe("blueAuthorization");
     expect(tx.action.args.authorized).toBe(
       addressesRegistry[mainnet.id].bundler3.generalAdapter1,
     );
   });
 
   test("behavior: returns a signable requirement when supportSignature is true", async () => {
-    const requirement = await getMorphoAuthorizationRequirement({
+    const requirement = await getBlueAuthorizationRequirement({
       viemClient: makeClient({
         chainId: mainnet.id,
         isAuthorized: false,

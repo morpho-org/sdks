@@ -16,7 +16,7 @@ import {
   type Transaction,
   ZeroCollateralAmountError,
 } from "../../types/index.js";
-import { getTokenRequirementActions } from "../signatures/getTokenRequirementActions.js";
+import { getRequirementsAction } from "../requirements/getRequirementsAction.js";
 
 /** Parameters for {@link blueSupplyCollateral}. */
 export interface BlueSupplyCollateralParams {
@@ -61,11 +61,11 @@ export interface BlueSupplyCollateralParams {
  * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
  * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the collateral
  *   token is not the chain's wNative.
- * @throws {DepositAssetMismatchError} from `getTokenRequirementActions` when `requirementSignature`
+ * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `requirementSignature`
  *   is provided and the signed asset differs from `marketParams.collateralToken`.
- * @throws {DepositAmountMismatchError} from `getTokenRequirementActions` when `requirementSignature`
+ * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
  *   is provided and the signed amount differs from `args.amount`.
- * @throws {Permit2ExpirationMissingError} from `getTokenRequirementActions` when a Permit2 requirement
+ * @throws {Permit2ExpirationMissingError} from `getRequirementsAction` when a Permit2 requirement
  *   signature is missing its expiration.
  * @example
  * ```ts
@@ -123,7 +123,7 @@ export const blueSupplyCollateral = ({
   if (amount > 0n) {
     if (requirementSignature) {
       actions.push(
-        ...getTokenRequirementActions({
+        ...getRequirementsAction({
           asset: marketParams.collateralToken,
           amount,
           recipient: generalAdapter1,

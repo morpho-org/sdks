@@ -13,7 +13,7 @@ import {
   VaultAssetMismatchError,
   type VaultV1MigrateToV2Action,
 } from "../../types/index.js";
-import { getTokenRequirementActions } from "../signatures/getTokenRequirementActions.js";
+import { getRequirementsAction } from "../requirements/getRequirementsAction.js";
 
 /** Parameters for {@link vaultV1MigrateToV2}. */
 export interface VaultV1MigrateToV2Params {
@@ -75,11 +75,11 @@ export interface VaultV1MigrateToV2Params {
  * @throws {NonPositiveSharesAmountError} when `shares <= 0n`.
  * @throws {NegativeMinSharePriceError} when `minSharePriceVaultV1 < 0n`.
  * @throws {NonPositiveMaxSharePriceError} when `maxSharePriceVaultV2 <= 0n`.
- * @throws {DepositAssetMismatchError} from `getTokenRequirementActions` when `requirementSignature`
+ * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `requirementSignature`
  *   is provided and the signed asset differs from `vault.address` (the V1 share token).
- * @throws {DepositAmountMismatchError} from `getTokenRequirementActions` when `requirementSignature`
+ * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
  *   is provided and the signed amount differs from `args.shares`.
- * @throws {Permit2ExpirationMissingError} from `getTokenRequirementActions` when a Permit2 requirement
+ * @throws {Permit2ExpirationMissingError} from `getRequirementsAction` when a Permit2 requirement
  *   signature is missing its expiration.
  * @example
  * ```ts
@@ -143,7 +143,7 @@ export const vaultV1MigrateToV2 = ({
   // Without: plain erc20TransferFrom for the specified shares amount.
   if (requirementSignature) {
     actions.push(
-      ...getTokenRequirementActions({
+      ...getRequirementsAction({
         asset: sourceVault,
         amount: shares,
         recipient: generalAdapter1,

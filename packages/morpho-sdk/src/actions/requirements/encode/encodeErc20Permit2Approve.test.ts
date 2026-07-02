@@ -9,9 +9,9 @@ import {
   AddressMismatchError,
   InvalidSignatureError,
 } from "../../../types/index.js";
-import { encodeErc20Permit2 } from "./encodeErc20Permit2.js";
+import { encodeErc20Permit2Approve } from "./encodeErc20Permit2Approve.js";
 
-describe("encodeErc20Permit2", () => {
+describe("encodeErc20Permit2Approve", () => {
   const {
     usdc,
     bundler3: { generalAdapter1 },
@@ -29,7 +29,7 @@ describe("encodeErc20Permit2", () => {
     test("should sign permit2 for token", async ({ client }) => {
       const userAddress = client.account.address;
 
-      const permit = encodeErc20Permit2({
+      const permit = encodeErc20Permit2Approve({
         token: usdc,
         amount: mockAmount,
         chainId: mainnet.id,
@@ -50,7 +50,7 @@ describe("encodeErc20Permit2", () => {
       const differentAddress: Address =
         "0x0000000000000000000000000000000000000001";
 
-      const permit = encodeErc20Permit2({
+      const permit = encodeErc20Permit2Approve({
         token: usdc,
         amount: mockAmount,
         chainId: mainnet.id,
@@ -76,7 +76,7 @@ describe("encodeErc20Permit2", () => {
           address: client.account.address,
         },
       };
-      const permit = encodeErc20Permit2({
+      const permit = encodeErc20Permit2Approve({
         token: usdc,
         amount: mockAmount,
         chainId: mainnet.id,
@@ -92,7 +92,7 @@ describe("encodeErc20Permit2", () => {
     test("should return all expected properties in signature args", async ({
       client,
     }) => {
-      const permit = encodeErc20Permit2({
+      const permit = encodeErc20Permit2Approve({
         token: usdc,
         amount: mockAmount,
         chainId: mainnet.id,
@@ -128,7 +128,7 @@ describe("encodeErc20Permit2", () => {
     }) => {
       const now = Time.timestamp();
 
-      const permit = encodeErc20Permit2({
+      const permit = encodeErc20Permit2Approve({
         token: usdc,
         amount: mockAmount,
         chainId: mainnet.id,
@@ -156,7 +156,7 @@ describe("encodeErc20Permit2", () => {
     });
 
     test("should have correct action structure", async () => {
-      const permit = encodeErc20Permit2({
+      const permit = encodeErc20Permit2Approve({
         token: usdc,
         amount: mockAmount,
         chainId: mainnet.id,

@@ -13,8 +13,8 @@ import {
   NegativeSupplyMaxSharePriceError,
   ZeroSupplyAmountError,
 } from "../../types/index.js";
-import { getRequirements } from "../requirements/index.js";
-import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
+import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
+import { getGeneralAdapterRequirements } from "../requirements/index.js";
 import { blueSupply } from "./supply.js";
 
 describe("blueSupply unit tests", () => {
@@ -108,7 +108,7 @@ describe("blueSupply unit tests", () => {
   test("should create tx with permit2 signature", async ({ client }) => {
     const amount = parseUnits("1000", 6);
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: CbbtcUsdcBlue.loanToken,
       chainId: mainnet.id,
       supportSignature: true,
@@ -131,8 +131,8 @@ describe("blueSupply unit tests", () => {
     );
 
     const localSpy = vi.spyOn(
-      getTokenRequirementActionsModule,
-      "getTokenRequirementActions",
+      getRequirementsActionModule,
+      "getRequirementsAction",
     );
 
     const tx = blueSupply({
@@ -149,12 +149,12 @@ describe("blueSupply unit tests", () => {
     expect(tx.action.type).toBe("blueSupply");
   });
 
-  test("should not call getTokenRequirementActions when no requirementSignature", async ({
+  test("should not call getRequirementsAction when no requirementSignature", async ({
     client,
   }) => {
     const localSpy = vi.spyOn(
-      getTokenRequirementActionsModule,
-      "getTokenRequirementActions",
+      getRequirementsActionModule,
+      "getRequirementsAction",
     );
 
     blueSupply({

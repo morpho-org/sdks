@@ -9,11 +9,9 @@ import { describe, expect, test } from "vitest";
 import { baseOffer } from "../__test__/fixtures.js";
 import { MAX_TICK } from "../constants.js";
 import {
-  InvalidOfferParameterError,
   PriceGreaterThanOneError,
   SettlementFeeExceedsPriceError,
 } from "../errors.js";
-import { ConsumableUnitsLib } from "./ConsumableUnitsLib.js";
 import { TakeAmountsLib } from "./TakeAmountsLib.js";
 import { TickLib } from "./TickLib.js";
 
@@ -348,143 +346,5 @@ describe("TakeAmountsLib.toUnitsAtTick", () => {
       ),
       { numRuns: 100 },
     );
-  });
-});
-
-describe("ConsumableUnitsLib.consumableUnits", () => {
-  test("default", () => {
-    expect(
-      ConsumableUnitsLib.consumableUnits({
-        offer: {
-          buy: true,
-          tick: MAX_TICK,
-          maxUnits: 100n,
-          maxAssets: 0n,
-        },
-        consumed: 40n,
-        settlementFee: 0n,
-      }),
-    ).toBe(60n);
-  });
-
-  test("behavior: max units use zero-floor subtraction", () => {
-    expect(
-      ConsumableUnitsLib.consumableUnits({
-        offer: baseOffer({ maxUnits: 100n, maxAssets: 0n }),
-        consumed: 120n,
-        settlementFee: MathLib.WAD,
-      }),
-    ).toBe(0n);
-  });
-
-  test("behavior: buy max assets convert buyer assets", () => {
-    const offer = baseOffer({ buy: true, maxUnits: 0n, maxAssets: 123n });
-
-    expect(
-      ConsumableUnitsLib.consumableUnits({
-        offer,
-        consumed: 23n,
-        settlementFee: 0n,
-      }),
-    ).toBe(
-      TakeAmountsLib.buyerAssetsToUnits({
-        offer,
-        targetBuyerAssets: 100n,
-        settlementFee: 0n,
-      }),
-    );
-  });
-
-  test("behavior: sell max assets convert seller assets", () => {
-    const offer = baseOffer({
-      buy: false,
-      maxUnits: 0n,
-      maxAssets: 123n,
-    });
-
-    expect(
-      ConsumableUnitsLib.consumableUnits({
-        offer,
-        consumed: 23n,
-        settlementFee: 0n,
-      }),
-    ).toBe(
-      TakeAmountsLib.sellerAssetsToUnits({
-        offer,
-        targetSellerAssets: 100n,
-        settlementFee: 0n,
-      }),
-    );
-  });
-
-  test("behavior: max assets use zero-floor subtraction", () => {
-    expect(
-      ConsumableUnitsLib.consumableUnits({
-        offer: baseOffer({
-          buy: true,
-          tick: MAX_TICK,
-          maxUnits: 0n,
-          maxAssets: 100n,
-        }),
-        consumed: 120n,
-        settlementFee: 0n,
-      }),
-    ).toBe(0n);
-  });
-
-  test("error: NegativeValueError", () => {
-    expect(() =>
-      ConsumableUnitsLib.consumableUnits({
-        offer: baseOffer({ maxUnits: 100n, maxAssets: 0n }),
-        consumed: -1n,
-        settlementFee: 0n,
-      }),
-    ).toThrow(NegativeValueError);
-    expect(() =>
-      ConsumableUnitsLib.consumableUnits({
-        offer: baseOffer({ maxUnits: -1n }),
-        consumed: 0n,
-        settlementFee: 0n,
-      }),
-    ).toThrow(NegativeValueError);
-  });
-
-  test("error: InvalidOfferParameterError for cap shape", () => {
-    expect(() =>
-      ConsumableUnitsLib.consumableUnits({
-        offer: baseOffer({ maxUnits: 0n, maxAssets: 0n }),
-        consumed: 0n,
-        settlementFee: 0n,
-      }),
-    ).toThrow(InvalidOfferParameterError);
-    expect(() =>
-      ConsumableUnitsLib.consumableUnits({
-        offer: baseOffer({ maxUnits: 1n, maxAssets: 1n }),
-        consumed: 0n,
-        settlementFee: 0n,
-      }),
-    ).toThrow(InvalidOfferParameterError);
-  });
-
-  test("error: DivisionByZeroError", () => {
-    expect(() =>
-      ConsumableUnitsLib.consumableUnits({
-        offer: baseOffer({ buy: true, tick: 0n, maxUnits: 0n }),
-        consumed: 0n,
-        settlementFee: 0n,
-      }),
-    ).toThrow(DivisionByZeroError);
-  });
-
-  test("error: SettlementFeeExceedsPriceError", () => {
-    const offer = baseOffer({ buy: true, tick: 2n, maxUnits: 0n });
-
-    expect(() =>
-      ConsumableUnitsLib.consumableUnits({
-        offer,
-        consumed: 0n,
-        settlementFee: TickLib.tickToPrice(offer.tick) + 1n,
-      }),
-    ).toThrow(SettlementFeeExceedsPriceError);
   });
 });

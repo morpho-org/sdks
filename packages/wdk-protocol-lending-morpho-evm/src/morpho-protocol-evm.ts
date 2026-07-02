@@ -5,9 +5,9 @@ import {
 } from "@morpho-org/blue-sdk";
 import { fetchMarket } from "@morpho-org/blue-sdk-viem";
 import {
+  type BlueAuthorizationAction,
   type ERC20ApprovalAction,
   type Metadata,
-  type MorphoAuthorizationAction,
   type MorphoClientType,
   morphoViemExtension,
   type Requirement,
@@ -104,7 +104,7 @@ export type Erc4337TransactionConfig = Partial<
 >;
 
 export type RequirementApproval = Transaction<ERC20ApprovalAction>;
-export type RequirementAuthorization = Transaction<MorphoAuthorizationAction>;
+export type RequirementAuthorization = Transaction<BlueAuthorizationAction>;
 export type RequirementSignatureRequest = Requirement;
 export type ApprovalOrSignatureRequirement =
   | RequirementApproval

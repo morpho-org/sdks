@@ -26,7 +26,7 @@ import {
  * ```ts
  * import { getBlueAuthorizationAction } from "@morpho-org/morpho-sdk";
  *
- * // `requirement` comes from `getMorphoAuthorizationRequirement` with `supportSignature: true`.
+ * // `requirement` comes from `getBlueAuthorizationRequirement` with `supportSignature: true`.
  * const signed = await requirement.sign(walletClient, borrower);
  * const action = getBlueAuthorizationAction(1, signed);
  * // action satisfies { type: "morphoSetAuthorizationWithSig"; args: [...] }

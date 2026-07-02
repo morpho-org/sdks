@@ -19,8 +19,9 @@ Midnight HTTP API helpers are exported from `@morpho-org/midnight-sdk/api`. This
 ## Making offers
 
 The make-side starts with local offer construction, groups offers that should share consumption, and
-commits grouped and standalone offers into one tree. Validate the tree before asking the maker or an
-authorized signer to sign, or before asking the maker contract to approve the root. Then encode the
+commits grouped and standalone offers into one tree. Ratification inputs are optional for validation,
+so validate the tree before asking the maker or an authorized signer to sign. After signing, pass
+ratification inputs only when you also want to validate the final payload shape. Then encode the
 ratified items into a mempool payload and submit the raw payload bytes onchain.
 
 ```ts
@@ -103,19 +104,28 @@ export async function makeBaseUsdcWethOffers(params: {
     standaloneBorrowOffer,
   ]);
 
-  const treeValidation = await tree.mempoolValidate({
+  // Ratification data is optional here. Omitting it catches API policy issues before asking the maker to sign.
+  await tree.mempoolValidate({
     chainId,
   });
-  if (!treeValidation.valid) {
-    return { ok: false as const, issues: treeValidation.issues };
-  }
 
   // EcrecoverRatifierUtils derives the verifier from offer.ratifier and rejects mixed-ratifier trees.
   // The account may be the maker or an authorized signer for every maker in the tree.
-  const items = await EcrecoverRatifierUtils.ratify({
+  const signature = await EcrecoverRatifierUtils.sign({
     tree,
     client: params.walletClient,
     account: params.maker,
+  });
+
+  // Optional final-payload validation: include ratification data when validating post-signature bytes.
+  await tree.mempoolValidate({
+    chainId,
+    ratification: { type: "ecrecover", signature },
+  });
+
+  const items = await EcrecoverRatifierUtils.ratify({
+    tree,
+    signature,
   });
   const payload = await Payload.encode(items);
 
@@ -235,8 +245,11 @@ normalization. Caller inputs and successful JSON output shapes are trusted at ru
 TypeScript types model the API contract.
 
 Use `tree.mempoolValidate({ chainId })` in normal make-side flows before the maker signs or approves
-the root. Pass `apiUrl` to that method when using a custom Midnight API URL. `MidnightApi` keeps the
-raw HTTP surface, including `validateMempoolPayload` for already encoded payload bytes.
+the root. Ratification data is optional for validation; pass `ratification` only when validating
+final payload bytes with real ratifier data after the signature or Setter proof is available. It
+throws `MidnightMempoolValidationError` with the API issues when policy validation fails. Pass
+`apiUrl` to that method when using a custom Midnight API URL. `MidnightApi` keeps the raw HTTP
+surface, including non-throwing `validateMempoolPayload` results for already encoded payload bytes.
 
 ## Development
 
