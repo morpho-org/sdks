@@ -14,7 +14,7 @@ import {
   type PermitRequirementSignature,
   type Transaction,
 } from "../../types/index.js";
-import { getAuthorizationAction } from "../signatures/getAuthorizationAction.js";
+import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
 import { getRequirementsAction } from "../signatures/getRequirementsAction.js";
 
 /** Parameters for {@link blueRepayWithdrawCollateral}. */
@@ -164,7 +164,7 @@ export const blueRepayWithdrawCollateral = ({
   const actions: Action[] = [];
 
   if (authorizationSignature) {
-    actions.push(getAuthorizationAction(chainId, authorizationSignature));
+    actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
   }
 
   if (requirementSignature) {

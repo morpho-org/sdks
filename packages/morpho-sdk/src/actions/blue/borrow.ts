@@ -12,7 +12,7 @@ import {
   type Transaction,
   type VaultReallocation,
 } from "../../types/index.js";
-import { getAuthorizationAction } from "../signatures/getAuthorizationAction.js";
+import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
 import { buildReallocationActions } from "./buildReallocationActions.js";
 
 /** Parameters for {@link blueBorrow}. */
@@ -114,7 +114,7 @@ export const blueBorrow = ({
   let reallocationFee = 0n;
 
   if (authorizationSignature) {
-    actions.push(getAuthorizationAction(chainId, authorizationSignature));
+    actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
   }
 
   if (reallocations && reallocations.length > 0) {

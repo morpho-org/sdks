@@ -24,15 +24,15 @@ import {
  *   `GeneralAdapter1`.
  * @example
  * ```ts
- * import { getAuthorizationAction } from "@morpho-org/morpho-sdk";
+ * import { getBlueAuthorizationAction } from "@morpho-org/morpho-sdk";
  *
  * // `requirement` comes from `getMorphoAuthorizationRequirement` with `supportSignature: true`.
  * const signed = await requirement.sign(walletClient, borrower);
- * const action = getAuthorizationAction(1, signed);
+ * const action = getBlueAuthorizationAction(1, signed);
  * // action satisfies { type: "morphoSetAuthorizationWithSig"; args: [...] }
  * ```
  */
-export const getAuthorizationAction = (
+export const getBlueAuthorizationAction = (
   chainId: number,
   signature: AuthorizationRequirementSignature,
 ): Action => {

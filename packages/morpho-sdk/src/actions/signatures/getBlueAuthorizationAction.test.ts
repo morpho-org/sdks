@@ -6,7 +6,7 @@ import {
   type AuthorizationRequirementSignature,
   BundlerErrors,
 } from "../../types/index.js";
-import { getAuthorizationAction } from "./getAuthorizationAction.js";
+import { getBlueAuthorizationAction } from "./getBlueAuthorizationAction.js";
 
 const OWNER: Address = "0x1111111111111111111111111111111111111111";
 const {
@@ -33,9 +33,9 @@ const signature: AuthorizationRequirementSignature = {
   },
 };
 
-describe("getAuthorizationAction", () => {
+describe("getBlueAuthorizationAction", () => {
   test("default", () => {
-    const action = getAuthorizationAction(mainnet.id, signature);
+    const action = getBlueAuthorizationAction(mainnet.id, signature);
 
     expect(action.type).toBe("morphoSetAuthorizationWithSig");
     expect(action.args).toEqual([
@@ -52,7 +52,7 @@ describe("getAuthorizationAction", () => {
   });
 
   test("behavior: maps owner to authorizer and forwards the raw signature", () => {
-    const action = getAuthorizationAction(mainnet.id, signature);
+    const action = getBlueAuthorizationAction(mainnet.id, signature);
     if (action.type !== "morphoSetAuthorizationWithSig") {
       throw new Error("expected a morphoSetAuthorizationWithSig action");
     }
@@ -74,8 +74,8 @@ describe("getAuthorizationAction", () => {
       args: { ...signature.args, authorized: rogue },
     };
 
-    expect(() => getAuthorizationAction(mainnet.id, rogueSignature)).toThrow(
-      BundlerErrors.UnexpectedSignature,
-    );
+    expect(() =>
+      getBlueAuthorizationAction(mainnet.id, rogueSignature),
+    ).toThrow(BundlerErrors.UnexpectedSignature);
   });
 });

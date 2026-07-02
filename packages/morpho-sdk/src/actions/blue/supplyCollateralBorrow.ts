@@ -20,7 +20,7 @@ import {
   type VaultReallocation,
   ZeroCollateralAmountError,
 } from "../../types/index.js";
-import { getAuthorizationAction } from "../signatures/getAuthorizationAction.js";
+import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
 import { getRequirementsAction } from "../signatures/getRequirementsAction.js";
 import { buildReallocationActions } from "./buildReallocationActions.js";
 
@@ -172,7 +172,7 @@ export const blueSupplyCollateralBorrow = ({
   const actions: Action[] = [];
 
   if (authorizationSignature) {
-    actions.push(getAuthorizationAction(chainId, authorizationSignature));
+    actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
   }
 
   if (nativeAmount !== undefined && nativeAmount > 0n) {

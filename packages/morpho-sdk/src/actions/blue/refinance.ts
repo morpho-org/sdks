@@ -19,7 +19,7 @@ import {
   type VaultReallocation,
   ZeroCollateralAmountError,
 } from "../../types/index.js";
-import { getAuthorizationAction } from "../signatures/getAuthorizationAction.js";
+import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
 import { buildReallocationActions } from "./buildReallocationActions.js";
 
 /** Parameters for {@link blueRefinance}. */
@@ -279,7 +279,7 @@ export const blueRefinance = ({
   let reallocationFee = 0n;
 
   if (authorizationSignature) {
-    actions.push(getAuthorizationAction(chainId, authorizationSignature));
+    actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
   }
 
   if (targetReallocations && targetReallocations.length > 0) {

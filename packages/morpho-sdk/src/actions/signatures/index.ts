@@ -1,2 +1,2 @@
-export * from "./getAuthorizationAction.js";
+export * from "./getBlueAuthorizationAction.js";
 export * from "./getRequirementsAction.js";
