@@ -1,5 +1,5 @@
 import { midnightBundlesAbi } from "@morpho-org/midnight-sdk";
-import { decodeFunctionData } from "viem";
+import { decodeFunctionData, maxUint256, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -29,11 +29,16 @@ describe("midnightRepayWithdrawCollateral", () => {
     expect(tx.action.args).toEqual({
       market: midnightMarketId,
       repayAssets: 1_000n,
-      withdrawCollateralAssets: 2_000n,
+      collateralWithdrawals: 1,
       onBehalf: midnightAddresses.taker,
-      receiver: midnightAddresses.taker,
+      collateralReceiver: midnightAddresses.taker,
+      referralFeePct: 0n,
+      referralFeeRecipient: zeroAddress,
+      deadline: maxUint256,
     });
-    expect(decoded.functionName).toBe("repayAndWithdrawCollateral");
+    expect(decoded.functionName).toBe(
+      "midnightBundlesV1RepayAndWithdrawCollateral",
+    );
     expect(decoded.args[1]).toBe(1_000n);
     expect(decoded.args?.[3]).toEqual({
       kind: PermitKind.None,

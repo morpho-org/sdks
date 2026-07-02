@@ -24,6 +24,7 @@ import {
 } from "viem";
 import { getBlock, signTypedData } from "viem/actions";
 import {
+  type MidnightCollateralWithdrawal,
   type MidnightTakeableOffer,
   midnightCancelOffer,
   midnightRedeem,
@@ -148,6 +149,13 @@ export interface TakeLendParams extends MarketActionParams {
   readonly assets: bigint;
   readonly minUnits: bigint;
   readonly takeableOffers: readonly MidnightTakeableOffer[];
+  readonly reduceOnly?: boolean;
+  readonly collateralWithdrawals?: readonly MidnightCollateralWithdrawal[];
+  readonly collateralReceiver?: Address;
+  readonly referralFeePct?: bigint;
+  readonly referralFeeRecipient?: Address;
+  readonly maxContinuousFee?: bigint;
+  readonly deadline?: bigint;
 }
 
 /** Parameters for the Midnight take-borrow taker flow. */
@@ -155,6 +163,12 @@ export interface TakeBorrowParams extends MarketActionParams {
   readonly loanAssets: bigint;
   readonly maxUnits: bigint;
   readonly takeableOffers: readonly MidnightTakeableOffer[];
+  readonly reduceOnly?: boolean;
+  readonly receiver?: Address;
+  readonly referralFeePct?: bigint;
+  readonly referralFeeRecipient?: Address;
+  readonly maxContinuousFee?: bigint;
+  readonly deadline?: bigint;
 }
 
 /** Parameters for the Midnight supply-collateral-and-take-borrow taker flow. */
@@ -182,6 +196,12 @@ export interface RepayWithdrawCollateralParams extends MarketActionParams {
   readonly repayAssets: bigint;
   readonly withdrawCollateralAssets: bigint;
   readonly collateralIndex?: bigint;
+  readonly receiver?: Address;
+  readonly collateralReceiver?: Address;
+  readonly collateralWithdrawals?: readonly MidnightCollateralWithdrawal[];
+  readonly referralFeePct?: bigint;
+  readonly referralFeeRecipient?: Address;
+  readonly deadline?: bigint;
 }
 
 /** Parameters for fetching a Midnight user position with market data. */
@@ -389,6 +409,13 @@ export class MorphoMidnight implements MidnightActions {
           minUnits: params.minUnits,
           taker: params.accountAddress,
           takeableOffers: params.takeableOffers,
+          reduceOnly: params.reduceOnly,
+          collateralWithdrawals: params.collateralWithdrawals,
+          collateralReceiver: params.collateralReceiver,
+          referralFeePct: params.referralFeePct,
+          referralFeeRecipient: params.referralFeeRecipient,
+          maxContinuousFee: params.maxContinuousFee,
+          deadline: params.deadline,
           signatures,
           metadata: this.client.options.metadata,
         }),
@@ -425,6 +452,12 @@ export class MorphoMidnight implements MidnightActions {
           maxUnits: params.maxUnits,
           taker: params.accountAddress,
           takeableOffers: params.takeableOffers,
+          reduceOnly: params.reduceOnly,
+          receiver: params.receiver,
+          referralFeePct: params.referralFeePct,
+          referralFeeRecipient: params.referralFeeRecipient,
+          maxContinuousFee: params.maxContinuousFee,
+          deadline: params.deadline,
           metadata: this.client.options.metadata,
         }),
     };
@@ -481,6 +514,12 @@ export class MorphoMidnight implements MidnightActions {
           taker: params.accountAddress,
           collateralIndex,
           takeableOffers: params.takeableOffers,
+          reduceOnly: params.reduceOnly,
+          receiver: params.receiver,
+          referralFeePct: params.referralFeePct,
+          referralFeeRecipient: params.referralFeeRecipient,
+          maxContinuousFee: params.maxContinuousFee,
+          deadline: params.deadline,
           signatures,
           metadata: this.client.options.metadata,
         }),
@@ -711,7 +750,30 @@ export class MorphoMidnight implements MidnightActions {
       "withdrawCollateralAssets",
       params.withdrawCollateralAssets,
     );
-    if (params.repayAssets === 0n && params.withdrawCollateralAssets === 0n) {
+    const collateralWithdrawals =
+      params.collateralWithdrawals ??
+      (params.withdrawCollateralAssets > 0n
+        ? [
+            {
+              collateralIndex: params.collateralIndex ?? 0n,
+              assets: params.withdrawCollateralAssets,
+            },
+          ]
+        : []);
+    for (const [index, withdrawal] of collateralWithdrawals.entries()) {
+      assertNonNegativeAmount(
+        `collateralWithdrawals[${index}].collateralIndex`,
+        withdrawal.collateralIndex,
+      );
+      assertNonNegativeAmount(
+        `collateralWithdrawals[${index}].assets`,
+        withdrawal.assets,
+      );
+    }
+    if (
+      params.repayAssets === 0n &&
+      collateralWithdrawals.every((withdrawal) => withdrawal.assets === 0n)
+    ) {
       throw new NonPositiveMidnightAmountError("repay or withdraw amount", 0n);
     }
 
@@ -752,6 +814,12 @@ export class MorphoMidnight implements MidnightActions {
           withdrawCollateralAssets: params.withdrawCollateralAssets,
           onBehalf: params.accountAddress,
           collateralIndex: params.collateralIndex,
+          receiver: params.receiver,
+          collateralReceiver: params.collateralReceiver,
+          collateralWithdrawals,
+          referralFeePct: params.referralFeePct,
+          referralFeeRecipient: params.referralFeeRecipient,
+          deadline: params.deadline,
           signatures,
           metadata: this.client.options.metadata,
         }),

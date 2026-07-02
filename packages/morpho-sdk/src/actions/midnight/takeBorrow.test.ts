@@ -34,11 +34,11 @@ describe("midnightTakeBorrow", () => {
     expect(tx.to).toBe(midnightAddresses.midnightBundles);
     expect(tx.action.args.loanAssets).toBe(1_000n);
     expect(decoded.functionName).toBe(
-      "supplyCollateralAndSellWithAssetsTarget",
+      "midnightBundlesV1SupplyCollateralAndSellWithAssetsTarget",
     );
     expect(decoded.args[0]).toBe(1_000n);
     expect(decoded.args[1]).toBe(1_100n);
-    expect(decoded.args?.[4]).toEqual([]);
+    expect(decoded.args?.[5]).toEqual([]);
   });
 
   test("error: EmptyMidnightTakeableOffersError", () => {

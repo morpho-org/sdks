@@ -41,11 +41,11 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
     expect(tx.action.args.loanAssets).toBe(1_000n);
     expect(tx.action.type).toBe("midnightSupplyCollateralTakeBorrow");
     expect(decoded.functionName).toBe(
-      "supplyCollateralAndSellWithAssetsTarget",
+      "midnightBundlesV1SupplyCollateralAndSellWithAssetsTarget",
     );
     expect(decoded.args[0]).toBe(1_000n);
     expect(decoded.args[1]).toBe(1_100n);
-    expect(decoded.args?.[4]).toMatchObject([
+    expect(decoded.args?.[5]).toMatchObject([
       {
         permit: {
           kind: PermitKind.None,
@@ -90,7 +90,7 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
       data: tx.data,
     });
 
-    expect(decoded.args?.[4]).toMatchObject([
+    expect(decoded.args?.[5]).toMatchObject([
       {
         permit: {
           kind: PermitKind.ERC2612,
