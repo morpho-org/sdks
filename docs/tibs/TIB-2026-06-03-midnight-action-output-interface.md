@@ -130,7 +130,7 @@ The migration should keep the markets app on the bundle paths it already uses:
 - direct `Midnight.supplyCollateral(...)` only for supply-only branches where there are no takeableOffers and the bundler would index `takeableOffers[0]`;
 - `MidnightBundles.midnightBundlesV1RepayAndWithdrawCollateral(...)` for repay-only, withdraw-only, and repay+withdraw position flows.
 
-These bundle signatures are checked against `morpho-org/bundles` `main` commit `ecb1f3a8` (`src/midnight/IMidnightBundlesV1.sol` and `src/midnight/MidnightBundlesV1.sol`). The local `midnight-sdk` ABI in this stack may lag that deploy while the implementation PR updates generated ABI inputs.
+These bundle signatures are checked against `morpho-org/bundles` `main` commit `4c71ac5ee7254b2a448b6054e003bd81e171d86e` (`src/midnight/IMidnightBundlesV1.sol` and `src/midnight/MidnightBundlesV1.sol`). The local `midnight-sdk` ABI in this stack may lag that deploy while the implementation PR updates generated ABI inputs.
 
 This is not just a UI preference. `MidnightBundles` pulls tokens once, consumes token permits when the SDK collected one, skips reverted stale offers while continuing through the provided take list, enforces exact asset / unit targets, and performs the authorized `Midnight` calls on behalf of the taker. The app already shaped its flows around those semantics, so the SDK migration should preserve them to minimize app changes.
 
