@@ -3,8 +3,6 @@ import {
   type AnyRequirementSignature,
   DepositAmountMismatchError,
   DepositAssetMismatchError,
-  DepositOwnerMismatchError,
-  DepositSpenderMismatchError,
   MidnightPermit2TransferSignatureRequiredError,
 } from "../../types/index.js";
 import { type MidnightTokenPermit, PermitKind } from "./types.js";
@@ -33,8 +31,6 @@ export interface EncodeMidnightTokenPermitParams {
  * @returns Midnight bundle `TokenPermit` calldata payload.
  * @throws {DepositAssetMismatchError} when a token signature targets another asset.
  * @throws {DepositAmountMismatchError} when a token signature targets another amount.
- * @throws {DepositOwnerMismatchError} when a token signature targets another owner.
- * @throws {DepositSpenderMismatchError} when a token signature targets another spender.
  * @throws {MidnightPermit2TransferSignatureRequiredError} when a Blue Permit2 allowance signature
  *   is passed instead of a Midnight Permit2 transfer signature.
  * @example
@@ -77,17 +73,6 @@ export const encodeMidnightTokenPermit = (
   }
 
   if (signature == null) return { kind: PermitKind.None, data: "0x" };
-
-  if (!isAddressEqual(signature.args.owner, params.owner)) {
-    throw new DepositOwnerMismatchError(params.owner, signature.args.owner);
-  }
-
-  if (!isAddressEqual(signature.action.args.spender, params.spender)) {
-    throw new DepositSpenderMismatchError(
-      params.spender,
-      signature.action.args.spender,
-    );
-  }
 
   if (!isAddressEqual(signature.args.asset, params.token)) {
     throw new DepositAssetMismatchError(params.token, signature.args.asset);
