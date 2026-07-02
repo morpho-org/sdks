@@ -1,9 +1,9 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { mainnet } from "viem/chains";
-import type { RequirementSignature } from "../../src/index.js";
+import type { PermitRequirementSignature } from "../../src/index.js";
 
 /**
- * Builds a mainnet ERC-2612 permit {@link RequirementSignature} fixture targeting
+ * Builds a mainnet ERC-2612 permit {@link PermitRequirementSignature} fixture targeting
  * `GeneralAdapter1`, for exercising the `requirementSignature` path of the Blue actions.
  */
 export function makePermit({
@@ -14,7 +14,7 @@ export function makePermit({
   owner: `0x${string}`;
   asset: `0x${string}`;
   amount: bigint;
-}): RequirementSignature {
+}): PermitRequirementSignature {
   const {
     bundler3: { generalAdapter1 },
   } = getChainAddresses(mainnet.id);
@@ -36,5 +36,5 @@ export function makePermit({
         deadline: 1n,
       },
     },
-  } satisfies RequirementSignature;
+  } satisfies PermitRequirementSignature;
 }

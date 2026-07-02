@@ -7,6 +7,7 @@ import {
   validateNativeAsset,
 } from "../../helpers/index.js";
 import {
+  type AuthorizationRequirementSignature,
   type BlueRepayWithdrawCollateralAction,
   type Metadata,
   MutuallyExclusiveRepayAmountsError,
@@ -14,12 +15,13 @@ import {
   NonPositiveRepayAmountError,
   NonPositiveRepayMaxSharePriceError,
   NonPositiveWithdrawCollateralAmountError,
+  type PermitRequirementSignature,
   type RepayActionAmountArgs,
-  type RequirementSignature,
   type Transaction,
   TransferAmountNotEqualToAssetsError,
 } from "../../types/index.js";
-import { getRequirementsAction } from "../requirements/getRequirementsAction.js";
+import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
+import { getTokenRequirementActions } from "../signatures/getTokenRequirementActions.js";
 
 /** Parameters for {@link blueRepayWithdrawCollateral}. */
 export interface BlueRepayWithdrawCollateralParams {
@@ -36,7 +38,14 @@ export interface BlueRepayWithdrawCollateralParams {
     receiver: Address;
     /** Maximum repay share price (in ray). Protects against share price manipulation. */
     maxSharePrice: bigint;
-    requirementSignature?: RequirementSignature;
+    /** Optional pre-signed permit/permit2 approval for the loan-token transfer. */
+    requirementSignature?: PermitRequirementSignature;
+    /**
+     * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
+     * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a
+     * standalone `setAuthorization` transaction.
+     */
+    authorizationSignature?: AuthorizationRequirementSignature;
   };
   metadata?: Metadata;
 }
@@ -63,7 +72,8 @@ export interface BlueRepayWithdrawCollateralParams {
  *   ERC-20 (already net of native); residual loan tokens are skimmed back to `receiver`.
  *
  * Prerequisites: ERC-20 approval for the loan token to `GeneralAdapter1` (for the repay) **and**
- * `GeneralAdapter1` must be authorized on Morpho (for the withdraw).
+ * `GeneralAdapter1` must be authorized on Morpho (for the withdraw). Passing an
+ * `authorizationSignature` prepends the authorization in-bundle instead.
  *
  * @param params.market.chainId - The chain the market lives on.
  * @param params.market.marketParams - Market params (loanToken, collateralToken, oracle, irm, lltv).
@@ -82,6 +92,8 @@ export interface BlueRepayWithdrawCollateralParams {
  *   protection.
  * @param params.args.requirementSignature - Optional pre-signed permit/permit2 approval for the
  *   loan-token transfer.
+ * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
+ *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueRepayWithdrawCollateralAction>` with `to`,
  *   `value` (= `nativeAmount`), `data`, and the typed `action` discriminator the simulation layer consumes.
@@ -97,11 +109,11 @@ export interface BlueRepayWithdrawCollateralParams {
  * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
  * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the loan token is not
  *   the chain's wNative.
- * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `requirementSignature`
+ * @throws {DepositAssetMismatchError} from `getTokenRequirementActions` when `requirementSignature`
  *   is provided and the signed asset differs from `marketParams.loanToken`.
- * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
+ * @throws {DepositAmountMismatchError} from `getTokenRequirementActions` when `requirementSignature`
  *   is provided and the signed amount differs from the ERC-20 amount pulled.
- * @throws {Permit2ExpirationMissingError} from `getRequirementsAction` when a Permit2 requirement
+ * @throws {Permit2ExpirationMissingError} from `getTokenRequirementActions` when a Permit2 requirement
  *   signature is missing its expiration.
  * @example
  * ```ts
@@ -139,6 +151,7 @@ export const blueRepayWithdrawCollateral = ({
     receiver,
     maxSharePrice,
     requirementSignature,
+    authorizationSignature,
   } = args;
 
   if (maxSharePrice <= 0n) {
@@ -194,6 +207,11 @@ export const blueRepayWithdrawCollateral = ({
 
   const actions: Action[] = [];
 
+  // Authorize GeneralAdapter1 in-bundle when a signed authorization is supplied.
+  if (authorizationSignature) {
+    actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
+  }
+
   // Wrap native into wNative before pulling the ERC-20 remainder.
   if (nativeAmount > 0n) {
     validateNativeAsset(chainId, marketParams.loanToken);
@@ -214,7 +232,7 @@ export const blueRepayWithdrawCollateral = ({
   if (erc20Amount > 0n) {
     if (requirementSignature) {
       actions.push(
-        ...getRequirementsAction({
+        ...getTokenRequirementActions({
           asset: marketParams.loanToken,
           amount: erc20Amount,
           recipient: generalAdapter1,

@@ -18,8 +18,8 @@ import {
   NonPositiveSharesAmountError,
   VaultAssetMismatchError,
 } from "../../types/index.js";
-import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
 import { getRequirements } from "../requirements/index.js";
+import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
 import { vaultV1MigrateToV2 } from "./migrateToV2.js";
 
 describe("vaultV1MigrateToV2 unit tests", () => {
@@ -151,8 +151,8 @@ describe("vaultV1MigrateToV2 unit tests", () => {
     );
 
     const localSpy = vi.spyOn(
-      getRequirementsActionModule,
-      "getRequirementsAction",
+      getTokenRequirementActionsModule,
+      "getTokenRequirementActions",
     );
 
     const tx = vaultV1MigrateToV2({
@@ -244,12 +244,12 @@ describe("vaultV1MigrateToV2 unit tests", () => {
     expect(tx.value).toBe(0n);
   });
 
-  test("should not call getRequirementsAction without requirement signature", async ({
+  test("should not call getTokenRequirementActions without requirement signature", async ({
     client,
   }) => {
     const localSpy = vi.spyOn(
-      getRequirementsActionModule,
-      "getRequirementsAction",
+      getTokenRequirementActionsModule,
+      "getTokenRequirementActions",
     );
 
     const tx = vaultV1MigrateToV2({

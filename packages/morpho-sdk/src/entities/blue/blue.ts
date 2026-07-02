@@ -78,6 +78,7 @@ import {
   NonPositiveRepayAmountError,
   NonPositiveWithdrawAmountError,
   NonPositiveWithdrawCollateralAmountError,
+  type PermitRequirementSignature,
   type ReallocationComputeOptions,
   RefinanceExceedsBorrowAssetsError,
   RefinanceExceedsBorrowSharesError,
@@ -87,6 +88,7 @@ import {
   type RepayAmountArgs,
   type Requirement,
   type RequirementSignature,
+  selectRequirementSignatures,
   type Transaction,
   type VaultReallocation,
   WithdrawExceedsCollateralError,
@@ -128,11 +130,16 @@ export interface BlueActions {
    */
   supplyCollateral: (params: { userAddress: Address } & DepositAmountArgs) => {
     buildTx: (
-      requirementSignature?: RequirementSignature,
+      signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<BlueSupplyCollateralAction>>;
     getRequirements: (params?: {
       useSimplePermit?: boolean;
-    }) => Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]>;
+    }) => Promise<
+      (
+        | Readonly<Transaction<ERC20ApprovalAction>>
+        | Requirement<PermitRequirementSignature>
+      )[]
+    >;
   };
 
   /**
@@ -156,11 +163,16 @@ export interface BlueActions {
     } & DepositAmountArgs,
   ) => {
     buildTx: (
-      requirementSignature?: RequirementSignature,
+      signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<BlueSupplyAction>>;
     getRequirements: (params?: {
       useSimplePermit?: boolean;
-    }) => Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]>;
+    }) => Promise<
+      (
+        | Readonly<Transaction<ERC20ApprovalAction>>
+        | Requirement<PermitRequirementSignature>
+      )[]
+    >;
   };
 
   /**
@@ -194,9 +206,11 @@ export interface BlueActions {
       reallocations?: readonly VaultReallocation[];
     } & AssetsOrSharesArgs,
   ) => {
-    buildTx: () => Readonly<Transaction<BlueWithdrawAction>>;
+    buildTx: (
+      signatures?: readonly RequirementSignature[],
+    ) => Readonly<Transaction<BlueWithdrawAction>>;
     getRequirements: () => Promise<
-      Readonly<Transaction<MorphoAuthorizationAction>>[]
+      (Readonly<Transaction<MorphoAuthorizationAction>> | Requirement)[]
     >;
   };
 
@@ -225,9 +239,11 @@ export interface BlueActions {
     slippageTolerance?: bigint;
     reallocations?: readonly VaultReallocation[];
   }) => {
-    buildTx: () => Readonly<Transaction<BlueBorrowAction>>;
+    buildTx: (
+      signatures?: readonly RequirementSignature[],
+    ) => Readonly<Transaction<BlueBorrowAction>>;
     getRequirements: () => Promise<
-      Readonly<Transaction<MorphoAuthorizationAction>>[]
+      (Readonly<Transaction<MorphoAuthorizationAction>> | Requirement)[]
     >;
   };
 
@@ -257,11 +273,16 @@ export interface BlueActions {
     } & RepayAmountArgs,
   ) => {
     buildTx: (
-      requirementSignature?: RequirementSignature,
+      signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<BlueRepayAction>>;
     getRequirements: (params?: {
       useSimplePermit?: boolean;
-    }) => Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]>;
+    }) => Promise<
+      (
+        | Readonly<Transaction<ERC20ApprovalAction>>
+        | Requirement<PermitRequirementSignature>
+      )[]
+    >;
   };
 
   /**
@@ -312,7 +333,7 @@ export interface BlueActions {
     } & RepayAmountArgs,
   ) => {
     buildTx: (
-      requirementSignature?: RequirementSignature,
+      signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<BlueRepayWithdrawCollateralAction>>;
     getRequirements: (params?: {
       useSimplePermit?: boolean;
@@ -353,7 +374,7 @@ export interface BlueActions {
     } & DepositAmountArgs,
   ) => {
     buildTx: (
-      requirementSignature?: RequirementSignature,
+      signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<BlueSupplyCollateralBorrowAction>>;
     getRequirements: (params?: {
       useSimplePermit?: boolean;
@@ -402,9 +423,11 @@ export interface BlueActions {
     slippageTolerance?: bigint;
     targetReallocations?: readonly VaultReallocation[];
   }) => {
-    buildTx: () => Readonly<Transaction<BlueRefinanceAction>>;
+    buildTx: (
+      signatures?: readonly RequirementSignature[],
+    ) => Readonly<Transaction<BlueRefinanceAction>>;
     getRequirements: () => Promise<
-      Readonly<Transaction<MorphoAuthorizationAction>>[]
+      (Readonly<Transaction<MorphoAuthorizationAction>> | Requirement)[]
     >;
   };
 
@@ -571,18 +594,23 @@ export class MorphoBlue implements BlueActions {
           args: { amount, from: userAddress },
         }),
 
-      buildTx: (requirementSignature?: RequirementSignature) =>
-        blueSupply({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { permit } = selectRequirementSignatures(signatures, {
+          permit: true,
+        });
+
+        return blueSupply({
           market: { chainId: this.chainId, marketParams: this.marketParams },
           args: {
             amount,
             nativeAmount,
             onBehalf: userAddress,
             maxSharePrice,
-            requirementSignature,
+            requirementSignature: permit,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 
@@ -660,12 +688,17 @@ export class MorphoBlue implements BlueActions {
           viemClient: this.client.viemClient,
           chainId: this.chainId,
           userAddress,
+          supportSignature: this.client.options.supportSignature,
         });
         return authTx ? [authTx] : [];
       },
 
-      buildTx: () =>
-        blueWithdraw({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { authorization } = selectRequirementSignatures(signatures, {
+          authorization: true,
+        });
+
+        return blueWithdraw({
           market: { chainId: this.chainId, marketParams: this.marketParams },
           args: {
             assets,
@@ -673,9 +706,11 @@ export class MorphoBlue implements BlueActions {
             receiver,
             minSharePrice,
             reallocations,
+            authorizationSignature: authorization,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 
@@ -714,8 +749,12 @@ export class MorphoBlue implements BlueActions {
           args: { amount, from: userAddress },
         }),
 
-      buildTx: (requirementSignature?: RequirementSignature) =>
-        blueSupplyCollateral({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { permit } = selectRequirementSignatures(signatures, {
+          permit: true,
+        });
+
+        return blueSupplyCollateral({
           market: {
             chainId: this.chainId,
             marketParams: this.marketParams,
@@ -724,10 +763,11 @@ export class MorphoBlue implements BlueActions {
             amount,
             nativeAmount,
             onBehalf: userAddress,
-            requirementSignature,
+            requirementSignature: permit,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 
@@ -781,12 +821,17 @@ export class MorphoBlue implements BlueActions {
           viemClient: this.client.viemClient,
           chainId: this.chainId,
           userAddress,
+          supportSignature: this.client.options.supportSignature,
         });
         return authTx ? [authTx] : [];
       },
 
-      buildTx: () =>
-        blueBorrow({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { authorization } = selectRequirementSignatures(signatures, {
+          authorization: true,
+        });
+
+        return blueBorrow({
           market: {
             chainId: this.chainId,
             marketParams: this.marketParams,
@@ -796,9 +841,11 @@ export class MorphoBlue implements BlueActions {
             receiver: userAddress,
             minSharePrice,
             reallocations,
+            authorizationSignature: authorization,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 
@@ -919,8 +966,12 @@ export class MorphoBlue implements BlueActions {
         });
       },
 
-      buildTx: (requirementSignature?: RequirementSignature) =>
-        blueRepay({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { permit } = selectRequirementSignatures(signatures, {
+          permit: true,
+        });
+
+        return blueRepay({
           market: {
             chainId: this.chainId,
             marketParams: this.marketParams,
@@ -936,7 +987,7 @@ export class MorphoBlue implements BlueActions {
                   onBehalf: userAddress,
                   receiver: userAddress,
                   maxSharePrice,
-                  requirementSignature,
+                  requirementSignature: permit,
                 }
               : {
                   amount: erc20Amount,
@@ -945,10 +996,11 @@ export class MorphoBlue implements BlueActions {
                   onBehalf: userAddress,
                   receiver: userAddress,
                   maxSharePrice,
-                  requirementSignature,
+                  requirementSignature: permit,
                 },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 
@@ -1157,14 +1209,20 @@ export class MorphoBlue implements BlueActions {
             viemClient: this.client.viemClient,
             chainId: this.chainId,
             userAddress,
+            supportSignature: this.client.options.supportSignature,
           }),
         ]);
 
         return [...erc20Requirements, ...(authTx ? [authTx] : [])];
       },
 
-      buildTx: (requirementSignature?: RequirementSignature) =>
-        blueRepayWithdrawCollateral({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { permit, authorization } = selectRequirementSignatures(
+          signatures,
+          { permit: true, authorization: true },
+        );
+
+        return blueRepayWithdrawCollateral({
           market: {
             chainId: this.chainId,
             marketParams: this.marketParams,
@@ -1181,7 +1239,8 @@ export class MorphoBlue implements BlueActions {
                   onBehalf: userAddress,
                   receiver: userAddress,
                   maxSharePrice,
-                  requirementSignature,
+                  requirementSignature: permit,
+                  authorizationSignature: authorization,
                 }
               : {
                   amount: erc20Amount,
@@ -1191,10 +1250,12 @@ export class MorphoBlue implements BlueActions {
                   onBehalf: userAddress,
                   receiver: userAddress,
                   maxSharePrice,
-                  requirementSignature,
+                  requirementSignature: permit,
+                  authorizationSignature: authorization,
                 },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 
@@ -1277,14 +1338,20 @@ export class MorphoBlue implements BlueActions {
             viemClient: this.client.viemClient,
             chainId: this.chainId,
             userAddress,
+            supportSignature: this.client.options.supportSignature,
           }),
         ]);
 
         return [...erc20Requirements, ...(authTx ? [authTx] : [])];
       },
 
-      buildTx: (requirementSignature?: RequirementSignature) =>
-        blueSupplyCollateralBorrow({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { permit, authorization } = selectRequirementSignatures(
+          signatures,
+          { permit: true, authorization: true },
+        );
+
+        return blueSupplyCollateralBorrow({
           market: {
             chainId: this.chainId,
             marketParams: this.marketParams,
@@ -1296,11 +1363,13 @@ export class MorphoBlue implements BlueActions {
             onBehalf: userAddress,
             receiver: userAddress,
             minSharePrice,
-            requirementSignature,
+            requirementSignature: permit,
+            authorizationSignature: authorization,
             reallocations,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 
@@ -1506,12 +1575,17 @@ export class MorphoBlue implements BlueActions {
           viemClient: this.client.viemClient,
           chainId: this.chainId,
           userAddress,
+          supportSignature: this.client.options.supportSignature,
         });
         return authTx ? [authTx] : [];
       },
 
-      buildTx: () =>
-        blueRefinance({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { authorization } = selectRequirementSignatures(signatures, {
+          authorization: true,
+        });
+
+        return blueRefinance({
           source: {
             chainId: this.chainId,
             marketParams: this.marketParams,
@@ -1525,9 +1599,11 @@ export class MorphoBlue implements BlueActions {
             minBorrowSharePrice,
             maxRepaySharePrice,
             targetReallocations,
+            authorizationSignature: authorization,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 

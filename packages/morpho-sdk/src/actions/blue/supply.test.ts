@@ -13,8 +13,8 @@ import {
   NegativeSupplyMaxSharePriceError,
   ZeroSupplyAmountError,
 } from "../../types/index.js";
-import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
 import { getRequirements } from "../requirements/index.js";
+import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
 import { blueSupply } from "./supply.js";
 
 describe("blueSupply unit tests", () => {
@@ -131,8 +131,8 @@ describe("blueSupply unit tests", () => {
     );
 
     const localSpy = vi.spyOn(
-      getRequirementsActionModule,
-      "getRequirementsAction",
+      getTokenRequirementActionsModule,
+      "getTokenRequirementActions",
     );
 
     const tx = blueSupply({
@@ -149,12 +149,12 @@ describe("blueSupply unit tests", () => {
     expect(tx.action.type).toBe("blueSupply");
   });
 
-  test("should not call getRequirementsAction when no requirementSignature", async ({
+  test("should not call getTokenRequirementActions when no requirementSignature", async ({
     client,
   }) => {
     const localSpy = vi.spyOn(
-      getRequirementsActionModule,
-      "getRequirementsAction",
+      getTokenRequirementActionsModule,
+      "getTokenRequirementActions",
     );
 
     blueSupply({

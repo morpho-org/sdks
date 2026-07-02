@@ -59,7 +59,7 @@ describe("Permit", () => {
           BigInt(Math.floor(Date.now() / 1000)),
         );
 
-        const tx_1 = deposit.buildTx(requirementSignature);
+        const tx_1 = deposit.buildTx([requirementSignature]);
 
         await client.sendTransaction(tx_1);
       },

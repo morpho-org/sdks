@@ -13,12 +13,12 @@ import {
   NegativeNativeAmountError,
   NonPositiveRepayAmountError,
   NonPositiveRepayMaxSharePriceError,
+  type PermitRequirementSignature,
   type RepayActionAmountArgs,
-  type RequirementSignature,
   type Transaction,
   TransferAmountNotEqualToAssetsError,
 } from "../../types/index.js";
-import { getRequirementsAction } from "../requirements/getRequirementsAction.js";
+import { getTokenRequirementActions } from "../signatures/getTokenRequirementActions.js";
 
 /** Parameters for {@link blueRepay}. */
 export interface BlueRepayParams {
@@ -33,7 +33,8 @@ export interface BlueRepayParams {
     receiver: Address;
     /** Maximum repay share price (in ray). Protects against share price manipulation. */
     maxSharePrice: bigint;
-    requirementSignature?: RequirementSignature;
+    /** Optional pre-signed permit/permit2 approval for the loan-token transfer. */
+    requirementSignature?: PermitRequirementSignature;
   };
   metadata?: Metadata;
 }
@@ -83,11 +84,11 @@ export interface BlueRepayParams {
  * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
  * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the loan token is not
  *   the chain's wNative.
- * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `requirementSignature`
+ * @throws {DepositAssetMismatchError} from `getTokenRequirementActions` when `requirementSignature`
  *   is provided and the signed asset differs from `marketParams.loanToken`.
- * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
+ * @throws {DepositAmountMismatchError} from `getTokenRequirementActions` when `requirementSignature`
  *   is provided and the signed amount differs from the ERC-20 amount pulled.
- * @throws {Permit2ExpirationMissingError} from `getRequirementsAction` when a Permit2 requirement
+ * @throws {Permit2ExpirationMissingError} from `getTokenRequirementActions` when a Permit2 requirement
  *   signature is missing its expiration.
  * @example
  * ```ts
@@ -194,7 +195,7 @@ export const blueRepay = ({
   if (erc20Amount > 0n) {
     if (requirementSignature) {
       actions.push(
-        ...getRequirementsAction({
+        ...getTokenRequirementActions({
           asset: marketParams.loanToken,
           amount: erc20Amount,
           recipient: generalAdapter1,

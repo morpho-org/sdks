@@ -356,19 +356,26 @@ describe("SupplyCollateralBorrowBlue", () => {
           throw new Error("Expected permit signature requirement");
         }
 
-        const requirementSignature = await permitRequirement.sign(
+        const permitSignature = await permitRequirement.sign(
           client,
           client.account.address,
         );
 
+        // With `supportSignature: true` the authorization is returned as a
+        // signable requirement folded into the bundle, not a standalone
+        // `setAuthorization` transaction.
         const authorization = requirements[1];
-        if (!isRequirementAuthorization(authorization)) {
-          throw new Error("Authorization requirement not found");
+        if (!isRequirementSignature(authorization)) {
+          throw new Error("Expected authorization signature requirement");
         }
+        expect(authorization.action.type).toBe("authorization");
 
-        await client.sendTransaction(authorization);
+        const authorizationSignature = await authorization.sign(
+          client,
+          client.account.address,
+        );
 
-        const tx = scb.buildTx(requirementSignature);
+        const tx = scb.buildTx([permitSignature, authorizationSignature]);
         await client.sendTransaction(tx);
       },
     });
@@ -446,20 +453,26 @@ describe("SupplyCollateralBorrowBlue", () => {
           throw new Error("Expected permit2 signature requirement");
         }
 
-        const requirementSignature = await signaturePermit2.sign(
+        const permit2Signature = await signaturePermit2.sign(
           client,
           client.account.address,
         );
 
+        // With `supportSignature: true` the authorization is returned as a
+        // signable requirement folded into the bundle, not a standalone
+        // `setAuthorization` transaction.
         const authorization = requirements[2];
-        if (!isRequirementAuthorization(authorization)) {
-          throw new Error("Authorization requirement not found");
+        if (!isRequirementSignature(authorization)) {
+          throw new Error("Expected authorization signature requirement");
         }
-        expect(authorization.action.type).toBe("morphoAuthorization");
+        expect(authorization.action.type).toBe("authorization");
 
-        await client.sendTransaction(authorization);
+        const authorizationSignature = await authorization.sign(
+          client,
+          client.account.address,
+        );
 
-        const tx = scb.buildTx(requirementSignature);
+        const tx = scb.buildTx([permit2Signature, authorizationSignature]);
         await client.sendTransaction(tx);
       },
     });

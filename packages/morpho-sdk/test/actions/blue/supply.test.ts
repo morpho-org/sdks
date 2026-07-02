@@ -178,7 +178,7 @@ describe("SupplyBlue", () => {
         );
         expect(isHex(requirementSignature.args.signature)).toBe(true);
 
-        const tx = supply.buildTx(requirementSignature);
+        const tx = supply.buildTx([requirementSignature]);
         expect(tx.value).toBe(0n);
         await client.sendTransaction(tx);
       },

@@ -4,6 +4,7 @@ import { type Address, isAddressEqual, maxUint256 } from "viem";
 import { type Action, BundlerAction } from "../../bundler/index.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
+  type AuthorizationRequirementSignature,
   type BlueRefinanceAction,
   type Metadata,
   NegativeBorrowSharesError,
@@ -18,6 +19,7 @@ import {
   type VaultReallocation,
   ZeroCollateralAmountError,
 } from "../../types/index.js";
+import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
 import { buildReallocationActions } from "./buildReallocationActions.js";
 
 /** Parameters for {@link blueRefinance}. */
@@ -30,7 +32,9 @@ export interface BlueRefinanceParams {
     readonly marketParams: MarketParams;
   };
   args: {
+    /** Address whose position is refinanced from the source to the target market. */
     user: Address;
+    /** Amount of collateral moved from the source market to the target market. */
     collateralAmount: bigint;
     /**
      * Loan assets to borrow on the target. Assets mode: the exact borrow (exclusive with
@@ -46,6 +50,12 @@ export interface BlueRefinanceParams {
     maxRepaySharePrice: bigint;
     /** PublicAllocator reallocations into the target market, run before the bundle. Fees add to `tx.value`. */
     targetReallocations?: readonly VaultReallocation[];
+    /**
+     * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
+     * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a
+     * standalone `setAuthorization` transaction.
+     */
+    authorizationSignature?: AuthorizationRequirementSignature;
   };
   metadata?: Metadata;
 }
@@ -97,6 +107,8 @@ export interface BlueRefinanceParams {
  * @param params.args.minBorrowSharePrice - Minimum borrow share price (ray) on the target.
  * @param params.args.maxRepaySharePrice - Maximum repay share price (ray) on the source.
  * @param params.args.targetReallocations - PublicAllocator reallocations into the target, run before the supply leg.
+ * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
+ *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata appended to `tx.data`.
  * @returns A deep-frozen `Transaction<BlueRefinanceAction>`.
  * @remarks `borrowAssets` and `borrowShares` describe different markets (target borrow vs. source
@@ -145,6 +157,7 @@ export const blueRefinance = ({
     minBorrowSharePrice,
     maxRepaySharePrice,
     targetReallocations,
+    authorizationSignature,
   },
   metadata,
 }: BlueRefinanceParams): Readonly<Transaction<BlueRefinanceAction>> => {
@@ -264,6 +277,10 @@ export const blueRefinance = ({
 
   const actions: Action[] = [];
   let reallocationFee = 0n;
+
+  if (authorizationSignature) {
+    actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
+  }
 
   if (targetReallocations && targetReallocations.length > 0) {
     const result = buildReallocationActions(targetReallocations, targetParams);

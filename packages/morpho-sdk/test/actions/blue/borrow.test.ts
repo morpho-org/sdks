@@ -1,9 +1,11 @@
 import {
   type AccrualPosition,
+  addressesRegistry,
   DEFAULT_SLIPPAGE_TOLERANCE,
   MathLib,
   SharesMath,
 } from "@morpho-org/blue-sdk";
+import { blueAbi } from "@morpho-org/blue-sdk-viem";
 
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
@@ -11,6 +13,7 @@ import { describe, expect } from "vitest";
 import {
   BorrowExceedsSafeLtvError,
   isRequirementAuthorization,
+  isRequirementSignature,
   MissingAccrualPositionError,
   morphoViemExtension,
 } from "../../../src/index.js";
@@ -120,6 +123,87 @@ describe("BorrowBlue", () => {
     );
     expect(finalState.morphoLoanTokenBalance).toEqual(
       initialState.morphoLoanTokenBalance - borrowAmount,
+    );
+    expect(finalState.position.borrowAssets).toEqual(
+      initialState.position.borrowAssets + borrowAmount + 1n,
+    );
+  });
+
+  test("should borrow loan token end-to-end with an in-bundle setAuthorizationWithSig", async ({
+    client,
+  }) => {
+    const collateralAmount = parseUnits("10", 18);
+    const borrowAmount = parseUnits("1000", 18);
+
+    const { morpho, bundler3 } = addressesRegistry[mainnet.id];
+
+    await supplyCollateral({
+      client,
+      chainId: mainnet.id,
+      market: WethUsdsBlue,
+      collateralAmount,
+    });
+
+    const {
+      markets: {
+        WethUsdsBlue: { initialState, finalState },
+      },
+    } = await testInvariants({
+      client,
+      params: {
+        markets: { WethUsdsBlue },
+      },
+      actionFn: async () => {
+        const morphoClient = client.extend(
+          morphoViemExtension({ supportSignature: true }),
+        ).morpho;
+        const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
+        const positionData = await market.getPositionData(
+          client.account.address,
+        );
+
+        const borrow = market.borrow({
+          userAddress: client.account.address,
+          amount: borrowAmount,
+          positionData,
+        });
+
+        // With supportSignature the authorization requirement is signable —
+        // no standalone setAuthorization transaction is sent.
+        const requirements = await borrow.getRequirements();
+        const requirement = requirements[0];
+        if (!isRequirementSignature(requirement)) {
+          throw new Error("Expected a signable authorization requirement");
+        }
+        if (requirement.action.type !== "authorization") {
+          throw new Error("Expected an authorization action");
+        }
+        expect(requirement.action.args.authorized).toBe(
+          bundler3.generalAdapter1,
+        );
+
+        const authorizationSignature = await requirement.sign(
+          client,
+          client.account.address,
+        );
+
+        // GeneralAdapter1 is not authorized before the bundle runs.
+        expect(
+          await client.readContract({
+            address: morpho,
+            abi: blueAbi,
+            functionName: "isAuthorized",
+            args: [client.account.address, bundler3.generalAdapter1],
+          }),
+        ).toBe(false);
+
+        const tx = borrow.buildTx([authorizationSignature]);
+        await client.sendTransaction(tx);
+      },
+    });
+
+    expect(finalState.userLoanTokenBalance).toEqual(
+      initialState.userLoanTokenBalance + borrowAmount,
     );
     expect(finalState.position.borrowAssets).toEqual(
       initialState.position.borrowAssets + borrowAmount + 1n,

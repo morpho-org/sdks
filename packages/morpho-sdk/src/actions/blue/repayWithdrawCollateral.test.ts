@@ -14,7 +14,7 @@ import {
   NonPositiveWithdrawCollateralAmountError,
   TransferAmountNotEqualToAssetsError,
 } from "../../types/index.js";
-import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
+import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
 import { blueRepayWithdrawCollateral } from "./repayWithdrawCollateral.js";
 
 const MAX_UINT256_HEX = "f".repeat(64);
@@ -128,7 +128,10 @@ describe("blueRepayWithdrawCollateral unit tests", () => {
     const erc20Amount = parseUnits("0.4", 18); // transferAmount = ERC-20 net of native
     const nativeAmount = parseUnits("0.2", 18);
 
-    const spy = vi.spyOn(getRequirementsActionModule, "getRequirementsAction");
+    const spy = vi.spyOn(
+      getTokenRequirementActionsModule,
+      "getTokenRequirementActions",
+    );
 
     const tx = blueRepayWithdrawCollateral({
       market: {
@@ -348,10 +351,13 @@ describe("blueRepayWithdrawCollateral unit tests", () => {
     ).toThrow(NativeAmountOnNonWNativeAssetError);
   });
 
-  test("behavior: no getRequirementsAction without a requirementSignature", async ({
+  test("behavior: no getTokenRequirementActions without a requirementSignature", async ({
     client,
   }) => {
-    const spy = vi.spyOn(getRequirementsActionModule, "getRequirementsAction");
+    const spy = vi.spyOn(
+      getTokenRequirementActionsModule,
+      "getTokenRequirementActions",
+    );
 
     blueRepayWithdrawCollateral({
       market: { chainId: mainnet.id, marketParams: WethUsdsBlue },
@@ -368,11 +374,14 @@ describe("blueRepayWithdrawCollateral unit tests", () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
-  test("behavior: requirementSignature drives getRequirementsAction on the ERC-20 amount", async ({
+  test("behavior: requirementSignature drives getTokenRequirementActions on the ERC-20 amount", async ({
     client,
   }) => {
     const amount = parseUnits("100", 6);
-    const spy = vi.spyOn(getRequirementsActionModule, "getRequirementsAction");
+    const spy = vi.spyOn(
+      getTokenRequirementActionsModule,
+      "getTokenRequirementActions",
+    );
 
     const tx = blueRepayWithdrawCollateral({
       market: { chainId: mainnet.id, marketParams: WethUsdsBlue },
