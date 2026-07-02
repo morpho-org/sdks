@@ -17,7 +17,7 @@ import {
   ShareDivideByZeroError,
   WithdrawMakesPositionUnhealthyError,
 } from "../../../src/index.js";
-import { WethUsdsBlue } from "../../fixtures/blue.js";
+import { WethUsdsBlue, WstethWethBlue } from "../../fixtures/blue.js";
 import { borrow, supplyCollateral } from "../../helpers/blue.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
@@ -265,6 +265,90 @@ describe("RepayWithdrawCollateralBlue", () => {
     expect(finalState.position.collateral).toBe(0n);
     expect(finalState.userCollateralTokenBalance).toEqual(
       initialState.userCollateralTokenBalance + collateralAmount,
+    );
+  });
+
+  test("should repay with native ETH and withdraw collateral (wNative loan)", async ({
+    client,
+  }) => {
+    const collateralAmount = parseUnits("10", 18);
+    const borrowAmount = parseUnits("1", 18);
+    const nativeAmount = parseUnits("0.5", 18);
+    const withdrawAmount = parseUnits("1", 18);
+
+    await supplyCollateral({
+      client,
+      chainId: mainnet.id,
+      market: WstethWethBlue,
+      collateralAmount,
+    });
+    await borrow({
+      client,
+      chainId: mainnet.id,
+      market: WstethWethBlue,
+      borrowAmount,
+    });
+
+    // Fund the account with native ETH to wrap for the repay leg.
+    await client.setBalance({
+      address: client.account.address,
+      value: nativeAmount + parseUnits("10", 18),
+    });
+
+    const {
+      markets: {
+        WstethWethBlue: { initialState, finalState },
+      },
+    } = await testInvariants({
+      client,
+      params: {
+        markets: { WstethWethBlue },
+      },
+      actionFn: async () => {
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
+        const market = morphoClient.blue(WstethWethBlue, mainnet.id);
+        const positionData = await market.getPositionData(
+          client.account.address,
+        );
+
+        // Fully native repay leg (no ERC-20 pulled), then withdraw collateral.
+        const action = market.repayWithdrawCollateral({
+          userAddress: client.account.address,
+          amount: 0n,
+          nativeAmount,
+          withdrawAmount,
+          positionData,
+        });
+
+        const requirements = await action.getRequirements();
+        // A fully-native repay pulls no ERC-20, so there is no approval to make;
+        // GeneralAdapter1 was already authorized when the position was opened.
+        expect(requirements.some(isRequirementApproval)).toBe(false);
+        for (const req of requirements) {
+          if (isRequirementAuthorization(req)) {
+            await client.sendTransaction(req);
+          }
+        }
+
+        const tx = action.buildTx();
+        expect(tx.value).toEqual(nativeAmount);
+        await client.sendTransaction(tx);
+      },
+    });
+
+    // The wrapped ETH repaid WETH into Morpho and reduced the debt.
+    expect(finalState.morphoLoanTokenBalance).toEqual(
+      initialState.morphoLoanTokenBalance + nativeAmount,
+    );
+    expect(finalState.position.borrowShares).toBeLessThan(
+      initialState.position.borrowShares,
+    );
+    // Collateral was withdrawn to the receiver.
+    expect(finalState.position.collateral).toEqual(
+      initialState.position.collateral - withdrawAmount,
+    );
+    expect(finalState.userCollateralTokenBalance).toEqual(
+      initialState.userCollateralTokenBalance + withdrawAmount,
     );
   });
 
