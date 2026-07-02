@@ -18,8 +18,8 @@ import {
   NonPositiveMaxSharePriceError,
   ZeroDepositAmountError,
 } from "../../types/index.js";
-import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
 import { getRequirements } from "../requirements/index.js";
+import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
 import { vaultV2Deposit } from "./deposit.js";
 
 describe("depositVaultV2 unit tests", () => {
@@ -123,8 +123,8 @@ describe("depositVaultV2 unit tests", () => {
     expect(requirementSignature.args.asset).toEqual(usdc);
 
     const localSpy = vi.spyOn(
-      getRequirementsActionModule,
-      "getRequirementsAction",
+      getTokenRequirementActionsModule,
+      "getTokenRequirementActions",
     );
 
     const tx = vaultV2Deposit({
@@ -309,8 +309,8 @@ describe("depositVaultV2 unit tests", () => {
     const maxSharePrice = 1000000n;
 
     const localSpy = vi.spyOn(
-      getRequirementsActionModule,
-      "getRequirementsAction",
+      getTokenRequirementActionsModule,
+      "getTokenRequirementActions",
     );
 
     const tx = vaultV2Deposit({

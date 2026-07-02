@@ -33,6 +33,7 @@ The action verbs an integrator sees in the bundle (`BundlerAction.encode...`):
 
 - **`morphoBorrow` / `morphoSupply` / `morphoSupplyCollateral` / `morphoRepay` / `morphoWithdraw`** — Morpho Blue contract calls executed by GeneralAdapter1 on the user's behalf.
 - **`setAuthorization`** — Morpho call that grants GeneralAdapter1 the right to call market functions on behalf of the user. Required pre-condition for `borrow`, `supplyCollateralBorrow`, `repayWithdrawCollateral`, and `withdraw` (loan-asset).
+- **`setAuthorizationWithSig`** — the offchain-signature equivalent of `setAuthorization`. When the client opts into signatures (`supportSignature: true`), the authorization requirement becomes a signable `Requirement`; the signed `AuthorizationRequirementSignature` is folded into the bundle as a `setAuthorizationWithSig` call (prepended before the Morpho operation), removing the standalone authorization transaction.
 - **`erc20TransferFrom`** — pulls user-approved tokens into the bundler.
 - **`nativeTransfer` + `wrapNative`** — pair that converts an attached native amount (`tx.value`) into the chain's wNative for a deposit/supply path.
 - **`forceDeallocate`** — VaultV2 multicall entry that pulls liquidity out of a specific adapter before withdraw/redeem.

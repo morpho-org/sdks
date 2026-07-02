@@ -3,6 +3,7 @@ import {
   type InputMarketParams,
 } from "@morpho-org/blue-sdk";
 import {
+  blueAbi,
   erc2612Abi,
   permit2Abi,
   publicAllocatorAbi,
@@ -15,12 +16,15 @@ import {
   isAddressEqual,
   keccak256,
   parseSignature,
+  type Signature,
+  serializeSignature,
   zeroHash,
 } from "viem";
 import { bundler3Abi, coreAdapterAbi, generalAdapter1Abi } from "../abis.js";
 import { BundlerErrors } from "../types/error.js";
 import type {
   Action,
+  Authorization,
   InputReallocation,
   Permit2PermitSingle,
 } from "./types.js";
@@ -84,6 +88,14 @@ const addBundlerPrefund = (
   value: state.value + amount,
   availableBundlerValue: state.availableBundlerValue + amount,
 });
+
+/**
+ * Normalizes a raw ECDSA signature to its hex form. Integrators get a `Hex` from
+ * `signTypedData`/`signMessage` and a viem `Signature` object from the low-level
+ * `sign`; both are accepted so no manual conversion is required at the call site.
+ */
+const toSignatureHex = (signature: Hex | Signature): Hex =>
+  typeof signature === "string" ? signature : serializeSignature(signature);
 
 const consumeCallValue = (
   state: BundleValueState,
@@ -248,6 +260,17 @@ export namespace BundlerAction {
       }
       case "erc4626Redeem": {
         return BundlerAction.erc4626Redeem(chainId, ...args);
+      }
+      case "morphoSetAuthorizationWithSig": {
+        const [authorization, signature, skipRevert] = args;
+        if (signature == null) throw new BundlerErrors.MissingSignature();
+
+        return BundlerAction.morphoSetAuthorizationWithSig(
+          chainId,
+          authorization,
+          signature,
+          skipRevert,
+        );
       }
       case "morphoSupplyCollateral": {
         const [market, amount, onBehalf, onMorphoSupplyCollateral, skipRevert] =
@@ -607,13 +630,13 @@ export namespace BundlerAction {
     asset: Address,
     amount: bigint,
     deadline: bigint,
-    signature: Hex,
+    signature: Hex | Signature,
     skipRevert = true,
   ): BundlerCall[] {
     const {
       bundler3: { generalAdapter1 },
     } = getChainAddresses(chainId);
-    const { r, s, yParity } = parseSignature(signature);
+    const { r, s, yParity } = parseSignature(toSignatureHex(signature));
 
     return [
       {
@@ -671,7 +694,7 @@ export namespace BundlerAction {
     chainId: number,
     owner: Address,
     permitSingle: Permit2PermitSingle,
-    signature: Hex,
+    signature: Hex | Signature,
     skipRevert = true,
   ): BundlerCall[] {
     const {
@@ -694,7 +717,7 @@ export namespace BundlerAction {
               ...permitSingle,
               spender: generalAdapter1,
             },
-            signature,
+            toSignatureHex(signature),
           ],
         }),
         value: 0n,
@@ -862,6 +885,77 @@ export namespace BundlerAction {
           abi: generalAdapter1Abi,
           functionName: "erc4626Redeem",
           args: [erc4626, shares, minSharePrice, receiver, owner],
+        }),
+        value: 0n,
+        skipRevert,
+        callbackHash: zeroHash,
+      },
+    ];
+  }
+
+  /**
+   * Encodes a Morpho Blue `setAuthorizationWithSig` call that submits a signed authorization.
+   *
+   * Lets a bundle grant `authorization.authorized` (GeneralAdapter1) operator rights on Morpho
+   * on behalf of `authorization.authorizer` without a separate `setAuthorization` transaction.
+   *
+   * @param chainId - Chain where the action will execute.
+   * @param authorization - The Morpho authorization payload covered by the signature.
+   * @param signature - The owner's EIP-712 signature over the authorization typed data, as a hex
+   *   string or a viem `Signature` object.
+   * @param skipRevert - Whether Bundler3 should tolerate a revert. Defaults to `true`, matching
+   *   the convention for already-authorized accounts (the call reverts harmlessly).
+   * @returns Encoded Bundler3 calls.
+   * @throws {BundlerErrors.UnexpectedSignature} when `authorization.authorized` is not the chain's
+   *   `GeneralAdapter1` — the only operator this bundled path may grant rights to.
+   *
+   * @example
+   * ```ts
+   * import { getChainAddresses } from "@morpho-org/blue-sdk";
+   * import { BundlerAction } from "@morpho-org/morpho-sdk/bundler";
+   *
+   * const { generalAdapter1 } = getChainAddresses(1).bundler3;
+   * const owner = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
+   * const signature =
+   *   "0x111111111111111111111111111111111111111111111111111111111111111122222222222222222222222222222222222222222222222222222222222222221b";
+   *
+   * const calls = BundlerAction.morphoSetAuthorizationWithSig(
+   *   1,
+   *   {
+   *     authorizer: owner,
+   *     authorized: generalAdapter1,
+   *     isAuthorized: true,
+   *     nonce: 0n,
+   *     deadline: 1_900_000_000n,
+   *   },
+   *   signature,
+   * );
+   * ```
+   */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
+  export function morphoSetAuthorizationWithSig(
+    chainId: number,
+    authorization: Authorization,
+    signature: Hex | Signature,
+    skipRevert = true,
+  ): BundlerCall[] {
+    const {
+      morpho,
+      bundler3: { generalAdapter1 },
+    } = getChainAddresses(chainId);
+    const { r, s, yParity } = parseSignature(toSignatureHex(signature));
+
+    if (!isAddressEqual(authorization.authorized, generalAdapter1)) {
+      throw new BundlerErrors.UnexpectedSignature(authorization.authorized);
+    }
+
+    return [
+      {
+        to: morpho,
+        data: encodeFunctionData({
+          abi: blueAbi,
+          functionName: "setAuthorizationWithSig",
+          args: [authorization, { v: yParity + 27, r, s }],
         }),
         value: 0n,
         skipRevert,

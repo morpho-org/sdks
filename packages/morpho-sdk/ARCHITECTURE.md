@@ -289,15 +289,17 @@ getRequirements(viemClient, params)
 
 ### How signatures flow into deposits
 
-When requirements return a `Requirement` object (permit or permit2 path), the consuming
-application calls `requirement.sign(client, userAddress)` to obtain a `RequirementSignature`.
-This signature is then passed to `buildTx(requirementSignature)`:
+When requirements return a `Requirement` object (permit, permit2, or Morpho authorization path),
+the consuming application calls `requirement.sign(client, userAddress)` to obtain a
+`RequirementSignature`. The collected signatures are then passed to `buildTx` as an array
+(`buildTx([...signatures])`), letting a permit and a Morpho authorization signature travel
+together:
 
 ```
-getRequirements() → Requirement { sign() } → RequirementSignature → buildTx(sig)
+getRequirements() → Requirement { sign() } → RequirementSignature → buildTx([sig, ...])
 ```
 
-Inside `buildTx`, `getRequirementsAction()` converts the signature into bundler actions:
+Inside `buildTx`, `getTokenRequirementActions()` converts the signature into bundler actions:
 
 - **Permit path**: `permit` action + `erc20TransferFrom` to generalAdapter1.
 - **Permit2 path**: `approve2` action + `transferFrom2` to generalAdapter1.

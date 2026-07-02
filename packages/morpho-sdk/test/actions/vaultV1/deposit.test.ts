@@ -206,7 +206,7 @@ describe("DepositVaultV1", () => {
           BigInt(Math.floor(Date.now() / 1000)),
         );
 
-        const tx = deposit.buildTx(requirementSignature);
+        const tx = deposit.buildTx([requirementSignature]);
 
         await client.sendTransaction(tx);
       },
@@ -301,7 +301,7 @@ describe("DepositVaultV1", () => {
 
         await client.sendTransaction(approvalPermit2);
 
-        const tx = deposit.buildTx(requirementSignature);
+        const tx = deposit.buildTx([requirementSignature]);
 
         await client.sendTransaction(tx);
       },

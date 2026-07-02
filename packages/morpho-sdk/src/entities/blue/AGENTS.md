@@ -23,4 +23,6 @@
 - ERC-20 approval for **GeneralAdapter1** on the collateral token (any path that supplies collateral) or the loan token (`supply`, `repay`).
 - `morpho.setAuthorization(generalAdapter1, true)` when authorization is not yet set on Morpho — read via `publicActions`. Required for `borrow`, `supplyCollateralBorrow`, `repayWithdrawCollateral`, and `withdraw` (loan-asset).
 
+When `supportSignature` is enabled on the client, the authorization requirement is returned as a signable `Requirement` instead of a transaction; signing it produces an `AuthorizationRequirementSignature` that `buildTx` consumes and folds into the bundle as a `setAuthorizationWithSig` call, so no standalone authorization transaction is needed. `buildTx` accepts a `readonly RequirementSignature[]` and splits permit vs. authorization signatures via `isPermitSignature` / `isAuthorizationSignature`.
+
 `withdrawCollateral` has no requirements. `repay` and `supply` need only loan-token approval. Loan-asset `withdraw` needs only the Morpho authorization.

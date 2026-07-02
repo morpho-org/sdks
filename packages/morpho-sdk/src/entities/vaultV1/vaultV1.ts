@@ -33,8 +33,10 @@ import {
   NegativeSlippageToleranceError,
   NonPositiveAssetAmountError,
   NonPositiveSharesAmountError,
+  type PermitRequirementSignature,
   type Requirement,
   type RequirementSignature,
+  selectRequirementSignatures,
   type Transaction,
   VaultAddressMismatchError,
   VaultAssetMismatchError,
@@ -76,11 +78,16 @@ export interface VaultV1Actions {
     } & DepositAmountArgs,
   ) => {
     buildTx: (
-      requirementSignature?: RequirementSignature,
+      signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<VaultV1DepositAction>>;
     getRequirements: (params?: {
       useSimplePermit?: boolean;
-    }) => Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]>;
+    }) => Promise<
+      (
+        | Readonly<Transaction<ERC20ApprovalAction>>
+        | Requirement<PermitRequirementSignature>
+      )[]
+    >;
   };
   /**
    * Prepares a withdraw from a VaultV1 (MetaMorpho) contract.
@@ -126,10 +133,13 @@ export interface VaultV1Actions {
     slippageTolerance?: bigint;
   }) => {
     buildTx: (
-      requirementSignature?: RequirementSignature,
+      signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<VaultV1MigrateToV2Action>>;
     getRequirements: () => Promise<
-      (Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]
+      (
+        | Readonly<Transaction<ERC20ApprovalAction>>
+        | Requirement<PermitRequirementSignature>
+      )[]
     >;
   };
 }
@@ -241,8 +251,12 @@ export class MorphoVaultV1 implements VaultV1Actions {
           },
         }),
 
-      buildTx: (requirementSignature?: RequirementSignature) =>
-        vaultV1Deposit({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { permit } = selectRequirementSignatures(signatures, {
+          permit: true,
+        });
+
+        return vaultV1Deposit({
           vault: {
             chainId: this.chainId,
             address: this.vault,
@@ -252,11 +266,12 @@ export class MorphoVaultV1 implements VaultV1Actions {
             amount,
             maxSharePrice,
             recipient: userAddress,
-            requirementSignature,
+            requirementSignature: permit,
             nativeAmount,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 
@@ -381,8 +396,12 @@ export class MorphoVaultV1 implements VaultV1Actions {
           },
         }),
 
-      buildTx: (requirementSignature?: RequirementSignature) =>
-        vaultV1MigrateToV2({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { permit } = selectRequirementSignatures(signatures, {
+          permit: true,
+        });
+
+        return vaultV1MigrateToV2({
           vault: {
             chainId: this.chainId,
             address: this.vault,
@@ -395,10 +414,11 @@ export class MorphoVaultV1 implements VaultV1Actions {
             minSharePriceVaultV1,
             maxSharePriceVaultV2,
             recipient: userAddress,
-            requirementSignature,
+            requirementSignature: permit,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 }

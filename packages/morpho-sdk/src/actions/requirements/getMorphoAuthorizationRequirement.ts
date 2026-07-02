@@ -6,22 +6,32 @@ import { type Address, encodeFunctionData, publicActions } from "viem";
 import {
   ChainIdMismatchError,
   type MorphoAuthorizationAction,
+  type Requirement,
   type Transaction,
 } from "../../types/index.js";
+import { encodeAuthorization } from "./encode/encodeAuthorization.js";
 
 /**
  * Resolves whether `GeneralAdapter1` needs Morpho authorization for the given user, and returns
- * the `setAuthorization(generalAdapter1, true)` transaction when it does.
+ * the requirement to satisfy it when it does.
  *
  * Reads `Morpho.isAuthorized(userAddress, generalAdapter1)` on the target chain. Required before
- * any bundled Blue path that operates on behalf of the user (`borrow`,
- * `supplyCollateralBorrow`, `repayWithdrawCollateral`).
+ * any bundled Blue path that operates on behalf of the user (`borrow`, `withdraw`,
+ * `supplyCollateralBorrow`, `repayWithdrawCollateral`, `refinance`).
+ *
+ * - When `supportSignature` is falsy (default), returns the
+ *   `setAuthorization(generalAdapter1, true)` transaction the user submits before the bundle.
+ * - When `supportSignature` is `true`, reads the user's Morpho `nonce` and returns a signable
+ *   `Requirement`; the signed authorization is folded into the bundle via
+ *   `setAuthorizationWithSig`, removing the standalone transaction.
  *
  * @param params.viemClient - Connected viem `Client` whose `chain.id` matches `params.chainId`.
  * @param params.chainId - Target chain id (used to resolve Morpho and `GeneralAdapter1`).
  * @param params.userAddress - The user that must authorize `GeneralAdapter1`.
- * @returns A deep-frozen `Transaction<MorphoAuthorizationAction>`, or `null` when authorization
- *   is already in place.
+ * @param params.supportSignature - When `true`, return a signable `Requirement` instead of a
+ *   transaction so authorization can be bundled via `setAuthorizationWithSig`.
+ * @returns A deep-frozen `Transaction<MorphoAuthorizationAction>`, a signable `Requirement`
+ *   (when `supportSignature` is `true`), or `null` when authorization is already in place.
  * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`.
  * @example
  * ```ts
@@ -30,20 +40,25 @@ import {
  * import { getMorphoAuthorizationRequirement } from "@morpho-org/morpho-sdk";
  *
  * const client = createPublicClient({ chain: mainnet, transport: http() });
- * const tx = await getMorphoAuthorizationRequirement({
+ * const requirement = await getMorphoAuthorizationRequirement({
  *   viemClient: client,
  *   chainId: 1,
  *   userAddress: borrower,
+ *   supportSignature: true,
  * });
- * // tx is null when already authorized, otherwise satisfies Readonly<Transaction<MorphoAuthorizationAction>>
+ * // requirement is null when already authorized, a Requirement when supportSignature is true,
+ * // otherwise Readonly<Transaction<MorphoAuthorizationAction>>
  * ```
  */
 export const getMorphoAuthorizationRequirement = async (params: {
   viemClient: Client;
   chainId: number;
   userAddress: Address;
-}): Promise<Readonly<Transaction<MorphoAuthorizationAction>> | null> => {
-  const { viemClient, chainId, userAddress } = params;
+  supportSignature?: boolean;
+}): Promise<
+  Readonly<Transaction<MorphoAuthorizationAction>> | Requirement | null
+> => {
+  const { viemClient, chainId, userAddress, supportSignature } = params;
 
   if (viemClient.chain?.id !== chainId) {
     throw new ChainIdMismatchError(viemClient.chain?.id, chainId);
@@ -55,6 +70,39 @@ export const getMorphoAuthorizationRequirement = async (params: {
   } = getChainAddresses(chainId);
 
   const pc = viemClient.extend(publicActions);
+
+  if (supportSignature) {
+    // The signable path needs the user's Morpho nonce; fetch it alongside the
+    // authorization status so both reads share a round-trip (batched into a
+    // single multicall when the client enables batching) instead of
+    // serializing the nonce read behind isAuthorized. Enabling supportSignature
+    // signals intent to authorize, so the nonce is needed in the common case.
+    const [isAuthorized, nonce] = await Promise.all([
+      pc.readContract({
+        address: morpho,
+        abi: blueAbi,
+        functionName: "isAuthorized",
+        args: [userAddress, generalAdapter1],
+      }),
+      pc.readContract({
+        address: morpho,
+        abi: blueAbi,
+        functionName: "nonce",
+        args: [userAddress],
+      }),
+    ]);
+
+    if (isAuthorized) {
+      return null;
+    }
+
+    return encodeAuthorization(viemClient, {
+      authorized: generalAdapter1,
+      chainId,
+      nonce,
+    });
+  }
+
   const isAuthorized = await pc.readContract({
     address: morpho,
     abi: blueAbi,

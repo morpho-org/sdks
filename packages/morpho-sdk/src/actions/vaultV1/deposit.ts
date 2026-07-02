@@ -11,12 +11,12 @@ import {
   NegativeNativeAmountError,
   NonPositiveAssetAmountError,
   NonPositiveMaxSharePriceError,
-  type RequirementSignature,
+  type PermitRequirementSignature,
   type Transaction,
   type VaultV1DepositAction,
   ZeroDepositAmountError,
 } from "../../types/index.js";
-import { getRequirementsAction } from "../requirements/getRequirementsAction.js";
+import { getTokenRequirementActions } from "../signatures/getTokenRequirementActions.js";
 
 /** Parameters for {@link vaultV1Deposit}. */
 export interface VaultV1DepositParams {
@@ -28,7 +28,7 @@ export interface VaultV1DepositParams {
   args: DepositAmountArgs & {
     maxSharePrice: bigint;
     recipient: Address;
-    requirementSignature?: RequirementSignature;
+    requirementSignature?: PermitRequirementSignature;
   };
   metadata?: Metadata;
 }
@@ -67,12 +67,12 @@ export interface VaultV1DepositParams {
  *   configured wNative.
  * @throws {NativeAmountOnNonWNativeVaultError} when `nativeAmount` is provided but the vault
  *   asset is not the chain's wNative.
- * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `amount > 0n` and
+ * @throws {DepositAssetMismatchError} from `getTokenRequirementActions` when `amount > 0n` and
  *   `requirementSignature` is provided and the signed asset differs from `vault.asset`. The
  *   signature is ignored on the native-only path (`amount === 0n` with `nativeAmount > 0n`).
- * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `amount > 0n` and
+ * @throws {DepositAmountMismatchError} from `getTokenRequirementActions` when `amount > 0n` and
  *   `requirementSignature` is provided and the signed amount differs from `args.amount`.
- * @throws {Permit2ExpirationMissingError} from `getRequirementsAction` when `amount > 0n` and a
+ * @throws {Permit2ExpirationMissingError} from `getTokenRequirementActions` when `amount > 0n` and a
  *   Permit2 requirement signature is missing its expiration.
  * @throws {ZeroDepositAmountError} when both `amount` and `nativeAmount` resolve to zero.
  * @example
@@ -144,7 +144,7 @@ export const vaultV1Deposit = ({
   if (amount > 0n) {
     if (requirementSignature) {
       actions.push(
-        ...getRequirementsAction({
+        ...getTokenRequirementActions({
           asset,
           amount,
           recipient: generalAdapter1,

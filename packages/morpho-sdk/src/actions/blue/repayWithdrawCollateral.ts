@@ -7,13 +7,15 @@ import {
   validateRepayParams,
 } from "../../helpers/index.js";
 import {
+  type AuthorizationRequirementSignature,
   type BlueRepayWithdrawCollateralAction,
   type Metadata,
   NonPositiveWithdrawCollateralAmountError,
-  type RequirementSignature,
+  type PermitRequirementSignature,
   type Transaction,
 } from "../../types/index.js";
-import { getRequirementsAction } from "../requirements/getRequirementsAction.js";
+import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
+import { getTokenRequirementActions } from "../signatures/getTokenRequirementActions.js";
 
 /** Parameters for {@link blueRepayWithdrawCollateral}. */
 export interface BlueRepayWithdrawCollateralParams {
@@ -41,7 +43,14 @@ export interface BlueRepayWithdrawCollateralParams {
     receiver: Address;
     /** Maximum repay share price (in ray). Protects against share price manipulation. */
     maxSharePrice: bigint;
-    requirementSignature?: RequirementSignature;
+    /** Optional pre-signed permit/permit2 approval for the loan-token transfer. */
+    requirementSignature?: PermitRequirementSignature;
+    /**
+     * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
+     * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a
+     * standalone `setAuthorization` transaction.
+     */
+    authorizationSignature?: AuthorizationRequirementSignature;
   };
   metadata?: Metadata;
 }
@@ -82,6 +91,8 @@ export interface BlueRepayWithdrawCollateralParams {
  *   protection.
  * @param params.args.requirementSignature - Optional pre-signed permit/permit2 approval for the
  *   loan-token transfer.
+ * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
+ *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueRepayWithdrawCollateralAction>` with `to`,
  *   `value`, `data`, and the typed `action` discriminator the simulation layer consumes.
@@ -92,11 +103,11 @@ export interface BlueRepayWithdrawCollateralParams {
  * @throws {NonPositiveTransferAmountError} when `transferAmount <= 0n`.
  * @throws {TransferAmountNotEqualToAssetsError} when in assets mode and `transferAmount !== assets`.
  * @throws {NonPositiveWithdrawCollateralAmountError} when `withdrawAmount <= 0n`.
- * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `requirementSignature`
+ * @throws {DepositAssetMismatchError} from `getTokenRequirementActions` when `requirementSignature`
  *   is provided and the signed asset differs from `marketParams.loanToken`.
- * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
+ * @throws {DepositAmountMismatchError} from `getTokenRequirementActions` when `requirementSignature`
  *   is provided and the signed amount differs from `args.transferAmount`.
- * @throws {Permit2ExpirationMissingError} from `getRequirementsAction` when a Permit2 requirement
+ * @throws {Permit2ExpirationMissingError} from `getTokenRequirementActions` when a Permit2 requirement
  *   signature is missing its expiration.
  * @example
  * ```ts
@@ -128,6 +139,7 @@ export const blueRepayWithdrawCollateral = ({
     receiver,
     maxSharePrice,
     requirementSignature,
+    authorizationSignature,
   },
   metadata,
 }: BlueRepayWithdrawCollateralParams): Readonly<
@@ -151,9 +163,13 @@ export const blueRepayWithdrawCollateral = ({
 
   const actions: Action[] = [];
 
+  if (authorizationSignature) {
+    actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
+  }
+
   if (requirementSignature) {
     actions.push(
-      ...getRequirementsAction({
+      ...getTokenRequirementActions({
         asset: marketParams.loanToken,
         amount: transferAmount,
         recipient: generalAdapter1,

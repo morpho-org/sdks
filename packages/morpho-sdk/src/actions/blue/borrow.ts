@@ -4,6 +4,7 @@ import type { Address } from "viem";
 import { type Action, BundlerAction } from "../../bundler/index.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
+  type AuthorizationRequirementSignature,
   type BlueBorrowAction,
   type Metadata,
   NonPositiveBorrowAmountError,
@@ -11,6 +12,7 @@ import {
   type Transaction,
   type VaultReallocation,
 } from "../../types/index.js";
+import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
 import { buildReallocationActions } from "./buildReallocationActions.js";
 
 /** Parameters for {@link blueBorrow}. */
@@ -20,12 +22,20 @@ export interface BlueBorrowParams {
     readonly marketParams: MarketParams;
   };
   args: {
+    /** Amount of loan asset to borrow. */
     amount: bigint;
+    /** Address that receives the borrowed assets. */
     receiver: Address;
     /** Minimum borrow share price (in ray). Protects against share price manipulation. */
     minSharePrice: bigint;
     /** Vault reallocations to execute before borrowing (computed by entity). */
     reallocations?: readonly VaultReallocation[];
+    /**
+     * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
+     * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a
+     * standalone `setAuthorization` transaction.
+     */
+    authorizationSignature?: AuthorizationRequirementSignature;
   };
   metadata?: Metadata;
 }
@@ -48,6 +58,8 @@ export interface BlueBorrowParams {
  * @param params.args.minSharePrice - Minimum borrow share price (in ray). Slippage protection.
  * @param params.args.reallocations - Optional vault reallocations to execute before borrowing,
  *   computed by the entity layer.
+ * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
+ *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueBorrowAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator the simulation layer consumes.
@@ -81,7 +93,13 @@ export interface BlueBorrowParams {
  */
 export const blueBorrow = ({
   market: { chainId, marketParams },
-  args: { amount, receiver, minSharePrice, reallocations },
+  args: {
+    amount,
+    receiver,
+    minSharePrice,
+    reallocations,
+    authorizationSignature,
+  },
   metadata,
 }: BlueBorrowParams): Readonly<Transaction<BlueBorrowAction>> => {
   if (amount <= 0n) {
@@ -94,6 +112,10 @@ export const blueBorrow = ({
 
   const actions: Action[] = [];
   let reallocationFee = 0n;
+
+  if (authorizationSignature) {
+    actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
+  }
 
   if (reallocations && reallocations.length > 0) {
     const result = buildReallocationActions(reallocations, marketParams);

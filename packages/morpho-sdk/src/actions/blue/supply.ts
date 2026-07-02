@@ -13,11 +13,11 @@ import {
   NegativeNativeAmountError,
   NegativeSupplyAmountError,
   NegativeSupplyMaxSharePriceError,
-  type RequirementSignature,
+  type PermitRequirementSignature,
   type Transaction,
   ZeroSupplyAmountError,
 } from "../../types/index.js";
-import { getRequirementsAction } from "../requirements/getRequirementsAction.js";
+import { getTokenRequirementActions } from "../signatures/getTokenRequirementActions.js";
 
 /** Parameters for {@link blueSupply}. */
 export interface BlueSupplyParams {
@@ -26,10 +26,16 @@ export interface BlueSupplyParams {
     readonly marketParams: MarketParams;
   };
   args: DepositAmountArgs & {
+    /** Address whose Morpho supply position is credited. */
     onBehalf: Address;
     /** Maximum supply share price (in ray). Slippage protection against inflation attacks. */
     maxSharePrice: bigint;
-    requirementSignature?: RequirementSignature;
+    /**
+     * Optional pre-signed permit/permit2 approval for the loan-token transfer. When absent, the
+     * bundle uses a plain `erc20TransferFrom` and assumes the user has already approved
+     * `GeneralAdapter1`.
+     */
+    requirementSignature?: PermitRequirementSignature;
   };
   metadata?: Metadata;
 }
@@ -66,9 +72,9 @@ export interface BlueSupplyParams {
  * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
  * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the loan token is not
  *   the chain's wNative.
- * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `requirementSignature`
+ * @throws {DepositAssetMismatchError} from `getTokenRequirementActions` when `requirementSignature`
  *   is provided and the signed asset differs from `marketParams.loanToken`.
- * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
+ * @throws {DepositAmountMismatchError} from `getTokenRequirementActions` when `requirementSignature`
  *   is provided and the signed amount differs from `args.amount`.
  * @example
  * ```ts
@@ -138,7 +144,7 @@ export const blueSupply = ({
   if (amount > 0n) {
     if (requirementSignature) {
       actions.push(
-        ...getRequirementsAction({
+        ...getTokenRequirementActions({
           asset: marketParams.loanToken,
           amount,
           recipient: generalAdapter1,

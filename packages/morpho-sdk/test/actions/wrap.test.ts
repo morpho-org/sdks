@@ -203,7 +203,7 @@ describe("WrapNative - VaultV1", () => {
         expect(isHex(requirementSignature.args.signature)).toBe(true);
         expect(requirementSignature.args.signature.length).toBe(132);
 
-        const tx = deposit.buildTx(requirementSignature);
+        const tx = deposit.buildTx([requirementSignature]);
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
         expect(tx.action.args.amount).toEqual(amount);
@@ -458,7 +458,7 @@ describe("WrapNative - VaultV2", () => {
         expect(isHex(requirementSignature.args.signature)).toBe(true);
         expect(requirementSignature.args.signature.length).toBe(132);
 
-        const tx = deposit.buildTx(requirementSignature);
+        const tx = deposit.buildTx([requirementSignature]);
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
         expect(tx.action.args.amount).toEqual(amount);
