@@ -337,14 +337,14 @@ const tx = buildTx(requirementSignature);
 
 #### Repay
 
-Two modes depending on whether the caller specifies `assets` (partial repay) or `shares` (full repay, immune to interest accrual between quote and inclusion):
+Two modes depending on whether the caller specifies `amount` (partial repay) or `shares` (full repay, immune to interest accrual between quote and inclusion). Optionally attach `nativeAmount` to fund the repay by wrapping native ETH (loan token must be the chain's wNative):
 
 ```typescript
 const positionData = await market.getPositionData("0xUser...");
 
-// Partial repay — by assets
+// Partial repay — by amount
 const { buildTx, getRequirements } = market.repay({
-  assets: 250000000000000000n,
+  amount: 250000000000000000n,
   userAddress: "0xUser...",
   positionData,
 });
