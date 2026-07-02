@@ -11,6 +11,7 @@ import {
   NegativeNativeAmountError,
   NonPositiveRepayAmountError,
   NonPositiveRepayMaxSharePriceError,
+  TransferAmountNotEqualToAssetsError,
 } from "../../types/index.js";
 import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
 import { blueRepay } from "./repay.js";
@@ -326,6 +327,40 @@ describe("blueRepay unit tests", () => {
         args: {
           shares: parseUnits("100", 6),
           transferAmount: -1n,
+          onBehalf: client.account.address,
+          receiver: client.account.address,
+          maxSharePrice: 1n,
+        },
+      }),
+    ).toThrow(NonPositiveRepayAmountError);
+  });
+
+  test("error: TransferAmountNotEqualToAssetsError when assets-mode transferAmount != amount + nativeAmount", async ({
+    client,
+  }) => {
+    expect(() =>
+      blueRepay({
+        market: { chainId: mainnet.id, marketParams: WethUsdsBlue },
+        args: {
+          amount: parseUnits("100", 6),
+          transferAmount: parseUnits("150", 6), // != amount + nativeAmount (100 + 0)
+          onBehalf: client.account.address,
+          receiver: client.account.address,
+          maxSharePrice: 1n,
+        },
+      }),
+    ).toThrow(TransferAmountNotEqualToAssetsError);
+  });
+
+  test("error: NonPositiveRepayAmountError when shares mode has no funding", async ({
+    client,
+  }) => {
+    expect(() =>
+      blueRepay({
+        market: { chainId: mainnet.id, marketParams: WethUsdsBlue },
+        args: {
+          shares: parseUnits("100", 6),
+          transferAmount: 0n, // no ERC-20 and no native → unfunded
           onBehalf: client.account.address,
           receiver: client.account.address,
           maxSharePrice: 1n,

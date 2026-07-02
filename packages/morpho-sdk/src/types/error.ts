@@ -327,11 +327,9 @@ export class NonPositiveTransferAmountError extends Error {
 }
 
 /**
- * Thrown when a market repay in assets mode has `transferAmount !== assets`.
- *
- * @deprecated No longer thrown. Repay assets mode is now additive (`amount + nativeAmount`) and no
- * longer takes a separate `transferAmount`, so this invariant no longer exists. Retained as
- * exported API for back-compat; slated for removal in a future major.
+ * Thrown when a market repay in assets mode has `transferAmount !== amount + nativeAmount` — the
+ * pre-resolved ERC-20 pull plus the wrapped native must equal the assets repaid, so the bundle
+ * neither strands over-pulled loan tokens on `GeneralAdapter1` nor under-funds the repay.
  */
 export class TransferAmountNotEqualToAssetsError extends Error {
   constructor(params: {
@@ -340,7 +338,7 @@ export class TransferAmountNotEqualToAssetsError extends Error {
     market: string;
   }) {
     super(
-      `Transfer amount ${params.transferAmount} is not equal to repay assets ${params.assets} for market: ${params.market}`,
+      `Transfer amount ${params.transferAmount} is not equal to repay assets ${params.assets} for market: ${params.market}. In assets mode, transferAmount must equal amount + nativeAmount.`,
     );
   }
 }
