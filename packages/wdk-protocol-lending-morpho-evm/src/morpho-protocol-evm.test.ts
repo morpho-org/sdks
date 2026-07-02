@@ -578,7 +578,7 @@ describe.sequential("MorphoProtocolEvm", () => {
 
       expect(account.getTokenBalance).toHaveBeenCalledWith(TOKEN);
       expect(marketEntity.repay).toHaveBeenCalledWith({
-        assets: 100_000n,
+        amount: 100_000n,
         userAddress: ADDRESS,
         positionData,
         slippageTolerance: undefined,
