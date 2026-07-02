@@ -246,29 +246,4 @@ describe("ReallocationData.getAvailableLiquidityToUtilization", () => {
       data.getAvailableLiquidityToUtilization(sourceParamsA.id),
     ).toThrow(UnknownReallocationMarketError);
   });
-
-  test("behavior: deprecated getAvailableLiquidityToTargetUtilization alias delegates", () => {
-    const data = makeData();
-    stubReallocations(data, [
-      { id: sourceParamsA.id, vault: VAULT_A, assets: 200n * MathLib.WAD },
-    ]);
-    const options = {
-      timestamp: TIMESTAMP,
-      defaultSupplyTargetUtilization: NINETY_PERCENT,
-    };
-
-    expect(
-      data.getAvailableLiquidityToTargetUtilization(
-        targetParams.id,
-        NINETY_PERCENT,
-        options,
-      ),
-    ).toBe(
-      data.getAvailableLiquidityToUtilization(
-        targetParams.id,
-        NINETY_PERCENT,
-        options,
-      ),
-    );
-  });
 });

@@ -42,6 +42,7 @@ export enum ChainId {
   ArcMainnet = 5042,
   MorphMainnet = 2818,
   MegaEthMainnet = 4326,
+  RobinhoodMainnet = 4663,
 }
 
 /** Explorer, native currency, and identifier metadata for a supported chain. */
@@ -447,6 +448,13 @@ export namespace ChainUtils {
       nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
       explorerUrl: "https://mega.etherscan.io",
       identifier: "megaeth",
+    },
+    [ChainId.RobinhoodMainnet]: {
+      name: "Robinhood Chain",
+      id: ChainId.RobinhoodMainnet,
+      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      explorerUrl: "https://robinhoodchain.blockscout.com",
+      identifier: "robinhood",
     },
   } satisfies Record<ChainId, ChainMetadata>;
 }
