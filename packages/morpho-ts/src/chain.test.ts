@@ -126,6 +126,15 @@ describe("ChainUtils explorer URL helpers", () => {
         nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
       },
     ],
+    [
+      4_663,
+      {
+        name: "Robinhood Chain",
+        explorerUrl: "https://robinhoodchain.blockscout.com",
+        identifier: "robinhood",
+        nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      },
+    ],
   ])("exposes era-2 metadata for chain %i", (chainId, expectedMetadata) => {
     expect(
       (ChainUtils.CHAIN_METADATA as Record<number, unknown>)[chainId],
