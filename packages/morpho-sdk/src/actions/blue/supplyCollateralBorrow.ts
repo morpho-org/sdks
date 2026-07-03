@@ -20,8 +20,8 @@ import {
   type VaultReallocation,
   ZeroCollateralAmountError,
 } from "../../types/index.js";
-import { getRequirementsAction } from "../requirements/getRequirementsAction.js";
 import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
+import { getTokenRequirementActions } from "../signatures/getTokenRequirementActions.js";
 import { buildReallocationActions } from "./buildReallocationActions.js";
 
 /** Parameters for {@link blueSupplyCollateralBorrow}. */
@@ -93,11 +93,11 @@ export interface BlueSupplyCollateralBorrowParams {
  * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
  * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the collateral
  *   token is not the chain's wNative.
- * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `requirementSignature`
+ * @throws {DepositAssetMismatchError} from `getTokenRequirementActions` when `requirementSignature`
  *   is provided and the signed asset differs from `marketParams.collateralToken`.
- * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
+ * @throws {DepositAmountMismatchError} from `getTokenRequirementActions` when `requirementSignature`
  *   is provided and the signed amount differs from `args.amount`.
- * @throws {Permit2ExpirationMissingError} from `getRequirementsAction` when a Permit2 requirement
+ * @throws {Permit2ExpirationMissingError} from `getTokenRequirementActions` when a Permit2 requirement
  *   signature is missing its expiration.
  * @throws {NegativeReallocationFeeError} from `buildReallocationActions` when
  *   `reallocations` is non-empty and any `reallocation.fee < 0n`.
@@ -193,7 +193,7 @@ export const blueSupplyCollateralBorrow = ({
   if (amount > 0n) {
     if (requirementSignature) {
       actions.push(
-        ...getRequirementsAction({
+        ...getTokenRequirementActions({
           asset: marketParams.collateralToken,
           amount,
           recipient: generalAdapter1,

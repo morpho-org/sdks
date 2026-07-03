@@ -299,7 +299,7 @@ together:
 getRequirements() → Requirement { sign() } → RequirementSignature → buildTx([sig, ...])
 ```
 
-Inside `buildTx`, `getRequirementsAction()` converts the signature into bundler actions:
+Inside `buildTx`, `getTokenRequirementActions()` converts the signature into bundler actions:
 
 - **Permit path**: `permit` action + `erc20TransferFrom` to generalAdapter1.
 - **Permit2 path**: `approve2` action + `transferFrom2` to generalAdapter1.

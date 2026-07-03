@@ -15,7 +15,7 @@ import {
   isRequirementSignature,
   Permit2ExpirationMissingError,
 } from "../../../types/index.js";
-import { getRequirementsAction } from "../getRequirementsAction.js";
+import { getTokenRequirementActions } from "../../signatures/getTokenRequirementActions.js";
 import { getRequirementsApproval } from "../getRequirementsApproval.js";
 import { getGeneralAdapterRequirements } from "./getGeneralAdapterRequirements.js";
 import { getGeneralAdapterRequirementsPermit } from "./getGeneralAdapterRequirementsPermit.js";
@@ -535,9 +535,9 @@ describe("getGeneralAdapterRequirements", () => {
   });
 
   describe("direct requirement helpers", () => {
-    test("getRequirementsAction throws when permit2 signature args omit expiration", () => {
+    test("getTokenRequirementActions throws when permit2 signature args omit expiration", () => {
       expect(() =>
-        getRequirementsAction({
+        getTokenRequirementActions({
           asset: usdc,
           amount: mockAmount,
           recipient: generalAdapter1,

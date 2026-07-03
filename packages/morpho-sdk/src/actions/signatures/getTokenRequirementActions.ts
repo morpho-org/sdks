@@ -7,7 +7,7 @@ import {
   type PermitRequirementSignature,
 } from "../../types/index.js";
 
-interface GetRequirementsActionParams {
+interface GetTokenRequirementActionsParams {
   asset: Address;
   amount: bigint;
   recipient: Address;
@@ -35,7 +35,7 @@ interface GetRequirementsActionParams {
  * ```ts
  * import { createWalletClient, http } from "viem";
  * import { mainnet } from "viem/chains";
- * import { getRequirementsAction } from "@morpho-org/morpho-sdk";
+ * import { getTokenRequirementActions } from "@morpho-org/morpho-sdk";
  *
  * const walletClient = createWalletClient({
  *   chain: mainnet,
@@ -46,7 +46,7 @@ interface GetRequirementsActionParams {
  * // `requirement` comes from a requirement helper; signing produces a `RequirementSignature`.
  * const requirementSignature = await requirement.sign(walletClient, borrower);
  *
- * const actions = getRequirementsAction({
+ * const actions = getTokenRequirementActions({
  *   asset: loanToken,
  *   amount: 1_000_000n,
  *   recipient: generalAdapter1,
@@ -57,12 +57,12 @@ interface GetRequirementsActionParams {
  * // - classic permit path: [{ type: "permit", ... }, { type: "erc20TransferFrom", ... }]
  * ```
  */
-export const getRequirementsAction = ({
+export const getTokenRequirementActions = ({
   asset,
   amount,
   recipient,
   requirementSignature,
-}: GetRequirementsActionParams): Action[] => {
+}: GetTokenRequirementActionsParams): Action[] => {
   if (!isAddressEqual(requirementSignature.args.asset, asset)) {
     throw new DepositAssetMismatchError(asset, requirementSignature.args.asset);
   }
