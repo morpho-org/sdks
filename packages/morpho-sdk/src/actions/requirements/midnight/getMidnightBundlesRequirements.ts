@@ -1,6 +1,6 @@
 import { MathLib } from "@morpho-org/blue-sdk";
 import { erc2612Abi } from "@morpho-org/blue-sdk-viem";
-import { getChainAddresses } from "@morpho-org/morpho-ts";
+import { getChainAddress, getChainAddresses } from "@morpho-org/morpho-ts";
 import {
   type Address,
   bytesToHex,
@@ -15,9 +15,11 @@ import {
   type ActionRequirement,
   CryptoUnavailableError,
 } from "../../../types/index.js";
-import { encodeErc20Permit } from "../encode/index.js";
+import {
+  encodeErc20Permit,
+  encodeErc20Permit2Transfer,
+} from "../encode/index.js";
 import { getRequirementsApproval } from "../getRequirementsApproval.js";
-import { encodeMidnightBundlesPermit2Transfer } from "./encodeMidnightBundlesPermit2Transfer.js";
 
 /** Parameters for {@link getMidnightBundlesRequirements}. */
 export type GetMidnightBundlesRequirementsParams =
@@ -26,7 +28,6 @@ export type GetMidnightBundlesRequirementsParams =
       readonly chainId: number;
       readonly token: Address;
       readonly owner: Address;
-      readonly spender: Address;
       readonly amount: bigint;
       readonly supportDeployless?: boolean;
       readonly supportSignature: false;
@@ -36,7 +37,6 @@ export type GetMidnightBundlesRequirementsParams =
       readonly chainId: number;
       readonly token: Address;
       readonly owner: Address;
-      readonly spender: Address;
       readonly amount: bigint;
       readonly supportDeployless?: boolean;
       readonly supportSignature: true;
@@ -51,7 +51,8 @@ export type GetMidnightBundlesRequirementsParams =
 /**
  * Resolves token-pull prerequisites for Midnight bundle calls.
  *
- * Reads the user's direct ERC-20 allowance to the Midnight bundle, then picks one of three flows:
+ * Resolves the MidnightBundles spender from `chainId`, reads the user's direct ERC-20 allowance
+ * to that contract, then picks one of three flows:
  *
  * 1. **`supportSignature: false`** - classic ERC-20 `approve` transaction to the Midnight bundle.
  * 2. **`supportSignature: true` + EIP-2612 nonce detected + `useSimplePermit`** - single permit
@@ -83,7 +84,6 @@ export type GetMidnightBundlesRequirementsParams =
  *   chainId: 1,
  *   token: loanToken,
  *   owner: user,
- *   spender: midnightBundles,
  *   amount: 1_000_000n,
  *   supportSignature: true,
  * });
@@ -96,11 +96,12 @@ export const getMidnightBundlesRequirements = async (
 
   if (params.amount === 0n) return [];
 
+  const midnightBundles = getChainAddress(params.chainId, "midnightBundles");
   const directAllowance = await readContract(params.viemClient, {
     address: params.token,
     abi: erc20Abi,
     functionName: "allowance",
-    args: [params.owner, params.spender],
+    args: [params.owner, midnightBundles],
   });
 
   if (directAllowance >= params.amount) return [];
@@ -124,7 +125,7 @@ export const getMidnightBundlesRequirements = async (
         return [
           await encodeErc20Permit(params.viemClient, {
             token: params.token,
-            spender: params.spender,
+            spender: midnightBundles,
             amount: params.amount,
             chainId: params.chainId,
             nonce,
@@ -159,9 +160,9 @@ export const getMidnightBundlesRequirements = async (
           },
           allowances: permit2Allowance,
         }),
-        encodeMidnightBundlesPermit2Transfer({
+        encodeErc20Permit2Transfer({
           token: params.token,
-          spender: params.spender,
+          spender: midnightBundles,
           amount: params.amount,
           chainId: params.chainId,
           nonce,
@@ -174,7 +175,7 @@ export const getMidnightBundlesRequirements = async (
     address: params.token,
     chainId: params.chainId,
     args: {
-      spender: params.spender,
+      spender: midnightBundles,
       spendAmount: params.amount,
       approvalAmount: params.amount,
     },

@@ -807,27 +807,57 @@ export function isAuthorizationSignature(
   return signature.action.type === "authorization";
 }
 
-/** The typed permit / authorization slots a bundled path consumes, split from a `buildTx` array. */
+/**
+ * Narrows a {@link RequirementSignature} to a Midnight Permit2 SignatureTransfer payload.
+ *
+ * @param signature - The signed requirement to test.
+ * @returns `true` when `signature.action.type` is `"permit2Transfer"`.
+ */
+export function isPermit2TransferSignature(
+  signature: RequirementSignature,
+): signature is Permit2TransferRequirementSignature {
+  return signature.action.type === "permit2Transfer";
+}
+
+/**
+ * Narrows a {@link RequirementSignature} to a Midnight offer-root signature.
+ *
+ * @param signature - The signed requirement to test.
+ * @returns `true` when `signature.action.type` is `"midnightOfferRootSignature"`.
+ */
+export function isMidnightOfferRootSignature(
+  signature: RequirementSignature,
+): signature is MidnightOfferRootSignature {
+  return signature.action.type === "midnightOfferRootSignature";
+}
+
+/** The typed requirement-signature slots a transaction builder consumes, split from a `buildTx` array. */
 export interface SelectedRequirementSignatures {
   /** The single permit / Permit2 signature, when present. */
   permit?: PermitRequirementSignature;
   /** The single Morpho authorization signature, when present. */
   authorization?: AuthorizationRequirementSignature;
+  /** The single Midnight Permit2 SignatureTransfer payload, when present. */
+  permit2Transfer?: Permit2TransferRequirementSignature;
+  /** The single Midnight offer-root signature, when present. */
+  midnightOfferRoot?: MidnightOfferRootSignature;
 }
 
 /**
- * Splits a `buildTx` signature array into its typed permit / authorization slots, rejecting
+ * Splits a `buildTx` signature array into its typed requirement-signature slots, rejecting
  * ambiguous or unexpected input so a path never silently consumes the wrong signature.
  *
- * A bundled path consumes at most one permit and one authorization signature. Passing several of
- * the same kind, or a kind the path does not consume, is rejected with a typed error rather than
- * silently dropping the extras — the latter could otherwise leave a required authorization or
- * permit unsigned (and the bundle reverting on-chain) or apply the wrong signature.
+ * A bundled path consumes at most one signature of each accepted kind. Passing several of the same
+ * kind, or a kind the path does not consume, is rejected with a typed error rather than silently
+ * dropping the extras — the latter could otherwise leave a required authorization or permit
+ * unsigned (and the bundle reverting on-chain) or apply the wrong signature.
  *
  * @param signatures - The signatures passed to `buildTx`.
  * @param accepts - Which signature kinds this operation consumes.
  * @param accepts.permit - Whether a permit / Permit2 signature is consumed.
  * @param accepts.authorization - Whether a Morpho authorization signature is consumed.
+ * @param accepts.permit2Transfer - Whether a Midnight Permit2 SignatureTransfer is consumed.
+ * @param accepts.midnightOfferRoot - Whether a Midnight offer-root signature is consumed.
  * @returns The single permit and/or authorization signature, when present.
  * @throws {AmbiguousRequirementSignaturesError} when more than one signature of an accepted kind is present.
  * @throws {UnexpectedRequirementSignatureError} when a signature of a kind the operation does not consume is present.
@@ -843,17 +873,28 @@ export interface SelectedRequirementSignatures {
  */
 export function selectRequirementSignatures(
   signatures: readonly RequirementSignature[] | undefined,
-  accepts: { permit?: boolean; authorization?: boolean },
+  accepts: {
+    permit?: boolean;
+    authorization?: boolean;
+    permit2Transfer?: boolean;
+    midnightOfferRoot?: boolean;
+  },
 ): SelectedRequirementSignatures {
   if (signatures == null) return {};
 
   const permits = signatures.filter(isPermitSignature);
   const authorizations = signatures.filter(isAuthorizationSignature);
+  const permit2Transfers = signatures.filter(isPermit2TransferSignature);
+  const midnightOfferRoots = signatures.filter(isMidnightOfferRootSignature);
 
   if (!accepts.permit && permits.length > 0)
     throw new UnexpectedRequirementSignatureError("permit");
   if (!accepts.authorization && authorizations.length > 0)
     throw new UnexpectedRequirementSignatureError("authorization");
+  if (!accepts.permit2Transfer && permit2Transfers.length > 0)
+    throw new UnexpectedRequirementSignatureError("permit2Transfer");
+  if (!accepts.midnightOfferRoot && midnightOfferRoots.length > 0)
+    throw new UnexpectedRequirementSignatureError("midnightOfferRootSignature");
   if (permits.length > 1)
     throw new AmbiguousRequirementSignaturesError("permit", permits.length);
   if (authorizations.length > 1)
@@ -861,6 +902,21 @@ export function selectRequirementSignatures(
       "authorization",
       authorizations.length,
     );
+  if (permit2Transfers.length > 1)
+    throw new AmbiguousRequirementSignaturesError(
+      "permit2Transfer",
+      permit2Transfers.length,
+    );
+  if (midnightOfferRoots.length > 1)
+    throw new AmbiguousRequirementSignaturesError(
+      "midnightOfferRootSignature",
+      midnightOfferRoots.length,
+    );
 
-  return { permit: permits[0], authorization: authorizations[0] };
+  return {
+    permit: permits[0],
+    authorization: authorizations[0],
+    permit2Transfer: permit2Transfers[0],
+    midnightOfferRoot: midnightOfferRoots[0],
+  };
 }

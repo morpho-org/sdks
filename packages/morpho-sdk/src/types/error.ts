@@ -73,27 +73,34 @@ export namespace BundlerErrors {
   }
 }
 
+/** Requirement signature kind accepted by action-output transaction builders. */
+export type RequirementSignatureKind =
+  | "permit"
+  | "authorization"
+  | "permit2Transfer"
+  | "midnightOfferRootSignature";
+
 /**
  * Thrown when `buildTx` receives more than one requirement signature of the same kind.
  *
- * A bundled path consumes at most one permit and one authorization signature; passing several of
- * the same kind is ambiguous and would silently drop all but the first, so it is rejected instead.
+ * A bundled path consumes at most one signature per accepted kind; passing several of the same
+ * kind is ambiguous and would silently drop all but the first, so it is rejected instead.
  *
  * @example
  * ```ts
  * import { AmbiguousRequirementSignaturesError } from "@morpho-org/morpho-sdk";
  *
  * if (error instanceof AmbiguousRequirementSignaturesError) {
- *   // Pass a single permit (and at most one authorization) signature to buildTx.
+ *   // Pass a single signature per accepted kind to buildTx.
  * }
  * ```
  */
 export class AmbiguousRequirementSignaturesError extends Error {
   /**
-   * @param kind - The over-supplied signature kind (`"permit"` or `"authorization"`).
+   * @param kind - The over-supplied signature kind.
    * @param count - How many signatures of that kind were received.
    */
-  constructor(kind: "permit" | "authorization", count: number) {
+  constructor(kind: RequirementSignatureKind, count: number) {
     super(
       `Expected at most one ${kind} signature but received ${count}. Pass a single ${kind} signature to buildTx.`,
     );
@@ -101,9 +108,8 @@ export class AmbiguousRequirementSignaturesError extends Error {
 }
 
 /**
- * Thrown when `buildTx` receives a requirement signature of a kind the operation does not consume
- * (for example an authorization signature on a plain supply path). Surfacing it prevents a signed
- * authorization or permit from being silently ignored.
+ * Thrown when `buildTx` receives a requirement signature of a kind the operation does not consume.
+ * Surfacing it prevents a signed requirement from being silently ignored.
  *
  * @example
  * ```ts
@@ -116,9 +122,9 @@ export class AmbiguousRequirementSignaturesError extends Error {
  */
 export class UnexpectedRequirementSignatureError extends Error {
   /**
-   * @param kind - The unexpected signature kind (`"permit"` or `"authorization"`).
+   * @param kind - The unexpected signature kind.
    */
-  constructor(kind: "permit" | "authorization") {
+  constructor(kind: RequirementSignatureKind) {
     super(
       `Received a ${kind} signature that this operation does not consume. Remove it from the buildTx signatures array.`,
     );
@@ -256,6 +262,24 @@ export class DepositAssetMismatchError extends Error {
   constructor(depositAsset: Address, signatureAsset: Address) {
     super(
       `Deposit asset "${depositAsset}" does not match requirement signature asset "${signatureAsset}"`,
+    );
+  }
+}
+
+/** Thrown when a deposit's owner differs from the owner the supplied permit / permit2 signature was issued for. */
+export class DepositOwnerMismatchError extends Error {
+  constructor(depositOwner: Address, signatureOwner: Address) {
+    super(
+      `Deposit owner "${depositOwner}" does not match requirement signature owner "${signatureOwner}"`,
+    );
+  }
+}
+
+/** Thrown when a deposit's spender differs from the spender the supplied permit / permit2 signature was issued for. */
+export class DepositSpenderMismatchError extends Error {
+  constructor(depositSpender: Address, signatureSpender: Address) {
+    super(
+      `Deposit spender "${depositSpender}" does not match requirement signature spender "${signatureSpender}"`,
     );
   }
 }

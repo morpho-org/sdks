@@ -56,7 +56,6 @@ import {
   MidnightOfferRootOfferCountMismatchError,
   MidnightOfferRootOwnerMismatchError,
   MidnightOfferRootRatifierMismatchError,
-  type MidnightOfferRootSignature,
   type MidnightOfferRootSignatureAction,
   type MidnightRedeemAction,
   type MidnightRepayWithdrawCollateralAction,
@@ -70,6 +69,7 @@ import {
   NegativeMidnightAmountError,
   NoMidnightCreditToRedeemError,
   NonPositiveMidnightAmountError,
+  selectRequirementSignatures,
   UnknownMidnightCollateralError,
   UnknownMidnightRatifierError,
 } from "../../types/index.js";
@@ -385,7 +385,6 @@ export class MorphoMidnight implements MidnightActions {
             {
               token: market.params.loanToken,
               owner: params.accountAddress,
-              spender: midnightBundles,
               amount: params.assets,
             },
             reqParams,
@@ -488,7 +487,6 @@ export class MorphoMidnight implements MidnightActions {
             {
               token: collateral.token,
               owner: params.accountAddress,
-              spender: midnightBundles,
               amount: params.collateralAssets,
             },
             reqParams,
@@ -789,7 +787,6 @@ export class MorphoMidnight implements MidnightActions {
               {
                 token: market.params.loanToken,
                 owner: params.accountAddress,
-                spender: midnightBundles,
                 amount: params.repayAssets,
               },
               reqParams,
@@ -934,7 +931,6 @@ export class MorphoMidnight implements MidnightActions {
     params: {
       readonly token: Address;
       readonly owner: Address;
-      readonly spender: Address;
       readonly amount: bigint;
     },
     reqParams?: MidnightRequirementsParams,
@@ -964,20 +960,18 @@ export class MorphoMidnight implements MidnightActions {
     readonly signatures?: MidnightActionSignatures;
   }) {
     const data = params.offersData;
+    const collectedSignatures =
+      params.signatures == null
+        ? undefined
+        : "action" in params.signatures
+          ? [params.signatures]
+          : params.signatures;
     let payload = data.setterPayload;
     if (data.ratifierType === "ecrecover") {
-      const collectedSignatures = params.signatures;
-      const signature =
-        collectedSignatures == null
-          ? undefined
-          : "action" in collectedSignatures
-            ? collectedSignatures.action.type === "midnightOfferRootSignature"
-              ? (collectedSignatures as MidnightOfferRootSignature)
-              : undefined
-            : (collectedSignatures.find(
-                (candidate) =>
-                  candidate.action.type === "midnightOfferRootSignature",
-              ) as MidnightOfferRootSignature | undefined);
+      const { midnightOfferRoot: signature } = selectRequirementSignatures(
+        collectedSignatures,
+        { midnightOfferRoot: true },
+      );
 
       if (signature == null) {
         throw new MissingMidnightOfferRootSignatureError();
@@ -1016,6 +1010,8 @@ export class MorphoMidnight implements MidnightActions {
         });
       }
       payload = signature.args.payload;
+    } else {
+      selectRequirementSignatures(collectedSignatures, {});
     }
 
     if (payload == null) throw new MissingMidnightOfferRootSignatureError();

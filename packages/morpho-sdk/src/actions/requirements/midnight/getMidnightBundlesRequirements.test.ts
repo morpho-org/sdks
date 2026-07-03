@@ -164,7 +164,6 @@ describe.sequential("getMidnightBundlesRequirements", () => {
         chainId: midnightChainId,
         token: midnightAddresses.loanToken,
         owner: midnightAddresses.taker,
-        spender: midnightAddresses.midnightBundles,
         amount: 1n,
         supportSignature: false,
       }),
@@ -185,7 +184,6 @@ describe.sequential("getMidnightBundlesRequirements", () => {
       chainId: midnightChainId,
       token: midnightAddresses.loanToken,
       owner: midnightAddresses.taker,
-      spender: midnightAddresses.midnightBundles,
       amount: 1_000n,
       supportSignature: false,
     });
@@ -201,7 +199,6 @@ describe.sequential("getMidnightBundlesRequirements", () => {
       chainId: midnightChainId,
       token: midnightAddresses.loanToken,
       owner: midnightAddresses.taker,
-      spender: midnightAddresses.midnightBundles,
       amount: 0n,
       supportSignature: true,
     });
@@ -224,7 +221,6 @@ describe.sequential("getMidnightBundlesRequirements", () => {
       chainId: midnightChainId,
       token: midnightAddresses.loanToken,
       owner: midnightAddresses.taker,
-      spender: midnightAddresses.midnightBundles,
       amount: 1_000n,
       supportSignature: false,
     });
@@ -260,7 +256,6 @@ describe.sequential("getMidnightBundlesRequirements", () => {
       chainId: midnightChainId,
       token: midnightAddresses.loanToken,
       owner: midnightAddresses.taker,
-      spender: midnightAddresses.midnightBundles,
       amount: 1_000n,
       supportSignature: true,
       useSimplePermit: true,
@@ -290,7 +285,6 @@ describe.sequential("getMidnightBundlesRequirements", () => {
       chainId: midnightChainId,
       token: midnightAddresses.loanToken,
       owner: midnightAddresses.taker,
-      spender: midnightAddresses.midnightBundles,
       amount: 1_000n,
       supportSignature: true,
     });
@@ -326,7 +320,6 @@ describe.sequential("getMidnightBundlesRequirements", () => {
       chainId: noPermit2ChainId,
       token: midnightAddresses.loanToken,
       owner: midnightAddresses.taker,
-      spender: midnightAddresses.midnightBundles,
       amount: 1_000n,
       supportSignature: true,
     });
@@ -368,7 +361,6 @@ describe.sequential("getMidnightBundlesRequirements", () => {
         chainId: midnightChainId,
         token: midnightAddresses.dai,
         owner: midnightAddresses.taker,
-        spender: midnightAddresses.midnightBundles,
         amount: 1_000n,
         supportSignature: true,
         useSimplePermit: true,
@@ -415,7 +407,6 @@ describe.sequential("getMidnightBundlesRequirements", () => {
         chainId: midnightChainId,
         token: midnightAddresses.loanToken,
         owner: midnightAddresses.taker,
-        spender: midnightAddresses.midnightBundles,
         amount: 1_000n,
         supportSignature: true,
       }),

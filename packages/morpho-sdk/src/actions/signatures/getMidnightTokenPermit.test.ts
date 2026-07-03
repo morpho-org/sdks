@@ -2,23 +2,27 @@ import { decodeAbiParameters, type Hex } from "viem";
 import { describe, expect, test } from "vitest";
 import { midnightAddresses } from "../../../test/fixtures/midnight.js";
 import {
+  AmbiguousRequirementSignaturesError,
   DepositAmountMismatchError,
   DepositAssetMismatchError,
+  DepositOwnerMismatchError,
+  DepositSpenderMismatchError,
   MidnightPermit2TransferSignatureRequiredError,
   type RequirementSignature,
   type TokenRequirementSignature,
+  UnexpectedRequirementSignatureError,
 } from "../../types/index.js";
-import { encodeMidnightTokenPermit } from "./encodeMidnightTokenPermit.js";
-import { PermitKind } from "./types.js";
+import { PermitKind } from "../midnight/types.js";
+import { getMidnightTokenPermit } from "./getMidnightTokenPermit.js";
 
 const signature = `0x${"11".repeat(32)}${"22".repeat(32)}1b` as Hex;
 
 type HasExpiration<T> = T extends { expiration: bigint } ? true : false;
 
-describe("encodeMidnightTokenPermit", () => {
+describe("getMidnightTokenPermit", () => {
   test("default", () => {
     expect(
-      encodeMidnightTokenPermit({
+      getMidnightTokenPermit({
         token: midnightAddresses.loanToken,
         owner: midnightAddresses.taker,
         spender: midnightAddresses.midnightBundles,
@@ -96,7 +100,7 @@ describe("encodeMidnightTokenPermit", () => {
       },
     } satisfies RequirementSignature;
 
-    const permit = encodeMidnightTokenPermit({
+    const permit = getMidnightTokenPermit({
       token: midnightAddresses.loanToken,
       owner: midnightAddresses.taker,
       spender: midnightAddresses.midnightBundles,
@@ -142,7 +146,7 @@ describe("encodeMidnightTokenPermit", () => {
       },
     } satisfies TokenRequirementSignature;
 
-    const permit = encodeMidnightTokenPermit({
+    const permit = getMidnightTokenPermit({
       token: midnightAddresses.loanToken,
       owner: midnightAddresses.taker,
       spender: midnightAddresses.midnightBundles,
@@ -181,7 +185,7 @@ describe("encodeMidnightTokenPermit", () => {
     } satisfies RequirementSignature;
 
     expect(() =>
-      encodeMidnightTokenPermit({
+      getMidnightTokenPermit({
         token: midnightAddresses.loanToken,
         owner: midnightAddresses.taker,
         spender: midnightAddresses.midnightBundles,
@@ -189,6 +193,66 @@ describe("encodeMidnightTokenPermit", () => {
         signatures: [permit2Signature],
       }),
     ).toThrow(MidnightPermit2TransferSignatureRequiredError);
+  });
+
+  test("error: AmbiguousRequirementSignaturesError", () => {
+    const permit2Signature = {
+      action: {
+        type: "permit2Transfer",
+        args: {
+          spender: midnightAddresses.midnightBundles,
+          amount: 1_000n,
+          deadline: 123n,
+        },
+      },
+      args: {
+        owner: midnightAddresses.taker,
+        nonce: 42n,
+        asset: midnightAddresses.loanToken,
+        signature,
+        amount: 1_000n,
+        deadline: 123n,
+      },
+    } satisfies TokenRequirementSignature;
+
+    expect(() =>
+      getMidnightTokenPermit({
+        token: midnightAddresses.loanToken,
+        owner: midnightAddresses.taker,
+        spender: midnightAddresses.midnightBundles,
+        amount: 1_000n,
+        signatures: [permit2Signature, permit2Signature],
+      }),
+    ).toThrow(AmbiguousRequirementSignaturesError);
+  });
+
+  test("error: UnexpectedRequirementSignatureError", () => {
+    const offerRootSignature = {
+      action: {
+        type: "midnightOfferRootSignature",
+        args: {
+          root: `0x${"33".repeat(32)}` as Hex,
+          ratifier: midnightAddresses.ecrecoverRatifier,
+          offers: 1,
+        },
+      },
+      args: {
+        owner: midnightAddresses.maker,
+        root: `0x${"33".repeat(32)}` as Hex,
+        signature,
+        payload: "0x1234",
+      },
+    } satisfies RequirementSignature;
+
+    expect(() =>
+      getMidnightTokenPermit({
+        token: midnightAddresses.loanToken,
+        owner: midnightAddresses.taker,
+        spender: midnightAddresses.midnightBundles,
+        amount: 1_000n,
+        signatures: [offerRootSignature],
+      }),
+    ).toThrow(UnexpectedRequirementSignatureError);
   });
 
   test("error: DepositAssetMismatchError", () => {
@@ -212,7 +276,7 @@ describe("encodeMidnightTokenPermit", () => {
     } satisfies RequirementSignature;
 
     expect(() =>
-      encodeMidnightTokenPermit({
+      getMidnightTokenPermit({
         token: midnightAddresses.loanToken,
         owner: midnightAddresses.taker,
         spender: midnightAddresses.midnightBundles,
@@ -243,7 +307,7 @@ describe("encodeMidnightTokenPermit", () => {
     } satisfies RequirementSignature;
 
     expect(() =>
-      encodeMidnightTokenPermit({
+      getMidnightTokenPermit({
         token: midnightAddresses.loanToken,
         owner: midnightAddresses.taker,
         spender: midnightAddresses.midnightBundles,
@@ -251,5 +315,67 @@ describe("encodeMidnightTokenPermit", () => {
         signatures: [permitSignature],
       }),
     ).toThrow(DepositAmountMismatchError);
+  });
+
+  test("error: DepositOwnerMismatchError", () => {
+    const permitSignature = {
+      action: {
+        type: "permit",
+        args: {
+          spender: midnightAddresses.midnightBundles,
+          amount: 1_000n,
+          deadline: 123n,
+        },
+      },
+      args: {
+        owner: midnightAddresses.maker,
+        nonce: 0n,
+        asset: midnightAddresses.loanToken,
+        signature,
+        amount: 1_000n,
+        deadline: 123n,
+      },
+    } satisfies RequirementSignature;
+
+    expect(() =>
+      getMidnightTokenPermit({
+        token: midnightAddresses.loanToken,
+        owner: midnightAddresses.taker,
+        spender: midnightAddresses.midnightBundles,
+        amount: 1_000n,
+        signatures: [permitSignature],
+      }),
+    ).toThrow(DepositOwnerMismatchError);
+  });
+
+  test("error: DepositSpenderMismatchError", () => {
+    const permitSignature = {
+      action: {
+        type: "permit",
+        args: {
+          spender: midnightAddresses.generalAdapter1,
+          amount: 1_000n,
+          deadline: 123n,
+        },
+      },
+      args: {
+        owner: midnightAddresses.taker,
+        nonce: 0n,
+        asset: midnightAddresses.loanToken,
+        signature,
+        amount: 1_000n,
+        deadline: 123n,
+      },
+    } satisfies RequirementSignature;
+
+    expect(() =>
+      getMidnightTokenPermit({
+        token: midnightAddresses.loanToken,
+        owner: midnightAddresses.taker,
+        spender: midnightAddresses.midnightBundles,
+        amount: 1_000n,
+        signatures: [permitSignature],
+      }),
+    ).toThrow(DepositSpenderMismatchError);
   });
 });
