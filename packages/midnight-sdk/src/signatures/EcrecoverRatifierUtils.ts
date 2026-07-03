@@ -18,9 +18,12 @@ import {
 import { signTypedData } from "viem/actions";
 import { EIP712_DOMAIN_TYPEHASH } from "../constants.js";
 import {
+  ChainIdMismatchError,
+  InvalidTreeError,
   InvalidTreeHeightError,
   InvalidTypedDataSignatureError,
 } from "../errors.js";
+import { MarketParams } from "../market/index.js";
 import type { OfferStruct } from "../offers/index.js";
 import type { Payload } from "./Payload.js";
 import { RatifierUtils } from "./RatifierUtils.js";
@@ -605,8 +608,9 @@ export namespace EcrecoverRatifierUtils {
    * @param params.client - Viem client whose transport signs the tree typed data.
    * @param params.account - Account used to sign the tree typed data.
    * @returns Signature returned by the client.
-   * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
+   * @throws {InvalidTreeError} when the tree is invalid, contains multiple ratifiers, or spans multiple chain ids.
    * @throws {InvalidTreeHeightError} when the tree height is unsupported.
+   * @throws {ChainIdMismatchError} when `params.client.chain?.id` does not match the tree offer chain id.
    * @throws {InvalidTypedDataSignatureError} when the returned signature does not recover to `params.account`.
    * @example
    * ```ts
@@ -658,13 +662,32 @@ export namespace EcrecoverRatifierUtils {
     readonly client: Client<Transport, Chain, Account | undefined>;
     readonly account: Account | Address;
   }): Promise<Hex> {
+    const { tree } = RatifierUtils.normalizeRatifierTree({
+      tree: params.tree,
+      label: "Ecrecover",
+    });
+    const expectedChainId = MarketParams.from(tree.offers[0]!.market).chainId;
+    for (const offer of tree.offers.slice(1)) {
+      const offerChainId = MarketParams.from(offer.market).chainId;
+      if (offerChainId !== expectedChainId) {
+        throw new InvalidTreeError(
+          `All offers in an Ecrecover tree must use one chain id; expected "${expectedChainId}", got "${offerChainId}". Build separate trees per chain.`,
+        );
+      }
+    }
+
+    const clientChainId = params.client.chain?.id;
+    if (clientChainId == null || BigInt(clientChainId) !== expectedChainId) {
+      throw new ChainIdMismatchError(clientChainId, expectedChainId);
+    }
+
     const signer =
       typeof params.account === "string"
         ? params.account
         : params.account.address;
     const data = typedData({
-      tree: params.tree,
-      chainId: params.client.chain.id,
+      tree,
+      chainId: expectedChainId,
     });
 
     const signature = await signTypedData<

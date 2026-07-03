@@ -24,7 +24,7 @@ Offer creation and payload validation reject `expiry` before `start` while allow
 
 Ecrecover ratification supports direct maker signatures and delegated signer signatures, including mixed-maker trees when the same signer is authorized by every maker onchain.
 
-Ecrecover ratification accepts a viem client plus explicit signer account, derives the EIP-712 domain chain id from that client, and validates the returned signature before producing payload items.
+Ecrecover ratification accepts a viem client plus explicit signer account, infers a single EIP-712 domain chain id from the offer tree, rejects mixed-chain Ecrecover trees, checks the client is on that chain before signing, and validates the returned signature before producing payload items.
 
 Ecrecover client signing rejects typed-data signatures that do not recover to the requested signer account.
 

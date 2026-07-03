@@ -8,9 +8,13 @@ import {
   stringToHex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { base } from "viem/chains";
-import { describe, expect, test } from "vitest";
-import { addresses, baseOffer } from "../__test__/fixtures.js";
+import { base, mainnet } from "viem/chains";
+import { describe, expect, test, vi } from "vitest";
+import {
+  addresses,
+  baseMarketParamsInput,
+  baseOffer,
+} from "../__test__/fixtures.js";
 import {
   COLLATERAL_PARAMS_TYPEHASH,
   EIP712_DOMAIN_TYPEHASH,
@@ -18,6 +22,7 @@ import {
   OFFER_TYPEHASH,
 } from "../constants.js";
 import {
+  ChainIdMismatchError,
   InvalidTreeError,
   InvalidTreeHeightError,
   InvalidTypedDataSignatureError,
@@ -348,6 +353,53 @@ describe("EcrecoverRatifierUtils.sign", () => {
     });
 
     expect(signature).toMatch(/^0x[0-9a-f]{130}$/);
+  });
+
+  test("error: InvalidTreeError when offers span multiple chain ids", async () => {
+    const account = privateKeyToAccount(privateKey);
+    const request = vi.fn(async () => null);
+    const tree = Tree.create([
+      baseOffer({ maker: account.address, maxAssets: 0n }),
+      baseOffer({
+        maker: account.address,
+        market: { ...baseMarketParamsInput(), chainId: mainnet.id },
+        maxAssets: 0n,
+      }),
+    ]);
+    const client = createWalletClient({
+      chain: base,
+      transport: custom({ request }),
+    });
+
+    await expect(
+      EcrecoverRatifierUtils.sign({
+        tree,
+        client,
+        account,
+      }),
+    ).rejects.toBeInstanceOf(InvalidTreeError);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  test("error: ChainIdMismatchError when client chain differs from offer chain", async () => {
+    const account = privateKeyToAccount(privateKey);
+    const request = vi.fn(async () => null);
+    const tree = Tree.create([
+      baseOffer({ maker: account.address, maxAssets: 0n }),
+    ]);
+    const client = createWalletClient({
+      chain: mainnet,
+      transport: custom({ request }),
+    });
+
+    await expect(
+      EcrecoverRatifierUtils.sign({
+        tree,
+        client,
+        account,
+      }),
+    ).rejects.toBeInstanceOf(ChainIdMismatchError);
+    expect(request).not.toHaveBeenCalled();
   });
 });
 

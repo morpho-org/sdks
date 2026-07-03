@@ -284,6 +284,36 @@ export class InvalidTreeError extends Error {
 }
 
 /**
+ * Thrown when a viem client's chain id does not match the chain id required by a signing flow.
+ *
+ * @example
+ * ```ts
+ * import { ChainIdMismatchError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new ChainIdMismatchError(1, 8453n);
+ * ```
+ */
+export class ChainIdMismatchError extends Error {
+  /** Chain id reported by the viem client, when configured. */
+  public readonly clientChainId: number | undefined;
+
+  /** Chain id required by the data being signed. */
+  public readonly expectedChainId: bigint;
+
+  public constructor(
+    clientChainId: number | undefined,
+    expectedChainId: bigint,
+  ) {
+    super(
+      `Client chain id "${clientChainId}" does not match expected chain id "${expectedChainId}". Switch the viem client to the offer market chain before signing.`,
+    );
+    this.name = "ChainIdMismatchError";
+    this.clientChainId = clientChainId;
+    this.expectedChainId = expectedChainId;
+  }
+}
+
+/**
  * Thrown when the Midnight API rejects a tree during mempool policy validation.
  *
  * @example
