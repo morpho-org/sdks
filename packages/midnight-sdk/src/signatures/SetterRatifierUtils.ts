@@ -5,7 +5,7 @@ import {
   type Hash,
   type Hex,
 } from "viem";
-import type { Item as PayloadItem } from "./Payload.js";
+import type { Payload } from "./Payload.js";
 import { RatifierUtils } from "./RatifierUtils.js";
 import {
   type RatifierTreeInput,
@@ -294,13 +294,13 @@ export namespace SetterRatifierUtils {
    */
   export function ratify(params: {
     readonly tree: RatifierTreeInput;
-  }): readonly PayloadItem[] {
+  }): readonly Payload.Item[] {
     const { tree } = RatifierUtils.normalizeRatifierTree({
       tree: params.tree,
       label: "Setter",
     });
 
-    const items: PayloadItem[] = [];
+    const items: Payload.Item[] = [];
 
     for (const offer of tree.offers) {
       items.push({

@@ -16,9 +16,9 @@ import {
   baseOffer,
   group,
 } from "../__test__/fixtures.js";
+import { PayloadDecodeError } from "../errors.js";
 import { type IOffer, type OfferStruct, OfferUtils } from "../offers/index.js";
-import * as Payload from "./Payload.js";
-import { MAX_ATTRIBUTION_SUFFIX_BYTES } from "./Payload.js";
+import { Payload } from "./Payload.js";
 
 const API_VALID_MATURITY = 1_767_279_600n;
 const liquidationCursor = 250000000000000000n;
@@ -128,10 +128,8 @@ describe("Payload.encode", () => {
     expect(decoded[0]!.ratifierData).toBe("0x1234");
   });
 
-  test("error: DecodeError", async () => {
-    await expect(Payload.encode([])).rejects.toBeInstanceOf(
-      Payload.DecodeError,
-    );
+  test("error: PayloadDecodeError", async () => {
+    await expect(Payload.encode([])).rejects.toBeInstanceOf(PayloadDecodeError);
   });
 
   test("behavior: does not enforce router item-count policy", async () => {
@@ -172,7 +170,7 @@ describe("Payload.encode", () => {
           ratifierData: "0x1234" as Hex,
         },
       ]),
-    ).rejects.toBeInstanceOf(Payload.DecodeError);
+    ).rejects.toBeInstanceOf(PayloadDecodeError);
   });
 
   test("error: invalid offer time range", async () => {
@@ -186,7 +184,7 @@ describe("Payload.encode", () => {
           ratifierData: "0x1234" as Hex,
         },
       ]),
-    ).rejects.toBeInstanceOf(Payload.DecodeError);
+    ).rejects.toBeInstanceOf(PayloadDecodeError);
   });
 
   test("error: non-zero maker-seller receiver on buy offer", async () => {
@@ -200,7 +198,7 @@ describe("Payload.encode", () => {
           ratifierData: "0x1234" as Hex,
         },
       ]),
-    ).rejects.toBeInstanceOf(Payload.DecodeError);
+    ).rejects.toBeInstanceOf(PayloadDecodeError);
   });
 
   test("error: zero offer caps", async () => {
@@ -211,7 +209,7 @@ describe("Payload.encode", () => {
           ratifierData: "0x1234" as Hex,
         },
       ]),
-    ).rejects.toBeInstanceOf(Payload.DecodeError);
+    ).rejects.toBeInstanceOf(PayloadDecodeError);
   });
 });
 
@@ -227,9 +225,9 @@ describe("Payload.decode", () => {
     expect(decoded[0]!.ratifierData).toBe("0x1234");
   });
 
-  test("error: DecodeError", async () => {
+  test("error: PayloadDecodeError", async () => {
     await expect(Payload.decode("0x1234")).rejects.toBeInstanceOf(
-      Payload.DecodeError,
+      PayloadDecodeError,
     );
   });
 
@@ -241,7 +239,7 @@ describe("Payload.decode", () => {
     bytes[0] = Payload.CURRENT_VERSION + 1;
 
     await expect(Payload.decode(bytesToHex(bytes))).rejects.toBeInstanceOf(
-      Payload.DecodeError,
+      PayloadDecodeError,
     );
   });
 
@@ -255,7 +253,7 @@ describe("Payload.decode", () => {
     view.setUint32(1, compressedLength + 1);
 
     await expect(Payload.decode(bytesToHex(bytes))).rejects.toBeInstanceOf(
-      Payload.DecodeError,
+      PayloadDecodeError,
     );
   });
 
@@ -264,19 +262,19 @@ describe("Payload.decode", () => {
       { offer: apiValidOffer({ group }), ratifierData: "0x1234" as Hex },
     ]);
     const suffix = bytesToHex(
-      new Uint8Array(MAX_ATTRIBUTION_SUFFIX_BYTES + 1).fill(255),
+      new Uint8Array(Payload.MAX_ATTRIBUTION_SUFFIX_BYTES + 1).fill(255),
     );
 
     await expect(
       Payload.decode(concat([encoded, suffix])),
-    ).rejects.toBeInstanceOf(Payload.DecodeError);
+    ).rejects.toBeInstanceOf(PayloadDecodeError);
   });
 
   test("error: payload hex length cap", async () => {
     const payload = `0x${"zz".repeat(Payload.MAX_PAYLOAD_BYTES + 1)}` as Hex;
 
     await expect(Payload.decode(payload)).rejects.toBeInstanceOf(
-      Payload.DecodeError,
+      PayloadDecodeError,
     );
   });
 
@@ -288,12 +286,12 @@ describe("Payload.decode", () => {
 
     await expect(
       Payload.decode(encoded, { maxItems: 1 }),
-    ).rejects.toBeInstanceOf(Payload.DecodeError);
+    ).rejects.toBeInstanceOf(PayloadDecodeError);
   });
 
   test("error: invalid maxItems option", async () => {
     await expect(Payload.decode("0x" as Hex, { maxItems: 0 })).rejects.toThrow(
-      Payload.DecodeError,
+      PayloadDecodeError,
     );
   });
 
@@ -308,7 +306,7 @@ describe("Payload.decode", () => {
     );
 
     await expect(Payload.decode(encoded)).rejects.toBeInstanceOf(
-      Payload.DecodeError,
+      PayloadDecodeError,
     );
   });
 
@@ -324,7 +322,7 @@ describe("Payload.decode", () => {
     );
 
     await expect(Payload.decode(encoded)).rejects.toBeInstanceOf(
-      Payload.DecodeError,
+      PayloadDecodeError,
     );
   });
 
@@ -335,7 +333,7 @@ describe("Payload.decode", () => {
     });
 
     await expect(Payload.decode(encoded)).rejects.toBeInstanceOf(
-      Payload.DecodeError,
+      PayloadDecodeError,
     );
   });
 
@@ -350,7 +348,7 @@ describe("Payload.decode", () => {
     );
 
     await expect(Payload.decode(encoded)).rejects.toBeInstanceOf(
-      Payload.DecodeError,
+      PayloadDecodeError,
     );
   });
 
@@ -370,7 +368,7 @@ describe("Payload.decode", () => {
     });
 
     await expect(Payload.decode(encoded)).rejects.toBeInstanceOf(
-      Payload.DecodeError,
+      PayloadDecodeError,
     );
   });
 
@@ -410,7 +408,7 @@ describe("Payload.decode", () => {
     });
 
     await expect(Payload.decode(encoded)).rejects.toBeInstanceOf(
-      Payload.DecodeError,
+      PayloadDecodeError,
     );
   });
 
@@ -431,7 +429,7 @@ describe("Payload.decode", () => {
     });
 
     await expect(Payload.decode(encoded)).rejects.toBeInstanceOf(
-      Payload.DecodeError,
+      PayloadDecodeError,
     );
   });
 
@@ -451,7 +449,7 @@ describe("Payload.decode", () => {
     });
 
     await expect(Payload.decode(encoded)).rejects.toBeInstanceOf(
-      Payload.DecodeError,
+      PayloadDecodeError,
     );
   });
 });

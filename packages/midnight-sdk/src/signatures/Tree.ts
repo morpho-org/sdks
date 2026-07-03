@@ -206,7 +206,7 @@ export class Tree {
    * @param params.request - Optional fetch options forwarded to the API request.
    * @param params.ratification - Optional ratification inputs used to validate final payload bytes with real ratifier data.
    * @returns Successful API validation result with `valid: true`.
-   * @throws {Payload.DecodeError} when validation payload encoding fails.
+   * @throws {PayloadDecodeError} when validation payload encoding fails.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
    * @throws {MidnightMempoolValidationError} when the API returns validation issues.

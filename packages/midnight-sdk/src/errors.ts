@@ -229,6 +229,27 @@ export class InvalidOfferParameterError extends Error {
 }
 
 /**
+ * Thrown when Midnight mempool payload bytes cannot be encoded or decoded.
+ *
+ * @example
+ * ```ts
+ * import { PayloadDecodeError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new PayloadDecodeError("payload too short for header");
+ * ```
+ */
+export class PayloadDecodeError extends Error {
+  /** Machine-readable decode failure reason without the class message prefix. */
+  public readonly reason: string;
+
+  public constructor(reason: string, cause?: Error) {
+    super(`Failed to decode payload: ${reason}`, cause ? { cause } : undefined);
+    this.name = "PayloadDecodeError";
+    this.reason = reason;
+  }
+}
+
+/**
  * Thrown when a tree height exceeds the ratifier typehash table.
  *
  * @example

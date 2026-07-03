@@ -1,4 +1,4 @@
-import { encode as encodePayload } from "../signatures/Payload.js";
+import { Payload } from "../signatures/Payload.js";
 import {
   buildBookPath,
   mapBookMarket,
@@ -492,7 +492,7 @@ export class MidnightApi {
    * @param params.fetch - Optional fetch implementation override.
    * @param params.request - Optional fetch options forwarded to this request.
    * @returns API issues and `valid` summary.
-   * @throws {Payload.DecodeError} when item encoding fails.
+   * @throws {PayloadDecodeError} when item encoding fails.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
    * @example
@@ -538,7 +538,7 @@ export class MidnightApi {
     params: ValidateMempoolItemsParams,
   ): Promise<MempoolPayloadValidationResult> {
     const input = params;
-    const payload = await encodePayload(input.items);
+    const payload = await Payload.encode(input.items);
 
     return MidnightApi.validateMempoolPayload({
       baseUrl: input.baseUrl,
@@ -794,7 +794,7 @@ export class MidnightApi {
    * @param params.items - SDK-native payload items to encode before API validation.
    * @param params.timestamp - Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot.
    * @returns API validation result.
-   * @throws {Payload.DecodeError} when item encoding fails.
+   * @throws {PayloadDecodeError} when item encoding fails.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
    * @example

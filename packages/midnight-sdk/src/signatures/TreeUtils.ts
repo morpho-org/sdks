@@ -36,10 +36,7 @@ import {
   EMPTY_OFFER_STRUCT,
   isEmptyOfferStruct,
 } from "./offerStructInternal.js";
-import {
-  encode as encodePayload,
-  type Item as PayloadItem,
-} from "./Payload.js";
+import { Payload } from "./Payload.js";
 import { SetterRatifierUtils } from "./SetterRatifierUtils.js";
 import type { Tree } from "./Tree.js";
 
@@ -509,7 +506,7 @@ export namespace TreeUtils {
    * @returns Successful API validation result with `valid: true`.
    * @throws {InvalidTreeError} when the tree is empty, all padding, or duplicated.
    * @throws {InvalidTreeHeightError} when the resulting height is unsupported.
-   * @throws {Payload.DecodeError} when validation payload encoding fails.
+   * @throws {PayloadDecodeError} when validation payload encoding fails.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
    * @throws {MidnightMempoolValidationError} when the API returns validation issues.
@@ -558,7 +555,7 @@ export namespace TreeUtils {
       readonly ratification?: TreeMempoolValidateRatification;
     },
   ): Promise<MempoolPayloadValidationSuccess> {
-    let items: readonly PayloadItem[];
+    let items: readonly Payload.Item[];
     if (params.ratification == null) {
       const offers =
         "paddedOffers" in params.tree
@@ -594,7 +591,7 @@ export namespace TreeUtils {
       items = SetterRatifierUtils.ratify({ tree: params.tree });
     }
 
-    const payload = await encodePayload(items);
+    const payload = await Payload.encode(items);
 
     const validation = await MidnightApi.validateMempoolPayload({
       baseUrl: params.apiUrl,

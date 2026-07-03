@@ -22,7 +22,7 @@ import {
   InvalidTypedDataSignatureError,
 } from "../errors.js";
 import type { OfferStruct } from "../offers/index.js";
-import type { Item as PayloadItem } from "./Payload.js";
+import type { Payload } from "./Payload.js";
 import { RatifierUtils } from "./RatifierUtils.js";
 import {
   type RatifierTreeInput,
@@ -946,7 +946,7 @@ export namespace EcrecoverRatifierUtils {
    */
   export async function ratify(
     params: EcrecoverRatifierRatifyParams,
-  ): Promise<readonly PayloadItem[]> {
+  ): Promise<readonly Payload.Item[]> {
     const { tree } = RatifierUtils.normalizeRatifierTree({
       tree: params.tree,
       label: "Ecrecover",
@@ -963,7 +963,7 @@ export namespace EcrecoverRatifierUtils {
         }),
       );
     }
-    const items: PayloadItem[] = [];
+    const items: Payload.Item[] = [];
 
     for (const offer of tree.offers) {
       items.push({

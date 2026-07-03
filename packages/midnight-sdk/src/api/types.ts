@@ -2,7 +2,7 @@ import type { BigIntish } from "@morpho-org/morpho-ts";
 import type { Address, Hash, Hex } from "viem";
 
 import type { OfferStruct } from "../offers/Offer.js";
-import type { Item as MidnightPayloadItem } from "../signatures/Payload.js";
+import type { Payload } from "../signatures/Payload.js";
 
 /**
  * Fetch implementation used by Midnight API helpers.
@@ -86,7 +86,7 @@ export interface ValidateMempoolItemsParams extends MidnightApiConfig {
   /** Chain id whose API policy should validate the payload. */
   readonly chainId: number;
   /** SDK-native payload items to encode before API validation. */
-  readonly items: readonly MidnightPayloadItem[];
+  readonly items: readonly Payload.Item[];
   /** Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot. */
   readonly timestamp?: string | Date;
 }

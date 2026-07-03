@@ -17,7 +17,7 @@ import { type IOffer, Offer, type OfferStruct } from "../offers/index.js";
 import { EcrecoverRatifierUtils } from "./EcrecoverRatifierUtils.js";
 import { Group } from "./Group.js";
 import { GroupUtils } from "./GroupUtils.js";
-import * as Payload from "./Payload.js";
+import { Payload } from "./Payload.js";
 import { SetterRatifierUtils } from "./SetterRatifierUtils.js";
 import { Tree } from "./Tree.js";
 import { TreeUtils } from "./TreeUtils.js";
