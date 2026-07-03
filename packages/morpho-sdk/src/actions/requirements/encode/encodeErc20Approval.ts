@@ -17,18 +17,19 @@ interface EncodeErc20ApprovalParams {
 }
 
 /**
- * Encodes a deep-frozen ERC-20 approval transaction for GeneralAdapter1 or Permit2.
+ * Encodes a deep-frozen ERC-20 approval transaction for a supported SDK spender.
  *
  * Caps `amount` at the per-chain, per-token maximum from `MAX_TOKEN_APPROVALS` (defaults to
  * `maxUint256`). Used by {@link getRequirementsApproval} and {@link getGeneralAdapterRequirementsPermit2}.
  *
  * @param params - Encoding parameters.
  * @param params.token - ERC-20 token address to approve.
- * @param params.spender - Address granted the allowance. Must be GeneralAdapter1 or Permit2.
+ * @param params.spender - Address granted the allowance. Must be GeneralAdapter1, Permit2,
+ *   Midnight, or MidnightBundles for the chain.
  * @param params.amount - Allowance amount before per-token cap.
  * @param params.chainId - The chain the transaction targets (used to resolve supported spenders and the per-token cap).
  * @returns A deep-frozen `Transaction<ERC20ApprovalAction>` with the capped approval amount.
- * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not GeneralAdapter1 or Permit2 for `chainId`.
+ * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not a supported SDK spender for `chainId`.
  * @example
  * ```ts
  * import { encodeErc20Approval } from "@morpho-org/morpho-sdk";
@@ -48,18 +49,29 @@ export const encodeErc20Approval = (
   const { token, spender, amount, chainId } = params;
   const {
     permit2,
+    midnight,
+    midnightBundles,
     bundler3: { generalAdapter1 },
   } = getChainAddresses(chainId);
+  const supportedSpenders = [
+    generalAdapter1,
+    permit2,
+    midnight,
+    midnightBundles,
+  ];
 
   if (
-    !isAddressEqual(spender, generalAdapter1) &&
-    (permit2 == null || !isAddressEqual(spender, permit2))
+    !supportedSpenders.some(
+      (supported) => supported != null && isAddressEqual(spender, supported),
+    )
   ) {
     throw new UnsupportedErc20ApprovalSpenderError({
       spender,
       chainId,
       generalAdapter1,
       permit2,
+      midnight,
+      midnightBundles,
     });
   }
 
