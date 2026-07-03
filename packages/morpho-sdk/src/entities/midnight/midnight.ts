@@ -900,6 +900,7 @@ export class MorphoMidnight implements MidnightActions {
 
           const items = await EcrecoverRatifierUtils.ratify({
             tree: data.tree,
+            account: userAddress,
             signature,
           });
           const payload = await Payload.encode(items);
