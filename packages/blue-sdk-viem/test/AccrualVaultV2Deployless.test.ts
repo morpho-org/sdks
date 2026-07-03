@@ -1,5 +1,6 @@
 import {
   type AccrualVaultV2,
+  AccrualVaultV2MorphoVaultV1Adapter,
   addressesRegistry,
   type IAccrualVaultV2Adapter,
   MarketParams,
@@ -74,10 +75,29 @@ function expectSameOutcome<T>(actualFn: () => T, expectedFn: () => T) {
 }
 
 /**
+ * Extracts the nested MetaMorpho V1 fields the deployless query now reads at parity with the
+ * multicall path — the vault's EIP-5267 domain and PublicAllocator config (vault-level and
+ * per-market) — so they can be compared directly. Returns `undefined` for non-`MorphoVaultV1`
+ * adapters, which have no nested vault.
+ */
+function vaultV1PublicFields(adapter: IAccrualVaultV2Adapter | undefined) {
+  if (!(adapter instanceof AccrualVaultV2MorphoVaultV1Adapter))
+    return undefined;
+  const vault = adapter.accrualVaultV1;
+  return {
+    eip5267Domain: vault.eip5267Domain,
+    publicAllocatorConfig: vault.publicAllocatorConfig,
+    marketPublicAllocatorConfigs: [...vault.allocations.values()].map(
+      ({ config }) => config.publicAllocatorConfig,
+    ),
+  };
+}
+
+/**
  * Asserts the deployless one-call reader is behaviourally identical to the multicall
- * (`deployless: false`) reader. Deep object equality is avoided because the deployless nested
- * MetaMorpho V1 vault intentionally omits `eip5267Domain` and `publicAllocatorConfig` (which the
- * multicall path does read); every accounting and capacity output is compared instead.
+ * (`deployless: false`) reader. The nested MetaMorpho V1 vault's `eip5267Domain` and
+ * `publicAllocatorConfig` (vault-level and per-market) are read in the same single call, so they
+ * are compared for exact parity alongside every accounting and capacity output.
  */
 function expectEquivalent(actual: AccrualVaultV2, expected: AccrualVaultV2) {
   expect(actual.address).toBe(expected.address);
@@ -107,7 +127,14 @@ function expectEquivalent(actual: AccrualVaultV2, expected: AccrualVaultV2) {
     expect(adapter.realAssets(ACCRUAL_TIMESTAMP)).toBe(
       expected.accrualAdapters[i]?.realAssets(ACCRUAL_TIMESTAMP),
     );
+    expect(vaultV1PublicFields(adapter)).toStrictEqual(
+      vaultV1PublicFields(expected.accrualAdapters[i]),
+    );
   });
+
+  expect(vaultV1PublicFields(actual.accrualLiquidityAdapter)).toStrictEqual(
+    vaultV1PublicFields(expected.accrualLiquidityAdapter),
+  );
 
   expect(
     actual.accrualLiquidityAdapter &&

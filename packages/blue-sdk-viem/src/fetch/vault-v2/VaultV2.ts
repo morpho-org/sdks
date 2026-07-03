@@ -5,6 +5,7 @@ import {
   AccrualVaultV2MorphoMarketV1Adapter,
   AccrualVaultV2MorphoMarketV1AdapterV2,
   AccrualVaultV2MorphoVaultV1Adapter,
+  Eip5267Domain,
   getChainAddresses,
   type IAccrualVaultV2Adapter,
   type IVaultV2Allocation,
@@ -17,6 +18,7 @@ import {
   UnsupportedVaultV2AdapterError,
   Vault,
   VaultMarketConfig,
+  VaultMarketPublicAllocatorConfig,
   VaultV2,
   VaultV2MorphoMarketV1Adapter,
   VaultV2MorphoMarketV1AdapterV2,
@@ -522,9 +524,11 @@ function toMarket(
 }
 
 /** @internal Rebuilds one accrued adapter from a deployless `GetAccrualVaultV2` adapter response. */
+// biome-ignore lint/complexity/useMaxParams: internal decoder threading chain-resolved addresses
 function toAccrualAdapter(
   adapter: AdapterQueryResponse,
   adaptiveCurveIrm: Address,
+  publicAllocator: Address | undefined,
 ): IAccrualVaultV2Adapter {
   const base = {
     address: adapter.adapter,
@@ -542,6 +546,7 @@ function toAccrualAdapter(
         symbol: vaultV1.config.symbol,
         name: vaultV1.config.name,
         decimalsOffset: vaultV1.config.decimalsOffset,
+        eip5267Domain: new Eip5267Domain(vaultV1.config.eip5267Domain),
         owner: vaultV1.owner,
         curator: vaultV1.curator,
         guardian: vaultV1.guardian,
@@ -565,6 +570,16 @@ function toAccrualAdapter(
         totalAssets: 0n,
         lastTotalAssets: vaultV1.lastTotalAssets,
         lostAssets: vaultV1.hasLostAssets ? vaultV1.lostAssets : undefined,
+        // Populated only when the vault set the chain's PublicAllocator as an allocator, matching
+        // `fetchVault`'s multicall gate (`undefined` otherwise, not a zeroed config).
+        publicAllocatorConfig:
+          publicAllocator != null && vaultV1.hasPublicAllocator
+            ? {
+                admin: vaultV1.publicAllocatorConfig.admin,
+                fee: vaultV1.publicAllocatorConfig.fee,
+                accruedFee: vaultV1.publicAllocatorConfig.accruedFee,
+              }
+            : undefined,
       });
 
       const allocations = adapter.vaultV1Allocations.map((allocation, i) => {
@@ -582,6 +597,17 @@ function toAccrualAdapter(
             },
             removableAt: allocation.removableAt,
             enabled: allocation.enabled,
+            // Per-market flow caps are only read when a PublicAllocator is configured for the
+            // chain; otherwise the query leaves them zeroed and the field stays `undefined`.
+            publicAllocatorConfig:
+              publicAllocator != null
+                ? new VaultMarketPublicAllocatorConfig({
+                    vault: morphoVaultV1,
+                    marketId,
+                    maxIn: allocation.flowCapMaxIn,
+                    maxOut: allocation.flowCapMaxOut,
+                  })
+                : undefined,
           }),
           position: new AccrualPosition(
             new Position({
@@ -668,11 +694,10 @@ function toAccrualAdapter(
  * read fails (equivalent to `deployless: "force"`), and requires every configured adapter factory to
  * be deployed at the queried block.
  *
- * The returned `AccrualVaultV2` is behaviorally identical to `fetchAccrualVaultV2`'s output. The
- * nested MetaMorpho V1 vault of a `MorphoVaultV1Adapter` omits two capacity-irrelevant optional
- * fields for query-size reasons: its EIP-5267 domain (`eip5267Domain`) and PublicAllocator config
- * (both vault-level and per-market `publicAllocatorConfig`). All accounting and capacity outputs
- * (`maxDeposit`, `maxWithdraw`, `accrueInterest`, per-adapter `realAssets`) match exactly.
+ * The returned `AccrualVaultV2` is byte-for-byte identical to `fetchAccrualVaultV2`'s output,
+ * including the nested MetaMorpho V1 vault of a `MorphoVaultV1Adapter`: its EIP-5267 domain
+ * (`eip5267Domain`) and PublicAllocator config (both vault-level and per-market
+ * `publicAllocatorConfig`) are read in the same single call, so no field is dropped.
  *
  * @param address - Address of the VaultV2 to fetch.
  * @param client - Viem client used for the deployless read.
@@ -718,6 +743,7 @@ export async function fetchAccrualVaultV2Deployless(
     morphoVaultV1AdapterFactory,
     morphoMarketV1AdapterFactory,
     morphoMarketV1AdapterV2Factory,
+    publicAllocator,
   } = getChainAddresses(parameters.chainId);
 
   if (!vaultV2Factory) {
@@ -739,6 +765,7 @@ export async function fetchAccrualVaultV2Deployless(
         morphoMarketV1AdapterV2Factory ?? zeroAddress,
         morpho,
         adaptiveCurveIrm,
+        publicAllocator ?? zeroAddress,
       ],
     });
   } catch (error) {
@@ -774,11 +801,15 @@ export async function fetchAccrualVaultV2Deployless(
   });
 
   const accrualLiquidityAdapter = response.hasLiquidityAdapter
-    ? toAccrualAdapter(response.liquidityAdapterInfo, adaptiveCurveIrm)
+    ? toAccrualAdapter(
+        response.liquidityAdapterInfo,
+        adaptiveCurveIrm,
+        publicAllocator,
+      )
     : undefined;
 
   const accrualAdapters = response.adapters.map((adapter) =>
-    toAccrualAdapter(adapter, adaptiveCurveIrm),
+    toAccrualAdapter(adapter, adaptiveCurveIrm, publicAllocator),
   );
 
   const forceDeallocatePenalties = Object.fromEntries(

@@ -1601,6 +1601,7 @@ const emptyVaultV1QueryResult = {
     name: "MetaMorpho Mock",
     decimals: 18n,
     decimalsOffset: 12n,
+    eip5267Domain: DOMAIN,
   },
   owner: RECIPIENT,
   curator: RECIPIENT,
@@ -1618,6 +1619,8 @@ const emptyVaultV1QueryResult = {
   lostAssets: 0n,
   supplyQueue: [],
   withdrawQueue: [],
+  hasPublicAllocator: false,
+  publicAllocatorConfig: { admin: zeroAddress, fee: 0n, accruedFee: 0n },
 };
 
 function marketV1V2AdapterQueryResult(adapter: Address, supplyShares: bigint) {
