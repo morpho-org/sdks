@@ -1,7 +1,7 @@
 import type { Address, Client } from "viem";
 import { encodeErc20Permit } from "../encode/index.js";
 
-interface GeneralAdapterPermitAllowances {
+interface GeneralAdapterPermitErc20Allowances {
   readonly generalAdapter1: bigint;
 }
 
@@ -16,7 +16,7 @@ interface GeneralAdapterPermitAllowances {
  * @param params.token - ERC-20 token address (must support EIP-2612).
  * @param params.chainId - The chain the bundle targets.
  * @param params.args.amount - Required token amount.
- * @param params.allowances - Current ERC-20 allowances keyed by spender contract name.
+ * @param params.erc20Allowances - Current ERC-20 allowances keyed by spender contract name.
  * @param params.nonce - The user's current EIP-2612 nonce on `token`.
  * @param params.supportDeployless - Whether to fetch token metadata via deployless multicall.
  * @returns A single-element array containing the `Requirement` to sign, or an empty array when
@@ -32,7 +32,7 @@ interface GeneralAdapterPermitAllowances {
  *   token: USDC, // an ERC-2612-compatible token; DAI is excluded by getGeneralAdapterRequirements
  *   chainId: 1,
  *   args: { amount: 1_000_000n },
- *   allowances: { generalAdapter1: 0n },
+ *   erc20Allowances: { generalAdapter1: 0n },
  *   nonce: 0n,
  * });
  * // reqs satisfies Requirement[]
@@ -44,7 +44,7 @@ export const getGeneralAdapterRequirementsPermit = async (
     token: Address;
     chainId: number;
     args: { amount: bigint };
-    allowances: GeneralAdapterPermitAllowances;
+    erc20Allowances: GeneralAdapterPermitErc20Allowances;
     nonce: bigint;
     supportDeployless?: boolean;
   },
@@ -53,12 +53,12 @@ export const getGeneralAdapterRequirementsPermit = async (
     token,
     chainId,
     args: { amount },
-    allowances,
+    erc20Allowances,
     nonce,
     supportDeployless,
   } = params;
 
-  if (allowances.generalAdapter1 < amount) {
+  if (erc20Allowances.generalAdapter1 < amount) {
     return [
       await encodeErc20Permit(viemClient, {
         token,

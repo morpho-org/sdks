@@ -8,7 +8,7 @@ import type {
 import { encodeErc20Permit2Approve } from "../encode/encodeErc20Permit2Approve.js";
 import { getRequirementsApproval } from "../getRequirementsApproval.js";
 
-interface GeneralAdapterPermit2Allowances {
+interface GeneralAdapterPermit2Erc20Allowances {
   readonly generalAdapter1: bigint;
   readonly permit2: bigint;
 }
@@ -33,7 +33,7 @@ interface GeneralAdapterPermit2Allowance {
  * @param params.chainId - The chain the bundle targets.
  * @param params.permit2 - The Permit2 contract address for the chain.
  * @param params.args.amount - Required token amount.
- * @param params.allowances - Current ERC-20 allowances keyed by spender contract name.
+ * @param params.erc20Allowances - Current ERC-20 allowances keyed by spender contract name.
  * @param params.permit2Allowance - Permit2-managed allowance for `GeneralAdapter1`.
  * @returns Ordered list of approval transactions and/or `Requirement` objects to satisfy before
  *   bundling.
@@ -51,7 +51,7 @@ interface GeneralAdapterPermit2Allowance {
  *   chainId: 1,
  *   permit2,
  *   args: { amount: 1_000_000n },
- *   allowances: { generalAdapter1: 0n, permit2: 0n },
+ *   erc20Allowances: { generalAdapter1: 0n, permit2: 0n },
  *   permit2Allowance: { amount: 0n, expiration: 0n, nonce: 0n },
  * });
  * // requirements satisfies (Readonly<Transaction<ERC20ApprovalAction> | Bundler3TokenSignatureRequirement>)[]
@@ -62,7 +62,7 @@ export const getGeneralAdapterRequirementsPermit2 = (params: {
   chainId: number;
   permit2: Address;
   args: { amount: bigint };
-  allowances: GeneralAdapterPermit2Allowances;
+  erc20Allowances: GeneralAdapterPermit2Erc20Allowances;
   permit2Allowance: GeneralAdapterPermit2Allowance;
 }): Readonly<
   Transaction<ERC20ApprovalAction> | Bundler3TokenSignatureRequirement
@@ -72,11 +72,11 @@ export const getGeneralAdapterRequirementsPermit2 = (params: {
     chainId,
     permit2,
     args: { amount },
-    allowances,
+    erc20Allowances,
     permit2Allowance,
   } = params;
 
-  if (allowances.generalAdapter1 >= amount) {
+  if (erc20Allowances.generalAdapter1 >= amount) {
     return [];
   }
 
@@ -93,7 +93,7 @@ export const getGeneralAdapterRequirementsPermit2 = (params: {
       spendAmount: amount,
       spender: permit2,
     },
-    allowances: allowances.permit2,
+    allowances: erc20Allowances.permit2,
   });
 
   requirements.push(...approvalRequirements);

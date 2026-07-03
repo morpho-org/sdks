@@ -585,7 +585,7 @@ describe("getGeneralAdapterRequirements", () => {
           token: usdc,
           chainId: mainnet.id,
           args: { amount: mockAmount },
-          allowances: { generalAdapter1: mockAmount },
+          erc20Allowances: { generalAdapter1: mockAmount },
           nonce: 0n,
         }),
       ).resolves.toEqual([]);

@@ -138,7 +138,7 @@ export const getGeneralAdapterRequirements = async (
         token: address,
         chainId,
         args: { amount },
-        allowances: {
+        erc20Allowances: {
           generalAdapter1: erc20Allowances["bundler3.generalAdapter1"],
         },
         nonce: erc2612Nonce,
@@ -152,7 +152,7 @@ export const getGeneralAdapterRequirements = async (
         chainId,
         permit2,
         args: { amount },
-        allowances: {
+        erc20Allowances: {
           generalAdapter1: erc20Allowances["bundler3.generalAdapter1"],
           permit2: erc20Allowances.permit2,
         },
