@@ -62,13 +62,14 @@ export const encodeErc20Permit = async (
   params: EncodeErc20PermitParams,
 ): Promise<Requirement<PermitRequirementSignature>> => {
   const { token, amount, chainId, nonce, supportDeployless } = params;
-  const {
-    bundler3: { generalAdapter1 },
-  } = getChainAddresses(chainId);
 
   if (viemClient.chain?.id !== chainId) {
     throw new ChainIdMismatchError(viemClient.chain?.id, chainId);
   }
+
+  const {
+    bundler3: { generalAdapter1 },
+  } = getChainAddresses(chainId);
 
   const now = Time.timestamp();
   const deadline = now + Time.s.from.h(2n);
