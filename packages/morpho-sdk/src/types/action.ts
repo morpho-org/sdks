@@ -671,7 +671,10 @@ type RequirementResult<
   TSignatureOrAction extends RequirementSignature | SignatureRequirementAction,
   TArgs extends RequirementSignatureArgs | undefined,
 > = TSignatureOrAction extends SignatureRequirementAction
-  ? RequirementSignature<TSignatureOrAction, Extract<TArgs, RequirementSignatureArgs>>
+  ? RequirementSignature<
+      TSignatureOrAction,
+      Extract<TArgs, RequirementSignatureArgs>
+    >
   : Extract<TSignatureOrAction, RequirementSignature>;
 
 /**
