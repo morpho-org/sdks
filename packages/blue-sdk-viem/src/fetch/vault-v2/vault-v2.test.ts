@@ -1,6 +1,7 @@
 import {
+  AccrualVaultV2,
   type AccrualVaultV2MorphoMarketV1Adapter,
-  type AccrualVaultV2MorphoMarketV1AdapterV2,
+  AccrualVaultV2MorphoMarketV1AdapterV2,
   AccrualVaultV2MorphoVaultV1Adapter,
   addressesRegistry,
   type ChainAddresses,
@@ -47,11 +48,16 @@ import {
 } from "../../abis.js";
 import { abi as marketQueryAbi } from "../../queries/GetMarket.js";
 import { abi as vaultQueryAbi } from "../../queries/GetVault.js";
+import { abi as accrualVaultV2QueryAbi } from "../../queries/vault-v2/GetAccrualVaultV2.js";
 import { abi as vaultV2QueryAbi } from "../../queries/vault-v2/GetVaultV2.js";
 import { abi as marketAdapterQueryAbi } from "../../queries/vault-v2/GetVaultV2MorphoMarketV1Adapter.js";
 import { abi as marketAdapterV2QueryAbi } from "../../queries/vault-v2/GetVaultV2MorphoMarketV1AdapterV2.js";
 import { abi as vaultAdapterQueryAbi } from "../../queries/vault-v2/GetVaultV2MorphoVaultV1Adapter.js";
-import { fetchAccrualVaultV2, fetchVaultV2 } from "./VaultV2.js";
+import {
+  fetchAccrualVaultV2,
+  fetchAccrualVaultV2Deployless,
+  fetchVaultV2,
+} from "./VaultV2.js";
 import {
   fetchAccrualVaultV2Adapter,
   fetchVaultV2Adapter,
@@ -1579,5 +1585,163 @@ describe("fetchAccrualVaultV2", () => {
     expect(vault.accrualLiquidityAdapter?.address).toBe(ADAPTER);
     expect(vault.accrualAdapters[0]?.address).toBe(ADAPTER_2);
     expect(vault.forceDeallocatePenalties[ADAPTER_2]).toBe(12n);
+  });
+});
+
+const emptyVaultV1QueryResult = {
+  config: {
+    asset: ASSET,
+    symbol: "MM",
+    name: "MetaMorpho Mock",
+    decimals: 18n,
+    decimalsOffset: 12n,
+  },
+  owner: RECIPIENT,
+  curator: RECIPIENT,
+  guardian: RECIPIENT,
+  timelock: 0n,
+  pendingTimelock: { value: 0n, validAt: 0n },
+  pendingGuardian: { value: zeroAddress, validAt: 0n },
+  pendingOwner: zeroAddress,
+  fee: 0n,
+  feeRecipient: RECIPIENT,
+  skimRecipient: RECIPIENT,
+  totalSupply: 0n,
+  lastTotalAssets: 0n,
+  hasLostAssets: false,
+  lostAssets: 0n,
+  supplyQueue: [],
+  withdrawQueue: [],
+};
+
+function marketV1V2AdapterQueryResult(adapter: Address, supplyShares: bigint) {
+  return {
+    adapter,
+    adapterType: 3,
+    parentVault: VAULT,
+    skimRecipient: RECIPIENT,
+    forceDeallocatePenalty: 0n,
+    morphoVaultV1: zeroAddress,
+    vaultV1: emptyVaultV1QueryResult,
+    vaultV1Allocations: [],
+    vaultV1Shares: 0n,
+    marketV1Positions: [],
+    adaptiveCurveIrm: ADDRESSES.adaptiveCurveIrm,
+    marketV1V2Allocations: [
+      { marketId: ID, supplyShares, market: marketQueryResult },
+    ],
+  };
+}
+
+const accrualVaultV2Result = {
+  token: tokenResult,
+  asset: ASSET,
+  _totalAssets: 100n,
+  totalSupply: 200n,
+  virtualShares: 1n,
+  maxRate: 3n,
+  lastUpdate: 4n,
+  liquidityAdapter: ADAPTER,
+  liquidityData: "0x",
+  isLiquidityAdapterKnown: true,
+  liquidityAllocations: [
+    {
+      id: VaultV2MorphoMarketV1AdapterV2.adapterId(ADAPTER),
+      absoluteCap: 1_000n,
+      relativeCap: 1_000000000000000000n,
+      allocation: 100n,
+    },
+  ],
+  performanceFee: 5n,
+  managementFee: 6n,
+  performanceFeeRecipient: RECIPIENT,
+  managementFeeRecipient: RECIPIENT,
+  assetBalance: 777n,
+  hasLiquidityAdapter: true,
+  liquidityAdapterInfo: marketV1V2AdapterQueryResult(ADAPTER, 55n),
+  adapters: [
+    {
+      ...marketV1V2AdapterQueryResult(ADAPTER_2, 99n),
+      forceDeallocatePenalty: 12n,
+    },
+  ],
+};
+
+describe("fetchAccrualVaultV2Deployless", () => {
+  test("decodes the full accrual tree in a single deployless call", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessRead(
+      handle,
+      accrualVaultV2QueryAbi,
+      "query",
+      accrualVaultV2Result,
+    );
+
+    const vault = await fetchAccrualVaultV2Deployless(VAULT, handle.client, {
+      chainId: CHAIN_ID,
+    });
+
+    expect(vault).toBeInstanceOf(AccrualVaultV2);
+    expect(vault.address).toBe(VAULT);
+    expect(vault.assetBalance).toBe(777n);
+    expect(vault.liquidityAllocations?.[0]?.allocation).toBe(100n);
+
+    expect(vault.accrualLiquidityAdapter).toBeInstanceOf(
+      AccrualVaultV2MorphoMarketV1AdapterV2,
+    );
+    expect(vault.accrualLiquidityAdapter?.address).toBe(ADAPTER);
+
+    expect(vault.accrualAdapters).toHaveLength(1);
+    const [adapter] = vault.accrualAdapters;
+    expect(adapter).toBeInstanceOf(AccrualVaultV2MorphoMarketV1AdapterV2);
+    expect(adapter?.address).toBe(ADAPTER_2);
+    expect(vault.forceDeallocatePenalties[ADAPTER_2]).toBe(12n);
+
+    const marketAdapter = adapter as AccrualVaultV2MorphoMarketV1AdapterV2;
+    expect(marketAdapter.supplyShares[ID]).toBe(99n);
+    expect(marketAdapter.markets[0]?.id).toBe(ID);
+  });
+
+  test("does not fall back to multicall when the deployless read fails", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessReads(handle, ["0x"]);
+
+    await expect(
+      fetchAccrualVaultV2Deployless(VAULT, handle.client, {
+        chainId: CHAIN_ID,
+      }),
+    ).rejects.toThrow();
+  });
+
+  test("throws UnknownFactory when the chain has no Vault V2 factory", async () => {
+    const { client } = createMockClient(mainnet);
+
+    await expect(
+      fetchAccrualVaultV2Deployless(VAULT, client, {
+        chainId: ChainId.CeloMainnet,
+      }),
+    ).rejects.toBeInstanceOf(UnknownFactory);
+  });
+
+  test("maps unsupported adapter reverts to UnsupportedVaultV2AdapterError", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessReads(handle, [contractRevert("UnsupportedVaultV2Adapter")]);
+
+    await expect(
+      fetchAccrualVaultV2Deployless(VAULT, handle.client, {
+        chainId: CHAIN_ID,
+      }),
+    ).rejects.toBeInstanceOf(UnsupportedVaultV2AdapterError);
+  });
+
+  test("maps UnknownOfFactory reverts to a typed UnknownOfFactory error", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessReads(handle, [contractRevert("UnknownOfFactory")]);
+
+    await expect(
+      fetchAccrualVaultV2Deployless(VAULT, handle.client, {
+        chainId: CHAIN_ID,
+      }),
+    ).rejects.toBeInstanceOf(UnknownOfFactory);
   });
 });

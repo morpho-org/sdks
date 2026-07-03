@@ -1,18 +1,31 @@
 import {
+  AccrualPosition,
+  AccrualVault,
   AccrualVaultV2,
+  AccrualVaultV2MorphoMarketV1Adapter,
+  AccrualVaultV2MorphoMarketV1AdapterV2,
+  AccrualVaultV2MorphoVaultV1Adapter,
   getChainAddresses,
+  type IAccrualVaultV2Adapter,
   type IVaultV2Allocation,
+  Market,
+  type MarketId,
   MarketParams,
+  Position,
   UnknownFactory,
   UnknownOfFactory,
   UnsupportedVaultV2AdapterError,
+  Vault,
+  VaultMarketConfig,
   VaultV2,
+  VaultV2MorphoMarketV1Adapter,
   VaultV2MorphoMarketV1AdapterV2,
   VaultV2MorphoVaultV1Adapter,
 } from "@morpho-org/blue-sdk";
 import {
   type Address,
   type Client,
+  type ContractFunctionReturnType,
   erc20Abi,
   type Hash,
   zeroAddress,
@@ -28,6 +41,10 @@ import {
   getUnsupportedVaultV2Adapter,
   isUnknownOfFactoryError,
 } from "../../error.js";
+import {
+  abi as getAccrualVaultV2Abi,
+  code as getAccrualVaultV2Code,
+} from "../../queries/vault-v2/GetAccrualVaultV2.js";
 import { abi, code } from "../../queries/vault-v2/GetVaultV2.js";
 import type { DeploylessFetchParameters } from "../../types.js";
 import { fetchToken } from "../Token.js";
@@ -441,6 +458,318 @@ export async function fetchAccrualVaultV2(
     liquidityAdapter,
     adapters,
     assetBalance,
+    forceDeallocatePenalties,
+  );
+}
+
+/** @internal Decoded shape of the deployless `GetAccrualVaultV2.query` response. */
+type AccrualVaultV2QueryResponse = ContractFunctionReturnType<
+  typeof getAccrualVaultV2Abi,
+  "view",
+  "query"
+>;
+/** @internal One adapter entry of the deployless `GetAccrualVaultV2.query` response. */
+type AdapterQueryResponse = AccrualVaultV2QueryResponse["adapters"][number];
+/** @internal One market entry of the deployless `GetAccrualVaultV2.query` response. */
+type MarketQueryResponse =
+  AdapterQueryResponse["marketV1Positions"][number]["market"];
+
+/** @internal Mirrors the `AdapterType` enum encoded by `GetAccrualVaultV2.sol`. */
+const AdapterType = {
+  Unknown: 0,
+  MorphoVaultV1: 1,
+  MorphoMarketV1: 2,
+  MorphoMarketV1AdapterV2: 3,
+} as const;
+
+/** @internal Rebuilds a `Market` from a deployless `GetAccrualVaultV2` market response. */
+function toMarket(
+  response: MarketQueryResponse,
+  adaptiveCurveIrm: Address,
+): Market {
+  return new Market({
+    params: new MarketParams(response.marketParams),
+    ...response.market,
+    price: response.hasPrice ? response.price : undefined,
+    rateAtTarget:
+      response.marketParams.irm === adaptiveCurveIrm
+        ? response.rateAtTarget
+        : undefined,
+  });
+}
+
+/** @internal Rebuilds one accrued adapter from a deployless `GetAccrualVaultV2` adapter response. */
+function toAccrualAdapter(
+  adapter: AdapterQueryResponse,
+  adaptiveCurveIrm: Address,
+): IAccrualVaultV2Adapter {
+  const base = {
+    address: adapter.adapter,
+    parentVault: adapter.parentVault,
+    skimRecipient: adapter.skimRecipient,
+  };
+
+  switch (adapter.adapterType) {
+    case AdapterType.MorphoVaultV1: {
+      const { morphoVaultV1, vaultV1 } = adapter;
+
+      const vault = new Vault({
+        address: morphoVaultV1,
+        asset: vaultV1.config.asset,
+        symbol: vaultV1.config.symbol,
+        name: vaultV1.config.name,
+        decimalsOffset: vaultV1.config.decimalsOffset,
+        owner: vaultV1.owner,
+        curator: vaultV1.curator,
+        guardian: vaultV1.guardian,
+        feeRecipient: vaultV1.feeRecipient,
+        skimRecipient: vaultV1.skimRecipient,
+        timelock: vaultV1.timelock,
+        fee: vaultV1.fee,
+        pendingOwner: vaultV1.pendingOwner,
+        pendingGuardian: {
+          value: vaultV1.pendingGuardian.value,
+          validAt: vaultV1.pendingGuardian.validAt,
+        },
+        pendingTimelock: {
+          value: vaultV1.pendingTimelock.value,
+          validAt: vaultV1.pendingTimelock.validAt,
+        },
+        supplyQueue: [...vaultV1.supplyQueue] as MarketId[],
+        withdrawQueue: [...vaultV1.withdrawQueue] as MarketId[],
+        totalSupply: vaultV1.totalSupply,
+        // Overridden by `AccrualVault` with the sum of allocations' supply assets.
+        totalAssets: 0n,
+        lastTotalAssets: vaultV1.lastTotalAssets,
+        lostAssets: vaultV1.hasLostAssets ? vaultV1.lostAssets : undefined,
+      });
+
+      const allocations = adapter.vaultV1Allocations.map((allocation, i) => {
+        const marketId = vaultV1.withdrawQueue[i] as MarketId;
+        const market = toMarket(allocation.market, adaptiveCurveIrm);
+
+        return {
+          config: new VaultMarketConfig({
+            vault: morphoVaultV1,
+            marketId,
+            cap: allocation.cap,
+            pendingCap: {
+              value: allocation.pendingCap.value,
+              validAt: allocation.pendingCap.validAt,
+            },
+            removableAt: allocation.removableAt,
+            enabled: allocation.enabled,
+          }),
+          position: new AccrualPosition(
+            new Position({
+              user: morphoVaultV1,
+              marketId,
+              supplyShares: allocation.position.supplyShares,
+              borrowShares: allocation.position.borrowShares,
+              collateral: allocation.position.collateral,
+            }),
+            market,
+          ),
+        };
+      });
+
+      return new AccrualVaultV2MorphoVaultV1Adapter(
+        new VaultV2MorphoVaultV1Adapter({ ...base, morphoVaultV1 }),
+        new AccrualVault(vault, allocations),
+        adapter.vaultV1Shares,
+      );
+    }
+
+    case AdapterType.MorphoMarketV1: {
+      const positions = adapter.marketV1Positions.map((entry) => {
+        const market = toMarket(entry.market, adaptiveCurveIrm);
+
+        return new AccrualPosition(
+          new Position({
+            user: adapter.adapter,
+            marketId: market.id,
+            supplyShares: entry.position.supplyShares,
+            borrowShares: entry.position.borrowShares,
+            collateral: entry.position.collateral,
+          }),
+          market,
+        );
+      });
+
+      return new AccrualVaultV2MorphoMarketV1Adapter(
+        new VaultV2MorphoMarketV1Adapter({
+          ...base,
+          marketParamsList: adapter.marketV1Positions.map(
+            (entry) => new MarketParams(entry.market.marketParams),
+          ),
+        }),
+        positions,
+      );
+    }
+
+    case AdapterType.MorphoMarketV1AdapterV2: {
+      const markets = adapter.marketV1V2Allocations.map((entry) =>
+        toMarket(entry.market, adaptiveCurveIrm),
+      );
+
+      return new AccrualVaultV2MorphoMarketV1AdapterV2(
+        new VaultV2MorphoMarketV1AdapterV2({
+          ...base,
+          adaptiveCurveIrm: adapter.adaptiveCurveIrm,
+          marketIds: adapter.marketV1V2Allocations.map(
+            (entry) => entry.marketId as MarketId,
+          ),
+          supplyShares: Object.fromEntries(
+            adapter.marketV1V2Allocations.map((entry) => [
+              entry.marketId,
+              entry.supplyShares,
+            ]),
+          ),
+        }),
+        markets,
+      );
+    }
+
+    default:
+      throw new UnsupportedVaultV2AdapterError(adapter.adapter);
+  }
+}
+
+/**
+ * Fetches the full VaultV2 accrual tree in a single deployless call.
+ *
+ * Unlike {@link fetchAccrualVaultV2}, which chains sequential reads (vault, then each adapter, then
+ * each adapter's markets or wrapped MetaMorpho V1 vault), this reader traverses the entire tree
+ * on-chain through the deployless `GetAccrualVaultV2` query and returns the hydrated entity from one
+ * `eth_call`. It is deployless-only: there is no multicall fallback, so it throws if the deployless
+ * read fails (equivalent to `deployless: "force"`), and requires every configured adapter factory to
+ * be deployed at the queried block.
+ *
+ * The returned `AccrualVaultV2` is behaviorally identical to `fetchAccrualVaultV2`'s output. The
+ * nested MetaMorpho V1 vault of a `MorphoVaultV1Adapter` omits two capacity-irrelevant optional
+ * fields for query-size reasons: its EIP-5267 domain (`eip5267Domain`) and PublicAllocator config
+ * (both vault-level and per-market `publicAllocatorConfig`). All accounting and capacity outputs
+ * (`maxDeposit`, `maxWithdraw`, `accrueInterest`, per-adapter `realAssets`) match exactly.
+ *
+ * @param address - Address of the VaultV2 to fetch.
+ * @param client - Viem client used for the deployless read.
+ * @param parameters.account - Optional account passed to the viem call.
+ * @param parameters.blockNumber - Optional block number for a historical read.
+ * @param parameters.blockTag - Optional block tag for a historical read.
+ * @param parameters.stateOverride - Optional viem state override.
+ * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
+ * @returns The hydrated `AccrualVaultV2` entity with asset balance, accrued liquidity and regular
+ *   adapters, and force-deallocate penalties.
+ * @throws {UnknownFactory} when the configured chain has no VaultV2 factory.
+ * @throws {UnknownOfFactory} when `address` is not a VaultV2 from the configured factory.
+ * @throws {UnsupportedVaultV2AdapterError} when the vault or one of its adapters uses an unsupported
+ *   adapter class.
+ * @example
+ * ```ts
+ * import type { AccrualVaultV2 } from "@morpho-org/blue-sdk";
+ * import { fetchAccrualVaultV2Deployless } from "@morpho-org/blue-sdk-viem";
+ * import { createPublicClient, http } from "viem";
+ * import { base } from "viem/chains";
+ *
+ * const client = createPublicClient({ chain: base, transport: http() });
+ * const vaultV2Address = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+ *
+ * const vault: AccrualVaultV2 = await fetchAccrualVaultV2Deployless(
+ *   vaultV2Address,
+ *   client,
+ * );
+ * ```
+ */
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
+export async function fetchAccrualVaultV2Deployless(
+  address: Address,
+  client: Client,
+  parameters: DeploylessFetchParameters = {},
+) {
+  parameters.chainId ??= await getChainId(client);
+
+  const {
+    morpho,
+    adaptiveCurveIrm,
+    vaultV2Factory,
+    morphoVaultV1AdapterFactory,
+    morphoMarketV1AdapterFactory,
+    morphoMarketV1AdapterV2Factory,
+  } = getChainAddresses(parameters.chainId);
+
+  if (!vaultV2Factory) {
+    throw new UnknownFactory();
+  }
+
+  let response: AccrualVaultV2QueryResponse;
+  try {
+    response = await readContract(client, {
+      ...parameters,
+      abi: getAccrualVaultV2Abi,
+      code: getAccrualVaultV2Code,
+      functionName: "query",
+      args: [
+        address,
+        vaultV2Factory,
+        morphoVaultV1AdapterFactory ?? zeroAddress,
+        morphoMarketV1AdapterFactory ?? zeroAddress,
+        morphoMarketV1AdapterV2Factory ?? zeroAddress,
+        morpho,
+        adaptiveCurveIrm,
+      ],
+    });
+  } catch (error) {
+    const unsupportedAdapter = getUnsupportedVaultV2Adapter(error);
+    if (unsupportedAdapter != null)
+      throw new UnsupportedVaultV2AdapterError(unsupportedAdapter);
+
+    if (isUnknownOfFactoryError(error))
+      throw new UnknownOfFactory(vaultV2Factory, address);
+
+    throw error;
+  }
+
+  const vaultV2 = new VaultV2({
+    ...response.token,
+    asset: response.asset,
+    _totalAssets: response._totalAssets,
+    totalSupply: response.totalSupply,
+    virtualShares: response.virtualShares,
+    maxRate: response.maxRate,
+    lastUpdate: response.lastUpdate,
+    address,
+    adapters: response.adapters.map((adapter) => adapter.adapter),
+    liquidityAdapter: response.liquidityAdapter,
+    liquidityData: response.liquidityData,
+    liquidityAllocations: response.isLiquidityAdapterKnown
+      ? [...response.liquidityAllocations]
+      : undefined,
+    performanceFee: response.performanceFee,
+    managementFee: response.managementFee,
+    performanceFeeRecipient: response.performanceFeeRecipient,
+    managementFeeRecipient: response.managementFeeRecipient,
+  });
+
+  const accrualLiquidityAdapter = response.hasLiquidityAdapter
+    ? toAccrualAdapter(response.liquidityAdapterInfo, adaptiveCurveIrm)
+    : undefined;
+
+  const accrualAdapters = response.adapters.map((adapter) =>
+    toAccrualAdapter(adapter, adaptiveCurveIrm),
+  );
+
+  const forceDeallocatePenalties = Object.fromEntries(
+    response.adapters.map((adapter) => [
+      adapter.adapter,
+      adapter.forceDeallocatePenalty,
+    ]),
+  );
+
+  return new AccrualVaultV2(
+    vaultV2,
+    accrualLiquidityAdapter,
+    accrualAdapters,
+    response.assetBalance,
     forceDeallocatePenalties,
   );
 }
