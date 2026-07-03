@@ -20,8 +20,8 @@ const ACCRUAL_TIMESTAMP = 2_000_000_000n;
 
 // VaultV2 whose liquidity adapter wraps a MetaMorpho V1 vault (deepest adapter branch).
 const vaultV2VaultV1 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
-// VaultV2 whose liquidity adapter is a MorphoMarketV1Adapter.
-const vaultV2MarketV1 = "0x4C7b69b4a82e9E5D8ec60E96516f7A0E17CBC55C";
+// VaultV2 whose liquidity adapter is a MorphoMarketV1AdapterV2 (real caps and allocations).
+const vaultV2MarketV1V2 = "0x4C7b69b4a82e9E5D8ec60E96516f7A0E17CBC55C";
 
 const marketParams = new MarketParams({
   collateralToken: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
@@ -173,9 +173,18 @@ describe("fetchAccrualVaultV2Deployless", () => {
   vaultV2Test(
     "matches fetchAccrualVaultV2 for a MorphoMarketV1 liquidity adapter",
     async ({ client }) => {
+      const { usdc } = addressesRegistry[client.chain.id];
+      const vaultAddress = await deployVaultV2(client as AnvilTestClient, usdc);
+      await deployMorphoMarketV1Adapter(
+        client as AnvilTestClient,
+        vaultAddress,
+        "1",
+        { marketParams, deposit: parseUnits("1000", 6) },
+      );
+
       const [deployless, sequential] = await Promise.all([
-        fetchAccrualVaultV2Deployless(vaultV2MarketV1, client),
-        fetchAccrualVaultV2(vaultV2MarketV1, client),
+        fetchAccrualVaultV2Deployless(vaultAddress, client),
+        fetchAccrualVaultV2(vaultAddress, client),
       ]);
 
       expect(deployless.accrualLiquidityAdapter?.type).toBe(
@@ -188,18 +197,9 @@ describe("fetchAccrualVaultV2Deployless", () => {
   vaultV2Test(
     "matches fetchAccrualVaultV2 for a MorphoMarketV1AdapterV2 liquidity adapter",
     async ({ client }) => {
-      const { usdc } = addressesRegistry[client.chain.id];
-      const vaultAddress = await deployVaultV2(client as AnvilTestClient, usdc);
-      await deployMorphoMarketV1Adapter(
-        client as AnvilTestClient,
-        vaultAddress,
-        "2",
-        { marketParams, deposit: parseUnits("1000", 6) },
-      );
-
       const [deployless, sequential] = await Promise.all([
-        fetchAccrualVaultV2Deployless(vaultAddress, client),
-        fetchAccrualVaultV2(vaultAddress, client),
+        fetchAccrualVaultV2Deployless(vaultV2MarketV1V2, client),
+        fetchAccrualVaultV2(vaultV2MarketV1V2, client),
       ]);
 
       expect(deployless.accrualLiquidityAdapter?.type).toBe(
