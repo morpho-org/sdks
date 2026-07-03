@@ -8,10 +8,11 @@ import {
 import {
   AddressMismatchError,
   InvalidSignatureError,
+  UnsupportedErc20ApprovalSpenderError,
 } from "../../../types/index.js";
-import { encodeMidnightBundlesPermit2Transfer } from "./encodeMidnightBundlesPermit2Transfer.js";
+import { encodeErc20Permit2Transfer } from "./encodeErc20Permit2Transfer.js";
 
-describe("encodeMidnightBundlesPermit2Transfer", () => {
+describe("encodeErc20Permit2Transfer", () => {
   const account = privateKeyToAccount(
     "0x0000000000000000000000000000000000000000000000000000000000000001",
   );
@@ -35,7 +36,7 @@ describe("encodeMidnightBundlesPermit2Transfer", () => {
   });
 
   test("default", async () => {
-    const requirement = encodeMidnightBundlesPermit2Transfer({
+    const requirement = encodeErc20Permit2Transfer({
       token: midnightAddresses.loanToken,
       spender: midnightAddresses.midnightBundles,
       amount: 1_000n,
@@ -58,10 +59,22 @@ describe("encodeMidnightBundlesPermit2Transfer", () => {
     expect(isHex(signature.args.signature)).toBe(true);
   });
 
+  test("error: UnsupportedErc20ApprovalSpenderError", () => {
+    expect(() =>
+      encodeErc20Permit2Transfer({
+        token: midnightAddresses.loanToken,
+        spender: midnightAddresses.generalAdapter1,
+        amount: 1_000n,
+        chainId: midnightChainId,
+        nonce: 42n,
+      }),
+    ).toThrow(UnsupportedErc20ApprovalSpenderError);
+  });
+
   test("error: AddressMismatchError", async () => {
     const differentAddress =
       "0x0000000000000000000000000000000000000001" as Address;
-    const requirement = encodeMidnightBundlesPermit2Transfer({
+    const requirement = encodeErc20Permit2Transfer({
       token: midnightAddresses.loanToken,
       spender: midnightAddresses.midnightBundles,
       amount: 1_000n,
@@ -85,7 +98,7 @@ describe("encodeMidnightBundlesPermit2Transfer", () => {
         address: client.account.address,
       },
     };
-    const requirement = encodeMidnightBundlesPermit2Transfer({
+    const requirement = encodeErc20Permit2Transfer({
       token: midnightAddresses.loanToken,
       spender: midnightAddresses.midnightBundles,
       amount: 1_000n,

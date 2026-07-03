@@ -19,7 +19,7 @@ import {
   NonPositiveMidnightAmountError,
   type Transaction,
 } from "../../types/index.js";
-import { encodeMidnightTokenPermit } from "./encodeMidnightTokenPermit.js";
+import { getMidnightTokenPermit } from "../signatures/getMidnightTokenPermit.js";
 import type { MidnightCollateralWithdrawal } from "./types.js";
 
 /** Parameters for {@link midnightRepayWithdrawCollateral}. */
@@ -114,7 +114,7 @@ export const midnightRepayWithdrawCollateral = (
         market,
         params.repayAssets,
         params.onBehalf,
-        encodeMidnightTokenPermit({
+        getMidnightTokenPermit({
           token: market.loanToken,
           owner: params.onBehalf,
           spender: midnightBundles,

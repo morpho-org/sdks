@@ -82,16 +82,19 @@ export const encodeErc20Permit = async (
     midnightBundles,
     bundler3: { generalAdapter1 },
   } = getChainAddresses(chainId);
+  const supportedSpenders = [generalAdapter1, midnightBundles];
+
   if (
-    !isAddressEqual(spender, generalAdapter1) &&
-    (midnightBundles == null || !isAddressEqual(spender, midnightBundles))
+    !supportedSpenders.some(
+      (supported) => supported != null && isAddressEqual(spender, supported),
+    )
   ) {
     throw new UnsupportedErc20ApprovalSpenderError({
       spender,
       chainId,
       generalAdapter1,
       midnightBundles,
-      supportedSpenders: [generalAdapter1, midnightBundles],
+      supportedSpenders,
     });
   }
 

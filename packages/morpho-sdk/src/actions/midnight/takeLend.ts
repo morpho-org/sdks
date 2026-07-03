@@ -22,7 +22,7 @@ import {
   NonPositiveMidnightAmountError,
   type Transaction,
 } from "../../types/index.js";
-import { encodeMidnightTokenPermit } from "./encodeMidnightTokenPermit.js";
+import { getMidnightTokenPermit } from "../signatures/getMidnightTokenPermit.js";
 import type {
   MidnightCollateralWithdrawal,
   MidnightTakeableOffer,
@@ -116,7 +116,7 @@ export const midnightTakeLend = (
   const referralFeeRecipient = params.referralFeeRecipient ?? zeroAddress;
   const maxContinuousFee = params.maxContinuousFee ?? maxUint256;
   const deadline = params.deadline ?? maxUint256;
-  const loanTokenPermit = encodeMidnightTokenPermit({
+  const loanTokenPermit = getMidnightTokenPermit({
     token: MarketUtils.toStruct(params.market).loanToken,
     owner: params.taker,
     spender: midnightBundles,
