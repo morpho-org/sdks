@@ -74,10 +74,10 @@ function expectSameOutcome<T>(actualFn: () => T, expectedFn: () => T) {
 }
 
 /**
- * Asserts the deployless one-call reader is behaviourally identical to the sequential reader.
- * Deep object equality is avoided because the deployless nested MetaMorpho V1 vault intentionally
- * omits `eip5267Domain` and `publicAllocatorConfig`; every accounting and capacity output is
- * compared instead.
+ * Asserts the deployless one-call reader is behaviourally identical to the multicall
+ * (`deployless: false`) reader. Deep object equality is avoided because the deployless nested
+ * MetaMorpho V1 vault intentionally omits `eip5267Domain` and `publicAllocatorConfig` (which the
+ * multicall path does read); every accounting and capacity output is compared instead.
  */
 function expectEquivalent(actual: AccrualVaultV2, expected: AccrualVaultV2) {
   expect(actual.address).toBe(expected.address);
@@ -158,15 +158,15 @@ describe("fetchAccrualVaultV2Deployless", () => {
   vaultV2Test(
     "matches fetchAccrualVaultV2 for a MorphoVaultV1 liquidity adapter",
     async ({ client }) => {
-      const [deployless, sequential] = await Promise.all([
+      const [deployless, multicall] = await Promise.all([
         fetchAccrualVaultV2Deployless(vaultV2VaultV1, client),
-        fetchAccrualVaultV2(vaultV2VaultV1, client),
+        fetchAccrualVaultV2(vaultV2VaultV1, client, { deployless: false }),
       ]);
 
       expect(deployless.accrualLiquidityAdapter?.type).toBe(
         "VaultV2MorphoVaultV1Adapter",
       );
-      expectEquivalent(deployless, sequential);
+      expectEquivalent(deployless, multicall);
     },
   );
 
@@ -182,30 +182,30 @@ describe("fetchAccrualVaultV2Deployless", () => {
         { marketParams, deposit: parseUnits("1000", 6) },
       );
 
-      const [deployless, sequential] = await Promise.all([
+      const [deployless, multicall] = await Promise.all([
         fetchAccrualVaultV2Deployless(vaultAddress, client),
-        fetchAccrualVaultV2(vaultAddress, client),
+        fetchAccrualVaultV2(vaultAddress, client, { deployless: false }),
       ]);
 
       expect(deployless.accrualLiquidityAdapter?.type).toBe(
         "VaultV2MorphoMarketV1Adapter",
       );
-      expectEquivalent(deployless, sequential);
+      expectEquivalent(deployless, multicall);
     },
   );
 
   vaultV2Test(
     "matches fetchAccrualVaultV2 for a MorphoMarketV1AdapterV2 liquidity adapter",
     async ({ client }) => {
-      const [deployless, sequential] = await Promise.all([
+      const [deployless, multicall] = await Promise.all([
         fetchAccrualVaultV2Deployless(vaultV2MarketV1V2, client),
-        fetchAccrualVaultV2(vaultV2MarketV1V2, client),
+        fetchAccrualVaultV2(vaultV2MarketV1V2, client, { deployless: false }),
       ]);
 
       expect(deployless.accrualLiquidityAdapter?.type).toBe(
         "VaultV2MorphoMarketV1AdapterV2",
       );
-      expectEquivalent(deployless, sequential);
+      expectEquivalent(deployless, multicall);
     },
   );
 });
