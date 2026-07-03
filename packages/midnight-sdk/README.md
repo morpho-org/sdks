@@ -120,11 +120,12 @@ export async function makeBaseUsdcWethOffers(params: {
   // Optional final-payload validation: include ratification data when validating post-signature bytes.
   await tree.mempoolValidate({
     chainId,
-    ratification: { type: "ecrecover", signature },
+    ratification: { type: "ecrecover", account: params.maker, signature },
   });
 
   const items = await EcrecoverRatifierUtils.ratify({
     tree,
+    account: params.maker,
     signature,
   });
   const payload = await Payload.encode(items);

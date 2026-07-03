@@ -1,5 +1,6 @@
 import { type Hex, zeroAddress } from "viem";
-import { describe, expect, expectTypeOf, test } from "vitest";
+import { privateKeyToAccount } from "viem/accounts";
+import { describe, expect, expectTypeOf, test, vi } from "vitest";
 import {
   addresses,
   baseMarketParamsInput,
@@ -11,6 +12,7 @@ import type { MidnightApiFetch } from "../api/index.js";
 import {
   InvalidMarketParameterError,
   InvalidTreeError,
+  InvalidTypedDataSignatureError,
   MidnightMempoolValidationError,
 } from "../errors.js";
 import { type IOffer, Offer, type OfferStruct } from "../offers/index.js";
@@ -27,7 +29,8 @@ const root =
 const zeroBytes32 =
   "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
 const API_VALID_MATURITY = 1_767_279_600n;
-const signature = { v: 27, r: zeroBytes32, s: zeroBytes32 } as const;
+const privateKey =
+  "0x0000000000000000000000000000000000000000000000000000000000000001" as const;
 
 const emptyMarket = () => ({
   chainId: 0n,
@@ -168,6 +171,7 @@ describe("Tree.mempoolValidate", () => {
   });
 
   test("behavior: ecrecover ratification validates final payload", async () => {
+    const account = privateKeyToAccount(privateKey);
     const calls: {
       readonly input: Parameters<MidnightApiFetch>[0];
       readonly init: Parameters<MidnightApiFetch>[1];
@@ -181,6 +185,7 @@ describe("Tree.mempoolValidate", () => {
     };
     const tree = Tree.create([
       baseOffer({
+        maker: account.address,
         market: {
           ...baseMarketParamsInput(),
           maturity: API_VALID_MATURITY,
@@ -190,12 +195,16 @@ describe("Tree.mempoolValidate", () => {
         maxAssets: 1_000n,
       }),
     ]);
+    const signature = await account.signTypedData(
+      EcrecoverRatifierUtils.typedData({ tree, chainId: 8453n }),
+    );
 
     await tree.mempoolValidate({
       chainId: 8453,
       fetch,
       ratification: {
         type: "ecrecover",
+        account,
         signature,
       },
     });
@@ -209,7 +218,9 @@ describe("Tree.mempoolValidate", () => {
     );
 
     expect(decoded[0]!.ratifierData).not.toBe("0x");
-    expect(ratifierData.signature).toEqual(signature);
+    expect(ratifierData.signature).toEqual(
+      EcrecoverRatifierUtils.toSignature(signature),
+    );
     expect(
       TreeUtils.verifyProof({
         offer: decoded[0]!.offer,
@@ -218,6 +229,36 @@ describe("Tree.mempoolValidate", () => {
         proof: ratifierData.proof,
       }),
     ).toBe(true);
+  });
+
+  test("error: InvalidTypedDataSignatureError when ecrecover ratification signature is invalid", async () => {
+    const account = privateKeyToAccount(privateKey);
+    const fetch = vi.fn<MidnightApiFetch>();
+    const tree = Tree.create([
+      baseOffer({
+        maker: account.address,
+        market: {
+          ...baseMarketParamsInput(),
+          maturity: API_VALID_MATURITY,
+        },
+        expiry: API_VALID_MATURITY - 60n,
+        maxUnits: 0n,
+        maxAssets: 1_000n,
+      }),
+    ]);
+
+    await expect(
+      tree.mempoolValidate({
+        chainId: 8453,
+        fetch,
+        ratification: {
+          type: "ecrecover",
+          account,
+          signature: { v: 27, r: zeroBytes32, s: zeroBytes32 },
+        },
+      }),
+    ).rejects.toBeInstanceOf(InvalidTypedDataSignatureError);
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   test("error: MidnightMempoolValidationError", async () => {
@@ -263,6 +304,7 @@ describe("Tree.from", () => {
 
 describe("TreeUtils.mempoolValidate", () => {
   test("behavior: ecrecover ratification validates final payload from existing tree", async () => {
+    const account = privateKeyToAccount(privateKey);
     const calls: {
       readonly input: Parameters<MidnightApiFetch>[0];
       readonly init: Parameters<MidnightApiFetch>[1];
@@ -276,6 +318,7 @@ describe("TreeUtils.mempoolValidate", () => {
     };
     const tree = Tree.create([
       baseOffer({
+        maker: account.address,
         market: {
           ...baseMarketParamsInput(),
           maturity: API_VALID_MATURITY,
@@ -285,6 +328,9 @@ describe("TreeUtils.mempoolValidate", () => {
         maxAssets: 1_000n,
       }),
     ]);
+    const signature = await account.signTypedData(
+      EcrecoverRatifierUtils.typedData({ tree, chainId: 8453n }),
+    );
 
     await TreeUtils.mempoolValidate({
       chainId: 8453,
@@ -292,6 +338,7 @@ describe("TreeUtils.mempoolValidate", () => {
       fetch,
       ratification: {
         type: "ecrecover",
+        account,
         signature,
       },
     });
@@ -305,7 +352,9 @@ describe("TreeUtils.mempoolValidate", () => {
     );
 
     expect(decoded[0]!.ratifierData).not.toBe("0x");
-    expect(ratifierData.signature).toEqual(signature);
+    expect(ratifierData.signature).toEqual(
+      EcrecoverRatifierUtils.toSignature(signature),
+    );
     expect(ratifierData.root).toBe(tree.root);
   });
 

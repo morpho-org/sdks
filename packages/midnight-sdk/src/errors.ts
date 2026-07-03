@@ -352,9 +352,10 @@ export class InvalidTypedDataSignatureError extends Error {
   /** Signer address the signature was expected to recover. */
   public readonly signer: Address;
 
-  public constructor(signer: Address) {
+  public constructor(signer: Address, cause?: unknown) {
     super(
       `Typed-data signature does not recover to signer "${signer}". Check the wallet account or signing transport.`,
+      cause === undefined ? undefined : { cause },
     );
     this.name = "InvalidTypedDataSignatureError";
     this.signer = signer;

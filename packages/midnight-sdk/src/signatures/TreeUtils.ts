@@ -372,8 +372,8 @@ export type RatifierTreeInput = TreeLike | TreeCreateParams;
  *
  * Omit this when validating offer policy before the maker signs or approves a
  * tree. Provide it when validating the final payload shape, including real
- * `ratifierData`, after the Ecrecover signature exists or the Setter root is
- * ready for publication.
+ * `ratifierData`, after the Ecrecover signature and signer address exist or the
+ * Setter root is ready for publication.
  *
  * @example
  * ```ts
@@ -382,6 +382,7 @@ export type RatifierTreeInput = TreeLike | TreeCreateParams;
  *
  * const ratification: TreeMempoolValidateRatification = {
  *   type: "ecrecover",
+ *   account: "0x0000000000000000000000000000000000009000",
  *   signature: { v: 27, r: zeroHash, s: zeroHash } satisfies Signature,
  * };
  * console.log(ratification.type);
@@ -403,10 +404,10 @@ export type TreeMempoolValidateRatification =
       readonly type: "ecrecover";
       /** Precomputed signature for this tree root. */
       readonly signature: EcrecoverSignatureInput;
+      /** Account that produced the signature. It may be the maker or an address authorized by each maker. */
+      readonly account: Account | Address;
       /** Omit when a precomputed signature is supplied. */
       readonly client?: undefined;
-      /** Omit when a precomputed signature is supplied. */
-      readonly account?: undefined;
     }
   | {
       /** Setter ratifier route. */
@@ -579,6 +580,7 @@ export namespace TreeUtils {
         items = await EcrecoverRatifierUtils.ratify({
           tree: params.tree,
           signature: params.ratification.signature,
+          account: params.ratification.account,
         });
       } else {
         items = await EcrecoverRatifierUtils.ratify({

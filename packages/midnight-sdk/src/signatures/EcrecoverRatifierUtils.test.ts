@@ -60,24 +60,35 @@ const ecrecoverTree = (offerCount: number) =>
     ),
   );
 
+const signTree = async (
+  tree: Tree,
+  account = privateKeyToAccount(privateKey),
+) =>
+  account.signTypedData(
+    EcrecoverRatifierUtils.typedData({ tree, chainId: BigInt(base.id) }),
+  );
+
 describe("EcrecoverRatifierUtils.ratify", () => {
   test("default", async () => {
-    const offer = baseOffer({ maxAssets: 0n });
+    const account = privateKeyToAccount(privateKey);
+    const offer = baseOffer({ maker: account.address, maxAssets: 0n });
     const tree = Tree.create([offer]);
-    const signature = {
-      v: 27,
-      r: "0x0000000000000000000000000000000000000000000000000000000000000000",
-      s: "0x0000000000000000000000000000000000000000000000000000000000000000",
-    } as const;
+    const signature = await signTree(tree, account);
 
-    const items = await EcrecoverRatifierUtils.ratify({ tree, signature });
+    const items = await EcrecoverRatifierUtils.ratify({
+      tree,
+      account,
+      signature,
+    });
     const decoded = EcrecoverRatifierUtils.decodeRatifierData(
       items[0]!.ratifierData,
     );
 
     expect(items).toHaveLength(1);
     expect(items[0]!.offer).toBe(tree.offers[0]);
-    expect(decoded.signature).toEqual(signature);
+    expect(decoded.signature).toEqual(
+      EcrecoverRatifierUtils.toSignature(signature),
+    );
     expect(
       TreeUtils.verifyProof({
         offer: items[0]!.offer,
@@ -89,15 +100,14 @@ describe("EcrecoverRatifierUtils.ratify", () => {
   });
 
   test("behavior: accepts plain tree input", async () => {
-    const offer = baseOffer({ maxAssets: 0n });
-    const signature = {
-      v: 27,
-      r: "0x0000000000000000000000000000000000000000000000000000000000000000",
-      s: "0x0000000000000000000000000000000000000000000000000000000000000000",
-    } as const;
+    const account = privateKeyToAccount(privateKey);
+    const offer = baseOffer({ maker: account.address, maxAssets: 0n });
+    const tree = Tree.create([offer]);
+    const signature = await signTree(tree, account);
 
     const items = await EcrecoverRatifierUtils.ratify({
       tree: [offer],
+      account,
       signature,
     });
     const decoded = EcrecoverRatifierUtils.decodeRatifierData(
@@ -106,7 +116,9 @@ describe("EcrecoverRatifierUtils.ratify", () => {
 
     expect(items).toHaveLength(1);
     expect(items[0]!.offer).toBe(offer);
-    expect(decoded.signature).toEqual(signature);
+    expect(decoded.signature).toEqual(
+      EcrecoverRatifierUtils.toSignature(signature),
+    );
     expect(
       TreeUtils.verifyProof({
         offer: items[0]!.offer,
@@ -172,12 +184,15 @@ describe("EcrecoverRatifierUtils.ratify", () => {
   });
 
   test("error: InvalidTreeError mixed ratifiers", async () => {
+    const account = privateKeyToAccount(privateKey);
     const tree = Tree.create([
       baseOffer({
+        maker: account.address,
         maxAssets: 0n,
         ratifier: addresses.ecrecoverRatifier,
       }),
       baseOffer({
+        maker: account.address,
         maxAssets: 0n,
         ratifier: addresses.setterRatifier,
       }),
@@ -186,6 +201,7 @@ describe("EcrecoverRatifierUtils.ratify", () => {
     await expect(
       EcrecoverRatifierUtils.ratify({
         tree,
+        account,
         signature: {
           v: 27,
           r: "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -193,6 +209,25 @@ describe("EcrecoverRatifierUtils.ratify", () => {
         },
       }),
     ).rejects.toThrow(InvalidTreeError);
+  });
+
+  test("error: InvalidTypedDataSignatureError when precomputed signature does not recover to account", async () => {
+    const account = privateKeyToAccount(privateKey);
+    const tree = Tree.create([
+      baseOffer({ maker: account.address, maxAssets: 0n }),
+    ]);
+
+    await expect(
+      EcrecoverRatifierUtils.ratify({
+        tree,
+        account,
+        signature: {
+          v: 27,
+          r: "0x0000000000000000000000000000000000000000000000000000000000000000",
+          s: "0x0000000000000000000000000000000000000000000000000000000000000000",
+        },
+      }),
+    ).rejects.toBeInstanceOf(InvalidTypedDataSignatureError);
   });
 
   test("error: propagates viem signature verification errors", async () => {
