@@ -13,7 +13,7 @@ import {
   NegativeSupplyMaxSharePriceError,
   ZeroSupplyAmountError,
 } from "../../types/index.js";
-import { getRequirements } from "../requirements/index.js";
+import { getGeneralAdapterRequirements } from "../requirements/index.js";
 import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
 import { blueSupply } from "./supply.js";
 
@@ -108,7 +108,7 @@ describe("blueSupply unit tests", () => {
   test("should create tx with permit2 signature", async ({ client }) => {
     const amount = parseUnits("1000", 6);
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: CbbtcUsdcBlue.loanToken,
       chainId: mainnet.id,
       supportSignature: true,
@@ -149,7 +149,7 @@ describe("blueSupply unit tests", () => {
     expect(tx.action.type).toBe("blueSupply");
   });
 
-  test("should not call getTokenRequirementActions when no requirementSignature", async ({
+  test("should call getTokenRequirementActions without requirementSignature", async ({
     client,
   }) => {
     const localSpy = vi.spyOn(
@@ -166,7 +166,7 @@ describe("blueSupply unit tests", () => {
       },
     });
 
-    expect(localSpy).not.toHaveBeenCalled();
+    expect(localSpy).toHaveBeenCalled();
   });
 
   test("should throw NegativeSupplyAmountError when amount is negative", async ({

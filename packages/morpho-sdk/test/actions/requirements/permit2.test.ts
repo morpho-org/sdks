@@ -196,7 +196,7 @@ describe("Permit2", () => {
     );
   });
 
-  test("should deposit WETH approval already sufficient on general adapter", async ({
+  test("should deposit WETH with pre-existing general adapter approval through permit2", async ({
     client,
   }) => {
     const { wNative } = addressesRegistry[mainnet.id];
@@ -235,9 +235,43 @@ describe("Permit2", () => {
 
         const requirements = await deposit.getRequirements();
 
-        expect(requirements.length).toBe(0);
+        expect(requirements.length).toBe(2);
 
-        await client.sendTransaction(deposit.buildTx());
+        const approvalPermit2 = requirements[0];
+        if (!isRequirementApproval(approvalPermit2)) {
+          throw new Error("Approval requirement not found");
+        }
+
+        expect(approvalPermit2.action.args.spender).toBe(permit2);
+        expect(approvalPermit2.action.args.amount).toBe(MathLib.MAX_UINT_160);
+        expect(approvalPermit2.action.type).toBe("erc20Approval");
+
+        await client.sendTransaction(approvalPermit2);
+
+        const permit2Requirement = requirements[1];
+
+        if (!isRequirementSignature(permit2Requirement)) {
+          throw new Error("Requirement is not a signature requirement");
+        }
+
+        expect(permit2Requirement.action.type).toBe("permit2");
+        expect(permit2Requirement.action.args.spender).toBe(generalAdapter1);
+        expect(permit2Requirement.action.args.amount).toBe(amount);
+
+        const requirementSignature = await permit2Requirement.sign(
+          client,
+          client.account.address,
+        );
+
+        expect(requirementSignature.args.owner).toEqual(client.account.address);
+        expect(isHex(requirementSignature.args.signature)).toBe(true);
+        expect(requirementSignature.args.signature.length).toBe(132);
+        expect(requirementSignature.args.asset).toBe(wNative);
+        expect(requirementSignature.args.deadline).toBeGreaterThan(
+          BigInt(Math.floor(Date.now() / 1000)),
+        );
+
+        await client.sendTransaction(deposit.buildTx([requirementSignature]));
       },
     });
 

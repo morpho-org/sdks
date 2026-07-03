@@ -30,11 +30,7 @@ export interface BlueSupplyParams {
     onBehalf: Address;
     /** Maximum supply share price (in ray). Slippage protection against inflation attacks. */
     maxSharePrice: bigint;
-    /**
-     * Optional pre-signed permit/permit2 approval for the loan-token transfer. When absent, the
-     * bundle uses a plain `erc20TransferFrom` and assumes the user has already approved
-     * `GeneralAdapter1`.
-     */
+    /** Optional pre-signed permit/permit2 approval for the loan-token transfer. */
     requirementSignature?: PermitRequirementSignature;
   };
   metadata?: Metadata;
@@ -59,9 +55,7 @@ export interface BlueSupplyParams {
  *   protection.
  * @param params.args.nativeAmount - Optional amount of native token to wrap into wNative for the
  *   supply. Requires the loan token to be the chain's wNative.
- * @param params.args.requirementSignature - Optional pre-signed permit/permit2 approval. When
- *   absent, the bundle uses a plain `erc20TransferFrom` and assumes the user has already
- *   approved `GeneralAdapter1`.
+ * @param params.args.requirementSignature - Optional pre-signed permit/permit2 approval.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueSupplyAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator the simulation layer consumes.
@@ -142,21 +136,14 @@ export const blueSupply = ({
   }
 
   if (amount > 0n) {
-    if (requirementSignature) {
-      actions.push(
-        ...getTokenRequirementActions({
-          asset: marketParams.loanToken,
-          amount,
-          recipient: generalAdapter1,
-          requirementSignature,
-        }),
-      );
-    } else {
-      actions.push({
-        type: "erc20TransferFrom",
-        args: [marketParams.loanToken, amount, generalAdapter1, false],
-      });
-    }
+    actions.push(
+      ...getTokenRequirementActions({
+        asset: marketParams.loanToken,
+        amount,
+        recipient: generalAdapter1,
+        requirementSignature,
+      }),
+    );
   }
 
   actions.push({

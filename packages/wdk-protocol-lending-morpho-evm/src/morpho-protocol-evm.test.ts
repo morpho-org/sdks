@@ -75,7 +75,7 @@ const withdrawAction = {
 const borrowAction = {
   getRequirements: vi
     .fn()
-    .mockResolvedValue([{ action: { type: "morphoAuthorization" } }]),
+    .mockResolvedValue([{ action: { type: "blueAuthorization" } }]),
   buildTx: vi.fn().mockReturnValue(BORROW_TX),
 };
 const repayAction = {
@@ -521,9 +521,7 @@ describe.sequential("MorphoProtocolEvm", () => {
         amount: 100_000n,
       });
 
-      expect(requirements).toEqual([
-        { action: { type: "morphoAuthorization" } },
-      ]);
+      expect(requirements).toEqual([{ action: { type: "blueAuthorization" } }]);
       expect(borrowAction.getRequirements).toHaveBeenCalled();
     });
 

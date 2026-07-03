@@ -300,9 +300,10 @@ export interface RepayActionAmountArgs {
   transferAmount: bigint;
 }
 
-export interface MorphoAuthorizationAction
+/** Metadata for a Blue authorization prerequisite transaction. */
+export interface BlueAuthorizationAction
   extends BaseAction<
-    "morphoAuthorization",
+    "blueAuthorization",
     {
       authorized: Address;
       isAuthorized: boolean;
@@ -329,7 +330,7 @@ export type TransactionAction =
   | BlueWithdrawCollateralAction
   | BlueRepayWithdrawCollateralAction
   | BlueRefinanceAction
-  | MorphoAuthorizationAction;
+  | BlueAuthorizationAction;
 
 export interface Transaction<TAction extends BaseAction = TransactionAction> {
   readonly to: Address;
@@ -446,37 +447,42 @@ export type RequirementSignature =
   | PermitRequirementSignature
   | AuthorizationRequirementSignature;
 
+/** Bundler3 token signature requirement. */
+export type Bundler3TokenSignatureRequirement =
+  Requirement<PermitRequirementSignature>;
+
 export function isRequirementApproval(
-  requirement:
-    | Transaction<ERC20ApprovalAction>
-    | Transaction<MorphoAuthorizationAction>
-    | Requirement
-    | undefined,
+  requirement: unknown,
 ): requirement is Transaction<ERC20ApprovalAction> {
   return (
-    requirement !== undefined &&
+    typeof requirement === "object" &&
+    requirement !== null &&
     "to" in requirement &&
     "value" in requirement &&
     "data" in requirement &&
     "action" in requirement &&
+    typeof requirement.action === "object" &&
+    requirement.action !== null &&
+    "type" in requirement.action &&
     requirement.action.type === "erc20Approval"
   );
 }
 
-export function isRequirementAuthorization(
-  requirement:
-    | Transaction<ERC20ApprovalAction>
-    | Transaction<MorphoAuthorizationAction>
-    | Requirement
-    | undefined,
-): requirement is Transaction<MorphoAuthorizationAction> {
+/** Checks whether an action requirement is a Blue authorization transaction. */
+export function isRequirementBlueAuthorization(
+  requirement: unknown,
+): requirement is Transaction<BlueAuthorizationAction> {
   return (
-    requirement !== undefined &&
+    typeof requirement === "object" &&
+    requirement !== null &&
     "to" in requirement &&
     "value" in requirement &&
     "data" in requirement &&
     "action" in requirement &&
-    requirement.action.type === "morphoAuthorization"
+    typeof requirement.action === "object" &&
+    requirement.action !== null &&
+    "type" in requirement.action &&
+    requirement.action.type === "blueAuthorization"
   );
 }
 
@@ -485,12 +491,14 @@ export function isRequirementSignature<
 >(
   requirement:
     | Transaction<ERC20ApprovalAction>
-    | Transaction<MorphoAuthorizationAction>
+    | Transaction<BlueAuthorizationAction>
     | Requirement<T>
     | undefined,
 ): requirement is Requirement<T> {
   return (
     requirement !== undefined &&
+    typeof requirement === "object" &&
+    requirement !== null &&
     "sign" in requirement &&
     typeof requirement.sign === "function"
   );

@@ -1,4 +1,4 @@
-import { encode as encodePayload } from "../signatures/Payload.js";
+import { Payload } from "../signatures/Payload.js";
 import {
   buildBookPath,
   mapBookMarket,
@@ -43,6 +43,7 @@ export type {
   FetchTakeableOffersParams,
   MempoolPayloadValidationIssue,
   MempoolPayloadValidationResult,
+  MempoolPayloadValidationSuccess,
   MidnightApiBookMarket,
   MidnightApiBookPriceLevelsResult,
   MidnightApiBookResult,
@@ -427,9 +428,9 @@ export class MidnightApi {
    * Validates an encoded Midnight mempool payload against API policy.
    *
    * Use when an integration already has encoded payload bytes and wants API
-   * feedback before publishing those bytes onchain. Normal SDK maker flows
-   * should call `Tree.mempoolValidate` before ratification instead of
-   * validating again after `Payload.encode`.
+   * feedback before publishing those bytes onchain. Normal SDK maker flows can
+   * call `Tree.mempoolValidate` before ratification, or pass ratification
+   * inputs to that helper when validating final payload bytes.
    *
    * Sends `POST /mempool/validate` to the Midnight API. Does not read onchain RPC state.
    *
@@ -477,9 +478,10 @@ export class MidnightApi {
    * Encodes SDK-native payload items and validates them against API policy.
    *
    * Use when an integration already has payload-ready items but not encoded
-   * payload bytes. Normal SDK maker flows should call `Tree.mempoolValidate`
-   * before ratification. This helper owns the temporary payload encoding for
-   * validation only.
+   * payload bytes. Normal SDK maker flows can call `Tree.mempoolValidate`
+   * before ratification, or pass ratification inputs to that helper when
+   * validating final payload bytes. This helper owns the temporary payload
+   * encoding for validation only.
    *
    * Encodes `params.items`, then sends `POST /mempool/validate` to the Midnight API. Does not read onchain RPC state.
    *
@@ -490,7 +492,7 @@ export class MidnightApi {
    * @param params.fetch - Optional fetch implementation override.
    * @param params.request - Optional fetch options forwarded to this request.
    * @returns API issues and `valid` summary.
-   * @throws {Payload.DecodeError} when item encoding fails.
+   * @throws {PayloadDecodeError} when item encoding fails.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
    * @example
@@ -536,7 +538,7 @@ export class MidnightApi {
     params: ValidateMempoolItemsParams,
   ): Promise<MempoolPayloadValidationResult> {
     const input = params;
-    const payload = await encodePayload(input.items);
+    const payload = await Payload.encode(input.items);
 
     return MidnightApi.validateMempoolPayload({
       baseUrl: input.baseUrl,
@@ -782,8 +784,9 @@ export class MidnightApi {
    * Validates payload-ready items with this client's configuration.
    *
    * Use when an integration already has payload-ready items but not encoded
-   * payload bytes. Normal SDK maker flows should call `Tree.mempoolValidate`
-   * before ratification.
+   * payload bytes. Normal SDK maker flows can call `Tree.mempoolValidate`
+   * before ratification, or pass ratification inputs to that helper when
+   * validating final payload bytes.
    *
    * Encodes `params.items`, then sends `POST /mempool/validate` to the Midnight API using this client's configuration. Does not read onchain RPC state.
    *
@@ -791,7 +794,7 @@ export class MidnightApi {
    * @param params.items - SDK-native payload items to encode before API validation.
    * @param params.timestamp - Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot.
    * @returns API validation result.
-   * @throws {Payload.DecodeError} when item encoding fails.
+   * @throws {PayloadDecodeError} when item encoding fails.
    * @throws {MidnightApiError} when the API returns a non-2xx response.
    * @throws {InvalidMidnightApiResponseError} when the API returns malformed success JSON.
    * @example

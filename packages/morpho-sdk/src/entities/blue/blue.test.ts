@@ -161,7 +161,7 @@ describe("MorphoBlue validation", () => {
     ).toThrow(NonPositiveBorrowAmountError);
   });
 
-  test("withdraw getRequirements includes Morpho authorization when missing", async ({
+  test("withdraw getRequirements includes Blue authorization when missing", async ({
     client,
   }) => {
     const market = client
@@ -286,7 +286,7 @@ describe("MorphoBlue validation", () => {
     ).toThrow(WithdrawExceedsCollateralError);
   });
 
-  test("repayWithdrawCollateral getRequirements includes Morpho authorization when missing", async ({
+  test("repayWithdrawCollateral getRequirements includes Blue authorization when missing", async ({
     client,
   }) => {
     const market = client

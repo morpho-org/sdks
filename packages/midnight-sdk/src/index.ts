@@ -16,4 +16,4 @@ export * from "./signatures/index.js";
  * Encoded payloads are always `Hex` strings ready to be included in onchain
  * mempool submission calldata.
  */
-export * as Payload from "./signatures/Payload.js";
+export { Payload } from "./signatures/Payload.js";

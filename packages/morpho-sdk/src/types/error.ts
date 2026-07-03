@@ -178,6 +178,23 @@ export class ApprovalAmountLessThanSpendAmountError extends Error {
   }
 }
 
+/** Thrown when an ERC-20 approval requirement targets an unsupported spender. */
+export class UnsupportedErc20ApprovalSpenderError extends Error {
+  constructor(params: {
+    readonly spender: Address;
+    readonly chainId: number;
+    readonly generalAdapter1: Address;
+    readonly permit2?: Address;
+  }) {
+    const supported = [params.generalAdapter1, params.permit2]
+      .filter((address) => address != null)
+      .join('", "');
+    super(
+      `ERC-20 approval spender "${params.spender}" is not supported on chain "${params.chainId}". Use "${supported}".`,
+    );
+  }
+}
+
 /** Thrown when a slippage tolerance is negative. */
 export class NegativeSlippageToleranceError extends Error {
   constructor(slippageTolerance: bigint) {
@@ -212,7 +229,7 @@ export class EmptyDeallocationsError extends Error {
 export class DepositAmountMismatchError extends Error {
   constructor(depositAmount: bigint, signatureAmount: bigint) {
     super(
-      `Deposit amount ${depositAmount} does not match requirement signature amount ${signatureAmount}`,
+      `Deposit amount "${depositAmount}" does not match requirement signature amount "${signatureAmount}"`,
     );
   }
 }
@@ -221,7 +238,7 @@ export class DepositAmountMismatchError extends Error {
 export class DepositAssetMismatchError extends Error {
   constructor(depositAsset: Address, signatureAsset: Address) {
     super(
-      `Deposit asset ${depositAsset} does not match requirement signature asset ${signatureAsset}`,
+      `Deposit asset "${depositAsset}" does not match requirement signature asset "${signatureAsset}"`,
     );
   }
 }
