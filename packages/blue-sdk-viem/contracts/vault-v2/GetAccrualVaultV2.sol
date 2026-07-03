@@ -108,8 +108,11 @@ struct VaultV1MarketAllocation {
     uint128 flowCapMaxOut;
 }
 
-/// @dev One `MorphoMarketV1Adapter` market: the adapter's position and the market state.
+/// @dev One `MorphoMarketV1Adapter` market: the adapter's configured market params (read from the
+/// adapter, so they survive even for a market not yet created in Morpho), its position, and the
+/// market state.
 struct MarketV1Position {
+    MarketParams marketParams;
     Position position;
     MarketResponse market;
 }
@@ -324,7 +327,9 @@ contract GetAccrualVaultV2 {
             uint256 length = typed.marketParamsListLength();
             res.marketV1Positions = new MarketV1Position[](length);
             for (uint256 i; i < length; ++i) {
-                Id id = _id(typed.marketParamsList(i));
+                MarketParams memory marketParams = typed.marketParamsList(i);
+                Id id = _id(marketParams);
+                res.marketV1Positions[i].marketParams = marketParams;
                 res.marketV1Positions[i].position = morpho.position(id, adapter);
                 res.marketV1Positions[i].market = _queryMarket(morpho, id, adaptiveCurveIrm);
             }

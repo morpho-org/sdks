@@ -1642,6 +1642,43 @@ function marketV1V2AdapterQueryResult(adapter: Address, supplyShares: bigint) {
   };
 }
 
+// A MorphoMarketV1 adapter listing a market not yet created in Morpho: the adapter keeps the real
+// `marketParams`, but `idToMarketParams` (the market response) is zeroed.
+function marketV1AdapterUncreatedQueryResult(adapter: Address) {
+  return {
+    adapter,
+    adapterType: 2,
+    parentVault: VAULT,
+    skimRecipient: RECIPIENT,
+    forceDeallocatePenalty: 0n,
+    morphoVaultV1: zeroAddress,
+    vaultV1: emptyVaultV1QueryResult,
+    vaultV1Allocations: [],
+    vaultV1Shares: 0n,
+    marketV1Positions: [
+      {
+        marketParams: marketQueryResult.marketParams,
+        position: { supplyShares: 0n, borrowShares: 0n, collateral: 0n },
+        market: {
+          marketParams: [
+            zeroAddress,
+            zeroAddress,
+            zeroAddress,
+            zeroAddress,
+            0n,
+          ] as const,
+          market: [0n, 0n, 0n, 0n, 0n, 0n] as const,
+          hasPrice: false,
+          price: 0n,
+          rateAtTarget: 0n,
+        },
+      },
+    ],
+    adaptiveCurveIrm: ADDRESSES.adaptiveCurveIrm,
+    marketV1V2Allocations: [],
+  };
+}
+
 const accrualVaultV2Result = {
   token: tokenResult,
   asset: ASSET,
@@ -1709,6 +1746,27 @@ describe("fetchAccrualVaultV2Deployless", () => {
     const marketAdapter = adapter as AccrualVaultV2MorphoMarketV1AdapterV2;
     expect(marketAdapter.supplyShares[ID]).toBe(99n);
     expect(marketAdapter.markets[0]?.id).toBe(ID);
+  });
+
+  test("keeps a MorphoMarketV1 adapter's configured params for a market not yet created", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessRead(handle, accrualVaultV2QueryAbi, "query", {
+      ...accrualVaultV2Result,
+      adapters: [marketV1AdapterUncreatedQueryResult(ADAPTER_2)],
+    });
+
+    const vault = await fetchAccrualVaultV2Deployless(VAULT, handle.client, {
+      chainId: CHAIN_ID,
+    });
+
+    const [adapter] = vault.accrualAdapters;
+    const marketAdapter = adapter as AccrualVaultV2MorphoMarketV1Adapter;
+    expect(marketAdapter.type).toBe("VaultV2MorphoMarketV1Adapter");
+    // The adapter's real params survive even though idToMarketParams was zeroed.
+    expect(marketAdapter.marketParamsList[0]?.loanToken).toBe(
+      MARKET_PARAMS.loanToken,
+    );
+    expect(marketAdapter.marketParamsList[0]?.id).toBe(ID);
   });
 
   test("fetchAccrualVaultV2 delegates to the single deployless call by default", async () => {

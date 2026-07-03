@@ -648,8 +648,10 @@ function toAccrualAdapter(
       return new AccrualVaultV2MorphoMarketV1Adapter(
         new VaultV2MorphoMarketV1Adapter({
           ...base,
+          // Read from the adapter, not derived from `idToMarketParams`, so the configured
+          // params survive for a market listed on the adapter but not yet created in Morpho.
           marketParamsList: adapter.marketV1Positions.map(
-            (entry) => new MarketParams(entry.market.marketParams),
+            (entry) => new MarketParams(entry.marketParams),
           ),
         }),
         positions,
