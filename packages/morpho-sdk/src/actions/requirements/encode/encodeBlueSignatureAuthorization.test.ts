@@ -14,7 +14,7 @@ import {
   AddressMismatchError,
   ChainIdMismatchError,
 } from "../../../types/index.js";
-import { encodeAuthorization } from "./encodeAuthorization.js";
+import { encodeBlueSignatureAuthorization } from "./encodeBlueSignatureAuthorization.js";
 
 // Anvil account #0 — signing is local crypto, so no RPC is required.
 const account = privateKeyToAccount(
@@ -30,10 +30,10 @@ function walletClient(chainId: number = mainnet.id) {
   return createWalletClient({ account, chain, transport: http() });
 }
 
-describe("encodeAuthorization", () => {
+describe("encodeBlueSignatureAuthorization", () => {
   test("error: ChainIdMismatchError when client chain differs", async () => {
     await expect(
-      encodeAuthorization(walletClient(mainnet.id), {
+      encodeBlueSignatureAuthorization(walletClient(mainnet.id), {
         authorized: generalAdapter1,
         chainId: mainnet.id + 1,
         nonce: 0n,
@@ -43,7 +43,7 @@ describe("encodeAuthorization", () => {
 
   test("default: signs a verifiable Morpho authorization", async () => {
     const client = walletClient();
-    const requirement = await encodeAuthorization(client, {
+    const requirement = await encodeBlueSignatureAuthorization(client, {
       authorized: generalAdapter1,
       chainId: mainnet.id,
       nonce: 0n,
@@ -82,7 +82,7 @@ describe("encodeAuthorization", () => {
 
   test("behavior: supports revocation via isAuthorized=false", async () => {
     const client = walletClient();
-    const requirement = await encodeAuthorization(client, {
+    const requirement = await encodeBlueSignatureAuthorization(client, {
       authorized: generalAdapter1,
       chainId: mainnet.id,
       nonce: 1n,
@@ -95,7 +95,7 @@ describe("encodeAuthorization", () => {
 
   test("error: AddressMismatchError when signer differs from userAddress", async () => {
     const client = walletClient();
-    const requirement = await encodeAuthorization(client, {
+    const requirement = await encodeBlueSignatureAuthorization(client, {
       authorized: generalAdapter1,
       chainId: mainnet.id,
       nonce: 0n,

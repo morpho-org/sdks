@@ -2,7 +2,7 @@ import type { BigIntish } from "@morpho-org/morpho-ts";
 import type { Address, Hash, Hex } from "viem";
 
 import type { OfferStruct } from "../offers/Offer.js";
-import type { Item as MidnightPayloadItem } from "../signatures/Payload.js";
+import type { Payload } from "../signatures/Payload.js";
 
 /**
  * Fetch implementation used by Midnight API helpers.
@@ -86,7 +86,7 @@ export interface ValidateMempoolItemsParams extends MidnightApiConfig {
   /** Chain id whose API policy should validate the payload. */
   readonly chainId: number;
   /** SDK-native payload items to encode before API validation. */
-  readonly items: readonly MidnightPayloadItem[];
+  readonly items: readonly Payload.Item[];
   /** Optional ISO-8601 timestamp or `Date` selecting the API policy snapshot. */
   readonly timestamp?: string | Date;
 }
@@ -243,6 +243,29 @@ export interface MempoolPayloadValidationResult {
   /** Payload-level API issues. */
   readonly issues: readonly MempoolPayloadValidationIssue[];
 }
+
+/**
+ * Successful Midnight mempool validation result.
+ *
+ * Returned by `Tree.mempoolValidate` and `TreeUtils.mempoolValidate`, which
+ * throw `MidnightMempoolValidationError` instead of returning unsuccessful API
+ * validation results.
+ *
+ * @example
+ * ```ts
+ * import type { MempoolPayloadValidationSuccess } from "@morpho-org/midnight-sdk/api";
+ *
+ * const result: MempoolPayloadValidationSuccess = {
+ *   valid: true,
+ *   issues: [],
+ * };
+ * console.log(result.valid);
+ * ```
+ */
+export type MempoolPayloadValidationSuccess = MempoolPayloadValidationResult & {
+  /** Successful tree validation always has `valid: true`. */
+  readonly valid: true;
+};
 
 /**
  * Collateral metadata returned by Midnight API book routes.

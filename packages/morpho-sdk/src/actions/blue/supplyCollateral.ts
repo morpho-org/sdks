@@ -47,9 +47,7 @@ export interface BlueSupplyCollateralParams {
  * @param params.args.amount - Amount of ERC-20 collateral to supply. At least one of `amount` or
  *   `nativeAmount` must be positive. Defaults to `0n`.
  * @param params.args.onBehalf - Address whose Morpho position is credited with the collateral.
- * @param params.args.requirementSignature - Optional pre-signed permit/permit2 approval. When
- *   absent, the bundle uses a plain `erc20TransferFrom` and assumes the user has already
- *   approved `GeneralAdapter1`.
+ * @param params.args.requirementSignature - Optional pre-signed permit/permit2 approval.
  * @param params.args.nativeAmount - Optional amount of native token to wrap into wNative for the
  *   supply. Requires the collateral token to be the chain's wNative.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
@@ -121,21 +119,14 @@ export const blueSupplyCollateral = ({
   }
 
   if (amount > 0n) {
-    if (requirementSignature) {
-      actions.push(
-        ...getTokenRequirementActions({
-          asset: marketParams.collateralToken,
-          amount,
-          recipient: generalAdapter1,
-          requirementSignature,
-        }),
-      );
-    } else {
-      actions.push({
-        type: "erc20TransferFrom",
-        args: [marketParams.collateralToken, amount, generalAdapter1, false],
-      });
-    }
+    actions.push(
+      ...getTokenRequirementActions({
+        asset: marketParams.collateralToken,
+        amount,
+        recipient: generalAdapter1,
+        requirementSignature,
+      }),
+    );
   }
 
   actions.push({

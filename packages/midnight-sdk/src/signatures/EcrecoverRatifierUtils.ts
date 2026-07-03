@@ -12,20 +12,27 @@ import {
   keccak256,
   parseSignature,
   type Signature,
+  serializeSignature,
   type Transport,
-  verifyTypedData,
+  verifyHash,
 } from "viem";
 import { signTypedData } from "viem/actions";
 import { EIP712_DOMAIN_TYPEHASH } from "../constants.js";
 import {
+  ChainIdMismatchError,
   InvalidTreeError,
   InvalidTreeHeightError,
   InvalidTypedDataSignatureError,
 } from "../errors.js";
+import { MarketParams } from "../market/index.js";
 import type { OfferStruct } from "../offers/index.js";
-import type { Item as PayloadItem } from "./Payload.js";
-import type { Tree } from "./Tree.js";
-import type { TreeProof } from "./TreeUtils.js";
+import type { Payload } from "./Payload.js";
+import { RatifierUtils } from "./RatifierUtils.js";
+import {
+  type RatifierTreeInput,
+  type TreeProof,
+  TreeUtils,
+} from "./TreeUtils.js";
 
 const treeTypeHashes = [
   "0x004abfc3a2bdb852bd9e193d58623de158d293bff8df82b2c73762b1449a92da",
@@ -123,26 +130,6 @@ const buildTreeValue = (offers: readonly OfferStruct[]): unknown => {
     buildTreeValue(offers.slice(0, mid)),
     buildTreeValue(offers.slice(mid)),
   ];
-};
-
-const getTreeRatifier = (tree: Tree): Address => {
-  const offers = tree.offers;
-  const firstOffer = offers[0];
-  if (firstOffer == null) {
-    throw new InvalidTreeError("Tree must contain at least one offer.");
-  }
-
-  const ratifier = firstOffer.ratifier;
-  const comparableRatifier = ratifier.toLowerCase();
-  for (const offer of offers.slice(1)) {
-    if (offer.ratifier.toLowerCase() !== comparableRatifier) {
-      throw new InvalidTreeError(
-        `All offers in an Ecrecover tree must use one ratifier; expected "${ratifier}", got "${offer.ratifier}". Build separate trees per ratifier.`,
-      );
-    }
-  }
-
-  return ratifier;
 };
 
 /**
@@ -297,8 +284,8 @@ export type EcrecoverSignatureInput =
  * ```
  */
 export interface EcrecoverRatifierTypedDataParams {
-  /** Tree being ratified. */
-  readonly tree: Tree;
+  /** Tree-like input being ratified. Existing `Tree` instances reuse cached hashes and proofs. */
+  readonly tree: RatifierTreeInput;
   /** Chain id used by the EIP-712 domain. */
   readonly chainId: BigIntish;
 }
@@ -307,7 +294,7 @@ export interface EcrecoverRatifierTypedDataParams {
  * Parameters for {@link EcrecoverRatifierUtils.ratify}.
  *
  * Use this after tree validation. Provide either a signing client plus account
- * or a signature that was produced from `typedData`.
+ * or a precomputed signature plus the account that produced it.
  *
  * @example
  * ```ts
@@ -341,6 +328,7 @@ export interface EcrecoverRatifierTypedDataParams {
  * });
  * const params: EcrecoverRatifierRatifyParams = {
  *   tree: Tree.create([offer]),
+ *   account: "0x0000000000000000000000000000000000009000",
  *   signature: { v: 27, r: zeroHash, s: zeroHash },
  * };
  * console.log(params.tree);
@@ -348,8 +336,8 @@ export interface EcrecoverRatifierTypedDataParams {
  */
 export type EcrecoverRatifierRatifyParams =
   | {
-      /** Tree being ratified. */
-      readonly tree: Tree;
+      /** Tree-like input being ratified. */
+      readonly tree: RatifierTreeInput;
       /** Viem client whose transport signs the typed data built from `tree`. */
       readonly client: Client<Transport, Chain, Account | undefined>;
       /** Account that signs the tree root. It may be the maker or an address authorized by each maker. */
@@ -358,14 +346,14 @@ export type EcrecoverRatifierRatifyParams =
       readonly signature?: undefined;
     }
   | {
-      /** Tree being ratified. */
-      readonly tree: Tree;
+      /** Tree-like input being ratified. */
+      readonly tree: RatifierTreeInput;
       /** Precomputed signature for this tree root. */
       readonly signature: EcrecoverSignatureInput;
+      /** Account that produced the signature. It may be the maker or an address authorized by each maker. */
+      readonly account: Account | Address;
       /** Omit when a precomputed signature is supplied. */
       readonly client?: undefined;
-      /** Omit when a precomputed signature is supplied. */
-      readonly account?: undefined;
       /** Omit when a precomputed signature is supplied. */
       readonly chainId?: undefined;
     };
@@ -412,8 +400,8 @@ export type EcrecoverRatifierRatifyParams =
  * ```
  */
 export interface EcrecoverRatifierDataParams {
-  /** Tree that produced the proof. */
-  readonly tree: Tree;
+  /** Tree-like input that produced the proof. Existing `Tree` instances reuse cached hashes and proofs. */
+  readonly tree: RatifierTreeInput;
   /** Leaf index to prove. */
   readonly leafIndex: BigIntish;
   /** Ecrecover signature for the tree root. */
@@ -428,7 +416,10 @@ export interface EcrecoverRatifierDataParams {
  * validate the tree, sign the typed data, call `ratify`, then pass the returned
  * items to `Payload.encode`. Ecrecover trees must contain one ratifier; split
  * trees by ratifier before signing. The signer may be the maker or an address
- * authorized by every maker in the tree.
+ * authorized by every maker in the tree. Ratifier helpers accept tree-like
+ * inputs rather than requiring the `Tree` class. Passing an existing `Tree`
+ * remains the optimal path because its cached offers, leaves, root, and height
+ * are reused for typed data and per-leaf proofs.
  *
  * @example
  * ```ts
@@ -459,14 +450,14 @@ export namespace EcrecoverRatifierUtils {
   }
 
   /**
-   * Builds EcrecoverRatifier typed data for a tree.
+   * Builds EcrecoverRatifier typed data for a tree-like input.
    *
    * Use after the tree is built and validated, before requesting the signer
    * signature. The EIP-712 verifier is derived from the shared ratifier address
    * on the tree offers. `ratify` calls this for you when given a client and
    * account.
    *
-   * @param params.tree - Ecrecover-ratified offer tree to sign.
+   * @param params.tree - Ecrecover-ratified offer tree-like input to sign.
    * @param params.chainId - EIP-155 chain id included in the EIP-712 domain.
    * @returns EIP-712 typed-data descriptor.
    * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
@@ -513,11 +504,13 @@ export namespace EcrecoverRatifierUtils {
   export function typedData(
     params: EcrecoverRatifierTypedDataParams,
   ): EcrecoverRatificationTypedData {
-    const verifyingContract = getTreeRatifier(params.tree);
+    const { tree, ratifier: verifyingContract } =
+      RatifierUtils.normalizeRatifierTree({
+        tree: params.tree,
+        label: "Ecrecover",
+      });
     const treeType =
-      params.tree.height === 0
-        ? "Offer"
-        : `Offer${"[2]".repeat(params.tree.height)}`;
+      tree.height === 0 ? "Offer" : `Offer${"[2]".repeat(tree.height)}`;
 
     return deepFreeze({
       domain: {
@@ -530,7 +523,7 @@ export namespace EcrecoverRatifierUtils {
       },
       primaryType: "OfferTree",
       message: {
-        offerTree: buildTreeValue(params.tree.paddedOffers),
+        offerTree: buildTreeValue(tree.paddedOffers),
       },
     });
   }
@@ -538,7 +531,7 @@ export namespace EcrecoverRatifierUtils {
   /**
    * Builds the EcrecoverRatifier digest used by the Solidity ratifier.
    *
-   * @param params.tree - Ecrecover-ratified offer tree to hash.
+   * @param params.tree - Ecrecover-ratified offer tree-like input to hash.
    * @param params.chainId - EIP-155 chain id included in the EIP-712 domain.
    * @returns EIP-712 digest.
    * @throws {InvalidTreeError} when the tree contains multiple ratifiers.
@@ -583,7 +576,11 @@ export namespace EcrecoverRatifierUtils {
    * ```
    */
   export function digest(params: EcrecoverRatifierTypedDataParams) {
-    const verifyingContract = getTreeRatifier(params.tree);
+    const { tree, ratifier: verifyingContract } =
+      RatifierUtils.normalizeRatifierTree({
+        tree: params.tree,
+        label: "Ecrecover",
+      });
     const domainSeparator = keccak256(
       encodeAbiParameters(domainSeparatorAbi, [
         EIP712_DOMAIN_TYPEHASH,
@@ -593,8 +590,8 @@ export namespace EcrecoverRatifierUtils {
     );
     const structHash = keccak256(
       encodeAbiParameters(treeStructHashAbi, [
-        treeTypeHash(params.tree.height),
-        params.tree.root,
+        treeTypeHash(tree.height),
+        tree.root,
       ]),
     );
 
@@ -609,12 +606,13 @@ export namespace EcrecoverRatifierUtils {
    * client and account. The account may be the maker or an address authorized
    * by every maker in the tree; the protocol checks that authorization onchain.
    *
-   * @param params.tree - Ecrecover-ratified offer tree to sign.
+   * @param params.tree - Ecrecover-ratified offer tree-like input to sign.
    * @param params.client - Viem client whose transport signs the tree typed data.
    * @param params.account - Account used to sign the tree typed data.
    * @returns Signature returned by the client.
-   * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
+   * @throws {InvalidTreeError} when the tree is invalid, contains multiple ratifiers, or spans multiple chain ids.
    * @throws {InvalidTreeHeightError} when the tree height is unsupported.
+   * @throws {ChainIdMismatchError} when `params.client.chain?.id` does not match the tree offer chain id.
    * @throws {InvalidTypedDataSignatureError} when the returned signature does not recover to `params.account`.
    * @example
    * ```ts
@@ -662,17 +660,36 @@ export namespace EcrecoverRatifierUtils {
    * ```
    */
   export async function sign(params: {
-    readonly tree: Tree;
+    readonly tree: RatifierTreeInput;
     readonly client: Client<Transport, Chain, Account | undefined>;
     readonly account: Account | Address;
   }): Promise<Hex> {
+    const { tree } = RatifierUtils.normalizeRatifierTree({
+      tree: params.tree,
+      label: "Ecrecover",
+    });
+    const expectedChainId = MarketParams.from(tree.offers[0]!.market).chainId;
+    for (const offer of tree.offers.slice(1)) {
+      const offerChainId = MarketParams.from(offer.market).chainId;
+      if (offerChainId !== expectedChainId) {
+        throw new InvalidTreeError(
+          `All offers in an Ecrecover tree must use one chain id; expected "${expectedChainId}", got "${offerChainId}". Build separate trees per chain.`,
+        );
+      }
+    }
+
+    const clientChainId = params.client.chain?.id;
+    if (clientChainId == null || BigInt(clientChainId) !== expectedChainId) {
+      throw new ChainIdMismatchError(clientChainId, expectedChainId);
+    }
+
     const signer =
       typeof params.account === "string"
         ? params.account
         : params.account.address;
     const data = typedData({
-      tree: params.tree,
-      chainId: params.client.chain.id,
+      tree,
+      chainId: expectedChainId,
     });
 
     const signature = await signTypedData<
@@ -685,16 +702,20 @@ export namespace EcrecoverRatifierUtils {
       ...data,
     });
 
-    const isValidSignature = await verifyTypedData<
-      Record<string, unknown>,
-      "OfferTree"
-    >({
-      ...data,
-      address: signer,
-      signature,
-    });
+    let isValidSignature = false;
+    try {
+      isValidSignature = await verifyHash({
+        address: signer,
+        hash: digest({ tree, chainId: expectedChainId }),
+        signature,
+      });
+    } catch (cause) {
+      throw new InvalidTypedDataSignatureError(signer, cause);
+    }
 
-    if (!isValidSignature) throw new InvalidTypedDataSignatureError(signer);
+    if (!isValidSignature) {
+      throw new InvalidTypedDataSignatureError(signer);
+    }
 
     return signature;
   }
@@ -721,19 +742,19 @@ export namespace EcrecoverRatifierUtils {
     signature: EcrecoverSignatureInput,
   ): Signature<number, number> & { readonly v: number } {
     if (typeof signature !== "string") {
+      const v =
+        signature.v != null ? Number(signature.v) : Number(signature.yParity);
       return {
-        v:
-          signature.v != null
-            ? Number(signature.v)
-            : Number(signature.yParity) + 27,
+        v: v < 27 ? v + 27 : v,
         r: signature.r,
         s: signature.s,
       };
     }
 
     const parsed = parseSignature(signature);
+    const v = Number(parsed.v ?? BigInt(parsed.yParity));
     return {
-      v: Number(parsed.v ?? BigInt(parsed.yParity + 27)),
+      v: v < 27 ? v + 27 : v,
       r: parsed.r,
       s: parsed.s,
     };
@@ -834,7 +855,7 @@ export namespace EcrecoverRatifierUtils {
    * Use after a tree has been signed when a caller needs data for one offer
    * leaf. Use `ratify` to produce payload-ready items for the whole tree.
    *
-   * @param params.tree - Ecrecover-ratified offer tree that produced the proof.
+   * @param params.tree - Ecrecover-ratified offer tree-like input that produced the proof.
    * @param params.leafIndex - Leaf index to prove.
    * @param params.signature - Ecrecover signature for the tree root.
    * @returns ABI-encoded EcrecoverRatifier data.
@@ -878,8 +899,11 @@ export namespace EcrecoverRatifierUtils {
    * ```
    */
   export function ratifierData(params: EcrecoverRatifierDataParams): Hex {
-    getTreeRatifier(params.tree);
-    const proof = params.tree.proof(params.leafIndex);
+    const { tree } = RatifierUtils.normalizeRatifierTree({
+      tree: params.tree,
+      label: "Ecrecover",
+    });
+    const proof = TreeUtils.buildProof({ tree, leafIndex: params.leafIndex });
 
     return encodeRatifierData({
       signature: toSignature(params.signature),
@@ -896,14 +920,14 @@ export namespace EcrecoverRatifierUtils {
    * The returned items preserve tree leaf order and include ratifier data
    * required by takers. The group id is stored on each inline offer.
    *
-   * @param params.tree - Ecrecover-ratified offer tree to ratify.
+   * @param params.tree - Ecrecover-ratified offer tree-like input to ratify.
    * @param params.client - Optional viem client whose transport signs typed data built from `params.tree`.
    * @param params.account - Optional account used to sign typed data built from `params.tree`.
    * @param params.signature - Optional precomputed signature for `params.tree`.
    * @returns Items containing each offer and its ratifier data.
    * @throws {InvalidTreeError} when the tree is invalid or contains multiple ratifiers.
    * @throws {InvalidTreeHeightError} when the tree height is unsupported.
-   * @throws {InvalidTypedDataSignatureError} when client signing returns a signature that does not recover to `params.account`.
+   * @throws {InvalidTypedDataSignatureError} when client signing or a precomputed signature does not recover to `params.account`.
    * @example
    * ```ts
    * import { EcrecoverRatifierUtils, Tree } from "@morpho-org/midnight-sdk";
@@ -951,21 +975,62 @@ export namespace EcrecoverRatifierUtils {
    */
   export async function ratify(
     params: EcrecoverRatifierRatifyParams,
-  ): Promise<readonly PayloadItem[]> {
+  ): Promise<readonly Payload.Item[]> {
+    const { tree } = RatifierUtils.normalizeRatifierTree({
+      tree: params.tree,
+      label: "Ecrecover",
+    });
     let signature: Signature<number, number> & { readonly v: number };
     if (params.signature != null) {
-      getTreeRatifier(params.tree);
       signature = toSignature(params.signature);
-    } else {
-      signature = toSignature(await sign(params));
-    }
-    const items: PayloadItem[] = [];
+      const expectedChainId = MarketParams.from(tree.offers[0]!.market).chainId;
+      for (const offer of tree.offers.slice(1)) {
+        const offerChainId = MarketParams.from(offer.market).chainId;
+        if (offerChainId !== expectedChainId) {
+          throw new InvalidTreeError(
+            `All offers in an Ecrecover tree must use one chain id; expected "${expectedChainId}", got "${offerChainId}". Build separate trees per chain.`,
+          );
+        }
+      }
 
-    for (const offer of params.tree.offers) {
+      const signer =
+        typeof params.account === "string"
+          ? params.account
+          : params.account.address;
+      let isValidSignature = false;
+      try {
+        isValidSignature = await verifyHash({
+          address: signer,
+          hash: digest({ tree, chainId: expectedChainId }),
+          signature: serializeSignature({
+            r: signature.r,
+            s: signature.s,
+            yParity: signature.v - 27,
+          }),
+        });
+      } catch (cause) {
+        throw new InvalidTypedDataSignatureError(signer, cause);
+      }
+
+      if (!isValidSignature) {
+        throw new InvalidTypedDataSignatureError(signer);
+      }
+    } else {
+      signature = toSignature(
+        await sign({
+          tree,
+          client: params.client,
+          account: params.account,
+        }),
+      );
+    }
+    const items: Payload.Item[] = [];
+
+    for (const offer of tree.offers) {
       items.push({
         offer,
         ratifierData: ratifierData({
-          tree: params.tree,
+          tree,
           leafIndex: items.length,
           signature,
         }),

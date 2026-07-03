@@ -2,15 +2,18 @@ import { addressesRegistry } from "@morpho-org/blue-sdk";
 import { decodeFunctionData, erc20Abi, isHex } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
+import { UnsupportedErc20ApprovalSpenderError } from "../../../types/index.js";
 import { encodeErc20Approval } from "./encodeErc20Approval.js";
 
 describe("encodeErc20Approval", () => {
   const {
+    permit2,
     usdc,
     bundler3: { generalAdapter1 },
   } = addressesRegistry[mainnet.id];
 
   const mockAmount = 1000000n;
+  const customSpender = "0x0000000000000000000000000000000000000001" as const;
 
   test("should set correct transaction properties", () => {
     const transaction = encodeErc20Approval({
@@ -44,6 +47,26 @@ describe("encodeErc20Approval", () => {
     expect(decoded.args[1]).toEqual(mockAmount);
   });
 
+  test("should encode permit2 approval", () => {
+    if (permit2 == null) {
+      throw new Error("Permit2 is not configured");
+    }
+
+    const transaction = encodeErc20Approval({
+      token: usdc,
+      spender: permit2,
+      amount: mockAmount,
+      chainId: mainnet.id,
+    });
+
+    const decoded = decodeFunctionData({
+      abi: erc20Abi,
+      data: transaction.data,
+    });
+
+    expect(decoded.args[0]).toEqual(permit2);
+  });
+
   test("should work with zero amount", () => {
     const transaction = encodeErc20Approval({
       token: usdc,
@@ -59,5 +82,16 @@ describe("encodeErc20Approval", () => {
       data: transaction.data,
     });
     expect(decoded.args[1]).toEqual(0n);
+  });
+
+  test("should reject unsupported spender", () => {
+    expect(() =>
+      encodeErc20Approval({
+        token: usdc,
+        spender: customSpender,
+        amount: mockAmount,
+        chainId: mainnet.id,
+      }),
+    ).toThrow(UnsupportedErc20ApprovalSpenderError);
   });
 });

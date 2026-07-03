@@ -1,4 +1,5 @@
 import type { Address } from "viem";
+import type { MempoolPayloadValidationIssue } from "./api/types.js";
 
 /**
  * Thrown when a Midnight offer group violates protocol-level group mechanics.
@@ -228,6 +229,27 @@ export class InvalidOfferParameterError extends Error {
 }
 
 /**
+ * Thrown when Midnight mempool payload bytes cannot be encoded or decoded.
+ *
+ * @example
+ * ```ts
+ * import { PayloadDecodeError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new PayloadDecodeError("payload too short for header");
+ * ```
+ */
+export class PayloadDecodeError extends Error {
+  /** Machine-readable decode failure reason without the class message prefix. */
+  public readonly reason: string;
+
+  public constructor(reason: string, cause?: Error) {
+    super(`Failed to decode payload: ${reason}`, cause ? { cause } : undefined);
+    this.name = "PayloadDecodeError";
+    this.reason = reason;
+  }
+}
+
+/**
  * Thrown when a tree height exceeds the ratifier typehash table.
  *
  * @example
@@ -262,6 +284,59 @@ export class InvalidTreeError extends Error {
 }
 
 /**
+ * Thrown when a viem client's chain id does not match the chain id required by a signing flow.
+ *
+ * @example
+ * ```ts
+ * import { ChainIdMismatchError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new ChainIdMismatchError(1, 8453n);
+ * ```
+ */
+export class ChainIdMismatchError extends Error {
+  /** Chain id reported by the viem client, when configured. */
+  public readonly clientChainId: number | undefined;
+
+  /** Chain id required by the data being signed. */
+  public readonly expectedChainId: bigint;
+
+  public constructor(
+    clientChainId: number | undefined,
+    expectedChainId: bigint,
+  ) {
+    super(
+      `Client chain id "${clientChainId}" does not match expected chain id "${expectedChainId}". Switch the viem client to the offer market chain before signing.`,
+    );
+    this.name = "ChainIdMismatchError";
+    this.clientChainId = clientChainId;
+    this.expectedChainId = expectedChainId;
+  }
+}
+
+/**
+ * Thrown when the Midnight API rejects a tree during mempool policy validation.
+ *
+ * @example
+ * ```ts
+ * import { MidnightMempoolValidationError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new MidnightMempoolValidationError([{ rule: "tick_spacing" }]);
+ * ```
+ */
+export class MidnightMempoolValidationError extends Error {
+  /** Validation issues returned by the Midnight API. */
+  public readonly issues: readonly MempoolPayloadValidationIssue[];
+
+  public constructor(issues: readonly MempoolPayloadValidationIssue[]) {
+    super(
+      `Midnight mempool validation failed with "${issues.length}" issue${issues.length === 1 ? "" : "s"}. Adjust the offer parameters and try again.`,
+    );
+    this.name = "MidnightMempoolValidationError";
+    this.issues = issues;
+  }
+}
+
+/**
  * Thrown when a typed-data signature does not recover to the expected signer.
  *
  * @example
@@ -277,9 +352,10 @@ export class InvalidTypedDataSignatureError extends Error {
   /** Signer address the signature was expected to recover. */
   public readonly signer: Address;
 
-  public constructor(signer: Address) {
+  public constructor(signer: Address, cause?: unknown) {
     super(
       `Typed-data signature does not recover to signer "${signer}". Check the wallet account or signing transport.`,
+      cause === undefined ? undefined : { cause },
     );
     this.name = "InvalidTypedDataSignatureError";
     this.signer = signer;

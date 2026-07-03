@@ -1,4 +1,4 @@
-import type { Address } from "@morpho-org/blue-sdk";
+import { type Address, getChainAddresses } from "@morpho-org/blue-sdk";
 import { fetchToken, getPermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
 import { type Client, verifyTypedData, type WalletClient } from "viem";
@@ -15,7 +15,6 @@ import {
 /** Parameters for {@link encodeErc20Permit}. */
 interface EncodeErc20PermitParams {
   token: Address;
-  spender: Address;
   amount: bigint;
   chainId: number;
   nonce: bigint;
@@ -23,8 +22,8 @@ interface EncodeErc20PermitParams {
 }
 
 /**
- * Builds an EIP-2612 permit `Requirement` that, once signed, lets `spender` pull `amount` of
- * `token`.
+ * Builds an EIP-2612 permit `Requirement` that, once signed, lets GeneralAdapter1 pull `amount`
+ * of `token`.
  *
  * Reads token metadata via `fetchToken`. The returned `Requirement.sign()` produces the EIP-712
  * signature, verifies it against the connected account, and returns a `RequirementSignature`
@@ -33,7 +32,6 @@ interface EncodeErc20PermitParams {
  * @param viemClient - Connected viem `Client` whose `chain.id` matches `params.chainId`.
  * @param params - Permit encoding parameters.
  * @param params.token - ERC-20 token address (must support EIP-2612).
- * @param params.spender - Address that will be granted the permit allowance.
  * @param params.amount - Permit allowance amount.
  * @param params.chainId - Target chain id.
  * @param params.nonce - The user's current EIP-2612 nonce on `token`.
@@ -51,8 +49,7 @@ interface EncodeErc20PermitParams {
  *
  * const client = createWalletClient({ chain: mainnet, transport: http() });
  * const requirement = await encodeErc20Permit(client, {
- *   token: USDC, // L1 mainnet USDC. Bridged USDC.e on L2s often does not implement EIP-2612 — query token metadata before signing on other chains. DAI uses a non-standard permit signature.
- *   spender: generalAdapter1,
+ *   token: USDC, // Must implement standard ERC-2612. DAI is routed through Permit2 by requirement helpers.
  *   amount: 1_000_000n,
  *   chainId: 1,
  *   nonce: 0n,
@@ -64,11 +61,15 @@ export const encodeErc20Permit = async (
   viemClient: Client,
   params: EncodeErc20PermitParams,
 ): Promise<Requirement<PermitRequirementSignature>> => {
-  const { token, spender, amount, chainId, nonce, supportDeployless } = params;
+  const { token, amount, chainId, nonce, supportDeployless } = params;
 
   if (viemClient.chain?.id !== chainId) {
     throw new ChainIdMismatchError(viemClient.chain?.id, chainId);
   }
+
+  const {
+    bundler3: { generalAdapter1 },
+  } = getChainAddresses(chainId);
 
   const now = Time.timestamp();
   const deadline = now + Time.s.from.h(2n);
@@ -80,7 +81,7 @@ export const encodeErc20Permit = async (
   const action: PermitAction = {
     type: "permit",
     args: {
-      spender,
+      spender: generalAdapter1,
       amount,
       deadline,
     },
@@ -95,7 +96,7 @@ export const encodeErc20Permit = async (
         {
           erc20: tokenData,
           owner: userAddress,
-          spender,
+          spender: generalAdapter1,
           allowance: amount,
           nonce,
           deadline,

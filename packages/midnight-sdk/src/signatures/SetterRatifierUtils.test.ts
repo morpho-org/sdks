@@ -35,6 +35,29 @@ describe("SetterRatifierUtils.ratify", () => {
     ).toBe(true);
   });
 
+  test("behavior: accepts plain tree input", () => {
+    const offer = baseOffer({
+      maxAssets: 0n,
+      ratifier: addresses.setterRatifier,
+    });
+
+    const items = SetterRatifierUtils.ratify({ tree: [offer] });
+    const decoded = SetterRatifierUtils.decodeRatifierData(
+      items[0]!.ratifierData,
+    );
+
+    expect(items).toHaveLength(1);
+    expect(items[0]!.offer).toBe(offer);
+    expect(
+      TreeUtils.verifyProof({
+        offer: items[0]!.offer,
+        root: decoded.root,
+        leafIndex: decoded.leafIndex,
+        proof: decoded.proof,
+      }),
+    ).toBe(true);
+  });
+
   test("error: InvalidTreeError mixed ratifiers", () => {
     const tree = Tree.create([
       baseOffer({
@@ -50,6 +73,25 @@ describe("SetterRatifierUtils.ratify", () => {
     expect(() => SetterRatifierUtils.ratify({ tree })).toThrow(
       InvalidTreeError,
     );
+  });
+});
+
+describe("SetterRatifierUtils.ratifierData", () => {
+  test("error: InvalidTreeError mixed ratifiers", () => {
+    const tree = Tree.create([
+      baseOffer({
+        maxAssets: 0n,
+        ratifier: addresses.setterRatifier,
+      }),
+      baseOffer({
+        maxAssets: 0n,
+        ratifier: addresses.ecrecoverRatifier,
+      }),
+    ]);
+
+    expect(() =>
+      SetterRatifierUtils.ratifierData({ tree, leafIndex: 0n }),
+    ).toThrow(InvalidTreeError);
   });
 });
 

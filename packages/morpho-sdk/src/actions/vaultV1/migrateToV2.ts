@@ -67,7 +67,7 @@ export interface VaultV1MigrateToV2Params {
  *   for the deposit leg).
  * @param params.args.recipient - Address that receives the V2 vault shares.
  * @param params.args.requirementSignature - Optional pre-signed permit/permit2 for the V1 share
- *   transfer. When absent, the bundle falls back to a plain `erc20TransferFrom`.
+ *   transfer.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<VaultV1MigrateToV2Action>` with `to`, `value`, `data`, and
  *   the typed `action` discriminator the simulation layer consumes.
@@ -140,22 +140,15 @@ export const vaultV1MigrateToV2 = ({
 
   // Transfer V1 shares from user to GA1.
   // With a signature: permit/permit2 + transferFrom for the signed amount.
-  // Without: plain erc20TransferFrom for the specified shares amount.
-  if (requirementSignature) {
-    actions.push(
-      ...getTokenRequirementActions({
-        asset: sourceVault,
-        amount: shares,
-        recipient: generalAdapter1,
-        requirementSignature,
-      }),
-    );
-  } else {
-    actions.push({
-      type: "erc20TransferFrom",
-      args: [sourceVault, shares, generalAdapter1, false /* skipRevert */],
-    });
-  }
+  // Without a signature: use ERC-20 transferFrom for the specified shares amount.
+  actions.push(
+    ...getTokenRequirementActions({
+      asset: sourceVault,
+      amount: shares,
+      recipient: generalAdapter1,
+      requirementSignature,
+    }),
+  );
 
   // GA1 redeems its own shares (owner = GA1, no allowance check).
   actions.push({

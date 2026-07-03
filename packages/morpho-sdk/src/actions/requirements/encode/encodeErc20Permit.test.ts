@@ -15,7 +15,6 @@ import { encodeErc20Permit } from "./encodeErc20Permit.js";
 describe("encodeErc20Permit", () => {
   const {
     usdc,
-    dai,
     bundler3: { generalAdapter1 },
   } = addressesRegistry[mainnet.id];
 
@@ -33,7 +32,6 @@ describe("encodeErc20Permit", () => {
       await expect(
         encodeErc20Permit(client, {
           token: usdc,
-          spender: generalAdapter1,
           amount: mockAmount,
           chainId: mainnet.id + 1,
           nonce: mockNonce,
@@ -46,25 +44,6 @@ describe("encodeErc20Permit", () => {
 
       const permit = await encodeErc20Permit(client, {
         token: usdc,
-        spender: generalAdapter1,
-        amount: mockAmount,
-        chainId: mainnet.id,
-        nonce: mockNonce,
-      });
-
-      const signatureRequirement = await permit.sign(client, userAddress);
-
-      expect(signatureRequirement.args.owner).toEqual(userAddress);
-      expect(isHex(signatureRequirement.args.signature)).toBe(true);
-      expect(signatureRequirement.args.signature.length).toBe(132);
-    });
-
-    test("should sign permit for DAI token", async ({ client }) => {
-      const userAddress = client.account.address;
-
-      const permit = await encodeErc20Permit(client, {
-        token: dai,
-        spender: generalAdapter1,
         amount: mockAmount,
         chainId: mainnet.id,
         nonce: mockNonce,
@@ -85,7 +64,6 @@ describe("encodeErc20Permit", () => {
 
       const permit = await encodeErc20Permit(client, {
         token: usdc,
-        spender: generalAdapter1,
         amount: mockAmount,
         chainId: mainnet.id,
         nonce: mockNonce,
@@ -112,7 +90,6 @@ describe("encodeErc20Permit", () => {
       };
       const permit = await encodeErc20Permit(client, {
         token: usdc,
-        spender: generalAdapter1,
         amount: mockAmount,
         chainId: mainnet.id,
         nonce: mockNonce,
@@ -130,7 +107,6 @@ describe("encodeErc20Permit", () => {
 
       const permit = await encodeErc20Permit(client, {
         token: usdc,
-        spender: generalAdapter1,
         amount: mockAmount,
         chainId: mainnet.id,
         nonce: mockNonce,
@@ -158,7 +134,6 @@ describe("encodeErc20Permit", () => {
 
       const permit = await encodeErc20Permit(client, {
         token: usdc,
-        spender: generalAdapter1,
         amount: mockAmount,
         chainId: mainnet.id,
         nonce: mockNonce,
@@ -183,7 +158,6 @@ describe("encodeErc20Permit", () => {
     test("should have correct action structure", async ({ client }) => {
       const permit = await encodeErc20Permit(client, {
         token: usdc,
-        spender: generalAdapter1,
         amount: mockAmount,
         chainId: mainnet.id,
         nonce: mockNonce,
