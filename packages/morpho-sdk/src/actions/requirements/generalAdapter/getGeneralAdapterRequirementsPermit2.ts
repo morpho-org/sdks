@@ -1,5 +1,4 @@
 import { type Address, MathLib } from "@morpho-org/blue-sdk";
-import { Time } from "@morpho-org/morpho-ts";
 import type {
   Bundler3TokenSignatureRequirement,
   ERC20ApprovalAction,
@@ -9,32 +8,28 @@ import { encodeErc20Permit2Approve } from "../encode/encodeErc20Permit2Approve.j
 import { getRequirementsApproval } from "../getRequirementsApproval.js";
 
 interface GeneralAdapterPermit2Erc20Allowances {
-  readonly generalAdapter1: bigint;
   readonly permit2: bigint;
-}
-
-interface GeneralAdapterPermit2Allowance {
-  readonly amount: bigint;
-  readonly expiration: bigint;
-  readonly nonce: bigint;
 }
 
 /**
  * Computes the Permit2 prerequisites for `GeneralAdapter1` to pull `amount` of `address`.
  *
- * Returns an empty array when the direct adapter allowance already covers `amount`. Otherwise
- * emits two ordered prerequisites:
+ * Emits two ordered prerequisites:
  *
  * 1. A classic ERC-20 approval to the Permit2 contract (infinite, if not already in place).
- * 2. A Permit2 `Requirement` signed against `GeneralAdapter1` (skipped when the existing
- *    Permit2-managed allowance covers `amount` and is not about to expire within four hours).
+ * 2. A Permit2 `Requirement` signed against `GeneralAdapter1`.
+ *
+ * The Permit2 signature is always requested for the exact transfer amount when this path is
+ * selected. Permit2 allowance signatures overwrite the existing allowance, so relying on
+ * residual Permit2-managed allowance would make the final transfer path depend on stale state and
+ * could leave allowance behind after a partial spend.
  *
  * @param params.address - ERC-20 token address.
  * @param params.chainId - The chain the bundle targets.
  * @param params.permit2 - The Permit2 contract address for the chain.
  * @param params.args.amount - Required token amount.
  * @param params.erc20Allowances - Current ERC-20 allowances keyed by spender contract name.
- * @param params.permit2Allowance - Permit2-managed allowance for `GeneralAdapter1`.
+ * @param params.permit2Nonce - Current Permit2 nonce for the token owner / token / GeneralAdapter1 tuple.
  * @returns Ordered list of approval transactions and/or `Requirement` objects to satisfy before
  *   bundling.
  * @throws {ApprovalAmountLessThanSpendAmountError} from the inner approval helper when its
@@ -51,8 +46,8 @@ interface GeneralAdapterPermit2Allowance {
  *   chainId: 1,
  *   permit2,
  *   args: { amount: 1_000_000n },
- *   erc20Allowances: { generalAdapter1: 0n, permit2: 0n },
- *   permit2Allowance: { amount: 0n, expiration: 0n, nonce: 0n },
+ *   erc20Allowances: { permit2: 0n },
+ *   permit2Nonce: 0n,
  * });
  * // requirements satisfies (Readonly<Transaction<ERC20ApprovalAction> | Bundler3TokenSignatureRequirement>)[]
  * ```
@@ -63,7 +58,7 @@ export const getGeneralAdapterRequirementsPermit2 = (params: {
   permit2: Address;
   args: { amount: bigint };
   erc20Allowances: GeneralAdapterPermit2Erc20Allowances;
-  permit2Allowance: GeneralAdapterPermit2Allowance;
+  permit2Nonce: bigint;
 }): Readonly<
   Transaction<ERC20ApprovalAction> | Bundler3TokenSignatureRequirement
 >[] => {
@@ -73,12 +68,8 @@ export const getGeneralAdapterRequirementsPermit2 = (params: {
     permit2,
     args: { amount },
     erc20Allowances,
-    permit2Allowance,
+    permit2Nonce,
   } = params;
-
-  if (erc20Allowances.generalAdapter1 >= amount) {
-    return [];
-  }
 
   const requirements: (
     | Transaction<ERC20ApprovalAction>
@@ -98,20 +89,18 @@ export const getGeneralAdapterRequirementsPermit2 = (params: {
 
   requirements.push(...approvalRequirements);
 
-  if (
-    permit2Allowance.amount < amount ||
-    permit2Allowance.expiration < Time.timestamp() + Time.s.from.h(4n)
-  ) {
-    requirements.push(
-      encodeErc20Permit2Approve({
-        token: address,
-        amount,
-        chainId,
-        nonce: permit2Allowance.nonce,
-        expiration: MathLib.MAX_UINT_48, // Always approve indefinitely.
-      }),
-    );
-  }
+  // Existing Permit2-managed allowance is intentionally not checked for sufficiency. Permit2
+  // overwrites the allowance with this signed amount, and the bundle spends exactly `amount`,
+  // leaving no residual Permit2 allowance after inclusion.
+  requirements.push(
+    encodeErc20Permit2Approve({
+      token: address,
+      amount,
+      chainId,
+      nonce: permit2Nonce,
+      expiration: MathLib.MAX_UINT_48, // Always approve indefinitely.
+    }),
+  );
 
   return requirements;
 };

@@ -258,7 +258,7 @@ describe("depositVaultV1 unit tests", () => {
       },
     });
 
-    expect(localSpy).not.toHaveBeenCalled();
+    expect(localSpy).toHaveBeenCalled();
 
     expect(tx).toBeDefined();
     expect(tx.action.type).toBe("vaultV1Deposit");

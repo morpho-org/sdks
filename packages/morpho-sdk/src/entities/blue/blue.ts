@@ -606,7 +606,6 @@ export class MorphoBlue implements BlueActions {
       market: marketData,
       slippageTolerance,
     });
-
     return {
       getRequirements: (params?: { useSimplePermit?: boolean }) =>
         getGeneralAdapterRequirements(this.client.viemClient, {
@@ -761,7 +760,6 @@ export class MorphoBlue implements BlueActions {
     if (nativeAmount !== undefined && nativeAmount > 0n) {
       validateNativeAsset(this.chainId, this.marketParams.collateralToken);
     }
-
     return {
       getRequirements: (params?: { useSimplePermit?: boolean }) =>
         getGeneralAdapterRequirements(this.client.viemClient, {
@@ -954,7 +952,6 @@ export class MorphoBlue implements BlueActions {
       market: marketForRepay,
       slippageTolerance,
     });
-
     return {
       getRequirements: (reqParams?: { useSimplePermit?: boolean }) =>
         getGeneralAdapterRequirements(this.client.viemClient, {
@@ -1156,7 +1153,6 @@ export class MorphoBlue implements BlueActions {
       market: marketForRepay,
       slippageTolerance,
     });
-
     return {
       getRequirements: async (reqParams?: { useSimplePermit?: boolean }) => {
         const [erc20Requirements, authTx] = await Promise.all([
@@ -1270,7 +1266,6 @@ export class MorphoBlue implements BlueActions {
       market: positionData.market,
       slippageTolerance,
     });
-
     return {
       getRequirements: async (params?: { useSimplePermit?: boolean }) => {
         const [erc20Requirements, authTx] = await Promise.all([

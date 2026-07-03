@@ -271,10 +271,9 @@ export class MorphoVaultV2 implements VaultV2Actions {
       ),
       MathLib.RAY * 100n,
     );
-
     return {
-      getRequirements: async (params?: { useSimplePermit?: boolean }) =>
-        await getGeneralAdapterRequirements(this.client.viemClient, {
+      getRequirements: (params?: { useSimplePermit?: boolean }) =>
+        getGeneralAdapterRequirements(this.client.viemClient, {
           address: vaultData.asset,
           chainId: this.chainId,
           supportSignature: this.client.options.supportSignature,

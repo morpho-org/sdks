@@ -1,25 +1,28 @@
 import { type Address, getChainAddresses } from "@morpho-org/blue-sdk";
-import { fetchHolding } from "@morpho-org/blue-sdk-viem";
+import { erc2612Abi, permit2Abi } from "@morpho-org/blue-sdk-viem";
 import { isDefined } from "@morpho-org/morpho-ts";
-import { type Client, isAddressEqual } from "viem";
-import {
-  type Bundler3TokenSignatureRequirement,
-  ChainIdMismatchError,
-  type ERC20ApprovalAction,
-  type Transaction,
+import { type Client, erc20Abi, isAddressEqual } from "viem";
+import { readContract } from "viem/actions";
+import type {
+  Bundler3TokenSignatureRequirement,
+  ERC20ApprovalAction,
+  Transaction,
 } from "../../../types/index.js";
+import { ChainIdMismatchError } from "../../../types/index.js";
 import { getRequirementsApproval } from "../getRequirementsApproval.js";
 import { getGeneralAdapterRequirementsPermit } from "./getGeneralAdapterRequirementsPermit.js";
 import { getGeneralAdapterRequirementsPermit2 } from "./getGeneralAdapterRequirementsPermit2.js";
 
-type GetGeneralAdapterRequirementsBaseParams = {
+/** Shared parameters for GeneralAdapter1 token requirement resolution. */
+export type GetGeneralAdapterRequirementsBaseParams = {
   address: Address;
   chainId: number;
   supportDeployless?: boolean;
   args: { amount: bigint; from: Address };
 };
 
-type GetGeneralAdapterRequirementsParams =
+/** Parameters for {@link getGeneralAdapterRequirements}. */
+export type GetGeneralAdapterRequirementsParams =
   | (GetGeneralAdapterRequirementsBaseParams & {
       /** Signature-based approvals are not supported. Classic approval (transaction) will be used. */
       supportSignature: false;
@@ -39,11 +42,11 @@ type GetGeneralAdapterRequirementsParams =
  * Resolves the approval requirements an integrator must satisfy before a bundled action pulls
  * tokens through `GeneralAdapter1`.
  *
- * Reads the user's current `holding` (allowances + nonces) from the chain, then picks one of
- * three flows:
+ * Reads the minimum token allowance / nonce state needed from the chain, then picks one of three
+ * flows:
  *
  * 1. **`supportSignature: false`** — classic ERC-20 `approve` transaction (or no-op when the
- *    allowance is already large enough).
+ *    direct allowance is already large enough).
  * 2. **`supportSignature: true` + EIP-2612 nonce detected + `useSimplePermit`** — single permit
  *    signature against the token itself. DAI is excluded from this branch (its non-standard
  *    permit signature is incompatible) and falls through to Permit2 even with
@@ -51,8 +54,8 @@ type GetGeneralAdapterRequirementsParams =
  * 3. **`supportSignature: true`, default** — Permit2 flow: classic approval to the Permit2
  *    contract (if needed), followed by a Permit2 signature against `GeneralAdapter1`.
  *
- * The simple-permit compatibility check is intentionally shallow: it reuses the fetched
- * ERC-2612 nonce, which is based on whether the token exposes a readable `nonces(owner)`.
+ * The simple-permit compatibility check is intentionally shallow: when requested, it probes
+ * whether the token exposes a readable ERC-2612 `nonces(owner)` value.
  * Leaving `useSimplePermit` unset, or passing `false`, is the caller escape hatch for tokens
  * that expose `nonces` but are still incompatible with the SDK's ERC-2612 encoder. This opt-out
  * has proven useful in the past, but the SDK does not encode a token-specific example here.
@@ -67,13 +70,13 @@ type GetGeneralAdapterRequirementsParams =
  * @param params.args.from - Account that will grant the approval.
  * @param params.supportSignature - Whether the integrator can collect a signature; controls
  *   permit / permit2 vs. classic approval.
- * @param params.supportDeployless - Whether to fetch holdings via deployless multicall.
+ * @param params.supportDeployless - Whether ERC-2612 permit metadata reads may use deployless multicall.
  * @param params.useSimplePermit - When `supportSignature` is `true`, prefer EIP-2612 permit if
  *   the nonce probe detects support. Leave unset or pass `false` to force the Permit2 fallback
  *   for tokens known to be incompatible despite passing that probe.
  * @returns Promise resolving to an array of either deep-frozen approval transactions or
- *   `Requirement` objects (signature requirements with a `sign()` method). Empty when the
- *   existing allowance already covers `amount`.
+ *   `Requirement` objects (signature requirements with a `sign()` method). Empty when `amount`
+ *   is zero or when the classic-approval path can reuse sufficient direct allowance.
  * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`. No other typed
  *   error is reachable through this entry point: the values passed into
  *   `getRequirementsApproval` always satisfy `approvalAmount >= spendAmount` (direct path uses
@@ -123,43 +126,69 @@ export const getGeneralAdapterRequirements = async (
     dai,
     bundler3: { generalAdapter1 },
   } = getChainAddresses(chainId);
-  const { erc20Allowances, erc2612Nonce, permit2BundlerAllowance } =
-    await fetchHolding(from, address, viemClient, {
-      deployless: params.supportDeployless,
-    });
-
   if (supportSignature) {
     const { useSimplePermit } = params;
     const isDai = isDefined(dai) && isAddressEqual(address, dai);
-    const supportSimplePermit = isDefined(erc2612Nonce) && !isDai;
 
-    if (supportSimplePermit && useSimplePermit) {
-      return await getGeneralAdapterRequirementsPermit(viemClient, {
-        token: address,
-        chainId,
-        args: { amount },
-        erc20Allowances: {
-          generalAdapter1: erc20Allowances["bundler3.generalAdapter1"],
-        },
-        nonce: erc2612Nonce,
-        supportDeployless: params.supportDeployless,
-      });
+    if (useSimplePermit && !isDai) {
+      const erc2612Nonce = await readContract(viemClient, {
+        abi: erc2612Abi,
+        address,
+        functionName: "nonces",
+        args: [from],
+      }).catch(() => undefined);
+
+      if (isDefined(erc2612Nonce)) {
+        // Do not skip this exact permit because a previous ERC-20 allowance is already enough.
+        // ERC-2612 overwrites the allowance, and the bundle spends exactly `amount`, so signing
+        // the pulled amount leaves no residual direct allowance after inclusion.
+        return getGeneralAdapterRequirementsPermit(viemClient, {
+          token: address,
+          chainId,
+          args: { amount },
+          nonce: erc2612Nonce,
+          supportDeployless: params.supportDeployless,
+        });
+      }
     }
 
     if (permit2) {
+      // Do not check the existing Permit2-managed amount/expiration. Permit2 allowance signatures
+      // overwrite the tuple, and the bundle spends exactly `amount`, so a fresh exact signature
+      // leaves no residual Permit2 allowance. The tuple is still read because Permit2 requires
+      // its nonce in the signed allowance payload.
+      const [permit2Erc20Allowance, [, , permit2Nonce]] = await Promise.all([
+        readContract(viemClient, {
+          abi: erc20Abi,
+          address,
+          functionName: "allowance",
+          args: [from, permit2],
+        }),
+        readContract(viemClient, {
+          abi: permit2Abi,
+          address: permit2,
+          functionName: "allowance",
+          args: [from, address, generalAdapter1],
+        }),
+      ]);
+
       return getGeneralAdapterRequirementsPermit2({
         address,
         chainId,
         permit2,
         args: { amount },
-        erc20Allowances: {
-          generalAdapter1: erc20Allowances["bundler3.generalAdapter1"],
-          permit2: erc20Allowances.permit2,
-        },
-        permit2Allowance: permit2BundlerAllowance,
+        erc20Allowances: { permit2: permit2Erc20Allowance },
+        permit2Nonce: BigInt(permit2Nonce),
       });
     }
   }
+
+  const generalAdapterAllowance = await readContract(viemClient, {
+    abi: erc20Abi,
+    address,
+    functionName: "allowance",
+    args: [from, generalAdapter1],
+  });
 
   return getRequirementsApproval({
     address,
@@ -169,6 +198,6 @@ export const getGeneralAdapterRequirements = async (
       approvalAmount: amount,
       spender: generalAdapter1,
     },
-    allowances: erc20Allowances["bundler3.generalAdapter1"],
+    allowances: generalAdapterAllowance,
   });
 };

@@ -236,10 +236,9 @@ export class MorphoVaultV1 implements VaultV1Actions {
       ),
       MAX_ABSOLUTE_SHARE_PRICE,
     );
-
     return {
-      getRequirements: async (params?: { useSimplePermit?: boolean }) =>
-        await getGeneralAdapterRequirements(this.client.viemClient, {
+      getRequirements: (params?: { useSimplePermit?: boolean }) =>
+        getGeneralAdapterRequirements(this.client.viemClient, {
           address: vaultData.asset,
           chainId: this.chainId,
           supportSignature: this.client.options.supportSignature,
@@ -380,10 +379,9 @@ export class MorphoVaultV1 implements VaultV1Actions {
       ),
       MAX_ABSOLUTE_SHARE_PRICE,
     );
-
     return {
-      getRequirements: async () =>
-        await getGeneralAdapterRequirements(this.client.viemClient, {
+      getRequirements: () =>
+        getGeneralAdapterRequirements(this.client.viemClient, {
           address: this.vault,
           chainId: this.chainId,
           supportSignature: this.client.options.supportSignature,

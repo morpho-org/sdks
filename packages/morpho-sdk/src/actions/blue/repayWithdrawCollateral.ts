@@ -167,21 +167,14 @@ export const blueRepayWithdrawCollateral = ({
     actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
   }
 
-  if (requirementSignature) {
-    actions.push(
-      ...getTokenRequirementActions({
-        asset: marketParams.loanToken,
-        amount: transferAmount,
-        recipient: generalAdapter1,
-        requirementSignature,
-      }),
-    );
-  } else {
-    actions.push({
-      type: "erc20TransferFrom",
-      args: [marketParams.loanToken, transferAmount, generalAdapter1, false],
-    });
-  }
+  actions.push(
+    ...getTokenRequirementActions({
+      asset: marketParams.loanToken,
+      amount: transferAmount,
+      recipient: generalAdapter1,
+      requirementSignature,
+    }),
+  );
 
   // REPAY FIRST — reduces debt before withdrawing collateral
   actions.push({

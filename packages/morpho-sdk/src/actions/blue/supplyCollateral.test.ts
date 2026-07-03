@@ -162,7 +162,7 @@ describe("blueSupplyCollateral unit tests", () => {
     expect(tx.value).toBe(nativeAmount);
   });
 
-  test("should not call getTokenRequirementActions when no requirementSignature", async ({
+  test("should call getTokenRequirementActions without requirementSignature", async ({
     client,
   }) => {
     const localSpy = vi.spyOn(
@@ -181,7 +181,7 @@ describe("blueSupplyCollateral unit tests", () => {
       },
     });
 
-    expect(localSpy).not.toHaveBeenCalled();
+    expect(localSpy).toHaveBeenCalled();
   });
 
   test("should throw NonPositiveAssetAmountError when amount is negative", async ({

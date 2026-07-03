@@ -149,7 +149,7 @@ describe("blueSupply unit tests", () => {
     expect(tx.action.type).toBe("blueSupply");
   });
 
-  test("should not call getTokenRequirementActions when no requirementSignature", async ({
+  test("should call getTokenRequirementActions without requirementSignature", async ({
     client,
   }) => {
     const localSpy = vi.spyOn(
@@ -166,7 +166,7 @@ describe("blueSupply unit tests", () => {
       },
     });
 
-    expect(localSpy).not.toHaveBeenCalled();
+    expect(localSpy).toHaveBeenCalled();
   });
 
   test("should throw NegativeSupplyAmountError when amount is negative", async ({

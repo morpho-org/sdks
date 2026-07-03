@@ -1,11 +1,21 @@
 import {
   addressesRegistry,
   type ChainAddresses,
+  getChainAddresses,
   Holding,
   MathLib,
   registerCustomAddresses,
 } from "@morpho-org/blue-sdk";
-import type { Address, Client } from "viem";
+import { createMockClient, type MockClientHandle } from "@morpho-org/test/mock";
+import {
+  type Address,
+  type Chain,
+  type Client,
+  decodeFunctionData,
+  encodeFunctionResult,
+  erc20Abi,
+  type Hex,
+} from "viem";
 import { mainnet } from "viem/chains";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
@@ -20,15 +30,16 @@ import { getRequirementsApproval } from "../getRequirementsApproval.js";
 import { getGeneralAdapterRequirements } from "./getGeneralAdapterRequirements.js";
 import { getGeneralAdapterRequirementsPermit } from "./getGeneralAdapterRequirementsPermit.js";
 
-vi.mock("@morpho-org/blue-sdk-viem", async (_importOriginal) => {
+vi.mock("@morpho-org/blue-sdk-viem", async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import("@morpho-org/blue-sdk-viem")>();
   return {
-    fetchHolding: vi.fn(),
+    ...original,
     fetchToken: vi.fn(),
   };
 });
 
-import { fetchHolding, fetchToken } from "@morpho-org/blue-sdk-viem";
-import { Time } from "@morpho-org/morpho-ts";
+import { erc2612Abi, fetchToken, permit2Abi } from "@morpho-org/blue-sdk-viem";
 
 describe("getGeneralAdapterRequirements", () => {
   const {
@@ -44,14 +55,90 @@ describe("getGeneralAdapterRequirements", () => {
   const noPermit2ChainId = 9_101_003;
 
   let mockClient: Client;
+  let mockHandle: MockClientHandle;
+
+  const useMockClient = (chain: Chain = mainnet) => {
+    mockHandle = createMockClient(chain);
+    mockClient = mockHandle.client;
+  };
+
+  const mockHoldingReads = (holding: Holding) => {
+    mockHandle.request.mockImplementation(async ({ method, params }) => {
+      if (method === "eth_chainId") {
+        return `0x${mockHandle.chain.id.toString(16)}`;
+      }
+
+      if (method !== "eth_call") {
+        throw new Error(`Unhandled RPC method ${method}`);
+      }
+
+      const [tx] = (params ?? []) as [{ to?: Address; data?: Hex }];
+      if (tx?.to == null || tx.data == null) {
+        throw new Error("Malformed eth_call");
+      }
+
+      const to = tx.to.toLowerCase();
+      const { permit2: chainPermit2 } = getChainAddresses(mockHandle.chain.id);
+
+      if (chainPermit2 == null || to !== chainPermit2.toLowerCase()) {
+        try {
+          const call = decodeFunctionData({ abi: erc20Abi, data: tx.data });
+
+          if (call.functionName === "allowance") {
+            const [, spender] = call.args;
+            return encodeFunctionResult({
+              abi: erc20Abi,
+              functionName: "allowance",
+              result:
+                chainPermit2 != null &&
+                spender.toLowerCase() === chainPermit2.toLowerCase()
+                  ? holding.erc20Allowances.permit2
+                  : holding.erc20Allowances["bundler3.generalAdapter1"],
+            });
+          }
+        } catch {
+          // The token read may be an ERC-2612 nonce probe instead of ERC-20 allowance.
+        }
+
+        const nonceCall = decodeFunctionData({
+          abi: erc2612Abi,
+          data: tx.data,
+        });
+        if (nonceCall.functionName === "nonces") {
+          if (holding.erc2612Nonce == null) {
+            throw new Error("ERC-2612 nonce unavailable");
+          }
+
+          return encodeFunctionResult({
+            abi: erc2612Abi,
+            functionName: "nonces",
+            result: holding.erc2612Nonce,
+          });
+        }
+      }
+
+      if (chainPermit2 != null && to === chainPermit2.toLowerCase()) {
+        const call = decodeFunctionData({ abi: permit2Abi, data: tx.data });
+        if (call.functionName === "allowance") {
+          return encodeFunctionResult({
+            abi: permit2Abi,
+            functionName: "allowance",
+            result: [
+              holding.permit2BundlerAllowance.amount,
+              Number(holding.permit2BundlerAllowance.expiration),
+              Number(holding.permit2BundlerAllowance.nonce),
+            ],
+          });
+        }
+      }
+
+      throw new Error(`Unhandled eth_call to ${tx.to}`);
+    });
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockClient = {
-      chain: {
-        id: mainnet.id,
-      },
-    } as unknown as Client;
+    useMockClient();
 
     // Mock fetchToken to return token data required for permit signing
     vi.mocked(fetchToken).mockResolvedValue({
@@ -95,7 +182,7 @@ describe("getGeneralAdapterRequirements", () => {
 
   describe("Flow 1: supportSignature = false (classic approval)", () => {
     test("should return approval when allowance is less than amount", async () => {
-      vi.mocked(fetchHolding).mockResolvedValue(
+      mockHoldingReads(
         new Holding({
           user: mockFrom,
           token: usdc,
@@ -133,7 +220,7 @@ describe("getGeneralAdapterRequirements", () => {
     });
 
     test("should return empty array when allowance is sufficient", async () => {
-      vi.mocked(fetchHolding).mockResolvedValue(
+      mockHoldingReads(
         new Holding({
           user: mockFrom,
           token: usdc,
@@ -167,7 +254,7 @@ describe("getGeneralAdapterRequirements", () => {
   describe("supportSignature = true", () => {
     describe("Flow 2: Simple permit (EIP-2612)", () => {
       test("should return simple permit requirement when erc2612Nonce is defined", async () => {
-        vi.mocked(fetchHolding).mockResolvedValue(
+        mockHoldingReads(
           new Holding({
             user: mockFrom,
             token: usdc,
@@ -205,8 +292,8 @@ describe("getGeneralAdapterRequirements", () => {
         expect(permit.action.args.amount).toBe(mockAmount);
       });
 
-      test("should return empty array when allowance is sufficient", async () => {
-        vi.mocked(fetchHolding).mockResolvedValue(
+      test("should return simple permit when direct allowance is sufficient", async () => {
+        mockHoldingReads(
           new Holding({
             user: mockFrom,
             token: usdc,
@@ -231,15 +318,22 @@ describe("getGeneralAdapterRequirements", () => {
           address: usdc,
           chainId: mainnet.id,
           args: { amount: mockAmount, from: mockFrom },
+          useSimplePermit: true,
         });
 
-        expect(requirements).toHaveLength(0);
+        expect(requirements).toHaveLength(1);
+        const permit = requirements[0];
+        if (!isRequirementSignature(permit)) {
+          throw new Error("Requirement is not a permit transaction");
+        }
+        expect(permit.action.type).toBe("permit");
+        expect(permit.action.args.amount).toBe(mockAmount);
       });
     });
 
     describe("Flow 3: Permit2", () => {
       test("should return permit2 requirement with prior approval for permit2", async () => {
-        vi.mocked(fetchHolding).mockResolvedValue(
+        mockHoldingReads(
           new Holding({
             user: mockFrom,
             token: usdc,
@@ -288,7 +382,7 @@ describe("getGeneralAdapterRequirements", () => {
       });
 
       test("should return permit2 only when prior approval for permit2 is sufficient", async () => {
-        vi.mocked(fetchHolding).mockResolvedValue(
+        mockHoldingReads(
           new Holding({
             user: mockFrom,
             token: usdc,
@@ -325,9 +419,8 @@ describe("getGeneralAdapterRequirements", () => {
         expect(permit2Requirement.action.args.amount).toBe(mockAmount);
       });
 
-      test("should return empty array when permit2 allowance is sufficient and not expired", async () => {
-        const now = Time.timestamp();
-        vi.mocked(fetchHolding).mockResolvedValue(
+      test("should return permit2 requirement when residual permit2 allowance is sufficient", async () => {
+        mockHoldingReads(
           new Holding({
             user: mockFrom,
             token: usdc,
@@ -338,7 +431,7 @@ describe("getGeneralAdapterRequirements", () => {
             },
             permit2BundlerAllowance: {
               amount: 2000000n, // Sufficient amount
-              expiration: now + Time.s.from.h(5n), // Not expired with 5 hours margin
+              expiration: 2n ** 48n - 1n,
               nonce: 0n,
             },
             erc2612Nonce: undefined,
@@ -354,14 +447,18 @@ describe("getGeneralAdapterRequirements", () => {
           args: { amount: mockAmount, from: mockFrom },
         });
 
-        // Should return empty array when everything is sufficient
-        expect(requirements).toHaveLength(0);
+        expect(requirements).toHaveLength(1);
+        const permit2Requirement = requirements[0];
+        if (!isRequirementSignature(permit2Requirement)) {
+          throw new Error("Requirement is not a requirement signature");
+        }
+        expect(permit2Requirement.action.type).toBe("permit2");
+        expect(permit2Requirement.action.args.spender).toBe(generalAdapter1);
+        expect(permit2Requirement.action.args.amount).toBe(mockAmount);
       });
 
-      test("should return permit2 requirement when expiration is expired", async () => {
-        const now = Time.timestamp();
-        const expiration = now - 1000n;
-        vi.mocked(fetchHolding).mockResolvedValue(
+      test("should return permit2 requirement when residual permit2 allowance is expired", async () => {
+        mockHoldingReads(
           new Holding({
             user: mockFrom,
             token: usdc,
@@ -372,7 +469,7 @@ describe("getGeneralAdapterRequirements", () => {
             },
             permit2BundlerAllowance: {
               amount: 2000000n, // Sufficient amount
-              expiration: expiration, // Expired
+              expiration: 0n, // Expired
               nonce: 0n,
             },
             erc2612Nonce: undefined,
@@ -399,7 +496,7 @@ describe("getGeneralAdapterRequirements", () => {
       });
 
       test("should return permit2 requirement when DAI exposes nonce and simple permit is requested", async () => {
-        vi.mocked(fetchHolding).mockResolvedValue(
+        mockHoldingReads(
           new Holding({
             user: mockFrom,
             token: dai,
@@ -448,7 +545,7 @@ describe("getGeneralAdapterRequirements", () => {
 
       test("should compare DAI case-insensitively before excluding simple permit", async () => {
         const lowerCaseDai = dai.toLowerCase() as Address;
-        vi.mocked(fetchHolding).mockResolvedValue(
+        mockHoldingReads(
           new Holding({
             user: mockFrom,
             token: lowerCaseDai,
@@ -494,7 +591,8 @@ describe("getGeneralAdapterRequirements", () => {
       });
 
       test("should fall back to classic approval when a chain has no Permit2", async () => {
-        vi.mocked(fetchHolding).mockResolvedValue(
+        useMockClient({ ...mainnet, id: noPermit2ChainId });
+        mockHoldingReads(
           new Holding({
             user: mockFrom,
             token: usdc,
@@ -513,7 +611,6 @@ describe("getGeneralAdapterRequirements", () => {
             balance: 0n,
           }),
         );
-        mockClient = { chain: { id: noPermit2ChainId } } as unknown as Client;
 
         const requirements = await getGeneralAdapterRequirements(mockClient, {
           supportSignature: true,
@@ -535,6 +632,21 @@ describe("getGeneralAdapterRequirements", () => {
   });
 
   describe("direct requirement helpers", () => {
+    test("getTokenRequirementActions emits ERC-20 transfer when no signature is provided", () => {
+      expect(
+        getTokenRequirementActions({
+          asset: usdc,
+          amount: mockAmount,
+          recipient: generalAdapter1,
+        }),
+      ).toEqual([
+        {
+          type: "erc20TransferFrom",
+          args: [usdc, mockAmount, generalAdapter1, false],
+        },
+      ]);
+    });
+
     test("getTokenRequirementActions throws when permit2 signature args omit expiration", () => {
       expect(() =>
         getTokenRequirementActions({
@@ -579,16 +691,20 @@ describe("getGeneralAdapterRequirements", () => {
       ).toThrow(ApprovalAmountLessThanSpendAmountError);
     });
 
-    test("getGeneralAdapterRequirementsPermit returns no requirement when allowance is sufficient", async () => {
-      await expect(
-        getGeneralAdapterRequirementsPermit(mockClient, {
+    test("getGeneralAdapterRequirementsPermit returns an exact permit requirement", async () => {
+      const requirements = await getGeneralAdapterRequirementsPermit(
+        mockClient,
+        {
           token: usdc,
           chainId: mainnet.id,
           args: { amount: mockAmount },
-          erc20Allowances: { generalAdapter1: mockAmount },
           nonce: 0n,
-        }),
-      ).resolves.toEqual([]);
+        },
+      );
+
+      expect(requirements).toHaveLength(1);
+      expect(requirements[0]?.action.type).toBe("permit");
+      expect(requirements[0]?.action.args.amount).toBe(mockAmount);
     });
   });
 });

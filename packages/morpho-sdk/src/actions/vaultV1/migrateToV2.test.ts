@@ -244,7 +244,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
     expect(tx.value).toBe(0n);
   });
 
-  test("should not call getTokenRequirementActions without requirement signature", async ({
+  test("should call getTokenRequirementActions without requirement signature", async ({
     client,
   }) => {
     const localSpy = vi.spyOn(
@@ -268,7 +268,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
       },
     });
 
-    expect(localSpy).not.toHaveBeenCalled();
+    expect(localSpy).toHaveBeenCalled();
     expect(tx).toBeDefined();
     expect(tx.action.type).toBe("vaultV1MigrateToV2");
   });

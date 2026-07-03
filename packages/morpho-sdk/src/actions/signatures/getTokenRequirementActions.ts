@@ -11,23 +11,25 @@ interface GetTokenRequirementActionsParams {
   asset: Address;
   amount: bigint;
   recipient: Address;
-  requirementSignature: PermitRequirementSignature;
+  requirementSignature?: PermitRequirementSignature;
 }
 
 /**
- * Encodes the bundler actions that consume a pre-signed permit / permit2 requirement and pull
- * the asset to `recipient`.
+ * Encodes the bundler actions that pull the asset to `recipient`, optionally consuming a
+ * pre-signed permit / permit2 requirement first.
  *
  * Permit2 path emits `approve2` + `transferFrom2`; classic permit path emits `permit` +
- * `erc20TransferFrom`. The signed `asset` and `amount` must match the pulled `asset` and
- * `amount` exactly, otherwise the function throws so the caller does not silently spend a
- * wider-than-expected approval.
+ * `erc20TransferFrom`. When no signature is provided, the function emits a plain
+ * `erc20TransferFrom` against an existing ERC-20 allowance.
+ *
+ * The signed `asset` and `amount` must match the pulled `asset` and `amount` exactly, otherwise
+ * the function throws so the caller does not silently spend a wider-than-expected approval.
  *
  * @param params.asset - The ERC-20 to pull.
  * @param params.amount - The amount to pull, in the asset's smallest unit.
  * @param params.recipient - The address that receives the transfer.
- * @param params.requirementSignature - The signed permit / permit2 to apply before the transfer.
- * @returns A pair of bundler `Action`s: a permit / approve2 followed by the transfer.
+ * @param params.requirementSignature - Optional signed permit / permit2 to apply before the transfer.
+ * @returns Bundler `Action`s needed to pull the token.
  * @throws {DepositAssetMismatchError} when the signed asset differs from `asset`.
  * @throws {DepositAmountMismatchError} when the signed amount differs from `amount`.
  * @throws {Permit2ExpirationMissingError} when `action.type === "permit2"` but `args.expiration` is missing.
@@ -55,6 +57,7 @@ interface GetTokenRequirementActionsParams {
  * // actions satisfies Action[]
  * // - permit2 path: [{ type: "approve2", ... }, { type: "transferFrom2", ... }]
  * // - classic permit path: [{ type: "permit", ... }, { type: "erc20TransferFrom", ... }]
+ * // - no signature: [{ type: "erc20TransferFrom", ... }]
  * ```
  */
 export const getTokenRequirementActions = ({
@@ -63,10 +66,21 @@ export const getTokenRequirementActions = ({
   recipient,
   requirementSignature,
 }: GetTokenRequirementActionsParams): Action[] => {
+  if (requirementSignature == null) {
+    return [
+      {
+        type: "erc20TransferFrom",
+        args: [asset, amount, recipient, false /* skipRevert */],
+      },
+    ];
+  }
+
   if (!isAddressEqual(requirementSignature.args.asset, asset)) {
     throw new DepositAssetMismatchError(asset, requirementSignature.args.asset);
   }
 
+  // Permit2 and ERC-2612 overwrite the previous allowance with the signed amount.
+  // It must exactly cover the transfer: less would fail, more would leave residual allowance.
   if (requirementSignature.args.amount !== amount) {
     throw new DepositAmountMismatchError(
       amount,

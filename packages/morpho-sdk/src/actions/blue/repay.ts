@@ -130,21 +130,14 @@ export const blueRepay = ({
 
   const actions: Action[] = [];
 
-  if (requirementSignature) {
-    actions.push(
-      ...getTokenRequirementActions({
-        asset: marketParams.loanToken,
-        amount: transferAmount,
-        recipient: generalAdapter1,
-        requirementSignature,
-      }),
-    );
-  } else {
-    actions.push({
-      type: "erc20TransferFrom",
-      args: [marketParams.loanToken, transferAmount, generalAdapter1, false],
-    });
-  }
+  actions.push(
+    ...getTokenRequirementActions({
+      asset: marketParams.loanToken,
+      amount: transferAmount,
+      recipient: generalAdapter1,
+      requirementSignature,
+    }),
+  );
 
   actions.push({
     type: "morphoRepay",
