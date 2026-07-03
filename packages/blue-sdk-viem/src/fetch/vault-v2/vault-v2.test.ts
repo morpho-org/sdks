@@ -1501,14 +1501,18 @@ describe("individual adapter fetchers", () => {
 });
 
 describe("fetchAccrualVaultV2", () => {
-  test("fetches a deployless Vault V2 with asset balance", async () => {
+  test("falls back to sequential reads when the single deployless call fails", async () => {
     const handle = createMockClient(mainnet);
-    mockDeploylessRead(handle, vaultV2QueryAbi, "query", {
-      ...vaultV2Result,
-      adapters: [],
-      liquidityAdapter: zeroAddress,
-      liquidityAllocations: [],
-    });
+    mockDeploylessReads(handle, [
+      // GetAccrualVaultV2 single-call query fails, forcing the sequential fallback.
+      "0x",
+      encodeReadResult(vaultV2QueryAbi, "query", {
+        ...vaultV2Result,
+        adapters: [],
+        liquidityAdapter: zeroAddress,
+        liquidityAllocations: [],
+      }),
+    ]);
     mockRead(handle, {
       address: ASSET,
       abi: erc20Abi,
@@ -1523,9 +1527,11 @@ describe("fetchAccrualVaultV2", () => {
     expect(vault.accrualAdapters).toEqual([]);
   });
 
-  test("fetches accrual adapters and force-deallocate penalties", async () => {
+  test("falls back to sequential adapter and penalty reads when the single call fails", async () => {
     const handle = createMockClient(mainnet);
     mockDeploylessReads(handle, [
+      // GetAccrualVaultV2 single-call query fails, forcing the sequential fallback.
+      "0x",
       encodeReadResult(vaultV2QueryAbi, "query", {
         ...vaultV2Result,
         liquidityAdapter: ADAPTER,
@@ -1700,6 +1706,27 @@ describe("fetchAccrualVaultV2Deployless", () => {
     const marketAdapter = adapter as AccrualVaultV2MorphoMarketV1AdapterV2;
     expect(marketAdapter.supplyShares[ID]).toBe(99n);
     expect(marketAdapter.markets[0]?.id).toBe(ID);
+  });
+
+  test("fetchAccrualVaultV2 delegates to the single deployless call by default", async () => {
+    const handle = createMockClient(mainnet);
+    // Only the single-call query is mocked; a sequential fan-out would need more responses.
+    mockDeploylessRead(
+      handle,
+      accrualVaultV2QueryAbi,
+      "query",
+      accrualVaultV2Result,
+    );
+
+    const vault = await fetchAccrualVaultV2(VAULT, handle.client, {
+      chainId: CHAIN_ID,
+    });
+
+    expect(vault).toBeInstanceOf(AccrualVaultV2);
+    expect(vault.assetBalance).toBe(777n);
+    expect(vault.accrualLiquidityAdapter?.address).toBe(ADAPTER);
+    expect(vault.accrualAdapters[0]?.address).toBe(ADAPTER_2);
+    expect(vault.forceDeallocatePenalties[ADAPTER_2]).toBe(12n);
   });
 
   test("does not fall back to multicall when the deployless read fails", async () => {

@@ -368,7 +368,10 @@ export async function fetchVaultV2(
  * Fetches VaultV2 state with accrual data for capacity calculations.
  *
  * Reads all state fetched by `fetchVaultV2`, the vault asset balance, accrual state for the
- * configured liquidity adapter and regular adapters, and force-deallocate penalties.
+ * configured liquidity adapter and regular adapters, and force-deallocate penalties. By default it
+ * reads the entire tree in a single deployless call via {@link fetchAccrualVaultV2Deployless} and
+ * only falls back to sequential multicall reads when that call fails; pass `deployless: "force"` to
+ * require the single call, or `deployless: false` to use multicall reads directly.
  *
  * `MorphoMarketV1Adapter` has zero support as a VaultV2 liquidity adapter. This fetcher may hydrate
  * that adapter as an accrual adapter, but liquidity cap allocations remain undefined because
@@ -410,6 +413,26 @@ export async function fetchAccrualVaultV2(
   parameters: DeploylessFetchParameters = {},
 ) {
   parameters.chainId ??= await getChainId(client);
+
+  const { deployless = true } = parameters;
+
+  // The entire accrual tree can be read in a single deployless call. When it succeeds there is
+  // nothing left to fetch, so return early and skip the sequential multicall fan-out below.
+  if (deployless) {
+    try {
+      return await fetchAccrualVaultV2Deployless(address, client, parameters);
+    } catch (error) {
+      if (deployless === "force") throw error;
+      // Deterministic errors would be raised identically by the multicall path — do not retry.
+      if (
+        error instanceof UnknownFactory ||
+        error instanceof UnknownOfFactory ||
+        error instanceof UnsupportedVaultV2AdapterError
+      )
+        throw error;
+      // Otherwise fall back to sequential multicall reads on transient deployless failures.
+    }
+  }
 
   const vaultV2 = await fetchVaultV2(address, client, parameters);
 
