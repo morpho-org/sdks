@@ -28,8 +28,8 @@ import {
   blueSupplyCollateralBorrow,
   blueWithdraw,
   blueWithdrawCollateral,
-  getMorphoAuthorizationRequirement,
-  getRequirements,
+  getBlueAuthorizationRequirement,
+  getGeneralAdapterRequirements,
 } from "../../actions/index.js";
 import {
   computeMaxRepaySharePrice,
@@ -51,6 +51,7 @@ import {
 import type { FetchParameters } from "../../types/data.js";
 import {
   type AssetsOrSharesArgs,
+  type BlueAuthorizationAction,
   type BlueBorrowAction,
   type BlueRefinanceAction,
   type BlueRepayAction,
@@ -65,7 +66,6 @@ import {
   type ERC20ApprovalAction,
   MarketIdMismatchError,
   MissingAccrualPositionError,
-  type MorphoAuthorizationAction,
   type MorphoClientType,
   MutuallyExclusiveRepayAmountsError,
   MutuallyExclusiveWithdrawAmountsError,
@@ -132,6 +132,11 @@ export interface BlueActions {
       signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<BlueSupplyCollateralAction>>;
     getRequirements: (params?: {
+      /**
+       * Prefer the ERC-2612 simple-permit path when the SDK detects support.
+       * Leave unset or set to `false` to force the Permit2/classic approval fallback when
+       * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
+       */
       useSimplePermit?: boolean;
     }) => Promise<
       (
@@ -165,6 +170,11 @@ export interface BlueActions {
       signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<BlueSupplyAction>>;
     getRequirements: (params?: {
+      /**
+       * Prefer the ERC-2612 simple-permit path when the SDK detects support.
+       * Leave unset or set to `false` to force the Permit2/classic approval fallback when
+       * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
+       */
       useSimplePermit?: boolean;
     }) => Promise<
       (
@@ -209,7 +219,7 @@ export interface BlueActions {
       signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<BlueWithdrawAction>>;
     getRequirements: () => Promise<
-      (Readonly<Transaction<MorphoAuthorizationAction>> | Requirement)[]
+      (Readonly<Transaction<BlueAuthorizationAction>> | Requirement)[]
     >;
   };
 
@@ -242,7 +252,7 @@ export interface BlueActions {
       signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<BlueBorrowAction>>;
     getRequirements: () => Promise<
-      (Readonly<Transaction<MorphoAuthorizationAction>> | Requirement)[]
+      (Readonly<Transaction<BlueAuthorizationAction>> | Requirement)[]
     >;
   };
 
@@ -275,6 +285,11 @@ export interface BlueActions {
       signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<BlueRepayAction>>;
     getRequirements: (params?: {
+      /**
+       * Prefer the ERC-2612 simple-permit path when the SDK detects support.
+       * Leave unset or set to `false` to force the Permit2/classic approval fallback when
+       * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
+       */
       useSimplePermit?: boolean;
     }) => Promise<
       (
@@ -335,11 +350,16 @@ export interface BlueActions {
       signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<BlueRepayWithdrawCollateralAction>>;
     getRequirements: (params?: {
+      /**
+       * Prefer the ERC-2612 simple-permit path when the SDK detects support.
+       * Leave unset or set to `false` to force the Permit2/classic approval fallback when
+       * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
+       */
       useSimplePermit?: boolean;
     }) => Promise<
       (
         | Readonly<Transaction<ERC20ApprovalAction>>
-        | Readonly<Transaction<MorphoAuthorizationAction>>
+        | Readonly<Transaction<BlueAuthorizationAction>>
         | Requirement
       )[]
     >;
@@ -376,11 +396,16 @@ export interface BlueActions {
       signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<BlueSupplyCollateralBorrowAction>>;
     getRequirements: (params?: {
+      /**
+       * Prefer the ERC-2612 simple-permit path when the SDK detects support.
+       * Leave unset or set to `false` to force the Permit2/classic approval fallback when
+       * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
+       */
       useSimplePermit?: boolean;
     }) => Promise<
       (
         | Readonly<Transaction<ERC20ApprovalAction>>
-        | Readonly<Transaction<MorphoAuthorizationAction>>
+        | Readonly<Transaction<BlueAuthorizationAction>>
         | Requirement
       )[]
     >;
@@ -426,7 +451,7 @@ export interface BlueActions {
       signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<BlueRefinanceAction>>;
     getRequirements: () => Promise<
-      (Readonly<Transaction<MorphoAuthorizationAction>> | Requirement)[]
+      (Readonly<Transaction<BlueAuthorizationAction>> | Requirement)[]
     >;
   };
 
@@ -581,10 +606,9 @@ export class MorphoBlue implements BlueActions {
       market: marketData,
       slippageTolerance,
     });
-
     return {
       getRequirements: (params?: { useSimplePermit?: boolean }) =>
-        getRequirements(this.client.viemClient, {
+        getGeneralAdapterRequirements(this.client.viemClient, {
           address: this.marketParams.loanToken,
           chainId: this.chainId,
           supportSignature: this.client.options.supportSignature,
@@ -683,7 +707,7 @@ export class MorphoBlue implements BlueActions {
 
     return {
       getRequirements: async () => {
-        const authTx = await getMorphoAuthorizationRequirement({
+        const authTx = await getBlueAuthorizationRequirement({
           viemClient: this.client.viemClient,
           chainId: this.chainId,
           userAddress,
@@ -736,10 +760,9 @@ export class MorphoBlue implements BlueActions {
     if (nativeAmount !== undefined && nativeAmount > 0n) {
       validateNativeAsset(this.chainId, this.marketParams.collateralToken);
     }
-
     return {
       getRequirements: (params?: { useSimplePermit?: boolean }) =>
-        getRequirements(this.client.viemClient, {
+        getGeneralAdapterRequirements(this.client.viemClient, {
           address: this.marketParams.collateralToken,
           chainId: this.chainId,
           supportSignature: this.client.options.supportSignature,
@@ -816,7 +839,7 @@ export class MorphoBlue implements BlueActions {
 
     return {
       getRequirements: async () => {
-        const authTx = await getMorphoAuthorizationRequirement({
+        const authTx = await getBlueAuthorizationRequirement({
           viemClient: this.client.viemClient,
           chainId: this.chainId,
           userAddress,
@@ -929,10 +952,9 @@ export class MorphoBlue implements BlueActions {
       market: marketForRepay,
       slippageTolerance,
     });
-
     return {
       getRequirements: (reqParams?: { useSimplePermit?: boolean }) =>
-        getRequirements(this.client.viemClient, {
+        getGeneralAdapterRequirements(this.client.viemClient, {
           address: this.marketParams.loanToken,
           chainId: this.chainId,
           supportSignature: this.client.options.supportSignature,
@@ -1131,11 +1153,10 @@ export class MorphoBlue implements BlueActions {
       market: marketForRepay,
       slippageTolerance,
     });
-
     return {
       getRequirements: async (reqParams?: { useSimplePermit?: boolean }) => {
         const [erc20Requirements, authTx] = await Promise.all([
-          getRequirements(this.client.viemClient, {
+          getGeneralAdapterRequirements(this.client.viemClient, {
             address: this.marketParams.loanToken,
             chainId: this.chainId,
             supportSignature: this.client.options.supportSignature,
@@ -1143,7 +1164,7 @@ export class MorphoBlue implements BlueActions {
             useSimplePermit: reqParams?.useSimplePermit,
             args: { amount: transferAmount, from: userAddress },
           }),
-          getMorphoAuthorizationRequirement({
+          getBlueAuthorizationRequirement({
             viemClient: this.client.viemClient,
             chainId: this.chainId,
             userAddress,
@@ -1245,11 +1266,10 @@ export class MorphoBlue implements BlueActions {
       market: positionData.market,
       slippageTolerance,
     });
-
     return {
       getRequirements: async (params?: { useSimplePermit?: boolean }) => {
         const [erc20Requirements, authTx] = await Promise.all([
-          getRequirements(this.client.viemClient, {
+          getGeneralAdapterRequirements(this.client.viemClient, {
             address: this.marketParams.collateralToken,
             chainId: this.chainId,
             supportSignature: this.client.options.supportSignature,
@@ -1257,7 +1277,7 @@ export class MorphoBlue implements BlueActions {
             useSimplePermit: params?.useSimplePermit,
             args: { amount, from: userAddress },
           }),
-          getMorphoAuthorizationRequirement({
+          getBlueAuthorizationRequirement({
             viemClient: this.client.viemClient,
             chainId: this.chainId,
             userAddress,
@@ -1494,7 +1514,7 @@ export class MorphoBlue implements BlueActions {
 
     return {
       getRequirements: async () => {
-        const authTx = await getMorphoAuthorizationRequirement({
+        const authTx = await getBlueAuthorizationRequirement({
           viemClient: this.client.viemClient,
           chainId: this.chainId,
           userAddress,

@@ -191,21 +191,14 @@ export const blueSupplyCollateralBorrow = ({
   }
 
   if (amount > 0n) {
-    if (requirementSignature) {
-      actions.push(
-        ...getTokenRequirementActions({
-          asset: marketParams.collateralToken,
-          amount,
-          recipient: generalAdapter1,
-          requirementSignature,
-        }),
-      );
-    } else {
-      actions.push({
-        type: "erc20TransferFrom",
-        args: [marketParams.collateralToken, amount, generalAdapter1, false],
-      });
-    }
+    actions.push(
+      ...getTokenRequirementActions({
+        asset: marketParams.collateralToken,
+        amount,
+        recipient: generalAdapter1,
+        requirementSignature,
+      }),
+    );
   }
 
   actions.push({

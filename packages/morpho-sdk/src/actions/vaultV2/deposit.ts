@@ -52,9 +52,7 @@ export interface VaultV2DepositParams {
  * @param params.args.maxSharePrice - Maximum acceptable share price (in RAY, slippage
  *   protection enforced on-chain by `GeneralAdapter1`).
  * @param params.args.recipient - Address that receives the minted vault shares.
- * @param params.args.requirementSignature - Optional pre-signed permit/permit2 approval. When
- *   absent, the bundle uses a plain `erc20TransferFrom` and assumes the user has already
- *   approved `GeneralAdapter1`.
+ * @param params.args.requirementSignature - Optional pre-signed permit/permit2 approval.
  * @param params.args.nativeAmount - Optional amount of native token to wrap into wNative for the
  *   deposit. Requires the vault asset to be the chain's wNative.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
@@ -142,21 +140,14 @@ export const vaultV2Deposit = ({
   }
 
   if (amount > 0n) {
-    if (requirementSignature) {
-      actions.push(
-        ...getTokenRequirementActions({
-          asset,
-          amount,
-          recipient: generalAdapter1,
-          requirementSignature,
-        }),
-      );
-    } else {
-      actions.push({
-        type: "erc20TransferFrom",
-        args: [asset, amount, generalAdapter1, false /* skipRevert */],
-      });
-    }
+    actions.push(
+      ...getTokenRequirementActions({
+        asset,
+        amount,
+        recipient: generalAdapter1,
+        requirementSignature,
+      }),
+    );
   }
 
   const totalAssets = amount + (nativeAmount ?? 0n);

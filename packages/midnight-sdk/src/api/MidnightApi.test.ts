@@ -7,7 +7,7 @@ import {
   MidnightApiError,
 } from "../errors.js";
 import type { IOffer } from "../offers/index.js";
-import * as Payload from "../signatures/Payload.js";
+import { Payload } from "../signatures/Payload.js";
 import { MidnightApi, type MidnightApiFetch } from "./MidnightApi.js";
 
 type FetchCall = {

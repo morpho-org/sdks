@@ -180,9 +180,9 @@ export class AccrualPosition extends Position {
   /** Hydrated market for this position. */
   public readonly market: Market;
 
-  public constructor(position: IPosition, market: IMarket) {
+  public constructor(position: IPosition, market: IMarket | Market) {
     super(position);
-    this.market = market instanceof Market ? market : new Market(market);
+    this.market = Market.from(market);
   }
 
   /**

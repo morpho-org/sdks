@@ -313,7 +313,7 @@ describe("blueRepay unit tests", () => {
     ).toThrow(TransferAmountNotEqualToAssetsError);
   });
 
-  test("should not call getTokenRequirementActions when no requirementSignature", async ({
+  test("should call getTokenRequirementActions without requirementSignature", async ({
     client,
   }) => {
     const localSpy = vi.spyOn(
@@ -336,7 +336,7 @@ describe("blueRepay unit tests", () => {
       },
     });
 
-    expect(localSpy).not.toHaveBeenCalled();
+    expect(localSpy).toHaveBeenCalled();
   });
 
   test("should include requirement actions when requirementSignature is provided", async ({
