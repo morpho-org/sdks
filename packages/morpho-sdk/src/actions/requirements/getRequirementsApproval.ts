@@ -8,7 +8,11 @@ import {
 import { encodeErc20Approval } from "./encode/encodeErc20Approval.js";
 
 /**
- * Computes classic ERC-20 approval transactions for supported SDK spenders, given the existing allowance.
+ * Computes classic ERC-20 approval transactions for a supported SDK spender, given the existing
+ * allowance.
+ *
+ * The spender is validated by {@link encodeErc20Approval}. Supported spenders are the chain's
+ * GeneralAdapter1, Permit2, Midnight, and MidnightBundles addresses when configured.
  *
  * Returns an empty array when the allowance already covers `spendAmount`. When the token is in
  * `APPROVE_ONLY_ONCE_TOKENS` (e.g. USDT) and the existing allowance is non-zero, prepends a
@@ -16,11 +20,13 @@ import { encodeErc20Approval } from "./encode/encodeErc20Approval.js";
  * before re-approving.
  *
  * @param params.address - ERC-20 token address.
- * @param params.chainId - The chain the bundle targets.
+ * @param params.chainId - The chain the transaction targets, used to resolve supported spenders
+ *   and token approval caps.
  * @param params.args.spendAmount - The amount the bundle will actually pull.
  * @param params.args.approvalAmount - The amount to approve (often equal to `spendAmount`, but
  *   may be `MAX_UINT_160` for Permit2 prerequisites).
- * @param params.args.spender - Address that will be granted the approval.
+ * @param params.args.spender - Address that will be granted the approval. Must be GeneralAdapter1,
+ *   Permit2, Midnight, or MidnightBundles for `chainId`.
  * @param params.allowances - The user's current allowance of `address` for `spender`.
  * @returns Up to two deep-frozen `Transaction<ERC20ApprovalAction>` entries: an optional reset
  *   followed by the new approval. Empty when no approval is needed.

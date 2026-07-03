@@ -19,16 +19,19 @@ import {
 import type {
   MidnightOfferRootSignature,
   MidnightSubmitOffersAction,
+  TokenRequirementSignature,
   Transaction,
 } from "../../types/action.js";
 import type { MorphoClientType } from "../../types/client.js";
 import {
+  AmbiguousRequirementSignaturesError,
   MarketIdMismatchError,
   MidnightOfferRootOfferCountMismatchError,
   MidnightOfferRootOwnerMismatchError,
   MidnightOfferRootRatifierMismatchError,
   MidnightOfferSideMismatchError,
   MissingAccrualPositionError,
+  UnexpectedRequirementSignatureError,
 } from "../../types/error.js";
 import type { MidnightActionSignatures, OffersData } from "./midnight.js";
 import { MorphoMidnight } from "./midnight.js";
@@ -97,6 +100,27 @@ const multiGroupOffersData = (): OffersData => {
   };
 };
 
+const setterOffersData = (): OffersData => {
+  const offer = Offer.create(
+    midnightBaseOffer({
+      buy: true,
+      maxAssets: 1_000n,
+      maxUnits: 0n,
+      ratifier: midnightAddresses.setterRatifier,
+    }),
+  );
+  const group = Group.create([offer]);
+
+  return {
+    accountAddress: midnightAddresses.maker,
+    groups: [group.id],
+    tree: Tree.create([group]),
+    ratifierType: "setter",
+    ratifier: midnightAddresses.setterRatifier,
+    setterPayload: "0x1234",
+  };
+};
+
 const offerRootSignature = (
   data: OffersData,
   overrides: {
@@ -120,6 +144,25 @@ const offerRootSignature = (
     payload: "0x1234",
   },
 });
+
+const tokenSignature = {
+  action: {
+    type: "permit2Transfer",
+    args: {
+      spender: midnightAddresses.midnightBundles,
+      amount: 1_000n,
+      deadline: 123n,
+    },
+  },
+  args: {
+    owner: midnightAddresses.taker,
+    nonce: 42n,
+    asset: midnightAddresses.loanToken,
+    signature: "0x1234",
+    amount: 1_000n,
+    deadline: 123n,
+  },
+} satisfies TokenRequirementSignature;
 
 const client = {
   viemClient: { chain: { id: midnightChainId } },
@@ -439,6 +482,40 @@ describe("MorphoMidnight", () => {
           }),
         }),
       ).toThrow(MidnightOfferRootOfferCountMismatchError);
+    });
+
+    test("error: AmbiguousRequirementSignaturesError", () => {
+      const data = offersData();
+      const signature = offerRootSignature(data);
+
+      expect(() =>
+        buildSubmitOffersTx({
+          offersData: data,
+          signatures: [signature, signature],
+        }),
+      ).toThrow(AmbiguousRequirementSignaturesError);
+    });
+
+    test("error: UnexpectedRequirementSignatureError", () => {
+      const data = offersData();
+
+      expect(() =>
+        buildSubmitOffersTx({
+          offersData: data,
+          signatures: [tokenSignature],
+        }),
+      ).toThrow(UnexpectedRequirementSignatureError);
+    });
+
+    test("error: UnexpectedRequirementSignatureError for setter ratifier", () => {
+      const data = setterOffersData();
+
+      expect(() =>
+        buildSubmitOffersTx({
+          offersData: data,
+          signatures: [offerRootSignature(data)],
+        }),
+      ).toThrow(UnexpectedRequirementSignatureError);
     });
   });
 });

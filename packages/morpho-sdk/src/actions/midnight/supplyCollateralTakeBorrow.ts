@@ -13,7 +13,7 @@ import {
   type Transaction,
   UnknownMidnightCollateralError,
 } from "../../types/index.js";
-import { encodeMidnightTokenPermit } from "./encodeMidnightTokenPermit.js";
+import { getMidnightTokenPermit } from "../signatures/getMidnightTokenPermit.js";
 import type { MidnightTakeBorrowParams } from "./takeBorrow.js";
 import type { MidnightCollateralSupply } from "./types.js";
 
@@ -92,7 +92,7 @@ export const midnightSupplyCollateralTakeBorrow = (
     {
       collateralIndex,
       assets: params.collateralAssets,
-      permit: encodeMidnightTokenPermit({
+      permit: getMidnightTokenPermit({
         token: collateral.token,
         owner: params.taker,
         spender: midnightBundles,

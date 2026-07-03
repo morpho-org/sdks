@@ -1,6 +1,12 @@
+import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { getPermit2TransferFromTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
-import { type Address, verifyTypedData, type WalletClient } from "viem";
+import {
+  type Address,
+  isAddressEqual,
+  verifyTypedData,
+  type WalletClient,
+} from "viem";
 import { signTypedData } from "viem/actions";
 import { validateUserAddress } from "../../../helpers/index.js";
 import {
@@ -8,10 +14,11 @@ import {
   type Permit2TransferAction,
   type Permit2TransferArgs,
   type Requirement,
+  UnsupportedErc20ApprovalSpenderError,
 } from "../../../types/index.js";
 
-/** Parameters for {@link encodeMidnightBundlesPermit2Transfer}. */
-export interface EncodeMidnightBundlesPermit2TransferParams {
+/** Parameters for {@link encodeErc20Permit2Transfer}. */
+export interface EncodeErc20Permit2TransferParams {
   readonly token: Address;
   readonly spender: Address;
   readonly amount: bigint;
@@ -20,23 +27,29 @@ export interface EncodeMidnightBundlesPermit2TransferParams {
 }
 
 /**
- * Builds a Permit2 SignatureTransfer requirement for a Midnight bundle token pull.
+ * Builds a Permit2 SignatureTransfer requirement for a supported SDK spender.
+ *
+ * Today only MidnightBundles consumes this signature shape. The spender remains explicit so the
+ * API can support future consumers without changing shape, but unsupported values are rejected
+ * before signing.
  *
  * @param params - Permit2 SignatureTransfer parameters.
- * @param params.token - ERC20 token the Midnight bundle will pull.
- * @param params.spender - Midnight bundle address that will call Permit2.
- * @param params.amount - Exact token amount the bundle will pull.
- * @param params.chainId - Chain id whose Permit2 deployment verifies the signature.
+ * @param params.token - ERC20 token the spender will pull.
+ * @param params.spender - Address that will spend the Permit2 SignatureTransfer. Must be
+ *   MidnightBundles for the chain.
+ * @param params.amount - Exact token amount the spender will pull.
+ * @param params.chainId - Chain id whose MidnightBundles and Permit2 deployments verify the signature.
  * @param params.nonce - One-shot Permit2 unordered nonce.
  * @returns A `permit2Transfer` requirement whose signature can be encoded into Midnight `TokenPermit`.
+ * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not MidnightBundles for `chainId`.
  * @throws {AddressMismatchError} from `sign()` when the client account differs from `userAddress`.
  * @throws {MissingClientPropertyError} from `sign()` when the client has no account address.
  * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails.
  * @example
  * ```ts
- * import { encodeMidnightBundlesPermit2Transfer } from "@morpho-org/morpho-sdk";
+ * import { encodeErc20Permit2Transfer } from "@morpho-org/morpho-sdk";
  *
- * const requirement = encodeMidnightBundlesPermit2Transfer({
+ * const requirement = encodeErc20Permit2Transfer({
  *   token: loanToken,
  *   spender: midnightBundles,
  *   amount: 1_000_000n,
@@ -45,9 +58,30 @@ export interface EncodeMidnightBundlesPermit2TransferParams {
  * });
  * ```
  */
-export const encodeMidnightBundlesPermit2Transfer = (
-  params: EncodeMidnightBundlesPermit2TransferParams,
+export const encodeErc20Permit2Transfer = (
+  params: EncodeErc20Permit2TransferParams,
 ): Requirement<Permit2TransferAction, Permit2TransferArgs> => {
+  const {
+    midnight,
+    midnightBundles,
+    permit2,
+    bundler3: { generalAdapter1 },
+  } = getChainAddresses(params.chainId);
+  if (
+    midnightBundles == null ||
+    !isAddressEqual(params.spender, midnightBundles)
+  ) {
+    throw new UnsupportedErc20ApprovalSpenderError({
+      spender: params.spender,
+      chainId: params.chainId,
+      generalAdapter1,
+      permit2,
+      midnight,
+      midnightBundles,
+      supportedSpenders: [midnightBundles],
+    });
+  }
+
   const deadline = Time.timestamp() + Time.s.from.h(2n);
   const action: Permit2TransferAction = {
     type: "permit2Transfer",

@@ -1,6 +1,5 @@
 export * from "./authorization.js";
 export * from "./cancelOffer.js";
-export * from "./encodeMidnightTokenPermit.js";
 export * from "./ratifyRoot.js";
 export * from "./redeem.js";
 export * from "./repayWithdrawCollateral.js";
