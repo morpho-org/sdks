@@ -2,26 +2,19 @@ import { getChainAddresses, type MarketParams } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import { type Address, maxUint256 } from "viem";
 import { type Action, BundlerAction } from "../../bundler/index.js";
-import {
-  addTransactionMetadata,
-  validateNativeAsset,
-} from "../../helpers/index.js";
+import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   type AuthorizationRequirementSignature,
   type BlueRepayWithdrawCollateralAction,
   type Metadata,
-  MutuallyExclusiveRepayAmountsError,
-  NegativeNativeAmountError,
-  NonPositiveRepayAmountError,
-  NonPositiveRepayMaxSharePriceError,
   NonPositiveWithdrawCollateralAmountError,
   type PermitRequirementSignature,
   type RepayActionAmountArgs,
   type Transaction,
-  TransferAmountNotEqualToAssetsError,
 } from "../../types/index.js";
 import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
-import { getTokenRequirementActions } from "../signatures/getTokenRequirementActions.js";
+import { buildRepayFundingActions } from "./buildRepayFundingActions.js";
+import { resolveRepayFunding } from "./resolveRepayFunding.js";
 
 /** Parameters for {@link blueRepayWithdrawCollateral}. */
 export interface BlueRepayWithdrawCollateralParams {
@@ -154,55 +147,17 @@ export const blueRepayWithdrawCollateral = ({
     authorizationSignature,
   } = args;
 
-  if (maxSharePrice <= 0n) {
-    throw new NonPositiveRepayMaxSharePriceError(marketParams.id);
-  }
-  if (nativeAmount < 0n) {
-    throw new NegativeNativeAmountError(nativeAmount);
-  }
-  if (amount < 0n || shares < 0n) {
-    throw new NonPositiveRepayAmountError(marketParams.id);
-  }
-  if (amount > 0n && shares > 0n) {
-    throw new MutuallyExclusiveRepayAmountsError(marketParams.id);
-  }
+  const { isSharesMode, repayAssets, repayShares, erc20Amount } =
+    resolveRepayFunding(
+      { amount, shares, nativeAmount, transferAmount, maxSharePrice },
+      marketParams.id,
+    );
   if (withdrawAmount <= 0n) {
     throw new NonPositiveWithdrawCollateralAmountError(marketParams.id);
   }
 
-  // Shares mode repays an exact share count and pulls `transferAmount` ERC-20
-  // (already net of native), skimming the residual. Assets mode repays
-  // `transferAmount` (= amount + native, additive) and pulls `amount`.
-  const isSharesMode = shares > 0n;
-  const repayAssets = isSharesMode ? 0n : transferAmount;
-  const repayShares = shares;
-  const erc20Amount = isSharesMode ? transferAmount : amount;
-
-  // Validate the pre-resolved funding. Assets mode is additive like `blueSupply`:
-  // the ERC-20 pulled (`amount`) plus the wrapped `nativeAmount` must equal the
-  // assets repaid, and the total must be positive — so the adapter neither strands
-  // over-pulled tokens nor under-funds the repay-before-withdraw bundle. Shares mode
-  // pulls `transferAmount` ERC-20 (0 on a fully-native repay) and wraps `nativeAmount`;
-  // the bundle must fund the repay with a non-negative transfer and a positive total.
-  if (isSharesMode) {
-    if (transferAmount < 0n || transferAmount + nativeAmount <= 0n) {
-      throw new NonPositiveRepayAmountError(marketParams.id);
-    }
-  } else {
-    if (transferAmount !== amount + nativeAmount) {
-      throw new TransferAmountNotEqualToAssetsError({
-        transferAmount,
-        assets: amount + nativeAmount,
-        market: marketParams.id,
-      });
-    }
-    if (repayAssets <= 0n) {
-      throw new NonPositiveRepayAmountError(marketParams.id);
-    }
-  }
-
   const {
-    bundler3: { generalAdapter1, bundler3 },
+    bundler3: { generalAdapter1 },
   } = getChainAddresses(chainId);
 
   const actions: Action[] = [];
@@ -212,40 +167,16 @@ export const blueRepayWithdrawCollateral = ({
     actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
   }
 
-  // Wrap native into wNative before pulling the ERC-20 remainder.
-  if (nativeAmount > 0n) {
-    validateNativeAsset(chainId, marketParams.loanToken);
-
-    actions.push(
-      {
-        type: "nativeTransfer",
-        args: [bundler3, generalAdapter1, nativeAmount, false],
-      },
-      {
-        type: "wrapNative",
-        args: [nativeAmount, generalAdapter1, false],
-      },
-    );
-  }
-
-  // Pull the ERC-20 portion (0 on a fully native repay).
-  if (erc20Amount > 0n) {
-    if (requirementSignature) {
-      actions.push(
-        ...getTokenRequirementActions({
-          asset: marketParams.loanToken,
-          amount: erc20Amount,
-          recipient: generalAdapter1,
-          requirementSignature,
-        }),
-      );
-    } else {
-      actions.push({
-        type: "erc20TransferFrom",
-        args: [marketParams.loanToken, erc20Amount, generalAdapter1, false],
-      });
-    }
-  }
+  // Fund the repay: wrap native (if any) then pull the ERC-20 remainder.
+  actions.push(
+    ...buildRepayFundingActions({
+      chainId,
+      marketParams,
+      erc20Amount,
+      nativeAmount,
+      requirementSignature,
+    }),
+  );
 
   // REPAY FIRST — reduces debt before withdrawing collateral
   actions.push({
