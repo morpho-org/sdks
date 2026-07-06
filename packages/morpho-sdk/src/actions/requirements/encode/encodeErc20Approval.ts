@@ -1,12 +1,9 @@
-import { type Address, getChainAddresses, MathLib } from "@morpho-org/blue-sdk";
+import { type Address, MathLib } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import { encodeFunctionData, erc20Abi, isAddressEqual, maxUint256 } from "viem";
+import { encodeFunctionData, erc20Abi, maxUint256 } from "viem";
 import { MAX_TOKEN_APPROVALS } from "../../../helpers/constant.js";
-import {
-  type ERC20ApprovalAction,
-  type Transaction,
-  UnsupportedErc20ApprovalSpenderError,
-} from "../../../types/index.js";
+import type { ERC20ApprovalAction, Transaction } from "../../../types/index.js";
+import { validateRequirementSpender } from "./validateRequirementSpender.js";
 
 /** Parameters for {@link encodeErc20Approval}. */
 interface EncodeErc20ApprovalParams {
@@ -47,33 +44,11 @@ export const encodeErc20Approval = (
   params: EncodeErc20ApprovalParams,
 ): Transaction<ERC20ApprovalAction> => {
   const { token, spender, amount, chainId } = params;
-  const {
-    permit2,
-    midnight,
-    midnightBundles,
-    bundler3: { generalAdapter1 },
-  } = getChainAddresses(chainId);
-  const supportedSpenders = [
-    generalAdapter1,
-    permit2,
-    midnight,
-    midnightBundles,
-  ];
-
-  if (
-    !supportedSpenders.some(
-      (supported) => supported != null && isAddressEqual(spender, supported),
-    )
-  ) {
-    throw new UnsupportedErc20ApprovalSpenderError({
-      spender,
-      chainId,
-      generalAdapter1,
-      permit2,
-      midnight,
-      midnightBundles,
-    });
-  }
+  validateRequirementSpender({
+    chainId,
+    spender,
+    allowed: ["generalAdapter1", "permit2", "midnight", "midnightBundles"],
+  });
 
   const amountValue = MathLib.min(
     amount,
