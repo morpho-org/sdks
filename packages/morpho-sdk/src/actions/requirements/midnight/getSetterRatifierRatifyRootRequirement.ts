@@ -4,12 +4,12 @@ import { type Address, type Client, encodeFunctionData, type Hex } from "viem";
 import { readContract } from "viem/actions";
 import { validateChainId } from "../../../helpers/index.js";
 import type {
-  MidnightRatifyRootAction,
+  SetterRatifierRatifyRootAction,
   Transaction,
 } from "../../../types/index.js";
 
-/** Parameters for {@link getMidnightRatifyRootRequirement}. */
-export interface GetMidnightRatifyRootRequirementParams {
+/** Parameters for {@link getSetterRatifierRatifyRootRequirement}. */
+export interface GetSetterRatifierRatifyRootRequirementParams {
   readonly viemClient: Client;
   readonly chainId: number;
   readonly maker: Address;
@@ -24,9 +24,9 @@ export interface GetMidnightRatifyRootRequirementParams {
  * @throws {ChainIdMismatchError} when the viem client is connected to another chain.
  * @example
  * ```ts
- * import { getMidnightRatifyRootRequirement } from "@morpho-org/morpho-sdk";
+ * import { getSetterRatifierRatifyRootRequirement } from "@morpho-org/morpho-sdk";
  *
- * const tx = await getMidnightRatifyRootRequirement({
+ * const tx = await getSetterRatifierRatifyRootRequirement({
  *   viemClient: client,
  *   chainId: 8453,
  *   maker: user,
@@ -35,9 +35,9 @@ export interface GetMidnightRatifyRootRequirementParams {
  * console.log(tx?.action.type);
  * ```
  */
-export const getMidnightRatifyRootRequirement = async (
-  params: GetMidnightRatifyRootRequirementParams,
-): Promise<Readonly<Transaction<MidnightRatifyRootAction>> | null> => {
+export const getSetterRatifierRatifyRootRequirement = async (
+  params: GetSetterRatifierRatifyRootRequirementParams,
+): Promise<Readonly<Transaction<SetterRatifierRatifyRootAction>> | null> => {
   validateChainId(params.viemClient.chain?.id, params.chainId);
 
   const setterRatifier = getChainAddress(params.chainId, "setterRatifier");
@@ -59,7 +59,7 @@ export const getMidnightRatifyRootRequirement = async (
       args: [params.maker, params.root, true],
     }),
     action: {
-      type: "midnightRatifyRoot",
+      type: "setterRatifierRatifyRoot",
       args: {
         maker: params.maker,
         root: params.root,

@@ -4,23 +4,43 @@ import { type Address, encodeFunctionData, type Hex } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import type {
   Metadata,
-  MidnightRatifyRootAction,
+  SetterRatifierRatifyRootAction,
   Transaction,
 } from "../../types/index.js";
 
-/** Parameters for {@link midnightRatifyRoot}. */
-export interface MidnightRatifyRootParams {
+/** Parameters for {@link setterRatifierRatifyRoot}. */
+export interface SetterRatifierRatifyRootParams {
+  /** Chain id used to resolve the SetterRatifier deployment. */
   readonly chainId: number;
+  /** Maker whose offer-tree root is being ratified. */
   readonly maker: Address;
+  /** Offer-tree root to ratify or unratify. */
   readonly root: Hex;
+  /** Whether the root should be ratified. Defaults to `true`. */
   readonly isRootRatified?: boolean;
+  /** Optional metadata appended to the transaction calldata. */
   readonly metadata?: Metadata;
 }
 
-/** Encodes `SetterRatifier.setIsRootRatified(maker, root, true)`. */
-export const midnightRatifyRoot = (
-  params: MidnightRatifyRootParams,
-): Readonly<Transaction<MidnightRatifyRootAction>> => {
+/**
+ * Encodes a SetterRatifier root-ratification transaction.
+ *
+ * @param params - SetterRatifier ratify-root parameters.
+ * @returns A deep-frozen transaction calling `SetterRatifier.setIsRootRatified`.
+ * @example
+ * ```ts
+ * import { setterRatifierRatifyRoot } from "@morpho-org/morpho-sdk";
+ *
+ * const tx = setterRatifierRatifyRoot({
+ *   chainId: 8453,
+ *   maker,
+ *   root,
+ * });
+ * ```
+ */
+export const setterRatifierRatifyRoot = (
+  params: SetterRatifierRatifyRootParams,
+): Readonly<Transaction<SetterRatifierRatifyRootAction>> => {
   const isRootRatified = params.isRootRatified ?? true;
   const setterRatifier = getChainAddress(params.chainId, "setterRatifier");
 
@@ -41,7 +61,7 @@ export const midnightRatifyRoot = (
   return deepFreeze({
     ...tx,
     action: {
-      type: "midnightRatifyRoot",
+      type: "setterRatifierRatifyRoot",
       args: {
         maker: params.maker,
         root: params.root,
