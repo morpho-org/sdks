@@ -267,7 +267,7 @@ export type TreeCreateParams = readonly GroupInput[];
  * console.log(tree);
  * ```
  */
-export type TreeInput = Tree | TreeCreateParams;
+export type TreeInput = Tree | TreeCreateParams | GroupInput;
 
 /**
  * Tree-shaped data required by ratifier helpers.
@@ -365,7 +365,7 @@ export interface TreeLike {
  * console.log(tree);
  * ```
  */
-export type RatifierTreeInput = TreeLike | TreeCreateParams;
+export type RatifierTreeInput = TreeLike | TreeInput;
 
 /**
  * Optional ratification inputs for {@link Tree.mempoolValidate}.
@@ -558,28 +558,32 @@ export namespace TreeUtils {
   ): Promise<MempoolPayloadValidationSuccess> {
     let items: readonly Payload.Item[];
     if (params.ratification == null) {
-      const offers =
-        "paddedOffers" in params.tree
-          ? params.tree.offers
-          : params.tree.flatMap((entry) =>
-              GroupUtils.isGroupInput(entry)
-                ? Group.from(entry).offers
-                : [
-                    new Offer({
-                      ...Offer.from(entry),
-                      group: OfferUtils.groupHash(entry),
-                    }),
-                  ],
-            );
+      if ("paddedOffers" in params.tree) {
+        items = params.tree.offers.map((offer) => ({
+          offer,
+          ratifierData: "0x" as const,
+        }));
+      } else {
+        const entries = Array.isArray(params.tree)
+          ? params.tree
+          : [params.tree];
+        const offers = entries.flatMap((entry) =>
+          GroupUtils.isGroupInput(entry)
+            ? Group.from(entry).offers
+            : [
+                new Offer({
+                  ...Offer.from(entry),
+                  group: OfferUtils.groupHash(entry),
+                }),
+              ],
+        );
 
-      if (!("paddedOffers" in params.tree)) {
         buildDescriptor(offers, { preserveStandaloneGroups: true });
+        items = offers.map((offer) => ({
+          offer,
+          ratifierData: "0x" as const,
+        }));
       }
-
-      items = offers.map((offer) => ({
-        offer,
-        ratifierData: "0x" as const,
-      }));
     } else if (params.ratification.type === "ecrecover") {
       if (params.ratification.signature != null) {
         items = await EcrecoverRatifierUtils.ratify({

@@ -22,7 +22,8 @@ function normalizeTree(tree: RatifierTreeInput): TreeLike {
     return tree;
   }
 
-  const offers: readonly IOffer[] = tree.flatMap((entry) =>
+  const entries = Array.isArray(tree) ? tree : [tree];
+  const offers: readonly IOffer[] = entries.flatMap((entry) =>
     GroupUtils.isGroupInput(entry)
       ? Group.from(entry).offers
       : [

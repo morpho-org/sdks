@@ -2,10 +2,18 @@ import {
   AccrualPosition,
   Group,
   Market,
+  midnightAbi,
   Offer,
   Tree,
 } from "@morpho-org/midnight-sdk";
-import { type Address, maxUint256, zeroAddress } from "viem";
+import { createMockClient, mockRead } from "@morpho-org/test/mock";
+import {
+  type Address,
+  type Chain,
+  erc20Abi,
+  maxUint256,
+  zeroAddress,
+} from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -26,6 +34,9 @@ import type { MorphoClientType } from "../../types/client.js";
 import {
   AmbiguousRequirementSignaturesError,
   MarketIdMismatchError,
+  MidnightOfferMarketAddressMismatchError,
+  MidnightOfferMarketChainMismatchError,
+  MidnightOfferMarketLoanTokenMismatchError,
   MidnightOfferRootOfferCountMismatchError,
   MidnightOfferRootOwnerMismatchError,
   MidnightOfferRootRatifierMismatchError,
@@ -53,7 +64,9 @@ const buildSubmitOffersTx: BuildSubmitOffersTx = (params) =>
 const offersData = (buy = true): OffersData => {
   const offer = Offer.create(
     midnightBaseOffer({
+      market: { ...midnightMarket, maturity: apiValidMaturity },
       buy,
+      expiry: apiValidMaturity - 60n,
       maxAssets: 1_000n,
       maxUnits: 0n,
       ratifier: midnightAddresses.ecrecoverRatifier,
@@ -73,7 +86,9 @@ const offersData = (buy = true): OffersData => {
 const multiGroupOffersData = (): OffersData => {
   const lendOffer = Offer.create(
     midnightBaseOffer({
+      market: { ...midnightMarket, maturity: apiValidMaturity },
       buy: true,
+      expiry: apiValidMaturity - 60n,
       maxAssets: 1_000n,
       maxUnits: 0n,
       ratifier: midnightAddresses.ecrecoverRatifier,
@@ -81,8 +96,10 @@ const multiGroupOffersData = (): OffersData => {
   );
   const borrowOffer = Offer.create(
     midnightBaseOffer({
+      market: { ...midnightMarket, maturity: apiValidMaturity },
       buy: false,
       tick: 5_004n,
+      expiry: apiValidMaturity - 60n,
       maxAssets: 1_000n,
       maxUnits: 0n,
       ratifier: midnightAddresses.ecrecoverRatifier,
@@ -103,7 +120,9 @@ const multiGroupOffersData = (): OffersData => {
 const setterOffersData = (): OffersData => {
   const offer = Offer.create(
     midnightBaseOffer({
+      market: { ...midnightMarket, maturity: apiValidMaturity },
       buy: true,
+      expiry: apiValidMaturity - 60n,
       maxAssets: 1_000n,
       maxUnits: 0n,
       ratifier: midnightAddresses.setterRatifier,
@@ -169,7 +188,22 @@ const client = {
   options: {},
 } as unknown as MorphoClientType;
 
+const midnightTestChain = {
+  id: midnightChainId,
+  name: "Midnight Test",
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  rpcUrls: { default: { http: ["http://localhost"] } },
+} as const satisfies Chain;
+
 const apiValidMaturity = 1_767_279_600n;
+const offerValidation = {
+  apiUrl: "https://api.example/base/",
+  fetch: async () =>
+    new Response(JSON.stringify({ data: { issues: [] } }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }),
+};
 
 const marketData = (overrides: { readonly withdrawable?: bigint } = {}) =>
   new Market({
@@ -349,15 +383,8 @@ describe("MorphoMidnight", () => {
       const borrowGroup = Group.create([borrowOffer]);
       const data = await midnight().getOffersData({
         accountAddress: midnightAddresses.maker,
-        tree: [lendGroup, borrowGroup],
-        validation: {
-          apiUrl: "https://api.example/base/",
-          fetch: async () =>
-            new Response(JSON.stringify({ data: { issues: [] } }), {
-              status: 200,
-              headers: { "Content-Type": "application/json" },
-            }),
-        },
+        offers: [lendGroup, borrowGroup],
+        validation: offerValidation,
       });
 
       expect(data.groups).toEqual([lendGroup.id, borrowGroup.id]);
@@ -365,13 +392,76 @@ describe("MorphoMidnight", () => {
       expect(data.ratifierType).toBe("ecrecover");
       expect(data.ratifier).toBe(midnightAddresses.ecrecoverRatifier);
     });
+
+    test("behavior: accepts a single offer", async () => {
+      const offer = Offer.create(
+        midnightBaseOffer({
+          market: { ...midnightMarket, maturity: apiValidMaturity },
+          buy: true,
+          expiry: apiValidMaturity - 60n,
+          maxAssets: 1_000n,
+          maxUnits: 0n,
+          ratifier: midnightAddresses.ecrecoverRatifier,
+        }),
+      );
+      const data = await midnight().getOffersData({
+        accountAddress: midnightAddresses.maker,
+        offers: offer,
+        validation: offerValidation,
+      });
+
+      expect(data.groups).toEqual([offer.group]);
+      expect(data.tree.offers).toHaveLength(1);
+    });
+
+    test("error: MidnightOfferMarketChainMismatchError", async () => {
+      const offer = Offer.create(
+        midnightBaseOffer({
+          market: { ...midnightMarket, chainId: 1n },
+          buy: true,
+          maxAssets: 1_000n,
+          maxUnits: 0n,
+          ratifier: midnightAddresses.ecrecoverRatifier,
+        }),
+      );
+
+      await expect(
+        midnight().getOffersData({
+          accountAddress: midnightAddresses.maker,
+          offers: offer,
+          validation: offerValidation,
+        }),
+      ).rejects.toThrow(MidnightOfferMarketChainMismatchError);
+    });
+
+    test("error: MidnightOfferMarketAddressMismatchError", async () => {
+      const offer = Offer.create(
+        midnightBaseOffer({
+          market: { ...midnightMarket, midnight: zeroAddress },
+          buy: true,
+          maxAssets: 1_000n,
+          maxUnits: 0n,
+          ratifier: midnightAddresses.ecrecoverRatifier,
+        }),
+      );
+
+      await expect(
+        midnight().getOffersData({
+          accountAddress: midnightAddresses.maker,
+          offers: offer,
+          validation: offerValidation,
+        }),
+      ).rejects.toThrow(MidnightOfferMarketAddressMismatchError);
+    });
   });
 
   describe("makeLend", () => {
-    test("default", () => {
+    test("default", async () => {
       const data = offersData(true);
-      const output = midnight().makeLend({
-        offersData: data,
+      const output = await midnight().makeLend({
+        accountAddress: data.accountAddress,
+        offers: data.tree,
+        validation: offerValidation,
         loanToken: midnightAddresses.loanToken,
         loanAssets: 1_000n,
       });
@@ -390,21 +480,154 @@ describe("MorphoMidnight", () => {
       });
     });
 
-    test("error: MidnightOfferSideMismatchError", () => {
-      expect(() =>
+    test("behavior: approval covers new group and existing loan reserves", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockRead(handle, {
+        address: midnightAddresses.loanToken,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: 0n,
+      });
+      mockRead(handle, {
+        address: midnightAddresses.midnight,
+        abi: midnightAbi,
+        functionName: "isAuthorized",
+        result: true,
+      });
+
+      const data = offersData(true);
+      const output = await new MorphoMidnight(
+        {
+          viemClient: handle.client,
+          options: {},
+        } as unknown as MorphoClientType,
+        midnightChainId,
+      ).makeLend({
+        accountAddress: data.accountAddress,
+        offers: data.tree,
+        validation: offerValidation,
+        loanToken: midnightAddresses.loanToken,
+        loanAssets: 1_000n,
+        reservedLoanAssets: 250n,
+      });
+      const requirements = await output.getRequirements();
+
+      expect(
+        requirements.find(
+          (requirement) => requirement.action.type === "erc20Approval",
+        )?.action,
+      ).toMatchObject({
+        args: {
+          spender: midnightAddresses.midnight,
+          amount: 1_250n,
+        },
+      });
+    });
+
+    test("error: MidnightOfferSideMismatchError", async () => {
+      await expect(
         midnight().makeLend({
-          offersData: offersData(false),
+          accountAddress: midnightAddresses.maker,
+          offers: offersData(false).tree,
+          validation: offerValidation,
           loanToken: midnightAddresses.loanToken,
           loanAssets: 1_000n,
         }),
-      ).toThrow(MidnightOfferSideMismatchError);
+      ).rejects.toThrow(MidnightOfferSideMismatchError);
+    });
+
+    test("error: MidnightOfferMarketLoanTokenMismatchError", async () => {
+      const offer = Offer.create(
+        midnightBaseOffer({
+          market: {
+            ...midnightMarket,
+            loanToken: midnightAddresses.dai,
+            maturity: apiValidMaturity,
+          },
+          buy: true,
+          expiry: apiValidMaturity - 60n,
+          maxAssets: 1_000n,
+          maxUnits: 0n,
+          ratifier: midnightAddresses.ecrecoverRatifier,
+        }),
+      );
+
+      await expect(
+        midnight().makeLend({
+          accountAddress: midnightAddresses.maker,
+          offers: offer,
+          validation: offerValidation,
+          loanToken: midnightAddresses.loanToken,
+          loanAssets: 1_000n,
+        }),
+      ).rejects.toThrow(MidnightOfferMarketLoanTokenMismatchError);
+    });
+  });
+
+  describe("supplyCollateralMakeBorrow", () => {
+    test("behavior: approval covers new group and existing collateral reserves", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockRead(handle, {
+        address: midnightAddresses.collateralToken,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: 0n,
+      });
+      mockRead(handle, {
+        address: midnightAddresses.midnight,
+        abi: midnightAbi,
+        functionName: "isAuthorized",
+        result: true,
+      });
+
+      const data = offersData(false);
+      const output = await new MorphoMidnight(
+        {
+          viemClient: handle.client,
+          options: {},
+        } as unknown as MorphoClientType,
+        midnightChainId,
+      ).supplyCollateralMakeBorrow({
+        accountAddress: data.accountAddress,
+        offers: data.tree,
+        validation: offerValidation,
+        market: midnightMarket,
+        collateralAssets: 1_000n,
+        reservedCollateralAssets: 250n,
+      });
+      const requirements = await output.getRequirements();
+
+      expect(
+        requirements.find(
+          (requirement) => requirement.action.type === "erc20Approval",
+        )?.action,
+      ).toMatchObject({
+        args: {
+          spender: midnightAddresses.midnight,
+          amount: 1_250n,
+        },
+      });
+      expect(
+        requirements.find(
+          (requirement) =>
+            requirement.action.type === "midnightSupplyCollateral",
+        )?.action,
+      ).toMatchObject({
+        args: {
+          assets: 1_000n,
+        },
+      });
     });
   });
 
   describe("makeBorrow", () => {
-    test("default", () => {
+    test("default", async () => {
       const data = offersData(false);
-      const output = midnight().makeBorrow({ offersData: data });
+      const output = await midnight().makeBorrow({
+        accountAddress: data.accountAddress,
+        offers: data.tree,
+        validation: offerValidation,
+      });
       const tx = output.buildTx(offerRootSignature(data));
 
       expect(output.groups).toEqual(data.groups);
@@ -412,18 +635,26 @@ describe("MorphoMidnight", () => {
       expect(tx.action.args.offers).toBe(data.tree.offers.length);
     });
 
-    test("error: MidnightOfferSideMismatchError", () => {
-      expect(() =>
-        midnight().makeBorrow({ offersData: offersData(true) }),
-      ).toThrow(MidnightOfferSideMismatchError);
+    test("error: MidnightOfferSideMismatchError", async () => {
+      await expect(
+        midnight().makeBorrow({
+          accountAddress: midnightAddresses.maker,
+          offers: offersData(true).tree,
+          validation: offerValidation,
+        }),
+      ).rejects.toThrow(MidnightOfferSideMismatchError);
     });
 
-    test("error: MidnightOfferSideMismatchError mixed-side groups", () => {
+    test("error: MidnightOfferSideMismatchError mixed-side groups", async () => {
       const data = multiGroupOffersData();
 
-      expect(() => midnight().makeBorrow({ offersData: data })).toThrow(
-        MidnightOfferSideMismatchError,
-      );
+      await expect(
+        midnight().makeBorrow({
+          accountAddress: data.accountAddress,
+          offers: data.tree,
+          validation: offerValidation,
+        }),
+      ).rejects.toThrow(MidnightOfferSideMismatchError);
     });
   });
 
