@@ -40,8 +40,8 @@ import {
   getMidnightBundlesRequirements,
   getMidnightRatifyRootRequirement,
 } from "../../actions/requirements/index.js";
-import { signAndVerifyTypedData } from "../../actions/requirements/signAndVerifyTypedData.js";
 import { validateChainId } from "../../helpers/index.js";
+import { signAndVerifyTypedData } from "../../helpers/signAndVerifyTypedData.js";
 import { validateOfferSides } from "../../helpers/validateOfferSides.js";
 import type { MorphoClientType } from "../../types/client.js";
 import {

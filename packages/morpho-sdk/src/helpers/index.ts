@@ -9,6 +9,7 @@ export {
   MAX_TOKEN_APPROVALS,
 } from "./constant.js";
 export { addTransactionMetadata } from "./metadata.js";
+export { signAndVerifyTypedData } from "./signAndVerifyTypedData.js";
 export {
   computeMaxRepaySharePrice,
   computeMaxSupplySharePrice,
@@ -30,3 +31,8 @@ export {
   validateWithdrawAmount,
   validateWithdrawShares,
 } from "./validate.js";
+export { validateOfferSides } from "./validateOfferSides.js";
+export {
+  type RequirementSpenderKey,
+  validateRequirementSpender,
+} from "./validateRequirementSpender.js";
