@@ -2,14 +2,14 @@ import type { Address } from "@morpho-org/blue-sdk";
 import { fetchToken, getPermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
 import type { Client, WalletClient } from "viem";
+import { signAndVerifyTypedData } from "../../../helpers/signAndVerifyTypedData.js";
+import { validateRequirementSpender } from "../../../helpers/validateRequirementSpender.js";
 import {
   ChainIdMismatchError,
   type PermitAction,
   type PermitRequirementSignature,
   type Requirement,
 } from "../../../types/index.js";
-import { signAndVerifyTypedData } from "../signAndVerifyTypedData.js";
-import { validateRequirementSpender } from "./validateRequirementSpender.js";
 
 /** Parameters for {@link encodeErc20Permit}. */
 interface EncodeErc20PermitParams {

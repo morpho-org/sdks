@@ -1,16 +1,32 @@
 import { type Address, getChainAddresses } from "@morpho-org/blue-sdk";
 import { isAddressEqual } from "viem";
-import { UnsupportedErc20ApprovalSpenderError } from "../../../types/index.js";
+import { UnsupportedErc20ApprovalSpenderError } from "../types/index.js";
 
-type RequirementSpenderKey =
+/** Supported spender slots that can be validated against the chain address registry. */
+export type RequirementSpenderKey =
   | "generalAdapter1"
   | "permit2"
   | "midnight"
   | "midnightBundles";
 
 /**
- * @internal
- * Validates that a requirement encoder spender is one of the supported chain addresses.
+ * Validates that a requirement encoder spender matches one of the allowed chain addresses.
+ *
+ * @param params - Spender validation parameters.
+ * @param params.chainId - Chain id used to resolve supported spender addresses.
+ * @param params.spender - Spender address to validate.
+ * @param params.allowed - Allowed registry slots for this requirement.
+ * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` does not match any allowed slot.
+ * @example
+ * ```ts
+ * import { validateRequirementSpender } from "@morpho-org/morpho-sdk";
+ *
+ * validateRequirementSpender({
+ *   chainId: 1,
+ *   spender: generalAdapter1,
+ *   allowed: ["generalAdapter1"],
+ * });
+ * ```
  */
 export const validateRequirementSpender = (params: {
   readonly chainId: number;
