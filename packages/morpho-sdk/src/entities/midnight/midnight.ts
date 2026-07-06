@@ -6,6 +6,7 @@ import {
   type Market,
   type MarketInput,
   MarketParams,
+  MarketUtils,
   type MidnightFetchParams,
   Payload,
   SetterRatifierUtils,
@@ -69,7 +70,6 @@ import {
   NoMidnightCreditToRedeemError,
   NonPositiveMidnightAmountError,
   selectRequirementSignatures,
-  UnknownMidnightCollateralError,
   UnknownMidnightRatifierError,
 } from "../../types/index.js";
 
@@ -471,13 +471,7 @@ export class MorphoMidnight implements MidnightActions {
     const market = params.marketData;
     const collateralIndex = params.collateralIndex ?? 0n;
     const midnightBundles = getChainAddress(this.chainId, "midnightBundles");
-    const collateral = market.getCollateralParamsByIndex(collateralIndex);
-    if (collateral == null) {
-      throw new UnknownMidnightCollateralError({
-        market: market.id,
-        collateralIndex,
-      });
-    }
+    const collateral = market.getCollateralByIndex(collateralIndex);
 
     return {
       getRequirements: async (reqParams?: MidnightRequirementsParams) => {
@@ -534,13 +528,7 @@ export class MorphoMidnight implements MidnightActions {
 
     const market = params.marketData;
     const collateralIndex = params.collateralIndex ?? 0n;
-    const collateral = market.getCollateralParamsByIndex(collateralIndex);
-    if (collateral == null) {
-      throw new UnknownMidnightCollateralError({
-        market: market.id,
-        collateralIndex,
-      });
-    }
+    const collateral = market.getCollateralByIndex(collateralIndex);
     const midnight = getChainAddress(this.chainId, "midnight");
 
     return {
@@ -648,13 +636,10 @@ export class MorphoMidnight implements MidnightActions {
         ? params.market
         : MarketParams.from(params.market);
     const collateralIndex = params.collateralIndex ?? 0n;
-    const collateral = market.collateralParams[Number(collateralIndex)];
-    if (collateral == null) {
-      throw new UnknownMidnightCollateralError({
-        market: "provided market",
-        collateralIndex,
-      });
-    }
+    const collateral = MarketUtils.getCollateralByIndex(
+      market,
+      collateralIndex,
+    );
 
     const data = params.offersData;
     validateOfferSides(data.tree.offers, false);

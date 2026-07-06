@@ -1,4 +1,7 @@
-import { midnightAbi } from "@morpho-org/midnight-sdk";
+import {
+  midnightAbi,
+  UnknownCollateralIndexError,
+} from "@morpho-org/midnight-sdk";
 import { decodeFunctionData } from "viem";
 import { describe, expect, test } from "vitest";
 import {
@@ -27,5 +30,17 @@ describe("midnightSupplyCollateral", () => {
       onBehalf: midnightAddresses.taker,
     });
     expect(decoded.functionName).toBe("supplyCollateral");
+  });
+
+  test("error: UnknownCollateralIndexError", () => {
+    expect(() =>
+      midnightSupplyCollateral({
+        chainId: midnightChainId,
+        market: midnightMarket,
+        collateralIndex: 1n,
+        assets: 2_000n,
+        onBehalf: midnightAddresses.taker,
+      }),
+    ).toThrow(UnknownCollateralIndexError);
   });
 });

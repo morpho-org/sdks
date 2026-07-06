@@ -708,15 +708,6 @@ export class MidnightTakeableOfferMarketMismatchError extends Error {
   }
 }
 
-/** Thrown when a Midnight flow references a collateral index not configured on the market. */
-export class UnknownMidnightCollateralError extends Error {
-  constructor(params: { market: string; collateralIndex: bigint }) {
-    super(
-      `Midnight market "${params.market}" has no collateral at index "${params.collateralIndex}". Use a configured collateral index.`,
-    );
-  }
-}
-
 /** Thrown when a Midnight offer tree uses an unsupported ratifier address. */
 export class UnknownMidnightRatifierError extends Error {
   constructor(params: {
