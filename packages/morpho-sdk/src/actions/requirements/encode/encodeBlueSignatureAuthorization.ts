@@ -2,13 +2,13 @@ import type { Address } from "@morpho-org/blue-sdk";
 import { getAuthorizationTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
 import type { Client, WalletClient } from "viem";
+import { signAndVerifyTypedData } from "../../../helpers/signAndVerifyTypedData.js";
 import {
   type AuthorizationAction,
   type AuthorizationRequirementSignature,
   ChainIdMismatchError,
   type Requirement,
 } from "../../../types/index.js";
-import { signAndVerifyTypedData } from "../signAndVerifyTypedData.js";
 
 /** Parameters for {@link encodeBlueSignatureAuthorization}. */
 interface EncodeBlueSignatureAuthorizationParams {

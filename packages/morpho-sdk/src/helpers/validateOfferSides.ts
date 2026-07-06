@@ -1,6 +1,18 @@
 import { MidnightOfferSideMismatchError } from "../types/index.js";
 
-/** @internal Validates that Midnight offers match a named flow's maker side. */
+/**
+ * Validates that Midnight offers match a named flow's maker side.
+ *
+ * @param offers - Offers to validate.
+ * @param expectedBuy - Expected maker side for every offer.
+ * @throws {MidnightOfferSideMismatchError} when any offer side differs from `expectedBuy`.
+ * @example
+ * ```ts
+ * import { validateOfferSides } from "@morpho-org/morpho-sdk";
+ *
+ * validateOfferSides(offers, true);
+ * ```
+ */
 export const validateOfferSides = (
   offers: Iterable<{ readonly buy: boolean }>,
   expectedBuy: boolean,

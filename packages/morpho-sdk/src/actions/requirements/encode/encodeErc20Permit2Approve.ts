@@ -2,12 +2,12 @@ import { type Address, getChainAddresses, MathLib } from "@morpho-org/blue-sdk";
 import { getPermit2PermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
 import type { WalletClient } from "viem";
+import { signAndVerifyTypedData } from "../../../helpers/signAndVerifyTypedData.js";
 import type {
   Permit2Action,
   PermitRequirementSignature,
   Requirement,
 } from "../../../types/index.js";
-import { signAndVerifyTypedData } from "../signAndVerifyTypedData.js";
 
 /** Parameters for {@link encodeErc20Permit2Approve}. */
 interface EncodeErc20Permit2ApproveParams {
