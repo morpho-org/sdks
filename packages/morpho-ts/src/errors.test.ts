@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  _try,
   DivisionByZeroError,
   IncompleteChainRegistryError,
   InvalidBitLengthError,
@@ -9,6 +10,10 @@ import {
   UnknownAddressError,
   UnsupportedChainIdError,
 } from "./errors.js";
+
+class TestDataError extends Error {}
+
+class TestMissingError extends TestDataError {}
 
 describe("UnsupportedChainIdError", () => {
   test("default", () => {
@@ -98,5 +103,63 @@ describe("UnknownAddressError", () => {
     expect(error.label).toBe("midnight");
     expect(error.message).toContain("31337");
     expect(error.message).toContain("midnight");
+  });
+});
+
+describe("_try", () => {
+  test("returns the value when sync accessor succeeds", () => {
+    expect(_try(() => 42)).toBe(42);
+  });
+
+  test("returns undefined when sync accessor throws and no error class given", () => {
+    expect(
+      _try(() => {
+        throw new Error("oops");
+      }),
+    ).toBe(undefined);
+  });
+
+  test("returns undefined for matching error class", () => {
+    expect(
+      _try(() => {
+        throw new UnknownAddressError({ chainId: 1, label: "midnight" });
+      }, UnknownAddressError),
+    ).toBe(undefined);
+  });
+
+  test("re-throws when error class does not match", () => {
+    expect(() =>
+      _try(() => {
+        throw new TypeError("not me");
+      }, UnknownAddressError),
+    ).toThrow(TypeError);
+  });
+
+  test("matches subclasses", () => {
+    expect(
+      _try(() => {
+        throw new TestMissingError("missing");
+      }, TestDataError),
+    ).toBe(undefined);
+  });
+
+  test("returns the resolved value for async accessor success", async () => {
+    expect(await _try(async () => "ok")).toBe("ok");
+  });
+
+  test("returns undefined for async rejection on matching error class", async () => {
+    expect(
+      await _try(async () => {
+        throw new UnknownAddressError({ chainId: 1, label: "midnight" });
+      }, UnknownAddressError),
+    ).toBe(undefined);
+  });
+
+  test("re-throws on async rejection when no class matches", async () => {
+    await expect(
+      _try(async () => {
+        throw new TypeError("nope");
+      }, UnknownAddressError),
+    ).rejects.toThrow(TypeError);
   });
 });

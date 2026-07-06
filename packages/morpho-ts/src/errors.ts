@@ -164,3 +164,89 @@ export class UnknownAddressError extends Error {
     this.name = "UnknownAddressError";
   }
 }
+
+/** Constructor type for errors accepted by `_try`. */
+export interface ErrorClass<E extends Error = Error> {
+  // biome-ignore lint/suspicious/noExplicitAny: match any type of error constructor arg.
+  new (...args: any[]): E;
+}
+
+/**
+ * Runs an async accessor and returns `undefined` for expected lookup errors.
+ *
+ * @param accessor - Async accessor to run.
+ * @param errorClasses - Optional error classes to catch. When omitted, all errors are caught.
+ * @returns The accessor result, or `undefined` when the accessor throws a matching error.
+ * @example
+ * ```ts
+ * import { _try, UnknownAddressError } from "@morpho-org/morpho-ts";
+ *
+ * const address = await _try(async () => {
+ *   throw new UnknownAddressError({ chainId: 1, label: "midnight" });
+ * }, UnknownAddressError);
+ * console.log(address);
+ * ```
+ */
+export function _try<T, ErrorClasses extends readonly ErrorClass[] = []>(
+  accessor: () => Promise<T>,
+  ...errorClasses: ErrorClasses
+): Promise<T | undefined>;
+/**
+ * Runs a sync accessor and returns `undefined` for expected lookup errors.
+ *
+ * @param accessor - Sync accessor to run.
+ * @param errorClasses - Optional error classes to catch. When omitted, all errors are caught.
+ * @returns The accessor result, or `undefined` when the accessor throws a matching error.
+ * @example
+ * ```ts
+ * import { _try, UnknownAddressError } from "@morpho-org/morpho-ts";
+ *
+ * const address = _try(() => {
+ *   throw new UnknownAddressError({ chainId: 1, label: "midnight" });
+ * }, UnknownAddressError);
+ * console.log(address);
+ * ```
+ */
+export function _try<T, ErrorClasses extends readonly ErrorClass[] = []>(
+  accessor: () => T,
+  ...errorClasses: ErrorClasses
+): T | undefined;
+/**
+ * Runs an accessor and returns `undefined` for expected lookup errors.
+ *
+ * @param accessor - Accessor to run.
+ * @param errorClasses - Optional error classes to catch. When omitted, all errors are caught.
+ * @returns The accessor result, or `undefined` when the accessor throws a matching error.
+ * @example
+ * ```ts
+ * import { _try, UnknownAddressError } from "@morpho-org/morpho-ts";
+ *
+ * const address = _try(() => {
+ *   throw new UnknownAddressError({ chainId: 1, label: "midnight" });
+ * }, UnknownAddressError);
+ * console.log(address);
+ * ```
+ */
+export function _try<T, ErrorClasses extends readonly ErrorClass[] = []>(
+  accessor: () => T | Promise<T>,
+  ...errorClasses: ErrorClasses
+): T | undefined | Promise<T | undefined> {
+  const maybeCatchError = (error: unknown): undefined => {
+    if (
+      errorClasses.length === 0 ||
+      errorClasses.some((errorClass) => error instanceof errorClass)
+    )
+      return;
+
+    throw error;
+  };
+
+  try {
+    const res = accessor();
+
+    if (res instanceof Promise) return res.catch(maybeCatchError);
+    return res;
+  } catch (error) {
+    return maybeCatchError(error);
+  }
+}

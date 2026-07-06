@@ -1,5 +1,7 @@
 export {
+  _try,
   DivisionByZeroError,
+  type ErrorClass,
   IncompleteChainRegistryError,
   InvalidBitLengthError,
   RegistryValueAlreadyRegisteredError,
@@ -187,58 +189,5 @@ export class UnknownOfFactory extends Error {
     public readonly address: Address,
   ) {
     super(`address "${address}" is not from the ${factory} factory`);
-  }
-}
-
-/** Constructor type for errors accepted by `_try`. */
-export interface ErrorClass<E extends Error = Error> {
-  // biome-ignore lint/suspicious/noExplicitAny: match any type of arg
-  new (...args: any[]): E;
-}
-
-/**
- * Runs an async accessor and returns `undefined` for expected lookup errors.
- *
- * @internal
- */
-export function _try<T, ErrorClasses extends readonly ErrorClass[] = []>(
-  accessor: () => Promise<T>,
-  ...errorClasses: ErrorClasses
-): Promise<T | undefined>;
-/**
- * Runs a sync accessor and returns `undefined` for expected lookup errors.
- *
- * @internal
- */
-export function _try<T, ErrorClasses extends readonly ErrorClass[] = []>(
-  accessor: () => T,
-  ...errorClasses: ErrorClasses
-): T | undefined;
-/**
- * Runs an accessor and returns `undefined` for expected lookup errors.
- *
- * @internal
- */
-export function _try<T, ErrorClasses extends readonly ErrorClass[] = []>(
-  accessor: () => T | Promise<T>,
-  ...errorClasses: ErrorClasses
-): T | undefined | Promise<T | undefined> {
-  const maybeCatchError = (error: unknown): undefined => {
-    if (
-      errorClasses.length === 0 ||
-      errorClasses.some((errorClass) => error instanceof errorClass)
-    )
-      return;
-
-    throw error;
-  };
-
-  try {
-    const res = accessor();
-
-    if (res instanceof Promise) return res.catch(maybeCatchError);
-    return res;
-  } catch (error) {
-    return maybeCatchError(error);
   }
 }
