@@ -803,11 +803,11 @@ Contract wallet:
 
 `buildTx(signatures?)` returns `MidnightSubmitOffersAction` to the mempool contract.
 
-The make-lend method builds one or more precomputed `{ market, tick, start, expiry }` offers. It must accept multi-market offer legs in the same tree when the markets share one loan token, matching the markets app's multi-limit-order / OCA basket flow. For those baskets, the loan-token reserve approval is the sum of reserves across all legs, and the SDK throws a typed error when the tree would exceed the Midnight tree-size limit.
+The make-lend method builds one or more precomputed `{ market, tick, start, expiry }` offers. It must accept multi-market offer legs in the same tree when the markets share one loan token, matching the markets app's multi-limit-order / OCA basket flow. For those baskets, offers in the same group share one `consumed[maker][group]` counter on Midnight, so the new group contributes one reserve amount: the maximum leg reserve, with equal leg reserves expected for the current OCA shape. It is not the sum of every offer leg. The SDK throws a typed error when the tree would exceed the Midnight tree-size limit.
 
 Maker reserve approvals stay transaction approvals in this migration. The final mempool submit payload does not consume ERC2612 or Permit2 token signatures, so supporting permits here would require a separate protocol entry point rather than a markets-app-only SDK migration.
 
-`reservedLoanAssets` and `reservedCollateralAssets` are protocol reserve amounts, not UI display values. The entity must derive them from existing maker reserve state or accept them through an explicit data object when the caller already fetched that state. They are added to the new offer reserve amount before approval so a replacement approval does not under-cover already-open offers.
+`reservedLoanAssets` and `reservedCollateralAssets` are cross-group protocol reserve amounts, not UI display values. All resting groups for the maker share the same direct `Midnight` allowance, so the approval target is the existing reserved amount across open groups plus the new group's reserve amount. The entity must derive existing reserved amounts from maker reserve state, including each open group's current consumed amount when that data is available from the API, or accept them through an explicit data object when the caller already fetched that state. They are added to the new group reserve amount before approval so a replacement approval does not under-cover already-open offers.
 
 ### Borrow limit collateral-only branch
 
