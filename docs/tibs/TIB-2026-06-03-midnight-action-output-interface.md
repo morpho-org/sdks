@@ -136,7 +136,7 @@ This is not just a UI preference. `MidnightBundles` pulls tokens once, consumes 
 
 Maker flows remain mempool flows, not bundle flows:
 
-- the SDK builds offers, one content-addressed group, and a Merkle tree;
+- the SDK normalizes the provided offer set into content-addressed groups and a Merkle tree;
 - the maker authorizes the chosen ratifier on `Midnight`;
 - EOA / EIP-7702 makers sign the tree root for `EcrecoverRatifier`;
 - contract-wallet makers send `SetterRatifier.setIsRootRatified(maker, root, true)`;
@@ -156,7 +156,7 @@ The adapter preserves the current markets app UX where all signature prompts are
 
 The label mapper stays in the markets app. It can map requirement types such as token permits, Permit2 transfer signatures, root signatures, ERC20 approvals, Midnight authorizations, ratify-root transactions, and collateral-supply transactions to screen-specific copy. This remains app-side because it depends on display concepts (`loan token`, `collateral token`, token symbols, and screen-specific final labels) that do not belong in `morpho-sdk`.
 
-If a markets app screen needs protocol metadata for follow-up behavior, the Midnight method can return a method-specific subtype that structurally extends `ActionOutput` with readonly metadata. The concrete maker flows return protocol fields such as `group`, `root`, and `ratifierType`; review-only display state such as `offerExpiry` stays in the markets app because the app still owns offer-chain construction. That does not change the core `{ getRequirements, buildTx }` interface, and the app decides how to display the metadata.
+If a markets app screen needs protocol metadata for follow-up behavior, the Midnight method can return a method-specific subtype that structurally extends `ActionOutput` with readonly metadata. The concrete maker flows return protocol fields such as `group`, `root`, and `ratifierType`; review-only display state such as `offerExpiry` stays in the markets app because the app owns display preparation while the SDK owns offer-set normalization, tree construction, and submit payload construction. That does not change the core `{ getRequirements, buildTx }` interface, and the app decides how to display the metadata.
 
 ### Example 1: take-lend taker flow
 
@@ -190,13 +190,13 @@ Complexity for the markets app: **low**. This is mostly a mechanical builder rep
 
 This migration sketch is illustrative. It describes the intended split of responsibilities, not an implementation-ready branch structure.
 
-This is the hardest current migration shape because it combines a mandatory collateral prelude transaction with maker consent. The app should keep form-level validation, rate / tick / expiry preparation, review display state, ratifier selection, tick-spacing preflight, labels, and the `ActionFlow` wrapper. The SDK should own collateral approval requirements, collateral supply transaction construction, offer tree validation, mempool validation, ratifier requirements, root signature / ratify-root requirements, payload construction, and the final submit transaction.
+This is the hardest current migration shape because it combines a mandatory collateral prelude transaction with maker consent. The app should keep form-level validation, rate / tick / expiry preparation, review display state, ratifier selection, tick-spacing preflight, labels, and the `ActionFlow` wrapper. The SDK should accept only a tree-like offer set for maker flows, then own collateral approval requirements, collateral supply transaction construction, offer-set normalization, tree validation, mempool validation, ratifier requirements, root signature / ratify-root requirements, payload construction, and the final submit transaction.
 
 This case intentionally stays approval-based for collateral and reserve transfers. The mandatory `MidnightSupplyCollateralAction` and maker reserve approvals target the core `Midnight` contract / mempool path, not a `MidnightBundles` function that accepts `TokenPermit`. Introducing token permits here would require a different protocol entry point rather than an app-only SDK migration.
 
 `MidnightApi.validateMempoolPayload(...)` keeps the API-helper behavior: it returns the raw validation result as `{ valid, issues }` so low-level callers can decide how to surface policy failures. `Tree.mempoolValidate(...)` / `TreeUtils.mempoolValidate(...)` are the SDK-owned safety boundary for action flows, so they must branch on `valid` and throw a typed `MidnightMempoolValidationError` carrying the returned `issues` before the entity exposes `midnightOfferRootSignature`, ratify-root requirements, or submit calldata.
 
-`getOffersData(...)` remains side-agnostic because it prepares any valid tree. The low-level take transaction builders enforce take-side semantics: `takeLend` requires maker-sell takeable offers, and `takeBorrow` / `supplyCollateralTakeBorrow` require maker-buy takeable offers. The named maker entity flows enforce maker-side semantics: `makeLend` requires maker-buy offers, and `makeBorrow` / `supplyCollateralMakeBorrow` require maker-sell offers.
+`getOffersData(...)` remains side-agnostic because it prepares any valid tree-like offer set. The low-level take transaction builders enforce take-side semantics: `takeLend` requires maker-sell takeable offers, and `takeBorrow` / `supplyCollateralTakeBorrow` require maker-buy takeable offers. The named maker entity flows enforce maker-side semantics: `makeLend` requires maker-buy offers, and `makeBorrow` / `supplyCollateralMakeBorrow` require maker-sell offers.
 
 Collateral-only handling must be explicit. Blue's combined supply-collateral-and-borrow flow rejects a zero borrow amount, and callers use direct `supplyCollateral` for collateral-only behavior. Midnight should follow the same principle unless the implementation PR deliberately chooses a different product contract. If the markets screen keeps a collateral-only branch, that branch should route directly to `supplyCollateral` or reject the combined maker flow before offer-tree preparation. It should not prepare an empty offer tree or call maker-offer helpers with no offers.
 
@@ -211,13 +211,13 @@ What leaves the app:
 What stays in the app:
 
 - form-level guards and user-facing copy (`"Rate is required"`, empty amount checks) unless the app chooses to rely entirely on SDK typed errors;
-- market loading, the existing rate / tick / expiry logic that produces offer and group entries, ratifier selection, and tick-spacing preflight;
+- market loading, the existing rate / tick / expiry logic that produces a tree-like offer set, ratifier selection, and tick-spacing preflight;
 - `ActionFlow` execution through the shared adapter;
 - final labels and requirement labels;
 - no token-permit UI branch for this collateral prelude; the SDK returns an approval transaction because the core Midnight call used by this migration has no `TokenPermit` argument;
 - success routing with the created group when a maker offer exists, plus local review display of `offerExpiry`.
 
-Complexity for the markets app: **medium**. The code removal is still large, but the remaining app code is the code it already owns: form validation, rate / tick / expiry preparation, offer/group construction, labels, and `offerExpiry` display. The SDK action should return enough metadata for the app to route `onSuccess` with the created group when a maker offer exists. No markets app flow requires `ActionFlow.before`, `ActionFlow.after`, a DAG, or `buildTxs()`.
+Complexity for the markets app: **medium**. The code removal is still large, but the remaining app code is the code it already owns: form validation, rate / tick / expiry preparation, tree-like offer-set input preparation, labels, and `offerExpiry` display. The SDK action should return enough metadata for the app to route `onSuccess` with the created group when a maker offer exists. No markets app flow requires `ActionFlow.before`, `ActionFlow.after`, a DAG, or `buildTxs()`.
 
 ### Example 3: repay / withdraw through MidnightBundles
 
@@ -370,23 +370,21 @@ export type MidnightTokenPermit =
 
 This is action-encoding metadata, not UI state. Integrators still receive neutral `permit`, `permit2`, and `permit2Transfer` requirements and decide how to label them.
 
-### Transaction requirements
+### Call requirements
 
-Add a named transaction-requirement union. Existing raw `Transaction<...>` requirement values stay valid.
+Add a named call-requirement union. Existing raw `Transaction<...>` requirement values stay valid.
 
 ```ts
-export type TransactionRequirementAction =
+export type CallRequirementAction =
   | ERC20ApprovalAction
   | MorphoAuthorizationAction
   | MidnightAuthorizationAction
   | MidnightRatifyRootAction
   | MidnightSupplyCollateralAction;
 
-export type TransactionRequirement = Readonly<
-  Transaction<TransactionRequirementAction>
->;
+export type CallRequirement = Readonly<Transaction<CallRequirementAction>>;
 
-export type ActionRequirement = TransactionRequirement | SignatureRequirement;
+export type ActionRequirement = CallRequirement | SignatureRequirement;
 ```
 
 `MidnightSupplyCollateralAction` is included because it can be a mandatory prelude transaction for a currently implemented app flow:
@@ -445,6 +443,13 @@ export interface MidnightOfferRootSignatureArgs {
 Add action union members only; do not change `Transaction`.
 
 ```ts
+export type MidnightOfferSetInput =
+  | Offer
+  | readonly Offer[]
+  | Group
+  | readonly Group[]
+  | Tree;
+
 export interface MidnightTakeLendAction
   extends BaseAction<
     "midnightTakeLend",
@@ -544,6 +549,10 @@ export interface MidnightCancelOfferAction
     }
   > {}
 ```
+
+Maker entity methods accept a tree-like `MidnightOfferSetInput` only. The caller may pass a single offer, an array of offers, pre-grouped offers, or a tree; it does not pass derived `groups`, `root`, compression, signature payload, or mempool calldata. The entity normalizes the offer set, constructs the groups and tree, derives the root and signature input, validates the router / mempool payload, and passes only prepared encode inputs into the final action builder. `MidnightSubmitOffersAction` may expose derived metadata such as `groups`, `root`, and `offers` for adapters and `onSuccess` routing, but those fields are not caller inputs.
+
+Building offers from a target rate and implementing offer chaining remain outside this initial migration unless the caller has already materialized the resulting tree-like offer set before calling the SDK.
 
 Extend `TransactionAction` with these action interfaces and the Midnight requirement action interfaces above (`MidnightAuthorizationAction`, `MidnightRatifyRootAction`).
 
@@ -658,7 +667,7 @@ Midnight.setIsAuthorized(authorized, true, owner)
 The implementation keeps maker consent in the `MorphoMidnight` entity instead of exporting one large helper. This keeps the public helper surface comparable to Blue and keeps tree / payload construction at the entity boundary:
 
 ```ts
-async getOffersData(...): Promise<OffersData>;
+async getOffersData(offerSet: MidnightOfferSetInput): Promise<OffersData>;
 
 private async getRatifierRequirements({
   offersData,
@@ -687,13 +696,13 @@ Contract-wallet maker:
 
 The migration must preserve the monorepo's `Client → Entity → Action` split.
 
-- **Entity layer** performs SDK-owned reads and off-chain checks: allowances, `isAuthorized`, ratifier selection, Midnight API mempool validation, credit / withdrawable reads, and group generation. App-owned preflights such as quote previews, rate math, and tick-spacing assertions may run before the entity call.
-- **Action layer** is synchronous and encode-only: it receives already-computed amounts, offers, payloads, roots, and addresses, then returns deep-frozen `Transaction` values.
+- **Entity layer** performs SDK-owned reads and off-chain checks: allowances, `isAuthorized`, ratifier selection, offer-set normalization, tree / payload construction, Midnight API mempool validation, credit / withdrawable reads, and group generation. App-owned preflights such as quote previews, rate math, and tick-spacing assertions may run before the entity call.
+- **Action layer** is synchronous and encode-only: it receives already-computed amounts, prepared calldata payloads, roots, and addresses from the entity boundary, then returns deep-frozen `Transaction` values.
 - **Helpers** are pure unless explicitly placed in the requirement-resolution boundary.
 
 Important boundary calls:
 
-- group ids are content-addressed, not random: the entity builds offers with the Midnight SDK, then uses `Group.create(offers)` / `GroupUtils.hash` so `group`, roots, payloads, cancel references, and `onSuccess` metadata all agree with the shared Midnight helpers;
+- group ids are content-addressed, not random: the entity normalizes the caller-provided offer set with the Midnight SDK, then uses `Group.create(offers)` / `GroupUtils.hash` so `group`, roots, payloads, cancel references, and `onSuccess` metadata all agree with the shared Midnight helpers;
 - offer and tree construction derives the market `chainId` and `midnight` address from the chain-scoped SDK configuration / market data, never from router SDK defaults such as `DEFAULT_CHAIN_ID` or `DEFAULT_MIDNIGHT`; these fields are part of the offer-id preimage and must follow the selected chain;
 - signing is inside `Requirement.sign`, not action-level;
 - router validation through `Tree.mempoolValidate(...)` throws before a signature prompt is exposed; lower-level `MidnightApi` helpers may still return `{ valid, issues }` for raw API consumers;
@@ -913,7 +922,7 @@ Midnight.setConsumed(group, maxUint256, onBehalf)
 
 This proposal is compatible with the current markets app flows, with the documented redeem default divergence, because:
 
-- every app `CallRequest` maps either to a `TransactionRequirement` or to `buildTx()`;
+- every app `CallRequest` maps either to a `CallRequirement` or to `buildTx()`;
 - every app `SignatureRequest` maps to `Requirement.sign(...)`;
 - the `Transaction` wire shape is unchanged;
 - no app builder currently needs `before` / `after` callback semantics;
@@ -957,7 +966,7 @@ Keep approval-only Midnight bundle flows for the initial migration and add token
 
 ## Implementation phases
 
-- **Phase 1 — Shared action-flow types / interfaces.** Add `ActionRequirement`, `TransactionRequirement`, widened `Requirement` / `RequirementSignature` unions, Midnight action interfaces, and type guards. This is the compatibility layer that lets the markets app keep its existing `ActionFlow` signature / call collection model while consuming SDK-built Midnight flows. Existing Blue / MarketV1 / vault methods keep their narrow return types.
+- **Phase 1 — Shared action-flow types / interfaces.** Add `ActionRequirement`, `CallRequirement`, widened `Requirement` / `RequirementSignature` unions, Midnight action interfaces, and type guards. This is the compatibility layer that lets the markets app keep its existing `ActionFlow` signature / call collection model while consuming SDK-built Midnight flows. Existing Blue / MarketV1 / vault methods keep their narrow return types.
 - **Phase 2 — Requirement helpers.** Export / reuse `getRequirementsApproval` with explicit spender; add Midnight token-pull, authorization, and ratifier helpers.
 - **Phase 3 — Pure action encoders.** Add `src/actions/midnight/*` encoders for final txs and prelude txs. Every encoder returns a deep-frozen `Transaction` and has colocated unit tests.
 - **Phase 4 — Entity methods.** Add `MorphoMidnight` methods that perform RPC/off-chain reads, router validation, amount math, group generation, and return `{ getRequirements, buildTx }`.
