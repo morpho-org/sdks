@@ -18,7 +18,6 @@ import {
   NegativeMidnightAmountError,
   NonPositiveMidnightAmountError,
   type Transaction,
-  UnknownMidnightCollateralError,
 } from "../../types/index.js";
 import { getMidnightTokenPermit } from "../signatures/getMidnightTokenPermit.js";
 import type { MidnightCollateralWithdrawal } from "./types.js";
@@ -99,14 +98,9 @@ export const midnightRepayWithdrawCollateral = (
   const marketId = MarketUtils.toId(params.market);
   const market = MarketUtils.toStruct(params.market);
   for (const withdrawal of collateralWithdrawals) {
-    if (
-      withdrawal.assets > 0n &&
-      market.collateralParams[Number(withdrawal.collateralIndex)] == null
-    ) {
-      throw new UnknownMidnightCollateralError({
-        market: marketId,
-        collateralIndex: withdrawal.collateralIndex,
-      });
+    if (withdrawal.assets > 0n) {
+      // Validate that every positive withdrawal targets a configured collateral.
+      MarketUtils.getCollateralByIndex(market, withdrawal.collateralIndex);
     }
   }
   const midnightBundles = getChainAddress(params.chainId, "midnightBundles");

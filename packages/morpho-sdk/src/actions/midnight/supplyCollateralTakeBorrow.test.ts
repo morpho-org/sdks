@@ -1,4 +1,7 @@
-import { midnightBundlesAbi } from "@morpho-org/midnight-sdk";
+import {
+  midnightBundlesAbi,
+  UnknownCollateralIndexError,
+} from "@morpho-org/midnight-sdk";
 import { decodeFunctionData, type Hex } from "viem";
 import { describe, expect, test } from "vitest";
 import {
@@ -13,7 +16,6 @@ import {
   MidnightOfferSideMismatchError,
   MidnightTakeableOfferMarketMismatchError,
   type RequirementSignature,
-  UnknownMidnightCollateralError,
 } from "../../types/index.js";
 import { midnightSupplyCollateralTakeBorrow } from "./supplyCollateralTakeBorrow.js";
 import { PermitKind } from "./types.js";
@@ -147,7 +149,7 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
     ).toThrow(MidnightTakeableOfferMarketMismatchError);
   });
 
-  test("error: UnknownMidnightCollateralError", () => {
+  test("error: UnknownCollateralIndexError", () => {
     expect(() =>
       midnightSupplyCollateralTakeBorrow({
         chainId: midnightChainId,
@@ -159,6 +161,6 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
         collateralIndex: 1n,
         takeableOffers: [midnightApiTake({ buy: true })],
       }),
-    ).toThrow(UnknownMidnightCollateralError);
+    ).toThrow(UnknownCollateralIndexError);
   });
 });

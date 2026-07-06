@@ -1,4 +1,7 @@
-import { midnightBundlesAbi } from "@morpho-org/midnight-sdk";
+import {
+  midnightBundlesAbi,
+  UnknownCollateralIndexError,
+} from "@morpho-org/midnight-sdk";
 import { decodeFunctionData, maxUint256, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
@@ -7,10 +10,7 @@ import {
   midnightMarket,
   midnightMarketId,
 } from "../../../test/fixtures/midnight.js";
-import {
-  type TokenRequirementSignature,
-  UnknownMidnightCollateralError,
-} from "../../types/index.js";
+import type { TokenRequirementSignature } from "../../types/index.js";
 import { midnightRepayWithdrawCollateral } from "./repayWithdrawCollateral.js";
 import { PermitKind } from "./types.js";
 
@@ -87,7 +87,7 @@ describe("midnightRepayWithdrawCollateral", () => {
     });
   });
 
-  test("error: UnknownMidnightCollateralError for default withdrawal", () => {
+  test("error: UnknownCollateralIndexError for default withdrawal", () => {
     expect(() =>
       midnightRepayWithdrawCollateral({
         chainId: midnightChainId,
@@ -97,10 +97,10 @@ describe("midnightRepayWithdrawCollateral", () => {
         collateralIndex: 1n,
         onBehalf: midnightAddresses.taker,
       }),
-    ).toThrow(UnknownMidnightCollateralError);
+    ).toThrow(UnknownCollateralIndexError);
   });
 
-  test("error: UnknownMidnightCollateralError for listed withdrawal", () => {
+  test("error: UnknownCollateralIndexError for listed withdrawal", () => {
     expect(() =>
       midnightRepayWithdrawCollateral({
         chainId: midnightChainId,
@@ -110,6 +110,6 @@ describe("midnightRepayWithdrawCollateral", () => {
         collateralWithdrawals: [{ collateralIndex: 1n, assets: 2_000n }],
         onBehalf: midnightAddresses.taker,
       }),
-    ).toThrow(UnknownMidnightCollateralError);
+    ).toThrow(UnknownCollateralIndexError);
   });
 });
