@@ -1,22 +1,15 @@
-import { type Address, getChainAddresses } from "@morpho-org/blue-sdk";
+import type { Address } from "@morpho-org/blue-sdk";
 import { fetchToken, getPermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
-import {
-  type Client,
-  isAddressEqual,
-  verifyTypedData,
-  type WalletClient,
-} from "viem";
-import { signTypedData } from "viem/actions";
-import { validateUserAddress } from "../../../helpers/validate.js";
+import type { Client, WalletClient } from "viem";
 import {
   ChainIdMismatchError,
-  InvalidSignatureError,
   type PermitAction,
   type PermitRequirementSignature,
   type Requirement,
-  UnsupportedErc20ApprovalSpenderError,
 } from "../../../types/index.js";
+import { signAndVerifyTypedData } from "../signAndVerifyTypedData.js";
+import { validateRequirementSpender } from "./validateRequirementSpender.js";
 
 /** Parameters for {@link encodeErc20Permit}. */
 interface EncodeErc20PermitParams {
@@ -77,26 +70,11 @@ export const encodeErc20Permit = async (
   if (viemClient.chain?.id !== chainId) {
     throw new ChainIdMismatchError(viemClient.chain?.id, chainId);
   }
-
-  const {
-    midnightBundles,
-    bundler3: { generalAdapter1 },
-  } = getChainAddresses(chainId);
-  const supportedSpenders = [generalAdapter1, midnightBundles];
-
-  if (
-    !supportedSpenders.some(
-      (supported) => supported != null && isAddressEqual(spender, supported),
-    )
-  ) {
-    throw new UnsupportedErc20ApprovalSpenderError({
-      spender,
-      chainId,
-      generalAdapter1,
-      midnightBundles,
-      supportedSpenders,
-    });
-  }
+  validateRequirementSpender({
+    chainId,
+    spender,
+    allowed: ["generalAdapter1", "midnightBundles"],
+  });
 
   const now = Time.timestamp();
   const deadline = now + Time.s.from.h(2n);
@@ -117,8 +95,6 @@ export const encodeErc20Permit = async (
   return {
     action,
     async sign(client: WalletClient, userAddress: Address) {
-      const account = client.account;
-      validateUserAddress(account?.address, userAddress);
       const typedData = getPermitTypedData(
         {
           erc20: tokenData,
@@ -130,21 +106,11 @@ export const encodeErc20Permit = async (
         },
         chainId,
       );
-
-      const signature = await signTypedData(client, {
-        ...typedData,
-        account,
+      const signature = await signAndVerifyTypedData({
+        client,
+        userAddress,
+        typedData,
       });
-
-      const isValid = await verifyTypedData({
-        ...typedData,
-        address: userAddress, // Verify against the permit's owner.
-        signature,
-      });
-
-      if (!isValid) {
-        throw new InvalidSignatureError();
-      }
 
       return deepFreeze({
         args: {

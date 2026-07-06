@@ -1,4 +1,3 @@
-import { MathLib } from "@morpho-org/blue-sdk";
 import { erc2612Abi } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress, getChainAddresses } from "@morpho-org/morpho-ts";
 import {
@@ -15,11 +14,9 @@ import {
   type ActionRequirement,
   CryptoUnavailableError,
 } from "../../../types/index.js";
-import {
-  encodeErc20Permit,
-  encodeErc20Permit2Transfer,
-} from "../encode/index.js";
 import { getRequirementsApproval } from "../getRequirementsApproval.js";
+import { getMidnightBundlesRequirementsPermit } from "./getMidnightBundlesRequirementsPermit.js";
+import { getMidnightBundlesRequirementsPermit2 } from "./getMidnightBundlesRequirementsPermit2.js";
 
 /** Parameters for {@link getMidnightBundlesRequirements}. */
 export type GetMidnightBundlesRequirementsParams =
@@ -122,16 +119,14 @@ export const getMidnightBundlesRequirements = async (
       }).catch(() => undefined);
 
       if (nonce !== undefined) {
-        return [
-          await encodeErc20Permit(params.viemClient, {
-            token: params.token,
-            spender: midnightBundles,
-            amount: params.amount,
-            chainId: params.chainId,
-            nonce,
-            supportDeployless: params.supportDeployless,
-          }),
-        ];
+        return getMidnightBundlesRequirementsPermit(params.viemClient, {
+          token: params.token,
+          spender: midnightBundles,
+          chainId: params.chainId,
+          args: { amount: params.amount },
+          nonce,
+          supportDeployless: params.supportDeployless,
+        });
       }
     }
 
@@ -149,25 +144,15 @@ export const getMidnightBundlesRequirements = async (
       globalThis.crypto.getRandomValues(nonceBytes);
       const nonce = hexToBigInt(bytesToHex(nonceBytes));
 
-      return [
-        ...getRequirementsApproval({
-          address: params.token,
-          chainId: params.chainId,
-          args: {
-            spender: chainAddresses.permit2,
-            spendAmount: params.amount,
-            approvalAmount: MathLib.MAX_UINT_160,
-          },
-          allowances: permit2Allowance,
-        }),
-        encodeErc20Permit2Transfer({
-          token: params.token,
-          spender: midnightBundles,
-          amount: params.amount,
-          chainId: params.chainId,
-          nonce,
-        }),
-      ];
+      return getMidnightBundlesRequirementsPermit2({
+        address: params.token,
+        chainId: params.chainId,
+        permit2: chainAddresses.permit2,
+        spender: midnightBundles,
+        args: { amount: params.amount },
+        erc20Allowances: { permit2: permit2Allowance },
+        nonce,
+      });
     }
   }
 
