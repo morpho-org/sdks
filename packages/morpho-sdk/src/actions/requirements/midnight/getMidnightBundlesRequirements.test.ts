@@ -22,6 +22,8 @@ import {
   isRequirementSignature,
 } from "../../../types/index.js";
 import { getMidnightBundlesRequirements } from "./getMidnightBundlesRequirements.js";
+import { getMidnightBundlesRequirementsPermit } from "./getMidnightBundlesRequirementsPermit.js";
+import { getMidnightBundlesRequirementsPermit2 } from "./getMidnightBundlesRequirementsPermit2.js";
 
 vi.mock("@morpho-org/blue-sdk-viem", async (importOriginal) => {
   const actual =
@@ -272,6 +274,25 @@ describe.sequential("getMidnightBundlesRequirements", () => {
     expect(permit.action.args.spender).toBe(midnightAddresses.midnightBundles);
   });
 
+  test("getMidnightBundlesRequirementsPermit returns an exact permit requirement", async () => {
+    const { client } = createMockClient(midnightTestChain);
+
+    const requirements = await getMidnightBundlesRequirementsPermit(client, {
+      token: midnightAddresses.loanToken,
+      spender: midnightAddresses.midnightBundles,
+      chainId: midnightChainId,
+      args: { amount: 1_000n },
+      nonce: 7n,
+    });
+
+    expect(requirements).toHaveLength(1);
+    expect(requirements[0]?.action.type).toBe("permit");
+    expect(requirements[0]?.action.args.spender).toBe(
+      midnightAddresses.midnightBundles,
+    );
+    expect(requirements[0]?.action.args.amount).toBe(1_000n);
+  });
+
   test("behavior: returns Permit2 signature with optional approval", async () => {
     const handle = createMockClient(midnightTestChain);
     mockAllowanceReads({
@@ -304,6 +325,33 @@ describe.sequential("getMidnightBundlesRequirements", () => {
       throw new Error("Requirement is not a Permit2 transfer signature");
     }
     expect(permit2.action.args.spender).toBe(midnightAddresses.midnightBundles);
+  });
+
+  test("getMidnightBundlesRequirementsPermit2 returns Permit2 approval and transfer signature", () => {
+    const requirements = getMidnightBundlesRequirementsPermit2({
+      address: midnightAddresses.loanToken,
+      chainId: midnightChainId,
+      permit2: midnightAddresses.permit2,
+      spender: midnightAddresses.midnightBundles,
+      args: { amount: 1_000n },
+      erc20Allowances: { permit2: 0n },
+      nonce: 42n,
+    });
+
+    expect(requirements).toHaveLength(2);
+    const approval = requirements[0];
+    const permit2 = requirements[1];
+    if (!isRequirementApproval(approval)) {
+      throw new Error("Requirement is not an approval transaction");
+    }
+    if (!isRequirementSignature(permit2)) {
+      throw new Error("Requirement is not a signature requirement");
+    }
+    expect(approval.action.args.spender).toBe(midnightAddresses.permit2);
+    expect(approval.action.args.amount).toBe(MathLib.MAX_UINT_160);
+    expect(permit2.action.type).toBe("permit2Transfer");
+    expect(permit2.action.args.spender).toBe(midnightAddresses.midnightBundles);
+    expect(permit2.action.args.amount).toBe(1_000n);
   });
 
   test("behavior: returns classic approval when Permit2 is not deployed", async () => {

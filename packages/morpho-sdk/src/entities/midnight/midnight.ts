@@ -19,10 +19,9 @@ import {
   type Hex,
   isAddressEqual,
   type TypedDataDefinition,
-  verifyTypedData,
   type WalletClient,
 } from "viem";
-import { getBlock, signTypedData } from "viem/actions";
+import { getBlock } from "viem/actions";
 import {
   type MidnightCollateralWithdrawal,
   type MidnightTakeableOffer,
@@ -41,7 +40,8 @@ import {
   getMidnightBundlesRequirements,
   getMidnightRatifyRootRequirement,
 } from "../../actions/requirements/index.js";
-import { validateChainId, validateUserAddress } from "../../helpers/index.js";
+import { signAndVerifyTypedData } from "../../actions/requirements/signAndVerifyTypedData.js";
+import { validateChainId } from "../../helpers/index.js";
 import { validateOfferSides } from "../../helpers/validateOfferSides.js";
 import type { MorphoClientType } from "../../types/client.js";
 import {
@@ -49,7 +49,6 @@ import {
   type ActionRequirement,
   type AnyRequirementSignature,
   InsufficientMidnightWithdrawableLiquidityError,
-  InvalidSignatureError,
   MarketIdMismatchError,
   type MidnightCancelOfferAction,
   MidnightOfferRootMismatchError,
@@ -868,8 +867,6 @@ export class MorphoMidnight implements MidnightActions {
       requirements.push({
         action,
         async sign(client: WalletClient, userAddress: Address) {
-          const account = client.account;
-          validateUserAddress(account?.address, userAddress);
           const typedData = EcrecoverRatifierUtils.typedData({
             tree: data.tree,
             chainId,
@@ -883,17 +880,11 @@ export class MorphoMidnight implements MidnightActions {
             primaryType: typedData.primaryType,
             message: typedData.message,
           };
-          const signature = await signTypedData(client, {
-            ...typedDataDefinition,
-            account,
+          const signature = await signAndVerifyTypedData({
+            client,
+            userAddress,
+            typedData: typedDataDefinition,
           });
-          const isValid = await verifyTypedData({
-            ...typedDataDefinition,
-            address: userAddress,
-            signature,
-          });
-
-          if (!isValid) throw new InvalidSignatureError();
 
           const items = await EcrecoverRatifierUtils.ratify({
             tree: data.tree,

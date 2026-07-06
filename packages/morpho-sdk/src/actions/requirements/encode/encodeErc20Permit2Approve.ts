@@ -1,15 +1,13 @@
 import { type Address, getChainAddresses, MathLib } from "@morpho-org/blue-sdk";
 import { getPermit2PermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
-import { verifyTypedData, type WalletClient } from "viem";
-import { signTypedData } from "viem/actions";
-import { validateUserAddress } from "../../../helpers/validate.js";
-import {
-  InvalidSignatureError,
-  type Permit2Action,
-  type PermitRequirementSignature,
-  type Requirement,
+import type { WalletClient } from "viem";
+import type {
+  Permit2Action,
+  PermitRequirementSignature,
+  Requirement,
 } from "../../../types/index.js";
+import { signAndVerifyTypedData } from "../signAndVerifyTypedData.js";
 
 /** Parameters for {@link encodeErc20Permit2Approve}. */
 interface EncodeErc20Permit2ApproveParams {
@@ -80,9 +78,6 @@ export const encodeErc20Permit2Approve = (
   return {
     action,
     async sign(client: WalletClient, userAddress: Address) {
-      const account = client.account;
-      validateUserAddress(account?.address, userAddress);
-
       const typedData = getPermit2PermitTypedData(
         {
           spender: generalAdapter1,
@@ -94,20 +89,11 @@ export const encodeErc20Permit2Approve = (
         },
         chainId,
       );
-      const signature = await signTypedData(client, {
-        ...typedData,
-        account,
+      const signature = await signAndVerifyTypedData({
+        client,
+        userAddress,
+        typedData,
       });
-
-      const isValid = await verifyTypedData({
-        ...typedData,
-        address: userAddress,
-        signature,
-      });
-
-      if (!isValid) {
-        throw new InvalidSignatureError();
-      }
 
       return deepFreeze({
         args: {
