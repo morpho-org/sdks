@@ -7,7 +7,10 @@ import {
   midnightMarket,
   midnightMarketId,
 } from "../../../test/fixtures/midnight.js";
-import type { TokenRequirementSignature } from "../../types/index.js";
+import {
+  type TokenRequirementSignature,
+  UnknownMidnightCollateralError,
+} from "../../types/index.js";
 import { midnightRepayWithdrawCollateral } from "./repayWithdrawCollateral.js";
 import { PermitKind } from "./types.js";
 
@@ -82,5 +85,31 @@ describe("midnightRepayWithdrawCollateral", () => {
     expect(decoded.args?.[3]).toMatchObject({
       kind: PermitKind.Permit2,
     });
+  });
+
+  test("error: UnknownMidnightCollateralError for default withdrawal", () => {
+    expect(() =>
+      midnightRepayWithdrawCollateral({
+        chainId: midnightChainId,
+        market: midnightMarket,
+        repayAssets: 0n,
+        withdrawCollateralAssets: 2_000n,
+        collateralIndex: 1n,
+        onBehalf: midnightAddresses.taker,
+      }),
+    ).toThrow(UnknownMidnightCollateralError);
+  });
+
+  test("error: UnknownMidnightCollateralError for listed withdrawal", () => {
+    expect(() =>
+      midnightRepayWithdrawCollateral({
+        chainId: midnightChainId,
+        market: midnightMarket,
+        repayAssets: 1_000n,
+        withdrawCollateralAssets: 0n,
+        collateralWithdrawals: [{ collateralIndex: 1n, assets: 2_000n }],
+        onBehalf: midnightAddresses.taker,
+      }),
+    ).toThrow(UnknownMidnightCollateralError);
   });
 });
