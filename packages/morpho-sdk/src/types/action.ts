@@ -322,9 +322,9 @@ export interface MidnightAuthorizationAction
   > {}
 
 /** Metadata for a SetterRatifier ratify-root prerequisite transaction. */
-export interface MidnightRatifyRootAction
+export interface SetterRatifierRatifyRootAction
   extends BaseAction<
-    "midnightRatifyRoot",
+    "setterRatifierRatifyRoot",
     {
       maker: Address;
       root: Hex;
@@ -480,7 +480,7 @@ export type TransactionAction =
   | BlueRefinanceAction
   | BlueAuthorizationAction
   | MidnightAuthorizationAction
-  | MidnightRatifyRootAction
+  | SetterRatifierRatifyRootAction
   | MidnightTakeLendAction
   | MidnightTakeBorrowAction
   | MidnightSupplyCollateralTakeBorrowAction
@@ -738,7 +738,7 @@ export type TransactionRequirementAction =
   | ERC20ApprovalAction
   | BlueAuthorizationAction
   | MidnightAuthorizationAction
-  | MidnightRatifyRootAction
+  | SetterRatifierRatifyRootAction
   | MidnightSupplyCollateralAction;
 
 /** Transaction prerequisite returned by action-output `getRequirements()`. */
