@@ -19,10 +19,11 @@ function isTreeLike(tree: RatifierTreeInput): tree is TreeLike {
 function normalizeTree(tree: RatifierTreeInput): TreeLike {
   if (isTreeLike(tree)) return tree;
 
-  const offers: readonly IOffer[] = tree.flatMap((entry) =>
+  const entries = Array.isArray(tree) ? tree : [tree];
+  const offers: readonly IOffer[] = entries.flatMap((entry) =>
     "offers" in entry ? Group.from(entry).offers : [Offer.from(entry)],
   );
-  const descriptor = TreeUtils.buildDescriptor(offers);
+  const descriptor = TreeUtils.buildDescriptor(entries);
 
   return {
     offers,

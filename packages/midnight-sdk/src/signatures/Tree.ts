@@ -137,7 +137,8 @@ export class Tree {
    * ```
    */
   public static from(tree: TreeInput): Tree {
-    return tree instanceof Tree ? tree : Tree.create(tree);
+    if (tree instanceof Tree) return tree;
+    return Tree.create(Array.isArray(tree) ? tree : [tree]);
   }
 
   /**

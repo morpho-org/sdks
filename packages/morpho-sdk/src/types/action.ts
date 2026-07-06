@@ -685,21 +685,19 @@ export type SignatureRequirement =
   | MidnightOfferRootRequirement
   | Requirement<AuthorizationRequirementSignature>;
 
-/** Transaction action metadata that can appear as an action prerequisite. */
-export type TransactionRequirementAction =
+/** Call action metadata that can appear as an action prerequisite. */
+export type CallRequirementAction =
   | ERC20ApprovalAction
   | BlueAuthorizationAction
   | MidnightAuthorizationAction
   | SetterRatifierRatifyRootAction
   | MidnightSupplyCollateralAction;
 
-/** Transaction prerequisite returned by action-output `getRequirements()`. */
-export type TransactionRequirement = Readonly<
-  Transaction<TransactionRequirementAction>
->;
+/** Onchain call prerequisite returned by action-output `getRequirements()`. */
+export type CallRequirement = Readonly<Transaction<CallRequirementAction>>;
 
-/** Transaction or signature prerequisite returned by an entity action output. */
-export type ActionRequirement = TransactionRequirement | SignatureRequirement;
+/** Onchain call or signature prerequisite returned by an entity action output. */
+export type ActionRequirement = CallRequirement | SignatureRequirement;
 
 /** Lazy entity result exposing prerequisite resolution and synchronous transaction building. */
 export interface ActionOutput<
@@ -734,7 +732,7 @@ export function isRequirementApproval(
   );
 }
 
-/** Checks whether an action requirement is a Blue authorization transaction. */
+/** Checks whether an action requirement is a Blue authorization call. */
 export function isRequirementBlueAuthorization(
   requirement: unknown,
 ): requirement is Transaction<BlueAuthorizationAction> {
@@ -755,18 +753,10 @@ export function isRequirementBlueAuthorization(
 export function isRequirementSignature<
   T extends RequirementSignature = RequirementSignature,
 >(
-  requirement:
-    | Transaction<ERC20ApprovalAction>
-    | Transaction<BlueAuthorizationAction>
-    | Requirement<T>
-    | undefined,
+  requirement: CallRequirement | Requirement<T> | undefined,
 ): requirement is Requirement<T>;
 export function isRequirementSignature(
-  requirement:
-    | Transaction<ERC20ApprovalAction>
-    | Transaction<BlueAuthorizationAction>
-    | Requirement
-    | undefined,
+  requirement: CallRequirement | Requirement | undefined,
 ): requirement is Requirement;
 export function isRequirementSignature(
   requirement: ActionRequirement | undefined,

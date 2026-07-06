@@ -695,6 +695,45 @@ export class MidnightOfferSideMismatchError extends Error {
   }
 }
 
+/** Thrown when a Midnight maker offer targets a different chain than the action flow. */
+export class MidnightOfferMarketChainMismatchError extends Error {
+  constructor(params: {
+    readonly index: number;
+    readonly expectedChainId: number;
+    readonly actualChainId: bigint;
+  }) {
+    super(
+      `Midnight offer "${params.index}" targets chain "${params.actualChainId}", expected "${params.expectedChainId}". Rebuild the offer set for the selected chain.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight maker offer targets a different Midnight contract than the action flow. */
+export class MidnightOfferMarketAddressMismatchError extends Error {
+  constructor(params: {
+    readonly index: number;
+    readonly expectedMidnight: Address;
+    readonly actualMidnight: Address;
+  }) {
+    super(
+      `Midnight offer "${params.index}" targets Midnight "${params.actualMidnight}", expected "${params.expectedMidnight}". Rebuild the offer set for the selected chain.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight make-lend offer does not use the approved loan token. */
+export class MidnightOfferMarketLoanTokenMismatchError extends Error {
+  constructor(params: {
+    readonly index: number;
+    readonly expectedLoanToken: Address;
+    readonly actualLoanToken: Address;
+  }) {
+    super(
+      `Midnight offer "${params.index}" uses loan token "${params.actualLoanToken}", expected "${params.expectedLoanToken}". Rebuild the lend offer set for the approved loan token.`,
+    );
+  }
+}
+
 /** Thrown when a quoted Midnight takeable offer belongs to a different market than the requested flow. */
 export class MidnightTakeableOfferMarketMismatchError extends Error {
   constructor(params: {
