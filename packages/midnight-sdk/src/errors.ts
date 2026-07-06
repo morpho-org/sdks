@@ -192,6 +192,41 @@ export class InvalidMarketParameterError extends Error {
 }
 
 /**
+ * Thrown when a Midnight market collateral index is not configured.
+ *
+ * @example
+ * ```ts
+ * import { UnknownCollateralIndexError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new UnknownCollateralIndexError({
+ *   market: "0x1111111111111111111111111111111111111111111111111111111111111111",
+ *   collateralIndex: 2n,
+ * });
+ * ```
+ * @param params.market - Market id whose collateral list was queried.
+ * @param params.collateralIndex - Missing collateral index.
+ */
+export class UnknownCollateralIndexError extends Error {
+  /** Market id whose collateral list was queried. */
+  public readonly market: string;
+
+  /** Missing collateral index. */
+  public readonly collateralIndex: bigint;
+
+  public constructor(params: {
+    readonly market: string;
+    readonly collateralIndex: bigint;
+  }) {
+    super(
+      `Midnight market "${params.market}" has no collateral at index "${params.collateralIndex}". Use a configured collateral index.`,
+    );
+    this.name = "UnknownCollateralIndexError";
+    this.market = params.market;
+    this.collateralIndex = params.collateralIndex;
+  }
+}
+
+/**
  * Thrown when an offer builder receives a parameter that cannot satisfy Midnight protocol rules.
  *
  * @example

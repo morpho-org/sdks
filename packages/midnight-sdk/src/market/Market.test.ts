@@ -1,4 +1,4 @@
-import { MathLib } from "@morpho-org/morpho-ts";
+import { _try, MathLib } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
 import { numberToHex } from "viem";
 import { describe, expect, test } from "vitest";
@@ -17,7 +17,10 @@ import {
   MAX_COLLATERALS,
   SETTLEMENT_FEE_BREAKPOINTS,
 } from "../constants.js";
-import { InvalidMarketParameterError } from "../errors.js";
+import {
+  InvalidMarketParameterError,
+  UnknownCollateralIndexError,
+} from "../errors.js";
 import { Market, MarketParams } from "./Market.js";
 import { MarketUtils } from "./MarketUtils.js";
 
@@ -241,14 +244,22 @@ describe("Market", () => {
   test("behavior: collateral lookup helpers", () => {
     const market = baseMarket();
 
-    expect(market.getCollateralParamsByIndex(0)?.token).toBe(
+    expect(market.getCollateralByIndex(0).token).toBe(
       addresses.collateralToken,
     );
     expect(market.getCollateralIndexByToken(addresses.collateralToken)).toBe(0);
     expect(
       market.getCollateralParamsByToken(addresses.collateralToken)?.lltv,
     ).toBe(770000000000000000n);
-    expect(market.getCollateralParamsByIndex(1)).toBeUndefined();
+    expect(
+      _try(() => market.getCollateralByIndex(1), UnknownCollateralIndexError),
+    ).toBeUndefined();
+    expect(() => market.getCollateralByIndex(1)).toThrow(
+      UnknownCollateralIndexError,
+    );
+    expect(() => MarketUtils.getCollateralByIndex(market, 1)).toThrow(
+      UnknownCollateralIndexError,
+    );
   });
 
   test("error: invalid bigint input", () => {
