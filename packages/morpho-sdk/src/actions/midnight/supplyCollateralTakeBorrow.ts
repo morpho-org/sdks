@@ -11,7 +11,6 @@ import {
   NegativeMidnightAmountError,
   NonPositiveMidnightAmountError,
   type Transaction,
-  UnknownMidnightCollateralError,
 } from "../../types/index.js";
 import { getMidnightTokenPermit } from "../signatures/getMidnightTokenPermit.js";
 import type { MidnightTakeBorrowParams } from "./takeBorrow.js";
@@ -79,15 +78,11 @@ export const midnightSupplyCollateralTakeBorrow = (
   }
 
   const midnightBundles = getChainAddress(params.chainId, "midnightBundles");
-  const market = MarketUtils.toStruct(params.market);
   const collateralIndex = params.collateralIndex ?? 0n;
-  const collateral = market.collateralParams[Number(collateralIndex)];
-  if (collateral == null) {
-    throw new UnknownMidnightCollateralError({
-      market: marketId,
-      collateralIndex,
-    });
-  }
+  const collateral = MarketUtils.getCollateralByIndex(
+    params.market,
+    collateralIndex,
+  );
   const collateralSupplies: readonly MidnightCollateralSupply[] = [
     {
       collateralIndex,

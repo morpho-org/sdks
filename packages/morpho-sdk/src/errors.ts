@@ -30,6 +30,7 @@ export {
   PriceGreaterThanOneError,
   SettlementFeeExceedsPriceError,
   TickOutOfRangeError,
+  UnknownCollateralIndexError,
 } from "@morpho-org/midnight-sdk";
 export type { ErrorClass } from "@morpho-org/morpho-ts";
 export { _try } from "@morpho-org/morpho-ts";

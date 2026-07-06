@@ -34,6 +34,8 @@ export const midnightSupplyCollateral = (
   const marketId = MarketUtils.toId(params.market);
   const midnight = getChainAddress(params.chainId, "midnight");
   const collateralIndex = params.collateralIndex ?? 0n;
+  // Validate that the supplied collateral index is configured before encoding.
+  MarketUtils.getCollateralByIndex(params.market, collateralIndex);
 
   let tx = {
     to: midnight,
