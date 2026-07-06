@@ -38,7 +38,7 @@ import {
   getMidnightApprovalRequirements,
   getMidnightAuthorizationRequirement,
   getMidnightBundlesRequirements,
-  getMidnightRatifyRootRequirement,
+  getSetterRatifierRatifyRootRequirement,
 } from "../../actions/requirements/index.js";
 import { validateChainId } from "../../helpers/index.js";
 import { signAndVerifyTypedData } from "../../helpers/signAndVerifyTypedData.js";
@@ -907,7 +907,7 @@ export class MorphoMidnight implements MidnightActions {
       return requirements;
     }
 
-    const ratifyRoot = await getMidnightRatifyRootRequirement({
+    const ratifyRoot = await getSetterRatifierRatifyRootRequirement({
       viemClient: this.client.viemClient,
       chainId: this.chainId,
       maker: data.accountAddress,

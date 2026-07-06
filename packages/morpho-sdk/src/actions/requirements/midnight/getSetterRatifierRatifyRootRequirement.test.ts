@@ -7,7 +7,7 @@ import {
   midnightChainId,
 } from "../../../../test/fixtures/midnight.js";
 import { ChainIdMismatchError } from "../../../types/index.js";
-import { getMidnightRatifyRootRequirement } from "./getMidnightRatifyRootRequirement.js";
+import { getSetterRatifierRatifyRootRequirement } from "./getSetterRatifierRatifyRootRequirement.js";
 
 const midnightTestChain = {
   id: midnightChainId,
@@ -24,12 +24,12 @@ const wrongChain = {
 const root =
   "0x1111111111111111111111111111111111111111111111111111111111111111" as Hex;
 
-describe("getMidnightRatifyRootRequirement", () => {
+describe("getSetterRatifierRatifyRootRequirement", () => {
   test("throws ChainIdMismatchError when the client chain differs", async () => {
     const { client } = createMockClient(wrongChain);
 
     await expect(
-      getMidnightRatifyRootRequirement({
+      getSetterRatifierRatifyRootRequirement({
         viemClient: client,
         chainId: midnightChainId,
         maker: midnightAddresses.maker,
@@ -48,7 +48,7 @@ describe("getMidnightRatifyRootRequirement", () => {
     });
 
     await expect(
-      getMidnightRatifyRootRequirement({
+      getSetterRatifierRatifyRootRequirement({
         viemClient: handle.client,
         chainId: midnightChainId,
         maker: midnightAddresses.maker,
@@ -66,7 +66,7 @@ describe("getMidnightRatifyRootRequirement", () => {
       result: false,
     });
 
-    const tx = await getMidnightRatifyRootRequirement({
+    const tx = await getSetterRatifierRatifyRootRequirement({
       viemClient: handle.client,
       chainId: midnightChainId,
       maker: midnightAddresses.maker,
@@ -74,7 +74,7 @@ describe("getMidnightRatifyRootRequirement", () => {
     });
 
     expect(tx?.to).toBe(midnightAddresses.setterRatifier);
-    expect(tx?.action.type).toBe("midnightRatifyRoot");
+    expect(tx?.action.type).toBe("setterRatifierRatifyRoot");
     expect(tx?.action.args.maker).toBe(midnightAddresses.maker);
     expect(tx?.action.args.root).toBe(root);
   });
