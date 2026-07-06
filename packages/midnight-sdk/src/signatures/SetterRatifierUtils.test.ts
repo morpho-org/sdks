@@ -41,7 +41,7 @@ describe("SetterRatifierUtils.ratify", () => {
       ratifier: addresses.setterRatifier,
     });
 
-    const items = SetterRatifierUtils.ratify({ tree: [offer] });
+    const items = SetterRatifierUtils.ratify({ tree: offer });
     const decoded = SetterRatifierUtils.decodeRatifierData(
       items[0]!.ratifierData,
     );

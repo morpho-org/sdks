@@ -11,7 +11,7 @@ import {
   Payload,
   SetterRatifierUtils,
   Tree,
-  type TreeCreateParams,
+  type TreeInput,
   type TreeMempoolValidateParams,
 } from "@morpho-org/midnight-sdk";
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
@@ -52,6 +52,9 @@ import {
   InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
   type MidnightCancelOfferAction,
+  MidnightOfferMarketAddressMismatchError,
+  MidnightOfferMarketChainMismatchError,
+  MidnightOfferMarketLoanTokenMismatchError,
   MidnightOfferRootMismatchError,
   MidnightOfferRootOfferCountMismatchError,
   MidnightOfferRootOwnerMismatchError,
@@ -79,11 +82,11 @@ export type OfferValidationParams = Omit<TreeMempoolValidateParams, "chainId">;
 /** Parameters for building and validating Midnight offer data. */
 export interface GetOffersDataParams {
   readonly accountAddress: Address;
-  readonly tree: TreeCreateParams;
+  readonly offers: TreeInput;
   readonly validation?: OfferValidationParams;
 }
 
-/** Precomputed Midnight maker-offer data consumed by synchronous maker action flows. */
+/** Prepared Midnight maker-offer data derived from a tree-like offer set. */
 export interface OffersData {
   readonly accountAddress: Address;
   readonly groups: readonly Hex[];
@@ -95,20 +98,26 @@ export interface OffersData {
 
 /** Parameters shared by Midnight maker-offer flows. */
 export interface MakeOffersParams {
-  readonly offersData: OffersData;
+  readonly accountAddress: Address;
+  readonly offers: TreeInput;
+  readonly validation?: OfferValidationParams;
 }
 
 /** Parameters for the Midnight make-lend maker flow. */
 export interface MakeLendParams extends MakeOffersParams {
   readonly loanToken: Address;
+  /** New group loan reserve. For grouped OCA offers, pass the group reserve once instead of summing every leg. */
   readonly loanAssets: bigint;
+  /** Existing loan assets reserved across the maker's other open groups, including consumed amounts when available. */
   readonly reservedLoanAssets?: bigint;
 }
 
 /** Parameters for the Midnight supply-collateral-and-make-borrow maker flow. */
 export interface SupplyCollateralMakeBorrowParams extends MakeOffersParams {
   readonly market: MarketInput;
+  /** Collateral supplied before offer submission and the new group collateral reserve counted once for grouped offers. */
   readonly collateralAssets: bigint;
+  /** Existing collateral assets reserved across the maker's other open groups, including consumed amounts when available. */
   readonly reservedCollateralAssets?: bigint;
   readonly collateralIndex?: bigint;
 }
@@ -179,6 +188,7 @@ export interface SupplyCollateralTakeBorrowParams extends TakeBorrowParams {
 /** Parameters for the Midnight supply-collateral flow. */
 export interface SupplyCollateralParams extends MarketActionParams {
   readonly collateralAssets: bigint;
+  /** Existing collateral assets reserved across the maker's open groups, including consumed amounts when available. */
   readonly reservedCollateralAssets?: bigint;
   readonly collateralIndex?: bigint;
 }
@@ -233,11 +243,11 @@ export interface MidnightActions {
   supplyCollateral(
     params: SupplyCollateralParams,
   ): ActionOutput<MidnightSupplyCollateralAction, undefined>;
-  makeLend(params: MakeLendParams): MakeOffersOutput;
-  makeBorrow(params: MakeOffersParams): MakeOffersOutput;
+  makeLend(params: MakeLendParams): Promise<MakeOffersOutput>;
+  makeBorrow(params: MakeOffersParams): Promise<MakeOffersOutput>;
   supplyCollateralMakeBorrow(
     params: SupplyCollateralMakeBorrowParams,
-  ): MakeOffersOutput;
+  ): Promise<MakeOffersOutput>;
   redeem(params: RedeemParams): ActionOutput<MidnightRedeemAction, undefined>;
   repayWithdrawCollateral(
     params: RepayWithdrawCollateralParams,
@@ -308,7 +318,26 @@ export class MorphoMidnight implements MidnightActions {
 
   async getOffersData(params: GetOffersDataParams): Promise<OffersData> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    const tree = Tree.create(params.tree);
+    const tree = Tree.from(params.offers);
+    const midnight = getChainAddress(this.chainId, "midnight");
+    tree.offers.forEach((offer, index) => {
+      const market =
+        "params" in offer.market ? offer.market.params : offer.market;
+      if (market.chainId !== BigInt(this.chainId)) {
+        throw new MidnightOfferMarketChainMismatchError({
+          index,
+          expectedChainId: this.chainId,
+          actualChainId: market.chainId,
+        });
+      }
+      if (!isAddressEqual(market.midnight, midnight)) {
+        throw new MidnightOfferMarketAddressMismatchError({
+          index,
+          expectedMidnight: midnight,
+          actualMidnight: market.midnight,
+        });
+      }
+    });
     const ratifier = tree.offers[0]!.ratifier;
     const ecrecoverRatifier = getChainAddress(
       this.chainId,
@@ -554,7 +583,7 @@ export class MorphoMidnight implements MidnightActions {
     };
   }
 
-  makeLend(params: MakeLendParams): MakeOffersOutput {
+  async makeLend(params: MakeLendParams): Promise<MakeOffersOutput> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     assertPositiveAmount("loanAssets", params.loanAssets);
     assertNonNegativeAmount(
@@ -562,8 +591,23 @@ export class MorphoMidnight implements MidnightActions {
       params.reservedLoanAssets ?? 0n,
     );
 
-    const data = params.offersData;
+    const data = await this.getOffersData({
+      accountAddress: params.accountAddress,
+      offers: params.offers,
+      validation: params.validation,
+    });
     validateOfferSides(data.tree.offers, true);
+    data.tree.offers.forEach((offer, index) => {
+      const market =
+        "params" in offer.market ? offer.market.params : offer.market;
+      if (!isAddressEqual(market.loanToken, params.loanToken)) {
+        throw new MidnightOfferMarketLoanTokenMismatchError({
+          index,
+          expectedLoanToken: params.loanToken,
+          actualLoanToken: market.loanToken,
+        });
+      }
+    });
     const midnight = getChainAddress(this.chainId, "midnight");
 
     return {
@@ -598,10 +642,14 @@ export class MorphoMidnight implements MidnightActions {
     };
   }
 
-  makeBorrow(params: MakeOffersParams): MakeOffersOutput {
+  async makeBorrow(params: MakeOffersParams): Promise<MakeOffersOutput> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
-    const data = params.offersData;
+    const data = await this.getOffersData({
+      accountAddress: params.accountAddress,
+      offers: params.offers,
+      validation: params.validation,
+    });
     validateOfferSides(data.tree.offers, false);
 
     return {
@@ -621,9 +669,9 @@ export class MorphoMidnight implements MidnightActions {
     };
   }
 
-  supplyCollateralMakeBorrow(
+  async supplyCollateralMakeBorrow(
     params: SupplyCollateralMakeBorrowParams,
-  ): MakeOffersOutput {
+  ): Promise<MakeOffersOutput> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     assertPositiveAmount("collateralAssets", params.collateralAssets);
     assertNonNegativeAmount(
@@ -641,7 +689,11 @@ export class MorphoMidnight implements MidnightActions {
       collateralIndex,
     );
 
-    const data = params.offersData;
+    const data = await this.getOffersData({
+      accountAddress: params.accountAddress,
+      offers: params.offers,
+      validation: params.validation,
+    });
     validateOfferSides(data.tree.offers, false);
     const midnight = getChainAddress(this.chainId, "midnight");
 

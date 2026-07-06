@@ -307,6 +307,7 @@ describe("Tree.from", () => {
 
     expect(Tree.from(tree)).toBe(tree);
     expect(Tree.from([baseOfferInput({ maxAssets: 0n })])).toBeInstanceOf(Tree);
+    expect(Tree.from(baseOfferInput({ maxAssets: 0n }))).toBeInstanceOf(Tree);
   });
 });
 
@@ -391,7 +392,7 @@ describe("TreeUtils.mempoolValidate", () => {
 
     await TreeUtils.mempoolValidate({
       chainId: 8453,
-      tree: [offer],
+      tree: offer,
       fetch,
       ratification: { type: "setter" },
     });
