@@ -141,6 +141,9 @@ export const getMidnightBundlesRequirements = async (
       if (globalThis.crypto?.getRandomValues == null) {
         throw new CryptoUnavailableError("Permit2 unordered nonce generation");
       }
+      // Permit2 SignatureTransfer uses caller-chosen unordered nonces. The high-level helper
+      // generates one without a bitmap read, so it must be CSPRNG-backed to avoid collisions
+      // across outstanding signatures.
       globalThis.crypto.getRandomValues(nonceBytes);
       const nonce = hexToBigInt(bytesToHex(nonceBytes));
 

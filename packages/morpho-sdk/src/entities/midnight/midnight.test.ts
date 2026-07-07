@@ -44,8 +44,8 @@ import {
   MissingAccrualPositionError,
   UnexpectedRequirementSignatureError,
 } from "../../types/error.js";
-import type { MidnightActionSignatures, OffersData } from "./midnight.js";
 import { MorphoMidnight } from "./midnight.js";
+import type { MidnightActionSignatures, OffersData } from "./types.js";
 
 type BuildSubmitOffersTx = (params: {
   readonly offersData: OffersData;
