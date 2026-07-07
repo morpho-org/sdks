@@ -43,6 +43,7 @@ import {
   MidnightOfferRootOwnerMismatchError,
   MidnightOfferRootRatifierMismatchError,
   MidnightOfferSideMismatchError,
+  MidnightRedeemExceedsCreditError,
   MissingAccrualPositionError,
   UnexpectedRequirementSignatureError,
 } from "../../types/error.js";
@@ -338,6 +339,19 @@ describe("MorphoMidnight", () => {
       });
     });
 
+    test("behavior: explicit units can exceed face value up to accrued credit", () => {
+      const market = marketData();
+      const output = midnight().redeem({
+        marketData: market,
+        positionData: positionData(market, { credit: 250n, pendingFee: 50n }),
+        accountAddress: midnightAddresses.taker,
+        units: 225n,
+      });
+      const tx = output.buildTx();
+
+      expect(tx.action.args.units).toBe(225n);
+    });
+
     test("error: MarketIdMismatchError", () => {
       const market = marketData();
       const otherMarket = new Market({
@@ -364,6 +378,19 @@ describe("MorphoMidnight", () => {
           accountAddress: midnightAddresses.taker,
         }),
       ).toThrow(MissingAccrualPositionError);
+    });
+
+    test("error: MidnightRedeemExceedsCreditError", () => {
+      const market = marketData();
+
+      expect(() =>
+        midnight().redeem({
+          marketData: market,
+          positionData: positionData(market, { credit: 250n, pendingFee: 50n }),
+          accountAddress: midnightAddresses.taker,
+          units: 251n,
+        }),
+      ).toThrow(MidnightRedeemExceedsCreditError);
     });
   });
 
