@@ -52,12 +52,18 @@ import type { MidnightActionSignatures, OffersData } from "./types.js";
 type BuildSubmitOffersTx = (params: {
   readonly offersData: OffersData;
   readonly signatures?: MidnightActionSignatures;
+  readonly metadata?: { readonly origin: string };
 }) => Readonly<Transaction<MempoolSubmitOffersAction>>;
 
 const buildSubmitOffersTx: BuildSubmitOffersTx = (params) =>
   (
     Object.assign(Object.create(MorphoMidnight.prototype), {
       chainId: midnightChainId,
+      client: {
+        options: {
+          metadata: params.metadata,
+        },
+      },
     }) as {
       buildSubmitOffersTx: BuildSubmitOffersTx;
     }
@@ -753,6 +759,18 @@ describe("MorphoMidnight", () => {
         ratifierType: "ecrecover",
         offers: data.tree.offers.length,
       });
+    });
+
+    test("behavior: appends metadata", () => {
+      const data = offersData();
+      const tx = buildSubmitOffersTx({
+        offersData: data,
+        signatures: offerRootSignature(data),
+        metadata: { origin: "a1b2c3d4" },
+      });
+
+      expect(tx.action.type).toBe("mempoolSubmitOffers");
+      expect(tx.data.includes("a1b2c3d4")).toBe(true);
     });
 
     test("error: MidnightOfferRootOwnerMismatchError", () => {
