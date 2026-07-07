@@ -26,10 +26,10 @@ import { getBlock } from "viem/actions";
 import {
   type MidnightCollateralWithdrawal,
   type MidnightTakeableOffer,
+  mempoolSubmitOffers,
   midnightCancelOffer,
   midnightRedeem,
   midnightRepayWithdrawCollateral,
-  midnightSubmitOffers,
   midnightSupplyCollateral,
   midnightSupplyCollateralTakeBorrow,
   midnightTakeBorrow,
@@ -51,6 +51,7 @@ import {
   type AnyRequirementSignature,
   InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
+  type MempoolSubmitOffersAction,
   type MidnightCancelOfferAction,
   MidnightOfferMarketAddressMismatchError,
   MidnightOfferMarketChainMismatchError,
@@ -62,7 +63,6 @@ import {
   type MidnightOfferRootSignatureAction,
   type MidnightRedeemAction,
   type MidnightRepayWithdrawCollateralAction,
-  type MidnightSubmitOffersAction,
   type MidnightSupplyCollateralAction,
   type MidnightSupplyCollateralTakeBorrowAction,
   type MidnightTakeBorrowAction,
@@ -140,7 +140,7 @@ export type MidnightActionSignatures =
 
 /** Output returned by maker-offer flows. */
 export interface MakeOffersOutput
-  extends ActionOutput<MidnightSubmitOffersAction, MidnightActionSignatures> {
+  extends ActionOutput<MempoolSubmitOffersAction, MidnightActionSignatures> {
   readonly groups: readonly Hex[];
   readonly root: Hex;
   readonly ratifierType: "ecrecover" | "setter";
@@ -1051,7 +1051,7 @@ export class MorphoMidnight implements MidnightActions {
 
     if (payload == null) throw new MissingMidnightOfferRootSignatureError();
 
-    return midnightSubmitOffers({
+    return mempoolSubmitOffers({
       chainId: this.chainId,
       groups: data.groups,
       root: data.tree.root,

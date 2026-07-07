@@ -25,8 +25,8 @@ import {
   midnightOtherMarket,
 } from "../../../test/fixtures/midnight.js";
 import type {
+  MempoolSubmitOffersAction,
   MidnightOfferRootSignature,
-  MidnightSubmitOffersAction,
   TokenRequirementSignature,
   Transaction,
 } from "../../types/action.js";
@@ -50,7 +50,7 @@ import { MorphoMidnight } from "./midnight.js";
 type BuildSubmitOffersTx = (params: {
   readonly offersData: OffersData;
   readonly signatures?: MidnightActionSignatures;
-}) => Readonly<Transaction<MidnightSubmitOffersAction>>;
+}) => Readonly<Transaction<MempoolSubmitOffersAction>>;
 
 const buildSubmitOffersTx: BuildSubmitOffersTx = (params) =>
   (

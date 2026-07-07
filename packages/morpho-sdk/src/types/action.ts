@@ -406,9 +406,9 @@ export interface MidnightSupplyCollateralAction
   > {}
 
 /** Metadata for a Midnight mempool payload submission. */
-export interface MidnightSubmitOffersAction
+export interface MempoolSubmitOffersAction
   extends BaseAction<
-    "midnightSubmitOffers",
+    "mempoolSubmitOffers",
     {
       groups: readonly Hex[];
       root: Hex;
@@ -485,7 +485,7 @@ export type TransactionAction =
   | MidnightTakeBorrowAction
   | MidnightSupplyCollateralTakeBorrowAction
   | MidnightSupplyCollateralAction
-  | MidnightSubmitOffersAction
+  | MempoolSubmitOffersAction
   | MidnightRedeemAction
   | MidnightRepayWithdrawCollateralAction
   | MidnightCancelOfferAction;
