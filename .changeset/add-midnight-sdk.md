@@ -42,6 +42,6 @@ Tick math constants mirror the current Midnight protocol range and price quantum
 
 The package exports `midnightBundlesAbi` for app-compatible Midnight Bundles taker and repay flows, with tuple components aligned to the current Midnight `Market` and `Offer` structs.
 
-The package consumes shared primitives, `MathLib`, typed errors, and registry data from `@morpho-org/morpho-ts`, and exposes a configurable `MidnightApi` client from `@morpho-org/midnight-sdk/api` with a `https://api.morpho.org` default, optional string-or-`URL` `baseUrl` override, and parsed quote or takeable-offer payloads that can be passed directly to compatible bundle action inputs.
+The package consumes shared primitives, `MathLib`, typed errors, and registry data from `@morpho-org/morpho-ts`, and exposes a configurable `MidnightApi` client from `@morpho-org/midnight-sdk/api` with a `https://api.morpho.org/v0/midnight` default, optional string-or-`URL` `baseUrl` override, and parsed quote or takeable-offer payloads that can be passed directly to compatible bundle action inputs.
 
 `MidnightApi` uses explicit TypeScript interfaces with viem `Address`, `Hash`, and `Hex` primitives for the HTTP boundary; caller inputs are trusted at runtime and forwarded according to those types.
