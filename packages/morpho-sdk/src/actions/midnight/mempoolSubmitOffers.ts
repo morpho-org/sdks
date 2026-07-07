@@ -1,12 +1,12 @@
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
 import type { Address, Hex } from "viem";
 import type {
-  MidnightSubmitOffersAction,
+  MempoolSubmitOffersAction,
   Transaction,
 } from "../../types/index.js";
 
-/** Parameters for {@link midnightSubmitOffers}. */
-export interface MidnightSubmitOffersParams {
+/** Parameters for {@link mempoolSubmitOffers}. */
+export interface MempoolSubmitOffersParams {
   readonly chainId: number;
   readonly groups: readonly Hex[];
   readonly root: Hex;
@@ -18,9 +18,9 @@ export interface MidnightSubmitOffersParams {
 }
 
 /** Encodes the Midnight mempool payload submission transaction. */
-export const midnightSubmitOffers = (
-  params: MidnightSubmitOffersParams,
-): Readonly<Transaction<MidnightSubmitOffersAction>> => {
+export const mempoolSubmitOffers = (
+  params: MempoolSubmitOffersParams,
+): Readonly<Transaction<MempoolSubmitOffersAction>> => {
   const midnightMempool = getChainAddress(params.chainId, "midnightMempool");
 
   return deepFreeze({
@@ -28,7 +28,7 @@ export const midnightSubmitOffers = (
     value: 0n,
     data: params.payload,
     action: {
-      type: "midnightSubmitOffers" as const,
+      type: "mempoolSubmitOffers" as const,
       args: {
         groups: params.groups,
         root: params.root,
