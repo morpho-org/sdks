@@ -162,22 +162,29 @@ export class MorphoMidnight implements MidnightActions {
     params: GetPositionDataParams,
   ): Promise<AccrualPosition> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    const parameters = params.parameters ?? {};
     const blockParameters =
-      params.parameters?.blockNumber != null
-        ? { blockNumber: params.parameters.blockNumber }
-        : params.parameters?.blockTag != null
-          ? { blockTag: params.parameters.blockTag }
+      parameters.blockNumber != null
+        ? { blockNumber: parameters.blockNumber }
+        : parameters.blockTag != null
+          ? { blockTag: parameters.blockTag }
           : {};
+    const block = await getBlock(this.client.viemClient, blockParameters);
+    const {
+      blockNumber: _blockNumber,
+      blockTag: _blockTag,
+      ...fetchParams
+    } = parameters;
+    const fetchBlockParameters =
+      block.number != null ? { blockNumber: block.number } : blockParameters;
 
-    const [position, block] = await Promise.all([
-      fetchAccrualPosition(this.client.viemClient, {
-        ...params.parameters,
-        deployless: this.client.options.supportDeployless,
-        marketId: params.marketId,
-        user: params.accountAddress,
-      }),
-      getBlock(this.client.viemClient, blockParameters),
-    ]);
+    const position = await fetchAccrualPosition(this.client.viemClient, {
+      ...fetchParams,
+      deployless: this.client.options.supportDeployless,
+      ...fetchBlockParameters,
+      marketId: params.marketId,
+      user: params.accountAddress,
+    });
 
     return position.accrueInterest(block.timestamp);
   }
