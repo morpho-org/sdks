@@ -15,10 +15,10 @@ import { type IOffer, Offer } from "../offers/index.js";
 export const chainId = ChainId.BaseMainnet;
 
 export const addresses = {
-  midnight: "0x0000000000000000000000000000000000001000" as Address,
-  midnightMempool: "0x0000000000000000000000000000000000003000" as Address,
-  ecrecoverRatifier: "0x0000000000000000000000000000000000004000" as Address,
-  setterRatifier: "0x0000000000000000000000000000000000005000" as Address,
+  midnight: "0xAdedD8ab6dE832766Fedf0FaC4992E5C4D3EA18A" as Address,
+  midnightMempool: "0xdD6DCE32e21f7b020898a8258dA37355b4017993" as Address,
+  ecrecoverRatifier: "0xd6e70365C8E8DDa9a4ca662C07bbE663b017755E" as Address,
+  setterRatifier: "0x800B5F12A61B8198a5a6EfD794Cac6699B294d63" as Address,
   loanToken: "0x0000000000000000000000000000000000006000" as Address,
   collateralToken: "0x0000000000000000000000000000000000007000" as Address,
   oracle: "0x0000000000000000000000000000000000008000" as Address,

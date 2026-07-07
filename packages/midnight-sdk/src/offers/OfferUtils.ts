@@ -9,6 +9,7 @@ import { encodeAbiParameters, keccak256, zeroAddress, zeroHash } from "viem";
 import {
   DEFAULT_TICK_SPACING,
   MAX_CONTINUOUS_FEE,
+  MAX_OFFER_CAP,
   MAX_TICK,
   OFFER_TYPEHASH,
 } from "../constants.js";
@@ -41,8 +42,8 @@ const offerHashParams = [
   { name: "receiverIfMakerIsSeller", type: "address" },
   { name: "ratifier", type: "address" },
   { name: "reduceOnly", type: "bool" },
-  { name: "maxUnits", type: "uint256" },
-  { name: "maxAssets", type: "uint256" },
+  { name: "maxUnits", type: "uint128" },
+  { name: "maxAssets", type: "uint128" },
   { name: "continuousFeeCap", type: "uint256" },
 ] as const;
 
@@ -427,6 +428,20 @@ export namespace OfferUtils {
         instruction: "Use a non-negative cap.",
       });
     }
+    if (maxUnits > MAX_OFFER_CAP) {
+      throw new InvalidOfferParameterError({
+        parameter: "maxUnits",
+        value: maxUnits,
+        instruction: `Use a cap less than or equal to "${MAX_OFFER_CAP}".`,
+      });
+    }
+    if (maxAssets > MAX_OFFER_CAP) {
+      throw new InvalidOfferParameterError({
+        parameter: "maxAssets",
+        value: maxAssets,
+        instruction: `Use a cap less than or equal to "${MAX_OFFER_CAP}".`,
+      });
+    }
     if ((maxAssets === 0n) === (maxUnits === 0n)) {
       throw new InvalidOfferParameterError({
         parameter: "maxUnits/maxAssets",
@@ -671,11 +686,13 @@ export namespace OfferUtils {
       }
       if (
         offer.maxUnits < 0n ||
+        offer.maxUnits > MAX_OFFER_CAP ||
         offer.maxAssets < 0n ||
+        offer.maxAssets > MAX_OFFER_CAP ||
         (offer.maxAssets === 0n) === (offer.maxUnits === 0n)
       ) {
         throw new InvalidOfferGroupError(
-          "Every offer must set exactly one non-zero non-negative cap.",
+          "Every offer must set exactly one non-zero uint128 cap.",
         );
       }
       if (

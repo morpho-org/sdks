@@ -105,10 +105,12 @@ export interface ChainAddresses {
   midnight?: `0x${string}`;
   /** MidnightBundles periphery contract for batched take, repay, collateral, permit, and referral workflows. */
   midnightBundles?: `0x${string}`;
-  /** Midnight mempool submission endpoint used by app and orderbook flows for offchain offer payloads. */
+  /** Midnight onchain mempool log contract used by app and orderbook flows for offer payload publication. */
   midnightMempool?: `0x${string}`;
   /** EcrecoverRatifier contract that validates EIP-712 signed Merkle roots of Midnight offers. */
   ecrecoverRatifier?: `0x${string}`;
+  /** EcrecoverAuthorizer contract that validates EIP-712 Midnight authorization signatures. */
+  ecrecoverAuthorizer?: `0x${string}`;
   /** SetterRatifier contract that validates Midnight offer Merkle roots ratified onchain by the maker or delegate. */
   setterRatifier?: `0x${string}`;
 }
@@ -243,6 +245,12 @@ const _addressesRegistry = {
     verUsdc: "0x59aaF835D34b1E3dF2170e4872B785f11E2a964b",
     /** Permissioned test USDC wrapper mapped to canonical Base USDC when unwrapped. */
     testUsdc: "0xBC77067f829979812d795d516E523C4033b66409",
+    midnight: "0xAdedD8ab6dE832766Fedf0FaC4992E5C4D3EA18A",
+    midnightBundles: "0x091183d729BE9f808c212b475E387A12E67850A7",
+    midnightMempool: "0xdD6DCE32e21f7b020898a8258dA37355b4017993",
+    ecrecoverRatifier: "0xd6e70365C8E8DDa9a4ca662C07bbE663b017755E",
+    ecrecoverAuthorizer: "0x292bEa9f1443d54E0E509120c919106765c6a493",
+    setterRatifier: "0x800B5F12A61B8198a5a6EfD794Cac6699B294d63",
   },
   [ChainId.PolygonMainnet]: {
     blue: "0x1bF0c2541F820E775182832f06c0B7Fc27A25f67",
@@ -1062,6 +1070,12 @@ const _deployments = {
     registryList: 35615358n,
     chainlinkOracleFactory: 13978286n,
     preLiquidationFactory: 23779056n,
+    midnight: 48286884n,
+    midnightBundles: 48286997n,
+    midnightMempool: 48286884n,
+    ecrecoverRatifier: 48286884n,
+    ecrecoverAuthorizer: 48286884n,
+    setterRatifier: 48286884n,
   },
   [ChainId.PolygonMainnet]: {
     blue: 66931042n,
@@ -2279,7 +2293,8 @@ const withBlueAlias = <T extends { blue?: unknown; morpho?: unknown }>({
  *       midnightBundles: "0x0000000000000000000000000000000000000006",
  *       midnightMempool: "0x0000000000000000000000000000000000000007",
  *       ecrecoverRatifier: "0x0000000000000000000000000000000000000008",
- *       setterRatifier: "0x0000000000000000000000000000000000000009",
+ *       ecrecoverAuthorizer: "0x0000000000000000000000000000000000000009",
+ *       setterRatifier: "0x0000000000000000000000000000000000000010",
  *       permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
  *     },
  *   },

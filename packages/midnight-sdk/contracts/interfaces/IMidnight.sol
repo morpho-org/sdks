@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 interface IMidnight {
     function collateral(bytes32 id, address user, uint256 index) external view returns (uint128);
 
-    function consumed(address user, bytes32 group) external view returns (uint256);
+    function consumed(address user, bytes32 group) external view returns (uint128);
 
     function position(bytes32 id, address user)
         external

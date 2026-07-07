@@ -555,7 +555,7 @@ describe("TreeUtils.buildDescriptor", () => {
 
     expect(payload.height).toBe(0);
     expect(payload.root).toBe(
-      "0xd8d57bfe5657d24007dc511ac40c1d0c3ff11f9814f8245a26947d82e4a1bf05",
+      "0x28b3e3a09d4db352984618ea6e4fc7b43fe98082df0fee72d8d4f7bc877f355f",
     );
   });
 
