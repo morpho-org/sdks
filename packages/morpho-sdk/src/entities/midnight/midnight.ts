@@ -163,7 +163,8 @@ export interface TakeLendParams extends MarketActionParams {
   readonly referralFeePct?: bigint;
   readonly referralFeeRecipient?: Address;
   readonly maxContinuousFee?: bigint;
-  readonly deadline?: bigint;
+  /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
+  readonly deadline: bigint;
 }
 
 /** Parameters for the Midnight take-borrow taker flow. */
@@ -176,7 +177,8 @@ export interface TakeBorrowParams extends MarketActionParams {
   readonly referralFeePct?: bigint;
   readonly referralFeeRecipient?: Address;
   readonly maxContinuousFee?: bigint;
-  readonly deadline?: bigint;
+  /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
+  readonly deadline: bigint;
 }
 
 /** Parameters for the Midnight supply-collateral-and-take-borrow taker flow. */
@@ -210,7 +212,8 @@ export interface RepayWithdrawCollateralParams extends MarketActionParams {
   readonly collateralWithdrawals?: readonly MidnightCollateralWithdrawal[];
   readonly referralFeePct?: bigint;
   readonly referralFeeRecipient?: Address;
-  readonly deadline?: bigint;
+  /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
+  readonly deadline: bigint;
 }
 
 /** Parameters for fetching a Midnight user position with market data. */
@@ -402,6 +405,7 @@ export class MorphoMidnight implements MidnightActions {
     validateMarketData(params.marketData, this.chainId);
     assertPositiveAmount("assets", params.assets);
     assertNonNegativeAmount("minUnits", params.minUnits);
+    assertNonNegativeAmount("deadline", params.deadline);
 
     const market = params.marketData;
     const midnightBundles = getChainAddress(this.chainId, "midnightBundles");
@@ -454,6 +458,7 @@ export class MorphoMidnight implements MidnightActions {
     validateMarketData(params.marketData, this.chainId);
     assertPositiveAmount("loanAssets", params.loanAssets);
     assertNonNegativeAmount("maxUnits", params.maxUnits);
+    assertNonNegativeAmount("deadline", params.deadline);
 
     const market = params.marketData;
     const midnightBundles = getChainAddress(this.chainId, "midnightBundles");
@@ -496,6 +501,7 @@ export class MorphoMidnight implements MidnightActions {
     assertPositiveAmount("collateralAssets", params.collateralAssets);
     assertPositiveAmount("loanAssets", params.loanAssets);
     assertNonNegativeAmount("maxUnits", params.maxUnits);
+    assertNonNegativeAmount("deadline", params.deadline);
 
     const market = params.marketData;
     const collateralIndex = params.collateralIndex ?? 0n;
@@ -784,6 +790,7 @@ export class MorphoMidnight implements MidnightActions {
       "withdrawCollateralAssets",
       params.withdrawCollateralAssets,
     );
+    assertNonNegativeAmount("deadline", params.deadline);
     const collateralWithdrawals =
       params.collateralWithdrawals ??
       (params.withdrawCollateralAssets > 0n

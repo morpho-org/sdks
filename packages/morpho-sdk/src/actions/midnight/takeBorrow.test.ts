@@ -1,5 +1,5 @@
 import { midnightBundlesAbi } from "@morpho-org/midnight-sdk";
-import { decodeFunctionData } from "viem";
+import { decodeFunctionData, maxUint256 } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -25,6 +25,7 @@ describe("midnightTakeBorrow", () => {
       maxUnits: 1_100n,
       taker: midnightAddresses.taker,
       takeableOffers,
+      deadline: maxUint256,
     });
     const decoded = decodeFunctionData({
       abi: midnightBundlesAbi,
@@ -50,6 +51,7 @@ describe("midnightTakeBorrow", () => {
         maxUnits: 1_100n,
         taker: midnightAddresses.taker,
         takeableOffers: [],
+        deadline: maxUint256,
       }),
     ).toThrow(EmptyMidnightTakeableOffersError);
   });
@@ -65,6 +67,7 @@ describe("midnightTakeBorrow", () => {
         maxUnits: 1_100n,
         taker: midnightAddresses.taker,
         takeableOffers,
+        deadline: maxUint256,
       }),
     ).toThrow(MidnightOfferSideMismatchError);
   });
@@ -82,6 +85,7 @@ describe("midnightTakeBorrow", () => {
         maxUnits: 1_100n,
         taker: midnightAddresses.taker,
         takeableOffers,
+        deadline: maxUint256,
       }),
     ).toThrow(MidnightTakeableOfferMarketMismatchError);
   });

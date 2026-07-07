@@ -42,7 +42,8 @@ export interface MidnightTakeLendParams {
   readonly referralFeePct?: bigint;
   readonly referralFeeRecipient?: Address;
   readonly maxContinuousFee?: bigint;
-  readonly deadline?: bigint;
+  /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
+  readonly deadline: bigint;
   readonly signatures?:
     | AnyRequirementSignature
     | readonly AnyRequirementSignature[];
@@ -71,8 +72,8 @@ export const midnightTakeLend = (
       params.maxContinuousFee ?? maxUint256,
     );
   }
-  if ((params.deadline ?? maxUint256) < 0n) {
-    throw new NegativeMidnightAmountError("deadline", params.deadline ?? 0n);
+  if (params.deadline < 0n) {
+    throw new NegativeMidnightAmountError("deadline", params.deadline);
   }
   if (params.takeableOffers.length === 0) {
     throw new EmptyMidnightTakeableOffersError();
@@ -115,7 +116,6 @@ export const midnightTakeLend = (
   const referralFeePct = params.referralFeePct ?? 0n;
   const referralFeeRecipient = params.referralFeeRecipient ?? zeroAddress;
   const maxContinuousFee = params.maxContinuousFee ?? maxUint256;
-  const deadline = params.deadline ?? maxUint256;
   const loanTokenPermit = getMidnightTokenPermit({
     token: MarketUtils.toStruct(params.market).loanToken,
     owner: params.taker,
@@ -142,7 +142,7 @@ export const midnightTakeLend = (
         referralFeePct,
         referralFeeRecipient,
         maxContinuousFee,
-        deadline,
+        params.deadline,
       ],
     }),
   };
@@ -167,7 +167,7 @@ export const midnightTakeLend = (
         referralFeePct,
         referralFeeRecipient,
         maxContinuousFee,
-        deadline,
+        deadline: params.deadline,
       },
     },
   });
