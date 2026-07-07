@@ -930,6 +930,7 @@ export class MorphoMidnight implements MidnightActions {
       ratifierType: data.ratifierType,
       offers: data.tree.offers.length,
       payload,
+      metadata: this.client.options.metadata,
     });
   }
 }

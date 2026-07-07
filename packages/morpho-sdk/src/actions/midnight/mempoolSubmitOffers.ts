@@ -1,7 +1,9 @@
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
 import type { Address, Hex } from "viem";
+import { addTransactionMetadata } from "../../helpers/index.js";
 import type {
   MempoolSubmitOffersAction,
+  Metadata,
   Transaction,
 } from "../../types/index.js";
 
@@ -15,6 +17,7 @@ export interface MempoolSubmitOffersParams {
   readonly ratifierType: "ecrecover" | "setter";
   readonly offers: number;
   readonly payload: Hex;
+  readonly metadata?: Metadata;
 }
 
 /** Encodes the Midnight mempool payload submission transaction. */
@@ -23,10 +26,18 @@ export const mempoolSubmitOffers = (
 ): Readonly<Transaction<MempoolSubmitOffersAction>> => {
   const midnightMempool = getChainAddress(params.chainId, "midnightMempool");
 
-  return deepFreeze({
+  let tx = {
     to: midnightMempool,
     value: 0n,
     data: params.payload,
+  };
+
+  if (params.metadata) {
+    tx = addTransactionMetadata(tx, params.metadata);
+  }
+
+  return deepFreeze({
+    ...tx,
     action: {
       type: "mempoolSubmitOffers" as const,
       args: {
