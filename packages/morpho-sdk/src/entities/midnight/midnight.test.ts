@@ -2,6 +2,7 @@ import {
   AccrualPosition,
   Group,
   Market,
+  MarketUtils,
   midnightAbi,
   Offer,
   Tree,
@@ -12,6 +13,7 @@ import {
   type Chain,
   erc20Abi,
   maxUint256,
+  numberToHex,
   zeroAddress,
 } from "viem";
 import { describe, expect, test } from "vitest";
@@ -356,6 +358,80 @@ describe("MorphoMidnight", () => {
           accountAddress: midnightAddresses.taker,
         }),
       ).toThrow(MissingAccrualPositionError);
+    });
+  });
+
+  describe("getPositionData", () => {
+    test("behavior: pins position reads to the fetched block", async () => {
+      const handle = createMockClient(midnightTestChain);
+      const blockNumber = 123n;
+      const blockTimestamp = 1_500n;
+      handle.request.mockImplementation(async ({ method, params }) => {
+        if (method === "eth_chainId") return numberToHex(midnightChainId);
+        if (method === "eth_getBlockByNumber") {
+          return {
+            number: numberToHex(blockNumber),
+            timestamp: numberToHex(blockTimestamp),
+            transactions: [],
+          };
+        }
+        if (method === "eth_call") {
+          const [tx] = (params ?? []) as [
+            { readonly to?: Address; readonly data?: `0x${string}` },
+          ];
+          if (typeof tx?.to === "string" && typeof tx.data === "string") {
+            const encoded = handle.dispatch.get(
+              `${tx.to.toLowerCase()}|${tx.data.slice(0, 10).toLowerCase()}`,
+            );
+            if (encoded != null) return encoded;
+          }
+        }
+
+        throw new Error(`unhandled RPC ${method} ${JSON.stringify(params)}`);
+      });
+      mockRead(handle, {
+        address: midnightAddresses.midnight,
+        abi: midnightAbi,
+        functionName: "position",
+        result: [1_000n, 0n, 0n, 1_000n, 0n, 0n],
+      });
+      mockRead(handle, {
+        address: midnightAddresses.midnight,
+        abi: midnightAbi,
+        functionName: "collateral",
+        result: 0n,
+      });
+      mockRead(handle, {
+        address: midnightAddresses.midnight,
+        abi: midnightAbi,
+        functionName: "toMarket",
+        result: MarketUtils.toStruct(midnightMarket),
+      });
+      mockRead(handle, {
+        address: midnightAddresses.midnight,
+        abi: midnightAbi,
+        functionName: "marketState",
+        result: [1_000n, 0n, 1_000n, 0n, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      });
+
+      const position = await new MorphoMidnight(
+        {
+          viemClient: handle.client,
+          options: { supportDeployless: false },
+        } as unknown as MorphoClientType,
+        midnightChainId,
+      ).getPositionData({
+        marketId: midnightMarketId,
+        accountAddress: midnightAddresses.taker,
+      });
+
+      expect(position.lastAccrual).toBe(blockTimestamp);
+      expect(
+        handle.request.mock.calls
+          .map(([call]) => call)
+          .filter((call) => call.method === "eth_call")
+          .every((call) => call.params?.[1] === numberToHex(blockNumber)),
+      ).toBe(true);
     });
   });
 
