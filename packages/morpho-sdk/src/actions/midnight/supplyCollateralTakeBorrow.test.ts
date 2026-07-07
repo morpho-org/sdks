@@ -2,7 +2,7 @@ import {
   midnightBundlesAbi,
   UnknownCollateralIndexError,
 } from "@morpho-org/midnight-sdk";
-import { decodeFunctionData, type Hex } from "viem";
+import { decodeFunctionData, type Hex, maxUint256 } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -33,6 +33,7 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
       maxUnits: 1_100n,
       taker: midnightAddresses.taker,
       takeableOffers,
+      deadline: maxUint256,
     });
     const decoded = decodeFunctionData({
       abi: midnightBundlesAbi,
@@ -66,6 +67,7 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
       maxUnits: 1_100n,
       taker: midnightAddresses.taker,
       takeableOffers: [midnightApiTake({ buy: true })],
+      deadline: maxUint256,
       signatures: [
         {
           action: {
@@ -111,6 +113,7 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
         maxUnits: 1_100n,
         taker: midnightAddresses.taker,
         takeableOffers: [],
+        deadline: maxUint256,
       }),
     ).toThrow(EmptyMidnightTakeableOffersError);
   });
@@ -127,6 +130,7 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
         maxUnits: 1_100n,
         taker: midnightAddresses.taker,
         takeableOffers,
+        deadline: maxUint256,
       }),
     ).toThrow(MidnightOfferSideMismatchError);
   });
@@ -145,6 +149,7 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
         maxUnits: 1_100n,
         taker: midnightAddresses.taker,
         takeableOffers,
+        deadline: maxUint256,
       }),
     ).toThrow(MidnightTakeableOfferMarketMismatchError);
   });
@@ -160,6 +165,7 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
         taker: midnightAddresses.taker,
         collateralIndex: 1n,
         takeableOffers: [midnightApiTake({ buy: true })],
+        deadline: maxUint256,
       }),
     ).toThrow(UnknownCollateralIndexError);
   });
