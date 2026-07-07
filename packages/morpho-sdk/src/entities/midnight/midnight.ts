@@ -55,6 +55,7 @@ import {
   MidnightOfferRootRatifierMismatchError,
   type MidnightOfferRootSignatureAction,
   type MidnightRedeemAction,
+  MidnightRedeemExceedsCreditError,
   type MidnightRepayWithdrawCollateralAction,
   type MidnightSupplyCollateralAction,
   type MidnightSupplyCollateralTakeBorrowAction,
@@ -630,6 +631,13 @@ export class MorphoMidnight implements MidnightActions {
     const market = params.marketData;
     const units = params.units ?? params.positionData.faceValue;
     if (units <= 0n) throw new NoMidnightCreditToRedeemError(market.id);
+    if (params.positionData.credit < units) {
+      throw new MidnightRedeemExceedsCreditError({
+        market: market.id,
+        units,
+        credit: params.positionData.credit,
+      });
+    }
     if (market.withdrawable < units) {
       throw new InsufficientMidnightWithdrawableLiquidityError({
         market: market.id,

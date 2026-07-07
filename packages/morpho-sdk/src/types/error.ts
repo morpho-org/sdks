@@ -844,6 +844,15 @@ export class NoMidnightCreditToRedeemError extends Error {
   }
 }
 
+/** Thrown when a Midnight redeem amount exceeds the user's accrued credit. */
+export class MidnightRedeemExceedsCreditError extends Error {
+  constructor(params: { market: string; units: bigint; credit: bigint }) {
+    super(
+      `Midnight redeem amount exceeds accrued credit on market "${params.market}": units "${params.units}", credit "${params.credit}". Redeem less or refresh the position data.`,
+    );
+  }
+}
+
 /** Thrown when a Midnight redeem amount exceeds the market's currently withdrawable liquidity. */
 export class InsufficientMidnightWithdrawableLiquidityError extends Error {
   constructor(params: { market: string; units: bigint; withdrawable: bigint }) {
