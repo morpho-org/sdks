@@ -861,11 +861,14 @@ Pre-read / validation happens before returning the action output:
 
 - `updatePositionView(...)` gives accrued `creditUnits` and remaining `pendingFeeUnits`;
 - compute `redeemUnits = creditUnits - pendingFeeUnits`, using the `midnight-sdk` `positionData.faceValue` getter when the SDK consumer provides an `AccrualPosition`;
-- `withdrawable(marketId) >= redeemUnits`.
+- resolve `requestedUnits = params.units ?? redeemUnits`;
+- `requestedUnits > 0`;
+- `requestedUnits <= creditUnits`;
+- `withdrawable(marketId) >= requestedUnits`.
 
-Do not default this flow to raw `positionData.credit`. `Midnight.withdraw(...)` calls `_updatePosition(...)` before burning credit, so pending continuous fees can reduce the position's credit before the withdraw amount is applied. The default SDK flow should therefore use the accrued net face value. Integrators that intentionally want a different partial withdraw amount can still pass explicit `units`.
+Do not default this flow to raw, unaccrued `positionData.credit`. `Midnight.withdraw(...)` calls `_updatePosition(...)` before burning credit, so bad-debt loss and accrued continuous fees can reduce the position's credit before the withdraw amount is applied. The default SDK flow should therefore use the accrued net face value. Integrators that intentionally want a different partial withdraw amount can still pass explicit `units`.
 
-This intentionally differs from the current markets app implementation, which withdraws the post-update credit without subtracting the pending fee. The protocol team should confirm the net face-value behavior and the app should be fixed before Phase 4 lands if this TIB is correct.
+The latest `morpho-org/midnight` implementation does not cap withdrawals at net face value. After `_updatePosition(...)`, `Midnight.withdraw(...)` decreases `pendingFee` pro rata and burns `units` from the updated `credit`; the protocol-compatible cap for explicit `units` is therefore accrued `creditUnits`, plus market `withdrawable` liquidity. This intentionally keeps the SDK default at net face value while still allowing integrators to request another protocol-valid partial amount explicitly.
 
 `getRequirements()` returns `[]`.
 
@@ -934,7 +937,7 @@ This proposal is compatible with the current markets app flows, with the documen
 - EOA maker signatures and token signatures can be surfaced before transaction requirements, preserving the markets app's current signature-before-calls UX;
 - repay / withdraw keeps the app's existing single final `MidnightBundles.midnightBundlesV1RepayAndWithdrawCollateral(...)` transaction;
 - all multi-tx app flows can be represented by ordered requirements plus final `buildTx()`.
-- redeem defaults to net face value rather than the current app's raw post-update credit behavior; Phase 4 must reconcile this with the protocol team and the app before migration.
+- redeem defaults to net face value, while explicit `units` can still reproduce the current app's post-update credit behavior as long as the amount does not exceed accrued credit or market withdrawable liquidity.
 
 The only semantic expansion is documented: returned transaction requirements are **ordered pre-execution items** and can include mandatory prelude transactions. Consumers must execute every returned item in order unless they intentionally replace it with an equivalent already-satisfied state.
 
