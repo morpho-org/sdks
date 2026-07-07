@@ -22,6 +22,7 @@ describe("midnightRepayWithdrawCollateral", () => {
       repayAssets: 1_000n,
       withdrawCollateralAssets: 2_000n,
       onBehalf: midnightAddresses.taker,
+      deadline: maxUint256,
     });
     const decoded = decodeFunctionData({
       abi: midnightBundlesAbi,
@@ -56,6 +57,7 @@ describe("midnightRepayWithdrawCollateral", () => {
       repayAssets: 1_000n,
       withdrawCollateralAssets: 0n,
       onBehalf: midnightAddresses.taker,
+      deadline: maxUint256,
       signatures: [
         {
           action: {
@@ -96,6 +98,7 @@ describe("midnightRepayWithdrawCollateral", () => {
         withdrawCollateralAssets: 2_000n,
         collateralIndex: 1n,
         onBehalf: midnightAddresses.taker,
+        deadline: maxUint256,
       }),
     ).toThrow(UnknownCollateralIndexError);
   });
@@ -109,6 +112,7 @@ describe("midnightRepayWithdrawCollateral", () => {
         withdrawCollateralAssets: 0n,
         collateralWithdrawals: [{ collateralIndex: 1n, assets: 2_000n }],
         onBehalf: midnightAddresses.taker,
+        deadline: maxUint256,
       }),
     ).toThrow(UnknownCollateralIndexError);
   });

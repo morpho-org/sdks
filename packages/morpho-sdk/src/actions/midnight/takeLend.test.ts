@@ -28,6 +28,7 @@ describe("midnightTakeLend", () => {
       minUnits: 900n,
       taker: midnightAddresses.taker,
       takeableOffers,
+      deadline: maxUint256,
     });
     const decoded = decodeFunctionData({
       abi: midnightBundlesAbi,
@@ -68,6 +69,7 @@ describe("midnightTakeLend", () => {
       minUnits: 900n,
       taker: midnightAddresses.taker,
       takeableOffers: [midnightApiTake()],
+      deadline: maxUint256,
       signatures: [
         {
           action: {
@@ -108,6 +110,7 @@ describe("midnightTakeLend", () => {
         minUnits: 900n,
         taker: midnightAddresses.taker,
         takeableOffers: [],
+        deadline: maxUint256,
       }),
     ).toThrow(EmptyMidnightTakeableOffersError);
   });
@@ -123,6 +126,7 @@ describe("midnightTakeLend", () => {
         minUnits: 900n,
         taker: midnightAddresses.taker,
         takeableOffers,
+        deadline: maxUint256,
       }),
     ).toThrow(MidnightOfferSideMismatchError);
   });
@@ -138,6 +142,7 @@ describe("midnightTakeLend", () => {
         minUnits: 900n,
         taker: midnightAddresses.taker,
         takeableOffers,
+        deadline: maxUint256,
       }),
     ).toThrow(MidnightTakeableOfferMarketMismatchError);
   });

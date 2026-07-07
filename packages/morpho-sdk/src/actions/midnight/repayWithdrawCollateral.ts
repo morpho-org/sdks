@@ -4,12 +4,7 @@ import {
   midnightBundlesAbi,
 } from "@morpho-org/midnight-sdk";
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
-import {
-  type Address,
-  encodeFunctionData,
-  maxUint256,
-  zeroAddress,
-} from "viem";
+import { type Address, encodeFunctionData, zeroAddress } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   type AnyRequirementSignature,
@@ -35,7 +30,8 @@ export interface MidnightRepayWithdrawCollateralParams {
   readonly collateralWithdrawals?: readonly MidnightCollateralWithdrawal[];
   readonly referralFeePct?: bigint;
   readonly referralFeeRecipient?: Address;
-  readonly deadline?: bigint;
+  /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
+  readonly deadline: bigint;
   readonly signatures?:
     | AnyRequirementSignature
     | readonly AnyRequirementSignature[];
@@ -61,8 +57,8 @@ export const midnightRepayWithdrawCollateral = (
       params.referralFeePct ?? 0n,
     );
   }
-  if ((params.deadline ?? maxUint256) < 0n) {
-    throw new NegativeMidnightAmountError("deadline", params.deadline ?? 0n);
+  if (params.deadline < 0n) {
+    throw new NegativeMidnightAmountError("deadline", params.deadline);
   }
   const collateralWithdrawals =
     params.collateralWithdrawals ??
@@ -108,7 +104,6 @@ export const midnightRepayWithdrawCollateral = (
     params.collateralReceiver ?? params.receiver ?? params.onBehalf;
   const referralFeePct = params.referralFeePct ?? 0n;
   const referralFeeRecipient = params.referralFeeRecipient ?? zeroAddress;
-  const deadline = params.deadline ?? maxUint256;
 
   let tx = {
     to: midnightBundles,
@@ -131,7 +126,7 @@ export const midnightRepayWithdrawCollateral = (
         collateralReceiver,
         referralFeePct,
         referralFeeRecipient,
-        deadline,
+        params.deadline,
       ],
     }),
   };
@@ -152,7 +147,7 @@ export const midnightRepayWithdrawCollateral = (
         collateralReceiver,
         referralFeePct,
         referralFeeRecipient,
-        deadline,
+        deadline: params.deadline,
       },
     },
   });

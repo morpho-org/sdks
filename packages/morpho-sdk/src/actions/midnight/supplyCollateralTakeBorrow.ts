@@ -54,8 +54,8 @@ export const midnightSupplyCollateralTakeBorrow = (
       params.maxContinuousFee ?? maxUint256,
     );
   }
-  if ((params.deadline ?? maxUint256) < 0n) {
-    throw new NegativeMidnightAmountError("deadline", params.deadline ?? 0n);
+  if (params.deadline < 0n) {
+    throw new NegativeMidnightAmountError("deadline", params.deadline);
   }
   if (params.takeableOffers.length === 0) {
     throw new EmptyMidnightTakeableOffersError();
@@ -101,7 +101,6 @@ export const midnightSupplyCollateralTakeBorrow = (
   const referralFeePct = params.referralFeePct ?? 0n;
   const referralFeeRecipient = params.referralFeeRecipient ?? zeroAddress;
   const maxContinuousFee = params.maxContinuousFee ?? maxUint256;
-  const deadline = params.deadline ?? maxUint256;
 
   let tx = {
     to: midnightBundles,
@@ -120,7 +119,7 @@ export const midnightSupplyCollateralTakeBorrow = (
         referralFeePct,
         referralFeeRecipient,
         maxContinuousFee,
-        deadline,
+        params.deadline,
       ],
     }),
   };
@@ -146,7 +145,7 @@ export const midnightSupplyCollateralTakeBorrow = (
         referralFeePct,
         referralFeeRecipient,
         maxContinuousFee,
-        deadline,
+        deadline: params.deadline,
       },
     },
   });

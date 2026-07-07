@@ -245,6 +245,7 @@ describe("MorphoMidnight", () => {
         assets: 1_000n,
         minUnits: 900n,
         takeableOffers: [midnightApiTake()],
+        deadline: maxUint256,
       });
       const tx = output.buildTx();
 
@@ -271,6 +272,7 @@ describe("MorphoMidnight", () => {
         assets: 1_000n,
         minUnits: 900n,
         takeableOffers: [midnightApiTake({ buy: true })],
+        deadline: maxUint256,
       });
 
       expect(() => output.buildTx()).toThrow(MidnightOfferSideMismatchError);
@@ -285,6 +287,7 @@ describe("MorphoMidnight", () => {
         loanAssets: 1_000n,
         maxUnits: 900n,
         takeableOffers: [midnightApiTake({ buy: false })],
+        deadline: maxUint256,
       });
 
       expect(() => output.buildTx()).toThrow(MidnightOfferSideMismatchError);
