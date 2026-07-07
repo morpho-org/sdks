@@ -1,3 +1,5 @@
+import { maxUint128 } from "viem";
+
 /**
  * Centibip scale used by settlement fees.
  *
@@ -135,7 +137,7 @@ export const MAX_CONTINUOUS_FEE = 317097919n;
  * console.log(MAX_OFFER_CAP);
  * ```
  */
-export const MAX_OFFER_CAP = (1n << 128n) - 1n;
+export const MAX_OFFER_CAP = maxUint128;
 
 /**
  * Seconds after maturity over which post-maturity LIF reaches the computed

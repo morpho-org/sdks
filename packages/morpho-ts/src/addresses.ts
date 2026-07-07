@@ -245,6 +245,7 @@ const _addressesRegistry = {
     verUsdc: "0x59aaF835D34b1E3dF2170e4872B785f11E2a964b",
     /** Permissioned test USDC wrapper mapped to canonical Base USDC when unwrapped. */
     testUsdc: "0xBC77067f829979812d795d516E523C4033b66409",
+
     midnight: "0xAdedD8ab6dE832766Fedf0FaC4992E5C4D3EA18A",
     midnightBundles: "0x091183d729BE9f808c212b475E387A12E67850A7",
     midnightMempool: "0xdD6DCE32e21f7b020898a8258dA37355b4017993",
@@ -1070,6 +1071,7 @@ const _deployments = {
     registryList: 35615358n,
     chainlinkOracleFactory: 13978286n,
     preLiquidationFactory: 23779056n,
+
     midnight: 48286884n,
     midnightBundles: 48286997n,
     midnightMempool: 48286884n,
