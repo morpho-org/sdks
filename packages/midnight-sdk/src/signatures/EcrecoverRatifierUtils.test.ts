@@ -45,7 +45,7 @@ const collateralParamsType =
 const marketType =
   "Market(uint256 chainId,address midnight,address loanToken,CollateralParams[] collateralParams,uint256 maturity,uint256 rcfThreshold,address enterGate,address liquidatorGate)";
 const offerType =
-  "Offer(Market market,bool buy,address maker,uint256 start,uint256 expiry,uint256 tick,bytes32 group,address callback,bytes callbackData,address receiverIfMakerIsSeller,address ratifier,bool reduceOnly,uint256 maxUnits,uint256 maxAssets,uint256 continuousFeeCap)";
+  "Offer(Market market,bool buy,address maker,uint256 start,uint256 expiry,uint256 tick,bytes32 group,address callback,bytes callbackData,address receiverIfMakerIsSeller,address ratifier,bool reduceOnly,uint128 maxUnits,uint128 maxAssets,uint256 continuousFeeCap)";
 const eip712DomainType =
   "EIP712Domain(uint256 chainId,address verifyingContract)";
 
@@ -363,9 +363,9 @@ describe("EcrecoverRatifierUtils.digest", () => {
     const digest = EcrecoverRatifierUtils.digest({ tree, chainId: 8453n });
 
     // Captured from the Solidity EcrecoverRatifier digest formula at
-    // morpho-org/midnight@55db096af93a8f2bc85bb67f3ccc7b92e1bfab73.
+    // morpho-org/midnight@336b924a2bb378d810ef6d35b6dd3486759af8bd.
     expect(digest).toBe(
-      "0xfb891d1a5cb383a7235a7c7044dc2dad21a408420f2272fd9b13947895adce93",
+      "0x600cf16f5db1129056b39621ecb708369079387dc10125c836cffc3f5b365b5e",
     );
   });
 });
