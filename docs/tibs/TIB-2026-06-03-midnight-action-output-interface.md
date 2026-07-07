@@ -379,7 +379,7 @@ export type CallRequirementAction =
   | ERC20ApprovalAction
   | MorphoAuthorizationAction
   | MidnightAuthorizationAction
-  | MidnightRatifyRootAction
+  | SetterRatifierRatifyRootAction
   | MidnightSupplyCollateralAction;
 
 export type CallRequirement = Readonly<Transaction<CallRequirementAction>>;
@@ -395,7 +395,7 @@ Repay / withdraw collateral does **not** need a mandatory repay prelude in the a
 
 ### New Midnight requirement actions
 
-Use public `Midnight*` action names for SDK metadata. The calldata still targets `Midnight`, `MidnightBundles`, `EcrecoverRatifier`, `SetterRatifier`, and the mempool contract.
+Use contract-specific action names for SDK metadata. The calldata targets `Midnight`, `MidnightBundles`, `EcrecoverRatifier`, `SetterRatifier`, and the mempool contract.
 
 ```ts
 export interface MidnightAuthorizationAction
@@ -408,9 +408,9 @@ export interface MidnightAuthorizationAction
     }
   > {}
 
-export interface MidnightRatifyRootAction
+export interface SetterRatifierRatifyRootAction
   extends BaseAction<
-    "midnightRatifyRoot",
+    "setterRatifierRatifyRoot",
     {
       maker: Address;
       root: Hex;
@@ -500,9 +500,9 @@ export interface MidnightSupplyCollateralAction
     }
   > {}
 
-export interface MidnightSubmitOffersAction
+export interface MempoolSubmitOffersAction
   extends BaseAction<
-    "midnightSubmitOffers",
+    "mempoolSubmitOffers",
     {
       groups: readonly Hex[];
       root: Hex;
@@ -550,11 +550,11 @@ export interface MidnightCancelOfferAction
   > {}
 ```
 
-Maker entity methods accept a tree-like `MidnightOfferSetInput` only. The caller may pass a single offer, an array of offers, pre-grouped offers, or a tree; it does not pass derived `groups`, `root`, compression, signature payload, or mempool calldata. The entity normalizes the offer set, constructs the groups and tree, derives the root and signature input, validates the router / mempool payload, and passes only prepared encode inputs into the final action builder. `MidnightSubmitOffersAction` may expose derived metadata such as `groups`, `root`, and `offers` for adapters and `onSuccess` routing, but those fields are not caller inputs.
+Maker entity methods accept a tree-like `MidnightOfferSetInput` only. The caller may pass a single offer, an array of offers, pre-grouped offers, or a tree; it does not pass derived `groups`, `root`, compression, signature payload, or mempool calldata. The entity normalizes the offer set, constructs the groups and tree, derives the root and signature input, validates the router / mempool payload, and passes only prepared encode inputs into the final action builder. `MempoolSubmitOffersAction` may expose derived metadata such as `groups`, `root`, and `offers` for adapters and `onSuccess` routing, but those fields are not caller inputs.
 
 Building offers from a target rate and implementing offer chaining remain outside this initial migration unless the caller has already materialized the resulting tree-like offer set before calling the SDK.
 
-Extend `TransactionAction` with these action interfaces and the Midnight requirement action interfaces above (`MidnightAuthorizationAction`, `MidnightRatifyRootAction`).
+Extend `TransactionAction` with these action interfaces and the Midnight requirement action interfaces above (`MidnightAuthorizationAction`, `SetterRatifierRatifyRootAction`).
 
 ## Minimal helper changes
 
@@ -676,7 +676,7 @@ private async getRatifierRequirements({
 private buildSubmitOffersTx({
   offersData,
   signatures,
-}): Readonly<Transaction<MidnightSubmitOffersAction>>;
+}): Readonly<Transaction<MempoolSubmitOffersAction>>;
 ```
 
 EOA / EIP-7702 maker:
@@ -689,7 +689,7 @@ EOA / EIP-7702 maker:
 Contract-wallet maker:
 
 - optional `MidnightAuthorizationAction` for `SetterRatifier`;
-- one `MidnightRatifyRootAction` transaction requirement from `getMidnightRatifyRootRequirement(...)`, calling `SetterRatifier.setIsRootRatified(maker, root, true)` only when missing;
+- one `SetterRatifierRatifyRootAction` transaction requirement from `getSetterRatifierRatifyRootRequirement(...)`, calling `SetterRatifier.setIsRootRatified(maker, root, true)` only when missing;
 - `buildTx()` uses precomputed `Payload.encode(SetterRatifierUtils.ratify({ tree }))` as mempool calldata.
 
 ## Layering
@@ -799,9 +799,9 @@ Contract wallet:
 
 1. optional loan-token approval to `Midnight` for `reservedLoanAssets + loanAssets`;
 2. optional `MidnightAuthorizationAction` for the chosen ratifier;
-3. one `midnightRatifyRoot` transaction requirement.
+3. one `setterRatifierRatifyRoot` transaction requirement.
 
-`buildTx(signatures?)` returns `MidnightSubmitOffersAction` to the mempool contract.
+`buildTx(signatures?)` returns `MempoolSubmitOffersAction` to the mempool contract.
 
 The make-lend method builds one or more precomputed `{ market, tick, start, expiry }` offers. It must accept multi-market offer legs in the same tree when the markets share one loan token, matching the markets app's multi-limit-order / OCA basket flow. For those baskets, offers in the same group share one `consumed[maker][group]` counter on Midnight, so the new group contributes one reserve amount: the maximum leg reserve, with equal leg reserves expected for the current OCA shape. It is not the sum of every offer leg. The SDK throws a typed error when the tree would exceed the Midnight tree-size limit.
 
@@ -829,9 +829,9 @@ EOA / EIP-7702:
 Contract wallet:
 
 1. optional `MidnightAuthorizationAction` for the chosen ratifier;
-2. one `midnightRatifyRoot` transaction requirement.
+2. one `setterRatifierRatifyRoot` transaction requirement.
 
-`buildTx(signatures?)` returns `MidnightSubmitOffersAction` to the mempool contract.
+`buildTx(signatures?)` returns `MempoolSubmitOffersAction` to the mempool contract.
 
 ### Borrow limit collateral + loan branch
 
@@ -849,9 +849,9 @@ Contract wallet:
 1. optional collateral approval to `Midnight`;
 2. **mandatory** `MidnightSupplyCollateralAction` transaction requirement;
 3. optional `MidnightAuthorizationAction` for the chosen ratifier;
-4. one `midnightRatifyRoot` transaction requirement.
+4. one `setterRatifierRatifyRoot` transaction requirement.
 
-`buildTx(signatures?)` returns only the final `MidnightSubmitOffersAction`.
+`buildTx(signatures?)` returns only the final `MempoolSubmitOffersAction`.
 
 This branch is the reason `getRequirements()` must be allowed to return mandatory prelude transactions, not only optional prerequisites.
 
