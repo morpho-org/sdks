@@ -583,8 +583,8 @@ importers:
         specifier: 1.0.0-beta.14
         version: 1.0.0-beta.14(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1))(bare-tcp@2.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)))(bare-url@2.4.5)
       '@tetherto/wdk-wallet-evm-erc-4337':
-        specifier: 1.0.0-beta.10
-        version: 1.0.0-beta.10(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1))(bare-tcp@2.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)))(bare-url@2.4.5)
+        specifier: 1.0.0-beta.11
+        version: 1.0.0-beta.11(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1))(bare-tcp@2.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)))(bare-url@2.4.5)
       bare-node-runtime:
         specifier: 1.5.0
         version: 1.5.0(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1))(bare-tcp@2.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)))
@@ -1614,17 +1614,23 @@ packages:
   '@tetherto/wdk-failover-provider@1.0.0-beta.2':
     resolution: {integrity: sha512-G1KNpw11Hql7Q6Xy5oqO+8P+AkJi4QBTK4JZtZvcXmx8ze+d/lzSQSufWLE/k5YAvwJ+xDx7mRzy/teG4zaiOw==}
 
-  '@tetherto/wdk-wallet-evm-erc-4337@1.0.0-beta.10':
-    resolution: {integrity: sha512-1BSGrQTGIlgdJpyJG2tsLWxrDyzZW1bY5+V0QALEBZd1SFudHcoR05PMO+SupaDJs9B/9nxcnA8QpNG/h8BNcQ==}
+  '@tetherto/wdk-wallet-evm-erc-4337@1.0.0-beta.11':
+    resolution: {integrity: sha512-IHKnooZzc1a2XDiBHuMrTsLAwho1JaJnxaSPn3o7ha3OqgVBbZ11nC4QWv8WCIIYPMBWOXJHLk4/fh++NALCHQ==}
 
   '@tetherto/wdk-wallet-evm@1.0.0-beta.14':
     resolution: {integrity: sha512-dcHkWqtg3pJRiR+eRCrDcj2sUtSHpLm32dv9fbV3RPVI2PtOrXLyBgj2l6Tg2udBUfL67aTDUJ3hND5S9MA0lA==}
+
+  '@tetherto/wdk-wallet-evm@1.0.0-beta.15':
+    resolution: {integrity: sha512-826moEb94gTFaUTi6dRSPJE/JfTEkm1S+TmJYriBoxUekOeJmR1PZ/d6EqvSWW+CC2rgWWJeLn3HSCp5nsMPyg==}
 
   '@tetherto/wdk-wallet@1.0.0-beta.11':
     resolution: {integrity: sha512-4KxZxIU3t7aQ7bdgB0UTM4LfLB/PvuLXqJ/AkTTP0MzhyJcJ8CtuYBT+fCnh4KNWSizPGmCqZNBGITYHyKwiug==}
 
   '@tetherto/wdk-wallet@1.0.0-beta.12':
     resolution: {integrity: sha512-mKMezkFwyoQ84vbnOlJ/zgSinU93Uvyu8wR4aqbcmZiFUTEdnHNV1rlv7h5LCMDS8mKI2EYaXQbw/nbqT3zJVg==}
+
+  '@tetherto/wdk-wallet@1.0.0-beta.13':
+    resolution: {integrity: sha512-0lF6TVxcgui/uLpU54x+3+qcAiypiMhJhnHbnHlyCxwKNjpzncq2DsJwJg/IeyeH1mm2wKWE4QqOohRr/VQbwA==}
 
   '@tybys/wasm-util@0.10.3':
     resolution: {integrity: sha512-F3fo1MYrRJYL3zER0OUOmkutjr1Vp23m7OsSgp7nq4SP6OqX6C/56XFIPAl5bt3zaBRjmW7SGz3u/6LwFpYcOg==}
@@ -2602,8 +2608,8 @@ packages:
     resolution: {integrity: sha512-Jm/dzRs2Z9iBrT6e9TvGxyb5YVKAPLlpna7hjxH7KH/++DSh2T/JVmQUv7iHI5E55hDbp/gEVvstWYXVxXFzsA==}
     engines: {node: '>=14.0.0'}
 
-  ethers@6.16.0:
-    resolution: {integrity: sha512-U1wulmetNymijEhpSEQ7Ct/P/Jw9/e7R1j5XIbPRydgV2DjLVMsULDlNksq3RQnFgKoLlZf88ijYtWEXcPa07A==}
+  ethers@6.17.0:
+    resolution: {integrity: sha512-BpyrpIPJ3ydEVow8zGaz1DuPS7YU8DcWxuBnY9a0UA/lvAPwrMr+EPXsfrul628SRaekPNeIM4UFh/91GWZang==}
     engines: {node: '>=14.0.0'}
 
   eventemitter3@5.0.1:
@@ -5310,14 +5316,14 @@ snapshots:
 
   '@tetherto/wdk-failover-provider@1.0.0-beta.2': {}
 
-  '@tetherto/wdk-wallet-evm-erc-4337@1.0.0-beta.10(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1))(bare-tcp@2.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)))(bare-url@2.4.5)':
+  '@tetherto/wdk-wallet-evm-erc-4337@1.0.0-beta.11(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1))(bare-tcp@2.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)))(bare-url@2.4.5)':
     dependencies:
       '@tetherto/wdk-failover-provider': 1.0.0-beta.2
-      '@tetherto/wdk-wallet': 1.0.0-beta.12(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1))(bare-tcp@2.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)))
-      '@tetherto/wdk-wallet-evm': 1.0.0-beta.14(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1))(bare-tcp@2.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)))(bare-url@2.4.5)
+      '@tetherto/wdk-wallet': 1.0.0-beta.13(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1))(bare-tcp@2.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)))
+      '@tetherto/wdk-wallet-evm': 1.0.0-beta.15(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1))(bare-tcp@2.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)))(bare-url@2.4.5)
       abstractionkit: 0.4.0
       bare-node-runtime: 1.5.0(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1))(bare-tcp@2.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)))
-      ethers: 6.16.0
+      ethers: 6.17.0
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
@@ -5353,6 +5359,28 @@ snapshots:
       - sodium-javascript
       - utf-8-validate
 
+  '@tetherto/wdk-wallet-evm@1.0.0-beta.15(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1))(bare-tcp@2.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)))(bare-url@2.4.5)':
+    dependencies:
+      '@noble/hashes': 1.8.0
+      '@noble/secp256k1': 2.2.3
+      '@tetherto/wdk-failover-provider': 1.0.0-beta.2
+      '@tetherto/wdk-wallet': 1.0.0-beta.13(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1))(bare-tcp@2.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)))
+      bare-node-runtime: 1.5.0(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1))(bare-tcp@2.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)))
+      bip39: 3.1.0
+      ethers: 6.17.0
+      sodium-universal: 5.0.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.4.5)
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bare-events
+      - bare-pipe
+      - bare-tcp
+      - bare-url
+      - bufferutil
+      - react-native-b4a
+      - sodium-javascript
+      - utf-8-validate
+
   '@tetherto/wdk-wallet@1.0.0-beta.11(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1))(bare-tcp@2.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)))':
     dependencies:
       bare-node-runtime: 1.5.0(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1))(bare-tcp@2.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)))
@@ -5363,6 +5391,15 @@ snapshots:
       - react-native-b4a
 
   '@tetherto/wdk-wallet@1.0.0-beta.12(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1))(bare-tcp@2.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)))':
+    dependencies:
+      bare-node-runtime: 1.5.0(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1))(bare-tcp@2.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)))
+      bip39: 3.1.0
+    transitivePeerDependencies:
+      - bare-pipe
+      - bare-tcp
+      - react-native-b4a
+
+  '@tetherto/wdk-wallet@1.0.0-beta.13(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1))(bare-tcp@2.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)))':
     dependencies:
       bare-node-runtime: 1.5.0(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1))(bare-tcp@2.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)(bare-pipe@4.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.1)))
       bip39: 3.1.0
@@ -6580,9 +6617,9 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  ethers@6.16.0:
+  ethers@6.17.0:
     dependencies:
-      '@adraffy/ens-normalize': 1.10.1
+      '@adraffy/ens-normalize': 1.11.1
       '@noble/curves': 1.2.0
       '@noble/hashes': 1.3.2
       '@types/node': 22.7.5
