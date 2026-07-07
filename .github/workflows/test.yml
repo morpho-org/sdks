@@ -36,7 +36,7 @@ jobs:
           key: foundry-${{ github.job }}-${{ github.sha }}
           restore-keys: foundry-${{ github.job }}-
 
-      - uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1
+      - uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1
         with:
           cache: false # Disable built-in cache to always save it.
 
