@@ -10,9 +10,7 @@ import {
   midnightMarket,
   midnightMarketId,
 } from "../../../test/fixtures/midnight.js";
-import type { TokenRequirementSignature } from "../../types/index.js";
 import { midnightRepayWithdrawCollateral } from "./repayWithdrawCollateral.js";
-import { PermitKind } from "./types.js";
 
 describe("midnightRepayWithdrawCollateral", () => {
   test("default", () => {
@@ -36,8 +34,6 @@ describe("midnightRepayWithdrawCollateral", () => {
       collateralWithdrawals: 1,
       onBehalf: midnightAddresses.taker,
       collateralReceiver: midnightAddresses.taker,
-      referralFeePct: 0n,
-      referralFeeRecipient: zeroAddress,
       deadline: maxUint256,
     });
     expect(decoded.functionName).toBe(
@@ -45,48 +41,11 @@ describe("midnightRepayWithdrawCollateral", () => {
     );
     expect(decoded.args[1]).toBe(1_000n);
     expect(decoded.args?.[3]).toEqual({
-      kind: PermitKind.None,
+      kind: 0,
       data: "0x",
     });
-  });
-
-  test("behavior: encodes loan token permit", () => {
-    const tx = midnightRepayWithdrawCollateral({
-      chainId: midnightChainId,
-      market: midnightMarket,
-      repayAssets: 1_000n,
-      withdrawCollateralAssets: 0n,
-      onBehalf: midnightAddresses.taker,
-      deadline: maxUint256,
-      signatures: [
-        {
-          action: {
-            type: "permit2Transfer",
-            args: {
-              spender: midnightAddresses.midnightBundles,
-              amount: 1_000n,
-              deadline: 123n,
-            },
-          },
-          args: {
-            owner: midnightAddresses.taker,
-            nonce: 42n,
-            asset: midnightAddresses.loanToken,
-            signature: "0x1234",
-            amount: 1_000n,
-            deadline: 123n,
-          },
-        } satisfies TokenRequirementSignature,
-      ],
-    });
-    const decoded = decodeFunctionData({
-      abi: midnightBundlesAbi,
-      data: tx.data,
-    });
-
-    expect(decoded.args?.[3]).toMatchObject({
-      kind: PermitKind.Permit2,
-    });
+    expect(decoded.args?.[6]).toBe(0n);
+    expect(decoded.args?.[7]).toBe(zeroAddress);
   });
 
   test("error: UnknownCollateralIndexError for default withdrawal", () => {
@@ -97,20 +56,6 @@ describe("midnightRepayWithdrawCollateral", () => {
         repayAssets: 0n,
         withdrawCollateralAssets: 2_000n,
         collateralIndex: 1n,
-        onBehalf: midnightAddresses.taker,
-        deadline: maxUint256,
-      }),
-    ).toThrow(UnknownCollateralIndexError);
-  });
-
-  test("error: UnknownCollateralIndexError for listed withdrawal", () => {
-    expect(() =>
-      midnightRepayWithdrawCollateral({
-        chainId: midnightChainId,
-        market: midnightMarket,
-        repayAssets: 1_000n,
-        withdrawCollateralAssets: 0n,
-        collateralWithdrawals: [{ collateralIndex: 1n, assets: 2_000n }],
         onBehalf: midnightAddresses.taker,
         deadline: maxUint256,
       }),

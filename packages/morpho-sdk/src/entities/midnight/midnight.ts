@@ -33,7 +33,6 @@ import {
 import {
   getMidnightApprovalRequirements,
   getMidnightAuthorizationRequirement,
-  getMidnightBundlesRequirements,
   getSetterRatifierRatifyRootRequirement,
 } from "../../actions/requirements/index.js";
 import { validateChainId } from "../../helpers/index.js";
@@ -41,7 +40,6 @@ import { signAndVerifyTypedData } from "../../helpers/signAndVerifyTypedData.js"
 import { validateOfferSides } from "../../helpers/validateOfferSides.js";
 import type { MorphoClientType } from "../../types/client.js";
 import {
-  type ActionOutput,
   type ActionRequirement,
   InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
@@ -75,8 +73,8 @@ import type {
   MakeLendParams,
   MakeOffersOutput,
   MakeOffersParams,
+  MidnightActionOutput,
   MidnightActionSignatures,
-  MidnightRequirementsParams,
   OffersData,
   RedeemParams,
   RepayWithdrawCollateralParams,
@@ -97,35 +95,31 @@ export interface MidnightActions {
   getOffersData(params: GetOffersDataParams): Promise<OffersData>;
   takeLend(
     params: TakeLendParams,
-  ): ActionOutput<MidnightTakeLendAction, MidnightActionSignatures>;
+  ): MidnightActionOutput<MidnightTakeLendAction, undefined>;
   takeBorrow(
     params: TakeBorrowParams,
-  ): ActionOutput<MidnightTakeBorrowAction, undefined>;
+  ): MidnightActionOutput<MidnightTakeBorrowAction, undefined>;
   supplyCollateralTakeBorrow(
     params: SupplyCollateralTakeBorrowParams,
-  ): ActionOutput<
-    MidnightSupplyCollateralTakeBorrowAction,
-    MidnightActionSignatures
-  >;
+  ): MidnightActionOutput<MidnightSupplyCollateralTakeBorrowAction, undefined>;
   supplyCollateral(
     params: SupplyCollateralParams,
-  ): ActionOutput<MidnightSupplyCollateralAction, undefined>;
+  ): MidnightActionOutput<MidnightSupplyCollateralAction, undefined>;
   makeLend(params: MakeLendParams): Promise<MakeOffersOutput>;
   makeBorrow(params: MakeOffersParams): Promise<MakeOffersOutput>;
   supplyCollateralMakeBorrow(
     params: SupplyCollateralMakeBorrowParams,
   ): Promise<MakeOffersOutput>;
-  redeem(params: RedeemParams): ActionOutput<MidnightRedeemAction, undefined>;
+  redeem(
+    params: RedeemParams,
+  ): MidnightActionOutput<MidnightRedeemAction, undefined>;
   repayWithdrawCollateral(
     params: RepayWithdrawCollateralParams,
-  ): ActionOutput<
-    MidnightRepayWithdrawCollateralAction,
-    MidnightActionSignatures
-  >;
+  ): MidnightActionOutput<MidnightRepayWithdrawCollateralAction, undefined>;
   cancelOffer(params: {
     readonly group: Hex;
     readonly accountAddress: Address;
-  }): ActionOutput<MidnightCancelOfferAction, undefined>;
+  }): MidnightActionOutput<MidnightCancelOfferAction, undefined>;
 }
 
 const assertNonNegativeAmount = (label: string, amount: bigint) => {
@@ -282,16 +276,16 @@ export class MorphoMidnight implements MidnightActions {
     const midnightBundles = getChainAddress(this.chainId, "midnightBundles");
 
     return {
-      getRequirements: async (reqParams?: MidnightRequirementsParams) => {
+      getRequirements: async () => {
         const requirements: ActionRequirement[] = [
-          ...(await this.getTokenPullRequirements(
-            {
-              token: market.params.loanToken,
-              owner: params.accountAddress,
-              amount: params.assets,
-            },
-            reqParams,
-          )),
+          ...(await getMidnightApprovalRequirements({
+            viemClient: this.client.viemClient,
+            chainId: this.chainId,
+            token: market.params.loanToken,
+            owner: params.accountAddress,
+            spender: midnightBundles,
+            amount: params.assets,
+          })),
         ];
         const authorization = await getMidnightAuthorizationRequirement({
           viemClient: this.client.viemClient,
@@ -303,7 +297,7 @@ export class MorphoMidnight implements MidnightActions {
 
         return requirements;
       },
-      buildTx: (signatures?: MidnightActionSignatures) =>
+      buildTx: () =>
         midnightTakeLend({
           chainId: this.chainId,
           market: market.params,
@@ -311,14 +305,7 @@ export class MorphoMidnight implements MidnightActions {
           minUnits: params.minUnits,
           taker: params.accountAddress,
           takeableOffers: params.takeableOffers,
-          reduceOnly: params.reduceOnly,
-          collateralWithdrawals: params.collateralWithdrawals,
-          collateralReceiver: params.collateralReceiver,
-          referralFeePct: params.referralFeePct,
-          referralFeeRecipient: params.referralFeeRecipient,
-          maxContinuousFee: params.maxContinuousFee,
           deadline: params.deadline,
-          signatures,
           metadata: this.client.options.metadata,
         }),
     };
@@ -355,11 +342,6 @@ export class MorphoMidnight implements MidnightActions {
           maxUnits: params.maxUnits,
           taker: params.accountAddress,
           takeableOffers: params.takeableOffers,
-          reduceOnly: params.reduceOnly,
-          receiver: params.receiver,
-          referralFeePct: params.referralFeePct,
-          referralFeeRecipient: params.referralFeeRecipient,
-          maxContinuousFee: params.maxContinuousFee,
           deadline: params.deadline,
           metadata: this.client.options.metadata,
         }),
@@ -380,16 +362,16 @@ export class MorphoMidnight implements MidnightActions {
     const collateral = market.getCollateralByIndex(collateralIndex);
 
     return {
-      getRequirements: async (reqParams?: MidnightRequirementsParams) => {
+      getRequirements: async () => {
         const requirements: ActionRequirement[] = [
-          ...(await this.getTokenPullRequirements(
-            {
-              token: collateral.token,
-              owner: params.accountAddress,
-              amount: params.collateralAssets,
-            },
-            reqParams,
-          )),
+          ...(await getMidnightApprovalRequirements({
+            viemClient: this.client.viemClient,
+            chainId: this.chainId,
+            token: collateral.token,
+            owner: params.accountAddress,
+            spender: midnightBundles,
+            amount: params.collateralAssets,
+          })),
         ];
         const authorization = await getMidnightAuthorizationRequirement({
           viemClient: this.client.viemClient,
@@ -401,7 +383,7 @@ export class MorphoMidnight implements MidnightActions {
 
         return requirements;
       },
-      buildTx: (signatures?: MidnightActionSignatures) =>
+      buildTx: () =>
         midnightSupplyCollateralTakeBorrow({
           chainId: this.chainId,
           market: market.params,
@@ -411,13 +393,7 @@ export class MorphoMidnight implements MidnightActions {
           taker: params.accountAddress,
           collateralIndex,
           takeableOffers: params.takeableOffers,
-          reduceOnly: params.reduceOnly,
-          receiver: params.receiver,
-          referralFeePct: params.referralFeePct,
-          referralFeeRecipient: params.referralFeeRecipient,
-          maxContinuousFee: params.maxContinuousFee,
           deadline: params.deadline,
-          signatures,
           metadata: this.client.options.metadata,
         }),
     };
@@ -670,15 +646,14 @@ export class MorphoMidnight implements MidnightActions {
     );
     assertNonNegativeAmount("deadline", params.deadline);
     const collateralWithdrawals =
-      params.collateralWithdrawals ??
-      (params.withdrawCollateralAssets > 0n
+      params.withdrawCollateralAssets > 0n
         ? [
             {
               collateralIndex: params.collateralIndex ?? 0n,
               assets: params.withdrawCollateralAssets,
             },
           ]
-        : []);
+        : [];
     for (const [index, withdrawal] of collateralWithdrawals.entries()) {
       assertNonNegativeAmount(
         `collateralWithdrawals[${index}].collateralIndex`,
@@ -700,18 +675,18 @@ export class MorphoMidnight implements MidnightActions {
     const midnightBundles = getChainAddress(this.chainId, "midnightBundles");
 
     return {
-      getRequirements: async (reqParams?: MidnightRequirementsParams) => {
+      getRequirements: async () => {
         const requirements: ActionRequirement[] = [];
         if (params.repayAssets > 0n) {
           requirements.push(
-            ...(await this.getTokenPullRequirements(
-              {
-                token: market.params.loanToken,
-                owner: params.accountAddress,
-                amount: params.repayAssets,
-              },
-              reqParams,
-            )),
+            ...(await getMidnightApprovalRequirements({
+              viemClient: this.client.viemClient,
+              chainId: this.chainId,
+              token: market.params.loanToken,
+              owner: params.accountAddress,
+              spender: midnightBundles,
+              amount: params.repayAssets,
+            })),
           );
         }
         const authorization = await getMidnightAuthorizationRequirement({
@@ -724,7 +699,7 @@ export class MorphoMidnight implements MidnightActions {
 
         return requirements;
       },
-      buildTx: (signatures?: MidnightActionSignatures) =>
+      buildTx: () =>
         midnightRepayWithdrawCollateral({
           chainId: this.chainId,
           market: market.params,
@@ -732,13 +707,7 @@ export class MorphoMidnight implements MidnightActions {
           withdrawCollateralAssets: params.withdrawCollateralAssets,
           onBehalf: params.accountAddress,
           collateralIndex: params.collateralIndex,
-          receiver: params.receiver,
-          collateralReceiver: params.collateralReceiver,
-          collateralWithdrawals,
-          referralFeePct: params.referralFeePct,
-          referralFeeRecipient: params.referralFeeRecipient,
           deadline: params.deadline,
-          signatures,
           metadata: this.client.options.metadata,
         }),
     };
@@ -838,34 +807,6 @@ export class MorphoMidnight implements MidnightActions {
     if (ratifyRoot) requirements.push(ratifyRoot);
 
     return requirements;
-  }
-
-  private async getTokenPullRequirements(
-    params: {
-      readonly token: Address;
-      readonly owner: Address;
-      readonly amount: bigint;
-    },
-    reqParams?: MidnightRequirementsParams,
-  ) {
-    if (this.client.options.supportSignature) {
-      return await getMidnightBundlesRequirements({
-        viemClient: this.client.viemClient,
-        chainId: this.chainId,
-        supportDeployless: this.client.options.supportDeployless,
-        supportSignature: true,
-        useSimplePermit: reqParams?.useSimplePermit,
-        ...params,
-      });
-    }
-
-    return await getMidnightBundlesRequirements({
-      viemClient: this.client.viemClient,
-      chainId: this.chainId,
-      supportDeployless: this.client.options.supportDeployless,
-      supportSignature: false,
-      ...params,
-    });
   }
 
   private buildSubmitOffersTx(params: {
