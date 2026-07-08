@@ -36,20 +36,11 @@ export interface BuildFixedRateOfferChainParams {
   readonly chainEndTimestamp: BigIntish;
 }
 
-interface NormalizedBuildFixedRateOfferChainParams {
-  readonly side: "borrow" | "lend";
-  readonly targetRate: number;
-  readonly tickSpacing: bigint;
-  readonly maturityTimestamp: bigint;
-  readonly chainStartTimestamp: bigint;
-  readonly chainEndTimestamp: bigint;
-}
-
-interface TauLeg {
-  readonly tick: bigint;
-  readonly tauMax: number;
-  readonly tauMin: number;
-}
+/** Parameters for side-specific fixed-rate offer-chain builders. */
+export type BuildFixedRateOfferChainSideParams = Omit<
+  BuildFixedRateOfferChainParams,
+  "side"
+>;
 
 /**
  * Utilities for building time-bounded Midnight offer chains.
@@ -131,51 +122,323 @@ export namespace OfferChainUtils {
   export function buildFixedRateOfferChain(
     params: BuildFixedRateOfferChainParams,
   ): readonly FixedRateOfferChainLeg[] {
-    const normalized = normalizeBuildParams(params);
-    const maxChainEndTimestamp = getMaxFixedRateOfferChainEndTimestamp({
-      maturityTimestamp: normalized.maturityTimestamp,
-      chainStartTimestamp: normalized.chainStartTimestamp,
+    const { side, ...chainParams } = params;
+    if (side === "borrow") return buildBorrowFixedRateOfferChain(chainParams);
+    if (side === "lend") return buildLendFixedRateOfferChain(chainParams);
+
+    throw new InvalidOfferParameterError({
+      parameter: "side",
+      value: side,
+      instruction: 'Use "borrow" or "lend".',
     });
-    if (normalized.chainEndTimestamp > maxChainEndTimestamp) {
+  }
+
+  /**
+   * Builds borrow-side sell-offer legs that approximate one fixed maker rate over time.
+   *
+   * Borrow chains read their target rate at each leg's expiry edge. If a leg
+   * would need to extend past `chainEndTimestamp`, it is dropped rather than
+   * clamped so the expiry edge remains the recoverable target-rate edge.
+   *
+   * @param params - Fixed-rate offer-chain parameters without a side field.
+   * @returns Borrow-side offer legs that can be mapped to `Offer.create({ buy: false, ... })`.
+   * @throws {InvalidOfferParameterError} when an input is invalid or the end timestamp exceeds the supported horizon.
+   * @example
+   * ```ts
+   * import { OfferChainUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const legs = OfferChainUtils.buildBorrowFixedRateOfferChain({
+   *   targetRate: 0.08,
+   *   tickSpacing: market.tickSpacing,
+   *   maturityTimestamp: market.params.maturity,
+   *   chainStartTimestamp: now,
+   *   chainEndTimestamp: expiry,
+   * });
+   * console.log(legs[0]?.expiryTimestamp);
+   * ```
+   */
+  export function buildBorrowFixedRateOfferChain(
+    params: BuildFixedRateOfferChainSideParams,
+  ): readonly FixedRateOfferChainLeg[] {
+    if (!Number.isFinite(params.targetRate)) {
+      throw new InvalidOfferParameterError({
+        parameter: "targetRate",
+        value: params.targetRate,
+        instruction: "Use a finite positive yearly rate.",
+      });
+    }
+    if (params.targetRate <= 0) {
+      throw new InvalidOfferParameterError({
+        parameter: "targetRate",
+        value: params.targetRate,
+        instruction: "Use a positive yearly rate.",
+      });
+    }
+
+    const tickSpacing = normalizeSafeInteger("tickSpacing", params.tickSpacing);
+    if (tickSpacing <= 0n) {
+      throw new InvalidOfferParameterError({
+        parameter: "tickSpacing",
+        value: tickSpacing,
+        instruction: "Use a positive tick spacing.",
+      });
+    }
+
+    const maturityTimestamp = normalizeSafeInteger(
+      "maturityTimestamp",
+      params.maturityTimestamp,
+    );
+    const chainStartTimestamp = normalizeSafeInteger(
+      "chainStartTimestamp",
+      params.chainStartTimestamp,
+    );
+    const chainEndTimestamp = normalizeSafeInteger(
+      "chainEndTimestamp",
+      params.chainEndTimestamp,
+    );
+    if (maturityTimestamp <= chainStartTimestamp) {
+      throw new InvalidOfferParameterError({
+        parameter: "maturityTimestamp",
+        value: maturityTimestamp,
+        instruction: "Use a timestamp greater than chainStartTimestamp.",
+      });
+    }
+    if (chainEndTimestamp <= chainStartTimestamp) {
       throw new InvalidOfferParameterError({
         parameter: "chainEndTimestamp",
-        value: normalized.chainEndTimestamp,
+        value: chainEndTimestamp,
+        instruction: "Use a timestamp greater than chainStartTimestamp.",
+      });
+    }
+
+    const maxChainEndTimestamp = getMaxFixedRateOfferChainEndTimestamp({
+      maturityTimestamp,
+      chainStartTimestamp,
+    });
+    if (chainEndTimestamp > maxChainEndTimestamp) {
+      throw new InvalidOfferParameterError({
+        parameter: "chainEndTimestamp",
+        value: chainEndTimestamp,
         instruction: `Use a timestamp no greater than "${maxChainEndTimestamp}".`,
       });
     }
 
     const tauInitial =
-      Number(normalized.maturityTimestamp - normalized.chainStartTimestamp) /
-      SECONDS_PER_YEAR;
+      Number(maturityTimestamp - chainStartTimestamp) / SECONDS_PER_YEAR;
     const tauStop =
-      Number(normalized.maturityTimestamp - normalized.chainEndTimestamp) /
-      SECONDS_PER_YEAR;
-    const legs =
-      normalized.side === "borrow"
-        ? buildBorrowChain({
-            targetRate: normalized.targetRate,
-            tauInitial,
-            tauStop,
-            tickSpacing: normalized.tickSpacing,
-          })
-        : buildLendChain({
-            targetRate: normalized.targetRate,
-            tauInitial,
-            tauStop,
-            tickSpacing: normalized.tickSpacing,
-          });
+      Number(maturityTimestamp - chainEndTimestamp) / SECONDS_PER_YEAR;
+    const lowerRate = params.targetRate * (1 - FAVORABLE_RATE_DRIFT);
+    if (lowerRate <= 0) return [];
 
-    return legs
+    const legs: FixedRateOfferChainLeg[] = [];
+    let tauTop = tauInitial;
+    let iteration = 0;
+
+    for (; iteration < MAX_CHAIN_LEGS; iteration++) {
+      const price = (1 + lowerRate) ** -tauTop;
+      const rawTick =
+        TickLib.priceToTick(
+          !Number.isFinite(price) || price <= 0
+            ? 0n
+            : price >= 1
+              ? MathLib.WAD
+              : parseUnits(price.toFixed(18), 18),
+          1n,
+        ) - 1n;
+      if (rawTick < 0n || rawTick > MAX_TICK) break;
+
+      const tick = floorTickToSpacing(rawTick, tickSpacing);
+      if (legs.at(-1)?.tick === tick) break;
+
+      const tauMax = rateTau(tick, lowerRate);
+      const tauMin = rateTau(tick, params.targetRate);
+      if (tauMin >= tauTop) break;
+      if (tauMin < tauStop) break;
+
+      const startTimestamp =
+        maturityTimestamp -
+        BigInt(Math.round(Math.min(tauMax, tauTop) * SECONDS_PER_YEAR));
+      const expiryTimestamp =
+        maturityTimestamp - BigInt(Math.round(tauMin * SECONDS_PER_YEAR));
+      if (expiryTimestamp > startTimestamp) {
+        legs.push({ tick, startTimestamp, expiryTimestamp });
+      }
+      tauTop = tauMin;
+    }
+
+    if (iteration >= MAX_CHAIN_LEGS) {
+      throw new InvalidOfferParameterError({
+        parameter: "tickSpacing",
+        value: tickSpacing,
+        instruction: `Borrow chain exceeded "${MAX_CHAIN_LEGS}" legs.`,
+      });
+    }
+
+    return legs;
+  }
+
+  /**
+   * Builds lend-side buy-offer legs that approximate one fixed maker rate over time.
+   *
+   * Lend chains read their target rate at each leg's start edge. The first leg
+   * may start before `chainStartTimestamp`; clamping that edge would move the
+   * recoverable display rate below the maker's target.
+   *
+   * @param params - Fixed-rate offer-chain parameters without a side field.
+   * @returns Lend-side offer legs that can be mapped to `Offer.create({ buy: true, ... })`.
+   * @throws {InvalidOfferParameterError} when an input is invalid or the end timestamp exceeds the supported horizon.
+   * @example
+   * ```ts
+   * import { OfferChainUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const legs = OfferChainUtils.buildLendFixedRateOfferChain({
+   *   targetRate: 0.05,
+   *   tickSpacing: market.tickSpacing,
+   *   maturityTimestamp: market.params.maturity,
+   *   chainStartTimestamp: now,
+   *   chainEndTimestamp: expiry,
+   * });
+   * console.log(legs[0]?.startTimestamp);
+   * ```
+   */
+  export function buildLendFixedRateOfferChain(
+    params: BuildFixedRateOfferChainSideParams,
+  ): readonly FixedRateOfferChainLeg[] {
+    if (!Number.isFinite(params.targetRate)) {
+      throw new InvalidOfferParameterError({
+        parameter: "targetRate",
+        value: params.targetRate,
+        instruction: "Use a finite positive yearly rate.",
+      });
+    }
+    if (params.targetRate <= 0) {
+      throw new InvalidOfferParameterError({
+        parameter: "targetRate",
+        value: params.targetRate,
+        instruction: "Use a positive yearly rate.",
+      });
+    }
+
+    const tickSpacing = normalizeSafeInteger("tickSpacing", params.tickSpacing);
+    if (tickSpacing <= 0n) {
+      throw new InvalidOfferParameterError({
+        parameter: "tickSpacing",
+        value: tickSpacing,
+        instruction: "Use a positive tick spacing.",
+      });
+    }
+
+    const maturityTimestamp = normalizeSafeInteger(
+      "maturityTimestamp",
+      params.maturityTimestamp,
+    );
+    const chainStartTimestamp = normalizeSafeInteger(
+      "chainStartTimestamp",
+      params.chainStartTimestamp,
+    );
+    const chainEndTimestamp = normalizeSafeInteger(
+      "chainEndTimestamp",
+      params.chainEndTimestamp,
+    );
+    if (maturityTimestamp <= chainStartTimestamp) {
+      throw new InvalidOfferParameterError({
+        parameter: "maturityTimestamp",
+        value: maturityTimestamp,
+        instruction: "Use a timestamp greater than chainStartTimestamp.",
+      });
+    }
+    if (chainEndTimestamp <= chainStartTimestamp) {
+      throw new InvalidOfferParameterError({
+        parameter: "chainEndTimestamp",
+        value: chainEndTimestamp,
+        instruction: "Use a timestamp greater than chainStartTimestamp.",
+      });
+    }
+
+    const maxChainEndTimestamp = getMaxFixedRateOfferChainEndTimestamp({
+      maturityTimestamp,
+      chainStartTimestamp,
+    });
+    if (chainEndTimestamp > maxChainEndTimestamp) {
+      throw new InvalidOfferParameterError({
+        parameter: "chainEndTimestamp",
+        value: chainEndTimestamp,
+        instruction: `Use a timestamp no greater than "${maxChainEndTimestamp}".`,
+      });
+    }
+
+    const tauInitial =
+      Number(maturityTimestamp - chainStartTimestamp) / SECONDS_PER_YEAR;
+    const tauStop =
+      Number(maturityTimestamp - chainEndTimestamp) / SECONDS_PER_YEAR;
+    const upperRate = params.targetRate * (1 + FAVORABLE_RATE_DRIFT);
+    const maxAlignedTick = floorTickToSpacing(MAX_TICK, tickSpacing);
+    const highestDiscountTick = floorTickToSpacing(
+      TickLib.priceToTick(MathLib.WAD, 1n) - 1n,
+      tickSpacing,
+    );
+    const ceilingTick =
+      highestDiscountTick < maxAlignedTick
+        ? highestDiscountTick
+        : maxAlignedTick;
+
+    const tauCeiling = rateTau(ceilingTick, upperRate);
+    let tauBottom = Math.max(tauStop, tauCeiling);
+    if (tauBottom >= tauInitial) return [];
+
+    const tauLegs: {
+      readonly tick: bigint;
+      readonly tauMax: number;
+      readonly tauMin: number;
+    }[] = [];
+    let iteration = 0;
+
+    for (; iteration < MAX_CHAIN_LEGS; iteration++) {
+      const price = (1 + upperRate) ** -tauBottom;
+      const rawTick = TickLib.priceToTick(
+        !Number.isFinite(price) || price <= 0
+          ? 0n
+          : price >= 1
+            ? MathLib.WAD
+            : parseUnits(price.toFixed(18), 18),
+        1n,
+      );
+      if (rawTick < 0n || rawTick > MAX_TICK || rawTick > maxAlignedTick) break;
+
+      const alignedTick =
+        ((rawTick + tickSpacing - 1n) / tickSpacing) * tickSpacing;
+      const tick = alignedTick < maxAlignedTick ? alignedTick : maxAlignedTick;
+      if (tauLegs.at(-1)?.tick === tick) break;
+
+      const tauMax = rateTau(tick, params.targetRate);
+      const tauMin = rateTau(tick, upperRate);
+      if (tauMax <= tauBottom) break;
+
+      tauLegs.push({ tick, tauMax, tauMin: Math.max(tauMin, tauBottom) });
+      if (tauMax >= tauInitial) break;
+
+      tauBottom = tauMax;
+    }
+
+    if (iteration >= MAX_CHAIN_LEGS) {
+      throw new InvalidOfferParameterError({
+        parameter: "tickSpacing",
+        value: tickSpacing,
+        instruction: `Lend chain exceeded "${MAX_CHAIN_LEGS}" legs.`,
+      });
+    }
+
+    const leftmostLeg = tauLegs.at(-1);
+    if (leftmostLeg && leftmostLeg.tauMax < tauInitial) return [];
+
+    return tauLegs
+      .reverse()
       .map((leg) => ({
         tick: leg.tick,
-        startTimestamp: tauToTimestamp(
-          normalized.maturityTimestamp,
-          leg.tauMax,
-        ),
-        expiryTimestamp: tauToTimestamp(
-          normalized.maturityTimestamp,
-          leg.tauMin,
-        ),
+        startTimestamp:
+          maturityTimestamp - BigInt(Math.round(leg.tauMax * SECONDS_PER_YEAR)),
+        expiryTimestamp:
+          maturityTimestamp - BigInt(Math.round(leg.tauMin * SECONDS_PER_YEAR)),
       }))
       .filter((leg) => leg.expiryTimestamp > leg.startTimestamp);
   }
@@ -230,172 +493,6 @@ export namespace OfferChainUtils {
   }
 }
 
-function buildBorrowChain(params: {
-  readonly targetRate: number;
-  readonly tauInitial: number;
-  readonly tauStop: number;
-  readonly tickSpacing: bigint;
-}): readonly TauLeg[] {
-  const lowerRate = params.targetRate * (1 - FAVORABLE_RATE_DRIFT);
-  if (lowerRate <= 0) return [];
-
-  const legs: TauLeg[] = [];
-  let tauTop = params.tauInitial;
-  let iteration = 0;
-
-  for (; iteration < MAX_CHAIN_LEGS; iteration++) {
-    const rawTick =
-      TickLib.priceToTick(rateToPriceAtTau(lowerRate, tauTop), 1n) - 1n;
-    if (rawTick < 0n || rawTick > MAX_TICK) break;
-
-    const tick = floorTickToSpacing(rawTick, params.tickSpacing);
-    if (legs.at(-1)?.tick === tick) break;
-
-    const tauMax = rateTau(tick, lowerRate);
-    const tauMin = rateTau(tick, params.targetRate);
-    if (tauMin >= tauTop) break;
-    if (tauMin < params.tauStop) break;
-
-    legs.push({ tick, tauMax: Math.min(tauMax, tauTop), tauMin });
-    tauTop = tauMin;
-  }
-
-  if (iteration >= MAX_CHAIN_LEGS) {
-    throw new InvalidOfferParameterError({
-      parameter: "tickSpacing",
-      value: params.tickSpacing,
-      instruction: `Borrow chain exceeded "${MAX_CHAIN_LEGS}" legs.`,
-    });
-  }
-
-  return legs;
-}
-
-function buildLendChain(params: {
-  readonly targetRate: number;
-  readonly tauInitial: number;
-  readonly tauStop: number;
-  readonly tickSpacing: bigint;
-}): readonly TauLeg[] {
-  const upperRate = params.targetRate * (1 + FAVORABLE_RATE_DRIFT);
-  const maxAlignedTick = floorTickToSpacing(MAX_TICK, params.tickSpacing);
-  const ceilingTick = minBigint(
-    highestDiscountTick(params.tickSpacing),
-    maxAlignedTick,
-  );
-
-  const tauCeiling = rateTau(ceilingTick, upperRate);
-  let tauBottom = Math.max(params.tauStop, tauCeiling);
-  if (tauBottom >= params.tauInitial) return [];
-
-  const legs: TauLeg[] = [];
-  let iteration = 0;
-
-  for (; iteration < MAX_CHAIN_LEGS; iteration++) {
-    const rawTick = TickLib.priceToTick(
-      rateToPriceAtTau(upperRate, tauBottom),
-      1n,
-    );
-    if (rawTick < 0n || rawTick > MAX_TICK || rawTick > maxAlignedTick) break;
-
-    const tick = ceilTickToSpacing(rawTick, params.tickSpacing);
-    if (legs.at(-1)?.tick === tick) break;
-
-    const tauMax = rateTau(tick, params.targetRate);
-    const tauMin = rateTau(tick, upperRate);
-    if (tauMax <= tauBottom) break;
-
-    legs.push({ tick, tauMax, tauMin: Math.max(tauMin, tauBottom) });
-    if (tauMax >= params.tauInitial) break;
-
-    tauBottom = tauMax;
-  }
-
-  if (iteration >= MAX_CHAIN_LEGS) {
-    throw new InvalidOfferParameterError({
-      parameter: "tickSpacing",
-      value: params.tickSpacing,
-      instruction: `Lend chain exceeded "${MAX_CHAIN_LEGS}" legs.`,
-    });
-  }
-
-  const leftmostLeg = legs.at(-1);
-  if (leftmostLeg && leftmostLeg.tauMax < params.tauInitial) return [];
-
-  return legs.reverse();
-}
-
-function normalizeBuildParams(
-  params: BuildFixedRateOfferChainParams,
-): NormalizedBuildFixedRateOfferChainParams {
-  if (params.side !== "borrow" && params.side !== "lend") {
-    throw new InvalidOfferParameterError({
-      parameter: "side",
-      value: params.side,
-      instruction: 'Use "borrow" or "lend".',
-    });
-  }
-  if (!Number.isFinite(params.targetRate)) {
-    throw new InvalidOfferParameterError({
-      parameter: "targetRate",
-      value: params.targetRate,
-      instruction: "Use a finite positive yearly rate.",
-    });
-  }
-  if (params.targetRate <= 0) {
-    throw new InvalidOfferParameterError({
-      parameter: "targetRate",
-      value: params.targetRate,
-      instruction: "Use a positive yearly rate.",
-    });
-  }
-
-  const tickSpacing = normalizeSafeInteger("tickSpacing", params.tickSpacing);
-  if (tickSpacing <= 0n) {
-    throw new InvalidOfferParameterError({
-      parameter: "tickSpacing",
-      value: tickSpacing,
-      instruction: "Use a positive tick spacing.",
-    });
-  }
-
-  const maturityTimestamp = normalizeSafeInteger(
-    "maturityTimestamp",
-    params.maturityTimestamp,
-  );
-  const chainStartTimestamp = normalizeSafeInteger(
-    "chainStartTimestamp",
-    params.chainStartTimestamp,
-  );
-  const chainEndTimestamp = normalizeSafeInteger(
-    "chainEndTimestamp",
-    params.chainEndTimestamp,
-  );
-  if (maturityTimestamp <= chainStartTimestamp) {
-    throw new InvalidOfferParameterError({
-      parameter: "maturityTimestamp",
-      value: maturityTimestamp,
-      instruction: "Use a timestamp greater than chainStartTimestamp.",
-    });
-  }
-  if (chainEndTimestamp <= chainStartTimestamp) {
-    throw new InvalidOfferParameterError({
-      parameter: "chainEndTimestamp",
-      value: chainEndTimestamp,
-      instruction: "Use a timestamp greater than chainStartTimestamp.",
-    });
-  }
-
-  return {
-    side: params.side,
-    targetRate: params.targetRate,
-    tickSpacing,
-    maturityTimestamp,
-    chainStartTimestamp,
-    chainEndTimestamp,
-  };
-}
-
 function normalizeSafeInteger(parameter: string, value: BigIntish) {
   let normalized: bigint;
   try {
@@ -421,14 +518,6 @@ function normalizeSafeInteger(parameter: string, value: BigIntish) {
   return normalized;
 }
 
-function rateToPriceAtTau(rate: number, tau: number): bigint {
-  const price = (1 + rate) ** -tau;
-  if (!Number.isFinite(price) || price <= 0) return 0n;
-  if (price >= 1) return MathLib.WAD;
-
-  return parseUnits(price.toFixed(18), 18);
-}
-
 function rateTau(tick: bigint, rate: number): number {
   const price = Number(formatUnits(TickLib.tickToPrice(tick), 18));
   if (price <= 0 || price >= 1 || rate <= 0) return 0;
@@ -436,25 +525,6 @@ function rateTau(tick: bigint, rate: number): number {
   return Math.log(1 / price) / Math.log(1 + rate);
 }
 
-function tauToTimestamp(maturityTimestamp: bigint, tau: number) {
-  return maturityTimestamp - BigInt(Math.round(tau * SECONDS_PER_YEAR));
-}
-
 function floorTickToSpacing(tick: bigint, spacing: bigint) {
   return tick - (tick % spacing);
-}
-
-function ceilTickToSpacing(tick: bigint, spacing: bigint) {
-  return ((tick + spacing - 1n) / spacing) * spacing;
-}
-
-function highestDiscountTick(tickSpacing: bigint) {
-  return floorTickToSpacing(
-    TickLib.priceToTick(MathLib.WAD, 1n) - 1n,
-    tickSpacing,
-  );
-}
-
-function minBigint(a: bigint, b: bigint) {
-  return a < b ? a : b;
 }

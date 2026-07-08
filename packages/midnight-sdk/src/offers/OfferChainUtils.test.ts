@@ -47,6 +47,21 @@ describe("OfferChainUtils.buildFixedRateOfferChain", () => {
   test.each([
     "borrow",
     "lend",
+  ] as const)("behavior: dispatches to the %s-only builder", (side) => {
+    const { side: _side, ...chainParams } = { ...defaultParams, side };
+    const expected =
+      side === "borrow"
+        ? OfferChainUtils.buildBorrowFixedRateOfferChain(chainParams)
+        : OfferChainUtils.buildLendFixedRateOfferChain(chainParams);
+
+    expect(
+      OfferChainUtils.buildFixedRateOfferChain({ ...chainParams, side }),
+    ).toStrictEqual(expected);
+  });
+
+  test.each([
+    "borrow",
+    "lend",
   ] as const)("behavior: recovers target rate at every %s display edge", (side) => {
     const chain = OfferChainUtils.buildFixedRateOfferChain({
       ...defaultParams,
