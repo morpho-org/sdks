@@ -11,7 +11,13 @@ export interface MidnightCollateralSupply {
   };
 }
 
-/** ABI-ready Midnight takeable offer used by direct and bundled take flows. */
+/**
+ * ABI-ready Midnight takeable offer returned by quote/takeable-offer APIs.
+ *
+ * Pass these objects unchanged into `takeLend`, `takeBorrow`, or
+ * `supplyCollateralTakeBorrow`; the action builders validate side and market
+ * consistency before encoding the bundle.
+ */
 export interface MidnightTakeableOffer {
   readonly units: bigint;
   readonly offer: OfferStruct;

@@ -23,7 +23,7 @@ import {
 } from "../../types/index.js";
 import type { MidnightTakeableOffer } from "./types.js";
 
-/** Parameters for {@link midnightTakeBorrow}. */
+/** Parameters for encoding a Midnight borrow take from already selected offers. */
 export interface MidnightTakeBorrowParams {
   readonly chainId: number;
   readonly market: MarketInput;
@@ -36,7 +36,44 @@ export interface MidnightTakeBorrowParams {
   readonly metadata?: Metadata;
 }
 
-/** Encodes the take-borrow Midnight bundle. */
+/**
+ * Encodes a Midnight bundle that borrows loan assets by taking lend-side offers.
+ *
+ * Prefer `client.morpho.midnight(chainId).takeBorrow(...)` in app flows so
+ * authorization requirements are resolved first. Use this low-level builder
+ * only after the Midnight API has returned takeable offers and the caller has
+ * already handled prerequisites.
+ *
+ * @param params.chainId - Chain id used to resolve `MidnightBundles`.
+ * @param params.market - Midnight market traded by every takeable offer.
+ * @param params.loanAssets - Loan assets the borrower receives.
+ * @param params.maxUnits - Maximum debt units accepted from the bundle quote.
+ * @param params.taker - Borrower address executing the bundle.
+ * @param params.deadline - Bundle execution deadline timestamp; pass `maxUint256` explicitly for no expiry.
+ * @param params.takeableOffers - ABI-ready lend-side offers returned by the Midnight API.
+ * @param params.metadata - Optional analytics metadata appended to calldata.
+ * @returns A deep-frozen `Transaction<MidnightTakeBorrowAction>` targeting `MidnightBundles`.
+ * @throws {NonPositiveMidnightAmountError} when `loanAssets <= 0n`.
+ * @throws {NegativeMidnightAmountError} when `maxUnits` or `deadline` is negative.
+ * @throws {EmptyMidnightTakeableOffersError} when no offers are provided.
+ * @throws {MidnightOfferSideMismatchError} when any offer is not lend-side.
+ * @throws {MidnightTakeableOfferMarketMismatchError} when any offer belongs to another market.
+ * @example
+ * ```ts
+ * import { maxUint256 } from "viem";
+ * import { midnightTakeBorrow } from "@morpho-org/morpho-sdk";
+ *
+ * const tx = midnightTakeBorrow({
+ *   chainId: 8453,
+ *   market: marketData.params,
+ *   loanAssets: BigInt(quote.data.availableAssets),
+ *   maxUnits: BigInt(quote.data.availableUnits),
+ *   taker: borrower,
+ *   takeableOffers: quote.data.takeableOffers,
+ *   deadline: maxUint256,
+ * });
+ * ```
+ */
 export const midnightTakeBorrow = (
   params: MidnightTakeBorrowParams,
 ): Readonly<Transaction<MidnightTakeBorrowAction>> => {

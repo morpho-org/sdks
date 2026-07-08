@@ -8,7 +8,7 @@ import type {
   Transaction,
 } from "../../types/index.js";
 
-/** Parameters for {@link midnightAuthorization}. */
+/** Parameters for encoding a direct Midnight authorization change. */
 export interface MidnightAuthorizationParams {
   readonly chainId: number;
   readonly authorized: Address;
@@ -17,7 +17,31 @@ export interface MidnightAuthorizationParams {
   readonly metadata?: Metadata;
 }
 
-/** Encodes `Midnight.setIsAuthorized(authorized, true, onBehalf)`. */
+/**
+ * Encodes `Midnight.setIsAuthorized` for a bundle spender or ratifier.
+ *
+ * Prefer requirement helpers or entity `getRequirements()` in app flows; they
+ * read `isAuthorized` first and return this transaction only when needed. Use
+ * this builder directly when the caller intentionally wants to set or revoke
+ * authorization without reading state.
+ *
+ * @param params.chainId - Chain id used to resolve `Midnight`.
+ * @param params.authorized - Address receiving or losing authorization.
+ * @param params.onBehalf - Owner whose authorization mapping is updated.
+ * @param params.isAuthorized - Optional target state; defaults to `true`.
+ * @param params.metadata - Optional analytics metadata appended to calldata.
+ * @returns A deep-frozen `Transaction<MidnightAuthorizationAction>` targeting `Midnight`.
+ * @example
+ * ```ts
+ * import { midnightAuthorization } from "@morpho-org/morpho-sdk";
+ *
+ * const tx = midnightAuthorization({
+ *   chainId: 8453,
+ *   authorized: midnightBundles,
+ *   onBehalf: user,
+ * });
+ * ```
+ */
 export const midnightAuthorization = (
   params: MidnightAuthorizationParams,
 ): Readonly<Transaction<MidnightAuthorizationAction>> => {

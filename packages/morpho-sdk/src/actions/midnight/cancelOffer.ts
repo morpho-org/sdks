@@ -8,7 +8,7 @@ import type {
   Transaction,
 } from "../../types/index.js";
 
-/** Parameters for {@link midnightCancelOffer}. */
+/** Parameters for encoding a Midnight group consumption update. */
 export interface MidnightCancelOfferParams {
   readonly chainId: number;
   readonly group: Hex;
@@ -17,7 +17,31 @@ export interface MidnightCancelOfferParams {
   readonly metadata?: Metadata;
 }
 
-/** Encodes `Midnight.setConsumed(group, maxUint256, onBehalf)`. */
+/**
+ * Encodes `Midnight.setConsumed` to cancel or partially consume an offer group.
+ *
+ * App flows should usually call `client.morpho.midnight(chainId).cancelOffer(...)`.
+ * Use this builder directly when the group id is already known and no
+ * additional requirements are needed. Omitting `amount` fully cancels the group
+ * by setting consumption to `maxUint256`.
+ *
+ * @param params.chainId - Chain id used to resolve `Midnight`.
+ * @param params.group - Offer group id to mark consumed.
+ * @param params.onBehalf - Maker whose group consumption is updated.
+ * @param params.amount - Optional consumed amount; defaults to `maxUint256` for full cancellation.
+ * @param params.metadata - Optional analytics metadata appended to calldata.
+ * @returns A deep-frozen `Transaction<MidnightCancelOfferAction>` targeting `Midnight`.
+ * @example
+ * ```ts
+ * import { midnightCancelOffer } from "@morpho-org/morpho-sdk";
+ *
+ * const tx = midnightCancelOffer({
+ *   chainId: 8453,
+ *   group,
+ *   onBehalf: maker,
+ * });
+ * ```
+ */
 export const midnightCancelOffer = (
   params: MidnightCancelOfferParams,
 ): Readonly<Transaction<MidnightCancelOfferAction>> => {

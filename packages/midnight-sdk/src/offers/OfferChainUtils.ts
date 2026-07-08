@@ -10,7 +10,7 @@ const MAX_EXPIRY_TTM_DENOMINATOR = 100n;
 const MAX_CHAIN_LEGS = Number(MAX_TICK) + 1;
 const SECONDS_PER_YEAR = Number(Time.s.from.y(1n));
 
-/** One time-bounded offer leg in a fixed-rate Midnight offer chain. */
+/** One time-bounded offer leg to convert into a Midnight `Offer.create` input. */
 export interface FixedRateOfferChainLeg {
   /** Spacing-aligned Midnight tick for this offer. */
   readonly tick: bigint;
@@ -20,7 +20,7 @@ export interface FixedRateOfferChainLeg {
   readonly expiryTimestamp: bigint;
 }
 
-/** Parameters for fixed-rate offer-chain builders. */
+/** Parameters shared by lend-only and borrow-only fixed-rate offer-chain builders. */
 export interface BuildFixedRateOfferChainParams {
   /** Target yearly fixed rate as a decimal number, for example `0.05` for 5%. */
   readonly targetRate: number;
@@ -62,6 +62,10 @@ export namespace OfferChainUtils {
   /**
    * Maximum fraction of the initial time-to-maturity covered by a fixed-rate offer chain.
    *
+   * Use this cap before displaying an expiry picker for a fixed-rate maker
+   * order. The last part of the maturity window is intentionally excluded
+   * because tiny time changes cause large displayed-rate drift.
+   *
    * @example
    * ```ts
    * import { OfferChainUtils } from "@morpho-org/midnight-sdk";
@@ -74,6 +78,11 @@ export namespace OfferChainUtils {
   /**
    * Builds borrow-side sell-offer legs that approximate one fixed maker rate over time.
    *
+   * Use before a make-borrow or supply-collateral-and-make-borrow flow when a
+   * borrower wants one displayed fixed borrow rate across a longer window. Map
+   * the returned legs to `Offer.create({ buy: false, ... })`, then group and
+   * submit them through the maker flow.
+   *
    * Borrow chains read their target rate at each leg's expiry edge. If a leg
    * would need to extend past `chainEndTimestamp`, it is dropped rather than
    * clamped so the expiry edge remains the recoverable target-rate edge.
@@ -83,7 +92,7 @@ export namespace OfferChainUtils {
    * @throws {InvalidOfferParameterError} when an input is invalid or the end timestamp exceeds the supported horizon.
    * @example
    * ```ts
-   * import { OfferChainUtils } from "@morpho-org/midnight-sdk";
+   * import { Offer, OfferChainUtils } from "@morpho-org/midnight-sdk";
    *
    * const legs = OfferChainUtils.buildBorrowFixedRateOfferChain({
    *   targetRate: 0.08,
@@ -92,7 +101,15 @@ export namespace OfferChainUtils {
    *   chainStartTimestamp: now,
    *   chainEndTimestamp: expiry,
    * });
-   * console.log(legs[0]?.expiryTimestamp);
+   * const offers = legs.map((leg) =>
+   *   Offer.create({
+   *     ...baseOffer,
+   *     buy: false,
+   *     tick: leg.tick,
+   *     start: leg.startTimestamp,
+   *     expiry: leg.expiryTimestamp,
+   *   }),
+   * );
    * ```
    */
   export function buildBorrowFixedRateOfferChain(
@@ -218,6 +235,11 @@ export namespace OfferChainUtils {
   /**
    * Builds lend-side buy-offer legs that approximate one fixed maker rate over time.
    *
+   * Use before a make-lend flow when a lender wants one displayed fixed lend
+   * rate across a longer window. Map the returned legs to
+   * `Offer.create({ buy: true, ... })`, then group and submit them through the
+   * maker flow.
+   *
    * Lend chains read their target rate at each leg's start edge. The first leg
    * may start before `chainStartTimestamp`; clamping that edge would move the
    * recoverable display rate below the maker's target.
@@ -227,7 +249,7 @@ export namespace OfferChainUtils {
    * @throws {InvalidOfferParameterError} when an input is invalid or the end timestamp exceeds the supported horizon.
    * @example
    * ```ts
-   * import { OfferChainUtils } from "@morpho-org/midnight-sdk";
+   * import { Offer, OfferChainUtils } from "@morpho-org/midnight-sdk";
    *
    * const legs = OfferChainUtils.buildLendFixedRateOfferChain({
    *   targetRate: 0.05,
@@ -236,7 +258,15 @@ export namespace OfferChainUtils {
    *   chainStartTimestamp: now,
    *   chainEndTimestamp: expiry,
    * });
-   * console.log(legs[0]?.startTimestamp);
+   * const offers = legs.map((leg) =>
+   *   Offer.create({
+   *     ...baseOffer,
+   *     buy: true,
+   *     tick: leg.tick,
+   *     start: leg.startTimestamp,
+   *     expiry: leg.expiryTimestamp,
+   *   }),
+   * );
    * ```
    */
   export function buildLendFixedRateOfferChain(
@@ -387,6 +417,8 @@ export namespace OfferChainUtils {
    * Chains intentionally stop before the final part of the maturity window
    * because rate sensitivity accelerates near maturity and would require too
    * many short-lived offers for a stable maker quote.
+   * Call this when constraining a make-offer expiry selector, then pass the
+   * selected timestamp to the lend-only or borrow-only chain builder.
    *
    * @param params - Maturity and chain-start timestamps.
    * @returns Latest accepted chain end timestamp.

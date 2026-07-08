@@ -19,7 +19,14 @@ export interface GetSetterRatifierRatifyRootRequirementParams {
 /**
  * Resolves the SetterRatifier root approval transaction for a maker offer tree.
  *
- * @param params - Root approval resolution parameters.
+ * Call after building a Setter-ratified tree and before encoding/submitting its
+ * payload. Entity make-offer flows call this from `getRequirements()` and omit
+ * the transaction when the maker has already approved the root.
+ *
+ * @param params.viemClient - Viem client used to read root approval state.
+ * @param params.chainId - Chain id expected by the viem client.
+ * @param params.maker - Maker whose root approval is checked.
+ * @param params.root - Offer-tree root that must be approved.
  * @returns Ratify-root transaction, or `null` when the root is already ratified.
  * @throws {ChainIdMismatchError} when the viem client is connected to another chain.
  * @example
@@ -32,7 +39,13 @@ export interface GetSetterRatifierRatifyRootRequirementParams {
  *   maker: user,
  *   root,
  * });
- * console.log(tx?.action.type);
+ * if (tx) {
+ *   await walletClient.sendTransaction({
+ *     to: tx.to,
+ *     data: tx.data,
+ *     value: tx.value,
+ *   });
+ * }
  * ```
  */
 export const getSetterRatifierRatifyRootRequirement = async (

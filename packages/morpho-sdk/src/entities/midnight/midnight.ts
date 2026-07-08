@@ -85,7 +85,32 @@ import type {
   TakeLendParams,
 } from "./types.js";
 
-/** Midnight entity methods exposed by `client.morpho.midnight(chainId)`. */
+/**
+ * Entity methods exposed by `client.morpho.midnight(chainId)`.
+ *
+ * Use this surface for app flows: fetch market or position data first when a
+ * method asks for it, call the flow method to receive lazy `getRequirements`
+ * and `buildTx` handles, collect requirements, then build the final
+ * transaction synchronously.
+ *
+ * @example
+ * ```ts
+ * import { maxUint256 } from "viem";
+ *
+ * const midnight = client.morpho.midnight(8453);
+ * const marketData = await midnight.getMarketData(marketId);
+ * const output = midnight.takeLend({
+ *   accountAddress: lender,
+ *   marketData,
+ *   assets: BigInt(quote.data.availableAssets),
+ *   minUnits: BigInt(quote.data.availableUnits),
+ *   takeableOffers: quote.data.takeableOffers,
+ *   deadline: maxUint256,
+ * });
+ * const requirements = await output.getRequirements();
+ * const tx = output.buildTx();
+ * ```
+ */
 export interface MidnightActions {
   getMarketData(
     marketId: Hex,
@@ -134,7 +159,29 @@ const validateMarketData = (market: Market, chainId: number) => {
   validateChainId(Number(market.chainId), chainId);
 };
 
-/** Entity facade for Midnight Midnight action flows. */
+/**
+ * Entity facade for Midnight fixed-rate action flows.
+ *
+ * `MorphoMidnight` keeps reads and transaction construction separated. Methods
+ * that need chain or API state fetch it up front, while returned `buildTx`
+ * callbacks are synchronous and only consume the data already passed in.
+ *
+ * @example
+ * ```ts
+ * const midnight = client.morpho.midnight(8453);
+ * const marketData = await midnight.getMarketData(marketId);
+ * const positionData = await midnight.getPositionData({
+ *   marketId,
+ *   accountAddress: user,
+ * });
+ * const { buildTx } = midnight.redeem({
+ *   accountAddress: user,
+ *   marketData,
+ *   positionData,
+ * });
+ * const tx = buildTx();
+ * ```
+ */
 export class MorphoMidnight implements MidnightActions {
   constructor(
     private readonly client: MorphoClientType,
