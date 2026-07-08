@@ -20,10 +20,8 @@ export interface FixedRateOfferChainLeg {
   readonly expiryTimestamp: bigint;
 }
 
-/** Parameters for {@link OfferChainUtils.buildFixedRateOfferChain}. */
+/** Parameters for fixed-rate offer-chain builders. */
 export interface BuildFixedRateOfferChainParams {
-  /** Maker side: `"lend"` for buy offers, `"borrow"` for sell offers. */
-  readonly side: "borrow" | "lend";
   /** Target yearly fixed rate as a decimal number, for example `0.05` for 5%. */
   readonly targetRate: number;
   /** Tick spacing enforced by the market. */
@@ -36,21 +34,21 @@ export interface BuildFixedRateOfferChainParams {
   readonly chainEndTimestamp: BigIntish;
 }
 
-/** Parameters for side-specific fixed-rate offer-chain builders. */
-export type BuildFixedRateOfferChainSideParams = Omit<
-  BuildFixedRateOfferChainParams,
-  "side"
->;
-
 /**
  * Utilities for building time-bounded Midnight offer chains.
+ *
+ * A Midnight offer has one fixed price, so its displayed yearly rate changes
+ * as maturity approaches. The markets app uses these helpers when a maker wants
+ * to post, for example, a 5% order for several months: the app builds several
+ * adjacent offers sharing the same reserve, each with a different tick and time
+ * window, so the order reviews and renders as a stable 5% order across the
+ * selected window instead of drifting upward as time passes.
  *
  * @example
  * ```ts
  * import { OfferChainUtils } from "@morpho-org/midnight-sdk";
  *
- * const legs = OfferChainUtils.buildFixedRateOfferChain({
- *   side: "lend",
+ * const legs = OfferChainUtils.buildLendFixedRateOfferChain({
  *   targetRate: 0.05,
  *   tickSpacing: 4n,
  *   maturityTimestamp: 1_798_761_600n,
@@ -72,66 +70,6 @@ export namespace OfferChainUtils {
    * ```
    */
   export const MAX_EXPIRY_TTM_FRACTION = 0.75;
-
-  /**
-   * Builds offer legs that approximate one fixed maker rate over time.
-   *
-   * A Midnight offer has one fixed price, so its displayed yearly rate changes
-   * as maturity approaches. The markets app uses this helper when a maker wants
-   * to post, for example, a 5% lend order for several months: the app builds
-   * several adjacent offers sharing the same reserve, each with a different
-   * tick and time window, so the order reviews and renders as a stable 5% order
-   * across the selected window instead of drifting upward as time passes.
-   *
-   * The returned legs are contiguous, use increasing spacing-aligned ticks, and
-   * stay on the maker-favorable side of `targetRate` within each leg: borrow
-   * chains stay at or below the target, while lend chains stay at or above it.
-   * Returns `[]` when the requested rate/window cannot be represented on the
-   * tick grid.
-   *
-   * @param params - Fixed-rate offer-chain parameters.
-   * @returns Offer legs that can be mapped to `Offer.create` inputs.
-   * @throws {InvalidOfferParameterError} when an input is invalid or the end timestamp exceeds the supported horizon.
-   * @example
-   * ```ts
-   * import { Offer, OfferChainUtils } from "@morpho-org/midnight-sdk";
-   *
-   * const legs = OfferChainUtils.buildFixedRateOfferChain({
-   *   side: "lend",
-   *   targetRate: 0.05,
-   *   tickSpacing: market.tickSpacing,
-   *   maturityTimestamp: market.params.maturity,
-   *   chainStartTimestamp: now,
-   *   chainEndTimestamp: expiry,
-   * });
-   *
-   * const offers = legs.map((leg) =>
-   *   Offer.create({
-   *     market: market.params,
-   *     buy: true,
-   *     maker,
-   *     tick: leg.tick,
-   *     start: leg.startTimestamp,
-   *     expiry: leg.expiryTimestamp,
-   *     ratifier,
-   *     maxAssets: loanAssets,
-   *   }),
-   * );
-   * ```
-   */
-  export function buildFixedRateOfferChain(
-    params: BuildFixedRateOfferChainParams,
-  ): readonly FixedRateOfferChainLeg[] {
-    const { side, ...chainParams } = params;
-    if (side === "borrow") return buildBorrowFixedRateOfferChain(chainParams);
-    if (side === "lend") return buildLendFixedRateOfferChain(chainParams);
-
-    throw new InvalidOfferParameterError({
-      parameter: "side",
-      value: side,
-      instruction: 'Use "borrow" or "lend".',
-    });
-  }
 
   /**
    * Builds borrow-side sell-offer legs that approximate one fixed maker rate over time.
@@ -158,7 +96,7 @@ export namespace OfferChainUtils {
    * ```
    */
   export function buildBorrowFixedRateOfferChain(
-    params: BuildFixedRateOfferChainSideParams,
+    params: BuildFixedRateOfferChainParams,
   ): readonly FixedRateOfferChainLeg[] {
     if (!Number.isFinite(params.targetRate)) {
       throw new InvalidOfferParameterError({
@@ -302,7 +240,7 @@ export namespace OfferChainUtils {
    * ```
    */
   export function buildLendFixedRateOfferChain(
-    params: BuildFixedRateOfferChainSideParams,
+    params: BuildFixedRateOfferChainParams,
   ): readonly FixedRateOfferChainLeg[] {
     if (!Number.isFinite(params.targetRate)) {
       throw new InvalidOfferParameterError({
