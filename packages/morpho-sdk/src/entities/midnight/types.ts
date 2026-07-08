@@ -8,13 +8,14 @@ import type {
   TreeMempoolValidateParams,
 } from "@morpho-org/midnight-sdk";
 import type { Address, Hex } from "viem";
-import type { MidnightTakeableOffer } from "../../actions/midnight/types.js";
 import type {
-  ActionRequirement,
-  BaseAction,
+  MidnightCollateralWithdrawal,
+  MidnightTakeableOffer,
+} from "../../actions/midnight/types.js";
+import type {
+  ActionOutput,
+  AnyRequirementSignature,
   MempoolSubmitOffersAction,
-  MidnightOfferRootSignature,
-  Transaction,
 } from "../../types/action.js";
 
 /** Optional Midnight API validation controls for make-offer flows. */
@@ -63,28 +64,25 @@ export interface SupplyCollateralMakeBorrowParams extends MakeOffersParams {
   readonly collateralIndex?: bigint;
 }
 
+/** Requirement-resolution options accepted by Midnight action outputs. */
+export interface MidnightRequirementsParams {
+  /**
+   * Prefer the ERC-2612 simple-permit path when the SDK detects support.
+   * Leave unset or set to `false` to force the Permit2/classic approval fallback when
+   * a token is known to be incompatible despite passing the SDK's shallow `nonces`
+   * compatibility probe.
+   */
+  readonly useSimplePermit?: boolean;
+}
+
 /** Signatures accepted by Midnight action-output transaction builders. */
 export type MidnightActionSignatures =
-  | MidnightOfferRootSignature
-  | readonly MidnightOfferRootSignature[];
-
-/** Lazy Midnight entity result with synchronous transaction building. */
-export interface MidnightActionOutput<
-  TAction extends BaseAction,
-  TSignatures = undefined,
-> {
-  readonly buildTx: (
-    signatures?: TSignatures,
-  ) => Readonly<Transaction<TAction>>;
-  readonly getRequirements: () => Promise<readonly ActionRequirement[]>;
-}
+  | AnyRequirementSignature
+  | readonly AnyRequirementSignature[];
 
 /** Output returned by maker-offer flows. */
 export interface MakeOffersOutput
-  extends MidnightActionOutput<
-    MempoolSubmitOffersAction,
-    MidnightActionSignatures
-  > {
+  extends ActionOutput<MempoolSubmitOffersAction, MidnightActionSignatures> {
   readonly groups: readonly Hex[];
   readonly root: Hex;
   readonly ratifierType: "ecrecover" | "setter";
@@ -101,6 +99,12 @@ export interface TakeLendParams extends MarketActionParams {
   readonly assets: bigint;
   readonly minUnits: bigint;
   readonly takeableOffers: readonly MidnightTakeableOffer[];
+  readonly reduceOnly?: boolean;
+  readonly collateralWithdrawals?: readonly MidnightCollateralWithdrawal[];
+  readonly collateralReceiver?: Address;
+  readonly referralFeePct?: bigint;
+  readonly referralFeeRecipient?: Address;
+  readonly maxContinuousFee?: bigint;
   /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
   readonly deadline: bigint;
 }
@@ -110,6 +114,11 @@ export interface TakeBorrowParams extends MarketActionParams {
   readonly loanAssets: bigint;
   readonly maxUnits: bigint;
   readonly takeableOffers: readonly MidnightTakeableOffer[];
+  readonly reduceOnly?: boolean;
+  readonly receiver?: Address;
+  readonly referralFeePct?: bigint;
+  readonly referralFeeRecipient?: Address;
+  readonly maxContinuousFee?: bigint;
   /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
   readonly deadline: bigint;
 }
@@ -140,6 +149,11 @@ export interface RepayWithdrawCollateralParams extends MarketActionParams {
   readonly repayAssets: bigint;
   readonly withdrawCollateralAssets: bigint;
   readonly collateralIndex?: bigint;
+  readonly receiver?: Address;
+  readonly collateralReceiver?: Address;
+  readonly collateralWithdrawals?: readonly MidnightCollateralWithdrawal[];
+  readonly referralFeePct?: bigint;
+  readonly referralFeeRecipient?: Address;
   /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
   readonly deadline: bigint;
 }

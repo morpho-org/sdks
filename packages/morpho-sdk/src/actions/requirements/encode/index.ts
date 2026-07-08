@@ -2,3 +2,4 @@ export * from "./encodeBlueSignatureAuthorization.js";
 export * from "./encodeErc20Approval.js";
 export * from "./encodeErc20Permit.js";
 export * from "./encodeErc20Permit2Approve.js";
+export * from "./encodeErc20Permit2Transfer.js";
