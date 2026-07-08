@@ -11,11 +11,15 @@ import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import {
   type Address,
   type Chain,
+  createWalletClient,
+  custom,
   erc20Abi,
+  type Hex,
   maxUint256,
   numberToHex,
   zeroAddress,
 } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -70,21 +74,26 @@ const buildSubmitOffersTx: BuildSubmitOffersTx = (params) =>
     }
   ).buildSubmitOffersTx(params);
 
-const offersData = (buy = true): OffersData => {
+const offersData = (
+  buy = true,
+  maker: Address = midnightAddresses.maker,
+): OffersData => {
   const offer = Offer.create(
     midnightBaseOffer({
       market: { ...midnightMarket, maturity: apiValidMaturity },
       buy,
+      maker,
       expiry: apiValidMaturity - 60n,
       maxAssets: 1_000n,
       maxUnits: 0n,
       ratifier: midnightAddresses.ecrecoverRatifier,
+      receiverIfMakerIsSeller: buy ? zeroAddress : maker,
     }),
   );
   const group = Group.create([offer]);
 
   return {
-    accountAddress: midnightAddresses.maker,
+    accountAddress: maker,
     groups: [group.id],
     tree: Tree.create([group]),
     ratifierType: "ecrecover",
@@ -589,6 +598,109 @@ describe("MorphoMidnight", () => {
         ratifier: midnightAddresses.ecrecoverRatifier,
         ratifierType: "ecrecover",
         offers: data.tree.offers.length,
+      });
+    });
+
+    test("behavior: signs reviewable offer tree typed data", async () => {
+      const account = privateKeyToAccount(
+        "0x0000000000000000000000000000000000000000000000000000000000000001",
+      );
+      let capturedOfferTreeTypedData:
+        | {
+            readonly primaryType?: string;
+            readonly types?: {
+              readonly OfferTree?: readonly {
+                readonly name: string;
+                readonly type: string;
+              }[];
+            };
+            readonly message?: {
+              readonly root?: Hex;
+              readonly offerTree?: {
+                readonly maker?: Address;
+                readonly ratifier?: Address;
+                readonly market?: { readonly loanToken?: Address };
+              };
+            };
+          }
+        | undefined;
+      const walletClient = createWalletClient({
+        account: account.address,
+        chain: midnightTestChain,
+        transport: custom({
+          request: async ({ method, params }) => {
+            if (
+              method !== "eth_signTypedData_v4" ||
+              !Array.isArray(params) ||
+              typeof params[1] !== "string"
+            ) {
+              throw new Error("Unexpected RPC request");
+            }
+            const typedData = JSON.parse(params[1]) as NonNullable<
+              typeof capturedOfferTreeTypedData
+            > &
+              Parameters<typeof account.signTypedData>[0];
+            capturedOfferTreeTypedData = typedData;
+
+            return account.signTypedData(typedData);
+          },
+        }),
+      });
+      const handle = createMockClient(midnightTestChain);
+      mockRead(handle, {
+        address: midnightAddresses.loanToken,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: maxUint256,
+      });
+      mockRead(handle, {
+        address: midnightAddresses.midnight,
+        abi: midnightAbi,
+        functionName: "isAuthorized",
+        result: true,
+      });
+
+      const data = offersData(true, account.address);
+      const output = await new MorphoMidnight(
+        {
+          viemClient: handle.client,
+          options: {},
+        } as unknown as MorphoClientType,
+        midnightChainId,
+      ).makeLend({
+        accountAddress: data.accountAddress,
+        offers: data.tree,
+        validation: offerValidation,
+        loanToken: midnightAddresses.loanToken,
+        loanAssets: 1_000n,
+      });
+      const requirements = await output.getRequirements();
+      const requirement = requirements.find(
+        ({ action }) => action.type === "midnightOfferRootSignature",
+      );
+      if (requirement == null || !("sign" in requirement)) {
+        throw new Error("Expected midnightOfferRootSignature requirement");
+      }
+
+      const signature = await requirement.sign(walletClient, account.address);
+      if (signature.action.type !== "midnightOfferRootSignature") {
+        throw new Error("Expected midnightOfferRootSignature result");
+      }
+      const message = capturedOfferTreeTypedData?.message;
+
+      expect(signature.action.args.root).toBe(data.tree.root);
+      expect(capturedOfferTreeTypedData?.primaryType).toBe("OfferTree");
+      expect(capturedOfferTreeTypedData?.types?.OfferTree?.[0]).toEqual({
+        name: "offerTree",
+        type: "Offer",
+      });
+      expect(message?.root).toBeUndefined();
+      expect(message?.offerTree).toMatchObject({
+        maker: account.address,
+        ratifier: data.ratifier,
+        market: {
+          loanToken: midnightAddresses.loanToken,
+        },
       });
     });
 
