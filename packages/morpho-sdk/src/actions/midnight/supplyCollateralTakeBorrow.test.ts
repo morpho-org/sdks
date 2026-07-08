@@ -15,6 +15,8 @@ import {
   EmptyMidnightTakeableOffersError,
   MidnightOfferSideMismatchError,
   MidnightTakeableOfferMarketMismatchError,
+  NegativeMidnightAmountError,
+  NonPositiveMidnightAmountError,
 } from "../../types/index.js";
 import { midnightSupplyCollateralTakeBorrow } from "./supplyCollateralTakeBorrow.js";
 
@@ -55,6 +57,65 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
     expect(decoded.args?.[3]).toBe(false);
     expect(decoded.args?.[7]).toBe(0n);
     expect(decoded.args?.[9]).toBe(maxUint256);
+  });
+
+  test("behavior: appends metadata", () => {
+    const tx = midnightSupplyCollateralTakeBorrow({
+      chainId: midnightChainId,
+      market: midnightMarket,
+      collateralAssets: 2_000n,
+      loanAssets: 1_000n,
+      maxUnits: 1_100n,
+      taker: midnightAddresses.taker,
+      takeableOffers: [midnightApiTake({ buy: true })],
+      deadline: maxUint256,
+      metadata: { origin: "a1b2c3d4" },
+    });
+
+    expect(tx.data.endsWith("a1b2c3d4")).toBe(true);
+  });
+
+  test("error: NonPositiveMidnightAmountError", () => {
+    const params = {
+      chainId: midnightChainId,
+      market: midnightMarket,
+      collateralAssets: 2_000n,
+      loanAssets: 1_000n,
+      maxUnits: 1_100n,
+      taker: midnightAddresses.taker,
+      takeableOffers: [midnightApiTake({ buy: true })],
+      deadline: maxUint256,
+    } as const;
+
+    expect(() =>
+      midnightSupplyCollateralTakeBorrow({
+        ...params,
+        collateralAssets: 0n,
+      }),
+    ).toThrow(NonPositiveMidnightAmountError);
+    expect(() =>
+      midnightSupplyCollateralTakeBorrow({ ...params, loanAssets: 0n }),
+    ).toThrow(NonPositiveMidnightAmountError);
+  });
+
+  test("error: NegativeMidnightAmountError", () => {
+    const params = {
+      chainId: midnightChainId,
+      market: midnightMarket,
+      collateralAssets: 2_000n,
+      loanAssets: 1_000n,
+      maxUnits: 1_100n,
+      taker: midnightAddresses.taker,
+      takeableOffers: [midnightApiTake({ buy: true })],
+      deadline: maxUint256,
+    } as const;
+
+    expect(() =>
+      midnightSupplyCollateralTakeBorrow({ ...params, maxUnits: -1n }),
+    ).toThrow(NegativeMidnightAmountError);
+    expect(() =>
+      midnightSupplyCollateralTakeBorrow({ ...params, deadline: -1n }),
+    ).toThrow(NegativeMidnightAmountError);
   });
 
   test("error: EmptyMidnightTakeableOffersError", () => {

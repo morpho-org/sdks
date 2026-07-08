@@ -148,6 +148,121 @@ describe("OfferChainUtils fixed-rate offer-chain builders", () => {
     ).toThrow(InvalidOfferParameterError);
   });
 
+  test.each([
+    ["borrow", OfferChainUtils.buildBorrowFixedRateOfferChain],
+    ["lend", OfferChainUtils.buildLendFixedRateOfferChain],
+  ] as const)("error: InvalidOfferParameterError for invalid %s inputs", (_, build) => {
+    expect(() =>
+      build({
+        ...defaultParams,
+        targetRate: Number.POSITIVE_INFINITY,
+      }),
+    ).toThrow(InvalidOfferParameterError);
+    expect(() =>
+      build({
+        ...defaultParams,
+        targetRate: 0,
+      }),
+    ).toThrow(InvalidOfferParameterError);
+    expect(() =>
+      build({
+        ...defaultParams,
+        tickSpacing: 0n,
+      }),
+    ).toThrow(InvalidOfferParameterError);
+    expect(() =>
+      build({
+        ...defaultParams,
+        maturityTimestamp: NOW,
+      }),
+    ).toThrow(InvalidOfferParameterError);
+    expect(() =>
+      build({
+        ...defaultParams,
+        chainEndTimestamp: MAX_EXPIRY + 1n,
+      }),
+    ).toThrow(InvalidOfferParameterError);
+    expect(() =>
+      build({
+        ...defaultParams,
+        chainEndTimestamp: NOW,
+      }),
+    ).toThrow(InvalidOfferParameterError);
+  });
+
+  test("behavior: returns an empty borrow chain when the rate maps outside the tick range", () => {
+    const maturityTimestamp = NOW + 10n * YEAR;
+    const chainEndTimestamp =
+      OfferChainUtils.getMaxFixedRateOfferChainEndTimestamp({
+        maturityTimestamp,
+        chainStartTimestamp: NOW,
+      });
+
+    expect(
+      OfferChainUtils.buildBorrowFixedRateOfferChain({
+        ...defaultParams,
+        targetRate: 1e308,
+        tickSpacing: 1n,
+        maturityTimestamp,
+        chainEndTimestamp,
+      }),
+    ).toEqual([]);
+  });
+
+  test("behavior: handles a borrow rate below floating-point precision", () => {
+    expect(
+      OfferChainUtils.buildBorrowFixedRateOfferChain({
+        ...defaultParams,
+        targetRate: Number.MIN_VALUE,
+        tickSpacing: 1n,
+      }),
+    ).toEqual([]);
+  });
+
+  test("behavior: returns an empty lend chain when the rate is below the tick grid", () => {
+    expect(
+      OfferChainUtils.buildLendFixedRateOfferChain({
+        ...defaultParams,
+        targetRate: Number.MIN_VALUE,
+        tickSpacing: 1n,
+      }),
+    ).toEqual([]);
+  });
+
+  test("behavior: handles a lend rate that maps to the lower tick boundary", () => {
+    const maturityTimestamp = NOW + 10n * YEAR;
+    const chainEndTimestamp =
+      OfferChainUtils.getMaxFixedRateOfferChainEndTimestamp({
+        maturityTimestamp,
+        chainStartTimestamp: NOW,
+      });
+
+    expect(
+      OfferChainUtils.buildLendFixedRateOfferChain({
+        ...defaultParams,
+        targetRate: 1e308,
+        tickSpacing: 1n,
+        maturityTimestamp,
+        chainEndTimestamp,
+      }),
+    ).toEqual([]);
+  });
+
+  test("error: InvalidOfferParameterError for unsafe integer inputs", () => {
+    expect(() =>
+      OfferChainUtils.getMaxFixedRateOfferChainEndTimestamp({
+        maturityTimestamp: "not-a-bigint",
+        chainStartTimestamp: NOW,
+      }),
+    ).toThrow(InvalidOfferParameterError);
+    expect(() =>
+      OfferChainUtils.getMaxFixedRateOfferChainEndTimestamp({
+        maturityTimestamp: BigInt(Number.MAX_SAFE_INTEGER) + 1n,
+        chainStartTimestamp: NOW,
+      }),
+    ).toThrow(InvalidOfferParameterError);
+  });
+
   test("behavior: property-based chain invariants", () => {
     fc.assert(
       fc.property(

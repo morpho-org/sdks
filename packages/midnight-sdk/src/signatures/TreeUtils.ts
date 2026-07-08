@@ -76,6 +76,7 @@ function assertLeafOffers(
     seen.add(leafHash);
   }
 
+  /* v8 ignore next: buildDescriptor rejects empty struct lists before padding; this protects direct internal misuse. */
   if (seen.size === 0) {
     throw new InvalidTreeError("Tree must not be empty.");
   }
@@ -716,6 +717,7 @@ export namespace TreeUtils {
     assertLeafOffers(offerStructs, leaves);
 
     const height = Math.log2(offerStructs.length);
+    /* v8 ignore next: exercising this branch would require allocating more than 2^20 offer structs. */
     if (height > 20) throw new InvalidTreeHeightError(height);
 
     let level = [...leaves];

@@ -21,21 +21,34 @@ describe("morphoViemExtension", () => {
     expect(typeof client.morpho.vaultV1).toBe("function");
     expect(typeof client.morpho.vaultV2).toBe("function");
     expect(typeof client.morpho.blue).toBe("function");
+    expect(typeof client.morpho.midnight).toBe("function");
   });
 
   test("behavior: factories return entities bound to the same client", () => {
     const client = publicClient().extend(morphoViemExtension());
 
+    const vaultV1 = client.morpho.vaultV1(
+      "0x0000000000000000000000000000000000000001",
+      mainnet.id,
+    );
     const vault = client.morpho.vaultV2(
       "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145",
       mainnet.id,
     );
+    const blue = client.morpho.blue(
+      new MarketParams(CbbtcUsdcBlue),
+      mainnet.id,
+    );
+    const midnight = client.morpho.midnight(mainnet.id);
 
+    expect(vaultV1.getData).toBeDefined();
     expect(vault).toBeDefined();
     expect(vault.getData).toBeDefined();
     expect(vault.deposit).toBeDefined();
     expect(vault.withdraw).toBeDefined();
     expect(vault.redeem).toBeDefined();
+    expect(blue.getMarketData).toBeDefined();
+    expect(midnight.getMarketData).toBeDefined();
   });
 
   test("behavior: options default supportSignature to false", () => {
