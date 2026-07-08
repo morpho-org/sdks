@@ -2,4 +2,4 @@
 "@morpho-org/midnight-sdk": minor
 ---
 
-Add Midnight mempool log decoding helpers and local ratifier-data verification utilities.
+Add local ratifier-data verification utilities for Ecrecover and Setter payload items.

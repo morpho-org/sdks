@@ -5,7 +5,6 @@ import {
   encodeAbiParameters,
   type Hex,
   hexToBytes,
-  toEventHash,
 } from "viem";
 import { MAX_COLLATERALS, MAX_OFFER_CAP, MAX_TICK } from "../constants.js";
 import { InvalidOfferParameterError, PayloadDecodeError } from "../errors.js";
@@ -94,43 +93,6 @@ export namespace Payload {
    */
   export const CURRENT_VERSION = 1;
 
-  /**
-   * Event signature emitted by the Midnight onchain mempool log contract.
-   *
-   * @example
-   * ```ts
-   * import { Payload } from "@morpho-org/midnight-sdk";
-   *
-   * console.log(Payload.MEMPOOL_EVENT_SIGNATURE);
-   * ```
-   */
-  export const MEMPOOL_EVENT_SIGNATURE = "Data(bytes)";
-
-  /**
-   * Topic hash for Midnight mempool `Data(bytes)` logs.
-   *
-   * @example
-   * ```ts
-   * import { Payload } from "@morpho-org/midnight-sdk";
-   *
-   * console.log(Payload.MEMPOOL_EVENT_TOPIC);
-   * ```
-   */
-  export const MEMPOOL_EVENT_TOPIC = toEventHash(MEMPOOL_EVENT_SIGNATURE);
-
-  /**
-   * Default item cap used by Midnight mempool payload consumers.
-   *
-   * @example
-   * ```ts
-   * import { Payload } from "@morpho-org/midnight-sdk";
-   *
-   * console.log(Payload.MAX_MEMPOOL_ITEMS);
-   * ```
-   */
-  export const MAX_MEMPOOL_ITEMS = 256;
-
-  const mempoolLogDataAbi = [{ type: "bytes" }] as const;
   const VERSION_PREFIX_BYTES = 1;
   const LENGTH_PREFIX_BYTES = 4;
   const HEADER_BYTES = VERSION_PREFIX_BYTES + LENGTH_PREFIX_BYTES;
@@ -289,64 +251,6 @@ export namespace Payload {
       ],
     },
   ] as const;
-
-  /**
-   * Decodes the `bytes payload` field from Midnight mempool `Data(bytes)` log data.
-   *
-   * Use this after filtering logs by `Payload.MEMPOOL_EVENT_TOPIC` and the chain's
-   * `midnightMempool` address. The returned payload can be passed to
-   * `Payload.decode` or `Payload.decodeMempoolLogItems`.
-   *
-   * @param data - ABI-encoded log `data` field from a `Data(bytes)` event.
-   * @returns Encoded Midnight mempool payload bytes.
-   * @throws {PayloadDecodeError} when the log data is not a single ABI-encoded bytes value.
-   * @example
-   * ```ts
-   * import { Payload } from "@morpho-org/midnight-sdk";
-   *
-   * const payload = Payload.decodeMempoolLogPayload(log.data);
-   * console.log(payload);
-   * ```
-   */
-  export function decodeMempoolLogPayload(data: Hex): Hex {
-    try {
-      const [payload] = decodeAbiParameters(mempoolLogDataAbi, data);
-      return payload;
-    } catch (cause) {
-      throw new PayloadDecodeError(
-        "mempool log data abi decode failed",
-        cause instanceof Error ? cause : undefined,
-      );
-    }
-  }
-
-  /**
-   * Decodes payload items from Midnight mempool `Data(bytes)` log data.
-   *
-   * The default item cap matches the indexer/API mempool policy. Pass
-   * `options.maxItems` only when intentionally applying a stricter or looser
-   * policy.
-   *
-   * @param data - ABI-encoded log `data` field from a `Data(bytes)` event.
-   * @param options - Optional payload decode bounds.
-   * @returns Decoded payload items.
-   * @throws {PayloadDecodeError} when the log data or payload is malformed.
-   * @example
-   * ```ts
-   * import { Payload } from "@morpho-org/midnight-sdk";
-   *
-   * const items = await Payload.decodeMempoolLogItems(log.data);
-   * console.log(items.length);
-   * ```
-   */
-  export function decodeMempoolLogItems(
-    data: Hex,
-    options?: DecodeOptions,
-  ): Promise<Item[]> {
-    return decode(decodeMempoolLogPayload(data), {
-      maxItems: options?.maxItems ?? MAX_MEMPOOL_ITEMS,
-    });
-  }
 
   /**
    * ABI-encode `items` as `(Offer, bytes ratifierData)[]` and gzip the result,

@@ -477,38 +477,6 @@ describe("Payload.decode", () => {
   });
 });
 
-describe("Payload.decodeMempoolLogItems", () => {
-  test("behavior: decodes Data(bytes) log data with the mempool item cap", async () => {
-    const payload = await Payload.encode([
-      { offer: apiValidOffer({ group }), ratifierData: "0x1234" as Hex },
-    ]);
-    const logData = encodeAbiParameters([{ type: "bytes" }], [payload]);
-
-    expect(Payload.MEMPOOL_EVENT_TOPIC).toBe(
-      "0x0b76c48be4e2908f4c9d4eabaf7538e91577fd9ae26db46693fa8d861c6a42fb",
-    );
-    expect(Payload.decodeMempoolLogPayload(logData)).toBe(payload);
-    await expect(Payload.decodeMempoolLogItems(logData)).resolves.toHaveLength(
-      1,
-    );
-  });
-
-  test("error: default mempool item cap", async () => {
-    const item = {
-      offer: apiValidOffer({ group }),
-      ratifierData: "0x1234" as Hex,
-    };
-    const payload = await Payload.encode(
-      Array.from({ length: Payload.MAX_MEMPOOL_ITEMS + 1 }, () => item),
-    );
-    const logData = encodeAbiParameters([{ type: "bytes" }], [payload]);
-
-    await expect(Payload.decodeMempoolLogItems(logData)).rejects.toBeInstanceOf(
-      PayloadDecodeError,
-    );
-  });
-});
-
 describe("Payload size limits", () => {
   test("default", () => {
     expect(Payload.MAX_PAYLOAD_BYTES).toBe(1_000_000);
