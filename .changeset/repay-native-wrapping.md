@@ -1,5 +1,5 @@
 ---
-"@morpho-org/morpho-sdk": major
+"@morpho-org/morpho-sdk": minor
 "@morpho-org/wdk-protocol-lending-morpho-evm": patch
 "@morpho-org/liquidity-sdk-viem": patch
 ---
