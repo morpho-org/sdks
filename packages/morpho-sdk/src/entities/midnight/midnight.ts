@@ -706,10 +706,6 @@ export class MorphoMidnight implements MidnightActions {
         `collateralWithdrawals[${index}].collateralIndex`,
         withdrawal.collateralIndex,
       );
-      assertNonNegativeAmount(
-        `collateralWithdrawals[${index}].assets`,
-        withdrawal.assets,
-      );
     }
     if (
       params.repayAssets === 0n &&

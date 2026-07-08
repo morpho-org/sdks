@@ -77,4 +77,25 @@ describe("getMidnightApprovalRequirements", () => {
     );
     expect(requirements[0]?.action.args.amount).toBe(1_000n);
   });
+
+  test("returns no approval when allowance already covers the amount", async () => {
+    const handle = createMockClient(midnightTestChain);
+    mockRead(handle, {
+      address: midnightAddresses.loanToken,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 1_000n,
+    });
+
+    await expect(
+      getMidnightApprovalRequirements({
+        viemClient: handle.client,
+        chainId: midnightChainId,
+        token: midnightAddresses.loanToken,
+        owner: midnightAddresses.taker,
+        spender: midnightAddresses.midnightBundles,
+        amount: 1_000n,
+      }),
+    ).resolves.toEqual([]);
+  });
 });

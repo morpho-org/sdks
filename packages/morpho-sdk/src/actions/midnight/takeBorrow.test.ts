@@ -12,6 +12,8 @@ import {
   EmptyMidnightTakeableOffersError,
   MidnightOfferSideMismatchError,
   MidnightTakeableOfferMarketMismatchError,
+  NegativeMidnightAmountError,
+  NonPositiveMidnightAmountError,
 } from "../../types/index.js";
 import { midnightTakeBorrow } from "./takeBorrow.js";
 
@@ -40,6 +42,54 @@ describe("midnightTakeBorrow", () => {
     expect(decoded.args[0]).toBe(1_000n);
     expect(decoded.args[1]).toBe(1_100n);
     expect(decoded.args?.[5]).toEqual([]);
+  });
+
+  test("behavior: appends metadata", () => {
+    const tx = midnightTakeBorrow({
+      chainId: midnightChainId,
+      market: midnightMarket,
+      loanAssets: 1_000n,
+      maxUnits: 1_100n,
+      taker: midnightAddresses.taker,
+      takeableOffers: [midnightApiTake({ buy: true })],
+      deadline: maxUint256,
+      metadata: { origin: "a1b2c3d4" },
+    });
+
+    expect(tx.data.endsWith("a1b2c3d4")).toBe(true);
+  });
+
+  test("error: NonPositiveMidnightAmountError", () => {
+    expect(() =>
+      midnightTakeBorrow({
+        chainId: midnightChainId,
+        market: midnightMarket,
+        loanAssets: 0n,
+        maxUnits: 1_100n,
+        taker: midnightAddresses.taker,
+        takeableOffers: [midnightApiTake({ buy: true })],
+        deadline: maxUint256,
+      }),
+    ).toThrow(NonPositiveMidnightAmountError);
+  });
+
+  test("error: NegativeMidnightAmountError", () => {
+    const params = {
+      chainId: midnightChainId,
+      market: midnightMarket,
+      loanAssets: 1_000n,
+      maxUnits: 1_100n,
+      taker: midnightAddresses.taker,
+      takeableOffers: [midnightApiTake({ buy: true })],
+      deadline: maxUint256,
+    } as const;
+
+    expect(() => midnightTakeBorrow({ ...params, maxUnits: -1n })).toThrow(
+      NegativeMidnightAmountError,
+    );
+    expect(() => midnightTakeBorrow({ ...params, deadline: -1n })).toThrow(
+      NegativeMidnightAmountError,
+    );
   });
 
   test("error: EmptyMidnightTakeableOffersError", () => {

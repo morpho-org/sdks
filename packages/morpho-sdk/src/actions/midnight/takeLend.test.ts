@@ -13,6 +13,8 @@ import {
   EmptyMidnightTakeableOffersError,
   MidnightOfferSideMismatchError,
   MidnightTakeableOfferMarketMismatchError,
+  NegativeMidnightAmountError,
+  NonPositiveMidnightAmountError,
 } from "../../types/index.js";
 import { midnightTakeLend } from "./takeLend.js";
 
@@ -54,6 +56,54 @@ describe("midnightTakeLend", () => {
     expect(decoded.args?.[6]).toEqual([]);
     expect(decoded.args?.[8]).toBe(0n);
     expect(decoded.args?.[10]).toBe(maxUint256);
+  });
+
+  test("behavior: appends metadata", () => {
+    const tx = midnightTakeLend({
+      chainId: midnightChainId,
+      market: midnightMarket,
+      assets: 1_000n,
+      minUnits: 900n,
+      taker: midnightAddresses.taker,
+      takeableOffers: [midnightApiTake()],
+      deadline: maxUint256,
+      metadata: { origin: "a1b2c3d4" },
+    });
+
+    expect(tx.data.endsWith("a1b2c3d4")).toBe(true);
+  });
+
+  test("error: NonPositiveMidnightAmountError", () => {
+    expect(() =>
+      midnightTakeLend({
+        chainId: midnightChainId,
+        market: midnightMarket,
+        assets: 0n,
+        minUnits: 900n,
+        taker: midnightAddresses.taker,
+        takeableOffers: [midnightApiTake()],
+        deadline: maxUint256,
+      }),
+    ).toThrow(NonPositiveMidnightAmountError);
+  });
+
+  test("error: NegativeMidnightAmountError", () => {
+    const params = {
+      chainId: midnightChainId,
+      market: midnightMarket,
+      assets: 1_000n,
+      minUnits: 900n,
+      taker: midnightAddresses.taker,
+      takeableOffers: [midnightApiTake()],
+      deadline: maxUint256,
+    } as const;
+
+    expect(() => midnightTakeLend({ ...params, minUnits: -1n })).toThrow(
+      NegativeMidnightAmountError,
+    );
+    expect(() => midnightTakeLend({ ...params, deadline: -1n })).toThrow(
+      NegativeMidnightAmountError,
+    );
   });
 
   test("error: EmptyMidnightTakeableOffersError", () => {

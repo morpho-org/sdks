@@ -5,9 +5,14 @@ import {
   MarketUtils,
   midnightAbi,
   Offer,
+  setterRatifierAbi,
   Tree,
 } from "@morpho-org/midnight-sdk";
-import { createMockClient, mockRead } from "@morpho-org/test/mock";
+import {
+  createMockClient,
+  type MockClientHandle,
+  mockRead,
+} from "@morpho-org/test/mock";
 import {
   type Address,
   type Chain,
@@ -38,17 +43,25 @@ import type {
 import type { MorphoClientType } from "../../types/client.js";
 import {
   AmbiguousRequirementSignaturesError,
+  ChainIdMismatchError,
+  InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
   MidnightOfferMarketAddressMismatchError,
   MidnightOfferMarketChainMismatchError,
   MidnightOfferMarketLoanTokenMismatchError,
+  MidnightOfferRootMismatchError,
   MidnightOfferRootOfferCountMismatchError,
   MidnightOfferRootOwnerMismatchError,
   MidnightOfferRootRatifierMismatchError,
   MidnightOfferSideMismatchError,
   MidnightRedeemExceedsCreditError,
   MissingAccrualPositionError,
+  MissingMidnightOfferRootSignatureError,
+  NegativeMidnightAmountError,
+  NoMidnightCreditToRedeemError,
+  NonPositiveMidnightAmountError,
   UnexpectedRequirementSignatureError,
+  UnknownMidnightRatifierError,
 } from "../../types/error.js";
 import { MorphoMidnight } from "./midnight.js";
 import type { MidnightActionSignatures, OffersData } from "./types.js";
@@ -134,11 +147,11 @@ const multiGroupOffersData = (): OffersData => {
   };
 };
 
-const setterOffersData = (): OffersData => {
+const setterOffersData = (buy = true): OffersData => {
   const offer = Offer.create(
     midnightBaseOffer({
       market: { ...midnightMarket, maturity: apiValidMaturity },
-      buy: true,
+      buy,
       expiry: apiValidMaturity - 60n,
       maxAssets: 1_000n,
       maxUnits: 0n,
@@ -252,6 +265,117 @@ const positionData = (
   );
 
 const midnight = () => new MorphoMidnight(client, midnightChainId);
+type MidnightMockHandle = MockClientHandle<typeof midnightTestChain>;
+
+const midnightWithHandle = (
+  handle: MidnightMockHandle,
+  options: MorphoClientType["options"] = { supportSignature: false },
+) =>
+  new MorphoMidnight(
+    {
+      viemClient: handle.client,
+      options,
+    } as unknown as MorphoClientType,
+    midnightChainId,
+  );
+
+const mockAllowance = (params: {
+  readonly handle: MidnightMockHandle;
+  readonly token: Address;
+  readonly result: bigint;
+}) => {
+  mockRead(params.handle, {
+    address: params.token,
+    abi: erc20Abi,
+    functionName: "allowance",
+    result: params.result,
+  });
+};
+
+const mockMidnightAuthorization = (
+  handle: MidnightMockHandle,
+  result: boolean,
+) => {
+  mockRead(handle, {
+    address: midnightAddresses.midnight,
+    abi: midnightAbi,
+    functionName: "isAuthorized",
+    result,
+  });
+};
+
+const mockSetterRootRatification = (
+  handle: MidnightMockHandle,
+  result: boolean,
+) => {
+  mockRead(handle, {
+    address: midnightAddresses.setterRatifier,
+    abi: setterRatifierAbi,
+    functionName: "isRootRatified",
+    result,
+  });
+};
+
+const mockMarketReads = (handle: MidnightMockHandle) => {
+  mockRead(handle, {
+    address: midnightAddresses.midnight,
+    abi: midnightAbi,
+    functionName: "toMarket",
+    result: MarketUtils.toStruct(midnightMarket),
+  });
+  mockRead(handle, {
+    address: midnightAddresses.midnight,
+    abi: midnightAbi,
+    functionName: "marketState",
+    result: [1_000n, 0n, 1_000n, 0n, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+  });
+};
+
+const mockPositionReads = (handle: MidnightMockHandle) => {
+  mockRead(handle, {
+    address: midnightAddresses.midnight,
+    abi: midnightAbi,
+    functionName: "position",
+    result: [1_000n, 0n, 0n, 1_000n, 0n, 0n],
+  });
+  mockRead(handle, {
+    address: midnightAddresses.midnight,
+    abi: midnightAbi,
+    functionName: "collateral",
+    result: 0n,
+  });
+  mockMarketReads(handle);
+};
+
+const mockBlockAndReads = (
+  handle: MidnightMockHandle,
+  block: { readonly number: bigint | null; readonly timestamp: bigint },
+) => {
+  handle.request.mockImplementation(async ({ method, params }) => {
+    if (method === "eth_chainId") return numberToHex(midnightChainId);
+    if (method === "eth_getBlockByNumber") {
+      return {
+        number: block.number == null ? null : numberToHex(block.number),
+        timestamp: numberToHex(block.timestamp),
+        transactions: [],
+      };
+    }
+    if (method === "eth_call") {
+      const [tx] = (params ?? []) as [
+        { readonly to?: Address; readonly data?: `0x${string}` },
+      ];
+      if (typeof tx?.to === "string" && typeof tx.data === "string") {
+        const encoded = handle.dispatch.get(
+          `${tx.to.toLowerCase()}|${tx.data.slice(0, 10).toLowerCase()}`,
+        );
+        if (encoded != null) return encoded;
+      }
+    }
+
+    throw new Error(`unhandled RPC ${method} ${JSON.stringify(params)}`);
+  });
+  mockPositionReads(handle);
+};
 
 describe("MorphoMidnight", () => {
   describe("takeLend", () => {
@@ -288,9 +412,124 @@ describe("MorphoMidnight", () => {
 
       expect(() => output.buildTx()).toThrow(MidnightOfferSideMismatchError);
     });
+
+    test("behavior: requirements include loan approval and bundle authorization", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockAllowance({
+        handle,
+        token: midnightAddresses.loanToken,
+        result: 0n,
+      });
+      mockMidnightAuthorization(handle, false);
+
+      const output = midnightWithHandle(handle).takeLend({
+        marketData: marketData(),
+        accountAddress: midnightAddresses.taker,
+        assets: 1_000n,
+        minUnits: 900n,
+        takeableOffers: [midnightApiTake()],
+        deadline: maxUint256,
+      });
+      const requirements = await output.getRequirements();
+
+      expect(
+        requirements.map((requirement) => requirement.action.type),
+      ).toEqual(["erc20Approval", "midnightAuthorization"]);
+    });
+
+    test("behavior: returns no requirements when approval and authorization are satisfied", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockAllowance({
+        handle,
+        token: midnightAddresses.loanToken,
+        result: maxUint256,
+      });
+      mockMidnightAuthorization(handle, true);
+
+      const output = midnightWithHandle(handle).takeLend({
+        marketData: marketData(),
+        accountAddress: midnightAddresses.taker,
+        assets: 1_000n,
+        minUnits: 900n,
+        takeableOffers: [midnightApiTake()],
+        deadline: maxUint256,
+      });
+
+      await expect(output.getRequirements()).resolves.toEqual([]);
+    });
+
+    test("error: amount validation", () => {
+      expect(() =>
+        midnight().takeLend({
+          marketData: marketData(),
+          accountAddress: midnightAddresses.taker,
+          assets: 0n,
+          minUnits: 900n,
+          takeableOffers: [midnightApiTake()],
+          deadline: maxUint256,
+        }),
+      ).toThrow(NonPositiveMidnightAmountError);
+      expect(() =>
+        midnight().takeLend({
+          marketData: marketData(),
+          accountAddress: midnightAddresses.taker,
+          assets: 1_000n,
+          minUnits: -1n,
+          takeableOffers: [midnightApiTake()],
+          deadline: maxUint256,
+        }),
+      ).toThrow(NegativeMidnightAmountError);
+      expect(() =>
+        midnight().takeLend({
+          marketData: marketData(),
+          accountAddress: midnightAddresses.taker,
+          assets: 1_000n,
+          minUnits: 900n,
+          takeableOffers: [midnightApiTake()],
+          deadline: -1n,
+        }),
+      ).toThrow(NegativeMidnightAmountError);
+    });
   });
 
   describe("takeBorrow", () => {
+    test("default", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockMidnightAuthorization(handle, false);
+
+      const output = midnightWithHandle(handle).takeBorrow({
+        marketData: marketData(),
+        accountAddress: midnightAddresses.taker,
+        loanAssets: 1_000n,
+        maxUnits: 900n,
+        takeableOffers: [midnightApiTake({ buy: true })],
+        deadline: maxUint256,
+      });
+      const requirements = await output.getRequirements();
+      const tx = output.buildTx();
+
+      expect(tx.action.args.loanAssets).toBe(1_000n);
+      expect(
+        requirements.map((requirement) => requirement.action.type),
+      ).toEqual(["midnightAuthorization"]);
+    });
+
+    test("behavior: returns no requirements when authorization is satisfied", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockMidnightAuthorization(handle, true);
+
+      const output = midnightWithHandle(handle).takeBorrow({
+        marketData: marketData(),
+        accountAddress: midnightAddresses.taker,
+        loanAssets: 1_000n,
+        maxUnits: 900n,
+        takeableOffers: [midnightApiTake({ buy: true })],
+        deadline: maxUint256,
+      });
+
+      await expect(output.getRequirements()).resolves.toEqual([]);
+    });
+
     test("error: MidnightOfferSideMismatchError", () => {
       const output = midnight().takeBorrow({
         marketData: marketData(),
@@ -302,6 +541,186 @@ describe("MorphoMidnight", () => {
       });
 
       expect(() => output.buildTx()).toThrow(MidnightOfferSideMismatchError);
+    });
+
+    test("error: amount validation", () => {
+      expect(() =>
+        midnight().takeBorrow({
+          marketData: marketData(),
+          accountAddress: midnightAddresses.taker,
+          loanAssets: 0n,
+          maxUnits: 900n,
+          takeableOffers: [midnightApiTake({ buy: true })],
+          deadline: maxUint256,
+        }),
+      ).toThrow(NonPositiveMidnightAmountError);
+      expect(() =>
+        midnight().takeBorrow({
+          marketData: marketData(),
+          accountAddress: midnightAddresses.taker,
+          loanAssets: 1_000n,
+          maxUnits: -1n,
+          takeableOffers: [midnightApiTake({ buy: true })],
+          deadline: maxUint256,
+        }),
+      ).toThrow(NegativeMidnightAmountError);
+      expect(() =>
+        midnight().takeBorrow({
+          marketData: marketData(),
+          accountAddress: midnightAddresses.taker,
+          loanAssets: 1_000n,
+          maxUnits: 900n,
+          takeableOffers: [midnightApiTake({ buy: true })],
+          deadline: -1n,
+        }),
+      ).toThrow(NegativeMidnightAmountError);
+    });
+  });
+
+  describe("supplyCollateralTakeBorrow", () => {
+    test("default", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockAllowance({
+        handle,
+        token: midnightAddresses.collateralToken,
+        result: 0n,
+      });
+      mockMidnightAuthorization(handle, false);
+
+      const output = midnightWithHandle(handle).supplyCollateralTakeBorrow({
+        marketData: marketData(),
+        accountAddress: midnightAddresses.taker,
+        collateralAssets: 2_000n,
+        loanAssets: 1_000n,
+        maxUnits: 900n,
+        takeableOffers: [midnightApiTake({ buy: true })],
+        deadline: maxUint256,
+      });
+      const requirements = await output.getRequirements();
+      const tx = output.buildTx();
+
+      expect(tx.action.args).toMatchObject({
+        collateralAssets: 2_000n,
+        loanAssets: 1_000n,
+      });
+      expect(
+        requirements.map((requirement) => requirement.action.type),
+      ).toEqual(["erc20Approval", "midnightAuthorization"]);
+    });
+
+    test("behavior: returns no requirements when approval and authorization are satisfied", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockAllowance({
+        handle,
+        token: midnightAddresses.collateralToken,
+        result: maxUint256,
+      });
+      mockMidnightAuthorization(handle, true);
+
+      const output = midnightWithHandle(handle).supplyCollateralTakeBorrow({
+        marketData: marketData(),
+        accountAddress: midnightAddresses.taker,
+        collateralAssets: 2_000n,
+        loanAssets: 1_000n,
+        maxUnits: 900n,
+        takeableOffers: [midnightApiTake({ buy: true })],
+        deadline: maxUint256,
+      });
+
+      await expect(output.getRequirements()).resolves.toEqual([]);
+    });
+
+    test("error: amount validation", () => {
+      const params = {
+        marketData: marketData(),
+        accountAddress: midnightAddresses.taker,
+        collateralAssets: 2_000n,
+        loanAssets: 1_000n,
+        maxUnits: 900n,
+        takeableOffers: [midnightApiTake({ buy: true })],
+        deadline: maxUint256,
+      } as const;
+
+      expect(() =>
+        midnight().supplyCollateralTakeBorrow({
+          ...params,
+          collateralAssets: 0n,
+        }),
+      ).toThrow(NonPositiveMidnightAmountError);
+      expect(() =>
+        midnight().supplyCollateralTakeBorrow({ ...params, loanAssets: 0n }),
+      ).toThrow(NonPositiveMidnightAmountError);
+      expect(() =>
+        midnight().supplyCollateralTakeBorrow({ ...params, maxUnits: -1n }),
+      ).toThrow(NegativeMidnightAmountError);
+      expect(() =>
+        midnight().supplyCollateralTakeBorrow({ ...params, deadline: -1n }),
+      ).toThrow(NegativeMidnightAmountError);
+    });
+  });
+
+  describe("supplyCollateral", () => {
+    test("default", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockAllowance({
+        handle,
+        token: midnightAddresses.collateralToken,
+        result: 0n,
+      });
+
+      const output = midnightWithHandle(handle).supplyCollateral({
+        marketData: marketData(),
+        accountAddress: midnightAddresses.taker,
+        collateralAssets: 2_000n,
+        reservedCollateralAssets: 500n,
+      });
+      const requirements = await output.getRequirements();
+      const tx = output.buildTx();
+
+      expect(tx.action.args.assets).toBe(2_000n);
+      expect(requirements[0]?.action).toMatchObject({
+        type: "erc20Approval",
+        args: {
+          spender: midnightAddresses.midnight,
+          amount: 2_500n,
+        },
+      });
+    });
+
+    test("behavior: defaults reserved collateral to zero", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockAllowance({
+        handle,
+        token: midnightAddresses.collateralToken,
+        result: 0n,
+      });
+
+      const output = midnightWithHandle(handle).supplyCollateral({
+        marketData: marketData(),
+        accountAddress: midnightAddresses.taker,
+        collateralAssets: 2_000n,
+      });
+      const requirements = await output.getRequirements();
+
+      expect(requirements[0]?.action.args.amount).toBe(2_000n);
+    });
+
+    test("error: amount validation", () => {
+      expect(() =>
+        midnight().supplyCollateral({
+          marketData: marketData(),
+          accountAddress: midnightAddresses.taker,
+          collateralAssets: 0n,
+        }),
+      ).toThrow(NonPositiveMidnightAmountError);
+      expect(() =>
+        midnight().supplyCollateral({
+          marketData: marketData(),
+          accountAddress: midnightAddresses.taker,
+          collateralAssets: 2_000n,
+          reservedCollateralAssets: -1n,
+        }),
+      ).toThrow(NegativeMidnightAmountError);
     });
   });
 
@@ -354,6 +773,21 @@ describe("MorphoMidnight", () => {
       expect(tx.action.args.units).toBe(225n);
     });
 
+    test("behavior: explicit receiver and empty requirements", async () => {
+      const market = marketData();
+      const output = midnight().redeem({
+        marketData: market,
+        positionData: positionData(market, { credit: 250n, pendingFee: 50n }),
+        accountAddress: midnightAddresses.taker,
+        receiver: midnightAddresses.maker,
+      });
+      const requirements = await output.getRequirements();
+      const tx = output.buildTx();
+
+      expect(requirements).toEqual([]);
+      expect(tx.action.args.receiver).toBe(midnightAddresses.maker);
+    });
+
     test("error: MarketIdMismatchError", () => {
       const market = marketData();
       const otherMarket = new Market({
@@ -394,6 +828,55 @@ describe("MorphoMidnight", () => {
         }),
       ).toThrow(MidnightRedeemExceedsCreditError);
     });
+
+    test("error: NoMidnightCreditToRedeemError", () => {
+      const market = marketData();
+
+      expect(() =>
+        midnight().redeem({
+          marketData: market,
+          positionData: positionData(market, { credit: 50n, pendingFee: 50n }),
+          accountAddress: midnightAddresses.taker,
+        }),
+      ).toThrow(NoMidnightCreditToRedeemError);
+    });
+
+    test("error: InsufficientMidnightWithdrawableLiquidityError", () => {
+      const market = marketData({ withdrawable: 50n });
+
+      expect(() =>
+        midnight().redeem({
+          marketData: market,
+          positionData: positionData(market, { credit: 250n, pendingFee: 50n }),
+          accountAddress: midnightAddresses.taker,
+        }),
+      ).toThrow(InsufficientMidnightWithdrawableLiquidityError);
+    });
+  });
+
+  describe("getMarketData", () => {
+    test("default", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockMarketReads(handle);
+
+      const market =
+        await midnightWithHandle(handle).getMarketData(midnightMarketId);
+
+      expect(market.id).toBe(midnightMarketId);
+      expect(market.withdrawable).toBe(1_000n);
+    });
+
+    test("error: ChainIdMismatchError", async () => {
+      await expect(
+        new MorphoMidnight(
+          {
+            viemClient: { chain: { id: midnightChainId + 1 } },
+            options: {},
+          } as unknown as MorphoClientType,
+          midnightChainId,
+        ).getMarketData(midnightMarketId),
+      ).rejects.toThrow(ChainIdMismatchError);
+    });
   });
 
   describe("getPositionData", () => {
@@ -401,52 +884,9 @@ describe("MorphoMidnight", () => {
       const handle = createMockClient(midnightTestChain);
       const blockNumber = 123n;
       const blockTimestamp = 1_500n;
-      handle.request.mockImplementation(async ({ method, params }) => {
-        if (method === "eth_chainId") return numberToHex(midnightChainId);
-        if (method === "eth_getBlockByNumber") {
-          return {
-            number: numberToHex(blockNumber),
-            timestamp: numberToHex(blockTimestamp),
-            transactions: [],
-          };
-        }
-        if (method === "eth_call") {
-          const [tx] = (params ?? []) as [
-            { readonly to?: Address; readonly data?: `0x${string}` },
-          ];
-          if (typeof tx?.to === "string" && typeof tx.data === "string") {
-            const encoded = handle.dispatch.get(
-              `${tx.to.toLowerCase()}|${tx.data.slice(0, 10).toLowerCase()}`,
-            );
-            if (encoded != null) return encoded;
-          }
-        }
-
-        throw new Error(`unhandled RPC ${method} ${JSON.stringify(params)}`);
-      });
-      mockRead(handle, {
-        address: midnightAddresses.midnight,
-        abi: midnightAbi,
-        functionName: "position",
-        result: [1_000n, 0n, 0n, 1_000n, 0n, 0n],
-      });
-      mockRead(handle, {
-        address: midnightAddresses.midnight,
-        abi: midnightAbi,
-        functionName: "collateral",
-        result: 0n,
-      });
-      mockRead(handle, {
-        address: midnightAddresses.midnight,
-        abi: midnightAbi,
-        functionName: "toMarket",
-        result: MarketUtils.toStruct(midnightMarket),
-      });
-      mockRead(handle, {
-        address: midnightAddresses.midnight,
-        abi: midnightAbi,
-        functionName: "marketState",
-        result: [1_000n, 0n, 1_000n, 0n, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      mockBlockAndReads(handle, {
+        number: blockNumber,
+        timestamp: blockTimestamp,
       });
 
       const position = await new MorphoMidnight(
@@ -466,6 +906,62 @@ describe("MorphoMidnight", () => {
           .map(([call]) => call)
           .filter((call) => call.method === "eth_call")
           .every((call) => call.params?.[1] === numberToHex(blockNumber)),
+      ).toBe(true);
+    });
+
+    test("behavior: accepts explicit blockNumber for the block snapshot", async () => {
+      const handle = createMockClient(midnightTestChain);
+      const requestedBlockNumber = 100n;
+      const fetchedBlockNumber = 123n;
+      mockBlockAndReads(handle, {
+        number: fetchedBlockNumber,
+        timestamp: 1_500n,
+      });
+
+      await midnightWithHandle(handle).getPositionData({
+        marketId: midnightMarketId,
+        accountAddress: midnightAddresses.taker,
+        parameters: { blockNumber: requestedBlockNumber },
+      });
+
+      expect(
+        handle.request.mock.calls.find(
+          ([call]) => call.method === "eth_getBlockByNumber",
+        )?.[0].params?.[0],
+      ).toBe(numberToHex(requestedBlockNumber));
+      expect(
+        handle.request.mock.calls
+          .map(([call]) => call)
+          .filter((call) => call.method === "eth_call")
+          .every(
+            (call) => call.params?.[1] === numberToHex(fetchedBlockNumber),
+          ),
+      ).toBe(true);
+    });
+
+    test("behavior: reuses blockTag when the fetched block has no number", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockBlockAndReads(handle, {
+        number: null,
+        timestamp: 1_500n,
+      });
+
+      await midnightWithHandle(handle).getPositionData({
+        marketId: midnightMarketId,
+        accountAddress: midnightAddresses.taker,
+        parameters: { blockTag: "pending" },
+      });
+
+      expect(
+        handle.request.mock.calls.find(
+          ([call]) => call.method === "eth_getBlockByNumber",
+        )?.[0].params?.[0],
+      ).toBe("pending");
+      expect(
+        handle.request.mock.calls
+          .map(([call]) => call)
+          .filter((call) => call.method === "eth_call")
+          .every((call) => call.params?.[1] === "pending"),
       ).toBe(true);
     });
   });
@@ -507,6 +1003,41 @@ describe("MorphoMidnight", () => {
       expect(data.ratifier).toBe(midnightAddresses.ecrecoverRatifier);
     });
 
+    test("behavior: de-duplicates groups from grouped offers", async () => {
+      const offers = [
+        Offer.create(
+          midnightBaseOffer({
+            market: { ...midnightMarket, maturity: apiValidMaturity },
+            buy: true,
+            expiry: apiValidMaturity - 60n,
+            maxAssets: 1_000n,
+            maxUnits: 0n,
+            ratifier: midnightAddresses.ecrecoverRatifier,
+          }),
+        ),
+        Offer.create(
+          midnightBaseOffer({
+            market: { ...midnightMarket, maturity: apiValidMaturity },
+            buy: true,
+            tick: 5_004n,
+            expiry: apiValidMaturity - 60n,
+            maxAssets: 1_000n,
+            maxUnits: 0n,
+            ratifier: midnightAddresses.ecrecoverRatifier,
+          }),
+        ),
+      ];
+      const group = Group.create(offers);
+      const data = await midnight().getOffersData({
+        accountAddress: midnightAddresses.maker,
+        offers: group,
+        validation: offerValidation,
+      });
+
+      expect(data.groups).toEqual([group.id]);
+      expect(data.tree.offers).toHaveLength(2);
+    });
+
     test("behavior: accepts a single offer", async () => {
       const offer = Offer.create(
         midnightBaseOffer({
@@ -526,6 +1057,27 @@ describe("MorphoMidnight", () => {
 
       expect(data.groups).toEqual([offer.group]);
       expect(data.tree.offers).toHaveLength(1);
+    });
+
+    test("behavior: returns setter payload for setter-ratified offers", async () => {
+      const offer = Offer.create(
+        midnightBaseOffer({
+          market: { ...midnightMarket, maturity: apiValidMaturity },
+          buy: true,
+          expiry: apiValidMaturity - 60n,
+          maxAssets: 1_000n,
+          maxUnits: 0n,
+          ratifier: midnightAddresses.setterRatifier,
+        }),
+      );
+      const data = await midnight().getOffersData({
+        accountAddress: midnightAddresses.maker,
+        offers: offer,
+        validation: offerValidation,
+      });
+
+      expect(data.ratifierType).toBe("setter");
+      expect(data.setterPayload).toMatch(/^0x/u);
     });
 
     test("error: MidnightOfferMarketChainMismatchError", async () => {
@@ -566,6 +1118,27 @@ describe("MorphoMidnight", () => {
           validation: offerValidation,
         }),
       ).rejects.toThrow(MidnightOfferMarketAddressMismatchError);
+    });
+
+    test("error: UnknownMidnightRatifierError", async () => {
+      const offer = Offer.create(
+        midnightBaseOffer({
+          market: { ...midnightMarket, maturity: apiValidMaturity },
+          buy: true,
+          expiry: apiValidMaturity - 60n,
+          maxAssets: 1_000n,
+          maxUnits: 0n,
+          ratifier: zeroAddress,
+        }),
+      );
+
+      await expect(
+        midnight().getOffersData({
+          accountAddress: midnightAddresses.maker,
+          offers: offer,
+          validation: offerValidation,
+        }),
+      ).rejects.toThrow(UnknownMidnightRatifierError);
     });
   });
 
@@ -699,18 +1272,12 @@ describe("MorphoMidnight", () => {
 
     test("behavior: approval covers new group and existing loan reserves", async () => {
       const handle = createMockClient(midnightTestChain);
-      mockRead(handle, {
-        address: midnightAddresses.loanToken,
-        abi: erc20Abi,
-        functionName: "allowance",
+      mockAllowance({
+        handle,
+        token: midnightAddresses.loanToken,
         result: 0n,
       });
-      mockRead(handle, {
-        address: midnightAddresses.midnight,
-        abi: midnightAbi,
-        functionName: "isAuthorized",
-        result: true,
-      });
+      mockMidnightAuthorization(handle, true);
 
       const data = offersData(true);
       const output = await new MorphoMidnight(
@@ -739,6 +1306,61 @@ describe("MorphoMidnight", () => {
           amount: 1_250n,
         },
       });
+    });
+
+    test("behavior: accepts offers carrying hydrated market data", async () => {
+      const offer = Offer.create(
+        midnightBaseOffer({
+          market: new Market({
+            params: { ...midnightMarket, maturity: apiValidMaturity },
+            totalUnits: 1_000n,
+            lossFactor: 0n,
+            withdrawable: 1_000n,
+            continuousFeeCredit: 0n,
+            settlementFeeCbps: [0, 0, 0, 0, 0, 0, 0],
+            continuousFee: 0,
+            tickSpacing: 1,
+          }),
+          buy: true,
+          expiry: apiValidMaturity - 60n,
+          maxAssets: 1_000n,
+          maxUnits: 0n,
+          ratifier: midnightAddresses.ecrecoverRatifier,
+        }),
+      );
+      const output = await midnight().makeLend({
+        accountAddress: midnightAddresses.maker,
+        offers: offer,
+        validation: offerValidation,
+        loanToken: midnightAddresses.loanToken,
+        loanAssets: 1_000n,
+      });
+
+      expect(output.root).toMatch(/^0x/u);
+    });
+
+    test("error: amount validation", async () => {
+      const data = offersData(true);
+
+      await expect(
+        midnight().makeLend({
+          accountAddress: data.accountAddress,
+          offers: data.tree,
+          validation: offerValidation,
+          loanToken: midnightAddresses.loanToken,
+          loanAssets: 0n,
+        }),
+      ).rejects.toThrow(NonPositiveMidnightAmountError);
+      await expect(
+        midnight().makeLend({
+          accountAddress: data.accountAddress,
+          offers: data.tree,
+          validation: offerValidation,
+          loanToken: midnightAddresses.loanToken,
+          loanAssets: 1_000n,
+          reservedLoanAssets: -1n,
+        }),
+      ).rejects.toThrow(NegativeMidnightAmountError);
     });
 
     test("error: MidnightOfferSideMismatchError", async () => {
@@ -784,18 +1406,12 @@ describe("MorphoMidnight", () => {
   describe("supplyCollateralMakeBorrow", () => {
     test("behavior: approval covers new group and existing collateral reserves", async () => {
       const handle = createMockClient(midnightTestChain);
-      mockRead(handle, {
-        address: midnightAddresses.collateralToken,
-        abi: erc20Abi,
-        functionName: "allowance",
+      mockAllowance({
+        handle,
+        token: midnightAddresses.collateralToken,
         result: 0n,
       });
-      mockRead(handle, {
-        address: midnightAddresses.midnight,
-        abi: midnightAbi,
-        functionName: "isAuthorized",
-        result: true,
-      });
+      mockMidnightAuthorization(handle, true);
 
       const data = offersData(false);
       const output = await new MorphoMidnight(
@@ -834,6 +1450,60 @@ describe("MorphoMidnight", () => {
           assets: 1_000n,
         },
       });
+      const tx = output.buildTx(offerRootSignature(data));
+
+      expect(tx.action.args.maker).toBe(data.accountAddress);
+    });
+
+    test("behavior: accepts plain market input and defaults reserved collateral to zero", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockAllowance({
+        handle,
+        token: midnightAddresses.collateralToken,
+        result: 0n,
+      });
+      mockMidnightAuthorization(handle, true);
+      const data = offersData(false);
+      const output = await midnightWithHandle(
+        handle,
+      ).supplyCollateralMakeBorrow({
+        accountAddress: data.accountAddress,
+        offers: data.tree,
+        validation: offerValidation,
+        market: MarketUtils.toStruct(midnightMarket),
+        collateralAssets: 1_000n,
+      });
+      const requirements = await output.getRequirements();
+
+      expect(
+        requirements.find(
+          (requirement) => requirement.action.type === "erc20Approval",
+        )?.action.args.amount,
+      ).toBe(1_000n);
+    });
+
+    test("error: amount validation", async () => {
+      const data = offersData(false);
+
+      await expect(
+        midnight().supplyCollateralMakeBorrow({
+          accountAddress: data.accountAddress,
+          offers: data.tree,
+          validation: offerValidation,
+          market: midnightMarket,
+          collateralAssets: 0n,
+        }),
+      ).rejects.toThrow(NonPositiveMidnightAmountError);
+      await expect(
+        midnight().supplyCollateralMakeBorrow({
+          accountAddress: data.accountAddress,
+          offers: data.tree,
+          validation: offerValidation,
+          market: midnightMarket,
+          collateralAssets: 1_000n,
+          reservedCollateralAssets: -1n,
+        }),
+      ).rejects.toThrow(NegativeMidnightAmountError);
     });
   });
 
@@ -850,6 +1520,55 @@ describe("MorphoMidnight", () => {
       expect(output.groups).toEqual(data.groups);
       expect(tx.action.args.maker).toBe(midnightAddresses.maker);
       expect(tx.action.args.offers).toBe(data.tree.offers.length);
+    });
+
+    test("behavior: ecrecover requirements include ratifier authorization", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockMidnightAuthorization(handle, false);
+      const data = offersData(false);
+      const output = await midnightWithHandle(handle).makeBorrow({
+        accountAddress: data.accountAddress,
+        offers: data.tree,
+        validation: offerValidation,
+      });
+      const requirements = await output.getRequirements();
+
+      expect(
+        requirements.map((requirement) => requirement.action.type),
+      ).toEqual(["midnightAuthorization", "midnightOfferRootSignature"]);
+    });
+
+    test("behavior: setter ratifier requirements include root ratification", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockMidnightAuthorization(handle, true);
+      mockSetterRootRatification(handle, false);
+      const data = setterOffersData(false);
+      const output = await midnightWithHandle(handle).makeBorrow({
+        accountAddress: data.accountAddress,
+        offers: data.tree,
+        validation: offerValidation,
+      });
+      const requirements = await output.getRequirements();
+      const tx = output.buildTx();
+
+      expect(
+        requirements.map((requirement) => requirement.action.type),
+      ).toEqual(["setterRatifierRatifyRoot"]);
+      expect(tx.action.args.ratifierType).toBe("setter");
+    });
+
+    test("behavior: setter ratifier returns no requirements when root is ratified", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockMidnightAuthorization(handle, true);
+      mockSetterRootRatification(handle, true);
+      const data = setterOffersData(false);
+      const output = await midnightWithHandle(handle).makeBorrow({
+        accountAddress: data.accountAddress,
+        offers: data.tree,
+        validation: offerValidation,
+      });
+
+      await expect(output.getRequirements()).resolves.toEqual([]);
     });
 
     test("error: MidnightOfferSideMismatchError", async () => {
@@ -872,6 +1591,104 @@ describe("MorphoMidnight", () => {
           validation: offerValidation,
         }),
       ).rejects.toThrow(MidnightOfferSideMismatchError);
+    });
+  });
+
+  describe("repayWithdrawCollateral", () => {
+    test("default", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockAllowance({
+        handle,
+        token: midnightAddresses.loanToken,
+        result: 0n,
+      });
+      mockMidnightAuthorization(handle, false);
+
+      const output = midnightWithHandle(handle).repayWithdrawCollateral({
+        marketData: marketData(),
+        accountAddress: midnightAddresses.taker,
+        repayAssets: 1_000n,
+        withdrawCollateralAssets: 2_000n,
+        deadline: maxUint256,
+      });
+      const requirements = await output.getRequirements();
+      const tx = output.buildTx();
+
+      expect(tx.action.args).toMatchObject({
+        repayAssets: 1_000n,
+        collateralWithdrawals: 1,
+      });
+      expect(
+        requirements.map((requirement) => requirement.action.type),
+      ).toEqual(["erc20Approval", "midnightAuthorization"]);
+    });
+
+    test("behavior: withdraw-only flow skips loan approval", async () => {
+      const handle = createMockClient(midnightTestChain);
+      mockMidnightAuthorization(handle, true);
+
+      const output = midnightWithHandle(handle).repayWithdrawCollateral({
+        marketData: marketData(),
+        accountAddress: midnightAddresses.taker,
+        repayAssets: 0n,
+        withdrawCollateralAssets: 2_000n,
+        deadline: maxUint256,
+      });
+      const requirements = await output.getRequirements();
+
+      expect(requirements).toEqual([]);
+    });
+
+    test("error: amount validation", () => {
+      const params = {
+        marketData: marketData(),
+        accountAddress: midnightAddresses.taker,
+        repayAssets: 1_000n,
+        withdrawCollateralAssets: 0n,
+        deadline: maxUint256,
+      } as const;
+
+      expect(() =>
+        midnight().repayWithdrawCollateral({ ...params, repayAssets: -1n }),
+      ).toThrow(NegativeMidnightAmountError);
+      expect(() =>
+        midnight().repayWithdrawCollateral({
+          ...params,
+          withdrawCollateralAssets: -1n,
+        }),
+      ).toThrow(NegativeMidnightAmountError);
+      expect(() =>
+        midnight().repayWithdrawCollateral({ ...params, deadline: -1n }),
+      ).toThrow(NegativeMidnightAmountError);
+      expect(() =>
+        midnight().repayWithdrawCollateral({
+          ...params,
+          withdrawCollateralAssets: 1n,
+          collateralIndex: -1n,
+        }),
+      ).toThrow(NegativeMidnightAmountError);
+      expect(() =>
+        midnight().repayWithdrawCollateral({
+          ...params,
+          repayAssets: 0n,
+          withdrawCollateralAssets: 0n,
+        }),
+      ).toThrow(NonPositiveMidnightAmountError);
+    });
+  });
+
+  describe("cancelOffer", () => {
+    test("default", async () => {
+      const data = offersData();
+      const output = midnight().cancelOffer({
+        group: data.groups[0]!,
+        accountAddress: midnightAddresses.maker,
+      });
+      const requirements = await output.getRequirements();
+      const tx = output.buildTx();
+
+      expect(requirements).toEqual([]);
+      expect(tx.action.args.group).toBe(data.groups[0]);
     });
   });
 
@@ -903,6 +1720,74 @@ describe("MorphoMidnight", () => {
 
       expect(tx.action.type).toBe("mempoolSubmitOffers");
       expect(tx.data.includes("a1b2c3d4")).toBe(true);
+    });
+
+    test("behavior: setter ratifier uses prepared payload without signatures", () => {
+      const data = setterOffersData();
+      const tx = buildSubmitOffersTx({
+        offersData: data,
+      });
+
+      expect(tx.data).toBe(data.setterPayload);
+      expect(tx.action.args.ratifierType).toBe("setter");
+    });
+
+    test("error: MissingMidnightOfferRootSignatureError for malformed setter data", () => {
+      const data = setterOffersData();
+
+      expect(() =>
+        buildSubmitOffersTx({
+          offersData: {
+            ...data,
+            setterPayload: undefined,
+          },
+        }),
+      ).toThrow(MissingMidnightOfferRootSignatureError);
+    });
+
+    test("error: MissingMidnightOfferRootSignatureError", () => {
+      const data = offersData();
+
+      expect(() =>
+        buildSubmitOffersTx({
+          offersData: data,
+        }),
+      ).toThrow(MissingMidnightOfferRootSignatureError);
+    });
+
+    test("error: MidnightOfferRootMismatchError", () => {
+      const data = offersData();
+      const signature = offerRootSignature(data);
+      const otherRoot =
+        "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0" as Hex;
+
+      expect(() =>
+        buildSubmitOffersTx({
+          offersData: data,
+          signatures: {
+            ...signature,
+            args: {
+              ...signature.args,
+              root: otherRoot,
+            },
+          },
+        }),
+      ).toThrow(MidnightOfferRootMismatchError);
+      expect(() =>
+        buildSubmitOffersTx({
+          offersData: data,
+          signatures: {
+            ...signature,
+            action: {
+              ...signature.action,
+              args: {
+                ...signature.action.args,
+                root: otherRoot,
+              },
+            },
+          },
+        }),
+      ).toThrow(MidnightOfferRootMismatchError);
     });
 
     test("error: MidnightOfferRootOwnerMismatchError", () => {

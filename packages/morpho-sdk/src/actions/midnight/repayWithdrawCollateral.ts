@@ -93,12 +93,6 @@ export const midnightRepayWithdrawCollateral = (
         withdrawal.collateralIndex,
       );
     }
-    if (withdrawal.assets < 0n) {
-      throw new NegativeMidnightAmountError(
-        `collateralWithdrawals[${index}].assets`,
-        withdrawal.assets,
-      );
-    }
   }
   if (
     params.repayAssets === 0n &&
@@ -110,10 +104,8 @@ export const midnightRepayWithdrawCollateral = (
   const marketId = MarketUtils.toId(params.market);
   const market = MarketUtils.toStruct(params.market);
   for (const withdrawal of collateralWithdrawals) {
-    if (withdrawal.assets > 0n) {
-      // Validate that every positive withdrawal targets a configured collateral.
-      MarketUtils.getCollateralByIndex(market, withdrawal.collateralIndex);
-    }
+    // Validate that every withdrawal targets a configured collateral.
+    MarketUtils.getCollateralByIndex(market, withdrawal.collateralIndex);
   }
   const midnightBundles = getChainAddress(params.chainId, "midnightBundles");
 
