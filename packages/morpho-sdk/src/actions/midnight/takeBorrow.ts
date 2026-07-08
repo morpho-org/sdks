@@ -30,11 +30,6 @@ export interface MidnightTakeBorrowParams {
   readonly loanAssets: bigint;
   readonly maxUnits: bigint;
   readonly taker: Address;
-  readonly reduceOnly?: boolean;
-  readonly receiver?: Address;
-  readonly referralFeePct?: bigint;
-  readonly referralFeeRecipient?: Address;
-  readonly maxContinuousFee?: bigint;
   /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
   readonly deadline: bigint;
   readonly takeableOffers: readonly MidnightTakeableOffer[];
@@ -50,18 +45,6 @@ export const midnightTakeBorrow = (
   }
   if (params.maxUnits < 0n) {
     throw new NegativeMidnightAmountError("maxUnits", params.maxUnits);
-  }
-  if ((params.referralFeePct ?? 0n) < 0n) {
-    throw new NegativeMidnightAmountError(
-      "referralFeePct",
-      params.referralFeePct ?? 0n,
-    );
-  }
-  if ((params.maxContinuousFee ?? maxUint256) < 0n) {
-    throw new NegativeMidnightAmountError(
-      "maxContinuousFee",
-      params.maxContinuousFee ?? maxUint256,
-    );
   }
   if (params.deadline < 0n) {
     throw new NegativeMidnightAmountError("deadline", params.deadline);
@@ -87,11 +70,6 @@ export const midnightTakeBorrow = (
   }
 
   const midnightBundles = getChainAddress(params.chainId, "midnightBundles");
-  const reduceOnly = params.reduceOnly ?? false;
-  const receiver = params.receiver ?? params.taker;
-  const referralFeePct = params.referralFeePct ?? 0n;
-  const referralFeeRecipient = params.referralFeeRecipient ?? zeroAddress;
-  const maxContinuousFee = params.maxContinuousFee ?? maxUint256;
 
   let tx = {
     to: midnightBundles,
@@ -103,13 +81,13 @@ export const midnightTakeBorrow = (
         params.loanAssets,
         params.maxUnits,
         params.taker,
-        reduceOnly,
-        receiver,
+        false,
+        params.taker,
         [],
         params.takeableOffers,
-        referralFeePct,
-        referralFeeRecipient,
-        maxContinuousFee,
+        0n,
+        zeroAddress,
+        maxUint256,
         params.deadline,
       ],
     }),
@@ -128,13 +106,9 @@ export const midnightTakeBorrow = (
         loanAssets: params.loanAssets,
         maxUnits: params.maxUnits,
         taker: params.taker,
-        reduceOnly,
-        receiver,
+        receiver: params.taker,
         collateralSupplies: 0,
         takeableOffers: params.takeableOffers.length,
-        referralFeePct,
-        referralFeeRecipient,
-        maxContinuousFee,
         deadline: params.deadline,
       },
     },

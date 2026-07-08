@@ -4,7 +4,6 @@ import { encodeFunctionData, maxUint256, zeroAddress } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import { validateOfferSides } from "../../helpers/validateOfferSides.js";
 import {
-  type AnyRequirementSignature,
   EmptyMidnightTakeableOffersError,
   type MidnightSupplyCollateralTakeBorrowAction,
   MidnightTakeableOfferMarketMismatchError,
@@ -12,7 +11,6 @@ import {
   NonPositiveMidnightAmountError,
   type Transaction,
 } from "../../types/index.js";
-import { getMidnightTokenPermit } from "../signatures/getMidnightTokenPermit.js";
 import type { MidnightTakeBorrowParams } from "./takeBorrow.js";
 import type { MidnightCollateralSupply } from "./types.js";
 
@@ -21,9 +19,6 @@ export interface MidnightSupplyCollateralTakeBorrowParams
   extends MidnightTakeBorrowParams {
   readonly collateralAssets: bigint;
   readonly collateralIndex?: bigint;
-  readonly signatures?:
-    | AnyRequirementSignature
-    | readonly AnyRequirementSignature[];
 }
 
 /** Encodes the supply-collateral-and-take-borrow Midnight bundle. */
@@ -41,18 +36,6 @@ export const midnightSupplyCollateralTakeBorrow = (
   }
   if (params.maxUnits < 0n) {
     throw new NegativeMidnightAmountError("maxUnits", params.maxUnits);
-  }
-  if ((params.referralFeePct ?? 0n) < 0n) {
-    throw new NegativeMidnightAmountError(
-      "referralFeePct",
-      params.referralFeePct ?? 0n,
-    );
-  }
-  if ((params.maxContinuousFee ?? maxUint256) < 0n) {
-    throw new NegativeMidnightAmountError(
-      "maxContinuousFee",
-      params.maxContinuousFee ?? maxUint256,
-    );
   }
   if (params.deadline < 0n) {
     throw new NegativeMidnightAmountError("deadline", params.deadline);
@@ -79,28 +62,15 @@ export const midnightSupplyCollateralTakeBorrow = (
 
   const midnightBundles = getChainAddress(params.chainId, "midnightBundles");
   const collateralIndex = params.collateralIndex ?? 0n;
-  const collateral = MarketUtils.getCollateralByIndex(
-    params.market,
-    collateralIndex,
-  );
+  // Validate that the collateral index is configured before encoding the bundle.
+  MarketUtils.getCollateralByIndex(params.market, collateralIndex);
   const collateralSupplies: readonly MidnightCollateralSupply[] = [
     {
       collateralIndex,
       assets: params.collateralAssets,
-      permit: getMidnightTokenPermit({
-        token: collateral.token,
-        owner: params.taker,
-        spender: midnightBundles,
-        amount: params.collateralAssets,
-        signatures: params.signatures,
-      }),
+      permit: { kind: 0, data: "0x" },
     },
   ];
-  const reduceOnly = params.reduceOnly ?? false;
-  const receiver = params.receiver ?? params.taker;
-  const referralFeePct = params.referralFeePct ?? 0n;
-  const referralFeeRecipient = params.referralFeeRecipient ?? zeroAddress;
-  const maxContinuousFee = params.maxContinuousFee ?? maxUint256;
 
   let tx = {
     to: midnightBundles,
@@ -112,13 +82,13 @@ export const midnightSupplyCollateralTakeBorrow = (
         params.loanAssets,
         params.maxUnits,
         params.taker,
-        reduceOnly,
-        receiver,
+        false,
+        params.taker,
         collateralSupplies,
         params.takeableOffers,
-        referralFeePct,
-        referralFeeRecipient,
-        maxContinuousFee,
+        0n,
+        zeroAddress,
+        maxUint256,
         params.deadline,
       ],
     }),
@@ -138,13 +108,9 @@ export const midnightSupplyCollateralTakeBorrow = (
         loanAssets: params.loanAssets,
         maxUnits: params.maxUnits,
         taker: params.taker,
-        reduceOnly,
-        receiver,
+        receiver: params.taker,
         collateralSupplies: collateralSupplies.length,
         takeableOffers: params.takeableOffers.length,
-        referralFeePct,
-        referralFeeRecipient,
-        maxContinuousFee,
         deadline: params.deadline,
       },
     },

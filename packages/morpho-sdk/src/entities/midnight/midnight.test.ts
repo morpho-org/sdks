@@ -33,7 +33,6 @@ import {
 import type {
   MempoolSubmitOffersAction,
   MidnightOfferRootSignature,
-  TokenRequirementSignature,
   Transaction,
 } from "../../types/action.js";
 import type { MorphoClientType } from "../../types/client.js";
@@ -182,24 +181,24 @@ const offerRootSignature = (
   },
 });
 
-const tokenSignature = {
+const unexpectedSignature = {
   action: {
-    type: "permit2Transfer",
+    type: "authorization",
     args: {
-      spender: midnightAddresses.midnightBundles,
-      amount: 1_000n,
+      authorized: midnightAddresses.midnightBundles,
+      isAuthorized: true,
       deadline: 123n,
     },
   },
   args: {
     owner: midnightAddresses.taker,
+    authorized: midnightAddresses.midnightBundles,
+    isAuthorized: true,
     nonce: 42n,
-    asset: midnightAddresses.loanToken,
     signature: "0x1234",
-    amount: 1_000n,
     deadline: 123n,
   },
-} satisfies TokenRequirementSignature;
+} as unknown as MidnightActionSignatures;
 
 const client = {
   viemClient: { chain: { id: midnightChainId } },
@@ -272,13 +271,7 @@ describe("MorphoMidnight", () => {
         assets: 1_000n,
         minUnits: 900n,
         taker: midnightAddresses.taker,
-        reduceOnly: false,
         takeableOffers: 1,
-        collateralWithdrawals: 0,
-        collateralReceiver: zeroAddress,
-        referralFeePct: 0n,
-        referralFeeRecipient: zeroAddress,
-        maxContinuousFee: maxUint256,
         deadline: maxUint256,
       });
     });
@@ -969,7 +962,7 @@ describe("MorphoMidnight", () => {
       expect(() =>
         buildSubmitOffersTx({
           offersData: data,
-          signatures: [tokenSignature],
+          signatures: unexpectedSignature,
         }),
       ).toThrow(UnexpectedRequirementSignatureError);
     });
