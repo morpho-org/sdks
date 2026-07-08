@@ -2,7 +2,7 @@ import {
   midnightBundlesAbi,
   UnknownCollateralIndexError,
 } from "@morpho-org/midnight-sdk";
-import { decodeFunctionData, maxUint256 } from "viem";
+import { decodeFunctionData, type Hex, maxUint256 } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -15,8 +15,12 @@ import {
   EmptyMidnightTakeableOffersError,
   MidnightOfferSideMismatchError,
   MidnightTakeableOfferMarketMismatchError,
+  type RequirementSignature,
 } from "../../types/index.js";
 import { midnightSupplyCollateralTakeBorrow } from "./supplyCollateralTakeBorrow.js";
+import { PermitKind } from "./types.js";
+
+const signature = `0x${"11".repeat(32)}${"22".repeat(32)}1b` as Hex;
 
 describe("midnightSupplyCollateralTakeBorrow", () => {
   test("default", () => {
@@ -47,14 +51,56 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
     expect(decoded.args?.[5]).toMatchObject([
       {
         permit: {
-          kind: 0,
+          kind: PermitKind.None,
           data: "0x",
         },
       },
     ]);
-    expect(decoded.args?.[3]).toBe(false);
-    expect(decoded.args?.[7]).toBe(0n);
-    expect(decoded.args?.[9]).toBe(maxUint256);
+  });
+
+  test("behavior: encodes collateral token permit", () => {
+    const tx = midnightSupplyCollateralTakeBorrow({
+      chainId: midnightChainId,
+      market: midnightMarket,
+      collateralAssets: 2_000n,
+      loanAssets: 1_000n,
+      maxUnits: 1_100n,
+      taker: midnightAddresses.taker,
+      takeableOffers: [midnightApiTake({ buy: true })],
+      deadline: maxUint256,
+      signatures: [
+        {
+          action: {
+            type: "permit",
+            args: {
+              spender: midnightAddresses.midnightBundles,
+              amount: 2_000n,
+              deadline: 123n,
+            },
+          },
+          args: {
+            owner: midnightAddresses.taker,
+            nonce: 0n,
+            asset: midnightAddresses.collateralToken,
+            signature,
+            amount: 2_000n,
+            deadline: 123n,
+          },
+        } satisfies RequirementSignature,
+      ],
+    });
+    const decoded = decodeFunctionData({
+      abi: midnightBundlesAbi,
+      data: tx.data,
+    });
+
+    expect(decoded.args?.[5]).toMatchObject([
+      {
+        permit: {
+          kind: PermitKind.ERC2612,
+        },
+      },
+    ]);
   });
 
   test("error: EmptyMidnightTakeableOffersError", () => {

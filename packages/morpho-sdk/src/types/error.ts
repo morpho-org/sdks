@@ -77,6 +77,7 @@ export namespace BundlerErrors {
 export type RequirementSignatureKind =
   | "permit"
   | "authorization"
+  | "permit2Transfer"
   | "midnightOfferRootSignature";
 
 /**
@@ -288,6 +289,15 @@ export class Permit2ExpirationMissingError extends Error {
   constructor() {
     super(
       'Requirement signature with action.type === "permit2" must include args.expiration. Re-sign using the permit2 flow.',
+    );
+  }
+}
+
+/** Thrown when a Blue Permit2 allowance signature is passed to a Midnight bundle token pull. */
+export class MidnightPermit2TransferSignatureRequiredError extends Error {
+  constructor() {
+    super(
+      'Midnight token pulls require a requirement signature with action.type === "permit2Transfer". Re-sign using the Midnight Permit2 transfer flow.',
     );
   }
 }

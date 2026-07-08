@@ -13,6 +13,7 @@ import {
 import { addTransactionMetadata } from "../../helpers/index.js";
 import { validateOfferSides } from "../../helpers/validateOfferSides.js";
 import {
+  type AnyRequirementSignature,
   EmptyMidnightTakeableOffersError,
   type Metadata,
   MidnightTakeableOfferMarketMismatchError,
@@ -21,7 +22,11 @@ import {
   NonPositiveMidnightAmountError,
   type Transaction,
 } from "../../types/index.js";
-import type { MidnightTakeableOffer } from "./types.js";
+import { getMidnightTokenPermit } from "../signatures/getMidnightTokenPermit.js";
+import type {
+  MidnightCollateralWithdrawal,
+  MidnightTakeableOffer,
+} from "./types.js";
 
 /** Parameters for {@link midnightTakeLend}. */
 export interface MidnightTakeLendParams {
@@ -30,9 +35,18 @@ export interface MidnightTakeLendParams {
   readonly assets: bigint;
   readonly minUnits: bigint;
   readonly taker: Address;
+  readonly reduceOnly?: boolean;
   readonly takeableOffers: readonly MidnightTakeableOffer[];
+  readonly collateralWithdrawals?: readonly MidnightCollateralWithdrawal[];
+  readonly collateralReceiver?: Address;
+  readonly referralFeePct?: bigint;
+  readonly referralFeeRecipient?: Address;
+  readonly maxContinuousFee?: bigint;
   /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
   readonly deadline: bigint;
+  readonly signatures?:
+    | AnyRequirementSignature
+    | readonly AnyRequirementSignature[];
   readonly metadata?: Metadata;
 }
 
@@ -45,6 +59,18 @@ export const midnightTakeLend = (
   }
   if (params.minUnits < 0n) {
     throw new NegativeMidnightAmountError("minUnits", params.minUnits);
+  }
+  if ((params.referralFeePct ?? 0n) < 0n) {
+    throw new NegativeMidnightAmountError(
+      "referralFeePct",
+      params.referralFeePct ?? 0n,
+    );
+  }
+  if ((params.maxContinuousFee ?? maxUint256) < 0n) {
+    throw new NegativeMidnightAmountError(
+      "maxContinuousFee",
+      params.maxContinuousFee ?? maxUint256,
+    );
   }
   if (params.deadline < 0n) {
     throw new NegativeMidnightAmountError("deadline", params.deadline);
@@ -70,6 +96,33 @@ export const midnightTakeLend = (
   }
 
   const midnightBundles = getChainAddress(params.chainId, "midnightBundles");
+  const reduceOnly = params.reduceOnly ?? false;
+  const collateralWithdrawals = params.collateralWithdrawals ?? [];
+  for (const [index, withdrawal] of collateralWithdrawals.entries()) {
+    if (withdrawal.collateralIndex < 0n) {
+      throw new NegativeMidnightAmountError(
+        `collateralWithdrawals[${index}].collateralIndex`,
+        withdrawal.collateralIndex,
+      );
+    }
+    if (withdrawal.assets < 0n) {
+      throw new NegativeMidnightAmountError(
+        `collateralWithdrawals[${index}].assets`,
+        withdrawal.assets,
+      );
+    }
+  }
+  const collateralReceiver = params.collateralReceiver ?? zeroAddress;
+  const referralFeePct = params.referralFeePct ?? 0n;
+  const referralFeeRecipient = params.referralFeeRecipient ?? zeroAddress;
+  const maxContinuousFee = params.maxContinuousFee ?? maxUint256;
+  const loanTokenPermit = getMidnightTokenPermit({
+    token: MarketUtils.toStruct(params.market).loanToken,
+    owner: params.taker,
+    spender: midnightBundles,
+    amount: params.assets,
+    signatures: params.signatures,
+  });
 
   let tx = {
     to: midnightBundles,
@@ -81,14 +134,14 @@ export const midnightTakeLend = (
         params.assets,
         params.minUnits,
         params.taker,
-        false,
-        { kind: 0, data: "0x" },
+        reduceOnly,
+        loanTokenPermit,
         params.takeableOffers,
-        [],
-        zeroAddress,
-        0n,
-        zeroAddress,
-        maxUint256,
+        collateralWithdrawals,
+        collateralReceiver,
+        referralFeePct,
+        referralFeeRecipient,
+        maxContinuousFee,
         params.deadline,
       ],
     }),
@@ -107,7 +160,13 @@ export const midnightTakeLend = (
         assets: params.assets,
         minUnits: params.minUnits,
         taker: params.taker,
+        reduceOnly,
         takeableOffers: params.takeableOffers.length,
+        collateralWithdrawals: collateralWithdrawals.length,
+        collateralReceiver,
+        referralFeePct,
+        referralFeeRecipient,
+        maxContinuousFee,
         deadline: params.deadline,
       },
     },
