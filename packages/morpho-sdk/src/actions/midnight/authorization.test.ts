@@ -25,7 +25,11 @@ describe("midnightAuthorization", () => {
     expect(decoded.functionName).toBe("setIsAuthorized");
     expect(decoded.args[0]).toBe(midnightAddresses.midnightBundles);
     expect(decoded.args[1]).toBe(true);
-    expect(isAddressEqual(decoded.args[2], midnightAddresses.taker)).toBe(true);
+    const onBehalf = decoded.args[2];
+    if (typeof onBehalf !== "string") {
+      throw new Error("expected onBehalf argument");
+    }
+    expect(isAddressEqual(onBehalf, midnightAddresses.taker)).toBe(true);
   });
 
   test("behavior: revokes authorization and appends metadata", () => {

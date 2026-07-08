@@ -1474,12 +1474,14 @@ describe("MorphoMidnight", () => {
         collateralAssets: 1_000n,
       });
       const requirements = await output.getRequirements();
+      const approval = requirements.find(
+        (requirement) => requirement.action.type === "erc20Approval",
+      );
+      if (approval?.action.type !== "erc20Approval") {
+        throw new Error("expected an ERC20 approval requirement");
+      }
 
-      expect(
-        requirements.find(
-          (requirement) => requirement.action.type === "erc20Approval",
-        )?.action.args.amount,
-      ).toBe(1_000n);
+      expect(approval.action.args.amount).toBe(1_000n);
     });
 
     test("error: amount validation", async () => {

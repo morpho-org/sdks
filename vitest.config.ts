@@ -77,7 +77,10 @@ export default defineConfig({
         extends: true,
         test: {
           name: "midnight-sdk",
-          include: ["packages/midnight-sdk/src/**/*.test.ts"],
+          include: [
+            "packages/midnight-sdk/src/**/*.test.ts",
+            "packages/midnight-sdk/test/**/*.test.ts",
+          ],
         },
       },
       {
