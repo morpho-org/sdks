@@ -193,6 +193,8 @@ export interface BlueRepayAction
       onBehalf: Address;
       receiver: Address;
       maxSharePrice: bigint;
+      /** Native token wrapped into wNative to fund the repay. Present when `> 0n`. */
+      nativeAmount?: bigint;
     }
   > {}
 
@@ -219,6 +221,8 @@ export interface BlueRepayWithdrawCollateralAction
       maxSharePrice: bigint;
       onBehalf: Address;
       receiver: Address;
+      /** Native token wrapped into wNative to fund the repay. Present when `> 0n`. */
+      nativeAmount?: bigint;
     }
   > {}
 
@@ -245,12 +249,56 @@ export interface BlueRefinanceAction
  * - `shares`: operate on an exact share count (typical for full position closes,
  *   immune to interest accrual between tx construction and execution).
  *
- * Used by repay (asserts on borrow side) and withdraw (asserts on supply side).
+ * Used by withdraw (asserts on supply side). Repay uses {@link RepayAmountArgs},
+ * which additionally supports native wrapping.
  */
 export type AssetsOrSharesArgs = { assets: bigint } | { shares: bigint };
 
-/** @deprecated Use {@link AssetsOrSharesArgs}. Kept as an alias for back-compat. */
-export type RepayAmountArgs = AssetsOrSharesArgs;
+/**
+ * Repay funding sources for the **entity layer** (`MorphoBlue.repay` /
+ * `MorphoBlue.repayWithdrawCollateral`), which computes the loan-token
+ * `transferAmount` itself from live market state.
+ *
+ * - **assets mode** ({@link DepositAmountArgs}): repay an exact asset total of
+ *   `amount` (ERC-20) + `nativeAmount` (wrapped native). Additive — mirrors `blueSupply`.
+ * - **shares mode** (`{ shares }`): repay an exact borrow-share count (full close,
+ *   immune to interest accrual). `nativeAmount` funds part of the transfer.
+ *
+ * `nativeAmount` requires the market's loan token to be the chain's wNative.
+ */
+export type RepayAmountArgs =
+  | DepositAmountArgs
+  | { shares: bigint; nativeAmount?: bigint };
+
+/**
+ * Repay funding sources for the **action layer** (`blueRepay` /
+ * `blueRepayWithdrawCollateral`) — a flat, pre-resolved shape. The entity layer
+ * ({@link RepayAmountArgs}) derives these from live market state; the action does no
+ * amount arithmetic. The mode is discriminated on `shares`:
+ *
+ * - **assets mode** (`shares` unset/`0n`): repays `transferAmount` assets
+ *   (`= amount + nativeAmount`, additive like `blueSupply`), pulling `amount` ERC-20
+ *   and wrapping `nativeAmount`. No residual.
+ * - **shares mode** (`shares > 0n`): repays an exact borrow-share count (full close),
+ *   pulling `transferAmount` ERC-20 (already net of native) and wrapping `nativeAmount`;
+ *   the residual loan token is skimmed back to `receiver`.
+ *
+ * `nativeAmount` requires the market's loan token to be the chain's wNative.
+ */
+export interface RepayActionAmountArgs {
+  /** Assets-mode ERC-20 loan tokens pulled from the payer. Omit (or `0n`) in shares mode. */
+  amount?: bigint;
+  /** Shares-mode borrow shares to repay (full close). Omit (or `0n`) in assets mode. */
+  shares?: bigint;
+  /** Native ETH wrapped into wNative to help fund the repay. Loan token must be wNative. */
+  nativeAmount?: bigint;
+  /**
+   * Loan tokens routed into `GeneralAdapter1`. Assets mode: the total repaid
+   * (`amount + nativeAmount`). Shares mode: the ERC-20 pulled
+   * (`toBorrowAssets(shares) − nativeAmount`).
+   */
+  transferAmount: bigint;
+}
 
 /** Metadata for a Blue authorization prerequisite transaction. */
 export interface BlueAuthorizationAction

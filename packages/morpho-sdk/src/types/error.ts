@@ -413,14 +413,25 @@ export class UnsortedReallocationWithdrawalsError extends Error {
   }
 }
 
-/** Thrown when a market repay's `transferAmount` is zero or negative. */
+/**
+ * Thrown when a market repay's `transferAmount` is zero or negative.
+ *
+ * @deprecated No longer thrown. The repay action layer no longer validates `transferAmount`
+ * directly (assets mode uses {@link NonPositiveRepayAmountError}; shares mode allows a zero
+ * ERC-20 transfer for fully-native repays). Retained as exported API for back-compat; slated
+ * for removal in a future major.
+ */
 export class NonPositiveTransferAmountError extends Error {
   constructor(market: string) {
     super(`Transfer amount must be positive for market: ${market}`);
   }
 }
 
-/** Thrown when a market repay in assets mode has `transferAmount !== assets` (asset-mode requires exact transfer). */
+/**
+ * Thrown when a market repay in assets mode has `transferAmount !== amount + nativeAmount` — the
+ * pre-resolved ERC-20 pull plus the wrapped native must equal the assets repaid, so the bundle
+ * neither strands over-pulled loan tokens on `GeneralAdapter1` nor under-funds the repay.
+ */
 export class TransferAmountNotEqualToAssetsError extends Error {
   constructor(params: {
     transferAmount: bigint;
@@ -428,7 +439,23 @@ export class TransferAmountNotEqualToAssetsError extends Error {
     market: string;
   }) {
     super(
-      `Transfer amount ${params.transferAmount} is not equal to repay assets ${params.assets} for market: ${params.market}`,
+      `Transfer amount ${params.transferAmount} is not equal to repay assets ${params.assets} for market: ${params.market}. In assets mode, transferAmount must equal amount + nativeAmount.`,
+    );
+  }
+}
+
+/**
+ * Thrown when a shares-mode repay's `nativeAmount` exceeds `transferAmount`, which
+ * would make the ERC-20 amount to pull (`transferAmount − nativeAmount`) negative.
+ */
+export class NativeAmountExceedsTransferAmountError extends Error {
+  constructor(params: {
+    nativeAmount: bigint;
+    transferAmount: bigint;
+    market: string;
+  }) {
+    super(
+      `Native amount ${params.nativeAmount} exceeds transfer amount ${params.transferAmount} for market: ${params.market}. Reduce nativeAmount to at most transferAmount.`,
     );
   }
 }

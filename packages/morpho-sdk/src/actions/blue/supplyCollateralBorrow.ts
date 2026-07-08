@@ -1,11 +1,8 @@
-import { getChainAddresses, type MarketParams } from "@morpho-org/blue-sdk";
+import type { MarketParams } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
 import { type Action, BundlerAction } from "../../bundler/index.js";
-import {
-  addTransactionMetadata,
-  validateNativeAsset,
-} from "../../helpers/index.js";
+import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   type AuthorizationRequirementSignature,
   type BlueSupplyCollateralBorrowAction,
@@ -21,7 +18,7 @@ import {
   ZeroCollateralAmountError,
 } from "../../types/index.js";
 import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
-import { getTokenRequirementActions } from "../signatures/getTokenRequirementActions.js";
+import { buildAssetFundingActions } from "./buildAssetFundingActions.js";
 import { buildReallocationActions } from "./buildReallocationActions.js";
 
 /** Parameters for {@link blueSupplyCollateralBorrow}. */
@@ -165,41 +162,21 @@ export const blueSupplyCollateralBorrow = ({
     throw new ZeroCollateralAmountError(marketParams.id);
   }
 
-  const {
-    bundler3: { generalAdapter1, bundler3 },
-  } = getChainAddresses(chainId);
-
   const actions: Action[] = [];
 
   if (authorizationSignature) {
     actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
   }
 
-  if (nativeAmount !== undefined && nativeAmount > 0n) {
-    validateNativeAsset(chainId, marketParams.collateralToken);
-
-    actions.push(
-      {
-        type: "nativeTransfer",
-        args: [bundler3, generalAdapter1, nativeAmount, false],
-      },
-      {
-        type: "wrapNative",
-        args: [nativeAmount, generalAdapter1, false],
-      },
-    );
-  }
-
-  if (amount > 0n) {
-    actions.push(
-      ...getTokenRequirementActions({
-        asset: marketParams.collateralToken,
-        amount,
-        recipient: generalAdapter1,
-        requirementSignature,
-      }),
-    );
-  }
+  actions.push(
+    ...buildAssetFundingActions({
+      chainId,
+      asset: marketParams.collateralToken,
+      erc20Amount: amount,
+      nativeAmount: nativeAmount ?? 0n,
+      requirementSignature,
+    }),
+  );
 
   actions.push({
     type: "morphoSupplyCollateral",
