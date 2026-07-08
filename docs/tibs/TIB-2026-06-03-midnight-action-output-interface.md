@@ -13,17 +13,15 @@
 
 This TIB specifies the implementation of Midnight action flows in `morpho-sdk`. The source behavior is the markets app (`morpho-apps/apps/markets-app`): its home-made action builders already encode the protocol paths, requirement ordering, token-pull policy, ratifier selection, and mempool submission behavior future integrators need. The SDK should lift that protocol logic into reusable Midnight entity / action flows, while keeping the markets app migration as close as possible to an adapter swap.
 
-The markets app is also the compatibility target. To minimize its diff, the SDK keeps the lazy action output shape already used by existing `morpho-sdk` action flows and widens only the requirement and signature arguments:
+The markets app is also the compatibility target. To minimize its diff, the SDK keeps the lazy action output shape already used by existing `morpho-sdk` action flows and widens only the requirement list and maker-offer signature arguments needed by the current app flows:
 
 ```ts
 {
-  getRequirements: (params?: {
-    useSimplePermit?: boolean;
-  }) => Promise<readonly RequirementItem[]>;
+  getRequirements: () => Promise<readonly ActionRequirement[]>;
   buildTx: (
     requirementSignatures?:
-      | AnyRequirementSignature
-      | readonly AnyRequirementSignature[],
+      | MidnightOfferRootSignature
+      | readonly MidnightOfferRootSignature[],
   ) => Readonly<Transaction<TAction>>;
 }
 ```
@@ -63,7 +61,8 @@ The compatibility constraint is intentionally two-sided. For existing `morpho-sd
 - Keep existing Blue / MarketV1 / vault methods source-compatible; widen shared action-flow types / interfaces only where needed for the markets app's minimum-change migration.
 - Avoid large breaking changes for existing `morpho-sdk` consumers while maximizing compatibility with the markets app's current action-flow shape.
 - Make requirement ordering explicit enough for multi-step Midnight flows.
-- Support ERC2612 and Permit2 for Midnight bundle token pulls with the same `supportSignature` / `useSimplePermit` consumer policy as Blue. `supportSignature` remains a consumer capability flag: when false, the SDK returns transaction requirements only; when true, it may return signature requirements for tokens that support a safe permit path.
+- Keep Midnight bundle token pulls approval-only in the first implementation, matching the current markets app builders.
+- Add SDK support for constructing fixed-rate offer chains, because the markets app currently needs this protocol utility to build one maker order from several time-bounded offers.
 - Support both maker consent paths: EOA / EIP-7702 signature and contract-wallet ratify-root.
 
 **Non-Goals**
@@ -72,8 +71,18 @@ The compatibility constraint is intentionally two-sided. For existing `morpho-sd
 - No generic DAG / dependency graph of steps.
 - No `buildTxs()` as the primary interface.
 - No validation requirement objects. SDK-owned validation throws typed errors from entity / requirement resolution; app-owned preflights such as quote previews and tick-spacing assertions may continue to throw the app's user-facing errors before the SDK call.
-- No SDK-specific UI policy for token permits. The SDK exposes ERC2612 / Permit2 requirements with neutral metadata; the markets app still decides whether `supportSignature` is enabled, whether to request simple permits with `useSimplePermit`, and how each signature step is labeled.
+- No ERC2612 or Permit2 token-pull support for Midnight bundle calls in the first PR. This is a follow-up once a product flow needs it.
+- No exposed `reduceOnly` input, unit-target take entry points, referral fee input, max-continuous-fee input, or take-lend collateral-withdrawal input in the first PR. The implementation hardcodes the current markets app defaults where the bundle ABI requires those fields.
 - No SDK modeling for app-only forms, dialogs, or UI copy.
+
+**Deferred follow-up PR**
+
+The first implementation should be limited to surface area the current markets app can actually consume. A follow-up PR, stacked on the implementation PR, can add broader protocol coverage:
+
+- ERC2612 and Permit2 SignatureTransfer support for Midnight bundle token pulls;
+- unit-target take helpers in addition to the app's asset-targeted take flows with unit slippage guards;
+- exposed `reduceOnly` for take flows;
+- secondary bundle knobs such as referral fees, max continuous fee caps, and take-lend collateral withdrawals.
 
 ## Decision
 
@@ -86,15 +95,13 @@ export interface ActionOutput<
   TAction extends BaseAction = TransactionAction,
   TSignatures = RequirementSignature,
 > {
-  readonly getRequirements: (params?: {
-    readonly useSimplePermit?: boolean;
-  }) => Promise<readonly ActionRequirement[]>;
+  readonly getRequirements: () => Promise<readonly ActionRequirement[]>;
   readonly buildTx: (signatures?: TSignatures) => Readonly<Transaction<TAction>>;
 }
 
 export type MidnightActionSignatures =
-  | AnyRequirementSignature
-  | readonly AnyRequirementSignature[];
+  | MidnightOfferRootSignature
+  | readonly MidnightOfferRootSignature[];
 ```
 
 Semantics:
@@ -102,12 +109,12 @@ Semantics:
 1. `getRequirements()` returns every item that must be satisfied **before** `buildTx()`'s transaction is sent.
 2. Items are already filtered: if an approval / authorization is not needed, it is omitted.
 3. Returned transaction items are ordered and must be executed in relative order.
-4. Signature items in the initial Midnight implementation may be collected before transaction items because the signed typed data is fully determined during entity resolution and does not depend on a prerequisite transaction being mined.
+4. Maker signature items in the initial Midnight implementation may be collected before transaction items because the signed offer-tree typed data is fully determined during entity resolution and does not depend on a prerequisite transaction being mined.
 5. A transaction item is not necessarily an approval; it can be an authorization, contract-wallet ratify-root, or mandatory prelude transaction.
-6. A signature item returns a `RequirementSignature` value. Existing one-signature flows may pass that value directly into `buildTx(signature)`; Midnight flows use `MidnightActionSignatures` and may pass the collected `readonly AnyRequirementSignature[]` into `buildTx(signatures)` when the final bundle needs a token permit and a maker root signature can appear in the same action output.
+6. A signature item returns a `RequirementSignature` value. Existing one-signature flows may pass that value directly into `buildTx(signature)`; Midnight maker flows use `MidnightActionSignatures` and may pass the collected `readonly MidnightOfferRootSignature[]` into `buildTx(signatures)`.
 7. Existing methods may keep narrower return types; new Midnight methods use `ActionRequirement`.
 
-This is the smallest compatible change: Midnight flows that are one final tx remain one final tx, flows with required prelude txs place those prelude txs in `getRequirements()`, and the markets app can forward the signature list it already collects instead of learning a keyed SDK-owned flow engine.
+This is the smallest compatible change: Midnight flows that are one final tx remain one final tx, flows with required prelude txs place those prelude txs in `getRequirements()`, and the markets app can forward the maker signature it already collects instead of learning a keyed SDK-owned flow engine.
 
 ## Description: markets app migration boundary
 
@@ -115,8 +122,8 @@ The markets app can keep its UI-specific `ActionFlow` execution engine. Because 
 
 The concrete SDK implementation in the stacked implementation PR moves protocol execution into `morpho-sdk`, while leaving rate-form and display decisions in the markets app:
 
-- **SDK-owned protocol logic**: allowance reads, `Midnight.isAuthorized(...)` reads, ratifier selection, `Group` / `Tree` / `Payload` construction, root-signature payload generation, ratify-root calldata, Midnight API mempool validation, and `MidnightBundles` / `Midnight` calldata.
-- **Integrator-owned app logic**: `ActionFlow` construction, step labels (`"Confirm"`, `"Approve loan token"`, `"Submit offer"`), form-specific copy, review-only display values (`offerExpiry`, date labels, token role labels), `onSuccess` routing, query invalidation, analytics, EIP-5792 batching behavior, `before` / `after` waits if the app ever adds them, user-facing error presentation, and rate-derived input preparation (`minUnits`, `maxUnits`, maker `offers`).
+- **SDK-owned protocol logic**: allowance reads, `Midnight.isAuthorized(...)` reads, ratifier selection, `Group` / `Tree` / `Payload` construction, fixed-rate offer-chain construction, root-signature payload generation, ratify-root calldata, Midnight API mempool validation, and `MidnightBundles` / `Midnight` calldata.
+- **Integrator-owned app logic**: `ActionFlow` construction, step labels (`"Confirm"`, `"Approve loan token"`, `"Submit offer"`), form-specific copy, review-only display values (`offerExpiry`, date labels, token role labels), `onSuccess` routing, query invalidation, analytics, EIP-5792 batching behavior, `before` / `after` waits if the app ever adds them, user-facing error presentation, and final take constraints (`minUnits`, `maxUnits`) from the selected quote.
 - **Retained preflight validation in the markets app**: existing quote/rate preview checks and tick-spacing assertions may stay app-side because they are used to produce immediate UX errors and review data. The SDK still performs the protocol checks it needs to build safe transactions and payloads.
 
 The SDK may expose neutral typed metadata so an integrator can label steps, but it must not expose labels or UI state. For example, `MidnightAuthorizationAction.args.authorized` is SDK metadata; `"Authorize bundler"` is app copy.
@@ -132,7 +139,7 @@ The migration should keep the markets app on the bundle paths it already uses:
 
 These bundle signatures are checked against `morpho-org/bundles` `main` commit `4c71ac5ee7254b2a448b6054e003bd81e171d86e` (`src/midnight/IMidnightBundlesV1.sol` and `src/midnight/MidnightBundlesV1.sol`). The local `midnight-sdk` ABI in this stack may lag that deploy while the implementation PR updates generated ABI inputs.
 
-This is not just a UI preference. `MidnightBundles` pulls tokens once, consumes token permits when the SDK collected one, skips reverted stale offers while continuing through the provided take list, enforces exact asset / unit targets, and performs the authorized `Midnight` calls on behalf of the taker. The app already shaped its flows around those semantics, so the SDK migration should preserve them to minimize app changes.
+This is not just a UI preference. `MidnightBundles` pulls tokens once from direct ERC-20 allowance in the first implementation, skips reverted stale offers while continuing through the provided take list, enforces exact asset targets with unit slippage guards, and performs the authorized `Midnight` calls on behalf of the taker. The app already shaped its flows around those semantics, so the SDK migration should preserve them to minimize app changes.
 
 Maker flows remain mempool flows, not bundle flows:
 
@@ -149,12 +156,12 @@ The markets app can adapt SDK output once and reuse the adapter across every scr
 - SDK action outputs expose requirements and one final transaction builder;
 - the app wallet layer turns SDK signature requirements into signature prompts;
 - the app turns SDK transaction requirements into ordered call requests;
-- collected signatures are passed back to the final `buildTx` call;
+- collected maker signatures are passed back to the final `buildTx` call;
 - labels, token roles, display copy, and success behavior stay in the app.
 
-The adapter preserves the current markets app UX where all signature prompts are collected before transactions are sent. ERC2612 permits, Permit2 transfer signatures, and EOA maker offer-root signatures do not depend on prior Midnight authorization or collateral-supply transactions, so grouping signatures first is protocol-compatible for the flows covered by this TIB. Permit2 may still require an ERC20 approval transaction to the Permit2 contract; that transaction stays in the ordered transaction requirements. If a future Midnight flow introduces a signature that depends on a mined prerequisite transaction, the app adapter should gain an explicit dependency concept then.
+The adapter preserves the current markets app UX where maker signature prompts are collected before transactions are sent. EOA maker offer-tree signatures do not depend on prior Midnight authorization or collateral-supply transactions, so grouping signatures first is protocol-compatible for the flows covered by this TIB. If a future Midnight flow introduces a signature that depends on a mined prerequisite transaction, the app adapter should gain an explicit dependency concept then.
 
-The label mapper stays in the markets app. It can map requirement types such as token permits, Permit2 transfer signatures, root signatures, ERC20 approvals, Midnight authorizations, ratify-root transactions, and collateral-supply transactions to screen-specific copy. This remains app-side because it depends on display concepts (`loan token`, `collateral token`, token symbols, and screen-specific final labels) that do not belong in `morpho-sdk`.
+The label mapper stays in the markets app. It can map requirement types such as offer-tree signatures, ERC20 approvals, Midnight authorizations, ratify-root transactions, and collateral-supply transactions to screen-specific copy. This remains app-side because it depends on display concepts (`loan token`, `collateral token`, token symbols, and screen-specific final labels) that do not belong in `morpho-sdk`.
 
 If a markets app screen needs protocol metadata for follow-up behavior, the Midnight method can return a method-specific subtype that structurally extends `ActionOutput` with readonly metadata. The concrete maker flows return protocol fields such as `group`, `root`, and `ratifierType`; review-only display state such as `offerExpiry` stays in the markets app because the app owns display preparation while the SDK owns offer-set normalization, tree construction, and submit payload construction. That does not change the core `{ getRequirements, buildTx }` interface, and the app decides how to display the metadata.
 
@@ -167,7 +174,7 @@ The app keeps quote selection, loading state, form guards, rate display math, an
 What leaves the app:
 
 - allowance read for the loan token;
-- `buildApprovalCallRequestIfNeeded(...)` invocation for this flow; the SDK now resolves the loan-token pull as either an approval transaction, ERC2612 signature, or Permit2 signature through the same shared signature policy as Blue;
+- `buildApprovalCallRequestIfNeeded(...)` invocation for this flow; the SDK now resolves the loan-token pull as a direct approval transaction to `MidnightBundles`;
 - `buildAuthorizeBundlerCallRequestIfNeeded(...)` invocation for this flow;
 - take construction (`buildTakesFromOffers(...)` in the markets app) and `MidnightBundles` calldata encoding.
 
@@ -177,14 +184,13 @@ What stays in the app:
 - rate and price display math, because the concrete SDK API receives the final unit constraint and does not own app display math;
 - form guards if the app wants immediate local UX errors;
 - labels (`"Take lend offers"`, `"Approve loan token"`, `"Authorize bundler"`);
-- the app's existing signature policy at the shared SDK / adapter boundary; the take-lend builder does not add an ERC2612-vs-Permit2 UI branch;
 - `ActionFlow` wrapping and `onSuccess`.
 
-The resulting SDK action should expose token-pull and Midnight authorization requirements when needed, then build the final `MidnightBundles` take-lend transaction once the adapter passes back any collected signatures. The exact helper names and call shapes are intentionally left to the implementation PR.
+The resulting SDK action should expose approval and Midnight authorization requirements when needed, then build the final `MidnightBundles` take-lend transaction. The exact helper names and call shapes are intentionally left to the implementation PR.
 
-The buy bundle has a collateral-withdrawal slot that the current lend-market screen leaves empty. The SDK should reserve room for that field in the action parameters with app-compatible defaults (`[]` and a zero collateral receiver) so secondary-market exits such as repay-via-market can be added without a breaking interface change.
+The buy bundle has collateral-withdrawal, referral, max-continuous-fee, and `reduceOnly` slots that the current lend-market screen leaves at defaults. The first SDK implementation should hardcode the current app defaults instead of exposing those fields as public parameters. A follow-up PR can expose them when a product flow needs secondary-market exits or advanced bundle policy.
 
-Complexity for the markets app: **low**. This is mostly a mechanical builder replacement. The app keeps the existing rate-to-units lines, removes roughly the allowance / authorization / approval / take-encoding / final-call half of the builder, and updates tests to assert adapter inputs rather than raw app-built calldata. Signature support, when already enabled at the shared SDK / adapter boundary, is surfaced by the adapter and does not require another branch inside this builder.
+Complexity for the markets app: **low**. This is mostly a mechanical builder replacement. The app keeps the existing rate-to-units lines, removes roughly the allowance / authorization / approval / take-encoding / final-call half of the builder, and updates tests to assert adapter inputs rather than raw app-built calldata.
 
 ### Example 2: supply-collateral-make-borrow
 
@@ -211,7 +217,7 @@ What leaves the app:
 What stays in the app:
 
 - form-level guards and user-facing copy (`"Rate is required"`, empty amount checks) unless the app chooses to rely entirely on SDK typed errors;
-- market loading, the existing rate / tick / expiry logic that produces a tree-like offer set, ratifier selection, and tick-spacing preflight;
+- market loading, final review display, ratifier selection, and tick-spacing preflight;
 - `ActionFlow` execution through the shared adapter;
 - final labels and requirement labels;
 - no token-permit UI branch for this collateral prelude; the SDK returns an approval transaction because the core Midnight call used by this migration has no `TokenPermit` argument;
@@ -225,7 +231,7 @@ The current app already minimizes transactions here by using `MidnightBundles.mi
 
 This migration sketch is illustrative. It describes the desired shape, not a literal app patch.
 
-The app keeps input validation, final label selection, `ActionFlow` wrapping, and success behavior. The SDK should own the loan-token allowance read, token-pull requirement selection, bundler authorization requirement, collateral-withdrawal struct construction, and final `MidnightBundles.midnightBundlesV1RepayAndWithdrawCollateral(...)` calldata encoding.
+The app keeps input validation, final label selection, `ActionFlow` wrapping, and success behavior. The SDK should own the loan-token allowance read, approval requirement selection, bundler authorization requirement, single-collateral withdrawal struct construction, and final `MidnightBundles.midnightBundlesV1RepayAndWithdrawCollateral(...)` calldata encoding.
 
 The SDK requirements should include a loan-token pull requirement only when repay assets are positive, plus a MidnightBundles authorization requirement when needed. The final transaction remains one bundle transaction for repay-only, withdraw-only, and combined repay-withdraw flows.
 
@@ -235,7 +241,7 @@ What leaves the app:
 
 - loan-token allowance read;
 - bundler authorization read;
-- loan-token approval construction; the SDK now resolves the repay token pull as either an approval transaction, ERC2612 signature, or Permit2 signature through the same shared signature policy as Blue;
+- loan-token approval construction; the SDK now resolves the repay token pull as an approval transaction to `MidnightBundles`;
 - `collateralWithdrawals` struct construction;
 - `MidnightBundles.midnightBundlesV1RepayAndWithdrawCollateral(...)` calldata encoding.
 
@@ -243,43 +249,25 @@ What stays in the app:
 
 - `validateInputs(...)` or equivalent form-level guards;
 - the final label switch between `"Repay"`, `"Withdraw collateral"`, and `"Repay and withdraw collateral"`;
-- the app's existing signature policy at the shared SDK / adapter boundary;
 - `ActionFlow` wrapping and `onSuccess`.
 
-Complexity for the markets app: **low**. The important migration detail is that this does **not** become a two-step direct `repay` then `withdrawCollateral` flow. The SDK keeps the same final bundle transaction the app uses today, so app risk is mostly around label/test updates and adapter reuse. Signature support, when already enabled at the shared SDK / adapter boundary, is surfaced by the adapter and does not require another branch inside this builder.
+Complexity for the markets app: **low**. The important migration detail is that this does **not** become a two-step direct `repay` then `withdrawCollateral` flow. The SDK keeps the same final bundle transaction the app uses today, so app risk is mostly around label/test updates and adapter reuse.
 
 ## Type changes
 
 ### Requirement aliases
 
-Add explicit aliases, without changing the shape of existing `Requirement` objects.
+Add explicit aliases for ordered call requirements and Midnight maker signatures, without changing the shape of existing `Requirement` objects.
 
 ```ts
-export interface Permit2TransferAction
-  extends BaseAction<
-    "permit2Transfer",
-    { spender: Address; amount: bigint; deadline: bigint }
-  > {}
-
-export interface Permit2TransferArgs {
-  readonly owner: Address;
-  readonly nonce: bigint;
-  readonly asset: Address;
-  readonly signature: Hex;
-  readonly amount: bigint;
-  readonly deadline: bigint;
-}
-
 export type SignatureRequirementAction =
   | PermitAction
   | Permit2Action
-  | Permit2TransferAction
   | MidnightOfferRootSignatureAction;
 
 export type RequirementSignatureArgs =
   | PermitArgs
   | Permit2Args
-  | Permit2TransferArgs
   | MidnightOfferRootSignatureArgs;
 
 export interface Requirement<
@@ -315,17 +303,13 @@ export type BlueTokenSignatureRequirement =
   | Requirement<PermitAction, PermitArgs>
   | Requirement<Permit2Action, Permit2Args>;
 
-export type TokenSignatureRequirement =
-  | BlueTokenSignatureRequirement
-  | Requirement<Permit2TransferAction, Permit2TransferArgs>;
+export type TokenSignatureRequirement = BlueTokenSignatureRequirement;
 
 export type BlueTokenRequirementSignature =
   | RequirementSignature<PermitAction, PermitArgs>
   | RequirementSignature<Permit2Action, Permit2Args>;
 
-export type TokenRequirementSignature =
-  | BlueTokenRequirementSignature
-  | RequirementSignature<Permit2TransferAction, Permit2TransferArgs>;
+export type TokenRequirementSignature = BlueTokenRequirementSignature;
 
 export type AnyRequirementSignature =
   | TokenRequirementSignature
@@ -341,10 +325,8 @@ Compatibility:
 - Existing `permit` and Blue `permit2` requirement objects stay structurally identical.
 - Existing consumers that check `"sign" in requirement` still work.
 - New consumers can discriminate on `requirement.action.type`.
-- Token signature aliases are unions of paired action/args instantiations, so `action.type` narrows `args` and mismatched pairs such as `permit2Transfer` with Blue `Permit2Args` are rejected at compile time.
-- Blue-only requirement getters can return `BlueTokenSignatureRequirement` so existing Blue flows are not typed as possibly returning Midnight `permit2Transfer` requirements.
-- Midnight bundle actions that can consume a token permit accept `AnyRequirementSignature | readonly AnyRequirementSignature[]` and select the matching `permit` / `permit2Transfer` signature for the token pull they encode. They validate the signed token and amount before producing `TokenPermit` calldata.
-- Midnight does not reuse `action.type === "permit2"` because Blue's existing `permit2` requirement signs Permit2 `PermitSingle` and returns `Permit2Args` with `expiration`. Midnight Bundles consume Permit2 `SignatureTransfer` through `permitTransferFrom`, whose signed payload has no `expiration`; it is encoded into `TokenPermit` as `(nonce, deadline, signature)`. A separate `permit2Transfer` action / args shape keeps the two public contracts distinguishable.
+- Midnight maker flows can return `MidnightOfferRootRequirement`; taker and repay flows in the first implementation return only call requirements.
+- Midnight bundle token signatures are intentionally not represented in the first implementation. A follow-up PR should add a distinct requirement type for Permit2 SignatureTransfer rather than reusing Blue's `action.type === "permit2"`, because Blue signs `PermitSingle` and Midnight Bundles consume `permitTransferFrom`.
 
 ### Midnight bundle permit metadata
 
@@ -368,7 +350,7 @@ export type MidnightTokenPermit =
     };
 ```
 
-This is action-encoding metadata, not UI state. Integrators still receive neutral `permit`, `permit2`, and `permit2Transfer` requirements and decide how to label them.
+This is action-encoding metadata, not UI state. The first implementation only encodes `PermitKind.None`; the non-`None` variants are ABI names reserved for the deferred token-signature PR.
 
 ### Call requirements
 
@@ -458,13 +440,7 @@ export interface MidnightTakeLendAction
       assets: bigint;
       minUnits: bigint;
       taker: Address;
-      reduceOnly: boolean;
       takeableOffers: number;
-      collateralWithdrawals: number;
-      collateralReceiver: Address;
-      referralFeePct: bigint;
-      referralFeeRecipient: Address;
-      maxContinuousFee: bigint;
       deadline: bigint;
     }
   > {}
@@ -474,17 +450,12 @@ export interface MidnightTakeBorrowAction
     "midnightTakeBorrow",
     {
       market: Hex;
-      collateralAssets: bigint;
       loanAssets: bigint;
       maxUnits: bigint;
       taker: Address;
-      reduceOnly: boolean;
       receiver: Address;
       collateralSupplies: number;
       takeableOffers: number;
-      referralFeePct: bigint;
-      referralFeeRecipient: Address;
-      maxContinuousFee: bigint;
       deadline: bigint;
     }
   > {}
@@ -533,8 +504,6 @@ export interface MidnightRepayWithdrawCollateralAction
       collateralWithdrawals: number;
       onBehalf: Address;
       collateralReceiver: Address;
-      referralFeePct: bigint;
-      referralFeeRecipient: Address;
       deadline: bigint;
     }
   > {}
@@ -552,88 +521,54 @@ export interface MidnightCancelOfferAction
 
 Maker entity methods accept a tree-like `MidnightOfferSetInput` only. The caller may pass a single offer, an array of offers, pre-grouped offers, or a tree; it does not pass derived `groups`, `root`, compression, signature payload, or mempool calldata. The entity normalizes the offer set, constructs the groups and tree, derives the root and signature input, validates the router / mempool payload, and passes only prepared encode inputs into the final action builder. `MempoolSubmitOffersAction` may expose derived metadata such as `groups`, `root`, and `offers` for adapters and `onSuccess` routing, but those fields are not caller inputs.
 
-Building offers from a target rate and implementing offer chaining remain outside this initial migration unless the caller has already materialized the resulting tree-like offer set before calling the SDK.
+Building a tree-like offer set remains caller-owned, but the Midnight SDK should expose the fixed-rate offer-chain utility the markets app currently owns. The utility returns `{ tick, startTimestamp, expiryTimestamp }` legs from a target APR, side, tick spacing, maturity, and requested window. The app still turns those legs into `Offer.create(...)` inputs and review display state.
 
 Extend `TransactionAction` with these action interfaces and the Midnight requirement action interfaces above (`MidnightAuthorizationAction`, `SetterRatifierRatifyRootAction`).
 
 ## Minimal helper changes
 
-### Midnight token-pull requirement helper
+### Midnight approval requirement helper
 
-Do not reuse the top-level Blue / MarketV1 `getRequirements(...)` helper for Midnight, because it hardcodes `bundler3.generalAdapter1` as spender and its Permit2 path emits Bundler3 actions (`approve2` + `transferFrom2`). Midnight bundle entry points consume a `TokenPermit` struct directly, so the SDK needs a Midnight-specific token-pull helper with an explicit spender and an encoder for the bundle's permit argument.
-
-```ts
-type GetMidnightTokenPullRequirementsParams =
-  | {
-      readonly viemClient: Client;
-      readonly chainId: number;
-      readonly token: Address;
-      readonly owner: Address;
-      readonly spender: Address;
-      readonly amount: bigint;
-      readonly supportDeployless?: boolean;
-      readonly supportSignature: false;
-    }
-  | {
-      readonly viemClient: Client;
-      readonly chainId: number;
-      readonly token: Address;
-      readonly owner: Address;
-      readonly spender: Address;
-      readonly amount: bigint;
-      readonly supportDeployless?: boolean;
-      readonly supportSignature: true;
-      readonly useSimplePermit?: boolean;
-    };
-
-async function getMidnightTokenPullRequirements(
-  params: GetMidnightTokenPullRequirementsParams,
-): Promise<readonly ActionRequirement[]>
-```
-
-The helper follows Blue's consumer-facing policy:
-
-- if the direct allowance to `spender` already covers `amount`, return `[]`;
-- if `supportSignature` is `false`, return the approval transaction requirements for `token.approve(spender, approvalAmount)`;
-- if `supportSignature` is `true`, `useSimplePermit` is `true`, the token supports ERC2612, and the token is not the chain's configured DAI address, return a standard ERC2612 `permit` signature requirement for `spender`;
-- otherwise, when Permit2 is configured on the chain, return the Permit2 prerequisites: optional approval transaction requirements for `token.approve(Permit2, approvalAmount)` plus a `permit2Transfer` signature requirement for Midnight's SignatureTransfer payload;
-- if signatures are enabled but no permit route is available, fall back to the classic approval transaction.
-
-Approval transaction requirements can be a reset-then-approve pair for reset-requiring tokens. The reset requirement for amount `0n` must precede the positive approval requirement, which is one concrete reason returned transaction requirements are ordered rather than just a set.
-
-The SDK must not expose or use DAI-specific permit support in the Blue or Midnight action flows. DAI exposes a readable `nonces(owner)` function and can therefore look ERC2612-compatible to a shallow nonce probe, but its permit shape is non-standard while the shared `permit` requirement encodes ERC2612. DAI must therefore skip the simple-permit branch even when `useSimplePermit` is `true` and continue to Permit2 (Permit2 allowance for Blue, Permit2 SignatureTransfer for Midnight) or classic approval when Permit2 is unavailable.
-
-The paired action encoder consumes the collected signatures:
+Do not reuse the top-level Blue / MarketV1 `getRequirements(...)` helper for Midnight, because it hardcodes `bundler3.generalAdapter1` as spender and its signature paths emit Bundler3 actions. The first Midnight action-flow implementation mirrors the current markets app and returns classic ERC-20 approval transactions only for token pulls. The spender is explicit because current flows need both `Midnight` (maker reserves and direct collateral supply) and `MidnightBundles` (taker and repay/withdraw bundle calls).
 
 ```ts
-function encodeMidnightTokenPermit({
+async function getMidnightApprovalRequirements({
+  viemClient,
+  chainId,
   token,
   owner,
   spender,
   amount,
-  signatures,
 }: {
-  token: Address;
-  owner: Address;
-  spender: Address;
-  amount: bigint;
-  signatures?: AnyRequirementSignature | readonly AnyRequirementSignature[];
-}): MidnightTokenPermit
+  readonly viemClient: Client;
+  readonly chainId: number;
+  readonly token: Address;
+  readonly owner: Address;
+  readonly spender: Address;
+  readonly amount: bigint;
+}): Promise<readonly Readonly<Transaction<ERC20ApprovalAction>>[]>
 ```
 
-Encoding rules:
+The helper follows the current markets app policy:
 
-- no matching token signature: `{ kind: PermitKind.None, data: "0x" }`;
-- ERC2612: validate `args.owner === owner`, `action.args.spender === spender`, `args.asset === token`, and `args.amount === amount`, then encode `(deadline, v, r, s)` as `PermitKind.ERC2612`;
-- Permit2 SignatureTransfer: validate `args.owner === owner`, `action.args.spender === spender`, `args.asset === token`, and `args.amount === amount`, then encode Midnight's Permit2 data `(nonce, deadline, signature)` as `PermitKind.Permit2`. A Blue `permit2` allowance signature is not valid here because it signs `PermitSingle` and carries an `expiration`; Midnight only accepts `permit2Transfer`.
+- if `amount === 0n`, return `[]`;
+- read `allowance(owner, spender)`;
+- return `[]` when the direct allowance already covers `amount`;
+- otherwise return the approval transaction requirements for `token.approve(spender, amount)`.
 
-This follows the Midnight protocol source: `MidnightBundles._pullToken(...)` decodes `PermitKind.Permit2` data as `(uint256 nonce, uint256 deadline, bytes signature)` and calls `IPermit2.permitTransferFrom(...)` with `PermitTransferFrom(TokenPermissions(token, amount), nonce, deadline)`. There is no `expiration` field in the signed or encoded Midnight bundle path.
+Approval transaction requirements can be a reset-then-approve pair for reset-requiring tokens. The reset requirement for amount `0n` must precede the positive approval requirement, which is one concrete reason returned transaction requirements are ordered rather than just a set.
 
-Midnight's Permit2 branch uses SignatureTransfer with a randomly generated 256-bit unordered nonce. It does not read Permit2 nonce bitmaps before returning the requirement: with a random unordered nonce, collision risk is negligible, and the extra onchain read would add cost and latency to every Permit2-backed Midnight bundle flow.
+Bundle action encoders still pass a `TokenPermit` struct because the ABI requires it, but the first implementation always uses:
+
+```ts
+{ kind: PermitKind.None, data: "0x" }
+```
+
+The deferred token-signature PR can add ERC2612 and Permit2 SignatureTransfer support. That PR should keep the bundle spender explicit, validate the signed spender and amount, and not reuse Blue's `permit2` requirement shape because Midnight's Permit2 branch signs SignatureTransfer, not PermitSingle.
 
 Midnight callers still supply the spender explicitly:
 
-- `MidnightBundles` for take-lend, take-borrow with `loanAssets > 0`, and repay / withdraw bundle flows. These bundle calls have a `TokenPermit` argument and can use ERC2612 / Permit2;
+- `MidnightBundles` for take-lend, take-borrow with `loanAssets > 0`, and repay / withdraw bundle flows;
 - `Midnight` for direct `supplyCollateral` branches and maker-offer reserve approvals (make-lend loan token approvals and supply-collateral-make-borrow collateral approvals). These direct / mempool paths do not have a `TokenPermit` argument in this migration and remain approval-transaction based.
 
 Never route a bundle token pull through the core `Midnight` allowance. Bundle flows should use `MidnightBundles` as spender so they do not churn the core `Midnight` allowance that open maker offers use for reserved amounts.
@@ -708,13 +643,15 @@ Important boundary calls:
 - router validation through `Tree.mempoolValidate(...)` throws before a signature prompt is exposed; lower-level `MidnightApi` helpers may still return `{ valid, issues }` for raw API consumers;
 - no raw `Error`; every new failure mode gets a typed error in the package that owns the failing boundary.
 
-Bundle action parameters expose ABI policy knobs with app-compatible defaults:
+Bundle action builders encode ABI policy knobs with the current markets app defaults:
 
-- `reduceOnly` defaults to `false` on buy / sell bundle paths, matching the current app flows, but remains part of the SDK action parameters because it is part of the latest `IMidnightBundlesV1` ABI;
-- `deadline` defaults to `maxUint256` to match the current markets app, but integrators can pass a bounded deadline;
-- `maxContinuousFee` defaults to `maxUint256` for the buy and sell bundle paths that expose it;
-- referral parameters default to `0n` and `zeroAddress`;
-- take-lend collateral withdrawals default to an empty list and a zero collateral receiver.
+- `reduceOnly` is encoded as `false`;
+- `deadline` is still a required caller input, so the app can keep its current explicit max-deadline behavior or pass a bounded deadline later;
+- `maxContinuousFee` is encoded as `maxUint256` for buy / sell bundle paths that expose it;
+- referral parameters are encoded as `0n` and `zeroAddress`;
+- take-lend collateral withdrawals are encoded as an empty list and a zero collateral receiver.
+
+These fields should not be first-iteration public inputs. Exposing them before the markets app needs them creates untested action-flow surface.
 
 ## Flow mapping
 
@@ -722,56 +659,56 @@ Bundle action parameters expose ABI policy knobs with app-compatible defaults:
 
 `getRequirements()` returns:
 
-1. optional loan-token pull requirement for `MidnightBundles`: either `ERC20ApprovalAction(loanToken, MidnightBundles, approvalAmount)`, ERC2612 `permit`, or Permit2 SignatureTransfer `permit2Transfer` (+ optional `ERC20ApprovalAction(loanToken, Permit2, approvalAmount)`);
+1. optional loan-token approval requirement for `MidnightBundles`;
 2. optional `MidnightAuthorizationAction` for `Midnight.setIsAuthorized(MidnightBundles, true, taker)`.
 
-`buildTx(signatures?)` returns `MidnightTakeLendAction`:
+`buildTx()` returns `MidnightTakeLendAction`:
 
 ```ts
 MidnightBundles.midnightBundlesV1BuyWithAssetsTargetAndWithdrawCollateral(
   assets,
   minUnits,
   taker,
-  reduceOnly,
-  loanTokenPermit,
+  false, // reduceOnly
+  { kind: PermitKind.None, data: "0x" },
   takeableOffers,
-  collateralWithdrawals,
-  collateralReceiver,
-  referralFeePct,
-  referralFeeRecipient,
-  maxContinuousFee,
+  [],
+  zeroAddress,
+  0n,
+  zeroAddress,
+  maxUint256,
   deadline,
 )
 ```
 
-No offer-root signature is involved. `buildTx(signatures?)` only consumes a token signature if `getRequirements()` returned an ERC2612 `permit` or Permit2 `permit2Transfer` requirement for the bundle token pull.
+No offer-root or token signature is involved in the first implementation.
 
 ### Take borrow with `loanAssets > 0`
 
 `getRequirements()` returns:
 
-1. optional collateral-token pull requirement for `MidnightBundles` when new collateral is supplied: either `ERC20ApprovalAction(collateralToken, MidnightBundles, approvalAmount)`, ERC2612 `permit`, or Permit2 SignatureTransfer `permit2Transfer` (+ optional `ERC20ApprovalAction(collateralToken, Permit2, approvalAmount)`);
+1. optional collateral-token approval requirement for `MidnightBundles` when new collateral is supplied;
 2. optional `MidnightAuthorizationAction` for `Midnight.setIsAuthorized(MidnightBundles, true, taker)`.
 
-`buildTx(signatures?)` returns `MidnightTakeBorrowAction`:
+`buildTx()` returns `MidnightTakeBorrowAction`:
 
 ```ts
 MidnightBundles.midnightBundlesV1SupplyCollateralAndSellWithAssetsTarget(
   loanAssets,
   maxUnits,
   taker,
-  reduceOnly,
-  receiver,
-  collateralSuppliesWithPermits,
+  false, // reduceOnly
+  taker,
+  collateralSuppliesWithNoPermit,
   takeableOffers,
-  referralFeePct,
-  referralFeeRecipient,
-  maxContinuousFee,
+  0n,
+  zeroAddress,
+  maxUint256,
   deadline,
 )
 ```
 
-No offer-root signature is involved. `buildTx(signatures?)` only consumes a token signature if `getRequirements()` returned an ERC2612 `permit` or Permit2 `permit2Transfer` requirement for the bundle collateral pull.
+No offer-root or token signature is involved in the first implementation.
 
 ### Take borrow supply-only branch
 
@@ -803,7 +740,9 @@ Contract wallet:
 
 `buildTx(signatures?)` returns `MempoolSubmitOffersAction` to the mempool contract.
 
-The make-lend method builds one or more precomputed `{ market, tick, start, expiry }` offers. It must accept multi-market offer legs in the same tree when the markets share one loan token, matching the markets app's multi-limit-order / OCA basket flow. For those baskets, offers in the same group share one `consumed[maker][group]` counter on Midnight, so the new group contributes one reserve amount: the maximum leg reserve, with equal leg reserves expected for the current OCA shape. It is not the sum of every offer leg. The SDK throws a typed error when the tree would exceed the Midnight tree-size limit.
+The make-lend method accepts a tree-like offer set. It must accept multi-market offer legs in the same tree when the markets share one loan token, matching the markets app's multi-limit-order / OCA basket flow. For those baskets, offers in the same group share one `consumed[maker][group]` counter on Midnight, so the new group contributes one reserve amount: the maximum leg reserve, with equal leg reserves expected for the current OCA shape. It is not the sum of every offer leg. The SDK throws a typed error when the tree would exceed the Midnight tree-size limit.
+
+The Midnight SDK also exposes a fixed-rate offer-chain utility consumed before this entity call. Given a target APR, side, tick spacing, maturity, and `[start, end]` window, it returns time-bounded legs that the app maps to `Offer.create(...)`. This replaces the app-owned protocol math without making the entity layer own form state or display labels.
 
 Maker reserve approvals stay transaction approvals in this migration. The final mempool submit payload does not consume ERC2612 or Permit2 token signatures, so supporting permits here would require a separate protocol entry point rather than a markets-app-only SDK migration.
 
@@ -884,8 +823,8 @@ All three app branches keep the current bundled execution path.
 
 Repay only:
 
-- `getRequirements()` returns optional loan-token pull requirement for `MidnightBundles` (approval, ERC2612 `permit`, or Permit2 `permit2Transfer`), then optional `MidnightAuthorizationAction` for `MidnightBundles`;
-- `buildTx(signatures?)` returns `MidnightRepayWithdrawCollateralAction`.
+- `getRequirements()` returns optional loan-token approval requirement for `MidnightBundles`, then optional `MidnightAuthorizationAction` for `MidnightBundles`;
+- `buildTx()` returns `MidnightRepayWithdrawCollateralAction`.
 
 Withdraw-only:
 
@@ -894,19 +833,19 @@ Withdraw-only:
 
 Repay + withdraw:
 
-- `getRequirements()` returns optional loan-token pull requirement for `MidnightBundles` (approval, ERC2612 `permit`, or Permit2 `permit2Transfer`), then optional `MidnightAuthorizationAction` for `MidnightBundles`;
-- `buildTx(signatures?)` returns `MidnightRepayWithdrawCollateralAction`.
+- `getRequirements()` returns optional loan-token approval requirement for `MidnightBundles`, then optional `MidnightAuthorizationAction` for `MidnightBundles`;
+- `buildTx()` returns `MidnightRepayWithdrawCollateralAction`.
 
 ```ts
 MidnightBundles.midnightBundlesV1RepayAndWithdrawCollateral(
   market,
   repayAssets,
   onBehalf,
-  loanTokenPermit,
+  { kind: PermitKind.None, data: "0x" },
   collateralWithdrawals,
   receiver,
-  referralFeePct,
-  referralFeeRecipient,
+  0n,
+  zeroAddress,
   deadline,
 )
 ```
@@ -926,15 +865,14 @@ Midnight.setConsumed(group, maxUint256, onBehalf)
 This proposal is compatible with the current markets app flows, with the documented redeem default divergence, because:
 
 - every app `CallRequest` maps either to a `CallRequirement` or to `buildTx()`;
-- every app `SignatureRequest` maps to `Requirement.sign(...)`;
+- every app maker `SignatureRequest` maps to `Requirement.sign(...)`;
 - the `Transaction` wire shape is unchanged;
 - no app builder currently needs `before` / `after` callback semantics;
-- when `supportSignature` stays `false`, bundle token pulls keep the approval-transaction behavior the markets app uses today;
-- when `supportSignature` is `true`, bundle token pulls can return ERC2612 `permit` / Permit2 `permit2Transfer` signature requirements, and the shared adapter forwards every collected `AnyRequirementSignature[]` to `buildTx(signatures)`;
+- bundle token pulls keep the approval-transaction behavior the markets app uses today;
 - direct core Midnight paths still return approval transactions because they do not consume `TokenPermit`;
 - EOA maker flow still needs exactly one offer-root signature, selected from the collected signature list;
 - contract-wallet maker flow needs zero signatures and one ratify-root tx;
-- EOA maker signatures and token signatures can be surfaced before transaction requirements, preserving the markets app's current signature-before-calls UX;
+- EOA maker signatures can be surfaced before transaction requirements, preserving the markets app's current signature-before-calls UX;
 - repay / withdraw keeps the app's existing single final `MidnightBundles.midnightBundlesV1RepayAndWithdrawCollateral(...)` transaction;
 - all multi-tx app flows can be represented by ordered requirements plus final `buildTx()`.
 - redeem defaults to net face value, while explicit `units` can still reproduce the current app's post-update credit behavior as long as the amount does not exceed accrued credit or market withdrawable liquidity.
@@ -961,16 +899,16 @@ Expose only optional prerequisites and force callers to build prelude txs manual
 
 **Why rejected:** supply-collateral-make-borrow cannot be expressed safely if the caller owns the prelude because the collateral supply must execute before the mempool submit transaction. Integrators would need bespoke sequencing outside the SDK, which defeats the migration goal.
 
-### Alternative 4: Keep Midnight Permit / Permit2 deferred
+### Alternative 4: Include Midnight Permit / Permit2 immediately
 
-Keep approval-only Midnight bundle flows for the initial migration and add token permits later behind another interface change.
+Add ERC2612 and Permit2 SignatureTransfer support to the first action-flow implementation because the bundle ABI already has `TokenPermit` slots.
 
-**Why rejected:** this would make Midnight diverge from Blue even though the markets app already has a `signatureRequests` array. A source-compatible `buildTx(signatures?: AnyRequirementSignature | readonly AnyRequirementSignature[])` shape lets the shared adapter pass all collected signatures, keeps app changes centralized, and uses the `TokenPermit` slots already present on the Midnight bundle ABI.
+**Why rejected for the first PR:** the current markets app builders use direct ERC-20 approvals and `PermitKind.None`. Adding token signatures would expand the first SDK surface beyond what will be migrated and tested by the app. The follow-up PR can add this once there is a product path or dedicated test plan for it.
 
 ## Implementation phases
 
 - **Phase 1 — Shared action-flow types / interfaces.** Add `ActionRequirement`, `CallRequirement`, widened `Requirement` / `RequirementSignature` unions, Midnight action interfaces, and type guards. This is the compatibility layer that lets the markets app keep its existing `ActionFlow` signature / call collection model while consuming SDK-built Midnight flows. Existing Blue / MarketV1 / vault methods keep their narrow return types.
-- **Phase 2 — Requirement helpers.** Export / reuse `getRequirementsApproval` with explicit spender; add Midnight token-pull, authorization, and ratifier helpers.
+- **Phase 2 — Requirement helpers.** Export / reuse `getRequirementsApproval` with explicit spender; add Midnight approval, authorization, and ratifier helpers.
 - **Phase 3 — Pure action encoders.** Add `src/actions/midnight/*` encoders for final txs and prelude txs. Every encoder returns a deep-frozen `Transaction` and has colocated unit tests.
 - **Phase 4 — Entity methods.** Add `MorphoMidnight` methods that perform RPC/off-chain reads, router validation, amount math, group generation, and return `{ getRequirements, buildTx }`.
 - **Phase 5 — Integration tests.** Fork-test each flow shape: no requirement, approval reset, missing authorization, EOA root signature, contract-wallet ratify-root, mandatory prelude txs, and cancel offer.
@@ -984,7 +922,7 @@ Keep approval-only Midnight bundle flows for the initial migration and add token
 - **Authorization target is explicit.** `MidnightAuthorizationAction.args.authorized` is either `MidnightBundles`, `EcrecoverRatifier`, or `SetterRatifier`; never inferred by a consumer.
 - **Approval target is explicit.** Midnight approval helper callers pass `spender`; no default to `GeneralAdapter1`.
 - **Bundle token-pull policy is explicit.** Bundle flows use `MidnightBundles` as spender and never consume or reset the core `Midnight` allowance reserved by maker offers.
-- **Deadline defaults are compatibility defaults, not safety recommendations.** The app-compatible `maxUint256` deadline default preserves current markets app behavior, but the SDK exposes `deadline` so integrators can require bounded validity.
+- **Deadline is explicit.** Passing `maxUint256` preserves current markets app behavior, but requiring `deadline` keeps unbounded validity intentional at each call site.
 - **Typed errors only.** SDK-owned router / mempool validation, invalid protocol inputs, no credit, and insufficient withdrawable liquidity each get exported typed errors before implementation lands. App-owned preflights may keep app-specific user-facing errors.
 
 ## Future considerations
