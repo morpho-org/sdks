@@ -1,5 +1,6 @@
 ---
 "@morpho-org/midnight-sdk": minor
+"@morpho-org/morpho-ts": minor
 ---
 
-Add local ratifier-data verification utilities for Ecrecover and Setter payload items.
+Add shared EIP-712 digest parts plus local ratifier-data verification utilities for Ecrecover and Setter payload items.

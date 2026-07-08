@@ -6,6 +6,7 @@ import {
   createGetValue,
   createHasValue,
   deepFreeze,
+  eip712DigestParts,
   entries,
   filterDefined,
   fromEntries,
@@ -194,6 +195,21 @@ describe("transformValue", () => {
   test("preserves falsy non-nullish values (0, '')", () => {
     expect(transformValue(0, (n) => n + 1)).toBe(1);
     expect(transformValue("", (s) => `${s}x`)).toBe("x");
+  });
+});
+
+describe("eip712DigestParts", () => {
+  test("default", () => {
+    const domainSeparator =
+      "0x0000000000000000000000000000000000000000000000000000000000000001" as const;
+    const structHash =
+      "0x0000000000000000000000000000000000000000000000000000000000000002" as const;
+
+    expect(eip712DigestParts(domainSeparator, structHash)).toEqual([
+      "0x1901",
+      domainSeparator,
+      structHash,
+    ]);
   });
 });
 

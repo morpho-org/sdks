@@ -1,4 +1,8 @@
-import { type BigIntish, deepFreeze } from "@morpho-org/morpho-ts";
+import {
+  type BigIntish,
+  deepFreeze,
+  eip712DigestParts,
+} from "@morpho-org/morpho-ts";
 import {
   type Account,
   type Address,
@@ -133,14 +137,6 @@ const buildTreeValue = (offers: readonly OfferStruct[]): unknown => {
     buildTreeValue(offers.slice(mid)),
   ];
 };
-
-const EIP712_MESSAGE_PREFIX = "0x1901" as const;
-
-function eip712Digest(domainSeparator: Hash, structHash: Hash): Hash {
-  return keccak256(
-    concat([EIP712_MESSAGE_PREFIX, domainSeparator, structHash]),
-  );
-}
 
 function toCanonicalYParity(v: number): 0 | 1 {
   if (v === 27) return 0;
@@ -651,7 +647,7 @@ export namespace EcrecoverRatifierUtils {
       ]),
     );
 
-    return eip712Digest(domainSeparator, structHash);
+    return keccak256(concat(eip712DigestParts(domainSeparator, structHash)));
   }
 
   /**
@@ -707,7 +703,7 @@ export namespace EcrecoverRatifierUtils {
       ]),
     );
 
-    return eip712Digest(domainSeparator, structHash);
+    return keccak256(concat(eip712DigestParts(domainSeparator, structHash)));
   }
 
   /**

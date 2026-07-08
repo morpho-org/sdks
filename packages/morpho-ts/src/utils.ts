@@ -182,6 +182,34 @@ export const transformValue = <T, R>(
 ) => (isDefined(value) ? _transform(value) : value);
 
 /**
+ * Returns the byte parts that EIP-712 hashes as `0x1901 || domainSeparator || structHash`.
+ *
+ * Keep hashing and byte concatenation with the caller's web3 stack. For viem,
+ * pass the returned tuple to `concat`, then hash with `keccak256`.
+ *
+ * @param domainSeparator - EIP-712 domain separator hash.
+ * @param structHash - EIP-712 struct hash.
+ * @returns Digest input parts in canonical order.
+ * @example
+ * ```ts
+ * import { eip712DigestParts } from "@morpho-org/morpho-ts";
+ *
+ * const parts = eip712DigestParts(
+ *   "0x0000000000000000000000000000000000000000000000000000000000000001",
+ *   "0x0000000000000000000000000000000000000000000000000000000000000002",
+ * );
+ * // ["0x1901", domainSeparator, structHash]
+ * ```
+ */
+export const eip712DigestParts = <
+  TDomainSeparator extends `0x${string}`,
+  TStructHash extends `0x${string}`,
+>(
+  domainSeparator: TDomainSeparator,
+  structHash: TStructHash,
+) => ["0x1901", domainSeparator, structHash] as const;
+
+/**
  * Creates a reusable getter for a dot-separated path.
  *
  * @param path - Dot-separated path the returned getter reads.
