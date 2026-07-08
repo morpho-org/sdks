@@ -7,15 +7,12 @@ import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData, zeroAddress } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
-  type AnyRequirementSignature,
   type Metadata,
   type MidnightRepayWithdrawCollateralAction,
   NegativeMidnightAmountError,
   NonPositiveMidnightAmountError,
   type Transaction,
 } from "../../types/index.js";
-import { getMidnightTokenPermit } from "../signatures/getMidnightTokenPermit.js";
-import type { MidnightCollateralWithdrawal } from "./types.js";
 
 /** Parameters for {@link midnightRepayWithdrawCollateral}. */
 export interface MidnightRepayWithdrawCollateralParams {
@@ -24,17 +21,9 @@ export interface MidnightRepayWithdrawCollateralParams {
   readonly repayAssets: bigint;
   readonly withdrawCollateralAssets: bigint;
   readonly onBehalf: Address;
-  readonly receiver?: Address;
-  readonly collateralReceiver?: Address;
   readonly collateralIndex?: bigint;
-  readonly collateralWithdrawals?: readonly MidnightCollateralWithdrawal[];
-  readonly referralFeePct?: bigint;
-  readonly referralFeeRecipient?: Address;
   /** Bundle execution deadline timestamp. Pass `maxUint256` explicitly for no expiry. */
   readonly deadline: bigint;
-  readonly signatures?:
-    | AnyRequirementSignature
-    | readonly AnyRequirementSignature[];
   readonly metadata?: Metadata;
 }
 
@@ -51,25 +40,18 @@ export const midnightRepayWithdrawCollateral = (
       params.withdrawCollateralAssets,
     );
   }
-  if ((params.referralFeePct ?? 0n) < 0n) {
-    throw new NegativeMidnightAmountError(
-      "referralFeePct",
-      params.referralFeePct ?? 0n,
-    );
-  }
   if (params.deadline < 0n) {
     throw new NegativeMidnightAmountError("deadline", params.deadline);
   }
   const collateralWithdrawals =
-    params.collateralWithdrawals ??
-    (params.withdrawCollateralAssets > 0n
+    params.withdrawCollateralAssets > 0n
       ? [
           {
             collateralIndex: params.collateralIndex ?? 0n,
             assets: params.withdrawCollateralAssets,
           },
         ]
-      : []);
+      : [];
   for (const [index, withdrawal] of collateralWithdrawals.entries()) {
     if (withdrawal.collateralIndex < 0n) {
       throw new NegativeMidnightAmountError(
@@ -100,10 +82,6 @@ export const midnightRepayWithdrawCollateral = (
     }
   }
   const midnightBundles = getChainAddress(params.chainId, "midnightBundles");
-  const collateralReceiver =
-    params.collateralReceiver ?? params.receiver ?? params.onBehalf;
-  const referralFeePct = params.referralFeePct ?? 0n;
-  const referralFeeRecipient = params.referralFeeRecipient ?? zeroAddress;
 
   let tx = {
     to: midnightBundles,
@@ -115,17 +93,11 @@ export const midnightRepayWithdrawCollateral = (
         market,
         params.repayAssets,
         params.onBehalf,
-        getMidnightTokenPermit({
-          token: market.loanToken,
-          owner: params.onBehalf,
-          spender: midnightBundles,
-          amount: params.repayAssets,
-          signatures: params.signatures,
-        }),
+        { kind: 0, data: "0x" },
         collateralWithdrawals,
-        collateralReceiver,
-        referralFeePct,
-        referralFeeRecipient,
+        params.onBehalf,
+        0n,
+        zeroAddress,
         params.deadline,
       ],
     }),
@@ -144,9 +116,7 @@ export const midnightRepayWithdrawCollateral = (
         repayAssets: params.repayAssets,
         collateralWithdrawals: collateralWithdrawals.length,
         onBehalf: params.onBehalf,
-        collateralReceiver,
-        referralFeePct,
-        referralFeeRecipient,
+        collateralReceiver: params.onBehalf,
         deadline: params.deadline,
       },
     },

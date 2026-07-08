@@ -293,13 +293,7 @@ export interface MidnightTakeLendAction
       assets: bigint;
       minUnits: bigint;
       taker: Address;
-      reduceOnly: boolean;
       takeableOffers: number;
-      collateralWithdrawals: number;
-      collateralReceiver: Address;
-      referralFeePct: bigint;
-      referralFeeRecipient: Address;
-      maxContinuousFee: bigint;
       deadline: bigint;
     }
   > {}
@@ -313,13 +307,9 @@ export interface MidnightTakeBorrowAction
       loanAssets: bigint;
       maxUnits: bigint;
       taker: Address;
-      reduceOnly: boolean;
       receiver: Address;
       collateralSupplies: number;
       takeableOffers: number;
-      referralFeePct: bigint;
-      referralFeeRecipient: Address;
-      maxContinuousFee: bigint;
       deadline: bigint;
     }
   > {}
@@ -334,13 +324,9 @@ export interface MidnightSupplyCollateralTakeBorrowAction
       loanAssets: bigint;
       maxUnits: bigint;
       taker: Address;
-      reduceOnly: boolean;
       receiver: Address;
       collateralSupplies: number;
       takeableOffers: number;
-      referralFeePct: bigint;
-      referralFeeRecipient: Address;
-      maxContinuousFee: bigint;
       deadline: bigint;
     }
   > {}
@@ -393,8 +379,6 @@ export interface MidnightRepayWithdrawCollateralAction
       collateralWithdrawals: number;
       onBehalf: Address;
       collateralReceiver: Address;
-      referralFeePct: bigint;
-      referralFeeRecipient: Address;
       deadline: bigint;
     }
   > {}
@@ -499,16 +483,6 @@ export interface AuthorizationSignatureArgs {
   signature: Hex;
 }
 
-/** Signed Permit2 SignatureTransfer payload returned by Midnight bundle token-pull requirements. */
-export interface Permit2TransferArgs {
-  owner: Address;
-  nonce: bigint;
-  asset: Address;
-  signature: Hex;
-  amount: bigint;
-  deadline: bigint;
-}
-
 /** Signed and encoded Ecrecover offer-root payload used by Midnight maker flows. */
 export interface MidnightOfferRootSignatureArgs {
   owner: Address;
@@ -539,13 +513,6 @@ export interface AuthorizationAction
     { authorized: Address; isAuthorized: boolean; deadline: bigint }
   > {}
 
-/** Metadata for a Permit2 SignatureTransfer request. */
-export interface Permit2TransferAction
-  extends BaseAction<
-    "permit2Transfer",
-    { spender: Address; amount: bigint; deadline: bigint }
-  > {}
-
 /** Metadata for a Midnight offer-root signature request. */
 export interface MidnightOfferRootSignatureAction
   extends BaseAction<
@@ -562,7 +529,6 @@ export type SignatureRequirementAction =
   | PermitAction
   | Permit2Action
   | AuthorizationAction
-  | Permit2TransferAction
   | MidnightOfferRootSignatureAction;
 
 /** Argument payloads returned by signature requirements. */
@@ -570,7 +536,6 @@ export type RequirementSignatureArgs =
   | PermitArgs
   | Permit2Args
   | AuthorizationSignatureArgs
-  | Permit2TransferArgs
   | MidnightOfferRootSignatureArgs;
 
 /** A signed ERC-2612 permit or Permit2 approval requirement. */
@@ -585,12 +550,6 @@ export interface AuthorizationRequirementSignature {
   action: AuthorizationAction;
 }
 
-/** A signed Midnight Permit2 SignatureTransfer requirement. */
-export interface Permit2TransferRequirementSignature {
-  args: Permit2TransferArgs;
-  action: Permit2TransferAction;
-}
-
 /** A signed Midnight Ecrecover offer-root requirement. */
 export interface MidnightOfferRootSignature {
   args: MidnightOfferRootSignatureArgs;
@@ -600,8 +559,7 @@ export interface MidnightOfferRootSignature {
 /**
  * The deep-frozen output of `Requirement.sign()`. Discriminated on `action.type`:
  * `"permit"` / `"permit2"` carry Bundler3 token-approval args, `"authorization"` carries the
- * signed Morpho authorization, and Midnight adds `"permit2Transfer"` plus
- * `"midnightOfferRootSignature"`.
+ * signed Morpho authorization, and Midnight adds `"midnightOfferRootSignature"`.
  */
 export type RequirementSignature<
   TAction extends SignatureRequirementAction | undefined = undefined,
@@ -616,7 +574,6 @@ export type RequirementSignature<
   :
       | PermitRequirementSignature
       | AuthorizationRequirementSignature
-      | Permit2TransferRequirementSignature
       | MidnightOfferRootSignature;
 
 type RequirementResult<
@@ -662,17 +619,13 @@ export type MidnightOfferRootRequirement = Requirement<
 >;
 
 /** Permit or Permit2 token signature requirement. */
-export type TokenSignatureRequirement =
-  | Bundler3TokenSignatureRequirement
-  | Requirement<Permit2TransferAction, Permit2TransferArgs>;
+export type TokenSignatureRequirement = Bundler3TokenSignatureRequirement;
 
 /** Bundler3 token signature result. */
 export type Bundler3TokenRequirementSignature = PermitRequirementSignature;
 
 /** Permit or Permit2 token signature result. */
-export type TokenRequirementSignature =
-  | Bundler3TokenRequirementSignature
-  | Permit2TransferRequirementSignature;
+export type TokenRequirementSignature = Bundler3TokenRequirementSignature;
 
 /** Any signature result returned by an action-output signature requirement. */
 export type AnyRequirementSignature =
@@ -798,18 +751,6 @@ export function isAuthorizationSignature(
 }
 
 /**
- * Narrows a {@link RequirementSignature} to a Midnight Permit2 SignatureTransfer payload.
- *
- * @param signature - The signed requirement to test.
- * @returns `true` when `signature.action.type` is `"permit2Transfer"`.
- */
-export function isPermit2TransferSignature(
-  signature: RequirementSignature,
-): signature is Permit2TransferRequirementSignature {
-  return signature.action.type === "permit2Transfer";
-}
-
-/**
  * Narrows a {@link RequirementSignature} to a Midnight offer-root signature.
  *
  * @param signature - The signed requirement to test.
@@ -827,8 +768,6 @@ export interface SelectedRequirementSignatures {
   permit?: PermitRequirementSignature;
   /** The single Morpho authorization signature, when present. */
   authorization?: AuthorizationRequirementSignature;
-  /** The single Midnight Permit2 SignatureTransfer payload, when present. */
-  permit2Transfer?: Permit2TransferRequirementSignature;
   /** The single Midnight offer-root signature, when present. */
   midnightOfferRoot?: MidnightOfferRootSignature;
 }
@@ -846,7 +785,6 @@ export interface SelectedRequirementSignatures {
  * @param accepts - Which signature kinds this operation consumes.
  * @param accepts.permit - Whether a permit / Permit2 signature is consumed.
  * @param accepts.authorization - Whether a Morpho authorization signature is consumed.
- * @param accepts.permit2Transfer - Whether a Midnight Permit2 SignatureTransfer is consumed.
  * @param accepts.midnightOfferRoot - Whether a Midnight offer-root signature is consumed.
  * @returns The single permit and/or authorization signature, when present.
  * @throws {AmbiguousRequirementSignaturesError} when more than one signature of an accepted kind is present.
@@ -866,7 +804,6 @@ export function selectRequirementSignatures(
   accepts: {
     permit?: boolean;
     authorization?: boolean;
-    permit2Transfer?: boolean;
     midnightOfferRoot?: boolean;
   },
 ): SelectedRequirementSignatures {
@@ -874,15 +811,12 @@ export function selectRequirementSignatures(
 
   const permits = signatures.filter(isPermitSignature);
   const authorizations = signatures.filter(isAuthorizationSignature);
-  const permit2Transfers = signatures.filter(isPermit2TransferSignature);
   const midnightOfferRoots = signatures.filter(isMidnightOfferRootSignature);
 
   if (!accepts.permit && permits.length > 0)
     throw new UnexpectedRequirementSignatureError("permit");
   if (!accepts.authorization && authorizations.length > 0)
     throw new UnexpectedRequirementSignatureError("authorization");
-  if (!accepts.permit2Transfer && permit2Transfers.length > 0)
-    throw new UnexpectedRequirementSignatureError("permit2Transfer");
   if (!accepts.midnightOfferRoot && midnightOfferRoots.length > 0)
     throw new UnexpectedRequirementSignatureError("midnightOfferRootSignature");
   if (permits.length > 1)
@@ -891,11 +825,6 @@ export function selectRequirementSignatures(
     throw new AmbiguousRequirementSignaturesError(
       "authorization",
       authorizations.length,
-    );
-  if (permit2Transfers.length > 1)
-    throw new AmbiguousRequirementSignaturesError(
-      "permit2Transfer",
-      permit2Transfers.length,
     );
   if (midnightOfferRoots.length > 1)
     throw new AmbiguousRequirementSignaturesError(
@@ -906,7 +835,6 @@ export function selectRequirementSignatures(
   return {
     permit: permits[0],
     authorization: authorizations[0],
-    permit2Transfer: permit2Transfers[0],
     midnightOfferRoot: midnightOfferRoots[0],
   };
 }
