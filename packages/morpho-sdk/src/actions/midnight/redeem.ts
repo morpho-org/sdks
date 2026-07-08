@@ -13,7 +13,7 @@ import {
   type Transaction,
 } from "../../types/index.js";
 
-/** Parameters for {@link midnightRedeem}. */
+/** Parameters for encoding a direct Midnight credit redemption. */
 export interface MidnightRedeemParams {
   readonly chainId: number;
   readonly market: MarketInput;
@@ -23,7 +23,34 @@ export interface MidnightRedeemParams {
   readonly metadata?: Metadata;
 }
 
-/** Encodes `Midnight.withdraw` for credit redemption. */
+/**
+ * Encodes a direct Midnight credit redemption.
+ *
+ * Use this low-level builder after the caller has fetched and checked position
+ * credit and market withdrawable liquidity. App flows should usually call
+ * `client.morpho.midnight(chainId).redeem(...)`, which performs those checks
+ * from supplied `marketData` and `positionData` before exposing `buildTx`.
+ *
+ * @param params.chainId - Chain id used to resolve `Midnight`.
+ * @param params.market - Midnight market whose credit is redeemed.
+ * @param params.units - Credit units to withdraw.
+ * @param params.onBehalf - Account whose credit balance is reduced.
+ * @param params.receiver - Optional receiver for withdrawn loan assets; defaults to `onBehalf`.
+ * @param params.metadata - Optional analytics metadata appended to calldata.
+ * @returns A deep-frozen `Transaction<MidnightRedeemAction>` targeting `Midnight`.
+ * @throws {NonPositiveMidnightAmountError} when `units <= 0n`.
+ * @example
+ * ```ts
+ * import { midnightRedeem } from "@morpho-org/morpho-sdk";
+ *
+ * const tx = midnightRedeem({
+ *   chainId: 8453,
+ *   market: marketData.params,
+ *   units: positionData.faceValue,
+ *   onBehalf: user,
+ * });
+ * ```
+ */
 export const midnightRedeem = (
   params: MidnightRedeemParams,
 ): Readonly<Transaction<MidnightRedeemAction>> => {

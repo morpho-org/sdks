@@ -68,7 +68,29 @@ export type MidnightActionSignatures =
   | MidnightOfferRootSignature
   | readonly MidnightOfferRootSignature[];
 
-/** Lazy Midnight entity result with synchronous transaction building. */
+/**
+ * Lazy Midnight entity result with async requirements and sync transaction building.
+ *
+ * Call `getRequirements()` first to collect approvals, authorizations, or
+ * signatures. Once those are handled, pass any requirement signatures to
+ * `buildTx`; the transaction builder itself performs no fetching or signing.
+ *
+ * @example
+ * ```ts
+ * const output = midnight.takeLend(params);
+ * const requirements = await output.getRequirements();
+ * for (const requirement of requirements) {
+ *   if (!("sign" in requirement)) {
+ *     await walletClient.sendTransaction({
+ *       to: requirement.to,
+ *       data: requirement.data,
+ *       value: requirement.value,
+ *     });
+ *   }
+ * }
+ * const tx = output.buildTx();
+ * ```
+ */
 export interface MidnightActionOutput<
   TAction extends BaseAction,
   TSignatures = undefined,
@@ -79,7 +101,33 @@ export interface MidnightActionOutput<
   readonly getRequirements: () => Promise<readonly ActionRequirement[]>;
 }
 
-/** Output returned by maker-offer flows. */
+/**
+ * Output returned by maker-offer flows after offer-tree preparation.
+ *
+ * Use `groups` and `root` for review UI, call `getRequirements()` to collect
+ * ratifier approval or signature requirements, then call `buildTx(signatures)`
+ * to publish the encoded payload to the Midnight mempool.
+ *
+ * @example
+ * ```ts
+ * const output = await midnight.makeLend(params);
+ * console.log(output.root, output.groups);
+ * const requirements = await output.getRequirements();
+ * const signatures = [];
+ * for (const requirement of requirements) {
+ *   if ("sign" in requirement) {
+ *     signatures.push(await requirement.sign(walletClient, maker));
+ *   } else {
+ *     await walletClient.sendTransaction({
+ *       to: requirement.to,
+ *       data: requirement.data,
+ *       value: requirement.value,
+ *     });
+ *   }
+ * }
+ * const tx = output.buildTx(signatures);
+ * ```
+ */
 export interface MakeOffersOutput
   extends MidnightActionOutput<
     MempoolSubmitOffersAction,

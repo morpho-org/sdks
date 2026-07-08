@@ -14,7 +14,7 @@ import {
   type Transaction,
 } from "../../types/index.js";
 
-/** Parameters for {@link midnightRepayWithdrawCollateral}. */
+/** Parameters for encoding a Midnight repay and/or collateral withdrawal bundle. */
 export interface MidnightRepayWithdrawCollateralParams {
   readonly chainId: number;
   readonly market: MarketInput;
@@ -27,7 +27,41 @@ export interface MidnightRepayWithdrawCollateralParams {
   readonly metadata?: Metadata;
 }
 
-/** Encodes the repay and/or withdraw-collateral Midnight bundle. */
+/**
+ * Encodes a Midnight bundle that repays debt, withdraws collateral, or both.
+ *
+ * Prefer `client.morpho.midnight(chainId).repayWithdrawCollateral(...)` in app
+ * flows so loan-token approval and Midnight authorization requirements are
+ * resolved first. Use this low-level builder only when those requirements and
+ * collateral-index checks are already handled by the caller.
+ *
+ * @param params.chainId - Chain id used to resolve `MidnightBundles`.
+ * @param params.market - Midnight market whose position is updated.
+ * @param params.repayAssets - Loan assets repaid; may be zero when only withdrawing collateral.
+ * @param params.withdrawCollateralAssets - Collateral assets withdrawn; may be zero when only repaying.
+ * @param params.onBehalf - Position owner.
+ * @param params.collateralIndex - Optional collateral index for withdrawal; defaults to `0n`.
+ * @param params.deadline - Bundle execution deadline timestamp; pass `maxUint256` explicitly for no expiry.
+ * @param params.metadata - Optional analytics metadata appended to calldata.
+ * @returns A deep-frozen `Transaction<MidnightRepayWithdrawCollateralAction>` targeting `MidnightBundles`.
+ * @throws {NegativeMidnightAmountError} when any amount, collateral index, or deadline is negative.
+ * @throws {NonPositiveMidnightAmountError} when both repay and withdrawal amounts are zero.
+ * @throws {UnknownCollateralIndexError} when a positive withdrawal targets an unconfigured collateral index.
+ * @example
+ * ```ts
+ * import { maxUint256 } from "viem";
+ * import { midnightRepayWithdrawCollateral } from "@morpho-org/morpho-sdk";
+ *
+ * const tx = midnightRepayWithdrawCollateral({
+ *   chainId: 8453,
+ *   market: marketData.params,
+ *   repayAssets: 1_000_000n,
+ *   withdrawCollateralAssets: 0n,
+ *   onBehalf: user,
+ *   deadline: maxUint256,
+ * });
+ * ```
+ */
 export const midnightRepayWithdrawCollateral = (
   params: MidnightRepayWithdrawCollateralParams,
 ): Readonly<Transaction<MidnightRepayWithdrawCollateralAction>> => {

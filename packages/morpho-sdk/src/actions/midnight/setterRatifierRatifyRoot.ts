@@ -25,8 +25,16 @@ export interface SetterRatifierRatifyRootParams {
 /**
  * Encodes a SetterRatifier root-ratification transaction.
  *
- * @param params - SetterRatifier ratify-root parameters.
- * @returns A deep-frozen transaction calling `SetterRatifier.setIsRootRatified`.
+ * Use this after building a Setter-ratified offer tree and before submitting
+ * its mempool payload. Entity make-offer flows expose the same transaction
+ * through `getRequirements()` when the root is not already approved.
+ *
+ * @param params.chainId - Chain id used to resolve `SetterRatifier`.
+ * @param params.maker - Maker whose root approval is updated.
+ * @param params.root - Offer-tree root to approve or revoke.
+ * @param params.isRootRatified - Optional target state; defaults to `true`.
+ * @param params.metadata - Optional analytics metadata appended to calldata.
+ * @returns A deep-frozen `Transaction<SetterRatifierRatifyRootAction>` targeting `SetterRatifier`.
  * @example
  * ```ts
  * import { setterRatifierRatifyRoot } from "@morpho-org/morpho-sdk";

@@ -8,6 +8,10 @@ import { validateUserAddress } from "./validate.js";
  * Signs EIP-712 typed data with a wallet client, verifies that the produced signature recovers
  * `userAddress`, and returns the signature.
  *
+ * Use inside requirement `sign(...)` callbacks before converting a signature
+ * into protocol calldata or mempool payload bytes. The verification step keeps
+ * wallet/account mismatches from reaching transaction builders.
+ *
  * @param params - Signing and verification parameters.
  * @param params.client - Wallet client used to sign the typed data.
  * @param params.userAddress - Address expected to own the produced signature.
@@ -22,8 +26,8 @@ import { validateUserAddress } from "./validate.js";
  *
  * const signature = await signAndVerifyTypedData({
  *   client: walletClient,
- *   userAddress,
- *   typedData,
+ *   userAddress: maker,
+ *   typedData: offerRootTypedData,
  * });
  * ```
  */

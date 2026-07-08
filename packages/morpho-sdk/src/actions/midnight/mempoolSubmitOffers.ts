@@ -7,7 +7,7 @@ import type {
   Transaction,
 } from "../../types/index.js";
 
-/** Parameters for {@link mempoolSubmitOffers}. */
+/** Parameters for publishing an already ratified Midnight offer payload. */
 export interface MempoolSubmitOffersParams {
   readonly chainId: number;
   readonly groups: readonly Hex[];
@@ -20,7 +20,42 @@ export interface MempoolSubmitOffersParams {
   readonly metadata?: Metadata;
 }
 
-/** Encodes the Midnight mempool payload submission transaction. */
+/**
+ * Encodes a Midnight mempool payload submission transaction.
+ *
+ * App make-offer flows should call `getOffersData`, gather the returned
+ * requirements, then call the output `buildTx(signatures)`. Use this builder
+ * directly only when the payload has already been encoded with ratifier data
+ * and the caller wants to submit those bytes to the mempool contract.
+ *
+ * @param params.chainId - Chain id used to resolve `MidnightMempool`.
+ * @param params.groups - Group ids included in the payload.
+ * @param params.root - Offer tree root committed by the maker.
+ * @param params.maker - Maker whose offers are submitted.
+ * @param params.ratifier - Ratifier address shared by the offer tree.
+ * @param params.ratifierType - Ratifier route used to build the payload.
+ * @param params.offers - Number of non-padding offers in the payload.
+ * @param params.payload - Encoded mempool payload bytes.
+ * @param params.metadata - Optional analytics metadata appended to calldata.
+ * @returns A deep-frozen `Transaction<MempoolSubmitOffersAction>` targeting `MidnightMempool`.
+ * @example
+ * ```ts
+ * import { Payload } from "@morpho-org/midnight-sdk";
+ * import { mempoolSubmitOffers } from "@morpho-org/morpho-sdk";
+ *
+ * const payload = await Payload.encode(items);
+ * const tx = mempoolSubmitOffers({
+ *   chainId: 8453,
+ *   groups,
+ *   root: tree.root,
+ *   maker,
+ *   ratifier,
+ *   ratifierType: "ecrecover",
+ *   offers: tree.offers.length,
+ *   payload,
+ * });
+ * ```
+ */
 export const mempoolSubmitOffers = (
   params: MempoolSubmitOffersParams,
 ): Readonly<Transaction<MempoolSubmitOffersAction>> => {

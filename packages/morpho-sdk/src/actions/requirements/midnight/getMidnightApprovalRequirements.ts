@@ -18,12 +18,24 @@ export interface GetMidnightApprovalRequirementsParams {
 /**
  * Resolves classic ERC20 approval requirements for a Midnight spender.
  *
- * @param params - Approval resolution parameters.
+ * Entity flows call this from `getRequirements()`. Direct low-level consumers
+ * should call it before encoding a Midnight action that lets `Midnight` or
+ * `MidnightBundles` pull ERC20 tokens from the user.
+ *
+ * @param params.viemClient - Viem client used to read ERC20 allowance.
+ * @param params.chainId - Chain id expected by the viem client.
+ * @param params.token - ERC20 token that may need approval.
+ * @param params.owner - Token owner.
+ * @param params.spender - Midnight spender that will pull tokens.
+ * @param params.amount - Token amount the spender must be able to pull.
  * @returns Approval transactions required for `spender` to pull `amount`.
  * @throws {ChainIdMismatchError} when the viem client is connected to another chain.
  * @example
  * ```ts
- * import { getMidnightApprovalRequirements } from "@morpho-org/morpho-sdk";
+ * import {
+ *   getMidnightApprovalRequirements,
+ *   midnightTakeLend,
+ * } from "@morpho-org/morpho-sdk";
  *
  * const approvals = await getMidnightApprovalRequirements({
  *   viemClient: client,
@@ -33,7 +45,9 @@ export interface GetMidnightApprovalRequirementsParams {
  *   spender: midnightBundles,
  *   amount: 1_000_000n,
  * });
- * console.log(approvals.length);
+ * if (approvals.length === 0) {
+ *   const tx = midnightTakeLend(takeParams);
+ * }
  * ```
  */
 export const getMidnightApprovalRequirements = async (

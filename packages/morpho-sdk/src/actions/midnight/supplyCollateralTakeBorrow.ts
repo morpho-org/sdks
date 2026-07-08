@@ -14,14 +14,54 @@ import {
 import type { MidnightTakeBorrowParams } from "./takeBorrow.js";
 import type { MidnightCollateralSupply } from "./types.js";
 
-/** Parameters for {@link midnightSupplyCollateralTakeBorrow}. */
+/** Parameters for encoding a collateral supply followed by a Midnight borrow take. */
 export interface MidnightSupplyCollateralTakeBorrowParams
   extends MidnightTakeBorrowParams {
   readonly collateralAssets: bigint;
   readonly collateralIndex?: bigint;
 }
 
-/** Encodes the supply-collateral-and-take-borrow Midnight bundle. */
+/**
+ * Encodes a Midnight bundle that supplies collateral and borrows in one call.
+ *
+ * Prefer `client.morpho.midnight(chainId).supplyCollateralTakeBorrow(...)` in
+ * app flows so collateral approval and Midnight authorization requirements are
+ * resolved before building the bundle. Use this low-level builder only after
+ * market data and API takeable offers are already available.
+ *
+ * @param params.chainId - Chain id used to resolve `MidnightBundles`.
+ * @param params.market - Midnight market traded by every takeable offer.
+ * @param params.loanAssets - Loan assets the borrower receives.
+ * @param params.maxUnits - Maximum debt units accepted from the bundle quote.
+ * @param params.taker - Borrower address executing the bundle.
+ * @param params.deadline - Bundle execution deadline timestamp; pass `maxUint256` explicitly for no expiry.
+ * @param params.takeableOffers - ABI-ready lend-side offers returned by the Midnight API.
+ * @param params.collateralAssets - Collateral assets supplied before taking offers.
+ * @param params.collateralIndex - Optional collateral index; defaults to `0n`.
+ * @returns A deep-frozen `Transaction<MidnightSupplyCollateralTakeBorrowAction>` targeting `MidnightBundles`.
+ * @throws {NonPositiveMidnightAmountError} when collateral or loan assets are non-positive.
+ * @throws {NegativeMidnightAmountError} when `maxUnits` or `deadline` is negative.
+ * @throws {EmptyMidnightTakeableOffersError} when no offers are provided.
+ * @throws {MidnightOfferSideMismatchError} when any offer is not lend-side.
+ * @throws {MidnightTakeableOfferMarketMismatchError} when any offer belongs to another market.
+ * @throws {UnknownCollateralIndexError} when `collateralIndex` is not configured on the market.
+ * @example
+ * ```ts
+ * import { maxUint256 } from "viem";
+ * import { midnightSupplyCollateralTakeBorrow } from "@morpho-org/morpho-sdk";
+ *
+ * const tx = midnightSupplyCollateralTakeBorrow({
+ *   chainId: 8453,
+ *   market: marketData.params,
+ *   collateralAssets: 2_000_000n,
+ *   loanAssets: BigInt(quote.data.availableAssets),
+ *   maxUnits: BigInt(quote.data.availableUnits),
+ *   taker: borrower,
+ *   takeableOffers: quote.data.takeableOffers,
+ *   deadline: maxUint256,
+ * });
+ * ```
+ */
 export const midnightSupplyCollateralTakeBorrow = (
   params: MidnightSupplyCollateralTakeBorrowParams,
 ): Readonly<Transaction<MidnightSupplyCollateralTakeBorrowAction>> => {
