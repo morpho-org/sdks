@@ -1,4 +1,5 @@
 export * from "./EcrecoverRatifierUtils.js";
+export * from "./eip712.js";
 export * from "./Group.js";
 export * from "./GroupUtils.js";
 export { Payload } from "./Payload.js";

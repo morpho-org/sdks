@@ -4,7 +4,6 @@ import {
   type Address,
   type Chain,
   type Client,
-  concat,
   decodeAbiParameters,
   encodeAbiParameters,
   type Hash,
@@ -28,6 +27,7 @@ import {
 } from "../errors.js";
 import { MarketParams } from "../market/index.js";
 import { type IOffer, Offer, type OfferStruct } from "../offers/index.js";
+import { eip712Digest } from "./eip712.js";
 import type { Payload } from "./Payload.js";
 import { RatifierUtils } from "./RatifierUtils.js";
 import {
@@ -643,7 +643,7 @@ export namespace EcrecoverRatifierUtils {
       ]),
     );
 
-    return keccak256(concat(["0x1901", domainSeparator, structHash]));
+    return eip712Digest(domainSeparator, structHash);
   }
 
   /**
@@ -699,7 +699,7 @@ export namespace EcrecoverRatifierUtils {
       ]),
     );
 
-    return keccak256(concat(["0x1901", domainSeparator, structHash]));
+    return eip712Digest(domainSeparator, structHash);
   }
 
   /**

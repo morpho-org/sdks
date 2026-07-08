@@ -11,7 +11,7 @@ import { concat, type Hash, keccak256 } from "viem";
  * @returns Canonical EIP-712 digest.
  * @example
  * ```ts
- * import { eip712Digest } from "@morpho-org/morpho-sdk";
+ * import { eip712Digest } from "@morpho-org/midnight-sdk";
  *
  * const digest = eip712Digest(
  *   "0x0000000000000000000000000000000000000000000000000000000000000001",
