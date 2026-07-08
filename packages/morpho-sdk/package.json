@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/morpho-sdk",
   "description": "Abstraction layer for Morpho's complexity.",
-  "version": "4.2.0",
+  "version": "5.0.0",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Foulks-Plb <https://x.com/FoulkPlb>"
@@ -106,7 +106,7 @@
     "dotenv": "^17.4.2",
     "fast-check": "^4.8.0",
     "typescript": "^6.0.3",
-    "viem": "^2.53.1",
+    "viem": "^2.54.2",
     "vitest": "^4.1.9"
   },
   "publishConfig": {

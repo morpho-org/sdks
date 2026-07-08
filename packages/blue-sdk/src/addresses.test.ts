@@ -44,9 +44,12 @@ describe("addresses helpers", () => {
   });
 
   test("getChainAddress throws for unknown labels", () => {
-    expect(() => getChainAddress(ChainId.BaseMainnet, "midnight")).toThrow(
-      UnknownAddressError,
-    );
+    expect(() =>
+      getChainAddress(
+        ChainId.BaseMainnet,
+        "bundler3.compoundV2MigrationAdapter",
+      ),
+    ).toThrow(UnknownAddressError);
   });
 
   test("getUnwrappedToken resolves known wrapped native tokens", () => {

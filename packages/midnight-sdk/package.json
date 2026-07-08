@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/midnight-sdk",
   "description": "Viem-based package for Morpho Midnight that exports protocol utilities, fetch helpers, and Midnight API utilities under a dedicated API subpath.",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Rubilmax <rmilon@gmail.com>"
@@ -46,10 +46,10 @@
   "devDependencies": {
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
-    "fast-check": "^4.4.0",
+    "fast-check": "^4.8.0",
     "typescript": "^6.0.3",
-    "viem": "2.53.1",
-    "vitest": "^4.1.6"
+    "viem": "^2.54.2",
+    "vitest": "^4.1.9"
   },
   "publishConfig": {
     "exports": {

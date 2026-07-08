@@ -6,7 +6,7 @@ import {
   type Hex,
   hexToBytes,
 } from "viem";
-import { MAX_COLLATERALS, MAX_TICK } from "../constants.js";
+import { MAX_COLLATERALS, MAX_OFFER_CAP, MAX_TICK } from "../constants.js";
 import { InvalidOfferParameterError, PayloadDecodeError } from "../errors.js";
 import {
   type IOffer,
@@ -514,6 +514,16 @@ export namespace Payload {
     if ((offer.maxUnits === 0n) === (offer.maxAssets === 0n)) {
       throw new PayloadDecodeError(
         "invalid offer bytes: exactly one of maxUnits and maxAssets must be non-zero",
+      );
+    }
+    if (offer.maxUnits > MAX_OFFER_CAP) {
+      throw new PayloadDecodeError(
+        `invalid offer bytes: maxUnits exceeds maximum ${MAX_OFFER_CAP}`,
+      );
+    }
+    if (offer.maxAssets > MAX_OFFER_CAP) {
+      throw new PayloadDecodeError(
+        `invalid offer bytes: maxAssets exceeds maximum ${MAX_OFFER_CAP}`,
       );
     }
     if (offer.continuousFeeCap < 0n) {

@@ -178,19 +178,29 @@ export class ApprovalAmountLessThanSpendAmountError extends Error {
   }
 }
 
-/** Thrown when an ERC-20 approval requirement targets an unsupported spender. */
+/** Thrown when a requirement encoder targets an unsupported spender. */
 export class UnsupportedErc20ApprovalSpenderError extends Error {
   constructor(params: {
     readonly spender: Address;
     readonly chainId: number;
     readonly generalAdapter1: Address;
     readonly permit2?: Address;
+    readonly midnight?: Address;
+    readonly midnightBundles?: Address;
+    readonly supportedSpenders?: readonly (Address | undefined)[];
   }) {
-    const supported = [params.generalAdapter1, params.permit2]
+    const supported = (
+      params.supportedSpenders ?? [
+        params.generalAdapter1,
+        params.permit2,
+        params.midnight,
+        params.midnightBundles,
+      ]
+    )
       .filter((address) => address != null)
       .join('", "');
     super(
-      `ERC-20 approval spender "${params.spender}" is not supported on chain "${params.chainId}". Use "${supported}".`,
+      `Requirement spender "${params.spender}" is not supported on chain "${params.chainId}". Use "${supported}".`,
     );
   }
 }

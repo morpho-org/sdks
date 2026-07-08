@@ -1,5 +1,6 @@
-import { type BigIntish, MathLib } from "@morpho-org/morpho-ts";
+import { _try, type BigIntish, MathLib } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
+import { UnknownCollateralIndexError } from "../errors.js";
 import { type IMarket, Market } from "./Market.js";
 import { PositionUtils } from "./PositionUtils.js";
 
@@ -252,7 +253,12 @@ export class AccrualPosition extends Position {
    */
   public getCollateralBalanceByIndex(index: BigIntish) {
     const normalizedIndex = BigInt(index);
-    if (this.market.getCollateralParamsByIndex(normalizedIndex) == null)
+    if (
+      _try(
+        () => this.market.getCollateralByIndex(normalizedIndex),
+        UnknownCollateralIndexError,
+      ) == null
+    )
       return undefined;
 
     return this.collateral[Number(normalizedIndex)] ?? 0n;
