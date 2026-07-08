@@ -13,7 +13,7 @@ import {
   type Transaction,
 } from "../../types/index.js";
 import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
-import { buildRepayFundingActions } from "./buildRepayFundingActions.js";
+import { buildAssetFundingActions } from "./buildAssetFundingActions.js";
 import { resolveRepayFunding } from "./resolveRepayFunding.js";
 
 /** Parameters for {@link blueRepayWithdrawCollateral}. */
@@ -169,9 +169,9 @@ export const blueRepayWithdrawCollateral = ({
 
   // Fund the repay: wrap native (if any) then pull the ERC-20 remainder.
   actions.push(
-    ...buildRepayFundingActions({
+    ...buildAssetFundingActions({
       chainId,
-      marketParams,
+      asset: marketParams.loanToken,
       erc20Amount,
       nativeAmount,
       requirementSignature,

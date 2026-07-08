@@ -10,7 +10,7 @@ import type {
   RepayActionAmountArgs,
   Transaction,
 } from "../../types/index.js";
-import { buildRepayFundingActions } from "./buildRepayFundingActions.js";
+import { buildAssetFundingActions } from "./buildAssetFundingActions.js";
 import { resolveRepayFunding } from "./resolveRepayFunding.js";
 
 /** Parameters for {@link blueRepay}. */
@@ -128,9 +128,9 @@ export const blueRepay = ({
     bundler3: { generalAdapter1 },
   } = getChainAddresses(chainId);
 
-  const actions: Action[] = buildRepayFundingActions({
+  const actions: Action[] = buildAssetFundingActions({
     chainId,
-    marketParams,
+    asset: marketParams.loanToken,
     erc20Amount,
     nativeAmount,
     requirementSignature,

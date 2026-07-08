@@ -351,9 +351,10 @@ describe("blueRepayWithdrawCollateral unit tests", () => {
     ).toThrow(NativeAmountOnNonWNativeAssetError);
   });
 
-  test("behavior: no getTokenRequirementActions without a requirementSignature", async ({
+  test("behavior: ERC-20 pull routes through getTokenRequirementActions with no signature", async ({
     client,
   }) => {
+    const amount = parseUnits("100", 6);
     const spy = vi.spyOn(
       getTokenRequirementActionsModule,
       "getTokenRequirementActions",
@@ -362,8 +363,8 @@ describe("blueRepayWithdrawCollateral unit tests", () => {
     blueRepayWithdrawCollateral({
       market: { chainId: mainnet.id, marketParams: WethUsdsBlue },
       args: {
-        amount: parseUnits("100", 6),
-        transferAmount: parseUnits("100", 6),
+        amount,
+        transferAmount: amount,
         withdrawAmount: WITHDRAW_AMOUNT,
         onBehalf: client.account.address,
         receiver: client.account.address,
@@ -371,7 +372,15 @@ describe("blueRepayWithdrawCollateral unit tests", () => {
       },
     });
 
-    expect(spy).not.toHaveBeenCalled();
+    // The funding helper is the single ERC-20 entry point. Without a signature it is still the
+    // one that runs, invoked with `requirementSignature: undefined`, so it emits a plain
+    // erc20TransferFrom (proven end-to-end by the fork round-trips) rather than permit machinery.
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0][0]).toMatchObject({
+      asset: WethUsdsBlue.loanToken,
+      amount,
+    });
+    expect(spy.mock.calls[0][0].requirementSignature).toBeUndefined();
   });
 
   test("behavior: requirementSignature drives getTokenRequirementActions on the ERC-20 amount", async ({
