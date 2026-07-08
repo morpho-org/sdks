@@ -1,13 +1,10 @@
-import {
-  type BigIntish,
-  deepFreeze,
-  eip712Digest,
-} from "@morpho-org/morpho-ts";
+import { type BigIntish, deepFreeze } from "@morpho-org/morpho-ts";
 import {
   type Account,
   type Address,
   type Chain,
   type Client,
+  concat,
   decodeAbiParameters,
   encodeAbiParameters,
   type Hash,
@@ -646,7 +643,7 @@ export namespace EcrecoverRatifierUtils {
       ]),
     );
 
-    return eip712Digest(domainSeparator, structHash);
+    return keccak256(concat(["0x1901", domainSeparator, structHash]));
   }
 
   /**
@@ -702,7 +699,7 @@ export namespace EcrecoverRatifierUtils {
       ]),
     );
 
-    return eip712Digest(domainSeparator, structHash);
+    return keccak256(concat(["0x1901", domainSeparator, structHash]));
   }
 
   /**

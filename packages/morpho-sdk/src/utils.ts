@@ -53,6 +53,7 @@ export {
   values,
 } from "@morpho-org/morpho-ts";
 export { computeReallocations } from "./helpers/computeReallocations.js";
+export { eip712Digest } from "./helpers/eip712.js";
 export { addTransactionMetadata } from "./helpers/metadata.js";
 export {
   computeMaxRepaySharePrice,

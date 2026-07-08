@@ -8,6 +8,7 @@ export {
   MAX_SLIPPAGE_TOLERANCE,
   MAX_TOKEN_APPROVALS,
 } from "./constant.js";
+export { eip712Digest } from "./eip712.js";
 export { addTransactionMetadata } from "./metadata.js";
 export {
   computeMaxRepaySharePrice,
