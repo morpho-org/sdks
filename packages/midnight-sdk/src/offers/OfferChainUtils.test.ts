@@ -18,7 +18,6 @@ const MAX_EXPIRY = OfferChainUtils.getMaxFixedRateOfferChainEndTimestamp({
 });
 
 const defaultParams = {
-  side: "lend",
   targetRate: 0.05,
   tickSpacing: 4n,
   maturityTimestamp: MATURITY,
@@ -26,13 +25,18 @@ const defaultParams = {
   chainEndTimestamp: MAX_EXPIRY,
 } as const;
 
-describe("OfferChainUtils.buildFixedRateOfferChain", () => {
+const chainBuilders = {
+  borrow: OfferChainUtils.buildBorrowFixedRateOfferChain,
+  lend: OfferChainUtils.buildLendFixedRateOfferChain,
+} as const;
+
+describe("OfferChainUtils fixed-rate offer-chain builders", () => {
   test("default", () => {
-    const chain = OfferChainUtils.buildFixedRateOfferChain(defaultParams);
+    const chain = OfferChainUtils.buildLendFixedRateOfferChain(defaultParams);
 
     expect(chain.length).toBeGreaterThan(0);
     expect(chain).toStrictEqual(
-      OfferChainUtils.buildFixedRateOfferChain(defaultParams),
+      OfferChainUtils.buildLendFixedRateOfferChain(defaultParams),
     );
     for (const [index, leg] of chain.entries()) {
       expect(leg.tick % defaultParams.tickSpacing).toBe(0n);
@@ -47,26 +51,8 @@ describe("OfferChainUtils.buildFixedRateOfferChain", () => {
   test.each([
     "borrow",
     "lend",
-  ] as const)("behavior: dispatches to the %s-only builder", (side) => {
-    const { side: _side, ...chainParams } = { ...defaultParams, side };
-    const expected =
-      side === "borrow"
-        ? OfferChainUtils.buildBorrowFixedRateOfferChain(chainParams)
-        : OfferChainUtils.buildLendFixedRateOfferChain(chainParams);
-
-    expect(
-      OfferChainUtils.buildFixedRateOfferChain({ ...chainParams, side }),
-    ).toStrictEqual(expected);
-  });
-
-  test.each([
-    "borrow",
-    "lend",
   ] as const)("behavior: recovers target rate at every %s display edge", (side) => {
-    const chain = OfferChainUtils.buildFixedRateOfferChain({
-      ...defaultParams,
-      side,
-    });
+    const chain = chainBuilders[side](defaultParams);
 
     for (const leg of chain) {
       const displayTimestamp =
@@ -87,10 +73,7 @@ describe("OfferChainUtils.buildFixedRateOfferChain", () => {
     "borrow",
     "lend",
   ] as const)("behavior: keeps %s rates on the maker-favorable side", (side) => {
-    const chain = OfferChainUtils.buildFixedRateOfferChain({
-      ...defaultParams,
-      side,
-    });
+    const chain = chainBuilders[side](defaultParams);
 
     for (const leg of chain) {
       const startRate = rateAt({
@@ -130,10 +113,9 @@ describe("OfferChainUtils.buildFixedRateOfferChain", () => {
 
   test("behavior: returns an empty chain when the grid cannot represent the rate", () => {
     expect(
-      OfferChainUtils.buildFixedRateOfferChain({
+      OfferChainUtils.buildLendFixedRateOfferChain({
         ...defaultParams,
         targetRate: 0.0001,
-        side: "lend",
         chainStartTimestamp: MATURITY - 2n * Time.s.from.d(1n),
         chainEndTimestamp: MATURITY - Time.s.from.d(1n),
       }),
@@ -141,7 +123,7 @@ describe("OfferChainUtils.buildFixedRateOfferChain", () => {
   });
 
   test("behavior: accepts tick spacing that does not divide max tick", () => {
-    const chain = OfferChainUtils.buildFixedRateOfferChain({
+    const chain = OfferChainUtils.buildLendFixedRateOfferChain({
       ...defaultParams,
       tickSpacing: 64n,
     });
@@ -153,13 +135,13 @@ describe("OfferChainUtils.buildFixedRateOfferChain", () => {
 
   test("error: InvalidOfferParameterError", () => {
     expect(() =>
-      OfferChainUtils.buildFixedRateOfferChain({
+      OfferChainUtils.buildLendFixedRateOfferChain({
         ...defaultParams,
         targetRate: 0,
       }),
     ).toThrow(InvalidOfferParameterError);
     expect(() =>
-      OfferChainUtils.buildFixedRateOfferChain({
+      OfferChainUtils.buildLendFixedRateOfferChain({
         ...defaultParams,
         chainEndTimestamp: MAX_EXPIRY + 1n,
       }),
@@ -195,8 +177,7 @@ describe("OfferChainUtils.buildFixedRateOfferChain", () => {
               maturityTimestamp,
               chainStartTimestamp,
             });
-          const chain = OfferChainUtils.buildFixedRateOfferChain({
-            side: input.side,
+          const chain = chainBuilders[input.side]({
             targetRate: input.targetRate,
             tickSpacing: BigInt(input.tickSpacing),
             maturityTimestamp,
