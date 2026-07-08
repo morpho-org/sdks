@@ -6,7 +6,7 @@ import {
   createGetValue,
   createHasValue,
   deepFreeze,
-  eip712DigestParts,
+  eip712Digest,
   entries,
   filterDefined,
   fromEntries,
@@ -198,18 +198,16 @@ describe("transformValue", () => {
   });
 });
 
-describe("eip712DigestParts", () => {
+describe("eip712Digest", () => {
   test("default", () => {
     const domainSeparator =
       "0x0000000000000000000000000000000000000000000000000000000000000001" as const;
     const structHash =
       "0x0000000000000000000000000000000000000000000000000000000000000002" as const;
 
-    expect(eip712DigestParts(domainSeparator, structHash)).toEqual([
-      "0x1901",
-      domainSeparator,
-      structHash,
-    ]);
+    expect(eip712Digest(domainSeparator, structHash)).toBe(
+      "0xf0ea82caad44da271e51b0402eda1521c8e7275ebea7d20c30c2f0c4eb5a3ede",
+    );
   });
 });
 

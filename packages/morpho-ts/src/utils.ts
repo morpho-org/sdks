@@ -1,3 +1,4 @@
+import { concat, type Hash, keccak256 } from "viem";
 import { NegativeValueError } from "./errors.js";
 import { Time } from "./time/index.js";
 import type { FieldType, PartialDottedKeys } from "./types.js";
@@ -182,32 +183,27 @@ export const transformValue = <T, R>(
 ) => (isDefined(value) ? _transform(value) : value);
 
 /**
- * Returns the byte parts that EIP-712 hashes as `0x1901 || domainSeparator || structHash`.
+ * Hashes EIP-712 digest parts as `keccak256(0x1901 || domainSeparator || structHash)`.
  *
- * Keep hashing and byte concatenation with the caller's web3 stack. For viem,
- * pass the returned tuple to `concat`, then hash with `keccak256`.
+ * Use this when the domain separator and struct hash are already available and
+ * rebuilding full typed-data values would duplicate protocol-specific type maps.
  *
  * @param domainSeparator - EIP-712 domain separator hash.
  * @param structHash - EIP-712 struct hash.
- * @returns Digest input parts in canonical order.
+ * @returns Canonical EIP-712 digest.
  * @example
  * ```ts
- * import { eip712DigestParts } from "@morpho-org/morpho-ts";
+ * import { eip712Digest } from "@morpho-org/morpho-ts";
  *
- * const parts = eip712DigestParts(
+ * const digest = eip712Digest(
  *   "0x0000000000000000000000000000000000000000000000000000000000000001",
  *   "0x0000000000000000000000000000000000000000000000000000000000000002",
  * );
- * // ["0x1901", domainSeparator, structHash]
+ * console.log(digest);
  * ```
  */
-export const eip712DigestParts = <
-  TDomainSeparator extends `0x${string}`,
-  TStructHash extends `0x${string}`,
->(
-  domainSeparator: TDomainSeparator,
-  structHash: TStructHash,
-) => ["0x1901", domainSeparator, structHash] as const;
+export const eip712Digest = (domainSeparator: Hash, structHash: Hash): Hash =>
+  keccak256(concat(["0x1901", domainSeparator, structHash]));
 
 /**
  * Creates a reusable getter for a dot-separated path.
