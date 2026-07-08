@@ -24,6 +24,7 @@ import {
 } from "../constants.js";
 import {
   ChainIdMismatchError,
+  InvalidEcrecoverSignatureVError,
   InvalidTreeError,
   InvalidTreeHeightError,
   InvalidTypedDataSignatureError,
@@ -387,6 +388,7 @@ describe("EcrecoverRatifierUtils.digestRatifierData", () => {
 
     expect(
       EcrecoverRatifierUtils.digestRatifierData({
+        chainId: base.id,
         offer: tree.offers[1]!,
         ratifierData,
       }),
@@ -409,6 +411,7 @@ describe("EcrecoverRatifierUtils.verifyRatifierData", () => {
     });
 
     const verified = await EcrecoverRatifierUtils.verifyRatifierData({
+      chainId: base.id,
       offer: tree.offers[1]!,
       ratifierData,
     });
@@ -433,10 +436,55 @@ describe("EcrecoverRatifierUtils.verifyRatifierData", () => {
 
     await expect(
       EcrecoverRatifierUtils.verifyRatifierData({
+        chainId: base.id,
         offer: tree.offers[1]!,
         ratifierData,
       }),
     ).rejects.toBeInstanceOf(InvalidTreeError);
+  });
+
+  test("error: ChainIdMismatchError when observed chain differs from offer chain", async () => {
+    const account = privateKeyToAccount(privateKey);
+    const tree = Tree.create([
+      baseOffer({ maker: account.address, maxAssets: 0n }),
+    ]);
+    const signature = await signTree(tree, account);
+    const ratifierData = EcrecoverRatifierUtils.ratifierData({
+      tree,
+      leafIndex: 0n,
+      signature,
+    });
+
+    await expect(
+      EcrecoverRatifierUtils.verifyRatifierData({
+        chainId: mainnet.id,
+        offer: tree.offers[0]!,
+        ratifierData,
+      }),
+    ).rejects.toBeInstanceOf(ChainIdMismatchError);
+  });
+
+  test("error: InvalidEcrecoverSignatureVError when ratifier data uses non-canonical v", async () => {
+    const tree = Tree.create([baseOffer({ maxAssets: 0n })]);
+    const proof = tree.proof(0n);
+    const ratifierData = EcrecoverRatifierUtils.encodeRatifierData({
+      signature: {
+        v: 29,
+        r: "0x1111111111111111111111111111111111111111111111111111111111111111",
+        s: "0x2222222222222222222222222222222222222222222222222222222222222222",
+      },
+      root: proof.root,
+      leafIndex: proof.leafIndex,
+      proof: proof.proof,
+    });
+
+    await expect(
+      EcrecoverRatifierUtils.verifyRatifierData({
+        chainId: base.id,
+        offer: tree.offers[0]!,
+        ratifierData,
+      }),
+    ).rejects.toBeInstanceOf(InvalidEcrecoverSignatureVError);
   });
 });
 

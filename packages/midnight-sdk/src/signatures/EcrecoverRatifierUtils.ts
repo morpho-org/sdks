@@ -21,6 +21,7 @@ import { signTypedData } from "viem/actions";
 import { EIP712_DOMAIN_TYPEHASH } from "../constants.js";
 import {
   ChainIdMismatchError,
+  InvalidEcrecoverSignatureVError,
   InvalidTreeError,
   InvalidTreeHeightError,
   InvalidTypedDataSignatureError,
@@ -132,6 +133,21 @@ const buildTreeValue = (offers: readonly OfferStruct[]): unknown => {
     buildTreeValue(offers.slice(mid)),
   ];
 };
+
+const EIP712_MESSAGE_PREFIX = "0x1901" as const;
+
+function eip712Digest(domainSeparator: Hash, structHash: Hash): Hash {
+  return keccak256(
+    concat([EIP712_MESSAGE_PREFIX, domainSeparator, structHash]),
+  );
+}
+
+function toCanonicalYParity(v: number): 0 | 1 {
+  if (v === 27) return 0;
+  if (v === 28) return 1;
+
+  throw new InvalidEcrecoverSignatureVError(v);
+}
 
 /**
  * Decoded EcrecoverRatifier ratifier data.
@@ -411,6 +427,8 @@ export interface EcrecoverRatifierDataParams {
 
 /** Parameters for reconstructing an EcrecoverRatifier digest from decoded ratifier data fields. */
 export interface EcrecoverRatifierRootDigestParams {
+  /** Observed EIP-155 chain id from the log or execution context. Must match `offer.market.chainId`. */
+  readonly chainId: BigIntish;
   /** Offer whose ratifier address and market chain id define the EIP-712 domain. */
   readonly offer: IOffer;
   /** Merkle root embedded in the ratifier data. */
@@ -421,6 +439,8 @@ export interface EcrecoverRatifierRootDigestParams {
 
 /** Parameters for reconstructing an EcrecoverRatifier digest from encoded ratifier data. */
 export interface EcrecoverRatifierDataDigestParams {
+  /** Observed EIP-155 chain id from the log or execution context. Must match `offer.market.chainId`. */
+  readonly chainId: BigIntish;
   /** Offer carried by the payload item. */
   readonly offer: IOffer;
   /** ABI-encoded Ecrecover ratifier data carried by the payload item. */
@@ -429,6 +449,8 @@ export interface EcrecoverRatifierDataDigestParams {
 
 /** Parameters for locally verifying Ecrecover ratifier data attached to one payload item. */
 export interface EcrecoverRatifierDataVerificationParams {
+  /** Observed EIP-155 chain id from the log or execution context. Must match `offer.market.chainId`. */
+  readonly chainId: BigIntish;
   /** Offer carried by the payload item. */
   readonly offer: IOffer;
   /** ABI-encoded Ecrecover ratifier data carried by the payload item. */
@@ -629,7 +651,7 @@ export namespace EcrecoverRatifierUtils {
       ]),
     );
 
-    return keccak256(concat(["0x1901", domainSeparator, structHash]));
+    return eip712Digest(domainSeparator, structHash);
   }
 
   /**
@@ -637,12 +659,16 @@ export namespace EcrecoverRatifierUtils {
    *
    * Use this on the take-side or in indexers after decoding ratifier data, when
    * the original full tree is not available but the payload item includes the
-   * offer and proof metadata needed to reconstruct the signed digest.
+   * offer and proof metadata needed to reconstruct the signed digest. Pass the
+   * observed log or execution chain id so cross-chain-spoofed payloads are
+   * rejected before signature recovery.
    *
+   * @param params.chainId - Observed EIP-155 chain id from the log or execution context.
    * @param params.offer - Offer carried by the payload item.
    * @param params.root - Merkle root embedded in the ratifier data.
    * @param params.proofLength - Number of sibling hashes in the Merkle proof.
    * @returns EIP-712 digest signed by the maker or authorized signer.
+   * @throws {ChainIdMismatchError} when `params.chainId` does not match `offer.market.chainId`.
    * @throws {InvalidTreeHeightError} when `proofLength` exceeds 20.
    * @example
    * ```ts
@@ -650,6 +676,7 @@ export namespace EcrecoverRatifierUtils {
    * import { zeroHash } from "viem";
    *
    * const digest = EcrecoverRatifierUtils.digestForRoot({
+   *   chainId: 8453n,
    *   offer,
    *   root: zeroHash,
    *   proofLength: 0,
@@ -662,10 +689,14 @@ export namespace EcrecoverRatifierUtils {
   ): Hash {
     const offer = Offer.from(params.offer);
     const market = MarketParams.from(offer.market);
+    const chainId = BigInt(params.chainId);
+    if (chainId !== market.chainId) {
+      throw new ChainIdMismatchError(Number(chainId), market.chainId);
+    }
     const domainSeparator = keccak256(
       encodeAbiParameters(domainSeparatorAbi, [
         EIP712_DOMAIN_TYPEHASH,
-        market.chainId,
+        chainId,
         offer.ratifier,
       ]),
     );
@@ -676,21 +707,24 @@ export namespace EcrecoverRatifierUtils {
       ]),
     );
 
-    return keccak256(concat(["0x1901", domainSeparator, structHash]));
+    return eip712Digest(domainSeparator, structHash);
   }
 
   /**
    * Builds the EcrecoverRatifier digest from one payload item's encoded ratifier data.
    *
+   * @param params.chainId - Observed EIP-155 chain id from the log or execution context.
    * @param params.offer - Offer carried by the payload item.
    * @param params.ratifierData - ABI-encoded Ecrecover ratifier data.
    * @returns EIP-712 digest signed by the maker or authorized signer.
+   * @throws {ChainIdMismatchError} when `params.chainId` does not match `offer.market.chainId`.
    * @throws {InvalidTreeHeightError} when the proof height exceeds 20.
    * @example
    * ```ts
    * import { EcrecoverRatifierUtils } from "@morpho-org/midnight-sdk";
    *
    * const digest = EcrecoverRatifierUtils.digestRatifierData({
+   *   chainId: 8453n,
    *   offer,
    *   ratifierData,
    * });
@@ -703,6 +737,7 @@ export namespace EcrecoverRatifierUtils {
     const decoded = decodeRatifierData(params.ratifierData);
 
     return digestForRoot({
+      chainId: params.chainId,
       offer: params.offer,
       root: decoded.root,
       proofLength: decoded.proof.length,
@@ -712,13 +747,18 @@ export namespace EcrecoverRatifierUtils {
   /**
    * Verifies an Ecrecover ratifier-data proof and recovers its signer.
    *
-   * This helper intentionally does not check `Midnight.isAuthorized` state.
-   * Consumers can compare the returned `signer` with `offer.maker`, or query the
-   * relevant authorization state for delegated signers at their own block.
+   * This helper intentionally does not check `Midnight.isAuthorized` or
+   * `EcrecoverRatifier.isRootCanceled` state. Consumers must query both at the
+   * observed block before treating a recovered item as executable: the returned
+   * signer must be the maker or authorized by the maker, the offer ratifier must
+   * be authorized by the maker, and `isRootCanceled(maker, root)` must be false.
    *
+   * @param params.chainId - Observed EIP-155 chain id from the log or execution context.
    * @param params.offer - Offer carried by the payload item.
    * @param params.ratifierData - ABI-encoded Ecrecover ratifier data.
    * @returns Decoded ratifier data plus recovered signer.
+   * @throws {ChainIdMismatchError} when `params.chainId` does not match `offer.market.chainId`.
+   * @throws {InvalidEcrecoverSignatureVError} when the decoded signature `v` is not 27 or 28.
    * @throws {InvalidTreeError} when the proof does not include `offer` in `root`.
    * @throws {InvalidTreeHeightError} when the proof height exceeds 20.
    * @example
@@ -726,6 +766,7 @@ export namespace EcrecoverRatifierUtils {
    * import { EcrecoverRatifierUtils } from "@morpho-org/midnight-sdk";
    *
    * const verified = await EcrecoverRatifierUtils.verifyRatifierData({
+   *   chainId: 8453n,
    *   offer,
    *   ratifierData,
    * });
@@ -750,6 +791,7 @@ export namespace EcrecoverRatifierUtils {
 
     const signer = await recoverAddress({
       hash: digestForRoot({
+        chainId: params.chainId,
         offer,
         root: decoded.root,
         proofLength: decoded.proof.length,
@@ -757,7 +799,7 @@ export namespace EcrecoverRatifierUtils {
       signature: serializeSignature({
         r: decoded.signature.r,
         s: decoded.signature.s,
-        yParity: decoded.signature.v === 27 ? 0 : 1,
+        yParity: toCanonicalYParity(decoded.signature.v),
       }),
     });
 
