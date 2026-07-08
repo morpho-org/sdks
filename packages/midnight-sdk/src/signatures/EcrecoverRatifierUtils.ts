@@ -11,6 +11,7 @@ import {
   type Hex,
   keccak256,
   parseSignature,
+  recoverAddress,
   type Signature,
   serializeSignature,
   type Transport,
@@ -25,7 +26,7 @@ import {
   InvalidTypedDataSignatureError,
 } from "../errors.js";
 import { MarketParams } from "../market/index.js";
-import type { OfferStruct } from "../offers/index.js";
+import { type IOffer, Offer, type OfferStruct } from "../offers/index.js";
 import type { Payload } from "./Payload.js";
 import { RatifierUtils } from "./RatifierUtils.js";
 import {
@@ -408,6 +409,39 @@ export interface EcrecoverRatifierDataParams {
   readonly signature: EcrecoverSignatureInput;
 }
 
+/** Parameters for reconstructing an EcrecoverRatifier digest from decoded ratifier data fields. */
+export interface EcrecoverRatifierRootDigestParams {
+  /** Offer whose ratifier address and market chain id define the EIP-712 domain. */
+  readonly offer: IOffer;
+  /** Merkle root embedded in the ratifier data. */
+  readonly root: Hash;
+  /** Number of sibling hashes in the Merkle proof. */
+  readonly proofLength: number;
+}
+
+/** Parameters for reconstructing an EcrecoverRatifier digest from encoded ratifier data. */
+export interface EcrecoverRatifierDataDigestParams {
+  /** Offer carried by the payload item. */
+  readonly offer: IOffer;
+  /** ABI-encoded Ecrecover ratifier data carried by the payload item. */
+  readonly ratifierData: Hex;
+}
+
+/** Parameters for locally verifying Ecrecover ratifier data attached to one payload item. */
+export interface EcrecoverRatifierDataVerificationParams {
+  /** Offer carried by the payload item. */
+  readonly offer: IOffer;
+  /** ABI-encoded Ecrecover ratifier data carried by the payload item. */
+  readonly ratifierData: Hex;
+}
+
+/** Decoded Ecrecover ratifier data after local proof verification and signature recovery. */
+export interface VerifiedEcrecoverRatifierData
+  extends DecodedEcrecoverRatifierData {
+  /** Signer recovered from the Ecrecover typed-data digest. */
+  readonly signer: Address;
+}
+
 /**
  * EcrecoverRatifier-specific pure utilities.
  *
@@ -596,6 +630,141 @@ export namespace EcrecoverRatifierUtils {
     );
 
     return keccak256(concat(["0x1901", domainSeparator, structHash]));
+  }
+
+  /**
+   * Builds the EcrecoverRatifier digest from a payload offer, root, and proof height.
+   *
+   * Use this on the take-side or in indexers after decoding ratifier data, when
+   * the original full tree is not available but the payload item includes the
+   * offer and proof metadata needed to reconstruct the signed digest.
+   *
+   * @param params.offer - Offer carried by the payload item.
+   * @param params.root - Merkle root embedded in the ratifier data.
+   * @param params.proofLength - Number of sibling hashes in the Merkle proof.
+   * @returns EIP-712 digest signed by the maker or authorized signer.
+   * @throws {InvalidTreeHeightError} when `proofLength` exceeds 20.
+   * @example
+   * ```ts
+   * import { EcrecoverRatifierUtils } from "@morpho-org/midnight-sdk";
+   * import { zeroHash } from "viem";
+   *
+   * const digest = EcrecoverRatifierUtils.digestForRoot({
+   *   offer,
+   *   root: zeroHash,
+   *   proofLength: 0,
+   * });
+   * console.log(digest);
+   * ```
+   */
+  export function digestForRoot(
+    params: EcrecoverRatifierRootDigestParams,
+  ): Hash {
+    const offer = Offer.from(params.offer);
+    const market = MarketParams.from(offer.market);
+    const domainSeparator = keccak256(
+      encodeAbiParameters(domainSeparatorAbi, [
+        EIP712_DOMAIN_TYPEHASH,
+        market.chainId,
+        offer.ratifier,
+      ]),
+    );
+    const structHash = keccak256(
+      encodeAbiParameters(treeStructHashAbi, [
+        treeTypeHash(params.proofLength),
+        params.root,
+      ]),
+    );
+
+    return keccak256(concat(["0x1901", domainSeparator, structHash]));
+  }
+
+  /**
+   * Builds the EcrecoverRatifier digest from one payload item's encoded ratifier data.
+   *
+   * @param params.offer - Offer carried by the payload item.
+   * @param params.ratifierData - ABI-encoded Ecrecover ratifier data.
+   * @returns EIP-712 digest signed by the maker or authorized signer.
+   * @throws {InvalidTreeHeightError} when the proof height exceeds 20.
+   * @example
+   * ```ts
+   * import { EcrecoverRatifierUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const digest = EcrecoverRatifierUtils.digestRatifierData({
+   *   offer,
+   *   ratifierData,
+   * });
+   * console.log(digest);
+   * ```
+   */
+  export function digestRatifierData(
+    params: EcrecoverRatifierDataDigestParams,
+  ): Hash {
+    const decoded = decodeRatifierData(params.ratifierData);
+
+    return digestForRoot({
+      offer: params.offer,
+      root: decoded.root,
+      proofLength: decoded.proof.length,
+    });
+  }
+
+  /**
+   * Verifies an Ecrecover ratifier-data proof and recovers its signer.
+   *
+   * This helper intentionally does not check `Midnight.isAuthorized` state.
+   * Consumers can compare the returned `signer` with `offer.maker`, or query the
+   * relevant authorization state for delegated signers at their own block.
+   *
+   * @param params.offer - Offer carried by the payload item.
+   * @param params.ratifierData - ABI-encoded Ecrecover ratifier data.
+   * @returns Decoded ratifier data plus recovered signer.
+   * @throws {InvalidTreeError} when the proof does not include `offer` in `root`.
+   * @throws {InvalidTreeHeightError} when the proof height exceeds 20.
+   * @example
+   * ```ts
+   * import { EcrecoverRatifierUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const verified = await EcrecoverRatifierUtils.verifyRatifierData({
+   *   offer,
+   *   ratifierData,
+   * });
+   * console.log(verified.signer);
+   * ```
+   */
+  export async function verifyRatifierData(
+    params: EcrecoverRatifierDataVerificationParams,
+  ): Promise<VerifiedEcrecoverRatifierData> {
+    const offer = Offer.from(params.offer);
+    const decoded = decodeRatifierData(params.ratifierData);
+    if (
+      !TreeUtils.verifyProof({
+        offer,
+        root: decoded.root,
+        leafIndex: decoded.leafIndex,
+        proof: decoded.proof,
+      })
+    ) {
+      throw new InvalidTreeError("Ratifier data proof does not include offer.");
+    }
+
+    const signer = await recoverAddress({
+      hash: digestForRoot({
+        offer,
+        root: decoded.root,
+        proofLength: decoded.proof.length,
+      }),
+      signature: serializeSignature({
+        r: decoded.signature.r,
+        s: decoded.signature.s,
+        yParity: decoded.signature.v === 27 ? 0 : 1,
+      }),
+    });
+
+    return deepFreeze({
+      ...decoded,
+      signer,
+    });
   }
 
   /**

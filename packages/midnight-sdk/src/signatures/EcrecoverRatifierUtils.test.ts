@@ -3,6 +3,7 @@ import {
   custom,
   type Hex,
   hashTypedData,
+  isAddressEqual,
   keccak256,
   type Signature,
   stringToHex,
@@ -367,6 +368,75 @@ describe("EcrecoverRatifierUtils.digest", () => {
     expect(digest).toBe(
       "0x600cf16f5db1129056b39621ecb708369079387dc10125c836cffc3f5b365b5e",
     );
+  });
+});
+
+describe("EcrecoverRatifierUtils.digestRatifierData", () => {
+  test("behavior: matches tree digest for decoded ratifier data", async () => {
+    const account = privateKeyToAccount(privateKey);
+    const tree = Tree.create([
+      baseOffer({ maker: account.address, maxAssets: 0n }),
+      baseOffer({ maker: account.address, maxAssets: 0n, maxUnits: 2n }),
+    ]);
+    const signature = await signTree(tree, account);
+    const ratifierData = EcrecoverRatifierUtils.ratifierData({
+      tree,
+      leafIndex: 1n,
+      signature,
+    });
+
+    expect(
+      EcrecoverRatifierUtils.digestRatifierData({
+        offer: tree.offers[1]!,
+        ratifierData,
+      }),
+    ).toBe(EcrecoverRatifierUtils.digest({ tree, chainId: BigInt(base.id) }));
+  });
+});
+
+describe("EcrecoverRatifierUtils.verifyRatifierData", () => {
+  test("behavior: verifies proof and returns recovered signer", async () => {
+    const account = privateKeyToAccount(privateKey);
+    const tree = Tree.create([
+      baseOffer({ maker: addresses.maker, maxAssets: 0n }),
+      baseOffer({ maker: addresses.taker, maxAssets: 0n, maxUnits: 2n }),
+    ]);
+    const signature = await signTree(tree, account);
+    const ratifierData = EcrecoverRatifierUtils.ratifierData({
+      tree,
+      leafIndex: 1n,
+      signature,
+    });
+
+    const verified = await EcrecoverRatifierUtils.verifyRatifierData({
+      offer: tree.offers[1]!,
+      ratifierData,
+    });
+
+    expect(verified.root).toBe(tree.root);
+    expect(verified.leafIndex).toBe(1n);
+    expect(isAddressEqual(verified.signer, account.address)).toBe(true);
+  });
+
+  test("error: InvalidTreeError when ratifier data proof does not match offer", async () => {
+    const account = privateKeyToAccount(privateKey);
+    const tree = Tree.create([
+      baseOffer({ maker: account.address, maxAssets: 0n }),
+      baseOffer({ maker: account.address, maxAssets: 0n, maxUnits: 2n }),
+    ]);
+    const signature = await signTree(tree, account);
+    const ratifierData = EcrecoverRatifierUtils.ratifierData({
+      tree,
+      leafIndex: 0n,
+      signature,
+    });
+
+    await expect(
+      EcrecoverRatifierUtils.verifyRatifierData({
+        offer: tree.offers[1]!,
+        ratifierData,
+      }),
+    ).rejects.toBeInstanceOf(InvalidTreeError);
   });
 });
 

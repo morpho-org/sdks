@@ -95,6 +95,47 @@ describe("SetterRatifierUtils.ratifierData", () => {
   });
 });
 
+describe("SetterRatifierUtils.verifyRatifierData", () => {
+  test("behavior: verifies proof and returns decoded ratifier data", () => {
+    const offer = baseOffer({
+      maxAssets: 0n,
+      ratifier: addresses.setterRatifier,
+    });
+    const tree = Tree.create([offer]);
+    const data = SetterRatifierUtils.ratifierData({ tree, leafIndex: 0n });
+
+    const decoded = SetterRatifierUtils.verifyRatifierData({
+      offer,
+      ratifierData: data,
+    });
+
+    expect(decoded.root).toBe(tree.root);
+    expect(decoded.leafIndex).toBe(0n);
+  });
+
+  test("error: InvalidTreeError when ratifier data proof does not match offer", () => {
+    const tree = Tree.create([
+      baseOffer({
+        maxAssets: 0n,
+        ratifier: addresses.setterRatifier,
+      }),
+      baseOffer({
+        maxAssets: 0n,
+        maxUnits: 2n,
+        ratifier: addresses.setterRatifier,
+      }),
+    ]);
+    const data = SetterRatifierUtils.ratifierData({ tree, leafIndex: 0n });
+
+    expect(() =>
+      SetterRatifierUtils.verifyRatifierData({
+        offer: tree.offers[1]!,
+        ratifierData: data,
+      }),
+    ).toThrow(InvalidTreeError);
+  });
+});
+
 describe("SetterRatifierUtils.encodeRatifierData", () => {
   test("behavior: decode round trip", () => {
     const data = SetterRatifierUtils.encodeRatifierData({
