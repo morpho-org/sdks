@@ -432,14 +432,15 @@ describe("blueRepay unit tests", () => {
     });
 
     // The funding helper is the single ERC-20 entry point. Without a signature it is still the
-    // one that runs, invoked with `requirementSignature: undefined`, so it emits a plain
-    // erc20TransferFrom (proven end-to-end by the fork round-trips) rather than permit machinery.
+    // one that runs (invoked with `requirementSignature: undefined`), so it emits a plain
+    // erc20TransferFrom — proven end-to-end by the fork round-trips — rather than permit machinery.
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(spy.mock.calls[0][0]).toMatchObject({
+    const fundingArgs = spy.mock.calls[0]?.[0];
+    expect(fundingArgs).toMatchObject({
       asset: WethUsdsBlue.loanToken,
       amount,
     });
-    expect(spy.mock.calls[0][0].requirementSignature).toBeUndefined();
+    expect(fundingArgs?.requirementSignature).toBeUndefined();
   });
 
   test("behavior: requirementSignature drives getTokenRequirementActions on the ERC-20 amount", async ({
