@@ -1,5 +1,11 @@
 # @morpho-org/midnight-sdk
 
+## 1.1.0
+
+### Minor Changes
+
+- [#858](https://github.com/morpho-org/sdks/pull/858) [`bb031a8`](https://github.com/morpho-org/sdks/commit/bb031a83e4ed44d4568da0637a7250c507461b6c) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Add EIP-712 digest and local ratifier-data verification utilities for Ecrecover and Setter payload items.
+
 ## 1.0.0
 
 ### Major Changes
