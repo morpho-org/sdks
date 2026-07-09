@@ -4,11 +4,17 @@ import {
   DivisionByZeroError,
   MathLib,
 } from "@morpho-org/morpho-ts";
-import type { Address, Hash } from "viem";
-import { encodeAbiParameters, keccak256, zeroAddress, zeroHash } from "viem";
+import {
+  type Address,
+  encodeAbiParameters,
+  type Hash,
+  isAddressEqual,
+  keccak256,
+  zeroAddress,
+  zeroHash,
+} from "viem";
 import {
   DEFAULT_TICK_SPACING,
-  MAX_CONTINUOUS_FEE,
   MAX_OFFER_CAP,
   MAX_TICK,
   OFFER_TYPEHASH,
@@ -25,8 +31,6 @@ import {
   Offer,
   type OfferStruct,
 } from "./Offer.js";
-
-const comparableHex = (value: string) => value.toLowerCase();
 
 const offerHashParams = [
   { name: "typehash", type: "bytes32" },
@@ -457,8 +461,8 @@ export namespace OfferUtils {
    * Validates and normalizes the maximum continuous fee an offer accepts.
    *
    * Use this before `Offer.create` when a maker UI exposes fee tolerance.
-   * `Offer.create` calls it internally and defaults omitted values to
-   * {@link MAX_CONTINUOUS_FEE}.
+   * `Offer.create` calls it internally and defaults omitted values to zero so
+   * fresh offers fail closed unless the maker explicitly accepts a fee cap.
    *
    * @param params.continuousFeeCap - Optional maximum market continuous fee accepted by this offer.
    * @returns Normalized continuous fee cap.
@@ -474,9 +478,7 @@ export namespace OfferUtils {
   export function validateContinuousFeeCap(params: {
     readonly continuousFeeCap?: BigIntish;
   }) {
-    const continuousFeeCap = BigInt(
-      params.continuousFeeCap ?? MAX_CONTINUOUS_FEE,
-    );
+    const continuousFeeCap = BigInt(params.continuousFeeCap ?? 0n);
 
     if (continuousFeeCap < 0n) {
       throw new InvalidOfferParameterError({
@@ -544,7 +546,7 @@ export namespace OfferUtils {
    * @param params.tickSpacing - Optional market tick spacing; defaults to `DEFAULT_TICK_SPACING`.
    * @param params.maxUnits - Optional unit cap; defaults to zero.
    * @param params.maxAssets - Optional buyer or seller asset cap; defaults to zero.
-   * @param params.continuousFeeCap - Optional maximum market continuous fee accepted by this offer; defaults to `MAX_CONTINUOUS_FEE`.
+   * @param params.continuousFeeCap - Optional maximum market continuous fee accepted by this offer; defaults to zero.
    * @param params.start - Optional offer start timestamp; defaults to zero.
    * @param params.expiry - Offer expiry timestamp.
    * @param params.receiverIfMakerIsSeller - Optional receiver used when maker is seller.
@@ -665,16 +667,16 @@ export namespace OfferUtils {
     const offers = offerInputs.map((offer) => Offer.from(offer));
     const first = offers[0]!;
 
-    const expectedMaker = comparableHex(first.maker);
+    const expectedMaker = first.maker;
     const expectedBuy = first.buy;
-    const expectedLoanToken = comparableHex(
-      MarketParams.from(first.market).loanToken,
-    );
+    const expectedLoanToken = MarketParams.from(first.market).loanToken;
+    const expectedChainId = MarketParams.from(first.market).chainId;
+    const expectedMidnight = MarketParams.from(first.market).midnight;
     const expectedMaxUnits = first.maxUnits;
     const expectedMaxAssets = first.maxAssets;
 
     for (const offer of offers) {
-      if (comparableHex(offer.maker) !== expectedMaker) {
+      if (!isAddressEqual(offer.maker, expectedMaker)) {
         throw new InvalidOfferGroupError(
           "All offers in a group must use the same maker.",
         );
@@ -696,11 +698,28 @@ export namespace OfferUtils {
         );
       }
       if (
-        comparableHex(MarketParams.from(offer.market).loanToken) !==
-        expectedLoanToken
+        !isAddressEqual(
+          MarketParams.from(offer.market).loanToken,
+          expectedLoanToken,
+        )
       ) {
         throw new InvalidOfferGroupError(
           "All offers in a group must use the same loan token.",
+        );
+      }
+      if (MarketParams.from(offer.market).chainId !== expectedChainId) {
+        throw new InvalidOfferGroupError(
+          "All offers in a group must use the same chain id.",
+        );
+      }
+      if (
+        !isAddressEqual(
+          MarketParams.from(offer.market).midnight,
+          expectedMidnight,
+        )
+      ) {
+        throw new InvalidOfferGroupError(
+          "All offers in a group must use the same Midnight contract.",
         );
       }
       if (
@@ -713,8 +732,7 @@ export namespace OfferUtils {
       }
       if (
         offer.buy &&
-        comparableHex(offer.receiverIfMakerIsSeller) !==
-          comparableHex(zeroAddress)
+        !isAddressEqual(offer.receiverIfMakerIsSeller, zeroAddress)
       ) {
         throw new InvalidOfferGroupError(
           "Buy offers must use the zero address as receiverIfMakerIsSeller.",
@@ -961,17 +979,30 @@ export namespace OfferUtils {
   export function getConsumableUnits(params: {
     readonly offer: Pick<
       IOffer,
-      "market" | "buy" | "tick" | "maxUnits" | "maxAssets" | "continuousFeeCap"
+      | "market"
+      | "buy"
+      | "start"
+      | "expiry"
+      | "tick"
+      | "maxUnits"
+      | "maxAssets"
+      | "continuousFeeCap"
     >;
     readonly consumed: BigIntish;
     readonly timestamp: BigIntish;
   }): bigint {
     const offer = params.offer;
     const consumed = BigInt(params.consumed);
+    const timestamp = BigInt(params.timestamp);
+    const start = BigInt(offer.start);
+    const expiry = BigInt(offer.expiry);
     const maxUnits = BigInt(offer.maxUnits);
     const maxAssets = BigInt(offer.maxAssets);
     const continuousFeeCap = BigInt(offer.continuousFeeCap);
     assertNonNegative("consumed", consumed);
+    assertNonNegative("timestamp", timestamp);
+    assertNonNegative("offer.start", start);
+    assertNonNegative("offer.expiry", expiry);
     assertNonNegative("offer.maxUnits", maxUnits);
     assertNonNegative("offer.maxAssets", maxAssets);
     assertNonNegative("offer.continuousFeeCap", continuousFeeCap);
@@ -987,12 +1018,13 @@ export namespace OfferUtils {
     }
 
     const market = Market.from(offer.market);
+    if (timestamp < start || timestamp > expiry) return 0n;
     if (continuousFeeCap < BigInt(market.continuousFee)) return 0n;
     if (maxUnits > 0n) return MathLib.zeroFloorSub(maxUnits, consumed);
 
     const remainingAssets = MathLib.zeroFloorSub(maxAssets, consumed);
     const settlementFee = market.getSettlementFee(
-      market.timeToMaturity(params.timestamp),
+      market.timeToMaturity(timestamp),
     );
     if (!offer.buy) {
       const { sellerPrice } = TakeAmountsLib.prices({

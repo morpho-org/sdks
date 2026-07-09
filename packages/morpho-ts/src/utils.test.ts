@@ -14,6 +14,7 @@ import {
   getValue,
   hasValue,
   isDefined,
+  isHexEqual,
   isNotNull,
   isNotUndefined,
   keys,
@@ -31,6 +32,13 @@ describe("ZERO_ADDRESS", () => {
 
   test("has length 42 (0x + 40 hex chars)", () => {
     expect(ZERO_ADDRESS.length).toBe(42);
+  });
+});
+
+describe("isHexEqual", () => {
+  test("compares hex strings case-insensitively", () => {
+    expect(isHexEqual("0xAbCd", "0xabcd")).toBe(true);
+    expect(isHexEqual("0xAbCd", "0xabce")).toBe(false);
   });
 });
 

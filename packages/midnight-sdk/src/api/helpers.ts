@@ -1,9 +1,10 @@
-import { BLUE_API_BASE_URL } from "@morpho-org/morpho-ts";
-import type { Hash } from "viem";
+import { BLUE_API_BASE_URL, isHexEqual } from "@morpho-org/morpho-ts";
+import { type Address, type Hash, isAddressEqual } from "viem";
 import {
   InvalidMidnightApiResponseError,
   MidnightApiError,
 } from "../errors.js";
+import { MarketUtils } from "../market/index.js";
 import type {
   ApiBookMarketResponse,
   ApiCollateralResponse,
@@ -21,7 +22,7 @@ import type {
 const DEFAULT_MIDNIGHT_API_URL = new URL("/v0/midnight", BLUE_API_BASE_URL);
 // Keep this literal in source so the browser ESM build does not import package.json
 // through Node-only createRequire/module shims.
-const MIDNIGHT_SDK_VERSION = "0.1.0";
+const MIDNIGHT_SDK_VERSION = "1.0.1";
 
 /** @internal Sends one Midnight API request and maps non-2xx responses to SDK errors. */
 export async function requestMidnightApi<Response = unknown>(
@@ -202,6 +203,83 @@ export function mapTakeableOffer(
     },
     ratifierData: takeableOffer.ratifier_data,
   };
+}
+
+/** @internal API response context required for a takeable offer to be executable for the caller's request. */
+export interface TakeableOfferContext {
+  readonly marketId?: Hash;
+  readonly side?: MidnightApiBookSide;
+  readonly maker?: Address;
+  readonly marketIds?: readonly Hash[];
+  readonly groups?: readonly Hash[];
+}
+
+/** @internal Maps, validates, and best-price-sorts API takeable offers. */
+export function mapBoundTakeableOffers(
+  takeableOffers: readonly ApiTakeableOfferResponse[],
+  context: TakeableOfferContext,
+): MidnightApiTake[] {
+  const mapped = takeableOffers.map((takeableOffer) => {
+    const take = mapTakeableOffer(takeableOffer);
+    const embeddedMarketId = MarketUtils.toId(take.offer.market);
+    if (!isHexEqual(embeddedMarketId, take.marketId)) {
+      throw new InvalidMidnightApiResponseError(
+        `Midnight API takeable offer market_id "${take.marketId}" does not match embedded offer market "${embeddedMarketId}".`,
+      );
+    }
+    if (
+      context.marketId != null &&
+      !isHexEqual(take.marketId, context.marketId)
+    ) {
+      throw new InvalidMidnightApiResponseError(
+        `Midnight API takeable offer market_id "${take.marketId}" does not match requested market "${context.marketId}".`,
+      );
+    }
+    if (
+      context.marketIds != null &&
+      context.marketIds.length > 0 &&
+      !context.marketIds.some((marketId) => isHexEqual(marketId, take.marketId))
+    ) {
+      throw new InvalidMidnightApiResponseError(
+        `Midnight API takeable offer market_id "${take.marketId}" is outside the requested market_ids filter.`,
+      );
+    }
+    if (context.side != null) {
+      const expectedBuy = context.side === "bids";
+      if (take.offer.buy !== expectedBuy) {
+        throw new InvalidMidnightApiResponseError(
+          `Midnight API ${context.side} takeable offer returned offer.buy "${take.offer.buy}".`,
+        );
+      }
+    }
+    if (
+      context.maker != null &&
+      !isAddressEqual(take.offer.maker, context.maker)
+    ) {
+      throw new InvalidMidnightApiResponseError(
+        `Midnight API takeable offer maker "${take.offer.maker}" does not match requested maker "${context.maker}".`,
+      );
+    }
+    if (
+      context.groups != null &&
+      context.groups.length > 0 &&
+      !context.groups.some((group) => isHexEqual(group, take.offer.group))
+    ) {
+      throw new InvalidMidnightApiResponseError(
+        `Midnight API takeable offer group "${take.offer.group}" is outside the requested groups filter.`,
+      );
+    }
+
+    return take;
+  });
+
+  if (context.side == null) return mapped;
+
+  return [...mapped].sort((a, b) => {
+    if (a.offer.tick === b.offer.tick) return 0;
+    if (context.side === "asks") return a.offer.tick < b.offer.tick ? -1 : 1;
+    return a.offer.tick > b.offer.tick ? -1 : 1;
+  });
 }
 
 /** @internal Parses the mempool validation response envelope. */

@@ -176,6 +176,48 @@
         "import": "./lib/esm/utils.js",
         "require": "./lib/cjs/utils.js"
       }
+    },
+    "main": "./lib/cjs/index.js",
+    "types": "./lib/esm/index.d.ts",
+    "typesVersions": {
+      "*": {
+        "abis": [
+          "lib/esm/abis.d.ts"
+        ],
+        "addresses": [
+          "lib/esm/addresses.d.ts"
+        ],
+        "augment": [
+          "lib/esm/augment.d.ts"
+        ],
+        "augment/*": [
+          "lib/esm/augment/*.d.ts"
+        ],
+        "bundler": [
+          "lib/esm/bundler/index.d.ts"
+        ],
+        "constants": [
+          "lib/esm/constants.d.ts"
+        ],
+        "entities": [
+          "lib/esm/entities/index.d.ts"
+        ],
+        "errors": [
+          "lib/esm/errors.d.ts"
+        ],
+        "fetch": [
+          "lib/esm/fetch.d.ts"
+        ],
+        "format": [
+          "lib/esm/format.d.ts"
+        ],
+        "types": [
+          "lib/esm/types.d.ts"
+        ],
+        "utils": [
+          "lib/esm/utils.d.ts"
+        ]
+      }
     }
   }
 }

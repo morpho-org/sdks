@@ -47,7 +47,8 @@ describe("SetterRatifierUtils.ratify", () => {
     );
 
     expect(items).toHaveLength(1);
-    expect(items[0]!.offer).toBe(offer);
+    expect(items[0]!.offer).not.toBe(offer);
+    expect(items[0]!.offer.group).toBe(offer.group);
     expect(
       TreeUtils.verifyProof({
         offer: items[0]!.offer,

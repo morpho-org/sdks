@@ -108,6 +108,57 @@ export type GroupInput = IGroup | IOffer;
  */
 export namespace GroupUtils {
   /**
+   * Returns whether an entry is an explicit group rather than a standalone offer.
+   *
+   * Plain offer objects can also contain incidental `offers` properties, so the
+   * discriminant must reject values that still carry the offer `market` field.
+   *
+   * @param entry - Group or offer input to inspect.
+   * @returns Whether `entry` is an explicit group input.
+   * @example
+   * ```ts
+   * import { GroupUtils, Offer } from "@morpho-org/midnight-sdk";
+   *
+   * const offer = Offer.from({
+   *   market: {
+   *     chainId: 8453,
+   *     midnight: "0x0000000000000000000000000000000000001000",
+   *     loanToken: "0x0000000000000000000000000000000000006000",
+   *     collateralParams: [
+   *       {
+   *         token: "0x0000000000000000000000000000000000007000",
+   *         lltv: 770000000000000000n,
+   *         liquidationCursor: 250000000000000000n,
+   *         oracle: "0x0000000000000000000000000000000000008000",
+   *       },
+   *     ],
+   *     maturity: 54_000n,
+   *     rcfThreshold: 0n,
+   *     enterGate: "0x0000000000000000000000000000000000000000",
+   *     liquidatorGate: "0x0000000000000000000000000000000000000000",
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000009000",
+   *   start: 0n,
+   *   expiry: 3_600n,
+   *   tick: 5_000n,
+   *   callback: "0x0000000000000000000000000000000000000000",
+   *   callbackData: "0x",
+   *   receiverIfMakerIsSeller: "0x0000000000000000000000000000000000000000",
+   *   ratifier: "0x0000000000000000000000000000000000004000",
+   *   reduceOnly: false,
+   *   maxUnits: 100n,
+   *   maxAssets: 0n,
+   *   continuousFeeCap: 0n,
+   * });
+   * console.log(GroupUtils.isGroupInput(offer));
+   * ```
+   */
+  export function isGroupInput(entry: GroupInput): entry is IGroup {
+    return "offers" in entry && !("market" in entry);
+  }
+
+  /**
    * Derives the deterministic content-addressed id for a group of offers.
    *
    * This mirrors the router implementation: hash each offer with `group = 0`,

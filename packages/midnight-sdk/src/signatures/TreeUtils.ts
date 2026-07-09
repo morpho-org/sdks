@@ -562,13 +562,18 @@ export namespace TreeUtils {
         "paddedOffers" in params.tree
           ? params.tree.offers
           : params.tree.flatMap((entry) =>
-              "offers" in entry
+              GroupUtils.isGroupInput(entry)
                 ? Group.from(entry).offers
-                : [Offer.from(entry)],
+                : [
+                    new Offer({
+                      ...Offer.from(entry),
+                      group: OfferUtils.groupHash(entry),
+                    }),
+                  ],
             );
 
       if (!("paddedOffers" in params.tree)) {
-        buildDescriptor(params.tree);
+        buildDescriptor(offers, { preserveStandaloneGroups: true });
       }
 
       items = offers.map((offer) => ({
@@ -644,6 +649,7 @@ export namespace TreeUtils {
    * make-side code.
    *
    * @param entries - Groups or standalone offers in leaf order.
+   * @param options.preserveStandaloneGroups - Whether standalone offer group ids should be preserved instead of normalized.
    * @returns Tree descriptor.
    * @throws {InvalidTreeError} when the offer count is empty, all padding, or duplicated.
    * @throws {InvalidTreeHeightError} when the padded tree exceeds supported ratifier typehashes.
@@ -681,11 +687,21 @@ export namespace TreeUtils {
    * console.log(tree.root);
    * ```
    */
-  export function buildDescriptor(entries: TreeCreateParams): TreeDescriptor {
+  export function buildDescriptor(
+    entries: TreeCreateParams,
+    options: { readonly preserveStandaloneGroups?: boolean } = {},
+  ): TreeDescriptor {
     const structs = entries.flatMap((entry) =>
-      "offers" in entry
+      GroupUtils.isGroupInput(entry)
         ? GroupUtils.toStructs(entry)
-        : [OfferUtils.toStruct({ offer: entry })],
+        : [
+            OfferUtils.toStruct({
+              offer: entry as IOffer,
+              group: options.preserveStandaloneGroups
+                ? undefined
+                : OfferUtils.groupHash(entry as IOffer),
+            }),
+          ],
     );
     if (structs.length === 0) {
       throw new InvalidTreeError("Tree must not be empty.");

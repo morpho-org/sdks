@@ -811,7 +811,7 @@ export interface BuildOfferParams {
   readonly maxUnits?: BigIntish;
   /** Maximum buyer or seller assets; defaults to zero. Exactly one of `maxUnits` and `maxAssets` must be non-zero. */
   readonly maxAssets?: BigIntish;
-  /** Maximum market continuous fee accepted by this offer; defaults to the protocol maximum. */
+  /** Maximum market continuous fee accepted by this offer; defaults to zero. */
   readonly continuousFeeCap?: BigIntish;
   /** Offer start timestamp; defaults to zero. */
   readonly start?: BigIntish;

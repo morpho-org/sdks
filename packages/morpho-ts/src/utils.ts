@@ -7,6 +7,23 @@ export const ZERO_ADDRESS =
   "0x0000000000000000000000000000000000000000" as const;
 
 /**
+ * Compares hex strings case-insensitively.
+ *
+ * @param left - First hex string.
+ * @param right - Second hex string.
+ * @returns Whether both hex strings are equal after lowercase normalization.
+ * @example
+ * ```ts
+ * import { isHexEqual } from "@morpho-org/morpho-ts";
+ *
+ * const equal = isHexEqual("0xAbC", "0xabc");
+ * // true
+ * ```
+ */
+export const isHexEqual = (left: string, right: string) =>
+  left.toLowerCase() === right.toLowerCase();
+
+/**
  * Narrows a nullable value to its non-null type.
  *
  * @param v - Value to test.

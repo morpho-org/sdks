@@ -14,7 +14,7 @@ import {
   baseOfferInput,
   group,
 } from "../__test__/fixtures.js";
-import { MAX_CONTINUOUS_FEE, MAX_OFFER_CAP, MAX_TICK } from "../constants.js";
+import { MAX_OFFER_CAP, MAX_TICK } from "../constants.js";
 import {
   InvalidOfferGroupError,
   InvalidOfferParameterError,
@@ -90,7 +90,7 @@ describe("Offer.create", () => {
     });
 
     expect(offer.maxAssets).toBe(100n);
-    expect(offer.continuousFeeCap).toBe(MAX_CONTINUOUS_FEE);
+    expect(offer.continuousFeeCap).toBe(0n);
     expect(offer.receiverIfMakerIsSeller).toBe(zeroAddress);
     expect(offer.group).toBe(OfferUtils.groupHash(offer));
     expect(offer.hash).toBe(OfferUtils.hash(offer));
@@ -154,7 +154,7 @@ describe("Offer.create", () => {
       expiry: 11n,
       maxUnits: 0n,
       maxAssets: 100n,
-      continuousFeeCap: MAX_CONTINUOUS_FEE,
+      continuousFeeCap: 0n,
       receiverIfMakerIsSeller: zeroAddress,
     });
   });
@@ -183,7 +183,7 @@ describe("Offer.create", () => {
       maxAssets: MAX_OFFER_CAP,
     });
     expect(OfferUtils.validateContinuousFeeCap({})).toEqual({
-      continuousFeeCap: MAX_CONTINUOUS_FEE,
+      continuousFeeCap: 0n,
     });
     expect(
       OfferUtils.resolveReceiverIfMakerIsSeller({

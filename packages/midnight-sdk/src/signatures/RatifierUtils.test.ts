@@ -1,7 +1,13 @@
 import { describe, expect, test } from "vitest";
-import { addresses, baseOffer } from "../__test__/fixtures.js";
+import {
+  addresses,
+  baseOffer,
+  group as staleGroup,
+} from "../__test__/fixtures.js";
 import { InvalidTreeError } from "../errors.js";
 import { RatifierUtils as RootRatifierUtils } from "../index.js";
+import { OfferUtils } from "../offers/index.js";
+import { Group } from "./Group.js";
 import { RatifierUtils } from "./RatifierUtils.js";
 import { Tree } from "./Tree.js";
 
@@ -61,8 +67,39 @@ describe("RatifierUtils.normalizeRatifierTree", () => {
       label: "Setter",
     });
 
-    expect(tree.offers).toEqual([offer]);
+    expect(tree.offers).toHaveLength(1);
+    expect(tree.offers[0]).not.toBe(offer);
+    expect(tree.offers[0]!.group).toBe(offer.group);
     expect(ratifier).toBe(addresses.setterRatifier);
+  });
+
+  test("behavior: preserves grouped TreeLike descriptors", () => {
+    const first = baseOffer({ maxAssets: 0n, tick: 4_000n });
+    const second = baseOffer({ maxAssets: 0n, tick: 5_000n });
+    const groupedTree = Tree.create([Group.create([first, second])]);
+
+    const { tree } = RatifierUtils.normalizeRatifierTree({
+      tree: groupedTree,
+      label: "Ecrecover",
+    });
+
+    expect(tree.root).toBe(groupedTree.root);
+    expect(tree.paddedOffers[0]!.group).toBe(
+      groupedTree.paddedOffers[0]!.group,
+    );
+  });
+
+  test("behavior: normalizes stale standalone groups in raw inputs", () => {
+    const offer = baseOffer({ group: staleGroup, maxAssets: 0n });
+
+    const { tree } = RatifierUtils.normalizeRatifierTree({
+      tree: [offer],
+      label: "Ecrecover",
+    });
+
+    expect(tree.offers[0]!.group).toBe(OfferUtils.groupHash(offer));
+    expect(tree.offers[0]!.group).not.toBe(staleGroup);
+    expect(tree.paddedOffers[0]!.group).toBe(OfferUtils.groupHash(offer));
   });
 
   test("error: InvalidTreeError mixed ratifiers", () => {

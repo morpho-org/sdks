@@ -1,7 +1,8 @@
 import type { Address, Hex } from "viem";
 import { InvalidTreeError } from "../errors.js";
-import { type IOffer, Offer } from "../offers/index.js";
+import { type IOffer, Offer, OfferUtils } from "../offers/index.js";
 import { Group } from "./Group.js";
+import { GroupUtils } from "./GroupUtils.js";
 import type { RatifierTreeInput, TreeLike } from "./TreeUtils.js";
 import { TreeUtils } from "./TreeUtils.js";
 
@@ -17,12 +18,34 @@ function isTreeLike(tree: RatifierTreeInput): tree is TreeLike {
 }
 
 function normalizeTree(tree: RatifierTreeInput): TreeLike {
-  if (isTreeLike(tree)) return tree;
+  if (isTreeLike(tree)) {
+    const offers = tree.offers.map((offer) => Offer.from(offer));
+    const descriptor = TreeUtils.buildDescriptor(offers, {
+      preserveStandaloneGroups: true,
+    });
+
+    return {
+      offers,
+      paddedOffers: descriptor.offers,
+      leaves: descriptor.leaves,
+      root: descriptor.root,
+      height: descriptor.height,
+    };
+  }
 
   const offers: readonly IOffer[] = tree.flatMap((entry) =>
-    "offers" in entry ? Group.from(entry).offers : [Offer.from(entry)],
+    GroupUtils.isGroupInput(entry)
+      ? Group.from(entry).offers
+      : [
+          new Offer({
+            ...Offer.from(entry as IOffer),
+            group: OfferUtils.groupHash(entry as IOffer),
+          }),
+        ],
   );
-  const descriptor = TreeUtils.buildDescriptor(offers);
+  const descriptor = TreeUtils.buildDescriptor(offers, {
+    preserveStandaloneGroups: true,
+  });
 
   return {
     offers,

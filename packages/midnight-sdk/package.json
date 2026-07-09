@@ -40,7 +40,7 @@
     "test": "vitest --root ../.. --project midnight-sdk"
   },
   "peerDependencies": {
-    "@morpho-org/morpho-ts": "^2.7.0",
+    "@morpho-org/morpho-ts": "^2.8.0",
     "viem": "^2.0.0"
   },
   "devDependencies": {
@@ -52,6 +52,8 @@
     "vitest": "^4.1.9"
   },
   "publishConfig": {
+    "main": "./lib/cjs/index.js",
+    "types": "./lib/esm/index.d.ts",
     "exports": {
       ".": {
         "types": "./lib/esm/index.d.ts",
@@ -64,6 +66,13 @@
         "require": "./lib/cjs/api/index.js"
       },
       "./package.json": "./package.json"
+    },
+    "typesVersions": {
+      "*": {
+        "api": [
+          "lib/esm/api/index.d.ts"
+        ]
+      }
     }
   }
 }

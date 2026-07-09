@@ -1,9 +1,12 @@
+import { MathLib } from "@morpho-org/morpho-ts";
+import { InvalidMidnightApiResponseError } from "../errors.js";
+import { TickLib } from "../math/index.js";
 import { Payload } from "../signatures/Payload.js";
 import {
   buildBookPath,
   mapBookMarket,
+  mapBoundTakeableOffers,
   mapPriceLevel,
-  mapTakeableOffer,
   parseValidationResponse,
   requestMidnightApi,
 } from "./helpers.js";
@@ -308,7 +311,10 @@ export class MidnightApi {
     });
 
     return {
-      data: response.data.map(mapTakeableOffer),
+      data: mapBoundTakeableOffers(response.data, {
+        marketId: input.marketId,
+        side: input.side,
+      }),
     };
   }
 
@@ -362,7 +368,59 @@ export class MidnightApi {
       },
     });
 
-    const takeableOffers = response.data.takeable_offers.map(mapTakeableOffer);
+    const takeableOffers = mapBoundTakeableOffers(
+      response.data.takeable_offers,
+      {
+        marketId: input.marketId,
+        side: input.side,
+      },
+    );
+    const averageWorstPrice =
+      "averageWorstPrice" in input && input.averageWorstPrice != null
+        ? input.averageWorstPrice
+        : "slippage" in input && input.slippage != null
+          ? response.data.average_worst_price
+          : undefined;
+    if (averageWorstPrice != null) {
+      const guard = BigInt(averageWorstPrice);
+      if ("units" in input && input.units != null) {
+        let remainingUnits = BigInt(input.units);
+        let filledUnits = 0n;
+        let weightedPrice = 0n;
+        for (const take of takeableOffers) {
+          if (remainingUnits === 0n) break;
+          const filled =
+            take.units < remainingUnits ? take.units : remainingUnits;
+          filledUnits += filled;
+          weightedPrice += filled * TickLib.tickToPrice(take.offer.tick);
+          remainingUnits -= filled;
+        }
+        if (filledUnits > 0n) {
+          const averagePrice = MathLib.mulDivDown(
+            weightedPrice,
+            1n,
+            filledUnits,
+          );
+          const violatesGuard =
+            input.side === "asks" ? averagePrice > guard : averagePrice < guard;
+          if (violatesGuard) {
+            throw new InvalidMidnightApiResponseError(
+              `Midnight API quote takeable offers imply average price "${averagePrice}" outside average_worst_price guard "${guard}".`,
+            );
+          }
+        }
+      } else {
+        const violatesAnyCap = takeableOffers.some((take) => {
+          const price = TickLib.tickToPrice(take.offer.tick);
+          return input.side === "asks" ? price > guard : price < guard;
+        });
+        if (violatesAnyCap) {
+          throw new InvalidMidnightApiResponseError(
+            `Midnight API quote takeable offers include a price outside average_worst_price guard "${guard}".`,
+          );
+        }
+      }
+    }
 
     return {
       data: {
@@ -420,7 +478,11 @@ export class MidnightApi {
 
     return {
       cursor: response.cursor,
-      data: response.data.map(mapTakeableOffer),
+      data: mapBoundTakeableOffers(response.data, {
+        maker: input.maker,
+        marketIds: input.marketIds,
+        groups: input.groups,
+      }),
     };
   }
 

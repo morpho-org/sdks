@@ -6,6 +6,7 @@ import {
   InvalidMidnightApiResponseError,
   MidnightApiError,
 } from "../errors.js";
+import { TickLib } from "../math/index.js";
 import type { IOffer } from "../offers/index.js";
 import { Payload } from "../signatures/Payload.js";
 import { MidnightApi, type MidnightApiFetch } from "./MidnightApi.js";
@@ -55,7 +56,7 @@ function getRequestUrl(call: FetchCall) {
 }
 
 const MARKET_ID =
-  "0x12590ae1aee324a005be565f3bcdd16dbf8daf7969b26c181c8b8f467dad9f67";
+  "0xbb7c4d7ca92fc06e8b046a913d1c100482e6e5cb11298a4530f8e19657ea296e";
 const SECOND_MARKET_ID =
   "0x22590ae1aee324a005be565f3bcdd16dbf8daf7969b26c181c8b8f467dad9f68";
 const GROUP_ID =
@@ -253,6 +254,7 @@ describe("MidnightApi.validateMempoolPayload", () => {
 
     const headers = new Headers(call.init?.headers);
     expect(headers.get("content-type")).toBe("application/json");
+    expect(headers.get("sdk-version")).toBe("1.0.1");
     expect(headers.get("x-app")).toBe("markets-v2");
   });
 
@@ -503,7 +505,7 @@ describe("MidnightApi.fetchBookTakeableOffers", () => {
 
     const result = await MidnightApi.fetchBookTakeableOffers({
       marketId: MARKET_ID,
-      side: "bids",
+      side: "asks",
       fetch,
     });
 
@@ -512,7 +514,7 @@ describe("MidnightApi.fetchBookTakeableOffers", () => {
     const call = calls[0]!;
     const url = getRequestUrl(call);
     expect(url.pathname).toBe(
-      `/v0/midnight/books/${MARKET_ID}/bids/takeable-offers`,
+      `/v0/midnight/books/${MARKET_ID}/asks/takeable-offers`,
     );
     expect(call.init?.method).toBe("GET");
   });
@@ -583,6 +585,82 @@ describe("MidnightApi.fetchBookQuote", () => {
     expect(url.searchParams.get("assets")).toBe("1000000000000000000");
     expect(url.searchParams.get("slippage")).toBe("0.5");
   });
+
+  test("behavior: clamps guard checks to requested units", async () => {
+    const secondTakeableOffer = {
+      ...apiTakeableOffer,
+      units: "100000000000000000000",
+      offer: {
+        ...apiOffer,
+        tick: 5_000,
+      },
+    };
+    const { fetch } = createJsonFetch({
+      data: {
+        average_best_price: "1000000000000000000",
+        average_worst_price: TickLib.tickToPrice(apiOffer.tick).toString(),
+        available_assets: "1500000000000000000",
+        available_units: "1500000000000000000",
+        takeable_offers: [apiTakeableOffer, secondTakeableOffer],
+      },
+    });
+
+    const result = await MidnightApi.fetchBookQuote({
+      marketId: MARKET_ID,
+      side: "asks",
+      units: apiTakeableOffer.units,
+      averageWorstPrice: TickLib.tickToPrice(apiOffer.tick).toString(),
+      fetch,
+    });
+
+    expect(result.data.takeableOffers).toHaveLength(2);
+  });
+
+  test("error: direct averageWorstPrice guard is enforced over response guard", async () => {
+    const callerGuard = TickLib.tickToPrice(apiOffer.tick) - 1n;
+    const { fetch } = createJsonFetch({
+      data: {
+        average_best_price: "1000000000000000000",
+        average_worst_price: TickLib.tickToPrice(apiOffer.tick).toString(),
+        available_assets: "1500000000000000000",
+        available_units: "1500000000000000000",
+        takeable_offers: [apiTakeableOffer],
+      },
+    });
+
+    await expect(
+      MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side: "asks",
+        units: apiTakeableOffer.units,
+        averageWorstPrice: callerGuard,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("error: asset-targeted quote guards check returned caps", async () => {
+    const callerGuard = TickLib.tickToPrice(apiOffer.tick) - 1n;
+    const { fetch } = createJsonFetch({
+      data: {
+        average_best_price: "1000000000000000000",
+        average_worst_price: TickLib.tickToPrice(apiOffer.tick).toString(),
+        available_assets: "1500000000000000000",
+        available_units: "1500000000000000000",
+        takeable_offers: [apiTakeableOffer],
+      },
+    });
+
+    await expect(
+      MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side: "asks",
+        assets: "1000000000000000000",
+        averageWorstPrice: callerGuard,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
 });
 
 describe("MidnightApi.fetchTakeableOffers", () => {
@@ -617,5 +695,24 @@ describe("MidnightApi.fetchTakeableOffers", () => {
     expect(url.searchParams.get("limit")).toBe("10");
     expect(url.searchParams.get("cursor")).toBe("previous");
     expect(call.init?.method).toBe("GET");
+  });
+
+  test("behavior: treats empty optional filters as unset", async () => {
+    const { calls, fetch } = createJsonFetch({
+      cursor: null,
+      data: [apiTakeableOffer],
+    });
+
+    const result = await MidnightApi.fetchTakeableOffers({
+      maker: MAKER,
+      marketIds: [],
+      groups: [],
+      fetch,
+    });
+
+    expect(result.data).toEqual([expectedTakeableOffer]);
+    const url = getRequestUrl(calls[0]!);
+    expect(url.searchParams.has("market_ids")).toBe(false);
+    expect(url.searchParams.has("groups")).toBe(false);
   });
 });
