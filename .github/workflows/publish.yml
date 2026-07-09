@@ -2,6 +2,10 @@ name: Publish
 
 on:
   workflow_call:
+    outputs:
+      has_tags:
+        description: Whether this run created package tags that were not already on the remote, i.e. whether packages were published.
+        value: ${{ jobs.publish.outputs.has_tags }}
 
 permissions:
   contents: write

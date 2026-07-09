@@ -1,0 +1,81 @@
+name: Docs dispatch
+
+on:
+  workflow_call:
+    secrets:
+      DOCS_BOT_APP_ID:
+        required: true
+      DOCS_BOT_PRIVATE_KEY:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  docs-dispatch:
+    name: Dispatch documentation regeneration
+    runs-on: ubuntu-latest
+    # `actions/checkout` reads this repository; nothing else here touches it.
+    # The cross-repository dispatch travels on the down-scoped app token minted
+    # below, never on GITHUB_TOKEN.
+    permissions:
+      contents: read
+    env:
+      DOCS_REPOSITORY: morpho-org/morpho-apps
+      DOCS_WORKFLOW: doc-auto-generation-workflow.yml
+
+    steps:
+      # `fetch-depth: 2` is the minimum that resolves `HEAD^`, which is the base
+      # of the released-package diff. On a merge commit this fetches every
+      # parent, and the diff follows the first one.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version-file: .nvmrc
+
+      # Only node builtins are used, so this deliberately skips `pnpm install`
+      # and the dependency lifecycle scripts it would run before the app token
+      # is minted.
+      - name: Detect released packages
+        id: released-packages
+        run: node scripts/release/list-released-packages.mjs
+
+      - name: Skip dispatch when no package was released
+        if: steps.released-packages.outputs.has_released_packages == 'false'
+        run: echo "No package version changed in this commit; skipping documentation regeneration."
+
+      # The morpho-docs-bot app is not installed on this repository. The key
+      # exists only to mint an `actions: write` token scoped to the morpho-apps
+      # installation, which can start a workflow there and read nothing else.
+      - name: Generate docs bot token
+        id: docs-bot-token
+        if: steps.released-packages.outputs.has_released_packages == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.DOCS_BOT_APP_ID }}
+          private-key: ${{ secrets.DOCS_BOT_PRIVATE_KEY }}
+          owner: morpho-org
+          repositories: morpho-apps
+          permission-actions: write
+
+      - name: Dispatch documentation regeneration
+        if: steps.released-packages.outputs.has_released_packages == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.docs-bot-token.outputs.token }}
+          RELEASED_PACKAGES: ${{ steps.released-packages.outputs.released_packages }}
+          SOURCE_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          # `--raw-field`, not `--field`: the latter respects gh's `@` syntax,
+          # and the payload is dense with `@morpho-org/...` package names.
+          gh workflow run "${DOCS_WORKFLOW}" \
+            --repo "${DOCS_REPOSITORY}" \
+            --raw-field source="${RELEASED_PACKAGES}" \
+            --raw-field source_run="${SOURCE_RUN_URL}"

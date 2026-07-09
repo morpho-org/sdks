@@ -70,3 +70,21 @@ jobs:
       - version-pr
 
     uses: ./.github/workflows/publish.yml
+
+  # Regenerate the `.mdxai`-scaffolded SDK pages in morpho-apps once packages
+  # are actually on npm. Gated on the publish signal rather than on the
+  # version-bump push, so a failed publish never dispatches a doc rebuild for
+  # versions nobody can install.
+  docs-dispatch:
+    if: needs.publish.result == 'success' && needs.publish.outputs.has_tags == 'true'
+
+    permissions:
+      contents: read
+
+    needs:
+      - publish
+
+    uses: ./.github/workflows/docs-dispatch.yml
+    secrets:
+      DOCS_BOT_APP_ID: ${{ secrets.DOCS_BOT_APP_ID }}
+      DOCS_BOT_PRIVATE_KEY: ${{ secrets.DOCS_BOT_PRIVATE_KEY }}
