@@ -398,6 +398,29 @@ export class InvalidTypedDataSignatureError extends Error {
 }
 
 /**
+ * Thrown when decoded Ecrecover ratifier data contains a non-canonical signature `v` value.
+ *
+ * @example
+ * ```ts
+ * import { InvalidEcrecoverSignatureVError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new InvalidEcrecoverSignatureVError(29);
+ * ```
+ */
+export class InvalidEcrecoverSignatureVError extends Error {
+  /** Invalid ECDSA recovery id. */
+  public readonly v: number;
+
+  public constructor(v: number) {
+    super(
+      `Ecrecover signature v "${v}" is invalid. Use canonical Ethereum v 27 or 28.`,
+    );
+    this.name = "InvalidEcrecoverSignatureVError";
+    this.v = v;
+  }
+}
+
+/**
  * Thrown when the Midnight API returns a non-2xx response.
  *
  * @example
