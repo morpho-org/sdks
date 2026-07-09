@@ -1,5 +1,6 @@
 import type { Client } from "viem";
 import { getChainId } from "viem/actions";
+import { ChainIdMismatchError } from "../errors.js";
 import type {
   DeploylessFetchParameters,
   MidnightCallParameters,
@@ -19,6 +20,12 @@ export const callParameters = (
 export const shouldUseDeployless = (params: DeploylessFetchParameters) =>
   params.deployless ?? true;
 
-/** @internal Returns the configured viem client chain id or fetches it from RPC. */
-export const resolveChainId = async (client: Client) =>
-  client.chain?.id ?? (await getChainId(client));
+/** @internal Returns the RPC chain id and rejects configured-chain drift. */
+export const resolveChainId = async (client: Client) => {
+  const rpcChainId = await getChainId(client);
+  if (client.chain?.id != null && client.chain.id !== rpcChainId) {
+    throw new ChainIdMismatchError(client.chain.id, BigInt(rpcChainId));
+  }
+
+  return rpcChainId;
+};

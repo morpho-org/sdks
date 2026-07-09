@@ -117,7 +117,8 @@ describe("EcrecoverRatifierUtils.ratify", () => {
     );
 
     expect(items).toHaveLength(1);
-    expect(items[0]!.offer).toBe(offer);
+    expect(items[0]!.offer).not.toBe(offer);
+    expect(items[0]!.offer.group).toBe(offer.group);
     expect(decoded.signature).toEqual(
       EcrecoverRatifierUtils.toSignature(signature),
     );

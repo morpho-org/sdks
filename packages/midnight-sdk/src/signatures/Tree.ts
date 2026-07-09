@@ -1,8 +1,14 @@
 import type { BigIntish } from "@morpho-org/morpho-ts";
 import type { Hash } from "viem";
 import type { MempoolPayloadValidationSuccess } from "../api/types.js";
-import { Offer, type OfferStruct } from "../offers/index.js";
+import {
+  type IOffer,
+  Offer,
+  type OfferStruct,
+  OfferUtils,
+} from "../offers/index.js";
 import { Group } from "./Group.js";
+import { GroupUtils } from "./GroupUtils.js";
 import {
   type TreeCreateParams,
   type TreeInput,
@@ -81,10 +87,17 @@ export class Tree {
 
   private constructor(params: TreeCreateParams) {
     this.offers = params.flatMap((entry) =>
-      "offers" in entry ? Group.from(entry).offers : [Offer.from(entry)],
+      GroupUtils.isGroupInput(entry)
+        ? Group.from(entry).offers
+        : [
+            new Offer({
+              ...Offer.from(entry as IOffer),
+              group: OfferUtils.groupHash(entry as IOffer),
+            }),
+          ],
     );
 
-    const descriptor = TreeUtils.buildDescriptor(this.offers);
+    const descriptor = TreeUtils.buildDescriptor(params);
     this.paddedOffers = descriptor.offers;
     this.leaves = descriptor.leaves;
     this.root = descriptor.root;

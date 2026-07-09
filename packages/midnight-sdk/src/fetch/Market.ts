@@ -1,8 +1,9 @@
 import { getChainAddress } from "@morpho-org/morpho-ts";
-import type { Client, Hash } from "viem";
+import type { Address, Client, Hash } from "viem";
 import { readContract } from "viem/actions";
 import { midnightAbi } from "../abis.js";
-import { Market, MarketParams } from "../market/index.js";
+import { InvalidMarketParameterError } from "../errors.js";
+import { Market, MarketParams, MarketUtils } from "../market/index.js";
 import type { MidnightFetchParams } from "./types.js";
 import { callParameters, resolveChainId } from "./utils.js";
 
@@ -50,7 +51,11 @@ export async function fetchMarketParams(
     args: [params.marketId],
   });
 
-  return new MarketParams(market);
+  return normalizeFetchedMarketParams(market, {
+    marketId: params.marketId,
+    chainId,
+    midnight,
+  });
 }
 
 /**
@@ -122,7 +127,11 @@ export async function fetchMarket(
   ] = state;
 
   return new Market({
-    params: new MarketParams(market),
+    params: normalizeFetchedMarketParams(market, {
+      marketId: params.marketId,
+      chainId,
+      midnight,
+    }),
     totalUnits,
     lossFactor,
     withdrawable,
@@ -139,4 +148,40 @@ export async function fetchMarket(
     continuousFee,
     tickSpacing,
   });
+}
+
+function normalizeFetchedMarketParams(
+  market: ConstructorParameters<typeof MarketParams>[0],
+  expected: {
+    readonly marketId: Hash;
+    readonly chainId: number;
+    readonly midnight: Address;
+  },
+): MarketParams {
+  const marketParams = new MarketParams(market);
+  if (marketParams.chainId !== BigInt(expected.chainId)) {
+    throw new InvalidMarketParameterError({
+      parameter: "chainId",
+      value: marketParams.chainId,
+      instruction: `Fetched market must use client chain id "${expected.chainId}".`,
+    });
+  }
+  if (marketParams.midnight.toLowerCase() !== expected.midnight.toLowerCase()) {
+    throw new InvalidMarketParameterError({
+      parameter: "midnight",
+      value: marketParams.midnight,
+      instruction: `Fetched market must use Midnight contract "${expected.midnight}".`,
+    });
+  }
+
+  const actualMarketId = MarketUtils.toId(marketParams);
+  if (actualMarketId.toLowerCase() !== expected.marketId.toLowerCase()) {
+    throw new InvalidMarketParameterError({
+      parameter: "marketId",
+      value: actualMarketId,
+      instruction: `Fetched market must match requested market id "${expected.marketId}".`,
+    });
+  }
+
+  return marketParams;
 }

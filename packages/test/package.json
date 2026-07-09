@@ -102,6 +102,24 @@
         "import": "./lib/esm/playwright.js",
         "require": "./lib/cjs/playwright.js"
       }
+    },
+    "main": "./lib/cjs/index.js",
+    "types": "./lib/esm/index.d.ts",
+    "typesVersions": {
+      "*": {
+        "vitest": [
+          "lib/esm/vitest.d.ts"
+        ],
+        "fixtures": [
+          "lib/esm/fixtures.d.ts"
+        ],
+        "mock": [
+          "lib/esm/mock.d.ts"
+        ],
+        "playwright": [
+          "lib/esm/playwright.d.ts"
+        ]
+      }
     }
   }
 }
