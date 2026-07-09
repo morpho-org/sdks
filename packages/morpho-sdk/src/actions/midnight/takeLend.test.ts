@@ -17,6 +17,7 @@ import {
   NonPositiveMidnightAmountError,
 } from "../../types/index.js";
 import { midnightTakeLend } from "./takeLend.js";
+import { PermitKind } from "./types.js";
 
 describe("midnightTakeLend", () => {
   test("default", () => {
@@ -50,7 +51,7 @@ describe("midnightTakeLend", () => {
     expect(decoded.args[0]).toBe(1_000n);
     expect(decoded.args[1]).toBe(900n);
     expect(decoded.args?.[4]).toEqual({
-      kind: 0,
+      kind: PermitKind.None,
       data: "0x",
     });
     expect(decoded.args?.[6]).toEqual([]);

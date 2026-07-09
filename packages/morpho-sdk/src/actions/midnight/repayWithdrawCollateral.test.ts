@@ -15,6 +15,7 @@ import {
   NonPositiveMidnightAmountError,
 } from "../../types/index.js";
 import { midnightRepayWithdrawCollateral } from "./repayWithdrawCollateral.js";
+import { PermitKind } from "./types.js";
 
 describe("midnightRepayWithdrawCollateral", () => {
   test("default", () => {
@@ -45,7 +46,7 @@ describe("midnightRepayWithdrawCollateral", () => {
     );
     expect(decoded.args[1]).toBe(1_000n);
     expect(decoded.args?.[3]).toEqual({
-      kind: 0,
+      kind: PermitKind.None,
       data: "0x",
     });
     expect(decoded.args?.[6]).toBe(0n);

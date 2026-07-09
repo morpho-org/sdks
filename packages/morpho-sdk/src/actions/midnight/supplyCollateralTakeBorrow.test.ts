@@ -19,6 +19,7 @@ import {
   NonPositiveMidnightAmountError,
 } from "../../types/index.js";
 import { midnightSupplyCollateralTakeBorrow } from "./supplyCollateralTakeBorrow.js";
+import { PermitKind } from "./types.js";
 
 describe("midnightSupplyCollateralTakeBorrow", () => {
   test("default", () => {
@@ -49,7 +50,7 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
     expect(decoded.args?.[5]).toMatchObject([
       {
         permit: {
-          kind: 0,
+          kind: PermitKind.None,
           data: "0x",
         },
       },
