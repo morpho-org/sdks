@@ -1,3 +1,4 @@
+import { MathLib } from "@morpho-org/morpho-ts";
 import type { Hex } from "viem";
 import { describe, expect, test } from "vitest";
 
@@ -616,6 +617,42 @@ describe("MidnightApi.fetchBookQuote", () => {
     expect(result.data.takeableOffers).toHaveLength(2);
   });
 
+  test("behavior: clamps guard checks to requested assets", async () => {
+    const firstPrice = TickLib.tickToPrice(apiOffer.tick);
+    const firstAssets = MathLib.mulDivUp(
+      BigInt(apiTakeableOffer.units),
+      firstPrice,
+      MathLib.WAD,
+    );
+    const secondTakeableOffer = {
+      ...apiTakeableOffer,
+      units: "100000000000000000000",
+      offer: {
+        ...apiOffer,
+        tick: 5_000,
+      },
+    };
+    const { fetch } = createJsonFetch({
+      data: {
+        average_best_price: "1000000000000000000",
+        average_worst_price: firstPrice.toString(),
+        available_assets: "1500000000000000000",
+        available_units: "1500000000000000000",
+        takeable_offers: [apiTakeableOffer, secondTakeableOffer],
+      },
+    });
+
+    const result = await MidnightApi.fetchBookQuote({
+      marketId: MARKET_ID,
+      side: "asks",
+      assets: firstAssets,
+      averageWorstPrice: firstPrice,
+      fetch,
+    });
+
+    expect(result.data.takeableOffers).toHaveLength(2);
+  });
+
   test("error: direct averageWorstPrice guard is enforced over response guard", async () => {
     const callerGuard = TickLib.tickToPrice(apiOffer.tick) - 1n;
     const { fetch } = createJsonFetch({
@@ -639,15 +676,35 @@ describe("MidnightApi.fetchBookQuote", () => {
     ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
   });
 
-  test("error: asset-targeted quote guards check returned caps", async () => {
-    const callerGuard = TickLib.tickToPrice(apiOffer.tick) - 1n;
+  test("error: asset-targeted quote guards check aggregate price", async () => {
+    const firstPrice = TickLib.tickToPrice(apiOffer.tick);
+    const secondTakeableOffer = {
+      ...apiTakeableOffer,
+      units: "100000000000000000000",
+      offer: {
+        ...apiOffer,
+        tick: 5_000,
+      },
+    };
+    const secondPrice = TickLib.tickToPrice(secondTakeableOffer.offer.tick);
+    const requestedAssets =
+      MathLib.mulDivUp(
+        BigInt(apiTakeableOffer.units),
+        firstPrice,
+        MathLib.WAD,
+      ) +
+      MathLib.mulDivUp(
+        BigInt(secondTakeableOffer.units),
+        secondPrice,
+        MathLib.WAD,
+      );
     const { fetch } = createJsonFetch({
       data: {
         average_best_price: "1000000000000000000",
-        average_worst_price: TickLib.tickToPrice(apiOffer.tick).toString(),
+        average_worst_price: firstPrice.toString(),
         available_assets: "1500000000000000000",
         available_units: "1500000000000000000",
-        takeable_offers: [apiTakeableOffer],
+        takeable_offers: [apiTakeableOffer, secondTakeableOffer],
       },
     });
 
@@ -655,8 +712,8 @@ describe("MidnightApi.fetchBookQuote", () => {
       MidnightApi.fetchBookQuote({
         marketId: MARKET_ID,
         side: "asks",
-        assets: "1000000000000000000",
-        averageWorstPrice: callerGuard,
+        assets: requestedAssets,
+        averageWorstPrice: firstPrice,
         fetch,
       }),
     ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);

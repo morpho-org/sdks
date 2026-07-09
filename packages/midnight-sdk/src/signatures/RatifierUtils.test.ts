@@ -8,8 +8,10 @@ import { InvalidTreeError } from "../errors.js";
 import { RatifierUtils as RootRatifierUtils } from "../index.js";
 import { OfferUtils } from "../offers/index.js";
 import { Group } from "./Group.js";
+import { EMPTY_OFFER_STRUCT } from "./offerStructInternal.js";
 import { RatifierUtils } from "./RatifierUtils.js";
 import { Tree } from "./Tree.js";
+import { TreeUtils } from "./TreeUtils.js";
 
 describe("RatifierUtils.getRatifierInfo", () => {
   test("default", () => {
@@ -87,6 +89,40 @@ describe("RatifierUtils.normalizeRatifierTree", () => {
     expect(tree.paddedOffers[0]!.group).toBe(
       groupedTree.paddedOffers[0]!.group,
     );
+  });
+
+  test("behavior: preserves caller-provided TreeLike root and padding", () => {
+    const group = Group.create([
+      baseOffer({
+        maxAssets: 0n,
+        ratifier: addresses.ecrecoverRatifier,
+      }),
+    ]);
+    const offer = group.offers[0]!;
+    const paddedOffers = [
+      OfferUtils.toStruct({ offer }),
+      EMPTY_OFFER_STRUCT,
+    ] as const;
+    const leaves = paddedOffers.map(OfferUtils.hashStruct);
+    const root = TreeUtils.hashNode(leaves[0]!, leaves[1]!);
+    const treeLike = {
+      offers: [offer],
+      paddedOffers,
+      leaves,
+      root,
+      height: 1,
+    } as const;
+
+    const { tree, ratifier } = RatifierUtils.normalizeRatifierTree({
+      tree: treeLike,
+      label: "Ecrecover",
+    });
+
+    expect(tree.paddedOffers).toBe(paddedOffers);
+    expect(tree.leaves).toBe(leaves);
+    expect(tree.root).toBe(root);
+    expect(tree.height).toBe(1);
+    expect(ratifier).toBe(addresses.ecrecoverRatifier);
   });
 
   test("behavior: normalizes stale standalone groups in raw inputs", () => {

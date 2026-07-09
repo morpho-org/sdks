@@ -383,40 +383,53 @@ export class MidnightApi {
           : undefined;
     if (averageWorstPrice != null) {
       const guard = BigInt(averageWorstPrice);
+      let filledUnits = 0n;
+      let weightedPrice = 0n;
       if ("units" in input && input.units != null) {
         let remainingUnits = BigInt(input.units);
-        let filledUnits = 0n;
-        let weightedPrice = 0n;
         for (const take of takeableOffers) {
           if (remainingUnits === 0n) break;
+          const price = TickLib.tickToPrice(take.offer.tick);
           const filled =
             take.units < remainingUnits ? take.units : remainingUnits;
           filledUnits += filled;
-          weightedPrice += filled * TickLib.tickToPrice(take.offer.tick);
+          weightedPrice += filled * price;
           remainingUnits -= filled;
         }
-        if (filledUnits > 0n) {
-          const averagePrice = MathLib.mulDivDown(
-            weightedPrice,
-            1n,
-            filledUnits,
-          );
-          const violatesGuard =
-            input.side === "asks" ? averagePrice > guard : averagePrice < guard;
-          if (violatesGuard) {
-            throw new InvalidMidnightApiResponseError(
-              `Midnight API quote takeable offers imply average price "${averagePrice}" outside average_worst_price guard "${guard}".`,
-            );
-          }
-        }
       } else {
-        const violatesAnyCap = takeableOffers.some((take) => {
+        let remainingAssets = BigInt(input.assets);
+        for (const take of takeableOffers) {
+          if (remainingAssets === 0n) break;
           const price = TickLib.tickToPrice(take.offer.tick);
-          return input.side === "asks" ? price > guard : price < guard;
-        });
-        if (violatesAnyCap) {
+          const takeAssets =
+            input.side === "asks"
+              ? MathLib.mulDivUp(take.units, price, MathLib.WAD)
+              : MathLib.mulDivDown(take.units, price, MathLib.WAD);
+          if (takeAssets === 0n) continue;
+
+          const fillsEntireTake = takeAssets <= remainingAssets;
+          const filled = fillsEntireTake
+            ? take.units
+            : MathLib.mulDiv(
+                remainingAssets,
+                MathLib.WAD,
+                price,
+                input.side === "asks" ? "Down" : "Up",
+              );
+          if (filled === 0n) continue;
+
+          filledUnits += filled;
+          weightedPrice += filled * price;
+          remainingAssets = fillsEntireTake ? remainingAssets - takeAssets : 0n;
+        }
+      }
+      if (filledUnits > 0n) {
+        const averagePrice = MathLib.mulDivDown(weightedPrice, 1n, filledUnits);
+        const violatesGuard =
+          input.side === "asks" ? averagePrice > guard : averagePrice < guard;
+        if (violatesGuard) {
           throw new InvalidMidnightApiResponseError(
-            `Midnight API quote takeable offers include a price outside average_worst_price guard "${guard}".`,
+            `Midnight API quote takeable offers imply average price "${averagePrice}" outside average_worst_price guard "${guard}".`,
           );
         }
       }
