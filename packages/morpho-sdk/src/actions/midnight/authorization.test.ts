@@ -5,11 +5,11 @@ import {
   midnightAddresses,
   midnightChainId,
 } from "../../../test/fixtures/midnight.js";
-import { midnightAuthorization } from "./authorization.js";
+import { midnightSetIsAuthorized } from "./authorization.js";
 
-describe("midnightAuthorization", () => {
+describe("midnightSetIsAuthorized", () => {
   test("default", () => {
-    const tx = midnightAuthorization({
+    const tx = midnightSetIsAuthorized({
       chainId: midnightChainId,
       authorized: midnightAddresses.midnightBundles,
       onBehalf: midnightAddresses.taker,
@@ -33,7 +33,7 @@ describe("midnightAuthorization", () => {
   });
 
   test("behavior: revokes authorization and appends metadata", () => {
-    const tx = midnightAuthorization({
+    const tx = midnightSetIsAuthorized({
       chainId: midnightChainId,
       authorized: midnightAddresses.midnightBundles,
       onBehalf: midnightAddresses.taker,

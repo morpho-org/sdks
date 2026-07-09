@@ -13,6 +13,7 @@ import {
   NonPositiveMidnightAmountError,
   type Transaction,
 } from "../../types/index.js";
+import { PermitKind } from "./types.js";
 
 /** Parameters for encoding a Midnight repay and/or collateral withdrawal bundle. */
 export interface MidnightRepayWithdrawCollateralParams {
@@ -119,7 +120,7 @@ export const midnightRepayWithdrawCollateral = (
         market,
         params.repayAssets,
         params.onBehalf,
-        { kind: 0, data: "0x" },
+        { kind: PermitKind.None, data: "0x" },
         collateralWithdrawals,
         params.onBehalf,
         0n,

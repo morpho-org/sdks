@@ -21,7 +21,7 @@ import {
   NonPositiveMidnightAmountError,
   type Transaction,
 } from "../../types/index.js";
-import type { MidnightTakeableOffer } from "./types.js";
+import { type MidnightTakeableOffer, PermitKind } from "./types.js";
 
 /** Parameters for encoding a Midnight lend take from already selected offers. */
 export interface MidnightTakeLendParams {
@@ -119,7 +119,7 @@ export const midnightTakeLend = (
         params.minUnits,
         params.taker,
         false,
-        { kind: 0, data: "0x" },
+        { kind: PermitKind.None, data: "0x" },
         params.takeableOffers,
         [],
         zeroAddress,

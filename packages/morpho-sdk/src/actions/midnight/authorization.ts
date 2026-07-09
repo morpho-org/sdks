@@ -8,8 +8,8 @@ import type {
   Transaction,
 } from "../../types/index.js";
 
-/** Parameters for encoding a direct Midnight authorization change. */
-export interface MidnightAuthorizationParams {
+/** Parameters for encoding a direct Midnight `setIsAuthorized` call. */
+export interface MidnightSetIsAuthorizedParams {
   readonly chainId: number;
   readonly authorized: Address;
   readonly onBehalf: Address;
@@ -33,17 +33,17 @@ export interface MidnightAuthorizationParams {
  * @returns A deep-frozen `Transaction<MidnightAuthorizationAction>` targeting `Midnight`.
  * @example
  * ```ts
- * import { midnightAuthorization } from "@morpho-org/morpho-sdk";
+ * import { midnightSetIsAuthorized } from "@morpho-org/morpho-sdk";
  *
- * const tx = midnightAuthorization({
+ * const tx = midnightSetIsAuthorized({
  *   chainId: 8453,
  *   authorized: midnightBundles,
  *   onBehalf: user,
  * });
  * ```
  */
-export const midnightAuthorization = (
-  params: MidnightAuthorizationParams,
+export const midnightSetIsAuthorized = (
+  params: MidnightSetIsAuthorizedParams,
 ): Readonly<Transaction<MidnightAuthorizationAction>> => {
   const isAuthorized = params.isAuthorized ?? true;
   const midnight = getChainAddress(params.chainId, "midnight");

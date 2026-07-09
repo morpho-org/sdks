@@ -12,7 +12,7 @@ import {
   type Transaction,
 } from "../../types/index.js";
 import type { MidnightTakeBorrowParams } from "./takeBorrow.js";
-import type { MidnightCollateralSupply } from "./types.js";
+import { type MidnightCollateralSupply, PermitKind } from "./types.js";
 
 /** Parameters for encoding a collateral supply followed by a Midnight borrow take. */
 export interface MidnightSupplyCollateralTakeBorrowParams
@@ -108,7 +108,7 @@ export const midnightSupplyCollateralTakeBorrow = (
     {
       collateralIndex,
       assets: params.collateralAssets,
-      permit: { kind: 0, data: "0x" },
+      permit: { kind: PermitKind.None, data: "0x" },
     },
   ];
 
