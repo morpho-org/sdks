@@ -1,5 +1,14 @@
 # @morpho-org/morpho-test
 
+## 4.0.3
+
+### Patch Changes
+
+- [#862](https://github.com/morpho-org/sdks/pull/862) [`5a39d63`](https://github.com/morpho-org/sdks/commit/5a39d6314afb5a8a236242090ec3c40623aebf57) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Fix published CJS/ESM package entrypoint metadata so legacy main/type resolution and conditional exports point at built files.
+
+- Updated dependencies [[`5a39d63`](https://github.com/morpho-org/sdks/commit/5a39d6314afb5a8a236242090ec3c40623aebf57)]:
+  - @morpho-org/blue-sdk@6.3.1
+
 ## 4.0.2
 
 ### Patch Changes
