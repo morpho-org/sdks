@@ -42,10 +42,6 @@ try {
       authorizations: [{ type: "signature", token: usdc, spender: vault }],
     },
   );
-  // `simulationTxs` — resolved bundle (prepended authorization txs included).
-  // `calls[i]`      — per-tx logs/status/returnData/gasUsed, 1:1 with simulationTxs.
-  // `transfers`     — parsed ERC-20 / WETH9 transfers, each tagged with its txIdx.
-  // `assetChanges`  — net per-token balance delta, grouped by account.
 } catch (err) {
   if (err instanceof SimulationRevertedError) {
     // show err.reason to the user
