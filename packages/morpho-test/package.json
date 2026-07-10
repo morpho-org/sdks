@@ -42,6 +42,8 @@
     "viem": "^2.54.2"
   },
   "publishConfig": {
+    "main": "./lib/cjs/index.js",
+    "types": "./lib/esm/index.d.ts",
     "exports": {
       ".": {
         "types": "./lib/esm/index.d.ts",

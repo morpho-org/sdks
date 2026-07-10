@@ -68,6 +68,8 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/",
+    "main": "./lib/cjs/index.js",
+    "types": "./lib/esm/index.d.ts",
     "exports": {
       ".": {
         "types": "./lib/esm/index.d.ts",

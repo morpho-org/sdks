@@ -43,6 +43,8 @@
     "vitest": "^4.1.9"
   },
   "publishConfig": {
+    "main": "./lib/cjs/index.js",
+    "types": "./lib/esm/index.d.ts",
     "exports": {
       ".": {
         "types": "./lib/esm/index.d.ts",
