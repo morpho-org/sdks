@@ -493,11 +493,6 @@ type AccrualVaultV2QueryResponse = ContractFunctionReturnType<
   "view",
   "query"
 >;
-/** @internal One adapter entry of the deployless `GetAccrualVaultV2.query` response. */
-type AdapterQueryResponse = AccrualVaultV2QueryResponse["adapters"][number];
-/** @internal One market entry of the deployless `GetAccrualVaultV2.query` response. */
-type MarketQueryResponse =
-  AdapterQueryResponse["marketV1Positions"][number]["market"];
 
 /** @internal Mirrors the `AdapterType` enum encoded by `GetAccrualVaultV2.sol`. */
 const AdapterType = {
@@ -509,7 +504,7 @@ const AdapterType = {
 
 /** @internal Rebuilds a `Market` from a deployless `GetAccrualVaultV2` market response. */
 function toMarket(
-  response: MarketQueryResponse,
+  response: AccrualVaultV2QueryResponse["adapters"][number]["marketV1Positions"][number]["market"],
   adaptiveCurveIrm: Address,
 ): Market {
   return new Market({
@@ -526,7 +521,7 @@ function toMarket(
 /** @internal Rebuilds one accrued adapter from a deployless `GetAccrualVaultV2` adapter response. */
 // biome-ignore lint/complexity/useMaxParams: internal decoder threading chain-resolved addresses
 function toAccrualAdapter(
-  adapter: AdapterQueryResponse,
+  adapter: AccrualVaultV2QueryResponse["adapters"][number],
   adaptiveCurveIrm: Address,
   publicAllocator: Address | undefined,
 ): IAccrualVaultV2Adapter {
