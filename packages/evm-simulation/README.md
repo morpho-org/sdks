@@ -7,14 +7,8 @@ transfer parsing, and net per-account balance changes.
 
 ## Installation
 
-Add to the consuming app's `package.json`:
-
-```jsonc
-{
-  "dependencies": {
-    "@morpho-org/evm-simulation": "workspace:*"
-  }
-}
+```bash
+pnpm add @morpho-org/evm-simulation
 ```
 
 ## Usage
