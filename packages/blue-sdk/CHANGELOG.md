@@ -1,5 +1,11 @@
 # @morpho-org/blue-sdk
 
+## 6.3.1
+
+### Patch Changes
+
+- [#862](https://github.com/morpho-org/sdks/pull/862) [`5a39d63`](https://github.com/morpho-org/sdks/commit/5a39d6314afb5a8a236242090ec3c40623aebf57) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Fix published CJS/ESM package entrypoint metadata so legacy main/type resolution and conditional exports point at built files.
+
 ## 6.3.0
 
 ### Minor Changes
