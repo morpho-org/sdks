@@ -1,5 +1,5 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
-import { type Address, type Hex, zeroAddress } from "viem";
+import { type Address, ethAddress, type Hex, zeroAddress } from "viem";
 import { vi } from "vitest";
 import {
   BlacklistViolationError,
@@ -199,6 +199,24 @@ describe.sequential("simulate — success", () => {
       }),
     ];
     mockTenderlyRpc.mockResolvedValueOnce(makeSuccessResult(logs));
+
+    await expect(simulate(makeConfig(), makeParams())).rejects.toThrow(
+      BlacklistViolationError,
+    );
+  });
+
+  it("throws BlacklistViolationError end-to-end when Tenderly reports native ETH retention via assetChanges only (finding 1440)", async () => {
+    // Tenderly derives native ETH into assetChanges and emits no transfer log.
+    // With logs empty, only assetChanges carries the retained ETH — the guard
+    // must still fire. Before the fix, simulate() resolved instead of throwing.
+    const BUNDLER = getChainAddresses(1).bundler3.bundler3;
+    const assetChanges: AccountAssetChanges[] = [
+      {
+        account: BUNDLER,
+        changes: [{ token: ethAddress, diff: 1_000000000000000000n }],
+      },
+    ];
+    mockTenderlyRpc.mockResolvedValueOnce(makeSuccessResult([], assetChanges));
 
     await expect(simulate(makeConfig(), makeParams())).rejects.toThrow(
       BlacklistViolationError,
