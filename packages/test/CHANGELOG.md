@@ -1,5 +1,11 @@
 # @morpho-org/test
 
+## 2.8.2
+
+### Patch Changes
+
+- [#849](https://github.com/morpho-org/sdks/pull/849) [`ca3d727`](https://github.com/morpho-org/sdks/commit/ca3d7276012f37238646f99212ee12416aba2b43) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Harden Midnight SDK API, fetch, offer, group, tree, and package-export behavior for Cantina audit findings.
+
 ## 2.8.1
 
 ### Patch Changes

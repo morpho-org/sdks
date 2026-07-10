@@ -681,10 +681,11 @@ export class Market {
   }
 
   /**
-   * Returns collateral params by numeric index.
+   * Returns collateral by numeric index.
    *
    * @param index - Collateral index.
-   * @returns Collateral params, or undefined when the index is not configured.
+   * @returns Collateral entry for the configured index.
+   * @throws {UnknownCollateralIndexError} when the index is not configured.
    * @example
    * ```ts
    * import { registerCustomAddresses } from "@morpho-org/morpho-ts";
@@ -730,19 +731,12 @@ export class Market {
    *   continuousFee: 10,
    *   tickSpacing: 4,
    * });
-   * const params = market.getCollateralParamsByIndex(0);
-   * console.log(params?.token);
+   * const collateral = market.getCollateralByIndex(0);
+   * console.log(collateral.token);
    * ```
    */
-  public getCollateralParamsByIndex(index: BigIntish) {
-    const normalizedIndex = BigInt(index);
-    if (
-      normalizedIndex < 0n ||
-      normalizedIndex > BigInt(Number.MAX_SAFE_INTEGER)
-    )
-      return undefined;
-
-    return this.params.collateralParams[Number(normalizedIndex)];
+  public getCollateralByIndex(index: BigIntish) {
+    return MarketUtils.getCollateralByIndex(this, index);
   }
 
   /**

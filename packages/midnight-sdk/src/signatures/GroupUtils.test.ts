@@ -13,6 +13,18 @@ describe("Group.from", () => {
   });
 });
 
+describe("GroupUtils.isGroupInput", () => {
+  test("behavior: distinguishes groups from offers with incidental offers fields", () => {
+    const offer = {
+      ...baseOfferInput({ maxAssets: 0n }),
+      offers: [baseOfferInput({ maxAssets: 0n })],
+    };
+
+    expect(GroupUtils.isGroupInput({ offers: [offer] })).toBe(true);
+    expect(GroupUtils.isGroupInput(offer)).toBe(false);
+  });
+});
+
 describe("GroupUtils.toStructs", () => {
   test("behavior: derives group id from the offer list", () => {
     const offer = baseOfferInput({ group: staleGroup, maxAssets: 0n });

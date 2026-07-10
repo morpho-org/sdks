@@ -1,3 +1,4 @@
+import { MathLib } from "@morpho-org/morpho-ts";
 import type { Hex } from "viem";
 import { describe, expect, test } from "vitest";
 
@@ -6,6 +7,7 @@ import {
   InvalidMidnightApiResponseError,
   MidnightApiError,
 } from "../errors.js";
+import { TickLib } from "../math/index.js";
 import type { IOffer } from "../offers/index.js";
 import { Payload } from "../signatures/Payload.js";
 import { MidnightApi, type MidnightApiFetch } from "./MidnightApi.js";
@@ -55,7 +57,7 @@ function getRequestUrl(call: FetchCall) {
 }
 
 const MARKET_ID =
-  "0x12590ae1aee324a005be565f3bcdd16dbf8daf7969b26c181c8b8f467dad9f67";
+  "0xbb7c4d7ca92fc06e8b046a913d1c100482e6e5cb11298a4530f8e19657ea296e";
 const SECOND_MARKET_ID =
   "0x22590ae1aee324a005be565f3bcdd16dbf8daf7969b26c181c8b8f467dad9f68";
 const GROUP_ID =
@@ -239,7 +241,7 @@ describe("MidnightApi.validateMempoolPayload", () => {
     const call = calls[0]!;
     const url = getRequestUrl(call);
     expect(url.origin).toBe("https://api.morpho.org");
-    expect(url.pathname).toBe("/v1/midnight/mempool/validate");
+    expect(url.pathname).toBe("/v0/midnight/mempool/validate");
     expect(url.searchParams.get("timestamp")).toBe(timestamp);
     expect(call.init?.method).toBe("POST");
     expect(call.init?.signal).toBe(controller.signal);
@@ -253,6 +255,7 @@ describe("MidnightApi.validateMempoolPayload", () => {
 
     const headers = new Headers(call.init?.headers);
     expect(headers.get("content-type")).toBe("application/json");
+    expect(headers.get("sdk-version")).toBe("1.0.1");
     expect(headers.get("x-app")).toBe("markets-v2");
   });
 
@@ -434,7 +437,7 @@ describe("MidnightApi.fetchBooks", () => {
 
     const call = calls[0]!;
     const url = getRequestUrl(call);
-    expect(url.pathname).toBe("/v1/midnight/books");
+    expect(url.pathname).toBe("/v0/midnight/books");
     expect(url.searchParams.get("sort")).toBe("-ask,maturity");
     expect(url.searchParams.get("maturities")).toBe("1761922799,1764524800");
     expect(url.searchParams.get("collateral_tokens")).toBe(COLLATERAL_TOKEN);
@@ -466,7 +469,7 @@ describe("MidnightApi.fetchBook", () => {
 
     const call = calls[0]!;
     const url = getRequestUrl(call);
-    expect(url.pathname).toBe(`/v1/midnight/books/${MARKET_ID}`);
+    expect(url.pathname).toBe(`/v0/midnight/books/${MARKET_ID}`);
     expect(url.searchParams.get("depth")).toBe("100");
     expect(call.init?.method).toBe("GET");
   });
@@ -489,7 +492,7 @@ describe("MidnightApi.fetchBookPriceLevels", () => {
 
     const call = calls[0]!;
     const url = getRequestUrl(call);
-    expect(url.pathname).toBe(`/v1/midnight/books/${MARKET_ID}/asks`);
+    expect(url.pathname).toBe(`/v0/midnight/books/${MARKET_ID}/asks`);
     expect(url.searchParams.get("depth")).toBe("50");
     expect(call.init?.method).toBe("GET");
   });
@@ -503,7 +506,7 @@ describe("MidnightApi.fetchBookTakeableOffers", () => {
 
     const result = await MidnightApi.fetchBookTakeableOffers({
       marketId: MARKET_ID,
-      side: "bids",
+      side: "asks",
       fetch,
     });
 
@@ -512,7 +515,7 @@ describe("MidnightApi.fetchBookTakeableOffers", () => {
     const call = calls[0]!;
     const url = getRequestUrl(call);
     expect(url.pathname).toBe(
-      `/v1/midnight/books/${MARKET_ID}/bids/takeable-offers`,
+      `/v0/midnight/books/${MARKET_ID}/asks/takeable-offers`,
     );
     expect(call.init?.method).toBe("GET");
   });
@@ -551,7 +554,7 @@ describe("MidnightApi.fetchBookQuote", () => {
 
     const call = calls[0]!;
     const url = getRequestUrl(call);
-    expect(url.pathname).toBe(`/v1/midnight/books/${MARKET_ID}/asks/quote`);
+    expect(url.pathname).toBe(`/v0/midnight/books/${MARKET_ID}/asks/quote`);
     expect(url.searchParams.get("units")).toBe("1000000000000000000");
     expect(url.searchParams.get("average_worst_price")).toBe(
       "1010000000000000000",
@@ -579,9 +582,141 @@ describe("MidnightApi.fetchBookQuote", () => {
     });
 
     const url = getRequestUrl(calls[0]!);
-    expect(url.pathname).toBe(`/v1/midnight/books/${MARKET_ID}/bids/quote`);
+    expect(url.pathname).toBe(`/v0/midnight/books/${MARKET_ID}/bids/quote`);
     expect(url.searchParams.get("assets")).toBe("1000000000000000000");
     expect(url.searchParams.get("slippage")).toBe("0.5");
+  });
+
+  test("behavior: clamps guard checks to requested units", async () => {
+    const secondTakeableOffer = {
+      ...apiTakeableOffer,
+      units: "100000000000000000000",
+      offer: {
+        ...apiOffer,
+        tick: 5_000,
+      },
+    };
+    const { fetch } = createJsonFetch({
+      data: {
+        average_best_price: "1000000000000000000",
+        average_worst_price: TickLib.tickToPrice(apiOffer.tick).toString(),
+        available_assets: "1500000000000000000",
+        available_units: "1500000000000000000",
+        takeable_offers: [apiTakeableOffer, secondTakeableOffer],
+      },
+    });
+
+    const result = await MidnightApi.fetchBookQuote({
+      marketId: MARKET_ID,
+      side: "asks",
+      units: apiTakeableOffer.units,
+      averageWorstPrice: TickLib.tickToPrice(apiOffer.tick).toString(),
+      fetch,
+    });
+
+    expect(result.data.takeableOffers).toHaveLength(2);
+  });
+
+  test("behavior: clamps guard checks to requested assets", async () => {
+    const firstPrice = TickLib.tickToPrice(apiOffer.tick);
+    const firstAssets = MathLib.mulDivUp(
+      BigInt(apiTakeableOffer.units),
+      firstPrice,
+      MathLib.WAD,
+    );
+    const secondTakeableOffer = {
+      ...apiTakeableOffer,
+      units: "100000000000000000000",
+      offer: {
+        ...apiOffer,
+        tick: 5_000,
+      },
+    };
+    const { fetch } = createJsonFetch({
+      data: {
+        average_best_price: "1000000000000000000",
+        average_worst_price: firstPrice.toString(),
+        available_assets: "1500000000000000000",
+        available_units: "1500000000000000000",
+        takeable_offers: [apiTakeableOffer, secondTakeableOffer],
+      },
+    });
+
+    const result = await MidnightApi.fetchBookQuote({
+      marketId: MARKET_ID,
+      side: "asks",
+      assets: firstAssets,
+      averageWorstPrice: firstPrice,
+      fetch,
+    });
+
+    expect(result.data.takeableOffers).toHaveLength(2);
+  });
+
+  test("error: direct averageWorstPrice guard is enforced over response guard", async () => {
+    const callerGuard = TickLib.tickToPrice(apiOffer.tick) - 1n;
+    const { fetch } = createJsonFetch({
+      data: {
+        average_best_price: "1000000000000000000",
+        average_worst_price: TickLib.tickToPrice(apiOffer.tick).toString(),
+        available_assets: "1500000000000000000",
+        available_units: "1500000000000000000",
+        takeable_offers: [apiTakeableOffer],
+      },
+    });
+
+    await expect(
+      MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side: "asks",
+        units: apiTakeableOffer.units,
+        averageWorstPrice: callerGuard,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("error: asset-targeted quote guards check aggregate price", async () => {
+    const firstPrice = TickLib.tickToPrice(apiOffer.tick);
+    const secondTakeableOffer = {
+      ...apiTakeableOffer,
+      units: "100000000000000000000",
+      offer: {
+        ...apiOffer,
+        tick: 5_000,
+      },
+    };
+    const secondPrice = TickLib.tickToPrice(secondTakeableOffer.offer.tick);
+    const requestedAssets =
+      MathLib.mulDivUp(
+        BigInt(apiTakeableOffer.units),
+        firstPrice,
+        MathLib.WAD,
+      ) +
+      MathLib.mulDivUp(
+        BigInt(secondTakeableOffer.units),
+        secondPrice,
+        MathLib.WAD,
+      );
+    const { fetch } = createJsonFetch({
+      data: {
+        average_best_price: "1000000000000000000",
+        average_worst_price: firstPrice.toString(),
+        available_assets: "1500000000000000000",
+        available_units: "1500000000000000000",
+        takeable_offers: [apiTakeableOffer, secondTakeableOffer],
+      },
+    });
+
+    await expect(
+      MidnightApi.fetchBookQuote({
+        marketId: MARKET_ID,
+        side: "asks",
+        assets: requestedAssets,
+        averageWorstPrice: firstPrice,
+        fetch,
+      }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
   });
 });
 
@@ -608,7 +743,7 @@ describe("MidnightApi.fetchTakeableOffers", () => {
 
     const call = calls[0]!;
     const url = getRequestUrl(call);
-    expect(url.pathname).toBe("/v1/midnight/takeable-offers");
+    expect(url.pathname).toBe("/v0/midnight/takeable-offers");
     expect(url.searchParams.get("maker")).toBe(MAKER);
     expect(url.searchParams.get("market_ids")).toBe(
       `${MARKET_ID},${SECOND_MARKET_ID}`,
@@ -617,5 +752,24 @@ describe("MidnightApi.fetchTakeableOffers", () => {
     expect(url.searchParams.get("limit")).toBe("10");
     expect(url.searchParams.get("cursor")).toBe("previous");
     expect(call.init?.method).toBe("GET");
+  });
+
+  test("behavior: treats empty optional filters as unset", async () => {
+    const { calls, fetch } = createJsonFetch({
+      cursor: null,
+      data: [apiTakeableOffer],
+    });
+
+    const result = await MidnightApi.fetchTakeableOffers({
+      maker: MAKER,
+      marketIds: [],
+      groups: [],
+      fetch,
+    });
+
+    expect(result.data).toEqual([expectedTakeableOffer]);
+    const url = getRequestUrl(calls[0]!);
+    expect(url.searchParams.has("market_ids")).toBe(false);
+    expect(url.searchParams.has("groups")).toBe(false);
   });
 });

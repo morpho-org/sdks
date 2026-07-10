@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/midnight-sdk",
   "description": "Viem-based package for Morpho Midnight that exports protocol utilities, fetch helpers, and Midnight API utilities under a dedicated API subpath.",
-  "version": "0.1.0",
+  "version": "1.1.1",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Rubilmax <rmilon@gmail.com>"
@@ -40,18 +40,20 @@
     "test": "vitest --root ../.. --project midnight-sdk"
   },
   "peerDependencies": {
-    "@morpho-org/morpho-ts": "^2.7.0",
+    "@morpho-org/morpho-ts": "^2.8.0",
     "viem": "^2.0.0"
   },
   "devDependencies": {
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
-    "fast-check": "^4.4.0",
+    "fast-check": "^4.8.0",
     "typescript": "^6.0.3",
-    "viem": "2.53.1",
-    "vitest": "^4.1.6"
+    "viem": "^2.54.2",
+    "vitest": "^4.1.9"
   },
   "publishConfig": {
+    "main": "./lib/cjs/index.js",
+    "types": "./lib/esm/index.d.ts",
     "exports": {
       ".": {
         "types": "./lib/esm/index.d.ts",
@@ -64,6 +66,13 @@
         "require": "./lib/cjs/api/index.js"
       },
       "./package.json": "./package.json"
+    },
+    "typesVersions": {
+      "*": {
+        "api": [
+          "lib/esm/api/index.d.ts"
+        ]
+      }
     }
   }
 }

@@ -1,11 +1,8 @@
-import { getChainAddresses, type MarketParams } from "@morpho-org/blue-sdk";
+import type { MarketParams } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
 import { type Action, BundlerAction } from "../../bundler/index.js";
-import {
-  addTransactionMetadata,
-  validateNativeAsset,
-} from "../../helpers/index.js";
+import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   type BlueSupplyCollateralAction,
   type DepositAmountArgs,
@@ -16,7 +13,7 @@ import {
   type Transaction,
   ZeroCollateralAmountError,
 } from "../../types/index.js";
-import { getTokenRequirementActions } from "../signatures/getTokenRequirementActions.js";
+import { buildAssetFundingActions } from "./buildAssetFundingActions.js";
 
 /** Parameters for {@link blueSupplyCollateral}. */
 export interface BlueSupplyCollateralParams {
@@ -97,37 +94,13 @@ export const blueSupplyCollateral = ({
     throw new ZeroCollateralAmountError(marketParams.id);
   }
 
-  const {
-    bundler3: { generalAdapter1, bundler3 },
-  } = getChainAddresses(chainId);
-
-  const actions: Action[] = [];
-
-  if (nativeAmount !== undefined && nativeAmount > 0n) {
-    validateNativeAsset(chainId, marketParams.collateralToken);
-
-    actions.push(
-      {
-        type: "nativeTransfer",
-        args: [bundler3, generalAdapter1, nativeAmount, false],
-      },
-      {
-        type: "wrapNative",
-        args: [nativeAmount, generalAdapter1, false],
-      },
-    );
-  }
-
-  if (amount > 0n) {
-    actions.push(
-      ...getTokenRequirementActions({
-        asset: marketParams.collateralToken,
-        amount,
-        recipient: generalAdapter1,
-        requirementSignature,
-      }),
-    );
-  }
+  const actions: Action[] = buildAssetFundingActions({
+    chainId,
+    asset: marketParams.collateralToken,
+    erc20Amount: amount,
+    nativeAmount: nativeAmount ?? 0n,
+    requirementSignature,
+  });
 
   actions.push({
     type: "morphoSupplyCollateral",

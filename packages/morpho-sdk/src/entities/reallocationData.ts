@@ -1,5 +1,4 @@
 import {
-  _try,
   AccrualPosition,
   Market,
   type MarketId,
@@ -11,7 +10,7 @@ import {
   VaultMarketConfig,
   VaultMarketPublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
-import { bigIntComparator } from "@morpho-org/morpho-ts";
+import { _try, bigIntComparator } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
 import {
   DEFAULT_SUPPLY_TARGET_UTILIZATION,

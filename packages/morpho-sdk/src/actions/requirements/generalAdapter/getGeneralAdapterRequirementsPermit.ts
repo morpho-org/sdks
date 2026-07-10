@@ -1,3 +1,4 @@
+import { getChainAddresses } from "@morpho-org/blue-sdk";
 import type { Address, Client } from "viem";
 import { encodeErc20Permit } from "../encode/index.js";
 
@@ -45,6 +46,9 @@ export const getGeneralAdapterRequirementsPermit = async (
     nonce,
     supportDeployless,
   } = params;
+  const {
+    bundler3: { generalAdapter1 },
+  } = getChainAddresses(chainId);
 
   // Existing direct ERC-20 allowance is intentionally not an input here. ERC-2612 overwrites the
   // allowance with the signed amount, and the bundle spends exactly `amount`, leaving no residual
@@ -52,6 +56,7 @@ export const getGeneralAdapterRequirementsPermit = async (
   return [
     await encodeErc20Permit(viemClient, {
       token,
+      spender: generalAdapter1,
       amount,
       chainId,
       nonce,

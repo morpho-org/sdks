@@ -16,6 +16,7 @@ import {
   baseOffer,
   group,
 } from "../__test__/fixtures.js";
+import { MAX_OFFER_CAP } from "../constants.js";
 import { PayloadDecodeError } from "../errors.js";
 import { type IOffer, type OfferStruct, OfferUtils } from "../offers/index.js";
 import { Payload } from "./Payload.js";
@@ -211,6 +212,17 @@ describe("Payload.encode", () => {
       ]),
     ).rejects.toBeInstanceOf(PayloadDecodeError);
   });
+
+  test("error: offer cap above uint128 max", async () => {
+    await expect(
+      Payload.encode([
+        {
+          offer: apiValidOffer({ group, maxAssets: MAX_OFFER_CAP + 1n }),
+          ratifierData: "0x1234" as Hex,
+        },
+      ]),
+    ).rejects.toBeInstanceOf(PayloadDecodeError);
+  });
 });
 
 describe("Payload.decode", () => {
@@ -346,6 +358,17 @@ describe("Payload.decode", () => {
         }),
       }),
     );
+
+    await expect(Payload.decode(encoded)).rejects.toBeInstanceOf(
+      PayloadDecodeError,
+    );
+  });
+
+  test("error: offer cap above uint128 max bytes", async () => {
+    const encoded = await encodeUncheckedPayload({
+      ...OfferUtils.toStruct({ offer: apiValidOffer({ group }) }),
+      maxAssets: MAX_OFFER_CAP + 1n,
+    });
 
     await expect(Payload.decode(encoded)).rejects.toBeInstanceOf(
       PayloadDecodeError,

@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/morpho-ts",
   "description": "TypeScript package to handle all things time & format-related.",
-  "version": "2.6.0",
+  "version": "2.8.0",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Rubilmax <rmilon@gmail.com>"
@@ -54,6 +54,15 @@
         "types": "./lib/esm/abis.d.ts",
         "import": "./lib/esm/abis.js",
         "require": "./lib/cjs/abis.js"
+      }
+    },
+    "main": "./lib/cjs/index.js",
+    "types": "./lib/esm/index.d.ts",
+    "typesVersions": {
+      "*": {
+        "abis": [
+          "lib/esm/abis.d.ts"
+        ]
       }
     }
   }

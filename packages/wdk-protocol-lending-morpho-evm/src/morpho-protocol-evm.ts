@@ -822,7 +822,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     const repayAmount =
       normalizedAmount === "max"
         ? { shares: positionData.borrowShares }
-        : { assets: normalizedAmount };
+        : { amount: normalizedAmount };
 
     return market.entity.repay({
       ...repayAmount,

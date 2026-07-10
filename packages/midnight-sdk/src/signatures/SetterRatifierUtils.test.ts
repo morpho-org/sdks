@@ -47,7 +47,8 @@ describe("SetterRatifierUtils.ratify", () => {
     );
 
     expect(items).toHaveLength(1);
-    expect(items[0]!.offer).toBe(offer);
+    expect(items[0]!.offer).not.toBe(offer);
+    expect(items[0]!.offer.group).toBe(offer.group);
     expect(
       TreeUtils.verifyProof({
         offer: items[0]!.offer,
@@ -91,6 +92,47 @@ describe("SetterRatifierUtils.ratifierData", () => {
 
     expect(() =>
       SetterRatifierUtils.ratifierData({ tree, leafIndex: 0n }),
+    ).toThrow(InvalidTreeError);
+  });
+});
+
+describe("SetterRatifierUtils.verifyRatifierData", () => {
+  test("behavior: verifies proof and returns decoded ratifier data", () => {
+    const offer = baseOffer({
+      maxAssets: 0n,
+      ratifier: addresses.setterRatifier,
+    });
+    const tree = Tree.create([offer]);
+    const data = SetterRatifierUtils.ratifierData({ tree, leafIndex: 0n });
+
+    const decoded = SetterRatifierUtils.verifyRatifierData({
+      offer,
+      ratifierData: data,
+    });
+
+    expect(decoded.root).toBe(tree.root);
+    expect(decoded.leafIndex).toBe(0n);
+  });
+
+  test("error: InvalidTreeError when ratifier data proof does not match offer", () => {
+    const tree = Tree.create([
+      baseOffer({
+        maxAssets: 0n,
+        ratifier: addresses.setterRatifier,
+      }),
+      baseOffer({
+        maxAssets: 0n,
+        maxUnits: 2n,
+        ratifier: addresses.setterRatifier,
+      }),
+    ]);
+    const data = SetterRatifierUtils.ratifierData({ tree, leafIndex: 0n });
+
+    expect(() =>
+      SetterRatifierUtils.verifyRatifierData({
+        offer: tree.offers[1]!,
+        ratifierData: data,
+      }),
     ).toThrow(InvalidTreeError);
   });
 });

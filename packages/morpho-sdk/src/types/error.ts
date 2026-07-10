@@ -178,19 +178,29 @@ export class ApprovalAmountLessThanSpendAmountError extends Error {
   }
 }
 
-/** Thrown when an ERC-20 approval requirement targets an unsupported spender. */
+/** Thrown when a requirement encoder targets an unsupported spender. */
 export class UnsupportedErc20ApprovalSpenderError extends Error {
   constructor(params: {
     readonly spender: Address;
     readonly chainId: number;
     readonly generalAdapter1: Address;
     readonly permit2?: Address;
+    readonly midnight?: Address;
+    readonly midnightBundles?: Address;
+    readonly supportedSpenders?: readonly (Address | undefined)[];
   }) {
-    const supported = [params.generalAdapter1, params.permit2]
+    const supported = (
+      params.supportedSpenders ?? [
+        params.generalAdapter1,
+        params.permit2,
+        params.midnight,
+        params.midnightBundles,
+      ]
+    )
       .filter((address) => address != null)
       .join('", "');
     super(
-      `ERC-20 approval spender "${params.spender}" is not supported on chain "${params.chainId}". Use "${supported}".`,
+      `Requirement spender "${params.spender}" is not supported on chain "${params.chainId}". Use "${supported}".`,
     );
   }
 }
@@ -403,14 +413,25 @@ export class UnsortedReallocationWithdrawalsError extends Error {
   }
 }
 
-/** Thrown when a market repay's `transferAmount` is zero or negative. */
+/**
+ * Thrown when a market repay's `transferAmount` is zero or negative.
+ *
+ * @deprecated No longer thrown. The repay action layer no longer validates `transferAmount`
+ * directly (assets mode uses {@link NonPositiveRepayAmountError}; shares mode allows a zero
+ * ERC-20 transfer for fully-native repays). Retained as exported API for back-compat; slated
+ * for removal in a future major.
+ */
 export class NonPositiveTransferAmountError extends Error {
   constructor(market: string) {
     super(`Transfer amount must be positive for market: ${market}`);
   }
 }
 
-/** Thrown when a market repay in assets mode has `transferAmount !== assets` (asset-mode requires exact transfer). */
+/**
+ * Thrown when a market repay in assets mode has `transferAmount !== amount + nativeAmount` — the
+ * pre-resolved ERC-20 pull plus the wrapped native must equal the assets repaid, so the bundle
+ * neither strands over-pulled loan tokens on `GeneralAdapter1` nor under-funds the repay.
+ */
 export class TransferAmountNotEqualToAssetsError extends Error {
   constructor(params: {
     transferAmount: bigint;
@@ -418,7 +439,23 @@ export class TransferAmountNotEqualToAssetsError extends Error {
     market: string;
   }) {
     super(
-      `Transfer amount ${params.transferAmount} is not equal to repay assets ${params.assets} for market: ${params.market}`,
+      `Transfer amount ${params.transferAmount} is not equal to repay assets ${params.assets} for market: ${params.market}. In assets mode, transferAmount must equal amount + nativeAmount.`,
+    );
+  }
+}
+
+/**
+ * Thrown when a shares-mode repay's `nativeAmount` exceeds `transferAmount`, which
+ * would make the ERC-20 amount to pull (`transferAmount − nativeAmount`) negative.
+ */
+export class NativeAmountExceedsTransferAmountError extends Error {
+  constructor(params: {
+    nativeAmount: bigint;
+    transferAmount: bigint;
+    market: string;
+  }) {
+    super(
+      `Native amount ${params.nativeAmount} exceeds transfer amount ${params.transferAmount} for market: ${params.market}. Reduce nativeAmount to at most transferAmount.`,
     );
   }
 }

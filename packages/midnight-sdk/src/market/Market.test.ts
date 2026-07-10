@@ -1,4 +1,4 @@
-import { MathLib } from "@morpho-org/morpho-ts";
+import { _try, MathLib } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
 import { numberToHex } from "viem";
 import { describe, expect, test } from "vitest";
@@ -17,7 +17,10 @@ import {
   MAX_COLLATERALS,
   SETTLEMENT_FEE_BREAKPOINTS,
 } from "../constants.js";
-import { InvalidMarketParameterError } from "../errors.js";
+import {
+  InvalidMarketParameterError,
+  UnknownCollateralIndexError,
+} from "../errors.js";
 import { Market, MarketParams } from "./Market.js";
 import { MarketUtils } from "./MarketUtils.js";
 
@@ -241,14 +244,22 @@ describe("Market", () => {
   test("behavior: collateral lookup helpers", () => {
     const market = baseMarket();
 
-    expect(market.getCollateralParamsByIndex(0)?.token).toBe(
+    expect(market.getCollateralByIndex(0).token).toBe(
       addresses.collateralToken,
     );
     expect(market.getCollateralIndexByToken(addresses.collateralToken)).toBe(0);
     expect(
       market.getCollateralParamsByToken(addresses.collateralToken)?.lltv,
     ).toBe(770000000000000000n);
-    expect(market.getCollateralParamsByIndex(1)).toBeUndefined();
+    expect(
+      _try(() => market.getCollateralByIndex(1), UnknownCollateralIndexError),
+    ).toBeUndefined();
+    expect(() => market.getCollateralByIndex(1)).toThrow(
+      UnknownCollateralIndexError,
+    );
+    expect(() => MarketUtils.getCollateralByIndex(market, 1)).toThrow(
+      UnknownCollateralIndexError,
+    );
   });
 
   test("error: invalid bigint input", () => {
@@ -332,13 +343,13 @@ describe("MarketUtils", () => {
 
   test("behavior: hash and id are deterministic", () => {
     expect(MarketUtils.hash(baseMarketParamsInput())).toMatchInlineSnapshot(
-      `"0xa3a2c32022b41a9af871628bdf7bd128cf4113f449cae01d4286d3a184209383"`,
+      `"0x0c2a140996f0e000f896b45764bcd789d291ac30247d4228cc9f4bc6c6eda451"`,
     );
     expect(MarketUtils.hash(baseMarket())).toMatchInlineSnapshot(
-      `"0xa3a2c32022b41a9af871628bdf7bd128cf4113f449cae01d4286d3a184209383"`,
+      `"0x0c2a140996f0e000f896b45764bcd789d291ac30247d4228cc9f4bc6c6eda451"`,
     );
     expect(MarketUtils.toId(baseMarketParamsInput())).toMatchInlineSnapshot(
-      `"0xb84c376e254e575fc4bbf9f612bc68719f73d9ac8c99c02122c705d9baa15417"`,
+      `"0x994ce88b951db7a30742bb05a4dedd42dd42ce6633884ea82d7d525b1a56ed1f"`,
     );
   });
 

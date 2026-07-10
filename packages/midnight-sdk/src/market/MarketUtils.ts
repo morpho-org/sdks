@@ -10,7 +10,10 @@ import {
   MARKET_TYPEHASH,
   SETTLEMENT_FEE_BREAKPOINTS,
 } from "../constants.js";
-import { InvalidMarketParameterError } from "../errors.js";
+import {
+  InvalidMarketParameterError,
+  UnknownCollateralIndexError,
+} from "../errors.js";
 import {
   type CollateralParams,
   type ICollateralParams,
@@ -171,6 +174,55 @@ export namespace MarketUtils {
       enterGate: params.enterGate,
       liquidatorGate: params.liquidatorGate,
     };
+  }
+
+  /**
+   * Returns configured collateral by index.
+   *
+   * @param market - Market params or hydrated market.
+   * @param index - Collateral index to look up.
+   * @returns Collateral entry for the configured index.
+   * @throws {UnknownCollateralIndexError} when the index is not configured.
+   * @example
+   * ```ts
+   * import { MarketUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const collateral = MarketUtils.getCollateralByIndex({
+   *   chainId: 8453,
+   *   midnight: "0x0000000000000000000000000000000000001000",
+   *   loanToken: "0x0000000000000000000000000000000000000001",
+   *   collateralParams: [
+   *     {
+   *       token: "0x0000000000000000000000000000000000000002",
+   *       lltv: 770000000000000000n,
+   *       liquidationCursor: 250000000000000000n,
+   *       oracle: "0x0000000000000000000000000000000000000003",
+   *     },
+   *   ],
+   *   maturity: 1n,
+   *   rcfThreshold: 0n,
+   *   enterGate: "0x0000000000000000000000000000000000000000",
+   *   liquidatorGate: "0x0000000000000000000000000000000000000000",
+   * }, 0n);
+   * console.log(collateral.token);
+   * ```
+   */
+  export function getCollateralByIndex(market: MarketInput, index: BigIntish) {
+    const normalizedIndex = BigInt(index);
+    const params = MarketParams.from(market);
+    const collateral =
+      normalizedIndex >= 0n &&
+      normalizedIndex <= BigInt(Number.MAX_SAFE_INTEGER)
+        ? params.collateralParams[Number(normalizedIndex)]
+        : undefined;
+    if (collateral == null) {
+      throw new UnknownCollateralIndexError({
+        market: toId(params),
+        collateralIndex: normalizedIndex,
+      });
+    }
+
+    return collateral;
   }
 
   /**

@@ -1,3 +1,5 @@
+import { maxUint128 } from "viem";
+
 /**
  * Centibip scale used by settlement fees.
  *
@@ -126,6 +128,18 @@ export const MAX_SETTLEMENT_FEES = [
 export const MAX_CONTINUOUS_FEE = 317097919n;
 
 /**
+ * Maximum value accepted by the uint128 offer cap fields.
+ *
+ * @example
+ * ```ts
+ * import { MAX_OFFER_CAP } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(MAX_OFFER_CAP);
+ * ```
+ */
+export const MAX_OFFER_CAP = maxUint128;
+
+/**
  * Seconds after maturity over which post-maturity LIF reaches the computed
  * maximum liquidation incentive factor.
  *
@@ -175,7 +189,7 @@ export const MARKET_TYPEHASH =
  * ```
  */
 export const OFFER_TYPEHASH =
-  "0xa316348449d1749c733fbf0befac14d04d6ed14ea8993956f5eb405e6191bb81";
+  "0x9905214264a9fb7b6cc1b0e33db7a04687c6e4185a84755d29914314aa9d8906";
 
 /**
  * EcrecoverRatifier EIP-712 domain typehash.

@@ -34,6 +34,7 @@ Cross-layer leaks (entities encoding calldata, actions reading state, helpers de
 - Every package has one clear job. If a package needs a paragraph to describe, split it.
 - Every module has one responsibility. Files grow by *adding* exports of the same kind, never by stretching scope.
 - Do not extract a local, non-exported helper unless it has at least three call sites. Inline one-off and two-use helpers.
+- When a helper is called only to run validation, throw, or trigger another intentional side effect, add a short call-site comment explaining why its return value is unused.
 - **Single source of truth** per concept: one place per ABI, one place per address registry, one place per error class. Duplication is a refactor, not a feature.
 - Do not export duplicate TypeScript shapes for the same concept. If a domain interface and ABI struct are identical, export one interface and reuse it; only introduce a distinct `*Struct` type when the shapes actually differ.
 - Framework adapters live in explicitly named packages (`*-wagmi`, `*-viem`). Core packages stay framework-free.

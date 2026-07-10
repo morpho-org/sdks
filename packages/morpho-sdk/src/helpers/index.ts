@@ -23,7 +23,6 @@ export {
   validatePositionHealthAfterWithdraw,
   validateReallocations,
   validateRepayAmount,
-  validateRepayParams,
   validateRepayShares,
   validateSlippageTolerance,
   validateUserAddress,

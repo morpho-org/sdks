@@ -5,6 +5,8 @@ import {
   type Hash,
   type Hex,
 } from "viem";
+import { InvalidTreeError } from "../errors.js";
+import { type IOffer, Offer } from "../offers/index.js";
 import type { Payload } from "./Payload.js";
 import { RatifierUtils } from "./RatifierUtils.js";
 import {
@@ -93,6 +95,14 @@ export interface SetterRatifierDataParams {
   readonly leafIndex: BigIntish;
 }
 
+/** Parameters for locally verifying Setter ratifier data attached to one payload item. */
+export interface SetterRatifierDataVerificationParams {
+  /** Offer carried by the payload item. */
+  readonly offer: IOffer;
+  /** ABI-encoded Setter ratifier data carried by the payload item. */
+  readonly ratifierData: Hex;
+}
+
 /**
  * SetterRatifier-specific pure utilities.
  *
@@ -176,6 +186,47 @@ export namespace SetterRatifierUtils {
     );
 
     return deepFreeze({ root, leafIndex, proof: [...proof] });
+  }
+
+  /**
+   * Verifies that Setter ratifier data proves one payload offer belongs to its root.
+   *
+   * This helper intentionally does not check `SetterRatifier.isRootRatified` or
+   * `Midnight.isAuthorized` state. Consumers can query those values at their
+   * own block context after local proof verification.
+   *
+   * @param params.offer - Offer carried by the payload item.
+   * @param params.ratifierData - ABI-encoded Setter ratifier data.
+   * @returns Decoded Setter ratifier data after proof verification.
+   * @throws {InvalidTreeError} when the proof does not include `offer` in `root`.
+   * @example
+   * ```ts
+   * import { SetterRatifierUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const decoded = SetterRatifierUtils.verifyRatifierData({
+   *   offer,
+   *   ratifierData,
+   * });
+   * console.log(decoded.root);
+   * ```
+   */
+  export function verifyRatifierData(
+    params: SetterRatifierDataVerificationParams,
+  ): DecodedSetterRatifierData {
+    const offer = Offer.from(params.offer);
+    const decoded = decodeRatifierData(params.ratifierData);
+    if (
+      !TreeUtils.verifyProof({
+        offer,
+        root: decoded.root,
+        leafIndex: decoded.leafIndex,
+        proof: decoded.proof,
+      })
+    ) {
+      throw new InvalidTreeError("Ratifier data proof does not include offer.");
+    }
+
+    return decoded;
   }
 
   /**

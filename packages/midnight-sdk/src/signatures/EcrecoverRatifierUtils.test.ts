@@ -3,6 +3,7 @@ import {
   custom,
   type Hex,
   hashTypedData,
+  isAddressEqual,
   keccak256,
   type Signature,
   stringToHex,
@@ -23,6 +24,7 @@ import {
 } from "../constants.js";
 import {
   ChainIdMismatchError,
+  InvalidEcrecoverSignatureVError,
   InvalidTreeError,
   InvalidTreeHeightError,
   InvalidTypedDataSignatureError,
@@ -45,7 +47,7 @@ const collateralParamsType =
 const marketType =
   "Market(uint256 chainId,address midnight,address loanToken,CollateralParams[] collateralParams,uint256 maturity,uint256 rcfThreshold,address enterGate,address liquidatorGate)";
 const offerType =
-  "Offer(Market market,bool buy,address maker,uint256 start,uint256 expiry,uint256 tick,bytes32 group,address callback,bytes callbackData,address receiverIfMakerIsSeller,address ratifier,bool reduceOnly,uint256 maxUnits,uint256 maxAssets,uint256 continuousFeeCap)";
+  "Offer(Market market,bool buy,address maker,uint256 start,uint256 expiry,uint256 tick,bytes32 group,address callback,bytes callbackData,address receiverIfMakerIsSeller,address ratifier,bool reduceOnly,uint128 maxUnits,uint128 maxAssets,uint256 continuousFeeCap)";
 const eip712DomainType =
   "EIP712Domain(uint256 chainId,address verifyingContract)";
 
@@ -115,7 +117,8 @@ describe("EcrecoverRatifierUtils.ratify", () => {
     );
 
     expect(items).toHaveLength(1);
-    expect(items[0]!.offer).toBe(offer);
+    expect(items[0]!.offer).not.toBe(offer);
+    expect(items[0]!.offer.group).toBe(offer.group);
     expect(decoded.signature).toEqual(
       EcrecoverRatifierUtils.toSignature(signature),
     );
@@ -363,10 +366,126 @@ describe("EcrecoverRatifierUtils.digest", () => {
     const digest = EcrecoverRatifierUtils.digest({ tree, chainId: 8453n });
 
     // Captured from the Solidity EcrecoverRatifier digest formula at
-    // morpho-org/midnight@55db096af93a8f2bc85bb67f3ccc7b92e1bfab73.
+    // morpho-org/midnight@336b924a2bb378d810ef6d35b6dd3486759af8bd.
     expect(digest).toBe(
-      "0xfb891d1a5cb383a7235a7c7044dc2dad21a408420f2272fd9b13947895adce93",
+      "0x600cf16f5db1129056b39621ecb708369079387dc10125c836cffc3f5b365b5e",
     );
+  });
+});
+
+describe("EcrecoverRatifierUtils.digestRatifierData", () => {
+  test("behavior: matches tree digest for decoded ratifier data", async () => {
+    const account = privateKeyToAccount(privateKey);
+    const tree = Tree.create([
+      baseOffer({ maker: account.address, maxAssets: 0n }),
+      baseOffer({ maker: account.address, maxAssets: 0n, maxUnits: 2n }),
+    ]);
+    const signature = await signTree(tree, account);
+    const ratifierData = EcrecoverRatifierUtils.ratifierData({
+      tree,
+      leafIndex: 1n,
+      signature,
+    });
+
+    expect(
+      EcrecoverRatifierUtils.digestRatifierData({
+        chainId: base.id,
+        offer: tree.offers[1]!,
+        ratifierData,
+      }),
+    ).toBe(EcrecoverRatifierUtils.digest({ tree, chainId: BigInt(base.id) }));
+  });
+});
+
+describe("EcrecoverRatifierUtils.verifyRatifierData", () => {
+  test("behavior: verifies proof and returns recovered signer", async () => {
+    const account = privateKeyToAccount(privateKey);
+    const tree = Tree.create([
+      baseOffer({ maker: addresses.maker, maxAssets: 0n }),
+      baseOffer({ maker: addresses.taker, maxAssets: 0n, maxUnits: 2n }),
+    ]);
+    const signature = await signTree(tree, account);
+    const ratifierData = EcrecoverRatifierUtils.ratifierData({
+      tree,
+      leafIndex: 1n,
+      signature,
+    });
+
+    const verified = await EcrecoverRatifierUtils.verifyRatifierData({
+      chainId: base.id,
+      offer: tree.offers[1]!,
+      ratifierData,
+    });
+
+    expect(verified.root).toBe(tree.root);
+    expect(verified.leafIndex).toBe(1n);
+    expect(isAddressEqual(verified.signer, account.address)).toBe(true);
+  });
+
+  test("error: InvalidTreeError when ratifier data proof does not match offer", async () => {
+    const account = privateKeyToAccount(privateKey);
+    const tree = Tree.create([
+      baseOffer({ maker: account.address, maxAssets: 0n }),
+      baseOffer({ maker: account.address, maxAssets: 0n, maxUnits: 2n }),
+    ]);
+    const signature = await signTree(tree, account);
+    const ratifierData = EcrecoverRatifierUtils.ratifierData({
+      tree,
+      leafIndex: 0n,
+      signature,
+    });
+
+    await expect(
+      EcrecoverRatifierUtils.verifyRatifierData({
+        chainId: base.id,
+        offer: tree.offers[1]!,
+        ratifierData,
+      }),
+    ).rejects.toBeInstanceOf(InvalidTreeError);
+  });
+
+  test("error: ChainIdMismatchError when observed chain differs from offer chain", async () => {
+    const account = privateKeyToAccount(privateKey);
+    const tree = Tree.create([
+      baseOffer({ maker: account.address, maxAssets: 0n }),
+    ]);
+    const signature = await signTree(tree, account);
+    const ratifierData = EcrecoverRatifierUtils.ratifierData({
+      tree,
+      leafIndex: 0n,
+      signature,
+    });
+
+    await expect(
+      EcrecoverRatifierUtils.verifyRatifierData({
+        chainId: mainnet.id,
+        offer: tree.offers[0]!,
+        ratifierData,
+      }),
+    ).rejects.toBeInstanceOf(ChainIdMismatchError);
+  });
+
+  test("error: InvalidEcrecoverSignatureVError when ratifier data uses non-canonical v", async () => {
+    const tree = Tree.create([baseOffer({ maxAssets: 0n })]);
+    const proof = tree.proof(0n);
+    const ratifierData = EcrecoverRatifierUtils.encodeRatifierData({
+      signature: {
+        v: 29,
+        r: "0x1111111111111111111111111111111111111111111111111111111111111111",
+        s: "0x2222222222222222222222222222222222222222222222222222222222222222",
+      },
+      root: proof.root,
+      leafIndex: proof.leafIndex,
+      proof: proof.proof,
+    });
+
+    await expect(
+      EcrecoverRatifierUtils.verifyRatifierData({
+        chainId: base.id,
+        offer: tree.offers[0]!,
+        ratifierData,
+      }),
+    ).rejects.toBeInstanceOf(InvalidEcrecoverSignatureVError);
   });
 });
 

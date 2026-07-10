@@ -15,7 +15,12 @@ import {
   InvalidTypedDataSignatureError,
   MidnightMempoolValidationError,
 } from "../errors.js";
-import { type IOffer, Offer, type OfferStruct } from "../offers/index.js";
+import {
+  type IOffer,
+  Offer,
+  type OfferStruct,
+  OfferUtils,
+} from "../offers/index.js";
 import { EcrecoverRatifierUtils } from "./EcrecoverRatifierUtils.js";
 import { Group } from "./Group.js";
 import { GroupUtils } from "./GroupUtils.js";
@@ -94,13 +99,16 @@ describe("Tree.create", () => {
     );
   });
 
-  test("behavior: standalone offers keep their own group id", () => {
-    const offer = baseOffer({ maxAssets: 0n });
+  test("behavior: standalone offers normalize caller-supplied group ids", () => {
+    const offer = baseOffer({ group: staleGroup, maxAssets: 0n });
     const tree = Tree.create([offer]);
+    const expectedGroup = OfferUtils.groupHash(offer);
 
     expect(tree.offers).toHaveLength(1);
-    expect(tree.offers[0]).toBe(offer);
-    expect(tree.offers[0]!.group).toBe(offer.group);
+    expect(tree.offers[0]).not.toBe(offer);
+    expect(tree.offers[0]!.group).toBe(expectedGroup);
+    expect(tree.paddedOffers[0]!.group).toBe(expectedGroup);
+    expect(tree.paddedOffers[0]!.group).not.toBe(staleGroup);
   });
 
   test("behavior: wraps plain offer input", () => {
@@ -499,6 +507,45 @@ describe("TreeUtils.mempoolValidate", () => {
     expect(calls).toHaveLength(0);
   });
 
+  test("behavior: normalizes raw standalone offers before mempool validation", async () => {
+    const calls: {
+      readonly input: Parameters<MidnightApiFetch>[0];
+      readonly init: Parameters<MidnightApiFetch>[1];
+    }[] = [];
+    const fetch: MidnightApiFetch = async (input, init) => {
+      calls.push({ input, init });
+      return new Response(JSON.stringify({ data: { issues: [] } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+    const offer = baseOfferInput({
+      market: {
+        ...baseMarketParamsInput(),
+        maturity: API_VALID_MATURITY,
+      },
+      group: staleGroup,
+      expiry: API_VALID_MATURITY - 60n,
+      maxUnits: 0n,
+      maxAssets: 1_000n,
+    });
+    const expectedGroup = OfferUtils.groupHash(offer);
+
+    await TreeUtils.mempoolValidate({
+      chainId: 8453,
+      tree: [offer],
+      fetch,
+    });
+
+    const body = JSON.parse(String(calls[0]!.init?.body)) as Readonly<
+      Record<string, unknown>
+    >;
+    const decoded = await Payload.decode(body.payload as Hex);
+
+    expect(decoded[0]!.offer.group).toBe(expectedGroup);
+    expect(decoded[0]!.offer.group).not.toBe(staleGroup);
+  });
+
   test("error: MidnightMempoolValidationError", async () => {
     const calls: {
       readonly input: Parameters<MidnightApiFetch>[0];
@@ -555,7 +602,7 @@ describe("TreeUtils.buildDescriptor", () => {
 
     expect(payload.height).toBe(0);
     expect(payload.root).toBe(
-      "0xd8d57bfe5657d24007dc511ac40c1d0c3ff11f9814f8245a26947d82e4a1bf05",
+      "0x28b3e3a09d4db352984618ea6e4fc7b43fe98082df0fee72d8d4f7bc877f355f",
     );
   });
 

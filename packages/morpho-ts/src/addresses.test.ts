@@ -34,6 +34,7 @@ const createMidnightAddresses = () => ({
   midnightBundles: randomAddress(),
   midnightMempool: randomAddress(),
   ecrecoverRatifier: randomAddress(),
+  ecrecoverAuthorizer: randomAddress(),
   setterRatifier: randomAddress(),
   permit2: randomAddress(),
 });
@@ -58,8 +59,9 @@ const createMidnightDeployments = () => ({
   midnightBundles: 2n,
   midnightMempool: 3n,
   ecrecoverRatifier: 4n,
-  setterRatifier: 5n,
-  permit2: 6n,
+  ecrecoverAuthorizer: 5n,
+  setterRatifier: 6n,
+  permit2: 7n,
 });
 
 const createBlueDeployments = () =>
@@ -145,6 +147,27 @@ describe("addressesRegistry", () => {
 
     expect(addressesRegistry[ChainId.WorldChainMainnet].usdc).toBe(usdc);
     expect(getChainAddress(ChainId.WorldChainMainnet, "usdc")).toBe(usdc);
+  });
+
+  test("behavior: exposes Base Midnight deployment addresses", () => {
+    expect(getChainAddress(ChainId.BaseMainnet, "midnight")).toBe(
+      "0xAdedD8ab6dE832766Fedf0FaC4992E5C4D3EA18A",
+    );
+    expect(getChainAddress(ChainId.BaseMainnet, "midnightBundles")).toBe(
+      "0x091183d729BE9f808c212b475E387A12E67850A7",
+    );
+    expect(getChainAddress(ChainId.BaseMainnet, "midnightMempool")).toBe(
+      "0xdD6DCE32e21f7b020898a8258dA37355b4017993",
+    );
+    expect(getChainAddress(ChainId.BaseMainnet, "ecrecoverRatifier")).toBe(
+      "0xd6e70365C8E8DDa9a4ca662C07bbE663b017755E",
+    );
+    expect(getChainAddress(ChainId.BaseMainnet, "ecrecoverAuthorizer")).toBe(
+      "0x292bEa9f1443d54E0E509120c919106765c6a493",
+    );
+    expect(getChainAddress(ChainId.BaseMainnet, "setterRatifier")).toBe(
+      "0x800B5F12A61B8198a5a6EfD794Cac6699B294d63",
+    );
   });
 
   test("behavior: exposes Midnight entries through the unified registry", () => {
@@ -494,6 +517,17 @@ describe("registerCustomAddresses", () => {
     });
 
     expect(deployments[chainId]?.midnight).toBe(chainDeployments.midnight);
+  });
+
+  test("behavior: exposes Base Midnight deployment blocks", () => {
+    expect(deployments[ChainId.BaseMainnet]?.midnight).toBe(48286884n);
+    expect(deployments[ChainId.BaseMainnet]?.midnightBundles).toBe(48286997n);
+    expect(deployments[ChainId.BaseMainnet]?.midnightMempool).toBe(48286884n);
+    expect(deployments[ChainId.BaseMainnet]?.ecrecoverRatifier).toBe(48286884n);
+    expect(deployments[ChainId.BaseMainnet]?.ecrecoverAuthorizer).toBe(
+      48286884n,
+    );
+    expect(deployments[ChainId.BaseMainnet]?.setterRatifier).toBe(48286884n);
   });
 
   test("error: IncompleteChainRegistryError for custom-chain deployments", () => {
