@@ -3,6 +3,7 @@
 "@morpho-org/blue-sdk-viem": patch
 "@morpho-org/evm-simulation": patch
 "@morpho-org/liquidity-sdk-viem": patch
+"@morpho-org/morpho-sdk": patch
 "@morpho-org/morpho-test": patch
 "@morpho-org/wdk-protocol-lending-morpho-evm": patch
 ---
