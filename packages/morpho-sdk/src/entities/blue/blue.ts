@@ -37,6 +37,8 @@ import {
   computeMinBorrowSharePrice,
   computeMinWithdrawSharePrice,
   computeReallocations,
+  computeRepayAccrualTimestamp,
+  computeSharesRepayFunding,
   validateAccrualPosition,
   validateChainId,
   validateNativeAsset,
@@ -69,7 +71,6 @@ import {
   type MorphoClientType,
   MutuallyExclusiveRepayAmountsError,
   MutuallyExclusiveWithdrawAmountsError,
-  NativeAmountExceedsTransferAmountError,
   NegativeBorrowSharesError,
   NegativeNativeAmountError,
   NegativeSupplyAmountError,
@@ -270,7 +271,10 @@ export interface BlueActions {
    * `getRequirements` returns ERC20 approval for loan token to GeneralAdapter1.
    * Does NOT require Morpho authorization (anyone can repay on behalf of anyone).
    *
-   * **Shares mode:** `slippageTolerance` also caps `transferAmount`.
+   * **Shares mode:** `slippageTolerance` also caps `transferAmount`, and the
+   * loan-token funding is sized by {@link computeSharesRepayFunding} anchored
+   * on `now` — pass the anchor used to pre-size a native/ERC-20 split so the
+   * ERC-20 pull matches it byte-for-byte.
    *
    * @param params - Repay parameters including pre-fetched `positionData`.
    * @returns Object with `buildTx` and `getRequirements`.
@@ -280,6 +284,11 @@ export interface BlueActions {
       userAddress: Address;
       positionData: AccrualPosition;
       slippageTolerance?: bigint;
+      /**
+       * "Now" anchor (Unix seconds) for the shares-mode funding accrual — see
+       * {@link computeSharesRepayFunding}. Defaults to the machine clock.
+       */
+      now?: bigint;
     } & RepayAmountArgs,
   ) => {
     buildTx: (
@@ -336,6 +345,11 @@ export interface BlueActions {
    *
    * **Stale `positionData` risks underestimated debt and unsafe withdrawal.**
    *
+   * **Shares mode:** the loan-token funding is sized by
+   * {@link computeSharesRepayFunding} anchored on `now` — pass the anchor used
+   * to pre-size a native/ERC-20 split so the ERC-20 pull matches it
+   * byte-for-byte.
+   *
    * @param params - Combined parameters including pre-fetched `positionData`.
    * @returns Object with `buildTx` and `getRequirements`.
    */
@@ -345,6 +359,12 @@ export interface BlueActions {
       withdrawAmount: bigint;
       positionData: AccrualPosition;
       slippageTolerance?: bigint;
+      /**
+       * "Now" anchor (Unix seconds) for the funding accrual (shares mode) and
+       * the post-repay health check — see {@link computeSharesRepayFunding}.
+       * Defaults to the machine clock.
+       */
+      now?: bigint;
     } & RepayAmountArgs,
   ) => {
     buildTx: (
@@ -877,6 +897,14 @@ export class MorphoBlue implements BlueActions {
       userAddress: Address;
       positionData: AccrualPosition;
       slippageTolerance?: bigint;
+      /**
+       * "Now" anchor (Unix seconds) for the shares-mode funding accrual — see
+       * {@link computeSharesRepayFunding}. Defaults to the machine clock. Pass
+       * the anchor used to size an external native/ERC-20 funding split so the
+       * ERC-20 pull matches that split byte-for-byte instead of drifting with
+       * the clock between sizing and build.
+       */
+      now?: bigint;
     } & RepayAmountArgs,
   ) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
@@ -930,21 +958,16 @@ export class MorphoBlue implements BlueActions {
       repayAssets = 0n;
       repayShares = shares;
       // 2h forward accrual upper-bounds the on-chain repay price; bundle
-      // skims residual back to the receiver.
-      const accrualTimestamp =
-        MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
-        Time.s.from.h(2n);
-      marketForRepay = positionData.market.accrueInterest(accrualTimestamp);
-      const borrowAssets = marketForRepay.toBorrowAssets(shares, "Up");
-      // Native funds part of the transfer; the ERC-20 pulled is the remainder.
-      if (nativeAmount > borrowAssets) {
-        throw new NativeAmountExceedsTransferAmountError({
-          nativeAmount,
-          transferAmount: borrowAssets,
-          market: this.marketParams.id,
-        });
-      }
-      erc20Amount = borrowAssets - nativeAmount;
+      // skims residual back to the receiver. Native funds part of the
+      // transfer; the ERC-20 pulled is the remainder.
+      const funding = computeSharesRepayFunding({
+        market: positionData.market,
+        shares,
+        nativeAmount,
+        now: params.now ?? Time.timestamp(),
+      });
+      marketForRepay = funding.accruedMarket;
+      erc20Amount = funding.erc20Amount;
     } else {
       // Assets mode is additive, like supply: repaid = amount + nativeAmount.
       const amount = params.amount ?? 0n;
@@ -1089,6 +1112,15 @@ export class MorphoBlue implements BlueActions {
       withdrawAmount: bigint;
       positionData: AccrualPosition;
       slippageTolerance?: bigint;
+      /**
+       * "Now" anchor (Unix seconds) for the funding accrual (shares mode) and
+       * the post-repay health check — see {@link computeSharesRepayFunding}.
+       * Defaults to the machine clock. Pass the anchor used to size an
+       * external native/ERC-20 funding split so the ERC-20 pull matches that
+       * split byte-for-byte instead of drifting with the clock between sizing
+       * and build.
+       */
+      now?: bigint;
     } & RepayAmountArgs,
   ) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
@@ -1134,11 +1166,13 @@ export class MorphoBlue implements BlueActions {
     let erc20Amount: bigint;
     let marketForRepay: Market;
 
+    const now = params.now ?? Time.timestamp();
     // 2h forward accrual upper-bounds the on-chain repay price (shares
     // mode) and the post-repay health check; bundle skims residual back.
-    const accrualTimestamp =
-      MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
-      Time.s.from.h(2n);
+    const accrualTimestamp = computeRepayAccrualTimestamp({
+      now,
+      lastUpdate: positionData.market.lastUpdate,
+    });
 
     if ("shares" in params) {
       const shares = params.shares;
@@ -1152,17 +1186,15 @@ export class MorphoBlue implements BlueActions {
       });
       repayAssets = 0n;
       repayShares = shares;
-      marketForRepay = positionData.market.accrueInterest(accrualTimestamp);
-      const borrowAssets = marketForRepay.toBorrowAssets(shares, "Up");
       // Native funds part of the transfer; the ERC-20 pulled is the remainder.
-      if (nativeAmount > borrowAssets) {
-        throw new NativeAmountExceedsTransferAmountError({
-          nativeAmount,
-          transferAmount: borrowAssets,
-          market: this.marketParams.id,
-        });
-      }
-      erc20Amount = borrowAssets - nativeAmount;
+      const funding = computeSharesRepayFunding({
+        market: positionData.market,
+        shares,
+        nativeAmount,
+        now,
+      });
+      marketForRepay = funding.accruedMarket;
+      erc20Amount = funding.erc20Amount;
     } else {
       // Assets mode is additive, like supply: repaid = amount + nativeAmount.
       const amount = params.amount ?? 0n;

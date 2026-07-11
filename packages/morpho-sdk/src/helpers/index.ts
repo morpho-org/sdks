@@ -10,6 +10,11 @@ export {
 } from "./constant.js";
 export { addTransactionMetadata } from "./metadata.js";
 export {
+  computeRepayAccrualTimestamp,
+  computeSharesRepayFunding,
+  REPAY_ACCRUAL_BUFFER,
+} from "./repayFunding.js";
+export {
   computeMaxRepaySharePrice,
   computeMaxSupplySharePrice,
   computeMinBorrowSharePrice,

@@ -13,6 +13,7 @@ import { describe, expect } from "vitest";
 import { CbbtcUsdcBlue, WstethWethBlue } from "../../../test/fixtures/blue.js";
 import { test } from "../../../test/setup.js";
 import { morphoViemExtension } from "../../client/index.js";
+import { computeSharesRepayFunding } from "../../helpers/index.js";
 import {
   isRequirementApproval,
   MutuallyExclusiveRepayAmountsError,
@@ -60,8 +61,13 @@ function makePosition(
 }
 
 // Position on a market whose loan token is wNative (WETH), for native-wrap repays.
+// Pass `rateAtTarget` to make forward accrual effective (it is a no-op without it).
 function makeWethPosition(
-  overrides: { collateral?: bigint; borrowShares?: bigint } = {},
+  overrides: {
+    collateral?: bigint;
+    borrowShares?: bigint;
+    rateAtTarget?: bigint;
+  } = {},
 ) {
   const market = new Market({
     params: new MarketParams(WstethWethBlue),
@@ -72,6 +78,7 @@ function makeWethPosition(
     lastUpdate: 1_700_000_000n,
     fee: 0n,
     price: ORACLE_PRICE_SCALE,
+    rateAtTarget: overrides.rateAtTarget,
   });
 
   return new AccrualPosition(
@@ -429,6 +436,48 @@ describe("MorphoBlue validation", () => {
     expect(approval.action.args.amount).toBe(expectedErc20);
   });
 
+  test("repay native: shares mode `now` pins the ERC-20 pull to a pre-sized split", async ({
+    client,
+  }) => {
+    const market = client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.blue(WstethWethBlue, mainnet.id);
+    // Accruing market (rateAtTarget set): without a pinned `now`, the funding
+    // recomputed at build time would drift past a split sized moments earlier.
+    const positionData = makeWethPosition({ rateAtTarget: 10n ** 9n });
+    const now = positionData.market.lastUpdate + 100n;
+
+    // Integrator flow: size the native/ERC-20 split ahead of the entity call,
+    // draining the ERC-20 balance first and wrapping native for the remainder.
+    const funding = computeSharesRepayFunding({
+      market: positionData.market,
+      shares: positionData.borrowShares,
+      now,
+    });
+    const erc20Balance = funding.transferAmount - parseUnits("0.1", 18);
+    const nativeAmount = funding.transferAmount - erc20Balance;
+
+    const repay = market.repay({
+      shares: positionData.borrowShares,
+      nativeAmount,
+      userAddress: USER,
+      positionData,
+      now,
+    });
+
+    // Same `now` ⇒ the entity reproduces the split byte-for-byte: the total
+    // routed is the pre-sized transfer and the ERC-20 pulled is exactly the
+    // balance the split drained — not a clock-drifted recomputation.
+    const tx = repay.buildTx();
+    expect(tx.action.args.transferAmount).toBe(funding.transferAmount);
+    const requirements = await repay.getRequirements();
+    const approval = requirements.find(isRequirementApproval);
+    if (!approval) {
+      throw new Error("Approval requirement not found");
+    }
+    expect(approval.action.args.amount).toBe(erc20Balance);
+  });
+
   test("repayWithdrawCollateral native: rejects nativeAmount when the loan token is not wNative", async ({
     client,
   }) => {
@@ -552,6 +601,43 @@ describe("MorphoBlue validation", () => {
       throw new Error("Approval requirement not found");
     }
     expect(approval.action.args.amount).toBe(expectedErc20);
+  });
+
+  test("repayWithdrawCollateral native: shares mode `now` pins the ERC-20 pull to a pre-sized split", async ({
+    client,
+  }) => {
+    const market = client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.blue(WstethWethBlue, mainnet.id);
+    // Accruing market — same determinism contract as the repay sister test.
+    const positionData = makeWethPosition({ rateAtTarget: 10n ** 9n });
+    const now = positionData.market.lastUpdate + 100n;
+
+    const funding = computeSharesRepayFunding({
+      market: positionData.market,
+      shares: positionData.borrowShares,
+      now,
+    });
+    const erc20Balance = funding.transferAmount - parseUnits("0.1", 18);
+    const nativeAmount = funding.transferAmount - erc20Balance;
+
+    const action = market.repayWithdrawCollateral({
+      shares: positionData.borrowShares,
+      nativeAmount,
+      withdrawAmount: positionData.collateral,
+      userAddress: USER,
+      positionData,
+      now,
+    });
+
+    const tx = action.buildTx();
+    expect(tx.action.args.transferAmount).toBe(funding.transferAmount);
+    const requirements = await action.getRequirements();
+    const approval = requirements.find(isRequirementApproval);
+    if (!approval) {
+      throw new Error("Approval requirement not found");
+    }
+    expect(approval.action.args.amount).toBe(erc20Balance);
   });
 
   test("supplyCollateralBorrow rejects invalid collateral and borrow amounts", async ({
