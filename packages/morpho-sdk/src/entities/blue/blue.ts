@@ -69,7 +69,6 @@ import {
   type MorphoClientType,
   MutuallyExclusiveRepayAmountsError,
   MutuallyExclusiveWithdrawAmountsError,
-  NativeAmountExceedsTransferAmountError,
   NegativeBorrowSharesError,
   NegativeNativeAmountError,
   NegativeSupplyAmountError,
@@ -936,15 +935,13 @@ export class MorphoBlue implements BlueActions {
         Time.s.from.h(2n);
       marketForRepay = positionData.market.accrueInterest(accrualTimestamp);
       const borrowAssets = marketForRepay.toBorrowAssets(shares, "Up");
-      // Native funds part of the transfer; the ERC-20 pulled is the remainder.
-      if (nativeAmount > borrowAssets) {
-        throw new NativeAmountExceedsTransferAmountError({
-          nativeAmount,
-          transferAmount: borrowAssets,
-          market: this.marketParams.id,
-        });
-      }
-      erc20Amount = borrowAssets - nativeAmount;
+      // Native funds the transfer first; the ERC-20 pulled is the remainder.
+      // When native covers the full (2h-forward-accrued, rounded-up) borrow
+      // assets, nothing is pulled as ERC-20 — the bundle wraps the native and
+      // skims any residual wNative back to the receiver. So a fully-native
+      // shares repay pulls no ERC-20 and emits no loan-token approval requirement.
+      erc20Amount =
+        nativeAmount >= borrowAssets ? 0n : borrowAssets - nativeAmount;
     } else {
       // Assets mode is additive, like supply: repaid = amount + nativeAmount.
       const amount = params.amount ?? 0n;
@@ -1154,15 +1151,13 @@ export class MorphoBlue implements BlueActions {
       repayShares = shares;
       marketForRepay = positionData.market.accrueInterest(accrualTimestamp);
       const borrowAssets = marketForRepay.toBorrowAssets(shares, "Up");
-      // Native funds part of the transfer; the ERC-20 pulled is the remainder.
-      if (nativeAmount > borrowAssets) {
-        throw new NativeAmountExceedsTransferAmountError({
-          nativeAmount,
-          transferAmount: borrowAssets,
-          market: this.marketParams.id,
-        });
-      }
-      erc20Amount = borrowAssets - nativeAmount;
+      // Native funds the transfer first; the ERC-20 pulled is the remainder.
+      // When native covers the full (2h-forward-accrued, rounded-up) borrow
+      // assets, nothing is pulled as ERC-20 — the bundle wraps the native and
+      // skims any residual wNative back to the receiver. So a fully-native
+      // shares repay pulls no ERC-20 and emits no loan-token approval requirement.
+      erc20Amount =
+        nativeAmount >= borrowAssets ? 0n : borrowAssets - nativeAmount;
     } else {
       // Assets mode is additive, like supply: repaid = amount + nativeAmount.
       const amount = params.amount ?? 0n;
