@@ -399,36 +399,6 @@ const mockPositionReads = (handle: MidnightMockHandle) => {
   mockMarketReads(handle);
 };
 
-const mockBlockAndReads = (
-  handle: MidnightMockHandle,
-  block: { readonly number: bigint | null; readonly timestamp: bigint },
-) => {
-  handle.request.mockImplementation(async ({ method, params }) => {
-    if (method === "eth_chainId") return numberToHex(midnightChainId);
-    if (method === "eth_getBlockByNumber") {
-      return {
-        number: block.number == null ? null : numberToHex(block.number),
-        timestamp: numberToHex(block.timestamp),
-        transactions: [],
-      };
-    }
-    if (method === "eth_call") {
-      const [tx] = (params ?? []) as [
-        { readonly to?: Address; readonly data?: `0x${string}` },
-      ];
-      if (typeof tx?.to === "string" && typeof tx.data === "string") {
-        const encoded = handle.dispatch.get(
-          `${tx.to.toLowerCase()}|${tx.data.slice(0, 10).toLowerCase()}`,
-        );
-        if (encoded != null) return encoded;
-      }
-    }
-
-    throw new Error(`unhandled RPC ${method} ${JSON.stringify(params)}`);
-  });
-  mockPositionReads(handle);
-};
-
 describe("MorphoMidnight", () => {
   describe.each(takeFlowCases)("$name takeable offers", (takeFlow) => {
     test("error: EmptyMidnightTakeableOffersError", () => {
@@ -781,7 +751,6 @@ describe("MorphoMidnight", () => {
     test("default", () => {
       const market = marketData();
       const output = midnight().redeem({
-        marketData: market,
         positionData: positionData(market, { credit: 250n, pendingFee: 50n }),
         accountAddress: midnightAddresses.taker,
       });
@@ -798,7 +767,6 @@ describe("MorphoMidnight", () => {
     test("behavior: explicit units override face value", () => {
       const market = marketData();
       const output = midnight().redeem({
-        marketData: market,
         positionData: positionData(market, { credit: 250n, pendingFee: 50n }),
         accountAddress: midnightAddresses.taker,
         units: 125n,
@@ -818,7 +786,6 @@ describe("MorphoMidnight", () => {
 
       expect(() =>
         midnight().redeem({
-          marketData: market,
           positionData: positionData(market, {
             credit: 250n,
             pendingFee: 50n,
@@ -832,7 +799,6 @@ describe("MorphoMidnight", () => {
     test("behavior: explicit receiver and empty requirements", async () => {
       const market = marketData();
       const output = midnight().redeem({
-        marketData: market,
         positionData: positionData(market, { credit: 250n, pendingFee: 50n }),
         accountAddress: midnightAddresses.taker,
         receiver: midnightAddresses.maker,
@@ -844,32 +810,31 @@ describe("MorphoMidnight", () => {
       expect(tx.action.args.receiver).toBe(midnightAddresses.maker);
     });
 
-    test("error: MarketIdMismatchError", () => {
-      const market = marketData();
-      const otherMarket = new Market({
-        ...market,
-        params: midnightOtherMarket,
-      });
-
-      expect(() =>
-        midnight().redeem({
-          marketData: market,
-          positionData: positionData(otherMarket),
-          accountAddress: midnightAddresses.taker,
-        }),
-      ).toThrow(MarketIdMismatchError);
-    });
-
     test("error: MissingAccrualPositionError", () => {
-      const market = marketData();
-
       expect(() =>
         midnight().redeem({
-          marketData: market,
           positionData: undefined as unknown as AccrualPosition,
           accountAddress: midnightAddresses.taker,
         }),
       ).toThrow(MissingAccrualPositionError);
+    });
+
+    test("error: ChainIdMismatchError", () => {
+      const market = marketData();
+      const wrongChainMarket = new Market({
+        ...market,
+        params: {
+          ...market.params,
+          chainId: midnightChainId + 1,
+        },
+      });
+
+      expect(() =>
+        midnight().redeem({
+          positionData: positionData(wrongChainMarket),
+          accountAddress: midnightAddresses.taker,
+        }),
+      ).toThrow(ChainIdMismatchError);
     });
 
     test("error: NoMidnightCreditToRedeemError", () => {
@@ -877,7 +842,6 @@ describe("MorphoMidnight", () => {
 
       expect(() =>
         midnight().redeem({
-          marketData: market,
           positionData: positionData(market, { credit: 50n, pendingFee: 50n }),
           accountAddress: midnightAddresses.taker,
         }),
@@ -886,34 +850,16 @@ describe("MorphoMidnight", () => {
 
     test("error: InsufficientMidnightWithdrawableLiquidityError", () => {
       const market = marketData({ withdrawable: 50n });
-      const stalePositionMarket = marketData({ withdrawable: 1_000n });
 
       expect(() =>
         midnight().redeem({
-          marketData: market,
-          positionData: positionData(stalePositionMarket, {
+          positionData: positionData(market, {
             credit: 250n,
             pendingFee: 50n,
           }),
           accountAddress: midnightAddresses.taker,
         }),
       ).toThrow(InsufficientMidnightWithdrawableLiquidityError);
-    });
-
-    test("behavior: uses the supplied market liquidity", () => {
-      const market = marketData({ withdrawable: 1_000n });
-      const stalePositionMarket = marketData({ withdrawable: 50n });
-
-      const output = midnight().redeem({
-        marketData: market,
-        positionData: positionData(stalePositionMarket, {
-          credit: 250n,
-          pendingFee: 50n,
-        }),
-        accountAddress: midnightAddresses.taker,
-      });
-
-      expect(output.buildTx().action.args.units).toBe(200n);
     });
   });
 
@@ -943,14 +889,9 @@ describe("MorphoMidnight", () => {
   });
 
   describe("getPositionData", () => {
-    test("behavior: pins position reads to the fetched block", async () => {
+    test("default", async () => {
       const handle = createMockClient(midnightTestChain);
-      const blockNumber = 123n;
-      const blockTimestamp = 1_500n;
-      mockBlockAndReads(handle, {
-        number: blockNumber,
-        timestamp: blockTimestamp,
-      });
+      mockPositionReads(handle);
 
       const position = await new MorphoMidnight(
         {
@@ -963,69 +904,57 @@ describe("MorphoMidnight", () => {
         accountAddress: midnightAddresses.taker,
       });
 
-      expect(position.lastAccrual).toBe(blockTimestamp);
+      expect(position.lastAccrual).toBe(1_000n);
       expect(
-        handle.request.mock.calls
-          .map(([call]) => call)
-          .filter((call) => call.method === "eth_call")
-          .every((call) => call.params?.[1] === numberToHex(blockNumber)),
-      ).toBe(true);
+        handle.request.mock.calls.some(
+          ([call]) => call.method === "eth_getBlockByNumber",
+        ),
+      ).toBe(false);
     });
 
-    test("behavior: accepts explicit blockNumber for the block snapshot", async () => {
+    test("behavior: forwards an explicit blockNumber to every read", async () => {
       const handle = createMockClient(midnightTestChain);
       const requestedBlockNumber = 100n;
-      const fetchedBlockNumber = 123n;
-      mockBlockAndReads(handle, {
-        number: fetchedBlockNumber,
-        timestamp: 1_500n,
-      });
+      mockPositionReads(handle);
 
-      await midnightWithHandle(handle).getPositionData({
+      await midnightWithHandle(handle, {
+        supportSignature: false,
+        supportDeployless: false,
+      }).getPositionData({
         marketId: midnightMarketId,
         accountAddress: midnightAddresses.taker,
         parameters: { blockNumber: requestedBlockNumber },
       });
 
+      const calls = handle.request.mock.calls
+        .map(([call]) => call)
+        .filter((call) => call.method === "eth_call");
+      expect(calls.length).toBeGreaterThan(0);
       expect(
-        handle.request.mock.calls.find(
-          ([call]) => call.method === "eth_getBlockByNumber",
-        )?.[0].params?.[0],
-      ).toBe(numberToHex(requestedBlockNumber));
-      expect(
-        handle.request.mock.calls
-          .map(([call]) => call)
-          .filter((call) => call.method === "eth_call")
-          .every(
-            (call) => call.params?.[1] === numberToHex(fetchedBlockNumber),
-          ),
+        calls.every(
+          (call) => call.params?.[1] === numberToHex(requestedBlockNumber),
+        ),
       ).toBe(true);
     });
 
-    test("behavior: reuses blockTag when the fetched block has no number", async () => {
+    test("behavior: forwards an explicit blockTag to every read", async () => {
       const handle = createMockClient(midnightTestChain);
-      mockBlockAndReads(handle, {
-        number: null,
-        timestamp: 1_500n,
-      });
+      mockPositionReads(handle);
 
-      await midnightWithHandle(handle).getPositionData({
+      await midnightWithHandle(handle, {
+        supportSignature: false,
+        supportDeployless: false,
+      }).getPositionData({
         marketId: midnightMarketId,
         accountAddress: midnightAddresses.taker,
         parameters: { blockTag: "pending" },
       });
 
-      expect(
-        handle.request.mock.calls.find(
-          ([call]) => call.method === "eth_getBlockByNumber",
-        )?.[0].params?.[0],
-      ).toBe("pending");
-      expect(
-        handle.request.mock.calls
-          .map(([call]) => call)
-          .filter((call) => call.method === "eth_call")
-          .every((call) => call.params?.[1] === "pending"),
-      ).toBe(true);
+      const calls = handle.request.mock.calls
+        .map(([call]) => call)
+        .filter((call) => call.method === "eth_call");
+      expect(calls.length).toBeGreaterThan(0);
+      expect(calls.every((call) => call.params?.[1] === "pending")).toBe(true);
     });
   });
 

@@ -20,7 +20,6 @@ import {
   type TypedDataDefinition,
   type WalletClient,
 } from "viem";
-import { getBlock } from "viem/actions";
 import {
   mempoolSubmitOffers,
   midnightCancelOffer,
@@ -172,14 +171,16 @@ const validateMarketData = (market: Market, chainId: number) => {
  * @example
  * ```ts
  * const midnight = client.morpho.midnight(8453);
- * const marketData = await midnight.getMarketData(marketId);
- * const positionData = await midnight.getPositionData({
- *   marketId,
- *   accountAddress: user,
- * });
+ * const block = await client.getBlock();
+ * const positionData = (
+ *   await midnight.getPositionData({
+ *     marketId,
+ *     accountAddress: user,
+ *     parameters: { blockNumber: block.number },
+ *   })
+ * ).accrueInterest(block.timestamp);
  * const { buildTx } = midnight.redeem({
  *   accountAddress: user,
- *   marketData,
  *   positionData,
  * });
  * const tx = buildTx();
@@ -207,31 +208,13 @@ export class MorphoMidnight implements MidnightActions {
     params: GetPositionDataParams,
   ): Promise<AccrualPosition> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    const parameters = params.parameters ?? {};
-    const blockParameters =
-      parameters.blockNumber != null
-        ? { blockNumber: parameters.blockNumber }
-        : parameters.blockTag != null
-          ? { blockTag: parameters.blockTag }
-          : {};
-    const block = await getBlock(this.client.viemClient, blockParameters);
-    const {
-      blockNumber: _blockNumber,
-      blockTag: _blockTag,
-      ...fetchParams
-    } = parameters;
-    const fetchBlockParameters =
-      block.number != null ? { blockNumber: block.number } : blockParameters;
 
-    const position = await fetchAccrualPosition(this.client.viemClient, {
-      ...fetchParams,
+    return fetchAccrualPosition(this.client.viemClient, {
+      ...params.parameters,
       deployless: this.client.options.supportDeployless,
-      ...fetchBlockParameters,
       marketId: params.marketId,
       user: params.accountAddress,
     });
-
-    return position.accrueInterest(block.timestamp);
   }
 
   async getOffersData(params: GetOffersDataParams): Promise<OffersData> {
@@ -676,21 +659,12 @@ export class MorphoMidnight implements MidnightActions {
 
   redeem(params: RedeemParams) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    validateMarketData(params.marketData, this.chainId);
     if (!params.positionData) {
-      throw new MissingAccrualPositionError(params.marketData.id);
-    }
-    if (
-      params.positionData.market.id.toLowerCase() !==
-      params.marketData.id.toLowerCase()
-    ) {
-      throw new MarketIdMismatchError(
-        params.positionData.market.id,
-        params.marketData.id,
-      );
+      throw new MissingAccrualPositionError();
     }
 
-    const market = params.marketData;
+    const market = params.positionData.market;
+    validateMarketData(market, this.chainId);
     const units = params.units ?? params.positionData.faceValue;
     if (units <= 0n) throw new NoMidnightCreditToRedeemError(market.id);
     if (params.positionData.faceValue < units) {
@@ -700,11 +674,11 @@ export class MorphoMidnight implements MidnightActions {
         faceValue: params.positionData.faceValue,
       });
     }
-    if (market.withdrawable < units) {
+    if (params.positionData.withdrawable < units) {
       throw new InsufficientMidnightWithdrawableLiquidityError({
         market: market.id,
         units,
-        withdrawable: market.withdrawable,
+        withdrawable: params.positionData.withdrawable,
       });
     }
 
