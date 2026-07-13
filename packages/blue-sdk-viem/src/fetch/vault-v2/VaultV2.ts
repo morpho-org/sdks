@@ -17,6 +17,7 @@ import {
   UnknownOfFactory,
   UnsupportedVaultV2AdapterError,
   Vault,
+  VaultConfig,
   VaultMarketConfig,
   VaultMarketPublicAllocatorConfig,
   VaultV2,
@@ -48,7 +49,10 @@ import {
   code as getAccrualVaultV2Code,
 } from "../../queries/vault-v2/GetAccrualVaultV2.js";
 import { abi, code } from "../../queries/vault-v2/GetVaultV2.js";
-import type { DeploylessFetchParameters } from "../../types.js";
+import type {
+  DeploylessFetchParameters,
+  FetchParameters,
+} from "../../types.js";
 import { fetchToken } from "../Token.js";
 import { fetchAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
 
@@ -395,6 +399,8 @@ export async function fetchVaultV2(
  * @throws {UnknownOfFactory} when `address` is not a VaultV2 from the configured factory.
  * @throws {UnsupportedVaultV2AdapterError} when the vault or one of its adapters uses an
  *   unsupported adapter class.
+ * @throws {viem.BaseError} when a read fails with no fallback left (`deployless: "force"`, or a
+ *   multicall read when `deployless: false`).
  * @example
  * ```ts
  * import type { AccrualVaultV2 } from "@morpho-org/blue-sdk";
@@ -412,11 +418,11 @@ export async function fetchVaultV2(
 export async function fetchAccrualVaultV2(
   address: Address,
   client: Client,
-  parameters: DeploylessFetchParameters = {},
+  // Destructure so `parameters` is a fresh rest object we own — defaulting `chainId` below never
+  // mutates the caller's argument (§2).
+  { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
   parameters.chainId ??= await getChainId(client);
-
-  const { deployless = true } = parameters;
 
   // The entire accrual tree can be read in a single deployless call. When it succeeds there is
   // nothing left to fetch, so return early and skip the sequential multicall fan-out below.
@@ -436,7 +442,10 @@ export async function fetchAccrualVaultV2(
     }
   }
 
-  const vaultV2 = await fetchVaultV2(address, client, parameters);
+  const vaultV2 = await fetchVaultV2(address, client, {
+    ...parameters,
+    deployless,
+  });
 
   const [assetBalance, liquidityAdapter, ...adapterResults] = await Promise.all(
     [
@@ -448,15 +457,17 @@ export async function fetchAccrualVaultV2(
         args: [vaultV2.address],
       }),
       vaultV2.liquidityAdapter !== zeroAddress
-        ? fetchAccrualVaultV2Adapter(
-            vaultV2.liquidityAdapter,
-            client,
-            parameters,
-          )
+        ? fetchAccrualVaultV2Adapter(vaultV2.liquidityAdapter, client, {
+            ...parameters,
+            deployless,
+          })
         : undefined,
       ...vaultV2.adapters.map(async (adapter) => {
         const [accrualAdapter, forceDeallocatePenalty] = await Promise.all([
-          fetchAccrualVaultV2Adapter(adapter, client, parameters),
+          fetchAccrualVaultV2Adapter(adapter, client, {
+            ...parameters,
+            deployless,
+          }),
           readContract(client, {
             ...parameters,
             address,
@@ -536,12 +547,17 @@ function toAccrualAdapter(
       const { morphoVaultV1, vaultV1 } = adapter;
 
       const vault = new Vault({
-        address: morphoVaultV1,
-        asset: vaultV1.config.asset,
-        symbol: vaultV1.config.symbol,
-        name: vaultV1.config.name,
-        decimalsOffset: vaultV1.config.decimalsOffset,
-        eip5267Domain: new Eip5267Domain(vaultV1.config.eip5267Domain),
+        // Build the immutable token config through `VaultConfig` so the share token keeps its
+        // normalized 18 decimals, matching the multicall `fetchVault` path (a bare `Vault` input
+        // omits `decimals`, which `Token` would otherwise default to 0).
+        ...new VaultConfig({
+          address: morphoVaultV1,
+          asset: vaultV1.config.asset,
+          symbol: vaultV1.config.symbol,
+          name: vaultV1.config.name,
+          decimalsOffset: vaultV1.config.decimalsOffset,
+          eip5267Domain: new Eip5267Domain(vaultV1.config.eip5267Domain),
+        }),
         owner: vaultV1.owner,
         curator: vaultV1.curator,
         guardian: vaultV1.guardian,
@@ -684,12 +700,12 @@ function toAccrualAdapter(
 /**
  * Fetches the full VaultV2 accrual tree in a single deployless call.
  *
- * Unlike {@link fetchAccrualVaultV2}, which chains sequential reads (vault, then each adapter, then
- * each adapter's markets or wrapped MetaMorpho V1 vault), this reader traverses the entire tree
- * on-chain through the deployless `GetAccrualVaultV2` query and returns the hydrated entity from one
- * `eth_call`. It is deployless-only: there is no multicall fallback, so it throws if the deployless
- * read fails (equivalent to `deployless: "force"`), and requires every configured adapter factory to
- * be deployed at the queried block.
+ * {@link fetchAccrualVaultV2} defaults to this same single deployless call but transparently falls
+ * back to sequential multicall reads (vault, then each adapter, then each adapter's markets or
+ * wrapped MetaMorpho V1 vault) when the deployless read fails. This reader is deployless-only: it
+ * always performs the single `eth_call`, never falls back, and throws if the deployless read fails
+ * (equivalent to `deployless: "force"`). It requires every configured adapter factory to be deployed
+ * at the queried block.
  *
  * The returned `AccrualVaultV2` is byte-for-byte identical to `fetchAccrualVaultV2`'s output,
  * including the nested MetaMorpho V1 vault of a `MorphoVaultV1Adapter`: its EIP-5267 domain
@@ -709,6 +725,7 @@ function toAccrualAdapter(
  * @throws {UnknownOfFactory} when `address` is not a VaultV2 from the configured factory.
  * @throws {UnsupportedVaultV2AdapterError} when the vault or one of its adapters uses an unsupported
  *   adapter class.
+ * @throws {viem.BaseError} when the deployless `eth_call` or response decoding fails (no fallback).
  * @example
  * ```ts
  * import type { AccrualVaultV2 } from "@morpho-org/blue-sdk";
@@ -729,9 +746,13 @@ function toAccrualAdapter(
 export async function fetchAccrualVaultV2Deployless(
   address: Address,
   client: Client,
-  parameters: DeploylessFetchParameters = {},
+  // This reader is deployless-only, so it takes `FetchParameters` (no `deployless` toggle): it
+  // never falls back to multicall and always performs the single bytecode call.
+  parameters: FetchParameters = {},
 ) {
-  parameters.chainId ??= await getChainId(client);
+  // Do not mutate the caller's object (§2); copy it before defaulting `chainId`.
+  const chainId = parameters.chainId ?? (await getChainId(client));
+  const readParameters = { ...parameters, chainId };
 
   const {
     morpho,
@@ -741,7 +762,7 @@ export async function fetchAccrualVaultV2Deployless(
     morphoMarketV1AdapterFactory,
     morphoMarketV1AdapterV2Factory,
     publicAllocator,
-  } = getChainAddresses(parameters.chainId);
+  } = getChainAddresses(chainId);
 
   if (!vaultV2Factory) {
     throw new UnknownFactory();
@@ -750,7 +771,7 @@ export async function fetchAccrualVaultV2Deployless(
   let response: AccrualVaultV2QueryResponse;
   try {
     response = await readContract(client, {
-      ...parameters,
+      ...readParameters,
       abi: getAccrualVaultV2Abi,
       code: getAccrualVaultV2Code,
       functionName: "query",

@@ -222,6 +222,26 @@ describe("fetchAccrualVaultV2Deployless", () => {
   );
 
   vaultV2Test(
+    "matches fetchAccrualVaultV2 for a vault without a liquidity adapter",
+    async ({ client }) => {
+      // A freshly-deployed VaultV2 has no liquidity adapter and no regular adapters, exercising the
+      // `hasLiquidityAdapter === false` and `isLiquidityAdapterKnown === false` decoding branches.
+      const { usdc } = addressesRegistry[client.chain.id];
+      const vaultAddress = await deployVaultV2(client as AnvilTestClient, usdc);
+
+      const [deployless, multicall] = await Promise.all([
+        fetchAccrualVaultV2Deployless(vaultAddress, client),
+        fetchAccrualVaultV2(vaultAddress, client, { deployless: false }),
+      ]);
+
+      expect(deployless.accrualLiquidityAdapter).toBeUndefined();
+      expect(deployless.liquidityAllocations).toBeUndefined();
+      expect(deployless.accrualAdapters).toHaveLength(0);
+      expectEquivalent(deployless, multicall);
+    },
+  );
+
+  vaultV2Test(
     "matches fetchAccrualVaultV2 for a MorphoMarketV1AdapterV2 liquidity adapter",
     async ({ client }) => {
       const [deployless, multicall] = await Promise.all([

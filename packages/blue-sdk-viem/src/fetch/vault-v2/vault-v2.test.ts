@@ -1592,6 +1592,47 @@ describe("fetchAccrualVaultV2", () => {
     expect(vault.accrualAdapters[0]?.address).toBe(ADAPTER_2);
     expect(vault.forceDeallocatePenalties[ADAPTER_2]).toBe(12n);
   });
+
+  test("does not fall back when the single deployless call is forced", async () => {
+    const handle = createMockClient(mainnet);
+    // Only the failing single-call query is mocked; a multicall fallback would need more responses,
+    // so a thrown error proves the forced path never falls back.
+    mockDeploylessReads(handle, ["0x"]);
+
+    await expect(
+      fetchAccrualVaultV2(VAULT, handle.client, {
+        chainId: CHAIN_ID,
+        deployless: "force",
+      }),
+    ).rejects.toThrow();
+  });
+
+  test("rethrows a deterministic UnknownOfFactory revert without falling back", async () => {
+    const handle = createMockClient(mainnet);
+    // No multicall reads are mocked: falling back would throw a different, non-typed error.
+    mockDeploylessReads(handle, [contractRevert("UnknownOfFactory")]);
+
+    await expect(
+      fetchAccrualVaultV2(VAULT, handle.client, { chainId: CHAIN_ID }),
+    ).rejects.toBeInstanceOf(UnknownOfFactory);
+  });
+
+  test("rethrows a deterministic UnsupportedVaultV2Adapter revert without falling back", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessReads(handle, [contractRevert("UnsupportedVaultV2Adapter")]);
+
+    await expect(
+      fetchAccrualVaultV2(VAULT, handle.client, { chainId: CHAIN_ID }),
+    ).rejects.toBeInstanceOf(UnsupportedVaultV2AdapterError);
+  });
+
+  test("rethrows UnknownFactory without attempting the deployless call", async () => {
+    const { client } = createMockClient(mainnet);
+
+    await expect(
+      fetchAccrualVaultV2(VAULT, client, { chainId: ChainId.CeloMainnet }),
+    ).rejects.toBeInstanceOf(UnknownFactory);
+  });
 });
 
 const emptyVaultV1QueryResult = {
@@ -1746,6 +1787,38 @@ describe("fetchAccrualVaultV2Deployless", () => {
     const marketAdapter = adapter as AccrualVaultV2MorphoMarketV1AdapterV2;
     expect(marketAdapter.supplyShares[ID]).toBe(99n);
     expect(marketAdapter.markets[0]?.id).toBe(ID);
+  });
+
+  test("omits liquidity allocations when the liquidity adapter is unknown", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessRead(handle, accrualVaultV2QueryAbi, "query", {
+      ...accrualVaultV2Result,
+      isLiquidityAdapterKnown: false,
+    });
+
+    const vault = await fetchAccrualVaultV2Deployless(VAULT, handle.client, {
+      chainId: CHAIN_ID,
+    });
+
+    expect(vault.liquidityAllocations).toBeUndefined();
+  });
+
+  test("leaves the accrual liquidity adapter undefined when none is configured", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessRead(handle, accrualVaultV2QueryAbi, "query", {
+      ...accrualVaultV2Result,
+      liquidityAdapter: zeroAddress,
+      hasLiquidityAdapter: false,
+      isLiquidityAdapterKnown: false,
+      liquidityAllocations: [],
+    });
+
+    const vault = await fetchAccrualVaultV2Deployless(VAULT, handle.client, {
+      chainId: CHAIN_ID,
+    });
+
+    expect(vault.accrualLiquidityAdapter).toBeUndefined();
+    expect(vault.liquidityAllocations).toBeUndefined();
   });
 
   test("keeps a MorphoMarketV1 adapter's configured params for a market not yet created", async () => {
