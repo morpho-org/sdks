@@ -1,6 +1,6 @@
-import { midnightAbi } from "@morpho-org/midnight-sdk";
+import { MAX_OFFER_CAP, midnightAbi } from "@morpho-org/midnight-sdk";
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
-import { type Address, encodeFunctionData, type Hex, maxUint256 } from "viem";
+import { type Address, encodeFunctionData, type Hex } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import type {
   Metadata,
@@ -23,12 +23,12 @@ export interface MidnightCancelOfferParams {
  * App flows should usually call `client.morpho.midnight(chainId).cancelOffer(...)`.
  * Use this builder directly when the group id is already known and no
  * additional requirements are needed. Omitting `amount` fully cancels the group
- * by setting consumption to `maxUint256`.
+ * by setting consumption to {@link MAX_OFFER_CAP}.
  *
  * @param params.chainId - Chain id used to resolve `Midnight`.
  * @param params.group - Offer group id to mark consumed.
  * @param params.onBehalf - Maker whose group consumption is updated.
- * @param params.amount - Optional consumed amount; defaults to `maxUint256` for full cancellation.
+ * @param params.amount - Optional consumed amount; defaults to {@link MAX_OFFER_CAP} for full cancellation.
  * @param params.metadata - Optional analytics metadata appended to calldata.
  * @returns A deep-frozen `Transaction<MidnightCancelOfferAction>` targeting `Midnight`.
  * @example
@@ -46,7 +46,7 @@ export const midnightCancelOffer = (
   params: MidnightCancelOfferParams,
 ): Readonly<Transaction<MidnightCancelOfferAction>> => {
   const midnight = getChainAddress(params.chainId, "midnight");
-  const amount = params.amount ?? maxUint256;
+  const amount = params.amount ?? MAX_OFFER_CAP;
 
   let tx = {
     to: midnight,
