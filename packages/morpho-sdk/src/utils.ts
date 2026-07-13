@@ -10,7 +10,6 @@ export {
 export {
   decodeBytes32String,
   getAuthorizationTypedData,
-  getDaiPermitTypedData,
   getPermit2PermitTypedData,
   getPermit2TransferFromTypedData,
   getPermitTypedData,
@@ -67,7 +66,6 @@ export {
   validatePositionHealthAfterWithdraw,
   validateReallocations,
   validateRepayAmount,
-  validateRepayParams,
   validateRepayShares,
   validateSlippageTolerance,
   validateUserAddress,

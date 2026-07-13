@@ -1,22 +1,19 @@
-import { getChainAddresses, type MarketParams } from "@morpho-org/blue-sdk";
+import type { MarketParams } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
 import { type Action, BundlerAction } from "../../bundler/index.js";
-import {
-  addTransactionMetadata,
-  validateNativeAsset,
-} from "../../helpers/index.js";
+import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   type BlueSupplyCollateralAction,
   type DepositAmountArgs,
   type Metadata,
   NegativeNativeAmountError,
   NonPositiveAssetAmountError,
-  type RequirementSignature,
+  type PermitRequirementSignature,
   type Transaction,
   ZeroCollateralAmountError,
 } from "../../types/index.js";
-import { getRequirementsAction } from "../requirements/getRequirementsAction.js";
+import { buildAssetFundingActions } from "./buildAssetFundingActions.js";
 
 /** Parameters for {@link blueSupplyCollateral}. */
 export interface BlueSupplyCollateralParams {
@@ -25,8 +22,10 @@ export interface BlueSupplyCollateralParams {
     readonly marketParams: MarketParams;
   };
   args: DepositAmountArgs & {
+    /** Address whose Morpho collateral position is credited. */
     onBehalf: Address;
-    requirementSignature?: RequirementSignature;
+    /** Optional pre-signed permit/permit2 approval for the collateral transfer. */
+    requirementSignature?: PermitRequirementSignature;
   };
   metadata?: Metadata;
 }
@@ -45,9 +44,7 @@ export interface BlueSupplyCollateralParams {
  * @param params.args.amount - Amount of ERC-20 collateral to supply. At least one of `amount` or
  *   `nativeAmount` must be positive. Defaults to `0n`.
  * @param params.args.onBehalf - Address whose Morpho position is credited with the collateral.
- * @param params.args.requirementSignature - Optional pre-signed permit/permit2 approval. When
- *   absent, the bundle uses a plain `erc20TransferFrom` and assumes the user has already
- *   approved `GeneralAdapter1`.
+ * @param params.args.requirementSignature - Optional pre-signed permit/permit2 approval.
  * @param params.args.nativeAmount - Optional amount of native token to wrap into wNative for the
  *   supply. Requires the collateral token to be the chain's wNative.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
@@ -59,11 +56,11 @@ export interface BlueSupplyCollateralParams {
  * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
  * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the collateral
  *   token is not the chain's wNative.
- * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `requirementSignature`
+ * @throws {DepositAssetMismatchError} from `getTokenRequirementActions` when `requirementSignature`
  *   is provided and the signed asset differs from `marketParams.collateralToken`.
- * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
+ * @throws {DepositAmountMismatchError} from `getTokenRequirementActions` when `requirementSignature`
  *   is provided and the signed amount differs from `args.amount`.
- * @throws {Permit2ExpirationMissingError} from `getRequirementsAction` when a Permit2 requirement
+ * @throws {Permit2ExpirationMissingError} from `getTokenRequirementActions` when a Permit2 requirement
  *   signature is missing its expiration.
  * @example
  * ```ts
@@ -97,44 +94,13 @@ export const blueSupplyCollateral = ({
     throw new ZeroCollateralAmountError(marketParams.id);
   }
 
-  const {
-    bundler3: { generalAdapter1, bundler3 },
-  } = getChainAddresses(chainId);
-
-  const actions: Action[] = [];
-
-  if (nativeAmount !== undefined && nativeAmount > 0n) {
-    validateNativeAsset(chainId, marketParams.collateralToken);
-
-    actions.push(
-      {
-        type: "nativeTransfer",
-        args: [bundler3, generalAdapter1, nativeAmount, false],
-      },
-      {
-        type: "wrapNative",
-        args: [nativeAmount, generalAdapter1, false],
-      },
-    );
-  }
-
-  if (amount > 0n) {
-    if (requirementSignature) {
-      actions.push(
-        ...getRequirementsAction({
-          asset: marketParams.collateralToken,
-          amount,
-          recipient: generalAdapter1,
-          requirementSignature,
-        }),
-      );
-    } else {
-      actions.push({
-        type: "erc20TransferFrom",
-        args: [marketParams.collateralToken, amount, generalAdapter1, false],
-      });
-    }
-  }
+  const actions: Action[] = buildAssetFundingActions({
+    chainId,
+    asset: marketParams.collateralToken,
+    erc20Amount: amount,
+    nativeAmount: nativeAmount ?? 0n,
+    requirementSignature,
+  });
 
   actions.push({
     type: "morphoSupplyCollateral",

@@ -1,12 +1,10 @@
-import { getChainAddresses, type MarketParams } from "@morpho-org/blue-sdk";
+import type { MarketParams } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
 import { type Action, BundlerAction } from "../../bundler/index.js";
+import { addTransactionMetadata } from "../../helpers/index.js";
 import {
-  addTransactionMetadata,
-  validateNativeAsset,
-} from "../../helpers/index.js";
-import {
+  type AuthorizationRequirementSignature,
   type BlueSupplyCollateralBorrowAction,
   type DepositAmountArgs,
   type Metadata,
@@ -14,12 +12,13 @@ import {
   NonPositiveAssetAmountError,
   NonPositiveBorrowAmountError,
   NonPositiveMinBorrowSharePriceError,
-  type RequirementSignature,
+  type PermitRequirementSignature,
   type Transaction,
   type VaultReallocation,
   ZeroCollateralAmountError,
 } from "../../types/index.js";
-import { getRequirementsAction } from "../requirements/getRequirementsAction.js";
+import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
+import { buildAssetFundingActions } from "./buildAssetFundingActions.js";
 import { buildReallocationActions } from "./buildReallocationActions.js";
 
 /** Parameters for {@link blueSupplyCollateralBorrow}. */
@@ -29,14 +28,24 @@ export interface BlueSupplyCollateralBorrowParams {
     readonly marketParams: MarketParams;
   };
   args: DepositAmountArgs & {
+    /** Amount of loan asset to borrow after the collateral is supplied. */
     borrowAmount: bigint;
+    /** Address whose Morpho collateral and borrow positions are credited. */
     onBehalf: Address;
+    /** Address that receives the borrowed assets. */
     receiver: Address;
     /** Minimum borrow share price (in ray). Protects against share price manipulation. */
     minSharePrice: bigint;
-    requirementSignature?: RequirementSignature;
+    /** Optional pre-signed permit/permit2 approval for the collateral transfer. */
+    requirementSignature?: PermitRequirementSignature;
     /** Vault reallocations to execute before borrowing (computed by entity). */
     reallocations?: readonly VaultReallocation[];
+    /**
+     * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
+     * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a
+     * standalone `setAuthorization` transaction.
+     */
+    authorizationSignature?: AuthorizationRequirementSignature;
   };
   metadata?: Metadata;
 }
@@ -68,6 +77,8 @@ export interface BlueSupplyCollateralBorrowParams {
  *   collateral supply. Requires the collateral token to be the chain's wNative.
  * @param params.args.reallocations - Optional vault reallocations to execute between the supply
  *   and borrow legs, computed by the entity layer.
+ * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
+ *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueSupplyCollateralBorrowAction>` with `to`, `value`,
  *   `data`, and the typed `action` discriminator the simulation layer consumes.
@@ -79,11 +90,11 @@ export interface BlueSupplyCollateralBorrowParams {
  * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
  * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the collateral
  *   token is not the chain's wNative.
- * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `requirementSignature`
+ * @throws {DepositAssetMismatchError} from `getTokenRequirementActions` when `requirementSignature`
  *   is provided and the signed asset differs from `marketParams.collateralToken`.
- * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
+ * @throws {DepositAmountMismatchError} from `getTokenRequirementActions` when `requirementSignature`
  *   is provided and the signed amount differs from `args.amount`.
- * @throws {Permit2ExpirationMissingError} from `getRequirementsAction` when a Permit2 requirement
+ * @throws {Permit2ExpirationMissingError} from `getTokenRequirementActions` when a Permit2 requirement
  *   signature is missing its expiration.
  * @throws {NegativeReallocationFeeError} from `buildReallocationActions` when
  *   `reallocations` is non-empty and any `reallocation.fee < 0n`.
@@ -123,6 +134,7 @@ export const blueSupplyCollateralBorrow = ({
     requirementSignature,
     nativeAmount,
     reallocations,
+    authorizationSignature,
   },
   metadata,
 }: BlueSupplyCollateralBorrowParams): Readonly<
@@ -150,44 +162,21 @@ export const blueSupplyCollateralBorrow = ({
     throw new ZeroCollateralAmountError(marketParams.id);
   }
 
-  const {
-    bundler3: { generalAdapter1, bundler3 },
-  } = getChainAddresses(chainId);
-
   const actions: Action[] = [];
 
-  if (nativeAmount !== undefined && nativeAmount > 0n) {
-    validateNativeAsset(chainId, marketParams.collateralToken);
-
-    actions.push(
-      {
-        type: "nativeTransfer",
-        args: [bundler3, generalAdapter1, nativeAmount, false],
-      },
-      {
-        type: "wrapNative",
-        args: [nativeAmount, generalAdapter1, false],
-      },
-    );
+  if (authorizationSignature) {
+    actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
   }
 
-  if (amount > 0n) {
-    if (requirementSignature) {
-      actions.push(
-        ...getRequirementsAction({
-          asset: marketParams.collateralToken,
-          amount,
-          recipient: generalAdapter1,
-          requirementSignature,
-        }),
-      );
-    } else {
-      actions.push({
-        type: "erc20TransferFrom",
-        args: [marketParams.collateralToken, amount, generalAdapter1, false],
-      });
-    }
-  }
+  actions.push(
+    ...buildAssetFundingActions({
+      chainId,
+      asset: marketParams.collateralToken,
+      erc20Amount: amount,
+      nativeAmount: nativeAmount ?? 0n,
+      requirementSignature,
+    }),
+  );
 
   actions.push({
     type: "morphoSupplyCollateral",

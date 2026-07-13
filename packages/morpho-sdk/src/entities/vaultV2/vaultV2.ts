@@ -8,7 +8,7 @@ import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import { type Address, isAddressEqual } from "viem";
 import {
-  getRequirements,
+  getGeneralAdapterRequirements,
   vaultV2Deposit,
   vaultV2ForceRedeem,
   vaultV2ForceWithdraw,
@@ -30,8 +30,10 @@ import {
   NegativeSlippageToleranceError,
   NonPositiveAssetAmountError,
   NonPositiveSharesAmountError,
+  type PermitRequirementSignature,
   type Requirement,
   type RequirementSignature,
+  selectRequirementSignatures,
   type Transaction,
   VaultAddressMismatchError,
   type VaultV2DepositAction,
@@ -69,7 +71,7 @@ export interface VaultV2Actions {
    * @param {bigint} [params.nativeAmount] - Amount of native token to wrap into wNative. Vault asset must be wNative.
    * @returns {Object} The result object.
    * @returns {Readonly<Transaction<VaultV2DepositAction>>} returns.tx The prepared deposit transaction.
-   * @returns {Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]>} returns.getRequirements The function for retrieving all required approval transactions.
+   * @returns {Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement<PermitRequirementSignature>)[]>} returns.getRequirements The function for retrieving all required approval transactions.
    */
   deposit: (
     params: {
@@ -79,11 +81,16 @@ export interface VaultV2Actions {
     } & DepositAmountArgs,
   ) => {
     buildTx: (
-      requirementSignature?: RequirementSignature,
+      signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<VaultV2DepositAction>>;
     getRequirements: (params?: {
       useSimplePermit?: boolean;
-    }) => Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]>;
+    }) => Promise<
+      (
+        | Readonly<Transaction<ERC20ApprovalAction>>
+        | Requirement<PermitRequirementSignature>
+      )[]
+    >;
   };
   /**
    * Prepares a withdraw transaction for the VaultV2 contract.
@@ -264,10 +271,9 @@ export class MorphoVaultV2 implements VaultV2Actions {
       ),
       MathLib.RAY * 100n,
     );
-
     return {
-      getRequirements: async (params?: { useSimplePermit?: boolean }) =>
-        await getRequirements(this.client.viemClient, {
+      getRequirements: (params?: { useSimplePermit?: boolean }) =>
+        getGeneralAdapterRequirements(this.client.viemClient, {
           address: vaultData.asset,
           chainId: this.chainId,
           supportSignature: this.client.options.supportSignature,
@@ -279,8 +285,12 @@ export class MorphoVaultV2 implements VaultV2Actions {
           },
         }),
 
-      buildTx: (requirementSignature?: RequirementSignature) =>
-        vaultV2Deposit({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { permit } = selectRequirementSignatures(signatures, {
+          permit: true,
+        });
+
+        return vaultV2Deposit({
           vault: {
             chainId: this.chainId,
             address: this.vault,
@@ -290,11 +300,12 @@ export class MorphoVaultV2 implements VaultV2Actions {
             amount,
             maxSharePrice,
             recipient: userAddress,
-            requirementSignature,
+            requirementSignature: permit,
             nativeAmount,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 // JSDoc coverage burndown for Tier 1–4 packages.
-// Approximate, regex-driven. Phase 0 informational; CI gating lands in Phase 5
-// per docs/tibs/TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md.
+// Approximate and regex-driven.
 //
 // Flags:
 //   --verbose       — list every undocumented export under each package.
@@ -28,7 +27,6 @@ const TIER = {
   "simulation-sdk": 2,
   "blue-sdk-viem": 2,
   "bundler-sdk-viem": 3,
-  "liquidation-sdk-viem": 3,
   "liquidity-sdk-viem": 3,
   "migration-sdk-viem": 3,
   "blue-sdk-wagmi": 4,

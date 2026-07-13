@@ -6,8 +6,8 @@ This monorepo contains the TypeScript SDK packages used to interact with the Mor
 
 ### Prerequisites
 
-- Node.js `>=22`
-- pnpm `10`, declared by the root `packageManager` field
+- Node.js `>=26 <27`
+- pnpm `11`, declared by the root `packageManager` field
 - Git
 - An Ethereum mainnet RPC URL for fork-backed tests
 
@@ -167,26 +167,7 @@ Update `_unwrappedTokensMapping` in `packages/blue-sdk/src/addresses.ts`:
 },
 ```
 
-### 6. Update the Liquidation SDK
-
-Update `packages/liquidation-sdk-viem/src/addresses.ts`.
-
-Add a Midas mapping, using an empty object when the chain has no Midas configuration:
-
-```typescript
-[ChainId.YourNewChain]: {},
-```
-
-Add the pre-liquidation factory configuration:
-
-```typescript
-[ChainId.YourNewChain]: {
-  address: addressesRegistry[ChainId.YourNewChain].preLiquidationFactory,
-  startBlock: deployments[ChainId.YourNewChain].preLiquidationFactory,
-},
-```
-
-### 7. Verify the Chain Listing
+### 6. Verify the Chain Listing
 
 - The chain ID is unique and correctly formatted.
 - Contract addresses are valid and checksummed.

@@ -45,13 +45,13 @@ pnpm add @morpho-org/morpho-sdk
 
 Every action that touches a user's tokens or positions returns two things:
 
-- `buildTx(signature?)` — builds the final viem `Transaction` object.
+- `buildTx(signatures?)` — builds the final viem `Transaction` object. Takes an optional array of collected `RequirementSignature`s (permit / Permit2 and/or Morpho authorization).
 - `getRequirements()` — returns the list of on-chain pre-requisites that must be satisfied first.
 
 Typical requirements:
 
 - **ERC-20 approval** — the user must approve the bundler (or Morpho directly) to pull tokens. Returned as a standard `approve` transaction the consumer sends first.
-- **Permit / Permit2 signature** — off-chain approvals that go into `buildTx` as a `signature` argument, avoiding the extra approval tx. Enabled via `morphoViemExtension({ supportSignature: true })`.
+- **Permit / Permit2 signature** — off-chain approvals that go into `buildTx` in the `signatures` array, avoiding the extra approval tx. Enabled via `morphoViemExtension({ supportSignature: true })`.
 - **Morpho authorization** — `borrow`, `supplyCollateralBorrow`, and `repayWithdrawCollateral` require the user to authorize `GeneralAdapter1` on the Morpho contract once (`setAuthorization`). The SDK returns this as an extra transaction if it's missing.
 
 Usage pattern:
@@ -66,12 +66,12 @@ const requirements = await getRequirements();
 
 // Consumer satisfies each requirement (send tx / sign permit), collects the signature,
 // then calls buildTx to get the final transaction:
-const tx = buildTx(permitSignature);
+const tx = buildTx([permitSignature]);
 ```
 
 ### Integration invariant — builder = signer
 
-**`userAddress` MUST equal the account that ends up signing/executing the tx.** Critical for `repayWithdrawCollateral`, whose bundle mixes explicit `onBehalf` (repay) with implicit `msg.sender` (transfer-from + withdraw) — see [BUNDLER3.md](./BUNDLER3.md#other-pitfalls). Transaction builders do not validate this at build time, so callers MUST keep `userAddress` aligned with the signing account themselves. The signature requirements (`encodeErc20Permit` / `encodeErc20Permit2`) take a `WalletClient` and enforce the invariant at `sign()` time via `validateUserAddress`, rejecting any `sign(client, userAddress)` where `client.account.address !== userAddress` with `MissingClientPropertyError` / `AddressMismatchError`.
+**`userAddress` MUST equal the account that ends up signing/executing the tx.** Critical for `repayWithdrawCollateral`, whose bundle mixes explicit `onBehalf` (repay) with implicit `msg.sender` (transfer-from + withdraw) — see [BUNDLER3.md](./BUNDLER3.md#other-pitfalls). Transaction builders do not validate this at build time, so callers MUST keep `userAddress` aligned with the signing account themselves. The signature requirements (`encodeErc20Permit` / `encodeErc20Permit2Approve`) take a `WalletClient` and enforce the invariant at `sign()` time via `validateUserAddress`, rejecting any `sign(client, userAddress)` where `client.account.address !== userAddress` with `MissingClientPropertyError` / `AddressMismatchError`.
 
 | Entity       | Action                   | Route                     | Why                                                                                                 |
 | ------------ | ------------------------ | ------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -114,7 +114,7 @@ const { buildTx, getRequirements } = await vault.deposit({
 });
 
 const requirements = await getRequirements();
-const tx = buildTx(requirementSignature);
+const tx = buildTx([requirementSignature]);
 ```
 
 ##### Deposit with native token wrapping
@@ -199,7 +199,7 @@ const { buildTx, getRequirements } = await vault.deposit({
 });
 
 const requirements = await getRequirements();
-const tx = buildTx(requirementSignature);
+const tx = buildTx([requirementSignature]);
 ```
 
 #### Withdraw
@@ -240,7 +240,7 @@ const { buildTx, getRequirements } = sourceVault.migrateToV2({
 });
 
 const requirements = await getRequirements();
-const tx = buildTx(requirementSignature);
+const tx = buildTx([requirementSignature]);
 ```
 
 ### Blue
@@ -275,7 +275,7 @@ const { buildTx, getRequirements } = market.supply({
 });
 
 const requirements = await getRequirements();
-const tx = buildTx(requirementSignature);
+const tx = buildTx([requirementSignature]);
 ```
 
 ##### Supply with native token wrapping
@@ -301,7 +301,7 @@ const { buildTx, getRequirements } = market.supplyCollateral({
 });
 
 const requirements = await getRequirements();
-const tx = buildTx(requirementSignature);
+const tx = buildTx([requirementSignature]);
 ```
 
 #### Borrow
@@ -332,19 +332,19 @@ const { buildTx, getRequirements } = market.supplyCollateralBorrow({
 });
 
 const requirements = await getRequirements();
-const tx = buildTx(requirementSignature);
+const tx = buildTx([requirementSignature]);
 ```
 
 #### Repay
 
-Two modes depending on whether the caller specifies `assets` (partial repay) or `shares` (full repay, immune to interest accrual between quote and inclusion):
+Two modes depending on whether the caller specifies `amount` (partial repay) or `shares` (full repay, immune to interest accrual between quote and inclusion). Optionally attach `nativeAmount` to fund the repay by wrapping native ETH (loan token must be the chain's wNative):
 
 ```typescript
 const positionData = await market.getPositionData("0xUser...");
 
-// Partial repay — by assets
+// Partial repay — by amount
 const { buildTx, getRequirements } = market.repay({
-  assets: 250000000000000000n,
+  amount: 250000000000000000n,
   userAddress: "0xUser...",
   positionData,
 });
@@ -357,7 +357,7 @@ const { buildTx, getRequirements } = market.repay({
 });
 
 const requirements = await getRequirements();
-const tx = buildTx(requirementSignature);
+const tx = buildTx([requirementSignature]);
 ```
 
 Repay does **not** require Morpho authorization (it only requires a loan token approval for `GeneralAdapter1`).
@@ -411,14 +411,14 @@ Direct call to `morpho.withdrawCollateral()` — no bundler, no `GeneralAdapter1
 const positionData = await market.getPositionData("0xUser...");
 
 const { buildTx, getRequirements } = market.repayWithdrawCollateral({
-  assets: 250000000000000000n, // or shares: ...
+  amount: 250000000000000000n, // or shares: ...
   withdrawAmount: 500000000000000000n,
   userAddress: "0xUser...",
   positionData,
 });
 
 const requirements = await getRequirements();
-const tx = buildTx(requirementSignature);
+const tx = buildTx([requirementSignature]);
 ```
 
 Atomically bundles repay → withdraw collateral via bundler3. Bundle order is critical: repay runs first to reduce debt, then withdraw. Requires both a loan token approval (for repay) and a Morpho authorization (for withdraw). The SDK validates combined position health by simulating the repay before checking withdrawal safety.

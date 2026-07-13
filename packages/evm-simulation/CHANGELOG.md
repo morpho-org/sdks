@@ -1,5 +1,84 @@
 # @morpho-org/evm-simulation
 
+## 4.1.2
+
+### Patch Changes
+
+- [#865](https://github.com/morpho-org/sdks/pull/865) [`2aeb19d`](https://github.com/morpho-org/sdks/commit/2aeb19ddf2e727ed544e47416660b06b14b57e1c) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - fix(evm-simulation): detect native ETH retained by bundler3 on the Tenderly backend
+
+  `assertNoBundlerRetention` only inspected parsed `Transfer` logs, so native ETH
+  retained by a bundler3 address slipped through the guard on the Tenderly primary
+  backend — native ETH emits no event log, and Tenderly derives it into
+  `assetChanges` rather than synthetic transfer logs (Cantina finding 1440).
+
+  The retention check now also reads native ETH from `assetChanges` (the
+  cross-backend source of truth), while ERC20/WETH retention keeps coming from
+  transfer logs. Native transfer logs (the `eth_simulateV1` synthetic sentinel)
+  are only used as a fallback for bundler addresses absent from `assetChanges`, so
+  native moves are never double-counted on `eth_simulateV1`.
+
+## 4.1.1
+
+### Patch Changes
+
+- [#862](https://github.com/morpho-org/sdks/pull/862) [`5a39d63`](https://github.com/morpho-org/sdks/commit/5a39d6314afb5a8a236242090ec3c40623aebf57) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Fix published CJS/ESM package entrypoint metadata so legacy main/type resolution and conditional exports point at built files.
+
+- Updated dependencies [[`5a39d63`](https://github.com/morpho-org/sdks/commit/5a39d6314afb5a8a236242090ec3c40623aebf57)]:
+  - @morpho-org/blue-sdk@6.3.1
+
+## 4.1.0
+
+### Minor Changes
+
+- [#803](https://github.com/morpho-org/sdks/pull/803) [`7157a55`](https://github.com/morpho-org/sdks/commit/7157a5526af51fe7fc817f39e2cc4a799b3ae483) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Enable `traceTransfers` on the `eth_simulateV1` backend so native-ETH moves — including ETH moved through internal calls (e.g. a `WETH.withdraw` refund) — are captured in `assetChanges`. The node synthesizes native transfers as `Transfer` logs from the native sentinel, which `parseTransfers` normalizes to viem's `ethAddress`. Native ETH is now derived entirely from these logs instead of the top-level transaction `value`, closing the prior coverage gap where the `eth_simulateV1` path missed internally-moved ETH (Tenderly already reported it). Both backends now report the full net native-ETH delta.
+
+  The sender ETH balance override now uses half of `uint256` instead of the `uint256` ceiling, leaving headroom for inbound native ETH. Pinning the sender at `maxUint256` overflowed the recipient balance whenever the simulated calls paid native ETH back to the sender (e.g. a `WETH.withdraw` refund), reverting the value transfer.
+
+### Patch Changes
+
+- [#841](https://github.com/morpho-org/sdks/pull/841) [`1848eb4`](https://github.com/morpho-org/sdks/commit/1848eb47e794acbf50eedd4a10eb51fee8576a1b) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Add Robinhood Chain (chain id 4663) to the shared chain and address registries.
+
+  Register the `ChainId.RobinhoodMainnet` enum member, its explorer/native-currency metadata, and its era-2 Morpho Blue, AdaptiveCurveIrm, Bundler3, VaultV2, adapter-factory, registry, oracle-factory, pre-liquidation-factory, and wrapped-native addresses (sourced from the `morpho-org/deployments` address book).
+
+  Patch maintained packages with direct runtime dependencies on `@morpho-org/morpho-ts` so their latest releases resolve the new registry entry.
+
+- [#828](https://github.com/morpho-org/sdks/pull/828) [`830c27e`](https://github.com/morpho-org/sdks/commit/830c27ecfde39d371f406475e3a7edb79ae41da1) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Add World Chain USDC with permit version 2 support to the shared address registry.
+
+  Normalize fallback Circle permit token address checks so known USDC/EURC addresses use permit domain version `"2"` regardless of caller-provided address casing.
+
+  Patch maintained packages with direct runtime dependencies on `@morpho-org/morpho-ts` so their latest releases resolve the new registry entry.
+
+- [#712](https://github.com/morpho-org/sdks/pull/712) [`93f0c1a`](https://github.com/morpho-org/sdks/commit/93f0c1a2f923d0047c421049f7ffab8f0d66d0c4) Thanks [@0xbulma](https://github.com/0xbulma)! - Move shared Blue and Midnight SDK primitives to `@morpho-org/morpho-ts`: chain metadata, address/deployment registries, fixed-point math helpers, shared bigint types, typed registry/math errors, `ORACLE_PRICE_SCALE`, `assertNonNegative`, and `_try`.
+
+  Expose shared ABI literals through `@morpho-org/morpho-ts/abis` so root utility imports do not load the ABI table.
+
+  Model addresses as a unified flat Morpho registry so Blue and Midnight addresses live on the same chain entry and resolve through the protocol-agnostic `getChainAddresses`, `getChainAddress`, and `registerCustomAddresses` helpers.
+
+  Keep `@morpho-org/blue-sdk` compatible by re-exporting the extracted chain, address, math, `_try`, and error surfaces from `@morpho-org/morpho-ts`, and remove the now-unused lodash registry merge dependencies from `@morpho-org/blue-sdk`.
+
+  Expose the shared address registry helpers and registry types through `@morpho-org/morpho-sdk` so integrators can import the cross-protocol address surface from the main SDK package.
+
+  Update maintained dependents of `@morpho-org/blue-sdk` and `@morpho-org/morpho-ts`, including peer dependents, so published packages resolve the extracted shared primitives used by the Blue SDK compatibility layer.
+
+- [#848](https://github.com/morpho-org/sdks/pull/848) [`8baeac7`](https://github.com/morpho-org/sdks/commit/8baeac71ff62689407b5f9bf2fcb839326de0bcb) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Update Midnight ABI/hash helpers and register Base Midnight deployment addresses.
+
+- Updated dependencies [[`1848eb4`](https://github.com/morpho-org/sdks/commit/1848eb47e794acbf50eedd4a10eb51fee8576a1b), [`830c27e`](https://github.com/morpho-org/sdks/commit/830c27ecfde39d371f406475e3a7edb79ae41da1), [`93f0c1a`](https://github.com/morpho-org/sdks/commit/93f0c1a2f923d0047c421049f7ffab8f0d66d0c4), [`8baeac7`](https://github.com/morpho-org/sdks/commit/8baeac71ff62689407b5f9bf2fcb839326de0bcb)]:
+  - @morpho-org/morpho-ts@2.7.0
+  - @morpho-org/blue-sdk@6.3.0
+
+## 4.0.1
+
+### Patch Changes
+
+- [#752](https://github.com/morpho-org/sdks/pull/752) [`229fa2e`](https://github.com/morpho-org/sdks/commit/229fa2ed33e2a55fc597dca96220ec4666fc481c) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Add Morph and MegaETH chain metadata, deployment addresses, deployment block lower bounds, and wrapped-native mappings.
+
+  Patch maintained packages that depend directly on `@morpho-org/blue-sdk` so their latest releases resolve the new address registry.
+
+- [#792](https://github.com/morpho-org/sdks/pull/792) [`bbec0e8`](https://github.com/morpho-org/sdks/commit/bbec0e8a8784dd8438ec510cd7f79c4f91386c81) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Warn, but do not block, when a simulated bundle sweeps a pre-existing bundler balance.
+
+- Updated dependencies [[`229fa2e`](https://github.com/morpho-org/sdks/commit/229fa2ed33e2a55fc597dca96220ec4666fc481c), [`fab0186`](https://github.com/morpho-org/sdks/commit/fab018666faef372a7f695edcd4b54e658f73118)]:
+  - @morpho-org/blue-sdk@6.2.0
+
 ## 4.0.0
 
 ### Major Changes

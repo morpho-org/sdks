@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.5.0/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.2/schema.json",
   "extends": ["./biome.json"],
   "files": {
     "includes": [
@@ -9,13 +9,11 @@
       "!**/cache",
       "!**/coverage",
       "!**/artifacts",
-      "!**/packages/liquidation-sdk-viem",
       "!**/packages/bundler-sdk-viem",
       "!**/packages/migration-sdk-viem",
       "!**/packages/simulation-sdk",
       "!**/packages/blue-sdk-wagmi",
       "!**/packages/simulation-sdk-wagmi",
-      "!**/packages/test-wagmi",
       "!**/packages/liquidity-sdk-viem/src/api/sdk.ts"
     ]
   }

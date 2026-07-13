@@ -18,8 +18,8 @@ import {
   NonPositiveSharesAmountError,
   VaultAssetMismatchError,
 } from "../../types/index.js";
-import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
-import { getRequirements } from "../requirements/index.js";
+import { getGeneralAdapterRequirements } from "../requirements/index.js";
+import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
 import { vaultV1MigrateToV2 } from "./migrateToV2.js";
 
 describe("vaultV1MigrateToV2 unit tests", () => {
@@ -125,7 +125,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
   }) => {
     const shares = 1000000000000000000000n; // 1000 shares (18 decimals)
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: SteakhouseUsdcVaultV1.address,
       chainId: mainnet.id,
       supportSignature: true,
@@ -151,8 +151,8 @@ describe("vaultV1MigrateToV2 unit tests", () => {
     );
 
     const localSpy = vi.spyOn(
-      getRequirementsActionModule,
-      "getRequirementsAction",
+      getTokenRequirementActionsModule,
+      "getTokenRequirementActions",
     );
 
     const tx = vaultV1MigrateToV2({
@@ -188,7 +188,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
   }) => {
     const shares = 5000000000000000000n; // 5 shares (18 decimals)
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: GauntletWethVaultV1.address,
       chainId: mainnet.id,
       supportSignature: true,
@@ -244,12 +244,12 @@ describe("vaultV1MigrateToV2 unit tests", () => {
     expect(tx.value).toBe(0n);
   });
 
-  test("should not call getRequirementsAction without requirement signature", async ({
+  test("should call getTokenRequirementActions without requirement signature", async ({
     client,
   }) => {
     const localSpy = vi.spyOn(
-      getRequirementsActionModule,
-      "getRequirementsAction",
+      getTokenRequirementActionsModule,
+      "getTokenRequirementActions",
     );
 
     const tx = vaultV1MigrateToV2({
@@ -268,7 +268,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
       },
     });
 
-    expect(localSpy).not.toHaveBeenCalled();
+    expect(localSpy).toHaveBeenCalled();
     expect(tx).toBeDefined();
     expect(tx.action.type).toBe("vaultV1MigrateToV2");
   });
@@ -279,7 +279,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
     const shares = 1000000000000000000000n; // 1000 shares (18 decimals)
 
     // Sign permit for WETH vault shares
-    const requirements = await getRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: GauntletWethVaultV1.address,
       chainId: mainnet.id,
       supportSignature: true,

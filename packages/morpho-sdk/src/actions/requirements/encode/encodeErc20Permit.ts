@@ -1,14 +1,21 @@
-import type { Address } from "@morpho-org/blue-sdk";
+import { type Address, getChainAddresses } from "@morpho-org/blue-sdk";
 import { fetchToken, getPermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
-import { type Client, verifyTypedData, type WalletClient } from "viem";
+import {
+  type Client,
+  isAddressEqual,
+  verifyTypedData,
+  type WalletClient,
+} from "viem";
 import { signTypedData } from "viem/actions";
 import { validateUserAddress } from "../../../helpers/validate.js";
 import {
   ChainIdMismatchError,
   InvalidSignatureError,
   type PermitAction,
+  type PermitRequirementSignature,
   type Requirement,
+  UnsupportedErc20ApprovalSpenderError,
 } from "../../../types/index.js";
 
 /** Parameters for {@link encodeErc20Permit}. */
@@ -22,8 +29,8 @@ interface EncodeErc20PermitParams {
 }
 
 /**
- * Builds an EIP-2612 permit `Requirement` that, once signed, lets `spender` pull `amount` of
- * `token`.
+ * Builds an EIP-2612 permit `Requirement` that, once signed, lets a supported SDK spender pull
+ * `amount` of `token`.
  *
  * Reads token metadata via `fetchToken`. The returned `Requirement.sign()` produces the EIP-712
  * signature, verifies it against the connected account, and returns a `RequirementSignature`
@@ -32,13 +39,15 @@ interface EncodeErc20PermitParams {
  * @param viemClient - Connected viem `Client` whose `chain.id` matches `params.chainId`.
  * @param params - Permit encoding parameters.
  * @param params.token - ERC-20 token address (must support EIP-2612).
- * @param params.spender - Address that will be granted the permit allowance.
+ * @param params.spender - Permit spender. Must be GeneralAdapter1 or MidnightBundles for the chain.
  * @param params.amount - Permit allowance amount.
  * @param params.chainId - Target chain id.
  * @param params.nonce - The user's current EIP-2612 nonce on `token`.
  * @param params.supportDeployless - Whether `fetchToken` should use deployless multicall.
  * @returns A `Requirement` whose `sign(client, userAddress)` produces the deep-frozen signature.
  * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`.
+ * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not GeneralAdapter1 or
+ *   MidnightBundles for `chainId`.
  * @throws {MissingClientPropertyError} from `sign()` when the client has no `account.address`.
  * @throws {AddressMismatchError} from `sign()` when the client account differs from `userAddress`.
  * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails.
@@ -50,7 +59,7 @@ interface EncodeErc20PermitParams {
  *
  * const client = createWalletClient({ chain: mainnet, transport: http() });
  * const requirement = await encodeErc20Permit(client, {
- *   token: USDC, // L1 mainnet USDC. Bridged USDC.e on L2s often does not implement EIP-2612 — query token metadata before signing on other chains. DAI uses a non-standard permit signature.
+ *   token: USDC, // Must implement standard ERC-2612. DAI is routed through Permit2 by requirement helpers.
  *   spender: generalAdapter1,
  *   amount: 1_000_000n,
  *   chainId: 1,
@@ -62,11 +71,28 @@ interface EncodeErc20PermitParams {
 export const encodeErc20Permit = async (
   viemClient: Client,
   params: EncodeErc20PermitParams,
-): Promise<Requirement> => {
+): Promise<Requirement<PermitRequirementSignature>> => {
   const { token, spender, amount, chainId, nonce, supportDeployless } = params;
 
   if (viemClient.chain?.id !== chainId) {
     throw new ChainIdMismatchError(viemClient.chain?.id, chainId);
+  }
+
+  const {
+    midnightBundles,
+    bundler3: { generalAdapter1 },
+  } = getChainAddresses(chainId);
+  if (
+    !isAddressEqual(spender, generalAdapter1) &&
+    (midnightBundles == null || !isAddressEqual(spender, midnightBundles))
+  ) {
+    throw new UnsupportedErc20ApprovalSpenderError({
+      spender,
+      chainId,
+      generalAdapter1,
+      midnightBundles,
+      supportedSpenders: [generalAdapter1, midnightBundles],
+    });
   }
 
   const now = Time.timestamp();

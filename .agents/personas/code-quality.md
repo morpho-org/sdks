@@ -23,7 +23,7 @@ Per AGENTS.md §2 — forbidden patterns:
 - `any`, `as unknown as`, `@ts-ignore`, `@ts-expect-error` without a linked issue and a deletion plan.
 - `throw new Error(...)` in SDK source — every failure mode must be a named, exported class. (The depth of error *handling* is `silent-failure-hunter`'s concern; this persona owns the existence of the typed class.)
 - Mutation of input arguments.
-- Feature, address, ABI, dependency, test, JSDoc, refactor, or changeset updates under frozen deprecated packages (`liquidation-sdk-viem`, `bundler-sdk-viem`, `migration-sdk-viem`, `simulation-sdk`, `blue-sdk-wagmi`, `simulation-sdk-wagmi`, `test-wagmi`) unless the PR is explicitly scoped to deprecation metadata or source deletion.
+- Feature, address, ABI, dependency, test, JSDoc, refactor, or changeset updates under frozen deprecated packages (`bundler-sdk-viem`, `migration-sdk-viem`, `simulation-sdk`, `blue-sdk-wagmi`, `simulation-sdk-wagmi`) unless the PR is explicitly scoped to deprecation metadata or source deletion.
 
 Per AGENTS.md §3 — type discipline inside the body:
 

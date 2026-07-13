@@ -383,7 +383,7 @@ For each file with findings, build a complete understanding before touching anyt
 1. **Read the project rules that govern this file** — these are authoritative; the fix must respect them:
    - Root `AGENTS.md` (canonical engineering rules; `CLAUDE.md` is a symlink — do not also read it).
    - `MISSION.md` (mission, scope, and values — explains *why* the rules exist).
-   - **`docs/jsdoc-style.md`** — if the fix touches an exported symbol from any `packages/<pkg>/src/index.ts` re-export entry, an `@example` block, or any JSDoc comment. This is the canonical JSDoc style guide for the monorepo (operationalizes AGENTS.md §6). Backed by `docs/tibs/TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md`.
+   - **`docs/jsdoc-style.md`** — if the fix touches an exported symbol from any `packages/<pkg>/src/index.ts` re-export entry, an `@example` block, or any JSDoc comment. This is the canonical JSDoc style guide for the monorepo (operationalizes AGENTS.md §6).
    - **If the file lives under `packages/<pkg>/`**:
      - `packages/<pkg>/AGENTS.md` — package-specific refinements (these refine the root for this package; root wins on contradictions).
      - `packages/<pkg>/README.md` — public-facing usage.

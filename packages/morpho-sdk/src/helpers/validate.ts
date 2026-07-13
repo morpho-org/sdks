@@ -18,18 +18,13 @@ import {
   MarketIdMismatchError,
   MissingClientPropertyError,
   MissingMarketPriceError,
-  MutuallyExclusiveRepayAmountsError,
   NativeAmountOnNonWNativeAssetError,
   NegativeReallocationFeeError,
   NegativeSlippageToleranceError,
   NonPositiveReallocationAmountError,
-  NonPositiveRepayAmountError,
-  NonPositiveRepayMaxSharePriceError,
-  NonPositiveTransferAmountError,
   ReallocationWithdrawalOnTargetMarketError,
   RepayExceedsDebtError,
   RepaySharesExceedDebtError,
-  TransferAmountNotEqualToAssetsError,
   UnsortedReallocationWithdrawalsError,
   type VaultReallocation,
   WithdrawExceedsCollateralError,
@@ -54,7 +49,7 @@ export const compareMarketIds = (idA: MarketId, idB: MarketId) => {
  * the provided user address.
  *
  * Used internally by the signature requirements (`encodeErc20Permit`,
- * `encodeErc20Permit2`) to enforce builder = signer at `sign()` time:
+ * `encodeErc20Permit2Approve`) to enforce builder = signer at `sign()` time:
  * the signing flow is the only path where an account/address mismatch
  * is a real security concern (rather than just an integrator footgun).
  *
@@ -300,55 +295,6 @@ export const validateRepayShares = (params: {
     throw new RepaySharesExceedDebtError({
       repayShares,
       borrowShares: positionData.borrowShares,
-      market: marketId,
-    });
-  }
-};
-
-/**
- * Validates the common repay input parameters shared by `blueRepay`
- * and `blueRepayWithdrawCollateral`.
- *
- * @param params - Validation parameters.
- * @param params.assets - Repay assets amount (0n when repaying by shares).
- * @param params.shares - Repay shares amount (0n when repaying by assets).
- * @param params.transferAmount - ERC20 amount to transfer to GeneralAdapter1.
- * @param params.maxSharePrice - Maximum repay share price (in ray). Must be positive.
- * @param params.marketId - The market identifier (for error messages).
- */
-export const validateRepayParams = (params: {
-  assets: bigint;
-  shares: bigint;
-  transferAmount: bigint;
-  maxSharePrice: bigint;
-  marketId: MarketId;
-}): void => {
-  const { assets, shares, transferAmount, maxSharePrice, marketId } = params;
-
-  if (maxSharePrice <= 0n) {
-    throw new NonPositiveRepayMaxSharePriceError(marketId);
-  }
-
-  if (assets < 0n || shares < 0n) {
-    throw new NonPositiveRepayAmountError(marketId);
-  }
-
-  if (assets > 0n && shares > 0n) {
-    throw new MutuallyExclusiveRepayAmountsError(marketId);
-  }
-
-  if (assets === 0n && shares === 0n) {
-    throw new NonPositiveRepayAmountError(marketId);
-  }
-
-  if (transferAmount <= 0n) {
-    throw new NonPositiveTransferAmountError(marketId);
-  }
-
-  if (assets > 0n && transferAmount !== assets) {
-    throw new TransferAmountNotEqualToAssetsError({
-      transferAmount,
-      assets,
       market: marketId,
     });
   }

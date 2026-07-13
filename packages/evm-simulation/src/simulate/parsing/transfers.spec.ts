@@ -1,4 +1,11 @@
-import { type Address, getAddress, type Hex, zeroAddress } from "viem";
+import {
+  type Address,
+  ethAddress,
+  getAddress,
+  type Hex,
+  parseEther,
+  zeroAddress,
+} from "viem";
 import { vi } from "vitest";
 import {
   encodeUint256,
@@ -37,6 +44,30 @@ describe("parseTransfers", () => {
       from: getAddress(USER),
       to: getAddress(VAULT),
       amount: 1000000n,
+      txIdx: 0,
+    });
+  });
+
+  it("normalizes a native-ETH Transfer (eth sentinel) to viem's ethAddress", () => {
+    // eth_simulateV1 + traceTransfers emits native moves from the lowercase
+    // sentinel 0xeee…eee; token must collapse to ethAddress, not its checksum.
+    const logs: RawLog[] = [
+      {
+        address: ethAddress,
+        topics: [TRANSFER_TOPIC, padAddress(USER), padAddress(VAULT)],
+        data: encodeUint256(parseEther("1")),
+      },
+    ];
+
+    const result = parseTransfers([makeCall(logs)]);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]!.token).toBe(ethAddress);
+    expect(result[0]).toEqual({
+      token: ethAddress,
+      from: getAddress(USER),
+      to: getAddress(VAULT),
+      amount: parseEther("1"),
       txIdx: 0,
     });
   });

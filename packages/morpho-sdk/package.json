@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/morpho-sdk",
   "description": "Abstraction layer for Morpho's complexity.",
-  "version": "3.2.0",
+  "version": "5.1.2",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Foulks-Plb <https://x.com/FoulkPlb>"
@@ -106,8 +106,8 @@
     "dotenv": "^17.4.2",
     "fast-check": "^4.8.0",
     "typescript": "^6.0.3",
-    "viem": "2.52.2",
-    "vitest": "^4.1.8"
+    "viem": "^2.54.2",
+    "vitest": "^4.1.9"
   },
   "publishConfig": {
     "exports": {
@@ -175,6 +175,48 @@
         "types": "./lib/esm/utils.d.ts",
         "import": "./lib/esm/utils.js",
         "require": "./lib/cjs/utils.js"
+      }
+    },
+    "main": "./lib/cjs/index.js",
+    "types": "./lib/esm/index.d.ts",
+    "typesVersions": {
+      "*": {
+        "abis": [
+          "lib/esm/abis.d.ts"
+        ],
+        "addresses": [
+          "lib/esm/addresses.d.ts"
+        ],
+        "augment": [
+          "lib/esm/augment.d.ts"
+        ],
+        "augment/*": [
+          "lib/esm/augment/*.d.ts"
+        ],
+        "bundler": [
+          "lib/esm/bundler/index.d.ts"
+        ],
+        "constants": [
+          "lib/esm/constants.d.ts"
+        ],
+        "entities": [
+          "lib/esm/entities/index.d.ts"
+        ],
+        "errors": [
+          "lib/esm/errors.d.ts"
+        ],
+        "fetch": [
+          "lib/esm/fetch.d.ts"
+        ],
+        "format": [
+          "lib/esm/format.d.ts"
+        ],
+        "types": [
+          "lib/esm/types.d.ts"
+        ],
+        "utils": [
+          "lib/esm/utils.d.ts"
+        ]
       }
     }
   }

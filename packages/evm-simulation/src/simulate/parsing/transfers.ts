@@ -1,4 +1,11 @@
-import { getAddress, type Hex, zeroAddress, zeroHash } from "viem";
+import {
+  type Address,
+  ethAddress,
+  getAddress,
+  type Hex,
+  zeroAddress,
+  zeroHash,
+} from "viem";
 
 import type {
   RawCall,
@@ -31,6 +38,15 @@ const UINT256_HEX_LENGTH = 66; // "0x" + 32 bytes
  * events paired with their Deposit/Withdrawal are deduplicated. ERC721 and
  * ERC1155 transfer events are **not** parsed — consumers with NFT flows will
  * see an incomplete transfer list.
+ *
+ * **Native ETH (`eth_simulateV1` + `traceTransfers`).** When the backend runs
+ * `eth_simulateV1` with `traceTransfers` enabled, native-ETH moves — including
+ * those made through internal calls (e.g. a `WETH.withdraw` refund) — are
+ * synthesized as `Transfer` events emitted from the native sentinel
+ * `0xeee…eee`. These are parsed like any ERC20 transfer, with `token`
+ * collapsed to viem's `ethAddress` so native deltas key consistently across
+ * backends. Tenderly does not emit these synthetic logs (it derives native ETH
+ * separately), so this path is inert there.
  *
  * **WETH9 dedup assumption — canonical atomic emission.** Dedup is scoped to
  * the same tx: a zero-address `Transfer` is suppressed only if its paired
@@ -170,7 +186,7 @@ export function parseTransfers(
             }
 
             transfers.push({
-              token: getAddress(log.address),
+              token: normalizeTransferToken(log.address),
               from: getAddress(`0x${fromTopic.slice(26)}`),
               to: getAddress(`0x${toTopic.slice(26)}`),
               amount: BigInt(log.data),
@@ -193,6 +209,22 @@ export function parseTransfers(
   }
 
   return sortTransfers(transfers);
+}
+
+/**
+ * Normalize a `Transfer` log's emitting address into a transfer `token`.
+ *
+ * `eth_simulateV1` with `traceTransfers` enabled synthesizes native-ETH moves
+ * (including internal calls) as `Transfer` events emitted from the native
+ * sentinel `0xeee…eee`. The rest of the SDK keys native ETH by viem's
+ * `ethAddress` constant, so we collapse the sentinel to that exact value rather
+ * than the checksummed form `getAddress` would produce — keeping native deltas
+ * on a single map key across backends. Real ERC20 tokens are checksummed.
+ */
+function normalizeTransferToken(address: Hex): Address {
+  return address.toLowerCase() === ethAddress
+    ? ethAddress
+    : getAddress(address);
 }
 
 function isTopicHex(value: Hex | undefined): value is Hex {

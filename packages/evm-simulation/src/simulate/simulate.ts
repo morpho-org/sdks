@@ -97,6 +97,7 @@ export async function simulate(
   assertNoBundlerRetention({
     chainId: params.chainId,
     transfers,
+    assetChanges: result.assetChanges,
     logger: config.logger,
   });
 

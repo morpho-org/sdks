@@ -7,8 +7,8 @@ out-of-scope:
   - Code quality of build/test scripts themselves — see code-quality, style-conventions.
   - JSDoc on any exported symbols touched by a CI script — see documentation.
   - Test coverage of the publish flow — see test-coverage.
-focus: GitHub Actions workflow injection, action pinning, workflow permissions, secret exposure, publish-flow integrity, Changesets/release-bot wiring, lockfile drift, dependency hygiene, .npmrc and pnpm-workspace settings.
-severity-guidance: Workflow injection → critical. Floating action tags or wide default permissions → high. Lockfile drift without justification → high (runtime/peer dep) or medium (devDep only). Provenance opt-out → medium.
+focus: GitHub Actions workflow injection, action pinning, workflow permissions, secret exposure, publish-flow integrity, Changesets/release-bot wiring, lockfile drift, dependency hygiene, .npmrc and pnpm-workspace settings, pnpm minimum-release-age bypasses.
+severity-guidance: Workflow injection → critical. Floating action tags or wide default permissions → high. Runtime/peer lockfile drift without manifest/versioning → high. Compatible devDependency-only resolution drift is allowed. Provenance opt-out → medium. Dependency-age bypass → high unless explicitly approved and temporary.
 ---
 
 # CI / Release Security
@@ -71,11 +71,13 @@ Per AGENTS.md §10 — release commits and annotated tags MUST have a valid sign
 - `.changeset/config.json` changes — fixed-version, linked-package, baseBranch, or commit changes alter what gets shipped. Flag for human review on every change.
 - New release workflows or release-bot actions — they typically hold elevated tokens; require pinned SHAs and explicit `permissions:`.
 - Removed gating: if a previously-required check (lint, test, fork-suite) is dropped from the release workflow's `needs:`, flag as **high**.
-- Frozen deprecated package CI exclusion: CI must not build, lint, or select Vitest projects for `liquidation-sdk-viem`, `bundler-sdk-viem`, `migration-sdk-viem`, `simulation-sdk`, `blue-sdk-wagmi`, `simulation-sdk-wagmi`, and `test-wagmi` unless the PR is explicitly scoped to deprecation metadata or source deletion for that package. Flag CI changes that remove the local ability to run those deprecated Vitest projects, or that exclude maintained-package tests merely because they import deprecated packages for parity coverage.
+- Frozen deprecated package CI exclusion: CI must not build, lint, or select Vitest projects for `bundler-sdk-viem`, `migration-sdk-viem`, `simulation-sdk`, `blue-sdk-wagmi`, and `simulation-sdk-wagmi` unless the PR is explicitly scoped to deprecation metadata or source deletion for that package. Flag CI changes that remove the local ability to run those deprecated Vitest projects, or that exclude maintained-package tests merely because they import deprecated packages for parity coverage.
 
 ### Lockfile drift / dependency hygiene
 
-- `pnpm-lock.yaml` changes WITHOUT a corresponding `package.json` change — surface as a finding (could be a malicious lockfile-only attack, or legitimate transitive bump; ask for justification).
+- `pnpm-lock.yaml` changes without a corresponding `package.json` change:
+  - Accept when every changed importer resolution is for an existing `devDependencies` entry and the resolved version still satisfies that manifest's existing specifier; no manifest bump is required.
+  - Flag when the drift changes direct runtime `dependencies` or `peerDependencies`, moves a devDependency outside the existing range, changes package-manager/install settings, or introduces/removes package metadata with install hooks; direct runtime/peer drift needs an explicit manifest change and package-version/changeset decision.
 - New dependencies added to any `package.json`:
   - **High** when the dep ends up in `dependencies` or `peerDependencies` of a published package (runtime surface).
   - **Medium** when in `devDependencies` only.
@@ -87,6 +89,7 @@ Per AGENTS.md §10 — release commits and annotated tags MUST have a valid sign
 - Registry changes (`registry=` or `@scope:registry=`) — flag any non-`registry.npmjs.org` URL for explicit human review.
 - `always-auth=true` or `_authToken=` committed to the repo — **critical** (credential leak).
 - New `auto-install-peers` / `strict-peer-dependencies` flips — flag as **medium**, surface impact on consumer install behavior.
+- New `minimumReleaseAgeExclude` entries or equivalent pnpm minimum-release-age bypasses — flag as **high** unless the PR includes explicit maintainer approval, a narrowly-scoped emergency reason, and removal before merge. Removing `minimumReleaseAgeStrict` is also **high**. Dependency bump PRs should wait for the configured `minimumReleaseAge` window or pin to the latest eligible version.
 
 ## Output expectations
 

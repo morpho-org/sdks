@@ -95,9 +95,13 @@ export const getPermitTypedData = (
     }
   }
 
+  const isCirclePermitV2Token =
+    (usdc != null && isAddressEqual(erc20.address, usdc)) ||
+    (eurc != null && isAddressEqual(erc20.address, eurc));
+
   const permitDomain = domain ?? {
     name: erc20.name,
-    version: erc20.address === usdc || erc20.address === eurc ? "2" : "1",
+    version: isCirclePermitV2Token ? "2" : "1",
     chainId,
     verifyingContract: erc20.address,
   };

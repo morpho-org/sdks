@@ -12,8 +12,8 @@ import {
   NonPositiveAssetAmountError,
   ZeroCollateralAmountError,
 } from "../../types/index.js";
-import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
-import { getRequirements } from "../requirements/index.js";
+import { getGeneralAdapterRequirements } from "../requirements/index.js";
+import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
 import { blueSupplyCollateral } from "./supplyCollateral.js";
 
 describe("blueSupplyCollateral unit tests", () => {
@@ -113,7 +113,7 @@ describe("blueSupplyCollateral unit tests", () => {
     const amount = parseUnits("0.5", 18);
     const nativeAmount = parseUnits("0.5", 18);
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: wNative,
       chainId: mainnet.id,
       supportSignature: true,
@@ -139,8 +139,8 @@ describe("blueSupplyCollateral unit tests", () => {
     );
 
     const localSpy = vi.spyOn(
-      getRequirementsActionModule,
-      "getRequirementsAction",
+      getTokenRequirementActionsModule,
+      "getTokenRequirementActions",
     );
 
     const tx = blueSupplyCollateral({
@@ -162,12 +162,12 @@ describe("blueSupplyCollateral unit tests", () => {
     expect(tx.value).toBe(nativeAmount);
   });
 
-  test("should not call getRequirementsAction when no requirementSignature", async ({
+  test("should call getTokenRequirementActions without requirementSignature", async ({
     client,
   }) => {
     const localSpy = vi.spyOn(
-      getRequirementsActionModule,
-      "getRequirementsAction",
+      getTokenRequirementActionsModule,
+      "getTokenRequirementActions",
     );
 
     blueSupplyCollateral({
@@ -181,7 +181,7 @@ describe("blueSupplyCollateral unit tests", () => {
       },
     });
 
-    expect(localSpy).not.toHaveBeenCalled();
+    expect(localSpy).toHaveBeenCalled();
   });
 
   test("should throw NonPositiveAssetAmountError when amount is negative", async ({

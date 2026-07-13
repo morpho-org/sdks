@@ -18,8 +18,8 @@ import {
   NonPositiveMaxSharePriceError,
   ZeroDepositAmountError,
 } from "../../types/index.js";
-import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
-import { getRequirements } from "../requirements/index.js";
+import { getGeneralAdapterRequirements } from "../requirements/index.js";
+import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
 import { vaultV1Deposit } from "./deposit.js";
 
 describe("depositVaultV1 unit tests", () => {
@@ -37,7 +37,7 @@ describe("depositVaultV1 unit tests", () => {
     const assets = parseUnits("100", 18);
     const maxSharePrice = 1000000000000000000n;
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: dai,
       chainId: mainnet.id,
       supportSignature: true,
@@ -95,7 +95,7 @@ describe("depositVaultV1 unit tests", () => {
     const amount = parseUnits("1000", 6);
     const maxSharePrice = 1000000n;
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: usdc,
       chainId: mainnet.id,
       supportSignature: true,
@@ -119,8 +119,8 @@ describe("depositVaultV1 unit tests", () => {
     expect(requirementSignature.args.asset).toEqual(usdc);
 
     const localSpy = vi.spyOn(
-      getRequirementsActionModule,
-      "getRequirementsAction",
+      getTokenRequirementActionsModule,
+      "getTokenRequirementActions",
     );
 
     const tx = vaultV1Deposit({
@@ -156,7 +156,7 @@ describe("depositVaultV1 unit tests", () => {
     const amount = parseUnits("5", 18);
     const maxSharePrice = 1000000000000000000n;
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: wNative,
       chainId: mainnet.id,
       supportSignature: true,
@@ -241,8 +241,8 @@ describe("depositVaultV1 unit tests", () => {
     const maxSharePrice = 1000000n;
 
     const localSpy = vi.spyOn(
-      getRequirementsActionModule,
-      "getRequirementsAction",
+      getTokenRequirementActionsModule,
+      "getTokenRequirementActions",
     );
 
     const tx = vaultV1Deposit({
@@ -258,7 +258,7 @@ describe("depositVaultV1 unit tests", () => {
       },
     });
 
-    expect(localSpy).not.toHaveBeenCalled();
+    expect(localSpy).toHaveBeenCalled();
 
     expect(tx).toBeDefined();
     expect(tx.action.type).toBe("vaultV1Deposit");
@@ -278,7 +278,7 @@ describe("depositVaultV1 unit tests", () => {
     const depositAmount = parseUnits("1000", 6);
     const maxSharePrice = 1000000n;
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: usdc,
       chainId: mainnet.id,
       supportSignature: true,
@@ -474,7 +474,7 @@ describe("depositVaultV1 unit tests", () => {
     const assets = parseUnits("100", 18);
     const maxSharePrice = 1000000000000000000n;
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: dai,
       chainId: mainnet.id,
       supportSignature: true,

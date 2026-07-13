@@ -20,8 +20,8 @@ import {
   type VaultReallocation,
   ZeroCollateralAmountError,
 } from "../../types/index.js";
-import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
-import { getRequirements } from "../requirements/index.js";
+import { getGeneralAdapterRequirements } from "../requirements/index.js";
+import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
 import { blueSupplyCollateralBorrow } from "./supplyCollateralBorrow.js";
 
 describe("blueSupplyCollateralBorrow unit tests", () => {
@@ -161,7 +161,7 @@ describe("blueSupplyCollateralBorrow unit tests", () => {
     const amount = parseUnits("1", 18);
     const borrowAmount = parseUnits("1000", 6);
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: wNative,
       chainId: mainnet.id,
       supportSignature: true,
@@ -187,8 +187,8 @@ describe("blueSupplyCollateralBorrow unit tests", () => {
     );
 
     const localSpy = vi.spyOn(
-      getRequirementsActionModule,
-      "getRequirementsAction",
+      getTokenRequirementActionsModule,
+      "getTokenRequirementActions",
     );
 
     const tx = blueSupplyCollateralBorrow({

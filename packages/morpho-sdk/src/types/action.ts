@@ -1,5 +1,9 @@
 import type { Address, Hex, WalletClient } from "viem";
 import type { Deallocation } from "./deallocation.js";
+import {
+  AmbiguousRequirementSignaturesError,
+  UnexpectedRequirementSignatureError,
+} from "./error.js";
 
 export interface BaseAction<
   TType extends string = string,
@@ -189,6 +193,8 @@ export interface BlueRepayAction
       onBehalf: Address;
       receiver: Address;
       maxSharePrice: bigint;
+      /** Native token wrapped into wNative to fund the repay. Present when `> 0n`. */
+      nativeAmount?: bigint;
     }
   > {}
 
@@ -215,6 +221,8 @@ export interface BlueRepayWithdrawCollateralAction
       maxSharePrice: bigint;
       onBehalf: Address;
       receiver: Address;
+      /** Native token wrapped into wNative to fund the repay. Present when `> 0n`. */
+      nativeAmount?: bigint;
     }
   > {}
 
@@ -241,16 +249,61 @@ export interface BlueRefinanceAction
  * - `shares`: operate on an exact share count (typical for full position closes,
  *   immune to interest accrual between tx construction and execution).
  *
- * Used by repay (asserts on borrow side) and withdraw (asserts on supply side).
+ * Used by withdraw (asserts on supply side). Repay uses {@link RepayAmountArgs},
+ * which additionally supports native wrapping.
  */
 export type AssetsOrSharesArgs = { assets: bigint } | { shares: bigint };
 
-/** @deprecated Use {@link AssetsOrSharesArgs}. Kept as an alias for back-compat. */
-export type RepayAmountArgs = AssetsOrSharesArgs;
+/**
+ * Repay funding sources for the **entity layer** (`MorphoBlue.repay` /
+ * `MorphoBlue.repayWithdrawCollateral`), which computes the loan-token
+ * `transferAmount` itself from live market state.
+ *
+ * - **assets mode** ({@link DepositAmountArgs}): repay an exact asset total of
+ *   `amount` (ERC-20) + `nativeAmount` (wrapped native). Additive — mirrors `blueSupply`.
+ * - **shares mode** (`{ shares }`): repay an exact borrow-share count (full close,
+ *   immune to interest accrual). `nativeAmount` funds part of the transfer.
+ *
+ * `nativeAmount` requires the market's loan token to be the chain's wNative.
+ */
+export type RepayAmountArgs =
+  | DepositAmountArgs
+  | { shares: bigint; nativeAmount?: bigint };
 
-export interface MorphoAuthorizationAction
+/**
+ * Repay funding sources for the **action layer** (`blueRepay` /
+ * `blueRepayWithdrawCollateral`) — a flat, pre-resolved shape. The entity layer
+ * ({@link RepayAmountArgs}) derives these from live market state; the action does no
+ * amount arithmetic. The mode is discriminated on `shares`:
+ *
+ * - **assets mode** (`shares` unset/`0n`): repays `transferAmount` assets
+ *   (`= amount + nativeAmount`, additive like `blueSupply`), pulling `amount` ERC-20
+ *   and wrapping `nativeAmount`. No residual.
+ * - **shares mode** (`shares > 0n`): repays an exact borrow-share count (full close),
+ *   pulling `transferAmount` ERC-20 (already net of native) and wrapping `nativeAmount`;
+ *   the residual loan token is skimmed back to `receiver`.
+ *
+ * `nativeAmount` requires the market's loan token to be the chain's wNative.
+ */
+export interface RepayActionAmountArgs {
+  /** Assets-mode ERC-20 loan tokens pulled from the payer. Omit (or `0n`) in shares mode. */
+  amount?: bigint;
+  /** Shares-mode borrow shares to repay (full close). Omit (or `0n`) in assets mode. */
+  shares?: bigint;
+  /** Native ETH wrapped into wNative to help fund the repay. Loan token must be wNative. */
+  nativeAmount?: bigint;
+  /**
+   * Loan tokens routed into `GeneralAdapter1`. Assets mode: the total repaid
+   * (`amount + nativeAmount`). Shares mode: the ERC-20 pulled
+   * (`toBorrowAssets(shares) − nativeAmount`).
+   */
+  transferAmount: bigint;
+}
+
+/** Metadata for a Blue authorization prerequisite transaction. */
+export interface BlueAuthorizationAction
   extends BaseAction<
-    "morphoAuthorization",
+    "blueAuthorization",
     {
       authorized: Address;
       isAuthorized: boolean;
@@ -277,7 +330,7 @@ export type TransactionAction =
   | BlueWithdrawCollateralAction
   | BlueRepayWithdrawCollateralAction
   | BlueRefinanceAction
-  | MorphoAuthorizationAction;
+  | BlueAuthorizationAction;
 
 export interface Transaction<TAction extends BaseAction = TransactionAction> {
   readonly to: Address;
@@ -316,12 +369,39 @@ export interface Permit2Args {
   expiration: bigint;
 }
 
-export interface Requirement {
-  sign: (
-    client: WalletClient,
-    userAddress: Address,
-  ) => Promise<RequirementSignature>;
-  action: PermitAction | Permit2Action;
+/**
+ * Signed Morpho Blue authorization payload produced when an integrator opts into offchain
+ * signatures (`supportSignature: true`). Consumed by the action layer to emit a
+ * `setAuthorizationWithSig` bundler call in place of a standalone `setAuthorization` transaction.
+ */
+export interface AuthorizationSignatureArgs {
+  /** Account granting the authorization (the position owner). */
+  owner: Address;
+  /** Account being authorized to operate on Morpho on the owner's behalf (GeneralAdapter1). */
+  authorized: Address;
+  /** Whether the authorization is granted (`true`) or revoked (`false`). */
+  isAuthorized: boolean;
+  /** Morpho authorization nonce consumed by the signature. */
+  nonce: bigint;
+  /** Signature deadline timestamp in seconds. */
+  deadline: bigint;
+  /** EIP-712 signature over the Morpho `Authorization` typed data. */
+  signature: Hex;
+}
+
+/**
+ * A signable approval / authorization requirement. `sign()` returns the matching
+ * {@link RequirementSignature}; `action` describes the requirement without signing.
+ *
+ * Generic over the signature it produces so permit encoders narrow to
+ * {@link PermitRequirementSignature} and the authorization encoder to
+ * {@link AuthorizationRequirementSignature}; the default keeps the broad union for mixed arrays.
+ */
+export interface Requirement<
+  TSignature extends RequirementSignature = RequirementSignature,
+> {
+  sign: (client: WalletClient, userAddress: Address) => Promise<TSignature>;
+  action: TSignature["action"];
 }
 
 export interface PermitAction
@@ -336,55 +416,174 @@ export interface Permit2Action
     { spender: Address; amount: bigint; deadline: bigint; expiration: bigint }
   > {}
 
-export interface RequirementSignature {
+/**
+ * Signable Morpho authorization requirement. Emitted by the entity layer when a bundled path
+ * needs GeneralAdapter1 authorized and the client opts into offchain signatures.
+ */
+export interface AuthorizationAction
+  extends BaseAction<
+    "authorization",
+    { authorized: Address; isAuthorized: boolean; deadline: bigint }
+  > {}
+
+/** A signed ERC-2612 permit or Permit2 approval requirement. */
+export interface PermitRequirementSignature {
   args: PermitArgs | Permit2Args;
   action: PermitAction | Permit2Action;
 }
 
+/** A signed Morpho authorization requirement (consumed via `setAuthorizationWithSig`). */
+export interface AuthorizationRequirementSignature {
+  args: AuthorizationSignatureArgs;
+  action: AuthorizationAction;
+}
+
+/**
+ * The deep-frozen output of `Requirement.sign()`. Discriminated on `action.type`:
+ * `"permit"` / `"permit2"` carry token-approval args, `"authorization"` carries the signed
+ * Morpho authorization. Narrow with {@link isPermitSignature} / {@link isAuthorizationSignature}.
+ */
+export type RequirementSignature =
+  | PermitRequirementSignature
+  | AuthorizationRequirementSignature;
+
+/** Bundler3 token signature requirement. */
+export type Bundler3TokenSignatureRequirement =
+  Requirement<PermitRequirementSignature>;
+
 export function isRequirementApproval(
-  requirement:
-    | Transaction<ERC20ApprovalAction>
-    | Transaction<MorphoAuthorizationAction>
-    | Requirement
-    | undefined,
+  requirement: unknown,
 ): requirement is Transaction<ERC20ApprovalAction> {
   return (
-    requirement !== undefined &&
+    typeof requirement === "object" &&
+    requirement !== null &&
     "to" in requirement &&
     "value" in requirement &&
     "data" in requirement &&
     "action" in requirement &&
+    typeof requirement.action === "object" &&
+    requirement.action !== null &&
+    "type" in requirement.action &&
     requirement.action.type === "erc20Approval"
   );
 }
 
-export function isRequirementAuthorization(
-  requirement:
-    | Transaction<ERC20ApprovalAction>
-    | Transaction<MorphoAuthorizationAction>
-    | Requirement
-    | undefined,
-): requirement is Transaction<MorphoAuthorizationAction> {
+/** Checks whether an action requirement is a Blue authorization transaction. */
+export function isRequirementBlueAuthorization(
+  requirement: unknown,
+): requirement is Transaction<BlueAuthorizationAction> {
   return (
-    requirement !== undefined &&
+    typeof requirement === "object" &&
+    requirement !== null &&
     "to" in requirement &&
     "value" in requirement &&
     "data" in requirement &&
     "action" in requirement &&
-    requirement.action.type === "morphoAuthorization"
+    typeof requirement.action === "object" &&
+    requirement.action !== null &&
+    "type" in requirement.action &&
+    requirement.action.type === "blueAuthorization"
   );
 }
 
-export function isRequirementSignature(
+export function isRequirementSignature<
+  T extends RequirementSignature = RequirementSignature,
+>(
   requirement:
     | Transaction<ERC20ApprovalAction>
-    | Transaction<MorphoAuthorizationAction>
-    | Requirement
+    | Transaction<BlueAuthorizationAction>
+    | Requirement<T>
     | undefined,
-): requirement is Requirement {
+): requirement is Requirement<T> {
   return (
     requirement !== undefined &&
+    typeof requirement === "object" &&
+    requirement !== null &&
     "sign" in requirement &&
     typeof requirement.sign === "function"
   );
+}
+
+/**
+ * Narrows a {@link RequirementSignature} to a permit / Permit2 token-approval signature.
+ *
+ * @param signature - The signed requirement to test.
+ * @returns `true` when `signature.action.type` is `"permit"` or `"permit2"`.
+ */
+export function isPermitSignature(
+  signature: RequirementSignature,
+): signature is PermitRequirementSignature {
+  return (
+    signature.action.type === "permit" || signature.action.type === "permit2"
+  );
+}
+
+/**
+ * Narrows a {@link RequirementSignature} to a signed Morpho authorization.
+ *
+ * @param signature - The signed requirement to test.
+ * @returns `true` when `signature.action.type` is `"authorization"`.
+ */
+export function isAuthorizationSignature(
+  signature: RequirementSignature,
+): signature is AuthorizationRequirementSignature {
+  return signature.action.type === "authorization";
+}
+
+/** The typed permit / authorization slots a bundled path consumes, split from a `buildTx` array. */
+export interface SelectedRequirementSignatures {
+  /** The single permit / Permit2 signature, when present. */
+  permit?: PermitRequirementSignature;
+  /** The single Morpho authorization signature, when present. */
+  authorization?: AuthorizationRequirementSignature;
+}
+
+/**
+ * Splits a `buildTx` signature array into its typed permit / authorization slots, rejecting
+ * ambiguous or unexpected input so a path never silently consumes the wrong signature.
+ *
+ * A bundled path consumes at most one permit and one authorization signature. Passing several of
+ * the same kind, or a kind the path does not consume, is rejected with a typed error rather than
+ * silently dropping the extras — the latter could otherwise leave a required authorization or
+ * permit unsigned (and the bundle reverting on-chain) or apply the wrong signature.
+ *
+ * @param signatures - The signatures passed to `buildTx`.
+ * @param accepts - Which signature kinds this operation consumes.
+ * @param accepts.permit - Whether a permit / Permit2 signature is consumed.
+ * @param accepts.authorization - Whether a Morpho authorization signature is consumed.
+ * @returns The single permit and/or authorization signature, when present.
+ * @throws {AmbiguousRequirementSignaturesError} when more than one signature of an accepted kind is present.
+ * @throws {UnexpectedRequirementSignatureError} when a signature of a kind the operation does not consume is present.
+ * @example
+ * ```ts
+ * import { selectRequirementSignatures } from "@morpho-org/morpho-sdk";
+ *
+ * const { permit, authorization } = selectRequirementSignatures(signatures, {
+ *   permit: true,
+ *   authorization: true,
+ * });
+ * ```
+ */
+export function selectRequirementSignatures(
+  signatures: readonly RequirementSignature[] | undefined,
+  accepts: { permit?: boolean; authorization?: boolean },
+): SelectedRequirementSignatures {
+  if (signatures == null) return {};
+
+  const permits = signatures.filter(isPermitSignature);
+  const authorizations = signatures.filter(isAuthorizationSignature);
+
+  if (!accepts.permit && permits.length > 0)
+    throw new UnexpectedRequirementSignatureError("permit");
+  if (!accepts.authorization && authorizations.length > 0)
+    throw new UnexpectedRequirementSignatureError("authorization");
+  if (permits.length > 1)
+    throw new AmbiguousRequirementSignaturesError("permit", permits.length);
+  if (authorizations.length > 1)
+    throw new AmbiguousRequirementSignaturesError(
+      "authorization",
+      authorizations.length,
+    );
+
+  return { permit: permits[0], authorization: authorizations[0] };
 }

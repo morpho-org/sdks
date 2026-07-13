@@ -4,10 +4,6 @@ This guide is the canonical shape for JSDoc on every exported symbol in this mon
 
 The guide is repo-wide. Every package follows it. Per-package `AGENTS.md` files link here rather than restating the rules.
 
-> Background and rollout sequence: [`docs/tibs/TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md`](./tibs/TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md).
-
----
-
 ## What needs JSDoc
 
 Every symbol re-exported from a package's `src/index.ts`:
@@ -21,7 +17,7 @@ Symbols that **do not** need JSDoc:
 
 - Anything marked `@internal`.
 - Anything not re-exported from `src/index.ts`.
-- Test fixtures and helpers under `morpho-test`, `test`, `test-wagmi`.
+- Test fixtures and helpers under `morpho-test` and `test`.
 - Generated outputs (`packages/*/src/api/sdk.ts`, `packages/*/src/api/types.ts`).
 
 ## What goes in a JSDoc block, in order
@@ -244,4 +240,4 @@ Copy from those files when in doubt.
 - **One concern per PR** ([`AGENTS.md`](../AGENTS.md) §8): JSDoc backfill PRs do not mix in feature work or refactors.
 - **Changesets follow semver relevance** per [`AGENTS.md`](../AGENTS.md) §7. JSDoc-only changes to published package source may ship a patch changeset when maintainers want them visible in package release notes. Repo-meta-only PRs (TIB, style guide, root tooling) and tests-only changes do not need a changeset unless they accompany a behavior-affecting published package source change.
 - **Coverage is observable**: run `pnpm jsdoc:coverage` to print the per-package burndown table. Backfill PRs paste the new table into their PR description so reviewers see progress without reading the diff.
-- **Automated enforcement is deferred** — see [TIB-2026-05-04](./tibs/TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md) Considered Alternative 6. Reviewers and the burndown signal hold the line until Biome ships JSDoc rules (or a lighter in-repo gate emerges).
+- **Automated enforcement is deferred** — reviewers and the burndown signal hold the line until Biome ships JSDoc rules or a lighter in-repo gate emerges.

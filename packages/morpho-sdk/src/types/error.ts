@@ -49,6 +49,80 @@ export namespace BundlerErrors {
       super(`unexpected action "${type}" on chain "${chainId}"`);
     }
   }
+
+  /**
+   * Thrown when a Morpho authorization signature names a forbidden `authorized` account
+   * (for example Bundler3 itself), which would grant operator rights to an unintended address.
+   *
+   * @example
+   * ```ts
+   * import { BundlerErrors } from "@morpho-org/morpho-sdk";
+   *
+   * if (error instanceof BundlerErrors.UnexpectedSignature) {
+   *   // Re-sign the authorization targeting GeneralAdapter1.
+   * }
+   * ```
+   */
+  export class UnexpectedSignature extends Error {
+    /**
+     * @param authorized - The forbidden `authorized` address carried by the signature.
+     */
+    constructor(authorized: Address) {
+      super(`unexpected signature authorizing "${authorized}"`);
+    }
+  }
+}
+
+/**
+ * Thrown when `buildTx` receives more than one requirement signature of the same kind.
+ *
+ * A bundled path consumes at most one permit and one authorization signature; passing several of
+ * the same kind is ambiguous and would silently drop all but the first, so it is rejected instead.
+ *
+ * @example
+ * ```ts
+ * import { AmbiguousRequirementSignaturesError } from "@morpho-org/morpho-sdk";
+ *
+ * if (error instanceof AmbiguousRequirementSignaturesError) {
+ *   // Pass a single permit (and at most one authorization) signature to buildTx.
+ * }
+ * ```
+ */
+export class AmbiguousRequirementSignaturesError extends Error {
+  /**
+   * @param kind - The over-supplied signature kind (`"permit"` or `"authorization"`).
+   * @param count - How many signatures of that kind were received.
+   */
+  constructor(kind: "permit" | "authorization", count: number) {
+    super(
+      `Expected at most one ${kind} signature but received ${count}. Pass a single ${kind} signature to buildTx.`,
+    );
+  }
+}
+
+/**
+ * Thrown when `buildTx` receives a requirement signature of a kind the operation does not consume
+ * (for example an authorization signature on a plain supply path). Surfacing it prevents a signed
+ * authorization or permit from being silently ignored.
+ *
+ * @example
+ * ```ts
+ * import { UnexpectedRequirementSignatureError } from "@morpho-org/morpho-sdk";
+ *
+ * if (error instanceof UnexpectedRequirementSignatureError) {
+ *   // Remove the signature this operation does not use from the buildTx array.
+ * }
+ * ```
+ */
+export class UnexpectedRequirementSignatureError extends Error {
+  /**
+   * @param kind - The unexpected signature kind (`"permit"` or `"authorization"`).
+   */
+  constructor(kind: "permit" | "authorization") {
+    super(
+      `Received a ${kind} signature that this operation does not consume. Remove it from the buildTx signatures array.`,
+    );
+  }
 }
 
 /** Thrown when an asset amount is required to be positive but is zero or negative. */
@@ -104,6 +178,33 @@ export class ApprovalAmountLessThanSpendAmountError extends Error {
   }
 }
 
+/** Thrown when a requirement encoder targets an unsupported spender. */
+export class UnsupportedErc20ApprovalSpenderError extends Error {
+  constructor(params: {
+    readonly spender: Address;
+    readonly chainId: number;
+    readonly generalAdapter1: Address;
+    readonly permit2?: Address;
+    readonly midnight?: Address;
+    readonly midnightBundles?: Address;
+    readonly supportedSpenders?: readonly (Address | undefined)[];
+  }) {
+    const supported = (
+      params.supportedSpenders ?? [
+        params.generalAdapter1,
+        params.permit2,
+        params.midnight,
+        params.midnightBundles,
+      ]
+    )
+      .filter((address) => address != null)
+      .join('", "');
+    super(
+      `Requirement spender "${params.spender}" is not supported on chain "${params.chainId}". Use "${supported}".`,
+    );
+  }
+}
+
 /** Thrown when a slippage tolerance is negative. */
 export class NegativeSlippageToleranceError extends Error {
   constructor(slippageTolerance: bigint) {
@@ -138,7 +239,7 @@ export class EmptyDeallocationsError extends Error {
 export class DepositAmountMismatchError extends Error {
   constructor(depositAmount: bigint, signatureAmount: bigint) {
     super(
-      `Deposit amount ${depositAmount} does not match requirement signature amount ${signatureAmount}`,
+      `Deposit amount "${depositAmount}" does not match requirement signature amount "${signatureAmount}"`,
     );
   }
 }
@@ -147,7 +248,7 @@ export class DepositAmountMismatchError extends Error {
 export class DepositAssetMismatchError extends Error {
   constructor(depositAsset: Address, signatureAsset: Address) {
     super(
-      `Deposit asset ${depositAsset} does not match requirement signature asset ${signatureAsset}`,
+      `Deposit asset "${depositAsset}" does not match requirement signature asset "${signatureAsset}"`,
     );
   }
 }
@@ -312,14 +413,25 @@ export class UnsortedReallocationWithdrawalsError extends Error {
   }
 }
 
-/** Thrown when a market repay's `transferAmount` is zero or negative. */
+/**
+ * Thrown when a market repay's `transferAmount` is zero or negative.
+ *
+ * @deprecated No longer thrown. The repay action layer no longer validates `transferAmount`
+ * directly (assets mode uses {@link NonPositiveRepayAmountError}; shares mode allows a zero
+ * ERC-20 transfer for fully-native repays). Retained as exported API for back-compat; slated
+ * for removal in a future major.
+ */
 export class NonPositiveTransferAmountError extends Error {
   constructor(market: string) {
     super(`Transfer amount must be positive for market: ${market}`);
   }
 }
 
-/** Thrown when a market repay in assets mode has `transferAmount !== assets` (asset-mode requires exact transfer). */
+/**
+ * Thrown when a market repay in assets mode has `transferAmount !== amount + nativeAmount` — the
+ * pre-resolved ERC-20 pull plus the wrapped native must equal the assets repaid, so the bundle
+ * neither strands over-pulled loan tokens on `GeneralAdapter1` nor under-funds the repay.
+ */
 export class TransferAmountNotEqualToAssetsError extends Error {
   constructor(params: {
     transferAmount: bigint;
@@ -327,7 +439,23 @@ export class TransferAmountNotEqualToAssetsError extends Error {
     market: string;
   }) {
     super(
-      `Transfer amount ${params.transferAmount} is not equal to repay assets ${params.assets} for market: ${params.market}`,
+      `Transfer amount ${params.transferAmount} is not equal to repay assets ${params.assets} for market: ${params.market}. In assets mode, transferAmount must equal amount + nativeAmount.`,
+    );
+  }
+}
+
+/**
+ * Thrown when a shares-mode repay's `nativeAmount` exceeds `transferAmount`, which
+ * would make the ERC-20 amount to pull (`transferAmount − nativeAmount`) negative.
+ */
+export class NativeAmountExceedsTransferAmountError extends Error {
+  constructor(params: {
+    nativeAmount: bigint;
+    transferAmount: bigint;
+    market: string;
+  }) {
+    super(
+      `Native amount ${params.nativeAmount} exceeds transfer amount ${params.transferAmount} for market: ${params.market}. Reduce nativeAmount to at most transferAmount.`,
     );
   }
 }

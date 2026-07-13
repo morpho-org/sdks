@@ -44,7 +44,6 @@
     "@morpho-org/morpho-test": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
-    "@morpho-org/test-wagmi": "workspace:^",
     "@tanstack/query-core": "^5.100.14",
     "@tanstack/react-query": "^5.100.14",
     "@testing-library/dom": "^10.4.1",

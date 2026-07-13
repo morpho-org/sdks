@@ -6,13 +6,11 @@ import config from "../../biome.json" with { type: "json" };
 const excludeDeprecated = process.argv.includes("--exclude-deprecated");
 
 const deprecatedPackageDirs = new Set([
-  "packages/liquidation-sdk-viem",
   "packages/bundler-sdk-viem",
   "packages/migration-sdk-viem",
   "packages/simulation-sdk",
   "packages/blue-sdk-wagmi",
   "packages/simulation-sdk-wagmi",
-  "packages/test-wagmi",
 ]);
 
 const ignored = (config.files?.includes ?? [])

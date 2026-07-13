@@ -1,10 +1,10 @@
 import {
-  _try,
   getChainAddresses,
   type MarketId,
   MarketParams,
   UnknownMarketParamsError,
 } from "@morpho-org/blue-sdk";
+import { _try } from "@morpho-org/morpho-ts";
 import type { Client } from "viem";
 import { getChainId } from "viem/actions";
 import { blueAbi } from "../abis.js";

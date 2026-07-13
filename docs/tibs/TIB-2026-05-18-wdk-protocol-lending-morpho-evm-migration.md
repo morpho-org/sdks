@@ -161,7 +161,7 @@ The exported WDK adapter surface is preserved one-for-one so external consumers 
 
 Leave the codebase in `morpho-org/wdk-protocol-lending-morpho-evm` and replicate the monorepo's Biome / Vitest / Changesets / Cantina pipeline there.
 
-**Why rejected:** Duplicates every release-flow concern, every CI investment from [TIB-2026-05-12](./TIB-2026-05-12-release-pr-publish-on-push.md), and the audit cadence from §7 for a single package. Dependency-range coupling with `morpho-sdk` would still require manual lockstep updates that the monorepo's Changesets cascade ([TIB-0002](./TIB-0002-consolidate-sdk-packages.md) Dependencies §) handles automatically.
+**Why rejected:** Duplicates every release-flow concern, every CI investment from [TIB-2026-05-12](./TIB-2026-05-12-release-pr-publish-on-push.md), and the audit cadence from §7 for a single package. Dependency-range coupling with `morpho-sdk` would still require manual lockstep updates that the monorepo's Changesets cascade handles automatically.
 
 ### Alternative 2: Rename to `@morpho-org/morpho-sdk-wdk`
 
@@ -209,7 +209,7 @@ Discard the upstream source and rewrite the adapter inside the monorepo.
 ## Observability
 
 - Track npm download trends for `@morpho-org/wdk-protocol-lending-morpho-evm` after the org/maintenance change to confirm no regression at the rollover.
-- JSDoc coverage of the migrated surface is measured by `pnpm jsdoc:coverage` once Phase 2a converts the source to TypeScript, per [TIB-2026-05-04](./TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md).
+- JSDoc coverage of the migrated surface is measured by `pnpm jsdoc:coverage` once Phase 2a converts the source to TypeScript.
 
 ## Future Considerations
 
@@ -223,5 +223,3 @@ Discard the upstream source and rewrite the adapter inside the monorepo.
 - Tether WDK: [tetherto/wdk](https://github.com/tetherto/wdk)
 - Monorepo engineering rules: [`AGENTS.md`](../../AGENTS.md)
 - Release flow: [TIB-2026-05-12](./TIB-2026-05-12-release-pr-publish-on-push.md)
-- SDK consolidation context: [TIB-0002](./TIB-0002-consolidate-sdk-packages.md)
-- JSDoc bar: [TIB-2026-05-04](./TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md)

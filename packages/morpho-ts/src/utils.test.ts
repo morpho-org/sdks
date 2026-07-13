@@ -1,5 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
+import { NegativeValueError } from "./errors.js";
 import {
+  assertNonNegative,
   bigIntComparator,
   createGetValue,
   createHasValue,
@@ -12,6 +14,7 @@ import {
   getValue,
   hasValue,
   isDefined,
+  isHexEqual,
   isNotNull,
   isNotUndefined,
   keys,
@@ -29,6 +32,13 @@ describe("ZERO_ADDRESS", () => {
 
   test("has length 42 (0x + 40 hex chars)", () => {
     expect(ZERO_ADDRESS.length).toBe(42);
+  });
+});
+
+describe("isHexEqual", () => {
+  test("compares hex strings case-insensitively", () => {
+    expect(isHexEqual("0xAbCd", "0xabcd")).toBe(true);
+    expect(isHexEqual("0xAbCd", "0xabce")).toBe(false);
   });
 });
 
@@ -485,6 +495,17 @@ describe("getLastDefined", () => {
 
   test("returns the only element when array has one defined value", () => {
     expect(getLastDefined([42])).toBe(42);
+  });
+});
+
+describe("assertNonNegative", () => {
+  test("default", () => {
+    expect(assertNonNegative("assets", 0n)).toBe(undefined);
+    expect(assertNonNegative("assets", 1n)).toBe(undefined);
+  });
+
+  test("error: NegativeValueError", () => {
+    expect(() => assertNonNegative("assets", -1n)).toThrow(NegativeValueError);
   });
 });
 

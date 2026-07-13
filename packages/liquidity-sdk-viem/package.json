@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/liquidity-sdk-viem",
   "description": "Viem-based package that helps seamlessly calculate the liquidity available through the PublicAllocator.",
-  "version": "3.0.2",
+  "version": "4.0.2",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Rubilmax <rmilon@gmail.com>"
@@ -31,8 +31,8 @@
   "peerDependencies": {
     "@morpho-org/blue-sdk": "^6.0.0",
     "@morpho-org/blue-sdk-viem": "^5.0.0",
-    "@morpho-org/morpho-sdk": "^3.0.0",
-    "@morpho-org/morpho-ts": "^2.5.1",
+    "@morpho-org/morpho-sdk": "^5.0.0",
+    "@morpho-org/morpho-ts": "^2.7.0",
     "dataloader": "^2.2.3",
     "graphql": "^14.0.0 || ^15.0.0 || ^16.0.0",
     "graphql-request": "^6.1.0",
@@ -40,11 +40,11 @@
     "viem": "^2.0.0"
   },
   "devDependencies": {
-    "@graphql-codegen/cli": "^7.1.2",
+    "@graphql-codegen/cli": "^7.1.3",
     "@graphql-codegen/import-types-preset": "^4.0.1",
     "@graphql-codegen/typescript": "^6.0.2",
     "@graphql-codegen/typescript-graphql-request": "^7.1.0",
-    "@graphql-codegen/typescript-operations": "^6.0.3",
+    "@graphql-codegen/typescript-operations": "^6.0.5",
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/blue-sdk-viem": "workspace:^",
     "@morpho-org/morpho-sdk": "workspace:^",
@@ -53,12 +53,14 @@
     "@morpho-org/test": "workspace:^",
     "dataloader": "^2.2.3",
     "graphql": "^16.14.2",
-    "nock": "^14.0.15",
+    "nock": "^14.0.16",
     "typescript": "^6.0.3",
-    "viem": "2.52.2",
-    "vitest": "^4.1.8"
+    "viem": "^2.54.2",
+    "vitest": "^4.1.9"
   },
   "publishConfig": {
+    "main": "./lib/cjs/index.js",
+    "types": "./lib/esm/index.d.ts",
     "exports": {
       ".": {
         "types": "./lib/esm/index.d.ts",

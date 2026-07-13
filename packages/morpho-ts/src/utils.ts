@@ -1,9 +1,27 @@
+import { NegativeValueError } from "./errors.js";
 import { Time } from "./time/index.js";
 import type { FieldType, PartialDottedKeys } from "./types.js";
 
 /** Canonical zero address constant. */
 export const ZERO_ADDRESS =
   "0x0000000000000000000000000000000000000000" as const;
+
+/**
+ * Compares hex strings case-insensitively.
+ *
+ * @param left - First hex string.
+ * @param right - Second hex string.
+ * @returns Whether both hex strings are equal after lowercase normalization.
+ * @example
+ * ```ts
+ * import { isHexEqual } from "@morpho-org/morpho-ts";
+ *
+ * const equal = isHexEqual("0xAbC", "0xabc");
+ * // true
+ * ```
+ */
+export const isHexEqual = (left: string, right: string) =>
+  left.toLowerCase() === right.toLowerCase();
 
 /**
  * Narrows a nullable value to its non-null type.
@@ -493,6 +511,23 @@ export function getLastDefined<T>(
  */
 export function getLastDefined<T>(array: T[]) {
   return getLast(filterDefined(array));
+}
+
+/**
+ * Asserts that a bigint value is non-negative.
+ *
+ * @param field - Field name used in the thrown error message.
+ * @param value - Bigint value to validate.
+ * @throws NegativeValueError when `value` is negative.
+ * @example
+ * ```ts
+ * import { assertNonNegative } from "@morpho-org/morpho-ts";
+ *
+ * assertNonNegative("assets", 0n);
+ * ```
+ */
+export function assertNonNegative(field: string, value: bigint) {
+  if (value < 0n) throw new NegativeValueError(field, value);
 }
 
 /**
