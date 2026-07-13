@@ -187,6 +187,64 @@ export class AccrualPosition extends Position {
   }
 
   /**
+   * Returns the maximum credit units currently withdrawable from this position.
+   *
+   * The capacity is limited by both the position face value and the market's
+   * currently withdrawable liquidity.
+   *
+   * @returns Maximum credit units currently withdrawable.
+   * @example
+   * ```ts
+   * import { AccrualPosition } from "@morpho-org/midnight-sdk";
+   *
+   * const position = new AccrualPosition(
+   *   {
+   *     credit: 1_000n,
+   *     pendingFee: 100n,
+   *     lastLossFactor: 0n,
+   *     lastAccrual: 1_000n,
+   *     debt: 0n,
+   *     collateralBitmap: 1n,
+   *     collateral: [50n],
+   *   },
+   *   {
+   *     params: {
+   *       chainId: 8453,
+   *       midnight: "0x0000000000000000000000000000000000001000",
+   *       loanToken: "0x0000000000000000000000000000000000006000",
+   *       collateralParams: [
+   *         {
+   *           token: "0x0000000000000000000000000000000000007000",
+   *           lltv: 770000000000000000n,
+   *           liquidationCursor: 250000000000000000n,
+   *           oracle: "0x0000000000000000000000000000000000008000",
+   *         },
+   *       ],
+   *       maturity: 54_000n,
+   *       rcfThreshold: 0n,
+   *       enterGate: "0x0000000000000000000000000000000000000000",
+   *       liquidatorGate: "0x0000000000000000000000000000000000000000",
+   *     },
+   *     totalUnits: 1_000n,
+   *     lossFactor: 0n,
+   *     withdrawable: 500n,
+   *     continuousFeeCredit: 0n,
+   *     settlementFeeCbps: [1, 2, 3, 4, 5, 6, 7],
+   *     continuousFee: 10,
+   *     tickSpacing: 4,
+   *   },
+   * );
+   * console.log(position.withdrawable); // 500n
+   * ```
+   */
+  public get withdrawable() {
+    return PositionUtils.getWithdrawable({
+      position: this,
+      market: this.market,
+    });
+  }
+
+  /**
    * Returns the position collateral balance at an index configured by the market.
    *
    * @param index - Collateral index.

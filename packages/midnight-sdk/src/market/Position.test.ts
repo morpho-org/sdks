@@ -36,11 +36,31 @@ describe("Position", () => {
     );
 
     expect(position.faceValue).toBe(900n);
+    expect(position.withdrawable).toBe(500n);
     expect(
       position.getCollateralBalanceByToken(addresses.collateralToken),
     ).toBe(123n);
     expect(position.getCollateralBalanceByIndex(1)).toBeUndefined();
     expect(position.market.id).toBe(marketId);
+  });
+});
+
+describe("PositionUtils.getWithdrawable", () => {
+  test.each([
+    { credit: 1_000n, pendingFee: 100n, liquidity: 500n, expected: 500n },
+    { credit: 1_000n, pendingFee: 100n, liquidity: 950n, expected: 900n },
+  ])("behavior: returns $expected when credit is $credit, fee is $pendingFee, and liquidity is $liquidity", ({
+    credit,
+    pendingFee,
+    liquidity,
+    expected,
+  }) => {
+    expect(
+      PositionUtils.getWithdrawable({
+        position: { credit, pendingFee },
+        market: { withdrawable: liquidity },
+      }),
+    ).toBe(expected);
   });
 });
 

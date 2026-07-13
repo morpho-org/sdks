@@ -55,7 +55,7 @@ import {
   MidnightOfferRootOwnerMismatchError,
   MidnightOfferRootRatifierMismatchError,
   MidnightOfferSideMismatchError,
-  MidnightRedeemExceedsCreditError,
+  MidnightRedeemExceedsFaceValueError,
   MissingAccrualPositionError,
   MissingMidnightOfferRootSignatureError,
   NegativeMidnightAmountError,
@@ -761,17 +761,20 @@ describe("MorphoMidnight", () => {
       });
     });
 
-    test("behavior: explicit units can exceed face value up to accrued credit", () => {
+    test("error: MidnightRedeemExceedsFaceValueError", () => {
       const market = marketData();
-      const output = midnight().redeem({
-        marketData: market,
-        positionData: positionData(market, { credit: 250n, pendingFee: 50n }),
-        accountAddress: midnightAddresses.taker,
-        units: 225n,
-      });
-      const tx = output.buildTx();
 
-      expect(tx.action.args.units).toBe(225n);
+      expect(() =>
+        midnight().redeem({
+          marketData: market,
+          positionData: positionData(market, {
+            credit: 250n,
+            pendingFee: 50n,
+          }),
+          accountAddress: midnightAddresses.taker,
+          units: 225n,
+        }),
+      ).toThrow(MidnightRedeemExceedsFaceValueError);
     });
 
     test("behavior: explicit receiver and empty requirements", async () => {
@@ -815,19 +818,6 @@ describe("MorphoMidnight", () => {
           accountAddress: midnightAddresses.taker,
         }),
       ).toThrow(MissingAccrualPositionError);
-    });
-
-    test("error: MidnightRedeemExceedsCreditError", () => {
-      const market = marketData();
-
-      expect(() =>
-        midnight().redeem({
-          marketData: market,
-          positionData: positionData(market, { credit: 250n, pendingFee: 50n }),
-          accountAddress: midnightAddresses.taker,
-          units: 251n,
-        }),
-      ).toThrow(MidnightRedeemExceedsCreditError);
     });
 
     test("error: NoMidnightCreditToRedeemError", () => {

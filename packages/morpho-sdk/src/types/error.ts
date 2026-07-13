@@ -847,11 +847,11 @@ export class NoMidnightCreditToRedeemError extends Error {
   }
 }
 
-/** Thrown when a Midnight redeem amount exceeds the user's accrued credit. */
-export class MidnightRedeemExceedsCreditError extends Error {
-  constructor(params: { market: string; units: bigint; credit: bigint }) {
+/** Thrown when a Midnight redeem amount exceeds the user's position face value. */
+export class MidnightRedeemExceedsFaceValueError extends Error {
+  constructor(params: { market: string; units: bigint; faceValue: bigint }) {
     super(
-      `Midnight redeem amount exceeds accrued credit on market "${params.market}": units "${params.units}", credit "${params.credit}". Redeem less or refresh the position data.`,
+      `Midnight redeem amount exceeds position face value on market "${params.market}": units "${params.units}", face value "${params.faceValue}". Redeem less or refresh the position data.`,
     );
   }
 }
