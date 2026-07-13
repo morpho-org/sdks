@@ -447,6 +447,11 @@ export class TransferAmountNotEqualToAssetsError extends Error {
 /**
  * Thrown when a shares-mode repay's `nativeAmount` exceeds `transferAmount`, which
  * would make the ERC-20 amount to pull (`transferAmount − nativeAmount`) negative.
+ *
+ * @deprecated No longer thrown. A shares-mode repay now accepts a `nativeAmount` that
+ * covers (or exceeds) the full repaid assets: it wraps the native, pulls no ERC-20, and
+ * the bundle skims the residual wNative back to the receiver. This class is retained for
+ * one minor for API stability and will be removed in the next major.
  */
 export class NativeAmountExceedsTransferAmountError extends Error {
   constructor(params: {

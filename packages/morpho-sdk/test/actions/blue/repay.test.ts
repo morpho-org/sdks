@@ -496,6 +496,93 @@ describe("RepayBlue", () => {
     );
   });
 
+  test("should full repay by shares funded entirely by native ETH (over-wrapped, residual skimmed)", async ({
+    client,
+  }) => {
+    // Shares mode with nativeAmount >= toBorrowAssets(shares): no ERC-20 is
+    // pulled, the whole debt is funded by wrapped ETH, and the wrapped residual
+    // (nativeAmount - the exact on-chain repay) is skimmed back to the receiver.
+    // testInvariants additionally asserts every bundler3 adapter balance returns
+    // to 0 — i.e. nothing is stranded / lost in GeneralAdapter1.
+    const collateralAmount = parseUnits("10", 18);
+    const borrowAmount = parseUnits("1", 18);
+    // Comfortably exceeds the 2h-forward-accrued borrow assets (~1 WETH).
+    const nativeAmount = parseUnits("1.5", 18);
+
+    await supplyCollateral({
+      client,
+      chainId: mainnet.id,
+      market: WstethWethBlue,
+      collateralAmount,
+    });
+    await borrow({
+      client,
+      chainId: mainnet.id,
+      market: WstethWethBlue,
+      borrowAmount,
+    });
+
+    await client.setBalance({
+      address: client.account.address,
+      value: nativeAmount + parseUnits("10", 18),
+    });
+
+    const {
+      markets: {
+        WstethWethBlue: { initialState, finalState },
+      },
+    } = await testInvariants({
+      client,
+      params: {
+        markets: { WstethWethBlue },
+      },
+      actionFn: async () => {
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
+        const market = morphoClient.blue(WstethWethBlue, mainnet.id);
+        const positionData = await market.getPositionData(
+          client.account.address,
+        );
+
+        const repay = market.repay({
+          userAddress: client.account.address,
+          shares: positionData.borrowShares,
+          nativeAmount,
+          positionData,
+        });
+
+        // Native covers the full debt ⇒ no ERC-20 approval/permit requirement.
+        const requirements = await repay.getRequirements();
+        expect(requirements).toEqual([]);
+
+        const tx = repay.buildTx();
+        // Everything is wrapped native; no ERC-20 pulled.
+        expect(tx.value).toEqual(nativeAmount);
+        expect(tx.action.args.transferAmount).toEqual(nativeAmount);
+        await client.sendTransaction(tx);
+      },
+    });
+
+    // Full close.
+    expect(finalState.position.borrowShares).toBe(0n);
+    // Morpho received the repaid loan tokens.
+    expect(finalState.morphoLoanTokenBalance).toBeGreaterThan(
+      initialState.morphoLoanTokenBalance,
+    );
+    // The wrapped ETH (plus gas) left the user's native balance.
+    expect(finalState.userNativeBalance).toBeLessThan(
+      initialState.userNativeBalance - nativeAmount,
+    );
+    // No loss: the over-wrapped residual is returned to the user as wNative, so
+    // their ERC-20 loan-token balance grows (nothing is stranded in the adapter).
+    expect(finalState.userLoanTokenBalance).toBeGreaterThan(
+      initialState.userLoanTokenBalance,
+    );
+    // Collateral untouched (repay only).
+    expect(finalState.position.collateral).toEqual(
+      initialState.position.collateral,
+    );
+  });
+
   test("should throw when repay amount exceeds debt", async ({ client }) => {
     const collateralAmount = parseUnits("10", 18);
     const borrowAmount = parseUnits("1000", 18);

@@ -16,7 +16,6 @@ import { morphoViemExtension } from "../../client/index.js";
 import {
   isRequirementApproval,
   MutuallyExclusiveRepayAmountsError,
-  NativeAmountExceedsTransferAmountError,
   NativeAmountOnNonWNativeAssetError,
   NegativeNativeAmountError,
   NonPositiveAssetAmountError,
@@ -368,21 +367,39 @@ describe("MorphoBlue validation", () => {
     expect(requirements).toEqual([]);
   });
 
-  test("repay native: shares mode rejects nativeAmount exceeding the computed transfer", async ({
+  test("repay native: shares mode funded entirely by native emits no ERC-20 requirement", async ({
     client,
   }) => {
     const market = client
-      .extend(morphoViemExtension())
+      .extend(morphoViemExtension({ supportSignature: false }))
       .morpho.blue(WstethWethBlue, mainnet.id);
+    const positionData = makeWethPosition();
 
-    expect(() =>
-      market.repay({
-        shares: 10n ** 12n,
-        nativeAmount: parseUnits("1000000", 18),
-        userAddress: USER,
-        positionData: makeWethPosition(),
-      }),
-    ).toThrow(NativeAmountExceedsTransferAmountError);
+    // Native covers the full (rate-less fixture ⇒ accrual is a no-op) borrow
+    // assets and then some: no ERC-20 is pulled and the bundle wraps the native,
+    // skimming the residual wNative back to the receiver.
+    const borrowAssets = positionData.market.toBorrowAssets(
+      positionData.borrowShares,
+      "Up",
+    );
+    const nativeAmount = borrowAssets + parseUnits("1", 18);
+
+    const repay = market.repay({
+      shares: positionData.borrowShares,
+      nativeAmount,
+      userAddress: USER,
+      positionData,
+    });
+
+    const tx = repay.buildTx();
+    expect(tx.action.args.shares).toBe(positionData.borrowShares);
+    expect(tx.action.args.nativeAmount).toBe(nativeAmount);
+    expect(tx.value).toBe(nativeAmount);
+    // ERC-20 pulled is 0 ⇒ the total routed to the adapter is the wrapped native only.
+    expect(tx.action.args.transferAmount).toBe(nativeAmount);
+
+    // Fully-native repay pulls no ERC-20 ⇒ no approval/permit requirement.
+    expect(await repay.getRequirements()).toEqual([]);
   });
 
   test("repay native: shares mode pulls transferAmount net of native (happy path)", async ({
@@ -492,22 +509,39 @@ describe("MorphoBlue validation", () => {
     expect(requirements).toHaveLength(1);
   });
 
-  test("repayWithdrawCollateral native: shares mode rejects nativeAmount exceeding the computed transfer", async ({
+  test("repayWithdrawCollateral native: shares mode funded entirely by native emits no ERC-20 requirement", async ({
     client,
   }) => {
     const market = client
-      .extend(morphoViemExtension())
+      .extend(morphoViemExtension({ supportSignature: false }))
       .morpho.blue(WstethWethBlue, mainnet.id);
+    const positionData = makeWethPosition();
 
-    expect(() =>
-      market.repayWithdrawCollateral({
-        shares: 10n ** 12n,
-        nativeAmount: parseUnits("1000000", 18),
-        withdrawAmount: parseUnits("1", 18),
-        userAddress: USER,
-        positionData: makeWethPosition(),
-      }),
-    ).toThrow(NativeAmountExceedsTransferAmountError);
+    // Native covers the full borrow assets (rate-less fixture ⇒ accrual no-op),
+    // so no ERC-20 is pulled; the bundle wraps the native and skims the residual.
+    const borrowAssets = positionData.market.toBorrowAssets(
+      positionData.borrowShares,
+      "Up",
+    );
+    const nativeAmount = borrowAssets + parseUnits("1", 18);
+
+    const action = market.repayWithdrawCollateral({
+      shares: positionData.borrowShares,
+      nativeAmount,
+      withdrawAmount: positionData.collateral,
+      userAddress: USER,
+      positionData,
+    });
+
+    const tx = action.buildTx();
+    expect(tx.action.args.repayShares).toBe(positionData.borrowShares);
+    expect(tx.action.args.nativeAmount).toBe(nativeAmount);
+    expect(tx.value).toBe(nativeAmount);
+    // ERC-20 pulled is 0 ⇒ the total routed to the adapter is the wrapped native only.
+    expect(tx.action.args.transferAmount).toBe(nativeAmount);
+
+    // No ERC-20 pulled ⇒ only the Morpho authorization requirement remains.
+    expect(await action.getRequirements()).toHaveLength(1);
   });
 
   test("repayWithdrawCollateral native: shares mode pulls transferAmount net of native (happy path)", async ({
