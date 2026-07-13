@@ -237,10 +237,14 @@ export class NegativeSlippageToleranceError extends Error {
   }
 }
 
-/** Thrown when a Morpho accrual position is missing for a market the call needs to read. */
+/** Thrown when a Morpho accrual position required by a call is missing. */
 export class MissingAccrualPositionError extends Error {
-  constructor(market: string) {
-    super(`Accrual position is missing for market: ${market}`);
+  constructor(market?: string) {
+    super(
+      market == null
+        ? "Accrual position is missing. Fetch the position data and try again."
+        : `Accrual position is missing for market: ${market}`,
+    );
   }
 }
 

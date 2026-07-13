@@ -177,7 +177,8 @@ export interface SupplyCollateralParams extends MarketActionParams {
 }
 
 /** Parameters for the Midnight redeem flow. */
-export interface RedeemParams extends MarketActionParams {
+export interface RedeemParams {
+  readonly accountAddress: Address;
   readonly positionData: AccrualPosition;
   readonly receiver?: Address;
   readonly units?: bigint;
@@ -196,5 +197,6 @@ export interface RepayWithdrawCollateralParams extends MarketActionParams {
 export interface GetPositionDataParams {
   readonly marketId: Hex;
   readonly accountAddress: Address;
+  /** Optional fetch controls. Pass an externally fetched block number to coordinate this snapshot with other reads. */
   readonly parameters?: MidnightFetchParams;
 }

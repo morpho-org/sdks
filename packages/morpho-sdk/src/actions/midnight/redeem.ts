@@ -29,7 +29,7 @@ export interface MidnightRedeemParams {
  * Use this low-level builder after the caller has fetched and checked position
  * credit and market withdrawable liquidity. App flows should usually call
  * `client.morpho.midnight(chainId).redeem(...)`, which performs those checks
- * from supplied `marketData` and `positionData` before exposing `buildTx`.
+ * from the supplied `positionData` snapshot before exposing `buildTx`.
  *
  * @param params.chainId - Chain id used to resolve `Midnight`.
  * @param params.market - Midnight market whose credit is redeemed.
