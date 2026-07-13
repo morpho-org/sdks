@@ -1,17 +1,9 @@
-import { _try, MathLib } from "@morpho-org/morpho-ts";
+import { _try, ChainId, getChainAddress, MathLib } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
 import { numberToHex } from "viem";
 import { describe, expect, test } from "vitest";
 
-import {
-  addresses,
-  baseMarket,
-  baseMarketInput,
-  baseMarketParams,
-  baseMarketParamsInput,
-  chainId,
-  marketId,
-} from "../__test__/fixtures.js";
+import { addresses, chainId, createFixtures } from "../__test__/fixtures.js";
 import {
   CBP,
   MAX_COLLATERALS,
@@ -26,6 +18,17 @@ import { MarketUtils } from "./MarketUtils.js";
 
 const liquidationCursorLow = 250000000000000000n;
 const liquidationCursorHigh = 500000000000000000n;
+const midnight = getChainAddress(ChainId.BaseMainnet, "midnight");
+const {
+  baseMarket,
+  baseMarketInput,
+  baseMarketParams,
+  baseMarketParamsInput,
+  marketId,
+} = createFixtures({
+  midnight,
+  ecrecoverRatifier: getChainAddress(ChainId.BaseMainnet, "ecrecoverRatifier"),
+});
 
 describe("CollateralParams", () => {
   test("behavior: normalized by MarketParams", () => {
@@ -45,7 +48,7 @@ describe("MarketParams", () => {
     const params = new MarketParams(baseMarketParamsInput());
 
     expect(params.chainId).toBe(BigInt(chainId));
-    expect(params.midnight).toBe(addresses.midnight);
+    expect(params.midnight).toBe(midnight);
     expect(params.loanToken).toBe(addresses.loanToken);
     expect(params.collateralParams[0]!.token).toBe(addresses.collateralToken);
   });

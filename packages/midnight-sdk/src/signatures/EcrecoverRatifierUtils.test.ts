@@ -1,3 +1,4 @@
+import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
 import {
   createWalletClient,
   custom,
@@ -11,11 +12,7 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 import { base, mainnet } from "viem/chains";
 import { describe, expect, test, vi } from "vitest";
-import {
-  addresses,
-  baseMarketParamsInput,
-  baseOffer,
-} from "../__test__/fixtures.js";
+import { addresses, createFixtures } from "../__test__/fixtures.js";
 import {
   COLLATERAL_PARAMS_TYPEHASH,
   EIP712_DOMAIN_TYPEHASH,
@@ -41,6 +38,15 @@ const privateKey =
   "0x0000000000000000000000000000000000000000000000000000000000000001" as const;
 const wrongPrivateKey =
   "0x0000000000000000000000000000000000000000000000000000000000000002" as const;
+const ecrecoverRatifier = getChainAddress(
+  ChainId.BaseMainnet,
+  "ecrecoverRatifier",
+);
+const setterRatifier = getChainAddress(ChainId.BaseMainnet, "setterRatifier");
+const { baseMarketParamsInput, baseOffer } = createFixtures({
+  midnight: getChainAddress(ChainId.BaseMainnet, "midnight"),
+  ecrecoverRatifier,
+});
 const invalidSignature = `0x${"00".repeat(65)}` as Hex;
 const collateralParamsType =
   "CollateralParams(address token,uint256 lltv,uint256 liquidationCursor,address oracle)";
@@ -192,12 +198,12 @@ describe("EcrecoverRatifierUtils.ratify", () => {
       baseOffer({
         maker: account.address,
         maxAssets: 0n,
-        ratifier: addresses.ecrecoverRatifier,
+        ratifier: ecrecoverRatifier,
       }),
       baseOffer({
         maker: account.address,
         maxAssets: 0n,
-        ratifier: addresses.setterRatifier,
+        ratifier: setterRatifier,
       }),
     ]);
 
@@ -300,11 +306,11 @@ describe("EcrecoverRatifierUtils.typedData", () => {
     const tree = Tree.create([
       baseOffer({
         maxAssets: 0n,
-        ratifier: addresses.ecrecoverRatifier,
+        ratifier: ecrecoverRatifier,
       }),
       baseOffer({
         maxAssets: 0n,
-        ratifier: addresses.setterRatifier,
+        ratifier: setterRatifier,
       }),
     ]);
 

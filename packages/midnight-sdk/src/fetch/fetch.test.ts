@@ -1,3 +1,4 @@
+import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
 import {
   createMockClient,
   type MockClientHandle,
@@ -15,7 +16,7 @@ import {
 } from "viem";
 import { base } from "viem/chains";
 import { describe, expect, test } from "vitest";
-import { addresses, baseMarketParams, marketId } from "../__test__/fixtures.js";
+import { addresses, createFixtures } from "../__test__/fixtures.js";
 import { midnightAbi } from "../abis.js";
 import { MarketUtils } from "../market/index.js";
 import { abi as getPositionAbi } from "../queries/GetPosition.js";
@@ -26,6 +27,16 @@ import {
   fetchPosition,
   fetchRatifierInfo,
 } from "./index.js";
+
+const midnight = getChainAddress(ChainId.BaseMainnet, "midnight");
+const ecrecoverRatifier = getChainAddress(
+  ChainId.BaseMainnet,
+  "ecrecoverRatifier",
+);
+const { baseMarketParams, marketId } = createFixtures({
+  midnight,
+  ecrecoverRatifier,
+});
 
 function mockDeploylessRead<
   const abi extends Abi,
@@ -76,7 +87,7 @@ describe("fetchMarketParams", () => {
   test("default", async () => {
     const handle = createMockClient(base);
     mockRead(handle, {
-      address: addresses.midnight,
+      address: midnight,
       abi: midnightAbi,
       functionName: "toMarket",
       args: [marketId],
@@ -97,7 +108,7 @@ describe("fetchMarketParams", () => {
       transport: custom({ request: handle.request }),
     });
     mockRead(handle, {
-      address: addresses.midnight,
+      address: midnight,
       abi: midnightAbi,
       functionName: "toMarket",
       args: [marketId],
@@ -119,14 +130,14 @@ describe("fetchMarket", () => {
   test("default", async () => {
     const handle = createMockClient(base);
     mockRead(handle, {
-      address: addresses.midnight,
+      address: midnight,
       abi: midnightAbi,
       functionName: "toMarket",
       args: [marketId],
       result: MarketUtils.toStruct(baseMarketParams()),
     });
     mockRead(handle, {
-      address: addresses.midnight,
+      address: midnight,
       abi: midnightAbi,
       functionName: "marketState",
       args: [marketId],
@@ -178,14 +189,14 @@ describe("fetchPosition", () => {
   test("behavior: direct reads when deployless is disabled", async () => {
     const handle = createMockClient(base);
     mockRead(handle, {
-      address: addresses.midnight,
+      address: midnight,
       abi: midnightAbi,
       functionName: "position",
       args: [marketId, addresses.taker],
       result: [1n, 2n, 3n, 4n, 5n, 6n],
     });
     mockRead(handle, {
-      address: addresses.midnight,
+      address: midnight,
       abi: midnightAbi,
       functionName: "collateral",
       args: [marketId, addresses.taker, 0n],
@@ -216,14 +227,14 @@ describe("fetchPosition", () => {
     const handle = createMockClient(base);
     mockDeploylessFailure(handle);
     mockRead(handle, {
-      address: addresses.midnight,
+      address: midnight,
       abi: midnightAbi,
       functionName: "position",
       args: [marketId, addresses.taker],
       result: [1n, 2n, 3n, 4n, 5n, 6n],
     });
     mockRead(handle, {
-      address: addresses.midnight,
+      address: midnight,
       abi: midnightAbi,
       functionName: "collateral",
       args: [marketId, addresses.taker, 0n],
@@ -270,14 +281,14 @@ describe("fetchAccrualPosition", () => {
       },
     });
     mockRead(handle, {
-      address: addresses.midnight,
+      address: midnight,
       abi: midnightAbi,
       functionName: "toMarket",
       args: [marketId],
       result: MarketUtils.toStruct(baseMarketParams()),
     });
     mockRead(handle, {
-      address: addresses.midnight,
+      address: midnight,
       abi: midnightAbi,
       functionName: "marketState",
       args: [marketId],
@@ -310,6 +321,6 @@ describe("fetchRatifierInfo", () => {
     });
 
     expect(info.type).toBe("ecrecover");
-    expect(info.ratifier).toBe(addresses.ecrecoverRatifier);
+    expect(info.ratifier).toBe(ecrecoverRatifier);
   });
 });

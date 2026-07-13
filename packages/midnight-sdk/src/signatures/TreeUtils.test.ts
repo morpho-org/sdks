@@ -1,12 +1,10 @@
+import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
 import { createWalletClient, type Hex, http, zeroAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { describe, expect, expectTypeOf, test, vi } from "vitest";
 import {
-  addresses,
-  baseMarketParamsInput,
-  baseOffer,
-  baseOfferInput,
   chainId,
+  createFixtures,
   group as staleGroup,
 } from "../__test__/fixtures.js";
 import type { MidnightApiFetch } from "../api/index.js";
@@ -36,6 +34,11 @@ const root =
 const zeroBytes32 =
   "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
 const API_VALID_MATURITY = 1_767_279_600n;
+const setterRatifier = getChainAddress(ChainId.BaseMainnet, "setterRatifier");
+const { baseMarketParamsInput, baseOffer, baseOfferInput } = createFixtures({
+  midnight: getChainAddress(ChainId.BaseMainnet, "midnight"),
+  ecrecoverRatifier: getChainAddress(ChainId.BaseMainnet, "ecrecoverRatifier"),
+});
 const privateKey =
   "0x0000000000000000000000000000000000000000000000000000000000000001" as const;
 const midnightTestChain = {
@@ -441,7 +444,7 @@ describe("TreeUtils.mempoolValidate", () => {
         ...baseMarketParamsInput(),
         maturity: API_VALID_MATURITY,
       },
-      ratifier: addresses.setterRatifier,
+      ratifier: setterRatifier,
       expiry: API_VALID_MATURITY - 60n,
       maxUnits: 0n,
       maxAssets: 1_000n,
@@ -584,7 +587,7 @@ describe("TreeUtils.mempoolValidate", () => {
         ...baseMarketParamsInput(),
         maturity: API_VALID_MATURITY,
       },
-      ratifier: addresses.setterRatifier,
+      ratifier: setterRatifier,
       expiry: API_VALID_MATURITY - 60n,
       maxUnits: 0n,
       maxAssets: 1_000n,

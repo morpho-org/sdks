@@ -1,12 +1,7 @@
-import { MathLib } from "@morpho-org/morpho-ts";
+import { ChainId, getChainAddress, MathLib } from "@morpho-org/morpho-ts";
 import { describe, expect, test } from "vitest";
 
-import {
-  addresses,
-  baseMarketInput,
-  baseMarketParamsInput,
-  marketId,
-} from "../__test__/fixtures.js";
+import { addresses, createFixtures } from "../__test__/fixtures.js";
 import { CBP } from "../constants.js";
 import {
   InvalidPositionAccrualStateError,
@@ -15,6 +10,11 @@ import {
 } from "../errors.js";
 import { AccrualPosition, type IPosition } from "./Position.js";
 import { PositionUtils } from "./PositionUtils.js";
+
+const { baseMarketInput, baseMarketParamsInput, marketId } = createFixtures({
+  midnight: getChainAddress(ChainId.BaseMainnet, "midnight"),
+  ecrecoverRatifier: getChainAddress(ChainId.BaseMainnet, "ecrecoverRatifier"),
+});
 
 const basePositionInput = (overrides: Partial<IPosition> = {}): IPosition => ({
   credit: overrides.credit ?? 1_000n,

@@ -1,25 +1,14 @@
-import { ChainId, registerCustomAddresses } from "@morpho-org/morpho-ts";
-import type { Address } from "viem";
+import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
 import { describe, expect } from "vitest";
 import { fetchRatifierInfo } from "../../src/fetch/Ratifier.js";
 import { test } from "./setup.js";
 
-const ecrecoverRatifier =
-  "0xd6e70365C8E8DDa9a4ca662C07bbE663b017755E" as Address;
-const setterRatifier = "0x800B5F12A61B8198a5a6EfD794Cac6699B294d63" as Address;
-const usdc = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as Address;
-
-registerCustomAddresses({
-  addresses: {
-    [ChainId.BaseMainnet]: {
-      midnight: "0xAdedD8ab6dE832766Fedf0FaC4992E5C4D3EA18A",
-      midnightBundles: "0x091183d729BE9f808c212b475E387A12E67850A7",
-      midnightMempool: "0xdD6DCE32e21f7b020898a8258dA37355b4017993",
-      ecrecoverRatifier,
-      setterRatifier,
-    },
-  },
-});
+const ecrecoverRatifier = getChainAddress(
+  ChainId.BaseMainnet,
+  "ecrecoverRatifier",
+);
+const setterRatifier = getChainAddress(ChainId.BaseMainnet, "setterRatifier");
+const usdc = getChainAddress(ChainId.BaseMainnet, "usdc");
 
 describe("fetchRatifierInfo on fork", () => {
   test("routes EOAs through the Ecrecover ratifier", async ({ client }) => {

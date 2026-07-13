@@ -1,19 +1,14 @@
 import {
+  ChainId,
   DivisionByZeroError,
+  getChainAddress,
   MathLib,
   NegativeValueError,
 } from "@morpho-org/morpho-ts";
 import fc from "fast-check";
 import { zeroAddress, zeroHash } from "viem";
 import { describe, expect, test } from "vitest";
-import {
-  addresses,
-  baseMarketInput,
-  baseMarketParamsInput,
-  baseOffer,
-  baseOfferInput,
-  group,
-} from "../__test__/fixtures.js";
+import { addresses, createFixtures, group } from "../__test__/fixtures.js";
 import { MAX_OFFER_CAP, MAX_TICK } from "../constants.js";
 import {
   InvalidOfferGroupError,
@@ -27,13 +22,24 @@ import type { BuildOfferParams } from "./Offer.js";
 import { Offer } from "./Offer.js";
 import { OfferUtils } from "./OfferUtils.js";
 
+const ecrecoverRatifier = getChainAddress(
+  ChainId.BaseMainnet,
+  "ecrecoverRatifier",
+);
+const setterRatifier = getChainAddress(ChainId.BaseMainnet, "setterRatifier");
+const { baseMarketInput, baseMarketParamsInput, baseOffer, baseOfferInput } =
+  createFixtures({
+    midnight: getChainAddress(ChainId.BaseMainnet, "midnight"),
+    ecrecoverRatifier,
+  });
+
 const buildOfferParams = (overrides: Partial<BuildOfferParams> = {}) => ({
   market: baseMarketParamsInput(),
   buy: true,
   maker: addresses.maker,
   tick: 5_000n,
   expiry: 2_100n,
-  ratifier: addresses.ecrecoverRatifier,
+  ratifier: ecrecoverRatifier,
   maxAssets: 100n,
   ...overrides,
 });
@@ -85,7 +91,7 @@ describe("Offer.create", () => {
       maker: addresses.maker,
       tick: 5_000n,
       expiry: 2_100n,
-      ratifier: addresses.ecrecoverRatifier,
+      ratifier: ecrecoverRatifier,
       maxAssets: 100n,
     });
 
@@ -572,7 +578,7 @@ describe("OfferUtils.validateOfferGroup", () => {
           buildOfferParams({
             start: 10n,
             expiry: 2_200n,
-            ratifier: addresses.ecrecoverRatifier,
+            ratifier: ecrecoverRatifier,
           }),
         ),
         Offer.create(
@@ -581,14 +587,14 @@ describe("OfferUtils.validateOfferGroup", () => {
             expiry: 2_300n,
             callback: addresses.callback,
             callbackData: "0x1234",
-            ratifier: addresses.setterRatifier,
+            ratifier: setterRatifier,
           }),
         ),
       ],
     });
 
-    expect(offers[0]!.ratifier).toBe(addresses.ecrecoverRatifier);
-    expect(offers[1]!.ratifier).toBe(addresses.setterRatifier);
+    expect(offers[0]!.ratifier).toBe(ecrecoverRatifier);
+    expect(offers[1]!.ratifier).toBe(setterRatifier);
     expect(offers[1]!.callback).toBe(addresses.callback);
   });
 
@@ -615,8 +621,8 @@ describe("OfferUtils.validateOfferGroup", () => {
                 callback: entry.useCallback ? addresses.callback : undefined,
                 callbackData: entry.useCallback ? "0x1234" : undefined,
                 ratifier: entry.useSetterRatifier
-                  ? addresses.setterRatifier
-                  : addresses.ecrecoverRatifier,
+                  ? setterRatifier
+                  : ecrecoverRatifier,
               }),
             ),
           );

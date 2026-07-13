@@ -1,5 +1,6 @@
+import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
 import { describe, expect, test } from "vitest";
-import { addresses, baseOffer } from "../__test__/fixtures.js";
+import { createFixtures } from "../__test__/fixtures.js";
 import { InvalidTreeError } from "../errors.js";
 import { SetterRatifierUtils } from "./SetterRatifierUtils.js";
 import { Tree } from "./Tree.js";
@@ -9,12 +10,21 @@ const root =
   "0x3333333333333333333333333333333333333333333333333333333333333333" as const;
 const proofNode =
   "0x4444444444444444444444444444444444444444444444444444444444444444" as const;
+const ecrecoverRatifier = getChainAddress(
+  ChainId.BaseMainnet,
+  "ecrecoverRatifier",
+);
+const setterRatifier = getChainAddress(ChainId.BaseMainnet, "setterRatifier");
+const { baseOffer } = createFixtures({
+  midnight: getChainAddress(ChainId.BaseMainnet, "midnight"),
+  ecrecoverRatifier,
+});
 
 describe("SetterRatifierUtils.ratify", () => {
   test("default", () => {
     const offer = baseOffer({
       maxAssets: 0n,
-      ratifier: addresses.setterRatifier,
+      ratifier: setterRatifier,
     });
     const tree = Tree.create([offer]);
 
@@ -38,7 +48,7 @@ describe("SetterRatifierUtils.ratify", () => {
   test("behavior: accepts plain tree input", () => {
     const offer = baseOffer({
       maxAssets: 0n,
-      ratifier: addresses.setterRatifier,
+      ratifier: setterRatifier,
     });
 
     const items = SetterRatifierUtils.ratify({ tree: offer });
@@ -63,11 +73,11 @@ describe("SetterRatifierUtils.ratify", () => {
     const tree = Tree.create([
       baseOffer({
         maxAssets: 0n,
-        ratifier: addresses.setterRatifier,
+        ratifier: setterRatifier,
       }),
       baseOffer({
         maxAssets: 0n,
-        ratifier: addresses.ecrecoverRatifier,
+        ratifier: ecrecoverRatifier,
       }),
     ]);
 
@@ -82,11 +92,11 @@ describe("SetterRatifierUtils.ratifierData", () => {
     const tree = Tree.create([
       baseOffer({
         maxAssets: 0n,
-        ratifier: addresses.setterRatifier,
+        ratifier: setterRatifier,
       }),
       baseOffer({
         maxAssets: 0n,
-        ratifier: addresses.ecrecoverRatifier,
+        ratifier: ecrecoverRatifier,
       }),
     ]);
 
@@ -100,7 +110,7 @@ describe("SetterRatifierUtils.verifyRatifierData", () => {
   test("behavior: verifies proof and returns decoded ratifier data", () => {
     const offer = baseOffer({
       maxAssets: 0n,
-      ratifier: addresses.setterRatifier,
+      ratifier: setterRatifier,
     });
     const tree = Tree.create([offer]);
     const data = SetterRatifierUtils.ratifierData({ tree, leafIndex: 0n });
@@ -118,12 +128,12 @@ describe("SetterRatifierUtils.verifyRatifierData", () => {
     const tree = Tree.create([
       baseOffer({
         maxAssets: 0n,
-        ratifier: addresses.setterRatifier,
+        ratifier: setterRatifier,
       }),
       baseOffer({
         maxAssets: 0n,
         maxUnits: 2n,
-        ratifier: addresses.setterRatifier,
+        ratifier: setterRatifier,
       }),
     ]);
     const data = SetterRatifierUtils.ratifierData({ tree, leafIndex: 0n });

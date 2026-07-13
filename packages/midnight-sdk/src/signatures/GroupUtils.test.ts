@@ -1,7 +1,13 @@
+import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
 import { describe, expect, test } from "vitest";
-import { baseOfferInput, group as staleGroup } from "../__test__/fixtures.js";
+import { createFixtures, group as staleGroup } from "../__test__/fixtures.js";
 import { Group } from "./Group.js";
 import { GroupUtils } from "./GroupUtils.js";
+
+const { baseOfferInput } = createFixtures({
+  midnight: getChainAddress(ChainId.BaseMainnet, "midnight"),
+  ecrecoverRatifier: getChainAddress(ChainId.BaseMainnet, "ecrecoverRatifier"),
+});
 
 describe("Group.from", () => {
   test("default", () => {
