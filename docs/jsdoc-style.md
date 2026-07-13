@@ -87,8 +87,8 @@ Format: `@throws {ErrorClass} when <condition that triggers it>.`
 
 ```ts
 /**
- * @throws {NonPositiveBorrowAmountError} when `amount <= 0n`.
- * @throws {NonPositiveMinBorrowSharePriceError} when `minSharePrice < 0n`.
+ * @throws {NonPositiveInputError} when `amount <= 0n`.
+ * @throws {NegativeInputError} when `minSharePrice < 0n`.
  */
 ```
 
@@ -207,8 +207,8 @@ What's wrong:
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueBorrowAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator.
- * @throws {NonPositiveBorrowAmountError} when `amount <= 0n`.
- * @throws {NonPositiveMinBorrowSharePriceError} when `minSharePrice < 0n`.
+ * @throws {NonPositiveInputError} when `amount <= 0n`.
+ * @throws {NegativeInputError} when `minSharePrice < 0n`.
  * @example
  * ```ts
  * import { blueBorrow } from "@morpho-org/morpho-sdk";

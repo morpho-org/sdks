@@ -4,7 +4,7 @@ import { type Address, encodeFunctionData } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   type Metadata,
-  NonPositiveSharesAmountError,
+  NonPositiveInputError,
   type Transaction,
   type VaultV2RedeemAction,
 } from "../../types/index.js";
@@ -35,7 +35,7 @@ export interface VaultV2RedeemParams {
  * @param params.metadata - Optional analytics metadata attached to the transaction.
  * @returns A deep-frozen `Transaction<VaultV2RedeemAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator the simulation layer consumes.
- * @throws {NonPositiveSharesAmountError} when `shares <= 0n`.
+ * @throws {NonPositiveInputError} when `shares <= 0n`.
  * @example
  * ```ts
  * import { vaultV2Redeem } from "@morpho-org/morpho-sdk";
@@ -53,7 +53,7 @@ export const vaultV2Redeem = ({
   metadata,
 }: VaultV2RedeemParams): Readonly<Transaction<VaultV2RedeemAction>> => {
   if (shares <= 0n) {
-    throw new NonPositiveSharesAmountError(vaultAddress);
+    throw new NonPositiveInputError("shares", shares);
   }
 
   let tx = {

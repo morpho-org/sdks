@@ -26,10 +26,8 @@ import {
   ExcessiveSlippageToleranceError,
   type MorphoClientType,
   NativeAmountOnNonWNativeVaultError,
-  NegativeNativeAmountError,
-  NegativeSlippageToleranceError,
-  NonPositiveAssetAmountError,
-  NonPositiveSharesAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   type PermitRequirementSignature,
   type Requirement,
   type RequirementSignature,
@@ -222,11 +220,11 @@ export class MorphoVaultV2 implements VaultV2Actions {
     }
 
     if (amount < 0n) {
-      throw new NonPositiveAssetAmountError(this.vault);
+      throw new NegativeInputError("amount", amount);
     }
 
     if (nativeAmount && nativeAmount < 0n) {
-      throw new NegativeNativeAmountError(nativeAmount);
+      throw new NegativeInputError("nativeAmount", nativeAmount);
     }
 
     let wNative: Address | undefined;
@@ -238,7 +236,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     }
 
     if (slippageTolerance < 0n) {
-      throw new NegativeSlippageToleranceError(slippageTolerance);
+      throw new NegativeInputError("slippageTolerance", slippageTolerance);
     }
     if (slippageTolerance > MAX_SLIPPAGE_TOLERANCE) {
       throw new ExcessiveSlippageToleranceError(slippageTolerance);
@@ -260,7 +258,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
 
     const shares = accruedVault.toShares(totalAssets);
     if (shares <= 0n) {
-      throw new NonPositiveSharesAmountError(this.vault);
+      throw new NonPositiveInputError("shares", shares);
     }
 
     const maxSharePrice = MathLib.min(

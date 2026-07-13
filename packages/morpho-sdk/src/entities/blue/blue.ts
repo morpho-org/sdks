@@ -69,14 +69,8 @@ import {
   type MorphoClientType,
   MutuallyExclusiveRepayAmountsError,
   MutuallyExclusiveWithdrawAmountsError,
-  NegativeBorrowSharesError,
-  NegativeNativeAmountError,
-  NegativeSupplyAmountError,
-  NonPositiveAssetAmountError,
-  NonPositiveBorrowAmountError,
-  NonPositiveRepayAmountError,
-  NonPositiveWithdrawAmountError,
-  NonPositiveWithdrawCollateralAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   type PermitRequirementSignature,
   type ReallocationComputeOptions,
   RefinanceExceedsBorrowAssetsError,
@@ -91,8 +85,6 @@ import {
   type Transaction,
   type VaultReallocation,
   WithdrawExceedsCollateralError,
-  ZeroCollateralAmountError,
-  ZeroSupplyAmountError,
 } from "../../types/index.js";
 import { ReallocationData } from "../reallocationData.js";
 
@@ -579,16 +571,16 @@ export class MorphoBlue implements BlueActions {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     if (amount < 0n) {
-      throw new NegativeSupplyAmountError(this.marketParams.id);
+      throw new NegativeInputError("amount", amount);
     }
 
     if (nativeAmount !== undefined && nativeAmount < 0n) {
-      throw new NegativeNativeAmountError(nativeAmount);
+      throw new NegativeInputError("nativeAmount", nativeAmount);
     }
 
     const totalAssets = amount + (nativeAmount ?? 0n);
     if (totalAssets === 0n) {
-      throw new ZeroSupplyAmountError(this.marketParams.id);
+      throw new NonPositiveInputError("totalAssets", totalAssets);
     }
 
     if (marketData.id !== this.marketParams.id) {
@@ -668,8 +660,14 @@ export class MorphoBlue implements BlueActions {
     if (assets !== 0n && shares !== 0n) {
       throw new MutuallyExclusiveWithdrawAmountsError(this.marketParams.id);
     }
-    if (assets < 0n || shares < 0n || (assets === 0n && shares === 0n)) {
-      throw new NonPositiveWithdrawAmountError(this.marketParams.id);
+    if (assets < 0n) {
+      throw new NonPositiveInputError("assets", assets);
+    }
+    if (shares < 0n) {
+      throw new NonPositiveInputError("shares", shares);
+    }
+    if (assets === 0n && shares === 0n) {
+      throw new NonPositiveInputError("assets or shares", 0n);
     }
 
     validateSlippageTolerance(slippageTolerance);
@@ -745,16 +743,16 @@ export class MorphoBlue implements BlueActions {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     if (amount < 0n) {
-      throw new NonPositiveAssetAmountError(this.marketParams.collateralToken);
+      throw new NegativeInputError("amount", amount);
     }
 
     if (nativeAmount !== undefined && nativeAmount < 0n) {
-      throw new NegativeNativeAmountError(nativeAmount);
+      throw new NegativeInputError("nativeAmount", nativeAmount);
     }
 
     const totalCollateral = amount + (nativeAmount ?? 0n);
     if (totalCollateral === 0n) {
-      throw new ZeroCollateralAmountError(this.marketParams.id);
+      throw new NonPositiveInputError("totalCollateral", totalCollateral);
     }
 
     if (nativeAmount !== undefined && nativeAmount > 0n) {
@@ -809,7 +807,7 @@ export class MorphoBlue implements BlueActions {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     if (amount <= 0n) {
-      throw new NonPositiveBorrowAmountError(this.marketParams.id);
+      throw new NonPositiveInputError("amount", amount);
     }
 
     validateSlippageTolerance(slippageTolerance);
@@ -892,7 +890,24 @@ export class MorphoBlue implements BlueActions {
 
     const nativeAmount = params.nativeAmount ?? 0n;
     if (nativeAmount < 0n) {
-      throw new NegativeNativeAmountError(nativeAmount);
+      throw new NegativeInputError("nativeAmount", nativeAmount);
+    }
+
+    if ("shares" in params) {
+      if (params.shares <= 0n) {
+        throw new NonPositiveInputError("shares", params.shares);
+      }
+    } else {
+      const amount = params.amount ?? 0n;
+      if (amount < 0n) {
+        throw new NegativeInputError("amount", amount);
+      }
+      if (amount + nativeAmount <= 0n) {
+        throw new NonPositiveInputError(
+          "amount + nativeAmount",
+          amount + nativeAmount,
+        );
+      }
     }
 
     validateSlippageTolerance(slippageTolerance);
@@ -919,7 +934,7 @@ export class MorphoBlue implements BlueActions {
     if ("shares" in params) {
       const shares = params.shares;
       if (shares <= 0n) {
-        throw new NonPositiveRepayAmountError(this.marketParams.id);
+        throw new NonPositiveInputError("shares", shares);
       }
       validateRepayShares({
         positionData,
@@ -948,11 +963,11 @@ export class MorphoBlue implements BlueActions {
       // in the sum below (a negative amount would otherwise yield a negative
       // erc20Amount and a negative approval in getRequirements).
       if (amount < 0n) {
-        throw new NonPositiveRepayAmountError(this.marketParams.id);
+        throw new NegativeInputError("amount", amount);
       }
       repayAssets = amount + nativeAmount;
       if (repayAssets <= 0n) {
-        throw new NonPositiveRepayAmountError(this.marketParams.id);
+        throw new NonPositiveInputError("amount + nativeAmount", repayAssets);
       }
       validateRepayAmount({
         positionData,
@@ -1034,7 +1049,7 @@ export class MorphoBlue implements BlueActions {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     if (amount <= 0n) {
-      throw new NonPositiveWithdrawCollateralAmountError(this.marketParams.id);
+      throw new NonPositiveInputError("amount", amount);
     }
 
     if (!positionData) {
@@ -1102,11 +1117,28 @@ export class MorphoBlue implements BlueActions {
 
     const nativeAmount = params.nativeAmount ?? 0n;
     if (nativeAmount < 0n) {
-      throw new NegativeNativeAmountError(nativeAmount);
+      throw new NegativeInputError("nativeAmount", nativeAmount);
+    }
+
+    if ("shares" in params) {
+      if (params.shares <= 0n) {
+        throw new NonPositiveInputError("shares", params.shares);
+      }
+    } else {
+      const amount = params.amount ?? 0n;
+      if (amount < 0n) {
+        throw new NegativeInputError("amount", amount);
+      }
+      if (amount + nativeAmount <= 0n) {
+        throw new NonPositiveInputError(
+          "amount + nativeAmount",
+          amount + nativeAmount,
+        );
+      }
     }
 
     if (withdrawAmount <= 0n) {
-      throw new NonPositiveWithdrawCollateralAmountError(this.marketParams.id);
+      throw new NonPositiveInputError("withdrawAmount", withdrawAmount);
     }
 
     validateSlippageTolerance(slippageTolerance);
@@ -1139,7 +1171,7 @@ export class MorphoBlue implements BlueActions {
     if ("shares" in params) {
       const shares = params.shares;
       if (shares <= 0n) {
-        throw new NonPositiveRepayAmountError(this.marketParams.id);
+        throw new NonPositiveInputError("shares", shares);
       }
       validateRepayShares({
         positionData,
@@ -1163,11 +1195,11 @@ export class MorphoBlue implements BlueActions {
       // in the sum below (a negative amount would otherwise yield a negative
       // erc20Amount and a negative approval in getRequirements).
       if (amount < 0n) {
-        throw new NonPositiveRepayAmountError(this.marketParams.id);
+        throw new NegativeInputError("amount", amount);
       }
       repayAssets = amount + nativeAmount;
       if (repayAssets <= 0n) {
-        throw new NonPositiveRepayAmountError(this.marketParams.id);
+        throw new NonPositiveInputError("amount + nativeAmount", repayAssets);
       }
       validateRepayAmount({
         positionData,
@@ -1291,15 +1323,15 @@ export class MorphoBlue implements BlueActions {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     if (amount < 0n) {
-      throw new NonPositiveAssetAmountError(this.marketParams.collateralToken);
+      throw new NegativeInputError("amount", amount);
     }
 
     if (nativeAmount !== undefined && nativeAmount < 0n) {
-      throw new NegativeNativeAmountError(nativeAmount);
+      throw new NegativeInputError("nativeAmount", nativeAmount);
     }
 
     if (borrowAmount <= 0n) {
-      throw new NonPositiveBorrowAmountError(this.marketParams.id);
+      throw new NonPositiveInputError("borrowAmount", borrowAmount);
     }
 
     if (!positionData) {
@@ -1314,7 +1346,7 @@ export class MorphoBlue implements BlueActions {
 
     const totalCollateral = amount + (nativeAmount ?? 0n);
     if (totalCollateral === 0n) {
-      throw new ZeroCollateralAmountError(this.marketParams.id);
+      throw new NonPositiveInputError("totalCollateral", totalCollateral);
     }
 
     validateSlippageTolerance(slippageTolerance);
@@ -1412,7 +1444,7 @@ export class MorphoBlue implements BlueActions {
     validateSlippageTolerance(slippageTolerance);
 
     if (collateralAmount <= 0n) {
-      throw new ZeroCollateralAmountError(this.marketParams.id);
+      throw new NonPositiveInputError("collateralAmount", collateralAmount);
     }
 
     if (!positionData) {
@@ -1456,10 +1488,10 @@ export class MorphoBlue implements BlueActions {
 
     // Reject negative debt up front; otherwise it slips past the `> 0n` mode checks and only fails at buildTx().
     if (requestedAssets < 0n) {
-      throw new NonPositiveAssetAmountError(this.marketParams.loanToken);
+      throw new NegativeInputError("borrowAssets", requestedAssets);
     }
     if (requestedShares < 0n) {
-      throw new NegativeBorrowSharesError(this.marketParams.id);
+      throw new NegativeInputError("borrowShares", requestedShares);
     }
 
     if (requestedAssets > 0n && requestedShares > 0n) {

@@ -7,8 +7,8 @@ import {
   type AuthorizationRequirementSignature,
   type BlueBorrowAction,
   type Metadata,
-  NonPositiveBorrowAmountError,
-  NonPositiveMinBorrowSharePriceError,
+  NegativeInputError,
+  NonPositiveInputError,
   type Transaction,
   type VaultReallocation,
 } from "../../types/index.js";
@@ -63,15 +63,11 @@ export interface BlueBorrowParams {
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueBorrowAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator the simulation layer consumes.
- * @throws {NonPositiveBorrowAmountError} when `amount <= 0n`.
- * @throws {NonPositiveMinBorrowSharePriceError} when `minSharePrice < 0n` (negative; zero is
- *   allowed despite the class name).
- * @throws {NegativeReallocationFeeError} from `buildReallocationActions` when
- *   `reallocations` is non-empty and any `reallocation.fee < 0n`.
+ * @throws {NonPositiveInputError} when `amount <= 0n` or any reallocation withdrawal amount
+ *   is non-positive.
+ * @throws {NegativeInputError} when `minSharePrice < 0n` or any reallocation fee is negative.
  * @throws {EmptyReallocationWithdrawalsError} from `buildReallocationActions` when any
  *   `reallocation.withdrawals` is empty.
- * @throws {NonPositiveReallocationAmountError} from `buildReallocationActions` when any
- *   `reallocation.withdrawals[i].amount <= 0n`.
  * @throws {ReallocationWithdrawalOnTargetMarketError} from `buildReallocationActions` when any
  *   reallocation withdrawal references the target market.
  * @throws {UnsortedReallocationWithdrawalsError} from `buildReallocationActions` when
@@ -103,11 +99,11 @@ export const blueBorrow = ({
   metadata,
 }: BlueBorrowParams): Readonly<Transaction<BlueBorrowAction>> => {
   if (amount <= 0n) {
-    throw new NonPositiveBorrowAmountError(marketParams.id);
+    throw new NonPositiveInputError("amount", amount);
   }
 
   if (minSharePrice < 0n) {
-    throw new NonPositiveMinBorrowSharePriceError(marketParams.id);
+    throw new NegativeInputError("minSharePrice", minSharePrice);
   }
 
   const actions: Action[] = [];

@@ -29,10 +29,8 @@ import {
   ExcessiveSlippageToleranceError,
   type MorphoClientType,
   NativeAmountOnNonWNativeVaultError,
-  NegativeNativeAmountError,
-  NegativeSlippageToleranceError,
-  NonPositiveAssetAmountError,
-  NonPositiveSharesAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   type PermitRequirementSignature,
   type Requirement,
   type RequirementSignature,
@@ -193,11 +191,11 @@ export class MorphoVaultV1 implements VaultV1Actions {
     }
 
     if (amount < 0n) {
-      throw new NonPositiveAssetAmountError(this.vault);
+      throw new NegativeInputError("amount", amount);
     }
 
     if (nativeAmount && nativeAmount < 0n) {
-      throw new NegativeNativeAmountError(nativeAmount);
+      throw new NegativeInputError("nativeAmount", nativeAmount);
     }
 
     let wNative: Address | undefined;
@@ -209,7 +207,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
     }
 
     if (slippageTolerance < 0n) {
-      throw new NegativeSlippageToleranceError(slippageTolerance);
+      throw new NegativeInputError("slippageTolerance", slippageTolerance);
     }
     if (slippageTolerance > MAX_SLIPPAGE_TOLERANCE) {
       throw new ExcessiveSlippageToleranceError(slippageTolerance);
@@ -225,7 +223,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
 
     const shares = vaultData.toShares(totalAssets);
     if (shares <= 0n) {
-      throw new NonPositiveSharesAmountError(this.vault);
+      throw new NonPositiveInputError("shares", shares);
     }
 
     const maxSharePrice = MathLib.min(
@@ -342,11 +340,11 @@ export class MorphoVaultV1 implements VaultV1Actions {
     }
 
     if (shares <= 0n) {
-      throw new NonPositiveSharesAmountError(this.vault);
+      throw new NonPositiveInputError("shares", shares);
     }
 
     if (slippageTolerance < 0n) {
-      throw new NegativeSlippageToleranceError(slippageTolerance);
+      throw new NegativeInputError("slippageTolerance", slippageTolerance);
     }
     if (slippageTolerance > MAX_SLIPPAGE_TOLERANCE) {
       throw new ExcessiveSlippageToleranceError(slippageTolerance);
@@ -369,7 +367,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
     );
     const v2RefShares = accruedTargetVault.toShares(v1RefAssets);
     if (v2RefShares <= 0n) {
-      throw new NonPositiveSharesAmountError(targetVault.address);
+      throw new NonPositiveInputError("targetVaultShares", v2RefShares);
     }
     const maxSharePriceVaultV2 = MathLib.min(
       MathLib.mulDivUp(

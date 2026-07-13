@@ -4,7 +4,7 @@ import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import { WethUsdsBlue } from "../../../test/fixtures/blue.js";
 import { test } from "../../../test/setup.js";
-import { NonPositiveWithdrawCollateralAmountError } from "../../types/index.js";
+import { NonPositiveInputError } from "../../types/index.js";
 import { blueWithdrawCollateral } from "./withdrawCollateral.js";
 
 describe("blueWithdrawCollateral unit tests", () => {
@@ -38,7 +38,7 @@ describe("blueWithdrawCollateral unit tests", () => {
     expect(tx.value).toBe(0n);
   });
 
-  test("should throw NonPositiveWithdrawCollateralAmountError when amount is zero", async ({
+  test("should throw NonPositiveInputError when amount is zero", async ({
     client,
   }) => {
     expect(() =>
@@ -53,10 +53,10 @@ describe("blueWithdrawCollateral unit tests", () => {
           receiver: client.account.address,
         },
       }),
-    ).toThrow(NonPositiveWithdrawCollateralAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NonPositiveWithdrawCollateralAmountError when amount is negative", async ({
+  test("should throw NonPositiveInputError when amount is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -71,7 +71,7 @@ describe("blueWithdrawCollateral unit tests", () => {
           receiver: client.account.address,
         },
       }),
-    ).toThrow(NonPositiveWithdrawCollateralAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
   test("should return a deep-frozen transaction object", async ({ client }) => {

@@ -19,9 +19,8 @@ import {
   MissingClientPropertyError,
   MissingMarketPriceError,
   NativeAmountOnNonWNativeAssetError,
-  NegativeReallocationFeeError,
-  NegativeSlippageToleranceError,
-  NonPositiveReallocationAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   ReallocationWithdrawalOnTargetMarketError,
   RepayExceedsDebtError,
   RepaySharesExceedDebtError,
@@ -313,6 +312,20 @@ export const validateRepayShares = (params: {
  *
  * @param reallocations - The reallocations to validate.
  * @param targetMarketId - The ID of the operation's target market. No withdrawal may reference this market.
+ * @returns Nothing when every reallocation is valid.
+ * @throws {NegativeInputError} when a reallocation fee is negative.
+ * @throws {EmptyReallocationWithdrawalsError} when a reallocation has no withdrawals.
+ * @throws {NonPositiveInputError} when a withdrawal amount is non-positive.
+ * @throws {ReallocationWithdrawalOnTargetMarketError} when a withdrawal references the target market.
+ * @throws {UnsortedReallocationWithdrawalsError} when withdrawals are not strictly market-id sorted.
+ * @example
+ * ```ts
+ * import type { MarketId } from "@morpho-org/blue-sdk";
+ * import { validateReallocations } from "@morpho-org/morpho-sdk";
+ * import { zeroHash } from "viem";
+ *
+ * const result: void = validateReallocations([], zeroHash as MarketId);
+ * ```
  */
 export const validateReallocations = (
   reallocations: readonly VaultReallocation[],
@@ -320,7 +333,7 @@ export const validateReallocations = (
 ): void => {
   for (const r of reallocations) {
     if (r.fee < 0n) {
-      throw new NegativeReallocationFeeError(r.vault);
+      throw new NegativeInputError("reallocation.fee", r.fee);
     }
     if (r.withdrawals.length === 0) {
       throw new EmptyReallocationWithdrawalsError(r.vault);
@@ -328,9 +341,9 @@ export const validateReallocations = (
     let prevId: MarketId | undefined;
     for (const w of r.withdrawals) {
       if (w.amount <= 0n) {
-        throw new NonPositiveReallocationAmountError(
-          r.vault,
-          w.marketParams.id,
+        throw new NonPositiveInputError(
+          `reallocation.withdrawals[${w.marketParams.id}].amount`,
+          w.amount,
         );
       }
       if (w.marketParams.id === targetMarketId) {
@@ -356,14 +369,23 @@ export const validateReallocations = (
 /**
  * Validates that a slippage tolerance is within an acceptable range.
  *
- * Throws {@link NegativeSlippageToleranceError} if negative.
+ * Throws {@link NegativeInputError} if negative.
  * Throws {@link ExcessiveSlippageToleranceError} if greater than {@link MAX_SLIPPAGE_TOLERANCE}.
  *
  * @param slippageTolerance - The slippage tolerance in WAD.
+ * @returns Nothing when the slippage tolerance is valid.
+ * @throws {NegativeInputError} when `slippageTolerance < 0n`.
+ * @throws {ExcessiveSlippageToleranceError} when the tolerance exceeds the SDK maximum.
+ * @example
+ * ```ts
+ * import { validateSlippageTolerance } from "@morpho-org/morpho-sdk";
+ *
+ * const result: void = validateSlippageTolerance(5_000000000000000n);
+ * ```
  */
 export const validateSlippageTolerance = (slippageTolerance: bigint): void => {
   if (slippageTolerance < 0n) {
-    throw new NegativeSlippageToleranceError(slippageTolerance);
+    throw new NegativeInputError("slippageTolerance", slippageTolerance);
   }
   if (slippageTolerance > MAX_SLIPPAGE_TOLERANCE) {
     throw new ExcessiveSlippageToleranceError(slippageTolerance);

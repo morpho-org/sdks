@@ -10,8 +10,8 @@ import {
   MissingAccrualPositionError,
   MutuallyExclusiveWithdrawAmountsError,
   morphoViemExtension,
-  NegativeSlippageToleranceError,
-  NonPositiveWithdrawAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   type VaultReallocation,
   WithdrawExceedsSupplyError,
   WithdrawSharesExceedSupplyError,
@@ -420,7 +420,7 @@ describe("WithdrawBlue", () => {
     ).toThrow(MutuallyExclusiveWithdrawAmountsError);
   });
 
-  test("error: NonPositiveWithdrawAmountError when shares is negative", async ({
+  test("error: NonPositiveInputError when shares is negative", async ({
     client,
   }) => {
     const morphoClient = client.extend(morphoViemExtension()).morpho;
@@ -432,7 +432,7 @@ describe("WithdrawBlue", () => {
         shares: -1n,
         positionData: undefined as never,
       } as never),
-    ).toThrow(NonPositiveWithdrawAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
   test("error: MissingAccrualPositionError when positionData is missing", async ({
@@ -550,7 +550,7 @@ describe("WithdrawBlue", () => {
     ).toThrow(WithdrawSharesExceedSupplyError);
   });
 
-  test("error: NegativeSlippageToleranceError when slippageTolerance is negative", async ({
+  test("error: NegativeInputError when slippageTolerance is negative", async ({
     client,
   }) => {
     const morphoClient = client.extend(morphoViemExtension()).morpho;
@@ -563,7 +563,7 @@ describe("WithdrawBlue", () => {
         positionData: undefined as never,
         slippageTolerance: -1n,
       }),
-    ).toThrow(NegativeSlippageToleranceError);
+    ).toThrow(NegativeInputError);
   });
 
   test("error: ExcessiveSlippageToleranceError when slippageTolerance is too high", async ({

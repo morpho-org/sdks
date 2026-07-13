@@ -64,9 +64,9 @@ import {
   MidnightTakeableOfferMarketMismatchError,
   MissingAccrualPositionError,
   MissingMidnightOfferRootSignatureError,
-  NegativeMidnightAmountError,
+  NegativeInputError,
   NoMidnightCreditToRedeemError,
-  NonPositiveMidnightAmountError,
+  NonPositiveInputError,
   UnexpectedRequirementSignatureError,
   UnknownMidnightRatifierError,
   UnpreparedMidnightOfferRootSignatureError,
@@ -559,7 +559,7 @@ describe("MorphoMidnight", () => {
           takeableOffers: [midnightApiTake()],
           deadline: maxUint256,
         }),
-      ).toThrow(NonPositiveMidnightAmountError);
+      ).toThrow(NonPositiveInputError);
       expect(() =>
         midnight().takeLend({
           marketData: marketData(),
@@ -569,7 +569,7 @@ describe("MorphoMidnight", () => {
           takeableOffers: [midnightApiTake()],
           deadline: maxUint256,
         }),
-      ).toThrow(NegativeMidnightAmountError);
+      ).toThrow(NegativeInputError);
       expect(() =>
         midnight().takeLend({
           marketData: marketData(),
@@ -579,7 +579,7 @@ describe("MorphoMidnight", () => {
           takeableOffers: [midnightApiTake()],
           deadline: -1n,
         }),
-      ).toThrow(NegativeMidnightAmountError);
+      ).toThrow(NegativeInputError);
     });
 
     test("error: MidnightMarketAddressMismatchError", () => {
@@ -653,7 +653,7 @@ describe("MorphoMidnight", () => {
           takeableOffers: [midnightApiTake({ buy: true })],
           deadline: maxUint256,
         }),
-      ).toThrow(NonPositiveMidnightAmountError);
+      ).toThrow(NonPositiveInputError);
       expect(() =>
         midnight().takeBorrow({
           marketData: marketData(),
@@ -663,17 +663,7 @@ describe("MorphoMidnight", () => {
           takeableOffers: [midnightApiTake({ buy: true })],
           deadline: maxUint256,
         }),
-      ).toThrow(NonPositiveMidnightAmountError);
-      expect(() =>
-        midnight().takeBorrow({
-          marketData: marketData(),
-          accountAddress: midnightAddresses.taker,
-          loanAssets: 1_000n,
-          maxUnits: 0n,
-          takeableOffers: [midnightApiTake({ buy: true })],
-          deadline: maxUint256,
-        }),
-      ).toThrow(NonPositiveMidnightAmountError);
+      ).toThrow(NegativeInputError);
       expect(() =>
         midnight().takeBorrow({
           marketData: marketData(),
@@ -683,7 +673,7 @@ describe("MorphoMidnight", () => {
           takeableOffers: [midnightApiTake({ buy: true })],
           deadline: -1n,
         }),
-      ).toThrow(NegativeMidnightAmountError);
+      ).toThrow(NegativeInputError);
     });
   });
 
@@ -756,19 +746,16 @@ describe("MorphoMidnight", () => {
           ...params,
           collateralAssets: 0n,
         }),
-      ).toThrow(NonPositiveMidnightAmountError);
+      ).toThrow(NonPositiveInputError);
       expect(() =>
         midnight().supplyCollateralTakeBorrow({ ...params, loanAssets: 0n }),
-      ).toThrow(NonPositiveMidnightAmountError);
-      expect(() =>
-        midnight().supplyCollateralTakeBorrow({ ...params, maxUnits: 0n }),
-      ).toThrow(NonPositiveMidnightAmountError);
+      ).toThrow(NonPositiveInputError);
       expect(() =>
         midnight().supplyCollateralTakeBorrow({ ...params, maxUnits: -1n }),
-      ).toThrow(NonPositiveMidnightAmountError);
+      ).toThrow(NegativeInputError);
       expect(() =>
         midnight().supplyCollateralTakeBorrow({ ...params, deadline: -1n }),
-      ).toThrow(NegativeMidnightAmountError);
+      ).toThrow(NegativeInputError);
     });
   });
 
@@ -828,7 +815,7 @@ describe("MorphoMidnight", () => {
           accountAddress: midnightAddresses.taker,
           collateralAssets: 0n,
         }),
-      ).toThrow(NonPositiveMidnightAmountError);
+      ).toThrow(NonPositiveInputError);
       expect(() =>
         midnight().supplyCollateral({
           marketData: marketData(),
@@ -836,7 +823,7 @@ describe("MorphoMidnight", () => {
           collateralAssets: 2_000n,
           reservedCollateralAssets: -1n,
         }),
-      ).toThrow(NegativeMidnightAmountError);
+      ).toThrow(NegativeInputError);
     });
   });
 
@@ -1523,7 +1510,7 @@ describe("MorphoMidnight", () => {
           loanToken: midnightAddresses.loanToken,
           loanAssets: 0n,
         }),
-      ).rejects.toThrow(NonPositiveMidnightAmountError);
+      ).rejects.toThrow(NonPositiveInputError);
       await expect(
         midnight().makeLend({
           accountAddress: data.accountAddress,
@@ -1533,7 +1520,7 @@ describe("MorphoMidnight", () => {
           loanAssets: 1_000n,
           reservedLoanAssets: -1n,
         }),
-      ).rejects.toThrow(NegativeMidnightAmountError);
+      ).rejects.toThrow(NegativeInputError);
     });
 
     test("error: MidnightOfferSideMismatchError", async () => {
@@ -1672,7 +1659,7 @@ describe("MorphoMidnight", () => {
           market: midnightMarket,
           collateralAssets: 0n,
         }),
-      ).rejects.toThrow(NonPositiveMidnightAmountError);
+      ).rejects.toThrow(NonPositiveInputError);
       await expect(
         midnight().supplyCollateralMakeBorrow({
           accountAddress: data.accountAddress,
@@ -1682,7 +1669,7 @@ describe("MorphoMidnight", () => {
           collateralAssets: 1_000n,
           reservedCollateralAssets: -1n,
         }),
-      ).rejects.toThrow(NegativeMidnightAmountError);
+      ).rejects.toThrow(NegativeInputError);
     });
 
     test("error: MarketIdMismatchError", async () => {
@@ -1856,23 +1843,23 @@ describe("MorphoMidnight", () => {
 
       expect(() =>
         midnight().repayWithdrawCollateral({ ...params, repayAssets: -1n }),
-      ).toThrow(NegativeMidnightAmountError);
+      ).toThrow(NegativeInputError);
       expect(() =>
         midnight().repayWithdrawCollateral({
           ...params,
           withdrawCollateralAssets: -1n,
         }),
-      ).toThrow(NegativeMidnightAmountError);
+      ).toThrow(NegativeInputError);
       expect(() =>
         midnight().repayWithdrawCollateral({ ...params, deadline: -1n }),
-      ).toThrow(NegativeMidnightAmountError);
+      ).toThrow(NegativeInputError);
       expect(() =>
         midnight().repayWithdrawCollateral({
           ...params,
           withdrawCollateralAssets: 1n,
           collateralIndex: -1n,
         }),
-      ).toThrow(NegativeMidnightAmountError);
+      ).toThrow(NegativeInputError);
       expect(() =>
         midnight().repayWithdrawCollateral({
           ...params,
@@ -1886,7 +1873,7 @@ describe("MorphoMidnight", () => {
           repayAssets: 0n,
           withdrawCollateralAssets: 0n,
         }),
-      ).toThrow(NonPositiveMidnightAmountError);
+      ).toThrow(NonPositiveInputError);
     });
   });
 

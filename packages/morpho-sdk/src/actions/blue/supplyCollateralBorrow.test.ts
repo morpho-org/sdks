@@ -13,12 +13,9 @@ import {
   isRequirementApproval,
   isRequirementSignature,
   NativeAmountOnNonWNativeAssetError,
-  NegativeNativeAmountError,
-  NonPositiveAssetAmountError,
-  NonPositiveBorrowAmountError,
-  NonPositiveMinBorrowSharePriceError,
+  NegativeInputError,
+  NonPositiveInputError,
   type VaultReallocation,
-  ZeroCollateralAmountError,
 } from "../../types/index.js";
 import { getGeneralAdapterRequirements } from "../requirements/index.js";
 import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
@@ -211,7 +208,7 @@ describe("blueSupplyCollateralBorrow unit tests", () => {
     expect(tx.action.type).toBe("blueSupplyCollateralBorrow");
   });
 
-  test("should throw NonPositiveAssetAmountError when amount is negative", async ({
+  test("should throw NegativeInputError when amount is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -228,10 +225,10 @@ describe("blueSupplyCollateralBorrow unit tests", () => {
           minSharePrice: 0n,
         },
       }),
-    ).toThrow(NonPositiveAssetAmountError);
+    ).toThrow(NegativeInputError);
   });
 
-  test("should throw NonPositiveBorrowAmountError when borrowAmount is zero", async ({
+  test("should throw NonPositiveInputError when borrowAmount is zero", async ({
     client,
   }) => {
     expect(() =>
@@ -248,10 +245,10 @@ describe("blueSupplyCollateralBorrow unit tests", () => {
           minSharePrice: 0n,
         },
       }),
-    ).toThrow(NonPositiveBorrowAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NonPositiveBorrowAmountError when borrowAmount is negative", async ({
+  test("should throw NonPositiveInputError when borrowAmount is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -268,10 +265,10 @@ describe("blueSupplyCollateralBorrow unit tests", () => {
           minSharePrice: 0n,
         },
       }),
-    ).toThrow(NonPositiveBorrowAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NonPositiveMinBorrowSharePriceError when minSharePrice is negative", async ({
+  test("should throw NegativeInputError when minSharePrice is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -288,10 +285,10 @@ describe("blueSupplyCollateralBorrow unit tests", () => {
           minSharePrice: -1n,
         },
       }),
-    ).toThrow(NonPositiveMinBorrowSharePriceError);
+    ).toThrow(NegativeInputError);
   });
 
-  test("should throw ZeroCollateralAmountError when total collateral is zero", async ({
+  test("should throw NonPositiveInputError when total collateral is zero", async ({
     client,
   }) => {
     expect(() =>
@@ -308,10 +305,10 @@ describe("blueSupplyCollateralBorrow unit tests", () => {
           minSharePrice: 0n,
         },
       }),
-    ).toThrow(ZeroCollateralAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NegativeNativeAmountError when nativeAmount is negative", async ({
+  test("should throw NegativeInputError when nativeAmount is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -328,7 +325,7 @@ describe("blueSupplyCollateralBorrow unit tests", () => {
           minSharePrice: 0n,
         },
       }),
-    ).toThrow(NegativeNativeAmountError);
+    ).toThrow(NegativeInputError);
   });
 
   test("should throw NativeAmountOnNonWNativeAssetError for non-wNative collateral", async ({

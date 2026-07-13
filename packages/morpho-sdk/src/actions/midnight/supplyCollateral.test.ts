@@ -10,7 +10,7 @@ import {
   midnightMarket,
   midnightMarketId,
 } from "../../../test/fixtures/midnight.js";
-import { NonPositiveMidnightAmountError } from "../../types/index.js";
+import { NonPositiveInputError } from "../../types/index.js";
 import { midnightSupplyCollateral } from "./supplyCollateral.js";
 
 describe("midnightSupplyCollateral", () => {
@@ -47,7 +47,7 @@ describe("midnightSupplyCollateral", () => {
     expect(tx.data.endsWith("a1b2c3d4")).toBe(true);
   });
 
-  test("error: NonPositiveMidnightAmountError", () => {
+  test("error: NonPositiveInputError", () => {
     expect(() =>
       midnightSupplyCollateral({
         chainId: midnightChainId,
@@ -55,7 +55,7 @@ describe("midnightSupplyCollateral", () => {
         assets: 0n,
         onBehalf: midnightAddresses.taker,
       }),
-    ).toThrow(NonPositiveMidnightAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
   test("error: UnknownCollateralIndexError", () => {

@@ -23,9 +23,8 @@ import {
   MissingClientPropertyError,
   MissingMarketPriceError,
   NativeAmountOnNonWNativeAssetError,
-  NegativeReallocationFeeError,
-  NegativeSlippageToleranceError,
-  NonPositiveReallocationAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   ReallocationWithdrawalOnTargetMarketError,
   RepayExceedsDebtError,
   RepaySharesExceedDebtError,
@@ -521,13 +520,13 @@ describe("validateReallocations", () => {
     ).not.toThrow();
   });
 
-  test("should throw NegativeReallocationFeeError when fee is negative", () => {
+  test("should throw NegativeInputError when fee is negative", () => {
     expect(() =>
       validateReallocations(
         [{ ...validReallocation, fee: -1n }],
         targetMarketId,
       ),
-    ).toThrow(NegativeReallocationFeeError);
+    ).toThrow(NegativeInputError);
   });
 
   test("should throw EmptyReallocationWithdrawalsError when withdrawals is empty", () => {
@@ -539,7 +538,7 @@ describe("validateReallocations", () => {
     ).toThrow(EmptyReallocationWithdrawalsError);
   });
 
-  test("should throw NonPositiveReallocationAmountError when withdrawal amount is zero", () => {
+  test("should throw NonPositiveInputError when withdrawal amount is zero", () => {
     expect(() =>
       validateReallocations(
         [
@@ -550,10 +549,10 @@ describe("validateReallocations", () => {
         ],
         targetMarketId,
       ),
-    ).toThrow(NonPositiveReallocationAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NonPositiveReallocationAmountError when withdrawal amount is negative", () => {
+  test("should throw NonPositiveInputError when withdrawal amount is negative", () => {
     expect(() =>
       validateReallocations(
         [
@@ -564,7 +563,7 @@ describe("validateReallocations", () => {
         ],
         targetMarketId,
       ),
-    ).toThrow(NonPositiveReallocationAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
   test("should throw ReallocationWithdrawalOnTargetMarketError when withdrawal targets the target market", () => {
@@ -642,10 +641,8 @@ describe("validateSlippageTolerance", () => {
     ).not.toThrow();
   });
 
-  test("should throw NegativeSlippageToleranceError when slippage is negative", () => {
-    expect(() => validateSlippageTolerance(-1n)).toThrow(
-      NegativeSlippageToleranceError,
-    );
+  test("should throw NegativeInputError when slippage is negative", () => {
+    expect(() => validateSlippageTolerance(-1n)).toThrow(NegativeInputError);
   });
 
   test("should throw ExcessiveSlippageToleranceError just above MAX_SLIPPAGE_TOLERANCE", () => {

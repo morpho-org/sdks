@@ -8,10 +8,8 @@ import {
   isRequirementApproval,
   isRequirementSignature,
   NativeAmountOnNonWNativeAssetError,
-  NegativeNativeAmountError,
-  NegativeSupplyAmountError,
-  NegativeSupplyMaxSharePriceError,
-  ZeroSupplyAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
 } from "../../types/index.js";
 import { getGeneralAdapterRequirements } from "../requirements/index.js";
 import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
@@ -169,7 +167,7 @@ describe("blueSupply unit tests", () => {
     expect(localSpy).toHaveBeenCalled();
   });
 
-  test("should throw NegativeSupplyAmountError when amount is negative", async ({
+  test("should throw NegativeInputError when amount is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -181,10 +179,10 @@ describe("blueSupply unit tests", () => {
           maxSharePrice: MAX_SHARE_PRICE,
         },
       }),
-    ).toThrow(NegativeSupplyAmountError);
+    ).toThrow(NegativeInputError);
   });
 
-  test("should throw ZeroSupplyAmountError when total amount is zero", async ({
+  test("should throw NonPositiveInputError when total amount is zero", async ({
     client,
   }) => {
     expect(() =>
@@ -196,10 +194,10 @@ describe("blueSupply unit tests", () => {
           maxSharePrice: MAX_SHARE_PRICE,
         },
       }),
-    ).toThrow(ZeroSupplyAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NegativeNativeAmountError when nativeAmount is negative", async ({
+  test("should throw NegativeInputError when nativeAmount is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -211,10 +209,10 @@ describe("blueSupply unit tests", () => {
           maxSharePrice: MAX_SHARE_PRICE,
         },
       }),
-    ).toThrow(NegativeNativeAmountError);
+    ).toThrow(NegativeInputError);
   });
 
-  test("should throw NegativeSupplyMaxSharePriceError when maxSharePrice is negative", async ({
+  test("should throw NegativeInputError when maxSharePrice is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -226,7 +224,7 @@ describe("blueSupply unit tests", () => {
           maxSharePrice: -1n,
         },
       }),
-    ).toThrow(NegativeSupplyMaxSharePriceError);
+    ).toThrow(NegativeInputError);
   });
 
   test("should throw NativeAmountOnNonWNativeAssetError for non-wNative loan token", async ({

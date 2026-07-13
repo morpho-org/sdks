@@ -12,8 +12,8 @@ import {
   EmptyMidnightTakeableOffersError,
   MidnightOfferSideMismatchError,
   MidnightTakeableOfferMarketMismatchError,
-  NegativeMidnightAmountError,
-  NonPositiveMidnightAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
 } from "../../types/index.js";
 import { midnightTakeBorrow } from "./takeBorrow.js";
 
@@ -59,7 +59,7 @@ describe("midnightTakeBorrow", () => {
     expect(tx.data.endsWith("a1b2c3d4")).toBe(true);
   });
 
-  test("error: NonPositiveMidnightAmountError", () => {
+  test("error: NonPositiveInputError", () => {
     expect(() =>
       midnightTakeBorrow({
         chainId: midnightChainId,
@@ -70,10 +70,10 @@ describe("midnightTakeBorrow", () => {
         takeableOffers: [midnightApiTake({ buy: true })],
         deadline: maxUint256,
       }),
-    ).toThrow(NonPositiveMidnightAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("error: amount validation", () => {
+  test("error: NegativeInputError", () => {
     const params = {
       chainId: midnightChainId,
       market: midnightMarket,
@@ -84,14 +84,11 @@ describe("midnightTakeBorrow", () => {
       deadline: maxUint256,
     } as const;
 
-    expect(() => midnightTakeBorrow({ ...params, maxUnits: 0n })).toThrow(
-      NonPositiveMidnightAmountError,
-    );
     expect(() => midnightTakeBorrow({ ...params, maxUnits: -1n })).toThrow(
-      NonPositiveMidnightAmountError,
+      NegativeInputError,
     );
     expect(() => midnightTakeBorrow({ ...params, deadline: -1n })).toThrow(
-      NegativeMidnightAmountError,
+      NegativeInputError,
     );
   });
 

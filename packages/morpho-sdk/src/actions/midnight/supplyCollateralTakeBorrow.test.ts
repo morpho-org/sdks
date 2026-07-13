@@ -15,8 +15,8 @@ import {
   EmptyMidnightTakeableOffersError,
   MidnightOfferSideMismatchError,
   MidnightTakeableOfferMarketMismatchError,
-  NegativeMidnightAmountError,
-  NonPositiveMidnightAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
 } from "../../types/index.js";
 import { midnightSupplyCollateralTakeBorrow } from "./supplyCollateralTakeBorrow.js";
 import { PermitKind } from "./types.js";
@@ -76,7 +76,7 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
     expect(tx.data.endsWith("a1b2c3d4")).toBe(true);
   });
 
-  test("error: NonPositiveMidnightAmountError", () => {
+  test("error: NonPositiveInputError", () => {
     const params = {
       chainId: midnightChainId,
       market: midnightMarket,
@@ -93,13 +93,13 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
         ...params,
         collateralAssets: 0n,
       }),
-    ).toThrow(NonPositiveMidnightAmountError);
+    ).toThrow(NonPositiveInputError);
     expect(() =>
       midnightSupplyCollateralTakeBorrow({ ...params, loanAssets: 0n }),
-    ).toThrow(NonPositiveMidnightAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("error: NegativeMidnightAmountError", () => {
+  test("error: NegativeInputError", () => {
     const params = {
       chainId: midnightChainId,
       market: midnightMarket,
@@ -112,14 +112,11 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
     } as const;
 
     expect(() =>
-      midnightSupplyCollateralTakeBorrow({ ...params, maxUnits: 0n }),
-    ).toThrow(NonPositiveMidnightAmountError);
-    expect(() =>
       midnightSupplyCollateralTakeBorrow({ ...params, maxUnits: -1n }),
-    ).toThrow(NonPositiveMidnightAmountError);
+    ).toThrow(NegativeInputError);
     expect(() =>
       midnightSupplyCollateralTakeBorrow({ ...params, deadline: -1n }),
-    ).toThrow(NegativeMidnightAmountError);
+    ).toThrow(NegativeInputError);
   });
 
   test("error: EmptyMidnightTakeableOffersError", () => {

@@ -7,11 +7,10 @@ import {
   type BlueSupplyCollateralAction,
   type DepositAmountArgs,
   type Metadata,
-  NegativeNativeAmountError,
-  NonPositiveAssetAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   type PermitRequirementSignature,
   type Transaction,
-  ZeroCollateralAmountError,
 } from "../../types/index.js";
 import { buildAssetFundingActions } from "./buildAssetFundingActions.js";
 
@@ -50,9 +49,8 @@ export interface BlueSupplyCollateralParams {
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueSupplyCollateralAction>` with `to`, `value`, `data`,
  *   and the typed `action` discriminator the simulation layer consumes.
- * @throws {NonPositiveAssetAmountError} when `amount < 0n`.
- * @throws {NegativeNativeAmountError} when `nativeAmount < 0n`.
- * @throws {ZeroCollateralAmountError} when both `amount` and `nativeAmount` resolve to zero.
+ * @throws {NegativeInputError} when `amount < 0n` or `nativeAmount < 0n`.
+ * @throws {NonPositiveInputError} when both `amount` and `nativeAmount` resolve to zero.
  * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
  * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the collateral
  *   token is not the chain's wNative.
@@ -81,17 +79,17 @@ export const blueSupplyCollateral = ({
   Transaction<BlueSupplyCollateralAction>
 > => {
   if (amount < 0n) {
-    throw new NonPositiveAssetAmountError(marketParams.collateralToken);
+    throw new NegativeInputError("amount", amount);
   }
 
   if (nativeAmount !== undefined && nativeAmount < 0n) {
-    throw new NegativeNativeAmountError(nativeAmount);
+    throw new NegativeInputError("nativeAmount", nativeAmount);
   }
 
   const totalCollateral = amount + (nativeAmount ?? 0n);
 
   if (totalCollateral === 0n) {
-    throw new ZeroCollateralAmountError(marketParams.id);
+    throw new NonPositiveInputError("totalCollateral", totalCollateral);
   }
 
   const actions: Action[] = buildAssetFundingActions({

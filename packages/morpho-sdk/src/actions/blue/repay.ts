@@ -66,14 +66,11 @@ export interface BlueRepayParams {
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueRepayAction>` with `to`, `value` (= `nativeAmount`),
  *   `data`, and the typed `action` discriminator the simulation layer consumes.
- * @throws {NonPositiveRepayMaxSharePriceError} when `maxSharePrice <= 0n`.
- * @throws {NegativeNativeAmountError} when `nativeAmount < 0n`.
+ * @throws {NonPositiveInputError} when `maxSharePrice <= 0n` or the total funding is zero.
+ * @throws {NegativeInputError} when `amount`, `shares`, `nativeAmount`, or `transferAmount` is negative.
  * @throws {MutuallyExclusiveRepayAmountsError} when both `amount` and `shares` are `> 0n`.
  * @throws {TransferAmountNotEqualToAssetsError} when in assets mode and
  *   `transferAmount !== amount + nativeAmount`.
- * @throws {NonPositiveRepayAmountError} when `amount` or `shares` is negative, when in assets mode
- *   and `transferAmount <= 0n`, or when in shares mode and `transferAmount` is negative or the total
- *   funding (`transferAmount + nativeAmount`) is `<= 0n`.
  * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
  * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the loan token is not
  *   the chain's wNative.

@@ -27,12 +27,13 @@ Both map directly to `PublicAllocator.reallocateTo()` arguments.
 
 One class per error case. Never throw a generic `Error` from SDK source.
 
-- **Market-specific:** `BorrowExceedsSafeLtvError`, `MissingMarketPriceError`, `ZeroCollateralAmountError`, `NativeAmountOnNonWNativeAssetError`, `NativeAmountExceedsTransferAmountError`, `ZeroSupplyAmountError`, `NegativeSupplyAmountError`, `NegativeSupplyMaxSharePriceError`, `NonPositiveWithdrawAmountError`, `NegativeWithdrawMinSharePriceError`, `MutuallyExclusiveWithdrawAmountsError`, `WithdrawExceedsSupplyError`, `WithdrawSharesExceedSupplyError`.
-- **Reallocation-specific:** `NegativeReallocationFeeError`, `EmptyReallocationWithdrawalsError`, `NonPositiveReallocationAmountError`, `ReallocationWithdrawalOnTargetMarketError`, `UnsortedReallocationWithdrawalsError`, `ReallocationWithdrawExceedsMarketSupplyError`.
+- **Generic input bounds:** `NegativeInputError` for values that must be non-negative and `NonPositiveInputError` for values that must be positive. Both expose the invalid `field` and `value`; reuse them across Vault, Blue, and Midnight instead of adding operation-specific scalar-bound errors.
+- **Market-specific:** `BorrowExceedsSafeLtvError`, `MissingMarketPriceError`, `NativeAmountOnNonWNativeAssetError`, `NativeAmountExceedsTransferAmountError`, `MutuallyExclusiveWithdrawAmountsError`, `WithdrawExceedsSupplyError`, `WithdrawSharesExceedSupplyError`.
+- **Reallocation-specific:** `EmptyReallocationWithdrawalsError`, `ReallocationWithdrawalOnTargetMarketError`, `UnsortedReallocationWithdrawalsError`, `ReallocationWithdrawExceedsMarketSupplyError`.
 
 ## Adding a new operation
 
 1. Add the action interface here, extending `BaseAction<TType, TArgs>`.
 2. Extend the `TransactionAction` union.
-3. Add a dedicated error class in `error.ts` for any new failure mode it introduces.
+3. Reuse the generic input-bound errors for scalar validation; add a dedicated class in `error.ts` only for a distinct domain failure mode.
 4. Mark all properties `readonly`.

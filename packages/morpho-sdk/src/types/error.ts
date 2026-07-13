@@ -2,6 +2,60 @@ import { type MarketId, UnknownDataError } from "@morpho-org/blue-sdk";
 import type { Address } from "viem";
 
 /**
+ * Thrown when a morpho-sdk input that must be non-negative is negative.
+ *
+ * @example
+ * ```ts
+ * import { NegativeInputError } from "@morpho-org/morpho-sdk";
+ *
+ * const error = new NegativeInputError("amount", -1n);
+ * if (error instanceof NegativeInputError) {
+ *   console.error(error.field, error.value);
+ * }
+ * ```
+ */
+export class NegativeInputError extends Error {
+  /**
+   * @param field - Public input field whose value is invalid.
+   * @param value - Negative bigint supplied for the field.
+   */
+  public constructor(
+    public readonly field: string,
+    public readonly value: bigint,
+  ) {
+    super(`Input "${field}" must be non-negative, got "${value}".`);
+    this.name = "NegativeInputError";
+  }
+}
+
+/**
+ * Thrown when a morpho-sdk input that must be positive is zero or negative.
+ *
+ * @example
+ * ```ts
+ * import { NonPositiveInputError } from "@morpho-org/morpho-sdk";
+ *
+ * const error = new NonPositiveInputError("shares", 0n);
+ * if (error instanceof NonPositiveInputError) {
+ *   console.error(error.field, error.value);
+ * }
+ * ```
+ */
+export class NonPositiveInputError extends Error {
+  /**
+   * @param field - Public input field whose value is invalid.
+   * @param value - Zero or negative bigint supplied for the field.
+   */
+  public constructor(
+    public readonly field: string,
+    public readonly value: bigint,
+  ) {
+    super(`Input "${field}" must be positive, got "${value}".`);
+    this.name = "NonPositiveInputError";
+  }
+}
+
+/**
  * Typed errors thrown while encoding supported Bundler3 actions.
  *
  * @remarks
@@ -130,27 +184,6 @@ export class UnexpectedRequirementSignatureError extends Error {
   }
 }
 
-/** Thrown when an asset amount is required to be positive but is zero or negative. */
-export class NonPositiveAssetAmountError extends Error {
-  constructor(origin: Address) {
-    super(`Asset amount must be positive for address ${origin}`);
-  }
-}
-
-/** Thrown when a shares amount is required to be positive but is zero or negative. */
-export class NonPositiveSharesAmountError extends Error {
-  constructor(vault: Address) {
-    super(`Shares amount must be positive for address: ${vault}`);
-  }
-}
-
-/** Thrown when a vault deposit's `maxSharePrice` slippage bound is zero or negative. */
-export class NonPositiveMaxSharePriceError extends Error {
-  constructor(vault: Address) {
-    super(`Max share price must be positive for vault: ${vault}`);
-  }
-}
-
 /** Thrown when a viem client's account address does not match the address required by the call. */
 export class AddressMismatchError extends Error {
   constructor(clientAddress: Address, argsAddress: Address) {
@@ -227,13 +260,6 @@ export class UnsupportedMidnightAuthorizationTargetError extends Error {
     super(
       `Midnight authorization target "${params.authorized}" is not supported on chain "${params.chainId}". Use "${params.supportedTargets.join('", "')}".`,
     );
-  }
-}
-
-/** Thrown when a slippage tolerance is negative. */
-export class NegativeSlippageToleranceError extends Error {
-  constructor(slippageTolerance: bigint) {
-    super(`Slippage tolerance ${slippageTolerance} must not be negative`);
   }
 }
 
@@ -327,43 +353,11 @@ export class ChainWNativeMissingError extends Error {
   }
 }
 
-/** Thrown when `nativeAmount` is negative. */
-export class NegativeNativeAmountError extends Error {
-  constructor(nativeAmount: bigint) {
-    super(`Native amount must not be negative, got ${nativeAmount}`);
-  }
-}
-
-/** Thrown when both `amount` and `nativeAmount` resolve to zero on a vault deposit. */
-export class ZeroDepositAmountError extends Error {
-  constructor(vault: Address) {
-    super(
-      `Total deposit amount must be positive for vault: ${vault}. Both amount and nativeAmount are zero.`,
-    );
-  }
-}
-
 /** Thrown when a vault entity's address does not match the vault address embedded in the call's args. */
 export class VaultAddressMismatchError extends Error {
   constructor(vaultAddress: Address, argsVaultAddress: Address) {
     super(
       `Vault address mismatch between vault: ${vaultAddress} and args: ${argsVaultAddress}`,
-    );
-  }
-}
-
-/** Thrown when a market borrow amount is zero or negative. */
-export class NonPositiveBorrowAmountError extends Error {
-  constructor(market: string) {
-    super(`Borrow amount must be positive for market: ${market}`);
-  }
-}
-
-/** Thrown when both `amount` and `nativeAmount` resolve to zero on a market collateral supply. */
-export class ZeroCollateralAmountError extends Error {
-  constructor(market: string) {
-    super(
-      `Total collateral amount must be positive for market: ${market}. Both amount and nativeAmount are zero.`,
     );
   }
 }
@@ -419,26 +413,10 @@ export class AccrualPositionUserMismatchError extends Error {
   }
 }
 
-/** Thrown when a reallocation's fee is negative. */
-export class NegativeReallocationFeeError extends Error {
-  constructor(vault: string) {
-    super(`Reallocation fee must not be negative for vault: ${vault}`);
-  }
-}
-
 /** Thrown when a reallocation has no withdrawals. */
 export class EmptyReallocationWithdrawalsError extends Error {
   constructor(vault: string) {
     super(`Reallocation withdrawals list cannot be empty for vault: ${vault}`);
-  }
-}
-
-/** Thrown when a reallocation withdrawal amount is zero or negative. */
-export class NonPositiveReallocationAmountError extends Error {
-  constructor(vault: string, market: string) {
-    super(
-      `Reallocation withdrawal amount must be positive for vault ${vault} on market ${market}`,
-    );
   }
 }
 
@@ -464,9 +442,9 @@ export class UnsortedReallocationWithdrawalsError extends Error {
  * Thrown when a market repay's `transferAmount` is zero or negative.
  *
  * @deprecated No longer thrown. The repay action layer no longer validates `transferAmount`
- * directly (assets mode uses {@link NonPositiveRepayAmountError}; shares mode allows a zero
- * ERC-20 transfer for fully-native repays). Retained as exported API for back-compat; slated
- * for removal in a future major.
+ * through this operation-specific error; it uses {@link NegativeInputError} and
+ * {@link NonPositiveInputError}, while shares mode allows a zero ERC-20 transfer for fully-native
+ * repays. Retained as exported API for back-compat; slated for removal in a future major.
  */
 export class NonPositiveTransferAmountError extends Error {
   constructor(market: string) {
@@ -518,27 +496,6 @@ export class MutuallyExclusiveRepayAmountsError extends Error {
     super(
       `Exactly one of assets or shares must be non-zero for market: ${market}. Both were provided.`,
     );
-  }
-}
-
-/** Thrown when a market repay has non-positive amounts: both `assets` and `shares` are zero, or either is negative. */
-export class NonPositiveRepayAmountError extends Error {
-  constructor(market: string) {
-    super(`Repay amount must be positive for market: ${market}`);
-  }
-}
-
-/** Thrown when a market repay's `maxSharePrice` slippage bound is zero or negative. */
-export class NonPositiveRepayMaxSharePriceError extends Error {
-  constructor(market: string) {
-    super(`Max share price must be positive for market: ${market}`);
-  }
-}
-
-/** Thrown when a market `withdrawCollateral` amount is zero or negative. */
-export class NonPositiveWithdrawCollateralAmountError extends Error {
-  constructor(market: string) {
-    super(`Withdraw collateral amount must be positive for market: ${market}`);
   }
 }
 
@@ -695,20 +652,6 @@ export class UnknownReallocationPositionError extends UnknownDataError {
     public readonly marketId: MarketId,
   ) {
     super(`unknown reallocation position of "${user}" on market "${marketId}"`);
-  }
-}
-
-/** Thrown when a Midnight amount that must be positive is zero or negative. */
-export class NonPositiveMidnightAmountError extends Error {
-  constructor(label: string, amount: bigint) {
-    super(`Midnight ${label} must be positive, got "${amount}".`);
-  }
-}
-
-/** Thrown when a Midnight amount that must be non-negative is negative. */
-export class NegativeMidnightAmountError extends Error {
-  constructor(label: string, amount: bigint) {
-    super(`Midnight ${label} must not be negative, got "${amount}".`);
   }
 }
 
@@ -916,50 +859,6 @@ export class InsufficientMidnightWithdrawableLiquidityError extends Error {
   }
 }
 
-/** Thrown when a market borrow's `minSharePrice` slippage bound is negative. */
-export class NonPositiveMinBorrowSharePriceError extends Error {
-  constructor(market: string) {
-    super(`Min share price must be non-negative for market: ${market}`);
-  }
-}
-
-/** Thrown when a market loan-asset supply amount is negative. */
-export class NegativeSupplyAmountError extends Error {
-  constructor(market: string) {
-    super(`Supply amount must be non-negative for market: ${market}`);
-  }
-}
-
-/** Thrown when a market loan-asset supply's `maxSharePrice` slippage bound is negative. */
-export class NegativeSupplyMaxSharePriceError extends Error {
-  constructor(market: string) {
-    super(`Max share price must be non-negative for market: ${market}`);
-  }
-}
-
-/** Thrown when both `amount` and `nativeAmount` resolve to zero on a market loan-asset supply. */
-export class ZeroSupplyAmountError extends Error {
-  constructor(market: string) {
-    super(
-      `Total supply amount must be positive for market: ${market}. Both amount and nativeAmount are zero.`,
-    );
-  }
-}
-
-/** Thrown when a market loan-asset withdraw has both `assets` and `shares` zero, or either negative. */
-export class NonPositiveWithdrawAmountError extends Error {
-  constructor(market: string) {
-    super(`Withdraw amount must be positive for market: ${market}`);
-  }
-}
-
-/** Thrown when a market loan-asset withdraw's `minSharePrice` slippage bound is negative. */
-export class NegativeWithdrawMinSharePriceError extends Error {
-  constructor(market: string) {
-    super(`Min share price must be non-negative for market: ${market}`);
-  }
-}
-
 /** Thrown when a loan-asset withdraw specifies both `assets` and `shares` as non-zero (modes are mutually exclusive). */
 export class MutuallyExclusiveWithdrawAmountsError extends Error {
   constructor(market: string) {
@@ -1025,33 +924,12 @@ export class VaultAssetMismatchError extends Error {
   }
 }
 
-/** Thrown when a vault redeem's `minSharePrice` slippage bound is negative. */
-export class NegativeMinSharePriceError extends Error {
-  constructor(vault: Address) {
-    super(`Min share price must be non-negative for vault: ${vault}`);
-  }
-}
-
-/** Thrown when a refinance's `borrowShares` argument is negative. */
-export class NegativeBorrowSharesError extends Error {
-  constructor(market: string) {
-    super(`Borrow shares must be non-negative for market: ${market}`);
-  }
-}
-
 /** Thrown when a refinance specifies both `borrowAssets` and `borrowShares` as non-zero (modes are mutually exclusive). */
 export class BorrowAmountAndSharesExclusiveError extends Error {
   constructor(market: string) {
     super(
       `Exactly one of borrowAssets or borrowShares must be non-zero for market: ${market}. Both were provided.`,
     );
-  }
-}
-
-/** Thrown when a refinance's `maxRepaySharePrice` slippage bound is negative. */
-export class NegativeMaxRepaySharePriceError extends Error {
-  constructor(market: string) {
-    super(`Max repay share price must be non-negative for market: ${market}`);
   }
 }
 

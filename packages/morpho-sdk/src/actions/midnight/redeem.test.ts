@@ -7,7 +7,7 @@ import {
   midnightMarket,
   midnightMarketId,
 } from "../../../test/fixtures/midnight.js";
-import { NonPositiveMidnightAmountError } from "../../types/index.js";
+import { NonPositiveInputError } from "../../types/index.js";
 import { midnightRedeem } from "./redeem.js";
 
 describe("midnightRedeem", () => {
@@ -45,7 +45,7 @@ describe("midnightRedeem", () => {
     expect(tx.data.endsWith("a1b2c3d4")).toBe(true);
   });
 
-  test("error: NonPositiveMidnightAmountError", () => {
+  test("error: NonPositiveInputError", () => {
     expect(() =>
       midnightRedeem({
         chainId: midnightChainId,
@@ -53,6 +53,6 @@ describe("midnightRedeem", () => {
         units: 0n,
         onBehalf: midnightAddresses.taker,
       }),
-    ).toThrow(NonPositiveMidnightAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 });

@@ -15,9 +15,9 @@ import type { VaultReallocation } from "../../types/index.js";
  * @param reallocations - The vault reallocations to encode.
  * @param targetMarketParams - The target market params the freed liquidity is destined for.
  * @returns The encoded `reallocateTo` actions and the summed reallocation fee in native tokens.
- * @throws {NegativeReallocationFeeError} when any reallocation fee is negative.
+ * @throws {NegativeInputError} when any reallocation fee is negative.
  * @throws {EmptyReallocationWithdrawalsError} when any reallocation has no withdrawals.
- * @throws {NonPositiveReallocationAmountError} when any withdrawal amount is non-positive.
+ * @throws {NonPositiveInputError} when any withdrawal amount is non-positive.
  * @throws {ReallocationWithdrawalOnTargetMarketError} when a withdrawal references the target market.
  * @throws {UnsortedReallocationWithdrawalsError} when withdrawals within a reallocation are not
  *   strictly sorted by market id.
