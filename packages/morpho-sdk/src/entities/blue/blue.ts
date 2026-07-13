@@ -940,8 +940,7 @@ export class MorphoBlue implements BlueActions {
       // assets, nothing is pulled as ERC-20 — the bundle wraps the native and
       // skims any residual wNative back to the receiver. So a fully-native
       // shares repay pulls no ERC-20 and emits no loan-token approval requirement.
-      erc20Amount =
-        nativeAmount >= borrowAssets ? 0n : borrowAssets - nativeAmount;
+      erc20Amount = MathLib.zeroFloorSub(borrowAssets, nativeAmount);
     } else {
       // Assets mode is additive, like supply: repaid = amount + nativeAmount.
       const amount = params.amount ?? 0n;
@@ -1156,8 +1155,7 @@ export class MorphoBlue implements BlueActions {
       // assets, nothing is pulled as ERC-20 — the bundle wraps the native and
       // skims any residual wNative back to the receiver. So a fully-native
       // shares repay pulls no ERC-20 and emits no loan-token approval requirement.
-      erc20Amount =
-        nativeAmount >= borrowAssets ? 0n : borrowAssets - nativeAmount;
+      erc20Amount = MathLib.zeroFloorSub(borrowAssets, nativeAmount);
     } else {
       // Assets mode is additive, like supply: repaid = amount + nativeAmount.
       const amount = params.amount ?? 0n;
