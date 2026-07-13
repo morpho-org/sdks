@@ -1,4 +1,4 @@
-import { MathLib } from "@morpho-org/morpho-ts";
+import { ChainId, getChainAddress, MathLib } from "@morpho-org/morpho-ts";
 import {
   type Address,
   bytesToHex,
@@ -10,16 +10,16 @@ import {
   zeroAddress,
 } from "viem";
 import { describe, expect, test } from "vitest";
-import {
-  addresses,
-  baseMarketParamsInput,
-  baseOffer,
-  group,
-} from "../__test__/fixtures.js";
+import { addresses, createFixtures, group } from "../__test__/fixtures.js";
 import { MAX_OFFER_CAP } from "../constants.js";
 import { PayloadDecodeError } from "../errors.js";
 import { type IOffer, type OfferStruct, OfferUtils } from "../offers/index.js";
 import { Payload } from "./Payload.js";
+
+const { baseMarketParamsInput, baseOffer } = createFixtures({
+  midnight: getChainAddress(ChainId.BaseMainnet, "midnight"),
+  ecrecoverRatifier: getChainAddress(ChainId.BaseMainnet, "ecrecoverRatifier"),
+});
 
 const API_VALID_MATURITY = 1_767_279_600n;
 const liquidationCursor = 250000000000000000n;

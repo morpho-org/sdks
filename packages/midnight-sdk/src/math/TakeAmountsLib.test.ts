@@ -1,12 +1,14 @@
 import {
+  ChainId,
   DivisionByZeroError,
+  getChainAddress,
   MathLib,
   NegativeValueError,
 } from "@morpho-org/morpho-ts";
 import fc from "fast-check";
 import { describe, expect, test } from "vitest";
 
-import { baseOffer } from "../__test__/fixtures.js";
+import { createFixtures } from "../__test__/fixtures.js";
 import { MAX_TICK } from "../constants.js";
 import {
   PriceGreaterThanOneError,
@@ -14,6 +16,11 @@ import {
 } from "../errors.js";
 import { TakeAmountsLib } from "./TakeAmountsLib.js";
 import { TickLib } from "./TickLib.js";
+
+const { baseOffer } = createFixtures({
+  midnight: getChainAddress(ChainId.BaseMainnet, "midnight"),
+  ecrecoverRatifier: getChainAddress(ChainId.BaseMainnet, "ecrecoverRatifier"),
+});
 
 describe("TakeAmountsLib.prices", () => {
   test("default: prices", () => {

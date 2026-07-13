@@ -1,4 +1,4 @@
-import { addressesRegistry } from "@morpho-org/blue-sdk";
+import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
@@ -7,11 +7,12 @@ import {
 } from "../../types/index.js";
 import { getRequirementsApproval } from "./getRequirementsApproval.js";
 
-const {
-  usdc,
-  bundler3: { generalAdapter1 },
-} = addressesRegistry[mainnet.id];
-const usdt = "0xdAC17F958D2ee523a2206206994597C13D831ec7" as const;
+const usdc = getChainAddress(ChainId.EthMainnet, "usdc");
+const usdt = getChainAddress(ChainId.EthMainnet, "usdt");
+const generalAdapter1 = getChainAddress(
+  ChainId.EthMainnet,
+  "bundler3.generalAdapter1",
+);
 
 describe("getRequirementsApproval", () => {
   test("default", () => {

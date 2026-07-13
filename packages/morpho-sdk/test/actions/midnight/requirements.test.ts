@@ -1,4 +1,3 @@
-import { addressesRegistry } from "@morpho-org/blue-sdk";
 import {
   Market,
   MarketParams,
@@ -7,6 +6,7 @@ import {
   OfferUtils,
   setterRatifierAbi,
 } from "@morpho-org/midnight-sdk";
+import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -24,7 +24,6 @@ import {
   isRequirementApproval,
   morphoViemExtension,
 } from "../../../src/index.js";
-import { midnightForkAddresses } from "../../helpers/midnight.js";
 
 const test = createViemTest(base, {
   forkUrl: process.env.BASE_RPC_URL,
@@ -34,18 +33,19 @@ const test = createViemTest(base, {
 
 const root =
   "0x1111111111111111111111111111111111111111111111111111111111111111";
-const usdc = addressesRegistry[base.id].usdc;
+const usdc = getChainAddress(ChainId.BaseMainnet, "usdc");
+const oracle = "0x0000000000000000000000000000000000080000" as Address;
 const marketData = new Market({
   params: new MarketParams({
     chainId: base.id,
-    midnight: midnightForkAddresses.midnight,
+    midnight: getChainAddress(ChainId.BaseMainnet, "midnight"),
     loanToken: usdc,
     collateralParams: [
       {
         token: usdc,
         lltv: 770000000000000000n,
         liquidationCursor: 250000000000000000n,
-        oracle: midnightForkAddresses.oracle,
+        oracle,
       },
     ],
     maturity: 2_000_000_000n,
@@ -71,7 +71,7 @@ const takeableOffer = (buy: boolean, maker: Address) => ({
       maker,
       expiry: marketData.params.maturity,
       tick: 5_000n,
-      ratifier: midnightForkAddresses.setterRatifier,
+      ratifier: getChainAddress(ChainId.BaseMainnet, "setterRatifier"),
       maxUnits: 1n,
     }),
   }),
@@ -84,7 +84,7 @@ describe("Midnight requirements on fork", () => {
   }) => {
     const amount = parseUnits("1", 6);
     const owner = client.account.address;
-    const spender = midnightForkAddresses.midnightBundles;
+    const spender = getChainAddress(ChainId.BaseMainnet, "midnightBundles");
 
     const requirements = await getMidnightApprovalRequirements({
       viemClient: client,
@@ -129,7 +129,7 @@ describe("Midnight requirements on fork", () => {
     client,
   }) => {
     const owner = client.account.address;
-    const authorized = midnightForkAddresses.midnightBundles;
+    const authorized = getChainAddress(ChainId.BaseMainnet, "midnightBundles");
     const requirement = await getMidnightAuthorizationRequirement({
       viemClient: client,
       chainId: base.id,
@@ -146,7 +146,7 @@ describe("Midnight requirements on fork", () => {
 
     await expect(
       client.readContract({
-        address: midnightForkAddresses.midnight,
+        address: getChainAddress(ChainId.BaseMainnet, "midnight"),
         abi: midnightAbi,
         functionName: "isAuthorized",
         args: [owner, authorized],
@@ -182,7 +182,7 @@ describe("Midnight requirements on fork", () => {
 
     await expect(
       client.readContract({
-        address: midnightForkAddresses.setterRatifier,
+        address: getChainAddress(ChainId.BaseMainnet, "setterRatifier"),
         abi: setterRatifierAbi,
         functionName: "isRootRatified",
         args: [maker, root],
@@ -219,14 +219,18 @@ describe("Midnight requirements on fork", () => {
     if (!isRequirementApproval(approval)) {
       throw new Error("expected an ERC20 approval requirement");
     }
-    expect(approval.action.args.spender).toBe(midnightForkAddresses.midnight);
+    expect(approval.action.args.spender).toBe(
+      getChainAddress(ChainId.BaseMainnet, "midnight"),
+    );
     expect(approval.action.args.amount).toBe(
       collateralAssets + reservedCollateralAssets,
     );
 
     await client.sendTransaction(approval);
     await expect(output.getRequirements()).resolves.toEqual([]);
-    expect(output.buildTx().to).toBe(midnightForkAddresses.midnight);
+    expect(output.buildTx().to).toBe(
+      getChainAddress(ChainId.BaseMainnet, "midnight"),
+    );
   });
 
   test("resolves take and repay bundle requirements through the Midnight entity", async ({

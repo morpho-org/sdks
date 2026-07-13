@@ -1,8 +1,8 @@
-import { MathLib } from "@morpho-org/morpho-ts";
+import { ChainId, getChainAddress, MathLib } from "@morpho-org/morpho-ts";
 import type { Hex } from "viem";
 import { describe, expect, test } from "vitest";
 
-import { baseMarketParamsInput, baseOffer } from "../__test__/fixtures.js";
+import { createFixtures } from "../__test__/fixtures.js";
 import {
   InvalidMidnightApiResponseError,
   MidnightApiError,
@@ -11,6 +11,11 @@ import { TickLib } from "../math/index.js";
 import type { IOffer } from "../offers/index.js";
 import { Payload } from "../signatures/Payload.js";
 import { MidnightApi, type MidnightApiFetch } from "./MidnightApi.js";
+
+const { baseMarketParamsInput, baseOffer } = createFixtures({
+  midnight: getChainAddress(ChainId.BaseMainnet, "midnight"),
+  ecrecoverRatifier: getChainAddress(ChainId.BaseMainnet, "ecrecoverRatifier"),
+});
 
 type FetchCall = {
   readonly input: Parameters<MidnightApiFetch>[0];
