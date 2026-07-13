@@ -1,5 +1,5 @@
-import { midnightAbi } from "@morpho-org/midnight-sdk";
-import { decodeFunctionData, type Hex, maxUint256 } from "viem";
+import { MAX_OFFER_CAP, midnightAbi } from "@morpho-org/midnight-sdk";
+import { decodeFunctionData, type Hex } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
@@ -20,7 +20,7 @@ describe("midnightCancelOffer", () => {
 
     expect(tx.to).toBe(midnightAddresses.midnight);
     expect(tx.action.args.group).toBe(group);
-    expect(tx.action.args.amount).toBe(maxUint256);
+    expect(tx.action.args.amount).toBe(MAX_OFFER_CAP);
     expect(decoded.functionName).toBe("setConsumed");
     expect(decoded.args[0]).toBe(group);
   });

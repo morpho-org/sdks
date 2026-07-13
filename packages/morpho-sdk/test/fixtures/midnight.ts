@@ -6,24 +6,19 @@ import {
   OfferUtils,
 } from "@morpho-org/midnight-sdk";
 import type { MidnightApiTake } from "@morpho-org/midnight-sdk/api";
-import { registerCustomAddresses } from "@morpho-org/morpho-ts";
+import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
 import type { Address, Hex } from "viem";
 import { zeroAddress } from "viem";
 
-export const midnightChainId = 30_001_337;
+export const midnightChainId = ChainId.BaseMainnet;
 export const midnightLiquidationCursor = 250000000000000000n;
 
 export const midnightAddresses = {
-  morpho: "0x0000000000000000000000000000000000000001" as Address,
-  permit2: "0x0000000000000000000000000000000000002222" as Address,
-  bundler3: "0x0000000000000000000000000000000000000002" as Address,
-  generalAdapter1: "0x0000000000000000000000000000000000000003" as Address,
-  adaptiveCurveIrm: "0x0000000000000000000000000000000000000004" as Address,
-  midnight: "0x0000000000000000000000000000000000001000" as Address,
-  midnightBundles: "0x0000000000000000000000000000000000002000" as Address,
-  midnightMempool: "0x0000000000000000000000000000000000003000" as Address,
-  ecrecoverRatifier: "0x0000000000000000000000000000000000004000" as Address,
-  setterRatifier: "0x0000000000000000000000000000000000005000" as Address,
+  midnight: getChainAddress(midnightChainId, "midnight"),
+  midnightBundles: getChainAddress(midnightChainId, "midnightBundles"),
+  midnightMempool: getChainAddress(midnightChainId, "midnightMempool"),
+  ecrecoverRatifier: getChainAddress(midnightChainId, "ecrecoverRatifier"),
+  setterRatifier: getChainAddress(midnightChainId, "setterRatifier"),
   loanToken: "0x0000000000000000000000000000000000006000" as Address,
   dai: "0x0000000000000000000000000000000000006100" as Address,
   collateralToken: "0x0000000000000000000000000000000000007000" as Address,
@@ -31,26 +26,6 @@ export const midnightAddresses = {
   maker: "0x0000000000000000000000000000000000009000" as Address,
   taker: "0x000000000000000000000000000000000000a000" as Address,
 };
-
-registerCustomAddresses({
-  addresses: {
-    [midnightChainId]: {
-      morpho: midnightAddresses.morpho,
-      permit2: midnightAddresses.permit2,
-      bundler3: {
-        bundler3: midnightAddresses.bundler3,
-        generalAdapter1: midnightAddresses.generalAdapter1,
-      },
-      adaptiveCurveIrm: midnightAddresses.adaptiveCurveIrm,
-      midnight: midnightAddresses.midnight,
-      midnightBundles: midnightAddresses.midnightBundles,
-      midnightMempool: midnightAddresses.midnightMempool,
-      ecrecoverRatifier: midnightAddresses.ecrecoverRatifier,
-      setterRatifier: midnightAddresses.setterRatifier,
-      dai: midnightAddresses.dai,
-    },
-  },
-});
 
 export const midnightMarket = new MarketParams({
   chainId: midnightChainId,
