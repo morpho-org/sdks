@@ -3,6 +3,7 @@ import {
   EcrecoverRatifierUtils,
   fetchAccrualPosition,
   fetchMarket,
+  InvalidTreeError,
   type Market,
   MarketParams,
   MarketUtils,
@@ -44,6 +45,7 @@ import {
   InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
   type MidnightCancelOfferAction,
+  MidnightOfferMakerMismatchError,
   MidnightOfferMarketAddressMismatchError,
   MidnightOfferMarketChainMismatchError,
   MidnightOfferMarketLoanTokenMismatchError,
@@ -236,6 +238,13 @@ export class MorphoMidnight implements MidnightActions {
     const tree = Tree.from(params.offers);
     const midnight = getChainAddress(this.chainId, "midnight");
     tree.offers.forEach((offer, index) => {
+      if (!isAddressEqual(offer.maker, params.accountAddress)) {
+        throw new MidnightOfferMakerMismatchError({
+          index,
+          expectedMaker: params.accountAddress,
+          actualMaker: offer.maker,
+        });
+      }
       const market =
         "params" in offer.market ? offer.market.params : offer.market;
       if (market.chainId !== BigInt(this.chainId)) {
@@ -253,7 +262,11 @@ export class MorphoMidnight implements MidnightActions {
         });
       }
     });
-    const ratifier = tree.offers[0]!.ratifier;
+    const firstOffer = tree.offers[0];
+    if (firstOffer == null) {
+      throw new InvalidTreeError("Tree must contain at least one offer.");
+    }
+    const ratifier = firstOffer.ratifier;
     const ecrecoverRatifier = getChainAddress(
       this.chainId,
       "ecrecoverRatifier",
@@ -595,6 +608,13 @@ export class MorphoMidnight implements MidnightActions {
       validation: params.validation,
     });
     validateOfferSides(data.tree.offers, false);
+    const marketId = MarketUtils.toId(market);
+    for (const offer of data.tree.offers) {
+      const offerMarketId = MarketUtils.toId(offer.market);
+      if (offerMarketId.toLowerCase() !== marketId.toLowerCase()) {
+        throw new MarketIdMismatchError(offerMarketId, marketId);
+      }
+    }
     const midnight = getChainAddress(this.chainId, "midnight");
 
     return {

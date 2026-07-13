@@ -717,6 +717,19 @@ export class MidnightOfferSideMismatchError extends Error {
   }
 }
 
+/** Thrown when a Midnight maker offer belongs to a different account than the action flow. */
+export class MidnightOfferMakerMismatchError extends Error {
+  constructor(params: {
+    readonly index: number;
+    readonly expectedMaker: Address;
+    readonly actualMaker: Address;
+  }) {
+    super(
+      `Midnight offer "${params.index}" belongs to maker "${params.actualMaker}", expected "${params.expectedMaker}". Rebuild the offer set for the active account.`,
+    );
+  }
+}
+
 /** Thrown when a Midnight maker offer targets a different chain than the action flow. */
 export class MidnightOfferMarketChainMismatchError extends Error {
   constructor(params: {
