@@ -44,7 +44,13 @@ contract GetHolding {
             permit2: token.allowance(account, address(permit2)),
             generalAdapter1: token.allowance(account, generalAdapter1)
         });
-        res.permit2BundlerAllowance = permit2.allowance(account, address(token), generalAdapter1);
+        // Permit2 is not deployed on every chain. When it is absent the caller passes
+        // `address(0)`, so skip the external call (which would revert on an addressless
+        // contract) and leave `permit2BundlerAllowance` at its zero default, matching the
+        // multicall fallback.
+        if (address(permit2) != address(0)) {
+            res.permit2BundlerAllowance = permit2.allowance(account, address(token), generalAdapter1);
+        }
 
         try token.nonces(account) returns (uint256 nonce) {
             res.isErc2612 = true;

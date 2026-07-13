@@ -5,10 +5,14 @@ import {
   NATIVE_ADDRESS,
 } from "@morpho-org/blue-sdk";
 
-import { maxUint256 } from "viem";
+import { maxUint256, zeroAddress } from "viem";
 import { describe, expect } from "vitest";
 import { Holding } from "../src/augment/Holding.js";
 import { permit2Abi } from "../src/index.js";
+import {
+  abi as getHoldingAbi,
+  code as getHoldingCode,
+} from "../src/queries/GetHolding.js";
 import { test } from "./setup.js";
 
 const {
@@ -269,5 +273,38 @@ describe("augment/Holding", () => {
     });
 
     expect(value).toStrictEqual(expectedData);
+  });
+
+  test("deployless query does not revert when Permit2 is absent", async ({
+    client,
+  }) => {
+    // Some chains have no Permit2 deployment; `fetchHolding` then passes `address(0)`.
+    // The deployless query must skip the Permit2 call instead of reverting on an
+    // addressless contract, leaving `permit2BundlerAllowance` at its zero default so
+    // it matches the multicall fallback. Exercised here on mainnet by passing
+    // `zeroAddress` directly as the Permit2 argument.
+    await client.deal({ erc20: wNative, amount: 10n * MathLib.WAD });
+
+    const res = await client.readContract({
+      abi: getHoldingAbi,
+      code: getHoldingCode,
+      functionName: "query",
+      args: [
+        wNative,
+        client.account.address,
+        morpho,
+        zeroAddress,
+        generalAdapter1,
+        false,
+        false,
+      ],
+    });
+
+    expect(res.balance).toBe(10n * MathLib.WAD);
+    expect(res.permit2BundlerAllowance).toEqual({
+      amount: 0n,
+      expiration: 0,
+      nonce: 0,
+    });
   });
 });
