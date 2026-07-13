@@ -44,6 +44,7 @@ import type { MorphoClientType } from "../../types/client.js";
 import {
   AmbiguousRequirementSignaturesError,
   ChainIdMismatchError,
+  EmptyMidnightTakeableOffersError,
   InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
   MidnightOfferMakerMismatchError,
@@ -56,6 +57,7 @@ import {
   MidnightOfferRootRatifierMismatchError,
   MidnightOfferSideMismatchError,
   MidnightRedeemExceedsFaceValueError,
+  MidnightTakeableOfferMarketMismatchError,
   MissingAccrualPositionError,
   MissingMidnightOfferRootSignatureError,
   NegativeMidnightAmountError,
@@ -280,6 +282,55 @@ const midnightWithHandle = (
     midnightChainId,
   );
 
+type TakeableOffers = readonly ReturnType<typeof midnightApiTake>[];
+
+const takeFlowCases: readonly {
+  readonly name: string;
+  readonly expectedBuy: boolean;
+  readonly createOutput: (takeableOffers: TakeableOffers) => unknown;
+}[] = [
+  {
+    name: "takeLend",
+    expectedBuy: false,
+    createOutput: (takeableOffers) =>
+      midnight().takeLend({
+        marketData: marketData(),
+        accountAddress: midnightAddresses.taker,
+        assets: 1_000n,
+        minUnits: 900n,
+        takeableOffers,
+        deadline: maxUint256,
+      }),
+  },
+  {
+    name: "takeBorrow",
+    expectedBuy: true,
+    createOutput: (takeableOffers) =>
+      midnight().takeBorrow({
+        marketData: marketData(),
+        accountAddress: midnightAddresses.taker,
+        loanAssets: 1_000n,
+        maxUnits: 900n,
+        takeableOffers,
+        deadline: maxUint256,
+      }),
+  },
+  {
+    name: "supplyCollateralTakeBorrow",
+    expectedBuy: true,
+    createOutput: (takeableOffers) =>
+      midnight().supplyCollateralTakeBorrow({
+        marketData: marketData(),
+        accountAddress: midnightAddresses.taker,
+        collateralAssets: 2_000n,
+        loanAssets: 1_000n,
+        maxUnits: 900n,
+        takeableOffers,
+        deadline: maxUint256,
+      }),
+  },
+];
+
 const mockAllowance = (params: {
   readonly handle: MidnightMockHandle;
   readonly token: Address;
@@ -379,6 +430,33 @@ const mockBlockAndReads = (
 };
 
 describe("MorphoMidnight", () => {
+  describe.each(takeFlowCases)("$name takeable offers", (takeFlow) => {
+    test("error: EmptyMidnightTakeableOffersError", () => {
+      expect(() => takeFlow.createOutput([])).toThrow(
+        EmptyMidnightTakeableOffersError,
+      );
+    });
+
+    test("error: MidnightOfferSideMismatchError", () => {
+      expect(() =>
+        takeFlow.createOutput([
+          midnightApiTake({ buy: !takeFlow.expectedBuy }),
+        ]),
+      ).toThrow(MidnightOfferSideMismatchError);
+    });
+
+    test("error: MidnightTakeableOfferMarketMismatchError", () => {
+      expect(() =>
+        takeFlow.createOutput([
+          midnightApiTake({
+            buy: takeFlow.expectedBuy,
+            market: midnightOtherMarket,
+          }),
+        ]),
+      ).toThrow(MidnightTakeableOfferMarketMismatchError);
+    });
+  });
+
   describe("takeLend", () => {
     test("default", () => {
       const output = midnight().takeLend({
@@ -399,19 +477,6 @@ describe("MorphoMidnight", () => {
         takeableOffers: 1,
         deadline: maxUint256,
       });
-    });
-
-    test("error: MidnightOfferSideMismatchError", () => {
-      const output = midnight().takeLend({
-        marketData: marketData(),
-        accountAddress: midnightAddresses.taker,
-        assets: 1_000n,
-        minUnits: 900n,
-        takeableOffers: [midnightApiTake({ buy: true })],
-        deadline: maxUint256,
-      });
-
-      expect(() => output.buildTx()).toThrow(MidnightOfferSideMismatchError);
     });
 
     test("behavior: requirements include loan approval and bundle authorization", async () => {
@@ -529,19 +594,6 @@ describe("MorphoMidnight", () => {
       });
 
       await expect(output.getRequirements()).resolves.toEqual([]);
-    });
-
-    test("error: MidnightOfferSideMismatchError", () => {
-      const output = midnight().takeBorrow({
-        marketData: marketData(),
-        accountAddress: midnightAddresses.taker,
-        loanAssets: 1_000n,
-        maxUnits: 900n,
-        takeableOffers: [midnightApiTake({ buy: false })],
-        deadline: maxUint256,
-      });
-
-      expect(() => output.buildTx()).toThrow(MidnightOfferSideMismatchError);
     });
 
     test("error: amount validation", () => {
@@ -834,14 +886,34 @@ describe("MorphoMidnight", () => {
 
     test("error: InsufficientMidnightWithdrawableLiquidityError", () => {
       const market = marketData({ withdrawable: 50n });
+      const stalePositionMarket = marketData({ withdrawable: 1_000n });
 
       expect(() =>
         midnight().redeem({
           marketData: market,
-          positionData: positionData(market, { credit: 250n, pendingFee: 50n }),
+          positionData: positionData(stalePositionMarket, {
+            credit: 250n,
+            pendingFee: 50n,
+          }),
           accountAddress: midnightAddresses.taker,
         }),
       ).toThrow(InsufficientMidnightWithdrawableLiquidityError);
+    });
+
+    test("behavior: uses the supplied market liquidity", () => {
+      const market = marketData({ withdrawable: 1_000n });
+      const stalePositionMarket = marketData({ withdrawable: 50n });
+
+      const output = midnight().redeem({
+        marketData: market,
+        positionData: positionData(stalePositionMarket, {
+          credit: 250n,
+          pendingFee: 50n,
+        }),
+        accountAddress: midnightAddresses.taker,
+      });
+
+      expect(output.buildTx().action.args.units).toBe(200n);
     });
   });
 

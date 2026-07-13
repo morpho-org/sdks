@@ -39,6 +39,7 @@ import {
 import { validateChainId } from "../../helpers/index.js";
 import { signAndVerifyTypedData } from "../../helpers/signAndVerifyTypedData.js";
 import { validateOfferSides } from "../../helpers/validateOfferSides.js";
+import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js";
 import type { MorphoClientType } from "../../types/client.js";
 import {
   type ActionRequirement,
@@ -331,6 +332,12 @@ export class MorphoMidnight implements MidnightActions {
     assertPositiveAmount("assets", params.assets);
     assertNonNegativeAmount("minUnits", params.minUnits);
     assertNonNegativeAmount("deadline", params.deadline);
+    // Reject inconsistent quotes before exposing requirement reads.
+    validateTakeableOffers({
+      market: params.marketData.params,
+      takeableOffers: params.takeableOffers,
+      expectedBuy: false,
+    });
 
     const market = params.marketData;
     const midnightBundles = getChainAddress(this.chainId, "midnightBundles");
@@ -377,6 +384,12 @@ export class MorphoMidnight implements MidnightActions {
     assertPositiveAmount("loanAssets", params.loanAssets);
     assertNonNegativeAmount("maxUnits", params.maxUnits);
     assertNonNegativeAmount("deadline", params.deadline);
+    // Reject inconsistent quotes before exposing requirement reads.
+    validateTakeableOffers({
+      market: params.marketData.params,
+      takeableOffers: params.takeableOffers,
+      expectedBuy: true,
+    });
 
     const market = params.marketData;
     const midnightBundles = getChainAddress(this.chainId, "midnightBundles");
@@ -415,6 +428,12 @@ export class MorphoMidnight implements MidnightActions {
     assertPositiveAmount("loanAssets", params.loanAssets);
     assertNonNegativeAmount("maxUnits", params.maxUnits);
     assertNonNegativeAmount("deadline", params.deadline);
+    // Reject inconsistent quotes before exposing requirement reads.
+    validateTakeableOffers({
+      market: params.marketData.params,
+      takeableOffers: params.takeableOffers,
+      expectedBuy: true,
+    });
 
     const market = params.marketData;
     const collateralIndex = params.collateralIndex ?? 0n;
@@ -681,7 +700,7 @@ export class MorphoMidnight implements MidnightActions {
         faceValue: params.positionData.faceValue,
       });
     }
-    if (params.positionData.withdrawable < units) {
+    if (market.withdrawable < units) {
       throw new InsufficientMidnightWithdrawableLiquidityError({
         market: market.id,
         units,

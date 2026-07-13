@@ -3,10 +3,18 @@ import {
   Market,
   MarketParams,
   midnightAbi,
+  Offer,
+  OfferUtils,
   setterRatifierAbi,
 } from "@morpho-org/midnight-sdk";
 import { createViemTest } from "@morpho-org/test/vitest";
-import { erc20Abi, maxUint256, parseUnits, zeroAddress } from "viem";
+import {
+  type Address,
+  erc20Abi,
+  maxUint256,
+  parseUnits,
+  zeroAddress,
+} from "viem";
 import { base } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
@@ -52,6 +60,22 @@ const marketData = new Market({
   settlementFeeCbps: [0, 0, 0, 0, 0, 0, 0],
   continuousFee: 0,
   tickSpacing: 1,
+});
+
+const takeableOffer = (buy: boolean, maker: Address) => ({
+  units: 1n,
+  offer: OfferUtils.toStruct({
+    offer: Offer.create({
+      market: marketData.params,
+      buy,
+      maker,
+      expiry: marketData.params.maturity,
+      tick: 5_000n,
+      ratifier: midnightForkAddresses.setterRatifier,
+      maxUnits: 1n,
+    }),
+  }),
+  ratifierData: "0x" as const,
 });
 
 describe("Midnight requirements on fork", () => {
@@ -218,7 +242,7 @@ describe("Midnight requirements on fork", () => {
         accountAddress: client.account.address,
         assets: amount,
         minUnits: 0n,
-        takeableOffers: [],
+        takeableOffers: [takeableOffer(false, client.account.address)],
         deadline: maxUint256,
       }),
       midnight.supplyCollateralTakeBorrow({
@@ -227,7 +251,7 @@ describe("Midnight requirements on fork", () => {
         collateralAssets: amount,
         loanAssets: amount,
         maxUnits: 0n,
-        takeableOffers: [],
+        takeableOffers: [takeableOffer(true, client.account.address)],
         deadline: maxUint256,
       }),
       midnight.repayWithdrawCollateral({
@@ -266,7 +290,7 @@ describe("Midnight requirements on fork", () => {
       accountAddress: client.account.address,
       loanAssets: amount,
       maxUnits: 0n,
-      takeableOffers: [],
+      takeableOffers: [takeableOffer(true, client.account.address)],
       deadline: maxUint256,
     });
 

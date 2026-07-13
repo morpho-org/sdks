@@ -2,11 +2,9 @@ import { MarketUtils, midnightBundlesAbi } from "@morpho-org/midnight-sdk";
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
 import { encodeFunctionData, maxUint256, zeroAddress } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
-import { validateOfferSides } from "../../helpers/validateOfferSides.js";
+import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js";
 import {
-  EmptyMidnightTakeableOffersError,
   type MidnightSupplyCollateralTakeBorrowAction,
-  MidnightTakeableOfferMarketMismatchError,
   NegativeMidnightAmountError,
   NonPositiveMidnightAmountError,
   type Transaction,
@@ -80,25 +78,11 @@ export const midnightSupplyCollateralTakeBorrow = (
   if (params.deadline < 0n) {
     throw new NegativeMidnightAmountError("deadline", params.deadline);
   }
-  if (params.takeableOffers.length === 0) {
-    throw new EmptyMidnightTakeableOffersError();
-  }
-
-  const marketId = MarketUtils.toId(params.market);
-  validateOfferSides(
-    params.takeableOffers.map((take) => take.offer),
-    true,
-  );
-  for (const [index, take] of params.takeableOffers.entries()) {
-    const actualMarketId = MarketUtils.toId(take.offer.market);
-    if (actualMarketId.toLowerCase() !== marketId.toLowerCase()) {
-      throw new MidnightTakeableOfferMarketMismatchError({
-        index,
-        expectedMarket: marketId,
-        actualMarket: actualMarketId,
-      });
-    }
-  }
+  const marketId = validateTakeableOffers({
+    market: params.market,
+    takeableOffers: params.takeableOffers,
+    expectedBuy: true,
+  });
 
   const midnightBundles = getChainAddress(params.chainId, "midnightBundles");
   const collateralIndex = params.collateralIndex ?? 0n;
