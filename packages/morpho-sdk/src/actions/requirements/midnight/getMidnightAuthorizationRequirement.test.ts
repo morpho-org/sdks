@@ -1,12 +1,15 @@
 import { midnightAbi } from "@morpho-org/midnight-sdk";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
-import type { Chain } from "viem";
+import { type Chain, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
   midnightChainId,
 } from "../../../../test/fixtures/midnight.js";
-import { ChainIdMismatchError } from "../../../types/index.js";
+import {
+  ChainIdMismatchError,
+  UnsupportedMidnightAuthorizationTargetError,
+} from "../../../types/index.js";
 import { getMidnightAuthorizationRequirement } from "./getMidnightAuthorizationRequirement.js";
 
 const midnightTestChain = {
@@ -73,5 +76,41 @@ describe("getMidnightAuthorizationRequirement", () => {
     expect(tx?.to).toBe(midnightAddresses.midnight);
     expect(tx?.action.type).toBe("midnightAuthorization");
     expect(tx?.action.args.authorized).toBe(midnightAddresses.midnightBundles);
+  });
+
+  test.each([
+    midnightAddresses.midnightBundles,
+    midnightAddresses.ecrecoverRatifier,
+    midnightAddresses.setterRatifier,
+  ])("behavior: accepts supported target %s", async (authorized) => {
+    const handle = createMockClient(midnightTestChain);
+    mockRead(handle, {
+      address: midnightAddresses.midnight,
+      abi: midnightAbi,
+      functionName: "isAuthorized",
+      result: true,
+    });
+
+    await expect(
+      getMidnightAuthorizationRequirement({
+        viemClient: handle.client,
+        chainId: midnightChainId,
+        owner: midnightAddresses.taker,
+        authorized,
+      }),
+    ).resolves.toBeNull();
+  });
+
+  test("error: UnsupportedMidnightAuthorizationTargetError", async () => {
+    const { client } = createMockClient(midnightTestChain);
+
+    await expect(
+      getMidnightAuthorizationRequirement({
+        viemClient: client,
+        chainId: midnightChainId,
+        owner: midnightAddresses.taker,
+        authorized: zeroAddress,
+      }),
+    ).rejects.toThrow(UnsupportedMidnightAuthorizationTargetError);
   });
 });

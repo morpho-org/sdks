@@ -1,12 +1,22 @@
 import { midnightAbi } from "@morpho-org/midnight-sdk";
-import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
-import { type Address, type Client, encodeFunctionData } from "viem";
+import {
+  deepFreeze,
+  getChainAddress,
+  getChainAddresses,
+} from "@morpho-org/morpho-ts";
+import {
+  type Address,
+  type Client,
+  encodeFunctionData,
+  isAddressEqual,
+} from "viem";
 import { readContract } from "viem/actions";
 import { validateChainId } from "../../../helpers/index.js";
 import type {
   MidnightAuthorizationAction,
   Transaction,
 } from "../../../types/index.js";
+import { UnsupportedMidnightAuthorizationTargetError } from "../../../types/index.js";
 
 /** Parameters for {@link getMidnightAuthorizationRequirement}. */
 export interface GetMidnightAuthorizationRequirementParams {
@@ -30,6 +40,7 @@ export interface GetMidnightAuthorizationRequirementParams {
  * @param params.authorized - Spender or ratifier that needs authorization.
  * @returns Authorization transaction, or `null` when already authorized.
  * @throws {ChainIdMismatchError} when the viem client is connected to another chain.
+ * @throws {UnsupportedMidnightAuthorizationTargetError} when `authorized` is not a supported bundle or ratifier address.
  * @example
  * ```ts
  * import { getMidnightAuthorizationRequirement } from "@morpho-org/morpho-sdk";
@@ -54,6 +65,24 @@ export const getMidnightAuthorizationRequirement = async (
 ): Promise<Readonly<Transaction<MidnightAuthorizationAction>> | null> => {
   validateChainId(params.viemClient.chain?.id, params.chainId);
 
+  const { midnightBundles, ecrecoverRatifier, setterRatifier } =
+    getChainAddresses(params.chainId);
+  const supportedTargets = [
+    midnightBundles,
+    ecrecoverRatifier,
+    setterRatifier,
+  ].filter((target): target is Address => target != null);
+  if (
+    !supportedTargets.some((supported) =>
+      isAddressEqual(params.authorized, supported),
+    )
+  ) {
+    throw new UnsupportedMidnightAuthorizationTargetError({
+      authorized: params.authorized,
+      chainId: params.chainId,
+      supportedTargets,
+    });
+  }
   const midnight = getChainAddress(params.chainId, "midnight");
   const isAuthorized = await readContract(params.viemClient, {
     address: midnight,
