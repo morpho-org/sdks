@@ -46,6 +46,7 @@ import {
   ChainIdMismatchError,
   InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
+  MidnightOfferMakerMismatchError,
   MidnightOfferMarketAddressMismatchError,
   MidnightOfferMarketChainMismatchError,
   MidnightOfferMarketLoanTokenMismatchError,
@@ -1100,6 +1101,41 @@ describe("MorphoMidnight", () => {
       ).rejects.toThrow(MidnightOfferMarketChainMismatchError);
     });
 
+    test("error: MidnightOfferMakerMismatchError", async () => {
+      const offers = [
+        Offer.create(
+          midnightBaseOffer({
+            market: { ...midnightMarket, maturity: apiValidMaturity },
+            buy: true,
+            expiry: apiValidMaturity - 60n,
+            maxAssets: 1_000n,
+            maxUnits: 0n,
+            ratifier: midnightAddresses.ecrecoverRatifier,
+          }),
+        ),
+        Offer.create(
+          midnightBaseOffer({
+            market: { ...midnightMarket, maturity: apiValidMaturity },
+            buy: true,
+            maker: midnightAddresses.taker,
+            tick: 5_004n,
+            expiry: apiValidMaturity - 60n,
+            maxAssets: 1_000n,
+            maxUnits: 0n,
+            ratifier: midnightAddresses.ecrecoverRatifier,
+          }),
+        ),
+      ];
+
+      await expect(
+        midnight().getOffersData({
+          accountAddress: midnightAddresses.maker,
+          offers,
+          validation: offerValidation,
+        }),
+      ).rejects.toThrow(MidnightOfferMakerMismatchError);
+    });
+
     test("error: MidnightOfferMarketAddressMismatchError", async () => {
       const offer = Offer.create(
         midnightBaseOffer({
@@ -1424,7 +1460,7 @@ describe("MorphoMidnight", () => {
         accountAddress: data.accountAddress,
         offers: data.tree,
         validation: offerValidation,
-        market: midnightMarket,
+        market: { ...midnightMarket, maturity: apiValidMaturity },
         collateralAssets: 1_000n,
         reservedCollateralAssets: 250n,
       });
@@ -1470,7 +1506,10 @@ describe("MorphoMidnight", () => {
         accountAddress: data.accountAddress,
         offers: data.tree,
         validation: offerValidation,
-        market: MarketUtils.toStruct(midnightMarket),
+        market: MarketUtils.toStruct({
+          ...midnightMarket,
+          maturity: apiValidMaturity,
+        }),
         collateralAssets: 1_000n,
       });
       const requirements = await output.getRequirements();
@@ -1506,6 +1545,29 @@ describe("MorphoMidnight", () => {
           reservedCollateralAssets: -1n,
         }),
       ).rejects.toThrow(NegativeMidnightAmountError);
+    });
+
+    test("error: MarketIdMismatchError", async () => {
+      const offer = Offer.create(
+        midnightBaseOffer({
+          market: { ...midnightOtherMarket, maturity: apiValidMaturity },
+          buy: false,
+          expiry: apiValidMaturity - 60n,
+          maxAssets: 1_000n,
+          maxUnits: 0n,
+          ratifier: midnightAddresses.ecrecoverRatifier,
+        }),
+      );
+
+      await expect(
+        midnight().supplyCollateralMakeBorrow({
+          accountAddress: midnightAddresses.maker,
+          offers: offer,
+          validation: offerValidation,
+          market: midnightMarket,
+          collateralAssets: 1_000n,
+        }),
+      ).rejects.toThrow(MarketIdMismatchError);
     });
   });
 
