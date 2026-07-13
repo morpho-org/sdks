@@ -217,6 +217,19 @@ export class UnsupportedErc20ApprovalSpenderError extends Error {
   }
 }
 
+/** Thrown when a Midnight authorization requirement targets an unsupported operator. */
+export class UnsupportedMidnightAuthorizationTargetError extends Error {
+  constructor(params: {
+    readonly authorized: Address;
+    readonly chainId: number;
+    readonly supportedTargets: readonly Address[];
+  }) {
+    super(
+      `Midnight authorization target "${params.authorized}" is not supported on chain "${params.chainId}". Use "${params.supportedTargets.join('", "')}".`,
+    );
+  }
+}
+
 /** Thrown when a slippage tolerance is negative. */
 export class NegativeSlippageToleranceError extends Error {
   constructor(slippageTolerance: bigint) {

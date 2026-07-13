@@ -76,7 +76,7 @@ export const mempoolSubmitOffers = (
     action: {
       type: "mempoolSubmitOffers" as const,
       args: {
-        groups: params.groups,
+        groups: [...params.groups],
         root: params.root,
         maker: params.maker,
         ratifier: params.ratifier,
