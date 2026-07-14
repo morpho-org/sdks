@@ -55,7 +55,7 @@
     "lint-staged": "^17.0.8",
     "solc": "0.8.35",
     "typedoc": "^0.28.19",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "undici": "^8.6.0",
     "viem": "2.54.2",
     "vite": "8.1.3",

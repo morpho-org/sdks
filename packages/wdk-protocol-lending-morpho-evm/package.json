@@ -61,7 +61,7 @@
     "viem": "^2.0.0"
   },
   "devDependencies": {
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "viem": "^2.54.2",
     "vitest": "^4.1.9"
   },
