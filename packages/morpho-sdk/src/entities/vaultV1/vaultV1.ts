@@ -15,18 +15,17 @@ import {
   vaultV1Redeem,
   vaultV1Withdraw,
 } from "../../actions/index.js";
+import { MAX_ABSOLUTE_SHARE_PRICE } from "../../helpers/constant.js";
 import {
-  MAX_ABSOLUTE_SHARE_PRICE,
-  MAX_SLIPPAGE_TOLERANCE,
-} from "../../helpers/constant.js";
-import { validateChainId } from "../../helpers/index.js";
+  validateChainId,
+  validateSlippageTolerance,
+} from "../../helpers/index.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
   ChainIdMismatchError,
   ChainWNativeMissingError,
   type DepositAmountArgs,
   type ERC20ApprovalAction,
-  ExcessiveSlippageToleranceError,
   type MorphoClientType,
   NativeAmountOnNonWNativeVaultError,
   NegativeInputError,
@@ -206,12 +205,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
       }
     }
 
-    if (slippageTolerance < 0n) {
-      throw new NegativeInputError("slippageTolerance", slippageTolerance);
-    }
-    if (slippageTolerance > MAX_SLIPPAGE_TOLERANCE) {
-      throw new ExcessiveSlippageToleranceError(slippageTolerance);
-    }
+    validateSlippageTolerance(slippageTolerance);
 
     if (nativeAmount && wNative) {
       if (!isAddressEqual(vaultData.asset, wNative)) {
@@ -343,12 +337,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
       throw new NonPositiveInputError("shares", shares);
     }
 
-    if (slippageTolerance < 0n) {
-      throw new NegativeInputError("slippageTolerance", slippageTolerance);
-    }
-    if (slippageTolerance > MAX_SLIPPAGE_TOLERANCE) {
-      throw new ExcessiveSlippageToleranceError(slippageTolerance);
-    }
+    validateSlippageTolerance(slippageTolerance);
 
     // Compute minSharePriceVaultV1 for V1 redeem (slippage downward)
     const v1RefAssets = sourceVault.toAssets(shares);

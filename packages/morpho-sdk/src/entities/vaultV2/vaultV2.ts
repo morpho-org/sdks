@@ -15,7 +15,7 @@ import {
   vaultV2Redeem,
   vaultV2Withdraw,
 } from "../../actions/index.js";
-import { MAX_SLIPPAGE_TOLERANCE } from "../../helpers/constant.js";
+import { validateSlippageTolerance } from "../../helpers/index.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
   ChainIdMismatchError,
@@ -23,7 +23,6 @@ import {
   type Deallocation,
   type DepositAmountArgs,
   type ERC20ApprovalAction,
-  ExcessiveSlippageToleranceError,
   type MorphoClientType,
   NativeAmountOnNonWNativeVaultError,
   NegativeInputError,
@@ -235,12 +234,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
       }
     }
 
-    if (slippageTolerance < 0n) {
-      throw new NegativeInputError("slippageTolerance", slippageTolerance);
-    }
-    if (slippageTolerance > MAX_SLIPPAGE_TOLERANCE) {
-      throw new ExcessiveSlippageToleranceError(slippageTolerance);
-    }
+    validateSlippageTolerance(slippageTolerance);
 
     if (nativeAmount && wNative) {
       if (!isAddressEqual(vaultData.asset, wNative)) {

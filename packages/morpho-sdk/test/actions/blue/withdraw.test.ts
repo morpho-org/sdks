@@ -11,7 +11,6 @@ import {
   MutuallyExclusiveWithdrawAmountsError,
   morphoViemExtension,
   NegativeInputError,
-  NonPositiveInputError,
   type VaultReallocation,
   WithdrawExceedsSupplyError,
   WithdrawSharesExceedSupplyError,
@@ -420,7 +419,7 @@ describe("WithdrawBlue", () => {
     ).toThrow(MutuallyExclusiveWithdrawAmountsError);
   });
 
-  test("error: NonPositiveInputError when shares is negative", async ({
+  test("error: NegativeInputError when a withdraw mode is negative", async ({
     client,
   }) => {
     const morphoClient = client.extend(morphoViemExtension()).morpho;
@@ -432,7 +431,14 @@ describe("WithdrawBlue", () => {
         shares: -1n,
         positionData: undefined as never,
       } as never),
-    ).toThrow(NonPositiveInputError);
+    ).toThrow(NegativeInputError);
+    expect(() =>
+      market.withdraw({
+        userAddress: client.account.address,
+        assets: -1n,
+        positionData: undefined as never,
+      } as never),
+    ).toThrow(NegativeInputError);
   });
 
   test("error: MissingAccrualPositionError when positionData is missing", async ({

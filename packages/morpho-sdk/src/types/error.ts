@@ -439,20 +439,6 @@ export class UnsortedReallocationWithdrawalsError extends Error {
 }
 
 /**
- * Thrown when a market repay's `transferAmount` is zero or negative.
- *
- * @deprecated No longer thrown. The repay action layer no longer validates `transferAmount`
- * through this operation-specific error; it uses {@link NegativeInputError} and
- * {@link NonPositiveInputError}, while shares mode allows a zero ERC-20 transfer for fully-native
- * repays. Retained as exported API for back-compat; slated for removal in a future major.
- */
-export class NonPositiveTransferAmountError extends Error {
-  constructor(market: string) {
-    super(`Transfer amount must be positive for market: ${market}`);
-  }
-}
-
-/**
  * Thrown when a market repay in assets mode has `transferAmount !== amount + nativeAmount` — the
  * pre-resolved ERC-20 pull plus the wrapped native must equal the assets repaid, so the bundle
  * neither strands over-pulled loan tokens on `GeneralAdapter1` nor under-funds the repay.

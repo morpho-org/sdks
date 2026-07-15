@@ -959,6 +959,26 @@ describe("MorphoMidnight", () => {
       ).toThrow(NoMidnightCreditToRedeemError);
     });
 
+    test("error: NonPositiveInputError for explicit non-positive units", () => {
+      const market = marketData();
+      const data = positionData(market, { credit: 250n, pendingFee: 50n });
+
+      expect(() =>
+        midnight().redeem({
+          positionData: data,
+          accountAddress: midnightAddresses.taker,
+          units: 0n,
+        }),
+      ).toThrow(NonPositiveInputError);
+      expect(() =>
+        midnight().redeem({
+          positionData: data,
+          accountAddress: midnightAddresses.taker,
+          units: -1n,
+        }),
+      ).toThrow(NonPositiveInputError);
+    });
+
     test("error: InsufficientMidnightWithdrawableLiquidityError", () => {
       const market = marketData({ withdrawable: 50n });
 

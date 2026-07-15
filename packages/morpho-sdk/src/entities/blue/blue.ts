@@ -661,10 +661,10 @@ export class MorphoBlue implements BlueActions {
       throw new MutuallyExclusiveWithdrawAmountsError(this.marketParams.id);
     }
     if (assets < 0n) {
-      throw new NonPositiveInputError("assets", assets);
+      throw new NegativeInputError("assets", assets);
     }
     if (shares < 0n) {
-      throw new NonPositiveInputError("shares", shares);
+      throw new NegativeInputError("shares", shares);
     }
     if (assets === 0n && shares === 0n) {
       throw new NonPositiveInputError("assets or shares", 0n);
@@ -884,24 +884,28 @@ export class MorphoBlue implements BlueActions {
       slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
     } = params;
 
-    if ("amount" in params && "shares" in params) {
-      throw new MutuallyExclusiveRepayAmountsError(this.marketParams.id);
-    }
-
     const nativeAmount = params.nativeAmount ?? 0n;
     if (nativeAmount < 0n) {
       throw new NegativeInputError("nativeAmount", nativeAmount);
     }
 
+    const amount = ("amount" in params ? params.amount : undefined) ?? 0n;
+    const shares = ("shares" in params ? params.shares : undefined) ?? 0n;
+    if (amount < 0n) {
+      throw new NegativeInputError("amount", amount);
+    }
+    if (shares < 0n) {
+      throw new NegativeInputError("shares", shares);
+    }
+    if (amount > 0n && shares > 0n) {
+      throw new MutuallyExclusiveRepayAmountsError(this.marketParams.id);
+    }
+
     if ("shares" in params) {
-      if (params.shares <= 0n) {
-        throw new NonPositiveInputError("shares", params.shares);
+      if (shares === 0n) {
+        throw new NonPositiveInputError("shares", shares);
       }
     } else {
-      const amount = params.amount ?? 0n;
-      if (amount < 0n) {
-        throw new NegativeInputError("amount", amount);
-      }
       if (amount + nativeAmount <= 0n) {
         throw new NonPositiveInputError(
           "amount + nativeAmount",
@@ -932,10 +936,6 @@ export class MorphoBlue implements BlueActions {
     let marketForRepay: Market;
 
     if ("shares" in params) {
-      const shares = params.shares;
-      if (shares <= 0n) {
-        throw new NonPositiveInputError("shares", shares);
-      }
       validateRepayShares({
         positionData,
         repayShares: shares,
@@ -958,17 +958,7 @@ export class MorphoBlue implements BlueActions {
       erc20Amount = MathLib.zeroFloorSub(borrowAssets, nativeAmount);
     } else {
       // Assets mode is additive, like supply: repaid = amount + nativeAmount.
-      const amount = params.amount ?? 0n;
-      // Reject a negative ERC-20 amount before it can be masked by nativeAmount
-      // in the sum below (a negative amount would otherwise yield a negative
-      // erc20Amount and a negative approval in getRequirements).
-      if (amount < 0n) {
-        throw new NegativeInputError("amount", amount);
-      }
       repayAssets = amount + nativeAmount;
-      if (repayAssets <= 0n) {
-        throw new NonPositiveInputError("amount + nativeAmount", repayAssets);
-      }
       validateRepayAmount({
         positionData,
         repayAssets,
@@ -1111,24 +1101,28 @@ export class MorphoBlue implements BlueActions {
       slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
     } = params;
 
-    if ("amount" in params && "shares" in params) {
-      throw new MutuallyExclusiveRepayAmountsError(this.marketParams.id);
-    }
-
     const nativeAmount = params.nativeAmount ?? 0n;
     if (nativeAmount < 0n) {
       throw new NegativeInputError("nativeAmount", nativeAmount);
     }
 
+    const amount = ("amount" in params ? params.amount : undefined) ?? 0n;
+    const shares = ("shares" in params ? params.shares : undefined) ?? 0n;
+    if (amount < 0n) {
+      throw new NegativeInputError("amount", amount);
+    }
+    if (shares < 0n) {
+      throw new NegativeInputError("shares", shares);
+    }
+    if (amount > 0n && shares > 0n) {
+      throw new MutuallyExclusiveRepayAmountsError(this.marketParams.id);
+    }
+
     if ("shares" in params) {
-      if (params.shares <= 0n) {
-        throw new NonPositiveInputError("shares", params.shares);
+      if (shares === 0n) {
+        throw new NonPositiveInputError("shares", shares);
       }
     } else {
-      const amount = params.amount ?? 0n;
-      if (amount < 0n) {
-        throw new NegativeInputError("amount", amount);
-      }
       if (amount + nativeAmount <= 0n) {
         throw new NonPositiveInputError(
           "amount + nativeAmount",
@@ -1169,10 +1163,6 @@ export class MorphoBlue implements BlueActions {
       Time.s.from.h(2n);
 
     if ("shares" in params) {
-      const shares = params.shares;
-      if (shares <= 0n) {
-        throw new NonPositiveInputError("shares", shares);
-      }
       validateRepayShares({
         positionData,
         repayShares: shares,
@@ -1190,17 +1180,7 @@ export class MorphoBlue implements BlueActions {
       erc20Amount = MathLib.zeroFloorSub(borrowAssets, nativeAmount);
     } else {
       // Assets mode is additive, like supply: repaid = amount + nativeAmount.
-      const amount = params.amount ?? 0n;
-      // Reject a negative ERC-20 amount before it can be masked by nativeAmount
-      // in the sum below (a negative amount would otherwise yield a negative
-      // erc20Amount and a negative approval in getRequirements).
-      if (amount < 0n) {
-        throw new NegativeInputError("amount", amount);
-      }
       repayAssets = amount + nativeAmount;
-      if (repayAssets <= 0n) {
-        throw new NonPositiveInputError("amount + nativeAmount", repayAssets);
-      }
       validateRepayAmount({
         positionData,
         repayAssets,

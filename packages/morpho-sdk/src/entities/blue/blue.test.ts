@@ -224,11 +224,26 @@ describe("MorphoBlue validation", () => {
     ).toThrow(MutuallyExclusiveRepayAmountsError);
     expect(() =>
       market.repay({
+        amount: -1n,
+        shares: 1n,
+        userAddress: USER,
+        positionData: makePosition(),
+      } as never),
+    ).toThrow(NegativeInputError);
+    expect(() =>
+      market.repay({
         shares: 0n,
         userAddress: USER,
         positionData: makePosition(),
       }),
     ).toThrow(NonPositiveInputError);
+    expect(() =>
+      market.repay({
+        shares: -1n,
+        userAddress: USER,
+        positionData: makePosition(),
+      }),
+    ).toThrow(NegativeInputError);
     // Assets mode: a negative amount must not be masked by nativeAmount.
     expect(() =>
       market.repay({
@@ -257,12 +272,29 @@ describe("MorphoBlue validation", () => {
     ).toThrow(MutuallyExclusiveRepayAmountsError);
     expect(() =>
       market.repayWithdrawCollateral({
+        amount: -1n,
+        shares: 1n,
+        withdrawAmount: 1n,
+        userAddress: USER,
+        positionData: makePosition(),
+      } as never),
+    ).toThrow(NegativeInputError);
+    expect(() =>
+      market.repayWithdrawCollateral({
         shares: 0n,
         withdrawAmount: 1n,
         userAddress: USER,
         positionData: makePosition(),
       }),
     ).toThrow(NonPositiveInputError);
+    expect(() =>
+      market.repayWithdrawCollateral({
+        shares: -1n,
+        withdrawAmount: 1n,
+        userAddress: USER,
+        positionData: makePosition(),
+      }),
+    ).toThrow(NegativeInputError);
     // Assets mode: a negative amount must not be masked by nativeAmount.
     expect(() =>
       market.repayWithdrawCollateral({

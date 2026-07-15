@@ -958,6 +958,9 @@ export class MorphoMidnight {
     const market = params.positionData.market;
     validateMarketData(market, this.chainId);
     const units = params.units ?? params.positionData.faceValue;
+    if (params.units !== undefined && units <= 0n) {
+      throw new NonPositiveInputError("units", units);
+    }
     if (units <= 0n) throw new NoMidnightCreditToRedeemError(market.id);
     if (params.positionData.credit < units) {
       throw new MidnightRedeemExceedsCreditError({

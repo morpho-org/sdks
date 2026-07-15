@@ -159,8 +159,8 @@ Bundle:
 The old `transferAmount === assets` invariant is false under additive native wrapping. Rather than a
 complex pure resolver, the amounts are derived **inline in the entity** — which already holds live
 state — and the action trusts them. This honours root `AGENTS.md` §1 (actions are arithmetic-free)
-and keeps the logic minimal. `NonPositiveTransferAmountError` is **retained as exported API but no
-longer thrown** (`@deprecated`), per §7's no-silent-removals rule. `TransferAmountNotEqualToAssetsError`
+and keeps the logic minimal. `NonPositiveTransferAmountError` remained exported but deprecated
+throughout v5 and is removed in v6 after that deprecation window. `TransferAmountNotEqualToAssetsError`
 is retained and **still thrown**: it now guards the assets-mode action funding invariant
 (`transferAmount === amount + nativeAmount`, see below). A new exported
 `NativeAmountExceedsTransferAmountError` covers the shares-mode carve-out.
