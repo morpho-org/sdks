@@ -712,6 +712,19 @@ export class NegativeMidnightAmountError extends Error {
   }
 }
 
+/** Thrown when a Midnight amount exceeds the maximum offer-cap value accepted onchain. */
+export class MidnightAmountExceedsMaxOfferCapError extends Error {
+  constructor(params: {
+    readonly label: string;
+    readonly amount: bigint;
+    readonly maxOfferCap: bigint;
+  }) {
+    super(
+      `Midnight ${params.label} "${params.amount}" exceeds maximum offer cap "${params.maxOfferCap}". Reduce the amount to the maximum offer cap or less.`,
+    );
+  }
+}
+
 /** Thrown when a Midnight flow needs at least one takeable offer. */
 export class EmptyMidnightTakeableOffersError extends Error {
   constructor() {
@@ -864,11 +877,11 @@ export class NoMidnightCreditToRedeemError extends Error {
   }
 }
 
-/** Thrown when a Midnight redeem amount exceeds the user's position face value. */
-export class MidnightRedeemExceedsFaceValueError extends Error {
-  constructor(params: { market: string; units: bigint; faceValue: bigint }) {
+/** Thrown when a Midnight redeem amount exceeds the user's accrued credit. */
+export class MidnightRedeemExceedsCreditError extends Error {
+  constructor(params: { market: string; units: bigint; credit: bigint }) {
     super(
-      `Midnight redeem amount exceeds position face value on market "${params.market}": units "${params.units}", face value "${params.faceValue}". Redeem less or refresh the position data.`,
+      `Midnight redeem amount exceeds position credit on market "${params.market}": units "${params.units}", credit "${params.credit}". Redeem less or refresh the position data.`,
     );
   }
 }

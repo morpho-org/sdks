@@ -47,17 +47,17 @@ describe("Position", () => {
 
 describe("PositionUtils.getWithdrawable", () => {
   test.each([
-    { credit: 1_000n, pendingFee: 100n, liquidity: 500n, expected: 500n },
-    { credit: 1_000n, pendingFee: 100n, liquidity: 950n, expected: 900n },
-  ])("behavior: returns $expected when credit is $credit, fee is $pendingFee, and liquidity is $liquidity", ({
+    { credit: 1_000n, liquidity: 500n, expected: 500n },
+    { credit: 1_000n, liquidity: 950n, expected: 950n },
+    { credit: 1_000n, liquidity: 1_200n, expected: 1_000n },
+  ])("behavior: returns $expected when credit is $credit and liquidity is $liquidity", ({
     credit,
-    pendingFee,
     liquidity,
     expected,
   }) => {
     expect(
       PositionUtils.getWithdrawable({
-        position: { credit, pendingFee },
+        position: { credit },
         market: { withdrawable: liquidity },
       }),
     ).toBe(expected);

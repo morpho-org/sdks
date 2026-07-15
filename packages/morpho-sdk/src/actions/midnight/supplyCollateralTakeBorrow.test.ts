@@ -112,8 +112,11 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
     } as const;
 
     expect(() =>
+      midnightSupplyCollateralTakeBorrow({ ...params, maxUnits: 0n }),
+    ).toThrow(NonPositiveMidnightAmountError);
+    expect(() =>
       midnightSupplyCollateralTakeBorrow({ ...params, maxUnits: -1n }),
-    ).toThrow(NegativeMidnightAmountError);
+    ).toThrow(NonPositiveMidnightAmountError);
     expect(() =>
       midnightSupplyCollateralTakeBorrow({ ...params, deadline: -1n }),
     ).toThrow(NegativeMidnightAmountError);

@@ -189,8 +189,9 @@ export class AccrualPosition extends Position {
   /**
    * Returns the maximum credit units currently withdrawable from this position.
    *
-   * The capacity is limited by both the position face value and the market's
-   * currently withdrawable liquidity.
+   * The protocol capacity is limited by both the accrued position credit and
+   * the market's currently withdrawable liquidity. Default redemption flows may
+   * still choose the position face value.
    *
    * @returns Maximum credit units currently withdrawable.
    * @example
@@ -227,14 +228,14 @@ export class AccrualPosition extends Position {
    *     },
    *     totalUnits: 1_000n,
    *     lossFactor: 0n,
-   *     withdrawable: 500n,
+   *     withdrawable: 950n,
    *     continuousFeeCredit: 0n,
    *     settlementFeeCbps: [1, 2, 3, 4, 5, 6, 7],
    *     continuousFee: 10,
    *     tickSpacing: 4,
    *   },
    * );
-   * console.log(position.withdrawable); // 500n
+   * console.log(position.withdrawable); // 950n
    * ```
    */
   public get withdrawable() {

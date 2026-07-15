@@ -221,6 +221,9 @@
         "format": [
           "lib/esm/format.d.ts"
         ],
+        "midnight-api": [
+          "lib/esm/midnight-api.d.ts"
+        ],
         "types": [
           "lib/esm/types.d.ts"
         ],

@@ -254,7 +254,7 @@ describe("Midnight requirements on fork", () => {
         accountAddress: client.account.address,
         collateralAssets: amount,
         loanAssets: amount,
-        maxUnits: 0n,
+        maxUnits: 1n,
         takeableOffers: [takeableOffer(true, client.account.address)],
         deadline: maxUint256,
       }),
@@ -293,7 +293,7 @@ describe("Midnight requirements on fork", () => {
       marketData,
       accountAddress: client.account.address,
       loanAssets: amount,
-      maxUnits: 0n,
+      maxUnits: 1n,
       takeableOffers: [takeableOffer(true, client.account.address)],
       deadline: maxUint256,
     });

@@ -73,7 +73,7 @@ describe("midnightTakeBorrow", () => {
     ).toThrow(NonPositiveMidnightAmountError);
   });
 
-  test("error: NegativeMidnightAmountError", () => {
+  test("error: amount validation", () => {
     const params = {
       chainId: midnightChainId,
       market: midnightMarket,
@@ -84,8 +84,11 @@ describe("midnightTakeBorrow", () => {
       deadline: maxUint256,
     } as const;
 
+    expect(() => midnightTakeBorrow({ ...params, maxUnits: 0n })).toThrow(
+      NonPositiveMidnightAmountError,
+    );
     expect(() => midnightTakeBorrow({ ...params, maxUnits: -1n })).toThrow(
-      NegativeMidnightAmountError,
+      NonPositiveMidnightAmountError,
     );
     expect(() => midnightTakeBorrow({ ...params, deadline: -1n })).toThrow(
       NegativeMidnightAmountError,

@@ -5,6 +5,10 @@ import {
   midnightAddresses,
   midnightChainId,
 } from "../../../test/fixtures/midnight.js";
+import {
+  MidnightAmountExceedsMaxOfferCapError,
+  NegativeMidnightAmountError,
+} from "../../types/index.js";
 import { midnightCancelOffer } from "./cancelOffer.js";
 
 describe("midnightCancelOffer", () => {
@@ -40,5 +44,29 @@ describe("midnightCancelOffer", () => {
     expect(tx.action.args.amount).toBe(42n);
     expect(decoded.args[1]).toBe(42n);
     expect(tx.data.endsWith("a1b2c3d4")).toBe(true);
+  });
+
+  test("error: NegativeMidnightAmountError", () => {
+    expect(() =>
+      midnightCancelOffer({
+        chainId: midnightChainId,
+        group:
+          "0x1111111111111111111111111111111111111111111111111111111111111111",
+        amount: -1n,
+        onBehalf: midnightAddresses.taker,
+      }),
+    ).toThrow(NegativeMidnightAmountError);
+  });
+
+  test("error: MidnightAmountExceedsMaxOfferCapError", () => {
+    expect(() =>
+      midnightCancelOffer({
+        chainId: midnightChainId,
+        group:
+          "0x1111111111111111111111111111111111111111111111111111111111111111",
+        amount: MAX_OFFER_CAP + 1n,
+        onBehalf: midnightAddresses.taker,
+      }),
+    ).toThrow(MidnightAmountExceedsMaxOfferCapError);
   });
 });
