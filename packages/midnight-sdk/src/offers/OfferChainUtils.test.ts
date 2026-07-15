@@ -154,14 +154,14 @@ describe("OfferChainUtils fixed-rate offer-chain builders", () => {
     ).toStrictEqual([]);
   });
 
-  test("behavior: accepts tick spacing that does not divide max tick", () => {
+  test("behavior: accepts protocol spacing that does not divide max tick", () => {
     const chain = OfferChainUtils.buildLendFixedRateOfferChain({
       ...defaultParams,
-      tickSpacing: 64n,
+      tickSpacing: 2n,
     });
 
     for (const leg of chain) {
-      expect(leg.tick % 64n).toBe(0n);
+      expect(leg.tick % 2n).toBe(0n);
     }
   });
 
@@ -200,6 +200,38 @@ describe("OfferChainUtils fixed-rate offer-chain builders", () => {
       build({
         ...defaultParams,
         tickSpacing: 0n,
+      }),
+    ).toThrow(InvalidOfferParameterError);
+    expect(() =>
+      build({
+        ...defaultParams,
+        tickSpacing: 3n,
+      }),
+    ).toThrow(InvalidOfferParameterError);
+    expect(() =>
+      build({
+        ...defaultParams,
+        tickSpacing: 64n,
+      }),
+    ).toThrow(InvalidOfferParameterError);
+    expect(() =>
+      build({
+        ...defaultParams,
+        maturityTimestamp: -1n,
+        chainStartTimestamp: -2n,
+        chainEndTimestamp: 0n,
+      }),
+    ).toThrow(InvalidOfferParameterError);
+    expect(() =>
+      build({
+        ...defaultParams,
+        chainStartTimestamp: -1n,
+      }),
+    ).toThrow(InvalidOfferParameterError);
+    expect(() =>
+      build({
+        ...defaultParams,
+        chainEndTimestamp: -1n,
       }),
     ).toThrow(InvalidOfferParameterError);
     expect(() =>
@@ -306,7 +338,7 @@ describe("OfferChainUtils fixed-rate offer-chain builders", () => {
             noNaN: true,
             noDefaultInfinity: true,
           }),
-          tickSpacing: fc.integer({ min: 1, max: 96 }),
+          tickSpacing: fc.constantFrom(1, 2, 4),
           startOffset: fc.integer({
             min: 0,
             max: Number(Time.s.from.d(30n)),
@@ -367,6 +399,12 @@ describe("OfferChainUtils.getMaxFixedRateOfferChainEndTimestamp", () => {
       OfferChainUtils.getMaxFixedRateOfferChainEndTimestamp({
         maturityTimestamp: NOW,
         chainStartTimestamp: NOW,
+      }),
+    ).toThrow(InvalidOfferParameterError);
+    expect(() =>
+      OfferChainUtils.getMaxFixedRateOfferChainEndTimestamp({
+        maturityTimestamp: 0n,
+        chainStartTimestamp: -1n,
       }),
     ).toThrow(InvalidOfferParameterError);
   });
