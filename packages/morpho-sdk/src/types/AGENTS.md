@@ -28,7 +28,7 @@ Both map directly to `PublicAllocator.reallocateTo()` arguments.
 One class per error case. Never throw a generic `Error` from SDK source.
 
 - **Generic input bounds:** `NegativeInputError` for values that must be non-negative and `NonPositiveInputError` for values that must be positive. Both expose the invalid `field` and `value`; reuse them across Vault, Blue, and Midnight instead of adding operation-specific scalar-bound errors.
-- **Market-specific:** `BorrowExceedsSafeLtvError`, `MissingMarketPriceError`, `NativeAmountOnNonWNativeAssetError`, `NativeAmountExceedsTransferAmountError`, `MutuallyExclusiveWithdrawAmountsError`, `WithdrawExceedsSupplyError`, `WithdrawSharesExceedSupplyError`.
+- **Market-specific:** `BorrowExceedsSafeLtvError`, `MissingMarketPriceError`, `NativeAmountOnNonWNativeAssetError`, `MutuallyExclusiveWithdrawAmountsError`, `WithdrawExceedsSupplyError`, `WithdrawSharesExceedSupplyError`.
 - **Reallocation-specific:** `EmptyReallocationWithdrawalsError`, `ReallocationWithdrawalOnTargetMarketError`, `UnsortedReallocationWithdrawalsError`, `ReallocationWithdrawExceedsMarketSupplyError`.
 
 ## Adding a new operation

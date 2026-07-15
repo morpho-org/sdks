@@ -55,6 +55,116 @@ export class NonPositiveInputError extends Error {
   }
 }
 
+/** @deprecated Use {@link NonPositiveInputError}. */
+export const NonPositiveAssetAmountError = NonPositiveInputError;
+/** @deprecated Use {@link NonPositiveInputError}. */
+export type NonPositiveAssetAmountError = NonPositiveInputError;
+
+/** @deprecated Use {@link NonPositiveInputError}. */
+export const NonPositiveSharesAmountError = NonPositiveInputError;
+/** @deprecated Use {@link NonPositiveInputError}. */
+export type NonPositiveSharesAmountError = NonPositiveInputError;
+
+/** @deprecated Use {@link NonPositiveInputError}. */
+export const NonPositiveMaxSharePriceError = NonPositiveInputError;
+/** @deprecated Use {@link NonPositiveInputError}. */
+export type NonPositiveMaxSharePriceError = NonPositiveInputError;
+
+/** @deprecated Use {@link NonPositiveInputError}. */
+export const ZeroDepositAmountError = NonPositiveInputError;
+/** @deprecated Use {@link NonPositiveInputError}. */
+export type ZeroDepositAmountError = NonPositiveInputError;
+
+/** @deprecated Use {@link NonPositiveInputError}. */
+export const NonPositiveBorrowAmountError = NonPositiveInputError;
+/** @deprecated Use {@link NonPositiveInputError}. */
+export type NonPositiveBorrowAmountError = NonPositiveInputError;
+
+/** @deprecated Use {@link NonPositiveInputError}. */
+export const ZeroCollateralAmountError = NonPositiveInputError;
+/** @deprecated Use {@link NonPositiveInputError}. */
+export type ZeroCollateralAmountError = NonPositiveInputError;
+
+/** @deprecated Use {@link NonPositiveInputError}. */
+export const NonPositiveReallocationAmountError = NonPositiveInputError;
+/** @deprecated Use {@link NonPositiveInputError}. */
+export type NonPositiveReallocationAmountError = NonPositiveInputError;
+
+/** @deprecated Use {@link NonPositiveInputError}. */
+export const NonPositiveRepayAmountError = NonPositiveInputError;
+/** @deprecated Use {@link NonPositiveInputError}. */
+export type NonPositiveRepayAmountError = NonPositiveInputError;
+
+/** @deprecated Use {@link NonPositiveInputError}. */
+export const NonPositiveRepayMaxSharePriceError = NonPositiveInputError;
+/** @deprecated Use {@link NonPositiveInputError}. */
+export type NonPositiveRepayMaxSharePriceError = NonPositiveInputError;
+
+/** @deprecated Use {@link NonPositiveInputError}. */
+export const NonPositiveWithdrawCollateralAmountError = NonPositiveInputError;
+/** @deprecated Use {@link NonPositiveInputError}. */
+export type NonPositiveWithdrawCollateralAmountError = NonPositiveInputError;
+
+/** @deprecated Use {@link NonPositiveInputError}. */
+export const ZeroSupplyAmountError = NonPositiveInputError;
+/** @deprecated Use {@link NonPositiveInputError}. */
+export type ZeroSupplyAmountError = NonPositiveInputError;
+
+/** @deprecated Use {@link NonPositiveInputError}. */
+export const NonPositiveWithdrawAmountError = NonPositiveInputError;
+/** @deprecated Use {@link NonPositiveInputError}. */
+export type NonPositiveWithdrawAmountError = NonPositiveInputError;
+
+/** @deprecated Use {@link NegativeInputError}. */
+export const NegativeSlippageToleranceError = NegativeInputError;
+/** @deprecated Use {@link NegativeInputError}. */
+export type NegativeSlippageToleranceError = NegativeInputError;
+
+/** @deprecated Use {@link NegativeInputError}. */
+export const NegativeNativeAmountError = NegativeInputError;
+/** @deprecated Use {@link NegativeInputError}. */
+export type NegativeNativeAmountError = NegativeInputError;
+
+/** @deprecated Use {@link NegativeInputError}. */
+export const NegativeReallocationFeeError = NegativeInputError;
+/** @deprecated Use {@link NegativeInputError}. */
+export type NegativeReallocationFeeError = NegativeInputError;
+
+/** @deprecated Use {@link NegativeInputError}. */
+export const NonPositiveMinBorrowSharePriceError = NegativeInputError;
+/** @deprecated Use {@link NegativeInputError}. */
+export type NonPositiveMinBorrowSharePriceError = NegativeInputError;
+
+/** @deprecated Use {@link NegativeInputError}. */
+export const NegativeSupplyAmountError = NegativeInputError;
+/** @deprecated Use {@link NegativeInputError}. */
+export type NegativeSupplyAmountError = NegativeInputError;
+
+/** @deprecated Use {@link NegativeInputError}. */
+export const NegativeSupplyMaxSharePriceError = NegativeInputError;
+/** @deprecated Use {@link NegativeInputError}. */
+export type NegativeSupplyMaxSharePriceError = NegativeInputError;
+
+/** @deprecated Use {@link NegativeInputError}. */
+export const NegativeWithdrawMinSharePriceError = NegativeInputError;
+/** @deprecated Use {@link NegativeInputError}. */
+export type NegativeWithdrawMinSharePriceError = NegativeInputError;
+
+/** @deprecated Use {@link NegativeInputError}. */
+export const NegativeMinSharePriceError = NegativeInputError;
+/** @deprecated Use {@link NegativeInputError}. */
+export type NegativeMinSharePriceError = NegativeInputError;
+
+/** @deprecated Use {@link NegativeInputError}. */
+export const NegativeBorrowSharesError = NegativeInputError;
+/** @deprecated Use {@link NegativeInputError}. */
+export type NegativeBorrowSharesError = NegativeInputError;
+
+/** @deprecated Use {@link NegativeInputError}. */
+export const NegativeMaxRepaySharePriceError = NegativeInputError;
+/** @deprecated Use {@link NegativeInputError}. */
+export type NegativeMaxRepaySharePriceError = NegativeInputError;
+
 /**
  * Typed errors thrown while encoding supported Bundler3 actions.
  *
@@ -451,27 +561,6 @@ export class TransferAmountNotEqualToAssetsError extends Error {
   }) {
     super(
       `Transfer amount ${params.transferAmount} is not equal to repay assets ${params.assets} for market: ${params.market}. In assets mode, transferAmount must equal amount + nativeAmount.`,
-    );
-  }
-}
-
-/**
- * Thrown when a shares-mode repay's `nativeAmount` exceeds `transferAmount`, which
- * would make the ERC-20 amount to pull (`transferAmount − nativeAmount`) negative.
- *
- * @deprecated No longer thrown. A shares-mode repay now accepts a `nativeAmount` that
- * covers (or exceeds) the full repaid assets: it wraps the native, pulls no ERC-20, and
- * the bundle skims the residual wNative back to the receiver. This class is retained for
- * one minor for API stability and will be removed in the next major.
- */
-export class NativeAmountExceedsTransferAmountError extends Error {
-  constructor(params: {
-    nativeAmount: bigint;
-    transferAmount: bigint;
-    market: string;
-  }) {
-    super(
-      `Native amount ${params.nativeAmount} exceeds transfer amount ${params.transferAmount} for market: ${params.market}. Reduce nativeAmount to at most transferAmount.`,
     );
   }
 }

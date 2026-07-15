@@ -1,3 +1,4 @@
+import { InvalidTreeError } from "@morpho-org/midnight-sdk";
 import type { Hex } from "viem";
 import { describe, expect, test } from "vitest";
 import {
@@ -77,5 +78,20 @@ describe("mempoolSubmitOffers", () => {
 
     expect(groups).toEqual([group, otherGroup]);
     expect(tx.action.args.groups).toEqual([group]);
+  });
+
+  test("error: InvalidTreeError when offers is non-positive", () => {
+    expect(() =>
+      mempoolSubmitOffers({
+        chainId: midnightChainId,
+        groups: [group],
+        root,
+        maker: midnightAddresses.maker,
+        ratifier: midnightAddresses.ecrecoverRatifier,
+        ratifierType: "ecrecover",
+        offers: 0,
+        payload,
+      }),
+    ).toThrow(InvalidTreeError);
   });
 });

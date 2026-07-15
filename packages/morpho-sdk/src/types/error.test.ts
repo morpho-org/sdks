@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { NegativeInputError, NonPositiveInputError } from "./error.js";
+import {
+  NegativeInputError,
+  NegativeNativeAmountError,
+  NonPositiveAssetAmountError,
+  NonPositiveInputError,
+} from "./error.js";
 
 describe("NegativeInputError", () => {
   test("default", () => {
@@ -24,5 +29,18 @@ describe("NonPositiveInputError", () => {
     expect(error.field).toBe("assets");
     expect(error.value).toBe(0n);
     expect(error.message).toBe('Input "assets" must be positive, got "0".');
+  });
+});
+
+describe("deprecated scalar input error aliases", () => {
+  test("behavior: aliases preserve canonical constructor identity", () => {
+    expect(NegativeNativeAmountError).toBe(NegativeInputError);
+    expect(NonPositiveAssetAmountError).toBe(NonPositiveInputError);
+    expect(new NegativeInputError("nativeAmount", -1n)).toBeInstanceOf(
+      NegativeNativeAmountError,
+    );
+    expect(new NonPositiveInputError("assets", 0n)).toBeInstanceOf(
+      NonPositiveAssetAmountError,
+    );
   });
 });

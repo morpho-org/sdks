@@ -12,6 +12,7 @@ import {
   midnightOtherMarket,
 } from "../../../test/fixtures/midnight.js";
 import {
+  ChainIdMismatchError,
   EmptyMidnightTakeableOffersError,
   MidnightOfferSideMismatchError,
   MidnightTakeableOfferMarketMismatchError,
@@ -184,5 +185,20 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
         deadline: maxUint256,
       }),
     ).toThrow(UnknownCollateralIndexError);
+  });
+
+  test("error: ChainIdMismatchError", () => {
+    expect(() =>
+      midnightSupplyCollateralTakeBorrow({
+        chainId: midnightChainId,
+        market: { ...midnightMarket, chainId: BigInt(midnightChainId + 1) },
+        collateralAssets: 2_000n,
+        loanAssets: 1_000n,
+        maxUnits: 900n,
+        taker: midnightAddresses.taker,
+        takeableOffers: [midnightApiTake({ buy: true })],
+        deadline: maxUint256,
+      }),
+    ).toThrow(ChainIdMismatchError);
   });
 });

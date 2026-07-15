@@ -10,7 +10,10 @@ import {
   midnightMarket,
   midnightMarketId,
 } from "../../../test/fixtures/midnight.js";
-import { NonPositiveInputError } from "../../types/index.js";
+import {
+  ChainIdMismatchError,
+  NonPositiveInputError,
+} from "../../types/index.js";
 import { midnightSupplyCollateral } from "./supplyCollateral.js";
 
 describe("midnightSupplyCollateral", () => {
@@ -68,5 +71,16 @@ describe("midnightSupplyCollateral", () => {
         onBehalf: midnightAddresses.taker,
       }),
     ).toThrow(UnknownCollateralIndexError);
+  });
+
+  test("error: ChainIdMismatchError", () => {
+    expect(() =>
+      midnightSupplyCollateral({
+        chainId: midnightChainId,
+        market: { ...midnightMarket, chainId: BigInt(midnightChainId + 1) },
+        assets: 2_000n,
+        onBehalf: midnightAddresses.taker,
+      }),
+    ).toThrow(ChainIdMismatchError);
   });
 });

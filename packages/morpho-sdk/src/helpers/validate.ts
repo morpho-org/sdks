@@ -5,6 +5,7 @@ import {
   MathLib,
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
+import type { MarketInput as MidnightMarketInput } from "@morpho-org/midnight-sdk";
 import { isDefined } from "@morpho-org/morpho-ts";
 import { type Address, isAddressEqual } from "viem";
 import {
@@ -41,6 +42,28 @@ export const compareMarketIds = (idA: MarketId, idB: MarketId) => {
   if (normalizedIdA > normalizedIdB) return 1;
   if (normalizedIdA < normalizedIdB) return -1;
   return 0;
+};
+
+/**
+ * Validates that a raw or hydrated Midnight market belongs to the expected chain.
+ *
+ * @param market - Midnight market params or hydrated market state.
+ * @param chainId - Expected EIP-155 chain id.
+ * @returns Nothing when the market belongs to `chainId`.
+ * @throws {ChainIdMismatchError} when the market belongs to another chain.
+ * @example
+ * ```ts
+ * import { validateMidnightMarketChainId } from "@morpho-org/morpho-sdk";
+ *
+ * validateMidnightMarketChainId(marketParams, 8453);
+ * ```
+ */
+export const validateMidnightMarketChainId = (
+  market: MidnightMarketInput,
+  chainId: number,
+): void => {
+  const marketParams = "params" in market ? market.params : market;
+  validateChainId(Number(marketParams.chainId), chainId);
 };
 
 /**

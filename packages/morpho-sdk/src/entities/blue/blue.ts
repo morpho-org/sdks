@@ -42,6 +42,7 @@ import {
   validateNativeAsset,
   validatePositionHealth,
   validatePositionHealthAfterWithdraw,
+  validateReallocations,
   validateRepayAmount,
   validateRepayShares,
   validateSlippageTolerance,
@@ -671,6 +672,9 @@ export class MorphoBlue implements BlueActions {
     }
 
     validateSlippageTolerance(slippageTolerance);
+    if (reallocations) {
+      validateReallocations(reallocations, this.marketParams.id);
+    }
 
     if (!positionData) {
       throw new MissingAccrualPositionError(this.marketParams.id);
@@ -811,6 +815,9 @@ export class MorphoBlue implements BlueActions {
     }
 
     validateSlippageTolerance(slippageTolerance);
+    if (reallocations) {
+      validateReallocations(reallocations, this.marketParams.id);
+    }
 
     if (!positionData) {
       throw new MissingAccrualPositionError(this.marketParams.id);
@@ -1314,6 +1321,16 @@ export class MorphoBlue implements BlueActions {
       throw new NonPositiveInputError("borrowAmount", borrowAmount);
     }
 
+    const totalCollateral = amount + (nativeAmount ?? 0n);
+    if (totalCollateral === 0n) {
+      throw new NonPositiveInputError("totalCollateral", totalCollateral);
+    }
+
+    validateSlippageTolerance(slippageTolerance);
+    if (reallocations) {
+      validateReallocations(reallocations, this.marketParams.id);
+    }
+
     if (!positionData) {
       throw new MissingAccrualPositionError(this.marketParams.id);
     }
@@ -1323,13 +1340,6 @@ export class MorphoBlue implements BlueActions {
       expectedMarketId: this.marketParams.id,
       expectedUser: userAddress,
     });
-
-    const totalCollateral = amount + (nativeAmount ?? 0n);
-    if (totalCollateral === 0n) {
-      throw new NonPositiveInputError("totalCollateral", totalCollateral);
-    }
-
-    validateSlippageTolerance(slippageTolerance);
 
     if (nativeAmount !== undefined && nativeAmount > 0n) {
       validateNativeAsset(this.chainId, this.marketParams.collateralToken);
@@ -1427,6 +1437,21 @@ export class MorphoBlue implements BlueActions {
       throw new NonPositiveInputError("collateralAmount", collateralAmount);
     }
 
+    const requestedAssets = borrowAssets ?? 0n;
+    const requestedShares = borrowShares ?? 0n;
+    if (requestedAssets < 0n) {
+      throw new NegativeInputError("borrowAssets", requestedAssets);
+    }
+    if (requestedShares < 0n) {
+      throw new NegativeInputError("borrowShares", requestedShares);
+    }
+    if (requestedAssets > 0n && requestedShares > 0n) {
+      throw new BorrowAmountAndSharesExclusiveError(this.marketParams.id);
+    }
+    if (targetReallocations) {
+      validateReallocations(targetReallocations, target.marketParams.id);
+    }
+
     if (!positionData) {
       throw new MissingAccrualPositionError(this.marketParams.id);
     }
@@ -1462,21 +1487,6 @@ export class MorphoBlue implements BlueActions {
       expectedMarketId: target.marketParams.id,
       expectedUser: userAddress,
     });
-
-    const requestedAssets = borrowAssets ?? 0n;
-    const requestedShares = borrowShares ?? 0n;
-
-    // Reject negative debt up front; otherwise it slips past the `> 0n` mode checks and only fails at buildTx().
-    if (requestedAssets < 0n) {
-      throw new NegativeInputError("borrowAssets", requestedAssets);
-    }
-    if (requestedShares < 0n) {
-      throw new NegativeInputError("borrowShares", requestedShares);
-    }
-
-    if (requestedAssets > 0n && requestedShares > 0n) {
-      throw new BorrowAmountAndSharesExclusiveError(this.marketParams.id);
-    }
 
     const sharesMode = requestedShares > 0n;
     const shouldMigrateBorrow = requestedAssets > 0n || sharesMode;

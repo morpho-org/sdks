@@ -9,6 +9,7 @@ import {
   midnightOtherMarket,
 } from "../../../test/fixtures/midnight.js";
 import {
+  ChainIdMismatchError,
   EmptyMidnightTakeableOffersError,
   MidnightOfferSideMismatchError,
   MidnightTakeableOfferMarketMismatchError,
@@ -57,6 +58,20 @@ describe("midnightTakeBorrow", () => {
     });
 
     expect(tx.data.endsWith("a1b2c3d4")).toBe(true);
+  });
+
+  test("error: ChainIdMismatchError", () => {
+    expect(() =>
+      midnightTakeBorrow({
+        chainId: midnightChainId,
+        market: { ...midnightMarket, chainId: BigInt(midnightChainId + 1) },
+        loanAssets: 1_000n,
+        maxUnits: 900n,
+        taker: midnightAddresses.taker,
+        takeableOffers: [midnightApiTake({ buy: true })],
+        deadline: maxUint256,
+      }),
+    ).toThrow(ChainIdMismatchError);
   });
 
   test("error: NonPositiveInputError", () => {

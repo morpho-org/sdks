@@ -12,6 +12,10 @@ import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { CbbtcUsdcBlue, WethUsdsBlue } from "../../test/fixtures/blue.js";
 import {
+  midnightChainId,
+  midnightMarket,
+} from "../../test/fixtures/midnight.js";
+import {
   AccrualPositionUserMismatchError,
   AddressMismatchError,
   BorrowExceedsSafeLtvError,
@@ -39,6 +43,7 @@ import { MAX_SLIPPAGE_TOLERANCE } from "./constant.js";
 import {
   validateAccrualPosition,
   validateChainId,
+  validateMidnightMarketChainId,
   validateNativeAsset,
   validatePositionHealth,
   validatePositionHealthAfterWithdraw,
@@ -271,6 +276,41 @@ describe("validateChainId", () => {
     expect(() => validateChainId(undefined, mainnet.id)).toThrow(
       ChainIdMismatchError,
     );
+  });
+});
+
+describe("validateMidnightMarketChainId", () => {
+  test("default: accepts raw market params on the expected chain", () => {
+    expect(() =>
+      validateMidnightMarketChainId(midnightMarket, midnightChainId),
+    ).not.toThrow();
+  });
+
+  test("behavior: accepts hydrated market state on the expected chain", () => {
+    expect(() =>
+      validateMidnightMarketChainId(
+        {
+          params: midnightMarket,
+          totalUnits: 1_000n,
+          lossFactor: 0n,
+          withdrawable: 500n,
+          continuousFeeCredit: 0n,
+          settlementFeeCbps: [0, 0, 0, 0, 0, 0, 0],
+          continuousFee: 0,
+          tickSpacing: 4,
+        },
+        midnightChainId,
+      ),
+    ).not.toThrow();
+  });
+
+  test("error: ChainIdMismatchError", () => {
+    expect(() =>
+      validateMidnightMarketChainId(
+        { ...midnightMarket, chainId: BigInt(midnightChainId + 1) },
+        midnightChainId,
+      ),
+    ).toThrow(ChainIdMismatchError);
   });
 });
 

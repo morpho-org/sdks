@@ -1,3 +1,4 @@
+import { InvalidTreeError } from "@morpho-org/midnight-sdk";
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
 import type { Address, Hex } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
@@ -38,6 +39,7 @@ export interface MempoolSubmitOffersParams {
  * @param params.payload - Encoded mempool payload bytes.
  * @param params.metadata - Optional analytics metadata appended to calldata.
  * @returns A deep-frozen `Transaction<MempoolSubmitOffersAction>` targeting `MidnightMempool`.
+ * @throws {InvalidTreeError} when `offers <= 0`.
  * @example
  * ```ts
  * import { Payload } from "@morpho-org/midnight-sdk";
@@ -59,6 +61,10 @@ export interface MempoolSubmitOffersParams {
 export const mempoolSubmitOffers = (
   params: MempoolSubmitOffersParams,
 ): Readonly<Transaction<MempoolSubmitOffersAction>> => {
+  if (params.offers <= 0) {
+    throw new InvalidTreeError("Tree must contain at least one offer.");
+  }
+
   const midnightMempool = getChainAddress(params.chainId, "midnightMempool");
 
   let tx = {

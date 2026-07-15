@@ -1692,6 +1692,23 @@ describe("MorphoMidnight", () => {
       ).rejects.toThrow(NegativeInputError);
     });
 
+    test("error: ChainIdMismatchError", async () => {
+      const data = offersData(false);
+
+      await expect(
+        midnight().supplyCollateralMakeBorrow({
+          accountAddress: data.accountAddress,
+          offers: data.tree,
+          validation: offerValidation,
+          market: {
+            ...midnightMarket,
+            chainId: BigInt(midnightChainId + 1),
+          },
+          collateralAssets: 1_000n,
+        }),
+      ).rejects.toThrow(ChainIdMismatchError);
+    });
+
     test("error: MarketIdMismatchError", async () => {
       const offer = Offer.create(
         midnightBaseOffer({
@@ -1894,6 +1911,14 @@ describe("MorphoMidnight", () => {
           withdrawCollateralAssets: 0n,
         }),
       ).toThrow(NonPositiveInputError);
+      expect(() =>
+        midnight().repayWithdrawCollateral({
+          ...params,
+          repayAssets: 0n,
+          withdrawCollateralAssets: 1n,
+          collateralIndex: 1n,
+        }),
+      ).toThrow(UnknownCollateralIndexError);
     });
   });
 

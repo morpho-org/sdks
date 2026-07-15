@@ -7,7 +7,10 @@ import {
   midnightMarket,
   midnightMarketId,
 } from "../../../test/fixtures/midnight.js";
-import { NonPositiveInputError } from "../../types/index.js";
+import {
+  ChainIdMismatchError,
+  NonPositiveInputError,
+} from "../../types/index.js";
 import { midnightRedeem } from "./redeem.js";
 
 describe("midnightRedeem", () => {
@@ -54,5 +57,16 @@ describe("midnightRedeem", () => {
         onBehalf: midnightAddresses.taker,
       }),
     ).toThrow(NonPositiveInputError);
+  });
+
+  test("error: ChainIdMismatchError", () => {
+    expect(() =>
+      midnightRedeem({
+        chainId: midnightChainId,
+        market: { ...midnightMarket, chainId: BigInt(midnightChainId + 1) },
+        units: 1_000n,
+        onBehalf: midnightAddresses.taker,
+      }),
+    ).toThrow(ChainIdMismatchError);
   });
 });
