@@ -63,9 +63,21 @@ const positionData = {
   collateral: 44n,
 };
 
-function mockTransactionPlan(tx: typeof SUPPLY_TX, requirements = []) {
-  const getRequirementRequests = vi.fn().mockResolvedValue(requirements);
-  const buildPrimaryCall = vi.fn().mockReturnValue(tx);
+type MockRequirement = {
+  readonly action: { readonly type: string };
+  readonly sign?: () => Promise<RequirementSignature>;
+};
+
+function mockTransactionPlan(
+  tx: typeof SUPPLY_TX,
+  requirements: readonly MockRequirement[] = [],
+) {
+  const getRequirementRequests = vi.fn(
+    async (_requestOptions?: unknown) => requirements,
+  );
+  const buildPrimaryCall = vi.fn(
+    (_signatures?: readonly RequirementSignature[]) => tx,
+  );
   const prepare = vi.fn(async (options?: { requestOptions?: unknown }) => {
     const resolvedRequirements = await getRequirementRequests(
       options?.requestOptions,
@@ -742,7 +754,6 @@ describe.sequential("MorphoProtocolEvm", () => {
         chainId: 1,
         provider: "https://dummy-rpc-url.com",
         bundlerUrl: "https://dummy-bundler-url.com",
-        entryPointAddress: "0x0000000000000000000000000000000000000007",
         safeModulesVersion: "0.3.0",
         isSponsored: false,
         useNativeCoins: true,

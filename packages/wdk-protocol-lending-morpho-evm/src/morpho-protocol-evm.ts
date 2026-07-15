@@ -405,15 +405,19 @@ async function getTransactionPlanRequests<
 >(
   plan: TransactionPlan<TAction, TOptions, TRequest, TSignatures>,
   requestOptions?: TOptions,
-): Promise<readonly TRequest[]> {
+): Promise<TRequest[]> {
   const prepared = await plan.prepare(
     requestOptions === undefined ? undefined : { requestOptions },
   );
-  return prepared.steps
-    .filter((request) => request.id !== "primary")
-    .map((request) =>
-      request.kind === "signature" ? request.request : request.tx,
-    ) as unknown as readonly TRequest[];
+  const requests: TRequest[] = [];
+  for (const request of prepared.steps) {
+    if (request.id === "primary") continue;
+    requests.push(
+      (request.kind === "signature" ? request.request : request.tx) as TRequest,
+    );
+  }
+
+  return requests;
 }
 
 async function getTransactionPlanTx<
