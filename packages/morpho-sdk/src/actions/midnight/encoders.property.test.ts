@@ -1,5 +1,6 @@
 import {
   MAX_OFFER_CAP,
+  MarketParams,
   midnightAbi,
   midnightBundlesAbi,
   setterRatifierAbi,
@@ -13,6 +14,7 @@ import {
   midnightChainId,
   midnightMarket,
 } from "../../../test/fixtures/midnight.js";
+import { MidnightMarketAddressMismatchError } from "../../types/index.js";
 import { midnightSetIsAuthorized } from "./authorization.js";
 import { midnightCancelOffer } from "./cancelOffer.js";
 import { midnightRedeem } from "./redeem.js";
@@ -35,6 +37,90 @@ const inputs = fc.record({
 });
 
 describe("Midnight calldata encoders", () => {
+  test.each([
+    [
+      "redeem",
+      (market: MarketParams) =>
+        midnightRedeem({
+          chainId: midnightChainId,
+          market,
+          units: 1n,
+          onBehalf: midnightAddresses.taker,
+        }),
+    ],
+    [
+      "repayWithdrawCollateral",
+      (market: MarketParams) =>
+        midnightRepayWithdrawCollateral({
+          chainId: midnightChainId,
+          market,
+          repayAssets: 1n,
+          withdrawCollateralAssets: 0n,
+          onBehalf: midnightAddresses.taker,
+          deadline: 1n,
+        }),
+    ],
+    [
+      "supplyCollateral",
+      (market: MarketParams) =>
+        midnightSupplyCollateral({
+          chainId: midnightChainId,
+          market,
+          assets: 1n,
+          onBehalf: midnightAddresses.taker,
+        }),
+    ],
+    [
+      "supplyCollateralTakeBorrow",
+      (market: MarketParams) =>
+        midnightSupplyCollateralTakeBorrow({
+          chainId: midnightChainId,
+          market,
+          collateralAssets: 1n,
+          loanAssets: 1n,
+          maxUnits: 1n,
+          taker: midnightAddresses.taker,
+          takeableOffers: [midnightApiTake({ buy: true })],
+          deadline: 1n,
+        }),
+    ],
+    [
+      "takeBorrow",
+      (market: MarketParams) =>
+        midnightTakeBorrow({
+          chainId: midnightChainId,
+          market,
+          loanAssets: 1n,
+          maxUnits: 1n,
+          taker: midnightAddresses.taker,
+          takeableOffers: [midnightApiTake({ buy: true })],
+          deadline: 1n,
+        }),
+    ],
+    [
+      "takeLend",
+      (market: MarketParams) =>
+        midnightTakeLend({
+          chainId: midnightChainId,
+          market,
+          assets: 1n,
+          minUnits: 1n,
+          taker: midnightAddresses.taker,
+          takeableOffers: [midnightApiTake({ buy: false })],
+          deadline: 1n,
+        }),
+    ],
+  ] as const)("error: MidnightMarketAddressMismatchError for %s", (_, build) => {
+    const foreignMarket = new MarketParams({
+      ...midnightMarket,
+      midnight: midnightAddresses.taker,
+    });
+
+    expect(() => build(foreignMarket)).toThrow(
+      MidnightMarketAddressMismatchError,
+    );
+  });
+
   test("property: preserves bounded primitive inputs through ABI encoding", () => {
     fc.assert(
       fc.property(inputs, ({ assets, units, optionalAmount, flag }) => {

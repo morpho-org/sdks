@@ -2,6 +2,7 @@ import { MarketUtils, midnightBundlesAbi } from "@morpho-org/midnight-sdk";
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
 import { encodeFunctionData, maxUint256, zeroAddress } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
+import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js";
 import {
   type MidnightSupplyCollateralTakeBorrowAction,
@@ -42,6 +43,8 @@ export interface MidnightSupplyCollateralTakeBorrowParams
  * @throws {EmptyMidnightTakeableOffersError} when no offers are provided.
  * @throws {MidnightOfferSideMismatchError} when any offer is not lend-side.
  * @throws {MidnightTakeableOfferMarketMismatchError} when any offer belongs to another market.
+ * @throws {ChainIdMismatchError} when the market targets another chain.
+ * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
  * @throws {UnknownCollateralIndexError} when `collateralIndex` is not configured on the market.
  * @example
  * ```ts
@@ -78,6 +81,8 @@ export const midnightSupplyCollateralTakeBorrow = (
   if (params.deadline < 0n) {
     throw new NegativeMidnightAmountError("deadline", params.deadline);
   }
+  // Reject markets from another chain deployment before encoding the bundle.
+  validateMidnightMarket({ market: params.market, chainId: params.chainId });
   const marketId = validateTakeableOffers({
     market: params.market,
     takeableOffers: params.takeableOffers,

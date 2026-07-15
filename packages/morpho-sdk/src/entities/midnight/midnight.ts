@@ -37,6 +37,7 @@ import {
 } from "../../actions/requirements/index.js";
 import { validateChainId } from "../../helpers/index.js";
 import { signAndVerifyTypedData } from "../../helpers/signAndVerifyTypedData.js";
+import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateOfferSides } from "../../helpers/validateOfferSides.js";
 import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js";
 import type { MorphoClientType } from "../../types/client.js";
@@ -113,41 +114,22 @@ import type {
  * const tx = output.buildTx();
  * ```
  */
-export interface MidnightActions {
-  getMarketData(
-    marketId: Hex,
-    parameters?: MidnightFetchParams,
-  ): Promise<Market>;
-  getPositionData(params: GetPositionDataParams): Promise<AccrualPosition>;
-  getOffersData(params: GetOffersDataParams): Promise<OffersData>;
-  takeLend(
-    params: TakeLendParams,
-  ): MidnightActionOutput<MidnightTakeLendAction, undefined>;
-  takeBorrow(
-    params: TakeBorrowParams,
-  ): MidnightActionOutput<MidnightTakeBorrowAction, undefined>;
-  supplyCollateralTakeBorrow(
-    params: SupplyCollateralTakeBorrowParams,
-  ): MidnightActionOutput<MidnightSupplyCollateralTakeBorrowAction, undefined>;
-  supplyCollateral(
-    params: SupplyCollateralParams,
-  ): MidnightActionOutput<MidnightSupplyCollateralAction, undefined>;
-  makeLend(params: MakeLendParams): Promise<MakeOffersOutput>;
-  makeBorrow(params: MakeOffersParams): Promise<MakeOffersOutput>;
-  supplyCollateralMakeBorrow(
-    params: SupplyCollateralMakeBorrowParams,
-  ): Promise<MakeOffersOutput>;
-  redeem(
-    params: RedeemParams,
-  ): MidnightActionOutput<MidnightRedeemAction, undefined>;
-  repayWithdrawCollateral(
-    params: RepayWithdrawCollateralParams,
-  ): MidnightActionOutput<MidnightRepayWithdrawCollateralAction, undefined>;
-  cancelOffer(params: {
-    readonly group: Hex;
-    readonly accountAddress: Address;
-  }): MidnightActionOutput<MidnightCancelOfferAction, undefined>;
-}
+export type MidnightActions = Pick<
+  MorphoMidnight,
+  | "getMarketData"
+  | "getPositionData"
+  | "getOffersData"
+  | "takeLend"
+  | "takeBorrow"
+  | "supplyCollateralTakeBorrow"
+  | "supplyCollateral"
+  | "makeLend"
+  | "makeBorrow"
+  | "supplyCollateralMakeBorrow"
+  | "redeem"
+  | "repayWithdrawCollateral"
+  | "cancelOffer"
+>;
 
 const assertNonNegativeAmount = (label: string, amount: bigint) => {
   if (amount < 0n) throw new NegativeMidnightAmountError(label, amount);
@@ -158,7 +140,8 @@ const assertPositiveAmount = (label: string, amount: bigint) => {
 };
 
 const validateMarketData = (market: Market, chainId: number) => {
-  validateChainId(Number(market.chainId), chainId);
+  // Reject snapshots from another chain deployment before exposing requirements.
+  validateMidnightMarket({ market, chainId });
 };
 
 /**
@@ -186,7 +169,7 @@ const validateMarketData = (market: Market, chainId: number) => {
  * const tx = buildTx();
  * ```
  */
-export class MorphoMidnight implements MidnightActions {
+export class MorphoMidnight {
   constructor(
     private readonly client: MorphoClientType,
     private readonly chainId: number,
@@ -379,6 +362,7 @@ export class MorphoMidnight implements MidnightActions {
    * @param params.deadline - Bundle execution deadline timestamp.
    * @returns Lazy approval/authorization requirements and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain.
+   * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
    * @throws {NonPositiveMidnightAmountError} when `assets` is non-positive.
    * @throws {NegativeMidnightAmountError} when `minUnits` or `deadline` is negative.
    * @throws {EmptyMidnightTakeableOffersError} when no offers are supplied.
@@ -396,7 +380,9 @@ export class MorphoMidnight implements MidnightActions {
    * });
    * ```
    */
-  takeLend(params: TakeLendParams) {
+  takeLend(
+    params: TakeLendParams,
+  ): MidnightActionOutput<MidnightTakeLendAction> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     validateMarketData(params.marketData, this.chainId);
     assertPositiveAmount("assets", params.assets);
@@ -460,6 +446,7 @@ export class MorphoMidnight implements MidnightActions {
    * @param params.deadline - Bundle execution deadline timestamp.
    * @returns Lazy authorization requirements and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain.
+   * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
    * @throws {NonPositiveMidnightAmountError} when `loanAssets` or `maxUnits` is non-positive.
    * @throws {NegativeMidnightAmountError} when `deadline` is negative.
    * @throws {EmptyMidnightTakeableOffersError} when no offers are supplied.
@@ -477,7 +464,9 @@ export class MorphoMidnight implements MidnightActions {
    * });
    * ```
    */
-  takeBorrow(params: TakeBorrowParams) {
+  takeBorrow(
+    params: TakeBorrowParams,
+  ): MidnightActionOutput<MidnightTakeBorrowAction> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     validateMarketData(params.marketData, this.chainId);
     assertPositiveAmount("loanAssets", params.loanAssets);
@@ -534,6 +523,7 @@ export class MorphoMidnight implements MidnightActions {
    * @param params.deadline - Bundle execution deadline timestamp.
    * @returns Lazy collateral approval/authorization requirements and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain.
+   * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
    * @throws {NonPositiveMidnightAmountError} when collateral, loan assets, or `maxUnits` is non-positive.
    * @throws {NegativeMidnightAmountError} when `deadline` is negative.
    * @throws {UnknownCollateralIndexError} when the selected collateral is not configured.
@@ -553,7 +543,9 @@ export class MorphoMidnight implements MidnightActions {
    * });
    * ```
    */
-  supplyCollateralTakeBorrow(params: SupplyCollateralTakeBorrowParams) {
+  supplyCollateralTakeBorrow(
+    params: SupplyCollateralTakeBorrowParams,
+  ): MidnightActionOutput<MidnightSupplyCollateralTakeBorrowAction> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     validateMarketData(params.marketData, this.chainId);
     assertPositiveAmount("collateralAssets", params.collateralAssets);
@@ -621,6 +613,7 @@ export class MorphoMidnight implements MidnightActions {
    * @param params.collateralIndex - Optional collateral index; defaults to `0n`.
    * @returns Lazy token-approval requirements and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain.
+   * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
    * @throws {NonPositiveMidnightAmountError} when `collateralAssets` is non-positive.
    * @throws {NegativeMidnightAmountError} when `reservedCollateralAssets` is negative.
    * @throws {UnknownCollateralIndexError} when the selected collateral is not configured.
@@ -633,7 +626,9 @@ export class MorphoMidnight implements MidnightActions {
    * });
    * ```
    */
-  supplyCollateral(params: SupplyCollateralParams) {
+  supplyCollateral(
+    params: SupplyCollateralParams,
+  ): MidnightActionOutput<MidnightSupplyCollateralAction> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     validateMarketData(params.marketData, this.chainId);
     assertPositiveAmount("collateralAssets", params.collateralAssets);
@@ -685,6 +680,7 @@ export class MorphoMidnight implements MidnightActions {
    * @param params.reservedLoanAssets - Existing loan assets reserved by other open groups.
    * @returns Prepared group metadata, lazy requirements, and a synchronous mempool transaction builder.
    * @throws {ChainIdMismatchError} when the client targets another chain.
+   * @throws {MidnightOfferMarketAddressMismatchError} when an offer targets another Midnight deployment.
    * @throws {NonPositiveMidnightAmountError} when `loanAssets` is non-positive.
    * @throws {NegativeMidnightAmountError} when `reservedLoanAssets` is negative.
    * @throws {MidnightOfferSideMismatchError} when an offer is not lend-side.
@@ -767,6 +763,7 @@ export class MorphoMidnight implements MidnightActions {
    * @param params.validation - Optional Midnight mempool API request controls.
    * @returns Prepared group metadata, lazy ratifier requirements, and a synchronous mempool transaction builder.
    * @throws {ChainIdMismatchError} when the client targets another chain.
+   * @throws {MidnightOfferMarketAddressMismatchError} when an offer targets another Midnight deployment.
    * @throws {MidnightOfferSideMismatchError} when an offer is not borrow-side.
    * @example
    * ```ts
@@ -816,6 +813,7 @@ export class MorphoMidnight implements MidnightActions {
    * @param params.collateralIndex - Optional collateral index; defaults to `0n`.
    * @returns Prepared group metadata, lazy supply/ratifier requirements, and a synchronous mempool transaction builder.
    * @throws {ChainIdMismatchError} when the client targets another chain.
+   * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
    * @throws {NonPositiveMidnightAmountError} when `collateralAssets` is non-positive.
    * @throws {NegativeMidnightAmountError} when `reservedCollateralAssets` is negative.
    * @throws {UnknownCollateralIndexError} when the selected collateral is not configured.
@@ -845,6 +843,8 @@ export class MorphoMidnight implements MidnightActions {
       params.market instanceof MarketParams
         ? params.market
         : MarketParams.from(params.market);
+    // Reject markets from another chain deployment before preparing requirements.
+    validateMidnightMarket({ market, chainId: this.chainId });
     const collateralIndex = params.collateralIndex ?? 0n;
     const collateral = MarketUtils.getCollateralByIndex(
       market,
@@ -914,6 +914,7 @@ export class MorphoMidnight implements MidnightActions {
    * @param params.units - Optional credit units to redeem; defaults to the position face value.
    * @returns No requirements and a synchronous redemption transaction builder.
    * @throws {ChainIdMismatchError} when the position market targets another chain.
+   * @throws {MidnightMarketAddressMismatchError} when the position market targets another Midnight deployment.
    * @throws {MissingAccrualPositionError} when no position snapshot is supplied.
    * @throws {NoMidnightCreditToRedeemError} when the selected unit amount is non-positive.
    * @throws {MidnightRedeemExceedsCreditError} when the selected amount exceeds position credit.
@@ -927,7 +928,7 @@ export class MorphoMidnight implements MidnightActions {
    * });
    * ```
    */
-  redeem(params: RedeemParams) {
+  redeem(params: RedeemParams): MidnightActionOutput<MidnightRedeemAction> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     if (!params.positionData) {
       throw new MissingAccrualPositionError();
@@ -978,6 +979,7 @@ export class MorphoMidnight implements MidnightActions {
    * @param params.deadline - Bundle execution deadline timestamp.
    * @returns Lazy loan approval/authorization requirements and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain.
+   * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
    * @throws {NegativeMidnightAmountError} when an amount, index, or deadline is negative.
    * @throws {NonPositiveMidnightAmountError} when both repay and withdrawal amounts are zero.
    * @throws {UnknownCollateralIndexError} when a positive withdrawal selects an unconfigured collateral.
@@ -992,7 +994,9 @@ export class MorphoMidnight implements MidnightActions {
    * });
    * ```
    */
-  repayWithdrawCollateral(params: RepayWithdrawCollateralParams) {
+  repayWithdrawCollateral(
+    params: RepayWithdrawCollateralParams,
+  ): MidnightActionOutput<MidnightRepayWithdrawCollateralAction> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     validateMarketData(params.marketData, this.chainId);
     assertNonNegativeAmount("repayAssets", params.repayAssets);
@@ -1086,7 +1090,7 @@ export class MorphoMidnight implements MidnightActions {
   cancelOffer(params: {
     readonly group: Hex;
     readonly accountAddress: Address;
-  }) {
+  }): MidnightActionOutput<MidnightCancelOfferAction> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     return {
@@ -1190,7 +1194,7 @@ export class MorphoMidnight implements MidnightActions {
         : "action" in params.signatures
           ? [params.signatures]
           : params.signatures;
-    let payload = data.setterPayload;
+    let payload: Hex;
     if (data.ratifierType === "ecrecover") {
       const { midnightOfferRoot: signature } = selectRequirementSignatures(
         collectedSignatures,
@@ -1236,9 +1240,8 @@ export class MorphoMidnight implements MidnightActions {
       payload = signature.args.payload;
     } else {
       selectRequirementSignatures(collectedSignatures, {});
+      payload = data.setterPayload;
     }
-
-    if (payload == null) throw new MissingMidnightOfferRootSignatureError();
 
     return mempoolSubmitOffers({
       chainId: this.chainId,

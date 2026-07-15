@@ -48,6 +48,7 @@ import {
   EmptyMidnightTakeableOffersError,
   InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
+  MidnightMarketAddressMismatchError,
   MidnightOfferMakerMismatchError,
   MidnightOfferMarketAddressMismatchError,
   MidnightOfferMarketChainMismatchError,
@@ -527,6 +528,28 @@ describe("MorphoMidnight", () => {
         }),
       ).toThrow(NegativeMidnightAmountError);
     });
+
+    test("error: MidnightMarketAddressMismatchError", () => {
+      const market = marketData();
+      const foreignMarket = new Market({
+        ...market,
+        params: {
+          ...market.params,
+          midnight: midnightAddresses.taker,
+        },
+      });
+
+      expect(() =>
+        midnight().takeLend({
+          marketData: foreignMarket,
+          accountAddress: midnightAddresses.taker,
+          assets: 1_000n,
+          minUnits: 900n,
+          takeableOffers: [midnightApiTake()],
+          deadline: maxUint256,
+        }),
+      ).toThrow(MidnightMarketAddressMismatchError);
+    });
   });
 
   describe("takeBorrow", () => {
@@ -739,7 +762,10 @@ describe("MorphoMidnight", () => {
       });
       const requirements = await output.getRequirements();
 
-      expect(requirements[0]?.action.args.amount).toBe(2_000n);
+      const approval = requirements[0];
+      expect(approval?.action.type).toBe("erc20Approval");
+      if (approval?.action.type !== "erc20Approval") return;
+      expect(approval.action.args.amount).toBe(2_000n);
     });
 
     test("error: amount validation", () => {
@@ -1806,19 +1832,6 @@ describe("MorphoMidnight", () => {
 
       expect(tx.data).toBe(data.setterPayload);
       expect(tx.action.args.ratifierType).toBe("setter");
-    });
-
-    test("error: MissingMidnightOfferRootSignatureError for malformed setter data", () => {
-      const data = setterOffersData();
-
-      expect(() =>
-        buildSubmitOffersTx({
-          offersData: {
-            ...data,
-            setterPayload: undefined,
-          },
-        }),
-      ).toThrow(MissingMidnightOfferRootSignatureError);
     });
 
     test("error: MissingMidnightOfferRootSignatureError", () => {

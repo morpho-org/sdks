@@ -26,36 +26,17 @@ the consuming application decides when and how to send it.
 
 ## Layered Architecture
 
-```
-┌─────────────────────────────────────────────────┐
-│                   Consumer App                  │
-└────────────────────────┬────────────────────────┘
-                         │
-              ┌──────────▼──────────┐
-              │    client.morpho    │  ← Client layer
-              │ (morphoViemExtension│
-              │  on a viem Client)  │
-              └───┬────────┬────┬───┘
-                  │        │    │
-        .vaultV1()│        │    │.blue()
-                  │        │    │
-        ┌─────────▼──┐     │   ┌▼──────────────┐
-        │MorphoVaultV1│    │   │MorphoBlue     │  ← Entity layer
-        │(MetaMorpho) │    │   │(Morpho Blue)  │
-        └──────┬──────┘    │   └──────┬────────┘
-               │           │          │
-               │ .vaultV2()│          │  delegates
-               │           │          │
-               │   ┌───────▼────┐     │
-               │   │MorphoVaultV2│    │
-               │   └──────┬─────┘     │
-               │          │           │
-               │delegates │  delegates│
-               │          │           │
-        ┌──────▼───────── ▼───────────▼──┐
-        │         Action functions       │  ← Action layer
-        │  (pure tx builders, no state)  │
-        └────────────────────────────────┘
+```mermaid
+graph TD
+    APP[Consumer App] --> CLIENT[client.morpho on a viem Client]
+    CLIENT -->|vaultV1| V1[MorphoVaultV1]
+    CLIENT -->|vaultV2| V2[MorphoVaultV2]
+    CLIENT -->|blue| BLUE[MorphoBlue]
+    CLIENT -->|midnight| MIDNIGHT[MorphoMidnight]
+    V1 --> ACTIONS[Pure action functions]
+    V2 --> ACTIONS
+    BLUE --> ACTIONS
+    MIDNIGHT --> ACTIONS
 ```
 
 ### Why this layering exists
@@ -64,8 +45,8 @@ Each layer has a single responsibility and a strict boundary:
 
 | Layer      | Responsibility                                                                                                                                  | What it must NOT do                           |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
-| **Client** | Wrap a viem `Client`, normalize SDK options (`supportSignature`, `metadata`, `supportDeployless`), produce vault/market entities                | Call actions directly, hold mutable state     |
-| **Entity** | Fetch on-chain data (vault accrual data for V1/V2, market/position data for Blue), compute derived values (e.g. `maxSharePrice`, LLTV buffer), delegate to actions | Encode calldata, know about bundler internals |
+| **Client** | Wrap a viem `Client`, normalize SDK options (`supportSignature`, `metadata`, `supportDeployless`), produce vault, Blue, and Midnight entities                | Call actions directly, hold mutable state     |
+| **Entity** | Fetch on-chain data (vault accrual data for V1/V2, market/position data for Blue and Midnight), compute derived values (e.g. `maxSharePrice`, LLTV buffer), delegate to actions | Encode calldata, know about bundler internals |
 | **Action** | Validate inputs, encode calldata, deep-freeze the result, return a `Transaction<TAction>`                                                       | Fetch data, hold state, mutate anything       |
 
 **Calls flow strictly downward**: Client → Entity → Action. An action never calls an entity;
@@ -126,6 +107,17 @@ at the SDK level. The differences are at the protocol layer:
   stays below `LLTV - buffer` (default 0.5%). Throws `BorrowExceedsSafeLtvError` if exceeded.
 - **SDK data**: Fetched via `fetchMarket` / `fetchAccrualPosition`. `AccrualPosition` provides
   health metrics: `maxBorrowAssets`, `ltv`, `isHealthy`, `borrowAssets`, `collateral`.
+
+### Midnight
+
+- **Fixed-rate markets**: Midnight represents lending and borrowing through signed or
+  contract-ratified offers with prices fixed until market maturity.
+- **Taker routing**: Asset-targeted takes and repay/withdraw flows call `MidnightBundles`;
+  collateral supply, credit redemption, and cancellation call Midnight directly.
+- **Maker routing**: Maker flows build and validate offer trees, collect an Ecrecover root
+  signature or SetterRatifier transaction, then submit the payload to the Midnight mempool.
+- **SDK data**: `MorphoMidnight` fetches hydrated market and position snapshots and exposes
+  the same lazy `{ getRequirements, buildTx }` contract as the other entities.
 
 
 ### Force Deallocation (V2 only)
@@ -197,6 +189,7 @@ The SDK builds on the Morpho TypeScript ecosystem. Each dependency has a specifi
 morpho-sdk
 ├── @morpho-org/blue-sdk           Core protocol constants and math
 ├── @morpho-org/blue-sdk-viem      On-chain data fetching and ABIs
+├── @morpho-org/midnight-sdk       Midnight market models, offer trees, math, and ABIs
 ├── @morpho-org/morpho-ts          Shared utilities (deepFreeze, Time)
 └── viem                           Ethereum client and ABI encoding
 ```

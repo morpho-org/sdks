@@ -10,11 +10,10 @@ import type {
 import type { Address, Hex } from "viem";
 import type { MidnightTakeableOffer } from "../../actions/midnight/types.js";
 import type {
-  ActionRequirement,
+  ActionOutput,
   BaseAction,
   MempoolSubmitOffersAction,
   MidnightOfferRootSignature,
-  Transaction,
 } from "../../types/action.js";
 
 /** Optional Midnight API validation controls for make-offer flows. */
@@ -27,15 +26,23 @@ export interface GetOffersDataParams {
   readonly validation?: OfferValidationParams;
 }
 
-/** Prepared Midnight maker-offer data derived from a tree-like offer set. */
-export interface OffersData {
+interface OffersDataBase {
   readonly accountAddress: Address;
   readonly groups: readonly Hex[];
   readonly tree: Tree;
-  readonly ratifierType: "ecrecover" | "setter";
   readonly ratifier: Address;
-  readonly setterPayload?: Hex;
 }
+
+/** Prepared Midnight maker-offer data discriminated by its ratifier execution path. */
+export type OffersData =
+  | (OffersDataBase & {
+      readonly ratifierType: "ecrecover";
+      readonly setterPayload?: never;
+    })
+  | (OffersDataBase & {
+      readonly ratifierType: "setter";
+      readonly setterPayload: Hex;
+    });
 
 /** Parameters shared by Midnight maker-offer flows. */
 export interface MakeOffersParams {
@@ -91,15 +98,10 @@ export type MidnightActionSignatures =
  * const tx = output.buildTx();
  * ```
  */
-export interface MidnightActionOutput<
+export type MidnightActionOutput<
   TAction extends BaseAction,
   TSignatures = undefined,
-> {
-  readonly buildTx: (
-    signatures?: TSignatures,
-  ) => Readonly<Transaction<TAction>>;
-  readonly getRequirements: () => Promise<readonly ActionRequirement[]>;
-}
+> = ActionOutput<TAction, TSignatures, undefined>;
 
 /**
  * Output returned by maker-offer flows after offer-tree preparation.

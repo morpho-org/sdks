@@ -7,7 +7,6 @@ import { TickLib } from "../math/index.js";
 import { OfferChainUtils } from "./OfferChainUtils.js";
 
 const YEAR = Time.s.from.y(1n);
-const YEAR_NUMBER = Number(YEAR);
 const DRIFT = 0.1;
 const RATE_EPSILON = 0.00001;
 const NOW = 1_767_225_600n;
@@ -66,6 +65,39 @@ describe("OfferChainUtils fixed-rate offer-chain builders", () => {
       expect(Math.abs(displayRate - defaultParams.targetRate)).toBeLessThan(
         defaultParams.targetRate * 0.005 + 0.00001,
       );
+    }
+  });
+
+  test.each([
+    "borrow",
+    "lend",
+  ] as const)("behavior: uses simple APR for sub-year %s chains", (side) => {
+    const chainStartTimestamp = MATURITY - 90n * Time.s.from.d(1n);
+    const chainEndTimestamp =
+      OfferChainUtils.getMaxFixedRateOfferChainEndTimestamp({
+        maturityTimestamp: MATURITY,
+        chainStartTimestamp,
+      });
+    const targetRate = 0.5;
+    const chain = chainBuilders[side]({
+      targetRate,
+      tickSpacing: 1n,
+      maturityTimestamp: MATURITY,
+      chainStartTimestamp,
+      chainEndTimestamp,
+    });
+
+    expect(chain.length).toBeGreaterThan(0);
+    for (const leg of chain) {
+      const displayTimestamp =
+        side === "borrow" ? leg.expiryTimestamp : leg.startTimestamp;
+      expect(
+        rateAt({
+          tick: leg.tick,
+          maturityTimestamp: MATURITY,
+          timestamp: displayTimestamp,
+        }),
+      ).toBeCloseTo(targetRate, 3);
     }
   });
 
@@ -345,8 +377,13 @@ function rateAt(params: {
   readonly maturityTimestamp: bigint;
   readonly timestamp: bigint;
 }) {
-  const price = Number(formatUnits(TickLib.tickToPrice(params.tick), 18));
-  const tau = Number(params.maturityTimestamp - params.timestamp) / YEAR_NUMBER;
-
-  return (1 / price) ** (1 / tau) - 1;
+  return Number(
+    formatUnits(
+      TickLib.tickToApr(
+        params.tick,
+        params.maturityTimestamp - params.timestamp,
+      ),
+      18,
+    ),
+  );
 }
