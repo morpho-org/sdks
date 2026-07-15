@@ -1,6 +1,6 @@
 import { type BigIntish, MathLib, Time } from "@morpho-org/morpho-ts";
 import { formatUnits, parseUnits } from "viem";
-import { MAX_TICK } from "../constants.js";
+import { DEFAULT_TICK_SPACING, MAX_TICK } from "../constants.js";
 import { InvalidOfferParameterError } from "../errors.js";
 import { TickLib } from "../math/index.js";
 
@@ -136,23 +136,23 @@ export namespace OfferChainUtils {
     }
 
     const tickSpacing = normalizeSafeInteger("tickSpacing", params.tickSpacing);
-    if (tickSpacing <= 0n) {
+    if (tickSpacing <= 0n || DEFAULT_TICK_SPACING % tickSpacing !== 0n) {
       throw new InvalidOfferParameterError({
         parameter: "tickSpacing",
         value: tickSpacing,
-        instruction: "Use a positive tick spacing.",
+        instruction: `Use a positive tick spacing that divides "${DEFAULT_TICK_SPACING}".`,
       });
     }
 
-    const maturityTimestamp = normalizeSafeInteger(
+    const maturityTimestamp = normalizeTimestamp(
       "maturityTimestamp",
       params.maturityTimestamp,
     );
-    const chainStartTimestamp = normalizeSafeInteger(
+    const chainStartTimestamp = normalizeTimestamp(
       "chainStartTimestamp",
       params.chainStartTimestamp,
     );
-    const chainEndTimestamp = normalizeSafeInteger(
+    const chainEndTimestamp = normalizeTimestamp(
       "chainEndTimestamp",
       params.chainEndTimestamp,
     );
@@ -301,23 +301,23 @@ export namespace OfferChainUtils {
     }
 
     const tickSpacing = normalizeSafeInteger("tickSpacing", params.tickSpacing);
-    if (tickSpacing <= 0n) {
+    if (tickSpacing <= 0n || DEFAULT_TICK_SPACING % tickSpacing !== 0n) {
       throw new InvalidOfferParameterError({
         parameter: "tickSpacing",
         value: tickSpacing,
-        instruction: "Use a positive tick spacing.",
+        instruction: `Use a positive tick spacing that divides "${DEFAULT_TICK_SPACING}".`,
       });
     }
 
-    const maturityTimestamp = normalizeSafeInteger(
+    const maturityTimestamp = normalizeTimestamp(
       "maturityTimestamp",
       params.maturityTimestamp,
     );
-    const chainStartTimestamp = normalizeSafeInteger(
+    const chainStartTimestamp = normalizeTimestamp(
       "chainStartTimestamp",
       params.chainStartTimestamp,
     );
-    const chainEndTimestamp = normalizeSafeInteger(
+    const chainEndTimestamp = normalizeTimestamp(
       "chainEndTimestamp",
       params.chainEndTimestamp,
     );
@@ -460,11 +460,11 @@ export namespace OfferChainUtils {
     readonly maturityTimestamp: BigIntish;
     readonly chainStartTimestamp: BigIntish;
   }) {
-    const maturityTimestamp = normalizeSafeInteger(
+    const maturityTimestamp = normalizeTimestamp(
       "maturityTimestamp",
       params.maturityTimestamp,
     );
-    const chainStartTimestamp = normalizeSafeInteger(
+    const chainStartTimestamp = normalizeTimestamp(
       "chainStartTimestamp",
       params.chainStartTimestamp,
     );
@@ -504,6 +504,19 @@ function normalizeSafeInteger(parameter: string, value: BigIntish) {
       parameter,
       value,
       instruction: "Use a JavaScript-safe integer value.",
+    });
+  }
+
+  return normalized;
+}
+
+function normalizeTimestamp(parameter: string, value: BigIntish) {
+  const normalized = normalizeSafeInteger(parameter, value);
+  if (normalized < 0n) {
+    throw new InvalidOfferParameterError({
+      parameter,
+      value,
+      instruction: "Use a non-negative timestamp.",
     });
   }
 

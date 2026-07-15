@@ -138,6 +138,7 @@ export interface AnvilArgs {
     | "Shanghai"
     | "Cancun"
     | "Prague"
+    | "Osaka"
     | "Latest"
     | undefined;
   /**
