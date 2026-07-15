@@ -1,5 +1,22 @@
 # @morpho-org/morpho-sdk
 
+## 5.2.0
+
+### Minor Changes
+
+- [#871](https://github.com/morpho-org/sdks/pull/871) [`36e9607`](https://github.com/morpho-org/sdks/commit/36e9607bfe40f442e9fce174df8bfcc6ff94f73f) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Fix Blue shares-mode repay so a `nativeAmount` that covers the full debt no longer emits a spurious loan-token approval requirement.
+
+  `MorphoBlue.repay` / `repayWithdrawCollateral` derive the ERC-20 pulled in shares mode from the 2h-forward-accrued, rounded-up `toBorrowAssets(shares)`. Previously the entity threw `NativeAmountExceedsTransferAmountError` when `nativeAmount` exceeded that upper bound and always computed `erc20Amount = borrowAssets - nativeAmount`, so a repay funded entirely by native ETH left a tiny positive residual and `getRequirements()` returned a wNative approval/permit requirement that was never actually needed.
+
+  The ERC-20 pulled is now clamped: `erc20Amount = max(0, borrowAssets - nativeAmount)`. When native covers (or exceeds) the borrow assets, nothing is pulled as ERC-20 — the bundle wraps the native and skims any residual wNative back to the receiver (the existing shares-mode skim) — so a fully-native shares repay emits no loan-token approval requirement.
+
+  `NativeAmountExceedsTransferAmountError` is now deprecated (no longer thrown) and will be removed in the next major.
+
+### Patch Changes
+
+- Updated dependencies [[`552ab7b`](https://github.com/morpho-org/sdks/commit/552ab7b9d00e8bb0ec8c6718c798ccc1943d76d4), [`966bdc4`](https://github.com/morpho-org/sdks/commit/966bdc413e54f1cef65fffed7da92479f1322baf)]:
+  - @morpho-org/blue-sdk-viem@5.2.0
+
 ## 5.1.2
 
 ### Patch Changes
