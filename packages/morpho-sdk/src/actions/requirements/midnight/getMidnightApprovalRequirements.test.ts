@@ -8,7 +8,7 @@ import {
 } from "../../../../test/fixtures/midnight.js";
 import {
   ChainIdMismatchError,
-  NegativeMidnightAmountError,
+  NegativeInputError,
   UnsupportedErc20ApprovalSpenderError,
 } from "../../../types/index.js";
 import { getMidnightApprovalRequirements } from "./getMidnightApprovalRequirements.js";
@@ -56,7 +56,7 @@ describe("getMidnightApprovalRequirements", () => {
     ).resolves.toEqual([]);
   });
 
-  test("error: NegativeMidnightAmountError", async () => {
+  test("throws NegativeInputError when amount is negative", async () => {
     const { client } = createMockClient(midnightTestChain);
 
     await expect(
@@ -68,7 +68,7 @@ describe("getMidnightApprovalRequirements", () => {
         spender: midnightAddresses.midnightBundles,
         amount: -1n,
       }),
-    ).rejects.toThrow(NegativeMidnightAmountError);
+    ).rejects.toThrow(NegativeInputError);
   });
 
   test("error: UnsupportedErc20ApprovalSpenderError", async () => {
