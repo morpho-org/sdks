@@ -315,9 +315,9 @@ export interface MidnightAuthorizationAction
   extends BaseAction<
     "midnightAuthorization",
     {
-      authorized: Address;
-      isAuthorized: boolean;
-      onBehalf: Address;
+      readonly authorized: Address;
+      readonly isAuthorized: boolean;
+      readonly onBehalf: Address;
     }
   > {}
 
@@ -326,9 +326,9 @@ export interface SetterRatifierRatifyRootAction
   extends BaseAction<
     "setterRatifierRatifyRoot",
     {
-      maker: Address;
-      root: Hex;
-      isRootRatified: boolean;
+      readonly maker: Address;
+      readonly root: Hex;
+      readonly isRootRatified: boolean;
     }
   > {}
 
@@ -337,12 +337,12 @@ export interface MidnightTakeLendAction
   extends BaseAction<
     "midnightTakeLend",
     {
-      market: Hex;
-      assets: bigint;
-      minUnits: bigint;
-      taker: Address;
-      takeableOffers: number;
-      deadline: bigint;
+      readonly market: Hex;
+      readonly assets: bigint;
+      readonly minUnits: bigint;
+      readonly taker: Address;
+      readonly takeableOffers: number;
+      readonly deadline: bigint;
     }
   > {}
 
@@ -351,14 +351,14 @@ export interface MidnightTakeBorrowAction
   extends BaseAction<
     "midnightTakeBorrow",
     {
-      market: Hex;
-      loanAssets: bigint;
-      maxUnits: bigint;
-      taker: Address;
-      receiver: Address;
-      collateralSupplies: number;
-      takeableOffers: number;
-      deadline: bigint;
+      readonly market: Hex;
+      readonly loanAssets: bigint;
+      readonly maxUnits: bigint;
+      readonly taker: Address;
+      readonly receiver: Address;
+      readonly collateralSupplies: number;
+      readonly takeableOffers: number;
+      readonly deadline: bigint;
     }
   > {}
 
@@ -367,15 +367,15 @@ export interface MidnightSupplyCollateralTakeBorrowAction
   extends BaseAction<
     "midnightSupplyCollateralTakeBorrow",
     {
-      market: Hex;
-      collateralAssets: bigint;
-      loanAssets: bigint;
-      maxUnits: bigint;
-      taker: Address;
-      receiver: Address;
-      collateralSupplies: number;
-      takeableOffers: number;
-      deadline: bigint;
+      readonly market: Hex;
+      readonly collateralAssets: bigint;
+      readonly loanAssets: bigint;
+      readonly maxUnits: bigint;
+      readonly taker: Address;
+      readonly receiver: Address;
+      readonly collateralSupplies: number;
+      readonly takeableOffers: number;
+      readonly deadline: bigint;
     }
   > {}
 
@@ -384,10 +384,10 @@ export interface MidnightSupplyCollateralAction
   extends BaseAction<
     "midnightSupplyCollateral",
     {
-      market: Hex;
-      collateralIndex: bigint;
-      assets: bigint;
-      onBehalf: Address;
+      readonly market: Hex;
+      readonly collateralIndex: bigint;
+      readonly assets: bigint;
+      readonly onBehalf: Address;
     }
   > {}
 
@@ -396,12 +396,12 @@ export interface MempoolSubmitOffersAction
   extends BaseAction<
     "mempoolSubmitOffers",
     {
-      groups: readonly Hex[];
-      root: Hex;
-      maker: Address;
-      ratifier: Address;
-      ratifierType: "ecrecover" | "setter";
-      offers: number;
+      readonly groups: readonly Hex[];
+      readonly root: Hex;
+      readonly maker: Address;
+      readonly ratifier: Address;
+      readonly ratifierType: "ecrecover" | "setter";
+      readonly offers: number;
     }
   > {}
 
@@ -410,10 +410,10 @@ export interface MidnightRedeemAction
   extends BaseAction<
     "midnightRedeem",
     {
-      market: Hex;
-      units: bigint;
-      onBehalf: Address;
-      receiver: Address;
+      readonly market: Hex;
+      readonly units: bigint;
+      readonly onBehalf: Address;
+      readonly receiver: Address;
     }
   > {}
 
@@ -422,12 +422,12 @@ export interface MidnightRepayWithdrawCollateralAction
   extends BaseAction<
     "midnightRepayWithdrawCollateral",
     {
-      market: Hex;
-      repayAssets: bigint;
-      collateralWithdrawals: number;
-      onBehalf: Address;
-      collateralReceiver: Address;
-      deadline: bigint;
+      readonly market: Hex;
+      readonly repayAssets: bigint;
+      readonly collateralWithdrawals: number;
+      readonly onBehalf: Address;
+      readonly collateralReceiver: Address;
+      readonly deadline: bigint;
     }
   > {}
 
@@ -436,9 +436,9 @@ export interface MidnightCancelOfferAction
   extends BaseAction<
     "midnightCancelOffer",
     {
-      group: Hex;
-      amount: bigint;
-      onBehalf: Address;
+      readonly group: Hex;
+      readonly amount: bigint;
+      readonly onBehalf: Address;
     }
   > {}
 
@@ -533,10 +533,10 @@ export interface AuthorizationSignatureArgs {
 
 /** Signed and encoded Ecrecover offer-root payload used by Midnight maker flows. */
 export interface MidnightOfferRootSignatureArgs {
-  owner: Address;
-  root: Hex;
-  signature: Hex;
-  payload: Hex;
+  readonly owner: Address;
+  readonly root: Hex;
+  readonly signature: Hex;
+  readonly payload: Hex;
 }
 
 export interface PermitAction
@@ -566,9 +566,9 @@ export interface MidnightOfferRootSignatureAction
   extends BaseAction<
     "midnightOfferRootSignature",
     {
-      root: Hex;
-      ratifier: Address;
-      offers: number;
+      readonly root: Hex;
+      readonly ratifier: Address;
+      readonly offers: number;
     }
   > {}
 
@@ -600,8 +600,8 @@ export interface AuthorizationRequirementSignature {
 
 /** A signed Midnight Ecrecover offer-root requirement. */
 export interface MidnightOfferRootSignature {
-  args: MidnightOfferRootSignatureArgs;
-  action: MidnightOfferRootSignatureAction;
+  readonly args: MidnightOfferRootSignatureArgs;
+  readonly action: MidnightOfferRootSignatureAction;
 }
 
 /**

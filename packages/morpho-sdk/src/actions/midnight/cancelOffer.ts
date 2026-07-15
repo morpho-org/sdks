@@ -7,6 +7,10 @@ import type {
   MidnightCancelOfferAction,
   Transaction,
 } from "../../types/index.js";
+import {
+  MidnightAmountExceedsMaxOfferCapError,
+  NegativeMidnightAmountError,
+} from "../../types/index.js";
 
 /** Parameters for encoding a Midnight group consumption update. */
 export interface MidnightCancelOfferParams {
@@ -31,6 +35,8 @@ export interface MidnightCancelOfferParams {
  * @param params.amount - Optional consumed amount; defaults to {@link MAX_OFFER_CAP} for full cancellation.
  * @param params.metadata - Optional analytics metadata appended to calldata.
  * @returns A deep-frozen `Transaction<MidnightCancelOfferAction>` targeting `Midnight`.
+ * @throws {NegativeMidnightAmountError} when `amount` is negative.
+ * @throws {MidnightAmountExceedsMaxOfferCapError} when `amount` exceeds {@link MAX_OFFER_CAP}.
  * @example
  * ```ts
  * import { midnightCancelOffer } from "@morpho-org/morpho-sdk";
@@ -47,6 +53,16 @@ export const midnightCancelOffer = (
 ): Readonly<Transaction<MidnightCancelOfferAction>> => {
   const midnight = getChainAddress(params.chainId, "midnight");
   const amount = params.amount ?? MAX_OFFER_CAP;
+  if (amount < 0n) {
+    throw new NegativeMidnightAmountError("cancel amount", amount);
+  }
+  if (amount > MAX_OFFER_CAP) {
+    throw new MidnightAmountExceedsMaxOfferCapError({
+      label: "cancel amount",
+      amount,
+      maxOfferCap: MAX_OFFER_CAP,
+    });
+  }
 
   let tx = {
     to: midnight,

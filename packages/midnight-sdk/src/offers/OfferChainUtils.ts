@@ -88,6 +88,11 @@ export namespace OfferChainUtils {
    * clamped so the expiry edge remains the recoverable target-rate edge.
    *
    * @param params - Fixed-rate offer-chain parameters without a side field.
+   * @param params.targetRate - Target yearly fixed rate expressed as a decimal number.
+   * @param params.tickSpacing - Tick spacing enforced by the market.
+   * @param params.maturityTimestamp - Market maturity timestamp in seconds.
+   * @param params.chainStartTimestamp - First timestamp the chain should cover.
+   * @param params.chainEndTimestamp - Latest timestamp the chain may cover.
    * @returns Borrow-side offer legs that can be mapped to `Offer.create({ buy: false, ... })`.
    * @throws {InvalidOfferParameterError} when an input is invalid or the end timestamp exceeds the supported horizon.
    * @example
@@ -248,6 +253,11 @@ export namespace OfferChainUtils {
    * recoverable display rate below the maker's target.
    *
    * @param params - Fixed-rate offer-chain parameters without a side field.
+   * @param params.targetRate - Target yearly fixed rate expressed as a decimal number.
+   * @param params.tickSpacing - Tick spacing enforced by the market.
+   * @param params.maturityTimestamp - Market maturity timestamp in seconds.
+   * @param params.chainStartTimestamp - First timestamp the chain should cover.
+   * @param params.chainEndTimestamp - Latest timestamp the chain may cover.
    * @returns Lend-side offer legs that can be mapped to `Offer.create({ buy: true, ... })`.
    * @throws {InvalidOfferParameterError} when an input is invalid or the end timestamp exceeds the supported horizon.
    * @example
@@ -431,6 +441,8 @@ export namespace OfferChainUtils {
    * selected timestamp to the lend-only or borrow-only chain builder.
    *
    * @param params - Maturity and chain-start timestamps.
+   * @param params.maturityTimestamp - Market maturity timestamp in seconds.
+   * @param params.chainStartTimestamp - First timestamp the chain should cover.
    * @returns Latest accepted chain end timestamp.
    * @throws {InvalidOfferParameterError} when a timestamp is invalid.
    * @example

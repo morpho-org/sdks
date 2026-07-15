@@ -7,6 +7,7 @@ import {
   Offer,
   setterRatifierAbi,
   Tree,
+  UnknownCollateralIndexError,
 } from "@morpho-org/midnight-sdk";
 import {
   createMockClient,
@@ -56,7 +57,7 @@ import {
   MidnightOfferRootOwnerMismatchError,
   MidnightOfferRootRatifierMismatchError,
   MidnightOfferSideMismatchError,
-  MidnightRedeemExceedsFaceValueError,
+  MidnightRedeemExceedsCreditError,
   MidnightTakeableOfferMarketMismatchError,
   MissingAccrualPositionError,
   MissingMidnightOfferRootSignatureError,
@@ -586,7 +587,17 @@ describe("MorphoMidnight", () => {
           takeableOffers: [midnightApiTake({ buy: true })],
           deadline: maxUint256,
         }),
-      ).toThrow(NegativeMidnightAmountError);
+      ).toThrow(NonPositiveMidnightAmountError);
+      expect(() =>
+        midnight().takeBorrow({
+          marketData: marketData(),
+          accountAddress: midnightAddresses.taker,
+          loanAssets: 1_000n,
+          maxUnits: 0n,
+          takeableOffers: [midnightApiTake({ buy: true })],
+          deadline: maxUint256,
+        }),
+      ).toThrow(NonPositiveMidnightAmountError);
       expect(() =>
         midnight().takeBorrow({
           marketData: marketData(),
@@ -674,8 +685,11 @@ describe("MorphoMidnight", () => {
         midnight().supplyCollateralTakeBorrow({ ...params, loanAssets: 0n }),
       ).toThrow(NonPositiveMidnightAmountError);
       expect(() =>
+        midnight().supplyCollateralTakeBorrow({ ...params, maxUnits: 0n }),
+      ).toThrow(NonPositiveMidnightAmountError);
+      expect(() =>
         midnight().supplyCollateralTakeBorrow({ ...params, maxUnits: -1n }),
-      ).toThrow(NegativeMidnightAmountError);
+      ).toThrow(NonPositiveMidnightAmountError);
       expect(() =>
         midnight().supplyCollateralTakeBorrow({ ...params, deadline: -1n }),
       ).toThrow(NegativeMidnightAmountError);
@@ -764,24 +778,24 @@ describe("MorphoMidnight", () => {
       });
     });
 
-    test("behavior: explicit units override face value", () => {
+    test("behavior: explicit units may exceed face value up to credit", () => {
       const market = marketData();
       const output = midnight().redeem({
         positionData: positionData(market, { credit: 250n, pendingFee: 50n }),
         accountAddress: midnightAddresses.taker,
-        units: 125n,
+        units: 225n,
       });
       const tx = output.buildTx();
 
       expect(tx.action.args).toEqual({
         market: midnightMarketId,
-        units: 125n,
+        units: 225n,
         onBehalf: midnightAddresses.taker,
         receiver: midnightAddresses.taker,
       });
     });
 
-    test("error: MidnightRedeemExceedsFaceValueError", () => {
+    test("error: MidnightRedeemExceedsCreditError", () => {
       const market = marketData();
 
       expect(() =>
@@ -791,9 +805,9 @@ describe("MorphoMidnight", () => {
             pendingFee: 50n,
           }),
           accountAddress: midnightAddresses.taker,
-          units: 225n,
+          units: 251n,
         }),
-      ).toThrow(MidnightRedeemExceedsFaceValueError);
+      ).toThrow(MidnightRedeemExceedsCreditError);
     });
 
     test("behavior: explicit receiver and empty requirements", async () => {
@@ -1722,6 +1736,13 @@ describe("MorphoMidnight", () => {
           collateralIndex: -1n,
         }),
       ).toThrow(NegativeMidnightAmountError);
+      expect(() =>
+        midnight().repayWithdrawCollateral({
+          ...params,
+          withdrawCollateralAssets: 1n,
+          collateralIndex: 1n,
+        }),
+      ).toThrow(UnknownCollateralIndexError);
       expect(() =>
         midnight().repayWithdrawCollateral({
           ...params,

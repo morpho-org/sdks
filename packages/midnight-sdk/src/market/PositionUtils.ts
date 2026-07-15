@@ -65,30 +65,28 @@ export namespace PositionUtils {
   /**
    * Returns the maximum credit units currently withdrawable by a position.
    *
-   * @param params.position - Position whose face value limits the withdrawal.
+   * @param params.position - Position whose credit limits the withdrawal.
    * @param params.market - Market whose available liquidity limits the withdrawal.
-   * @returns The lower of the position face value and market withdrawable liquidity.
+   * @returns The lower of the position credit and market withdrawable liquidity.
    * @example
    * ```ts
    * import { PositionUtils } from "@morpho-org/midnight-sdk";
    *
    * const withdrawable = PositionUtils.getWithdrawable({
-   *   position: { credit: 1_000n, pendingFee: 100n },
+   *   position: { credit: 1_000n },
    *   market: { withdrawable: 500n },
    * });
    * console.log(withdrawable); // 500n
    * ```
    */
   export function getWithdrawable(params: {
-    readonly position: Pick<IPosition, "credit" | "pendingFee">;
+    readonly position: Pick<IPosition, "credit">;
     readonly market: Pick<IMarket, "withdrawable">;
   }) {
-    const faceValue = MathLib.zeroFloorSub(
+    return MathLib.min(
       BigInt(params.position.credit),
-      BigInt(params.position.pendingFee),
+      BigInt(params.market.withdrawable),
     );
-
-    return MathLib.min(faceValue, BigInt(params.market.withdrawable));
   }
 
   /**
