@@ -678,6 +678,7 @@ export type TokenRequirementSignature = Bundler3TokenRequirementSignature;
 /** Any signature result returned by an action-output signature requirement. */
 export type AnyRequirementSignature =
   | TokenRequirementSignature
+  | AuthorizationRequirementSignature
   | MidnightOfferRootSignature;
 
 /** Any signature requirement returned by an entity action output. */
@@ -700,20 +701,28 @@ export type CallRequirement = Readonly<Transaction<CallRequirementAction>>;
 /** Onchain call or signature prerequisite returned by an entity action output. */
 export type ActionRequirement = CallRequirement | SignatureRequirement;
 
+/** Optional controls used while resolving action prerequisites. */
+interface ActionRequirementsParams {
+  /**
+   * Prefer the ERC-2612 simple-permit path when the SDK detects support.
+   * Leave unset or set to `false` to force the Permit2/classic approval fallback when
+   * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
+   */
+  readonly useSimplePermit?: boolean;
+}
+
 /** Lazy entity result exposing prerequisite resolution and synchronous transaction building. */
 export interface ActionOutput<
   TAction extends BaseAction = TransactionAction,
   TSignatures = RequirementSignature,
+  TRequirementsParams = ActionRequirementsParams,
 > {
-  buildTx: (signatures?: TSignatures) => Readonly<Transaction<TAction>>;
-  getRequirements: (params?: {
-    /**
-     * Prefer the ERC-2612 simple-permit path when the SDK detects support.
-     * Leave unset or set to `false` to force the Permit2/classic approval fallback when
-     * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
-     */
-    readonly useSimplePermit?: boolean;
-  }) => Promise<readonly ActionRequirement[]>;
+  readonly buildTx: (
+    signatures?: TSignatures,
+  ) => Readonly<Transaction<TAction>>;
+  readonly getRequirements: (
+    params?: TRequirementsParams,
+  ) => Promise<readonly ActionRequirement[]>;
 }
 
 export function isRequirementApproval(

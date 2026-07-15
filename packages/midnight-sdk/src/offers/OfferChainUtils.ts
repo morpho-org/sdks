@@ -196,7 +196,7 @@ export namespace OfferChainUtils {
     let iteration = 0;
 
     for (; iteration < MAX_CHAIN_LEGS; iteration++) {
-      const price = (1 + lowerRate) ** -tauTop;
+      const price = 1 / (1 + lowerRate * tauTop);
       let priceInput: bigint;
       if (!Number.isFinite(price) || price <= 0) {
         priceInput = 0n;
@@ -375,7 +375,7 @@ export namespace OfferChainUtils {
     let iteration = 0;
 
     for (; iteration < MAX_CHAIN_LEGS; iteration++) {
-      const price = (1 + upperRate) ** -tauBottom;
+      const price = 1 / (1 + upperRate * tauBottom);
       let priceInput: bigint;
       if (!Number.isFinite(price) || price <= 0) {
         priceInput = 0n;
@@ -515,7 +515,7 @@ function rateTau(tick: bigint, rate: number): number {
   /* v8 ignore next: builders pass positive rates and discount ticks; this guards direct internal misuse. */
   if (price <= 0 || price >= 1 || rate <= 0) return 0;
 
-  return Math.log(1 / price) / Math.log(1 + rate);
+  return (1 / price - 1) / rate;
 }
 
 function floorTickToSpacing(tick: bigint, spacing: bigint) {

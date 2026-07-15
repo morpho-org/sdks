@@ -7,6 +7,7 @@ import {
   zeroAddress,
 } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
+import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js";
 import {
   type Metadata,
@@ -52,6 +53,8 @@ export interface MidnightTakeBorrowParams {
  * @throws {EmptyMidnightTakeableOffersError} when no offers are provided.
  * @throws {MidnightOfferSideMismatchError} when any offer is not lend-side.
  * @throws {MidnightTakeableOfferMarketMismatchError} when any offer belongs to another market.
+ * @throws {ChainIdMismatchError} when the market targets another chain.
+ * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
  * @example
  * ```ts
  * import { maxUint256 } from "viem";
@@ -80,6 +83,8 @@ export const midnightTakeBorrow = (
   if (params.deadline < 0n) {
     throw new NegativeMidnightAmountError("deadline", params.deadline);
   }
+  // Reject markets from another chain deployment before encoding the bundle.
+  validateMidnightMarket({ market: params.market, chainId: params.chainId });
   const marketId = validateTakeableOffers({
     market: params.market,
     takeableOffers: params.takeableOffers,

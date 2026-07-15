@@ -6,7 +6,11 @@ import {
   midnightAddresses,
   midnightChainId,
 } from "../../../../test/fixtures/midnight.js";
-import { ChainIdMismatchError } from "../../../types/index.js";
+import {
+  ChainIdMismatchError,
+  NegativeMidnightAmountError,
+  UnsupportedErc20ApprovalSpenderError,
+} from "../../../types/index.js";
 import { getMidnightApprovalRequirements } from "./getMidnightApprovalRequirements.js";
 
 const midnightTestChain = {
@@ -50,6 +54,36 @@ describe("getMidnightApprovalRequirements", () => {
         amount: 0n,
       }),
     ).resolves.toEqual([]);
+  });
+
+  test("error: NegativeMidnightAmountError", async () => {
+    const { client } = createMockClient(midnightTestChain);
+
+    await expect(
+      getMidnightApprovalRequirements({
+        viemClient: client,
+        chainId: midnightChainId,
+        token: midnightAddresses.loanToken,
+        owner: midnightAddresses.taker,
+        spender: midnightAddresses.midnightBundles,
+        amount: -1n,
+      }),
+    ).rejects.toThrow(NegativeMidnightAmountError);
+  });
+
+  test("error: UnsupportedErc20ApprovalSpenderError", async () => {
+    const { client } = createMockClient(midnightTestChain);
+
+    await expect(
+      getMidnightApprovalRequirements({
+        viemClient: client,
+        chainId: midnightChainId,
+        token: midnightAddresses.loanToken,
+        owner: midnightAddresses.taker,
+        spender: midnightAddresses.taker,
+        amount: 1n,
+      }),
+    ).rejects.toThrow(UnsupportedErc20ApprovalSpenderError);
   });
 
   test("returns an approval when allowance is insufficient", async () => {

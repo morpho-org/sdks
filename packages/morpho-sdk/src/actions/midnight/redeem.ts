@@ -6,6 +6,7 @@ import {
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
+import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import {
   type Metadata,
   type MidnightRedeemAction,
@@ -39,6 +40,8 @@ export interface MidnightRedeemParams {
  * @param params.metadata - Optional analytics metadata appended to calldata.
  * @returns A deep-frozen `Transaction<MidnightRedeemAction>` targeting `Midnight`.
  * @throws {NonPositiveMidnightAmountError} when `units <= 0n`.
+ * @throws {ChainIdMismatchError} when the market targets another chain.
+ * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
  * @example
  * ```ts
  * import { midnightRedeem } from "@morpho-org/morpho-sdk";
@@ -58,6 +61,8 @@ export const midnightRedeem = (
     throw new NonPositiveMidnightAmountError("units", params.units);
   }
 
+  // Reject markets from another chain deployment before encoding the call.
+  validateMidnightMarket({ market: params.market, chainId: params.chainId });
   const marketId = MarketUtils.toId(params.market);
   const midnight = getChainAddress(params.chainId, "midnight");
   const receiver = params.receiver ?? params.onBehalf;

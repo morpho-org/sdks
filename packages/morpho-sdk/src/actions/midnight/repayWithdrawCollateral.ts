@@ -6,6 +6,7 @@ import {
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData, zeroAddress } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
+import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import {
   type Metadata,
   type MidnightRepayWithdrawCollateralAction,
@@ -47,6 +48,8 @@ export interface MidnightRepayWithdrawCollateralParams {
  * @returns A deep-frozen `Transaction<MidnightRepayWithdrawCollateralAction>` targeting `MidnightBundles`.
  * @throws {NegativeMidnightAmountError} when any amount, collateral index, or deadline is negative.
  * @throws {NonPositiveMidnightAmountError} when both repay and withdrawal amounts are zero.
+ * @throws {ChainIdMismatchError} when the market targets another chain.
+ * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
  * @throws {UnknownCollateralIndexError} when a positive withdrawal targets an unconfigured collateral index.
  * @example
  * ```ts
@@ -102,6 +105,8 @@ export const midnightRepayWithdrawCollateral = (
     throw new NonPositiveMidnightAmountError("repay or withdraw amount", 0n);
   }
 
+  // Reject markets from another chain deployment before encoding the bundle.
+  validateMidnightMarket({ market: params.market, chainId: params.chainId });
   const marketId = MarketUtils.toId(params.market);
   const market = MarketUtils.toStruct(params.market);
   for (const withdrawal of collateralWithdrawals) {

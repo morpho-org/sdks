@@ -16,15 +16,17 @@ export type RequirementSpenderKey =
  * @param params.chainId - Chain id used to resolve supported spender addresses.
  * @param params.spender - Spender address to validate.
  * @param params.allowed - Allowed registry slots for this requirement.
+ * @returns Nothing after the spender matches an allowed chain address.
  * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` does not match any allowed slot.
  * @example
  * ```ts
  * import { validateRequirementSpender } from "@morpho-org/morpho-sdk";
+ * import { getChainAddress } from "@morpho-org/morpho-ts";
  *
  * validateRequirementSpender({
- *   chainId: 1,
- *   spender: generalAdapter1,
- *   allowed: ["generalAdapter1"],
+ *   chainId: 8453,
+ *   spender: getChainAddress(8453, "midnightBundles"),
+ *   allowed: ["midnightBundles"],
  * });
  * ```
  */
@@ -32,7 +34,7 @@ export const validateRequirementSpender = (params: {
   readonly chainId: number;
   readonly spender: Address;
   readonly allowed: readonly RequirementSpenderKey[];
-}) => {
+}): void => {
   const {
     permit2,
     midnight,

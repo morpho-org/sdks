@@ -1,8 +1,15 @@
 import type { Address, Client } from "viem";
 import { erc20Abi } from "viem";
 import { readContract } from "viem/actions";
-import { validateChainId } from "../../../helpers/index.js";
-import type { ERC20ApprovalAction, Transaction } from "../../../types/index.js";
+import {
+  validateChainId,
+  validateRequirementSpender,
+} from "../../../helpers/index.js";
+import {
+  type ERC20ApprovalAction,
+  NegativeMidnightAmountError,
+  type Transaction,
+} from "../../../types/index.js";
 import { getRequirementsApproval } from "../getRequirementsApproval.js";
 
 /** Parameters for {@link getMidnightApprovalRequirements}. */
@@ -30,6 +37,8 @@ export interface GetMidnightApprovalRequirementsParams {
  * @param params.amount - Token amount the spender must be able to pull.
  * @returns Approval transactions required for `spender` to pull `amount`.
  * @throws {ChainIdMismatchError} when the viem client is connected to another chain.
+ * @throws {NegativeMidnightAmountError} when `amount` is negative.
+ * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not the chain's Midnight or MidnightBundles deployment.
  * @example
  * ```ts
  * import {
@@ -54,6 +63,15 @@ export const getMidnightApprovalRequirements = async (
   params: GetMidnightApprovalRequirementsParams,
 ): Promise<readonly Readonly<Transaction<ERC20ApprovalAction>>[]> => {
   validateChainId(params.viemClient.chain?.id, params.chainId);
+  if (params.amount < 0n) {
+    throw new NegativeMidnightAmountError("approval amount", params.amount);
+  }
+  // Validate the target even when no approval transaction needs to be encoded.
+  validateRequirementSpender({
+    chainId: params.chainId,
+    spender: params.spender,
+    allowed: ["midnight", "midnightBundles"],
+  });
 
   if (params.amount === 0n) return [];
 

@@ -9,18 +9,19 @@ import { MidnightOfferSideMismatchError } from "../types/index.js";
  *
  * @param offers - Offers to validate.
  * @param expectedBuy - Expected maker side for every offer.
+ * @returns Nothing after every offer has the expected maker side.
  * @throws {MidnightOfferSideMismatchError} when any offer side differs from `expectedBuy`.
  * @example
  * ```ts
  * import { validateOfferSides } from "@morpho-org/morpho-sdk";
  *
- * validateOfferSides(takeableOffers.map((take) => take.offer), false);
+ * validateOfferSides([{ buy: false }, { buy: false }], false);
  * ```
  */
 export const validateOfferSides = (
   offers: Iterable<{ readonly buy: boolean }>,
   expectedBuy: boolean,
-) => {
+): void => {
   let index = 0;
   for (const offer of offers) {
     if (offer.buy !== expectedBuy) {

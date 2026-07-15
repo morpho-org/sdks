@@ -786,6 +786,18 @@ export class MidnightOfferMarketAddressMismatchError extends Error {
   }
 }
 
+/** Thrown when a Midnight market targets a different deployment than the selected chain. */
+export class MidnightMarketAddressMismatchError extends Error {
+  constructor(params: {
+    readonly expectedMidnight: Address;
+    readonly actualMidnight: Address;
+  }) {
+    super(
+      `Midnight market targets contract "${params.actualMidnight}", expected "${params.expectedMidnight}". Use market data from the selected chain deployment.`,
+    );
+  }
+}
+
 /** Thrown when a Midnight make-lend offer does not use the approved loan token. */
 export class MidnightOfferMarketLoanTokenMismatchError extends Error {
   constructor(params: {
