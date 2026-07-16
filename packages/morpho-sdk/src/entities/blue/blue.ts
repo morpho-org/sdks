@@ -877,7 +877,7 @@ export class MorphoBlue implements BlueActions {
       const amount = params.amount ?? 0n;
       // Reject a negative ERC-20 amount before it can be masked by nativeAmount
       // in the sum below (a negative amount would otherwise yield a negative
-      // erc20Amount and a negative approval in getRequirements).
+      // erc20Amount and a negative approval during plan preparation).
       if (amount < 0n) {
         throw new NonPositiveRepayAmountError(this.marketParams.id);
       }
@@ -1094,7 +1094,7 @@ export class MorphoBlue implements BlueActions {
       const amount = params.amount ?? 0n;
       // Reject a negative ERC-20 amount before it can be masked by nativeAmount
       // in the sum below (a negative amount would otherwise yield a negative
-      // erc20Amount and a negative approval in getRequirements).
+      // erc20Amount and a negative approval during plan preparation).
       if (amount < 0n) {
         throw new NonPositiveRepayAmountError(this.marketParams.id);
       }
@@ -1391,7 +1391,7 @@ export class MorphoBlue implements BlueActions {
     const requestedAssets = borrowAssets ?? 0n;
     const requestedShares = borrowShares ?? 0n;
 
-    // Reject negative debt up front; otherwise it slips past the `> 0n` mode checks and only fails at buildTx().
+    // Reject negative debt up front; otherwise it slips past the `> 0n` mode checks and only fails when the prepared plan is built.
     if (requestedAssets < 0n) {
       throw new NonPositiveAssetAmountError(this.marketParams.loanToken);
     }

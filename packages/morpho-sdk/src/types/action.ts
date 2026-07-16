@@ -590,30 +590,21 @@ export interface MidnightOfferRootSignatureAction
     }
   > {}
 
-/** Action metadata supported by signature requirements. */
-export type SignatureRequirementAction =
-  | PermitAction
-  | Permit2Action
-  | AuthorizationAction
-  | MidnightOfferRootSignatureAction;
-
-/** Argument payloads returned by signature requirements. */
-export type RequirementSignatureArgs =
-  | PermitArgs
-  | Permit2Args
-  | AuthorizationSignatureArgs
-  | MidnightOfferRootSignatureArgs;
-
 /** A signed ERC-2612 permit or Permit2 approval requirement. */
-export interface PermitRequirementSignature {
-  args: PermitArgs | Permit2Args;
-  action: PermitAction | Permit2Action;
-}
+export type PermitRequirementSignature =
+  | {
+      readonly args: PermitArgs;
+      readonly action: PermitAction;
+    }
+  | {
+      readonly args: Permit2Args;
+      readonly action: Permit2Action;
+    };
 
 /** A signed Morpho authorization requirement (consumed via `setAuthorizationWithSig`). */
 export interface AuthorizationRequirementSignature {
-  args: AuthorizationSignatureArgs;
-  action: AuthorizationAction;
+  readonly args: AuthorizationSignatureArgs;
+  readonly action: AuthorizationAction;
 }
 
 /** A signed Midnight Ecrecover offer-root requirement. */
@@ -627,62 +618,34 @@ export interface MidnightOfferRootSignature {
  * `"permit"` / `"permit2"` carry Bundler3 token-approval args, `"authorization"` carries the
  * signed Morpho authorization, and Midnight adds `"midnightOfferRootSignature"`.
  */
-export type RequirementSignature<
-  TAction extends SignatureRequirementAction | undefined = undefined,
-  TArgs extends RequirementSignatureArgs | undefined = undefined,
-> = TAction extends SignatureRequirementAction
-  ? TArgs extends RequirementSignatureArgs
-    ? {
-        args: TArgs;
-        action: TAction;
-      }
-    : never
-  :
-      | PermitRequirementSignature
-      | AuthorizationRequirementSignature
-      | MidnightOfferRootSignature;
-
-type RequirementResult<
-  TSignatureOrAction extends RequirementSignature | SignatureRequirementAction,
-  TArgs extends RequirementSignatureArgs | undefined,
-> = TSignatureOrAction extends SignatureRequirementAction
-  ? RequirementSignature<
-      TSignatureOrAction,
-      Extract<TArgs, RequirementSignatureArgs>
-    >
-  : Extract<TSignatureOrAction, RequirementSignature>;
+export type RequirementSignature =
+  | PermitRequirementSignature
+  | AuthorizationRequirementSignature
+  | MidnightOfferRootSignature;
 
 /**
  * A signable approval / authorization requirement. `sign()` returns the matching
  * {@link RequirementSignature}; `action` describes the requirement without signing.
  *
- * Generic over the signature it produces so permit encoders narrow to
- * {@link PermitRequirementSignature} and the authorization encoder to
- * {@link AuthorizationRequirementSignature}; the two-parameter form is kept for
- * Midnight action requirements that are parameterized by action and args.
+ * Generic over the exact signature it produces so the returned `args` and `action`
+ * remain correlated through their action discriminator.
  */
-export interface Requirement<
-  TSignatureOrAction extends
-    | RequirementSignature
-    | SignatureRequirementAction = RequirementSignature,
-  TArgs extends RequirementSignatureArgs | undefined = undefined,
-> {
-  sign: (
-    client: WalletClient,
-    userAddress: Address,
-  ) => Promise<RequirementResult<TSignatureOrAction, TArgs>>;
-  action: RequirementResult<TSignatureOrAction, TArgs>["action"];
-}
+export type Requirement<
+  TSignature extends RequirementSignature = RequirementSignature,
+> = TSignature extends RequirementSignature
+  ? {
+      sign: (client: WalletClient, userAddress: Address) => Promise<TSignature>;
+      readonly action: TSignature["action"];
+    }
+  : never;
 
 /** Bundler3 token signature requirement. */
 export type Bundler3TokenSignatureRequirement =
   Requirement<PermitRequirementSignature>;
 
 /** Midnight Ecrecover offer-root signature requirement. */
-export type MidnightOfferRootRequirement = Requirement<
-  MidnightOfferRootSignatureAction,
-  MidnightOfferRootSignatureArgs
->;
+export type MidnightOfferRootRequirement =
+  Requirement<MidnightOfferRootSignature>;
 
 /** Permit or Permit2 token signature requirement. */
 export type TokenSignatureRequirement = Bundler3TokenSignatureRequirement;
@@ -813,7 +776,7 @@ export function isMidnightOfferRootSignature(
   return signature.action.type === "midnightOfferRootSignature";
 }
 
-/** The typed requirement-signature slots a transaction builder consumes, split from a `buildTx` array. */
+/** Typed requirement-signature slots consumed while building a prepared transaction plan. */
 export interface SelectedRequirementSignatures {
   /** The single permit / Permit2 signature, when present. */
   permit?: PermitRequirementSignature;
@@ -824,7 +787,7 @@ export interface SelectedRequirementSignatures {
 }
 
 /**
- * Splits a `buildTx` signature array into its typed requirement-signature slots, rejecting
+ * Splits transaction-plan signatures into typed requirement-signature slots, rejecting
  * ambiguous or unexpected input so a path never silently consumes the wrong signature.
  *
  * A bundled path consumes at most one signature of each accepted kind. Passing several of the same
@@ -832,7 +795,7 @@ export interface SelectedRequirementSignatures {
  * dropping the extras — the latter could otherwise leave a required authorization or permit
  * unsigned (and the bundle reverting on-chain) or apply the wrong signature.
  *
- * @param signatures - The signatures passed to `buildTx`.
+ * @param signatures - The signatures passed to `PreparedTransactionPlan.build()`.
  * @param accepts - Which signature kinds this operation consumes.
  * @param accepts.permit - Whether a permit / Permit2 signature is consumed.
  * @param accepts.authorization - Whether a Morpho authorization signature is consumed.

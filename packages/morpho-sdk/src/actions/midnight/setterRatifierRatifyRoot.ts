@@ -27,7 +27,7 @@ export interface SetterRatifierRatifyRootParams {
  *
  * Use this after building a Setter-ratified offer tree and before submitting
  * its mempool payload. Entity make-offer flows expose the same transaction
- * through `getRequirements()` when the root is not already approved.
+ * through `TransactionPlan.prepare()` when the root is not already approved.
  *
  * @param params.chainId - Chain id used to resolve `SetterRatifier`.
  * @param params.maker - Maker whose root approval is updated.

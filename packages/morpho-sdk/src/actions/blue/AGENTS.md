@@ -50,7 +50,7 @@ ERC-20 approval spender is **GeneralAdapter1** for any bundled path — never th
 
 ## Required pre-conditions
 
-Enforced by the entity layer's `getRequirements`; see [`entities/blue/AGENTS.md`](../../entities/blue/AGENTS.md):
+Enforced while the entity layer prepares its `TransactionPlan`; see [`entities/blue/AGENTS.md`](../../entities/blue/AGENTS.md):
 
 - `borrow`, `supplyCollateralBorrow`, `repayWithdrawCollateral`, `withdraw`, and `refinance` require GeneralAdapter1 to be authorized on Morpho (`setAuthorization`). When an `authorizationSignature` is passed, these builders prepend a `setAuthorizationWithSig` call to the bundle instead of relying on a separate `setAuthorization` transaction.
 - Native wrapping requires the collateral token (collateral-supply paths) or the loan token (`supply`, `repay`, `repayWithdrawCollateral`) to be the configured wNative for the chain.

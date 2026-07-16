@@ -23,8 +23,8 @@ export interface MempoolSubmitOffersParams {
 /**
  * Encodes a Midnight mempool payload submission transaction.
  *
- * App make-offer flows should call `getOffersData`, gather the returned
- * requirements, then call the output `buildTx(signatures)`. Use this builder
+ * App make-offer flows should call `getOffersData`, prepare the returned
+ * transaction plan, then call `PreparedTransactionPlan.build(signatures)`. Use this builder
  * directly only when the payload has already been encoded with ratifier data
  * and the caller wants to submit those bytes to the mempool contract.
  *

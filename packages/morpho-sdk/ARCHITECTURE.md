@@ -13,9 +13,10 @@ operations on EVM-compatible chains for Morpho protocol.
 - **Deterministic transaction building.** Given the same inputs and on-chain state, the SDK
   always produces the same `Transaction` object. No simulation, no gas estimation, no
   sending — the consumer handles those concerns.
-- **Predictable developer experience.** Every operation returns a `{ buildTx, getRequirements }`
-  pair (for deposits) or `{ buildTx }` (for withdrawals/redeems). The interface is identical
-  across V1 and V2 vaults.
+- **Predictable developer experience.** Every entity operation returns a lazy `TransactionPlan`.
+  `prepare()` resolves prerequisite calls and signature requests, while
+  `PreparedTransactionPlan.build(signatures)` returns the ordered executable calls. The lifecycle
+  is identical across VaultV1, VaultV2, Blue, and Midnight.
 - **Immutability.** Every returned `Transaction` is deep-frozen via `@morpho-org/morpho-ts`'s
   `deepFreeze`. Once built, a transaction object cannot be mutated.
 - **No `any`.** Strict TypeScript throughout, with discriminated unions for action types and
@@ -251,33 +252,35 @@ bundle.
 ### Decision tree
 
 ```
-getRequirements(viemClient, params)
+TransactionPlan.prepare()
 │
-├─ supportSignature: false (default)
-│    └─► getRequirementsApproval()
-│         Spender: generalAdapter1
-│         Returns: Transaction<ERC20ApprovalAction>[]
-│         • Checks current allowance — skips if sufficient.
-│         • For APPROVE_ONLY_ONCE_TOKENS (e.g. USDT): prepends
-│           a reset-to-zero approval before the actual approval.
-│
-└─ supportSignature: true
+└─► getGeneralAdapterRequirements(viemClient, params)
      │
-     ├─ Token supports EIP-2612 AND useSimplePermit: true
-     │    └─► getRequirementsPermit()
-     │         Returns: Requirement[] with sign() → PermitAction
-     │         • Checks generalAdapter1 allowance — skips if sufficient.
-     │         • Produces a signable permit for the generalAdapter1 spender.
+     ├─ supportSignature: false (default)
+     │    └─► getRequirementsApproval()
+     │         Spender: generalAdapter1
+     │         Returns: Transaction<ERC20ApprovalAction>[]
+     │         • Checks current allowance — skips if sufficient.
+     │         • For APPROVE_ONLY_ONCE_TOKENS (e.g. USDT): prepends
+     │           a reset-to-zero approval before the actual approval.
      │
-     ├─ Permit2 contract exists on this chain
-     │    └─► getRequirementsPermit2()
-     │         Returns: (Transaction | Requirement)[]
-     │         Two-step:
-     │         1. ERC20 → Permit2: classic approve() if needed (infinite).
-     │         2. Permit2 → generalAdapter1: signature if needed or expiring.
-     │
-     └─ Fallback
-          └─► getRequirementsApproval() (same as supportSignature: false)
+     └─ supportSignature: true
+          │
+          ├─ Token supports EIP-2612 AND useSimplePermit: true
+          │    └─► getRequirementsPermit()
+          │         Returns: Requirement[] with sign() → PermitAction
+          │         • Checks generalAdapter1 allowance — skips if sufficient.
+          │         • Produces a signable permit for the generalAdapter1 spender.
+          │
+          ├─ Permit2 contract exists on this chain
+          │    └─► getRequirementsPermit2()
+          │         Returns: (Transaction | Requirement)[]
+          │         Two-step:
+          │         1. ERC20 → Permit2: classic approve() if needed (infinite).
+          │         2. Permit2 → generalAdapter1: signature if needed or expiring.
+          │
+          └─ Fallback
+               └─► getRequirementsApproval() (same as supportSignature: false)
 ```
 
 ### How signatures flow into deposits

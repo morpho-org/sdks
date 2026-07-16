@@ -164,7 +164,7 @@ describe("MorphoBlue validation", () => {
     ).toThrow(NonPositiveBorrowAmountError);
   });
 
-  test("withdraw getRequirements includes Blue authorization when missing", async ({
+  test("withdraw prepare includes Blue authorization when missing", async ({
     client,
   }) => {
     const market = client
@@ -186,7 +186,7 @@ describe("MorphoBlue validation", () => {
     expect(requirements).toHaveLength(1);
   });
 
-  test("withdraw getRequirements returns no authorization when already authorized", async () => {
+  test("withdraw prepare returns no authorization when already authorized", async () => {
     const handle = createMockClient(mainnet);
     const { morpho } = getChainAddresses(mainnet.id);
     mockRead(handle, {
@@ -289,7 +289,7 @@ describe("MorphoBlue validation", () => {
     ).toThrow(WithdrawExceedsCollateralError);
   });
 
-  test("repayWithdrawCollateral getRequirements includes Blue authorization when missing", async ({
+  test("repayWithdrawCollateral prepare includes Blue authorization when missing", async ({
     client,
   }) => {
     const market = client
@@ -441,7 +441,7 @@ describe("MorphoBlue validation", () => {
     expect(tx.action.args.transferAmount).toBe(borrowAssets);
     expect(tx.action.args.transferAmount - nativeAmount).toBe(expectedErc20);
 
-    // getRequirements approves exactly the carved ERC-20 remainder, not the debt.
+    // Preparation approves exactly the carved ERC-20 remainder, not the debt.
     const requirements = await getPlanRequests(repay);
     const approval = requirements.find(isRequirementApproval);
     if (!approval) {
@@ -582,7 +582,7 @@ describe("MorphoBlue validation", () => {
     expect(tx.action.args.transferAmount).toBe(borrowAssets);
     expect(tx.action.args.transferAmount - nativeAmount).toBe(expectedErc20);
 
-    // getRequirements approves exactly the carved ERC-20 remainder (alongside the
+    // Preparation approves exactly the carved ERC-20 remainder (alongside the
     // Morpho authorization the withdraw leg needs).
     const requirements = await getPlanRequests(action);
     const approval = requirements.find(isRequirementApproval);

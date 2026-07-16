@@ -25,7 +25,7 @@ export interface GetMidnightApprovalRequirementsParams {
 /**
  * Resolves classic ERC20 approval requirements for a Midnight spender.
  *
- * Entity flows call this from `getRequirements()`. Direct low-level consumers
+ * Entity flows call this while preparing a transaction plan. Direct low-level consumers
  * should call it before encoding a Midnight action that lets `Midnight` or
  * `MidnightBundles` pull ERC20 tokens from the user.
  *

@@ -20,7 +20,7 @@ export interface GetSetterRatifierRatifyRootRequirementParams {
  * Resolves the SetterRatifier root approval transaction for a maker offer tree.
  *
  * Call after building a Setter-ratified tree and before encoding/submitting its
- * payload. Entity make-offer flows call this from `getRequirements()` and omit
+ * payload. Entity make-offer flows call this while preparing a transaction plan and omit
  * the transaction when the maker has already approved the root.
  *
  * @param params.viemClient - Viem client used to read root approval state.

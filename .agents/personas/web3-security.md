@@ -58,7 +58,7 @@ The boundary between the SDK and the chain. Authoritative rules live in [`AGENTS
 
 ### Action-layer purity (§1)
 
-- **State read in the Action layer.** An action whose `buildTx` calls `readContract` or otherwise hits the network — Actions are pure encoders per §1's table. State reads belong in the Entity layer.
+- **State read in the Action layer.** An action encoder that calls `readContract` or otherwise hits the network — Actions are pure encoders per §1's table. State reads belong in the Entity layer and are resolved before it returns a `TransactionPlan`.
 - **Async in an Action.** The §1 table forbids `async` in actions. Flag any encoder marked `async` (signing belongs at the Client edge, not in encoders).
 - **Mutation of input arguments.** Encoders return new objects; mutation of incoming structs is a §1 invariant break.
 

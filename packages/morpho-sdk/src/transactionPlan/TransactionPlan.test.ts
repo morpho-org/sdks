@@ -58,7 +58,7 @@ const primaryTx: Transaction<VaultV2DepositAction> = {
   },
 };
 
-const permitSignature: PermitRequirementSignature = {
+const permitSignature = {
   action: {
     type: "permit2",
     args: {
@@ -79,7 +79,7 @@ const permitSignature: PermitRequirementSignature = {
     expiration: 2_000_000_000n,
     signature: SIGNATURE,
   },
-};
+} as const satisfies PermitRequirementSignature;
 
 const authorizationSignature: AuthorizationRequirementSignature = {
   action: {
@@ -101,7 +101,7 @@ const authorizationSignature: AuthorizationRequirementSignature = {
   },
 };
 
-function permitRequest(): Requirement<PermitRequirementSignature> {
+function permitRequest(): Requirement<typeof permitSignature> {
   return {
     action: permitSignature.action,
     sign: vi.fn(async () => permitSignature),
@@ -227,7 +227,7 @@ describe("TransactionPlan", () => {
       VaultV2DepositAction,
       unknown,
       | Readonly<Transaction<ERC20ApprovalAction>>
-      | Requirement<PermitRequirementSignature>
+      | Requirement<typeof permitSignature>
     >({
       getRequirementRequests: vi.fn(async () => [approvalTx, permitRequest()]),
       buildPrimaryCall: vi.fn(() => primaryTx),
@@ -247,10 +247,10 @@ describe("TransactionPlan", () => {
     >;
 
     expectTypeOf<SignatureRequest["request"]>().toEqualTypeOf<
-      Requirement<PermitRequirementSignature>
+      Requirement<typeof permitSignature>
     >();
     expectTypeOf<ReturnType<SignatureRequest["sign"]>>().toEqualTypeOf<
-      Promise<PermitRequirementSignature>
+      Promise<typeof permitSignature>
     >();
     expectTypeOf<PreparationCall["tx"]>().toEqualTypeOf<
       Readonly<Transaction<ERC20ApprovalAction>>

@@ -51,7 +51,7 @@ export interface VaultV1MigrateToV2Params {
  *
  * Prerequisite: the user must either approve `GeneralAdapter1` to spend their V1 vault shares
  * (classic approve) or provide a pre-signed permit/permit2 via `requirementSignature`. Use
- * `getRequirements()` on the entity to resolve the appropriate approval.
+ * `TransactionPlan.prepare()` on the entity output to resolve the appropriate approval.
  *
  * @param params.vault.chainId - The chain the source vault lives on (used to resolve bundler
  *   addresses).

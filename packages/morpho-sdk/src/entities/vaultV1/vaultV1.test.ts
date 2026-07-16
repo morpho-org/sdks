@@ -331,7 +331,7 @@ describe("MorphoVaultV1 entity tests", () => {
     });
   });
 
-  describe("getRequirements with supportSignature: false", () => {
+  describe("prepare with supportSignature: false", () => {
     test("should return classic approval requirements when supportSignature is false", async ({
       client,
     }) => {
@@ -478,7 +478,7 @@ describe("MorphoVaultV1 entity tests", () => {
       ).toThrow(NonPositiveSharesAmountError);
     });
 
-    test("should return buildTx and getRequirements", async ({ client }) => {
+    test("returns a transaction plan", async ({ client }) => {
       const morphoClient = client.extend(
         morphoViemExtension({
           supportSignature: false,
