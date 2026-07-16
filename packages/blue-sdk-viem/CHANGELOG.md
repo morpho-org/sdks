@@ -1,5 +1,28 @@
 # @morpho-org/blue-sdk-viem
 
+## 5.2.0
+
+### Minor Changes
+
+- [#845](https://github.com/morpho-org/sdks/pull/845) [`966bdc4`](https://github.com/morpho-org/sdks/commit/966bdc413e54f1cef65fffed7da92479f1322baf) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Add `fetchAccrualVaultV2Deployless`, a deployless-only reader that fetches the full VaultV2 accrual tree in a single `eth_call`.
+
+  `fetchAccrualVaultV2` chains sequential reads dictated by the VaultV2 architecture — the vault, then each adapter (resolving its type), then each adapter's Morpho Blue markets or wrapped MetaMorpho V1 vault. The new `fetchAccrualVaultV2Deployless` traverses the entire tree on-chain through a new deployless `GetAccrualVaultV2` query and returns the hydrated `AccrualVaultV2` from one round-trip. It has no multicall fallback (equivalent to `deployless: "force"`) and requires every configured adapter factory to be deployed at the queried block.
+
+  The returned entity is byte-for-byte identical to `fetchAccrualVaultV2` — same `maxDeposit`, `maxWithdraw`, `accrueInterest`, and per-adapter `realAssets`, and the nested MetaMorpho V1 vault of a `MorphoVaultV1Adapter` carries the same optional fields the multicall path reads: its EIP-5267 domain (`eip5267Domain`) and PublicAllocator config (`publicAllocatorConfig`, both vault-level and per-market). These are read in the same single `eth_call`, so the default path drops no field.
+
+  `fetchAccrualVaultV2` now uses this single deployless call by default and only falls back to its previous sequential multicall reads when the call fails (or when `deployless` is `false`). Its signature and results are unchanged; it just issues far fewer RPC round-trips.
+
+### Patch Changes
+
+- [#873](https://github.com/morpho-org/sdks/pull/873) [`552ab7b`](https://github.com/morpho-org/sdks/commit/552ab7b9d00e8bb0ec8c6718c798ccc1943d76d4) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - fix(blue-sdk-viem): stop the deployless holding query from reverting on chains without Permit2
+
+  The deployless `GetHolding` query called `permit2.allowance(...)` unconditionally. On
+  chains that have no Permit2 deployment, `fetchHolding` passes `address(0)`, so the
+  external call reverted (an addressless contract), forcing every deployless holding read
+  to fall back to multicall — and throwing outright under `deployless: "force"`. The query
+  now skips the Permit2 call when the address is zero and leaves `permit2BundlerAllowance`
+  at its zero default, matching the multicall fallback.
+
 ## 5.1.3
 
 ### Patch Changes

@@ -1,10 +1,11 @@
 import { midnightAbi } from "@morpho-org/midnight-sdk";
-import { decodeFunctionData, isAddressEqual } from "viem";
+import { decodeFunctionData, isAddressEqual, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   midnightAddresses,
   midnightChainId,
 } from "../../../test/fixtures/midnight.js";
+import { UnsupportedMidnightAuthorizationTargetError } from "../../types/index.js";
 import { midnightSetIsAuthorized } from "./authorization.js";
 
 describe("midnightSetIsAuthorized", () => {
@@ -35,7 +36,7 @@ describe("midnightSetIsAuthorized", () => {
   test("behavior: revokes authorization and appends metadata", () => {
     const tx = midnightSetIsAuthorized({
       chainId: midnightChainId,
-      authorized: midnightAddresses.midnightBundles,
+      authorized: zeroAddress,
       onBehalf: midnightAddresses.taker,
       isAuthorized: false,
       metadata: { origin: "a1b2c3d4" },
@@ -43,5 +44,15 @@ describe("midnightSetIsAuthorized", () => {
 
     expect(tx.action.args.isAuthorized).toBe(false);
     expect(tx.data.endsWith("a1b2c3d4")).toBe(true);
+  });
+
+  test("error: UnsupportedMidnightAuthorizationTargetError", () => {
+    expect(() =>
+      midnightSetIsAuthorized({
+        chainId: midnightChainId,
+        authorized: zeroAddress,
+        onBehalf: midnightAddresses.taker,
+      }),
+    ).toThrow(UnsupportedMidnightAuthorizationTargetError);
   });
 });

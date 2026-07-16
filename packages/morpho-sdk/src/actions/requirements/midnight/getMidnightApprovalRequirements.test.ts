@@ -86,7 +86,12 @@ describe("getMidnightApprovalRequirements", () => {
     ).rejects.toThrow(UnsupportedErc20ApprovalSpenderError);
   });
 
-  test("returns an approval when allowance is insufficient", async () => {
+  test.each([
+    { name: "Midnight", spender: midnightAddresses.midnight },
+    { name: "MidnightBundles", spender: midnightAddresses.midnightBundles },
+  ])("returns an approval for $name when allowance is insufficient", async ({
+    spender,
+  }) => {
     const handle = createMockClient(midnightTestChain);
     mockRead(handle, {
       address: midnightAddresses.loanToken,
@@ -100,15 +105,13 @@ describe("getMidnightApprovalRequirements", () => {
       chainId: midnightChainId,
       token: midnightAddresses.loanToken,
       owner: midnightAddresses.taker,
-      spender: midnightAddresses.midnightBundles,
+      spender,
       amount: 1_000n,
     });
 
     expect(requirements).toHaveLength(1);
     expect(requirements[0]?.action.type).toBe("erc20Approval");
-    expect(requirements[0]?.action.args.spender).toBe(
-      midnightAddresses.midnightBundles,
-    );
+    expect(requirements[0]?.action.args.spender).toBe(spender);
     expect(requirements[0]?.action.args.amount).toBe(1_000n);
   });
 

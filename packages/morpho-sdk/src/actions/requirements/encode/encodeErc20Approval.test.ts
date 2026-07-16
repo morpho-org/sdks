@@ -2,6 +2,10 @@ import { addressesRegistry } from "@morpho-org/blue-sdk";
 import { decodeFunctionData, erc20Abi, isHex } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
+import {
+  midnightAddresses,
+  midnightChainId,
+} from "../../../../test/fixtures/midnight.js";
 import { UnsupportedErc20ApprovalSpenderError } from "../../../types/index.js";
 import { encodeErc20Approval } from "./encodeErc20Approval.js";
 
@@ -65,6 +69,26 @@ describe("encodeErc20Approval", () => {
     });
 
     expect(decoded.args[0]).toEqual(permit2);
+  });
+
+  test.each([
+    { name: "Midnight", spender: midnightAddresses.midnight },
+    { name: "MidnightBundles", spender: midnightAddresses.midnightBundles },
+  ])("behavior: encodes an approval for $name", ({ spender }) => {
+    const transaction = encodeErc20Approval({
+      token: midnightAddresses.loanToken,
+      spender,
+      amount: mockAmount,
+      chainId: midnightChainId,
+    });
+
+    const decoded = decodeFunctionData({
+      abi: erc20Abi,
+      data: transaction.data,
+    });
+
+    expect(decoded.args[0]).toEqual(spender);
+    expect(transaction.action.args.spender).toEqual(spender);
   });
 
   test("should work with zero amount", () => {
