@@ -2,6 +2,7 @@ import { midnightAbi } from "@morpho-org/midnight-sdk";
 import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
+import { validateMidnightAuthorizationTarget } from "../../helpers/validateMidnightAuthorizationTarget.js";
 import type {
   Metadata,
   MidnightAuthorizationAction,
@@ -26,11 +27,12 @@ export interface MidnightSetIsAuthorizedParams {
  * authorization without reading state.
  *
  * @param params.chainId - Chain id used to resolve `Midnight`.
- * @param params.authorized - Address receiving or losing authorization.
+ * @param params.authorized - Supported operator receiving authorization, or any operator losing authorization.
  * @param params.onBehalf - Owner whose authorization mapping is updated.
  * @param params.isAuthorized - Optional target state; defaults to `true`.
  * @param params.metadata - Optional analytics metadata appended to calldata.
  * @returns A deep-frozen `Transaction<MidnightAuthorizationAction>` targeting `Midnight`.
+ * @throws {UnsupportedMidnightAuthorizationTargetError} when granting authorization to an unsupported operator.
  * @example
  * ```ts
  * import { midnightSetIsAuthorized } from "@morpho-org/morpho-sdk";
@@ -46,6 +48,13 @@ export const midnightSetIsAuthorized = (
   params: MidnightSetIsAuthorizedParams,
 ): Readonly<Transaction<MidnightAuthorizationAction>> => {
   const isAuthorized = params.isAuthorized ?? true;
+  if (isAuthorized) {
+    // Restrict grants to known protocol operators; revocations remain permissionless by target.
+    validateMidnightAuthorizationTarget({
+      chainId: params.chainId,
+      authorized: params.authorized,
+    });
+  }
   const midnight = getChainAddress(params.chainId, "midnight");
 
   let tx = {
