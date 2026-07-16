@@ -115,7 +115,11 @@ import type {
  *   deadline: maxUint256,
  * });
  * const prepared = await plan.prepare();
- * const executable = prepared.build(await prepared.signAll(walletClient, lender));
+ * const signatures = [];
+ * for (const request of prepared.signatureRequests) {
+ *   signatures.push(await request.sign(walletClient, lender));
+ * }
+ * const executable = prepared.build(signatures);
  * const calls = executable.callRequests.map((request) => request.call);
  * ```
  */
@@ -692,7 +696,7 @@ export class MorphoMidnight {
    * Validates lend-side maker offers and prepares their reserve and ratifier requirements.
    *
    * Calls the Midnight mempool validation API while preparing the offer tree;
-   * allowance and ratifier state are read lazily by `getRequirements()`.
+   * allowance and ratifier state are read lazily by `TransactionPlan.prepare()`.
    *
    * @param params - Maker, raw offers, loan token, reserve amounts, and validation controls.
    * @param params.accountAddress - Maker expected on every offer.
@@ -701,7 +705,7 @@ export class MorphoMidnight {
    * @param params.loanToken - Loan token shared by every offer market.
    * @param params.loanAssets - New loan reserve assigned to the submitted groups.
    * @param params.reservedLoanAssets - Existing loan assets reserved by other open groups.
-   * @returns Prepared group metadata, lazy requirements, and a synchronous mempool transaction builder.
+   * @returns Prepared group metadata and a lazy transaction plan for the mempool submission flow.
    * @throws {ChainIdMismatchError} when the client targets another chain.
    * @throws {MidnightOfferMarketAddressMismatchError} when an offer targets another Midnight deployment.
    * @throws {NonPositiveMidnightAmountError} when `loanAssets` is non-positive.

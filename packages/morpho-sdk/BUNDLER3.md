@@ -18,7 +18,7 @@ Instead of exposing the user directly to target contracts (ERC-4626 vault, Morph
 - executes `morphoSupplyCollateral`, `morphoBorrow`, `morphoRepay`, `morphoWithdrawCollateral` on Morpho Blue,
 - forwards `reallocateTo` calls to the `PublicAllocator` for shared liquidity.
 
-The **spender** of every approval / permit / permit2 is therefore **always** `generalAdapter1`, never the vault or Morpho directly. See [src/actions/requirements/getRequirements.ts](src/actions/requirements/getRequirements.ts) and the "Requirements System" section of [ARCHITECTURE.md](ARCHITECTURE.md#requirements-system).
+The **spender** of every approval / permit / permit2 is therefore **always** `generalAdapter1`, never the vault or Morpho directly. See [`getGeneralAdapterRequirements`](src/actions/requirements/generalAdapter/getGeneralAdapterRequirements.ts) and the "Requirements System" section of [ARCHITECTURE.md](ARCHITECTURE.md#requirements-system).
 
 ## Composability & modularity
 
@@ -70,7 +70,7 @@ For every ERC-4626 deposit (VaultV1 / VaultV2), GeneralAdapter1 calls `erc4626De
 
 ### 5. A single approval surface
 
-Whether it's a V1 deposit, a V2 deposit, a `supplyCollateral`, a `repay`, or a `supplyCollateralBorrow`: the spender is **always** `generalAdapter1`. A user who has already approved GA1 for a given token transparently reuses that approval. The approval / permit / permit2 decision is centralized in [`getRequirements`](src/actions/requirements/getRequirements.ts).
+Whether it's a V1 deposit, a V2 deposit, a `supplyCollateral`, a `repay`, or a `supplyCollateralBorrow`: the spender is **always** `generalAdapter1`. A user who has already approved GA1 for a given token transparently reuses that approval. The approval / permit / permit2 decision is centralized in [`getGeneralAdapterRequirements`](src/actions/requirements/generalAdapter/getGeneralAdapterRequirements.ts).
 
 ## Dangers & limits
 

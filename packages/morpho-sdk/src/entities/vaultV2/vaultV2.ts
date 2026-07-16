@@ -27,7 +27,6 @@ import {
   ChainWNativeMissingError,
   type Deallocation,
   type DepositAmountArgs,
-  type ERC20ApprovalAction,
   ExcessiveSlippageToleranceError,
   type MorphoClientType,
   NativeAmountOnNonWNativeVaultError,
@@ -35,10 +34,7 @@ import {
   NegativeSlippageToleranceError,
   NonPositiveAssetAmountError,
   NonPositiveSharesAmountError,
-  type PermitRequirementSignature,
-  type Requirement,
   selectRequirementSignatures,
-  type Transaction,
   VaultAddressMismatchError,
   type VaultV2DepositAction,
   type VaultV2ForceRedeemAction,
@@ -70,7 +66,7 @@ export interface VaultV2Actions {
    *
    * This function constructs the transaction data required to deposit a specified amount of assets into the vault.
    * Uses pre-fetched vault data for accurate calculations of slippage and asset address,
-   * then returns the prepared deposit transaction and a function for retrieving all required approval transactions.
+   * then returns a lazy transaction plan for resolving approval or signature requests and building the deposit call.
    * Bundler Integration: This flow uses the bundler to atomically execute the user's asset transfer and vault deposit in a single transaction for slippage protection.
    *
    * @param {Object} params - The deposit parameters.
@@ -79,9 +75,8 @@ export interface VaultV2Actions {
    * @param {AccrualVaultV2} params.vaultData - Pre-fetched vault data with asset address and share conversion.
    * @param {bigint} [params.slippageTolerance=DEFAULT_SLIPPAGE_TOLERANCE] - Optional slippage tolerance value. Default is 0.03%. Slippage tolerance must be less than 10%.
    * @param {bigint} [params.nativeAmount] - Amount of native token to wrap into wNative. Vault asset must be wNative.
-   * @returns {Object} The result object.
-   * @returns {Readonly<Transaction<VaultV2DepositAction>>} returns.tx The prepared deposit transaction.
-   * @returns {Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement<PermitRequirementSignature>)[]>} returns.prepare Resolves supporting approval/signature requests plus the primary call.
+   * @returns A lazy `TransactionPlan` whose `prepare()` resolves token approval or permit requests
+   *   and whose prepared form builds the executable deposit call.
    */
   deposit: (
     params: {
@@ -102,8 +97,7 @@ export interface VaultV2Actions {
    * @param {Object} params - The withdraw parameters.
    * @param {bigint} params.amount - The amount of assets to withdraw.
    * @param {Address} params.userAddress - User address initiating the withdraw.
-   * @returns {Object} The result object.
-   * @returns {Readonly<Transaction<VaultV2WithdrawAction>>} returns.tx The prepared withdraw transaction.
+   * @returns A lazy `TransactionPlan` that prepares and builds the direct withdraw call.
    */
   withdraw: (params: {
     amount: bigint;
@@ -117,8 +111,7 @@ export interface VaultV2Actions {
    * @param {Object} params - The redeem parameters.
    * @param {bigint} params.shares - The amount of shares to redeem.
    * @param {Address} params.userAddress - User address initiating the redeem.
-   * @returns {Object} The result object.
-   * @returns {Readonly<Transaction<VaultV2RedeemAction>>} returns.tx The prepared redeem transaction.
+   * @returns A lazy `TransactionPlan` that prepares and builds the direct redeem call.
    */
   redeem: (params: {
     shares: bigint;
@@ -136,8 +129,7 @@ export interface VaultV2Actions {
    * @param {Object} params.withdraw - The withdraw parameters applied after deallocations.
    * @param {bigint} params.withdraw.amount - The amount of assets to withdraw.
    * @param {Address} params.userAddress - User address (penalty source and withdraw recipient).
-   * @returns {Object} The result object.
-   * @returns {Readonly<Transaction<VaultV2ForceWithdrawAction>>} returns.prepare Resolves the primary multicall request.
+   * @returns A lazy `TransactionPlan` that prepares and builds the force-withdraw multicall.
    */
   forceWithdraw: (params: {
     deallocations: readonly Deallocation[];
@@ -163,8 +155,7 @@ export interface VaultV2Actions {
    * @param {Object} params.redeem - The redeem parameters applied after deallocations.
    * @param {bigint} params.redeem.shares - The amount of shares to redeem.
    * @param {Address} params.userAddress - User address (penalty source and redeem recipient).
-   * @returns {Object} The result object.
-   * @returns {Readonly<Transaction<VaultV2ForceRedeemAction>>} returns.prepare Resolves the primary multicall request.
+   * @returns A lazy `TransactionPlan` that prepares and builds the force-redeem multicall.
    */
   forceRedeem: (params: {
     deallocations: readonly Deallocation[];

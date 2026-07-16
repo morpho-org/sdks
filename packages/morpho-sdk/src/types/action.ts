@@ -543,11 +543,11 @@ export interface PermitAction
   extends BaseAction<
     "permit",
     {
-      token?: Address;
-      spender: Address;
-      amount: bigint;
-      deadline: bigint;
-      chainId?: number;
+      readonly token?: Address;
+      readonly spender: Address;
+      readonly amount: bigint;
+      readonly deadline: bigint;
+      readonly chainId?: number;
     }
   > {}
 
@@ -555,12 +555,12 @@ export interface Permit2Action
   extends BaseAction<
     "permit2",
     {
-      token?: Address;
-      spender: Address;
-      amount: bigint;
-      deadline: bigint;
-      expiration: bigint;
-      chainId?: number;
+      readonly token?: Address;
+      readonly spender: Address;
+      readonly amount: bigint;
+      readonly deadline: bigint;
+      readonly expiration: bigint;
+      readonly chainId?: number;
     }
   > {}
 
@@ -572,10 +572,10 @@ export interface AuthorizationAction
   extends BaseAction<
     "authorization",
     {
-      authorized: Address;
-      isAuthorized: boolean;
-      deadline: bigint;
-      chainId?: number;
+      readonly authorized: Address;
+      readonly isAuthorized: boolean;
+      readonly deadline: bigint;
+      readonly chainId?: number;
     }
   > {}
 
@@ -693,13 +693,13 @@ export type Bundler3TokenRequirementSignature = PermitRequirementSignature;
 /** Permit or Permit2 token signature result. */
 export type TokenRequirementSignature = Bundler3TokenRequirementSignature;
 
-/** Any signature result returned by an action-output signature requirement. */
+/** Any signature result returned by a transaction-plan signature request. */
 export type AnyRequirementSignature =
   | TokenRequirementSignature
   | AuthorizationRequirementSignature
   | MidnightOfferRootSignature;
 
-/** Any signature requirement returned by an entity action output. */
+/** Any signature requirement discovered while preparing an entity transaction plan. */
 export type SignatureRequirement =
   | TokenSignatureRequirement
   | MidnightOfferRootRequirement
@@ -713,10 +713,10 @@ export type CallRequirementAction =
   | SetterRatifierRatifyRootAction
   | MidnightSupplyCollateralAction;
 
-/** Onchain call prerequisite returned by action-output `getRequirements()`. */
+/** Onchain call prerequisite discovered while preparing an entity transaction plan. */
 export type CallRequirement = Readonly<Transaction<CallRequirementAction>>;
 
-/** Onchain call or signature prerequisite returned by an entity action output. */
+/** Onchain call or signature prerequisite discovered while preparing an entity transaction plan. */
 export type ActionRequirement = CallRequirement | SignatureRequirement;
 
 export function isRequirementApproval(

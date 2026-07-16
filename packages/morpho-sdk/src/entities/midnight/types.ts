@@ -72,7 +72,7 @@ export interface SupplyCollateralMakeBorrowParams extends MakeOffersParams {
   readonly collateralIndex?: bigint;
 }
 
-/** Signatures accepted by Midnight action-output transaction builders. */
+/** Signatures accepted when building Midnight transaction plans. */
 export type MidnightActionSignatures =
   | MidnightOfferRootSignature
   | readonly MidnightOfferRootSignature[];
@@ -85,7 +85,10 @@ export type MidnightActionSignatures =
  * ```ts
  * const plan = midnight.takeLend(params);
  * const prepared = await plan.prepare();
- * const signatures = await prepared.signAll(walletClient, taker);
+ * const signatures = [];
+ * for (const request of prepared.signatureRequests) {
+ *   signatures.push(await request.sign(walletClient, taker));
+ * }
  * const executable = prepared.build(signatures);
  * const calls = executable.callRequests.map((request) => request.call);
  * ```
@@ -106,7 +109,10 @@ export type MidnightActionOutput<
  * const plan = await midnight.makeLend(params);
  * console.log(plan.root, plan.groups);
  * const prepared = await plan.prepare();
- * const signatures = await prepared.signAll(walletClient, maker);
+ * const signatures = [];
+ * for (const request of prepared.signatureRequests) {
+ *   signatures.push(await request.sign(walletClient, maker));
+ * }
  * const executable = prepared.build(signatures);
  * const calls = executable.callRequests.map((request) => request.call);
  * ```

@@ -14,6 +14,7 @@ export type {
   WithdrawOptions,
   WithdrawResult,
 } from "@tetherto/wdk-wallet/protocols";
+export { MissingTransactionPlanCallError } from "./errors.js";
 export {
   type Market,
   type MarketPresetKey,

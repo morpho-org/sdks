@@ -74,7 +74,8 @@ export interface VaultV1Actions {
    * @param {AccrualVault} params.vaultData - Pre-fetched vault data with asset address and share conversion.
    * @param {bigint} [params.slippageTolerance=DEFAULT_SLIPPAGE_TOLERANCE] - Slippage tolerance (default 0.03%, max 10%).
    * @param {bigint} [params.nativeAmount] - Amount of native ETH to wrap into WETH. Vault asset must be wNative.
-   * @returns {Object} Object with `buildTx` and `getRequirements`.
+   * @returns A lazy `TransactionPlan` whose `prepare()` resolves token approval or permit requests
+   *   and whose prepared form builds the executable deposit call.
    */
   deposit: (
     params: {
@@ -93,7 +94,7 @@ export interface VaultV1Actions {
    * @param {Object} params - The withdraw parameters.
    * @param {bigint} params.amount - Amount of assets to withdraw.
    * @param {Address} params.userAddress - User address initiating the withdraw.
-   * @returns {Object} Object with `buildTx`.
+   * @returns A lazy `TransactionPlan` that prepares and builds the direct withdraw call.
    */
   withdraw: (params: {
     amount: bigint;
@@ -105,7 +106,7 @@ export interface VaultV1Actions {
    * @param {Object} params - The redeem parameters.
    * @param {bigint} params.shares - Amount of shares to redeem.
    * @param {Address} params.userAddress - User address initiating the redeem.
-   * @returns {Object} Object with `buildTx`.
+   * @returns A lazy `TransactionPlan` that prepares and builds the direct redeem call.
    */
   redeem: (params: {
     shares: bigint;
@@ -123,7 +124,8 @@ export interface VaultV1Actions {
    * @param {AccrualVaultV2} params.targetVault - Pre-fetched V2 vault data.
    * @param {bigint} params.shares - User's V1 share balance to migrate.
    * @param {bigint} [params.slippageTolerance=DEFAULT_SLIPPAGE_TOLERANCE] - Slippage tolerance (default 0.03%, max 10%).
-   * @returns {Object} Object with `buildTx` and `getRequirements`.
+   * @returns A lazy `TransactionPlan` whose `prepare()` resolves the V1-share approval request
+   *   and whose prepared form builds the atomic migration call.
    */
   migrateToV2: (params: {
     userAddress: Address;

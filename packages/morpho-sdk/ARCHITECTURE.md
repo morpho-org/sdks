@@ -117,7 +117,7 @@ at the SDK level. The differences are at the protocol layer:
 - **Maker routing**: Maker flows build and validate offer trees, collect an Ecrecover root
   signature or SetterRatifier transaction, then submit the payload to the Midnight mempool.
 - **SDK data**: `MorphoMidnight` fetches hydrated market and position snapshots and exposes
-  the same lazy `{ getRequirements, buildTx }` contract as the other entities.
+  the same lazy `TransactionPlan` lifecycle as the other entities.
 
 
 ### Force Deallocation (V2 only)
@@ -283,16 +283,16 @@ getRequirements(viemClient, params)
 ### How signatures flow into deposits
 
 When requirements return a `Requirement` object (permit, permit2, or Morpho authorization path),
-the consuming application calls `requirement.sign(client, userAddress)` to obtain a
-`RequirementSignature`. The collected signatures are then passed to `buildTx` as an array
-(`buildTx([...signatures])`), letting a permit and a Morpho authorization signature travel
-together:
+`TransactionPlan.prepare()` exposes it as a signature request. The consuming application calls
+`request.sign(client, userAddress)` to obtain a `RequirementSignature`, then passes the collected
+signatures to `PreparedTransactionPlan.build([...signatures])`, letting a permit and a Morpho
+authorization signature travel together:
 
 ```
-getRequirements() → Requirement { sign() } → RequirementSignature → buildTx([sig, ...])
+prepare() → signatureRequests → RequirementSignature → build([sig, ...])
 ```
 
-Inside `buildTx`, `getTokenRequirementActions()` converts the signature into bundler actions:
+Inside the primary transaction builder, `getTokenRequirementActions()` converts the signature into bundler actions:
 
 - **Permit path**: `permit` action + `erc20TransferFrom` to generalAdapter1.
 - **Permit2 path**: `approve2` action + `transferFrom2` to generalAdapter1.
@@ -300,9 +300,9 @@ Inside `buildTx`, `getTokenRequirementActions()` converts the signature into bun
 These actions are prepended to the `erc4626Deposit` action in the bundle. The entire sequence
 executes atomically in a single transaction.
 
-When no signature is provided (classic approval path), `buildTx()` uses a simple
-`erc20TransferFrom` action to move tokens from the user to the general adapter before the
-deposit.
+When no signature is provided (classic approval path), the prepared plan exposes the required
+approval as a preparation-phase call and the primary builder uses a simple `erc20TransferFrom`
+action to move tokens from the user to the general adapter before the deposit.
 
 ### Guard functions
 

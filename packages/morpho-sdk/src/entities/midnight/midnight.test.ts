@@ -1356,7 +1356,6 @@ describe("MorphoMidnight", () => {
       const tx = await buildPlanTx(output, signature);
 
       expect(output.groups).toEqual(data.groups);
-      expect(output).toBeInstanceOf(TransactionPlan);
       expect(output.root).toBe(data.tree.root);
       expect(output.ratifierType).toBe("ecrecover");
       expect(tx.action.args).toMatchObject({

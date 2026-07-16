@@ -1,5 +1,5 @@
-import type { Address, Hex, WalletClient } from "viem";
-import { describe, expect, test, vi } from "vitest";
+import type { Address, Hex } from "viem";
+import { describe, expect, expectTypeOf, test, vi } from "vitest";
 import {
   type AuthorizationRequirementSignature,
   type BlueAuthorizationAction,
@@ -101,21 +101,17 @@ const authorizationSignature: AuthorizationRequirementSignature = {
   },
 };
 
-function permitRequest(params?: {
-  readonly sign?: Requirement<PermitRequirementSignature>["sign"];
-}): Requirement<PermitRequirementSignature> {
+function permitRequest(): Requirement<PermitRequirementSignature> {
   return {
     action: permitSignature.action,
-    sign: params?.sign ?? vi.fn(async () => permitSignature),
+    sign: vi.fn(async () => permitSignature),
   };
 }
 
-function authorizationRequest(params?: {
-  readonly sign?: Requirement<AuthorizationRequirementSignature>["sign"];
-}): Requirement<AuthorizationRequirementSignature> {
+function authorizationRequest(): Requirement<AuthorizationRequirementSignature> {
   return {
     action: authorizationSignature.action,
-    sign: params?.sign ?? vi.fn(async () => authorizationSignature),
+    sign: vi.fn(async () => authorizationSignature),
   };
 }
 
@@ -182,37 +178,6 @@ describe("TransactionPlan", () => {
     ]);
   });
 
-  test("behavior: signs every signature request sequentially", async () => {
-    let resolveFirst: ((value: PermitRequirementSignature) => void) | undefined;
-    const firstSign = vi.fn(
-      () =>
-        new Promise<PermitRequirementSignature>((resolve) => {
-          resolveFirst = resolve;
-        }),
-    );
-    const secondSign = vi.fn(async () => authorizationSignature);
-    const plan = TransactionPlan.create<VaultV2DepositAction>({
-      getRequirementRequests: vi.fn(async () => [
-        permitRequest({ sign: firstSign }),
-        authorizationRequest({ sign: secondSign }),
-      ]),
-      buildPrimaryCall: vi.fn(() => primaryTx),
-    });
-    const prepared = await plan.prepare();
-
-    const promise = prepared.signAll({} as WalletClient, USER);
-    await Promise.resolve();
-
-    expect(firstSign).toHaveBeenCalledWith({}, USER);
-    expect(secondSign).not.toHaveBeenCalled();
-
-    resolveFirst?.(permitSignature);
-    const signatures = await promise;
-
-    expect(secondSign).toHaveBeenCalledWith({}, USER);
-    expect(signatures).toEqual([permitSignature, authorizationSignature]);
-  });
-
   test("behavior: builds ordered call requests only after requested signatures are provided", async () => {
     const permit = permitRequest();
     const authorization = authorizationRequest();
@@ -255,6 +220,42 @@ describe("TransactionPlan", () => {
       { to: TOKEN, value: 0n, data: "0xa1" },
       { to: BUNDLER, value: 0n, data: "0xf1" },
     ]);
+  });
+
+  test("behavior: preserves prerequisite and primary action types through execution", async () => {
+    const plan = TransactionPlan.create<
+      VaultV2DepositAction,
+      unknown,
+      | Readonly<Transaction<ERC20ApprovalAction>>
+      | Requirement<PermitRequirementSignature>
+    >({
+      getRequirementRequests: vi.fn(async () => [approvalTx, permitRequest()]),
+      buildPrimaryCall: vi.fn(() => primaryTx),
+    });
+
+    const prepared = await plan.prepare();
+    type Prepared = typeof prepared;
+    type SignatureRequest = Prepared["signatureRequests"][number];
+    type PreparationCall = Extract<
+      Prepared["callRequests"][number],
+      { readonly phase: "preparation" }
+    >;
+    type Executable = ReturnType<Prepared["build"]>;
+    type PrimaryCall = Extract<
+      Executable["callRequests"][number],
+      { readonly phase: "primary" }
+    >;
+
+    expectTypeOf<SignatureRequest["request"]>().toEqualTypeOf<
+      Requirement<PermitRequirementSignature>
+    >();
+    expectTypeOf<ReturnType<SignatureRequest["sign"]>>().toEqualTypeOf<
+      Promise<PermitRequirementSignature>
+    >();
+    expectTypeOf<PreparationCall["tx"]>().toEqualTypeOf<
+      Readonly<Transaction<ERC20ApprovalAction>>
+    >();
+    expectTypeOf<PrimaryCall["action"]>().toEqualTypeOf<VaultV2DepositAction>();
   });
 
   test("behavior: requirement call requests keep authorization intent separate from token approval", async () => {

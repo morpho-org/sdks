@@ -1,4 +1,4 @@
-import type { Address, Hex, WalletClient } from "viem";
+import type { Address, Hex } from "viem";
 import type {
   AuthorizationRequirementSignature,
   BaseAction,
@@ -182,39 +182,42 @@ export type TransactionPlanFlowKind =
   | "mixed_requests";
 
 /** A signable request in a transaction plan. */
-export interface TransactionPlanSignatureRequest {
+export interface TransactionPlanSignatureRequest<
+  TRequest extends SignatureRequirement = SignatureRequirement,
+> {
   /** Request kind discriminator. */
   readonly kind: "signature";
   /** Stable id based on original request order, e.g. `request-1`. */
   readonly id: string;
   /** Original SDK signable descriptor. */
-  readonly request: SignatureRequirement;
+  readonly request: TRequest;
   /** Exact SDK/protocol action metadata used to encode this signature request. */
-  readonly action: SignatureRequirement["action"];
+  readonly action: TRequest["action"];
   /** Higher-level plan category for app labels, filtering, and analytics. */
   readonly intent:
     | TransactionPlanTokenApprovalIntent
     | TransactionPlanOperatorAuthorizationIntent
     | TransactionPlanMidnightOfferRootIntent;
   /** Signs the request with the provided wallet client and user address. */
-  readonly sign: (
-    client: WalletClient,
-    userAddress: Address,
-  ) => Promise<RequirementSignature>;
+  readonly sign: TRequest["sign"];
 }
 
 /** A viem-compatible call request in a transaction plan. */
 export interface TransactionPlanCallRequest<
   TAction extends BaseAction = TransactionAction,
+  TTransaction extends Readonly<Transaction<TAction>> = Readonly<
+    Transaction<TAction>
+  >,
+  TPhase extends "preparation" | "primary" = "preparation" | "primary",
 > {
   /** Request kind discriminator. */
   readonly kind: "call";
   /** Stable id based on original request order, or `primary` for the requested action call. */
   readonly id: string;
   /** Whether this call supports the flow or executes the requested primary action. */
-  readonly phase: "preparation" | "primary";
+  readonly phase: TPhase;
   /** Original SDK transaction with Morpho action metadata. */
-  readonly tx: Readonly<Transaction<TAction>>;
+  readonly tx: TTransaction;
   /** Exact SDK/protocol action metadata used to encode this call. */
   readonly action: TAction;
   /** Higher-level plan category for app labels, filtering, and analytics. */
@@ -223,32 +226,68 @@ export interface TransactionPlanCallRequest<
   readonly call: TransactionPlanViemCall;
 }
 
-/** A request in a transaction plan: either a signature prompt or a transaction call. */
-export type TransactionPlanStep =
-  | TransactionPlanSignatureRequest
-  | TransactionPlanCallRequest;
+/** Prepared representation of one prerequisite request discovered by a transaction plan. */
+export type TransactionPlanPreparedRequest<
+  TRequest extends TransactionPlanRequest = TransactionPlanRequest,
+> =
+  | TransactionPlanSignatureRequest<Extract<TRequest, SignatureRequirement>>
+  | TransactionPlanCallRequest<
+      Extract<TRequest, CallRequirement>["action"],
+      Extract<TRequest, CallRequirement>,
+      "preparation"
+    >;
+
+/** A request in a transaction plan: either a prerequisite step or the primary transaction. */
+export type TransactionPlanStep<
+  TPrimaryAction extends TransactionAction = TransactionAction,
+  TRequest extends TransactionPlanRequest = TransactionPlanRequest,
+> =
+  | TransactionPlanPreparedRequest<TRequest>
+  | TransactionPlanCallRequest<
+      TPrimaryAction,
+      Readonly<Transaction<TPrimaryAction>>,
+      "primary"
+    >;
 
 /** Narrows transaction-plan steps by semantic intent type. */
 export type TransactionPlanStepForIntent<
   TType extends TransactionPlanIntent["type"],
-> = TransactionPlanStep & {
+  TPrimaryAction extends TransactionAction = TransactionAction,
+  TRequest extends TransactionPlanRequest = TransactionPlanRequest,
+> = TransactionPlanStep<TPrimaryAction, TRequest> & {
   readonly intent: Extract<TransactionPlanIntent, { readonly type: TType }>;
 };
 
 /** Prepared transaction plan shape consumed by app review/execution code. */
-export interface PreparedTransactionPlanShape {
+export interface PreparedTransactionPlanShape<
+  TPrimaryAction extends TransactionAction = TransactionAction,
+  TRequest extends TransactionPlanRequest = TransactionPlanRequest,
+> {
   /** Ordered signable requests to present to the user. */
-  readonly signatureRequests: readonly TransactionPlanSignatureRequest[];
+  readonly signatureRequests: readonly TransactionPlanSignatureRequest<
+    Extract<TRequest, SignatureRequirement>
+  >[];
   /** Ordered viem-compatible calls. Includes the primary action call last when previewable. */
-  readonly callRequests: readonly TransactionPlanCallRequest[];
+  readonly callRequests: readonly Extract<
+    TransactionPlanStep<TPrimaryAction, TRequest>,
+    { readonly kind: "call" }
+  >[];
   /** All signature requests and call requests in review order. */
-  readonly steps: readonly TransactionPlanStep[];
+  readonly steps: readonly TransactionPlanStep<TPrimaryAction, TRequest>[];
 }
 
 /** Built plan ready for transaction submission after signatures have been collected. */
-export interface ExecutableTransactionPlanShape {
+export interface ExecutableTransactionPlanShape<
+  TPrimaryAction extends TransactionAction = TransactionAction,
+  TRequest extends TransactionPlanRequest = TransactionPlanRequest,
+> {
   /** Ordered signable requests used to produce the signatures passed to `build(...)`. */
-  readonly signatureRequests: readonly TransactionPlanSignatureRequest[];
+  readonly signatureRequests: readonly TransactionPlanSignatureRequest<
+    Extract<TRequest, SignatureRequirement>
+  >[];
   /** Ordered viem-compatible calls to submit, with the primary action call last. */
-  readonly callRequests: readonly TransactionPlanCallRequest[];
+  readonly callRequests: readonly Extract<
+    TransactionPlanStep<TPrimaryAction, TRequest>,
+    { readonly kind: "call" }
+  >[];
 }

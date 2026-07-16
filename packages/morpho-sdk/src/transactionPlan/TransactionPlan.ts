@@ -1,10 +1,10 @@
-import type { Address, WalletClient } from "viem";
 import {
   type CallRequirement,
   isRequirementApproval,
   isRequirementBlueAuthorization,
   type RequirementSignature,
   type SignatureRequirement,
+  type Transaction,
   type TransactionAction,
 } from "../types/action.js";
 import { MissingTransactionPlanSignaturesError } from "../types/error.js";
@@ -19,6 +19,7 @@ import type {
   TransactionPlanIntent,
   TransactionPlanMidnightOfferRootIntent,
   TransactionPlanOperatorAuthorizationIntent,
+  TransactionPlanPreparedRequest,
   TransactionPlanPrepareOptions,
   TransactionPlanRequest,
   TransactionPlanSignatureRequest,
@@ -85,7 +86,11 @@ export type {
  *   sign: (client) => request.sign(client, accountAddress),
  * }));
  *
- * const executable = prepared.build(await prepared.signAll(walletClient, accountAddress));
+ * const signatures = [];
+ * for (const request of prepared.signatureRequests) {
+ *   signatures.push(await request.sign(walletClient, accountAddress));
+ * }
+ * const executable = prepared.build(signatures);
  * const callRequests = executable.callRequests.map((request) => ({
  *   label: request.intent.type === "primaryTransaction" ? "Submit transaction" : "Approve token",
  *   getCall: () => request.call,
@@ -109,6 +114,13 @@ export class TransactionPlan<
    * Creates a lazy TransactionPlan from SDK handler callbacks.
    *
    * @param handler - SDK handler callbacks used by `prepare()` and `PreparedTransactionPlan.build(...)`.
+   * @example
+   * ```ts
+   * const plan = new TransactionPlan({
+   *   getRequirementRequests: async () => requests,
+   *   buildPrimaryCall: () => transaction,
+   * });
+   * ```
    */
   constructor(
     handler: TransactionPlanHandler<
@@ -121,138 +133,156 @@ export class TransactionPlan<
     this.handler = handler;
   }
 
-  /** Prepares semantic review and execution metadata by resolving current requests. */
+  /**
+   * Resolves the prerequisite requests and semantic review metadata for this plan.
+   *
+   * @param options - Optional request-discovery controls forwarded to the entity handler.
+   * @returns A prepared plan whose request types and primary action match this plan.
+   * @example
+   * ```ts
+   * const prepared = await vault.deposit(params).prepare({
+   *   requestOptions: { useSimplePermit: true },
+   * });
+   * // prepared.steps contains the typed prerequisites followed by the primary call preview.
+   * ```
+   */
   async prepare(
     options?: TransactionPlanPrepareOptions<TRequestOptions>,
-  ): Promise<PreparedTransactionPlan<TPrimaryAction, TSignatures>> {
+  ): Promise<PreparedTransactionPlan<TPrimaryAction, TRequest, TSignatures>> {
     const requests = this.handler.getRequirementRequests
       ? await this.handler.getRequirementRequests(options?.requestOptions)
       : [];
-    const requestSteps = requests.map((request, index) => {
-      const id = `request-${index}`;
-      if (isRequirementApproval(request)) {
-        return {
-          kind: "call",
-          id,
-          phase: "preparation",
-          tx: request,
-          action: request.action,
-          intent: {
-            type: "tokenApproval",
-            method: "tx",
-            token: request.to,
-            spender: request.action.args.spender,
-            amount: request.action.args.amount,
-          },
-          call: { to: request.to, value: request.value, data: request.data },
-        } satisfies TransactionPlanCallRequest;
-      }
-      if (isRequirementBlueAuthorization(request)) {
-        return {
-          kind: "call",
-          id,
-          phase: "preparation",
-          tx: request,
-          action: request.action,
-          intent: {
-            type: "operatorAuthorization",
-            method: "tx",
-            operator: request.action.args.authorized,
-            isAuthorized: request.action.args.isAuthorized,
-          },
-          call: { to: request.to, value: request.value, data: request.data },
-        } satisfies TransactionPlanCallRequest;
-      }
-      if (
-        typeof request === "object" &&
-        request !== null &&
-        "to" in request &&
-        "value" in request &&
-        "data" in request &&
-        "action" in request
-      ) {
-        const tx = request as CallRequirement;
-        const intent:
-          | TransactionPlanOperatorAuthorizationIntent
-          | TransactionPlanContractCallIntent<CallRequirement["action"]> =
-          tx.action.type === "midnightAuthorization"
-            ? {
-                type: "operatorAuthorization",
-                method: "tx",
-                operator: tx.action.args.authorized,
-                isAuthorized: tx.action.args.isAuthorized,
-                owner: tx.action.args.onBehalf,
-              }
-            : { type: "contractCall", actionType: tx.action.type };
-        return {
-          kind: "call",
-          id,
-          phase: "preparation",
-          tx,
-          action: tx.action,
-          intent,
-          call: { to: tx.to, value: tx.value, data: tx.data },
-        } satisfies TransactionPlanCallRequest;
-      }
+    const requestSteps = requests.map(
+      (request, index): TransactionPlanPreparedRequest<TRequest> => {
+        const id = `request-${index}`;
+        if (isRequirementApproval(request)) {
+          const tx = request as Extract<TRequest, CallRequirement>;
+          return {
+            kind: "call",
+            id,
+            phase: "preparation",
+            tx,
+            action: tx.action,
+            intent: {
+              type: "tokenApproval",
+              method: "tx",
+              token: request.to,
+              spender: request.action.args.spender,
+              amount: request.action.args.amount,
+            },
+            call: { to: request.to, value: request.value, data: request.data },
+          } satisfies TransactionPlanPreparedRequest<TRequest>;
+        }
+        if (isRequirementBlueAuthorization(request)) {
+          const tx = request as Extract<TRequest, CallRequirement>;
+          return {
+            kind: "call",
+            id,
+            phase: "preparation",
+            tx,
+            action: tx.action,
+            intent: {
+              type: "operatorAuthorization",
+              method: "tx",
+              operator: request.action.args.authorized,
+              isAuthorized: request.action.args.isAuthorized,
+            },
+            call: { to: request.to, value: request.value, data: request.data },
+          } satisfies TransactionPlanPreparedRequest<TRequest>;
+        }
+        if (
+          typeof request === "object" &&
+          request !== null &&
+          "to" in request &&
+          "value" in request &&
+          "data" in request &&
+          "action" in request
+        ) {
+          const tx = request as Extract<TRequest, CallRequirement>;
+          const intent:
+            | TransactionPlanOperatorAuthorizationIntent
+            | TransactionPlanContractCallIntent<CallRequirement["action"]> =
+            tx.action.type === "midnightAuthorization"
+              ? {
+                  type: "operatorAuthorization",
+                  method: "tx",
+                  operator: tx.action.args.authorized,
+                  isAuthorized: tx.action.args.isAuthorized,
+                  owner: tx.action.args.onBehalf,
+                }
+              : { type: "contractCall", actionType: tx.action.type };
+          return {
+            kind: "call",
+            id,
+            phase: "preparation",
+            tx,
+            action: tx.action,
+            intent,
+            call: { to: tx.to, value: tx.value, data: tx.data },
+          } satisfies TransactionPlanPreparedRequest<TRequest>;
+        }
 
-      const signatureRequest = request as SignatureRequirement;
-      let intent:
-        | TransactionPlanTokenApprovalIntent
-        | TransactionPlanOperatorAuthorizationIntent
-        | TransactionPlanMidnightOfferRootIntent;
-      switch (signatureRequest.action.type) {
-        case "permit":
-          intent = {
-            type: "tokenApproval",
-            method: "permit",
-            token: signatureRequest.action.args.token,
-            spender: signatureRequest.action.args.spender,
-            amount: signatureRequest.action.args.amount,
-            deadline: signatureRequest.action.args.deadline,
-            chainId: signatureRequest.action.args.chainId,
-          };
-          break;
-        case "permit2":
-          intent = {
-            type: "tokenApproval",
-            method: "permit2",
-            token: signatureRequest.action.args.token,
-            spender: signatureRequest.action.args.spender,
-            amount: signatureRequest.action.args.amount,
-            deadline: signatureRequest.action.args.deadline,
-            expiration: signatureRequest.action.args.expiration,
-            chainId: signatureRequest.action.args.chainId,
-          };
-          break;
-        case "authorization":
-          intent = {
-            type: "operatorAuthorization",
-            method: "signature",
-            operator: signatureRequest.action.args.authorized,
-            isAuthorized: signatureRequest.action.args.isAuthorized,
-            deadline: signatureRequest.action.args.deadline,
-            chainId: signatureRequest.action.args.chainId,
-          };
-          break;
-        case "midnightOfferRootSignature":
-          intent = {
-            type: "midnightOfferRootSignature",
-            root: signatureRequest.action.args.root,
-            ratifier: signatureRequest.action.args.ratifier,
-            offers: signatureRequest.action.args.offers,
-          };
-          break;
-      }
-      return {
-        kind: "signature",
-        id,
-        request: signatureRequest,
-        action: signatureRequest.action,
-        intent,
-        sign: (client, userAddress) =>
-          signatureRequest.sign(client, userAddress),
-      } satisfies TransactionPlanSignatureRequest;
-    });
+        const signatureRequest = request as Extract<
+          TRequest,
+          SignatureRequirement
+        >;
+        let intent:
+          | TransactionPlanTokenApprovalIntent
+          | TransactionPlanOperatorAuthorizationIntent
+          | TransactionPlanMidnightOfferRootIntent;
+        switch (signatureRequest.action.type) {
+          case "permit":
+            intent = {
+              type: "tokenApproval",
+              method: "permit",
+              token: signatureRequest.action.args.token,
+              spender: signatureRequest.action.args.spender,
+              amount: signatureRequest.action.args.amount,
+              deadline: signatureRequest.action.args.deadline,
+              chainId: signatureRequest.action.args.chainId,
+            };
+            break;
+          case "permit2":
+            intent = {
+              type: "tokenApproval",
+              method: "permit2",
+              token: signatureRequest.action.args.token,
+              spender: signatureRequest.action.args.spender,
+              amount: signatureRequest.action.args.amount,
+              deadline: signatureRequest.action.args.deadline,
+              expiration: signatureRequest.action.args.expiration,
+              chainId: signatureRequest.action.args.chainId,
+            };
+            break;
+          case "authorization":
+            intent = {
+              type: "operatorAuthorization",
+              method: "signature",
+              operator: signatureRequest.action.args.authorized,
+              isAuthorized: signatureRequest.action.args.isAuthorized,
+              deadline: signatureRequest.action.args.deadline,
+              chainId: signatureRequest.action.args.chainId,
+            };
+            break;
+          case "midnightOfferRootSignature":
+            intent = {
+              type: "midnightOfferRootSignature",
+              root: signatureRequest.action.args.root,
+              ratifier: signatureRequest.action.args.ratifier,
+              offers: signatureRequest.action.args.offers,
+            };
+            break;
+        }
+        return {
+          kind: "signature",
+          id,
+          request: signatureRequest,
+          action: signatureRequest.action,
+          intent,
+          sign: signatureRequest.sign,
+        } satisfies TransactionPlanPreparedRequest<TRequest>;
+      },
+    );
     const primaryTx =
       this.handler.previewPrimaryCall === false
         ? undefined
@@ -278,9 +308,13 @@ export class TransactionPlan<
               value: primaryTx.value,
               data: primaryTx.data,
             },
-          } satisfies TransactionPlanCallRequest<TPrimaryAction>);
+          } satisfies TransactionPlanCallRequest<
+            TPrimaryAction,
+            Readonly<Transaction<TPrimaryAction>>,
+            "primary"
+          >);
 
-    return new PreparedTransactionPlan({
+    return new PreparedTransactionPlan<TPrimaryAction, TRequest, TSignatures>({
       buildPrimaryCall: this.handler.buildPrimaryCall,
       requestSteps,
       primaryCall,
@@ -292,6 +326,13 @@ export class TransactionPlan<
    *
    * @param handler - SDK handler callbacks used by `prepare()` and `PreparedTransactionPlan.build(...)`.
    * @returns A TransactionPlan exposing `prepare()` as the public execution entry point.
+   * @example
+   * ```ts
+   * const plan = TransactionPlan.create({
+   *   getRequirementRequests: async () => requests,
+   *   buildPrimaryCall: () => transaction,
+   * });
+   * ```
    */
   static create<
     TCreatedPrimaryAction extends TransactionAction,
@@ -315,11 +356,20 @@ export class TransactionPlan<
   }
 }
 
-/** Prepared transaction plan with resolved requests and app-facing helpers. */
+/**
+ * Prepared transaction plan with resolved requests and app-facing helpers.
+ *
+ * @example
+ * ```ts
+ * const prepared = await plan.prepare();
+ * const approvals = prepared.findIntent("tokenApproval");
+ * ```
+ */
 export class PreparedTransactionPlan<
   TPrimaryAction extends TransactionAction = TransactionAction,
+  TRequest extends TransactionPlanRequest = TransactionPlanRequest,
   TSignatures = readonly RequirementSignature[],
-> implements PreparedTransactionPlanShape
+> implements PreparedTransactionPlanShape<TPrimaryAction, TRequest>
 {
   private readonly buildPrimaryCall: TransactionPlanBuildPrimaryCall<
     TPrimaryAction,
@@ -327,40 +377,61 @@ export class PreparedTransactionPlan<
   >;
 
   /** Ordered signable requests to present to the user. */
-  readonly signatureRequests: readonly TransactionPlanSignatureRequest[];
+  readonly signatureRequests: readonly TransactionPlanSignatureRequest<
+    Extract<TRequest, SignatureRequirement>
+  >[];
 
   /** Ordered viem-compatible calls. Includes the primary action call last when previewable. */
-  readonly callRequests: readonly TransactionPlanCallRequest[];
+  readonly callRequests: PreparedTransactionPlanShape<
+    TPrimaryAction,
+    TRequest
+  >["callRequests"];
 
   /** All signature requests and call requests in review order. */
-  readonly steps: readonly TransactionPlanStep[];
+  readonly steps: readonly TransactionPlanStep<TPrimaryAction, TRequest>[];
 
   /**
    * Creates a prepared plan from resolved request steps.
    *
    * @param params - Build callback, resolved requests, and optional preview primary call.
+   * @example
+   * ```ts
+   * const prepared = new PreparedTransactionPlan({
+   *   buildPrimaryCall: () => transaction,
+   *   requestSteps: [],
+   *   primaryCall,
+   * });
+   * ```
    */
   constructor(params: {
     readonly buildPrimaryCall: TransactionPlanBuildPrimaryCall<
       TPrimaryAction,
       TSignatures
     >;
-    readonly requestSteps: readonly (
-      | TransactionPlanSignatureRequest
-      | TransactionPlanCallRequest
-    )[];
-    readonly primaryCall?: TransactionPlanCallRequest<TPrimaryAction>;
+    readonly requestSteps: readonly TransactionPlanPreparedRequest<TRequest>[];
+    readonly primaryCall?: TransactionPlanCallRequest<
+      TPrimaryAction,
+      Readonly<Transaction<TPrimaryAction>>,
+      "primary"
+    >;
   }) {
     this.buildPrimaryCall = params.buildPrimaryCall;
     this.signatureRequests = Object.freeze(
       params.requestSteps.filter(
-        (request): request is TransactionPlanSignatureRequest =>
-          request.kind === "signature",
+        (
+          request,
+        ): request is TransactionPlanSignatureRequest<
+          Extract<TRequest, SignatureRequirement>
+        > => request.kind === "signature",
       ),
     );
     const requirementCallRequests = params.requestSteps.filter(
-      (request): request is TransactionPlanCallRequest =>
-        request.kind === "call",
+      (
+        request,
+      ): request is Extract<
+        TransactionPlanPreparedRequest<TRequest>,
+        { readonly kind: "call" }
+      > => request.kind === "call",
     );
     const primaryCall = params.primaryCall;
     this.callRequests = Object.freeze(
@@ -375,22 +446,54 @@ export class PreparedTransactionPlan<
     );
   }
 
-  /** Number of signature requests plus call requests. */
+  /**
+   * Counts the signature and call requests currently exposed by the plan.
+   *
+   * @returns The total number of exposed requests.
+   * @example
+   * ```ts
+   * console.log(prepared.requestCount);
+   * ```
+   */
   get requestCount(): number {
     return this.signatureRequests.length + this.callRequests.length;
   }
 
-  /** Whether the plan requires at least one signature prompt. */
+  /**
+   * Reports whether the plan requires at least one signature prompt.
+   *
+   * @returns `true` when `signatureRequests` is non-empty.
+   * @example
+   * ```ts
+   * if (prepared.hasSignatureRequests) showSignatureReview();
+   * ```
+   */
   get hasSignatureRequests(): boolean {
     return this.signatureRequests.length > 0;
   }
 
-  /** Whether the plan has at least one viem-compatible call request available now. */
+  /**
+   * Reports whether the plan currently exposes a viem-compatible call.
+   *
+   * @returns `true` when `callRequests` is non-empty.
+   * @example
+   * ```ts
+   * if (prepared.hasCallRequests) showCallReview();
+   * ```
+   */
   get hasCallRequests(): boolean {
     return this.callRequests.length > 0;
   }
 
-  /** High-level flow kind derived from the request mix. */
+  /**
+   * Classifies the plan from its current signature and call request mix.
+   *
+   * @returns The high-level transaction-plan flow kind.
+   * @example
+   * ```ts
+   * const reviewMode = prepared.flowKind;
+   * ```
+   */
   get flowKind(): TransactionPlanFlowKind {
     const signatureRequests = this.signatureRequests.length;
     const preparationCalls = this.callRequests.filter(
@@ -408,35 +511,62 @@ export class PreparedTransactionPlan<
     return "call_requests";
   }
 
-  /** Returns true when at least one request carries the requested intent type. */
+  /**
+   * Checks whether at least one step carries the requested semantic intent.
+   *
+   * @param type - Intent discriminator to search for.
+   * @returns `true` when a matching step exists.
+   * @example
+   * ```ts
+   * const needsApproval = prepared.hasIntent("tokenApproval");
+   * ```
+   */
   hasIntent<TType extends TransactionPlanIntent["type"]>(type: TType): boolean {
     return this.steps.some((request) => request.intent.type === type);
   }
 
-  /** Returns all requests carrying the requested semantic intent type. */
+  /**
+   * Returns every step carrying the requested semantic intent.
+   *
+   * @param type - Intent discriminator used to narrow the returned steps.
+   * @returns The matching typed steps in execution order.
+   * @example
+   * ```ts
+   * const approvals = prepared.findIntent("tokenApproval");
+   * ```
+   */
   findIntent<TType extends TransactionPlanIntent["type"]>(
     type: TType,
-  ): readonly TransactionPlanStepForIntent<TType>[] {
+  ): readonly TransactionPlanStepForIntent<TType, TPrimaryAction, TRequest>[] {
     return this.steps.filter(
-      (request): request is TransactionPlanStepForIntent<TType> =>
-        request.intent.type === type,
+      (
+        request,
+      ): request is TransactionPlanStepForIntent<
+        TType,
+        TPrimaryAction,
+        TRequest
+      > => request.intent.type === type,
     );
   }
 
-  /** Signs every signature request sequentially and returns the produced signatures. */
-  async signAll(
-    client: WalletClient,
-    userAddress: Address,
-  ): Promise<readonly RequirementSignature[]> {
-    const signatures: RequirementSignature[] = [];
-    for (const request of this.signatureRequests) {
-      signatures.push(await request.sign(client, userAddress));
-    }
-    return Object.freeze(signatures);
-  }
-
-  /** Builds an executable transaction plan from already-collected signatures. */
-  build(signatures?: TSignatures): ExecutableTransactionPlan {
+  /**
+   * Builds the executable calls from signatures collected by the integrator.
+   *
+   * @param signatures - Signatures produced from `signatureRequests`, in request order.
+   * @returns An executable plan that preserves the prerequisite and primary-action types.
+   * @throws {MissingTransactionPlanSignaturesError} when fewer signatures are supplied than requested.
+   * @example
+   * ```ts
+   * const signatures = [];
+   * for (const request of prepared.signatureRequests) {
+   *   signatures.push(await request.sign(walletClient, userAddress));
+   * }
+   * const executable = prepared.build(signatures);
+   * ```
+   */
+  build(
+    signatures?: TSignatures,
+  ): ExecutableTransactionPlan<TPrimaryAction, TRequest> {
     const expected = this.signatureRequests.length;
     const received =
       signatures == null
@@ -459,35 +589,73 @@ export class PreparedTransactionPlan<
       action: primaryTx.action,
       intent: { type: "primaryTransaction", actionType: primaryTx.action.type },
       call: { to: primaryTx.to, value: primaryTx.value, data: primaryTx.data },
-    } satisfies TransactionPlanCallRequest<TPrimaryAction>;
-    return new ExecutableTransactionPlan({
+    } satisfies TransactionPlanCallRequest<
+      TPrimaryAction,
+      Readonly<Transaction<TPrimaryAction>>,
+      "primary"
+    >;
+    return new ExecutableTransactionPlan<TPrimaryAction, TRequest>({
       signatureRequests: Object.freeze([...this.signatureRequests]),
       callRequests: Object.freeze([...requirementCallRequests, primaryCall]),
     });
   }
 }
 
-/** Executable transaction plan built from a PreparedTransactionPlan after signature collection. */
-export class ExecutableTransactionPlan
-  implements ExecutableTransactionPlanShape
+/**
+ * Executable transaction plan built after signature collection.
+ *
+ * @example
+ * ```ts
+ * const executable = prepared.build(signatures);
+ * for (const request of executable.callRequests) {
+ *   await walletClient.sendTransaction(request.call);
+ * }
+ * ```
+ */
+export class ExecutableTransactionPlan<
+  TPrimaryAction extends TransactionAction = TransactionAction,
+  TRequest extends TransactionPlanRequest = TransactionPlanRequest,
+> implements ExecutableTransactionPlanShape<TPrimaryAction, TRequest>
 {
   /** Ordered signable requests used to produce the signatures passed to `PreparedTransactionPlan.build(...)`. */
-  readonly signatureRequests: readonly TransactionPlanSignatureRequest[];
+  readonly signatureRequests: readonly TransactionPlanSignatureRequest<
+    Extract<TRequest, SignatureRequirement>
+  >[];
 
   /** Ordered viem-compatible calls to submit, with the primary action call last. */
-  readonly callRequests: readonly TransactionPlanCallRequest[];
+  readonly callRequests: ExecutableTransactionPlanShape<
+    TPrimaryAction,
+    TRequest
+  >["callRequests"];
 
   /**
    * Creates an executable plan from built transaction requests.
    *
    * @param params - Executable plan shape.
+   * @example
+   * ```ts
+   * const executable = new ExecutableTransactionPlan({
+   *   signatureRequests: [],
+   *   callRequests,
+   * });
+   * ```
    */
-  constructor(params: ExecutableTransactionPlanShape) {
+  constructor(
+    params: ExecutableTransactionPlanShape<TPrimaryAction, TRequest>,
+  ) {
     this.signatureRequests = Object.freeze([...params.signatureRequests]);
     this.callRequests = Object.freeze([...params.callRequests]);
   }
 
-  /** Ordered viem-compatible calls for transaction submission. */
+  /**
+   * Extracts the ordered viem-compatible calls for transaction submission.
+   *
+   * @returns The raw calls in execution order.
+   * @example
+   * ```ts
+   * const calls = executable.viemCalls;
+   * ```
+   */
   get viemCalls(): readonly TransactionPlanViemCall[] {
     return this.callRequests.map((request) => request.call);
   }
