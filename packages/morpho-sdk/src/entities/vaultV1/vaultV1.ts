@@ -214,6 +214,9 @@ export class MorphoVaultV1 implements VaultV1Actions {
     }
 
     const totalAssets = amount + (nativeAmount ?? 0n);
+    if (totalAssets === 0n) {
+      throw new NonPositiveInputError("totalAssets", totalAssets);
+    }
 
     const shares = vaultData.toShares(totalAssets);
     if (shares <= 0n) {

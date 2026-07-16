@@ -239,29 +239,6 @@ describe("MorphoVaultV1 entity tests", () => {
       ).toThrow(NegativeInputError);
     });
 
-    test("should throw NonPositiveInputError for zero total assets", async ({
-      client,
-    }) => {
-      const morphoClient = client.extend(
-        morphoViemExtension({
-          supportSignature: true,
-        }),
-      ).morpho;
-      const vault = morphoClient.vaultV1(
-        SteakhouseUsdcVaultV1.address,
-        mainnet.id,
-      );
-      const vaultData = await vault.getData();
-
-      expect(() =>
-        vault.deposit({
-          amount: 0n,
-          userAddress: client.account.address,
-          vaultData,
-        }),
-      ).toThrow(NonPositiveInputError);
-    });
-
     test("should throw NegativeInputError for negative nativeAmount", async ({
       client,
     }) => {

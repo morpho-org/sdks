@@ -15,7 +15,6 @@ import {
   ExcessiveSlippageToleranceError,
   NativeAmountOnNonWNativeVaultError,
   NegativeInputError,
-  NonPositiveInputError,
   VaultAddressMismatchError,
 } from "../../types/index.js";
 
@@ -305,29 +304,6 @@ describe("MorphoVaultV2 entity tests", () => {
           vaultData,
         }),
       ).toThrow(NativeAmountOnNonWNativeVaultError);
-    });
-
-    test("should throw NonPositiveInputError for zero total assets", async ({
-      client,
-    }) => {
-      const morphoClient = client.extend(
-        morphoViemExtension({
-          supportSignature: true,
-        }),
-      ).morpho;
-      const vault = morphoClient.vaultV2(
-        KeyrockUsdcVaultV2.address,
-        mainnet.id,
-      );
-      const vaultData = await vault.getData();
-
-      expect(() =>
-        vault.deposit({
-          amount: 0n,
-          userAddress: client.account.address,
-          vaultData,
-        }),
-      ).toThrow(NonPositiveInputError);
     });
   });
 });

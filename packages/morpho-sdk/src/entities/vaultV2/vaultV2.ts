@@ -243,6 +243,9 @@ export class MorphoVaultV2 implements VaultV2Actions {
     }
 
     const totalAssets = amount + (nativeAmount ?? 0n);
+    if (totalAssets === 0n) {
+      throw new NonPositiveInputError("totalAssets", totalAssets);
+    }
 
     // Accrue interest forward to bound the on-chain share price at execution.
     // Mirrors blue repay's 2h forward-accrual buffer.
