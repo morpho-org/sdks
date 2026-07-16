@@ -4,7 +4,14 @@ import { type Address, maxUint96 } from "viem";
 /** Maximum slippage tolerance: 10% */
 export const MAX_SLIPPAGE_TOLERANCE = MathLib.WAD / 10n;
 
-/** Default LLTV buffer: 0.5% below LLTV. Prevents instant liquidation on new positions. */
+/**
+ * Recommended UI buffer: 0.5% below LLTV. A safe default for a "max borrow"
+ * button so fresh positions don't sit at the liquidation edge. This is NOT
+ * enforced by the transaction builders — `validatePositionHealth` /
+ * `validatePositionHealthAfterWithdraw` only reject positions at or above the
+ * true LLTV — so integrators may let users borrow past this buffer (up to just
+ * under LLTV) behind an explicit risk acknowledgment.
+ */
 export const DEFAULT_LLTV_BUFFER = MathLib.WAD / 200n;
 
 /** Maximum absolute share price cap (100 RAY). Prevents absurd maxSharePrice values in repay. */

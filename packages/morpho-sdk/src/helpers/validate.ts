@@ -32,7 +32,7 @@ import {
   WithdrawMakesPositionUnhealthyError,
   WithdrawSharesExceedSupplyError,
 } from "../types/index.js";
-import { DEFAULT_LLTV_BUFFER, MAX_SLIPPAGE_TOLERANCE } from "./constant.js";
+import { MAX_SLIPPAGE_TOLERANCE } from "./constant.js";
 
 /** @internal */
 export const compareMarketIds = (idA: MarketId, idB: MarketId) => {
@@ -126,8 +126,8 @@ export const validateAccrualPosition = (params: {
 };
 
 /**
- * Validates that the resulting position stays within the safe LTV threshold
- * (LLTV minus buffer) after supplying additional collateral and borrowing.
+ * Validates that the resulting position stays strictly below the liquidation
+ * threshold (LLTV) after supplying additional collateral and borrowing.
  *
  * @param params - Validation parameters.
  * @param params.positionData - The current accrual position with market data.
@@ -158,13 +158,11 @@ export const validatePositionHealth = (params: {
     ORACLE_PRICE_SCALE,
   );
 
-  const effectiveLltv =
-    lltv > DEFAULT_LLTV_BUFFER ? lltv - DEFAULT_LLTV_BUFFER : 0n;
-
-  const maxSafeBorrowAfter = MathLib.wMulDown(
-    collateralValueAfter,
-    effectiveLltv,
-  );
+  // Reject only borrows that would leave the position at or above the true LLTV
+  // (immediately liquidatable). No 0.5% safety buffer is subtracted here anymore
+  // — that lives as a UI default (DEFAULT_LLTV_BUFFER); callers may let users
+  // borrow up to just under LLTV behind an explicit acknowledgment.
+  const maxSafeBorrowAfter = MathLib.wMulDown(collateralValueAfter, lltv);
 
   const totalBorrowAfter = positionData.borrowAssets + borrowAmount + 1n; // +1 to account for share-to-asset rounding (happens when the borrow amount doesn't divide evenly into shares)
 
@@ -214,8 +212,8 @@ export const validateNativeAsset = (chainId: number, asset: Address): void => {
 };
 
 /**
- * Validates that the resulting position stays within the safe LTV threshold
- * (LLTV minus buffer) after withdrawing collateral.
+ * Validates that the resulting position stays strictly below the liquidation
+ * threshold (LLTV) after withdrawing collateral.
  *
  * @param params - Validation parameters.
  * @param params.positionData - The current accrual position with market data.
@@ -260,12 +258,9 @@ export const validatePositionHealthAfterWithdraw = (params: {
     ORACLE_PRICE_SCALE,
   );
 
-  const effectiveLltv =
-    lltv > DEFAULT_LLTV_BUFFER ? lltv - DEFAULT_LLTV_BUFFER : 0n;
-  const maxSafeBorrowAfter = MathLib.wMulDown(
-    collateralValueAfter,
-    effectiveLltv,
-  );
+  // Only reject when the remaining debt would sit at or above the true LLTV. The
+  // 0.5% buffer is a UI default only (DEFAULT_LLTV_BUFFER), not enforced here.
+  const maxSafeBorrowAfter = MathLib.wMulDown(collateralValueAfter, lltv);
 
   if (positionData.borrowAssets > maxSafeBorrowAfter) {
     throw new WithdrawMakesPositionUnhealthyError({

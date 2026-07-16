@@ -170,8 +170,7 @@ describe("validatePositionHealth", () => {
       borrowShares: 0n,
       market: makeMarket({ price: ORACLE_PRICE_SCALE }),
     });
-    // With 1:1 price and 86% LLTV (- 0.5% buffer ≈ 85.5%),
-    // borrowing 80% of collateral should be safe.
+    // With 1:1 price and 86% LLTV, borrowing ~8% of collateral is well within range.
     const borrowAmount = (8n * 10n ** 17n) / 10n; // 0.08 in 18-dec ≈ 8%
     expect(() =>
       validatePositionHealth({
@@ -205,7 +204,7 @@ describe("validatePositionHealth", () => {
       borrowShares: 0n,
       market: makeMarket({ price: ORACLE_PRICE_SCALE }),
     });
-    // With 1:1 price, borrowing 90% of collateral exceeds the 85.5% effective LLTV.
+    // With 1:1 price, borrowing 90% of collateral exceeds the 86% LLTV.
     const borrowAmount = (9n * 10n ** 18n) / 10n;
     expect(() =>
       validatePositionHealth({
@@ -238,20 +237,45 @@ describe("validatePositionHealth", () => {
     ).not.toThrow();
   });
 
-  test("should use zero effective LLTV when LLTV is below the buffer", () => {
+  test("should allow borrowing up to just under LLTV (no 0.5% safety buffer)", () => {
+    const collateral = 10n ** 18n;
     const pos = makePosition({
-      collateral: 10n ** 18n,
+      collateral,
       borrowShares: 0n,
       market: makeMarket({ price: ORACLE_PRICE_SCALE }),
     });
-
+    // 1:1 price ⇒ collateral value == collateral, so the on-chain liquidation
+    // boundary is wMulDown(collateral, lltv). Borrowing 2 wei below it lands well
+    // inside the old 0.5% buffer band (which used to throw); it must now pass.
+    const maxBorrow = MathLib.wMulDown(collateral, lltv);
     expect(() =>
       validatePositionHealth({
         positionData: pos,
         additionalCollateral: 0n,
-        borrowAmount: 1n,
+        borrowAmount: maxBorrow - 2n,
         marketId: marketParams.id,
-        lltv: 1n,
+        lltv,
+      }),
+    ).not.toThrow();
+  });
+
+  test("should still throw when the borrow would reach LLTV (strict +1n guard)", () => {
+    const collateral = 10n ** 18n;
+    const pos = makePosition({
+      collateral,
+      borrowShares: 0n,
+      market: makeMarket({ price: ORACLE_PRICE_SCALE }),
+    });
+    // Borrowing exactly the boundary trips the +1n rounding guard, so a position
+    // can never be built at or above LLTV.
+    const maxBorrow = MathLib.wMulDown(collateral, lltv);
+    expect(() =>
+      validatePositionHealth({
+        positionData: pos,
+        additionalCollateral: 0n,
+        borrowAmount: maxBorrow,
+        marketId: marketParams.id,
+        lltv,
       }),
     ).toThrow(BorrowExceedsSafeLtvError);
   });
@@ -445,22 +469,24 @@ describe("validatePositionHealthAfterWithdraw", () => {
     ).toThrow(WithdrawExceedsCollateralError);
   });
 
-  test("should use zero effective LLTV when LLTV is below the buffer", () => {
+  test("should allow a withdrawal that leaves the position just under LLTV (no buffer)", () => {
+    const collateral = 10n ** 18n;
     const market = makeMarket({ price: ORACLE_PRICE_SCALE });
-    const pos = makePosition({
-      collateral: 10n ** 18n,
-      borrowShares: 1n,
-      market,
-    });
-
+    const pos = makePosition({ collateral, borrowShares: 10n ** 17n, market });
+    const debt = pos.borrowAssets;
+    // Keep just enough collateral to stay strictly healthy at the true LLTV
+    // (1 wei above the exact boundary). This sits inside the old 0.5% buffer band,
+    // which used to throw, and must now pass.
+    const minCollateralAfter = MathLib.wDivUp(debt, lltv) + 1n;
+    const withdrawAmount = collateral - minCollateralAfter;
     expect(() =>
       validatePositionHealthAfterWithdraw({
         positionData: pos,
-        withdrawAmount: 0n,
-        lltv: 1n,
+        withdrawAmount,
+        lltv,
         marketId: marketParams.id,
       }),
-    ).toThrow(WithdrawMakesPositionUnhealthyError);
+    ).not.toThrow();
   });
 });
 
