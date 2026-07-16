@@ -42,6 +42,7 @@ import { validateOfferSides } from "../../helpers/validateOfferSides.js";
 import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js";
 import type { MorphoClientType } from "../../types/client.js";
 import {
+  AccrualPositionUserMismatchError,
   type ActionRequirement,
   InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
@@ -69,6 +70,7 @@ import {
   NonPositiveMidnightAmountError,
   selectRequirementSignatures,
   UnknownMidnightRatifierError,
+  UnpreparedMidnightOfferRootSignatureError,
 } from "../../types/index.js";
 import type {
   GetOffersDataParams,
@@ -721,6 +723,7 @@ export class MorphoMidnight {
       }
     });
     const midnight = getChainAddress(this.chainId, "midnight");
+    const signedPayloads = new Map<string, Hex>();
 
     return {
       groups: data.groups,
@@ -741,6 +744,7 @@ export class MorphoMidnight {
         requirements.push(
           ...(await this.getRatifierRequirements({
             offersData: data,
+            signedPayloads,
           })),
         );
 
@@ -750,6 +754,7 @@ export class MorphoMidnight {
         this.buildSubmitOffersTx({
           offersData: data,
           signatures,
+          signedPayloads,
         }),
     };
   }
@@ -782,6 +787,7 @@ export class MorphoMidnight {
       validation: params.validation,
     });
     validateOfferSides(data.tree.offers, false);
+    const signedPayloads = new Map<string, Hex>();
 
     return {
       groups: data.groups,
@@ -790,12 +796,14 @@ export class MorphoMidnight {
       getRequirements: async () => {
         return await this.getRatifierRequirements({
           offersData: data,
+          signedPayloads,
         });
       },
       buildTx: (signatures?: MidnightActionSignatures) =>
         this.buildSubmitOffersTx({
           offersData: data,
           signatures,
+          signedPayloads,
         }),
     };
   }
@@ -865,6 +873,7 @@ export class MorphoMidnight {
       }
     }
     const midnight = getChainAddress(this.chainId, "midnight");
+    const signedPayloads = new Map<string, Hex>();
 
     return {
       groups: data.groups,
@@ -891,6 +900,7 @@ export class MorphoMidnight {
           }),
           ...(await this.getRatifierRequirements({
             offersData: data,
+            signedPayloads,
           })),
         ];
 
@@ -900,6 +910,7 @@ export class MorphoMidnight {
         this.buildSubmitOffersTx({
           offersData: data,
           signatures,
+          signedPayloads,
         }),
     };
   }
@@ -916,6 +927,7 @@ export class MorphoMidnight {
    * @throws {ChainIdMismatchError} when the position market targets another chain.
    * @throws {MidnightMarketAddressMismatchError} when the position market targets another Midnight deployment.
    * @throws {MissingAccrualPositionError} when no position snapshot is supplied.
+   * @throws {AccrualPositionUserMismatchError} when the position snapshot belongs to another account.
    * @throws {NoMidnightCreditToRedeemError} when the selected unit amount is non-positive.
    * @throws {MidnightRedeemExceedsCreditError} when the selected amount exceeds position credit.
    * @throws {InsufficientMidnightWithdrawableLiquidityError} when market liquidity cannot cover the redemption.
@@ -932,6 +944,15 @@ export class MorphoMidnight {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     if (!params.positionData) {
       throw new MissingAccrualPositionError();
+    }
+    if (
+      params.positionData.user == null ||
+      !isAddressEqual(params.positionData.user, params.accountAddress)
+    ) {
+      throw new AccrualPositionUserMismatchError(
+        params.positionData.user ?? "unbound",
+        params.accountAddress,
+      );
     }
 
     const market = params.positionData.market;
@@ -1107,6 +1128,7 @@ export class MorphoMidnight {
 
   private async getRatifierRequirements(params: {
     readonly offersData: OffersData;
+    readonly signedPayloads: Map<string, Hex>;
   }): Promise<readonly ActionRequirement[]> {
     const data = params.offersData;
     const requirements: ActionRequirement[] = [];
@@ -1157,6 +1179,7 @@ export class MorphoMidnight {
             signature,
           });
           const payload = await Payload.encode(items);
+          params.signedPayloads.set(signature.toLowerCase(), payload);
 
           return deepFreeze({
             args: {
@@ -1186,6 +1209,7 @@ export class MorphoMidnight {
   private buildSubmitOffersTx(params: {
     readonly offersData: OffersData;
     readonly signatures?: MidnightActionSignatures;
+    readonly signedPayloads: ReadonlyMap<string, Hex>;
   }) {
     const data = params.offersData;
     const collectedSignatures =
@@ -1237,7 +1261,13 @@ export class MorphoMidnight {
           actualOffers: signature.action.args.offers,
         });
       }
-      payload = signature.args.payload;
+      const signedPayload = params.signedPayloads.get(
+        signature.args.signature.toLowerCase(),
+      );
+      if (signedPayload == null) {
+        throw new UnpreparedMidnightOfferRootSignatureError();
+      }
+      payload = signedPayload;
     } else {
       selectRequirementSignatures(collectedSignatures, {});
       payload = data.setterPayload;

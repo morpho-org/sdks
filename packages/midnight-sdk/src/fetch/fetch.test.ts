@@ -180,6 +180,8 @@ describe("fetchPosition", () => {
     });
 
     expect(position.credit).toBe(1n);
+    expect(position.user).toBe(addresses.taker);
+    expect(position.marketId).toBe(marketId);
     expect(position.debt).toBe(5n);
     expect(position.collateral).toHaveLength(128);
     expect(position.collateral[0]).toBe(7n);
@@ -301,6 +303,10 @@ describe("fetchAccrualPosition", () => {
     });
     const accrued = position.accrueInterest(1_500n);
 
+    expect(position.user).toBe(addresses.taker);
+    expect(position.marketId).toBe(marketId);
+    expect(accrued.user).toBe(addresses.taker);
+    expect(accrued.marketId).toBe(marketId);
     expect(accrued.credit).toBe(950n);
     expect(accrued.pendingFee).toBe(50n);
     expect(accrued.market.continuousFeeCredit).toBe(50n);

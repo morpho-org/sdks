@@ -1,7 +1,7 @@
 import { _try, type BigIntish, MathLib } from "@morpho-org/morpho-ts";
-import type { Address } from "viem";
+import type { Address, Hash } from "viem";
 import { UnknownCollateralIndexError } from "../errors.js";
-import { type IMarket, Market } from "./Market.js";
+import { type IMarket, Market } from "../market/Market.js";
 import { PositionUtils } from "./PositionUtils.js";
 
 /**
@@ -12,6 +12,8 @@ import { PositionUtils } from "./PositionUtils.js";
  * import type { IPosition } from "@morpho-org/midnight-sdk";
  *
  * const position: IPosition = {
+ *   user: "0x0000000000000000000000000000000000009000",
+ *   marketId: "0x0000000000000000000000000000000000000000000000000000000000000001",
  *   credit: 0n,
  *   pendingFee: 0n,
  *   lastLossFactor: 0n,
@@ -23,6 +25,10 @@ import { PositionUtils } from "./PositionUtils.js";
  * ```
  */
 export interface IPosition {
+  /** User holding this position. */
+  readonly user: Address;
+  /** Id of the market on which this position is held. */
+  readonly marketId: Hash;
   /** User credit. */
   readonly credit: BigIntish;
   /** Pending continuous fee. */
@@ -47,6 +53,8 @@ export interface IPosition {
  * import { Position } from "@morpho-org/midnight-sdk";
  *
  * const position = new Position({
+ *   user: "0x0000000000000000000000000000000000009000",
+ *   marketId: "0x0000000000000000000000000000000000000000000000000000000000000001",
  *   credit: 0n,
  *   pendingFee: 0n,
  *   lastLossFactor: 0n,
@@ -58,7 +66,13 @@ export interface IPosition {
  * console.log(position.debt);
  * ```
  */
-export class Position {
+export class Position implements IPosition {
+  /** User holding this position. */
+  public readonly user: Address;
+
+  /** Id of the market on which this position is held. */
+  public readonly marketId: Hash;
+
   /** User credit. */
   public readonly credit: bigint;
 
@@ -81,6 +95,8 @@ export class Position {
   public readonly collateral: readonly bigint[];
 
   public constructor(position: IPosition) {
+    this.user = position.user;
+    this.marketId = position.marketId;
     this.credit = BigInt(position.credit);
     this.pendingFee = BigInt(position.pendingFee);
     this.lastLossFactor = BigInt(position.lastLossFactor);
@@ -99,6 +115,8 @@ export class Position {
    * import { Position } from "@morpho-org/midnight-sdk";
    *
    * const position = new Position({
+   *   user: "0x0000000000000000000000000000000000009000",
+   *   marketId: "0x0000000000000000000000000000000000000000000000000000000000000001",
    *   credit: 1_000n,
    *   pendingFee: 100n,
    *   lastLossFactor: 0n,
@@ -114,6 +132,9 @@ export class Position {
     return MathLib.zeroFloorSub(this.credit, this.pendingFee);
   }
 }
+
+/** Plain input shape for a Midnight position paired with hydrated market state. */
+export interface IAccrualPosition extends Omit<IPosition, "marketId"> {}
 
 /**
  * Midnight position paired with its hydrated market.
@@ -139,6 +160,7 @@ export class Position {
  *
  * const position = new AccrualPosition(
  *   {
+ *     user: "0x0000000000000000000000000000000000009000",
  *     credit: 1_000n,
  *     pendingFee: 100n,
  *     lastLossFactor: 0n,
@@ -177,13 +199,18 @@ export class Position {
  * console.log(position.market.id);
  * ```
  */
-export class AccrualPosition extends Position {
-  /** Hydrated market for this position. */
-  public readonly market: Market;
+export class AccrualPosition extends Position implements IAccrualPosition {
+  protected readonly _market: Market;
 
-  public constructor(position: IPosition, market: IMarket | Market) {
-    super(position);
-    this.market = Market.from(market);
+  public constructor(position: IAccrualPosition, market: IMarket | Market) {
+    const _market = Market.from(market);
+    super({ ...position, marketId: _market.id });
+    this._market = _market;
+  }
+
+  /** Hydrated market for this position. */
+  public get market() {
+    return this._market;
   }
 
   /**
@@ -200,6 +227,7 @@ export class AccrualPosition extends Position {
    *
    * const position = new AccrualPosition(
    *   {
+   *     user: "0x0000000000000000000000000000000000009000",
    *     credit: 1_000n,
    *     pendingFee: 100n,
    *     lastLossFactor: 0n,
@@ -271,6 +299,7 @@ export class AccrualPosition extends Position {
    *
    * const position = new AccrualPosition(
    *   {
+   *     user: "0x0000000000000000000000000000000000009000",
    *     credit: 1_000n,
    *     pendingFee: 100n,
    *     lastLossFactor: 0n,
@@ -350,6 +379,7 @@ export class AccrualPosition extends Position {
    * const collateralToken = "0x0000000000000000000000000000000000007000";
    * const position = new AccrualPosition(
    *   {
+   *     user: "0x0000000000000000000000000000000000009000",
    *     credit: 1_000n,
    *     pendingFee: 100n,
    *     lastLossFactor: 0n,
@@ -421,6 +451,7 @@ export class AccrualPosition extends Position {
    *
    * const position = new AccrualPosition(
    *   {
+   *     user: "0x0000000000000000000000000000000000009000",
    *     credit: 1_000n,
    *     pendingFee: 100n,
    *     lastLossFactor: 0n,
@@ -493,6 +524,7 @@ export class AccrualPosition extends Position {
    *
    * const position = new AccrualPosition(
    *   {
+   *     user: "0x0000000000000000000000000000000000009000",
    *     credit: 1_000n,
    *     pendingFee: 100n,
    *     lastLossFactor: 0n,

@@ -7,7 +7,7 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
-import { InvalidSignatureError } from "../types/index.js";
+import { ChainIdMismatchError, InvalidSignatureError } from "../types/index.js";
 import { signAndVerifyTypedData } from "./signAndVerifyTypedData.js";
 
 const account = privateKeyToAccount(
@@ -73,5 +73,21 @@ describe("signAndVerifyTypedData", () => {
         typedData,
       }),
     ).rejects.toBeInstanceOf(InvalidSignatureError);
+  });
+
+  test("error: ChainIdMismatchError", async () => {
+    const client = createWalletClient({
+      account,
+      chain: { ...mainnet, id: mainnet.id + 1 },
+      transport: custom({ request: async () => "0x" }),
+    });
+
+    await expect(
+      signAndVerifyTypedData({
+        client,
+        userAddress: account.address,
+        typedData,
+      }),
+    ).rejects.toBeInstanceOf(ChainIdMismatchError);
   });
 });

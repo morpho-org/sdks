@@ -882,6 +882,15 @@ export class MidnightOfferRootOfferCountMismatchError extends Error {
   }
 }
 
+/** Thrown when a Midnight offer-root signature was not prepared by this maker flow. */
+export class UnpreparedMidnightOfferRootSignatureError extends Error {
+  constructor() {
+    super(
+      "Midnight offer root signature was not prepared for this offer tree. Sign this flow's offer-root requirement before building the submit transaction.",
+    );
+  }
+}
+
 /** Thrown when a Midnight redeem flow finds no credit units for the user. */
 export class NoMidnightCreditToRedeemError extends Error {
   constructor(market: string) {

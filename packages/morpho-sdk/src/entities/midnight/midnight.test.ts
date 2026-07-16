@@ -41,8 +41,10 @@ import type {
   MidnightOfferRootSignature,
   Transaction,
 } from "../../types/action.js";
+import { isMidnightOfferRootSignature } from "../../types/action.js";
 import type { MorphoClientType } from "../../types/client.js";
 import {
+  AccrualPositionUserMismatchError,
   AmbiguousRequirementSignaturesError,
   ChainIdMismatchError,
   EmptyMidnightTakeableOffersError,
@@ -67,13 +69,19 @@ import {
   NonPositiveMidnightAmountError,
   UnexpectedRequirementSignatureError,
   UnknownMidnightRatifierError,
+  UnpreparedMidnightOfferRootSignatureError,
 } from "../../types/error.js";
 import { MorphoMidnight } from "./midnight.js";
-import type { MidnightActionSignatures, OffersData } from "./types.js";
+import type {
+  MakeOffersOutput,
+  MidnightActionSignatures,
+  OffersData,
+} from "./types.js";
 
 type BuildSubmitOffersTx = (params: {
   readonly offersData: OffersData;
   readonly signatures?: MidnightActionSignatures;
+  readonly signedPayloads?: ReadonlyMap<string, Hex>;
   readonly metadata?: { readonly origin: string };
 }) => Readonly<Transaction<MempoolSubmitOffersAction>>;
 
@@ -87,9 +95,17 @@ const buildSubmitOffersTx: BuildSubmitOffersTx = (params) =>
         },
       },
     }) as {
-      buildSubmitOffersTx: BuildSubmitOffersTx;
+      buildSubmitOffersTx: (params: {
+        readonly offersData: OffersData;
+        readonly signatures?: MidnightActionSignatures;
+        readonly signedPayloads: ReadonlyMap<string, Hex>;
+      }) => Readonly<Transaction<MempoolSubmitOffersAction>>;
     }
-  ).buildSubmitOffersTx(params);
+  ).buildSubmitOffersTx({
+    ...params,
+    signedPayloads:
+      params.signedPayloads ?? new Map([["0x1234", "0x1234" as Hex]]),
+  });
 
 const offersData = (
   buy = true,
@@ -230,6 +246,38 @@ const midnightTestChain = {
   rpcUrls: { default: { http: ["http://localhost"] } },
 } as const satisfies Chain;
 
+const offerSignerAccount = privateKeyToAccount(
+  "0x0000000000000000000000000000000000000000000000000000000000000001",
+);
+const offerSignerWallet = createWalletClient({
+  account: offerSignerAccount,
+  chain: midnightTestChain,
+  transport: custom({
+    request: async ({ method }) => {
+      throw new Error(`Unexpected RPC request "${method}".`);
+    },
+  }),
+});
+
+const signOfferRootRequirement = async (
+  requirements: Awaited<ReturnType<MakeOffersOutput["getRequirements"]>>,
+): Promise<MidnightOfferRootSignature> => {
+  const requirement = requirements.find(
+    ({ action }) => action.type === "midnightOfferRootSignature",
+  );
+  if (requirement == null || !("sign" in requirement)) {
+    throw new Error("Expected midnightOfferRootSignature requirement");
+  }
+  const signature = await requirement.sign(
+    offerSignerWallet,
+    offerSignerAccount.address,
+  );
+  if (!isMidnightOfferRootSignature(signature)) {
+    throw new Error("Expected midnightOfferRootSignature result");
+  }
+  return signature;
+};
+
 const apiValidMaturity = 1_767_279_600n;
 const offerValidation = {
   apiUrl: "https://api.example/base/",
@@ -254,10 +302,15 @@ const marketData = (overrides: { readonly withdrawable?: bigint } = {}) =>
 
 const positionData = (
   market: Market,
-  overrides: { readonly credit?: bigint; readonly pendingFee?: bigint } = {},
+  overrides: {
+    readonly credit?: bigint;
+    readonly pendingFee?: bigint;
+    readonly user?: Address;
+  } = {},
 ) =>
   new AccrualPosition(
     {
+      user: overrides.user ?? midnightAddresses.taker,
       credit: overrides.credit ?? 100n,
       pendingFee: overrides.pendingFee ?? 0n,
       lastLossFactor: 0n,
@@ -836,6 +889,37 @@ describe("MorphoMidnight", () => {
       ).toThrow(MidnightRedeemExceedsCreditError);
     });
 
+    test("error: AccrualPositionUserMismatchError", () => {
+      const market = marketData();
+
+      expect(() =>
+        midnight().redeem({
+          positionData: positionData(market, {
+            user: midnightAddresses.maker,
+          }),
+          accountAddress: midnightAddresses.taker,
+        }),
+      ).toThrow(AccrualPositionUserMismatchError);
+    });
+
+    test("error: ownerless position snapshots are rejected", () => {
+      const market = marketData();
+      const ownerlessPosition = new AccrualPosition(
+        {
+          ...positionData(market),
+          user: undefined as unknown as Address,
+        },
+        market,
+      );
+
+      expect(() =>
+        midnight().redeem({
+          positionData: ownerlessPosition,
+          accountAddress: midnightAddresses.taker,
+        }),
+      ).toThrow(AccrualPositionUserMismatchError);
+    });
+
     test("behavior: explicit receiver and empty requirements", async () => {
       const market = marketData();
       const output = midnight().redeem({
@@ -1211,15 +1295,24 @@ describe("MorphoMidnight", () => {
 
   describe("makeLend", () => {
     test("default", async () => {
-      const data = offersData(true);
-      const output = await midnight().makeLend({
+      const handle = createMockClient(midnightTestChain);
+      mockAllowance({
+        handle,
+        token: midnightAddresses.loanToken,
+        result: maxUint256,
+      });
+      mockMidnightAuthorization(handle, true);
+      const data = offersData(true, offerSignerAccount.address);
+      const output = await midnightWithHandle(handle).makeLend({
         accountAddress: data.accountAddress,
         offers: data.tree,
         validation: offerValidation,
         loanToken: midnightAddresses.loanToken,
         loanAssets: 1_000n,
       });
-      const tx = output.buildTx(offerRootSignature(data));
+      const requirements = await output.getRequirements();
+      const signature = await signOfferRootRequirement(requirements);
+      const tx = output.buildTx(signature);
 
       expect(output.groups).toEqual(data.groups);
       expect(output.root).toBe(data.tree.root);
@@ -1227,7 +1320,7 @@ describe("MorphoMidnight", () => {
       expect(tx.action.args).toMatchObject({
         groups: data.groups,
         root: data.tree.root,
-        maker: midnightAddresses.maker,
+        maker: offerSignerAccount.address,
         ratifier: midnightAddresses.ecrecoverRatifier,
         ratifierType: "ecrecover",
         offers: data.tree.offers.length,
@@ -1314,6 +1407,19 @@ describe("MorphoMidnight", () => {
       if (requirement == null || !("sign" in requirement)) {
         throw new Error("Expected midnightOfferRootSignature requirement");
       }
+
+      const wrongChainWallet = createWalletClient({
+        account,
+        chain: { ...midnightTestChain, id: midnightChainId + 1 },
+        transport: custom({
+          request: async ({ method }) => {
+            throw new Error(`Unexpected RPC request "${method}".`);
+          },
+        }),
+      });
+      await expect(
+        requirement.sign(wrongChainWallet, account.address),
+      ).rejects.toBeInstanceOf(ChainIdMismatchError);
 
       const signature = await requirement.sign(walletClient, account.address);
       if (signature.action.type !== "midnightOfferRootSignature") {
@@ -1480,7 +1586,7 @@ describe("MorphoMidnight", () => {
       });
       mockMidnightAuthorization(handle, true);
 
-      const data = offersData(false);
+      const data = offersData(false, offerSignerAccount.address);
       const output = await new MorphoMidnight(
         {
           viemClient: handle.client,
@@ -1517,7 +1623,8 @@ describe("MorphoMidnight", () => {
           assets: 1_000n,
         },
       });
-      const tx = output.buildTx(offerRootSignature(data));
+      const signature = await signOfferRootRequirement(requirements);
+      const tx = output.buildTx(signature);
 
       expect(tx.action.args.maker).toBe(data.accountAddress);
     });
@@ -1604,16 +1711,20 @@ describe("MorphoMidnight", () => {
 
   describe("makeBorrow", () => {
     test("default", async () => {
-      const data = offersData(false);
-      const output = await midnight().makeBorrow({
+      const handle = createMockClient(midnightTestChain);
+      mockMidnightAuthorization(handle, true);
+      const data = offersData(false, offerSignerAccount.address);
+      const output = await midnightWithHandle(handle).makeBorrow({
         accountAddress: data.accountAddress,
         offers: data.tree,
         validation: offerValidation,
       });
-      const tx = output.buildTx(offerRootSignature(data));
+      const requirements = await output.getRequirements();
+      const signature = await signOfferRootRequirement(requirements);
+      const tx = output.buildTx(signature);
 
       expect(output.groups).toEqual(data.groups);
-      expect(tx.action.args.maker).toBe(midnightAddresses.maker);
+      expect(tx.action.args.maker).toBe(offerSignerAccount.address);
       expect(tx.action.args.offers).toBe(data.tree.offers.length);
     });
 
@@ -1824,6 +1935,20 @@ describe("MorphoMidnight", () => {
       expect(tx.data.includes("a1b2c3d4")).toBe(true);
     });
 
+    test("behavior: ignores untrusted payload bytes in the signature wrapper", () => {
+      const data = offersData();
+      const signature = offerRootSignature(data);
+      const tx = buildSubmitOffersTx({
+        offersData: data,
+        signatures: {
+          ...signature,
+          args: { ...signature.args, payload: "0xdeadbeef" },
+        },
+      });
+
+      expect(tx.data).toBe("0x1234");
+    });
+
     test("behavior: setter ratifier uses prepared payload without signatures", () => {
       const data = setterOffersData();
       const tx = buildSubmitOffersTx({
@@ -1916,6 +2041,18 @@ describe("MorphoMidnight", () => {
           }),
         }),
       ).toThrow(MidnightOfferRootOfferCountMismatchError);
+    });
+
+    test("error: UnpreparedMidnightOfferRootSignatureError", () => {
+      const data = offersData();
+
+      expect(() =>
+        buildSubmitOffersTx({
+          offersData: data,
+          signatures: offerRootSignature(data),
+          signedPayloads: new Map(),
+        }),
+      ).toThrow(UnpreparedMidnightOfferRootSignatureError);
     });
 
     test("error: AmbiguousRequirementSignaturesError", () => {

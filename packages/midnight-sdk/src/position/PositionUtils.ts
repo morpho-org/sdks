@@ -10,7 +10,7 @@ import type {
   IMarket,
   IMarketParams,
   SettlementFeeCbps,
-} from "./Market.js";
+} from "../market/Market.js";
 import type { IPosition } from "./Position.js";
 
 /**
@@ -22,6 +22,8 @@ import type { IPosition } from "./Position.js";
  *
  * const accrued = PositionUtils.accrueInterest({
  *   position: {
+ *     user: "0x0000000000000000000000000000000000009000",
+ *     marketId: "0x0000000000000000000000000000000000000000000000000000000000000001",
  *     credit: 1_000n,
  *     pendingFee: 100n,
  *     lastLossFactor: 0n,
@@ -105,6 +107,8 @@ export namespace PositionUtils {
    *
    * const { position, market } = PositionUtils.accrueInterest({
    *   position: {
+   *     user: "0x0000000000000000000000000000000000009000",
+   *     marketId: "0x0000000000000000000000000000000000000000000000000000000000000001",
    *     credit: 1_000n,
    *     pendingFee: 100n,
    *     lastLossFactor: 0n,
@@ -249,6 +253,8 @@ export namespace PositionUtils {
 
     return {
       position: {
+        user: params.position.user,
+        marketId: params.position.marketId,
         credit: postSlashCredit - accruedFee,
         pendingFee: postSlashPendingFee - accruedFee,
         lastLossFactor: marketLossFactor,

@@ -8,7 +8,12 @@ import {
   InvalidPositionAccrualTimestampError,
   InvalidPositionLossFactorError,
 } from "../errors.js";
-import { AccrualPosition, type IPosition } from "./Position.js";
+import {
+  AccrualPosition,
+  type IAccrualPosition,
+  type IPosition,
+  Position,
+} from "./Position.js";
 import { PositionUtils } from "./PositionUtils.js";
 
 const { baseMarketInput, baseMarketParamsInput, marketId } = createFixtures({
@@ -17,6 +22,8 @@ const { baseMarketInput, baseMarketParamsInput, marketId } = createFixtures({
 });
 
 const basePositionInput = (overrides: Partial<IPosition> = {}): IPosition => ({
+  user: overrides.user ?? addresses.taker,
+  marketId: overrides.marketId ?? marketId,
   credit: overrides.credit ?? 1_000n,
   pendingFee: overrides.pendingFee ?? 100n,
   lastLossFactor: overrides.lastLossFactor ?? 0n,
@@ -28,20 +35,39 @@ const basePositionInput = (overrides: Partial<IPosition> = {}): IPosition => ({
     Array.from({ length: 128 }, (_, index) => (index === 0 ? 123n : 0n)),
 });
 
+const baseAccrualPositionInput = (
+  overrides: Partial<IAccrualPosition> = {},
+): IAccrualPosition => {
+  const { marketId: _, ...position } = basePositionInput(overrides);
+  return position;
+};
+
 describe("Position", () => {
   test("default", () => {
+    const position = new Position(basePositionInput());
+
+    expect(position.faceValue).toBe(900n);
+    expect(position.user).toBe(addresses.taker);
+    expect(position.marketId).toBe(marketId);
+  });
+});
+
+describe("AccrualPosition", () => {
+  test("default", () => {
     const position = new AccrualPosition(
-      basePositionInput(),
+      baseAccrualPositionInput(),
       baseMarketInput(),
     );
 
+    expect(position.user).toBe(addresses.taker);
+    expect(position.marketId).toBe(marketId);
+    expect(position.market.id).toBe(marketId);
     expect(position.faceValue).toBe(900n);
     expect(position.withdrawable).toBe(500n);
     expect(
       position.getCollateralBalanceByToken(addresses.collateralToken),
     ).toBe(123n);
     expect(position.getCollateralBalanceByIndex(1)).toBeUndefined();
-    expect(position.market.id).toBe(marketId);
   });
 });
 
@@ -67,7 +93,7 @@ describe("PositionUtils.getWithdrawable", () => {
 describe("AccrualPosition.getSettlementFee", () => {
   test("default", () => {
     const maturity = 24n * 60n * 60n;
-    const position = new AccrualPosition(basePositionInput(), {
+    const position = new AccrualPosition(baseAccrualPositionInput(), {
       ...baseMarketInput(),
       params: { ...baseMarketParamsInput(), maturity },
     });
@@ -80,7 +106,7 @@ describe("AccrualPosition.getSettlementFee", () => {
 describe("AccrualPosition.accrueInterest", () => {
   test("default", () => {
     const accrued = new AccrualPosition(
-      basePositionInput(),
+      baseAccrualPositionInput(),
       baseMarketInput(),
     ).accrueInterest(1_500n);
 
@@ -93,7 +119,7 @@ describe("AccrualPosition.accrueInterest", () => {
 
   test("behavior: post-maturity accrues only until maturity", () => {
     const accrued = new AccrualPosition(
-      basePositionInput(),
+      baseAccrualPositionInput(),
       baseMarketInput(),
     ).accrueInterest(2_500n);
 
@@ -105,7 +131,7 @@ describe("AccrualPosition.accrueInterest", () => {
 
   test("behavior: bad-debt slashing reduces credit and pending fee before accrual", () => {
     const lossFactor = MathLib.MAX_UINT_128 / 2n;
-    const accrued = new AccrualPosition(basePositionInput(), {
+    const accrued = new AccrualPosition(baseAccrualPositionInput(), {
       ...baseMarketInput(),
       lossFactor,
     }).accrueInterest(1_500n);
@@ -119,7 +145,7 @@ describe("AccrualPosition.accrueInterest", () => {
   test("behavior: zero credit syncs loss factor without fee accrual", () => {
     const lossFactor = MathLib.MAX_UINT_128 / 2n;
     const accrued = new AccrualPosition(
-      basePositionInput({ credit: 0n, pendingFee: 0n }),
+      baseAccrualPositionInput({ credit: 0n, pendingFee: 0n }),
       {
         ...baseMarketInput(),
         lossFactor,
@@ -135,7 +161,7 @@ describe("AccrualPosition.accrueInterest", () => {
   test("error: InvalidPositionAccrualTimestampError", () => {
     expect(() =>
       new AccrualPosition(
-        basePositionInput(),
+        baseAccrualPositionInput(),
         baseMarketInput(),
       ).accrueInterest(999n),
     ).toThrow(InvalidPositionAccrualTimestampError);
@@ -144,7 +170,7 @@ describe("AccrualPosition.accrueInterest", () => {
   test("error: InvalidPositionLossFactorError", () => {
     expect(() =>
       new AccrualPosition(
-        basePositionInput({ lastLossFactor: 2n }),
+        baseAccrualPositionInput({ lastLossFactor: 2n }),
         baseMarketInput(),
       ).accrueInterest(1_500n),
     ).toThrow(InvalidPositionLossFactorError);
@@ -153,7 +179,7 @@ describe("AccrualPosition.accrueInterest", () => {
   test("error: InvalidPositionAccrualStateError", () => {
     expect(() =>
       new AccrualPosition(
-        basePositionInput({ credit: 100n, pendingFee: 101n }),
+        baseAccrualPositionInput({ credit: 100n, pendingFee: 101n }),
         baseMarketInput(),
       ).accrueInterest(1_500n),
     ).toThrow(InvalidPositionAccrualStateError);
