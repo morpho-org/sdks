@@ -12,6 +12,10 @@ import {
   KpkWETHVaultV2,
 } from "../../../test/fixtures/vaultV2.js";
 import { test } from "../../../test/setup.js";
+import {
+  buildPlanTx,
+  getPlanRequests,
+} from "../../../test/transactionPlanUtils.js";
 import { morphoViemExtension } from "../../client/index.js";
 import { MAX_SLIPPAGE_TOLERANCE } from "../../helpers/constant.js";
 import {
@@ -42,7 +46,7 @@ describe("MorphoVaultV1 entity tests", () => {
       await expect(vault.getData()).rejects.toThrow(ChainIdMismatchError);
     });
 
-    test("deposit throws ChainIdMismatchError when client chain differs", () => {
+    test("deposit throws ChainIdMismatchError when client chain differs", async () => {
       const publicClient = createPublicClient({
         chain: mainnet,
         transport: http("https://rpc.example"),
@@ -60,7 +64,7 @@ describe("MorphoVaultV1 entity tests", () => {
       ).toThrow(ChainIdMismatchError);
     });
 
-    test("withdraw and redeem throw ChainIdMismatchError when client chain differs", () => {
+    test("withdraw and redeem throw ChainIdMismatchError when client chain differs", async () => {
       const publicClient = createPublicClient({
         chain: mainnet,
         transport: http("https://rpc.example"),
@@ -105,11 +109,7 @@ describe("MorphoVaultV1 entity tests", () => {
         vaultData,
         slippageTolerance: 0n,
       });
-
-      expect(result.buildTx).toBeDefined();
-      expect(result.getRequirements).toBeDefined();
-
-      const tx = result.buildTx();
+      const tx = await buildPlanTx(result);
       expect(tx.data).toBeDefined();
       expect(tx.value).toBe(0n);
     });
@@ -134,11 +134,7 @@ describe("MorphoVaultV1 entity tests", () => {
         vaultData,
         slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
       });
-
-      expect(result.buildTx).toBeDefined();
-      expect(result.getRequirements).toBeDefined();
-
-      const tx = result.buildTx();
+      const tx = await buildPlanTx(result);
       expect(tx.data).toBeDefined();
       expect(tx.value).toBe(0n);
     });
@@ -312,7 +308,7 @@ describe("MorphoVaultV1 entity tests", () => {
       ).toThrow(NativeAmountOnNonWNativeVaultError);
     });
 
-    test("should throw ChainWNativeMissingError when native deposit is requested on a chain without wNative", () => {
+    test("should throw ChainWNativeMissingError when native deposit is requested on a chain without wNative", async () => {
       const publicClient = createPublicClient({
         chain: celo,
         transport: http("https://rpc.example"),
@@ -350,13 +346,13 @@ describe("MorphoVaultV1 entity tests", () => {
       );
 
       const vaultData = await vault.getData();
-      const { getRequirements } = vault.deposit({
-        amount: parseUnits("100", 6),
-        userAddress: client.account.address,
-        vaultData,
-      });
-
-      const requirements = await getRequirements();
+      const requirements = await getPlanRequests(
+        vault.deposit({
+          amount: parseUnits("100", 6),
+          userAddress: client.account.address,
+          vaultData,
+        }),
+      );
 
       expect(requirements).toHaveLength(1);
 
@@ -368,7 +364,7 @@ describe("MorphoVaultV1 entity tests", () => {
   });
 
   describe("migrateToV2", () => {
-    test("should throw ChainIdMismatchError when client chain differs", () => {
+    test("should throw ChainIdMismatchError when client chain differs", async () => {
       const publicClient = createPublicClient({
         chain: mainnet,
         transport: http("https://rpc.example"),
@@ -506,11 +502,7 @@ describe("MorphoVaultV1 entity tests", () => {
         targetVault,
         shares: parseUnits("1000", 18),
       });
-
-      expect(result.buildTx).toBeDefined();
-      expect(result.getRequirements).toBeDefined();
-
-      const tx = result.buildTx();
+      const tx = await buildPlanTx(result);
       expect(tx.action.type).toBe("vaultV1MigrateToV2");
       expect(tx.action.args.sourceVault).toBe(SteakhouseUsdcVaultV1.address);
       expect(tx.action.args.targetVault).toBe(KeyrockUsdcVaultV2.address);
@@ -638,9 +630,7 @@ describe("MorphoVaultV1 entity tests", () => {
         shares: parseUnits("1000", 18),
         slippageTolerance: 0n,
       });
-
-      expect(result.buildTx).toBeDefined();
-      const tx = result.buildTx();
+      const tx = await buildPlanTx(result);
       expect(tx.data).toBeDefined();
     });
 
@@ -671,9 +661,7 @@ describe("MorphoVaultV1 entity tests", () => {
         shares: parseUnits("1000", 18),
         slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
       });
-
-      expect(result.buildTx).toBeDefined();
-      const tx = result.buildTx();
+      const tx = await buildPlanTx(result);
       expect(tx.data).toBeDefined();
     });
 
@@ -703,14 +691,14 @@ describe("MorphoVaultV1 entity tests", () => {
         { chainId: mainnet.id },
       );
 
-      const { getRequirements } = vault.migrateToV2({
-        userAddress: client.account.address,
-        sourceVault,
-        targetVault,
-        shares,
-      });
-
-      const requirements = await getRequirements();
+      const requirements = await getPlanRequests(
+        vault.migrateToV2({
+          userAddress: client.account.address,
+          sourceVault,
+          targetVault,
+          shares,
+        }),
+      );
 
       expect(requirements).toHaveLength(1);
 
@@ -746,14 +734,14 @@ describe("MorphoVaultV1 entity tests", () => {
         { chainId: mainnet.id },
       );
 
-      const { getRequirements } = vault.migrateToV2({
-        userAddress: client.account.address,
-        sourceVault,
-        targetVault,
-        shares,
-      });
-
-      const requirements = await getRequirements();
+      const requirements = await getPlanRequests(
+        vault.migrateToV2({
+          userAddress: client.account.address,
+          sourceVault,
+          targetVault,
+          shares,
+        }),
+      );
 
       expect(requirements.length).toBeGreaterThanOrEqual(1);
     });
@@ -792,7 +780,7 @@ describe("MorphoVaultV1 entity tests", () => {
         shares: parseUnits("1000", 18),
       });
 
-      const tx = result.buildTx();
+      const tx = await buildPlanTx(result);
       expect(tx.action.args.recipient).toBe(OTHER_USER);
     });
 
@@ -825,7 +813,7 @@ describe("MorphoVaultV1 entity tests", () => {
         shares: parseUnits("1000", 18),
       });
 
-      const tx = result.buildTx();
+      const tx = await buildPlanTx(result);
       expect(tx.action.args.recipient).toBe(OTHER_USER);
     });
   });

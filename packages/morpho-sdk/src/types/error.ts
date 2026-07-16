@@ -130,6 +130,30 @@ export class UnexpectedRequirementSignatureError extends Error {
   }
 }
 
+/**
+ * Thrown when a prepared transaction plan is built without all requested signatures.
+ *
+ * @example
+ * ```ts
+ * import { MissingTransactionPlanSignaturesError } from "@morpho-org/morpho-sdk";
+ *
+ * if (error instanceof MissingTransactionPlanSignaturesError) {
+ *   // Collect every `prepared.signatureRequests` signature before calling build().
+ * }
+ * ```
+ */
+export class MissingTransactionPlanSignaturesError extends Error {
+  /**
+   * @param expected - Number of signature requests in the prepared plan.
+   * @param received - Number of signatures passed to `build`.
+   */
+  constructor(expected: number, received: number) {
+    super(
+      `Expected ${expected} transaction-plan signatures but received ${received}. Sign all prepared signature requests before building the executable transaction plan.`,
+    );
+  }
+}
+
 /** Thrown when an asset amount is required to be positive but is zero or negative. */
 export class NonPositiveAssetAmountError extends Error {
   constructor(origin: Address) {

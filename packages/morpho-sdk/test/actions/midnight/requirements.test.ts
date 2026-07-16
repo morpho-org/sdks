@@ -32,6 +32,7 @@ import {
   isRequirementApproval,
   morphoViemExtension,
 } from "../../../src/index.js";
+import { buildPlanTx, getPlanRequests } from "../../transactionPlanUtils.js";
 
 const test = createViemTest(base, {
   forkUrl: process.env.BASE_RPC_URL,
@@ -146,7 +147,7 @@ const prepareTakeableOffer = async (params: {
         reservedCollateralAssets: 0n,
       });
     await params.client.sendTransaction({
-      ...supply.buildTx(),
+      ...(await buildPlanTx(supply)),
       account: offerMaker,
     });
     await expect(
@@ -328,7 +329,7 @@ describe("Midnight requirements on fork", () => {
         reservedCollateralAssets,
       });
 
-    const requirements = await output.getRequirements();
+    const requirements = await getPlanRequests(output);
     expect(requirements).toHaveLength(1);
     const approval = requirements[0];
     if (!isRequirementApproval(approval)) {
@@ -342,8 +343,8 @@ describe("Midnight requirements on fork", () => {
     );
 
     await client.sendTransaction(approval);
-    await expect(output.getRequirements()).resolves.toEqual([]);
-    expect(output.buildTx().to).toBe(
+    await expect(getPlanRequests(output)).resolves.toEqual([]);
+    expect((await buildPlanTx(output)).to).toBe(
       getChainAddress(ChainId.BaseMainnet, "midnight"),
     );
   });
@@ -370,7 +371,7 @@ describe("Midnight requirements on fork", () => {
         takeableOffers: [takeableOffer],
         deadline: maxUint256,
       });
-    const requirements = await output.getRequirements();
+    const requirements = await getPlanRequests(output);
     expect(requirements.map((requirement) => requirement.action.type)).toEqual([
       "erc20Approval",
       "midnightAuthorization",
@@ -381,9 +382,9 @@ describe("Midnight requirements on fork", () => {
       }
       await client.sendTransaction(requirement);
     }
-    await expect(output.getRequirements()).resolves.toEqual([]);
+    await expect(getPlanRequests(output)).resolves.toEqual([]);
 
-    await client.sendTransaction(output.buildTx());
+    await client.sendTransaction(await buildPlanTx(output));
     await expect(
       client.readContract({
         address: midnight,
@@ -410,7 +411,7 @@ describe("Midnight requirements on fork", () => {
       collateralAssets,
       reservedCollateralAssets: 0n,
     });
-    const supplyRequirements = await supply.getRequirements();
+    const supplyRequirements = await getPlanRequests(supply);
     expect(
       supplyRequirements.map((requirement) => requirement.action.type),
     ).toEqual(["erc20Approval"]);
@@ -420,7 +421,7 @@ describe("Midnight requirements on fork", () => {
       }
       await client.sendTransaction(requirement);
     }
-    await client.sendTransaction(supply.buildTx());
+    await client.sendTransaction(await buildPlanTx(supply));
     await expect(
       client.readContract({
         address: midnight,
@@ -443,7 +444,7 @@ describe("Midnight requirements on fork", () => {
       takeableOffers: [takeableOffer],
       deadline: maxUint256,
     });
-    const borrowRequirements = await borrow.getRequirements();
+    const borrowRequirements = await getPlanRequests(borrow);
     expect(
       borrowRequirements.map((requirement) => requirement.action.type),
     ).toEqual(["midnightAuthorization"]);
@@ -453,7 +454,7 @@ describe("Midnight requirements on fork", () => {
       }
       await client.sendTransaction(requirement);
     }
-    await client.sendTransaction(borrow.buildTx());
+    await client.sendTransaction(await buildPlanTx(borrow));
     await expect(
       client.readContract({
         address: midnight,
@@ -488,7 +489,7 @@ describe("Midnight requirements on fork", () => {
       takeableOffers: [takeableOffer],
       deadline: maxUint256,
     });
-    const borrowRequirements = await borrow.getRequirements();
+    const borrowRequirements = await getPlanRequests(borrow);
     expect(
       borrowRequirements.map((requirement) => requirement.action.type),
     ).toEqual(["erc20Approval", "midnightAuthorization"]);
@@ -498,7 +499,7 @@ describe("Midnight requirements on fork", () => {
       }
       await client.sendTransaction(requirement);
     }
-    await client.sendTransaction(borrow.buildTx());
+    await client.sendTransaction(await buildPlanTx(borrow));
     await expect(
       client.readContract({
         address: midnight,
@@ -522,7 +523,7 @@ describe("Midnight requirements on fork", () => {
       withdrawCollateralAssets: 0n,
       deadline: maxUint256,
     });
-    const repayRequirements = await repay.getRequirements();
+    const repayRequirements = await getPlanRequests(repay);
     expect(
       repayRequirements.map((requirement) => requirement.action.type),
     ).toEqual(["erc20Approval"]);
@@ -532,7 +533,7 @@ describe("Midnight requirements on fork", () => {
       }
       await client.sendTransaction(requirement);
     }
-    await client.sendTransaction(repay.buildTx());
+    await client.sendTransaction(await buildPlanTx(repay));
     await expect(
       client.readContract({
         address: midnight,

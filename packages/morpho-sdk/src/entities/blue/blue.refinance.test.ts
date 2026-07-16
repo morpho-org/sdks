@@ -9,6 +9,7 @@ import { createMockClient } from "@morpho-org/test/mock";
 import { type Address, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
+import { buildPlanTx } from "../../../test/transactionPlanUtils.js";
 import { morphoViemExtension } from "../../client/index.js";
 import { computeMinBorrowSharePrice } from "../../helpers/index.js";
 import {
@@ -88,7 +89,7 @@ const makeMarket = () => {
 };
 
 describe("MorphoBlue.refinance", () => {
-  test("error: ZeroCollateralAmountError when collateralAmount is zero", () => {
+  test("error: ZeroCollateralAmountError when collateralAmount is zero", async () => {
     const market = makeMarket();
     const positionData = makePosition({
       market: baseMarket(sourceParams),
@@ -111,7 +112,7 @@ describe("MorphoBlue.refinance", () => {
     ).toThrow(ZeroCollateralAmountError);
   });
 
-  test("error: ChainIdMismatchError when client.chain.id !== entity.chainId", () => {
+  test("error: ChainIdMismatchError when client.chain.id !== entity.chainId", async () => {
     const { client } = createMockClient(mainnet);
     // Construct the entity bound to a different chain id than the client reports.
     const market = client
@@ -137,7 +138,7 @@ describe("MorphoBlue.refinance", () => {
     ).toThrow(ChainIdMismatchError);
   });
 
-  test("error: RefinanceSameMarketError when source and target are the same market", () => {
+  test("error: RefinanceSameMarketError when source and target are the same market", async () => {
     const market = makeMarket();
     const positionData = makePosition({
       market: baseMarket(sourceParams),
@@ -155,7 +156,7 @@ describe("MorphoBlue.refinance", () => {
     ).toThrow(RefinanceSameMarketError);
   });
 
-  test("error: RefinanceTokenMismatchError when loanToken differs", () => {
+  test("error: RefinanceTokenMismatchError when loanToken differs", async () => {
     const mismatched = new MarketParams({
       collateralToken: WETH,
       loanToken: USDT,
@@ -184,7 +185,7 @@ describe("MorphoBlue.refinance", () => {
     ).toThrow(RefinanceTokenMismatchError);
   });
 
-  test("error: RefinanceTokenMismatchError when collateralToken differs", () => {
+  test("error: RefinanceTokenMismatchError when collateralToken differs", async () => {
     const WBTC: Address = "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599";
     const mismatched = new MarketParams({
       collateralToken: WBTC,
@@ -214,7 +215,7 @@ describe("MorphoBlue.refinance", () => {
     ).toThrow(RefinanceTokenMismatchError);
   });
 
-  test("error: RefinanceExceedsCollateralError when collateralAmount > position.collateral", () => {
+  test("error: RefinanceExceedsCollateralError when collateralAmount > position.collateral", async () => {
     const market = makeMarket();
     const positionData = makePosition({
       market: baseMarket(sourceParams),
@@ -236,7 +237,7 @@ describe("MorphoBlue.refinance", () => {
     ).toThrow(RefinanceExceedsCollateralError);
   });
 
-  test("error: RefinanceExceedsBorrowAssetsError when borrowAssets > position.borrowAssets", () => {
+  test("error: RefinanceExceedsBorrowAssetsError when borrowAssets > position.borrowAssets", async () => {
     const market = makeMarket();
     // borrowShares ≈ 50 USDC at the 2:1 ratio; asking for 1000 USDC of asset repay exceeds it.
     const positionData = makePosition({
@@ -261,7 +262,7 @@ describe("MorphoBlue.refinance", () => {
     ).toThrow(RefinanceExceedsBorrowAssetsError);
   });
 
-  test("error: BorrowAmountAndSharesExclusiveError when both borrowAssets and borrowShares are positive", () => {
+  test("error: BorrowAmountAndSharesExclusiveError when both borrowAssets and borrowShares are positive", async () => {
     const market = makeMarket();
     const positionData = makePosition({
       market: baseMarket(sourceParams),
@@ -286,7 +287,7 @@ describe("MorphoBlue.refinance", () => {
     ).toThrow(BorrowAmountAndSharesExclusiveError);
   });
 
-  test("error: RefinanceExceedsBorrowSharesError when borrowShares > position.borrowShares", () => {
+  test("error: RefinanceExceedsBorrowSharesError when borrowShares > position.borrowShares", async () => {
     const market = makeMarket();
     const positionData = makePosition({
       market: baseMarket(sourceParams),
@@ -310,7 +311,7 @@ describe("MorphoBlue.refinance", () => {
     ).toThrow(RefinanceExceedsBorrowSharesError);
   });
 
-  test("error: BorrowExceedsSafeLtvError when partial migration leaves residual unhealthy", () => {
+  test("error: BorrowExceedsSafeLtvError when partial migration leaves residual unhealthy", async () => {
     // 1 WETH collateral ($4000 power), ~1000 USDC debt — currently safe on source.
     // Migrating all collateral while leaving debt creates a zero-collateral residual the LLTV check rejects.
     const market = makeMarket();
@@ -335,7 +336,7 @@ describe("MorphoBlue.refinance", () => {
     ).toThrow(BorrowExceedsSafeLtvError);
   });
 
-  test("default: shares-mode full close builds a valid bundle", () => {
+  test("default: shares-mode full close builds a valid bundle", async () => {
     const market = makeMarket();
     const positionData = makePosition({
       market: baseMarket(sourceParams),
@@ -356,7 +357,7 @@ describe("MorphoBlue.refinance", () => {
       borrowShares: parseUnits("100", 12),
     });
 
-    const tx = refi.buildTx();
+    const tx = await buildPlanTx(refi);
     expect(tx.action.type).toBe("blueRefinance");
     expect(tx.action.args.sourceMarket).toBe(sourceParams.id);
     expect(tx.action.args.targetMarket).toBe(targetParams.id);
@@ -366,7 +367,7 @@ describe("MorphoBlue.refinance", () => {
     expect(tx.action.args.user).toBe(USER);
   });
 
-  test("default: assets-mode partial migration builds a valid bundle", () => {
+  test("default: assets-mode partial migration builds a valid bundle", async () => {
     const market = makeMarket();
     const positionData = makePosition({
       market: baseMarket(sourceParams),
@@ -387,12 +388,12 @@ describe("MorphoBlue.refinance", () => {
       borrowAssets: parseUnits("50", 6),
     });
 
-    const tx = refi.buildTx();
+    const tx = await buildPlanTx(refi);
     expect(tx.action.args.borrowAssets).toBe(parseUnits("50", 6));
     expect(tx.action.args.borrowShares).toBe(0n);
   });
 
-  test("error: NonPositiveAssetAmountError when borrowAssets is negative", () => {
+  test("error: NonPositiveAssetAmountError when borrowAssets is negative", async () => {
     const market = makeMarket();
     const positionData = makePosition({
       market: baseMarket(sourceParams),
@@ -416,7 +417,7 @@ describe("MorphoBlue.refinance", () => {
     ).toThrow(NonPositiveAssetAmountError);
   });
 
-  test("error: NegativeBorrowSharesError when borrowShares is negative", () => {
+  test("error: NegativeBorrowSharesError when borrowShares is negative", async () => {
     const market = makeMarket();
     const positionData = makePosition({
       market: baseMarket(sourceParams),
@@ -440,7 +441,7 @@ describe("MorphoBlue.refinance", () => {
     ).toThrow(NegativeBorrowSharesError);
   });
 
-  test("behavior: collat-only refinance skips target health validation (no oracle required)", () => {
+  test("behavior: collat-only refinance skips target health validation (no oracle required)", async () => {
     // Target has no price; a collat-only refinance skips the target health check and must succeed.
     const market = makeMarket();
     const positionData = makePosition({
@@ -473,7 +474,7 @@ describe("MorphoBlue.refinance", () => {
     ).not.toThrow();
   });
 
-  test("regression: shares-mode low-slippage encodes minBorrowSharePrice from borrowAssetsAdjusted, not projectedBorrowAssets", () => {
+  test("regression: shares-mode low-slippage encodes minBorrowSharePrice from borrowAssetsAdjusted, not projectedBorrowAssets", async () => {
     // minBorrowSharePrice must be derived from the encoded borrowAssetsAdjusted, not the smaller
     // projectedBorrowAssets, or toBorrowShares("Up") rounding can revert a preflight-passing bundle.
     // Assert the encoded guard matches the borrowAssetsAdjusted-derived one.
@@ -498,7 +499,7 @@ describe("MorphoBlue.refinance", () => {
       borrowShares: parseUnits("100", 12),
       slippageTolerance,
     });
-    const tx = refi.buildTx();
+    const tx = await buildPlanTx(refi);
 
     // Recompute the entity's intermediate values (accrual deltas cancel for this fixture).
     const projectedBorrowAssets = sourceMarket.toBorrowAssets(
@@ -523,7 +524,7 @@ describe("MorphoBlue.refinance", () => {
     expect(tx.action.args.minBorrowSharePrice).toBe(guardFromAdjusted);
   });
 
-  test("default: collat-only migration builds a valid bundle", () => {
+  test("default: collat-only migration builds a valid bundle", async () => {
     const market = makeMarket();
     const positionData = makePosition({
       market: baseMarket(sourceParams),
@@ -542,12 +543,12 @@ describe("MorphoBlue.refinance", () => {
       collateralAmount: parseUnits("1", 18),
     });
 
-    const tx = refi.buildTx();
+    const tx = await buildPlanTx(refi);
     expect(tx.action.args.borrowAssets).toBe(0n);
     expect(tx.action.args.borrowShares).toBe(0n);
   });
 
-  test("behavior: targetReallocations are forwarded to the action layer", () => {
+  test("behavior: targetReallocations are forwarded to the action layer", async () => {
     const market = makeMarket();
     const positionData = makePosition({
       market: baseMarket(sourceParams),
@@ -587,7 +588,7 @@ describe("MorphoBlue.refinance", () => {
       targetReallocations,
     });
 
-    const tx = refi.buildTx();
+    const tx = await buildPlanTx(refi);
     expect(tx.value).toBe(fee);
     expect(tx.action.args.reallocationFee).toBe(fee);
   });

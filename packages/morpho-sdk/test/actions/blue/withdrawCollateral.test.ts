@@ -13,6 +13,7 @@ import { WethUsdsBlue } from "../../fixtures/blue.js";
 import { borrow, supplyCollateral } from "../../helpers/blue.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
+import { buildPlanTx } from "../../transactionPlanUtils.js";
 
 describe("WithdrawCollateralBlue", () => {
   test("should withdraw collateral (no debt)", async ({ client }) => {
@@ -48,7 +49,7 @@ describe("WithdrawCollateralBlue", () => {
           positionData,
         });
 
-        const tx = withdraw.buildTx();
+        const tx = await buildPlanTx(withdraw);
         await client.sendTransaction(tx);
       },
     });
@@ -97,7 +98,7 @@ describe("WithdrawCollateralBlue", () => {
           positionData,
         });
 
-        const tx = withdraw.buildTx();
+        const tx = await buildPlanTx(withdraw);
         await client.sendTransaction(tx);
       },
     });

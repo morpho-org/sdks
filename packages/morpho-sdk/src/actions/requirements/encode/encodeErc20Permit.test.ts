@@ -188,11 +188,15 @@ describe("encodeErc20Permit", () => {
       });
 
       expect(permit.action.type).toBe("permit");
+      expect(permit.action.args).toHaveProperty("token");
       expect(permit.action.args).toHaveProperty("spender");
       expect(permit.action.args).toHaveProperty("amount");
       expect(permit.action.args).toHaveProperty("deadline");
+      expect(permit.action.args).toHaveProperty("chainId");
+      expect(permit.action.args.token).toEqual(usdc);
       expect(permit.action.args.spender).toEqual(generalAdapter1);
       expect(permit.action.args.amount).toEqual(mockAmount);
+      expect(permit.action.args.chainId).toEqual(mainnet.id);
     });
   });
 });

@@ -21,6 +21,7 @@ import {
 } from "../../fixtures/blue.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
+import { buildPlanTx, getPlanRequests } from "../../transactionPlanUtils.js";
 
 describe("SupplyBlue", () => {
   test("should supply loan token end-to-end", async ({ client }) => {
@@ -49,14 +50,14 @@ describe("SupplyBlue", () => {
           marketData,
         });
 
-        const requirements = await supply.getRequirements();
+        const requirements = await getPlanRequests(supply);
         const approval = requirements[0];
         if (!isRequirementApproval(approval)) {
           throw new Error("Approval requirement not found");
         }
         await client.sendTransaction(approval);
 
-        const tx = supply.buildTx();
+        const tx = await buildPlanTx(supply);
         expect(tx.value).toBe(0n);
 
         await client.sendTransaction(tx);
@@ -90,7 +91,7 @@ describe("SupplyBlue", () => {
       marketData,
     });
 
-    const requirements = await supply.getRequirements();
+    const requirements = await getPlanRequests(supply);
     expect(requirements.length).toBeGreaterThan(0);
     const approval = requirements[0];
     expect(approval).toBeDefined();
@@ -111,7 +112,7 @@ describe("SupplyBlue", () => {
       marketData,
     });
 
-    const tx = supply.buildTx();
+    const tx = await buildPlanTx(supply);
 
     // Sanity bound only — exact value depends on virtual-share scaling.
     expect(tx.action.args.maxSharePrice).toBeGreaterThan(0n);
@@ -154,7 +155,7 @@ describe("SupplyBlue", () => {
           marketData,
         });
 
-        const requirements = await supply.getRequirements();
+        const requirements = await getPlanRequests(supply);
         expect(requirements.length).toBe(2);
 
         const approvalPermit2 = requirements[0];
@@ -178,7 +179,7 @@ describe("SupplyBlue", () => {
         );
         expect(isHex(requirementSignature.args.signature)).toBe(true);
 
-        const tx = supply.buildTx([requirementSignature]);
+        const tx = await buildPlanTx(supply, [requirementSignature]);
         expect(tx.value).toBe(0n);
         await client.sendTransaction(tx);
       },
@@ -222,10 +223,10 @@ describe("SupplyBlue", () => {
         });
 
         // No ERC20 approval needed: only native wrapping inside the bundle.
-        const requirements = await supply.getRequirements();
+        const requirements = await getPlanRequests(supply);
         expect(requirements.length).toBe(0);
 
-        const tx = supply.buildTx();
+        const tx = await buildPlanTx(supply);
         expect(tx.value).toEqual(nativeAmount);
         await client.sendTransaction(tx);
       },
@@ -274,14 +275,14 @@ describe("SupplyBlue", () => {
           marketData,
         });
 
-        const requirements = await supply.getRequirements();
+        const requirements = await getPlanRequests(supply);
         const approval = requirements[0];
         if (!isRequirementApproval(approval)) {
           throw new Error("Approval requirement not found");
         }
         await client.sendTransaction(approval);
 
-        const tx = supply.buildTx();
+        const tx = await buildPlanTx(supply);
         expect(tx.value).toEqual(nativeAmount);
         await client.sendTransaction(tx);
       },

@@ -5,6 +5,7 @@ import { morphoViemExtension } from "../../../src/index.js";
 import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
+import { buildPlanTx } from "../../transactionPlanUtils.js";
 
 describe("Withdraw VaultV1", () => {
   test("should withdraw 1K assets in vaultV1", async ({ client }) => {
@@ -34,7 +35,7 @@ describe("Withdraw VaultV1", () => {
           userAddress: client.account.address,
           amount: assets,
         });
-        const tx = withdraw.buildTx();
+        const tx = await buildPlanTx(withdraw);
 
         await client.sendTransaction(tx);
       },
@@ -81,13 +82,13 @@ describe("Withdraw VaultV1", () => {
           userAddress: client.account.address,
           amount: firstWithdraw,
         });
-        await client.sendTransaction(withdraw1.buildTx());
+        await client.sendTransaction(await buildPlanTx(withdraw1));
 
         const withdraw2 = vaultV1.withdraw({
           userAddress: client.account.address,
           amount: secondWithdraw,
         });
-        await client.sendTransaction(withdraw2.buildTx());
+        await client.sendTransaction(await buildPlanTx(withdraw2));
       },
     });
 

@@ -99,12 +99,12 @@ function createMorphoNamespace(
  * const block = await client.getBlockNumber();
  * const vault = client.morpho.vaultV1(vaultAddress, 1);
  * const vaultData = await vault.getData();
- * const { buildTx } = vault.deposit({
+ * const plan = vault.deposit({
  *   amount: 1_000_000n,
  *   userAddress: user,
  *   vaultData,
  * });
- * const tx = buildTx();
+ * const tx = (await plan.prepare()).build().callRequests.at(-1)?.tx;
  * ```
  */
 export function morphoViemExtension(_options?: {

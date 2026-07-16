@@ -9,11 +9,13 @@ import type {
 } from "@morpho-org/midnight-sdk";
 import type { Address, Hex } from "viem";
 import type { MidnightTakeableOffer } from "../../actions/midnight/types.js";
+import type { TransactionPlan } from "../../transactionPlan/index.js";
 import type {
-  ActionOutput,
-  BaseAction,
+  ActionRequirement,
   MempoolSubmitOffersAction,
   MidnightOfferRootSignature,
+  RequirementSignature,
+  TransactionAction,
 } from "../../types/action.js";
 
 /** Optional Midnight API validation controls for make-offer flows. */
@@ -76,69 +78,47 @@ export type MidnightActionSignatures =
   | readonly MidnightOfferRootSignature[];
 
 /**
- * Lazy Midnight entity result with async requirements and sync transaction building.
- *
- * Call `getRequirements()` first to collect approvals, authorizations, or
- * signatures. Once those are handled, pass any requirement signatures to
- * `buildTx`; the transaction builder itself performs no fetching or signing.
+ * Lazy Midnight transaction plan. Call `prepare()` to resolve the signature requests and/or call
+ * requests needed by the already chosen Midnight action.
  *
  * @example
  * ```ts
- * const output = midnight.takeLend(params);
- * const requirements = await output.getRequirements();
- * for (const requirement of requirements) {
- *   if (!("sign" in requirement)) {
- *     await walletClient.sendTransaction({
- *       to: requirement.to,
- *       data: requirement.data,
- *       value: requirement.value,
- *     });
- *   }
- * }
- * const tx = output.buildTx();
+ * const plan = midnight.takeLend(params);
+ * const prepared = await plan.prepare();
+ * const signatures = await prepared.signAll(walletClient, taker);
+ * const executable = prepared.build(signatures);
+ * const calls = executable.callRequests.map((request) => request.call);
  * ```
  */
 export type MidnightActionOutput<
-  TAction extends BaseAction,
-  TSignatures = undefined,
-> = ActionOutput<TAction, TSignatures, undefined>;
+  TAction extends TransactionAction,
+  TSignatures = readonly RequirementSignature[],
+> = TransactionPlan<TAction, undefined, ActionRequirement, TSignatures>;
 
 /**
- * Output returned by maker-offer flows after offer-tree preparation.
+ * Transaction plan returned by maker-offer flows after offer-tree preparation.
  *
- * Use `groups` and `root` for review UI, call `getRequirements()` to collect
- * ratifier approval or signature requirements, then call `buildTx(signatures)`
- * to publish the encoded payload to the Midnight mempool.
+ * Use `groups` and `root` for review UI. Call `prepare()` to resolve ratifier approval/signature
+ * requests, then build the executable call requests with the collected signatures.
  *
  * @example
  * ```ts
- * const output = await midnight.makeLend(params);
- * console.log(output.root, output.groups);
- * const requirements = await output.getRequirements();
- * const signatures = [];
- * for (const requirement of requirements) {
- *   if ("sign" in requirement) {
- *     signatures.push(await requirement.sign(walletClient, maker));
- *   } else {
- *     await walletClient.sendTransaction({
- *       to: requirement.to,
- *       data: requirement.data,
- *       value: requirement.value,
- *     });
- *   }
- * }
- * const tx = output.buildTx(signatures);
+ * const plan = await midnight.makeLend(params);
+ * console.log(plan.root, plan.groups);
+ * const prepared = await plan.prepare();
+ * const signatures = await prepared.signAll(walletClient, maker);
+ * const executable = prepared.build(signatures);
+ * const calls = executable.callRequests.map((request) => request.call);
  * ```
  */
-export interface MakeOffersOutput
-  extends MidnightActionOutput<
-    MempoolSubmitOffersAction,
-    MidnightActionSignatures
-  > {
+export type MakeOffersOutput = MidnightActionOutput<
+  MempoolSubmitOffersAction,
+  MidnightActionSignatures
+> & {
   readonly groups: readonly Hex[];
   readonly root: Hex;
   readonly ratifierType: "ecrecover" | "setter";
-}
+};
 
 /** Parameters shared by Midnight market action flows. */
 export interface MarketActionParams {

@@ -9,6 +9,7 @@ import {
 import { Re7UsdtVaultV2 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
+import { buildPlanTx, getPlanRequests } from "../../transactionPlanUtils.js";
 
 describe("Approval", () => {
   test("should approve once for USDT vaultV2 with allowance 0", async ({
@@ -39,7 +40,7 @@ describe("Approval", () => {
           vaultData,
         });
 
-        const requirements = await deposit.getRequirements();
+        const requirements = await getPlanRequests(deposit);
 
         expect(requirements.length).toBe(1);
         expect(requirements[0]?.action.args.spender).toBe(generalAdapter);
@@ -51,7 +52,7 @@ describe("Approval", () => {
 
         await client.sendTransaction(requirements[0]);
 
-        const tx = deposit.buildTx();
+        const tx = await buildPlanTx(deposit);
 
         await client.sendTransaction(tx);
       },
@@ -91,7 +92,7 @@ describe("Approval", () => {
           vaultData,
         });
 
-        const requirements = await deposit.getRequirements();
+        const requirements = await getPlanRequests(deposit);
 
         expect(requirements.length).toBe(2);
         expect(requirements[0]?.action.args.spender).toBe(generalAdapter);
@@ -109,7 +110,7 @@ describe("Approval", () => {
         await client.sendTransaction(requirements[0]);
         await client.sendTransaction(requirements[1]);
 
-        const tx = deposit.buildTx();
+        const tx = await buildPlanTx(deposit);
 
         await client.sendTransaction(tx);
       },

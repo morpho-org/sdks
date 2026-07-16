@@ -19,6 +19,7 @@ import { WethUsdsBlue, WstethWethBlue } from "../../fixtures/blue.js";
 import { borrow, supplyCollateral } from "../../helpers/blue.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
+import { buildPlanTx, getPlanRequests } from "../../transactionPlanUtils.js";
 
 describe("RepayBlue", () => {
   afterEach(() => {
@@ -64,7 +65,7 @@ describe("RepayBlue", () => {
           positionData,
         });
 
-        const requirements = await repay.getRequirements();
+        const requirements = await getPlanRequests(repay);
 
         // Repay should NOT have morpho authorization requirement
         const approval = requirements[0];
@@ -73,7 +74,7 @@ describe("RepayBlue", () => {
         }
         await client.sendTransaction(approval);
 
-        const tx = repay.buildTx();
+        const tx = await buildPlanTx(repay);
         await client.sendTransaction(tx);
       },
     });
@@ -129,7 +130,7 @@ describe("RepayBlue", () => {
           positionData,
         });
 
-        const requirements = await repay.getRequirements();
+        const requirements = await getPlanRequests(repay);
         const approval = requirements[0];
         if (!isRequirementApproval(approval)) {
           throw new Error("Approval requirement not found");
@@ -142,7 +143,7 @@ describe("RepayBlue", () => {
         });
         await client.sendTransaction(approval);
 
-        const tx = repay.buildTx();
+        const tx = await buildPlanTx(repay);
         await client.sendTransaction(tx);
       },
     });
@@ -225,14 +226,14 @@ describe("RepayBlue", () => {
           positionData,
         });
 
-        const requirements = await repay.getRequirements();
+        const requirements = await getPlanRequests(repay);
         const approval = requirements[0];
         if (!isRequirementApproval(approval)) {
           throw new Error("Approval requirement not found");
         }
         await client.sendTransaction(approval);
 
-        const tx = repay.buildTx();
+        const tx = await buildPlanTx(repay);
         await client.sendTransaction(tx);
       },
     });
@@ -292,10 +293,10 @@ describe("RepayBlue", () => {
         });
 
         // A fully-native repay pulls no ERC-20, so it needs no approval.
-        const requirements = await repay.getRequirements();
+        const requirements = await getPlanRequests(repay);
         expect(requirements.length).toBe(0);
 
-        const tx = repay.buildTx();
+        const tx = await buildPlanTx(repay);
         expect(tx.value).toEqual(nativeAmount);
         await client.sendTransaction(tx);
       },
@@ -374,7 +375,7 @@ describe("RepayBlue", () => {
         });
 
         // The approval must cover ONLY the ERC-20 portion, not the wrapped native.
-        const requirements = await repay.getRequirements();
+        const requirements = await getPlanRequests(repay);
         const approval = requirements[0];
         if (!isRequirementApproval(approval)) {
           throw new Error("Approval requirement not found");
@@ -382,7 +383,7 @@ describe("RepayBlue", () => {
         expect(approval.action.args.amount).toEqual(erc20Part);
         await client.sendTransaction(approval);
 
-        const tx = repay.buildTx();
+        const tx = await buildPlanTx(repay);
         // Only the native portion rides as tx.value.
         expect(tx.value).toEqual(nativePart);
         await client.sendTransaction(tx);
@@ -461,7 +462,7 @@ describe("RepayBlue", () => {
           positionData,
         });
 
-        const requirements = await repay.getRequirements();
+        const requirements = await getPlanRequests(repay);
         const approval = requirements[0];
         if (!isRequirementApproval(approval)) {
           throw new Error("Approval requirement not found");
@@ -475,7 +476,7 @@ describe("RepayBlue", () => {
         });
         await client.sendTransaction(approval);
 
-        const tx = repay.buildTx();
+        const tx = await buildPlanTx(repay);
         expect(tx.value).toEqual(nativePart);
         await client.sendTransaction(tx);
       },
@@ -551,10 +552,10 @@ describe("RepayBlue", () => {
         });
 
         // Native covers the full debt ⇒ no ERC-20 approval/permit requirement.
-        const requirements = await repay.getRequirements();
+        const requirements = await getPlanRequests(repay);
         expect(requirements).toEqual([]);
 
-        const tx = repay.buildTx();
+        const tx = await buildPlanTx(repay);
         // Everything is wrapped native; no ERC-20 pulled.
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.transferAmount).toEqual(nativeAmount);

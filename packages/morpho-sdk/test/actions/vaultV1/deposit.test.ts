@@ -18,6 +18,7 @@ import {
 } from "../../fixtures/vaultV1.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
+import { buildPlanTx, getPlanRequests } from "../../transactionPlanUtils.js";
 
 describe("DepositVaultV1", () => {
   test("should deposit 1K USDC in vaultV1", async ({ client }) => {
@@ -49,8 +50,8 @@ describe("DepositVaultV1", () => {
           vaultData,
         });
 
-        const tx = deposit.buildTx();
-        const requirements = await deposit.getRequirements();
+        const tx = await buildPlanTx(deposit);
+        const requirements = await getPlanRequests(deposit);
 
         const approveTx = requirements[0];
         if (!approveTx) {
@@ -117,8 +118,8 @@ describe("DepositVaultV1", () => {
           vaultData,
         });
 
-        const tx = deposit.buildTx();
-        const requirements = await deposit.getRequirements();
+        const tx = await buildPlanTx(deposit);
+        const requirements = await getPlanRequests(deposit);
 
         expect(requirements.length).toBe(2);
 
@@ -182,7 +183,7 @@ describe("DepositVaultV1", () => {
           amount: amount,
           vaultData,
         });
-        const requirements = await deposit.getRequirements({
+        const requirements = await getPlanRequests(deposit, {
           useSimplePermit: true,
         });
 
@@ -206,7 +207,7 @@ describe("DepositVaultV1", () => {
           BigInt(Math.floor(Date.now() / 1000)),
         );
 
-        const tx = deposit.buildTx([requirementSignature]);
+        const tx = await buildPlanTx(deposit, [requirementSignature]);
 
         await client.sendTransaction(tx);
       },
@@ -259,7 +260,7 @@ describe("DepositVaultV1", () => {
           vaultData,
         });
 
-        const requirements = await deposit.getRequirements({
+        const requirements = await getPlanRequests(deposit, {
           useSimplePermit: false,
         });
 
@@ -301,7 +302,7 @@ describe("DepositVaultV1", () => {
 
         await client.sendTransaction(approvalPermit2);
 
-        const tx = deposit.buildTx([requirementSignature]);
+        const tx = await buildPlanTx(deposit, [requirementSignature]);
 
         await client.sendTransaction(tx);
       },
@@ -360,7 +361,7 @@ describe("DepositVaultV1", () => {
           vaultData,
         });
 
-        const requirements = await deposit.getRequirements();
+        const requirements = await getPlanRequests(deposit);
 
         expect(requirements.length).toBe(2);
 
@@ -398,7 +399,9 @@ describe("DepositVaultV1", () => {
           BigInt(Math.floor(Date.now() / 1000)),
         );
 
-        await client.sendTransaction(deposit.buildTx([requirementSignature]));
+        await client.sendTransaction(
+          await buildPlanTx(deposit, [requirementSignature]),
+        );
       },
     });
 
@@ -445,13 +448,13 @@ describe("DepositVaultV1", () => {
           amount: amount,
           vaultData,
         });
-        const requirements = await deposit.getRequirements();
+        const requirements = await getPlanRequests(deposit);
         const approveTx = requirements[0];
         if (!isRequirementApproval(approveTx)) {
           throw new Error("Approve transaction not found");
         }
         await client.sendTransaction(approveTx);
-        const depositTx = deposit.buildTx();
+        const depositTx = await buildPlanTx(deposit);
         await client.sendTransaction(depositTx);
 
         const withdraw = vaultV1.withdraw({
@@ -459,7 +462,7 @@ describe("DepositVaultV1", () => {
           amount: amount,
         });
 
-        const withdrawTx = withdraw.buildTx();
+        const withdrawTx = await buildPlanTx(withdraw);
 
         await client.sendTransaction(withdrawTx);
       },

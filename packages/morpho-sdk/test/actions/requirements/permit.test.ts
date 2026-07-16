@@ -8,6 +8,7 @@ import {
 import { KeyrockUsdcVaultV2 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
+import { buildPlanTx, getPlanRequests } from "../../transactionPlanUtils.js";
 
 describe("Permit", () => {
   test("should deposit USDC with permit version 2", async ({ client }) => {
@@ -39,7 +40,7 @@ describe("Permit", () => {
           amount: amount,
           vaultData,
         });
-        const requirements_1 = await deposit.getRequirements({
+        const requirements_1 = await getPlanRequests(deposit, {
           useSimplePermit: true,
         });
 
@@ -59,7 +60,7 @@ describe("Permit", () => {
           BigInt(Math.floor(Date.now() / 1000)),
         );
 
-        const tx_1 = deposit.buildTx([requirementSignature]);
+        const tx_1 = await buildPlanTx(deposit, [requirementSignature]);
 
         await client.sendTransaction(tx_1);
       },

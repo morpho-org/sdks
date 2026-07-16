@@ -20,12 +20,16 @@ import {
   MAX_SLIPPAGE_TOLERANCE,
 } from "../../helpers/constant.js";
 import { validateChainId } from "../../helpers/index.js";
+import {
+  TransactionPlan,
+  type TransactionPlanSimplePermitOptions,
+  type TransactionPlanTokenRequest,
+} from "../../transactionPlan/index.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
   ChainIdMismatchError,
   ChainWNativeMissingError,
   type DepositAmountArgs,
-  type ERC20ApprovalAction,
   ExcessiveSlippageToleranceError,
   type MorphoClientType,
   NativeAmountOnNonWNativeVaultError,
@@ -33,11 +37,7 @@ import {
   NegativeSlippageToleranceError,
   NonPositiveAssetAmountError,
   NonPositiveSharesAmountError,
-  type PermitRequirementSignature,
-  type Requirement,
-  type RequirementSignature,
   selectRequirementSignatures,
-  type Transaction,
   VaultAddressMismatchError,
   VaultAssetMismatchError,
   type VaultV1DepositAction,
@@ -46,6 +46,12 @@ import {
   type VaultV1WithdrawAction,
 } from "../../types/index.js";
 
+/**
+ * VaultV1 action flows are synchronous so the SDK does not own vault data fetching. Consumers pass
+ * the vault snapshots they already fetched, which lets each app batch, cache, and refresh data for
+ * its own UX. Each flow returns a TransactionPlan; call `prepare()` when the app is ready to compute
+ * the minimal signature requests and/or call requests needed to execute that intent.
+ */
 export interface VaultV1Actions {
   /**
    * Fetches the latest vault data with accrued interest.
@@ -60,7 +66,7 @@ export interface VaultV1Actions {
    * Prepares a deposit into a VaultV1 (MetaMorpho) contract.
    *
    * Uses pre-fetched vault data to compute `maxSharePrice` with slippage tolerance,
-   * then returns `buildTx` and `getRequirements` for lazy evaluation.
+   * then returns a TransactionPlan for lazy request discovery and execution.
    *
    * @param {Object} params - The deposit parameters.
    * @param {bigint} params.amount - Amount of assets to deposit.
@@ -76,19 +82,11 @@ export interface VaultV1Actions {
       vaultData: AccrualVault;
       slippageTolerance?: bigint;
     } & DepositAmountArgs,
-  ) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<VaultV1DepositAction>>;
-    getRequirements: (params?: {
-      useSimplePermit?: boolean;
-    }) => Promise<
-      (
-        | Readonly<Transaction<ERC20ApprovalAction>>
-        | Requirement<PermitRequirementSignature>
-      )[]
-    >;
-  };
+  ) => TransactionPlan<
+    VaultV1DepositAction,
+    TransactionPlanSimplePermitOptions,
+    TransactionPlanTokenRequest
+  >;
   /**
    * Prepares a withdraw from a VaultV1 (MetaMorpho) contract.
    *
@@ -97,9 +95,10 @@ export interface VaultV1Actions {
    * @param {Address} params.userAddress - User address initiating the withdraw.
    * @returns {Object} Object with `buildTx`.
    */
-  withdraw: (params: { amount: bigint; userAddress: Address }) => {
-    buildTx: () => Readonly<Transaction<VaultV1WithdrawAction>>;
-  };
+  withdraw: (params: {
+    amount: bigint;
+    userAddress: Address;
+  }) => TransactionPlan<VaultV1WithdrawAction>;
   /**
    * Prepares a redeem from a VaultV1 (MetaMorpho) contract.
    *
@@ -108,9 +107,10 @@ export interface VaultV1Actions {
    * @param {Address} params.userAddress - User address initiating the redeem.
    * @returns {Object} Object with `buildTx`.
    */
-  redeem: (params: { shares: bigint; userAddress: Address }) => {
-    buildTx: () => Readonly<Transaction<VaultV1RedeemAction>>;
-  };
+  redeem: (params: {
+    shares: bigint;
+    userAddress: Address;
+  }) => TransactionPlan<VaultV1RedeemAction>;
   /**
    * Prepares a full migration from VaultV1 to VaultV2.
    *
@@ -131,17 +131,11 @@ export interface VaultV1Actions {
     targetVault: AccrualVaultV2;
     shares: bigint;
     slippageTolerance?: bigint;
-  }) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<VaultV1MigrateToV2Action>>;
-    getRequirements: () => Promise<
-      (
-        | Readonly<Transaction<ERC20ApprovalAction>>
-        | Requirement<PermitRequirementSignature>
-      )[]
-    >;
-  };
+  }) => TransactionPlan<
+    VaultV1MigrateToV2Action,
+    unknown,
+    TransactionPlanTokenRequest
+  >;
 }
 
 export class MorphoVaultV1 implements VaultV1Actions {
@@ -236,8 +230,8 @@ export class MorphoVaultV1 implements VaultV1Actions {
       ),
       MAX_ABSOLUTE_SHARE_PRICE,
     );
-    return {
-      getRequirements: (params?: { useSimplePermit?: boolean }) =>
+    return new TransactionPlan({
+      getRequirementRequests: (params?: TransactionPlanSimplePermitOptions) =>
         getGeneralAdapterRequirements(this.client.viemClient, {
           address: vaultData.asset,
           chainId: this.chainId,
@@ -250,7 +244,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
           },
         }),
 
-      buildTx: (signatures?: readonly RequirementSignature[]) => {
+      buildPrimaryCall: (signatures) => {
         const { permit } = selectRequirementSignatures(signatures, {
           permit: true,
         });
@@ -271,7 +265,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
           metadata: this.client.options.metadata,
         });
       },
-    };
+    });
   }
 
   withdraw({ amount, userAddress }: { amount: bigint; userAddress: Address }) {
@@ -282,8 +276,8 @@ export class MorphoVaultV1 implements VaultV1Actions {
       );
     }
 
-    return {
-      buildTx: () =>
+    return new TransactionPlan({
+      buildPrimaryCall: () =>
         vaultV1Withdraw({
           vault: { address: this.vault },
           args: {
@@ -293,7 +287,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
           },
           metadata: this.client.options.metadata,
         }),
-    };
+    });
   }
 
   redeem({ shares, userAddress }: { shares: bigint; userAddress: Address }) {
@@ -304,8 +298,8 @@ export class MorphoVaultV1 implements VaultV1Actions {
       );
     }
 
-    return {
-      buildTx: () =>
+    return new TransactionPlan({
+      buildPrimaryCall: () =>
         vaultV1Redeem({
           vault: { address: this.vault },
           args: {
@@ -315,7 +309,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
           },
           metadata: this.client.options.metadata,
         }),
-    };
+    });
   }
 
   migrateToV2({
@@ -379,8 +373,8 @@ export class MorphoVaultV1 implements VaultV1Actions {
       ),
       MAX_ABSOLUTE_SHARE_PRICE,
     );
-    return {
-      getRequirements: () =>
+    return new TransactionPlan({
+      getRequirementRequests: () =>
         getGeneralAdapterRequirements(this.client.viemClient, {
           address: this.vault,
           chainId: this.chainId,
@@ -394,7 +388,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
           },
         }),
 
-      buildTx: (signatures?: readonly RequirementSignature[]) => {
+      buildPrimaryCall: (signatures) => {
         const { permit } = selectRequirementSignatures(signatures, {
           permit: true,
         });
@@ -417,6 +411,6 @@ export class MorphoVaultV1 implements VaultV1Actions {
           metadata: this.client.options.metadata,
         });
       },
-    };
+    });
   }
 }

@@ -19,6 +19,7 @@ import {
 import { KeyrockUsdcVaultV2, KpkWETHVaultV2 } from "../fixtures/vaultV2.js";
 import { testInvariants } from "../helpers/invariants.js";
 import { test } from "../setup.js";
+import { buildPlanTx, getPlanRequests } from "../transactionPlanUtils.js";
 
 describe("WrapNative - VaultV1", () => {
   test("should deposit native ETH only in WETH vaultV1", async ({ client }) => {
@@ -49,10 +50,10 @@ describe("WrapNative - VaultV1", () => {
           vaultData,
         });
 
-        const requirements = await deposit.getRequirements();
+        const requirements = await getPlanRequests(deposit);
         expect(requirements.length).toBe(0);
 
-        const tx = deposit.buildTx();
+        const tx = await buildPlanTx(deposit);
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
         expect(tx.action.args.amount).toEqual(0n);
@@ -118,10 +119,10 @@ describe("WrapNative - VaultV1", () => {
           vaultData,
         });
 
-        const requirements = await deposit.getRequirements();
+        const requirements = await getPlanRequests(deposit);
         expect(requirements.length).toBe(0);
 
-        const tx = deposit.buildTx();
+        const tx = await buildPlanTx(deposit);
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
         expect(tx.action.args.amount).toEqual(amount);
@@ -180,7 +181,7 @@ describe("WrapNative - VaultV1", () => {
           vaultData,
         });
 
-        const requirements = await deposit.getRequirements();
+        const requirements = await getPlanRequests(deposit);
 
         expect(requirements.length).toBe(2);
 
@@ -203,7 +204,7 @@ describe("WrapNative - VaultV1", () => {
         expect(isHex(requirementSignature.args.signature)).toBe(true);
         expect(requirementSignature.args.signature.length).toBe(132);
 
-        const tx = deposit.buildTx([requirementSignature]);
+        const tx = await buildPlanTx(deposit, [requirementSignature]);
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
         expect(tx.action.args.amount).toEqual(amount);
@@ -223,7 +224,7 @@ describe("WrapNative - VaultV1", () => {
     );
   });
 
-  test("should throw NativeAmountOnNonWNativeVaultError for non-WETH vaultV1", () => {
+  test("should throw NativeAmountOnNonWNativeVaultError for non-WETH vaultV1", async () => {
     expect(() =>
       vaultV1Deposit({
         vault: {
@@ -240,7 +241,7 @@ describe("WrapNative - VaultV1", () => {
     ).toThrow(NativeAmountOnNonWNativeVaultError);
   });
 
-  test("should throw ZeroDepositAmountError when both amounts are zero in vaultV1", () => {
+  test("should throw ZeroDepositAmountError when both amounts are zero in vaultV1", async () => {
     expect(() =>
       vaultV1Deposit({
         vault: {
@@ -257,7 +258,7 @@ describe("WrapNative - VaultV1", () => {
     ).toThrow(ZeroDepositAmountError);
   });
 
-  test("should throw NegativeNativeAmountError for negative nativeAmount in vaultV1", () => {
+  test("should throw NegativeNativeAmountError for negative nativeAmount in vaultV1", async () => {
     expect(() =>
       vaultV1Deposit({
         vault: {
@@ -304,10 +305,10 @@ describe("WrapNative - VaultV2", () => {
           vaultData,
         });
 
-        const requirements = await deposit.getRequirements();
+        const requirements = await getPlanRequests(deposit);
         expect(requirements.length).toBe(0);
 
-        const tx = deposit.buildTx();
+        const tx = await buildPlanTx(deposit);
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
         expect(tx.action.args.amount).toEqual(0n);
@@ -373,10 +374,10 @@ describe("WrapNative - VaultV2", () => {
           vaultData,
         });
 
-        const requirements = await deposit.getRequirements();
+        const requirements = await getPlanRequests(deposit);
         expect(requirements.length).toBe(0);
 
-        const tx = deposit.buildTx();
+        const tx = await buildPlanTx(deposit);
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
         expect(tx.action.args.amount).toEqual(amount);
@@ -435,7 +436,7 @@ describe("WrapNative - VaultV2", () => {
           vaultData,
         });
 
-        const requirements = await deposit.getRequirements();
+        const requirements = await getPlanRequests(deposit);
 
         expect(requirements.length).toBe(2);
 
@@ -458,7 +459,7 @@ describe("WrapNative - VaultV2", () => {
         expect(isHex(requirementSignature.args.signature)).toBe(true);
         expect(requirementSignature.args.signature.length).toBe(132);
 
-        const tx = deposit.buildTx([requirementSignature]);
+        const tx = await buildPlanTx(deposit, [requirementSignature]);
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
         expect(tx.action.args.amount).toEqual(amount);
@@ -478,7 +479,7 @@ describe("WrapNative - VaultV2", () => {
     );
   });
 
-  test("should throw NativeAmountOnNonWNativeVaultError for non-WETH vaultV2", () => {
+  test("should throw NativeAmountOnNonWNativeVaultError for non-WETH vaultV2", async () => {
     expect(() =>
       vaultV2Deposit({
         vault: {
@@ -495,7 +496,7 @@ describe("WrapNative - VaultV2", () => {
     ).toThrow(NativeAmountOnNonWNativeVaultError);
   });
 
-  test("should throw ZeroDepositAmountError when both amounts are zero in vaultV2", () => {
+  test("should throw ZeroDepositAmountError when both amounts are zero in vaultV2", async () => {
     expect(() =>
       vaultV2Deposit({
         vault: {
@@ -512,7 +513,7 @@ describe("WrapNative - VaultV2", () => {
     ).toThrow(ZeroDepositAmountError);
   });
 
-  test("should throw NegativeNativeAmountError for negative nativeAmount in vaultV2", () => {
+  test("should throw NegativeNativeAmountError for negative nativeAmount in vaultV2", async () => {
     expect(() =>
       vaultV2Deposit({
         vault: {

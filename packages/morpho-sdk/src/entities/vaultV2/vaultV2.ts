@@ -16,6 +16,11 @@ import {
   vaultV2Withdraw,
 } from "../../actions/index.js";
 import { MAX_SLIPPAGE_TOLERANCE } from "../../helpers/constant.js";
+import {
+  TransactionPlan,
+  type TransactionPlanSimplePermitOptions,
+  type TransactionPlanTokenRequest,
+} from "../../transactionPlan/index.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
   ChainIdMismatchError,
@@ -32,7 +37,6 @@ import {
   NonPositiveSharesAmountError,
   type PermitRequirementSignature,
   type Requirement,
-  type RequirementSignature,
   selectRequirementSignatures,
   type Transaction,
   VaultAddressMismatchError,
@@ -43,6 +47,12 @@ import {
   type VaultV2WithdrawAction,
 } from "../../types/index.js";
 
+/**
+ * VaultV2 action flows are synchronous so the SDK does not own vault data fetching. Consumers pass
+ * the vault snapshots they already fetched, which lets each app batch, cache, and refresh data for
+ * its own UX. Each flow returns a TransactionPlan; call `prepare()` when the app is ready to compute
+ * the minimal signature requests and/or call requests needed to execute that intent.
+ */
 export interface VaultV2Actions {
   /**
    * Fetches the latest vault data.
@@ -71,7 +81,7 @@ export interface VaultV2Actions {
    * @param {bigint} [params.nativeAmount] - Amount of native token to wrap into wNative. Vault asset must be wNative.
    * @returns {Object} The result object.
    * @returns {Readonly<Transaction<VaultV2DepositAction>>} returns.tx The prepared deposit transaction.
-   * @returns {Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement<PermitRequirementSignature>)[]>} returns.getRequirements The function for retrieving all required approval transactions.
+   * @returns {Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement<PermitRequirementSignature>)[]>} returns.prepare Resolves supporting approval/signature requests plus the primary call.
    */
   deposit: (
     params: {
@@ -79,19 +89,11 @@ export interface VaultV2Actions {
       vaultData: AccrualVaultV2;
       slippageTolerance?: bigint;
     } & DepositAmountArgs,
-  ) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<VaultV2DepositAction>>;
-    getRequirements: (params?: {
-      useSimplePermit?: boolean;
-    }) => Promise<
-      (
-        | Readonly<Transaction<ERC20ApprovalAction>>
-        | Requirement<PermitRequirementSignature>
-      )[]
-    >;
-  };
+  ) => TransactionPlan<
+    VaultV2DepositAction,
+    TransactionPlanSimplePermitOptions,
+    TransactionPlanTokenRequest
+  >;
   /**
    * Prepares a withdraw transaction for the VaultV2 contract.
    *
@@ -103,9 +105,10 @@ export interface VaultV2Actions {
    * @returns {Object} The result object.
    * @returns {Readonly<Transaction<VaultV2WithdrawAction>>} returns.tx The prepared withdraw transaction.
    */
-  withdraw: (params: { amount: bigint; userAddress: Address }) => {
-    buildTx: () => Readonly<Transaction<VaultV2WithdrawAction>>;
-  };
+  withdraw: (params: {
+    amount: bigint;
+    userAddress: Address;
+  }) => TransactionPlan<VaultV2WithdrawAction>;
   /**
    * Prepares a redeem transaction for the VaultV2 contract.
    *
@@ -117,9 +120,10 @@ export interface VaultV2Actions {
    * @returns {Object} The result object.
    * @returns {Readonly<Transaction<VaultV2RedeemAction>>} returns.tx The prepared redeem transaction.
    */
-  redeem: (params: { shares: bigint; userAddress: Address }) => {
-    buildTx: () => Readonly<Transaction<VaultV2RedeemAction>>;
-  };
+  redeem: (params: {
+    shares: bigint;
+    userAddress: Address;
+  }) => TransactionPlan<VaultV2RedeemAction>;
   /**
    * Prepares a force withdraw transaction for the VaultV2 contract using the vault's native multicall.
    *
@@ -133,15 +137,13 @@ export interface VaultV2Actions {
    * @param {bigint} params.withdraw.amount - The amount of assets to withdraw.
    * @param {Address} params.userAddress - User address (penalty source and withdraw recipient).
    * @returns {Object} The result object.
-   * @returns {Readonly<Transaction<VaultV2ForceWithdrawAction>>} returns.buildTx The prepared multicall transaction.
+   * @returns {Readonly<Transaction<VaultV2ForceWithdrawAction>>} returns.prepare Resolves the primary multicall request.
    */
   forceWithdraw: (params: {
     deallocations: readonly Deallocation[];
     withdraw: { amount: bigint };
     userAddress: Address;
-  }) => {
-    buildTx: () => Readonly<Transaction<VaultV2ForceWithdrawAction>>;
-  };
+  }) => TransactionPlan<VaultV2ForceWithdrawAction>;
   /**
    * Prepares a force redeem transaction for the VaultV2 contract using the vault's native multicall.
    *
@@ -162,15 +164,13 @@ export interface VaultV2Actions {
    * @param {bigint} params.redeem.shares - The amount of shares to redeem.
    * @param {Address} params.userAddress - User address (penalty source and redeem recipient).
    * @returns {Object} The result object.
-   * @returns {Readonly<Transaction<VaultV2ForceRedeemAction>>} returns.buildTx The prepared multicall transaction.
+   * @returns {Readonly<Transaction<VaultV2ForceRedeemAction>>} returns.prepare Resolves the primary multicall request.
    */
   forceRedeem: (params: {
     deallocations: readonly Deallocation[];
     redeem: { shares: bigint };
     userAddress: Address;
-  }) => {
-    buildTx: () => Readonly<Transaction<VaultV2ForceRedeemAction>>;
-  };
+  }) => TransactionPlan<VaultV2ForceRedeemAction>;
 }
 
 export class MorphoVaultV2 implements VaultV2Actions {
@@ -271,8 +271,8 @@ export class MorphoVaultV2 implements VaultV2Actions {
       ),
       MathLib.RAY * 100n,
     );
-    return {
-      getRequirements: (params?: { useSimplePermit?: boolean }) =>
+    return new TransactionPlan({
+      getRequirementRequests: (params?: TransactionPlanSimplePermitOptions) =>
         getGeneralAdapterRequirements(this.client.viemClient, {
           address: vaultData.asset,
           chainId: this.chainId,
@@ -285,7 +285,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
           },
         }),
 
-      buildTx: (signatures?: readonly RequirementSignature[]) => {
+      buildPrimaryCall: (signatures) => {
         const { permit } = selectRequirementSignatures(signatures, {
           permit: true,
         });
@@ -306,7 +306,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
           metadata: this.client.options.metadata,
         });
       },
-    };
+    });
   }
 
   withdraw({ amount, userAddress }: { amount: bigint; userAddress: Address }) {
@@ -317,8 +317,8 @@ export class MorphoVaultV2 implements VaultV2Actions {
       );
     }
 
-    return {
-      buildTx: () =>
+    return new TransactionPlan({
+      buildPrimaryCall: () =>
         vaultV2Withdraw({
           vault: { address: this.vault },
           args: {
@@ -328,7 +328,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
           },
           metadata: this.client.options.metadata,
         }),
-    };
+    });
   }
 
   redeem({ shares, userAddress }: { shares: bigint; userAddress: Address }) {
@@ -339,8 +339,8 @@ export class MorphoVaultV2 implements VaultV2Actions {
       );
     }
 
-    return {
-      buildTx: () =>
+    return new TransactionPlan({
+      buildPrimaryCall: () =>
         vaultV2Redeem({
           vault: { address: this.vault },
           args: {
@@ -350,7 +350,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
           },
           metadata: this.client.options.metadata,
         }),
-    };
+    });
   }
 
   forceWithdraw({
@@ -369,8 +369,8 @@ export class MorphoVaultV2 implements VaultV2Actions {
       );
     }
 
-    return {
-      buildTx: () =>
+    return new TransactionPlan({
+      buildPrimaryCall: () =>
         vaultV2ForceWithdraw({
           vault: { address: this.vault },
           args: {
@@ -383,7 +383,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
           },
           metadata: this.client.options.metadata,
         }),
-    };
+    });
   }
 
   forceRedeem({
@@ -402,8 +402,8 @@ export class MorphoVaultV2 implements VaultV2Actions {
       );
     }
 
-    return {
-      buildTx: () =>
+    return new TransactionPlan({
+      buildPrimaryCall: () =>
         vaultV2ForceRedeem({
           vault: { address: this.vault },
           args: {
@@ -416,6 +416,6 @@ export class MorphoVaultV2 implements VaultV2Actions {
           },
           metadata: this.client.options.metadata,
         }),
-    };
+    });
   }
 }

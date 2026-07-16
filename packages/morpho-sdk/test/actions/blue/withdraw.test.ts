@@ -21,6 +21,7 @@ import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
 import { supplyLoan } from "../../helpers/blue.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
+import { buildPlanTx, getPlanRequests } from "../../transactionPlanUtils.js";
 
 describe("WithdrawBlue", () => {
   test("should withdraw loan token end-to-end (assets mode)", async ({
@@ -56,14 +57,14 @@ describe("WithdrawBlue", () => {
           positionData,
         });
 
-        const requirements = await withdraw.getRequirements();
+        const requirements = await getPlanRequests(withdraw);
         const authorization = requirements[0];
         if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
 
-        const tx = withdraw.buildTx();
+        const tx = await buildPlanTx(withdraw);
         expect(tx.value).toBe(0n);
 
         await client.sendTransaction(tx);
@@ -111,14 +112,14 @@ describe("WithdrawBlue", () => {
           positionData,
         });
 
-        const requirements = await withdraw.getRequirements();
+        const requirements = await getPlanRequests(withdraw);
         const authorization = requirements[0];
         if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
 
-        const tx = withdraw.buildTx();
+        const tx = await buildPlanTx(withdraw);
         expect(tx.value).toBe(0n);
 
         await client.sendTransaction(tx);
@@ -156,7 +157,7 @@ describe("WithdrawBlue", () => {
       positionData,
     });
 
-    const tx = withdraw.buildTx();
+    const tx = await buildPlanTx(withdraw);
     expect(tx.action.args.receiver).toBe(receiver);
   });
 
@@ -182,7 +183,7 @@ describe("WithdrawBlue", () => {
       positionData,
     });
 
-    const requirements = await withdraw.getRequirements();
+    const requirements = await getPlanRequests(withdraw);
     expect(requirements.length).toBe(1);
     expect(isRequirementBlueAuthorization(requirements[0])).toBe(true);
   });
@@ -236,14 +237,14 @@ describe("WithdrawBlue", () => {
           reallocations,
         });
 
-        const requirements = await withdraw.getRequirements();
+        const requirements = await getPlanRequests(withdraw);
         const authorization = requirements[0];
         if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
 
-        const tx = withdraw.buildTx();
+        const tx = await buildPlanTx(withdraw);
         expect(tx.value).toBe(0n);
         expect(tx.action.args.reallocationFee).toBe(0n);
 
@@ -307,14 +308,14 @@ describe("WithdrawBlue", () => {
           reallocations,
         });
 
-        const requirements = await withdraw.getRequirements();
+        const requirements = await getPlanRequests(withdraw);
         const authorization = requirements[0];
         if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
 
-        const tx = withdraw.buildTx();
+        const tx = await buildPlanTx(withdraw);
         expect(tx.value).toBe(0n);
         expect(tx.action.args.shares).toBe(withdrawShares);
         expect(tx.action.args.assets).toBe(0n);
@@ -382,14 +383,14 @@ describe("WithdrawBlue", () => {
           reallocations,
         });
 
-        const requirements = await withdraw.getRequirements();
+        const requirements = await getPlanRequests(withdraw);
         const authorization = requirements[0];
         if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
 
-        const tx = withdraw.buildTx();
+        const tx = await buildPlanTx(withdraw);
         expect(tx.action.args.receiver).toBe(receiver);
         await client.sendTransaction(tx);
       },

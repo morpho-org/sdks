@@ -7,6 +7,7 @@ import { morphoViemExtension, vaultV2ForceRedeem } from "../../../src/index.js";
 import { ReEcosystemUsdcVaultV2 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
+import { buildPlanTx } from "../../transactionPlanUtils.js";
 
 // Accrue VaultV2 to the current block timestamp so `toShares` matches the
 // post-accrue math the contract will run at redeem block (≈ same block here).
@@ -72,7 +73,7 @@ describe("ForceRedeem VaultV2", () => {
       redeem: { shares: redeemShares },
       userAddress: client.account.address,
     });
-    const tx_1 = forceRedeem.buildTx();
+    const tx_1 = await buildPlanTx(forceRedeem);
 
     const tx_2 = vaultV2ForceRedeem({
       vault: { address: ReEcosystemUsdcVaultV2.address },
@@ -134,7 +135,7 @@ describe("ForceRedeem VaultV2", () => {
       redeem: { shares: redeemShares },
       userAddress: client.account.address,
     });
-    const tx = forceRedeem.buildTx();
+    const tx = await buildPlanTx(forceRedeem);
 
     const {
       vaults: {
@@ -199,7 +200,7 @@ describe("ForceRedeem VaultV2", () => {
       redeem: { shares: redeemShares },
       userAddress: client.account.address,
     });
-    const tx = forceRedeem.buildTx();
+    const tx = await buildPlanTx(forceRedeem);
 
     const {
       vaults: {

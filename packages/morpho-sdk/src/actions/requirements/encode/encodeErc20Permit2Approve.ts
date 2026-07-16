@@ -68,10 +68,12 @@ export const encodeErc20Permit2Approve = (
   const action: Permit2Action = {
     type: "permit2",
     args: {
+      token,
       spender: generalAdapter1,
       amount,
       deadline,
       expiration,
+      chainId,
     },
   };
 

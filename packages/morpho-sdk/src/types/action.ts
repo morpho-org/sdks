@@ -542,13 +542,26 @@ export interface MidnightOfferRootSignatureArgs {
 export interface PermitAction
   extends BaseAction<
     "permit",
-    { spender: Address; amount: bigint; deadline: bigint }
+    {
+      token?: Address;
+      spender: Address;
+      amount: bigint;
+      deadline: bigint;
+      chainId?: number;
+    }
   > {}
 
 export interface Permit2Action
   extends BaseAction<
     "permit2",
-    { spender: Address; amount: bigint; deadline: bigint; expiration: bigint }
+    {
+      token?: Address;
+      spender: Address;
+      amount: bigint;
+      deadline: bigint;
+      expiration: bigint;
+      chainId?: number;
+    }
   > {}
 
 /**
@@ -558,7 +571,12 @@ export interface Permit2Action
 export interface AuthorizationAction
   extends BaseAction<
     "authorization",
-    { authorized: Address; isAuthorized: boolean; deadline: bigint }
+    {
+      authorized: Address;
+      isAuthorized: boolean;
+      deadline: bigint;
+      chainId?: number;
+    }
   > {}
 
 /** Metadata for a Midnight offer-root signature request. */
@@ -700,30 +718,6 @@ export type CallRequirement = Readonly<Transaction<CallRequirementAction>>;
 
 /** Onchain call or signature prerequisite returned by an entity action output. */
 export type ActionRequirement = CallRequirement | SignatureRequirement;
-
-/** Optional controls used while resolving action prerequisites. */
-interface ActionRequirementsParams {
-  /**
-   * Prefer the ERC-2612 simple-permit path when the SDK detects support.
-   * Leave unset or set to `false` to force the Permit2/classic approval fallback when
-   * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
-   */
-  readonly useSimplePermit?: boolean;
-}
-
-/** Lazy entity result exposing prerequisite resolution and synchronous transaction building. */
-export interface ActionOutput<
-  TAction extends BaseAction = TransactionAction,
-  TSignatures = RequirementSignature,
-  TRequirementsParams = ActionRequirementsParams,
-> {
-  readonly buildTx: (
-    signatures?: TSignatures,
-  ) => Readonly<Transaction<TAction>>;
-  readonly getRequirements: (
-    params?: TRequirementsParams,
-  ) => Promise<readonly ActionRequirement[]>;
-}
 
 export function isRequirementApproval(
   requirement: unknown,

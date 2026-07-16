@@ -5,6 +5,7 @@ import { morphoViemExtension } from "../../../src/index.js";
 import { KeyrockUsdcVaultV2 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
+import { buildPlanTx } from "../../transactionPlanUtils.js";
 
 describe("Withdraw VaultV2", () => {
   test("should withdraw 1K assets in vaultV2", async ({ client }) => {
@@ -31,7 +32,7 @@ describe("Withdraw VaultV2", () => {
           userAddress: client.account.address,
           amount: assets,
         });
-        const tx = withdraw.buildTx();
+        const tx = await buildPlanTx(withdraw);
 
         await client.sendTransaction(tx);
       },
