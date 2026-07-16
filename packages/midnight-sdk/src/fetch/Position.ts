@@ -3,7 +3,7 @@ import type { Address, Client, Hash } from "viem";
 import { readContract } from "viem/actions";
 import { midnightAbi } from "../abis.js";
 import { MAX_COLLATERALS } from "../constants.js";
-import { AccrualPosition, Position } from "../market/index.js";
+import { AccrualPosition, Position } from "../position/index.js";
 import {
   abi as getPositionAbi,
   code as getPositionCode,
@@ -78,6 +78,8 @@ export async function fetchPosition(
       const collateral = position.collateral as readonly BigIntish[];
 
       return new Position({
+        user: params.user,
+        marketId: params.marketId,
         credit: position.credit,
         pendingFee: position.pendingFee,
         lastLossFactor: position.lastLossFactor,
@@ -112,6 +114,8 @@ export async function fetchPosition(
   );
 
   return new Position({
+    user: params.user,
+    marketId: params.marketId,
     credit: position[0],
     pendingFee: position[1],
     lastLossFactor: position[2],

@@ -803,11 +803,13 @@ Pre-read / validation happens before returning the action output:
 - resolve `requestedUnits = params.units ?? redeemUnits`;
 - `requestedUnits > 0`;
 - `requestedUnits <= creditUnits`;
-- `withdrawable(marketId) >= requestedUnits`.
+- `positionData.withdrawable >= requestedUnits`, where `withdrawable` is the protocol-capacity helper `min(positionData.credit, positionData.market.withdrawable)` using the hydrated market snapshot embedded in the position.
+
+`positionData` is the sole state input for this flow, avoiding a second caller-provided market snapshot with potentially inconsistent liquidity. Callers that coordinate several reads fetch the block outside the entity, pass its `blockNumber` to `getPositionData(...)`, and accrue the returned position with the same block timestamp before constructing the redeem output.
 
 Do not default this flow to raw, unaccrued `positionData.credit`. `Midnight.withdraw(...)` calls `_updatePosition(...)` before burning credit, so bad-debt loss and accrued continuous fees can reduce the position's credit before the withdraw amount is applied. The default SDK flow should therefore use the accrued net face value. Integrators that intentionally want a different partial withdraw amount can still pass explicit `units`.
 
-The latest `morpho-org/midnight` implementation does not cap withdrawals at net face value. After `_updatePosition(...)`, `Midnight.withdraw(...)` decreases `pendingFee` pro rata and burns `units` from the updated `credit`; the protocol-compatible cap for explicit `units` is therefore accrued `creditUnits`, plus market `withdrawable` liquidity. This intentionally keeps the SDK default at net face value while still allowing integrators to request another protocol-valid partial amount explicitly.
+The latest `morpho-org/midnight` implementation does not cap withdrawals at net face value. After `_updatePosition(...)`, `Midnight.withdraw(...)` decreases `pendingFee` pro rata and burns `units` from the updated `credit`; the protocol-compatible cap for explicit `units` is therefore the lower of accrued `creditUnits` and market `withdrawable` liquidity. This intentionally keeps the SDK default at net face value while still allowing integrators to request another protocol-valid partial amount explicitly.
 
 `getRequirements()` returns `[]`.
 

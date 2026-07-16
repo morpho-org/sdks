@@ -1,4 +1,4 @@
-import { ChainId, registerCustomAddresses } from "@morpho-org/morpho-ts";
+import { ChainId } from "@morpho-org/morpho-ts";
 import type { Address, Hash } from "viem";
 import { zeroAddress } from "viem";
 
@@ -15,10 +15,6 @@ import { type IOffer, Offer } from "../offers/index.js";
 export const chainId = ChainId.BaseMainnet;
 
 export const addresses = {
-  midnight: "0xAdedD8ab6dE832766Fedf0FaC4992E5C4D3EA18A" as Address,
-  midnightMempool: "0xdD6DCE32e21f7b020898a8258dA37355b4017993" as Address,
-  ecrecoverRatifier: "0xd6e70365C8E8DDa9a4ca662C07bbE663b017755E" as Address,
-  setterRatifier: "0x800B5F12A61B8198a5a6EfD794Cac6699B294d63" as Address,
   loanToken: "0x0000000000000000000000000000000000006000" as Address,
   collateralToken: "0x0000000000000000000000000000000000007000" as Address,
   oracle: "0x0000000000000000000000000000000000008000" as Address,
@@ -28,78 +24,82 @@ export const addresses = {
   callback: "0x000000000000000000000000000000000000c000" as Address,
 };
 
-registerCustomAddresses({
-  addresses: {
-    [chainId]: {
-      midnight: addresses.midnight,
-      midnightMempool: addresses.midnightMempool,
-      ecrecoverRatifier: addresses.ecrecoverRatifier,
-      setterRatifier: addresses.setterRatifier,
-    },
-  },
-});
-
 export const group =
   "0x1111111111111111111111111111111111111111111111111111111111111111" as Hash;
 
-export const baseMarketParamsInput = (): IMarketParams => ({
-  chainId,
-  midnight: addresses.midnight,
-  loanToken: addresses.loanToken,
-  collateralParams: [
-    {
-      token: addresses.collateralToken,
-      lltv: 770000000000000000n,
-      liquidationCursor: 250000000000000000n,
-      oracle: addresses.oracle,
-    },
-  ],
-  maturity: 2_000n,
-  rcfThreshold: 0n,
-  enterGate: "0x0000000000000000000000000000000000000000",
-  liquidatorGate: "0x0000000000000000000000000000000000000000",
-});
+export const createFixtures = (deploymentAddresses: {
+  readonly midnight: Address;
+  readonly ecrecoverRatifier: Address;
+}) => {
+  const baseMarketParamsInput = (): IMarketParams => ({
+    chainId,
+    midnight: deploymentAddresses.midnight,
+    loanToken: addresses.loanToken,
+    collateralParams: [
+      {
+        token: addresses.collateralToken,
+        lltv: 770000000000000000n,
+        liquidationCursor: 250000000000000000n,
+        oracle: addresses.oracle,
+      },
+    ],
+    maturity: 2_000n,
+    rcfThreshold: 0n,
+    enterGate: "0x0000000000000000000000000000000000000000",
+    liquidatorGate: "0x0000000000000000000000000000000000000000",
+  });
 
-export const baseMarketParams = () => new MarketParams(baseMarketParamsInput());
+  const baseMarketParams = () => new MarketParams(baseMarketParamsInput());
 
-export const marketId = MarketUtils.toId(baseMarketParamsInput());
+  const marketId = MarketUtils.toId(baseMarketParamsInput());
 
-export const baseMarketInput = (): IMarket => ({
-  params: baseMarketParams(),
-  totalUnits: 1_000n,
-  lossFactor: 0n,
-  withdrawable: 500n,
-  continuousFeeCredit: 0n,
-  settlementFeeCbps: [1, 2, 3, 4, 5, 6, 7],
-  continuousFee: 10,
-  tickSpacing: 4,
-});
+  const baseMarketInput = (): IMarket => ({
+    params: baseMarketParams(),
+    totalUnits: 1_000n,
+    lossFactor: 0n,
+    withdrawable: 500n,
+    continuousFeeCredit: 0n,
+    settlementFeeCbps: [1, 2, 3, 4, 5, 6, 7],
+    continuousFee: 10,
+    tickSpacing: 4,
+  });
 
-export const baseMarket = () => new Market(baseMarketInput());
+  const baseMarket = () => new Market(baseMarketInput());
 
-export const baseOfferInput = (overrides: Partial<IOffer> = {}): IOffer => {
-  const buy = overrides.buy ?? true;
+  const baseOfferInput = (overrides: Partial<IOffer> = {}): IOffer => {
+    const buy = overrides.buy ?? true;
+
+    return {
+      market: overrides.market ?? baseMarketParams(),
+      buy,
+      maker: overrides.maker ?? addresses.maker,
+      start: overrides.start ?? 0n,
+      expiry: overrides.expiry ?? 2_100n,
+      tick: overrides.tick ?? 5_000n,
+      group: overrides.group,
+      callback: overrides.callback ?? zeroAddress,
+      callbackData: overrides.callbackData ?? "0x",
+      receiverIfMakerIsSeller:
+        overrides.receiverIfMakerIsSeller ??
+        (buy ? zeroAddress : addresses.maker),
+      ratifier: overrides.ratifier ?? deploymentAddresses.ecrecoverRatifier,
+      reduceOnly: overrides.reduceOnly ?? false,
+      maxUnits: overrides.maxUnits ?? 100n,
+      maxAssets: overrides.maxAssets ?? 1_000n,
+      continuousFeeCap: overrides.continuousFeeCap ?? MAX_CONTINUOUS_FEE,
+    };
+  };
+
+  const baseOffer = (overrides: Partial<IOffer> = {}) =>
+    new Offer(baseOfferInput(overrides));
 
   return {
-    market: overrides.market ?? baseMarketParams(),
-    buy,
-    maker: overrides.maker ?? addresses.maker,
-    start: overrides.start ?? 0n,
-    expiry: overrides.expiry ?? 2_100n,
-    tick: overrides.tick ?? 5_000n,
-    group: overrides.group,
-    callback: overrides.callback ?? zeroAddress,
-    callbackData: overrides.callbackData ?? "0x",
-    receiverIfMakerIsSeller:
-      overrides.receiverIfMakerIsSeller ??
-      (buy ? zeroAddress : addresses.maker),
-    ratifier: overrides.ratifier ?? addresses.ecrecoverRatifier,
-    reduceOnly: overrides.reduceOnly ?? false,
-    maxUnits: overrides.maxUnits ?? 100n,
-    maxAssets: overrides.maxAssets ?? 1_000n,
-    continuousFeeCap: overrides.continuousFeeCap ?? MAX_CONTINUOUS_FEE,
+    baseMarketParamsInput,
+    baseMarketParams,
+    marketId,
+    baseMarketInput,
+    baseMarket,
+    baseOfferInput,
+    baseOffer,
   };
 };
-
-export const baseOffer = (overrides: Partial<IOffer> = {}) =>
-  new Offer(baseOfferInput(overrides));

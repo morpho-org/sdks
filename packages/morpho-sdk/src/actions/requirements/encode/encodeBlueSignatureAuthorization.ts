@@ -1,14 +1,12 @@
 import type { Address } from "@morpho-org/blue-sdk";
 import { getAuthorizationTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
-import { type Client, verifyTypedData, type WalletClient } from "viem";
-import { signTypedData } from "viem/actions";
-import { validateUserAddress } from "../../../helpers/validate.js";
+import type { Client, WalletClient } from "viem";
+import { signAndVerifyTypedData } from "../../../helpers/signAndVerifyTypedData.js";
 import {
   type AuthorizationAction,
   type AuthorizationRequirementSignature,
   ChainIdMismatchError,
-  InvalidSignatureError,
   type Requirement,
 } from "../../../types/index.js";
 
@@ -83,28 +81,15 @@ export const encodeBlueSignatureAuthorization = async (
   return {
     action,
     async sign(client: WalletClient, userAddress: Address) {
-      const account = client.account;
-      validateUserAddress(account?.address, userAddress);
-
       const typedData = getAuthorizationTypedData(
         { authorizer: userAddress, authorized, isAuthorized, nonce, deadline },
         chainId,
       );
-
-      const signature = await signTypedData(client, {
-        ...typedData,
-        account,
+      const signature = await signAndVerifyTypedData({
+        client,
+        userAddress,
+        typedData,
       });
-
-      const isValid = await verifyTypedData({
-        ...typedData,
-        address: userAddress, // Verify against the authorizer.
-        signature,
-      });
-
-      if (!isValid) {
-        throw new InvalidSignatureError();
-      }
 
       return deepFreeze({
         args: {

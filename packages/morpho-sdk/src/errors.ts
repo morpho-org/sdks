@@ -15,5 +15,22 @@ export {
   UnsupportedVaultV2AdapterError,
   VaultV2Errors,
 } from "@morpho-org/blue-sdk";
+export {
+  InvalidMidnightApiResponseError,
+  InvalidOfferGroupError,
+  InvalidOfferParameterError,
+  InvalidPositionAccrualStateError,
+  InvalidPositionAccrualTimestampError,
+  InvalidPositionLossFactorError,
+  InvalidTickSpacingError,
+  InvalidTreeError,
+  InvalidTreeHeightError,
+  MidnightApiError,
+  MidnightMempoolValidationError,
+  PriceGreaterThanOneError,
+  SettlementFeeExceedsPriceError,
+  TickOutOfRangeError,
+  UnknownCollateralIndexError,
+} from "@morpho-org/midnight-sdk";
 export type { ErrorClass } from "@morpho-org/morpho-ts";
 export { _try } from "@morpho-org/morpho-ts";

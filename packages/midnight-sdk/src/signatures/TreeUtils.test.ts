@@ -1,11 +1,10 @@
-import { type Hex, zeroAddress } from "viem";
+import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
+import { createWalletClient, type Hex, http, zeroAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { describe, expect, expectTypeOf, test, vi } from "vitest";
 import {
-  addresses,
-  baseMarketParamsInput,
-  baseOffer,
-  baseOfferInput,
+  chainId,
+  createFixtures,
   group as staleGroup,
 } from "../__test__/fixtures.js";
 import type { MidnightApiFetch } from "../api/index.js";
@@ -25,6 +24,7 @@ import { EcrecoverRatifierUtils } from "./EcrecoverRatifierUtils.js";
 import { Group } from "./Group.js";
 import { GroupUtils } from "./GroupUtils.js";
 import { Payload } from "./Payload.js";
+import { RatifierUtils } from "./RatifierUtils.js";
 import { SetterRatifierUtils } from "./SetterRatifierUtils.js";
 import { Tree } from "./Tree.js";
 import { TreeUtils } from "./TreeUtils.js";
@@ -34,8 +34,19 @@ const root =
 const zeroBytes32 =
   "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
 const API_VALID_MATURITY = 1_767_279_600n;
+const setterRatifier = getChainAddress(ChainId.BaseMainnet, "setterRatifier");
+const { baseMarketParamsInput, baseOffer, baseOfferInput } = createFixtures({
+  midnight: getChainAddress(ChainId.BaseMainnet, "midnight"),
+  ecrecoverRatifier: getChainAddress(ChainId.BaseMainnet, "ecrecoverRatifier"),
+});
 const privateKey =
   "0x0000000000000000000000000000000000000000000000000000000000000001" as const;
+const midnightTestChain = {
+  id: chainId,
+  name: "Midnight Test",
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  rpcUrls: { default: { http: ["http://localhost"] } },
+} as const;
 
 const emptyMarket = () => ({
   chainId: 0n,
@@ -307,6 +318,7 @@ describe("Tree.from", () => {
 
     expect(Tree.from(tree)).toBe(tree);
     expect(Tree.from([baseOfferInput({ maxAssets: 0n })])).toBeInstanceOf(Tree);
+    expect(Tree.from(baseOfferInput({ maxAssets: 0n }))).toBeInstanceOf(Tree);
   });
 });
 
@@ -366,6 +378,55 @@ describe("TreeUtils.mempoolValidate", () => {
     expect(ratifierData.root).toBe(tree.root);
   });
 
+  test("behavior: ecrecover ratification can sign before API validation", async () => {
+    const account = privateKeyToAccount(privateKey);
+    const calls: {
+      readonly input: Parameters<MidnightApiFetch>[0];
+      readonly init: Parameters<MidnightApiFetch>[1];
+    }[] = [];
+    const fetch: MidnightApiFetch = async (input, init) => {
+      calls.push({ input, init });
+      return new Response(JSON.stringify({ data: { issues: [] } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+    const tree = Tree.create([
+      baseOffer({
+        maker: account.address,
+        market: {
+          ...baseMarketParamsInput(),
+          maturity: API_VALID_MATURITY,
+        },
+        expiry: API_VALID_MATURITY - 60n,
+        maxUnits: 0n,
+        maxAssets: 1_000n,
+      }),
+    ]);
+
+    await TreeUtils.mempoolValidate({
+      chainId,
+      tree,
+      fetch,
+      ratification: {
+        type: "ecrecover",
+        client: createWalletClient({
+          account,
+          chain: midnightTestChain,
+          transport: http("http://localhost"),
+        }),
+        account,
+      },
+    });
+
+    const body = JSON.parse(String(calls[0]!.init?.body)) as Readonly<
+      Record<string, unknown>
+    >;
+    const decoded = await Payload.decode(body.payload as Hex);
+
+    expect(decoded[0]!.ratifierData).not.toBe("0x");
+  });
+
   test("behavior: setter ratification validates final payload from plain input", async () => {
     const calls: {
       readonly input: Parameters<MidnightApiFetch>[0];
@@ -383,7 +444,7 @@ describe("TreeUtils.mempoolValidate", () => {
         ...baseMarketParamsInput(),
         maturity: API_VALID_MATURITY,
       },
-      ratifier: addresses.setterRatifier,
+      ratifier: setterRatifier,
       expiry: API_VALID_MATURITY - 60n,
       maxUnits: 0n,
       maxAssets: 1_000n,
@@ -391,7 +452,7 @@ describe("TreeUtils.mempoolValidate", () => {
 
     await TreeUtils.mempoolValidate({
       chainId: 8453,
-      tree: [offer],
+      tree: offer,
       fetch,
       ratification: { type: "setter" },
     });
@@ -413,6 +474,43 @@ describe("TreeUtils.mempoolValidate", () => {
         proof: ratifierData.proof,
       }),
     ).toBe(true);
+  });
+
+  test("behavior: no-ratification payload validation accepts a single plain offer", async () => {
+    const calls: {
+      readonly input: Parameters<MidnightApiFetch>[0];
+      readonly init: Parameters<MidnightApiFetch>[1];
+    }[] = [];
+    const fetch: MidnightApiFetch = async (input, init) => {
+      calls.push({ input, init });
+      return new Response(JSON.stringify({ data: { issues: [] } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+    const offer = baseOfferInput({
+      market: {
+        ...baseMarketParamsInput(),
+        maturity: API_VALID_MATURITY,
+      },
+      expiry: API_VALID_MATURITY - 60n,
+      maxUnits: 0n,
+      maxAssets: 1_000n,
+    });
+
+    await TreeUtils.mempoolValidate({
+      chainId: 8453,
+      tree: offer,
+      fetch,
+    });
+
+    const body = JSON.parse(String(calls[0]!.init?.body)) as Readonly<
+      Record<string, unknown>
+    >;
+    const decoded = await Payload.decode(body.payload as Hex);
+
+    expect(decoded[0]!.offer.maker).toBe(offer.maker);
+    expect(decoded[0]!.ratifierData).toBe("0x");
   });
 
   test("error: InvalidTreeError for empty plain input before API validation", async () => {
@@ -489,7 +587,7 @@ describe("TreeUtils.mempoolValidate", () => {
         ...baseMarketParamsInput(),
         maturity: API_VALID_MATURITY,
       },
-      ratifier: addresses.setterRatifier,
+      ratifier: setterRatifier,
       expiry: API_VALID_MATURITY - 60n,
       maxUnits: 0n,
       maxAssets: 1_000n,
@@ -670,6 +768,10 @@ describe("TreeUtils.buildDescriptor", () => {
     );
   });
 
+  test("error: empty tree", () => {
+    expect(() => TreeUtils.buildDescriptor([])).toThrow(InvalidTreeError);
+  });
+
   test("error: invalid empty offer", () => {
     expect(() => TreeUtils.buildDescriptor([emptyOfferInput()])).toThrow(
       InvalidMarketParameterError,
@@ -685,6 +787,45 @@ describe("TreeUtils.buildDescriptor", () => {
 
     expect(descriptor.offers).toHaveLength(512);
     expect(descriptor.height).toBe(9);
+  });
+});
+
+describe("TreeUtils.buildProof", () => {
+  test("error: InvalidTreeError for out-of-range leaf index", () => {
+    const tree = Tree.create([baseOffer({ maxAssets: 0n })]);
+
+    expect(() => TreeUtils.buildProof({ tree, leafIndex: 1n })).toThrow(
+      InvalidTreeError,
+    );
+  });
+});
+
+describe("RatifierUtils.normalizeRatifierTree", () => {
+  test("behavior: accepts grouped offer input", () => {
+    const offer = baseOffer({ maxAssets: 0n });
+    const group = Group.create([offer]);
+
+    expect(
+      RatifierUtils.normalizeRatifierTree({
+        tree: [group],
+        label: "Ecrecover",
+      }).ratifier,
+    ).toBe(offer.ratifier);
+  });
+
+  test("error: InvalidTreeError for malformed empty tree-like input", () => {
+    expect(() =>
+      RatifierUtils.normalizeRatifierTree({
+        tree: {
+          offers: [],
+          paddedOffers: [],
+          leaves: [],
+          root: zeroBytes32,
+          height: 0,
+        },
+        label: "Setter",
+      }),
+    ).toThrow(InvalidTreeError);
   });
 });
 

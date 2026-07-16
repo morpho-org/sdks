@@ -10,7 +10,7 @@ import type {
   IMarket,
   IMarketParams,
   SettlementFeeCbps,
-} from "./Market.js";
+} from "../market/Market.js";
 import type { IPosition } from "./Position.js";
 
 /**
@@ -22,6 +22,8 @@ import type { IPosition } from "./Position.js";
  *
  * const accrued = PositionUtils.accrueInterest({
  *   position: {
+ *     user: "0x0000000000000000000000000000000000009000",
+ *     marketId: "0x0000000000000000000000000000000000000000000000000000000000000001",
  *     credit: 1_000n,
  *     pendingFee: 100n,
  *     lastLossFactor: 0n,
@@ -63,6 +65,33 @@ import type { IPosition } from "./Position.js";
  */
 export namespace PositionUtils {
   /**
+   * Returns the maximum credit units currently withdrawable by a position.
+   *
+   * @param params.position - Position whose credit limits the withdrawal.
+   * @param params.market - Market whose available liquidity limits the withdrawal.
+   * @returns The lower of the position credit and market withdrawable liquidity.
+   * @example
+   * ```ts
+   * import { PositionUtils } from "@morpho-org/midnight-sdk";
+   *
+   * const withdrawable = PositionUtils.getWithdrawable({
+   *   position: { credit: 1_000n },
+   *   market: { withdrawable: 500n },
+   * });
+   * console.log(withdrawable); // 500n
+   * ```
+   */
+  export function getWithdrawable(params: {
+    readonly position: Pick<IPosition, "credit">;
+    readonly market: Pick<IMarket, "withdrawable">;
+  }) {
+    return MathLib.min(
+      BigInt(params.position.credit),
+      BigInt(params.market.withdrawable),
+    );
+  }
+
+  /**
    * Returns plain Midnight position and market objects accrued like Midnight `updatePositionView`.
    *
    * @param params.position - Position state to accrue.
@@ -78,6 +107,8 @@ export namespace PositionUtils {
    *
    * const { position, market } = PositionUtils.accrueInterest({
    *   position: {
+   *     user: "0x0000000000000000000000000000000000009000",
+   *     marketId: "0x0000000000000000000000000000000000000000000000000000000000000001",
    *     credit: 1_000n,
    *     pendingFee: 100n,
    *     lastLossFactor: 0n,
@@ -222,6 +253,8 @@ export namespace PositionUtils {
 
     return {
       position: {
+        user: params.position.user,
+        marketId: params.position.marketId,
         credit: postSlashCredit - accruedFee,
         pendingFee: postSlashPendingFee - accruedFee,
         lastLossFactor: marketLossFactor,

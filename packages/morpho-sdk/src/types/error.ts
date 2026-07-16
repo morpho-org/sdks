@@ -73,27 +73,33 @@ export namespace BundlerErrors {
   }
 }
 
+/** Requirement signature kind accepted by action-output transaction builders. */
+export type RequirementSignatureKind =
+  | "permit"
+  | "authorization"
+  | "midnightOfferRootSignature";
+
 /**
  * Thrown when `buildTx` receives more than one requirement signature of the same kind.
  *
- * A bundled path consumes at most one permit and one authorization signature; passing several of
- * the same kind is ambiguous and would silently drop all but the first, so it is rejected instead.
+ * A bundled path consumes at most one signature per accepted kind; passing several of the same
+ * kind is ambiguous and would silently drop all but the first, so it is rejected instead.
  *
  * @example
  * ```ts
  * import { AmbiguousRequirementSignaturesError } from "@morpho-org/morpho-sdk";
  *
  * if (error instanceof AmbiguousRequirementSignaturesError) {
- *   // Pass a single permit (and at most one authorization) signature to buildTx.
+ *   // Pass a single signature per accepted kind to buildTx.
  * }
  * ```
  */
 export class AmbiguousRequirementSignaturesError extends Error {
   /**
-   * @param kind - The over-supplied signature kind (`"permit"` or `"authorization"`).
+   * @param kind - The over-supplied signature kind.
    * @param count - How many signatures of that kind were received.
    */
-  constructor(kind: "permit" | "authorization", count: number) {
+  constructor(kind: RequirementSignatureKind, count: number) {
     super(
       `Expected at most one ${kind} signature but received ${count}. Pass a single ${kind} signature to buildTx.`,
     );
@@ -101,9 +107,8 @@ export class AmbiguousRequirementSignaturesError extends Error {
 }
 
 /**
- * Thrown when `buildTx` receives a requirement signature of a kind the operation does not consume
- * (for example an authorization signature on a plain supply path). Surfacing it prevents a signed
- * authorization or permit from being silently ignored.
+ * Thrown when `buildTx` receives a requirement signature of a kind the operation does not consume.
+ * Surfacing it prevents a signed requirement from being silently ignored.
  *
  * @example
  * ```ts
@@ -116,9 +121,9 @@ export class AmbiguousRequirementSignaturesError extends Error {
  */
 export class UnexpectedRequirementSignatureError extends Error {
   /**
-   * @param kind - The unexpected signature kind (`"permit"` or `"authorization"`).
+   * @param kind - The unexpected signature kind.
    */
-  constructor(kind: "permit" | "authorization") {
+  constructor(kind: RequirementSignatureKind) {
     super(
       `Received a ${kind} signature that this operation does not consume. Remove it from the buildTx signatures array.`,
     );
@@ -164,6 +169,13 @@ export class ChainIdMismatchError extends Error {
   }
 }
 
+/** Thrown when a runtime crypto API is required but unavailable. */
+export class CryptoUnavailableError extends Error {
+  constructor(feature: string) {
+    super(`Crypto API is required for ${feature} but is unavailable.`);
+  }
+}
+
 /** Thrown when the viem client is missing a property the call requires (e.g. `account.address`). */
 export class MissingClientPropertyError extends Error {
   constructor(property: string) {
@@ -205,6 +217,19 @@ export class UnsupportedErc20ApprovalSpenderError extends Error {
   }
 }
 
+/** Thrown when a Midnight authorization requirement targets an unsupported operator. */
+export class UnsupportedMidnightAuthorizationTargetError extends Error {
+  constructor(params: {
+    readonly authorized: Address;
+    readonly chainId: number;
+    readonly supportedTargets: readonly Address[];
+  }) {
+    super(
+      `Midnight authorization target "${params.authorized}" is not supported on chain "${params.chainId}". Use "${params.supportedTargets.join('", "')}".`,
+    );
+  }
+}
+
 /** Thrown when a slippage tolerance is negative. */
 export class NegativeSlippageToleranceError extends Error {
   constructor(slippageTolerance: bigint) {
@@ -212,10 +237,14 @@ export class NegativeSlippageToleranceError extends Error {
   }
 }
 
-/** Thrown when a Morpho accrual position is missing for a market the call needs to read. */
+/** Thrown when a Morpho accrual position required by a call is missing. */
 export class MissingAccrualPositionError extends Error {
-  constructor(market: string) {
-    super(`Accrual position is missing for market: ${market}`);
+  constructor(market?: string) {
+    super(
+      market == null
+        ? "Accrual position is missing. Fetch the position data and try again."
+        : `Accrual position is missing for market: ${market}`,
+    );
   }
 }
 
@@ -249,6 +278,24 @@ export class DepositAssetMismatchError extends Error {
   constructor(depositAsset: Address, signatureAsset: Address) {
     super(
       `Deposit asset "${depositAsset}" does not match requirement signature asset "${signatureAsset}"`,
+    );
+  }
+}
+
+/** Thrown when a deposit's owner differs from the owner the supplied permit / permit2 signature was issued for. */
+export class DepositOwnerMismatchError extends Error {
+  constructor(depositOwner: Address, signatureOwner: Address) {
+    super(
+      `Deposit owner "${depositOwner}" does not match requirement signature owner "${signatureOwner}"`,
+    );
+  }
+}
+
+/** Thrown when a deposit's spender differs from the spender the supplied permit / permit2 signature was issued for. */
+export class DepositSpenderMismatchError extends Error {
+  constructor(depositSpender: Address, signatureSpender: Address) {
+    super(
+      `Deposit spender "${depositSpender}" does not match requirement signature spender "${signatureSpender}"`,
     );
   }
 }
@@ -648,6 +695,224 @@ export class UnknownReallocationPositionError extends UnknownDataError {
     public readonly marketId: MarketId,
   ) {
     super(`unknown reallocation position of "${user}" on market "${marketId}"`);
+  }
+}
+
+/** Thrown when a Midnight amount that must be positive is zero or negative. */
+export class NonPositiveMidnightAmountError extends Error {
+  constructor(label: string, amount: bigint) {
+    super(`Midnight ${label} must be positive, got "${amount}".`);
+  }
+}
+
+/** Thrown when a Midnight amount that must be non-negative is negative. */
+export class NegativeMidnightAmountError extends Error {
+  constructor(label: string, amount: bigint) {
+    super(`Midnight ${label} must not be negative, got "${amount}".`);
+  }
+}
+
+/** Thrown when a Midnight amount exceeds the maximum offer-cap value accepted onchain. */
+export class MidnightAmountExceedsMaxOfferCapError extends Error {
+  constructor(params: {
+    readonly label: string;
+    readonly amount: bigint;
+    readonly maxOfferCap: bigint;
+  }) {
+    super(
+      `Midnight ${params.label} "${params.amount}" exceeds maximum offer cap "${params.maxOfferCap}". Reduce the amount to the maximum offer cap or less.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight flow needs at least one takeable offer. */
+export class EmptyMidnightTakeableOffersError extends Error {
+  constructor() {
+    super(
+      "Midnight takeable offers cannot be empty. Refresh the quote and try again.",
+    );
+  }
+}
+
+/** Thrown when a Midnight offer has the wrong maker side for the requested flow. */
+export class MidnightOfferSideMismatchError extends Error {
+  constructor(params: {
+    index: number;
+    expectedBuy: boolean;
+    actualBuy: boolean;
+  }) {
+    super(
+      `Midnight offer "${params.index}" has buy="${params.actualBuy}", expected "${params.expectedBuy}". Use the matching flow or rebuild the offer list.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight maker offer belongs to a different account than the action flow. */
+export class MidnightOfferMakerMismatchError extends Error {
+  constructor(params: {
+    readonly index: number;
+    readonly expectedMaker: Address;
+    readonly actualMaker: Address;
+  }) {
+    super(
+      `Midnight offer "${params.index}" belongs to maker "${params.actualMaker}", expected "${params.expectedMaker}". Rebuild the offer set for the active account.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight maker offer targets a different chain than the action flow. */
+export class MidnightOfferMarketChainMismatchError extends Error {
+  constructor(params: {
+    readonly index: number;
+    readonly expectedChainId: number;
+    readonly actualChainId: bigint;
+  }) {
+    super(
+      `Midnight offer "${params.index}" targets chain "${params.actualChainId}", expected "${params.expectedChainId}". Rebuild the offer set for the selected chain.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight maker offer targets a different Midnight contract than the action flow. */
+export class MidnightOfferMarketAddressMismatchError extends Error {
+  constructor(params: {
+    readonly index: number;
+    readonly expectedMidnight: Address;
+    readonly actualMidnight: Address;
+  }) {
+    super(
+      `Midnight offer "${params.index}" targets Midnight "${params.actualMidnight}", expected "${params.expectedMidnight}". Rebuild the offer set for the selected chain.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight market targets a different deployment than the selected chain. */
+export class MidnightMarketAddressMismatchError extends Error {
+  constructor(params: {
+    readonly expectedMidnight: Address;
+    readonly actualMidnight: Address;
+  }) {
+    super(
+      `Midnight market targets contract "${params.actualMidnight}", expected "${params.expectedMidnight}". Use market data from the selected chain deployment.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight make-lend offer does not use the approved loan token. */
+export class MidnightOfferMarketLoanTokenMismatchError extends Error {
+  constructor(params: {
+    readonly index: number;
+    readonly expectedLoanToken: Address;
+    readonly actualLoanToken: Address;
+  }) {
+    super(
+      `Midnight offer "${params.index}" uses loan token "${params.actualLoanToken}", expected "${params.expectedLoanToken}". Rebuild the lend offer set for the approved loan token.`,
+    );
+  }
+}
+
+/** Thrown when a quoted Midnight takeable offer belongs to a different market than the requested flow. */
+export class MidnightTakeableOfferMarketMismatchError extends Error {
+  constructor(params: {
+    index: number;
+    expectedMarket: string;
+    actualMarket: string;
+  }) {
+    super(
+      `Midnight takeable offer "${params.index}" belongs to market "${params.actualMarket}", expected "${params.expectedMarket}". Refresh the quote and try again.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight offer tree uses an unsupported ratifier address. */
+export class UnknownMidnightRatifierError extends Error {
+  constructor(params: {
+    ratifier: Address;
+    ecrecoverRatifier: Address;
+    setterRatifier: Address;
+  }) {
+    super(
+      `Midnight offer tree uses ratifier "${params.ratifier}", expected "${params.ecrecoverRatifier}" or "${params.setterRatifier}". Rebuild the tree with a supported ratifier.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight Ecrecover maker flow builds the submit transaction before signing. */
+export class MissingMidnightOfferRootSignatureError extends Error {
+  constructor() {
+    super(
+      "Midnight offer root signature is missing. Sign the offer-root requirement before building the submit transaction.",
+    );
+  }
+}
+
+/** Thrown when a Midnight offer-root signature does not match the prepared tree root. */
+export class MidnightOfferRootMismatchError extends Error {
+  constructor(params: { expectedRoot: string; actualRoot: string }) {
+    super(
+      `Midnight offer root mismatch: expected "${params.expectedRoot}", got "${params.actualRoot}". Rebuild the flow and sign again.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight offer-root signature was produced by another maker account. */
+export class MidnightOfferRootOwnerMismatchError extends Error {
+  constructor(params: { expectedOwner: Address; actualOwner: Address }) {
+    super(
+      `Midnight offer root owner mismatch: expected "${params.expectedOwner}", got "${params.actualOwner}". Rebuild the flow and sign again.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight offer-root signature targets another ratifier. */
+export class MidnightOfferRootRatifierMismatchError extends Error {
+  constructor(params: { expectedRatifier: Address; actualRatifier: Address }) {
+    super(
+      `Midnight offer root ratifier mismatch: expected "${params.expectedRatifier}", got "${params.actualRatifier}". Rebuild the flow and sign again.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight offer-root signature was produced for another offer count. */
+export class MidnightOfferRootOfferCountMismatchError extends Error {
+  constructor(params: { expectedOffers: number; actualOffers: number }) {
+    super(
+      `Midnight offer root offer-count mismatch: expected "${params.expectedOffers}", got "${params.actualOffers}". Rebuild the flow and sign again.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight offer-root signature was not prepared by this maker flow. */
+export class UnpreparedMidnightOfferRootSignatureError extends Error {
+  constructor() {
+    super(
+      "Midnight offer root signature was not prepared for this offer tree. Sign this flow's offer-root requirement before building the submit transaction.",
+    );
+  }
+}
+
+/** Thrown when a Midnight redeem flow finds no credit units for the user. */
+export class NoMidnightCreditToRedeemError extends Error {
+  constructor(market: string) {
+    super(`No Midnight credit is available to redeem for market "${market}".`);
+  }
+}
+
+/** Thrown when a Midnight redeem amount exceeds the user's accrued credit. */
+export class MidnightRedeemExceedsCreditError extends Error {
+  constructor(params: { market: string; units: bigint; credit: bigint }) {
+    super(
+      `Midnight redeem amount exceeds position credit on market "${params.market}": units "${params.units}", credit "${params.credit}". Redeem less or refresh the position data.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight redeem amount exceeds the market's currently withdrawable liquidity. */
+export class InsufficientMidnightWithdrawableLiquidityError extends Error {
+  constructor(params: { market: string; units: bigint; withdrawable: bigint }) {
+    super(
+      `Midnight withdrawable liquidity is insufficient on market "${params.market}": units "${params.units}", withdrawable "${params.withdrawable}". Try again later or redeem less.`,
+    );
   }
 }
 

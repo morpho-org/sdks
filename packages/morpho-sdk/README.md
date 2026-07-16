@@ -9,7 +9,7 @@
 
 > **The abstraction layer that simplifies Morpho protocol**
 
-Build transactions for **VaultV1** (MetaMorpho), **VaultV2**, and **Blue** (Morpho Blue) on EVM-compatible chains.
+Build transactions for **VaultV1** (MetaMorpho), **VaultV2**, **Blue** (Morpho Blue), and **Midnight** fixed-rate markets on EVM-compatible chains.
 
 ## Installation
 
@@ -40,12 +40,17 @@ pnpm add @morpho-org/morpho-sdk
 |              | `withdrawCollateral`      | Direct Morpho call        | No bundler overhead. Validates position health after withdrawal.                                    |
 |              | `repayWithdrawCollateral` | Bundler (general adapter) | Atomic repay + withdraw. Bundle order matters: repay first, then withdraw.                          |
 |              | `refinance`               | Bundler (general adapter) | Atomic position migration to another market with the same loan + collateral tokens. Flash-collateral via the target's `onMorphoSupplyCollateral` callback: borrow target → repay source → withdraw source collateral. Requires GA1 auth. Supports target reallocations. |
+| **Midnight** | `takeLend` / `takeBorrow` | MidnightBundles | Takes fixed-rate offers with ordered approval and authorization requirements. |
+|              | `supplyCollateralTakeBorrow` | MidnightBundles | Atomically supplies collateral and takes fixed-rate borrow liquidity. |
+|              | `makeLend` / `makeBorrow` | Midnight mempool | Builds, validates, signs or ratifies, and submits maker offer trees. |
+|              | `supplyCollateral` / `redeem` / `cancelOffer` | Direct Midnight call | Encodes direct collateral, credit, and offer-management operations. |
+|              | `repayWithdrawCollateral` | MidnightBundles | Atomically repays credit and withdraws collateral. |
 
 ### The `getRequirements` flow
 
 Every action that touches a user's tokens or positions returns two things:
 
-- `buildTx(signatures?)` — builds the final viem `Transaction` object. Takes an optional array of collected `RequirementSignature`s (permit / Permit2 and/or Morpho authorization).
+- `buildTx(signatures?)` — builds the final viem `Transaction` object. Takes the collected signature results required by the flow, including permit / Permit2, Morpho authorization, or a Midnight offer-root signature.
 - `getRequirements()` — returns the list of on-chain pre-requisites that must be satisfied first.
 
 Typical requirements:
@@ -53,6 +58,7 @@ Typical requirements:
 - **ERC-20 approval** — the user must approve the bundler (or Morpho directly) to pull tokens. Returned as a standard `approve` transaction the consumer sends first.
 - **Permit / Permit2 signature** — off-chain approvals that go into `buildTx` in the `signatures` array, avoiding the extra approval tx. Enabled via `morphoViemExtension({ supportSignature: true })`.
 - **Morpho authorization** — `borrow`, `supplyCollateralBorrow`, and `repayWithdrawCollateral` require the user to authorize `GeneralAdapter1` on the Morpho contract once (`setAuthorization`). The SDK returns this as an extra transaction if it's missing.
+- **Midnight authorization or ratification** — Midnight flows return the required operator authorization, Ecrecover offer-root signature, or SetterRatifier transaction before the final take or mempool submission.
 
 Usage pattern:
 
@@ -90,6 +96,10 @@ const tx = buildTx([permitSignature]);
 |              | `supplyCollateralBorrow` | Bundler (general adapter) | Atomic supply + borrow. LLTV buffer prevents instant liquidation. Supports reallocations.           |
 |              | `withdraw`               | Bundler (general adapter) | `morphoWithdraw` with `minSharePrice` slippage protection. Requires GA1 auth. Supports reallocations. |
 |              | `refinance`              | Bundler (general adapter) | Atomic position migration to another market sharing the same loan + collateral tokens. Requires GA1 auth. Supports reallocations. |
+| **Midnight** | `takeLend` / `takeBorrow` | MidnightBundles | Takes fixed-rate offers with ordered approval and authorization requirements. |
+|              | `makeLend` / `makeBorrow` | Midnight mempool | Builds and submits validated maker offer trees. |
+|              | `supplyCollateral` / `redeem` / `cancelOffer` | Direct Midnight call | Encodes direct Midnight operations. |
+|              | `repayWithdrawCollateral` | MidnightBundles | Atomically repays credit and withdraws collateral. |
 
 ### VaultV2
 
@@ -513,6 +523,28 @@ const { buildTx, getRequirements } = market.supplyCollateralBorrow({
 });
 ```
 
+### Midnight
+
+Midnight exposes fixed-rate market flows through a chain-scoped entity. Fetch market or
+position state when required, resolve the ordered prerequisites, then build the final
+transaction synchronously.
+
+```typescript
+const midnight = client.morpho.midnight(8453);
+const marketData = await midnight.getMarketData(marketId);
+const output = midnight.takeLend({
+  accountAddress: lender,
+  marketData,
+  assets: 1_000_000n,
+  minUnits: 900_000n,
+  takeableOffers: quote.data.takeableOffers,
+  deadline,
+});
+
+const requirements = await output.getRequirements();
+const tx = output.buildTx();
+```
+
 ### Architecture
 
 ```mermaid
@@ -522,6 +554,7 @@ graph LR
     MC -->|.vaultV1| MV1
     MC -->|.vaultV2| MV2
     MC -->|.blue| MM1
+    MC -->|.midnight| MN1
 
     subgraph VaultV1 Flow
         MV1[MorphoVaultV1]
@@ -570,6 +603,16 @@ graph LR
         B3 -.->|reallocateTo| PA[PublicAllocator]
     end
 
+    subgraph Midnight Flow
+        MN1[MorphoMidnight]
+        MN1 --> MNT[fixed-rate taker actions]
+        MN1 --> MNM[maker offer submission]
+        MN1 --> MNP[position actions]
+        MNT --> MNB[MidnightBundles]
+        MNM --> MNMP[Midnight mempool]
+        MNP --> MNC[Midnight / MidnightBundles]
+    end
+
 
     subgraph Shared
         REQ[getRequirements]
@@ -578,6 +621,7 @@ graph LR
     MV1 -.->|approval / permit| REQ
     MV2 -.->|approval / permit| REQ
     MM1 -.->|approval / permit / authorization| REQ
+    MN1 -.->|approval / authorization / root signature or ratification| REQ
 
     style B1 fill:#e8f5e9,stroke:#4caf50
     style B2 fill:#e8f5e9,stroke:#4caf50

@@ -1,9 +1,6 @@
+import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
 import { describe, expect, test } from "vitest";
-import {
-  addresses,
-  baseOffer,
-  group as staleGroup,
-} from "../__test__/fixtures.js";
+import { createFixtures, group as staleGroup } from "../__test__/fixtures.js";
 import { InvalidTreeError } from "../errors.js";
 import { RatifierUtils as RootRatifierUtils } from "../index.js";
 import { OfferUtils } from "../offers/index.js";
@@ -13,21 +10,31 @@ import { RatifierUtils } from "./RatifierUtils.js";
 import { Tree } from "./Tree.js";
 import { TreeUtils } from "./TreeUtils.js";
 
+const ecrecoverRatifier = getChainAddress(
+  ChainId.BaseMainnet,
+  "ecrecoverRatifier",
+);
+const setterRatifier = getChainAddress(ChainId.BaseMainnet, "setterRatifier");
+const { baseOffer } = createFixtures({
+  midnight: getChainAddress(ChainId.BaseMainnet, "midnight"),
+  ecrecoverRatifier,
+});
+
 describe("RatifierUtils.getRatifierInfo", () => {
   test("default", () => {
     expect(
       RatifierUtils.getRatifierInfo({
         bytecode: "0x",
-        ecrecoverRatifier: addresses.ecrecoverRatifier,
-        setterRatifier: addresses.setterRatifier,
+        ecrecoverRatifier,
+        setterRatifier,
       }),
-    ).toEqual({ type: "ecrecover", ratifier: addresses.ecrecoverRatifier });
+    ).toEqual({ type: "ecrecover", ratifier: ecrecoverRatifier });
 
     expect(
       RatifierUtils.getRatifierInfo({
         bytecode: "0x6000",
-        ecrecoverRatifier: addresses.ecrecoverRatifier,
-        setterRatifier: addresses.setterRatifier,
+        ecrecoverRatifier,
+        setterRatifier,
       }).type,
     ).toBe("setter");
   });
@@ -43,7 +50,7 @@ describe("RatifierUtils.normalizeRatifierTree", () => {
   test("default", () => {
     const offer = baseOffer({
       maxAssets: 0n,
-      ratifier: addresses.ecrecoverRatifier,
+      ratifier: ecrecoverRatifier,
     });
     const tree = Tree.create([offer]);
 
@@ -54,14 +61,14 @@ describe("RatifierUtils.normalizeRatifierTree", () => {
       }),
     ).toEqual({
       tree,
-      ratifier: addresses.ecrecoverRatifier,
+      ratifier: ecrecoverRatifier,
     });
   });
 
   test("behavior: accepts plain tree input", () => {
     const offer = baseOffer({
       maxAssets: 0n,
-      ratifier: addresses.setterRatifier,
+      ratifier: setterRatifier,
     });
 
     const { tree, ratifier } = RatifierUtils.normalizeRatifierTree({
@@ -72,7 +79,7 @@ describe("RatifierUtils.normalizeRatifierTree", () => {
     expect(tree.offers).toHaveLength(1);
     expect(tree.offers[0]).not.toBe(offer);
     expect(tree.offers[0]!.group).toBe(offer.group);
-    expect(ratifier).toBe(addresses.setterRatifier);
+    expect(ratifier).toBe(setterRatifier);
   });
 
   test("behavior: preserves grouped TreeLike descriptors", () => {
@@ -95,7 +102,7 @@ describe("RatifierUtils.normalizeRatifierTree", () => {
     const group = Group.create([
       baseOffer({
         maxAssets: 0n,
-        ratifier: addresses.ecrecoverRatifier,
+        ratifier: ecrecoverRatifier,
       }),
     ]);
     const offer = group.offers[0]!;
@@ -122,7 +129,7 @@ describe("RatifierUtils.normalizeRatifierTree", () => {
     expect(tree.leaves).toBe(leaves);
     expect(tree.root).toBe(root);
     expect(tree.height).toBe(1);
-    expect(ratifier).toBe(addresses.ecrecoverRatifier);
+    expect(ratifier).toBe(ecrecoverRatifier);
   });
 
   test("behavior: normalizes stale standalone groups in raw inputs", () => {
@@ -142,11 +149,11 @@ describe("RatifierUtils.normalizeRatifierTree", () => {
     const tree = Tree.create([
       baseOffer({
         maxAssets: 0n,
-        ratifier: addresses.ecrecoverRatifier,
+        ratifier: ecrecoverRatifier,
       }),
       baseOffer({
         maxAssets: 0n,
-        ratifier: addresses.setterRatifier,
+        ratifier: setterRatifier,
       }),
     ]);
 
