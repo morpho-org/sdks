@@ -10,8 +10,8 @@ import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js"
 import {
   type Metadata,
   type MidnightRepayWithdrawCollateralAction,
-  NegativeMidnightAmountError,
-  NonPositiveMidnightAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   type Transaction,
 } from "../../types/index.js";
 import { PermitKind } from "./types.js";
@@ -46,8 +46,8 @@ export interface MidnightRepayWithdrawCollateralParams {
  * @param params.deadline - Bundle execution deadline timestamp; pass `maxUint256` explicitly for no expiry.
  * @param params.metadata - Optional analytics metadata appended to calldata.
  * @returns A deep-frozen `Transaction<MidnightRepayWithdrawCollateralAction>` targeting `MidnightBundles`.
- * @throws {NegativeMidnightAmountError} when any amount, collateral index, or deadline is negative.
- * @throws {NonPositiveMidnightAmountError} when both repay and withdrawal amounts are zero.
+ * @throws {NegativeInputError} when any amount, collateral index, or deadline is negative.
+ * @throws {NonPositiveInputError} when both repay and withdrawal amounts are zero.
  * @throws {ChainIdMismatchError} when the market targets another chain.
  * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
  * @throws {UnknownCollateralIndexError} when a positive withdrawal targets an unconfigured collateral index.
@@ -70,16 +70,16 @@ export const midnightRepayWithdrawCollateral = (
   params: MidnightRepayWithdrawCollateralParams,
 ): Readonly<Transaction<MidnightRepayWithdrawCollateralAction>> => {
   if (params.repayAssets < 0n) {
-    throw new NegativeMidnightAmountError("repayAssets", params.repayAssets);
+    throw new NegativeInputError("repayAssets", params.repayAssets);
   }
   if (params.withdrawCollateralAssets < 0n) {
-    throw new NegativeMidnightAmountError(
+    throw new NegativeInputError(
       "withdrawCollateralAssets",
       params.withdrawCollateralAssets,
     );
   }
   if (params.deadline < 0n) {
-    throw new NegativeMidnightAmountError("deadline", params.deadline);
+    throw new NegativeInputError("deadline", params.deadline);
   }
   const collateralWithdrawals =
     params.withdrawCollateralAssets > 0n
@@ -92,7 +92,7 @@ export const midnightRepayWithdrawCollateral = (
       : [];
   for (const [index, withdrawal] of collateralWithdrawals.entries()) {
     if (withdrawal.collateralIndex < 0n) {
-      throw new NegativeMidnightAmountError(
+      throw new NegativeInputError(
         `collateralWithdrawals[${index}].collateralIndex`,
         withdrawal.collateralIndex,
       );
@@ -102,7 +102,7 @@ export const midnightRepayWithdrawCollateral = (
     params.repayAssets === 0n &&
     collateralWithdrawals.every((withdrawal) => withdrawal.assets === 0n)
   ) {
-    throw new NonPositiveMidnightAmountError("repay or withdraw amount", 0n);
+    throw new NonPositiveInputError("repay or withdraw amount", 0n);
   }
 
   // Reject markets from another chain deployment before encoding the bundle.

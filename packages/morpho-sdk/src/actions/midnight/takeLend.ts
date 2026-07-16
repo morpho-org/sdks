@@ -12,8 +12,8 @@ import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js"
 import {
   type Metadata,
   type MidnightTakeLendAction,
-  NegativeMidnightAmountError,
-  NonPositiveMidnightAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   type Transaction,
 } from "../../types/index.js";
 import { type MidnightTakeableOffer, PermitKind } from "./types.js";
@@ -48,8 +48,8 @@ export interface MidnightTakeLendParams {
  * @param params.deadline - Bundle execution deadline timestamp; pass `maxUint256` explicitly for no expiry.
  * @param params.metadata - Optional analytics metadata appended to calldata.
  * @returns A deep-frozen `Transaction<MidnightTakeLendAction>` targeting `MidnightBundles`.
- * @throws {NonPositiveMidnightAmountError} when `assets <= 0n`.
- * @throws {NegativeMidnightAmountError} when `minUnits` or `deadline` is negative.
+ * @throws {NonPositiveInputError} when `assets <= 0n`.
+ * @throws {NegativeInputError} when `minUnits` or `deadline` is negative.
  * @throws {EmptyMidnightTakeableOffersError} when no offers are provided.
  * @throws {MidnightOfferSideMismatchError} when any offer is not borrow-side.
  * @throws {MidnightTakeableOfferMarketMismatchError} when any offer belongs to another market.
@@ -75,13 +75,13 @@ export const midnightTakeLend = (
   params: MidnightTakeLendParams,
 ): Readonly<Transaction<MidnightTakeLendAction>> => {
   if (params.assets <= 0n) {
-    throw new NonPositiveMidnightAmountError("assets", params.assets);
+    throw new NonPositiveInputError("assets", params.assets);
   }
   if (params.minUnits < 0n) {
-    throw new NegativeMidnightAmountError("minUnits", params.minUnits);
+    throw new NegativeInputError("minUnits", params.minUnits);
   }
   if (params.deadline < 0n) {
-    throw new NegativeMidnightAmountError("deadline", params.deadline);
+    throw new NegativeInputError("deadline", params.deadline);
   }
   // Reject markets from another chain deployment before encoding the bundle.
   validateMidnightMarket({ market: params.market, chainId: params.chainId });

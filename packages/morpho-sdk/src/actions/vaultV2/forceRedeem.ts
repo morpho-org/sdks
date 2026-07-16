@@ -7,7 +7,7 @@ import {
   type Deallocation,
   EmptyDeallocationsError,
   type Metadata,
-  NonPositiveSharesAmountError,
+  NonPositiveInputError,
   type Transaction,
   type VaultV2ForceRedeemAction,
 } from "../../types/index.js";
@@ -55,9 +55,8 @@ export interface VaultV2ForceRedeemParams {
  * @returns A deep-frozen `Transaction<VaultV2ForceRedeemAction>` with `to`, `value`, `data`, and
  *   the typed `action` discriminator the simulation layer consumes.
  * @throws {EmptyDeallocationsError} when `deallocations` is empty.
- * @throws {NonPositiveSharesAmountError} when `redeem.shares <= 0n`.
- * @throws {NonPositiveAssetAmountError} when any `deallocations[i].amount <= 0n` (raised by
- *   `encodeForceDeallocateCall`).
+ * @throws {NonPositiveInputError} when `redeem.shares <= 0n` or any deallocation amount is
+ *   non-positive.
  * @example
  * ```ts
  * import { vaultV2ForceRedeem } from "@morpho-org/morpho-sdk";
@@ -85,7 +84,7 @@ export const vaultV2ForceRedeem = ({
   }
 
   if (redeem.shares <= 0n) {
-    throw new NonPositiveSharesAmountError(vaultAddress);
+    throw new NonPositiveInputError("redeem.shares", redeem.shares);
   }
 
   const calls: Hex[] = [];

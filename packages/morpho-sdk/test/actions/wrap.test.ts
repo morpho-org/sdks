@@ -7,10 +7,10 @@ import {
   isRequirementSignature,
   morphoViemExtension,
   NativeAmountOnNonWNativeVaultError,
-  NegativeNativeAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   vaultV1Deposit,
   vaultV2Deposit,
-  ZeroDepositAmountError,
 } from "../../src/index.js";
 import {
   GauntletWethVaultV1,
@@ -240,7 +240,7 @@ describe("WrapNative - VaultV1", () => {
     ).toThrow(NativeAmountOnNonWNativeVaultError);
   });
 
-  test("should throw ZeroDepositAmountError when both amounts are zero in vaultV1", () => {
+  test("should throw NonPositiveInputError when both amounts are zero in vaultV1", () => {
     expect(() =>
       vaultV1Deposit({
         vault: {
@@ -254,10 +254,10 @@ describe("WrapNative - VaultV1", () => {
           recipient: "0x0000000000000000000000000000000000000001",
         },
       }),
-    ).toThrow(ZeroDepositAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NegativeNativeAmountError for negative nativeAmount in vaultV1", () => {
+  test("should throw NegativeInputError for negative nativeAmount in vaultV1", () => {
     expect(() =>
       vaultV1Deposit({
         vault: {
@@ -271,7 +271,7 @@ describe("WrapNative - VaultV1", () => {
           recipient: "0x0000000000000000000000000000000000000001",
         },
       }),
-    ).toThrow(NegativeNativeAmountError);
+    ).toThrow(NegativeInputError);
   });
 });
 
@@ -495,7 +495,7 @@ describe("WrapNative - VaultV2", () => {
     ).toThrow(NativeAmountOnNonWNativeVaultError);
   });
 
-  test("should throw ZeroDepositAmountError when both amounts are zero in vaultV2", () => {
+  test("should throw NonPositiveInputError when both amounts are zero in vaultV2", () => {
     expect(() =>
       vaultV2Deposit({
         vault: {
@@ -509,10 +509,10 @@ describe("WrapNative - VaultV2", () => {
           recipient: "0x0000000000000000000000000000000000000001",
         },
       }),
-    ).toThrow(ZeroDepositAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NegativeNativeAmountError for negative nativeAmount in vaultV2", () => {
+  test("should throw NegativeInputError for negative nativeAmount in vaultV2", () => {
     expect(() =>
       vaultV2Deposit({
         vault: {
@@ -526,6 +526,6 @@ describe("WrapNative - VaultV2", () => {
           recipient: "0x0000000000000000000000000000000000000001",
         },
       }),
-    ).toThrow(NegativeNativeAmountError);
+    ).toThrow(NegativeInputError);
   });
 });

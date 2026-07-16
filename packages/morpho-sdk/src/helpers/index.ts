@@ -19,6 +19,7 @@ export {
 export {
   validateAccrualPosition,
   validateChainId,
+  validateMidnightMarketChainId,
   validateNativeAsset,
   validatePositionHealth,
   validatePositionHealthAfterWithdraw,

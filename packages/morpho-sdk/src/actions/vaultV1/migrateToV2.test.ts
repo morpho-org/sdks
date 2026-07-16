@@ -13,9 +13,8 @@ import {
   DepositAssetMismatchError,
   isRequirementApproval,
   isRequirementSignature,
-  NegativeMinSharePriceError,
-  NonPositiveMaxSharePriceError,
-  NonPositiveSharesAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   VaultAssetMismatchError,
 } from "../../types/index.js";
 import { getGeneralAdapterRequirements } from "../requirements/index.js";
@@ -343,7 +342,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
     ).toThrow(VaultAssetMismatchError);
   });
 
-  test("should throw NonPositiveSharesAmountError when shares is zero", async ({
+  test("should throw NonPositiveInputError when shares is zero", async ({
     client,
   }) => {
     expect(() =>
@@ -362,10 +361,10 @@ describe("vaultV1MigrateToV2 unit tests", () => {
           recipient: client.account.address,
         },
       }),
-    ).toThrow(NonPositiveSharesAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NonPositiveSharesAmountError when shares is negative", async ({
+  test("should throw NonPositiveInputError when shares is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -384,10 +383,10 @@ describe("vaultV1MigrateToV2 unit tests", () => {
           recipient: client.account.address,
         },
       }),
-    ).toThrow(NonPositiveSharesAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NonPositiveMaxSharePriceError when maxSharePriceVaultV2 is zero", async ({
+  test("should throw NonPositiveInputError when maxSharePriceVaultV2 is zero", async ({
     client,
   }) => {
     expect(() =>
@@ -406,10 +405,10 @@ describe("vaultV1MigrateToV2 unit tests", () => {
           recipient: client.account.address,
         },
       }),
-    ).toThrow(NonPositiveMaxSharePriceError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NonPositiveMaxSharePriceError when maxSharePriceVaultV2 is negative", async ({
+  test("should throw NonPositiveInputError when maxSharePriceVaultV2 is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -428,7 +427,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
           recipient: client.account.address,
         },
       }),
-    ).toThrow(NonPositiveMaxSharePriceError);
+    ).toThrow(NonPositiveInputError);
   });
 
   test("should accept minSharePriceVaultV1 of zero (no slippage floor)", async ({
@@ -453,7 +452,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
     ).not.toThrow();
   });
 
-  test("should throw NegativeMinSharePriceError when minSharePriceVaultV1 is negative", async ({
+  test("should throw NegativeInputError when minSharePriceVaultV1 is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -472,7 +471,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
           recipient: client.account.address,
         },
       }),
-    ).toThrow(NegativeMinSharePriceError);
+    ).toThrow(NegativeInputError);
   });
 
   test("should return a deep-frozen transaction object", async ({ client }) => {

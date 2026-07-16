@@ -120,13 +120,9 @@ interface MarketV1WithdrawAction extends BaseAction<"marketV1Withdraw", {
 
 ### Errors
 
-Nine new classes, one per failure mode (`src/types/error.ts`):
+Scalar input bounds use the protocol-agnostic `NegativeInputError` and
+`NonPositiveInputError` classes from `morpho-sdk`, while domain failures keep dedicated classes:
 
-- `NegativeSupplyAmountError`
-- `NegativeSupplyMaxSharePriceError`
-- `ZeroSupplyAmountError`
-- `NonPositiveWithdrawAmountError`
-- `NegativeWithdrawMinSharePriceError`
 - `MutuallyExclusiveWithdrawAmountsError`
 - `WithdrawExceedsSupplyError`
 - `WithdrawSharesExceedSupplyError`

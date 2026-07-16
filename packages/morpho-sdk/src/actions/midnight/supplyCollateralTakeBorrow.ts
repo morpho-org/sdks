@@ -6,8 +6,8 @@ import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js"
 import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js";
 import {
   type MidnightSupplyCollateralTakeBorrowAction,
-  NegativeMidnightAmountError,
-  NonPositiveMidnightAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   type Transaction,
 } from "../../types/index.js";
 import type { MidnightTakeBorrowParams } from "./takeBorrow.js";
@@ -38,8 +38,8 @@ export interface MidnightSupplyCollateralTakeBorrowParams
  * @param params.collateralAssets - Collateral assets supplied before taking offers.
  * @param params.collateralIndex - Optional collateral index; defaults to `0n`.
  * @returns A deep-frozen `Transaction<MidnightSupplyCollateralTakeBorrowAction>` targeting `MidnightBundles`.
- * @throws {NonPositiveMidnightAmountError} when collateral assets, loan assets, or `maxUnits` are non-positive.
- * @throws {NegativeMidnightAmountError} when `deadline` is negative.
+ * @throws {NonPositiveInputError} when collateral assets, loan assets, or `maxUnits` are non-positive.
+ * @throws {NegativeInputError} when `deadline` is negative.
  * @throws {EmptyMidnightTakeableOffersError} when no offers are provided.
  * @throws {MidnightOfferSideMismatchError} when any offer is not lend-side.
  * @throws {MidnightTakeableOfferMarketMismatchError} when any offer belongs to another market.
@@ -67,19 +67,19 @@ export const midnightSupplyCollateralTakeBorrow = (
   params: MidnightSupplyCollateralTakeBorrowParams,
 ): Readonly<Transaction<MidnightSupplyCollateralTakeBorrowAction>> => {
   if (params.collateralAssets <= 0n) {
-    throw new NonPositiveMidnightAmountError(
+    throw new NonPositiveInputError(
       "collateralAssets",
       params.collateralAssets,
     );
   }
   if (params.loanAssets <= 0n) {
-    throw new NonPositiveMidnightAmountError("loanAssets", params.loanAssets);
+    throw new NonPositiveInputError("loanAssets", params.loanAssets);
   }
   if (params.maxUnits <= 0n) {
-    throw new NonPositiveMidnightAmountError("maxUnits", params.maxUnits);
+    throw new NonPositiveInputError("maxUnits", params.maxUnits);
   }
   if (params.deadline < 0n) {
-    throw new NegativeMidnightAmountError("deadline", params.deadline);
+    throw new NegativeInputError("deadline", params.deadline);
   }
   // Reject markets from another chain deployment before encoding the bundle.
   validateMidnightMarket({ market: params.market, chainId: params.chainId });

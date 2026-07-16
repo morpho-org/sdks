@@ -10,7 +10,7 @@ import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js"
 import {
   type Metadata,
   type MidnightRedeemAction,
-  NonPositiveMidnightAmountError,
+  NonPositiveInputError,
   type Transaction,
 } from "../../types/index.js";
 
@@ -39,7 +39,7 @@ export interface MidnightRedeemParams {
  * @param params.receiver - Optional receiver for withdrawn loan assets; defaults to `onBehalf`.
  * @param params.metadata - Optional analytics metadata appended to calldata.
  * @returns A deep-frozen `Transaction<MidnightRedeemAction>` targeting `Midnight`.
- * @throws {NonPositiveMidnightAmountError} when `units <= 0n`.
+ * @throws {NonPositiveInputError} when `units <= 0n`.
  * @throws {ChainIdMismatchError} when the market targets another chain.
  * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
  * @example
@@ -58,7 +58,7 @@ export const midnightRedeem = (
   params: MidnightRedeemParams,
 ): Readonly<Transaction<MidnightRedeemAction>> => {
   if (params.units <= 0n) {
-    throw new NonPositiveMidnightAmountError("units", params.units);
+    throw new NonPositiveInputError("units", params.units);
   }
 
   // Reject markets from another chain deployment before encoding the call.

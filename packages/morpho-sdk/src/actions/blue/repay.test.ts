@@ -8,9 +8,8 @@ import { test } from "../../../test/setup.js";
 import {
   MutuallyExclusiveRepayAmountsError,
   NativeAmountOnNonWNativeAssetError,
-  NegativeNativeAmountError,
-  NonPositiveRepayAmountError,
-  NonPositiveRepayMaxSharePriceError,
+  NegativeInputError,
+  NonPositiveInputError,
   TransferAmountNotEqualToAssetsError,
 } from "../../types/index.js";
 import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
@@ -221,7 +220,7 @@ describe("blueRepay unit tests", () => {
     expect(tx.data.toLowerCase()).toContain(MAX_UINT256_HEX);
   });
 
-  test("error: NonPositiveRepayMaxSharePriceError when maxSharePrice is zero", async ({
+  test("error: NonPositiveInputError when maxSharePrice is zero", async ({
     client,
   }) => {
     expect(() =>
@@ -235,10 +234,10 @@ describe("blueRepay unit tests", () => {
           maxSharePrice: 0n,
         },
       }),
-    ).toThrow(NonPositiveRepayMaxSharePriceError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("error: NonPositiveRepayMaxSharePriceError when maxSharePrice is negative", async ({
+  test("error: NonPositiveInputError when maxSharePrice is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -252,7 +251,7 @@ describe("blueRepay unit tests", () => {
           maxSharePrice: -1n,
         },
       }),
-    ).toThrow(NonPositiveRepayMaxSharePriceError);
+    ).toThrow(NonPositiveInputError);
   });
 
   test("error: MutuallyExclusiveRepayAmountsError when both amount and shares are provided", async ({
@@ -273,7 +272,7 @@ describe("blueRepay unit tests", () => {
     ).toThrow(MutuallyExclusiveRepayAmountsError);
   });
 
-  test("error: NonPositiveRepayAmountError when the resolved amount is zero", async ({
+  test("error: NonPositiveInputError when the resolved amount is zero", async ({
     client,
   }) => {
     expect(() =>
@@ -287,10 +286,10 @@ describe("blueRepay unit tests", () => {
           maxSharePrice: 1n,
         },
       }),
-    ).toThrow(NonPositiveRepayAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("error: NonPositiveRepayAmountError when amount is negative", async ({
+  test("error: NegativeInputError when amount is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -304,10 +303,10 @@ describe("blueRepay unit tests", () => {
           maxSharePrice: 1n,
         },
       }),
-    ).toThrow(NonPositiveRepayAmountError);
+    ).toThrow(NegativeInputError);
   });
 
-  test("error: NonPositiveRepayAmountError when shares is negative", async ({
+  test("error: NegativeInputError when shares is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -321,10 +320,10 @@ describe("blueRepay unit tests", () => {
           maxSharePrice: 1n,
         },
       }),
-    ).toThrow(NonPositiveRepayAmountError);
+    ).toThrow(NegativeInputError);
   });
 
-  test("error: NonPositiveRepayAmountError when shares mode transferAmount is negative", async ({
+  test("error: NegativeInputError when shares mode transferAmount is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -338,7 +337,7 @@ describe("blueRepay unit tests", () => {
           maxSharePrice: 1n,
         },
       }),
-    ).toThrow(NonPositiveRepayAmountError);
+    ).toThrow(NegativeInputError);
   });
 
   test("error: TransferAmountNotEqualToAssetsError when assets-mode transferAmount != amount + nativeAmount", async ({
@@ -358,7 +357,7 @@ describe("blueRepay unit tests", () => {
     ).toThrow(TransferAmountNotEqualToAssetsError);
   });
 
-  test("error: NonPositiveRepayAmountError when shares mode has no funding", async ({
+  test("error: NonPositiveInputError when shares mode has no funding", async ({
     client,
   }) => {
     expect(() =>
@@ -372,10 +371,10 @@ describe("blueRepay unit tests", () => {
           maxSharePrice: 1n,
         },
       }),
-    ).toThrow(NonPositiveRepayAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("error: NegativeNativeAmountError when nativeAmount is negative", async ({
+  test("error: NegativeInputError when nativeAmount is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -390,7 +389,7 @@ describe("blueRepay unit tests", () => {
           maxSharePrice: 1n,
         },
       }),
-    ).toThrow(NegativeNativeAmountError);
+    ).toThrow(NegativeInputError);
   });
 
   test("error: NativeAmountOnNonWNativeAssetError when loan token is not wNative", async ({

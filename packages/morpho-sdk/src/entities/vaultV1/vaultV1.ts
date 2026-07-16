@@ -15,24 +15,21 @@ import {
   vaultV1Redeem,
   vaultV1Withdraw,
 } from "../../actions/index.js";
+import { MAX_ABSOLUTE_SHARE_PRICE } from "../../helpers/constant.js";
 import {
-  MAX_ABSOLUTE_SHARE_PRICE,
-  MAX_SLIPPAGE_TOLERANCE,
-} from "../../helpers/constant.js";
-import { validateChainId } from "../../helpers/index.js";
+  validateChainId,
+  validateSlippageTolerance,
+} from "../../helpers/index.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
   ChainIdMismatchError,
   ChainWNativeMissingError,
   type DepositAmountArgs,
   type ERC20ApprovalAction,
-  ExcessiveSlippageToleranceError,
   type MorphoClientType,
   NativeAmountOnNonWNativeVaultError,
-  NegativeNativeAmountError,
-  NegativeSlippageToleranceError,
-  NonPositiveAssetAmountError,
-  NonPositiveSharesAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   type PermitRequirementSignature,
   type Requirement,
   type RequirementSignature,
@@ -193,11 +190,11 @@ export class MorphoVaultV1 implements VaultV1Actions {
     }
 
     if (amount < 0n) {
-      throw new NonPositiveAssetAmountError(this.vault);
+      throw new NegativeInputError("amount", amount);
     }
 
     if (nativeAmount && nativeAmount < 0n) {
-      throw new NegativeNativeAmountError(nativeAmount);
+      throw new NegativeInputError("nativeAmount", nativeAmount);
     }
 
     let wNative: Address | undefined;
@@ -208,12 +205,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
       }
     }
 
-    if (slippageTolerance < 0n) {
-      throw new NegativeSlippageToleranceError(slippageTolerance);
-    }
-    if (slippageTolerance > MAX_SLIPPAGE_TOLERANCE) {
-      throw new ExcessiveSlippageToleranceError(slippageTolerance);
-    }
+    validateSlippageTolerance(slippageTolerance);
 
     if (nativeAmount && wNative) {
       if (!isAddressEqual(vaultData.asset, wNative)) {
@@ -222,10 +214,13 @@ export class MorphoVaultV1 implements VaultV1Actions {
     }
 
     const totalAssets = amount + (nativeAmount ?? 0n);
+    if (totalAssets === 0n) {
+      throw new NonPositiveInputError("totalAssets", totalAssets);
+    }
 
     const shares = vaultData.toShares(totalAssets);
     if (shares <= 0n) {
-      throw new NonPositiveSharesAmountError(this.vault);
+      throw new NonPositiveInputError("shares", shares);
     }
 
     const maxSharePrice = MathLib.min(
@@ -342,15 +337,10 @@ export class MorphoVaultV1 implements VaultV1Actions {
     }
 
     if (shares <= 0n) {
-      throw new NonPositiveSharesAmountError(this.vault);
+      throw new NonPositiveInputError("shares", shares);
     }
 
-    if (slippageTolerance < 0n) {
-      throw new NegativeSlippageToleranceError(slippageTolerance);
-    }
-    if (slippageTolerance > MAX_SLIPPAGE_TOLERANCE) {
-      throw new ExcessiveSlippageToleranceError(slippageTolerance);
-    }
+    validateSlippageTolerance(slippageTolerance);
 
     // Compute minSharePriceVaultV1 for V1 redeem (slippage downward)
     const v1RefAssets = sourceVault.toAssets(shares);
@@ -369,7 +359,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
     );
     const v2RefShares = accruedTargetVault.toShares(v1RefAssets);
     if (v2RefShares <= 0n) {
-      throw new NonPositiveSharesAmountError(targetVault.address);
+      throw new NonPositiveInputError("targetVaultShares", v2RefShares);
     }
     const maxSharePriceVaultV2 = MathLib.min(
       MathLib.mulDivUp(

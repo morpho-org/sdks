@@ -17,12 +17,9 @@ import {
   isRequirementApproval,
   MutuallyExclusiveRepayAmountsError,
   NativeAmountOnNonWNativeAssetError,
-  NegativeNativeAmountError,
-  NonPositiveAssetAmountError,
-  NonPositiveBorrowAmountError,
-  NonPositiveRepayAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   WithdrawExceedsCollateralError,
-  ZeroCollateralAmountError,
 } from "../../types/index.js";
 import { ReallocationData } from "../reallocationData.js";
 
@@ -133,17 +130,17 @@ describe("MorphoBlue validation", () => {
 
     expect(() =>
       market.supplyCollateral({ userAddress: USER, amount: -1n }),
-    ).toThrow(NonPositiveAssetAmountError);
+    ).toThrow(NegativeInputError);
     expect(() =>
       market.supplyCollateral({
         userAddress: USER,
         amount: 0n,
         nativeAmount: -1n,
       }),
-    ).toThrow(NegativeNativeAmountError);
+    ).toThrow(NegativeInputError);
     expect(() =>
       market.supplyCollateral({ userAddress: USER, amount: 0n }),
-    ).toThrow(ZeroCollateralAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
   test("borrow rejects non-positive amounts", async ({ client }) => {
@@ -157,7 +154,7 @@ describe("MorphoBlue validation", () => {
         userAddress: USER,
         positionData: makePosition(),
       }),
-    ).toThrow(NonPositiveBorrowAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
   test("withdraw getRequirements includes Blue authorization when missing", async ({
@@ -227,11 +224,26 @@ describe("MorphoBlue validation", () => {
     ).toThrow(MutuallyExclusiveRepayAmountsError);
     expect(() =>
       market.repay({
+        amount: -1n,
+        shares: 1n,
+        userAddress: USER,
+        positionData: makePosition(),
+      } as never),
+    ).toThrow(NegativeInputError);
+    expect(() =>
+      market.repay({
         shares: 0n,
         userAddress: USER,
         positionData: makePosition(),
       }),
-    ).toThrow(NonPositiveRepayAmountError);
+    ).toThrow(NonPositiveInputError);
+    expect(() =>
+      market.repay({
+        shares: -1n,
+        userAddress: USER,
+        positionData: makePosition(),
+      }),
+    ).toThrow(NegativeInputError);
     // Assets mode: a negative amount must not be masked by nativeAmount.
     expect(() =>
       market.repay({
@@ -239,7 +251,7 @@ describe("MorphoBlue validation", () => {
         userAddress: USER,
         positionData: makePosition(),
       }),
-    ).toThrow(NonPositiveRepayAmountError);
+    ).toThrow(NegativeInputError);
   });
 
   test("repayWithdrawCollateral rejects conflicting repay modes and excessive collateral withdrawal", async ({
@@ -260,12 +272,29 @@ describe("MorphoBlue validation", () => {
     ).toThrow(MutuallyExclusiveRepayAmountsError);
     expect(() =>
       market.repayWithdrawCollateral({
+        amount: -1n,
+        shares: 1n,
+        withdrawAmount: 1n,
+        userAddress: USER,
+        positionData: makePosition(),
+      } as never),
+    ).toThrow(NegativeInputError);
+    expect(() =>
+      market.repayWithdrawCollateral({
         shares: 0n,
         withdrawAmount: 1n,
         userAddress: USER,
         positionData: makePosition(),
       }),
-    ).toThrow(NonPositiveRepayAmountError);
+    ).toThrow(NonPositiveInputError);
+    expect(() =>
+      market.repayWithdrawCollateral({
+        shares: -1n,
+        withdrawAmount: 1n,
+        userAddress: USER,
+        positionData: makePosition(),
+      }),
+    ).toThrow(NegativeInputError);
     // Assets mode: a negative amount must not be masked by nativeAmount.
     expect(() =>
       market.repayWithdrawCollateral({
@@ -274,7 +303,7 @@ describe("MorphoBlue validation", () => {
         userAddress: USER,
         positionData: makePosition(),
       }),
-    ).toThrow(NonPositiveRepayAmountError);
+    ).toThrow(NegativeInputError);
     expect(() =>
       market.repayWithdrawCollateral({
         amount: 1n,
@@ -602,7 +631,7 @@ describe("MorphoBlue validation", () => {
         userAddress: USER,
         positionData: makePosition(),
       }),
-    ).toThrow(NonPositiveAssetAmountError);
+    ).toThrow(NegativeInputError);
     expect(() =>
       market.supplyCollateralBorrow({
         amount: 0n,
@@ -611,7 +640,7 @@ describe("MorphoBlue validation", () => {
         userAddress: USER,
         positionData: makePosition(),
       }),
-    ).toThrow(NegativeNativeAmountError);
+    ).toThrow(NegativeInputError);
     expect(() =>
       market.supplyCollateralBorrow({
         amount: 1n,
@@ -619,7 +648,7 @@ describe("MorphoBlue validation", () => {
         userAddress: USER,
         positionData: makePosition(),
       }),
-    ).toThrow(NonPositiveBorrowAmountError);
+    ).toThrow(NonPositiveInputError);
     expect(() =>
       market.supplyCollateralBorrow({
         amount: 0n,
@@ -627,7 +656,7 @@ describe("MorphoBlue validation", () => {
         userAddress: USER,
         positionData: makePosition(),
       }),
-    ).toThrow(ZeroCollateralAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
   test("getReallocations accepts the operation/amount parameter shape", async ({

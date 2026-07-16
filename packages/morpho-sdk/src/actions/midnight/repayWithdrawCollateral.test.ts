@@ -11,8 +11,9 @@ import {
   midnightMarketId,
 } from "../../../test/fixtures/midnight.js";
 import {
-  NegativeMidnightAmountError,
-  NonPositiveMidnightAmountError,
+  ChainIdMismatchError,
+  NegativeInputError,
+  NonPositiveInputError,
 } from "../../types/index.js";
 import { midnightRepayWithdrawCollateral } from "./repayWithdrawCollateral.js";
 import { PermitKind } from "./types.js";
@@ -73,7 +74,7 @@ describe("midnightRepayWithdrawCollateral", () => {
     expect(tx.data.endsWith("a1b2c3d4")).toBe(true);
   });
 
-  test("error: NegativeMidnightAmountError", () => {
+  test("error: NegativeInputError", () => {
     const params = {
       chainId: midnightChainId,
       market: midnightMarket,
@@ -85,26 +86,26 @@ describe("midnightRepayWithdrawCollateral", () => {
 
     expect(() =>
       midnightRepayWithdrawCollateral({ ...params, repayAssets: -1n }),
-    ).toThrow(NegativeMidnightAmountError);
+    ).toThrow(NegativeInputError);
     expect(() =>
       midnightRepayWithdrawCollateral({
         ...params,
         withdrawCollateralAssets: -1n,
       }),
-    ).toThrow(NegativeMidnightAmountError);
+    ).toThrow(NegativeInputError);
     expect(() =>
       midnightRepayWithdrawCollateral({ ...params, deadline: -1n }),
-    ).toThrow(NegativeMidnightAmountError);
+    ).toThrow(NegativeInputError);
     expect(() =>
       midnightRepayWithdrawCollateral({
         ...params,
         withdrawCollateralAssets: 1n,
         collateralIndex: -1n,
       }),
-    ).toThrow(NegativeMidnightAmountError);
+    ).toThrow(NegativeInputError);
   });
 
-  test("error: NonPositiveMidnightAmountError", () => {
+  test("error: NonPositiveInputError", () => {
     expect(() =>
       midnightRepayWithdrawCollateral({
         chainId: midnightChainId,
@@ -114,7 +115,7 @@ describe("midnightRepayWithdrawCollateral", () => {
         onBehalf: midnightAddresses.taker,
         deadline: maxUint256,
       }),
-    ).toThrow(NonPositiveMidnightAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
   test("error: UnknownCollateralIndexError for default withdrawal", () => {
@@ -129,5 +130,18 @@ describe("midnightRepayWithdrawCollateral", () => {
         deadline: maxUint256,
       }),
     ).toThrow(UnknownCollateralIndexError);
+  });
+
+  test("error: ChainIdMismatchError", () => {
+    expect(() =>
+      midnightRepayWithdrawCollateral({
+        chainId: midnightChainId,
+        market: { ...midnightMarket, chainId: BigInt(midnightChainId + 1) },
+        repayAssets: 1_000n,
+        withdrawCollateralAssets: 0n,
+        onBehalf: midnightAddresses.taker,
+        deadline: maxUint256,
+      }),
+    ).toThrow(ChainIdMismatchError);
   });
 });

@@ -5,7 +5,7 @@ import { describe, expect } from "vitest";
 import {
   MissingAccrualPositionError,
   morphoViemExtension,
-  NonPositiveWithdrawCollateralAmountError,
+  NonPositiveInputError,
   WithdrawExceedsCollateralError,
   WithdrawMakesPositionUnhealthyError,
 } from "../../../src/index.js";
@@ -182,7 +182,7 @@ describe("WithdrawCollateralBlue", () => {
         amount: 0n,
         positionData,
       }),
-    ).toThrow(NonPositiveWithdrawCollateralAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
   test("should revert when positionData is not provided", async ({

@@ -12,8 +12,8 @@ import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js"
 import {
   type Metadata,
   type MidnightTakeBorrowAction,
-  NegativeMidnightAmountError,
-  NonPositiveMidnightAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   type Transaction,
 } from "../../types/index.js";
 import type { MidnightTakeableOffer } from "./types.js";
@@ -48,8 +48,8 @@ export interface MidnightTakeBorrowParams {
  * @param params.takeableOffers - ABI-ready lend-side offers returned by the Midnight API.
  * @param params.metadata - Optional analytics metadata appended to calldata.
  * @returns A deep-frozen `Transaction<MidnightTakeBorrowAction>` targeting `MidnightBundles`.
- * @throws {NonPositiveMidnightAmountError} when `loanAssets` or `maxUnits` is non-positive.
- * @throws {NegativeMidnightAmountError} when `deadline` is negative.
+ * @throws {NonPositiveInputError} when `loanAssets` or `maxUnits` is non-positive.
+ * @throws {NegativeInputError} when `deadline` is negative.
  * @throws {EmptyMidnightTakeableOffersError} when no offers are provided.
  * @throws {MidnightOfferSideMismatchError} when any offer is not lend-side.
  * @throws {MidnightTakeableOfferMarketMismatchError} when any offer belongs to another market.
@@ -75,13 +75,13 @@ export const midnightTakeBorrow = (
   params: MidnightTakeBorrowParams,
 ): Readonly<Transaction<MidnightTakeBorrowAction>> => {
   if (params.loanAssets <= 0n) {
-    throw new NonPositiveMidnightAmountError("loanAssets", params.loanAssets);
+    throw new NonPositiveInputError("loanAssets", params.loanAssets);
   }
   if (params.maxUnits <= 0n) {
-    throw new NonPositiveMidnightAmountError("maxUnits", params.maxUnits);
+    throw new NonPositiveInputError("maxUnits", params.maxUnits);
   }
   if (params.deadline < 0n) {
-    throw new NegativeMidnightAmountError("deadline", params.deadline);
+    throw new NegativeInputError("deadline", params.deadline);
   }
   // Reject markets from another chain deployment before encoding the bundle.
   validateMidnightMarket({ market: params.market, chainId: params.chainId });

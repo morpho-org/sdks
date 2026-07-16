@@ -15,7 +15,7 @@ import {
   vaultV2Redeem,
   vaultV2Withdraw,
 } from "../../actions/index.js";
-import { MAX_SLIPPAGE_TOLERANCE } from "../../helpers/constant.js";
+import { validateSlippageTolerance } from "../../helpers/index.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
   ChainIdMismatchError,
@@ -23,13 +23,10 @@ import {
   type Deallocation,
   type DepositAmountArgs,
   type ERC20ApprovalAction,
-  ExcessiveSlippageToleranceError,
   type MorphoClientType,
   NativeAmountOnNonWNativeVaultError,
-  NegativeNativeAmountError,
-  NegativeSlippageToleranceError,
-  NonPositiveAssetAmountError,
-  NonPositiveSharesAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   type PermitRequirementSignature,
   type Requirement,
   type RequirementSignature,
@@ -222,11 +219,11 @@ export class MorphoVaultV2 implements VaultV2Actions {
     }
 
     if (amount < 0n) {
-      throw new NonPositiveAssetAmountError(this.vault);
+      throw new NegativeInputError("amount", amount);
     }
 
     if (nativeAmount && nativeAmount < 0n) {
-      throw new NegativeNativeAmountError(nativeAmount);
+      throw new NegativeInputError("nativeAmount", nativeAmount);
     }
 
     let wNative: Address | undefined;
@@ -237,12 +234,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
       }
     }
 
-    if (slippageTolerance < 0n) {
-      throw new NegativeSlippageToleranceError(slippageTolerance);
-    }
-    if (slippageTolerance > MAX_SLIPPAGE_TOLERANCE) {
-      throw new ExcessiveSlippageToleranceError(slippageTolerance);
-    }
+    validateSlippageTolerance(slippageTolerance);
 
     if (nativeAmount && wNative) {
       if (!isAddressEqual(vaultData.asset, wNative)) {
@@ -251,6 +243,9 @@ export class MorphoVaultV2 implements VaultV2Actions {
     }
 
     const totalAssets = amount + (nativeAmount ?? 0n);
+    if (totalAssets === 0n) {
+      throw new NonPositiveInputError("totalAssets", totalAssets);
+    }
 
     // Accrue interest forward to bound the on-chain share price at execution.
     // Mirrors blue repay's 2h forward-accrual buffer.
@@ -260,7 +255,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
 
     const shares = accruedVault.toShares(totalAssets);
     if (shares <= 0n) {
-      throw new NonPositiveSharesAmountError(this.vault);
+      throw new NonPositiveInputError("shares", shares);
     }
 
     const maxSharePrice = MathLib.min(
