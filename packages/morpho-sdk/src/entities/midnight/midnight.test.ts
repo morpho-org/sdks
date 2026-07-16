@@ -659,11 +659,21 @@ describe("MorphoMidnight", () => {
           marketData: marketData(),
           accountAddress: midnightAddresses.taker,
           loanAssets: 1_000n,
+          maxUnits: 0n,
+          takeableOffers: [midnightApiTake({ buy: true })],
+          deadline: maxUint256,
+        }),
+      ).toThrow(NonPositiveInputError);
+      expect(() =>
+        midnight().takeBorrow({
+          marketData: marketData(),
+          accountAddress: midnightAddresses.taker,
+          loanAssets: 1_000n,
           maxUnits: -1n,
           takeableOffers: [midnightApiTake({ buy: true })],
           deadline: maxUint256,
         }),
-      ).toThrow(NegativeInputError);
+      ).toThrow(NonPositiveInputError);
       expect(() =>
         midnight().takeBorrow({
           marketData: marketData(),
@@ -751,8 +761,11 @@ describe("MorphoMidnight", () => {
         midnight().supplyCollateralTakeBorrow({ ...params, loanAssets: 0n }),
       ).toThrow(NonPositiveInputError);
       expect(() =>
+        midnight().supplyCollateralTakeBorrow({ ...params, maxUnits: 0n }),
+      ).toThrow(NonPositiveInputError);
+      expect(() =>
         midnight().supplyCollateralTakeBorrow({ ...params, maxUnits: -1n }),
-      ).toThrow(NegativeInputError);
+      ).toThrow(NonPositiveInputError);
       expect(() =>
         midnight().supplyCollateralTakeBorrow({ ...params, deadline: -1n }),
       ).toThrow(NegativeInputError);

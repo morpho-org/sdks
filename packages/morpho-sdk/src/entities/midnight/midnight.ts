@@ -472,7 +472,7 @@ export class MorphoMidnight {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     validateMarketData(params.marketData, this.chainId);
     assertPositiveAmount("loanAssets", params.loanAssets);
-    assertNonNegativeAmount("maxUnits", params.maxUnits);
+    assertPositiveAmount("maxUnits", params.maxUnits);
     assertNonNegativeAmount("deadline", params.deadline);
     // Reject inconsistent quotes before exposing requirement reads.
     validateTakeableOffers({
@@ -552,7 +552,7 @@ export class MorphoMidnight {
     validateMarketData(params.marketData, this.chainId);
     assertPositiveAmount("collateralAssets", params.collateralAssets);
     assertPositiveAmount("loanAssets", params.loanAssets);
-    assertNonNegativeAmount("maxUnits", params.maxUnits);
+    assertPositiveAmount("maxUnits", params.maxUnits);
     assertNonNegativeAmount("deadline", params.deadline);
     // Reject inconsistent quotes before exposing requirement reads.
     validateTakeableOffers({

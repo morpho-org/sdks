@@ -38,8 +38,8 @@ export interface MidnightSupplyCollateralTakeBorrowParams
  * @param params.collateralAssets - Collateral assets supplied before taking offers.
  * @param params.collateralIndex - Optional collateral index; defaults to `0n`.
  * @returns A deep-frozen `Transaction<MidnightSupplyCollateralTakeBorrowAction>` targeting `MidnightBundles`.
- * @throws {NonPositiveInputError} when collateral or loan assets are non-positive.
- * @throws {NegativeInputError} when `maxUnits` or `deadline` is negative.
+ * @throws {NonPositiveInputError} when collateral assets, loan assets, or `maxUnits` are non-positive.
+ * @throws {NegativeInputError} when `deadline` is negative.
  * @throws {EmptyMidnightTakeableOffersError} when no offers are provided.
  * @throws {MidnightOfferSideMismatchError} when any offer is not lend-side.
  * @throws {MidnightTakeableOfferMarketMismatchError} when any offer belongs to another market.
@@ -75,8 +75,8 @@ export const midnightSupplyCollateralTakeBorrow = (
   if (params.loanAssets <= 0n) {
     throw new NonPositiveInputError("loanAssets", params.loanAssets);
   }
-  if (params.maxUnits < 0n) {
-    throw new NegativeInputError("maxUnits", params.maxUnits);
+  if (params.maxUnits <= 0n) {
+    throw new NonPositiveInputError("maxUnits", params.maxUnits);
   }
   if (params.deadline < 0n) {
     throw new NegativeInputError("deadline", params.deadline);

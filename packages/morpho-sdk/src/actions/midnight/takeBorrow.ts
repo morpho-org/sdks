@@ -48,8 +48,8 @@ export interface MidnightTakeBorrowParams {
  * @param params.takeableOffers - ABI-ready lend-side offers returned by the Midnight API.
  * @param params.metadata - Optional analytics metadata appended to calldata.
  * @returns A deep-frozen `Transaction<MidnightTakeBorrowAction>` targeting `MidnightBundles`.
- * @throws {NonPositiveInputError} when `loanAssets <= 0n`.
- * @throws {NegativeInputError} when `maxUnits` or `deadline` is negative.
+ * @throws {NonPositiveInputError} when `loanAssets` or `maxUnits` is non-positive.
+ * @throws {NegativeInputError} when `deadline` is negative.
  * @throws {EmptyMidnightTakeableOffersError} when no offers are provided.
  * @throws {MidnightOfferSideMismatchError} when any offer is not lend-side.
  * @throws {MidnightTakeableOfferMarketMismatchError} when any offer belongs to another market.
@@ -77,8 +77,8 @@ export const midnightTakeBorrow = (
   if (params.loanAssets <= 0n) {
     throw new NonPositiveInputError("loanAssets", params.loanAssets);
   }
-  if (params.maxUnits < 0n) {
-    throw new NegativeInputError("maxUnits", params.maxUnits);
+  if (params.maxUnits <= 0n) {
+    throw new NonPositiveInputError("maxUnits", params.maxUnits);
   }
   if (params.deadline < 0n) {
     throw new NegativeInputError("deadline", params.deadline);

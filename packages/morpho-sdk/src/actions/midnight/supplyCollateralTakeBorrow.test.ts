@@ -100,7 +100,7 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
     ).toThrow(NonPositiveInputError);
   });
 
-  test("error: NegativeInputError", () => {
+  test("error: NonPositiveInputError for maxUnits", () => {
     const params = {
       chainId: midnightChainId,
       market: midnightMarket,
@@ -113,10 +113,25 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
     } as const;
 
     expect(() =>
-      midnightSupplyCollateralTakeBorrow({ ...params, maxUnits: -1n }),
-    ).toThrow(NegativeInputError);
+      midnightSupplyCollateralTakeBorrow({ ...params, maxUnits: 0n }),
+    ).toThrow(NonPositiveInputError);
     expect(() =>
-      midnightSupplyCollateralTakeBorrow({ ...params, deadline: -1n }),
+      midnightSupplyCollateralTakeBorrow({ ...params, maxUnits: -1n }),
+    ).toThrow(NonPositiveInputError);
+  });
+
+  test("error: NegativeInputError", () => {
+    expect(() =>
+      midnightSupplyCollateralTakeBorrow({
+        chainId: midnightChainId,
+        market: midnightMarket,
+        collateralAssets: 2_000n,
+        loanAssets: 1_000n,
+        maxUnits: 1_100n,
+        taker: midnightAddresses.taker,
+        takeableOffers: [midnightApiTake({ buy: true })],
+        deadline: -1n,
+      }),
     ).toThrow(NegativeInputError);
   });
 
