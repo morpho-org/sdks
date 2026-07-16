@@ -1,7 +1,5 @@
 ---
-"@morpho-org/morpho-sdk": major
-"@morpho-org/liquidity-sdk-viem": patch
-"@morpho-org/wdk-protocol-lending-morpho-evm": patch
+"@morpho-org/morpho-sdk": minor
 ---
 
 Consolidate Vault, Blue, and Midnight scalar input validation into two protocol-agnostic errors: `NegativeInputError` for inputs that must be non-negative and `NonPositiveInputError` for inputs that must be positive. Both errors expose the invalid `field` and `value` as readonly properties.
@@ -13,10 +11,10 @@ This replaces the operation-specific scalar-bound error implementations with dep
 
 The previously deprecated `NonPositiveTransferAmountError` and `NativeAmountExceedsTransferAmountError` exports are removed. The unreleased Midnight-specific scalar errors are superseded directly by the canonical errors.
 
+Compatibility warning (acknowledged): this minor release intentionally changes the constructor signatures, constructor identity, and `name` property observed through the deprecated aliases. Negative values previously matched by a legacy `NonPositive*Error` may now match `NegativeInputError` instead. It also removes the two previously deprecated exports named above. These compatibility risks are explicitly accepted for this release despite their normally breaking nature.
+
 Consumers should replace handlers for these classes with the shared input error matching the documented constraint of each field.
 
 State-independent validation is now repeated at both public boundaries: Blue entities and pure actions reject the same malformed scalar modes and reallocations, while Midnight entities and pure actions reject the same malformed amounts, market chains, collateral indexes, and empty offer submissions.
-
-Update maintained direct dependents for the new major and allow `@morpho-org/liquidity-sdk-viem` to resolve `@morpho-org/morpho-sdk` v6.
 
 Domain-specific errors for conflicting modes, mismatched data, exceeded balances, unsupported native assets, and unsafe positions remain unchanged.
