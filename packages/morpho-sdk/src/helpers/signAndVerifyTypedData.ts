@@ -2,7 +2,7 @@ import type { Address, Hex, TypedDataDefinition, WalletClient } from "viem";
 import { verifyTypedData } from "viem";
 import { signTypedData } from "viem/actions";
 import { InvalidSignatureError } from "../types/index.js";
-import { validateUserAddress } from "./validate.js";
+import { validateChainId, validateUserAddress } from "./validate.js";
 
 /**
  * Signs EIP-712 typed data with a wallet client, verifies that the produced signature recovers
@@ -19,6 +19,7 @@ import { validateUserAddress } from "./validate.js";
  * @returns The verified EIP-712 signature.
  * @throws {MissingClientPropertyError} when the wallet client has no account address.
  * @throws {AddressMismatchError} when the wallet client account differs from `userAddress`.
+ * @throws {ChainIdMismatchError} when the wallet client targets a different chain than the typed-data domain.
  * @throws {InvalidSignatureError} when the signature does not recover to `userAddress`.
  * @example
  * ```ts
@@ -39,6 +40,10 @@ export const signAndVerifyTypedData = async (params: {
   const { client, userAddress, typedData } = params;
   const account = client.account;
   validateUserAddress(account?.address, userAddress);
+  const typedDataChainId = typedData.domain?.chainId;
+  if (typedDataChainId != null) {
+    validateChainId(client.chain?.id, Number(typedDataChainId));
+  }
 
   const signature = await signTypedData(client, {
     ...typedData,

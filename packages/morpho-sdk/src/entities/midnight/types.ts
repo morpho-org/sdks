@@ -181,6 +181,7 @@ export interface SupplyCollateralParams extends MarketActionParams {
 /** Parameters for the Midnight redeem flow. */
 export interface RedeemParams {
   readonly accountAddress: Address;
+  /** Owner-bound snapshot returned by `getPositionData`; manually constructed ownerless snapshots are rejected. */
   readonly positionData: AccrualPosition;
   readonly receiver?: Address;
   readonly units?: bigint;
