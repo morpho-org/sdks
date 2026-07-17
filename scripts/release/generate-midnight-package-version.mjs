@@ -1,8 +1,16 @@
 #!/usr/bin/env node
 
-import { readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+
+import { isPathInside } from "./helpers.mjs";
 
 /** Repository-relative Midnight SDK manifest path. */
 export const MIDNIGHT_PACKAGE_MANIFEST_PATH =
@@ -37,8 +45,21 @@ export function renderMidnightPackageVersionSource(version) {
  * @returns {string} Generated TypeScript source.
  */
 export function getMidnightPackageVersionSource(options = {}) {
-  const cwd = options.cwd ?? DEFAULT_REPOSITORY_ROOT;
-  const manifestPath = resolve(cwd, MIDNIGHT_PACKAGE_MANIFEST_PATH);
+  const basePath = realpathSync(options.cwd ?? DEFAULT_REPOSITORY_ROOT);
+  const manifestPath = resolve(basePath, MIDNIGHT_PACKAGE_MANIFEST_PATH);
+  if (!isPathInside(basePath, manifestPath)) {
+    throw new Error(
+      `Invalid Midnight SDK manifest path "${MIDNIGHT_PACKAGE_MANIFEST_PATH}".`,
+    );
+  }
+
+  const stats = lstatSync(manifestPath);
+  if (!stats.isFile() || !isPathInside(basePath, realpathSync(manifestPath))) {
+    throw new Error(
+      `Invalid Midnight SDK manifest path "${MIDNIGHT_PACKAGE_MANIFEST_PATH}".`,
+    );
+  }
+
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 
   return renderMidnightPackageVersionSource(manifest.version);
@@ -51,9 +72,23 @@ export function getMidnightPackageVersionSource(options = {}) {
  * @returns {string} Generated TypeScript source.
  */
 export function generateMidnightPackageVersion(options = {}) {
-  const cwd = options.cwd ?? DEFAULT_REPOSITORY_ROOT;
-  const source = getMidnightPackageVersionSource({ cwd });
-  writeFileSync(resolve(cwd, MIDNIGHT_VERSION_SOURCE_PATH), source);
+  const basePath = realpathSync(options.cwd ?? DEFAULT_REPOSITORY_ROOT);
+  const source = getMidnightPackageVersionSource({ cwd: basePath });
+  const sourcePath = resolve(basePath, MIDNIGHT_VERSION_SOURCE_PATH);
+  const sourceParentPath = realpathSync(dirname(sourcePath));
+  if (
+    !isPathInside(basePath, sourcePath) ||
+    !isPathInside(basePath, sourceParentPath) ||
+    (existsSync(sourcePath) &&
+      (!lstatSync(sourcePath).isFile() ||
+        !isPathInside(basePath, realpathSync(sourcePath))))
+  ) {
+    throw new Error(
+      `Invalid Midnight SDK version source path "${MIDNIGHT_VERSION_SOURCE_PATH}".`,
+    );
+  }
+
+  writeFileSync(sourcePath, source);
 
   return source;
 }
