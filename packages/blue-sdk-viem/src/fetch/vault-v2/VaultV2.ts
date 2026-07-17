@@ -59,9 +59,10 @@ import { fetchAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
 /**
  * Fetches VaultV2 state and liquidity-cap data.
  *
- * Reads token metadata, vault accounting, fee configuration, adapter addresses, the configured
- * liquidity adapter, liquidity data, and cap allocations for supported liquidity adapters. Uses the
- * deployless `GetVaultV2` query by default and falls back to multicall when allowed.
+ * Reads token metadata, vault accounting, fee configuration and recipient share eligibility,
+ * adapter addresses, the configured liquidity adapter, liquidity data, and cap allocations for
+ * supported liquidity adapters. Uses the deployless `GetVaultV2` query by default and falls back
+ * to multicall when allowed.
  *
  * `MorphoMarketV1Adapter` has zero support as a VaultV2 liquidity adapter. This fetcher only loads
  * liquidity allocations for `MorphoVaultV1Adapter` and `MorphoMarketV1AdapterV2`; when a vault
@@ -261,6 +262,30 @@ export async function fetchVaultV2(
   }
 
   const [
+    performanceFeeRecipientCanReceiveShares,
+    managementFeeRecipientCanReceiveShares,
+  ] = await Promise.all([
+    performanceFee > 0n
+      ? readContract(client, {
+          ...parameters,
+          address,
+          abi: vaultV2Abi,
+          functionName: "canReceiveShares",
+          args: [performanceFeeRecipient],
+        })
+      : true,
+    managementFee > 0n
+      ? readContract(client, {
+          ...parameters,
+          address,
+          abi: vaultV2Abi,
+          functionName: "canReceiveShares",
+          args: [managementFeeRecipient],
+        })
+      : true,
+  ]);
+
+  const [
     hasMorphoVaultV1LiquidityAdapter,
     hasMorphoMarketV1AdapterV2LiquidityAdapter,
     ...adapters
@@ -367,6 +392,8 @@ export async function fetchVaultV2(
     managementFee,
     performanceFeeRecipient,
     managementFeeRecipient,
+    performanceFeeRecipientCanReceiveShares,
+    managementFeeRecipientCanReceiveShares,
   });
 }
 
@@ -816,6 +843,10 @@ export async function fetchAccrualVaultV2Deployless(
     managementFee: response.managementFee,
     performanceFeeRecipient: response.performanceFeeRecipient,
     managementFeeRecipient: response.managementFeeRecipient,
+    performanceFeeRecipientCanReceiveShares:
+      response.performanceFeeRecipientCanReceiveShares,
+    managementFeeRecipientCanReceiveShares:
+      response.managementFeeRecipientCanReceiveShares,
   });
 
   const accrualLiquidityAdapter = response.hasLiquidityAdapter

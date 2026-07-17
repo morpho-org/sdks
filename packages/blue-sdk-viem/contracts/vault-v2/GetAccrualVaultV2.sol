@@ -159,6 +159,8 @@ struct AccrualVaultV2Response {
     uint96 managementFee;
     address performanceFeeRecipient;
     address managementFeeRecipient;
+    bool performanceFeeRecipientCanReceiveShares;
+    bool managementFeeRecipientCanReceiveShares;
     uint256 assetBalance;
     bool hasLiquidityAdapter;
     AdapterResponse liquidityAdapterInfo;
@@ -197,6 +199,10 @@ contract GetAccrualVaultV2 {
         res.managementFee = vault.managementFee();
         res.performanceFeeRecipient = vault.performanceFeeRecipient();
         res.managementFeeRecipient = vault.managementFeeRecipient();
+        res.performanceFeeRecipientCanReceiveShares =
+            res.performanceFee > 0 ? vault.canReceiveShares(res.performanceFeeRecipient) : true;
+        res.managementFeeRecipientCanReceiveShares =
+            res.managementFee > 0 ? vault.canReceiveShares(res.managementFeeRecipient) : true;
         res.assetBalance = IERC20(res.asset).balanceOf(address(vault));
 
         _queryLiquidityAllocations(

@@ -6,15 +6,21 @@ import {
   MarketParams,
   MathLib,
 } from "@morpho-org/blue-sdk";
+import { Time } from "@morpho-org/morpho-ts";
 import type { AnvilTestClient } from "@morpho-org/test";
-import { parseUnits } from "viem";
+import { type Hex, parseUnits } from "viem";
 import { describe, expect } from "vitest";
 import {
   fetchAccrualVaultV2,
   fetchAccrualVaultV2Deployless,
+  vaultV2Abi,
 } from "../src/index.js";
 import { vaultV2Test } from "./setup.js";
-import { deployMorphoMarketV1Adapter, deployVaultV2 } from "./utils.js";
+import {
+  deployMorphoMarketV1Adapter,
+  deployVaultV2,
+  submitAndAccept,
+} from "./utils.js";
 
 // Far-future timestamp (> the Base fork block) used for deterministic interest accrual.
 const ACCRUAL_TIMESTAMP = 2_000_000_000n;
@@ -23,6 +29,8 @@ const ACCRUAL_TIMESTAMP = 2_000_000_000n;
 const vaultV2VaultV1 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
 // VaultV2 whose liquidity adapter is a MorphoMarketV1AdapterV2 (real caps and allocations).
 const vaultV2MarketV1V2 = "0x4C7b69b4a82e9E5D8ec60E96516f7A0E17CBC55C";
+const rejectingSharesGate = "0x1111111111111111111111111111111111111111";
+const managementFeeRecipient = "0x2222222222222222222222222222222222222222";
 
 const marketParams = new MarketParams({
   collateralToken: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
@@ -116,6 +124,12 @@ function expectEquivalent(actual: AccrualVaultV2, expected: AccrualVaultV2) {
   expect(actual.managementFee).toBe(expected.managementFee);
   expect(actual.performanceFeeRecipient).toBe(expected.performanceFeeRecipient);
   expect(actual.managementFeeRecipient).toBe(expected.managementFeeRecipient);
+  expect(actual.performanceFeeRecipientCanReceiveShares).toBe(
+    expected.performanceFeeRecipientCanReceiveShares,
+  );
+  expect(actual.managementFeeRecipientCanReceiveShares).toBe(
+    expected.managementFeeRecipientCanReceiveShares,
+  );
   expect(actual.forceDeallocatePenalties).toStrictEqual(
     expected.forceDeallocatePenalties,
   );
@@ -182,6 +196,159 @@ function expectEquivalent(actual: AccrualVaultV2, expected: AccrualVaultV2) {
 }
 
 describe("fetchAccrualVaultV2Deployless", () => {
+  vaultV2Test(
+    "skips a reverting shares gate when both fees are zero",
+    async ({ client }) => {
+      const anvilClient = client as AnvilTestClient;
+      const { usdc } = addressesRegistry[client.chain.id];
+      const vaultAddress = await deployVaultV2(anvilClient, usdc);
+
+      await client.setCode({
+        address: rejectingSharesGate,
+        bytecode: "0x60006000fd",
+      });
+      await submitAndAccept(anvilClient, {
+        address: vaultAddress,
+        abi: vaultV2Abi,
+        functionName: "setReceiveSharesGate",
+        args: [rejectingSharesGate],
+      });
+
+      const [deployless, multicall] = await Promise.all([
+        fetchAccrualVaultV2Deployless(vaultAddress, client),
+        fetchAccrualVaultV2(vaultAddress, client, { deployless: false }),
+      ]);
+
+      expect(deployless.performanceFee).toBe(0n);
+      expect(deployless.managementFee).toBe(0n);
+      expect(deployless.performanceFeeRecipientCanReceiveShares).toBe(true);
+      expect(deployless.managementFeeRecipientCanReceiveShares).toBe(true);
+      expectEquivalent(deployless, multicall);
+    },
+  );
+
+  vaultV2Test(
+    "matches onchain accrual when fee recipients cannot receive shares",
+    async ({ client }) => {
+      const anvilClient = client as AnvilTestClient;
+      const { usdc } = addressesRegistry[client.chain.id];
+      const vaultAddress = await deployVaultV2(anvilClient, usdc);
+      const depositedAssets = parseUnits("1000", 6);
+
+      await client.deal({ erc20: usdc, amount: depositedAssets });
+      await client.approve({
+        address: usdc,
+        args: [vaultAddress, depositedAssets],
+      });
+      await client.writeContract({
+        address: vaultAddress,
+        abi: vaultV2Abi,
+        functionName: "deposit",
+        args: [depositedAssets, client.account.address],
+      });
+
+      await submitAndAccept(anvilClient, {
+        address: vaultAddress,
+        abi: vaultV2Abi,
+        functionName: "setPerformanceFeeRecipient",
+        args: [client.account.address],
+      });
+      await submitAndAccept(anvilClient, {
+        address: vaultAddress,
+        abi: vaultV2Abi,
+        functionName: "setManagementFeeRecipient",
+        args: [managementFeeRecipient],
+      });
+      await submitAndAccept(anvilClient, {
+        address: vaultAddress,
+        abi: vaultV2Abi,
+        functionName: "setPerformanceFee",
+        args: [parseUnits("10", 16)],
+      });
+      await submitAndAccept(anvilClient, {
+        address: vaultAddress,
+        abi: vaultV2Abi,
+        functionName: "setManagementFee",
+        args: [parseUnits("5", 16) / Time.s.from.y(1n)],
+      });
+      await client.writeContract({
+        address: vaultAddress,
+        abi: vaultV2Abi,
+        functionName: "setMaxRate",
+        args: [MathLib.WAD / Time.s.from.y(1n)],
+      });
+
+      await submitAndAccept(anvilClient, {
+        address: vaultAddress,
+        abi: vaultV2Abi,
+        functionName: "setReceiveSharesGate",
+        args: [rejectingSharesGate],
+      });
+
+      await client.deal({
+        erc20: usdc,
+        account: vaultAddress,
+        amount: parseUnits("1100", 6),
+      });
+      await client.setNextBlockTimestamp({ timestamp: ACCRUAL_TIMESTAMP });
+      await client.mine({ blocks: 1 });
+      const block = await client.getBlock({ blockTag: "latest" });
+
+      const scenarios = [
+        {
+          rejectedRecipient: client.account.address,
+          performanceFeeRecipientCanReceiveShares: false,
+          managementFeeRecipientCanReceiveShares: true,
+        },
+        {
+          rejectedRecipient: managementFeeRecipient,
+          performanceFeeRecipientCanReceiveShares: true,
+          managementFeeRecipientCanReceiveShares: false,
+        },
+      ] as const;
+
+      for (const scenario of scenarios) {
+        // Runtime bytecode returning `false` only for `scenario.rejectedRecipient`.
+        const gateBytecode =
+          `0x60043573${scenario.rejectedRecipient.slice(2)}141560005260206000f3` as Hex;
+        await client.setCode({
+          address: rejectingSharesGate,
+          bytecode: gateBytecode,
+        });
+
+        const [deployless, multicall, onchainAccrual] = await Promise.all([
+          fetchAccrualVaultV2Deployless(vaultAddress, client),
+          fetchAccrualVaultV2(vaultAddress, client, { deployless: false }),
+          client.readContract({
+            address: vaultAddress,
+            abi: vaultV2Abi,
+            functionName: "accrueInterestView",
+          }),
+        ]);
+
+        expect(deployless.performanceFeeRecipientCanReceiveShares).toBe(
+          scenario.performanceFeeRecipientCanReceiveShares,
+        );
+        expect(deployless.managementFeeRecipientCanReceiveShares).toBe(
+          scenario.managementFeeRecipientCanReceiveShares,
+        );
+        expectEquivalent(deployless, multicall);
+
+        const sdkAccrual = deployless.accrueInterest(block.timestamp);
+        expect(sdkAccrual.vault._totalAssets).toBe(onchainAccrual[0]);
+        expect(sdkAccrual.performanceFeeShares).toBe(onchainAccrual[1]);
+        expect(sdkAccrual.managementFeeShares).toBe(onchainAccrual[2]);
+        if (scenario.performanceFeeRecipientCanReceiveShares) {
+          expect(onchainAccrual[1]).toBeGreaterThan(0n);
+          expect(onchainAccrual[2]).toBe(0n);
+        } else {
+          expect(onchainAccrual[1]).toBe(0n);
+          expect(onchainAccrual[2]).toBeGreaterThan(0n);
+        }
+      }
+    },
+  );
+
   vaultV2Test(
     "matches fetchAccrualVaultV2 for a MorphoVaultV1 liquidity adapter",
     async ({ client }) => {
