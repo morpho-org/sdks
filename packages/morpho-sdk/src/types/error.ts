@@ -297,25 +297,29 @@ export class UnexpectedRequirementSignatureError extends Error {
 }
 
 /**
- * Thrown when a prepared transaction plan is built without all requested signatures.
+ * Thrown when the signatures passed to a prepared transaction plan do not exactly match its
+ * discovered signature requests.
  *
  * @example
  * ```ts
- * import { MissingTransactionPlanSignaturesError } from "@morpho-org/morpho-sdk";
+ * import { TransactionPlanSignatureCountMismatchError } from "@morpho-org/morpho-sdk";
  *
- * if (error instanceof MissingTransactionPlanSignaturesError) {
- *   // Collect every `prepared.signatureRequests` signature before calling build().
+ * if (error instanceof TransactionPlanSignatureCountMismatchError) {
+ *   // Pass one signature for each `prepared.signatureRequests` entry and no others.
  * }
  * ```
  */
-export class MissingTransactionPlanSignaturesError extends Error {
+export class TransactionPlanSignatureCountMismatchError extends Error {
   /**
    * @param expected - Number of signature requests in the prepared plan.
    * @param received - Number of signatures passed to `build`.
    */
-  constructor(expected: number, received: number) {
+  constructor(
+    public readonly expected: number,
+    public readonly received: number,
+  ) {
     super(
-      `Expected ${expected} transaction-plan signatures but received ${received}. Sign all prepared signature requests before building the executable transaction plan.`,
+      `Expected exactly ${expected} transaction-plan signatures but received ${received}. Pass one signature for each prepared signature request and no others.`,
     );
   }
 }

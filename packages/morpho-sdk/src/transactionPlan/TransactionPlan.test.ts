@@ -4,11 +4,11 @@ import {
   type AuthorizationRequirementSignature,
   type BlueAuthorizationAction,
   type ERC20ApprovalAction,
-  MissingTransactionPlanSignaturesError,
   type PermitRequirementSignature,
   type Requirement,
   type RequirementSignature,
   type Transaction,
+  TransactionPlanSignatureCountMismatchError,
   type VaultV2DepositAction,
 } from "../types/index.js";
 import {
@@ -217,10 +217,10 @@ describe("TransactionPlan", () => {
     >();
 
     expect(() => prepared.build()).toThrow(
-      MissingTransactionPlanSignaturesError,
+      TransactionPlanSignatureCountMismatchError,
     );
     expect(() => prepared.build([permitSignature])).toThrow(
-      MissingTransactionPlanSignaturesError,
+      TransactionPlanSignatureCountMismatchError,
     );
 
     const executable = prepared.build([
@@ -242,6 +242,26 @@ describe("TransactionPlan", () => {
       { to: TOKEN, value: 0n, data: "0xa1" },
       { to: BUNDLER, value: 0n, data: "0xf1" },
     ]);
+  });
+
+  test("error: TransactionPlanSignatureCountMismatchError on a stale surplus signature", async () => {
+    const buildPrimaryTx = vi.fn(() => primaryTx);
+    const plan = TransactionPlan.create<
+      VaultV2DepositAction,
+      unknown,
+      Requirement<typeof permitSignature>
+    >({
+      getRequirementRequests: vi.fn(async () => []),
+      buildPrimaryTx,
+    });
+
+    const prepared = await plan.prepare();
+    buildPrimaryTx.mockClear();
+
+    expect(() => prepared.build([permitSignature])).toThrow(
+      TransactionPlanSignatureCountMismatchError,
+    );
+    expect(buildPrimaryTx).not.toHaveBeenCalled();
   });
 
   test("behavior: preserves prerequisite and primary action types through execution", async () => {

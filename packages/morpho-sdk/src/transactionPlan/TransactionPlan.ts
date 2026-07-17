@@ -6,7 +6,7 @@ import {
   type TransactionAction,
   type TxRequirement,
 } from "../types/action.js";
-import { MissingTransactionPlanSignaturesError } from "../types/error.js";
+import { TransactionPlanSignatureCountMismatchError } from "../types/error.js";
 import type {
   ExecutableTransactionPlanShape,
   PreparedTransactionPlanShape,
@@ -611,7 +611,7 @@ export class PreparedTransactionPlan<
    *
    * @param signatures - Signatures produced from `signatureRequests`, in request order.
    * @returns An executable plan that preserves the prerequisite and primary-action types.
-   * @throws {MissingTransactionPlanSignaturesError} when fewer signatures are supplied than requested.
+   * @throws {TransactionPlanSignatureCountMismatchError} when the signature count differs from the prepared requests.
    * @example
    * ```ts
    * const signatures = [];
@@ -625,14 +625,9 @@ export class PreparedTransactionPlan<
     signatures?: TransactionPlanSignatures<TRequest>,
   ): ExecutableTransactionPlan<TPrimaryAction, TRequest> {
     const expected = this.signatureRequests.length;
-    const received =
-      signatures == null
-        ? 0
-        : Array.isArray(signatures)
-          ? signatures.length
-          : 1;
-    if (received < expected) {
-      throw new MissingTransactionPlanSignaturesError(expected, received);
+    const received = signatures?.length ?? 0;
+    if (received !== expected) {
+      throw new TransactionPlanSignatureCountMismatchError(expected, received);
     }
     const requirementTxSteps = this.txSteps.filter(
       (step) => step.phase === "preparation",
