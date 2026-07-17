@@ -156,6 +156,23 @@ describe("collectVersionChanges", () => {
     );
   });
 
+  test("error: rejects omitting the generated Midnight package version", () => {
+    const root = createGitRepo();
+    addMidnightPackage(root, "1.0.0");
+    commitAll(root, "add midnight package");
+    writeFileSync(
+      join(root, "packages/midnight-sdk/package.json"),
+      `${JSON.stringify({
+        name: "@morpho-org/midnight-sdk",
+        version: "1.1.0",
+      })}\n`,
+    );
+
+    expect(() => collectVersionChanges({ cwd: root })).toThrow(
+      `Generated package version source "${MIDNIGHT_VERSION_SOURCE_PATH}" does not match the Midnight SDK package manifest.`,
+    );
+  });
+
   test("error: rejects deleting the generated Midnight package version", () => {
     const root = createGitRepo();
     addMidnightPackage(root, "1.0.0");
