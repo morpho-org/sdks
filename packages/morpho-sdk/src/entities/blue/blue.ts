@@ -941,12 +941,7 @@ export class MorphoBlue implements BlueActions {
     let repayShares: bigint;
     let erc20Amount: bigint;
 
-    // 2h forward accrual upper-bounds the on-chain repay price for BOTH modes:
-    // on-chain `morphoRepay` accrues `lastUpdate → execution` before enforcing
-    // `maxSharePrice`, so deriving the bound from the un-accrued market makes a
-    // quiet market (long since `lastUpdate`) revert once accrued interest
-    // exceeds `slippageTolerance`. Accrue before computing the bound; the bundle
-    // skims any residual back to the receiver.
+    // Forward-accrue (2h) before deriving `maxSharePrice` (both modes): on-chain `morphoRepay` accrues `lastUpdate → execution`, so an un-accrued bound reverts on quiet markets.
     const accrualTimestamp =
       MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
       Time.s.from.h(2n);
@@ -1165,11 +1160,7 @@ export class MorphoBlue implements BlueActions {
     let repayShares: bigint;
     let erc20Amount: bigint;
 
-    // 2h forward accrual upper-bounds the on-chain repay price for BOTH modes
-    // and the post-repay health check: on-chain `morphoRepay` accrues
-    // `lastUpdate → execution` before enforcing `maxSharePrice`, so deriving the
-    // bound from the un-accrued market makes a quiet market revert once accrued
-    // interest exceeds `slippageTolerance`. Bundle skims residual back.
+    // Forward-accrue (2h) for `maxSharePrice` (both modes) and the post-repay health check: on-chain `morphoRepay` accrues `lastUpdate → execution`, so an un-accrued bound reverts on quiet markets.
     const accrualTimestamp =
       MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
       Time.s.from.h(2n);
