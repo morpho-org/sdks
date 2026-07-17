@@ -1,12 +1,7 @@
 import type { BigIntish } from "@morpho-org/morpho-ts";
 import type { Hash } from "viem";
 import type { MempoolPayloadValidationSuccess } from "../api/types.js";
-import {
-  type IOffer,
-  Offer,
-  type OfferStruct,
-  OfferUtils,
-} from "../offers/index.js";
+import { type IOffer, Offer, type OfferStruct } from "../offers/index.js";
 import { Group } from "./Group.js";
 import { GroupUtils } from "./GroupUtils.js";
 import {
@@ -92,7 +87,7 @@ export class Tree {
         : [
             new Offer({
               ...Offer.from(entry as IOffer),
-              group: OfferUtils.groupHash(entry as IOffer),
+              group: GroupUtils.hash([entry as IOffer]),
             }),
           ],
     );
@@ -159,8 +154,9 @@ export class Tree {
    *
    * Use after `Offer.create` and optional `Group.create`, before
    * `Tree.mempoolValidate`, `EcrecoverRatifierUtils.ratify`, or
-   * `SetterRatifierUtils.ratify`. Groups are flattened; the tree hashes each
-   * offer with the group id already stored on the offer.
+   * `SetterRatifierUtils.ratify`. Groups are flattened, and every standalone
+   * offer is normalized as a singleton group using the router-compatible group
+   * id algorithm.
    *
    * @param params - Groups or standalone offers in leaf order.
    * @returns Tree instance.

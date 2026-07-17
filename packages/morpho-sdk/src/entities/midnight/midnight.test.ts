@@ -1,6 +1,7 @@
 import {
   AccrualPosition,
   Group,
+  GroupUtils,
   Market,
   MarketUtils,
   midnightAbi,
@@ -1250,7 +1251,7 @@ describe("MorphoMidnight", () => {
         validation: offerValidation,
       });
 
-      expect(data.groups).toEqual([offer.group]);
+      expect(data.groups).toEqual([GroupUtils.hash([offer])]);
       expect(data.tree.offers).toHaveLength(1);
     });
 

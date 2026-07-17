@@ -1,6 +1,6 @@
 import type { Address, Hex } from "viem";
 import { InvalidTreeError } from "../errors.js";
-import { type IOffer, Offer, OfferUtils } from "../offers/index.js";
+import { type IOffer, Offer } from "../offers/index.js";
 import { Group } from "./Group.js";
 import { GroupUtils } from "./GroupUtils.js";
 import type { RatifierTreeInput, TreeLike } from "./TreeUtils.js";
@@ -29,13 +29,11 @@ function normalizeTree(tree: RatifierTreeInput): TreeLike {
       : [
           new Offer({
             ...Offer.from(entry as IOffer),
-            group: OfferUtils.groupHash(entry as IOffer),
+            group: GroupUtils.hash([entry as IOffer]),
           }),
         ],
   );
-  const descriptor = TreeUtils.buildDescriptor(offers, {
-    preserveStandaloneGroups: true,
-  });
+  const descriptor = TreeUtils.buildDescriptor(entries);
 
   return {
     offers,

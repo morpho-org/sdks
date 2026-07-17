@@ -34,9 +34,10 @@
   "scripts": {
     "prepublish": "$npm_execpath build",
     "compile": "node ../../scripts/compile-solidity.js midnight-sdk",
-    "build": "tsc --noEmit && $npm_execpath build:cjs && $npm_execpath build:esm",
+    "build": "$npm_execpath generate:version && tsc --noEmit && $npm_execpath build:cjs && $npm_execpath build:esm",
     "build:cjs": "tsc --build tsconfig.build.cjs.json && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json",
+    "generate:version": "node ../../scripts/release/generate-midnight-package-version.mjs",
     "test": "vitest --root ../.. --project midnight-sdk"
   },
   "peerDependencies": {

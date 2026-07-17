@@ -871,7 +871,12 @@ export class MorphoBlue implements BlueActions {
     let repayAssets: bigint;
     let repayShares: bigint;
     let erc20Amount: bigint;
-    let marketForRepay: Market;
+
+    // Forward-accrue (2h) before deriving `maxSharePrice` (both modes): on-chain `morphoRepay` accrues `lastUpdate → execution`, so an un-accrued bound reverts on quiet markets.
+    const accrualTimestamp =
+      MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
+      Time.s.from.h(2n);
+    const marketForRepay = positionData.market.accrueInterest(accrualTimestamp);
 
     if ("shares" in params) {
       validateRepayShares({
@@ -881,12 +886,6 @@ export class MorphoBlue implements BlueActions {
       });
       repayAssets = 0n;
       repayShares = shares;
-      // 2h forward accrual upper-bounds the on-chain repay price; bundle
-      // skims residual back to the receiver.
-      const accrualTimestamp =
-        MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
-        Time.s.from.h(2n);
-      marketForRepay = positionData.market.accrueInterest(accrualTimestamp);
       const borrowAssets = marketForRepay.toBorrowAssets(shares, "Up");
       // Native funds the transfer first; the ERC-20 pulled is the remainder.
       // When native covers the full (2h-forward-accrued, rounded-up) borrow
@@ -904,7 +903,6 @@ export class MorphoBlue implements BlueActions {
       });
       repayShares = 0n;
       erc20Amount = amount;
-      marketForRepay = positionData.market;
     }
 
     const maxSharePrice = computeMaxRepaySharePrice({
@@ -1094,13 +1092,12 @@ export class MorphoBlue implements BlueActions {
     let repayAssets: bigint;
     let repayShares: bigint;
     let erc20Amount: bigint;
-    let marketForRepay: Market;
 
-    // 2h forward accrual upper-bounds the on-chain repay price (shares
-    // mode) and the post-repay health check; bundle skims residual back.
+    // Forward-accrue (2h) for `maxSharePrice` (both modes) and the post-repay health check: on-chain `morphoRepay` accrues `lastUpdate → execution`, so an un-accrued bound reverts on quiet markets.
     const accrualTimestamp =
       MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
       Time.s.from.h(2n);
+    const marketForRepay = positionData.market.accrueInterest(accrualTimestamp);
 
     if ("shares" in params) {
       validateRepayShares({
@@ -1110,7 +1107,6 @@ export class MorphoBlue implements BlueActions {
       });
       repayAssets = 0n;
       repayShares = shares;
-      marketForRepay = positionData.market.accrueInterest(accrualTimestamp);
       const borrowAssets = marketForRepay.toBorrowAssets(shares, "Up");
       // Native funds the transfer first; the ERC-20 pulled is the remainder.
       // When native covers the full (2h-forward-accrued, rounded-up) borrow
@@ -1128,7 +1124,6 @@ export class MorphoBlue implements BlueActions {
       });
       repayShares = 0n;
       erc20Amount = amount;
-      marketForRepay = positionData.market;
     }
 
     if (withdrawAmount > positionData.collateral) {
