@@ -72,9 +72,9 @@ contract GetVaultV2 {
         res.performanceFeeRecipient = vault.performanceFeeRecipient();
         res.managementFeeRecipient = vault.managementFeeRecipient();
         res.performanceFeeRecipientCanReceiveShares =
-            vault.canReceiveShares(res.performanceFeeRecipient);
+            res.performanceFee > 0 ? vault.canReceiveShares(res.performanceFeeRecipient) : true;
         res.managementFeeRecipientCanReceiveShares =
-            vault.canReceiveShares(res.managementFeeRecipient);
+            res.managementFee > 0 ? vault.canReceiveShares(res.managementFeeRecipient) : true;
 
         uint256 adaptersLength = vault.adaptersLength();
         res.adapters = new address[](adaptersLength);

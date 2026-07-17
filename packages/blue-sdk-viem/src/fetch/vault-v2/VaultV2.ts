@@ -265,20 +265,24 @@ export async function fetchVaultV2(
     performanceFeeRecipientCanReceiveShares,
     managementFeeRecipientCanReceiveShares,
   ] = await Promise.all([
-    readContract(client, {
-      ...parameters,
-      address,
-      abi: vaultV2Abi,
-      functionName: "canReceiveShares",
-      args: [performanceFeeRecipient],
-    }),
-    readContract(client, {
-      ...parameters,
-      address,
-      abi: vaultV2Abi,
-      functionName: "canReceiveShares",
-      args: [managementFeeRecipient],
-    }),
+    performanceFee > 0n
+      ? readContract(client, {
+          ...parameters,
+          address,
+          abi: vaultV2Abi,
+          functionName: "canReceiveShares",
+          args: [performanceFeeRecipient],
+        })
+      : true,
+    managementFee > 0n
+      ? readContract(client, {
+          ...parameters,
+          address,
+          abi: vaultV2Abi,
+          functionName: "canReceiveShares",
+          args: [managementFeeRecipient],
+        })
+      : true,
   ]);
 
   const [

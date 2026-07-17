@@ -197,6 +197,37 @@ function expectEquivalent(actual: AccrualVaultV2, expected: AccrualVaultV2) {
 
 describe("fetchAccrualVaultV2Deployless", () => {
   vaultV2Test(
+    "skips a reverting shares gate when both fees are zero",
+    async ({ client }) => {
+      const anvilClient = client as AnvilTestClient;
+      const { usdc } = addressesRegistry[client.chain.id];
+      const vaultAddress = await deployVaultV2(anvilClient, usdc);
+
+      await client.setCode({
+        address: rejectingSharesGate,
+        bytecode: "0x60006000fd",
+      });
+      await submitAndAccept(anvilClient, {
+        address: vaultAddress,
+        abi: vaultV2Abi,
+        functionName: "setReceiveSharesGate",
+        args: [rejectingSharesGate],
+      });
+
+      const [deployless, multicall] = await Promise.all([
+        fetchAccrualVaultV2Deployless(vaultAddress, client),
+        fetchAccrualVaultV2(vaultAddress, client, { deployless: false }),
+      ]);
+
+      expect(deployless.performanceFee).toBe(0n);
+      expect(deployless.managementFee).toBe(0n);
+      expect(deployless.performanceFeeRecipientCanReceiveShares).toBe(true);
+      expect(deployless.managementFeeRecipientCanReceiveShares).toBe(true);
+      expectEquivalent(deployless, multicall);
+    },
+  );
+
+  vaultV2Test(
     "matches onchain accrual when fee recipients cannot receive shares",
     async ({ client }) => {
       const anvilClient = client as AnvilTestClient;

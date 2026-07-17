@@ -200,9 +200,9 @@ contract GetAccrualVaultV2 {
         res.performanceFeeRecipient = vault.performanceFeeRecipient();
         res.managementFeeRecipient = vault.managementFeeRecipient();
         res.performanceFeeRecipientCanReceiveShares =
-            vault.canReceiveShares(res.performanceFeeRecipient);
+            res.performanceFee > 0 ? vault.canReceiveShares(res.performanceFeeRecipient) : true;
         res.managementFeeRecipientCanReceiveShares =
-            vault.canReceiveShares(res.managementFeeRecipient);
+            res.managementFee > 0 ? vault.canReceiveShares(res.managementFeeRecipient) : true;
         res.assetBalance = IERC20(res.asset).balanceOf(address(vault));
 
         _queryLiquidityAllocations(
