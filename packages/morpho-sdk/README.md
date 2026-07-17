@@ -31,6 +31,7 @@ pnpm add @morpho-org/morpho-sdk
 | **VaultV1**  | `deposit`                 | Bundler (general adapter) | Same ERC-4626 inflation attack prevention as V2. Supports native token wrapping.                    |
 |              | `withdraw`                | Direct vault call         | No attack surface                                                                                   |
 |              | `redeem`                  | Direct vault call         | No attack surface                                                                                   |
+|              | `migrateToV2`             | Bundler (general adapter) | Atomic V1 → V2 migration: redeem V1 shares + deposit into V2 in one tx. Slippage-protected.         |
 | **Blue** | `supply`                  | Bundler (general adapter) | `erc20TransferFrom` + `morphoSupply` with `maxSharePrice` (inflation guard). Supports native wrapping when `loanToken === wNative`. |
 |              | `supplyCollateral`        | Bundler (general adapter) | `erc20TransferFrom` + `morphoSupplyCollateral`. Supports native wrapping.                           |
 |              | `borrow`                  | Bundler (general adapter) | `morphoBorrow` with `minSharePrice` slippage protection. Requires GA1 auth. Supports reallocations. |
