@@ -93,6 +93,8 @@ describe("VaultV2", () => {
     expect(vault.liquidityData).toBe(EMPTY_HEX);
     expect(vault.performanceFeeRecipient).toBe(RECIPIENT);
     expect(vault.managementFeeRecipient).toBe(RECIPIENT);
+    expect(vault.performanceFeeRecipientCanReceiveShares).toBe(true);
+    expect(vault.managementFeeRecipientCanReceiveShares).toBe(true);
   });
 
   test("toAssets and toShares use pre-accrual totals", () => {
@@ -288,6 +290,38 @@ describe("AccrualVaultV2.accrueInterest", () => {
     expect(result.performanceFeeShares).toBe(0n);
     expect(result.managementFeeShares).toBe(0n);
     expect(result.vault.totalSupply).toBe(1_000n);
+  });
+
+  test("does not accrue performance fees when the recipient cannot receive shares", () => {
+    const vault = accrualVaultV2(accrualAdapter({ realAssets: () => 1_100n }), {
+      maxRate: MathLib.WAD,
+      managementFee: 500_000_000_000_000_000n,
+      performanceFeeRecipientCanReceiveShares: false,
+    });
+    const result = vault.accrueInterest(101n);
+    const expectedManagementFeeShares = MathLib.mulDivDown(600n, 1_100n, 601n);
+
+    expect(result.performanceFeeShares).toBe(0n);
+    expect(result.managementFeeShares).toBe(expectedManagementFeeShares);
+    expect(result.vault.totalSupply).toBe(1_000n + result.managementFeeShares);
+  });
+
+  test("does not accrue management fees when the recipient cannot receive shares", () => {
+    const vault = accrualVaultV2(accrualAdapter({ realAssets: () => 1_100n }), {
+      maxRate: MathLib.WAD,
+      managementFee: 500_000_000_000_000_000n,
+      managementFeeRecipientCanReceiveShares: false,
+    });
+    const result = vault.accrueInterest(101n);
+    const expectedPerformanceFeeShares = MathLib.mulDivDown(
+      20n,
+      1_100n,
+      1_181n,
+    );
+
+    expect(result.performanceFeeShares).toBe(expectedPerformanceFeeShares);
+    expect(result.managementFeeShares).toBe(0n);
+    expect(result.vault.totalSupply).toBe(1_000n + result.performanceFeeShares);
   });
 });
 

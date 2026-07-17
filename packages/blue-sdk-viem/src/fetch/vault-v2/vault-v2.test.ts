@@ -148,6 +148,8 @@ const vaultV2Result = {
   managementFee: 6n,
   performanceFeeRecipient: RECIPIENT,
   managementFeeRecipient: RECIPIENT,
+  performanceFeeRecipientCanReceiveShares: false,
+  managementFeeRecipientCanReceiveShares: false,
 } as const;
 
 const marketQueryResult = {
@@ -226,6 +228,12 @@ function mockVaultV2BaseReads(handle: ReturnType<typeof createMockClient>) {
     functionName: "adapters",
     result: ADAPTER_2,
   });
+  mockRead(handle, {
+    address: VAULT,
+    abi: vaultV2Abi,
+    functionName: "canReceiveShares",
+    result: false,
+  });
 }
 
 function mockVaultV2AllocationReads(
@@ -294,6 +302,8 @@ describe("fetchVaultV2", () => {
     expect(vault.asset).toBe(ASSET);
     expect(vault.adapters).toEqual([ADAPTER_2]);
     expect(vault.liquidityAllocations?.[0]?.allocation).toBe(100n);
+    expect(vault.performanceFeeRecipientCanReceiveShares).toBe(false);
+    expect(vault.managementFeeRecipientCanReceiveShares).toBe(false);
   });
 
   test("omits deployless liquidity allocations for unknown liquidity adapters", async () => {
@@ -346,6 +356,8 @@ describe("fetchVaultV2", () => {
     expect(vault.liquidityAllocations?.[0]?.id).toBe(
       VaultV2MorphoVaultV1Adapter.adapterId(ADAPTER),
     );
+    expect(vault.performanceFeeRecipientCanReceiveShares).toBe(false);
+    expect(vault.managementFeeRecipientCanReceiveShares).toBe(false);
   });
 
   test("uses multicall directly when deployless is disabled", async () => {
@@ -1743,6 +1755,8 @@ const accrualVaultV2Result = {
   managementFee: 6n,
   performanceFeeRecipient: RECIPIENT,
   managementFeeRecipient: RECIPIENT,
+  performanceFeeRecipientCanReceiveShares: false,
+  managementFeeRecipientCanReceiveShares: false,
   assetBalance: 777n,
   hasLiquidityAdapter: true,
   liquidityAdapterInfo: marketV1V2AdapterQueryResult(ADAPTER, 55n),
@@ -1772,6 +1786,8 @@ describe("fetchAccrualVaultV2Deployless", () => {
     expect(vault.address).toBe(VAULT);
     expect(vault.assetBalance).toBe(777n);
     expect(vault.liquidityAllocations?.[0]?.allocation).toBe(100n);
+    expect(vault.performanceFeeRecipientCanReceiveShares).toBe(false);
+    expect(vault.managementFeeRecipientCanReceiveShares).toBe(false);
 
     expect(vault.accrualLiquidityAdapter).toBeInstanceOf(
       AccrualVaultV2MorphoMarketV1AdapterV2,

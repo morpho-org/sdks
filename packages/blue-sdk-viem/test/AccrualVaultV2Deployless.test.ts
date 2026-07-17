@@ -116,6 +116,12 @@ function expectEquivalent(actual: AccrualVaultV2, expected: AccrualVaultV2) {
   expect(actual.managementFee).toBe(expected.managementFee);
   expect(actual.performanceFeeRecipient).toBe(expected.performanceFeeRecipient);
   expect(actual.managementFeeRecipient).toBe(expected.managementFeeRecipient);
+  expect(actual.performanceFeeRecipientCanReceiveShares).toBe(
+    expected.performanceFeeRecipientCanReceiveShares,
+  );
+  expect(actual.managementFeeRecipientCanReceiveShares).toBe(
+    expected.managementFeeRecipientCanReceiveShares,
+  );
   expect(actual.forceDeallocatePenalties).toStrictEqual(
     expected.forceDeallocatePenalties,
   );

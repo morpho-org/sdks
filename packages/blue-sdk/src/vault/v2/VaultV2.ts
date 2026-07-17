@@ -36,6 +36,10 @@ export interface IVaultV2 extends IToken {
   managementFee: bigint;
   performanceFeeRecipient: Address;
   managementFeeRecipient: Address;
+  /** Whether the performance fee recipient can receive vault shares. Defaults to `true`. */
+  performanceFeeRecipientCanReceiveShares?: boolean;
+  /** Whether the management fee recipient can receive vault shares. Defaults to `true`. */
+  managementFeeRecipientCanReceiveShares?: boolean;
 }
 
 /** Represents a Morpho Vault V2 and its fee, adapter, and accounting state. */
@@ -58,6 +62,8 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
   public managementFee;
   public performanceFeeRecipient;
   public managementFeeRecipient;
+  public performanceFeeRecipientCanReceiveShares;
+  public managementFeeRecipientCanReceiveShares;
 
   constructor({
     asset,
@@ -74,6 +80,8 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
     managementFee,
     performanceFeeRecipient,
     managementFeeRecipient,
+    performanceFeeRecipientCanReceiveShares = true,
+    managementFeeRecipientCanReceiveShares = true,
     ...config
   }: IVaultV2) {
     super(config, asset);
@@ -92,6 +100,10 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
     this.managementFee = managementFee;
     this.performanceFeeRecipient = performanceFeeRecipient;
     this.managementFeeRecipient = managementFeeRecipient;
+    this.performanceFeeRecipientCanReceiveShares =
+      performanceFeeRecipientCanReceiveShares;
+    this.managementFeeRecipientCanReceiveShares =
+      managementFeeRecipientCanReceiveShares;
   }
 
   public toAssets(shares: BigIntish) {
@@ -257,11 +269,15 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     const interest = MathLib.zeroFloorSub(newTotalAssets, vault._totalAssets);
 
     const performanceFeeAssets =
-      interest > 0n && vault.performanceFee > 0n
+      interest > 0n &&
+      vault.performanceFee > 0n &&
+      vault.performanceFeeRecipientCanReceiveShares
         ? MathLib.wMulDown(interest, vault.performanceFee)
         : 0n;
     const managementFeeAssets =
-      elapsed > 0n && vault.managementFee > 0n
+      elapsed > 0n &&
+      vault.managementFee > 0n &&
+      vault.managementFeeRecipientCanReceiveShares
         ? MathLib.wMulDown(newTotalAssets * elapsed, vault.managementFee)
         : 0n;
 
