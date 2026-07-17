@@ -27,6 +27,7 @@ import {
   InvalidTypedDataSignatureError,
 } from "../errors.js";
 import { EcrecoverRatifierUtils } from "./EcrecoverRatifierUtils.js";
+import { GroupUtils } from "./GroupUtils.js";
 import { Tree } from "./Tree.js";
 import { TreeUtils } from "./TreeUtils.js";
 
@@ -124,7 +125,7 @@ describe("EcrecoverRatifierUtils.ratify", () => {
 
     expect(items).toHaveLength(1);
     expect(items[0]!.offer).not.toBe(offer);
-    expect(items[0]!.offer.group).toBe(offer.group);
+    expect(items[0]!.offer.group).toBe(GroupUtils.hash([offer]));
     expect(decoded.signature).toEqual(
       EcrecoverRatifierUtils.toSignature(signature),
     );
@@ -374,7 +375,7 @@ describe("EcrecoverRatifierUtils.digest", () => {
     // Captured from the Solidity EcrecoverRatifier digest formula at
     // morpho-org/midnight@336b924a2bb378d810ef6d35b6dd3486759af8bd.
     expect(digest).toBe(
-      "0x600cf16f5db1129056b39621ecb708369079387dc10125c836cffc3f5b365b5e",
+      "0x30fa6f2d2a3c44224e9c3132d392652b0d597ebf6ff76b9283d4718d95c68d9f",
     );
   });
 });

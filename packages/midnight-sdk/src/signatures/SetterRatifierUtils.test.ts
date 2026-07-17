@@ -2,6 +2,7 @@ import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
 import { describe, expect, test } from "vitest";
 import { createFixtures } from "../__test__/fixtures.js";
 import { InvalidTreeError } from "../errors.js";
+import { GroupUtils } from "./GroupUtils.js";
 import { SetterRatifierUtils } from "./SetterRatifierUtils.js";
 import { Tree } from "./Tree.js";
 import { TreeUtils } from "./TreeUtils.js";
@@ -58,7 +59,7 @@ describe("SetterRatifierUtils.ratify", () => {
 
     expect(items).toHaveLength(1);
     expect(items[0]!.offer).not.toBe(offer);
-    expect(items[0]!.offer.group).toBe(offer.group);
+    expect(items[0]!.offer.group).toBe(GroupUtils.hash([offer]));
     expect(
       TreeUtils.verifyProof({
         offer: items[0]!.offer,
@@ -116,7 +117,7 @@ describe("SetterRatifierUtils.verifyRatifierData", () => {
     const data = SetterRatifierUtils.ratifierData({ tree, leafIndex: 0n });
 
     const decoded = SetterRatifierUtils.verifyRatifierData({
-      offer,
+      offer: tree.offers[0]!,
       ratifierData: data,
     });
 

@@ -5,6 +5,7 @@ import { InvalidTreeError } from "../errors.js";
 import { RatifierUtils as RootRatifierUtils } from "../index.js";
 import { OfferUtils } from "../offers/index.js";
 import { Group } from "./Group.js";
+import { GroupUtils } from "./GroupUtils.js";
 import { EMPTY_OFFER_STRUCT } from "./offerStructInternal.js";
 import { RatifierUtils } from "./RatifierUtils.js";
 import { Tree } from "./Tree.js";
@@ -78,7 +79,7 @@ describe("RatifierUtils.normalizeRatifierTree", () => {
 
     expect(tree.offers).toHaveLength(1);
     expect(tree.offers[0]).not.toBe(offer);
-    expect(tree.offers[0]!.group).toBe(offer.group);
+    expect(tree.offers[0]!.group).toBe(GroupUtils.hash([offer]));
     expect(ratifier).toBe(setterRatifier);
   });
 
@@ -134,15 +135,16 @@ describe("RatifierUtils.normalizeRatifierTree", () => {
 
   test("behavior: normalizes stale standalone groups in raw inputs", () => {
     const offer = baseOffer({ group: staleGroup, maxAssets: 0n });
+    const expectedGroup = GroupUtils.hash([offer]);
 
     const { tree } = RatifierUtils.normalizeRatifierTree({
       tree: [offer],
       label: "Ecrecover",
     });
 
-    expect(tree.offers[0]!.group).toBe(OfferUtils.groupHash(offer));
+    expect(tree.offers[0]!.group).toBe(expectedGroup);
     expect(tree.offers[0]!.group).not.toBe(staleGroup);
-    expect(tree.paddedOffers[0]!.group).toBe(OfferUtils.groupHash(offer));
+    expect(tree.paddedOffers[0]!.group).toBe(expectedGroup);
   });
 
   test("error: InvalidTreeError mixed ratifiers", () => {
