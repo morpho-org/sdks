@@ -103,9 +103,9 @@ describe("MorphoVaultV1 entity tests", () => {
         vaultData,
         slippageTolerance: 0n,
       });
-      const tx = (await result.prepare()).build().primaryTx;
-      expect(tx.data).toBeDefined();
-      expect(tx.value).toBe(0n);
+      const tx = (await result.prepare()).primaryTx;
+      expect(tx?.data).toBeDefined();
+      expect(tx?.value).toBe(0n);
     });
 
     test("should accept slippageTolerance of exactly MAX_SLIPPAGE_TOLERANCE", async ({
@@ -128,9 +128,9 @@ describe("MorphoVaultV1 entity tests", () => {
         vaultData,
         slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
       });
-      const tx = (await result.prepare()).build().primaryTx;
-      expect(tx.data).toBeDefined();
-      expect(tx.value).toBe(0n);
+      const tx = (await result.prepare()).primaryTx;
+      expect(tx?.data).toBeDefined();
+      expect(tx?.value).toBe(0n);
     });
 
     test("should throw ExcessiveSlippageToleranceError when slippageTolerance exceeds MAX", async ({
