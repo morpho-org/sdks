@@ -1,5 +1,23 @@
 # @morpho-org/morpho-sdk
 
+## 5.3.1
+
+### Patch Changes
+
+- [#886](https://github.com/morpho-org/sdks/pull/886) [`b12f8a2`](https://github.com/morpho-org/sdks/commit/b12f8a2511a27cb42738366ec9d295414ced5b6a) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Fix assets-mode repay reverting on quiet markets. `MorphoBlue.repay` and
+  `MorphoBlue.repayWithdrawCollateral` now derive `maxSharePrice` from the
+  2h-forward-accrued market in **both** repay modes, not just shares mode.
+
+  Previously the assets path computed the slippage bound from the un-accrued
+  `positionData.market` snapshot (as of the market's on-chain `lastUpdate`),
+  while on-chain `morphoRepay` accrues interest `lastUpdate → execution` before
+  enforcing the bound. On a market that hasn't accrued recently, the accrued
+  borrow share price rose past the default 0.03% `slippageTolerance` ceiling and
+  the bundle reverted — e.g. at ~8% APR, 0.03% is only ~1.3 days of accrual, so a
+  quiet market reverted systematically. Direct core `repay` (no bundler, no
+  bound) was unaffected, which is why the fallback path succeeded while
+  app.morpho.org did not.
+
 ## 5.3.0
 
 ### Minor Changes
