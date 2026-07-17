@@ -62,7 +62,9 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
   public managementFee;
   public performanceFeeRecipient;
   public managementFeeRecipient;
+  /** Whether the performance fee recipient can receive vault shares. */
   public performanceFeeRecipientCanReceiveShares;
+  /** Whether the management fee recipient can receive vault shares. */
   public managementFeeRecipientCanReceiveShares;
 
   constructor({
@@ -232,6 +234,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
 
   /**
    * Returns a new vault derived from this vault, whose interest has been accrued up to the given timestamp.
+   * Performance and management fee shares are zero when the corresponding fee recipient cannot receive vault shares.
    * @param timestamp The timestamp at which to accrue interest. Must be greater than or equal to the vault's `lastUpdate`.
    */
   public accrueInterest(timestamp: BigIntish) {
