@@ -31,6 +31,7 @@ pnpm add @morpho-org/morpho-sdk
 | **VaultV1**  | `deposit`                 | Bundler (general adapter) | Same ERC-4626 inflation attack prevention as V2. Supports native token wrapping.                    |
 |              | `withdraw`                | Direct vault call         | No attack surface                                                                                   |
 |              | `redeem`                  | Direct vault call         | No attack surface                                                                                   |
+|              | `migrateToV2`             | Bundler (general adapter) | Atomic V1 → V2 migration: redeem V1 shares + deposit into V2 in one tx. Slippage-protected.         |
 | **Blue** | `supply`                  | Bundler (general adapter) | `erc20TransferFrom` + `morphoSupply` with `maxSharePrice` (inflation guard). Supports native wrapping when `loanToken === wNative`. |
 |              | `supplyCollateral`        | Bundler (general adapter) | `erc20TransferFrom` + `morphoSupplyCollateral`. Supports native wrapping.                           |
 |              | `borrow`                  | Bundler (general adapter) | `morphoBorrow` with `minSharePrice` slippage protection. Requires GA1 auth. Supports reallocations. |
@@ -236,7 +237,13 @@ const tx = buildTx();
 
 #### Migrate to V2
 
-Atomically migrate a full position from a VaultV1 (MetaMorpho) vault into a VaultV2 vault. The bundler redeems the V1 shares and deposits the resulting assets into V2 in a single transaction. Both vaults must share the same underlying asset.
+Atomically migrate a full position from a VaultV1 (MetaMorpho) vault into a VaultV2 vault. In a single bundler transaction, the user's V1 shares are pulled into `GeneralAdapter1`, redeemed for the underlying asset, and re-deposited into the V2 vault on the user's behalf. Guarantees:
+
+- **Atomic** — redeem V1 + deposit V2 happen in one transaction; the user is never left holding loose assets between the two legs.
+- **Slippage-protected on both legs** — the entity derives a `minSharePriceVaultV1` (V1 redeem floor) and a `maxSharePriceVaultV2` (V2 deposit ceiling, which doubles as the ERC-4626 inflation-attack guard) from live vault state plus your `slippageTolerance`.
+- **Same-asset only** — both vaults must share the same underlying asset. A mismatch throws `VaultAssetMismatchError`; a `sourceVault` whose address doesn't match the entity throws `VaultAddressMismatchError`.
+
+`sourceVault` / `targetVault` are the accrual snapshots returned by each entity's `getData()`.
 
 ```typescript
 const sourceVault = client.morpho.vaultV1("0xV1Vault...", 1);
@@ -246,11 +253,24 @@ const { buildTx, getRequirements } = sourceVault.migrateToV2({
   userAddress: "0xUser...",
   sourceVault: await sourceVault.getData(),
   targetVault: await targetVault.getData(),
-  shares: 1000000000000000000n,
+  shares: 1000000000000000000n, // full V1 position, in V1 shares
+  slippageTolerance: 300000000000000n, // optional, WAD (0.03%); defaults to DEFAULT_SLIPPAGE_TOLERANCE, capped at 10%
 });
 
+// GeneralAdapter1 must be allowed to pull the V1 shares. Because V1 shares
+// implement EIP-2612, this is returned either as an ERC-20 approval tx or as a
+// signable permit requirement (when the extension was created with `supportSignature: true`).
 const requirements = await getRequirements();
-const tx = buildTx([requirementSignature]);
+const signatures = [];
+for (const requirement of requirements) {
+  if (isRequirementApproval(requirement)) {
+    await walletClient.sendTransaction(requirement); // approve GA1 to pull V1 shares
+  } else if (isRequirementSignature(requirement)) {
+    signatures.push(await requirement.sign(walletClient, "0xUser..."));
+  }
+}
+
+const tx = buildTx(signatures);
 ```
 
 ### Blue
