@@ -117,7 +117,13 @@ function authorizationRequest(): Requirement<AuthorizationRequirementSignature> 
 
 describe("TransactionPlan", () => {
   test("default: exposes prepare as the single public entry point and prepares semantic requests", async () => {
-    const handler: TransactionPlanHandler<VaultV2DepositAction> = {
+    const handler: TransactionPlanHandler<
+      VaultV2DepositAction,
+      unknown,
+      | Readonly<Transaction<ERC20ApprovalAction>>
+      | Requirement<typeof permitSignature>
+      | Requirement<AuthorizationRequirementSignature>
+    > = {
       getRequirementRequests: vi.fn(async () => [
         approvalTx,
         permitRequest(),
@@ -194,7 +200,7 @@ describe("TransactionPlan", () => {
     const buildPrimaryTx = vi.fn(
       (_signatures?: readonly RequirementSignature[]) => primaryTx,
     );
-    const plan = TransactionPlan.create<VaultV2DepositAction>({
+    const plan = TransactionPlan.create({
       getRequirementRequests: vi.fn(async () => [
         approvalTx,
         permit,
@@ -204,6 +210,11 @@ describe("TransactionPlan", () => {
     });
 
     const prepared = await plan.prepare();
+
+    expectTypeOf<Parameters<typeof prepared.build>[0]>().toEqualTypeOf<
+      | readonly (typeof permitSignature | AuthorizationRequirementSignature)[]
+      | undefined
+    >();
 
     expect(() => prepared.build()).toThrow(
       MissingTransactionPlanSignaturesError,
@@ -252,6 +263,7 @@ describe("TransactionPlan", () => {
       { readonly phase: "preparation" }
     >;
     type Executable = ReturnType<Prepared["build"]>;
+    type BuildSignatures = Parameters<Prepared["build"]>[0];
     type PrimaryTxStep = Extract<
       Executable["txSteps"][number],
       { readonly phase: "primary" }
@@ -273,6 +285,9 @@ describe("TransactionPlan", () => {
     expectTypeOf<ReturnType<SignatureRequest["sign"]>>().toEqualTypeOf<
       Promise<typeof permitSignature>
     >();
+    expectTypeOf<BuildSignatures>().toEqualTypeOf<
+      readonly (typeof permitSignature)[] | undefined
+    >();
     expectTypeOf<PreparationTxStep["tx"]>().toEqualTypeOf<
       Readonly<Transaction<ERC20ApprovalAction>>
     >();
@@ -282,7 +297,7 @@ describe("TransactionPlan", () => {
   });
 
   test("behavior: requirement transaction steps keep authorization intent separate from token approval", async () => {
-    const plan = TransactionPlan.create<VaultV2DepositAction>({
+    const plan = TransactionPlan.create({
       getRequirementRequests: vi.fn(async () => [authorizationTx]),
       buildPrimaryTx: vi.fn(() => primaryTx),
     });
@@ -306,7 +321,7 @@ describe("TransactionPlan", () => {
   });
 
   test("behavior: a non-previewable primary step appears after build", async () => {
-    const plan = TransactionPlan.create<VaultV2DepositAction>({
+    const plan = TransactionPlan.create({
       getRequirementRequests: vi.fn(async () => [permitRequest()]),
       previewPrimaryTx: false,
       buildPrimaryTx: vi.fn(() => primaryTx),
@@ -334,6 +349,10 @@ describe("TransactionPlan", () => {
 
     const prepared = await plan.prepare();
     const executable = prepared.build();
+
+    expectTypeOf<Parameters<typeof prepared.build>[0]>().toEqualTypeOf<
+      readonly never[] | undefined
+    >();
 
     expect(prepared.flowKind).toBe("single_tx");
     expect(prepared.stepCount).toBe(1);

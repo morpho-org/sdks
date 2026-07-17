@@ -9,13 +9,15 @@ import type {
 } from "@morpho-org/midnight-sdk";
 import type { Address, Hex } from "viem";
 import type { MidnightTakeableOffer } from "../../actions/midnight/types.js";
-import type { TransactionPlan } from "../../transactionPlan/index.js";
 import type {
-  ActionRequirement,
+  TransactionPlan,
+  TransactionPlanRequest,
+} from "../../transactionPlan/index.js";
+import type {
   MempoolSubmitOffersAction,
-  MidnightOfferRootSignature,
-  RequirementSignature,
+  MidnightOfferRootRequirement,
   TransactionAction,
+  TxRequirement,
 } from "../../types/action.js";
 
 /** Optional Midnight API validation controls for make-offer flows. */
@@ -72,10 +74,10 @@ export interface SupplyCollateralMakeBorrowParams extends MakeOffersParams {
   readonly collateralIndex?: bigint;
 }
 
-/** Signatures accepted when building Midnight transaction plans. */
-export type MidnightActionSignatures =
-  | MidnightOfferRootSignature
-  | readonly MidnightOfferRootSignature[];
+/** Prerequisite transactions and offer-root signature supported by Midnight maker plans. */
+export type MidnightMakeOffersRequest =
+  | TxRequirement
+  | MidnightOfferRootRequirement;
 
 /**
  * Lazy Midnight transaction plan. Call `prepare()` to resolve the signature requests and/or
@@ -95,8 +97,8 @@ export type MidnightActionSignatures =
  */
 export type MidnightActionOutput<
   TAction extends TransactionAction,
-  TSignatures = readonly RequirementSignature[],
-> = TransactionPlan<TAction, undefined, ActionRequirement, TSignatures>;
+  TRequest extends TransactionPlanRequest = TxRequirement,
+> = TransactionPlan<TAction, undefined, TRequest>;
 
 /**
  * Transaction plan returned by maker-offer flows after offer-tree preparation.
@@ -119,7 +121,7 @@ export type MidnightActionOutput<
  */
 export type MakeOffersOutput = MidnightActionOutput<
   MempoolSubmitOffersAction,
-  MidnightActionSignatures
+  MidnightMakeOffersRequest
 > & {
   readonly groups: readonly Hex[];
   readonly root: Hex;

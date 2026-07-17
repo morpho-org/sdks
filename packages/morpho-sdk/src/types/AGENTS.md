@@ -7,8 +7,8 @@ Centralized type definitions and error classes. Barrel-exported via `index.ts`. 
 - `BaseAction<TType, TArgs>` — discriminated union base, keyed on `type`.
 - `Transaction<TAction>` — immutable `{ to, value, data, action }`. Returned from every action; deep-frozen.
 - `Requirement` / `RequirementSignature` — prerequisite signing flow for permit/permit2 and Midnight offer roots.
-- `TransactionPlan<TPrimaryAction, TRequestOptions, TRequest, TSignatures>` — lazy entity output whose `prepare()` call resolves typed prerequisite requests and whose prepared form builds an executable plan.
-- `PreparedTransactionPlan<TPrimaryAction, TRequest, TSignatures>` — resolved, typed review surface containing signature requests, transaction steps, and semantic intents.
+- `TransactionPlan<TPrimaryAction, TRequestOptions, TRequest>` — lazy entity output whose `prepare()` call resolves typed prerequisite requests and whose prepared form builds an executable plan. Its accepted build signatures are derived from `TRequest`.
+- `PreparedTransactionPlan<TPrimaryAction, TRequest>` — resolved, typed review surface containing signature requests, transaction steps, and semantic intents.
 - `ExecutableTransactionPlan<TPrimaryAction, TRequest>` — ordered prerequisite and primary transaction steps ready for submission.
 - `Metadata` — optional `{ origin, timestamp? }` for calldata tracing.
 - `DepositAmountArgs` — union enforcing at least one of `amount` / `nativeAmount`. Reused for vault deposits, market collateral supply, and market loan-asset supply.

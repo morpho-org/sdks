@@ -1,7 +1,6 @@
 import {
   isRequirementApproval,
   isRequirementBlueAuthorization,
-  type RequirementSignature,
   type SignatureRequirement,
   type Transaction,
   type TransactionAction,
@@ -23,6 +22,7 @@ import type {
   TransactionPlanPrepareOptions,
   TransactionPlanRequest,
   TransactionPlanSignatureRequest,
+  TransactionPlanSignatures,
   TransactionPlanStep,
   TransactionPlanStepForIntent,
   TransactionPlanTokenApprovalIntent,
@@ -101,14 +101,12 @@ export type {
 export class TransactionPlan<
   TPrimaryAction extends TransactionAction = TransactionAction,
   TRequestOptions = unknown,
-  TRequest extends TransactionPlanRequest = TransactionPlanRequest,
-  TSignatures = readonly RequirementSignature[],
+  TRequest extends TransactionPlanRequest = never,
 > {
   private readonly handler: TransactionPlanHandler<
     TPrimaryAction,
     TRequestOptions,
-    TRequest,
-    TSignatures
+    TRequest
   >;
 
   /**
@@ -124,12 +122,7 @@ export class TransactionPlan<
    * ```
    */
   constructor(
-    handler: TransactionPlanHandler<
-      TPrimaryAction,
-      TRequestOptions,
-      TRequest,
-      TSignatures
-    >,
+    handler: TransactionPlanHandler<TPrimaryAction, TRequestOptions, TRequest>,
   ) {
     this.handler = handler;
   }
@@ -149,46 +142,13 @@ export class TransactionPlan<
    */
   async prepare(
     options?: TransactionPlanPrepareOptions<TRequestOptions>,
-  ): Promise<PreparedTransactionPlan<TPrimaryAction, TRequest, TSignatures>> {
+  ): Promise<PreparedTransactionPlan<TPrimaryAction, TRequest>> {
     const requests = this.handler.getRequirementRequests
       ? await this.handler.getRequirementRequests(options?.requestOptions)
       : [];
     const requirementSteps = requests.map(
       (request, index): TransactionPlanPreparedStep<TRequest> => {
         const id = `request-${index}`;
-        if (isRequirementApproval(request)) {
-          const tx = request as Extract<TRequest, TxRequirement>;
-          return {
-            kind: "tx",
-            id,
-            phase: "preparation",
-            tx,
-            action: tx.action,
-            intent: {
-              type: "tokenApproval",
-              method: "tx",
-              token: request.to,
-              spender: request.action.args.spender,
-              amount: request.action.args.amount,
-            },
-          } satisfies TransactionPlanPreparedStep<TRequest>;
-        }
-        if (isRequirementBlueAuthorization(request)) {
-          const tx = request as Extract<TRequest, TxRequirement>;
-          return {
-            kind: "tx",
-            id,
-            phase: "preparation",
-            tx,
-            action: tx.action,
-            intent: {
-              type: "operatorAuthorization",
-              method: "tx",
-              operator: request.action.args.authorized,
-              isAuthorized: request.action.args.isAuthorized,
-            },
-          } satisfies TransactionPlanPreparedStep<TRequest>;
-        }
         if (
           typeof request === "object" &&
           request !== null &&
@@ -197,7 +157,39 @@ export class TransactionPlan<
           "data" in request &&
           "action" in request
         ) {
+          // Inline structural narrowing does not resolve a generic TRequest to its Extract branch.
           const tx = request as Extract<TRequest, TxRequirement>;
+          if (isRequirementApproval(tx)) {
+            return {
+              kind: "tx",
+              id,
+              phase: "preparation",
+              tx,
+              action: tx.action,
+              intent: {
+                type: "tokenApproval",
+                method: "tx",
+                token: tx.to,
+                spender: tx.action.args.spender,
+                amount: tx.action.args.amount,
+              },
+            } satisfies TransactionPlanPreparedStep<TRequest>;
+          }
+          if (isRequirementBlueAuthorization(tx)) {
+            return {
+              kind: "tx",
+              id,
+              phase: "preparation",
+              tx,
+              action: tx.action,
+              intent: {
+                type: "operatorAuthorization",
+                method: "tx",
+                operator: tx.action.args.authorized,
+                isAuthorized: tx.action.args.isAuthorized,
+              },
+            } satisfies TransactionPlanPreparedStep<TRequest>;
+          }
           const intent:
             | TransactionPlanOperatorAuthorizationIntent
             | TransactionPlanContractTxIntent<TxRequirement["action"]> =
@@ -220,6 +212,7 @@ export class TransactionPlan<
           } satisfies TransactionPlanPreparedStep<TRequest>;
         }
 
+        // The same generic-narrowing limitation applies to the complementary signature branch.
         const signatureRequest = request as Extract<
           TRequest,
           SignatureRequirement
@@ -307,7 +300,7 @@ export class TransactionPlan<
             "primary"
           >);
 
-    return new PreparedTransactionPlan<TPrimaryAction, TRequest, TSignatures>({
+    return new PreparedTransactionPlan<TPrimaryAction, TRequest>({
       buildPrimaryTx: this.handler.buildPrimaryTx,
       requirementSteps,
       primaryStep,
@@ -330,20 +323,17 @@ export class TransactionPlan<
   static create<
     TCreatedPrimaryAction extends TransactionAction,
     TCreatedRequestOptions = unknown,
-    TCreatedRequest extends TransactionPlanRequest = TransactionPlanRequest,
-    TCreatedSignatures = readonly RequirementSignature[],
+    TCreatedRequest extends TransactionPlanRequest = never,
   >(
     handler: TransactionPlanHandler<
       TCreatedPrimaryAction,
       TCreatedRequestOptions,
-      TCreatedRequest,
-      TCreatedSignatures
+      TCreatedRequest
     >,
   ): TransactionPlan<
     TCreatedPrimaryAction,
     TCreatedRequestOptions,
-    TCreatedRequest,
-    TCreatedSignatures
+    TCreatedRequest
   > {
     return new TransactionPlan(handler);
   }
@@ -360,13 +350,12 @@ export class TransactionPlan<
  */
 export class PreparedTransactionPlan<
   TPrimaryAction extends TransactionAction = TransactionAction,
-  TRequest extends TransactionPlanRequest = TransactionPlanRequest,
-  TSignatures = readonly RequirementSignature[],
+  TRequest extends TransactionPlanRequest = never,
 > implements PreparedTransactionPlanShape<TPrimaryAction, TRequest>
 {
   private readonly buildPrimaryTx: TransactionPlanBuildPrimaryTx<
     TPrimaryAction,
-    TSignatures
+    TRequest
   >;
 
   private readonly rawRequirements: readonly TRequest[];
@@ -407,7 +396,7 @@ export class PreparedTransactionPlan<
   constructor(params: {
     readonly buildPrimaryTx: TransactionPlanBuildPrimaryTx<
       TPrimaryAction,
-      TSignatures
+      TRequest
     >;
     readonly requirementSteps: readonly TransactionPlanPreparedStep<TRequest>[];
     readonly primaryStep?: TransactionPlanTxStep<
@@ -633,7 +622,7 @@ export class PreparedTransactionPlan<
    * ```
    */
   build(
-    signatures?: TSignatures,
+    signatures?: TransactionPlanSignatures<TRequest>,
   ): ExecutableTransactionPlan<TPrimaryAction, TRequest> {
     const expected = this.signatureRequests.length;
     const received =

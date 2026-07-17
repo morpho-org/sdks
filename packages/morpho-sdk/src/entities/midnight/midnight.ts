@@ -44,7 +44,6 @@ import { TransactionPlan } from "../../transactionPlan/index.js";
 import type { MorphoClientType } from "../../types/client.js";
 import {
   AccrualPositionUserMismatchError,
-  type ActionRequirement,
   InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
   type MempoolSubmitOffersAction,
@@ -71,6 +70,7 @@ import {
   NoMidnightCreditToRedeemError,
   NonPositiveInputError,
   selectRequirementSignatures,
+  type TxRequirement,
   UnknownMidnightRatifierError,
   UnpreparedMidnightOfferRootSignatureError,
 } from "../../types/index.js";
@@ -81,7 +81,7 @@ import type {
   MakeOffersOutput,
   MakeOffersParams,
   MidnightActionOutput,
-  MidnightActionSignatures,
+  MidnightMakeOffersRequest,
   OffersData,
   RedeemParams,
   RepayWithdrawCollateralParams,
@@ -412,10 +412,10 @@ export class MorphoMidnight {
     return new TransactionPlan<
       MidnightTakeLendAction,
       undefined,
-      ActionRequirement
+      TxRequirement
     >({
       getRequirementRequests: async () => {
-        const requirements: ActionRequirement[] = [
+        const requirements: TxRequirement[] = [
           ...(await getMidnightApprovalRequirements({
             viemClient: this.client.viemClient,
             chainId: this.chainId,
@@ -500,10 +500,10 @@ export class MorphoMidnight {
     return new TransactionPlan<
       MidnightTakeBorrowAction,
       undefined,
-      ActionRequirement
+      TxRequirement
     >({
       getRequirementRequests: async () => {
-        const requirements: ActionRequirement[] = [];
+        const requirements: TxRequirement[] = [];
         const authorization = await getMidnightAuthorizationRequirement({
           viemClient: this.client.viemClient,
           chainId: this.chainId,
@@ -586,10 +586,10 @@ export class MorphoMidnight {
     return new TransactionPlan<
       MidnightSupplyCollateralTakeBorrowAction,
       undefined,
-      ActionRequirement
+      TxRequirement
     >({
       getRequirementRequests: async () => {
-        const requirements: ActionRequirement[] = [
+        const requirements: TxRequirement[] = [
           ...(await getMidnightApprovalRequirements({
             viemClient: this.client.viemClient,
             chainId: this.chainId,
@@ -668,7 +668,7 @@ export class MorphoMidnight {
     return new TransactionPlan<
       MidnightSupplyCollateralAction,
       undefined,
-      ActionRequirement
+      TxRequirement
     >({
       getRequirementRequests: async () =>
         await getMidnightApprovalRequirements({
@@ -753,7 +753,7 @@ export class MorphoMidnight {
     return this.createMakeOffersOutput({
       offersData: data,
       getRequirementRequests: async () => {
-        const requirements: ActionRequirement[] = [];
+        const requirements: MidnightMakeOffersRequest[] = [];
         requirements.push(
           ...(await getMidnightApprovalRequirements({
             viemClient: this.client.viemClient,
@@ -889,7 +889,7 @@ export class MorphoMidnight {
     return this.createMakeOffersOutput({
       offersData: data,
       getRequirementRequests: async () => {
-        const requirements: ActionRequirement[] = [
+        const requirements: MidnightMakeOffersRequest[] = [
           ...(await getMidnightApprovalRequirements({
             viemClient: this.client.viemClient,
             chainId: this.chainId,
@@ -981,11 +981,7 @@ export class MorphoMidnight {
       });
     }
 
-    return new TransactionPlan<
-      MidnightRedeemAction,
-      undefined,
-      ActionRequirement
-    >({
+    return new TransactionPlan<MidnightRedeemAction, undefined, TxRequirement>({
       getRequirementRequests: async () => [],
       buildPrimaryTx: () =>
         midnightRedeem({
@@ -1067,10 +1063,10 @@ export class MorphoMidnight {
     return new TransactionPlan<
       MidnightRepayWithdrawCollateralAction,
       undefined,
-      ActionRequirement
+      TxRequirement
     >({
       getRequirementRequests: async () => {
-        const requirements: ActionRequirement[] = [];
+        const requirements: TxRequirement[] = [];
         if (params.repayAssets > 0n) {
           requirements.push(
             ...(await getMidnightApprovalRequirements({
@@ -1132,7 +1128,7 @@ export class MorphoMidnight {
     return new TransactionPlan<
       MidnightCancelOfferAction,
       undefined,
-      ActionRequirement
+      TxRequirement
     >({
       getRequirementRequests: async () => [],
       buildPrimaryTx: () =>
@@ -1148,7 +1144,7 @@ export class MorphoMidnight {
   private createMakeOffersOutput(params: {
     readonly offersData: OffersData;
     readonly getRequirementRequests: () => Promise<
-      readonly ActionRequirement[]
+      readonly MidnightMakeOffersRequest[]
     >;
     readonly signedPayloads: ReadonlyMap<string, Hex>;
   }): MakeOffersOutput {
@@ -1157,22 +1153,15 @@ export class MorphoMidnight {
       new TransactionPlan<
         MempoolSubmitOffersAction,
         undefined,
-        ActionRequirement,
-        MidnightActionSignatures
+        MidnightMakeOffersRequest
       >({
         getRequirementRequests: params.getRequirementRequests,
         previewPrimaryTx: false,
         buildPrimaryTx: (signatures) => {
-          const collectedSignatures =
-            signatures == null
-              ? undefined
-              : "action" in signatures
-                ? [signatures]
-                : signatures;
           let payload = data.setterPayload;
           if (data.ratifierType === "ecrecover") {
             const { midnightOfferRoot: signature } =
-              selectRequirementSignatures(collectedSignatures, {
+              selectRequirementSignatures(signatures, {
                 midnightOfferRoot: true,
               });
 
@@ -1224,7 +1213,7 @@ export class MorphoMidnight {
             }
             payload = signedPayload;
           } else {
-            selectRequirementSignatures(collectedSignatures, {});
+            selectRequirementSignatures(signatures, {});
           }
 
           if (payload == null)
@@ -1254,9 +1243,9 @@ export class MorphoMidnight {
   private async getRatifierRequirements(params: {
     readonly offersData: OffersData;
     readonly signedPayloads: Map<string, Hex>;
-  }): Promise<readonly ActionRequirement[]> {
+  }): Promise<readonly MidnightMakeOffersRequest[]> {
     const data = params.offersData;
-    const requirements: ActionRequirement[] = [];
+    const requirements: MidnightMakeOffersRequest[] = [];
     const authorization = await getMidnightAuthorizationRequirement({
       viemClient: this.client.viemClient,
       chainId: this.chainId,

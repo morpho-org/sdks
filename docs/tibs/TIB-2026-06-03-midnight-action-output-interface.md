@@ -110,8 +110,7 @@ wallet signing to the integrator, and builds one executable sequence after signa
 const plan: TransactionPlan<
   MempoolSubmitOffersAction,
   undefined,
-  ActionRequirement,
-  MidnightActionSignatures
+  MidnightMakeOffersRequest
 > = await midnight.makeLend(params);
 
 const prepared = await plan.prepare();

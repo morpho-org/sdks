@@ -5,17 +5,20 @@ import {
 } from "@morpho-org/blue-sdk";
 import { fetchMarket } from "@morpho-org/blue-sdk-viem";
 import {
+  type AuthorizationRequirementSignature,
   type BlueAuthorizationAction,
   type ERC20ApprovalAction,
   type Metadata,
   type MorphoClientType,
   morphoViemExtension,
+  type PermitRequirementSignature,
   type Requirement,
   type RequirementSignature,
   type Transaction,
   type TransactionAction,
   type TransactionPlan,
   type TransactionPlanRequest,
+  type TransactionPlanSignatures,
   type VaultReallocation,
 } from "@morpho-org/morpho-sdk";
 import type {
@@ -108,10 +111,12 @@ export type Erc4337TransactionConfig = Partial<
 
 export type RequirementApproval = Transaction<ERC20ApprovalAction>;
 export type RequirementAuthorization = Transaction<BlueAuthorizationAction>;
-export type RequirementSignatureRequest = Requirement;
+export type RequirementSignatureRequest<
+  TSignature extends RequirementSignature = RequirementSignature,
+> = Requirement<TSignature>;
 export type ApprovalOrSignatureRequirement =
   | RequirementApproval
-  | RequirementSignatureRequest;
+  | RequirementSignatureRequest<PermitRequirementSignature>;
 
 export interface RequirementOptions {
   /** Prefer the Morpho SDK simple permit flow when generating approval requirements. */
@@ -128,7 +133,7 @@ export interface MorphoErc20SupplyOptions {
   /** The address on behalf of which the supply operation should be performed. Must match the wallet account address when set. */
   onBehalfOf?: string;
   /** Signature returned by a Morpho SDK approval requirement. */
-  requirementSignature?: RequirementSignature;
+  requirementSignature?: PermitRequirementSignature;
   /** Optional Morpho SDK slippage tolerance in WAD precision. */
   slippageTolerance?: bigint;
 }
@@ -143,7 +148,7 @@ export interface MorphoNativeSupplyOptions {
   /** The address on behalf of which the supply operation should be performed. Must match the wallet account address when set. */
   onBehalfOf?: string;
   /** Signature returned by a Morpho SDK approval requirement. */
-  requirementSignature?: RequirementSignature;
+  requirementSignature?: PermitRequirementSignature;
   /** Optional Morpho SDK slippage tolerance in WAD precision. */
   slippageTolerance?: bigint;
 }
@@ -162,7 +167,7 @@ export interface MorphoBorrowOptions {
   /** Optional Morpho Vault V2 reallocations to include in the borrow action. */
   reallocations?: readonly VaultReallocation[];
   /** Signature returned by a Morpho SDK authorization requirement, folded into the bundle as `setAuthorizationWithSig`. */
-  requirementSignature?: RequirementSignature;
+  requirementSignature?: AuthorizationRequirementSignature;
   /** Optional Morpho SDK slippage tolerance in WAD precision. */
   slippageTolerance?: bigint;
 }
@@ -175,7 +180,7 @@ export interface MorphoRepayOptions {
   /** The address on behalf of which the repay operation should be performed. Must match the wallet account address when set. */
   onBehalfOf?: string;
   /** Signature returned by a Morpho SDK approval requirement. */
-  requirementSignature?: RequirementSignature;
+  requirementSignature?: PermitRequirementSignature;
   /** Optional Morpho SDK slippage tolerance in WAD precision. */
   slippageTolerance?: bigint;
 }
@@ -401,9 +406,8 @@ async function getTransactionPlanRequests<
   TAction extends TransactionAction,
   TOptions,
   TRequest extends TransactionPlanRequest,
-  TSignatures,
 >(
-  plan: TransactionPlan<TAction, TOptions, TRequest, TSignatures>,
+  plan: TransactionPlan<TAction, TOptions, TRequest>,
   requestOptions?: TOptions,
 ): Promise<TRequest[]> {
   const prepared = await plan.prepare(
@@ -416,10 +420,9 @@ async function getTransactionPlanTx<
   TAction extends TransactionAction,
   TOptions,
   TRequest extends TransactionPlanRequest,
-  TSignatures,
 >(
-  plan: TransactionPlan<TAction, TOptions, TRequest, TSignatures>,
-  signatures?: TSignatures,
+  plan: TransactionPlan<TAction, TOptions, TRequest>,
+  signatures?: TransactionPlanSignatures<TRequest>,
 ): Promise<WdkTransaction> {
   const executable = (await plan.prepare()).build(signatures);
   return toWdkTransaction(executable.primaryTx);
@@ -700,7 +703,12 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    */
   async getBorrowRequirements(
     options: MorphoBorrowOptions,
-  ): Promise<(RequirementAuthorization | RequirementSignatureRequest)[]> {
+  ): Promise<
+    (
+      | RequirementAuthorization
+      | RequirementSignatureRequest<AuthorizationRequirementSignature>
+    )[]
+  > {
     const action = await this._getBorrowAction(options);
 
     return await getTransactionPlanRequests(action);

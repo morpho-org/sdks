@@ -6,7 +6,6 @@ import type {
   ERC20ApprovalAction,
   PermitRequirementSignature,
   Requirement,
-  RequirementSignature,
   SignatureRequirement,
   Transaction,
   TransactionAction,
@@ -46,11 +45,23 @@ export interface TransactionPlanBatchCall {
 /** On-chain or signable request discovered while preparing a transaction plan. */
 export type TransactionPlanRequest = TxRequirement | SignatureRequirement;
 
+/** Signature produced by a transaction-plan request, or `never` for on-chain-only requests. */
+export type TransactionPlanSignatureForRequest<
+  TRequest extends TransactionPlanRequest,
+> = TRequest extends Requirement<infer TSignature> ? TSignature : never;
+
+/** Ordered signatures accepted by a transaction plan, derived from its request types. */
+export type TransactionPlanSignatures<
+  TRequest extends TransactionPlanRequest = TransactionPlanRequest,
+> = readonly TransactionPlanSignatureForRequest<TRequest>[];
+
 /** Builds the primary transaction, optionally consuming previously signed requests. */
 export type TransactionPlanBuildPrimaryTx<
   TPrimaryAction extends TransactionAction = TransactionAction,
-  TSignatures = readonly RequirementSignature[],
-> = (signatures?: TSignatures) => Readonly<Transaction<TPrimaryAction>>;
+  TRequest extends TransactionPlanRequest = never,
+> = (
+  signatures?: TransactionPlanSignatures<TRequest>,
+) => Readonly<Transaction<TPrimaryAction>>;
 
 /** Resolves transaction and signature requirements before the primary transaction. */
 export type TransactionPlanGetRequirementRequests<
@@ -62,13 +73,12 @@ export type TransactionPlanGetRequirementRequests<
 export interface TransactionPlanHandler<
   TPrimaryAction extends TransactionAction = TransactionAction,
   TRequestOptions = unknown,
-  TRequest extends TransactionPlanRequest = TransactionPlanRequest,
-  TSignatures = readonly RequirementSignature[],
+  TRequest extends TransactionPlanRequest = never,
 > {
   /** Builds the primary transaction, optionally consuming previously signed requests. */
   readonly buildPrimaryTx: TransactionPlanBuildPrimaryTx<
     TPrimaryAction,
-    TSignatures
+    TRequest
   >;
   /**
    * Controls whether `prepare()` can include an unsigned preview of the primary transaction.

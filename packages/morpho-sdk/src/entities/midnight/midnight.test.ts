@@ -73,15 +73,11 @@ import {
   UnpreparedMidnightOfferRootSignatureError,
 } from "../../types/error.js";
 import { MorphoMidnight } from "./midnight.js";
-import type {
-  MakeOffersOutput,
-  MidnightActionSignatures,
-  OffersData,
-} from "./types.js";
+import type { MakeOffersOutput, OffersData } from "./types.js";
 
 type BuildMakeOffersOutputTx = (params: {
   readonly offersData: OffersData;
-  readonly signatures?: MidnightActionSignatures;
+  readonly signatures?: readonly MidnightOfferRootSignature[];
   readonly signedPayloads?: ReadonlyMap<string, Hex>;
   readonly metadata?: { readonly origin: string };
 }) => Promise<Readonly<Transaction<MempoolSubmitOffersAction>>>;
@@ -223,24 +219,26 @@ const offerRootSignature = (
   },
 });
 
-const unexpectedSignature = {
-  action: {
-    type: "authorization",
+const unexpectedSignature = [
+  {
+    action: {
+      type: "authorization",
+      args: {
+        authorized: midnightAddresses.midnightBundles,
+        isAuthorized: true,
+        deadline: 123n,
+      },
+    },
     args: {
+      owner: midnightAddresses.taker,
       authorized: midnightAddresses.midnightBundles,
       isAuthorized: true,
+      nonce: 42n,
+      signature: "0x1234",
       deadline: 123n,
     },
   },
-  args: {
-    owner: midnightAddresses.taker,
-    authorized: midnightAddresses.midnightBundles,
-    isAuthorized: true,
-    nonce: 42n,
-    signature: "0x1234",
-    deadline: 123n,
-  },
-} as unknown as MidnightActionSignatures;
+] as unknown as readonly MidnightOfferRootSignature[];
 
 const client = {
   viemClient: { chain: { id: midnightChainId } },
@@ -1377,7 +1375,7 @@ describe("MorphoMidnight", () => {
       });
       expect(output).toBeInstanceOf(TransactionPlan);
       const signature = await signOfferRootRequirement(output);
-      const tx = (await output.prepare()).build(signature).primaryTx;
+      const tx = (await output.prepare()).build([signature]).primaryTx;
 
       expect(output.groups).toEqual(data.groups);
       expect(output.root).toBe(data.tree.root);
@@ -1693,7 +1691,7 @@ describe("MorphoMidnight", () => {
         },
       });
       const signature = await signOfferRootRequirement(output);
-      const tx = (await output.prepare()).build(signature).primaryTx;
+      const tx = (await output.prepare()).build([signature]).primaryTx;
 
       expect(tx.action.args.maker).toBe(data.accountAddress);
     });
@@ -1806,7 +1804,7 @@ describe("MorphoMidnight", () => {
         validation: offerValidation,
       });
       const signature = await signOfferRootRequirement(output);
-      const tx = (await output.prepare()).build(signature).primaryTx;
+      const tx = (await output.prepare()).build([signature]).primaryTx;
 
       expect(output.groups).toEqual(data.groups);
       expect(tx.action.args.maker).toBe(offerSignerAccount.address);
@@ -2003,7 +2001,7 @@ describe("MorphoMidnight", () => {
       const data = offersData();
       const tx = await buildMakeOffersOutputTx({
         offersData: data,
-        signatures: offerRootSignature(data),
+        signatures: [offerRootSignature(data)],
       });
 
       expect(tx.action.args).toEqual({
@@ -2020,7 +2018,7 @@ describe("MorphoMidnight", () => {
       const data = offersData();
       const tx = await buildMakeOffersOutputTx({
         offersData: data,
-        signatures: offerRootSignature(data),
+        signatures: [offerRootSignature(data)],
         metadata: { origin: "a1b2c3d4" },
       });
 
@@ -2033,10 +2031,12 @@ describe("MorphoMidnight", () => {
       const signature = offerRootSignature(data);
       const tx = await buildMakeOffersOutputTx({
         offersData: data,
-        signatures: {
-          ...signature,
-          args: { ...signature.args, payload: "0xdeadbeef" },
-        },
+        signatures: [
+          {
+            ...signature,
+            args: { ...signature.args, payload: "0xdeadbeef" },
+          },
+        ],
       });
 
       expect(tx.data).toBe("0x1234");
@@ -2071,28 +2071,32 @@ describe("MorphoMidnight", () => {
       await expect(
         buildMakeOffersOutputTx({
           offersData: data,
-          signatures: {
-            ...signature,
-            args: {
-              ...signature.args,
-              root: otherRoot,
+          signatures: [
+            {
+              ...signature,
+              args: {
+                ...signature.args,
+                root: otherRoot,
+              },
             },
-          },
+          ],
         }),
       ).rejects.toThrow(MidnightOfferRootMismatchError);
       await expect(
         buildMakeOffersOutputTx({
           offersData: data,
-          signatures: {
-            ...signature,
-            action: {
-              ...signature.action,
-              args: {
-                ...signature.action.args,
-                root: otherRoot,
+          signatures: [
+            {
+              ...signature,
+              action: {
+                ...signature.action,
+                args: {
+                  ...signature.action.args,
+                  root: otherRoot,
+                },
               },
             },
-          },
+          ],
         }),
       ).rejects.toThrow(MidnightOfferRootMismatchError);
     });
@@ -2103,9 +2107,11 @@ describe("MorphoMidnight", () => {
       await expect(
         buildMakeOffersOutputTx({
           offersData: data,
-          signatures: offerRootSignature(data, {
-            owner: midnightAddresses.taker,
-          }),
+          signatures: [
+            offerRootSignature(data, {
+              owner: midnightAddresses.taker,
+            }),
+          ],
         }),
       ).rejects.toThrow(MidnightOfferRootOwnerMismatchError);
     });
@@ -2116,9 +2122,11 @@ describe("MorphoMidnight", () => {
       await expect(
         buildMakeOffersOutputTx({
           offersData: data,
-          signatures: offerRootSignature(data, {
-            ratifier: midnightAddresses.setterRatifier,
-          }),
+          signatures: [
+            offerRootSignature(data, {
+              ratifier: midnightAddresses.setterRatifier,
+            }),
+          ],
         }),
       ).rejects.toThrow(MidnightOfferRootRatifierMismatchError);
     });
@@ -2129,9 +2137,11 @@ describe("MorphoMidnight", () => {
       await expect(
         buildMakeOffersOutputTx({
           offersData: data,
-          signatures: offerRootSignature(data, {
-            offers: data.tree.offers.length + 1,
-          }),
+          signatures: [
+            offerRootSignature(data, {
+              offers: data.tree.offers.length + 1,
+            }),
+          ],
         }),
       ).rejects.toThrow(MidnightOfferRootOfferCountMismatchError);
     });
@@ -2142,7 +2152,7 @@ describe("MorphoMidnight", () => {
       await expect(
         buildMakeOffersOutputTx({
           offersData: data,
-          signatures: offerRootSignature(data),
+          signatures: [offerRootSignature(data)],
           signedPayloads: new Map(),
         }),
       ).rejects.toThrow(UnpreparedMidnightOfferRootSignatureError);

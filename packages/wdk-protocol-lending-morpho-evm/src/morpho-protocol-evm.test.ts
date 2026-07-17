@@ -1,4 +1,7 @@
-import type { RequirementSignature } from "@morpho-org/morpho-sdk";
+import type {
+  AuthorizationRequirementSignature,
+  RequirementSignature,
+} from "@morpho-org/morpho-sdk";
 import * as viem from "viem";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -600,8 +603,23 @@ describe.sequential("MorphoProtocolEvm", () => {
         .fn()
         .mockResolvedValue({ hash: "dummy-borrow-hash", fee: 12_345n });
       const requirementSignature = {
-        action: { type: "authorization" },
-      } as unknown as RequirementSignature;
+        action: {
+          type: "authorization",
+          args: {
+            authorized: ADDRESS,
+            isAuthorized: true,
+            deadline: 1_900_000_000n,
+          },
+        },
+        args: {
+          owner: ADDRESS,
+          authorized: ADDRESS,
+          isAuthorized: true,
+          nonce: 0n,
+          deadline: 1_900_000_000n,
+          signature: "0x00",
+        },
+      } satisfies AuthorizationRequirementSignature;
 
       await protocol.borrow({
         token: TOKEN,
