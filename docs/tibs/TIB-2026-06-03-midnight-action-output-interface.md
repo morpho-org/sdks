@@ -15,8 +15,8 @@ This TIB specifies the implementation of Midnight action flows in `morpho-sdk`. 
 
 The markets app is also the compatibility target. To minimize its diff, the SDK exposes each flow
 as a lazy `TransactionPlan`: the app prepares the plan when it is ready to discover prerequisites,
-renders the typed signature and call requests, collects signatures at its wallet boundary, and then
-builds the executable call sequence.
+renders the typed signature requests and transaction steps, collects signatures at its wallet
+boundary, and then builds the executable transaction sequence.
 
 ```ts
 const prepared = await plan.prepare();
@@ -27,17 +27,18 @@ for (const request of prepared.signatureRequests) {
 }
 
 const executable = prepared.build(signatures);
-const calls = executable.callRequests.map((request) => request.call);
+const calls = executable.calls;
 ```
 
 The transaction-plan contract is shared by Midnight, Blue, MarketV1, and vault entities:
 
 - `TransactionPlan.prepare(...)` resolves only the prerequisites for the already selected action.
 - `PreparedTransactionPlan.signatureRequests` exposes signable requirements without signing them.
-- `PreparedTransactionPlan.callRequests` exposes ordered viem-compatible prerequisite calls and,
-  when previewable, the primary call.
+- `PreparedTransactionPlan.transactionSteps` exposes ordered prerequisite transactions and, when
+  previewable, the primary step. Its `.calls` getter converts those transactions to
+  viem-compatible call parameters for wallet batching.
 - `PreparedTransactionPlan.build(...)` consumes collected signatures and returns an
-  `ExecutableTransactionPlan` whose primary call is last.
+  `ExecutableTransactionPlan` whose primary step is last.
 - `TransactionPlan` preserves the primary action, request-options, prerequisite-request, and
   signature types through preparation and execution.
 
@@ -54,7 +55,7 @@ into `morpho-sdk`.
 
 The plan model makes prerequisite ordering and semantic intent explicit without importing the app's
 execution engine. Requirement descriptors remain either signable requests or typed transactions;
-the prepared plan converts them into app-facing signature and call requests. Blue, MarketV1,
+the prepared plan converts them into app-facing signature requests and transaction steps. Blue, MarketV1,
 vault, and Midnight methods use narrower `TransactionPlan` generic arguments where their request
 sets are known.
 
@@ -114,7 +115,7 @@ const plan: TransactionPlan<
 > = await midnight.makeLend(params);
 
 const prepared = await plan.prepare();
-// The app presents prepared.signatureRequests and prepared.callRequests.
+// The app presents prepared.signatureRequests and prepared.transactionSteps.
 const executable = prepared.build(collectedSignatures);
 ```
 
@@ -122,14 +123,14 @@ Semantics:
 
 1. `prepare()` resolves the currently required prerequisite descriptors and returns semantic request metadata.
 2. Already-satisfied approvals or authorizations are omitted.
-3. `steps` and `callRequests` preserve relative execution order; the primary call is last when present.
+3. `steps` and `transactionSteps` preserve relative execution order; the primary step is last when present.
 4. Signature descriptors are exposed through `signatureRequests`; the SDK never prompts the wallet on its own.
-5. A prerequisite call can be an approval, authorization, contract-wallet ratify-root, or mandatory prelude transaction.
-6. `build(signatures)` validates and consumes the collected signature values before encoding the primary call.
-7. `TRequest` remains available on prepared steps, and `TPrimaryAction` remains available on executable calls.
+5. A prerequisite transaction step can be an approval, authorization, contract-wallet ratify-root, or mandatory prelude transaction.
+6. `build(signatures)` validates and consumes the collected signature values before encoding the primary transaction.
+7. `TRequest` remains available on prepared steps, and `TPrimaryAction` remains available on executable steps.
 
-Midnight flows that need one final transaction remain single-call plans. Flows with mandatory prelude
-transactions expose them as preparation-phase call requests, and the markets app forwards the maker
+Midnight flows that need one final transaction remain single-transaction plans. Flows with mandatory
+prelude transactions expose them as preparation-phase transaction steps, and the markets app forwards the maker
 signature it already collects into `build(...)`.
 
 ## Description: markets app migration boundary
@@ -169,7 +170,7 @@ Maker flows remain mempool flows, not bundle flows:
 
 The markets app can adapt SDK output once and reuse the adapter across every screen. The adapter description here is intentionally illustrative, not an implementation-ready patch. The implementation PR can choose different function names, labels, and control flow as long as the boundary stays the same:
 
-- SDK transaction plans expose typed signature and call requests plus a final executable builder;
+- SDK transaction plans expose typed signature requests and transaction steps plus a final executable builder;
 - the app wallet layer turns SDK signature requirements into signature prompts;
 - the app turns SDK transaction requirements into ordered call requests;
 - collected maker signatures are passed to `PreparedTransactionPlan.build(...)`;
@@ -373,16 +374,16 @@ This is action-encoding metadata, not UI state. The first implementation only en
 Add a named call-requirement union. Existing raw `Transaction<...>` requirement values stay valid.
 
 ```ts
-export type CallRequirementAction =
+export type TransactionRequirementAction =
   | ERC20ApprovalAction
   | MorphoAuthorizationAction
   | MidnightAuthorizationAction
   | SetterRatifierRatifyRootAction
   | MidnightSupplyCollateralAction;
 
-export type CallRequirement = Readonly<Transaction<CallRequirementAction>>;
+export type TransactionRequirement = Readonly<Transaction<TransactionRequirementAction>>;
 
-export type ActionRequirement = CallRequirement | SignatureRequirement;
+export type ActionRequirement = TransactionRequirement | SignatureRequirement;
 ```
 
 `MidnightSupplyCollateralAction` is included because it can be a mandatory prelude transaction for a currently implemented app flow:
@@ -678,7 +679,7 @@ These fields should not be first-iteration public inputs. Exposing them before t
 1. optional loan-token approval requirement for `MidnightBundles`;
 2. optional `MidnightAuthorizationAction` for `Midnight.setIsAuthorized(MidnightBundles, true, taker)`.
 
-`PreparedTransactionPlan.build()` produces an executable plan whose primary call carries `MidnightTakeLendAction`:
+`PreparedTransactionPlan.build()` produces an executable plan whose primary step carries `MidnightTakeLendAction`:
 
 ```ts
 MidnightBundles.midnightBundlesV1BuyWithAssetsTargetAndWithdrawCollateral(
@@ -706,7 +707,7 @@ No offer-root or token signature is involved in the first implementation.
 1. optional collateral-token approval requirement for `MidnightBundles` when new collateral is supplied;
 2. optional `MidnightAuthorizationAction` for `Midnight.setIsAuthorized(MidnightBundles, true, taker)`.
 
-`PreparedTransactionPlan.build()` produces an executable plan whose primary call carries `MidnightTakeBorrowAction`:
+`PreparedTransactionPlan.build()` produces an executable plan whose primary step carries `MidnightTakeBorrowAction`:
 
 ```ts
 MidnightBundles.midnightBundlesV1SupplyCollateralAndSellWithAssetsTarget(
@@ -730,7 +731,7 @@ No offer-root or token signature is involved in the first implementation.
 
 `prepare()` exposes an optional collateral approval to `Midnight`.
 
-`PreparedTransactionPlan.build()` produces an executable plan whose primary call carries `MidnightSupplyCollateralAction`:
+`PreparedTransactionPlan.build()` produces an executable plan whose primary step carries `MidnightSupplyCollateralAction`:
 
 ```ts
 Midnight.supplyCollateral(market, 0n, collateralAssets, onBehalf)
@@ -754,7 +755,7 @@ Contract wallet:
 2. optional `MidnightAuthorizationAction` for the chosen ratifier;
 3. one `setterRatifierRatifyRoot` transaction requirement.
 
-`PreparedTransactionPlan.build(signatures)` produces an executable plan whose primary call carries `MempoolSubmitOffersAction` and targets the mempool contract.
+`PreparedTransactionPlan.build(signatures)` produces an executable plan whose primary step carries `MempoolSubmitOffersAction` and targets the mempool contract.
 
 The make-lend method accepts a tree-like offer set. It must accept multi-market offer legs in the same tree when the markets share one loan token, matching the markets app's multi-limit-order / OCA basket flow. For those baskets, offers in the same group share one `consumed[maker][group]` counter on Midnight, so the new group contributes one reserve amount: the maximum leg reserve, with equal leg reserves expected for the current OCA shape. It is not the sum of every offer leg. The SDK throws a typed error when the tree would exceed the Midnight tree-size limit.
 
@@ -768,7 +769,7 @@ Maker reserve approvals stay transaction approvals in this migration. The final 
 
 `prepare()` exposes an optional collateral approval to `Midnight`.
 
-`PreparedTransactionPlan.build()` produces an executable plan whose primary call carries `MidnightSupplyCollateralAction`.
+`PreparedTransactionPlan.build()` produces an executable plan whose primary step carries `MidnightSupplyCollateralAction`.
 
 This branch remains approval-based because direct `Midnight.supplyCollateral(...)` has no `TokenPermit` argument.
 
@@ -786,7 +787,7 @@ Contract wallet:
 1. optional `MidnightAuthorizationAction` for the chosen ratifier;
 2. one `setterRatifierRatifyRoot` transaction requirement.
 
-`PreparedTransactionPlan.build(signatures)` produces an executable plan whose primary call carries `MempoolSubmitOffersAction` and targets the mempool contract.
+`PreparedTransactionPlan.build(signatures)` produces an executable plan whose primary step carries `MempoolSubmitOffersAction` and targets the mempool contract.
 
 ### Borrow limit collateral + loan branch
 
@@ -806,7 +807,7 @@ Contract wallet:
 3. optional `MidnightAuthorizationAction` for the chosen ratifier;
 4. one `setterRatifierRatifyRoot` transaction requirement.
 
-`PreparedTransactionPlan.build(signatures)` produces an executable plan containing only the final `MempoolSubmitOffersAction` primary call.
+`PreparedTransactionPlan.build(signatures)` produces an executable plan containing only the final `MempoolSubmitOffersAction` primary step.
 
 This branch is the reason `prepare()` must be allowed to return mandatory prelude transactions, not only optional prerequisites.
 
@@ -829,7 +830,7 @@ The latest `morpho-org/midnight` implementation does not cap withdrawals at net 
 
 `prepare()` exposes no prerequisite requests.
 
-`PreparedTransactionPlan.build()` produces an executable plan whose primary call carries `MidnightRedeemAction`:
+`PreparedTransactionPlan.build()` produces an executable plan whose primary step carries `MidnightRedeemAction`:
 
 ```ts
 Midnight.withdraw(market, redeemUnits, onBehalf, receiver)
@@ -842,17 +843,17 @@ All three app branches keep the current bundled execution path.
 Repay only:
 
 - `prepare()` exposes an optional loan-token approval requirement for `MidnightBundles`, then optional `MidnightAuthorizationAction` for `MidnightBundles`;
-- `PreparedTransactionPlan.build()` produces an executable plan whose primary call carries `MidnightRepayWithdrawCollateralAction`.
+- `PreparedTransactionPlan.build()` produces an executable plan whose primary step carries `MidnightRepayWithdrawCollateralAction`.
 
 Withdraw-only:
 
 - `prepare()` exposes an optional `MidnightAuthorizationAction` for `MidnightBundles`;
-- `PreparedTransactionPlan.build()` produces an executable plan whose primary call carries `MidnightRepayWithdrawCollateralAction` with `repayAssets === 0n`.
+- `PreparedTransactionPlan.build()` produces an executable plan whose primary step carries `MidnightRepayWithdrawCollateralAction` with `repayAssets === 0n`.
 
 Repay + withdraw:
 
 - `prepare()` exposes an optional loan-token approval requirement for `MidnightBundles`, then optional `MidnightAuthorizationAction` for `MidnightBundles`;
-- `PreparedTransactionPlan.build()` produces an executable plan whose primary call carries `MidnightRepayWithdrawCollateralAction`.
+- `PreparedTransactionPlan.build()` produces an executable plan whose primary step carries `MidnightRepayWithdrawCollateralAction`.
 
 ```ts
 MidnightBundles.midnightBundlesV1RepayAndWithdrawCollateral(
@@ -872,7 +873,7 @@ MidnightBundles.midnightBundlesV1RepayAndWithdrawCollateral(
 
 `prepare()` exposes no prerequisite requests.
 
-`PreparedTransactionPlan.build()` produces an executable plan whose primary call carries `MidnightCancelOfferAction`:
+`PreparedTransactionPlan.build()` produces an executable plan whose primary step carries `MidnightCancelOfferAction`:
 
 ```ts
 Midnight.setConsumed(group, maxUint256, onBehalf)
@@ -882,7 +883,7 @@ Midnight.setConsumed(group, maxUint256, onBehalf)
 
 This implementation represents the current markets app flows, with the documented redeem default divergence, because:
 
-- every prerequisite transaction maps to a preparation-phase `callRequest`, and every primary transaction maps to the primary `callRequest` returned by `PreparedTransactionPlan.build()`;
+- every prerequisite transaction maps to a preparation-phase transaction step, and every primary transaction maps to the `primaryStep` returned by `PreparedTransactionPlan.build()`;
 - every maker signature requirement maps to a `signatureRequest` whose `sign(...)` delegates to `Requirement.sign(...)`;
 - the `Transaction` wire shape is unchanged;
 - no app builder currently needs `before` / `after` callback semantics;
@@ -903,7 +904,7 @@ The only semantic expansion is documented: returned transaction requirements are
 
 Return the whole transaction sequence from the transaction plan.
 
-**Why rejected:** it would add a second way to expose the ordered call sequence already represented by prepared and executable plans. The current app flows only need one final transaction plus ordered pre-execution items.
+**Why rejected:** it would add a second way to expose the ordered transaction sequence already represented by prepared and executable plans. The current app flows only need one final transaction plus ordered pre-execution items.
 
 ### Alternative 2: Port the app `ActionFlow` abstraction
 
@@ -936,7 +937,7 @@ Add ERC2612 and Permit2 SignatureTransfer support to the first action-flow imple
 
 - **Wallet-decodable offer-tree signing.** The SDK must build the offer tree locally from the SDK input and validate the router response before exposing `midnightOfferRootSignature`. The wallet signs EIP-712 `OfferTree` typed data whose leaves are visible to the user, and the SDK verifies that the signed tree hashes to the root used in ratifier data.
 - **No signing inside actions.** `Requirement.sign(...)` is the only signing boundary and takes a `WalletClient` from the integrator.
-- **No hidden prelude txs.** Mandatory prelude transactions are visible as typed preparation-phase `callRequests` on the prepared plan.
+- **No hidden prelude txs.** Mandatory prelude transactions are visible as typed preparation-phase `transactionSteps` on the prepared plan.
 - **Authorization target is explicit.** `MidnightAuthorizationAction.args.authorized` is either `MidnightBundles`, `EcrecoverRatifier`, or `SetterRatifier`; never inferred by a consumer.
 - **Approval target is explicit.** Midnight approval helper callers pass `spender`; no default to `GeneralAdapter1`.
 - **Bundle token-pull policy is explicit.** Bundle flows use `MidnightBundles` as spender and never consume or reset the core `Midnight` allowance reserved by maker offers.
@@ -946,7 +947,7 @@ Add ERC2612 and Permit2 SignatureTransfer support to the first action-flow imple
 ## Future considerations
 
 - If a future Midnight flow needs a real wait condition (`before` / `after` equivalent), add a small `wait` requirement kind at that time. Do not preemptively port app `ActionFlow`.
-- If consumers strongly reject mandatory preparation-phase `callRequests`, revisit a dedicated sequence-building API with evidence from integration feedback.
+- If consumers strongly reject mandatory preparation-phase `transactionSteps`, revisit a dedicated sequence-building API with evidence from integration feedback.
 
 ## References
 

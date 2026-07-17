@@ -8,7 +8,6 @@ import {
 import { KeyrockUsdcVaultV2 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
-import { buildPlanTx, getPlanRequests } from "../../transactionPlanUtils.js";
 
 describe("Permit", () => {
   test("should deposit USDC with permit version 2", async ({ client }) => {
@@ -40,9 +39,13 @@ describe("Permit", () => {
           amount: amount,
           vaultData,
         });
-        const requirements_1 = await getPlanRequests(deposit, {
-          useSimplePermit: true,
-        });
+        const requirements_1 = (
+          await deposit.prepare({
+            requestOptions: {
+              useSimplePermit: true,
+            },
+          })
+        ).requirements;
 
         if (!isRequirementSignature(requirements_1[0])) {
           throw new Error("Requirement is not a signature requirement");
@@ -60,7 +63,9 @@ describe("Permit", () => {
           BigInt(Math.floor(Date.now() / 1000)),
         );
 
-        const tx_1 = await buildPlanTx(deposit, [requirementSignature]);
+        const tx_1 = (await deposit.prepare()).build([
+          requirementSignature,
+        ]).primaryTransaction;
 
         await client.sendTransaction(tx_1);
       },

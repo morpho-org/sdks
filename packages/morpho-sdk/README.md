@@ -53,9 +53,10 @@ Every entity action returns a lazy `TransactionPlan`:
 - `plan.prepare()` resolves the prerequisite call and signature requests for the chosen action.
 - `prepared.signatureRequests` contains permits, Morpho authorizations, or Midnight offer-root
   signatures that the wallet must sign.
-- `prepared.callRequests` contains prerequisite calls and, when it can be previewed without a
-  signature, the primary call last.
-- `prepared.build(signatures)` returns the executable calls, ordered with the primary call last.
+- `prepared.transactionSteps` contains prerequisite transaction steps and, when it can be previewed
+  without a signature, the primary step last.
+- `prepared.build(signatures)` returns the executable transaction steps, ordered with the primary
+  step last.
 
 Typical requirements:
 
@@ -81,10 +82,13 @@ const signatures = await Promise.all(
 );
 const executable = prepared.build(signatures);
 
-// Send every call in order; prerequisite calls come before the primary action.
-for (const request of executable.callRequests) {
-  await walletClient.sendTransaction(request.call);
+// Send every transaction step in order; prerequisite steps come before the primary action.
+for (const step of executable.transactionSteps) {
+  await walletClient.sendTransaction(step.transaction);
 }
+
+// Or convert the executable transactions for an EIP-5792 wallet batch.
+await walletClient.sendCalls({ calls: executable.calls });
 ```
 
 The focused examples below use `signatures` for the array collected from
@@ -496,7 +500,7 @@ const prepared = await shareRefinancePlan.prepare();
 const executable = prepared.build(signatures);
 ```
 
-The SDK validates ownership, token/id match, and that amounts do not exceed the source position. Health is checked against `LLTV − buffer` where it can degrade: the residual source position is validated whenever debt remains after the repay, and the aggregate target position is validated whenever a borrow leg is migrated. Collateral-only migrations (both borrow fields omitted) skip the target health check — they can't degrade target health and would otherwise fail on missing-oracle target markets. Both markets are forward-accrued to `now`; in shares mode the target borrow overshoots by `slippageTolerance` and the callback sweeps the residual back into the target debt (or skims it to the user). `plan.prepare()` exposes the `setAuthorization(generalAdapter1, true)` transaction when GA1 is not yet authorized — a single global authorization covers both markets. Optional `targetReallocations` top up target-market liquidity via the **PublicAllocator** (same mechanism as `borrow`); their fees add to the primary call's `value`.
+The SDK validates ownership, token/id match, and that amounts do not exceed the source position. Health is checked against `LLTV − buffer` where it can degrade: the residual source position is validated whenever debt remains after the repay, and the aggregate target position is validated whenever a borrow leg is migrated. Collateral-only migrations (both borrow fields omitted) skip the target health check — they can't degrade target health and would otherwise fail on missing-oracle target markets. Both markets are forward-accrued to `now`; in shares mode the target borrow overshoots by `slippageTolerance` and the callback sweeps the residual back into the target debt (or skims it to the user). `plan.prepare()` exposes the `setAuthorization(generalAdapter1, true)` transaction when GA1 is not yet authorized — a single global authorization covers both markets. Optional `targetReallocations` top up target-market liquidity via the **PublicAllocator** (same mechanism as `borrow`); their fees add to the primary transaction's `value`.
 
 #### Borrow with Shared Liquidity (Reallocations)
 
@@ -530,7 +534,7 @@ const plan = market.borrow({
 
 const prepared = await plan.prepare();
 const executable = prepared.build(signatures);
-// The primary call's value includes the sum of all reallocation fees.
+// The primary transaction's value includes the sum of all reallocation fees.
 ```
 
 Reallocations also work with `supplyCollateralBorrow`:

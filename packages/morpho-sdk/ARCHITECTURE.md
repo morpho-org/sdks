@@ -14,8 +14,8 @@ operations on EVM-compatible chains for Morpho protocol.
   always produces the same `Transaction` object. No simulation, no gas estimation, no
   sending — the consumer handles those concerns.
 - **Predictable developer experience.** Every entity operation returns a lazy `TransactionPlan`.
-  `prepare()` resolves prerequisite calls and signature requests, while
-  `PreparedTransactionPlan.build(signatures)` returns the ordered executable calls. The lifecycle
+  `prepare()` resolves prerequisite transactions and signature requests, while
+  `PreparedTransactionPlan.build(signatures)` returns the ordered executable transactions. The lifecycle
   is identical across VaultV1, VaultV2, Blue, and Midnight.
 - **Immutability.** Every returned `Transaction` is deep-frozen via `@morpho-org/morpho-ts`'s
   `deepFreeze`. Once built, a transaction object cannot be mutated.

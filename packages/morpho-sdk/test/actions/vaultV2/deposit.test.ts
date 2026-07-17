@@ -8,7 +8,6 @@ import {
 import { KeyrockUsdcVaultV2 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
-import { buildPlanTx, getPlanRequests } from "../../transactionPlanUtils.js";
 
 describe("DepositVaultV2", () => {
   test("should deposit 1K USDC in vaultV2", async ({ client }) => {
@@ -37,8 +36,8 @@ describe("DepositVaultV2", () => {
           vaultData,
         });
 
-        const tx = await buildPlanTx(deposit);
-        const requirements = await getPlanRequests(deposit);
+        const tx = (await deposit.prepare()).build().primaryTransaction;
+        const requirements = (await deposit.prepare()).requirements;
 
         const approveTx = requirements[0];
         if (!approveTx) {

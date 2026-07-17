@@ -18,7 +18,6 @@ import {
 } from "../../fixtures/blue.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
-import { buildPlanTx, getPlanRequests } from "../../transactionPlanUtils.js";
 
 describe("SupplyCollateralBlue", () => {
   test("should supply 1 collateral with approval", async ({ client }) => {
@@ -46,7 +45,7 @@ describe("SupplyCollateralBlue", () => {
           amount,
         });
 
-        const requirements = await getPlanRequests(supplyCollateral);
+        const requirements = (await supplyCollateral.prepare()).requirements;
 
         const approveTx = requirements[0];
         if (!isRequirementApproval(approveTx)) {
@@ -55,7 +54,8 @@ describe("SupplyCollateralBlue", () => {
 
         await client.sendTransaction(approveTx);
 
-        const tx = await buildPlanTx(supplyCollateral);
+        const tx = (await supplyCollateral.prepare()).build()
+          .primaryTransaction;
         await client.sendTransaction(tx);
       },
     });
@@ -107,10 +107,11 @@ describe("SupplyCollateralBlue", () => {
           amount,
         });
 
-        const requirements = await getPlanRequests(supplyCollateral);
+        const requirements = (await supplyCollateral.prepare()).requirements;
         expect(requirements.length).toBe(0);
 
-        const tx = await buildPlanTx(supplyCollateral);
+        const tx = (await supplyCollateral.prepare()).build()
+          .primaryTransaction;
 
         await client.sendTransaction(tx);
       },
@@ -153,10 +154,11 @@ describe("SupplyCollateralBlue", () => {
           nativeAmount,
         });
 
-        const requirements = await getPlanRequests(supplyCollateral);
+        const requirements = (await supplyCollateral.prepare()).requirements;
         expect(requirements.length).toBe(0);
 
-        const tx = await buildPlanTx(supplyCollateral);
+        const tx = (await supplyCollateral.prepare()).build()
+          .primaryTransaction;
         expect(tx.value).toEqual(nativeAmount);
 
         await client.sendTransaction(tx);
@@ -210,7 +212,7 @@ describe("SupplyCollateralBlue", () => {
           nativeAmount,
         });
 
-        const requirements = await getPlanRequests(supplyCollateral);
+        const requirements = (await supplyCollateral.prepare()).requirements;
         expect(requirements.length).toBe(1);
 
         const approveTx = requirements[0];
@@ -220,7 +222,8 @@ describe("SupplyCollateralBlue", () => {
 
         await client.sendTransaction(approveTx);
 
-        const tx = await buildPlanTx(supplyCollateral);
+        const tx = (await supplyCollateral.prepare()).build()
+          .primaryTransaction;
         expect(tx.value).toEqual(nativeAmount);
 
         await client.sendTransaction(tx);
@@ -269,9 +272,13 @@ describe("SupplyCollateralBlue", () => {
           amount,
         });
 
-        const requirements = await getPlanRequests(supplyCollateral, {
-          useSimplePermit: true,
-        });
+        const requirements = (
+          await supplyCollateral.prepare({
+            requestOptions: {
+              useSimplePermit: true,
+            },
+          })
+        ).requirements;
         expect(requirements.length).toBe(1);
 
         if (!isRequirementSignature(requirements[0])) {
@@ -283,7 +290,9 @@ describe("SupplyCollateralBlue", () => {
           client.account.address,
         );
 
-        const tx = await buildPlanTx(supplyCollateral, [requirementSignature]);
+        const tx = (await supplyCollateral.prepare()).build([
+          requirementSignature,
+        ]).primaryTransaction;
         await client.sendTransaction(tx);
       },
     });
@@ -333,7 +342,7 @@ describe("SupplyCollateralBlue", () => {
           amount,
         });
 
-        const requirements = await getPlanRequests(supplyCollateral);
+        const requirements = (await supplyCollateral.prepare()).requirements;
         expect(requirements.length).toBe(2);
 
         const approvalPermit2 = requirements[0];
@@ -366,7 +375,9 @@ describe("SupplyCollateralBlue", () => {
           BigInt(Math.floor(Date.now() / 1000)),
         );
 
-        const tx = await buildPlanTx(supplyCollateral, [requirementSignature]);
+        const tx = (await supplyCollateral.prepare()).build([
+          requirementSignature,
+        ]).primaryTransaction;
         await client.sendTransaction(tx);
       },
     });

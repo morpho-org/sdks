@@ -9,7 +9,6 @@ import {
 import { WethUsdsBlue } from "../../fixtures/blue.js";
 import { supplyCollateral } from "../../helpers/blue.js";
 import { test } from "../../setup.js";
-import { getPlanRequests } from "../../transactionPlanUtils.js";
 
 describe("AuthorizationBlue", () => {
   describe("authorization requirements", () => {
@@ -32,13 +31,15 @@ describe("AuthorizationBlue", () => {
       const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
       const positionData = await market.getPositionData(client.account.address);
 
-      const requirements = await getPlanRequests(
-        market.borrow({
-          userAddress: client.account.address,
-          amount: parseUnits("100", 18),
-          positionData,
-        }),
-      );
+      const requirements = (
+        await market
+          .borrow({
+            userAddress: client.account.address,
+            amount: parseUnits("100", 18),
+            positionData,
+          })
+          .prepare()
+      ).requirements;
 
       expect(requirements).toHaveLength(1);
       const authTx = requirements[0]!;
@@ -65,22 +66,26 @@ describe("AuthorizationBlue", () => {
       const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
       const positionData = await market.getPositionData(client.account.address);
 
-      const borrowRequirements = await getPlanRequests(
-        market.borrow({
-          userAddress: client.account.address,
-          amount: parseUnits("100", 18),
-          positionData,
-        }),
-      );
+      const borrowRequirements = (
+        await market
+          .borrow({
+            userAddress: client.account.address,
+            amount: parseUnits("100", 18),
+            positionData,
+          })
+          .prepare()
+      ).requirements;
 
-      const scbRequirements = await getPlanRequests(
-        market.supplyCollateralBorrow({
-          userAddress: client.account.address,
-          nativeAmount: parseUnits("5", 18),
-          borrowAmount: parseUnits("100", 18),
-          positionData,
-        }),
-      );
+      const scbRequirements = (
+        await market
+          .supplyCollateralBorrow({
+            userAddress: client.account.address,
+            nativeAmount: parseUnits("5", 18),
+            borrowAmount: parseUnits("100", 18),
+            positionData,
+          })
+          .prepare()
+      ).requirements;
 
       expect(borrowRequirements).toStrictEqual(scbRequirements);
 
@@ -102,13 +107,15 @@ describe("AuthorizationBlue", () => {
       const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
       const positionData = await market.getPositionData(client.account.address);
 
-      const requirementsBefore = await getPlanRequests(
-        market.borrow({
-          userAddress: client.account.address,
-          amount: parseUnits("100", 18),
-          positionData,
-        }),
-      );
+      const requirementsBefore = (
+        await market
+          .borrow({
+            userAddress: client.account.address,
+            amount: parseUnits("100", 18),
+            positionData,
+          })
+          .prepare()
+      ).requirements;
 
       const requirementAuthorization = requirementsBefore[0];
       if (!isRequirementBlueAuthorization(requirementAuthorization)) {
@@ -116,13 +123,15 @@ describe("AuthorizationBlue", () => {
       }
       await client.sendTransaction(requirementAuthorization);
 
-      const requirementsAfter = await getPlanRequests(
-        market.borrow({
-          userAddress: client.account.address,
-          amount: parseUnits("100", 18),
-          positionData,
-        }),
-      );
+      const requirementsAfter = (
+        await market
+          .borrow({
+            userAddress: client.account.address,
+            amount: parseUnits("100", 18),
+            positionData,
+          })
+          .prepare()
+      ).requirements;
 
       expect(requirementsAfter).toHaveLength(0);
     });

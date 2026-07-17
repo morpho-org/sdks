@@ -19,7 +19,6 @@ import {
 import { KeyrockUsdcVaultV2, KpkWETHVaultV2 } from "../fixtures/vaultV2.js";
 import { testInvariants } from "../helpers/invariants.js";
 import { test } from "../setup.js";
-import { buildPlanTx, getPlanRequests } from "../transactionPlanUtils.js";
 
 describe("WrapNative - VaultV1", () => {
   test("should deposit native ETH only in WETH vaultV1", async ({ client }) => {
@@ -50,10 +49,10 @@ describe("WrapNative - VaultV1", () => {
           vaultData,
         });
 
-        const requirements = await getPlanRequests(deposit);
+        const requirements = (await deposit.prepare()).requirements;
         expect(requirements.length).toBe(0);
 
-        const tx = await buildPlanTx(deposit);
+        const tx = (await deposit.prepare()).build().primaryTransaction;
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
         expect(tx.action.args.amount).toEqual(0n);
@@ -119,10 +118,10 @@ describe("WrapNative - VaultV1", () => {
           vaultData,
         });
 
-        const requirements = await getPlanRequests(deposit);
+        const requirements = (await deposit.prepare()).requirements;
         expect(requirements.length).toBe(0);
 
-        const tx = await buildPlanTx(deposit);
+        const tx = (await deposit.prepare()).build().primaryTransaction;
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
         expect(tx.action.args.amount).toEqual(amount);
@@ -181,7 +180,7 @@ describe("WrapNative - VaultV1", () => {
           vaultData,
         });
 
-        const requirements = await getPlanRequests(deposit);
+        const requirements = (await deposit.prepare()).requirements;
 
         expect(requirements.length).toBe(2);
 
@@ -204,7 +203,9 @@ describe("WrapNative - VaultV1", () => {
         expect(isHex(requirementSignature.args.signature)).toBe(true);
         expect(requirementSignature.args.signature.length).toBe(132);
 
-        const tx = await buildPlanTx(deposit, [requirementSignature]);
+        const tx = (await deposit.prepare()).build([
+          requirementSignature,
+        ]).primaryTransaction;
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
         expect(tx.action.args.amount).toEqual(amount);
@@ -305,10 +306,10 @@ describe("WrapNative - VaultV2", () => {
           vaultData,
         });
 
-        const requirements = await getPlanRequests(deposit);
+        const requirements = (await deposit.prepare()).requirements;
         expect(requirements.length).toBe(0);
 
-        const tx = await buildPlanTx(deposit);
+        const tx = (await deposit.prepare()).build().primaryTransaction;
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
         expect(tx.action.args.amount).toEqual(0n);
@@ -374,10 +375,10 @@ describe("WrapNative - VaultV2", () => {
           vaultData,
         });
 
-        const requirements = await getPlanRequests(deposit);
+        const requirements = (await deposit.prepare()).requirements;
         expect(requirements.length).toBe(0);
 
-        const tx = await buildPlanTx(deposit);
+        const tx = (await deposit.prepare()).build().primaryTransaction;
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
         expect(tx.action.args.amount).toEqual(amount);
@@ -436,7 +437,7 @@ describe("WrapNative - VaultV2", () => {
           vaultData,
         });
 
-        const requirements = await getPlanRequests(deposit);
+        const requirements = (await deposit.prepare()).requirements;
 
         expect(requirements.length).toBe(2);
 
@@ -459,7 +460,9 @@ describe("WrapNative - VaultV2", () => {
         expect(isHex(requirementSignature.args.signature)).toBe(true);
         expect(requirementSignature.args.signature.length).toBe(132);
 
-        const tx = await buildPlanTx(deposit, [requirementSignature]);
+        const tx = (await deposit.prepare()).build([
+          requirementSignature,
+        ]).primaryTransaction;
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
         expect(tx.action.args.amount).toEqual(amount);

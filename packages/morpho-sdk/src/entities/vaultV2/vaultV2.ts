@@ -47,7 +47,7 @@ import {
  * VaultV2 action flows are synchronous so the SDK does not own vault data fetching. Consumers pass
  * the vault snapshots they already fetched, which lets each app batch, cache, and refresh data for
  * its own UX. Each flow returns a TransactionPlan; call `prepare()` when the app is ready to compute
- * the minimal signature requests and/or call requests needed to execute that intent.
+ * the minimal signature requests and/or transaction steps needed to execute that intent.
  */
 export interface VaultV2Actions {
   /**
@@ -66,7 +66,7 @@ export interface VaultV2Actions {
    *
    * This function constructs the transaction data required to deposit a specified amount of assets into the vault.
    * Uses pre-fetched vault data for accurate calculations of slippage and asset address,
-   * then returns a lazy transaction plan for resolving approval or signature requests and building the deposit call.
+   * then returns a lazy transaction plan for resolving approval or signature requests and building the deposit transaction.
    * Bundler Integration: This flow uses the bundler to atomically execute the user's asset transfer and vault deposit in a single transaction for slippage protection.
    *
    * @param {Object} params - The deposit parameters.
@@ -76,7 +76,7 @@ export interface VaultV2Actions {
    * @param {bigint} [params.slippageTolerance=DEFAULT_SLIPPAGE_TOLERANCE] - Optional slippage tolerance value. Default is 0.03%. Slippage tolerance must be less than 10%.
    * @param {bigint} [params.nativeAmount] - Amount of native token to wrap into wNative. Vault asset must be wNative.
    * @returns A lazy `TransactionPlan` whose `prepare()` resolves token approval or permit requests
-   *   and whose prepared form builds the executable deposit call.
+   *   and whose prepared form builds the executable deposit transaction.
    */
   deposit: (
     params: {
@@ -97,7 +97,7 @@ export interface VaultV2Actions {
    * @param {Object} params - The withdraw parameters.
    * @param {bigint} params.amount - The amount of assets to withdraw.
    * @param {Address} params.userAddress - User address initiating the withdraw.
-   * @returns A lazy `TransactionPlan` that prepares and builds the direct withdraw call.
+   * @returns A lazy `TransactionPlan` that prepares and builds the direct withdraw transaction.
    */
   withdraw: (params: {
     amount: bigint;
@@ -111,7 +111,7 @@ export interface VaultV2Actions {
    * @param {Object} params - The redeem parameters.
    * @param {bigint} params.shares - The amount of shares to redeem.
    * @param {Address} params.userAddress - User address initiating the redeem.
-   * @returns A lazy `TransactionPlan` that prepares and builds the direct redeem call.
+   * @returns A lazy `TransactionPlan` that prepares and builds the direct redeem transaction.
    */
   redeem: (params: {
     shares: bigint;
@@ -276,7 +276,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
           },
         }),
 
-      buildPrimaryCall: (signatures) => {
+      buildPrimaryTransaction: (signatures) => {
         const { permit } = selectRequirementSignatures(signatures, {
           permit: true,
         });
@@ -309,7 +309,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     }
 
     return new TransactionPlan({
-      buildPrimaryCall: () =>
+      buildPrimaryTransaction: () =>
         vaultV2Withdraw({
           vault: { address: this.vault },
           args: {
@@ -331,7 +331,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     }
 
     return new TransactionPlan({
-      buildPrimaryCall: () =>
+      buildPrimaryTransaction: () =>
         vaultV2Redeem({
           vault: { address: this.vault },
           args: {
@@ -361,7 +361,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     }
 
     return new TransactionPlan({
-      buildPrimaryCall: () =>
+      buildPrimaryTransaction: () =>
         vaultV2ForceWithdraw({
           vault: { address: this.vault },
           args: {
@@ -394,7 +394,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     }
 
     return new TransactionPlan({
-      buildPrimaryCall: () =>
+      buildPrimaryTransaction: () =>
         vaultV2ForceRedeem({
           vault: { address: this.vault },
           args: {

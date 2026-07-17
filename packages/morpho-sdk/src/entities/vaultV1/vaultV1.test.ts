@@ -12,10 +12,6 @@ import {
   KpkWETHVaultV2,
 } from "../../../test/fixtures/vaultV2.js";
 import { test } from "../../../test/setup.js";
-import {
-  buildPlanTx,
-  getPlanRequests,
-} from "../../../test/transactionPlanUtils.js";
 import { morphoViemExtension } from "../../client/index.js";
 import { MAX_SLIPPAGE_TOLERANCE } from "../../helpers/constant.js";
 import {
@@ -109,7 +105,7 @@ describe("MorphoVaultV1 entity tests", () => {
         vaultData,
         slippageTolerance: 0n,
       });
-      const tx = await buildPlanTx(result);
+      const tx = (await result.prepare()).build().primaryTransaction;
       expect(tx.data).toBeDefined();
       expect(tx.value).toBe(0n);
     });
@@ -134,7 +130,7 @@ describe("MorphoVaultV1 entity tests", () => {
         vaultData,
         slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
       });
-      const tx = await buildPlanTx(result);
+      const tx = (await result.prepare()).build().primaryTransaction;
       expect(tx.data).toBeDefined();
       expect(tx.value).toBe(0n);
     });
@@ -346,13 +342,15 @@ describe("MorphoVaultV1 entity tests", () => {
       );
 
       const vaultData = await vault.getData();
-      const requirements = await getPlanRequests(
-        vault.deposit({
-          amount: parseUnits("100", 6),
-          userAddress: client.account.address,
-          vaultData,
-        }),
-      );
+      const requirements = (
+        await vault
+          .deposit({
+            amount: parseUnits("100", 6),
+            userAddress: client.account.address,
+            vaultData,
+          })
+          .prepare()
+      ).requirements;
 
       expect(requirements).toHaveLength(1);
 
@@ -502,7 +500,7 @@ describe("MorphoVaultV1 entity tests", () => {
         targetVault,
         shares: parseUnits("1000", 18),
       });
-      const tx = await buildPlanTx(result);
+      const tx = (await result.prepare()).build().primaryTransaction;
       expect(tx.action.type).toBe("vaultV1MigrateToV2");
       expect(tx.action.args.sourceVault).toBe(SteakhouseUsdcVaultV1.address);
       expect(tx.action.args.targetVault).toBe(KeyrockUsdcVaultV2.address);
@@ -630,7 +628,7 @@ describe("MorphoVaultV1 entity tests", () => {
         shares: parseUnits("1000", 18),
         slippageTolerance: 0n,
       });
-      const tx = await buildPlanTx(result);
+      const tx = (await result.prepare()).build().primaryTransaction;
       expect(tx.data).toBeDefined();
     });
 
@@ -661,7 +659,7 @@ describe("MorphoVaultV1 entity tests", () => {
         shares: parseUnits("1000", 18),
         slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
       });
-      const tx = await buildPlanTx(result);
+      const tx = (await result.prepare()).build().primaryTransaction;
       expect(tx.data).toBeDefined();
     });
 
@@ -691,14 +689,16 @@ describe("MorphoVaultV1 entity tests", () => {
         { chainId: mainnet.id },
       );
 
-      const requirements = await getPlanRequests(
-        vault.migrateToV2({
-          userAddress: client.account.address,
-          sourceVault,
-          targetVault,
-          shares,
-        }),
-      );
+      const requirements = (
+        await vault
+          .migrateToV2({
+            userAddress: client.account.address,
+            sourceVault,
+            targetVault,
+            shares,
+          })
+          .prepare()
+      ).requirements;
 
       expect(requirements).toHaveLength(1);
 
@@ -734,14 +734,16 @@ describe("MorphoVaultV1 entity tests", () => {
         { chainId: mainnet.id },
       );
 
-      const requirements = await getPlanRequests(
-        vault.migrateToV2({
-          userAddress: client.account.address,
-          sourceVault,
-          targetVault,
-          shares,
-        }),
-      );
+      const requirements = (
+        await vault
+          .migrateToV2({
+            userAddress: client.account.address,
+            sourceVault,
+            targetVault,
+            shares,
+          })
+          .prepare()
+      ).requirements;
 
       expect(requirements.length).toBeGreaterThanOrEqual(1);
     });
@@ -780,7 +782,7 @@ describe("MorphoVaultV1 entity tests", () => {
         shares: parseUnits("1000", 18),
       });
 
-      const tx = await buildPlanTx(result);
+      const tx = (await result.prepare()).build().primaryTransaction;
       expect(tx.action.args.recipient).toBe(OTHER_USER);
     });
 
@@ -813,7 +815,7 @@ describe("MorphoVaultV1 entity tests", () => {
         shares: parseUnits("1000", 18),
       });
 
-      const tx = await buildPlanTx(result);
+      const tx = (await result.prepare()).build().primaryTransaction;
       expect(tx.action.args.recipient).toBe(OTHER_USER);
     });
   });

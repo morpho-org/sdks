@@ -9,7 +9,6 @@ import {
 import { ReEcosystemUsdcVaultV2 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
-import { buildPlanTx } from "../../transactionPlanUtils.js";
 
 describe("ForceWithdraw VaultV2", () => {
   // Blue adapter addresses
@@ -60,7 +59,7 @@ describe("ForceWithdraw VaultV2", () => {
       withdraw: { amount: assetsWithdraw },
       userAddress: client.account.address,
     });
-    const tx_1 = await buildPlanTx(forceWithdraw);
+    const tx_1 = (await forceWithdraw.prepare()).build().primaryTransaction;
 
     const tx_2 = vaultV2ForceWithdraw({
       vault: { address: ReEcosystemUsdcVaultV2.address },
@@ -125,7 +124,7 @@ describe("ForceWithdraw VaultV2", () => {
       withdraw: { amount: assets },
       userAddress: client.account.address,
     });
-    const tx = await buildPlanTx(forceWithdraw);
+    const tx = (await forceWithdraw.prepare()).build().primaryTransaction;
 
     const {
       vaults: {
@@ -191,7 +190,7 @@ describe("ForceWithdraw VaultV2", () => {
       withdraw: { amount: withdrawAssets },
       userAddress: client.account.address,
     });
-    const tx = await buildPlanTx(forceWithdraw);
+    const tx = (await forceWithdraw.prepare()).build().primaryTransaction;
 
     const {
       vaults: {

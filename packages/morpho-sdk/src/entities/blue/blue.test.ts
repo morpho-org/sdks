@@ -12,10 +12,6 @@ import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import { CbbtcUsdcBlue, WstethWethBlue } from "../../../test/fixtures/blue.js";
 import { test } from "../../../test/setup.js";
-import {
-  buildPlanTx,
-  getPlanRequests,
-} from "../../../test/transactionPlanUtils.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
   isRequirementApproval,
@@ -105,7 +101,7 @@ describe("MorphoBlue builder = signer freedom", () => {
       amount: parseUnits("1", 18),
     });
 
-    const tx = await buildPlanTx(supplyCollateral);
+    const tx = (await supplyCollateral.prepare()).build().primaryTransaction;
     expect(tx.action.args.onBehalf).toBe(OTHER_USER);
   });
 
@@ -124,7 +120,7 @@ describe("MorphoBlue builder = signer freedom", () => {
       amount: parseUnits("1", 18),
     });
 
-    const tx = await buildPlanTx(supplyCollateral);
+    const tx = (await supplyCollateral.prepare()).build().primaryTransaction;
     expect(tx.action.args.onBehalf).toBe(OTHER_USER);
   });
 });
@@ -175,13 +171,15 @@ describe("MorphoBlue validation", () => {
       )
       .morpho.blue(CbbtcUsdcBlue, mainnet.id);
 
-    const requirements = await getPlanRequests(
-      market.withdraw({
-        assets: 1n,
-        userAddress: USER,
-        positionData: makePosition({ supplyShares: 10n ** 18n }),
-      }),
-    );
+    const requirements = (
+      await market
+        .withdraw({
+          assets: 1n,
+          userAddress: USER,
+          positionData: makePosition({ supplyShares: 10n ** 18n }),
+        })
+        .prepare()
+    ).requirements;
 
     expect(requirements).toHaveLength(1);
   });
@@ -203,13 +201,15 @@ describe("MorphoBlue validation", () => {
       )
       .morpho.blue(CbbtcUsdcBlue, mainnet.id);
 
-    const requirements = await getPlanRequests(
-      market.withdraw({
-        assets: 1n,
-        userAddress: USER,
-        positionData: makePosition({ supplyShares: 10n ** 18n }),
-      }),
-    );
+    const requirements = (
+      await market
+        .withdraw({
+          assets: 1n,
+          userAddress: USER,
+          positionData: makePosition({ supplyShares: 10n ** 18n }),
+        })
+        .prepare()
+    ).requirements;
 
     expect(requirements).toEqual([]);
   });
@@ -300,14 +300,16 @@ describe("MorphoBlue validation", () => {
       )
       .morpho.blue(CbbtcUsdcBlue, mainnet.id);
 
-    const requirements = await getPlanRequests(
-      market.repayWithdrawCollateral({
-        amount: 1n,
-        withdrawAmount: 1n,
-        userAddress: USER,
-        positionData: makePosition(),
-      }),
-    );
+    const requirements = (
+      await market
+        .repayWithdrawCollateral({
+          amount: 1n,
+          withdrawAmount: 1n,
+          userAddress: USER,
+          positionData: makePosition(),
+        })
+        .prepare()
+    ).requirements;
 
     expect(requirements).toHaveLength(2);
   });
@@ -338,14 +340,16 @@ describe("MorphoBlue validation", () => {
     const amount = parseUnits("0.3", 18);
     const nativeAmount = parseUnits("0.2", 18);
 
-    const tx = await buildPlanTx(
-      market.repay({
-        amount,
-        nativeAmount,
-        userAddress: USER,
-        positionData: makeWethPosition(),
-      }),
-    );
+    const tx = (
+      await market
+        .repay({
+          amount,
+          nativeAmount,
+          userAddress: USER,
+          positionData: makeWethPosition(),
+        })
+        .prepare()
+    ).build().primaryTransaction;
 
     expect(tx.action.args.assets).toBe(amount + nativeAmount);
     expect(tx.action.args.nativeAmount).toBe(nativeAmount);
@@ -360,13 +364,15 @@ describe("MorphoBlue validation", () => {
       .morpho.blue(WstethWethBlue, mainnet.id);
     const nativeAmount = parseUnits("0.5", 18);
 
-    const requirements = await getPlanRequests(
-      market.repay({
-        nativeAmount,
-        userAddress: USER,
-        positionData: makeWethPosition(),
-      }),
-    );
+    const requirements = (
+      await market
+        .repay({
+          nativeAmount,
+          userAddress: USER,
+          positionData: makeWethPosition(),
+        })
+        .prepare()
+    ).requirements;
 
     expect(requirements).toEqual([]);
   });
@@ -395,7 +401,7 @@ describe("MorphoBlue validation", () => {
       positionData,
     });
 
-    const tx = await buildPlanTx(repay);
+    const tx = (await repay.prepare()).build().primaryTransaction;
     expect(tx.action.args.shares).toBe(positionData.borrowShares);
     expect(tx.action.args.nativeAmount).toBe(nativeAmount);
     expect(tx.value).toBe(nativeAmount);
@@ -403,7 +409,7 @@ describe("MorphoBlue validation", () => {
     expect(tx.action.args.transferAmount).toBe(nativeAmount);
 
     // Fully-native repay pulls no ERC-20 ⇒ no approval/permit requirement.
-    expect(await getPlanRequests(repay)).toEqual([]);
+    expect((await repay.prepare()).requirements).toEqual([]);
   });
 
   test("repay native: shares mode pulls transferAmount net of native (happy path)", async ({
@@ -432,7 +438,7 @@ describe("MorphoBlue validation", () => {
       positionData,
     });
 
-    const tx = await buildPlanTx(repay);
+    const tx = (await repay.prepare()).build().primaryTransaction;
     expect(tx.action.args.shares).toBe(positionData.borrowShares);
     expect(tx.action.args.nativeAmount).toBe(nativeAmount);
     expect(tx.value).toBe(nativeAmount);
@@ -442,7 +448,7 @@ describe("MorphoBlue validation", () => {
     expect(tx.action.args.transferAmount - nativeAmount).toBe(expectedErc20);
 
     // Preparation approves exactly the carved ERC-20 remainder, not the debt.
-    const requirements = await getPlanRequests(repay);
+    const requirements = (await repay.prepare()).requirements;
     const approval = requirements.find(isRequirementApproval);
     if (!approval) {
       throw new Error("Approval requirement not found");
@@ -477,15 +483,17 @@ describe("MorphoBlue validation", () => {
     const amount = parseUnits("0.3", 18);
     const nativeAmount = parseUnits("0.2", 18);
 
-    const tx = await buildPlanTx(
-      market.repayWithdrawCollateral({
-        amount,
-        nativeAmount,
-        withdrawAmount: parseUnits("1", 18),
-        userAddress: USER,
-        positionData: makeWethPosition(),
-      }),
-    );
+    const tx = (
+      await market
+        .repayWithdrawCollateral({
+          amount,
+          nativeAmount,
+          withdrawAmount: parseUnits("1", 18),
+          userAddress: USER,
+          positionData: makeWethPosition(),
+        })
+        .prepare()
+    ).build().primaryTransaction;
 
     expect(tx.action.args.repayAssets).toBe(amount + nativeAmount);
     expect(tx.action.args.nativeAmount).toBe(nativeAmount);
@@ -500,14 +508,16 @@ describe("MorphoBlue validation", () => {
       .morpho.blue(WstethWethBlue, mainnet.id);
     const nativeAmount = parseUnits("0.5", 18);
 
-    const requirements = await getPlanRequests(
-      market.repayWithdrawCollateral({
-        nativeAmount,
-        withdrawAmount: parseUnits("1", 18),
-        userAddress: USER,
-        positionData: makeWethPosition(),
-      }),
-    );
+    const requirements = (
+      await market
+        .repayWithdrawCollateral({
+          nativeAmount,
+          withdrawAmount: parseUnits("1", 18),
+          userAddress: USER,
+          positionData: makeWethPosition(),
+        })
+        .prepare()
+    ).requirements;
 
     // Fully-native repay pulls no ERC-20 → only the Morpho authorization remains.
     expect(requirements).toHaveLength(1);
@@ -537,7 +547,7 @@ describe("MorphoBlue validation", () => {
       positionData,
     });
 
-    const tx = await buildPlanTx(action);
+    const tx = (await action.prepare()).build().primaryTransaction;
     expect(tx.action.args.repayShares).toBe(positionData.borrowShares);
     expect(tx.action.args.nativeAmount).toBe(nativeAmount);
     expect(tx.value).toBe(nativeAmount);
@@ -545,7 +555,7 @@ describe("MorphoBlue validation", () => {
     expect(tx.action.args.transferAmount).toBe(nativeAmount);
 
     // No ERC-20 pulled ⇒ only the Morpho authorization requirement remains.
-    expect(await getPlanRequests(action)).toHaveLength(1);
+    expect((await action.prepare()).requirements).toHaveLength(1);
   });
 
   test("repayWithdrawCollateral native: shares mode pulls transferAmount net of native (happy path)", async ({
@@ -573,7 +583,7 @@ describe("MorphoBlue validation", () => {
       positionData,
     });
 
-    const tx = await buildPlanTx(action);
+    const tx = (await action.prepare()).build().primaryTransaction;
     expect(tx.action.args.repayShares).toBe(positionData.borrowShares);
     expect(tx.action.args.nativeAmount).toBe(nativeAmount);
     expect(tx.value).toBe(nativeAmount);
@@ -584,7 +594,7 @@ describe("MorphoBlue validation", () => {
 
     // Preparation approves exactly the carved ERC-20 remainder (alongside the
     // Morpho authorization the withdraw leg needs).
-    const requirements = await getPlanRequests(action);
+    const requirements = (await action.prepare()).requirements;
     const approval = requirements.find(isRequirementApproval);
     if (!approval) {
       throw new Error("Approval requirement not found");

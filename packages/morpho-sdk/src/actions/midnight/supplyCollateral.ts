@@ -30,7 +30,7 @@ export interface MidnightSupplyCollateralParams {
  * Use this low-level builder when a flow already knows the market, collateral
  * index, and approval state. App flows should usually call
  * `client.morpho.midnight(chainId).supplyCollateral(...)`, which resolves the
- * ERC20 approval call request when the transaction plan is prepared.
+ * ERC20 approval transaction step when the transaction plan is prepared.
  *
  * @param params.chainId - Chain id used to resolve `Midnight`.
  * @param params.market - Midnight market receiving collateral.

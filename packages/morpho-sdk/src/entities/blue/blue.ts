@@ -100,7 +100,7 @@ import { ReallocationData } from "../reallocationData.js";
  * Blue action flows are synchronous so the SDK does not own broad market or position data fetching.
  * Consumers pass the state snapshots they already fetched, which lets each app batch, cache, and
  * refresh data for its own UX. Each flow returns a TransactionPlan; call `prepare()` when the app is
- * ready to compute the minimal signature requests and/or call requests needed to execute that
+ * ready to compute the minimal signature requests and/or transaction steps needed to execute that
  * intent.
  */
 export interface BlueActions {
@@ -548,7 +548,7 @@ export class MorphoBlue implements BlueActions {
           args: { amount, from: userAddress },
         }),
 
-      buildPrimaryCall: (signatures) => {
+      buildPrimaryTransaction: (signatures) => {
         const { permit } = selectRequirementSignatures(signatures, {
           permit: true,
         });
@@ -647,7 +647,7 @@ export class MorphoBlue implements BlueActions {
         return authTx ? [authTx] : [];
       },
 
-      buildPrimaryCall: (signatures) => {
+      buildPrimaryTransaction: (signatures) => {
         const { authorization } = selectRequirementSignatures(signatures, {
           authorization: true,
         });
@@ -702,7 +702,7 @@ export class MorphoBlue implements BlueActions {
           args: { amount, from: userAddress },
         }),
 
-      buildPrimaryCall: (signatures) => {
+      buildPrimaryTransaction: (signatures) => {
         const { permit } = selectRequirementSignatures(signatures, {
           permit: true,
         });
@@ -779,7 +779,7 @@ export class MorphoBlue implements BlueActions {
         return authTx ? [authTx] : [];
       },
 
-      buildPrimaryCall: (signatures) => {
+      buildPrimaryTransaction: (signatures) => {
         const { authorization } = selectRequirementSignatures(signatures, {
           authorization: true,
         });
@@ -917,7 +917,7 @@ export class MorphoBlue implements BlueActions {
         });
       },
 
-      buildPrimaryCall: (signatures) => {
+      buildPrimaryTransaction: (signatures) => {
         const { permit } = selectRequirementSignatures(signatures, {
           permit: true,
         });
@@ -996,7 +996,7 @@ export class MorphoBlue implements BlueActions {
     });
 
     return new TransactionPlan({
-      buildPrimaryCall: () =>
+      buildPrimaryTransaction: () =>
         blueWithdrawCollateral({
           market: {
             chainId: this.chainId,
@@ -1165,7 +1165,7 @@ export class MorphoBlue implements BlueActions {
         return [...erc20Requirements, ...(authTx ? [authTx] : [])];
       },
 
-      buildPrimaryCall: (signatures) => {
+      buildPrimaryTransaction: (signatures) => {
         const { permit, authorization } = selectRequirementSignatures(
           signatures,
           { permit: true, authorization: true },
@@ -1295,7 +1295,7 @@ export class MorphoBlue implements BlueActions {
         return [...erc20Requirements, ...(authTx ? [authTx] : [])];
       },
 
-      buildPrimaryCall: (signatures) => {
+      buildPrimaryTransaction: (signatures) => {
         const { permit, authorization } = selectRequirementSignatures(
           signatures,
           { permit: true, authorization: true },
@@ -1530,7 +1530,7 @@ export class MorphoBlue implements BlueActions {
         return authTx ? [authTx] : [];
       },
 
-      buildPrimaryCall: (signatures) => {
+      buildPrimaryTransaction: (signatures) => {
         const { authorization } = selectRequirementSignatures(signatures, {
           authorization: true,
         });

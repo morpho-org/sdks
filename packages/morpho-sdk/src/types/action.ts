@@ -668,19 +668,21 @@ export type SignatureRequirement =
   | MidnightOfferRootRequirement
   | Requirement<AuthorizationRequirementSignature>;
 
-/** Call action metadata that can appear as an action prerequisite. */
-export type CallRequirementAction =
+/** Transaction action metadata that can appear as an action prerequisite. */
+export type TransactionRequirementAction =
   | ERC20ApprovalAction
   | BlueAuthorizationAction
   | MidnightAuthorizationAction
   | SetterRatifierRatifyRootAction
   | MidnightSupplyCollateralAction;
 
-/** Onchain call prerequisite discovered while preparing an entity transaction plan. */
-export type CallRequirement = Readonly<Transaction<CallRequirementAction>>;
+/** Onchain transaction prerequisite discovered while preparing an entity transaction plan. */
+export type TransactionRequirement = Readonly<
+  Transaction<TransactionRequirementAction>
+>;
 
-/** Onchain call or signature prerequisite discovered while preparing an entity transaction plan. */
-export type ActionRequirement = CallRequirement | SignatureRequirement;
+/** Onchain transaction or signature prerequisite discovered while preparing an entity transaction plan. */
+export type ActionRequirement = TransactionRequirement | SignatureRequirement;
 
 export function isRequirementApproval(
   requirement: unknown,
@@ -720,10 +722,10 @@ export function isRequirementBlueAuthorization(
 export function isRequirementSignature<
   T extends RequirementSignature = RequirementSignature,
 >(
-  requirement: CallRequirement | Requirement<T> | undefined,
+  requirement: TransactionRequirement | Requirement<T> | undefined,
 ): requirement is Requirement<T>;
 export function isRequirementSignature(
-  requirement: CallRequirement | Requirement | undefined,
+  requirement: TransactionRequirement | Requirement | undefined,
 ): requirement is Requirement;
 export function isRequirementSignature(
   requirement: ActionRequirement | undefined,

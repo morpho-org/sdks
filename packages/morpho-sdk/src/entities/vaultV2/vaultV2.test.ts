@@ -7,7 +7,6 @@ import {
   KpkWETHVaultV2,
 } from "../../../test/fixtures/vaultV2.js";
 import { test } from "../../../test/setup.js";
-import { buildPlanTx } from "../../../test/transactionPlanUtils.js";
 import { morphoViemExtension } from "../../client/index.js";
 import { MAX_SLIPPAGE_TOLERANCE } from "../../helpers/constant.js";
 import {
@@ -107,7 +106,7 @@ describe("MorphoVaultV2 entity tests", () => {
         vaultData,
         slippageTolerance: 0n,
       });
-      const tx = await buildPlanTx(result);
+      const tx = (await result.prepare()).build().primaryTransaction;
       expect(tx.data).toBeDefined();
       expect(tx.value).toBe(0n);
     });
@@ -132,7 +131,7 @@ describe("MorphoVaultV2 entity tests", () => {
         vaultData,
         slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
       });
-      const tx = await buildPlanTx(result);
+      const tx = (await result.prepare()).build().primaryTransaction;
       expect(tx.data).toBeDefined();
       expect(tx.value).toBe(0n);
     });

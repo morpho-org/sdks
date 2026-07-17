@@ -13,7 +13,6 @@ import { YearnUsdcVaultV1 } from "../../fixtures/vaultV1.js";
 import { borrow, supplyCollateral, supplyLoan } from "../../helpers/blue.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
-import { buildPlanTx, getPlanRequests } from "../../transactionPlanUtils.js";
 
 // Two real wstETH/wNative markets sharing the loan + collateral pair but differing oracles, at the pinned fork.
 const wstEthWeth_v1 = new MarketParams({
@@ -96,7 +95,7 @@ describe("RefinanceBlue (fork)", () => {
         });
 
         // Tolerate either a clean wallet (one auth requirement) or a pre-authorized one (none).
-        const requirements = await getPlanRequests(refi);
+        const requirements = (await refi.prepare()).requirements;
         expect(requirements.length).toBeLessThanOrEqual(1);
         for (const requirement of requirements) {
           if (!isRequirementBlueAuthorization(requirement)) {
@@ -105,7 +104,9 @@ describe("RefinanceBlue (fork)", () => {
           await client.sendTransaction(requirement);
         }
 
-        await client.sendTransaction(await buildPlanTx(refi));
+        await client.sendTransaction(
+          (await refi.prepare()).build().primaryTransaction,
+        );
       },
     });
     // testInvariants already asserts every bundler3 component ends with 0 balance — nothing left behind.
@@ -177,7 +178,7 @@ describe("RefinanceBlue (fork)", () => {
           slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
         });
 
-        const requirements = await getPlanRequests(refi);
+        const requirements = (await refi.prepare()).requirements;
         expect(requirements.length).toBeLessThanOrEqual(1);
         for (const requirement of requirements) {
           if (!isRequirementBlueAuthorization(requirement)) {
@@ -185,7 +186,9 @@ describe("RefinanceBlue (fork)", () => {
           }
           await client.sendTransaction(requirement);
         }
-        await client.sendTransaction(await buildPlanTx(refi));
+        await client.sendTransaction(
+          (await refi.prepare()).build().primaryTransaction,
+        );
       },
     });
 
@@ -241,7 +244,7 @@ describe("RefinanceBlue (fork)", () => {
           collateralAmount,
         });
 
-        const requirements = await getPlanRequests(refi);
+        const requirements = (await refi.prepare()).requirements;
         // Collat-only still needs GA1 authorized: the callback's withdrawCollateral runs onBehalf=user.
         expect(requirements).toHaveLength(1);
         const auth = requirements[0]!;
@@ -249,7 +252,9 @@ describe("RefinanceBlue (fork)", () => {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(auth);
-        await client.sendTransaction(await buildPlanTx(refi));
+        await client.sendTransaction(
+          (await refi.prepare()).build().primaryTransaction,
+        );
       },
     });
 
@@ -341,7 +346,7 @@ describe("RefinanceBlue (fork)", () => {
           targetReallocations: reallocations,
         });
 
-        const requirements = await getPlanRequests(refi);
+        const requirements = (await refi.prepare()).requirements;
         expect(requirements.length).toBeLessThanOrEqual(1);
         for (const requirement of requirements) {
           if (!isRequirementBlueAuthorization(requirement)) {
@@ -350,7 +355,7 @@ describe("RefinanceBlue (fork)", () => {
           await client.sendTransaction(requirement);
         }
 
-        const tx = await buildPlanTx(refi);
+        const tx = (await refi.prepare()).build().primaryTransaction;
         expect(tx.value).toBe(0n);
         expect(tx.action.args.reallocationFee).toBe(0n);
 

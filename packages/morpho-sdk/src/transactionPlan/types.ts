@@ -3,7 +3,6 @@ import type {
   AuthorizationRequirementSignature,
   BaseAction,
   BlueAuthorizationAction,
-  CallRequirement,
   ERC20ApprovalAction,
   PermitRequirementSignature,
   Requirement,
@@ -11,6 +10,7 @@ import type {
   SignatureRequirement,
   Transaction,
   TransactionAction,
+  TransactionRequirement,
 } from "../types/action.js";
 
 /** Options forwarded to token-approval request discovery. */
@@ -33,8 +33,8 @@ export type TransactionPlanOperatorAuthorizationRequest =
   | Readonly<Transaction<BlueAuthorizationAction>>
   | Requirement<AuthorizationRequirementSignature>;
 
-/** Raw viem-compatible call data extracted from a Morpho SDK transaction. */
-export interface TransactionPlanViemCall {
+/** EIP-5792-compatible batch call converted from a Morpho SDK transaction. */
+export interface TransactionPlanBatchCall {
   /** Contract that receives the call. */
   readonly to: Address;
   /** Encoded calldata. */
@@ -44,15 +44,17 @@ export interface TransactionPlanViemCall {
 }
 
 /** On-chain or signable request discovered while preparing a transaction plan. */
-export type TransactionPlanRequest = CallRequirement | SignatureRequirement;
+export type TransactionPlanRequest =
+  | TransactionRequirement
+  | SignatureRequirement;
 
-/** Builds the primary transaction call, optionally consuming previously signed requests. */
-export type TransactionPlanBuildPrimaryCall<
+/** Builds the primary transaction, optionally consuming previously signed requests. */
+export type TransactionPlanBuildPrimaryTransaction<
   TPrimaryAction extends TransactionAction = TransactionAction,
   TSignatures = readonly RequirementSignature[],
 > = (signatures?: TSignatures) => Readonly<Transaction<TPrimaryAction>>;
 
-/** Resolves requirement calls and signature requests before the primary transaction call. */
+/** Resolves transaction and signature requirements before the primary transaction. */
 export type TransactionPlanGetRequirementRequests<
   TRequestOptions = unknown,
   TRequest extends TransactionPlanRequest = TransactionPlanRequest,
@@ -65,23 +67,23 @@ export interface TransactionPlanHandler<
   TRequest extends TransactionPlanRequest = TransactionPlanRequest,
   TSignatures = readonly RequirementSignature[],
 > {
-  /** Builds the primary transaction call, optionally consuming previously signed requests. */
-  readonly buildPrimaryCall: TransactionPlanBuildPrimaryCall<
+  /** Builds the primary transaction, optionally consuming previously signed requests. */
+  readonly buildPrimaryTransaction: TransactionPlanBuildPrimaryTransaction<
     TPrimaryAction,
     TSignatures
   >;
   /**
-   * Controls whether `prepare()` can include an unsigned preview of the primary call.
+   * Controls whether `prepare()` can include an unsigned preview of the primary transaction.
    *
-   * Leave unset for normal flows where the primary call can be encoded without signatures. Set to
+   * Leave unset for normal flows where the primary transaction can be encoded without signatures. Set to
    * `false` for signature-dependent flows such as Midnight maker ECDSA offers, where the final
    * mempool payload is produced by the offer-root signature and can only be encoded inside
    * `prepared.build(signatures)`.
    */
-  readonly previewPrimaryCall?:
+  readonly previewPrimaryTransaction?:
     | false
     | (() => Readonly<Transaction<TPrimaryAction>>);
-  /** Resolves requirement calls and signature requests before the primary transaction call. */
+  /** Resolves transaction and signature requirements before the primary transaction. */
   readonly getRequirementRequests?: TransactionPlanGetRequirementRequests<
     TRequestOptions,
     TRequest
@@ -144,12 +146,12 @@ export interface TransactionPlanMidnightOfferRootIntent {
   readonly offers: number;
 }
 
-/** Generic on-chain transaction intent for neutral requirement calls. */
-export interface TransactionPlanContractCallIntent<
+/** Generic on-chain transaction intent for neutral transaction requirements. */
+export interface TransactionPlanContractTransactionIntent<
   TAction extends TransactionAction = TransactionAction,
 > {
   /** Intent discriminator for filtering and app-specific rendering. */
-  readonly type: "contractCall";
+  readonly type: "contractTransaction";
   /** SDK action type attached to the call metadata. */
   readonly actionType: TAction["type"];
 }
@@ -171,15 +173,15 @@ export type TransactionPlanIntent<
   | TransactionPlanTokenApprovalIntent
   | TransactionPlanOperatorAuthorizationIntent
   | TransactionPlanMidnightOfferRootIntent
-  | TransactionPlanContractCallIntent<TPrimaryAction>
+  | TransactionPlanContractTransactionIntent<TPrimaryAction>
   | TransactionPlanPrimaryTransactionIntent<TPrimaryAction>;
 
-/** Flow shape derived from a plan's signature and call request mix. */
+/** Flow shape derived from a plan's signature requests and transaction steps. */
 export type TransactionPlanFlowKind =
-  | "single_call"
-  | "call_requests"
-  | "signature_requests"
-  | "mixed_requests";
+  | "single_transaction"
+  | "transaction_steps"
+  | "signature_steps"
+  | "mixed_steps";
 
 /** A signable request in a transaction plan. */
 export interface TransactionPlanSignatureRequest<
@@ -202,8 +204,8 @@ export interface TransactionPlanSignatureRequest<
   readonly sign: TRequest["sign"];
 }
 
-/** A viem-compatible call request in a transaction plan. */
-export interface TransactionPlanCallRequest<
+/** A transaction step containing an SDK transaction and plan metadata. */
+export interface TransactionPlanTransactionStep<
   TAction extends BaseAction = TransactionAction,
   TTransaction extends Readonly<Transaction<TAction>> = Readonly<
     Transaction<TAction>
@@ -211,29 +213,27 @@ export interface TransactionPlanCallRequest<
   TPhase extends "preparation" | "primary" = "preparation" | "primary",
 > {
   /** Request kind discriminator. */
-  readonly kind: "call";
-  /** Stable id based on original request order, or `primary` for the requested action call. */
+  readonly kind: "transaction";
+  /** Stable id based on original requirement order, or `primary` for the requested action. */
   readonly id: string;
-  /** Whether this call supports the flow or executes the requested primary action. */
+  /** Whether this step supports the flow or executes the requested primary action. */
   readonly phase: TPhase;
   /** Original SDK transaction with Morpho action metadata. */
-  readonly tx: TTransaction;
-  /** Exact SDK/protocol action metadata used to encode this call. */
+  readonly transaction: TTransaction;
+  /** Exact SDK/protocol action metadata used to encode this transaction. */
   readonly action: TAction;
   /** Higher-level plan category for app labels, filtering, and analytics. */
   readonly intent: TransactionPlanIntent<Extract<TAction, TransactionAction>>;
-  /** viem-compatible call extracted from the transaction. */
-  readonly call: TransactionPlanViemCall;
 }
 
 /** Prepared representation of one prerequisite request discovered by a transaction plan. */
-export type TransactionPlanPreparedRequest<
+export type TransactionPlanPreparedStep<
   TRequest extends TransactionPlanRequest = TransactionPlanRequest,
 > =
   | TransactionPlanSignatureRequest<Extract<TRequest, SignatureRequirement>>
-  | TransactionPlanCallRequest<
-      Extract<TRequest, CallRequirement>["action"],
-      Extract<TRequest, CallRequirement>,
+  | TransactionPlanTransactionStep<
+      Extract<TRequest, TransactionRequirement>["action"],
+      Extract<TRequest, TransactionRequirement>,
       "preparation"
     >;
 
@@ -242,8 +242,8 @@ export type TransactionPlanStep<
   TPrimaryAction extends TransactionAction = TransactionAction,
   TRequest extends TransactionPlanRequest = TransactionPlanRequest,
 > =
-  | TransactionPlanPreparedRequest<TRequest>
-  | TransactionPlanCallRequest<
+  | TransactionPlanPreparedStep<TRequest>
+  | TransactionPlanTransactionStep<
       TPrimaryAction,
       Readonly<Transaction<TPrimaryAction>>,
       "primary"
@@ -263,16 +263,28 @@ export interface PreparedTransactionPlanShape<
   TPrimaryAction extends TransactionAction = TransactionAction,
   TRequest extends TransactionPlanRequest = TransactionPlanRequest,
 > {
+  /** Raw prerequisite requirements in discovery order. */
+  readonly requirements: readonly TRequest[];
+  /** Preview of the primary step, when its transaction can be encoded without signatures. */
+  readonly primaryStep?: TransactionPlanTransactionStep<
+    TPrimaryAction,
+    Readonly<Transaction<TPrimaryAction>>,
+    "primary"
+  >;
+  /** Preview of the primary SDK transaction, when it can be encoded without signatures. */
+  readonly primaryTransaction?: Readonly<Transaction<TPrimaryAction>>;
   /** Ordered signable requests to present to the user. */
   readonly signatureRequests: readonly TransactionPlanSignatureRequest<
     Extract<TRequest, SignatureRequirement>
   >[];
-  /** Ordered viem-compatible calls. Includes the primary action call last when previewable. */
-  readonly callRequests: readonly Extract<
+  /** Ordered transaction steps. Includes the primary action step last when previewable. */
+  readonly transactionSteps: readonly Extract<
     TransactionPlanStep<TPrimaryAction, TRequest>,
-    { readonly kind: "call" }
+    { readonly kind: "transaction" }
   >[];
-  /** All signature requests and call requests in review order. */
+  /** Viem-compatible calls converted from the currently previewable transaction steps. */
+  readonly calls: readonly TransactionPlanBatchCall[];
+  /** All signature requests and transaction steps in review order. */
   readonly steps: readonly TransactionPlanStep<TPrimaryAction, TRequest>[];
 }
 
@@ -281,13 +293,23 @@ export interface ExecutableTransactionPlanShape<
   TPrimaryAction extends TransactionAction = TransactionAction,
   TRequest extends TransactionPlanRequest = TransactionPlanRequest,
 > {
+  /** Built primary transaction step. */
+  readonly primaryStep: TransactionPlanTransactionStep<
+    TPrimaryAction,
+    Readonly<Transaction<TPrimaryAction>>,
+    "primary"
+  >;
+  /** Built primary SDK transaction. */
+  readonly primaryTransaction: Readonly<Transaction<TPrimaryAction>>;
   /** Ordered signable requests used to produce the signatures passed to `build(...)`. */
   readonly signatureRequests: readonly TransactionPlanSignatureRequest<
     Extract<TRequest, SignatureRequirement>
   >[];
-  /** Ordered viem-compatible calls to submit, with the primary action call last. */
-  readonly callRequests: readonly Extract<
+  /** Ordered transaction steps to submit, with the primary action step last. */
+  readonly transactionSteps: readonly Extract<
     TransactionPlanStep<TPrimaryAction, TRequest>,
-    { readonly kind: "call" }
+    { readonly kind: "transaction" }
   >[];
+  /** Viem-compatible calls converted from the executable transaction steps. */
+  readonly calls: readonly TransactionPlanBatchCall[];
 }

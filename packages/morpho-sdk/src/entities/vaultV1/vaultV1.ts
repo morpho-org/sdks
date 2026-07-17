@@ -50,7 +50,7 @@ import {
  * VaultV1 action flows are synchronous so the SDK does not own vault data fetching. Consumers pass
  * the vault snapshots they already fetched, which lets each app batch, cache, and refresh data for
  * its own UX. Each flow returns a TransactionPlan; call `prepare()` when the app is ready to compute
- * the minimal signature requests and/or call requests needed to execute that intent.
+ * the minimal signature requests and/or transaction steps needed to execute that intent.
  */
 export interface VaultV1Actions {
   /**
@@ -94,7 +94,7 @@ export interface VaultV1Actions {
    * @param {Object} params - The withdraw parameters.
    * @param {bigint} params.amount - Amount of assets to withdraw.
    * @param {Address} params.userAddress - User address initiating the withdraw.
-   * @returns A lazy `TransactionPlan` that prepares and builds the direct withdraw call.
+   * @returns A lazy `TransactionPlan` that prepares and builds the direct withdraw transaction.
    */
   withdraw: (params: {
     amount: bigint;
@@ -106,7 +106,7 @@ export interface VaultV1Actions {
    * @param {Object} params - The redeem parameters.
    * @param {bigint} params.shares - Amount of shares to redeem.
    * @param {Address} params.userAddress - User address initiating the redeem.
-   * @returns A lazy `TransactionPlan` that prepares and builds the direct redeem call.
+   * @returns A lazy `TransactionPlan` that prepares and builds the direct redeem transaction.
    */
   redeem: (params: {
     shares: bigint;
@@ -246,7 +246,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
           },
         }),
 
-      buildPrimaryCall: (signatures) => {
+      buildPrimaryTransaction: (signatures) => {
         const { permit } = selectRequirementSignatures(signatures, {
           permit: true,
         });
@@ -279,7 +279,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
     }
 
     return new TransactionPlan({
-      buildPrimaryCall: () =>
+      buildPrimaryTransaction: () =>
         vaultV1Withdraw({
           vault: { address: this.vault },
           args: {
@@ -301,7 +301,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
     }
 
     return new TransactionPlan({
-      buildPrimaryCall: () =>
+      buildPrimaryTransaction: () =>
         vaultV1Redeem({
           vault: { address: this.vault },
           args: {
@@ -390,7 +390,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
           },
         }),
 
-      buildPrimaryCall: (signatures) => {
+      buildPrimaryTransaction: (signatures) => {
         const { permit } = selectRequirementSignatures(signatures, {
           permit: true,
         });

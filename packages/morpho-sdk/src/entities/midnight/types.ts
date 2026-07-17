@@ -78,8 +78,8 @@ export type MidnightActionSignatures =
   | readonly MidnightOfferRootSignature[];
 
 /**
- * Lazy Midnight transaction plan. Call `prepare()` to resolve the signature requests and/or call
- * requests needed by the already chosen Midnight action.
+ * Lazy Midnight transaction plan. Call `prepare()` to resolve the signature requests and/or
+ * prerequisite transactions needed by the already chosen Midnight action.
  *
  * @example
  * ```ts
@@ -90,7 +90,7 @@ export type MidnightActionSignatures =
  *   signatures.push(await request.sign(walletClient, taker));
  * }
  * const executable = prepared.build(signatures);
- * const calls = executable.callRequests.map((request) => request.call);
+ * const calls = executable.calls;
  * ```
  */
 export type MidnightActionOutput<
@@ -102,7 +102,7 @@ export type MidnightActionOutput<
  * Transaction plan returned by maker-offer flows after offer-tree preparation.
  *
  * Use `groups` and `root` for review UI. Call `prepare()` to resolve ratifier approval/signature
- * requests, then build the executable call requests with the collected signatures.
+ * requests, then build the executable transaction steps with the collected signatures.
  *
  * @example
  * ```ts
@@ -114,7 +114,7 @@ export type MidnightActionOutput<
  *   signatures.push(await request.sign(walletClient, maker));
  * }
  * const executable = prepared.build(signatures);
- * const calls = executable.callRequests.map((request) => request.call);
+ * const calls = executable.calls;
  * ```
  */
 export type MakeOffersOutput = MidnightActionOutput<

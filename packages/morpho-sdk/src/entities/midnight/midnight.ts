@@ -98,7 +98,7 @@ import type {
  * Midnight action flows are synchronous after the caller provides market, position, or offer data:
  * the SDK does not own broad data fetching, letting apps batch, cache, and refresh state for their
  * own UX. Each flow returns a TransactionPlan; call `prepare()` when the app is ready to compute the
- * minimal signature requests and/or call requests needed to execute that intent.
+ * minimal signature requests and/or transaction steps needed to execute that intent.
  *
  * @example
  * ```ts
@@ -120,7 +120,7 @@ import type {
  *   signatures.push(await request.sign(walletClient, lender));
  * }
  * const executable = prepared.build(signatures);
- * const calls = executable.callRequests.map((request) => request.call);
+ * const calls = executable.calls;
  * ```
  */
 export type MidnightActions = Pick<
@@ -177,7 +177,7 @@ const validateMarketData = (market: Market, chainId: number) => {
  *   positionData,
  * });
  * const executable = (await plan.prepare()).build();
- * const tx = executable.callRequests.at(-1)?.tx;
+ * const tx = executable.primaryTransaction;
  * ```
  */
 export class MorphoMidnight {
@@ -435,7 +435,7 @@ export class MorphoMidnight {
 
         return requirements;
       },
-      buildPrimaryCall: () =>
+      buildPrimaryTransaction: () =>
         midnightTakeLend({
           chainId: this.chainId,
           market: market.params,
@@ -514,7 +514,7 @@ export class MorphoMidnight {
 
         return requirements;
       },
-      buildPrimaryCall: () =>
+      buildPrimaryTransaction: () =>
         midnightTakeBorrow({
           chainId: this.chainId,
           market: market.params,
@@ -609,7 +609,7 @@ export class MorphoMidnight {
 
         return requirements;
       },
-      buildPrimaryCall: () =>
+      buildPrimaryTransaction: () =>
         midnightSupplyCollateralTakeBorrow({
           chainId: this.chainId,
           market: market.params,
@@ -680,7 +680,7 @@ export class MorphoMidnight {
           amount:
             params.collateralAssets + (params.reservedCollateralAssets ?? 0n),
         }),
-      buildPrimaryCall: () =>
+      buildPrimaryTransaction: () =>
         midnightSupplyCollateral({
           chainId: this.chainId,
           market: market.params,
@@ -984,7 +984,7 @@ export class MorphoMidnight {
       ActionRequirement
     >({
       getRequirementRequests: async () => [],
-      buildPrimaryCall: () =>
+      buildPrimaryTransaction: () =>
         midnightRedeem({
           chainId: this.chainId,
           market: market.params,
@@ -1090,7 +1090,7 @@ export class MorphoMidnight {
 
         return requirements;
       },
-      buildPrimaryCall: () =>
+      buildPrimaryTransaction: () =>
         midnightRepayWithdrawCollateral({
           chainId: this.chainId,
           market: market.params,
@@ -1132,7 +1132,7 @@ export class MorphoMidnight {
       ActionRequirement
     >({
       getRequirementRequests: async () => [],
-      buildPrimaryCall: () =>
+      buildPrimaryTransaction: () =>
         midnightCancelOffer({
           chainId: this.chainId,
           group: params.group,
@@ -1158,8 +1158,8 @@ export class MorphoMidnight {
         MidnightActionSignatures
       >({
         getRequirementRequests: params.getRequirementRequests,
-        previewPrimaryCall: false,
-        buildPrimaryCall: (signatures) => {
+        previewPrimaryTransaction: false,
+        buildPrimaryTransaction: (signatures) => {
           const collectedSignatures =
             signatures == null
               ? undefined

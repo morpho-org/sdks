@@ -1,15 +1,16 @@
 import {
   AccrualPosition,
+  getChainAddresses,
   Market,
   MarketParams,
   MathLib,
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
-import { createMockClient } from "@morpho-org/test/mock";
+import { blueAbi } from "@morpho-org/blue-sdk-viem";
+import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import { type Address, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
-import { buildPlanTx } from "../../../test/transactionPlanUtils.js";
 import { morphoViemExtension } from "../../client/index.js";
 import { computeMinBorrowSharePrice } from "../../helpers/index.js";
 import {
@@ -82,8 +83,14 @@ const makePosition = (params: {
   );
 
 const makeMarket = () => {
-  const { client } = createMockClient(mainnet);
-  return client
+  const handle = createMockClient(mainnet);
+  mockRead(handle, {
+    address: getChainAddresses(mainnet.id).morpho,
+    abi: blueAbi,
+    functionName: "isAuthorized",
+    result: true,
+  });
+  return handle.client
     .extend(morphoViemExtension())
     .morpho.blue(sourceParams, mainnet.id);
 };
@@ -357,7 +364,7 @@ describe("MorphoBlue.refinance", () => {
       borrowShares: parseUnits("100", 12),
     });
 
-    const tx = await buildPlanTx(refi);
+    const tx = (await refi.prepare()).build().primaryTransaction;
     expect(tx.action.type).toBe("blueRefinance");
     expect(tx.action.args.sourceMarket).toBe(sourceParams.id);
     expect(tx.action.args.targetMarket).toBe(targetParams.id);
@@ -388,7 +395,7 @@ describe("MorphoBlue.refinance", () => {
       borrowAssets: parseUnits("50", 6),
     });
 
-    const tx = await buildPlanTx(refi);
+    const tx = (await refi.prepare()).build().primaryTransaction;
     expect(tx.action.args.borrowAssets).toBe(parseUnits("50", 6));
     expect(tx.action.args.borrowShares).toBe(0n);
   });
@@ -499,7 +506,7 @@ describe("MorphoBlue.refinance", () => {
       borrowShares: parseUnits("100", 12),
       slippageTolerance,
     });
-    const tx = await buildPlanTx(refi);
+    const tx = (await refi.prepare()).build().primaryTransaction;
 
     // Recompute the entity's intermediate values (accrual deltas cancel for this fixture).
     const projectedBorrowAssets = sourceMarket.toBorrowAssets(
@@ -543,7 +550,7 @@ describe("MorphoBlue.refinance", () => {
       collateralAmount: parseUnits("1", 18),
     });
 
-    const tx = await buildPlanTx(refi);
+    const tx = (await refi.prepare()).build().primaryTransaction;
     expect(tx.action.args.borrowAssets).toBe(0n);
     expect(tx.action.args.borrowShares).toBe(0n);
   });
@@ -588,7 +595,7 @@ describe("MorphoBlue.refinance", () => {
       targetReallocations,
     });
 
-    const tx = await buildPlanTx(refi);
+    const tx = (await refi.prepare()).build().primaryTransaction;
     expect(tx.value).toBe(fee);
     expect(tx.action.args.reallocationFee).toBe(fee);
   });

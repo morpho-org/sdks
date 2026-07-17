@@ -21,7 +21,6 @@ import { WethUsdsBlue } from "../../fixtures/blue.js";
 import { supplyCollateral } from "../../helpers/blue.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
-import { buildPlanTx, getPlanRequests } from "../../transactionPlanUtils.js";
 
 describe("BorrowBlue", () => {
   test("should compute minSharePrice from real market borrow state", async ({
@@ -45,13 +44,15 @@ describe("BorrowBlue", () => {
 
     const { totalBorrowAssets, totalBorrowShares } = positionData.market;
 
-    const tx = await buildPlanTx(
-      market.borrow({
-        userAddress: client.account.address,
-        amount: parseUnits("100", 18),
-        positionData,
-      }),
-    );
+    const tx = (
+      await market
+        .borrow({
+          userAddress: client.account.address,
+          amount: parseUnits("100", 18),
+          positionData,
+        })
+        .prepare()
+    ).build().primaryTransaction;
 
     const expectedMinSharePrice = MathLib.mulDivDown(
       totalBorrowAssets + SharesMath.VIRTUAL_ASSETS,
@@ -96,7 +97,7 @@ describe("BorrowBlue", () => {
           positionData,
         });
 
-        const requirements = await getPlanRequests(borrow);
+        const requirements = (await borrow.prepare()).requirements;
         const requirementAuthorization = requirements[0];
         if (!isRequirementBlueAuthorization(requirementAuthorization)) {
           throw new Error("Authorization requirement not found");
@@ -104,7 +105,7 @@ describe("BorrowBlue", () => {
 
         await client.sendTransaction(requirementAuthorization);
 
-        const tx = await buildPlanTx(borrow);
+        const tx = (await borrow.prepare()).build().primaryTransaction;
 
         await client.sendTransaction(tx);
       },
@@ -171,7 +172,7 @@ describe("BorrowBlue", () => {
 
         // With supportSignature the authorization requirement is signable —
         // no standalone setAuthorization transaction is sent.
-        const requirements = await getPlanRequests(borrow);
+        const requirements = (await borrow.prepare()).requirements;
         const requirement = requirements[0];
         if (!isRequirementSignature(requirement)) {
           throw new Error("Expected a signable authorization requirement");
@@ -198,7 +199,9 @@ describe("BorrowBlue", () => {
           }),
         ).toBe(false);
 
-        const tx = await buildPlanTx(borrow, [authorizationSignature]);
+        const tx = (await borrow.prepare()).build([
+          authorizationSignature,
+        ]).primaryTransaction;
         await client.sendTransaction(tx);
       },
     });

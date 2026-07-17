@@ -123,7 +123,7 @@ describe("TransactionPlan", () => {
         permitRequest(),
         authorizationRequest(),
       ]),
-      buildPrimaryCall: vi.fn(() => primaryTx),
+      buildPrimaryTransaction: vi.fn(() => primaryTx),
     };
 
     const plan = TransactionPlan.create(handler);
@@ -133,25 +133,35 @@ describe("TransactionPlan", () => {
     expect("buildTx" in plan).toBe(false);
     expect("getRequirements" in plan).toBe(false);
     expect(Object.hasOwn(plan, "prepare")).toBe(false);
-    expect(prepared.flowKind).toBe("mixed_requests");
+    expect(prepared.flowKind).toBe("mixed_steps");
     expect(prepared.hasSignatureRequests).toBe(true);
-    expect(prepared.hasCallRequests).toBe(true);
-    expect(prepared.steps.map((request) => request.kind)).toEqual([
-      "call",
+    expect(prepared.hasTransactionSteps).toBe(true);
+    expect(prepared.steps.map((step) => step.kind)).toEqual([
+      "transaction",
       "signature",
       "signature",
-      "call",
+      "transaction",
     ]);
-    expect(prepared.callRequests.map((request) => request.id)).toEqual([
+    expect(prepared.transactionSteps.map((step) => step.id)).toEqual([
       "request-0",
       "primary",
     ]);
-    expect(prepared.callRequests.map((request) => request.phase)).toEqual([
+    expect(prepared.transactionSteps.map((step) => step.phase)).toEqual([
       "preparation",
       "primary",
     ]);
+    expect(prepared.requirements.map((request) => request.action.type)).toEqual(
+      ["erc20Approval", "permit2", "authorization"],
+    );
+    expect(Object.isFrozen(prepared.requirements)).toBe(true);
+    expect(prepared.primaryStep?.transaction).toBe(primaryTx);
+    expect(prepared.primaryTransaction).toBe(primaryTx);
+    expect(prepared.calls).toEqual([
+      { to: TOKEN, value: 0n, data: "0xa1" },
+      { to: BUNDLER, value: 0n, data: "0xf1" },
+    ]);
     expect(prepared.signatureRequests).toHaveLength(2);
-    expect(prepared.requestCount).toBe(4);
+    expect(prepared.stepCount).toBe(4);
     expect(prepared.hasIntent("tokenApproval")).toBe(true);
     expect(prepared.hasIntent("operatorAuthorization")).toBe(true);
     expect(prepared.hasIntent("primaryTransaction")).toBe(true);
@@ -178,10 +188,10 @@ describe("TransactionPlan", () => {
     ]);
   });
 
-  test("behavior: builds ordered call requests only after requested signatures are provided", async () => {
+  test("behavior: builds ordered transaction steps only after requested signatures are provided", async () => {
     const permit = permitRequest();
     const authorization = authorizationRequest();
-    const buildPrimaryCall = vi.fn(
+    const buildPrimaryTransaction = vi.fn(
       (_signatures?: readonly RequirementSignature[]) => primaryTx,
     );
     const plan = TransactionPlan.create<VaultV2DepositAction>({
@@ -190,7 +200,7 @@ describe("TransactionPlan", () => {
         permit,
         authorization,
       ]),
-      buildPrimaryCall,
+      buildPrimaryTransaction,
     });
 
     const prepared = await plan.prepare();
@@ -207,16 +217,17 @@ describe("TransactionPlan", () => {
       authorizationSignature,
     ]);
 
-    expect(buildPrimaryCall).toHaveBeenCalledWith([
+    expect(buildPrimaryTransaction).toHaveBeenCalledWith([
       permitSignature,
       authorizationSignature,
     ]);
-    expect(executable.callRequests.map((request) => request.id)).toEqual([
+    expect(executable.transactionSteps.map((step) => step.id)).toEqual([
       "request-0",
       "primary",
     ]);
-    expect(executable.callRequests.at(-1)?.tx).toBe(primaryTx);
-    expect(executable.viemCalls).toEqual([
+    expect(executable.primaryStep.transaction).toBe(primaryTx);
+    expect(executable.primaryTransaction).toBe(primaryTx);
+    expect(executable.calls).toEqual([
       { to: TOKEN, value: 0n, data: "0xa1" },
       { to: BUNDLER, value: 0n, data: "0xf1" },
     ]);
@@ -230,43 +241,55 @@ describe("TransactionPlan", () => {
       | Requirement<typeof permitSignature>
     >({
       getRequirementRequests: vi.fn(async () => [approvalTx, permitRequest()]),
-      buildPrimaryCall: vi.fn(() => primaryTx),
+      buildPrimaryTransaction: vi.fn(() => primaryTx),
     });
 
     const prepared = await plan.prepare();
     type Prepared = typeof prepared;
     type SignatureRequest = Prepared["signatureRequests"][number];
-    type PreparationCall = Extract<
-      Prepared["callRequests"][number],
+    type PreparationTransactionStep = Extract<
+      Prepared["transactionSteps"][number],
       { readonly phase: "preparation" }
     >;
     type Executable = ReturnType<Prepared["build"]>;
-    type PrimaryCall = Extract<
-      Executable["callRequests"][number],
+    type PrimaryTransactionStep = Extract<
+      Executable["transactionSteps"][number],
       { readonly phase: "primary" }
     >;
 
+    expectTypeOf<Prepared["requirements"][number]>().toEqualTypeOf<
+      | Readonly<Transaction<ERC20ApprovalAction>>
+      | Requirement<typeof permitSignature>
+    >();
+    expectTypeOf<Prepared["primaryTransaction"]>().toEqualTypeOf<
+      Readonly<Transaction<VaultV2DepositAction>> | undefined
+    >();
+    expectTypeOf<Executable["primaryTransaction"]>().toEqualTypeOf<
+      Readonly<Transaction<VaultV2DepositAction>>
+    >();
     expectTypeOf<SignatureRequest["request"]>().toEqualTypeOf<
       Requirement<typeof permitSignature>
     >();
     expectTypeOf<ReturnType<SignatureRequest["sign"]>>().toEqualTypeOf<
       Promise<typeof permitSignature>
     >();
-    expectTypeOf<PreparationCall["tx"]>().toEqualTypeOf<
+    expectTypeOf<PreparationTransactionStep["transaction"]>().toEqualTypeOf<
       Readonly<Transaction<ERC20ApprovalAction>>
     >();
-    expectTypeOf<PrimaryCall["action"]>().toEqualTypeOf<VaultV2DepositAction>();
+    expectTypeOf<
+      PrimaryTransactionStep["action"]
+    >().toEqualTypeOf<VaultV2DepositAction>();
   });
 
-  test("behavior: requirement call requests keep authorization intent separate from token approval", async () => {
+  test("behavior: requirement transaction steps keep authorization intent separate from token approval", async () => {
     const plan = TransactionPlan.create<VaultV2DepositAction>({
       getRequirementRequests: vi.fn(async () => [authorizationTx]),
-      buildPrimaryCall: vi.fn(() => primaryTx),
+      buildPrimaryTransaction: vi.fn(() => primaryTx),
     });
 
     const prepared = await plan.prepare();
 
-    expect(prepared.flowKind).toBe("call_requests");
+    expect(prepared.flowKind).toBe("transaction_steps");
     expect(
       prepared
         .findIntent("operatorAuthorization")
@@ -282,45 +305,48 @@ describe("TransactionPlan", () => {
     expect(prepared.findIntent("tokenApproval")).toEqual([]);
   });
 
-  test("behavior: a non-previewable primary call appears after build", async () => {
+  test("behavior: a non-previewable primary step appears after build", async () => {
     const plan = TransactionPlan.create<VaultV2DepositAction>({
       getRequirementRequests: vi.fn(async () => [permitRequest()]),
-      previewPrimaryCall: false,
-      buildPrimaryCall: vi.fn(() => primaryTx),
+      previewPrimaryTransaction: false,
+      buildPrimaryTransaction: vi.fn(() => primaryTx),
     });
 
     const prepared = await plan.prepare();
 
-    expect(prepared.flowKind).toBe("signature_requests");
-    expect(prepared.callRequests).toEqual([]);
+    expect(prepared.flowKind).toBe("signature_steps");
+    expect(prepared.primaryStep).toBeUndefined();
+    expect(prepared.primaryTransaction).toBeUndefined();
+    expect(prepared.calls).toEqual([]);
+    expect(prepared.transactionSteps).toEqual([]);
     expect(prepared.steps.map((request) => request.id)).toEqual(["request-0"]);
 
     const executable = prepared.build([permitSignature]);
 
-    expect(executable.callRequests.at(-1)?.tx).toBe(primaryTx);
-    expect(executable.callRequests.map((request) => request.id)).toEqual([
+    expect(executable.primaryTransaction).toBe(primaryTx);
+    expect(executable.transactionSteps.map((step) => step.id)).toEqual([
       "primary",
     ]);
   });
 
-  test("behavior: a handler without requirement requests is a single call", async () => {
+  test("behavior: a handler without requirement requests is a single transaction", async () => {
     const plan = TransactionPlan.create<VaultV2DepositAction>({
-      buildPrimaryCall: vi.fn(() => primaryTx),
+      buildPrimaryTransaction: vi.fn(() => primaryTx),
     });
 
     const prepared = await plan.prepare();
     const executable = prepared.build();
 
-    expect(prepared.flowKind).toBe("single_call");
-    expect(prepared.requestCount).toBe(1);
+    expect(prepared.flowKind).toBe("single_transaction");
+    expect(prepared.stepCount).toBe(1);
     expect(prepared.signatureRequests).toEqual([]);
-    expect(prepared.callRequests.map((request) => request.id)).toEqual([
+    expect(prepared.transactionSteps.map((step) => step.id)).toEqual([
       "primary",
     ]);
-    expect(executable.callRequests.map((request) => request.id)).toEqual([
+    expect(executable.transactionSteps.map((step) => step.id)).toEqual([
       "primary",
     ]);
-    expect(executable.viemCalls).toEqual([
+    expect(executable.calls).toEqual([
       { to: BUNDLER, value: 0n, data: "0xf1" },
     ]);
   });

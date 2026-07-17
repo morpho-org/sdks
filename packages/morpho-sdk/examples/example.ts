@@ -54,9 +54,8 @@ async function main() {
     vaultData,
   });
   const preparedDeposit = await deposit.prepare();
-  const depositCall = preparedDeposit.callRequests.at(-1);
-  if (depositCall == null) throw new Error("Deposit call is unavailable");
-  const depositTx = depositCall.tx;
+  const depositTx = preparedDeposit.primaryTransaction;
+  if (depositTx == null) throw new Error("Deposit transaction is unavailable");
 
   console.log("Deposit transaction:", {
     to: depositTx.to,
@@ -66,7 +65,7 @@ async function main() {
 
   // Get requests (e.g., ERC20 approval or permit signature)
   console.log("\n📋 Checking requests...");
-  console.log(`Found ${preparedDeposit.requestCount} request(s)`);
+  console.log(`Found ${preparedDeposit.stepCount} request(s)`);
   preparedDeposit.steps.forEach((request, index) => {
     console.log(`  Request ${index + 1}:`, request);
   });
@@ -79,8 +78,9 @@ async function main() {
     userAddress: USER_ADDRESS,
   });
   const preparedWithdraw = await withdraw.prepare();
-  const withdrawTx = preparedWithdraw.callRequests.at(-1)?.tx;
-  if (withdrawTx == null) throw new Error("Withdraw call is unavailable");
+  const withdrawTx = preparedWithdraw.primaryTransaction;
+  if (withdrawTx == null)
+    throw new Error("Withdraw transaction is unavailable");
 
   console.log("Withdraw transaction:", {
     to: withdrawTx.to,
@@ -96,8 +96,8 @@ async function main() {
     userAddress: USER_ADDRESS,
   });
   const preparedRedeem = await redeem.prepare();
-  const redeemTx = preparedRedeem.callRequests.at(-1)?.tx;
-  if (redeemTx == null) throw new Error("Redeem call is unavailable");
+  const redeemTx = preparedRedeem.primaryTransaction;
+  if (redeemTx == null) throw new Error("Redeem transaction is unavailable");
 
   console.log("Redeem transaction:", {
     to: redeemTx.to,

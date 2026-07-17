@@ -10,7 +10,6 @@ import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
 import { KeyrockUsdcVaultV2 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
-import { buildPlanTx, getPlanRequests } from "../../transactionPlanUtils.js";
 
 describe("MigrateToV2 VaultV1", () => {
   test("should migrate full USDC position from V1 to V2", async ({
@@ -50,7 +49,7 @@ describe("MigrateToV2 VaultV1", () => {
           shares,
         });
 
-        const requirements = await getPlanRequests(migrate);
+        const requirements = (await migrate.prepare()).requirements;
 
         expect(requirements.length).toBe(1);
 
@@ -64,7 +63,7 @@ describe("MigrateToV2 VaultV1", () => {
 
         await client.sendTransaction(approveTx);
 
-        const tx = await buildPlanTx(migrate);
+        const tx = (await migrate.prepare()).build().primaryTransaction;
         await client.sendTransaction(tx);
       },
     });
@@ -121,7 +120,7 @@ describe("MigrateToV2 VaultV1", () => {
           shares,
         });
 
-        const requirements = await getPlanRequests(migrate);
+        const requirements = (await migrate.prepare()).requirements;
 
         if (!isRequirementSignature(requirements[0])) {
           throw new Error("Requirement is not a signature requirement");
@@ -143,7 +142,9 @@ describe("MigrateToV2 VaultV1", () => {
           BigInt(Math.floor(Date.now() / 1000)),
         );
 
-        const tx = await buildPlanTx(migrate, [requirementSignature]);
+        const tx = (await migrate.prepare()).build([
+          requirementSignature,
+        ]).primaryTransaction;
         await client.sendTransaction(tx);
       },
     });

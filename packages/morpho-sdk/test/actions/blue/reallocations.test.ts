@@ -26,7 +26,6 @@ import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
 import { supplyCollateral } from "../../helpers/blue.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
-import { buildPlanTx, getPlanRequests } from "../../transactionPlanUtils.js";
 
 /** PublicAllocator admin for the Steakhouse vault at the fork block. */
 const PA_ADMIN: Address = "0x9E9110cFd24cd851ea5bc73a27975B33E308f9e1";
@@ -80,14 +79,14 @@ describe("Borrow with single vault reallocation (e2e)", () => {
           reallocations,
         });
 
-        const requirements = await getPlanRequests(borrow);
+        const requirements = (await borrow.prepare()).requirements;
         const authorization = requirements[0];
         if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
 
-        const tx = await buildPlanTx(borrow);
+        const tx = (await borrow.prepare()).build().primaryTransaction;
         expect(tx.value).toBe(0n);
         expect(tx.action.args.reallocationFee).toBe(0n);
 
@@ -165,14 +164,14 @@ describe("Borrow with multiple source market withdrawals", () => {
           reallocations,
         });
 
-        const requirements = await getPlanRequests(borrow);
+        const requirements = (await borrow.prepare()).requirements;
         const authorization = requirements[0];
         if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
 
-        const tx = await buildPlanTx(borrow);
+        const tx = (await borrow.prepare()).build().primaryTransaction;
         expect(tx.value).toBe(0n);
 
         await client.sendTransaction(tx);
@@ -266,14 +265,14 @@ describe("Borrow with reallocation fee", () => {
           reallocations,
         });
 
-        const requirements = await getPlanRequests(borrow);
+        const requirements = (await borrow.prepare()).requirements;
         const authorization = requirements[0];
         if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
 
-        const tx = await buildPlanTx(borrow);
+        const tx = (await borrow.prepare()).build().primaryTransaction;
         expect(tx.value).toBe(reallocationFee);
         expect(tx.action.args.reallocationFee).toBe(reallocationFee);
 
@@ -356,7 +355,7 @@ describe("SupplyCollateralBorrow with single vault reallocation", () => {
           reallocations,
         });
 
-        const requirements = await getPlanRequests(scb);
+        const requirements = (await scb.prepare()).requirements;
         const approval = requirements[0];
         if (!isRequirementApproval(approval)) {
           throw new Error("Approval requirement not found");
@@ -369,7 +368,7 @@ describe("SupplyCollateralBorrow with single vault reallocation", () => {
         await client.sendTransaction(approval);
         await client.sendTransaction(authorization);
 
-        const tx = await buildPlanTx(scb);
+        const tx = (await scb.prepare()).build().primaryTransaction;
         expect(tx.value).toBe(0n);
         expect(tx.action.args.reallocationFee).toBe(0n);
 
@@ -450,7 +449,7 @@ describe("SupplyCollateralBorrow with multiple source market withdrawals", () =>
           reallocations,
         });
 
-        const requirements = await getPlanRequests(scb);
+        const requirements = (await scb.prepare()).requirements;
         const approval = requirements[0];
         if (!isRequirementApproval(approval)) {
           throw new Error("Approval requirement not found");
@@ -463,7 +462,7 @@ describe("SupplyCollateralBorrow with multiple source market withdrawals", () =>
         await client.sendTransaction(approval);
         await client.sendTransaction(authorization);
 
-        const tx = await buildPlanTx(scb);
+        const tx = (await scb.prepare()).build().primaryTransaction;
         expect(tx.value).toBe(0n);
 
         await client.sendTransaction(tx);
@@ -563,7 +562,7 @@ describe("SupplyCollateralBorrow with reallocation fee", () => {
           reallocations,
         });
 
-        const requirements = await getPlanRequests(scb);
+        const requirements = (await scb.prepare()).requirements;
         const approval = requirements[0];
         if (!isRequirementApproval(approval)) {
           throw new Error("Approval requirement not found");
@@ -576,7 +575,7 @@ describe("SupplyCollateralBorrow with reallocation fee", () => {
         await client.sendTransaction(approval);
         await client.sendTransaction(authorization);
 
-        const tx = await buildPlanTx(scb);
+        const tx = (await scb.prepare()).build().primaryTransaction;
         expect(tx.value).toBe(reallocationFee);
         expect(tx.action.args.reallocationFee).toBe(reallocationFee);
 
@@ -693,14 +692,14 @@ describe("getReallocationData and getReallocations", () => {
           reallocations,
         });
 
-        const requirements = await getPlanRequests(borrow);
+        const requirements = (await borrow.prepare()).requirements;
         const authorization = requirements[0];
         if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
 
-        const tx = await buildPlanTx(borrow);
+        const tx = (await borrow.prepare()).build().primaryTransaction;
         await client.sendTransaction(tx);
       },
     });
@@ -763,7 +762,7 @@ describe("getReallocationData and getReallocations", () => {
           reallocations,
         });
 
-        const requirements = await getPlanRequests(scb);
+        const requirements = (await scb.prepare()).requirements;
         const approval = requirements[0];
         if (!isRequirementApproval(approval)) {
           throw new Error("Approval requirement not found");
@@ -776,7 +775,7 @@ describe("getReallocationData and getReallocations", () => {
         await client.sendTransaction(approval);
         await client.sendTransaction(authorization);
 
-        const tx = await buildPlanTx(scb);
+        const tx = (await scb.prepare()).build().primaryTransaction;
         await client.sendTransaction(tx);
       },
     });

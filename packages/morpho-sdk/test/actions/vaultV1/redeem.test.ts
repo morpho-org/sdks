@@ -8,7 +8,6 @@ import {
 import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
-import { buildPlanTx, getPlanRequests } from "../../transactionPlanUtils.js";
 
 describe("Redeem VaultV1", () => {
   test("should redeem 1K shares in vaultV1", async ({ client }) => {
@@ -37,7 +36,7 @@ describe("Redeem VaultV1", () => {
           userAddress: client.account.address,
           shares,
         });
-        const tx = await buildPlanTx(redeem);
+        const tx = (await redeem.prepare()).build().primaryTransaction;
 
         await client.sendTransaction(tx);
       },
@@ -86,13 +85,15 @@ describe("Redeem VaultV1", () => {
           amount: depositAmount,
           vaultData,
         });
-        const requirements = await getPlanRequests(deposit);
+        const requirements = (await deposit.prepare()).requirements;
         const approveTx = requirements[0];
         if (!isRequirementApproval(approveTx)) {
           throw new Error("Approve transaction not found");
         }
         await client.sendTransaction(approveTx);
-        await client.sendTransaction(await buildPlanTx(deposit));
+        await client.sendTransaction(
+          (await deposit.prepare()).build().primaryTransaction,
+        );
 
         const shares = await client.balanceOf({
           erc20: SteakhouseUsdcVaultV1.address,
@@ -102,7 +103,9 @@ describe("Redeem VaultV1", () => {
           userAddress: client.account.address,
           shares,
         });
-        await client.sendTransaction(await buildPlanTx(redeem));
+        await client.sendTransaction(
+          (await redeem.prepare()).build().primaryTransaction,
+        );
       },
     });
 
@@ -146,7 +149,9 @@ describe("Redeem VaultV1", () => {
           userAddress: client.account.address,
           shares: redeemShares,
         });
-        await client.sendTransaction(await buildPlanTx(redeem));
+        await client.sendTransaction(
+          (await redeem.prepare()).build().primaryTransaction,
+        );
       },
     });
 

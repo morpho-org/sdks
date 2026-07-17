@@ -15,7 +15,6 @@ import {
 import { testInvariants } from "../../helpers/invariants.js";
 import { createVaultV2 } from "../../helpers/vaultV2.js";
 import { test } from "../../setup.js";
-import { buildPlanTx, getPlanRequests } from "../../transactionPlanUtils.js";
 
 describe("Permit2", () => {
   const {
@@ -59,7 +58,7 @@ describe("Permit2", () => {
           vaultData,
         });
 
-        const requirements = await getPlanRequests(deposit);
+        const requirements = (await deposit.prepare()).requirements;
 
         // USDT may require two signature requirements (reset approval permit2 + approve permit2 + set allowance)
         expect(requirements.length).toBe(3);
@@ -102,7 +101,9 @@ describe("Permit2", () => {
           BigInt(Math.floor(Date.now() / 1000)),
         );
 
-        const tx = await buildPlanTx(deposit, [requirementSignature]);
+        const tx = (await deposit.prepare()).build([
+          requirementSignature,
+        ]).primaryTransaction;
 
         await client.sendTransaction(tx);
       },
@@ -149,7 +150,7 @@ describe("Permit2", () => {
           vaultData,
         });
 
-        const requirements = await getPlanRequests(deposit);
+        const requirements = (await deposit.prepare()).requirements;
 
         // USDT may require two signature requirements (approve permit2 + set allowance)
         expect(requirements.length).toBe(2);
@@ -180,7 +181,9 @@ describe("Permit2", () => {
           BigInt(Math.floor(Date.now() / 1000)),
         );
 
-        const tx = await buildPlanTx(deposit, [requirementSignature]);
+        const tx = (await deposit.prepare()).build([
+          requirementSignature,
+        ]).primaryTransaction;
 
         await client.sendTransaction(tx);
       },
@@ -234,7 +237,7 @@ describe("Permit2", () => {
           vaultData,
         });
 
-        const requirements = await getPlanRequests(deposit);
+        const requirements = (await deposit.prepare()).requirements;
 
         expect(requirements.length).toBe(2);
 
@@ -273,7 +276,8 @@ describe("Permit2", () => {
         );
 
         await client.sendTransaction(
-          await buildPlanTx(deposit, [requirementSignature]),
+          (await deposit.prepare()).build([requirementSignature])
+            .primaryTransaction,
         );
       },
     });
@@ -329,7 +333,7 @@ describe("Permit2", () => {
           vaultData,
         });
 
-        const requirements = await getPlanRequests(deposit);
+        const requirements = (await deposit.prepare()).requirements;
 
         expect(requirements.length).toBe(2);
 
@@ -367,7 +371,9 @@ describe("Permit2", () => {
           BigInt(Math.floor(Date.now() / 1000)),
         );
 
-        const tx = await buildPlanTx(deposit, [requirementSignature]);
+        const tx = (await deposit.prepare()).build([
+          requirementSignature,
+        ]).primaryTransaction;
 
         await client.sendTransaction(tx);
       },
@@ -414,9 +420,13 @@ describe("Permit2", () => {
           vaultData,
         });
 
-        const requirements = await getPlanRequests(deposit, {
-          useSimplePermit: false,
-        });
+        const requirements = (
+          await deposit.prepare({
+            requestOptions: {
+              useSimplePermit: false,
+            },
+          })
+        ).requirements;
 
         expect(requirements.length).toBe(2);
 
@@ -454,7 +464,9 @@ describe("Permit2", () => {
           BigInt(Math.floor(Date.now() / 1000)),
         );
 
-        const tx = await buildPlanTx(deposit, [requirementSignature]);
+        const tx = (await deposit.prepare()).build([
+          requirementSignature,
+        ]).primaryTransaction;
 
         await client.sendTransaction(tx);
       },

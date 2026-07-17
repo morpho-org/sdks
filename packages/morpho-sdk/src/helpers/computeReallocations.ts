@@ -145,7 +145,7 @@ const capVaultWithdrawals = (
  *   positionData,
  *   reallocations,
  * });
- * // borrow.prepare().build().callRequests includes any required PublicAllocator reallocations.
+ * // borrow.prepare().build().transactionSteps includes any required PublicAllocator reallocations.
  * ```
  */
 export const computeReallocations = ({

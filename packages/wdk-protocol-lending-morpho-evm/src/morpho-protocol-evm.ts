@@ -53,7 +53,6 @@ import {
   zeroAddress,
 } from "viem";
 import { arbitrum, base, mainnet, optimism, polygon } from "viem/chains";
-import { MissingTransactionPlanCallError } from "./errors.js";
 import {
   type MarketPresetKey,
   MORPHO_MARKET_PRESETS,
@@ -410,13 +409,7 @@ async function getTransactionPlanRequests<
   const prepared = await plan.prepare(
     requestOptions === undefined ? undefined : { requestOptions },
   );
-  const requests: TRequest[] = [];
-  for (const request of prepared.steps) {
-    if (request.kind === "call" && request.phase === "primary") continue;
-    requests.push(request.kind === "signature" ? request.request : request.tx);
-  }
-
-  return requests;
+  return [...prepared.requirements];
 }
 
 async function getTransactionPlanTx<
@@ -429,11 +422,7 @@ async function getTransactionPlanTx<
   signatures?: TSignatures,
 ): Promise<WdkTransaction> {
   const executable = (await plan.prepare()).build(signatures);
-  const primaryCall = executable.callRequests.at(-1);
-  if (primaryCall == null) {
-    throw new MissingTransactionPlanCallError();
-  }
-  return toWdkTransaction(primaryCall.tx);
+  return toWdkTransaction(executable.primaryTransaction);
 }
 
 /**
