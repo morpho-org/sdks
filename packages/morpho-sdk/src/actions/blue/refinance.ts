@@ -7,17 +7,13 @@ import {
   type AuthorizationRequirementSignature,
   type BlueRefinanceAction,
   type Metadata,
-  NegativeBorrowSharesError,
-  NegativeMaxRepaySharePriceError,
-  NonPositiveAssetAmountError,
-  NonPositiveMinBorrowSharePriceError,
-  NonPositiveRepayMaxSharePriceError,
+  NegativeInputError,
+  NonPositiveInputError,
   RefinanceSameMarketError,
   RefinanceSharesMissingBorrowAssetsError,
   RefinanceTokenMismatchError,
   type Transaction,
   type VaultReallocation,
-  ZeroCollateralAmountError,
 } from "../../types/index.js";
 import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
 import { buildReallocationActions } from "./buildReallocationActions.js";
@@ -113,18 +109,14 @@ export interface BlueRefinanceParams {
  * @returns A deep-frozen `Transaction<BlueRefinanceAction>`.
  * @remarks `borrowAssets` and `borrowShares` describe different markets (target borrow vs. source
  * repay); in shares mode the entity passes both. Caller-facing mutual exclusivity is enforced at the entity layer.
- * @throws {ZeroCollateralAmountError} when `collateralAmount <= 0n`.
- * @throws {NonPositiveAssetAmountError} when `borrowAssets < 0n`.
- * @throws {NegativeBorrowSharesError} when `borrowShares < 0n`.
- * @throws {NonPositiveMinBorrowSharePriceError} when `minBorrowSharePrice < 0n`.
- * @throws {NegativeMaxRepaySharePriceError} when `maxRepaySharePrice < 0n`.
+ * @throws {NonPositiveInputError} when `collateralAmount <= 0n`, a repay leg has a non-positive
+ *   `maxRepaySharePrice`, or any reallocation withdrawal amount is non-positive.
+ * @throws {NegativeInputError} when `borrowAssets`, `borrowShares`, `minBorrowSharePrice`,
+ *   `maxRepaySharePrice`, or any reallocation fee is negative.
  * @throws {RefinanceSameMarketError} when source and target market ids are equal.
  * @throws {RefinanceTokenMismatchError} when source and target do not share both tokens.
  * @throws {RefinanceSharesMissingBorrowAssetsError} when `borrowShares > 0n` but `borrowAssets` is omitted or non-positive.
- * @throws {NonPositiveRepayMaxSharePriceError} when a repay leg is encoded and `maxRepaySharePrice <= 0n`.
- * @throws {NegativeReallocationFeeError} when any `reallocation.fee < 0n`.
  * @throws {EmptyReallocationWithdrawalsError} when any `reallocation.withdrawals` is empty.
- * @throws {NonPositiveReallocationAmountError} when any `reallocation.withdrawals[i].amount <= 0n`.
  * @throws {ReallocationWithdrawalOnTargetMarketError} when a reallocation withdrawal references the target market.
  * @throws {UnsortedReallocationWithdrawalsError} when reallocation withdrawals are not strictly sorted by market id.
  * @example
@@ -162,23 +154,23 @@ export const blueRefinance = ({
   metadata,
 }: BlueRefinanceParams): Readonly<Transaction<BlueRefinanceAction>> => {
   if (collateralAmount <= 0n) {
-    throw new ZeroCollateralAmountError(sourceParams.id);
+    throw new NonPositiveInputError("collateralAmount", collateralAmount);
   }
 
   if (borrowAssets < 0n) {
-    throw new NonPositiveAssetAmountError(sourceParams.loanToken);
+    throw new NegativeInputError("borrowAssets", borrowAssets);
   }
 
   if (borrowShares < 0n) {
-    throw new NegativeBorrowSharesError(sourceParams.id);
+    throw new NegativeInputError("borrowShares", borrowShares);
   }
 
   if (minBorrowSharePrice < 0n) {
-    throw new NonPositiveMinBorrowSharePriceError(targetParams.id);
+    throw new NegativeInputError("minBorrowSharePrice", minBorrowSharePrice);
   }
 
   if (maxRepaySharePrice < 0n) {
-    throw new NegativeMaxRepaySharePriceError(sourceParams.id);
+    throw new NegativeInputError("maxRepaySharePrice", maxRepaySharePrice);
   }
 
   if (sourceParams.id === targetParams.id) {
@@ -209,7 +201,7 @@ export const blueRefinance = ({
 
   // A repay leg with maxRepaySharePrice = 0n always reverts; require a positive cap when debt is migrated.
   if (shouldMigrateBorrow && maxRepaySharePrice <= 0n) {
-    throw new NonPositiveRepayMaxSharePriceError(sourceParams.id);
+    throw new NonPositiveInputError("maxRepaySharePrice", maxRepaySharePrice);
   }
 
   const callback: Action[] = [];

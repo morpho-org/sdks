@@ -10,8 +10,8 @@ import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
 import { test } from "../../../test/setup.js";
 import {
   MutuallyExclusiveWithdrawAmountsError,
-  NegativeWithdrawMinSharePriceError,
-  NonPositiveWithdrawAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   type VaultReallocation,
 } from "../../types/index.js";
 import { blueWithdraw } from "./withdraw.js";
@@ -85,7 +85,7 @@ describe("blueWithdraw unit tests", () => {
     expect(tx.action.args.receiver).toBe(receiver);
   });
 
-  test("should throw NonPositiveWithdrawAmountError when both assets and shares are zero", async ({
+  test("should throw NonPositiveInputError when both assets and shares are zero", async ({
     client,
   }) => {
     expect(() =>
@@ -98,10 +98,10 @@ describe("blueWithdraw unit tests", () => {
           minSharePrice: 0n,
         },
       }),
-    ).toThrow(NonPositiveWithdrawAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NonPositiveWithdrawAmountError when assets is negative", async ({
+  test("should throw NegativeInputError when assets is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -114,10 +114,10 @@ describe("blueWithdraw unit tests", () => {
           minSharePrice: 0n,
         },
       }),
-    ).toThrow(NonPositiveWithdrawAmountError);
+    ).toThrow(NegativeInputError);
   });
 
-  test("should throw NonPositiveWithdrawAmountError when shares is negative", async ({
+  test("should throw NegativeInputError when shares is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -130,7 +130,7 @@ describe("blueWithdraw unit tests", () => {
           minSharePrice: 0n,
         },
       }),
-    ).toThrow(NonPositiveWithdrawAmountError);
+    ).toThrow(NegativeInputError);
   });
 
   test("should throw MutuallyExclusiveWithdrawAmountsError when both assets and shares are non-zero", async ({
@@ -167,7 +167,7 @@ describe("blueWithdraw unit tests", () => {
     ).toThrow(MutuallyExclusiveWithdrawAmountsError);
   });
 
-  test("should throw NegativeWithdrawMinSharePriceError when minSharePrice is negative", async ({
+  test("should throw NegativeInputError when minSharePrice is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -180,7 +180,7 @@ describe("blueWithdraw unit tests", () => {
           minSharePrice: -1n,
         },
       }),
-    ).toThrow(NegativeWithdrawMinSharePriceError);
+    ).toThrow(NegativeInputError);
   });
 
   test("should return a deep-frozen transaction object", async ({ client }) => {

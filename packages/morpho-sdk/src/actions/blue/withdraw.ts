@@ -8,8 +8,8 @@ import {
   type BlueWithdrawAction,
   type Metadata,
   MutuallyExclusiveWithdrawAmountsError,
-  NegativeWithdrawMinSharePriceError,
-  NonPositiveWithdrawAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   type Transaction,
   type VaultReallocation,
 } from "../../types/index.js";
@@ -80,14 +80,16 @@ export interface BlueWithdrawParams {
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueWithdrawAction>` with `to`, `value`, `data`, and
  *   the typed `action` discriminator the simulation layer consumes.
- * @throws {NonPositiveWithdrawAmountError} when both `assets` and `shares` are zero, or either is negative.
+ * @throws {NegativeInputError} when `assets`, `shares`, `minSharePrice`, or any reallocation fee
+ *   is negative.
+ * @throws {NonPositiveInputError} when both `assets` and `shares` are zero or any reallocation
+ *   withdrawal amount is non-positive.
  * @throws {MutuallyExclusiveWithdrawAmountsError} when both `assets` and `shares` are non-zero.
- * @throws {NegativeWithdrawMinSharePriceError} when `minSharePrice < 0n` (zero is allowed despite
- *   the class name — pattern preserved for symmetry with `blueBorrow`).
- * @throws Reallocation errors from `buildReallocationActions` when `reallocations` is malformed
- *   (see its JSDoc: `NegativeReallocationFeeError`, `EmptyReallocationWithdrawalsError`,
- *   `NonPositiveReallocationAmountError`, `ReallocationWithdrawalOnTargetMarketError`,
- *   `UnsortedReallocationWithdrawalsError`).
+ * @throws {EmptyReallocationWithdrawalsError} when any reallocation has no withdrawals.
+ * @throws {ReallocationWithdrawalOnTargetMarketError} when a reallocation withdrawal references
+ *   the target market.
+ * @throws {UnsortedReallocationWithdrawalsError} when reallocation withdrawals are not strictly
+ *   sorted by market id.
  * @example
  * ```ts
  * import { blueWithdraw } from "@morpho-org/morpho-sdk";
@@ -123,12 +125,18 @@ export const blueWithdraw = ({
     throw new MutuallyExclusiveWithdrawAmountsError(marketParams.id);
   }
 
-  if (assets < 0n || shares < 0n || (assets === 0n && shares === 0n)) {
-    throw new NonPositiveWithdrawAmountError(marketParams.id);
+  if (assets < 0n) {
+    throw new NegativeInputError("assets", assets);
+  }
+  if (shares < 0n) {
+    throw new NegativeInputError("shares", shares);
+  }
+  if (assets === 0n && shares === 0n) {
+    throw new NonPositiveInputError("assets or shares", 0n);
   }
 
   if (minSharePrice < 0n) {
-    throw new NegativeWithdrawMinSharePriceError(marketParams.id);
+    throw new NegativeInputError("minSharePrice", minSharePrice);
   }
 
   const actions: Action[] = [];

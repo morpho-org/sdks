@@ -1,9 +1,8 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
 import {
   MutuallyExclusiveRepayAmountsError,
-  NegativeNativeAmountError,
-  NonPositiveRepayAmountError,
-  NonPositiveRepayMaxSharePriceError,
+  NegativeInputError,
+  NonPositiveInputError,
   TransferAmountNotEqualToAssetsError,
 } from "../../types/index.js";
 
@@ -66,11 +65,8 @@ export interface RepayFunding {
  * @param marketId - Market id used to tag the thrown errors.
  * @returns `{ isSharesMode, repayAssets, repayShares, erc20Amount }` — the mode discriminator and the
  *   amounts the repay builders assemble the bundle from.
- * @throws {NonPositiveRepayMaxSharePriceError} when `maxSharePrice <= 0n`.
- * @throws {NegativeNativeAmountError} when `nativeAmount < 0n`.
- * @throws {NonPositiveRepayAmountError} when `amount` or `shares` is negative, when in assets mode and
- *   the repaid assets are `<= 0n`, or when in shares mode and `transferAmount` is negative or the total
- *   funding (`transferAmount + nativeAmount`) is `<= 0n`.
+ * @throws {NonPositiveInputError} when `maxSharePrice <= 0n` or total repay funding is zero.
+ * @throws {NegativeInputError} when `amount`, `shares`, `nativeAmount`, or `transferAmount` is negative.
  * @throws {MutuallyExclusiveRepayAmountsError} when both `amount` and `shares` are `> 0n`.
  * @throws {TransferAmountNotEqualToAssetsError} when in assets mode and
  *   `transferAmount !== amount + nativeAmount`.
@@ -87,13 +83,16 @@ export const resolveRepayFunding = (
   marketId: MarketId,
 ): RepayFunding => {
   if (maxSharePrice <= 0n) {
-    throw new NonPositiveRepayMaxSharePriceError(marketId);
+    throw new NonPositiveInputError("maxSharePrice", maxSharePrice);
   }
   if (nativeAmount < 0n) {
-    throw new NegativeNativeAmountError(nativeAmount);
+    throw new NegativeInputError("nativeAmount", nativeAmount);
   }
-  if (amount < 0n || shares < 0n) {
-    throw new NonPositiveRepayAmountError(marketId);
+  if (amount < 0n) {
+    throw new NegativeInputError("amount", amount);
+  }
+  if (shares < 0n) {
+    throw new NegativeInputError("shares", shares);
   }
   if (amount > 0n && shares > 0n) {
     throw new MutuallyExclusiveRepayAmountsError(marketId);
@@ -114,8 +113,14 @@ export const resolveRepayFunding = (
   // ERC-20 (0 on a fully-native repay) and wraps `nativeAmount`; the bundle must
   // fund the repay with a non-negative transfer and a positive total.
   if (isSharesMode) {
-    if (transferAmount < 0n || transferAmount + nativeAmount <= 0n) {
-      throw new NonPositiveRepayAmountError(marketId);
+    if (transferAmount < 0n) {
+      throw new NegativeInputError("transferAmount", transferAmount);
+    }
+    if (transferAmount + nativeAmount <= 0n) {
+      throw new NonPositiveInputError(
+        "transferAmount + nativeAmount",
+        transferAmount + nativeAmount,
+      );
     }
   } else {
     if (transferAmount !== amount + nativeAmount) {
@@ -126,7 +131,7 @@ export const resolveRepayFunding = (
       });
     }
     if (repayAssets <= 0n) {
-      throw new NonPositiveRepayAmountError(marketId);
+      throw new NonPositiveInputError("amount + nativeAmount", repayAssets);
     }
   }
 

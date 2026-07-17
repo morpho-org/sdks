@@ -7,12 +7,10 @@ import {
   type BlueSupplyAction,
   type DepositAmountArgs,
   type Metadata,
-  NegativeNativeAmountError,
-  NegativeSupplyAmountError,
-  NegativeSupplyMaxSharePriceError,
+  NegativeInputError,
+  NonPositiveInputError,
   type PermitRequirementSignature,
   type Transaction,
-  ZeroSupplyAmountError,
 } from "../../types/index.js";
 import { buildAssetFundingActions } from "./buildAssetFundingActions.js";
 
@@ -56,10 +54,8 @@ export interface BlueSupplyParams {
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueSupplyAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator the simulation layer consumes.
- * @throws {NegativeSupplyAmountError} when `amount < 0n`.
- * @throws {NegativeNativeAmountError} when `nativeAmount < 0n`.
- * @throws {ZeroSupplyAmountError} when both `amount` and `nativeAmount` resolve to zero.
- * @throws {NegativeSupplyMaxSharePriceError} when `maxSharePrice < 0n`.
+ * @throws {NegativeInputError} when `amount`, `nativeAmount`, or `maxSharePrice` is negative.
+ * @throws {NonPositiveInputError} when both `amount` and `nativeAmount` resolve to zero.
  * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
  * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the loan token is not
  *   the chain's wNative.
@@ -94,21 +90,21 @@ export const blueSupply = ({
   metadata,
 }: BlueSupplyParams): Readonly<Transaction<BlueSupplyAction>> => {
   if (amount < 0n) {
-    throw new NegativeSupplyAmountError(marketParams.id);
+    throw new NegativeInputError("amount", amount);
   }
 
   if (nativeAmount !== undefined && nativeAmount < 0n) {
-    throw new NegativeNativeAmountError(nativeAmount);
+    throw new NegativeInputError("nativeAmount", nativeAmount);
   }
 
   if (maxSharePrice < 0n) {
-    throw new NegativeSupplyMaxSharePriceError(marketParams.id);
+    throw new NegativeInputError("maxSharePrice", maxSharePrice);
   }
 
   const totalAssets = amount + (nativeAmount ?? 0n);
 
   if (totalAssets === 0n) {
-    throw new ZeroSupplyAmountError(marketParams.id);
+    throw new NonPositiveInputError("totalAssets", totalAssets);
   }
 
   const actions: Action[] = buildAssetFundingActions({

@@ -12,8 +12,8 @@ import {
   isRequirementApproval,
   isRequirementBlueAuthorization,
   morphoViemExtension,
-  NegativeReallocationFeeError,
-  NonPositiveReallocationAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   ReallocationWithdrawalOnTargetMarketError,
 } from "../../../src/index.js";
 import type { VaultReallocation } from "../../../src/types/index.js";
@@ -818,7 +818,7 @@ describe("getReallocationData and getReallocations", () => {
 
 describe("Reallocation validation errors", () => {
   describe("blueBorrow", () => {
-    test("should throw NegativeReallocationFeeError for negative fee", async () => {
+    test("should throw NegativeInputError for negative fee", () => {
       expect(() =>
         blueBorrow({
           market: { chainId: mainnet.id, marketParams: CbbtcUsdcBlue },
@@ -840,7 +840,7 @@ describe("Reallocation validation errors", () => {
             ],
           },
         }),
-      ).toThrow(NegativeReallocationFeeError);
+      ).toThrow(NegativeInputError);
     });
 
     test("should throw EmptyReallocationWithdrawalsError for empty withdrawals", async () => {
@@ -863,7 +863,7 @@ describe("Reallocation validation errors", () => {
       ).toThrow(EmptyReallocationWithdrawalsError);
     });
 
-    test("should throw NonPositiveReallocationAmountError for zero withdrawal amount", async () => {
+    test("should throw NonPositiveInputError for zero withdrawal amount", () => {
       expect(() =>
         blueBorrow({
           market: { chainId: mainnet.id, marketParams: CbbtcUsdcBlue },
@@ -882,10 +882,10 @@ describe("Reallocation validation errors", () => {
             ],
           },
         }),
-      ).toThrow(NonPositiveReallocationAmountError);
+      ).toThrow(NonPositiveInputError);
     });
 
-    test("should throw NonPositiveReallocationAmountError for negative withdrawal amount", async () => {
+    test("should throw NonPositiveInputError for negative withdrawal amount", () => {
       expect(() =>
         blueBorrow({
           market: { chainId: mainnet.id, marketParams: CbbtcUsdcBlue },
@@ -904,7 +904,7 @@ describe("Reallocation validation errors", () => {
             ],
           },
         }),
-      ).toThrow(NonPositiveReallocationAmountError);
+      ).toThrow(NonPositiveInputError);
     });
 
     test("should throw ReallocationWithdrawalOnTargetMarketError when withdrawal includes a market with borrow", async () => {
@@ -934,7 +934,7 @@ describe("Reallocation validation errors", () => {
   });
 
   describe("blueSupplyCollateralBorrow", () => {
-    test("should throw NegativeReallocationFeeError for negative fee", async () => {
+    test("should throw NegativeInputError for negative fee", () => {
       expect(() =>
         blueSupplyCollateralBorrow({
           market: { chainId: mainnet.id, marketParams: CbbtcUsdcBlue },
@@ -958,7 +958,7 @@ describe("Reallocation validation errors", () => {
             ],
           },
         }),
-      ).toThrow(NegativeReallocationFeeError);
+      ).toThrow(NegativeInputError);
     });
 
     test("should throw EmptyReallocationWithdrawalsError for empty withdrawals", async () => {
@@ -983,7 +983,7 @@ describe("Reallocation validation errors", () => {
       ).toThrow(EmptyReallocationWithdrawalsError);
     });
 
-    test("should throw NonPositiveReallocationAmountError for zero withdrawal amount", async () => {
+    test("should throw NonPositiveInputError for zero withdrawal amount", () => {
       expect(() =>
         blueSupplyCollateralBorrow({
           market: { chainId: mainnet.id, marketParams: CbbtcUsdcBlue },
@@ -1004,10 +1004,10 @@ describe("Reallocation validation errors", () => {
             ],
           },
         }),
-      ).toThrow(NonPositiveReallocationAmountError);
+      ).toThrow(NonPositiveInputError);
     });
 
-    test("should throw NonPositiveReallocationAmountError for negative withdrawal amount", async () => {
+    test("should throw NonPositiveInputError for negative withdrawal amount", () => {
       expect(() =>
         blueSupplyCollateralBorrow({
           market: { chainId: mainnet.id, marketParams: CbbtcUsdcBlue },
@@ -1028,7 +1028,7 @@ describe("Reallocation validation errors", () => {
             ],
           },
         }),
-      ).toThrow(NonPositiveReallocationAmountError);
+      ).toThrow(NonPositiveInputError);
     });
 
     test("should throw ReallocationWithdrawalOnTargetMarketError when withdrawal includes a market with borrow", async () => {

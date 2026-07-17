@@ -6,10 +6,7 @@ import {
   encodeFunctionData,
   type Hex,
 } from "viem";
-import {
-  type Deallocation,
-  NonPositiveAssetAmountError,
-} from "../types/index.js";
+import { type Deallocation, NonPositiveInputError } from "../types/index.js";
 
 /**
  * Encodes the adapter-specific `data` bytes for a `forceDeallocate` call.
@@ -31,13 +28,17 @@ function encodeDeallocateData(deallocation: Deallocation): Hex {
  * @param deallocation - A deallocation entry.
  * @param onBehalf - The address from which the penalty is taken (share owner).
  * @returns The ABI-encoded calldata for `VaultV2.forceDeallocate`.
+ * @throws {NonPositiveInputError} when `deallocation.amount <= 0n`.
  */
 export function encodeForceDeallocateCall(
   deallocation: Deallocation,
   onBehalf: Address,
 ): Hex {
   if (deallocation.amount <= 0n) {
-    throw new NonPositiveAssetAmountError(deallocation.adapter);
+    throw new NonPositiveInputError(
+      `deallocation[${deallocation.adapter}].amount`,
+      deallocation.amount,
+    );
   }
 
   const data = encodeDeallocateData(deallocation);

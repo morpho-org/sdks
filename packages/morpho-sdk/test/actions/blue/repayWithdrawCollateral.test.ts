@@ -11,8 +11,7 @@ import {
   isRequirementBlueAuthorization,
   MissingAccrualPositionError,
   morphoViemExtension,
-  NonPositiveRepayAmountError,
-  NonPositiveWithdrawCollateralAmountError,
+  NonPositiveInputError,
   RepayExceedsDebtError,
   ShareDivideByZeroError,
   WithdrawMakesPositionUnhealthyError,
@@ -661,7 +660,7 @@ describe("RepayWithdrawCollateralBlue", () => {
         withdrawAmount: parseUnits("1", 18),
         positionData,
       }),
-    ).toThrow(NonPositiveRepayAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
   test("should throw when withdraw amount is non-positive", async ({
@@ -694,7 +693,7 @@ describe("RepayWithdrawCollateralBlue", () => {
         withdrawAmount: 0n,
         positionData,
       }),
-    ).toThrow(NonPositiveWithdrawCollateralAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
   test("should revert when positionData is not provided", async ({

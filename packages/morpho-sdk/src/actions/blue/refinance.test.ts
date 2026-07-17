@@ -3,17 +3,13 @@ import { type Address, maxUint256, parseUnits, toFunctionSelector } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
-  NegativeBorrowSharesError,
-  NegativeMaxRepaySharePriceError,
-  NonPositiveAssetAmountError,
-  NonPositiveMinBorrowSharePriceError,
-  NonPositiveRepayMaxSharePriceError,
+  NegativeInputError,
+  NonPositiveInputError,
   ReallocationWithdrawalOnTargetMarketError,
   RefinanceSameMarketError,
   RefinanceSharesMissingBorrowAssetsError,
   RefinanceTokenMismatchError,
   type VaultReallocation,
-  ZeroCollateralAmountError,
 } from "../../types/index.js";
 import { blueRefinance } from "./refinance.js";
 
@@ -199,64 +195,64 @@ describe("blueRefinance", () => {
     expect(txCollatOnly.data.toLowerCase()).not.toContain(skimSelector);
   });
 
-  test("error: ZeroCollateralAmountError when collateralAmount === 0n", () => {
+  test("error: NonPositiveInputError when collateralAmount === 0n", () => {
     expect(() =>
       blueRefinance({
         source: { chainId: mainnet.id, marketParams: source },
         target: { marketParams: target },
         args: { ...baseArgs, collateralAmount: 0n },
       }),
-    ).toThrow(ZeroCollateralAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("error: ZeroCollateralAmountError when collateralAmount is negative", () => {
+  test("error: NonPositiveInputError when collateralAmount is negative", () => {
     expect(() =>
       blueRefinance({
         source: { chainId: mainnet.id, marketParams: source },
         target: { marketParams: target },
         args: { ...baseArgs, collateralAmount: -1n },
       }),
-    ).toThrow(ZeroCollateralAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("error: NonPositiveAssetAmountError when borrowAssets is negative", () => {
+  test("error: NegativeInputError when borrowAssets is negative", () => {
     expect(() =>
       blueRefinance({
         source: { chainId: mainnet.id, marketParams: source },
         target: { marketParams: target },
         args: { ...baseArgs, borrowAssets: -1n },
       }),
-    ).toThrow(NonPositiveAssetAmountError);
+    ).toThrow(NegativeInputError);
   });
 
-  test("error: NegativeBorrowSharesError when borrowShares is negative", () => {
+  test("error: NegativeInputError when borrowShares is negative", () => {
     expect(() =>
       blueRefinance({
         source: { chainId: mainnet.id, marketParams: source },
         target: { marketParams: target },
         args: { ...baseArgs, borrowShares: -1n },
       }),
-    ).toThrow(NegativeBorrowSharesError);
+    ).toThrow(NegativeInputError);
   });
 
-  test("error: NonPositiveMinBorrowSharePriceError when minBorrowSharePrice is negative", () => {
+  test("error: NegativeInputError when minBorrowSharePrice is negative", () => {
     expect(() =>
       blueRefinance({
         source: { chainId: mainnet.id, marketParams: source },
         target: { marketParams: target },
         args: { ...baseArgs, minBorrowSharePrice: -1n },
       }),
-    ).toThrow(NonPositiveMinBorrowSharePriceError);
+    ).toThrow(NegativeInputError);
   });
 
-  test("error: NegativeMaxRepaySharePriceError when maxRepaySharePrice is negative", () => {
+  test("error: NegativeInputError when maxRepaySharePrice is negative", () => {
     expect(() =>
       blueRefinance({
         source: { chainId: mainnet.id, marketParams: source },
         target: { marketParams: target },
         args: { ...baseArgs, maxRepaySharePrice: -1n },
       }),
-    ).toThrow(NegativeMaxRepaySharePriceError);
+    ).toThrow(NegativeInputError);
   });
 
   test("error: RefinanceSameMarketError when source.id === target.id", () => {
@@ -303,7 +299,7 @@ describe("blueRefinance", () => {
     ).toThrow(RefinanceTokenMismatchError);
   });
 
-  test("error: NonPositiveRepayMaxSharePriceError when debt is migrated with zero maxRepaySharePrice", () => {
+  test("error: NonPositiveInputError when debt is migrated with zero maxRepaySharePrice", () => {
     expect(() =>
       blueRefinance({
         source: { chainId: mainnet.id, marketParams: source },
@@ -314,7 +310,7 @@ describe("blueRefinance", () => {
           maxRepaySharePrice: 0n,
         },
       }),
-    ).toThrow(NonPositiveRepayMaxSharePriceError);
+    ).toThrow(NonPositiveInputError);
   });
 
   test("behavior: collat-only refinance accepts zero maxRepaySharePrice", () => {

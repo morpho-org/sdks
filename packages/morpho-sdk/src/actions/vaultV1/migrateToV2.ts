@@ -5,9 +5,8 @@ import { type Action, BundlerAction } from "../../bundler/index.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   type Metadata,
-  NegativeMinSharePriceError,
-  NonPositiveMaxSharePriceError,
-  NonPositiveSharesAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   type PermitRequirementSignature,
   type Transaction,
   VaultAssetMismatchError,
@@ -72,9 +71,8 @@ export interface VaultV1MigrateToV2Params {
  * @returns A deep-frozen `Transaction<VaultV1MigrateToV2Action>` with `to`, `value`, `data`, and
  *   the typed `action` discriminator the simulation layer consumes.
  * @throws {VaultAssetMismatchError} when `targetAsset` differs from `vault.asset`.
- * @throws {NonPositiveSharesAmountError} when `shares <= 0n`.
- * @throws {NegativeMinSharePriceError} when `minSharePriceVaultV1 < 0n`.
- * @throws {NonPositiveMaxSharePriceError} when `maxSharePriceVaultV2 <= 0n`.
+ * @throws {NonPositiveInputError} when `shares <= 0n` or `maxSharePriceVaultV2 <= 0n`.
+ * @throws {NegativeInputError} when `minSharePriceVaultV1 < 0n`.
  * @throws {DepositAssetMismatchError} from `getTokenRequirementActions` when `requirementSignature`
  *   is provided and the signed asset differs from `vault.address` (the V1 share token).
  * @throws {DepositAmountMismatchError} from `getTokenRequirementActions` when `requirementSignature`
@@ -121,15 +119,18 @@ export const vaultV1MigrateToV2 = ({
   }
 
   if (shares <= 0n) {
-    throw new NonPositiveSharesAmountError(sourceVault);
+    throw new NonPositiveInputError("shares", shares);
   }
 
   if (minSharePriceVaultV1 < 0n) {
-    throw new NegativeMinSharePriceError(sourceVault);
+    throw new NegativeInputError("minSharePriceVaultV1", minSharePriceVaultV1);
   }
 
   if (maxSharePriceVaultV2 <= 0n) {
-    throw new NonPositiveMaxSharePriceError(targetVault);
+    throw new NonPositiveInputError(
+      "maxSharePriceVaultV2",
+      maxSharePriceVaultV2,
+    );
   }
 
   const {

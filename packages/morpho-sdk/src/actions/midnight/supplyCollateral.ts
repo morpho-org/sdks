@@ -10,7 +10,7 @@ import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js"
 import {
   type Metadata,
   type MidnightSupplyCollateralAction,
-  NonPositiveMidnightAmountError,
+  NonPositiveInputError,
   type Transaction,
 } from "../../types/index.js";
 
@@ -39,7 +39,7 @@ export interface MidnightSupplyCollateralParams {
  * @param params.onBehalf - Account whose collateral balance increases.
  * @param params.metadata - Optional analytics metadata appended to calldata.
  * @returns A deep-frozen `Transaction<MidnightSupplyCollateralAction>` targeting `Midnight`.
- * @throws {NonPositiveMidnightAmountError} when `assets <= 0n`.
+ * @throws {NonPositiveInputError} when `assets <= 0n`.
  * @throws {ChainIdMismatchError} when the market targets another chain.
  * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
  * @throws {UnknownCollateralIndexError} when `collateralIndex` is not configured on the market.
@@ -60,7 +60,7 @@ export const midnightSupplyCollateral = (
   params: MidnightSupplyCollateralParams,
 ): Readonly<Transaction<MidnightSupplyCollateralAction>> => {
   if (params.assets <= 0n) {
-    throw new NonPositiveMidnightAmountError("assets", params.assets);
+    throw new NonPositiveInputError("assets", params.assets);
   }
 
   // Reject markets from another chain deployment before encoding the call.

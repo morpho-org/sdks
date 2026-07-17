@@ -67,9 +67,9 @@ import {
   type MidnightTakeLendAction,
   MissingAccrualPositionError,
   MissingMidnightOfferRootSignatureError,
-  NegativeMidnightAmountError,
+  NegativeInputError,
   NoMidnightCreditToRedeemError,
-  NonPositiveMidnightAmountError,
+  NonPositiveInputError,
   selectRequirementSignatures,
   UnknownMidnightRatifierError,
   UnpreparedMidnightOfferRootSignatureError,
@@ -141,11 +141,11 @@ export type MidnightActions = Pick<
 >;
 
 const assertNonNegativeAmount = (label: string, amount: bigint) => {
-  if (amount < 0n) throw new NegativeMidnightAmountError(label, amount);
+  if (amount < 0n) throw new NegativeInputError(label, amount);
 };
 
 const assertPositiveAmount = (label: string, amount: bigint) => {
-  if (amount <= 0n) throw new NonPositiveMidnightAmountError(label, amount);
+  if (amount <= 0n) throw new NonPositiveInputError(label, amount);
 };
 
 const validateMarketData = (market: Market, chainId: number) => {
@@ -374,8 +374,8 @@ export class MorphoMidnight {
    * @returns Lazy approval/authorization requirements and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain.
    * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
-   * @throws {NonPositiveMidnightAmountError} when `assets` is non-positive.
-   * @throws {NegativeMidnightAmountError} when `minUnits` or `deadline` is negative.
+   * @throws {NonPositiveInputError} when `assets` is non-positive.
+   * @throws {NegativeInputError} when `minUnits` or `deadline` is negative.
    * @throws {EmptyMidnightTakeableOffersError} when no offers are supplied.
    * @throws {MidnightOfferSideMismatchError} when an offer has the wrong maker side.
    * @throws {MidnightTakeableOfferMarketMismatchError} when an offer targets another market.
@@ -462,8 +462,8 @@ export class MorphoMidnight {
    * @returns Lazy authorization requirements and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain.
    * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
-   * @throws {NonPositiveMidnightAmountError} when `loanAssets` or `maxUnits` is non-positive.
-   * @throws {NegativeMidnightAmountError} when `deadline` is negative.
+   * @throws {NonPositiveInputError} when `loanAssets` or `maxUnits` is non-positive.
+   * @throws {NegativeInputError} when `deadline` is negative.
    * @throws {EmptyMidnightTakeableOffersError} when no offers are supplied.
    * @throws {MidnightOfferSideMismatchError} when an offer has the wrong maker side.
    * @throws {MidnightTakeableOfferMarketMismatchError} when an offer targets another market.
@@ -543,8 +543,8 @@ export class MorphoMidnight {
    * @returns Lazy collateral approval/authorization requirements and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain.
    * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
-   * @throws {NonPositiveMidnightAmountError} when collateral, loan assets, or `maxUnits` is non-positive.
-   * @throws {NegativeMidnightAmountError} when `deadline` is negative.
+   * @throws {NonPositiveInputError} when collateral, loan assets, or `maxUnits` is non-positive.
+   * @throws {NegativeInputError} when `deadline` is negative.
    * @throws {UnknownCollateralIndexError} when the selected collateral is not configured.
    * @throws {EmptyMidnightTakeableOffersError} when no offers are supplied.
    * @throws {MidnightOfferSideMismatchError} when an offer has the wrong maker side.
@@ -637,8 +637,8 @@ export class MorphoMidnight {
    * @returns Lazy token-approval requirements and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain.
    * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
-   * @throws {NonPositiveMidnightAmountError} when `collateralAssets` is non-positive.
-   * @throws {NegativeMidnightAmountError} when `reservedCollateralAssets` is negative.
+   * @throws {NonPositiveInputError} when `collateralAssets` is non-positive.
+   * @throws {NegativeInputError} when `reservedCollateralAssets` is negative.
    * @throws {UnknownCollateralIndexError} when the selected collateral is not configured.
    * @example
    * ```ts
@@ -708,8 +708,8 @@ export class MorphoMidnight {
    * @returns Prepared group metadata and a lazy transaction plan for the mempool submission flow.
    * @throws {ChainIdMismatchError} when the client targets another chain.
    * @throws {MidnightOfferMarketAddressMismatchError} when an offer targets another Midnight deployment.
-   * @throws {NonPositiveMidnightAmountError} when `loanAssets` is non-positive.
-   * @throws {NegativeMidnightAmountError} when `reservedLoanAssets` is negative.
+   * @throws {NonPositiveInputError} when `loanAssets` is non-positive.
+   * @throws {NegativeInputError} when `reservedLoanAssets` is negative.
    * @throws {MidnightOfferSideMismatchError} when an offer is not lend-side.
    * @throws {MidnightOfferMarketLoanTokenMismatchError} when an offer uses another loan token.
    * @example
@@ -833,8 +833,8 @@ export class MorphoMidnight {
    * @returns Prepared group metadata, lazy supply/ratifier requirements, and a synchronous mempool transaction builder.
    * @throws {ChainIdMismatchError} when the client targets another chain.
    * @throws {MidnightMarketAddressMismatchError} when the market targets another Midnight deployment.
-   * @throws {NonPositiveMidnightAmountError} when `collateralAssets` is non-positive.
-   * @throws {NegativeMidnightAmountError} when `reservedCollateralAssets` is negative.
+   * @throws {NonPositiveInputError} when `collateralAssets` is non-positive.
+   * @throws {NegativeInputError} when `reservedCollateralAssets` is negative.
    * @throws {UnknownCollateralIndexError} when the selected collateral is not configured.
    * @throws {MidnightOfferSideMismatchError} when an offer is not borrow-side.
    * @throws {MarketIdMismatchError} when an offer targets another market.
@@ -962,6 +962,9 @@ export class MorphoMidnight {
     const market = params.positionData.market;
     validateMarketData(market, this.chainId);
     const units = params.units ?? params.positionData.faceValue;
+    if (params.units !== undefined && units <= 0n) {
+      throw new NonPositiveInputError("units", units);
+    }
     if (units <= 0n) throw new NoMidnightCreditToRedeemError(market.id);
     if (params.positionData.credit < units) {
       throw new MidnightRedeemExceedsCreditError({
@@ -1009,8 +1012,8 @@ export class MorphoMidnight {
    * @returns Lazy loan approval/authorization requirements and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when client or market data targets another chain.
    * @throws {MidnightMarketAddressMismatchError} when market data targets another Midnight deployment.
-   * @throws {NegativeMidnightAmountError} when an amount, index, or deadline is negative.
-   * @throws {NonPositiveMidnightAmountError} when both repay and withdrawal amounts are zero.
+   * @throws {NegativeInputError} when an amount, index, or deadline is negative.
+   * @throws {NonPositiveInputError} when both repay and withdrawal amounts are zero.
    * @throws {UnknownCollateralIndexError} when a positive withdrawal selects an unconfigured collateral.
    * @example
    * ```ts
@@ -1056,7 +1059,7 @@ export class MorphoMidnight {
       params.repayAssets === 0n &&
       collateralWithdrawals.every((withdrawal) => withdrawal.assets === 0n)
     ) {
-      throw new NonPositiveMidnightAmountError("repay or withdraw amount", 0n);
+      throw new NonPositiveInputError("repay or withdraw amount", 0n);
     }
 
     const midnightBundles = getChainAddress(this.chainId, "midnightBundles");

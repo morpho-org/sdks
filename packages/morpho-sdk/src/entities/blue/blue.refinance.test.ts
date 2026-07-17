@@ -17,15 +17,14 @@ import {
   BorrowAmountAndSharesExclusiveError,
   BorrowExceedsSafeLtvError,
   ChainIdMismatchError,
-  NegativeBorrowSharesError,
-  NonPositiveAssetAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   RefinanceExceedsBorrowAssetsError,
   RefinanceExceedsBorrowSharesError,
   RefinanceExceedsCollateralError,
   RefinanceSameMarketError,
   RefinanceTokenMismatchError,
   type VaultReallocation,
-  ZeroCollateralAmountError,
 } from "../../types/index.js";
 
 const USER: Address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -96,7 +95,7 @@ const makeMarket = () => {
 };
 
 describe("MorphoBlue.refinance", () => {
-  test("error: ZeroCollateralAmountError when collateralAmount is zero", async () => {
+  test("error: NonPositiveInputError when collateralAmount is zero", () => {
     const market = makeMarket();
     const positionData = makePosition({
       market: baseMarket(sourceParams),
@@ -116,7 +115,7 @@ describe("MorphoBlue.refinance", () => {
         target: { marketParams: targetParams, positionData: targetPosition },
         collateralAmount: 0n,
       }),
-    ).toThrow(ZeroCollateralAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
   test("error: ChainIdMismatchError when client.chain.id !== entity.chainId", async () => {
@@ -400,7 +399,7 @@ describe("MorphoBlue.refinance", () => {
     expect(tx.action.args.borrowShares).toBe(0n);
   });
 
-  test("error: NonPositiveAssetAmountError when borrowAssets is negative", async () => {
+  test("error: NegativeInputError when borrowAssets is negative", () => {
     const market = makeMarket();
     const positionData = makePosition({
       market: baseMarket(sourceParams),
@@ -421,10 +420,10 @@ describe("MorphoBlue.refinance", () => {
         collateralAmount: parseUnits("0.1", 18),
         borrowAssets: -1n,
       }),
-    ).toThrow(NonPositiveAssetAmountError);
+    ).toThrow(NegativeInputError);
   });
 
-  test("error: NegativeBorrowSharesError when borrowShares is negative", async () => {
+  test("error: NegativeInputError when borrowShares is negative", () => {
     const market = makeMarket();
     const positionData = makePosition({
       market: baseMarket(sourceParams),
@@ -445,7 +444,7 @@ describe("MorphoBlue.refinance", () => {
         collateralAmount: parseUnits("0.1", 18),
         borrowShares: -1n,
       }),
-    ).toThrow(NegativeBorrowSharesError);
+    ).toThrow(NegativeInputError);
   });
 
   test("behavior: collat-only refinance skips target health validation (no oracle required)", async () => {

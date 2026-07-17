@@ -147,8 +147,8 @@ Bundle:
   otherwise mask into a positive sum), `repayAssets = amount + nativeAmount`, `validateRepayAmount`,
   `erc20Amount = amount`.
 - **shares mode:** `validateRepayShares`, `borrowAssets = toBorrowAssets(shares, "Up")` on the
-  2h-accrued market, guard `nativeAmount <= borrowAssets` (`NativeAmountExceedsTransferAmountError`),
-  `erc20Amount = borrowAssets − nativeAmount`.
+  2h-accrued market, `erc20Amount = max(borrowAssets − nativeAmount, 0)`. Native may cover or exceed
+  the accrued borrow assets; the bundle pulls no ERC-20 and skims residual wrapped native.
 - `getRequirements` emits the ERC-20 approval/permit for the pulled portion only (`erc20Amount`), and
   returns `[]` for that leg when `erc20Amount === 0n` (a fully-native repay needs no approval).
 - Native wrapping requires `loanToken === chain wNative`; `validateNativeAsset(chainId, loanToken)`
@@ -159,18 +159,18 @@ Bundle:
 The old `transferAmount === assets` invariant is false under additive native wrapping. Rather than a
 complex pure resolver, the amounts are derived **inline in the entity** — which already holds live
 state — and the action trusts them. This honours root `AGENTS.md` §1 (actions are arithmetic-free)
-and keeps the logic minimal. `NonPositiveTransferAmountError` is **retained as exported API but no
-longer thrown** (`@deprecated`), per §7's no-silent-removals rule. `TransferAmountNotEqualToAssetsError`
+and keeps the logic minimal. `NonPositiveTransferAmountError` remained exported but deprecated
+throughout v5 and is removed in v6 after that deprecation window. `TransferAmountNotEqualToAssetsError`
 is retained and **still thrown**: it now guards the assets-mode action funding invariant
-(`transferAmount === amount + nativeAmount`, see below). A new exported
-`NativeAmountExceedsTransferAmountError` covers the shares-mode carve-out.
+(`transferAmount === amount + nativeAmount`, see below). The briefly introduced
+`NativeAmountExceedsTransferAmountError` is also removed in v6 because shares-mode native funding
+may exceed the accrued borrow assets and the residual is returned to the receiver.
 
 ### Implementation phases
 
 - **Phase 1 — Types + errors.** Flat `RepayActionAmountArgs`; redefine `RepayAmountArgs`;
-  `nativeAmount?` on both action output types; add `NativeAmountExceedsTransferAmountError`; deprecate
-  `NonPositiveTransferAmountError`; repurpose `TransferAmountNotEqualToAssetsError` as the assets-mode
-  action funding guard.
+  `nativeAmount?` on both action output types; deprecate `NonPositiveTransferAmountError`; repurpose
+  `TransferAmountNotEqualToAssetsError` as the assets-mode action funding guard.
 - **Phase 2 — Actions.** Native wrap block + arithmetic-free reconstruction + guards in `repay.ts`
   and `repayWithdrawCollateral.ts`; remove `validateRepayParams` and its barrel exports.
 - **Phase 3 — Entity.** Inline amount resolution + guards in `MorphoBlue.repay` /

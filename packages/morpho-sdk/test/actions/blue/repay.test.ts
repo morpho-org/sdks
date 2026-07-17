@@ -10,7 +10,7 @@ import {
   isRequirementApproval,
   MissingAccrualPositionError,
   morphoViemExtension,
-  NonPositiveRepayAmountError,
+  NonPositiveInputError,
   RepayExceedsDebtError,
   RepaySharesExceedDebtError,
   ShareDivideByZeroError,
@@ -699,7 +699,7 @@ describe("RepayBlue", () => {
         amount: 0n,
         positionData,
       }),
-    ).toThrow(NonPositiveRepayAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
   test("should revert when positionData is not provided", async ({

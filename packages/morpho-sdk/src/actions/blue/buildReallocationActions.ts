@@ -9,15 +9,14 @@ import type { VaultReallocation } from "../../types/index.js";
  * Validates the reallocations, then encodes each as a `reallocateTo` action against the target
  * market. Returns `{ actions: [], fee: 0n }` for an empty input — callers gate on
  * `reallocations.length > 0` and skip the call entirely in that case. Internal helper —
- * consumed only by `blueBorrow` and `blueSupplyCollateralBorrow`; not re-exported on the
- * public surface.
+ * consumed by the Blue actions that accept reallocations; not re-exported on the public surface.
  *
  * @param reallocations - The vault reallocations to encode.
  * @param targetMarketParams - The target market params the freed liquidity is destined for.
  * @returns The encoded `reallocateTo` actions and the summed reallocation fee in native tokens.
- * @throws {NegativeReallocationFeeError} when any reallocation fee is negative.
+ * @throws {NegativeInputError} when any reallocation fee is negative.
  * @throws {EmptyReallocationWithdrawalsError} when any reallocation has no withdrawals.
- * @throws {NonPositiveReallocationAmountError} when any withdrawal amount is non-positive.
+ * @throws {NonPositiveInputError} when any withdrawal amount is non-positive.
  * @throws {ReallocationWithdrawalOnTargetMarketError} when a withdrawal references the target market.
  * @throws {UnsortedReallocationWithdrawalsError} when withdrawals within a reallocation are not
  *   strictly sorted by market id.

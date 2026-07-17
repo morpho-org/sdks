@@ -8,9 +8,8 @@ import {
   isRequirementApproval,
   isRequirementSignature,
   NativeAmountOnNonWNativeAssetError,
-  NegativeNativeAmountError,
-  NonPositiveAssetAmountError,
-  ZeroCollateralAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
 } from "../../types/index.js";
 import { getGeneralAdapterRequirements } from "../requirements/index.js";
 import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
@@ -184,7 +183,7 @@ describe("blueSupplyCollateral unit tests", () => {
     expect(localSpy).toHaveBeenCalled();
   });
 
-  test("should throw NonPositiveAssetAmountError when amount is negative", async ({
+  test("should throw NegativeInputError when amount is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -198,10 +197,10 @@ describe("blueSupplyCollateral unit tests", () => {
           onBehalf: client.account.address,
         },
       }),
-    ).toThrow(NonPositiveAssetAmountError);
+    ).toThrow(NegativeInputError);
   });
 
-  test("should throw ZeroCollateralAmountError when total collateral is zero", async ({
+  test("should throw NonPositiveInputError when total collateral is zero", async ({
     client,
   }) => {
     expect(() =>
@@ -215,10 +214,10 @@ describe("blueSupplyCollateral unit tests", () => {
           onBehalf: client.account.address,
         },
       }),
-    ).toThrow(ZeroCollateralAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NegativeNativeAmountError when nativeAmount is negative", async ({
+  test("should throw NegativeInputError when nativeAmount is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -232,7 +231,7 @@ describe("blueSupplyCollateral unit tests", () => {
           onBehalf: client.account.address,
         },
       }),
-    ).toThrow(NegativeNativeAmountError);
+    ).toThrow(NegativeInputError);
   });
 
   test("should throw NativeAmountOnNonWNativeAssetError for non-wNative collateral", async ({

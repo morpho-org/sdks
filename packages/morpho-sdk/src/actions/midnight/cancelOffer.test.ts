@@ -7,7 +7,7 @@ import {
 } from "../../../test/fixtures/midnight.js";
 import {
   MidnightAmountExceedsMaxOfferCapError,
-  NegativeMidnightAmountError,
+  NegativeInputError,
 } from "../../types/index.js";
 import { midnightCancelOffer } from "./cancelOffer.js";
 
@@ -46,7 +46,7 @@ describe("midnightCancelOffer", () => {
     expect(tx.data.endsWith("a1b2c3d4")).toBe(true);
   });
 
-  test("error: NegativeMidnightAmountError", () => {
+  test("error: NegativeInputError", () => {
     expect(() =>
       midnightCancelOffer({
         chainId: midnightChainId,
@@ -55,7 +55,7 @@ describe("midnightCancelOffer", () => {
         amount: -1n,
         onBehalf: midnightAddresses.taker,
       }),
-    ).toThrow(NegativeMidnightAmountError);
+    ).toThrow(NegativeInputError);
   });
 
   test("error: MidnightAmountExceedsMaxOfferCapError", () => {

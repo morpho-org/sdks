@@ -14,9 +14,8 @@ import {
   DepositAssetMismatchError,
   isRequirementApproval,
   isRequirementSignature,
-  NonPositiveAssetAmountError,
-  NonPositiveMaxSharePriceError,
-  ZeroDepositAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
 } from "../../types/index.js";
 import { getGeneralAdapterRequirements } from "../requirements/index.js";
 import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
@@ -283,7 +282,7 @@ describe("depositVaultV2 unit tests", () => {
     ).toThrow(DepositAmountMismatchError);
   });
 
-  test("should throw NonPositiveAssetAmountError when assets is negative", async ({
+  test("should throw NegativeInputError when assets is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -299,7 +298,7 @@ describe("depositVaultV2 unit tests", () => {
           recipient: client.account.address,
         },
       }),
-    ).toThrow(NonPositiveAssetAmountError);
+    ).toThrow(NegativeInputError);
   });
 
   test("should create deposit bundle without requirement signature", async ({
@@ -339,7 +338,7 @@ describe("depositVaultV2 unit tests", () => {
     expect(tx.value).toBe(0n);
   });
 
-  test("should throw ZeroDepositAmountError when assets and nativeAmount are both zero", async ({
+  test("should throw NonPositiveInputError when assets and nativeAmount are both zero", async ({
     client,
   }) => {
     expect(() =>
@@ -355,10 +354,10 @@ describe("depositVaultV2 unit tests", () => {
           recipient: client.account.address,
         },
       }),
-    ).toThrow(ZeroDepositAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NonPositiveMaxSharePriceError when maxSharePrice is zero", async ({
+  test("should throw NonPositiveInputError when maxSharePrice is zero", async ({
     client,
   }) => {
     expect(() =>
@@ -374,10 +373,10 @@ describe("depositVaultV2 unit tests", () => {
           recipient: client.account.address,
         },
       }),
-    ).toThrow(NonPositiveMaxSharePriceError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NonPositiveMaxSharePriceError when maxSharePrice is negative", async ({
+  test("should throw NonPositiveInputError when maxSharePrice is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -393,7 +392,7 @@ describe("depositVaultV2 unit tests", () => {
           recipient: client.account.address,
         },
       }),
-    ).toThrow(NonPositiveMaxSharePriceError);
+    ).toThrow(NonPositiveInputError);
   });
 
   test("should throw ChainWNativeMissingError when nativeAmount is used on a chain without wNative", async ({

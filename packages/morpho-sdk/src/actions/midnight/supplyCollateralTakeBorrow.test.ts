@@ -12,11 +12,12 @@ import {
   midnightOtherMarket,
 } from "../../../test/fixtures/midnight.js";
 import {
+  ChainIdMismatchError,
   EmptyMidnightTakeableOffersError,
   MidnightOfferSideMismatchError,
   MidnightTakeableOfferMarketMismatchError,
-  NegativeMidnightAmountError,
-  NonPositiveMidnightAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
 } from "../../types/index.js";
 import { midnightSupplyCollateralTakeBorrow } from "./supplyCollateralTakeBorrow.js";
 import { PermitKind } from "./types.js";
@@ -76,7 +77,7 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
     expect(tx.data.endsWith("a1b2c3d4")).toBe(true);
   });
 
-  test("error: NonPositiveMidnightAmountError", () => {
+  test("error: NonPositiveInputError", () => {
     const params = {
       chainId: midnightChainId,
       market: midnightMarket,
@@ -93,13 +94,13 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
         ...params,
         collateralAssets: 0n,
       }),
-    ).toThrow(NonPositiveMidnightAmountError);
+    ).toThrow(NonPositiveInputError);
     expect(() =>
       midnightSupplyCollateralTakeBorrow({ ...params, loanAssets: 0n }),
-    ).toThrow(NonPositiveMidnightAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("error: NegativeMidnightAmountError", () => {
+  test("error: NonPositiveInputError for maxUnits", () => {
     const params = {
       chainId: midnightChainId,
       market: midnightMarket,
@@ -113,13 +114,25 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
 
     expect(() =>
       midnightSupplyCollateralTakeBorrow({ ...params, maxUnits: 0n }),
-    ).toThrow(NonPositiveMidnightAmountError);
+    ).toThrow(NonPositiveInputError);
     expect(() =>
       midnightSupplyCollateralTakeBorrow({ ...params, maxUnits: -1n }),
-    ).toThrow(NonPositiveMidnightAmountError);
+    ).toThrow(NonPositiveInputError);
+  });
+
+  test("error: NegativeInputError", () => {
     expect(() =>
-      midnightSupplyCollateralTakeBorrow({ ...params, deadline: -1n }),
-    ).toThrow(NegativeMidnightAmountError);
+      midnightSupplyCollateralTakeBorrow({
+        chainId: midnightChainId,
+        market: midnightMarket,
+        collateralAssets: 2_000n,
+        loanAssets: 1_000n,
+        maxUnits: 1_100n,
+        taker: midnightAddresses.taker,
+        takeableOffers: [midnightApiTake({ buy: true })],
+        deadline: -1n,
+      }),
+    ).toThrow(NegativeInputError);
   });
 
   test("error: EmptyMidnightTakeableOffersError", () => {
@@ -187,5 +200,20 @@ describe("midnightSupplyCollateralTakeBorrow", () => {
         deadline: maxUint256,
       }),
     ).toThrow(UnknownCollateralIndexError);
+  });
+
+  test("error: ChainIdMismatchError", () => {
+    expect(() =>
+      midnightSupplyCollateralTakeBorrow({
+        chainId: midnightChainId,
+        market: { ...midnightMarket, chainId: BigInt(midnightChainId + 1) },
+        collateralAssets: 2_000n,
+        loanAssets: 1_000n,
+        maxUnits: 900n,
+        taker: midnightAddresses.taker,
+        takeableOffers: [midnightApiTake({ buy: true })],
+        deadline: maxUint256,
+      }),
+    ).toThrow(ChainIdMismatchError);
   });
 });

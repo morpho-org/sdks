@@ -9,10 +9,8 @@ import {
   MarketIdMismatchError,
   morphoViemExtension,
   NativeAmountOnNonWNativeAssetError,
-  NegativeNativeAmountError,
-  NegativeSlippageToleranceError,
-  NegativeSupplyAmountError,
-  ZeroSupplyAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
 } from "../../../src/index.js";
 import {
   CbbtcUsdcBlue,
@@ -314,7 +312,7 @@ describe("SupplyBlue", () => {
     ).toThrow(MarketIdMismatchError);
   });
 
-  test("error: NegativeSupplyAmountError when amount is negative", async ({
+  test("error: NegativeInputError when amount is negative", async ({
     client,
   }) => {
     const morphoClient = client.extend(morphoViemExtension()).morpho;
@@ -327,10 +325,10 @@ describe("SupplyBlue", () => {
         amount: -1n,
         marketData,
       }),
-    ).toThrow(NegativeSupplyAmountError);
+    ).toThrow(NegativeInputError);
   });
 
-  test("error: NegativeNativeAmountError when nativeAmount is negative", async ({
+  test("error: NegativeInputError when nativeAmount is negative", async ({
     client,
   }) => {
     const morphoClient = client.extend(morphoViemExtension()).morpho;
@@ -344,10 +342,10 @@ describe("SupplyBlue", () => {
         nativeAmount: -1n,
         marketData,
       }),
-    ).toThrow(NegativeNativeAmountError);
+    ).toThrow(NegativeInputError);
   });
 
-  test("error: ZeroSupplyAmountError when both amount and nativeAmount are zero", async ({
+  test("error: NonPositiveInputError when both amount and nativeAmount are zero", async ({
     client,
   }) => {
     const morphoClient = client.extend(morphoViemExtension()).morpho;
@@ -360,10 +358,10 @@ describe("SupplyBlue", () => {
         amount: 0n,
         marketData,
       }),
-    ).toThrow(ZeroSupplyAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("error: NegativeSlippageToleranceError when slippageTolerance is negative", async ({
+  test("error: NegativeInputError when slippageTolerance is negative", async ({
     client,
   }) => {
     const morphoClient = client.extend(morphoViemExtension()).morpho;
@@ -377,7 +375,7 @@ describe("SupplyBlue", () => {
         marketData,
         slippageTolerance: -1n,
       }),
-    ).toThrow(NegativeSlippageToleranceError);
+    ).toThrow(NegativeInputError);
   });
 
   test("error: ExcessiveSlippageToleranceError when slippageTolerance is too high", async ({

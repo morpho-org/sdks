@@ -7,7 +7,7 @@ import {
   type AuthorizationRequirementSignature,
   type BlueRepayWithdrawCollateralAction,
   type Metadata,
-  NonPositiveWithdrawCollateralAmountError,
+  NonPositiveInputError,
   type PermitRequirementSignature,
   type RepayActionAmountArgs,
   type Transaction,
@@ -90,15 +90,12 @@ export interface BlueRepayWithdrawCollateralParams {
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueRepayWithdrawCollateralAction>` with `to`,
  *   `value` (= `nativeAmount`), `data`, and the typed `action` discriminator the simulation layer consumes.
- * @throws {NonPositiveRepayMaxSharePriceError} when `maxSharePrice <= 0n`.
- * @throws {NegativeNativeAmountError} when `nativeAmount < 0n`.
+ * @throws {NonPositiveInputError} when `maxSharePrice <= 0n`, the total funding is zero, or
+ *   `withdrawAmount <= 0n`.
+ * @throws {NegativeInputError} when `amount`, `shares`, `nativeAmount`, or `transferAmount` is negative.
  * @throws {MutuallyExclusiveRepayAmountsError} when both `amount` and `shares` are `> 0n`.
  * @throws {TransferAmountNotEqualToAssetsError} when in assets mode and
  *   `transferAmount !== amount + nativeAmount`.
- * @throws {NonPositiveRepayAmountError} when `amount` or `shares` is negative, when in assets mode
- *   and `transferAmount <= 0n`, or when in shares mode and `transferAmount` is negative or the total
- *   funding (`transferAmount + nativeAmount`) is `<= 0n`.
- * @throws {NonPositiveWithdrawCollateralAmountError} when `withdrawAmount <= 0n`.
  * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
  * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the loan token is not
  *   the chain's wNative.
@@ -153,7 +150,7 @@ export const blueRepayWithdrawCollateral = ({
       marketParams.id,
     );
   if (withdrawAmount <= 0n) {
-    throw new NonPositiveWithdrawCollateralAmountError(marketParams.id);
+    throw new NonPositiveInputError("withdrawAmount", withdrawAmount);
   }
 
   const {

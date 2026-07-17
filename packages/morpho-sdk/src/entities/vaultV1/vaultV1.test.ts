@@ -20,10 +20,8 @@ import {
   ExcessiveSlippageToleranceError,
   isRequirementApproval,
   NativeAmountOnNonWNativeVaultError,
-  NegativeNativeAmountError,
-  NegativeSlippageToleranceError,
-  NonPositiveAssetAmountError,
-  NonPositiveSharesAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   VaultAddressMismatchError,
   VaultAssetMismatchError,
 } from "../../types/index.js";
@@ -159,7 +157,7 @@ describe("MorphoVaultV1 entity tests", () => {
       ).toThrow(ExcessiveSlippageToleranceError);
     });
 
-    test("should throw NegativeSlippageToleranceError when slippageTolerance is negative", async ({
+    test("should throw NegativeInputError when slippageTolerance is negative", async ({
       client,
     }) => {
       const morphoClient = client.extend(
@@ -180,7 +178,7 @@ describe("MorphoVaultV1 entity tests", () => {
           vaultData,
           slippageTolerance: -1n,
         }),
-      ).toThrow(NegativeSlippageToleranceError);
+      ).toThrow(NegativeInputError);
     });
   });
 
@@ -210,7 +208,7 @@ describe("MorphoVaultV1 entity tests", () => {
       ).toThrow(VaultAddressMismatchError);
     });
 
-    test("should throw NonPositiveAssetAmountError for negative amount", async ({
+    test("should throw NegativeInputError for negative amount", async ({
       client,
     }) => {
       const morphoClient = client.extend(
@@ -230,33 +228,10 @@ describe("MorphoVaultV1 entity tests", () => {
           userAddress: client.account.address,
           vaultData,
         }),
-      ).toThrow(NonPositiveAssetAmountError);
+      ).toThrow(NegativeInputError);
     });
 
-    test("should throw NonPositiveSharesAmountError for zero total assets", async ({
-      client,
-    }) => {
-      const morphoClient = client.extend(
-        morphoViemExtension({
-          supportSignature: true,
-        }),
-      ).morpho;
-      const vault = morphoClient.vaultV1(
-        SteakhouseUsdcVaultV1.address,
-        mainnet.id,
-      );
-      const vaultData = await vault.getData();
-
-      expect(() =>
-        vault.deposit({
-          amount: 0n,
-          userAddress: client.account.address,
-          vaultData,
-        }),
-      ).toThrow(NonPositiveSharesAmountError);
-    });
-
-    test("should throw NegativeNativeAmountError for negative nativeAmount", async ({
+    test("should throw NegativeInputError for negative nativeAmount", async ({
       client,
     }) => {
       const morphoClient = client.extend(
@@ -277,7 +252,7 @@ describe("MorphoVaultV1 entity tests", () => {
           userAddress: client.account.address,
           vaultData,
         }),
-      ).toThrow(NegativeNativeAmountError);
+      ).toThrow(NegativeInputError);
     });
 
     test("should throw NativeAmountOnNonWNativeVaultError for non-WETH vault", async ({
@@ -416,7 +391,7 @@ describe("MorphoVaultV1 entity tests", () => {
       ).toThrow(VaultAddressMismatchError);
     });
 
-    test("should throw NonPositiveSharesAmountError when shares is zero", async ({
+    test("should throw NonPositiveInputError when shares is zero", async ({
       client,
     }) => {
       const morphoClient = client.extend(
@@ -442,10 +417,10 @@ describe("MorphoVaultV1 entity tests", () => {
           targetVault,
           shares: 0n,
         }),
-      ).toThrow(NonPositiveSharesAmountError);
+      ).toThrow(NonPositiveInputError);
     });
 
-    test("should throw NonPositiveSharesAmountError when the target V2 vault mints zero shares", async ({
+    test("should throw NonPositiveInputError when the target V2 vault mints zero shares", async ({
       client,
     }) => {
       const morphoClient = client.extend(
@@ -473,7 +448,7 @@ describe("MorphoVaultV1 entity tests", () => {
           } as never,
           shares: 1n,
         }),
-      ).toThrow(NonPositiveSharesAmountError);
+      ).toThrow(NonPositiveInputError);
     });
 
     test("returns a transaction plan", async ({ client }) => {
@@ -509,7 +484,7 @@ describe("MorphoVaultV1 entity tests", () => {
       expect(tx.value).toBe(0n);
     });
 
-    test("should throw NegativeSlippageToleranceError when slippageTolerance is negative", async ({
+    test("should throw NegativeInputError when slippageTolerance is negative", async ({
       client,
     }) => {
       const morphoClient = client.extend(
@@ -537,7 +512,7 @@ describe("MorphoVaultV1 entity tests", () => {
           shares: parseUnits("1000", 18),
           slippageTolerance: -1n,
         }),
-      ).toThrow(NegativeSlippageToleranceError);
+      ).toThrow(NegativeInputError);
     });
 
     test("should throw ExcessiveSlippageToleranceError when slippageTolerance exceeds MAX", async ({

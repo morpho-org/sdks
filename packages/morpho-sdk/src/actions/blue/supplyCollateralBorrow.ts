@@ -8,14 +8,11 @@ import {
   type BlueSupplyCollateralBorrowAction,
   type DepositAmountArgs,
   type Metadata,
-  NegativeNativeAmountError,
-  NonPositiveAssetAmountError,
-  NonPositiveBorrowAmountError,
-  NonPositiveMinBorrowSharePriceError,
+  NegativeInputError,
+  NonPositiveInputError,
   type PermitRequirementSignature,
   type Transaction,
   type VaultReallocation,
-  ZeroCollateralAmountError,
 } from "../../types/index.js";
 import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
 import { buildAssetFundingActions } from "./buildAssetFundingActions.js";
@@ -82,11 +79,10 @@ export interface BlueSupplyCollateralBorrowParams {
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueSupplyCollateralBorrowAction>` with `to`, `value`,
  *   `data`, and the typed `action` discriminator the simulation layer consumes.
- * @throws {NonPositiveAssetAmountError} when `amount < 0n`.
- * @throws {NegativeNativeAmountError} when `nativeAmount < 0n`.
- * @throws {NonPositiveBorrowAmountError} when `borrowAmount <= 0n`.
- * @throws {NonPositiveMinBorrowSharePriceError} when `minSharePrice < 0n`.
- * @throws {ZeroCollateralAmountError} when both `amount` and `nativeAmount` resolve to zero.
+ * @throws {NegativeInputError} when `amount`, `nativeAmount`, `minSharePrice`, or any reallocation
+ *   fee is negative.
+ * @throws {NonPositiveInputError} when `borrowAmount <= 0n`, both collateral amounts resolve to
+ *   zero, or any reallocation withdrawal amount is non-positive.
  * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
  * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the collateral
  *   token is not the chain's wNative.
@@ -96,12 +92,8 @@ export interface BlueSupplyCollateralBorrowParams {
  *   is provided and the signed amount differs from `args.amount`.
  * @throws {Permit2ExpirationMissingError} from `getTokenRequirementActions` when a Permit2 requirement
  *   signature is missing its expiration.
- * @throws {NegativeReallocationFeeError} from `buildReallocationActions` when
- *   `reallocations` is non-empty and any `reallocation.fee < 0n`.
  * @throws {EmptyReallocationWithdrawalsError} from `buildReallocationActions` when any
  *   `reallocation.withdrawals` is empty.
- * @throws {NonPositiveReallocationAmountError} from `buildReallocationActions` when any
- *   `reallocation.withdrawals[i].amount <= 0n`.
  * @throws {ReallocationWithdrawalOnTargetMarketError} from `buildReallocationActions` when any
  *   reallocation withdrawal references the target market.
  * @throws {UnsortedReallocationWithdrawalsError} from `buildReallocationActions` when
@@ -141,25 +133,25 @@ export const blueSupplyCollateralBorrow = ({
   Transaction<BlueSupplyCollateralBorrowAction>
 > => {
   if (amount < 0n) {
-    throw new NonPositiveAssetAmountError(marketParams.collateralToken);
+    throw new NegativeInputError("amount", amount);
   }
 
   if (nativeAmount !== undefined && nativeAmount < 0n) {
-    throw new NegativeNativeAmountError(nativeAmount);
+    throw new NegativeInputError("nativeAmount", nativeAmount);
   }
 
   if (borrowAmount <= 0n) {
-    throw new NonPositiveBorrowAmountError(marketParams.id);
+    throw new NonPositiveInputError("borrowAmount", borrowAmount);
   }
 
   if (minSharePrice < 0n) {
-    throw new NonPositiveMinBorrowSharePriceError(marketParams.id);
+    throw new NegativeInputError("minSharePrice", minSharePrice);
   }
 
   const totalCollateral = amount + (nativeAmount ?? 0n);
 
   if (totalCollateral === 0n) {
-    throw new ZeroCollateralAmountError(marketParams.id);
+    throw new NonPositiveInputError("totalCollateral", totalCollateral);
   }
 
   const actions: Action[] = [];
