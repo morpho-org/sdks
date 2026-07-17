@@ -19,6 +19,10 @@ import {
   main,
   pushReleaseBranchWithLease,
 } from "./create-version-commit.mjs";
+import {
+  MIDNIGHT_VERSION_SOURCE_PATH,
+  renderMidnightPackageVersionSource,
+} from "./generate-midnight-package-version.mjs";
 
 const tempDirs = [];
 
@@ -34,6 +38,7 @@ describe("isAllowedVersionPath", () => {
     expect(isAllowedVersionPath("packages/morpho-sdk/CHANGELOG.md")).toBe(true);
     expect(isAllowedVersionPath(".changeset/alpha.md")).toBe(true);
     expect(isAllowedVersionPath(".changeset/pre.json")).toBe(true);
+    expect(isAllowedVersionPath(MIDNIGHT_VERSION_SOURCE_PATH)).toBe(true);
   });
 
   test("behavior: rejects non-version paths", () => {
@@ -110,6 +115,56 @@ describe("collectVersionChanges", () => {
       disallowedPaths: ["README.md"],
       paths: ["README.md"],
     });
+  });
+
+  test("behavior: accepts the generated Midnight package version source", () => {
+    const root = createGitRepo();
+    addMidnightPackage(root, "1.0.0");
+    commitAll(root, "add midnight package");
+    writeFileSync(
+      join(root, "packages/midnight-sdk/package.json"),
+      `${JSON.stringify({
+        name: "@morpho-org/midnight-sdk",
+        version: "1.1.0",
+      })}\n`,
+    );
+    writeFileSync(
+      join(root, MIDNIGHT_VERSION_SOURCE_PATH),
+      renderMidnightPackageVersionSource("1.1.0"),
+    );
+
+    expect(collectVersionChanges({ cwd: root })).toMatchObject({
+      disallowedPaths: [],
+      paths: [
+        "packages/midnight-sdk/package.json",
+        MIDNIGHT_VERSION_SOURCE_PATH,
+      ],
+    });
+  });
+
+  test("error: rejects a stale generated Midnight package version", () => {
+    const root = createGitRepo();
+    addMidnightPackage(root, "1.0.0");
+    commitAll(root, "add midnight package");
+    writeFileSync(
+      join(root, MIDNIGHT_VERSION_SOURCE_PATH),
+      renderMidnightPackageVersionSource("1.1.0"),
+    );
+
+    expect(() => collectVersionChanges({ cwd: root })).toThrow(
+      `Generated package version source "${MIDNIGHT_VERSION_SOURCE_PATH}" does not match the Midnight SDK package manifest.`,
+    );
+  });
+
+  test("error: rejects deleting the generated Midnight package version", () => {
+    const root = createGitRepo();
+    addMidnightPackage(root, "1.0.0");
+    commitAll(root, "add midnight package");
+    rmSync(join(root, MIDNIGHT_VERSION_SOURCE_PATH));
+
+    expect(() => collectVersionChanges({ cwd: root })).toThrow(
+      `Versioning deleted generated package version source "${MIDNIGHT_VERSION_SOURCE_PATH}".`,
+    );
   });
 
   test("error: rejects dependency value changes", () => {
@@ -921,6 +976,21 @@ function createGitRepo(
   );
 
   return root;
+}
+
+function addMidnightPackage(root, version) {
+  mkdirSync(join(root, "packages/midnight-sdk/src/api"), { recursive: true });
+  writeFileSync(
+    join(root, "packages/midnight-sdk/package.json"),
+    `${JSON.stringify({
+      name: "@morpho-org/midnight-sdk",
+      version,
+    })}\n`,
+  );
+  writeFileSync(
+    join(root, MIDNIGHT_VERSION_SOURCE_PATH),
+    renderMidnightPackageVersionSource(version),
+  );
 }
 
 function createReleaseRemoteFixture(options = {}) {

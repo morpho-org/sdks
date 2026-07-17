@@ -5,6 +5,10 @@ import { appendFileSync, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import {
+  getMidnightPackageVersionSource,
+  MIDNIGHT_VERSION_SOURCE_PATH,
+} from "./generate-midnight-package-version.mjs";
 import { getErrorMessage, isPathInside, sanitizeLogLine } from "./helpers.mjs";
 
 const DEFAULT_API_BASE_URL = "https://api.github.com";
@@ -34,6 +38,7 @@ export function isAllowedVersionPath(path) {
     PACKAGE_MANIFEST_PATH_RE.test(path) ||
     PACKAGE_CHANGELOG_PATH_RE.test(path) ||
     CHANGESET_PATH_RE.test(path) ||
+    path === MIDNIGHT_VERSION_SOURCE_PATH ||
     path === ".changeset/pre.json"
   );
 }
@@ -92,6 +97,11 @@ export function collectVersionChanges(options = {}) {
         if (PACKAGE_MANIFEST_PATH_RE.test(path)) {
           throw new Error(`Versioning deleted package manifest "${path}".`);
         }
+        if (path === MIDNIGHT_VERSION_SOURCE_PATH) {
+          throw new Error(
+            `Versioning deleted generated package version source "${path}".`,
+          );
+        }
 
         deletions.push({ path });
         continue;
@@ -117,6 +127,14 @@ export function collectVersionChanges(options = {}) {
         beforeSource: readBaseVersionFile({ cwd, path, runGitImpl }),
         path,
       });
+    }
+    if (
+      path === MIDNIGHT_VERSION_SOURCE_PATH &&
+      contents.toString("utf8") !== getMidnightPackageVersionSource({ cwd })
+    ) {
+      throw new Error(
+        `Generated package version source "${path}" does not match the Midnight SDK package manifest.`,
+      );
     }
 
     additions.push({

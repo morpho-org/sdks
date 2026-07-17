@@ -37,7 +37,7 @@
     "test:coverage": "$npm_execpath test --coverage",
     "coverage:report": "genhtml --hierarchical --sort --prefix \"$(pwd)\" -o coverage/lcov coverage/lcov.info",
     "changeset": "changeset",
-    "version": "changeset version",
+    "version": "changeset version && node scripts/release/generate-midnight-package-version.mjs",
     "release": "changeset publish"
   },
   "devDependencies": {
