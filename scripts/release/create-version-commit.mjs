@@ -5,6 +5,11 @@ import { appendFileSync, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import {
+  getMidnightPackageVersionSource,
+  MIDNIGHT_PACKAGE_MANIFEST_PATH,
+  MIDNIGHT_VERSION_SOURCE_PATH,
+} from "./generate-midnight-package-version.mjs";
 import { getErrorMessage, isPathInside, sanitizeLogLine } from "./helpers.mjs";
 
 const DEFAULT_API_BASE_URL = "https://api.github.com";
@@ -34,6 +39,7 @@ export function isAllowedVersionPath(path) {
     PACKAGE_MANIFEST_PATH_RE.test(path) ||
     PACKAGE_CHANGELOG_PATH_RE.test(path) ||
     CHANGESET_PATH_RE.test(path) ||
+    path === MIDNIGHT_VERSION_SOURCE_PATH ||
     path === ".changeset/pre.json"
   );
 }
@@ -92,6 +98,11 @@ export function collectVersionChanges(options = {}) {
         if (PACKAGE_MANIFEST_PATH_RE.test(path)) {
           throw new Error(`Versioning deleted package manifest "${path}".`);
         }
+        if (path === MIDNIGHT_VERSION_SOURCE_PATH) {
+          throw new Error(
+            `Versioning deleted generated package version source "${path}".`,
+          );
+        }
 
         deletions.push({ path });
         continue;
@@ -118,14 +129,61 @@ export function collectVersionChanges(options = {}) {
         path,
       });
     }
-
     additions.push({
       contents: contents.toString("base64"),
       path,
     });
   }
 
+  if (
+    paths.includes(MIDNIGHT_PACKAGE_MANIFEST_PATH) ||
+    paths.includes(MIDNIGHT_VERSION_SOURCE_PATH)
+  ) {
+    assertMidnightPackageVersionSource({ cwd });
+  }
+
   return { additions, deletions, disallowedPaths, paths };
+}
+
+function assertMidnightPackageVersionSource(options) {
+  const { absolutePath, basePath } = resolveWorktreePath(
+    options.cwd,
+    MIDNIGHT_VERSION_SOURCE_PATH,
+  );
+  let stats;
+
+  try {
+    stats = lstatSync(absolutePath);
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      throw new Error(
+        `Generated package version source "${MIDNIGHT_VERSION_SOURCE_PATH}" does not match the Midnight SDK package manifest.`,
+      );
+    }
+
+    throw error;
+  }
+
+  if (!stats.isFile()) {
+    throw new Error(
+      `Versioning produced non-file path "${MIDNIGHT_VERSION_SOURCE_PATH}".`,
+    );
+  }
+
+  assertPathInsideBase({
+    absolutePath: realpathSync(absolutePath),
+    basePath,
+    path: MIDNIGHT_VERSION_SOURCE_PATH,
+  });
+
+  if (
+    readFileSync(absolutePath, "utf8") !==
+    getMidnightPackageVersionSource({ cwd: options.cwd })
+  ) {
+    throw new Error(
+      `Generated package version source "${MIDNIGHT_VERSION_SOURCE_PATH}" does not match the Midnight SDK package manifest.`,
+    );
+  }
 }
 
 /**

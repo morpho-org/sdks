@@ -1,6 +1,6 @@
 import type { BigIntish } from "@morpho-org/morpho-ts";
 import type { Address, Hash, Hex } from "viem";
-import { zeroAddress } from "viem";
+import { keccak256, zeroAddress } from "viem";
 import {
   type IMarket,
   type IMarketParams,
@@ -17,9 +17,9 @@ import { OfferUtils } from "./OfferUtils.js";
  * take-side conversion helpers. Use {@link Offer.create} instead for new maker
  * offers so deterministic fields are validated before grouping or signing.
  * The `group` field is optional. When omitted, {@link Offer.group} lazily
- * derives the standalone group id from this offer hashed with the protocol
- * zero group id. `Group.create` copies offers into a shared group and overrides
- * this field on the copies it owns.
+ * derives the content-addressed singleton group id from this offer's
+ * zero-group hash. `Group.create` copies offers into a shared group and
+ * overrides this field on the copies it owns.
  *
  * @example
  * ```ts
@@ -72,7 +72,7 @@ export interface IOffer {
   readonly expiry: BigIntish;
   /** Midnight tick. */
   readonly tick: BigIntish;
-  /** Consumption group id; defaults to the offer hash with the zero group id. */
+  /** Consumption group id; defaults to the content-addressed singleton group id. */
   readonly group?: Hash;
   /** Optional maker callback. */
   readonly callback: Address;
@@ -99,10 +99,11 @@ export interface IOffer {
  * `Group.create` for shared-consumption ladders or directly to `Tree.create`
  * for standalone offers. API/take-side code can convert a plain `IOffer`
  * into this class before ABI encoding. The class resolves the onchain `group`
- * field lazily. Standalone offers derive their group id from the offer hash
- * with the zero group id; `Group.create` copies offers and overrides the group
- * on those copies when several offers share one consumption bucket. Offers
- * hydrated from API or decoded data may also carry a known group id.
+ * field lazily. Standalone offers derive their content-addressed singleton
+ * group id from the offer's zero-group hash; `Group.create` copies offers and
+ * overrides the group on those copies when several offers share one
+ * consumption bucket. Offers hydrated from API or decoded data may also carry
+ * a known group id.
  *
  * @example
  * ```ts
@@ -268,8 +269,11 @@ export class Offer {
    * Consumption group id encoded into this offer.
    *
    * When no group id was provided, the value is computed on first access by
-   * hashing this offer with the protocol zero group id. The computed value is
-   * cached because offer hashing is resource-intensive.
+   * hashing this offer with the protocol zero group id, then hashing that
+   * result as a singleton group. The computed value is cached because offer
+   * hashing is resource-intensive. This is equivalent to
+   * `GroupUtils.hash([offer])`, but is computed directly to keep the offers
+   * layer from importing signature helpers and creating a circular dependency.
    *
    * @returns Consumption group id.
    * @example
@@ -314,7 +318,7 @@ export class Offer {
    * ```
    */
   public get group(): Hash {
-    this.cachedGroup ??= OfferUtils.groupHash(this);
+    this.cachedGroup ??= keccak256(OfferUtils.groupHash(this));
     return this.cachedGroup;
   }
 

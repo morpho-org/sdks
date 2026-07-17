@@ -574,12 +574,12 @@ export namespace TreeUtils {
             : [
                 new Offer({
                   ...Offer.from(entry),
-                  group: OfferUtils.groupHash(entry),
+                  group: GroupUtils.hash([entry]),
                 }),
               ],
         );
 
-        buildDescriptor(offers, { preserveStandaloneGroups: true });
+        buildDescriptor(entries);
         items = offers.map((offer) => ({
           offer,
           ratifierData: "0x" as const,
@@ -649,12 +649,11 @@ export namespace TreeUtils {
    * Use after `Group.create` or standalone `Offer.create` when you need the
    * padded leaves for custom signing, root approval, or proof construction.
    * Groups are encoded with their derived shared group id, and standalone
-   * offers are encoded with their own group id.
+   * offers are encoded as singleton groups with the same algorithm.
    * `Tree.create` calls this internally and is the simpler API for most
    * make-side code.
    *
    * @param entries - Groups or standalone offers in leaf order.
-   * @param options.preserveStandaloneGroups - Whether standalone offer group ids should be preserved instead of normalized.
    * @returns Tree descriptor.
    * @throws {InvalidTreeError} when the offer count is empty, all padding, or duplicated.
    * @throws {InvalidTreeHeightError} when the padded tree exceeds supported ratifier typehashes.
@@ -692,19 +691,14 @@ export namespace TreeUtils {
    * console.log(tree.root);
    * ```
    */
-  export function buildDescriptor(
-    entries: TreeCreateParams,
-    options: { readonly preserveStandaloneGroups?: boolean } = {},
-  ): TreeDescriptor {
+  export function buildDescriptor(entries: TreeCreateParams): TreeDescriptor {
     const structs = entries.flatMap((entry) =>
       GroupUtils.isGroupInput(entry)
         ? GroupUtils.toStructs(entry)
         : [
             OfferUtils.toStruct({
               offer: entry as IOffer,
-              group: options.preserveStandaloneGroups
-                ? undefined
-                : OfferUtils.groupHash(entry as IOffer),
+              group: GroupUtils.hash([entry as IOffer]),
             }),
           ],
     );

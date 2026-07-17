@@ -1,3 +1,6 @@
+import packageJson from "@morpho-org/midnight-sdk/package.json" with {
+  type: "json",
+};
 import { ChainId, getChainAddress, MathLib } from "@morpho-org/morpho-ts";
 import type { Hex } from "viem";
 import { describe, expect, test } from "vitest";
@@ -260,7 +263,7 @@ describe("MidnightApi.validateMempoolPayload", () => {
 
     const headers = new Headers(call.init?.headers);
     expect(headers.get("content-type")).toBe("application/json");
-    expect(headers.get("sdk-version")).toBe("1.0.1");
+    expect(headers.get("sdk-version")).toBe(packageJson.version);
     expect(headers.get("x-app")).toBe("markets-v2");
   });
 

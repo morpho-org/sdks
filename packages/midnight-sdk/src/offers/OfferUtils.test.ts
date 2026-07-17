@@ -6,7 +6,7 @@ import {
   NegativeValueError,
 } from "@morpho-org/morpho-ts";
 import fc from "fast-check";
-import { zeroAddress, zeroHash } from "viem";
+import { keccak256, zeroAddress, zeroHash } from "viem";
 import { describe, expect, test } from "vitest";
 import { addresses, createFixtures, group } from "../__test__/fixtures.js";
 import { MAX_OFFER_CAP, MAX_TICK } from "../constants.js";
@@ -17,7 +17,7 @@ import {
 } from "../errors.js";
 import { Market, MarketParams } from "../market/index.js";
 import { TakeAmountsLib, TickLib } from "../math/index.js";
-import { TreeUtils } from "../signatures/index.js";
+import { GroupUtils, TreeUtils } from "../signatures/index.js";
 import type { BuildOfferParams } from "./Offer.js";
 import { Offer } from "./Offer.js";
 import { OfferUtils } from "./OfferUtils.js";
@@ -98,7 +98,8 @@ describe("Offer.create", () => {
     expect(offer.maxAssets).toBe(100n);
     expect(offer.continuousFeeCap).toBe(0n);
     expect(offer.receiverIfMakerIsSeller).toBe(zeroAddress);
-    expect(offer.group).toBe(OfferUtils.groupHash(offer));
+    expect(offer.group).toBe(keccak256(OfferUtils.groupHash(offer)));
+    expect(offer.group).toBe(GroupUtils.hash([offer]));
     expect(offer.hash).toBe(OfferUtils.hash(offer));
     expect(
       Offer.create({

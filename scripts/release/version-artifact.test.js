@@ -12,6 +12,10 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
 import { applyVersionArtifact, main } from "./apply-version-artifact.mjs";
+import {
+  MIDNIGHT_VERSION_SOURCE_PATH,
+  renderMidnightPackageVersionSource,
+} from "./generate-midnight-package-version.mjs";
 import { writeVersionArtifact } from "./write-version-artifact.mjs";
 
 const tempDirs = [];
@@ -236,6 +240,62 @@ describe("applyVersionArtifact", () => {
     );
   });
 
+  test("error: rejects forged generated package version source before write token", () => {
+    const root = createGitRepo();
+    addMidnightPackage(root, "1.0.0");
+    commitAll(root, "add midnight package");
+    const artifactSource = serializeArtifact({
+      additions: [
+        {
+          contents: Buffer.from(
+            `${JSON.stringify({
+              name: "@morpho-org/midnight-sdk",
+              version: "1.1.0",
+            })}\n`,
+          ).toString("base64"),
+          path: "packages/midnight-sdk/package.json",
+        },
+        {
+          contents: Buffer.from(
+            renderMidnightPackageVersionSource("9.9.9"),
+          ).toString("base64"),
+          path: MIDNIGHT_VERSION_SOURCE_PATH,
+        },
+      ],
+      deletions: [],
+      schemaVersion: 1,
+    });
+
+    expect(() => applyVersionArtifact({ artifactSource, cwd: root })).toThrow(
+      `Generated package version source "${MIDNIGHT_VERSION_SOURCE_PATH}" does not match the Midnight SDK package manifest.`,
+    );
+  });
+
+  test("error: rejects omitted generated package version source before write token", () => {
+    const root = createGitRepo();
+    addMidnightPackage(root, "1.0.0");
+    commitAll(root, "add midnight package");
+    const artifactSource = serializeArtifact({
+      additions: [
+        {
+          contents: Buffer.from(
+            `${JSON.stringify({
+              name: "@morpho-org/midnight-sdk",
+              version: "1.1.0",
+            })}\n`,
+          ).toString("base64"),
+          path: "packages/midnight-sdk/package.json",
+        },
+      ],
+      deletions: [],
+      schemaVersion: 1,
+    });
+
+    expect(() => applyVersionArtifact({ artifactSource, cwd: root })).toThrow(
+      `Generated package version source "${MIDNIGHT_VERSION_SOURCE_PATH}" does not match the Midnight SDK package manifest.`,
+    );
+  });
+
   test("error: rejects missing artifact source", () => {
     const root = createGitRepo();
 
@@ -279,6 +339,26 @@ function createGitRepo(
   runGit(["commit", "-m", "initial"], root);
 
   return root;
+}
+
+function addMidnightPackage(root, version) {
+  mkdirSync(join(root, "packages/midnight-sdk/src/api"), { recursive: true });
+  writeFileSync(
+    join(root, "packages/midnight-sdk/package.json"),
+    `${JSON.stringify({
+      name: "@morpho-org/midnight-sdk",
+      version,
+    })}\n`,
+  );
+  writeFileSync(
+    join(root, MIDNIGHT_VERSION_SOURCE_PATH),
+    renderMidnightPackageVersionSource(version),
+  );
+}
+
+function commitAll(root, message) {
+  runGit(["add", "."], root);
+  runGit(["commit", "-m", message], root);
 }
 
 function serializeArtifact(artifact) {

@@ -14,12 +14,7 @@ import {
   InvalidTypedDataSignatureError,
   MidnightMempoolValidationError,
 } from "../errors.js";
-import {
-  type IOffer,
-  Offer,
-  type OfferStruct,
-  OfferUtils,
-} from "../offers/index.js";
+import { type IOffer, Offer, type OfferStruct } from "../offers/index.js";
 import { EcrecoverRatifierUtils } from "./EcrecoverRatifierUtils.js";
 import { Group } from "./Group.js";
 import { GroupUtils } from "./GroupUtils.js";
@@ -113,13 +108,25 @@ describe("Tree.create", () => {
   test("behavior: standalone offers normalize caller-supplied group ids", () => {
     const offer = baseOffer({ group: staleGroup, maxAssets: 0n });
     const tree = Tree.create([offer]);
-    const expectedGroup = OfferUtils.groupHash(offer);
+    const expectedGroup = GroupUtils.hash([offer]);
 
     expect(tree.offers).toHaveLength(1);
     expect(tree.offers[0]).not.toBe(offer);
     expect(tree.offers[0]!.group).toBe(expectedGroup);
     expect(tree.paddedOffers[0]!.group).toBe(expectedGroup);
     expect(tree.paddedOffers[0]!.group).not.toBe(staleGroup);
+  });
+
+  test("behavior: standalone and explicitly grouped singleton trees are identical", () => {
+    const offer = baseOffer({ maxAssets: 0n });
+    const standaloneTree = Tree.create([offer]);
+    const groupedTree = Tree.create([Group.create([offer])]);
+    const expectedGroup = GroupUtils.hash([offer]);
+
+    expect(standaloneTree.offers[0]!.group).toBe(expectedGroup);
+    expect(groupedTree.offers[0]!.group).toBe(expectedGroup);
+    expect(standaloneTree.leaves).toEqual(groupedTree.leaves);
+    expect(standaloneTree.root).toBe(groupedTree.root);
   });
 
   test("behavior: wraps plain offer input", () => {
@@ -605,18 +612,11 @@ describe("TreeUtils.mempoolValidate", () => {
     expect(calls).toHaveLength(0);
   });
 
-  test("behavior: normalizes raw standalone offers before mempool validation", async () => {
+  test("behavior: raw standalone offer passes group_identity validation", async () => {
     const calls: {
       readonly input: Parameters<MidnightApiFetch>[0];
       readonly init: Parameters<MidnightApiFetch>[1];
     }[] = [];
-    const fetch: MidnightApiFetch = async (input, init) => {
-      calls.push({ input, init });
-      return new Response(JSON.stringify({ data: { issues: [] } }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    };
     const offer = baseOfferInput({
       market: {
         ...baseMarketParamsInput(),
@@ -627,9 +627,26 @@ describe("TreeUtils.mempoolValidate", () => {
       maxUnits: 0n,
       maxAssets: 1_000n,
     });
-    const expectedGroup = OfferUtils.groupHash(offer);
+    const expectedGroup = GroupUtils.hash([offer]);
+    const fetch: MidnightApiFetch = async (input, init) => {
+      calls.push({ input, init });
+      const body = JSON.parse(String(init?.body)) as Readonly<
+        Record<string, unknown>
+      >;
+      const decoded = await Payload.decode(body.payload as Hex);
+      const issues = decoded.every(
+        (item) => item.offer.group === GroupUtils.hash([item.offer]),
+      )
+        ? []
+        : [{ rule: "group_identity" }];
 
-    await TreeUtils.mempoolValidate({
+      return new Response(JSON.stringify({ data: { issues } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+
+    const result = await TreeUtils.mempoolValidate({
       chainId: 8453,
       tree: [offer],
       fetch,
@@ -642,6 +659,7 @@ describe("TreeUtils.mempoolValidate", () => {
 
     expect(decoded[0]!.offer.group).toBe(expectedGroup);
     expect(decoded[0]!.offer.group).not.toBe(staleGroup);
+    expect(result).toEqual({ valid: true, issues: [] });
   });
 
   test("error: MidnightMempoolValidationError", async () => {
@@ -700,8 +718,19 @@ describe("TreeUtils.buildDescriptor", () => {
 
     expect(payload.height).toBe(0);
     expect(payload.root).toBe(
-      "0x28b3e3a09d4db352984618ea6e4fc7b43fe98082df0fee72d8d4f7bc877f355f",
+      "0xf26894e35339dea06aebcf09035fe62e768b2b8002c0db452ca255be4714ea9a",
     );
+  });
+
+  test("behavior: standalone input matches an explicit singleton group by default", () => {
+    const offer = baseOffer({ group: staleGroup, maxAssets: 0n });
+    const standalone = TreeUtils.buildDescriptor([offer]);
+    const singleton = TreeUtils.buildDescriptor([{ offers: [offer] }]);
+
+    expect(standalone.offers[0]!.group).toBe(GroupUtils.hash([offer]));
+    expect(standalone.offers).toEqual(singleton.offers);
+    expect(standalone.leaves).toEqual(singleton.leaves);
+    expect(standalone.root).toBe(singleton.root);
   });
 
   test("behavior: proof for second leaf", () => {
