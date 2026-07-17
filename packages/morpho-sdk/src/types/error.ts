@@ -491,7 +491,7 @@ export type NativeAmountOnNonWNativeCollateralError =
 export class BorrowExceedsSafeLtvError extends Error {
   constructor(borrowAmount: bigint, maxSafeBorrow: bigint) {
     super(
-      `Borrow amount ${borrowAmount} exceeds maximum ${maxSafeBorrow} (would reach or exceed the liquidation LTV). Reduce borrow or increase collateral.`,
+      `Borrow amount ${borrowAmount} exceeds maximum ${maxSafeBorrow} (would exceed the liquidation LTV). Reduce borrow or increase collateral.`,
     );
   }
 }

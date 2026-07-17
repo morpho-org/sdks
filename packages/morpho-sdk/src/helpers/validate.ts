@@ -126,8 +126,10 @@ export const validateAccrualPosition = (params: {
 };
 
 /**
- * Validates that the resulting position stays strictly below the liquidation
- * threshold (LLTV) after supplying additional collateral and borrowing.
+ * Validates a supply-collateral + borrow, rejecting it only if the resulting debt
+ * would exceed the LLTV (become liquidatable). Morpho's health check is inclusive,
+ * so a position landing exactly at the LLTV is allowed. The 0.5% DEFAULT_LLTV_BUFFER
+ * is a UI default, not enforced here.
  *
  * @param params - Validation parameters.
  * @param params.positionData - The current accrual position with market data.
@@ -158,13 +160,13 @@ export const validatePositionHealth = (params: {
     ORACLE_PRICE_SCALE,
   );
 
-  // Reject only borrows that would leave the position at or above the true LLTV
-  // (immediately liquidatable). No 0.5% safety buffer is subtracted here anymore
-  // — that lives as a UI default (DEFAULT_LLTV_BUFFER); callers may let users
-  // borrow up to just under LLTV behind an explicit acknowledgment.
+  // On-chain liquidation boundary (collateralValue × LLTV). No 0.5% buffer here:
+  // DEFAULT_LLTV_BUFFER is a UI default, not enforced.
   const maxSafeBorrowAfter = MathLib.wMulDown(collateralValueAfter, lltv);
 
-  const totalBorrowAfter = positionData.borrowAssets + borrowAmount + 1n; // +1 to account for share-to-asset rounding (happens when the borrow amount doesn't divide evenly into shares)
+  // +1: converting borrowAmount to shares rounds the resulting debt up by at most
+  // 1 wei, so reserving it keeps the built debt within maxBorrow (never liquidatable).
+  const totalBorrowAfter = positionData.borrowAssets + borrowAmount + 1n;
 
   if (totalBorrowAfter > maxSafeBorrowAfter) {
     const maxSafeAdditionalBorrow = MathLib.zeroFloorSub(
@@ -212,8 +214,9 @@ export const validateNativeAsset = (chainId: number, asset: Address): void => {
 };
 
 /**
- * Validates that the resulting position stays strictly below the liquidation
- * threshold (LLTV) after withdrawing collateral.
+ * Validates a collateral withdrawal, rejecting it only if the remaining debt would
+ * exceed the LLTV for the reduced collateral (become liquidatable). Mirrors
+ * {@link validatePositionHealth}; the 0.5% buffer is a UI default, not enforced.
  *
  * @param params - Validation parameters.
  * @param params.positionData - The current accrual position with market data.
@@ -258,8 +261,8 @@ export const validatePositionHealthAfterWithdraw = (params: {
     ORACLE_PRICE_SCALE,
   );
 
-  // Only reject when the remaining debt would sit at or above the true LLTV. The
-  // 0.5% buffer is a UI default only (DEFAULT_LLTV_BUFFER), not enforced here.
+  // Same on-chain liquidation boundary as validatePositionHealth. No +1 guard here:
+  // borrowAssets is the existing (already exact) debt, not a freshly-minted amount.
   const maxSafeBorrowAfter = MathLib.wMulDown(collateralValueAfter, lltv);
 
   if (positionData.borrowAssets > maxSafeBorrowAfter) {

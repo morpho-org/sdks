@@ -244,15 +244,16 @@ describe("validatePositionHealth", () => {
       borrowShares: 0n,
       market: makeMarket({ price: ORACLE_PRICE_SCALE }),
     });
-    // 1:1 price ⇒ collateral value == collateral, so the on-chain liquidation
-    // boundary is wMulDown(collateral, lltv). Borrowing 2 wei below it lands well
-    // inside the old 0.5% buffer band (which used to throw); it must now pass.
+    // 1:1 price ⇒ collateral value == collateral, so maxBorrow = wMulDown(collateral, lltv)
+    // is the on-chain liquidation boundary. maxBorrow - 1 is the largest passing amount: it
+    // sits inside the old 0.5% buffer band (which used to throw), and with the +1 rounding guard
+    // the resulting debt lands at exactly maxBorrow - healthy (inclusive).
     const maxBorrow = MathLib.wMulDown(collateral, lltv);
     expect(() =>
       validatePositionHealth({
         positionData: pos,
         additionalCollateral: 0n,
-        borrowAmount: maxBorrow - 2n,
+        borrowAmount: maxBorrow - 1n,
         marketId: marketParams.id,
         lltv,
       }),
@@ -266,8 +267,8 @@ describe("validatePositionHealth", () => {
       borrowShares: 0n,
       market: makeMarket({ price: ORACLE_PRICE_SCALE }),
     });
-    // Borrowing exactly the boundary trips the +1n rounding guard, so a position
-    // can never be built at or above LLTV.
+    // Requesting the full boundary trips the +1n guard: the rounded on-chain debt could
+    // exceed maxBorrow (liquidatable), so it is rejected - never built above the LLTV.
     const maxBorrow = MathLib.wMulDown(collateral, lltv);
     expect(() =>
       validatePositionHealth({
@@ -487,6 +488,37 @@ describe("validatePositionHealthAfterWithdraw", () => {
         marketId: marketParams.id,
       }),
     ).not.toThrow();
+  });
+
+  test("is inclusive at the LLTV boundary (exactly at LLTV passes, one wei above throws)", () => {
+    // 1:1 price + 50% LLTV ⇒ maxBorrow = collateralAfter / 2. Size collateralAfter so the
+    // unchanged debt lands exactly on the boundary: exactly at LLTV is healthy (inclusive),
+    // mirroring the borrow path.
+    const halfLltv = MathLib.WAD / 2n;
+    const collateral = 10n ** 18n;
+    const market = makeMarket({ price: ORACLE_PRICE_SCALE });
+    const pos = makePosition({ collateral, borrowShares: 10n ** 17n, market });
+    const debt = pos.borrowAssets;
+
+    // collateralAfter = 2·debt ⇒ maxBorrow == debt ⇒ position exactly at LLTV → allowed.
+    expect(() =>
+      validatePositionHealthAfterWithdraw({
+        positionData: pos,
+        withdrawAmount: collateral - 2n * debt,
+        lltv: halfLltv,
+        marketId: marketParams.id,
+      }),
+    ).not.toThrow();
+
+    // One wei less collateral ⇒ maxBorrow == debt − 1 ⇒ debt exceeds it → throws.
+    expect(() =>
+      validatePositionHealthAfterWithdraw({
+        positionData: pos,
+        withdrawAmount: collateral - (2n * debt - 1n),
+        lltv: halfLltv,
+        marketId: marketParams.id,
+      }),
+    ).toThrow(WithdrawMakesPositionUnhealthyError);
   });
 });
 
