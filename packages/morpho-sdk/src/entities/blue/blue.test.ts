@@ -98,7 +98,7 @@ describe("MorphoBlue builder = signer freedom", () => {
       amount: parseUnits("1", 18),
     });
 
-    const tx = (await supplyCollateral.prepare()).build().primaryTransaction;
+    const tx = (await supplyCollateral.prepare()).build().primaryTx;
     expect(tx.action.args.onBehalf).toBe(OTHER_USER);
   });
 
@@ -117,7 +117,7 @@ describe("MorphoBlue builder = signer freedom", () => {
       amount: parseUnits("1", 18),
     });
 
-    const tx = (await supplyCollateral.prepare()).build().primaryTransaction;
+    const tx = (await supplyCollateral.prepare()).build().primaryTx;
     expect(tx.action.args.onBehalf).toBe(OTHER_USER);
   });
 });
@@ -378,7 +378,7 @@ describe("MorphoBlue validation", () => {
           positionData: makeWethPosition(),
         })
         .prepare()
-    ).build().primaryTransaction;
+    ).build().primaryTx;
 
     expect(tx.action.args.assets).toBe(amount + nativeAmount);
     expect(tx.action.args.nativeAmount).toBe(nativeAmount);
@@ -430,7 +430,7 @@ describe("MorphoBlue validation", () => {
       positionData,
     });
 
-    const tx = (await repay.prepare()).build().primaryTransaction;
+    const tx = (await repay.prepare()).build().primaryTx;
     expect(tx.action.args.shares).toBe(positionData.borrowShares);
     expect(tx.action.args.nativeAmount).toBe(nativeAmount);
     expect(tx.value).toBe(nativeAmount);
@@ -467,7 +467,7 @@ describe("MorphoBlue validation", () => {
       positionData,
     });
 
-    const tx = (await repay.prepare()).build().primaryTransaction;
+    const tx = (await repay.prepare()).build().primaryTx;
     expect(tx.action.args.shares).toBe(positionData.borrowShares);
     expect(tx.action.args.nativeAmount).toBe(nativeAmount);
     expect(tx.value).toBe(nativeAmount);
@@ -522,7 +522,7 @@ describe("MorphoBlue validation", () => {
           positionData: makeWethPosition(),
         })
         .prepare()
-    ).build().primaryTransaction;
+    ).build().primaryTx;
 
     expect(tx.action.args.repayAssets).toBe(amount + nativeAmount);
     expect(tx.action.args.nativeAmount).toBe(nativeAmount);
@@ -576,7 +576,7 @@ describe("MorphoBlue validation", () => {
       positionData,
     });
 
-    const tx = (await action.prepare()).build().primaryTransaction;
+    const tx = (await action.prepare()).build().primaryTx;
     expect(tx.action.args.repayShares).toBe(positionData.borrowShares);
     expect(tx.action.args.nativeAmount).toBe(nativeAmount);
     expect(tx.value).toBe(nativeAmount);
@@ -612,7 +612,7 @@ describe("MorphoBlue validation", () => {
       positionData,
     });
 
-    const tx = (await action.prepare()).build().primaryTransaction;
+    const tx = (await action.prepare()).build().primaryTx;
     expect(tx.action.args.repayShares).toBe(positionData.borrowShares);
     expect(tx.action.args.nativeAmount).toBe(nativeAmount);
     expect(tx.value).toBe(nativeAmount);

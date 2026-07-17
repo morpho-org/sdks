@@ -104,9 +104,7 @@ describe("RefinanceBlue (fork)", () => {
           await client.sendTransaction(requirement);
         }
 
-        await client.sendTransaction(
-          (await refi.prepare()).build().primaryTransaction,
-        );
+        await client.sendTransaction((await refi.prepare()).build().primaryTx);
       },
     });
     // testInvariants already asserts every bundler3 component ends with 0 balance — nothing left behind.
@@ -186,9 +184,7 @@ describe("RefinanceBlue (fork)", () => {
           }
           await client.sendTransaction(requirement);
         }
-        await client.sendTransaction(
-          (await refi.prepare()).build().primaryTransaction,
-        );
+        await client.sendTransaction((await refi.prepare()).build().primaryTx);
       },
     });
 
@@ -252,9 +248,7 @@ describe("RefinanceBlue (fork)", () => {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(auth);
-        await client.sendTransaction(
-          (await refi.prepare()).build().primaryTransaction,
-        );
+        await client.sendTransaction((await refi.prepare()).build().primaryTx);
       },
     });
 
@@ -355,7 +349,7 @@ describe("RefinanceBlue (fork)", () => {
           await client.sendTransaction(requirement);
         }
 
-        const tx = (await refi.prepare()).build().primaryTransaction;
+        const tx = (await refi.prepare()).build().primaryTx;
         expect(tx.value).toBe(0n);
         expect(tx.action.args.reallocationFee).toBe(0n);
 

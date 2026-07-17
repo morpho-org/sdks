@@ -34,7 +34,7 @@ describe("Withdraw VaultV1", () => {
           userAddress: client.account.address,
           amount: assets,
         });
-        const tx = (await withdraw.prepare()).build().primaryTransaction;
+        const tx = (await withdraw.prepare()).build().primaryTx;
 
         await client.sendTransaction(tx);
       },
@@ -82,7 +82,7 @@ describe("Withdraw VaultV1", () => {
           amount: firstWithdraw,
         });
         await client.sendTransaction(
-          (await withdraw1.prepare()).build().primaryTransaction,
+          (await withdraw1.prepare()).build().primaryTx,
         );
 
         const withdraw2 = vaultV1.withdraw({
@@ -90,7 +90,7 @@ describe("Withdraw VaultV1", () => {
           amount: secondWithdraw,
         });
         await client.sendTransaction(
-          (await withdraw2.prepare()).build().primaryTransaction,
+          (await withdraw2.prepare()).build().primaryTx,
         );
       },
     });

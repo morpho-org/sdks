@@ -54,7 +54,7 @@ describe("SupplyBlue", () => {
         }
         await client.sendTransaction(approval);
 
-        const tx = (await supply.prepare()).build().primaryTransaction;
+        const tx = (await supply.prepare()).build().primaryTx;
         expect(tx.value).toBe(0n);
 
         await client.sendTransaction(tx);
@@ -109,7 +109,7 @@ describe("SupplyBlue", () => {
       marketData,
     });
 
-    const tx = (await supply.prepare()).build().primaryTransaction;
+    const tx = (await supply.prepare()).build().primaryTx;
 
     // Sanity bound only — exact value depends on virtual-share scaling.
     expect(tx.action.args.maxSharePrice).toBeGreaterThan(0n);
@@ -178,7 +178,7 @@ describe("SupplyBlue", () => {
 
         const tx = (await supply.prepare()).build([
           requirementSignature,
-        ]).primaryTransaction;
+        ]).primaryTx;
         expect(tx.value).toBe(0n);
         await client.sendTransaction(tx);
       },
@@ -225,7 +225,7 @@ describe("SupplyBlue", () => {
         const requirements = (await supply.prepare()).requirements;
         expect(requirements.length).toBe(0);
 
-        const tx = (await supply.prepare()).build().primaryTransaction;
+        const tx = (await supply.prepare()).build().primaryTx;
         expect(tx.value).toEqual(nativeAmount);
         await client.sendTransaction(tx);
       },
@@ -281,7 +281,7 @@ describe("SupplyBlue", () => {
         }
         await client.sendTransaction(approval);
 
-        const tx = (await supply.prepare()).build().primaryTransaction;
+        const tx = (await supply.prepare()).build().primaryTx;
         expect(tx.value).toEqual(nativeAmount);
         await client.sendTransaction(tx);
       },

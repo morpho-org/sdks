@@ -5,15 +5,15 @@ import {
   type SignatureRequirement,
   type Transaction,
   type TransactionAction,
-  type TransactionRequirement,
+  type TxRequirement,
 } from "../types/action.js";
 import { MissingTransactionPlanSignaturesError } from "../types/error.js";
 import type {
   ExecutableTransactionPlanShape,
   PreparedTransactionPlanShape,
   TransactionPlanBatchCall,
-  TransactionPlanBuildPrimaryTransaction,
-  TransactionPlanContractTransactionIntent,
+  TransactionPlanBuildPrimaryTx,
+  TransactionPlanContractTxIntent,
   TransactionPlanFlowKind,
   TransactionPlanHandler,
   TransactionPlanIntent,
@@ -26,7 +26,7 @@ import type {
   TransactionPlanStep,
   TransactionPlanStepForIntent,
   TransactionPlanTokenApprovalIntent,
-  TransactionPlanTransactionStep,
+  TransactionPlanTxStep,
 } from "./types.js";
 
 export type {
@@ -53,7 +53,7 @@ export type {
  * const plan = vault.deposit({ amount, userAddress, vaultData });
  * const prepared = await plan.prepare({ requestOptions: { useSimplePermit } });
  *
- * const txFlowType = prepared.flowKind === "single_transaction"
+ * const txFlowType = prepared.flowKind === "single_tx"
  *   ? "simple"
  *   : prepared.hasSignatureRequests
  *     ? "signature_required"
@@ -67,11 +67,11 @@ export type {
  *         : `Sign ${step.intent.method}`;
  *     case "operatorAuthorization":
  *       return "Authorize operator";
- *     case "contractTransaction":
+ *     case "contractTx":
  *       return `Review ${step.intent.actionType}`;
  *     case "midnightOfferRootSignature":
  *       return "Sign offer root";
- *     case "primaryTransaction":
+ *     case "primaryTx":
  *       return "Vault deposit";
  *   }
  * });
@@ -91,9 +91,9 @@ export type {
  *   signatures.push(await request.sign(walletClient, accountAddress));
  * }
  * const executable = prepared.build(signatures);
- * const transactionSteps = executable.transactionSteps.map((step) => ({
- *   label: step.intent.type === "primaryTransaction" ? "Submit transaction" : "Approve token",
- *   transaction: step.transaction,
+ * const txSteps = executable.txSteps.map((step) => ({
+ *   label: step.intent.type === "primaryTx" ? "Submit transaction" : "Approve token",
+ *   tx: step.tx,
  * }));
  * const calls = executable.calls;
  * ```
@@ -119,7 +119,7 @@ export class TransactionPlan<
    * ```ts
    * const plan = new TransactionPlan({
    *   getRequirementRequests: async () => requests,
-   *   buildPrimaryTransaction: () => transaction,
+   *   buildPrimaryTx: () => transaction,
    * });
    * ```
    */
@@ -157,12 +157,12 @@ export class TransactionPlan<
       (request, index): TransactionPlanPreparedStep<TRequest> => {
         const id = `request-${index}`;
         if (isRequirementApproval(request)) {
-          const tx = request as Extract<TRequest, TransactionRequirement>;
+          const tx = request as Extract<TRequest, TxRequirement>;
           return {
-            kind: "transaction",
+            kind: "tx",
             id,
             phase: "preparation",
-            transaction: tx,
+            tx,
             action: tx.action,
             intent: {
               type: "tokenApproval",
@@ -174,12 +174,12 @@ export class TransactionPlan<
           } satisfies TransactionPlanPreparedStep<TRequest>;
         }
         if (isRequirementBlueAuthorization(request)) {
-          const tx = request as Extract<TRequest, TransactionRequirement>;
+          const tx = request as Extract<TRequest, TxRequirement>;
           return {
-            kind: "transaction",
+            kind: "tx",
             id,
             phase: "preparation",
-            transaction: tx,
+            tx,
             action: tx.action,
             intent: {
               type: "operatorAuthorization",
@@ -197,12 +197,10 @@ export class TransactionPlan<
           "data" in request &&
           "action" in request
         ) {
-          const tx = request as Extract<TRequest, TransactionRequirement>;
+          const tx = request as Extract<TRequest, TxRequirement>;
           const intent:
             | TransactionPlanOperatorAuthorizationIntent
-            | TransactionPlanContractTransactionIntent<
-                TransactionRequirement["action"]
-              > =
+            | TransactionPlanContractTxIntent<TxRequirement["action"]> =
             tx.action.type === "midnightAuthorization"
               ? {
                   type: "operatorAuthorization",
@@ -211,12 +209,12 @@ export class TransactionPlan<
                   isAuthorized: tx.action.args.isAuthorized,
                   owner: tx.action.args.onBehalf,
                 }
-              : { type: "contractTransaction", actionType: tx.action.type };
+              : { type: "contractTx", actionType: tx.action.type };
           return {
-            kind: "transaction",
+            kind: "tx",
             id,
             phase: "preparation",
-            transaction: tx,
+            tx,
             action: tx.action,
             intent,
           } satisfies TransactionPlanPreparedStep<TRequest>;
@@ -284,33 +282,33 @@ export class TransactionPlan<
       },
     );
     const primaryTx =
-      this.handler.previewPrimaryTransaction === false
+      this.handler.previewPrimaryTx === false
         ? undefined
         : (
-            this.handler.previewPrimaryTransaction ??
-            (() => this.handler.buildPrimaryTransaction())
+            this.handler.previewPrimaryTx ??
+            (() => this.handler.buildPrimaryTx())
           )();
     const primaryStep =
       primaryTx == null
         ? undefined
         : ({
-            kind: "transaction",
+            kind: "tx",
             id: "primary",
             phase: "primary",
-            transaction: primaryTx,
+            tx: primaryTx,
             action: primaryTx.action,
             intent: {
-              type: "primaryTransaction",
+              type: "primaryTx",
               actionType: primaryTx.action.type,
             },
-          } satisfies TransactionPlanTransactionStep<
+          } satisfies TransactionPlanTxStep<
             TPrimaryAction,
             Readonly<Transaction<TPrimaryAction>>,
             "primary"
           >);
 
     return new PreparedTransactionPlan<TPrimaryAction, TRequest, TSignatures>({
-      buildPrimaryTransaction: this.handler.buildPrimaryTransaction,
+      buildPrimaryTx: this.handler.buildPrimaryTx,
       requirementSteps,
       primaryStep,
     });
@@ -325,7 +323,7 @@ export class TransactionPlan<
    * ```ts
    * const plan = TransactionPlan.create({
    *   getRequirementRequests: async () => requests,
-   *   buildPrimaryTransaction: () => transaction,
+   *   buildPrimaryTx: () => transaction,
    * });
    * ```
    */
@@ -366,14 +364,14 @@ export class PreparedTransactionPlan<
   TSignatures = readonly RequirementSignature[],
 > implements PreparedTransactionPlanShape<TPrimaryAction, TRequest>
 {
-  private readonly buildPrimaryTransaction: TransactionPlanBuildPrimaryTransaction<
+  private readonly buildPrimaryTx: TransactionPlanBuildPrimaryTx<
     TPrimaryAction,
     TSignatures
   >;
 
   private readonly rawRequirements: readonly TRequest[];
 
-  private readonly previewPrimaryStep?: TransactionPlanTransactionStep<
+  private readonly previewPrimaryStep?: TransactionPlanTxStep<
     TPrimaryAction,
     Readonly<Transaction<TPrimaryAction>>,
     "primary"
@@ -385,10 +383,10 @@ export class PreparedTransactionPlan<
   >[];
 
   /** Ordered transaction steps. Includes the primary action step last when previewable. */
-  readonly transactionSteps: PreparedTransactionPlanShape<
+  readonly txSteps: PreparedTransactionPlanShape<
     TPrimaryAction,
     TRequest
-  >["transactionSteps"];
+  >["txSteps"];
 
   /** All signature requests and transaction steps in review order. */
   readonly steps: readonly TransactionPlanStep<TPrimaryAction, TRequest>[];
@@ -400,29 +398,28 @@ export class PreparedTransactionPlan<
    * @example
    * ```ts
    * const prepared = new PreparedTransactionPlan({
-   *   buildPrimaryTransaction: () => transaction,
+   *   buildPrimaryTx: () => transaction,
    *   requirementSteps: [],
    *   primaryStep,
    * });
    * ```
    */
   constructor(params: {
-    readonly buildPrimaryTransaction: TransactionPlanBuildPrimaryTransaction<
+    readonly buildPrimaryTx: TransactionPlanBuildPrimaryTx<
       TPrimaryAction,
       TSignatures
     >;
     readonly requirementSteps: readonly TransactionPlanPreparedStep<TRequest>[];
-    readonly primaryStep?: TransactionPlanTransactionStep<
+    readonly primaryStep?: TransactionPlanTxStep<
       TPrimaryAction,
       Readonly<Transaction<TPrimaryAction>>,
       "primary"
     >;
   }) {
-    this.buildPrimaryTransaction = params.buildPrimaryTransaction;
+    this.buildPrimaryTx = params.buildPrimaryTx;
     this.rawRequirements = Object.freeze(
       params.requirementSteps.map(
-        (step): TRequest =>
-          step.kind === "transaction" ? step.transaction : step.request,
+        (step): TRequest => (step.kind === "tx" ? step.tx : step.request),
       ),
     );
     this.previewPrimaryStep = params.primaryStep;
@@ -435,19 +432,19 @@ export class PreparedTransactionPlan<
         > => step.kind === "signature",
       ),
     );
-    const requirementTransactionSteps = params.requirementSteps.filter(
+    const requirementTxSteps = params.requirementSteps.filter(
       (
         step,
       ): step is Extract<
         TransactionPlanPreparedStep<TRequest>,
-        { readonly kind: "transaction" }
-      > => step.kind === "transaction",
+        { readonly kind: "tx" }
+      > => step.kind === "tx",
     );
     const primaryStep = params.primaryStep;
-    this.transactionSteps = Object.freeze(
+    this.txSteps = Object.freeze(
       primaryStep == null
-        ? [...requirementTransactionSteps]
-        : [...requirementTransactionSteps, primaryStep],
+        ? [...requirementTxSteps]
+        : [...requirementTxSteps, primaryStep],
     );
     this.steps = Object.freeze(
       primaryStep == null
@@ -491,11 +488,11 @@ export class PreparedTransactionPlan<
    * @returns The primary transaction, or `undefined` when signatures are required before encoding.
    * @example
    * ```ts
-   * const tx = (await plan.prepare()).primaryTransaction;
+   * const tx = (await plan.prepare()).primaryTx;
    * ```
    */
-  get primaryTransaction(): Readonly<Transaction<TPrimaryAction>> | undefined {
-    return this.previewPrimaryStep?.transaction;
+  get primaryTx(): Readonly<Transaction<TPrimaryAction>> | undefined {
+    return this.previewPrimaryStep?.tx;
   }
 
   /**
@@ -510,10 +507,10 @@ export class PreparedTransactionPlan<
    * ```
    */
   get calls(): readonly TransactionPlanBatchCall[] {
-    return this.transactionSteps.map(({ transaction }) => ({
-      to: transaction.to,
-      value: transaction.value,
-      data: transaction.data,
+    return this.txSteps.map(({ tx }) => ({
+      to: tx.to,
+      value: tx.value,
+      data: tx.data,
     }));
   }
 
@@ -527,7 +524,7 @@ export class PreparedTransactionPlan<
    * ```
    */
   get stepCount(): number {
-    return this.signatureRequests.length + this.transactionSteps.length;
+    return this.signatureRequests.length + this.txSteps.length;
   }
 
   /**
@@ -546,14 +543,14 @@ export class PreparedTransactionPlan<
   /**
    * Reports whether the plan currently exposes a transaction step.
    *
-   * @returns `true` when `transactionSteps` is non-empty.
+   * @returns `true` when `txSteps` is non-empty.
    * @example
    * ```ts
-   * if (prepared.hasTransactionSteps) showTransactionReview();
+   * if (prepared.hasTxSteps) showTxReview();
    * ```
    */
-  get hasTransactionSteps(): boolean {
-    return this.transactionSteps.length > 0;
+  get hasTxSteps(): boolean {
+    return this.txSteps.length > 0;
   }
 
   /**
@@ -567,20 +564,19 @@ export class PreparedTransactionPlan<
    */
   get flowKind(): TransactionPlanFlowKind {
     const signatureRequests = this.signatureRequests.length;
-    const preparationSteps = this.transactionSteps.filter(
+    const preparationSteps = this.txSteps.filter(
       (step) => step.phase === "preparation",
     ).length;
-    const primarySteps = this.transactionSteps.filter(
+    const primarySteps = this.txSteps.filter(
       (step) => step.phase === "primary",
     ).length;
 
-    if (signatureRequests > 0 && this.transactionSteps.length > 0) {
+    if (signatureRequests > 0 && this.txSteps.length > 0) {
       return "mixed_steps";
     }
     if (signatureRequests > 0) return "signature_steps";
-    if (preparationSteps === 0 && primarySteps <= 1)
-      return "single_transaction";
-    return "transaction_steps";
+    if (preparationSteps === 0 && primarySteps <= 1) return "single_tx";
+    return "tx_steps";
   }
 
   /**
@@ -649,18 +645,18 @@ export class PreparedTransactionPlan<
     if (received < expected) {
       throw new MissingTransactionPlanSignaturesError(expected, received);
     }
-    const requirementTransactionSteps = this.transactionSteps.filter(
+    const requirementTxSteps = this.txSteps.filter(
       (step) => step.phase === "preparation",
     );
-    const primaryTx = this.buildPrimaryTransaction(signatures);
+    const primaryTx = this.buildPrimaryTx(signatures);
     const primaryStep = {
-      kind: "transaction",
+      kind: "tx",
       id: "primary",
       phase: "primary",
-      transaction: primaryTx,
+      tx: primaryTx,
       action: primaryTx.action,
-      intent: { type: "primaryTransaction", actionType: primaryTx.action.type },
-    } satisfies TransactionPlanTransactionStep<
+      intent: { type: "primaryTx", actionType: primaryTx.action.type },
+    } satisfies TransactionPlanTxStep<
       TPrimaryAction,
       Readonly<Transaction<TPrimaryAction>>,
       "primary"
@@ -668,10 +664,7 @@ export class PreparedTransactionPlan<
     return new ExecutableTransactionPlan<TPrimaryAction, TRequest>({
       primaryStep,
       signatureRequests: Object.freeze([...this.signatureRequests]),
-      transactionSteps: Object.freeze([
-        ...requirementTransactionSteps,
-        primaryStep,
-      ]),
+      txSteps: Object.freeze([...requirementTxSteps, primaryStep]),
     });
   }
 }
@@ -682,8 +675,8 @@ export class PreparedTransactionPlan<
  * @example
  * ```ts
  * const executable = prepared.build(signatures);
- * for (const step of executable.transactionSteps) {
- *   await walletClient.sendTransaction(step.transaction);
+ * for (const step of executable.txSteps) {
+ *   await walletClient.sendTransaction(step.tx);
  * }
  * await walletClient.sendCalls({ calls: executable.calls });
  * ```
@@ -693,7 +686,7 @@ export class ExecutableTransactionPlan<
   TRequest extends TransactionPlanRequest = TransactionPlanRequest,
 > implements ExecutableTransactionPlanShape<TPrimaryAction, TRequest>
 {
-  private readonly builtPrimaryStep: TransactionPlanTransactionStep<
+  private readonly builtPrimaryStep: TransactionPlanTxStep<
     TPrimaryAction,
     Readonly<Transaction<TPrimaryAction>>,
     "primary"
@@ -705,10 +698,10 @@ export class ExecutableTransactionPlan<
   >[];
 
   /** Ordered transaction steps to submit, with the primary action step last. */
-  readonly transactionSteps: ExecutableTransactionPlanShape<
+  readonly txSteps: ExecutableTransactionPlanShape<
     TPrimaryAction,
     TRequest
-  >["transactionSteps"];
+  >["txSteps"];
 
   /**
    * Creates an executable plan from built transaction requests.
@@ -719,19 +712,19 @@ export class ExecutableTransactionPlan<
    * const executable = new ExecutableTransactionPlan({
    *   primaryStep,
    *   signatureRequests: [],
-   *   transactionSteps,
+   *   txSteps,
    * });
    * ```
    */
   constructor(
     params: Omit<
       ExecutableTransactionPlanShape<TPrimaryAction, TRequest>,
-      "primaryTransaction" | "calls"
+      "primaryTx" | "calls"
     >,
   ) {
     this.builtPrimaryStep = params.primaryStep;
     this.signatureRequests = Object.freeze([...params.signatureRequests]);
-    this.transactionSteps = Object.freeze([...params.transactionSteps]);
+    this.txSteps = Object.freeze([...params.txSteps]);
   }
 
   /**
@@ -743,7 +736,7 @@ export class ExecutableTransactionPlan<
    * const primaryStep = executable.primaryStep;
    * ```
    */
-  get primaryStep(): TransactionPlanTransactionStep<
+  get primaryStep(): TransactionPlanTxStep<
     TPrimaryAction,
     Readonly<Transaction<TPrimaryAction>>,
     "primary"
@@ -757,11 +750,11 @@ export class ExecutableTransactionPlan<
    * @returns The final primary transaction after signatures are applied.
    * @example
    * ```ts
-   * const tx = executable.primaryTransaction;
+   * const tx = executable.primaryTx;
    * ```
    */
-  get primaryTransaction(): Readonly<Transaction<TPrimaryAction>> {
-    return this.builtPrimaryStep.transaction;
+  get primaryTx(): Readonly<Transaction<TPrimaryAction>> {
+    return this.builtPrimaryStep.tx;
   }
 
   /**
@@ -774,10 +767,10 @@ export class ExecutableTransactionPlan<
    * ```
    */
   get calls(): readonly TransactionPlanBatchCall[] {
-    return this.transactionSteps.map(({ transaction }) => ({
-      to: transaction.to,
-      value: transaction.value,
-      data: transaction.data,
+    return this.txSteps.map(({ tx }) => ({
+      to: tx.to,
+      value: tx.value,
+      data: tx.data,
     }));
   }
 }

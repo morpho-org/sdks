@@ -43,7 +43,7 @@ describe("Metadata", () => {
           vaultData,
         });
 
-        const tx_1 = (await deposit.prepare()).build().primaryTransaction;
+        const tx_1 = (await deposit.prepare()).build().primaryTx;
         expect(tx_1.data).toContain("25AFEA44");
         const position = tx_1.data.indexOf("25AFEA44");
         expect(position).toBeGreaterThanOrEqual(8);
@@ -64,7 +64,7 @@ describe("Metadata", () => {
           throw new Error("Approve transaction is not an approval transaction");
         }
 
-        const tx_2 = (await deposit.prepare()).build().primaryTransaction;
+        const tx_2 = (await deposit.prepare()).build().primaryTx;
         await client.sendTransaction(approveTx);
         await client.sendTransaction(tx_2);
       },
@@ -115,7 +115,7 @@ describe("Metadata", () => {
           vaultData,
         });
 
-        const tx = (await deposit.prepare()).build().primaryTransaction;
+        const tx = (await deposit.prepare()).build().primaryTx;
         expect(tx.data).toContain("25AFEA44");
         const position = tx.data.indexOf("25AFEA44");
         expect(position).toBeGreaterThanOrEqual(8);

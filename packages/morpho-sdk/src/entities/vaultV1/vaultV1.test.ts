@@ -103,7 +103,7 @@ describe("MorphoVaultV1 entity tests", () => {
         vaultData,
         slippageTolerance: 0n,
       });
-      const tx = (await result.prepare()).build().primaryTransaction;
+      const tx = (await result.prepare()).build().primaryTx;
       expect(tx.data).toBeDefined();
       expect(tx.value).toBe(0n);
     });
@@ -128,7 +128,7 @@ describe("MorphoVaultV1 entity tests", () => {
         vaultData,
         slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
       });
-      const tx = (await result.prepare()).build().primaryTransaction;
+      const tx = (await result.prepare()).build().primaryTx;
       expect(tx.data).toBeDefined();
       expect(tx.value).toBe(0n);
     });
@@ -475,7 +475,7 @@ describe("MorphoVaultV1 entity tests", () => {
         targetVault,
         shares: parseUnits("1000", 18),
       });
-      const tx = (await result.prepare()).build().primaryTransaction;
+      const tx = (await result.prepare()).build().primaryTx;
       expect(tx.action.type).toBe("vaultV1MigrateToV2");
       expect(tx.action.args.sourceVault).toBe(SteakhouseUsdcVaultV1.address);
       expect(tx.action.args.targetVault).toBe(KeyrockUsdcVaultV2.address);
@@ -603,7 +603,7 @@ describe("MorphoVaultV1 entity tests", () => {
         shares: parseUnits("1000", 18),
         slippageTolerance: 0n,
       });
-      const tx = (await result.prepare()).build().primaryTransaction;
+      const tx = (await result.prepare()).build().primaryTx;
       expect(tx.data).toBeDefined();
     });
 
@@ -634,7 +634,7 @@ describe("MorphoVaultV1 entity tests", () => {
         shares: parseUnits("1000", 18),
         slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
       });
-      const tx = (await result.prepare()).build().primaryTransaction;
+      const tx = (await result.prepare()).build().primaryTx;
       expect(tx.data).toBeDefined();
     });
 
@@ -757,7 +757,7 @@ describe("MorphoVaultV1 entity tests", () => {
         shares: parseUnits("1000", 18),
       });
 
-      const tx = (await result.prepare()).build().primaryTransaction;
+      const tx = (await result.prepare()).build().primaryTx;
       expect(tx.action.args.recipient).toBe(OTHER_USER);
     });
 
@@ -790,7 +790,7 @@ describe("MorphoVaultV1 entity tests", () => {
         shares: parseUnits("1000", 18),
       });
 
-      const tx = (await result.prepare()).build().primaryTransaction;
+      const tx = (await result.prepare()).build().primaryTx;
       expect(tx.action.args.recipient).toBe(OTHER_USER);
     });
   });

@@ -669,7 +669,7 @@ export type SignatureRequirement =
   | Requirement<AuthorizationRequirementSignature>;
 
 /** Transaction action metadata that can appear as an action prerequisite. */
-export type TransactionRequirementAction =
+export type TxRequirementAction =
   | ERC20ApprovalAction
   | BlueAuthorizationAction
   | MidnightAuthorizationAction
@@ -677,12 +677,10 @@ export type TransactionRequirementAction =
   | MidnightSupplyCollateralAction;
 
 /** Onchain transaction prerequisite discovered while preparing an entity transaction plan. */
-export type TransactionRequirement = Readonly<
-  Transaction<TransactionRequirementAction>
->;
+export type TxRequirement = Readonly<Transaction<TxRequirementAction>>;
 
 /** Onchain transaction or signature prerequisite discovered while preparing an entity transaction plan. */
-export type ActionRequirement = TransactionRequirement | SignatureRequirement;
+export type ActionRequirement = TxRequirement | SignatureRequirement;
 
 export function isRequirementApproval(
   requirement: unknown,
@@ -722,10 +720,10 @@ export function isRequirementBlueAuthorization(
 export function isRequirementSignature<
   T extends RequirementSignature = RequirementSignature,
 >(
-  requirement: TransactionRequirement | Requirement<T> | undefined,
+  requirement: TxRequirement | Requirement<T> | undefined,
 ): requirement is Requirement<T>;
 export function isRequirementSignature(
-  requirement: TransactionRequirement | Requirement | undefined,
+  requirement: TxRequirement | Requirement | undefined,
 ): requirement is Requirement;
 export function isRequirementSignature(
   requirement: ActionRequirement | undefined,

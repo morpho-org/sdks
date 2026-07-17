@@ -66,7 +66,7 @@ describe("SupplyCollateralBorrowBlue", () => {
         await client.sendTransaction(approval);
         await client.sendTransaction(authorization);
 
-        const tx = (await scb.prepare()).build().primaryTransaction;
+        const tx = (await scb.prepare()).build().primaryTx;
 
         await client.sendTransaction(tx);
       },
@@ -135,7 +135,7 @@ describe("SupplyCollateralBorrowBlue", () => {
 
         await client.sendTransaction(authorization);
 
-        const tx = (await scb.prepare()).build().primaryTransaction;
+        const tx = (await scb.prepare()).build().primaryTx;
         expect(tx.value).toEqual(nativeAmount);
         await client.sendTransaction(tx);
       },
@@ -213,7 +213,7 @@ describe("SupplyCollateralBorrowBlue", () => {
         await client.sendTransaction(approval);
         await client.sendTransaction(authorization);
 
-        const tx = (await scb.prepare()).build().primaryTransaction;
+        const tx = (await scb.prepare()).build().primaryTx;
         expect(tx.value).toEqual(nativeAmount);
         await client.sendTransaction(tx);
       },
@@ -291,7 +291,7 @@ describe("SupplyCollateralBorrowBlue", () => {
         }
         await client.sendTransaction(approval);
 
-        const tx = (await scb.prepare()).build().primaryTransaction;
+        const tx = (await scb.prepare()).build().primaryTx;
         await client.sendTransaction(tx);
       },
     });
@@ -382,7 +382,7 @@ describe("SupplyCollateralBorrowBlue", () => {
         const tx = (await scb.prepare()).build([
           permitSignature,
           authorizationSignature,
-        ]).primaryTransaction;
+        ]).primaryTx;
         await client.sendTransaction(tx);
       },
     });
@@ -482,7 +482,7 @@ describe("SupplyCollateralBorrowBlue", () => {
         const tx = (await scb.prepare()).build([
           permit2Signature,
           authorizationSignature,
-        ]).primaryTransaction;
+        ]).primaryTx;
         await client.sendTransaction(tx);
       },
     });

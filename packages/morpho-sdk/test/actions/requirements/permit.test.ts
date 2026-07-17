@@ -65,7 +65,7 @@ describe("Permit", () => {
 
         const tx_1 = (await deposit.prepare()).build([
           requirementSignature,
-        ]).primaryTransaction;
+        ]).primaryTx;
 
         await client.sendTransaction(tx_1);
       },

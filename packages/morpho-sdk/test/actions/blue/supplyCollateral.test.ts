@@ -54,8 +54,7 @@ describe("SupplyCollateralBlue", () => {
 
         await client.sendTransaction(approveTx);
 
-        const tx = (await supplyCollateral.prepare()).build()
-          .primaryTransaction;
+        const tx = (await supplyCollateral.prepare()).build().primaryTx;
         await client.sendTransaction(tx);
       },
     });
@@ -110,8 +109,7 @@ describe("SupplyCollateralBlue", () => {
         const requirements = (await supplyCollateral.prepare()).requirements;
         expect(requirements.length).toBe(0);
 
-        const tx = (await supplyCollateral.prepare()).build()
-          .primaryTransaction;
+        const tx = (await supplyCollateral.prepare()).build().primaryTx;
 
         await client.sendTransaction(tx);
       },
@@ -157,8 +155,7 @@ describe("SupplyCollateralBlue", () => {
         const requirements = (await supplyCollateral.prepare()).requirements;
         expect(requirements.length).toBe(0);
 
-        const tx = (await supplyCollateral.prepare()).build()
-          .primaryTransaction;
+        const tx = (await supplyCollateral.prepare()).build().primaryTx;
         expect(tx.value).toEqual(nativeAmount);
 
         await client.sendTransaction(tx);
@@ -222,8 +219,7 @@ describe("SupplyCollateralBlue", () => {
 
         await client.sendTransaction(approveTx);
 
-        const tx = (await supplyCollateral.prepare()).build()
-          .primaryTransaction;
+        const tx = (await supplyCollateral.prepare()).build().primaryTx;
         expect(tx.value).toEqual(nativeAmount);
 
         await client.sendTransaction(tx);
@@ -292,7 +288,7 @@ describe("SupplyCollateralBlue", () => {
 
         const tx = (await supplyCollateral.prepare()).build([
           requirementSignature,
-        ]).primaryTransaction;
+        ]).primaryTx;
         await client.sendTransaction(tx);
       },
     });
@@ -377,7 +373,7 @@ describe("SupplyCollateralBlue", () => {
 
         const tx = (await supplyCollateral.prepare()).build([
           requirementSignature,
-        ]).primaryTransaction;
+        ]).primaryTx;
         await client.sendTransaction(tx);
       },
     });

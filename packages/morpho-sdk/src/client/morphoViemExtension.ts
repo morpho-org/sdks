@@ -112,7 +112,7 @@ function createMorphoNamespace(
  * for (const request of prepared.signatureRequests) {
  *   signatures.push(await request.sign(client, user));
  * }
- * const tx = prepared.build(signatures).primaryTransaction;
+ * const tx = prepared.build(signatures).primaryTx;
  * ```
  */
 export function morphoViemExtension(_options?: {

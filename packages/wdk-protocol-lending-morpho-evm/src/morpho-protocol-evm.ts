@@ -422,7 +422,7 @@ async function getTransactionPlanTx<
   signatures?: TSignatures,
 ): Promise<WdkTransaction> {
   const executable = (await plan.prepare()).build(signatures);
-  return toWdkTransaction(executable.primaryTransaction);
+  return toWdkTransaction(executable.primaryTx);
 }
 
 /**

@@ -51,7 +51,7 @@ describe("Approval", () => {
 
         await client.sendTransaction(requirements[0]);
 
-        const tx = (await deposit.prepare()).build().primaryTransaction;
+        const tx = (await deposit.prepare()).build().primaryTx;
 
         await client.sendTransaction(tx);
       },
@@ -109,7 +109,7 @@ describe("Approval", () => {
         await client.sendTransaction(requirements[0]);
         await client.sendTransaction(requirements[1]);
 
-        const tx = (await deposit.prepare()).build().primaryTransaction;
+        const tx = (await deposit.prepare()).build().primaryTx;
 
         await client.sendTransaction(tx);
       },

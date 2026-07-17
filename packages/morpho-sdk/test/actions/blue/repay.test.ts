@@ -73,7 +73,7 @@ describe("RepayBlue", () => {
         }
         await client.sendTransaction(approval);
 
-        const tx = (await repay.prepare()).build().primaryTransaction;
+        const tx = (await repay.prepare()).build().primaryTx;
         await client.sendTransaction(tx);
       },
     });
@@ -142,7 +142,7 @@ describe("RepayBlue", () => {
         });
         await client.sendTransaction(approval);
 
-        const tx = (await repay.prepare()).build().primaryTransaction;
+        const tx = (await repay.prepare()).build().primaryTx;
         await client.sendTransaction(tx);
       },
     });
@@ -232,7 +232,7 @@ describe("RepayBlue", () => {
         }
         await client.sendTransaction(approval);
 
-        const tx = (await repay.prepare()).build().primaryTransaction;
+        const tx = (await repay.prepare()).build().primaryTx;
         await client.sendTransaction(tx);
       },
     });
@@ -295,7 +295,7 @@ describe("RepayBlue", () => {
         const requirements = (await repay.prepare()).requirements;
         expect(requirements.length).toBe(0);
 
-        const tx = (await repay.prepare()).build().primaryTransaction;
+        const tx = (await repay.prepare()).build().primaryTx;
         expect(tx.value).toEqual(nativeAmount);
         await client.sendTransaction(tx);
       },
@@ -382,7 +382,7 @@ describe("RepayBlue", () => {
         expect(approval.action.args.amount).toEqual(erc20Part);
         await client.sendTransaction(approval);
 
-        const tx = (await repay.prepare()).build().primaryTransaction;
+        const tx = (await repay.prepare()).build().primaryTx;
         // Only the native portion rides as tx.value.
         expect(tx.value).toEqual(nativePart);
         await client.sendTransaction(tx);
@@ -475,7 +475,7 @@ describe("RepayBlue", () => {
         });
         await client.sendTransaction(approval);
 
-        const tx = (await repay.prepare()).build().primaryTransaction;
+        const tx = (await repay.prepare()).build().primaryTx;
         expect(tx.value).toEqual(nativePart);
         await client.sendTransaction(tx);
       },
@@ -554,7 +554,7 @@ describe("RepayBlue", () => {
         const requirements = (await repay.prepare()).requirements;
         expect(requirements).toEqual([]);
 
-        const tx = (await repay.prepare()).build().primaryTransaction;
+        const tx = (await repay.prepare()).build().primaryTx;
         // Everything is wrapped native; no ERC-20 pulled.
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.transferAmount).toEqual(nativeAmount);

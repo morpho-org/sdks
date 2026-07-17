@@ -86,7 +86,7 @@ describe("Borrow with single vault reallocation (e2e)", () => {
         }
         await client.sendTransaction(authorization);
 
-        const tx = (await borrow.prepare()).build().primaryTransaction;
+        const tx = (await borrow.prepare()).build().primaryTx;
         expect(tx.value).toBe(0n);
         expect(tx.action.args.reallocationFee).toBe(0n);
 
@@ -171,7 +171,7 @@ describe("Borrow with multiple source market withdrawals", () => {
         }
         await client.sendTransaction(authorization);
 
-        const tx = (await borrow.prepare()).build().primaryTransaction;
+        const tx = (await borrow.prepare()).build().primaryTx;
         expect(tx.value).toBe(0n);
 
         await client.sendTransaction(tx);
@@ -272,7 +272,7 @@ describe("Borrow with reallocation fee", () => {
         }
         await client.sendTransaction(authorization);
 
-        const tx = (await borrow.prepare()).build().primaryTransaction;
+        const tx = (await borrow.prepare()).build().primaryTx;
         expect(tx.value).toBe(reallocationFee);
         expect(tx.action.args.reallocationFee).toBe(reallocationFee);
 
@@ -368,7 +368,7 @@ describe("SupplyCollateralBorrow with single vault reallocation", () => {
         await client.sendTransaction(approval);
         await client.sendTransaction(authorization);
 
-        const tx = (await scb.prepare()).build().primaryTransaction;
+        const tx = (await scb.prepare()).build().primaryTx;
         expect(tx.value).toBe(0n);
         expect(tx.action.args.reallocationFee).toBe(0n);
 
@@ -462,7 +462,7 @@ describe("SupplyCollateralBorrow with multiple source market withdrawals", () =>
         await client.sendTransaction(approval);
         await client.sendTransaction(authorization);
 
-        const tx = (await scb.prepare()).build().primaryTransaction;
+        const tx = (await scb.prepare()).build().primaryTx;
         expect(tx.value).toBe(0n);
 
         await client.sendTransaction(tx);
@@ -575,7 +575,7 @@ describe("SupplyCollateralBorrow with reallocation fee", () => {
         await client.sendTransaction(approval);
         await client.sendTransaction(authorization);
 
-        const tx = (await scb.prepare()).build().primaryTransaction;
+        const tx = (await scb.prepare()).build().primaryTx;
         expect(tx.value).toBe(reallocationFee);
         expect(tx.action.args.reallocationFee).toBe(reallocationFee);
 
@@ -699,7 +699,7 @@ describe("getReallocationData and getReallocations", () => {
         }
         await client.sendTransaction(authorization);
 
-        const tx = (await borrow.prepare()).build().primaryTransaction;
+        const tx = (await borrow.prepare()).build().primaryTx;
         await client.sendTransaction(tx);
       },
     });
@@ -775,7 +775,7 @@ describe("getReallocationData and getReallocations", () => {
         await client.sendTransaction(approval);
         await client.sendTransaction(authorization);
 
-        const tx = (await scb.prepare()).build().primaryTransaction;
+        const tx = (await scb.prepare()).build().primaryTx;
         await client.sendTransaction(tx);
       },
     });

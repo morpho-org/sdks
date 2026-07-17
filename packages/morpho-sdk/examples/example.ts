@@ -54,7 +54,7 @@ async function main() {
     vaultData,
   });
   const preparedDeposit = await deposit.prepare();
-  const depositTx = preparedDeposit.primaryTransaction;
+  const depositTx = preparedDeposit.primaryTx;
   if (depositTx == null) throw new Error("Deposit transaction is unavailable");
 
   console.log("Deposit transaction:", {
@@ -78,7 +78,7 @@ async function main() {
     userAddress: USER_ADDRESS,
   });
   const preparedWithdraw = await withdraw.prepare();
-  const withdrawTx = preparedWithdraw.primaryTransaction;
+  const withdrawTx = preparedWithdraw.primaryTx;
   if (withdrawTx == null)
     throw new Error("Withdraw transaction is unavailable");
 
@@ -96,7 +96,7 @@ async function main() {
     userAddress: USER_ADDRESS,
   });
   const preparedRedeem = await redeem.prepare();
-  const redeemTx = preparedRedeem.primaryTransaction;
+  const redeemTx = preparedRedeem.primaryTx;
   if (redeemTx == null) throw new Error("Redeem transaction is unavailable");
 
   console.log("Redeem transaction:", {

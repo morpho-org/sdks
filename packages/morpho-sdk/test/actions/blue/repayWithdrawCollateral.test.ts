@@ -81,7 +81,7 @@ describe("RepayWithdrawCollateralBlue", () => {
         }
         await client.sendTransaction(approval);
 
-        const tx = (await action.prepare()).build().primaryTransaction;
+        const tx = (await action.prepare()).build().primaryTx;
         await client.sendTransaction(tx);
       },
     });
@@ -158,7 +158,7 @@ describe("RepayWithdrawCollateralBlue", () => {
           }
         }
 
-        const tx = (await action.prepare()).build().primaryTransaction;
+        const tx = (await action.prepare()).build().primaryTx;
         await client.sendTransaction(tx);
       },
     });
@@ -255,7 +255,7 @@ describe("RepayWithdrawCollateralBlue", () => {
           }
         }
 
-        const tx = (await action.prepare()).build().primaryTransaction;
+        const tx = (await action.prepare()).build().primaryTx;
         await client.sendTransaction(tx);
       },
     });
@@ -329,7 +329,7 @@ describe("RepayWithdrawCollateralBlue", () => {
           }
         }
 
-        const tx = (await action.prepare()).build().primaryTransaction;
+        const tx = (await action.prepare()).build().primaryTx;
         expect(tx.value).toEqual(nativeAmount);
         await client.sendTransaction(tx);
       },
@@ -421,7 +421,7 @@ describe("RepayWithdrawCollateralBlue", () => {
         expect(approval.action.args.amount).toEqual(erc20Part);
         await client.sendTransaction(approval);
 
-        const tx = (await action.prepare()).build().primaryTransaction;
+        const tx = (await action.prepare()).build().primaryTx;
         // Only the native portion rides as tx.value.
         expect(tx.value).toEqual(nativePart);
         await client.sendTransaction(tx);
@@ -520,7 +520,7 @@ describe("RepayWithdrawCollateralBlue", () => {
         });
         await client.sendTransaction(approval);
 
-        const tx = (await action.prepare()).build().primaryTransaction;
+        const tx = (await action.prepare()).build().primaryTx;
         expect(tx.value).toEqual(nativePart);
         await client.sendTransaction(tx);
       },

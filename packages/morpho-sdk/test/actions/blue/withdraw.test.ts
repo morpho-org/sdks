@@ -62,7 +62,7 @@ describe("WithdrawBlue", () => {
         }
         await client.sendTransaction(authorization);
 
-        const tx = (await withdraw.prepare()).build().primaryTransaction;
+        const tx = (await withdraw.prepare()).build().primaryTx;
         expect(tx.value).toBe(0n);
 
         await client.sendTransaction(tx);
@@ -117,7 +117,7 @@ describe("WithdrawBlue", () => {
         }
         await client.sendTransaction(authorization);
 
-        const tx = (await withdraw.prepare()).build().primaryTransaction;
+        const tx = (await withdraw.prepare()).build().primaryTx;
         expect(tx.value).toBe(0n);
 
         await client.sendTransaction(tx);
@@ -155,7 +155,7 @@ describe("WithdrawBlue", () => {
       positionData,
     });
 
-    const tx = (await withdraw.prepare()).build().primaryTransaction;
+    const tx = (await withdraw.prepare()).build().primaryTx;
     expect(tx.action.args.receiver).toBe(receiver);
   });
 
@@ -242,7 +242,7 @@ describe("WithdrawBlue", () => {
         }
         await client.sendTransaction(authorization);
 
-        const tx = (await withdraw.prepare()).build().primaryTransaction;
+        const tx = (await withdraw.prepare()).build().primaryTx;
         expect(tx.value).toBe(0n);
         expect(tx.action.args.reallocationFee).toBe(0n);
 
@@ -313,7 +313,7 @@ describe("WithdrawBlue", () => {
         }
         await client.sendTransaction(authorization);
 
-        const tx = (await withdraw.prepare()).build().primaryTransaction;
+        const tx = (await withdraw.prepare()).build().primaryTx;
         expect(tx.value).toBe(0n);
         expect(tx.action.args.shares).toBe(withdrawShares);
         expect(tx.action.args.assets).toBe(0n);
@@ -388,7 +388,7 @@ describe("WithdrawBlue", () => {
         }
         await client.sendTransaction(authorization);
 
-        const tx = (await withdraw.prepare()).build().primaryTransaction;
+        const tx = (await withdraw.prepare()).build().primaryTx;
         expect(tx.action.args.receiver).toBe(receiver);
         await client.sendTransaction(tx);
       },

@@ -63,7 +63,7 @@ describe("MigrateToV2 VaultV1", () => {
 
         await client.sendTransaction(approveTx);
 
-        const tx = (await migrate.prepare()).build().primaryTransaction;
+        const tx = (await migrate.prepare()).build().primaryTx;
         await client.sendTransaction(tx);
       },
     });
@@ -144,7 +144,7 @@ describe("MigrateToV2 VaultV1", () => {
 
         const tx = (await migrate.prepare()).build([
           requirementSignature,
-        ]).primaryTransaction;
+        ]).primaryTx;
         await client.sendTransaction(tx);
       },
     });

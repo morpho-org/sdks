@@ -113,7 +113,7 @@ const buildMakeOffersOutputTx: BuildMakeOffersOutputTx = async (params) =>
           params.signedPayloads ?? new Map([["0x1234", "0x1234" as Hex]]),
       })
       .prepare()
-  ).build(params.signatures).primaryTransaction;
+  ).build(params.signatures).primaryTx;
 
 const offersData = (
   buy = true,
@@ -508,7 +508,7 @@ describe("MorphoMidnight", () => {
         deadline: maxUint256,
       });
       expect(output).toBeInstanceOf(TransactionPlan);
-      const tx = (await output.prepare()).build().primaryTransaction;
+      const tx = (await output.prepare()).build().primaryTx;
 
       expect(tx.action.args).toEqual({
         market: midnightMarketId,
@@ -649,7 +649,7 @@ describe("MorphoMidnight", () => {
       });
       const requirements = (await output.prepare()).requirements;
       expect(output).toBeInstanceOf(TransactionPlan);
-      const tx = (await output.prepare()).build().primaryTransaction;
+      const tx = (await output.prepare()).build().primaryTx;
 
       expect(tx.action.args.loanAssets).toBe(1_000n);
       expect(
@@ -751,7 +751,7 @@ describe("MorphoMidnight", () => {
       });
       const requirements = (await output.prepare()).requirements;
       expect(output).toBeInstanceOf(TransactionPlan);
-      const tx = (await output.prepare()).build().primaryTransaction;
+      const tx = (await output.prepare()).build().primaryTx;
 
       expect(tx.action.args).toMatchObject({
         collateralAssets: 2_000n,
@@ -833,7 +833,7 @@ describe("MorphoMidnight", () => {
       });
       const requirements = (await output.prepare()).requirements;
       expect(output).toBeInstanceOf(TransactionPlan);
-      const tx = (await output.prepare()).build().primaryTransaction;
+      const tx = (await output.prepare()).build().primaryTx;
 
       expect(tx.action.args.assets).toBe(2_000n);
       expect(requirements[0]?.action).toMatchObject({
@@ -892,7 +892,7 @@ describe("MorphoMidnight", () => {
         positionData: positionData(market, { credit: 250n, pendingFee: 50n }),
         accountAddress: midnightAddresses.taker,
       });
-      const tx = (await output.prepare()).build().primaryTransaction;
+      const tx = (await output.prepare()).build().primaryTx;
 
       expect(tx.action.args).toEqual({
         market: midnightMarketId,
@@ -909,7 +909,7 @@ describe("MorphoMidnight", () => {
         accountAddress: midnightAddresses.taker,
         units: 225n,
       });
-      const tx = (await output.prepare()).build().primaryTransaction;
+      const tx = (await output.prepare()).build().primaryTx;
 
       expect(tx.action.args).toEqual({
         market: midnightMarketId,
@@ -973,7 +973,7 @@ describe("MorphoMidnight", () => {
         receiver: midnightAddresses.maker,
       });
       const requirements = (await output.prepare()).requirements;
-      const tx = (await output.prepare()).build().primaryTransaction;
+      const tx = (await output.prepare()).build().primaryTx;
 
       expect(requirements).toEqual([]);
       expect(tx.action.args.receiver).toBe(midnightAddresses.maker);
@@ -1377,7 +1377,7 @@ describe("MorphoMidnight", () => {
       });
       expect(output).toBeInstanceOf(TransactionPlan);
       const signature = await signOfferRootRequirement(output);
-      const tx = (await output.prepare()).build(signature).primaryTransaction;
+      const tx = (await output.prepare()).build(signature).primaryTx;
 
       expect(output.groups).toEqual(data.groups);
       expect(output.root).toBe(data.tree.root);
@@ -1467,7 +1467,7 @@ describe("MorphoMidnight", () => {
       });
       const prepared = await output.prepare();
       expect(output).toBeInstanceOf(TransactionPlan);
-      expect(prepared.transactionSteps).toEqual([]);
+      expect(prepared.txSteps).toEqual([]);
       expect(prepared.hasIntent("midnightOfferRootSignature")).toBe(true);
       const requirements = (await output.prepare()).requirements;
       const requirement = requirements.find(
@@ -1693,7 +1693,7 @@ describe("MorphoMidnight", () => {
         },
       });
       const signature = await signOfferRootRequirement(output);
-      const tx = (await output.prepare()).build(signature).primaryTransaction;
+      const tx = (await output.prepare()).build(signature).primaryTx;
 
       expect(tx.action.args.maker).toBe(data.accountAddress);
     });
@@ -1806,7 +1806,7 @@ describe("MorphoMidnight", () => {
         validation: offerValidation,
       });
       const signature = await signOfferRootRequirement(output);
-      const tx = (await output.prepare()).build(signature).primaryTransaction;
+      const tx = (await output.prepare()).build(signature).primaryTx;
 
       expect(output.groups).toEqual(data.groups);
       expect(tx.action.args.maker).toBe(offerSignerAccount.address);
@@ -1840,7 +1840,7 @@ describe("MorphoMidnight", () => {
         validation: offerValidation,
       });
       const requirements = (await output.prepare()).requirements;
-      const tx = (await output.prepare()).build().primaryTransaction;
+      const tx = (await output.prepare()).build().primaryTx;
 
       expect(
         requirements.map((requirement) => requirement.action.type),
@@ -1903,7 +1903,7 @@ describe("MorphoMidnight", () => {
         deadline: maxUint256,
       });
       const requirements = (await output.prepare()).requirements;
-      const tx = (await output.prepare()).build().primaryTransaction;
+      const tx = (await output.prepare()).build().primaryTx;
 
       expect(tx.action.args).toMatchObject({
         repayAssets: 1_000n,
@@ -1991,7 +1991,7 @@ describe("MorphoMidnight", () => {
         accountAddress: midnightAddresses.maker,
       });
       const requirements = (await output.prepare()).requirements;
-      const tx = (await output.prepare()).build().primaryTransaction;
+      const tx = (await output.prepare()).build().primaryTx;
 
       expect(requirements).toEqual([]);
       expect(tx.action.args.group).toBe(data.groups[0]);

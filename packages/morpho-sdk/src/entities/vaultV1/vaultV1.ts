@@ -241,7 +241,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
           },
         }),
 
-      buildPrimaryTransaction: (signatures) => {
+      buildPrimaryTx: (signatures) => {
         const { permit } = selectRequirementSignatures(signatures, {
           permit: true,
         });
@@ -274,7 +274,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
     }
 
     return new TransactionPlan({
-      buildPrimaryTransaction: () =>
+      buildPrimaryTx: () =>
         vaultV1Withdraw({
           vault: { address: this.vault },
           args: {
@@ -296,7 +296,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
     }
 
     return new TransactionPlan({
-      buildPrimaryTransaction: () =>
+      buildPrimaryTx: () =>
         vaultV1Redeem({
           vault: { address: this.vault },
           args: {
@@ -380,7 +380,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
           },
         }),
 
-      buildPrimaryTransaction: (signatures) => {
+      buildPrimaryTx: (signatures) => {
         const { permit } = selectRequirementSignatures(signatures, {
           permit: true,
         });

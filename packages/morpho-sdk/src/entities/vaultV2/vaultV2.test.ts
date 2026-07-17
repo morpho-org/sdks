@@ -103,7 +103,7 @@ describe("MorphoVaultV2 entity tests", () => {
         vaultData,
         slippageTolerance: 0n,
       });
-      const tx = (await result.prepare()).build().primaryTransaction;
+      const tx = (await result.prepare()).build().primaryTx;
       expect(tx.data).toBeDefined();
       expect(tx.value).toBe(0n);
     });
@@ -128,7 +128,7 @@ describe("MorphoVaultV2 entity tests", () => {
         vaultData,
         slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
       });
-      const tx = (await result.prepare()).build().primaryTransaction;
+      const tx = (await result.prepare()).build().primaryTx;
       expect(tx.data).toBeDefined();
       expect(tx.value).toBe(0n);
     });

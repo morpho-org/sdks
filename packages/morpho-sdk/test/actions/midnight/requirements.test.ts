@@ -146,7 +146,7 @@ const prepareTakeableOffer = async (params: {
         reservedCollateralAssets: 0n,
       });
     await params.client.sendTransaction({
-      ...(await supply.prepare()).build().primaryTransaction,
+      ...(await supply.prepare()).build().primaryTx,
       account: offerMaker,
     });
     await expect(
@@ -343,7 +343,7 @@ describe("Midnight requirements on fork", () => {
 
     await client.sendTransaction(approval);
     await expect((await output.prepare()).requirements).toEqual([]);
-    expect((await output.prepare()).build().primaryTransaction.to).toBe(
+    expect((await output.prepare()).build().primaryTx.to).toBe(
       getChainAddress(ChainId.BaseMainnet, "midnight"),
     );
   });
@@ -383,9 +383,7 @@ describe("Midnight requirements on fork", () => {
     }
     await expect((await output.prepare()).requirements).toEqual([]);
 
-    await client.sendTransaction(
-      (await output.prepare()).build().primaryTransaction,
-    );
+    await client.sendTransaction((await output.prepare()).build().primaryTx);
     await expect(
       client.readContract({
         address: midnight,
@@ -422,9 +420,7 @@ describe("Midnight requirements on fork", () => {
       }
       await client.sendTransaction(requirement);
     }
-    await client.sendTransaction(
-      (await supply.prepare()).build().primaryTransaction,
-    );
+    await client.sendTransaction((await supply.prepare()).build().primaryTx);
     await expect(
       client.readContract({
         address: midnight,
@@ -457,9 +453,7 @@ describe("Midnight requirements on fork", () => {
       }
       await client.sendTransaction(requirement);
     }
-    await client.sendTransaction(
-      (await borrow.prepare()).build().primaryTransaction,
-    );
+    await client.sendTransaction((await borrow.prepare()).build().primaryTx);
     await expect(
       client.readContract({
         address: midnight,
@@ -504,9 +498,7 @@ describe("Midnight requirements on fork", () => {
       }
       await client.sendTransaction(requirement);
     }
-    await client.sendTransaction(
-      (await borrow.prepare()).build().primaryTransaction,
-    );
+    await client.sendTransaction((await borrow.prepare()).build().primaryTx);
     await expect(
       client.readContract({
         address: midnight,
@@ -540,9 +532,7 @@ describe("Midnight requirements on fork", () => {
       }
       await client.sendTransaction(requirement);
     }
-    await client.sendTransaction(
-      (await repay.prepare()).build().primaryTransaction,
-    );
+    await client.sendTransaction((await repay.prepare()).build().primaryTx);
     await expect(
       client.readContract({
         address: midnight,

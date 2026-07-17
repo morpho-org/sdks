@@ -541,7 +541,7 @@ export class MorphoBlue implements BlueActions {
           args: { amount, from: userAddress },
         }),
 
-      buildPrimaryTransaction: (signatures) => {
+      buildPrimaryTx: (signatures) => {
         const { permit } = selectRequirementSignatures(signatures, {
           permit: true,
         });
@@ -649,7 +649,7 @@ export class MorphoBlue implements BlueActions {
         return authTx ? [authTx] : [];
       },
 
-      buildPrimaryTransaction: (signatures) => {
+      buildPrimaryTx: (signatures) => {
         const { authorization } = selectRequirementSignatures(signatures, {
           authorization: true,
         });
@@ -704,7 +704,7 @@ export class MorphoBlue implements BlueActions {
           args: { amount, from: userAddress },
         }),
 
-      buildPrimaryTransaction: (signatures) => {
+      buildPrimaryTx: (signatures) => {
         const { permit } = selectRequirementSignatures(signatures, {
           permit: true,
         });
@@ -784,7 +784,7 @@ export class MorphoBlue implements BlueActions {
         return authTx ? [authTx] : [];
       },
 
-      buildPrimaryTransaction: (signatures) => {
+      buildPrimaryTx: (signatures) => {
         const { authorization } = selectRequirementSignatures(signatures, {
           authorization: true,
         });
@@ -929,7 +929,7 @@ export class MorphoBlue implements BlueActions {
         });
       },
 
-      buildPrimaryTransaction: (signatures) => {
+      buildPrimaryTx: (signatures) => {
         const { permit } = selectRequirementSignatures(signatures, {
           permit: true,
         });
@@ -1008,7 +1008,7 @@ export class MorphoBlue implements BlueActions {
     });
 
     return new TransactionPlan({
-      buildPrimaryTransaction: () =>
+      buildPrimaryTx: () =>
         blueWithdrawCollateral({
           market: {
             chainId: this.chainId,
@@ -1184,7 +1184,7 @@ export class MorphoBlue implements BlueActions {
         return [...erc20Requirements, ...(authTx ? [authTx] : [])];
       },
 
-      buildPrimaryTransaction: (signatures) => {
+      buildPrimaryTx: (signatures) => {
         const { permit, authorization } = selectRequirementSignatures(
           signatures,
           { permit: true, authorization: true },
@@ -1317,7 +1317,7 @@ export class MorphoBlue implements BlueActions {
         return [...erc20Requirements, ...(authTx ? [authTx] : [])];
       },
 
-      buildPrimaryTransaction: (signatures) => {
+      buildPrimaryTx: (signatures) => {
         const { permit, authorization } = selectRequirementSignatures(
           signatures,
           { permit: true, authorization: true },
@@ -1552,7 +1552,7 @@ export class MorphoBlue implements BlueActions {
         return authTx ? [authTx] : [];
       },
 
-      buildPrimaryTransaction: (signatures) => {
+      buildPrimaryTx: (signatures) => {
         const { authorization } = selectRequirementSignatures(signatures, {
           authorization: true,
         });

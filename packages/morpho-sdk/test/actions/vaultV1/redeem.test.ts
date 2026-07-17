@@ -36,7 +36,7 @@ describe("Redeem VaultV1", () => {
           userAddress: client.account.address,
           shares,
         });
-        const tx = (await redeem.prepare()).build().primaryTransaction;
+        const tx = (await redeem.prepare()).build().primaryTx;
 
         await client.sendTransaction(tx);
       },
@@ -92,7 +92,7 @@ describe("Redeem VaultV1", () => {
         }
         await client.sendTransaction(approveTx);
         await client.sendTransaction(
-          (await deposit.prepare()).build().primaryTransaction,
+          (await deposit.prepare()).build().primaryTx,
         );
 
         const shares = await client.balanceOf({
@@ -104,7 +104,7 @@ describe("Redeem VaultV1", () => {
           shares,
         });
         await client.sendTransaction(
-          (await redeem.prepare()).build().primaryTransaction,
+          (await redeem.prepare()).build().primaryTx,
         );
       },
     });
@@ -150,7 +150,7 @@ describe("Redeem VaultV1", () => {
           shares: redeemShares,
         });
         await client.sendTransaction(
-          (await redeem.prepare()).build().primaryTransaction,
+          (await redeem.prepare()).build().primaryTx,
         );
       },
     });

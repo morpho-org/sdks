@@ -75,7 +75,7 @@ function mockTransactionPlan(
   const getRequirementRequests = vi.fn(
     async (_requestOptions?: unknown) => requirements,
   );
-  const buildPrimaryTransaction = vi.fn(
+  const buildPrimaryTx = vi.fn(
     (_signatures?: readonly RequirementSignature[]) => tx,
   );
   const prepare = vi.fn(async (options?: { requestOptions?: unknown }) => {
@@ -84,16 +84,16 @@ function mockTransactionPlan(
     );
     const primaryStep = {
       id: "primary",
-      kind: "transaction",
+      kind: "tx",
       phase: "primary",
-      transaction: tx,
+      tx,
     } as const;
     return {
       requirements: resolvedRequirements,
       primaryStep,
-      primaryTransaction: tx,
+      primaryTx: tx,
       signatureRequests: [],
-      transactionSteps: [primaryStep],
+      txSteps: [primaryStep],
       calls: [{ to: tx.to, value: tx.value, data: tx.data }],
       steps: [
         ...resolvedRequirements.map((requirement, index) =>
@@ -105,38 +105,38 @@ function mockTransactionPlan(
               }
             : {
                 id: `request-${index}`,
-                kind: "transaction",
+                kind: "tx",
                 phase: "preparation",
-                transaction: requirement,
+                tx: requirement,
               },
         ),
         primaryStep,
       ],
       build: (signatures?: readonly RequirementSignature[]) => {
-        const primaryTransaction = buildPrimaryTransaction(signatures);
+        const primaryTx = buildPrimaryTx(signatures);
         const builtPrimaryStep = {
           id: "primary",
-          kind: "transaction",
+          kind: "tx",
           phase: "primary",
-          transaction: primaryTransaction,
+          tx: primaryTx,
         } as const;
         return {
           primaryStep: builtPrimaryStep,
-          primaryTransaction,
+          primaryTx,
           signatureRequests: [],
-          transactionSteps: [builtPrimaryStep],
+          txSteps: [builtPrimaryStep],
           calls: [
             {
-              to: primaryTransaction.to,
-              value: primaryTransaction.value,
-              data: primaryTransaction.data,
+              to: primaryTx.to,
+              value: primaryTx.value,
+              data: primaryTx.data,
             },
           ],
         };
       },
     };
   });
-  return { prepare, getRequirementRequests, buildPrimaryTransaction };
+  return { prepare, getRequirementRequests, buildPrimaryTx };
 }
 
 const supplyAction = mockTransactionPlan(SUPPLY_TX, [
@@ -592,9 +592,7 @@ describe.sequential("MorphoProtocolEvm", () => {
 
       await protocol.borrow({ token: TOKEN, amount: 100_000n });
 
-      expect(borrowAction.buildPrimaryTransaction).toHaveBeenCalledWith(
-        undefined,
-      );
+      expect(borrowAction.buildPrimaryTx).toHaveBeenCalledWith(undefined);
     });
 
     test("should fold a signed authorization into the bundle when provided", async () => {
@@ -611,7 +609,7 @@ describe.sequential("MorphoProtocolEvm", () => {
         requirementSignature,
       });
 
-      expect(borrowAction.buildPrimaryTransaction).toHaveBeenCalledWith([
+      expect(borrowAction.buildPrimaryTx).toHaveBeenCalledWith([
         requirementSignature,
       ]);
     });

@@ -103,7 +103,7 @@ describe("Permit2", () => {
 
         const tx = (await deposit.prepare()).build([
           requirementSignature,
-        ]).primaryTransaction;
+        ]).primaryTx;
 
         await client.sendTransaction(tx);
       },
@@ -183,7 +183,7 @@ describe("Permit2", () => {
 
         const tx = (await deposit.prepare()).build([
           requirementSignature,
-        ]).primaryTransaction;
+        ]).primaryTx;
 
         await client.sendTransaction(tx);
       },
@@ -276,8 +276,7 @@ describe("Permit2", () => {
         );
 
         await client.sendTransaction(
-          (await deposit.prepare()).build([requirementSignature])
-            .primaryTransaction,
+          (await deposit.prepare()).build([requirementSignature]).primaryTx,
         );
       },
     });
@@ -373,7 +372,7 @@ describe("Permit2", () => {
 
         const tx = (await deposit.prepare()).build([
           requirementSignature,
-        ]).primaryTransaction;
+        ]).primaryTx;
 
         await client.sendTransaction(tx);
       },
@@ -466,7 +465,7 @@ describe("Permit2", () => {
 
         const tx = (await deposit.prepare()).build([
           requirementSignature,
-        ]).primaryTransaction;
+        ]).primaryTx;
 
         await client.sendTransaction(tx);
       },

@@ -49,7 +49,7 @@ describe("DepositVaultV1", () => {
           vaultData,
         });
 
-        const tx = (await deposit.prepare()).build().primaryTransaction;
+        const tx = (await deposit.prepare()).build().primaryTx;
         const requirements = (await deposit.prepare()).requirements;
 
         const approveTx = requirements[0];
@@ -117,7 +117,7 @@ describe("DepositVaultV1", () => {
           vaultData,
         });
 
-        const tx = (await deposit.prepare()).build().primaryTransaction;
+        const tx = (await deposit.prepare()).build().primaryTx;
         const requirements = (await deposit.prepare()).requirements;
 
         expect(requirements.length).toBe(2);
@@ -212,7 +212,7 @@ describe("DepositVaultV1", () => {
 
         const tx = (await deposit.prepare()).build([
           requirementSignature,
-        ]).primaryTransaction;
+        ]).primaryTx;
 
         await client.sendTransaction(tx);
       },
@@ -313,7 +313,7 @@ describe("DepositVaultV1", () => {
 
         const tx = (await deposit.prepare()).build([
           requirementSignature,
-        ]).primaryTransaction;
+        ]).primaryTx;
 
         await client.sendTransaction(tx);
       },
@@ -411,8 +411,7 @@ describe("DepositVaultV1", () => {
         );
 
         await client.sendTransaction(
-          (await deposit.prepare()).build([requirementSignature])
-            .primaryTransaction,
+          (await deposit.prepare()).build([requirementSignature]).primaryTx,
         );
       },
     });
@@ -466,7 +465,7 @@ describe("DepositVaultV1", () => {
           throw new Error("Approve transaction not found");
         }
         await client.sendTransaction(approveTx);
-        const depositTx = (await deposit.prepare()).build().primaryTransaction;
+        const depositTx = (await deposit.prepare()).build().primaryTx;
         await client.sendTransaction(depositTx);
 
         const withdraw = vaultV1.withdraw({
@@ -474,8 +473,7 @@ describe("DepositVaultV1", () => {
           amount: amount,
         });
 
-        const withdrawTx = (await withdraw.prepare()).build()
-          .primaryTransaction;
+        const withdrawTx = (await withdraw.prepare()).build().primaryTx;
 
         await client.sendTransaction(withdrawTx);
       },

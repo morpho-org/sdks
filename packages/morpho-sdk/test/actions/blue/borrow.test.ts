@@ -52,7 +52,7 @@ describe("BorrowBlue", () => {
           positionData,
         })
         .prepare()
-    ).build().primaryTransaction;
+    ).build().primaryTx;
 
     const expectedMinSharePrice = MathLib.mulDivDown(
       totalBorrowAssets + SharesMath.VIRTUAL_ASSETS,
@@ -105,7 +105,7 @@ describe("BorrowBlue", () => {
 
         await client.sendTransaction(requirementAuthorization);
 
-        const tx = (await borrow.prepare()).build().primaryTransaction;
+        const tx = (await borrow.prepare()).build().primaryTx;
 
         await client.sendTransaction(tx);
       },
@@ -201,7 +201,7 @@ describe("BorrowBlue", () => {
 
         const tx = (await borrow.prepare()).build([
           authorizationSignature,
-        ]).primaryTransaction;
+        ]).primaryTx;
         await client.sendTransaction(tx);
       },
     });

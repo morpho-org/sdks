@@ -52,7 +52,7 @@ describe("WrapNative - VaultV1", () => {
         const requirements = (await deposit.prepare()).requirements;
         expect(requirements.length).toBe(0);
 
-        const tx = (await deposit.prepare()).build().primaryTransaction;
+        const tx = (await deposit.prepare()).build().primaryTx;
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
         expect(tx.action.args.amount).toEqual(0n);
@@ -121,7 +121,7 @@ describe("WrapNative - VaultV1", () => {
         const requirements = (await deposit.prepare()).requirements;
         expect(requirements.length).toBe(0);
 
-        const tx = (await deposit.prepare()).build().primaryTransaction;
+        const tx = (await deposit.prepare()).build().primaryTx;
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
         expect(tx.action.args.amount).toEqual(amount);
@@ -205,7 +205,7 @@ describe("WrapNative - VaultV1", () => {
 
         const tx = (await deposit.prepare()).build([
           requirementSignature,
-        ]).primaryTransaction;
+        ]).primaryTx;
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
         expect(tx.action.args.amount).toEqual(amount);
@@ -309,7 +309,7 @@ describe("WrapNative - VaultV2", () => {
         const requirements = (await deposit.prepare()).requirements;
         expect(requirements.length).toBe(0);
 
-        const tx = (await deposit.prepare()).build().primaryTransaction;
+        const tx = (await deposit.prepare()).build().primaryTx;
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
         expect(tx.action.args.amount).toEqual(0n);
@@ -378,7 +378,7 @@ describe("WrapNative - VaultV2", () => {
         const requirements = (await deposit.prepare()).requirements;
         expect(requirements.length).toBe(0);
 
-        const tx = (await deposit.prepare()).build().primaryTransaction;
+        const tx = (await deposit.prepare()).build().primaryTx;
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
         expect(tx.action.args.amount).toEqual(amount);
@@ -462,7 +462,7 @@ describe("WrapNative - VaultV2", () => {
 
         const tx = (await deposit.prepare()).build([
           requirementSignature,
-        ]).primaryTransaction;
+        ]).primaryTx;
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
         expect(tx.action.args.amount).toEqual(amount);

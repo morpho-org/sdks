@@ -34,7 +34,7 @@ The transaction-plan contract is shared by Midnight, Blue, MarketV1, and vault e
 
 - `TransactionPlan.prepare(...)` resolves only the prerequisites for the already selected action.
 - `PreparedTransactionPlan.signatureRequests` exposes signable requirements without signing them.
-- `PreparedTransactionPlan.transactionSteps` exposes ordered prerequisite transactions and, when
+- `PreparedTransactionPlan.txSteps` exposes ordered prerequisite transactions and, when
   previewable, the primary step. Its `.calls` getter converts those transactions to
   viem-compatible call parameters for wallet batching.
 - `PreparedTransactionPlan.build(...)` consumes collected signatures and returns an
@@ -115,7 +115,7 @@ const plan: TransactionPlan<
 > = await midnight.makeLend(params);
 
 const prepared = await plan.prepare();
-// The app presents prepared.signatureRequests and prepared.transactionSteps.
+// The app presents prepared.signatureRequests and prepared.txSteps.
 const executable = prepared.build(collectedSignatures);
 ```
 
@@ -123,7 +123,7 @@ Semantics:
 
 1. `prepare()` resolves the currently required prerequisite descriptors and returns semantic request metadata.
 2. Already-satisfied approvals or authorizations are omitted.
-3. `steps` and `transactionSteps` preserve relative execution order; the primary step is last when present.
+3. `steps` and `txSteps` preserve relative execution order; the primary step is last when present.
 4. Signature descriptors are exposed through `signatureRequests`; the SDK never prompts the wallet on its own.
 5. A prerequisite transaction step can be an approval, authorization, contract-wallet ratify-root, or mandatory prelude transaction.
 6. `build(signatures)` validates and consumes the collected signature values before encoding the primary transaction.
@@ -374,16 +374,16 @@ This is action-encoding metadata, not UI state. The first implementation only en
 Add a named call-requirement union. Existing raw `Transaction<...>` requirement values stay valid.
 
 ```ts
-export type TransactionRequirementAction =
+export type TxRequirementAction =
   | ERC20ApprovalAction
   | MorphoAuthorizationAction
   | MidnightAuthorizationAction
   | SetterRatifierRatifyRootAction
   | MidnightSupplyCollateralAction;
 
-export type TransactionRequirement = Readonly<Transaction<TransactionRequirementAction>>;
+export type TxRequirement = Readonly<Transaction<TxRequirementAction>>;
 
-export type ActionRequirement = TransactionRequirement | SignatureRequirement;
+export type ActionRequirement = TxRequirement | SignatureRequirement;
 ```
 
 `MidnightSupplyCollateralAction` is included because it can be a mandatory prelude transaction for a currently implemented app flow:
@@ -937,7 +937,7 @@ Add ERC2612 and Permit2 SignatureTransfer support to the first action-flow imple
 
 - **Wallet-decodable offer-tree signing.** The SDK must build the offer tree locally from the SDK input and validate the router response before exposing `midnightOfferRootSignature`. The wallet signs EIP-712 `OfferTree` typed data whose leaves are visible to the user, and the SDK verifies that the signed tree hashes to the root used in ratifier data.
 - **No signing inside actions.** `Requirement.sign(...)` is the only signing boundary and takes a `WalletClient` from the integrator.
-- **No hidden prelude txs.** Mandatory prelude transactions are visible as typed preparation-phase `transactionSteps` on the prepared plan.
+- **No hidden prelude txs.** Mandatory prelude transactions are visible as typed preparation-phase `txSteps` on the prepared plan.
 - **Authorization target is explicit.** `MidnightAuthorizationAction.args.authorized` is either `MidnightBundles`, `EcrecoverRatifier`, or `SetterRatifier`; never inferred by a consumer.
 - **Approval target is explicit.** Midnight approval helper callers pass `spender`; no default to `GeneralAdapter1`.
 - **Bundle token-pull policy is explicit.** Bundle flows use `MidnightBundles` as spender and never consume or reset the core `Midnight` allowance reserved by maker offers.
@@ -947,7 +947,7 @@ Add ERC2612 and Permit2 SignatureTransfer support to the first action-flow imple
 ## Future considerations
 
 - If a future Midnight flow needs a real wait condition (`before` / `after` equivalent), add a small `wait` requirement kind at that time. Do not preemptively port app `ActionFlow`.
-- If consumers strongly reject mandatory preparation-phase `transactionSteps`, revisit a dedicated sequence-building API with evidence from integration feedback.
+- If consumers strongly reject mandatory preparation-phase `txSteps`, revisit a dedicated sequence-building API with evidence from integration feedback.
 
 ## References
 

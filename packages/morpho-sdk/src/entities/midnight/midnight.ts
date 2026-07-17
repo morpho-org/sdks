@@ -177,7 +177,7 @@ const validateMarketData = (market: Market, chainId: number) => {
  *   positionData,
  * });
  * const executable = (await plan.prepare()).build();
- * const tx = executable.primaryTransaction;
+ * const tx = executable.primaryTx;
  * ```
  */
 export class MorphoMidnight {
@@ -435,7 +435,7 @@ export class MorphoMidnight {
 
         return requirements;
       },
-      buildPrimaryTransaction: () =>
+      buildPrimaryTx: () =>
         midnightTakeLend({
           chainId: this.chainId,
           market: market.params,
@@ -514,7 +514,7 @@ export class MorphoMidnight {
 
         return requirements;
       },
-      buildPrimaryTransaction: () =>
+      buildPrimaryTx: () =>
         midnightTakeBorrow({
           chainId: this.chainId,
           market: market.params,
@@ -609,7 +609,7 @@ export class MorphoMidnight {
 
         return requirements;
       },
-      buildPrimaryTransaction: () =>
+      buildPrimaryTx: () =>
         midnightSupplyCollateralTakeBorrow({
           chainId: this.chainId,
           market: market.params,
@@ -680,7 +680,7 @@ export class MorphoMidnight {
           amount:
             params.collateralAssets + (params.reservedCollateralAssets ?? 0n),
         }),
-      buildPrimaryTransaction: () =>
+      buildPrimaryTx: () =>
         midnightSupplyCollateral({
           chainId: this.chainId,
           market: market.params,
@@ -987,7 +987,7 @@ export class MorphoMidnight {
       ActionRequirement
     >({
       getRequirementRequests: async () => [],
-      buildPrimaryTransaction: () =>
+      buildPrimaryTx: () =>
         midnightRedeem({
           chainId: this.chainId,
           market: market.params,
@@ -1093,7 +1093,7 @@ export class MorphoMidnight {
 
         return requirements;
       },
-      buildPrimaryTransaction: () =>
+      buildPrimaryTx: () =>
         midnightRepayWithdrawCollateral({
           chainId: this.chainId,
           market: market.params,
@@ -1135,7 +1135,7 @@ export class MorphoMidnight {
       ActionRequirement
     >({
       getRequirementRequests: async () => [],
-      buildPrimaryTransaction: () =>
+      buildPrimaryTx: () =>
         midnightCancelOffer({
           chainId: this.chainId,
           group: params.group,
@@ -1161,8 +1161,8 @@ export class MorphoMidnight {
         MidnightActionSignatures
       >({
         getRequirementRequests: params.getRequirementRequests,
-        previewPrimaryTransaction: false,
-        buildPrimaryTransaction: (signatures) => {
+        previewPrimaryTx: false,
+        buildPrimaryTx: (signatures) => {
           const collectedSignatures =
             signatures == null
               ? undefined

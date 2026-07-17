@@ -53,7 +53,7 @@ Every entity action returns a lazy `TransactionPlan`:
 - `plan.prepare()` resolves the prerequisite call and signature requests for the chosen action.
 - `prepared.signatureRequests` contains permits, Morpho authorizations, or Midnight offer-root
   signatures that the wallet must sign.
-- `prepared.transactionSteps` contains prerequisite transaction steps and, when it can be previewed
+- `prepared.txSteps` contains prerequisite transaction steps and, when it can be previewed
   without a signature, the primary step last.
 - `prepared.build(signatures)` returns the executable transaction steps, ordered with the primary
   step last.
@@ -83,8 +83,8 @@ const signatures = await Promise.all(
 const executable = prepared.build(signatures);
 
 // Send every transaction step in order; prerequisite steps come before the primary action.
-for (const step of executable.transactionSteps) {
-  await walletClient.sendTransaction(step.transaction);
+for (const step of executable.txSteps) {
+  await walletClient.sendTransaction(step.tx);
 }
 
 // Or convert the executable transactions for an EIP-5792 wallet batch.
