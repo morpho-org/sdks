@@ -1,6 +1,5 @@
 import { BLUE_API_BASE_URL, isHexEqual } from "@morpho-org/morpho-ts";
 import { type Address, type Hash, isAddressEqual } from "viem";
-
 import {
   InvalidMidnightApiResponseError,
   MidnightApiError,
