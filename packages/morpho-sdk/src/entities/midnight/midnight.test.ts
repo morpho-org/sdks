@@ -1853,13 +1853,16 @@ describe("MorphoMidnight", () => {
         offers: data.tree,
         validation: offerValidation,
       });
-      const requirements = (await output.prepare()).requirements;
-      const tx = (await output.prepare()).build().primaryTx;
+      const prepared = await output.prepare();
 
       expect(
-        requirements.map((requirement) => requirement.action.type),
+        prepared.requirements.map((requirement) => requirement.action.type),
       ).toEqual(["setterRatifierRatifyRoot"]);
-      expect(tx.action.args.ratifierType).toBe("setter");
+      expect(prepared.primaryTx?.action.args.ratifierType).toBe("setter");
+      expect(prepared.txSteps.map((step) => step.id)).toEqual([
+        "request-0",
+        "primary",
+      ]);
     });
 
     test("behavior: setter ratifier returns no requirements when root is ratified", async () => {
@@ -1872,8 +1875,13 @@ describe("MorphoMidnight", () => {
         offers: data.tree,
         validation: offerValidation,
       });
+      const prepared = await output.prepare();
 
-      await expect((await output.prepare()).requirements).toEqual([]);
+      expect(prepared.requirements).toEqual([]);
+      expect(prepared.primaryTx?.action.args.ratifierType).toBe("setter");
+      expect(prepared.txSteps.map((step) => step.id)).toEqual(["primary"]);
+      expect(prepared.calls).toHaveLength(1);
+      expect(prepared.flowKind).toBe("single_tx");
     });
 
     test("error: MidnightOfferSideMismatchError", async () => {

@@ -1156,7 +1156,7 @@ export class MorphoMidnight {
         MidnightMakeOffersRequest
       >({
         getRequirementRequests: params.getRequirementRequests,
-        previewPrimaryTx: false,
+        previewPrimaryTx: data.ratifierType === "ecrecover" ? false : undefined,
         buildPrimaryTx: (signatures) => {
           let payload = data.setterPayload;
           if (data.ratifierType === "ecrecover") {

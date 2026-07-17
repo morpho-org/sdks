@@ -85,10 +85,7 @@ function createMorphoNamespace(
  * ```ts
  * import { createWalletClient, http, publicActions } from "viem";
  * import { mainnet } from "viem/chains";
- * import {
- *   morphoViemExtension,
- *   type RequirementSignature,
- * } from "@morpho-org/morpho-sdk";
+ * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
  *
  * const client = createWalletClient({
  *   chain: mainnet,
@@ -108,10 +105,9 @@ function createMorphoNamespace(
  *   vaultData,
  * });
  * const prepared = await plan.prepare();
- * const signatures: RequirementSignature[] = [];
- * for (const request of prepared.signatureRequests) {
- *   signatures.push(await request.sign(client, user));
- * }
+ * const signatures = await Promise.all(
+ *   prepared.signatureRequests.map((request) => request.sign(client, user)),
+ * );
  * const tx = prepared.build(signatures).primaryTx;
  * ```
  */

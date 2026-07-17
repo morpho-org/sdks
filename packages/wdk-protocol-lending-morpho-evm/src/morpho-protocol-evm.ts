@@ -428,6 +428,22 @@ async function getTransactionPlanTx<
   return toWdkTransaction(executable.primaryTx);
 }
 
+async function getTransactionPlanQuoteTx<
+  TAction extends TransactionAction,
+  TOptions,
+  TRequest extends TransactionPlanRequest,
+>(
+  plan: TransactionPlan<TAction, TOptions, TRequest>,
+  signatures?: TransactionPlanSignatures<TRequest>,
+): Promise<WdkTransaction> {
+  const prepared = await plan.prepare();
+  const tx =
+    signatures === undefined
+      ? (prepared.primaryTx ?? prepared.build().primaryTx)
+      : prepared.build(signatures).primaryTx;
+  return toWdkTransaction(tx);
+}
+
 /**
  * Morpho lending protocol adapter for WDK-compatible EVM wallet accounts.
  *
@@ -546,7 +562,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     options: MorphoSupplyOptions,
     config?: Erc4337TransactionConfig,
   ): Promise<Omit<SupplyResult, "hash">> {
-    const tx = await this._getSupplyTransaction(options);
+    const tx = await getTransactionPlanQuoteTx(
+      await this._getSupplyAction(options),
+      options.requirementSignature ? [options.requirementSignature] : undefined,
+    );
 
     return await this._quoteTransaction(tx, config);
   }
@@ -826,7 +845,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     options: MorphoRepayOptions,
     config?: Erc4337TransactionConfig,
   ): Promise<Omit<RepayResult, "hash">> {
-    const tx = await this._getRepayTransaction(options);
+    const tx = await getTransactionPlanQuoteTx(
+      await this._getRepayAction(options),
+      options.requirementSignature ? [options.requirementSignature] : undefined,
+    );
 
     return await this._quoteTransaction(tx, config);
   }
@@ -936,7 +958,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     options: MorphoSupplyOptions,
     config?: Erc4337TransactionConfig,
   ): Promise<Omit<SupplyResult, "hash">> {
-    const tx = await this._getSupplyCollateralTransaction(options);
+    const tx = await getTransactionPlanQuoteTx(
+      await this._getSupplyCollateralAction(options),
+      options.requirementSignature ? [options.requirementSignature] : undefined,
+    );
 
     return await this._quoteTransaction(tx, config);
   }
