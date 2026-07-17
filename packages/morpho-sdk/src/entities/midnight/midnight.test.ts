@@ -73,18 +73,25 @@ import {
   UnpreparedMidnightOfferRootSignatureError,
 } from "../../types/error.js";
 import { MorphoMidnight } from "./midnight.js";
-import type { MakeOffersOutput, OffersData } from "./types.js";
+import type {
+  MakeOffersOutput,
+  MidnightMakeOffersRequest,
+  OffersData,
+} from "./types.js";
 
 type BuildMakeOffersOutputTx = (params: {
   readonly offersData: OffersData;
   readonly signatures?: readonly MidnightOfferRootSignature[];
   readonly signedPayloads?: ReadonlyMap<string, Hex>;
   readonly metadata?: { readonly origin: string };
+  readonly signatureRequestCount?: number;
 }) => Promise<Readonly<Transaction<MempoolSubmitOffersAction>>>;
 
 type CreateMakeOffersOutput = (params: {
   readonly offersData: OffersData;
-  readonly getRequirementRequests: () => Promise<readonly []>;
+  readonly getRequirementRequests: () => Promise<
+    readonly MidnightMakeOffersRequest[]
+  >;
   readonly signedPayloads: ReadonlyMap<string, Hex>;
 }) => MakeOffersOutput;
 
@@ -104,7 +111,16 @@ const buildMakeOffersOutputTx: BuildMakeOffersOutputTx = async (params) =>
     )
       .createMakeOffersOutput({
         offersData: params.offersData,
-        getRequirementRequests: async () => [],
+        getRequirementRequests: async () => {
+          const count =
+            params.signatureRequestCount ??
+            (params.offersData.ratifierType === "ecrecover" ? 1 : 0);
+          const signature = offerRootSignature(params.offersData);
+          return Array.from({ length: count }, () => ({
+            action: signature.action,
+            sign: async () => signature,
+          }));
+        },
         signedPayloads:
           params.signedPayloads ?? new Map([["0x1234", "0x1234" as Hex]]),
       })
@@ -2058,6 +2074,7 @@ describe("MorphoMidnight", () => {
       await expect(
         buildMakeOffersOutputTx({
           offersData: data,
+          signatureRequestCount: 0,
         }),
       ).rejects.toThrow(MissingMidnightOfferRootSignatureError);
     });
@@ -2166,6 +2183,7 @@ describe("MorphoMidnight", () => {
         buildMakeOffersOutputTx({
           offersData: data,
           signatures: [signature, signature],
+          signatureRequestCount: 2,
         }),
       ).rejects.toThrow(AmbiguousRequirementSignaturesError);
     });
@@ -2188,6 +2206,7 @@ describe("MorphoMidnight", () => {
         buildMakeOffersOutputTx({
           offersData: data,
           signatures: [offerRootSignature(data)],
+          signatureRequestCount: 1,
         }),
       ).rejects.toThrow(UnexpectedRequirementSignatureError);
     });
