@@ -1,5 +1,10 @@
+/// <reference path="./packageJson.d.ts" />
+
 import { BLUE_API_BASE_URL, isHexEqual } from "@morpho-org/morpho-ts";
 import { type Address, type Hash, isAddressEqual } from "viem";
+
+import packageJson = require("@morpho-org/midnight-sdk/package.json");
+
 import {
   InvalidMidnightApiResponseError,
   MidnightApiError,
@@ -20,9 +25,6 @@ import type {
 } from "./types.js";
 
 const DEFAULT_MIDNIGHT_API_URL = new URL("/v0/midnight", BLUE_API_BASE_URL);
-// Keep this literal in source so the browser ESM build does not import package.json
-// through Node-only createRequire/module shims.
-const MIDNIGHT_SDK_VERSION = "1.0.1";
 
 /** @internal Sends one Midnight API request and maps non-2xx responses to SDK errors. */
 export async function requestMidnightApi<Response = unknown>(
@@ -57,7 +59,7 @@ export async function requestMidnightApi<Response = unknown>(
   const headers = new Headers(params.request?.headers);
   if (params.body !== undefined)
     headers.set("Content-Type", "application/json");
-  headers.set("sdk-version", MIDNIGHT_SDK_VERSION);
+  headers.set("sdk-version", packageJson.version);
 
   const init: RequestInit = {
     ...params.request,
