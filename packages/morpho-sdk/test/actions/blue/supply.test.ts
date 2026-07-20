@@ -47,14 +47,14 @@ describe("SupplyBlue", () => {
           marketData,
         });
 
-        const requirements = await supply.getRequirements();
+        const requirements = (await supply.prepare()).requirements;
         const approval = requirements[0];
         if (!isRequirementApproval(approval)) {
           throw new Error("Approval requirement not found");
         }
         await client.sendTransaction(approval);
 
-        const tx = supply.buildTx();
+        const tx = (await supply.prepare()).build().primaryTx;
         expect(tx.value).toBe(0n);
 
         await client.sendTransaction(tx);
@@ -88,7 +88,7 @@ describe("SupplyBlue", () => {
       marketData,
     });
 
-    const requirements = await supply.getRequirements();
+    const requirements = (await supply.prepare()).requirements;
     expect(requirements.length).toBeGreaterThan(0);
     const approval = requirements[0];
     expect(approval).toBeDefined();
@@ -109,7 +109,7 @@ describe("SupplyBlue", () => {
       marketData,
     });
 
-    const tx = supply.buildTx();
+    const tx = (await supply.prepare()).build().primaryTx;
 
     // Sanity bound only — exact value depends on virtual-share scaling.
     expect(tx.action.args.maxSharePrice).toBeGreaterThan(0n);
@@ -152,7 +152,7 @@ describe("SupplyBlue", () => {
           marketData,
         });
 
-        const requirements = await supply.getRequirements();
+        const requirements = (await supply.prepare()).requirements;
         expect(requirements.length).toBe(2);
 
         const approvalPermit2 = requirements[0];
@@ -176,7 +176,9 @@ describe("SupplyBlue", () => {
         );
         expect(isHex(requirementSignature.args.signature)).toBe(true);
 
-        const tx = supply.buildTx([requirementSignature]);
+        const tx = (await supply.prepare()).build([
+          requirementSignature,
+        ]).primaryTx;
         expect(tx.value).toBe(0n);
         await client.sendTransaction(tx);
       },
@@ -220,10 +222,10 @@ describe("SupplyBlue", () => {
         });
 
         // No ERC20 approval needed: only native wrapping inside the bundle.
-        const requirements = await supply.getRequirements();
+        const requirements = (await supply.prepare()).requirements;
         expect(requirements.length).toBe(0);
 
-        const tx = supply.buildTx();
+        const tx = (await supply.prepare()).build().primaryTx;
         expect(tx.value).toEqual(nativeAmount);
         await client.sendTransaction(tx);
       },
@@ -272,14 +274,14 @@ describe("SupplyBlue", () => {
           marketData,
         });
 
-        const requirements = await supply.getRequirements();
+        const requirements = (await supply.prepare()).requirements;
         const approval = requirements[0];
         if (!isRequirementApproval(approval)) {
           throw new Error("Approval requirement not found");
         }
         await client.sendTransaction(approval);
 
-        const tx = supply.buildTx();
+        const tx = (await supply.prepare()).build().primaryTx;
         expect(tx.value).toEqual(nativeAmount);
         await client.sendTransaction(tx);
       },

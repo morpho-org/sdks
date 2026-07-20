@@ -8,9 +8,16 @@ import {
 } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
-import { type Address, createPublicClient, http, parseUnits } from "viem";
+import {
+  type Address,
+  createPublicClient,
+  erc20Abi,
+  http,
+  maxUint256,
+  parseUnits,
+} from "viem";
 import { mainnet } from "viem/chains";
-import { afterEach, describe, expect, vi } from "vitest";
+import { afterEach, describe, expect, test as unitTest, vi } from "vitest";
 import { CbbtcUsdcBlue, WstethWethBlue } from "../../../test/fixtures/blue.js";
 import { test } from "../../../test/setup.js";
 import { morphoViemExtension } from "../../client/index.js";
@@ -100,7 +107,7 @@ describe("MorphoBlue builder = signer freedom", () => {
       amount: parseUnits("1", 18),
     });
 
-    const tx = supplyCollateral.buildTx();
+    const tx = (await supplyCollateral.prepare()).build().primaryTx;
     expect(tx.action.args.onBehalf).toBe(OTHER_USER);
   });
 
@@ -119,7 +126,7 @@ describe("MorphoBlue builder = signer freedom", () => {
       amount: parseUnits("1", 18),
     });
 
-    const tx = supplyCollateral.buildTx();
+    const tx = (await supplyCollateral.prepare()).build().primaryTx;
     expect(tx.action.args.onBehalf).toBe(OTHER_USER);
   });
 });
@@ -159,7 +166,7 @@ describe("MorphoBlue validation", () => {
     ).toThrow(NonPositiveInputError);
   });
 
-  test("withdraw getRequirements includes Blue authorization when missing", async ({
+  test("withdraw prepare includes Blue authorization when missing", async ({
     client,
   }) => {
     const market = client
@@ -170,18 +177,20 @@ describe("MorphoBlue validation", () => {
       )
       .morpho.blue(CbbtcUsdcBlue, mainnet.id);
 
-    const requirements = await market
-      .withdraw({
-        assets: 1n,
-        userAddress: USER,
-        positionData: makePosition({ supplyShares: 10n ** 18n }),
-      })
-      .getRequirements();
+    const requirements = (
+      await market
+        .withdraw({
+          assets: 1n,
+          userAddress: USER,
+          positionData: makePosition({ supplyShares: 10n ** 18n }),
+        })
+        .prepare()
+    ).requirements;
 
     expect(requirements).toHaveLength(1);
   });
 
-  test("withdraw getRequirements returns no authorization when already authorized", async () => {
+  test("withdraw prepare returns no authorization when already authorized", async () => {
     const handle = createMockClient(mainnet);
     const { morpho } = getChainAddresses(mainnet.id);
     mockRead(handle, {
@@ -198,13 +207,15 @@ describe("MorphoBlue validation", () => {
       )
       .morpho.blue(CbbtcUsdcBlue, mainnet.id);
 
-    const requirements = await market
-      .withdraw({
-        assets: 1n,
-        userAddress: USER,
-        positionData: makePosition({ supplyShares: 10n ** 18n }),
-      })
-      .getRequirements();
+    const requirements = (
+      await market
+        .withdraw({
+          assets: 1n,
+          userAddress: USER,
+          positionData: makePosition({ supplyShares: 10n ** 18n }),
+        })
+        .prepare()
+    ).requirements;
 
     expect(requirements).toEqual([]);
   });
@@ -316,7 +327,7 @@ describe("MorphoBlue validation", () => {
     ).toThrow(WithdrawExceedsCollateralError);
   });
 
-  test("repayWithdrawCollateral getRequirements includes Blue authorization when missing", async ({
+  test("repayWithdrawCollateral prepare includes Blue authorization when missing", async ({
     client,
   }) => {
     const market = client
@@ -327,14 +338,16 @@ describe("MorphoBlue validation", () => {
       )
       .morpho.blue(CbbtcUsdcBlue, mainnet.id);
 
-    const requirements = await market
-      .repayWithdrawCollateral({
-        amount: 1n,
-        withdrawAmount: 1n,
-        userAddress: USER,
-        positionData: makePosition(),
-      })
-      .getRequirements();
+    const requirements = (
+      await market
+        .repayWithdrawCollateral({
+          amount: 1n,
+          withdrawAmount: 1n,
+          userAddress: USER,
+          positionData: makePosition(),
+        })
+        .prepare()
+    ).requirements;
 
     expect(requirements).toHaveLength(2);
   });
@@ -365,14 +378,16 @@ describe("MorphoBlue validation", () => {
     const amount = parseUnits("0.3", 18);
     const nativeAmount = parseUnits("0.2", 18);
 
-    const tx = market
-      .repay({
-        amount,
-        nativeAmount,
-        userAddress: USER,
-        positionData: makeWethPosition(),
-      })
-      .buildTx();
+    const tx = (
+      await market
+        .repay({
+          amount,
+          nativeAmount,
+          userAddress: USER,
+          positionData: makeWethPosition(),
+        })
+        .prepare()
+    ).build().primaryTx;
 
     expect(tx.action.args.assets).toBe(amount + nativeAmount);
     expect(tx.action.args.nativeAmount).toBe(nativeAmount);
@@ -387,13 +402,15 @@ describe("MorphoBlue validation", () => {
       .morpho.blue(WstethWethBlue, mainnet.id);
     const nativeAmount = parseUnits("0.5", 18);
 
-    const requirements = await market
-      .repay({
-        nativeAmount,
-        userAddress: USER,
-        positionData: makeWethPosition(),
-      })
-      .getRequirements();
+    const requirements = (
+      await market
+        .repay({
+          nativeAmount,
+          userAddress: USER,
+          positionData: makeWethPosition(),
+        })
+        .prepare()
+    ).requirements;
 
     expect(requirements).toEqual([]);
   });
@@ -422,7 +439,7 @@ describe("MorphoBlue validation", () => {
       positionData,
     });
 
-    const tx = repay.buildTx();
+    const tx = (await repay.prepare()).build().primaryTx;
     expect(tx.action.args.shares).toBe(positionData.borrowShares);
     expect(tx.action.args.nativeAmount).toBe(nativeAmount);
     expect(tx.value).toBe(nativeAmount);
@@ -430,7 +447,7 @@ describe("MorphoBlue validation", () => {
     expect(tx.action.args.transferAmount).toBe(nativeAmount);
 
     // Fully-native repay pulls no ERC-20 ⇒ no approval/permit requirement.
-    expect(await repay.getRequirements()).toEqual([]);
+    expect((await repay.prepare()).requirements).toEqual([]);
   });
 
   test("repay native: shares mode pulls transferAmount net of native (happy path)", async ({
@@ -459,7 +476,7 @@ describe("MorphoBlue validation", () => {
       positionData,
     });
 
-    const tx = repay.buildTx();
+    const tx = (await repay.prepare()).build().primaryTx;
     expect(tx.action.args.shares).toBe(positionData.borrowShares);
     expect(tx.action.args.nativeAmount).toBe(nativeAmount);
     expect(tx.value).toBe(nativeAmount);
@@ -468,8 +485,8 @@ describe("MorphoBlue validation", () => {
     expect(tx.action.args.transferAmount).toBe(borrowAssets);
     expect(tx.action.args.transferAmount - nativeAmount).toBe(expectedErc20);
 
-    // getRequirements approves exactly the carved ERC-20 remainder, not the debt.
-    const requirements = await repay.getRequirements();
+    // Preparation approves exactly the carved ERC-20 remainder, not the debt.
+    const requirements = (await repay.prepare()).requirements;
     const approval = requirements.find(isRequirementApproval);
     if (!approval) {
       throw new Error("Approval requirement not found");
@@ -504,15 +521,17 @@ describe("MorphoBlue validation", () => {
     const amount = parseUnits("0.3", 18);
     const nativeAmount = parseUnits("0.2", 18);
 
-    const tx = market
-      .repayWithdrawCollateral({
-        amount,
-        nativeAmount,
-        withdrawAmount: parseUnits("1", 18),
-        userAddress: USER,
-        positionData: makeWethPosition(),
-      })
-      .buildTx();
+    const tx = (
+      await market
+        .repayWithdrawCollateral({
+          amount,
+          nativeAmount,
+          withdrawAmount: parseUnits("1", 18),
+          userAddress: USER,
+          positionData: makeWethPosition(),
+        })
+        .prepare()
+    ).build().primaryTx;
 
     expect(tx.action.args.repayAssets).toBe(amount + nativeAmount);
     expect(tx.action.args.nativeAmount).toBe(nativeAmount);
@@ -527,14 +546,16 @@ describe("MorphoBlue validation", () => {
       .morpho.blue(WstethWethBlue, mainnet.id);
     const nativeAmount = parseUnits("0.5", 18);
 
-    const requirements = await market
-      .repayWithdrawCollateral({
-        nativeAmount,
-        withdrawAmount: parseUnits("1", 18),
-        userAddress: USER,
-        positionData: makeWethPosition(),
-      })
-      .getRequirements();
+    const requirements = (
+      await market
+        .repayWithdrawCollateral({
+          nativeAmount,
+          withdrawAmount: parseUnits("1", 18),
+          userAddress: USER,
+          positionData: makeWethPosition(),
+        })
+        .prepare()
+    ).requirements;
 
     // Fully-native repay pulls no ERC-20 → only the Morpho authorization remains.
     expect(requirements).toHaveLength(1);
@@ -564,7 +585,7 @@ describe("MorphoBlue validation", () => {
       positionData,
     });
 
-    const tx = action.buildTx();
+    const tx = (await action.prepare()).build().primaryTx;
     expect(tx.action.args.repayShares).toBe(positionData.borrowShares);
     expect(tx.action.args.nativeAmount).toBe(nativeAmount);
     expect(tx.value).toBe(nativeAmount);
@@ -572,7 +593,7 @@ describe("MorphoBlue validation", () => {
     expect(tx.action.args.transferAmount).toBe(nativeAmount);
 
     // No ERC-20 pulled ⇒ only the Morpho authorization requirement remains.
-    expect(await action.getRequirements()).toHaveLength(1);
+    expect((await action.prepare()).requirements).toHaveLength(1);
   });
 
   test("repayWithdrawCollateral native: shares mode pulls transferAmount net of native (happy path)", async ({
@@ -600,7 +621,7 @@ describe("MorphoBlue validation", () => {
       positionData,
     });
 
-    const tx = action.buildTx();
+    const tx = (await action.prepare()).build().primaryTx;
     expect(tx.action.args.repayShares).toBe(positionData.borrowShares);
     expect(tx.action.args.nativeAmount).toBe(nativeAmount);
     expect(tx.value).toBe(nativeAmount);
@@ -609,9 +630,9 @@ describe("MorphoBlue validation", () => {
     expect(tx.action.args.transferAmount).toBe(borrowAssets);
     expect(tx.action.args.transferAmount - nativeAmount).toBe(expectedErc20);
 
-    // getRequirements approves exactly the carved ERC-20 remainder (alongside the
+    // Preparation approves exactly the carved ERC-20 remainder (alongside the
     // Morpho authorization the withdraw leg needs).
-    const requirements = await action.getRequirements();
+    const requirements = (await action.prepare()).requirements;
     const approval = requirements.find(isRequirementApproval);
     if (!approval) {
       throw new Error("Approval requirement not found");
@@ -723,81 +744,100 @@ describe("MorphoBlue repay maxSharePrice forward-accrual (VAU-1206)", () => {
     );
   }
 
-  // Local public client: `buildTx` is fully synchronous and makes no RPC call,
-  // so this needs no anvil fork (keeps the regression hermetic).
-  const localClient = createPublicClient({ chain: mainnet, transport: http() });
-
-  test("repay assets mode derives maxSharePrice from the forward-accrued market", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(Number(NOW_SEC) * 1_000);
-
-    const positionData = makeStalePosition();
-    const market = localClient
-      .extend(morphoViemExtension())
-      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
-    const amount = parseUnits("1000", 6);
-
-    const tx = market
-      .repay({ amount, userAddress: USER, positionData })
-      .buildTx();
-
-    const accruedMarket = positionData.market.accrueInterest(
-      NOW_SEC + TWO_HOURS,
-    );
-    const expected = computeMaxRepaySharePrice({
-      repayAssets: amount,
-      repayShares: 0n,
-      market: accruedMarket,
-      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
-    });
-    // The pre-fix bound, computed from the un-accrued snapshot — what reverted.
-    const stale = computeMaxRepaySharePrice({
-      repayAssets: amount,
-      repayShares: 0n,
-      market: positionData.market,
-      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
-    });
-
-    expect(tx.action.args.maxSharePrice).toBe(expected);
-    expect(tx.action.args.maxSharePrice).toBeGreaterThan(stale);
+  const handle = createMockClient(mainnet);
+  const { morpho } = getChainAddresses(mainnet.id);
+  mockRead(handle, {
+    address: CbbtcUsdcBlue.loanToken,
+    abi: erc20Abi,
+    functionName: "allowance",
+    result: maxUint256,
   });
-
-  test("repayWithdrawCollateral assets mode derives maxSharePrice from the forward-accrued market", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(Number(NOW_SEC) * 1_000);
-
-    const positionData = makeStalePosition();
-    const market = localClient
-      .extend(morphoViemExtension())
-      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
-    const amount = parseUnits("1000", 6);
-
-    const tx = market
-      .repayWithdrawCollateral({
-        amount,
-        withdrawAmount: 1n,
-        userAddress: USER,
-        positionData,
-      })
-      .buildTx();
-
-    const accruedMarket = positionData.market.accrueInterest(
-      NOW_SEC + TWO_HOURS,
-    );
-    const expected = computeMaxRepaySharePrice({
-      repayAssets: amount,
-      repayShares: 0n,
-      market: accruedMarket,
-      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
-    });
-    const stale = computeMaxRepaySharePrice({
-      repayAssets: amount,
-      repayShares: 0n,
-      market: positionData.market,
-      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
-    });
-
-    expect(tx.action.args.maxSharePrice).toBe(expected);
-    expect(tx.action.args.maxSharePrice).toBeGreaterThan(stale);
+  mockRead(handle, {
+    address: morpho,
+    abi: blueAbi,
+    functionName: "isAuthorized",
+    result: true,
   });
+  const market = handle.client
+    .extend(morphoViemExtension())
+    .morpho.blue(CbbtcUsdcBlue, mainnet.id);
+
+  // The mocked allowance and authorization reads keep these regressions hermetic.
+  unitTest(
+    "repay assets mode derives maxSharePrice from the forward-accrued market",
+    async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(Number(NOW_SEC) * 1_000);
+
+      const positionData = makeStalePosition();
+      const amount = parseUnits("1000", 6);
+
+      const tx = (
+        await market
+          .repay({ amount, userAddress: USER, positionData })
+          .prepare()
+      ).build().primaryTx;
+
+      const accruedMarket = positionData.market.accrueInterest(
+        NOW_SEC + TWO_HOURS,
+      );
+      const expected = computeMaxRepaySharePrice({
+        repayAssets: amount,
+        repayShares: 0n,
+        market: accruedMarket,
+        slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
+      });
+      // The pre-fix bound, computed from the un-accrued snapshot — what reverted.
+      const stale = computeMaxRepaySharePrice({
+        repayAssets: amount,
+        repayShares: 0n,
+        market: positionData.market,
+        slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
+      });
+
+      expect(tx.action.args.maxSharePrice).toBe(expected);
+      expect(tx.action.args.maxSharePrice).toBeGreaterThan(stale);
+    },
+  );
+
+  unitTest(
+    "repayWithdrawCollateral assets mode derives maxSharePrice from the forward-accrued market",
+    async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(Number(NOW_SEC) * 1_000);
+
+      const positionData = makeStalePosition();
+      const amount = parseUnits("1000", 6);
+
+      const tx = (
+        await market
+          .repayWithdrawCollateral({
+            amount,
+            withdrawAmount: 1n,
+            userAddress: USER,
+            positionData,
+          })
+          .prepare()
+      ).build().primaryTx;
+
+      const accruedMarket = positionData.market.accrueInterest(
+        NOW_SEC + TWO_HOURS,
+      );
+      const expected = computeMaxRepaySharePrice({
+        repayAssets: amount,
+        repayShares: 0n,
+        market: accruedMarket,
+        slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
+      });
+      const stale = computeMaxRepaySharePrice({
+        repayAssets: amount,
+        repayShares: 0n,
+        market: positionData.market,
+        slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
+      });
+
+      expect(tx.action.args.maxSharePrice).toBe(expected);
+      expect(tx.action.args.maxSharePrice).toBeGreaterThan(stale);
+    },
+  );
 });

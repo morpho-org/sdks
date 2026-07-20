@@ -53,7 +53,9 @@ async function main() {
     userAddress: USER_ADDRESS,
     vaultData,
   });
-  const depositTx = deposit.buildTx();
+  const preparedDeposit = await deposit.prepare();
+  const depositTx = preparedDeposit.primaryTx;
+  if (depositTx == null) throw new Error("Deposit transaction is unavailable");
 
   console.log("Deposit transaction:", {
     to: depositTx.to,
@@ -61,12 +63,11 @@ async function main() {
     value: depositTx.value,
   });
 
-  // Get requirements (e.g., ERC20 approval)
-  console.log("\n📋 Checking requirements...");
-  const requirements = await deposit.getRequirements();
-  console.log(`Found ${requirements.length} requirement(s)`);
-  requirements.forEach((req, index) => {
-    console.log(`  Requirement ${index + 1}:`, req);
+  // Get requests (e.g., ERC20 approval or permit signature)
+  console.log("\n📋 Checking requests...");
+  console.log(`Found ${preparedDeposit.stepCount} request(s)`);
+  preparedDeposit.steps.forEach((request, index) => {
+    console.log(`  Request ${index + 1}:`, request);
   });
 
   // Example 2: Create a withdraw transaction
@@ -76,7 +77,10 @@ async function main() {
     amount: withdrawAmount,
     userAddress: USER_ADDRESS,
   });
-  const withdrawTx = withdraw.buildTx();
+  const preparedWithdraw = await withdraw.prepare();
+  const withdrawTx = preparedWithdraw.primaryTx;
+  if (withdrawTx == null)
+    throw new Error("Withdraw transaction is unavailable");
 
   console.log("Withdraw transaction:", {
     to: withdrawTx.to,
@@ -91,7 +95,9 @@ async function main() {
     shares: redeemShares,
     userAddress: USER_ADDRESS,
   });
-  const redeemTx = redeem.buildTx();
+  const preparedRedeem = await redeem.prepare();
+  const redeemTx = preparedRedeem.primaryTx;
+  if (redeemTx == null) throw new Error("Redeem transaction is unavailable");
 
   console.log("Redeem transaction:", {
     to: redeemTx.to,

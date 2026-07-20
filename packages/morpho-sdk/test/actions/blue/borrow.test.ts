@@ -44,13 +44,15 @@ describe("BorrowBlue", () => {
 
     const { totalBorrowAssets, totalBorrowShares } = positionData.market;
 
-    const tx = market
-      .borrow({
-        userAddress: client.account.address,
-        amount: parseUnits("100", 18),
-        positionData,
-      })
-      .buildTx();
+    const tx = (
+      await market
+        .borrow({
+          userAddress: client.account.address,
+          amount: parseUnits("100", 18),
+          positionData,
+        })
+        .prepare()
+    ).build().primaryTx;
 
     const expectedMinSharePrice = MathLib.mulDivDown(
       totalBorrowAssets + SharesMath.VIRTUAL_ASSETS,
@@ -95,7 +97,7 @@ describe("BorrowBlue", () => {
           positionData,
         });
 
-        const requirements = await borrow.getRequirements();
+        const requirements = (await borrow.prepare()).requirements;
         const requirementAuthorization = requirements[0];
         if (!isRequirementBlueAuthorization(requirementAuthorization)) {
           throw new Error("Authorization requirement not found");
@@ -103,7 +105,7 @@ describe("BorrowBlue", () => {
 
         await client.sendTransaction(requirementAuthorization);
 
-        const tx = borrow.buildTx();
+        const tx = (await borrow.prepare()).build().primaryTx;
 
         await client.sendTransaction(tx);
       },
@@ -170,7 +172,7 @@ describe("BorrowBlue", () => {
 
         // With supportSignature the authorization requirement is signable —
         // no standalone setAuthorization transaction is sent.
-        const requirements = await borrow.getRequirements();
+        const requirements = (await borrow.prepare()).requirements;
         const requirement = requirements[0];
         if (!isRequirementSignature(requirement)) {
           throw new Error("Expected a signable authorization requirement");
@@ -197,7 +199,9 @@ describe("BorrowBlue", () => {
           }),
         ).toBe(false);
 
-        const tx = borrow.buildTx([authorizationSignature]);
+        const tx = (await borrow.prepare()).build([
+          authorizationSignature,
+        ]).primaryTx;
         await client.sendTransaction(tx);
       },
     });

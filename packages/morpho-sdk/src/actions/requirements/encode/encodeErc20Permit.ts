@@ -86,9 +86,11 @@ export const encodeErc20Permit = async (
   const action: PermitAction = {
     type: "permit",
     args: {
+      token,
       spender,
       amount,
       deadline,
+      chainId,
     },
   };
 

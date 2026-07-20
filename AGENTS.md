@@ -23,7 +23,7 @@ The three pillars: **layering, modularity, testability**. Everything else (types
 | Layer | Reads state? | Encodes calldata? | Async? | Returns |
 | --- | --- | --- | --- | --- |
 | **Client** | no | no | no | factory for entities |
-| **Entity** | yes (RPC) | no | yes | lazy `{ buildTx, getRequirements }` |
+| **Entity** | yes (RPC) | no | yes | lazy `TransactionPlan` |
 | **Action** | no | yes | **no** | deep-frozen `Transaction` |
 | **Helpers** | no | encode-only helpers (ABI-only); validators and constants are pure | no | new objects |
 

@@ -48,7 +48,7 @@ describe("WithdrawCollateralBlue", () => {
           positionData,
         });
 
-        const tx = withdraw.buildTx();
+        const tx = (await withdraw.prepare()).build().primaryTx;
         await client.sendTransaction(tx);
       },
     });
@@ -97,7 +97,7 @@ describe("WithdrawCollateralBlue", () => {
           positionData,
         });
 
-        const tx = withdraw.buildTx();
+        const tx = (await withdraw.prepare()).build().primaryTx;
         await client.sendTransaction(tx);
       },
     });

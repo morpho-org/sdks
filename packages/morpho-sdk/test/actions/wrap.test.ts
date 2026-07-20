@@ -49,10 +49,10 @@ describe("WrapNative - VaultV1", () => {
           vaultData,
         });
 
-        const requirements = await deposit.getRequirements();
+        const requirements = (await deposit.prepare()).requirements;
         expect(requirements.length).toBe(0);
 
-        const tx = deposit.buildTx();
+        const tx = (await deposit.prepare()).build().primaryTx;
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
         expect(tx.action.args.amount).toEqual(0n);
@@ -118,10 +118,10 @@ describe("WrapNative - VaultV1", () => {
           vaultData,
         });
 
-        const requirements = await deposit.getRequirements();
+        const requirements = (await deposit.prepare()).requirements;
         expect(requirements.length).toBe(0);
 
-        const tx = deposit.buildTx();
+        const tx = (await deposit.prepare()).build().primaryTx;
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
         expect(tx.action.args.amount).toEqual(amount);
@@ -180,7 +180,7 @@ describe("WrapNative - VaultV1", () => {
           vaultData,
         });
 
-        const requirements = await deposit.getRequirements();
+        const requirements = (await deposit.prepare()).requirements;
 
         expect(requirements.length).toBe(2);
 
@@ -203,7 +203,9 @@ describe("WrapNative - VaultV1", () => {
         expect(isHex(requirementSignature.args.signature)).toBe(true);
         expect(requirementSignature.args.signature.length).toBe(132);
 
-        const tx = deposit.buildTx([requirementSignature]);
+        const tx = (await deposit.prepare()).build([
+          requirementSignature,
+        ]).primaryTx;
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
         expect(tx.action.args.amount).toEqual(amount);
@@ -223,7 +225,7 @@ describe("WrapNative - VaultV1", () => {
     );
   });
 
-  test("should throw NativeAmountOnNonWNativeVaultError for non-WETH vaultV1", () => {
+  test("should throw NativeAmountOnNonWNativeVaultError for non-WETH vaultV1", async () => {
     expect(() =>
       vaultV1Deposit({
         vault: {
@@ -304,10 +306,10 @@ describe("WrapNative - VaultV2", () => {
           vaultData,
         });
 
-        const requirements = await deposit.getRequirements();
+        const requirements = (await deposit.prepare()).requirements;
         expect(requirements.length).toBe(0);
 
-        const tx = deposit.buildTx();
+        const tx = (await deposit.prepare()).build().primaryTx;
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
         expect(tx.action.args.amount).toEqual(0n);
@@ -373,10 +375,10 @@ describe("WrapNative - VaultV2", () => {
           vaultData,
         });
 
-        const requirements = await deposit.getRequirements();
+        const requirements = (await deposit.prepare()).requirements;
         expect(requirements.length).toBe(0);
 
-        const tx = deposit.buildTx();
+        const tx = (await deposit.prepare()).build().primaryTx;
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
         expect(tx.action.args.amount).toEqual(amount);
@@ -435,7 +437,7 @@ describe("WrapNative - VaultV2", () => {
           vaultData,
         });
 
-        const requirements = await deposit.getRequirements();
+        const requirements = (await deposit.prepare()).requirements;
 
         expect(requirements.length).toBe(2);
 
@@ -458,7 +460,9 @@ describe("WrapNative - VaultV2", () => {
         expect(isHex(requirementSignature.args.signature)).toBe(true);
         expect(requirementSignature.args.signature.length).toBe(132);
 
-        const tx = deposit.buildTx([requirementSignature]);
+        const tx = (await deposit.prepare()).build([
+          requirementSignature,
+        ]).primaryTx;
         expect(tx.value).toEqual(nativeAmount);
         expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
         expect(tx.action.args.amount).toEqual(amount);
@@ -478,7 +482,7 @@ describe("WrapNative - VaultV2", () => {
     );
   });
 
-  test("should throw NativeAmountOnNonWNativeVaultError for non-WETH vaultV2", () => {
+  test("should throw NativeAmountOnNonWNativeVaultError for non-WETH vaultV2", async () => {
     expect(() =>
       vaultV2Deposit({
         vault: {

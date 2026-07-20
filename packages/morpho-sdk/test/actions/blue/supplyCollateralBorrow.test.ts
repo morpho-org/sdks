@@ -49,7 +49,7 @@ describe("SupplyCollateralBorrowBlue", () => {
           positionData,
         });
 
-        const requirements = await scb.getRequirements();
+        const requirements = (await scb.prepare()).requirements;
         expect(requirements).toHaveLength(2);
         expect(requirements[0]!.action.type).toBe("erc20Approval");
         expect(requirements[1]!.action.type).toBe("blueAuthorization");
@@ -66,7 +66,7 @@ describe("SupplyCollateralBorrowBlue", () => {
         await client.sendTransaction(approval);
         await client.sendTransaction(authorization);
 
-        const tx = scb.buildTx();
+        const tx = (await scb.prepare()).build().primaryTx;
 
         await client.sendTransaction(tx);
       },
@@ -124,7 +124,7 @@ describe("SupplyCollateralBorrowBlue", () => {
           positionData,
         });
 
-        const requirements = await scb.getRequirements();
+        const requirements = (await scb.prepare()).requirements;
         expect(requirements).toHaveLength(1);
         expect(requirements[0]!.action.type).toBe("blueAuthorization");
 
@@ -135,7 +135,7 @@ describe("SupplyCollateralBorrowBlue", () => {
 
         await client.sendTransaction(authorization);
 
-        const tx = scb.buildTx();
+        const tx = (await scb.prepare()).build().primaryTx;
         expect(tx.value).toEqual(nativeAmount);
         await client.sendTransaction(tx);
       },
@@ -197,7 +197,7 @@ describe("SupplyCollateralBorrowBlue", () => {
           positionData,
         });
 
-        const requirements = await scb.getRequirements();
+        const requirements = (await scb.prepare()).requirements;
         expect(requirements).toHaveLength(2);
         expect(requirements[0]!.action.type).toBe("erc20Approval");
         expect(requirements[1]!.action.type).toBe("blueAuthorization");
@@ -213,7 +213,7 @@ describe("SupplyCollateralBorrowBlue", () => {
         await client.sendTransaction(approval);
         await client.sendTransaction(authorization);
 
-        const tx = scb.buildTx();
+        const tx = (await scb.prepare()).build().primaryTx;
         expect(tx.value).toEqual(nativeAmount);
         await client.sendTransaction(tx);
       },
@@ -282,7 +282,7 @@ describe("SupplyCollateralBorrowBlue", () => {
           positionData,
         });
 
-        const requirements = await scb.getRequirements();
+        const requirements = (await scb.prepare()).requirements;
         expect(requirements).toHaveLength(1);
 
         const approval = requirements[0];
@@ -291,7 +291,7 @@ describe("SupplyCollateralBorrowBlue", () => {
         }
         await client.sendTransaction(approval);
 
-        const tx = scb.buildTx();
+        const tx = (await scb.prepare()).build().primaryTx;
         await client.sendTransaction(tx);
       },
     });
@@ -346,9 +346,13 @@ describe("SupplyCollateralBorrowBlue", () => {
           positionData,
         });
 
-        const requirements = await scb.getRequirements({
-          useSimplePermit: true,
-        });
+        const requirements = (
+          await scb.prepare({
+            requestOptions: {
+              useSimplePermit: true,
+            },
+          })
+        ).requirements;
         expect(requirements).toHaveLength(2);
 
         const permitRequirement = requirements[0];
@@ -375,7 +379,10 @@ describe("SupplyCollateralBorrowBlue", () => {
           client.account.address,
         );
 
-        const tx = scb.buildTx([permitSignature, authorizationSignature]);
+        const tx = (await scb.prepare()).build([
+          permitSignature,
+          authorizationSignature,
+        ]).primaryTx;
         await client.sendTransaction(tx);
       },
     });
@@ -436,7 +443,7 @@ describe("SupplyCollateralBorrowBlue", () => {
           positionData,
         });
 
-        const requirements = await scb.getRequirements();
+        const requirements = (await scb.prepare()).requirements;
 
         // permit2 requirements: approve token -> permit2 + permit2 signature + morpho authorization
         expect(requirements).toHaveLength(3);
@@ -472,7 +479,10 @@ describe("SupplyCollateralBorrowBlue", () => {
           client.account.address,
         );
 
-        const tx = scb.buildTx([permit2Signature, authorizationSignature]);
+        const tx = (await scb.prepare()).build([
+          permit2Signature,
+          authorizationSignature,
+        ]).primaryTx;
         await client.sendTransaction(tx);
       },
     });

@@ -49,7 +49,7 @@ describe("MigrateToV2 VaultV1", () => {
           shares,
         });
 
-        const requirements = await migrate.getRequirements();
+        const requirements = (await migrate.prepare()).requirements;
 
         expect(requirements.length).toBe(1);
 
@@ -63,7 +63,7 @@ describe("MigrateToV2 VaultV1", () => {
 
         await client.sendTransaction(approveTx);
 
-        const tx = migrate.buildTx();
+        const tx = (await migrate.prepare()).build().primaryTx;
         await client.sendTransaction(tx);
       },
     });
@@ -120,7 +120,7 @@ describe("MigrateToV2 VaultV1", () => {
           shares,
         });
 
-        const requirements = await migrate.getRequirements();
+        const requirements = (await migrate.prepare()).requirements;
 
         if (!isRequirementSignature(requirements[0])) {
           throw new Error("Requirement is not a signature requirement");
@@ -142,7 +142,9 @@ describe("MigrateToV2 VaultV1", () => {
           BigInt(Math.floor(Date.now() / 1000)),
         );
 
-        const tx = migrate.buildTx([requirementSignature]);
+        const tx = (await migrate.prepare()).build([
+          requirementSignature,
+        ]).primaryTx;
         await client.sendTransaction(tx);
       },
     });

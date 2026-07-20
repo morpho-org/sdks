@@ -21,8 +21,8 @@ export interface MidnightSetIsAuthorizedParams {
 /**
  * Encodes `Midnight.setIsAuthorized` for a bundle spender or ratifier.
  *
- * Prefer requirement helpers or entity `getRequirements()` in app flows; they
- * read `isAuthorized` first and return this transaction only when needed. Use
+ * Prefer requirement helpers or `TransactionPlan.prepare()` in app flows; they
+ * read `isAuthorized` first and expose this transaction only when needed. Use
  * this builder directly when the caller intentionally wants to set or revoke
  * authorization without reading state.
  *

@@ -1,5 +1,5 @@
 import type { Address, Hex } from "viem";
-import { describe, expect, test } from "vitest";
+import { describe, expect, expectTypeOf, test } from "vitest";
 import {
   type AnyRequirementSignature,
   type AuthorizationRequirementSignature,
@@ -7,6 +7,8 @@ import {
   isMidnightOfferRootSignature,
   isPermitSignature,
   type MidnightOfferRootSignature,
+  type Permit2Args,
+  type PermitArgs,
   type PermitRequirementSignature,
   selectRequirementSignatures,
 } from "./action.js";
@@ -84,6 +86,22 @@ const midnightOfferRootSignature: MidnightOfferRootSignature = {
     payload: "0x1234",
   },
 };
+
+describe("RequirementSignature", () => {
+  test("behavior: permit action discriminators preserve their matching args", () => {
+    type PermitSignature = Extract<
+      PermitRequirementSignature,
+      { readonly action: { readonly type: "permit" } }
+    >;
+    type Permit2Signature = Extract<
+      PermitRequirementSignature,
+      { readonly action: { readonly type: "permit2" } }
+    >;
+
+    expectTypeOf<PermitSignature["args"]>().toEqualTypeOf<PermitArgs>();
+    expectTypeOf<Permit2Signature["args"]>().toEqualTypeOf<Permit2Args>();
+  });
+});
 
 describe("isPermitSignature", () => {
   test("default: true for permit", () => {

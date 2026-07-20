@@ -30,7 +30,7 @@ describe("Redeem VaultV2", () => {
           userAddress: client.account.address,
           shares,
         });
-        const tx = redeem.buildTx();
+        const tx = (await redeem.prepare()).build().primaryTx;
 
         await client.sendTransaction(tx);
       },

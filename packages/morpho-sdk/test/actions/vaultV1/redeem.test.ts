@@ -36,7 +36,7 @@ describe("Redeem VaultV1", () => {
           userAddress: client.account.address,
           shares,
         });
-        const tx = redeem.buildTx();
+        const tx = (await redeem.prepare()).build().primaryTx;
 
         await client.sendTransaction(tx);
       },
@@ -85,13 +85,15 @@ describe("Redeem VaultV1", () => {
           amount: depositAmount,
           vaultData,
         });
-        const requirements = await deposit.getRequirements();
+        const requirements = (await deposit.prepare()).requirements;
         const approveTx = requirements[0];
         if (!isRequirementApproval(approveTx)) {
           throw new Error("Approve transaction not found");
         }
         await client.sendTransaction(approveTx);
-        await client.sendTransaction(deposit.buildTx());
+        await client.sendTransaction(
+          (await deposit.prepare()).build().primaryTx,
+        );
 
         const shares = await client.balanceOf({
           erc20: SteakhouseUsdcVaultV1.address,
@@ -101,7 +103,9 @@ describe("Redeem VaultV1", () => {
           userAddress: client.account.address,
           shares,
         });
-        await client.sendTransaction(redeem.buildTx());
+        await client.sendTransaction(
+          (await redeem.prepare()).build().primaryTx,
+        );
       },
     });
 
@@ -145,7 +149,9 @@ describe("Redeem VaultV1", () => {
           userAddress: client.account.address,
           shares: redeemShares,
         });
-        await client.sendTransaction(redeem.buildTx());
+        await client.sendTransaction(
+          (await redeem.prepare()).build().primaryTx,
+        );
       },
     });
 

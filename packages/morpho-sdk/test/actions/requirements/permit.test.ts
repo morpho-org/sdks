@@ -39,9 +39,13 @@ describe("Permit", () => {
           amount: amount,
           vaultData,
         });
-        const requirements_1 = await deposit.getRequirements({
-          useSimplePermit: true,
-        });
+        const requirements_1 = (
+          await deposit.prepare({
+            requestOptions: {
+              useSimplePermit: true,
+            },
+          })
+        ).requirements;
 
         if (!isRequirementSignature(requirements_1[0])) {
           throw new Error("Requirement is not a signature requirement");
@@ -59,7 +63,9 @@ describe("Permit", () => {
           BigInt(Math.floor(Date.now() / 1000)),
         );
 
-        const tx_1 = deposit.buildTx([requirementSignature]);
+        const tx_1 = (await deposit.prepare()).build([
+          requirementSignature,
+        ]).primaryTx;
 
         await client.sendTransaction(tx_1);
       },

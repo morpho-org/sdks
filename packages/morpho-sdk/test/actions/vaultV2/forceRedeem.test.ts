@@ -72,7 +72,7 @@ describe("ForceRedeem VaultV2", () => {
       redeem: { shares: redeemShares },
       userAddress: client.account.address,
     });
-    const tx_1 = forceRedeem.buildTx();
+    const tx_1 = (await forceRedeem.prepare()).build().primaryTx;
 
     const tx_2 = vaultV2ForceRedeem({
       vault: { address: ReEcosystemUsdcVaultV2.address },
@@ -134,7 +134,7 @@ describe("ForceRedeem VaultV2", () => {
       redeem: { shares: redeemShares },
       userAddress: client.account.address,
     });
-    const tx = forceRedeem.buildTx();
+    const tx = (await forceRedeem.prepare()).build().primaryTx;
 
     const {
       vaults: {
@@ -199,7 +199,7 @@ describe("ForceRedeem VaultV2", () => {
       redeem: { shares: redeemShares },
       userAddress: client.account.address,
     });
-    const tx = forceRedeem.buildTx();
+    const tx = (await forceRedeem.prepare()).build().primaryTx;
 
     const {
       vaults: {

@@ -49,10 +49,15 @@ import {
   validateWithdrawAmount,
   validateWithdrawShares,
 } from "../../helpers/index.js";
+import {
+  TransactionPlan,
+  type TransactionPlanOperatorAuthorizationRequest,
+  type TransactionPlanSimplePermitOptions,
+  type TransactionPlanTokenRequest,
+} from "../../transactionPlan/index.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
   type AssetsOrSharesArgs,
-  type BlueAuthorizationAction,
   type BlueBorrowAction,
   type BlueRefinanceAction,
   type BlueRepayAction,
@@ -64,7 +69,6 @@ import {
   type BlueWithdrawCollateralAction,
   BorrowAmountAndSharesExclusiveError,
   type DepositAmountArgs,
-  type ERC20ApprovalAction,
   MarketIdMismatchError,
   MissingAccrualPositionError,
   type MorphoClientType,
@@ -72,7 +76,6 @@ import {
   MutuallyExclusiveWithdrawAmountsError,
   NegativeInputError,
   NonPositiveInputError,
-  type PermitRequirementSignature,
   type ReallocationComputeOptions,
   RefinanceExceedsBorrowAssetsError,
   RefinanceExceedsBorrowSharesError,
@@ -80,15 +83,19 @@ import {
   RefinanceSameMarketError,
   RefinanceTokenMismatchError,
   type RepayAmountArgs,
-  type Requirement,
-  type RequirementSignature,
   selectRequirementSignatures,
-  type Transaction,
   type VaultReallocation,
   WithdrawExceedsCollateralError,
 } from "../../types/index.js";
 import { ReallocationData } from "../reallocationData.js";
 
+/**
+ * Blue action flows are synchronous so the SDK does not own broad market or position data fetching.
+ * Consumers pass the state snapshots they already fetched, which lets each app batch, cache, and
+ * refresh data for its own UX. Each flow returns a TransactionPlan; call `prepare()` when the app is
+ * ready to compute the minimal signature requests and/or transaction steps needed to execute that
+ * intent.
+ */
 export interface BlueActions {
   /**
    * Fetches the latest market data with accrued interest.
@@ -114,43 +121,32 @@ export interface BlueActions {
    * Prepares a supply-collateral transaction.
    *
    * Routed through bundler via GeneralAdapter1.
-   * `getRequirements` returns ERC20 approval or permit for GeneralAdapter1.
+   * `prepare()` resolves ERC20 approval or permit for GeneralAdapter1.
    * When `nativeAmount` is provided, native token is wrapped; collateral must be wNative.
    *
    * @param params - Supply collateral parameters.
-   * @returns Object with `buildTx` and `getRequirements`.
+   * @returns TransactionPlan that can be prepared and built for execution.
    */
-  supplyCollateral: (params: { userAddress: Address } & DepositAmountArgs) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<BlueSupplyCollateralAction>>;
-    getRequirements: (params?: {
-      /**
-       * Prefer the ERC-2612 simple-permit path when the SDK detects support.
-       * Leave unset or set to `false` to force the Permit2/classic approval fallback when
-       * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
-       */
-      useSimplePermit?: boolean;
-    }) => Promise<
-      (
-        | Readonly<Transaction<ERC20ApprovalAction>>
-        | Requirement<PermitRequirementSignature>
-      )[]
-    >;
-  };
+  supplyCollateral: (
+    params: { userAddress: Address } & DepositAmountArgs,
+  ) => TransactionPlan<
+    BlueSupplyCollateralAction,
+    TransactionPlanSimplePermitOptions,
+    TransactionPlanTokenRequest
+  >;
 
   /**
    * Prepares a loan-asset supply transaction.
    *
    * Routed through bundler via GeneralAdapter1. Computes `maxSharePrice` from market supply
    * state and `slippageTolerance` to protect against share-price inflation.
-   * `getRequirements` returns ERC20 approval or permit for `GeneralAdapter1` on the loan token.
+   * `prepare()` resolves ERC20 approval or permit for `GeneralAdapter1` on the loan token.
    * When `nativeAmount` is provided, native token is wrapped; the loan token must be wNative.
    *
    * No Morpho authorization required (supplier is crediting, not withdrawing).
    *
    * @param params - Supply parameters.
-   * @returns Object with `buildTx` and `getRequirements`.
+   * @returns TransactionPlan that can be prepared and built for execution.
    */
   supply: (
     params: {
@@ -158,24 +154,11 @@ export interface BlueActions {
       marketData: Market;
       slippageTolerance?: bigint;
     } & DepositAmountArgs,
-  ) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<BlueSupplyAction>>;
-    getRequirements: (params?: {
-      /**
-       * Prefer the ERC-2612 simple-permit path when the SDK detects support.
-       * Leave unset or set to `false` to force the Permit2/classic approval fallback when
-       * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
-       */
-      useSimplePermit?: boolean;
-    }) => Promise<
-      (
-        | Readonly<Transaction<ERC20ApprovalAction>>
-        | Requirement<PermitRequirementSignature>
-      )[]
-    >;
-  };
+  ) => TransactionPlan<
+    BlueSupplyAction,
+    TransactionPlanSimplePermitOptions,
+    TransactionPlanTokenRequest
+  >;
 
   /**
    * Prepares a loan-asset withdraw transaction.
@@ -190,14 +173,14 @@ export interface BlueActions {
    * moving liquidity from other markets via the PublicAllocator before withdrawing — used to
    * unblock withdraws that exceed on-market liquidity.
    *
-   * `getRequirements` returns `morpho.setAuthorization(generalAdapter1, true)` if GA1 is not
+   * `prepare()` resolves `morpho.setAuthorization(generalAdapter1, true)` if GA1 is not
    * yet authorized on Morpho (returns `[]` when already authorized), since the bundler calls
    * `withdraw(...,onBehalf=user,...)`.
    *
    * **Stale `positionData` may cause unexpected supply share calculations.**
    *
    * @param params - Withdraw parameters including pre-fetched `positionData`.
-   * @returns Object with `buildTx` and `getRequirements`.
+   * @returns TransactionPlan that can be prepared and built for execution.
    */
   withdraw: (
     params: {
@@ -207,14 +190,11 @@ export interface BlueActions {
       slippageTolerance?: bigint;
       reallocations?: readonly VaultReallocation[];
     } & AssetsOrSharesArgs,
-  ) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<BlueWithdrawAction>>;
-    getRequirements: () => Promise<
-      (Readonly<Transaction<BlueAuthorizationAction>> | Requirement)[]
-    >;
-  };
+  ) => TransactionPlan<
+    BlueWithdrawAction,
+    unknown,
+    TransactionPlanOperatorAuthorizationRequest
+  >;
 
   /**
    * Prepares a borrow transaction.
@@ -226,13 +206,13 @@ export interface BlueActions {
    * When `reallocations` is provided, `reallocateTo` actions are prepended to the bundle,
    * moving liquidity from other markets via the PublicAllocator before borrowing.
    *
-   * `getRequirements` returns `morpho.setAuthorization(generalAdapter1, true)` if not yet authorized,
+   * `prepare()` resolves `morpho.setAuthorization(generalAdapter1, true)` if not yet authorized,
    * since borrowing through bundler3 requires GeneralAdapter1 authorization on Morpho.
    *
    * **Stale `positionData` may cause unexpected health.**
    *
    * @param params - Borrow parameters including pre-fetched `positionData` for health validation.
-   * @returns Object with `buildTx` and `getRequirements`.
+   * @returns TransactionPlan that can be prepared and built for execution.
    */
   borrow: (params: {
     userAddress: Address;
@@ -240,14 +220,11 @@ export interface BlueActions {
     positionData: AccrualPosition;
     slippageTolerance?: bigint;
     reallocations?: readonly VaultReallocation[];
-  }) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<BlueBorrowAction>>;
-    getRequirements: () => Promise<
-      (Readonly<Transaction<BlueAuthorizationAction>> | Requirement)[]
-    >;
-  };
+  }) => TransactionPlan<
+    BlueBorrowAction,
+    unknown,
+    TransactionPlanOperatorAuthorizationRequest
+  >;
 
   /**
    * Prepares a repay transaction.
@@ -259,13 +236,13 @@ export interface BlueActions {
    *
    * Computes `maxSharePrice` from market borrow state and `slippageTolerance`.
    *
-   * `getRequirements` returns ERC20 approval for loan token to GeneralAdapter1.
+   * `prepare()` resolves ERC20 approval for loan token to GeneralAdapter1.
    * Does NOT require Morpho authorization (anyone can repay on behalf of anyone).
    *
    * **Shares mode:** `slippageTolerance` also caps `transferAmount`.
    *
    * @param params - Repay parameters including pre-fetched `positionData`.
-   * @returns Object with `buildTx` and `getRequirements`.
+   * @returns TransactionPlan that can be prepared and built for execution.
    */
   repay: (
     params: {
@@ -273,24 +250,11 @@ export interface BlueActions {
       positionData: AccrualPosition;
       slippageTolerance?: bigint;
     } & RepayAmountArgs,
-  ) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<BlueRepayAction>>;
-    getRequirements: (params?: {
-      /**
-       * Prefer the ERC-2612 simple-permit path when the SDK detects support.
-       * Leave unset or set to `false` to force the Permit2/classic approval fallback when
-       * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
-       */
-      useSimplePermit?: boolean;
-    }) => Promise<
-      (
-        | Readonly<Transaction<ERC20ApprovalAction>>
-        | Requirement<PermitRequirementSignature>
-      )[]
-    >;
-  };
+  ) => TransactionPlan<
+    BlueRepayAction,
+    TransactionPlanSimplePermitOptions,
+    TransactionPlanTokenRequest
+  >;
 
   /**
    * Prepares a withdraw-collateral transaction.
@@ -299,21 +263,19 @@ export interface BlueActions {
    * The caller (`msg.sender`) must be `onBehalf`.
    * Validates position health after withdrawal using the LLTV buffer.
    *
-   * No `getRequirements` — no ERC20 approval or GeneralAdapter1 authorization needed
+   * No requirement requests — no ERC20 approval or GeneralAdapter1 authorization needed
    * (collateral flows out of Morpho, not in).
    *
    * **No on-chain slippage guard — stale `positionData` risks liquidation.**
    *
    * @param params - Withdraw collateral parameters including pre-fetched `positionData` for health validation.
-   * @returns Object with `buildTx`.
+   * @returns TransactionPlan that can be prepared and built for execution.
    */
   withdrawCollateral: (params: {
     userAddress: Address;
     amount: bigint;
     positionData: AccrualPosition;
-  }) => {
-    buildTx: () => Readonly<Transaction<BlueWithdrawCollateralAction>>;
-  };
+  }) => TransactionPlan<BlueWithdrawCollateralAction>;
 
   /**
    * Prepares an atomic repay-and-withdraw-collateral transaction.
@@ -322,14 +284,14 @@ export interface BlueActions {
    * Validates combined position health: simulates the repay, then checks
    * that the resulting position can sustain the collateral withdrawal.
    *
-   * `getRequirements` returns in parallel:
+   * `prepare()` resolves in parallel:
    * - ERC20 approval for loan token to GeneralAdapter1 (for the repay).
    * - `morpho.setAuthorization(generalAdapter1, true)` if not yet authorized (for the withdraw).
    *
    * **Stale `positionData` risks underestimated debt and unsafe withdrawal.**
    *
    * @param params - Combined parameters including pre-fetched `positionData`.
-   * @returns Object with `buildTx` and `getRequirements`.
+   * @returns TransactionPlan that can be prepared and built for execution.
    */
   repayWithdrawCollateral: (
     params: {
@@ -338,25 +300,11 @@ export interface BlueActions {
       positionData: AccrualPosition;
       slippageTolerance?: bigint;
     } & RepayAmountArgs,
-  ) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<BlueRepayWithdrawCollateralAction>>;
-    getRequirements: (params?: {
-      /**
-       * Prefer the ERC-2612 simple-permit path when the SDK detects support.
-       * Leave unset or set to `false` to force the Permit2/classic approval fallback when
-       * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
-       */
-      useSimplePermit?: boolean;
-    }) => Promise<
-      (
-        | Readonly<Transaction<ERC20ApprovalAction>>
-        | Readonly<Transaction<BlueAuthorizationAction>>
-        | Requirement
-      )[]
-    >;
-  };
+  ) => TransactionPlan<
+    BlueRepayWithdrawCollateralAction,
+    TransactionPlanSimplePermitOptions,
+    TransactionPlanTokenRequest | TransactionPlanOperatorAuthorizationRequest
+  >;
 
   /**
    * Prepares an atomic supply-collateral-and-borrow transaction.
@@ -367,14 +315,14 @@ export interface BlueActions {
    * When `reallocations` is provided, `reallocateTo` actions are prepended before
    * `morphoBorrow` in the bundle.
    *
-   * `getRequirements` returns in parallel:
+   * `prepare()` resolves in parallel:
    * - ERC20 approval or permit for collateral token (to GeneralAdapter1).
    * - `morpho.setAuthorization(generalAdapter1, true)` if adapter is not yet authorized.
    *
    * **Stale `positionData` may cause unexpected health.**
    *
    * @param params - Combined parameters including pre-fetched `positionData` for health validation.
-   * @returns Object with `buildTx` and `getRequirements`.
+   * @returns TransactionPlan that can be prepared and built for execution.
    */
   supplyCollateralBorrow: (
     params: {
@@ -384,25 +332,11 @@ export interface BlueActions {
       slippageTolerance?: bigint;
       reallocations?: readonly VaultReallocation[];
     } & DepositAmountArgs,
-  ) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<BlueSupplyCollateralBorrowAction>>;
-    getRequirements: (params?: {
-      /**
-       * Prefer the ERC-2612 simple-permit path when the SDK detects support.
-       * Leave unset or set to `false` to force the Permit2/classic approval fallback when
-       * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
-       */
-      useSimplePermit?: boolean;
-    }) => Promise<
-      (
-        | Readonly<Transaction<ERC20ApprovalAction>>
-        | Readonly<Transaction<BlueAuthorizationAction>>
-        | Requirement
-      )[]
-    >;
-  };
+  ) => TransactionPlan<
+    BlueSupplyCollateralBorrowAction,
+    TransactionPlanSimplePermitOptions,
+    TransactionPlanTokenRequest | TransactionPlanOperatorAuthorizationRequest
+  >;
 
   /**
    * Prepares an atomic refinance migrating this market's position to another Morpho Blue market
@@ -413,7 +347,7 @@ export interface BlueActions {
    * markets are forward-accrued to `now`; in shares mode the target borrow is overshot by
    * `slippageTolerance` and the callback sweeps the residual.
    *
-   * `getRequirements` returns `morpho.setAuthorization(generalAdapter1, true)` when GA1 is not yet
+   * `prepare()` resolves `morpho.setAuthorization(generalAdapter1, true)` when GA1 is not yet
    * authorized (a single global authorization covers both markets).
    *
    * @param params.userAddress - Position owner on both markets.
@@ -425,7 +359,7 @@ export interface BlueActions {
    * @param params.borrowShares - Borrow shares to repay on source; exclusive with `borrowAssets`.
    * @param params.slippageTolerance - WAD slippage tolerance. Defaults to `DEFAULT_SLIPPAGE_TOLERANCE`.
    * @param params.targetReallocations - PublicAllocator reallocations into the target market.
-   * @returns Object with `buildTx` and `getRequirements`.
+   * @returns TransactionPlan that can be prepared and built for execution.
    */
   refinance: (params: {
     userAddress: Address;
@@ -439,14 +373,11 @@ export interface BlueActions {
     borrowShares?: bigint;
     slippageTolerance?: bigint;
     targetReallocations?: readonly VaultReallocation[];
-  }) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<BlueRefinanceAction>>;
-    getRequirements: () => Promise<
-      (Readonly<Transaction<BlueAuthorizationAction>> | Requirement)[]
-    >;
-  };
+  }) => TransactionPlan<
+    BlueRefinanceAction,
+    unknown,
+    TransactionPlanOperatorAuthorizationRequest
+  >;
 
   /**
    * Fetches all on-chain data needed to construct a {@link ReallocationData}
@@ -599,8 +530,8 @@ export class MorphoBlue implements BlueActions {
       market: marketData,
       slippageTolerance,
     });
-    return {
-      getRequirements: (params?: { useSimplePermit?: boolean }) =>
+    return new TransactionPlan({
+      getRequirementRequests: (params?: TransactionPlanSimplePermitOptions) =>
         getGeneralAdapterRequirements(this.client.viemClient, {
           address: this.marketParams.loanToken,
           chainId: this.chainId,
@@ -610,7 +541,7 @@ export class MorphoBlue implements BlueActions {
           args: { amount, from: userAddress },
         }),
 
-      buildTx: (signatures?: readonly RequirementSignature[]) => {
+      buildPrimaryTx: (signatures) => {
         const { permit } = selectRequirementSignatures(signatures, {
           permit: true,
         });
@@ -627,7 +558,7 @@ export class MorphoBlue implements BlueActions {
           metadata: this.client.options.metadata,
         });
       },
-    };
+    });
   }
 
   withdraw(
@@ -707,8 +638,8 @@ export class MorphoBlue implements BlueActions {
       slippageTolerance,
     });
 
-    return {
-      getRequirements: async () => {
+    return new TransactionPlan({
+      getRequirementRequests: async () => {
         const authTx = await getBlueAuthorizationRequirement({
           viemClient: this.client.viemClient,
           chainId: this.chainId,
@@ -718,7 +649,7 @@ export class MorphoBlue implements BlueActions {
         return authTx ? [authTx] : [];
       },
 
-      buildTx: (signatures?: readonly RequirementSignature[]) => {
+      buildPrimaryTx: (signatures) => {
         const { authorization } = selectRequirementSignatures(signatures, {
           authorization: true,
         });
@@ -736,7 +667,7 @@ export class MorphoBlue implements BlueActions {
           metadata: this.client.options.metadata,
         });
       },
-    };
+    });
   }
 
   supplyCollateral({
@@ -762,8 +693,8 @@ export class MorphoBlue implements BlueActions {
     if (nativeAmount !== undefined && nativeAmount > 0n) {
       validateNativeAsset(this.chainId, this.marketParams.collateralToken);
     }
-    return {
-      getRequirements: (params?: { useSimplePermit?: boolean }) =>
+    return new TransactionPlan({
+      getRequirementRequests: (params?: TransactionPlanSimplePermitOptions) =>
         getGeneralAdapterRequirements(this.client.viemClient, {
           address: this.marketParams.collateralToken,
           chainId: this.chainId,
@@ -773,7 +704,7 @@ export class MorphoBlue implements BlueActions {
           args: { amount, from: userAddress },
         }),
 
-      buildTx: (signatures?: readonly RequirementSignature[]) => {
+      buildPrimaryTx: (signatures) => {
         const { permit } = selectRequirementSignatures(signatures, {
           permit: true,
         });
@@ -792,7 +723,7 @@ export class MorphoBlue implements BlueActions {
           metadata: this.client.options.metadata,
         });
       },
-    };
+    });
   }
 
   borrow({
@@ -842,8 +773,8 @@ export class MorphoBlue implements BlueActions {
       slippageTolerance,
     });
 
-    return {
-      getRequirements: async () => {
+    return new TransactionPlan({
+      getRequirementRequests: async () => {
         const authTx = await getBlueAuthorizationRequirement({
           viemClient: this.client.viemClient,
           chainId: this.chainId,
@@ -853,7 +784,7 @@ export class MorphoBlue implements BlueActions {
         return authTx ? [authTx] : [];
       },
 
-      buildTx: (signatures?: readonly RequirementSignature[]) => {
+      buildPrimaryTx: (signatures) => {
         const { authorization } = selectRequirementSignatures(signatures, {
           authorization: true,
         });
@@ -873,7 +804,7 @@ export class MorphoBlue implements BlueActions {
           metadata: this.client.options.metadata,
         });
       },
-    };
+    });
   }
 
   repay(
@@ -980,8 +911,10 @@ export class MorphoBlue implements BlueActions {
       market: marketForRepay,
       slippageTolerance,
     });
-    return {
-      getRequirements: (reqParams?: { useSimplePermit?: boolean }) => {
+    return new TransactionPlan({
+      getRequirementRequests: (
+        reqParams?: TransactionPlanSimplePermitOptions,
+      ) => {
         // Fully native repay pulls no ERC-20, so it needs no approval/permit.
         if (erc20Amount === 0n) return Promise.resolve([]);
         return getGeneralAdapterRequirements(this.client.viemClient, {
@@ -994,7 +927,7 @@ export class MorphoBlue implements BlueActions {
         });
       },
 
-      buildTx: (signatures?: readonly RequirementSignature[]) => {
+      buildPrimaryTx: (signatures) => {
         const { permit } = selectRequirementSignatures(signatures, {
           permit: true,
         });
@@ -1029,7 +962,7 @@ export class MorphoBlue implements BlueActions {
           metadata: this.client.options.metadata,
         });
       },
-    };
+    });
   }
 
   withdrawCollateral({
@@ -1072,8 +1005,8 @@ export class MorphoBlue implements BlueActions {
       marketId: this.marketParams.id,
     });
 
-    return {
-      buildTx: () =>
+    return new TransactionPlan({
+      buildPrimaryTx: () =>
         blueWithdrawCollateral({
           market: {
             chainId: this.chainId,
@@ -1086,7 +1019,7 @@ export class MorphoBlue implements BlueActions {
           },
           metadata: this.client.options.metadata,
         }),
-    };
+    });
   }
 
   repayWithdrawCollateral(
@@ -1219,8 +1152,10 @@ export class MorphoBlue implements BlueActions {
       market: marketForRepay,
       slippageTolerance,
     });
-    return {
-      getRequirements: async (reqParams?: { useSimplePermit?: boolean }) => {
+    return new TransactionPlan({
+      getRequirementRequests: async (
+        reqParams?: TransactionPlanSimplePermitOptions,
+      ) => {
         const [erc20Requirements, authTx] = await Promise.all([
           // Fully native repay pulls no ERC-20, so it needs no approval/permit.
           erc20Amount === 0n
@@ -1244,7 +1179,7 @@ export class MorphoBlue implements BlueActions {
         return [...erc20Requirements, ...(authTx ? [authTx] : [])];
       },
 
-      buildTx: (signatures?: readonly RequirementSignature[]) => {
+      buildPrimaryTx: (signatures) => {
         const { permit, authorization } = selectRequirementSignatures(
           signatures,
           { permit: true, authorization: true },
@@ -1284,7 +1219,7 @@ export class MorphoBlue implements BlueActions {
           metadata: this.client.options.metadata,
         });
       },
-    };
+    });
   }
 
   supplyCollateralBorrow({
@@ -1353,8 +1288,10 @@ export class MorphoBlue implements BlueActions {
       market: positionData.market,
       slippageTolerance,
     });
-    return {
-      getRequirements: async (params?: { useSimplePermit?: boolean }) => {
+    return new TransactionPlan({
+      getRequirementRequests: async (
+        params?: TransactionPlanSimplePermitOptions,
+      ) => {
         const [erc20Requirements, authTx] = await Promise.all([
           getGeneralAdapterRequirements(this.client.viemClient, {
             address: this.marketParams.collateralToken,
@@ -1375,7 +1312,7 @@ export class MorphoBlue implements BlueActions {
         return [...erc20Requirements, ...(authTx ? [authTx] : [])];
       },
 
-      buildTx: (signatures?: readonly RequirementSignature[]) => {
+      buildPrimaryTx: (signatures) => {
         const { permit, authorization } = selectRequirementSignatures(
           signatures,
           { permit: true, authorization: true },
@@ -1400,7 +1337,7 @@ export class MorphoBlue implements BlueActions {
           metadata: this.client.options.metadata,
         });
       },
-    };
+    });
   }
 
   refinance({
@@ -1599,8 +1536,8 @@ export class MorphoBlue implements BlueActions {
         })
       : 0n;
 
-    return {
-      getRequirements: async () => {
+    return new TransactionPlan({
+      getRequirementRequests: async () => {
         const authTx = await getBlueAuthorizationRequirement({
           viemClient: this.client.viemClient,
           chainId: this.chainId,
@@ -1610,7 +1547,7 @@ export class MorphoBlue implements BlueActions {
         return authTx ? [authTx] : [];
       },
 
-      buildTx: (signatures?: readonly RequirementSignature[]) => {
+      buildPrimaryTx: (signatures) => {
         const { authorization } = selectRequirementSignatures(signatures, {
           authorization: true,
         });
@@ -1634,7 +1571,7 @@ export class MorphoBlue implements BlueActions {
           metadata: this.client.options.metadata,
         });
       },
-    };
+    });
   }
 
   /**

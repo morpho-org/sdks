@@ -22,7 +22,7 @@ export interface GetMidnightAuthorizationRequirementParams {
  *
  * Call before actions that rely on `Midnight.isAuthorized(owner, authorized)`,
  * such as bundle takes or Ecrecover offer-root ratification. Entity flows call
- * this from `getRequirements()` and omit the transaction when authorization is
+ * this while preparing a transaction plan and omit the transaction when authorization is
  * already set.
  *
  * @param params.viemClient - Viem client used to read `Midnight.isAuthorized`.

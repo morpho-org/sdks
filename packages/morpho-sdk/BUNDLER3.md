@@ -18,7 +18,7 @@ Instead of exposing the user directly to target contracts (ERC-4626 vault, Morph
 - executes `morphoSupplyCollateral`, `morphoBorrow`, `morphoRepay`, `morphoWithdrawCollateral` on Morpho Blue,
 - forwards `reallocateTo` calls to the `PublicAllocator` for shared liquidity.
 
-The **spender** of every approval / permit / permit2 is therefore **always** `generalAdapter1`, never the vault or Morpho directly. See [src/actions/requirements/getRequirements.ts](src/actions/requirements/getRequirements.ts) and the "Requirements System" section of [ARCHITECTURE.md](ARCHITECTURE.md#requirements-system).
+The **spender** of every approval / permit / permit2 is therefore **always** `generalAdapter1`, never the vault or Morpho directly. See [`getGeneralAdapterRequirements`](src/actions/requirements/generalAdapter/getGeneralAdapterRequirements.ts) and the "Requirements System" section of [ARCHITECTURE.md](ARCHITECTURE.md#requirements-system).
 
 ## Composability & modularity
 
@@ -70,7 +70,7 @@ For every ERC-4626 deposit (VaultV1 / VaultV2), GeneralAdapter1 calls `erc4626De
 
 ### 5. A single approval surface
 
-Whether it's a V1 deposit, a V2 deposit, a `supplyCollateral`, a `repay`, or a `supplyCollateralBorrow`: the spender is **always** `generalAdapter1`. A user who has already approved GA1 for a given token transparently reuses that approval. The approval / permit / permit2 decision is centralized in [`getRequirements`](src/actions/requirements/getRequirements.ts).
+Whether it's a V1 deposit, a V2 deposit, a `supplyCollateral`, a `repay`, or a `supplyCollateralBorrow`: the spender is **always** `generalAdapter1`. A user who has already approved GA1 for a given token transparently reuses that approval. The approval / permit / permit2 decision is centralized in [`getGeneralAdapterRequirements`](src/actions/requirements/generalAdapter/getGeneralAdapterRequirements.ts).
 
 ## Dangers & limits
 
@@ -98,7 +98,7 @@ This is the main design caveat. For the following operations the SDK emits a **d
 
 ### Other pitfalls
 
-- **Blue authorization for GA1 required for `borrow`, `supplyCollateralBorrow`, `repayWithdrawCollateral`.** A user who has never granted it will receive a requirement through [`getBlueAuthorizationRequirement`](src/actions/requirements/blue/getBlueAuthorizationRequirement.ts). Without signature support, this is a `setAuthorization` transaction to execute beforehand. With `supportSignature`, this is a signable requirement; pass the resulting `AuthorizationRequirementSignature` to `buildTx`, which folds it into the bundle as `setAuthorizationWithSig`.
+- **Blue authorization for GA1 required for `borrow`, `supplyCollateralBorrow`, `repayWithdrawCollateral`.** A user who has never granted it will receive a request through [`getBlueAuthorizationRequirement`](src/actions/requirements/blue/getBlueAuthorizationRequirement.ts) when the plan is prepared. Without signature support, this is a `setAuthorization` transaction step that appears before the primary step. With `supportSignature`, it is a signable request; pass the resulting `AuthorizationRequirementSignature` to `PreparedTransactionPlan.build()`, which folds it into the bundle as `setAuthorizationWithSig`.
 - **Critical order in `repayWithdrawCollateral`**: `morphoRepay` **must** precede `morphoWithdrawCollateral` in the bundle, otherwise the position is deemed unhealthy at withdraw time and the tx reverts.
 - **Builder must equal signer.** Bundler actions reference accounts in two different ways: some take an explicit `onBehalf` and act on `userAddress` (e.g. `morphoRepay`), others act implicitly on the **initiator** — the `msg.sender` of `bundler3.multicall`, i.e. the EOA signing the tx, not the adapter — (e.g. `erc20TransferFrom`, `morphoWithdrawCollateral`, the latter exposing no `onBehalf` parameter on GA1). `repayWithdrawCollateral` is the canonical example: the repay leg targets `userAddress` while the transfer-from and the withdraw target the initiator. If the address that built the tx (and filled `userAddress`) is not the address that signs/executes it, the bundle would repay one account's debt while pulling tokens from and withdrawing collateral against the signer. Transaction builders do not validate this at build time — callers MUST keep `userAddress` aligned with the signing account. The signature requirements (`encodeErc20Permit` / `encodeErc20Permit2Approve`) take a `WalletClient` and enforce this at `sign()` time via `validateUserAddress` (throws `MissingClientPropertyError` / `AddressMismatchError`).
 - **Tricky `tx.value`**: whenever a `nativeAmount` or a `reallocateTo` (native fee) is involved, `BundlerAction.encodeBundle` computes `tx.value`. Do not overwrite it on the caller side.

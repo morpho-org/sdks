@@ -36,8 +36,8 @@ describe("DepositVaultV2", () => {
           vaultData,
         });
 
-        const tx = deposit.buildTx();
-        const requirements = await deposit.getRequirements();
+        const tx = (await deposit.prepare()).build().primaryTx;
+        const requirements = (await deposit.prepare()).requirements;
 
         const approveTx = requirements[0];
         if (!approveTx) {

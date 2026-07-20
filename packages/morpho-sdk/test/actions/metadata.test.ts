@@ -43,7 +43,7 @@ describe("Metadata", () => {
           vaultData,
         });
 
-        const tx_1 = deposit.buildTx();
+        const tx_1 = (await deposit.prepare()).build().primaryTx;
         expect(tx_1.data).toContain("25AFEA44");
         const position = tx_1.data.indexOf("25AFEA44");
         expect(position).toBeGreaterThanOrEqual(8);
@@ -54,7 +54,7 @@ describe("Metadata", () => {
         expect(typeof timestampNumber).toBe("number");
         expect(timestampNumber).toBeLessThanOrEqual(Number(Time.timestamp()));
 
-        const requirements = await deposit.getRequirements();
+        const requirements = (await deposit.prepare()).requirements;
 
         const approveTx = requirements[0];
         if (!approveTx) {
@@ -64,7 +64,7 @@ describe("Metadata", () => {
           throw new Error("Approve transaction is not an approval transaction");
         }
 
-        const tx_2 = deposit.buildTx();
+        const tx_2 = (await deposit.prepare()).build().primaryTx;
         await client.sendTransaction(approveTx);
         await client.sendTransaction(tx_2);
       },
@@ -115,7 +115,7 @@ describe("Metadata", () => {
           vaultData,
         });
 
-        const tx = deposit.buildTx();
+        const tx = (await deposit.prepare()).build().primaryTx;
         expect(tx.data).toContain("25AFEA44");
         const position = tx.data.indexOf("25AFEA44");
         expect(position).toBeGreaterThanOrEqual(8);
@@ -123,7 +123,7 @@ describe("Metadata", () => {
         const timestampHex = tx.data.slice(position - 8, position);
         expect(timestampHex).toBe("00000000");
 
-        const requirements = await deposit.getRequirements();
+        const requirements = (await deposit.prepare()).requirements;
 
         const approveTx = requirements[0];
         if (!approveTx) {

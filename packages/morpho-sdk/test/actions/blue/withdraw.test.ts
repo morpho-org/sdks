@@ -55,14 +55,14 @@ describe("WithdrawBlue", () => {
           positionData,
         });
 
-        const requirements = await withdraw.getRequirements();
+        const requirements = (await withdraw.prepare()).requirements;
         const authorization = requirements[0];
         if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
 
-        const tx = withdraw.buildTx();
+        const tx = (await withdraw.prepare()).build().primaryTx;
         expect(tx.value).toBe(0n);
 
         await client.sendTransaction(tx);
@@ -110,14 +110,14 @@ describe("WithdrawBlue", () => {
           positionData,
         });
 
-        const requirements = await withdraw.getRequirements();
+        const requirements = (await withdraw.prepare()).requirements;
         const authorization = requirements[0];
         if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
 
-        const tx = withdraw.buildTx();
+        const tx = (await withdraw.prepare()).build().primaryTx;
         expect(tx.value).toBe(0n);
 
         await client.sendTransaction(tx);
@@ -155,7 +155,7 @@ describe("WithdrawBlue", () => {
       positionData,
     });
 
-    const tx = withdraw.buildTx();
+    const tx = (await withdraw.prepare()).build().primaryTx;
     expect(tx.action.args.receiver).toBe(receiver);
   });
 
@@ -181,7 +181,7 @@ describe("WithdrawBlue", () => {
       positionData,
     });
 
-    const requirements = await withdraw.getRequirements();
+    const requirements = (await withdraw.prepare()).requirements;
     expect(requirements.length).toBe(1);
     expect(isRequirementBlueAuthorization(requirements[0])).toBe(true);
   });
@@ -235,14 +235,14 @@ describe("WithdrawBlue", () => {
           reallocations,
         });
 
-        const requirements = await withdraw.getRequirements();
+        const requirements = (await withdraw.prepare()).requirements;
         const authorization = requirements[0];
         if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
 
-        const tx = withdraw.buildTx();
+        const tx = (await withdraw.prepare()).build().primaryTx;
         expect(tx.value).toBe(0n);
         expect(tx.action.args.reallocationFee).toBe(0n);
 
@@ -306,14 +306,14 @@ describe("WithdrawBlue", () => {
           reallocations,
         });
 
-        const requirements = await withdraw.getRequirements();
+        const requirements = (await withdraw.prepare()).requirements;
         const authorization = requirements[0];
         if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
 
-        const tx = withdraw.buildTx();
+        const tx = (await withdraw.prepare()).build().primaryTx;
         expect(tx.value).toBe(0n);
         expect(tx.action.args.shares).toBe(withdrawShares);
         expect(tx.action.args.assets).toBe(0n);
@@ -381,14 +381,14 @@ describe("WithdrawBlue", () => {
           reallocations,
         });
 
-        const requirements = await withdraw.getRequirements();
+        const requirements = (await withdraw.prepare()).requirements;
         const authorization = requirements[0];
         if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
 
-        const tx = withdraw.buildTx();
+        const tx = (await withdraw.prepare()).build().primaryTx;
         expect(tx.action.args.receiver).toBe(receiver);
         await client.sendTransaction(tx);
       },

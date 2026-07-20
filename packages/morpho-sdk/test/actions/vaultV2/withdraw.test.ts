@@ -31,7 +31,7 @@ describe("Withdraw VaultV2", () => {
           userAddress: client.account.address,
           amount: assets,
         });
-        const tx = withdraw.buildTx();
+        const tx = (await withdraw.prepare()).build().primaryTx;
 
         await client.sendTransaction(tx);
       },

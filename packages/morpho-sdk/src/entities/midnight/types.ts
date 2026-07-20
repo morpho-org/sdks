@@ -10,10 +10,14 @@ import type {
 import type { Address, Hex } from "viem";
 import type { MidnightTakeableOffer } from "../../actions/midnight/types.js";
 import type {
-  ActionOutput,
-  BaseAction,
+  TransactionPlan,
+  TransactionPlanRequest,
+} from "../../transactionPlan/index.js";
+import type {
   MempoolSubmitOffersAction,
-  MidnightOfferRootSignature,
+  MidnightOfferRootRequirement,
+  TransactionAction,
+  TxRequirement,
 } from "../../types/action.js";
 
 /** Optional Midnight API validation controls for make-offer flows. */
@@ -70,75 +74,59 @@ export interface SupplyCollateralMakeBorrowParams extends MakeOffersParams {
   readonly collateralIndex?: bigint;
 }
 
-/** Signatures accepted by Midnight action-output transaction builders. */
-export type MidnightActionSignatures =
-  | MidnightOfferRootSignature
-  | readonly MidnightOfferRootSignature[];
+/** Prerequisite transactions and offer-root signature supported by Midnight maker plans. */
+export type MidnightMakeOffersRequest =
+  | TxRequirement
+  | MidnightOfferRootRequirement;
 
 /**
- * Lazy Midnight entity result with async requirements and sync transaction building.
- *
- * Call `getRequirements()` first to collect approvals, authorizations, or
- * signatures. Once those are handled, pass any requirement signatures to
- * `buildTx`; the transaction builder itself performs no fetching or signing.
+ * Lazy Midnight transaction plan. Call `prepare()` to resolve the signature requests and/or
+ * prerequisite transactions needed by the already chosen Midnight action.
  *
  * @example
  * ```ts
- * const output = midnight.takeLend(params);
- * const requirements = await output.getRequirements();
- * for (const requirement of requirements) {
- *   if (!("sign" in requirement)) {
- *     await walletClient.sendTransaction({
- *       to: requirement.to,
- *       data: requirement.data,
- *       value: requirement.value,
- *     });
- *   }
+ * const plan = midnight.takeLend(params);
+ * const prepared = await plan.prepare();
+ * const signatures = [];
+ * for (const request of prepared.signatureRequests) {
+ *   signatures.push(await request.sign(walletClient, taker));
  * }
- * const tx = output.buildTx();
+ * const executable = prepared.build(signatures);
+ * const calls = executable.calls;
  * ```
  */
 export type MidnightActionOutput<
-  TAction extends BaseAction,
-  TSignatures = undefined,
-> = ActionOutput<TAction, TSignatures, undefined>;
+  TAction extends TransactionAction,
+  TRequest extends TransactionPlanRequest = TxRequirement,
+> = TransactionPlan<TAction, undefined, TRequest>;
 
 /**
- * Output returned by maker-offer flows after offer-tree preparation.
+ * Transaction plan returned by maker-offer flows after offer-tree preparation.
  *
- * Use `groups` and `root` for review UI, call `getRequirements()` to collect
- * ratifier approval or signature requirements, then call `buildTx(signatures)`
- * to publish the encoded payload to the Midnight mempool.
+ * Use `groups` and `root` for review UI. Call `prepare()` to resolve ratifier approval/signature
+ * requests, then build the executable transaction steps with the collected signatures.
  *
  * @example
  * ```ts
- * const output = await midnight.makeLend(params);
- * console.log(output.root, output.groups);
- * const requirements = await output.getRequirements();
+ * const plan = await midnight.makeLend(params);
+ * console.log(plan.root, plan.groups);
+ * const prepared = await plan.prepare();
  * const signatures = [];
- * for (const requirement of requirements) {
- *   if ("sign" in requirement) {
- *     signatures.push(await requirement.sign(walletClient, maker));
- *   } else {
- *     await walletClient.sendTransaction({
- *       to: requirement.to,
- *       data: requirement.data,
- *       value: requirement.value,
- *     });
- *   }
+ * for (const request of prepared.signatureRequests) {
+ *   signatures.push(await request.sign(walletClient, maker));
  * }
- * const tx = output.buildTx(signatures);
+ * const executable = prepared.build(signatures);
+ * const calls = executable.calls;
  * ```
  */
-export interface MakeOffersOutput
-  extends MidnightActionOutput<
-    MempoolSubmitOffersAction,
-    MidnightActionSignatures
-  > {
+export type MakeOffersOutput = MidnightActionOutput<
+  MempoolSubmitOffersAction,
+  MidnightMakeOffersRequest
+> & {
   readonly groups: readonly Hex[];
   readonly root: Hex;
   readonly ratifierType: "ecrecover" | "setter";
-}
+};
 
 /** Parameters shared by Midnight market action flows. */
 export interface MarketActionParams {

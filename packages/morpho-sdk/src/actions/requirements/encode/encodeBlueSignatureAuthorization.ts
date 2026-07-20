@@ -75,7 +75,7 @@ export const encodeBlueSignatureAuthorization = async (
 
   const action: AuthorizationAction = {
     type: "authorization",
-    args: { authorized, isAuthorized, deadline },
+    args: { authorized, isAuthorized, deadline, chainId },
   };
 
   return {

@@ -40,12 +40,13 @@ import { signAndVerifyTypedData } from "../../helpers/signAndVerifyTypedData.js"
 import { validateMidnightMarket } from "../../helpers/validateMidnightMarket.js";
 import { validateOfferSides } from "../../helpers/validateOfferSides.js";
 import { validateTakeableOffers } from "../../helpers/validateTakeableOffers.js";
+import { TransactionPlan } from "../../transactionPlan/index.js";
 import type { MorphoClientType } from "../../types/client.js";
 import {
   AccrualPositionUserMismatchError,
-  type ActionRequirement,
   InsufficientMidnightWithdrawableLiquidityError,
   MarketIdMismatchError,
+  type MempoolSubmitOffersAction,
   type MidnightCancelOfferAction,
   MidnightOfferMakerMismatchError,
   MidnightOfferMarketAddressMismatchError,
@@ -69,6 +70,7 @@ import {
   NoMidnightCreditToRedeemError,
   NonPositiveInputError,
   selectRequirementSignatures,
+  type TxRequirement,
   UnknownMidnightRatifierError,
   UnpreparedMidnightOfferRootSignatureError,
 } from "../../types/index.js";
@@ -79,7 +81,7 @@ import type {
   MakeOffersOutput,
   MakeOffersParams,
   MidnightActionOutput,
-  MidnightActionSignatures,
+  MidnightMakeOffersRequest,
   OffersData,
   RedeemParams,
   RepayWithdrawCollateralParams,
@@ -93,10 +95,10 @@ import type {
 /**
  * Entity methods exposed by `client.morpho.midnight(chainId)`.
  *
- * Use this surface for app flows: fetch market or position data first when a
- * method asks for it, call the flow method to receive lazy `getRequirements`
- * and `buildTx` handles, collect requirements, then build the final
- * transaction synchronously.
+ * Midnight action flows are synchronous after the caller provides market, position, or offer data:
+ * the SDK does not own broad data fetching, letting apps batch, cache, and refresh state for their
+ * own UX. Each flow returns a TransactionPlan; call `prepare()` when the app is ready to compute the
+ * minimal signature requests and/or transaction steps needed to execute that intent.
  *
  * @example
  * ```ts
@@ -104,7 +106,7 @@ import type {
  *
  * const midnight = client.morpho.midnight(8453);
  * const marketData = await midnight.getMarketData(marketId);
- * const output = midnight.takeLend({
+ * const plan = midnight.takeLend({
  *   accountAddress: lender,
  *   marketData,
  *   assets: BigInt(quote.data.availableAssets),
@@ -112,8 +114,13 @@ import type {
  *   takeableOffers: quote.data.takeableOffers,
  *   deadline: maxUint256,
  * });
- * const requirements = await output.getRequirements();
- * const tx = output.buildTx();
+ * const prepared = await plan.prepare();
+ * const signatures = [];
+ * for (const request of prepared.signatureRequests) {
+ *   signatures.push(await request.sign(walletClient, lender));
+ * }
+ * const executable = prepared.build(signatures);
+ * const calls = executable.calls;
  * ```
  */
 export type MidnightActions = Pick<
@@ -149,9 +156,10 @@ const validateMarketData = (market: Market, chainId: number) => {
 /**
  * Entity facade for Midnight fixed-rate action flows.
  *
- * `MorphoMidnight` keeps reads and transaction construction separated. Methods
- * that need chain or API state fetch it up front, while returned `buildTx`
- * callbacks are synchronous and only consume the data already passed in.
+ * Reads stay explicit and owned by the consumer. Methods that need chain or API state ask for it as
+ * input, then synchronously return a TransactionPlan. `prepare()` performs the targeted dependency
+ * discovery for that already chosen action, resolving only the signature requests and/or call
+ * requests needed before execution.
  *
  * @example
  * ```ts
@@ -164,11 +172,12 @@ const validateMarketData = (market: Market, chainId: number) => {
  *     parameters: { blockNumber: block.number },
  *   })
  * ).accrueInterest(block.timestamp);
- * const { buildTx } = midnight.redeem({
+ * const plan = midnight.redeem({
  *   accountAddress: user,
  *   positionData,
  * });
- * const tx = buildTx();
+ * const executable = (await plan.prepare()).build();
+ * const tx = executable.primaryTx;
  * ```
  */
 export class MorphoMidnight {
@@ -400,9 +409,13 @@ export class MorphoMidnight {
     const market = params.marketData;
     const midnightBundles = getChainAddress(this.chainId, "midnightBundles");
 
-    return {
-      getRequirements: async () => {
-        const requirements: ActionRequirement[] = [
+    return new TransactionPlan<
+      MidnightTakeLendAction,
+      undefined,
+      TxRequirement
+    >({
+      getRequirementRequests: async () => {
+        const requirements: TxRequirement[] = [
           ...(await getMidnightApprovalRequirements({
             viemClient: this.client.viemClient,
             chainId: this.chainId,
@@ -422,7 +435,7 @@ export class MorphoMidnight {
 
         return requirements;
       },
-      buildTx: () =>
+      buildPrimaryTx: () =>
         midnightTakeLend({
           chainId: this.chainId,
           market: market.params,
@@ -433,7 +446,7 @@ export class MorphoMidnight {
           deadline: params.deadline,
           metadata: this.client.options.metadata,
         }),
-    };
+    });
   }
 
   /**
@@ -484,9 +497,13 @@ export class MorphoMidnight {
     const market = params.marketData;
     const midnightBundles = getChainAddress(this.chainId, "midnightBundles");
 
-    return {
-      getRequirements: async () => {
-        const requirements: ActionRequirement[] = [];
+    return new TransactionPlan<
+      MidnightTakeBorrowAction,
+      undefined,
+      TxRequirement
+    >({
+      getRequirementRequests: async () => {
+        const requirements: TxRequirement[] = [];
         const authorization = await getMidnightAuthorizationRequirement({
           viemClient: this.client.viemClient,
           chainId: this.chainId,
@@ -497,7 +514,7 @@ export class MorphoMidnight {
 
         return requirements;
       },
-      buildTx: () =>
+      buildPrimaryTx: () =>
         midnightTakeBorrow({
           chainId: this.chainId,
           market: market.params,
@@ -508,7 +525,7 @@ export class MorphoMidnight {
           deadline: params.deadline,
           metadata: this.client.options.metadata,
         }),
-    };
+    });
   }
 
   /**
@@ -566,9 +583,13 @@ export class MorphoMidnight {
     const midnightBundles = getChainAddress(this.chainId, "midnightBundles");
     const collateral = market.getCollateralByIndex(collateralIndex);
 
-    return {
-      getRequirements: async () => {
-        const requirements: ActionRequirement[] = [
+    return new TransactionPlan<
+      MidnightSupplyCollateralTakeBorrowAction,
+      undefined,
+      TxRequirement
+    >({
+      getRequirementRequests: async () => {
+        const requirements: TxRequirement[] = [
           ...(await getMidnightApprovalRequirements({
             viemClient: this.client.viemClient,
             chainId: this.chainId,
@@ -588,7 +609,7 @@ export class MorphoMidnight {
 
         return requirements;
       },
-      buildTx: () =>
+      buildPrimaryTx: () =>
         midnightSupplyCollateralTakeBorrow({
           chainId: this.chainId,
           market: market.params,
@@ -601,7 +622,7 @@ export class MorphoMidnight {
           deadline: params.deadline,
           metadata: this.client.options.metadata,
         }),
-    };
+    });
   }
 
   /**
@@ -644,8 +665,12 @@ export class MorphoMidnight {
     const collateral = market.getCollateralByIndex(collateralIndex);
     const midnight = getChainAddress(this.chainId, "midnight");
 
-    return {
-      getRequirements: async () =>
+    return new TransactionPlan<
+      MidnightSupplyCollateralAction,
+      undefined,
+      TxRequirement
+    >({
+      getRequirementRequests: async () =>
         await getMidnightApprovalRequirements({
           viemClient: this.client.viemClient,
           chainId: this.chainId,
@@ -655,7 +680,7 @@ export class MorphoMidnight {
           amount:
             params.collateralAssets + (params.reservedCollateralAssets ?? 0n),
         }),
-      buildTx: () =>
+      buildPrimaryTx: () =>
         midnightSupplyCollateral({
           chainId: this.chainId,
           market: market.params,
@@ -664,14 +689,14 @@ export class MorphoMidnight {
           onBehalf: params.accountAddress,
           metadata: this.client.options.metadata,
         }),
-    };
+    });
   }
 
   /**
    * Validates lend-side maker offers and prepares their reserve and ratifier requirements.
    *
    * Calls the Midnight mempool validation API while preparing the offer tree;
-   * allowance and ratifier state are read lazily by `getRequirements()`.
+   * allowance and ratifier state are read lazily by `TransactionPlan.prepare()`.
    *
    * @param params - Maker, raw offers, loan token, reserve amounts, and validation controls.
    * @param params.accountAddress - Maker expected on every offer.
@@ -680,7 +705,7 @@ export class MorphoMidnight {
    * @param params.loanToken - Loan token shared by every offer market.
    * @param params.loanAssets - New loan reserve assigned to the submitted groups.
    * @param params.reservedLoanAssets - Existing loan assets reserved by other open groups.
-   * @returns Prepared group metadata, lazy requirements, and a synchronous mempool transaction builder.
+   * @returns Prepared group metadata and a lazy transaction plan for the mempool submission flow.
    * @throws {ChainIdMismatchError} when the client targets another chain.
    * @throws {MidnightOfferMarketAddressMismatchError} when an offer targets another Midnight deployment.
    * @throws {NonPositiveInputError} when `loanAssets` is non-positive.
@@ -725,12 +750,10 @@ export class MorphoMidnight {
     const midnight = getChainAddress(this.chainId, "midnight");
     const signedPayloads = new Map<string, Hex>();
 
-    return {
-      groups: data.groups,
-      root: data.tree.root,
-      ratifierType: data.ratifierType,
-      getRequirements: async () => {
-        const requirements: ActionRequirement[] = [];
+    return this.createMakeOffersOutput({
+      offersData: data,
+      getRequirementRequests: async () => {
+        const requirements: MidnightMakeOffersRequest[] = [];
         requirements.push(
           ...(await getMidnightApprovalRequirements({
             viemClient: this.client.viemClient,
@@ -750,13 +773,8 @@ export class MorphoMidnight {
 
         return requirements;
       },
-      buildTx: (signatures?: MidnightActionSignatures) =>
-        this.buildSubmitOffersTx({
-          offersData: data,
-          signatures,
-          signedPayloads,
-        }),
-    };
+      signedPayloads,
+    });
   }
 
   /**
@@ -789,23 +807,16 @@ export class MorphoMidnight {
     validateOfferSides(data.tree.offers, false);
     const signedPayloads = new Map<string, Hex>();
 
-    return {
-      groups: data.groups,
-      root: data.tree.root,
-      ratifierType: data.ratifierType,
-      getRequirements: async () => {
+    return this.createMakeOffersOutput({
+      offersData: data,
+      getRequirementRequests: async () => {
         return await this.getRatifierRequirements({
           offersData: data,
           signedPayloads,
         });
       },
-      buildTx: (signatures?: MidnightActionSignatures) =>
-        this.buildSubmitOffersTx({
-          offersData: data,
-          signatures,
-          signedPayloads,
-        }),
-    };
+      signedPayloads,
+    });
   }
 
   /**
@@ -875,12 +886,10 @@ export class MorphoMidnight {
     const midnight = getChainAddress(this.chainId, "midnight");
     const signedPayloads = new Map<string, Hex>();
 
-    return {
-      groups: data.groups,
-      root: data.tree.root,
-      ratifierType: data.ratifierType,
-      getRequirements: async () => {
-        const requirements: ActionRequirement[] = [
+    return this.createMakeOffersOutput({
+      offersData: data,
+      getRequirementRequests: async () => {
+        const requirements: MidnightMakeOffersRequest[] = [
           ...(await getMidnightApprovalRequirements({
             viemClient: this.client.viemClient,
             chainId: this.chainId,
@@ -906,13 +915,8 @@ export class MorphoMidnight {
 
         return requirements;
       },
-      buildTx: (signatures?: MidnightActionSignatures) =>
-        this.buildSubmitOffersTx({
-          offersData: data,
-          signatures,
-          signedPayloads,
-        }),
-    };
+      signedPayloads,
+    });
   }
 
   /**
@@ -977,9 +981,9 @@ export class MorphoMidnight {
       });
     }
 
-    return {
-      getRequirements: async () => [],
-      buildTx: () =>
+    return new TransactionPlan<MidnightRedeemAction, undefined, TxRequirement>({
+      getRequirementRequests: async () => [],
+      buildPrimaryTx: () =>
         midnightRedeem({
           chainId: this.chainId,
           market: market.params,
@@ -988,7 +992,7 @@ export class MorphoMidnight {
           receiver: params.receiver,
           metadata: this.client.options.metadata,
         }),
-    };
+    });
   }
 
   /**
@@ -1056,9 +1060,13 @@ export class MorphoMidnight {
 
     const midnightBundles = getChainAddress(this.chainId, "midnightBundles");
 
-    return {
-      getRequirements: async () => {
-        const requirements: ActionRequirement[] = [];
+    return new TransactionPlan<
+      MidnightRepayWithdrawCollateralAction,
+      undefined,
+      TxRequirement
+    >({
+      getRequirementRequests: async () => {
+        const requirements: TxRequirement[] = [];
         if (params.repayAssets > 0n) {
           requirements.push(
             ...(await getMidnightApprovalRequirements({
@@ -1081,7 +1089,7 @@ export class MorphoMidnight {
 
         return requirements;
       },
-      buildTx: () =>
+      buildPrimaryTx: () =>
         midnightRepayWithdrawCollateral({
           chainId: this.chainId,
           market: market.params,
@@ -1092,7 +1100,7 @@ export class MorphoMidnight {
           deadline: params.deadline,
           metadata: this.client.options.metadata,
         }),
-    };
+    });
   }
 
   /**
@@ -1117,24 +1125,127 @@ export class MorphoMidnight {
   }): MidnightActionOutput<MidnightCancelOfferAction> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
-    return {
-      getRequirements: async () => [],
-      buildTx: () =>
+    return new TransactionPlan<
+      MidnightCancelOfferAction,
+      undefined,
+      TxRequirement
+    >({
+      getRequirementRequests: async () => [],
+      buildPrimaryTx: () =>
         midnightCancelOffer({
           chainId: this.chainId,
           group: params.group,
           onBehalf: params.accountAddress,
           metadata: this.client.options.metadata,
         }),
-    };
+    });
+  }
+
+  private createMakeOffersOutput(params: {
+    readonly offersData: OffersData;
+    readonly getRequirementRequests: () => Promise<
+      readonly MidnightMakeOffersRequest[]
+    >;
+    readonly signedPayloads: ReadonlyMap<string, Hex>;
+  }): MakeOffersOutput {
+    const data = params.offersData;
+    return Object.assign(
+      new TransactionPlan<
+        MempoolSubmitOffersAction,
+        undefined,
+        MidnightMakeOffersRequest
+      >({
+        getRequirementRequests: params.getRequirementRequests,
+        previewPrimaryTx: data.ratifierType === "ecrecover" ? false : undefined,
+        buildPrimaryTx: (signatures) => {
+          let payload = data.setterPayload;
+          if (data.ratifierType === "ecrecover") {
+            const { midnightOfferRoot: signature } =
+              selectRequirementSignatures(signatures, {
+                midnightOfferRoot: true,
+              });
+
+            if (signature == null) {
+              throw new MissingMidnightOfferRootSignatureError();
+            }
+            if (!isAddressEqual(signature.args.owner, data.accountAddress)) {
+              throw new MidnightOfferRootOwnerMismatchError({
+                expectedOwner: data.accountAddress,
+                actualOwner: signature.args.owner,
+              });
+            }
+            if (
+              signature.args.root.toLowerCase() !== data.tree.root.toLowerCase()
+            ) {
+              throw new MidnightOfferRootMismatchError({
+                expectedRoot: data.tree.root,
+                actualRoot: signature.args.root,
+              });
+            }
+            if (
+              signature.action.args.root.toLowerCase() !==
+              data.tree.root.toLowerCase()
+            ) {
+              throw new MidnightOfferRootMismatchError({
+                expectedRoot: data.tree.root,
+                actualRoot: signature.action.args.root,
+              });
+            }
+            if (
+              !isAddressEqual(signature.action.args.ratifier, data.ratifier)
+            ) {
+              throw new MidnightOfferRootRatifierMismatchError({
+                expectedRatifier: data.ratifier,
+                actualRatifier: signature.action.args.ratifier,
+              });
+            }
+            if (signature.action.args.offers !== data.tree.offers.length) {
+              throw new MidnightOfferRootOfferCountMismatchError({
+                expectedOffers: data.tree.offers.length,
+                actualOffers: signature.action.args.offers,
+              });
+            }
+            const signedPayload = params.signedPayloads.get(
+              signature.args.signature.toLowerCase(),
+            );
+            if (signedPayload == null) {
+              throw new UnpreparedMidnightOfferRootSignatureError();
+            }
+            payload = signedPayload;
+          } else {
+            selectRequirementSignatures(signatures, {});
+          }
+
+          if (payload == null)
+            throw new MissingMidnightOfferRootSignatureError();
+
+          return mempoolSubmitOffers({
+            chainId: this.chainId,
+            groups: data.groups,
+            root: data.tree.root,
+            maker: data.accountAddress,
+            ratifier: data.ratifier,
+            ratifierType: data.ratifierType,
+            offers: data.tree.offers.length,
+            payload,
+            metadata: this.client.options.metadata,
+          });
+        },
+      }),
+      {
+        groups: data.groups,
+        root: data.tree.root,
+        ratifierType: data.ratifierType,
+      } as const,
+    );
   }
 
   private async getRatifierRequirements(params: {
     readonly offersData: OffersData;
     readonly signedPayloads: Map<string, Hex>;
-  }): Promise<readonly ActionRequirement[]> {
+  }): Promise<readonly MidnightMakeOffersRequest[]> {
     const data = params.offersData;
-    const requirements: ActionRequirement[] = [];
+    const requirements: MidnightMakeOffersRequest[] = [];
     const authorization = await getMidnightAuthorizationRequirement({
       viemClient: this.client.viemClient,
       chainId: this.chainId,
@@ -1207,85 +1318,5 @@ export class MorphoMidnight {
     if (ratifyRoot) requirements.push(ratifyRoot);
 
     return requirements;
-  }
-
-  private buildSubmitOffersTx(params: {
-    readonly offersData: OffersData;
-    readonly signatures?: MidnightActionSignatures;
-    readonly signedPayloads: ReadonlyMap<string, Hex>;
-  }) {
-    const data = params.offersData;
-    const collectedSignatures =
-      params.signatures == null
-        ? undefined
-        : "action" in params.signatures
-          ? [params.signatures]
-          : params.signatures;
-    let payload: Hex;
-    if (data.ratifierType === "ecrecover") {
-      const { midnightOfferRoot: signature } = selectRequirementSignatures(
-        collectedSignatures,
-        { midnightOfferRoot: true },
-      );
-
-      if (signature == null) {
-        throw new MissingMidnightOfferRootSignatureError();
-      }
-      if (!isAddressEqual(signature.args.owner, data.accountAddress)) {
-        throw new MidnightOfferRootOwnerMismatchError({
-          expectedOwner: data.accountAddress,
-          actualOwner: signature.args.owner,
-        });
-      }
-      if (signature.args.root.toLowerCase() !== data.tree.root.toLowerCase()) {
-        throw new MidnightOfferRootMismatchError({
-          expectedRoot: data.tree.root,
-          actualRoot: signature.args.root,
-        });
-      }
-      if (
-        signature.action.args.root.toLowerCase() !==
-        data.tree.root.toLowerCase()
-      ) {
-        throw new MidnightOfferRootMismatchError({
-          expectedRoot: data.tree.root,
-          actualRoot: signature.action.args.root,
-        });
-      }
-      if (!isAddressEqual(signature.action.args.ratifier, data.ratifier)) {
-        throw new MidnightOfferRootRatifierMismatchError({
-          expectedRatifier: data.ratifier,
-          actualRatifier: signature.action.args.ratifier,
-        });
-      }
-      if (signature.action.args.offers !== data.tree.offers.length) {
-        throw new MidnightOfferRootOfferCountMismatchError({
-          expectedOffers: data.tree.offers.length,
-          actualOffers: signature.action.args.offers,
-        });
-      }
-      const signedPayload = params.signedPayloads.get(
-        signature.args.signature.toLowerCase(),
-      );
-      if (signedPayload == null) {
-        throw new UnpreparedMidnightOfferRootSignatureError();
-      }
-      payload = signedPayload;
-    } else {
-      selectRequirementSignatures(collectedSignatures, {});
-      payload = data.setterPayload;
-    }
-
-    return mempoolSubmitOffers({
-      chainId: this.chainId,
-      groups: data.groups,
-      root: data.tree.root,
-      maker: data.accountAddress,
-      ratifier: data.ratifier,
-      ratifierType: data.ratifierType,
-      offers: data.tree.offers.length,
-      payload,
-      metadata: this.client.options.metadata,
-    });
   }
 }

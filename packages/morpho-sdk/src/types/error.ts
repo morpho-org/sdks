@@ -237,14 +237,15 @@ export namespace BundlerErrors {
   }
 }
 
-/** Requirement signature kind accepted by action-output transaction builders. */
+/** Requirement signature kind accepted by prepared transaction plans. */
 export type RequirementSignatureKind =
   | "permit"
   | "authorization"
   | "midnightOfferRootSignature";
 
 /**
- * Thrown when `buildTx` receives more than one requirement signature of the same kind.
+ * Thrown when `PreparedTransactionPlan.build()` receives more than one requirement signature of
+ * the same kind.
  *
  * A bundled path consumes at most one signature per accepted kind; passing several of the same
  * kind is ambiguous and would silently drop all but the first, so it is rejected instead.
@@ -254,7 +255,7 @@ export type RequirementSignatureKind =
  * import { AmbiguousRequirementSignaturesError } from "@morpho-org/morpho-sdk";
  *
  * if (error instanceof AmbiguousRequirementSignaturesError) {
- *   // Pass a single signature per accepted kind to buildTx.
+ *   // Pass a single signature per accepted kind to prepared.build().
  * }
  * ```
  */
@@ -265,13 +266,14 @@ export class AmbiguousRequirementSignaturesError extends Error {
    */
   constructor(kind: RequirementSignatureKind, count: number) {
     super(
-      `Expected at most one ${kind} signature but received ${count}. Pass a single ${kind} signature to buildTx.`,
+      `Expected at most one ${kind} signature but received ${count}. Pass a single ${kind} signature to PreparedTransactionPlan.build().`,
     );
   }
 }
 
 /**
- * Thrown when `buildTx` receives a requirement signature of a kind the operation does not consume.
+ * Thrown when `PreparedTransactionPlan.build()` receives a requirement signature of a kind the
+ * operation does not consume.
  * Surfacing it prevents a signed requirement from being silently ignored.
  *
  * @example
@@ -279,7 +281,7 @@ export class AmbiguousRequirementSignaturesError extends Error {
  * import { UnexpectedRequirementSignatureError } from "@morpho-org/morpho-sdk";
  *
  * if (error instanceof UnexpectedRequirementSignatureError) {
- *   // Remove the signature this operation does not use from the buildTx array.
+ *   // Remove the signature this operation does not use from prepared.build().
  * }
  * ```
  */
@@ -289,7 +291,35 @@ export class UnexpectedRequirementSignatureError extends Error {
    */
   constructor(kind: RequirementSignatureKind) {
     super(
-      `Received a ${kind} signature that this operation does not consume. Remove it from the buildTx signatures array.`,
+      `Received a ${kind} signature that this operation does not consume. Remove it from the signatures passed to PreparedTransactionPlan.build().`,
+    );
+  }
+}
+
+/**
+ * Thrown when the signatures passed to a prepared transaction plan do not exactly match its
+ * discovered signature requests.
+ *
+ * @example
+ * ```ts
+ * import { TransactionPlanSignatureCountMismatchError } from "@morpho-org/morpho-sdk";
+ *
+ * if (error instanceof TransactionPlanSignatureCountMismatchError) {
+ *   // Pass one signature for each `prepared.signatureRequests` entry and no others.
+ * }
+ * ```
+ */
+export class TransactionPlanSignatureCountMismatchError extends Error {
+  /**
+   * @param expected - Number of signature requests in the prepared plan.
+   * @param received - Number of signatures passed to `build`.
+   */
+  constructor(
+    public readonly expected: number,
+    public readonly received: number,
+  ) {
+    super(
+      `Expected exactly ${expected} transaction-plan signatures but received ${received}. Pass one signature for each prepared signature request and no others.`,
     );
   }
 }

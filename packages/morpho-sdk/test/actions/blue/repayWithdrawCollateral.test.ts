@@ -73,7 +73,7 @@ describe("RepayWithdrawCollateralBlue", () => {
           positionData,
         });
 
-        const requirements = await action.getRequirements();
+        const requirements = (await action.prepare()).requirements;
 
         const approval = requirements[0];
         if (!isRequirementApproval(approval)) {
@@ -81,7 +81,7 @@ describe("RepayWithdrawCollateralBlue", () => {
         }
         await client.sendTransaction(approval);
 
-        const tx = action.buildTx();
+        const tx = (await action.prepare()).build().primaryTx;
         await client.sendTransaction(tx);
       },
     });
@@ -143,7 +143,7 @@ describe("RepayWithdrawCollateralBlue", () => {
           positionData,
         });
 
-        const requirements = await action.getRequirements();
+        const requirements = (await action.prepare()).requirements;
         for (const req of requirements) {
           if (isRequirementApproval(req)) {
             // Shares-mode repayments use a forward-accrued transfer amount;
@@ -158,7 +158,7 @@ describe("RepayWithdrawCollateralBlue", () => {
           }
         }
 
-        const tx = action.buildTx();
+        const tx = (await action.prepare()).build().primaryTx;
         await client.sendTransaction(tx);
       },
     });
@@ -240,7 +240,7 @@ describe("RepayWithdrawCollateralBlue", () => {
           positionData,
         });
 
-        const requirements = await action.getRequirements();
+        const requirements = (await action.prepare()).requirements;
         for (const req of requirements) {
           if (isRequirementApproval(req)) {
             // Shares-mode repayments use a forward-accrued transfer amount;
@@ -255,7 +255,7 @@ describe("RepayWithdrawCollateralBlue", () => {
           }
         }
 
-        const tx = action.buildTx();
+        const tx = (await action.prepare()).build().primaryTx;
         await client.sendTransaction(tx);
       },
     });
@@ -319,7 +319,7 @@ describe("RepayWithdrawCollateralBlue", () => {
           positionData,
         });
 
-        const requirements = await action.getRequirements();
+        const requirements = (await action.prepare()).requirements;
         // A fully-native repay pulls no ERC-20, so there is no approval to make;
         // GeneralAdapter1 was already authorized when the position was opened.
         expect(requirements.some(isRequirementApproval)).toBe(false);
@@ -329,7 +329,7 @@ describe("RepayWithdrawCollateralBlue", () => {
           }
         }
 
-        const tx = action.buildTx();
+        const tx = (await action.prepare()).build().primaryTx;
         expect(tx.value).toEqual(nativeAmount);
         await client.sendTransaction(tx);
       },
@@ -413,7 +413,7 @@ describe("RepayWithdrawCollateralBlue", () => {
 
         // GA1 was authorized when the position opened, so the only requirement is
         // the ERC-20 approval — and it must cover ONLY the ERC-20 portion.
-        const requirements = await action.getRequirements();
+        const requirements = (await action.prepare()).requirements;
         const approval = requirements[0];
         if (!isRequirementApproval(approval)) {
           throw new Error("Approval requirement not found");
@@ -421,7 +421,7 @@ describe("RepayWithdrawCollateralBlue", () => {
         expect(approval.action.args.amount).toEqual(erc20Part);
         await client.sendTransaction(approval);
 
-        const tx = action.buildTx();
+        const tx = (await action.prepare()).build().primaryTx;
         // Only the native portion rides as tx.value.
         expect(tx.value).toEqual(nativePart);
         await client.sendTransaction(tx);
@@ -506,7 +506,7 @@ describe("RepayWithdrawCollateralBlue", () => {
           positionData,
         });
 
-        const requirements = await action.getRequirements();
+        const requirements = (await action.prepare()).requirements;
         const approval = requirements[0];
         if (!isRequirementApproval(approval)) {
           throw new Error("Approval requirement not found");
@@ -520,7 +520,7 @@ describe("RepayWithdrawCollateralBlue", () => {
         });
         await client.sendTransaction(approval);
 
-        const tx = action.buildTx();
+        const tx = (await action.prepare()).build().primaryTx;
         expect(tx.value).toEqual(nativePart);
         await client.sendTransaction(tx);
       },

@@ -24,6 +24,7 @@ import {
   isRequirementApproval,
   isRequirementSignature,
   Permit2ExpirationMissingError,
+  type PermitRequirementSignature,
 } from "../../../types/index.js";
 import { getTokenRequirementActions } from "../../signatures/getTokenRequirementActions.js";
 import { getRequirementsApproval } from "../getRequirementsApproval.js";
@@ -671,7 +672,7 @@ describe("getGeneralAdapterRequirements", () => {
                 expiration: 2n,
               },
             },
-          },
+          } as unknown as PermitRequirementSignature,
         }),
       ).toThrow(Permit2ExpirationMissingError);
     });

@@ -45,7 +45,7 @@ describe("SupplyCollateralBlue", () => {
           amount,
         });
 
-        const requirements = await supplyCollateral.getRequirements();
+        const requirements = (await supplyCollateral.prepare()).requirements;
 
         const approveTx = requirements[0];
         if (!isRequirementApproval(approveTx)) {
@@ -54,7 +54,7 @@ describe("SupplyCollateralBlue", () => {
 
         await client.sendTransaction(approveTx);
 
-        const tx = supplyCollateral.buildTx();
+        const tx = (await supplyCollateral.prepare()).build().primaryTx;
         await client.sendTransaction(tx);
       },
     });
@@ -106,10 +106,10 @@ describe("SupplyCollateralBlue", () => {
           amount,
         });
 
-        const requirements = await supplyCollateral.getRequirements();
+        const requirements = (await supplyCollateral.prepare()).requirements;
         expect(requirements.length).toBe(0);
 
-        const tx = supplyCollateral.buildTx();
+        const tx = (await supplyCollateral.prepare()).build().primaryTx;
 
         await client.sendTransaction(tx);
       },
@@ -152,10 +152,10 @@ describe("SupplyCollateralBlue", () => {
           nativeAmount,
         });
 
-        const requirements = await supplyCollateral.getRequirements();
+        const requirements = (await supplyCollateral.prepare()).requirements;
         expect(requirements.length).toBe(0);
 
-        const tx = supplyCollateral.buildTx();
+        const tx = (await supplyCollateral.prepare()).build().primaryTx;
         expect(tx.value).toEqual(nativeAmount);
 
         await client.sendTransaction(tx);
@@ -209,7 +209,7 @@ describe("SupplyCollateralBlue", () => {
           nativeAmount,
         });
 
-        const requirements = await supplyCollateral.getRequirements();
+        const requirements = (await supplyCollateral.prepare()).requirements;
         expect(requirements.length).toBe(1);
 
         const approveTx = requirements[0];
@@ -219,7 +219,7 @@ describe("SupplyCollateralBlue", () => {
 
         await client.sendTransaction(approveTx);
 
-        const tx = supplyCollateral.buildTx();
+        const tx = (await supplyCollateral.prepare()).build().primaryTx;
         expect(tx.value).toEqual(nativeAmount);
 
         await client.sendTransaction(tx);
@@ -268,9 +268,13 @@ describe("SupplyCollateralBlue", () => {
           amount,
         });
 
-        const requirements = await supplyCollateral.getRequirements({
-          useSimplePermit: true,
-        });
+        const requirements = (
+          await supplyCollateral.prepare({
+            requestOptions: {
+              useSimplePermit: true,
+            },
+          })
+        ).requirements;
         expect(requirements.length).toBe(1);
 
         if (!isRequirementSignature(requirements[0])) {
@@ -282,7 +286,9 @@ describe("SupplyCollateralBlue", () => {
           client.account.address,
         );
 
-        const tx = supplyCollateral.buildTx([requirementSignature]);
+        const tx = (await supplyCollateral.prepare()).build([
+          requirementSignature,
+        ]).primaryTx;
         await client.sendTransaction(tx);
       },
     });
@@ -332,7 +338,7 @@ describe("SupplyCollateralBlue", () => {
           amount,
         });
 
-        const requirements = await supplyCollateral.getRequirements();
+        const requirements = (await supplyCollateral.prepare()).requirements;
         expect(requirements.length).toBe(2);
 
         const approvalPermit2 = requirements[0];
@@ -365,7 +371,9 @@ describe("SupplyCollateralBlue", () => {
           BigInt(Math.floor(Date.now() / 1000)),
         );
 
-        const tx = supplyCollateral.buildTx([requirementSignature]);
+        const tx = (await supplyCollateral.prepare()).build([
+          requirementSignature,
+        ]).primaryTx;
         await client.sendTransaction(tx);
       },
     });

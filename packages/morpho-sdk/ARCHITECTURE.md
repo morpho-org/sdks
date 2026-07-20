@@ -13,9 +13,10 @@ operations on EVM-compatible chains for Morpho protocol.
 - **Deterministic transaction building.** Given the same inputs and on-chain state, the SDK
   always produces the same `Transaction` object. No simulation, no gas estimation, no
   sending — the consumer handles those concerns.
-- **Predictable developer experience.** Every operation returns a `{ buildTx, getRequirements }`
-  pair (for deposits) or `{ buildTx }` (for withdrawals/redeems). The interface is identical
-  across V1 and V2 vaults.
+- **Predictable developer experience.** Every entity operation returns a lazy `TransactionPlan`.
+  `prepare()` resolves prerequisite transactions and signature requests, while
+  `PreparedTransactionPlan.build(signatures)` returns the ordered executable transactions. The lifecycle
+  is identical across VaultV1, VaultV2, Blue, and Midnight.
 - **Immutability.** Every returned `Transaction` is deep-frozen via `@morpho-org/morpho-ts`'s
   `deepFreeze`. Once built, a transaction object cannot be mutated.
 - **No `any`.** Strict TypeScript throughout, with discriminated unions for action types and
@@ -117,7 +118,7 @@ at the SDK level. The differences are at the protocol layer:
 - **Maker routing**: Maker flows build and validate offer trees, collect an Ecrecover root
   signature or SetterRatifier transaction, then submit the payload to the Midnight mempool.
 - **SDK data**: `MorphoMidnight` fetches hydrated market and position snapshots and exposes
-  the same lazy `{ getRequirements, buildTx }` contract as the other entities.
+  the same lazy `TransactionPlan` lifecycle as the other entities.
 
 
 ### Force Deallocation (V2 only)
@@ -251,48 +252,50 @@ bundle.
 ### Decision tree
 
 ```
-getRequirements(viemClient, params)
+TransactionPlan.prepare()
 │
-├─ supportSignature: false (default)
-│    └─► getRequirementsApproval()
-│         Spender: generalAdapter1
-│         Returns: Transaction<ERC20ApprovalAction>[]
-│         • Checks current allowance — skips if sufficient.
-│         • For APPROVE_ONLY_ONCE_TOKENS (e.g. USDT): prepends
-│           a reset-to-zero approval before the actual approval.
-│
-└─ supportSignature: true
+└─► getGeneralAdapterRequirements(viemClient, params)
      │
-     ├─ Token supports EIP-2612 AND useSimplePermit: true
-     │    └─► getRequirementsPermit()
-     │         Returns: Requirement[] with sign() → PermitAction
-     │         • Checks generalAdapter1 allowance — skips if sufficient.
-     │         • Produces a signable permit for the generalAdapter1 spender.
+     ├─ supportSignature: false (default)
+     │    └─► getRequirementsApproval()
+     │         Spender: generalAdapter1
+     │         Returns: Transaction<ERC20ApprovalAction>[]
+     │         • Checks current allowance — skips if sufficient.
+     │         • For APPROVE_ONLY_ONCE_TOKENS (e.g. USDT): prepends
+     │           a reset-to-zero approval before the actual approval.
      │
-     ├─ Permit2 contract exists on this chain
-     │    └─► getRequirementsPermit2()
-     │         Returns: (Transaction | Requirement)[]
-     │         Two-step:
-     │         1. ERC20 → Permit2: classic approve() if needed (infinite).
-     │         2. Permit2 → generalAdapter1: signature if needed or expiring.
-     │
-     └─ Fallback
-          └─► getRequirementsApproval() (same as supportSignature: false)
+     └─ supportSignature: true
+          │
+          ├─ Token supports EIP-2612 AND useSimplePermit: true
+          │    └─► getRequirementsPermit()
+          │         Returns: Requirement[] with sign() → PermitAction
+          │         • Checks generalAdapter1 allowance — skips if sufficient.
+          │         • Produces a signable permit for the generalAdapter1 spender.
+          │
+          ├─ Permit2 contract exists on this chain
+          │    └─► getRequirementsPermit2()
+          │         Returns: (Transaction | Requirement)[]
+          │         Two-step:
+          │         1. ERC20 → Permit2: classic approve() if needed (infinite).
+          │         2. Permit2 → generalAdapter1: signature if needed or expiring.
+          │
+          └─ Fallback
+               └─► getRequirementsApproval() (same as supportSignature: false)
 ```
 
 ### How signatures flow into deposits
 
 When requirements return a `Requirement` object (permit, permit2, or Morpho authorization path),
-the consuming application calls `requirement.sign(client, userAddress)` to obtain a
-`RequirementSignature`. The collected signatures are then passed to `buildTx` as an array
-(`buildTx([...signatures])`), letting a permit and a Morpho authorization signature travel
-together:
+`TransactionPlan.prepare()` exposes it as a signature request. The consuming application calls
+`request.sign(client, userAddress)` to obtain a `RequirementSignature`, then passes the collected
+signatures to `PreparedTransactionPlan.build([...signatures])`, letting a permit and a Morpho
+authorization signature travel together:
 
 ```
-getRequirements() → Requirement { sign() } → RequirementSignature → buildTx([sig, ...])
+prepare() → signatureRequests → RequirementSignature → build([sig, ...])
 ```
 
-Inside `buildTx`, `getTokenRequirementActions()` converts the signature into bundler actions:
+Inside the primary transaction builder, `getTokenRequirementActions()` converts the signature into bundler actions:
 
 - **Permit path**: `permit` action + `erc20TransferFrom` to generalAdapter1.
 - **Permit2 path**: `approve2` action + `transferFrom2` to generalAdapter1.
@@ -300,9 +303,9 @@ Inside `buildTx`, `getTokenRequirementActions()` converts the signature into bun
 These actions are prepended to the `erc4626Deposit` action in the bundle. The entire sequence
 executes atomically in a single transaction.
 
-When no signature is provided (classic approval path), `buildTx()` uses a simple
-`erc20TransferFrom` action to move tokens from the user to the general adapter before the
-deposit.
+When no signature is provided (classic approval path), the prepared plan exposes the required
+approval as a preparation-phase call and the primary builder uses a simple `erc20TransferFrom`
+action to move tokens from the user to the general adapter before the deposit.
 
 ### Guard functions
 

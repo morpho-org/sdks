@@ -32,7 +32,7 @@ describe("MorphoVaultV2 entity tests", () => {
       await expect(vault.getData()).rejects.toThrow(ChainIdMismatchError);
     });
 
-    test("deposit throws ChainIdMismatchError when client chain differs", () => {
+    test("deposit throws ChainIdMismatchError when client chain differs", async () => {
       const publicClient = createPublicClient({
         chain: mainnet,
         transport: http("https://rpc.example"),
@@ -103,13 +103,9 @@ describe("MorphoVaultV2 entity tests", () => {
         vaultData,
         slippageTolerance: 0n,
       });
-
-      expect(result.buildTx).toBeDefined();
-      expect(result.getRequirements).toBeDefined();
-
-      const tx = result.buildTx();
-      expect(tx.data).toBeDefined();
-      expect(tx.value).toBe(0n);
+      const tx = (await result.prepare()).primaryTx;
+      expect(tx?.data).toBeDefined();
+      expect(tx?.value).toBe(0n);
     });
 
     test("should accept slippageTolerance of exactly MAX_SLIPPAGE_TOLERANCE", async ({
@@ -132,13 +128,9 @@ describe("MorphoVaultV2 entity tests", () => {
         vaultData,
         slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
       });
-
-      expect(result.buildTx).toBeDefined();
-      expect(result.getRequirements).toBeDefined();
-
-      const tx = result.buildTx();
-      expect(tx.data).toBeDefined();
-      expect(tx.value).toBe(0n);
+      const tx = (await result.prepare()).primaryTx;
+      expect(tx?.data).toBeDefined();
+      expect(tx?.value).toBe(0n);
     });
 
     test("should throw ExcessiveSlippageToleranceError when slippageTolerance exceeds MAX", async ({
@@ -260,7 +252,7 @@ describe("MorphoVaultV2 entity tests", () => {
       ).toThrow(NegativeInputError);
     });
 
-    test("should throw ChainWNativeMissingError when native deposit is requested on a chain without wNative", () => {
+    test("should throw ChainWNativeMissingError when native deposit is requested on a chain without wNative", async () => {
       const publicClient = createPublicClient({
         chain: celo,
         transport: http("https://rpc.example"),

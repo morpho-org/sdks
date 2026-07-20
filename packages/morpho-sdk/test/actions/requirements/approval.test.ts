@@ -39,7 +39,7 @@ describe("Approval", () => {
           vaultData,
         });
 
-        const requirements = await deposit.getRequirements();
+        const requirements = (await deposit.prepare()).requirements;
 
         expect(requirements.length).toBe(1);
         expect(requirements[0]?.action.args.spender).toBe(generalAdapter);
@@ -51,7 +51,7 @@ describe("Approval", () => {
 
         await client.sendTransaction(requirements[0]);
 
-        const tx = deposit.buildTx();
+        const tx = (await deposit.prepare()).build().primaryTx;
 
         await client.sendTransaction(tx);
       },
@@ -91,7 +91,7 @@ describe("Approval", () => {
           vaultData,
         });
 
-        const requirements = await deposit.getRequirements();
+        const requirements = (await deposit.prepare()).requirements;
 
         expect(requirements.length).toBe(2);
         expect(requirements[0]?.action.args.spender).toBe(generalAdapter);
@@ -109,7 +109,7 @@ describe("Approval", () => {
         await client.sendTransaction(requirements[0]);
         await client.sendTransaction(requirements[1]);
 
-        const tx = deposit.buildTx();
+        const tx = (await deposit.prepare()).build().primaryTx;
 
         await client.sendTransaction(tx);
       },

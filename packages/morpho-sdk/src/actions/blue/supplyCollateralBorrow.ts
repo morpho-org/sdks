@@ -55,7 +55,7 @@ export interface BlueSupplyCollateralBorrowParams {
  * `GeneralAdapter1.wrapNative()` before the supply leg.
  *
  * Prerequisite: `GeneralAdapter1` must be authorized on Morpho to borrow on behalf of the user.
- * Use `getRequirements()` on the entity to check and obtain the authorization transaction.
+ * Use `TransactionPlan.prepare()` on the entity output to discover the authorization request.
  *
  * Zero loss: all collateral reaches Morpho, all borrowed tokens reach the receiver. No dust left
  * in bundler or adapter.

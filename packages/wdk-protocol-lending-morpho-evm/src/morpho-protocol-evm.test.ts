@@ -1,4 +1,8 @@
-import type { RequirementSignature } from "@morpho-org/morpho-sdk";
+import type {
+  AuthorizationRequirementSignature,
+  PermitRequirementSignature,
+  RequirementSignature,
+} from "@morpho-org/morpho-sdk";
 import * as viem from "viem";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -17,6 +21,29 @@ const MARKET_PARAMS = {
   irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
   lltv: 860000000000000000n,
 } as const;
+
+const PERMIT_SIGNATURE = {
+  action: {
+    type: "permit2",
+    args: {
+      token: TOKEN,
+      spender: ADDRESS,
+      amount: 100_000n,
+      deadline: 1_900_000_000n,
+      expiration: 2_000_000_000n,
+      chainId: 1,
+    },
+  },
+  args: {
+    owner: ADDRESS,
+    asset: TOKEN,
+    amount: 100_000n,
+    nonce: 0n,
+    deadline: 1_900_000_000n,
+    expiration: 2_000_000_000n,
+    signature: "0x00",
+  },
+} as const satisfies PermitRequirementSignature;
 
 const SUPPLY_TX = {
   to: "0x0000000000000000000000000000000000000001",
@@ -63,36 +90,119 @@ const positionData = {
   collateral: 44n,
 };
 
-const supplyAction = {
-  getRequirements: vi
-    .fn()
-    .mockResolvedValue([{ action: { type: "erc20Approval" } }]),
-  buildTx: vi.fn().mockReturnValue(SUPPLY_TX),
+type MockRequirement = {
+  readonly action: { readonly type: string };
+  readonly sign?: () => Promise<RequirementSignature>;
 };
-const withdrawAction = {
-  buildTx: vi.fn().mockReturnValue(WITHDRAW_TX),
-};
-const borrowAction = {
-  getRequirements: vi
-    .fn()
-    .mockResolvedValue([{ action: { type: "blueAuthorization" } }]),
-  buildTx: vi.fn().mockReturnValue(BORROW_TX),
-};
-const repayAction = {
-  getRequirements: vi
-    .fn()
-    .mockResolvedValue([{ action: { type: "erc20Approval" } }]),
-  buildTx: vi.fn().mockReturnValue(REPAY_TX),
-};
-const supplyCollateralAction = {
-  getRequirements: vi
-    .fn()
-    .mockResolvedValue([{ action: { type: "erc20Approval" } }]),
-  buildTx: vi.fn().mockReturnValue(SUPPLY_COLLATERAL_TX),
-};
-const withdrawCollateralAction = {
-  buildTx: vi.fn().mockReturnValue(WITHDRAW_COLLATERAL_TX),
-};
+
+function mockTransactionPlan(
+  tx: typeof SUPPLY_TX,
+  requirements: readonly MockRequirement[] = [],
+) {
+  const getRequirementRequests = vi.fn(
+    async (_requestOptions?: unknown) => requirements,
+  );
+  const buildPrimaryTx = vi.fn(
+    (_signatures?: readonly RequirementSignature[]) => tx,
+  );
+  const prepare = vi.fn(async (options?: { requestOptions?: unknown }) => {
+    const resolvedRequirements = await getRequirementRequests(
+      options?.requestOptions,
+    );
+    const primaryStep = {
+      id: "primary",
+      kind: "tx",
+      phase: "primary",
+      tx,
+    } as const;
+    return {
+      requirements: resolvedRequirements,
+      primaryStep,
+      primaryTx: tx,
+      signatureRequests: resolvedRequirements.filter(
+        (requirement) => requirement.sign !== undefined,
+      ),
+      txSteps: [primaryStep],
+      calls: [{ to: tx.to, value: tx.value, data: tx.data }],
+      steps: [
+        ...resolvedRequirements.map((requirement, index) =>
+          "sign" in requirement
+            ? {
+                id: `request-${index}`,
+                kind: "signature",
+                request: requirement,
+              }
+            : {
+                id: `request-${index}`,
+                kind: "tx",
+                phase: "preparation",
+                tx: requirement,
+              },
+        ),
+        primaryStep,
+      ],
+      build: (signatures?: readonly RequirementSignature[]) => {
+        const expected = resolvedRequirements.filter(
+          (requirement) => requirement.sign !== undefined,
+        ).length;
+        if (expected > 0 && (signatures?.length ?? 0) !== expected) {
+          throw new Error("signature count mismatch");
+        }
+        const primaryTx = buildPrimaryTx(signatures);
+        const builtPrimaryStep = {
+          id: "primary",
+          kind: "tx",
+          phase: "primary",
+          tx: primaryTx,
+        } as const;
+        return {
+          primaryStep: builtPrimaryStep,
+          primaryTx,
+          signatureRequests: [],
+          txSteps: [builtPrimaryStep],
+          calls: [
+            {
+              to: primaryTx.to,
+              value: primaryTx.value,
+              data: primaryTx.data,
+            },
+          ],
+        };
+      },
+    };
+  });
+  return { prepare, getRequirementRequests, buildPrimaryTx };
+}
+
+const supplyAction = mockTransactionPlan(SUPPLY_TX, [
+  { action: { type: "erc20Approval" } },
+]);
+const withdrawAction = mockTransactionPlan(WITHDRAW_TX);
+const borrowAction = mockTransactionPlan(BORROW_TX, [
+  { action: { type: "blueAuthorization" } },
+]);
+const repayAction = mockTransactionPlan(REPAY_TX, [
+  { action: { type: "erc20Approval" } },
+]);
+const supplyCollateralAction = mockTransactionPlan(SUPPLY_COLLATERAL_TX, [
+  { action: { type: "erc20Approval" } },
+]);
+const withdrawCollateralAction = mockTransactionPlan(WITHDRAW_COLLATERAL_TX);
+const signatureSupplyAction = mockTransactionPlan(SUPPLY_TX, [
+  { action: { type: "permit" }, sign: vi.fn(async () => PERMIT_SIGNATURE) },
+]);
+const signatureRepayAction = mockTransactionPlan(REPAY_TX, [
+  { action: { type: "permit" }, sign: vi.fn(async () => PERMIT_SIGNATURE) },
+]);
+const signatureSupplyCollateralAction = mockTransactionPlan(
+  SUPPLY_COLLATERAL_TX,
+  [
+    {
+      action: { type: "permit" },
+      sign: vi.fn(async () => PERMIT_SIGNATURE),
+    },
+  ],
+);
 
 const vaultV2Entity = {
   getData: vi.fn().mockResolvedValue(vaultData),
@@ -213,7 +323,7 @@ describe.sequential("MorphoProtocolEvm", () => {
       );
 
       expect(requirements).toEqual([{ action: { type: "erc20Approval" } }]);
-      expect(supplyAction.getRequirements).toHaveBeenCalledWith(
+      expect(supplyAction.getRequirementRequests).toHaveBeenCalledWith(
         requirementOptions,
       );
     });
@@ -413,6 +523,54 @@ describe.sequential("MorphoProtocolEvm", () => {
       expect(account.quoteSendTransaction).toHaveBeenCalledWith(SUPPLY_TX);
       expect(result).toEqual({ fee: 12_345n });
     });
+
+    test("should quote the primary preview before a permit is signed", async () => {
+      vaultV2Entity.deposit.mockReturnValueOnce(signatureSupplyAction);
+      account.quoteSendTransaction = vi
+        .fn()
+        .mockResolvedValue({ fee: 12_345n });
+      // biome-ignore lint/suspicious/noShadow: test-local protocol shadowing the suite default
+      const protocol = new MorphoProtocolEvm(account, {
+        chainId: 1,
+        earnVaultAddress: VAULT,
+        borrowMarketParams: MARKET_PARAMS,
+        supportSignature: true,
+      });
+
+      const result = await protocol.quoteSupply({
+        token: TOKEN,
+        amount: 100_000n,
+      });
+
+      expect(signatureSupplyAction.buildPrimaryTx).not.toHaveBeenCalled();
+      expect(account.quoteSendTransaction).toHaveBeenCalledWith(SUPPLY_TX);
+      expect(result).toEqual({ fee: 12_345n });
+    });
+
+    test("should quote the signed transaction when a permit is supplied", async () => {
+      vaultV2Entity.deposit.mockReturnValueOnce(signatureSupplyAction);
+      account.quoteSendTransaction = vi
+        .fn()
+        .mockResolvedValue({ fee: 12_345n });
+      // biome-ignore lint/suspicious/noShadow: test-local protocol shadowing the suite default
+      const protocol = new MorphoProtocolEvm(account, {
+        chainId: 1,
+        earnVaultAddress: VAULT,
+        borrowMarketParams: MARKET_PARAMS,
+        supportSignature: true,
+      });
+
+      await protocol.quoteSupply({
+        token: TOKEN,
+        amount: 100_000n,
+        requirementSignature: PERMIT_SIGNATURE,
+      });
+
+      expect(signatureSupplyAction.buildPrimaryTx).toHaveBeenCalledWith([
+        PERMIT_SIGNATURE,
+      ]);
+      expect(account.quoteSendTransaction).toHaveBeenCalledWith(SUPPLY_TX);
+    });
   });
 
   describe("withdraw", () => {
@@ -522,7 +680,7 @@ describe.sequential("MorphoProtocolEvm", () => {
       });
 
       expect(requirements).toEqual([{ action: { type: "blueAuthorization" } }]);
-      expect(borrowAction.getRequirements).toHaveBeenCalled();
+      expect(borrowAction.getRequirementRequests).toHaveBeenCalled();
     });
 
     test("should build the borrow without signatures by default", async () => {
@@ -532,7 +690,7 @@ describe.sequential("MorphoProtocolEvm", () => {
 
       await protocol.borrow({ token: TOKEN, amount: 100_000n });
 
-      expect(borrowAction.buildTx).toHaveBeenCalledWith(undefined);
+      expect(borrowAction.buildPrimaryTx).toHaveBeenCalledWith(undefined);
     });
 
     test("should fold a signed authorization into the bundle when provided", async () => {
@@ -540,8 +698,23 @@ describe.sequential("MorphoProtocolEvm", () => {
         .fn()
         .mockResolvedValue({ hash: "dummy-borrow-hash", fee: 12_345n });
       const requirementSignature = {
-        action: { type: "authorization" },
-      } as unknown as RequirementSignature;
+        action: {
+          type: "authorization",
+          args: {
+            authorized: ADDRESS,
+            isAuthorized: true,
+            deadline: 1_900_000_000n,
+          },
+        },
+        args: {
+          owner: ADDRESS,
+          authorized: ADDRESS,
+          isAuthorized: true,
+          nonce: 0n,
+          deadline: 1_900_000_000n,
+          signature: "0x00",
+        },
+      } satisfies AuthorizationRequirementSignature;
 
       await protocol.borrow({
         token: TOKEN,
@@ -549,7 +722,9 @@ describe.sequential("MorphoProtocolEvm", () => {
         requirementSignature,
       });
 
-      expect(borrowAction.buildTx).toHaveBeenCalledWith([requirementSignature]);
+      expect(borrowAction.buildPrimaryTx).toHaveBeenCalledWith([
+        requirementSignature,
+      ]);
     });
 
     test("should throw if 'onBehalfOf' differs from the wallet address", async () => {
@@ -619,9 +794,32 @@ describe.sequential("MorphoProtocolEvm", () => {
       );
 
       expect(requirements).toEqual([{ action: { type: "erc20Approval" } }]);
-      expect(repayAction.getRequirements).toHaveBeenCalledWith(
+      expect(repayAction.getRequirementRequests).toHaveBeenCalledWith(
         requirementOptions,
       );
+    });
+
+    test("should quote the primary preview before a permit is signed", async () => {
+      marketEntity.repay.mockReturnValueOnce(signatureRepayAction);
+      account.quoteSendTransaction = vi
+        .fn()
+        .mockResolvedValue({ fee: 12_345n });
+      // biome-ignore lint/suspicious/noShadow: test-local protocol shadowing the suite default
+      const protocol = new MorphoProtocolEvm(account, {
+        chainId: 1,
+        earnVaultAddress: VAULT,
+        borrowMarketParams: MARKET_PARAMS,
+        supportSignature: true,
+      });
+
+      const result = await protocol.quoteRepay({
+        token: TOKEN,
+        amount: 100_000n,
+      });
+
+      expect(signatureRepayAction.buildPrimaryTx).not.toHaveBeenCalled();
+      expect(account.quoteSendTransaction).toHaveBeenCalledWith(REPAY_TX);
+      expect(result).toEqual({ fee: 12_345n });
     });
   });
 
@@ -700,9 +898,38 @@ describe.sequential("MorphoProtocolEvm", () => {
       );
 
       expect(requirements).toEqual([{ action: { type: "erc20Approval" } }]);
-      expect(supplyCollateralAction.getRequirements).toHaveBeenCalledWith(
-        requirementOptions,
+      expect(
+        supplyCollateralAction.getRequirementRequests,
+      ).toHaveBeenCalledWith(requirementOptions);
+    });
+
+    test("should quote the primary preview before a permit is signed", async () => {
+      marketEntity.supplyCollateral.mockReturnValueOnce(
+        signatureSupplyCollateralAction,
       );
+      account.quoteSendTransaction = vi
+        .fn()
+        .mockResolvedValue({ fee: 12_345n });
+      // biome-ignore lint/suspicious/noShadow: test-local protocol shadowing the suite default
+      const protocol = new MorphoProtocolEvm(account, {
+        chainId: 1,
+        earnVaultAddress: VAULT,
+        borrowMarketParams: MARKET_PARAMS,
+        supportSignature: true,
+      });
+
+      const result = await protocol.quoteSupplyCollateral({
+        token: COLLATERAL,
+        amount: 100_000n,
+      });
+
+      expect(
+        signatureSupplyCollateralAction.buildPrimaryTx,
+      ).not.toHaveBeenCalled();
+      expect(account.quoteSendTransaction).toHaveBeenCalledWith(
+        SUPPLY_COLLATERAL_TX,
+      );
+      expect(result).toEqual({ fee: 12_345n });
     });
   });
 
@@ -713,7 +940,6 @@ describe.sequential("MorphoProtocolEvm", () => {
         chainId: 1,
         provider: "https://dummy-rpc-url.com",
         bundlerUrl: "https://dummy-bundler-url.com",
-        entryPointAddress: "0x0000000000000000000000000000000000000007",
         safeModulesVersion: "0.3.0",
         isSponsored: false,
         useNativeCoins: true,

@@ -50,6 +50,9 @@ describe("encodeBlueSignatureAuthorization", () => {
     });
 
     expect(requirement.action.type).toBe("authorization");
+    expect(requirement.action.args.authorized).toBe(generalAdapter1);
+    expect(requirement.action.args.isAuthorized).toBe(true);
+    expect(requirement.action.args.chainId).toBe(mainnet.id);
 
     const signed = await requirement.sign(client, account.address);
 
