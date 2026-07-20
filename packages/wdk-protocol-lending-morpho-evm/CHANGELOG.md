@@ -1,5 +1,16 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
+## 1.0.4
+
+### Patch Changes
+
+- [#891](https://github.com/morpho-org/sdks/pull/891) [`6c14469`](https://github.com/morpho-org/sdks/commit/6c14469d3532d379139d74bcf5dd710e43544fa0) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Respect Vault V2 receive-share gates when accruing performance and management fees, including in fetched accrual state and downstream transaction share-price bounds.
+
+- Updated dependencies [[`be008d6`](https://github.com/morpho-org/sdks/commit/be008d6ba2ad3a158b93b1cd201be8c29e56eef2), [`be008d6`](https://github.com/morpho-org/sdks/commit/be008d6ba2ad3a158b93b1cd201be8c29e56eef2), [`6c14469`](https://github.com/morpho-org/sdks/commit/6c14469d3532d379139d74bcf5dd710e43544fa0)]:
+  - @morpho-org/morpho-sdk@5.3.2
+  - @morpho-org/blue-sdk@6.4.0
+  - @morpho-org/blue-sdk-viem@5.2.1
+
 ## 1.0.3
 
 ### Patch Changes

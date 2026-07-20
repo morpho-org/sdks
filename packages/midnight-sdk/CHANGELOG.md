@@ -1,5 +1,17 @@
 # @morpho-org/midnight-sdk
 
+## 1.2.1
+
+### Patch Changes
+
+- [#888](https://github.com/morpho-org/sdks/pull/888) [`be008d6`](https://github.com/morpho-org/sdks/commit/be008d6ba2ad3a158b93b1cd201be8c29e56eef2) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Send the installed `@morpho-org/midnight-sdk` package version with Midnight API requests instead of a hardcoded SDK version.
+
+  Keep the version lookup compatible with both ESM and CommonJS consumers, including through the Midnight API re-export from `@morpho-org/morpho-sdk`.
+
+- [#888](https://github.com/morpho-org/sdks/pull/888) [`be008d6`](https://github.com/morpho-org/sdks/commit/be008d6ba2ad3a158b93b1cd201be8c29e56eef2) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Derive standalone Midnight offer group IDs with the router-compatible singleton group algorithm across trees, mempool validation, and ratifier helpers.
+
+  **Breaking change:** remove the `TreeUtils.buildDescriptor` `preserveStandaloneGroups` option. This escape hatch produced router-incompatible standalone groups and should not have been part of the public API.
+
 ## 1.2.0
 
 ### Minor Changes

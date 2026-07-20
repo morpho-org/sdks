@@ -1,5 +1,14 @@
 # @morpho-org/blue-sdk-viem
 
+## 5.2.1
+
+### Patch Changes
+
+- [#891](https://github.com/morpho-org/sdks/pull/891) [`6c14469`](https://github.com/morpho-org/sdks/commit/6c14469d3532d379139d74bcf5dd710e43544fa0) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Respect Vault V2 receive-share gates when accruing performance and management fees, including in fetched accrual state and downstream transaction share-price bounds.
+
+- Updated dependencies [[`6c14469`](https://github.com/morpho-org/sdks/commit/6c14469d3532d379139d74bcf5dd710e43544fa0)]:
+  - @morpho-org/blue-sdk@6.4.0
+
 ## 5.2.0
 
 ### Minor Changes

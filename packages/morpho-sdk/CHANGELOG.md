@@ -1,5 +1,24 @@
 # @morpho-org/morpho-sdk
 
+## 5.3.2
+
+### Patch Changes
+
+- [#888](https://github.com/morpho-org/sdks/pull/888) [`be008d6`](https://github.com/morpho-org/sdks/commit/be008d6ba2ad3a158b93b1cd201be8c29e56eef2) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Send the installed `@morpho-org/midnight-sdk` package version with Midnight API requests instead of a hardcoded SDK version.
+
+  Keep the version lookup compatible with both ESM and CommonJS consumers, including through the Midnight API re-export from `@morpho-org/morpho-sdk`.
+
+- [#888](https://github.com/morpho-org/sdks/pull/888) [`be008d6`](https://github.com/morpho-org/sdks/commit/be008d6ba2ad3a158b93b1cd201be8c29e56eef2) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Derive standalone Midnight offer group IDs with the router-compatible singleton group algorithm across trees, mempool validation, and ratifier helpers.
+
+  **Breaking change:** remove the `TreeUtils.buildDescriptor` `preserveStandaloneGroups` option. This escape hatch produced router-incompatible standalone groups and should not have been part of the public API.
+
+- [#891](https://github.com/morpho-org/sdks/pull/891) [`6c14469`](https://github.com/morpho-org/sdks/commit/6c14469d3532d379139d74bcf5dd710e43544fa0) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Respect Vault V2 receive-share gates when accruing performance and management fees, including in fetched accrual state and downstream transaction share-price bounds.
+
+- Updated dependencies [[`be008d6`](https://github.com/morpho-org/sdks/commit/be008d6ba2ad3a158b93b1cd201be8c29e56eef2), [`be008d6`](https://github.com/morpho-org/sdks/commit/be008d6ba2ad3a158b93b1cd201be8c29e56eef2), [`6c14469`](https://github.com/morpho-org/sdks/commit/6c14469d3532d379139d74bcf5dd710e43544fa0)]:
+  - @morpho-org/midnight-sdk@1.2.1
+  - @morpho-org/blue-sdk@6.4.0
+  - @morpho-org/blue-sdk-viem@5.2.1
+
 ## 5.3.1
 
 ### Patch Changes
