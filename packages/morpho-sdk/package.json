@@ -109,10 +109,10 @@
     "@morpho-org/simulation-sdk": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "dotenv": "^17.4.2",
-    "fast-check": "^4.8.0",
+    "fast-check": "^4.9.0",
     "typescript": "^6.0.3",
-    "viem": "^2.54.2",
-    "vitest": "^4.1.9"
+    "viem": "^2.55.2",
+    "vitest": "^4.1.10"
   },
   "publishConfig": {
     "exports": {

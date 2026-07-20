@@ -19,7 +19,7 @@ allowBuilds:
   utf-8-validate: true
 
 patchedDependencies:
-  ox@0.14.29: patches/ox@0.14.29.patch
+  ox@0.14.30: patches/ox@0.14.30.patch
 
 minimumReleaseAge: 4320
 minimumReleaseAgeStrict: true
