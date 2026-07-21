@@ -595,10 +595,7 @@ export class MorphoBlue implements BlueActions {
       validateNativeAsset(this.chainId, this.marketParams.loanToken);
     }
 
-    // Forward-accrue (2h) before deriving `maxSharePrice`: on-chain `morphoSupply` accrues
-    // `lastUpdate → execution`, which raises the supply share price, so a bound derived from the
-    // un-accrued snapshot reverts on quiet markets once accrued interest exceeds the slippage
-    // tolerance. Mirrors the repay path (VAU-1206).
+    // Forward-accrue (2h) before deriving `maxSharePrice`: on-chain `morphoSupply` accrues `lastUpdate → execution`, raising the supply share price, so an un-accrued bound reverts on quiet markets.
     const accrualTimestamp =
       MathLib.max(Time.timestamp(), marketData.lastUpdate) + Time.s.from.h(2n);
     const marketForSupply = marketData.accrueInterest(accrualTimestamp);

@@ -807,10 +807,8 @@ describe("MorphoBlue repay maxSharePrice forward-accrual (VAU-1206)", () => {
   });
 });
 
-// Regression for the supply counterpart of VAU-1206: a loan-asset supply on a quiet market
-// reverted on-chain because `maxSharePrice` was computed from the un-accrued snapshot while
-// `morphoSupply` accrues `lastUpdate → execution` first (which raises the supply share price).
-// The bound must be derived from the forward-accrued market, mirroring the repay path.
+// Supply counterpart of VAU-1206: `maxSharePrice` must come from the forward-accrued market,
+// else a supply on a quiet market reverts against `morphoSupply`'s on-chain guard.
 describe("MorphoBlue supply maxSharePrice forward-accrual", () => {
   const RATE_AT_TARGET = 3_170_979_198n; // ~10% APR per-second
   const NOW_SEC = 1_800_000_000n;
@@ -821,8 +819,7 @@ describe("MorphoBlue supply maxSharePrice forward-accrual", () => {
     vi.useRealTimers();
   });
 
-  // A WETH-loan market (wNative) last accrued 5 days ago — far enough that accrued interest
-  // exceeds the 0.03% default slippage, i.e. the case that reverted on `morphoSupply`.
+  // WETH-loan market last accrued 5 days ago — accrual then exceeds the 0.03% default slippage.
   function staleMarket() {
     return new Market({
       params: new MarketParams(WstethWethBlue),
@@ -837,8 +834,7 @@ describe("MorphoBlue supply maxSharePrice forward-accrual", () => {
     });
   }
 
-  // Local public client: `buildTx` is fully synchronous and makes no RPC call for a native-only
-  // supply, so this needs no anvil fork (keeps the regression hermetic).
+  // Native-only `buildTx` is synchronous and makes no RPC call, so this needs no anvil fork.
   const localClient = createPublicClient({ chain: mainnet, transport: http() });
 
   test("native-only supply derives maxSharePrice from the forward-accrued market", () => {
@@ -863,19 +859,19 @@ describe("MorphoBlue supply maxSharePrice forward-accrual", () => {
       market: accruedMarket,
       slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
     });
-    // The pre-fix bound, computed from the un-accrued snapshot — what reverted.
+    // The pre-fix bound, from the un-accrued snapshot — what reverted.
     const stale = computeMaxSupplySharePrice({
       supplyAssets: nativeAmount,
       market: marketData,
       slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
     });
 
-    // 1. supply() derives the bound from the forward-accrued market.
+    // Bound comes from the forward-accrued market.
     expect(tx.action.args.maxSharePrice).toBe(expected);
     expect(tx.action.args.maxSharePrice).toBeGreaterThan(stale);
 
-    // 2. the on-chain `morphoSupply` guard (suppliedAssets.rDivDown(suppliedShares) <=
-    //    maxSharePrice) computed against the accrued market no longer reverts...
+    // On-chain guard `suppliedAssets.rDivDown(suppliedShares) <= maxSharePrice`: the accrued
+    // price clears the fixed bound but exceeds the stale one.
     const onchainSharePrice = rDivDown(
       nativeAmount,
       accruedMarket.toSupplyShares(nativeAmount, "Down"),
@@ -883,7 +879,6 @@ describe("MorphoBlue supply maxSharePrice forward-accrual", () => {
     expect(tx.action.args.maxSharePrice).toBeGreaterThanOrEqual(
       onchainSharePrice,
     );
-    // 3. ...whereas the stale bound would have reverted.
     expect(onchainSharePrice).toBeGreaterThan(stale);
   });
 });
