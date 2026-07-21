@@ -4,9 +4,11 @@ import {
   getChainAddresses,
   Market,
   MarketParams,
+  MathLib,
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
+import { Time } from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import { type Address, createPublicClient, http, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
@@ -14,7 +16,10 @@ import { afterEach, describe, expect, vi } from "vitest";
 import { CbbtcUsdcBlue, WstethWethBlue } from "../../../test/fixtures/blue.js";
 import { test } from "../../../test/setup.js";
 import { morphoViemExtension } from "../../client/index.js";
-import { computeMaxRepaySharePrice } from "../../helpers/index.js";
+import {
+  computeMaxRepaySharePrice,
+  computeMaxSupplySharePrice,
+} from "../../helpers/index.js";
 import {
   isRequirementApproval,
   MutuallyExclusiveRepayAmountsError,
@@ -799,5 +804,81 @@ describe("MorphoBlue repay maxSharePrice forward-accrual (VAU-1206)", () => {
 
     expect(tx.action.args.maxSharePrice).toBe(expected);
     expect(tx.action.args.maxSharePrice).toBeGreaterThan(stale);
+  });
+});
+
+// Supply counterpart of VAU-1206: `maxSharePrice` must come from the forward-accrued market,
+// else a supply on a quiet market reverts against `morphoSupply`'s on-chain guard.
+describe("MorphoBlue supply maxSharePrice forward-accrual", () => {
+  const RATE_AT_TARGET = 3_170_979_198n; // ~10% APR per-second
+  const NOW_SEC = 1_800_000_000n;
+  const RAY = MathLib.RAY;
+  const rDivDown = (a: bigint, b: bigint) => (a * RAY) / b;
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // WETH-loan market last accrued 5 days ago — accrual then exceeds the 0.03% default slippage.
+  function staleMarket() {
+    return new Market({
+      params: new MarketParams(WstethWethBlue),
+      totalSupplyAssets: 10n ** 24n,
+      totalBorrowAssets: (10n ** 24n * 9n) / 10n, // 90% utilization
+      totalSupplyShares: 10n ** 30n,
+      totalBorrowShares: (10n ** 30n * 9n) / 10n,
+      lastUpdate: NOW_SEC - 5n * 24n * 3_600n,
+      fee: 0n,
+      price: ORACLE_PRICE_SCALE,
+      rateAtTarget: RATE_AT_TARGET,
+    });
+  }
+
+  // Native-only `buildTx` is synchronous and makes no RPC call, so this needs no anvil fork.
+  const localClient = createPublicClient({ chain: mainnet, transport: http() });
+
+  test("native-only supply derives maxSharePrice from the forward-accrued market", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(Number(NOW_SEC) * 1_000);
+
+    const marketData = staleMarket();
+    const nativeAmount = parseUnits("10", 18);
+    const market = localClient
+      .extend(morphoViemExtension())
+      .morpho.blue(WstethWethBlue, mainnet.id);
+
+    const tx = market
+      .supply({ nativeAmount, userAddress: USER, marketData })
+      .buildTx();
+
+    const accruedMarket = marketData.accrueInterest(
+      MathLib.max(Time.timestamp(), marketData.lastUpdate) + Time.s.from.h(2n),
+    );
+    const expected = computeMaxSupplySharePrice({
+      supplyAssets: nativeAmount,
+      market: accruedMarket,
+      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
+    });
+    // The pre-fix bound, from the un-accrued snapshot — what reverted.
+    const stale = computeMaxSupplySharePrice({
+      supplyAssets: nativeAmount,
+      market: marketData,
+      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
+    });
+
+    // Bound comes from the forward-accrued market.
+    expect(tx.action.args.maxSharePrice).toBe(expected);
+    expect(tx.action.args.maxSharePrice).toBeGreaterThan(stale);
+
+    // On-chain guard `suppliedAssets.rDivDown(suppliedShares) <= maxSharePrice`: the accrued
+    // price clears the fixed bound but exceeds the stale one.
+    const onchainSharePrice = rDivDown(
+      nativeAmount,
+      accruedMarket.toSupplyShares(nativeAmount, "Down"),
+    );
+    expect(tx.action.args.maxSharePrice).toBeGreaterThanOrEqual(
+      onchainSharePrice,
+    );
+    expect(onchainSharePrice).toBeGreaterThan(stale);
   });
 });
