@@ -142,8 +142,9 @@ export interface BlueActions {
   /**
    * Prepares a loan-asset supply transaction.
    *
-   * Routed through bundler via GeneralAdapter1. Computes `maxSharePrice` from market supply
-   * state and `slippageTolerance` to protect against share-price inflation.
+   * Routed through bundler via GeneralAdapter1. Computes `maxSharePrice` from the supply state of
+   * `marketData` forward-accrued to execution and `slippageTolerance` to protect against
+   * share-price inflation.
    * `getRequirements` returns ERC20 approval or permit for `GeneralAdapter1` on the loan token.
    * When `nativeAmount` is provided, native token is wrapped; the loan token must be wNative.
    *
@@ -594,9 +595,17 @@ export class MorphoBlue implements BlueActions {
       validateNativeAsset(this.chainId, this.marketParams.loanToken);
     }
 
+    // Forward-accrue (2h) before deriving `maxSharePrice`: on-chain `morphoSupply` accrues
+    // `lastUpdate → execution`, which raises the supply share price, so a bound derived from the
+    // un-accrued snapshot reverts on quiet markets once accrued interest exceeds the slippage
+    // tolerance. Mirrors the repay path (VAU-1206).
+    const accrualTimestamp =
+      MathLib.max(Time.timestamp(), marketData.lastUpdate) + Time.s.from.h(2n);
+    const marketForSupply = marketData.accrueInterest(accrualTimestamp);
+
     const maxSharePrice = computeMaxSupplySharePrice({
       supplyAssets: totalAssets,
-      market: marketData,
+      market: marketForSupply,
       slippageTolerance,
     });
     return {
