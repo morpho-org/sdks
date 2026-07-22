@@ -45,6 +45,7 @@ export type {
   FetchBookTakeableOffersParams,
   FetchTakeableOffersParams,
   MempoolPayloadValidationIssue,
+  MempoolPayloadValidationIssueDetails,
   MempoolPayloadValidationResult,
   MempoolPayloadValidationSuccess,
   MidnightApiBookMarket,
@@ -76,6 +77,7 @@ export type {
   ValidateMempoolItemsParams,
   ValidateMempoolPayloadParams,
 } from "./types.js";
+export { MempoolPayloadValidationRule } from "./types.js";
 
 /**
  * Midnight API client and stateless helper surface for books and mempool data.

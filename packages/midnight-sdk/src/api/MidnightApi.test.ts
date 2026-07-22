@@ -2,7 +2,7 @@ import packageJson from "@morpho-org/midnight-sdk/package.json" with {
   type: "json",
 };
 import { ChainId, getChainAddress, MathLib } from "@morpho-org/morpho-ts";
-import type { Hex } from "viem";
+import { type Hex, maxUint256 } from "viem";
 import { describe, expect, test } from "vitest";
 
 import { createFixtures } from "../__test__/fixtures.js";
@@ -13,7 +13,11 @@ import {
 import { TickLib } from "../math/index.js";
 import type { IOffer } from "../offers/index.js";
 import { Payload } from "../signatures/Payload.js";
-import { MidnightApi, type MidnightApiFetch } from "./MidnightApi.js";
+import {
+  MempoolPayloadValidationRule,
+  MidnightApi,
+  type MidnightApiFetch,
+} from "./MidnightApi.js";
 
 const { baseMarketParamsInput, baseOffer } = createFixtures({
   midnight: getChainAddress(ChainId.BaseMainnet, "midnight"),
@@ -214,6 +218,50 @@ const expectedTakeableOffer = {
 };
 
 describe("MidnightApi.validateMempoolPayload", () => {
+  test("behavior: exposes every documented validation rule", () => {
+    const documentedRules = [
+      "payload_version",
+      "payload_frame",
+      "payload_gzip_length",
+      "payload_suffix_too_large",
+      "payload_decompression",
+      "payload_abi_decode",
+      "empty_payload",
+      "max_offers_per_tree",
+      "duplicate_offer_hash",
+      "unsupported_chain",
+      "market_chain_mismatch",
+      "maturity",
+      "loan_token",
+      "collateral_token",
+      "oracle",
+      "market_triplet",
+      "rcf_threshold",
+      "collateral_lltv",
+      "max_lif",
+      "max_collaterals",
+      "amount_missing",
+      "amount_conflict",
+      "min_offer_assets_usd",
+      "min_tick",
+      "max_tick",
+      "tick_spacing",
+      "min_duration",
+      "ratifier",
+      "mixed_maker",
+      "mixed_ratifier",
+      "group_identity",
+      "group_consistency",
+      "non_empty_callback",
+      "buy_empty_callback",
+      "sell_empty_callback",
+    ];
+
+    expect(Object.values(MempoolPayloadValidationRule).toSorted()).toEqual(
+      documentedRules.toSorted(),
+    );
+  });
+
   test("default", async () => {
     const payload = "0x0100000000" as Hex;
     const timestamp = "2026-06-01T16:00:00Z";
@@ -265,6 +313,119 @@ describe("MidnightApi.validateMempoolPayload", () => {
     expect(headers.get("content-type")).toBe("application/json");
     expect(headers.get("sdk-version")).toBe(packageJson.version);
     expect(headers.get("x-app")).toBe("markets-v2");
+  });
+
+  test("behavior: parses known non-null details", async () => {
+    const { fetch } = createJsonFetch({
+      data: {
+        issues: [
+          {
+            rule: "min_offer_assets_usd",
+            details: {
+              loan_token: LOAN_TOKEN,
+              min_assets: "100014791",
+            },
+          },
+        ],
+      },
+    });
+
+    const result = await MidnightApi.validateMempoolPayload({
+      chainId: 8453,
+      payload: "0x0100000000" as Hex,
+      fetch,
+    });
+
+    expect(result.issues).toEqual([
+      {
+        rule: MempoolPayloadValidationRule.MinOfferAssetsUsd,
+        details: {
+          type: "minOfferAssetsUsd",
+          loanToken: LOAN_TOKEN,
+          minAssets: 100014791n,
+        },
+      },
+    ]);
+  });
+
+  test.each([
+    ["null", { rule: "tick_spacing", details: null }],
+    ["omitted", { rule: "tick_spacing" }],
+  ])("behavior: preserves the existing shape for %s details", async (_, issue) => {
+    const { fetch } = createJsonFetch({ data: { issues: [issue] } });
+
+    const result = await MidnightApi.validateMempoolPayload({
+      chainId: 8453,
+      payload: "0x0100000000" as Hex,
+      fetch,
+    });
+
+    expect(result.issues).toEqual([
+      { rule: MempoolPayloadValidationRule.TickSpacing },
+    ]);
+  });
+
+  test("behavior: retains future rules and details", async () => {
+    const futureDetails = { next_allowed_tick: 4 };
+    const futureRuleDetails = { threshold: "1000" };
+    const { fetch } = createJsonFetch({
+      data: {
+        issues: [
+          { rule: "tick_spacing", details: futureDetails },
+          { rule: "future_router_policy", details: futureRuleDetails },
+        ],
+      },
+    });
+
+    const result = await MidnightApi.validateMempoolPayload({
+      chainId: 8453,
+      payload: "0x0100000000" as Hex,
+      fetch,
+    });
+
+    expect(result.issues).toEqual([
+      {
+        rule: MempoolPayloadValidationRule.TickSpacing,
+        details: { type: "unknown", raw: futureDetails },
+      },
+      {
+        rule: "future_router_policy",
+        details: { type: "unknown", raw: futureRuleDetails },
+      },
+    ]);
+  });
+
+  test.each([
+    ["malformed", { loan_token: LOAN_TOKEN, min_assets: null }],
+    ["oversized", { loan_token: LOAN_TOKEN, min_assets: "9".repeat(79) }],
+    [
+      "above uint256",
+      { loan_token: LOAN_TOKEN, min_assets: (maxUint256 + 1n).toString() },
+    ],
+  ])("behavior: retains %s known details without rejecting the response", async (_, unrecognizedDetails) => {
+    const { fetch } = createJsonFetch({
+      data: {
+        issues: [
+          {
+            rule: "min_offer_assets_usd",
+            details: unrecognizedDetails,
+          },
+        ],
+      },
+    });
+
+    const result = await MidnightApi.validateMempoolPayload({
+      chainId: 8453,
+      payload: "0x0100000000" as Hex,
+      fetch,
+    });
+
+    expect(result.issues).toEqual([
+      {
+        rule: MempoolPayloadValidationRule.MinOfferAssetsUsd,
+        details: { type: "unknown", raw: unrecognizedDetails },
+      },
+    ]);
   });
 
   test("behavior: uses baseUrl override", async () => {
@@ -338,10 +499,14 @@ describe("MidnightApi.validateMempoolPayload", () => {
     expect.unreachable("Expected malformed API error body to throw.");
   });
 
-  test("error: InvalidMidnightApiResponseError", async () => {
-    const { fetch } = createJsonFetch({
-      data: { issues: [{ field: "rule" }] },
-    });
+  test.each([
+    ["missing data", {}],
+    ["missing issues", { data: {} }],
+    ["non-array issues", { data: { issues: {} } }],
+    ["non-object issue", { data: { issues: [null] } }],
+    ["missing rule", { data: { issues: [{ field: "rule" }] } }],
+  ])("error: InvalidMidnightApiResponseError for %s", async (_, response) => {
+    const { fetch } = createJsonFetch(response);
 
     await expect(
       MidnightApi.validateMempoolPayload({
