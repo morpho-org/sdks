@@ -7,7 +7,7 @@
 
 > 📖 **Full documentation → [docs.morpho.org/developers/sdks/morpho-sdk](https://docs.morpho.org/developers/sdks/morpho-sdk/)**
 
-Build transactions for Morpho's **VaultV1** (MetaMorpho), **VaultV2**, **Blue**, and **Midnight** fixed-rate markets on any EVM chain.
+Build transactions for Morpho's **VaultV1** (MetaMorpho), **VaultV2**, **Blue**, and **Midnight** fixed-rate markets on every chain where Morpho is deployed. Custom deployments can be added with `registerCustomAddresses` from `@morpho-org/blue-sdk`.
 
 ## Installation
 
@@ -60,12 +60,20 @@ import {
   morphoViemExtension,
   isRequirementSignature,
 } from "@morpho-org/morpho-sdk";
-import { createPublicClient, http } from "viem";
+import { createPublicClient, createWalletClient, custom, http } from "viem";
 import { mainnet } from "viem/chains";
 
+// Reads on-chain state, extended with the `morpho` namespace.
 const client = createPublicClient({ chain: mainnet, transport: http() }).extend(
   morphoViemExtension(),
 );
+
+// Signs permits and sends the approval / authorization transactions.
+const walletClient = createWalletClient({
+  account: "0xUser...",
+  chain: mainnet,
+  transport: custom(window.ethereum), // any EIP-1193 provider
+});
 ```
 
 Create an entity — every factory takes a chain ID as its last argument:
