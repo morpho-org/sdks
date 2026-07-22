@@ -34,7 +34,7 @@ Each entity exposes a set of actions. Bundled actions route through bundler3 (vi
 
 ## How it works
 
-Every action returns `{ buildTx, getRequirements }`:
+Actions that pull tokens or touch a position return `{ buildTx, getRequirements }`. Direct calls — vault `withdraw` / `redeem`, `forceWithdraw` / `forceRedeem`, and Blue `withdrawCollateral` — have no prerequisites and return only `{ buildTx }`.
 
 - **`getRequirements()`** — async; the on-chain prerequisites to satisfy first: ERC-20 approvals, permit / Permit2 signatures, Morpho authorization, or (for Midnight) operator authorization and offer-root signatures.
 - **`buildTx(signatures?)`** — synchronous; the final, deep-frozen viem transaction. Pass any signatures collected from the requirements.
@@ -56,7 +56,10 @@ Enable off-chain approvals (permit / Permit2) with `morphoViemExtension({ suppor
 ## Usage
 
 ```typescript
-import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+import {
+  morphoViemExtension,
+  isRequirementSignature,
+} from "@morpho-org/morpho-sdk";
 import { createPublicClient, http } from "viem";
 import { mainnet } from "viem/chains";
 
@@ -65,22 +68,30 @@ const client = createPublicClient({ chain: mainnet, transport: http() }).extend(
 );
 ```
 
-Create an entity with `client.morpho.vaultV1`, `.vaultV2`, `.blue`, or `.midnight` — each takes an address (or `MarketParams` for Blue) and a chain ID.
+Create an entity — every factory takes a chain ID as its last argument:
+
+- `client.morpho.vaultV1(address, chainId)` / `client.morpho.vaultV2(address, chainId)`
+- `client.morpho.blue(marketParams, chainId)`
+- `client.morpho.midnight(chainId)`
 
 ### Vault deposit / withdraw
+
+Deposit routes through the bundler and may require an approval or permit:
 
 ```typescript
 const vault = client.morpho.vaultV2("0xVault...", 1);
 
-// Deposit — routes through the bundler, may require an approval or permit
 const { buildTx, getRequirements } = await vault.deposit({
   amount: 1000000000000000000n,
   userAddress: "0xUser...",
 });
 const requirements = await getRequirements();
 const tx = buildTx([permitSignature]);
+```
 
-// Withdraw — direct vault call, no requirements
+Withdraw is a direct vault call with no requirements:
+
+```typescript
 const { buildTx } = vault.withdraw({
   amount: 500000000000000000n,
   userAddress: "0xUser...",
@@ -113,11 +124,22 @@ const { buildTx, getRequirements } = market.supplyCollateralBorrow({
   positionData,
 });
 
-const requirements = await getRequirements();
-const tx = buildTx([permitSignature]);
+// This flow can return more than one requirement — a collateral approval/permit
+// and a one-time Morpho authorization for GeneralAdapter1. Satisfy each and pass
+// every collected signature to buildTx.
+const signatures = [];
+for (const requirement of await getRequirements()) {
+  if (isRequirementSignature(requirement)) {
+    signatures.push(await requirement.sign(walletClient, "0xUser..."));
+  } else {
+    await walletClient.sendTransaction(requirement); // approval / authorization tx
+  }
+}
+
+const tx = buildTx(signatures);
 ```
 
-Borrowing requires a one-time Morpho authorization for `GeneralAdapter1` (returned by `getRequirements` when missing). The LLTV buffer guards against instant liquidation.
+The LLTV buffer guards against instant liquidation.
 
 ### Midnight: take a fixed-rate offer
 
