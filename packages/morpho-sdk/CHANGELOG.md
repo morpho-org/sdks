@@ -1,5 +1,11 @@
 # @morpho-org/morpho-sdk
 
+## 5.3.4
+
+### Patch Changes
+
+- [#901](https://github.com/morpho-org/sdks/pull/901) [`a7dfeed`](https://github.com/morpho-org/sdks/commit/a7dfeed9dcd1498dfdb6e33b64d9b94bbd472575) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Simplify and correct the README: add a link to the full documentation, replace the two duplicate action tables with a single concise one, and trim the usage examples to a few accurate flows.
+
 ## 5.3.3
 
 ### Patch Changes
