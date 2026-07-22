@@ -5,11 +5,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
 [![CI](https://github.com/morpho-org/morpho-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/morpho-org/morpho-sdk/actions/workflows/ci.yml)
 
-## Overview
+> 📖 **Full documentation → [docs.morpho.org/developers/sdks/morpho-sdk](https://docs.morpho.org/developers/sdks/morpho-sdk/)**
 
-> **The abstraction layer that simplifies Morpho protocol**
-
-Build transactions for **VaultV1** (MetaMorpho), **VaultV2**, **Blue** (Morpho Blue), and **Midnight** fixed-rate markets on EVM-compatible chains.
+Build transactions for Morpho's **VaultV1** (MetaMorpho), **VaultV2**, **Blue**, and **Midnight** fixed-rate markets on any EVM chain.
 
 ## Installation
 
@@ -17,92 +15,45 @@ Build transactions for **VaultV1** (MetaMorpho), **VaultV2**, **Blue** (Morpho B
 pnpm add @morpho-org/morpho-sdk
 ```
 
-## Usage
+## Actions
 
-### Entities & Actions
+Each entity exposes a set of actions. Bundled actions route through bundler3 (via `GeneralAdapter1`); the rest are direct contract calls.
 
-| Entity       | Action                    | Route                     | Why                                                                                                 |
-| ------------ | ------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------- |
-| **VaultV2**  | `deposit`                 | Bundler (general adapter) | Enforces `maxSharePrice` — inflation attack prevention. Supports native token wrapping.             |
-|              | `withdraw`                | Direct vault call         | No attack surface, no bundler overhead needed                                                       |
-|              | `redeem`                  | Direct vault call         | No attack surface, no bundler overhead needed                                                       |
-|              | `forceWithdraw`           | Vault `multicall`         | N `forceDeallocate` + 1 `withdraw` in a single tx                                                   |
-|              | `forceRedeem`             | Vault `multicall`         | N `forceDeallocate` + 1 `redeem` in a single tx                                                     |
-| **VaultV1**  | `deposit`                 | Bundler (general adapter) | Same ERC-4626 inflation attack prevention as V2. Supports native token wrapping.                    |
-|              | `withdraw`                | Direct vault call         | No attack surface                                                                                   |
-|              | `redeem`                  | Direct vault call         | No attack surface                                                                                   |
-|              | `migrateToV2`             | Bundler (general adapter) | Atomic V1 → V2 migration: redeem V1 shares + deposit into V2 in one tx. Slippage-protected.         |
-| **Blue** | `supply`                  | Bundler (general adapter) | `erc20TransferFrom` + `morphoSupply` with `maxSharePrice` (inflation guard). Supports native wrapping when `loanToken === wNative`. |
-|              | `supplyCollateral`        | Bundler (general adapter) | `erc20TransferFrom` + `morphoSupplyCollateral`. Supports native wrapping.                           |
-|              | `borrow`                  | Bundler (general adapter) | `morphoBorrow` with `minSharePrice` slippage protection. Requires GA1 auth. Supports reallocations. |
-|              | `supplyCollateralBorrow`  | Bundler (general adapter) | Atomic supply + borrow. LLTV buffer prevents instant liquidation. Supports reallocations.           |
-|              | `repay`                   | Bundler (general adapter) | `erc20TransferFrom` + `morphoRepay` with `maxSharePrice` protection. Supports partial or full.      |
-|              | `withdraw`                | Bundler (general adapter) | `morphoWithdraw` with `minSharePrice` slippage protection. Requires GA1 auth. Supports reallocations. |
-|              | `withdrawCollateral`      | Direct Morpho call        | No bundler overhead. Validates position health after withdrawal.                                    |
-|              | `repayWithdrawCollateral` | Bundler (general adapter) | Atomic repay + withdraw. Bundle order matters: repay first, then withdraw.                          |
-|              | `refinance`               | Bundler (general adapter) | Atomic position migration to another market with the same loan + collateral tokens. Flash-collateral via the target's `onMorphoSupplyCollateral` callback: borrow target → repay source → withdraw source collateral. Requires GA1 auth. Supports target reallocations. |
-| **Midnight** | `takeLend` / `takeBorrow` | MidnightBundles | Takes fixed-rate offers with ordered approval and authorization requirements. |
-|              | `supplyCollateralTakeBorrow` | MidnightBundles | Atomically supplies collateral and takes fixed-rate borrow liquidity. |
-|              | `makeLend` / `makeBorrow` | Midnight mempool | Builds, validates, signs or ratifies, and submits maker offer trees. |
-|              | `supplyCollateral` / `redeem` / `cancelOffer` | Direct Midnight call | Encodes direct collateral, credit, and offer-management operations. |
-|              | `repayWithdrawCollateral` | MidnightBundles | Atomically repays credit and withdraws collateral. |
+| Entity | Actions | Route |
+| --- | --- | --- |
+| **VaultV1** (MetaMorpho) | `deposit`, `migrateToV2` | Bundler |
+| | `withdraw`, `redeem` | Direct call |
+| **VaultV2** | `deposit` | Bundler |
+| | `withdraw`, `redeem` | Direct call |
+| | `forceWithdraw`, `forceRedeem` | Vault multicall |
+| **Blue** | `supply`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdraw`, `repayWithdrawCollateral`, `refinance` | Bundler |
+| | `withdrawCollateral` | Direct call |
+| **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `repayWithdrawCollateral` | Midnight Bundles |
+| | `makeLend`, `makeBorrow` | Midnight mempool |
+| | `supplyCollateral`, `redeem`, `cancelOffer` | Direct call |
 
-### The `getRequirements` flow
+## How it works
 
-Every action that touches a user's tokens or positions returns two things:
+Every action returns `{ buildTx, getRequirements }`:
 
-- `buildTx(signatures?)` — builds the final viem `Transaction` object. Takes the collected signature results required by the flow, including permit / Permit2, Morpho authorization, or a Midnight offer-root signature.
-- `getRequirements()` — returns the list of on-chain pre-requisites that must be satisfied first.
-
-Typical requirements:
-
-- **ERC-20 approval** — the user must approve the bundler (or Morpho directly) to pull tokens. Returned as a standard `approve` transaction the consumer sends first.
-- **Permit / Permit2 signature** — off-chain approvals that go into `buildTx` in the `signatures` array, avoiding the extra approval tx. Enabled via `morphoViemExtension({ supportSignature: true })`.
-- **Morpho authorization** — `borrow`, `supplyCollateralBorrow`, and `repayWithdrawCollateral` require the user to authorize `GeneralAdapter1` on the Morpho contract once (`setAuthorization`). The SDK returns this as an extra transaction if it's missing.
-- **Midnight authorization or ratification** — Midnight flows return the required operator authorization, Ecrecover offer-root signature, or SetterRatifier transaction before the final take or mempool submission.
-
-Usage pattern:
+- **`getRequirements()`** — async; the on-chain prerequisites to satisfy first: ERC-20 approvals, permit / Permit2 signatures, Morpho authorization, or (for Midnight) operator authorization and offer-root signatures.
+- **`buildTx(signatures?)`** — synchronous; the final, deep-frozen viem transaction. Pass any signatures collected from the requirements.
 
 ```typescript
-const { buildTx, getRequirements } = await vault.deposit({
-  /* ... */
-});
+const { buildTx, getRequirements } = await vault.deposit({ amount, userAddress });
 
 const requirements = await getRequirements();
-// → [{ type: "approval", tx: {...} }, { type: "permit", sign: async () => {...} }]
-
-// Consumer satisfies each requirement (send tx / sign permit), collects the signature,
-// then calls buildTx to get the final transaction:
+// Send each approval tx and collect each signature, then:
 const tx = buildTx([permitSignature]);
 ```
 
-### Integration invariant — builder = signer
+Enable off-chain approvals (permit / Permit2) with `morphoViemExtension({ supportSignature: true })`.
 
-**`userAddress` MUST equal the account that ends up signing/executing the tx.** Critical for `repayWithdrawCollateral`, whose bundle mixes explicit `onBehalf` (repay) with implicit `msg.sender` (transfer-from + withdraw) — see [BUNDLER3.md](./BUNDLER3.md#other-pitfalls). Transaction builders do not validate this at build time, so callers MUST keep `userAddress` aligned with the signing account themselves. The signature requirements (`encodeErc20Permit` / `encodeErc20Permit2Approve`) take a `WalletClient` and enforce the invariant at `sign()` time via `validateUserAddress`, rejecting any `sign(client, userAddress)` where `client.account.address !== userAddress` with `MissingClientPropertyError` / `AddressMismatchError`.
+### `userAddress` must be the signer
 
-| Entity       | Action                   | Route                     | Why                                                                                                 |
-| ------------ | ------------------------ | ------------------------- | --------------------------------------------------------------------------------------------------- |
-| **VaultV2**  | `deposit`                | Bundler (general adapter) | Enforces `maxSharePrice` — inflation attack prevention. Supports native token wrapping.             |
-|              | `withdraw`               | Direct vault call         | No attack surface, no bundler overhead needed                                                       |
-|              | `redeem`                 | Direct vault call         | No attack surface, no bundler overhead needed                                                       |
-|              | `forceWithdraw`          | Vault `multicall`         | N `forceDeallocate` + 1 `withdraw` in a single tx                                                   |
-|              | `forceRedeem`            | Vault `multicall`         | N `forceDeallocate` + 1 `redeem` in a single tx                                                     |
-| **VaultV1**  | `deposit`                | Bundler (general adapter) | Same ERC-4626 inflation attack prevention as V2. Supports native token wrapping.                    |
-|              | `withdraw`               | Direct vault call         | No attack surface                                                                                   |
-|              | `redeem`                 | Direct vault call         | No attack surface                                                                                   |
-|              | `migrateToV2`            | Bundler (general adapter) | Atomic V1 → V2 migration: redeem V1 shares + deposit into V2 in one tx. Slippage-protected.         |
-| **Blue** | `supply`                 | Bundler (general adapter) | `erc20TransferFrom` + `morphoSupply` with `maxSharePrice` (inflation guard). Supports native wrapping when `loanToken === wNative`. |
-|              | `supplyCollateral`       | Bundler (general adapter) | `erc20TransferFrom` + `morphoSupplyCollateral`. Supports native wrapping.                           |
-|              | `borrow`                 | Bundler (general adapter) | `morphoBorrow` with `minSharePrice` slippage protection. Requires GA1 auth. Supports reallocations. |
-|              | `supplyCollateralBorrow` | Bundler (general adapter) | Atomic supply + borrow. LLTV buffer prevents instant liquidation. Supports reallocations.           |
-|              | `withdraw`               | Bundler (general adapter) | `morphoWithdraw` with `minSharePrice` slippage protection. Requires GA1 auth. Supports reallocations. |
-|              | `refinance`              | Bundler (general adapter) | Atomic position migration to another market sharing the same loan + collateral tokens. Requires GA1 auth. Supports reallocations. |
-| **Midnight** | `takeLend` / `takeBorrow` | MidnightBundles | Takes fixed-rate offers with ordered approval and authorization requirements. |
-|              | `makeLend` / `makeBorrow` | Midnight mempool | Builds and submits validated maker offer trees. |
-|              | `supplyCollateral` / `redeem` / `cancelOffer` | Direct Midnight call | Encodes direct Midnight operations. |
-|              | `repayWithdrawCollateral` | MidnightBundles | Atomically repays credit and withdraws collateral. |
+`userAddress` must be the account that signs and sends the transaction. Builders don't enforce this, but the signature helpers do — `sign()` throws `AddressMismatchError` when the wallet's account differs. It matters most for `repayWithdrawCollateral`; see [BUNDLER3.md](./BUNDLER3.md#other-pitfalls).
 
-### VaultV2
+## Usage
 
 ```typescript
 import { morphoViemExtension } from "@morpho-org/morpho-sdk";
@@ -112,171 +63,34 @@ import { mainnet } from "viem/chains";
 const client = createPublicClient({ chain: mainnet, transport: http() }).extend(
   morphoViemExtension(),
 );
+```
 
+Create an entity with `client.morpho.vaultV1`, `.vaultV2`, `.blue`, or `.midnight` — each takes an address (or `MarketParams` for Blue) and a chain ID.
+
+### Vault deposit / withdraw
+
+```typescript
 const vault = client.morpho.vaultV2("0xVault...", 1);
-```
 
-#### Deposit
-
-```typescript
+// Deposit — routes through the bundler, may require an approval or permit
 const { buildTx, getRequirements } = await vault.deposit({
   amount: 1000000000000000000n,
   userAddress: "0xUser...",
 });
-
 const requirements = await getRequirements();
-const tx = buildTx([requirementSignature]);
-```
+const tx = buildTx([permitSignature]);
 
-##### Deposit with native token wrapping
-
-For vaults whose underlying asset is wNative, you can deposit native token that will be automatically wrapped:
-
-```typescript
-// Native ETH only — wraps 1 ETH to WETH and deposits
-const { buildTx, getRequirements } = await vault.deposit({
-  nativeAmount: 1000000000000000000n,
-  userAddress: "0xUser...",
-});
-
-// Mixed — 0.5 WETH (ERC-20) + 0.5 native ETH wrapped to WETH
-const { buildTx, getRequirements } = await vault.deposit({
-  amount: 500000000000000000n,
-  nativeAmount: 500000000000000000n,
-  userAddress: "0xUser...",
-});
-```
-
-The bundler atomically transfers native token, wraps it to wNative, and deposits alongside any ERC-20 amount. The transaction's `value` field is set to `nativeAmount`.
-
-#### Withdraw
-
-```typescript
+// Withdraw — direct vault call, no requirements
 const { buildTx } = vault.withdraw({
   amount: 500000000000000000n,
   userAddress: "0xUser...",
 });
-
 const tx = buildTx();
 ```
 
-#### Redeem
+For wNative vaults, pass `nativeAmount` instead of `amount` to deposit native ETH (wrapped automatically).
 
-```typescript
-const { buildTx } = vault.redeem({
-  shares: 1000000000000000000n,
-  userAddress: "0xUser...",
-});
-
-const tx = buildTx();
-```
-
-#### Force Withdraw
-
-```typescript
-const { buildTx } = vault.forceWithdraw({
-  deallocations: [{ adapter: "0xAdapter...", amount: 100n }],
-  withdraw: { amount: 500000000000000000n },
-  userAddress: "0xUser...",
-});
-
-const tx = buildTx();
-```
-
-#### Force Redeem
-
-```typescript
-const { buildTx } = vault.forceRedeem({
-  deallocations: [{ adapter: "0xAdapter...", amount: 100n }],
-  redeem: { shares: 1000000000000000000n },
-  userAddress: "0xUser...",
-});
-
-const tx = buildTx();
-```
-
-### VaultV1
-
-```typescript
-const vault = client.morpho.vaultV1("0xVault...", 1);
-```
-
-#### Deposit
-
-```typescript
-const { buildTx, getRequirements } = await vault.deposit({
-  amount: 1000000000000000000n,
-  userAddress: "0xUser...",
-});
-
-const requirements = await getRequirements();
-const tx = buildTx([requirementSignature]);
-```
-
-#### Withdraw
-
-```typescript
-const { buildTx } = vault.withdraw({
-  amount: 500000000000000000n,
-  userAddress: "0xUser...",
-});
-
-const tx = buildTx();
-```
-
-#### Redeem
-
-```typescript
-const { buildTx } = vault.redeem({
-  shares: 1000000000000000000n,
-  userAddress: "0xUser...",
-});
-
-const tx = buildTx();
-```
-
-#### Migrate to V2
-
-Atomically migrate a full position from a VaultV1 (MetaMorpho) vault into a VaultV2 vault. In a single bundler transaction, the user's V1 shares are pulled into `GeneralAdapter1`, redeemed for the underlying asset, and re-deposited into the V2 vault on the user's behalf. Guarantees:
-
-- **Atomic** — redeem V1 + deposit V2 happen in one transaction; the user is never left holding loose assets between the two legs.
-- **Slippage-protected on both legs** — the entity derives a `minSharePriceVaultV1` (V1 redeem floor) and a `maxSharePriceVaultV2` (V2 deposit ceiling, which doubles as the ERC-4626 inflation-attack guard) from live vault state plus your `slippageTolerance`.
-- **Same-asset only** — both vaults must share the same underlying asset. A mismatch throws `VaultAssetMismatchError`; a `sourceVault` whose address doesn't match the entity throws `VaultAddressMismatchError`.
-
-`sourceVault` / `targetVault` are the accrual snapshots returned by each entity's `getData()`.
-
-```typescript
-const sourceVault = client.morpho.vaultV1("0xV1Vault...", 1);
-const targetVault = client.morpho.vaultV2("0xV2Vault...", 1);
-
-const { buildTx, getRequirements } = sourceVault.migrateToV2({
-  userAddress: "0xUser...",
-  sourceVault: await sourceVault.getData(),
-  targetVault: await targetVault.getData(),
-  shares: 1000000000000000000n, // full V1 position, in V1 shares
-  slippageTolerance: 300000000000000n, // optional, WAD (0.03%); defaults to DEFAULT_SLIPPAGE_TOLERANCE, capped at 10%
-});
-
-// GeneralAdapter1 must be allowed to pull the V1 shares. Because V1 shares
-// implement EIP-2612, this is returned either as an ERC-20 approval tx or as a
-// signable permit requirement (when the extension was created with `supportSignature: true`).
-const requirements = await getRequirements();
-const signatures = [];
-for (const requirement of requirements) {
-  if (isRequirementApproval(requirement)) {
-    await walletClient.sendTransaction(requirement); // approve GA1 to pull V1 shares
-  } else if (isRequirementSignature(requirement)) {
-    signatures.push(await requirement.sign(walletClient, "0xUser..."));
-  }
-}
-
-const tx = buildTx(signatures);
-```
-
-### Blue
-
-Blue (Morpho Blue) is Morpho's immutable, variable-rate lending primitive: isolated markets whose
-borrow rate floats with utilization. Each market is identified by its `MarketParams`.
+### Blue: supply collateral & borrow
 
 ```typescript
 const market = client.morpho.blue(
@@ -287,271 +101,30 @@ const market = client.morpho.blue(
     irm: "0xIrm...",
     lltv: 860000000000000000n,
   },
-  1
+  1,
 );
-```
 
-#### Supply (loan asset)
-
-Supply the loan asset to earn yield on the market.
-
-```typescript
-const marketData = await market.getMarketData();
-
-const { buildTx, getRequirements } = market.supply({
-  amount: 1000000000n,
-  userAddress: "0xUser...",
-  marketData,
-});
-
-const requirements = await getRequirements();
-const tx = buildTx([requirementSignature]);
-```
-
-##### Supply with native token wrapping
-
-If the market's `loanToken` is the chain's wNative, you can supply native token that will be wrapped automatically:
-
-```typescript
-const { buildTx, getRequirements } = market.supply({
-  nativeAmount: 1000000000000000000n,
-  userAddress: "0xUser...",
-  marketData,
-});
-```
-
-The bundle routes through `GeneralAdapter1` with `maxSharePrice` slippage protection (anti-inflation guard).
-
-#### Supply Collateral
-
-```typescript
-const { buildTx, getRequirements } = market.supplyCollateral({
-  amount: 1000000000000000000n,
-  userAddress: "0xUser...",
-});
-
-const requirements = await getRequirements();
-const tx = buildTx([requirementSignature]);
-```
-
-#### Borrow
-
-```typescript
-const positionData = await market.getPositionData("0xUser...");
-
-const { buildTx, getRequirements } = market.borrow({
-  amount: 500000000000000000n,
-  userAddress: "0xUser...",
-  positionData,
-});
-
-const requirements = await getRequirements();
-const tx = buildTx();
-```
-
-#### Supply Collateral & Borrow
-
-```typescript
 const positionData = await market.getPositionData("0xUser...");
 
 const { buildTx, getRequirements } = market.supplyCollateralBorrow({
-  amount: 1000000000000000000n,
-  borrowAmount: 500000000000000000n,
+  amount: 1000000000000000000n, // collateral
+  borrowAmount: 500000000000000000n, // loan asset
   userAddress: "0xUser...",
   positionData,
 });
 
 const requirements = await getRequirements();
-const tx = buildTx([requirementSignature]);
+const tx = buildTx([permitSignature]);
 ```
 
-#### Repay
+Borrowing requires a one-time Morpho authorization for `GeneralAdapter1` (returned by `getRequirements` when missing). The LLTV buffer guards against instant liquidation.
 
-Two modes depending on whether the caller specifies `amount` (partial repay) or `shares` (full repay, immune to interest accrual between quote and inclusion). Optionally attach `nativeAmount` to fund the repay by wrapping native ETH (loan token must be the chain's wNative):
-
-```typescript
-const positionData = await market.getPositionData("0xUser...");
-
-// Partial repay — by amount
-const { buildTx, getRequirements } = market.repay({
-  amount: 250000000000000000n,
-  userAddress: "0xUser...",
-  positionData,
-});
-
-// Full repay — by shares (recommended to clear the full debt atomically)
-const { buildTx, getRequirements } = market.repay({
-  shares: positionData.borrowShares,
-  userAddress: "0xUser...",
-  positionData,
-});
-
-const requirements = await getRequirements();
-const tx = buildTx([requirementSignature]);
-```
-
-Repay does **not** require Morpho authorization (it only requires a loan token approval for `GeneralAdapter1`).
-
-#### Withdraw (loan asset)
-
-Two modes — `assets` (exact amount) or `shares` (full close, immune to interest accrual between quote and inclusion). Routed through bundler3 with `minSharePrice` slippage protection; the withdrawn assets are sent directly to `receiver` (defaults to `userAddress`). Optional `reallocations` top up market liquidity via the **PublicAllocator** when the on-market liquidity is insufficient (same mechanism as `borrow`).
-
-```typescript
-const positionData = await market.getPositionData("0xUser...");
-
-// Withdraw an exact amount of loan asset
-const { buildTx, getRequirements } = market.withdraw({
-  assets: 500000000n,
-  userAddress: "0xUser...",
-  positionData,
-});
-
-// Or close the full supply position by shares
-const { buildTx, getRequirements } = market.withdraw({
-  shares: positionData.supplyShares,
-  userAddress: "0xUser...",
-  positionData,
-});
-
-const requirements = await getRequirements();
-const tx = buildTx();
-```
-
-Loan-asset withdraw requires Morpho authorization for `GeneralAdapter1` (returned by `getRequirements` when missing). It does **not** require a token approval.
-
-#### Withdraw Collateral
-
-```typescript
-const positionData = await market.getPositionData("0xUser...");
-
-const { buildTx } = market.withdrawCollateral({
-  amount: 500000000000000000n,
-  userAddress: "0xUser...",
-  positionData,
-});
-
-const tx = buildTx();
-```
-
-Direct call to `morpho.withdrawCollateral()` — no bundler, no `GeneralAdapter1` authorization needed. The SDK validates position health after withdrawal against the LLTV buffer to prevent instant liquidation.
-
-#### Repay & Withdraw Collateral
-
-```typescript
-const positionData = await market.getPositionData("0xUser...");
-
-const { buildTx, getRequirements } = market.repayWithdrawCollateral({
-  amount: 250000000000000000n, // or shares: ...
-  withdrawAmount: 500000000000000000n,
-  userAddress: "0xUser...",
-  positionData,
-});
-
-const requirements = await getRequirements();
-const tx = buildTx([requirementSignature]);
-```
-
-Atomically bundles repay → withdraw collateral via bundler3. Bundle order is critical: repay runs first to reduce debt, then withdraw. Requires both a loan token approval (for repay) and a Morpho authorization (for withdraw). The SDK validates combined position health by simulating the repay before checking withdrawal safety.
-
-#### Refinance
-
-Atomically migrate a position from this market to another Morpho Blue market that shares the **same loan and collateral tokens** on the same chain — no flash loan, no upfront capital. The bundle flash-collateralizes the target via its `onMorphoSupplyCollateral` callback: inside the callback `GeneralAdapter1` borrows on the target, repays the source debt, then withdraws the source collateral to settle the deferred transfer.
-
-```typescript
-const source = client.morpho.blue(sourceMarketParams, 1);
-const target = client.morpho.blue(targetMarketParams, 1);
-
-const positionData = await source.getPositionData("0xUser...");
-const targetPositionData = await target.getPositionData("0xUser...");
-
-// Refinance by assets — exact-asset borrow and repay, no GA1 dust
-const { buildTx, getRequirements } = source.refinance({
-  userAddress: "0xUser...",
-  positionData,
-  target: { marketParams: targetMarketParams, positionData: targetPositionData },
-  collateralAmount: 1000000000000000000n,
-  borrowAssets: 500000000000000000n,
-});
-
-// Or migrate the full debt by shares (immune to interest accrual between quote and inclusion)
-const { buildTx, getRequirements } = source.refinance({
-  userAddress: "0xUser...",
-  positionData,
-  target: { marketParams: targetMarketParams, positionData: targetPositionData },
-  collateralAmount: 1000000000000000000n,
-  borrowShares: positionData.borrowShares,
-});
-
-// Collateral-only migration — omit both borrow fields
-const { buildTx, getRequirements } = source.refinance({
-  userAddress: "0xUser...",
-  positionData,
-  target: { marketParams: targetMarketParams, positionData: targetPositionData },
-  collateralAmount: 1000000000000000000n,
-});
-
-const requirements = await getRequirements();
-const tx = buildTx();
-```
-
-The SDK validates ownership, token/id match, and that amounts do not exceed the source position. Health is checked against `LLTV − buffer` where it can degrade: the residual source position is validated whenever debt remains after the repay, and the aggregate target position is validated whenever a borrow leg is migrated. Collateral-only migrations (both borrow fields omitted) skip the target health check — they can't degrade target health and would otherwise fail on missing-oracle target markets. Both markets are forward-accrued to `now`; in shares mode the target borrow overshoots by `slippageTolerance` and the callback sweeps the residual back into the target debt (or skims it to the user). `getRequirements` returns the `setAuthorization(generalAdapter1, true)` transaction when GA1 is not yet authorized — a single global authorization covers both markets. Optional `targetReallocations` top up target-market liquidity via the **PublicAllocator** (same mechanism as `borrow`); their fees add to `tx.value`.
-
-#### Borrow with Shared Liquidity (Reallocations)
-
-When a market lacks sufficient liquidity, you can reallocate liquidity from other markets managed by MetaMorpho Vaults via the **PublicAllocator** contract:
-
-```typescript
-import type { VaultReallocation } from "@morpho-org/morpho-sdk";
-
-const reallocations: VaultReallocation[] = [
-  {
-    vault: "0xVault...", // MetaMorpho vault to reallocate from
-    fee: 0n, // PublicAllocator fee in native token (can be 0)
-    withdrawals: [
-      {
-        marketParams: sourceMarketParams, // Source market to withdraw from
-        amount: 2000000000n, // Amount to withdraw
-      },
-    ],
-  },
-];
-
-const positionData = await market.getPositionData("0xUser...");
-
-// Borrow with reallocations
-const { buildTx, getRequirements } = market.borrow({
-  amount: 500000000000000000n,
-  userAddress: "0xUser...",
-  positionData,
-  reallocations,
-});
-
-const requirements = await getRequirements();
-const tx = buildTx();
-// tx.value includes the sum of all reallocation fees
-```
-
-Reallocations also work with `supplyCollateralBorrow`:
-
-```typescript
-const { buildTx, getRequirements } = market.supplyCollateralBorrow({
-  amount: 1000000000000000000n,
-  borrowAmount: 500000000000000000n,
-  userAddress: "0xUser...",
-  positionData,
-  reallocations,
-});
-```
-
-### Midnight
-
-Midnight exposes fixed-rate market flows through a chain-scoped entity. Fetch market or
-position state when required, resolve the ordered prerequisites, then build the final
-transaction synchronously.
+### Midnight: take a fixed-rate offer
 
 ```typescript
 const midnight = client.morpho.midnight(8453);
 const marketData = await midnight.getMarketData(marketId);
+
 const output = midnight.takeLend({
   accountAddress: lender,
   marketData,
@@ -565,7 +138,9 @@ const requirements = await output.getRequirements();
 const tx = output.buildTx();
 ```
 
-### Architecture
+See the [documentation](https://docs.morpho.org/developers/sdks/morpho-sdk/) for the full API: native wrapping, PublicAllocator reallocations, V1 → V2 migration, refinance, force withdraw/redeem, and Midnight maker flows.
+
+## Architecture
 
 ```mermaid
 graph LR
@@ -661,10 +236,8 @@ Link this package to your app for local debugging:
 pnpm run build:link
 ```
 
-In your other project:
-
 ```bash
-# Link the local package
+# In your other project
 pnpm link @morpho-org/morpho-sdk
 ```
 
