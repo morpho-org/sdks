@@ -19,6 +19,7 @@ import { SimulationState as SimulationStateImport } from "@morpho-org/simulation
 import type { Address } from "viem";
 import { maxUint256, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
+import { DEFAULT_WITHDRAWAL_TARGET_UTILIZATION } from "../helpers/constant.js";
 import {
   DisabledReallocationMarketError,
   MissingPublicAllocatorConfigError,
@@ -35,14 +36,6 @@ const TIMESTAMP = 1_700_000_000n;
 const VAULT: Address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 const OTHER_VAULT: Address = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const LOAN_TOKEN: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
-
-/**
- * The withdrawal-utilization default used by the legacy `SimulationState`
- * reference (92%). `morpho-sdk` now defaults to 90%, so parity cases that omit an
- * explicit ceiling pin the new implementation to this legacy value to keep the
- * algorithmic comparison exact.
- */
-const LEGACY_DEFAULT_WITHDRAWAL_UTILIZATION = 92_0000000000000000n;
 
 type LegacyPublicAllocatorOptions = {
   readonly enabled?: boolean;
@@ -350,7 +343,13 @@ const toLegacyOptions = (
     options.reallocatableVaults == null
       ? undefined
       : [...options.reallocatableVaults],
-  defaultMaxWithdrawalUtilization: options.defaultMaxWithdrawalUtilization,
+  // The legacy `SimulationState` reference defaults its withdrawal ceiling to
+  // 92% (frozen in `@morpho-org/simulation-sdk`); morpho-sdk now defaults to 90%.
+  // Pin the reference to the SDK default when a case sets none, so the parity
+  // comparison stays algorithm-only (not default-driven).
+  defaultMaxWithdrawalUtilization:
+    options.defaultMaxWithdrawalUtilization ??
+    DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
   maxWithdrawalUtilization:
     options.maxWithdrawalUtilization == null
       ? undefined
@@ -362,12 +361,6 @@ const toReallocationOptions = (
   options: PublicAllocatorOptions = {},
 ): PublicAllocatorOptions => ({
   ...options,
-  // The legacy reference defaults its withdrawal ceiling to 92%; morpho-sdk now
-  // defaults to 90%. Pin the new impl to the legacy default when a case sets none
-  // explicitly, so the parity comparison stays algorithm-only (not default-driven).
-  defaultMaxWithdrawalUtilization:
-    options.defaultMaxWithdrawalUtilization ??
-    LEGACY_DEFAULT_WITHDRAWAL_UTILIZATION,
   timestamp: TIMESTAMP,
 });
 
