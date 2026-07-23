@@ -11,14 +11,20 @@ export const DEFAULT_LLTV_BUFFER = MathLib.WAD / 200n;
 export const MAX_ABSOLUTE_SHARE_PRICE = 100n * MathLib.RAY;
 
 /**
- * The default maximum utilization allowed to reach when withdrawing shared liquidity.
+ * The default maximum utilization a source market may reach when withdrawing
+ * shared liquidity, scaled by WAD. Still overridable through the deprecated
+ * `maxWithdrawalUtilization` / `defaultMaxWithdrawalUtilization` options until
+ * the next major.
  */
-export const DEFAULT_WITHDRAWAL_TARGET_UTILIZATION = 92_0000000000000000n;
+export const DEFAULT_WITHDRAWAL_TARGET_UTILIZATION = 90_0000000000000000n;
 
 /**
- * The default target utilization above which shared liquidity reallocations are triggered.
+ * The default target utilization above which shared liquidity reallocations are
+ * triggered (and the level the target market is brought back to), scaled by WAD.
+ * Still overridable through the deprecated `supplyTargetUtilization` /
+ * `defaultSupplyTargetUtilization` options until the next major.
  */
-export const DEFAULT_SUPPLY_TARGET_UTILIZATION = 90_5000000000000000n;
+export const DEFAULT_SUPPLY_TARGET_UTILIZATION = 90_0000000000000000n;
 
 /**
  * Tokens that require setting allowance from zero before changing approval.

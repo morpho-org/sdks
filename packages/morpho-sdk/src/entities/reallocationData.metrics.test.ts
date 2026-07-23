@@ -15,6 +15,7 @@ import { ReallocationData } from "./reallocationData.js";
 const VAULT_A: Address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 const TIMESTAMP = 1_700_000_000n;
 const NINETY_PERCENT = (9n * MathLib.WAD) / 10n;
+const EIGHTY_PERCENT = (8n * MathLib.WAD) / 10n;
 
 const targetParams = new MarketParams(WethUsdsBlue);
 const sourceParamsA = new MarketParams(CbbtcUsdcBlue);
@@ -120,19 +121,20 @@ describe("ReallocationData.getAvailableLiquidityToUtilization", () => {
     ).toBe(580n * MathLib.WAD);
   });
 
-  test("behavior: returns only own headroom when supplyTargetUtilization > utilization", () => {
-    // Default supplyTarget (90.5%) > target (90%) → reallocation would not
-    // trigger, so available liquidity is excluded: ownHeadroom = 400.
+  test("behavior: returns only own headroom when the supply target exceeds the queried utilization", () => {
+    // Default supply target (90%) > queried utilization (80%) → reallocation
+    // would not trigger, so available liquidity is excluded: ownHeadroom to 80% =
+    // 1000·0.8 − 500 = 300.
     const data = makeData();
     stubReallocations(data, [
       { id: sourceParamsA.id, vault: VAULT_A, assets: 200n * MathLib.WAD },
     ]);
 
     expect(
-      data.getAvailableLiquidityToUtilization(targetParams.id, NINETY_PERCENT, {
+      data.getAvailableLiquidityToUtilization(targetParams.id, EIGHTY_PERCENT, {
         timestamp: TIMESTAMP,
       }),
-    ).toBe(400n * MathLib.WAD);
+    ).toBe(300n * MathLib.WAD);
   });
 
   test("behavior: returns only scaled available liquidity when utilization equals current utilization", () => {
