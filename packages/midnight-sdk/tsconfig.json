@@ -3,9 +3,8 @@
   "compilerOptions": {
     "outDir": "lib",
     "rootDir": ".",
-    "baseUrl": ".",
     "paths": {
-      "@morpho-org/midnight-sdk/package.json": ["package.json"]
+      "@morpho-org/midnight-sdk/package.json": ["./package.json"]
     }
   },
   "exclude": [
