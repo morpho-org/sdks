@@ -27,3 +27,7 @@ explicit overrides are still honored until the next major.
   90% and the Morpho API's `targetWithdrawUtilization` field is no longer
   consulted; explicitly passed `parameters` overrides are still honored until the
   next major.
+- The `@morpho-org/morpho-sdk` peer range moves to `^5.4.0`: the 90% default
+  ceiling lives in `morpho-sdk`'s `DEFAULT_WITHDRAWAL_TARGET_UTILIZATION`, so an
+  older peer would silently fall back to the previous 92% default now that the
+  API value is no longer consulted.
