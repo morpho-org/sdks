@@ -23,6 +23,10 @@ export interface PublicAllocatorOptions {
   /**
    * The maximum utilization each source market may reach when withdrawing
    * shared liquidity, scaled by WAD.
+   *
+   * @deprecated The source-market withdrawal ceiling is fixed at 90%
+   * ({@link DEFAULT_WITHDRAWAL_TARGET_UTILIZATION}) and will stop being
+   * configurable in the next major. Per-market overrides are still honored for now.
    */
   readonly maxWithdrawalUtilization?: Readonly<
     Record<MarketId, bigint | undefined>
@@ -31,7 +35,11 @@ export interface PublicAllocatorOptions {
   /**
    * The default maximum utilization source markets may reach when withdrawing
    * shared liquidity, scaled by WAD.
-   * @default 92% (920000000000000000n)
+   *
+   * @default 90% (900000000000000000n)
+   * @deprecated The source-market withdrawal ceiling is fixed at 90%
+   * ({@link DEFAULT_WITHDRAWAL_TARGET_UTILIZATION}) and will stop being
+   * configurable in the next major. Overrides are still honored for now.
    */
   readonly defaultMaxWithdrawalUtilization?: bigint;
 }
@@ -84,6 +92,10 @@ export interface ReallocationComputeOptions extends PublicAllocatorOptions {
    * Per-market target utilization above which the shared liquidity algorithm
    * is triggered (scaled by WAD). Overrides `defaultSupplyTargetUtilization`
    * for the specified market.
+   *
+   * @deprecated The supply-target trigger is fixed at 90%
+   * ({@link DEFAULT_SUPPLY_TARGET_UTILIZATION}) and will stop being configurable
+   * in the next major. Per-market overrides are still honored for now.
    */
   readonly supplyTargetUtilization?: Readonly<
     Record<MarketId, bigint | undefined>
@@ -92,7 +104,11 @@ export interface ReallocationComputeOptions extends PublicAllocatorOptions {
   /**
    * The default target utilization above which the shared liquidity algorithm
    * is triggered (scaled by WAD).
-   * @default 90.5% (905000000000000000n)
+   *
+   * @default 90% (900000000000000000n)
+   * @deprecated The supply-target trigger is fixed at 90%
+   * ({@link DEFAULT_SUPPLY_TARGET_UTILIZATION}) and will stop being configurable
+   * in the next major. Overrides are still honored for now.
    */
   readonly defaultSupplyTargetUtilization?: bigint;
 }

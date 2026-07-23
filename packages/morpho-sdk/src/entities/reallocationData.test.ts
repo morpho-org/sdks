@@ -19,6 +19,7 @@ import { SimulationState as SimulationStateImport } from "@morpho-org/simulation
 import type { Address } from "viem";
 import { maxUint256, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
+import { DEFAULT_WITHDRAWAL_TARGET_UTILIZATION } from "../helpers/constant.js";
 import {
   DisabledReallocationMarketError,
   MissingPublicAllocatorConfigError,
@@ -342,7 +343,13 @@ const toLegacyOptions = (
     options.reallocatableVaults == null
       ? undefined
       : [...options.reallocatableVaults],
-  defaultMaxWithdrawalUtilization: options.defaultMaxWithdrawalUtilization,
+  // The legacy `SimulationState` reference defaults its withdrawal ceiling to
+  // 92% (frozen in `@morpho-org/simulation-sdk`); morpho-sdk now defaults to 90%.
+  // Pin the reference to the SDK default when a case sets none, so the parity
+  // comparison stays algorithm-only (not default-driven).
+  defaultMaxWithdrawalUtilization:
+    options.defaultMaxWithdrawalUtilization ??
+    DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
   maxWithdrawalUtilization:
     options.maxWithdrawalUtilization == null
       ? undefined
