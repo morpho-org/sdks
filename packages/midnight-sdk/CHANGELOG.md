@@ -1,5 +1,11 @@
 # @morpho-org/midnight-sdk
 
+## 1.3.0
+
+### Minor Changes
+
+- [#903](https://github.com/morpho-org/sdks/pull/903) [`d8ec434`](https://github.com/morpho-org/sdks/commit/d8ec434fc82ba50f9d601e04c61351b8a9f5dc89) Thanks [@yum0e](https://github.com/yum0e)! - Expose known Midnight mempool validation rules and normalize the `min_offer_assets_usd` details. Preserve unknown rules and non-null detail shapes so router policy additions remain compatible with older SDK clients.
+
 ## 1.2.1
 
 ### Patch Changes
