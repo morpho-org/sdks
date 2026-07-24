@@ -227,11 +227,86 @@ export interface FetchTakeableOffersParams extends MidnightApiConfig {
 }
 
 /**
- * One API validation issue.
+ * `MempoolPayloadValidationRule` lists known Midnight mempool validation rules.
+ */
+export const MempoolPayloadValidationRule = {
+  MinOfferAssetsUsd: "min_offer_assets_usd",
+  PayloadVersion: "payload_version",
+  PayloadFrame: "payload_frame",
+  PayloadGzipLength: "payload_gzip_length",
+  PayloadSuffixTooLarge: "payload_suffix_too_large",
+  PayloadDecompression: "payload_decompression",
+  PayloadAbiDecode: "payload_abi_decode",
+  EmptyPayload: "empty_payload",
+  MaxOffersPerTree: "max_offers_per_tree",
+  DuplicateOfferHash: "duplicate_offer_hash",
+  UnsupportedChain: "unsupported_chain",
+  MarketChainMismatch: "market_chain_mismatch",
+  Maturity: "maturity",
+  LoanToken: "loan_token",
+  CollateralToken: "collateral_token",
+  Oracle: "oracle",
+  MarketTriplet: "market_triplet",
+  RcfThreshold: "rcf_threshold",
+  CollateralLltv: "collateral_lltv",
+  MaxLif: "max_lif",
+  MaxCollaterals: "max_collaterals",
+  AmountMissing: "amount_missing",
+  AmountConflict: "amount_conflict",
+  MinTick: "min_tick",
+  MaxTick: "max_tick",
+  TickSpacing: "tick_spacing",
+  MinDuration: "min_duration",
+  Ratifier: "ratifier",
+  MixedMaker: "mixed_maker",
+  MixedRatifier: "mixed_ratifier",
+  GroupIdentity: "group_identity",
+  GroupConsistency: "group_consistency",
+  NonEmptyCallback: "non_empty_callback",
+  BuyEmptyCallback: "buy_empty_callback",
+  SellEmptyCallback: "sell_empty_callback",
+} as const satisfies Readonly<Record<string, string>>;
+
+/**
+ * `MempoolPayloadValidationRule` represents a rule returned by the API.
+ *
+ * Known values have autocomplete through the matching constant; the open
+ * string branch keeps newer API rules forward-compatible.
+ */
+export type MempoolPayloadValidationRule =
+  | (typeof MempoolPayloadValidationRule)[keyof typeof MempoolPayloadValidationRule]
+  | (string & Record<never, never>);
+
+/**
+ * `MempoolPayloadValidationIssueDetails` represents parsed issue details.
+ *
+ * Unrecognized non-null details are retained verbatim so API additions do not
+ * make older SDK clients reject the entire validation response.
+ */
+export type MempoolPayloadValidationIssueDetails =
+  | {
+      /** Identifies details for the `min_offer_assets_usd` rule. */
+      readonly type: "minOfferAssetsUsd";
+      /** Loan token of the first offer below its configured minimum. */
+      readonly loanToken: Address;
+      /** Configured minimum in raw loan-token assets. */
+      readonly minAssets: bigint;
+    }
+  | {
+      /** Identifies details whose schema is not known by this SDK version. */
+      readonly type: "unknown";
+      /** Unmodified JSON value returned by the API. */
+      readonly raw: unknown;
+    };
+
+/**
+ * `MempoolPayloadValidationIssue` represents one API validation issue.
  */
 export interface MempoolPayloadValidationIssue {
   /** API rule violated by the payload. */
-  readonly rule: string;
+  readonly rule: MempoolPayloadValidationRule;
+  /** Parsed non-null details, when the API provides them. */
+  readonly details?: MempoolPayloadValidationIssueDetails;
 }
 
 /**

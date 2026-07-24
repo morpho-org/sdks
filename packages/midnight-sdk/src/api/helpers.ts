@@ -1,26 +1,34 @@
 import { BLUE_API_BASE_URL, isHexEqual } from "@morpho-org/morpho-ts";
-import { type Address, type Hash, isAddressEqual } from "viem";
+import {
+  type Address,
+  type Hash,
+  isAddress,
+  isAddressEqual,
+  maxUint256,
+} from "viem";
 import {
   InvalidMidnightApiResponseError,
   MidnightApiError,
 } from "../errors.js";
 import { MarketUtils } from "../market/index.js";
-import type {
-  ApiBookMarketResponse,
-  ApiCollateralResponse,
-  ApiPriceLevelResponse,
-  ApiRequestParams,
-  ApiTakeableOfferResponse,
-  MempoolPayloadValidationResult,
-  MidnightApiBookMarket,
-  MidnightApiBookSide,
-  MidnightApiCollateral,
-  MidnightApiPriceLevel,
-  MidnightApiTake,
+import {
+  type ApiBookMarketResponse,
+  type ApiCollateralResponse,
+  type ApiPriceLevelResponse,
+  type ApiRequestParams,
+  type ApiTakeableOfferResponse,
+  type MempoolPayloadValidationResult,
+  MempoolPayloadValidationRule,
+  type MidnightApiBookMarket,
+  type MidnightApiBookSide,
+  type MidnightApiCollateral,
+  type MidnightApiPriceLevel,
+  type MidnightApiTake,
 } from "./types.js";
 import { MIDNIGHT_SDK_VERSION } from "./version.generated.js";
 
 const DEFAULT_MIDNIGHT_API_URL = new URL("/v0/midnight", BLUE_API_BASE_URL);
+const MAX_UINT256_DECIMAL_LENGTH = maxUint256.toString().length;
 
 /** @internal Sends one Midnight API request and maps non-2xx responses to SDK errors. */
 export async function requestMidnightApi<Response = unknown>(
@@ -301,7 +309,43 @@ export function parseValidationResponse(
       );
     }
 
-    return { rule };
+    const details = record.details;
+    if (details == null) return { rule };
+
+    if (
+      rule === MempoolPayloadValidationRule.MinOfferAssetsUsd &&
+      isRecord(details)
+    ) {
+      const loanToken = details.loan_token;
+      const rawMinAssets = details.min_assets;
+      if (
+        typeof loanToken === "string" &&
+        isAddress(loanToken) &&
+        typeof rawMinAssets === "string" &&
+        rawMinAssets.length <= MAX_UINT256_DECIMAL_LENGTH &&
+        /^\d+$/.test(rawMinAssets)
+      ) {
+        const minAssets = BigInt(rawMinAssets);
+        if (minAssets <= maxUint256) {
+          return {
+            rule,
+            details: {
+              type: "minOfferAssetsUsd" as const,
+              loanToken,
+              minAssets,
+            },
+          };
+        }
+      }
+    }
+
+    return {
+      rule,
+      details: {
+        type: "unknown" as const,
+        raw: details,
+      },
+    };
   });
 
   return {
