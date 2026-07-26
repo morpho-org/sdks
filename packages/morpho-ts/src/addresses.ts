@@ -75,6 +75,8 @@ export interface ChainAddresses {
   chainlinkOracleFactory?: `0x${string}`;
   /** PreLiquidation factory that creates and indexes linear LIF/LCF pre-liquidation contracts for Morpho markets. */
   preLiquidationFactory?: `0x${string}`;
+  /** VaultExitBundles periphery contract for in-kind vault redemptions and force withdrawals against illiquid vaults. */
+  vaultExitBundles?: `0x${string}`;
   /** Canonical wrapped native token used by adapters and unwrapped-token mappings on this chain. */
   wNative?: `0x${string}`;
   /** Morpho governance token. */

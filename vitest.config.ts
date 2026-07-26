@@ -205,6 +205,8 @@ export default defineConfig({
         test: {
           name: "morpho-test",
           include: ["packages/morpho-test/src/**/*.test.ts"],
+          // `src/contracts` deploys onto a mainnet fork.
+          testTimeout: 120_000,
         },
       },
       {
