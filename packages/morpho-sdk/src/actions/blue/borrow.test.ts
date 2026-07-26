@@ -10,8 +10,8 @@ import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
 
 import { test } from "../../../test/setup.js";
 import {
-  NonPositiveBorrowAmountError,
-  NonPositiveMinBorrowSharePriceError,
+  NegativeInputError,
+  NonPositiveInputError,
   type VaultReallocation,
 } from "../../types/index.js";
 import { blueBorrow } from "./borrow.js";
@@ -80,7 +80,7 @@ describe("blueBorrow unit tests", () => {
     expect(tx.action.args.reallocationFee).toBe(reallocationFee);
   });
 
-  test("should throw NonPositiveBorrowAmountError when amount is zero", async ({
+  test("should throw NonPositiveInputError when amount is zero", async ({
     client,
   }) => {
     expect(() =>
@@ -95,10 +95,10 @@ describe("blueBorrow unit tests", () => {
           receiver: client.account.address,
         },
       }),
-    ).toThrow(NonPositiveBorrowAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NonPositiveBorrowAmountError when amount is negative", async ({
+  test("should throw NonPositiveInputError when amount is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -113,10 +113,10 @@ describe("blueBorrow unit tests", () => {
           receiver: client.account.address,
         },
       }),
-    ).toThrow(NonPositiveBorrowAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NonPositiveMinBorrowSharePriceError when minSharePrice is negative", async ({
+  test("should throw NegativeInputError when minSharePrice is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -131,7 +131,7 @@ describe("blueBorrow unit tests", () => {
           receiver: client.account.address,
         },
       }),
-    ).toThrow(NonPositiveMinBorrowSharePriceError);
+    ).toThrow(NegativeInputError);
   });
 
   test("should return a deep-frozen transaction object", async ({ client }) => {

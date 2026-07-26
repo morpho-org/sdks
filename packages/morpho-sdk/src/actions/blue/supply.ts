@@ -1,23 +1,18 @@
-import { getChainAddresses, type MarketParams } from "@morpho-org/blue-sdk";
+import type { MarketParams } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
 import { type Action, BundlerAction } from "../../bundler/index.js";
-import {
-  addTransactionMetadata,
-  validateNativeAsset,
-} from "../../helpers/index.js";
+import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   type BlueSupplyAction,
   type DepositAmountArgs,
   type Metadata,
-  NegativeNativeAmountError,
-  NegativeSupplyAmountError,
-  NegativeSupplyMaxSharePriceError,
-  type RequirementSignature,
+  NegativeInputError,
+  NonPositiveInputError,
+  type PermitRequirementSignature,
   type Transaction,
-  ZeroSupplyAmountError,
 } from "../../types/index.js";
-import { getRequirementsAction } from "../requirements/getRequirementsAction.js";
+import { buildAssetFundingActions } from "./buildAssetFundingActions.js";
 
 /** Parameters for {@link blueSupply}. */
 export interface BlueSupplyParams {
@@ -26,10 +21,12 @@ export interface BlueSupplyParams {
     readonly marketParams: MarketParams;
   };
   args: DepositAmountArgs & {
+    /** Address whose Morpho supply position is credited. */
     onBehalf: Address;
     /** Maximum supply share price (in ray). Slippage protection against inflation attacks. */
     maxSharePrice: bigint;
-    requirementSignature?: RequirementSignature;
+    /** Optional pre-signed permit/permit2 approval for the loan-token transfer. */
+    requirementSignature?: PermitRequirementSignature;
   };
   metadata?: Metadata;
 }
@@ -53,22 +50,18 @@ export interface BlueSupplyParams {
  *   protection.
  * @param params.args.nativeAmount - Optional amount of native token to wrap into wNative for the
  *   supply. Requires the loan token to be the chain's wNative.
- * @param params.args.requirementSignature - Optional pre-signed permit/permit2 approval. When
- *   absent, the bundle uses a plain `erc20TransferFrom` and assumes the user has already
- *   approved `GeneralAdapter1`.
+ * @param params.args.requirementSignature - Optional pre-signed permit/permit2 approval.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueSupplyAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator the simulation layer consumes.
- * @throws {NegativeSupplyAmountError} when `amount < 0n`.
- * @throws {NegativeNativeAmountError} when `nativeAmount < 0n`.
- * @throws {ZeroSupplyAmountError} when both `amount` and `nativeAmount` resolve to zero.
- * @throws {NegativeSupplyMaxSharePriceError} when `maxSharePrice < 0n`.
+ * @throws {NegativeInputError} when `amount`, `nativeAmount`, or `maxSharePrice` is negative.
+ * @throws {NonPositiveInputError} when both `amount` and `nativeAmount` resolve to zero.
  * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
  * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the loan token is not
  *   the chain's wNative.
- * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `requirementSignature`
+ * @throws {DepositAssetMismatchError} from `getTokenRequirementActions` when `requirementSignature`
  *   is provided and the signed asset differs from `marketParams.loanToken`.
- * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
+ * @throws {DepositAmountMismatchError} from `getTokenRequirementActions` when `requirementSignature`
  *   is provided and the signed amount differs from `args.amount`.
  * @example
  * ```ts
@@ -97,61 +90,30 @@ export const blueSupply = ({
   metadata,
 }: BlueSupplyParams): Readonly<Transaction<BlueSupplyAction>> => {
   if (amount < 0n) {
-    throw new NegativeSupplyAmountError(marketParams.id);
+    throw new NegativeInputError("amount", amount);
   }
 
   if (nativeAmount !== undefined && nativeAmount < 0n) {
-    throw new NegativeNativeAmountError(nativeAmount);
+    throw new NegativeInputError("nativeAmount", nativeAmount);
   }
 
   if (maxSharePrice < 0n) {
-    throw new NegativeSupplyMaxSharePriceError(marketParams.id);
+    throw new NegativeInputError("maxSharePrice", maxSharePrice);
   }
 
   const totalAssets = amount + (nativeAmount ?? 0n);
 
   if (totalAssets === 0n) {
-    throw new ZeroSupplyAmountError(marketParams.id);
+    throw new NonPositiveInputError("totalAssets", totalAssets);
   }
 
-  const {
-    bundler3: { generalAdapter1, bundler3 },
-  } = getChainAddresses(chainId);
-
-  const actions: Action[] = [];
-
-  if (nativeAmount !== undefined && nativeAmount > 0n) {
-    validateNativeAsset(chainId, marketParams.loanToken);
-
-    actions.push(
-      {
-        type: "nativeTransfer",
-        args: [bundler3, generalAdapter1, nativeAmount, false],
-      },
-      {
-        type: "wrapNative",
-        args: [nativeAmount, generalAdapter1, false],
-      },
-    );
-  }
-
-  if (amount > 0n) {
-    if (requirementSignature) {
-      actions.push(
-        ...getRequirementsAction({
-          asset: marketParams.loanToken,
-          amount,
-          recipient: generalAdapter1,
-          requirementSignature,
-        }),
-      );
-    } else {
-      actions.push({
-        type: "erc20TransferFrom",
-        args: [marketParams.loanToken, amount, generalAdapter1, false],
-      });
-    }
-  }
+  const actions: Action[] = buildAssetFundingActions({
+    chainId,
+    asset: marketParams.loanToken,
+    erc20Amount: amount,
+    nativeAmount: nativeAmount ?? 0n,
+    requirementSignature,
+  });
 
   actions.push({
     type: "morphoSupply",

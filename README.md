@@ -19,14 +19,13 @@
 
 ### Secondary packages
 
-The packages below are lower-level building blocks. Use them only if `@morpho-org/morpho-sdk` does not cover your use case.
-
-For read-only integrations, `@morpho-org/morpho-ts` + `@morpho-org/blue-sdk` + `@morpho-org/blue-sdk-viem` is a strong alternative: it avoids the transaction-building surface of `@morpho-org/morpho-sdk`, minimizes bundle size and integration complexity, and keeps the integration focused on reads. The tradeoff is installing three separate packages instead of one.
+The packages below are lower-level building blocks. Use them only if `@morpho-org/morpho-sdk` does not cover your use case. `@morpho-org/morpho-sdk` is the single recommended entry point for all integrations, including read-only ones — it covers both reads and transaction building, and long term is the package we converge on (with tree-shaking and dedicated export paths so read-only consumers don't pay for the transaction-building surface).
 
 #### Viem
 
 - [**`@morpho-org/blue-sdk-viem`**](./packages/blue-sdk-viem/): Viem-based augmentation of `@morpho-org/blue-sdk` that exports (and optionally injects) viem-based fetch methods
 - [**`@morpho-org/liquidity-sdk-viem`**](./packages/liquidity-sdk-viem/): Viem-based package that helps seamlessly calculate the liquidity available through the PublicAllocator
+- [**`@morpho-org/midnight-sdk`**](./packages/midnight-sdk/): Viem-based package for Morpho Midnight that exports protocol utilities, fetch helpers, and Midnight API utilities
 
 #### WDK (Tether Wallet Development Kit)
 

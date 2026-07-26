@@ -33,7 +33,10 @@ Cross-layer leaks (entities encoding calldata, actions reading state, helpers de
 
 - Every package has one clear job. If a package needs a paragraph to describe, split it.
 - Every module has one responsibility. Files grow by *adding* exports of the same kind, never by stretching scope.
+- Do not extract a local, non-exported helper unless it has at least three call sites. Inline one-off and two-use helpers.
+- When a helper is called only to run validation, throw, or trigger another intentional side effect, add a short call-site comment explaining why its return value is unused.
 - **Single source of truth** per concept: one place per ABI, one place per address registry, one place per error class. Duplication is a refactor, not a feature.
+- Do not export duplicate TypeScript shapes for the same concept. If a domain interface and ABI struct are identical, export one interface and reuse it; only introduce a distinct `*Struct` type when the shapes actually differ.
 - Framework adapters live in explicitly named packages (`*-wagmi`, `*-viem`). Core packages stay framework-free.
 - Public API = barrel re-exports from `src/index.ts`. No deep imports across packages, ever.
 
@@ -48,10 +51,18 @@ Cross-layer leaks (entities encoding calldata, actions reading state, helpers de
 
 - `morphoViemExtension()` rides on top of a viem client the integrator owns, exposing a stateless `morpho` namespace under `client.morpho` plus readonly options. No `init()`, no cache, no warm-up — those couple us to a host runtime and break statelessness.
 - Every returned `Transaction` is `deepFreeze`d. Public fields are `readonly`. Helpers return new objects, never mutate inputs.
+- Do not use classes as value bags. If a type has no meaningful behavior beyond construction, copying, or a one-line conversion, model it as a `type`/`interface` and use local pure conversion where needed. Classes are for typed errors and domain objects with real behavior.
+- Never `deepFreeze` a class instance. Use readonly fields/types for API intent. `deepFreeze` is reserved for function outputs that are expected to be immutable descriptors submitted onchain or signed immediately after construction.
 - Small primitives that combine. No kitchen-sink helpers; no boolean-prop explosions.
 - Prefer early returns over deep nesting — guard clauses first, happy path last.
 
-> Applied by personas: [`module-api-architecture`](./.agents/personas/module-api-architecture.md), [`morpho-protocol`](./.agents/personas/morpho-protocol.md) (protocol routing + ABI/address source of truth), [`web3-security`](./.agents/personas/web3-security.md) (Action-layer purity).
+### Class APIs over utility factories
+
+- If a public helper would primarily return an instance of a public class, expose it as a static class method instead of a `*Utils` factory: prefer `Offer.create(...)`, `Group.create(...)`, `Tree.create(...)` over `OfferUtils.buildOffer(...)` or `OfferUtils.buildTree(...)` returning class instances.
+- Class-specific methods and getters delegate to pure `*Utils` namespace functions that accept readonly plain JavaScript objects compatible with the class's public shape. This keeps the user-facing API composable and class-based while preserving broad compatibility for object-first integrations.
+- `*Utils` namespaces own deterministic object-compatible behavior, validation, encoding math, and struct reshaping. They should not be the primary user-facing constructor surface for a class instance.
+
+> Applied by personas: [`module-api-architecture`](./.agents/personas/module-api-architecture.md), [`morpho-protocol`](./.agents/personas/morpho-protocol.md) (protocol routing + ABI/address source of truth), [`web3-security`](./.agents/personas/web3-security.md) (Action-layer purity), [`silent-failure-hunter`](./.agents/personas/silent-failure-hunter.md) (testability).
 
 ---
 
@@ -163,6 +174,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 - **Migration guides on every major**, with codemods where mechanical.
 - **Cantina audit on every major release**, with the public report linked from the CHANGELOG entry. Critical CVEs trigger out-of-band patches.
 - **Pre-release dogfood on every minor:** at least one internal app and one external partner before the `latest` tag flips.
+- **Respect pnpm minimum release age when bumping releases.** Keep `minimumReleaseAgeStrict` enabled and do not add `minimumReleaseAgeExclude` (or equivalent bypasses) to force freshly-published dependencies through dependency bump PRs. If a dependency is too new, wait for the configured `minimumReleaseAge` window or pin to the latest eligible version; emergency bypasses require explicit maintainer approval and must be removed before merge.
 
 > Applied by personas: [`style-conventions`](./.agents/personas/style-conventions.md) (changeset relevance), [`morpho-protocol`](./.agents/personas/morpho-protocol.md) (pinned ABI/address release contract), [`ci-release-security`](./.agents/personas/ci-release-security.md) (publish-flow integrity, conditional).
 
@@ -170,7 +182,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 
 ## 8. Code style & tooling
 
-- pnpm + Node ≥22. Root checks: `pnpm lint` and `pnpm test`.
+- pnpm + Node ≥26. Root checks: `pnpm lint` and `pnpm test`.
 - Biome owns style: 2-space indent, organized imports, no unused imports or variables.
 - NodeNext module resolution; relative imports include `.js` (`export * from "./market/index.js"`).
 - Type-only imports where possible (`import type { Address } from "viem"`).
@@ -237,9 +249,10 @@ These are the rules `ci-release-security` enforces. They live here as source of 
 - **Publish-flow integrity.** `npm publish` / `pnpm publish` must use `--provenance` (or the Changesets provenance-aware path). Auth via org-scoped `NODE_AUTH_TOKEN`, never a personal access token. Tag-scope changes (e.g. `next` → `latest`) require human sign-off via `environment:` with required reviewers. Removing `--provenance` is a downgrade — flag at minimum **medium**, **high** for runtime/peer-surface packages.
 - **Release-commit signing & write-token hardening.** Release commits and annotated package tags must be created with a valid signed identity — prefer GitHub's `createCommitOnBranch` GraphQL mutation (produces GitHub-signed commits) over local `git commit` + push from a workflow. Write-scoped tokens must only be minted **after** one of these boundaries is in place: (a) same-job hardening that verifies the checksum and `$PATH` of any trusted release helper the post-token step will execute, truncates `$GITHUB_ENV` and `$GITHUB_PATH` so inherited state from earlier steps cannot influence the privileged step, and either confirms `.git/hooks/` contains only `.sample` files or forces hooks off for privileged git invocations (`core.hooksPath=/dev/null`, plus `--no-verify` on pushes); or (b) a split-job boundary where the privileged job fresh-checks out `github.sha`, consumes only a data artifact from the unprivileged job, validates that artifact with trusted code before minting the token, and confirms `.git/hooks/` contains only `.sample` files. Any enabled content under `.git/hooks/` is a hook-poisoning footgun and must be rejected or bypassed by trusted hook-disabling config. For same-job hardening, forcing the trusted `$PATH` and an explicit expected `RELEASE_BRANCH` on the write-token step is required. Loss of the applicable guards on an existing release workflow is **critical**.
 - **Changesets / release-bot wiring.** `.changeset/config.json` changes (fixed, linked, baseBranch, commit) alter what gets shipped — flag for human review on every change. New release workflows or release-bot actions require pinned SHAs and explicit `permissions:`. Removing a previously-required check from a release workflow's `needs:` is **high**.
-- **Lockfile drift.** A `pnpm-lock.yaml` change without a corresponding `package.json` change is a finding unless the PR description explains why (transitive bump, security patch).
+- **Lockfile drift.** A `pnpm-lock.yaml` change without a corresponding `package.json` change is acceptable for devDependency-only resolution drift when the existing manifest range already admits the new version. Flag lockfile-only changes that alter direct runtime `dependencies` or `peerDependencies`, move a dev dependency outside its declared range, change install settings, or introduce security-relevant package metadata; runtime/peer dependency changes require a manifest change plus package-version/changeset audit.
 - **Dependency hygiene.** New deps in `dependencies` or `peerDependencies` of a published package default to **high** for review. Flag unpinned semver ranges (`^`/`~`) on runtime deps, names that resemble typosquats of known packages, and deps whose registry metadata declares `postinstall` / `preinstall` / `install` scripts.
 - **`.npmrc` hardening.** `always-auth=true` or `_authToken=` committed to the repo is **critical** — credential leak. Non-`registry.npmjs.org` `registry=` or `@scope:registry=` lines require explicit human review (could redirect to a malicious registry).
 - **Workspace install behavior.** Flips of `auto-install-peers` or `strict-peer-dependencies` in `.npmrc` or `pnpm-workspace.yaml` are **medium** — surface the impact on consumer install behavior in the review comment.
+- **pnpm minimum-release-age bypasses.** `minimumReleaseAgeExclude` (or equivalent age-check bypasses) in `.npmrc` or `pnpm-workspace.yaml` are **high** unless the PR includes explicit maintainer approval, a narrowly-scoped emergency reason, and removal before merge. Removing `minimumReleaseAgeStrict` is also **high**. Dependency bump PRs should wait for the configured `minimumReleaseAge` window or pin to the latest eligible version.
 
 > Applied by persona: [`ci-release-security`](./.agents/personas/ci-release-security.md).

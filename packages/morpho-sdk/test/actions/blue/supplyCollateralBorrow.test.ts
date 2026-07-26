@@ -9,7 +9,7 @@ import {
   BorrowExceedsSafeLtvError,
   ExcessiveSlippageToleranceError,
   isRequirementApproval,
-  isRequirementAuthorization,
+  isRequirementBlueAuthorization,
   isRequirementSignature,
   MissingAccrualPositionError,
   morphoViemExtension,
@@ -52,14 +52,14 @@ describe("SupplyCollateralBorrowBlue", () => {
         const requirements = await scb.getRequirements();
         expect(requirements).toHaveLength(2);
         expect(requirements[0]!.action.type).toBe("erc20Approval");
-        expect(requirements[1]!.action.type).toBe("morphoAuthorization");
+        expect(requirements[1]!.action.type).toBe("blueAuthorization");
 
         const approval = requirements[0];
         if (!isRequirementApproval(approval)) {
           throw new Error("Approval requirement not found");
         }
         const authorization = requirements[1];
-        if (!isRequirementAuthorization(authorization)) {
+        if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
 
@@ -126,10 +126,10 @@ describe("SupplyCollateralBorrowBlue", () => {
 
         const requirements = await scb.getRequirements();
         expect(requirements).toHaveLength(1);
-        expect(requirements[0]!.action.type).toBe("morphoAuthorization");
+        expect(requirements[0]!.action.type).toBe("blueAuthorization");
 
         const authorization = requirements[0];
-        if (!isRequirementAuthorization(authorization)) {
+        if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
 
@@ -200,14 +200,14 @@ describe("SupplyCollateralBorrowBlue", () => {
         const requirements = await scb.getRequirements();
         expect(requirements).toHaveLength(2);
         expect(requirements[0]!.action.type).toBe("erc20Approval");
-        expect(requirements[1]!.action.type).toBe("morphoAuthorization");
+        expect(requirements[1]!.action.type).toBe("blueAuthorization");
 
         const approval = requirements[0];
         if (!isRequirementApproval(approval)) {
           throw new Error("Approval requirement not found");
         }
         const authorization = requirements[1];
-        if (!isRequirementAuthorization(authorization)) {
+        if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(approval);
@@ -356,19 +356,26 @@ describe("SupplyCollateralBorrowBlue", () => {
           throw new Error("Expected permit signature requirement");
         }
 
-        const requirementSignature = await permitRequirement.sign(
+        const permitSignature = await permitRequirement.sign(
           client,
           client.account.address,
         );
 
+        // With `supportSignature: true` the authorization is returned as a
+        // signable requirement folded into the bundle, not a standalone
+        // `setAuthorization` transaction.
         const authorization = requirements[1];
-        if (!isRequirementAuthorization(authorization)) {
-          throw new Error("Authorization requirement not found");
+        if (!isRequirementSignature(authorization)) {
+          throw new Error("Expected authorization signature requirement");
         }
+        expect(authorization.action.type).toBe("authorization");
 
-        await client.sendTransaction(authorization);
+        const authorizationSignature = await authorization.sign(
+          client,
+          client.account.address,
+        );
 
-        const tx = scb.buildTx(requirementSignature);
+        const tx = scb.buildTx([permitSignature, authorizationSignature]);
         await client.sendTransaction(tx);
       },
     });
@@ -446,20 +453,26 @@ describe("SupplyCollateralBorrowBlue", () => {
           throw new Error("Expected permit2 signature requirement");
         }
 
-        const requirementSignature = await signaturePermit2.sign(
+        const permit2Signature = await signaturePermit2.sign(
           client,
           client.account.address,
         );
 
+        // With `supportSignature: true` the authorization is returned as a
+        // signable requirement folded into the bundle, not a standalone
+        // `setAuthorization` transaction.
         const authorization = requirements[2];
-        if (!isRequirementAuthorization(authorization)) {
-          throw new Error("Authorization requirement not found");
+        if (!isRequirementSignature(authorization)) {
+          throw new Error("Expected authorization signature requirement");
         }
-        expect(authorization.action.type).toBe("morphoAuthorization");
+        expect(authorization.action.type).toBe("authorization");
 
-        await client.sendTransaction(authorization);
+        const authorizationSignature = await authorization.sign(
+          client,
+          client.account.address,
+        );
 
-        const tx = scb.buildTx(requirementSignature);
+        const tx = scb.buildTx([permit2Signature, authorizationSignature]);
         await client.sendTransaction(tx);
       },
     });

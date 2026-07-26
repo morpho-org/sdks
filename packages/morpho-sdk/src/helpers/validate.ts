@@ -5,6 +5,7 @@ import {
   MathLib,
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
+import type { MarketInput as MidnightMarketInput } from "@morpho-org/midnight-sdk";
 import { isDefined } from "@morpho-org/morpho-ts";
 import { type Address, isAddressEqual } from "viem";
 import {
@@ -18,18 +19,12 @@ import {
   MarketIdMismatchError,
   MissingClientPropertyError,
   MissingMarketPriceError,
-  MutuallyExclusiveRepayAmountsError,
   NativeAmountOnNonWNativeAssetError,
-  NegativeReallocationFeeError,
-  NegativeSlippageToleranceError,
-  NonPositiveReallocationAmountError,
-  NonPositiveRepayAmountError,
-  NonPositiveRepayMaxSharePriceError,
-  NonPositiveTransferAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   ReallocationWithdrawalOnTargetMarketError,
   RepayExceedsDebtError,
   RepaySharesExceedDebtError,
-  TransferAmountNotEqualToAssetsError,
   UnsortedReallocationWithdrawalsError,
   type VaultReallocation,
   WithdrawExceedsCollateralError,
@@ -50,11 +45,33 @@ export const compareMarketIds = (idA: MarketId, idB: MarketId) => {
 };
 
 /**
+ * Validates that a raw or hydrated Midnight market belongs to the expected chain.
+ *
+ * @param market - Midnight market params or hydrated market state.
+ * @param chainId - Expected EIP-155 chain id.
+ * @returns Nothing when the market belongs to `chainId`.
+ * @throws {ChainIdMismatchError} when the market belongs to another chain.
+ * @example
+ * ```ts
+ * import { validateMidnightMarketChainId } from "@morpho-org/morpho-sdk";
+ *
+ * validateMidnightMarketChainId(marketParams, 8453);
+ * ```
+ */
+export const validateMidnightMarketChainId = (
+  market: MidnightMarketInput,
+  chainId: number,
+): void => {
+  const marketParams = "params" in market ? market.params : market;
+  validateChainId(Number(marketParams.chainId), chainId);
+};
+
+/**
  * Asserts that the client has a connected account AND that it matches
  * the provided user address.
  *
  * Used internally by the signature requirements (`encodeErc20Permit`,
- * `encodeErc20Permit2`) to enforce builder = signer at `sign()` time:
+ * `encodeErc20Permit2Approve`) to enforce builder = signer at `sign()` time:
  * the signing flow is the only path where an account/address mismatch
  * is a real security concern (rather than just an integrator footgun).
  *
@@ -306,55 +323,6 @@ export const validateRepayShares = (params: {
 };
 
 /**
- * Validates the common repay input parameters shared by `blueRepay`
- * and `blueRepayWithdrawCollateral`.
- *
- * @param params - Validation parameters.
- * @param params.assets - Repay assets amount (0n when repaying by shares).
- * @param params.shares - Repay shares amount (0n when repaying by assets).
- * @param params.transferAmount - ERC20 amount to transfer to GeneralAdapter1.
- * @param params.maxSharePrice - Maximum repay share price (in ray). Must be positive.
- * @param params.marketId - The market identifier (for error messages).
- */
-export const validateRepayParams = (params: {
-  assets: bigint;
-  shares: bigint;
-  transferAmount: bigint;
-  maxSharePrice: bigint;
-  marketId: MarketId;
-}): void => {
-  const { assets, shares, transferAmount, maxSharePrice, marketId } = params;
-
-  if (maxSharePrice <= 0n) {
-    throw new NonPositiveRepayMaxSharePriceError(marketId);
-  }
-
-  if (assets < 0n || shares < 0n) {
-    throw new NonPositiveRepayAmountError(marketId);
-  }
-
-  if (assets > 0n && shares > 0n) {
-    throw new MutuallyExclusiveRepayAmountsError(marketId);
-  }
-
-  if (assets === 0n && shares === 0n) {
-    throw new NonPositiveRepayAmountError(marketId);
-  }
-
-  if (transferAmount <= 0n) {
-    throw new NonPositiveTransferAmountError(marketId);
-  }
-
-  if (assets > 0n && transferAmount !== assets) {
-    throw new TransferAmountNotEqualToAssetsError({
-      transferAmount,
-      assets,
-      market: marketId,
-    });
-  }
-};
-
-/**
  * Validates that vault reallocations are well-formed.
  *
  * Enforces the following invariants for each {@link VaultReallocation}:
@@ -367,6 +335,20 @@ export const validateRepayParams = (params: {
  *
  * @param reallocations - The reallocations to validate.
  * @param targetMarketId - The ID of the operation's target market. No withdrawal may reference this market.
+ * @returns Nothing when every reallocation is valid.
+ * @throws {NegativeInputError} when a reallocation fee is negative.
+ * @throws {EmptyReallocationWithdrawalsError} when a reallocation has no withdrawals.
+ * @throws {NonPositiveInputError} when a withdrawal amount is non-positive.
+ * @throws {ReallocationWithdrawalOnTargetMarketError} when a withdrawal references the target market.
+ * @throws {UnsortedReallocationWithdrawalsError} when withdrawals are not strictly market-id sorted.
+ * @example
+ * ```ts
+ * import type { MarketId } from "@morpho-org/blue-sdk";
+ * import { validateReallocations } from "@morpho-org/morpho-sdk";
+ * import { zeroHash } from "viem";
+ *
+ * const result: void = validateReallocations([], zeroHash as MarketId);
+ * ```
  */
 export const validateReallocations = (
   reallocations: readonly VaultReallocation[],
@@ -374,7 +356,7 @@ export const validateReallocations = (
 ): void => {
   for (const r of reallocations) {
     if (r.fee < 0n) {
-      throw new NegativeReallocationFeeError(r.vault);
+      throw new NegativeInputError("reallocation.fee", r.fee);
     }
     if (r.withdrawals.length === 0) {
       throw new EmptyReallocationWithdrawalsError(r.vault);
@@ -382,9 +364,9 @@ export const validateReallocations = (
     let prevId: MarketId | undefined;
     for (const w of r.withdrawals) {
       if (w.amount <= 0n) {
-        throw new NonPositiveReallocationAmountError(
-          r.vault,
-          w.marketParams.id,
+        throw new NonPositiveInputError(
+          `reallocation.withdrawals[${w.marketParams.id}].amount`,
+          w.amount,
         );
       }
       if (w.marketParams.id === targetMarketId) {
@@ -410,14 +392,23 @@ export const validateReallocations = (
 /**
  * Validates that a slippage tolerance is within an acceptable range.
  *
- * Throws {@link NegativeSlippageToleranceError} if negative.
+ * Throws {@link NegativeInputError} if negative.
  * Throws {@link ExcessiveSlippageToleranceError} if greater than {@link MAX_SLIPPAGE_TOLERANCE}.
  *
  * @param slippageTolerance - The slippage tolerance in WAD.
+ * @returns Nothing when the slippage tolerance is valid.
+ * @throws {NegativeInputError} when `slippageTolerance < 0n`.
+ * @throws {ExcessiveSlippageToleranceError} when the tolerance exceeds the SDK maximum.
+ * @example
+ * ```ts
+ * import { validateSlippageTolerance } from "@morpho-org/morpho-sdk";
+ *
+ * const result: void = validateSlippageTolerance(5_000000000000000n);
+ * ```
  */
 export const validateSlippageTolerance = (slippageTolerance: bigint): void => {
   if (slippageTolerance < 0n) {
-    throw new NegativeSlippageToleranceError(slippageTolerance);
+    throw new NegativeInputError("slippageTolerance", slippageTolerance);
   }
   if (slippageTolerance > MAX_SLIPPAGE_TOLERANCE) {
     throw new ExcessiveSlippageToleranceError(slippageTolerance);

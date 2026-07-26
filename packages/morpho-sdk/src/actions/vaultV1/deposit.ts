@@ -8,15 +8,13 @@ import {
   type DepositAmountArgs,
   type Metadata,
   NativeAmountOnNonWNativeVaultError,
-  NegativeNativeAmountError,
-  NonPositiveAssetAmountError,
-  NonPositiveMaxSharePriceError,
-  type RequirementSignature,
+  NegativeInputError,
+  NonPositiveInputError,
+  type PermitRequirementSignature,
   type Transaction,
   type VaultV1DepositAction,
-  ZeroDepositAmountError,
 } from "../../types/index.js";
-import { getRequirementsAction } from "../requirements/getRequirementsAction.js";
+import { getTokenRequirementActions } from "../signatures/getTokenRequirementActions.js";
 
 /** Parameters for {@link vaultV1Deposit}. */
 export interface VaultV1DepositParams {
@@ -28,7 +26,7 @@ export interface VaultV1DepositParams {
   args: DepositAmountArgs & {
     maxSharePrice: bigint;
     recipient: Address;
-    requirementSignature?: RequirementSignature;
+    requirementSignature?: PermitRequirementSignature;
   };
   metadata?: Metadata;
 }
@@ -52,29 +50,26 @@ export interface VaultV1DepositParams {
  * @param params.args.maxSharePrice - Maximum acceptable share price (in RAY, slippage
  *   protection enforced on-chain by `GeneralAdapter1`).
  * @param params.args.recipient - Address that receives the minted vault shares.
- * @param params.args.requirementSignature - Optional pre-signed permit/permit2 approval. When
- *   absent, the bundle uses a plain `erc20TransferFrom` and assumes the user has already
- *   approved `GeneralAdapter1`.
+ * @param params.args.requirementSignature - Optional pre-signed permit/permit2 approval.
  * @param params.args.nativeAmount - Optional amount of native token to wrap into wNative for the
  *   deposit. Requires the vault asset to be the chain's wNative.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<VaultV1DepositAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator the simulation layer consumes.
- * @throws {NonPositiveAssetAmountError} when `amount < 0n`.
- * @throws {NonPositiveMaxSharePriceError} when `maxSharePrice <= 0n`.
- * @throws {NegativeNativeAmountError} when `nativeAmount < 0n`.
+ * @throws {NegativeInputError} when `amount < 0n` or `nativeAmount < 0n`.
+ * @throws {NonPositiveInputError} when `maxSharePrice <= 0n`, or when both `amount` and
+ *   `nativeAmount` resolve to zero.
  * @throws {ChainWNativeMissingError} when `nativeAmount` is provided but the chain has no
  *   configured wNative.
  * @throws {NativeAmountOnNonWNativeVaultError} when `nativeAmount` is provided but the vault
  *   asset is not the chain's wNative.
- * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `amount > 0n` and
+ * @throws {DepositAssetMismatchError} from `getTokenRequirementActions` when `amount > 0n` and
  *   `requirementSignature` is provided and the signed asset differs from `vault.asset`. The
  *   signature is ignored on the native-only path (`amount === 0n` with `nativeAmount > 0n`).
- * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `amount > 0n` and
+ * @throws {DepositAmountMismatchError} from `getTokenRequirementActions` when `amount > 0n` and
  *   `requirementSignature` is provided and the signed amount differs from `args.amount`.
- * @throws {Permit2ExpirationMissingError} from `getRequirementsAction` when `amount > 0n` and a
+ * @throws {Permit2ExpirationMissingError} from `getTokenRequirementActions` when `amount > 0n` and a
  *   Permit2 requirement signature is missing its expiration.
- * @throws {ZeroDepositAmountError} when both `amount` and `nativeAmount` resolve to zero.
  * @example
  * ```ts
  * import { vaultV1Deposit } from "@morpho-org/morpho-sdk";
@@ -102,11 +97,11 @@ export const vaultV1Deposit = ({
   metadata,
 }: VaultV1DepositParams): Readonly<Transaction<VaultV1DepositAction>> => {
   if (amount < 0n) {
-    throw new NonPositiveAssetAmountError(asset);
+    throw new NegativeInputError("amount", amount);
   }
 
   if (maxSharePrice <= 0n) {
-    throw new NonPositiveMaxSharePriceError(vaultAddress);
+    throw new NonPositiveInputError("maxSharePrice", maxSharePrice);
   }
 
   const actions: Action[] = [];
@@ -118,7 +113,7 @@ export const vaultV1Deposit = ({
 
   if (nativeAmount) {
     if (nativeAmount < 0n) {
-      throw new NegativeNativeAmountError(nativeAmount);
+      throw new NegativeInputError("nativeAmount", nativeAmount);
     }
 
     if (!isDefined(wNative)) {
@@ -142,27 +137,20 @@ export const vaultV1Deposit = ({
   }
 
   if (amount > 0n) {
-    if (requirementSignature) {
-      actions.push(
-        ...getRequirementsAction({
-          asset,
-          amount,
-          recipient: generalAdapter1,
-          requirementSignature,
-        }),
-      );
-    } else {
-      actions.push({
-        type: "erc20TransferFrom",
-        args: [asset, amount, generalAdapter1, false /* skipRevert */],
-      });
-    }
+    actions.push(
+      ...getTokenRequirementActions({
+        asset,
+        amount,
+        recipient: generalAdapter1,
+        requirementSignature,
+      }),
+    );
   }
 
   const totalAssets = amount + (nativeAmount ?? 0n);
 
   if (totalAssets === 0n) {
-    throw new ZeroDepositAmountError(vaultAddress);
+    throw new NonPositiveInputError("totalAssets", totalAssets);
   }
 
   actions.push({

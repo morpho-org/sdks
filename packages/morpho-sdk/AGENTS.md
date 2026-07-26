@@ -1,13 +1,14 @@
 # `packages/morpho-sdk/`
 
-Transaction builders for VaultV1, VaultV2, and Blue. Subfolders carry the layer-scoped detail; this file is the package overview + glossary.
+Transaction builders for VaultV1, VaultV2, Blue, and Midnight, plus shared requirement helpers used by protocol flows. Subfolders carry the layer-scoped detail; this file is the package overview + glossary.
 
 > Architecture / type / test / doc / release rules apply per the [root `AGENTS.md`](../../AGENTS.md). Subfolder rules: see each `src/<layer>/AGENTS.md`.
 
 ## Routing summary
 
 - **VaultV1 / VaultV2 deposits** route through bundler3 via GeneralAdapter1 (which enforces `maxSharePrice`, protecting against inflation attacks). VaultV1/V2 `withdraw` and `redeem` are direct vault calls. VaultV2 `forceWithdraw` / `forceRedeem` use `multicall` with `forceDeallocate` calls before the final withdraw/redeem.
-- **Blue bundled paths** (`supply`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `repayWithdrawCollateral`, `withdraw`) route through bundler3 via GeneralAdapter1. `repay` and `withdraw` each accept assets or shares (mutually exclusive); `repayWithdrawCollateral` repays first then withdraws. Loan-asset `supply` supports native wrapping when `loanToken === wNative`; loan-asset `withdraw` supports optional PublicAllocator reallocations to top up market liquidity (same mechanism as `borrow`).
+- **Blue bundled paths** (`supply`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `repayWithdrawCollateral`, `withdraw`) route through bundler3 via GeneralAdapter1. `repay` and `withdraw` each accept assets or shares (mutually exclusive); `repayWithdrawCollateral` repays first then withdraws. Loan-asset `supply`, `repay`, and `repayWithdrawCollateral` support native wrapping when `loanToken === wNative` (repay assets mode is additive like supply; repay shares mode carves native out of the transfer); loan-asset `withdraw` supports optional PublicAllocator reallocations to top up market liquidity (same mechanism as `borrow`).
+- **Midnight paths** expose lazy action outputs under `client.morpho.midnight(chainId)`. Fixed-rate market taker flows route through Midnight Bundles, direct collateral supply/cancel/redeem route through Midnight, and maker flows return ratify-root requirements plus the mempool payload transaction. Requirement helpers under `src/actions/requirements/midnight` resolve Midnight authorization, Setter ratify-root, and token-pull requirements.
 - **Bundle composition, native wrapping, and reallocation rules** are canonical in [`src/actions/AGENTS.md`](./src/actions/AGENTS.md).
 
 ## Tests
@@ -33,6 +34,7 @@ The action verbs an integrator sees in the bundle (`BundlerAction.encode...`):
 
 - **`morphoBorrow` / `morphoSupply` / `morphoSupplyCollateral` / `morphoRepay` / `morphoWithdraw`** — Morpho Blue contract calls executed by GeneralAdapter1 on the user's behalf.
 - **`setAuthorization`** — Morpho call that grants GeneralAdapter1 the right to call market functions on behalf of the user. Required pre-condition for `borrow`, `supplyCollateralBorrow`, `repayWithdrawCollateral`, and `withdraw` (loan-asset).
+- **`setAuthorizationWithSig`** — the offchain-signature equivalent of `setAuthorization`. When the client opts into signatures (`supportSignature: true`), the authorization requirement becomes a signable `Requirement`; the signed `AuthorizationRequirementSignature` is folded into the bundle as a `setAuthorizationWithSig` call (prepended before the Morpho operation), removing the standalone authorization transaction.
 - **`erc20TransferFrom`** — pulls user-approved tokens into the bundler.
 - **`nativeTransfer` + `wrapNative`** — pair that converts an attached native amount (`tx.value`) into the chain's wNative for a deposit/supply path.
 - **`forceDeallocate`** — VaultV2 multicall entry that pulls liquidity out of a specific adapter before withdraw/redeem.

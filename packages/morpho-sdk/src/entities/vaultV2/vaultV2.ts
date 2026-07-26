@@ -8,14 +8,14 @@ import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import { type Address, isAddressEqual } from "viem";
 import {
-  getRequirements,
+  getGeneralAdapterRequirements,
   vaultV2Deposit,
   vaultV2ForceRedeem,
   vaultV2ForceWithdraw,
   vaultV2Redeem,
   vaultV2Withdraw,
 } from "../../actions/index.js";
-import { MAX_SLIPPAGE_TOLERANCE } from "../../helpers/constant.js";
+import { validateSlippageTolerance } from "../../helpers/index.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
   ChainIdMismatchError,
@@ -23,15 +23,14 @@ import {
   type Deallocation,
   type DepositAmountArgs,
   type ERC20ApprovalAction,
-  ExcessiveSlippageToleranceError,
   type MorphoClientType,
   NativeAmountOnNonWNativeVaultError,
-  NegativeNativeAmountError,
-  NegativeSlippageToleranceError,
-  NonPositiveAssetAmountError,
-  NonPositiveSharesAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
+  type PermitRequirementSignature,
   type Requirement,
   type RequirementSignature,
+  selectRequirementSignatures,
   type Transaction,
   VaultAddressMismatchError,
   type VaultV2DepositAction,
@@ -69,7 +68,7 @@ export interface VaultV2Actions {
    * @param {bigint} [params.nativeAmount] - Amount of native token to wrap into wNative. Vault asset must be wNative.
    * @returns {Object} The result object.
    * @returns {Readonly<Transaction<VaultV2DepositAction>>} returns.tx The prepared deposit transaction.
-   * @returns {Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]>} returns.getRequirements The function for retrieving all required approval transactions.
+   * @returns {Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement<PermitRequirementSignature>)[]>} returns.getRequirements The function for retrieving all required approval transactions.
    */
   deposit: (
     params: {
@@ -79,11 +78,16 @@ export interface VaultV2Actions {
     } & DepositAmountArgs,
   ) => {
     buildTx: (
-      requirementSignature?: RequirementSignature,
+      signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<VaultV2DepositAction>>;
     getRequirements: (params?: {
       useSimplePermit?: boolean;
-    }) => Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]>;
+    }) => Promise<
+      (
+        | Readonly<Transaction<ERC20ApprovalAction>>
+        | Requirement<PermitRequirementSignature>
+      )[]
+    >;
   };
   /**
    * Prepares a withdraw transaction for the VaultV2 contract.
@@ -215,11 +219,11 @@ export class MorphoVaultV2 implements VaultV2Actions {
     }
 
     if (amount < 0n) {
-      throw new NonPositiveAssetAmountError(this.vault);
+      throw new NegativeInputError("amount", amount);
     }
 
     if (nativeAmount && nativeAmount < 0n) {
-      throw new NegativeNativeAmountError(nativeAmount);
+      throw new NegativeInputError("nativeAmount", nativeAmount);
     }
 
     let wNative: Address | undefined;
@@ -230,12 +234,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
       }
     }
 
-    if (slippageTolerance < 0n) {
-      throw new NegativeSlippageToleranceError(slippageTolerance);
-    }
-    if (slippageTolerance > MAX_SLIPPAGE_TOLERANCE) {
-      throw new ExcessiveSlippageToleranceError(slippageTolerance);
-    }
+    validateSlippageTolerance(slippageTolerance);
 
     if (nativeAmount && wNative) {
       if (!isAddressEqual(vaultData.asset, wNative)) {
@@ -244,6 +243,9 @@ export class MorphoVaultV2 implements VaultV2Actions {
     }
 
     const totalAssets = amount + (nativeAmount ?? 0n);
+    if (totalAssets === 0n) {
+      throw new NonPositiveInputError("totalAssets", totalAssets);
+    }
 
     // Accrue interest forward to bound the on-chain share price at execution.
     // Mirrors blue repay's 2h forward-accrual buffer.
@@ -253,7 +255,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
 
     const shares = accruedVault.toShares(totalAssets);
     if (shares <= 0n) {
-      throw new NonPositiveSharesAmountError(this.vault);
+      throw new NonPositiveInputError("shares", shares);
     }
 
     const maxSharePrice = MathLib.min(
@@ -264,10 +266,9 @@ export class MorphoVaultV2 implements VaultV2Actions {
       ),
       MathLib.RAY * 100n,
     );
-
     return {
-      getRequirements: async (params?: { useSimplePermit?: boolean }) =>
-        await getRequirements(this.client.viemClient, {
+      getRequirements: (params?: { useSimplePermit?: boolean }) =>
+        getGeneralAdapterRequirements(this.client.viemClient, {
           address: vaultData.asset,
           chainId: this.chainId,
           supportSignature: this.client.options.supportSignature,
@@ -279,8 +280,12 @@ export class MorphoVaultV2 implements VaultV2Actions {
           },
         }),
 
-      buildTx: (requirementSignature?: RequirementSignature) =>
-        vaultV2Deposit({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { permit } = selectRequirementSignatures(signatures, {
+          permit: true,
+        });
+
+        return vaultV2Deposit({
           vault: {
             chainId: this.chainId,
             address: this.vault,
@@ -290,11 +295,12 @@ export class MorphoVaultV2 implements VaultV2Actions {
             amount,
             maxSharePrice,
             recipient: userAddress,
-            requirementSignature,
+            requirementSignature: permit,
             nativeAmount,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 

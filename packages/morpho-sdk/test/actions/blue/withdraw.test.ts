@@ -5,13 +5,12 @@ import { describe, expect } from "vitest";
 import {
   AccrualPositionUserMismatchError,
   ExcessiveSlippageToleranceError,
-  isRequirementAuthorization,
+  isRequirementBlueAuthorization,
   MarketIdMismatchError,
   MissingAccrualPositionError,
   MutuallyExclusiveWithdrawAmountsError,
   morphoViemExtension,
-  NegativeSlippageToleranceError,
-  NonPositiveWithdrawAmountError,
+  NegativeInputError,
   type VaultReallocation,
   WithdrawExceedsSupplyError,
   WithdrawSharesExceedSupplyError,
@@ -58,7 +57,7 @@ describe("WithdrawBlue", () => {
 
         const requirements = await withdraw.getRequirements();
         const authorization = requirements[0];
-        if (!isRequirementAuthorization(authorization)) {
+        if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
@@ -113,7 +112,7 @@ describe("WithdrawBlue", () => {
 
         const requirements = await withdraw.getRequirements();
         const authorization = requirements[0];
-        if (!isRequirementAuthorization(authorization)) {
+        if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
@@ -184,7 +183,7 @@ describe("WithdrawBlue", () => {
 
     const requirements = await withdraw.getRequirements();
     expect(requirements.length).toBe(1);
-    expect(isRequirementAuthorization(requirements[0])).toBe(true);
+    expect(isRequirementBlueAuthorization(requirements[0])).toBe(true);
   });
 
   test("should withdraw with single-vault reallocation", async ({ client }) => {
@@ -238,7 +237,7 @@ describe("WithdrawBlue", () => {
 
         const requirements = await withdraw.getRequirements();
         const authorization = requirements[0];
-        if (!isRequirementAuthorization(authorization)) {
+        if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
@@ -309,7 +308,7 @@ describe("WithdrawBlue", () => {
 
         const requirements = await withdraw.getRequirements();
         const authorization = requirements[0];
-        if (!isRequirementAuthorization(authorization)) {
+        if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
@@ -384,7 +383,7 @@ describe("WithdrawBlue", () => {
 
         const requirements = await withdraw.getRequirements();
         const authorization = requirements[0];
-        if (!isRequirementAuthorization(authorization)) {
+        if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
@@ -420,7 +419,7 @@ describe("WithdrawBlue", () => {
     ).toThrow(MutuallyExclusiveWithdrawAmountsError);
   });
 
-  test("error: NonPositiveWithdrawAmountError when shares is negative", async ({
+  test("error: NegativeInputError when a withdraw mode is negative", async ({
     client,
   }) => {
     const morphoClient = client.extend(morphoViemExtension()).morpho;
@@ -432,7 +431,14 @@ describe("WithdrawBlue", () => {
         shares: -1n,
         positionData: undefined as never,
       } as never),
-    ).toThrow(NonPositiveWithdrawAmountError);
+    ).toThrow(NegativeInputError);
+    expect(() =>
+      market.withdraw({
+        userAddress: client.account.address,
+        assets: -1n,
+        positionData: undefined as never,
+      } as never),
+    ).toThrow(NegativeInputError);
   });
 
   test("error: MissingAccrualPositionError when positionData is missing", async ({
@@ -550,7 +556,7 @@ describe("WithdrawBlue", () => {
     ).toThrow(WithdrawSharesExceedSupplyError);
   });
 
-  test("error: NegativeSlippageToleranceError when slippageTolerance is negative", async ({
+  test("error: NegativeInputError when slippageTolerance is negative", async ({
     client,
   }) => {
     const morphoClient = client.extend(morphoViemExtension()).morpho;
@@ -563,7 +569,7 @@ describe("WithdrawBlue", () => {
         positionData: undefined as never,
         slippageTolerance: -1n,
       }),
-    ).toThrow(NegativeSlippageToleranceError);
+    ).toThrow(NegativeInputError);
   });
 
   test("error: ExcessiveSlippageToleranceError when slippageTolerance is too high", async ({

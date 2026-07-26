@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "./lib/esm",
+    "tsBuildInfoFile": "tsconfig.esm.tsbuildinfo"
+  },
+  "include": ["src"],
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.test-d.ts",
+    "src/**/__test__/**",
+    "src/**/__mocks__/**",
+    "src/**/__fixtures__/**"
+  ]
+}

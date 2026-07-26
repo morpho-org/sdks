@@ -1,4 +1,7 @@
-import { Time } from "@morpho-org/morpho-ts";
+import {
+  ORACLE_PRICE_SCALE as SHARED_ORACLE_PRICE_SCALE,
+  Time,
+} from "@morpho-org/morpho-ts";
 
 /**
  * The liquidation cursor used to calculate the liquidation incentive. Hardcoded to 30%.
@@ -13,7 +16,7 @@ export const MAX_LIQUIDATION_INCENTIVE_FACTOR = 1_150000000000000000n;
 /**
  * The scale of the oracle price. Hardcoded to 1e36.
  */
-export const ORACLE_PRICE_SCALE = 1_000000000000000000000000000000000000n;
+export const ORACLE_PRICE_SCALE = SHARED_ORACLE_PRICE_SCALE;
 
 /**
  * The default slippage tolerance used in the SDK. Hardcoded to 0.03%.

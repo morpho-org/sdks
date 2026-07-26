@@ -28,8 +28,8 @@ import {
   blueSupplyCollateralBorrow,
   blueWithdraw,
   blueWithdrawCollateral,
-  getMorphoAuthorizationRequirement,
-  getRequirements,
+  getBlueAuthorizationRequirement,
+  getGeneralAdapterRequirements,
 } from "../../actions/index.js";
 import {
   computeMaxRepaySharePrice,
@@ -42,6 +42,7 @@ import {
   validateNativeAsset,
   validatePositionHealth,
   validatePositionHealthAfterWithdraw,
+  validateReallocations,
   validateRepayAmount,
   validateRepayShares,
   validateSlippageTolerance,
@@ -51,6 +52,7 @@ import {
 import type { FetchParameters } from "../../types/data.js";
 import {
   type AssetsOrSharesArgs,
+  type BlueAuthorizationAction,
   type BlueBorrowAction,
   type BlueRefinanceAction,
   type BlueRepayAction,
@@ -65,18 +67,12 @@ import {
   type ERC20ApprovalAction,
   MarketIdMismatchError,
   MissingAccrualPositionError,
-  type MorphoAuthorizationAction,
   type MorphoClientType,
   MutuallyExclusiveRepayAmountsError,
   MutuallyExclusiveWithdrawAmountsError,
-  NegativeBorrowSharesError,
-  NegativeNativeAmountError,
-  NegativeSupplyAmountError,
-  NonPositiveAssetAmountError,
-  NonPositiveBorrowAmountError,
-  NonPositiveRepayAmountError,
-  NonPositiveWithdrawAmountError,
-  NonPositiveWithdrawCollateralAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
+  type PermitRequirementSignature,
   type ReallocationComputeOptions,
   RefinanceExceedsBorrowAssetsError,
   RefinanceExceedsBorrowSharesError,
@@ -86,11 +82,10 @@ import {
   type RepayAmountArgs,
   type Requirement,
   type RequirementSignature,
+  selectRequirementSignatures,
   type Transaction,
   type VaultReallocation,
   WithdrawExceedsCollateralError,
-  ZeroCollateralAmountError,
-  ZeroSupplyAmountError,
 } from "../../types/index.js";
 import { ReallocationData } from "../reallocationData.js";
 
@@ -127,18 +122,29 @@ export interface BlueActions {
    */
   supplyCollateral: (params: { userAddress: Address } & DepositAmountArgs) => {
     buildTx: (
-      requirementSignature?: RequirementSignature,
+      signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<BlueSupplyCollateralAction>>;
     getRequirements: (params?: {
+      /**
+       * Prefer the ERC-2612 simple-permit path when the SDK detects support.
+       * Leave unset or set to `false` to force the Permit2/classic approval fallback when
+       * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
+       */
       useSimplePermit?: boolean;
-    }) => Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]>;
+    }) => Promise<
+      (
+        | Readonly<Transaction<ERC20ApprovalAction>>
+        | Requirement<PermitRequirementSignature>
+      )[]
+    >;
   };
 
   /**
    * Prepares a loan-asset supply transaction.
    *
-   * Routed through bundler via GeneralAdapter1. Computes `maxSharePrice` from market supply
-   * state and `slippageTolerance` to protect against share-price inflation.
+   * Routed through bundler via GeneralAdapter1. Computes `maxSharePrice` from the supply state of
+   * `marketData` forward-accrued to execution and `slippageTolerance` to protect against
+   * share-price inflation.
    * `getRequirements` returns ERC20 approval or permit for `GeneralAdapter1` on the loan token.
    * When `nativeAmount` is provided, native token is wrapped; the loan token must be wNative.
    *
@@ -155,11 +161,21 @@ export interface BlueActions {
     } & DepositAmountArgs,
   ) => {
     buildTx: (
-      requirementSignature?: RequirementSignature,
+      signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<BlueSupplyAction>>;
     getRequirements: (params?: {
+      /**
+       * Prefer the ERC-2612 simple-permit path when the SDK detects support.
+       * Leave unset or set to `false` to force the Permit2/classic approval fallback when
+       * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
+       */
       useSimplePermit?: boolean;
-    }) => Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]>;
+    }) => Promise<
+      (
+        | Readonly<Transaction<ERC20ApprovalAction>>
+        | Requirement<PermitRequirementSignature>
+      )[]
+    >;
   };
 
   /**
@@ -193,9 +209,11 @@ export interface BlueActions {
       reallocations?: readonly VaultReallocation[];
     } & AssetsOrSharesArgs,
   ) => {
-    buildTx: () => Readonly<Transaction<BlueWithdrawAction>>;
+    buildTx: (
+      signatures?: readonly RequirementSignature[],
+    ) => Readonly<Transaction<BlueWithdrawAction>>;
     getRequirements: () => Promise<
-      Readonly<Transaction<MorphoAuthorizationAction>>[]
+      (Readonly<Transaction<BlueAuthorizationAction>> | Requirement)[]
     >;
   };
 
@@ -224,9 +242,11 @@ export interface BlueActions {
     slippageTolerance?: bigint;
     reallocations?: readonly VaultReallocation[];
   }) => {
-    buildTx: () => Readonly<Transaction<BlueBorrowAction>>;
+    buildTx: (
+      signatures?: readonly RequirementSignature[],
+    ) => Readonly<Transaction<BlueBorrowAction>>;
     getRequirements: () => Promise<
-      Readonly<Transaction<MorphoAuthorizationAction>>[]
+      (Readonly<Transaction<BlueAuthorizationAction>> | Requirement)[]
     >;
   };
 
@@ -256,11 +276,21 @@ export interface BlueActions {
     } & RepayAmountArgs,
   ) => {
     buildTx: (
-      requirementSignature?: RequirementSignature,
+      signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<BlueRepayAction>>;
     getRequirements: (params?: {
+      /**
+       * Prefer the ERC-2612 simple-permit path when the SDK detects support.
+       * Leave unset or set to `false` to force the Permit2/classic approval fallback when
+       * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
+       */
       useSimplePermit?: boolean;
-    }) => Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]>;
+    }) => Promise<
+      (
+        | Readonly<Transaction<ERC20ApprovalAction>>
+        | Requirement<PermitRequirementSignature>
+      )[]
+    >;
   };
 
   /**
@@ -311,14 +341,19 @@ export interface BlueActions {
     } & RepayAmountArgs,
   ) => {
     buildTx: (
-      requirementSignature?: RequirementSignature,
+      signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<BlueRepayWithdrawCollateralAction>>;
     getRequirements: (params?: {
+      /**
+       * Prefer the ERC-2612 simple-permit path when the SDK detects support.
+       * Leave unset or set to `false` to force the Permit2/classic approval fallback when
+       * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
+       */
       useSimplePermit?: boolean;
     }) => Promise<
       (
         | Readonly<Transaction<ERC20ApprovalAction>>
-        | Readonly<Transaction<MorphoAuthorizationAction>>
+        | Readonly<Transaction<BlueAuthorizationAction>>
         | Requirement
       )[]
     >;
@@ -352,14 +387,19 @@ export interface BlueActions {
     } & DepositAmountArgs,
   ) => {
     buildTx: (
-      requirementSignature?: RequirementSignature,
+      signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<BlueSupplyCollateralBorrowAction>>;
     getRequirements: (params?: {
+      /**
+       * Prefer the ERC-2612 simple-permit path when the SDK detects support.
+       * Leave unset or set to `false` to force the Permit2/classic approval fallback when
+       * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
+       */
       useSimplePermit?: boolean;
     }) => Promise<
       (
         | Readonly<Transaction<ERC20ApprovalAction>>
-        | Readonly<Transaction<MorphoAuthorizationAction>>
+        | Readonly<Transaction<BlueAuthorizationAction>>
         | Requirement
       )[]
     >;
@@ -401,9 +441,11 @@ export interface BlueActions {
     slippageTolerance?: bigint;
     targetReallocations?: readonly VaultReallocation[];
   }) => {
-    buildTx: () => Readonly<Transaction<BlueRefinanceAction>>;
+    buildTx: (
+      signatures?: readonly RequirementSignature[],
+    ) => Readonly<Transaction<BlueRefinanceAction>>;
     getRequirements: () => Promise<
-      Readonly<Transaction<MorphoAuthorizationAction>>[]
+      (Readonly<Transaction<BlueAuthorizationAction>> | Requirement)[]
     >;
   };
 
@@ -531,16 +573,16 @@ export class MorphoBlue implements BlueActions {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     if (amount < 0n) {
-      throw new NegativeSupplyAmountError(this.marketParams.id);
+      throw new NegativeInputError("amount", amount);
     }
 
     if (nativeAmount !== undefined && nativeAmount < 0n) {
-      throw new NegativeNativeAmountError(nativeAmount);
+      throw new NegativeInputError("nativeAmount", nativeAmount);
     }
 
     const totalAssets = amount + (nativeAmount ?? 0n);
     if (totalAssets === 0n) {
-      throw new ZeroSupplyAmountError(this.marketParams.id);
+      throw new NonPositiveInputError("totalAssets", totalAssets);
     }
 
     if (marketData.id !== this.marketParams.id) {
@@ -553,15 +595,19 @@ export class MorphoBlue implements BlueActions {
       validateNativeAsset(this.chainId, this.marketParams.loanToken);
     }
 
+    // Forward-accrue (2h) before deriving `maxSharePrice`: on-chain `morphoSupply` accrues `lastUpdate → execution`, raising the supply share price, so an un-accrued bound reverts on quiet markets.
+    const accrualTimestamp =
+      MathLib.max(Time.timestamp(), marketData.lastUpdate) + Time.s.from.h(2n);
+    const marketForSupply = marketData.accrueInterest(accrualTimestamp);
+
     const maxSharePrice = computeMaxSupplySharePrice({
       supplyAssets: totalAssets,
-      market: marketData,
+      market: marketForSupply,
       slippageTolerance,
     });
-
     return {
       getRequirements: (params?: { useSimplePermit?: boolean }) =>
-        getRequirements(this.client.viemClient, {
+        getGeneralAdapterRequirements(this.client.viemClient, {
           address: this.marketParams.loanToken,
           chainId: this.chainId,
           supportSignature: this.client.options.supportSignature,
@@ -570,18 +616,23 @@ export class MorphoBlue implements BlueActions {
           args: { amount, from: userAddress },
         }),
 
-      buildTx: (requirementSignature?: RequirementSignature) =>
-        blueSupply({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { permit } = selectRequirementSignatures(signatures, {
+          permit: true,
+        });
+
+        return blueSupply({
           market: { chainId: this.chainId, marketParams: this.marketParams },
           args: {
             amount,
             nativeAmount,
             onBehalf: userAddress,
             maxSharePrice,
-            requirementSignature,
+            requirementSignature: permit,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 
@@ -616,11 +667,20 @@ export class MorphoBlue implements BlueActions {
     if (assets !== 0n && shares !== 0n) {
       throw new MutuallyExclusiveWithdrawAmountsError(this.marketParams.id);
     }
-    if (assets < 0n || shares < 0n || (assets === 0n && shares === 0n)) {
-      throw new NonPositiveWithdrawAmountError(this.marketParams.id);
+    if (assets < 0n) {
+      throw new NegativeInputError("assets", assets);
+    }
+    if (shares < 0n) {
+      throw new NegativeInputError("shares", shares);
+    }
+    if (assets === 0n && shares === 0n) {
+      throw new NonPositiveInputError("assets or shares", 0n);
     }
 
     validateSlippageTolerance(slippageTolerance);
+    if (reallocations) {
+      validateReallocations(reallocations, this.marketParams.id);
+    }
 
     if (!positionData) {
       throw new MissingAccrualPositionError(this.marketParams.id);
@@ -655,16 +715,21 @@ export class MorphoBlue implements BlueActions {
 
     return {
       getRequirements: async () => {
-        const authTx = await getMorphoAuthorizationRequirement({
+        const authTx = await getBlueAuthorizationRequirement({
           viemClient: this.client.viemClient,
           chainId: this.chainId,
           userAddress,
+          supportSignature: this.client.options.supportSignature,
         });
         return authTx ? [authTx] : [];
       },
 
-      buildTx: () =>
-        blueWithdraw({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { authorization } = selectRequirementSignatures(signatures, {
+          authorization: true,
+        });
+
+        return blueWithdraw({
           market: { chainId: this.chainId, marketParams: this.marketParams },
           args: {
             assets,
@@ -672,9 +737,11 @@ export class MorphoBlue implements BlueActions {
             receiver,
             minSharePrice,
             reallocations,
+            authorizationSignature: authorization,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 
@@ -686,25 +753,24 @@ export class MorphoBlue implements BlueActions {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     if (amount < 0n) {
-      throw new NonPositiveAssetAmountError(this.marketParams.collateralToken);
+      throw new NegativeInputError("amount", amount);
     }
 
     if (nativeAmount !== undefined && nativeAmount < 0n) {
-      throw new NegativeNativeAmountError(nativeAmount);
+      throw new NegativeInputError("nativeAmount", nativeAmount);
     }
 
     const totalCollateral = amount + (nativeAmount ?? 0n);
     if (totalCollateral === 0n) {
-      throw new ZeroCollateralAmountError(this.marketParams.id);
+      throw new NonPositiveInputError("totalCollateral", totalCollateral);
     }
 
     if (nativeAmount !== undefined && nativeAmount > 0n) {
       validateNativeAsset(this.chainId, this.marketParams.collateralToken);
     }
-
     return {
       getRequirements: (params?: { useSimplePermit?: boolean }) =>
-        getRequirements(this.client.viemClient, {
+        getGeneralAdapterRequirements(this.client.viemClient, {
           address: this.marketParams.collateralToken,
           chainId: this.chainId,
           supportSignature: this.client.options.supportSignature,
@@ -713,8 +779,12 @@ export class MorphoBlue implements BlueActions {
           args: { amount, from: userAddress },
         }),
 
-      buildTx: (requirementSignature?: RequirementSignature) =>
-        blueSupplyCollateral({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { permit } = selectRequirementSignatures(signatures, {
+          permit: true,
+        });
+
+        return blueSupplyCollateral({
           market: {
             chainId: this.chainId,
             marketParams: this.marketParams,
@@ -723,10 +793,11 @@ export class MorphoBlue implements BlueActions {
             amount,
             nativeAmount,
             onBehalf: userAddress,
-            requirementSignature,
+            requirementSignature: permit,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 
@@ -746,10 +817,13 @@ export class MorphoBlue implements BlueActions {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     if (amount <= 0n) {
-      throw new NonPositiveBorrowAmountError(this.marketParams.id);
+      throw new NonPositiveInputError("amount", amount);
     }
 
     validateSlippageTolerance(slippageTolerance);
+    if (reallocations) {
+      validateReallocations(reallocations, this.marketParams.id);
+    }
 
     if (!positionData) {
       throw new MissingAccrualPositionError(this.marketParams.id);
@@ -776,16 +850,21 @@ export class MorphoBlue implements BlueActions {
 
     return {
       getRequirements: async () => {
-        const authTx = await getMorphoAuthorizationRequirement({
+        const authTx = await getBlueAuthorizationRequirement({
           viemClient: this.client.viemClient,
           chainId: this.chainId,
           userAddress,
+          supportSignature: this.client.options.supportSignature,
         });
         return authTx ? [authTx] : [];
       },
 
-      buildTx: () =>
-        blueBorrow({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { authorization } = selectRequirementSignatures(signatures, {
+          authorization: true,
+        });
+
+        return blueBorrow({
           market: {
             chainId: this.chainId,
             marketParams: this.marketParams,
@@ -795,9 +874,11 @@ export class MorphoBlue implements BlueActions {
             receiver: userAddress,
             minSharePrice,
             reallocations,
+            authorizationSignature: authorization,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 
@@ -816,19 +897,33 @@ export class MorphoBlue implements BlueActions {
       slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
     } = params;
 
-    if ("assets" in params && "shares" in params) {
+    const nativeAmount = params.nativeAmount ?? 0n;
+    if (nativeAmount < 0n) {
+      throw new NegativeInputError("nativeAmount", nativeAmount);
+    }
+
+    const amount = ("amount" in params ? params.amount : undefined) ?? 0n;
+    const shares = ("shares" in params ? params.shares : undefined) ?? 0n;
+    if (amount < 0n) {
+      throw new NegativeInputError("amount", amount);
+    }
+    if (shares < 0n) {
+      throw new NegativeInputError("shares", shares);
+    }
+    if (amount > 0n && shares > 0n) {
       throw new MutuallyExclusiveRepayAmountsError(this.marketParams.id);
     }
 
-    const isSharesMode = "shares" in params;
-
-    if (isSharesMode) {
-      if (params.shares <= 0n) {
-        throw new NonPositiveRepayAmountError(this.marketParams.id);
+    if ("shares" in params) {
+      if (shares === 0n) {
+        throw new NonPositiveInputError("shares", shares);
       }
     } else {
-      if (params.assets <= 0n) {
-        throw new NonPositiveRepayAmountError(this.marketParams.id);
+      if (amount + nativeAmount <= 0n) {
+        throw new NonPositiveInputError(
+          "amount + nativeAmount",
+          amount + nativeAmount,
+        );
       }
     }
 
@@ -844,73 +939,102 @@ export class MorphoBlue implements BlueActions {
       expectedUser: userAddress,
     });
 
-    let assets: bigint;
-    let shares: bigint;
-    let transferAmount: bigint;
-    let marketForRepay: Market;
+    if (nativeAmount > 0n) {
+      validateNativeAsset(this.chainId, this.marketParams.loanToken);
+    }
 
-    if (isSharesMode) {
+    let repayAssets: bigint;
+    let repayShares: bigint;
+    let erc20Amount: bigint;
+
+    // Forward-accrue (2h) before deriving `maxSharePrice` (both modes): on-chain `morphoRepay` accrues `lastUpdate → execution`, so an un-accrued bound reverts on quiet markets.
+    const accrualTimestamp =
+      MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
+      Time.s.from.h(2n);
+    const marketForRepay = positionData.market.accrueInterest(accrualTimestamp);
+
+    if ("shares" in params) {
       validateRepayShares({
         positionData,
-        repayShares: params.shares,
+        repayShares: shares,
         marketId: this.marketParams.id,
       });
-      assets = 0n;
-      shares = params.shares;
-      // 2h forward accrual upper-bounds the on-chain repay price; bundle
-      // skims residual back to the receiver.
-      const accrualTimestamp =
-        MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
-        Time.s.from.h(2n);
-      marketForRepay = positionData.market.accrueInterest(accrualTimestamp);
-      transferAmount = marketForRepay.toBorrowAssets(shares, "Up");
+      repayAssets = 0n;
+      repayShares = shares;
+      const borrowAssets = marketForRepay.toBorrowAssets(shares, "Up");
+      // Native funds the transfer first; the ERC-20 pulled is the remainder.
+      // When native covers the full (2h-forward-accrued, rounded-up) borrow
+      // assets, nothing is pulled as ERC-20 — the bundle wraps the native and
+      // skims any residual wNative back to the receiver. So a fully-native
+      // shares repay pulls no ERC-20 and emits no loan-token approval requirement.
+      erc20Amount = MathLib.zeroFloorSub(borrowAssets, nativeAmount);
     } else {
+      // Assets mode is additive, like supply: repaid = amount + nativeAmount.
+      repayAssets = amount + nativeAmount;
       validateRepayAmount({
         positionData,
-        repayAssets: params.assets,
+        repayAssets,
         marketId: this.marketParams.id,
       });
-      assets = params.assets;
-      shares = 0n;
-      transferAmount = params.assets;
-      marketForRepay = positionData.market;
+      repayShares = 0n;
+      erc20Amount = amount;
     }
 
     const maxSharePrice = computeMaxRepaySharePrice({
-      repayAssets: assets,
-      repayShares: shares,
+      repayAssets,
+      repayShares,
       market: marketForRepay,
       slippageTolerance,
     });
-
     return {
-      getRequirements: (reqParams?: { useSimplePermit?: boolean }) =>
-        getRequirements(this.client.viemClient, {
+      getRequirements: (reqParams?: { useSimplePermit?: boolean }) => {
+        // Fully native repay pulls no ERC-20, so it needs no approval/permit.
+        if (erc20Amount === 0n) return Promise.resolve([]);
+        return getGeneralAdapterRequirements(this.client.viemClient, {
           address: this.marketParams.loanToken,
           chainId: this.chainId,
           supportSignature: this.client.options.supportSignature,
           supportDeployless: this.client.options.supportDeployless,
           useSimplePermit: reqParams?.useSimplePermit,
-          args: { amount: transferAmount, from: userAddress },
-        }),
+          args: { amount: erc20Amount, from: userAddress },
+        });
+      },
 
-      buildTx: (requirementSignature?: RequirementSignature) =>
-        blueRepay({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { permit } = selectRequirementSignatures(signatures, {
+          permit: true,
+        });
+
+        return blueRepay({
           market: {
             chainId: this.chainId,
             marketParams: this.marketParams,
           },
-          args: {
-            assets,
-            shares,
-            transferAmount,
-            onBehalf: userAddress,
-            receiver: userAddress,
-            maxSharePrice,
-            requirementSignature,
-          },
+          // Shares mode: repay `shares`, ERC-20 to pull = `erc20Amount`.
+          // Assets mode: repay `repayAssets` (= amount + native), pull `erc20Amount`.
+          args:
+            repayShares > 0n
+              ? {
+                  shares: repayShares,
+                  transferAmount: erc20Amount,
+                  nativeAmount,
+                  onBehalf: userAddress,
+                  receiver: userAddress,
+                  maxSharePrice,
+                  requirementSignature: permit,
+                }
+              : {
+                  amount: erc20Amount,
+                  transferAmount: repayAssets,
+                  nativeAmount,
+                  onBehalf: userAddress,
+                  receiver: userAddress,
+                  maxSharePrice,
+                  requirementSignature: permit,
+                },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 
@@ -926,7 +1050,7 @@ export class MorphoBlue implements BlueActions {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     if (amount <= 0n) {
-      throw new NonPositiveWithdrawCollateralAmountError(this.marketParams.id);
+      throw new NonPositiveInputError("amount", amount);
     }
 
     if (!positionData) {
@@ -988,24 +1112,38 @@ export class MorphoBlue implements BlueActions {
       slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
     } = params;
 
-    if ("assets" in params && "shares" in params) {
+    const nativeAmount = params.nativeAmount ?? 0n;
+    if (nativeAmount < 0n) {
+      throw new NegativeInputError("nativeAmount", nativeAmount);
+    }
+
+    const amount = ("amount" in params ? params.amount : undefined) ?? 0n;
+    const shares = ("shares" in params ? params.shares : undefined) ?? 0n;
+    if (amount < 0n) {
+      throw new NegativeInputError("amount", amount);
+    }
+    if (shares < 0n) {
+      throw new NegativeInputError("shares", shares);
+    }
+    if (amount > 0n && shares > 0n) {
       throw new MutuallyExclusiveRepayAmountsError(this.marketParams.id);
     }
 
-    const isSharesMode = "shares" in params;
-
-    if (isSharesMode) {
-      if (params.shares <= 0n) {
-        throw new NonPositiveRepayAmountError(this.marketParams.id);
+    if ("shares" in params) {
+      if (shares === 0n) {
+        throw new NonPositiveInputError("shares", shares);
       }
     } else {
-      if (params.assets <= 0n) {
-        throw new NonPositiveRepayAmountError(this.marketParams.id);
+      if (amount + nativeAmount <= 0n) {
+        throw new NonPositiveInputError(
+          "amount + nativeAmount",
+          amount + nativeAmount,
+        );
       }
     }
 
     if (withdrawAmount <= 0n) {
-      throw new NonPositiveWithdrawCollateralAmountError(this.marketParams.id);
+      throw new NonPositiveInputError("withdrawAmount", withdrawAmount);
     }
 
     validateSlippageTolerance(slippageTolerance);
@@ -1020,37 +1158,45 @@ export class MorphoBlue implements BlueActions {
       expectedUser: userAddress,
     });
 
-    let assets: bigint;
-    let shares: bigint;
-    let transferAmount: bigint;
-    let marketForRepay: Market;
+    if (nativeAmount > 0n) {
+      validateNativeAsset(this.chainId, this.marketParams.loanToken);
+    }
 
-    // 2h forward accrual upper-bounds the on-chain repay price (shares
-    // mode) and the post-repay health check; bundle skims residual back.
+    let repayAssets: bigint;
+    let repayShares: bigint;
+    let erc20Amount: bigint;
+
+    // Forward-accrue (2h) for `maxSharePrice` (both modes) and the post-repay health check: on-chain `morphoRepay` accrues `lastUpdate → execution`, so an un-accrued bound reverts on quiet markets.
     const accrualTimestamp =
       MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
       Time.s.from.h(2n);
+    const marketForRepay = positionData.market.accrueInterest(accrualTimestamp);
 
-    if (isSharesMode) {
+    if ("shares" in params) {
       validateRepayShares({
         positionData,
-        repayShares: params.shares,
+        repayShares: shares,
         marketId: this.marketParams.id,
       });
-      assets = 0n;
-      shares = params.shares;
-      marketForRepay = positionData.market.accrueInterest(accrualTimestamp);
-      transferAmount = marketForRepay.toBorrowAssets(shares, "Up");
+      repayAssets = 0n;
+      repayShares = shares;
+      const borrowAssets = marketForRepay.toBorrowAssets(shares, "Up");
+      // Native funds the transfer first; the ERC-20 pulled is the remainder.
+      // When native covers the full (2h-forward-accrued, rounded-up) borrow
+      // assets, nothing is pulled as ERC-20 — the bundle wraps the native and
+      // skims any residual wNative back to the receiver. So a fully-native
+      // shares repay pulls no ERC-20 and emits no loan-token approval requirement.
+      erc20Amount = MathLib.zeroFloorSub(borrowAssets, nativeAmount);
     } else {
+      // Assets mode is additive, like supply: repaid = amount + nativeAmount.
+      repayAssets = amount + nativeAmount;
       validateRepayAmount({
         positionData,
-        repayAssets: params.assets,
+        repayAssets,
         marketId: this.marketParams.id,
       });
-      assets = params.assets;
-      shares = 0n;
-      transferAmount = params.assets;
-      marketForRepay = positionData.market;
+      repayShares = 0n;
+      erc20Amount = amount;
     }
 
     if (withdrawAmount > positionData.collateral) {
@@ -1062,8 +1208,8 @@ export class MorphoBlue implements BlueActions {
     }
 
     const { position: positionAfterRepay } = positionData.repay(
-      assets,
-      shares,
+      repayAssets,
+      repayShares,
       accrualTimestamp,
     );
     validatePositionHealthAfterWithdraw({
@@ -1074,51 +1220,76 @@ export class MorphoBlue implements BlueActions {
     });
 
     const maxSharePrice = computeMaxRepaySharePrice({
-      repayAssets: assets,
-      repayShares: shares,
+      repayAssets,
+      repayShares,
       market: marketForRepay,
       slippageTolerance,
     });
-
     return {
       getRequirements: async (reqParams?: { useSimplePermit?: boolean }) => {
         const [erc20Requirements, authTx] = await Promise.all([
-          getRequirements(this.client.viemClient, {
-            address: this.marketParams.loanToken,
-            chainId: this.chainId,
-            supportSignature: this.client.options.supportSignature,
-            supportDeployless: this.client.options.supportDeployless,
-            useSimplePermit: reqParams?.useSimplePermit,
-            args: { amount: transferAmount, from: userAddress },
-          }),
-          getMorphoAuthorizationRequirement({
+          // Fully native repay pulls no ERC-20, so it needs no approval/permit.
+          erc20Amount === 0n
+            ? Promise.resolve([])
+            : getGeneralAdapterRequirements(this.client.viemClient, {
+                address: this.marketParams.loanToken,
+                chainId: this.chainId,
+                supportSignature: this.client.options.supportSignature,
+                supportDeployless: this.client.options.supportDeployless,
+                useSimplePermit: reqParams?.useSimplePermit,
+                args: { amount: erc20Amount, from: userAddress },
+              }),
+          getBlueAuthorizationRequirement({
             viemClient: this.client.viemClient,
             chainId: this.chainId,
             userAddress,
+            supportSignature: this.client.options.supportSignature,
           }),
         ]);
 
         return [...erc20Requirements, ...(authTx ? [authTx] : [])];
       },
 
-      buildTx: (requirementSignature?: RequirementSignature) =>
-        blueRepayWithdrawCollateral({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { permit, authorization } = selectRequirementSignatures(
+          signatures,
+          { permit: true, authorization: true },
+        );
+
+        return blueRepayWithdrawCollateral({
           market: {
             chainId: this.chainId,
             marketParams: this.marketParams,
           },
-          args: {
-            assets,
-            shares,
-            transferAmount,
-            withdrawAmount,
-            onBehalf: userAddress,
-            receiver: userAddress,
-            maxSharePrice,
-            requirementSignature,
-          },
+          // Shares mode: repay `shares`, ERC-20 to pull = `erc20Amount`.
+          // Assets mode: repay `repayAssets` (= amount + native), pull `erc20Amount`.
+          args:
+            repayShares > 0n
+              ? {
+                  shares: repayShares,
+                  transferAmount: erc20Amount,
+                  nativeAmount,
+                  withdrawAmount,
+                  onBehalf: userAddress,
+                  receiver: userAddress,
+                  maxSharePrice,
+                  requirementSignature: permit,
+                  authorizationSignature: authorization,
+                }
+              : {
+                  amount: erc20Amount,
+                  transferAmount: repayAssets,
+                  nativeAmount,
+                  withdrawAmount,
+                  onBehalf: userAddress,
+                  receiver: userAddress,
+                  maxSharePrice,
+                  requirementSignature: permit,
+                  authorizationSignature: authorization,
+                },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 
@@ -1140,15 +1311,25 @@ export class MorphoBlue implements BlueActions {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     if (amount < 0n) {
-      throw new NonPositiveAssetAmountError(this.marketParams.collateralToken);
+      throw new NegativeInputError("amount", amount);
     }
 
     if (nativeAmount !== undefined && nativeAmount < 0n) {
-      throw new NegativeNativeAmountError(nativeAmount);
+      throw new NegativeInputError("nativeAmount", nativeAmount);
     }
 
     if (borrowAmount <= 0n) {
-      throw new NonPositiveBorrowAmountError(this.marketParams.id);
+      throw new NonPositiveInputError("borrowAmount", borrowAmount);
+    }
+
+    const totalCollateral = amount + (nativeAmount ?? 0n);
+    if (totalCollateral === 0n) {
+      throw new NonPositiveInputError("totalCollateral", totalCollateral);
+    }
+
+    validateSlippageTolerance(slippageTolerance);
+    if (reallocations) {
+      validateReallocations(reallocations, this.marketParams.id);
     }
 
     if (!positionData) {
@@ -1160,13 +1341,6 @@ export class MorphoBlue implements BlueActions {
       expectedMarketId: this.marketParams.id,
       expectedUser: userAddress,
     });
-
-    const totalCollateral = amount + (nativeAmount ?? 0n);
-    if (totalCollateral === 0n) {
-      throw new ZeroCollateralAmountError(this.marketParams.id);
-    }
-
-    validateSlippageTolerance(slippageTolerance);
 
     if (nativeAmount !== undefined && nativeAmount > 0n) {
       validateNativeAsset(this.chainId, this.marketParams.collateralToken);
@@ -1185,11 +1359,10 @@ export class MorphoBlue implements BlueActions {
       market: positionData.market,
       slippageTolerance,
     });
-
     return {
       getRequirements: async (params?: { useSimplePermit?: boolean }) => {
         const [erc20Requirements, authTx] = await Promise.all([
-          getRequirements(this.client.viemClient, {
+          getGeneralAdapterRequirements(this.client.viemClient, {
             address: this.marketParams.collateralToken,
             chainId: this.chainId,
             supportSignature: this.client.options.supportSignature,
@@ -1197,18 +1370,24 @@ export class MorphoBlue implements BlueActions {
             useSimplePermit: params?.useSimplePermit,
             args: { amount, from: userAddress },
           }),
-          getMorphoAuthorizationRequirement({
+          getBlueAuthorizationRequirement({
             viemClient: this.client.viemClient,
             chainId: this.chainId,
             userAddress,
+            supportSignature: this.client.options.supportSignature,
           }),
         ]);
 
         return [...erc20Requirements, ...(authTx ? [authTx] : [])];
       },
 
-      buildTx: (requirementSignature?: RequirementSignature) =>
-        blueSupplyCollateralBorrow({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { permit, authorization } = selectRequirementSignatures(
+          signatures,
+          { permit: true, authorization: true },
+        );
+
+        return blueSupplyCollateralBorrow({
           market: {
             chainId: this.chainId,
             marketParams: this.marketParams,
@@ -1220,11 +1399,13 @@ export class MorphoBlue implements BlueActions {
             onBehalf: userAddress,
             receiver: userAddress,
             minSharePrice,
-            requirementSignature,
+            requirementSignature: permit,
+            authorizationSignature: authorization,
             reallocations,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 
@@ -1254,7 +1435,22 @@ export class MorphoBlue implements BlueActions {
     validateSlippageTolerance(slippageTolerance);
 
     if (collateralAmount <= 0n) {
-      throw new ZeroCollateralAmountError(this.marketParams.id);
+      throw new NonPositiveInputError("collateralAmount", collateralAmount);
+    }
+
+    const requestedAssets = borrowAssets ?? 0n;
+    const requestedShares = borrowShares ?? 0n;
+    if (requestedAssets < 0n) {
+      throw new NegativeInputError("borrowAssets", requestedAssets);
+    }
+    if (requestedShares < 0n) {
+      throw new NegativeInputError("borrowShares", requestedShares);
+    }
+    if (requestedAssets > 0n && requestedShares > 0n) {
+      throw new BorrowAmountAndSharesExclusiveError(this.marketParams.id);
+    }
+    if (targetReallocations) {
+      validateReallocations(targetReallocations, target.marketParams.id);
     }
 
     if (!positionData) {
@@ -1292,21 +1488,6 @@ export class MorphoBlue implements BlueActions {
       expectedMarketId: target.marketParams.id,
       expectedUser: userAddress,
     });
-
-    const requestedAssets = borrowAssets ?? 0n;
-    const requestedShares = borrowShares ?? 0n;
-
-    // Reject negative debt up front; otherwise it slips past the `> 0n` mode checks and only fails at buildTx().
-    if (requestedAssets < 0n) {
-      throw new NonPositiveAssetAmountError(this.marketParams.loanToken);
-    }
-    if (requestedShares < 0n) {
-      throw new NegativeBorrowSharesError(this.marketParams.id);
-    }
-
-    if (requestedAssets > 0n && requestedShares > 0n) {
-      throw new BorrowAmountAndSharesExclusiveError(this.marketParams.id);
-    }
 
     const sharesMode = requestedShares > 0n;
     const shouldMigrateBorrow = requestedAssets > 0n || sharesMode;
@@ -1426,16 +1607,21 @@ export class MorphoBlue implements BlueActions {
 
     return {
       getRequirements: async () => {
-        const authTx = await getMorphoAuthorizationRequirement({
+        const authTx = await getBlueAuthorizationRequirement({
           viemClient: this.client.viemClient,
           chainId: this.chainId,
           userAddress,
+          supportSignature: this.client.options.supportSignature,
         });
         return authTx ? [authTx] : [];
       },
 
-      buildTx: () =>
-        blueRefinance({
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { authorization } = selectRequirementSignatures(signatures, {
+          authorization: true,
+        });
+
+        return blueRefinance({
           source: {
             chainId: this.chainId,
             marketParams: this.marketParams,
@@ -1449,9 +1635,11 @@ export class MorphoBlue implements BlueActions {
             minBorrowSharePrice,
             maxRepaySharePrice,
             targetReallocations,
+            authorizationSignature: authorization,
           },
           metadata: this.client.options.metadata,
-        }),
+        });
+      },
     };
   }
 

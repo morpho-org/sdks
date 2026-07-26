@@ -12,6 +12,10 @@ import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { CbbtcUsdcBlue, WethUsdsBlue } from "../../test/fixtures/blue.js";
 import {
+  midnightChainId,
+  midnightMarket,
+} from "../../test/fixtures/midnight.js";
+import {
   AccrualPositionUserMismatchError,
   AddressMismatchError,
   BorrowExceedsSafeLtvError,
@@ -23,9 +27,8 @@ import {
   MissingClientPropertyError,
   MissingMarketPriceError,
   NativeAmountOnNonWNativeAssetError,
-  NegativeReallocationFeeError,
-  NegativeSlippageToleranceError,
-  NonPositiveReallocationAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   ReallocationWithdrawalOnTargetMarketError,
   RepayExceedsDebtError,
   RepaySharesExceedDebtError,
@@ -40,6 +43,7 @@ import { MAX_SLIPPAGE_TOLERANCE } from "./constant.js";
 import {
   validateAccrualPosition,
   validateChainId,
+  validateMidnightMarketChainId,
   validateNativeAsset,
   validatePositionHealth,
   validatePositionHealthAfterWithdraw,
@@ -272,6 +276,41 @@ describe("validateChainId", () => {
     expect(() => validateChainId(undefined, mainnet.id)).toThrow(
       ChainIdMismatchError,
     );
+  });
+});
+
+describe("validateMidnightMarketChainId", () => {
+  test("default: accepts raw market params on the expected chain", () => {
+    expect(() =>
+      validateMidnightMarketChainId(midnightMarket, midnightChainId),
+    ).not.toThrow();
+  });
+
+  test("behavior: accepts hydrated market state on the expected chain", () => {
+    expect(() =>
+      validateMidnightMarketChainId(
+        {
+          params: midnightMarket,
+          totalUnits: 1_000n,
+          lossFactor: 0n,
+          withdrawable: 500n,
+          continuousFeeCredit: 0n,
+          settlementFeeCbps: [0, 0, 0, 0, 0, 0, 0],
+          continuousFee: 0,
+          tickSpacing: 4,
+        },
+        midnightChainId,
+      ),
+    ).not.toThrow();
+  });
+
+  test("error: ChainIdMismatchError", () => {
+    expect(() =>
+      validateMidnightMarketChainId(
+        { ...midnightMarket, chainId: BigInt(midnightChainId + 1) },
+        midnightChainId,
+      ),
+    ).toThrow(ChainIdMismatchError);
   });
 });
 
@@ -521,13 +560,13 @@ describe("validateReallocations", () => {
     ).not.toThrow();
   });
 
-  test("should throw NegativeReallocationFeeError when fee is negative", () => {
+  test("should throw NegativeInputError when fee is negative", () => {
     expect(() =>
       validateReallocations(
         [{ ...validReallocation, fee: -1n }],
         targetMarketId,
       ),
-    ).toThrow(NegativeReallocationFeeError);
+    ).toThrow(NegativeInputError);
   });
 
   test("should throw EmptyReallocationWithdrawalsError when withdrawals is empty", () => {
@@ -539,7 +578,7 @@ describe("validateReallocations", () => {
     ).toThrow(EmptyReallocationWithdrawalsError);
   });
 
-  test("should throw NonPositiveReallocationAmountError when withdrawal amount is zero", () => {
+  test("should throw NonPositiveInputError when withdrawal amount is zero", () => {
     expect(() =>
       validateReallocations(
         [
@@ -550,10 +589,10 @@ describe("validateReallocations", () => {
         ],
         targetMarketId,
       ),
-    ).toThrow(NonPositiveReallocationAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NonPositiveReallocationAmountError when withdrawal amount is negative", () => {
+  test("should throw NonPositiveInputError when withdrawal amount is negative", () => {
     expect(() =>
       validateReallocations(
         [
@@ -564,7 +603,7 @@ describe("validateReallocations", () => {
         ],
         targetMarketId,
       ),
-    ).toThrow(NonPositiveReallocationAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
   test("should throw ReallocationWithdrawalOnTargetMarketError when withdrawal targets the target market", () => {
@@ -642,10 +681,8 @@ describe("validateSlippageTolerance", () => {
     ).not.toThrow();
   });
 
-  test("should throw NegativeSlippageToleranceError when slippage is negative", () => {
-    expect(() => validateSlippageTolerance(-1n)).toThrow(
-      NegativeSlippageToleranceError,
-    );
+  test("should throw NegativeInputError when slippage is negative", () => {
+    expect(() => validateSlippageTolerance(-1n)).toThrow(NegativeInputError);
   });
 
   test("should throw ExcessiveSlippageToleranceError just above MAX_SLIPPAGE_TOLERANCE", () => {

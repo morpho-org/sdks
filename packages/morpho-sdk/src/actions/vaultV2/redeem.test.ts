@@ -5,7 +5,7 @@ import {
   KpkWETHVaultV2,
 } from "../../../test/fixtures/vaultV2.js";
 import { test } from "../../../test/setup.js";
-import { NonPositiveSharesAmountError } from "../../types/index.js";
+import { NonPositiveInputError } from "../../types/index.js";
 import { vaultV2Redeem } from "./redeem.js";
 
 describe("redeemVaultV2 unit tests", () => {
@@ -102,7 +102,7 @@ describe("redeemVaultV2 unit tests", () => {
     expect(tx.data.includes("a1b2c3d4")).toBe(true);
   });
 
-  test("should throw NonPositiveSharesAmountError when shares is zero", async () => {
+  test("should throw NonPositiveInputError when shares is zero", async () => {
     expect(() =>
       vaultV2Redeem({
         vault: {
@@ -114,10 +114,10 @@ describe("redeemVaultV2 unit tests", () => {
           onBehalf: "0x1234567890123456789012345678901234567890",
         },
       }),
-    ).toThrow(NonPositiveSharesAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NonPositiveSharesAmountError when shares is negative", async () => {
+  test("should throw NonPositiveInputError when shares is negative", async () => {
     expect(() =>
       vaultV2Redeem({
         vault: {
@@ -129,6 +129,6 @@ describe("redeemVaultV2 unit tests", () => {
           onBehalf: "0x1234567890123456789012345678901234567890",
         },
       }),
-    ).toThrow(NonPositiveSharesAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 });

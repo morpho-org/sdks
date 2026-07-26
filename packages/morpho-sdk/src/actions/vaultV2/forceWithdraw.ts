@@ -7,7 +7,7 @@ import {
   type Deallocation,
   EmptyDeallocationsError,
   type Metadata,
-  NonPositiveAssetAmountError,
+  NonPositiveInputError,
   type Transaction,
   type VaultV2ForceWithdrawAction,
 } from "../../types/index.js";
@@ -51,7 +51,7 @@ export interface VaultV2ForceWithdrawParams {
  * @returns A deep-frozen `Transaction<VaultV2ForceWithdrawAction>` with `to`, `value`, `data`,
  *   and the typed `action` discriminator the simulation layer consumes.
  * @throws {EmptyDeallocationsError} when `deallocations` is empty.
- * @throws {NonPositiveAssetAmountError} when `withdraw.amount <= 0n`, or when any
+ * @throws {NonPositiveInputError} when `withdraw.amount <= 0n`, or when any
  *   `deallocations[i].amount <= 0n` (raised by `encodeForceDeallocateCall`).
  * @example
  * ```ts
@@ -82,7 +82,7 @@ export const vaultV2ForceWithdraw = ({
   const { amount: withdrawAmount, recipient: withdrawRecipient } = withdraw;
 
   if (withdrawAmount <= 0n) {
-    throw new NonPositiveAssetAmountError(vaultAddress);
+    throw new NonPositiveInputError("withdraw.amount", withdrawAmount);
   }
 
   const calls: Hex[] = [];

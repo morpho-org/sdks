@@ -633,25 +633,31 @@ describe.sequential("LiquidityLoader.fetch", () => {
     ]);
   });
 
-  test("uses caller-provided withdrawal utilization options", async () => {
+  test("caps source withdrawals at the default 90% utilization, ignoring the API value", async () => {
+    // The API advertises a 100% source ceiling, but it is no longer consulted:
+    // the source sits at 90% utilization (900 borrow / 1000 supply) and the
+    // default 90% ceiling lets nothing be pulled. If the API's 100% were still
+    // read, 100 assets would be withdrawable — so `[]` proves it is ignored.
     const cappedHandle = setupLoaderMockClient({
       blockTimestamp: 100n,
       targetPendingCapValue: 10_000n,
       sourceBorrowAssets: 900n,
     });
-    mockApiMarkets(900000000000000000n);
+    mockApiMarkets(MathLib.WAD);
 
     const capped = await new LiquidityLoader(cappedHandle.client).fetch(
       targetMarketId,
     );
     expect(capped.withdrawals).toStrictEqual([]);
 
+    // The deprecated `parameters.maxWithdrawalUtilization` override is still
+    // honored: forcing 100% drains the source down to that utilization.
     const overrideHandle = setupLoaderMockClient({
       blockTimestamp: 100n,
       targetPendingCapValue: 10_000n,
       sourceBorrowAssets: 900n,
     });
-    mockApiMarkets(900000000000000000n);
+    mockApiMarkets(MathLib.WAD);
 
     const override = await new LiquidityLoader(overrideHandle.client, {
       maxWithdrawalUtilization: {

@@ -2,19 +2,13 @@
 
 ## Overview
 
-EVM transaction simulation engine for Morpho — bundle execution preview
-and transfer parsing.
+EVM transaction simulation engine for Morpho — bundle execution preview,
+transfer parsing, and net per-account balance changes.
 
 ## Installation
 
-Add to the consuming app's `package.json`:
-
-```jsonc
-{
-  "dependencies": {
-    "@morpho-org/evm-simulation": "workspace:*"
-  }
-}
+```bash
+pnpm add @morpho-org/evm-simulation
 ```
 
 ## Usage
@@ -40,11 +34,14 @@ const config: SimulationConfig = {
 };
 
 try {
-  const { transfers, simulationTxs } = await simulate(config, {
-    chainId: 1,
-    transactions: [{ from: user, to: vault, data: encodedDeposit }],
-    authorizations: [{ type: "signature", token: usdc, spender: vault }],
-  });
+  const { simulationTxs, calls, transfers, assetChanges } = await simulate(
+    config,
+    {
+      chainId: 1,
+      transactions: [{ from: user, to: vault, data: encodedDeposit }],
+      authorizations: [{ type: "signature", token: usdc, spender: vault }],
+    },
+  );
 } catch (err) {
   if (err instanceof SimulationRevertedError) {
     // show err.reason to the user
@@ -61,7 +58,8 @@ All symbols below are re-exported from the package root.
 
 - `simulate(config, params)` — run a bundle through the simulation pipeline.
 - Config types: `SimulationConfig`, `TenderlyRpcConfig`, `ChainSimulationConfig`, `SimulationLogger`.
-- Data types: `SimulationTransaction`, `SimulationAuthorization`, `Transfer`, `SimulateParams`, `SimulationResult`.
+- Input types: `SimulateParams`, `SimulationTransaction`, `SimulationAuthorization`.
+- Result types: `SimulationResult`, `SimulationCall`, `Transfer`, `AccountAssetChanges`, `AssetChange`, `RawLog`.
 - Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `BlacklistViolationError`, `ExternalServiceError`, `SimulationValidationError`, `UnsupportedChainError`.
 
 ### Deeper docs

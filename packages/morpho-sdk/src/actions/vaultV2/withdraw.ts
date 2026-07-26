@@ -4,7 +4,7 @@ import { type Address, encodeFunctionData } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   type Metadata,
-  NonPositiveAssetAmountError,
+  NonPositiveInputError,
   type Transaction,
   type VaultV2WithdrawAction,
 } from "../../types/index.js";
@@ -35,7 +35,7 @@ export interface VaultV2WithdrawParams {
  * @param params.metadata - Optional analytics metadata attached to the transaction.
  * @returns A deep-frozen `Transaction<VaultV2WithdrawAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator the simulation layer consumes.
- * @throws {NonPositiveAssetAmountError} when `amount <= 0n`.
+ * @throws {NonPositiveInputError} when `amount <= 0n`.
  * @example
  * ```ts
  * import { vaultV2Withdraw } from "@morpho-org/morpho-sdk";
@@ -53,7 +53,7 @@ export const vaultV2Withdraw = ({
   metadata,
 }: VaultV2WithdrawParams): Readonly<Transaction<VaultV2WithdrawAction>> => {
   if (amount <= 0n) {
-    throw new NonPositiveAssetAmountError(vaultAddress);
+    throw new NonPositiveInputError("amount", amount);
   }
 
   let tx = {

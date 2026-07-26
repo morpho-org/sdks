@@ -14,15 +14,26 @@ import { getBlock } from "viem/actions";
 import { apiSdk } from "./api/index.js";
 
 const REALLOCATION_SIMULATION_DELAY = 3_600n;
+/**
+ * Optional tuning for the shared-liquidity source-market withdrawal ceiling.
+ *
+ * @deprecated The source-market withdrawal ceiling is fixed at 90%
+ * (`DEFAULT_WITHDRAWAL_TARGET_UTILIZATION` in `@morpho-org/morpho-sdk`) and will
+ * stop being configurable in the next major. Overrides are still honored for now.
+ */
 export interface LiquidityParameters {
   /**
    * The default maximum utilization allowed to reach to find shared liquidity (scaled by WAD).
+   *
+   * @deprecated Fixed at 90% and will be removed in the next major.
    */
   defaultMaxWithdrawalUtilization?: bigint;
 
   /**
    * If provided, defines the maximum utilization allowed to reach for each market, defaulting to `defaultMaxWithdrawalUtilization`.
-   * If not, these values are fetched from Morpho API.
+   *
+   * @deprecated Fixed at 90% and will be removed in the next major. The Morpho
+   * API's `targetWithdrawUtilization` is no longer consulted.
    */
   maxWithdrawalUtilization?: Record<MarketId, bigint>;
 }
@@ -40,6 +51,10 @@ export class LiquidityLoader<chain extends Chain = Chain> {
 
   constructor(
     public client: Client<Transport, chain>,
+    /**
+     * @deprecated The source-market withdrawal ceiling is fixed at 90% and will
+     * stop being configurable in the next major. Overrides are still honored for now.
+     */
     public readonly parameters: LiquidityParameters = {},
   ) {
     this.dataLoader = new DataLoader(
@@ -170,25 +185,17 @@ export class LiquidityLoader<chain extends Chain = Chain> {
           ),
         });
 
-        const maxWithdrawalUtilization =
-          parameters.maxWithdrawalUtilization ??
-          fromEntries(
-            // biome-ignore lint/suspicious/noShadow: TODO rename to avoid shadowing
-            allVaultsMarkets.flatMap(([, markets]) =>
-              markets.map((market) => [
-                market.uniqueKey,
-                market.targetWithdrawUtilization,
-              ]),
-            ),
-          );
-
         return apiMarkets.map(({ uniqueKey, targetBorrowUtilization }) => {
           try {
+            // The source-market withdrawal ceiling defaults to 90%
+            // (DEFAULT_WITHDRAWAL_TARGET_UTILIZATION) inside
+            // `getMarketPublicReallocations`; the API's per-market
+            // `targetWithdrawUtilization` is no longer consulted. Deprecated
+            // `parameters` overrides are still forwarded for backward compatibility.
             const { data: endState, withdrawals } =
               startState.getMarketPublicReallocations(uniqueKey, {
                 ...parameters,
                 timestamp: block.timestamp + REALLOCATION_SIMULATION_DELAY,
-                maxWithdrawalUtilization,
                 enabled: true,
               });
 

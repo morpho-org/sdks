@@ -6,7 +6,7 @@ import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   type BlueWithdrawCollateralAction,
   type Metadata,
-  NonPositiveWithdrawCollateralAmountError,
+  NonPositiveInputError,
   type Transaction,
 } from "../../types/index.js";
 
@@ -40,7 +40,7 @@ export interface BlueWithdrawCollateralParams {
  * @param params.metadata - Optional analytics metadata attached to the transaction.
  * @returns A deep-frozen `Transaction<BlueWithdrawCollateralAction>` with `to`, `value`,
  *   `data`, and the typed `action` discriminator the simulation layer consumes.
- * @throws {NonPositiveWithdrawCollateralAmountError} when `amount <= 0n`.
+ * @throws {NonPositiveInputError} when `amount <= 0n`.
  * @example
  * ```ts
  * import { blueWithdrawCollateral } from "@morpho-org/morpho-sdk";
@@ -64,7 +64,7 @@ export const blueWithdrawCollateral = ({
   Transaction<BlueWithdrawCollateralAction>
 > => {
   if (amount <= 0n) {
-    throw new NonPositiveWithdrawCollateralAmountError(marketParams.id);
+    throw new NonPositiveInputError("amount", amount);
   }
 
   const { morpho } = getChainAddresses(chainId);
