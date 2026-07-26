@@ -14,16 +14,13 @@
 `src/contracts` hosts contracts that tests deploy onto a fork because they are not yet deployed on
 any live chain. Each one is a committed compiler artifact plus a deploy helper.
 
-- Deploy through the CREATE2 proxy at `DETERMINISTIC_DEPLOYER_ADDRESS`, never plain `CREATE`. A
-  `CREATE` address is derived from the deployer's nonce, so it moves the moment a test sends any
-  transaction before deploying. Deriving it from the constructor arguments instead keeps it stable
-  across runs and test files, and makes it resolvable before the contract exists — which is what
-  setup needs when something must reference the address up front, such as a Vault V2
-  `receiveAssetsGate` that has to permit the bundler because the bundler receives the withdrawn
-  assets.
-- Deploy helpers are idempotent — return the existing address when the target already has code.
-- Expose the precomputed address too, e.g. `getVaultExitBundlesV1Address`, so tests can resolve the
-  address without spending a transaction.
+- Deploy with `client.deployContractWait({ abi, bytecode: code, args })`. It is the generic path
+  already on `AnvilTestClient`: it deploys from the test account, waits for the receipt, and throws
+  when no contract address comes back. Do not hand-roll a deployment or reach for a CREATE2 factory —
+  a helper here only binds the contract's constructor arguments on top of it.
+- Default what can be defaulted from the address registry, e.g. `blue`, and let the caller override.
+- Return the deployed address, and nothing else. The address follows the test account's nonce, so it
+  is not stable across calls: tests must read it from the return value rather than hard-code it.
 - Artifacts are generated: keep the provenance header, do not hand-edit, and re-export the ABI from
   `src/contracts/index.ts` under an explicit name, e.g. `vaultExitBundlesV1Abi`.
 - Delete the artifact and its helper once the contract ships on a live chain — these exist only to
