@@ -8,7 +8,12 @@
 //           targets emit byte-identical output for this contract, and "cancun" is what
 //           the fork blocks pinned across this repo can execute).
 //
-// Regenerate: see packages/morpho-test/AGENTS.md.
+// Regenerate: clone morpho-org/bundles at the commit above (`git clone --recurse-submodules`),
+//           then compile src/vault-exit/VaultExitBundlesV1.sol and its transitive imports with
+//           the solc version and settings above, emitting the ABI as `abi` and the creation
+//           bytecode as `code`.
+//
+// Delete this fixture once the contract ships on a live chain — it exists only to bridge that gap.
 
 /** `VaultExitBundlesV1` ABI, for encoding vault-exit bundle calls against a fork deployment. */
 export const abi = [
