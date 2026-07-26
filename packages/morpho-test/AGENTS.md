@@ -14,17 +14,20 @@
 `src/contracts` hosts contracts that tests deploy onto a fork because they are not yet deployed on
 any live chain. Each one is a committed compiler artifact plus a deploy helper.
 
-- Deploy through the CREATE2 proxy at `DETERMINISTIC_DEPLOYER_ADDRESS`, never plain `CREATE`. The
-  address must not depend on the deployer's nonce: `registerCustomAddresses` is additive-only and
-  throws `RegistryValueAlreadyRegisteredError` when a second call registers a different address for
-  the same key, so a nonce-dependent address breaks any test file that deploys more than once.
+- Deploy through the CREATE2 proxy at `DETERMINISTIC_DEPLOYER_ADDRESS`, never plain `CREATE`. A
+  `CREATE` address is derived from the deployer's nonce, so it moves the moment a test sends any
+  transaction before deploying. Deriving it from the constructor arguments instead keeps it stable
+  across runs and test files, and makes it resolvable before the contract exists — which is what
+  setup needs when something must reference the address up front, such as a Vault V2
+  `receiveAssetsGate` that has to permit the bundler because the bundler receives the withdrawn
+  assets.
 - Deploy helpers are idempotent — return the existing address when the target already has code.
 - Expose the precomputed address too, e.g. `getVaultExitBundlesV1Address`, so tests can resolve the
   address without spending a transaction.
 - Artifacts are generated: keep the provenance header, do not hand-edit, and re-export the ABI from
   `src/contracts/index.ts` under an explicit name, e.g. `vaultExitBundlesV1Abi`.
-- Delete the artifact and its helper once the contract ships on a live chain and the address lands in
-  the registry — these exist only to bridge that gap.
+- Delete the artifact and its helper once the contract ships on a live chain — these exist only to
+  bridge that gap.
 
 To regenerate an artifact, clone the source repository at the commit pinned in the file's header
 (`git clone --recurse-submodules`), then compile the contract and its transitive imports with the

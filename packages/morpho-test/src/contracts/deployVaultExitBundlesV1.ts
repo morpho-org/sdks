@@ -59,8 +59,9 @@ export class VaultExitBundlesV1DeploymentError extends Error {
 /**
  * Computes the address a `VaultExitBundlesV1` deployment lands on, without deploying it.
  *
- * The address depends only on `blue`, so it is stable across forks and test runs — which is what
- * makes registering it with `registerCustomAddresses` idempotent.
+ * The address depends only on `blue`, not on the deployer's nonce, so it is stable across forks and
+ * test runs and can be resolved before the contract exists — useful when setup has to reference the
+ * address up front.
  *
  * @param blue - Morpho Blue core address baked into the contract's immutable `BLUE`.
  * @returns The address a matching deployment lands on.
@@ -102,8 +103,7 @@ export const getVaultExitBundlesV1Address = (blue: Address): Address =>
  * @throws VaultExitBundlesV1DeploymentError when the deployment transaction leaves no code behind.
  * @example
  * ```ts
- * import { registerCustomAddresses } from "@morpho-org/blue-sdk";
- * import { deployVaultExitBundlesV1 } from "@morpho-org/morpho-test";
+ * import { deployVaultExitBundlesV1, vaultExitBundlesV1Abi } from "@morpho-org/morpho-test";
  * import { createViemTest } from "@morpho-org/test/vitest";
  * import { mainnet } from "viem/chains";
  *
@@ -113,7 +113,11 @@ export const getVaultExitBundlesV1Address = (blue: Address): Address =>
  *   const vaultExitBundles = await deployVaultExitBundlesV1(client);
  *   // vaultExitBundles satisfies `0x${string}`
  *
- *   registerCustomAddresses({ addresses: { [mainnet.id]: { vaultExitBundles } } });
+ *   await client.readContract({
+ *     address: vaultExitBundles,
+ *     abi: vaultExitBundlesV1Abi,
+ *     functionName: "BLUE",
+ *   });
  * });
  * ```
  */

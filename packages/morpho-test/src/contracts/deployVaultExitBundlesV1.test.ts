@@ -1,8 +1,4 @@
-import {
-  ChainId,
-  getChainAddress,
-  registerCustomAddresses,
-} from "@morpho-org/blue-sdk";
+import { ChainId, getChainAddress } from "@morpho-org/blue-sdk";
 import { randomAddress } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import { mainnet } from "viem/chains";
@@ -38,14 +34,6 @@ describe("deployVaultExitBundlesV1", () => {
         functionName: "BLUE",
       }),
     ).toBe(blue);
-
-    registerCustomAddresses({
-      addresses: { [ChainId.EthMainnet]: { vaultExitBundles } },
-    });
-
-    expect(getChainAddress(ChainId.EthMainnet, "vaultExitBundles")).toBe(
-      vaultExitBundles,
-    );
   });
 
   test("behavior: returns the existing address when already deployed", async ({
