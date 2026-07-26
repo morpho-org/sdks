@@ -17,3 +17,8 @@ twice returns the existing address instead of reverting.
 `@morpho-org/morpho-ts` adds the optional `vaultExitBundles` key to `ChainAddresses` so that address
 can be registered and then resolved through `getChainAddress(chainId, "vaultExitBundles")`. No chain
 declares it yet: the contract is not deployed anywhere, and this only opens the slot.
+
+`@morpho-org/morpho-test` raises its `@morpho-org/morpho-ts` peer floor to `^2.9.0` accordingly.
+Registering the deployed address is the point of the new helper, and on morpho-ts 2.7 or 2.8 that
+call does not type-check because `ChainAddresses` and `AddressLabel` have no `vaultExitBundles` key.
+The package is only ever a dev dependency, so this narrowing cascades nowhere.

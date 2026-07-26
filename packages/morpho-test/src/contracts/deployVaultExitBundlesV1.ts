@@ -50,7 +50,7 @@ export class MissingDeterministicDeployerError extends Error {
 export class VaultExitBundlesV1DeploymentError extends Error {
   public constructor(public readonly address: Address) {
     super(
-      `Deploying VaultExitBundlesV1 left no code at "${address}". Check that the fork's block gas limit and code size limit fit the contract.`,
+      `Deploying VaultExitBundlesV1 left no code at "${address}". Check that the fork has automine enabled, and that its block gas limit and code size limit fit the contract.`,
     );
     this.name = "VaultExitBundlesV1DeploymentError";
   }
@@ -86,6 +86,11 @@ export const getVaultExitBundlesV1Address = (blue: Address): Address =>
  *
  * Lets tests exercise vault-exit flows before the contract is deployed on any live chain. Deploying
  * again with the same `blue` returns the existing address instead of reverting.
+ *
+ * Requires the fork to have automine enabled, which is the default for `createViemTest`. Under
+ * `noMining: true` the deployment transaction stays pending, so the deployed code is never
+ * observable and this throws {@link VaultExitBundlesV1DeploymentError}; mine the block yourself and
+ * call again, or drop `noMining`.
  *
  * @param client - Anvil test client connected to the fork to deploy onto.
  * @param blue - Morpho Blue core address baked into the contract's immutable `BLUE`. Defaults to the
