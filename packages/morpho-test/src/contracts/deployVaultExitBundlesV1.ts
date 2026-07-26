@@ -5,7 +5,6 @@ import {
   concatHex,
   encodeDeployData,
   getCreate2Address,
-  type Hex,
   zeroHash,
 } from "viem";
 import { abi, code } from "./VaultExitBundlesV1.js";
@@ -13,9 +12,6 @@ import { abi, code } from "./VaultExitBundlesV1.js";
 /**
  * Canonical CREATE2 deterministic deployment proxy, live at this address on Ethereum mainnet and
  * every major EVM chain.
- *
- * Deploying through it makes the resulting address a pure function of the salt and the init code,
- * so it does not depend on the deployer's nonce.
  *
  * @see https://github.com/Arachnid/deterministic-deployment-proxy
  */
@@ -60,27 +56,13 @@ export class VaultExitBundlesV1DeploymentError extends Error {
   }
 }
 
-/** Parameters shared by {@link getVaultExitBundlesV1Address} and {@link deployVaultExitBundlesV1}. */
-export interface VaultExitBundlesV1Parameters {
-  /**
-   * Morpho Blue core address the deployment is bound to, baked into the contract's immutable `BLUE`.
-   *
-   * Defaults to the `blue` address registered for the client's chain.
-   */
-  readonly blue?: Address;
-  /** CREATE2 salt. Defaults to `zeroHash`. */
-  readonly salt?: Hex;
-}
-
 /**
  * Computes the address a `VaultExitBundlesV1` deployment lands on, without deploying it.
  *
- * The address is fully determined by `blue` and `salt`, so it is stable across forks and test
- * runs — which is what makes registering it with `registerCustomAddresses` idempotent.
+ * The address depends only on `blue`, so it is stable across forks and test runs — which is what
+ * makes registering it with `registerCustomAddresses` idempotent.
  *
- * @param parameters - The Morpho Blue address to bind, and the CREATE2 salt.
- * @param parameters.blue - Morpho Blue core address baked into the contract's immutable `BLUE`.
- * @param parameters.salt - CREATE2 salt. Defaults to `zeroHash`.
+ * @param blue - Morpho Blue core address baked into the contract's immutable `BLUE`.
  * @returns The address a matching deployment lands on.
  * @example
  * ```ts
@@ -88,34 +70,26 @@ export interface VaultExitBundlesV1Parameters {
  * import { getVaultExitBundlesV1Address } from "@morpho-org/morpho-test";
  * import { mainnet } from "viem/chains";
  *
- * const address = getVaultExitBundlesV1Address({
- *   blue: getChainAddress(mainnet.id, "blue"),
- * });
+ * const address = getVaultExitBundlesV1Address(getChainAddress(mainnet.id, "blue"));
  * // address satisfies `0x${string}`
  * ```
  */
-export const getVaultExitBundlesV1Address = ({
-  blue,
-  salt = zeroHash,
-}: VaultExitBundlesV1Parameters & { readonly blue: Address }): Address =>
+export const getVaultExitBundlesV1Address = (blue: Address): Address =>
   getCreate2Address({
     from: DETERMINISTIC_DEPLOYER_ADDRESS,
-    salt,
+    salt: zeroHash,
     bytecode: encodeDeployData({ abi, bytecode: code, args: [blue] }),
   });
 
 /**
  * Deploys `VaultExitBundlesV1` onto a fork through the CREATE2 deterministic deployment proxy.
  *
- * Lets tests exercise vault-exit flows before the contract is deployed on any live chain. The
- * deployment is idempotent: calling this again with the same parameters returns the existing
- * address instead of reverting.
+ * Lets tests exercise vault-exit flows before the contract is deployed on any live chain. Deploying
+ * again with the same `blue` returns the existing address instead of reverting.
  *
  * @param client - Anvil test client connected to the fork to deploy onto.
- * @param parameters - The Morpho Blue address to bind, and the CREATE2 salt.
- * @param parameters.blue - Morpho Blue core address baked into the contract's immutable `BLUE`.
- *                          Defaults to the `blue` address registered for the client's chain.
- * @param parameters.salt - CREATE2 salt. Defaults to `zeroHash`.
+ * @param blue - Morpho Blue core address baked into the contract's immutable `BLUE`. Defaults to the
+ *               `blue` address registered for the client's chain.
  * @returns The address the contract is deployed at.
  * @throws UnsupportedChainIdError when `blue` is omitted and the client's chain has no address registry.
  * @throws UnknownAddressError when `blue` is omitted and the client's chain has no registered `blue` address.
@@ -123,8 +97,8 @@ export const getVaultExitBundlesV1Address = ({
  * @throws VaultExitBundlesV1DeploymentError when the deployment transaction leaves no code behind.
  * @example
  * ```ts
- * import { deployVaultExitBundlesV1 } from "@morpho-org/morpho-test";
  * import { registerCustomAddresses } from "@morpho-org/blue-sdk";
+ * import { deployVaultExitBundlesV1 } from "@morpho-org/morpho-test";
  * import { createViemTest } from "@morpho-org/test/vitest";
  * import { mainnet } from "viem/chains";
  *
@@ -140,12 +114,9 @@ export const getVaultExitBundlesV1Address = ({
  */
 export const deployVaultExitBundlesV1 = async (
   client: AnvilTestClient,
-  {
-    blue = getChainAddress(client.chain.id, "blue"),
-    salt = zeroHash,
-  }: VaultExitBundlesV1Parameters = {},
+  blue: Address = getChainAddress(client.chain.id, "blue"),
 ): Promise<Address> => {
-  const address = getVaultExitBundlesV1Address({ blue, salt });
+  const address = getVaultExitBundlesV1Address(blue);
   if ((await client.getCode({ address })) != null) return address;
 
   if (
@@ -156,7 +127,7 @@ export const deployVaultExitBundlesV1 = async (
   await client.sendTransaction({
     to: DETERMINISTIC_DEPLOYER_ADDRESS,
     data: concatHex([
-      salt,
+      zeroHash,
       encodeDeployData({ abi, bytecode: code, args: [blue] }),
     ]),
   });

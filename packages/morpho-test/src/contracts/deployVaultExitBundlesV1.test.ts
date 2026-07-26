@@ -26,7 +26,7 @@ describe("deployVaultExitBundlesV1", () => {
   test("default", async ({ client }) => {
     const vaultExitBundles = await deployVaultExitBundlesV1(client);
 
-    expect(vaultExitBundles).toBe(getVaultExitBundlesV1Address({ blue }));
+    expect(vaultExitBundles).toBe(getVaultExitBundlesV1Address(blue));
 
     // The contract is really on the fork: it has code...
     expect(await client.getCode({ address: vaultExitBundles })).toBeDefined();
@@ -60,11 +60,9 @@ describe("deployVaultExitBundlesV1", () => {
   test("behavior: binds a custom blue address", async ({ client }) => {
     const customBlue = randomAddress();
 
-    const vaultExitBundles = await deployVaultExitBundlesV1(client, {
-      blue: customBlue,
-    });
+    const vaultExitBundles = await deployVaultExitBundlesV1(client, customBlue);
 
-    expect(vaultExitBundles).not.toBe(getVaultExitBundlesV1Address({ blue }));
+    expect(vaultExitBundles).not.toBe(getVaultExitBundlesV1Address(blue));
     expect(
       await client.readContract({
         address: vaultExitBundles,
