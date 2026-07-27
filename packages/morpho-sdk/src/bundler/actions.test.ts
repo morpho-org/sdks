@@ -579,13 +579,14 @@ describe("BundlerAction", () => {
       expect(legacyTx.value).toBe(123n);
     });
 
-    test.each(
-      parityActions.map((action) => [action.type, action] as const),
-    )("matches encode for %s", (_type, action) => {
-      expect(BundlerAction.encode(chainId, action)).toStrictEqual(
-        LegacyBundlerAction.encode(chainId, action),
-      );
-    });
+    test.each(parityActions.map((action) => [action.type, action] as const))(
+      "matches encode for %s",
+      (_type, action) => {
+        expect(BundlerAction.encode(chainId, action)).toStrictEqual(
+          LegacyBundlerAction.encode(chainId, action),
+        );
+      },
+    );
 
     test("matches callback reentry encoding for Morpho callback actions", () => {
       expect(

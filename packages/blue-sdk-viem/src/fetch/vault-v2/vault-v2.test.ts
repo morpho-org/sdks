@@ -418,39 +418,42 @@ describe("fetchVaultV2", () => {
       expectedPerformanceEligibility: false,
       expectedManagementEligibility: true,
     },
-  ])("skips $scenario zero-fee recipient gate reads", async ({
-    performanceFee,
-    managementFee,
-    expectedPerformanceEligibility,
-    expectedManagementEligibility,
-  }) => {
-    const handle = createMockClient(mainnet);
-    mockVaultV2BaseReads(handle, { performanceFee, managementFee });
-    mockRead(handle, {
-      address: ADDRESSES.morphoVaultV1AdapterFactory,
-      abi: morphoVaultV1AdapterFactoryAbi,
-      functionName: "isMorphoVaultV1Adapter",
-      result: false,
-    });
-    mockRead(handle, {
-      address: ADDRESSES.morphoMarketV1AdapterV2Factory,
-      abi: morphoMarketV1AdapterV2FactoryAbi,
-      functionName: "isMorphoMarketV1AdapterV2",
-      result: false,
-    });
-
-    const vault = await fetchVaultV2(VAULT, handle.client, {
-      chainId: CHAIN_ID,
-      deployless: false,
-    });
-
-    expect(vault.performanceFeeRecipientCanReceiveShares).toBe(
+  ])(
+    "skips $scenario zero-fee recipient gate reads",
+    async ({
+      performanceFee,
+      managementFee,
       expectedPerformanceEligibility,
-    );
-    expect(vault.managementFeeRecipientCanReceiveShares).toBe(
       expectedManagementEligibility,
-    );
-  });
+    }) => {
+      const handle = createMockClient(mainnet);
+      mockVaultV2BaseReads(handle, { performanceFee, managementFee });
+      mockRead(handle, {
+        address: ADDRESSES.morphoVaultV1AdapterFactory,
+        abi: morphoVaultV1AdapterFactoryAbi,
+        functionName: "isMorphoVaultV1Adapter",
+        result: false,
+      });
+      mockRead(handle, {
+        address: ADDRESSES.morphoMarketV1AdapterV2Factory,
+        abi: morphoMarketV1AdapterV2FactoryAbi,
+        functionName: "isMorphoMarketV1AdapterV2",
+        result: false,
+      });
+
+      const vault = await fetchVaultV2(VAULT, handle.client, {
+        chainId: CHAIN_ID,
+        deployless: false,
+      });
+
+      expect(vault.performanceFeeRecipientCanReceiveShares).toBe(
+        expectedPerformanceEligibility,
+      );
+      expect(vault.managementFeeRecipientCanReceiveShares).toBe(
+        expectedManagementEligibility,
+      );
+    },
+  );
 
   test("passes zero for missing deployless adapter factories", async () => {
     const handle = createMockClient(mainnet);
