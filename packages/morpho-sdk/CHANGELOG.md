@@ -378,7 +378,7 @@
 
 ### Minor Changes
 
-- [#684](https://github.com/morpho-org/sdks/pull/684) [`49b24e7`](https://github.com/morpho-org/sdks/commit/49b24e7e8ffc9e1ff6ea1381b81873de7cccdd83) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Adds `morphoSupply` and `morphoWithdraw` to the local Bundler3 action subset (action types, encoder functions, and `encode` dispatch), used by `marketV1Supply` / `marketV1Withdraw`.
+- [#684](https://github.com/morpho-org/sdks/pull/684) [`49b24e7`](https://github.com/morpho-org/sdks/commit/49b24e7e8ffc9e1ff6ea1381b81873de7cccdd83) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Adds `morphoSupply` and `morphoWithdraw` to the local Bundler3 action subset (action types, encoder functions, and `encode` dispatch), used by `marketV1Supply` / `marketV1Withdraw`. This keeps `@morpho-org/bundler-sdk-viem` a devDependency only — the published `morpho-sdk` tarball no longer imports it at runtime.
 
 - [#684](https://github.com/morpho-org/sdks/pull/684) [`49b24e7`](https://github.com/morpho-org/sdks/commit/49b24e7e8ffc9e1ff6ea1381b81873de7cccdd83) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Add `marketV1Supply` and `marketV1Withdraw` for the loan asset of a Morpho Blue market, routed through bundler3 / GeneralAdapter1. `marketV1Supply` mirrors `marketV1SupplyCollateral` with `maxSharePrice` (anti-inflation) and optional native wrapping when `loanToken === wNative`. `marketV1Withdraw` mirrors `marketV1Borrow` with `minSharePrice` (slippage) and optional PublicAllocator reallocations to top up market liquidity. Withdraw is signer-bound (no `onBehalf` arg; the bundler uses the transaction initiator, matching `marketV1Borrow`); it supports both `assets` and `shares` modes (via the new generic `AssetsOrSharesArgs` type; `RepayAmountArgs` kept as a deprecated alias). New entity methods `MorphoMarketV1.supply()` (validates `marketData.id === marketParams.id`) and `MorphoMarketV1.withdraw()` expose the same surface. `computeReallocations` takes a canonical `{ operation: "borrow" | "withdraw", amount }` shape (single source of truth for shared-liquidity planning); `MorphoMarketV1.getReallocations` keeps a `{ borrowAmount }` alias for back-compat at the entity boundary. Merges `validateNativeCollateral` and `validateNativeLoan` into a single action-agnostic `validateNativeAsset(chainId, asset)`; the corresponding error class is now `NativeAmountOnNonWNativeAssetError` (`NativeAmountOnNonWNativeCollateralError` is kept as a deprecated alias). New typed errors: `NegativeSupplyAmountError`, `NegativeSupplyMaxSharePriceError`, `ZeroSupplyAmountError`, `NonPositiveWithdrawAmountError`, `NegativeWithdrawMinSharePriceError`, `MutuallyExclusiveWithdrawAmountsError`, `WithdrawExceedsSupplyError`, `WithdrawSharesExceedSupplyError`, `ReallocationWithdrawExceedsMarketSupplyError` (raised by `computeReallocations` when a `"withdraw"` `amount` exceeds the target market's total supply — blocks fee-bearing reallocations on an on-chain-unreachable call).
 
@@ -395,13 +395,13 @@
 
 ### Major Changes
 
-- [#655](https://github.com/morpho-org/sdks/pull/655) [`42c27ae`](https://github.com/morpho-org/sdks/commit/42c27ae6cdc6c58426b1d08e6646fd91886a46c0) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Replace public allocator planning inputs with `ReallocationData`, moving reallocation computation onto local SDK state and adding explicit timestamp-driven reallocation options.
+- [#655](https://github.com/morpho-org/sdks/pull/655) [`42c27ae`](https://github.com/morpho-org/sdks/commit/42c27ae6cdc6c58426b1d08e6646fd91886a46c0) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Replace public allocator planning inputs with `ReallocationData`, moving reallocation computation off `simulation-sdk` state and adding explicit timestamp-driven reallocation options.
 
   `ReallocationData.getMarketPublicReallocations` does not carry over the legacy `SimulationState.getMarketPublicReallocations` one-hour `delay` margin. It evaluates target-market vault headroom at `options.timestamp` (or the target market's `lastUpdate` when omitted), so callers that need inclusion-time safety should pass a future timestamp or reserve their own headroom.
 
 ### Minor Changes
 
-- [#655](https://github.com/morpho-org/sdks/pull/655) [`42c27ae`](https://github.com/morpho-org/sdks/commit/42c27ae6cdc6c58426b1d08e6646fd91886a46c0) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Extract the Bundler3 action encoding surface needed by morpho-sdk into its own source tree.
+- [#655](https://github.com/morpho-org/sdks/pull/655) [`42c27ae`](https://github.com/morpho-org/sdks/commit/42c27ae6cdc6c58426b1d08e6646fd91886a46c0) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Extract the Bundler3 action encoding surface needed by morpho-sdk so it no longer depends on @morpho-org/bundler-sdk-viem.
 
   `BundlerAction.encodeBundle` now computes the native `tx.value` required by value-carrying Bundler3 calls, including `reallocateTo` fees in top-level and callback actions.
 
@@ -794,6 +794,8 @@
 - Updated dependencies [[`c9796ab`](https://github.com/morpho-org/sdks/commit/c9796ab033c7fe3ac7241542f3b1a85d17e9b987)]:
   - @morpho-org/blue-sdk@6.0.0
   - @morpho-org/blue-sdk-viem@5.0.0
+  - @morpho-org/simulation-sdk@4.0.0
+  - @morpho-org/bundler-sdk-viem@5.0.0
 
 ## 2.0.0
 
@@ -854,3 +856,4 @@
 - Updated dependencies [[`9dce8b7`](https://github.com/morpho-org/sdks/commit/9dce8b7047266badf7c7c813074a08f51ccb8c0a), [`81825a8`](https://github.com/morpho-org/sdks/commit/81825a8864d8c4228c8476380d1ad7e76a5ee1c0), [`1481e91`](https://github.com/morpho-org/sdks/commit/1481e91fd7e3382145b22d98c5156887c2b6496e)]:
   - @morpho-org/blue-sdk@5.23.3
   - @morpho-org/blue-sdk-viem@4.6.6
+  - @morpho-org/simulation-sdk@3.4.4
