@@ -105,8 +105,6 @@
     "viem": "^2.0.0"
   },
   "devDependencies": {
-    "@morpho-org/bundler-sdk-viem": "workspace:^",
-    "@morpho-org/simulation-sdk": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "dotenv": "^17.4.2",
     "fast-check": "^4.8.0",
