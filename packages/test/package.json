@@ -74,7 +74,7 @@
     "@types/lodash.kebabcase": "^4.1.9",
     "typescript": "^6.0.3",
     "viem": "^2.54.2",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.10"
   },
   "publishConfig": {
     "exports": {
