@@ -25,6 +25,16 @@ succeed. The user can then manage those Blue positions directly — including wa
 repay, which is the same wait the vault was imposing, but now on the user's own terms and without
 the vault's fees or curator in the path.
 
+This is a **complementary** exit path, not a replacement for anything. The classic `withdraw` /
+`redeem` and the force-deallocate paths (`MorphoVaultV2.forceWithdraw` / `forceRedeem`) serve
+*liquid* vaults: they hand the user the vault's underlying asset, and to do so they need free
+liquidity in the underlying markets. In-kind redemption is the escape hatch for the *illiquid* case
+— when no liquidity can be freed at all, the user still exits, by taking the Blue market position
+itself instead of assets. The first consumer is `vvrm-app` (the app.morpho.org depositor interface),
+which already ships the liquid-vault withdraw and force-deallocate flows and will surface in-kind
+redemption as the illiquid-vault path *alongside* them, not in place of them. Nothing here
+deprecates or reorders the existing flows.
+
 The contract is **not modular**. Unlike bundler3, the call sequence is fixed and auditable rather
 than crafted off-chain, and its entry points are meant to be called by EOAs directly. That is a good
 fit for the SDK's Action layer: there is exactly one function call to encode, and all the difficulty
@@ -159,9 +169,10 @@ The differences the SDK has to model:
 vaultExitBundlesV1?: `0x${string}`;
 ```
 
-The mirrored `bigint` deployment slot comes free via `ChainDeployments<Addresses>`. The slot stays
-**unset on every chain** until the contract ships (see Open Questions); actions throw
-`VaultExitBundlesV1NotDeployedError` when it is missing, and fork tests inject an address through
+The mirrored `bigint` deployment slot comes free via `ChainDeployments<Addresses>`.
+`VaultExitBundlesV1` will be deployed to **every chain Morpho supports**, so the slot is filled in
+per chain as each deployment lands. Until a given chain's address is known the slot stays unset,
+actions throw `VaultExitBundlesV1NotDeployedError`, and fork tests inject an address through
 `registerCustomAddresses`.
 
 **`morpho-sdk` — `src/abis.ts`.** Pin `vaultExitBundlesV1Abi` alongside `bundler3Abi` and
@@ -269,7 +280,8 @@ This is the load-bearing part of the decision. Each row was derived by walking
 | --------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
 | `InvalidAdaptersLength()`               | `adaptersLength() != 1`                                         | `vaultData.adapters.length === 1`                                                                                                                              | `InKindRedemptionRequiresSingleAdapterError`   |
 | `AdapterNotPartOfVault()`               | `!isAdapter(adapter)`                                           | `adapter ∈ vaultData.adapters`                                                                                                                                 | `AdapterNotPartOfVaultError`                   |
-| `MorphoMismatch()`                      | `adapter.morpho() != BLUE`                                      | `accrualAdapters[0].type === "VaultV2MorphoMarketV1AdapterV2"` — the fetcher already validated it against the chain's `morphoMarketV1AdapterV2Factory`, whose constructor pins Blue | reuse `UnsupportedVaultV2AdapterError`         |
+| revert / garbage from the contract casting the adapter to `IMorphoMarketV1AdapterV2` and calling `adapter.supplyShares(id)` / `adapter.morpho()` | the sole adapter is **not** a markets-based `MorphoMarketV1AdapterV2` — e.g. a legacy positions-based `MorphoMarketV1Adapter` or a `MorphoVaultV1Adapter` | `accrualAdapters[0] instanceof AccrualVaultV2MorphoMarketV1AdapterV2` — reject the other two `AccrualVaultV2*Adapter` types `vvrm`'s `deallocation.ts` already distinguishes; this is a **first-class check**, not an incidental one, because the whole V2 loop assumes the V2 adapter interface | `UnsupportedInKindAdapterError`                |
+| `MorphoMismatch()`                      | `adapter.morpho() != BLUE`                                      | subsumed by the adapter-type row above — the `MorphoMarketV1AdapterV2` factory pins Blue in its constructor, so a genuine `AccrualVaultV2MorphoMarketV1AdapterV2` cannot mismatch | reuse `UnsupportedInKindAdapterError`          |
 | **`panic 0x32`** (array out-of-bounds)  | list exhausted before `assetsToDeallocate` reaches 0            | coverage sum ≥ requirement, over **id-deduplicated** markets (below)                                                                                           | `InKindRedemptionCoverageError`                |
 | entry silently contributes zero         | a listed `MarketParams.id` is not in `adapter.marketIds`        | reject up front, naming the offending ids                                                                                                                      | `MarketNotInAdapterError`                      |
 | silent no-op that still burns the permit | `mulDivDown(amount, WAD, WAD + penalty) === 0`                 | derived `assetsToDeallocate > 0`                                                                                                                               | `NonPositiveInputError("assetsToDeallocate")`  |
@@ -410,17 +422,36 @@ which puts `VaultExitBundlesV1` on the pinned mainnet fork ahead of any live dep
   (allowance already max / permit / approve), via `createMockClient` from `@morpho-org/test/mock`.
 - **Fork.** PR #907's `deployVaultExitBundlesV1` is deliberately a local helper; this work promotes
   it to a shared `test/helpers/vaultExitBundlesV1.ts` beside the existing `test/helpers/vaultV2.ts`.
-  Because the actions resolve `to` from the address registry, the helper must also make the deployed
-  address *findable* — see Open Questions. End-to-end coverage: an illiquid Vault V2 exited in-kind
-  across several markets with a non-zero penalty, the V1 flash-loan path, and the gate and
-  Blue-balance rejections.
+  Because the actions resolve `to` from the address registry, the helper deploys the contract onto
+  the fork and makes its address *findable* via `registerCustomAddresses`, reusing the fork-wiring
+  approach PR [#907](https://github.com/morpho-org/sdks/pull/907) already establishes for the fixture
+  — so `getChainAddresses(chainId).vaultExitBundlesV1` resolves inside the suite. End-to-end
+  coverage: an illiquid Vault V2 exited in-kind across several markets with a non-zero penalty, the
+  V1 flash-loan path, and the gate and Blue-balance rejections.
 - **Security invariants as tests** (§5): the permitted value is always `maxUint256`; the empty permit
   is exactly `v=0, r=0, s=0`; a duplicate-heavy list that only covers the amount when double-counted
   is *rejected*; an under-covering list is rejected rather than left to panic.
 
 ### Implementation Phases
 
-- **Phase 0 — Prerequisite:** land PR #907.
+The work is sequenced to **parallelise on top of PR
+[#907](https://github.com/morpho-org/sdks/pull/907)** so the integration is finished and merged
+*before* `VaultExitBundlesV1` is deployed, and ships the moment it is. #907 puts the (not-yet-live)
+contract on the pinned Anvil fork, so every phase below — encoding, the validation matrix,
+`getRequirements`, and end-to-end fork coverage — is fully exercisable today, against fork state,
+with **no dependency on a live address or deployment date**. The only thing genuinely gated on
+deployment is one value: the per-chain `vaultExitBundlesV1` address-registry entry, which fills in
+as `VaultExitBundlesV1` rolls out across every Morpho-supported chain. Everything else can land now.
+
+Because the contract is undeployed, the artifact/ABI this work vendors from #907 is pinned to a
+commit that is **newer than the two audits** (bundles HEAD is the post-audit
+`vault-v2-single-adapter-check` merge; the audits predate it). Treat the fork suite as validating
+*our* integration, not the final on-chain bytecode: once the contract is live, re-verify the
+deployed selectors and immutables against the vendored ABI before flipping the address slot on, and
+delete the artifact per #907's header.
+
+- **Phase 0 — Prerequisite:** land PR #907. Everything after it runs against #907's fork and does
+  not wait on deployment.
 - **Phase 1 — Plumbing:** promote the ABI into `src/abis.ts` (the fixture keeps only `code`), add the
   `vaultExitBundlesV1` address slot, add `getVaultV2PermitTypedData` with unit tests. Independently
   useful and independently reviewable.
@@ -499,21 +530,34 @@ chain.
 ## Assumptions & Constraints
 
 - **Vault V2 in-kind redemption only works on single-adapter vaults** whose sole adapter is a
-  `MorphoMarketV1AdapterV2`. This is the contract's constraint, not ours; multi-adapter vaults are
-  simply out of reach.
+  `MorphoMarketV1AdapterV2`. This is the contract's constraint, not ours; multi-adapter vaults and
+  vaults on the legacy positions-based `MorphoMarketV1Adapter` (or a `MorphoVaultV1Adapter`) are
+  simply out of reach. The SDK **actively asserts the adapter type** (`instanceof
+  AccrualVaultV2MorphoMarketV1AdapterV2`) and throws `UnsupportedInKindAdapterError` before building,
+  rather than letting the contract revert opaquely when it casts to `IMorphoMarketV1AdapterV2` — the
+  three `AccrualVaultV2*Adapter` variants that `vvrm` already models are exactly the discriminants
+  this check keys on. How many live vaults qualify at launch is a product/reach question, not a
+  correctness one, and should be sized with the `vvrm` team before enabling each chain's address slot.
 - **The adapter's markets all share the vault's asset as loan token** — enforced on-chain by the
   adapter's `LoanAssetMismatch`. This is what lets the Blue-balance check be a single `balanceOf`.
 - **The vault's share price only moves up between build and execution.** True for accrual; false for
   a bad-debt realisation, which the contract explicitly does not guard against. Our share-sufficiency
   estimate is conservative only in the accrual direction.
 - **Smart-contract wallets cannot use the permit path.** `VaultV2.permit` calls `ecrecover` with no
-  EIP-1271 fallback. They must go through `supportSignature: false`.
+  EIP-1271 fallback. They must go through `supportSignature: false`, which the integrator sets — the
+  SDK does not sniff `getCode` to decide this, since that would misclassify EIP-7702-delegated EOAs,
+  which carry code yet sign ECDSA. The permit-vs-approve choice is the integrator's
+  `supportSignature` flag, authoritatively: `false` keeps the classic on-chain `approve` path, `true`
+  uses the off-chain shares permit.
 - **The builder must be the signer.** The contract binds `owner` and the allowance it spends to
   `msg.sender`, so `userAddress` must be the sending account — the same caveat already recorded in
   `BUNDLER3.md`.
-- **Adapter market lists are timelocked on addition**, so a caller can pass a forward-looking
-  superset. Coverage cannot credit markets the SDK has not yet observed, so such entries are
-  rejected today; revisit if it proves restrictive in practice.
+- **Markets still in their addition timelock are not considered — by decision, not omission.**
+  Adapter market additions are timelocked, so a caller could list a market the SDK cannot yet
+  observe. Such entries are **rejected** (`MarketNotInAdapterError`), and this is deliberate: coverage
+  cannot credit a position the adapter does not yet hold, so a timelocked market contributes nothing
+  to an exit anyway. Callers pass only live adapter markets; there is no need to account for pending
+  ones.
 - **The pinned fork block predates Osaka**, which is why PR #907's artifact targets `cancun`. Both
   targets emit byte-identical output for this contract.
 
@@ -542,6 +586,19 @@ chain.
 - **Blue token-balance dependency.** The exit's success depends on Blue's aggregate balance of the
   loan token at execution, which any other transaction in the same block can change. The pre-flight
   check is a snapshot, not a guarantee.
+- **Penalty and adapter-position drift is an acknowledged, unclosable blind spot.** The contract
+  reads the V2 penalty (`forceDeallocatePenalty(adapter)`) and each market's adapter position
+  *live, on-chain*; the SDK derives `assetsToDeallocate` and the coverage sum from the `getData()`
+  snapshot. Between build and execution these can move in the unsafe direction: a curator lowering
+  the penalty *raises* the on-chain `assetsToDeallocate`, and a reallocation or a third-party
+  `forceDeallocate` *shrinks* the adapter's position on a listed market — either can make a list that
+  passed pre-flight fall short and revert with the very `panic 0x32` this TIB set out to eliminate.
+  **There is no SDK-side defence, and we do not pretend otherwise.** The SDK cannot pin on-chain
+  state; re-reading at `getRequirements()` time only narrows the window, never closes it. What bounds
+  the exposure is external to us: penalty changes are timelocked and capped at 2%, and adapter market
+  removals are timelocked too — so the realistic drift is small and slow, not adversarial-instant.
+  This is documented on both entity methods as a residual, not defended against, and it is the one
+  failure mode in the matrix we consciously leave able to surface as a raw panic.
 - **Smart-contract wallets are silently permit-incapable.** Left unhandled this is a guaranteed
   `InvalidSigner()` after the user has gone through a signing flow. Routing them to the approve path
   is a correctness requirement, not a nicety.
@@ -570,25 +627,6 @@ chain.
   the plan without a second entity surface. Purely additive; deferred until there is demand.
 - **Deleting the test artifact** once the contract ships on a live chain, as PR #907's header
   instructs.
-
-## Open Questions
-
-1. **Which chains does `VaultExitBundlesV1` ship on, and when?** Until then the address slot stays
-   empty everywhere and only the fork path is exercised. Deployment also determines when the vendored
-   artifact can be deleted.
-2. **How should the fork tests make the deployed address findable?** Two candidates: deploy once,
-   capture the runtime code with its immutables baked, `setCode` it at a fixed canonical test address
-   in each test, and `registerCustomAddresses` that constant once at module load — deterministic, and
-   immune to `mergeRegistry` throwing `RegistryValueAlreadyRegisteredError` given a process-global
-   registry against per-test forks. Or a simpler memoized deploy-and-register helper, which couples
-   the registered address to whatever nonce the first test deploys at. Settle during Phase 4.
-3. **Should `getRequirements()` auto-downgrade to the approve path when `getCode(userAddress) !== "0x"`?**
-   One extra read turns a guaranteed `InvalidSigner()` into a working flow for an integrator who left
-   `supportSignature: true` on a smart-contract wallet. The counter-argument is that it makes
-   `supportSignature` advisory rather than authoritative.
-4. **Should forward-looking market entries be tolerated?** Adapter market additions are timelocked,
-   so a caller could legitimately list a market the SDK cannot yet see. Today `MarketNotInAdapterError`
-   rejects them, since coverage cannot credit them anyway.
 
 ## References
 
