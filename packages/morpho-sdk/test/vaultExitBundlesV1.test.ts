@@ -1,4 +1,4 @@
-import { getChainAddress } from "@morpho-org/blue-sdk";
+import { getChainAddress, registerCustomAddresses } from "@morpho-org/blue-sdk";
 import type { AnvilTestClient } from "@morpho-org/test";
 import { toFunctionSelector, toFunctionSignature } from "viem";
 import { describe, expect } from "vitest";
@@ -6,15 +6,23 @@ import { abi, code } from "./fixtures/vaultExitBundlesV1.js";
 import { test } from "./setup.js";
 
 // VaultExitBundlesV1 is not deployed on any live chain yet, so it has to be put on the fork before
-// vault-exit flows can be exercised against it.
-const deployVaultExitBundlesV1 = async (client: AnvilTestClient) =>
-  (
-    await client.deployContractWait({
-      abi,
-      bytecode: code,
-      args: [getChainAddress(client.chain.id, "blue")],
-    })
-  ).contractAddress;
+// vault-exit flows can be exercised against it. Once deployed, its address is registered into the
+// address registry under `bundles.vaultExitBundlesV1` so lookups resolve just like a live chain.
+const deployVaultExitBundlesV1 = async (client: AnvilTestClient) => {
+  const { contractAddress } = await client.deployContractWait({
+    abi,
+    bytecode: code,
+    args: [getChainAddress(client.chain.id, "blue")],
+  });
+
+  registerCustomAddresses({
+    addresses: {
+      [client.chain.id]: { bundles: { vaultExitBundlesV1: contractAddress } },
+    },
+  });
+
+  return contractAddress;
+};
 
 const functions = abi
   .filter((entry) => entry.type === "function")
@@ -33,6 +41,10 @@ describe("VaultExitBundlesV1", () => {
     expect(
       await client.readContract({ address, abi, functionName: "BLUE" }),
     ).toBe(getChainAddress(client.chain.id, "blue"));
+    // ...and the deploy is registered, so registry lookups resolve it like a live chain.
+    expect(getChainAddress(client.chain.id, "bundles.vaultExitBundlesV1")).toBe(
+      address,
+    );
   });
 
   test("behavior: the deployed code exposes every declared function", async ({

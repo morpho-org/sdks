@@ -55,6 +55,11 @@ export interface ChainAddresses {
     /** Bundler3 adapter for migrating Aave V3 Optimizer positions to Morpho. */
     aaveV3OptimizerMigrationAdapter?: `0x${string}`;
   };
+  /** Standalone bundle periphery contracts for composing vault-exit workflows outside Bundler3. */
+  bundles?: {
+    /** VaultExitBundlesV1 periphery contract for force-withdraw and in-kind redemption vault-exit flows. */
+    vaultExitBundlesV1: `0x${string}`;
+  };
   /** AdaptiveCurveIrm contract that lets Morpho update utilization-responsive borrow rates per market. */
   adaptiveCurveIrm: `0x${string}`;
   /** PublicAllocator contract for permissionless MetaMorpho reallocations subject to flow caps and vault fees. */
