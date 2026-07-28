@@ -24,7 +24,8 @@ import {
  * - `transfers` → user-facing preview / server-side verification.
  * - `simulationTxs` + `transfers` → server-side verification before broadcast.
  * - `calls[i]` → per-tx raw backend output (`logs`, `status`, `returnData`, `gasUsed`).
- *   Aligned 1:1 with `simulationTxs[i]`.
+ *   Aligned 1:1 with `simulationTxs[i]`. `gasUsed` is not a safe gas limit; consumers
+ *   deriving one must add their own headroom.
  * - `assetChanges` → net per-asset balance changes grouped by account (sender and
  *   counterparties) over the whole bundle, normalized to the same shape across backends.
  * - `transfers[k].txIdx` → index into `simulationTxs` of the tx that emitted the
