@@ -60,7 +60,9 @@ the pre-flight validation that turns those opaque failures into named SDK errors
   Client → Entity → Action layering.
 - **Validate exhaustively before building.** Every revert reachable from a well-formed call must
   surface as a named, exported error class at build time — in particular the unbounded-loop panic,
-  the Blue token-balance shortfall, the Vault V2 gates, and share/allowance sufficiency.
+  the Blue token-balance shortfall, the Vault V2 gates, and allowance sufficiency. Share sufficiency
+  is the one deliberate exception: `amount` sizing against the user's balance is the caller's job
+  (see Non-Goals).
 - Sign a **correct** Vault V2 shares permit. Vault V2's EIP-712 domain omits `name` and `version`,
   so the SDK's existing `getPermitTypedData` produces an unsignable digest for it.
 - Always permit `maxUint256`, so an exit never fails on an allowance the caller could not have sized
@@ -79,6 +81,11 @@ the pre-flight validation that turns those opaque failures into named SDK errors
   holding — that is a product choice, not an SDK one.
 - No shares or `max` input mode. The amount is asset-denominated, matching the contract's
   `exitAssets` one-to-one.
+- **No share-sufficiency validation.** The SDK does not check that the user holds enough vault shares
+  for `amount`. Forcing a `maxUint256` allowance settles *authorization*, not *balance* — an `amount`
+  above the user's holdings still reverts on-chain. Sizing `amount` against the share balance is the
+  caller's job (`vvrm` derives it from the balance it already has), so the SDK spends no RPC on a
+  `balanceOf` read it would only duplicate.
 - No composition with a penalty-free `withdraw` leg. In-kind redemption never touches the vault's
   pre-existing idle assets; splitting an exit across both paths is deferred (see Future
   Considerations).
@@ -107,8 +114,13 @@ For Vault V1 there is no force path at all.
 
 ### What the contract does
 
-Both entry points end with the user's vault shares burned and the user holding Blue supply positions
-worth the exited amount. They get there differently.
+Both entry points end with the user's vault shares burned and the user holding Blue supply positions.
+The amount of Blue exposure the user receives differs by vault version: for **Vault V1** it is the
+full `exitAssets`; for **Vault V2** it is `exitAssets` *net of the force-deallocation penalty* —
+`floor(exitAssets·WAD / (WAD + penalty))` — because the penalty is charged in the same step that
+burns the vault shares. Quoting the V2 output as the full `exitAssets` overstates the proceeds by the
+penalty and would propagate into UI quotes and accounting assertions; the SDK reports the net figure.
+They get there differently.
 
 **Vault V2** — per market in the caller's list, the bundler supplies into Blue *on behalf of the
 user* with a callback, and repays that supply from the vault inside the callback:
@@ -258,14 +270,26 @@ inKindRedemption(params: {
 
 `userAddress` is not optional decoration: the contract hardcodes `owner = msg.sender` and
 `spender = address(this)` inside `TokenLib.submitPermit`, so the permit must be signed by the sending
-account, and the same address drives the allowance/nonce reads, the share-balance check, and the
-`canSendShares` gate.
+account, and the same address drives the allowance/nonce reads and the `canSendShares` gate.
 
 The method is **synchronous**, like `deposit` / `withdraw` / `forceRedeem`, and runs every check
 derivable from `(amount, marketParamsList, vaultData)` eagerly — it throws before returning the
 handle. Checks that genuinely need RPC run inside the already-async `getRequirements()`. The single
 `deadline` is resolved once at handle creation and closed over, so the requirement and `buildTx`
 cannot disagree and the action stays clock-free.
+
+**`buildTx` is not async — only `getRequirements()` is.** This is deliberate and non-negotiable: by
+the SDK's layering rule (root `AGENTS.md` §1), the Action layer is synchronous and reads no chain
+state, so `buildTx` neither awaits nor performs RPC — it only assembles the deep-frozen `Transaction`
+from data already in hand. The "validate exhaustively before building" goal therefore has a precise
+scope that must be stated rather than assumed: the **synchronous** matrix (everything derivable from
+the `getData()` snapshot) always runs before the handle is returned, but the **RPC-backed** checks —
+Blue balance, the Vault V2 gates, the nonce read — run *only* when the caller awaits
+`getRequirements()`. A caller who invokes `buildTx` without first awaiting `getRequirements()` skips
+exactly those RPC checks and can still meet their reverts on-chain. That is not a gap to close by
+making `buildTx` await state — doing so would break the layer boundary every other entity method
+respects (see Considered Alternatives §5). It is a contract to document: integrators must call
+`getRequirements()` first, and both entity methods say so in their JSDoc.
 
 ### The validation matrix
 
@@ -278,6 +302,7 @@ This is the load-bearing part of the decision. Each row was derived by walking
 
 | On-chain failure                        | Trigger                                                       | SDK check                                                                                                                                                    | Error                                          |
 | --------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
+| every calc runs against the wrong vault | caller passes a `vaultData` fetched for a **different** vault — allocations, adapters, and penalties are then read off it while `buildTx` still targets `this.vault` | `vaultData.address === this.vault`, the same guard the Vault V1/V2 deposit and migration flows already apply — this must be the **first** row, since every row below trusts the snapshot | `VaultAddressMismatchError` (reuse existing)   |
 | `InvalidAdaptersLength()`               | `adaptersLength() != 1`                                         | `vaultData.adapters.length === 1`                                                                                                                              | `InKindRedemptionRequiresSingleAdapterError`   |
 | `AdapterNotPartOfVault()`               | `!isAdapter(adapter)`                                           | `adapter ∈ vaultData.adapters`                                                                                                                                 | `AdapterNotPartOfVaultError`                   |
 | revert / garbage from the contract casting the adapter to `IMorphoMarketV1AdapterV2` and calling `adapter.supplyShares(id)` / `adapter.morpho()` | the sole adapter is **not** a markets-based `MorphoMarketV1AdapterV2` — e.g. a legacy positions-based `MorphoMarketV1Adapter` or a `MorphoVaultV1Adapter` | `accrualAdapters[0] instanceof AccrualVaultV2MorphoMarketV1AdapterV2` — reject the other two `AccrualVaultV2*Adapter` types `vvrm`'s `deallocation.ts` already distinguishes; this is a **first-class check**, not an incidental one, because the whole V2 loop assumes the V2 adapter interface | `UnsupportedInKindAdapterError`                |
@@ -330,7 +355,6 @@ Two subtleties that are easy to get wrong:
 | On-chain failure                            | Trigger                                                                                                                    | SDK check                                                                                                                                              |
 | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | opaque ERC-20 revert inside the callback     | Blue credits the supply **before** the callback but pulls the tokens **after**, while the adapter withdraws real tokens mid-callback | `balanceOf(vaultData.asset, blue) >= peak`, where `peak` is the largest single `assets_i` from simulating the greedy loop **in the caller's order**         |
-| `deleteShares` underflow                     | user lacks shares for `Σ[assets_i + ceil(assets_i·penalty/WAD)]`                                                             | `balanceOf(vault, userAddress) >= toShares(amount, "Up") + 2·dedupedMarketCount` (headroom for per-market `mulDivUp` and `previewWithdraw` round-up)       |
 | allowance underflow                          | `allowance[user][bundler] -= shares` runs on **both** the penalty leg and the main leg                                       | forced `maxUint256` on both the permit and the approve path (see below)                                                                                    |
 | `CannotSendShares()`                         | `canSendShares(onBehalf)` in `VaultV2.exit()`                                                                                | `vault.canSendShares(userAddress)`                                                                                                                         |
 | `CannotReceiveAssets()`                      | `canReceiveAssets(receiver)` — the **bundler** on the main leg, the **vault itself** on the penalty leg                       | `vault.canReceiveAssets(vaultExitBundlesV1)` **and** `vault.canReceiveAssets(vault)`                                                                       |
@@ -353,9 +377,16 @@ Vault V1 inverts this: the flash loan takes the whole `exitAssets` up front, so 
 Failure modes deliberately left to documentation rather than checks: `AlreadyInitiated()`
 (transient reentrancy guard, unreachable from an EOA call and not even decodable),
 `ApproveReturnedFalse()` from `TokenLib.forceApproveMax` (exotic tokens; the library already handles
-USDT-style reset-to-zero and short-circuits above a `2^95` allowance), and a share-price **drop**
-between build and execution. The contract explicitly does not check share price, and our
-snapshot-based share estimate is conservative only against accrual, which moves in the user's favour.
+USDT-style reset-to-zero and short-circuits above a `2^95` allowance), a share-price **drop** between
+build and execution (the contract explicitly does not check share price), and — by explicit decision
+— **share sufficiency**. The SDK does **not** verify that the user holds enough vault shares for the
+exit. Forcing a `maxUint256` allowance solves *authorization*; it does not create shares, and an
+`amount` sized above the user's balance still reverts on-chain (`ERC20InsufficientBalance` inside
+`MetaMorpho.withdraw` on V1, a `deleteShares` underflow on V2). Sizing `amount` against the user's
+share balance is the **caller's** responsibility — `vvrm` derives it from the balance it already
+holds — so the SDK spends no RPC on a `balanceOf(vault, userAddress)` read it would only duplicate.
+This is the one non-panic revert the matrix consciously leaves opaque; it is documented on both
+entity methods and in § Security.
 
 ### Permit handling
 
@@ -395,13 +426,33 @@ after the user has already signed.
 
 `RequirementSpenderKey` in
 [`src/helpers/validateRequirementSpender.ts`](../../packages/morpho-sdk/src/helpers/validateRequirementSpender.ts)
-gains `"vaultExitBundlesV1"`, allowed in the new encoder only —
-[`encodeErc20Permit`](../../packages/morpho-sdk/src/actions/requirements/encode/encodeErc20Permit.ts)'s
-allowlist stays `["generalAdapter1", "midnightBundles"]`.
+gains `"vaultExitBundlesV1"`, and **both** requirement paths validate their spender against an
+allowlist, so both allowlists must admit it:
 
-`buildTx` cross-checks the signature it is handed against what it is about to encode
-(`args.asset === vault`, `args.amount === maxUint256`, `args.deadline === deadline`) and throws on
-mismatch, mirroring the guards in `getTokenRequirementActions`.
+- the permit path, through the new `encodeVaultSharesPermit`;
+- the **default** approve path (`supportSignature: false`, and the only path a smart-contract wallet
+  can take), through
+  [`encodeErc20Approval`](../../packages/morpho-sdk/src/actions/requirements/encode/encodeErc20Approval.ts),
+  whose allowlist is today `["generalAdapter1", "permit2", "midnight", "midnightBundles"]`.
+
+`vaultExitBundlesV1` **must be added to `encodeErc20Approval`'s allowlist too** — this was the easy
+omission to make. Leaving it out makes the default path throw `UnsupportedErc20ApprovalSpenderError`
+before it can return a requirement, breaking exactly the integrators who did not opt into signatures.
+The default approve authorization path gets its own test (§ Testing). `encodeErc20Permit`'s allowlist
+is a separate list for a separate encoder and stays `["generalAdapter1", "midnightBundles"]`; the
+new shares permit does not route through it.
+
+`buildTx` cross-checks the signature it is handed against what it is about to encode, and the check
+must **bind the permit to this user and this permit kind** — not merely match asset, amount, and
+deadline. `selectRequirementSignatures` deliberately groups `permit` and `permit2` in one bucket, so
+a signature carried over from another flow — a Permit2 signature, or an ERC-2612 permit signed by a
+*different* account — could otherwise pass a value-only check and then revert with `InvalidSigner()`
+on-chain, because the contract decodes only its own ERC-2612 permit and hardcodes `owner = msg.sender`
+/ `spender = address(this)`. `buildTx` therefore requires **all** of `action.type === "permit"`,
+`args.owner === userAddress`, `args.spender === vaultExitBundlesV1`, `args.asset === vault`,
+`args.amount === maxUint256`, and `args.deadline === deadline`, and throws on any mismatch, mirroring
+the guards in `getTokenRequirementActions`. This is an authorization-binding invariant with its own
+tests (§ Testing).
 
 **Deadline.** One value, `now + 2h`, used for both `permit.deadline` and the bundle `deadline`,
 matching `encodeErc20Permit`. `TokenLib` notes the two are independent — a signature that never
@@ -430,7 +481,12 @@ which puts `VaultExitBundlesV1` on the pinned mainnet fork ahead of any live dep
   V1 flash-loan path, and the gate and Blue-balance rejections.
 - **Security invariants as tests** (§5): the permitted value is always `maxUint256`; the empty permit
   is exactly `v=0, r=0, s=0`; a duplicate-heavy list that only covers the amount when double-counted
-  is *rejected*; an under-covering list is rejected rather than left to panic.
+  is *rejected*; an under-covering list is rejected rather than left to panic; the **default**
+  `supportSignature: false` path returns a valid `approve` requirement (i.e. `vaultExitBundlesV1` is
+  on `encodeErc20Approval`'s allowlist) instead of throwing `UnsupportedErc20ApprovalSpenderError`;
+  `buildTx` rejects a permit whose `owner`, `spender`, or `type` does not bind to this user and this
+  ERC-2612 kind; and a `vaultData` fetched for a different vault is rejected with
+  `VaultAddressMismatchError`.
 
 ### Implementation Phases
 
@@ -541,8 +597,8 @@ chain.
 - **The adapter's markets all share the vault's asset as loan token** — enforced on-chain by the
   adapter's `LoanAssetMismatch`. This is what lets the Blue-balance check be a single `balanceOf`.
 - **The vault's share price only moves up between build and execution.** True for accrual; false for
-  a bad-debt realisation, which the contract explicitly does not guard against. Our share-sufficiency
-  estimate is conservative only in the accrual direction.
+  a bad-debt realisation, which the contract explicitly does not guard against — and neither does the
+  SDK, since it validates neither share price nor share sufficiency (see Non-Goals and Security).
 - **Smart-contract wallets cannot use the permit path.** `VaultV2.permit` calls `ecrecover` with no
   EIP-1271 fallback. They must go through `supportSignature: false`, which the integrator sets — the
   SDK does not sniff `getCode` to decide this, since that would misclassify EIP-7702-delegated EOAs,
@@ -586,6 +642,14 @@ chain.
 - **Blue token-balance dependency.** The exit's success depends on Blue's aggregate balance of the
   loan token at execution, which any other transaction in the same block can change. The pre-flight
   check is a snapshot, not a guarantee.
+- **Share sufficiency is not validated — by decision.** The SDK forces a `maxUint256` allowance,
+  which settles *authorization*, and then does **not** read the user's share balance. An `amount`
+  sized above the user's holdings therefore reverts on-chain (`ERC20InsufficientBalance` in
+  `MetaMorpho.withdraw` on V1, a `deleteShares` underflow on V2) rather than as a named build-time
+  error. This is intentional: sizing `amount ≤ shares held` is the caller's responsibility (`vvrm`
+  derives it from the balance it already holds), and adding a `balanceOf` check would only duplicate
+  a read the caller has already made. It is stated in the JSDoc of both entity methods so no
+  integrator relies on the SDK to catch it.
 - **Penalty and adapter-position drift is an acknowledged, unclosable blind spot.** The contract
   reads the V2 penalty (`forceDeallocatePenalty(adapter)`) and each market's adapter position
   *live, on-chain*; the SDK derives `assetsToDeallocate` and the coverage sum from the `getData()`
