@@ -55,9 +55,11 @@ the pre-flight validation that turns those opaque failures into named SDK errors
 
 **Goals**
 
-- Add `vaultExitBundlesV1InKindRedemptionVaultV1` and `vaultExitBundlesV1InKindRedemptionVaultV2` to
-  `morpho-sdk` as pure, synchronous actions plus lazy entity handles, following the existing
-  Client → Entity → Action layering.
+- Add `vaultV1InKindRedemption` and `vaultV2InKindRedemption` to `morpho-sdk` as pure, synchronous
+  actions plus lazy entity handles — thin wrappers over the contract's
+  `vaultExitBundlesV1InKindRedemptionVaultV1` / `...VaultV2` entry points — following the existing
+  Client → Entity → Action layering. These short `vaultV{1,2}InKindRedemption` names are the frozen
+  **SDK** surface used everywhere below; the long names are the **contract** functions they encode.
 - **Validate exhaustively before building.** Every revert reachable from a well-formed call must
   surface as a named, exported error class at build time — in particular the unbounded-loop panic,
   the Blue token-balance shortfall, the Vault V2 gates, and allowance sufficiency. Share sufficiency
@@ -119,7 +121,11 @@ The amount of Blue exposure the user receives differs by vault version: for **Va
 full `exitAssets`; for **Vault V2** it is `exitAssets` *net of the force-deallocation penalty* —
 `floor(exitAssets·WAD / (WAD + penalty))` — because the penalty is charged in the same step that
 burns the vault shares. Quoting the V2 output as the full `exitAssets` overstates the proceeds by the
-penalty and would propagate into UI quotes and accounting assertions; the SDK reports the net figure.
+penalty. The SDK does **not** surface this net figure in the action's args or output: `amount` stays
+penalty-*inclusive* (it maps one-to-one to the contract's `exitAssets`), and the net proceeds are the
+caller's to derive from the `penalty` already on the `getData()` snapshot via the formula above. A
+first-class net-proceeds surface belongs to the deferred preview helper (see Future Considerations),
+not to this action's args — adding it here would widen the very surface this TIB is keeping minimal.
 They get there differently.
 
 **Vault V2** — per market in the caller's list, the bundler supplies into Blue *on behalf of the
@@ -302,12 +308,13 @@ This is the load-bearing part of the decision. Each row was derived by walking
 
 | On-chain failure                        | Trigger                                                       | SDK check                                                                                                                                                    | Error                                          |
 | --------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
-| every calc runs against the wrong vault | caller passes a `vaultData` fetched for a **different** vault — allocations, adapters, and penalties are then read off it while `buildTx` still targets `this.vault` | `vaultData.address === this.vault`, the same guard the Vault V1/V2 deposit and migration flows already apply — this must be the **first** row, since every row below trusts the snapshot | `VaultAddressMismatchError` (reuse existing)   |
+| every RPC reads the wrong chain          | the viem client is connected to a chain other than `this.chainId`, so `getRequirements()` would read allowances, nonces, gates, and Blue balances on one chain while `buildTx` resolves the `vaultExitBundlesV1` address for another | `this.client.viemClient.chain?.id === this.chainId` — the same first-line guard every existing Vault V1/V2 entity method already applies before returning a handle | `ChainIdMismatchError` (reuse existing)        |
+| every calc runs against the wrong vault | caller passes a `vaultData` fetched for a **different** vault — allocations, adapters, and penalties are then read off it while `buildTx` still targets `this.vault` | `vaultData.address === this.vault`, the same guard the Vault V1/V2 deposit and migration flows already apply — runs right after the chain-ID guard, since every row below trusts the snapshot | `VaultAddressMismatchError` (reuse existing)   |
 | `InvalidAdaptersLength()`               | `adaptersLength() != 1`                                         | `vaultData.adapters.length === 1`                                                                                                                              | `InKindRedemptionRequiresSingleAdapterError`   |
 | `AdapterNotPartOfVault()`               | `!isAdapter(adapter)`                                           | `adapter ∈ vaultData.adapters`                                                                                                                                 | `AdapterNotPartOfVaultError`                   |
 | revert / garbage from the contract casting the adapter to `IMorphoMarketV1AdapterV2` and calling `adapter.supplyShares(id)` / `adapter.morpho()` | the sole adapter is **not** a markets-based `MorphoMarketV1AdapterV2` — e.g. a legacy positions-based `MorphoMarketV1Adapter` or a `MorphoVaultV1Adapter` | `accrualAdapters[0] instanceof AccrualVaultV2MorphoMarketV1AdapterV2` — reject the other two `AccrualVaultV2*Adapter` types `vvrm`'s `deallocation.ts` already distinguishes; this is a **first-class check**, not an incidental one, because the whole V2 loop assumes the V2 adapter interface | `UnsupportedInKindAdapterError`                |
 | `MorphoMismatch()`                      | `adapter.morpho() != BLUE`                                      | subsumed by the adapter-type row above — the `MorphoMarketV1AdapterV2` factory pins Blue in its constructor, so a genuine `AccrualVaultV2MorphoMarketV1AdapterV2` cannot mismatch | reuse `UnsupportedInKindAdapterError`          |
-| **`panic 0x32`** (array out-of-bounds)  | list exhausted before `assetsToDeallocate` reaches 0            | coverage sum ≥ requirement, over **id-deduplicated** markets (below)                                                                                           | `InKindRedemptionCoverageError`                |
+| **`panic 0x32`** (array out-of-bounds)  | list exhausted before `assetsToDeallocate` reaches 0            | coverage sum ≥ requirement, under the **version-specific** rule below — id-deduplicated on V2, raw ordered list on V1                                          | `InKindRedemptionCoverageError`                |
 | entry silently contributes zero         | a listed `MarketParams.id` is not in `adapter.marketIds`        | reject up front, naming the offending ids                                                                                                                      | `MarketNotInAdapterError`                      |
 | silent no-op that still burns the permit | `mulDivDown(amount, WAD, WAD + penalty) === 0`                 | derived `assetsToDeallocate > 0`                                                                                                                               | `NonPositiveInputError("assetsToDeallocate")`  |
 | `panic 0x32` on the first index         | `marketParamsList.length === 0`                                 | non-empty list                                                                                                                                                 | `EmptyMarketParamsListError`                   |
@@ -325,10 +332,11 @@ require              covered >= assetsToDeallocate
 maxExitAssets      = mulDivDown(covered, WAD + penalty, WAD)     // returned in the error payload
 ```
 
-and for Vault V1, where there is no penalty and disabled markets are skipped by the contract:
+and for Vault V1, where there is no penalty, disabled markets are skipped by the contract, and —
+unlike V2 — **duplicates must not be deduplicated** (see the subtlety below):
 
 ```
-covered = Σ over dedup(marketParamsList) where vaultData.allocations.get(id)?.config.enabled
+covered = Σ over marketParamsList (raw, ordered) where vaultData.allocations.get(id)?.config.enabled
             of allocation.position accrued to t → supplyAssets
 require   covered >= amount
 ```
@@ -340,15 +348,22 @@ caller already made.
 
 Two subtleties that are easy to get wrong:
 
-- **Deduplication is load-bearing.** `expectedSupplyAssets` is re-read on *every* iteration, so a
-  market listed twice contributes ≈0 the second time round. A naive sum over the caller's raw list
-  would pass validation and then panic on-chain. Duplicates are **silently deduplicated** for the
-  coverage sum rather than rejected — they cost a wasted iteration but no revert, and the contract
-  explicitly acknowledges that duplicate entries are possible.
-- **After deduplication, sum ≡ greedy.** Simulating `min(adapterAssets_i, remaining)` down a list
-  with no repeats is exactly a sum, so **order never decides whether the call succeeds** — only
-  which Blue markets the user ends up holding. That is what makes it safe to leave ordering entirely
-  to the caller.
+- **Deduplication is load-bearing on V2 — and forbidden on V1.** The two versions drain the position
+  they read at *different* times, so an identical duplicate has opposite effects:
+  - On **V2**, `forceDeallocate` + `withdraw` run inside `onMorphoSupply` on every iteration, so the
+    adapter's `expectedSupplyAssets(id)` is *drained mid-loop* and a market listed twice contributes
+    ≈0 the second time round. A naive sum over the caller's raw list would over-count and then panic
+    on-chain, so duplicates are **silently deduplicated** for the V2 coverage sum — a wasted
+    iteration but no revert, and the contract explicitly acknowledges duplicate entries are possible.
+  - On **V1**, the single `withdraw` runs *after* the loop (the loop only supplies flash-loaned
+    assets on behalf of the user), so `expectedSupplyAssets(vault, id)` reads the **same undrained
+    vault position on every iteration**. A market listed twice therefore *re-contributes its full
+    position*, exactly as the contract will. Deduplicating the V1 coverage sum would under-count and
+    reject exits the contract can execute; V1 must simulate the **raw ordered list**.
+- **Coverage is order-independent either way.** On V2 (deduped) and on V1 (raw list), the greedy
+  `min(available_i, remaining)` telescopes to a plain sum against the target, so **order never
+  decides whether the call succeeds** — only which Blue markets the user ends up holding. That is
+  what makes it safe to leave ordering entirely to the caller.
 
 #### Asynchronous — in `getRequirements()`, batched into one multicall
 
@@ -449,9 +464,13 @@ a signature carried over from another flow — a Permit2 signature, or an ERC-26
 *different* account — could otherwise pass a value-only check and then revert with `InvalidSigner()`
 on-chain, because the contract decodes only its own ERC-2612 permit and hardcodes `owner = msg.sender`
 / `spender = address(this)`. `buildTx` therefore requires **all** of `action.type === "permit"`,
-`args.owner === userAddress`, `args.spender === vaultExitBundlesV1`, `args.asset === vault`,
+`args.owner === userAddress`, `action.args.spender === vaultExitBundlesV1`, `args.asset === vault`,
 `args.amount === maxUint256`, and `args.deadline === deadline`, and throws on any mismatch, mirroring
-the guards in `getTokenRequirementActions`. This is an authorization-binding invariant with its own
+the guards in `getTokenRequirementActions`. The spender is read from `action.args`, **not** `args`:
+`PermitArgs` carries `{ owner, nonce, asset, signature, amount, deadline }` and has no `spender`
+field, so the spender lives on the `PermitAction` metadata — the same `permit.action.args.spender`
+every existing permit encoder and test reads. Checking `args.spender` would compare `undefined` and
+reject every otherwise-valid ERC-2612 signature, breaking the `supportSignature: true` path. This is an authorization-binding invariant with its own
 tests (§ Testing).
 
 **Deadline.** One value, `now + 2h`, used for both `permit.deadline` and the bundle `deadline`,
@@ -478,15 +497,29 @@ which puts `VaultExitBundlesV1` on the pinned mainnet fork ahead of any live dep
   approach PR [#907](https://github.com/morpho-org/sdks/pull/907) already establishes for the fixture
   — so `getChainAddresses(chainId).vaultExitBundlesV1` resolves inside the suite. End-to-end
   coverage: an illiquid Vault V2 exited in-kind across several markets with a non-zero penalty, the
-  V1 flash-loan path, and the gate and Blue-balance rejections.
+  V1 flash-loan path, and the gate and Blue-balance rejections. **At least one V2 case must exercise
+  the `supportSignature: true` permit path end-to-end** — sign the `PermitRequirementSignature` that
+  `getRequirements()` returns, feed the resulting `v`/`r`/`s` into the bundle, and execute on the
+  fork — so the two-field EIP-712 domain built by `getVaultV2PermitTypedData` is checked against the
+  live `VaultV2.DOMAIN_SEPARATOR()` by the contract's own `ecrecover`. This cannot be substituted by
+  a unit round-trip (signing and re-verifying with the same helper only proves the SDK is
+  self-consistent, never that its domain matches the contract's) nor by an approve-based exit
+  (`supportSignature: false` skips `submitPermit` via the empty `v=0, r=0, s=0` sentinel and never
+  touches the domain). Either substitute would stay green while a wrong domain reverts every real
+  permit with `InvalidSigner()`.
 - **Security invariants as tests** (§5): the permitted value is always `maxUint256`; the empty permit
-  is exactly `v=0, r=0, s=0`; a duplicate-heavy list that only covers the amount when double-counted
-  is *rejected*; an under-covering list is rejected rather than left to panic; the **default**
+  is exactly `v=0, r=0, s=0`; a **V2** duplicate-heavy list that only covers the amount when
+  double-counted is *rejected* (deduped coverage), while the mirror **V1** list — where duplicates
+  legitimately re-contribute the undrained vault position — is *accepted* (raw-ordered coverage);
+  an under-covering list is rejected rather than left to panic; the **default**
   `supportSignature: false` path returns a valid `approve` requirement (i.e. `vaultExitBundlesV1` is
   on `encodeErc20Approval`'s allowlist) instead of throwing `UnsupportedErc20ApprovalSpenderError`;
-  `buildTx` rejects a permit whose `owner`, `spender`, or `type` does not bind to this user and this
-  ERC-2612 kind; and a `vaultData` fetched for a different vault is rejected with
-  `VaultAddressMismatchError`.
+  `buildTx` rejects a permit whose `owner`, `spender` (read from `action.args`), or `type` does not
+  bind to this user and this ERC-2612 kind; a `vaultData` fetched for a different vault is rejected
+  with `VaultAddressMismatchError`; a handle built from a client on the wrong chain is rejected with
+  `ChainIdMismatchError`; and a Vault V2 exit signed with `getVaultV2PermitTypedData` and submitted
+  on a fork is **accepted** by the contract's `ecrecover` — the on-chain proof that the two-field
+  domain does not produce `InvalidSigner()`.
 
 ### Implementation Phases
 
@@ -646,10 +679,16 @@ chain.
   which settles *authorization*, and then does **not** read the user's share balance. An `amount`
   sized above the user's holdings therefore reverts on-chain (`ERC20InsufficientBalance` in
   `MetaMorpho.withdraw` on V1, a `deleteShares` underflow on V2) rather than as a named build-time
-  error. This is intentional: sizing `amount ≤ shares held` is the caller's responsibility (`vvrm`
-  derives it from the balance it already holds), and adding a `balanceOf` check would only duplicate
-  a read the caller has already made. It is stated in the JSDoc of both entity methods so no
-  integrator relies on the SDK to catch it.
+  error. This is intentional, but the caller's sizing rule is **not** a raw `amount ≤ shares held`
+  comparison: `amount` is asset-denominated while the balance is in shares, so the two coincide only
+  at a share price of exactly 1. The caller must size in **asset terms** against what the shares can
+  actually redeem — `amount ≤ vault.previewRedeem(sharesHeld)` — because after appreciation a raw
+  share comparison over-caps a valid exit, while after a bad-debt write-down it *under*-caps and
+  still selects more assets than the shares can burn, hitting the opaque revert above. On V2 the
+  penalty leg burns extra shares on top of `previewWithdraw(amount)`, so the caller's share budget
+  must cover both legs. `vvrm` derives this from the balance it already holds; a `balanceOf` check
+  in the SDK would only duplicate that read while still owing the same preview math. It is stated in
+  the JSDoc of both entity methods so no integrator relies on the SDK to catch it.
 - **Penalty and adapter-position drift is an acknowledged, unclosable blind spot.** The contract
   reads the V2 penalty (`forceDeallocatePenalty(adapter)`) and each market's adapter position
   *live, on-chain*; the SDK derives `assetsToDeallocate` and the coverage sum from the `getData()`
