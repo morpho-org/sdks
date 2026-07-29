@@ -119,8 +119,17 @@ export class AccrualVaultV2MorphoMarketV1AdapterV2
    * given timestamp.
    * @param timestamp The timestamp at which to accrue interest. Must be greater
    * than or equal to each market's `lastUpdate`.
+   * @returns A new `AccrualVaultV2MorphoMarketV1AdapterV2` with every market
+   * accrued to `timestamp`.
+   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes a
+   * market's `lastUpdate`.
+   * @example
+   * ```ts
+   * const accrued = adapter.accrueInterest(adapter.markets[0]!.lastUpdate);
+   * // accrued.markets[0]!.lastUpdate === the passed timestamp
+   * ```
    */
-  accrueInterest(timestamp?: BigIntish) {
+  accrueInterest(timestamp: BigIntish) {
     return new AccrualVaultV2MorphoMarketV1AdapterV2(
       this,
       this.markets.map((market) => market.accrueInterest(timestamp)),

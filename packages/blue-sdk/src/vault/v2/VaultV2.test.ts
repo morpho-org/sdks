@@ -351,6 +351,29 @@ describe("AccrualVaultV2.accrueInterest", () => {
     // Accrual is non-mutating: the source adapter keeps its original state.
     expect(adapter.positions[0]?.market.lastUpdate).toBe(100n);
   });
+
+  test("behavior: leaves adapters without accrueInterest at their pre-accrual state", () => {
+    // An adapter built before the optional `accrueInterest` method existed.
+    const legacyAdapter: IAccrualVaultV2Adapter = {
+      ...vaultV2AdapterInput({ type: "LegacyAdapter" }),
+      realAssets: () => 1_100n,
+      maxDeposit: (_data, assets) => ({
+        value: BigInt(assets),
+        limiter: CapacityLimitReason.balance,
+      }),
+      maxWithdraw: () => ({
+        value: 500n,
+        limiter: CapacityLimitReason.balance,
+      }),
+    };
+    const vault = accrualVaultV2(legacyAdapter);
+
+    const { vault: accrued } = vault.accrueInterest(101n);
+
+    expect(accrued.lastUpdate).toBe(101n);
+    expect(accrued.accrualAdapters[0]).toBe(legacyAdapter);
+    expect(accrued.accrualLiquidityAdapter).toBe(legacyAdapter);
+  });
 });
 
 describe("VaultV2Adapter", () => {

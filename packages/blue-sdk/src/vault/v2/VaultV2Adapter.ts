@@ -43,10 +43,30 @@ export interface IAccrualVaultV2Adapter extends IVaultV2Adapter {
    * has been accrued up to the given timestamp. Lets a fully-accrued vault expose
    * an entity graph in which every adapter, market, and position shares one
    * `lastUpdate` instead of pre-accrual state.
-   * @param timestamp The timestamp at which to accrue interest. Must be greater
-   * than or equal to each underlying market's `lastUpdate`.
+   *
+   * Optional for backward compatibility: an adapter that does not implement it is
+   * left at its pre-accrual state by the vault's `accrueInterest`.
+   * @param timestamp The timestamp at which to accrue interest. Required so every
+   * nested market accrues to the same instant. Must be greater than or equal to
+   * each underlying market's `lastUpdate`.
+   * @returns A new adapter of the same concrete type, with every underlying
+   * market accrued to `timestamp`.
+   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes an
+   * underlying market's `lastUpdate`.
+   * @example
+   * ```ts
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() });
+   * const vault = await fetchAccrualVaultV2(vaultAddress, client);
+   * const [adapter] = vault.accrualAdapters;
+   * const accrued = adapter?.accrueInterest(vault.lastUpdate);
+   * // accrued.realAssets(vault.lastUpdate) reflects state at the shared timestamp
+   * ```
    */
-  accrueInterest(timestamp?: BigIntish): IAccrualVaultV2Adapter;
+  accrueInterest?(timestamp: BigIntish): IAccrualVaultV2Adapter;
 
   /**
    * Returns the maximum amount of assets that can be deposited to this adapter.
