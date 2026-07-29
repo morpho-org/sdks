@@ -39,6 +39,16 @@ export interface IAccrualVaultV2Adapter extends IVaultV2Adapter {
   realAssets(timestamp: BigIntish): bigint;
 
   /**
+   * Returns a new adapter derived from this one, whose underlying market state
+   * has been accrued up to the given timestamp. Lets a fully-accrued vault expose
+   * an entity graph in which every adapter, market, and position shares one
+   * `lastUpdate` instead of pre-accrual state.
+   * @param timestamp The timestamp at which to accrue interest. Must be greater
+   * than or equal to each underlying market's `lastUpdate`.
+   */
+  accrueInterest(timestamp?: BigIntish): IAccrualVaultV2Adapter;
+
+  /**
    * Returns the maximum amount of assets that can be deposited to this adapter.
    * @param assets The maximum amount of assets to deposit.
    */

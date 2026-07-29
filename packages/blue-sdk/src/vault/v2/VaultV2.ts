@@ -233,19 +233,21 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
   }
 
   /**
-   * Returns a new vault derived from this vault, whose interest has been accrued up to the given timestamp.
-   * Performance and management fee shares are zero when the corresponding fee recipient cannot receive vault shares.
-   * @param timestamp The timestamp at which to accrue interest. Must be greater than or equal to the vault's `lastUpdate`.
+   * Returns a new vault derived from this vault, whose interest — together with
+   * that of every adapter, market, and position it holds — has been accrued up to
+   * the given timestamp, so the entire returned entity graph shares one
+   * `lastUpdate`.
+   * Performance and management fee shares are zero when the corresponding fee
+   * recipient cannot receive vault shares.
+   * @param timestamp The timestamp at which to accrue interest. Must be greater
+   * than or equal to the vault's `lastUpdate` and to each underlying market's
+   * `lastUpdate`.
+   * @throws {VaultV2Errors.InvalidInterestAccrual} when `timestamp` precedes the
+   * vault's `lastUpdate`.
+   * @throws {BlueErrors.InvalidInterestAccrual} when `timestamp` precedes an
+   * underlying market's `lastUpdate`.
    */
   public accrueInterest(timestamp: BigIntish) {
-    const vault = new AccrualVaultV2(
-      this,
-      this.accrualLiquidityAdapter,
-      this.accrualAdapters,
-      this.assetBalance,
-      this.forceDeallocatePenalties,
-    );
-
     // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     timestamp = BigInt(timestamp);
 
@@ -256,6 +258,23 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
         timestamp,
         this.lastUpdate,
       );
+
+    // Accrue every nested adapter (and the liquidity adapter) to the same
+    // timestamp, so the returned vault exposes an entity graph that shares one
+    // `lastUpdate` rather than pre-accrual market state.
+    const accrualAdapters = this.accrualAdapters.map((adapter) =>
+      adapter.accrueInterest(timestamp),
+    );
+    const accrualLiquidityAdapter =
+      this.accrualLiquidityAdapter?.accrueInterest(timestamp);
+
+    const vault = new AccrualVaultV2(
+      this,
+      accrualLiquidityAdapter,
+      accrualAdapters,
+      this.assetBalance,
+      this.forceDeallocatePenalties,
+    );
 
     // Corresponds to the `firstTotalAssets == 0` onchain check.
     if (elapsed === 0n)
@@ -300,7 +319,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     vault._totalAssets = newTotalAssets;
     if (performanceFeeShares) vault.totalSupply += performanceFeeShares;
     if (managementFeeShares) vault.totalSupply += managementFeeShares;
-    vault.lastUpdate = BigInt(timestamp);
+    vault.lastUpdate = timestamp;
 
     return { vault, performanceFeeShares, managementFeeShares };
   }

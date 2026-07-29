@@ -114,6 +114,19 @@ export class AccrualVaultV2MorphoMarketV1AdapterV2
     );
   }
 
+  /**
+   * Returns a new adapter whose underlying markets have been accrued up to the
+   * given timestamp.
+   * @param timestamp The timestamp at which to accrue interest. Must be greater
+   * than or equal to each market's `lastUpdate`.
+   */
+  accrueInterest(timestamp?: BigIntish) {
+    return new AccrualVaultV2MorphoMarketV1AdapterV2(
+      this,
+      this.markets.map((market) => market.accrueInterest(timestamp)),
+    );
+  }
+
   maxDeposit(_data: Hex, assets: BigIntish) {
     return {
       value: BigInt(assets),
