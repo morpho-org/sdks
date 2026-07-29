@@ -42,6 +42,8 @@ struct VaultV2Response {
     uint96 managementFee;
     address performanceFeeRecipient;
     address managementFeeRecipient;
+    bool performanceFeeRecipientCanReceiveShares;
+    bool managementFeeRecipientCanReceiveShares;
 }
 
 contract GetVaultV2 {
@@ -69,6 +71,10 @@ contract GetVaultV2 {
         res.managementFee = vault.managementFee();
         res.performanceFeeRecipient = vault.performanceFeeRecipient();
         res.managementFeeRecipient = vault.managementFeeRecipient();
+        res.performanceFeeRecipientCanReceiveShares =
+            res.performanceFee > 0 ? vault.canReceiveShares(res.performanceFeeRecipient) : true;
+        res.managementFeeRecipientCanReceiveShares =
+            res.managementFee > 0 ? vault.canReceiveShares(res.managementFeeRecipient) : true;
 
         uint256 adaptersLength = vault.adaptersLength();
         res.adapters = new address[](adaptersLength);

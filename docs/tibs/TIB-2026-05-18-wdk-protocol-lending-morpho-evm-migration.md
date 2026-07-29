@@ -102,7 +102,7 @@ The adapter respects `Client → Entity → Action` from §1. It does not read s
 - Read paths (`getVaultPosition`, `getMarketPosition`, `getAccountData`) call `morpho-sdk` entity fetchers; they do not duplicate RPC reads.
 - Approvals, permits, and authorizations come from `morpho-sdk` requirements; this package never re-encodes them.
 
-This keeps the adapter free of the cross-layer leaks §1 forbids. The WDK module is at the same layer as `blue-sdk-wagmi`: a framework binding that wraps the SDK, not a parallel SDK.
+This keeps the adapter free of the cross-layer leaks §1 forbids. The WDK module is a framework binding that wraps the SDK, not a parallel SDK.
 
 ### Build, publish, dependencies
 
@@ -138,10 +138,10 @@ Upstream ships two suites that are wired into the same `pnpm test` script today:
 Two §5 violations make the suite unfit for CI as-is: **mocked viem clients on RPC paths**, and an **unpinned fork block**. The migration handles them as follows.
 
 - **Unit tests (mocked module path) → split.** Tests that exercise pure helpers (preset resolution, requirement translation, parameter normalization, error mapping, the V2-only invariant) become colocated Vitest unit tests next to source (`src/**/*.test.ts`) with no client mocks. Tests that today only assert "the SDK action was called with X" by mocking `morpho-sdk` are **rewritten as fork tests**: the assertion target moves from "SDK called with X" to "the WDK account received a `Transaction` whose `to`/`data`/`value` decode to the expected Morpho action". Drop the `jest.unstable_mockModule('viem', …)` and `jest.unstable_mockModule('@morpho-org/morpho-sdk', …)` calls entirely — they are exactly what §5 forbids and they prevent the suite from catching SDK regressions.
-- **Integration test → harden.** Migrate `tests/integration/module.test.js` to a fork test built on `createViemTest` / `createAnvilTestClient` from `@morpho-org/test`. Pin the block number per chain (mainnet first; matches the convention used by `morpho-sdk`, `migration-sdk-viem`, `liquidity-sdk-viem`). Replace the hardcoded mnemonic with the harness's prefunded test accounts; replace the impersonated USDT whale with `anvil_setBalance` + `anvil_setStorageAt` for ERC-20 balance seeding (already in the test package). Required env vars are read through `morpho-sdk`'s existing zod-validated `env()` helper or its package-local equivalent — `MAINNET_RPC_URL` reuses the root `.env` contract; no new secret surface.
+- **Integration test → harden.** Migrate `tests/integration/module.test.js` to a fork test built on `createViemTest` / `createAnvilTestClient` from `@morpho-org/test`. Pin the block number per chain (mainnet first; matches the convention used by maintained fork-tested packages). Replace the hardcoded mnemonic with the harness's prefunded test accounts; replace the impersonated USDT whale with `anvil_setBalance` + `anvil_setStorageAt` for ERC-20 balance seeding (already in the test package). Required env vars are read through `morpho-sdk`'s existing zod-validated `env()` helper or its package-local equivalent — `MAINNET_RPC_URL` reuses the root `.env` contract; no new secret surface.
 - **ERC-4337 flow.** Currently a single test that mocks the bundler. Keep it as a Vitest unit test with the bundler API stubbed (bundler infrastructure is not a Morpho protocol concern), and add a fork test that exercises the ERC-4337 account's call delegation against an Anvil-deployed EntryPoint when one is available in `@morpho-org/test`. If no EntryPoint fixture exists yet, leave the fork-side ERC-4337 coverage as Phase 6 follow-up rather than expanding the test harness in this TIB.
 - **Coverage parity gate.** Phase 1 keeps the suite running under its original jest configuration so the package lands in-tree with a green baseline. Phase 2 then ports tests in two PRs — unit tests first (fast, no infra), fork tests second (Anvil-bound). No test deletion until its Vitest equivalent is green; line/branch coverage on the migrated package source must not drop below the pre-migration jest report attached to the Phase 1 PR.
-- **CI surface (Phase 1).** Because the package still runs jest in Phase 1, the root Vitest project does not pick its tests up. The migration adds a dedicated step to `.github/workflows/test.yml` that runs `pnpm --filter @morpho-org/wdk-protocol-lending-morpho-evm test` after the root `pnpm test --coverage` step. The same step runs the e2e fork suite (`tests/integration/module.test.js`) since the upstream wires it into the default `pnpm test` glob; `MAINNET_RPC_URL` is already exported in this job and the existing `maybeDescribe = process.env.MAINNET_RPC_URL ? describe : describe.skip` guard short-circuits gracefully when the secret is missing on fork PRs. After Phase 2b the package's tests fold into the root Vitest project and share the same fork-test path as `morpho-sdk`, `migration-sdk-viem`, `liquidity-sdk-viem`. Re-running fork tests on every dependency bump of `morpho-sdk` / `blue-sdk-viem` is automatic via the workspace dep graph.
+- **CI surface (Phase 1).** Because the package still runs jest in Phase 1, the root Vitest project does not pick its tests up. The migration adds a dedicated step to `.github/workflows/test.yml` that runs `pnpm --filter @morpho-org/wdk-protocol-lending-morpho-evm test` after the root `pnpm test --coverage` step. The same step runs the e2e fork suite (`tests/integration/module.test.js`) since the upstream wires it into the default `pnpm test` glob; `MAINNET_RPC_URL` is already exported in this job and the existing `maybeDescribe = process.env.MAINNET_RPC_URL ? describe : describe.skip` guard short-circuits gracefully when the secret is missing on fork PRs. After Phase 2b the package's tests fold into the root Vitest project and share the same fork-test path as maintained SDK packages. Re-running fork tests on every dependency bump of `morpho-sdk` / `blue-sdk-viem` is automatic via the workspace dep graph.
 - **Property-based tests.** §5 calls for fast-check on calldata encoders. This package does not encode calldata itself (it forwards `morpho-sdk` outputs), so property-based coverage targets the WDK requirement translator instead: arbitrary `Requirement[]` shapes must round-trip to WDK signer calls without dropping items, reordering, or merging approvals that target different spenders. Add this as Phase 2 PR scope, not a follow-up.
 
 ### Public API preservation
@@ -161,7 +161,7 @@ The exported WDK adapter surface is preserved one-for-one so external consumers 
 
 Leave the codebase in `morpho-org/wdk-protocol-lending-morpho-evm` and replicate the monorepo's Biome / Vitest / Changesets / Cantina pipeline there.
 
-**Why rejected:** Duplicates every release-flow concern, every CI investment from [TIB-2026-05-12](./TIB-2026-05-12-release-pr-publish-on-push.md), and the audit cadence from §7 for a single package. Dependency-range coupling with `morpho-sdk` would still require manual lockstep updates that the monorepo's Changesets cascade ([TIB-0002](./TIB-0002-consolidate-sdk-packages.md) Dependencies §) handles automatically.
+**Why rejected:** Duplicates every release-flow concern, every CI investment from [TIB-2026-05-12](./TIB-2026-05-12-release-pr-publish-on-push.md), and the audit cadence from §7 for a single package. Dependency-range coupling with `morpho-sdk` would still require manual lockstep updates that the monorepo's Changesets cascade handles automatically.
 
 ### Alternative 2: Rename to `@morpho-org/morpho-sdk-wdk`
 
@@ -209,7 +209,7 @@ Discard the upstream source and rewrite the adapter inside the monorepo.
 ## Observability
 
 - Track npm download trends for `@morpho-org/wdk-protocol-lending-morpho-evm` after the org/maintenance change to confirm no regression at the rollover.
-- JSDoc coverage of the migrated surface is measured by `pnpm jsdoc:coverage` once Phase 2a converts the source to TypeScript, per [TIB-2026-05-04](./TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md).
+- JSDoc coverage of the migrated surface is measured by `pnpm jsdoc:coverage` once Phase 2a converts the source to TypeScript.
 
 ## Future Considerations
 
@@ -223,5 +223,3 @@ Discard the upstream source and rewrite the adapter inside the monorepo.
 - Tether WDK: [tetherto/wdk](https://github.com/tetherto/wdk)
 - Monorepo engineering rules: [`AGENTS.md`](../../AGENTS.md)
 - Release flow: [TIB-2026-05-12](./TIB-2026-05-12-release-pr-publish-on-push.md)
-- SDK consolidation context: [TIB-0002](./TIB-0002-consolidate-sdk-packages.md)
-- JSDoc bar: [TIB-2026-05-04](./TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md)

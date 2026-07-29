@@ -9,6 +9,7 @@ export {
   MAX_TOKEN_APPROVALS,
 } from "./constant.js";
 export { addTransactionMetadata } from "./metadata.js";
+export { signAndVerifyTypedData } from "./signAndVerifyTypedData.js";
 export {
   computeMaxRepaySharePrice,
   computeMaxSupplySharePrice,
@@ -18,15 +19,20 @@ export {
 export {
   validateAccrualPosition,
   validateChainId,
+  validateMidnightMarketChainId,
   validateNativeAsset,
   validatePositionHealth,
   validatePositionHealthAfterWithdraw,
   validateReallocations,
   validateRepayAmount,
-  validateRepayParams,
   validateRepayShares,
   validateSlippageTolerance,
   validateUserAddress,
   validateWithdrawAmount,
   validateWithdrawShares,
 } from "./validate.js";
+export { validateOfferSides } from "./validateOfferSides.js";
+export {
+  type RequirementSpenderKey,
+  validateRequirementSpender,
+} from "./validateRequirementSpender.js";

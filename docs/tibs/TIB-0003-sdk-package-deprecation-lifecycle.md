@@ -99,7 +99,3 @@ Maintained replacement APIs must remain in their owning packages.
   documenting the reason.
 - Source deletion should not happen while a maintained package still imports the deprecated
   package.
-
-## References
-
-- [SDK package consolidation](./TIB-0002-consolidate-sdk-packages.md)

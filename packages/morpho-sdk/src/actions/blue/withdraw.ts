@@ -4,14 +4,16 @@ import type { Address } from "viem";
 import { type Action, BundlerAction } from "../../bundler/index.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
+  type AuthorizationRequirementSignature,
   type BlueWithdrawAction,
   type Metadata,
   MutuallyExclusiveWithdrawAmountsError,
-  NegativeWithdrawMinSharePriceError,
-  NonPositiveWithdrawAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   type Transaction,
   type VaultReallocation,
 } from "../../types/index.js";
+import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
 import { buildReallocationActions } from "./buildReallocationActions.js";
 
 /** Parameters for {@link blueWithdraw}. */
@@ -35,6 +37,12 @@ export interface BlueWithdrawParams {
      * `computeReallocations({ operation: "withdraw", amount, ... })`.
      */
     reallocations?: readonly VaultReallocation[];
+    /**
+     * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
+     * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a
+     * standalone `setAuthorization` transaction.
+     */
+    authorizationSignature?: AuthorizationRequirementSignature;
   };
   metadata?: Metadata;
 }
@@ -67,17 +75,21 @@ export interface BlueWithdrawParams {
  *   protection.
  * @param params.args.reallocations - Optional vault reallocations to execute before withdrawing,
  *   computed by the entity layer.
+ * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
+ *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueWithdrawAction>` with `to`, `value`, `data`, and
  *   the typed `action` discriminator the simulation layer consumes.
- * @throws {NonPositiveWithdrawAmountError} when both `assets` and `shares` are zero, or either is negative.
+ * @throws {NegativeInputError} when `assets`, `shares`, `minSharePrice`, or any reallocation fee
+ *   is negative.
+ * @throws {NonPositiveInputError} when both `assets` and `shares` are zero or any reallocation
+ *   withdrawal amount is non-positive.
  * @throws {MutuallyExclusiveWithdrawAmountsError} when both `assets` and `shares` are non-zero.
- * @throws {NegativeWithdrawMinSharePriceError} when `minSharePrice < 0n` (zero is allowed despite
- *   the class name — pattern preserved for symmetry with `blueBorrow`).
- * @throws Reallocation errors from `buildReallocationActions` when `reallocations` is malformed
- *   (see its JSDoc: `NegativeReallocationFeeError`, `EmptyReallocationWithdrawalsError`,
- *   `NonPositiveReallocationAmountError`, `ReallocationWithdrawalOnTargetMarketError`,
- *   `UnsortedReallocationWithdrawalsError`).
+ * @throws {EmptyReallocationWithdrawalsError} when any reallocation has no withdrawals.
+ * @throws {ReallocationWithdrawalOnTargetMarketError} when a reallocation withdrawal references
+ *   the target market.
+ * @throws {UnsortedReallocationWithdrawalsError} when reallocation withdrawals are not strictly
+ *   sorted by market id.
  * @example
  * ```ts
  * import { blueWithdraw } from "@morpho-org/morpho-sdk";
@@ -96,7 +108,14 @@ export interface BlueWithdrawParams {
  */
 export const blueWithdraw = ({
   market: { chainId, marketParams },
-  args: { assets, shares, receiver, minSharePrice, reallocations },
+  args: {
+    assets,
+    shares,
+    receiver,
+    minSharePrice,
+    reallocations,
+    authorizationSignature,
+  },
   metadata,
 }: BlueWithdrawParams): Readonly<Transaction<BlueWithdrawAction>> => {
   // Mutual exclusion is detected on "both values present" (either non-zero),
@@ -106,16 +125,26 @@ export const blueWithdraw = ({
     throw new MutuallyExclusiveWithdrawAmountsError(marketParams.id);
   }
 
-  if (assets < 0n || shares < 0n || (assets === 0n && shares === 0n)) {
-    throw new NonPositiveWithdrawAmountError(marketParams.id);
+  if (assets < 0n) {
+    throw new NegativeInputError("assets", assets);
+  }
+  if (shares < 0n) {
+    throw new NegativeInputError("shares", shares);
+  }
+  if (assets === 0n && shares === 0n) {
+    throw new NonPositiveInputError("assets or shares", 0n);
   }
 
   if (minSharePrice < 0n) {
-    throw new NegativeWithdrawMinSharePriceError(marketParams.id);
+    throw new NegativeInputError("minSharePrice", minSharePrice);
   }
 
   const actions: Action[] = [];
   let reallocationFee = 0n;
+
+  if (authorizationSignature) {
+    actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
+  }
 
   if (reallocations && reallocations.length > 0) {
     const result = buildReallocationActions(reallocations, marketParams);

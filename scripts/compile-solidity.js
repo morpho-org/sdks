@@ -34,19 +34,20 @@ const packageConfigs = {
       );
     },
   },
-  "liquidation-sdk-viem": {
-    bytecodeExportName: "bytecode",
+  "midnight-sdk": {
+    bytecodeExportName: "code",
     describeArtifact(contractName) {
-      return `Compiled \`${contractName}\` test contract`;
+      return `Deployless \`${contractName}\` query`;
     },
     resolveOutputPath(sourceName) {
       if (sourceName.includes("/interfaces/")) return null;
 
+      const parsed = parse(sourceName);
       return join(
         packageDir,
-        "test",
-        "contracts",
-        `${parse(sourceName).name}.ts`,
+        "src",
+        parsed.dir.replaceAll("contracts", "queries"),
+        `${parsed.name}.ts`,
       );
     },
   },

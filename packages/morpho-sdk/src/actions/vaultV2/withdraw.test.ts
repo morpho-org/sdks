@@ -5,7 +5,7 @@ import {
   KpkWETHVaultV2,
 } from "../../../test/fixtures/vaultV2.js";
 import { test } from "../../../test/setup.js";
-import { NonPositiveAssetAmountError } from "../../types/index.js";
+import { NonPositiveInputError } from "../../types/index.js";
 import { vaultV2Withdraw } from "./withdraw.js";
 
 describe("withdrawVaultV2 unit tests", () => {
@@ -80,7 +80,7 @@ describe("withdrawVaultV2 unit tests", () => {
     expect(tx.data.includes("a1b2c3d4")).toBe(true);
   });
 
-  test("should throw NonPositiveAssetAmountError when assets is zero", async () => {
+  test("should throw NonPositiveInputError when assets is zero", async () => {
     expect(() =>
       vaultV2Withdraw({
         vault: {
@@ -92,10 +92,10 @@ describe("withdrawVaultV2 unit tests", () => {
           onBehalf: "0x1234567890123456789012345678901234567890",
         },
       }),
-    ).toThrow(NonPositiveAssetAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NonPositiveAssetAmountError when assets is negative", async () => {
+  test("should throw NonPositiveInputError when assets is negative", async () => {
     expect(() =>
       vaultV2Withdraw({
         vault: {
@@ -107,6 +107,6 @@ describe("withdrawVaultV2 unit tests", () => {
           onBehalf: "0x1234567890123456789012345678901234567890",
         },
       }),
-    ).toThrow(NonPositiveAssetAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 });

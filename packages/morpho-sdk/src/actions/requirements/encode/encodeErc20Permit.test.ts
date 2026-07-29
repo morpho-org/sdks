@@ -9,13 +9,13 @@ import {
   AddressMismatchError,
   ChainIdMismatchError,
   InvalidSignatureError,
+  UnsupportedErc20ApprovalSpenderError,
 } from "../../../types/index.js";
 import { encodeErc20Permit } from "./encodeErc20Permit.js";
 
 describe("encodeErc20Permit", () => {
   const {
     usdc,
-    dai,
     bundler3: { generalAdapter1 },
   } = addressesRegistry[mainnet.id];
 
@@ -41,29 +41,27 @@ describe("encodeErc20Permit", () => {
       ).rejects.toThrow(ChainIdMismatchError);
     });
 
+    test("should throw UnsupportedErc20ApprovalSpenderError when spender is not supported", async ({
+      client,
+    }) => {
+      const spender = "0x0000000000000000000000000000000000000001" as Address;
+
+      await expect(
+        encodeErc20Permit(client, {
+          token: usdc,
+          spender,
+          amount: mockAmount,
+          chainId: mainnet.id,
+          nonce: mockNonce,
+        }),
+      ).rejects.toThrow(UnsupportedErc20ApprovalSpenderError);
+    });
+
     test("should sign permit for non-DAI token", async ({ client }) => {
       const userAddress = client.account.address;
 
       const permit = await encodeErc20Permit(client, {
         token: usdc,
-        spender: generalAdapter1,
-        amount: mockAmount,
-        chainId: mainnet.id,
-        nonce: mockNonce,
-      });
-
-      const signatureRequirement = await permit.sign(client, userAddress);
-
-      expect(signatureRequirement.args.owner).toEqual(userAddress);
-      expect(isHex(signatureRequirement.args.signature)).toBe(true);
-      expect(signatureRequirement.args.signature.length).toBe(132);
-    });
-
-    test("should sign permit for DAI token", async ({ client }) => {
-      const userAddress = client.account.address;
-
-      const permit = await encodeErc20Permit(client, {
-        token: dai,
         spender: generalAdapter1,
         amount: mockAmount,
         chainId: mainnet.id,

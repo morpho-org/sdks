@@ -10,7 +10,6 @@ export {
 export {
   decodeBytes32String,
   getAuthorizationTypedData,
-  getDaiPermitTypedData,
   getPermit2PermitTypedData,
   getPermit2TransferFromTypedData,
   getPermitTypedData,
@@ -21,6 +20,17 @@ export {
   safeParseNumber,
   safeParseUnits,
 } from "@morpho-org/blue-sdk-viem";
+export {
+  EcrecoverRatifierUtils,
+  GroupUtils,
+  OfferUtils,
+  Payload,
+  RatifierUtils,
+  SetterRatifierUtils,
+  TakeAmountsLib,
+  TickLib,
+  TreeUtils,
+} from "@morpho-org/midnight-sdk";
 export type {
   ArrayElementType,
   DeepPartial,
@@ -67,7 +77,6 @@ export {
   validatePositionHealthAfterWithdraw,
   validateReallocations,
   validateRepayAmount,
-  validateRepayParams,
   validateRepayShares,
   validateSlippageTolerance,
   validateUserAddress,

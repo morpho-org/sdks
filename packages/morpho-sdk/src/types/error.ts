@@ -2,6 +2,170 @@ import { type MarketId, UnknownDataError } from "@morpho-org/blue-sdk";
 import type { Address } from "viem";
 
 /**
+ * Thrown when a morpho-sdk input that must be non-negative is negative.
+ *
+ * @example
+ * ```ts
+ * import { NegativeInputError } from "@morpho-org/morpho-sdk";
+ *
+ * const error = new NegativeInputError("amount", -1n);
+ * if (error instanceof NegativeInputError) {
+ *   console.error(error.field, error.value);
+ * }
+ * ```
+ */
+export class NegativeInputError extends Error {
+  /**
+   * @param field - Public input field whose value is invalid.
+   * @param value - Negative bigint supplied for the field.
+   */
+  public constructor(
+    public readonly field: string,
+    public readonly value: bigint,
+  ) {
+    super(`Input "${field}" must be non-negative, got "${value}".`);
+    this.name = "NegativeInputError";
+  }
+}
+
+/**
+ * Thrown when a morpho-sdk input that must be positive is zero or negative.
+ *
+ * @example
+ * ```ts
+ * import { NonPositiveInputError } from "@morpho-org/morpho-sdk";
+ *
+ * const error = new NonPositiveInputError("shares", 0n);
+ * if (error instanceof NonPositiveInputError) {
+ *   console.error(error.field, error.value);
+ * }
+ * ```
+ */
+export class NonPositiveInputError extends Error {
+  /**
+   * @param field - Public input field whose value is invalid.
+   * @param value - Zero or negative bigint supplied for the field.
+   */
+  public constructor(
+    public readonly field: string,
+    public readonly value: bigint,
+  ) {
+    super(`Input "${field}" must be positive, got "${value}".`);
+    this.name = "NonPositiveInputError";
+  }
+}
+
+/** @deprecated Use {@link NonPositiveInputError}. */
+export const NonPositiveAssetAmountError = NonPositiveInputError;
+/** @deprecated Use {@link NonPositiveInputError}. */
+export type NonPositiveAssetAmountError = NonPositiveInputError;
+
+/** @deprecated Use {@link NonPositiveInputError}. */
+export const NonPositiveSharesAmountError = NonPositiveInputError;
+/** @deprecated Use {@link NonPositiveInputError}. */
+export type NonPositiveSharesAmountError = NonPositiveInputError;
+
+/** @deprecated Use {@link NonPositiveInputError}. */
+export const NonPositiveMaxSharePriceError = NonPositiveInputError;
+/** @deprecated Use {@link NonPositiveInputError}. */
+export type NonPositiveMaxSharePriceError = NonPositiveInputError;
+
+/** @deprecated Use {@link NonPositiveInputError}. */
+export const ZeroDepositAmountError = NonPositiveInputError;
+/** @deprecated Use {@link NonPositiveInputError}. */
+export type ZeroDepositAmountError = NonPositiveInputError;
+
+/** @deprecated Use {@link NonPositiveInputError}. */
+export const NonPositiveBorrowAmountError = NonPositiveInputError;
+/** @deprecated Use {@link NonPositiveInputError}. */
+export type NonPositiveBorrowAmountError = NonPositiveInputError;
+
+/** @deprecated Use {@link NonPositiveInputError}. */
+export const ZeroCollateralAmountError = NonPositiveInputError;
+/** @deprecated Use {@link NonPositiveInputError}. */
+export type ZeroCollateralAmountError = NonPositiveInputError;
+
+/** @deprecated Use {@link NonPositiveInputError}. */
+export const NonPositiveReallocationAmountError = NonPositiveInputError;
+/** @deprecated Use {@link NonPositiveInputError}. */
+export type NonPositiveReallocationAmountError = NonPositiveInputError;
+
+/** @deprecated Use {@link NonPositiveInputError}. */
+export const NonPositiveRepayAmountError = NonPositiveInputError;
+/** @deprecated Use {@link NonPositiveInputError}. */
+export type NonPositiveRepayAmountError = NonPositiveInputError;
+
+/** @deprecated Use {@link NonPositiveInputError}. */
+export const NonPositiveRepayMaxSharePriceError = NonPositiveInputError;
+/** @deprecated Use {@link NonPositiveInputError}. */
+export type NonPositiveRepayMaxSharePriceError = NonPositiveInputError;
+
+/** @deprecated Use {@link NonPositiveInputError}. */
+export const NonPositiveWithdrawCollateralAmountError = NonPositiveInputError;
+/** @deprecated Use {@link NonPositiveInputError}. */
+export type NonPositiveWithdrawCollateralAmountError = NonPositiveInputError;
+
+/** @deprecated Use {@link NonPositiveInputError}. */
+export const ZeroSupplyAmountError = NonPositiveInputError;
+/** @deprecated Use {@link NonPositiveInputError}. */
+export type ZeroSupplyAmountError = NonPositiveInputError;
+
+/** @deprecated Use {@link NonPositiveInputError}. */
+export const NonPositiveWithdrawAmountError = NonPositiveInputError;
+/** @deprecated Use {@link NonPositiveInputError}. */
+export type NonPositiveWithdrawAmountError = NonPositiveInputError;
+
+/** @deprecated Use {@link NegativeInputError}. */
+export const NegativeSlippageToleranceError = NegativeInputError;
+/** @deprecated Use {@link NegativeInputError}. */
+export type NegativeSlippageToleranceError = NegativeInputError;
+
+/** @deprecated Use {@link NegativeInputError}. */
+export const NegativeNativeAmountError = NegativeInputError;
+/** @deprecated Use {@link NegativeInputError}. */
+export type NegativeNativeAmountError = NegativeInputError;
+
+/** @deprecated Use {@link NegativeInputError}. */
+export const NegativeReallocationFeeError = NegativeInputError;
+/** @deprecated Use {@link NegativeInputError}. */
+export type NegativeReallocationFeeError = NegativeInputError;
+
+/** @deprecated Use {@link NegativeInputError}. */
+export const NonPositiveMinBorrowSharePriceError = NegativeInputError;
+/** @deprecated Use {@link NegativeInputError}. */
+export type NonPositiveMinBorrowSharePriceError = NegativeInputError;
+
+/** @deprecated Use {@link NegativeInputError}. */
+export const NegativeSupplyAmountError = NegativeInputError;
+/** @deprecated Use {@link NegativeInputError}. */
+export type NegativeSupplyAmountError = NegativeInputError;
+
+/** @deprecated Use {@link NegativeInputError}. */
+export const NegativeSupplyMaxSharePriceError = NegativeInputError;
+/** @deprecated Use {@link NegativeInputError}. */
+export type NegativeSupplyMaxSharePriceError = NegativeInputError;
+
+/** @deprecated Use {@link NegativeInputError}. */
+export const NegativeWithdrawMinSharePriceError = NegativeInputError;
+/** @deprecated Use {@link NegativeInputError}. */
+export type NegativeWithdrawMinSharePriceError = NegativeInputError;
+
+/** @deprecated Use {@link NegativeInputError}. */
+export const NegativeMinSharePriceError = NegativeInputError;
+/** @deprecated Use {@link NegativeInputError}. */
+export type NegativeMinSharePriceError = NegativeInputError;
+
+/** @deprecated Use {@link NegativeInputError}. */
+export const NegativeBorrowSharesError = NegativeInputError;
+/** @deprecated Use {@link NegativeInputError}. */
+export type NegativeBorrowSharesError = NegativeInputError;
+
+/** @deprecated Use {@link NegativeInputError}. */
+export const NegativeMaxRepaySharePriceError = NegativeInputError;
+/** @deprecated Use {@link NegativeInputError}. */
+export type NegativeMaxRepaySharePriceError = NegativeInputError;
+
+/**
  * Typed errors thrown while encoding supported Bundler3 actions.
  *
  * @remarks
@@ -49,26 +213,84 @@ export namespace BundlerErrors {
       super(`unexpected action "${type}" on chain "${chainId}"`);
     }
   }
-}
 
-/** Thrown when an asset amount is required to be positive but is zero or negative. */
-export class NonPositiveAssetAmountError extends Error {
-  constructor(origin: Address) {
-    super(`Asset amount must be positive for address ${origin}`);
+  /**
+   * Thrown when a Morpho authorization signature names a forbidden `authorized` account
+   * (for example Bundler3 itself), which would grant operator rights to an unintended address.
+   *
+   * @example
+   * ```ts
+   * import { BundlerErrors } from "@morpho-org/morpho-sdk";
+   *
+   * if (error instanceof BundlerErrors.UnexpectedSignature) {
+   *   // Re-sign the authorization targeting GeneralAdapter1.
+   * }
+   * ```
+   */
+  export class UnexpectedSignature extends Error {
+    /**
+     * @param authorized - The forbidden `authorized` address carried by the signature.
+     */
+    constructor(authorized: Address) {
+      super(`unexpected signature authorizing "${authorized}"`);
+    }
   }
 }
 
-/** Thrown when a shares amount is required to be positive but is zero or negative. */
-export class NonPositiveSharesAmountError extends Error {
-  constructor(vault: Address) {
-    super(`Shares amount must be positive for address: ${vault}`);
+/** Requirement signature kind accepted by action-output transaction builders. */
+export type RequirementSignatureKind =
+  | "permit"
+  | "authorization"
+  | "midnightOfferRootSignature";
+
+/**
+ * Thrown when `buildTx` receives more than one requirement signature of the same kind.
+ *
+ * A bundled path consumes at most one signature per accepted kind; passing several of the same
+ * kind is ambiguous and would silently drop all but the first, so it is rejected instead.
+ *
+ * @example
+ * ```ts
+ * import { AmbiguousRequirementSignaturesError } from "@morpho-org/morpho-sdk";
+ *
+ * if (error instanceof AmbiguousRequirementSignaturesError) {
+ *   // Pass a single signature per accepted kind to buildTx.
+ * }
+ * ```
+ */
+export class AmbiguousRequirementSignaturesError extends Error {
+  /**
+   * @param kind - The over-supplied signature kind.
+   * @param count - How many signatures of that kind were received.
+   */
+  constructor(kind: RequirementSignatureKind, count: number) {
+    super(
+      `Expected at most one ${kind} signature but received ${count}. Pass a single ${kind} signature to buildTx.`,
+    );
   }
 }
 
-/** Thrown when a vault deposit's `maxSharePrice` slippage bound is zero or negative. */
-export class NonPositiveMaxSharePriceError extends Error {
-  constructor(vault: Address) {
-    super(`Max share price must be positive for vault: ${vault}`);
+/**
+ * Thrown when `buildTx` receives a requirement signature of a kind the operation does not consume.
+ * Surfacing it prevents a signed requirement from being silently ignored.
+ *
+ * @example
+ * ```ts
+ * import { UnexpectedRequirementSignatureError } from "@morpho-org/morpho-sdk";
+ *
+ * if (error instanceof UnexpectedRequirementSignatureError) {
+ *   // Remove the signature this operation does not use from the buildTx array.
+ * }
+ * ```
+ */
+export class UnexpectedRequirementSignatureError extends Error {
+  /**
+   * @param kind - The unexpected signature kind.
+   */
+  constructor(kind: RequirementSignatureKind) {
+    super(
+      `Received a ${kind} signature that this operation does not consume. Remove it from the buildTx signatures array.`,
+    );
   }
 }
 
@@ -90,6 +312,13 @@ export class ChainIdMismatchError extends Error {
   }
 }
 
+/** Thrown when a runtime crypto API is required but unavailable. */
+export class CryptoUnavailableError extends Error {
+  constructor(feature: string) {
+    super(`Crypto API is required for ${feature} but is unavailable.`);
+  }
+}
+
 /** Thrown when the viem client is missing a property the call requires (e.g. `account.address`). */
 export class MissingClientPropertyError extends Error {
   constructor(property: string) {
@@ -104,17 +333,54 @@ export class ApprovalAmountLessThanSpendAmountError extends Error {
   }
 }
 
-/** Thrown when a slippage tolerance is negative. */
-export class NegativeSlippageToleranceError extends Error {
-  constructor(slippageTolerance: bigint) {
-    super(`Slippage tolerance ${slippageTolerance} must not be negative`);
+/** Thrown when a requirement encoder targets an unsupported spender. */
+export class UnsupportedErc20ApprovalSpenderError extends Error {
+  constructor(params: {
+    readonly spender: Address;
+    readonly chainId: number;
+    readonly generalAdapter1: Address;
+    readonly permit2?: Address;
+    readonly midnight?: Address;
+    readonly midnightBundles?: Address;
+    readonly supportedSpenders?: readonly (Address | undefined)[];
+  }) {
+    const supported = (
+      params.supportedSpenders ?? [
+        params.generalAdapter1,
+        params.permit2,
+        params.midnight,
+        params.midnightBundles,
+      ]
+    )
+      .filter((address) => address != null)
+      .join('", "');
+    super(
+      `Requirement spender "${params.spender}" is not supported on chain "${params.chainId}". Use "${supported}".`,
+    );
   }
 }
 
-/** Thrown when a Morpho accrual position is missing for a market the call needs to read. */
+/** Thrown when a Midnight authorization requirement targets an unsupported operator. */
+export class UnsupportedMidnightAuthorizationTargetError extends Error {
+  constructor(params: {
+    readonly authorized: Address;
+    readonly chainId: number;
+    readonly supportedTargets: readonly Address[];
+  }) {
+    super(
+      `Midnight authorization target "${params.authorized}" is not supported on chain "${params.chainId}". Use "${params.supportedTargets.join('", "')}".`,
+    );
+  }
+}
+
+/** Thrown when a Morpho accrual position required by a call is missing. */
 export class MissingAccrualPositionError extends Error {
-  constructor(market: string) {
-    super(`Accrual position is missing for market: ${market}`);
+  constructor(market?: string) {
+    super(
+      market == null
+        ? "Accrual position is missing. Fetch the position data and try again."
+        : `Accrual position is missing for market: ${market}`,
+    );
   }
 }
 
@@ -138,7 +404,7 @@ export class EmptyDeallocationsError extends Error {
 export class DepositAmountMismatchError extends Error {
   constructor(depositAmount: bigint, signatureAmount: bigint) {
     super(
-      `Deposit amount ${depositAmount} does not match requirement signature amount ${signatureAmount}`,
+      `Deposit amount "${depositAmount}" does not match requirement signature amount "${signatureAmount}"`,
     );
   }
 }
@@ -147,7 +413,25 @@ export class DepositAmountMismatchError extends Error {
 export class DepositAssetMismatchError extends Error {
   constructor(depositAsset: Address, signatureAsset: Address) {
     super(
-      `Deposit asset ${depositAsset} does not match requirement signature asset ${signatureAsset}`,
+      `Deposit asset "${depositAsset}" does not match requirement signature asset "${signatureAsset}"`,
+    );
+  }
+}
+
+/** Thrown when a deposit's owner differs from the owner the supplied permit / permit2 signature was issued for. */
+export class DepositOwnerMismatchError extends Error {
+  constructor(depositOwner: Address, signatureOwner: Address) {
+    super(
+      `Deposit owner "${depositOwner}" does not match requirement signature owner "${signatureOwner}"`,
+    );
+  }
+}
+
+/** Thrown when a deposit's spender differs from the spender the supplied permit / permit2 signature was issued for. */
+export class DepositSpenderMismatchError extends Error {
+  constructor(depositSpender: Address, signatureSpender: Address) {
+    super(
+      `Deposit spender "${depositSpender}" does not match requirement signature spender "${signatureSpender}"`,
     );
   }
 }
@@ -179,43 +463,11 @@ export class ChainWNativeMissingError extends Error {
   }
 }
 
-/** Thrown when `nativeAmount` is negative. */
-export class NegativeNativeAmountError extends Error {
-  constructor(nativeAmount: bigint) {
-    super(`Native amount must not be negative, got ${nativeAmount}`);
-  }
-}
-
-/** Thrown when both `amount` and `nativeAmount` resolve to zero on a vault deposit. */
-export class ZeroDepositAmountError extends Error {
-  constructor(vault: Address) {
-    super(
-      `Total deposit amount must be positive for vault: ${vault}. Both amount and nativeAmount are zero.`,
-    );
-  }
-}
-
 /** Thrown when a vault entity's address does not match the vault address embedded in the call's args. */
 export class VaultAddressMismatchError extends Error {
   constructor(vaultAddress: Address, argsVaultAddress: Address) {
     super(
       `Vault address mismatch between vault: ${vaultAddress} and args: ${argsVaultAddress}`,
-    );
-  }
-}
-
-/** Thrown when a market borrow amount is zero or negative. */
-export class NonPositiveBorrowAmountError extends Error {
-  constructor(market: string) {
-    super(`Borrow amount must be positive for market: ${market}`);
-  }
-}
-
-/** Thrown when both `amount` and `nativeAmount` resolve to zero on a market collateral supply. */
-export class ZeroCollateralAmountError extends Error {
-  constructor(market: string) {
-    super(
-      `Total collateral amount must be positive for market: ${market}. Both amount and nativeAmount are zero.`,
     );
   }
 }
@@ -271,26 +523,10 @@ export class AccrualPositionUserMismatchError extends Error {
   }
 }
 
-/** Thrown when a reallocation's fee is negative. */
-export class NegativeReallocationFeeError extends Error {
-  constructor(vault: string) {
-    super(`Reallocation fee must not be negative for vault: ${vault}`);
-  }
-}
-
 /** Thrown when a reallocation has no withdrawals. */
 export class EmptyReallocationWithdrawalsError extends Error {
   constructor(vault: string) {
     super(`Reallocation withdrawals list cannot be empty for vault: ${vault}`);
-  }
-}
-
-/** Thrown when a reallocation withdrawal amount is zero or negative. */
-export class NonPositiveReallocationAmountError extends Error {
-  constructor(vault: string, market: string) {
-    super(
-      `Reallocation withdrawal amount must be positive for vault ${vault} on market ${market}`,
-    );
   }
 }
 
@@ -312,14 +548,11 @@ export class UnsortedReallocationWithdrawalsError extends Error {
   }
 }
 
-/** Thrown when a market repay's `transferAmount` is zero or negative. */
-export class NonPositiveTransferAmountError extends Error {
-  constructor(market: string) {
-    super(`Transfer amount must be positive for market: ${market}`);
-  }
-}
-
-/** Thrown when a market repay in assets mode has `transferAmount !== assets` (asset-mode requires exact transfer). */
+/**
+ * Thrown when a market repay in assets mode has `transferAmount !== amount + nativeAmount` — the
+ * pre-resolved ERC-20 pull plus the wrapped native must equal the assets repaid, so the bundle
+ * neither strands over-pulled loan tokens on `GeneralAdapter1` nor under-funds the repay.
+ */
 export class TransferAmountNotEqualToAssetsError extends Error {
   constructor(params: {
     transferAmount: bigint;
@@ -327,7 +560,7 @@ export class TransferAmountNotEqualToAssetsError extends Error {
     market: string;
   }) {
     super(
-      `Transfer amount ${params.transferAmount} is not equal to repay assets ${params.assets} for market: ${params.market}`,
+      `Transfer amount ${params.transferAmount} is not equal to repay assets ${params.assets} for market: ${params.market}. In assets mode, transferAmount must equal amount + nativeAmount.`,
     );
   }
 }
@@ -338,27 +571,6 @@ export class MutuallyExclusiveRepayAmountsError extends Error {
     super(
       `Exactly one of assets or shares must be non-zero for market: ${market}. Both were provided.`,
     );
-  }
-}
-
-/** Thrown when a market repay has non-positive amounts: both `assets` and `shares` are zero, or either is negative. */
-export class NonPositiveRepayAmountError extends Error {
-  constructor(market: string) {
-    super(`Repay amount must be positive for market: ${market}`);
-  }
-}
-
-/** Thrown when a market repay's `maxSharePrice` slippage bound is zero or negative. */
-export class NonPositiveRepayMaxSharePriceError extends Error {
-  constructor(market: string) {
-    super(`Max share price must be positive for market: ${market}`);
-  }
-}
-
-/** Thrown when a market `withdrawCollateral` amount is zero or negative. */
-export class NonPositiveWithdrawCollateralAmountError extends Error {
-  constructor(market: string) {
-    super(`Withdraw collateral amount must be positive for market: ${market}`);
   }
 }
 
@@ -518,47 +730,207 @@ export class UnknownReallocationPositionError extends UnknownDataError {
   }
 }
 
-/** Thrown when a market borrow's `minSharePrice` slippage bound is negative. */
-export class NonPositiveMinBorrowSharePriceError extends Error {
-  constructor(market: string) {
-    super(`Min share price must be non-negative for market: ${market}`);
-  }
-}
-
-/** Thrown when a market loan-asset supply amount is negative. */
-export class NegativeSupplyAmountError extends Error {
-  constructor(market: string) {
-    super(`Supply amount must be non-negative for market: ${market}`);
-  }
-}
-
-/** Thrown when a market loan-asset supply's `maxSharePrice` slippage bound is negative. */
-export class NegativeSupplyMaxSharePriceError extends Error {
-  constructor(market: string) {
-    super(`Max share price must be non-negative for market: ${market}`);
-  }
-}
-
-/** Thrown when both `amount` and `nativeAmount` resolve to zero on a market loan-asset supply. */
-export class ZeroSupplyAmountError extends Error {
-  constructor(market: string) {
+/** Thrown when a Midnight amount exceeds the maximum offer-cap value accepted onchain. */
+export class MidnightAmountExceedsMaxOfferCapError extends Error {
+  constructor(params: {
+    readonly label: string;
+    readonly amount: bigint;
+    readonly maxOfferCap: bigint;
+  }) {
     super(
-      `Total supply amount must be positive for market: ${market}. Both amount and nativeAmount are zero.`,
+      `Midnight ${params.label} "${params.amount}" exceeds maximum offer cap "${params.maxOfferCap}". Reduce the amount to the maximum offer cap or less.`,
     );
   }
 }
 
-/** Thrown when a market loan-asset withdraw has both `assets` and `shares` zero, or either negative. */
-export class NonPositiveWithdrawAmountError extends Error {
-  constructor(market: string) {
-    super(`Withdraw amount must be positive for market: ${market}`);
+/** Thrown when a Midnight flow needs at least one takeable offer. */
+export class EmptyMidnightTakeableOffersError extends Error {
+  constructor() {
+    super(
+      "Midnight takeable offers cannot be empty. Refresh the quote and try again.",
+    );
   }
 }
 
-/** Thrown when a market loan-asset withdraw's `minSharePrice` slippage bound is negative. */
-export class NegativeWithdrawMinSharePriceError extends Error {
+/** Thrown when a Midnight offer has the wrong maker side for the requested flow. */
+export class MidnightOfferSideMismatchError extends Error {
+  constructor(params: {
+    index: number;
+    expectedBuy: boolean;
+    actualBuy: boolean;
+  }) {
+    super(
+      `Midnight offer "${params.index}" has buy="${params.actualBuy}", expected "${params.expectedBuy}". Use the matching flow or rebuild the offer list.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight maker offer belongs to a different account than the action flow. */
+export class MidnightOfferMakerMismatchError extends Error {
+  constructor(params: {
+    readonly index: number;
+    readonly expectedMaker: Address;
+    readonly actualMaker: Address;
+  }) {
+    super(
+      `Midnight offer "${params.index}" belongs to maker "${params.actualMaker}", expected "${params.expectedMaker}". Rebuild the offer set for the active account.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight maker offer targets a different chain than the action flow. */
+export class MidnightOfferMarketChainMismatchError extends Error {
+  constructor(params: {
+    readonly index: number;
+    readonly expectedChainId: number;
+    readonly actualChainId: bigint;
+  }) {
+    super(
+      `Midnight offer "${params.index}" targets chain "${params.actualChainId}", expected "${params.expectedChainId}". Rebuild the offer set for the selected chain.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight maker offer targets a different Midnight contract than the action flow. */
+export class MidnightOfferMarketAddressMismatchError extends Error {
+  constructor(params: {
+    readonly index: number;
+    readonly expectedMidnight: Address;
+    readonly actualMidnight: Address;
+  }) {
+    super(
+      `Midnight offer "${params.index}" targets Midnight "${params.actualMidnight}", expected "${params.expectedMidnight}". Rebuild the offer set for the selected chain.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight market targets a different deployment than the selected chain. */
+export class MidnightMarketAddressMismatchError extends Error {
+  constructor(params: {
+    readonly expectedMidnight: Address;
+    readonly actualMidnight: Address;
+  }) {
+    super(
+      `Midnight market targets contract "${params.actualMidnight}", expected "${params.expectedMidnight}". Use market data from the selected chain deployment.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight make-lend offer does not use the approved loan token. */
+export class MidnightOfferMarketLoanTokenMismatchError extends Error {
+  constructor(params: {
+    readonly index: number;
+    readonly expectedLoanToken: Address;
+    readonly actualLoanToken: Address;
+  }) {
+    super(
+      `Midnight offer "${params.index}" uses loan token "${params.actualLoanToken}", expected "${params.expectedLoanToken}". Rebuild the lend offer set for the approved loan token.`,
+    );
+  }
+}
+
+/** Thrown when a quoted Midnight takeable offer belongs to a different market than the requested flow. */
+export class MidnightTakeableOfferMarketMismatchError extends Error {
+  constructor(params: {
+    index: number;
+    expectedMarket: string;
+    actualMarket: string;
+  }) {
+    super(
+      `Midnight takeable offer "${params.index}" belongs to market "${params.actualMarket}", expected "${params.expectedMarket}". Refresh the quote and try again.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight offer tree uses an unsupported ratifier address. */
+export class UnknownMidnightRatifierError extends Error {
+  constructor(params: {
+    ratifier: Address;
+    ecrecoverRatifier: Address;
+    setterRatifier: Address;
+  }) {
+    super(
+      `Midnight offer tree uses ratifier "${params.ratifier}", expected "${params.ecrecoverRatifier}" or "${params.setterRatifier}". Rebuild the tree with a supported ratifier.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight Ecrecover maker flow builds the submit transaction before signing. */
+export class MissingMidnightOfferRootSignatureError extends Error {
+  constructor() {
+    super(
+      "Midnight offer root signature is missing. Sign the offer-root requirement before building the submit transaction.",
+    );
+  }
+}
+
+/** Thrown when a Midnight offer-root signature does not match the prepared tree root. */
+export class MidnightOfferRootMismatchError extends Error {
+  constructor(params: { expectedRoot: string; actualRoot: string }) {
+    super(
+      `Midnight offer root mismatch: expected "${params.expectedRoot}", got "${params.actualRoot}". Rebuild the flow and sign again.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight offer-root signature was produced by another maker account. */
+export class MidnightOfferRootOwnerMismatchError extends Error {
+  constructor(params: { expectedOwner: Address; actualOwner: Address }) {
+    super(
+      `Midnight offer root owner mismatch: expected "${params.expectedOwner}", got "${params.actualOwner}". Rebuild the flow and sign again.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight offer-root signature targets another ratifier. */
+export class MidnightOfferRootRatifierMismatchError extends Error {
+  constructor(params: { expectedRatifier: Address; actualRatifier: Address }) {
+    super(
+      `Midnight offer root ratifier mismatch: expected "${params.expectedRatifier}", got "${params.actualRatifier}". Rebuild the flow and sign again.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight offer-root signature was produced for another offer count. */
+export class MidnightOfferRootOfferCountMismatchError extends Error {
+  constructor(params: { expectedOffers: number; actualOffers: number }) {
+    super(
+      `Midnight offer root offer-count mismatch: expected "${params.expectedOffers}", got "${params.actualOffers}". Rebuild the flow and sign again.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight offer-root signature was not prepared by this maker flow. */
+export class UnpreparedMidnightOfferRootSignatureError extends Error {
+  constructor() {
+    super(
+      "Midnight offer root signature was not prepared for this offer tree. Sign this flow's offer-root requirement before building the submit transaction.",
+    );
+  }
+}
+
+/** Thrown when a Midnight redeem flow finds no credit units for the user. */
+export class NoMidnightCreditToRedeemError extends Error {
   constructor(market: string) {
-    super(`Min share price must be non-negative for market: ${market}`);
+    super(`No Midnight credit is available to redeem for market "${market}".`);
+  }
+}
+
+/** Thrown when a Midnight redeem amount exceeds the user's accrued credit. */
+export class MidnightRedeemExceedsCreditError extends Error {
+  constructor(params: { market: string; units: bigint; credit: bigint }) {
+    super(
+      `Midnight redeem amount exceeds position credit on market "${params.market}": units "${params.units}", credit "${params.credit}". Redeem less or refresh the position data.`,
+    );
+  }
+}
+
+/** Thrown when a Midnight redeem amount exceeds the market's currently withdrawable liquidity. */
+export class InsufficientMidnightWithdrawableLiquidityError extends Error {
+  constructor(params: { market: string; units: bigint; withdrawable: bigint }) {
+    super(
+      `Midnight withdrawable liquidity is insufficient on market "${params.market}": units "${params.units}", withdrawable "${params.withdrawable}". Try again later or redeem less.`,
+    );
   }
 }
 
@@ -627,33 +999,12 @@ export class VaultAssetMismatchError extends Error {
   }
 }
 
-/** Thrown when a vault redeem's `minSharePrice` slippage bound is negative. */
-export class NegativeMinSharePriceError extends Error {
-  constructor(vault: Address) {
-    super(`Min share price must be non-negative for vault: ${vault}`);
-  }
-}
-
-/** Thrown when a refinance's `borrowShares` argument is negative. */
-export class NegativeBorrowSharesError extends Error {
-  constructor(market: string) {
-    super(`Borrow shares must be non-negative for market: ${market}`);
-  }
-}
-
 /** Thrown when a refinance specifies both `borrowAssets` and `borrowShares` as non-zero (modes are mutually exclusive). */
 export class BorrowAmountAndSharesExclusiveError extends Error {
   constructor(market: string) {
     super(
       `Exactly one of borrowAssets or borrowShares must be non-zero for market: ${market}. Both were provided.`,
     );
-  }
-}
-
-/** Thrown when a refinance's `maxRepaySharePrice` slippage bound is negative. */
-export class NegativeMaxRepaySharePriceError extends Error {
-  constructor(market: string) {
-    super(`Max repay share price must be non-negative for market: ${market}`);
   }
 }
 

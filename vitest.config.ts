@@ -1,15 +1,5 @@
 import { configDefaults, defineConfig } from "vitest/config";
 
-const deprecatedPackageVitestProjects = new Set([
-  "migration-sdk-viem",
-  "blue-sdk-wagmi-e2e",
-  "blue-sdk-wagmi-unit",
-  "simulation-sdk",
-  "simulation-sdk-wagmi",
-  "bundler-sdk-viem",
-  "liquidation-sdk-viem",
-]);
-
 export default defineConfig({
   test: {
     coverage: {
@@ -19,13 +9,6 @@ export default defineConfig({
         "scripts/release/**/*.{js,mjs}",
       ],
       exclude: [
-        "packages/liquidation-sdk-viem/**",
-        "packages/bundler-sdk-viem/**",
-        "packages/migration-sdk-viem/**",
-        "packages/simulation-sdk/**",
-        "packages/blue-sdk-wagmi/**",
-        "packages/simulation-sdk-wagmi/**",
-        "packages/test-wagmi/**",
         "packages/test/**",
         "packages/morpho-test/**",
         "packages/**/*.md",
@@ -94,12 +77,25 @@ export default defineConfig({
       {
         extends: true,
         test: {
+          name: "midnight-sdk",
+          include: [
+            "packages/midnight-sdk/src/**/*.test.ts",
+            "packages/midnight-sdk/test/**/*.test.ts",
+          ],
+        },
+      },
+      {
+        extends: true,
+        test: {
           name: "morpho-sdk",
           include: [
             "packages/morpho-sdk/src/**/*.test.ts",
             "packages/morpho-sdk/test/**/*.test.ts",
           ],
-          testTimeout: 60_000,
+          // Mainnet-fork tests provision an Anvil fork per test; under CI load
+          // fork setup + RPC latency can push a test past 60s and flake. Give
+          // headroom to match the heaviest fork projects.
+          testTimeout: 120_000,
         },
       },
       {
@@ -145,68 +141,10 @@ export default defineConfig({
             "packages/blue-sdk-viem/test/**/*.test.ts",
             "packages/blue-sdk-viem/src/**/*.test.ts",
           ],
-          testTimeout: 60_000,
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: "migration-sdk-viem",
-          include: ["packages/migration-sdk-viem/test/**/*.test.ts"],
-          testTimeout: 90_000,
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: "blue-sdk-wagmi-e2e",
-          include: ["packages/blue-sdk-wagmi/test/e2e/**/*.test.ts"],
-          environment: "happy-dom",
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: "blue-sdk-wagmi-unit",
-          include: ["packages/blue-sdk-wagmi/test/unit/**/*.test.ts"],
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: "simulation-sdk",
-          include: ["packages/simulation-sdk/test/**/*.test.ts"],
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: "simulation-sdk-wagmi",
-          include: ["packages/simulation-sdk-wagmi/test/**/*.test.ts"],
-          environment: "happy-dom",
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: "bundler-sdk-viem",
-          include: [
-            "packages/bundler-sdk-viem/test/**/*.test.ts",
-            "packages/bundler-sdk-viem/src/**/*.test.ts",
-          ],
-          environment: "happy-dom",
-          testTimeout: 60_000,
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: "liquidation-sdk-viem",
-          include: [
-            "packages/liquidation-sdk-viem/test/**/*.test.ts",
-            "packages/liquidation-sdk-viem/src/**/*.test.ts",
-          ],
-          testTimeout: 90_000,
+          // Mainnet-fork tests provision an Anvil fork per test; under CI load
+          // fork setup + RPC latency can push a test past 60s and flake. Give
+          // headroom to match the heaviest fork projects.
+          testTimeout: 120_000,
         },
       },
       {
@@ -247,9 +185,6 @@ export default defineConfig({
           testTimeout: 120_000,
         },
       },
-    ].filter(
-      ({ test }) =>
-        !process.env.CI || !deprecatedPackageVitestProjects.has(test.name),
-    ),
+    ],
   },
 });

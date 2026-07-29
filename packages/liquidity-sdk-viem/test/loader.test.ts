@@ -20,19 +20,9 @@ describe("dataloader", () => {
 
     expect(reallocations).toStrictEqual([
       {
-        assets: 3873700460362n,
+        assets: 1609457675962n,
         id: "0x3a85e619751152991742810df6ec69ce473daef99e28a64ab2340d7b7ccfee49",
         vault: "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB",
-      },
-      {
-        assets: 1511034176993n,
-        id: "0x64d65c9a2d91c36d56fbc42d69e979335320169b3df63bf92789e2c8883fcc64",
-        vault: "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB",
-      },
-      {
-        assets: 89n,
-        id: "0x3bb29b62affbedc60b8446b235aaa349d5e3bad96c09bca1d7a2d693c06669aa",
-        vault: "0x186514400e52270cef3D80e1c6F8d10A75d47344",
       },
     ]);
   });
@@ -52,18 +42,13 @@ describe("dataloader", () => {
 
     expect(eth_reallocations).toStrictEqual([
       {
-        assets: 1275140484727340602998n,
+        assets: 1159397680152036107732n,
         id: "0xb8fc70e82bc5bb53e773626fcc6a23f7eefa036918d7ef216ecfb1950a94a85e",
         vault: "0x2371e134e3455e0593363cBF89d3b6cf53740618",
       },
       {
-        assets: 365464355757324173961n,
+        assets: 334181181282594142674n,
         id: "0xba761af4134efb0855adfba638945f454f0a704af11fc93439e20c7c5ebab942",
-        vault: "0x4881Ef0BF6d2365D3dd6499ccd7532bcdBCE0658",
-      },
-      {
-        assets: 228469609053469911383n,
-        id: "0xd0e50cdac92fe2172043f5e0c36532c6369d24947e40968f34a5e8819ca9ec5d",
         vault: "0x4881Ef0BF6d2365D3dd6499ccd7532bcdBCE0658",
       },
       {
@@ -72,42 +57,44 @@ describe("dataloader", () => {
         vault: "0x78Fc2c2eD1A4cDb5402365934aE5648aDAd094d0",
       },
       {
-        assets: 124911026994913541789n,
+        assets: 119531849162836164920n,
         id: "0xcacd4c39af872ddecd48b650557ff5bcc7d3338194c0f5b2038e0d4dec5dc022",
         vault: "0x4881Ef0BF6d2365D3dd6499ccd7532bcdBCE0658",
       },
       {
-        assets: 34067768940166463160n,
+        assets: 84374938643006667977n,
+        id: "0xd0e50cdac92fe2172043f5e0c36532c6369d24947e40968f34a5e8819ca9ec5d",
+        vault: "0x2371e134e3455e0593363cBF89d3b6cf53740618",
+      },
+      {
+        assets: 66930590311663470057n,
+        id: "0x0eed5a89c7d397d02fd0b9b8e42811ca67e50ed5aeaa4f22e506516c716cfbbf",
+        vault: "0x4881Ef0BF6d2365D3dd6499ccd7532bcdBCE0658",
+      },
+      {
+        assets: 23306805022282394159n,
+        id: "0x698fe98247a40c5771537b5786b2f3f9d78eb487b4ce4d75533cd0e94d88a115",
+        vault: "0x4881Ef0BF6d2365D3dd6499ccd7532bcdBCE0658",
+      },
+      {
+        assets: 14167222149320089956n,
         id: "0x138eec0e4a1937eb92ebc70043ed539661dd7ed5a89fb92a720b341650288a40",
         vault: "0x2371e134e3455e0593363cBF89d3b6cf53740618",
       },
       {
-        assets: 23607619147993488117n,
-        id: "0x37e7484d642d90f14451f1910ba4b7b8e4c3ccdd0ec28f8b2bdb35479e472ba7",
-        vault: "0x4881Ef0BF6d2365D3dd6499ccd7532bcdBCE0658",
-      },
-      {
-        assets: 12852204041462170816n,
+        assets: 10242440491887459673n,
         id: "0xa0534c78620867b7c8706e3b6df9e69a2bc67c783281b7a77e034ed75cee012e",
         vault: "0x4881Ef0BF6d2365D3dd6499ccd7532bcdBCE0658",
       },
       {
-        assets: 240388238484242n,
-        id: "0x87a3e5dbcd822f2a543bea1365b7dd99ad9a1cb460061278319732e63207c792",
+        assets: 348595829549040913n,
+        id: "0xea023e57814fb9a814a5a9ee9f3e7ece5b771dd8cc703e50b911e9cde064a12d",
         vault: "0x4881Ef0BF6d2365D3dd6499ccd7532bcdBCE0658",
       },
     ]);
-    expect(usdc_reallocations).toStrictEqual([
-      {
-        assets: 2520842846565n,
-        id: "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc",
-        vault: "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB",
-      },
-      {
-        assets: 1511034176993n,
-        id: "0x64d65c9a2d91c36d56fbc42d69e979335320169b3df63bf92789e2c8883fcc64",
-        vault: "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB",
-      },
-    ]);
+    // At the pinned block, every usdc_wbtc source market already sits at or
+    // above 90% utilization, so the default 90% withdrawal ceiling (previously
+    // the API's per-market targetWithdrawUtilization) yields no withdrawals.
+    expect(usdc_reallocations).toStrictEqual([]);
   });
 });

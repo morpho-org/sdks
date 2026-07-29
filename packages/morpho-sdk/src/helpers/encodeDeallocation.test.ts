@@ -7,7 +7,7 @@ import {
   parseEther,
 } from "viem";
 import { describe, expect, test } from "vitest";
-import { NonPositiveAssetAmountError } from "../types/index.js";
+import { NonPositiveInputError } from "../types/index.js";
 import { encodeForceDeallocateCall } from "./encodeDeallocation.js";
 
 const ADAPTER: Address = "0x1111111111111111111111111111111111111111";
@@ -61,16 +61,16 @@ describe("encodeForceDeallocateCall", () => {
     expect(decodedParams.lltv).toBe(FIXTURE_PARAMS.lltv);
   });
 
-  test("throws NonPositiveAssetAmountError on amount=0", () => {
+  test("throws NonPositiveInputError on amount=0", () => {
     expect(() =>
       encodeForceDeallocateCall({ adapter: ADAPTER, amount: 0n }, ON_BEHALF),
-    ).toThrow(NonPositiveAssetAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("throws NonPositiveAssetAmountError on negative amount", () => {
+  test("throws NonPositiveInputError on negative amount", () => {
     expect(() =>
       encodeForceDeallocateCall({ adapter: ADAPTER, amount: -1n }, ON_BEHALF),
-    ).toThrow(NonPositiveAssetAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
   test("error message references the adapter context", () => {
@@ -78,10 +78,10 @@ describe("encodeForceDeallocateCall", () => {
       encodeForceDeallocateCall({ adapter: ADAPTER, amount: 0n }, ON_BEHALF);
       expect.fail("expected to throw");
     } catch (e) {
-      expect(e).toBeInstanceOf(NonPositiveAssetAmountError);
+      expect(e).toBeInstanceOf(NonPositiveInputError);
       // The thrown message must name the offending adapter so callers
       // pattern-matching on the error can attribute the failure.
-      expect((e as NonPositiveAssetAmountError).message).toContain(ADAPTER);
+      expect((e as NonPositiveInputError).message).toContain(ADAPTER);
     }
   });
 });

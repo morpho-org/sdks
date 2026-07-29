@@ -1,3 +1,7 @@
+import {
+  DivisionByZeroError,
+  InvalidBitLengthError,
+} from "@morpho-org/morpho-ts";
 import { describe, expect, test } from "vitest";
 import { MathLib } from "./MathLib.js";
 
@@ -28,15 +32,12 @@ describe("MathLib.maxUint", () => {
     expect(MathLib.maxUint(64)).toBe(2n ** 64n - 1n);
   });
   test("throws when n is not divisible by 4", () => {
-    expect(() => MathLib.maxUint(7)).toThrow(/Invalid number of bits/);
-    expect(() => MathLib.maxUint(33)).toThrow(/Invalid number of bits/);
+    expect(() => MathLib.maxUint(7)).toThrow(InvalidBitLengthError);
+    expect(() => MathLib.maxUint(33)).toThrow(InvalidBitLengthError);
   });
 
-  test("nBits=0 throws SyntaxError via BigInt('0x') (boundary case)", () => {
-    // Pinned to current behaviour: maxUint(0) calls BigInt("0x"), which
-    // throws SyntaxError. If a future refactor adds a guard, this test
-    // should be updated alongside (and the new typed-error class pinned).
-    expect(() => MathLib.maxUint(0)).toThrow(SyntaxError);
+  test("nBits=0 throws InvalidBitLengthError", () => {
+    expect(() => MathLib.maxUint(0)).toThrow(InvalidBitLengthError);
   });
 });
 
@@ -114,8 +115,8 @@ describe("MathLib.mulDivDown / MathLib.mulDivUp", () => {
     expect(MathLib.mulDivDown(6n, 1n, 3n)).toBe(2n);
   });
   test("throws DIVISION_BY_ZERO on zero denominator", () => {
-    expect(() => MathLib.mulDivDown(1n, 1n, 0n)).toThrow(/DIVISION_BY_ZERO/);
-    expect(() => MathLib.mulDivUp(1n, 1n, 0n)).toThrow(/DIVISION_BY_ZERO/);
+    expect(() => MathLib.mulDivDown(1n, 1n, 0n)).toThrow(DivisionByZeroError);
+    expect(() => MathLib.mulDivUp(1n, 1n, 0n)).toThrow(DivisionByZeroError);
   });
 });
 
@@ -162,7 +163,7 @@ describe("MathLib.wDiv / MathLib.wDivDown / MathLib.wDivUp", () => {
     expect(MathLib.wDiv(1n, 3n * MathLib.WAD, "Up")).toBe(1n);
   });
   test("wDiv throws on zero divisor", () => {
-    expect(() => MathLib.wDivDown(1n, 0n)).toThrow(/DIVISION_BY_ZERO/);
+    expect(() => MathLib.wDivDown(1n, 0n)).toThrow(DivisionByZeroError);
   });
 });
 

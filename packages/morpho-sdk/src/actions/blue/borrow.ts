@@ -4,13 +4,15 @@ import type { Address } from "viem";
 import { type Action, BundlerAction } from "../../bundler/index.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
+  type AuthorizationRequirementSignature,
   type BlueBorrowAction,
   type Metadata,
-  NonPositiveBorrowAmountError,
-  NonPositiveMinBorrowSharePriceError,
+  NegativeInputError,
+  NonPositiveInputError,
   type Transaction,
   type VaultReallocation,
 } from "../../types/index.js";
+import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
 import { buildReallocationActions } from "./buildReallocationActions.js";
 
 /** Parameters for {@link blueBorrow}. */
@@ -20,12 +22,20 @@ export interface BlueBorrowParams {
     readonly marketParams: MarketParams;
   };
   args: {
+    /** Amount of loan asset to borrow. */
     amount: bigint;
+    /** Address that receives the borrowed assets. */
     receiver: Address;
     /** Minimum borrow share price (in ray). Protects against share price manipulation. */
     minSharePrice: bigint;
     /** Vault reallocations to execute before borrowing (computed by entity). */
     reallocations?: readonly VaultReallocation[];
+    /**
+     * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
+     * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a
+     * standalone `setAuthorization` transaction.
+     */
+    authorizationSignature?: AuthorizationRequirementSignature;
   };
   metadata?: Metadata;
 }
@@ -48,18 +58,16 @@ export interface BlueBorrowParams {
  * @param params.args.minSharePrice - Minimum borrow share price (in ray). Slippage protection.
  * @param params.args.reallocations - Optional vault reallocations to execute before borrowing,
  *   computed by the entity layer.
+ * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
+ *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueBorrowAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator the simulation layer consumes.
- * @throws {NonPositiveBorrowAmountError} when `amount <= 0n`.
- * @throws {NonPositiveMinBorrowSharePriceError} when `minSharePrice < 0n` (negative; zero is
- *   allowed despite the class name).
- * @throws {NegativeReallocationFeeError} from `buildReallocationActions` when
- *   `reallocations` is non-empty and any `reallocation.fee < 0n`.
+ * @throws {NonPositiveInputError} when `amount <= 0n` or any reallocation withdrawal amount
+ *   is non-positive.
+ * @throws {NegativeInputError} when `minSharePrice < 0n` or any reallocation fee is negative.
  * @throws {EmptyReallocationWithdrawalsError} from `buildReallocationActions` when any
  *   `reallocation.withdrawals` is empty.
- * @throws {NonPositiveReallocationAmountError} from `buildReallocationActions` when any
- *   `reallocation.withdrawals[i].amount <= 0n`.
  * @throws {ReallocationWithdrawalOnTargetMarketError} from `buildReallocationActions` when any
  *   reallocation withdrawal references the target market.
  * @throws {UnsortedReallocationWithdrawalsError} from `buildReallocationActions` when
@@ -81,19 +89,29 @@ export interface BlueBorrowParams {
  */
 export const blueBorrow = ({
   market: { chainId, marketParams },
-  args: { amount, receiver, minSharePrice, reallocations },
+  args: {
+    amount,
+    receiver,
+    minSharePrice,
+    reallocations,
+    authorizationSignature,
+  },
   metadata,
 }: BlueBorrowParams): Readonly<Transaction<BlueBorrowAction>> => {
   if (amount <= 0n) {
-    throw new NonPositiveBorrowAmountError(marketParams.id);
+    throw new NonPositiveInputError("amount", amount);
   }
 
   if (minSharePrice < 0n) {
-    throw new NonPositiveMinBorrowSharePriceError(marketParams.id);
+    throw new NegativeInputError("minSharePrice", minSharePrice);
   }
 
   const actions: Action[] = [];
   let reallocationFee = 0n;
+
+  if (authorizationSignature) {
+    actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
+  }
 
   if (reallocations && reallocations.length > 0) {
     const result = buildReallocationActions(reallocations, marketParams);

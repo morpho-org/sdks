@@ -1,6 +1,7 @@
 import {
+  AccrualVaultV2,
   type AccrualVaultV2MorphoMarketV1Adapter,
-  type AccrualVaultV2MorphoMarketV1AdapterV2,
+  AccrualVaultV2MorphoMarketV1AdapterV2,
   AccrualVaultV2MorphoVaultV1Adapter,
   addressesRegistry,
   type ChainAddresses,
@@ -47,11 +48,16 @@ import {
 } from "../../abis.js";
 import { abi as marketQueryAbi } from "../../queries/GetMarket.js";
 import { abi as vaultQueryAbi } from "../../queries/GetVault.js";
+import { abi as accrualVaultV2QueryAbi } from "../../queries/vault-v2/GetAccrualVaultV2.js";
 import { abi as vaultV2QueryAbi } from "../../queries/vault-v2/GetVaultV2.js";
 import { abi as marketAdapterQueryAbi } from "../../queries/vault-v2/GetVaultV2MorphoMarketV1Adapter.js";
 import { abi as marketAdapterV2QueryAbi } from "../../queries/vault-v2/GetVaultV2MorphoMarketV1AdapterV2.js";
 import { abi as vaultAdapterQueryAbi } from "../../queries/vault-v2/GetVaultV2MorphoVaultV1Adapter.js";
-import { fetchAccrualVaultV2, fetchVaultV2 } from "./VaultV2.js";
+import {
+  fetchAccrualVaultV2,
+  fetchAccrualVaultV2Deployless,
+  fetchVaultV2,
+} from "./VaultV2.js";
 import {
   fetchAccrualVaultV2Adapter,
   fetchVaultV2Adapter,
@@ -142,6 +148,8 @@ const vaultV2Result = {
   managementFee: 6n,
   performanceFeeRecipient: RECIPIENT,
   managementFeeRecipient: RECIPIENT,
+  performanceFeeRecipientCanReceiveShares: false,
+  managementFeeRecipientCanReceiveShares: false,
 } as const;
 
 const marketQueryResult = {
@@ -184,7 +192,18 @@ function mockTokenReads(handle: ReturnType<typeof createMockClient>) {
   });
 }
 
-function mockVaultV2BaseReads(handle: ReturnType<typeof createMockClient>) {
+function mockVaultV2BaseReads(
+  handle: ReturnType<typeof createMockClient>,
+  {
+    performanceFee = 5n,
+    managementFee = 6n,
+    canReceiveShares = false,
+  }: {
+    performanceFee?: bigint;
+    managementFee?: bigint;
+    canReceiveShares?: boolean;
+  } = {},
+) {
   mockTokenReads(handle);
   mockRead(handle, {
     address: ADDRESSES.vaultV2Factory,
@@ -196,8 +215,8 @@ function mockVaultV2BaseReads(handle: ReturnType<typeof createMockClient>) {
     ["asset", ASSET],
     ["totalSupply", 200n],
     ["_totalAssets", 100n],
-    ["performanceFee", 5n],
-    ["managementFee", 6n],
+    ["performanceFee", performanceFee],
+    ["managementFee", managementFee],
     ["virtualShares", 1n],
     ["lastUpdate", 4n],
     ["maxRate", 3n],
@@ -220,6 +239,13 @@ function mockVaultV2BaseReads(handle: ReturnType<typeof createMockClient>) {
     functionName: "adapters",
     result: ADAPTER_2,
   });
+  if (performanceFee > 0n || managementFee > 0n)
+    mockRead(handle, {
+      address: VAULT,
+      abi: vaultV2Abi,
+      functionName: "canReceiveShares",
+      result: canReceiveShares,
+    });
 }
 
 function mockVaultV2AllocationReads(
@@ -288,6 +314,8 @@ describe("fetchVaultV2", () => {
     expect(vault.asset).toBe(ASSET);
     expect(vault.adapters).toEqual([ADAPTER_2]);
     expect(vault.liquidityAllocations?.[0]?.allocation).toBe(100n);
+    expect(vault.performanceFeeRecipientCanReceiveShares).toBe(false);
+    expect(vault.managementFeeRecipientCanReceiveShares).toBe(false);
   });
 
   test("omits deployless liquidity allocations for unknown liquidity adapters", async () => {
@@ -340,6 +368,8 @@ describe("fetchVaultV2", () => {
     expect(vault.liquidityAllocations?.[0]?.id).toBe(
       VaultV2MorphoVaultV1Adapter.adapterId(ADAPTER),
     );
+    expect(vault.performanceFeeRecipientCanReceiveShares).toBe(false);
+    expect(vault.managementFeeRecipientCanReceiveShares).toBe(false);
   });
 
   test("uses multicall directly when deployless is disabled", async () => {
@@ -364,6 +394,62 @@ describe("fetchVaultV2", () => {
     });
 
     expect(vault.liquidityAllocations).toBeUndefined();
+  });
+
+  test.each([
+    {
+      scenario: "both",
+      performanceFee: 0n,
+      managementFee: 0n,
+      expectedPerformanceEligibility: true,
+      expectedManagementEligibility: true,
+    },
+    {
+      scenario: "performance",
+      performanceFee: 0n,
+      managementFee: 6n,
+      expectedPerformanceEligibility: true,
+      expectedManagementEligibility: false,
+    },
+    {
+      scenario: "management",
+      performanceFee: 5n,
+      managementFee: 0n,
+      expectedPerformanceEligibility: false,
+      expectedManagementEligibility: true,
+    },
+  ])("skips $scenario zero-fee recipient gate reads", async ({
+    performanceFee,
+    managementFee,
+    expectedPerformanceEligibility,
+    expectedManagementEligibility,
+  }) => {
+    const handle = createMockClient(mainnet);
+    mockVaultV2BaseReads(handle, { performanceFee, managementFee });
+    mockRead(handle, {
+      address: ADDRESSES.morphoVaultV1AdapterFactory,
+      abi: morphoVaultV1AdapterFactoryAbi,
+      functionName: "isMorphoVaultV1Adapter",
+      result: false,
+    });
+    mockRead(handle, {
+      address: ADDRESSES.morphoMarketV1AdapterV2Factory,
+      abi: morphoMarketV1AdapterV2FactoryAbi,
+      functionName: "isMorphoMarketV1AdapterV2",
+      result: false,
+    });
+
+    const vault = await fetchVaultV2(VAULT, handle.client, {
+      chainId: CHAIN_ID,
+      deployless: false,
+    });
+
+    expect(vault.performanceFeeRecipientCanReceiveShares).toBe(
+      expectedPerformanceEligibility,
+    );
+    expect(vault.managementFeeRecipientCanReceiveShares).toBe(
+      expectedManagementEligibility,
+    );
   });
 
   test("passes zero for missing deployless adapter factories", async () => {
@@ -1408,6 +1494,8 @@ describe("individual adapter fetchers", () => {
         totalSupply: 10n,
         totalAssets: 11n,
         lastTotalAssets: 12n,
+        hasLostAssets: false,
+        lostAssets: 0n,
         supplyQueue: [],
         withdrawQueue: [],
         publicAllocatorConfig: {
@@ -1462,6 +1550,8 @@ describe("individual adapter fetchers", () => {
         totalSupply: 10n,
         totalAssets: 11n,
         lastTotalAssets: 12n,
+        hasLostAssets: false,
+        lostAssets: 0n,
         supplyQueue: [],
         withdrawQueue: [],
         publicAllocatorConfig: {
@@ -1491,14 +1581,18 @@ describe("individual adapter fetchers", () => {
 });
 
 describe("fetchAccrualVaultV2", () => {
-  test("fetches a deployless Vault V2 with asset balance", async () => {
+  test("falls back to sequential reads when the single deployless call fails", async () => {
     const handle = createMockClient(mainnet);
-    mockDeploylessRead(handle, vaultV2QueryAbi, "query", {
-      ...vaultV2Result,
-      adapters: [],
-      liquidityAdapter: zeroAddress,
-      liquidityAllocations: [],
-    });
+    mockDeploylessReads(handle, [
+      // GetAccrualVaultV2 single-call query fails, forcing the sequential fallback.
+      "0x",
+      encodeReadResult(vaultV2QueryAbi, "query", {
+        ...vaultV2Result,
+        adapters: [],
+        liquidityAdapter: zeroAddress,
+        liquidityAllocations: [],
+      }),
+    ]);
     mockRead(handle, {
       address: ASSET,
       abi: erc20Abi,
@@ -1513,9 +1607,11 @@ describe("fetchAccrualVaultV2", () => {
     expect(vault.accrualAdapters).toEqual([]);
   });
 
-  test("fetches accrual adapters and force-deallocate penalties", async () => {
+  test("falls back to sequential adapter and penalty reads when the single call fails", async () => {
     const handle = createMockClient(mainnet);
     mockDeploylessReads(handle, [
+      // GetAccrualVaultV2 single-call query fails, forcing the sequential fallback.
+      "0x",
       encodeReadResult(vaultV2QueryAbi, "query", {
         ...vaultV2Result,
         liquidityAdapter: ADAPTER,
@@ -1575,5 +1671,322 @@ describe("fetchAccrualVaultV2", () => {
     expect(vault.accrualLiquidityAdapter?.address).toBe(ADAPTER);
     expect(vault.accrualAdapters[0]?.address).toBe(ADAPTER_2);
     expect(vault.forceDeallocatePenalties[ADAPTER_2]).toBe(12n);
+  });
+
+  test("does not fall back when the single deployless call is forced", async () => {
+    const handle = createMockClient(mainnet);
+    // Only the failing single-call query is mocked; a multicall fallback would need more responses,
+    // so a thrown error proves the forced path never falls back.
+    mockDeploylessReads(handle, ["0x"]);
+
+    await expect(
+      fetchAccrualVaultV2(VAULT, handle.client, {
+        chainId: CHAIN_ID,
+        deployless: "force",
+      }),
+    ).rejects.toThrow();
+  });
+
+  test("rethrows a deterministic UnknownOfFactory revert without falling back", async () => {
+    const handle = createMockClient(mainnet);
+    // No multicall reads are mocked: falling back would throw a different, non-typed error.
+    mockDeploylessReads(handle, [contractRevert("UnknownOfFactory")]);
+
+    await expect(
+      fetchAccrualVaultV2(VAULT, handle.client, { chainId: CHAIN_ID }),
+    ).rejects.toBeInstanceOf(UnknownOfFactory);
+  });
+
+  test("rethrows a deterministic UnsupportedVaultV2Adapter revert without falling back", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessReads(handle, [contractRevert("UnsupportedVaultV2Adapter")]);
+
+    await expect(
+      fetchAccrualVaultV2(VAULT, handle.client, { chainId: CHAIN_ID }),
+    ).rejects.toBeInstanceOf(UnsupportedVaultV2AdapterError);
+  });
+
+  test("rethrows UnknownFactory without attempting the deployless call", async () => {
+    const { client } = createMockClient(mainnet);
+
+    await expect(
+      fetchAccrualVaultV2(VAULT, client, { chainId: ChainId.CeloMainnet }),
+    ).rejects.toBeInstanceOf(UnknownFactory);
+  });
+});
+
+const emptyVaultV1QueryResult = {
+  config: {
+    asset: ASSET,
+    symbol: "MM",
+    name: "MetaMorpho Mock",
+    decimals: 18n,
+    decimalsOffset: 12n,
+    eip5267Domain: DOMAIN,
+  },
+  owner: RECIPIENT,
+  curator: RECIPIENT,
+  guardian: RECIPIENT,
+  timelock: 0n,
+  pendingTimelock: { value: 0n, validAt: 0n },
+  pendingGuardian: { value: zeroAddress, validAt: 0n },
+  pendingOwner: zeroAddress,
+  fee: 0n,
+  feeRecipient: RECIPIENT,
+  skimRecipient: RECIPIENT,
+  totalSupply: 0n,
+  lastTotalAssets: 0n,
+  hasLostAssets: false,
+  lostAssets: 0n,
+  supplyQueue: [],
+  withdrawQueue: [],
+  hasPublicAllocator: false,
+  publicAllocatorConfig: { admin: zeroAddress, fee: 0n, accruedFee: 0n },
+};
+
+function marketV1V2AdapterQueryResult(adapter: Address, supplyShares: bigint) {
+  return {
+    adapter,
+    adapterType: 3,
+    parentVault: VAULT,
+    skimRecipient: RECIPIENT,
+    forceDeallocatePenalty: 0n,
+    morphoVaultV1: zeroAddress,
+    vaultV1: emptyVaultV1QueryResult,
+    vaultV1Allocations: [],
+    vaultV1Shares: 0n,
+    marketV1Positions: [],
+    adaptiveCurveIrm: ADDRESSES.adaptiveCurveIrm,
+    marketV1V2Allocations: [
+      { marketId: ID, supplyShares, market: marketQueryResult },
+    ],
+  };
+}
+
+// A MorphoMarketV1 adapter listing a market not yet created in Morpho: the adapter keeps the real
+// `marketParams`, but `idToMarketParams` (the market response) is zeroed.
+function marketV1AdapterUncreatedQueryResult(adapter: Address) {
+  return {
+    adapter,
+    adapterType: 2,
+    parentVault: VAULT,
+    skimRecipient: RECIPIENT,
+    forceDeallocatePenalty: 0n,
+    morphoVaultV1: zeroAddress,
+    vaultV1: emptyVaultV1QueryResult,
+    vaultV1Allocations: [],
+    vaultV1Shares: 0n,
+    marketV1Positions: [
+      {
+        marketParams: marketQueryResult.marketParams,
+        position: { supplyShares: 0n, borrowShares: 0n, collateral: 0n },
+        market: {
+          marketParams: [
+            zeroAddress,
+            zeroAddress,
+            zeroAddress,
+            zeroAddress,
+            0n,
+          ] as const,
+          market: [0n, 0n, 0n, 0n, 0n, 0n] as const,
+          hasPrice: false,
+          price: 0n,
+          rateAtTarget: 0n,
+        },
+      },
+    ],
+    adaptiveCurveIrm: ADDRESSES.adaptiveCurveIrm,
+    marketV1V2Allocations: [],
+  };
+}
+
+const accrualVaultV2Result = {
+  token: tokenResult,
+  asset: ASSET,
+  _totalAssets: 100n,
+  totalSupply: 200n,
+  virtualShares: 1n,
+  maxRate: 3n,
+  lastUpdate: 4n,
+  liquidityAdapter: ADAPTER,
+  liquidityData: "0x",
+  isLiquidityAdapterKnown: true,
+  liquidityAllocations: [
+    {
+      id: VaultV2MorphoMarketV1AdapterV2.adapterId(ADAPTER),
+      absoluteCap: 1_000n,
+      relativeCap: 1_000000000000000000n,
+      allocation: 100n,
+    },
+  ],
+  performanceFee: 5n,
+  managementFee: 6n,
+  performanceFeeRecipient: RECIPIENT,
+  managementFeeRecipient: RECIPIENT,
+  performanceFeeRecipientCanReceiveShares: false,
+  managementFeeRecipientCanReceiveShares: false,
+  assetBalance: 777n,
+  hasLiquidityAdapter: true,
+  liquidityAdapterInfo: marketV1V2AdapterQueryResult(ADAPTER, 55n),
+  adapters: [
+    {
+      ...marketV1V2AdapterQueryResult(ADAPTER_2, 99n),
+      forceDeallocatePenalty: 12n,
+    },
+  ],
+};
+
+describe("fetchAccrualVaultV2Deployless", () => {
+  test("decodes the full accrual tree in a single deployless call", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessRead(
+      handle,
+      accrualVaultV2QueryAbi,
+      "query",
+      accrualVaultV2Result,
+    );
+
+    const vault = await fetchAccrualVaultV2Deployless(VAULT, handle.client, {
+      chainId: CHAIN_ID,
+    });
+
+    expect(vault).toBeInstanceOf(AccrualVaultV2);
+    expect(vault.address).toBe(VAULT);
+    expect(vault.assetBalance).toBe(777n);
+    expect(vault.liquidityAllocations?.[0]?.allocation).toBe(100n);
+    expect(vault.performanceFeeRecipientCanReceiveShares).toBe(false);
+    expect(vault.managementFeeRecipientCanReceiveShares).toBe(false);
+
+    expect(vault.accrualLiquidityAdapter).toBeInstanceOf(
+      AccrualVaultV2MorphoMarketV1AdapterV2,
+    );
+    expect(vault.accrualLiquidityAdapter?.address).toBe(ADAPTER);
+
+    expect(vault.accrualAdapters).toHaveLength(1);
+    const [adapter] = vault.accrualAdapters;
+    expect(adapter).toBeInstanceOf(AccrualVaultV2MorphoMarketV1AdapterV2);
+    expect(adapter?.address).toBe(ADAPTER_2);
+    expect(vault.forceDeallocatePenalties[ADAPTER_2]).toBe(12n);
+
+    const marketAdapter = adapter as AccrualVaultV2MorphoMarketV1AdapterV2;
+    expect(marketAdapter.supplyShares[ID]).toBe(99n);
+    expect(marketAdapter.markets[0]?.id).toBe(ID);
+  });
+
+  test("omits liquidity allocations when the liquidity adapter is unknown", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessRead(handle, accrualVaultV2QueryAbi, "query", {
+      ...accrualVaultV2Result,
+      isLiquidityAdapterKnown: false,
+    });
+
+    const vault = await fetchAccrualVaultV2Deployless(VAULT, handle.client, {
+      chainId: CHAIN_ID,
+    });
+
+    expect(vault.liquidityAllocations).toBeUndefined();
+  });
+
+  test("leaves the accrual liquidity adapter undefined when none is configured", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessRead(handle, accrualVaultV2QueryAbi, "query", {
+      ...accrualVaultV2Result,
+      liquidityAdapter: zeroAddress,
+      hasLiquidityAdapter: false,
+      isLiquidityAdapterKnown: false,
+      liquidityAllocations: [],
+    });
+
+    const vault = await fetchAccrualVaultV2Deployless(VAULT, handle.client, {
+      chainId: CHAIN_ID,
+    });
+
+    expect(vault.accrualLiquidityAdapter).toBeUndefined();
+    expect(vault.liquidityAllocations).toBeUndefined();
+  });
+
+  test("keeps a MorphoMarketV1 adapter's configured params for a market not yet created", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessRead(handle, accrualVaultV2QueryAbi, "query", {
+      ...accrualVaultV2Result,
+      adapters: [marketV1AdapterUncreatedQueryResult(ADAPTER_2)],
+    });
+
+    const vault = await fetchAccrualVaultV2Deployless(VAULT, handle.client, {
+      chainId: CHAIN_ID,
+    });
+
+    const [adapter] = vault.accrualAdapters;
+    const marketAdapter = adapter as AccrualVaultV2MorphoMarketV1Adapter;
+    expect(marketAdapter.type).toBe("VaultV2MorphoMarketV1Adapter");
+    // The adapter's real params survive even though idToMarketParams was zeroed.
+    expect(marketAdapter.marketParamsList[0]?.loanToken).toBe(
+      MARKET_PARAMS.loanToken,
+    );
+    expect(marketAdapter.marketParamsList[0]?.id).toBe(ID);
+  });
+
+  test("fetchAccrualVaultV2 delegates to the single deployless call by default", async () => {
+    const handle = createMockClient(mainnet);
+    // Only the single-call query is mocked; a sequential fan-out would need more responses.
+    mockDeploylessRead(
+      handle,
+      accrualVaultV2QueryAbi,
+      "query",
+      accrualVaultV2Result,
+    );
+
+    const vault = await fetchAccrualVaultV2(VAULT, handle.client, {
+      chainId: CHAIN_ID,
+    });
+
+    expect(vault).toBeInstanceOf(AccrualVaultV2);
+    expect(vault.assetBalance).toBe(777n);
+    expect(vault.accrualLiquidityAdapter?.address).toBe(ADAPTER);
+    expect(vault.accrualAdapters[0]?.address).toBe(ADAPTER_2);
+    expect(vault.forceDeallocatePenalties[ADAPTER_2]).toBe(12n);
+  });
+
+  test("does not fall back to multicall when the deployless read fails", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessReads(handle, ["0x"]);
+
+    await expect(
+      fetchAccrualVaultV2Deployless(VAULT, handle.client, {
+        chainId: CHAIN_ID,
+      }),
+    ).rejects.toThrow();
+  });
+
+  test("throws UnknownFactory when the chain has no Vault V2 factory", async () => {
+    const { client } = createMockClient(mainnet);
+
+    await expect(
+      fetchAccrualVaultV2Deployless(VAULT, client, {
+        chainId: ChainId.CeloMainnet,
+      }),
+    ).rejects.toBeInstanceOf(UnknownFactory);
+  });
+
+  test("maps unsupported adapter reverts to UnsupportedVaultV2AdapterError", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessReads(handle, [contractRevert("UnsupportedVaultV2Adapter")]);
+
+    await expect(
+      fetchAccrualVaultV2Deployless(VAULT, handle.client, {
+        chainId: CHAIN_ID,
+      }),
+    ).rejects.toBeInstanceOf(UnsupportedVaultV2AdapterError);
+  });
+
+  test("maps UnknownOfFactory reverts to a typed UnknownOfFactory error", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessReads(handle, [contractRevert("UnknownOfFactory")]);
+
+    await expect(
+      fetchAccrualVaultV2Deployless(VAULT, handle.client, {
+        chainId: CHAIN_ID,
+      }),
+    ).rejects.toBeInstanceOf(UnknownOfFactory);
   });
 });

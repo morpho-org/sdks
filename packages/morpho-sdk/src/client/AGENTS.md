@@ -9,5 +9,6 @@ Entry point of the SDK. `morphoViemExtension()` returns a viem `extend(...)` fun
   - `client.morpho.vaultV1(address, chainId) → MorphoVaultV1`
   - `client.morpho.vaultV2(address, chainId) → MorphoVaultV2`
   - `client.morpho.blue(marketParams, chainId) → MorphoBlue`
+  - `client.morpho.midnight(chainId) → MorphoMidnight`
 - Rides on top of a viem client the integrator already owns (public or wallet), so reads and writes share one transport / chain / account.
 - Never holds state beyond configuration. Never calls actions directly. No cache, no `init()`, no warm-up — those would couple the SDK to a particular host runtime and break statelessness.

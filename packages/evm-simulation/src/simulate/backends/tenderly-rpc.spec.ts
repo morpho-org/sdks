@@ -336,8 +336,10 @@ describe.sequential("simulateTenderlyRpc — single tx", () => {
       unknown,
       Record<Address, { balance: Hex }>,
     ];
+    // Half of uint256 (not the ceiling) leaves headroom for inbound native ETH
+    // so a refund to the sender does not overflow and revert the transfer.
     expect(overrides[USER]!.balance).toBe(
-      "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
     );
   });
 

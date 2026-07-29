@@ -39,12 +39,22 @@ contract GetHolding {
         bool isErc20Permissioned
     ) external view returns (HoldingResponse memory res) {
         res.balance = token.balanceOf(account);
+
+        // Permit2 is not deployed on every chain; when it is absent the caller passes
+        // `address(0)`. The multicall fallback returns zero for both Permit2 allowances
+        // without any read in that case, so mirror it: skip the ERC20 allowance to a zero
+        // spender (whose value is meaningless and could revert on some tokens) and skip the
+        // Permit2 call (which would revert on an addressless contract), leaving both at their
+        // zero defaults.
+        bool hasPermit2 = address(permit2) != address(0);
         res.erc20Allowances = ERC20Allowances({
             morpho: token.allowance(account, morpho),
-            permit2: token.allowance(account, address(permit2)),
+            permit2: hasPermit2 ? token.allowance(account, address(permit2)) : 0,
             generalAdapter1: token.allowance(account, generalAdapter1)
         });
-        res.permit2BundlerAllowance = permit2.allowance(account, address(token), generalAdapter1);
+        if (hasPermit2) {
+            res.permit2BundlerAllowance = permit2.allowance(account, address(token), generalAdapter1);
+        }
 
         try token.nonces(account) returns (uint256 nonce) {
             res.isErc2612 = true;

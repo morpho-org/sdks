@@ -1300,6 +1300,8 @@ describe("vault fetchers", () => {
       totalSupply: 42n,
       totalAssets: 43n,
       lastTotalAssets: 44n,
+      hasLostAssets: true,
+      lostAssets: 55n,
       supplyQueue: [ID],
       withdrawQueue: [ID],
       publicAllocatorConfig: {
@@ -1314,6 +1316,7 @@ describe("vault fetchers", () => {
     expect(vault).toBeInstanceOf(Vault);
     expect(vault.address).toBe(VAULT);
     expect(vault.withdrawQueue).toEqual([ID]);
+    expect(vault.lostAssets).toBe(55n);
     expect(vault.publicAllocatorConfig?.accruedFee).toBe(46n);
   });
 
@@ -1341,6 +1344,8 @@ describe("vault fetchers", () => {
       totalSupply: 42n,
       totalAssets: 43n,
       lastTotalAssets: 44n,
+      hasLostAssets: true,
+      lostAssets: 55n,
       supplyQueue: [ID],
       withdrawQueue: [ID],
       publicAllocatorConfig: {
@@ -1728,6 +1733,8 @@ describe("vault fetchers", () => {
         totalSupply: 42n,
         totalAssets: 43n,
         lastTotalAssets: 44n,
+        hasLostAssets: true,
+        lostAssets: 55n,
         supplyQueue: [ID],
         withdrawQueue: [ID],
         publicAllocatorConfig: {

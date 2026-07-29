@@ -85,6 +85,8 @@ export async function fetchVault(
         totalSupply,
         totalAssets,
         lastTotalAssets,
+        hasLostAssets,
+        lostAssets,
         supplyQueue,
         withdrawQueue,
         publicAllocatorConfig,
@@ -119,6 +121,7 @@ export async function fetchVault(
         totalSupply,
         totalAssets,
         lastTotalAssets,
+        lostAssets: hasLostAssets ? lostAssets : undefined,
       });
     } catch (error) {
       if (deployless === "force") throw error;

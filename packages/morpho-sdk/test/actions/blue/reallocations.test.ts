@@ -10,10 +10,10 @@ import {
   ChainIdMismatchError,
   EmptyReallocationWithdrawalsError,
   isRequirementApproval,
-  isRequirementAuthorization,
+  isRequirementBlueAuthorization,
   morphoViemExtension,
-  NegativeReallocationFeeError,
-  NonPositiveReallocationAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   ReallocationWithdrawalOnTargetMarketError,
 } from "../../../src/index.js";
 import type { VaultReallocation } from "../../../src/types/index.js";
@@ -81,7 +81,7 @@ describe("Borrow with single vault reallocation (e2e)", () => {
 
         const requirements = await borrow.getRequirements();
         const authorization = requirements[0];
-        if (!isRequirementAuthorization(authorization)) {
+        if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
@@ -166,7 +166,7 @@ describe("Borrow with multiple source market withdrawals", () => {
 
         const requirements = await borrow.getRequirements();
         const authorization = requirements[0];
-        if (!isRequirementAuthorization(authorization)) {
+        if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
@@ -267,7 +267,7 @@ describe("Borrow with reallocation fee", () => {
 
         const requirements = await borrow.getRequirements();
         const authorization = requirements[0];
-        if (!isRequirementAuthorization(authorization)) {
+        if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
@@ -361,7 +361,7 @@ describe("SupplyCollateralBorrow with single vault reallocation", () => {
           throw new Error("Approval requirement not found");
         }
         const authorization = requirements[1];
-        if (!isRequirementAuthorization(authorization)) {
+        if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
 
@@ -455,7 +455,7 @@ describe("SupplyCollateralBorrow with multiple source market withdrawals", () =>
           throw new Error("Approval requirement not found");
         }
         const authorization = requirements[1];
-        if (!isRequirementAuthorization(authorization)) {
+        if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
 
@@ -568,7 +568,7 @@ describe("SupplyCollateralBorrow with reallocation fee", () => {
           throw new Error("Approval requirement not found");
         }
         const authorization = requirements[1];
-        if (!isRequirementAuthorization(authorization)) {
+        if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
 
@@ -694,7 +694,7 @@ describe("getReallocationData and getReallocations", () => {
 
         const requirements = await borrow.getRequirements();
         const authorization = requirements[0];
-        if (!isRequirementAuthorization(authorization)) {
+        if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
         await client.sendTransaction(authorization);
@@ -768,7 +768,7 @@ describe("getReallocationData and getReallocations", () => {
           throw new Error("Approval requirement not found");
         }
         const authorization = requirements[1];
-        if (!isRequirementAuthorization(authorization)) {
+        if (!isRequirementBlueAuthorization(authorization)) {
           throw new Error("Authorization requirement not found");
         }
 
@@ -818,7 +818,7 @@ describe("getReallocationData and getReallocations", () => {
 
 describe("Reallocation validation errors", () => {
   describe("blueBorrow", () => {
-    test("should throw NegativeReallocationFeeError for negative fee", () => {
+    test("should throw NegativeInputError for negative fee", () => {
       expect(() =>
         blueBorrow({
           market: { chainId: mainnet.id, marketParams: CbbtcUsdcBlue },
@@ -840,7 +840,7 @@ describe("Reallocation validation errors", () => {
             ],
           },
         }),
-      ).toThrow(NegativeReallocationFeeError);
+      ).toThrow(NegativeInputError);
     });
 
     test("should throw EmptyReallocationWithdrawalsError for empty withdrawals", () => {
@@ -863,7 +863,7 @@ describe("Reallocation validation errors", () => {
       ).toThrow(EmptyReallocationWithdrawalsError);
     });
 
-    test("should throw NonPositiveReallocationAmountError for zero withdrawal amount", () => {
+    test("should throw NonPositiveInputError for zero withdrawal amount", () => {
       expect(() =>
         blueBorrow({
           market: { chainId: mainnet.id, marketParams: CbbtcUsdcBlue },
@@ -882,10 +882,10 @@ describe("Reallocation validation errors", () => {
             ],
           },
         }),
-      ).toThrow(NonPositiveReallocationAmountError);
+      ).toThrow(NonPositiveInputError);
     });
 
-    test("should throw NonPositiveReallocationAmountError for negative withdrawal amount", () => {
+    test("should throw NonPositiveInputError for negative withdrawal amount", () => {
       expect(() =>
         blueBorrow({
           market: { chainId: mainnet.id, marketParams: CbbtcUsdcBlue },
@@ -904,10 +904,10 @@ describe("Reallocation validation errors", () => {
             ],
           },
         }),
-      ).toThrow(NonPositiveReallocationAmountError);
+      ).toThrow(NonPositiveInputError);
     });
 
-    test("should throw ReallocationWithdrawalOnTargetMarketError when withdrawal includes borrow market", () => {
+    test("should throw ReallocationWithdrawalOnTargetMarketError when withdrawal includes a market with borrow", () => {
       expect(() =>
         blueBorrow({
           market: { chainId: mainnet.id, marketParams: CbbtcUsdcBlue },
@@ -934,7 +934,7 @@ describe("Reallocation validation errors", () => {
   });
 
   describe("blueSupplyCollateralBorrow", () => {
-    test("should throw NegativeReallocationFeeError for negative fee", () => {
+    test("should throw NegativeInputError for negative fee", () => {
       expect(() =>
         blueSupplyCollateralBorrow({
           market: { chainId: mainnet.id, marketParams: CbbtcUsdcBlue },
@@ -958,7 +958,7 @@ describe("Reallocation validation errors", () => {
             ],
           },
         }),
-      ).toThrow(NegativeReallocationFeeError);
+      ).toThrow(NegativeInputError);
     });
 
     test("should throw EmptyReallocationWithdrawalsError for empty withdrawals", () => {
@@ -983,7 +983,7 @@ describe("Reallocation validation errors", () => {
       ).toThrow(EmptyReallocationWithdrawalsError);
     });
 
-    test("should throw NonPositiveReallocationAmountError for zero withdrawal amount", () => {
+    test("should throw NonPositiveInputError for zero withdrawal amount", () => {
       expect(() =>
         blueSupplyCollateralBorrow({
           market: { chainId: mainnet.id, marketParams: CbbtcUsdcBlue },
@@ -1004,10 +1004,10 @@ describe("Reallocation validation errors", () => {
             ],
           },
         }),
-      ).toThrow(NonPositiveReallocationAmountError);
+      ).toThrow(NonPositiveInputError);
     });
 
-    test("should throw NonPositiveReallocationAmountError for negative withdrawal amount", () => {
+    test("should throw NonPositiveInputError for negative withdrawal amount", () => {
       expect(() =>
         blueSupplyCollateralBorrow({
           market: { chainId: mainnet.id, marketParams: CbbtcUsdcBlue },
@@ -1028,10 +1028,10 @@ describe("Reallocation validation errors", () => {
             ],
           },
         }),
-      ).toThrow(NonPositiveReallocationAmountError);
+      ).toThrow(NonPositiveInputError);
     });
 
-    test("should throw ReallocationWithdrawalOnTargetMarketError when withdrawal includes borrow market", () => {
+    test("should throw ReallocationWithdrawalOnTargetMarketError when withdrawal includes a market with borrow", () => {
       expect(() =>
         blueSupplyCollateralBorrow({
           market: { chainId: mainnet.id, marketParams: CbbtcUsdcBlue },

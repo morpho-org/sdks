@@ -14,10 +14,7 @@ import {
   ChainWNativeMissingError,
   ExcessiveSlippageToleranceError,
   NativeAmountOnNonWNativeVaultError,
-  NegativeNativeAmountError,
-  NegativeSlippageToleranceError,
-  NonPositiveAssetAmountError,
-  NonPositiveSharesAmountError,
+  NegativeInputError,
   VaultAddressMismatchError,
 } from "../../types/index.js";
 
@@ -168,7 +165,7 @@ describe("MorphoVaultV2 entity tests", () => {
       ).toThrow(ExcessiveSlippageToleranceError);
     });
 
-    test("should throw NegativeSlippageToleranceError when slippageTolerance is negative", async ({
+    test("should throw NegativeInputError when slippageTolerance is negative", async ({
       client,
     }) => {
       const morphoClient = client.extend(
@@ -189,7 +186,7 @@ describe("MorphoVaultV2 entity tests", () => {
           vaultData,
           slippageTolerance: -1n,
         }),
-      ).toThrow(NegativeSlippageToleranceError);
+      ).toThrow(NegativeInputError);
     });
   });
 
@@ -219,7 +216,7 @@ describe("MorphoVaultV2 entity tests", () => {
       ).toThrow(VaultAddressMismatchError);
     });
 
-    test("should throw NonPositiveAssetAmountError for negative amount", async ({
+    test("should throw NegativeInputError for negative amount", async ({
       client,
     }) => {
       const morphoClient = client.extend(
@@ -239,10 +236,10 @@ describe("MorphoVaultV2 entity tests", () => {
           userAddress: client.account.address,
           vaultData,
         }),
-      ).toThrow(NonPositiveAssetAmountError);
+      ).toThrow(NegativeInputError);
     });
 
-    test("should throw NegativeNativeAmountError for negative nativeAmount", async ({
+    test("should throw NegativeInputError for negative nativeAmount", async ({
       client,
     }) => {
       const morphoClient = client.extend(
@@ -260,7 +257,7 @@ describe("MorphoVaultV2 entity tests", () => {
           userAddress: client.account.address,
           vaultData,
         }),
-      ).toThrow(NegativeNativeAmountError);
+      ).toThrow(NegativeInputError);
     });
 
     test("should throw ChainWNativeMissingError when native deposit is requested on a chain without wNative", () => {
@@ -307,29 +304,6 @@ describe("MorphoVaultV2 entity tests", () => {
           vaultData,
         }),
       ).toThrow(NativeAmountOnNonWNativeVaultError);
-    });
-
-    test("should throw NonPositiveSharesAmountError for zero total assets", async ({
-      client,
-    }) => {
-      const morphoClient = client.extend(
-        morphoViemExtension({
-          supportSignature: true,
-        }),
-      ).morpho;
-      const vault = morphoClient.vaultV2(
-        KeyrockUsdcVaultV2.address,
-        mainnet.id,
-      );
-      const vaultData = await vault.getData();
-
-      expect(() =>
-        vault.deposit({
-          amount: 0n,
-          userAddress: client.account.address,
-          vaultData,
-        }),
-      ).toThrow(NonPositiveSharesAmountError);
     });
   });
 });

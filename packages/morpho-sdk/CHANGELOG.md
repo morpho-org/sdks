@@ -1,5 +1,315 @@
 # @morpho-org/morpho-sdk
 
+## 5.4.1
+
+### Patch Changes
+
+- [#903](https://github.com/morpho-org/sdks/pull/903) [`d8ec434`](https://github.com/morpho-org/sdks/commit/d8ec434fc82ba50f9d601e04c61351b8a9f5dc89) Thanks [@yum0e](https://github.com/yum0e)! - Expose known Midnight mempool validation rules and normalize the `min_offer_assets_usd` details. Preserve unknown rules and non-null detail shapes so router policy additions remain compatible with older SDK clients.
+
+- Updated dependencies [[`d8ec434`](https://github.com/morpho-org/sdks/commit/d8ec434fc82ba50f9d601e04c61351b8a9f5dc89)]:
+  - @morpho-org/midnight-sdk@1.3.0
+
+## 5.4.0
+
+### Minor Changes
+
+- [#866](https://github.com/morpho-org/sdks/pull/866) [`fd9809c`](https://github.com/morpho-org/sdks/commit/fd9809c7004e08c529b59399a626fef7874fbf98) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Default the shared-liquidity target utilization to 90% and deprecate all
+  customization of it. This is non-breaking: the tuning surface stays in place and
+  explicit overrides are still honored until the next major.
+
+  **`@morpho-org/morpho-sdk`**:
+
+  - `DEFAULT_SUPPLY_TARGET_UTILIZATION` and `DEFAULT_WITHDRAWAL_TARGET_UTILIZATION`
+    are now both 90% (previously 90.5% and 92%). Callers that pass no explicit
+    override now trigger reallocations at 90% and cap phase-1 source-market
+    withdrawals at 90%. The aggressive fallback still drains to 100% as a last resort.
+  - `PublicAllocatorOptions.maxWithdrawalUtilization` /
+    `defaultMaxWithdrawalUtilization` and
+    `ReallocationComputeOptions.supplyTargetUtilization` /
+    `defaultSupplyTargetUtilization` are now `@deprecated`. They remain fully
+    functional and will be removed in the next major.
+
+  **`@morpho-org/liquidity-sdk-viem`**:
+
+  - `LiquidityParameters` and the `LiquidityLoader` `parameters` constructor
+    argument are now `@deprecated`. The source-market withdrawal ceiling defaults to
+    90% and the Morpho API's `targetWithdrawUtilization` field is no longer
+    consulted; explicitly passed `parameters` overrides are still honored until the
+    next major.
+  - The `@morpho-org/morpho-sdk` peer range moves to `^5.4.0`: the 90% default
+    ceiling lives in `morpho-sdk`'s `DEFAULT_WITHDRAWAL_TARGET_UTILIZATION`, so an
+    older peer would silently fall back to the previous 92% default now that the
+    API value is no longer consulted.
+
+## 5.3.4
+
+### Patch Changes
+
+- [#901](https://github.com/morpho-org/sdks/pull/901) [`a7dfeed`](https://github.com/morpho-org/sdks/commit/a7dfeed9dcd1498dfdb6e33b64d9b94bbd472575) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Simplify and correct the README: add a link to the full documentation, replace the two duplicate action tables with a single concise one, and trim the usage examples to a few accurate flows.
+
+## 5.3.3
+
+### Patch Changes
+
+- [#893](https://github.com/morpho-org/sdks/pull/893) [`0460ea0`](https://github.com/morpho-org/sdks/commit/0460ea08ecbd8a8634a743b6b411c49a6c560fe5) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Fix loan-asset supply reverting on quiet markets. `MorphoBlue.supply` now
+  derives `maxSharePrice` from the 2h-forward-accrued market instead of the raw
+  `marketData` snapshot.
+
+  Previously the supply path computed the slippage bound from the un-accrued
+  `marketData` snapshot (as of the market's on-chain `lastUpdate`), while on-chain
+  `morphoSupply` accrues interest `lastUpdate → execution` before enforcing the
+  bound. Accrual raises the supply share price, so on a market that hasn't accrued
+  recently the accrued price rose past the default 0.03% `slippageTolerance`
+  ceiling and the bundle reverted on `maxSharePrice` — e.g. at ~10% APR / 90%
+  utilization, ~0.03% is only a few days of accrual, so a quiet market reverted
+  systematically. This is the supply counterpart of the repay fix (VAU-1206); the
+  `withdraw` / `borrow` paths use a lower `minSharePrice` bound that accrual only
+  relaxes, so they were unaffected.
+
+## 5.3.2
+
+### Patch Changes
+
+- [#888](https://github.com/morpho-org/sdks/pull/888) [`be008d6`](https://github.com/morpho-org/sdks/commit/be008d6ba2ad3a158b93b1cd201be8c29e56eef2) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Send the installed `@morpho-org/midnight-sdk` package version with Midnight API requests instead of a hardcoded SDK version.
+
+  Keep the version lookup compatible with both ESM and CommonJS consumers, including through the Midnight API re-export from `@morpho-org/morpho-sdk`.
+
+- [#888](https://github.com/morpho-org/sdks/pull/888) [`be008d6`](https://github.com/morpho-org/sdks/commit/be008d6ba2ad3a158b93b1cd201be8c29e56eef2) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Derive standalone Midnight offer group IDs with the router-compatible singleton group algorithm across trees, mempool validation, and ratifier helpers.
+
+  **Breaking change:** remove the `TreeUtils.buildDescriptor` `preserveStandaloneGroups` option. This escape hatch produced router-incompatible standalone groups and should not have been part of the public API.
+
+- [#891](https://github.com/morpho-org/sdks/pull/891) [`6c14469`](https://github.com/morpho-org/sdks/commit/6c14469d3532d379139d74bcf5dd710e43544fa0) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Respect Vault V2 receive-share gates when accruing performance and management fees, including in fetched accrual state and downstream transaction share-price bounds.
+
+- Updated dependencies [[`be008d6`](https://github.com/morpho-org/sdks/commit/be008d6ba2ad3a158b93b1cd201be8c29e56eef2), [`be008d6`](https://github.com/morpho-org/sdks/commit/be008d6ba2ad3a158b93b1cd201be8c29e56eef2), [`6c14469`](https://github.com/morpho-org/sdks/commit/6c14469d3532d379139d74bcf5dd710e43544fa0)]:
+  - @morpho-org/midnight-sdk@1.2.1
+  - @morpho-org/blue-sdk@6.4.0
+  - @morpho-org/blue-sdk-viem@5.2.1
+
+## 5.3.1
+
+### Patch Changes
+
+- [#886](https://github.com/morpho-org/sdks/pull/886) [`b12f8a2`](https://github.com/morpho-org/sdks/commit/b12f8a2511a27cb42738366ec9d295414ced5b6a) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Fix assets-mode repay reverting on quiet markets. `MorphoBlue.repay` and
+  `MorphoBlue.repayWithdrawCollateral` now derive `maxSharePrice` from the
+  2h-forward-accrued market in **both** repay modes, not just shares mode.
+
+  Previously the assets path computed the slippage bound from the un-accrued
+  `positionData.market` snapshot (as of the market's on-chain `lastUpdate`),
+  while on-chain `morphoRepay` accrues interest `lastUpdate → execution` before
+  enforcing the bound. On a market that hasn't accrued recently, the accrued
+  borrow share price rose past the default 0.03% `slippageTolerance` ceiling and
+  the bundle reverted — e.g. at ~8% APR, 0.03% is only ~1.3 days of accrual, so a
+  quiet market reverted systematically. Direct core `repay` (no bundler, no
+  bound) was unaffected, which is why the fallback path succeeded while
+  app.morpho.org did not.
+
+## 5.3.0
+
+### Minor Changes
+
+- [#815](https://github.com/morpho-org/sdks/pull/815) [`e7578c3`](https://github.com/morpho-org/sdks/commit/e7578c3c205c3559bf1b7498030d818a0cc04220) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Add first-iteration Midnight action flows under `client.morpho.midnight(chainId)`, expose Midnight SDK API helpers through `morpho-sdk/midnight-api` and shared ABI/constant/error/utility entrypoints, and expose pure Midnight transaction builders for the markets-app taker, maker, redeem, repay/withdraw, and cancel flows.
+
+  The Midnight entity returns lazy action outputs with `getRequirements()` and synchronous `buildTx(...)` methods, matching the existing `morpho-sdk` action pattern while accepting fixed-rate API quote takeable offers directly. UI labels, rate display logic, and offer-chain presentation stay on the integrator side.
+
+  Midnight market transaction builders are synchronous and consume caller-provided `marketData` state, while `redeem` consumes a single caller-provided `positionData` snapshot that includes its hydrated market. Maker-offer action builders consume caller-provided `offersData` from `getOffersData(...)`, which creates the tree from the same entries accepted by `Tree.create(...)` and runs mempool validation. `getMarketData(...)`, `getPositionData(...)`, and `getOffersData(...)` remain async helpers so integrators can prepare state once, compose UI/validation around it, and then build transactions without hidden reads. Callers can pin several reads to one externally fetched block by forwarding its `blockNumber` through the fetch parameters.
+
+  Midnight Bundles token pulls use approval-based execution in this first iteration: `getRequirements()` returns ERC20 approval calls, and encoded bundle calls pass `PermitKind.None`. ERC2612 token permits, Permit2 SignatureTransfer token pulls, unit-target take helpers, exposed taker `reduceOnly`, referral fee controls, max-continuous-fee controls, and generic collateral withdrawal lists are left to follow-up work.
+
+  Allow fork tests to select Anvil's Osaka hardfork so deployed Midnight bytecode using the `CLZ` opcode can be exercised end to end.
+
+  Borrow-side flows are explicit: `takeBorrow` and `makeBorrow` borrow without supplying collateral, while `supplyCollateralTakeBorrow` and `supplyCollateralMakeBorrow` perform collateral-supply plus borrow flows. Public maker flows are exposed through async entity methods such as `makeLend`, `makeBorrow`, and `supplyCollateralMakeBorrow`; they accept raw offer or group inputs, prepare and validate `offersData` internally, then return lazy requirement and transaction handles. Maker submit metadata exposes all submitted group ids, and the ratifier helpers enforce that the submitted tree uses one ratifier.
+
+  Named take transaction builders validate that their takeable offers match the expected maker side, and named maker entity flows validate that prepared maker trees match the expected maker side. Borrow takes require a positive `maxUnits`, repayment-withdrawal flows reject unknown collateral indexes before exposing requirements, and partial group cancellation rejects amounts outside the onchain offer-cap range. `getOffersData(...)` stays side-agnostic so callers can prepare any valid tree.
+
+  Validation runs before requirements are exposed: takeable offers must match the requested flow, redemption cannot exceed position credit, approval amounts and operators are checked before allowance short-circuits, and market inputs must belong to the selected Midnight deployment. Maker preparation also preserves caller-owned offer group arrays.
+
+  Bind security-sensitive flow artifacts to their preparation context: Ecrecover submissions use the canonical payload retained for the signed tree instead of trusting payload bytes supplied to `buildTx`, typed-data signing rejects wallets on another chain, and redemption accepts only owner-bound position snapshots for the requested account.
+
+- [#875](https://github.com/morpho-org/sdks/pull/875) [`e3bcaf5`](https://github.com/morpho-org/sdks/commit/e3bcaf59b7a774996f02d9ba5e97365405c692bb) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Consolidate Vault, Blue, and Midnight scalar input validation into two protocol-agnostic errors: `NegativeInputError` for inputs that must be non-negative and `NonPositiveInputError` for inputs that must be positive. Both errors expose the invalid `field` and `value` as readonly properties.
+
+  This replaces the operation-specific scalar-bound error implementations with deprecated aliases to the two canonical classes, preserving imports and `instanceof` checks during the deprecation window:
+
+  - `NonPositiveAssetAmountError`, `NonPositiveSharesAmountError`, `NonPositiveMaxSharePriceError`, `ZeroDepositAmountError`, `NonPositiveBorrowAmountError`, `ZeroCollateralAmountError`, `NonPositiveReallocationAmountError`, `NonPositiveRepayAmountError`, `NonPositiveRepayMaxSharePriceError`, `NonPositiveWithdrawCollateralAmountError`, `ZeroSupplyAmountError`, and `NonPositiveWithdrawAmountError` alias `NonPositiveInputError`.
+  - `NegativeSlippageToleranceError`, `NegativeNativeAmountError`, `NegativeReallocationFeeError`, `NonPositiveMinBorrowSharePriceError`, `NegativeSupplyAmountError`, `NegativeSupplyMaxSharePriceError`, `NegativeWithdrawMinSharePriceError`, `NegativeMinSharePriceError`, `NegativeBorrowSharesError`, and `NegativeMaxRepaySharePriceError` alias `NegativeInputError`.
+
+  The previously deprecated `NonPositiveTransferAmountError` and `NativeAmountExceedsTransferAmountError` exports are removed. The unreleased Midnight-specific scalar errors are superseded directly by the canonical errors.
+
+  Compatibility warning (acknowledged): this minor release intentionally changes the constructor signatures, constructor identity, and `name` property observed through the deprecated aliases. Negative values previously matched by a legacy `NonPositive*Error` may now match `NegativeInputError` instead. It also removes the two previously deprecated exports named above. These compatibility risks are explicitly accepted for this release despite their normally breaking nature.
+
+  Consumers should replace handlers for these classes with the shared input error matching the documented constraint of each field.
+
+  State-independent validation is now repeated at both public boundaries: Blue entities and pure actions reject the same malformed scalar modes and reallocations, while Midnight entities and pure actions reject the same malformed amounts, market chains, collateral indexes, and empty offer submissions.
+
+  Patch maintained direct dependents so their published releases resolve and are validated against this `@morpho-org/morpho-sdk` minor. The existing `^5.0.0` peer range in `@morpho-org/liquidity-sdk-viem` already accepts the new v5 minor and does not require widening.
+
+  Domain-specific errors for conflicting modes, mismatched data, exceeded balances, unsupported native assets, and unsafe positions remain unchanged.
+
+### Patch Changes
+
+- Updated dependencies [[`e7578c3`](https://github.com/morpho-org/sdks/commit/e7578c3c205c3559bf1b7498030d818a0cc04220)]:
+  - @morpho-org/midnight-sdk@1.2.0
+
+## 5.2.0
+
+### Minor Changes
+
+- [#871](https://github.com/morpho-org/sdks/pull/871) [`36e9607`](https://github.com/morpho-org/sdks/commit/36e9607bfe40f442e9fce174df8bfcc6ff94f73f) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Fix Blue shares-mode repay so a `nativeAmount` that covers the full debt no longer emits a spurious loan-token approval requirement.
+
+  `MorphoBlue.repay` / `repayWithdrawCollateral` derive the ERC-20 pulled in shares mode from the 2h-forward-accrued, rounded-up `toBorrowAssets(shares)`. Previously the entity threw `NativeAmountExceedsTransferAmountError` when `nativeAmount` exceeded that upper bound and always computed `erc20Amount = borrowAssets - nativeAmount`, so a repay funded entirely by native ETH left a tiny positive residual and `getRequirements()` returned a wNative approval/permit requirement that was never actually needed.
+
+  The ERC-20 pulled is now clamped: `erc20Amount = max(0, borrowAssets - nativeAmount)`. When native covers (or exceeds) the borrow assets, nothing is pulled as ERC-20 — the bundle wraps the native and skims any residual wNative back to the receiver (the existing shares-mode skim) — so a fully-native shares repay emits no loan-token approval requirement.
+
+  `NativeAmountExceedsTransferAmountError` is now deprecated (no longer thrown) and will be removed in the next major.
+
+### Patch Changes
+
+- Updated dependencies [[`552ab7b`](https://github.com/morpho-org/sdks/commit/552ab7b9d00e8bb0ec8c6718c798ccc1943d76d4), [`966bdc4`](https://github.com/morpho-org/sdks/commit/966bdc413e54f1cef65fffed7da92479f1322baf)]:
+  - @morpho-org/blue-sdk-viem@5.2.0
+
+## 5.1.2
+
+### Patch Changes
+
+- [#862](https://github.com/morpho-org/sdks/pull/862) [`5a39d63`](https://github.com/morpho-org/sdks/commit/5a39d6314afb5a8a236242090ec3c40623aebf57) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Fix published CJS/ESM package entrypoint metadata so legacy main/type resolution and conditional exports point at built files.
+
+- Updated dependencies [[`5a39d63`](https://github.com/morpho-org/sdks/commit/5a39d6314afb5a8a236242090ec3c40623aebf57)]:
+  - @morpho-org/blue-sdk@6.3.1
+  - @morpho-org/blue-sdk-viem@5.1.3
+
+## 5.1.1
+
+### Patch Changes
+
+- [#849](https://github.com/morpho-org/sdks/pull/849) [`ca3d727`](https://github.com/morpho-org/sdks/commit/ca3d7276012f37238646f99212ee12416aba2b43) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Harden Midnight SDK API, fetch, offer, group, tree, and package-export behavior for Cantina audit findings.
+
+- Updated dependencies [[`ca3d727`](https://github.com/morpho-org/sdks/commit/ca3d7276012f37238646f99212ee12416aba2b43)]:
+  - @morpho-org/morpho-ts@2.8.0
+
+## 5.1.0
+
+### Minor Changes
+
+- [#840](https://github.com/morpho-org/sdks/pull/840) [`878a5bc`](https://github.com/morpho-org/sdks/commit/878a5bc4a442d677637497f30378f28fa32ac38c) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Add native (wNative) wrapping to the Blue repay flows and reshape their amount args, matching the `blueSupply` devex.
+
+  `MorphoBlue.repay` / `repayWithdrawCollateral` (entity) now take:
+
+  - **assets mode** — `{ amount, nativeAmount? }`. Additive like `blueSupply`: the repaid assets are `amount + nativeAmount`, the ERC-20 pulled is `amount`, and `nativeAmount` is wrapped into wNative.
+  - **shares mode** — `{ shares, nativeAmount? }`. Repays exact shares; the entity derives the ERC-20 pulled as `toBorrowAssets(shares) − nativeAmount` from live market state, wraps `nativeAmount`, and skims residual loan tokens back to `receiver`.
+
+  `blueRepay` / `blueRepayWithdrawCollateral` (action) take a **flat, pre-resolved** shape `{ amount?, shares?, nativeAmount?, transferAmount }` — the action does no amount arithmetic. Assets mode repays `transferAmount` (= `amount + nativeAmount`) and pulls `amount`; shares mode repays `shares` and pulls `transferAmount` ERC-20 (already net of native).
+
+  `nativeAmount` requires the market's loan token to be the chain's wNative. A fully-native repay pulls no ERC-20 and emits no approval requirement.
+
+  **Breaking changes (migration):**
+
+  - Assets mode renames `assets` → `amount`: replace `repay({ assets })` with `repay({ amount })`.
+  - The action args of `blueRepay` / `blueRepayWithdrawCollateral` are now the flat `RepayActionAmountArgs` (`{ amount?, shares?, nativeAmount?, transferAmount }`) instead of `{ assets, shares, transferAmount }`. Assets mode: pass `{ amount, transferAmount: amount + nativeAmount }`. Shares mode: pass `{ shares, transferAmount }` where `transferAmount` is the ERC-20 to pull (net of native).
+  - `RepayAmountArgs` is no longer a deprecated alias of `AssetsOrSharesArgs`; it is now the native-aware repay union (entity surface, `DepositAmountArgs | { shares }`). A new `RepayActionAmountArgs` is the flat action-layer shape. `AssetsOrSharesArgs` is unchanged and still used by `withdraw`.
+  - The `validateRepayParams` helper is removed; amount resolution now lives in the entity, and the action validates only its cheap invariants. Negative repay amounts are rejected consistently: a negative `amount` (assets mode) or a negative shares-mode `transferAmount` now throws `NonPositiveRepayAmountError` from both `getRequirements` and `buildTx`, instead of the entity leaking a negative approval.
+  - New exported error `NativeAmountExceedsTransferAmountError`, thrown when a shares-mode `nativeAmount` exceeds the loan assets to repay. The action layer validates its pre-resolved funding: assets mode requires `transferAmount === amount + nativeAmount` (`TransferAmountNotEqualToAssetsError`), shares mode requires positive funding (`transferAmount + nativeAmount > 0n`). `NonPositiveTransferAmountError` is retained as exported API but no longer thrown (deprecated, slated for removal in a future major).
+
+  `@morpho-org/wdk-protocol-lending-morpho-evm` is updated to the renamed `amount` field for its Morpho repay path.
+
+  `@morpho-org/liquidity-sdk-viem` bumps its `@morpho-org/morpho-sdk` peer dependency range to `^5.0.0` to track the new major.
+
+## 5.0.0
+
+### Major Changes
+
+- [#829](https://github.com/morpho-org/sdks/pull/829) [`4d85d35`](https://github.com/morpho-org/sdks/commit/4d85d3579ce03669ddd6d40b02c6490c907b9b77) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Rename Blue requirement entrypoints and isolate Blue-specific requirement modules.
+
+  The public GeneralAdapter requirement entrypoint is now `getGeneralAdapterRequirements`, and `getMorphoAuthorizationRequirement` is now `getBlueAuthorizationRequirement`. GeneralAdapter token permit requirement entrypoints are exported as `getGeneralAdapterRequirementsPermit` and `getGeneralAdapterRequirementsPermit2`, and the Permit2 approval encoder is exported as `encodeErc20Permit2Approve`. Protocol-agnostic approval and EIP-2612 encoding utilities remain exported from the common requirements barrel.
+
+  Token signature requirement callers now pass the supported spender explicitly to `encodeErc20Permit`, while ERC-20 permit and approval encoding reject spenders outside the supported chain registry entries for the target chain.
+
+  Token-pull builders now preserve Permit2 transfer routing even when the existing Permit2-managed allowance is already sufficient and no fresh Permit2 signature requirement is returned.
+
+  High-level `buildTx` flows that pull tokens now reject unsigned transfers until `getRequirements()` has resolved whether to route through ERC-20 allowance or Permit2 allowance.
+
+  Blue authorization requirement metadata is now protocol-prefixed as `BlueAuthorizationAction` with `action.type === "blueAuthorization"`. The previous `MorphoAuthorizationAction` type, `"morphoAuthorization"` discriminator, and `isRequirementAuthorization` guard are removed in favor of `isRequirementBlueAuthorization`.
+
+  DAI-specific permit support is removed from maintained Morpho SDK action-flow surfaces. DAI now follows the same token-pull policy as other tokens that are incompatible with the SDK's standard ERC-2612 encoder: Blue requirement flows route DAI to Permit2, or to classic approval when Permit2 is unavailable, even when `useSimplePermit` is enabled and `nonces(owner)` is readable. The `getDaiPermitTypedData` re-export is removed from `@morpho-org/morpho-sdk/utils`.
+
+  Update the WDK Morpho lending adapter to consume the renamed Blue authorization action metadata.
+
+  Update `@morpho-org/liquidity-sdk-viem` to accept the new `@morpho-org/morpho-sdk` peer major used for reallocation data helpers.
+
+- [#833](https://github.com/morpho-org/sdks/pull/833) [`e99bd39`](https://github.com/morpho-org/sdks/commit/e99bd39c760ead2779bf72ffa39ef3d93ae258f4) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Add offchain `setAuthorizationWithSig` support for Morpho Blue bundled paths and switch entity `buildTx` to accept an array of signatures.
+
+  When the client opts into offchain signatures (`supportSignature: true`), `getRequirements()` on the authorization-bearing Blue paths (`borrow`, `withdraw`, `supplyCollateralBorrow`, `repayWithdrawCollateral`, `refinance`) now returns a signable `Requirement` instead of a standalone `setAuthorization` transaction. Signing it yields an `AuthorizationRequirementSignature` that `buildTx` folds into the bundle as a `setAuthorizationWithSig` call, so GeneralAdapter1 is authorized in-bundle with no separate onchain transaction.
+
+  **Breaking:** every entity `buildTx` now accepts an array of signatures (`buildTx(signatures?: readonly RequirementSignature[])`) instead of a single optional signature. Pass `buildTx([permitSignature])` where you previously passed `buildTx(permitSignature)`; combine the permit and authorization signatures in the same array for paths that need both (e.g. `supplyCollateralBorrow`). The array is split internally via the new `selectRequirementSignatures` helper (built on the `isPermitSignature` / `isAuthorizationSignature` type guards). `RequirementSignature` is now the discriminated union `PermitRequirementSignature | AuthorizationRequirementSignature`, and `Requirement<T>` is generic over the signature it produces.
+
+  **Hardening of the signature array:** `buildTx` now rejects a `signatures` array that carries more than one signature of the same kind, or a signature kind the path does not consume, instead of silently keeping only the first — surfaced as the new `AmbiguousRequirementSignaturesError` / `UnexpectedRequirementSignatureError`. The authorization path is also pinned to the chain's GeneralAdapter1: `getBlueAuthorizationAction(chainId, signature)` now takes the `chainId` and throws `BundlerErrors.UnexpectedSignature` unless `authorized` is exactly GeneralAdapter1, so a bundle can never grant Morpho operator rights to an unintended address.
+
+  New public surface: `AuthorizationAction`, `AuthorizationSignatureArgs`, `AuthorizationRequirementSignature`, `PermitRequirementSignature`, `isPermitSignature`, `isAuthorizationSignature`, `selectRequirementSignatures`, `SelectedRequirementSignatures`, `encodeBlueSignatureAuthorization`, `getBlueAuthorizationAction` (now `(chainId, signature)`), the `morphoSetAuthorizationWithSig` bundler action, `BundlerErrors.UnexpectedSignature`, `AmbiguousRequirementSignaturesError`, and `UnexpectedRequirementSignatureError`. `getBlueAuthorizationRequirement` gains a `supportSignature` option.
+
+  **Breaking rename:** the previously-exported `getRequirementsAction` helper is renamed to `getTokenRequirementActions` and exported from the signature action surface. Its return type is `Action[]`; the new name reflects that it encodes the token permit / permit2 requirement into a list of bundler actions. Update imports of `getRequirementsAction` to `getTokenRequirementActions`.
+
+  `@morpho-org/wdk-protocol-lending-morpho-evm` is updated to pass single signatures as arrays to `buildTx` and widens `getBorrowRequirements` to surface the new signable authorization requirement. `MorphoBorrowOptions` gains a `requirementSignature` field, plumbed through `borrow` / `quoteBorrow`, so a signed authorization fetched via `getBorrowRequirements` (when `supportSignature: true`) can be folded into the bundle as `setAuthorizationWithSig` instead of requiring a separate `setAuthorization` transaction.
+
+  `@morpho-org/liquidity-sdk-viem` bumps its `@morpho-org/morpho-sdk` peer-dependency range to `^5.0.0` to track the new major (the previous `^3.0.0` range no longer matched the published version).
+
+- [#839](https://github.com/morpho-org/sdks/pull/839) [`cdff8c4`](https://github.com/morpho-org/sdks/commit/cdff8c458445d4ad7ff596ec316a5a8e8c0a12f3) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Remove the deprecated `ReallocationData.getAvailableLiquidityToTargetUtilization` alias. Use `getAvailableLiquidityToUtilization` instead — it has the same signature and behavior; only the method name (and its `targetUtilization` parameter, now `utilization`) changed.
+
+### Minor Changes
+
+- [#712](https://github.com/morpho-org/sdks/pull/712) [`93f0c1a`](https://github.com/morpho-org/sdks/commit/93f0c1a2f923d0047c421049f7ffab8f0d66d0c4) Thanks [@0xbulma](https://github.com/0xbulma)! - Move shared Blue and Midnight SDK primitives to `@morpho-org/morpho-ts`: chain metadata, address/deployment registries, fixed-point math helpers, shared bigint types, typed registry/math errors, `ORACLE_PRICE_SCALE`, `assertNonNegative`, and `_try`.
+
+  Expose shared ABI literals through `@morpho-org/morpho-ts/abis` so root utility imports do not load the ABI table.
+
+  Model addresses as a unified flat Morpho registry so Blue and Midnight addresses live on the same chain entry and resolve through the protocol-agnostic `getChainAddresses`, `getChainAddress`, and `registerCustomAddresses` helpers.
+
+  Keep `@morpho-org/blue-sdk` compatible by re-exporting the extracted chain, address, math, `_try`, and error surfaces from `@morpho-org/morpho-ts`, and remove the now-unused lodash registry merge dependencies from `@morpho-org/blue-sdk`.
+
+  Expose the shared address registry helpers and registry types through `@morpho-org/morpho-sdk` so integrators can import the cross-protocol address surface from the main SDK package.
+
+  Update maintained dependents of `@morpho-org/blue-sdk` and `@morpho-org/morpho-ts`, including peer dependents, so published packages resolve the extracted shared primitives used by the Blue SDK compatibility layer.
+
+### Patch Changes
+
+- [#841](https://github.com/morpho-org/sdks/pull/841) [`1848eb4`](https://github.com/morpho-org/sdks/commit/1848eb47e794acbf50eedd4a10eb51fee8576a1b) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Add Robinhood Chain (chain id 4663) to the shared chain and address registries.
+
+  Register the `ChainId.RobinhoodMainnet` enum member, its explorer/native-currency metadata, and its era-2 Morpho Blue, AdaptiveCurveIrm, Bundler3, VaultV2, adapter-factory, registry, oracle-factory, pre-liquidation-factory, and wrapped-native addresses (sourced from the `morpho-org/deployments` address book).
+
+  Patch maintained packages with direct runtime dependencies on `@morpho-org/morpho-ts` so their latest releases resolve the new registry entry.
+
+- [#828](https://github.com/morpho-org/sdks/pull/828) [`830c27e`](https://github.com/morpho-org/sdks/commit/830c27ecfde39d371f406475e3a7edb79ae41da1) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Add World Chain USDC with permit version 2 support to the shared address registry.
+
+  Normalize fallback Circle permit token address checks so known USDC/EURC addresses use permit domain version `"2"` regardless of caller-provided address casing.
+
+  Patch maintained packages with direct runtime dependencies on `@morpho-org/morpho-ts` so their latest releases resolve the new registry entry.
+
+- [#823](https://github.com/morpho-org/sdks/pull/823) [`e0208c2`](https://github.com/morpho-org/sdks/commit/e0208c299fa68552cc2b93adbd93b5d30ecaff5c) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Fix the deployless `GetVault` query reverting on all MetaMorpho vaults.
+
+  `fetchVault` (and `fetchAccrualVault`) silently fell back to multicall because the deployless query reverted while decoding the EIP-5267 domain: reading the high-level `eip712Domain()` struct return hits a Solidity via-IR decoding regression that reverts on valid domains. The query now decodes the raw `eip712Domain()` returndata as a tuple, the same workaround already used by `GetToken`. `deployless: "force"` no longer throws and the deployless fast path is restored (one RPC round-trip instead of a full multicall).
+
+  The deployless query now also reads `lostAssets` (MetaMorpho V1.1), so the deployless and multicall paths return identical `Vault` state.
+
+- [#848](https://github.com/morpho-org/sdks/pull/848) [`8baeac7`](https://github.com/morpho-org/sdks/commit/8baeac71ff62689407b5f9bf2fcb839326de0bcb) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Update Midnight ABI/hash helpers and register Base Midnight deployment addresses.
+
+- Updated dependencies [[`1848eb4`](https://github.com/morpho-org/sdks/commit/1848eb47e794acbf50eedd4a10eb51fee8576a1b), [`830c27e`](https://github.com/morpho-org/sdks/commit/830c27ecfde39d371f406475e3a7edb79ae41da1), [`93f0c1a`](https://github.com/morpho-org/sdks/commit/93f0c1a2f923d0047c421049f7ffab8f0d66d0c4), [`e0208c2`](https://github.com/morpho-org/sdks/commit/e0208c299fa68552cc2b93adbd93b5d30ecaff5c), [`8baeac7`](https://github.com/morpho-org/sdks/commit/8baeac71ff62689407b5f9bf2fcb839326de0bcb)]:
+  - @morpho-org/morpho-ts@2.7.0
+  - @morpho-org/blue-sdk-viem@5.1.2
+  - @morpho-org/blue-sdk@6.3.0
+
+## 4.2.0
+
+### Minor Changes
+
+- [#813](https://github.com/morpho-org/sdks/pull/813) [`3af165a`](https://github.com/morpho-org/sdks/commit/3af165a3c3c12e66308e6aa77750e6f28d1ab2fe) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Add `ReallocationData.getAvailableLiquidityToUtilization` (with a `utilization` parameter) and deprecate the previous `getAvailableLiquidityToTargetUtilization` / `targetUtilization` naming.
+
+  The `target utilization` wording wrongly suggested a market's configured supply-target utilization, whereas the argument is just an arbitrary utilization ceiling the caller wants to bring the market to. The old method is kept as a `@deprecated` alias that delegates to the new one (to be removed in the next major), so existing consumers keep working. Behavior is unchanged.
+
+## 4.1.0
+
+### Minor Changes
+
+- [#796](https://github.com/morpho-org/sdks/pull/796) [`2936ffa`](https://github.com/morpho-org/sdks/commit/2936ffa5ed4c435b1593fb3e99537a95afbb12ad) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Add two read-only public-allocator liquidity metrics as `ReallocationData` methods.
+
+  - `ReallocationData.getPublicReallocationLiquidity(marketId, options?)`: total reallocatable liquidity into a market from sibling markets via the PublicAllocator. Never throws on insufficiency (returns `0n`).
+  - `ReallocationData.getAvailableLiquidityToTargetUtilization(marketId, targetUtilization?, options?)`: liquidity available to bring a market to `targetUtilization` (default `DEFAULT_SUPPLY_TARGET_UTILIZATION`) — the max borrow keeping post-borrow utilization at or below the target on the post-reallocation supply, i.e. `getBorrowToUtilization({ supply + L, borrow }, targetUtilization)`. Returns only the market's own borrow headroom when `supplyTargetUtilization > targetUtilization`, and `0n` when the market is already at or above the target and the reallocatable liquidity is too small to bring it back under.
+
 ## 4.0.0
 
 ### Major Changes

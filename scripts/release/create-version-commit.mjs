@@ -5,6 +5,11 @@ import { appendFileSync, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import {
+  getMidnightPackageVersionSource,
+  MIDNIGHT_PACKAGE_MANIFEST_PATH,
+  MIDNIGHT_VERSION_SOURCE_PATH,
+} from "./generate-midnight-package-version.mjs";
 import { getErrorMessage, isPathInside, sanitizeLogLine } from "./helpers.mjs";
 
 const DEFAULT_API_BASE_URL = "https://api.github.com";
@@ -34,6 +39,7 @@ export function isAllowedVersionPath(path) {
     PACKAGE_MANIFEST_PATH_RE.test(path) ||
     PACKAGE_CHANGELOG_PATH_RE.test(path) ||
     CHANGESET_PATH_RE.test(path) ||
+    path === MIDNIGHT_VERSION_SOURCE_PATH ||
     path === ".changeset/pre.json"
   );
 }
@@ -92,6 +98,11 @@ export function collectVersionChanges(options = {}) {
         if (PACKAGE_MANIFEST_PATH_RE.test(path)) {
           throw new Error(`Versioning deleted package manifest "${path}".`);
         }
+        if (path === MIDNIGHT_VERSION_SOURCE_PATH) {
+          throw new Error(
+            `Versioning deleted generated package version source "${path}".`,
+          );
+        }
 
         deletions.push({ path });
         continue;
@@ -118,14 +129,61 @@ export function collectVersionChanges(options = {}) {
         path,
       });
     }
-
     additions.push({
       contents: contents.toString("base64"),
       path,
     });
   }
 
+  if (
+    paths.includes(MIDNIGHT_PACKAGE_MANIFEST_PATH) ||
+    paths.includes(MIDNIGHT_VERSION_SOURCE_PATH)
+  ) {
+    assertMidnightPackageVersionSource({ cwd });
+  }
+
   return { additions, deletions, disallowedPaths, paths };
+}
+
+function assertMidnightPackageVersionSource(options) {
+  const { absolutePath, basePath } = resolveWorktreePath(
+    options.cwd,
+    MIDNIGHT_VERSION_SOURCE_PATH,
+  );
+  let stats;
+
+  try {
+    stats = lstatSync(absolutePath);
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      throw new Error(
+        `Generated package version source "${MIDNIGHT_VERSION_SOURCE_PATH}" does not match the Midnight SDK package manifest.`,
+      );
+    }
+
+    throw error;
+  }
+
+  if (!stats.isFile()) {
+    throw new Error(
+      `Versioning produced non-file path "${MIDNIGHT_VERSION_SOURCE_PATH}".`,
+    );
+  }
+
+  assertPathInsideBase({
+    absolutePath: realpathSync(absolutePath),
+    basePath,
+    path: MIDNIGHT_VERSION_SOURCE_PATH,
+  });
+
+  if (
+    readFileSync(absolutePath, "utf8") !==
+    getMidnightPackageVersionSource({ cwd: options.cwd })
+  ) {
+    throw new Error(
+      `Generated package version source "${MIDNIGHT_VERSION_SOURCE_PATH}" does not match the Midnight SDK package manifest.`,
+    );
+  }
 }
 
 /**
@@ -298,7 +356,7 @@ export function pushReleaseBranchWithLease(options) {
 /**
  * Runs the release commit workflow step.
  *
- * @param {{ apiBaseUrl?: string, cwd?: string, env?: NodeJS.ProcessEnv, fetchImpl?: typeof fetch, outputFile?: string, pushReleaseBranch?: (options: { commitOid: string, cwd: string, releaseBranch: string, remoteUrl?: string, repository: string, tempBranch: string, token: string }) => void, writeError?: (message: string) => void, writeWarning?: (message: string) => void }} options Runtime options.
+ * @param {{ apiBaseUrl?: string, cwd?: string, env?: NodeJS.ProcessEnv, fetchImpl?: typeof fetch, outputFile?: string, pushReleaseBranch?: (options: { commitOid: string, cwd: string, releaseBranch: string, remoteUrl?: string, repository: string, tempBranch: string, token: string }) => void, writeError?: (message: string) => void, writeOutput?: (message: string) => void, writeWarning?: (message: string) => void }} options Runtime options.
  * @returns {Promise<null | { commitOid: string, tempBranch: string }>} The commit result when changes exist.
  */
 export async function main(options = {}) {
@@ -307,6 +365,8 @@ export async function main(options = {}) {
   const outputFile = options.outputFile ?? env.GITHUB_OUTPUT;
   const writeError =
     options.writeError ?? ((message) => process.stderr.write(message));
+  const writeOutput =
+    options.writeOutput ?? ((message) => process.stdout.write(message));
   const versionChanges = collectVersionChanges({ cwd });
 
   if (versionChanges.disallowedPaths.length > 0) {
@@ -316,7 +376,7 @@ export async function main(options = {}) {
   }
 
   if (versionChanges.paths.length === 0) {
-    process.stdout.write("No version changes to commit.\n");
+    writeOutput("No version changes to commit.\n");
     appendOutput(outputFile, getGitHubOutput({ hasVersionChanges: false }));
     return null;
   }
@@ -352,7 +412,7 @@ export async function main(options = {}) {
       hasVersionChanges: true,
     }),
   );
-  process.stdout.write(
+  writeOutput(
     `Created signed version commit ${result.commitOid} on ${releaseBranch}.\n`,
   );
 

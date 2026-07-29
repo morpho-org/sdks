@@ -4,20 +4,18 @@ import { type Address, isAddressEqual, maxUint256 } from "viem";
 import { type Action, BundlerAction } from "../../bundler/index.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
+  type AuthorizationRequirementSignature,
   type BlueRefinanceAction,
   type Metadata,
-  NegativeBorrowSharesError,
-  NegativeMaxRepaySharePriceError,
-  NonPositiveAssetAmountError,
-  NonPositiveMinBorrowSharePriceError,
-  NonPositiveRepayMaxSharePriceError,
+  NegativeInputError,
+  NonPositiveInputError,
   RefinanceSameMarketError,
   RefinanceSharesMissingBorrowAssetsError,
   RefinanceTokenMismatchError,
   type Transaction,
   type VaultReallocation,
-  ZeroCollateralAmountError,
 } from "../../types/index.js";
+import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
 import { buildReallocationActions } from "./buildReallocationActions.js";
 
 /** Parameters for {@link blueRefinance}. */
@@ -30,7 +28,9 @@ export interface BlueRefinanceParams {
     readonly marketParams: MarketParams;
   };
   args: {
+    /** Address whose position is refinanced from the source to the target market. */
     user: Address;
+    /** Amount of collateral moved from the source market to the target market. */
     collateralAmount: bigint;
     /**
      * Loan assets to borrow on the target. Assets mode: the exact borrow (exclusive with
@@ -46,6 +46,12 @@ export interface BlueRefinanceParams {
     maxRepaySharePrice: bigint;
     /** PublicAllocator reallocations into the target market, run before the bundle. Fees add to `tx.value`. */
     targetReallocations?: readonly VaultReallocation[];
+    /**
+     * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
+     * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a
+     * standalone `setAuthorization` transaction.
+     */
+    authorizationSignature?: AuthorizationRequirementSignature;
   };
   metadata?: Metadata;
 }
@@ -84,7 +90,7 @@ export interface BlueRefinanceParams {
  *   then an `erc20Transfer` skims any residual to the user if that repay is skipped.
  * - **Collat-only** (both zero/omitted): only collateral is migrated; borrow/repay legs omitted.
  *
- * Prerequisite: GA1 must be authorized on Morpho — the entity's `getRequirements()` returns the
+ * Prerequisite: GA1 must be authorized on Blue — the entity's `getRequirements()` returns the
  * `setAuthorization` transaction when needed.
  *
  * @param params.source.chainId - The chain both markets live on.
@@ -97,22 +103,20 @@ export interface BlueRefinanceParams {
  * @param params.args.minBorrowSharePrice - Minimum borrow share price (ray) on the target.
  * @param params.args.maxRepaySharePrice - Maximum repay share price (ray) on the source.
  * @param params.args.targetReallocations - PublicAllocator reallocations into the target, run before the supply leg.
+ * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
+ *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata appended to `tx.data`.
  * @returns A deep-frozen `Transaction<BlueRefinanceAction>`.
  * @remarks `borrowAssets` and `borrowShares` describe different markets (target borrow vs. source
  * repay); in shares mode the entity passes both. Caller-facing mutual exclusivity is enforced at the entity layer.
- * @throws {ZeroCollateralAmountError} when `collateralAmount <= 0n`.
- * @throws {NonPositiveAssetAmountError} when `borrowAssets < 0n`.
- * @throws {NegativeBorrowSharesError} when `borrowShares < 0n`.
- * @throws {NonPositiveMinBorrowSharePriceError} when `minBorrowSharePrice < 0n`.
- * @throws {NegativeMaxRepaySharePriceError} when `maxRepaySharePrice < 0n`.
+ * @throws {NonPositiveInputError} when `collateralAmount <= 0n`, a repay leg has a non-positive
+ *   `maxRepaySharePrice`, or any reallocation withdrawal amount is non-positive.
+ * @throws {NegativeInputError} when `borrowAssets`, `borrowShares`, `minBorrowSharePrice`,
+ *   `maxRepaySharePrice`, or any reallocation fee is negative.
  * @throws {RefinanceSameMarketError} when source and target market ids are equal.
  * @throws {RefinanceTokenMismatchError} when source and target do not share both tokens.
  * @throws {RefinanceSharesMissingBorrowAssetsError} when `borrowShares > 0n` but `borrowAssets` is omitted or non-positive.
- * @throws {NonPositiveRepayMaxSharePriceError} when a repay leg is encoded and `maxRepaySharePrice <= 0n`.
- * @throws {NegativeReallocationFeeError} when any `reallocation.fee < 0n`.
  * @throws {EmptyReallocationWithdrawalsError} when any `reallocation.withdrawals` is empty.
- * @throws {NonPositiveReallocationAmountError} when any `reallocation.withdrawals[i].amount <= 0n`.
  * @throws {ReallocationWithdrawalOnTargetMarketError} when a reallocation withdrawal references the target market.
  * @throws {UnsortedReallocationWithdrawalsError} when reallocation withdrawals are not strictly sorted by market id.
  * @example
@@ -145,27 +149,28 @@ export const blueRefinance = ({
     minBorrowSharePrice,
     maxRepaySharePrice,
     targetReallocations,
+    authorizationSignature,
   },
   metadata,
 }: BlueRefinanceParams): Readonly<Transaction<BlueRefinanceAction>> => {
   if (collateralAmount <= 0n) {
-    throw new ZeroCollateralAmountError(sourceParams.id);
+    throw new NonPositiveInputError("collateralAmount", collateralAmount);
   }
 
   if (borrowAssets < 0n) {
-    throw new NonPositiveAssetAmountError(sourceParams.loanToken);
+    throw new NegativeInputError("borrowAssets", borrowAssets);
   }
 
   if (borrowShares < 0n) {
-    throw new NegativeBorrowSharesError(sourceParams.id);
+    throw new NegativeInputError("borrowShares", borrowShares);
   }
 
   if (minBorrowSharePrice < 0n) {
-    throw new NonPositiveMinBorrowSharePriceError(targetParams.id);
+    throw new NegativeInputError("minBorrowSharePrice", minBorrowSharePrice);
   }
 
   if (maxRepaySharePrice < 0n) {
-    throw new NegativeMaxRepaySharePriceError(sourceParams.id);
+    throw new NegativeInputError("maxRepaySharePrice", maxRepaySharePrice);
   }
 
   if (sourceParams.id === targetParams.id) {
@@ -196,7 +201,7 @@ export const blueRefinance = ({
 
   // A repay leg with maxRepaySharePrice = 0n always reverts; require a positive cap when debt is migrated.
   if (shouldMigrateBorrow && maxRepaySharePrice <= 0n) {
-    throw new NonPositiveRepayMaxSharePriceError(sourceParams.id);
+    throw new NonPositiveInputError("maxRepaySharePrice", maxRepaySharePrice);
   }
 
   const callback: Action[] = [];
@@ -264,6 +269,10 @@ export const blueRefinance = ({
 
   const actions: Action[] = [];
   let reallocationFee = 0n;
+
+  if (authorizationSignature) {
+    actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
+  }
 
   if (targetReallocations && targetReallocations.length > 0) {
     const result = buildReallocationActions(targetReallocations, targetParams);
