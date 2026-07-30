@@ -554,6 +554,15 @@ parameter is the end state V1 is heading toward; V2 starts there.
 - Should `getPublicReallocationLiquidityVaultV2` count idle by default? It is included here, on the
   grounds that idle is genuinely reallocatable and excluding it under-reports — but a dashboard
   showing "shared liquidity" may prefer to attribute idle separately.
+- Should reallocation candidates be favored by penalty cost? Unlike PAV1's single per-vault fee,
+  PAV2 charges a penalty per market moved, so a plan spread across many markets is proportionally
+  more expensive for the borrower. This raises a product question: keep ranking candidates by size
+  (as V1 does today), or rank by liquidity obtained per unit of penalty. @Foulks-Plb has made a
+  first algorithm proposal to answer this and related product needs — the phase structure is
+  unchanged (Phase 1 Friendly, then Phase 2 Aggressive); the only difference is that each
+  reallocation is assigned a cost and the least-expensive reallocations are prioritized within each
+  phase. The idea is currently under discussion with the product team — see the
+  [Slack thread](https://morpholabs.slack.com/archives/C0AJMKR8VB9/p1785422085768909?thread_ts=1785398315.187139&cid=C0AJMKR8VB9).
 
 ## References
 
