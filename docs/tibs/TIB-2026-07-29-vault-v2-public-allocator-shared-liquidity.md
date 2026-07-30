@@ -548,9 +548,6 @@ parameter is the end state V1 is heading toward; V2 starts there.
 
 ## Open Questions
 
-- Will `BluePublicAllocator` be deployed as a single cross-chain singleton at a deterministic
-  address, or per-chain? The registry key is flat and per-chain either way, but a deterministic
-  address would let the fixture's canonical constant match the real deployment.
 - Should `getPublicReallocationLiquidityVaultV2` count idle by default? It is included here, on the
   grounds that idle is genuinely reallocatable and excluding it under-reports — but a dashboard
   showing "shared liquidity" may prefer to attribute idle separately.
