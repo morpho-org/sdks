@@ -109,7 +109,7 @@ mapping(address vault => mapping(bytes32 id => uint256)) public absoluteCap;
 mapping(address vault => mapping(bytes32 id => bool))    public canDeallocate;
 mapping(address vault => mapping(address adapter => bool)) public isActiveAdapter;
 mapping(address vault => VaultData) public vaultData;
-// VaultData { bool canAllocateFromIdle; uint120 nativePenalty; uint120 accruedNativePenalty; }
+// VaultData reads used here: { bool canAllocateFromIdle; uint120 nativePenalty; }
 
 function reallocate(
     address vault,
@@ -316,7 +316,6 @@ relative caps — over-stating by 1 wei produces a `RelativeCapExceeded` revert.
 | `markets[srcId]`, `srcAdapter.supplyShares` | `withdraw(assets)` | — |
 | `markets[tgtId]`, `tgtAdapter.supplyShares` | `supply(assets)` | same |
 | `vault.assetBalance` | `+= assets + untracked_src`, then `−= assets` | `−= assets` |
-| `publicAllocatorConfigs[vault].accruedNativePenalty` | `+= nativePenalty`, once per withdrawal | same |
 | `vault._totalAssets`, `firstTotalAssets` | **unchanged** | **unchanged** |
 
 `_totalAssets` is written only by `accrueInterest` / `enter` / `exit`, and `firstTotalAssets` is
@@ -399,9 +398,7 @@ Six invariants get a test that fails if the invariant is removed (root §5):
    `expectedSupplyAssets > allocation[id]` must succeed.
 5. **`_totalAssets` / `firstTotalAssets` immutability** across the state transition, plus a
    multi-step plan where a relative cap binds to the wei.
-6. **Fee arithmetic** — three withdrawals from one vault ⇒ `fee === 3n * nativePenalty`, and the
-   returned state's `accruedNativePenalty` matches on-chain `vaultData(vault).accruedNativePenalty`
-   after execution.
+6. **Fee arithmetic** — three withdrawals from one vault ⇒ `fee === 3n * nativePenalty`.
 
 Plus: pair-vs-market exclusion in both directions, and two idle withdrawals not each claiming the
 whole `assetBalance`.
