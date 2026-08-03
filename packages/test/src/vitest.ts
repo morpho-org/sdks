@@ -5,7 +5,7 @@ import {
   type SendTransactionParameters,
   zeroAddress,
 } from "viem";
-import { test } from "vitest";
+import { type TestAPI, test } from "vitest";
 import { type AnvilArgs, spawnAnvil } from "./anvil.js";
 import { type AnvilTestClient, createAnvilTestClient } from "./client.js";
 
@@ -41,7 +41,7 @@ const spawnAnvilWithRetry = async (parameters: AnvilArgs) => {
 export const createViemTest = <chain extends Chain>(
   chain: chain,
   parameters: AnvilArgs = {},
-) => {
+): TestAPI<ViemTestContext<chain>> => {
   parameters.forkChainId ??= chain?.id;
   parameters.forkUrl ??= chain?.rpcUrls.default.http[0];
   parameters.autoImpersonate ??= true;

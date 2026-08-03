@@ -6,12 +6,10 @@ describe("isMarketId", () => {
     expect(isMarketId(`0x${"ff".repeat(32)}`)).toBe(true);
   });
 
-  test.each([
-    undefined,
-    1,
-    "0x1234",
-    "not-hex",
-  ])("returns false for %s", (value) => {
-    expect(isMarketId(value)).toBe(false);
-  });
+  test.each([undefined, 1, "0x1234", "not-hex"])(
+    "returns false for %s",
+    (value) => {
+      expect(isMarketId(value)).toBe(false);
+    },
+  );
 });

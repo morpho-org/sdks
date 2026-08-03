@@ -5,4 +5,6 @@ import { getSdk } from "./sdk.js";
 
 export * as ApiTypes from "./types.js";
 
-export const apiSdk = getSdk(new GraphQLClient(BLUE_API_GRAPHQL_URL));
+export const apiSdk: ReturnType<typeof getSdk> = getSdk(
+  new GraphQLClient(BLUE_API_GRAPHQL_URL),
+);

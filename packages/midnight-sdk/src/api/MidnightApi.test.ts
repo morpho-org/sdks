@@ -351,19 +351,22 @@ describe("MidnightApi.validateMempoolPayload", () => {
   test.each([
     ["null", { rule: "tick_spacing", details: null }],
     ["omitted", { rule: "tick_spacing" }],
-  ])("behavior: preserves the existing shape for %s details", async (_, issue) => {
-    const { fetch } = createJsonFetch({ data: { issues: [issue] } });
+  ])(
+    "behavior: preserves the existing shape for %s details",
+    async (_, issue) => {
+      const { fetch } = createJsonFetch({ data: { issues: [issue] } });
 
-    const result = await MidnightApi.validateMempoolPayload({
-      chainId: 8453,
-      payload: "0x0100000000" as Hex,
-      fetch,
-    });
+      const result = await MidnightApi.validateMempoolPayload({
+        chainId: 8453,
+        payload: "0x0100000000" as Hex,
+        fetch,
+      });
 
-    expect(result.issues).toEqual([
-      { rule: MempoolPayloadValidationRule.TickSpacing },
-    ]);
-  });
+      expect(result.issues).toEqual([
+        { rule: MempoolPayloadValidationRule.TickSpacing },
+      ]);
+    },
+  );
 
   test("behavior: retains future rules and details", async () => {
     const futureDetails = { next_allowed_tick: 4 };
@@ -402,31 +405,34 @@ describe("MidnightApi.validateMempoolPayload", () => {
       "above uint256",
       { loan_token: LOAN_TOKEN, min_assets: (maxUint256 + 1n).toString() },
     ],
-  ])("behavior: retains %s known details without rejecting the response", async (_, unrecognizedDetails) => {
-    const { fetch } = createJsonFetch({
-      data: {
-        issues: [
-          {
-            rule: "min_offer_assets_usd",
-            details: unrecognizedDetails,
-          },
-        ],
-      },
-    });
+  ])(
+    "behavior: retains %s known details without rejecting the response",
+    async (_, unrecognizedDetails) => {
+      const { fetch } = createJsonFetch({
+        data: {
+          issues: [
+            {
+              rule: "min_offer_assets_usd",
+              details: unrecognizedDetails,
+            },
+          ],
+        },
+      });
 
-    const result = await MidnightApi.validateMempoolPayload({
-      chainId: 8453,
-      payload: "0x0100000000" as Hex,
-      fetch,
-    });
+      const result = await MidnightApi.validateMempoolPayload({
+        chainId: 8453,
+        payload: "0x0100000000" as Hex,
+        fetch,
+      });
 
-    expect(result.issues).toEqual([
-      {
-        rule: MempoolPayloadValidationRule.MinOfferAssetsUsd,
-        details: { type: "unknown", raw: unrecognizedDetails },
-      },
-    ]);
-  });
+      expect(result.issues).toEqual([
+        {
+          rule: MempoolPayloadValidationRule.MinOfferAssetsUsd,
+          details: { type: "unknown", raw: unrecognizedDetails },
+        },
+      ]);
+    },
+  );
 
   test("behavior: uses baseUrl override", async () => {
     const { calls, fetch } = createJsonFetch({

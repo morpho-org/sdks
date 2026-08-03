@@ -107,10 +107,10 @@
   "devDependencies": {
     "@morpho-org/test": "workspace:^",
     "dotenv": "^17.4.2",
-    "fast-check": "^4.8.0",
-    "typescript": "^6.0.3",
-    "viem": "^2.54.2",
-    "vitest": "^4.1.9"
+    "fast-check": "^4.9.0",
+    "typescript": "^7.0.2",
+    "viem": "^2.55.10",
+    "vitest": "^4.1.10"
   },
   "publishConfig": {
     "exports": {

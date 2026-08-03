@@ -110,16 +110,19 @@ describe("Midnight calldata encoders", () => {
           deadline: 1n,
         }),
     ],
-  ] as const)("error: MidnightMarketAddressMismatchError for %s", (_, build) => {
-    const foreignMarket = new MarketParams({
-      ...midnightMarket,
-      midnight: midnightAddresses.taker,
-    });
+  ] as const)(
+    "error: MidnightMarketAddressMismatchError for %s",
+    (_, build) => {
+      const foreignMarket = new MarketParams({
+        ...midnightMarket,
+        midnight: midnightAddresses.taker,
+      });
 
-    expect(() => build(foreignMarket)).toThrow(
-      MidnightMarketAddressMismatchError,
-    );
-  });
+      expect(() => build(foreignMarket)).toThrow(
+        MidnightMarketAddressMismatchError,
+      );
+    },
+  );
 
   test("property: preserves bounded primitive inputs through ABI encoding", () => {
     fc.assert(

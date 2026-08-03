@@ -223,27 +223,24 @@ describe("addressesRegistry", () => {
       morphoDeployment: 286n,
       wNativeDeployment: 2n,
     },
-  ])("behavior: exposes era-2 addresses for chain $chainId", ({
-    chainId,
-    morpho,
-    wNative,
-    morphoDeployment,
-    wNativeDeployment,
-  }) => {
-    expect(addressesRegistry[chainId]).toMatchObject({
-      blue: morpho,
-      morpho,
-      wNative,
-    });
-    expect(deployments[chainId]).toMatchObject({
-      blue: morphoDeployment,
-      morpho: morphoDeployment,
-      wNative: wNativeDeployment,
-    });
-    expect(getUnwrappedToken(wNative as `0x${string}`, chainId)).toBe(
-      NATIVE_ADDRESS,
-    );
-  });
+  ])(
+    "behavior: exposes era-2 addresses for chain $chainId",
+    ({ chainId, morpho, wNative, morphoDeployment, wNativeDeployment }) => {
+      expect(addressesRegistry[chainId]).toMatchObject({
+        blue: morpho,
+        morpho,
+        wNative,
+      });
+      expect(deployments[chainId]).toMatchObject({
+        blue: morphoDeployment,
+        morpho: morphoDeployment,
+        wNative: wNativeDeployment,
+      });
+      expect(getUnwrappedToken(wNative as `0x${string}`, chainId)).toBe(
+        NATIVE_ADDRESS,
+      );
+    },
+  );
 
   test("behavior: exposes Robinhood deployment blocks", () => {
     expect(deployments[ChainId.RobinhoodMainnet]).toMatchObject({

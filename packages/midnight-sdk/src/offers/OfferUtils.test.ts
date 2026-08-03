@@ -245,18 +245,21 @@ describe("Offer.create", () => {
       "receiverIfMakerIsSeller",
       { receiverIfMakerIsSeller: addresses.receiver },
     ],
-  ] as const)("error: InvalidOfferParameterError %s", (parameter, overrides) => {
-    try {
-      Offer.create(buildOfferParams(overrides));
-    } catch (error) {
-      if (!(error instanceof InvalidOfferParameterError)) throw error;
+  ] as const)(
+    "error: InvalidOfferParameterError %s",
+    (parameter, overrides) => {
+      try {
+        Offer.create(buildOfferParams(overrides));
+      } catch (error) {
+        if (!(error instanceof InvalidOfferParameterError)) throw error;
 
-      expect(error.parameter).toBe(parameter);
-      return;
-    }
+        expect(error.parameter).toBe(parameter);
+        return;
+      }
 
-    expect.unreachable("Expected invalid offer parameter.");
-  });
+      expect.unreachable("Expected invalid offer parameter.");
+    },
+  );
 });
 
 describe("OfferUtils.toStruct", () => {
