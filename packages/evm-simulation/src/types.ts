@@ -225,6 +225,11 @@ export interface SimulationCall {
   readonly status: boolean;
   /** Return data from the top-level call. */
   readonly returnData: Hex;
-  /** Gas used by this call (root frame). */
+  /**
+   * Gas consumed by this call's root frame, not a safe gas limit. This is
+   * post-refund consumption and does not account for EIP-150's 63/64 rule in
+   * nested calls, so consumers deriving a limit must add their own headroom,
+   * larger than headroom derived from `eth_estimateGas`.
+   */
   readonly gasUsed: bigint;
 }

@@ -188,6 +188,29 @@ describe.sequential("simulate — success", () => {
     expect(mainTransfer?.txIdx).toBe(1);
   });
 
+  it("propagates per-call gasUsed in bundle order", async () => {
+    mockTenderlyRpc.mockResolvedValueOnce({
+      calls: [
+        { logs: [], status: true, returnData: "0x", gasUsed: 21_000n },
+        { logs: [], status: true, returnData: "0x", gasUsed: 42_000n },
+      ],
+      assetChanges: [],
+    });
+
+    const result = await simulate(
+      makeConfig(),
+      makeParams({
+        transactions: [
+          { from: USER, to: USDC, data: "0x095ea7b3" as Hex },
+          { from: USER, to: VAULT, data: "0xa9059cbb" as Hex },
+        ],
+      }),
+    );
+
+    expect(result.calls[0]!.gasUsed).toBe(21_000n);
+    expect(result.calls[1]!.gasUsed).toBe(42_000n);
+  });
+
   it("throws BlacklistViolationError end-to-end when backend logs show bundler retention", async () => {
     const BUNDLER = getChainAddresses(1).bundler3.bundler3;
     const logs = [
