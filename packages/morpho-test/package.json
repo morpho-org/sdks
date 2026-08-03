@@ -38,8 +38,8 @@
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
-    "typescript": "^6.0.3",
-    "viem": "^2.54.2"
+    "typescript": "^7.0.2",
+    "viem": "^2.55.10"
   },
   "publishConfig": {
     "main": "./lib/cjs/index.js",

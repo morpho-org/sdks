@@ -70,11 +70,11 @@
     }
   },
   "devDependencies": {
-    "@playwright/test": "^1.61.1",
+    "@playwright/test": "^1.62.1",
     "@types/lodash.kebabcase": "^4.1.9",
-    "typescript": "^6.0.3",
-    "viem": "^2.54.2",
-    "vitest": "^4.1.9"
+    "typescript": "^7.0.2",
+    "viem": "^2.55.10",
+    "vitest": "^4.1.10"
   },
   "publishConfig": {
     "exports": {

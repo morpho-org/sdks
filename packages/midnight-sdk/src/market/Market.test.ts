@@ -142,41 +142,41 @@ describe("MarketParams", () => {
     ).toThrow(InvalidMarketParameterError);
   });
 
-  test.each([
-    -1n,
-    MathLib.WAD + 1n,
-  ])("error: InvalidMarketParameterError for lltv %s", (lltv) => {
-    expect(
-      () =>
-        new MarketParams({
-          ...baseMarketParamsInput(),
-          collateralParams: [
-            {
-              ...baseMarketParamsInput().collateralParams[0]!,
-              lltv,
-            },
-          ],
-        }),
-    ).toThrow(InvalidMarketParameterError);
-  });
+  test.each([-1n, MathLib.WAD + 1n])(
+    "error: InvalidMarketParameterError for lltv %s",
+    (lltv) => {
+      expect(
+        () =>
+          new MarketParams({
+            ...baseMarketParamsInput(),
+            collateralParams: [
+              {
+                ...baseMarketParamsInput().collateralParams[0]!,
+                lltv,
+              },
+            ],
+          }),
+      ).toThrow(InvalidMarketParameterError);
+    },
+  );
 
-  test.each([
-    -1n,
-    MathLib.WAD,
-  ])("error: InvalidMarketParameterError for liquidation cursor %s", (liquidationCursor) => {
-    expect(
-      () =>
-        new MarketParams({
-          ...baseMarketParamsInput(),
-          collateralParams: [
-            {
-              ...baseMarketParamsInput().collateralParams[0]!,
-              liquidationCursor,
-            },
-          ],
-        }),
-    ).toThrow(InvalidMarketParameterError);
-  });
+  test.each([-1n, MathLib.WAD])(
+    "error: InvalidMarketParameterError for liquidation cursor %s",
+    (liquidationCursor) => {
+      expect(
+        () =>
+          new MarketParams({
+            ...baseMarketParamsInput(),
+            collateralParams: [
+              {
+                ...baseMarketParamsInput().collateralParams[0]!,
+                liquidationCursor,
+              },
+            ],
+          }),
+      ).toThrow(InvalidMarketParameterError);
+    },
+  );
 
   test.each([
     {
@@ -189,24 +189,24 @@ describe("MarketParams", () => {
       lltv: 999000000000000000n,
       liquidationCursor: MathLib.WAD / 2n,
     },
-  ])("error: InvalidMarketParameterError for $name", ({
-    lltv,
-    liquidationCursor,
-  }) => {
-    expect(
-      () =>
-        new MarketParams({
-          ...baseMarketParamsInput(),
-          collateralParams: [
-            {
-              ...baseMarketParamsInput().collateralParams[0]!,
-              lltv,
-              liquidationCursor,
-            },
-          ],
-        }),
-    ).toThrow(InvalidMarketParameterError);
-  });
+  ])(
+    "error: InvalidMarketParameterError for $name",
+    ({ lltv, liquidationCursor }) => {
+      expect(
+        () =>
+          new MarketParams({
+            ...baseMarketParamsInput(),
+            collateralParams: [
+              {
+                ...baseMarketParamsInput().collateralParams[0]!,
+                lltv,
+                liquidationCursor,
+              },
+            ],
+          }),
+      ).toThrow(InvalidMarketParameterError);
+    },
+  );
 });
 
 describe("Market", () => {

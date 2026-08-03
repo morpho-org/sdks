@@ -76,18 +76,17 @@ describe("PositionUtils.getWithdrawable", () => {
     { credit: 1_000n, liquidity: 500n, expected: 500n },
     { credit: 1_000n, liquidity: 950n, expected: 950n },
     { credit: 1_000n, liquidity: 1_200n, expected: 1_000n },
-  ])("behavior: returns $expected when credit is $credit and liquidity is $liquidity", ({
-    credit,
-    liquidity,
-    expected,
-  }) => {
-    expect(
-      PositionUtils.getWithdrawable({
-        position: { credit },
-        market: { withdrawable: liquidity },
-      }),
-    ).toBe(expected);
-  });
+  ])(
+    "behavior: returns $expected when credit is $credit and liquidity is $liquidity",
+    ({ credit, liquidity, expected }) => {
+      expect(
+        PositionUtils.getWithdrawable({
+          position: { credit },
+          market: { withdrawable: liquidity },
+        }),
+      ).toBe(expected);
+    },
+  );
 });
 
 describe("AccrualPosition.getSettlementFee", () => {

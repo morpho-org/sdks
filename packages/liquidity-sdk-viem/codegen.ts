@@ -44,6 +44,10 @@ const config: CodegenConfig = {
       presetConfig: {
         typesPath: "./types.js",
       },
+      config: {
+        documentMode: "documentNode",
+        useTypeImports: true,
+      },
     },
   },
 };

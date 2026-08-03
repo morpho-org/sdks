@@ -89,31 +89,32 @@ describe("getMidnightApprovalRequirements", () => {
   test.each([
     { name: "Midnight", spender: midnightAddresses.midnight },
     { name: "MidnightBundles", spender: midnightAddresses.midnightBundles },
-  ])("returns an approval for $name when allowance is insufficient", async ({
-    spender,
-  }) => {
-    const handle = createMockClient(midnightTestChain);
-    mockRead(handle, {
-      address: midnightAddresses.loanToken,
-      abi: erc20Abi,
-      functionName: "allowance",
-      result: 0n,
-    });
+  ])(
+    "returns an approval for $name when allowance is insufficient",
+    async ({ spender }) => {
+      const handle = createMockClient(midnightTestChain);
+      mockRead(handle, {
+        address: midnightAddresses.loanToken,
+        abi: erc20Abi,
+        functionName: "allowance",
+        result: 0n,
+      });
 
-    const requirements = await getMidnightApprovalRequirements({
-      viemClient: handle.client,
-      chainId: midnightChainId,
-      token: midnightAddresses.loanToken,
-      owner: midnightAddresses.taker,
-      spender,
-      amount: 1_000n,
-    });
+      const requirements = await getMidnightApprovalRequirements({
+        viemClient: handle.client,
+        chainId: midnightChainId,
+        token: midnightAddresses.loanToken,
+        owner: midnightAddresses.taker,
+        spender,
+        amount: 1_000n,
+      });
 
-    expect(requirements).toHaveLength(1);
-    expect(requirements[0]?.action.type).toBe("erc20Approval");
-    expect(requirements[0]?.action.args.spender).toBe(spender);
-    expect(requirements[0]?.action.args.amount).toBe(1_000n);
-  });
+      expect(requirements).toHaveLength(1);
+      expect(requirements[0]?.action.type).toBe("erc20Approval");
+      expect(requirements[0]?.action.args.spender).toBe(spender);
+      expect(requirements[0]?.action.args.amount).toBe(1_000n);
+    },
+  );
 
   test("returns no approval when allowance already covers the amount", async () => {
     const handle = createMockClient(midnightTestChain);
