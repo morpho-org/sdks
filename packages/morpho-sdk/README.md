@@ -23,20 +23,37 @@ Each entity exposes a set of actions. Bundled actions route through bundler3 (vi
 | --- | --- | --- |
 | **VaultV1** (MetaMorpho) | `deposit`, `migrateToV2` | Bundler |
 | | `withdraw`, `redeem` | Direct call |
-| | `inKindRedeem` | VaultExitBundlesV1 |
+| | `inKindRedeem` *(custom deployment only)* | VaultExitBundlesV1 |
 | **VaultV2** | `deposit` | Bundler |
 | | `withdraw`, `redeem` | Direct call |
 | | `forceWithdraw`, `forceRedeem` | Vault multicall |
-| | `inKindRedeem` | VaultExitBundlesV1 |
+| | `inKindRedeem` *(custom deployment only)* | VaultExitBundlesV1 |
 | **Blue** | `supply`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdraw`, `repayWithdrawCollateral`, `refinance` | Bundler |
 | | `withdrawCollateral` | Direct call |
 | **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `repayWithdrawCollateral` | Midnight Bundles |
 | | `makeLend`, `makeBorrow` | Midnight mempool |
 | | `supplyCollateral`, `redeem`, `cancelOffer` | Direct call |
 
+`VaultExitBundlesV1` is not registered on any live chain yet. Until it is deployed and added to the
+built-in registry, configure a custom deployment before calling either `inKindRedeem` method:
+
+```typescript
+import { registerCustomAddresses } from "@morpho-org/morpho-sdk/addresses";
+
+registerCustomAddresses({
+  addresses: {
+    [chainId]: { bundles: { vaultExitBundlesV1 } },
+  },
+});
+```
+
 ## How it works
 
-Actions that pull tokens or touch a position return `{ buildTx, getRequirements }`. Vault `inKindRedeem` uses this shape because it checks live Blue liquidity and share authorization before encoding its direct VaultExitBundlesV1 call. Other direct calls — vault `withdraw` / `redeem`, `forceWithdraw` / `forceRedeem`, and Blue `withdrawCollateral` — have no prerequisites and return only `{ buildTx }`.
+Actions that pull tokens or touch a position return `{ buildTx, getRequirements }`. Vault
+`inKindRedeem` uses this shape so callers can await `getRequirements()` to check live Blue liquidity
+and share authorization before invoking `buildTx()`. Calling `buildTx()` directly skips those
+RPC-backed pre-flight checks. Other direct calls — vault `withdraw` / `redeem`, `forceWithdraw` /
+`forceRedeem`, and Blue `withdrawCollateral` — have no prerequisites and return only `{ buildTx }`.
 
 - **`getRequirements()`** — async; the on-chain prerequisites to satisfy first: ERC-20 approvals, permit / Permit2 signatures, Morpho authorization, or (for Midnight) operator authorization and offer-root signatures.
 - **`buildTx(signatures?)`** — synchronous; the final, deep-frozen viem transaction. Pass any signatures collected from the requirements.

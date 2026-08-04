@@ -5,9 +5,13 @@ import { describe, expect } from "vitest";
 import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
 import { deployVaultExitBundlesV1 } from "../../../test/helpers/vaultExitBundlesV1.js";
 import { test } from "../../../test/setup.js";
-import { isRequirementApproval, morphoViemExtension } from "../../index.js";
+import {
+  isRequirementApproval,
+  isRequirementSignature,
+  morphoViemExtension,
+} from "../../index.js";
 
-describe("InKindRedeem VaultV1", () => {
+describe("MorphoVaultV1.inKindRedeem integration", () => {
   test("exits vault shares into Morpho Blue supply positions", async ({
     client,
   }) => {
@@ -74,5 +78,54 @@ describe("InKindRedeem VaultV1", () => {
     ).toBeGreaterThan(
       initialSupplyShares.reduce((total, shares) => total + shares, 0n),
     );
+  });
+
+  test("accepts a Vault V1 shares permit and exits", async ({ client }) => {
+    await deployVaultExitBundlesV1(client);
+
+    const vault = client
+      .extend(morphoViemExtension({ supportSignature: true }))
+      .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
+    const vaultData = await vault.getData();
+    const amount = parseUnits("1", 6);
+    const marketParamsList = [...vaultData.allocations.values()]
+      .filter(({ config, position }) => {
+        return config.enabled && position.supplyShares > 0n;
+      })
+      .map(({ position }) => position.market.params);
+    const userShares = vaultData.toShares(amount * 2n);
+
+    await client.deal({
+      erc20: SteakhouseUsdcVaultV1.address,
+      amount: userShares,
+    });
+    const initialVaultShares = await client.readContract({
+      address: SteakhouseUsdcVaultV1.address,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [client.account.address],
+    });
+
+    const exit = vault.inKindRedeem({
+      amount,
+      marketParamsList,
+      vaultData,
+      userAddress: client.account.address,
+    });
+    const [permitRequirement] = await exit.getRequirements();
+    if (!isRequirementSignature(permitRequirement)) {
+      throw new Error("VaultExitBundlesV1 permit requirement not found");
+    }
+    const permit = await permitRequirement.sign(client, client.account.address);
+    await client.sendTransaction(exit.buildTx([permit]));
+
+    const finalVaultShares = await client.readContract({
+      address: SteakhouseUsdcVaultV1.address,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [client.account.address],
+    });
+
+    expect(finalVaultShares).toBeLessThan(initialVaultShares);
   });
 });

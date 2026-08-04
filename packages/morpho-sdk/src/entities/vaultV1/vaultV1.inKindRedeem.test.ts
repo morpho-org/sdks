@@ -1,5 +1,6 @@
 import {
   addressesRegistry,
+  MarketParams,
   registerCustomAddresses,
 } from "@morpho-org/blue-sdk";
 import { erc2612Abi, metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
@@ -78,6 +79,32 @@ describe("MorphoVaultV1.inKindRedeem", () => {
     });
 
     expect(exit.buildTx().action.type).toBe("vaultV1InKindRedeem");
+  });
+
+  test("behavior: snapshots the ordered market params", () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    const marketParams = new MarketParams(inKindMarketParams);
+    const marketParamsList = [marketParams];
+    const loanToken = marketParams.loanToken;
+    const exit = vault.inKindRedeem({
+      amount: 500n,
+      marketParamsList,
+      vaultData: inKindVaultV1Data(),
+      userAddress: IN_KIND_USER,
+    });
+    (
+      marketParams as unknown as {
+        loanToken: Address;
+      }
+    ).loanToken = "0x0000000000000000000000000000000000001999";
+    marketParamsList.length = 0;
+
+    const tx = exit.buildTx();
+    expect(tx.action.args.marketParamsList).toHaveLength(1);
+    expect(tx.action.args.marketParamsList[0]?.loanToken).toBe(loanToken);
   });
 
   test("error: InKindRedemptionCoverageError prevents array exhaustion", () => {

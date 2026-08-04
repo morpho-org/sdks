@@ -1,3 +1,5 @@
+import type { Abi } from "viem";
+
 export { marketParamsAbi } from "@morpho-org/blue-sdk";
 export {
   adaptiveCurveIrmAbi,
@@ -41,6 +43,7 @@ export const vaultExitBundlesV1Abi = [
     stateMutability: "nonpayable",
   },
   { type: "error", name: "AdapterNotPartOfVault", inputs: [] },
+  { type: "error", name: "AlreadyInitiated", inputs: [] },
   { type: "error", name: "ApproveReturnedFalse", inputs: [] },
   { type: "error", name: "DeadlinePassed", inputs: [] },
   { type: "error", name: "InvalidAdaptersLength", inputs: [] },
@@ -53,6 +56,13 @@ export const vaultExitBundlesV1Abi = [
   {
     type: "function",
     name: "BLUE",
+    inputs: [],
+    outputs: [{ name: "", type: "address", internalType: "address" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "initiator",
     inputs: [],
     outputs: [{ name: "", type: "address", internalType: "address" }],
     stateMutability: "view",
@@ -190,7 +200,7 @@ export const vaultExitBundlesV1Abi = [
     outputs: [],
     stateMutability: "nonpayable",
   },
-] as const;
+] as const satisfies Abi;
 
 /** ABI for the Bundler3 multicall contract. */
 export const bundler3Abi = [
@@ -320,7 +330,7 @@ export const bundler3Abi = [
     name: "MissingExpectedReenter",
     inputs: [],
   },
-] as const;
+] as const satisfies Abi;
 
 /** ABI for the Bundler3 core adapter. */
 export const coreAdapterAbi = [
@@ -434,7 +444,7 @@ export const coreAdapterAbi = [
     name: "ZeroAmount",
     inputs: [],
   },
-] as const;
+] as const satisfies Abi;
 
 /** ABI for the Bundler3 GeneralAdapter1 contract. */
 export const generalAdapter1Abi = [
@@ -1160,7 +1170,7 @@ export const generalAdapter1Abi = [
     name: "ZeroShares",
     inputs: [],
   },
-] as const;
+] as const satisfies Abi;
 
 /** ABI for the Ethereum-specific Bundler3 GeneralAdapter1 extension. */
 export const ethereumGeneralAdapter1Abi = [
@@ -1353,7 +1363,7 @@ export const ethereumGeneralAdapter1Abi = [
     outputs: [],
     stateMutability: "nonpayable",
   },
-] as const;
+] as const satisfies Abi;
 
 /** ABI for the Bundler3 Paraswap adapter. */
 export const paraswapAdapterAbi = [
@@ -1632,7 +1642,7 @@ export const paraswapAdapterAbi = [
     name: "SellAmountTooHigh",
     inputs: [],
   },
-] as const;
+] as const satisfies Abi;
 
 /** ABI for the Bundler3 ERC20 wrapper adapter. */
 export const erc20WrapperAdapterAbi = [
@@ -1699,7 +1709,7 @@ export const erc20WrapperAdapterAbi = [
     name: "WithdrawFailed",
     inputs: [],
   },
-] as const;
+] as const satisfies Abi;
 
 /** ABI for the Bundler3 Aave V2 migration adapter. */
 export const aaveV2MigrationAdapterAbi = [
@@ -1771,7 +1781,7 @@ export const aaveV2MigrationAdapterAbi = [
     outputs: [],
     stateMutability: "nonpayable",
   },
-] as const;
+] as const satisfies Abi;
 
 /** ABI for the Bundler3 Aave V3 migration adapter. */
 export const aaveV3MigrationAdapterAbi = [
@@ -1843,7 +1853,7 @@ export const aaveV3MigrationAdapterAbi = [
     outputs: [],
     stateMutability: "nonpayable",
   },
-] as const;
+] as const satisfies Abi;
 
 /** ABI for the Bundler3 Aave V3 Optimizer migration adapter. */
 export const aaveV3OptimizerMigrationAdapterAbi = [
@@ -1938,7 +1948,7 @@ export const aaveV3OptimizerMigrationAdapterAbi = [
     outputs: [],
     stateMutability: "nonpayable",
   },
-] as const;
+] as const satisfies Abi;
 
 /** ABI for the Bundler3 Compound V2 migration adapter. */
 export const compoundV2MigrationAdapterAbi = [
@@ -2054,7 +2064,7 @@ export const compoundV2MigrationAdapterAbi = [
     outputs: [],
     stateMutability: "nonpayable",
   },
-] as const;
+] as const satisfies Abi;
 
 /** ABI for the Bundler3 Compound V3 migration adapter. */
 export const compoundV3MigrationAdapterAbi = [
@@ -2121,4 +2131,4 @@ export const compoundV3MigrationAdapterAbi = [
     outputs: [],
     stateMutability: "nonpayable",
   },
-] as const;
+] as const satisfies Abi;

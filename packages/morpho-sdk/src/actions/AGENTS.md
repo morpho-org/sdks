@@ -9,7 +9,7 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 - `blue/` — Morpho Blue `supplyCollateral` / `borrow` / `supplyCollateralBorrow` / `repay` / `repayWithdrawCollateral` / `withdrawCollateral`. Borrow paths support optional shared liquidity via `reallocations`.
 - `midnight/` — Midnight fixed-rate direct and bundled transaction encoders plus take normalization for fixed-rate API quote outputs.
 - `requirements/` — async resolvers that read on-chain state and return what the user must do/sign before an action: token approvals, permit/permit2 signature requests, Morpho authorization, Midnight authorization, and SetterRatifier root ratification.
-- `signatures/` — pure encoders that turn signed requirements into the bundler `Action`s prepended to a bundle (`getTokenRequirementActions` for token permit / permit2 transfers, `getBlueAuthorizationAction` for `setAuthorizationWithSig`).
+- `signatures/` — pure helpers that encode signed requirements for their destination: `getTokenRequirementActions` and `getBlueAuthorizationAction` produce bundler `Action`s, while `getVaultExitBundlesV1PermitStruct` reshapes a vault-share permit for the standalone VaultExitBundlesV1 call.
 
 ## Common builder pattern
 

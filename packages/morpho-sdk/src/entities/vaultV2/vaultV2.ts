@@ -4,6 +4,7 @@ import {
   DEFAULT_SLIPPAGE_TOLERANCE,
   getChainAddresses,
   type MarketParams,
+  MarketUtils,
   MathLib,
 } from "@morpho-org/blue-sdk";
 import {
@@ -28,6 +29,7 @@ import {
 import { validateSlippageTolerance } from "../../helpers/index.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
+  type ActionOutput,
   type ActionRequirement,
   AdapterNotPartOfVaultError,
   CannotReceiveAssetsForInKindRedeemError,
@@ -42,7 +44,6 @@ import {
   InKindRedemptionCoverageError,
   InKindRedemptionRequiresSingleAdapterError,
   InsufficientBlueBalanceForInKindRedeemError,
-  MarketNotInAdapterError,
   type MorphoClientType,
   NativeAmountOnNonWNativeVaultError,
   NegativeInputError,
@@ -167,16 +168,19 @@ export interface VaultV2Actions {
    * @throws {InKindRedemptionRequiresSingleAdapterError} when the vault does not have one adapter.
    * @throws {AdapterNotPartOfVaultError} when `adapter` is not the vault's adapter.
    * @throws {UnsupportedInKindAdapterError} when the adapter is not a MorphoMarketV1AdapterV2.
-   * @throws {MarketNotInAdapterError} when a listed market is not live on the adapter.
    * @throws {InKindRedemptionCoverageError} when the deduplicated list cannot cover the exit.
    * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
    * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
    * @throws {InsufficientBlueBalanceForInKindRedeemError} from `getRequirements()` when Blue cannot fund the largest callback.
    * @throws {CannotSendSharesForInKindRedeemError} from `getRequirements()` when the user's share gate rejects the exit.
    * @throws {CannotReceiveAssetsForInKindRedeemError} from `getRequirements()` when either asset recipient is gated.
+   * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
+   * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
    * @throws {InKindRedeemPermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, amount, or signature encoding.
    * @example
    * ```ts
+   * import { isRequirementSignature } from "@morpho-org/morpho-sdk";
+   *
    * const vault = client.morpho.vaultV2(vaultAddress, 1);
    * const vaultData = await vault.getData();
    * const exit = vault.inKindRedeem({
@@ -185,23 +189,31 @@ export interface VaultV2Actions {
    *   vaultData,
    *   userAddress,
    * });
-   * const requirements = await exit.getRequirements();
-   * const tx = exit.buildTx();
+   * const signatures = [];
+   * for (const requirement of await exit.getRequirements()) {
+   *   if (isRequirementSignature(requirement)) {
+   *     signatures.push(await requirement.sign(walletClient, userAddress));
+   *   } else {
+   *     const hash = await walletClient.sendTransaction(requirement);
+   *     await client.waitForTransactionReceipt({ hash });
+   *   }
+   * }
+   * const tx = exit.buildTx(signatures);
+   * // tx satisfies Readonly<Transaction<VaultV2InKindRedeemAction>>
    * ```
    */
-  inKindRedeem: (params: {
-    amount: bigint;
-    marketParamsList: readonly MarketParams[];
-    vaultData: AccrualVaultV2;
-    userAddress: Address;
-    adapter?: Address;
-    deadline?: bigint;
-  }) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<VaultV2InKindRedeemAction>>;
-    getRequirements: () => Promise<readonly ActionRequirement[]>;
-  };
+  readonly inKindRedeem: (params: {
+    readonly amount: bigint;
+    readonly marketParamsList: readonly MarketParams[];
+    readonly vaultData: AccrualVaultV2;
+    readonly userAddress: Address;
+    readonly adapter?: Address;
+    readonly deadline?: bigint;
+  }) => ActionOutput<
+    VaultV2InKindRedeemAction,
+    readonly RequirementSignature[],
+    undefined
+  >;
   /**
    * Prepares a force withdraw transaction for the VaultV2 contract using the vault's native multicall.
    *
@@ -433,6 +445,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     };
   }
 
+  /** {@inheritDoc VaultV2Actions.inKindRedeem} */
   inKindRedeem({
     amount,
     marketParamsList,
@@ -441,13 +454,17 @@ export class MorphoVaultV2 implements VaultV2Actions {
     adapter: adapterOverride,
     deadline: deadlineOverride,
   }: {
-    amount: bigint;
-    marketParamsList: readonly MarketParams[];
-    vaultData: AccrualVaultV2;
-    userAddress: Address;
-    adapter?: Address;
-    deadline?: bigint;
-  }) {
+    readonly amount: bigint;
+    readonly marketParamsList: readonly MarketParams[];
+    readonly vaultData: AccrualVaultV2;
+    readonly userAddress: Address;
+    readonly adapter?: Address;
+    readonly deadline?: bigint;
+  }): ActionOutput<
+    VaultV2InKindRedeemAction,
+    readonly RequirementSignature[],
+    undefined
+  > {
     if (this.client.viemClient.chain?.id !== this.chainId) {
       throw new ChainIdMismatchError(
         this.client.viemClient.chain?.id,
@@ -459,6 +476,18 @@ export class MorphoVaultV2 implements VaultV2Actions {
     }
     if (amount <= 0n) throw new NonPositiveInputError("amount", amount);
     if (marketParamsList.length === 0) throw new EmptyMarketParamsListError();
+    const marketParamsListSnapshot = marketParamsList.map(
+      ({ loanToken, collateralToken, oracle, irm, lltv }) => ({
+        loanToken,
+        collateralToken,
+        oracle,
+        irm,
+        lltv,
+      }),
+    );
+    const marketIdListSnapshot = marketParamsListSnapshot.map((marketParams) =>
+      MarketUtils.getMarketId(marketParams),
+    );
 
     const now = Time.timestamp();
     const deadline = deadlineOverride ?? now + Time.s.from.h(2n);
@@ -482,14 +511,6 @@ export class MorphoVaultV2 implements VaultV2Actions {
       throw new UnsupportedInKindAdapterError(adapter);
     }
 
-    const marketIds = new Set(soleAdapter.marketIds);
-    const unknownMarketIds = marketParamsList
-      .map(({ id }) => id)
-      .filter((id) => !marketIds.has(id));
-    if (unknownMarketIds.length > 0) {
-      throw new MarketNotInAdapterError(adapter, unknownMarketIds);
-    }
-
     const penalty =
       vaultData.forceDeallocatePenalties[soleAdapter.address] ?? 0n;
     const assetsToDeallocate = MathLib.mulDivDown(
@@ -509,15 +530,15 @@ export class MorphoVaultV2 implements VaultV2Actions {
           .toSupplyAssets(soleAdapter.supplyShares[market.id] ?? 0n),
       ]),
     );
-    const uniqueMarketIds = new Set(marketParamsList.map(({ id }) => id));
+    const uniqueMarketIds = new Set(marketIdListSnapshot);
     let covered = 0n;
     for (const id of uniqueMarketIds) covered += assetsByMarket.get(id) ?? 0n;
     if (covered < assetsToDeallocate) {
-      const maxExitAssets = MathLib.mulDivDown(
-        covered,
-        MathLib.WAD + penalty,
-        MathLib.WAD,
-      );
+      const maxExitAssets =
+        covered === 0n
+          ? 0n
+          : MathLib.mulDivUp(covered + 1n, MathLib.WAD + penalty, MathLib.WAD) -
+            1n;
       throw new InKindRedemptionCoverageError({
         required: assetsToDeallocate,
         covered,
@@ -528,7 +549,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     let remaining = assetsToDeallocate;
     let peak = 0n;
     const consumedMarketIds = new Set<string>();
-    for (const { id } of marketParamsList) {
+    for (const id of marketIdListSnapshot) {
       const available = consumedMarketIds.has(id)
         ? 0n
         : (assetsByMarket.get(id) ?? 0n);
@@ -653,7 +674,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
           args: {
             adapter,
             amount,
-            marketParamsList,
+            marketParamsList: marketParamsListSnapshot,
             userAddress,
             deadline,
             requirementSignature: permit,

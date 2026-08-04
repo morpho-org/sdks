@@ -56,7 +56,7 @@ const submitAndAccept = async (params: {
   });
 };
 
-describe("InKindRedeem VaultV2", () => {
+describe("MorphoVaultV2.inKindRedeem integration", () => {
   test("accepts the two-field-domain permit and exits with a penalty", async ({
     client,
   }) => {

@@ -1,7 +1,7 @@
 import { MarketParams } from "@morpho-org/blue-sdk";
 import { erc2612Abi, vaultV2Abi } from "@morpho-org/blue-sdk-viem";
 import { createMockClient } from "@morpho-org/test/mock";
-import { erc20Abi, maxUint256 } from "viem";
+import { type Address, erc20Abi, maxUint256 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
@@ -24,7 +24,6 @@ import {
   InKindRedemptionCoverageError,
   InKindRedemptionRequiresSingleAdapterError,
   InsufficientBlueBalanceForInKindRedeemError,
-  MarketNotInAdapterError,
   NonPositiveInputError,
   UnsupportedInKindAdapterError,
   VaultAddressMismatchError,
@@ -90,6 +89,32 @@ describe("MorphoVaultV2.inKindRedeem", () => {
     expect(exit.buildTx().action.type).toBe("vaultV2InKindRedeem");
   });
 
+  test("behavior: snapshots the ordered market params", () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+    const marketParams = new MarketParams(inKindMarketParams);
+    const marketParamsList = [marketParams];
+    const loanToken = marketParams.loanToken;
+    const exit = vault.inKindRedeem({
+      amount: 500n,
+      marketParamsList,
+      vaultData: inKindVaultV2Data(),
+      userAddress: IN_KIND_USER,
+    });
+    (
+      marketParams as unknown as {
+        loanToken: Address;
+      }
+    ).loanToken = "0x0000000000000000000000000000000000001999";
+    marketParamsList.length = 0;
+
+    const tx = exit.buildTx();
+    expect(tx.action.args.marketParamsList).toHaveLength(1);
+    expect(tx.action.args.marketParamsList[0]?.loanToken).toBe(loanToken);
+  });
+
   test("error: duplicate markets do not double-count coverage", () => {
     const handle = createMockClient(mainnet);
     const vault = handle.client
@@ -105,6 +130,49 @@ describe("MorphoVaultV2.inKindRedeem", () => {
       }),
     ).toThrow(InKindRedemptionCoverageError);
   });
+
+  test.each([
+    {
+      supplyShares: 0n,
+      amount: 2n,
+      covered: 0n,
+      maxExitAssets: 0n,
+    },
+    {
+      supplyShares: 1_000_000n,
+      amount: 3n,
+      covered: 1n,
+      maxExitAssets: 2n,
+    },
+  ])(
+    "error: reports the exact max exit for $covered covered assets",
+    ({ supplyShares, amount, covered, maxExitAssets }) => {
+      const handle = createMockClient(mainnet);
+      const vault = handle.client
+        .extend(morphoViemExtension())
+        .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+      let thrown: unknown;
+
+      try {
+        vault.inKindRedeem({
+          amount,
+          marketParamsList: [inKindMarketParams],
+          vaultData: inKindVaultV2Data({
+            supplyShares,
+            penalty: 20_000_000_000_000_000n,
+          }),
+          userAddress: IN_KIND_USER,
+        });
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown).toBeInstanceOf(InKindRedemptionCoverageError);
+      if (!(thrown instanceof InKindRedemptionCoverageError)) return;
+      expect(thrown.covered).toBe(covered);
+      expect(thrown.maxExitAssets).toBe(maxExitAssets);
+    },
+  );
 
   test("error: InKindRedemptionRequiresSingleAdapterError", () => {
     const handle = createMockClient(mainnet);
@@ -217,7 +285,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
     ).toThrow(UnsupportedInKindAdapterError);
   });
 
-  test("error: MarketNotInAdapterError", () => {
+  test("behavior: treats markets absent from the adapter snapshot as zero", () => {
     const handle = createMockClient(mainnet);
     const vault = handle.client
       .extend(morphoViemExtension())
@@ -227,14 +295,23 @@ describe("MorphoVaultV2.inKindRedeem", () => {
       collateralToken: "0x0000000000000000000000000000000000001999",
     });
 
-    expect(() =>
-      vault.inKindRedeem({
-        amount: 1n,
-        marketParamsList: [unknownMarket],
-        vaultData: inKindVaultV2Data(),
-        userAddress: IN_KIND_USER,
-      }),
-    ).toThrow(MarketNotInAdapterError);
+    const exit = vault.inKindRedeem({
+      amount: 500n,
+      marketParamsList: [unknownMarket, inKindMarketParams],
+      vaultData: inKindVaultV2Data(),
+      userAddress: IN_KIND_USER,
+    });
+
+    expect(
+      exit
+        .buildTx()
+        .action.args.marketParamsList.map(
+          ({ collateralToken }) => collateralToken,
+        ),
+    ).toEqual([
+      unknownMarket.collateralToken,
+      inKindMarketParams.collateralToken,
+    ]);
   });
 
   test("behavior: default approve path requires maxUint256", async () => {

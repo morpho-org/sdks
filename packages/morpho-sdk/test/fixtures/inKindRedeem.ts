@@ -13,6 +13,7 @@ import { type MockClientHandle, mockRead } from "@morpho-org/test/mock";
 import {
   type Abi,
   type AbiStateMutability,
+  type Address,
   type ContractFunctionName,
   type ContractFunctionReturnType,
   type EncodeFunctionResultParameters,
@@ -61,7 +62,7 @@ const inKindMarket = () =>
   });
 
 export const inKindVaultV1Data = (params?: {
-  readonly address?: `0x${string}`;
+  readonly address?: Address;
   readonly supplyShares?: bigint;
   readonly enabled?: boolean;
 }) => {
@@ -112,7 +113,7 @@ export const inKindVaultV1Data = (params?: {
 };
 
 export const inKindVaultV2Data = (params?: {
-  readonly address?: `0x${string}`;
+  readonly address?: Address;
   readonly supplyShares?: bigint;
   readonly penalty?: bigint;
   readonly adapters?: "single" | "empty" | "legacy";

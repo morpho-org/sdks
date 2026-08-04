@@ -33,14 +33,18 @@ export interface VaultV1InKindRedeemParams {
  * empty-permit sentinel; the user must first approve VaultExitBundlesV1 for `maxUint256` shares.
  *
  * @param params - In-kind redemption parameters.
- * @param params.vault - Target Vault V1 address and chain.
+ * @param params.vault.chainId - Chain containing the target Vault V1 and VaultExitBundlesV1.
+ * @param params.vault.address - Target Vault V1 address.
  * @param params.args.amount - Asset-denominated amount to exit.
  * @param params.args.marketParamsList - Ordered markets consumed greedily by the contract.
- * @param params.args.userAddress - Sending account whose vault shares are burned.
+ * @param params.args.userAddress - Expected transaction sender, recorded in action metadata only.
+ *   VaultExitBundlesV1 burns `msg.sender`'s vault shares, so the submitting account must equal this
+ *   address.
  * @param params.args.deadline - Permit and bundle deadline.
  * @param params.args.requirementSignature - Optional max-value Vault V1 shares permit.
  * @param params.metadata - Optional analytics metadata.
- * @returns A deep-frozen VaultExitBundlesV1 transaction.
+ * @returns A deep-frozen `Readonly<Transaction<VaultV1InKindRedeemAction>>` with `to`, `value`,
+ *   `data`, and the typed action discriminator.
  * @throws {NonPositiveInputError} when `amount` or `deadline` is not positive.
  * @throws {EmptyMarketParamsListError} when no markets are supplied.
  * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
@@ -54,6 +58,7 @@ export interface VaultV1InKindRedeemParams {
  *   vault: { chainId: 1, address: vault },
  *   args: { amount: 1_000_000n, marketParamsList, userAddress, deadline },
  * });
+ * // tx satisfies Readonly<Transaction<VaultV1InKindRedeemAction>>
  * ```
  */
 export const vaultV1InKindRedeem = ({

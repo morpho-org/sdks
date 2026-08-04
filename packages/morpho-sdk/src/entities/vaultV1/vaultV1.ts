@@ -4,6 +4,7 @@ import {
   DEFAULT_SLIPPAGE_TOLERANCE,
   getChainAddresses,
   type MarketParams,
+  MarketUtils,
   MathLib,
 } from "@morpho-org/blue-sdk";
 import {
@@ -31,6 +32,7 @@ import {
 } from "../../helpers/index.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
+  type ActionOutput,
   type ActionRequirement,
   ChainIdMismatchError,
   ChainWNativeMissingError,
@@ -152,9 +154,13 @@ export interface VaultV1Actions {
    * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
    * @throws {VaultMorphoMismatchError} from `getRequirements()` when the vault uses another Morpho deployment.
    * @throws {InsufficientBlueBalanceForInKindRedeemError} from `getRequirements()` when Blue cannot fund the flash loan.
+   * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
+   * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
    * @throws {InKindRedeemPermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, amount, or signature encoding.
    * @example
    * ```ts
+   * import { isRequirementSignature } from "@morpho-org/morpho-sdk";
+   *
    * const vault = client.morpho.vaultV1(vaultAddress, 1);
    * const vaultData = await vault.getData();
    * const exit = vault.inKindRedeem({
@@ -163,22 +169,30 @@ export interface VaultV1Actions {
    *   vaultData,
    *   userAddress,
    * });
-   * const requirements = await exit.getRequirements();
-   * const tx = exit.buildTx();
+   * const signatures = [];
+   * for (const requirement of await exit.getRequirements()) {
+   *   if (isRequirementSignature(requirement)) {
+   *     signatures.push(await requirement.sign(walletClient, userAddress));
+   *   } else {
+   *     const hash = await walletClient.sendTransaction(requirement);
+   *     await client.waitForTransactionReceipt({ hash });
+   *   }
+   * }
+   * const tx = exit.buildTx(signatures);
+   * // tx satisfies Readonly<Transaction<VaultV1InKindRedeemAction>>
    * ```
    */
-  inKindRedeem: (params: {
-    amount: bigint;
-    marketParamsList: readonly MarketParams[];
-    vaultData: AccrualVault;
-    userAddress: Address;
-    deadline?: bigint;
-  }) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<VaultV1InKindRedeemAction>>;
-    getRequirements: () => Promise<readonly ActionRequirement[]>;
-  };
+  readonly inKindRedeem: (params: {
+    readonly amount: bigint;
+    readonly marketParamsList: readonly MarketParams[];
+    readonly vaultData: AccrualVault;
+    readonly userAddress: Address;
+    readonly deadline?: bigint;
+  }) => ActionOutput<
+    VaultV1InKindRedeemAction,
+    readonly RequirementSignature[],
+    undefined
+  >;
   /**
    * Prepares a full migration from VaultV1 to VaultV2.
    *
@@ -384,6 +398,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
     };
   }
 
+  /** {@inheritDoc VaultV1Actions.inKindRedeem} */
   inKindRedeem({
     amount,
     marketParamsList,
@@ -391,12 +406,16 @@ export class MorphoVaultV1 implements VaultV1Actions {
     userAddress,
     deadline: deadlineOverride,
   }: {
-    amount: bigint;
-    marketParamsList: readonly MarketParams[];
-    vaultData: AccrualVault;
-    userAddress: Address;
-    deadline?: bigint;
-  }) {
+    readonly amount: bigint;
+    readonly marketParamsList: readonly MarketParams[];
+    readonly vaultData: AccrualVault;
+    readonly userAddress: Address;
+    readonly deadline?: bigint;
+  }): ActionOutput<
+    VaultV1InKindRedeemAction,
+    readonly RequirementSignature[],
+    undefined
+  > {
     if (this.client.viemClient.chain?.id !== this.chainId) {
       throw new ChainIdMismatchError(
         this.client.viemClient.chain?.id,
@@ -408,6 +427,15 @@ export class MorphoVaultV1 implements VaultV1Actions {
     }
     if (amount <= 0n) throw new NonPositiveInputError("amount", amount);
     if (marketParamsList.length === 0) throw new EmptyMarketParamsListError();
+    const marketParamsListSnapshot = marketParamsList.map(
+      ({ loanToken, collateralToken, oracle, irm, lltv }) => ({
+        loanToken,
+        collateralToken,
+        oracle,
+        irm,
+        lltv,
+      }),
+    );
 
     const now = Time.timestamp();
     const deadline = deadlineOverride ?? now + Time.s.from.h(2n);
@@ -419,8 +447,10 @@ export class MorphoVaultV1 implements VaultV1Actions {
     );
     const addresses = getChainAddresses(this.chainId);
     const blue = addresses.blue ?? addresses.morpho;
-    const covered = marketParamsList.reduce((total, marketParams) => {
-      const allocation = vaultData.allocations.get(marketParams.id);
+    const covered = marketParamsListSnapshot.reduce((total, marketParams) => {
+      const allocation = vaultData.allocations.get(
+        MarketUtils.getMarketId(marketParams),
+      );
       if (allocation?.config.enabled !== true) return total;
 
       const market = allocation.position.market.accrueInterest(
@@ -515,7 +545,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
           vault: { chainId: this.chainId, address: this.vault },
           args: {
             amount,
-            marketParamsList,
+            marketParamsList: marketParamsListSnapshot,
             userAddress,
             deadline,
             requirementSignature: permit,

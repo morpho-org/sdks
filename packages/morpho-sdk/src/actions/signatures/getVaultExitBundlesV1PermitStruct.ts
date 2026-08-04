@@ -1,8 +1,11 @@
 import {
   type Address,
+  compactSignatureToSignature,
   isAddressEqual,
   maxUint256,
+  parseCompactSignature,
   parseSignature,
+  size,
   zeroHash,
 } from "viem";
 import {
@@ -44,7 +47,9 @@ export interface GetVaultExitBundlesV1PermitStructParams {
  * the ERC-2612 kind, vault asset, and max-share amount before splitting the serialized signature.
  * Owner, spender, deadline, nonce, and cryptographic validity are verified onchain by the vault.
  *
- * @param params - Vault permit encoding parameters.
+ * @param params.vault - Vault share token authorized by the permit.
+ * @param params.deadline - Bundle deadline used by the empty-permit sentinel.
+ * @param params.requirementSignature - Optional signed max-share ERC-2612 requirement.
  * @returns The VaultExitBundlesV1 permit tuple.
  * @throws {InKindRedeemPermitMismatchError} when the requirement has the wrong permit kind, asset, amount, or signature encoding.
  * @example
@@ -56,6 +61,7 @@ export interface GetVaultExitBundlesV1PermitStructParams {
  *   deadline,
  *   requirementSignature,
  * });
+ * // permit satisfies VaultExitBundlesV1PermitStruct
  * ```
  */
 export const getVaultExitBundlesV1PermitStruct = (
@@ -96,22 +102,36 @@ export const getVaultExitBundlesV1PermitStruct = (
   }
   const signature = (() => {
     try {
-      return parseSignature(requirementSignature.args.signature);
-    } catch {
+      const serializedSignature = requirementSignature.args.signature;
+      return size(serializedSignature) === 64
+        ? compactSignatureToSignature(
+            parseCompactSignature(serializedSignature),
+          )
+        : parseSignature(serializedSignature);
+    } catch (cause) {
       throw new InKindRedeemPermitMismatchError({
         field: "signature",
         expected: "a 64-byte compact or 65-byte serialized ECDSA signature",
         actual: requirementSignature.args.signature,
+        cause,
       });
     }
   })();
 
   const { r, s, v, yParity } = signature;
+  const normalizedV = v ?? (yParity == null ? undefined : BigInt(yParity + 27));
+  if (normalizedV == null) {
+    throw new InKindRedeemPermitMismatchError({
+      field: "signature",
+      expected: "a signature containing v or yParity",
+      actual: requirementSignature.args.signature,
+    });
+  }
   return {
     value: maxUint256,
     nonce: requirementSignature.args.nonce,
     deadline: requirementSignature.args.deadline,
-    v: Number(v ?? BigInt(yParity + 27)),
+    v: Number(normalizedV),
     r,
     s,
   };

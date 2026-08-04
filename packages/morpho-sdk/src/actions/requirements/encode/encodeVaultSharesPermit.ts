@@ -36,8 +36,15 @@ export interface EncodeVaultSharesPermitParams {
  * only `chainId` and `verifyingContract`. The amount is always `maxUint256` because the exit burns
  * shares across both the main and penalty legs and cannot be sized exactly before execution.
  *
- * @param params - Vault share permit parameters.
+ * @param params.vault - Vault share token, including V1 permit-domain metadata when available.
+ * @param params.version - Vault generation selecting the standard V1 or two-field V2 domain.
+ * @param params.spender - Registered VaultExitBundlesV1 spender.
+ * @param params.owner - Account that owns and authorizes spending of the vault shares.
+ * @param params.chainId - Chain on which the vault and spender are deployed.
+ * @param params.nonce - Current vault permit nonce for the owner.
+ * @param params.deadline - Shared permit and bundle deadline.
  * @returns A requirement whose `sign()` result can be embedded in VaultExitBundlesV1 calldata.
+ * @throws {UnsupportedChainIdError} when no address registry exists for `chainId`.
  * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not the registered VaultExitBundlesV1.
  * @throws {MissingClientPropertyError} from `sign()` when the wallet has no account.
  * @throws {AddressMismatchError} from `sign()` when the wallet account differs from `owner`.
@@ -60,24 +67,63 @@ export interface EncodeVaultSharesPermitParams {
  *   deadline,
  * });
  * const signature = await requirement.sign(walletClient, owner);
+ * // signature satisfies PermitRequirementSignature
  * ```
  */
 export const encodeVaultSharesPermit = (
   params: EncodeVaultSharesPermitParams,
 ): Requirement<PermitRequirementSignature> => {
+  const {
+    vault: inputVault,
+    version,
+    spender,
+    owner,
+    chainId,
+    nonce,
+    deadline,
+  } = params;
+  const inputDomain = inputVault.eip5267Domain;
+  const vault = new Token({
+    address: inputVault.address,
+    name: inputVault.name,
+    eip5267Domain:
+      version === "vaultV2"
+        ? new Eip5267Domain({
+            // Only the bitmap-selected fields enter Vault V2's domain separator.
+            fields: "0x0c",
+            name: "",
+            version: "",
+            chainId: BigInt(chainId),
+            verifyingContract: inputVault.address,
+            salt: zeroHash,
+            extensions: [],
+          })
+        : inputDomain == null
+          ? undefined
+          : new Eip5267Domain({
+              fields: inputDomain.fields,
+              name: inputDomain.name,
+              version: inputDomain.version,
+              chainId: inputDomain.chainId,
+              verifyingContract: inputDomain.verifyingContract,
+              salt: inputDomain.salt,
+              extensions: [...inputDomain.extensions],
+            }),
+  });
+
   // Bind the permit to the standalone vault-exit deployment for this chain.
   validateRequirementSpender({
-    chainId: params.chainId,
-    spender: params.spender,
+    chainId,
+    spender,
     allowed: ["vaultExitBundlesV1"],
   });
 
   const action: PermitAction = {
     type: "permit",
     args: {
-      spender: params.spender,
+      spender,
       amount: maxUint256,
-      deadline: params.deadline,
+      deadline,
     },
   };
 
@@ -85,35 +131,20 @@ export const encodeVaultSharesPermit = (
     action,
     async sign(client: WalletClient, userAddress: Address) {
       // The bundle spends msg.sender's shares, so another signer cannot authorize this exit.
-      validateUserAddress(userAddress, params.owner);
+      validateUserAddress(userAddress, owner);
       const permit = {
-        owner: params.owner,
-        spender: params.spender,
+        owner,
+        spender,
         allowance: maxUint256,
-        nonce: params.nonce,
-        deadline: params.deadline,
+        nonce,
+        deadline,
       };
       const typedData = getPermitTypedData(
         {
           ...permit,
-          erc20:
-            params.version === "vaultV2"
-              ? new Token({
-                  ...params.vault,
-                  eip5267Domain: new Eip5267Domain({
-                    // Only the bitmap-selected fields enter Vault V2's domain separator.
-                    fields: "0x0c",
-                    name: "",
-                    version: "",
-                    chainId: BigInt(params.chainId),
-                    verifyingContract: params.vault.address,
-                    salt: zeroHash,
-                    extensions: [],
-                  }),
-                })
-              : params.vault,
+          erc20: vault,
         },
-        params.chainId,
+        chainId,
       );
       const signature = await signAndVerifyTypedData({
         client,
@@ -123,12 +154,12 @@ export const encodeVaultSharesPermit = (
 
       return deepFreeze({
         args: {
-          owner: params.owner,
+          owner,
           signature,
-          deadline: params.deadline,
+          deadline,
           amount: maxUint256,
-          asset: params.vault.address,
-          nonce: params.nonce,
+          asset: vault.address,
+          nonce,
         },
         action,
       });

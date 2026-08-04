@@ -129,23 +129,6 @@ export class UnsupportedInKindAdapterError extends Error {
   }
 }
 
-/** Thrown when one or more requested markets are not live on the Vault V2 adapter. */
-export class MarketNotInAdapterError extends Error {
-  /**
-   * @param adapter - Vault V2 adapter address.
-   * @param marketIds - Market ids absent from the adapter.
-   */
-  public constructor(
-    public readonly adapter: Address,
-    public readonly marketIds: readonly MarketId[],
-  ) {
-    super(
-      `Markets "${marketIds.join('", "')}" are not configured on adapter "${adapter}". Remove them or refresh the vault data.`,
-    );
-    this.name = "MarketNotInAdapterError";
-  }
-}
-
 /** Thrown when the ordered market list cannot cover the requested in-kind redemption. */
 export class InKindRedemptionCoverageError extends Error {
   /**
@@ -268,6 +251,7 @@ export class InKindRedeemPermitMismatchError extends Error {
    * @param params.field - Permit field that does not match the exit.
    * @param params.expected - Value required by the exit.
    * @param params.actual - Value supplied by the signature.
+   * @param params.cause - Original parser failure when signature decoding is wrapped.
    */
   public readonly field: string;
   public readonly expected: string;
@@ -277,9 +261,11 @@ export class InKindRedeemPermitMismatchError extends Error {
     readonly field: string;
     readonly expected: string;
     readonly actual: string;
+    readonly cause?: unknown;
   }) {
     super(
       `In-kind redemption permit ${params.field} mismatch: expected "${params.expected}", got "${params.actual}". Rebuild and sign this exit's permit.`,
+      { cause: params.cause },
     );
     this.field = params.field;
     this.expected = params.expected;

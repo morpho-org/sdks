@@ -1,5 +1,13 @@
 import fc from "fast-check";
-import { type Address, maxUint256, serializeSignature, zeroHash } from "viem";
+import {
+  type Address,
+  concatHex,
+  maxUint256,
+  serializeCompactSignature,
+  serializeSignature,
+  signatureToCompactSignature,
+  zeroHash,
+} from "viem";
 import { describe, expect, test } from "vitest";
 import {
   InKindRedeemPermitMismatchError,
@@ -10,11 +18,20 @@ import { getVaultExitBundlesV1PermitStruct } from "./getVaultExitBundlesV1Permit
 const vault = "0x0000000000000000000000000000000000000001" as const;
 const owner = "0x0000000000000000000000000000000000000002" as const;
 const spender = "0x0000000000000000000000000000000000000003" as const;
-const serializedSignature = serializeSignature({
+const signatureParts = {
   r: `0x${"11".repeat(32)}`,
   s: `0x${"22".repeat(32)}`,
   yParity: 1,
-});
+} as const;
+const serializedSignature = serializeSignature(signatureParts);
+const yParitySerializedSignature = concatHex([
+  signatureParts.r,
+  signatureParts.s,
+  "0x01",
+]);
+const compactSignature = serializeCompactSignature(
+  signatureToCompactSignature(signatureParts),
+);
 
 const permit = (
   overrides: Partial<PermitRequirementSignature["args"]> = {},
@@ -61,12 +78,16 @@ describe("getVaultExitBundlesV1PermitStruct", () => {
     });
   });
 
-  test("behavior: encodes a signed max-share permit", () => {
+  test.each([
+    { label: "standard serialized", signature: serializedSignature },
+    { label: "y-parity serialized", signature: yParitySerializedSignature },
+    { label: "EIP-2098 compact", signature: compactSignature },
+  ])("behavior: encodes a $label max-share permit", ({ signature }) => {
     expect(
       getVaultExitBundlesV1PermitStruct({
         vault,
         deadline: 1_900_000_000n,
-        requirementSignature: permit(),
+        requirementSignature: permit({ signature }),
       }),
     ).toEqual({
       value: maxUint256,
@@ -149,14 +170,21 @@ describe("getVaultExitBundlesV1PermitStruct", () => {
     ).toThrow(InKindRedeemPermitMismatchError);
   });
 
-  test("error: rejects malformed serialized signatures", () => {
-    expect(() =>
+  test("error: rejects malformed signatures and preserves the parser cause", () => {
+    let thrown: unknown;
+    try {
       getVaultExitBundlesV1PermitStruct({
         vault,
         deadline: 1_900_000_000n,
         requirementSignature: permit({ signature: "0x12" }),
-      }),
-    ).toThrow(InKindRedeemPermitMismatchError);
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(InKindRedeemPermitMismatchError);
+    if (!(thrown instanceof InKindRedeemPermitMismatchError)) throw thrown;
+    expect(thrown.cause).toBeInstanceOf(Error);
   });
 
   test("behavior: permit tuple round-trips across valid scalar inputs", () => {

@@ -1,8 +1,20 @@
 import { MarketParams, registerCustomAddresses } from "@morpho-org/blue-sdk";
-import { decodeFunctionData, maxUint256, serializeSignature } from "viem";
+import fc from "fast-check";
+import {
+  bytesToHex,
+  decodeFunctionData,
+  getAddress,
+  maxUint256,
+  serializeSignature,
+  zeroHash,
+} from "viem";
 import { describe, expect, test } from "vitest";
 import { vaultExitBundlesV1Abi } from "../../abis.js";
-import type { PermitRequirementSignature } from "../../types/index.js";
+import {
+  EmptyMarketParamsListError,
+  NonPositiveInputError,
+  type PermitRequirementSignature,
+} from "../../types/index.js";
 import { vaultV2InKindRedeem } from "./inKindRedeem.js";
 
 const chainId = 31_338;
@@ -18,6 +30,28 @@ const marketParams = new MarketParams({
   oracle: "0x0000000000000000000000000000000000000008",
   irm: "0x0000000000000000000000000000000000000009",
   lltv: 860_000_000_000_000_000n,
+});
+const addressArbitrary = fc
+  .uint8Array({ minLength: 20, maxLength: 20 })
+  .map((bytes) => getAddress(bytesToHex(bytes)));
+const positiveUint256Arbitrary = fc.bigInt({ min: 1n, max: maxUint256 });
+const marketParamsArbitrary = fc.record({
+  loanToken: addressArbitrary,
+  collateralToken: addressArbitrary,
+  oracle: addressArbitrary,
+  irm: addressArbitrary,
+  lltv: fc.bigInt({ min: 0n, max: maxUint256 }),
+});
+const inKindRedeemArbitrary = fc.record({
+  vaultAddress: addressArbitrary,
+  adapterAddress: addressArbitrary,
+  amount: positiveUint256Arbitrary,
+  marketParamsList: fc.array(marketParamsArbitrary, {
+    minLength: 1,
+    maxLength: 3,
+  }),
+  onBehalf: addressArbitrary,
+  deadline: positiveUint256Arbitrary,
 });
 const serializedSignature = serializeSignature({
   r: `0x${"11".repeat(32)}`,
@@ -115,5 +149,99 @@ describe("vaultV2InKindRedeem", () => {
         "functionName": "vaultExitBundlesV1InKindRedemptionVaultV2",
       }
     `);
+  });
+
+  test("behavior: calldata round-trips across valid primitive inputs", () => {
+    fc.assert(
+      fc.property(
+        inKindRedeemArbitrary,
+        ({
+          vaultAddress,
+          adapterAddress,
+          amount,
+          marketParamsList,
+          onBehalf,
+          deadline,
+        }) => {
+          const tx = vaultV2InKindRedeem({
+            vault: { chainId, address: vaultAddress },
+            args: {
+              adapter: adapterAddress,
+              amount,
+              marketParamsList,
+              userAddress: onBehalf,
+              deadline,
+            },
+          });
+          const decoded = decodeFunctionData({
+            abi: vaultExitBundlesV1Abi,
+            data: tx.data,
+          });
+          if (
+            decoded.functionName !== "vaultExitBundlesV1InKindRedemptionVaultV2"
+          ) {
+            throw new TypeError("Unexpected VaultExitBundlesV1 function");
+          }
+
+          expect(decoded.args[0]).toBe(vaultAddress);
+          expect(decoded.args[1]).toBe(adapterAddress);
+          expect(decoded.args[2]).toEqual(marketParamsList);
+          expect(decoded.args[3]).toBe(amount);
+          expect(decoded.args[4]).toEqual({
+            value: maxUint256,
+            nonce: 0n,
+            deadline,
+            v: 0,
+            r: zeroHash,
+            s: zeroHash,
+          });
+          expect(decoded.args[5]).toBe(deadline);
+          expect(tx.action.args).toMatchObject({
+            vault: vaultAddress,
+            adapter: adapterAddress,
+            amount,
+            marketParamsList,
+            onBehalf,
+            deadline,
+          });
+        },
+      ),
+      { numRuns: 50, seed: 20_260_804 },
+    );
+  });
+
+  test("error: EmptyMarketParamsListError", () => {
+    expect(() =>
+      vaultV2InKindRedeem({
+        vault: { chainId, address: vault },
+        args: {
+          adapter,
+          amount: 100n,
+          marketParamsList: [],
+          userAddress,
+          deadline: 1_900_000_000n,
+        },
+      }),
+    ).toThrow(EmptyMarketParamsListError);
+  });
+
+  test.each([
+    { field: "amount", amount: 0n, deadline: 1_900_000_000n },
+    { field: "amount", amount: -1n, deadline: 1_900_000_000n },
+    { field: "deadline", amount: 100n, deadline: 0n },
+    { field: "deadline", amount: 100n, deadline: -1n },
+  ])("error: NonPositiveInputError for $field", ({ amount, deadline }) => {
+    expect(() =>
+      vaultV2InKindRedeem({
+        vault: { chainId, address: vault },
+        args: {
+          adapter,
+          amount,
+          marketParamsList: [marketParams],
+          userAddress,
+          deadline,
+        },
+      }),
+    ).toThrow(NonPositiveInputError);
   });
 });

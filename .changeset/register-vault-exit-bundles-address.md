@@ -12,3 +12,5 @@ new entry like any other registry address. The field is optional and unset on ev
 Add Vault V1 and Vault V2 in-kind redemption actions and entity methods backed by
 VaultExitBundlesV1, including max-share permit/approval requirements, Vault V2's two-field permit
 domain, snapshot coverage validation, Morpho Blue balance checks, and Vault V2 gate checks.
+The published ABI and fork deployment fixture pin the guarded upstream contract at
+`a531f7126f482eaeb57e7d8073e9afb718477bae`.
