@@ -4,8 +4,8 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 
 ## Sub-layers
 
-- `vaultV1/` — VaultV1 (MetaMorpho) `deposit` / `withdraw` / `redeem` / `migrateToV2`.
-- `vaultV2/` — VaultV2 `deposit` / `withdraw` / `redeem` / `forceWithdraw` / `forceRedeem`.
+- `vaultV1/` — VaultV1 (MetaMorpho) `deposit` / `withdraw` / `redeem` / `inKindRedeem` / `migrateToV2`.
+- `vaultV2/` — VaultV2 `deposit` / `withdraw` / `redeem` / `inKindRedeem` / `forceWithdraw` / `forceRedeem`.
 - `blue/` — Morpho Blue `supplyCollateral` / `borrow` / `supplyCollateralBorrow` / `repay` / `repayWithdrawCollateral` / `withdrawCollateral`. Borrow paths support optional shared liquidity via `reallocations`.
 - `midnight/` — Midnight fixed-rate direct and bundled transaction encoders plus take normalization for fixed-rate API quote outputs.
 - `requirements/` — async resolvers that read on-chain state and return what the user must do/sign before an action: token approvals, permit/permit2 signature requests, Morpho authorization, Midnight authorization, and SetterRatifier root ratification.
@@ -14,7 +14,7 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 ## Common builder pattern
 
 1. Validate inputs with dedicated errors from `src/types/error.ts` (`assets > 0`, `shares > 0`, `maxSharePrice > 0`, `nativeAmount >= 0`).
-2. Encode calldata. **Bundler3 paths** use `BundlerAction.encodeBundle`. **Midnight bundle paths** encode one `MidnightBundles` function call directly. Other **direct calls** (`vaultV1/withdraw`, `vaultV1/redeem`, `vaultV2/withdraw`, `vaultV2/redeem`, `blue/withdrawCollateral`, and Midnight collateral supply, redeem, and offer cancellation) encode their target contract call directly.
+2. Encode calldata. **Bundler3 paths** use `BundlerAction.encodeBundle`. **Midnight bundle paths** encode one `MidnightBundles` function call directly. Other **direct calls** (`vaultV1/withdraw`, `vaultV1/redeem`, `vaultV2/withdraw`, `vaultV2/redeem`, `blue/withdrawCollateral`, and Midnight collateral supply, redeem, and offer cancellation) encode their target contract call directly. Vault `inKindRedeem` actions directly encode the standalone `VaultExitBundlesV1` entry point rather than composing a Bundler3 bundle.
 3. Call `addTransactionMetadata` only when `metadata` is provided.
 4. `deepFreeze` the return value: `{ to, value, data, action: { type, args } }`.
 

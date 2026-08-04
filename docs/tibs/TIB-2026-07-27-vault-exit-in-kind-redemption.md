@@ -5,7 +5,7 @@
 | **Status** | Proposed                                                          |
 | **Date**   | 2026-07-27                                                        |
 | **Author** | @foulques                                                         |
-| **Scope**  | Packages: `morpho-sdk`, `morpho-ts`, `blue-sdk-viem`              |
+| **Scope**  | Packages: `morpho-sdk`, `morpho-ts`                              |
 
 ---
 
@@ -55,10 +55,10 @@ the pre-flight validation that turns those opaque failures into named SDK errors
 
 **Goals**
 
-- Add `vaultV1InKindRedemption` and `vaultV2InKindRedemption` to `morpho-sdk` as pure, synchronous
+- Add `vaultV1InKindRedeem` and `vaultV2InKindRedeem` to `morpho-sdk` as pure, synchronous
   actions plus lazy entity handles — thin wrappers over the contract's
   `vaultExitBundlesV1InKindRedemptionVaultV1` / `...VaultV2` entry points — following the existing
-  Client → Entity → Action layering. These short `vaultV{1,2}InKindRedemption` names are the frozen
+  Client → Entity → Action layering. These short `vaultV{1,2}InKindRedeem` names are the frozen
   **SDK** surface used everywhere below; the long names are the **contract** functions they encode.
 - **Validate exhaustively before building.** Every revert reachable from a well-formed call must
   surface as a named, exported error class at build time — in particular the unbounded-loop panic,
@@ -183,8 +183,11 @@ The differences the SDK has to model:
 **`morpho-ts` — `src/addresses.ts`.** A new optional `ChainAddresses` slot:
 
 ```ts
-/** VaultExitBundlesV1 periphery contract for in-kind vault exits into Morpho Blue positions. */
-vaultExitBundlesV1?: `0x${string}`;
+/** Standalone bundle periphery contracts. */
+bundles?: {
+  /** VaultExitBundlesV1 periphery contract for in-kind vault exits into Morpho Blue positions. */
+  vaultExitBundlesV1: `0x${string}`;
+};
 ```
 
 The mirrored `bigint` deployment slot comes free via `ChainDeployments<Addresses>`.
@@ -214,9 +217,8 @@ interface suggests:
   decode the reentrancy guard's revert. Unreachable from a normal EOA call, but do not claim
   otherwise in JSDoc.
 
-**`blue-sdk-viem` — `src/signatures/vaultV2Permit.ts`.** A new pure, synchronous
-`getVaultV2PermitTypedData`, sitting beside `permit.ts` / `permit2.ts` / `manager.ts`. Vault V2 builds
-its domain from **two fields only**:
+**Vault V2 permit domain.** The existing pure, synchronous `getPermitTypedData` reads
+`erc20.eip5267Domain`. Vault V2 builds its domain from **two fields only**:
 
 ```solidity
 // vault-v2/src/libraries/ConstantsLib.sol
@@ -227,36 +229,38 @@ function DOMAIN_SEPARATOR() public view returns (bytes32) {
 }
 ```
 
-No `name`, no `version`. The existing
+No `name`, no `version`. Without hardcoded domain metadata,
 [`getPermitTypedData`](../../packages/blue-sdk-viem/src/signatures/permit.ts) emits
 `{ name, version, chainId, verifyingContract }` and therefore hashes a different domain typehash →
 `InvalidSigner()`. Vault V2 does not implement `eip712Domain()`, so `fetchToken`'s EIP-5267 probe
 cannot rescue it either; the helper would silently fall through to its `version: "1"` default.
 
-`PERMIT_TYPEHASH` *is* the standard ERC-2612 struct, so the existing `permitTypes` is reused
-verbatim — only the domain differs, and passing `domain: { chainId, verifyingContract }` to viem
-produces exactly the right typehash. MetaMorpho is OpenZeppelin `ERC20Permit`, so V1 keeps using the
-existing helper, consistent with the `// V1 shares always implement EIP-2612.` comment already in
+`PERMIT_TYPEHASH` *is* the standard ERC-2612 struct, so the generic helper remains the single source
+of truth — only the domain differs. The Vault V2 consumer clones the token with a synthetic
+`Eip5267Domain` whose `fields: "0x0c"` bitmap selects only `chainId` and `verifyingContract`, then
+passes it to `getPermitTypedData`. MetaMorpho is OpenZeppelin `ERC20Permit`, so V1 uses the original
+token unchanged, consistent with the
+`// V1 shares always implement EIP-2612.` comment already in
 [`entities/vaultV1/vaultV1.ts`](../../packages/morpho-sdk/src/entities/vaultV1/vaultV1.ts).
 
 > **Latent bug worth noting.** `getGeneralAdapterRequirements({ address: <a Vault V2>, useSimplePermit: true })`
 > would today mint an unsignable permit for the same reason. No current call site does this, but
 > nothing prevents one.
 
-**`morpho-sdk` — actions.** `src/actions/vaultV1/inKindRedemption.ts` → `vaultV1InKindRedemption` and
-`src/actions/vaultV2/inKindRedemption.ts` → `vaultV2InKindRedemption`, matching the existing
-per-vault folder layout and `vaultV{1,2}<Verb>` naming, with `"vaultV1InKindRedemption"` /
-`"vaultV2InKindRedemption"` joining the `TransactionAction` union in `src/types/action.ts`.
+**`morpho-sdk` — actions.** `src/actions/vaultV1/inKindRedeem.ts` → `vaultV1InKindRedeem` and
+`src/actions/vaultV2/inKindRedeem.ts` → `vaultV2InKindRedeem`, matching the existing
+per-vault folder layout and `vaultV{1,2}<Verb>` naming, with `"vaultV1InKindRedeem"` /
+`"vaultV2InKindRedeem"` joining the `TransactionAction` union in `src/types/action.ts`.
 
 Pure, synchronous, deep-frozen, following the four-step pattern in
 [`src/actions/AGENTS.md`](../../packages/morpho-sdk/src/actions/AGENTS.md). `to` resolves from
-`getChainAddresses(chainId).vaultExitBundlesV1`; `value` is always `0n`.
+`getChainAddresses(chainId).bundles?.vaultExitBundlesV1`; `value` is always `0n`.
 
-**`morpho-sdk` — entities.** `MorphoVaultV2.inKindRedemption(...)` and
-`MorphoVaultV1.inKindRedemption(...)`:
+**`morpho-sdk` — entities.** `MorphoVaultV2.inKindRedeem(...)` and
+`MorphoVaultV1.inKindRedeem(...)`:
 
 ```ts
-inKindRedemption(params: {
+inKindRedeem(params: {
   /** Assets to pull out of the vault. Penalty-inclusive on V2. */
   amount: bigint;
   /** Ordered; the contract consumes it greedily and never reorders. */
@@ -269,7 +273,7 @@ inKindRedemption(params: {
   /** Defaults to `now + 2h`. */
   deadline?: bigint;
 }): {
-  buildTx: (signatures?: readonly RequirementSignature[]) => Readonly<Transaction<VaultV2InKindRedemptionAction>>;
+  buildTx: (signatures?: readonly RequirementSignature[]) => Readonly<Transaction<VaultV2InKindRedeemAction>>;
   getRequirements: () => Promise<readonly ActionRequirement[]>;
 };
 ```
@@ -433,9 +437,9 @@ after the user has already signed.
   max is permanent (below). It must **not** short-circuit on a merely large allowance, since the
   exact burn is unknowable;
 - with `supportSignature: true`, returns a `Requirement<PermitRequirementSignature>` from a new
-  `encodeVaultSharesPermit`, which reads `nonces`, routes V1 → `getPermitTypedData` and
-  V2 → `getVaultV2PermitTypedData`, and signs through `signAndVerifyTypedData` (which already
-  enforces signer === `userAddress`);
+  `encodeVaultSharesPermit`, which reads `nonces`, calls `getPermitTypedData`, hardcodes a synthetic
+  `erc20.eip5267Domain` with only `chainId` and `verifyingContract` selected for V2, and signs
+  through `signAndVerifyTypedData` (which already enforces signer === `userAddress`);
 - with `supportSignature: false`, returns an `approve(vaultExitBundlesV1, maxUint256)`
   `CallRequirement` via `encodeErc20Approval`.
 
@@ -495,12 +499,13 @@ which puts `VaultExitBundlesV1` on the pinned mainnet fork ahead of any live dep
   Because the actions resolve `to` from the address registry, the helper deploys the contract onto
   the fork and makes its address *findable* via `registerCustomAddresses`, reusing the fork-wiring
   approach PR [#907](https://github.com/morpho-org/sdks/pull/907) already establishes for the fixture
-  — so `getChainAddresses(chainId).vaultExitBundlesV1` resolves inside the suite. End-to-end
+  — so `getChainAddresses(chainId).bundles?.vaultExitBundlesV1` resolves inside the suite. End-to-end
   coverage: an illiquid Vault V2 exited in-kind across several markets with a non-zero penalty, the
   V1 flash-loan path, and the gate and Blue-balance rejections. **At least one V2 case must exercise
   the `supportSignature: true` permit path end-to-end** — sign the `PermitRequirementSignature` that
   `getRequirements()` returns, feed the resulting `v`/`r`/`s` into the bundle, and execute on the
-  fork — so the two-field EIP-712 domain built by `getVaultV2PermitTypedData` is checked against the
+  fork — so the hardcoded two-field `erc20.eip5267Domain` passed to `getPermitTypedData` is checked
+  against the
   live `VaultV2.DOMAIN_SEPARATOR()` by the contract's own `ecrecover`. This cannot be substituted by
   a unit round-trip (signing and re-verifying with the same helper only proves the SDK is
   self-consistent, never that its domain matches the contract's) nor by an approve-based exit
@@ -517,7 +522,8 @@ which puts `VaultExitBundlesV1` on the pinned mainnet fork ahead of any live dep
   `buildTx` rejects a permit whose `owner`, `spender` (read from `action.args`), or `type` does not
   bind to this user and this ERC-2612 kind; a `vaultData` fetched for a different vault is rejected
   with `VaultAddressMismatchError`; a handle built from a client on the wrong chain is rejected with
-  `ChainIdMismatchError`; and a Vault V2 exit signed with `getVaultV2PermitTypedData` and submitted
+  `ChainIdMismatchError`; and a Vault V2 exit signed with `getPermitTypedData` using the synthetic
+  two-field `erc20.eip5267Domain` and submitted
   on a fork is **accepted** by the contract's `ecrecover` — the on-chain proof that the two-field
   domain does not produce `InvalidSigner()`.
 
@@ -529,7 +535,7 @@ The work is sequenced to **parallelise on top of PR
 contract on the pinned Anvil fork, so every phase below — encoding, the validation matrix,
 `getRequirements`, and end-to-end fork coverage — is fully exercisable today, against fork state,
 with **no dependency on a live address or deployment date**. The only thing genuinely gated on
-deployment is one value: the per-chain `vaultExitBundlesV1` address-registry entry, which fills in
+deployment is one value: the per-chain `bundles.vaultExitBundlesV1` address-registry entry, which fills in
 as `VaultExitBundlesV1` rolls out across every Morpho-supported chain. Everything else can land now.
 
 Because the contract is undeployed, the artifact/ABI this work vendors from #907 is pinned to a
@@ -542,8 +548,7 @@ delete the artifact per #907's header.
 - **Phase 0 — Prerequisite:** land PR #907. Everything after it runs against #907's fork and does
   not wait on deployment.
 - **Phase 1 — Plumbing:** promote the ABI into `src/abis.ts` (the fixture keeps only `code`), add the
-  `vaultExitBundlesV1` address slot, add `getVaultV2PermitTypedData` with unit tests. Independently
-  useful and independently reviewable.
+  `bundles.vaultExitBundlesV1` address slot. Independently useful and independently reviewable.
 - **Phase 2 — Actions:** both pure builders, the new error classes, the action-union members,
   colocated unit and property tests.
 - **Phase 3 — Entities:** the full validation matrix, `getRequirements`, mock-client tests per branch.
@@ -597,7 +602,7 @@ rounding on two legs per market, and interest accruing between them — any buff
 safe is large enough that its "self-exhausting" property is theatre. Reverting *after* the user has
 signed is the worse failure.
 
-### Alternative 5: Make `inKindRedemption` async and fold every check into one place
+### Alternative 5: Make `inKindRedeem` async and fold every check into one place
 
 One `await`, one error surface, no split between synchronous and asynchronous validation.
 
@@ -657,9 +662,8 @@ chain.
   ABIs in this repo are.
 - PR [#907](https://github.com/morpho-org/sdks/pull/907) must land first: it is the only way to
   exercise the contract before deployment.
-- `@morpho-org/blue-sdk-viem` for `getVaultV2PermitTypedData`, and `@morpho-org/morpho-ts` for the
-  address slot. Per root `AGENTS.md` §7, bumping either requires auditing direct dependents and
-  including them in the changeset.
+- `@morpho-org/morpho-ts` for the address slot. Per root `AGENTS.md` §7, bumping it requires auditing
+  direct dependents and including them in the changeset.
 
 ## Security
 

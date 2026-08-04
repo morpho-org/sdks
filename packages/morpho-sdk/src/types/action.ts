@@ -1,3 +1,4 @@
+import type { InputMarketParams } from "@morpho-org/blue-sdk";
 import type { Address, Hex, WalletClient } from "viem";
 import type { Deallocation } from "./deallocation.js";
 import {
@@ -52,6 +53,20 @@ export interface VaultV2RedeemAction
     }
   > {}
 
+/** Metadata for a Vault V2 in-kind redemption into Morpho Blue supply positions. */
+export interface VaultV2InKindRedeemAction
+  extends BaseAction<
+    "vaultV2InKindRedeem",
+    {
+      readonly vault: Address;
+      readonly adapter: Address;
+      readonly amount: bigint;
+      readonly marketParamsList: readonly InputMarketParams[];
+      readonly onBehalf: Address;
+      readonly deadline: bigint;
+    }
+  > {}
+
 export interface VaultV2ForceWithdrawAction
   extends BaseAction<
     "vaultV2ForceWithdraw",
@@ -103,6 +118,19 @@ export interface VaultV1RedeemAction
       vault: Address;
       shares: bigint;
       recipient: Address;
+    }
+  > {}
+
+/** Metadata for a Vault V1 in-kind redemption into Morpho Blue supply positions. */
+export interface VaultV1InKindRedeemAction
+  extends BaseAction<
+    "vaultV1InKindRedeem",
+    {
+      readonly vault: Address;
+      readonly amount: bigint;
+      readonly marketParamsList: readonly InputMarketParams[];
+      readonly onBehalf: Address;
+      readonly deadline: bigint;
     }
   > {}
 
@@ -447,11 +475,13 @@ export type TransactionAction =
   | VaultV2DepositAction
   | VaultV2WithdrawAction
   | VaultV2RedeemAction
+  | VaultV2InKindRedeemAction
   | VaultV2ForceWithdrawAction
   | VaultV2ForceRedeemAction
   | VaultV1DepositAction
   | VaultV1WithdrawAction
   | VaultV1RedeemAction
+  | VaultV1InKindRedeemAction
   | VaultV1MigrateToV2Action
   | BlueSupplyAction
   | BlueWithdrawAction

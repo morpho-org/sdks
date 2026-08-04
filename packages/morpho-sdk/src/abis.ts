@@ -33,6 +33,165 @@ export {
   setterRatifierAbi,
 } from "@morpho-org/midnight-sdk";
 
+/** ABI for the VaultExitBundlesV1 periphery contract. */
+export const vaultExitBundlesV1Abi = [
+  {
+    type: "constructor",
+    inputs: [{ name: "_blue", type: "address", internalType: "address" }],
+    stateMutability: "nonpayable",
+  },
+  { type: "error", name: "AdapterNotPartOfVault", inputs: [] },
+  { type: "error", name: "ApproveReturnedFalse", inputs: [] },
+  { type: "error", name: "DeadlinePassed", inputs: [] },
+  { type: "error", name: "InvalidAdaptersLength", inputs: [] },
+  { type: "error", name: "MorphoMismatch", inputs: [] },
+  { type: "error", name: "NoCode", inputs: [] },
+  { type: "error", name: "PctExceeded", inputs: [] },
+  { type: "error", name: "SlippageExceeded", inputs: [] },
+  { type: "error", name: "TransferReturnedFalse", inputs: [] },
+  { type: "error", name: "UnauthorizedCallback", inputs: [] },
+  {
+    type: "function",
+    name: "BLUE",
+    inputs: [],
+    outputs: [{ name: "", type: "address", internalType: "address" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "onMorphoFlashLoan",
+    inputs: [
+      { name: "exitAssets", type: "uint256", internalType: "uint256" },
+      { name: "data", type: "bytes", internalType: "bytes" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "onMorphoSupply",
+    inputs: [
+      { name: "assets", type: "uint256", internalType: "uint256" },
+      { name: "data", type: "bytes", internalType: "bytes" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "vaultExitBundlesV1ForceWithdrawVaultV2",
+    inputs: [
+      { name: "vault", type: "address", internalType: "address" },
+      { name: "adapter", type: "address", internalType: "address" },
+      { name: "exitAssets", type: "uint256", internalType: "uint256" },
+      { name: "minSharePriceE27", type: "uint256", internalType: "uint256" },
+      {
+        name: "sharesPermit",
+        type: "tuple",
+        internalType: "struct Permit",
+        components: [
+          { name: "value", type: "uint256", internalType: "uint256" },
+          { name: "nonce", type: "uint256", internalType: "uint256" },
+          { name: "deadline", type: "uint256", internalType: "uint256" },
+          { name: "v", type: "uint8", internalType: "uint8" },
+          { name: "r", type: "bytes32", internalType: "bytes32" },
+          { name: "s", type: "bytes32", internalType: "bytes32" },
+        ],
+      },
+      { name: "referralFeePct", type: "uint256", internalType: "uint256" },
+      {
+        name: "referralFeeRecipient",
+        type: "address",
+        internalType: "address",
+      },
+      { name: "deadline", type: "uint256", internalType: "uint256" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "vaultExitBundlesV1InKindRedemptionVaultV1",
+    inputs: [
+      { name: "vault", type: "address", internalType: "address" },
+      {
+        name: "marketParamsList",
+        type: "tuple[]",
+        internalType: "struct MarketParams[]",
+        components: [
+          { name: "loanToken", type: "address", internalType: "address" },
+          {
+            name: "collateralToken",
+            type: "address",
+            internalType: "address",
+          },
+          { name: "oracle", type: "address", internalType: "address" },
+          { name: "irm", type: "address", internalType: "address" },
+          { name: "lltv", type: "uint256", internalType: "uint256" },
+        ],
+      },
+      { name: "exitAssets", type: "uint256", internalType: "uint256" },
+      {
+        name: "sharesPermit",
+        type: "tuple",
+        internalType: "struct Permit",
+        components: [
+          { name: "value", type: "uint256", internalType: "uint256" },
+          { name: "nonce", type: "uint256", internalType: "uint256" },
+          { name: "deadline", type: "uint256", internalType: "uint256" },
+          { name: "v", type: "uint8", internalType: "uint8" },
+          { name: "r", type: "bytes32", internalType: "bytes32" },
+          { name: "s", type: "bytes32", internalType: "bytes32" },
+        ],
+      },
+      { name: "deadline", type: "uint256", internalType: "uint256" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "vaultExitBundlesV1InKindRedemptionVaultV2",
+    inputs: [
+      { name: "vault", type: "address", internalType: "address" },
+      { name: "adapter", type: "address", internalType: "address" },
+      {
+        name: "marketParamsList",
+        type: "tuple[]",
+        internalType: "struct MarketParams[]",
+        components: [
+          { name: "loanToken", type: "address", internalType: "address" },
+          {
+            name: "collateralToken",
+            type: "address",
+            internalType: "address",
+          },
+          { name: "oracle", type: "address", internalType: "address" },
+          { name: "irm", type: "address", internalType: "address" },
+          { name: "lltv", type: "uint256", internalType: "uint256" },
+        ],
+      },
+      { name: "exitAssets", type: "uint256", internalType: "uint256" },
+      {
+        name: "sharesPermit",
+        type: "tuple",
+        internalType: "struct Permit",
+        components: [
+          { name: "value", type: "uint256", internalType: "uint256" },
+          { name: "nonce", type: "uint256", internalType: "uint256" },
+          { name: "deadline", type: "uint256", internalType: "uint256" },
+          { name: "v", type: "uint8", internalType: "uint8" },
+          { name: "r", type: "bytes32", internalType: "bytes32" },
+          { name: "s", type: "bytes32", internalType: "bytes32" },
+        ],
+      },
+      { name: "deadline", type: "uint256", internalType: "uint256" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+] as const;
+
 /** ABI for the Bundler3 multicall contract. */
 export const bundler3Abi = [
   {
