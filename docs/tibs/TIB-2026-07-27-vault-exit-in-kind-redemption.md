@@ -461,21 +461,12 @@ The default approve authorization path gets its own test (§ Testing). `encodeEr
 is a separate list for a separate encoder and stays `["generalAdapter1", "midnightBundles"]`; the
 new shares permit does not route through it.
 
-`buildTx` cross-checks the signature it is handed against what it is about to encode, and the check
-must **bind the permit to this user and this permit kind** — not merely match asset, amount, and
-deadline. `selectRequirementSignatures` deliberately groups `permit` and `permit2` in one bucket, so
-a signature carried over from another flow — a Permit2 signature, or an ERC-2612 permit signed by a
-*different* account — could otherwise pass a value-only check and then revert with `InvalidSigner()`
-on-chain, because the contract decodes only its own ERC-2612 permit and hardcodes `owner = msg.sender`
-/ `spender = address(this)`. `buildTx` therefore requires **all** of `action.type === "permit"`,
-`args.owner === userAddress`, `action.args.spender === vaultExitBundlesV1`, `args.asset === vault`,
-`args.amount === maxUint256`, and `args.deadline === deadline`, and throws on any mismatch, mirroring
-the guards in `getTokenRequirementActions`. The spender is read from `action.args`, **not** `args`:
-`PermitArgs` carries `{ owner, nonce, asset, signature, amount, deadline }` and has no `spender`
-field, so the spender lives on the `PermitAction` metadata — the same `permit.action.args.spender`
-every existing permit encoder and test reads. Checking `args.spender` would compare `undefined` and
-reject every otherwise-valid ERC-2612 signature, breaking the `supportSignature: true` path. This is an authorization-binding invariant with its own
-tests (§ Testing).
+`buildTx` follows the established `getTokenRequirementActions` convention: it rejects Permit2,
+checks that the signed asset is the vault and the signed amount is `maxUint256`, then parses the
+signature into the standalone contract's `{ value, nonce, deadline, v, r, s }` tuple. The tuple uses
+the signed requirement's nonce and deadline. Owner, spender, duplicated action metadata, and the
+signature's cryptographic validity are left to the vault's on-chain ERC-2612 verification, which
+hardcodes `owner = msg.sender` and `spender = address(this)`.
 
 **Deadline.** One value, `now + 2h`, used for both `permit.deadline` and the bundle `deadline`,
 matching `encodeErc20Permit`. `TokenLib` notes the two are independent — a signature that never
@@ -519,8 +510,8 @@ which puts `VaultExitBundlesV1` on the pinned mainnet fork ahead of any live dep
   an under-covering list is rejected rather than left to panic; the **default**
   `supportSignature: false` path returns a valid `approve` requirement (i.e. `vaultExitBundlesV1` is
   on `encodeErc20Approval`'s allowlist) instead of throwing `UnsupportedErc20ApprovalSpenderError`;
-  `buildTx` rejects a permit whose `owner`, `spender` (read from `action.args`), or `type` does not
-  bind to this user and this ERC-2612 kind; a `vaultData` fetched for a different vault is rejected
+  `buildTx` rejects Permit2 and a requirement whose signed asset or amount does not match the exit;
+  a `vaultData` fetched for a different vault is rejected
   with `VaultAddressMismatchError`; a handle built from a client on the wrong chain is rejected with
   `ChainIdMismatchError`; and a Vault V2 exit signed with `getPermitTypedData` using the synthetic
   two-field `erc20.eip5267Domain` and submitted

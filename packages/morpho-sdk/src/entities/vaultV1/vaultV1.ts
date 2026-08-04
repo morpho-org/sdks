@@ -152,7 +152,7 @@ export interface VaultV1Actions {
    * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
    * @throws {VaultMorphoMismatchError} from `getRequirements()` when the vault uses another Morpho deployment.
    * @throws {InsufficientBlueBalanceForInKindRedeemError} from `getRequirements()` when Blue cannot fund the flash loan.
-   * @throws {InKindRedeemPermitMismatchError} from `buildTx()` when a signature is not bound to this exit.
+   * @throws {InKindRedeemPermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, amount, or signature encoding.
    * @example
    * ```ts
    * const vault = client.morpho.vaultV1(vaultAddress, 1);

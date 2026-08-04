@@ -214,34 +214,12 @@ describe("vault in-kind redeem actions", () => {
 
   test.each([
     {
-      label: "owner",
-      signature: permit({
-        owner: "0x0000000000000000000000000000000000000099",
-      }),
-    },
-    {
       label: "asset",
       signature: permit({
         asset: "0x0000000000000000000000000000000000000099",
       }),
     },
     { label: "amount", signature: permit({ amount: maxUint256 - 1n }) },
-    { label: "deadline", signature: permit({ deadline: 1_900_000_001n }) },
-    {
-      label: "spender",
-      signature: permit(
-        {},
-        { spender: "0x0000000000000000000000000000000000000099" },
-      ),
-    },
-    {
-      label: "action amount",
-      signature: permit({}, { amount: maxUint256 - 1n }),
-    },
-    {
-      label: "action deadline",
-      signature: permit({}, { deadline: 1_900_000_001n }),
-    },
   ])("error: rejects mismatched permit $label", ({ signature }) => {
     expect(() =>
       vaultV2InKindRedeem({
@@ -256,6 +234,38 @@ describe("vault in-kind redeem actions", () => {
         },
       }),
     ).toThrow(InKindRedeemPermitMismatchError);
+  });
+
+  test("behavior: leaves non-security permit metadata validation onchain", () => {
+    const permitDeadline = 1_900_000_001n;
+    const tx = vaultV2InKindRedeem({
+      vault: { chainId, address: vault },
+      args: {
+        adapter,
+        amount: 100n,
+        marketParamsList: [marketParams],
+        userAddress,
+        deadline: 1_900_000_000n,
+        requirementSignature: permit(
+          {
+            owner: "0x0000000000000000000000000000000000000099",
+            deadline: permitDeadline,
+          },
+          {
+            spender: "0x0000000000000000000000000000000000000099",
+            amount: maxUint256 - 1n,
+            deadline: permitDeadline + 1n,
+          },
+        ),
+      },
+    });
+    const decoded = decodeFunctionData({
+      abi: vaultExitBundlesV1Abi,
+      data: tx.data,
+    });
+
+    expect(decoded.args?.[4]).toMatchObject({ deadline: permitDeadline });
+    expect(decoded.args?.[5]).toBe(1_900_000_000n);
   });
 
   test("error: rejects a Permit2 signature", () => {

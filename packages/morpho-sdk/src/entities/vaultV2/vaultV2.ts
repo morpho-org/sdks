@@ -174,7 +174,7 @@ export interface VaultV2Actions {
    * @throws {InsufficientBlueBalanceForInKindRedeemError} from `getRequirements()` when Blue cannot fund the largest callback.
    * @throws {CannotSendSharesForInKindRedeemError} from `getRequirements()` when the user's share gate rejects the exit.
    * @throws {CannotReceiveAssetsForInKindRedeemError} from `getRequirements()` when either asset recipient is gated.
-   * @throws {InKindRedeemPermitMismatchError} from `buildTx()` when a signature is not bound to this exit.
+   * @throws {InKindRedeemPermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, amount, or signature encoding.
    * @example
    * ```ts
    * const vault = client.morpho.vaultV2(vaultAddress, 1);

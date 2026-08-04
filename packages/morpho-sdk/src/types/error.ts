@@ -261,7 +261,7 @@ export class VaultMorphoMismatchError extends Error {
   }
 }
 
-/** Thrown when an embedded vault-shares permit is not bound to the prepared in-kind exit. */
+/** Thrown when a vault-shares requirement cannot be safely encoded as an ERC-2612 permit. */
 export class InKindRedeemPermitMismatchError extends Error {
   /**
    * @param params - Permit mismatch values used to explain the rejection.

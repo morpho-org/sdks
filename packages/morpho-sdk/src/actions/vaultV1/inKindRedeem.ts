@@ -45,7 +45,7 @@ export interface VaultV1InKindRedeemParams {
  * @throws {EmptyMarketParamsListError} when no markets are supplied.
  * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
  * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
- * @throws {InKindRedeemPermitMismatchError} when the permit is not bound to this exit.
+ * @throws {InKindRedeemPermitMismatchError} when the requirement has the wrong permit kind, asset, amount, or signature encoding.
  * @example
  * ```ts
  * import { vaultV1InKindRedeem } from "@morpho-org/morpho-sdk";
@@ -79,8 +79,6 @@ export const vaultV1InKindRedeem = ({
   }));
   const sharesPermit = getVaultExitBundlesV1Permit({
     vault: vault.address,
-    userAddress: args.userAddress,
-    spender: to,
     deadline: args.deadline,
     requirementSignature: args.requirementSignature,
   });

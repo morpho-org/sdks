@@ -23,8 +23,6 @@ export interface VaultExitBundlesV1Permit {
 /** Builds and validates the permit tuple embedded in an in-kind redemption. @internal */
 export const getVaultExitBundlesV1Permit = (params: {
   readonly vault: Address;
-  readonly userAddress: Address;
-  readonly spender: Address;
   readonly deadline: bigint;
   readonly requirementSignature?: PermitRequirementSignature;
 }): VaultExitBundlesV1Permit => {
@@ -59,22 +57,6 @@ export const getVaultExitBundlesV1Permit = (params: {
       actual: requirementSignature.action.type,
     });
   }
-  if (!isAddressEqual(requirementSignature.args.owner, params.userAddress)) {
-    mismatch({
-      field: "owner",
-      expected: params.userAddress,
-      actual: requirementSignature.args.owner,
-    });
-  }
-  if (
-    !isAddressEqual(requirementSignature.action.args.spender, params.spender)
-  ) {
-    mismatch({
-      field: "spender",
-      expected: params.spender,
-      actual: requirementSignature.action.args.spender,
-    });
-  }
   if (!isAddressEqual(requirementSignature.args.asset, params.vault)) {
     mismatch({
       field: "asset",
@@ -89,28 +71,6 @@ export const getVaultExitBundlesV1Permit = (params: {
       actual: requirementSignature.args.amount,
     });
   }
-  if (requirementSignature.action.args.amount !== maxUint256) {
-    mismatch({
-      field: "action amount",
-      expected: maxUint256,
-      actual: requirementSignature.action.args.amount,
-    });
-  }
-  if (requirementSignature.args.deadline !== params.deadline) {
-    mismatch({
-      field: "deadline",
-      expected: params.deadline,
-      actual: requirementSignature.args.deadline,
-    });
-  }
-  if (requirementSignature.action.args.deadline !== params.deadline) {
-    mismatch({
-      field: "action deadline",
-      expected: params.deadline,
-      actual: requirementSignature.action.args.deadline,
-    });
-  }
-
   const signature = (() => {
     try {
       return parseSignature(requirementSignature.args.signature);
@@ -127,7 +87,7 @@ export const getVaultExitBundlesV1Permit = (params: {
   return {
     value: maxUint256,
     nonce: requirementSignature.args.nonce,
-    deadline: params.deadline,
+    deadline: requirementSignature.args.deadline,
     v: Number(v ?? BigInt(yParity + 27)),
     r,
     s,
