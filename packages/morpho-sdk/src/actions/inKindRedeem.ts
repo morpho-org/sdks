@@ -38,44 +38,32 @@ export const getVaultExitBundlesV1Permit = (params: {
     };
   }
 
-  const mismatch = (mismatchParams: {
-    field: string;
-    expected: unknown;
-    actual: unknown;
-  }) => {
-    throw new InKindRedeemPermitMismatchError({
-      field: mismatchParams.field,
-      expected: String(mismatchParams.expected),
-      actual: String(mismatchParams.actual),
-    });
-  };
-
   if (requirementSignature.action.type !== "permit") {
-    mismatch({
+    throw new InKindRedeemPermitMismatchError({
       field: "type",
       expected: "permit",
       actual: requirementSignature.action.type,
     });
   }
   if (!isAddressEqual(requirementSignature.args.asset, params.vault)) {
-    mismatch({
+    throw new InKindRedeemPermitMismatchError({
       field: "asset",
       expected: params.vault,
       actual: requirementSignature.args.asset,
     });
   }
   if (requirementSignature.args.amount !== maxUint256) {
-    mismatch({
+    throw new InKindRedeemPermitMismatchError({
       field: "amount",
-      expected: maxUint256,
-      actual: requirementSignature.args.amount,
+      expected: String(maxUint256),
+      actual: String(requirementSignature.args.amount),
     });
   }
   const signature = (() => {
     try {
       return parseSignature(requirementSignature.args.signature);
     } catch {
-      return mismatch({
+      throw new InKindRedeemPermitMismatchError({
         field: "signature",
         expected: "a 64-byte compact or 65-byte serialized ECDSA signature",
         actual: requirementSignature.args.signature,
