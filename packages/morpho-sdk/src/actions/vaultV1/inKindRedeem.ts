@@ -1,5 +1,5 @@
 import type { InputMarketParams } from "@morpho-org/blue-sdk";
-import { deepFreeze } from "@morpho-org/morpho-ts";
+import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData } from "viem";
 import { vaultExitBundlesV1Abi } from "../../abis.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
@@ -11,10 +11,7 @@ import {
   type Transaction,
   type VaultV1InKindRedeemAction,
 } from "../../types/index.js";
-import {
-  getVaultExitBundlesV1Address,
-  getVaultExitBundlesV1Permit,
-} from "../inKindRedeem.js";
+import { getVaultExitBundlesV1Permit } from "../inKindRedeem.js";
 
 /** Parameters for {@link vaultV1InKindRedeem}. */
 export interface VaultV1InKindRedeemParams {
@@ -46,7 +43,8 @@ export interface VaultV1InKindRedeemParams {
  * @returns A deep-frozen VaultExitBundlesV1 transaction.
  * @throws {NonPositiveInputError} when `amount` or `deadline` is not positive.
  * @throws {EmptyMarketParamsListError} when no markets are supplied.
- * @throws {VaultExitBundlesV1NotDeployedError} when the periphery is not registered.
+ * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
+ * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
  * @throws {InKindRedeemPermitMismatchError} when the permit is not bound to this exit.
  * @example
  * ```ts
@@ -71,7 +69,7 @@ export const vaultV1InKindRedeem = ({
   if (args.marketParamsList.length === 0)
     throw new EmptyMarketParamsListError();
 
-  const to = getVaultExitBundlesV1Address(vault.chainId);
+  const to = getChainAddress(vault.chainId, "bundles.vaultExitBundlesV1");
   const marketParamsList = args.marketParamsList.map((marketParams) => ({
     loanToken: marketParams.loanToken,
     collateralToken: marketParams.collateralToken,

@@ -11,7 +11,7 @@ import {
   fetchAccrualVaultV2,
   vaultV2Abi,
 } from "@morpho-org/blue-sdk-viem";
-import { Time } from "@morpho-org/morpho-ts";
+import { getChainAddress, Time } from "@morpho-org/morpho-ts";
 import { type Address, erc20Abi, isAddressEqual, maxUint256 } from "viem";
 import { multicall } from "viem/actions";
 import {
@@ -25,7 +25,6 @@ import {
   vaultV2Redeem,
   vaultV2Withdraw,
 } from "../../actions/index.js";
-import { getVaultExitBundlesV1Address } from "../../actions/inKindRedeem.js";
 import { validateSlippageTolerance } from "../../helpers/index.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
@@ -170,7 +169,8 @@ export interface VaultV2Actions {
    * @throws {UnsupportedInKindAdapterError} when the adapter is not a MorphoMarketV1AdapterV2.
    * @throws {MarketNotInAdapterError} when a listed market is not live on the adapter.
    * @throws {InKindRedemptionCoverageError} when the deduplicated list cannot cover the exit.
-   * @throws {VaultExitBundlesV1NotDeployedError} when the periphery is not registered on the chain.
+   * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
+   * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
    * @throws {InsufficientBlueBalanceForInKindRedeemError} from `getRequirements()` when Blue cannot fund the largest callback.
    * @throws {CannotSendSharesForInKindRedeemError} from `getRequirements()` when the user's share gate rejects the exit.
    * @throws {CannotReceiveAssetsForInKindRedeemError} from `getRequirements()` when either asset recipient is gated.
@@ -538,7 +538,10 @@ export class MorphoVaultV2 implements VaultV2Actions {
       remaining -= chunk;
     }
 
-    const vaultExitBundlesV1 = getVaultExitBundlesV1Address(this.chainId);
+    const vaultExitBundlesV1 = getChainAddress(
+      this.chainId,
+      "bundles.vaultExitBundlesV1",
+    );
     const addresses = getChainAddresses(this.chainId);
     const blue = addresses.blue ?? addresses.morpho;
 

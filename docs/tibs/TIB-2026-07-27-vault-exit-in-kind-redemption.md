@@ -193,8 +193,8 @@ bundles?: {
 The mirrored `bigint` deployment slot comes free via `ChainDeployments<Addresses>`.
 `VaultExitBundlesV1` will be deployed to **every chain Morpho supports**, so the slot is filled in
 per chain as each deployment lands. Until a given chain's address is known the slot stays unset,
-actions throw `VaultExitBundlesV1NotDeployedError`, and fork tests inject an address through
-`registerCustomAddresses`.
+actions resolve it directly with `getChainAddress` (and therefore throw `UnknownAddressError`), and
+fork tests inject an address through `registerCustomAddresses`.
 
 **`morpho-sdk` — `src/abis.ts`.** Pin `vaultExitBundlesV1Abi` alongside `bundler3Abi` and
 `generalAdapter1Abi`. This is the established split: core protocol ABIs live in `morpho-ts`,

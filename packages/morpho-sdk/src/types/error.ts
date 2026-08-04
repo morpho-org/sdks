@@ -55,19 +55,6 @@ export class NonPositiveInputError extends Error {
   }
 }
 
-/** Thrown when VaultExitBundlesV1 is not registered on the target chain. */
-export class VaultExitBundlesV1NotDeployedError extends Error {
-  /**
-   * @param chainId - Chain without a registered VaultExitBundlesV1 deployment.
-   */
-  public constructor(public readonly chainId: number) {
-    super(
-      `VaultExitBundlesV1 is not deployed on chain "${chainId}". Use a supported chain or register the deployment before building the exit.`,
-    );
-    this.name = "VaultExitBundlesV1NotDeployedError";
-  }
-}
-
 /** Thrown when an in-kind redemption does not include any Morpho Blue market parameters. */
 export class EmptyMarketParamsListError extends Error {
   public constructor() {

@@ -1,4 +1,3 @@
-import { getChainAddresses } from "@morpho-org/blue-sdk";
 import {
   type Address,
   isAddressEqual,
@@ -9,7 +8,6 @@ import {
 import {
   InKindRedeemPermitMismatchError,
   type PermitRequirementSignature,
-  VaultExitBundlesV1NotDeployedError,
 } from "../types/index.js";
 
 /** Permit tuple consumed by VaultExitBundlesV1. @internal */
@@ -21,15 +19,6 @@ export interface VaultExitBundlesV1Permit {
   readonly r: `0x${string}`;
   readonly s: `0x${string}`;
 }
-
-/** Resolves the VaultExitBundlesV1 address for an action. @internal */
-export const getVaultExitBundlesV1Address = (chainId: number): Address => {
-  const address = getChainAddresses(chainId).bundles?.vaultExitBundlesV1;
-  if (address == null) {
-    throw new VaultExitBundlesV1NotDeployedError(chainId);
-  }
-  return address;
-};
 
 /** Builds and validates the permit tuple embedded in an in-kind redemption. @internal */
 export const getVaultExitBundlesV1Permit = (params: {

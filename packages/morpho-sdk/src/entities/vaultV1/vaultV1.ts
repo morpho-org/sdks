@@ -11,7 +11,7 @@ import {
   fetchAccrualVault,
   metaMorphoAbi,
 } from "@morpho-org/blue-sdk-viem";
-import { Time } from "@morpho-org/morpho-ts";
+import { getChainAddress, Time } from "@morpho-org/morpho-ts";
 import { type Address, erc20Abi, isAddressEqual, maxUint256 } from "viem";
 import { multicall } from "viem/actions";
 import {
@@ -24,7 +24,6 @@ import {
   vaultV1Redeem,
   vaultV1Withdraw,
 } from "../../actions/index.js";
-import { getVaultExitBundlesV1Address } from "../../actions/inKindRedeem.js";
 import { MAX_ABSOLUTE_SHARE_PRICE } from "../../helpers/constant.js";
 import {
   validateChainId,
@@ -149,7 +148,8 @@ export interface VaultV1Actions {
    * @throws {EmptyMarketParamsListError} when the market list is empty.
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future.
    * @throws {InKindRedemptionCoverageError} when the ordered list cannot cover `amount`.
-   * @throws {VaultExitBundlesV1NotDeployedError} when the periphery is not registered on the chain.
+   * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
+   * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
    * @throws {VaultMorphoMismatchError} from `getRequirements()` when the vault uses another Morpho deployment.
    * @throws {InsufficientBlueBalanceForInKindRedeemError} from `getRequirements()` when Blue cannot fund the flash loan.
    * @throws {InKindRedeemPermitMismatchError} from `buildTx()` when a signature is not bound to this exit.
@@ -413,7 +413,10 @@ export class MorphoVaultV1 implements VaultV1Actions {
     const deadline = deadlineOverride ?? now + Time.s.from.h(2n);
     if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
 
-    const vaultExitBundlesV1 = getVaultExitBundlesV1Address(this.chainId);
+    const vaultExitBundlesV1 = getChainAddress(
+      this.chainId,
+      "bundles.vaultExitBundlesV1",
+    );
     const addresses = getChainAddresses(this.chainId);
     const blue = addresses.blue ?? addresses.morpho;
     const covered = marketParamsList.reduce((total, marketParams) => {
