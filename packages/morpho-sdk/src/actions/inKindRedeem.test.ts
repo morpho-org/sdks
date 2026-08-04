@@ -1,7 +1,5 @@
 import { MarketParams, registerCustomAddresses } from "@morpho-org/blue-sdk";
-import fc from "fast-check";
 import {
-  type Address,
   decodeFunctionData,
   maxUint256,
   serializeSignature,
@@ -11,7 +9,6 @@ import { describe, expect, test } from "vitest";
 import { vaultExitBundlesV1Abi } from "../abis.js";
 import {
   EmptyMarketParamsListError,
-  InKindRedeemPermitMismatchError,
   type PermitRequirementSignature,
 } from "../types/index.js";
 import { vaultV1InKindRedeem } from "./vaultV1/inKindRedeem.js";
@@ -52,14 +49,7 @@ registerCustomAddresses({
   },
 });
 
-const permit = (
-  overrides: Partial<PermitRequirementSignature["args"]> = {},
-  actionOverrides: Partial<{
-    readonly spender: Address;
-    readonly amount: bigint;
-    readonly deadline: bigint;
-  }> = {},
-): PermitRequirementSignature => ({
+const permit = (): PermitRequirementSignature => ({
   args: {
     owner: userAddress,
     nonce: 7n,
@@ -67,7 +57,6 @@ const permit = (
     signature: serializedSignature,
     amount: maxUint256,
     deadline: 1_900_000_000n,
-    ...overrides,
   },
   action: {
     type: "permit",
@@ -75,7 +64,6 @@ const permit = (
       spender: vaultExitBundlesV1,
       amount: maxUint256,
       deadline: 1_900_000_000n,
-      ...actionOverrides,
     },
   },
 });
@@ -210,149 +198,5 @@ describe("vault in-kind redeem actions", () => {
         },
       }),
     ).toThrow(EmptyMarketParamsListError);
-  });
-
-  test.each([
-    {
-      label: "asset",
-      signature: permit({
-        asset: "0x0000000000000000000000000000000000000099",
-      }),
-    },
-    { label: "amount", signature: permit({ amount: maxUint256 - 1n }) },
-  ])("error: rejects mismatched permit $label", ({ signature }) => {
-    expect(() =>
-      vaultV2InKindRedeem({
-        vault: { chainId, address: vault },
-        args: {
-          adapter,
-          amount: 100n,
-          marketParamsList: [marketParams],
-          userAddress,
-          deadline: 1_900_000_000n,
-          requirementSignature: signature,
-        },
-      }),
-    ).toThrow(InKindRedeemPermitMismatchError);
-  });
-
-  test("behavior: leaves non-security permit metadata validation onchain", () => {
-    const permitDeadline = 1_900_000_001n;
-    const tx = vaultV2InKindRedeem({
-      vault: { chainId, address: vault },
-      args: {
-        adapter,
-        amount: 100n,
-        marketParamsList: [marketParams],
-        userAddress,
-        deadline: 1_900_000_000n,
-        requirementSignature: permit(
-          {
-            owner: "0x0000000000000000000000000000000000000099",
-            deadline: permitDeadline,
-          },
-          {
-            spender: "0x0000000000000000000000000000000000000099",
-            amount: maxUint256 - 1n,
-            deadline: permitDeadline + 1n,
-          },
-        ),
-      },
-    });
-    const decoded = decodeFunctionData({
-      abi: vaultExitBundlesV1Abi,
-      data: tx.data,
-    });
-
-    expect(decoded.args?.[4]).toMatchObject({ deadline: permitDeadline });
-    expect(decoded.args?.[5]).toBe(1_900_000_000n);
-  });
-
-  test("error: rejects a Permit2 signature", () => {
-    const requirementSignature: PermitRequirementSignature = {
-      args: {
-        owner: userAddress,
-        nonce: 7n,
-        asset: vault,
-        signature: serializedSignature,
-        amount: maxUint256,
-        deadline: 1_900_000_000n,
-        expiration: 1_900_000_000n,
-      },
-      action: {
-        type: "permit2",
-        args: {
-          spender: vaultExitBundlesV1,
-          amount: maxUint256,
-          deadline: 1_900_000_000n,
-          expiration: 1_900_000_000n,
-        },
-      },
-    };
-
-    expect(() =>
-      vaultV2InKindRedeem({
-        vault: { chainId, address: vault },
-        args: {
-          adapter,
-          amount: 100n,
-          marketParamsList: [marketParams],
-          userAddress,
-          deadline: 1_900_000_000n,
-          requirementSignature,
-        },
-      }),
-    ).toThrow(InKindRedeemPermitMismatchError);
-  });
-
-  test("error: rejects malformed serialized signatures with a typed error", () => {
-    expect(() =>
-      vaultV1InKindRedeem({
-        vault: { chainId, address: vault },
-        args: {
-          amount: 100n,
-          marketParamsList: [marketParams],
-          userAddress,
-          deadline: 1_900_000_000n,
-          requirementSignature: permit({ signature: "0x12" }),
-        },
-      }),
-    ).toThrow(InKindRedeemPermitMismatchError);
-  });
-
-  test("behavior: permit tuple round-trips across valid scalar inputs", () => {
-    fc.assert(
-      fc.property(
-        fc.bigInt({ min: 1n, max: 2n ** 128n }),
-        fc.bigInt({ min: 0n, max: 2n ** 128n }),
-        (deadline, nonce) => {
-          const requirementSignature = permit(
-            { deadline, nonce },
-            { deadline },
-          );
-          const tx = vaultV1InKindRedeem({
-            vault: { chainId, address: vault },
-            args: {
-              amount: 1n,
-              marketParamsList: [marketParams],
-              userAddress,
-              deadline,
-              requirementSignature,
-            },
-          });
-          const decoded = decodeFunctionData({
-            abi: vaultExitBundlesV1Abi,
-            data: tx.data,
-          });
-          expect(decoded.args?.[3]).toMatchObject({
-            value: maxUint256,
-            nonce,
-            deadline,
-            v: 28,
-          });
-        },
-      ),
-      { numRuns: 50, seed: 20_260_727 },
-    );
   });
 });

@@ -11,7 +11,7 @@ import {
   type Transaction,
   type VaultV2InKindRedeemAction,
 } from "../../types/index.js";
-import { getVaultExitBundlesV1Permit } from "../inKindRedeem.js";
+import { encodeVaultExitBundlesV1Permit } from "../requirements/encode/encodeVaultExitBundlesV1Permit.js";
 
 /** Parameters for {@link vaultV2InKindRedeem}. */
 export interface VaultV2InKindRedeemParams {
@@ -79,7 +79,7 @@ export const vaultV2InKindRedeem = ({
     irm: marketParams.irm,
     lltv: marketParams.lltv,
   }));
-  const sharesPermit = getVaultExitBundlesV1Permit({
+  const sharesPermit = encodeVaultExitBundlesV1Permit({
     vault: vault.address,
     deadline: args.deadline,
     requirementSignature: args.requirementSignature,

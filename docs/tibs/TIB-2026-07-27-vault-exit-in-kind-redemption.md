@@ -461,12 +461,13 @@ The default approve authorization path gets its own test (§ Testing). `encodeEr
 is a separate list for a separate encoder and stays `["generalAdapter1", "midnightBundles"]`; the
 new shares permit does not route through it.
 
-`buildTx` follows the established `getTokenRequirementActions` convention: it rejects Permit2,
-checks that the signed asset is the vault and the signed amount is `maxUint256`, then parses the
-signature into the standalone contract's `{ value, nonce, deadline, v, r, s }` tuple. The tuple uses
-the signed requirement's nonce and deadline. Owner, spender, duplicated action metadata, and the
-signature's cryptographic validity are left to the vault's on-chain ERC-2612 verification, which
-hardcodes `owner = msg.sender` and `spender = address(this)`.
+`buildTx` routes the selected signature through `encodeVaultExitBundlesV1Permit`, a dedicated
+requirement encoder following the established `getTokenRequirementActions` convention. It rejects
+Permit2, checks that the signed asset is the vault and the signed amount is `maxUint256`, then parses
+the signature into the standalone contract's `{ value, nonce, deadline, v, r, s }` tuple. The tuple
+uses the signed requirement's nonce and deadline. Owner, spender, duplicated action metadata, and
+the signature's cryptographic validity are left to the vault's on-chain ERC-2612 verification,
+which hardcodes `owner = msg.sender` and `spender = address(this)`.
 
 **Deadline.** One value, `now + 2h`, used for both `permit.deadline` and the bundle `deadline`,
 matching `encodeErc20Permit`. `TokenLib` notes the two are independent — a signature that never
