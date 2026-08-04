@@ -8,10 +8,10 @@ import {
 import {
   InKindRedeemPermitMismatchError,
   type PermitRequirementSignature,
-} from "../../../types/index.js";
+} from "../../types/index.js";
 
 /** Permit tuple consumed by VaultExitBundlesV1. */
-export interface VaultExitBundlesV1Permit {
+export interface VaultExitBundlesV1PermitStruct {
   /** Vault-share allowance authorized by the permit. */
   readonly value: bigint;
   /** Vault permit nonce signed by the owner. */
@@ -26,8 +26,8 @@ export interface VaultExitBundlesV1Permit {
   readonly s: `0x${string}`;
 }
 
-/** Parameters for {@link encodeVaultExitBundlesV1Permit}. */
-export interface EncodeVaultExitBundlesV1PermitParams {
+/** Parameters for {@link getVaultExitBundlesV1PermitStruct}. */
+export interface GetVaultExitBundlesV1PermitStructParams {
   /** Vault share token authorized by the permit. */
   readonly vault: Address;
   /** Bundle deadline used by the empty-permit sentinel. */
@@ -37,8 +37,8 @@ export interface EncodeVaultExitBundlesV1PermitParams {
 }
 
 /**
- * Encodes an optional vault-share requirement signature as the permit tuple consumed by
- * VaultExitBundlesV1.
+ * Returns the permit struct consumed by VaultExitBundlesV1 from an optional vault-share
+ * requirement signature.
  *
  * Without a signature, returns the contract's empty-permit sentinel. With a signature, validates
  * the ERC-2612 kind, vault asset, and max-share amount before splitting the serialized signature.
@@ -49,18 +49,18 @@ export interface EncodeVaultExitBundlesV1PermitParams {
  * @throws {InKindRedeemPermitMismatchError} when the requirement has the wrong permit kind, asset, amount, or signature encoding.
  * @example
  * ```ts
- * import { encodeVaultExitBundlesV1Permit } from "@morpho-org/morpho-sdk";
+ * import { getVaultExitBundlesV1PermitStruct } from "@morpho-org/morpho-sdk";
  *
- * const permit = encodeVaultExitBundlesV1Permit({
+ * const permit = getVaultExitBundlesV1PermitStruct({
  *   vault,
  *   deadline,
  *   requirementSignature,
  * });
  * ```
  */
-export const encodeVaultExitBundlesV1Permit = (
-  params: EncodeVaultExitBundlesV1PermitParams,
-): VaultExitBundlesV1Permit => {
+export const getVaultExitBundlesV1PermitStruct = (
+  params: GetVaultExitBundlesV1PermitStructParams,
+): VaultExitBundlesV1PermitStruct => {
   const { requirementSignature } = params;
   if (requirementSignature == null) {
     return {

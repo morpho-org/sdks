@@ -461,8 +461,8 @@ The default approve authorization path gets its own test (§ Testing). `encodeEr
 is a separate list for a separate encoder and stays `["generalAdapter1", "midnightBundles"]`; the
 new shares permit does not route through it.
 
-`buildTx` routes the selected signature through `encodeVaultExitBundlesV1Permit`, a dedicated
-requirement encoder following the established `getTokenRequirementActions` convention. It rejects
+`buildTx` routes the selected signature through `getVaultExitBundlesV1PermitStruct`, colocated with
+and following the established `getTokenRequirementActions` convention. It rejects
 Permit2, checks that the signed asset is the vault and the signed amount is `maxUint256`, then parses
 the signature into the standalone contract's `{ value, nonce, deadline, v, r, s }` tuple. The tuple
 uses the signed requirement's nonce and deadline. Owner, spender, duplicated action metadata, and

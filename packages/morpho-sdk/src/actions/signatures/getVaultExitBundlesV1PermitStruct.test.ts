@@ -4,8 +4,8 @@ import { describe, expect, test } from "vitest";
 import {
   InKindRedeemPermitMismatchError,
   type PermitRequirementSignature,
-} from "../../../types/index.js";
-import { encodeVaultExitBundlesV1Permit } from "./encodeVaultExitBundlesV1Permit.js";
+} from "../../types/index.js";
+import { getVaultExitBundlesV1PermitStruct } from "./getVaultExitBundlesV1PermitStruct.js";
 
 const vault = "0x0000000000000000000000000000000000000001" as const;
 const owner = "0x0000000000000000000000000000000000000002" as const;
@@ -44,10 +44,10 @@ const permit = (
   },
 });
 
-describe("encodeVaultExitBundlesV1Permit", () => {
+describe("getVaultExitBundlesV1PermitStruct", () => {
   test("default: encodes the empty-permit sentinel", () => {
     expect(
-      encodeVaultExitBundlesV1Permit({
+      getVaultExitBundlesV1PermitStruct({
         vault,
         deadline: 1_900_000_000n,
       }),
@@ -63,7 +63,7 @@ describe("encodeVaultExitBundlesV1Permit", () => {
 
   test("behavior: encodes a signed max-share permit", () => {
     expect(
-      encodeVaultExitBundlesV1Permit({
+      getVaultExitBundlesV1PermitStruct({
         vault,
         deadline: 1_900_000_000n,
         requirementSignature: permit(),
@@ -88,7 +88,7 @@ describe("encodeVaultExitBundlesV1Permit", () => {
     { label: "amount", signature: permit({ amount: maxUint256 - 1n }) },
   ])("error: rejects mismatched permit $label", ({ signature }) => {
     expect(() =>
-      encodeVaultExitBundlesV1Permit({
+      getVaultExitBundlesV1PermitStruct({
         vault,
         deadline: 1_900_000_000n,
         requirementSignature: signature,
@@ -99,7 +99,7 @@ describe("encodeVaultExitBundlesV1Permit", () => {
   test("behavior: leaves non-security permit metadata validation onchain", () => {
     const permitDeadline = 1_900_000_001n;
 
-    const encoded = encodeVaultExitBundlesV1Permit({
+    const encoded = getVaultExitBundlesV1PermitStruct({
       vault,
       deadline: 1_900_000_000n,
       requirementSignature: permit(
@@ -141,7 +141,7 @@ describe("encodeVaultExitBundlesV1Permit", () => {
     };
 
     expect(() =>
-      encodeVaultExitBundlesV1Permit({
+      getVaultExitBundlesV1PermitStruct({
         vault,
         deadline: 1_900_000_000n,
         requirementSignature,
@@ -151,7 +151,7 @@ describe("encodeVaultExitBundlesV1Permit", () => {
 
   test("error: rejects malformed serialized signatures", () => {
     expect(() =>
-      encodeVaultExitBundlesV1Permit({
+      getVaultExitBundlesV1PermitStruct({
         vault,
         deadline: 1_900_000_000n,
         requirementSignature: permit({ signature: "0x12" }),
@@ -165,7 +165,7 @@ describe("encodeVaultExitBundlesV1Permit", () => {
         fc.bigInt({ min: 1n, max: 2n ** 128n }),
         fc.bigInt({ min: 0n, max: 2n ** 128n }),
         (deadline, nonce) => {
-          const encoded = encodeVaultExitBundlesV1Permit({
+          const encoded = getVaultExitBundlesV1PermitStruct({
             vault,
             deadline,
             requirementSignature: permit({ deadline, nonce }, { deadline }),
