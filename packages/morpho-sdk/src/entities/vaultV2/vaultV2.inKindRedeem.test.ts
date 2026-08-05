@@ -144,6 +144,12 @@ describe("MorphoVaultV2.inKindRedeem", () => {
       covered: 1n,
       maxExitAssets: 2n,
     },
+    {
+      supplyShares: 50_000_000n,
+      amount: 53n,
+      covered: 50n,
+      maxExitAssets: 52n,
+    },
   ])(
     "error: reports the exact max exit for $covered covered assets",
     ({ supplyShares, amount, covered, maxExitAssets }) => {

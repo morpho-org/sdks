@@ -513,11 +513,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
 
     const penalty =
       vaultData.forceDeallocatePenalties[soleAdapter.address] ?? 0n;
-    const assetsToDeallocate = MathLib.mulDivDown(
-      amount,
-      MathLib.WAD,
-      MathLib.WAD + penalty,
-    );
+    const assetsToDeallocate = MathLib.wDivDown(amount, MathLib.WAD + penalty);
     if (assetsToDeallocate <= 0n) {
       throw new NonPositiveInputError("assetsToDeallocate", assetsToDeallocate);
     }
@@ -537,8 +533,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
       const maxExitAssets =
         covered === 0n
           ? 0n
-          : MathLib.mulDivUp(covered + 1n, MathLib.WAD + penalty, MathLib.WAD) -
-            1n;
+          : MathLib.wMulUp(covered + 1n, MathLib.WAD + penalty) - 1n;
       throw new InKindRedemptionCoverageError({
         required: assetsToDeallocate,
         covered,
