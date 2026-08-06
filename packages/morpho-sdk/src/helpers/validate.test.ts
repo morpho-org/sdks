@@ -18,7 +18,7 @@ import {
 import {
   AccrualPositionUserMismatchError,
   AddressMismatchError,
-  type BluePublicAllocatorV2Reallocation,
+  type BluePublicAllocatorReallocation,
   type BlueReallocation,
   BorrowExceedsSafeLtvError,
   ChainIdMismatchError,
@@ -559,15 +559,16 @@ describe("validateReallocations", () => {
     withdrawals: [{ marketParams: sourceMarketA, amount: 10n ** 18n }],
   };
 
-  const validV2Reallocation: BluePublicAllocatorV2Reallocation = {
-    type: "publicAllocatorV2",
-    allocator: USER_A,
-    vault: USER_B,
-    from: { type: "idle" },
-    to: { adapter: USER_A },
-    assets: 1n,
-    nativePenalty: 0n,
-  };
+  const validBluePublicAllocatorReallocation: BluePublicAllocatorReallocation =
+    {
+      type: "bluePublicAllocator",
+      allocator: USER_A,
+      vault: USER_B,
+      from: { type: "idle" },
+      to: { adapter: USER_A },
+      assets: 1n,
+      nativePenalty: 0n,
+    };
 
   test("should pass with valid reallocations", () => {
     expect(() =>
@@ -584,46 +585,58 @@ describe("validateReallocations", () => {
     ).not.toThrow();
   });
 
-  test("behavior: accepts a valid V2 idle reallocation", () => {
+  test("behavior: accepts a valid Blue Public Allocator idle reallocation", () => {
     expect(() =>
-      validateReallocations([validV2Reallocation], targetMarketId),
+      validateReallocations(
+        [validBluePublicAllocatorReallocation],
+        targetMarketId,
+      ),
     ).not.toThrow();
   });
 
   test.each([
     {
       name: "negative native penalty",
-      reallocation: { ...validV2Reallocation, nativePenalty: -1n },
+      reallocation: {
+        ...validBluePublicAllocatorReallocation,
+        nativePenalty: -1n,
+      },
       ErrorClass: NegativeInputError,
     },
     {
       name: "zero assets",
-      reallocation: { ...validV2Reallocation, assets: 0n },
+      reallocation: { ...validBluePublicAllocatorReallocation, assets: 0n },
       ErrorClass: NonPositiveInputError,
     },
     {
       name: "uint128 asset overflow",
-      reallocation: { ...validV2Reallocation, assets: maxUint128 + 1n },
+      reallocation: {
+        ...validBluePublicAllocatorReallocation,
+        assets: maxUint128 + 1n,
+      },
       ErrorClass: InputExceedsMaxError,
     },
-  ])("error: rejects V2 $name", ({ reallocation, ErrorClass }) => {
-    expect(() => validateReallocations([reallocation], targetMarketId)).toThrow(
-      ErrorClass,
-    );
-  });
+  ])(
+    "error: rejects Blue Public Allocator $name",
+    ({ reallocation, ErrorClass }) => {
+      expect(() =>
+        validateReallocations([reallocation], targetMarketId),
+      ).toThrow(ErrorClass);
+    },
+  );
 
-  test("error: ReallocationWithdrawalOnTargetMarketError for a V2 target-market source", () => {
+  test("error: ReallocationWithdrawalOnTargetMarketError for a Blue Public Allocator target-market source", () => {
     expect(() =>
       validateReallocations(
         [
           {
-            ...validV2Reallocation,
+            ...validBluePublicAllocatorReallocation,
             from: {
               type: "market",
               adapter: USER_A,
               marketParams,
             },
-          } satisfies BluePublicAllocatorV2Reallocation,
+          } satisfies BluePublicAllocatorReallocation,
         ],
         targetMarketId,
       ),
@@ -632,7 +645,7 @@ describe("validateReallocations", () => {
 
   test("error: InvalidReallocationSourceTypeError", () => {
     const reallocation = {
-      ...validV2Reallocation,
+      ...validBluePublicAllocatorReallocation,
       from: { type: "marketTypo" },
     } as unknown as BlueReallocation;
 

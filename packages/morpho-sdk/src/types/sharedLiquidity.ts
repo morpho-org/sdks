@@ -83,8 +83,8 @@ export interface VaultReallocation {
   readonly withdrawals: readonly ReallocationWithdrawal[];
 }
 
-/** Source of a Blue Public Allocator V2 reallocation. */
-export type BluePublicAllocatorV2Source =
+/** Source of a Blue Public Allocator reallocation. */
+export type BluePublicAllocatorSource =
   | {
       /** Reallocate from a Morpho Blue market. */
       readonly type: "market";
@@ -99,19 +99,19 @@ export type BluePublicAllocatorV2Source =
     };
 
 /**
- * One Blue Public Allocator V2 contract call performed before a Blue action.
+ * One Blue Public Allocator contract call performed before a Blue action.
  *
  * The target market parameters are derived from the enclosing Blue action.
  */
-export interface BluePublicAllocatorV2Reallocation {
-  /** Explicit allocator contract address because V2 has no deployment registry entry. */
+export interface BluePublicAllocatorReallocation {
+  /** Explicit allocator contract address because BluePublicAllocator has no deployment registry entry. */
   readonly allocator: Address;
-  /** Discriminator separating V2 reallocations from untagged V1 reallocations. */
-  readonly type: "publicAllocatorV2";
+  /** Discriminator separating BluePublicAllocator reallocations from PublicAllocator V1 reallocations. */
+  readonly type: "bluePublicAllocator";
   /** Vault whose liquidity is moved. */
   readonly vault: Address;
   /** Liquidity source. */
-  readonly from: BluePublicAllocatorV2Source;
+  readonly from: BluePublicAllocatorSource;
   /** Target Vault V2 adapter; the target market comes from the enclosing action. */
   readonly to: { readonly adapter: Address };
   /** Asset amount, which must fit in `uint128`. */
@@ -121,14 +121,15 @@ export interface BluePublicAllocatorV2Reallocation {
 }
 
 /**
- * Reallocation accepted by Blue actions that support Public Allocator V1 or V2.
+ * Reallocation accepted by Blue actions that support PublicAllocator V1 or BluePublicAllocator.
  *
  * V1 entries remain valid without a `type` field and may optionally use
- * `type: "publicAllocatorV1"`; V2 entries use `type: "publicAllocatorV2"`.
+ * `type: "publicAllocatorV1"`; Blue Public Allocator entries use
+ * `type: "bluePublicAllocator"`.
  */
 export type BlueReallocation =
   | VaultReallocation
-  | BluePublicAllocatorV2Reallocation;
+  | BluePublicAllocatorReallocation;
 
 /**
  * Options for computing vault reallocations via the public allocator.

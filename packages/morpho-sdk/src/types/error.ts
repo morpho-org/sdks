@@ -587,15 +587,15 @@ export class InvalidReallocationTypeError extends Error {
   public constructor(public readonly reallocationType: string | undefined) {
     super(
       reallocationType === undefined
-        ? 'Reallocation must be an untagged Public Allocator V1 entry with "withdrawals" or specify type "publicAllocatorV1" or "publicAllocatorV2".'
-        : `Reallocation type must be "publicAllocatorV1" or "publicAllocatorV2", got "${reallocationType}".`,
+        ? 'Reallocation must be an untagged Public Allocator V1 entry with "withdrawals" or specify type "publicAllocatorV1" or "bluePublicAllocator".'
+        : `Reallocation type must be "publicAllocatorV1" or "bluePublicAllocator", got "${reallocationType}".`,
     );
     this.name = "InvalidReallocationTypeError";
   }
 }
 
 /**
- * Thrown when a Blue Public Allocator V2 source has an unknown discriminator.
+ * Thrown when a Blue Public Allocator source has an unknown discriminator.
  *
  * @example
  * ```ts

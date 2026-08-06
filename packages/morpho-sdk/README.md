@@ -226,7 +226,7 @@ graph LR
         M1RF -->|allocator reallocation? + supplyCollateral callback: borrow + repay + withdrawCollateral| B3
 
         B3 -.->|reallocateTo| PA1[PublicAllocator V1]
-        B3 -.->|reallocate / allocateFromIdle| PA2[Blue Public Allocator V2]
+        B3 -.->|reallocate / allocateFromIdle| BPA[Blue Public Allocator]
     end
 
     subgraph Midnight Flow

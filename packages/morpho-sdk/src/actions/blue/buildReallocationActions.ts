@@ -4,23 +4,24 @@ import { validateReallocations } from "../../helpers/index.js";
 import type { BlueReallocation } from "../../types/index.js";
 
 /**
- * Builds V1 and Blue Public Allocator V2 reallocation actions and computes their native cost.
+ * Builds Public Allocator V1 and Blue Public Allocator actions and computes their native cost.
  *
- * V1 entries preserve their `reallocateTo` ABI and validation. Each V2 entry maps 1:1 to either
- * `reallocate` for a market source or `allocateFromIdle` for an idle source. The enclosing Blue
- * action supplies the target market parameters.
+ * PublicAllocator V1 entries preserve their `reallocateTo` ABI and validation. Each
+ * BluePublicAllocator entry maps 1:1 to either `reallocate` for a market source or
+ * `allocateFromIdle` for an idle source. The enclosing Blue action supplies the target market
+ * parameters.
  *
- * @param reallocations - V1 and V2 reallocations in execution order.
+ * @param reallocations - PublicAllocator V1 and BluePublicAllocator reallocations in execution order.
  * @param targetMarketParams - Target market params derived from the enclosing Blue action.
- * @returns Encoded actions and the sum of V1 fees plus V2 native penalties.
- * @throws {NegativeInputError} when a V1 fee or V2 native penalty is negative.
- * @throws {EmptyReallocationWithdrawalsError} when a V1 reallocation has no withdrawals.
- * @throws {NonPositiveInputError} when a V1 withdrawal or V2 asset amount is non-positive.
- * @throws {InputExceedsMaxError} when a V2 asset amount exceeds `uint128`.
- * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
+ * @returns Encoded actions and the sum of PublicAllocator V1 fees plus BluePublicAllocator native penalties.
+ * @throws {NegativeInputError} when a PublicAllocator V1 fee or BluePublicAllocator native penalty is negative.
+ * @throws {EmptyReallocationWithdrawalsError} when a PublicAllocator V1 reallocation has no withdrawals.
+ * @throws {NonPositiveInputError} when a PublicAllocator V1 withdrawal or BluePublicAllocator asset amount is non-positive.
+ * @throws {InputExceedsMaxError} when a BluePublicAllocator asset amount exceeds `uint128`.
+ * @throws {InvalidReallocationSourceTypeError} when a BluePublicAllocator source discriminator is unknown.
  * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
  * @throws {ReallocationWithdrawalOnTargetMarketError} when a source references the target market.
- * @throws {UnsortedReallocationWithdrawalsError} when V1 withdrawals are not strictly market-id sorted.
+ * @throws {UnsortedReallocationWithdrawalsError} when PublicAllocator V1 withdrawals are not strictly market-id sorted.
  * @internal
  */
 export const buildReallocationActions = (
@@ -33,10 +34,10 @@ export const buildReallocationActions = (
   const actions: Action[] = [];
 
   for (const reallocation of reallocations) {
-    if (reallocation.type === "publicAllocatorV2") {
+    if (reallocation.type === "bluePublicAllocator") {
       if (reallocation.from.type === "market") {
         actions.push({
-          type: "bluePublicAllocatorV2Reallocate",
+          type: "bluePublicAllocatorReallocate",
           args: [
             reallocation.allocator,
             reallocation.vault,
@@ -51,7 +52,7 @@ export const buildReallocationActions = (
         });
       } else {
         actions.push({
-          type: "bluePublicAllocatorV2AllocateFromIdle",
+          type: "bluePublicAllocatorAllocateFromIdle",
           args: [
             reallocation.allocator,
             reallocation.vault,

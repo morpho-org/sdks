@@ -38,9 +38,10 @@ ERC-20 approval spender is **GeneralAdapter1** for any bundled path — never th
 | `withdraw` | `morphoWithdraw` |
 | `withdraw` (with reallocations) | `[allocator reallocation × N] → morphoWithdraw` |
 
-An allocator reallocation is V1 `reallocateTo` or V2 `reallocate`/`allocateFromIdle` according to
-the `BlueReallocation` discriminator. `BundlerAction.encodeBundle` derives `tx.value` from native
-wrapping calls, V1 fees, and V2 native penalties.
+An allocator reallocation is PublicAllocator V1 `reallocateTo` or BluePublicAllocator
+`reallocate`/`allocateFromIdle` according to the `BlueReallocation` discriminator. One bundle may
+mix both allocator contracts. `BundlerAction.encodeBundle` derives `tx.value` from native wrapping
+calls, PublicAllocator V1 fees, and BluePublicAllocator native penalties.
 
 ## Mode and ordering rules
 
