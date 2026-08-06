@@ -44,6 +44,18 @@ export interface PublicAllocatorOptions {
   readonly defaultMaxWithdrawalUtilization?: bigint;
 }
 
+/** Options controlling Vault V2 BluePublicAllocator reallocation discovery. */
+export interface PublicAllocatorOptionsVaultV2 {
+  /** Whether Vault V2 public allocator discovery is enabled. */
+  readonly enabled?: boolean;
+
+  /** Timestamp at which market and Vault V2 interest is evaluated. */
+  readonly timestamp?: BigIntish;
+
+  /** Vault V2 addresses to consider. Defaults to every vault in the reallocation data. */
+  readonly reallocatableVaults?: readonly Address[];
+}
+
 /**
  * A computed source-market withdrawal before it is grouped by vault.
  */
@@ -73,7 +85,7 @@ export interface ReallocationWithdrawal {
  * Maps 1:1 to a `PublicAllocator.reallocateTo()` call.
  * Withdraws from source markets and supplies to the target market.
  */
-export interface VaultReallocation {
+export interface VaultV1BlueReallocation {
   /** Optional discriminator; omitted by legacy Public Allocator V1 callers. */
   readonly type?: "publicAllocatorV1";
   readonly vault: Address;
@@ -103,7 +115,7 @@ export type BluePublicAllocatorSource =
  *
  * The target market parameters are derived from the enclosing Blue action.
  */
-export interface BluePublicAllocatorReallocation {
+export interface VaultV2BlueReallocation {
   /** Explicit allocator contract address because BluePublicAllocator has no deployment registry entry. */
   readonly allocator: Address;
   /** Discriminator separating BluePublicAllocator reallocations from PublicAllocator V1 reallocations. */
@@ -128,8 +140,15 @@ export interface BluePublicAllocatorReallocation {
  * `type: "bluePublicAllocator"`.
  */
 export type BlueReallocation =
-  | VaultReallocation
-  | BluePublicAllocatorReallocation;
+  | VaultV1BlueReallocation
+  | VaultV2BlueReallocation;
+
+/**
+ * Deprecated name for a Vault V1 Blue reallocation.
+ *
+ * @deprecated Use {@link VaultV1BlueReallocation} instead.
+ */
+export type VaultReallocation = VaultV1BlueReallocation;
 
 /**
  * Options for computing vault reallocations via the public allocator.
@@ -162,3 +181,6 @@ export interface ReallocationComputeOptions extends PublicAllocatorOptions {
    */
   readonly defaultSupplyTargetUtilization?: bigint;
 }
+
+/** Options for the Vault V2 borrow/withdraw reallocation planner. */
+export type ReallocationComputeOptionsVaultV2 = PublicAllocatorOptionsVaultV2;

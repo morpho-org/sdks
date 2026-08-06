@@ -1,5 +1,5 @@
 import { type MarketId, UnknownDataError } from "@morpho-org/blue-sdk";
-import type { Address } from "viem";
+import type { Address, Hash } from "viem";
 
 /**
  * Thrown when a morpho-sdk input that must be non-negative is negative.
@@ -1033,6 +1033,91 @@ export class UnknownReallocationPositionError extends UnknownDataError {
     public readonly marketId: MarketId,
   ) {
     super(`unknown reallocation position of "${user}" on market "${marketId}"`);
+  }
+}
+
+/** Thrown when Vault V2 reallocation state does not contain a requested allocation id. */
+export class UnknownReallocationAllocationError extends UnknownDataError {
+  /**
+   * @param vault - Vault V2 address for the missing allocation.
+   * @param id - Missing Vault V2 allocation id.
+   */
+  constructor(
+    public readonly vault: Address,
+    public readonly id: Hash,
+  ) {
+    super(`unknown reallocation allocation "${id}" for vault "${vault}"`);
+  }
+}
+
+/** Thrown when Vault V2 reallocation state lacks the vault-wide allocator configuration. */
+export class UnknownReallocationPublicAllocatorConfigError extends UnknownDataError {
+  /** @param vault - Vault V2 address with missing allocator configuration. */
+  constructor(public readonly vault: Address) {
+    super(`unknown public allocator configuration for vault "${vault}"`);
+  }
+}
+
+/** Thrown when Vault V2 reallocation state lacks an adapter-market allocator configuration. */
+export class UnknownReallocationMarketPublicAllocatorConfigError extends UnknownDataError {
+  /**
+   * @param vault - Vault V2 address for the missing configuration.
+   * @param marketParamsId - Missing adapter-scoped market-parameters id.
+   */
+  constructor(
+    public readonly vault: Address,
+    public readonly marketParamsId: Hash,
+  ) {
+    super(
+      `unknown public allocator configuration "${marketParamsId}" for vault "${vault}"`,
+    );
+  }
+}
+
+/** Thrown when Vault V2 reallocation state does not contain a requested adapter. */
+export class UnknownReallocationAdapterError extends UnknownDataError {
+  /**
+   * @param vault - Vault V2 address expected to own the adapter.
+   * @param adapter - Missing adapter address.
+   */
+  constructor(
+    public readonly vault: Address,
+    public readonly adapter: Address,
+  ) {
+    super(`unknown reallocation adapter "${adapter}" for vault "${vault}"`);
+  }
+}
+
+/** Thrown when a simulated Vault V2 allocation transition would underflow. */
+export class ReallocationAllocationUnderflowError extends Error {
+  constructor(
+    public readonly params: {
+      readonly vault: Address;
+      readonly id: Hash;
+      readonly allocation: bigint;
+      readonly change: bigint;
+    },
+  ) {
+    super(
+      `Reallocation change "${params.change}" exceeds allocation "${params.allocation}" for id "${params.id}" on vault "${params.vault}". Refresh the reallocation data and recompute the plan.`,
+    );
+  }
+}
+
+/** Thrown when a simulated Vault V2 market withdrawal exceeds the adapter's supply shares. */
+export class ReallocationAdapterSupplySharesUnderflowError extends Error {
+  constructor(
+    public readonly params: {
+      readonly vault: Address;
+      readonly adapter: Address;
+      readonly marketId: MarketId;
+      readonly supplyShares: bigint;
+      readonly withdrawnShares: bigint;
+    },
+  ) {
+    super(
+      `Reallocation withdraw shares "${params.withdrawnShares}" exceed adapter supply shares "${params.supplyShares}" on market "${params.marketId}" for adapter "${params.adapter}". Refresh the reallocation data and recompute the plan.`,
+    );
   }
 }
 

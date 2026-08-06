@@ -18,7 +18,6 @@ import {
 import {
   AccrualPositionUserMismatchError,
   AddressMismatchError,
-  type BluePublicAllocatorReallocation,
   type BlueReallocation,
   BorrowExceedsSafeLtvError,
   ChainIdMismatchError,
@@ -39,6 +38,7 @@ import {
   RepaySharesExceedDebtError,
   UnsortedReallocationWithdrawalsError,
   type VaultReallocation,
+  type VaultV2BlueReallocation,
   WithdrawExceedsCollateralError,
   WithdrawExceedsSupplyError,
   WithdrawMakesPositionUnhealthyError,
@@ -559,16 +559,15 @@ describe("validateReallocations", () => {
     withdrawals: [{ marketParams: sourceMarketA, amount: 10n ** 18n }],
   };
 
-  const validBluePublicAllocatorReallocation: BluePublicAllocatorReallocation =
-    {
-      type: "bluePublicAllocator",
-      allocator: USER_A,
-      vault: USER_B,
-      from: { type: "idle" },
-      to: { adapter: USER_A },
-      assets: 1n,
-      nativePenalty: 0n,
-    };
+  const validBluePublicAllocatorReallocation: VaultV2BlueReallocation = {
+    type: "bluePublicAllocator",
+    allocator: USER_A,
+    vault: USER_B,
+    from: { type: "idle" },
+    to: { adapter: USER_A },
+    assets: 1n,
+    nativePenalty: 0n,
+  };
 
   test("should pass with valid reallocations", () => {
     expect(() =>
@@ -636,11 +635,29 @@ describe("validateReallocations", () => {
               adapter: USER_A,
               marketParams,
             },
-          } satisfies BluePublicAllocatorReallocation,
+          } satisfies VaultV2BlueReallocation,
         ],
         targetMarketId,
       ),
     ).toThrow(ReallocationWithdrawalOnTargetMarketError);
+  });
+
+  test("behavior: allows the target market through a different Vault V2 adapter", () => {
+    expect(() =>
+      validateReallocations(
+        [
+          {
+            ...validBluePublicAllocatorReallocation,
+            from: {
+              type: "market",
+              adapter: USER_B,
+              marketParams,
+            },
+          } satisfies VaultV2BlueReallocation,
+        ],
+        targetMarketId,
+      ),
+    ).not.toThrow();
   });
 
   test("error: InvalidReallocationSourceTypeError", () => {

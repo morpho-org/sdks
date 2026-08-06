@@ -257,6 +257,26 @@ const applyPublicReallocation = (
   });
 
 describe("ReallocationData unit coverage", () => {
+  test("computeVaultV1Reallocations preserves the deprecated alias behavior", () => {
+    const input = {
+      targetSupply: 1_000n * MathLib.WAD,
+      targetBorrow: 500n * MathLib.WAD,
+      sourceSupply: 1_000n * MathLib.WAD,
+      sourceBorrow: 500n * MathLib.WAD,
+    };
+    const canonical = new ReallocationData(
+      makeInput(input),
+    ).computeVaultV1Reallocations(targetParams.id, { timestamp: TIMESTAMP });
+    const deprecated = new ReallocationData(
+      makeInput(input),
+    ).getMarketPublicReallocations(targetParams.id, { timestamp: TIMESTAMP });
+
+    expect(deprecated.withdrawals).toStrictEqual(canonical.withdrawals);
+    expect(deprecated.data.markets).toStrictEqual(canonical.data.markets);
+    expect(deprecated.data.positions).toStrictEqual(canonical.data.positions);
+    expect(deprecated.data.vaults).toStrictEqual(canonical.data.vaults);
+  });
+
   test("preserves documented entity fields when cloning inputs", () => {
     const eip5267Domain = new Eip5267Domain({
       fields: "0x1f",

@@ -7,7 +7,7 @@ import {
   type PublicReallocation,
   type ReallocationComputeOptions,
   ReallocationWithdrawExceedsMarketSupplyError,
-  type VaultReallocation,
+  type VaultV1BlueReallocation,
 } from "../types/index.js";
 import { getSupplyTargetUtilization } from "./utilization.js";
 import { compareMarketIds } from "./validate.js";
@@ -160,7 +160,7 @@ export const computeReallocations = ({
   readonly operation: "borrow" | "withdraw";
   readonly amount: bigint;
   readonly options?: ReallocationComputeOptions;
-}): readonly VaultReallocation[] => {
+}): readonly VaultV1BlueReallocation[] => {
   if (options?.enabled === false) return [];
 
   // ReallocationData does not retain the fetch block; pass that block timestamp
@@ -210,7 +210,7 @@ export const computeReallocations = ({
 
   // Phase 1: "friendly" reallocations respecting withdrawal utilization targets.
   const { withdrawals: friendlyWithdrawals, data: friendlyReallocationData } =
-    data.getMarketPublicReallocations(market.id, options);
+    data.computeVaultV1Reallocations(market.id, options);
 
   const withdrawals = [...friendlyWithdrawals];
 
@@ -232,7 +232,7 @@ export const computeReallocations = ({
     // Phase 2: "aggressive" — fully withdraw from every market (100% utilization).
     requiredAssets = newTotalBorrowAssets - newTotalSupplyAssets;
     withdrawals.push(
-      ...friendlyReallocationData.getMarketPublicReallocations(market.id, {
+      ...friendlyReallocationData.computeVaultV1Reallocations(market.id, {
         ...options,
         defaultMaxWithdrawalUtilization: MathLib.WAD,
         maxWithdrawalUtilization: {},
@@ -283,7 +283,7 @@ export const computeReallocations = ({
     });
   }
 
-  // Transform into VaultReallocation[] format.
+  // Transform into VaultV1BlueReallocation[] format.
   return reallocations
     .filter(({ withdrawals: vaultWithdrawals }) => vaultWithdrawals.length > 0)
     .map(({ vault, withdrawals: vaultWithdrawals }) => ({

@@ -1,4 +1,5 @@
 export { computeReallocations } from "./computeReallocations.js";
+export { computeReallocationsVaultV2 } from "./computeReallocationsVaultV2.js";
 export {
   APPROVE_ONLY_ONCE_TOKENS,
   DEFAULT_LLTV_BUFFER,

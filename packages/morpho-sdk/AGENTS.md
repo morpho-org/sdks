@@ -29,6 +29,7 @@ Protocol terms used across this package's docs and JSDoc:
 - **PublicAllocator V1** — MetaMorpho allocator that moves liquidity from one or more sorted source markets into a target via `reallocateTo(...)`; each call pays one `fee`.
 - **BluePublicAllocator** — Vault V2 allocator that moves one source market or vault idle liquidity into the enclosing Blue action's target market via `reallocate(...)` or `allocateFromIdle(...)`. The caller supplies the allocator and adapter addresses explicitly because no canonical deployment is registered; each call pays its own `nativePenalty`.
 - **VaultExitBundlesV1** — standalone periphery for exiting an illiquid VaultV1 or single-adapter VaultV2 into idle underlying assets and/or Morpho Blue supply positions.
+- **Shared-liquidity naming** — `ReallocationData.computeVaultV1Reallocations` and `VaultV1BlueReallocation` are canonical for PublicAllocator V1 (`getMarketPublicReallocations` and `VaultReallocation` are deprecated aliases). `ReallocationDataVaultV2.computeVaultV2Reallocations` and `computeReallocationsVaultV2` produce flat, action-ready `VaultV2BlueReallocation` calls.
 
 ### Bundler actions
 

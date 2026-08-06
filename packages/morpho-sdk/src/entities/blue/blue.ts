@@ -85,7 +85,7 @@ import {
   type RequirementSignature,
   selectRequirementSignatures,
   type Transaction,
-  type VaultReallocation,
+  type VaultV1BlueReallocation,
   WithdrawExceedsCollateralError,
 } from "../../types/index.js";
 import { ReallocationData } from "../reallocationData.js";
@@ -477,7 +477,7 @@ export interface BlueActions {
    * fees) into the resulting bundle.
    *
    * The returned reallocation data can be passed to {@link getReallocations}
-   * to compute the `VaultReallocation[]` array for `borrow()` or
+   * to compute the `VaultV1BlueReallocation[]` array for `borrow()` or
    * `supplyCollateralBorrow()`.
    *
    * **Stale data reverts on-chain (fail-safe).**
@@ -537,7 +537,7 @@ export interface BlueActions {
           amount?: never;
         }
     ),
-  ) => readonly VaultReallocation[];
+  ) => readonly VaultV1BlueReallocation[];
 }
 
 export class MorphoBlue implements BlueActions {
@@ -1816,7 +1816,7 @@ export class MorphoBlue implements BlueActions {
           amount?: never;
         }
     ),
-  ): readonly VaultReallocation[] {
+  ): readonly VaultV1BlueReallocation[] {
     validateChainId(params.reallocationData.chainId, this.chainId);
 
     const marketId = this.marketParams.id;
