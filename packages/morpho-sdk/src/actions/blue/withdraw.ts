@@ -84,6 +84,7 @@ export interface BlueWithdrawParams {
  *   is negative.
  * @throws {NonPositiveInputError} when both `assets` and `shares` are zero or any reallocation
  *   withdrawal amount is non-positive.
+ * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
  * @throws {MutuallyExclusiveWithdrawAmountsError} when both `assets` and `shares` are non-zero.
  * @throws {EmptyReallocationWithdrawalsError} when any reallocation has no withdrawals.
  * @throws {ReallocationWithdrawalOnTargetMarketError} when a reallocation withdrawal references
