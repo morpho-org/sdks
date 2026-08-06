@@ -7,7 +7,7 @@ import {
   MathLib,
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
-import type { Address } from "viem";
+import { type Address, maxUint128 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { CbbtcUsdcBlue, WethUsdsBlue } from "../../test/fixtures/blue.js";
@@ -18,11 +18,16 @@ import {
 import {
   AccrualPositionUserMismatchError,
   AddressMismatchError,
+  type BluePublicAllocatorV2Reallocation,
+  type BlueReallocation,
   BorrowExceedsSafeLtvError,
   ChainIdMismatchError,
   ChainWNativeMissingError,
   EmptyReallocationWithdrawalsError,
   ExcessiveSlippageToleranceError,
+  InputExceedsMaxError,
+  InvalidReallocationSourceTypeError,
+  InvalidReallocationTypeError,
   MarketIdMismatchError,
   MissingClientPropertyError,
   MissingMarketPriceError,
@@ -554,10 +559,107 @@ describe("validateReallocations", () => {
     withdrawals: [{ marketParams: sourceMarketA, amount: 10n ** 18n }],
   };
 
+  const validV2Reallocation: BluePublicAllocatorV2Reallocation = {
+    type: "publicAllocatorV2",
+    allocator: USER_A,
+    vault: USER_B,
+    from: { type: "idle" },
+    to: { adapter: USER_A },
+    assets: 1n,
+    nativePenalty: 0n,
+  };
+
   test("should pass with valid reallocations", () => {
     expect(() =>
       validateReallocations([validReallocation], targetMarketId),
     ).not.toThrow();
+  });
+
+  test("behavior: accepts an explicitly tagged V1 reallocation", () => {
+    expect(() =>
+      validateReallocations(
+        [{ ...validReallocation, type: "publicAllocatorV1" }],
+        targetMarketId,
+      ),
+    ).not.toThrow();
+  });
+
+  test("behavior: accepts a valid V2 idle reallocation", () => {
+    expect(() =>
+      validateReallocations([validV2Reallocation], targetMarketId),
+    ).not.toThrow();
+  });
+
+  test.each([
+    {
+      name: "negative native penalty",
+      reallocation: { ...validV2Reallocation, nativePenalty: -1n },
+      ErrorClass: NegativeInputError,
+    },
+    {
+      name: "zero assets",
+      reallocation: { ...validV2Reallocation, assets: 0n },
+      ErrorClass: NonPositiveInputError,
+    },
+    {
+      name: "uint128 asset overflow",
+      reallocation: { ...validV2Reallocation, assets: maxUint128 + 1n },
+      ErrorClass: InputExceedsMaxError,
+    },
+  ])("error: rejects V2 $name", ({ reallocation, ErrorClass }) => {
+    expect(() => validateReallocations([reallocation], targetMarketId)).toThrow(
+      ErrorClass,
+    );
+  });
+
+  test("error: ReallocationWithdrawalOnTargetMarketError for a V2 target-market source", () => {
+    expect(() =>
+      validateReallocations(
+        [
+          {
+            ...validV2Reallocation,
+            from: {
+              type: "market",
+              adapter: USER_A,
+              marketParams,
+            },
+          } satisfies BluePublicAllocatorV2Reallocation,
+        ],
+        targetMarketId,
+      ),
+    ).toThrow(ReallocationWithdrawalOnTargetMarketError);
+  });
+
+  test("error: InvalidReallocationSourceTypeError", () => {
+    const reallocation = {
+      ...validV2Reallocation,
+      from: { type: "marketTypo" },
+    } as unknown as BlueReallocation;
+
+    expect(() => validateReallocations([reallocation], targetMarketId)).toThrow(
+      InvalidReallocationSourceTypeError,
+    );
+  });
+
+  test.each([
+    {
+      name: "unknown top-level discriminator",
+      reallocation: {
+        ...validReallocation,
+        type: "publicAllocatorV3",
+      } as unknown as BlueReallocation,
+    },
+    {
+      name: "untagged entry without V1 withdrawals",
+      reallocation: {
+        vault: USER_A,
+        fee: 0n,
+      } as unknown as BlueReallocation,
+    },
+  ])("error: InvalidReallocationTypeError for $name", ({ reallocation }) => {
+    expect(() => validateReallocations([reallocation], targetMarketId)).toThrow(
+      InvalidReallocationTypeError,
+    );
   });
 
   test("should throw NegativeInputError when fee is negative", () => {

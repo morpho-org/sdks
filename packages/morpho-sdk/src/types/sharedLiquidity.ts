@@ -74,6 +74,8 @@ export interface ReallocationWithdrawal {
  * Withdraws from source markets and supplies to the target market.
  */
 export interface VaultReallocation {
+  /** Optional discriminator; omitted by legacy Public Allocator V1 callers. */
+  readonly type?: "publicAllocatorV1";
   readonly vault: Address;
   /** Fee in native token (ETH) paid to the PublicAllocator for this vault. */
   readonly fee: bigint;
@@ -118,7 +120,12 @@ export interface BluePublicAllocatorV2Reallocation {
   readonly nativePenalty: bigint;
 }
 
-/** Additive union accepted by Blue actions that support V1 or V2 reallocations. */
+/**
+ * Reallocation accepted by Blue actions that support Public Allocator V1 or V2.
+ *
+ * V1 entries remain valid without a `type` field and may optionally use
+ * `type: "publicAllocatorV1"`; V2 entries use `type: "publicAllocatorV2"`.
+ */
 export type BlueReallocation =
   | VaultReallocation
   | BluePublicAllocatorV2Reallocation;

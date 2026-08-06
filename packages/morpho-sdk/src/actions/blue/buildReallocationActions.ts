@@ -18,6 +18,7 @@ import type { BlueReallocation } from "../../types/index.js";
  * @throws {NonPositiveInputError} when a V1 withdrawal or V2 asset amount is non-positive.
  * @throws {InputExceedsMaxError} when a V2 asset amount exceeds `uint128`.
  * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
+ * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
  * @throws {ReallocationWithdrawalOnTargetMarketError} when a source references the target market.
  * @throws {UnsortedReallocationWithdrawalsError} when V1 withdrawals are not strictly market-id sorted.
  * @internal
@@ -32,7 +33,7 @@ export const buildReallocationActions = (
   const actions: Action[] = [];
 
   for (const reallocation of reallocations) {
-    if ("type" in reallocation && reallocation.type === "publicAllocatorV2") {
+    if (reallocation.type === "publicAllocatorV2") {
       if (reallocation.from.type === "market") {
         actions.push({
           type: "bluePublicAllocatorV2Reallocate",
@@ -65,8 +66,6 @@ export const buildReallocationActions = (
       fee += reallocation.nativePenalty;
       continue;
     }
-
-    if (!("withdrawals" in reallocation)) continue;
 
     actions.push({
       type: "reallocateTo",

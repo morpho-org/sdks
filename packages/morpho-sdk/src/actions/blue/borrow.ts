@@ -28,7 +28,7 @@ export interface BlueBorrowParams {
     receiver: Address;
     /** Minimum borrow share price (in ray). Protects against share price manipulation. */
     minSharePrice: bigint;
-    /** Vault reallocations to execute before borrowing (computed by entity). */
+    /** Public Allocator V1 or V2 reallocations to execute before borrowing. */
     reallocations?: readonly BlueReallocation[];
     /**
      * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
@@ -47,17 +47,17 @@ export interface BlueBorrowParams {
  * `onBehalf`. Uses `minSharePrice` to protect against share price manipulation between
  * transaction construction and execution.
  *
- * When `reallocations` are provided, `reallocateTo` actions are prepended to the bundle, moving
- * liquidity from other markets via the PublicAllocator before borrowing. Reallocation fees
- * accumulate in `tx.value`.
+ * When `reallocations` are provided, Public Allocator V1 entries encode `reallocateTo`, while V2
+ * market and idle entries encode `reallocate` and `allocateFromIdle`. The calls run before the
+ * borrow, and V1 fees plus V2 native penalties accumulate in `tx.value`.
  *
  * @param params.market.chainId - The chain the market lives on.
  * @param params.market.marketParams - Market params (loanToken, collateralToken, oracle, irm, lltv).
  * @param params.args.amount - Loan asset amount to borrow, in the loan token's smallest unit.
  * @param params.args.receiver - Address that receives the borrowed assets.
  * @param params.args.minSharePrice - Minimum borrow share price (in ray). Slippage protection.
- * @param params.args.reallocations - Optional vault reallocations to execute before borrowing,
- *   computed by the entity layer.
+ * @param params.args.reallocations - Optional Public Allocator V1 or V2 reallocations to execute
+ *   before borrowing.
  * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
  *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
@@ -67,7 +67,8 @@ export interface BlueBorrowParams {
  *   is non-positive.
  * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
  * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
- * @throws {NegativeInputError} when `minSharePrice < 0n` or any reallocation fee is negative.
+ * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
+ * @throws {NegativeInputError} when `minSharePrice < 0n`, a V1 fee, or a V2 native penalty is negative.
  * @throws {EmptyReallocationWithdrawalsError} from `buildReallocationActions` when any
  *   `reallocation.withdrawals` is empty.
  * @throws {ReallocationWithdrawalOnTargetMarketError} from `buildReallocationActions` when any

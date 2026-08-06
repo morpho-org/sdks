@@ -220,12 +220,13 @@ graph LR
 
         M1S -->|nativeWrap? + erc20TransferFrom + morphoSupply| B3[Bundler3]
         M1SC -->|erc20TransferFrom + morphoSupplyCollateral| B3
-        M1B -->|reallocateTo? + morphoBorrow| B3
-        M1SCB -->|transfer + supplyCollateral + reallocateTo? + borrow| B3
-        M1W -->|reallocateTo? + morphoWithdraw| B3
-        M1RF -->|reallocateTo? + supplyCollateral callback: borrow + repay + withdrawCollateral| B3
+        M1B -->|allocator reallocation? + morphoBorrow| B3
+        M1SCB -->|transfer + supplyCollateral + allocator reallocation? + borrow| B3
+        M1W -->|allocator reallocation? + morphoWithdraw| B3
+        M1RF -->|allocator reallocation? + supplyCollateral callback: borrow + repay + withdrawCollateral| B3
 
-        B3 -.->|reallocateTo| PA[PublicAllocator]
+        B3 -.->|reallocateTo| PA1[PublicAllocator V1]
+        B3 -.->|reallocate / allocateFromIdle| PA2[Blue Public Allocator V2]
     end
 
     subgraph Midnight Flow

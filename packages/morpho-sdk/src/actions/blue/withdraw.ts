@@ -32,9 +32,9 @@ export interface BlueWithdrawParams {
     /** Minimum withdraw share price (in ray). Slippage protection. */
     minSharePrice: bigint;
     /**
-     * Vault reallocations to execute before withdrawing. Compute via
-     * `MorphoBlue.getReallocations({ operation: "withdraw", amount })` or directly via
-     * `computeReallocations({ operation: "withdraw", amount, ... })`.
+     * Public Allocator V1 or V2 reallocations to execute before withdrawing. V1 entries can be
+     * computed via `MorphoBlue.getReallocations({ operation: "withdraw", amount })` or directly
+     * via `computeReallocations({ operation: "withdraw", amount, ... })`.
      */
     reallocations?: readonly BlueReallocation[];
     /**
@@ -56,10 +56,10 @@ export interface BlueWithdrawParams {
  * - **By shares** (`assets = 0, shares > 0`): burns an exact share count (typical for a full
  *   supplier position close; immune to interest accrual between tx construction and execution).
  *
- * When `reallocations` are provided, `reallocateTo` actions are prepended to the bundle, moving
- * liquidity from other markets into this one via the PublicAllocator before withdrawing.
- * Reallocation fees accumulate in `tx.value`. The on-chain `morphoWithdraw` sends the assets
- * computed on-chain directly to `receiver`; no skim is required.
+ * When `reallocations` are provided, V1 entries encode `reallocateTo`, while V2 market and idle
+ * entries encode `reallocate` and `allocateFromIdle`. The calls run before the withdraw, and V1
+ * fees plus V2 native penalties accumulate in `tx.value`. The on-chain `morphoWithdraw` sends
+ * the assets computed on-chain directly to `receiver`; no skim is required.
  *
  * The withdraw is performed on behalf of the transaction initiator (signer) — there is no
  * separate `onBehalf` field; mirror `blueBorrow`. The entity layer keeps `receiver` aligned
@@ -73,19 +73,20 @@ export interface BlueWithdrawParams {
  * @param params.args.receiver - Address that receives the withdrawn assets.
  * @param params.args.minSharePrice - Minimum acceptable withdraw share price (in ray). Slippage
  *   protection.
- * @param params.args.reallocations - Optional vault reallocations to execute before withdrawing,
- *   computed by the entity layer.
+ * @param params.args.reallocations - Optional Public Allocator V1 or V2 reallocations to execute
+ *   before withdrawing.
  * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
  *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueWithdrawAction>` with `to`, `value`, `data`, and
  *   the typed `action` discriminator the simulation layer consumes.
- * @throws {NegativeInputError} when `assets`, `shares`, `minSharePrice`, or any reallocation fee
- *   is negative.
+ * @throws {NegativeInputError} when `assets`, `shares`, `minSharePrice`, a V1 fee, or a V2 native
+ *   penalty is negative.
  * @throws {NonPositiveInputError} when both `assets` and `shares` are zero or any reallocation
  *   withdrawal amount is non-positive.
  * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
  * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
+ * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
  * @throws {MutuallyExclusiveWithdrawAmountsError} when both `assets` and `shares` are non-zero.
  * @throws {EmptyReallocationWithdrawalsError} when any reallocation has no withdrawals.
  * @throws {ReallocationWithdrawalOnTargetMarketError} when a reallocation withdrawal references

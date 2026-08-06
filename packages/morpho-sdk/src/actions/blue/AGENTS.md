@@ -28,17 +28,19 @@ ERC-20 approval spender is **GeneralAdapter1** for any bundled path — never th
 | `supplyCollateral` (ERC-20) | `erc20TransferFrom → morphoSupplyCollateral` |
 | `supplyCollateral` (native) | `nativeTransfer → wrapNative → [erc20TransferFrom?] → morphoSupplyCollateral` |
 | `borrow` | `morphoBorrow` |
-| `borrow` (with reallocations) | `[reallocateTo × N] → morphoBorrow` |
+| `borrow` (with reallocations) | `[allocator reallocation × N] → morphoBorrow` |
 | `supplyCollateralBorrow` | `[nativeWrap?] → [erc20Transfer?] → morphoSupplyCollateral → morphoBorrow` |
-| `supplyCollateralBorrow` (with reallocations) | `[nativeWrap?] → [erc20Transfer?] → morphoSupplyCollateral → [reallocateTo × N] → morphoBorrow` |
+| `supplyCollateralBorrow` (with reallocations) | `[nativeWrap?] → [erc20Transfer?] → morphoSupplyCollateral → [allocator reallocation × N] → morphoBorrow` |
 | `repay` (ERC-20) | `[erc20TransferFrom \| permit/permit2] → morphoRepay → [erc20Transfer skim (shares mode)]` |
 | `repay` (native) | `nativeTransfer → wrapNative → [erc20TransferFrom?] → morphoRepay → [skim (shares mode)]` |
 | `repayWithdrawCollateral` (ERC-20) | `[erc20TransferFrom \| permit/permit2] → morphoRepay → [skim (shares mode)] → morphoWithdrawCollateral` |
 | `repayWithdrawCollateral` (native) | `nativeTransfer → wrapNative → [erc20TransferFrom?] → morphoRepay → [skim (shares mode)] → morphoWithdrawCollateral` |
 | `withdraw` | `morphoWithdraw` |
-| `withdraw` (with reallocations) | `[reallocateTo × N] → morphoWithdraw` |
+| `withdraw` (with reallocations) | `[allocator reallocation × N] → morphoWithdraw` |
 
-`BundlerAction.encodeBundle` derives `tx.value` from native wrapping calls and reallocation fees.
+An allocator reallocation is V1 `reallocateTo` or V2 `reallocate`/`allocateFromIdle` according to
+the `BlueReallocation` discriminator. `BundlerAction.encodeBundle` derives `tx.value` from native
+wrapping calls, V1 fees, and V2 native penalties.
 
 ## Mode and ordering rules
 

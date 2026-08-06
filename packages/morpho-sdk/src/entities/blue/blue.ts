@@ -188,9 +188,9 @@ export interface BlueActions {
    *
    * Computes `minSharePrice` from market supply state and `slippageTolerance`.
    *
-   * When `reallocations` is provided, `reallocateTo` actions are prepended to the bundle,
-   * moving liquidity from other markets via the PublicAllocator before withdrawing — used to
-   * unblock withdraws that exceed on-market liquidity.
+   * When `reallocations` is provided, V1 `reallocateTo` or V2 `reallocate`/`allocateFromIdle`
+   * actions are prepended to move liquidity before withdrawing. V1 fees and V2 native penalties
+   * add to the transaction value.
    *
    * `getRequirements` returns `morpho.setAuthorization(generalAdapter1, true)` if GA1 is not
    * yet authorized on Morpho (returns `[]` when already authorized), since the bundler calls
@@ -202,6 +202,7 @@ export interface BlueActions {
    * @returns Object with `buildTx` and `getRequirements`.
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
    * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
+   * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
    */
   withdraw: (
     params: {
@@ -227,8 +228,9 @@ export interface BlueActions {
    * Validates position health with LLTV buffer (0.5%) using the pre-fetched `positionData`.
    * Computes `minSharePrice` from market borrow state and `slippageTolerance`.
    *
-   * When `reallocations` is provided, `reallocateTo` actions are prepended to the bundle,
-   * moving liquidity from other markets via the PublicAllocator before borrowing.
+   * When `reallocations` is provided, V1 `reallocateTo` or V2 `reallocate`/`allocateFromIdle`
+   * actions are prepended before borrowing. V1 fees and V2 native penalties add to the
+   * transaction value.
    *
    * `getRequirements` returns `morpho.setAuthorization(generalAdapter1, true)` if not yet authorized,
    * since borrowing through bundler3 requires GeneralAdapter1 authorization on Morpho.
@@ -239,6 +241,7 @@ export interface BlueActions {
    * @returns Object with `buildTx` and `getRequirements`.
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
    * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
+   * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
    */
   borrow: (params: {
     userAddress: Address;
@@ -370,8 +373,9 @@ export interface BlueActions {
    * Routed through the bundler. Validates position health with LLTV buffer
    * to prevent instant liquidation on new positions near the LLTV threshold.
    *
-   * When `reallocations` is provided, `reallocateTo` actions are prepended before
-   * `morphoBorrow` in the bundle.
+   * When `reallocations` is provided, V1 `reallocateTo` or V2 `reallocate`/`allocateFromIdle`
+   * actions run between the collateral supply and `morphoBorrow`. V1 fees and V2 native penalties
+   * add to the transaction value.
    *
    * `getRequirements` returns in parallel:
    * - ERC20 approval or permit for collateral token (to GeneralAdapter1).
@@ -383,6 +387,7 @@ export interface BlueActions {
    * @returns Object with `buildTx` and `getRequirements`.
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
    * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
+   * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
    */
   supplyCollateralBorrow: (
     params: {
@@ -420,6 +425,8 @@ export interface BlueActions {
    * both the residual source and the aggregate target position stay within LLTV − buffer. Both
    * markets are forward-accrued to `now`; in shares mode the target borrow is overshot by
    * `slippageTolerance` and the callback sweeps the residual.
+   * Target reallocations run first as V1 `reallocateTo` or V2 `reallocate`/`allocateFromIdle`
+   * actions; V1 fees and V2 native penalties add to the transaction value.
    *
    * `getRequirements` returns `morpho.setAuthorization(generalAdapter1, true)` when GA1 is not yet
    * authorized (a single global authorization covers both markets).
@@ -432,10 +439,11 @@ export interface BlueActions {
    * @param params.borrowAssets - Loan assets to repay on source; exclusive with `borrowShares`.
    * @param params.borrowShares - Borrow shares to repay on source; exclusive with `borrowAssets`.
    * @param params.slippageTolerance - WAD slippage tolerance. Defaults to `DEFAULT_SLIPPAGE_TOLERANCE`.
-   * @param params.targetReallocations - PublicAllocator reallocations into the target market.
+   * @param params.targetReallocations - Public Allocator V1 or V2 reallocations into the target market.
    * @returns Object with `buildTx` and `getRequirements`.
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
    * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
+   * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
    */
   refinance: (params: {
     userAddress: Address;

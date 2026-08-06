@@ -44,7 +44,7 @@ export interface BlueRefinanceParams {
     minBorrowSharePrice: bigint;
     /** Maximum repay share price on the source market (in ray); must be > 0 when a repay leg exists. */
     maxRepaySharePrice: bigint;
-    /** PublicAllocator reallocations into the target market, run before the bundle. Fees add to `tx.value`. */
+    /** Public Allocator V1 or V2 reallocations into the target market, run before the supply leg. */
     targetReallocations?: readonly BlueReallocation[];
     /**
      * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
@@ -67,8 +67,8 @@ export interface BlueRefinanceParams {
  * Bundle shape (callback contents depend on borrow mode):
  *
  * ```text
- * // optional: one reallocateTo per targetReallocations entry, run first
- * reallocateTo(vault_i, fee_i, withdrawals_i, target, false),
+ * // optional targetReallocations run first:
+ * reallocateTo(...) | reallocate(...) | allocateFromIdle(...),
  *
  * morphoSupplyCollateral(target, collateralAmount, user, [
  *   // omitted in collat-only mode
@@ -102,7 +102,8 @@ export interface BlueRefinanceParams {
  * @param params.args.borrowShares - Borrow shares to repay on the source; exclusive with `borrowAssets`. Defaults to `0n`.
  * @param params.args.minBorrowSharePrice - Minimum borrow share price (ray) on the target.
  * @param params.args.maxRepaySharePrice - Maximum repay share price (ray) on the source.
- * @param params.args.targetReallocations - PublicAllocator reallocations into the target, run before the supply leg.
+ * @param params.args.targetReallocations - Public Allocator V1 or V2 reallocations into the target,
+ *   run before the supply leg. V1 fees and V2 native penalties add to `tx.value`.
  * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
  *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata appended to `tx.data`.
@@ -113,8 +114,9 @@ export interface BlueRefinanceParams {
  *   `maxRepaySharePrice`, or any reallocation withdrawal amount is non-positive.
  * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
  * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
+ * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
  * @throws {NegativeInputError} when `borrowAssets`, `borrowShares`, `minBorrowSharePrice`,
- *   `maxRepaySharePrice`, or any reallocation fee is negative.
+ *   `maxRepaySharePrice`, a V1 fee, or a V2 native penalty is negative.
  * @throws {RefinanceSameMarketError} when source and target market ids are equal.
  * @throws {RefinanceTokenMismatchError} when source and target do not share both tokens.
  * @throws {RefinanceSharesMissingBorrowAssetsError} when `borrowShares > 0n` but `borrowAssets` is omitted or non-positive.
