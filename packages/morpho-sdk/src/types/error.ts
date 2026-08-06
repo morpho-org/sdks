@@ -569,6 +569,28 @@ export class ReallocationWithdrawalOnTargetMarketError extends Error {
   }
 }
 
+/**
+ * Thrown when a Blue Public Allocator V2 source has an unknown discriminator.
+ *
+ * @example
+ * ```ts
+ * import { InvalidReallocationSourceTypeError } from "@morpho-org/morpho-sdk";
+ *
+ * const error = new InvalidReallocationSourceTypeError("marketTypo");
+ * ```
+ */
+export class InvalidReallocationSourceTypeError extends Error {
+  /**
+   * @param sourceType - Invalid runtime value received for `reallocation.from.type`.
+   */
+  public constructor(public readonly sourceType: string) {
+    super(
+      `Reallocation source type must be "market" or "idle", got "${sourceType}".`,
+    );
+    this.name = "InvalidReallocationSourceTypeError";
+  }
+}
+
 /** Thrown when reallocation withdrawals within a vault are not strictly sorted by market id. */
 export class UnsortedReallocationWithdrawalsError extends Error {
   constructor(vault: string, marketId: string) {

@@ -84,6 +84,7 @@ export interface BlueSupplyCollateralBorrowParams {
  * @throws {NonPositiveInputError} when `borrowAmount <= 0n`, both collateral amounts resolve to
  *   zero, or any reallocation withdrawal amount is non-positive.
  * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
+ * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
  * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
  * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the collateral
  *   token is not the chain's wNative.

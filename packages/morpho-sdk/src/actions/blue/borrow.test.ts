@@ -17,6 +17,7 @@ import {
 import {
   type BlueReallocation,
   InputExceedsMaxError,
+  InvalidReallocationSourceTypeError,
   NegativeInputError,
   NonPositiveInputError,
   ReallocationWithdrawalOnTargetMarketError,
@@ -241,6 +242,32 @@ describe("blueBorrow unit tests", () => {
         },
       }),
     ).toThrow(ReallocationWithdrawalOnTargetMarketError);
+  });
+
+  test("rejects an unknown Public Allocator V2 source discriminator", () => {
+    expect(() =>
+      blueBorrow({
+        market: { chainId: mainnet.id, marketParams: WethUsdsBlue },
+        args: {
+          amount: 1n,
+          minSharePrice: 0n,
+          receiver: "0x0000000000000000000000000000000000000001",
+          reallocations: [
+            {
+              type: "publicAllocatorV2",
+              allocator: "0x0000000000000000000000000000000000000011",
+              vault: SteakhouseUsdcVaultV1.address,
+              from: { type: "marketTypo" },
+              to: {
+                adapter: "0x0000000000000000000000000000000000000013",
+              },
+              assets: 1n,
+              nativePenalty: 0n,
+            } as unknown as BlueReallocation,
+          ],
+        },
+      }),
+    ).toThrow(InvalidReallocationSourceTypeError);
   });
 
   test("should throw NonPositiveInputError when amount is zero", async ({

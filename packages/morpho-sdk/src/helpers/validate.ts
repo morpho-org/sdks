@@ -18,6 +18,7 @@ import {
   EmptyReallocationWithdrawalsError,
   ExcessiveSlippageToleranceError,
   InputExceedsMaxError,
+  InvalidReallocationSourceTypeError,
   MarketIdMismatchError,
   MissingClientPropertyError,
   MissingMarketPriceError,
@@ -343,6 +344,7 @@ export const validateRepayShares = (params: {
  * @throws {EmptyReallocationWithdrawalsError} when a reallocation has no withdrawals.
  * @throws {NonPositiveInputError} when a withdrawal or V2 asset amount is non-positive.
  * @throws {InputExceedsMaxError} when a V2 asset amount exceeds `uint128`.
+ * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
  * @throws {ReallocationWithdrawalOnTargetMarketError} when a source references the target market.
  * @throws {UnsortedReallocationWithdrawalsError} when withdrawals are not strictly market-id sorted.
  * @example
@@ -360,6 +362,10 @@ export const validateReallocations = (
 ): void => {
   for (const r of reallocations) {
     if ("type" in r && r.type === "publicAllocatorV2") {
+      const sourceType: string = r.from.type;
+      if (sourceType !== "market" && sourceType !== "idle") {
+        throw new InvalidReallocationSourceTypeError(sourceType);
+      }
       if (r.nativePenalty < 0n) {
         throw new NegativeInputError(
           "reallocation.nativePenalty",

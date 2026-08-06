@@ -66,6 +66,7 @@ export interface BlueBorrowParams {
  * @throws {NonPositiveInputError} when `amount <= 0n` or any reallocation withdrawal amount
  *   is non-positive.
  * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
+ * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
  * @throws {NegativeInputError} when `minSharePrice < 0n` or any reallocation fee is negative.
  * @throws {EmptyReallocationWithdrawalsError} from `buildReallocationActions` when any
  *   `reallocation.withdrawals` is empty.
