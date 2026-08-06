@@ -200,6 +200,7 @@ export interface BlueActions {
    *
    * @param params - Withdraw parameters including pre-fetched `positionData`.
    * @returns Object with `buildTx` and `getRequirements`.
+   * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
    */
   withdraw: (
     params: {
@@ -235,6 +236,7 @@ export interface BlueActions {
    *
    * @param params - Borrow parameters including pre-fetched `positionData` for health validation.
    * @returns Object with `buildTx` and `getRequirements`.
+   * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
    */
   borrow: (params: {
     userAddress: Address;
@@ -377,6 +379,7 @@ export interface BlueActions {
    *
    * @param params - Combined parameters including pre-fetched `positionData` for health validation.
    * @returns Object with `buildTx` and `getRequirements`.
+   * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
    */
   supplyCollateralBorrow: (
     params: {
@@ -428,6 +431,7 @@ export interface BlueActions {
    * @param params.slippageTolerance - WAD slippage tolerance. Defaults to `DEFAULT_SLIPPAGE_TOLERANCE`.
    * @param params.targetReallocations - PublicAllocator reallocations into the target market.
    * @returns Object with `buildTx` and `getRequirements`.
+   * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
    */
   refinance: (params: {
     userAddress: Address;
