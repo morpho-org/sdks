@@ -201,6 +201,7 @@ export interface BlueActions {
    * @param params - Withdraw parameters including pre-fetched `positionData`.
    * @returns Object with `buildTx` and `getRequirements`.
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
+   * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
    */
   withdraw: (
     params: {
@@ -237,6 +238,7 @@ export interface BlueActions {
    * @param params - Borrow parameters including pre-fetched `positionData` for health validation.
    * @returns Object with `buildTx` and `getRequirements`.
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
+   * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
    */
   borrow: (params: {
     userAddress: Address;
@@ -380,6 +382,7 @@ export interface BlueActions {
    * @param params - Combined parameters including pre-fetched `positionData` for health validation.
    * @returns Object with `buildTx` and `getRequirements`.
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
+   * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
    */
   supplyCollateralBorrow: (
     params: {
@@ -432,6 +435,7 @@ export interface BlueActions {
    * @param params.targetReallocations - PublicAllocator reallocations into the target market.
    * @returns Object with `buildTx` and `getRequirements`.
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
+   * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
    */
   refinance: (params: {
     userAddress: Address;

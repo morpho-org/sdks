@@ -112,6 +112,7 @@ export interface BlueRefinanceParams {
  * @throws {NonPositiveInputError} when `collateralAmount <= 0n`, a repay leg has a non-positive
  *   `maxRepaySharePrice`, or any reallocation withdrawal amount is non-positive.
  * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
+ * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
  * @throws {NegativeInputError} when `borrowAssets`, `borrowShares`, `minBorrowSharePrice`,
  *   `maxRepaySharePrice`, or any reallocation fee is negative.
  * @throws {RefinanceSameMarketError} when source and target market ids are equal.

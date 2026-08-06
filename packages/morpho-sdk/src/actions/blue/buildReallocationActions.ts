@@ -17,6 +17,7 @@ import type { BlueReallocation } from "../../types/index.js";
  * @throws {EmptyReallocationWithdrawalsError} when a V1 reallocation has no withdrawals.
  * @throws {NonPositiveInputError} when a V1 withdrawal or V2 asset amount is non-positive.
  * @throws {InputExceedsMaxError} when a V2 asset amount exceeds `uint128`.
+ * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
  * @throws {ReallocationWithdrawalOnTargetMarketError} when a source references the target market.
  * @throws {UnsortedReallocationWithdrawalsError} when V1 withdrawals are not strictly market-id sorted.
  * @internal
