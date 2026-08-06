@@ -7,15 +7,17 @@ import {
 } from "@morpho-org/blue-sdk";
 import type { MarketInput as MidnightMarketInput } from "@morpho-org/midnight-sdk";
 import { isDefined } from "@morpho-org/morpho-ts";
-import { type Address, isAddressEqual } from "viem";
+import { type Address, isAddressEqual, maxUint128 } from "viem";
 import {
   AccrualPositionUserMismatchError,
   AddressMismatchError,
+  type BlueReallocation,
   BorrowExceedsSafeLtvError,
   ChainIdMismatchError,
   ChainWNativeMissingError,
   EmptyReallocationWithdrawalsError,
   ExcessiveSlippageToleranceError,
+  InputExceedsMaxError,
   MarketIdMismatchError,
   MissingClientPropertyError,
   MissingMarketPriceError,
@@ -26,7 +28,6 @@ import {
   RepayExceedsDebtError,
   RepaySharesExceedDebtError,
   UnsortedReallocationWithdrawalsError,
-  type VaultReallocation,
   WithdrawExceedsCollateralError,
   WithdrawExceedsSupplyError,
   WithdrawMakesPositionUnhealthyError,
@@ -323,23 +324,26 @@ export const validateRepayShares = (params: {
 };
 
 /**
- * Validates that vault reallocations are well-formed.
+ * Validates that Public Allocator V1 and Blue Public Allocator V2 reallocations are well-formed.
  *
- * Enforces the following invariants for each {@link VaultReallocation}:
+ * V1 entries preserve the following invariants:
  * - `fee` must be non-negative.
  * - `withdrawals` must be non-empty.
  * - Every withdrawal `amount` must be strictly positive.
- * - No withdrawal may target `targetMarketId` (the operation's target market — the market being
- *   borrowed from for `borrow`, or being withdrawn from for `withdraw`).
- * - Withdrawal market IDs must be strictly ascending (required by `PublicAllocator.reallocateTo`).
+ * - No withdrawal may target `targetMarketId`.
+ * - Withdrawal market IDs must be strictly ascending.
+ *
+ * V2 entries enforce non-negative `nativePenalty`, positive `uint128`-bounded `assets`, and a
+ * market source distinct from `targetMarketId`. Idle sources have no market or sorting rule.
  *
  * @param reallocations - The reallocations to validate.
  * @param targetMarketId - The ID of the operation's target market. No withdrawal may reference this market.
  * @returns Nothing when every reallocation is valid.
  * @throws {NegativeInputError} when a reallocation fee is negative.
  * @throws {EmptyReallocationWithdrawalsError} when a reallocation has no withdrawals.
- * @throws {NonPositiveInputError} when a withdrawal amount is non-positive.
- * @throws {ReallocationWithdrawalOnTargetMarketError} when a withdrawal references the target market.
+ * @throws {NonPositiveInputError} when a withdrawal or V2 asset amount is non-positive.
+ * @throws {InputExceedsMaxError} when a V2 asset amount exceeds `uint128`.
+ * @throws {ReallocationWithdrawalOnTargetMarketError} when a source references the target market.
  * @throws {UnsortedReallocationWithdrawalsError} when withdrawals are not strictly market-id sorted.
  * @example
  * ```ts
@@ -351,10 +355,39 @@ export const validateRepayShares = (params: {
  * ```
  */
 export const validateReallocations = (
-  reallocations: readonly VaultReallocation[],
+  reallocations: readonly BlueReallocation[],
   targetMarketId: MarketId,
 ): void => {
   for (const r of reallocations) {
+    if ("type" in r && r.type === "publicAllocatorV2") {
+      if (r.nativePenalty < 0n) {
+        throw new NegativeInputError(
+          "reallocation.nativePenalty",
+          r.nativePenalty,
+        );
+      }
+      if (r.assets <= 0n) {
+        throw new NonPositiveInputError("reallocation.assets", r.assets);
+      }
+      if (r.assets > maxUint128) {
+        throw new InputExceedsMaxError({
+          field: "reallocation.assets",
+          value: r.assets,
+          max: maxUint128,
+        });
+      }
+      if (
+        r.from.type === "market" &&
+        r.from.marketParams.id === targetMarketId
+      ) {
+        throw new ReallocationWithdrawalOnTargetMarketError(
+          r.vault,
+          r.from.marketParams.id,
+        );
+      }
+      continue;
+    }
+    if (!("withdrawals" in r)) continue;
     if (r.fee < 0n) {
       throw new NegativeInputError("reallocation.fee", r.fee);
     }

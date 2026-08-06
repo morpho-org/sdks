@@ -54,6 +54,7 @@ import {
   type AssetsOrSharesArgs,
   type BlueAuthorizationAction,
   type BlueBorrowAction,
+  type BlueReallocation,
   type BlueRefinanceAction,
   type BlueRepayAction,
   type BlueRepayWithdrawCollateralAction,
@@ -206,7 +207,7 @@ export interface BlueActions {
       receiver?: Address;
       positionData: AccrualPosition;
       slippageTolerance?: bigint;
-      reallocations?: readonly VaultReallocation[];
+      reallocations?: readonly BlueReallocation[];
     } & AssetsOrSharesArgs,
   ) => {
     buildTx: (
@@ -240,7 +241,7 @@ export interface BlueActions {
     amount: bigint;
     positionData: AccrualPosition;
     slippageTolerance?: bigint;
-    reallocations?: readonly VaultReallocation[];
+    reallocations?: readonly BlueReallocation[];
   }) => {
     buildTx: (
       signatures?: readonly RequirementSignature[],
@@ -383,7 +384,7 @@ export interface BlueActions {
       positionData: AccrualPosition;
       borrowAmount: bigint;
       slippageTolerance?: bigint;
-      reallocations?: readonly VaultReallocation[];
+      reallocations?: readonly BlueReallocation[];
     } & DepositAmountArgs,
   ) => {
     buildTx: (
@@ -439,7 +440,7 @@ export interface BlueActions {
     borrowAssets?: bigint;
     borrowShares?: bigint;
     slippageTolerance?: bigint;
-    targetReallocations?: readonly VaultReallocation[];
+    targetReallocations?: readonly BlueReallocation[];
   }) => {
     buildTx: (
       signatures?: readonly RequirementSignature[],
@@ -642,7 +643,7 @@ export class MorphoBlue implements BlueActions {
       receiver?: Address;
       positionData: AccrualPosition;
       slippageTolerance?: bigint;
-      reallocations?: readonly VaultReallocation[];
+      reallocations?: readonly BlueReallocation[];
     } & AssetsOrSharesArgs,
   ) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
@@ -812,7 +813,7 @@ export class MorphoBlue implements BlueActions {
     userAddress: Address;
     positionData: AccrualPosition;
     slippageTolerance?: bigint;
-    reallocations?: readonly VaultReallocation[];
+    reallocations?: readonly BlueReallocation[];
   }) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
@@ -1306,7 +1307,7 @@ export class MorphoBlue implements BlueActions {
     positionData: AccrualPosition;
     borrowAmount: bigint;
     slippageTolerance?: bigint;
-    reallocations?: readonly VaultReallocation[];
+    reallocations?: readonly BlueReallocation[];
   } & DepositAmountArgs) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
@@ -1429,7 +1430,7 @@ export class MorphoBlue implements BlueActions {
     borrowAssets?: bigint;
     borrowShares?: bigint;
     slippageTolerance?: bigint;
-    targetReallocations?: readonly VaultReallocation[];
+    targetReallocations?: readonly BlueReallocation[];
   }) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     validateSlippageTolerance(slippageTolerance);

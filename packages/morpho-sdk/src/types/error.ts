@@ -284,6 +284,36 @@ export class VaultExitBundlesV1PermitMismatchError extends Error {
   }
 }
 
+/** Thrown when an integer input exceeds its protocol-defined maximum. */
+export class InputExceedsMaxError extends Error {
+  /**
+   * @param params - Maximum-bound validation details.
+   * @param params.field - Public input field whose value is invalid.
+   * @param params.value - Supplied value.
+   * @param params.max - Largest accepted value.
+   */
+  public constructor(params: {
+    readonly field: string;
+    readonly value: bigint;
+    readonly max: bigint;
+  }) {
+    super(
+      `Input "${params.field}" must be at most "${params.max}", got "${params.value}".`,
+    );
+    this.field = params.field;
+    this.value = params.value;
+    this.max = params.max;
+    this.name = "InputExceedsMaxError";
+  }
+
+  /** Public input field whose value is invalid. */
+  public readonly field: string;
+  /** Supplied value. */
+  public readonly value: bigint;
+  /** Largest accepted value. */
+  public readonly max: bigint;
+}
+
 /** @deprecated Use {@link NonPositiveInputError}. */
 export const NonPositiveAssetAmountError = NonPositiveInputError;
 /** @deprecated Use {@link NonPositiveInputError}. */

@@ -210,6 +210,30 @@ export interface ActionArgs {
     skipRevert?: boolean,
   ];
 
+  /** Blue Public Allocator V2 market-to-market reallocation with an explicit allocator address and native penalty. */
+  readonly bluePublicAllocatorV2Reallocate: [
+    allocator: Address,
+    vault: Address,
+    deallocateAdapter: Address,
+    deallocateMarket: InputMarketParams,
+    allocateAdapter: Address,
+    allocateMarket: InputMarketParams,
+    assets: bigint,
+    nativePenalty: bigint,
+    skipRevert?: boolean,
+  ];
+
+  /** Blue Public Allocator V2 idle-to-market allocation with an explicit allocator address and native penalty. */
+  readonly bluePublicAllocatorV2AllocateFromIdle: [
+    allocator: Address,
+    vault: Address,
+    adapter: Address,
+    market: InputMarketParams,
+    assets: bigint,
+    nativePenalty: bigint,
+    skipRevert?: boolean,
+  ];
+
   /** GeneralAdapter1 native wrap of `amount` to `recipient`; `skipRevert` controls Bundler3 revert handling. */
   readonly wrapNative: [
     amount: bigint,

@@ -24,7 +24,7 @@ Only valid for assets/collateral configured as wNative. When `nativeAmount > 0`:
 
 ## Shared liquidity / reallocations (canonical statement)
 
-`blueBorrow` and `blueSupplyCollateralBorrow` accept optional `reallocations: VaultReallocation[]`. Each reallocation becomes a `PublicAllocator.reallocateTo(vault, fee, withdrawals, targetMarket)` bundler action **before** `morphoBorrow`. `BundlerAction.encodeBundle` includes those fees in `tx.value`. Validation: `helpers/validateReallocations`. Other layer docs link here rather than restating these rules.
+`blueBorrow`, `blueSupplyCollateralBorrow`, loan-asset `blueWithdraw`, and refinance target flows accept optional `reallocations: BlueReallocation[]` (refinance names the field `targetReallocations`). Untagged `VaultReallocation` entries preserve PublicAllocator V1: each becomes `reallocateTo(vault, fee, sortedWithdrawals, targetMarket)` before the primary Blue action. Tagged `BluePublicAllocatorV2Reallocation` entries map 1:1 to `reallocate(...)` for a market source or `allocateFromIdle(...)` for idle liquidity; the enclosing action supplies the target market, the input supplies the allocator/adapters explicitly, and each call pays its own `nativePenalty`. V2 sources are not sorted and idle uses no synthetic zero-address market. `BundlerAction.encodeBundle` sums V1 fees and V2 penalties into `tx.value`; all high-level allocator calls use `skipRevert: false`. Validation lives in `helpers/validateReallocations`.
 
 ## Discriminated unions
 

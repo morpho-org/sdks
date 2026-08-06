@@ -5,6 +5,7 @@ import { type Action, BundlerAction } from "../../bundler/index.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   type AuthorizationRequirementSignature,
+  type BlueReallocation,
   type BlueRefinanceAction,
   type Metadata,
   NegativeInputError,
@@ -13,7 +14,6 @@ import {
   RefinanceSharesMissingBorrowAssetsError,
   RefinanceTokenMismatchError,
   type Transaction,
-  type VaultReallocation,
 } from "../../types/index.js";
 import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
 import { buildReallocationActions } from "./buildReallocationActions.js";
@@ -45,7 +45,7 @@ export interface BlueRefinanceParams {
     /** Maximum repay share price on the source market (in ray); must be > 0 when a repay leg exists. */
     maxRepaySharePrice: bigint;
     /** PublicAllocator reallocations into the target market, run before the bundle. Fees add to `tx.value`. */
-    targetReallocations?: readonly VaultReallocation[];
+    targetReallocations?: readonly BlueReallocation[];
     /**
      * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
      * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a
