@@ -799,6 +799,31 @@ export class ReallocationWithdrawalOnTargetMarketError extends Error {
 }
 
 /**
+ * Thrown when a Public Allocator reallocation has an unknown top-level discriminator.
+ *
+ * @example
+ * ```ts
+ * import { InvalidReallocationTypeError } from "@morpho-org/morpho-sdk";
+ *
+ * const error = new InvalidReallocationTypeError("publicAllocatorV3");
+ * ```
+ */
+export class InvalidReallocationTypeError extends Error {
+  /**
+   * @param reallocationType - Invalid runtime value received for `reallocation.type`, or
+   *   `undefined` when an untagged entry lacks the V1 `withdrawals` field.
+   */
+  public constructor(public readonly reallocationType: string | undefined) {
+    super(
+      reallocationType === undefined
+        ? 'Reallocation must be an untagged Public Allocator V1 entry with "withdrawals" or specify type "publicAllocatorV1" or "publicAllocatorV2".'
+        : `Reallocation type must be "publicAllocatorV1" or "publicAllocatorV2", got "${reallocationType}".`,
+    );
+    this.name = "InvalidReallocationTypeError";
+  }
+}
+
+/**
  * Thrown when a Blue Public Allocator V2 source has an unknown discriminator.
  *
  * @example

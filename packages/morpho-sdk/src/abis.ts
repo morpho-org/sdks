@@ -5,6 +5,7 @@ export {
   adaptiveCurveIrmAbi,
   blueAbi,
   blueOracleAbi,
+  bluePublicAllocatorV2Abi,
   erc2612Abi,
   erc5267Abi,
   metaMorphoAbi,
@@ -201,85 +202,6 @@ export const vaultExitBundlesV1Abi = [
     stateMutability: "nonpayable",
   },
 ] as const satisfies Abi;
-
-/** ABI for Blue Public Allocator V2 user reallocation calls. */
-export const bluePublicAllocatorV2Abi = [
-  {
-    type: "function",
-    name: "reallocate",
-    inputs: [
-      { name: "vault", type: "address", internalType: "address" },
-      {
-        name: "deallocateAdapter",
-        type: "address",
-        internalType: "address",
-      },
-      {
-        name: "deallocateMarketParams",
-        type: "tuple",
-        internalType: "struct MarketParams",
-        components: [
-          { name: "loanToken", type: "address", internalType: "address" },
-          {
-            name: "collateralToken",
-            type: "address",
-            internalType: "address",
-          },
-          { name: "oracle", type: "address", internalType: "address" },
-          { name: "irm", type: "address", internalType: "address" },
-          { name: "lltv", type: "uint256", internalType: "uint256" },
-        ],
-      },
-      { name: "allocateAdapter", type: "address", internalType: "address" },
-      {
-        name: "allocateMarketParams",
-        type: "tuple",
-        internalType: "struct MarketParams",
-        components: [
-          { name: "loanToken", type: "address", internalType: "address" },
-          {
-            name: "collateralToken",
-            type: "address",
-            internalType: "address",
-          },
-          { name: "oracle", type: "address", internalType: "address" },
-          { name: "irm", type: "address", internalType: "address" },
-          { name: "lltv", type: "uint256", internalType: "uint256" },
-        ],
-      },
-      { name: "assets", type: "uint128", internalType: "uint128" },
-    ],
-    outputs: [],
-    stateMutability: "payable",
-  },
-  {
-    type: "function",
-    name: "allocateFromIdle",
-    inputs: [
-      { name: "vault", type: "address", internalType: "address" },
-      { name: "adapter", type: "address", internalType: "address" },
-      {
-        name: "marketParams",
-        type: "tuple",
-        internalType: "struct MarketParams",
-        components: [
-          { name: "loanToken", type: "address", internalType: "address" },
-          {
-            name: "collateralToken",
-            type: "address",
-            internalType: "address",
-          },
-          { name: "oracle", type: "address", internalType: "address" },
-          { name: "irm", type: "address", internalType: "address" },
-          { name: "lltv", type: "uint256", internalType: "uint256" },
-        ],
-      },
-      { name: "assets", type: "uint128", internalType: "uint128" },
-    ],
-    outputs: [],
-    stateMutability: "payable",
-  },
-] as const;
 
 /** ABI for the Bundler3 multicall contract. */
 export const bundler3Abi = [

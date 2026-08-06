@@ -5,6 +5,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import {
   blueAbi,
+  bluePublicAllocatorV2Abi,
   erc2612Abi,
   permit2Abi,
   publicAllocatorAbi,
@@ -22,12 +23,7 @@ import {
   zeroHash,
 } from "viem";
 import { describe, expect, test } from "vitest";
-import {
-  bluePublicAllocatorV2Abi,
-  bundler3Abi,
-  coreAdapterAbi,
-  generalAdapter1Abi,
-} from "../abis.js";
+import { bundler3Abi, coreAdapterAbi, generalAdapter1Abi } from "../abis.js";
 import { BundlerErrors } from "../types/index.js";
 import {
   type Action,

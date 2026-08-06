@@ -4,6 +4,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import {
   blueAbi,
+  bluePublicAllocatorV2Abi,
   erc2612Abi,
   permit2Abi,
   publicAllocatorAbi,
@@ -20,12 +21,7 @@ import {
   serializeSignature,
   zeroHash,
 } from "viem";
-import {
-  bluePublicAllocatorV2Abi,
-  bundler3Abi,
-  coreAdapterAbi,
-  generalAdapter1Abi,
-} from "../abis.js";
+import { bundler3Abi, coreAdapterAbi, generalAdapter1Abi } from "../abis.js";
 import { BundlerErrors } from "../types/error.js";
 import type {
   Action,
@@ -1467,6 +1463,24 @@ export namespace BundlerAction {
    * @returns One encoded call targeting the explicit allocator.
    * @example
    * ```ts
+   * import { BundlerAction } from "@morpho-org/morpho-sdk/bundler";
+   *
+   * const allocator = "0x0000000000000000000000000000000000000001";
+   * const vault = "0x0000000000000000000000000000000000000002";
+   * const sourceAdapter = "0x0000000000000000000000000000000000000003";
+   * const targetAdapter = "0x0000000000000000000000000000000000000004";
+   * const sourceMarket = {
+   *   loanToken: "0x0000000000000000000000000000000000000005",
+   *   collateralToken: "0x0000000000000000000000000000000000000006",
+   *   oracle: "0x0000000000000000000000000000000000000007",
+   *   irm: "0x0000000000000000000000000000000000000008",
+   *   lltv: 860_000000000000000000n,
+   * };
+   * const targetMarket = {
+   *   ...sourceMarket,
+   *   collateralToken: "0x0000000000000000000000000000000000000009",
+   * };
+   *
    * const calls = BundlerAction.bluePublicAllocatorV2Reallocate(
    *   allocator,
    *   vault,
@@ -1477,6 +1491,7 @@ export namespace BundlerAction {
    *   1_000_000n,
    *   10n,
    * );
+   * // calls[0] targets `allocator` with `value: 10n` and `reallocate` calldata.
    * ```
    */
   // biome-ignore lint/complexity/useMaxParams: mirrors the protocol call
@@ -1526,6 +1541,19 @@ export namespace BundlerAction {
    * @returns One encoded call targeting the explicit allocator.
    * @example
    * ```ts
+   * import { BundlerAction } from "@morpho-org/morpho-sdk/bundler";
+   *
+   * const allocator = "0x0000000000000000000000000000000000000001";
+   * const vault = "0x0000000000000000000000000000000000000002";
+   * const targetAdapter = "0x0000000000000000000000000000000000000003";
+   * const targetMarket = {
+   *   loanToken: "0x0000000000000000000000000000000000000004",
+   *   collateralToken: "0x0000000000000000000000000000000000000005",
+   *   oracle: "0x0000000000000000000000000000000000000006",
+   *   irm: "0x0000000000000000000000000000000000000007",
+   *   lltv: 860_000000000000000000n,
+   * };
+   *
    * const calls = BundlerAction.bluePublicAllocatorV2AllocateFromIdle(
    *   allocator,
    *   vault,
@@ -1534,6 +1562,7 @@ export namespace BundlerAction {
    *   1_000_000n,
    *   10n,
    * );
+   * // calls[0] targets `allocator` with `value: 10n` and `allocateFromIdle` calldata.
    * ```
    */
   // biome-ignore lint/complexity/useMaxParams: mirrors the protocol call

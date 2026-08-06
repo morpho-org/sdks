@@ -35,7 +35,7 @@ export interface BlueSupplyCollateralBorrowParams {
     minSharePrice: bigint;
     /** Optional pre-signed permit/permit2 approval for the collateral transfer. */
     requirementSignature?: PermitRequirementSignature;
-    /** Vault reallocations to execute before borrowing (computed by entity). */
+    /** Public Allocator V1 or V2 reallocations to execute before borrowing. */
     reallocations?: readonly BlueReallocation[];
     /**
      * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
@@ -50,9 +50,11 @@ export interface BlueSupplyCollateralBorrowParams {
 /**
  * Prepares an atomic supply-collateral-and-borrow transaction for a Morpho Blue market.
  *
- * Routed through bundler3: collateral transfer → `morphoSupplyCollateral` → optional
- * `reallocateTo` calls → `morphoBorrow`. When `nativeAmount > 0`, native ETH is wrapped via
- * `GeneralAdapter1.wrapNative()` before the supply leg.
+ * Routed through bundler3: collateral transfer → `morphoSupplyCollateral` → optional Public
+ * Allocator calls → `morphoBorrow`. V1 entries encode `reallocateTo`; V2 market and idle entries
+ * encode `reallocate` and `allocateFromIdle`. When `nativeAmount > 0`, native ETH is wrapped via
+ * `GeneralAdapter1.wrapNative()` before the supply leg. V1 fees and V2 native penalties add to
+ * `tx.value`.
  *
  * Prerequisite: `GeneralAdapter1` must be authorized on Morpho to borrow on behalf of the user.
  * Use `getRequirements()` on the entity to check and obtain the authorization transaction.
@@ -72,19 +74,20 @@ export interface BlueSupplyCollateralBorrowParams {
  *   collateral transfer.
  * @param params.args.nativeAmount - Optional amount of native token to wrap into wNative for the
  *   collateral supply. Requires the collateral token to be the chain's wNative.
- * @param params.args.reallocations - Optional vault reallocations to execute between the supply
- *   and borrow legs, computed by the entity layer.
+ * @param params.args.reallocations - Optional Public Allocator V1 or V2 reallocations to execute
+ *   between the supply and borrow legs.
  * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
  *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueSupplyCollateralBorrowAction>` with `to`, `value`,
  *   `data`, and the typed `action` discriminator the simulation layer consumes.
- * @throws {NegativeInputError} when `amount`, `nativeAmount`, `minSharePrice`, or any reallocation
- *   fee is negative.
+ * @throws {NegativeInputError} when `amount`, `nativeAmount`, `minSharePrice`, a V1 fee, or a V2
+ *   native penalty is negative.
  * @throws {NonPositiveInputError} when `borrowAmount <= 0n`, both collateral amounts resolve to
  *   zero, or any reallocation withdrawal amount is non-positive.
  * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
  * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
+ * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
  * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
  * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the collateral
  *   token is not the chain's wNative.

@@ -4038,6 +4038,34 @@ export const metaMorphoAbi = [
   },
 ] as const;
 
+const morphoBlueMarketParamsAbiComponents = [
+  {
+    internalType: "address",
+    name: "loanToken",
+    type: "address",
+  },
+  {
+    internalType: "address",
+    name: "collateralToken",
+    type: "address",
+  },
+  {
+    internalType: "address",
+    name: "oracle",
+    type: "address",
+  },
+  {
+    internalType: "address",
+    name: "irm",
+    type: "address",
+  },
+  {
+    internalType: "uint256",
+    name: "lltv",
+    type: "uint256",
+  },
+] as const;
+
 /** PublicAllocator ABI used to read vault allocator configuration and flow caps. */
 export const publicAllocatorAbi = [
   {
@@ -4442,33 +4470,7 @@ export const publicAllocatorAbi = [
       {
         components: [
           {
-            components: [
-              {
-                internalType: "address",
-                name: "loanToken",
-                type: "address",
-              },
-              {
-                internalType: "address",
-                name: "collateralToken",
-                type: "address",
-              },
-              {
-                internalType: "address",
-                name: "oracle",
-                type: "address",
-              },
-              {
-                internalType: "address",
-                name: "irm",
-                type: "address",
-              },
-              {
-                internalType: "uint256",
-                name: "lltv",
-                type: "uint256",
-              },
-            ],
+            components: morphoBlueMarketParamsAbiComponents,
             internalType: "struct MarketParams",
             name: "marketParams",
             type: "tuple",
@@ -4484,33 +4486,7 @@ export const publicAllocatorAbi = [
         type: "tuple[]",
       },
       {
-        components: [
-          {
-            internalType: "address",
-            name: "loanToken",
-            type: "address",
-          },
-          {
-            internalType: "address",
-            name: "collateralToken",
-            type: "address",
-          },
-          {
-            internalType: "address",
-            name: "oracle",
-            type: "address",
-          },
-          {
-            internalType: "address",
-            name: "irm",
-            type: "address",
-          },
-          {
-            internalType: "uint256",
-            name: "lltv",
-            type: "uint256",
-          },
-        ],
+        components: morphoBlueMarketParamsAbiComponents,
         internalType: "struct MarketParams",
         name: "supplyMarketParams",
         type: "tuple",
@@ -4615,6 +4591,79 @@ export const publicAllocatorAbi = [
     name: "transferFee",
     outputs: [],
     stateMutability: "nonpayable",
+    type: "function",
+  },
+] as const;
+
+/** Blue Public Allocator V2 ABI used for market and idle reallocations. */
+export const bluePublicAllocatorV2Abi = [
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "vault",
+        type: "address",
+      },
+      {
+        internalType: "address",
+        name: "deallocateAdapter",
+        type: "address",
+      },
+      {
+        components: morphoBlueMarketParamsAbiComponents,
+        internalType: "struct MarketParams",
+        name: "deallocateMarketParams",
+        type: "tuple",
+      },
+      {
+        internalType: "address",
+        name: "allocateAdapter",
+        type: "address",
+      },
+      {
+        components: morphoBlueMarketParamsAbiComponents,
+        internalType: "struct MarketParams",
+        name: "allocateMarketParams",
+        type: "tuple",
+      },
+      {
+        internalType: "uint128",
+        name: "assets",
+        type: "uint128",
+      },
+    ],
+    name: "reallocate",
+    outputs: [],
+    stateMutability: "payable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "vault",
+        type: "address",
+      },
+      {
+        internalType: "address",
+        name: "adapter",
+        type: "address",
+      },
+      {
+        components: morphoBlueMarketParamsAbiComponents,
+        internalType: "struct MarketParams",
+        name: "marketParams",
+        type: "tuple",
+      },
+      {
+        internalType: "uint128",
+        name: "assets",
+        type: "uint128",
+      },
+    ],
+    name: "allocateFromIdle",
+    outputs: [],
+    stateMutability: "payable",
     type: "function",
   },
 ] as const;
