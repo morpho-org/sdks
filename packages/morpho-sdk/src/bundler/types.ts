@@ -210,8 +210,8 @@ export interface ActionArgs {
     skipRevert?: boolean,
   ];
 
-  /** Blue Public Allocator V2 market-to-market reallocation with an explicit allocator address and native penalty. */
-  readonly bluePublicAllocatorV2Reallocate: [
+  /** Blue Public Allocator market-to-market reallocation with an explicit allocator address and native penalty. */
+  readonly bluePublicAllocatorReallocate: [
     allocator: Address,
     vault: Address,
     deallocateAdapter: Address,
@@ -223,8 +223,8 @@ export interface ActionArgs {
     skipRevert?: boolean,
   ];
 
-  /** Blue Public Allocator V2 idle-to-market allocation with an explicit allocator address and native penalty. */
-  readonly bluePublicAllocatorV2AllocateFromIdle: [
+  /** Blue Public Allocator idle-to-market allocation with an explicit allocator address and native penalty. */
+  readonly bluePublicAllocatorAllocateFromIdle: [
     allocator: Address,
     vault: Address,
     adapter: Address,

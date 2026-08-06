@@ -5,7 +5,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import {
   blueAbi,
-  bluePublicAllocatorV2Abi,
+  bluePublicAllocatorAbi,
   erc2612Abi,
   permit2Abi,
   publicAllocatorAbi,
@@ -361,7 +361,7 @@ describe("BundlerAction", () => {
       .map(
         (args) =>
           ({
-            type: "bluePublicAllocatorV2Reallocate",
+            type: "bluePublicAllocatorReallocate",
             args,
           }) satisfies Action,
       ),
@@ -378,7 +378,7 @@ describe("BundlerAction", () => {
       .map(
         (args) =>
           ({
-            type: "bluePublicAllocatorV2AllocateFromIdle",
+            type: "bluePublicAllocatorAllocateFromIdle",
             args,
           }) satisfies Action,
       ),
@@ -610,10 +610,10 @@ describe("BundlerAction", () => {
     expect(calls[0]?.value).toBe(5n);
   });
 
-  test("encodeBundle aggregates Blue Public Allocator V2 native penalties", () => {
+  test("encodeBundle aggregates Blue Public Allocator native penalties", () => {
     const tx = BundlerAction.encodeBundle(chainId, [
       {
-        type: "bluePublicAllocatorV2Reallocate",
+        type: "bluePublicAllocatorReallocate",
         args: [
           allocator,
           vault,
@@ -627,7 +627,7 @@ describe("BundlerAction", () => {
         ],
       },
       {
-        type: "bluePublicAllocatorV2AllocateFromIdle",
+        type: "bluePublicAllocatorAllocateFromIdle",
         args: [allocator, vault, allocateAdapter, market, 3n, 4n, false],
       },
     ]);
@@ -1042,9 +1042,9 @@ describe("BundlerAction", () => {
           ),
         ],
         [
-          "bluePublicAllocatorV2Reallocate",
+          "bluePublicAllocatorReallocate",
           {
-            type: "bluePublicAllocatorV2Reallocate",
+            type: "bluePublicAllocatorReallocate",
             args: [
               allocator,
               vault,
@@ -1057,7 +1057,7 @@ describe("BundlerAction", () => {
               false,
             ],
           },
-          BundlerAction.bluePublicAllocatorV2Reallocate(
+          BundlerAction.bluePublicAllocatorReallocate(
             allocator,
             vault,
             deallocateAdapter,
@@ -1070,12 +1070,12 @@ describe("BundlerAction", () => {
           ),
         ],
         [
-          "bluePublicAllocatorV2AllocateFromIdle",
+          "bluePublicAllocatorAllocateFromIdle",
           {
-            type: "bluePublicAllocatorV2AllocateFromIdle",
+            type: "bluePublicAllocatorAllocateFromIdle",
             args: [allocator, vault, allocateAdapter, market, 22n, 23n, false],
           },
-          BundlerAction.bluePublicAllocatorV2AllocateFromIdle(
+          BundlerAction.bluePublicAllocatorAllocateFromIdle(
             allocator,
             vault,
             allocateAdapter,
@@ -1558,9 +1558,9 @@ describe("BundlerAction", () => {
     expect(decoded.args).toEqual([vault, withdrawals, market]);
   });
 
-  test("bluePublicAllocatorV2Reallocate", () => {
+  test("bluePublicAllocatorReallocate", () => {
     const call = onlyCall(
-      BundlerAction.bluePublicAllocatorV2Reallocate(
+      BundlerAction.bluePublicAllocatorReallocate(
         allocator,
         vault,
         deallocateAdapter,
@@ -1573,7 +1573,7 @@ describe("BundlerAction", () => {
       ),
     );
     const decoded = decodeFunctionData({
-      abi: bluePublicAllocatorV2Abi,
+      abi: bluePublicAllocatorAbi,
       data: call.data,
     });
 
@@ -1591,9 +1591,9 @@ describe("BundlerAction", () => {
     ]);
   });
 
-  test("bluePublicAllocatorV2AllocateFromIdle", () => {
+  test("bluePublicAllocatorAllocateFromIdle", () => {
     const call = onlyCall(
-      BundlerAction.bluePublicAllocatorV2AllocateFromIdle(
+      BundlerAction.bluePublicAllocatorAllocateFromIdle(
         allocator,
         vault,
         allocateAdapter,
@@ -1604,7 +1604,7 @@ describe("BundlerAction", () => {
       ),
     );
     const decoded = decodeFunctionData({
-      abi: bluePublicAllocatorV2Abi,
+      abi: bluePublicAllocatorAbi,
       data: call.data,
     });
 

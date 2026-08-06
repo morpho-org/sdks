@@ -1,5 +1,5 @@
 export {
-  bluePublicAllocatorV2Abi,
+  bluePublicAllocatorAbi,
   erc2612Abi,
   erc5267Abi,
   metaMorphoAbi,

@@ -326,7 +326,7 @@ export const validateRepayShares = (params: {
 };
 
 /**
- * Validates that Public Allocator V1 and Blue Public Allocator V2 reallocations are well-formed.
+ * Validates that Public Allocator V1 and Blue Public Allocator reallocations are well-formed.
  *
  * V1 entries preserve the following invariants:
  * - `fee` must be non-negative.
@@ -335,17 +335,18 @@ export const validateRepayShares = (params: {
  * - No withdrawal may target `targetMarketId`.
  * - Withdrawal market IDs must be strictly ascending.
  *
- * V2 entries enforce non-negative `nativePenalty`, positive `uint128`-bounded `assets`, and a
- * market source distinct from `targetMarketId`. Idle sources have no market or sorting rule.
+ * BluePublicAllocator entries enforce non-negative `nativePenalty`, positive `uint128`-bounded
+ * `assets`, and a market source distinct from `targetMarketId`. Idle sources have no market or
+ * sorting rule.
  *
  * @param reallocations - The reallocations to validate.
  * @param targetMarketId - The ID of the operation's target market. No withdrawal may reference this market.
  * @returns Nothing when every reallocation is valid.
  * @throws {NegativeInputError} when a reallocation fee is negative.
  * @throws {EmptyReallocationWithdrawalsError} when a reallocation has no withdrawals.
- * @throws {NonPositiveInputError} when a withdrawal or V2 asset amount is non-positive.
- * @throws {InputExceedsMaxError} when a V2 asset amount exceeds `uint128`.
- * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
+ * @throws {NonPositiveInputError} when a withdrawal or BluePublicAllocator asset amount is non-positive.
+ * @throws {InputExceedsMaxError} when a BluePublicAllocator asset amount exceeds `uint128`.
+ * @throws {InvalidReallocationSourceTypeError} when a BluePublicAllocator source discriminator is unknown.
  * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
  * @throws {ReallocationWithdrawalOnTargetMarketError} when a source references the target market.
  * @throws {UnsortedReallocationWithdrawalsError} when withdrawals are not strictly market-id sorted.
@@ -363,7 +364,7 @@ export const validateReallocations = (
   targetMarketId: MarketId,
 ): void => {
   for (const r of reallocations) {
-    if (r.type === "publicAllocatorV2") {
+    if (r.type === "bluePublicAllocator") {
       const sourceType: string = r.from.type;
       if (sourceType !== "market" && sourceType !== "idle") {
         throw new InvalidReallocationSourceTypeError(sourceType);

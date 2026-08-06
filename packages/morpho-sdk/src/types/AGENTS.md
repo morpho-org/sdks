@@ -19,16 +19,16 @@ Centralized type definitions and error classes. Barrel-exported via `index.ts`. 
 ## Shared liquidity (`sharedLiquidity.ts`)
 
 - `VaultReallocation` — legacy-untagged or explicitly `publicAllocatorV1` vault address + fee + sorted withdrawals; maps to `reallocateTo()`.
-- `BluePublicAllocatorV2Reallocation` — tagged V2 allocator/vault/source/target-adapter/assets/native-penalty input; maps 1:1 to `reallocate()` or `allocateFromIdle()` while deriving target market params from the enclosing Blue action.
+- `BluePublicAllocatorReallocation` — tagged BluePublicAllocator/vault/source/target-adapter/assets/native-penalty input; maps 1:1 to `reallocate()` or `allocateFromIdle()` while deriving target market params from the enclosing Blue action.
 - `BlueReallocation` — additive union accepted by Blue action and entity pass-through surfaces; preserves every V1 caller.
 
 ## Errors (`error.ts`)
 
 One class per error case. Never throw a generic `Error` from SDK source.
 
-- **Generic input bounds:** `NegativeInputError` for values that must be non-negative, `NonPositiveInputError` for values that must be positive, and `InputExceedsMaxError` for protocol-width upper bounds such as Public Allocator V2's `uint128` assets. All expose the invalid `field` and `value`; reuse them across Vault, Blue, and Midnight instead of adding operation-specific scalar-bound errors.
+- **Generic input bounds:** `NegativeInputError` for values that must be non-negative, `NonPositiveInputError` for values that must be positive, and `InputExceedsMaxError` for protocol-width upper bounds such as BluePublicAllocator's `uint128` assets. All expose the invalid `field` and `value`; reuse them across Vault, Blue, and Midnight instead of adding operation-specific scalar-bound errors.
 - **Market-specific:** `BorrowExceedsSafeLtvError`, `MissingMarketPriceError`, `NativeAmountOnNonWNativeAssetError`, `MutuallyExclusiveWithdrawAmountsError`, `WithdrawExceedsSupplyError`, `WithdrawSharesExceedSupplyError`.
-- **Reallocation-specific:** `EmptyReallocationWithdrawalsError`, `InvalidReallocationTypeError` for an unknown top-level Public Allocator variant, `InvalidReallocationSourceTypeError` for an unknown V2 source, `ReallocationWithdrawalOnTargetMarketError`, `UnsortedReallocationWithdrawalsError`, `ReallocationWithdrawExceedsMarketSupplyError`.
+- **Reallocation-specific:** `EmptyReallocationWithdrawalsError`, `InvalidReallocationTypeError` for an unknown top-level Public Allocator variant, `InvalidReallocationSourceTypeError` for an unknown BluePublicAllocator source, `ReallocationWithdrawalOnTargetMarketError`, `UnsortedReallocationWithdrawalsError`, `ReallocationWithdrawExceedsMarketSupplyError`.
 
 ## Adding a new operation
 

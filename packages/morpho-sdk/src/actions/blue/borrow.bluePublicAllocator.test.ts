@@ -1,20 +1,22 @@
 import { ChainId, MarketParams } from "@morpho-org/blue-sdk";
-import { bluePublicAllocatorV2Abi as canonicalBluePublicAllocatorV2Abi } from "@morpho-org/blue-sdk-viem";
+import { bluePublicAllocatorAbi as canonicalBluePublicAllocatorAbi } from "@morpho-org/blue-sdk-viem";
 import { decodeFunctionData } from "viem";
 import { describe, expect, test } from "vitest";
 import {
-  bluePublicAllocatorV2Abi,
+  bluePublicAllocatorAbi,
   bundler3Abi,
   generalAdapter1Abi,
+  publicAllocatorAbi,
 } from "../../abis.js";
 import type { BlueReallocation } from "../../types/index.js";
 import { blueBorrow } from "./borrow.js";
 
 const allocator = "0x0000000000000000000000000000000000000011";
-const vault = "0x0000000000000000000000000000000000000012";
+const vaultV1 = "0x0000000000000000000000000000000000000012";
 const sourceAdapter = "0x0000000000000000000000000000000000000013";
 const targetAdapter = "0x0000000000000000000000000000000000000014";
 const receiver = "0x0000000000000000000000000000000000000015";
+const vaultV2 = "0x0000000000000000000000000000000000000016";
 
 const targetMarket = new MarketParams({
   loanToken: "0x0000000000000000000000000000000000000021",
@@ -32,19 +34,19 @@ const sourceMarket = new MarketParams({
   lltv: targetMarket.lltv,
 });
 
-describe("blueBorrow Public Allocator V2", () => {
+describe("blueBorrow Blue Public Allocator", () => {
   test("default", () => {
     const reallocations: readonly BlueReallocation[] = [
       {
         type: "publicAllocatorV1",
-        vault,
+        vault: vaultV1,
         fee: 2n,
         withdrawals: [{ marketParams: sourceMarket, amount: 1n }],
       },
       {
-        type: "publicAllocatorV2",
+        type: "bluePublicAllocator",
         allocator,
-        vault,
+        vault: vaultV2,
         from: {
           type: "market",
           adapter: sourceAdapter,
@@ -55,9 +57,9 @@ describe("blueBorrow Public Allocator V2", () => {
         nativePenalty: 5n,
       },
       {
-        type: "publicAllocatorV2",
+        type: "bluePublicAllocator",
         allocator,
-        vault,
+        vault: vaultV2,
         from: { type: "idle" },
         to: { adapter: targetAdapter },
         assets: 7n,
@@ -88,19 +90,25 @@ describe("blueBorrow Public Allocator V2", () => {
       false,
     ]);
 
+    const publicAllocatorCall = decodeFunctionData({
+      abi: publicAllocatorAbi,
+      data: calls[0]!.data,
+    });
+    expect(publicAllocatorCall.functionName).toBe("reallocateTo");
+    expect(publicAllocatorCall.args[0]).toBe(vaultV1);
     expect(
       decodeFunctionData({
-        abi: bluePublicAllocatorV2Abi,
+        abi: bluePublicAllocatorAbi,
         data: calls[1]!.data,
       }).functionName,
     ).toBe("reallocate");
 
     const idleCall = decodeFunctionData({
-      abi: bluePublicAllocatorV2Abi,
+      abi: bluePublicAllocatorAbi,
       data: calls[2]!.data,
     });
     expect(idleCall.functionName).toBe("allocateFromIdle");
-    expect(idleCall.args[0]).toBe(vault);
+    expect(idleCall.args[0]).toBe(vaultV2);
     expect(idleCall.args[1]).toBe(targetAdapter);
     expect(idleCall.args[2]).toMatchObject({
       loanToken: targetMarket.loanToken,
@@ -117,6 +125,6 @@ describe("blueBorrow Public Allocator V2", () => {
   });
 
   test("re-exports the canonical ABI", () => {
-    expect(bluePublicAllocatorV2Abi).toBe(canonicalBluePublicAllocatorV2Abi);
+    expect(bluePublicAllocatorAbi).toBe(canonicalBluePublicAllocatorAbi);
   });
 });
