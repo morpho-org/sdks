@@ -87,7 +87,7 @@ interface MockStateParams {
  * Creates a minimal mock ReallocationData.
  *
  * Only implements the methods computeReallocations actually calls:
- * `getMarket`, `getMarketPublicReallocations`, and `getVault`.
+ * `getMarket`, `computeVaultV1Reallocations`, and `getVault`.
  */
 function makeMockState({
   targetMarket: tm = defaultTarget,
@@ -109,7 +109,7 @@ function makeMockState({
       id === tm.id && friendlyTargetMarket != null
         ? friendlyTargetMarket
         : markets.get(id)!,
-    getMarketPublicReallocations: () => ({
+    computeVaultV1Reallocations: () => ({
       withdrawals: [...aggressiveWithdrawals],
       data: {} as ReallocationData,
     }),
@@ -121,7 +121,7 @@ function makeMockState({
       if (m == null) throw new Error(`Mock: unknown market ${id}`);
       return m;
     },
-    getMarketPublicReallocations: () => ({
+    computeVaultV1Reallocations: () => ({
       withdrawals: [...friendlyWithdrawals],
       data: friendlyData,
     }),

@@ -46,7 +46,7 @@ function makeData(targetMarket = makeMarket()) {
 }
 
 /**
- * Stubs `getMarketPublicReallocations` so the metric methods can be unit-tested
+ * Stubs `computeVaultV1Reallocations` so the metric methods can be unit-tested
  * in isolation. The discovery algorithm itself is covered by
  * `reallocationData.test.ts`. The stub mimics the `enabled: false` short-circuit.
  */
@@ -55,7 +55,7 @@ function stubReallocations(
   withdrawals: readonly PublicReallocation[],
 ) {
   return vi
-    .spyOn(data, "getMarketPublicReallocations")
+    .spyOn(data, "computeVaultV1Reallocations")
     .mockImplementation((_marketId, options?: PublicAllocatorOptions) => ({
       withdrawals: options?.enabled === false ? [] : withdrawals,
       data,

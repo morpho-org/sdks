@@ -387,7 +387,8 @@ export const validateReallocations = (
       }
       if (
         r.from.type === "market" &&
-        r.from.marketParams.id === targetMarketId
+        r.from.marketParams.id === targetMarketId &&
+        isAddressEqual(r.from.adapter, r.to.adapter)
       ) {
         throw new ReallocationWithdrawalOnTargetMarketError(
           r.vault,

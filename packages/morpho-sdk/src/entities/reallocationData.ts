@@ -361,12 +361,12 @@ export class ReallocationData implements InputReallocationData {
    * const result: {
    *   withdrawals: readonly PublicReallocation[];
    *   data: ReallocationData;
-   * } = reallocationData.getMarketPublicReallocations(marketParams.id, {
+   * } = reallocationData.computeVaultV1Reallocations(marketParams.id, {
    *   timestamp: block.timestamp,
    * });
    * ```
    */
-  public getMarketPublicReallocations(
+  public computeVaultV1Reallocations(
     marketId: MarketId,
     options: PublicAllocatorOptions = {},
   ): {
@@ -468,6 +468,22 @@ export class ReallocationData implements InputReallocationData {
   }
 
   /**
+   * Calculates Vault V1 public reallocations that can supply liquidity to `marketId`.
+   *
+   * @param marketId - Target market to supply with shared liquidity.
+   * @param options - Optional allocator discovery options.
+   * @returns Computed source-market withdrawals and the post-reallocation state.
+   * @throws {@link UnknownReallocationMarketError} when the target market is absent.
+   * @deprecated Use {@link computeVaultV1Reallocations} instead.
+   */
+  public getMarketPublicReallocations(
+    marketId: MarketId,
+    options: PublicAllocatorOptions = {},
+  ) {
+    return this.computeVaultV1Reallocations(marketId, options);
+  }
+
+  /**
    * Sums the public-allocator liquidity reallocatable into `marketId` from
    * sibling markets.
    *
@@ -510,10 +526,7 @@ export class ReallocationData implements InputReallocationData {
     marketId: MarketId,
     options?: PublicAllocatorOptions,
   ): bigint {
-    const { withdrawals } = this.getMarketPublicReallocations(
-      marketId,
-      options,
-    );
+    const { withdrawals } = this.computeVaultV1Reallocations(marketId, options);
 
     return withdrawals.reduce((total, { assets }) => total + assets, 0n);
   }

@@ -1,4 +1,10 @@
-import { type Address, encodeAbiParameters, type Hex, keccak256 } from "viem";
+import {
+  type Address,
+  encodeAbiParameters,
+  type Hash,
+  type Hex,
+  keccak256,
+} from "viem";
 import {
   type Market,
   MarketParams,
@@ -78,7 +84,7 @@ export class VaultV2MorphoMarketV1AdapterV2
     this.supplyShares = supplyShares;
   }
 
-  public ids(params: MarketParams) {
+  public ids(params: MarketParams): readonly [Hash, Hash, Hash] {
     return [
       this.adapterId,
       VaultV2MorphoMarketV1AdapterV2.collateralId(params.collateralToken),

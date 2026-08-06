@@ -6,6 +6,7 @@ export {
   MathLib,
   SharesMath,
   VaultUtils,
+  VaultV2Utils,
 } from "@morpho-org/blue-sdk";
 export {
   decodeBytes32String,
@@ -64,6 +65,7 @@ export {
   values,
 } from "@morpho-org/morpho-ts";
 export { computeReallocations } from "./helpers/computeReallocations.js";
+export { computeReallocationsVaultV2 } from "./helpers/computeReallocationsVaultV2.js";
 export { addTransactionMetadata } from "./helpers/metadata.js";
 export {
   computeMaxRepaySharePrice,

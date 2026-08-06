@@ -18,8 +18,8 @@ Centralized type definitions and error classes. Barrel-exported via `index.ts`. 
 
 ## Shared liquidity (`sharedLiquidity.ts`)
 
-- `VaultReallocation` — legacy-untagged or explicitly `publicAllocatorV1` vault address + fee + sorted withdrawals; maps to `reallocateTo()`.
-- `BluePublicAllocatorReallocation` — tagged BluePublicAllocator/vault/source/target-adapter/assets/native-penalty input; maps 1:1 to `reallocate()` or `allocateFromIdle()` while deriving target market params from the enclosing Blue action.
+- `VaultV1BlueReallocation` — legacy-untagged or explicitly `publicAllocatorV1` vault address + fee + sorted withdrawals; maps to `reallocateTo()`. `VaultReallocation` is its deprecated compatibility alias.
+- `VaultV2BlueReallocation` — tagged BluePublicAllocator/vault/source/target-adapter/assets/native-penalty input; maps 1:1 to `reallocate()` or `allocateFromIdle()` while deriving target market params from the enclosing Blue action.
 - `BlueReallocation` — additive union accepted by Blue action and entity pass-through surfaces; preserves every V1 caller.
 
 ## Errors (`error.ts`)

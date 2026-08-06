@@ -156,7 +156,7 @@ export interface MorphoBorrowOptions {
   amount: number | bigint;
   /** The address on behalf of which the borrow operation should be performed. Must match the wallet account address when set. */
   onBehalfOf?: string;
-  /** Optional Morpho Vault V2 reallocations to include in the borrow action. */
+  /** Optional MetaMorpho Vault V1 reallocations to include in the borrow action. */
   reallocations?: readonly VaultReallocation[];
   /** Signature returned by a Morpho SDK authorization requirement, folded into the bundle as `setAuthorizationWithSig`. */
   requirementSignature?: RequirementSignature;

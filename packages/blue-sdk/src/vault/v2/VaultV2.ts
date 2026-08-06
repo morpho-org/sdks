@@ -5,6 +5,7 @@ import { type IToken, WrappedToken } from "../../token/index.js";
 import type { BigIntish } from "../../types.js";
 import { type CapacityLimit, CapacityLimitReason } from "../../utils.js";
 import type { IAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
+import { VaultV2Utils } from "./VaultV2Utils.js";
 
 /** Plain input shape for one Vault V2 liquidity allocation. */
 export interface IVaultV2Allocation {
@@ -177,28 +178,13 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
 
     // At this stage: `liquidityAdapterLimit.value <= assets`
 
-    for (const { absoluteCap, relativeCap, allocation } of this
-      .liquidityAllocations) {
-      // `absoluteCap` can be set lower than `allocation`.
-      const absoluteMaxDeposit = MathLib.zeroFloorSub(absoluteCap, allocation);
-      if (liquidityAdapterLimit.value > absoluteMaxDeposit)
-        liquidityAdapterLimit = {
-          value: absoluteMaxDeposit,
-          limiter: CapacityLimitReason.vaultV2_absoluteCap,
-        };
-
-      if (relativeCap !== MathLib.WAD) {
-        // `relativeCap` can be set lower than `allocation / _totalAssets`.
-        const relativeMaxDeposit = MathLib.zeroFloorSub(
-          MathLib.wMulDown(this._totalAssets, relativeCap),
-          allocation,
-        );
-        if (liquidityAdapterLimit.value > relativeMaxDeposit)
-          liquidityAdapterLimit = {
-            value: relativeMaxDeposit,
-            limiter: CapacityLimitReason.vaultV2_relativeCap,
-          };
-      }
+    for (const allocation of this.liquidityAllocations) {
+      const allocationLimit = VaultV2Utils.allocationHeadroom(
+        allocation,
+        this._totalAssets,
+      );
+      if (liquidityAdapterLimit.value > allocationLimit.value)
+        liquidityAdapterLimit = allocationLimit;
     }
 
     return liquidityAdapterLimit;
