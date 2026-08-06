@@ -20,7 +20,12 @@ import {
   serializeSignature,
   zeroHash,
 } from "viem";
-import { bundler3Abi, coreAdapterAbi, generalAdapter1Abi } from "../abis.js";
+import {
+  bluePublicAllocatorV2Abi,
+  bundler3Abi,
+  coreAdapterAbi,
+  generalAdapter1Abi,
+} from "../abis.js";
 import { BundlerErrors } from "../types/error.js";
 import type {
   Action,
@@ -341,6 +346,12 @@ export namespace BundlerAction {
       }
       case "reallocateTo": {
         return BundlerAction.publicAllocatorReallocateTo(chainId, ...args);
+      }
+      case "bluePublicAllocatorV2Reallocate": {
+        return BundlerAction.bluePublicAllocatorV2Reallocate(...args);
+      }
+      case "bluePublicAllocatorV2AllocateFromIdle": {
+        return BundlerAction.bluePublicAllocatorV2AllocateFromIdle(...args);
       }
       case "wrapNative": {
         return BundlerAction.wrapNative(chainId, ...args);
@@ -1435,6 +1446,115 @@ export namespace BundlerAction {
           args: [vault, withdrawals, supplyMarketParams],
         }),
         value: fee,
+        skipRevert,
+        callbackHash: zeroHash,
+      },
+    ];
+  }
+
+  /**
+   * Encodes a Blue Public Allocator V2 market-to-market reallocation.
+   *
+   * @param allocator - Explicit Blue Public Allocator V2 contract address.
+   * @param vault - Vault whose liquidity is reallocated.
+   * @param deallocateAdapter - Vault V2 adapter supplying the source market.
+   * @param deallocateMarket - Source Morpho Blue market parameters.
+   * @param allocateAdapter - Vault V2 adapter supplying the target market.
+   * @param allocateMarket - Target Morpho Blue market parameters.
+   * @param assets - Assets to reallocate, bounded by `uint128` by the high-level action.
+   * @param nativePenalty - Native penalty paid to the allocator.
+   * @param skipRevert - Whether Bundler3 should tolerate a revert.
+   * @returns One encoded call targeting the explicit allocator.
+   * @example
+   * ```ts
+   * const calls = BundlerAction.bluePublicAllocatorV2Reallocate(
+   *   allocator,
+   *   vault,
+   *   sourceAdapter,
+   *   sourceMarket,
+   *   targetAdapter,
+   *   targetMarket,
+   *   1_000_000n,
+   *   10n,
+   * );
+   * ```
+   */
+  // biome-ignore lint/complexity/useMaxParams: mirrors the protocol call
+  export function bluePublicAllocatorV2Reallocate(
+    allocator: Address,
+    vault: Address,
+    deallocateAdapter: Address,
+    deallocateMarket: InputMarketParams,
+    allocateAdapter: Address,
+    allocateMarket: InputMarketParams,
+    assets: bigint,
+    nativePenalty: bigint,
+    skipRevert = false,
+  ): BundlerCall[] {
+    return [
+      {
+        to: allocator,
+        data: encodeFunctionData({
+          abi: bluePublicAllocatorV2Abi,
+          functionName: "reallocate",
+          args: [
+            vault,
+            deallocateAdapter,
+            deallocateMarket,
+            allocateAdapter,
+            allocateMarket,
+            assets,
+          ],
+        }),
+        value: nativePenalty,
+        skipRevert,
+        callbackHash: zeroHash,
+      },
+    ];
+  }
+
+  /**
+   * Encodes a Blue Public Allocator V2 allocation from vault idle liquidity.
+   *
+   * @param allocator - Explicit Blue Public Allocator V2 contract address.
+   * @param vault - Vault whose idle liquidity is allocated.
+   * @param adapter - Vault V2 adapter supplying the target market.
+   * @param market - Target Morpho Blue market parameters.
+   * @param assets - Assets to allocate, bounded by `uint128` by the high-level action.
+   * @param nativePenalty - Native penalty paid to the allocator.
+   * @param skipRevert - Whether Bundler3 should tolerate a revert.
+   * @returns One encoded call targeting the explicit allocator.
+   * @example
+   * ```ts
+   * const calls = BundlerAction.bluePublicAllocatorV2AllocateFromIdle(
+   *   allocator,
+   *   vault,
+   *   targetAdapter,
+   *   targetMarket,
+   *   1_000_000n,
+   *   10n,
+   * );
+   * ```
+   */
+  // biome-ignore lint/complexity/useMaxParams: mirrors the protocol call
+  export function bluePublicAllocatorV2AllocateFromIdle(
+    allocator: Address,
+    vault: Address,
+    adapter: Address,
+    market: InputMarketParams,
+    assets: bigint,
+    nativePenalty: bigint,
+    skipRevert = false,
+  ): BundlerCall[] {
+    return [
+      {
+        to: allocator,
+        data: encodeFunctionData({
+          abi: bluePublicAllocatorV2Abi,
+          functionName: "allocateFromIdle",
+          args: [vault, adapter, market, assets],
+        }),
+        value: nativePenalty,
         skipRevert,
         callbackHash: zeroHash,
       },

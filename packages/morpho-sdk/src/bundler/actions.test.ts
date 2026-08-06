@@ -22,7 +22,12 @@ import {
   zeroHash,
 } from "viem";
 import { describe, expect, test } from "vitest";
-import { bundler3Abi, coreAdapterAbi, generalAdapter1Abi } from "../abis.js";
+import {
+  bluePublicAllocatorV2Abi,
+  bundler3Abi,
+  coreAdapterAbi,
+  generalAdapter1Abi,
+} from "../abis.js";
 import { BundlerErrors } from "../types/index.js";
 import {
   type Action,
@@ -46,6 +51,9 @@ describe("BundlerAction", () => {
   const adapter = "0x0000000000000000000000000000000000000004";
   const erc4626 = "0x0000000000000000000000000000000000000005";
   const vault = "0x0000000000000000000000000000000000000006";
+  const allocator = "0x0000000000000000000000000000000000000011";
+  const deallocateAdapter = "0x0000000000000000000000000000000000000012";
+  const allocateAdapter = "0x0000000000000000000000000000000000000013";
   const loanToken = "0x0000000000000000000000000000000000000007";
   const collateralToken = "0x0000000000000000000000000000000000000008";
   const oracle = "0x0000000000000000000000000000000000000009";
@@ -342,6 +350,42 @@ describe("BundlerAction", () => {
             args,
           }) satisfies Action,
       ),
+    fc
+      .tuple(
+        addressArbitrary,
+        addressArbitrary,
+        addressArbitrary,
+        marketArbitrary,
+        addressArbitrary,
+        marketArbitrary,
+        amountArbitrary,
+        amountArbitrary,
+        skipRevertArbitrary,
+      )
+      .map(
+        (args) =>
+          ({
+            type: "bluePublicAllocatorV2Reallocate",
+            args,
+          }) satisfies Action,
+      ),
+    fc
+      .tuple(
+        addressArbitrary,
+        addressArbitrary,
+        addressArbitrary,
+        marketArbitrary,
+        amountArbitrary,
+        amountArbitrary,
+        skipRevertArbitrary,
+      )
+      .map(
+        (args) =>
+          ({
+            type: "bluePublicAllocatorV2AllocateFromIdle",
+            args,
+          }) satisfies Action,
+      ),
     fc.tuple(amountArbitrary, addressArbitrary, skipRevertArbitrary).map(
       (args) =>
         ({
@@ -568,6 +612,35 @@ describe("BundlerAction", () => {
     const calls = decoded.args[0] ?? [];
     expect(calls).toHaveLength(1);
     expect(calls[0]?.value).toBe(5n);
+  });
+
+  test("encodeBundle aggregates Blue Public Allocator V2 native penalties", () => {
+    const tx = BundlerAction.encodeBundle(chainId, [
+      {
+        type: "bluePublicAllocatorV2Reallocate",
+        args: [
+          allocator,
+          vault,
+          deallocateAdapter,
+          market,
+          allocateAdapter,
+          market,
+          1n,
+          2n,
+          false,
+        ],
+      },
+      {
+        type: "bluePublicAllocatorV2AllocateFromIdle",
+        args: [allocator, vault, allocateAdapter, market, 3n, 4n, false],
+      },
+    ]);
+
+    expect(tx.value).toBe(6n);
+
+    const decoded = decodeFunctionData({ abi: bundler3Abi, data: tx.data });
+    expect(decoded.functionName).toBe("multicall");
+    expect((decoded.args[0] ?? []).map((call) => call.value)).toEqual([2n, 4n]);
   });
 
   test("encodeBundle includes callback action values in transaction value", () => {
@@ -969,6 +1042,50 @@ describe("BundlerAction", () => {
             19n,
             [{ marketParams: market, amount: 20n }],
             market,
+            false,
+          ),
+        ],
+        [
+          "bluePublicAllocatorV2Reallocate",
+          {
+            type: "bluePublicAllocatorV2Reallocate",
+            args: [
+              allocator,
+              vault,
+              deallocateAdapter,
+              market,
+              allocateAdapter,
+              market,
+              20n,
+              21n,
+              false,
+            ],
+          },
+          BundlerAction.bluePublicAllocatorV2Reallocate(
+            allocator,
+            vault,
+            deallocateAdapter,
+            market,
+            allocateAdapter,
+            market,
+            20n,
+            21n,
+            false,
+          ),
+        ],
+        [
+          "bluePublicAllocatorV2AllocateFromIdle",
+          {
+            type: "bluePublicAllocatorV2AllocateFromIdle",
+            args: [allocator, vault, allocateAdapter, market, 22n, 23n, false],
+          },
+          BundlerAction.bluePublicAllocatorV2AllocateFromIdle(
+            allocator,
+            vault,
+            allocateAdapter,
+            market,
+            22n,
+            23n,
             false,
           ),
         ],
@@ -1443,6 +1560,63 @@ describe("BundlerAction", () => {
     expect(call.skipRevert).toBe(true);
     expect(decoded.functionName).toBe("reallocateTo");
     expect(decoded.args).toEqual([vault, withdrawals, market]);
+  });
+
+  test("bluePublicAllocatorV2Reallocate", () => {
+    const call = onlyCall(
+      BundlerAction.bluePublicAllocatorV2Reallocate(
+        allocator,
+        vault,
+        deallocateAdapter,
+        market,
+        allocateAdapter,
+        market,
+        1n,
+        2n,
+        true,
+      ),
+    );
+    const decoded = decodeFunctionData({
+      abi: bluePublicAllocatorV2Abi,
+      data: call.data,
+    });
+
+    expect(call.to).toBe(allocator);
+    expect(call.value).toBe(2n);
+    expect(call.skipRevert).toBe(true);
+    expect(decoded.functionName).toBe("reallocate");
+    expect(decoded.args).toEqual([
+      vault,
+      deallocateAdapter,
+      market,
+      allocateAdapter,
+      market,
+      1n,
+    ]);
+  });
+
+  test("bluePublicAllocatorV2AllocateFromIdle", () => {
+    const call = onlyCall(
+      BundlerAction.bluePublicAllocatorV2AllocateFromIdle(
+        allocator,
+        vault,
+        allocateAdapter,
+        market,
+        1n,
+        2n,
+        true,
+      ),
+    );
+    const decoded = decodeFunctionData({
+      abi: bluePublicAllocatorV2Abi,
+      data: call.data,
+    });
+
+    expect(call.to).toBe(allocator);
+    expect(call.value).toBe(2n);
+    expect(call.skipRevert).toBe(true);
+    expect(decoded.functionName).toBe("allocateFromIdle");
+    expect(decoded.args).toEqual([vault, allocateAdapter, market, 1n]);
   });
 
   test("wrapNative", () => {

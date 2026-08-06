@@ -5,6 +5,7 @@ import { type Action, BundlerAction } from "../../bundler/index.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   type AuthorizationRequirementSignature,
+  type BlueReallocation,
   type BlueSupplyCollateralBorrowAction,
   type DepositAmountArgs,
   type Metadata,
@@ -12,7 +13,6 @@ import {
   NonPositiveInputError,
   type PermitRequirementSignature,
   type Transaction,
-  type VaultReallocation,
 } from "../../types/index.js";
 import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
 import { buildAssetFundingActions } from "./buildAssetFundingActions.js";
@@ -36,7 +36,7 @@ export interface BlueSupplyCollateralBorrowParams {
     /** Optional pre-signed permit/permit2 approval for the collateral transfer. */
     requirementSignature?: PermitRequirementSignature;
     /** Vault reallocations to execute before borrowing (computed by entity). */
-    reallocations?: readonly VaultReallocation[];
+    reallocations?: readonly BlueReallocation[];
     /**
      * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
      * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a

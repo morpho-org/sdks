@@ -81,6 +81,48 @@ export interface VaultReallocation {
   readonly withdrawals: readonly ReallocationWithdrawal[];
 }
 
+/** Source of a Blue Public Allocator V2 reallocation. */
+export type BluePublicAllocatorV2Source =
+  | {
+      /** Reallocate from a Morpho Blue market. */
+      readonly type: "market";
+      /** Vault V2 adapter supplying the source market. */
+      readonly adapter: Address;
+      /** Source market parameters. */
+      readonly marketParams: MarketParams;
+    }
+  | {
+      /** Allocate from vault idle liquidity without a synthetic market. */
+      readonly type: "idle";
+    };
+
+/**
+ * One Blue Public Allocator V2 contract call performed before a Blue action.
+ *
+ * The target market parameters are derived from the enclosing Blue action.
+ */
+export interface BluePublicAllocatorV2Reallocation {
+  /** Explicit allocator contract address because V2 has no deployment registry entry. */
+  readonly allocator: Address;
+  /** Discriminator separating V2 reallocations from untagged V1 reallocations. */
+  readonly type: "publicAllocatorV2";
+  /** Vault whose liquidity is moved. */
+  readonly vault: Address;
+  /** Liquidity source. */
+  readonly from: BluePublicAllocatorV2Source;
+  /** Target Vault V2 adapter; the target market comes from the enclosing action. */
+  readonly to: { readonly adapter: Address };
+  /** Asset amount, which must fit in `uint128`. */
+  readonly assets: bigint;
+  /** Native penalty paid for this individual allocator call. */
+  readonly nativePenalty: bigint;
+}
+
+/** Additive union accepted by Blue actions that support V1 or V2 reallocations. */
+export type BlueReallocation =
+  | VaultReallocation
+  | BluePublicAllocatorV2Reallocation;
+
 /**
  * Options for computing vault reallocations via the public allocator.
  *

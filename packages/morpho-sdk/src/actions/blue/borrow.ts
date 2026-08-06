@@ -6,11 +6,11 @@ import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   type AuthorizationRequirementSignature,
   type BlueBorrowAction,
+  type BlueReallocation,
   type Metadata,
   NegativeInputError,
   NonPositiveInputError,
   type Transaction,
-  type VaultReallocation,
 } from "../../types/index.js";
 import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
 import { buildReallocationActions } from "./buildReallocationActions.js";
@@ -29,7 +29,7 @@ export interface BlueBorrowParams {
     /** Minimum borrow share price (in ray). Protects against share price manipulation. */
     minSharePrice: bigint;
     /** Vault reallocations to execute before borrowing (computed by entity). */
-    reallocations?: readonly VaultReallocation[];
+    reallocations?: readonly BlueReallocation[];
     /**
      * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
      * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a

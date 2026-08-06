@@ -26,7 +26,8 @@ Protocol terms used across this package's docs and JSDoc:
 - **VaultV2** — successor vault with adapter-based liquidity routing and `forceDeallocate`.
 - **bundler3** — the bundler entry point; receives a sequence of adapter actions in one transaction.
 - **GeneralAdapter1** — the bundler-side adapter that holds approvals/auth and executes Morpho calls on the user's behalf. Required as the spender for ERC-20 approvals on every bundled path; required as authorized operator on Morpho for `borrow`, `supplyCollateralBorrow`, `repayWithdrawCollateral`, and `withdraw` (the supplier-side path).
-- **PublicAllocator** — Morpho contract that lets vault curators move liquidity between markets within a vault (`reallocateTo(...)`).
+- **PublicAllocator V1** — MetaMorpho allocator that moves liquidity from one or more sorted source markets into a target via `reallocateTo(...)`; each call pays one `fee`.
+- **BluePublicAllocator V2** — Vault V2 allocator that moves one source market or vault idle liquidity into the enclosing Blue action's target market via `reallocate(...)` or `allocateFromIdle(...)`. The caller supplies the allocator and adapter addresses explicitly because no canonical deployment is registered; each call pays its own `nativePenalty`.
 
 ### Bundler actions
 
@@ -38,7 +39,8 @@ The action verbs an integrator sees in the bundle (`BundlerAction.encode...`):
 - **`erc20TransferFrom`** — pulls user-approved tokens into the bundler.
 - **`nativeTransfer` + `wrapNative`** — pair that converts an attached native amount (`tx.value`) into the chain's wNative for a deposit/supply path.
 - **`forceDeallocate`** — VaultV2 multicall entry that pulls liquidity out of a specific adapter before withdraw/redeem.
-- **`reallocateTo`** — `PublicAllocator` call that shifts liquidity between markets in a curator vault before a borrow or a loan-asset withdraw.
+- **`reallocateTo`** — PublicAllocator V1 call that shifts liquidity from sorted source markets into the target market.
+- **`bluePublicAllocatorV2Reallocate` / `bluePublicAllocatorV2AllocateFromIdle`** — BluePublicAllocator V2 calls that move one market source or vault idle liquidity into the enclosing Blue action's target market. Both target an explicit allocator address and carry one native penalty.
 
 ### Constants and conventions
 
