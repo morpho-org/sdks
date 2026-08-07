@@ -1,5 +1,4 @@
 export {
-  bluePublicAllocatorAbi,
   erc2612Abi,
   erc5267Abi,
   metaMorphoAbi,
@@ -16,6 +15,7 @@ export {
   vaultV1AdapterAbi,
   vaultV1AdapterFactoryAbi,
   vaultV2Abi,
+  vaultV2BluePublicAllocatorAbi,
   vaultV2FactoryAbi,
   whitelistControllerAggregatorV2Abi,
   wrappedBackedTokenAbi,

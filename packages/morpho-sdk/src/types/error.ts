@@ -737,7 +737,7 @@ export class DisabledReallocationMarketError extends Error {
 }
 
 /**
- * Thrown when shared liquidity selected by `computeReallocations` cannot cover
+ * Thrown when shared liquidity selected by `computeVaultV1Reallocations` cannot cover
  * the operation's absolute shortfall on the target market — the resulting
  * `morphoBorrow` or `morphoWithdraw` would still revert onchain.
  *
@@ -1132,7 +1132,7 @@ export class WithdrawSharesExceedSupplyError extends Error {
 }
 
 /**
- * Thrown when `computeReallocations` is called with a withdraw `amount` greater
+ * Thrown when `computeVaultV1Reallocations` is called with a withdraw `amount` greater
  * than the target market's current `totalSupplyAssets` — the post-withdraw
  * supply would be negative, making the on-chain `morphoWithdraw` revert
  * regardless of any reallocation. Caught here so callers do not pay

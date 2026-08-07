@@ -34,7 +34,7 @@ import {
 } from "../types/index.js";
 
 /** Input state required to simulate Vault V2 BluePublicAllocator reallocations. */
-export interface InputReallocationDataVaultV2 {
+export interface InputVaultV2ReallocationData {
   /** Chain id associated with the fetched state. */
   readonly chainId: number;
   /** Explicit BluePublicAllocator contract used by every returned call. */
@@ -129,12 +129,12 @@ const cloneVault = (vault: AccrualVaultV2) => {
  *
  * @example
  * ```ts
- * import { ReallocationDataVaultV2 } from "@morpho-org/morpho-sdk/entities";
+ * import { VaultV2ReallocationData } from "@morpho-org/morpho-sdk/entities";
  *
- * const data = new ReallocationDataVaultV2(input);
+ * const data = new VaultV2ReallocationData(input);
  * ```
  */
-export class ReallocationDataVaultV2 implements InputReallocationDataVaultV2 {
+export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
   /** Chain id associated with this snapshot. */
   public readonly chainId: number;
   /** Explicit BluePublicAllocator address used in returned calls. */
@@ -164,7 +164,7 @@ export class ReallocationDataVaultV2 implements InputReallocationDataVaultV2 {
    *
    * @param input - State fetched at one consistent block.
    */
-  public constructor(input: InputReallocationDataVaultV2) {
+  public constructor(input: InputVaultV2ReallocationData) {
     this.chainId = input.chainId;
     this.allocator = input.allocator;
     this.markets = {};
@@ -249,7 +249,7 @@ export class ReallocationDataVaultV2 implements InputReallocationDataVaultV2 {
    * ```
    */
   public clone() {
-    return new ReallocationDataVaultV2(this);
+    return new VaultV2ReallocationData(this);
   }
 
   /**
@@ -373,18 +373,19 @@ export class ReallocationDataVaultV2 implements InputReallocationDataVaultV2 {
    *
    * The algorithm ranks action-ready calls by obtainable assets, includes idle
    * liquidity, applies each winner to cloned state, and stops when every
-   * candidate is exhausted. Source markets are held below the SDK's default
-   * withdrawal-utilization ceiling.
+   * candidate is exhausted. Vaults whose configured native penalty exceeds
+   * `options.maxNativePenalty` are ignored. Source markets are held below the
+   * SDK's default withdrawal-utilization ceiling.
    *
    * @param marketId - Target Blue market id.
-   * @param options - Optional timestamp, enable flag, and vault allowlist.
+   * @param options - Optional timestamp, enable flag, vault allowlist, and maximum native penalty.
    * @returns Flat action-ready reallocations and their post-simulation state.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
    * @example
    * ```ts
-   * import { ReallocationDataVaultV2 } from "@morpho-org/morpho-sdk/entities";
+   * import { VaultV2ReallocationData } from "@morpho-org/morpho-sdk/entities";
    *
-   * const data = new ReallocationDataVaultV2(input);
+   * const data = new VaultV2ReallocationData(input);
    * const result = data.computeVaultV2Reallocations(targetMarketId, { timestamp });
    * ```
    */
@@ -404,7 +405,7 @@ export class ReallocationDataVaultV2 implements InputReallocationDataVaultV2 {
    *
    * @param marketId - Target market id.
    * @param maxWithdrawalUtilization - Source-market utilization ceiling.
-   * @param options - Discovery options.
+   * @param options - Discovery options, including the maximum native penalty.
    * @returns Flat action-ready reallocations and post-simulation state.
    * @internal
    */
@@ -418,7 +419,7 @@ export class ReallocationDataVaultV2 implements InputReallocationDataVaultV2 {
     readonly options?: PublicAllocatorOptionsVaultV2;
   }): {
     readonly reallocations: readonly VaultV2BlueReallocation[];
-    readonly data: ReallocationDataVaultV2;
+    readonly data: VaultV2ReallocationData;
   } {
     if (options.enabled === false) return { reallocations: [], data: this };
 
@@ -446,6 +447,7 @@ export class ReallocationDataVaultV2 implements InputReallocationDataVaultV2 {
             vaultAddress: vault,
             marketId,
             maxWithdrawalUtilization,
+            maxNativePenalty: options.maxNativePenalty,
           }),
         )
         .filter(
@@ -470,7 +472,7 @@ export class ReallocationDataVaultV2 implements InputReallocationDataVaultV2 {
    * Sums friendly Vault V2 shared liquidity available to a target market.
    *
    * @param marketId - Target Blue market id.
-   * @param options - Optional timestamp, enable flag, and vault allowlist.
+   * @param options - Optional timestamp, enable flag, vault allowlist, and maximum native penalty.
    * @returns Reallocatable market and idle assets, or `0n` when none are available.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
    * @example
@@ -494,7 +496,7 @@ export class ReallocationDataVaultV2 implements InputReallocationDataVaultV2 {
    *
    * @param marketId - Target Blue market id.
    * @param utilization - Desired utilization, scaled by WAD. Defaults to 90%.
-   * @param options - Optional timestamp, enable flag, and vault allowlist.
+   * @param options - Optional timestamp, enable flag, vault allowlist, and maximum native penalty.
    * @returns Borrowable assets while remaining at or below `utilization`.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
    * @example
@@ -559,17 +561,21 @@ export class ReallocationDataVaultV2 implements InputReallocationDataVaultV2 {
     vaultAddress,
     marketId,
     maxWithdrawalUtilization,
+    maxNativePenalty,
   }: {
     readonly vaultAddress: Address;
     readonly marketId: MarketId;
     readonly maxWithdrawalUtilization: bigint;
+    readonly maxNativePenalty?: bigint;
   }) {
     return _try(() => {
       const vault = this.getVault(vaultAddress);
       const publicAllocatorConfig = this.getPublicAllocatorConfig(vaultAddress);
       if (
         !isAddressEqual(publicAllocatorConfig.allocator, this.allocator) ||
-        !isAddressEqual(publicAllocatorConfig.vault, vaultAddress)
+        !isAddressEqual(publicAllocatorConfig.vault, vaultAddress) ||
+        (maxNativePenalty != null &&
+          publicAllocatorConfig.nativePenalty > maxNativePenalty)
       )
         return;
 

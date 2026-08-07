@@ -5,7 +5,7 @@
 | **Status** | Accepted                                                         |
 | **Date**   | 2026-07-29                                                       |
 | **Author** | @foulques                                                        |
-| **Scope**  | `morpho-sdk`, `blue-sdk-viem`, `blue-sdk`, and `morpho-ts`      |
+| **Scope**  | `morpho-sdk`, `liquidity-sdk-viem`, `blue-sdk-viem`, `blue-sdk`, and `morpho-ts` |
 
 ## Context
 
@@ -14,13 +14,14 @@ Morpho Blue market through PublicAllocator V1:
 
 ```text
 MorphoBlue.getReallocationData()
-  → ReallocationData.computeVaultV1Reallocations()  # discovery
-  → computeReallocations()                           # borrow/withdraw planner
+  → VaultV1ReallocationData.computeVaultV1Reallocations()  # discovery
+  → computeVaultV1Reallocations()                           # borrow/withdraw planner
   → VaultV1BlueReallocation[]
   → PublicAllocator.reallocateTo(...)
 ```
 
-The historical names `getMarketPublicReallocations()` and
+The historical V1 names `ReallocationData`, `InputReallocationData`,
+`computeReallocations()`, `getMarketPublicReallocations()`, and
 `VaultReallocation` remain as deprecated aliases for the prescribed
 deprecation window.
 
@@ -34,14 +35,14 @@ This TIB freezes that Vault V2 design.
 
 ## Goals
 
-- Add `ReallocationDataVaultV2.computeVaultV2Reallocations(...)` for greedy,
+- Add `VaultV2ReallocationData.computeVaultV2Reallocations(...)` for greedy,
   largest-first discovery.
-- Add `computeReallocationsVaultV2(...)` for amount-aware borrow and withdraw
+- Add `computeVaultV2Reallocations(...)` for amount-aware borrow and withdraw
   planning.
 - Return flat, action-ready `VaultV2BlueReallocation[]`; one entry is exactly
   one `reallocate(...)` or `allocateFromIdle(...)` call and pays one
   `nativePenalty`.
-- Keep `computeReallocations(...)` as the Vault V1 planner and make the
+- Keep `computeVaultV1Reallocations(...)` as the Vault V1 planner and make the
   versioned V1 discovery/type names canonical.
 - Simulate the allocator target cap, all three Vault V2 allocation caps,
   source Blue liquidity and utilization, shared allocation IDs, untracked
@@ -55,23 +56,27 @@ This TIB freezes that Vault V2 design.
   explicit input to fetchers, state, and every returned call.
 - No curator-facing setters such as `setAbsoluteCap`, `setCanDeallocate`, or
   `setNativePenalty`.
-- No `liquidity-sdk-viem` release. Its use of the deprecated V1 discovery
-  alias remains source-compatible.
-- No penalty-efficiency optimizer. Candidates are ranked by obtainable assets.
+- No penalty-efficiency optimizer beyond an explicit maximum native-penalty
+  filter. Retained candidates are ranked by obtainable assets.
 
 ## Public API and naming
 
 | Concern | Canonical symbol |
 | --- | --- |
-| V1 discovery | `ReallocationData.computeVaultV1Reallocations(marketId, options?)` |
-| V1 discovery compatibility | `ReallocationData.getMarketPublicReallocations(...)` (`@deprecated`) |
-| V1 planner | `computeReallocations(...)` |
+| V1 state | `VaultV1ReallocationData` / `InputVaultV1ReallocationData` |
+| V1 state compatibility | `ReallocationData` / `InputReallocationData` (`@deprecated` aliases) |
+| V1 discovery | `VaultV1ReallocationData.computeVaultV1Reallocations(marketId, options?)` |
+| V1 discovery compatibility | `VaultV1ReallocationData.getMarketPublicReallocations(...)` (`@deprecated`) |
+| V1 planner | `computeVaultV1Reallocations(...)` |
+| V1 planner compatibility | `computeReallocations(...)` (`@deprecated` alias) |
 | V1 action input | `VaultV1BlueReallocation` |
 | V1 type compatibility | `VaultReallocation` (`@deprecated` alias) |
-| V2 state | `ReallocationDataVaultV2` / `InputReallocationDataVaultV2` |
-| V2 discovery | `ReallocationDataVaultV2.computeVaultV2Reallocations(marketId, options?)` |
-| V2 planner | `computeReallocationsVaultV2(...)` |
+| V2 state | `VaultV2ReallocationData` / `InputVaultV2ReallocationData` |
+| V2 discovery | `VaultV2ReallocationData.computeVaultV2Reallocations(marketId, options?)` |
+| V2 planner | `computeVaultV2Reallocations(...)` |
 | V2 action input | `VaultV2BlueReallocation` |
+| V2 Bundler actions | `vaultV2BluePublicAllocatorReallocate`, `vaultV2BluePublicAllocatorAllocateFromIdle` |
+| V2 allocator ABI | `vaultV2BluePublicAllocatorAbi` |
 | Shared action union | `BlueReallocation` |
 | V2 options | `PublicAllocatorOptionsVaultV2`, `ReallocationComputeOptionsVaultV2` |
 | V2 config | `VaultV2PublicAllocatorConfig`, `VaultV2MarketPublicAllocatorConfig` |
@@ -79,7 +84,8 @@ This TIB freezes that Vault V2 design.
 
 `BluePublicAllocatorReallocation` was unreleased relative to `origin/main` and
 is renamed directly to `VaultV2BlueReallocation`; it has no compatibility
-alias.
+alias. The former unversioned V2 state, planner, ABI, and Bundler action names
+were also unreleased and are renamed directly without aliases.
 
 The action-ready V2 shape is flat:
 
@@ -158,7 +164,7 @@ State is therefore keyed by `(vault, derivedId)`, not by a projected
 `(vault, adapter, market)` tuple:
 
 ```ts
-export interface InputReallocationDataVaultV2 {
+export interface InputVaultV2ReallocationData {
   readonly chainId: number;
   readonly allocator: Address;
   readonly markets?: Readonly<Record<MarketId, Market | undefined>>;
@@ -185,7 +191,7 @@ also carries `adapter`, `marketParamsId`, `absoluteCap`, `canDeallocate`, and
 
 ## Fetching
 
-`bluePublicAllocatorAbi` includes the three allocator mapping reads and
+`vaultV2BluePublicAllocatorAbi` includes the three allocator mapping reads and
 `vaultData`. Fetchers always take the allocator address explicitly:
 
 - `fetchVaultV2PublicAllocatorConfig(allocator, vault, client, parameters?)`;
@@ -247,6 +253,8 @@ A candidate exists only when:
   `adaptiveCurveIrm`;
 - target/source adapters are active, source deallocation is permitted, or
   idle allocation is permitted;
+- the vault's configured `nativePenalty` does not exceed
+  `options.maxNativePenalty` when that threshold is provided;
 - all three target vault caps have a positive absolute cap;
 - all three source allocations are non-zero for market sources;
 - the source pair is not the exact target `(adapter, market)` pair. The same
@@ -295,7 +303,7 @@ folded into vault accounting.
 
 ## Planner
 
-`computeReallocationsVaultV2` uses the same operation algebra and target
+`computeVaultV2Reallocations` uses the same operation algebra and target
 utilization calculation as V1:
 
 - borrow: `B' = B + amount`, `S' = S`;
@@ -304,7 +312,8 @@ utilization calculation as V1:
 If the post-operation utilization is at most the fixed 90% target, it returns
 no calls. Otherwise it discovers friendly sources using the fixed 90% source
 ceiling. If the operation would still have `borrow > supply`, it continues
-from the friendly post-state with an internal 100% source ceiling.
+from the friendly post-state with an internal 100% source ceiling. Both phases
+ignore vaults above the configured `maxNativePenalty` threshold.
 
 The flat calls are capped in discovery order to the required amount. Every
 retained call keeps its full `nativePenalty`. The planner throws:
@@ -320,7 +329,7 @@ The existing `validateReallocations` validates the combined `BlueReallocation`
 union. A V2 market source is rejected only when both its adapter and market
 match the target pair. The same market through another adapter is accepted.
 
-`ReallocationDataVaultV2` exposes:
+`VaultV2ReallocationData` exposes:
 
 - `getPublicReallocationLiquidityVaultV2(...)`, which sums market and idle
   candidates; and
@@ -361,9 +370,16 @@ source and target thresholds plus an internal 100% fallback.
   `computeVaultV1Reallocations` and is marked deprecated.
 - `VaultReallocation` aliases `VaultV1BlueReallocation` and is marked
   deprecated.
-- `computeReallocations` remains the V1 amount-aware planner.
+- `ReallocationData` and `InputReallocationData` alias
+  `VaultV1ReallocationData` and `InputVaultV1ReallocationData`, respectively,
+  and are marked deprecated.
+- `computeReallocations` aliases `computeVaultV1Reallocations` and is marked
+  deprecated.
 - `BluePublicAllocatorReallocation` receives no alias because it was not part
   of the published surface relative to `origin/main`.
+- `liquidity-sdk-viem` migrates its public state declarations to
+  `VaultV1ReallocationData`; this is type-compatible with the deprecated class
+  alias and ships as a patch.
 - The feature is minor for `morpho-ts`, `blue-sdk`, `blue-sdk-viem`, and
   `morpho-sdk`.
 - `blue-sdk-viem` raises its `blue-sdk` peer range to the new minor.
@@ -399,9 +415,9 @@ source and target thresholds plus an internal 100% fallback.
 - [`VaultV2.sol`](https://github.com/morpho-org/vault-v2/blob/main/src/VaultV2.sol)
 - [`MorphoMarketV1AdapterV2.sol`](https://github.com/morpho-org/vault-v2/blob/main/src/adapters/MorphoMarketV1AdapterV2.sol)
 - [TIB-2026-06-16 shared-liquidity target-utilization metric](./TIB-2026-06-16-shared-liquidity-target-utilization-metric.md)
-- `packages/morpho-sdk/src/entities/reallocationData.ts`
-- `packages/morpho-sdk/src/entities/reallocationDataVaultV2.ts`
-- `packages/morpho-sdk/src/helpers/computeReallocations.ts`
-- `packages/morpho-sdk/src/helpers/computeReallocationsVaultV2.ts`
+- `packages/morpho-sdk/src/entities/vaultV1ReallocationData.ts`
+- `packages/morpho-sdk/src/entities/vaultV2ReallocationData.ts`
+- `packages/morpho-sdk/src/helpers/computeVaultV1Reallocations.ts`
+- `packages/morpho-sdk/src/helpers/computeVaultV2Reallocations.ts`
 - `packages/blue-sdk/src/vault/v2/VaultV2Utils.ts`
 - `packages/blue-sdk-viem/src/fetch/vault-v2/VaultV2PublicAllocatorConfig.ts`

@@ -5,10 +5,10 @@ import {
 } from "@morpho-org/blue-sdk";
 import {
   blueAbi,
-  bluePublicAllocatorAbi,
   erc2612Abi,
   permit2Abi,
   publicAllocatorAbi,
+  vaultV2BluePublicAllocatorAbi,
 } from "@morpho-org/blue-sdk-viem";
 import fc from "fast-check";
 import {
@@ -361,7 +361,7 @@ describe("BundlerAction", () => {
       .map(
         (args) =>
           ({
-            type: "bluePublicAllocatorReallocate",
+            type: "vaultV2BluePublicAllocatorReallocate",
             args,
           }) satisfies Action,
       ),
@@ -378,7 +378,7 @@ describe("BundlerAction", () => {
       .map(
         (args) =>
           ({
-            type: "bluePublicAllocatorAllocateFromIdle",
+            type: "vaultV2BluePublicAllocatorAllocateFromIdle",
             args,
           }) satisfies Action,
       ),
@@ -613,7 +613,7 @@ describe("BundlerAction", () => {
   test("encodeBundle aggregates Blue Public Allocator native penalties", () => {
     const tx = BundlerAction.encodeBundle(chainId, [
       {
-        type: "bluePublicAllocatorReallocate",
+        type: "vaultV2BluePublicAllocatorReallocate",
         args: [
           allocator,
           vault,
@@ -627,7 +627,7 @@ describe("BundlerAction", () => {
         ],
       },
       {
-        type: "bluePublicAllocatorAllocateFromIdle",
+        type: "vaultV2BluePublicAllocatorAllocateFromIdle",
         args: [allocator, vault, allocateAdapter, market, 3n, 4n, false],
       },
     ]);
@@ -1042,9 +1042,9 @@ describe("BundlerAction", () => {
           ),
         ],
         [
-          "bluePublicAllocatorReallocate",
+          "vaultV2BluePublicAllocatorReallocate",
           {
-            type: "bluePublicAllocatorReallocate",
+            type: "vaultV2BluePublicAllocatorReallocate",
             args: [
               allocator,
               vault,
@@ -1057,7 +1057,7 @@ describe("BundlerAction", () => {
               false,
             ],
           },
-          BundlerAction.bluePublicAllocatorReallocate(
+          BundlerAction.vaultV2BluePublicAllocatorReallocate(
             allocator,
             vault,
             deallocateAdapter,
@@ -1070,12 +1070,12 @@ describe("BundlerAction", () => {
           ),
         ],
         [
-          "bluePublicAllocatorAllocateFromIdle",
+          "vaultV2BluePublicAllocatorAllocateFromIdle",
           {
-            type: "bluePublicAllocatorAllocateFromIdle",
+            type: "vaultV2BluePublicAllocatorAllocateFromIdle",
             args: [allocator, vault, allocateAdapter, market, 22n, 23n, false],
           },
-          BundlerAction.bluePublicAllocatorAllocateFromIdle(
+          BundlerAction.vaultV2BluePublicAllocatorAllocateFromIdle(
             allocator,
             vault,
             allocateAdapter,
@@ -1558,9 +1558,9 @@ describe("BundlerAction", () => {
     expect(decoded.args).toEqual([vault, withdrawals, market]);
   });
 
-  test("bluePublicAllocatorReallocate", () => {
+  test("vaultV2BluePublicAllocatorReallocate", () => {
     const call = onlyCall(
-      BundlerAction.bluePublicAllocatorReallocate(
+      BundlerAction.vaultV2BluePublicAllocatorReallocate(
         allocator,
         vault,
         deallocateAdapter,
@@ -1573,7 +1573,7 @@ describe("BundlerAction", () => {
       ),
     );
     const decoded = decodeFunctionData({
-      abi: bluePublicAllocatorAbi,
+      abi: vaultV2BluePublicAllocatorAbi,
       data: call.data,
     });
 
@@ -1591,9 +1591,9 @@ describe("BundlerAction", () => {
     ]);
   });
 
-  test("bluePublicAllocatorAllocateFromIdle", () => {
+  test("vaultV2BluePublicAllocatorAllocateFromIdle", () => {
     const call = onlyCall(
-      BundlerAction.bluePublicAllocatorAllocateFromIdle(
+      BundlerAction.vaultV2BluePublicAllocatorAllocateFromIdle(
         allocator,
         vault,
         allocateAdapter,
@@ -1604,7 +1604,7 @@ describe("BundlerAction", () => {
       ),
     );
     const decoded = decodeFunctionData({
-      abi: bluePublicAllocatorAbi,
+      abi: vaultV2BluePublicAllocatorAbi,
       data: call.data,
     });
 

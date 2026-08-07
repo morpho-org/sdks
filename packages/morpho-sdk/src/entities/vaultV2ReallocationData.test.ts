@@ -11,12 +11,12 @@ import type { Address, Hash } from "viem";
 import { zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import { blueBorrow } from "../actions/index.js";
-import { computeReallocationsVaultV2 } from "../helpers/index.js";
+import { computeVaultV2Reallocations } from "../helpers/index.js";
 import {
   InsufficientSharedLiquidityError,
   ReallocationWithdrawExceedsMarketSupplyError,
 } from "../types/index.js";
-import { ReallocationDataVaultV2 } from "./reallocationDataVaultV2.js";
+import { VaultV2ReallocationData } from "./vaultV2ReallocationData.js";
 
 const TIMESTAMP = 1_700_000_000n;
 const ALLOCATOR = "0x0000000000000000000000000000000000000001";
@@ -242,7 +242,7 @@ const makeFixture = ({
   );
 
   return {
-    data: new ReallocationDataVaultV2({
+    data: new VaultV2ReallocationData({
       chainId: ChainId.EthMainnet,
       allocator: ALLOCATOR,
       markets: {
@@ -289,7 +289,7 @@ const makeFixture = ({
   };
 };
 
-describe("ReallocationDataVaultV2.computeVaultV2Reallocations", () => {
+describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
   test("default: returns an action-ready market reallocation and cloned post-state", () => {
     const { data, sourceExpectedAssets, sourceIds, targetIds } = makeFixture();
 
@@ -479,13 +479,39 @@ describe("ReallocationDataVaultV2.computeVaultV2Reallocations", () => {
         .reallocations,
     ).toStrictEqual([]);
   });
+
+  test("behavior: ignores vault liquidity above the native penalty threshold", () => {
+    const { data, sourceExpectedAssets } = makeFixture({
+      idle: 300n,
+      nativePenalty: 8n,
+    });
+
+    expect(
+      data.computeVaultV2Reallocations(targetParams.id, {
+        maxNativePenalty: 7n,
+      }).reallocations,
+    ).toStrictEqual([]);
+    expect(
+      data
+        .computeVaultV2Reallocations(targetParams.id, {
+          maxNativePenalty: 8n,
+        })
+        .reallocations.map(({ from, assets }) => ({
+          from: from.type,
+          assets,
+        })),
+    ).toStrictEqual([
+      { from: "market", assets: sourceExpectedAssets },
+      { from: "idle", assets: 300n },
+    ]);
+  });
 });
 
-describe("computeReallocationsVaultV2", () => {
+describe("computeVaultV2Reallocations", () => {
   test("default: caps friendly reallocations to the 90% target", () => {
     const { data } = makeFixture({ targetSupply: 100n, targetBorrow: 90n });
 
-    const reallocations = computeReallocationsVaultV2({
+    const reallocations = computeVaultV2Reallocations({
       reallocationData: data,
       marketId: targetParams.id,
       operation: "borrow",
@@ -504,7 +530,7 @@ describe("computeReallocationsVaultV2", () => {
       sourceBorrow: 950n,
     });
 
-    const reallocations = computeReallocationsVaultV2({
+    const reallocations = computeVaultV2Reallocations({
       reallocationData: data,
       marketId: targetParams.id,
       operation: "borrow",
@@ -517,7 +543,7 @@ describe("computeReallocationsVaultV2", () => {
   test("behavior: plans a loan-asset withdraw", () => {
     const { data } = makeFixture({ targetSupply: 100n, targetBorrow: 90n });
 
-    const reallocations = computeReallocationsVaultV2({
+    const reallocations = computeVaultV2Reallocations({
       reallocationData: data,
       marketId: targetParams.id,
       operation: "withdraw",
@@ -533,7 +559,7 @@ describe("computeReallocationsVaultV2", () => {
       targetBorrow: 100n,
       idle: 300n,
     });
-    const reallocations = computeReallocationsVaultV2({
+    const reallocations = computeVaultV2Reallocations({
       reallocationData: data,
       marketId: targetParams.id,
       operation: "borrow",
@@ -557,6 +583,33 @@ describe("computeReallocationsVaultV2", () => {
     expect(tx.value).toBe(14n);
   });
 
+  test("behavior: excludes reallocations above the native penalty threshold", () => {
+    const { data } = makeFixture({
+      targetSupply: 100n,
+      targetBorrow: 90n,
+      nativePenalty: 7n,
+    });
+
+    expect(
+      computeVaultV2Reallocations({
+        reallocationData: data,
+        marketId: targetParams.id,
+        operation: "borrow",
+        amount: 1n,
+        options: { maxNativePenalty: 6n },
+      }),
+    ).toStrictEqual([]);
+    expect(
+      computeVaultV2Reallocations({
+        reallocationData: data,
+        marketId: targetParams.id,
+        operation: "borrow",
+        amount: 1n,
+        options: { maxNativePenalty: 7n },
+      })[0]?.assets,
+    ).toBe(1n);
+  });
+
   test("error: InsufficientSharedLiquidityError rejects a partial plan", () => {
     const { data } = makeFixture({
       targetSupply: 100n,
@@ -565,7 +618,7 @@ describe("computeReallocationsVaultV2", () => {
     });
 
     expect(() =>
-      computeReallocationsVaultV2({
+      computeVaultV2Reallocations({
         reallocationData: data,
         marketId: targetParams.id,
         operation: "borrow",
@@ -578,7 +631,7 @@ describe("computeReallocationsVaultV2", () => {
     const { data } = makeFixture({ targetSupply: 100n });
 
     expect(() =>
-      computeReallocationsVaultV2({
+      computeVaultV2Reallocations({
         reallocationData: data,
         marketId: targetParams.id,
         operation: "withdraw",
@@ -591,7 +644,7 @@ describe("computeReallocationsVaultV2", () => {
     const { data } = makeFixture();
 
     expect(
-      computeReallocationsVaultV2({
+      computeVaultV2Reallocations({
         reallocationData: data,
         marketId: targetParams.id,
         operation: "borrow",
@@ -602,7 +655,7 @@ describe("computeReallocationsVaultV2", () => {
   });
 });
 
-describe("ReallocationDataVaultV2 liquidity metrics", () => {
+describe("VaultV2ReallocationData liquidity metrics", () => {
   test("default: sums idle and market liquidity in target-utilization math", () => {
     const { data, sourceExpectedAssets } = makeFixture({
       targetSupply: 100n,

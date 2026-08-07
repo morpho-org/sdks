@@ -1,12 +1,12 @@
 import { ChainId, MarketParams } from "@morpho-org/blue-sdk";
-import { bluePublicAllocatorAbi as canonicalBluePublicAllocatorAbi } from "@morpho-org/blue-sdk-viem";
+import { vaultV2BluePublicAllocatorAbi as canonicalVaultV2BluePublicAllocatorAbi } from "@morpho-org/blue-sdk-viem";
 import { decodeFunctionData } from "viem";
 import { describe, expect, test } from "vitest";
 import {
-  bluePublicAllocatorAbi,
   bundler3Abi,
   generalAdapter1Abi,
   publicAllocatorAbi,
+  vaultV2BluePublicAllocatorAbi,
 } from "../../abis.js";
 import type { BlueReallocation } from "../../types/index.js";
 import { blueBorrow } from "./borrow.js";
@@ -98,13 +98,13 @@ describe("blueBorrow Blue Public Allocator", () => {
     expect(publicAllocatorCall.args[0]).toBe(vaultV1);
     expect(
       decodeFunctionData({
-        abi: bluePublicAllocatorAbi,
+        abi: vaultV2BluePublicAllocatorAbi,
         data: calls[1]!.data,
       }).functionName,
     ).toBe("reallocate");
 
     const idleCall = decodeFunctionData({
-      abi: bluePublicAllocatorAbi,
+      abi: vaultV2BluePublicAllocatorAbi,
       data: calls[2]!.data,
     });
     expect(idleCall.functionName).toBe("allocateFromIdle");
@@ -125,6 +125,8 @@ describe("blueBorrow Blue Public Allocator", () => {
   });
 
   test("re-exports the canonical ABI", () => {
-    expect(bluePublicAllocatorAbi).toBe(canonicalBluePublicAllocatorAbi);
+    expect(vaultV2BluePublicAllocatorAbi).toBe(
+      canonicalVaultV2BluePublicAllocatorAbi,
+    );
   });
 });

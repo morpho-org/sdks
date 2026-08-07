@@ -36,7 +36,7 @@ import {
   computeMaxSupplySharePrice,
   computeMinBorrowSharePrice,
   computeMinWithdrawSharePrice,
-  computeReallocations,
+  computeVaultV1Reallocations,
   validateAccrualPosition,
   validateChainId,
   validateNativeAsset,
@@ -88,7 +88,7 @@ import {
   type VaultV1BlueReallocation,
   WithdrawExceedsCollateralError,
 } from "../../types/index.js";
-import { ReallocationData } from "../reallocationData.js";
+import { VaultV1ReallocationData } from "../vaultV1ReallocationData.js";
 
 export interface BlueActions {
   /**
@@ -467,7 +467,7 @@ export interface BlueActions {
   };
 
   /**
-   * Fetches all on-chain data needed to construct a {@link ReallocationData}
+   * Fetches all on-chain data needed to construct a {@link VaultV1ReallocationData}
    * for computing vault reallocations via the public allocator.
    *
    * The target market is refetched internally at `block.number` so the
@@ -484,7 +484,7 @@ export interface BlueActions {
    *
    * @param params.vaultAddresses - Addresses of MetaMorpho vaults that allocate to this market.
    * @param params.block - The block to fetch data at (number and timestamp).
-   * @returns A ReallocationData instance populated with all required data.
+   * @returns A VaultV1ReallocationData instance populated with all required data.
    * @throws {ChainIdMismatchError} when the client chain does not match this market.
    */
   getReallocationData: (params: {
@@ -493,7 +493,7 @@ export interface BlueActions {
       readonly number: bigint;
       readonly timestamp: bigint;
     };
-  }) => Promise<ReallocationData>;
+  }) => Promise<VaultV1ReallocationData>;
 
   /**
    * Computes vault reallocations for a borrow or withdraw on this market.
@@ -522,7 +522,7 @@ export interface BlueActions {
    */
   getReallocations: (
     params: {
-      reallocationData: ReallocationData;
+      reallocationData: VaultV1ReallocationData;
       options?: ReallocationComputeOptions;
     } & (
       | {
@@ -1678,7 +1678,7 @@ export class MorphoBlue implements BlueActions {
       readonly number: bigint;
       readonly timestamp: bigint;
     };
-  }): Promise<ReallocationData> {
+  }): Promise<VaultV1ReallocationData> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     const client = this.client.viemClient;
@@ -1742,7 +1742,7 @@ export class MorphoBlue implements BlueActions {
       ),
     ]);
 
-    // Assemble records for ReallocationData.
+    // Assemble records for VaultV1ReallocationData.
     const marketsRecord: Record<MarketId, Market | undefined> = {
       [targetMarketId]: targetMarket,
     };
@@ -1771,7 +1771,7 @@ export class MorphoBlue implements BlueActions {
       (positionsRecord[vault] ??= {})[mid] = position;
     }
 
-    return new ReallocationData({
+    return new VaultV1ReallocationData({
       chainId: this.chainId,
       markets: marketsRecord,
       vaults: vaultsRecord,
@@ -1801,7 +1801,7 @@ export class MorphoBlue implements BlueActions {
    */
   getReallocations(
     params: {
-      reallocationData: ReallocationData;
+      reallocationData: VaultV1ReallocationData;
       options?: ReallocationComputeOptions;
     } & (
       | {
@@ -1823,7 +1823,7 @@ export class MorphoBlue implements BlueActions {
     const options = { enabled: true, ...params.options };
 
     if (params.borrowAmount !== undefined) {
-      return computeReallocations({
+      return computeVaultV1Reallocations({
         reallocationData: params.reallocationData,
         marketId,
         operation: "borrow",
@@ -1832,7 +1832,7 @@ export class MorphoBlue implements BlueActions {
       });
     }
 
-    return computeReallocations({
+    return computeVaultV1Reallocations({
       reallocationData: params.reallocationData,
       marketId,
       operation: params.operation,

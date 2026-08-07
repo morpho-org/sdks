@@ -54,6 +54,12 @@ export interface PublicAllocatorOptionsVaultV2 {
 
   /** Vault V2 addresses to consider. Defaults to every vault in the reallocation data. */
   readonly reallocatableVaults?: readonly Address[];
+
+  /**
+   * Maximum native-token penalty accepted for each BluePublicAllocator call.
+   * Vaults with a higher configured penalty are ignored. Defaults to no limit.
+   */
+  readonly maxNativePenalty?: bigint;
 }
 
 /**

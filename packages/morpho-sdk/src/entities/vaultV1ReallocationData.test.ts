@@ -26,7 +26,11 @@ import {
   UnknownReallocationVaultError,
   UnknownReallocationVaultMarketConfigError,
 } from "../types/index.js";
-import { ReallocationData } from "./reallocationData.js";
+import {
+  type InputReallocationData,
+  ReallocationData,
+  VaultV1ReallocationData,
+} from "./vaultV1ReallocationData.js";
 
 const TIMESTAMP = 1_700_000_000n;
 const VAULT: Address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -239,14 +243,14 @@ type ApplyPublicReallocationParams = {
   readonly timestamp: bigint;
 };
 
-class TestReallocationData extends ReallocationData {
+class TestReallocationData extends VaultV1ReallocationData {
   public applyPublicReallocationForTest(params: ApplyPublicReallocationParams) {
     return this.applyPublicReallocation(params);
   }
 }
 
 const applyPublicReallocation = (
-  data: ReallocationData,
+  data: VaultV1ReallocationData,
   withdrawal: PublicReallocation,
 ) =>
   new TestReallocationData(data).applyPublicReallocationForTest({
@@ -256,7 +260,16 @@ const applyPublicReallocation = (
     timestamp: TIMESTAMP,
   });
 
-describe("ReallocationData unit coverage", () => {
+describe("VaultV1ReallocationData unit coverage", () => {
+  test("behavior: preserves the deprecated Vault V1 class and input aliases", () => {
+    const input = {
+      chainId: ChainId.EthMainnet,
+    } satisfies InputReallocationData;
+
+    expect(ReallocationData).toBe(VaultV1ReallocationData);
+    expect(new ReallocationData(input)).toBeInstanceOf(VaultV1ReallocationData);
+  });
+
   test("computeVaultV1Reallocations preserves the deprecated alias behavior", () => {
     const input = {
       targetSupply: 1_000n * MathLib.WAD,
@@ -264,10 +277,10 @@ describe("ReallocationData unit coverage", () => {
       sourceSupply: 1_000n * MathLib.WAD,
       sourceBorrow: 500n * MathLib.WAD,
     };
-    const canonical = new ReallocationData(
+    const canonical = new VaultV1ReallocationData(
       makeInput(input),
     ).computeVaultV1Reallocations(targetParams.id, { timestamp: TIMESTAMP });
-    const deprecated = new ReallocationData(
+    const deprecated = new VaultV1ReallocationData(
       makeInput(input),
     ).getMarketPublicReallocations(targetParams.id, { timestamp: TIMESTAMP });
 
@@ -353,7 +366,7 @@ describe("ReallocationData unit coverage", () => {
     const position = new Position(positionInput);
     const vault = new Vault(vaultInput);
     const vaultMarketConfig = new VaultMarketConfig(vaultMarketConfigInput);
-    const data = new ReallocationData({
+    const data = new VaultV1ReallocationData({
       chainId: ChainId.EthMainnet,
       markets: { [targetParams.id]: market },
       vaults: { [VAULT]: vault },
@@ -394,7 +407,7 @@ describe("ReallocationData unit coverage", () => {
   });
 
   test("returns empty reallocations when disabled without reading missing target market", () => {
-    const data = new ReallocationData({ chainId: ChainId.EthMainnet });
+    const data = new VaultV1ReallocationData({ chainId: ChainId.EthMainnet });
     const missingMarket = `0x${"55".repeat(32)}` as MarketId;
 
     expect(
@@ -403,7 +416,9 @@ describe("ReallocationData unit coverage", () => {
   });
 
   test("clones inputs and exposes getters without sharing mutable entity instances", () => {
-    const emptyData = new ReallocationData({ chainId: ChainId.EthMainnet });
+    const emptyData = new VaultV1ReallocationData({
+      chainId: ChainId.EthMainnet,
+    });
     expect(emptyData.markets).toEqual({});
     expect(emptyData.vaults).toEqual({});
     expect(emptyData.positions).toEqual({});
@@ -415,7 +430,7 @@ describe("ReallocationData unit coverage", () => {
       sourceSupply: 1000n * MathLib.WAD,
       sourceBorrow: 500n * MathLib.WAD,
     });
-    const data = new ReallocationData({
+    const data = new VaultV1ReallocationData({
       ...input,
       markets: { ...input.markets, ["0x00" as MarketId]: undefined },
       vaults: { ...input.vaults, [zeroAddress]: undefined },
@@ -485,7 +500,7 @@ describe("ReallocationData unit coverage", () => {
       maxIn: 0n,
       maxOut: 10n * MathLib.WAD,
     });
-    const data = new ReallocationData(input);
+    const data = new VaultV1ReallocationData(input);
 
     expect(
       data.getMarketPublicReallocations(targetParams.id, { enabled: false }),
@@ -609,7 +624,7 @@ describe("ReallocationData unit coverage", () => {
       }),
     };
 
-    const reallocationResult = new ReallocationData(
+    const reallocationResult = new VaultV1ReallocationData(
       input,
     ).getMarketPublicReallocations(targetParams.id, {
       timestamp: TIMESTAMP,
@@ -642,7 +657,7 @@ describe("ReallocationData unit coverage", () => {
     ).toBe(13n);
 
     expect(
-      new ReallocationData({
+      new VaultV1ReallocationData({
         ...input,
         vaultMarketConfigs: {
           [VAULT]: {
@@ -662,7 +677,7 @@ describe("ReallocationData unit coverage", () => {
     ).toEqual([]);
 
     expect(
-      new ReallocationData({
+      new VaultV1ReallocationData({
         ...input,
         vaultMarketConfigs: {
           [VAULT]: {
@@ -689,7 +704,7 @@ describe("ReallocationData unit coverage", () => {
     ]);
 
     expect(
-      new ReallocationData({
+      new VaultV1ReallocationData({
         ...input,
         vaultMarketConfigs: {
           [VAULT]: {
@@ -731,7 +746,7 @@ describe("ReallocationData unit coverage", () => {
 
     expect(() =>
       applyPublicReallocation(
-        new ReallocationData({
+        new VaultV1ReallocationData({
           ...baseInput,
           vaults: {
             [VAULT]: makeVault({ withoutPublicAllocatorConfig: true }),
@@ -743,7 +758,7 @@ describe("ReallocationData unit coverage", () => {
 
     expect(() =>
       applyPublicReallocation(
-        new ReallocationData({
+        new VaultV1ReallocationData({
           ...baseInput,
           vaultMarketConfigs: {
             [VAULT]: {
@@ -764,7 +779,7 @@ describe("ReallocationData unit coverage", () => {
 
     expect(() =>
       applyPublicReallocation(
-        new ReallocationData({
+        new VaultV1ReallocationData({
           ...baseInput,
           vaultMarketConfigs: {
             [VAULT]: {
@@ -785,7 +800,7 @@ describe("ReallocationData unit coverage", () => {
 
     expect(() =>
       applyPublicReallocation(
-        new ReallocationData({
+        new VaultV1ReallocationData({
           ...baseInput,
           vaultMarketConfigs: {
             [VAULT]: {
@@ -806,7 +821,7 @@ describe("ReallocationData unit coverage", () => {
 
     expect(() =>
       applyPublicReallocation(
-        new ReallocationData({
+        new VaultV1ReallocationData({
           ...baseInput,
           vaultMarketConfigs: {
             [VAULT]: {
@@ -826,7 +841,7 @@ describe("ReallocationData unit coverage", () => {
     ).toThrow(DisabledReallocationMarketError);
 
     const sameMarketData = new TestReallocationData(
-      new ReallocationData(baseInput),
+      new VaultV1ReallocationData(baseInput),
     ).applyPublicReallocationForTest({
       vault: VAULT,
       supplyMarketId: sourceParams.id,

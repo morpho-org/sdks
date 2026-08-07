@@ -4,10 +4,10 @@ import {
 } from "@morpho-org/blue-sdk";
 import {
   blueAbi,
-  bluePublicAllocatorAbi,
   erc2612Abi,
   permit2Abi,
   publicAllocatorAbi,
+  vaultV2BluePublicAllocatorAbi,
 } from "@morpho-org/blue-sdk-viem";
 import {
   type Address,
@@ -343,11 +343,13 @@ export namespace BundlerAction {
       case "reallocateTo": {
         return BundlerAction.publicAllocatorReallocateTo(chainId, ...args);
       }
-      case "bluePublicAllocatorReallocate": {
-        return BundlerAction.bluePublicAllocatorReallocate(...args);
+      case "vaultV2BluePublicAllocatorReallocate": {
+        return BundlerAction.vaultV2BluePublicAllocatorReallocate(...args);
       }
-      case "bluePublicAllocatorAllocateFromIdle": {
-        return BundlerAction.bluePublicAllocatorAllocateFromIdle(...args);
+      case "vaultV2BluePublicAllocatorAllocateFromIdle": {
+        return BundlerAction.vaultV2BluePublicAllocatorAllocateFromIdle(
+          ...args,
+        );
       }
       case "wrapNative": {
         return BundlerAction.wrapNative(chainId, ...args);
@@ -1449,7 +1451,7 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a Blue Public Allocator market-to-market reallocation.
+   * Encodes a Vault V2 Blue Public Allocator market-to-market reallocation.
    *
    * @param allocator - Explicit Blue Public Allocator contract address.
    * @param vault - Vault whose liquidity is reallocated.
@@ -1481,7 +1483,7 @@ export namespace BundlerAction {
    *   collateralToken: "0x0000000000000000000000000000000000000009",
    * };
    *
-   * const calls = BundlerAction.bluePublicAllocatorReallocate(
+   * const calls = BundlerAction.vaultV2BluePublicAllocatorReallocate(
    *   allocator,
    *   vault,
    *   sourceAdapter,
@@ -1495,7 +1497,7 @@ export namespace BundlerAction {
    * ```
    */
   // biome-ignore lint/complexity/useMaxParams: mirrors the protocol call
-  export function bluePublicAllocatorReallocate(
+  export function vaultV2BluePublicAllocatorReallocate(
     allocator: Address,
     vault: Address,
     deallocateAdapter: Address,
@@ -1510,7 +1512,7 @@ export namespace BundlerAction {
       {
         to: allocator,
         data: encodeFunctionData({
-          abi: bluePublicAllocatorAbi,
+          abi: vaultV2BluePublicAllocatorAbi,
           functionName: "reallocate",
           args: [
             vault,
@@ -1529,7 +1531,7 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a Blue Public Allocator allocation from vault idle liquidity.
+   * Encodes a Vault V2 Blue Public Allocator allocation from vault idle liquidity.
    *
    * @param allocator - Explicit Blue Public Allocator contract address.
    * @param vault - Vault whose idle liquidity is allocated.
@@ -1554,7 +1556,7 @@ export namespace BundlerAction {
    *   lltv: 860_000000000000000000n,
    * };
    *
-   * const calls = BundlerAction.bluePublicAllocatorAllocateFromIdle(
+   * const calls = BundlerAction.vaultV2BluePublicAllocatorAllocateFromIdle(
    *   allocator,
    *   vault,
    *   targetAdapter,
@@ -1566,7 +1568,7 @@ export namespace BundlerAction {
    * ```
    */
   // biome-ignore lint/complexity/useMaxParams: mirrors the protocol call
-  export function bluePublicAllocatorAllocateFromIdle(
+  export function vaultV2BluePublicAllocatorAllocateFromIdle(
     allocator: Address,
     vault: Address,
     adapter: Address,
@@ -1579,7 +1581,7 @@ export namespace BundlerAction {
       {
         to: allocator,
         data: encodeFunctionData({
-          abi: bluePublicAllocatorAbi,
+          abi: vaultV2BluePublicAllocatorAbi,
           functionName: "allocateFromIdle",
           args: [vault, adapter, market, assets],
         }),

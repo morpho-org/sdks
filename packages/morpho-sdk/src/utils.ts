@@ -64,8 +64,11 @@ export {
   transformValue,
   values,
 } from "@morpho-org/morpho-ts";
-export { computeReallocations } from "./helpers/computeReallocations.js";
-export { computeReallocationsVaultV2 } from "./helpers/computeReallocationsVaultV2.js";
+export {
+  computeReallocations,
+  computeVaultV1Reallocations,
+} from "./helpers/computeVaultV1Reallocations.js";
+export { computeVaultV2Reallocations } from "./helpers/computeVaultV2Reallocations.js";
 export { addTransactionMetadata } from "./helpers/metadata.js";
 export {
   computeMaxRepaySharePrice,

@@ -37,7 +37,7 @@ export const buildReallocationActions = (
     if (reallocation.type === "bluePublicAllocator") {
       if (reallocation.from.type === "market") {
         actions.push({
-          type: "bluePublicAllocatorReallocate",
+          type: "vaultV2BluePublicAllocatorReallocate",
           args: [
             reallocation.allocator,
             reallocation.vault,
@@ -52,7 +52,7 @@ export const buildReallocationActions = (
         });
       } else {
         actions.push({
-          type: "bluePublicAllocatorAllocateFromIdle",
+          type: "vaultV2BluePublicAllocatorAllocateFromIdle",
           args: [
             reallocation.allocator,
             reallocation.vault,
