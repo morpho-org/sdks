@@ -1,7 +1,10 @@
 export type { InputMarketParams } from "@morpho-org/blue-sdk";
 export type {
+  BlueReallocation,
   RequirementSignature,
   VaultReallocation,
+  VaultV1BlueReallocation,
+  VaultV2BlueReallocation,
 } from "@morpho-org/morpho-sdk";
 export type { TransactionResult } from "@tetherto/wdk-wallet";
 export type {

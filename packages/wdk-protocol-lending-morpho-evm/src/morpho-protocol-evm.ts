@@ -6,6 +6,7 @@ import {
 import { fetchMarket } from "@morpho-org/blue-sdk-viem";
 import {
   type BlueAuthorizationAction,
+  type BlueReallocation,
   type ERC20ApprovalAction,
   type Metadata,
   type MorphoClientType,
@@ -13,7 +14,6 @@ import {
   type Requirement,
   type RequirementSignature,
   type Transaction,
-  type VaultReallocation,
 } from "@morpho-org/morpho-sdk";
 import type {
   BorrowResult,
@@ -156,8 +156,8 @@ export interface MorphoBorrowOptions {
   amount: number | bigint;
   /** The address on behalf of which the borrow operation should be performed. Must match the wallet account address when set. */
   onBehalfOf?: string;
-  /** Optional MetaMorpho Vault V1 reallocations to include in the borrow action. */
-  reallocations?: readonly VaultReallocation[];
+  /** Optional Vault V1 PublicAllocator or Vault V2 BluePublicAllocator reallocations to include in the borrow action. */
+  reallocations?: readonly BlueReallocation[];
   /** Signature returned by a Morpho SDK authorization requirement, folded into the bundle as `setAuthorizationWithSig`. */
   requirementSignature?: RequirementSignature;
   /** Optional Morpho SDK slippage tolerance in WAD precision. */
