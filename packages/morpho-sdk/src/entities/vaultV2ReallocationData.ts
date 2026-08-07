@@ -18,8 +18,7 @@ import {
   DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
 } from "../helpers/constant.js";
 import type {
-  PublicAllocatorOptionsVaultV2,
-  ReallocationComputeOptionsVaultV2,
+  VaultV2BluePublicAllocatorOptions,
   VaultV2BlueReallocation,
 } from "../types/index.js";
 import {
@@ -391,7 +390,7 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
    */
   public computeVaultV2Reallocations(
     marketId: MarketId,
-    options: PublicAllocatorOptionsVaultV2 = {},
+    options: VaultV2BluePublicAllocatorOptions = {},
   ) {
     return this._computeVaultV2Reallocations({
       marketId,
@@ -416,7 +415,7 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
   }: {
     readonly marketId: MarketId;
     readonly maxWithdrawalUtilization: bigint;
-    readonly options?: PublicAllocatorOptionsVaultV2;
+    readonly options?: VaultV2BluePublicAllocatorOptions;
   }): {
     readonly reallocations: readonly VaultV2BlueReallocation[];
     readonly data: VaultV2ReallocationData;
@@ -482,7 +481,7 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
    */
   public getPublicReallocationLiquidityVaultV2(
     marketId: MarketId,
-    options?: PublicAllocatorOptionsVaultV2,
+    options?: VaultV2BluePublicAllocatorOptions,
   ) {
     return this.computeVaultV2Reallocations(
       marketId,
@@ -508,7 +507,7 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
   public getAvailableLiquidityToUtilizationVaultV2(
     marketId: MarketId,
     utilization: bigint = DEFAULT_SUPPLY_TARGET_UTILIZATION,
-    options?: ReallocationComputeOptionsVaultV2,
+    options?: VaultV2BluePublicAllocatorOptions,
   ) {
     const market = this.getMarket(marketId).accrueInterest(options?.timestamp);
     if (DEFAULT_SUPPLY_TARGET_UTILIZATION > utilization)
