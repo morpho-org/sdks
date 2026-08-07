@@ -1,3 +1,4 @@
+import { marketParamsAbi as canonicalMarketParamsAbi } from "@morpho-org/morpho-ts/abis";
 import { encodeAbiParameters } from "viem";
 import { describe, expect, test } from "vitest";
 import { LOAN_TOKEN, marketParams } from "../__test__/fixtures.js";
@@ -9,6 +10,10 @@ import type { MarketId } from "../types.js";
 import { MarketParams, marketParamsAbi } from "./MarketParams.js";
 
 describe("MarketParams", () => {
+  test("re-exports the canonical market params ABI", () => {
+    expect(marketParamsAbi).toBe(canonicalMarketParamsAbi);
+  });
+
   test("get returns the cached params by id", () => {
     const params = new MarketParams(marketParams());
 

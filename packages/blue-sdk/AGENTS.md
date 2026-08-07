@@ -12,6 +12,7 @@
 - Getters may throw typed `Unknown*Error`; nullable lookup paths should use `_try` or `tryGet*`-style helpers deliberately.
 - Vault V2 absolute/relative allocation-cap math is canonical in `VaultV2Utils.allocationHeadroom`; consumers such as `AccrualVaultV2.maxDeposit` and shared-liquidity simulation delegate to it.
 - Vault V2 BluePublicAllocator config interfaces are readonly identity-bearing projections: they include the explicit allocator and vault, plus the adapter and derived market-params id for pair-scoped state.
+- `marketParamsAbi` is owned by `@morpho-org/morpho-ts/abis` and re-exported from `MarketParams.ts` for backward compatibility; do not define a second copy in this package.
 
 ## Continuous Improvement
 

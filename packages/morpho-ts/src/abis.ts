@@ -4038,33 +4038,17 @@ export const metaMorphoAbi = [
   },
 ] as const;
 
-const morphoBlueMarketParamsAbiComponents = [
-  {
-    internalType: "address",
-    name: "loanToken",
-    type: "address",
-  },
-  {
-    internalType: "address",
-    name: "collateralToken",
-    type: "address",
-  },
-  {
-    internalType: "address",
-    name: "oracle",
-    type: "address",
-  },
-  {
-    internalType: "address",
-    name: "irm",
-    type: "address",
-  },
-  {
-    internalType: "uint256",
-    name: "lltv",
-    type: "uint256",
-  },
-] as const;
+/** ABI tuple definition for Morpho Blue market params. */
+export const marketParamsAbi = {
+  type: "tuple",
+  components: [
+    { type: "address", name: "loanToken" },
+    { type: "address", name: "collateralToken" },
+    { type: "address", name: "oracle" },
+    { type: "address", name: "irm" },
+    { type: "uint256", name: "lltv" },
+  ],
+} as const;
 
 /** PublicAllocator ABI used to read vault allocator configuration and flow caps. */
 export const publicAllocatorAbi = [
@@ -4470,7 +4454,7 @@ export const publicAllocatorAbi = [
       {
         components: [
           {
-            components: morphoBlueMarketParamsAbiComponents,
+            components: marketParamsAbi.components,
             internalType: "struct MarketParams",
             name: "marketParams",
             type: "tuple",
@@ -4486,7 +4470,7 @@ export const publicAllocatorAbi = [
         type: "tuple[]",
       },
       {
-        components: morphoBlueMarketParamsAbiComponents,
+        components: marketParamsAbi.components,
         internalType: "struct MarketParams",
         name: "supplyMarketParams",
         type: "tuple",
@@ -4711,7 +4695,7 @@ export const vaultV2BluePublicAllocatorAbi = [
         type: "address",
       },
       {
-        components: morphoBlueMarketParamsAbiComponents,
+        components: marketParamsAbi.components,
         internalType: "struct MarketParams",
         name: "deallocateMarketParams",
         type: "tuple",
@@ -4722,7 +4706,7 @@ export const vaultV2BluePublicAllocatorAbi = [
         type: "address",
       },
       {
-        components: morphoBlueMarketParamsAbiComponents,
+        components: marketParamsAbi.components,
         internalType: "struct MarketParams",
         name: "allocateMarketParams",
         type: "tuple",
@@ -4751,7 +4735,7 @@ export const vaultV2BluePublicAllocatorAbi = [
         type: "address",
       },
       {
-        components: morphoBlueMarketParamsAbiComponents,
+        components: marketParamsAbi.components,
         internalType: "struct MarketParams",
         name: "marketParams",
         type: "tuple",

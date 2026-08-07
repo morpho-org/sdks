@@ -16,7 +16,7 @@
 Two consequences:
 
 - Liquidity providers cannot participate in a Morpho market through the SDK without leaving the typed surface (no `Transaction<TAction>`, no `getRequirements`, no PublicAllocator reallocation help).
-- Suppliers who hit on-market illiquidity on a withdraw cannot reuse the SDK's shared-liquidity machinery (`getReallocationData` / `getReallocations` / `computeVaultV1Reallocations`) — that machinery is hard-coded to borrow semantics today.
+- Suppliers who hit on-market illiquidity on a withdraw cannot reuse the SDK's shared-liquidity machinery (`getReallocationData` / `getReallocations` / `computeReallocations`) — that machinery is hard-coded to borrow semantics today.
 
 This TIB freezes the design decision for the missing pair before the implementation lands.
 
@@ -28,7 +28,7 @@ This TIB freezes the design decision for the missing pair before the implementat
 - Route both through bundler3 / `GeneralAdapter1` (`morphoSupply` / `morphoWithdraw`) so they compose with the rest of the bundle action set.
 - Support **native ETH wrapping** on supply when the loan token is the chain's wNative — same contract as `marketV1SupplyCollateral`.
 - Support **optional PublicAllocator reallocations** on withdraw, so a withdraw whose amount exceeds on-market liquidity can succeed by first pulling liquidity from other markets of the same loan asset.
-- Reuse `computeVaultV1Reallocations` for the withdraw direction (single source of truth), not a fork of the helper.
+- Reuse `computeReallocations` for the withdraw direction (single source of truth), not a fork of the helper.
 - Maintain 100% JSDoc and tests (unit colocated + fork e2e) on the new surface in the same PR.
 
 **Non-Goals**
@@ -68,10 +68,10 @@ A withdraw with native unwrap is **out of scope** for this PR. It requires routi
 
 PublicAllocator reallocations apply identically: they prepend `reallocateTo(vault, fee, withdrawals[], targetMarketParams)` actions before `morphoWithdraw`, and their fees accumulate in `tx.value`. `validateReallocations(target=withdrawMarketId)` is reused as-is — sort, no-target-market, non-empty, non-negative fee, strictly-ascending market IDs.
 
-The shared-liquidity planner `computeVaultV1Reallocations` gains an `operation: "borrow" | "withdraw"` discriminator. The signature becomes:
+The shared-liquidity planner `computeReallocations` gains an `operation: "borrow" | "withdraw"` discriminator. The signature becomes:
 
 ```ts
-computeVaultV1Reallocations({
+computeReallocations({
   reallocationData,
   marketId,
   operation: "borrow" | "withdraw",
@@ -135,7 +135,7 @@ Messages follow the canonical `"<what> <values>. <Imperative remediation>."` sha
 
 - **Phase 1 — Types + errors.** Extend `src/types/action.ts` (action interfaces + `AssetsOrSharesArgs`) and `src/types/error.ts`. Unblocks barrel re-exports for the rest of the work.
 - **Phase 2 — Helpers.** Add `computeMaxSupplySharePrice` and `computeMinWithdrawSharePrice` in `src/helpers/slippage.ts`; `validateWithdrawAmount`, `validateWithdrawShares`, and the unified `validateNativeAsset` in `src/helpers/validate.ts`. Unit tests colocated.
-- **Phase 3 — `computeVaultV1Reallocations` extension.** Add the `operation` discriminator; update the borrow caller to pass `"borrow"`; cover the withdraw branch with new tests.
+- **Phase 3 — `computeReallocations` extension.** Add the `operation` discriminator; update the borrow caller to pass `"borrow"`; cover the withdraw branch with new tests.
 - **Phase 4 — Action builders.** `src/actions/marketV1/supply.ts` and `src/actions/marketV1/withdraw.ts` + colocated unit tests + barrel update.
 - **Phase 5 — Entity wiring.** Two new methods on `MorphoMarketV1` (`supply`, `withdraw`); generalize `getReallocations` to take `{ amount, operation }`.
 - **Phase 6 — Fork tests.** Anvil mainnet at the pinned block; reuse `CbbtcUsdcMarketV1`, `SteakhouseUsdcVaultV1`, `WbtcUsdcSourceMarket`, `WstethUsdcSourceMarket` from existing fixtures. Cover happy paths, modes, native, permit2, reallocation single/multi/fee, `InsufficientSharedLiquidityError`, missing `setAuthorization`.
@@ -143,7 +143,7 @@ Messages follow the canonical `"<what> <values>. <Imperative remediation>."` sha
 
 ## Considered Alternatives
 
-### Alternative 1: Fork `computeVaultV1Reallocations` into a withdraw-specific helper
+### Alternative 1: Fork `computeReallocations` into a withdraw-specific helper
 
 Add `computeWithdrawReallocations` alongside the existing function.
 
@@ -178,7 +178,7 @@ Bundle the native-unwrap path with `withdraw` to ship a complete native story.
 
 - **Slippage is bounded on both sides.** Supply uses `maxSharePriceE27 = (assets / shares) × (WAD + slippage)` (upper bound, RAY-scaled), so a malicious actor inflating the share price via a donation between transaction construction and execution cannot dilute the supplier. Withdraw uses `minSharePriceE27 = (assets / shares) × (WAD − slippage)` (lower bound), capping the loss to slippage tolerance. Both helpers cap at `MAX_ABSOLUTE_SHARE_PRICE` like the existing repay helper.
 - **Authorization is enforced.** `withdraw` requires `setAuthorization(generalAdapter1, true)` on Morpho. `getRequirements` returns the typed authorization tx so integrators send it before the bundle; if they don't, the bundle reverts on the Morpho-side auth check.
-- **Reallocation fees are paid only when they can actually unblock the withdraw.** `computeVaultV1Reallocations` continues to throw `InsufficientSharedLiquidityError` when the aggregate reallocatable liquidity strictly under-covers the absolute shortfall — preventing the user from paying ETH fees to the PublicAllocator on a withdraw that would still revert.
+- **Reallocation fees are paid only when they can actually unblock the withdraw.** `computeReallocations` continues to throw `InsufficientSharedLiquidityError` when the aggregate reallocatable liquidity strictly under-covers the absolute shortfall — preventing the user from paying ETH fees to the PublicAllocator on a withdraw that would still revert.
 - **`validateReallocations` is reused unchanged.** Strict-ascending market IDs, no withdrawal on the target market, non-empty withdrawals, non-negative fee.
 - **Input validation runs before any encoding.** Every error is a named class (`Error` subclass) that integrators can pattern-match on; messages never leak raw `Error` strings from upstream.
 
@@ -194,7 +194,7 @@ Bundle the native-unwrap path with `withdraw` to ship a complete native story.
 - `packages/morpho-sdk/src/actions/marketV1/borrow.ts` — closest existing template (slippage + reallocation).
 - `packages/morpho-sdk/src/actions/marketV1/repay.ts` — assets/shares mode reference.
 - `packages/morpho-sdk/src/actions/marketV1/supplyCollateral.ts` — native wrap reference.
-- `packages/morpho-sdk/src/helpers/computeVaultV1Reallocations.ts` — extended in Phase 3.
+- `packages/morpho-sdk/src/helpers/computeReallocations.ts` — extended in Phase 3.
 - `packages/morpho-sdk/src/helpers/slippage.ts` — extended in Phase 2.
 - [`Morpho.sol`](https://github.com/morpho-org/morpho-blue/blob/main/src/Morpho.sol) — `supply` / `withdraw` reference.
 - [`GeneralAdapter1.sol`](https://github.com/morpho-org/bundler3/blob/main/src/adapters/GeneralAdapter1.sol) — `morphoSupply` / `morphoWithdraw` reference.
