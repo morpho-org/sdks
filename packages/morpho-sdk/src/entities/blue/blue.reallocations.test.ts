@@ -4,7 +4,7 @@ import { describe, expect, test } from "vitest";
 import { CbbtcUsdcBlue } from "../../../test/fixtures/blue.js";
 import { morphoViemExtension } from "../../client/index.js";
 import { ChainIdMismatchError } from "../../types/index.js";
-import { ReallocationData } from "../reallocationData.js";
+import { VaultV1ReallocationData } from "../vaultV1ReallocationData.js";
 
 describe("MorphoBlue.getReallocations", () => {
   test("error: ChainIdMismatchError when reallocation data chain differs from market chain", () => {
@@ -17,7 +17,9 @@ describe("MorphoBlue.getReallocations", () => {
 
     expect(() =>
       market.getReallocations({
-        reallocationData: new ReallocationData({ chainId: mainnet.id + 1 }),
+        reallocationData: new VaultV1ReallocationData({
+          chainId: mainnet.id + 1,
+        }),
         borrowAmount: 1n,
       }),
     ).toThrow(ChainIdMismatchError);

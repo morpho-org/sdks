@@ -1,5 +1,5 @@
 import { type MarketId, MarketUtils, MathLib } from "@morpho-org/blue-sdk";
-import type { ReallocationDataVaultV2 } from "../entities/reallocationDataVaultV2.js";
+import type { VaultV2ReallocationData } from "../entities/vaultV2ReallocationData.js";
 import {
   InsufficientSharedLiquidityError,
   type ReallocationComputeOptionsVaultV2,
@@ -21,15 +21,15 @@ import { DEFAULT_SUPPLY_TARGET_UTILIZATION } from "./constant.js";
  * @param params.marketId - Target Blue market id.
  * @param params.operation - Operation driving the reallocation.
  * @param params.amount - Borrow or withdraw amount.
- * @param params.options - Optional timestamp, enable flag, and vault allowlist.
+ * @param params.options - Optional timestamp, enable flag, vault allowlist, and maximum native penalty.
  * @returns Flat Vault V2 reallocations accepted directly by Blue action builders.
  * @throws {@link InsufficientSharedLiquidityError} when selected liquidity cannot cover the absolute shortfall.
  * @throws {@link ReallocationWithdrawExceedsMarketSupplyError} when a withdraw exceeds market supply.
  * @example
  * ```ts
- * import { computeReallocationsVaultV2 } from "@morpho-org/morpho-sdk";
+ * import { computeVaultV2Reallocations } from "@morpho-org/morpho-sdk";
  *
- * const reallocations = computeReallocationsVaultV2({
+ * const reallocations = computeVaultV2Reallocations({
  *   reallocationData,
  *   marketId,
  *   operation: "borrow",
@@ -38,14 +38,14 @@ import { DEFAULT_SUPPLY_TARGET_UTILIZATION } from "./constant.js";
  * });
  * ```
  */
-export const computeReallocationsVaultV2 = ({
+export const computeVaultV2Reallocations = ({
   reallocationData: data,
   marketId,
   operation,
   amount,
   options,
 }: {
-  readonly reallocationData: ReallocationDataVaultV2;
+  readonly reallocationData: VaultV2ReallocationData;
   readonly marketId: MarketId;
   readonly operation: "borrow" | "withdraw";
   readonly amount: bigint;

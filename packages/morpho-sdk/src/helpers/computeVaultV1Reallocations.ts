@@ -1,6 +1,6 @@
 import { type MarketId, MarketUtils, MathLib } from "@morpho-org/blue-sdk";
 import type { Address } from "viem";
-import type { ReallocationData } from "../entities/reallocationData.js";
+import type { VaultV1ReallocationData } from "../entities/vaultV1ReallocationData.js";
 import {
   InsufficientSharedLiquidityError,
   MissingPublicAllocatorConfigError,
@@ -113,7 +113,7 @@ const capVaultWithdrawals = (
  * import { mainnet } from "viem/chains";
  * import { markets, vaults } from "@morpho-org/morpho-test";
  * import {
- *   computeReallocations,
+ *   computeVaultV1Reallocations,
  *   morphoViemExtension,
  * } from "@morpho-org/morpho-sdk";
  *
@@ -131,7 +131,7 @@ const capVaultWithdrawals = (
  *   block: { number: block.number, timestamp: block.timestamp },
  * });
  * const borrowAmount = parseUnits("1000", 6);
- * const reallocations = computeReallocations({
+ * const reallocations = computeVaultV1Reallocations({
  *   reallocationData,
  *   marketId: marketParams.id,
  *   operation: "borrow",
@@ -148,14 +148,14 @@ const capVaultWithdrawals = (
  * // borrow.buildTx() includes any required PublicAllocator reallocations.
  * ```
  */
-export const computeReallocations = ({
+export const computeVaultV1Reallocations = ({
   reallocationData: data,
   marketId,
   operation,
   amount,
   options,
 }: {
-  readonly reallocationData: ReallocationData;
+  readonly reallocationData: VaultV1ReallocationData;
   readonly marketId: MarketId;
   readonly operation: "borrow" | "withdraw";
   readonly amount: bigint;
@@ -163,7 +163,7 @@ export const computeReallocations = ({
 }): readonly VaultV1BlueReallocation[] => {
   if (options?.enabled === false) return [];
 
-  // ReallocationData does not retain the fetch block; pass that block timestamp
+  // VaultV1ReallocationData does not retain the fetch block; pass that block timestamp
   // to compute against the same accrued state, otherwise Market defaults to lastUpdate.
   const market = data.getMarket(marketId).accrueInterest(options?.timestamp);
 
@@ -305,3 +305,10 @@ export const computeReallocations = ({
         })),
     }));
 };
+
+/**
+ * Deprecated name for the Vault V1 amount-aware reallocation planner.
+ *
+ * @deprecated Use {@link computeVaultV1Reallocations} instead.
+ */
+export const computeReallocations = computeVaultV1Reallocations;

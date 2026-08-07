@@ -17,4 +17,4 @@ See [`packages/morpho-sdk/AGENTS.md`](../../AGENTS.md) routing summary.
 
 `MorphoBlue.borrow()`, `supplyCollateralBorrow()`, `withdraw()`, and `refinance()` accept optional reallocations. The entity validates their state-independent shape before returning requirements, and the pure action repeats the same validation before encoding. `getReallocationData` may fetch the inputs needed to compute reallocations, but action encoding stays outside the entity fetch path.
 
-`ReallocationData` is the entity-level state container for public allocator simulations. Its public maps are readable snapshots for inspection; state transitions stay on its methods and return cloned `ReallocationData` instances.
+`VaultV1ReallocationData` is the entity-level state container for PublicAllocator V1 simulations; `ReallocationData` remains its deprecated compatibility alias. `VaultV2ReallocationData` owns the separate BluePublicAllocator state model. Their public maps are readable snapshots for inspection; state transitions stay on their methods and return cloned instances of the same versioned class.

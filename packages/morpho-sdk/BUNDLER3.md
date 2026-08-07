@@ -26,7 +26,7 @@ The **spender** of every approval / permit / permit2 is therefore **always** `ge
 
 The value of the Bundler3 + GeneralAdapter1 pairing rests on three properties:
 
-1. **Composition of elementary actions.** Each step (`nativeTransfer`, `wrapNative`, `erc20TransferFrom`, `permit`, `approve2`, `transferFrom2`, `erc4626Deposit`, `morphoSupplyCollateral`, `morphoBorrow`, `morphoRepay`, `morphoWithdrawCollateral`, `reallocateTo`, `bluePublicAllocatorReallocate`, `bluePublicAllocatorAllocateFromIdle`) is an independent building block. The SDK **composes** them in an explicit order to build a business flow.
+1. **Composition of elementary actions.** Each step (`nativeTransfer`, `wrapNative`, `erc20TransferFrom`, `permit`, `approve2`, `transferFrom2`, `erc4626Deposit`, `morphoSupplyCollateral`, `morphoBorrow`, `morphoRepay`, `morphoWithdrawCollateral`, `reallocateTo`, `vaultV2BluePublicAllocatorReallocate`, `vaultV2BluePublicAllocatorAllocateFromIdle`) is an independent building block. The SDK **composes** them in an explicit order to build a business flow.
 2. **Atomicity.** The entire bundle either succeeds or reverts as one. No intermediate state is exposed to MEV bots or other transactions.
 3. **Simplified approval UX.** A user approves _a single spender_ (GeneralAdapter1) for the entire protocol surface — rather than one approval per V1/V2 vault or per Morpho contract.
 

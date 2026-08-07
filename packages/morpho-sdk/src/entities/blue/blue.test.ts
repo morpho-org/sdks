@@ -28,7 +28,7 @@ import {
   NonPositiveInputError,
   WithdrawExceedsCollateralError,
 } from "../../types/index.js";
-import { ReallocationData } from "../reallocationData.js";
+import { VaultV1ReallocationData } from "../vaultV1ReallocationData.js";
 
 const MARKET_PARAMS = new MarketParams(CbbtcUsdcBlue);
 const USER: Address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -675,7 +675,7 @@ describe("MorphoBlue validation", () => {
 
     expect(
       market.getReallocations({
-        reallocationData: new ReallocationData({ chainId: mainnet.id }),
+        reallocationData: new VaultV1ReallocationData({ chainId: mainnet.id }),
         operation: "borrow",
         amount: 1n,
         options: { enabled: false },

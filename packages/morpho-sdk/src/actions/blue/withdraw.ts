@@ -34,7 +34,7 @@ export interface BlueWithdrawParams {
     /**
      * Public Allocator V1 or V2 reallocations to execute before withdrawing. V1 entries can be
      * computed via `MorphoBlue.getReallocations({ operation: "withdraw", amount })` or directly
-     * via `computeReallocations({ operation: "withdraw", amount, ... })`.
+     * via `computeVaultV1Reallocations({ operation: "withdraw", amount, ... })`.
      */
     reallocations?: readonly BlueReallocation[];
     /**

@@ -14,7 +14,7 @@ import {
   mockDeploylessRead,
   mockDeploylessReads,
 } from "../../__test__/viem.js";
-import { bluePublicAllocatorAbi, vaultV2Abi } from "../../abis.js";
+import { vaultV2Abi, vaultV2BluePublicAllocatorAbi } from "../../abis.js";
 import { abi as queryAbi } from "../../queries/vault-v2/GetVaultV2PublicAllocatorConfig.js";
 import {
   fetchVaultV2MarketPublicAllocatorConfig,
@@ -114,25 +114,25 @@ const expected = {
 const mockDirectReads = (handle: ReturnType<typeof createMockClient>) => {
   mockRead(handle, {
     address: ALLOCATOR,
-    abi: bluePublicAllocatorAbi,
+    abi: vaultV2BluePublicAllocatorAbi,
     functionName: "vaultData",
     result: [true, 12n, 34n],
   });
   mockRead(handle, {
     address: ALLOCATOR,
-    abi: bluePublicAllocatorAbi,
+    abi: vaultV2BluePublicAllocatorAbi,
     functionName: "absoluteCap",
     result: 500n,
   });
   mockRead(handle, {
     address: ALLOCATOR,
-    abi: bluePublicAllocatorAbi,
+    abi: vaultV2BluePublicAllocatorAbi,
     functionName: "canDeallocate",
     result: true,
   });
   mockRead(handle, {
     address: ALLOCATOR,
-    abi: bluePublicAllocatorAbi,
+    abi: vaultV2BluePublicAllocatorAbi,
     functionName: "isActiveAdapter",
     result: true,
   });

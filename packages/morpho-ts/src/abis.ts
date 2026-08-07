@@ -4595,8 +4595,8 @@ export const publicAllocatorAbi = [
   },
 ] as const;
 
-/** Blue Public Allocator ABI used for market and idle reallocations. */
-export const bluePublicAllocatorAbi = [
+/** Vault V2 Blue Public Allocator ABI used for market and idle reallocations. */
+export const vaultV2BluePublicAllocatorAbi = [
   {
     inputs: [
       {

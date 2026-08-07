@@ -12,13 +12,16 @@ import {
   WethUsdsBlue,
   WstethUsdcSourceMarket,
 } from "../../test/fixtures/blue.js";
-import type { ReallocationData } from "../entities/reallocationData.js";
+import type { VaultV1ReallocationData } from "../entities/vaultV1ReallocationData.js";
 import {
   InsufficientSharedLiquidityError,
   MissingPublicAllocatorConfigError,
   ReallocationWithdrawExceedsMarketSupplyError,
 } from "../types/index.js";
-import { computeReallocations } from "./computeReallocations.js";
+import {
+  computeReallocations,
+  computeVaultV1Reallocations,
+} from "./computeVaultV1Reallocations.js";
 
 // --- Constants ---
 
@@ -84,9 +87,9 @@ interface MockStateParams {
 }
 
 /**
- * Creates a minimal mock ReallocationData.
+ * Creates a minimal mock VaultV1ReallocationData.
  *
- * Only implements the methods computeReallocations actually calls:
+ * Only implements the methods computeVaultV1Reallocations actually calls:
  * `getMarket`, `computeVaultV1Reallocations`, and `getVault`.
  */
 function makeMockState({
@@ -96,7 +99,7 @@ function makeMockState({
   aggressiveWithdrawals = [],
   vaultFees = {},
   extraMarkets = [],
-}: MockStateParams = {}): ReallocationData {
+}: MockStateParams = {}): VaultV1ReallocationData {
   const markets = new Map<string, Market>();
   markets.set(tm.id, tm);
   markets.set(sourceA.id, sourceA);
@@ -111,7 +114,7 @@ function makeMockState({
         : markets.get(id)!,
     computeVaultV1Reallocations: () => ({
       withdrawals: [...aggressiveWithdrawals],
-      data: {} as ReallocationData,
+      data: {} as VaultV1ReallocationData,
     }),
   };
 
@@ -130,18 +133,22 @@ function makeMockState({
         ? { admin: vault, fee: vaultFees[vault]!, accruedFee: 0n }
         : undefined,
     }),
-  } as unknown as ReallocationData;
+  } as unknown as VaultV1ReallocationData;
 }
 
 // ---------------------------------------------------------------------------
 // Early returns
 // ---------------------------------------------------------------------------
 
-describe("computeReallocations", () => {
+describe("computeVaultV1Reallocations", () => {
+  test("behavior: preserves the deprecated planner alias", () => {
+    expect(computeReallocations).toBe(computeVaultV1Reallocations);
+  });
+
   describe("early returns", () => {
     test("should return empty when enabled is false", () => {
-      const result = computeReallocations({
-        reallocationData: {} as ReallocationData,
+      const result = computeVaultV1Reallocations({
+        reallocationData: {} as VaultV1ReallocationData,
         marketId: targetParams.id,
         operation: "borrow",
         amount: MathLib.WAD,
@@ -153,7 +160,7 @@ describe("computeReallocations", () => {
     test("should return empty when post-borrow utilization is below supply target", () => {
       const data = makeMockState();
       // Borrow 1 WAD: utilization ≈ 501/1000 = 50.1% < 90.5%
-      const result = computeReallocations({
+      const result = computeVaultV1Reallocations({
         reallocationData: data,
         marketId: targetParams.id,
         operation: "borrow",
@@ -182,7 +189,7 @@ describe("computeReallocations", () => {
         vaultFees: { [VAULT_A]: 1000n },
       });
 
-      const result = computeReallocations({
+      const result = computeVaultV1Reallocations({
         reallocationData: data,
         marketId: targetParams.id,
         operation: "borrow",
@@ -218,7 +225,7 @@ describe("computeReallocations", () => {
         vaultFees: { [VAULT_A]: 1000n },
       });
 
-      const result = computeReallocations({
+      const result = computeVaultV1Reallocations({
         reallocationData: data,
         marketId: targetParams.id,
         operation: "borrow",
@@ -256,7 +263,7 @@ describe("computeReallocations", () => {
         vaultFees: { [VAULT_A]: 0n },
       });
 
-      const result = computeReallocations({
+      const result = computeVaultV1Reallocations({
         reallocationData: data,
         marketId: targetParams.id,
         operation: "borrow",
@@ -293,7 +300,7 @@ describe("computeReallocations", () => {
         vaultFees: { [VAULT_A]: 0n },
       });
 
-      const result = computeReallocations({
+      const result = computeVaultV1Reallocations({
         reallocationData: data,
         marketId: targetParams.id,
         operation: "borrow",
@@ -345,7 +352,7 @@ describe("computeReallocations", () => {
         ],
       });
 
-      const result = computeReallocations({
+      const result = computeVaultV1Reallocations({
         reallocationData: data,
         marketId: targetParams.id,
         operation: "borrow",
@@ -390,7 +397,7 @@ describe("computeReallocations", () => {
         vaultFees: { [VAULT_A]: 500n },
       });
 
-      const result = computeReallocations({
+      const result = computeVaultV1Reallocations({
         reallocationData: data,
         marketId: targetParams.id,
         operation: "borrow",
@@ -436,7 +443,7 @@ describe("computeReallocations", () => {
         vaultFees: { [VAULT_A]: 0n },
       });
 
-      const result = computeReallocations({
+      const result = computeVaultV1Reallocations({
         reallocationData: data,
         marketId: targetParams.id,
         operation: "borrow",
@@ -481,7 +488,7 @@ describe("computeReallocations", () => {
         vaultFees: { [VAULT_A]: 1000n, [VAULT_B]: 2000n },
       });
 
-      const result = computeReallocations({
+      const result = computeVaultV1Reallocations({
         reallocationData: data,
         marketId: targetParams.id,
         operation: "borrow",
@@ -520,7 +527,7 @@ describe("computeReallocations", () => {
         vaultFees: { [VAULT_A]: 1000n, [VAULT_B]: 2000n },
       });
 
-      const result = computeReallocations({
+      const result = computeVaultV1Reallocations({
         reallocationData: data,
         marketId: targetParams.id,
         operation: "borrow",
@@ -554,7 +561,7 @@ describe("computeReallocations", () => {
         vaultFees: { [VAULT_A]: 1000n, [VAULT_B]: 2000n },
       });
 
-      const result = computeReallocations({
+      const result = computeVaultV1Reallocations({
         reallocationData: data,
         marketId: targetParams.id,
         operation: "borrow",
@@ -607,7 +614,7 @@ describe("computeReallocations", () => {
         vaultFees: { [VAULT_A]: 0n },
       });
 
-      const result = computeReallocations({
+      const result = computeVaultV1Reallocations({
         reallocationData: data,
         marketId: targetParams.id,
         operation: "borrow",
@@ -640,7 +647,7 @@ describe("computeReallocations", () => {
         vaultFees: { [VAULT_A]: 0n },
       });
 
-      const result = computeReallocations({
+      const result = computeVaultV1Reallocations({
         reallocationData: data,
         marketId: targetParams.id,
         operation: "borrow",
@@ -684,7 +691,7 @@ describe("computeReallocations", () => {
         vaultFees: { [VAULT_A]: 0n },
       });
 
-      const result = computeReallocations({
+      const result = computeVaultV1Reallocations({
         reallocationData: data,
         marketId: targetParams.id,
         operation: "borrow",
@@ -701,7 +708,7 @@ describe("computeReallocations", () => {
     });
 
     test("should return empty when required assets is non-positive", () => {
-      const result = computeReallocations({
+      const result = computeVaultV1Reallocations({
         reallocationData: makeMockState(),
         marketId: targetParams.id,
         operation: "borrow",
@@ -730,7 +737,7 @@ describe("computeReallocations", () => {
         vaultFees: { [VAULT_A]: 0n },
       });
 
-      const result = computeReallocations({
+      const result = computeVaultV1Reallocations({
         reallocationData: data,
         marketId: targetParams.id,
         operation: "borrow",
@@ -762,7 +769,7 @@ describe("computeReallocations", () => {
 
       // Set target utilization very high (99%) — requires less reallocation.
       const highTarget = (99n * MathLib.WAD) / 100n;
-      const resultHigh = computeReallocations({
+      const resultHigh = computeVaultV1Reallocations({
         reallocationData: data,
         marketId: targetParams.id,
         operation: "borrow",
@@ -775,7 +782,7 @@ describe("computeReallocations", () => {
 
       // Set target utilization low (50%) — requires more reallocation.
       const lowTarget = MathLib.WAD / 2n;
-      const resultLow = computeReallocations({
+      const resultLow = computeVaultV1Reallocations({
         reallocationData: data,
         marketId: targetParams.id,
         operation: "borrow",
@@ -818,7 +825,7 @@ describe("computeReallocations", () => {
       });
 
       try {
-        computeReallocations({
+        computeVaultV1Reallocations({
           reallocationData: data,
           marketId: targetParams.id,
           operation: "borrow",
@@ -861,7 +868,7 @@ describe("computeReallocations", () => {
       });
 
       try {
-        computeReallocations({
+        computeVaultV1Reallocations({
           reallocationData: data,
           marketId: targetParams.id,
           operation: "borrow",
@@ -893,7 +900,7 @@ describe("computeReallocations", () => {
         vaultFees: { [VAULT_A]: 0n },
       });
 
-      const result = computeReallocations({
+      const result = computeVaultV1Reallocations({
         reallocationData: data,
         marketId: targetParams.id,
         operation: "borrow",
@@ -923,7 +930,7 @@ describe("computeReallocations", () => {
       });
 
       expect(() =>
-        computeReallocations({
+        computeVaultV1Reallocations({
           reallocationData: data,
           marketId: targetParams.id,
           operation: "borrow",
@@ -942,7 +949,7 @@ describe("computeReallocations", () => {
     test("should return empty when post-withdraw utilization is below supply target", () => {
       // Default market: S=1000, B=500. Withdraw 100 → S'=900, util = 500/900 ≈ 55.5% < 90.5%.
       const data = makeMockState();
-      const result = computeReallocations({
+      const result = computeVaultV1Reallocations({
         reallocationData: data,
         marketId: targetParams.id,
         operation: "withdraw",
@@ -970,7 +977,7 @@ describe("computeReallocations", () => {
         vaultFees: { [VAULT_A]: 0n },
       });
 
-      const result = computeReallocations({
+      const result = computeVaultV1Reallocations({
         reallocationData: data,
         marketId: targetParams.id,
         operation: "withdraw",
@@ -1009,7 +1016,7 @@ describe("computeReallocations", () => {
         vaultFees: { [VAULT_A]: 0n },
       });
 
-      const result = computeReallocations({
+      const result = computeVaultV1Reallocations({
         reallocationData: data,
         marketId: targetParams.id,
         operation: "withdraw",
@@ -1054,7 +1061,7 @@ describe("computeReallocations", () => {
       });
 
       expect(() =>
-        computeReallocations({
+        computeVaultV1Reallocations({
           reallocationData: data,
           marketId: targetParams.id,
           operation: "withdraw",
@@ -1072,7 +1079,7 @@ describe("computeReallocations", () => {
       const withdrawAmount = parseEther("1001");
 
       try {
-        computeReallocations({
+        computeVaultV1Reallocations({
           reallocationData: data,
           marketId: targetParams.id,
           operation: "withdraw",
@@ -1099,7 +1106,7 @@ describe("computeReallocations", () => {
       });
       const data = makeMockState({ targetMarket: tm });
       expect(() =>
-        computeReallocations({
+        computeVaultV1Reallocations({
           reallocationData: data,
           marketId: targetParams.id,
           operation: "withdraw",

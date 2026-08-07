@@ -7,7 +7,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import type { Address, Client, Hash } from "viem";
 import { readContract } from "viem/actions";
-import { bluePublicAllocatorAbi, vaultV2Abi } from "../../abis.js";
+import { vaultV2Abi, vaultV2BluePublicAllocatorAbi } from "../../abis.js";
 import {
   abi,
   code,
@@ -45,7 +45,7 @@ export async function fetchVaultV2PublicAllocatorConfig(
   const [canAllocateFromIdle, nativePenalty] = await readContract(client, {
     ...parameters,
     address: allocator,
-    abi: bluePublicAllocatorAbi,
+    abi: vaultV2BluePublicAllocatorAbi,
     functionName: "vaultData",
     args: [vault],
   });
@@ -97,21 +97,21 @@ export async function fetchVaultV2MarketPublicAllocatorConfig(
     readContract(client, {
       ...parameters,
       address: allocator,
-      abi: bluePublicAllocatorAbi,
+      abi: vaultV2BluePublicAllocatorAbi,
       functionName: "absoluteCap",
       args: [vault, marketParamsId],
     }),
     readContract(client, {
       ...parameters,
       address: allocator,
-      abi: bluePublicAllocatorAbi,
+      abi: vaultV2BluePublicAllocatorAbi,
       functionName: "canDeallocate",
       args: [vault, marketParamsId],
     }),
     readContract(client, {
       ...parameters,
       address: allocator,
-      abi: bluePublicAllocatorAbi,
+      abi: vaultV2BluePublicAllocatorAbi,
       functionName: "isActiveAdapter",
       args: [vault, adapter],
     }),
