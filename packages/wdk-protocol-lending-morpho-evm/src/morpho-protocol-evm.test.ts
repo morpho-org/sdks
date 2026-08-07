@@ -1,4 +1,7 @@
-import type { RequirementSignature } from "@morpho-org/morpho-sdk";
+import type {
+  RequirementSignature,
+  VaultV2BlueReallocation,
+} from "@morpho-org/morpho-sdk";
 import * as viem from "viem";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -472,6 +475,38 @@ describe.sequential("MorphoProtocolEvm", () => {
       });
       expect(account.sendTransaction).toHaveBeenCalledWith(BORROW_TX);
       expect(result).toEqual({ hash: "dummy-borrow-hash", fee: 12_345n });
+    });
+
+    test("should forward Vault V2 BluePublicAllocator reallocations", async () => {
+      const reallocation = {
+        allocator: "0x0000000000000000000000000000000000000010",
+        type: "bluePublicAllocator",
+        vault: VAULT,
+        from: { type: "idle" },
+        to: {
+          adapter: "0x0000000000000000000000000000000000000020",
+        },
+        assets: 50_000n,
+        nativePenalty: 1n,
+      } satisfies VaultV2BlueReallocation;
+
+      account.sendTransaction = vi
+        .fn()
+        .mockResolvedValue({ hash: "dummy-v2-borrow-hash", fee: 12_345n });
+
+      await protocol.borrow({
+        token: TOKEN,
+        amount: 100_000n,
+        reallocations: [reallocation],
+      });
+
+      expect(marketEntity.borrow).toHaveBeenCalledWith({
+        amount: 100_000n,
+        userAddress: ADDRESS,
+        positionData,
+        slippageTolerance: undefined,
+        reallocations: [reallocation],
+      });
     });
 
     test("should fetch market params when only borrowMarketId is configured", async () => {
