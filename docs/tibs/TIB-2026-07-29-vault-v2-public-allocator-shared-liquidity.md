@@ -78,7 +78,7 @@ This TIB freezes that Vault V2 design.
 | V2 Bundler actions | `vaultV2BluePublicAllocatorReallocate`, `vaultV2BluePublicAllocatorAllocateFromIdle` |
 | V2 allocator ABI | `vaultV2BluePublicAllocatorAbi` |
 | Shared action union | `BlueReallocation` |
-| V2 options | `PublicAllocatorOptionsVaultV2`, `ReallocationComputeOptionsVaultV2` |
+| V2 options | `VaultV2BluePublicAllocatorOptions` |
 | V2 config | `VaultV2PublicAllocatorConfig`, `VaultV2MarketPublicAllocatorConfig` |
 | Fetchers | `fetchVaultV2PublicAllocatorConfig`, `fetchVaultV2MarketPublicAllocatorConfig`, `fetchVaultV2PublicAllocatorData` |
 

@@ -45,7 +45,7 @@ export interface PublicAllocatorOptions {
 }
 
 /** Options controlling Vault V2 BluePublicAllocator reallocation discovery. */
-export interface PublicAllocatorOptionsVaultV2 {
+export interface VaultV2BluePublicAllocatorOptions {
   /** Whether Vault V2 public allocator discovery is enabled. */
   readonly enabled?: boolean;
 
@@ -187,6 +187,3 @@ export interface ReallocationComputeOptions extends PublicAllocatorOptions {
    */
   readonly defaultSupplyTargetUtilization?: bigint;
 }
-
-/** Options for the Vault V2 borrow/withdraw reallocation planner. */
-export type ReallocationComputeOptionsVaultV2 = PublicAllocatorOptionsVaultV2;

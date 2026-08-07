@@ -2,8 +2,8 @@ import { type MarketId, MarketUtils, MathLib } from "@morpho-org/blue-sdk";
 import type { VaultV2ReallocationData } from "../entities/vaultV2ReallocationData.js";
 import {
   InsufficientSharedLiquidityError,
-  type ReallocationComputeOptionsVaultV2,
   ReallocationWithdrawExceedsMarketSupplyError,
+  type VaultV2BluePublicAllocatorOptions,
   type VaultV2BlueReallocation,
 } from "../types/index.js";
 import { DEFAULT_SUPPLY_TARGET_UTILIZATION } from "./constant.js";
@@ -49,7 +49,7 @@ export const computeVaultV2Reallocations = ({
   readonly marketId: MarketId;
   readonly operation: "borrow" | "withdraw";
   readonly amount: bigint;
-  readonly options?: ReallocationComputeOptionsVaultV2;
+  readonly options?: VaultV2BluePublicAllocatorOptions;
 }): readonly VaultV2BlueReallocation[] => {
   if (options?.enabled === false) return [];
 
