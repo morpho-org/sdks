@@ -73,7 +73,7 @@
     "@playwright/test": "^1.62.1",
     "@types/lodash.kebabcase": "^4.1.9",
     "typescript": "^7.0.2",
-    "viem": "^2.55.10",
+    "viem": "^2.55.11",
     "vitest": "^4.1.10"
   },
   "publishConfig": {
