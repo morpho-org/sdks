@@ -11,7 +11,6 @@ import {
 import { describe, expect, test } from "vitest";
 import { vaultExitBundlesV1Abi } from "../../abis.js";
 import {
-  EmptyMarketParamsListError,
   NonPositiveInputError,
   type PermitRequirementSignature,
 } from "../../types/index.js";
@@ -47,7 +46,7 @@ const inKindRedeemArbitrary = fc.record({
   adapterAddress: addressArbitrary,
   amount: positiveUint256Arbitrary,
   marketParamsList: fc.array(marketParamsArbitrary, {
-    minLength: 1,
+    minLength: 0,
     maxLength: 3,
   }),
   onBehalf: addressArbitrary,
@@ -210,19 +209,23 @@ describe("vaultV2InKindRedeem", () => {
     );
   });
 
-  test("error: EmptyMarketParamsListError", () => {
-    expect(() =>
-      vaultV2InKindRedeem({
-        vault: { chainId, address: vault },
-        args: {
-          adapter,
-          amount: 100n,
-          marketParamsList: [],
-          userAddress,
-          deadline: 1_900_000_000n,
-        },
-      }),
-    ).toThrow(EmptyMarketParamsListError);
+  test("behavior: accepts an empty market list for an idle-only exit", () => {
+    const tx = vaultV2InKindRedeem({
+      vault: { chainId, address: vault },
+      args: {
+        adapter,
+        amount: 100n,
+        marketParamsList: [],
+        userAddress,
+        deadline: 1_900_000_000n,
+      },
+    });
+
+    const decoded = decodeFunctionData({
+      abi: vaultExitBundlesV1Abi,
+      data: tx.data,
+    });
+    expect(decoded.args?.[2]).toEqual([]);
   });
 
   test.each([

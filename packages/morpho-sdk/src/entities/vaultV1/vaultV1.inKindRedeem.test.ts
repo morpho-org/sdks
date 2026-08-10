@@ -1,9 +1,5 @@
-import {
-  addressesRegistry,
-  MarketParams,
-  registerCustomAddresses,
-} from "@morpho-org/blue-sdk";
-import { erc2612Abi, metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
+import { addressesRegistry, MarketParams } from "@morpho-org/blue-sdk";
+import { blueAbi, erc2612Abi, metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
 import { createMockClient } from "@morpho-org/test/mock";
 import { type Address, erc20Abi, maxUint256 } from "viem";
 import { mainnet } from "viem/chains";
@@ -26,20 +22,20 @@ import {
   InsufficientBlueBalanceForInKindRedeemError,
   NonPositiveInputError,
   VaultAddressMismatchError,
+  VaultIsBlueFeeRecipientError,
   VaultMorphoMismatchError,
 } from "../../types/index.js";
 
 const blue = addressesRegistry[mainnet.id].blue;
 
-registerCustomAddresses({
-  addresses: {
-    [mainnet.id]: { bundles: { vaultExitBundlesV1: IN_KIND_BUNDLER } },
-  },
-});
-
 const mockV1Requirements = (
   handle: ReturnType<typeof createMockClient>,
-  params: { allowance: bigint; blueBalance?: bigint; morpho?: Address },
+  params: {
+    allowance: bigint;
+    blueBalance?: bigint;
+    morpho?: Address;
+    blueFeeRecipient?: Address;
+  },
 ) => {
   mockMulticallResults(handle, [
     encodeReadResult({
@@ -61,6 +57,11 @@ const mockV1Requirements = (
       abi: metaMorphoAbi,
       functionName: "MORPHO",
       result: params.morpho ?? blue,
+    }),
+    encodeReadResult({
+      abi: blueAbi,
+      functionName: "feeRecipient",
+      result: params.blueFeeRecipient ?? IN_KIND_USER,
     }),
   ]);
 };
@@ -291,5 +292,28 @@ describe("MorphoVaultV1.inKindRedeem", () => {
       .getRequirements();
 
     await expect(requirements).rejects.toBeInstanceOf(VaultMorphoMismatchError);
+  });
+
+  test("error: VaultIsBlueFeeRecipientError", async () => {
+    const handle = createMockClient(mainnet);
+    mockV1Requirements(handle, {
+      allowance: maxUint256,
+      blueFeeRecipient: IN_KIND_VAULT,
+    });
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    const requirements = vault
+      .inKindRedeem({
+        amount: 500n,
+        marketParamsList: [inKindMarketParams],
+        vaultData: inKindVaultV1Data(),
+        userAddress: IN_KIND_USER,
+      })
+      .getRequirements();
+
+    await expect(requirements).rejects.toBeInstanceOf(
+      VaultIsBlueFeeRecipientError,
+    );
   });
 });

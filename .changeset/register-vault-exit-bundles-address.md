@@ -6,12 +6,16 @@
 Add a `bundles` group to `ChainAddresses` for standalone bundle periphery contracts, starting with
 `bundles.vaultExitBundlesV1`. The `AddressLabel` union gains `bundles.vaultExitBundlesV1`, so
 `getChainAddress(chainId, "bundles.vaultExitBundlesV1")` and `registerCustomAddresses` resolve the
-new entry like any other registry address. The field is optional and unset on every live chain until
-`VaultExitBundlesV1` ships, so fork tests register the deployed address at runtime.
+new entry like any other registry address. Register the canonical `VaultExitBundlesV1` deployments
+and deployment blocks on Ethereum, Base, Arbitrum, Optimism, Polygon, World Chain, Unichain,
+HyperEVM, Katana, Monad, Stable, Tempo, and Robinhood Chain.
 
 Add Vault V1 and Vault V2 in-kind redemption actions and entity methods backed by
 VaultExitBundlesV1, including max-share permit/approval requirements, Vault V2's two-field permit
-domain, snapshot coverage validation, Morpho Blue balance checks, and Vault V2 gate checks.
+domain, snapshot coverage validation, and Morpho Blue balance checks.
+Vault V1 exits also reject vaults configured as Morpho Blue's fee recipient, which the periphery
+cannot safely account for when protocol fee shares accrue.
 Add a minimal Vault V2 preview helper for frontend eligibility, market capacity, and proceeds.
-The published ABI and fork deployment fixture pin the guarded upstream contract at
-`a531f7126f482eaeb57e7d8073e9afb718477bae`.
+Match the deployed contract at upstream commit `9994e6abe5b18d5f7e0d6bd666f85eb259e3312f`,
+including its idle-assets-first Vault V2 exit behavior. The deployed ABI is unchanged. Fork tests
+now use the canonical Ethereum deployment directly.

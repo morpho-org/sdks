@@ -18,7 +18,6 @@ import {
   maxUint128,
   parseEventLogs,
   parseUnits,
-  zeroAddress,
 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -26,11 +25,9 @@ import {
   CbbtcUsdcBlue,
   WbtcUsdcSourceMarket,
 } from "../../../test/fixtures/blue.js";
-import { deployVaultExitBundlesV1 } from "../../../test/helpers/vaultExitBundlesV1.js";
 import { createVaultV2 } from "../../../test/helpers/vaultV2.js";
 import { test } from "../../../test/setup.js";
 import {
-  CannotReceiveAssetsForInKindRedeemError,
   InsufficientBlueBalanceForInKindRedeemError,
   isRequirementSignature,
   morphoViemExtension,
@@ -198,10 +195,9 @@ describe("MorphoVaultV2.inKindRedeem integration", () => {
       args: [
         adapterAddress,
         encodeAbiParameters([marketParamsAbi], [WbtcUsdcSourceMarket]),
-        reallocationAmount,
+        reallocationAmount / 2n,
       ],
     });
-    await deployVaultExitBundlesV1(client);
 
     const vault = client
       .extend(morphoViemExtension({ supportSignature: true }))
@@ -212,9 +208,15 @@ describe("MorphoVaultV2.inKindRedeem integration", () => {
       throw new Error("Expected a MorphoMarketV1AdapterV2 snapshot");
     }
     const marketParamsList = adapter.markets.map(({ params }) => params);
-    const amount = parseUnits("750", 6);
+    const amount = parseUnits("900", 6);
     const initialVaultShares = await client.readContract({
       address: vaultAddress,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [client.account.address],
+    });
+    const initialAssetBalance = await client.readContract({
+      address: USDC,
       abi: erc20Abi,
       functionName: "balanceOf",
       args: [client.account.address],
@@ -247,6 +249,12 @@ describe("MorphoVaultV2.inKindRedeem integration", () => {
       functionName: "balanceOf",
       args: [client.account.address],
     });
+    const finalAssetBalance = await client.readContract({
+      address: USDC,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [client.account.address],
+    });
     const finalSupplyShares = await Promise.all(
       setupMarkets.map(async ({ id }) => {
         return (await fetchAccrualPosition(client.account.address, id, client))
@@ -255,45 +263,15 @@ describe("MorphoVaultV2.inKindRedeem integration", () => {
     );
 
     expect(finalVaultShares).toBeLessThan(initialVaultShares);
+    expect(finalAssetBalance - initialAssetBalance).toBe(
+      vaultData.assetBalance,
+    );
     expect(
       finalSupplyShares.reduce((total, shares) => total + shares, 0n),
     ).toBeGreaterThan(
       initialSupplyShares.reduce((total, shares) => total + shares, 0n),
     );
 
-    const rejectingGate = "0x0000000000000000000000000000000000000666" as const;
-    await client.setCode({
-      address: rejectingGate,
-      bytecode: "0x600060005260206000f3",
-    });
-    await submitAndAccept({
-      client,
-      vault: vaultAddress,
-      data: encodeFunctionData({
-        abi: vaultV2Abi,
-        functionName: "setReceiveAssetsGate",
-        args: [rejectingGate],
-      }),
-    });
-    const gatedExit = vault.inKindRedeem({
-      amount: 2n,
-      marketParamsList: [WbtcUsdcSourceMarket],
-      vaultData: await vault.getData(),
-      userAddress: client.account.address,
-    });
-    await expect(gatedExit.getRequirements()).rejects.toBeInstanceOf(
-      CannotReceiveAssetsForInKindRedeemError,
-    );
-
-    await submitAndAccept({
-      client,
-      vault: vaultAddress,
-      data: encodeFunctionData({
-        abi: vaultV2Abi,
-        functionName: "setReceiveAssetsGate",
-        args: [zeroAddress],
-      }),
-    });
     const { blue = getChainAddresses(mainnet.id).morpho } = getChainAddresses(
       mainnet.id,
     );

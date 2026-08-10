@@ -4,7 +4,6 @@ import { type Address, encodeFunctionData } from "viem";
 import { vaultExitBundlesV1Abi } from "../../abis.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
-  EmptyMarketParamsListError,
   type Metadata,
   NonPositiveInputError,
   type PermitRequirementSignature,
@@ -28,7 +27,7 @@ export interface VaultV2InKindRedeemParams {
 }
 
 /**
- * Prepares a Vault V2 in-kind redemption into Morpho Blue supply positions.
+ * Prepares a Vault V2 in-kind redemption into idle assets and Morpho Blue supply positions.
  *
  * `amount` includes the Vault V2 force-deallocation penalty. Without a signature this embeds the
  * empty-permit sentinel and requires a prior max-share approval to VaultExitBundlesV1.
@@ -38,7 +37,8 @@ export interface VaultV2InKindRedeemParams {
  * @param params.vault.address - Target Vault V2 address.
  * @param params.args.adapter - Vault's sole MorphoMarketV1AdapterV2.
  * @param params.args.amount - Penalty-inclusive, asset-denominated amount to exit.
- * @param params.args.marketParamsList - Ordered markets consumed greedily by the contract.
+ * @param params.args.marketParamsList - Ordered markets consumed greedily after idle assets. May be
+ *   empty when the vault's idle balance covers `amount`.
  * @param params.args.userAddress - Expected transaction sender, recorded in action metadata only.
  *   VaultExitBundlesV1 burns `msg.sender`'s vault shares, so the submitting account must equal this
  *   address.
@@ -48,7 +48,6 @@ export interface VaultV2InKindRedeemParams {
  * @returns A deep-frozen `Readonly<Transaction<VaultV2InKindRedeemAction>>` with `to`, `value`,
  *   `data`, and the typed action discriminator.
  * @throws {NonPositiveInputError} when `amount` or `deadline` is not positive.
- * @throws {EmptyMarketParamsListError} when no markets are supplied.
  * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
  * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
  * @throws {InKindRedeemPermitMismatchError} when the requirement has the wrong permit kind, asset, amount, or signature encoding.
@@ -73,9 +72,6 @@ export const vaultV2InKindRedeem = ({
   if (args.amount <= 0n) throw new NonPositiveInputError("amount", args.amount);
   if (args.deadline <= 0n)
     throw new NonPositiveInputError("deadline", args.deadline);
-  if (args.marketParamsList.length === 0)
-    throw new EmptyMarketParamsListError();
-
   const to = getChainAddress(vault.chainId, "bundles.vaultExitBundlesV1");
   const marketParamsList = args.marketParamsList.map((marketParams) => ({
     loanToken: marketParams.loanToken,

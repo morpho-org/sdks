@@ -170,6 +170,84 @@ describe("addressesRegistry", () => {
     );
   });
 
+  test.each([
+    [
+      ChainId.EthMainnet,
+      "0xaf85aF286637A033BE7d59ED8cC566afa3309B02",
+      25_720_868n,
+    ],
+    [
+      ChainId.BaseMainnet,
+      "0xE52E169C342C096C4949ABb944DC9f30E3F5Ea84",
+      49_765_458n,
+    ],
+    [
+      ChainId.ArbitrumMainnet,
+      "0x7B885a940164eD51A068725f577a12197b76109b",
+      492_901_559n,
+    ],
+    [
+      ChainId.OptimismMainnet,
+      "0x80De0F063aC662a4ee86c2F4Db0b52746094ad62",
+      155_360_936n,
+    ],
+    [
+      ChainId.PolygonMainnet,
+      "0x7Ae2B7012c82ea18a6BeE98ad09a684C88d6e36a",
+      91_743_910n,
+    ],
+    [
+      ChainId.WorldChainMainnet,
+      "0xcf7b4a40f25A6b839A93b8A8b45297F2a5383E73",
+      33_492_822n,
+    ],
+    [
+      ChainId.Unichain,
+      "0x0628B860947fA0c195988F65d53850546A489732",
+      55_572_727n,
+    ],
+    [
+      ChainId.HyperliquidMainnet,
+      "0xC1749C8d50bc645D5116ccf4C858Bc45cB981Ac4",
+      42_767_282n,
+    ],
+    [
+      ChainId.KatanaMainnet,
+      "0xa434ABcc7e945b804c87B4f3c0a76b20651d4863",
+      39_579_123n,
+    ],
+    [
+      ChainId.MonadMainnet,
+      "0xB04b831893A6E2E02Be347cD259690c5Bc7D0675",
+      94_631_561n,
+    ],
+    [
+      ChainId.StableMainnet,
+      "0x258d5c815CCE7017E24c63a7669F51ABcD0Dd4e5",
+      34_970_501n,
+    ],
+    [
+      ChainId.TempoMainnet,
+      "0x8225192b8638bDe9D41a6d96aBb824F660Ef57E1",
+      34_046_873n,
+    ],
+    [
+      ChainId.RobinhoodMainnet,
+      "0xCE29862924756584BBD0D75CA1249d22007E2813",
+      32_383_480n,
+    ],
+  ] as const)(
+    "behavior: exposes VaultExitBundlesV1 on chain %s",
+    (...[chainId, address, deploymentBlock]) => {
+      expect(getChainAddress(chainId, "bundles.vaultExitBundlesV1")).toBe(
+        address,
+      );
+      expect(deployments[chainId].bundles.vaultExitBundlesV1).toBe(
+        deploymentBlock,
+      );
+    },
+  );
+
   test("behavior: exposes Midnight entries through the unified registry", () => {
     const chainId = 31_337_002;
     const chainAddresses = createChainAddresses();

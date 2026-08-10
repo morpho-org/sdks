@@ -23,29 +23,20 @@ Each entity exposes a set of actions. Bundled actions route through bundler3 (vi
 | --- | --- | --- |
 | **VaultV1** (MetaMorpho) | `deposit`, `migrateToV2` | Bundler |
 | | `withdraw`, `redeem` | Direct call |
-| | `inKindRedeem` *(custom deployment only)* | VaultExitBundlesV1 |
+| | `inKindRedeem` | VaultExitBundlesV1 |
 | **VaultV2** | `deposit` | Bundler |
 | | `withdraw`, `redeem` | Direct call |
 | | `forceWithdraw`, `forceRedeem` | Vault multicall |
-| | `inKindRedeem` *(custom deployment only)* | VaultExitBundlesV1 |
+| | `inKindRedeem` | VaultExitBundlesV1 |
 | **Blue** | `supply`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdraw`, `repayWithdrawCollateral`, `refinance` | Bundler |
 | | `withdrawCollateral` | Direct call |
 | **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `repayWithdrawCollateral` | Midnight Bundles |
 | | `makeLend`, `makeBorrow` | Midnight mempool |
 | | `supplyCollateral`, `redeem`, `cancelOffer` | Direct call |
 
-`VaultExitBundlesV1` is not registered on any live chain yet. Until it is deployed and added to the
-built-in registry, configure a custom deployment before calling either `inKindRedeem` method:
-
-```typescript
-import { registerCustomAddresses } from "@morpho-org/morpho-sdk/addresses";
-
-registerCustomAddresses({
-  addresses: {
-    [chainId]: { bundles: { vaultExitBundlesV1 } },
-  },
-});
-```
+`VaultExitBundlesV1` is registered on Ethereum, Base, Arbitrum, Optimism, Polygon, World Chain,
+Unichain, HyperEVM, Katana, Monad, Stable, Tempo, and Robinhood Chain. Custom deployments can still
+be configured with `registerCustomAddresses`.
 
 ## How it works
 

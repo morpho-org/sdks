@@ -1,9 +1,4 @@
-import {
-  Eip5267Domain,
-  getChainAddress,
-  registerCustomAddresses,
-  Token,
-} from "@morpho-org/blue-sdk";
+import { Eip5267Domain, getChainAddress, Token } from "@morpho-org/blue-sdk";
 import {
   type Address,
   createWalletClient,
@@ -22,7 +17,7 @@ import {
 import { encodeVaultSharesPermit } from "./encodeVaultSharesPermit.js";
 
 const vault = "0x0000000000000000000000000000000000002001" as const;
-const spender = "0x0000000000000000000000000000000000002002" as const;
+const spender = getChainAddress(mainnet.id, "bundles.vaultExitBundlesV1");
 const otherSpender = "0x0000000000000000000000000000000000002999" as const;
 const permitTypes = {
   Permit: [
@@ -44,10 +39,6 @@ const walletClient = createWalletClient({
       throw new Error("Unexpected RPC request");
     },
   }),
-});
-
-registerCustomAddresses({
-  addresses: { [mainnet.id]: { bundles: { vaultExitBundlesV1: spender } } },
 });
 
 describe("encodeVaultSharesPermit", () => {

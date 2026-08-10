@@ -8,6 +8,7 @@ import {
   MathLib,
 } from "@morpho-org/blue-sdk";
 import {
+  blueAbi,
   erc2612Abi,
   fetchAccrualVault,
   metaMorphoAbi,
@@ -53,6 +54,7 @@ import {
   type Transaction,
   VaultAddressMismatchError,
   VaultAssetMismatchError,
+  VaultIsBlueFeeRecipientError,
   VaultMorphoMismatchError,
   type VaultV1DepositAction,
   type VaultV1InKindRedeemAction,
@@ -153,6 +155,7 @@ export interface VaultV1Actions {
    * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
    * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
    * @throws {VaultMorphoMismatchError} from `getRequirements()` when the vault uses another Morpho deployment.
+   * @throws {VaultIsBlueFeeRecipientError} from `getRequirements()` when Morpho Blue accrues protocol fees to the vault.
    * @throws {InsufficientBlueBalanceForInKindRedeemError} from `getRequirements()` when Blue cannot fund the flash loan.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
@@ -468,9 +471,8 @@ export class MorphoVaultV1 implements VaultV1Actions {
 
     return {
       getRequirements: async (): Promise<readonly ActionRequirement[]> => {
-        const [allowance, nonce, blueBalance, morpho] = await multicall(
-          this.client.viemClient,
-          {
+        const [allowance, nonce, blueBalance, morpho, blueFeeRecipient] =
+          await multicall(this.client.viemClient, {
             allowFailure: false,
             contracts: [
               {
@@ -496,9 +498,13 @@ export class MorphoVaultV1 implements VaultV1Actions {
                 abi: metaMorphoAbi,
                 functionName: "MORPHO",
               },
+              {
+                address: blue,
+                abi: blueAbi,
+                functionName: "feeRecipient",
+              },
             ],
-          },
-        );
+          });
 
         if (!isAddressEqual(morpho, blue)) {
           throw new VaultMorphoMismatchError({
@@ -506,6 +512,12 @@ export class MorphoVaultV1 implements VaultV1Actions {
             expected: blue,
             actual: morpho,
           });
+        }
+        // Reject this unsupported configuration before authorizing vault shares:
+        // VaultExitBundlesV1 omits newly accrued Morpho fee shares when estimating the
+        // vault position, so its callback can exhaust marketParamsList and panic on-chain.
+        if (isAddressEqual(blueFeeRecipient, this.vault)) {
+          throw new VaultIsBlueFeeRecipientError(this.vault, blue);
         }
         if (blueBalance < amount) {
           throw new InsufficientBlueBalanceForInKindRedeemError({

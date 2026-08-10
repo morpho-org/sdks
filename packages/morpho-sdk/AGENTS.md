@@ -27,7 +27,7 @@ Protocol terms used across this package's docs and JSDoc:
 - **bundler3** — the bundler entry point; receives a sequence of adapter actions in one transaction.
 - **GeneralAdapter1** — the bundler-side adapter that holds approvals/auth and executes Morpho calls on the user's behalf. Required as the spender for ERC-20 approvals on every bundled path; required as authorized operator on Morpho for `borrow`, `supplyCollateralBorrow`, `repayWithdrawCollateral`, and `withdraw` (the supplier-side path).
 - **PublicAllocator** — Morpho contract that lets vault curators move liquidity between markets within a vault (`reallocateTo(...)`).
-- **VaultExitBundlesV1** — standalone periphery for exiting an illiquid VaultV1 or single-adapter VaultV2 into Morpho Blue supply positions instead of the underlying asset.
+- **VaultExitBundlesV1** — standalone periphery for exiting an illiquid VaultV1 or single-adapter VaultV2 into idle underlying assets and/or Morpho Blue supply positions.
 
 ### Bundler actions
 

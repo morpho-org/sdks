@@ -3,7 +3,6 @@ import { erc20Abi, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
-import { deployVaultExitBundlesV1 } from "../../../test/helpers/vaultExitBundlesV1.js";
 import { test } from "../../../test/setup.js";
 import {
   isRequirementApproval,
@@ -15,8 +14,6 @@ describe("MorphoVaultV1.inKindRedeem integration", () => {
   test("exits vault shares into Morpho Blue supply positions", async ({
     client,
   }) => {
-    await deployVaultExitBundlesV1(client);
-
     const vault = client
       .extend(morphoViemExtension({ supportSignature: false }))
       .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
@@ -81,8 +78,6 @@ describe("MorphoVaultV1.inKindRedeem integration", () => {
   });
 
   test("accepts a Vault V1 shares permit and exits", async ({ client }) => {
-    await deployVaultExitBundlesV1(client);
-
     const vault = client
       .extend(morphoViemExtension({ supportSignature: true }))
       .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);

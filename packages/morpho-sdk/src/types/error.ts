@@ -183,40 +183,6 @@ export class InsufficientBlueBalanceForInKindRedeemError extends Error {
   }
 }
 
-/** Thrown when a Vault V2 gate prevents the user from sending shares. */
-export class CannotSendSharesForInKindRedeemError extends Error {
-  /**
-   * @param vault - Gated Vault V2 address.
-   * @param user - User rejected by the share-send gate.
-   */
-  public constructor(
-    public readonly vault: Address,
-    public readonly user: Address,
-  ) {
-    super(
-      `User "${user}" cannot send shares of vault "${vault}". Satisfy the vault's share gate before redeeming in kind.`,
-    );
-    this.name = "CannotSendSharesForInKindRedeemError";
-  }
-}
-
-/** Thrown when a Vault V2 gate prevents an in-kind redemption recipient from receiving assets. */
-export class CannotReceiveAssetsForInKindRedeemError extends Error {
-  /**
-   * @param vault - Gated Vault V2 address.
-   * @param recipient - Recipient rejected by the asset-receive gate.
-   */
-  public constructor(
-    public readonly vault: Address,
-    public readonly recipient: Address,
-  ) {
-    super(
-      `Recipient "${recipient}" cannot receive assets from vault "${vault}". Satisfy the vault's asset gate before redeeming in kind.`,
-    );
-    this.name = "CannotReceiveAssetsForInKindRedeemError";
-  }
-}
-
 /** Thrown when a MetaMorpho vault is connected to a different Morpho deployment. */
 export class VaultMorphoMismatchError extends Error {
   /**
@@ -241,6 +207,23 @@ export class VaultMorphoMismatchError extends Error {
     this.expected = params.expected;
     this.actual = params.actual;
     this.name = "VaultMorphoMismatchError";
+  }
+}
+
+/** Thrown when a Vault V1 is Morpho Blue's fee recipient and cannot safely redeem in kind. */
+export class VaultIsBlueFeeRecipientError extends Error {
+  /**
+   * @param vault - Unsupported Vault V1 address.
+   * @param blue - Morpho Blue deployment whose fees accrue to the vault.
+   */
+  public constructor(
+    public readonly vault: Address,
+    public readonly blue: Address,
+  ) {
+    super(
+      `Vault "${vault}" is Morpho Blue "${blue}"'s fee recipient. Use another exit path because VaultExitBundlesV1 cannot safely account for the vault's accrued fee shares.`,
+    );
+    this.name = "VaultIsBlueFeeRecipientError";
   }
 }
 

@@ -4,9 +4,9 @@ import {
   AccrualVaultV2,
   AccrualVaultV2MorphoMarketV1Adapter,
   AccrualVaultV2MorphoMarketV1AdapterV2,
+  getChainAddress,
   Market,
   MarketParams,
-  registerCustomAddresses,
 } from "@morpho-org/blue-sdk";
 import { Time, ZERO_ADDRESS } from "@morpho-org/morpho-ts";
 import { type MockClientHandle, mockRead } from "@morpho-org/test/mock";
@@ -31,8 +31,10 @@ export const IN_KIND_ASSET =
   "0x0000000000000000000000000000000000001003" as const;
 export const IN_KIND_USER =
   "0x0000000000000000000000000000000000001004" as const;
-export const IN_KIND_BUNDLER =
-  "0x0000000000000000000000000000000000001005" as const;
+export const IN_KIND_BUNDLER = getChainAddress(
+  mainnet.id,
+  "bundles.vaultExitBundlesV1",
+);
 
 export const inKindMarketParams = new MarketParams({
   loanToken: IN_KIND_ASSET,
@@ -40,12 +42,6 @@ export const inKindMarketParams = new MarketParams({
   oracle: "0x0000000000000000000000000000000000001007",
   irm: "0x0000000000000000000000000000000000001008",
   lltv: 860_000_000_000_000_000n,
-});
-
-registerCustomAddresses({
-  addresses: {
-    [mainnet.id]: { bundles: { vaultExitBundlesV1: IN_KIND_BUNDLER } },
-  },
 });
 
 const futureTimestamp = () => Time.timestamp() + Time.s.from.d(1n);
@@ -116,6 +112,7 @@ export const inKindVaultV2Data = (params?: {
   readonly address?: Address;
   readonly supplyShares?: bigint;
   readonly penalty?: bigint;
+  readonly assetBalance?: bigint;
   readonly adapters?: "single" | "empty" | "legacy";
 }) => {
   const address = params?.address ?? IN_KIND_VAULT;
@@ -179,7 +176,7 @@ export const inKindVaultV2Data = (params?: {
     },
     undefined,
     adapters,
-    0n,
+    params?.assetBalance ?? 0n,
     { [IN_KIND_ADAPTER]: params?.penalty ?? 0n },
   );
 };

@@ -72,8 +72,8 @@ the pre-flight validation that turns those opaque failures into named SDK errors
   correctly.
 - Offer an approve-only path when the integrator sets `supportSignature: false` — which is also the
   answer for smart-contract wallets, since Vault V2's `permit` is `ecrecover`-only.
-- Ship with JSDoc, colocated unit tests, Anvil fork tests over the deployment from PR
-  [#907](https://github.com/morpho-org/sdks/pull/907), and a semver-relevant changeset.
+- Ship with JSDoc, colocated unit tests, Anvil fork tests over the canonical Ethereum deployment,
+  and a semver-relevant changeset.
 
 **Non-Goals**
 
@@ -89,14 +89,13 @@ the pre-flight validation that turns those opaque failures into named SDK errors
   above the user's holdings still reverts on-chain. Sizing `amount` against the share balance is the
   caller's job (`vvrm` derives it from the balance it already has), so the SDK spends no RPC on a
   `balanceOf` read it would only duplicate.
-- No composition with a penalty-free `withdraw` leg. In-kind redemption never touches the vault's
-  pre-existing idle assets; splitting an exit across both paths is deferred (see Future
-  Considerations).
+- No separate composition with a penalty-free `withdraw` leg. VaultExitBundlesV1 atomically
+  withdraws available idle assets first and applies in-kind redemption only to the remainder.
 - No new runtime dependencies. `viem` stays the only peer dep of `morpho-sdk`.
 
-## Current Solution
+## Pre-change State
 
-`morpho-sdk` has no support for `morpho-org/bundles` at all — a case-insensitive search for
+Before this proposal, `morpho-sdk` had no support for `morpho-org/bundles` — a search for
 `VaultExitBundles`, `vault-exit`, `InKindRedemption`, and `IKR` across `src/` returns nothing.
 
 The nearest surface is the pair of Vault V2 force paths in
@@ -117,24 +116,22 @@ For Vault V1 there is no force path at all.
 
 ### What the contract does
 
-Both entry points end with the user's vault shares burned and the user holding Blue supply positions.
-The amount of Blue exposure the user receives differs by vault version: for **Vault V1** it is the
-full `exitAssets`; for **Vault V2** it is `exitAssets` *net of the force-deallocation penalty* —
-`floor(exitAssets·WAD / (WAD + penalty))` — because the penalty is charged in the same step that
-burns the vault shares. Quoting the V2 output as the full `exitAssets` overstates the proceeds by the
-penalty. The SDK does **not** surface this net figure in the action's args or output: `amount` stays
-penalty-*inclusive* (it maps one-to-one to the contract's `exitAssets`), and the net proceeds are the
-caller's to derive from the `penalty` already on the `getData()` snapshot via the formula above. A
-first-class net-proceeds surface belongs to the deferred preview helper (see Future Considerations),
-not to this action's args — adding it here would widen the very surface this TIB is keeping minimal.
-They get there differently.
+Both entry points burn the user's vault shares. Vault V1 gives the user Blue supply positions for
+the full `exitAssets`. Vault V2 first withdraws `min(vault asset balance, exitAssets)` as idle tokens,
+then gives the user Blue supply positions for
+`floor((exitAssets - idleAssets)·WAD / (WAD + penalty))`. Quoting the V2 output as the full
+`exitAssets` therefore overstates the Blue position. The action keeps `amount` penalty-inclusive and
+maps it one-to-one to the contract's `exitAssets`; `previewVaultV2InKindRedeem` exposes the idle,
+net, and fee split needed by frontends.
 
 **Vault V2** — per market in the caller's list, the bundler supplies into Blue *on behalf of the
 user* with a callback, and repays that supply from the vault inside the callback:
 
 ```solidity
+idleAssets         = min(IERC20(asset).balanceOf(vault), exitAssets);
+IVaultV2(vault).withdraw(idleAssets, address(this), msg.sender);
 penalty            = IVaultV2(vault).forceDeallocatePenalty(adapter);
-assetsToDeallocate = exitAssets.mulDivDown(WAD, WAD + penalty);
+assetsToDeallocate = (exitAssets - idleAssets).mulDivDown(WAD, WAD + penalty);
 
 for (uint256 i; assetsToDeallocate > 0; i++) {                       // <- unbounded
     bytes32 marketId = Id.unwrap(marketParamsList[i].id());
@@ -172,11 +169,11 @@ The differences the SDK has to model:
 |                        | Vault V1 (`IMetaMorpho`)                                        | Vault V2 (`IVaultV2`)                                            |
 | ---------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------- |
 | Funding                | Blue `flashLoan` for the full amount, up front                    | per-market `supply` + `onMorphoSupply` callback                    |
-| Penalty                | none — `assetsToDeallocate == exitAssets`                         | `floor(exitAssets·WAD / (WAD + penalty))`, penalty capped at 2%    |
+| Penalty                | none — `assetsToDeallocate == exitAssets`                         | `floor((exitAssets - idleAssets)·WAD / (WAD + penalty))`, penalty capped at 2% |
 | Adapter argument       | absent                                                            | required; single, and must be a `MorphoMarketV1AdapterV2`          |
 | Unknown markets        | skipped via `config(id).enabled`                                  | not skipped; contribute zero and burn an index                     |
 | Blue balance needed    | `>= exitAssets` (whole amount at once — **stricter**)             | `>= max_i(assets_i)` (peak per-iteration chunk)                    |
-| Vault gates            | none                                                              | `canSendShares`, `canReceiveAssets` ×2                             |
+| Vault gates            | none                                                              | enforced by Vault V2 during execution; not preflighted             |
 | Shares permit domain   | standard OZ `ERC20Permit`                                         | **non-standard, see below**                                        |
 
 ### Public surface
@@ -191,22 +188,20 @@ bundles?: {
 };
 ```
 
-The mirrored `bigint` deployment slot comes free via `ChainDeployments<Addresses>`.
-`VaultExitBundlesV1` will be deployed to **every chain Morpho supports**, so the slot is filled in
-per chain as each deployment lands. Until a given chain's address is known the slot stays unset,
-actions resolve it directly with `getChainAddress` (and therefore throw `UnknownAddressError`), and
-fork tests inject an address through `registerCustomAddresses`.
+The mirrored `bigint` deployment slot comes free via `ChainDeployments<Addresses>`. Canonical
+deployments are registered on Ethereum, Base, Arbitrum, Optimism, Polygon, World Chain, Unichain,
+HyperEVM, Katana, Monad, Stable, Tempo, and Robinhood Chain. On other chains, actions resolve the
+optional entry with `getChainAddress` and therefore throw `UnknownAddressError` until an address is
+registered.
 
 **`morpho-sdk` — `src/abis.ts`.** Pin `vaultExitBundlesV1Abi` alongside `bundler3Abi` and
 `generalAdapter1Abi`. This is the established split: core protocol ABIs live in `morpho-ts`,
 periphery and bundler ABIs live in the SDK that drives them — the same placement `midnightBundlesAbi`
 uses in `midnight-sdk`.
 
-The ABI is compiled from `morpho-org/bundles` commit
-`a531f7126f482eaeb57e7d8073e9afb718477bae`, promoted from test fixture to published source.
-`test/fixtures/vaultExitBundlesV1.ts` keeps only the matching creation `code` and imports the ABI
-from `src`, so there is one source of truth (root `AGENTS.md` §1) and the fixture's selector
-assertions guard the *published* ABI instead of a private copy.
+The ABI matches the deployed `morpho-org/bundles` commit
+`9994e6abe5b18d5f7e0d6bd666f85eb259e3312f`. The deployed selectors are unchanged from the earlier
+integration artifact, so `src/abis.ts` remains the single published source of truth.
 
 Two properties of that compiled ABI are worth recording:
 
@@ -281,7 +276,7 @@ inKindRedeem(params: {
 
 `userAddress` is not optional decoration: the contract hardcodes `owner = msg.sender` and
 `spender = address(this)` inside `TokenLib.submitPermit`, so the permit must be signed by the sending
-account, and the same address drives the allowance/nonce reads and the `canSendShares` gate.
+account, and the same address drives the allowance and nonce reads.
 
 The method is **synchronous**, like `deposit` / `withdraw` / `forceRedeem`, and runs every check
 derivable from `(amount, marketParamsList, vaultData)` eagerly — it throws before returning the
@@ -321,8 +316,8 @@ This is the load-bearing part of the decision. Each row was derived by walking
 | `MorphoMismatch()`                      | `adapter.morpho() != BLUE`                                      | subsumed by the adapter-type row above — the `MorphoMarketV1AdapterV2` factory pins Blue in its constructor, so a genuine `AccrualVaultV2MorphoMarketV1AdapterV2` cannot mismatch | reuse `UnsupportedInKindAdapterError`          |
 | **`panic 0x32`** (array out-of-bounds)  | list exhausted before `assetsToDeallocate` reaches 0            | coverage sum ≥ requirement, under the **version-specific** rule below — id-deduplicated on V2, raw ordered list on V1                                          | `InKindRedemptionCoverageError`                |
 | entry silently contributes zero         | a listed `MarketParams.id` is not in `adapter.marketIds`        | treat it as zero in the coverage and peak-balance calculations, matching the contract                                                                           | —                                              |
-| silent no-op that still burns the permit | `mulDivDown(amount, WAD, WAD + penalty) === 0`                 | derived `assetsToDeallocate > 0`                                                                                                                               | `NonPositiveInputError("assetsToDeallocate")`  |
-| `panic 0x32` on the first index         | `marketParamsList.length === 0`                                 | non-empty list                                                                                                                                                 | `EmptyMarketParamsListError`                   |
+| silent no-op that still burns the permit | no idle assets and `mulDivDown(amount, WAD, WAD + penalty) === 0` | require either idle assets or a positive derived `assetsToDeallocate`                                                                                         | `NonPositiveInputError("assetsToDeallocate")`  |
+| `panic 0x32` on the first index         | `marketParamsList.length === 0` while deallocation is required   | require a non-empty list only when `assetsToDeallocate > 0`                                                                                                    | `EmptyMarketParamsListError`                   |
 | `DeadlinePassed()` / `PermitDeadlineExpired()` | `block.timestamp > deadline`                             | `deadline > Time.timestamp()`                                                                                                                                  | `ExpiredDeadlineError`                         |
 | —                                       | `amount <= 0`                                                   | positive amount                                                                                                                                                | `NonPositiveInputError("amount")`              |
 
@@ -330,13 +325,14 @@ Coverage, for Vault V2:
 
 ```
 penalty            = vaultData.forceDeallocatePenalties[adapter]
-assetsToDeallocate = mulDivDown(amount, WAD, WAD + penalty)
+idleAssets         = min(vaultData.assetBalance, amount)
+assetsToDeallocate = mulDivDown(amount - idleAssets, WAD, WAD + penalty)
 covered            = Σ over dedup(marketParamsList) of
                        market(id).accrueInterest(t).toSupplyAssets(adapter.supplyShares[id])
 require              covered >= assetsToDeallocate
 maxExitAssets      = covered == 0
-                       ? 0
-                       : mulDivUp(covered + 1, WAD + penalty, WAD) - 1
+                       ? idleAssets
+                       : idleAssets + mulDivUp(covered + 1, WAD + penalty, WAD) - 1
                                                                   // returned in the error payload
 ```
 
@@ -379,10 +375,9 @@ Two subtleties that are easy to get wrong:
 | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | opaque ERC-20 revert inside the callback     | Blue credits the supply **before** the callback but pulls the tokens **after**, while the adapter withdraws real tokens mid-callback | `balanceOf(vaultData.asset, blue) >= peak`, where `peak` is the largest single `assets_i` from simulating the greedy loop **in the caller's order**         |
 | allowance underflow                          | `allowance[user][bundler] -= shares` runs on **both** the penalty leg and the main leg                                       | forced `maxUint256` on both the permit and the approve path (see below)                                                                                    |
-| `CannotSendShares()`                         | `canSendShares(onBehalf)` in `VaultV2.exit()`                                                                                | `vault.canSendShares(userAddress)`                                                                                                                         |
-| `CannotReceiveAssets()`                      | `canReceiveAssets(receiver)` — the **bundler** on the main leg, the **vault itself** on the penalty leg                       | `vault.canReceiveAssets(vaultExitBundlesV1)` **and** `vault.canReceiveAssets(vault)`                                                                       |
 | `InvalidSigner()`                            | nonce stale or ahead of chain                                                                                                | read `nonces(userAddress)` fresh at requirement time                                                                                                       |
 | `MorphoMismatch()` (V1 only)                 | `IMetaMorpho(vault).MORPHO() != BLUE`                                                                                        | one `MORPHO()` read                                                                                                                                        |
+| V1 callback undercounts accrued fee shares   | the Vault V1 is Morpho Blue's `feeRecipient`, a configuration VaultExitBundlesV1 explicitly does not support                 | read `BLUE.feeRecipient()` and reject when it equals the vault                                                                                              |
 
 The Blue-balance row deserves emphasis, because it is **order-dependent** where coverage is not, and
 because it is the live failure mode rather than a theoretical one. Inside `onMorphoSupply` the market's
@@ -396,6 +391,13 @@ which is exactly the situation in-kind redemption exists to serve.
 
 Vault V1 inverts this: the flash loan takes the whole `exitAssets` up front, so the bound is
 `balanceOf(loanToken, blue) >= exitAssets` — strictly stronger than V2's.
+
+Vault V2 gates are intentionally not preflighted. A receive-assets gate may inspect
+`VaultExitBundlesV1.initiator()`, whose transient value is populated only inside the actual
+periphery call. Reading `canReceiveAssets` directly — inside or outside multicall — therefore uses
+a different execution context and can disagree with execution. Share-send and asset-receive gates
+remain enforced by Vault V2 on-chain. Integrators that need gate assurance before submission must
+simulate the finalized transaction after its permit is signed or its approval is mined.
 
 Failure modes deliberately left to documentation rather than checks: `AlreadyInitiated()`
 (decodable transient reentrancy guard, unreachable from a normal EOA call),
@@ -457,7 +459,7 @@ allowlist, so both allowlists must admit it:
 - the **default** approve path (`supportSignature: false`, and the only path a smart-contract wallet
   can take), through
   [`encodeErc20Approval`](../../packages/morpho-sdk/src/actions/requirements/encode/encodeErc20Approval.ts),
-  whose allowlist is today `["generalAdapter1", "permit2", "midnight", "midnightBundles"]`.
+  whose allowlist before this change is `["generalAdapter1", "permit2", "midnight", "midnightBundles"]`.
 
 `vaultExitBundlesV1` **must be added to `encodeErc20Approval`'s allowlist too** — this was the easy
 omission to make. Leaving it out makes the default path throw `UnsupportedErc20ApprovalSpenderError`
@@ -482,8 +484,7 @@ flows.
 
 ### Testing
 
-Per root `AGENTS.md` §5, and building on PR [#907](https://github.com/morpho-org/sdks/pull/907),
-which puts `VaultExitBundlesV1` on the pinned mainnet fork ahead of any live deployment.
+Per root `AGENTS.md` §5, tests use the canonical deployment on the pinned mainnet fork.
 
 - **Unit, colocated.** Both actions: happy path, inline calldata snapshots, the empty-permit
   sentinel, 65-byte `v`/`yParity` and 64-byte EIP-2098 normalisation, and every mismatch guard. A
@@ -491,14 +492,10 @@ which puts `VaultExitBundlesV1` on the pinned mainnet fork ahead of any live dep
   the convention in `src/bundler/actions.test.ts`.
 - **Unit, mock client.** Every row of the synchronous matrix, and each `getRequirements()` branch
   (allowance already max / permit / approve), via `createMockClient` from `@morpho-org/test/mock`.
-- **Fork.** PR #907's `deployVaultExitBundlesV1` is deliberately a local helper; this work promotes
-  it to a shared `test/helpers/vaultExitBundlesV1.ts` beside the existing `test/helpers/vaultV2.ts`.
-  Because the actions resolve `to` from the address registry, the helper deploys the contract onto
-  the fork and makes its address *findable* via `registerCustomAddresses`, reusing the fork-wiring
-  approach PR [#907](https://github.com/morpho-org/sdks/pull/907) already establishes for the fixture
-  — so `getChainAddresses(chainId).bundles?.vaultExitBundlesV1` resolves inside the suite. End-to-end
-  coverage: an illiquid Vault V2 exited in-kind across several markets with a non-zero penalty, the
-  V1 flash-loan path, and the gate and Blue-balance rejections. **At least one V2 case must exercise
+- **Fork.** The fork block includes the canonical Ethereum `VaultExitBundlesV1`, resolved through
+  the built-in address registry. End-to-end coverage includes an illiquid Vault V2 exited in-kind
+  across several markets with idle assets and a non-zero penalty, the
+  V1 flash-loan path, and the Blue-balance rejection. **At least one V2 case must exercise
   the `supportSignature: true` permit path end-to-end** — sign the `PermitRequirementSignature` that
   `getRequirements()` returns, feed the resulting `v`/`r`/`s` into the bundle, and execute on the
   fork — so the hardcoded two-field `erc20.eip5267Domain` passed to `getPermitTypedData` is checked
@@ -528,30 +525,20 @@ which puts `VaultExitBundlesV1` on the pinned mainnet fork ahead of any live dep
 
 ### Implementation Phases
 
-The work is sequenced to **parallelise on top of PR
-[#907](https://github.com/morpho-org/sdks/pull/907)** so the integration is finished and merged
-*before* `VaultExitBundlesV1` is deployed, and ships the moment it is. #907 puts the (not-yet-live)
-contract on the pinned Anvil fork, so every phase below — encoding, the validation matrix,
-`getRequirements`, and end-to-end fork coverage — is fully exercisable today, against fork state,
-with **no dependency on a live address or deployment date**. The only thing genuinely gated on
-deployment is one value: the per-chain `bundles.vaultExitBundlesV1` address-registry entry, which fills in
-as `VaultExitBundlesV1` rolls out across every Morpho-supported chain. Everything else can land now.
+The implementation originally landed in phases ahead of deployment. The canonical deployments are
+now registered, the fork suite exercises the live Ethereum bytecode, and the temporary creation-code
+artifact and deployment helper have been removed. The verified selectors and `BLUE` immutable match
+the vendored ABI.
 
-Because the contract is undeployed, the artifact and ABI are pinned to upstream commit
-`a531f7126f482eaeb57e7d8073e9afb718477bae`. Treat the fork suite as validating *our* integration,
-not the final on-chain bytecode: once the contract is live, re-verify the deployed selectors and
-immutables against the vendored ABI before flipping the address slot on, and delete the artifact
-per its header.
-
-- **Phase 0 — Prerequisite:** land PR #907. Everything after it runs against #907's fork and does
-  not wait on deployment.
-- **Phase 1 — Plumbing:** promote the ABI into `src/abis.ts` (the fixture keeps only `code`), add the
-  `bundles.vaultExitBundlesV1` address slot. Independently useful and independently reviewable.
+- **Phase 0 — Prerequisite:** establish predeployment fork coverage (completed by PR #907 and now
+  superseded by the canonical deployment).
+- **Phase 1 — Plumbing:** promote the ABI into `src/abis.ts` and add the
+  `bundles.vaultExitBundlesV1` address slot.
 - **Phase 2 — Actions:** both pure builders, the new error classes, the action-union members,
   colocated unit and property tests.
 - **Phase 3 — Entities:** the full validation matrix, `getRequirements`, mock-client tests per branch.
-- **Phase 4 — Fork tests and release:** shared deploy helper, end-to-end fork coverage, JSDoc
-  `@example` blocks, changeset.
+- **Phase 4 — Fork tests and release:** end-to-end coverage against the canonical deployment,
+  JSDoc `@example` blocks, and changeset.
 
 ## Considered Alternatives
 
@@ -573,9 +560,9 @@ Accept `{ shares }` or `{ max: true }` and convert internally, mirroring `blueRe
 The full exit is the archetypal use case and it is naturally share-denominated.
 
 **Why rejected:** the contract's `exitAssets` is penalty-*inclusive*, so a shares mode would have to
-invert the penalty as well as the share price, and a `max` mode would additionally have to cap
-against the adapter's total exposure — in-kind redemption cannot touch the vault's idle assets at
-all. Each conversion is a place for the SDK to be subtly wrong about an amount the user cannot
+invert the penalty as well as the share price, and a `max` mode would additionally have to combine
+the vault's changing idle balance with the adapter's total exposure. Each conversion is a place for
+the SDK to be subtly wrong about an amount the user cannot
 verify. A 1:1 passthrough keeps the SDK honest about what it is doing; convenience modes can be
 added later, additively, once the primitive has real usage.
 
@@ -616,8 +603,8 @@ Use `scripts/compile-solidity.js` rather than committing a pre-compiled artifact
 
 **Why rejected:** already settled in PR #907 — the contract pulls in 37 Solidity files across six
 foundry submodules, which would mean checking roughly 150 KB of upstream contracts into this repo.
-The artifact carries its provenance in a header and is deleted once the contract ships on a live
-chain.
+The temporary predeployment artifact carried its provenance in a header and was deleted once the
+canonical deployment became available.
 
 ## Assumptions & Constraints
 
@@ -649,16 +636,14 @@ chain.
   market toward coverage nor includes it in the peak Blue-balance calculation, but it preserves the
   entry in calldata. This matches the contract, which skips zero-share and foreign markets, and lets
   callers pass comprehensive ordered lists that remain useful across allocation changes.
-- **The pinned fork block predates Osaka**, which is why PR #907's artifact targets `cancun`. Both
-  targets emit byte-identical output for this contract.
+- **The pinned fork block includes the Osaka-compiled canonical deployment**, so the suite validates
+  the exact live bytecode rather than a locally compiled artifact.
 
 ## Dependencies
 
-- [`morpho-org/bundles`](https://github.com/morpho-org/bundles) `VaultExitBundlesV1`, at commit
-  `a531f7126f482eaeb57e7d8073e9afb718477bae` pinned by the fixture header. No runtime dependency is
-  added — the ABI is vendored, as all ABIs in this repo are.
-- PR [#907](https://github.com/morpho-org/sdks/pull/907) must land first: it is the only way to
-  exercise the contract before deployment.
+- [`morpho-org/bundles`](https://github.com/morpho-org/bundles) `VaultExitBundlesV1`, at deployed
+  commit `9994e6abe5b18d5f7e0d6bd666f85eb259e3312f`. No runtime dependency is added — the ABI is
+  vendored, as all ABIs in this repo are.
 - `@morpho-org/morpho-ts` for the address slot. Per root `AGENTS.md` §7, bumping it requires auditing
   direct dependents and including them in the changeset.
 
@@ -676,6 +661,11 @@ chain.
 - **Blue token-balance dependency.** The exit's success depends on Blue's aggregate balance of the
   loan token at execution, which any other transaction in the same block can change. The pre-flight
   check is a snapshot, not a guarantee.
+- **Vault gates are enforced only during execution.** A receive-assets gate may inspect the
+  periphery's transient `initiator`, which is unset during standalone RPC reads. The SDK therefore
+  does not preflight either Vault V2 gate family: a direct or multicall read could reject a valid
+  exit or approve one that later reverts. Simulate the finalized, authorized transaction when gate
+  compatibility must be known before submission.
 - **Share sufficiency is not validated — by decision.** The SDK forces a `maxUint256` allowance,
   which settles *authorization*, and then does **not** read the user's share balance. An `amount`
   sized above the user's holdings therefore reverts on-chain (`ERC20InsufficientBalance` in
@@ -690,11 +680,12 @@ chain.
   must cover both legs. `vvrm` derives this from the balance it already holds; a `balanceOf` check
   in the SDK would only duplicate that read while still owing the same preview math. It is stated in
   the JSDoc of both entity methods so no integrator relies on the SDK to catch it.
-- **Penalty and adapter-position drift is an acknowledged, unclosable blind spot.** The contract
-  reads the V2 penalty (`forceDeallocatePenalty(adapter)`) and each market's adapter position
-  *live, on-chain*; the SDK derives `assetsToDeallocate` and the coverage sum from the `getData()`
-  snapshot. Between build and execution these can move in the unsafe direction: a curator lowering
-  the penalty *raises* the on-chain `assetsToDeallocate`, and a reallocation or a third-party
+- **Idle balance, penalty, and adapter-position drift are an acknowledged, unclosable blind spot.**
+  The contract reads the vault's asset balance, V2 penalty (`forceDeallocatePenalty(adapter)`), and
+  each market's adapter position *live, on-chain*; the SDK derives `assetsToDeallocate` and the
+  coverage sum from the `getData()` snapshot. Between build and execution these can move in the
+  unsafe direction: a lower idle balance or penalty *raises* the on-chain `assetsToDeallocate`, and
+  a reallocation or a third-party
   `forceDeallocate` *shrinks* the adapter's position on a listed market — either can make a list that
   passed pre-flight fall short and revert with the very `panic 0x32` this TIB set out to eliminate.
   **There is no SDK-side defence, and we do not pretend otherwise.** The SDK cannot pin on-chain
@@ -721,23 +712,13 @@ chain.
   today's `forceWithdraw` / `forceRedeem`, and it carries extra surface (`minSharePriceE27`,
   referral fee and recipient) worth deciding on separately. This TIB neither deprecates nor changes
   the existing force paths.
-- **Splitting an exit across a penalty-free withdraw and an in-kind leg.** In-kind redemption never
-  touches the vault's idle assets, and the contract's own docstring notes that withdrawing normally
-  avoids the penalty where liquidity exists. A planner could route the liquid portion through
-  `withdraw` and only the remainder through in-kind redemption — but the two cannot be composed
-  atomically, since `VaultExitBundlesV1` is a standalone entry point rather than a bundler3 adapter.
-- **A preview helper.** A pure `previewInKindRedemption(vaultData, { amount, marketParamsList })`
-  returning the per-market split, penalty paid, and resulting Blue positions would give integrators
-  the plan without a second entity surface. Purely additive; deferred until there is demand.
-- **Deleting the test artifact** once the contract ships on a live chain, as PR #907's header
-  instructs.
 
 ## References
 
 - [`VaultExitBundlesV1.sol`](https://github.com/morpho-org/bundles/blob/main/src/vault-exit/VaultExitBundlesV1.sol) — the contract
 - [`TokenLib.sol`](https://github.com/morpho-org/bundles/blob/main/src/libraries/TokenLib.sol) — the `Permit` struct and `submitPermit` semantics
 - [morpho-org/bundles README](https://github.com/morpho-org/bundles) — the bundles design rationale and audits
-- [PR #907 — `test(morpho-sdk): deploy VaultExitBundlesV1 onto a fork`](https://github.com/morpho-org/sdks/pull/907) — the prerequisite
+- [PR #907 — `test(morpho-sdk): deploy VaultExitBundlesV1 onto a fork`](https://github.com/morpho-org/sdks/pull/907) — historical predeployment fork setup
 - [`vault-v2/src/VaultV2.sol`](https://github.com/morpho-org/vault-v2/blob/main/src/VaultV2.sol) — `DOMAIN_SEPARATOR`, `exit`, `forceDeallocate`, `permit`
 - [`TIB-2026-06-03`](./TIB-2026-06-03-midnight-action-output-interface.md) — the `ActionOutput` direction these handles should converge on
 - [`TIB-2026-07-02`](./TIB-2026-07-02-blue-repay-native-wrapping.md) — precedent for entity-resolved amounts with a purely assembling action

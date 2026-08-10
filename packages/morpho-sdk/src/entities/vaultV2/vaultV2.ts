@@ -7,11 +7,7 @@ import {
   MarketUtils,
   MathLib,
 } from "@morpho-org/blue-sdk";
-import {
-  erc2612Abi,
-  fetchAccrualVaultV2,
-  vaultV2Abi,
-} from "@morpho-org/blue-sdk-viem";
+import { erc2612Abi, fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress, Time } from "@morpho-org/morpho-ts";
 import { type Address, erc20Abi, isAddressEqual, maxUint256 } from "viem";
 import { multicall } from "viem/actions";
@@ -27,13 +23,12 @@ import {
   vaultV2Withdraw,
 } from "../../actions/index.js";
 import { validateSlippageTolerance } from "../../helpers/index.js";
+import { getVaultV2InKindRedeemMarketAssets } from "../../helpers/previewVaultV2InKindRedeem.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
   type ActionOutput,
   type ActionRequirement,
   AdapterNotPartOfVaultError,
-  CannotReceiveAssetsForInKindRedeemError,
-  CannotSendSharesForInKindRedeemError,
   ChainIdMismatchError,
   ChainWNativeMissingError,
   type Deallocation,
@@ -141,20 +136,21 @@ export interface VaultV2Actions {
     buildTx: () => Readonly<Transaction<VaultV2RedeemAction>>;
   };
   /**
-   * Prepares an illiquid Vault V2 exit into the vault adapter's Morpho Blue supply positions.
+   * Prepares an illiquid Vault V2 exit into idle assets and Morpho Blue supply positions.
    *
    * The vault must have exactly one `MorphoMarketV1AdapterV2`. `amount` is penalty-inclusive and
    * the caller controls market order. Call `getRequirements()` before `buildTx()` so Blue balance,
-   * vault gates, allowance, and nonce are checked on-chain. The SDK intentionally does not validate
-   * the user's share balance; it must cover both the main and penalty legs. A max-share permit or
-   * approval remains after execution.
+   * allowance, and nonce are checked on-chain. Vault gates are enforced by the final transaction
+   * and are not preflighted because receive gates may depend on VaultExitBundlesV1's transient
+   * initiator. The SDK intentionally does not validate the user's share balance; it must cover both
+   * the main and penalty legs. A max-share permit or approval remains after execution.
    *
-   * Penalty and adapter positions can drift after the snapshot, so an on-chain under-coverage panic
-   * remains possible if vault state changes between preparation and inclusion.
+   * Idle balance, penalty, and adapter positions can drift after the snapshot, so an on-chain
+   * under-coverage panic remains possible if vault state changes between preparation and inclusion.
    *
    * @param params - In-kind redemption parameters.
    * @param params.amount - Penalty-inclusive, asset-denominated amount to exit.
-   * @param params.marketParamsList - Ordered adapter markets consumed greedily by the contract.
+   * @param params.marketParamsList - Ordered adapter markets consumed greedily after idle assets.
    * @param params.vaultData - Pre-fetched Vault V2 accrual snapshot.
    * @param params.userAddress - Account that signs and submits the exit.
    * @param params.adapter - Optional adapter override; defaults to the vault's sole adapter.
@@ -162,8 +158,8 @@ export interface VaultV2Actions {
    * @returns Lazy prerequisite resolution and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client and entity target different chains.
    * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
-   * @throws {NonPositiveInputError} when `amount` or the derived deallocation amount is not positive.
-   * @throws {EmptyMarketParamsListError} when the market list is empty.
+   * @throws {NonPositiveInputError} when `amount` is not positive or rounds to no exit without idle assets.
+   * @throws {EmptyMarketParamsListError} when assets must be deallocated and the market list is empty.
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future.
    * @throws {InKindRedemptionRequiresSingleAdapterError} when the vault does not have one adapter.
    * @throws {AdapterNotPartOfVaultError} when `adapter` is not the vault's adapter.
@@ -172,8 +168,6 @@ export interface VaultV2Actions {
    * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
    * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
    * @throws {InsufficientBlueBalanceForInKindRedeemError} from `getRequirements()` when Blue cannot fund the largest callback.
-   * @throws {CannotSendSharesForInKindRedeemError} from `getRequirements()` when the user's share gate rejects the exit.
-   * @throws {CannotReceiveAssetsForInKindRedeemError} from `getRequirements()` when either asset recipient is gated.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
    * @throws {InKindRedeemPermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, amount, or signature encoding.
@@ -475,7 +469,6 @@ export class MorphoVaultV2 implements VaultV2Actions {
       throw new VaultAddressMismatchError(this.vault, vaultData.address);
     }
     if (amount <= 0n) throw new NonPositiveInputError("amount", amount);
-    if (marketParamsList.length === 0) throw new EmptyMarketParamsListError();
     const marketParamsListSnapshot = marketParamsList.map(
       ({ loanToken, collateralToken, oracle, irm, lltv }) => ({
         loanToken,
@@ -513,17 +506,26 @@ export class MorphoVaultV2 implements VaultV2Actions {
 
     const penalty =
       vaultData.forceDeallocatePenalties[soleAdapter.address] ?? 0n;
-    const assetsToDeallocate = MathLib.wDivDown(amount, MathLib.WAD + penalty);
-    if (assetsToDeallocate <= 0n) {
+    const idleAssets = MathLib.min(vaultData.assetBalance, amount);
+    const assetsToDeallocate = MathLib.wDivDown(
+      amount - idleAssets,
+      MathLib.WAD + penalty,
+    );
+    if (idleAssets === 0n && assetsToDeallocate === 0n) {
       throw new NonPositiveInputError("assetsToDeallocate", assetsToDeallocate);
+    }
+    if (assetsToDeallocate > 0n && marketParamsListSnapshot.length === 0) {
+      throw new EmptyMarketParamsListError();
     }
 
     const assetsByMarket = new Map(
       soleAdapter.markets.map((market) => [
         market.id,
-        market
-          .accrueInterest(MathLib.max(now, market.lastUpdate))
-          .toSupplyAssets(soleAdapter.supplyShares[market.id] ?? 0n),
+        getVaultV2InKindRedeemMarketAssets({
+          market,
+          supplyShares: soleAdapter.supplyShares[market.id] ?? 0n,
+          timestamp: now,
+        }),
       ]),
     );
     const uniqueMarketIds = new Set(marketIdListSnapshot);
@@ -532,8 +534,10 @@ export class MorphoVaultV2 implements VaultV2Actions {
     if (covered < assetsToDeallocate) {
       const maxExitAssets =
         covered === 0n
-          ? 0n
-          : MathLib.wMulUp(covered + 1n, MathLib.WAD + penalty) - 1n;
+          ? idleAssets
+          : idleAssets +
+            MathLib.wMulUp(covered + 1n, MathLib.WAD + penalty) -
+            1n;
       throw new InKindRedemptionCoverageError({
         required: assetsToDeallocate,
         covered,
@@ -563,54 +567,38 @@ export class MorphoVaultV2 implements VaultV2Actions {
 
     return {
       getRequirements: async (): Promise<readonly ActionRequirement[]> => {
-        const [
-          allowance,
-          nonce,
-          blueBalance,
-          canSendShares,
-          bundlerCanReceiveAssets,
-          vaultCanReceiveAssets,
-        ] = await multicall(this.client.viemClient, {
-          allowFailure: false,
-          contracts: [
-            {
-              address: this.vault,
-              abi: erc20Abi,
-              functionName: "allowance",
-              args: [userAddress, vaultExitBundlesV1],
-            },
-            {
-              address: this.vault,
-              abi: erc2612Abi,
-              functionName: "nonces",
-              args: [userAddress],
-            },
-            {
-              address: vaultData.asset,
-              abi: erc20Abi,
-              functionName: "balanceOf",
-              args: [blue],
-            },
-            {
-              address: this.vault,
-              abi: vaultV2Abi,
-              functionName: "canSendShares",
-              args: [userAddress],
-            },
-            {
-              address: this.vault,
-              abi: vaultV2Abi,
-              functionName: "canReceiveAssets",
-              args: [vaultExitBundlesV1],
-            },
-            {
-              address: this.vault,
-              abi: vaultV2Abi,
-              functionName: "canReceiveAssets",
-              args: [this.vault],
-            },
-          ],
-        });
+        // Vault gates are intentionally left to the final transaction. In particular, a receive
+        // gate may inspect VaultExitBundlesV1's transient `initiator`, which is populated only
+        // during the actual periphery call. Reading gates directly (inside or outside multicall)
+        // would therefore use a different execution context and could reject a valid exit or
+        // approve one that later reverts. Simulate the finalized transaction after authorization
+        // when gate compatibility must be checked before submission.
+        const [allowance, nonce, blueBalance] = await multicall(
+          this.client.viemClient,
+          {
+            allowFailure: false,
+            contracts: [
+              {
+                address: this.vault,
+                abi: erc20Abi,
+                functionName: "allowance",
+                args: [userAddress, vaultExitBundlesV1],
+              },
+              {
+                address: this.vault,
+                abi: erc2612Abi,
+                functionName: "nonces",
+                args: [userAddress],
+              },
+              {
+                address: vaultData.asset,
+                abi: erc20Abi,
+                functionName: "balanceOf",
+                args: [blue],
+              },
+            ],
+          },
+        );
 
         if (blueBalance < peak) {
           throw new InsufficientBlueBalanceForInKindRedeemError({
@@ -618,24 +606,6 @@ export class MorphoVaultV2 implements VaultV2Actions {
             available: blueBalance,
             required: peak,
           });
-        }
-        if (!canSendShares) {
-          throw new CannotSendSharesForInKindRedeemError(
-            this.vault,
-            userAddress,
-          );
-        }
-        if (!bundlerCanReceiveAssets) {
-          throw new CannotReceiveAssetsForInKindRedeemError(
-            this.vault,
-            vaultExitBundlesV1,
-          );
-        }
-        if (!vaultCanReceiveAssets) {
-          throw new CannotReceiveAssetsForInKindRedeemError(
-            this.vault,
-            this.vault,
-          );
         }
         if (allowance === maxUint256) return [];
         if (this.client.options.supportSignature) {
