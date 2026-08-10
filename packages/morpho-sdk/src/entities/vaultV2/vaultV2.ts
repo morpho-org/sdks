@@ -23,7 +23,6 @@ import {
   vaultV2Withdraw,
 } from "../../actions/index.js";
 import { validateSlippageTolerance } from "../../helpers/index.js";
-import { getVaultV2InKindRedeemMarketAssets } from "../../helpers/previewVaultV2InKindRedeem.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
   type ActionOutput,
@@ -521,11 +520,9 @@ export class MorphoVaultV2 implements VaultV2Actions {
     const assetsByMarket = new Map(
       soleAdapter.markets.map((market) => [
         market.id,
-        getVaultV2InKindRedeemMarketAssets({
-          market,
-          supplyShares: soleAdapter.supplyShares[market.id] ?? 0n,
-          timestamp: now,
-        }),
+        market
+          .accrueInterest(MathLib.max(now, market.lastUpdate))
+          .toSupplyAssets(soleAdapter.supplyShares[market.id] ?? 0n),
       ]),
     );
     const uniqueMarketIds = new Set(marketIdListSnapshot);

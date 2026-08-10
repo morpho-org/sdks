@@ -46,8 +46,12 @@ export const inKindMarketParams = new MarketParams({
 
 const futureTimestamp = () => Time.timestamp() + Time.s.from.d(1n);
 
-const inKindMarket = () =>
-  new Market({
+export const inKindVaultV1Data = (params?: {
+  readonly address?: Address;
+  readonly supplyShares?: bigint;
+  readonly enabled?: boolean;
+}) => {
+  const market = new Market({
     params: inKindMarketParams,
     totalSupplyAssets: 1_000n,
     totalBorrowAssets: 900n,
@@ -56,13 +60,6 @@ const inKindMarket = () =>
     lastUpdate: futureTimestamp(),
     fee: 0n,
   });
-
-export const inKindVaultV1Data = (params?: {
-  readonly address?: Address;
-  readonly supplyShares?: bigint;
-  readonly enabled?: boolean;
-}) => {
-  const market = inKindMarket();
   return new AccrualVault(
     {
       address: params?.address ?? IN_KIND_VAULT,
@@ -116,7 +113,15 @@ export const inKindVaultV2Data = (params?: {
   readonly adapters?: "single" | "empty" | "legacy";
 }) => {
   const address = params?.address ?? IN_KIND_VAULT;
-  const market = inKindMarket();
+  const market = new Market({
+    params: inKindMarketParams,
+    totalSupplyAssets: 1_000n,
+    totalBorrowAssets: 900n,
+    totalSupplyShares: 1_000_000_000n,
+    totalBorrowShares: 900n,
+    lastUpdate: futureTimestamp(),
+    fee: 0n,
+  });
   const adapter = new AccrualVaultV2MorphoMarketV1AdapterV2(
     {
       address: IN_KIND_ADAPTER,

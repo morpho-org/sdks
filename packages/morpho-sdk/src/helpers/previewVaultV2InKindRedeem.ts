@@ -1,7 +1,6 @@
 import {
   type AccrualVaultV2,
   AccrualVaultV2MorphoMarketV1AdapterV2,
-  type Market,
   type MarketParams,
   MathLib,
 } from "@morpho-org/blue-sdk";
@@ -23,16 +22,6 @@ interface VaultV2InKindRedeemMarketPreview {
   readonly netAssets: bigint;
   readonly feeAssets: bigint;
 }
-
-/** @internal */
-export const getVaultV2InKindRedeemMarketAssets = (params: {
-  readonly market: Market;
-  readonly supplyShares: bigint;
-  readonly timestamp: bigint;
-}): bigint =>
-  params.market
-    .accrueInterest(MathLib.max(params.timestamp, params.market.lastUpdate))
-    .toSupplyAssets(params.supplyShares);
 
 /**
  * Previews the single-market in-kind redemption choices needed by a Vault V2 frontend.
@@ -79,11 +68,9 @@ export function previewVaultV2InKindRedeem(
   const allocations = adapter.markets
     .map((market) => ({
       market,
-      allocationAssets: getVaultV2InKindRedeemMarketAssets({
-        market,
-        supplyShares: adapter.supplyShares[market.id] ?? 0n,
-        timestamp,
-      }),
+      allocationAssets: market
+        .accrueInterest(MathLib.max(timestamp, market.lastUpdate))
+        .toSupplyAssets(adapter.supplyShares[market.id] ?? 0n),
     }))
     .filter(({ allocationAssets }) => allocationAssets > 0n)
     .toSorted(({ allocationAssets: a }, { allocationAssets: b }) =>
