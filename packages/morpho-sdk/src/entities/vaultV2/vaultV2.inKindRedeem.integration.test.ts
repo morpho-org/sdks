@@ -10,6 +10,7 @@ import {
   vaultV2Abi,
 } from "@morpho-org/blue-sdk-viem";
 import type { AnvilTestClient } from "@morpho-org/test";
+import { createViemTest } from "@morpho-org/test/vitest";
 import {
   type Address,
   encodeAbiParameters,
@@ -26,7 +27,6 @@ import {
   WbtcUsdcSourceMarket,
 } from "../../../test/fixtures/blue.js";
 import { createVaultV2 } from "../../../test/helpers/vaultV2.js";
-import { test } from "../../../test/setup.js";
 import {
   InsufficientBlueBalanceForInKindRedeemError,
   isRequirementSignature,
@@ -35,6 +35,14 @@ import {
 
 const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const setupMarkets = [CbbtcUsdcBlue, WbtcUsdcSourceMarket] as const;
+
+// VaultExitBundlesV1 is deployed at this block. Keep the newer fork local so the shared fork
+// remains pinned to the historical state expected by the existing Morpho SDK integration suite.
+const test = createViemTest(mainnet, {
+  forkUrl: process.env.MAINNET_RPC_URL,
+  chainId: mainnet.id,
+  forkBlockNumber: 25_720_868n,
+});
 
 const submitAndAccept = async (params: {
   readonly client: AnvilTestClient;
@@ -57,6 +65,11 @@ describe("MorphoVaultV2.inKindRedeem integration", () => {
   test("accepts the two-field-domain permit and exits with a penalty", async ({
     client,
   }) => {
+    // Clear the test account's mainnet EIP-7702 delegation so permit validation uses ECDSA.
+    await client.setCode({
+      address: client.account.address,
+      bytecode: "0x",
+    });
     const { address: vaultAddress } = await createVaultV2({
       client,
       asset: USDC,

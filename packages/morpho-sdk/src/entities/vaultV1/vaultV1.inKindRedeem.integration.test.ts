@@ -1,19 +1,32 @@
 import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
+import { createViemTest } from "@morpho-org/test/vitest";
 import { erc20Abi, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
-import { test } from "../../../test/setup.js";
 import {
   isRequirementApproval,
   isRequirementSignature,
   morphoViemExtension,
 } from "../../index.js";
 
+// VaultExitBundlesV1 is deployed at this block. Keep the newer fork local so the shared fork
+// remains pinned to the historical state expected by the existing Morpho SDK integration suite.
+const test = createViemTest(mainnet, {
+  forkUrl: process.env.MAINNET_RPC_URL,
+  chainId: mainnet.id,
+  forkBlockNumber: 25_720_868n,
+});
+
 describe("MorphoVaultV1.inKindRedeem integration", () => {
   test("exits vault shares into Morpho Blue supply positions", async ({
     client,
   }) => {
+    // Clear the test account's mainnet EIP-7702 delegation before exercising the bundle.
+    await client.setCode({
+      address: client.account.address,
+      bytecode: "0x",
+    });
     const vault = client
       .extend(morphoViemExtension({ supportSignature: false }))
       .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
@@ -78,6 +91,11 @@ describe("MorphoVaultV1.inKindRedeem integration", () => {
   });
 
   test("accepts a Vault V1 shares permit and exits", async ({ client }) => {
+    // Clear the test account's mainnet EIP-7702 delegation so permit validation uses ECDSA.
+    await client.setCode({
+      address: client.account.address,
+      bytecode: "0x",
+    });
     const vault = client
       .extend(morphoViemExtension({ supportSignature: true }))
       .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
