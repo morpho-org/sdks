@@ -519,7 +519,20 @@ describe("computeVaultV2Reallocations", () => {
     });
 
     expect(reallocations).toHaveLength(1);
-    expect(reallocations[0]?.assets).toBe(22n);
+    expect(reallocations[0]?.assets).toBe(23n);
+  });
+
+  test("behavior: rounds required supply up to the utilization target", () => {
+    const { data } = makeFixture({ targetSupply: 1n, targetBorrow: 0n });
+
+    const reallocations = computeVaultV2Reallocations({
+      reallocationData: data,
+      marketId: targetParams.id,
+      operation: "borrow",
+      amount: 1n,
+    });
+
+    expect(reallocations[0]?.assets).toBe(1n);
   });
 
   test("behavior: falls back to a 100% source-utilization ceiling", () => {
@@ -607,7 +620,7 @@ describe("computeVaultV2Reallocations", () => {
         amount: 1n,
         options: { maxNativePenalty: 7n },
       })[0]?.assets,
-    ).toBe(1n);
+    ).toBe(2n);
   });
 
   test("error: InsufficientSharedLiquidityError rejects a partial plan", () => {

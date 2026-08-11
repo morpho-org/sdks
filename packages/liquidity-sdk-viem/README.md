@@ -77,7 +77,7 @@ const { reallocations, startState, endState, targetBorrowUtilization } =
   await loader.fetch(marketId);
 ```
 
-`VaultV2LiquidityLoader` is a separate RPC-only loader. The BluePublicAllocator and participating Vault V2 addresses are explicit because the protocol has no canonical allocator registry entry. Its `reallocations` can be passed directly to Morpho SDK Blue borrow and withdraw actions.
+`VaultV2LiquidityLoader` is a separate REST-backed loader. It reads Vault V2 configuration, state, allocations, withdrawal penalties, Blue market state, adapter positions, oracle prices, and adaptive-curve IRM state from the Morpho REST APIs. BluePublicAllocator-only configuration remains an onchain read through the supplied viem client. The allocator and participating Vault V2 addresses are explicit because the protocol has no canonical allocator registry entry. Its `reallocations` can be passed directly to Morpho SDK Blue borrow and withdraw actions.
 
 ## Development
 
