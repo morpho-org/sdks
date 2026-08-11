@@ -80,7 +80,7 @@ export const computeVaultV2Reallocations = ({
     return [];
 
   let requiredAssets =
-    MathLib.wDivDown(newTotalBorrowAssets, DEFAULT_SUPPLY_TARGET_UTILIZATION) -
+    MathLib.wDivUp(newTotalBorrowAssets, DEFAULT_SUPPLY_TARGET_UTILIZATION) -
     newTotalSupplyAssets;
 
   const friendly = data.computeVaultV2Reallocations(marketId, options);

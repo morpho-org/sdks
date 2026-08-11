@@ -26,6 +26,9 @@ const packageConfigs = {
       if (sourceName.includes("/interfaces/")) return null;
 
       const parsed = parse(sourceName);
+      if (sourceName.includes("/fixtures/")) {
+        return join(packageDir, "test", "fixtures", `${parsed.name}.ts`);
+      }
       return join(
         packageDir,
         "src",
