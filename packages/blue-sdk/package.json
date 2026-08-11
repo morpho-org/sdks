@@ -30,7 +30,7 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@noble/hashes": "^2.2.0"
+    "@noble/hashes": "^2.3.0"
   },
   "peerDependencies": {
     "@morpho-org/morpho-ts": "^2.7.0"
