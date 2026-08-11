@@ -62,8 +62,8 @@ importers:
         specifier: ^8.9.0
         version: 8.9.0
       viem:
-        specifier: 2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.4.3)
+        specifier: 2.55.11
+        version: 2.55.11(typescript@7.0.2)(zod@4.4.3)
       vite:
         specifier: 8.2.0
         version: 8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.0)
@@ -87,8 +87,8 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
       viem:
-        specifier: 2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.4.3)
+        specifier: 2.55.11
+        version: 2.55.11(typescript@7.0.2)(zod@4.4.3)
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.0))
@@ -111,8 +111,8 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
       viem:
-        specifier: ^2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.4.3)
+        specifier: ^2.55.11
+        version: 2.55.11(typescript@7.0.2)(zod@4.4.3)
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.0))
@@ -136,8 +136,8 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
       viem:
-        specifier: ^2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.4.3)
+        specifier: ^2.55.11
+        version: 2.55.11(typescript@7.0.2)(zod@4.4.3)
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.0))
@@ -197,8 +197,8 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
       viem:
-        specifier: ^2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.4.3)
+        specifier: ^2.55.11
+        version: 2.55.11(typescript@7.0.2)(zod@4.4.3)
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.0))
@@ -218,8 +218,8 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
       viem:
-        specifier: ^2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.4.3)
+        specifier: ^2.55.11
+        version: 2.55.11(typescript@7.0.2)(zod@4.4.3)
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.0))
@@ -255,8 +255,8 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
       viem:
-        specifier: ^2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.4.3)
+        specifier: ^2.55.11
+        version: 2.55.11(typescript@7.0.2)(zod@4.4.3)
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.0))
@@ -276,8 +276,8 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
       viem:
-        specifier: ^2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.4.3)
+        specifier: ^2.55.11
+        version: 2.55.11(typescript@7.0.2)(zod@4.4.3)
 
   packages/morpho-ts:
     devDependencies:
@@ -295,10 +295,10 @@ importers:
         version: 4.1.1
       viem-deal:
         specifier: ^2.0.4
-        version: 2.0.4(viem@2.55.10(typescript@7.0.2)(zod@4.4.3))
+        version: 2.0.4(viem@2.55.11(typescript@7.0.2)(zod@4.4.3))
       viem-tracer:
         specifier: ^1.8.0
-        version: 1.8.0(viem@2.55.10(typescript@7.0.2)(zod@4.4.3))
+        version: 1.8.0(viem@2.55.11(typescript@7.0.2)(zod@4.4.3))
     devDependencies:
       '@playwright/test':
         specifier: ^1.62.1
@@ -310,8 +310,8 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
       viem:
-        specifier: ^2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.4.3)
+        specifier: ^2.55.11
+        version: 2.55.11(typescript@7.0.2)(zod@4.4.3)
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.0))
@@ -344,8 +344,8 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
       viem:
-        specifier: ^2.55.10
-        version: 2.55.10(typescript@7.0.2)(zod@4.4.3)
+        specifier: ^2.55.11
+        version: 2.55.11(typescript@7.0.2)(zod@4.4.3)
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(yaml@2.9.0))
@@ -3325,8 +3325,8 @@ packages:
     peerDependencies:
       viem: ^2.21.0
 
-  viem@2.55.10:
-    resolution: {integrity: sha512-Q9Ba+/ma81U2M5o5P2AQ7Ux8rTIwmCZvUcr8rKdQ22bV0IBFHllM2m5gWDP8hFaUN2nH2oW3QG44amRazflYNQ==}
+  viem@2.55.11:
+    resolution: {integrity: sha512-RR5MwtdUnFfqw6ZGoFptizywyLOkLuhTL7UafoP3Irf2upXpANakQkLgGqY4H7A7+8JBxjUs6lElGF5zuGjMEw==}
     peerDependencies:
       typescript: '>=5.0.4'
     peerDependenciesMeta:
@@ -4701,7 +4701,7 @@ snapshots:
 
   '@scure/bip32@1.7.0':
     dependencies:
-      '@noble/curves': 1.9.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.8.0
       '@scure/base': 1.2.6
 
@@ -6924,16 +6924,16 @@ snapshots:
 
   urlpattern-polyfill@10.1.0: {}
 
-  viem-deal@2.0.4(viem@2.55.10(typescript@7.0.2)(zod@4.4.3)):
+  viem-deal@2.0.4(viem@2.55.11(typescript@7.0.2)(zod@4.4.3)):
     dependencies:
-      viem: 2.55.10(typescript@7.0.2)(zod@4.4.3)
+      viem: 2.55.11(typescript@7.0.2)(zod@4.4.3)
 
-  viem-tracer@1.8.0(viem@2.55.10(typescript@7.0.2)(zod@4.4.3)):
+  viem-tracer@1.8.0(viem@2.55.11(typescript@7.0.2)(zod@4.4.3)):
     dependencies:
       colors: 1.4.0
-      viem: 2.55.10(typescript@7.0.2)(zod@4.4.3)
+      viem: 2.55.11(typescript@7.0.2)(zod@4.4.3)
 
-  viem@2.55.10(typescript@7.0.2)(zod@4.4.3):
+  viem@2.55.11(typescript@7.0.2)(zod@4.4.3):
     dependencies:
       '@noble/curves': 1.9.1
       '@noble/hashes': 1.8.0
