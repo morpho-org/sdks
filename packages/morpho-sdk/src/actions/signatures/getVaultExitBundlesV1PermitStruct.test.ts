@@ -10,8 +10,8 @@ import {
 } from "viem";
 import { describe, expect, test } from "vitest";
 import {
-  InKindRedeemPermitMismatchError,
   type PermitRequirementSignature,
+  VaultExitBundlesV1PermitMismatchError,
 } from "../../types/index.js";
 import { getVaultExitBundlesV1PermitStruct } from "./getVaultExitBundlesV1PermitStruct.js";
 
@@ -101,21 +101,30 @@ describe("getVaultExitBundlesV1PermitStruct", () => {
 
   test.each([
     {
-      label: "asset",
+      field: "asset",
       signature: permit({
         asset: "0x0000000000000000000000000000000000000099",
       }),
     },
-    { label: "amount", signature: permit({ amount: maxUint256 - 1n }) },
-  ])("error: rejects mismatched permit $label", ({ signature }) => {
-    expect(() =>
-      getVaultExitBundlesV1PermitStruct({
-        vault,
-        deadline: 1_900_000_000n,
-        requirementSignature: signature,
-      }),
-    ).toThrow(InKindRedeemPermitMismatchError);
-  });
+    { field: "amount", signature: permit({ amount: maxUint256 - 1n }) },
+  ] as const)(
+    "error: rejects mismatched permit $field",
+    ({ field, signature }) => {
+      let thrown: unknown;
+      try {
+        getVaultExitBundlesV1PermitStruct({
+          vault,
+          deadline: 1_900_000_000n,
+          requirementSignature: signature,
+        });
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown).toBeInstanceOf(VaultExitBundlesV1PermitMismatchError);
+      expect(thrown).toMatchObject({ field });
+    },
+  );
 
   test("behavior: leaves non-security permit metadata validation onchain", () => {
     const permitDeadline = 1_900_000_001n;
@@ -161,13 +170,19 @@ describe("getVaultExitBundlesV1PermitStruct", () => {
       },
     };
 
-    expect(() =>
+    let thrown: unknown;
+    try {
       getVaultExitBundlesV1PermitStruct({
         vault,
         deadline: 1_900_000_000n,
         requirementSignature,
-      }),
-    ).toThrow(InKindRedeemPermitMismatchError);
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(VaultExitBundlesV1PermitMismatchError);
+    expect(thrown).toMatchObject({ field: "type" });
   });
 
   test("error: rejects malformed signatures and preserves the parser cause", () => {
@@ -182,8 +197,10 @@ describe("getVaultExitBundlesV1PermitStruct", () => {
       thrown = error;
     }
 
-    expect(thrown).toBeInstanceOf(InKindRedeemPermitMismatchError);
-    if (!(thrown instanceof InKindRedeemPermitMismatchError)) throw thrown;
+    expect(thrown).toBeInstanceOf(VaultExitBundlesV1PermitMismatchError);
+    if (!(thrown instanceof VaultExitBundlesV1PermitMismatchError))
+      throw thrown;
+    expect(thrown.field).toBe("signature");
     expect(thrown.cause).toBeInstanceOf(Error);
   });
 

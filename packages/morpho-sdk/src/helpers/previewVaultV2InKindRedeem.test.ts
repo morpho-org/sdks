@@ -40,7 +40,7 @@ describe("previewVaultV2InKindRedeem", () => {
         remainingExitAssets: 1n,
         idleAssets: 0n,
         netAssets: 50n,
-        feeAssets: 2n,
+        feeAssets: 1n,
       },
     ]);
   });
@@ -98,6 +98,36 @@ describe("previewVaultV2InKindRedeem", () => {
     expect(preview).toEqual([]);
   });
 
+  test("behavior: omits choices that round to no effective exit", () => {
+    const preview = previewInKind(
+      inKindVaultV2Data({
+        supplyShares: 50_000_000n,
+        penalty: TWO_PERCENT,
+      }),
+      1n,
+    );
+
+    expect(preview).toEqual([]);
+  });
+
+  test("behavior: keeps an idle-only choice when in-kind assets round to zero", () => {
+    const preview = previewInKind(
+      inKindVaultV2Data({
+        assetBalance: 1n,
+        supplyShares: 50_000_000n,
+        penalty: TWO_PERCENT,
+      }),
+      1n,
+    );
+
+    expect(preview).toHaveLength(1);
+    expect(preview[0]).toMatchObject({
+      idleAssets: 1n,
+      netAssets: 0n,
+      feeAssets: 0n,
+    });
+  });
+
   test("behavior: accounts for idle assets before the market allocation", () => {
     const preview = previewInKind(
       inKindVaultV2Data({
@@ -116,7 +146,7 @@ describe("previewVaultV2InKindRedeem", () => {
         remainingExitAssets: 1n,
         idleAssets: 10n,
         netAssets: 50n,
-        feeAssets: 2n,
+        feeAssets: 1n,
       },
     ]);
   });

@@ -13,13 +13,21 @@ export interface PreviewVaultV2InKindRedeemParams {
   readonly timestamp: bigint;
 }
 
-interface VaultV2InKindRedeemMarketPreview {
+/** Frontend-ready preview of a Vault V2 in-kind redemption through one Morpho Blue market. */
+export interface VaultV2InKindRedeemMarketPreview {
+  /** Morpho Blue market parameters to pass to the in-kind redemption action. */
   readonly marketParams: MarketParams;
+  /** Maximum penalty-inclusive exit amount supported by this market and the vault's idle assets. */
   readonly maxExitAssets: bigint;
+  /** Penalty-inclusive exit amount assigned to this market choice. */
   readonly exitAssets: bigint;
+  /** Requested penalty-inclusive exit amount not covered by this market choice. */
   readonly remainingExitAssets: bigint;
+  /** Portion of `exitAssets` withdrawn directly from the vault's idle assets. */
   readonly idleAssets: bigint;
+  /** Morpho Blue supply assets received after the force-deallocation penalty. */
   readonly netAssets: bigint;
+  /** Assets charged as the force-deallocation penalty. */
   readonly feeAssets: bigint;
 }
 
@@ -77,7 +85,7 @@ export function previewVaultV2InKindRedeem(
       a === b ? 0 : a > b ? -1 : 1,
     );
 
-  return allocations.map(({ market, allocationAssets }) => {
+  return allocations.flatMap(({ market, allocationAssets }) => {
     const maxExitAssets =
       availableIdleAssets +
       MathLib.wMulUp(allocationAssets + 1n, MathLib.WAD + penalty) -
@@ -87,14 +95,18 @@ export function previewVaultV2InKindRedeem(
     const inKindExitAssets = exitAssets - idleAssets;
     const netAssets = MathLib.wDivDown(inKindExitAssets, MathLib.WAD + penalty);
 
-    return {
-      marketParams: market.params,
-      maxExitAssets,
-      exitAssets,
-      remainingExitAssets: requestedExitAssets - exitAssets,
-      idleAssets,
-      netAssets,
-      feeAssets: inKindExitAssets - netAssets,
-    };
+    if (idleAssets === 0n && netAssets === 0n) return [];
+
+    return [
+      {
+        marketParams: market.params,
+        maxExitAssets,
+        exitAssets,
+        remainingExitAssets: requestedExitAssets - exitAssets,
+        idleAssets,
+        netAssets,
+        feeAssets: MathLib.wMulUp(netAssets, penalty),
+      },
+    ];
   });
 }

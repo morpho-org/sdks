@@ -41,7 +41,7 @@ import {
   EmptyMarketParamsListError,
   type ERC20ApprovalAction,
   ExpiredDeadlineError,
-  InKindRedemptionCoverageError,
+  InKindRedeemCoverageError,
   InsufficientBlueBalanceForInKindRedeemError,
   type MorphoClientType,
   NativeAmountOnNonWNativeVaultError,
@@ -141,7 +141,8 @@ export interface VaultV1Actions {
    *
    * @param params - In-kind redemption parameters.
    * @param params.amount - Asset-denominated amount to exit.
-   * @param params.marketParamsList - Ordered vault markets consumed greedily by the contract.
+   * @param params.marketParamsList - Ordered vault markets consumed greedily by the contract;
+   *   repeated entries cannot draw from the same vault position twice.
    * @param params.vaultData - Pre-fetched Vault V1 accrual snapshot.
    * @param params.userAddress - Account that signs and submits the exit.
    * @param params.deadline - Optional shared permit/bundle deadline; defaults to two hours from now.
@@ -150,16 +151,19 @@ export interface VaultV1Actions {
    * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
    * @throws {NonPositiveInputError} when `amount` is not positive.
    * @throws {EmptyMarketParamsListError} when the market list is empty.
-   * @throws {ExpiredDeadlineError} when `deadline` is not in the future.
-   * @throws {InKindRedemptionCoverageError} when the ordered list cannot cover `amount`.
+   * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
+   *   requirement resolution.
+   * @throws {InKindRedeemCoverageError} when the ordered list cannot cover `amount` without
+   *   assigning more than the vault owns in a repeated market.
    * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
    * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
+   * @throws {viem.BaseError} from `getRequirements()` when an RPC or multicall contract read fails.
    * @throws {VaultMorphoMismatchError} from `getRequirements()` when the vault uses another Morpho deployment.
    * @throws {VaultIsBlueFeeRecipientError} from `getRequirements()` when Morpho Blue accrues protocol fees to the vault.
    * @throws {InsufficientBlueBalanceForInKindRedeemError} from `getRequirements()` when Blue cannot fund the flash loan.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
-   * @throws {InKindRedeemPermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, amount, or signature encoding.
+   * @throws {VaultExitBundlesV1PermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, amount, or signature encoding.
    * @example
    * ```ts
    * import { isRequirementSignature } from "@morpho-org/morpho-sdk";
@@ -450,19 +454,32 @@ export class MorphoVaultV1 implements VaultV1Actions {
     );
     const addresses = getChainAddresses(this.chainId);
     const blue = addresses.blue ?? addresses.morpho;
-    const covered = marketParamsListSnapshot.reduce((total, marketParams) => {
-      const allocation = vaultData.allocations.get(
-        MarketUtils.getMarketId(marketParams),
-      );
-      if (allocation?.config.enabled !== true) return total;
+    let covered = 0n;
+    const assignedByMarket = new Map<string, bigint>();
+    for (const marketParams of marketParamsListSnapshot) {
+      if (covered === amount) break;
+      const marketId = MarketUtils.getMarketId(marketParams);
+      const allocation = vaultData.allocations.get(marketId);
+      if (allocation?.config.enabled !== true) continue;
 
       const market = allocation.position.market.accrueInterest(
         MathLib.max(now, allocation.position.market.lastUpdate),
       );
-      return total + market.toSupplyAssets(allocation.position.supplyShares);
-    }, 0n);
+      const available = market.toSupplyAssets(allocation.position.supplyShares);
+      const assigned = assignedByMarket.get(marketId) ?? 0n;
+      const chunk = MathLib.min(available, amount - covered);
+      if (assigned + chunk > available) {
+        throw new InKindRedeemCoverageError({
+          required: amount,
+          covered,
+          maxExitAssets: covered,
+        });
+      }
+      assignedByMarket.set(marketId, assigned + chunk);
+      covered += chunk;
+    }
     if (covered < amount) {
-      throw new InKindRedemptionCoverageError({
+      throw new InKindRedeemCoverageError({
         required: amount,
         covered,
         maxExitAssets: covered,
@@ -471,6 +488,10 @@ export class MorphoVaultV1 implements VaultV1Actions {
 
     return {
       getRequirements: async (): Promise<readonly ActionRequirement[]> => {
+        const requirementsTimestamp = Time.timestamp();
+        if (deadline <= requirementsTimestamp) {
+          throw new ExpiredDeadlineError(deadline, requirementsTimestamp);
+        }
         const [allowance, nonce, blueBalance, morpho, blueFeeRecipient] =
           await multicall(this.client.viemClient, {
             allowFailure: false,

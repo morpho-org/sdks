@@ -1,6 +1,7 @@
 import {
   type Address,
   compactSignatureToSignature,
+  type Hex,
   isAddressEqual,
   maxUint256,
   parseCompactSignature,
@@ -9,8 +10,8 @@ import {
   zeroHash,
 } from "viem";
 import {
-  InKindRedeemPermitMismatchError,
   type PermitRequirementSignature,
+  VaultExitBundlesV1PermitMismatchError,
 } from "../../types/index.js";
 
 /** Permit tuple consumed by VaultExitBundlesV1. */
@@ -24,9 +25,9 @@ export interface VaultExitBundlesV1PermitStruct {
   /** ECDSA recovery identifier, or zero for the empty-permit sentinel. */
   readonly v: number;
   /** ECDSA signature `r`, or zero for the empty-permit sentinel. */
-  readonly r: `0x${string}`;
+  readonly r: Hex;
   /** ECDSA signature `s`, or zero for the empty-permit sentinel. */
-  readonly s: `0x${string}`;
+  readonly s: Hex;
 }
 
 /** Parameters for {@link getVaultExitBundlesV1PermitStruct}. */
@@ -51,7 +52,7 @@ export interface GetVaultExitBundlesV1PermitStructParams {
  * @param params.deadline - Bundle deadline used by the empty-permit sentinel.
  * @param params.requirementSignature - Optional signed max-share ERC-2612 requirement.
  * @returns The VaultExitBundlesV1 permit tuple.
- * @throws {InKindRedeemPermitMismatchError} when the requirement has the wrong permit kind, asset, amount, or signature encoding.
+ * @throws {VaultExitBundlesV1PermitMismatchError} when the requirement has the wrong permit kind, asset, amount, or signature encoding.
  * @example
  * ```ts
  * import { getVaultExitBundlesV1PermitStruct } from "@morpho-org/morpho-sdk";
@@ -80,21 +81,21 @@ export const getVaultExitBundlesV1PermitStruct = (
   }
 
   if (requirementSignature.action.type !== "permit") {
-    throw new InKindRedeemPermitMismatchError({
+    throw new VaultExitBundlesV1PermitMismatchError({
       field: "type",
       expected: "permit",
       actual: requirementSignature.action.type,
     });
   }
   if (!isAddressEqual(requirementSignature.args.asset, params.vault)) {
-    throw new InKindRedeemPermitMismatchError({
+    throw new VaultExitBundlesV1PermitMismatchError({
       field: "asset",
       expected: params.vault,
       actual: requirementSignature.args.asset,
     });
   }
   if (requirementSignature.args.amount !== maxUint256) {
-    throw new InKindRedeemPermitMismatchError({
+    throw new VaultExitBundlesV1PermitMismatchError({
       field: "amount",
       expected: String(maxUint256),
       actual: String(requirementSignature.args.amount),
@@ -109,7 +110,7 @@ export const getVaultExitBundlesV1PermitStruct = (
           )
         : parseSignature(serializedSignature);
     } catch (cause) {
-      throw new InKindRedeemPermitMismatchError({
+      throw new VaultExitBundlesV1PermitMismatchError({
         field: "signature",
         expected: "a 64-byte compact or 65-byte serialized ECDSA signature",
         actual: requirementSignature.args.signature,
@@ -121,7 +122,7 @@ export const getVaultExitBundlesV1PermitStruct = (
   const { r, s, v, yParity } = signature;
   const normalizedV = v ?? (yParity == null ? undefined : BigInt(yParity + 27));
   if (normalizedV == null) {
-    throw new InKindRedeemPermitMismatchError({
+    throw new VaultExitBundlesV1PermitMismatchError({
       field: "signature",
       expected: "a signature containing v or yParity",
       actual: requirementSignature.args.signature,

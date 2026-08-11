@@ -29,6 +29,7 @@ import {
 import { createVaultV2 } from "../../../test/helpers/vaultV2.js";
 import {
   InsufficientBlueBalanceForInKindRedeemError,
+  isRequirementApproval,
   isRequirementSignature,
   morphoViemExtension,
 } from "../../index.js";
@@ -298,5 +299,111 @@ describe("MorphoVaultV2.inKindRedeem integration", () => {
     await expect(balanceLimitedExit.getRequirements()).rejects.toBeInstanceOf(
       InsufficientBlueBalanceForInKindRedeemError,
     );
+  });
+
+  test("behavior: exits idle assets with an empty market list", async ({
+    client,
+  }) => {
+    const { address: vaultAddress } = await createVaultV2({
+      client,
+      asset: USDC,
+      chainId: mainnet.id,
+    });
+    await client.writeContract({
+      address: vaultAddress,
+      abi: vaultV2Abi,
+      functionName: "setCurator",
+      args: [client.account.address],
+    });
+
+    const { morphoMarketV1AdapterV2Factory } = getChainAddresses(mainnet.id);
+    if (morphoMarketV1AdapterV2Factory == null) {
+      throw new Error("MorphoMarketV1AdapterV2 factory not found");
+    }
+    const adapterHash = await client.writeContract({
+      address: morphoMarketV1AdapterV2Factory,
+      abi: morphoMarketV1AdapterV2FactoryAbi,
+      functionName: "createMorphoMarketV1AdapterV2",
+      args: [vaultAddress],
+    });
+    const adapterReceipt = await client.waitForTransactionReceipt({
+      hash: adapterHash,
+    });
+    const [adapterEvent] = parseEventLogs({
+      abi: morphoMarketV1AdapterV2FactoryAbi,
+      logs: adapterReceipt.logs,
+      eventName: "CreateMorphoMarketV1AdapterV2",
+    });
+    const adapterAddress = adapterEvent?.args.morphoMarketV1AdapterV2;
+    if (adapterAddress == null) {
+      throw new Error("MorphoMarketV1AdapterV2 deployment event not found");
+    }
+    await submitAndAccept({
+      client,
+      vault: vaultAddress,
+      data: encodeFunctionData({
+        abi: vaultV2Abi,
+        functionName: "addAdapter",
+        args: [adapterAddress],
+      }),
+    });
+
+    const deposit = parseUnits("100", 6);
+    await client.deal({ erc20: USDC, amount: deposit });
+    await client.approve({ address: USDC, args: [vaultAddress, deposit] });
+    await client.writeContract({
+      address: vaultAddress,
+      abi: vaultV2Abi,
+      functionName: "deposit",
+      args: [deposit, client.account.address],
+    });
+
+    const vault = client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.vaultV2(vaultAddress, mainnet.id);
+    const vaultData = await vault.getData();
+    const amount = deposit / 2n;
+    const initialVaultShares = await client.readContract({
+      address: vaultAddress,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [client.account.address],
+    });
+    const initialAssetBalance = await client.readContract({
+      address: USDC,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [client.account.address],
+    });
+
+    expect(vaultData.assetBalance).toBe(deposit);
+    const exit = vault.inKindRedeem({
+      amount,
+      marketParamsList: [],
+      vaultData,
+      userAddress: client.account.address,
+    });
+    const [approval] = await exit.getRequirements();
+    if (!isRequirementApproval(approval)) {
+      throw new Error("VaultExitBundlesV1 approval requirement not found");
+    }
+    await client.sendTransaction(approval);
+    await client.sendTransaction(exit.buildTx());
+
+    const finalVaultShares = await client.readContract({
+      address: vaultAddress,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [client.account.address],
+    });
+    const finalAssetBalance = await client.readContract({
+      address: USDC,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [client.account.address],
+    });
+
+    expect(finalVaultShares).toBeLessThan(initialVaultShares);
+    expect(finalAssetBalance - initialAssetBalance).toBe(amount);
   });
 });

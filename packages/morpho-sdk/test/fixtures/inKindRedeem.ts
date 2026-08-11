@@ -44,12 +44,21 @@ export const inKindMarketParams = new MarketParams({
   lltv: 860_000_000_000_000_000n,
 });
 
+export const secondInKindMarketParams = new MarketParams({
+  loanToken: IN_KIND_ASSET,
+  collateralToken: "0x0000000000000000000000000000000000001009",
+  oracle: "0x0000000000000000000000000000000000001010",
+  irm: "0x0000000000000000000000000000000000001011",
+  lltv: 860_000_000_000_000_000n,
+});
+
 const futureTimestamp = () => Time.timestamp() + Time.s.from.d(1n);
 
 export const inKindVaultV1Data = (params?: {
   readonly address?: Address;
   readonly supplyShares?: bigint;
   readonly enabled?: boolean;
+  readonly additionalMarket?: boolean;
 }) => {
   const market = new Market({
     params: inKindMarketParams,
@@ -60,6 +69,17 @@ export const inKindVaultV1Data = (params?: {
     lastUpdate: futureTimestamp(),
     fee: 0n,
   });
+  const secondMarket = new Market({
+    params: secondInKindMarketParams,
+    totalSupplyAssets: 500n,
+    totalBorrowAssets: 450n,
+    totalSupplyShares: 500_000_000n,
+    totalBorrowShares: 450n,
+    lastUpdate: futureTimestamp(),
+    fee: 0n,
+  });
+  const markets = params?.additionalMarket ? [market, secondMarket] : [market];
+  const totalAssets = params?.additionalMarket ? 1_500n : 1_000n;
   return new AccrualVault(
     {
       address: params?.address ?? IN_KIND_VAULT,
@@ -77,9 +97,9 @@ export const inKindVaultV1Data = (params?: {
       pendingGuardian: { value: IN_KIND_USER, validAt: 0n },
       pendingOwner: IN_KIND_USER,
       timelock: 0n,
-      supplyQueue: [market.id],
-      totalSupply: 1_000n,
-      lastTotalAssets: 1_000n,
+      supplyQueue: markets.map(({ id }) => id),
+      totalSupply: totalAssets,
+      lastTotalAssets: totalAssets,
     },
     [
       {
@@ -101,6 +121,29 @@ export const inKindVaultV1Data = (params?: {
           market,
         ),
       },
+      ...(params?.additionalMarket
+        ? [
+            {
+              config: {
+                vault: params?.address ?? IN_KIND_VAULT,
+                marketId: secondMarket.id,
+                cap: 2_000n,
+                pendingCap: { value: 0n, validAt: 0n },
+                removableAt: 0n,
+                enabled: true,
+              },
+              position: new AccrualPosition(
+                {
+                  user: params?.address ?? IN_KIND_VAULT,
+                  supplyShares: 500_000_000n,
+                  borrowShares: 0n,
+                  collateral: 0n,
+                },
+                secondMarket,
+              ),
+            },
+          ]
+        : []),
     ],
   );
 };
@@ -111,6 +154,7 @@ export const inKindVaultV2Data = (params?: {
   readonly penalty?: bigint;
   readonly assetBalance?: bigint;
   readonly adapters?: "single" | "empty" | "legacy";
+  readonly additionalMarket?: boolean;
 }) => {
   const address = params?.address ?? IN_KIND_VAULT;
   const market = new Market({
@@ -122,18 +166,32 @@ export const inKindVaultV2Data = (params?: {
     lastUpdate: futureTimestamp(),
     fee: 0n,
   });
+  const secondMarket = new Market({
+    params: secondInKindMarketParams,
+    totalSupplyAssets: 500n,
+    totalBorrowAssets: 450n,
+    totalSupplyShares: 500_000_000n,
+    totalBorrowShares: 450n,
+    lastUpdate: futureTimestamp(),
+    fee: 0n,
+  });
+  const markets = params?.additionalMarket ? [market, secondMarket] : [market];
+  const totalAssets = params?.additionalMarket ? 1_500n : 1_000n;
   const adapter = new AccrualVaultV2MorphoMarketV1AdapterV2(
     {
       address: IN_KIND_ADAPTER,
       parentVault: address,
       skimRecipient: IN_KIND_USER,
-      marketIds: [market.id],
+      marketIds: markets.map(({ id }) => id),
       adaptiveCurveIrm: inKindMarketParams.irm,
       supplyShares: {
         [market.id]: params?.supplyShares ?? 1_000_000_000n,
+        ...(params?.additionalMarket
+          ? { [secondMarket.id]: 500_000_000n }
+          : {}),
       },
     },
-    [market],
+    markets,
   );
   const legacyAdapter = new AccrualVaultV2MorphoMarketV1Adapter(
     {
@@ -166,8 +224,8 @@ export const inKindVaultV2Data = (params?: {
       symbol: "ikV2",
       decimals: 18,
       asset: IN_KIND_ASSET,
-      _totalAssets: 1_000n,
-      totalSupply: 1_000n,
+      _totalAssets: totalAssets,
+      totalSupply: totalAssets,
       virtualShares: 0n,
       maxRate: 0n,
       lastUpdate: futureTimestamp(),

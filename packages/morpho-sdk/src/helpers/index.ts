@@ -12,6 +12,7 @@ export { addTransactionMetadata } from "./metadata.js";
 export {
   type PreviewVaultV2InKindRedeemParams,
   previewVaultV2InKindRedeem,
+  type VaultV2InKindRedeemMarketPreview,
 } from "./previewVaultV2InKindRedeem.js";
 export { signAndVerifyTypedData } from "./signAndVerifyTypedData.js";
 export {

@@ -1,6 +1,7 @@
 ---
 "@morpho-org/morpho-ts": minor
 "@morpho-org/morpho-sdk": minor
+"@morpho-org/evm-simulation": patch
 ---
 
 Add a `bundles` group to `ChainAddresses` for standalone bundle periphery contracts, starting with
@@ -9,6 +10,9 @@ Add a `bundles` group to `ChainAddresses` for standalone bundle periphery contra
 new entry like any other registry address. Register the canonical `VaultExitBundlesV1` deployments
 and deployment blocks on Ethereum, Base, Arbitrum, Optimism, Polygon, World Chain, Unichain,
 HyperEVM, Katana, Monad, Stable, Tempo, and Robinhood Chain.
+
+Patch maintained packages with direct runtime dependencies on `@morpho-org/morpho-ts` so their
+latest releases resolve the new registry entry.
 
 Add Vault V1 and Vault V2 in-kind redemption actions and entity methods backed by
 VaultExitBundlesV1, including max-share permit/approval requirements, Vault V2's two-field permit

@@ -3,7 +3,7 @@ import { erc2612Abi } from "@morpho-org/blue-sdk-viem";
 import { createMockClient } from "@morpho-org/test/mock";
 import { type Address, erc20Abi, maxUint256 } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   encodeReadResult,
   IN_KIND_BUNDLER,
@@ -12,6 +12,7 @@ import {
   inKindMarketParams,
   inKindVaultV2Data,
   mockMulticallResults,
+  secondInKindMarketParams,
 } from "../../../test/fixtures/inKindRedeem.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
@@ -19,8 +20,9 @@ import {
   ChainIdMismatchError,
   EmptyMarketParamsListError,
   ExpiredDeadlineError,
-  InKindRedemptionCoverageError,
-  InKindRedemptionRequiresSingleAdapterError,
+  InKindRedeemCoverageError,
+  InKindRedeemRequiresSingleAdapterError,
+  InKindRedeemZeroDeallocationError,
   InsufficientBlueBalanceForInKindRedeemError,
   NonPositiveInputError,
   UnsupportedInKindAdapterError,
@@ -54,6 +56,10 @@ const mockV2Requirements = (
 };
 
 describe("MorphoVaultV2.inKindRedeem", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   test("default", () => {
     const handle = createMockClient(mainnet);
     const vault = handle.client
@@ -108,7 +114,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
         vaultData: inKindVaultV2Data(),
         userAddress: IN_KIND_USER,
       }),
-    ).toThrow(InKindRedemptionCoverageError);
+    ).toThrow(InKindRedeemCoverageError);
   });
 
   test("behavior: subtracts idle assets before validating market coverage", () => {
@@ -149,7 +155,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
       thrown = error;
     }
 
-    expect(thrown).toBeInstanceOf(InKindRedemptionCoverageError);
+    expect(thrown).toBeInstanceOf(InKindRedeemCoverageError);
     expect(thrown).toMatchObject({ maxExitAssets: 62n });
   });
 
@@ -195,14 +201,14 @@ describe("MorphoVaultV2.inKindRedeem", () => {
         thrown = error;
       }
 
-      expect(thrown).toBeInstanceOf(InKindRedemptionCoverageError);
-      if (!(thrown instanceof InKindRedemptionCoverageError)) return;
+      expect(thrown).toBeInstanceOf(InKindRedeemCoverageError);
+      if (!(thrown instanceof InKindRedeemCoverageError)) return;
       expect(thrown.covered).toBe(covered);
       expect(thrown.maxExitAssets).toBe(maxExitAssets);
     },
   );
 
-  test("error: InKindRedemptionRequiresSingleAdapterError", () => {
+  test("error: InKindRedeemRequiresSingleAdapterError", () => {
     const handle = createMockClient(mainnet);
     const vault = handle.client
       .extend(morphoViemExtension())
@@ -215,7 +221,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
         vaultData: inKindVaultV2Data({ adapters: "empty" }),
         userAddress: IN_KIND_USER,
       }),
-    ).toThrow(InKindRedemptionRequiresSingleAdapterError);
+    ).toThrow(InKindRedeemRequiresSingleAdapterError);
   });
 
   test("error: validates chain and vault snapshot address", () => {
@@ -277,6 +283,36 @@ describe("MorphoVaultV2.inKindRedeem", () => {
         deadline: 1n,
       }),
     ).toThrow(ExpiredDeadlineError);
+  });
+
+  test("error: ExpiredDeadlineError when deadline expires before requirements", async () => {
+    const now = 1_800_000_000n;
+    vi.useFakeTimers();
+    vi.setSystemTime(Number(now) * 1_000);
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+    const exit = vault.inKindRedeem({
+      amount: 500n,
+      marketParamsList: [inKindMarketParams],
+      vaultData: inKindVaultV2Data(),
+      userAddress: IN_KIND_USER,
+      deadline: now + 1n,
+    });
+
+    vi.setSystemTime(Number(now + 1n) * 1_000);
+
+    await expect(exit.getRequirements()).rejects.toBeInstanceOf(
+      ExpiredDeadlineError,
+    );
+  });
+
+  test("error: InKindRedeemZeroDeallocationError", () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
     expect(() =>
       vault.inKindRedeem({
         amount: 1n,
@@ -286,7 +322,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
         }),
         userAddress: IN_KIND_USER,
       }),
-    ).toThrow(NonPositiveInputError);
+    ).toThrow(InKindRedeemZeroDeallocationError);
   });
 
   test("error: validates the adapter override and implementation", () => {
@@ -363,6 +399,27 @@ describe("MorphoVaultV2.inKindRedeem", () => {
     });
   });
 
+  test("behavior: a sufficient non-max allowance still requires max approval", async () => {
+    const handle = createMockClient(mainnet);
+    mockV2Requirements(handle, { allowance: 1_000n });
+    const vault = handle.client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+    const [approval] = await vault
+      .inKindRedeem({
+        amount: 500n,
+        marketParamsList: [inKindMarketParams],
+        vaultData: inKindVaultV2Data(),
+        userAddress: IN_KIND_USER,
+      })
+      .getRequirements();
+
+    expect(approval?.action).toEqual({
+      type: "erc20Approval",
+      args: { spender: IN_KIND_BUNDLER, amount: maxUint256 },
+    });
+  });
+
   test("behavior: allows an idle-only exit without markets or Blue callbacks", async () => {
     const handle = createMockClient(mainnet);
     mockV2Requirements(handle, {
@@ -421,6 +478,27 @@ describe("MorphoVaultV2.inKindRedeem", () => {
     await expect(requirements).rejects.toBeInstanceOf(
       InsufficientBlueBalanceForInKindRedeemError,
     );
+  });
+
+  test("behavior: Blue balance covers the peak market chunk instead of the total", async () => {
+    const handle = createMockClient(mainnet);
+    mockV2Requirements(handle, {
+      allowance: maxUint256,
+      blueBalance: 1_000n,
+    });
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+    const requirements = await vault
+      .inKindRedeem({
+        amount: 1_500n,
+        marketParamsList: [inKindMarketParams, secondInKindMarketParams],
+        vaultData: inKindVaultV2Data({ additionalMarket: true }),
+        userAddress: IN_KIND_USER,
+      })
+      .getRequirements();
+
+    expect(requirements).toEqual([]);
   });
 
   test("behavior: exact max allowance returns no authorization", async () => {

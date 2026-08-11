@@ -3,7 +3,7 @@ import { blueAbi, erc2612Abi, metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
 import { createMockClient } from "@morpho-org/test/mock";
 import { type Address, erc20Abi, maxUint256 } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   encodeReadResult,
   IN_KIND_BUNDLER,
@@ -12,13 +12,14 @@ import {
   inKindMarketParams,
   inKindVaultV1Data,
   mockMulticallResults,
+  secondInKindMarketParams,
 } from "../../../test/fixtures/inKindRedeem.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
   ChainIdMismatchError,
   EmptyMarketParamsListError,
   ExpiredDeadlineError,
-  InKindRedemptionCoverageError,
+  InKindRedeemCoverageError,
   InsufficientBlueBalanceForInKindRedeemError,
   NonPositiveInputError,
   VaultAddressMismatchError,
@@ -67,19 +68,69 @@ const mockV1Requirements = (
 };
 
 describe("MorphoVaultV1.inKindRedeem", () => {
-  test("default: accepts raw duplicate coverage and builds the V1 action", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  test("default: builds the V1 action from distinct market coverage", () => {
     const handle = createMockClient(mainnet);
     const vault = handle.client
       .extend(morphoViemExtension())
       .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
     const exit = vault.inKindRedeem({
       amount: 1_500n,
-      marketParamsList: [inKindMarketParams, inKindMarketParams],
-      vaultData: inKindVaultV1Data(),
+      marketParamsList: [inKindMarketParams, secondInKindMarketParams],
+      vaultData: inKindVaultV1Data({ additionalMarket: true }),
       userAddress: IN_KIND_USER,
     });
 
     expect(exit.buildTx().action.type).toBe("vaultV1InKindRedeem");
+  });
+
+  test("error: duplicate markets do not double-count coverage", () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    let thrown: unknown;
+
+    try {
+      vault.inKindRedeem({
+        amount: 1_500n,
+        marketParamsList: [inKindMarketParams, inKindMarketParams],
+        vaultData: inKindVaultV1Data(),
+        userAddress: IN_KIND_USER,
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(InKindRedeemCoverageError);
+    expect(thrown).toMatchObject({
+      required: 1_500n,
+      covered: 1_000n,
+      maxExitAssets: 1_000n,
+    });
+  });
+
+  test("error: preserves raw order when a duplicate precedes distinct coverage", () => {
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+
+    expect(() =>
+      vault.inKindRedeem({
+        amount: 1_500n,
+        marketParamsList: [
+          inKindMarketParams,
+          inKindMarketParams,
+          secondInKindMarketParams,
+        ],
+        vaultData: inKindVaultV1Data({ additionalMarket: true }),
+        userAddress: IN_KIND_USER,
+      }),
+    ).toThrow(InKindRedeemCoverageError);
   });
 
   test("behavior: snapshots the ordered market params", () => {
@@ -108,7 +159,7 @@ describe("MorphoVaultV1.inKindRedeem", () => {
     expect(tx.action.args.marketParamsList[0]?.loanToken).toBe(loanToken);
   });
 
-  test("error: InKindRedemptionCoverageError prevents array exhaustion", () => {
+  test("error: InKindRedeemCoverageError prevents array exhaustion", () => {
     const handle = createMockClient(mainnet);
     const vault = handle.client
       .extend(morphoViemExtension())
@@ -121,7 +172,7 @@ describe("MorphoVaultV1.inKindRedeem", () => {
         vaultData: inKindVaultV1Data(),
         userAddress: IN_KIND_USER,
       }),
-    ).toThrow(InKindRedemptionCoverageError);
+    ).toThrow(InKindRedeemCoverageError);
     expect(() =>
       vault.inKindRedeem({
         amount: 1n,
@@ -129,7 +180,7 @@ describe("MorphoVaultV1.inKindRedeem", () => {
         vaultData: inKindVaultV1Data({ enabled: false }),
         userAddress: IN_KIND_USER,
       }),
-    ).toThrow(InKindRedemptionCoverageError);
+    ).toThrow(InKindRedeemCoverageError);
   });
 
   test("error: validates client chain and vault snapshot address", () => {
@@ -193,9 +244,53 @@ describe("MorphoVaultV1.inKindRedeem", () => {
     ).toThrow(ExpiredDeadlineError);
   });
 
+  test("error: ExpiredDeadlineError when deadline expires before requirements", async () => {
+    const now = 1_800_000_000n;
+    vi.useFakeTimers();
+    vi.setSystemTime(Number(now) * 1_000);
+    const handle = createMockClient(mainnet);
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    const exit = vault.inKindRedeem({
+      amount: 500n,
+      marketParamsList: [inKindMarketParams],
+      vaultData: inKindVaultV1Data(),
+      userAddress: IN_KIND_USER,
+      deadline: now + 1n,
+    });
+
+    vi.setSystemTime(Number(now + 1n) * 1_000);
+
+    await expect(exit.getRequirements()).rejects.toBeInstanceOf(
+      ExpiredDeadlineError,
+    );
+  });
+
   test("behavior: default approve path requires maxUint256", async () => {
     const handle = createMockClient(mainnet);
     mockV1Requirements(handle, { allowance: 0n });
+    const vault = handle.client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    const [approval] = await vault
+      .inKindRedeem({
+        amount: 500n,
+        marketParamsList: [inKindMarketParams],
+        vaultData: inKindVaultV1Data(),
+        userAddress: IN_KIND_USER,
+      })
+      .getRequirements();
+
+    expect(approval?.action).toEqual({
+      type: "erc20Approval",
+      args: { spender: IN_KIND_BUNDLER, amount: maxUint256 },
+    });
+  });
+
+  test("behavior: a sufficient non-max allowance still requires max approval", async () => {
+    const handle = createMockClient(mainnet);
+    mockV1Requirements(handle, { allowance: 1_000n });
     const vault = handle.client
       .extend(morphoViemExtension({ supportSignature: false }))
       .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);

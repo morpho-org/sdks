@@ -83,7 +83,7 @@ export class ExpiredDeadlineError extends Error {
 }
 
 /** Thrown when Vault V2 in-kind redemption is attempted with anything other than one adapter. */
-export class InKindRedemptionRequiresSingleAdapterError extends Error {
+export class InKindRedeemRequiresSingleAdapterError extends Error {
   /**
    * @param vault - Vault V2 address.
    * @param adapters - Number of adapters in the supplied vault snapshot.
@@ -95,7 +95,7 @@ export class InKindRedemptionRequiresSingleAdapterError extends Error {
     super(
       `Vault "${vault}" has "${adapters}" adapters. In-kind redemption requires exactly one MorphoMarketV1AdapterV2.`,
     );
-    this.name = "InKindRedemptionRequiresSingleAdapterError";
+    this.name = "InKindRedeemRequiresSingleAdapterError";
   }
 }
 
@@ -129,8 +129,35 @@ export class UnsupportedInKindAdapterError extends Error {
   }
 }
 
+/** Thrown when a Vault V2 in-kind redemption rounds to no deallocated assets. */
+export class InKindRedeemZeroDeallocationError extends Error {
+  /**
+   * @param params - Values that caused the exit to round to zero deallocated assets.
+   * @param params.vault - Vault V2 address with no idle assets available for the exit.
+   * @param params.amount - Positive penalty-inclusive amount requested by the caller.
+   * @param params.penalty - WAD-scaled force-deallocation penalty applied by the adapter.
+   */
+  public readonly vault: Address;
+  public readonly amount: bigint;
+  public readonly penalty: bigint;
+
+  public constructor(params: {
+    readonly vault: Address;
+    readonly amount: bigint;
+    readonly penalty: bigint;
+  }) {
+    super(
+      `Vault "${params.vault}" has no idle assets, and in-kind redemption amount "${params.amount}" rounds to zero deallocated assets after applying penalty "${params.penalty}". Increase the amount or use another exit path.`,
+    );
+    this.vault = params.vault;
+    this.amount = params.amount;
+    this.penalty = params.penalty;
+    this.name = "InKindRedeemZeroDeallocationError";
+  }
+}
+
 /** Thrown when the ordered market list cannot cover the requested in-kind redemption. */
-export class InKindRedemptionCoverageError extends Error {
+export class InKindRedeemCoverageError extends Error {
   /**
    * @param params - Coverage values used to explain the rejected exit.
    * @param params.required - Assets that must be deallocated from listed markets.
@@ -152,7 +179,7 @@ export class InKindRedemptionCoverageError extends Error {
     this.required = params.required;
     this.covered = params.covered;
     this.maxExitAssets = params.maxExitAssets;
-    this.name = "InKindRedemptionCoverageError";
+    this.name = "InKindRedeemCoverageError";
   }
 }
 
@@ -228,7 +255,7 @@ export class VaultIsBlueFeeRecipientError extends Error {
 }
 
 /** Thrown when a vault-shares requirement cannot be safely encoded as an ERC-2612 permit. */
-export class InKindRedeemPermitMismatchError extends Error {
+export class VaultExitBundlesV1PermitMismatchError extends Error {
   /**
    * @param params - Permit mismatch values used to explain the rejection.
    * @param params.field - Permit field that does not match the exit.
@@ -236,24 +263,24 @@ export class InKindRedeemPermitMismatchError extends Error {
    * @param params.actual - Value supplied by the signature.
    * @param params.cause - Original parser failure when signature decoding is wrapped.
    */
-  public readonly field: string;
+  public readonly field: "type" | "asset" | "amount" | "signature";
   public readonly expected: string;
   public readonly actual: string;
 
   public constructor(params: {
-    readonly field: string;
+    readonly field: "type" | "asset" | "amount" | "signature";
     readonly expected: string;
     readonly actual: string;
     readonly cause?: unknown;
   }) {
     super(
-      `In-kind redemption permit ${params.field} mismatch: expected "${params.expected}", got "${params.actual}". Rebuild and sign this exit's permit.`,
+      `VaultExitBundlesV1 permit ${params.field} mismatch: expected "${params.expected}", got "${params.actual}". Rebuild and sign the vault-exit permit.`,
       { cause: params.cause },
     );
     this.field = params.field;
     this.expected = params.expected;
     this.actual = params.actual;
-    this.name = "InKindRedeemPermitMismatchError";
+    this.name = "VaultExitBundlesV1PermitMismatchError";
   }
 }
 

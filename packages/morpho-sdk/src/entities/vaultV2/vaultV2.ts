@@ -35,8 +35,9 @@ import {
   EmptyMarketParamsListError,
   type ERC20ApprovalAction,
   ExpiredDeadlineError,
-  InKindRedemptionCoverageError,
-  InKindRedemptionRequiresSingleAdapterError,
+  InKindRedeemCoverageError,
+  InKindRedeemRequiresSingleAdapterError,
+  InKindRedeemZeroDeallocationError,
   InsufficientBlueBalanceForInKindRedeemError,
   type MorphoClientType,
   NativeAmountOnNonWNativeVaultError,
@@ -140,9 +141,12 @@ export interface VaultV2Actions {
    * The vault must have exactly one `MorphoMarketV1AdapterV2`. `amount` is penalty-inclusive and
    * the caller controls market order. Call `getRequirements()` before `buildTx()` so Blue balance,
    * allowance, and nonce are checked on-chain. Vault gates are enforced by the final transaction
-   * and are not preflighted because receive gates may depend on VaultExitBundlesV1's transient
-   * initiator. The SDK intentionally does not validate the user's share balance; it must cover both
-   * the main and penalty legs. A max-share permit or approval remains after execution.
+   * and are not preflighted: receive gates may depend on VaultExitBundlesV1's transient initiator,
+   * while arbitrary send-share gates may depend on intermediate state changed by the exit's
+   * multiple share burns. The SDK intentionally does not validate the user's share balance; size
+   * `amount` in asset terms so `amount <= vault.previewRedeem(sharesHeld)` instead of comparing it
+   * to raw shares, and ensure the held shares cover both the main and penalty legs. A max-share
+   * permit or approval remains after execution.
    *
    * Idle balance, penalty, and adapter positions can drift after the snapshot, so an on-chain
    * under-coverage panic remains possible if vault state changes between preparation and inclusion.
@@ -157,19 +161,23 @@ export interface VaultV2Actions {
    * @returns Lazy prerequisite resolution and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client and entity target different chains.
    * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
-   * @throws {NonPositiveInputError} when `amount` is not positive or rounds to no exit without idle assets.
+   * @throws {NonPositiveInputError} when `amount` is not positive.
+   * @throws {InKindRedeemZeroDeallocationError} when the vault has no idle assets and the
+   *   penalty-adjusted amount rounds to zero deallocated assets.
    * @throws {EmptyMarketParamsListError} when assets must be deallocated and the market list is empty.
-   * @throws {ExpiredDeadlineError} when `deadline` is not in the future.
-   * @throws {InKindRedemptionRequiresSingleAdapterError} when the vault does not have one adapter.
+   * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
+   *   requirement resolution.
+   * @throws {InKindRedeemRequiresSingleAdapterError} when the vault does not have one adapter.
    * @throws {AdapterNotPartOfVaultError} when `adapter` is not the vault's adapter.
    * @throws {UnsupportedInKindAdapterError} when the adapter is not a MorphoMarketV1AdapterV2.
-   * @throws {InKindRedemptionCoverageError} when the deduplicated list cannot cover the exit.
+   * @throws {InKindRedeemCoverageError} when the deduplicated list cannot cover the exit.
    * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
    * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
+   * @throws {viem.BaseError} from `getRequirements()` when an RPC or multicall contract read fails.
    * @throws {InsufficientBlueBalanceForInKindRedeemError} from `getRequirements()` when Blue cannot fund the largest callback.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
-   * @throws {InKindRedeemPermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, amount, or signature encoding.
+   * @throws {VaultExitBundlesV1PermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, amount, or signature encoding.
    * @example
    * ```ts
    * import { isRequirementSignature } from "@morpho-org/morpho-sdk";
@@ -485,7 +493,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     const deadline = deadlineOverride ?? now + Time.s.from.h(2n);
     if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
     if (vaultData.accrualAdapters.length !== 1) {
-      throw new InKindRedemptionRequiresSingleAdapterError(
+      throw new InKindRedeemRequiresSingleAdapterError(
         this.vault,
         vaultData.accrualAdapters.length,
       );
@@ -493,7 +501,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
 
     const soleAdapter = vaultData.accrualAdapters[0];
     if (soleAdapter == null) {
-      throw new InKindRedemptionRequiresSingleAdapterError(this.vault, 0);
+      throw new InKindRedeemRequiresSingleAdapterError(this.vault, 0);
     }
     const adapter = adapterOverride ?? soleAdapter.address;
     if (!isAddressEqual(adapter, soleAdapter.address)) {
@@ -511,7 +519,11 @@ export class MorphoVaultV2 implements VaultV2Actions {
       MathLib.WAD + penalty,
     );
     if (idleAssets === 0n && assetsToDeallocate === 0n) {
-      throw new NonPositiveInputError("assetsToDeallocate", assetsToDeallocate);
+      throw new InKindRedeemZeroDeallocationError({
+        vault: this.vault,
+        amount,
+        penalty,
+      });
     }
     if (assetsToDeallocate > 0n && marketParamsListSnapshot.length === 0) {
       throw new EmptyMarketParamsListError();
@@ -535,7 +547,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
           : idleAssets +
             MathLib.wMulUp(covered + 1n, MathLib.WAD + penalty) -
             1n;
-      throw new InKindRedemptionCoverageError({
+      throw new InKindRedeemCoverageError({
         required: assetsToDeallocate,
         covered,
         maxExitAssets,
@@ -564,12 +576,16 @@ export class MorphoVaultV2 implements VaultV2Actions {
 
     return {
       getRequirements: async (): Promise<readonly ActionRequirement[]> => {
-        // Vault gates are intentionally left to the final transaction. In particular, a receive
-        // gate may inspect VaultExitBundlesV1's transient `initiator`, which is populated only
-        // during the actual periphery call. Reading gates directly (inside or outside multicall)
-        // would therefore use a different execution context and could reject a valid exit or
-        // approve one that later reverts. Simulate the finalized transaction after authorization
-        // when gate compatibility must be checked before submission.
+        const requirementsTimestamp = Time.timestamp();
+        if (deadline <= requirementsTimestamp) {
+          throw new ExpiredDeadlineError(deadline, requirementsTimestamp);
+        }
+        // Vault gates are intentionally left to the final transaction. A receive gate may inspect
+        // VaultExitBundlesV1's transient `initiator`, which is populated only during the actual
+        // periphery call. A send-share gate is arbitrary external code and is evaluated repeatedly
+        // after intermediate penalty share burns, so one standalone read is not execution-equivalent
+        // either. Simulate the finalized transaction after authorization when gate compatibility
+        // must be checked before submission.
         const [allowance, nonce, blueBalance] = await multicall(
           this.client.viemClient,
           {

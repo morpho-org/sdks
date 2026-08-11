@@ -62,10 +62,11 @@ the pre-flight validation that turns those opaque failures into named SDK errors
   **SDK** surface used everywhere below; the long names are the **contract** functions they encode.
 - **Surface supported pre-flight failures before submission.** Handle construction synchronously
   validates snapshot-dependent inputs and market coverage. When the caller awaits
-  `getRequirements()`, it performs the RPC-backed Blue balance, Vault V2 gate, allowance, nonce,
-  and Morpho-deployment checks. `buildTx()` remains pure and synchronous and does not require those
-  checks to have run. Share sufficiency is the one deliberate exception: `amount` sizing against
-  the user's balance is the caller's job (see Non-Goals).
+  `getRequirements()`, it performs the RPC-backed Blue balance, allowance, nonce, and
+  Morpho-deployment checks. Vault V2 gates remain enforced on-chain and are intentionally not
+  preflighted; see [Security](#security). `buildTx()` remains pure and synchronous and does not
+  require those checks to have run. Share sufficiency is the one deliberate exception: `amount`
+  sizing against the user's balance is the caller's job (see Non-Goals).
 - Sign a **correct** Vault V2 shares permit. Vault V2's EIP-712 domain omits `name` and `version`,
   so the SDK's existing `getPermitTypedData` produces an unsignable digest for it.
 - Always permit `maxUint256`, so an exit never fails on an allowance the caller could not have sized
@@ -93,7 +94,7 @@ the pre-flight validation that turns those opaque failures into named SDK errors
   withdraws available idle assets first and applies in-kind redemption only to the remainder.
 - No new runtime dependencies. `viem` stays the only peer dep of `morpho-sdk`.
 
-## Pre-change State
+## Current Solution
 
 Before this proposal, `morpho-sdk` had no support for `morpho-org/bundles` — a search for
 `VaultExitBundles`, `vault-exit`, `InKindRedemption`, and `IKR` across `src/` returns nothing.
@@ -282,7 +283,9 @@ The method is **synchronous**, like `deposit` / `withdraw` / `forceRedeem`, and 
 derivable from `(amount, marketParamsList, vaultData)` eagerly — it throws before returning the
 handle. Checks that genuinely need RPC run inside the already-async `getRequirements()`. The single
 `deadline` is resolved once at handle creation and closed over, so the requirement and `buildTx`
-cannot disagree and the action stays clock-free.
+cannot disagree and the action stays clock-free. `getRequirements()` re-checks that closed-over
+deadline against the current timestamp before performing any RPC reads, so a stale handle cannot
+return a dead permit requirement.
 
 **`buildTx` is not async — only `getRequirements()` is.** This is deliberate and non-negotiable: by
 the SDK's layering rule (root `AGENTS.md` §1), the Action layer is synchronous and reads no chain
@@ -290,12 +293,12 @@ state, so `buildTx` neither awaits nor performs RPC — it only assembles the de
 from data already in hand. The "validate exhaustively before building" goal therefore has a precise
 scope that must be stated rather than assumed: the **synchronous** matrix (everything derivable from
 the `getData()` snapshot) always runs before the handle is returned, but the **RPC-backed** checks —
-Blue balance, the Vault V2 gates, the nonce read — run *only* when the caller awaits
-`getRequirements()`. A caller who invokes `buildTx` without first awaiting `getRequirements()` skips
-exactly those RPC checks and can still meet their reverts on-chain. That is not a gap to close by
-making `buildTx` await state — doing so would break the layer boundary every other entity method
-respects (see Considered Alternatives §5). It is a contract to document: integrators must call
-`getRequirements()` first, and both entity methods say so in their JSDoc.
+Blue balance, allowance, nonce, and V1 Morpho deployment and fee-recipient reads — run *only* when
+the caller awaits `getRequirements()`. A caller who invokes `buildTx` without first awaiting
+`getRequirements()` skips exactly those RPC checks and can still meet their reverts on-chain. That
+is not a gap to close by making `buildTx` await state — doing so would break the layer boundary every
+other entity method respects (see Considered Alternatives §5). It is a contract to document:
+integrators must call `getRequirements()` first, and both entity methods say so in their JSDoc.
 
 ### The validation matrix
 
@@ -308,17 +311,18 @@ This is the load-bearing part of the decision. Each row was derived by walking
 
 | On-chain failure                        | Trigger                                                       | SDK check                                                                                                                                                    | Error                                          |
 | --------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
-| every RPC reads the wrong chain          | the viem client is connected to a chain other than `this.chainId`, so `getRequirements()` would read allowances, nonces, gates, and Blue balances on one chain while `buildTx` resolves the `vaultExitBundlesV1` address for another | `this.client.viemClient.chain?.id === this.chainId` — the same first-line guard every existing Vault V1/V2 entity method already applies before returning a handle | `ChainIdMismatchError` (reuse existing)        |
+| every RPC reads the wrong chain          | the viem client is connected to a chain other than `this.chainId`, so `getRequirements()` would read allowances, nonces, Blue balances, and V1 Morpho configuration on one chain while `buildTx` resolves the `vaultExitBundlesV1` address for another | `this.client.viemClient.chain?.id === this.chainId` — the same first-line guard every existing Vault V1/V2 entity method already applies before returning a handle | `ChainIdMismatchError` (reuse existing)        |
 | every calc runs against the wrong vault | caller passes a `vaultData` fetched for a **different** vault — allocations, adapters, and penalties are then read off it while `buildTx` still targets `this.vault` | `vaultData.address === this.vault`, the same guard the Vault V1/V2 deposit and migration flows already apply — runs right after the chain-ID guard, since every row below trusts the snapshot | `VaultAddressMismatchError` (reuse existing)   |
-| `InvalidAdaptersLength()`               | `adaptersLength() != 1`                                         | `vaultData.adapters.length === 1`                                                                                                                              | `InKindRedemptionRequiresSingleAdapterError`   |
+| `InvalidAdaptersLength()`               | `adaptersLength() != 1`                                         | `vaultData.adapters.length === 1`                                                                                                                              | `InKindRedeemRequiresSingleAdapterError`       |
 | `AdapterNotPartOfVault()`               | `!isAdapter(adapter)`                                           | `adapter ∈ vaultData.adapters`                                                                                                                                 | `AdapterNotPartOfVaultError`                   |
 | revert / garbage from the contract casting the adapter to `IMorphoMarketV1AdapterV2` and calling `adapter.supplyShares(id)` / `adapter.morpho()` | the sole adapter is **not** a markets-based `MorphoMarketV1AdapterV2` — e.g. a legacy positions-based `MorphoMarketV1Adapter` or a `MorphoVaultV1Adapter` | `accrualAdapters[0] instanceof AccrualVaultV2MorphoMarketV1AdapterV2` — reject the other two `AccrualVaultV2*Adapter` types `vvrm`'s `deallocation.ts` already distinguishes; this is a **first-class check**, not an incidental one, because the whole V2 loop assumes the V2 adapter interface | `UnsupportedInKindAdapterError`                |
 | `MorphoMismatch()`                      | `adapter.morpho() != BLUE`                                      | subsumed by the adapter-type row above — the `MorphoMarketV1AdapterV2` factory pins Blue in its constructor, so a genuine `AccrualVaultV2MorphoMarketV1AdapterV2` cannot mismatch | reuse `UnsupportedInKindAdapterError`          |
-| **`panic 0x32`** (array out-of-bounds)  | list exhausted before `assetsToDeallocate` reaches 0            | coverage sum ≥ requirement, under the **version-specific** rule below — id-deduplicated on V2, raw ordered list on V1                                          | `InKindRedemptionCoverageError`                |
+| **`panic 0x32`** (array out-of-bounds)  | list exhausted before `assetsToDeallocate` reaches 0            | simulate the version-specific loop below — id-deduplicated coverage on V2 and the raw ordered greedy loop on V1                                                 | `InKindRedeemCoverageError`                    |
+| `NotEnoughLiquidity()` (V1)             | the raw loop assigns a non-zero chunk to the same market twice, but the final vault withdrawal cannot redeem more than the vault's position in that market | track cumulative assignment per market id and reject when it exceeds the snapshot position                                                                     | `InKindRedeemCoverageError`                    |
 | entry silently contributes zero         | a listed `MarketParams.id` is not in `adapter.marketIds`        | treat it as zero in the coverage and peak-balance calculations, matching the contract                                                                           | —                                              |
-| silent no-op that still burns the permit | no idle assets and `mulDivDown(amount, WAD, WAD + penalty) === 0` | require either idle assets or a positive derived `assetsToDeallocate`                                                                                         | `NonPositiveInputError("assetsToDeallocate")`  |
+| silent no-op that still burns the permit | no idle assets and `mulDivDown(amount, WAD, WAD + penalty) === 0` | require either idle assets or a positive derived `assetsToDeallocate`                                                                                         | `InKindRedeemZeroDeallocationError`             |
 | `panic 0x32` on the first index         | `marketParamsList.length === 0` while deallocation is required   | require a non-empty list only when `assetsToDeallocate > 0`                                                                                                    | `EmptyMarketParamsListError`                   |
-| `DeadlinePassed()` / `PermitDeadlineExpired()` | `block.timestamp > deadline`                             | `deadline > Time.timestamp()`                                                                                                                                  | `ExpiredDeadlineError`                         |
+| `DeadlinePassed()` / `PermitDeadlineExpired()` | `block.timestamp > deadline`                             | `deadline > Time.timestamp()` at handle creation and again before `getRequirements()` performs RPC                                                                                                                           | `ExpiredDeadlineError`                         |
 | —                                       | `amount <= 0`                                                   | positive amount                                                                                                                                                | `NonPositiveInputError("amount")`              |
 
 Coverage, for Vault V2:
@@ -336,13 +340,19 @@ maxExitAssets      = covered == 0
                                                                   // returned in the error payload
 ```
 
-and for Vault V1, where there is no penalty, disabled markets are skipped by the contract, and —
-unlike V2 — **duplicates must not be deduplicated** (see the subtlety below):
+and for Vault V1, where there is no penalty and disabled markets are skipped by the contract, the
+raw ordered loop must be simulated while bounding cumulative assignment by the vault's position:
 
 ```
-covered = Σ over marketParamsList (raw, ordered) where vaultData.allocations.get(id)?.config.enabled
-            of allocation.position accrued to t → supplyAssets
-require   covered >= amount
+remaining    = amount
+assigned[id] = 0
+for marketParams in marketParamsList while remaining > 0:
+  available = allocation.position accrued to t → supplyAssets
+  chunk     = min(available, remaining)
+  require assigned[id] + chunk <= available
+  assigned[id] += chunk
+  remaining    -= chunk
+require remaining == 0
 ```
 
 Every input is already on `AccrualVaultV2` / `AccrualVault` — `adapters`,
@@ -352,8 +362,8 @@ caller already made.
 
 Two subtleties that are easy to get wrong:
 
-- **Deduplication is load-bearing on V2 — and forbidden on V1.** The two versions drain the position
-  they read at *different* times, so an identical duplicate has opposite effects:
+- **Duplicate handling is version-specific.** The two versions drain the position they read at
+  different times, so an identical duplicate has opposite effects:
   - On **V2**, `forceDeallocate` + `withdraw` run inside `onMorphoSupply` on every iteration, so the
     adapter's `expectedSupplyAssets(id)` is *drained mid-loop* and a market listed twice contributes
     ≈0 the second time round. A naive sum over the caller's raw list would over-count and then panic
@@ -361,13 +371,14 @@ Two subtleties that are easy to get wrong:
     iteration but no revert, and the contract explicitly acknowledges duplicate entries are possible.
   - On **V1**, the single `withdraw` runs *after* the loop (the loop only supplies flash-loaned
     assets on behalf of the user), so `expectedSupplyAssets(vault, id)` reads the **same undrained
-    vault position on every iteration**. A market listed twice therefore *re-contributes its full
-    position*, exactly as the contract will. Deduplicating the V1 coverage sum would under-count and
-    reject exits the contract can execute; V1 must simulate the **raw ordered list**.
-- **Coverage is order-independent either way.** On V2 (deduped) and on V1 (raw list), the greedy
-  `min(available_i, remaining)` telescopes to a plain sum against the target, so **order never
-  decides whether the call succeeds** — only which Blue markets the user ends up holding. That is
-  what makes it safe to leave ordering entirely to the caller.
+    vault position on every iteration**. This can make the raw loop terminate, but the supplied
+    assets are credited to the user, not the vault. The final MetaMorpho withdrawal still cannot
+    redeem more than the vault owns in that market, so a second non-zero assignment is rejected
+    before it can surface as `NotEnoughLiquidity()`.
+- **Order is safety-relevant on V1.** V2's deduplicated capacity remains order-independent, with
+  order affecting only which Blue positions the user receives. V1 must preserve the contract's raw
+  order: a harmful duplicate reached before the amount is covered is rejected, while entries after
+  the greedy loop has reached zero are never executed.
 
 #### Asynchronous — in `getRequirements()`, batched into one multicall
 
@@ -392,12 +403,21 @@ which is exactly the situation in-kind redemption exists to serve.
 Vault V1 inverts this: the flash loan takes the whole `exitAssets` up front, so the bound is
 `balanceOf(loanToken, blue) >= exitAssets` — strictly stronger than V2's.
 
+Blue's loan-token balance is not part of `vaultData`, so `getRequirements()` reads it for the first
+time against the peak derived from the supplied snapshot. The vault's idle balance, penalty, and
+adapter positions are already supplied together in `vaultData`. Re-reading only idle balance would
+mix a fresh value with stale penalty and position values rather than refresh the state that produced
+the coverage bound; a coherent refresh would require fetching the complete Vault V2 snapshot again.
+
 Vault V2 gates are intentionally not preflighted. A receive-assets gate may inspect
 `VaultExitBundlesV1.initiator()`, whose transient value is populated only inside the actual
 periphery call. Reading `canReceiveAssets` directly — inside or outside multicall — therefore uses
-a different execution context and can disagree with execution. Share-send and asset-receive gates
-remain enforced by Vault V2 on-chain. Integrators that need gate assurance before submission must
-simulate the finalized transaction after its permit is signed or its approval is mined.
+a different execution context and can disagree with execution. `canSendShares(userAddress)` also
+delegates to arbitrary external gate code and is evaluated repeatedly after intermediate penalty
+share burns, so one standalone read can likewise disagree with the final sequence. Share-send and
+asset-receive gates remain enforced by Vault V2 on-chain. Integrators that need gate assurance
+before submission must simulate the finalized transaction after its permit is signed or its
+approval is mined.
 
 Failure modes deliberately left to documentation rather than checks: `AlreadyInitiated()`
 (decodable transient reentrancy guard, unreachable from a normal EOA call),
@@ -480,7 +500,8 @@ which hardcodes `owner = msg.sender` and `spender = address(this)`.
 matching `encodeErc20Permit`. `TokenLib` notes the two are independent — a signature that never
 lands stays submittable until `permit.deadline` — so keeping them equal bounds the floating-signature
 window to the bundle's own lifetime. The entity accepts an override, which matters for slow signing
-flows.
+flows. Requirement resolution rejects the handle if that shared deadline has expired before its
+allowance, nonce, and balance reads begin.
 
 ### Testing
 
@@ -508,8 +529,8 @@ Per root `AGENTS.md` §5, tests use the canonical deployment on the pinned mainn
   permit with `InvalidSigner()`.
 - **Security invariants as tests** (§5): the permitted value is always `maxUint256`; the empty permit
   is exactly `v=0, r=0, s=0`; a **V2** duplicate-heavy list that only covers the amount when
-  double-counted is *rejected* (deduped coverage), while the mirror **V1** list — where duplicates
-  legitimately re-contribute the undrained vault position — is *accepted* (raw-ordered coverage); a
+  double-counted is *rejected* (deduped coverage), and the mirror **V1** list is also *rejected* when
+  the raw greedy loop assigns a second non-zero chunk from the same vault position; a
   V2 list may contain an absent market before a covering live market, with the absent entry preserved
   in calldata but counted as zero; an under-covering list is rejected rather than left to panic; the
   **default**
@@ -660,12 +681,15 @@ canonical deployment became available.
   methods, not just here.
 - **Blue token-balance dependency.** The exit's success depends on Blue's aggregate balance of the
   loan token at execution, which any other transaction in the same block can change. The pre-flight
-  check is a snapshot, not a guarantee.
+  check is a snapshot, not a guarantee. This is Blue's first balance read because that value is not
+  included in `vaultData`; it is not a selective refresh of an existing snapshot field.
 - **Vault gates are enforced only during execution.** A receive-assets gate may inspect the
-  periphery's transient `initiator`, which is unset during standalone RPC reads. The SDK therefore
-  does not preflight either Vault V2 gate family: a direct or multicall read could reject a valid
-  exit or approve one that later reverts. Simulate the finalized, authorized transaction when gate
-  compatibility must be known before submission.
+  periphery's transient `initiator`, which is unset during standalone RPC reads. A send-share gate
+  is arbitrary external code and is called repeatedly after intermediate share burns, so its result
+  can also change within the exit sequence. The SDK therefore does not preflight either Vault V2
+  gate family: a direct or multicall read could reject a valid exit or approve one that later
+  reverts. Simulate the finalized, authorized transaction when gate compatibility must be known
+  before submission.
 - **Share sufficiency is not validated — by decision.** The SDK forces a `maxUint256` allowance,
   which settles *authorization*, and then does **not** read the user's share balance. An `amount`
   sized above the user's holdings therefore reverts on-chain (`ERC20InsufficientBalance` in
@@ -689,19 +713,21 @@ canonical deployment became available.
   `forceDeallocate` *shrinks* the adapter's position on a listed market — either can make a list that
   passed pre-flight fall short and revert with the very `panic 0x32` this TIB set out to eliminate.
   **There is no SDK-side defence, and we do not pretend otherwise.** The SDK cannot pin on-chain
-  state; re-reading at `getRequirements()` time only narrows the window, never closes it. What bounds
-  the exposure is external to us: penalty changes are timelocked and capped at 2%, and adapter market
-  removals are timelocked too — so the realistic drift is small and slow, not adversarial-instant.
-  This is documented on both entity methods as a residual, not defended against, and it is the one
-  failure mode in the matrix we consciously leave able to surface as a raw panic.
+  state. Re-reading only `assetBalance` at `getRequirements()` time would mix that fresh value with
+  stale penalty and adapter-position values; refetching the complete snapshot would only narrow the
+  window, never close it. What bounds the exposure is external to us: penalty changes are timelocked
+  and capped at 2%, and adapter market removals are timelocked too — so the realistic drift is small
+  and slow, not adversarial-instant. This is documented on both entity methods as a residual, not
+  defended against, and it is the one failure mode in the matrix we consciously leave able to
+  surface as a raw panic.
 - **Smart-contract wallets are silently permit-incapable.** Left unhandled this is a guaranteed
   `InvalidSigner()` after the user has gone through a signing flow. Routing them to the approve path
   is a correctness requirement, not a nicety.
 - **Inherited from the contract, by its own acknowledgement:** the vault share price is never
   checked, so a bad-debt realisation between build and execution is absorbed silently; minted Blue
   shares are never checked (at most one wei per supply lost to rounding, acceptable for curated
-  markets); duplicate markets are permitted; and no-ops and zero-checks are not systematically
-  prevented.
+  markets); duplicate inputs are permitted at contract level, although the SDK rejects V1 duplicates
+  that over-assign a vault position; and no-ops and zero-checks are not systematically prevented.
 - The contract carries two audits (blackthorn, trustsec, 2026-07-06) in
   [`audits/`](https://github.com/morpho-org/bundles/tree/main/audits).
 
