@@ -42,7 +42,16 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm run test:ci
+      - name: Test
+        id: test
+        run: |
+          pnpm run test:ci --reporter=default --reporter=json --outputFile.json=vitest-results.json
+          if jq -e '[.testResults[].assertionResults[].failureMessages[]] | length == 0' vitest-results.json > /dev/null; then
+            echo "cache_safe=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Skipping Foundry cache save because Vitest recovered from a failed attempt."
+            echo "cache_safe=false" >> "$GITHUB_OUTPUT"
+          fi
         env:
           MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
           BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
@@ -50,9 +59,9 @@ jobs:
           IS_LOGGING_DISABLED: true
 
       - name: Save Foundry cache
-        # A panicked Anvil can leave a partial shared read cache. Never publish a failed run's
-        # cache as the restore source for later, otherwise independent jobs inherit its damage.
-        if: success()
+        # A panicked Anvil can leave a partial shared read cache. The JSON report retains failure
+        # messages from retried attempts, so save only when every test passed on its first attempt.
+        if: success() && steps.test.outputs.cache_safe == 'true'
         uses: actions/cache/save@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6
         with:
           path: ~/.foundry/cache/rpc

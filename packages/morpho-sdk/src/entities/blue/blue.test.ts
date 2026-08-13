@@ -12,8 +12,9 @@ import { Time } from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import { type Address, createPublicClient, http, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
-import { afterEach, describe, expect, vi } from "vitest";
+import { describe, expect } from "vitest";
 import { CbbtcUsdcBlue, WstethWethBlue } from "../../../test/fixtures/blue.js";
+import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { test } from "../../../test/setup.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
@@ -697,10 +698,6 @@ describe("MorphoBlue repay maxSharePrice forward-accrual (VAU-1206)", () => {
   // Fixed wall clock so `Time.timestamp()` (= Date.now()) is deterministic.
   const NOW_SEC = 1_800_000_000n;
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   // A CbBTC/USDC position on a market that last accrued 5 days ago — far enough
   // that accrued interest exceeds the 0.03% default slippage, i.e. the case that
   // used to revert against `morphoRepay`'s `maxSharePrice` guard.
@@ -733,18 +730,15 @@ describe("MorphoBlue repay maxSharePrice forward-accrual (VAU-1206)", () => {
   const localClient = createPublicClient({ chain: mainnet, transport: http() });
 
   test("repay assets mode derives maxSharePrice from the forward-accrued market", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(Number(NOW_SEC) * 1_000);
-
     const positionData = makeStalePosition();
     const market = localClient
       .extend(morphoViemExtension())
       .morpho.blue(CbbtcUsdcBlue, mainnet.id);
     const amount = parseUnits("1000", 6);
 
-    const tx = market
-      .repay({ amount, userAddress: USER, positionData })
-      .buildTx();
+    const tx = withChainTimestamp(NOW_SEC, () =>
+      market.repay({ amount, userAddress: USER, positionData }).buildTx(),
+    );
 
     const accruedMarket = positionData.market.accrueInterest(
       NOW_SEC + TWO_HOURS,
@@ -768,23 +762,22 @@ describe("MorphoBlue repay maxSharePrice forward-accrual (VAU-1206)", () => {
   });
 
   test("repayWithdrawCollateral assets mode derives maxSharePrice from the forward-accrued market", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(Number(NOW_SEC) * 1_000);
-
     const positionData = makeStalePosition();
     const market = localClient
       .extend(morphoViemExtension())
       .morpho.blue(CbbtcUsdcBlue, mainnet.id);
     const amount = parseUnits("1000", 6);
 
-    const tx = market
-      .repayWithdrawCollateral({
-        amount,
-        withdrawAmount: 1n,
-        userAddress: USER,
-        positionData,
-      })
-      .buildTx();
+    const tx = withChainTimestamp(NOW_SEC, () =>
+      market
+        .repayWithdrawCollateral({
+          amount,
+          withdrawAmount: 1n,
+          userAddress: USER,
+          positionData,
+        })
+        .buildTx(),
+    );
 
     const accruedMarket = positionData.market.accrueInterest(
       NOW_SEC + TWO_HOURS,
@@ -815,10 +808,6 @@ describe("MorphoBlue supply maxSharePrice forward-accrual", () => {
   const RAY = MathLib.RAY;
   const rDivDown = (a: bigint, b: bigint) => (a * RAY) / b;
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   // WETH-loan market last accrued 5 days ago — accrual then exceeds the 0.03% default slippage.
   function staleMarket() {
     return new Market({
@@ -838,21 +827,18 @@ describe("MorphoBlue supply maxSharePrice forward-accrual", () => {
   const localClient = createPublicClient({ chain: mainnet, transport: http() });
 
   test("native-only supply derives maxSharePrice from the forward-accrued market", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(Number(NOW_SEC) * 1_000);
-
     const marketData = staleMarket();
     const nativeAmount = parseUnits("10", 18);
     const market = localClient
       .extend(morphoViemExtension())
       .morpho.blue(WstethWethBlue, mainnet.id);
 
-    const tx = market
-      .supply({ nativeAmount, userAddress: USER, marketData })
-      .buildTx();
+    const tx = withChainTimestamp(NOW_SEC, () =>
+      market.supply({ nativeAmount, userAddress: USER, marketData }).buildTx(),
+    );
 
     const accruedMarket = marketData.accrueInterest(
-      MathLib.max(Time.timestamp(), marketData.lastUpdate) + Time.s.from.h(2n),
+      MathLib.max(NOW_SEC, marketData.lastUpdate) + Time.s.from.h(2n),
     );
     const expected = computeMaxSupplySharePrice({
       supplyAssets: nativeAmount,

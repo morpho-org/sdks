@@ -1,10 +1,9 @@
 import { configDefaults, defineConfig } from "vitest/config";
 
-const forkTestSequence = {
-  // Fork-backed files still run concurrently across workers. Serializing only the tests within
-  // each file keeps Anvil pressure bounded without slowing unrelated projects.
-  concurrent: !process.env.CI,
-};
+// Fork-backed files still run across every available worker. CI limits only the tests started
+// within each worker so independent Anvil nodes do not collectively saturate the shared upstream
+// RPC; local runs retain Vitest's default concurrency of five.
+const forkTestMaxConcurrency = process.env.CI ? 2 : 5;
 
 export default defineConfig({
   test: {
@@ -78,7 +77,7 @@ export default defineConfig({
             "packages/blue-sdk/test/**/*.test.ts",
             "packages/blue-sdk/src/**/*.test.ts",
           ],
-          sequence: forkTestSequence,
+          maxConcurrency: forkTestMaxConcurrency,
         },
       },
       {
@@ -89,7 +88,7 @@ export default defineConfig({
             "packages/midnight-sdk/src/**/*.test.ts",
             "packages/midnight-sdk/test/**/*.test.ts",
           ],
-          sequence: forkTestSequence,
+          maxConcurrency: forkTestMaxConcurrency,
         },
       },
       {
@@ -104,7 +103,7 @@ export default defineConfig({
           // fork setup + RPC latency can push a test past 60s and flake. Give
           // headroom to match the heaviest fork projects.
           testTimeout: 120_000,
-          sequence: forkTestSequence,
+          maxConcurrency: forkTestMaxConcurrency,
         },
       },
       {
@@ -154,7 +153,7 @@ export default defineConfig({
           // fork setup + RPC latency can push a test past 60s and flake. Give
           // headroom to match the heaviest fork projects.
           testTimeout: 120_000,
-          sequence: forkTestSequence,
+          maxConcurrency: forkTestMaxConcurrency,
         },
       },
       {
@@ -165,7 +164,7 @@ export default defineConfig({
             "packages/liquidity-sdk-viem/test/**/*.test.ts",
             "packages/liquidity-sdk-viem/src/**/*.test.ts",
           ],
-          sequence: forkTestSequence,
+          maxConcurrency: forkTestMaxConcurrency,
         },
       },
       {
@@ -176,7 +175,7 @@ export default defineConfig({
             "packages/test/test/**/*.test.ts",
             "packages/test/src/**/*.test.ts",
           ],
-          sequence: forkTestSequence,
+          maxConcurrency: forkTestMaxConcurrency,
         },
       },
       {

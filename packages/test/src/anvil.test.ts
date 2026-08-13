@@ -5,12 +5,20 @@ import { spawnAnvil } from "./anvil.js";
 import { createAnvilTestClient } from "./client.js";
 
 test("spawnAnvil isolates state on unique local nodes", async () => {
-  const [firstNode, secondNode] = await Promise.all([
+  const [firstResult, secondResult] = await Promise.allSettled([
     spawnAnvil({ chainId: mainnet.id }),
     spawnAnvil({ chainId: mainnet.id }),
   ]);
+  const nodes = [firstResult, secondResult].flatMap((result) =>
+    result.status === "fulfilled" ? [result.value] : [],
+  );
 
   try {
+    if (firstResult.status === "rejected") throw firstResult.reason;
+    if (secondResult.status === "rejected") throw secondResult.reason;
+
+    const firstNode = firstResult.value;
+    const secondNode = secondResult.value;
     expect(firstNode.rpcUrl).not.toBe(secondNode.rpcUrl);
 
     const firstClient = createAnvilTestClient(http(firstNode.rpcUrl), mainnet);
@@ -36,7 +44,6 @@ test("spawnAnvil isolates state on unique local nodes", async () => {
       ]),
     ).resolves.toEqual([1n, 2n]);
   } finally {
-    firstNode.stop();
-    secondNode.stop();
+    for (const node of nodes) node.stop();
   }
 });

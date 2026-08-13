@@ -21,11 +21,12 @@ import {
   parseUnits,
 } from "viem";
 import { mainnet } from "viem/chains";
-import { afterEach, describe, expect, vi } from "vitest";
+import { describe, expect } from "vitest";
 import {
   CbbtcUsdcBlue,
   WbtcUsdcSourceMarket,
 } from "../../../test/fixtures/blue.js";
+import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { createVaultV2 } from "../../../test/helpers/vaultV2.js";
 import {
   InsufficientBlueBalanceForInKindRedeemError,
@@ -63,10 +64,6 @@ const submitAndAccept = async (params: {
 };
 
 describe("MorphoVaultV2.inKindRedeem integration", () => {
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   test("accepts the two-field-domain permit and exits with a penalty", async ({
     client,
   }) => {
@@ -220,12 +217,6 @@ describe("MorphoVaultV2.inKindRedeem integration", () => {
     const vault = client
       .extend(morphoViemExtension({ supportSignature: true }))
       .morpho.vaultV2(vaultAddress, mainnet.id);
-    // Keep the SDK wall clock aligned with the pinned fork so its market-accrual preview targets
-    // the same timestamp as the transaction rather than the current date.
-    vi.useFakeTimers({
-      now: Number(await client.timestamp()) * 1_000,
-      toFake: ["Date"],
-    });
     const vaultData = await vault.getData();
     const [adapter] = vaultData.accrualAdapters;
     if (!(adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2)) {
@@ -254,13 +245,18 @@ describe("MorphoVaultV2.inKindRedeem integration", () => {
 
     expect(vaultData.forceDeallocatePenalties[adapterAddress]).toBe(penalty);
     expect(marketParamsList).toHaveLength(2);
-    const exit = vault.inKindRedeem({
-      amount,
-      marketParamsList,
-      vaultData,
-      userAddress: client.account.address,
-    });
-    const [permitRequirement] = await exit.getRequirements();
+    const exit = withChainTimestamp(await client.timestamp(), () =>
+      vault.inKindRedeem({
+        amount,
+        marketParamsList,
+        vaultData,
+        userAddress: client.account.address,
+      }),
+    );
+    const [permitRequirement] = await withChainTimestamp(
+      await client.timestamp(),
+      () => exit.getRequirements(),
+    );
     if (!isRequirementSignature(permitRequirement)) {
       throw new Error("Vault V2 shares permit requirement not found");
     }
@@ -300,14 +296,22 @@ describe("MorphoVaultV2.inKindRedeem integration", () => {
       mainnet.id,
     );
     await client.deal({ erc20: USDC, account: blue, amount: 0n });
-    vi.setSystemTime(Number(await client.timestamp()) * 1_000);
-    const balanceLimitedExit = vault.inKindRedeem({
-      amount: 2n,
-      marketParamsList: [WbtcUsdcSourceMarket],
-      vaultData: await vault.getData(),
-      userAddress: client.account.address,
-    });
-    await expect(balanceLimitedExit.getRequirements()).rejects.toBeInstanceOf(
+    const balanceLimitedVaultData = await vault.getData();
+    const balanceLimitedExit = withChainTimestamp(
+      await client.timestamp(),
+      () =>
+        vault.inKindRedeem({
+          amount: 2n,
+          marketParamsList: [WbtcUsdcSourceMarket],
+          vaultData: balanceLimitedVaultData,
+          userAddress: client.account.address,
+        }),
+    );
+    const balanceLimitedRequirements = withChainTimestamp(
+      await client.timestamp(),
+      () => balanceLimitedExit.getRequirements(),
+    );
+    await expect(balanceLimitedRequirements).rejects.toBeInstanceOf(
       InsufficientBlueBalanceForInKindRedeemError,
     );
   });
@@ -372,12 +376,6 @@ describe("MorphoVaultV2.inKindRedeem integration", () => {
     const vault = client
       .extend(morphoViemExtension({ supportSignature: false }))
       .morpho.vaultV2(vaultAddress, mainnet.id);
-    // Keep the SDK wall clock aligned with the pinned fork for deterministic deadlines and
-    // accrual previews.
-    vi.useFakeTimers({
-      now: Number(await client.timestamp()) * 1_000,
-      toFake: ["Date"],
-    });
     const vaultData = await vault.getData();
     const amount = deposit / 2n;
     const initialVaultShares = await client.readContract({
@@ -394,13 +392,17 @@ describe("MorphoVaultV2.inKindRedeem integration", () => {
     });
 
     expect(vaultData.assetBalance).toBe(deposit);
-    const exit = vault.inKindRedeem({
-      amount,
-      marketParamsList: [],
-      vaultData,
-      userAddress: client.account.address,
-    });
-    const [approval] = await exit.getRequirements();
+    const exit = withChainTimestamp(await client.timestamp(), () =>
+      vault.inKindRedeem({
+        amount,
+        marketParamsList: [],
+        vaultData,
+        userAddress: client.account.address,
+      }),
+    );
+    const [approval] = await withChainTimestamp(await client.timestamp(), () =>
+      exit.getRequirements(),
+    );
     if (!isRequirementApproval(approval)) {
       throw new Error("VaultExitBundlesV1 approval requirement not found");
     }
