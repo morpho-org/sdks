@@ -55,6 +55,11 @@ export interface ChainAddresses {
     /** Bundler3 adapter for migrating Aave V3 Optimizer positions to Morpho. */
     aaveV3OptimizerMigrationAdapter?: `0x${string}`;
   };
+  /** Standalone bundle periphery contracts for composing vault-exit workflows outside Bundler3. */
+  readonly bundles?: {
+    /** VaultExitBundlesV1 periphery contract for force-withdraw and in-kind redemption vault-exit flows. */
+    readonly vaultExitBundlesV1: `0x${string}`;
+  };
   /** AdaptiveCurveIrm contract that lets Morpho update utilization-responsive borrow rates per market. */
   adaptiveCurveIrm: `0x${string}`;
   /** PublicAllocator contract for permissionless MetaMorpho reallocations subject to flow caps and vault fees. */
@@ -134,6 +139,9 @@ const _addressesRegistry = {
         "0x4011dc6581fA05F9B0c7A12AdCd676e2b1a59ca3",
       aaveV3OptimizerMigrationAdapter:
         "0x9e2ea2d5785598a163D569D795f286F5C55ad972",
+    },
+    bundles: {
+      vaultExitBundlesV1: "0xaf85aF286637A033BE7d59ED8cC566afa3309B02",
     },
     adaptiveCurveIrm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
     publicAllocator: "0xfd32fA2ca22c76dD6E550706Ad913FC6CE91c75D",
@@ -224,6 +232,9 @@ const _addressesRegistry = {
       compoundV3MigrationAdapter: "0x85D4812Ef92c040d4270eD8547b6835e41FbbB70",
       aaveV3CoreMigrationAdapter: "0xb27Aa2a964eAd5ed661D86974b37e4fB995b36f5",
     },
+    bundles: {
+      vaultExitBundlesV1: "0xE52E169C342C096C4949ABb944DC9f30E3F5Ea84",
+    },
     adaptiveCurveIrm: "0x46415998764C29aB2a25CbeA6254146D50D22687",
     publicAllocator: "0xA090dD1a701408Df1d4d0B85b716c87565f90467",
     metaMorphoFactory: "0xFf62A7c278C62eD665133147129245053Bbf5918",
@@ -265,6 +276,9 @@ const _addressesRegistry = {
       aaveV3CoreMigrationAdapter: "0xEcB1662a1dff5C20650CF98c3334d2fddcD50742",
     },
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    bundles: {
+      vaultExitBundlesV1: "0x7Ae2B7012c82ea18a6BeE98ad09a684C88d6e36a",
+    },
     adaptiveCurveIrm: "0xe675A2161D4a6E2de2eeD70ac98EEBf257FBF0B0",
     publicAllocator: "0xfac15aff53ADd2ff80C2962127C434E8615Df0d3",
     metaMorphoFactory: "0xa9c87daB340631C34BB738625C70499e29ddDC98",
@@ -292,6 +306,9 @@ const _addressesRegistry = {
       compoundV3MigrationAdapter: "0x86Ca77a4a37A9CDBe9bBf4975F6d69531B96444b",
     },
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    bundles: {
+      vaultExitBundlesV1: "0x7B885a940164eD51A068725f577a12197b76109b",
+    },
     adaptiveCurveIrm: "0x66F30587FB8D4206918deb78ecA7d5eBbafD06DA",
     publicAllocator: "0x769583Af5e9D03589F159EbEC31Cc2c23E8C355E",
     metaMorphoFactory: "0x878988f5f561081deEa117717052164ea1Ef0c82",
@@ -317,6 +334,9 @@ const _addressesRegistry = {
       paraswapAdapter: "0x31F539f4Ed14fA1fd18781e93f6739249692aDC5",
     },
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    bundles: {
+      vaultExitBundlesV1: "0x80De0F063aC662a4ee86c2F4Db0b52746094ad62",
+    },
     adaptiveCurveIrm: "0x8cD70A8F399428456b29546BC5dBe10ab6a06ef6",
     publicAllocator: "0x0d68a97324E602E02799CD83B42D337207B40658",
     metaMorphoFactory: "0x3Bb6A6A0Bc85b367EFE0A5bAc81c5E52C892839a",
@@ -339,6 +359,9 @@ const _addressesRegistry = {
     bundler3: {
       bundler3: "0x3D07BF2FFb23248034bF704F3a4786F1ffE2a448",
       generalAdapter1: "0x30fa9A3cF56931ACEea42E28D35519a97D90aA67",
+    },
+    bundles: {
+      vaultExitBundlesV1: "0xcf7b4a40f25A6b839A93b8A8b45297F2a5383E73",
     },
     adaptiveCurveIrm: "0x34E99D604751a72cF8d0CFDf87069292d82De472",
     publicAllocator: "0xef9889B4e443DEd35FA0Bd060f2104Cca94e6A43",
@@ -416,6 +439,9 @@ const _addressesRegistry = {
       generalAdapter1: "0xC11329d19C2275c9E759867e879ECFcEeD7e30A0",
       paraswapAdapter: "0xAa870Da2a9F611A3A53d0D2AEe5664B3700a59c9",
       compoundV3MigrationAdapter: "0x617f8d7885CCE689115Af04576F7cB6F2534fA9a",
+    },
+    bundles: {
+      vaultExitBundlesV1: "0x0628B860947fA0c195988F65d53850546A489732",
     },
     adaptiveCurveIrm: "0x9a6061d51743B31D2c3Be75D83781Fa423f53F0E",
     publicAllocator: "0xB0c9a107fA17c779B3378210A7a593e88938C7C9",
@@ -544,6 +570,9 @@ const _addressesRegistry = {
       bundler3: "0xA8C5e23C9C0DF2b6fF716486c6bBEBB6661548C8",
       generalAdapter1: "0x916Aa175C36E845db45fF6DDB886AE437d403B61",
     },
+    bundles: {
+      vaultExitBundlesV1: "0xa434ABcc7e945b804c87B4f3c0a76b20651d4863",
+    },
     adaptiveCurveIrm: "0x4F708C0ae7deD3d74736594C2109C2E3c065B428",
     publicAllocator: "0x39EB6Da5e88194C82B13491Df2e8B3E213eD2412",
     metaMorphoFactory: "0x1c8De6889acee12257899BFeAa2b7e534de32E16",
@@ -613,6 +642,9 @@ const _addressesRegistry = {
     bundler3: {
       bundler3: "0xa3F50477AfA601C771874260A3B34B40e244Fa0e",
       generalAdapter1: "0xD7F48aDE56613E8605863832B7B8A1985B934aE4",
+    },
+    bundles: {
+      vaultExitBundlesV1: "0xC1749C8d50bc645D5116ccf4C858Bc45cB981Ac4",
     },
     adaptiveCurveIrm: "0xD4a426F010986dCad727e8dd6eed44cA4A9b7483",
     publicAllocator: "0x517505be22D9068687334e69ae7a02fC77edf4Fc",
@@ -688,6 +720,9 @@ const _addressesRegistry = {
       bundler3: "0x82b684483e844422FD339df0b67b3B111F02c66E",
       generalAdapter1: "0x725AB8CAd931BCb80Fdbf10955a806765cCe00e5",
     },
+    bundles: {
+      vaultExitBundlesV1: "0xB04b831893A6E2E02Be347cD259690c5Bc7D0675",
+    },
     adaptiveCurveIrm: "0x09475a3D6eA8c314c592b1a3799bDE044E2F400F",
     publicAllocator: "0xfd70575B732F9482F4197FE1075492e114E97302",
     metaMorphoFactory: "0x33f20973275B2F574488b18929cd7DCBf1AbF275",
@@ -708,6 +743,9 @@ const _addressesRegistry = {
     bundler3: {
       bundler3: "0xA0bb114F927dF03d9a1a639b9c71F71B0FaFDf1B",
       generalAdapter1: "0x59b1F4376a81e39c466A0A218447E4D36f39A96b",
+    },
+    bundles: {
+      vaultExitBundlesV1: "0x258d5c815CCE7017E24c63a7669F51ABcD0Dd4e5",
     },
     adaptiveCurveIrm: "0x41e846FC8108b8527C1D4EDB4c9564E56442940f",
     publicAllocator: "0xbCB063D4B6D479b209C186e462828CBACaC82DbE",
@@ -831,6 +869,9 @@ const _addressesRegistry = {
     bundler3: {
       bundler3: "0x5A3B829dcDBE1979cdD9F648Afb6D39dCF805E33",
       generalAdapter1: "0x3a2A86bD16629B054f7f3d87F0a7570F3881a43c",
+    },
+    bundles: {
+      vaultExitBundlesV1: "0x8225192b8638bDe9D41a6d96aBb824F660Ef57E1",
     },
     adaptiveCurveIrm: "0x112fd4042E442C3C12C67AD23587b0afe36eB74E",
     vaultV2Factory: "0x3DE400E3F79113194fa5AF6Ae5C474947E0C82Db",
@@ -1001,6 +1042,9 @@ const _addressesRegistry = {
       bundler3: "0x6478e9393d4C5bB4d53ee881d1DE78786A0344a6",
       generalAdapter1: "0xc5E188541D107e8B79e43478bDE365F1406665D6",
     },
+    bundles: {
+      vaultExitBundlesV1: "0xCE29862924756584BBD0D75CA1249d22007E2813",
+    },
     adaptiveCurveIrm: "0x2BD3d5965B26B51814AC95127B2b80dD6CcC0fa1",
     vaultV2Factory: "0x0FBad98595b0186dA120E41f77C102beb49f803c",
     morphoMarketV1AdapterV2Factory:
@@ -1038,6 +1082,7 @@ const _deployments = {
       aaveV3EtherFiMigrationAdapter: 21643807n,
       aaveV3OptimizerMigrationAdapter: 21643807n,
     },
+    bundles: { vaultExitBundlesV1: 25_720_868n },
     adaptiveCurveIrm: 18883124n,
     publicAllocator: 19375099n,
     metaMorphoFactory: 21439510n,
@@ -1061,6 +1106,7 @@ const _deployments = {
       compoundV3MigrationAdapter: 25161671n,
       aaveV3CoreMigrationAdapter: 25161671n,
     },
+    bundles: { vaultExitBundlesV1: 49_765_458n },
     adaptiveCurveIrm: 13977152n,
     publicAllocator: 13979545n,
     metaMorphoFactory: 23928808n,
@@ -1090,6 +1136,7 @@ const _deployments = {
       aaveV2MigrationAdapter: 68690465n,
       aaveV3CoreMigrationAdapter: 68690465n,
     },
+    bundles: { vaultExitBundlesV1: 91_743_910n },
     permit2: 35701901n,
     adaptiveCurveIrm: 66931042n,
     publicAllocator: 66931042n,
@@ -1112,6 +1159,7 @@ const _deployments = {
       aaveV3CoreMigrationAdapter: 358694526n,
       compoundV3MigrationAdapter: 358693964n,
     },
+    bundles: { vaultExitBundlesV1: 492_901_559n },
     permit2: 38692735n,
     adaptiveCurveIrm: 296446593n,
     publicAllocator: 296446593n,
@@ -1132,6 +1180,7 @@ const _deployments = {
       generalAdapter1: 132139369n,
       paraswapAdapter: 132139438n,
     },
+    bundles: { vaultExitBundlesV1: 155_360_936n },
     permit2: 38854427n,
     adaptiveCurveIrm: 130770075n,
     publicAllocator: 130770075n,
@@ -1151,6 +1200,7 @@ const _deployments = {
       bundler3: 10273494n,
       generalAdapter1: 10273494n,
     },
+    bundles: { vaultExitBundlesV1: 33_492_822n },
     adaptiveCurveIrm: 9025669n,
     publicAllocator: 9025669n,
     metaMorphoFactory: 9025733n,
@@ -1211,6 +1261,7 @@ const _deployments = {
       paraswapAdapter: 20872902n,
       compoundV3MigrationAdapter: 22019479n,
     },
+    bundles: { vaultExitBundlesV1: 55_572_727n },
     adaptiveCurveIrm: 9139027n,
     publicAllocator: 9139027n,
     metaMorphoFactory: 9316789n,
@@ -1312,6 +1363,7 @@ const _deployments = {
       bundler3: 2741993n,
       generalAdapter1: 2741993n,
     },
+    bundles: { vaultExitBundlesV1: 39_579_123n },
     adaptiveCurveIrm: 2741069n,
     publicAllocator: 2741069n,
     metaMorphoFactory: 2741420n,
@@ -1370,6 +1422,7 @@ const _deployments = {
       bundler3: 1988956n,
       generalAdapter1: 1988956n,
     },
+    bundles: { vaultExitBundlesV1: 42_767_282n },
     adaptiveCurveIrm: 1988429n,
     publicAllocator: 1988429n,
     metaMorphoFactory: 1988677n,
@@ -1433,6 +1486,7 @@ const _deployments = {
       bundler3: 32321504n,
       generalAdapter1: 32321504n,
     },
+    bundles: { vaultExitBundlesV1: 94_631_561n },
     adaptiveCurveIrm: 31907457n,
     publicAllocator: 31907457n,
     metaMorphoFactory: 32320327n,
@@ -1452,6 +1506,7 @@ const _deployments = {
       bundler3: 1741861n,
       generalAdapter1: 1741861n,
     },
+    bundles: { vaultExitBundlesV1: 34_970_501n },
     adaptiveCurveIrm: 1504506n,
     publicAllocator: 1504506n,
     metaMorphoFactory: 1504774n,
@@ -1557,6 +1612,7 @@ const _deployments = {
       bundler3: 2375313n,
       generalAdapter1: 2375301n,
     },
+    bundles: { vaultExitBundlesV1: 34_046_873n },
     adaptiveCurveIrm: 2375313n,
     vaultV2Factory: 2375650n,
     morphoMarketV1AdapterV2Factory: 2375701n,
@@ -1716,6 +1772,7 @@ const _deployments = {
       bundler3: 286n,
       generalAdapter1: 286n,
     },
+    bundles: { vaultExitBundlesV1: 32_383_480n },
     adaptiveCurveIrm: 286n,
     vaultV2Factory: 288n,
     morphoMarketV1AdapterV2Factory: 289n,

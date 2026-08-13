@@ -7,7 +7,8 @@ export type RequirementSpenderKey =
   | "generalAdapter1"
   | "permit2"
   | "midnight"
-  | "midnightBundles";
+  | "midnightBundles"
+  | "vaultExitBundlesV1";
 
 /**
  * Validates that a requirement encoder spender matches one of the allowed chain addresses.
@@ -40,12 +41,14 @@ export const validateRequirementSpender = (params: {
     midnight,
     midnightBundles,
     bundler3: { generalAdapter1 },
+    bundles,
   } = getChainAddresses(params.chainId);
   const addresses = {
     generalAdapter1,
     permit2,
     midnight,
     midnightBundles,
+    vaultExitBundlesV1: bundles?.vaultExitBundlesV1,
   } satisfies Record<RequirementSpenderKey, Address | undefined>;
   const supportedSpenders = params.allowed.map((key) => addresses[key]);
 

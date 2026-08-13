@@ -6,7 +6,7 @@ Transaction builders for VaultV1, VaultV2, Blue, and Midnight, plus shared requi
 
 ## Routing summary
 
-- **VaultV1 / VaultV2 deposits** route through bundler3 via GeneralAdapter1 (which enforces `maxSharePrice`, protecting against inflation attacks). VaultV1/V2 `withdraw` and `redeem` are direct vault calls. VaultV2 `forceWithdraw` / `forceRedeem` use `multicall` with `forceDeallocate` calls before the final withdraw/redeem.
+- **VaultV1 / VaultV2 deposits** route through bundler3 via GeneralAdapter1 (which enforces `maxSharePrice`, protecting against inflation attacks). VaultV1/V2 `withdraw` and `redeem` are direct vault calls. VaultV2 `forceWithdraw` / `forceRedeem` use `multicall` with `forceDeallocate` calls before the final withdraw/redeem. VaultV1/V2 `inKindRedeem` handles validate their supplied snapshots eagerly and call the standalone VaultExitBundlesV1 periphery directly. Their optional RPC-backed pre-flight checks run only when the caller awaits `getRequirements()`; the pure actions and `buildTx()` remain synchronous and can encode without those reads.
 - **Blue bundled paths** (`supply`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `repayWithdrawCollateral`, `withdraw`) route through bundler3 via GeneralAdapter1. `repay` and `withdraw` each accept assets or shares (mutually exclusive); `repayWithdrawCollateral` repays first then withdraws. Loan-asset `supply`, `repay`, and `repayWithdrawCollateral` support native wrapping when `loanToken === wNative` (repay assets mode is additive like supply; repay shares mode carves native out of the transfer); loan-asset `withdraw` supports optional PublicAllocator reallocations to top up market liquidity (same mechanism as `borrow`).
 - **Midnight paths** expose lazy action outputs under `client.morpho.midnight(chainId)`. Fixed-rate market taker flows route through Midnight Bundles, direct collateral supply/cancel/redeem route through Midnight, and maker flows return ratify-root requirements plus the mempool payload transaction. Requirement helpers under `src/actions/requirements/midnight` resolve Midnight authorization, Setter ratify-root, and token-pull requirements.
 - **Bundle composition, native wrapping, and reallocation rules** are canonical in [`src/actions/AGENTS.md`](./src/actions/AGENTS.md).
@@ -27,6 +27,7 @@ Protocol terms used across this package's docs and JSDoc:
 - **bundler3** — the bundler entry point; receives a sequence of adapter actions in one transaction.
 - **GeneralAdapter1** — the bundler-side adapter that holds approvals/auth and executes Morpho calls on the user's behalf. Required as the spender for ERC-20 approvals on every bundled path; required as authorized operator on Morpho for `borrow`, `supplyCollateralBorrow`, `repayWithdrawCollateral`, and `withdraw` (the supplier-side path).
 - **PublicAllocator** — Morpho contract that lets vault curators move liquidity between markets within a vault (`reallocateTo(...)`).
+- **VaultExitBundlesV1** — standalone periphery for exiting an illiquid VaultV1 or single-adapter VaultV2 into idle underlying assets and/or Morpho Blue supply positions.
 
 ### Bundler actions
 

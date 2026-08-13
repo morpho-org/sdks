@@ -23,18 +23,28 @@ Each entity exposes a set of actions. Bundled actions route through bundler3 (vi
 | --- | --- | --- |
 | **VaultV1** (MetaMorpho) | `deposit`, `migrateToV2` | Bundler |
 | | `withdraw`, `redeem` | Direct call |
+| | `inKindRedeem` | VaultExitBundlesV1 |
 | **VaultV2** | `deposit` | Bundler |
 | | `withdraw`, `redeem` | Direct call |
 | | `forceWithdraw`, `forceRedeem` | Vault multicall |
+| | `inKindRedeem` | VaultExitBundlesV1 |
 | **Blue** | `supply`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdraw`, `repayWithdrawCollateral`, `refinance` | Bundler |
 | | `withdrawCollateral` | Direct call |
 | **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `repayWithdrawCollateral` | Midnight Bundles |
 | | `makeLend`, `makeBorrow` | Midnight mempool |
 | | `supplyCollateral`, `redeem`, `cancelOffer` | Direct call |
 
+`VaultExitBundlesV1` is registered on Ethereum, Base, Arbitrum, Optimism, Polygon, World Chain,
+Unichain, HyperEVM, Katana, Monad, Stable, Tempo, and Robinhood Chain. Custom deployments can still
+be configured with `registerCustomAddresses`.
+
 ## How it works
 
-Actions that pull tokens or touch a position return `{ buildTx, getRequirements }`. Direct calls — vault `withdraw` / `redeem`, `forceWithdraw` / `forceRedeem`, and Blue `withdrawCollateral` — have no prerequisites and return only `{ buildTx }`.
+Actions that pull tokens or touch a position return `{ buildTx, getRequirements }`. Vault
+`inKindRedeem` uses this shape so callers can await `getRequirements()` to check live Blue liquidity
+and share authorization before invoking `buildTx()`. Calling `buildTx()` directly skips those
+RPC-backed pre-flight checks. Other direct calls — vault `withdraw` / `redeem`, `forceWithdraw` /
+`forceRedeem`, and Blue `withdrawCollateral` — have no prerequisites and return only `{ buildTx }`.
 
 - **`getRequirements()`** — async; the on-chain prerequisites to satisfy first: ERC-20 approvals, permit / Permit2 signatures, Morpho authorization, or (for Midnight) operator authorization and offer-root signatures.
 - **`buildTx(signatures?)`** — synchronous; the final, deep-frozen viem transaction. Pass any signatures collected from the requirements.
@@ -186,11 +196,13 @@ graph LR
         MV1 --> V1D[vaultV1Deposit]
         MV1 --> V1W[vaultV1Withdraw]
         MV1 --> V1R[vaultV1Redeem]
+        MV1 --> V1IKR[vaultV1InKindRedeem]
         MV1 --> V1M[vaultV1MigrateToV2]
 
         V1D -->|nativeTransfer + wrapNative + erc4626Deposit| B1[Bundler3]
         V1W -->|direct call| MM[MetaMorpho]
         V1R -->|direct call| MM
+        V1IKR -->|direct call| VEB[VaultExitBundlesV1]
         V1M -->|erc20TransferFrom + erc4626Redeem + erc4626Deposit| B1
     end
 
@@ -199,12 +211,14 @@ graph LR
         MV2 --> V2D[vaultV2Deposit]
         MV2 --> V2W[vaultV2Withdraw]
         MV2 --> V2R[vaultV2Redeem]
+        MV2 --> V2IKR[vaultV2InKindRedeem]
         MV2 --> V2FW[vaultV2ForceWithdraw]
         MV2 --> V2FR[vaultV2ForceRedeem]
 
         V2D -->|nativeTransfer + wrapNative + erc4626Deposit| B2[Bundler3]
         V2W -->|direct call| V2C[VaultV2 Contract]
         V2R -->|direct call| V2C
+        V2IKR -->|direct call| VEB
         V2FW -->|multicall| V2C
         V2FR -->|multicall| V2C
     end

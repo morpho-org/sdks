@@ -55,6 +55,235 @@ export class NonPositiveInputError extends Error {
   }
 }
 
+/** Thrown when an in-kind redemption does not include any Morpho Blue market parameters. */
+export class EmptyMarketParamsListError extends Error {
+  public constructor() {
+    super(
+      "Market parameters list cannot be empty. Include enough ordered vault markets to cover the in-kind redemption.",
+    );
+    this.name = "EmptyMarketParamsListError";
+  }
+}
+
+/** Thrown when an in-kind redemption deadline has already passed. */
+export class ExpiredDeadlineError extends Error {
+  /**
+   * @param deadline - Expired deadline supplied by the caller.
+   * @param timestamp - Current timestamp used for validation.
+   */
+  public constructor(
+    public readonly deadline: bigint,
+    public readonly timestamp: bigint,
+  ) {
+    super(
+      `Deadline "${deadline}" has expired at timestamp "${timestamp}". Choose a future deadline and rebuild the exit.`,
+    );
+    this.name = "ExpiredDeadlineError";
+  }
+}
+
+/** Thrown when Vault V2 in-kind redemption is attempted with anything other than one adapter. */
+export class InKindRedeemRequiresSingleAdapterError extends Error {
+  /**
+   * @param vault - Vault V2 address.
+   * @param adapters - Number of adapters in the supplied vault snapshot.
+   */
+  public constructor(
+    public readonly vault: Address,
+    public readonly adapters: number,
+  ) {
+    super(
+      `Vault "${vault}" has "${adapters}" adapters. In-kind redemption requires exactly one MorphoMarketV1AdapterV2.`,
+    );
+    this.name = "InKindRedeemRequiresSingleAdapterError";
+  }
+}
+
+/** Thrown when a requested in-kind redemption adapter is not part of the Vault V2 snapshot. */
+export class AdapterNotPartOfVaultError extends Error {
+  /**
+   * @param vault - Vault V2 address.
+   * @param adapter - Adapter rejected by the vault snapshot.
+   */
+  public constructor(
+    public readonly vault: Address,
+    public readonly adapter: Address,
+  ) {
+    super(
+      `Adapter "${adapter}" is not part of vault "${vault}". Use the vault's sole configured adapter.`,
+    );
+    this.name = "AdapterNotPartOfVaultError";
+  }
+}
+
+/** Thrown when the Vault V2 adapter cannot expose MorphoMarketV1AdapterV2 market shares. */
+export class UnsupportedInKindAdapterError extends Error {
+  /**
+   * @param adapter - Unsupported Vault V2 adapter address.
+   */
+  public constructor(public readonly adapter: Address) {
+    super(
+      `Adapter "${adapter}" does not support Vault V2 in-kind redemption. Use a MorphoMarketV1AdapterV2-backed vault.`,
+    );
+    this.name = "UnsupportedInKindAdapterError";
+  }
+}
+
+/** Thrown when a Vault V2 in-kind redemption rounds to no deallocated assets. */
+export class InKindRedeemZeroDeallocationError extends Error {
+  /**
+   * @param params - Values that caused the exit to round to zero deallocated assets.
+   * @param params.vault - Vault V2 address with no idle assets available for the exit.
+   * @param params.amount - Positive penalty-inclusive amount requested by the caller.
+   * @param params.penalty - WAD-scaled force-deallocation penalty applied by the adapter.
+   */
+  public readonly vault: Address;
+  public readonly amount: bigint;
+  public readonly penalty: bigint;
+
+  public constructor(params: {
+    readonly vault: Address;
+    readonly amount: bigint;
+    readonly penalty: bigint;
+  }) {
+    super(
+      `Vault "${params.vault}" has no idle assets, and in-kind redemption amount "${params.amount}" rounds to zero deallocated assets after applying penalty "${params.penalty}". Increase the amount or use another exit path.`,
+    );
+    this.vault = params.vault;
+    this.amount = params.amount;
+    this.penalty = params.penalty;
+    this.name = "InKindRedeemZeroDeallocationError";
+  }
+}
+
+/** Thrown when the ordered market list cannot cover the requested in-kind redemption. */
+export class InKindRedeemCoverageError extends Error {
+  /**
+   * @param params - Coverage values used to explain the rejected exit.
+   * @param params.required - Assets that must be deallocated from listed markets.
+   * @param params.covered - Assets covered by the supplied market list.
+   * @param params.maxExitAssets - Largest penalty-inclusive exit supported by the list.
+   */
+  public readonly required: bigint;
+  public readonly covered: bigint;
+  public readonly maxExitAssets: bigint;
+
+  public constructor(params: {
+    readonly required: bigint;
+    readonly covered: bigint;
+    readonly maxExitAssets: bigint;
+  }) {
+    super(
+      `In-kind redemption requires "${params.required}" assets but the market list covers "${params.covered}". Reduce the amount to at most "${params.maxExitAssets}" or include more vault markets.`,
+    );
+    this.required = params.required;
+    this.covered = params.covered;
+    this.maxExitAssets = params.maxExitAssets;
+    this.name = "InKindRedeemCoverageError";
+  }
+}
+
+/** Thrown when Morpho Blue lacks the physical loan-token balance needed during an exit callback. */
+export class InsufficientBlueBalanceForInKindRedeemError extends Error {
+  /**
+   * @param params - Morpho Blue balance values used to explain the rejected exit.
+   * @param params.asset - Loan token required by the exit.
+   * @param params.available - Current token balance held by Morpho Blue.
+   * @param params.required - Peak token balance required by the exit.
+   */
+  public readonly asset: Address;
+  public readonly available: bigint;
+  public readonly required: bigint;
+
+  public constructor(params: {
+    readonly asset: Address;
+    readonly available: bigint;
+    readonly required: bigint;
+  }) {
+    super(
+      `Morpho Blue holds "${params.available}" of asset "${params.asset}", but this in-kind redemption requires "${params.required}" during its callback. Reduce the amount or wait for Blue liquidity.`,
+    );
+    this.asset = params.asset;
+    this.available = params.available;
+    this.required = params.required;
+    this.name = "InsufficientBlueBalanceForInKindRedeemError";
+  }
+}
+
+/** Thrown when a MetaMorpho vault is connected to a different Morpho deployment. */
+export class VaultMorphoMismatchError extends Error {
+  /**
+   * @param params - Vault and Morpho addresses used to explain the mismatch.
+   * @param params.vault - MetaMorpho vault address.
+   * @param params.expected - Morpho Blue address expected for the target chain.
+   * @param params.actual - Morpho address returned by the vault.
+   */
+  public readonly vault: Address;
+  public readonly expected: Address;
+  public readonly actual: Address;
+
+  public constructor(params: {
+    readonly vault: Address;
+    readonly expected: Address;
+    readonly actual: Address;
+  }) {
+    super(
+      `Vault "${params.vault}" uses Morpho "${params.actual}", expected "${params.expected}". Use vault data from the selected chain.`,
+    );
+    this.vault = params.vault;
+    this.expected = params.expected;
+    this.actual = params.actual;
+    this.name = "VaultMorphoMismatchError";
+  }
+}
+
+/** Thrown when a Vault V1 is Morpho Blue's fee recipient and cannot safely redeem in kind. */
+export class VaultIsBlueFeeRecipientError extends Error {
+  /**
+   * @param vault - Unsupported Vault V1 address.
+   * @param blue - Morpho Blue deployment whose fees accrue to the vault.
+   */
+  public constructor(
+    public readonly vault: Address,
+    public readonly blue: Address,
+  ) {
+    super(
+      `Vault "${vault}" is Morpho Blue "${blue}"'s fee recipient. Use another exit path because VaultExitBundlesV1 cannot safely account for the vault's accrued fee shares.`,
+    );
+    this.name = "VaultIsBlueFeeRecipientError";
+  }
+}
+
+/** Thrown when a vault-shares requirement cannot be safely encoded as an ERC-2612 permit. */
+export class VaultExitBundlesV1PermitMismatchError extends Error {
+  /**
+   * @param params - Permit mismatch values used to explain the rejection.
+   * @param params.field - Permit field that does not match the exit.
+   * @param params.expected - Value required by the exit.
+   * @param params.actual - Value supplied by the signature.
+   * @param params.cause - Original parser failure when signature decoding is wrapped.
+   */
+  public readonly field: "type" | "asset" | "signature";
+  public readonly expected: string;
+  public readonly actual: string;
+
+  public constructor(params: {
+    readonly field: "type" | "asset" | "signature";
+    readonly expected: string;
+    readonly actual: string;
+    readonly cause?: unknown;
+  }) {
+    super(
+      `VaultExitBundlesV1 permit ${params.field} mismatch: expected "${params.expected}", got "${params.actual}". Rebuild and sign the vault-exit permit.`,
+      { cause: params.cause },
+    );
+    this.field = params.field;
+    this.expected = params.expected;
+    this.actual = params.actual;
+    this.name = "VaultExitBundlesV1PermitMismatchError";
+  }
+}
+
 /** @deprecated Use {@link NonPositiveInputError}. */
 export const NonPositiveAssetAmountError = NonPositiveInputError;
 /** @deprecated Use {@link NonPositiveInputError}. */

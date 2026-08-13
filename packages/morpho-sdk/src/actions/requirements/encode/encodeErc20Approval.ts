@@ -22,7 +22,7 @@ interface EncodeErc20ApprovalParams {
  * @param params - Encoding parameters.
  * @param params.token - ERC-20 token address to approve.
  * @param params.spender - Address granted the allowance. Must be GeneralAdapter1, Permit2,
- *   Midnight, or MidnightBundles for the chain.
+ *   Midnight, MidnightBundles, or VaultExitBundlesV1 for the chain.
  * @param params.amount - Allowance amount before per-token cap.
  * @param params.chainId - The chain the transaction targets (used to resolve supported spenders and the per-token cap).
  * @returns A deep-frozen `Transaction<ERC20ApprovalAction>` with the capped approval amount.
@@ -44,10 +44,17 @@ export const encodeErc20Approval = (
   params: EncodeErc20ApprovalParams,
 ): Transaction<ERC20ApprovalAction> => {
   const { token, spender, amount, chainId } = params;
+  // Reject approval targets outside the SDK's registered protocol spenders.
   validateRequirementSpender({
     chainId,
     spender,
-    allowed: ["generalAdapter1", "permit2", "midnight", "midnightBundles"],
+    allowed: [
+      "generalAdapter1",
+      "permit2",
+      "midnight",
+      "midnightBundles",
+      "vaultExitBundlesV1",
+    ],
   });
 
   const amountValue = MathLib.min(
