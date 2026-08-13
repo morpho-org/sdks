@@ -1,5 +1,15 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
+## 1.0.6
+
+### Patch Changes
+
+- [#914](https://github.com/morpho-org/sdks/pull/914) [`d45fffa`](https://github.com/morpho-org/sdks/commit/d45fffad3b2d6f5182b1a0d31a7d8a55cf4eaad2) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Refresh SDK dependencies and update TypeScript configuration and test helper types for TypeScript 7. No peer range widening was required; GraphQL remains on the latest compatible v16 because its direct consumers do not support v17. Remove the obsolete ox compatibility patch now fixed upstream.
+
+- Updated dependencies [[`2c76ea5`](https://github.com/morpho-org/sdks/commit/2c76ea50ee1f29d2c3a5a74f9bddd9e34910378a)]:
+  - @morpho-org/blue-sdk@6.5.0
+  - @morpho-org/morpho-sdk@5.5.0
+
 ## 1.0.5
 
 ### Patch Changes
