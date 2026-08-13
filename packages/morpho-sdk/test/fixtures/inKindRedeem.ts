@@ -52,7 +52,7 @@ export const secondInKindMarketParams = new MarketParams({
   lltv: 860_000_000_000_000_000n,
 });
 
-const futureTimestamp = () => Time.timestamp() + Time.s.from.d(1n);
+const snapshotTimestamp = () => Time.timestamp();
 
 export const inKindVaultV1Data = (params?: {
   readonly address?: Address;
@@ -66,7 +66,7 @@ export const inKindVaultV1Data = (params?: {
     totalBorrowAssets: 900n,
     totalSupplyShares: 1_000_000_000n,
     totalBorrowShares: 900n,
-    lastUpdate: futureTimestamp(),
+    lastUpdate: snapshotTimestamp(),
     fee: 0n,
   });
   const secondMarket = new Market({
@@ -75,7 +75,7 @@ export const inKindVaultV1Data = (params?: {
     totalBorrowAssets: 450n,
     totalSupplyShares: 500_000_000n,
     totalBorrowShares: 450n,
-    lastUpdate: futureTimestamp(),
+    lastUpdate: snapshotTimestamp(),
     fee: 0n,
   });
   const markets = params?.additionalMarket ? [market, secondMarket] : [market];
@@ -153,18 +153,28 @@ export const inKindVaultV2Data = (params?: {
   readonly supplyShares?: bigint;
   readonly penalty?: bigint;
   readonly assetBalance?: bigint;
+  readonly totalAssets?: bigint;
+  readonly marketTotalAssets?: bigint;
+  readonly marketTotalSupplyShares?: bigint;
+  readonly rateAtTarget?: bigint;
+  readonly maxRate?: bigint;
+  readonly managementFee?: bigint;
   readonly adapters?: "single" | "empty" | "legacy";
   readonly additionalMarket?: boolean;
 }) => {
   const address = params?.address ?? IN_KIND_VAULT;
+  const marketTotalAssets = params?.marketTotalAssets ?? 1_000n;
+  const marketTotalSupplyShares =
+    params?.marketTotalSupplyShares ?? 1_000_000_000n;
   const market = new Market({
     params: inKindMarketParams,
-    totalSupplyAssets: 1_000n,
-    totalBorrowAssets: 900n,
-    totalSupplyShares: 1_000_000_000n,
+    totalSupplyAssets: marketTotalAssets,
+    totalBorrowAssets: (marketTotalAssets * 9n) / 10n,
+    totalSupplyShares: marketTotalSupplyShares,
     totalBorrowShares: 900n,
-    lastUpdate: futureTimestamp(),
+    lastUpdate: snapshotTimestamp(),
     fee: 0n,
+    rateAtTarget: params?.rateAtTarget,
   });
   const secondMarket = new Market({
     params: secondInKindMarketParams,
@@ -172,11 +182,13 @@ export const inKindVaultV2Data = (params?: {
     totalBorrowAssets: 450n,
     totalSupplyShares: 500_000_000n,
     totalBorrowShares: 450n,
-    lastUpdate: futureTimestamp(),
+    lastUpdate: snapshotTimestamp(),
     fee: 0n,
   });
   const markets = params?.additionalMarket ? [market, secondMarket] : [market];
-  const totalAssets = params?.additionalMarket ? 1_500n : 1_000n;
+  const totalAssets =
+    params?.totalAssets ??
+    (params?.additionalMarket ? 1_500n : marketTotalAssets);
   const adapter = new AccrualVaultV2MorphoMarketV1AdapterV2(
     {
       address: IN_KIND_ADAPTER,
@@ -227,13 +239,13 @@ export const inKindVaultV2Data = (params?: {
       _totalAssets: totalAssets,
       totalSupply: totalAssets,
       virtualShares: 0n,
-      maxRate: 0n,
-      lastUpdate: futureTimestamp(),
+      maxRate: params?.maxRate ?? 0n,
+      lastUpdate: snapshotTimestamp(),
       liquidityAdapter: ZERO_ADDRESS,
       liquidityData: "0x",
       liquidityAllocations: undefined,
       performanceFee: 0n,
-      managementFee: 0n,
+      managementFee: params?.managementFee ?? 0n,
       performanceFeeRecipient: IN_KIND_USER,
       managementFeeRecipient: IN_KIND_USER,
     },

@@ -263,12 +263,12 @@ export class VaultExitBundlesV1PermitMismatchError extends Error {
    * @param params.actual - Value supplied by the signature.
    * @param params.cause - Original parser failure when signature decoding is wrapped.
    */
-  public readonly field: "type" | "asset" | "amount" | "signature";
+  public readonly field: "type" | "asset" | "signature";
   public readonly expected: string;
   public readonly actual: string;
 
   public constructor(params: {
-    readonly field: "type" | "asset" | "amount" | "signature";
+    readonly field: "type" | "asset" | "signature";
     readonly expected: string;
     readonly actual: string;
     readonly cause?: unknown;

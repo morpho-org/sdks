@@ -1,7 +1,7 @@
 import { addressesRegistry, MarketParams } from "@morpho-org/blue-sdk";
 import { blueAbi, erc2612Abi, metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
 import { createMockClient } from "@morpho-org/test/mock";
-import { type Address, erc20Abi, maxUint256 } from "viem";
+import { type Address, erc20Abi } from "viem";
 import { mainnet } from "viem/chains";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
@@ -267,7 +267,7 @@ describe("MorphoVaultV1.inKindRedeem", () => {
     );
   });
 
-  test("behavior: default approve path requires maxUint256", async () => {
+  test("behavior: default approve path uses the bounded share amount", async () => {
     const handle = createMockClient(mainnet);
     mockV1Requirements(handle, { allowance: 0n });
     const vault = handle.client
@@ -284,17 +284,17 @@ describe("MorphoVaultV1.inKindRedeem", () => {
 
     expect(approval?.action).toEqual({
       type: "erc20Approval",
-      args: { spender: IN_KIND_BUNDLER, amount: maxUint256 },
+      args: { spender: IN_KIND_BUNDLER, amount: 500n },
     });
   });
 
-  test("behavior: a sufficient non-max allowance still requires max approval", async () => {
+  test("behavior: a greater bounded allowance needs no authorization", async () => {
     const handle = createMockClient(mainnet);
     mockV1Requirements(handle, { allowance: 1_000n });
     const vault = handle.client
       .extend(morphoViemExtension({ supportSignature: false }))
       .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
-    const [approval] = await vault
+    const requirements = await vault
       .inKindRedeem({
         amount: 500n,
         marketParamsList: [inKindMarketParams],
@@ -303,13 +303,10 @@ describe("MorphoVaultV1.inKindRedeem", () => {
       })
       .getRequirements();
 
-    expect(approval?.action).toEqual({
-      type: "erc20Approval",
-      args: { spender: IN_KIND_BUNDLER, amount: maxUint256 },
-    });
+    expect(requirements).toEqual([]);
   });
 
-  test("behavior: signature path emits a max-value V1 permit", async () => {
+  test("behavior: signature path emits a bounded V1 permit", async () => {
     const handle = createMockClient(mainnet);
     mockV1Requirements(handle, { allowance: 0n });
     const vault = handle.client
@@ -326,13 +323,13 @@ describe("MorphoVaultV1.inKindRedeem", () => {
 
     expect(requirement?.action).toMatchObject({
       type: "permit",
-      args: { spender: IN_KIND_BUNDLER, amount: maxUint256 },
+      args: { spender: IN_KIND_BUNDLER, amount: 500n },
     });
   });
 
-  test("behavior: an existing exact max allowance needs no authorization", async () => {
+  test("behavior: an exact bounded allowance needs no authorization", async () => {
     const handle = createMockClient(mainnet);
-    mockV1Requirements(handle, { allowance: maxUint256 });
+    mockV1Requirements(handle, { allowance: 500n });
     const vault = handle.client
       .extend(morphoViemExtension())
       .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
@@ -350,7 +347,7 @@ describe("MorphoVaultV1.inKindRedeem", () => {
 
   test("error: InsufficientBlueBalanceForInKindRedeemError", async () => {
     const handle = createMockClient(mainnet);
-    mockV1Requirements(handle, { allowance: maxUint256, blueBalance: 499n });
+    mockV1Requirements(handle, { allowance: 500n, blueBalance: 499n });
     const vault = handle.client
       .extend(morphoViemExtension())
       .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
@@ -371,7 +368,7 @@ describe("MorphoVaultV1.inKindRedeem", () => {
   test("error: VaultMorphoMismatchError", async () => {
     const handle = createMockClient(mainnet);
     mockV1Requirements(handle, {
-      allowance: maxUint256,
+      allowance: 500n,
       morpho: "0x0000000000000000000000000000000000001999",
     });
     const vault = handle.client
@@ -392,7 +389,7 @@ describe("MorphoVaultV1.inKindRedeem", () => {
   test("error: VaultIsBlueFeeRecipientError", async () => {
     const handle = createMockClient(mainnet);
     mockV1Requirements(handle, {
-      allowance: maxUint256,
+      allowance: 500n,
       blueFeeRecipient: IN_KIND_VAULT,
     });
     const vault = handle.client

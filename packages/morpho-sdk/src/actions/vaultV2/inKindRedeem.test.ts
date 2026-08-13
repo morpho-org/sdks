@@ -57,6 +57,7 @@ const serializedSignature = serializeSignature({
   s: `0x${"22".repeat(32)}`,
   yParity: 1,
 });
+const permitAmount = 125n;
 
 registerCustomAddresses({
   addresses: {
@@ -79,14 +80,14 @@ const permit: PermitRequirementSignature = {
     nonce: 7n,
     asset: vault,
     signature: serializedSignature,
-    amount: maxUint256,
+    amount: permitAmount,
     deadline: 1_900_000_000n,
   },
   action: {
     type: "permit",
     args: {
       spender: vaultExitBundlesV1,
-      amount: maxUint256,
+      amount: permitAmount,
       deadline: 1_900_000_000n,
     },
   },
@@ -115,7 +116,7 @@ describe("vaultV2InKindRedeem", () => {
       "vaultExitBundlesV1InKindRedemptionVaultV2",
     );
     expect(decoded.args?.[4]).toMatchObject({
-      value: maxUint256,
+      value: permitAmount,
       nonce: 7n,
       deadline: 1_900_000_000n,
       v: 28,
@@ -141,7 +142,7 @@ describe("vaultV2InKindRedeem", () => {
             "r": "0x1111111111111111111111111111111111111111111111111111111111111111",
             "s": "0x2222222222222222222222222222222222222222222222222222222222222222",
             "v": 28,
-            "value": 115792089237316195423570985008687907853269984665640564039457584007913129639935n,
+            "value": 125n,
           },
           1900000000n,
         ],
@@ -187,7 +188,7 @@ describe("vaultV2InKindRedeem", () => {
           expect(decoded.args[2]).toEqual(marketParamsList);
           expect(decoded.args[3]).toBe(amount);
           expect(decoded.args[4]).toEqual({
-            value: maxUint256,
+            value: 0n,
             nonce: 0n,
             deadline,
             v: 0,

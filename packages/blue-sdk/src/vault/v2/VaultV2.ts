@@ -112,8 +112,20 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
     return this._unwrap(shares, "Down");
   }
 
-  public toShares(assets: BigIntish) {
-    return this._wrap(assets, "Down");
+  /**
+   * Converts assets to shares using the stored pre-accrual totals.
+   *
+   * @param assets - Amount of underlying assets.
+   * @param rounding - Optional rounding direction. Defaults to `"Down"`.
+   * @returns The corresponding vault shares.
+   * @example
+   * ```ts
+   * const shares = vault.toShares(100n, "Up");
+   * // shares satisfies bigint
+   * ```
+   */
+  public toShares(assets: BigIntish, rounding: RoundingDirection = "Down") {
+    return this._wrap(assets, rounding);
   }
 
   protected _wrap(amount: BigIntish, rounding: RoundingDirection) {

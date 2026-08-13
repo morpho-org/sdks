@@ -3,7 +3,6 @@ import {
   type Address,
   createWalletClient,
   custom,
-  maxUint256,
   verifyTypedData,
   zeroHash,
 } from "viem";
@@ -19,6 +18,7 @@ import { encodeVaultSharesPermit } from "./encodeVaultSharesPermit.js";
 const vault = "0x0000000000000000000000000000000000002001" as const;
 const spender = getChainAddress(mainnet.id, "bundles.vaultExitBundlesV1");
 const otherSpender = "0x0000000000000000000000000000000000002999" as const;
+const amount = 500n;
 const permitTypes = {
   Permit: [
     { name: "owner", type: "address" },
@@ -42,7 +42,7 @@ const walletClient = createWalletClient({
 });
 
 describe("encodeVaultSharesPermit", () => {
-  test("default: signs a max-value Vault V2 permit", async () => {
+  test("default: signs a bounded Vault V2 permit", async () => {
     const requirement = encodeVaultSharesPermit({
       vault: new Token({ address: vault, name: "Vault V2" }),
       version: "vaultV2",
@@ -50,18 +50,19 @@ describe("encodeVaultSharesPermit", () => {
       owner: account.address,
       chainId: mainnet.id,
       nonce: 9n,
+      amount,
       deadline: 1_900_000_000n,
     });
     const signed = await requirement.sign(walletClient, account.address);
 
     expect(signed.action).toEqual({
       type: "permit",
-      args: { spender, amount: maxUint256, deadline: 1_900_000_000n },
+      args: { spender, amount, deadline: 1_900_000_000n },
     });
     expect(signed.args).toMatchObject({
       owner: account.address,
       asset: vault,
-      amount: maxUint256,
+      amount,
       nonce: 9n,
       deadline: 1_900_000_000n,
     });
@@ -76,12 +77,13 @@ describe("encodeVaultSharesPermit", () => {
       owner: account.address,
       chainId: mainnet.id,
       nonce: 3n,
+      amount,
       deadline: 1_900_000_000n,
     });
 
     await expect(
       requirement.sign(walletClient, account.address),
-    ).resolves.toMatchObject({ args: { amount: maxUint256, nonce: 3n } });
+    ).resolves.toMatchObject({ args: { amount, nonce: 3n } });
   });
 
   test("behavior: snapshots permit inputs before signing", async () => {
@@ -92,6 +94,7 @@ describe("encodeVaultSharesPermit", () => {
       owner: account.address,
       chainId: mainnet.id,
       nonce: 9n,
+      amount,
       deadline: 1_900_000_000n,
     };
     const requirement = encodeVaultSharesPermit(params);
@@ -107,7 +110,7 @@ describe("encodeVaultSharesPermit", () => {
       message: {
         owner: account.address,
         spender,
-        value: maxUint256,
+        value: amount,
         nonce: 9n,
         deadline: 1_900_000_000n,
       },
@@ -138,6 +141,7 @@ describe("encodeVaultSharesPermit", () => {
       owner: account.address,
       chainId: mainnet.id,
       nonce: 3n,
+      amount,
       deadline: 1_900_000_000n,
     });
     extensions.push(1n);
@@ -157,7 +161,7 @@ describe("encodeVaultSharesPermit", () => {
       message: {
         owner: account.address,
         spender,
-        value: maxUint256,
+        value: amount,
         nonce: 3n,
         deadline: 1_900_000_000n,
       },
@@ -174,6 +178,7 @@ describe("encodeVaultSharesPermit", () => {
       owner: "0x0000000000000000000000000000000000002999",
       chainId: mainnet.id,
       nonce: 0n,
+      amount,
       deadline: 1_900_000_000n,
     });
 
@@ -196,6 +201,7 @@ describe("encodeVaultSharesPermit", () => {
         owner: account.address,
         chainId: mainnet.id,
         nonce: 0n,
+        amount,
         deadline: 1_900_000_000n,
       }),
     ).toThrow(UnsupportedErc20ApprovalSpenderError);

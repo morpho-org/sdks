@@ -30,7 +30,7 @@ export interface VaultV1InKindRedeemParams {
  * Prepares a Vault V1 in-kind redemption into Morpho Blue supply positions.
  *
  * The transaction calls VaultExitBundlesV1 directly. Without a signature it embeds the contract's
- * empty-permit sentinel; the user must first approve VaultExitBundlesV1 for `maxUint256` shares.
+ * empty-permit sentinel; the user must first approve enough shares for the exit.
  *
  * @param params - In-kind redemption parameters.
  * @param params.vault.chainId - Chain containing the target Vault V1 and VaultExitBundlesV1.
@@ -41,7 +41,7 @@ export interface VaultV1InKindRedeemParams {
  *   VaultExitBundlesV1 burns `msg.sender`'s vault shares, so the submitting account must equal this
  *   address.
  * @param params.args.deadline - Permit and bundle deadline.
- * @param params.args.requirementSignature - Optional max-value Vault V1 shares permit.
+ * @param params.args.requirementSignature - Optional bounded Vault V1 shares permit.
  * @param params.metadata - Optional analytics metadata.
  * @returns A deep-frozen `Readonly<Transaction<VaultV1InKindRedeemAction>>` with `to`, `value`,
  *   `data`, and the typed action discriminator.
@@ -49,7 +49,7 @@ export interface VaultV1InKindRedeemParams {
  * @throws {EmptyMarketParamsListError} when no markets are supplied.
  * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
  * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
- * @throws {VaultExitBundlesV1PermitMismatchError} when the requirement has the wrong permit kind, asset, amount, or signature encoding.
+ * @throws {VaultExitBundlesV1PermitMismatchError} when the requirement has the wrong permit kind, asset, or signature encoding.
  * @example
  * ```ts
  * import { vaultV1InKindRedeem } from "@morpho-org/morpho-sdk";

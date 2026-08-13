@@ -69,8 +69,8 @@ the pre-flight validation that turns those opaque failures into named SDK errors
   sizing against the user's balance is the caller's job (see Non-Goals).
 - Sign a **correct** Vault V2 shares permit. Vault V2's EIP-712 domain omits `name` and `version`,
   so the SDK's existing `getPermitTypedData` produces an unsignable digest for it.
-- Always permit `maxUint256`, so an exit never fails on an allowance the caller could not have sized
-  correctly.
+- Bound the share allowance using V1's current preview and V2's worse current/two-hour-forward
+  preview, including every V2 penalty and main burn with its own rounding.
 - Offer an approve-only path when the integrator sets `supportSignature: false` — which is also the
   answer for smart-contract wallets, since Vault V2's `permit` is `ecrecover`-only.
 - Ship with JSDoc, colocated unit tests, Anvil fork tests over the canonical Ethereum deployment,
@@ -86,7 +86,7 @@ the pre-flight validation that turns those opaque failures into named SDK errors
 - No shares or `max` input mode. The amount is asset-denominated, matching the contract's
   `exitAssets` one-to-one.
 - **No share-sufficiency validation.** The SDK does not check that the user holds enough vault shares
-  for `amount`. Forcing a `maxUint256` allowance settles *authorization*, not *balance* — an `amount`
+  for `amount`. A sufficient allowance settles *authorization*, not *balance* — an `amount`
   above the user's holdings still reverts on-chain. Sizing `amount` against the share balance is the
   caller's job (`vvrm` derives it from the balance it already has), so the SDK spends no RPC on a
   `balanceOf` read it would only duplicate.
@@ -385,7 +385,7 @@ Two subtleties that are easy to get wrong:
 | On-chain failure                            | Trigger                                                                                                                    | SDK check                                                                                                                                              |
 | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | opaque ERC-20 revert inside the callback     | Blue credits the supply **before** the callback but pulls the tokens **after**, while the adapter withdraws real tokens mid-callback | `balanceOf(vaultData.asset, blue) >= peak`, where `peak` is the largest single `assets_i` from simulating the greedy loop **in the caller's order**         |
-| allowance underflow                          | `allowance[user][bundler] -= shares` runs on **both** the penalty leg and the main leg                                       | forced `maxUint256` on both the permit and the approve path (see below)                                                                                    |
+| allowance underflow                          | `allowance[user][bundler] -= shares` runs on **both** the penalty leg and the main leg                                       | use V1's current preview; for V2, bound current/two-hour-forward accrual and sum each separately rounded penalty and main burn                               |
 | `InvalidSigner()`                            | nonce stale or ahead of chain                                                                                                | read `nonces(userAddress)` fresh at requirement time                                                                                                       |
 | `MorphoMismatch()` (V1 only)                 | `IMetaMorpho(vault).MORPHO() != BLUE`                                                                                        | one `MORPHO()` read                                                                                                                                        |
 | V1 callback undercounts accrued fee shares   | the Vault V1 is Morpho Blue's `feeRecipient`, a configuration VaultExitBundlesV1 explicitly does not support                 | read `BLUE.feeRecipient()` and reject when it equals the vault                                                                                              |
@@ -425,7 +425,7 @@ Failure modes deliberately left to documentation rather than checks: `AlreadyIni
 USDT-style reset-to-zero and short-circuits above a `2^95` allowance), a share-price **drop** between
 build and execution (the contract explicitly does not check share price), and — by explicit decision
 — **share sufficiency**. The SDK does **not** verify that the user holds enough vault shares for the
-exit. Forcing a `maxUint256` allowance solves *authorization*; it does not create shares, and an
+exit. A bounded allowance solves *authorization*; it does not create shares, and an
 `amount` sized above the user's balance still reverts on-chain (`ERC20InsufficientBalance` inside
 `MetaMorpho.withdraw` on V1, a `deleteShares` underflow on V2). Sizing `amount` against the user's
 share balance is the **caller's** responsibility — `vvrm` derives it from the balance it already
@@ -452,22 +452,19 @@ Three consequences for the action layer:
 3. **`spender` and `owner` are not ours to choose** — the contract hardcodes them to `address(this)`
    and `msg.sender`.
 
-**The permitted value is always `maxUint256`.** This is a requirement, not a convenience. The
-allowance is consumed twice per market — once by the main withdraw and once by the penalty withdraw
-inside `forceDeallocate`, each with its own `previewWithdraw` rounding and an interest accrual in
-between. No caller can size that correctly in advance, and every rounding wei short is a full revert
-after the user has already signed.
+The permitted value uses V1's current rounded-up preview because interest can only reduce its share
+burn. V2 uses the worse current/two-hour-forward preview because interest can lower the burn while
+management fees can raise it, then sums the idle withdrawal and every separately rounded penalty
+and main burn.
 
 `getRequirements()` therefore:
 
-- returns `[]` when `allowance(user, vaultExitBundlesV1) === maxUint256` — safe precisely *because*
-  max is permanent (below). It must **not** short-circuit on a merely large allowance, since the
-  exact burn is unknowable;
+- returns `[]` when `allowance(user, vaultExitBundlesV1) >= requiredShareAllowance`;
 - with `supportSignature: true`, the entity multicall reads `nonces(user)` and passes the nonce to
   the pure `encodeVaultSharesPermit` helper. The helper calls `getPermitTypedData`, hardcodes a
   synthetic `erc20.eip5267Domain` with only `chainId` and `verifyingContract` selected for V2, and
   signs through `signAndVerifyTypedData` (which already enforces signer === `userAddress`);
-- with `supportSignature: false`, returns an `approve(vaultExitBundlesV1, maxUint256)`
+- with `supportSignature: false`, returns an `approve(vaultExitBundlesV1, requiredShareAllowance)`
   `CallRequirement` via `encodeErc20Approval`.
 
 `RequirementSpenderKey` in
@@ -490,7 +487,7 @@ new shares permit does not route through it.
 
 `buildTx` routes the selected signature through `getVaultExitBundlesV1PermitStruct`, colocated with
 and following the established `getTokenRequirementActions` convention. It rejects
-Permit2, checks that the signed asset is the vault and the signed amount is `maxUint256`, then parses
+Permit2, checks that the signed asset is the vault, then parses
 the signature into the standalone contract's `{ value, nonce, deadline, v, r, s }` tuple. The tuple
 uses the signed requirement's nonce and deadline. Owner, spender, duplicated action metadata, and
 the signature's cryptographic validity are left to the vault's on-chain ERC-2612 verification,
@@ -527,8 +524,9 @@ Per root `AGENTS.md` §5, tests use the canonical deployment on the pinned mainn
   (`supportSignature: false` skips `submitPermit` via the empty `v=0, r=0, s=0` sentinel and never
   touches the domain). Either substitute would stay green while a wrong domain reverts every real
   permit with `InvalidSigner()`.
-- **Security invariants as tests** (§5): the permitted value is always `maxUint256`; the empty permit
-  is exactly `v=0, r=0, s=0`; a **V2** duplicate-heavy list that only covers the amount when
+- **Security invariants as tests** (§5): approvals and permits use the bounded share amount and a
+  sufficient existing allowance is reused; the empty permit is exactly `v=0, r=0, s=0`; a **V2**
+  duplicate-heavy list that only covers the amount when
   double-counted is *rejected* (deduped coverage), and the mirror **V1** list is also *rejected* when
   the raw greedy loop assigns a second non-zero chunk from the same vault position; a
   V2 list may contain an absent market before a covering live market, with the absent entry preserved
@@ -597,16 +595,13 @@ already uses it to pull vault shares.
 also dead weight here — the contract only understands ERC-2612. A dedicated `encodeVaultSharesPermit`
 is smaller than the changes reusing it would require.
 
-### Alternative 4: Exact-amount permit with a safety buffer
+### Alternative 4: Unlimited share allowance
 
-Estimate the shares to be burned, add headroom, and permit that instead of `maxUint256`, so the
-allowance self-exhausts and leaves nothing behind.
+Permit or approve `maxUint256`, avoiding any allowance-underflow risk from accrual and rounding.
 
-**Why rejected:** it trades a documented, non-exploitable standing allowance for an undocumented
-revert risk. The true figure depends on per-market `mulDivUp` penalty rounding, `previewWithdraw`
-rounding on two legs per market, and interest accruing between them — any buffer large enough to be
-safe is large enough that its "self-exhausting" property is theatre. Reverting *after* the user has
-signed is the worse failure.
+**Why rejected:** it leaves an unnecessary standing allowance to every VaultExitBundlesV1 entry
+point. V1's current preview and V2's current/two-hour-forward previews conservatively cover every
+burn.
 
 ### Alternative 5: Make `inKindRedeem` async and fold every check into one place
 
@@ -670,15 +665,9 @@ canonical deployment became available.
 
 ## Security
 
-- **A max permit leaves a permanent allowance.** `VaultV2.exit()` skips the decrement when the
-  allowance is `type(uint256).max`, so the approval survives the transaction indefinitely — and the
-  permit `deadline` does not bound it, only when the signature may be submitted. This is **not**
-  third-party exploitable: every entry point spends `allowance[msg.sender][bundler]`, so an attacker
-  invoking the contract burns their own shares, never a victim's. The residual risks are
-  permit-nonce griefing (a front-run submission consumes the nonce and forces a re-sign, which
-  `submitPermit`'s `nonces(...) <= permit.nonce` guard tolerates) and the general exposure of a
-  standing approval to a periphery contract. This must be stated in the JSDoc of both entity
-  methods, not just here.
+- **The allowance is bounded, not exact.** V1's current preview and V2's two-hour accrual/per-leg
+  rounding headroom may leave a small residual, but the allowance caps every VaultExitBundlesV1
+  entry point instead of granting a permanent unlimited approval.
 - **Blue token-balance dependency.** The exit's success depends on Blue's aggregate balance of the
   loan token at execution, which any other transaction in the same block can change. The pre-flight
   check is a snapshot, not a guarantee. This is Blue's first balance read because that value is not
@@ -690,8 +679,8 @@ canonical deployment became available.
   gate family: a direct or multicall read could reject a valid exit or approve one that later
   reverts. Simulate the finalized, authorized transaction when gate compatibility must be known
   before submission.
-- **Share sufficiency is not validated — by decision.** The SDK forces a `maxUint256` allowance,
-  which settles *authorization*, and then does **not** read the user's share balance. An `amount`
+- **Share sufficiency is not validated — by decision.** The SDK sizes the required allowance but
+  does **not** read the user's share balance. An `amount`
   sized above the user's holdings therefore reverts on-chain (`ERC20InsufficientBalance` in
   `MetaMorpho.withdraw` on V1, a `deleteShares` underflow on V2) rather than as a named build-time
   error. This is intentional, but the caller's sizing rule is **not** a raw `amount ≤ shares held`

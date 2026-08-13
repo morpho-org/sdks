@@ -102,6 +102,7 @@ describe("VaultV2", () => {
 
     expect(vault.toAssets(110n)).toBe(100n);
     expect(vault.toShares(100n)).toBe(109n);
+    expect(vault.toShares(100n, "Up")).toBe(110n);
   });
 });
 

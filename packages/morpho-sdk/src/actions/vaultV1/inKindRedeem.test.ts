@@ -88,7 +88,7 @@ describe("vaultV1InKindRedeem", () => {
       "vaultExitBundlesV1InKindRedemptionVaultV1",
     );
     expect(decoded.args?.[3]).toEqual({
-      value: maxUint256,
+      value: 0n,
       nonce: 0n,
       deadline: 1_900_000_000n,
       v: 0,
@@ -115,7 +115,7 @@ describe("vaultV1InKindRedeem", () => {
             "r": "0x0000000000000000000000000000000000000000000000000000000000000000",
             "s": "0x0000000000000000000000000000000000000000000000000000000000000000",
             "v": 0,
-            "value": 115792089237316195423570985008687907853269984665640564039457584007913129639935n,
+            "value": 0n,
           },
           1900000000n,
         ],
@@ -154,7 +154,7 @@ describe("vaultV1InKindRedeem", () => {
           expect(decoded.args[1]).toEqual(marketParamsList);
           expect(decoded.args[2]).toBe(amount);
           expect(decoded.args[3]).toEqual({
-            value: maxUint256,
+            value: 0n,
             nonce: 0n,
             deadline,
             v: 0,

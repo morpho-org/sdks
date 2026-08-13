@@ -14,7 +14,7 @@ import {
   metaMorphoAbi,
 } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress, Time } from "@morpho-org/morpho-ts";
-import { type Address, erc20Abi, isAddressEqual, maxUint256 } from "viem";
+import { type Address, erc20Abi, isAddressEqual } from "viem";
 import { multicall } from "viem/actions";
 import {
   encodeErc20Approval,
@@ -134,7 +134,8 @@ export interface VaultV1Actions {
    * The caller controls market order and must call `getRequirements()` before `buildTx()` so the
    * RPC-backed Blue-balance and Morpho-deployment checks run. The SDK validates market coverage but
    * intentionally does not validate the user's share balance; size `amount` in asset terms against
-   * `previewRedeem(sharesHeld)`. A max-share permit or approval remains after execution.
+   * `previewRedeem(sharesHeld)`. The share allowance uses the current rounded-up share preview;
+   * future interest can only reduce the required burn.
    *
    * Snapshot state can drift before inclusion, so a later reallocation may still make the on-chain
    * loop under-cover even after pre-flight succeeds.
@@ -163,7 +164,7 @@ export interface VaultV1Actions {
    * @throws {InsufficientBlueBalanceForInKindRedeemError} from `getRequirements()` when Blue cannot fund the flash loan.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
-   * @throws {VaultExitBundlesV1PermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, amount, or signature encoding.
+   * @throws {VaultExitBundlesV1PermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, or signature encoding.
    * @example
    * ```ts
    * import { isRequirementSignature } from "@morpho-org/morpho-sdk";
@@ -462,9 +463,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
       const allocation = vaultData.allocations.get(marketId);
       if (allocation?.config.enabled !== true) continue;
 
-      const market = allocation.position.market.accrueInterest(
-        MathLib.max(now, allocation.position.market.lastUpdate),
-      );
+      const market = allocation.position.market.accrueInterest(now);
       const available = market.toSupplyAssets(allocation.position.supplyShares);
       const assigned = assignedByMarket.get(marketId) ?? 0n;
       const chunk = MathLib.min(available, amount - covered);
@@ -485,6 +484,9 @@ export class MorphoVaultV1 implements VaultV1Actions {
         maxExitAssets: covered,
       });
     }
+
+    // V1 interest cannot lower share price, so the current preview upper-bounds execution.
+    const requiredShareAllowance = vaultData.toShares(amount);
 
     return {
       getRequirements: async (): Promise<readonly ActionRequirement[]> => {
@@ -547,7 +549,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
             required: amount,
           });
         }
-        if (allowance === maxUint256) return [];
+        if (allowance >= requiredShareAllowance) return [];
         if (this.client.options.supportSignature) {
           return [
             encodeVaultSharesPermit({
@@ -557,6 +559,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
               owner: userAddress,
               chainId: this.chainId,
               nonce,
+              amount: requiredShareAllowance,
               deadline,
             }),
           ];
@@ -565,7 +568,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
           encodeErc20Approval({
             token: this.vault,
             spender: vaultExitBundlesV1,
-            amount: maxUint256,
+            amount: requiredShareAllowance,
             chainId: this.chainId,
           }),
         ];

@@ -2,7 +2,6 @@ import fc from "fast-check";
 import {
   type Address,
   concatHex,
-  maxUint256,
   serializeCompactSignature,
   serializeSignature,
   signatureToCompactSignature,
@@ -32,6 +31,7 @@ const yParitySerializedSignature = concatHex([
 const compactSignature = serializeCompactSignature(
   signatureToCompactSignature(signatureParts),
 );
+const amount = 500n;
 
 const permit = (
   overrides: Partial<PermitRequirementSignature["args"]> = {},
@@ -46,7 +46,7 @@ const permit = (
     nonce: 7n,
     asset: vault,
     signature: serializedSignature,
-    amount: maxUint256,
+    amount,
     deadline: 1_900_000_000n,
     ...overrides,
   },
@@ -54,7 +54,7 @@ const permit = (
     type: "permit",
     args: {
       spender,
-      amount: maxUint256,
+      amount,
       deadline: 1_900_000_000n,
       ...actionOverrides,
     },
@@ -69,7 +69,7 @@ describe("getVaultExitBundlesV1PermitStruct", () => {
         deadline: 1_900_000_000n,
       }),
     ).toEqual({
-      value: maxUint256,
+      value: 0n,
       nonce: 0n,
       deadline: 1_900_000_000n,
       v: 0,
@@ -82,7 +82,7 @@ describe("getVaultExitBundlesV1PermitStruct", () => {
     { label: "standard serialized", signature: serializedSignature },
     { label: "y-parity serialized", signature: yParitySerializedSignature },
     { label: "EIP-2098 compact", signature: compactSignature },
-  ])("behavior: encodes a $label max-share permit", ({ signature }) => {
+  ])("behavior: encodes a $label bounded permit", ({ signature }) => {
     expect(
       getVaultExitBundlesV1PermitStruct({
         vault,
@@ -90,7 +90,7 @@ describe("getVaultExitBundlesV1PermitStruct", () => {
         requirementSignature: permit({ signature }),
       }),
     ).toEqual({
-      value: maxUint256,
+      value: amount,
       nonce: 7n,
       deadline: 1_900_000_000n,
       v: 28,
@@ -106,7 +106,6 @@ describe("getVaultExitBundlesV1PermitStruct", () => {
         asset: "0x0000000000000000000000000000000000000099",
       }),
     },
-    { field: "amount", signature: permit({ amount: maxUint256 - 1n }) },
   ] as const)(
     "error: rejects mismatched permit $field",
     ({ field, signature }) => {
@@ -139,7 +138,7 @@ describe("getVaultExitBundlesV1PermitStruct", () => {
         },
         {
           spender: "0x0000000000000000000000000000000000000099",
-          amount: maxUint256 - 1n,
+          amount: amount + 1n,
           deadline: permitDeadline + 1n,
         },
       ),
@@ -155,7 +154,7 @@ describe("getVaultExitBundlesV1PermitStruct", () => {
         nonce: 7n,
         asset: vault,
         signature: serializedSignature,
-        amount: maxUint256,
+        amount,
         deadline: 1_900_000_000n,
         expiration: 1_900_000_000n,
       },
@@ -163,7 +162,7 @@ describe("getVaultExitBundlesV1PermitStruct", () => {
         type: "permit2",
         args: {
           spender,
-          amount: maxUint256,
+          amount,
           deadline: 1_900_000_000n,
           expiration: 1_900_000_000n,
         },
@@ -207,17 +206,23 @@ describe("getVaultExitBundlesV1PermitStruct", () => {
   test("behavior: permit tuple round-trips across valid scalar inputs", () => {
     fc.assert(
       fc.property(
-        fc.bigInt({ min: 1n, max: 2n ** 128n }),
-        fc.bigInt({ min: 0n, max: 2n ** 128n }),
-        (deadline, nonce) => {
+        fc.record({
+          deadline: fc.bigInt({ min: 1n, max: 2n ** 128n }),
+          nonce: fc.bigInt({ min: 0n, max: 2n ** 128n }),
+          permitAmount: fc.bigInt({ min: 1n, max: 2n ** 128n }),
+        }),
+        ({ deadline, nonce, permitAmount }) => {
           const encoded = getVaultExitBundlesV1PermitStruct({
             vault,
             deadline,
-            requirementSignature: permit({ deadline, nonce }, { deadline }),
+            requirementSignature: permit(
+              { amount: permitAmount, deadline, nonce },
+              { amount: permitAmount, deadline },
+            ),
           });
 
           expect(encoded).toMatchObject({
-            value: maxUint256,
+            value: permitAmount,
             nonce,
             deadline,
             v: 28,

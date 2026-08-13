@@ -3,7 +3,6 @@ import {
   compactSignatureToSignature,
   type Hex,
   isAddressEqual,
-  maxUint256,
   parseCompactSignature,
   parseSignature,
   size,
@@ -36,7 +35,7 @@ export interface GetVaultExitBundlesV1PermitStructParams {
   readonly vault: Address;
   /** Bundle deadline used by the empty-permit sentinel. */
   readonly deadline: bigint;
-  /** Optional signed max-share ERC-2612 requirement. */
+  /** Optional signed bounded ERC-2612 requirement. */
   readonly requirementSignature?: PermitRequirementSignature;
 }
 
@@ -45,14 +44,14 @@ export interface GetVaultExitBundlesV1PermitStructParams {
  * requirement signature.
  *
  * Without a signature, returns the contract's empty-permit sentinel. With a signature, validates
- * the ERC-2612 kind, vault asset, and max-share amount before splitting the serialized signature.
+ * the ERC-2612 kind and vault asset before splitting the serialized signature.
  * Owner, spender, deadline, nonce, and cryptographic validity are verified onchain by the vault.
  *
  * @param params.vault - Vault share token authorized by the permit.
  * @param params.deadline - Bundle deadline used by the empty-permit sentinel.
- * @param params.requirementSignature - Optional signed max-share ERC-2612 requirement.
+ * @param params.requirementSignature - Optional signed bounded ERC-2612 requirement.
  * @returns The VaultExitBundlesV1 permit tuple.
- * @throws {VaultExitBundlesV1PermitMismatchError} when the requirement has the wrong permit kind, asset, amount, or signature encoding.
+ * @throws {VaultExitBundlesV1PermitMismatchError} when the requirement has the wrong permit kind, asset, or signature encoding.
  * @example
  * ```ts
  * import { getVaultExitBundlesV1PermitStruct } from "@morpho-org/morpho-sdk";
@@ -71,7 +70,7 @@ export const getVaultExitBundlesV1PermitStruct = (
   const { requirementSignature } = params;
   if (requirementSignature == null) {
     return {
-      value: maxUint256,
+      value: 0n,
       nonce: 0n,
       deadline: params.deadline,
       v: 0,
@@ -92,13 +91,6 @@ export const getVaultExitBundlesV1PermitStruct = (
       field: "asset",
       expected: params.vault,
       actual: requirementSignature.args.asset,
-    });
-  }
-  if (requirementSignature.args.amount !== maxUint256) {
-    throw new VaultExitBundlesV1PermitMismatchError({
-      field: "amount",
-      expected: String(maxUint256),
-      actual: String(requirementSignature.args.amount),
     });
   }
   const signature = (() => {
@@ -129,7 +121,7 @@ export const getVaultExitBundlesV1PermitStruct = (
     });
   }
   return {
-    value: maxUint256,
+    value: requirementSignature.args.amount,
     nonce: requirementSignature.args.nonce,
     deadline: requirementSignature.args.deadline,
     v: Number(normalizedV),

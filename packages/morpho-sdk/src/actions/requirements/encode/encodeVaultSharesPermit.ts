@@ -1,7 +1,7 @@
 import { type Address, Eip5267Domain, Token } from "@morpho-org/blue-sdk";
 import { getPermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import { maxUint256, type WalletClient, zeroHash } from "viem";
+import { type WalletClient, zeroHash } from "viem";
 import { signAndVerifyTypedData } from "../../../helpers/signAndVerifyTypedData.js";
 import { validateUserAddress } from "../../../helpers/validate.js";
 import { validateRequirementSpender } from "../../../helpers/validateRequirementSpender.js";
@@ -25,16 +25,17 @@ export interface EncodeVaultSharesPermitParams {
   readonly chainId: number;
   /** Current vault permit nonce for the owner. */
   readonly nonce: bigint;
+  /** Vault-share allowance to authorize. */
+  readonly amount: bigint;
   /** Shared permit and bundle deadline. */
   readonly deadline: bigint;
 }
 
 /**
- * Builds the max-value ERC-2612 shares-permit requirement used by an in-kind vault exit.
+ * Builds the bounded ERC-2612 shares-permit requirement used by an in-kind vault exit.
  *
  * Vault V1 uses the standard token permit domain. Vault V2 uses its protocol-specific domain with
- * only `chainId` and `verifyingContract`. The amount is always `maxUint256` because the exit burns
- * shares across both the main and penalty legs and cannot be sized exactly before execution.
+ * only `chainId` and `verifyingContract`.
  *
  * @param params.vault - Vault share token, including V1 permit-domain metadata when available.
  * @param params.version - Vault generation selecting the standard V1 or two-field V2 domain.
@@ -42,6 +43,7 @@ export interface EncodeVaultSharesPermitParams {
  * @param params.owner - Account that owns and authorizes spending of the vault shares.
  * @param params.chainId - Chain on which the vault and spender are deployed.
  * @param params.nonce - Current vault permit nonce for the owner.
+ * @param params.amount - Vault-share allowance to authorize.
  * @param params.deadline - Shared permit and bundle deadline.
  * @returns A requirement whose `sign()` result can be embedded in VaultExitBundlesV1 calldata.
  * @throws {UnsupportedChainIdError} when no address registry exists for `chainId`.
@@ -64,6 +66,7 @@ export interface EncodeVaultSharesPermitParams {
  *   owner,
  *   chainId: 1,
  *   nonce: 0n,
+ *   amount: 1_000_000n,
  *   deadline,
  * });
  * const signature = await requirement.sign(walletClient, owner);
@@ -80,6 +83,7 @@ export const encodeVaultSharesPermit = (
     owner,
     chainId,
     nonce,
+    amount,
     deadline,
   } = params;
   const inputDomain = inputVault.eip5267Domain;
@@ -122,7 +126,7 @@ export const encodeVaultSharesPermit = (
     type: "permit",
     args: {
       spender,
-      amount: maxUint256,
+      amount,
       deadline,
     },
   };
@@ -135,7 +139,7 @@ export const encodeVaultSharesPermit = (
       const permit = {
         owner,
         spender,
-        allowance: maxUint256,
+        allowance: amount,
         nonce,
         deadline,
       };
@@ -157,7 +161,7 @@ export const encodeVaultSharesPermit = (
           owner,
           signature,
           deadline,
-          amount: maxUint256,
+          amount,
           asset: vault.address,
           nonce,
         },

@@ -9,7 +9,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { erc2612Abi, fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress, Time } from "@morpho-org/morpho-ts";
-import { type Address, erc20Abi, isAddressEqual, maxUint256 } from "viem";
+import { type Address, erc20Abi, isAddressEqual } from "viem";
 import { multicall } from "viem/actions";
 import {
   encodeErc20Approval,
@@ -144,16 +144,17 @@ export interface VaultV2Actions {
    * and are not preflighted: receive gates may depend on VaultExitBundlesV1's transient initiator,
    * while arbitrary send-share gates may depend on intermediate state changed by the exit's
    * multiple share burns. The SDK intentionally does not validate the user's share balance; size
-   * `amount` in asset terms so `amount <= vault.previewRedeem(sharesHeld)` instead of comparing it
-   * to raw shares, and ensure the held shares cover both the main and penalty legs. A max-share
-   * permit or approval remains after execution.
+   * it so `amount + BigInt(marketParamsList.length) <= vault.previewRedeem(sharesHeld)`. The
+   * per-market term covers V2 withdrawal rounding and is not needed for V1. The share allowance
+   * includes the penalty burns and a two-hour accrual buffer.
    *
    * Idle balance, penalty, and adapter positions can drift after the snapshot, so an on-chain
    * under-coverage panic remains possible if vault state changes between preparation and inclusion.
    *
    * @param params - In-kind redemption parameters.
    * @param params.amount - Penalty-inclusive, asset-denominated amount to exit.
-   * @param params.marketParamsList - Ordered adapter markets consumed greedily after idle assets.
+   * @param params.marketParamsList - Ordered adapter markets consumed greedily after idle assets;
+   *   its length is also the V2 share-sufficiency rounding buffer.
    * @param params.vaultData - Pre-fetched Vault V2 accrual snapshot.
    * @param params.userAddress - Account that signs and submits the exit.
    * @param params.adapter - Optional adapter override; defaults to the vault's sole adapter.
@@ -177,7 +178,7 @@ export interface VaultV2Actions {
    * @throws {InsufficientBlueBalanceForInKindRedeemError} from `getRequirements()` when Blue cannot fund the largest callback.
    * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when more than one permit signature is supplied.
    * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-permit signature is supplied.
-   * @throws {VaultExitBundlesV1PermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, amount, or signature encoding.
+   * @throws {VaultExitBundlesV1PermitMismatchError} from `buildTx()` when the requirement has the wrong permit kind, asset, or signature encoding.
    * @example
    * ```ts
    * import { isRequirementSignature } from "@morpho-org/morpho-sdk";
@@ -533,7 +534,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
       soleAdapter.markets.map((market) => [
         market.id,
         market
-          .accrueInterest(MathLib.max(now, market.lastUpdate))
+          .accrueInterest(now)
           .toSupplyAssets(soleAdapter.supplyShares[market.id] ?? 0n),
       ]),
     );
@@ -556,7 +557,20 @@ export class MorphoVaultV2 implements VaultV2Actions {
 
     let remaining = assetsToDeallocate;
     let peak = 0n;
+    let requiredShareAllowance = 0n;
     const consumedMarketIds = new Set<string>();
+    const allowanceTimestamp = now + Time.s.from.h(2n);
+    const { vault: allowanceVault } =
+      vaultData.accrueInterest(allowanceTimestamp);
+    // Interest can lower the burn, while management fees can raise it; bound both endpoints.
+    const previewAllowance = (assets: bigint) =>
+      MathLib.max(
+        vaultData.toShares(assets, "Up"),
+        allowanceVault.toShares(assets, "Up"),
+      );
+
+    // Pre-burn previews upper-bound each separately rounded idle, penalty, and main burn.
+    requiredShareAllowance += previewAllowance(idleAssets);
     for (const id of marketIdListSnapshot) {
       const available = consumedMarketIds.has(id)
         ? 0n
@@ -564,6 +578,10 @@ export class MorphoVaultV2 implements VaultV2Actions {
       consumedMarketIds.add(id);
       const chunk = MathLib.min(available, remaining);
       peak = MathLib.max(peak, chunk);
+      requiredShareAllowance += previewAllowance(
+        MathLib.wMulUp(chunk, penalty),
+      );
+      requiredShareAllowance += previewAllowance(chunk);
       remaining -= chunk;
     }
 
@@ -620,7 +638,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
             required: peak,
           });
         }
-        if (allowance === maxUint256) return [];
+        if (allowance >= requiredShareAllowance) return [];
         if (this.client.options.supportSignature) {
           return [
             encodeVaultSharesPermit({
@@ -630,6 +648,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
               owner: userAddress,
               chainId: this.chainId,
               nonce,
+              amount: requiredShareAllowance,
               deadline,
             }),
           ];
@@ -638,7 +657,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
           encodeErc20Approval({
             token: this.vault,
             spender: vaultExitBundlesV1,
-            amount: maxUint256,
+            amount: requiredShareAllowance,
             chainId: this.chainId,
           }),
         ];
