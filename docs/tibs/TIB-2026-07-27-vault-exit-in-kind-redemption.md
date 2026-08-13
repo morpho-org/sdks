@@ -600,7 +600,7 @@ is smaller than the changes reusing it would require.
 Permit or approve `maxUint256`, avoiding any allowance-underflow risk from accrual and rounding.
 
 **Why rejected:** it leaves an unnecessary standing allowance to every VaultExitBundlesV1 entry
-point. V1's current preview and the worse of V2's current and deadline-accrued previews
+point. V1's current fee-accrued preview and the worse of V2's current and deadline-accrued previews
 conservatively cover every burn.
 
 ### Alternative 5: Make `inKindRedeem` async and fold every check into one place
@@ -635,7 +635,7 @@ canonical deployment became available.
   correctness one, and should be sized with the `vvrm` team before enabling each chain's address slot.
 - **The adapter's markets all share the vault's asset as loan token** — enforced on-chain by the
   adapter's `LoanAssetMismatch`. This is what lets the Blue-balance check be a single `balanceOf`.
-- **The vault's share price only moves up between build and execution.** True for accrual; false for
+- **The vault's fee-accrued share price only moves up between build and execution.** True for accrual; false for
   a bad-debt realisation, which the contract explicitly does not guard against — and neither does the
   SDK, since it validates neither share price nor share sufficiency (see Non-Goals and Security).
 - **Smart-contract wallets cannot use the permit path.** `VaultV2.permit` calls `ecrecover` with no
@@ -665,7 +665,7 @@ canonical deployment became available.
 
 ## Security
 
-- **The allowance is bounded, not exact.** V1's current preview and V2's deadline accrual/per-leg
+- **The allowance is bounded, not exact.** V1's current fee-accrued preview and V2's deadline accrual/per-leg
   rounding headroom may leave a small residual, but the allowance caps every VaultExitBundlesV1
   entry point instead of granting a permanent unlimited approval.
 - **Blue token-balance dependency.** The exit's success depends on Blue's aggregate balance of the

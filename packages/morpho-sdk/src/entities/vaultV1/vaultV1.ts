@@ -134,8 +134,9 @@ export interface VaultV1Actions {
    * The caller controls market order and must call `getRequirements()` before `buildTx()` so the
    * RPC-backed Blue-balance and Morpho-deployment checks run. The SDK validates market coverage but
    * intentionally does not validate the user's share balance; size `amount` in asset terms against
-   * `previewRedeem(sharesHeld)`. The share allowance uses the current rounded-up share preview;
-   * future interest can only reduce the required burn.
+   * `previewRedeem(sharesHeld)`. The share allowance first accrues pending performance-fee shares,
+   * then uses the current rounded-up share preview; future interest can only reduce the required
+   * burn.
    *
    * Snapshot state can drift before inclusion, so a later reallocation may still make the on-chain
    * loop under-cover even after pre-flight succeeds.
@@ -485,8 +486,11 @@ export class MorphoVaultV1 implements VaultV1Actions {
       });
     }
 
-    // V1 interest cannot lower share price, so the current preview upper-bounds execution.
-    const requiredShareAllowance = vaultData.toShares(amount);
+    // Account for pending performance-fee shares before previewing the burn. Once accrued, future
+    // V1 interest cannot lower the share price, so this upper-bounds execution.
+    const requiredShareAllowance = vaultData
+      .accrueInterest(now)
+      .toShares(amount);
 
     return {
       getRequirements: async (): Promise<readonly ActionRequirement[]> => {

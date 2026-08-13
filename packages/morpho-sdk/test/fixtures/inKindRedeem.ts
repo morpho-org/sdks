@@ -59,6 +59,8 @@ export const inKindVaultV1Data = (params?: {
   readonly supplyShares?: bigint;
   readonly enabled?: boolean;
   readonly additionalMarket?: boolean;
+  readonly fee?: bigint;
+  readonly lastTotalAssets?: bigint;
 }) => {
   const market = new Market({
     params: inKindMarketParams,
@@ -90,7 +92,7 @@ export const inKindVaultV1Data = (params?: {
       curator: IN_KIND_USER,
       owner: IN_KIND_USER,
       guardian: IN_KIND_USER,
-      fee: 0n,
+      fee: params?.fee ?? 0n,
       feeRecipient: IN_KIND_USER,
       skimRecipient: IN_KIND_USER,
       pendingTimelock: { value: 0n, validAt: 0n },
@@ -99,7 +101,7 @@ export const inKindVaultV1Data = (params?: {
       timelock: 0n,
       supplyQueue: markets.map(({ id }) => id),
       totalSupply: totalAssets,
-      lastTotalAssets: totalAssets,
+      lastTotalAssets: params?.lastTotalAssets ?? totalAssets,
     },
     [
       {

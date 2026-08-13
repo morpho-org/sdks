@@ -1,4 +1,4 @@
-import { addressesRegistry, MarketParams } from "@morpho-org/blue-sdk";
+import { addressesRegistry, MarketParams, MathLib } from "@morpho-org/blue-sdk";
 import { blueAbi, erc2612Abi, metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
 import { createMockClient } from "@morpho-org/test/mock";
 import { type Address, erc20Abi } from "viem";
@@ -285,6 +285,30 @@ describe("MorphoVaultV1.inKindRedeem", () => {
     expect(approval?.action).toEqual({
       type: "erc20Approval",
       args: { spender: IN_KIND_BUNDLER, amount: 500n },
+    });
+  });
+
+  test("behavior: allowance includes pending V1 performance fee shares", async () => {
+    const handle = createMockClient(mainnet);
+    mockV1Requirements(handle, { allowance: 0n });
+    const vault = handle.client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+    const [approval] = await vault
+      .inKindRedeem({
+        amount: 500n,
+        marketParamsList: [inKindMarketParams],
+        vaultData: inKindVaultV1Data({
+          fee: MathLib.WAD / 10n,
+          lastTotalAssets: 900n,
+        }),
+        userAddress: IN_KIND_USER,
+      })
+      .getRequirements();
+
+    expect(approval?.action).toEqual({
+      type: "erc20Approval",
+      args: { spender: IN_KIND_BUNDLER, amount: 505n },
     });
   });
 
