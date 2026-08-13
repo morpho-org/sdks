@@ -146,7 +146,7 @@ export interface VaultV2Actions {
    * multiple share burns. The SDK intentionally does not validate the user's share balance; size
    * it so `amount + BigInt(marketParamsList.length) <= vault.previewRedeem(sharesHeld)`. The
    * per-market term covers V2 withdrawal rounding and is not needed for V1. The share allowance
-   * includes the penalty burns and a two-hour accrual buffer.
+   * includes the penalty burns and accrual through the bundle deadline.
    *
    * Idle balance, penalty, and adapter positions can drift after the snapshot, so an on-chain
    * under-coverage panic remains possible if vault state changes between preparation and inclusion.
@@ -559,9 +559,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     let peak = 0n;
     let requiredShareAllowance = 0n;
     const consumedMarketIds = new Set<string>();
-    const allowanceTimestamp = now + Time.s.from.h(2n);
-    const { vault: allowanceVault } =
-      vaultData.accrueInterest(allowanceTimestamp);
+    const { vault: allowanceVault } = vaultData.accrueInterest(deadline);
     // Interest can lower the burn, while management fees can raise it; bound both endpoints.
     const previewAllowance = (assets: bigint) =>
       MathLib.max(

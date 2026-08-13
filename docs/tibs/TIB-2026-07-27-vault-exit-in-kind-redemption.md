@@ -69,8 +69,8 @@ the pre-flight validation that turns those opaque failures into named SDK errors
   sizing against the user's balance is the caller's job (see Non-Goals).
 - Sign a **correct** Vault V2 shares permit. Vault V2's EIP-712 domain omits `name` and `version`,
   so the SDK's existing `getPermitTypedData` produces an unsignable digest for it.
-- Bound the share allowance using V1's current preview and V2's worse current/two-hour-forward
-  preview, including every V2 penalty and main burn with its own rounding.
+- Bound the share allowance using V1's current preview and the worse of V2's current and
+  deadline-accrued previews, including every V2 penalty and main burn with its own rounding.
 - Offer an approve-only path when the integrator sets `supportSignature: false` — which is also the
   answer for smart-contract wallets, since Vault V2's `permit` is `ecrecover`-only.
 - Ship with JSDoc, colocated unit tests, Anvil fork tests over the canonical Ethereum deployment,
@@ -385,7 +385,7 @@ Two subtleties that are easy to get wrong:
 | On-chain failure                            | Trigger                                                                                                                    | SDK check                                                                                                                                              |
 | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | opaque ERC-20 revert inside the callback     | Blue credits the supply **before** the callback but pulls the tokens **after**, while the adapter withdraws real tokens mid-callback | `balanceOf(vaultData.asset, blue) >= peak`, where `peak` is the largest single `assets_i` from simulating the greedy loop **in the caller's order**         |
-| allowance underflow                          | `allowance[user][bundler] -= shares` runs on **both** the penalty leg and the main leg                                       | use V1's current preview; for V2, bound current/two-hour-forward accrual and sum each separately rounded penalty and main burn                               |
+| allowance underflow                          | `allowance[user][bundler] -= shares` runs on **both** the penalty leg and the main leg                                       | use V1's current preview; for V2, bound both current and deadline accrual and sum each separately rounded penalty and main burn                       |
 | `InvalidSigner()`                            | nonce stale or ahead of chain                                                                                                | read `nonces(userAddress)` fresh at requirement time                                                                                                       |
 | `MorphoMismatch()` (V1 only)                 | `IMetaMorpho(vault).MORPHO() != BLUE`                                                                                        | one `MORPHO()` read                                                                                                                                        |
 | V1 callback undercounts accrued fee shares   | the Vault V1 is Morpho Blue's `feeRecipient`, a configuration VaultExitBundlesV1 explicitly does not support                 | read `BLUE.feeRecipient()` and reject when it equals the vault                                                                                              |
@@ -453,9 +453,9 @@ Three consequences for the action layer:
    and `msg.sender`.
 
 The permitted value uses V1's current rounded-up preview because interest can only reduce its share
-burn. V2 uses the worse current/two-hour-forward preview because interest can lower the burn while
-management fees can raise it, then sums the idle withdrawal and every separately rounded penalty
-and main burn.
+burn. V2 uses the worse of its current and deadline-accrued previews because interest can lower the
+burn while management fees can raise it, then sums the idle withdrawal and every separately rounded
+penalty and main burn.
 
 `getRequirements()` therefore:
 
@@ -600,8 +600,8 @@ is smaller than the changes reusing it would require.
 Permit or approve `maxUint256`, avoiding any allowance-underflow risk from accrual and rounding.
 
 **Why rejected:** it leaves an unnecessary standing allowance to every VaultExitBundlesV1 entry
-point. V1's current preview and V2's current/two-hour-forward previews conservatively cover every
-burn.
+point. V1's current preview and the worse of V2's current and deadline-accrued previews
+conservatively cover every burn.
 
 ### Alternative 5: Make `inKindRedeem` async and fold every check into one place
 
@@ -665,7 +665,7 @@ canonical deployment became available.
 
 ## Security
 
-- **The allowance is bounded, not exact.** V1's current preview and V2's two-hour accrual/per-leg
+- **The allowance is bounded, not exact.** V1's current preview and V2's deadline accrual/per-leg
   rounding headroom may leave a small residual, but the allowance caps every VaultExitBundlesV1
   entry point instead of granting a permanent unlimited approval.
 - **Blue token-balance dependency.** The exit's success depends on Blue's aggregate balance of the

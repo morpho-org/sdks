@@ -510,8 +510,9 @@ describe("MorphoVaultV2.inKindRedeem", () => {
     expect(approval?.action).toMatchObject({ args: { amount } });
   });
 
-  test("behavior: forward preview bounds management-fee dilution", async () => {
+  test("behavior: deadline preview bounds management-fee dilution", async () => {
     const now = 1_800_000_000n;
+    const deadline = now + Time.s.from.h(4n);
     vi.useFakeTimers();
     vi.setSystemTime(Number(now) * 1_000);
     const totalAssets = 1_000_000_000_000_000_000n;
@@ -521,17 +522,19 @@ describe("MorphoVaultV2.inKindRedeem", () => {
     const vault = handle.client
       .extend(morphoViemExtension({ supportSignature: false }))
       .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+    const vaultData = inKindVaultV2Data({
+      marketTotalAssets: totalAssets,
+      marketTotalSupplyShares: totalAssets,
+      supplyShares: totalAssets,
+      managementFee: 50_000_000_000_000_000n / Time.s.from.y(1n),
+    });
     const [approval] = await vault
       .inKindRedeem({
         amount,
         marketParamsList: [inKindMarketParams],
-        vaultData: inKindVaultV2Data({
-          marketTotalAssets: totalAssets,
-          marketTotalSupplyShares: totalAssets,
-          supplyShares: totalAssets,
-          managementFee: 50_000_000_000_000_000n / Time.s.from.y(1n),
-        }),
+        vaultData,
         userAddress: IN_KIND_USER,
+        deadline,
       })
       .getRequirements();
 
@@ -539,7 +542,8 @@ describe("MorphoVaultV2.inKindRedeem", () => {
       approval?.action.type === "erc20Approval"
         ? approval.action.args.amount
         : 0n;
-    expect(approvalAmount).toBeGreaterThan(amount);
+    const { vault: deadlineVault } = vaultData.accrueInterest(deadline);
+    expect(approvalAmount).toBe(deadlineVault.toShares(amount, "Up"));
   });
 
   test("error: InsufficientBlueBalanceForInKindRedeemError", async () => {
