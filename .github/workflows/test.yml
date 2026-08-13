@@ -48,9 +48,9 @@ jobs:
           MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
           BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
           ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
-          # Keep pure tests and Vitest workers fully parallel while bounding the Anvil processes
-          # that share one upstream RPC budget across those workers.
-          MORPHO_TEST_MAX_ANVIL_PROCESSES: 4
+          # Keep pure tests and Vitest workers fully parallel while bounding only the Anvil
+          # processes that share the same upstream RPC budget across those workers.
+          MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC: 2
           IS_LOGGING_DISABLED: true
 
       - name: Save Foundry cache

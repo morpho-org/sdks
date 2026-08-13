@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   closeSync,
   mkdirSync,
@@ -10,8 +11,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout } from "node:timers/promises";
 import _kebabCase from "lodash.kebabcase";
-
-const DEFAULT_PROVIDER_COMPUTE_UNITS_PER_SECOND = 330;
 
 /**
  * Error thrown when Anvil exits or fails before its RPC server starts listening.
@@ -34,18 +33,22 @@ export class AnvilStartupError extends Error {
   }
 }
 
-const getMaxConcurrentAnvilProcesses = () => {
+const getMaxConcurrentAnvilProcessesPerRpc = () => {
   const configuredValue =
-    process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES ??
-    (process.env.CI ? "4" : undefined);
+    process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC ??
+    (process.env.CI ? "2" : undefined);
   if (configuredValue === undefined) return undefined;
 
   const value = Number.parseInt(configuredValue, 10);
   return Number.isSafeInteger(value) && value > 0 ? value : undefined;
 };
 
-const acquireAnvilProcessSlot = async (maxProcesses: number | undefined) => {
-  if (maxProcesses === undefined) return () => {};
+const acquireAnvilProcessSlot = async (
+  maxProcessesPerRpc: number | undefined,
+  forkUrl: string | undefined,
+) => {
+  if (maxProcessesPerRpc === undefined || forkUrl === undefined)
+    return () => {};
 
   const configuredRunId = process.env.MORPHO_TEST_ANVIL_RUN_ID;
   const githubRun = process.env.GITHUB_RUN_ID;
@@ -54,11 +57,12 @@ const acquireAnvilProcessSlot = async (maxProcesses: number | undefined) => {
     configuredRunId ??
     (githubRun ? `${githubRun}-${githubAttempt ?? "1"}` : String(process.ppid))
   ).replaceAll(/[^a-zA-Z0-9_-]/g, "_");
-  const lockDirectory = join(tmpdir(), "morpho-test-anvil", runId);
+  const rpcId = createHash("sha256").update(forkUrl).digest("hex").slice(0, 16);
+  const lockDirectory = join(tmpdir(), "morpho-test-anvil", runId, rpcId);
   mkdirSync(lockDirectory, { recursive: true });
 
   while (true) {
-    for (let slot = 0; slot < maxProcesses; slot++) {
+    for (let slot = 0; slot < maxProcessesPerRpc; slot++) {
       const lockPath = join(lockDirectory, `${slot}.lock`);
       let descriptor: number | undefined;
 
@@ -383,8 +387,9 @@ function toArgs(obj: AnvilArgs) {
 
 /**
  * Starts an isolated Anvil process and resolves when its RPC server is listening.
- * CI processes share a bounded RPC budget; set `MORPHO_TEST_MAX_ANVIL_PROCESSES`
- * to override the default limit of four concurrent processes.
+ * CI processes sharing a fork URL also share its bounded RPC budget; set
+ * `MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC` to override the default limit of two
+ * concurrent processes per upstream RPC. Processes using other fork URLs remain concurrent.
  *
  * @param args Anvil command-line arguments and optional binary path.
  * @returns The local RPC URL and an idempotent process cleanup function.
@@ -407,24 +412,16 @@ export const spawnAnvil = async (
   rpcUrl: `http://localhost:${number}`;
   stop: () => boolean;
 }> => {
-  const maxProcesses = getMaxConcurrentAnvilProcesses();
-  const releaseProcessSlot = await acquireAnvilProcessSlot(maxProcesses);
+  const maxProcessesPerRpc = getMaxConcurrentAnvilProcessesPerRpc();
+  const releaseProcessSlot = await acquireAnvilProcessSlot(
+    maxProcessesPerRpc,
+    args.forkUrl,
+  );
   const { binary = "anvil", ...anvilArgs } = args;
   let port = args.port ?? 0;
 
   try {
-    const processArgs: AnvilArgs = { ...anvilArgs, port };
-    if (
-      processArgs.forkUrl !== undefined &&
-      processArgs.computeUnitsPerSecond === undefined &&
-      maxProcesses !== undefined
-    )
-      processArgs.computeUnitsPerSecond = Math.max(
-        1,
-        Math.floor(DEFAULT_PROVIDER_COMPUTE_UNITS_PER_SECOND / maxProcesses),
-      );
-
-    const subprocess = spawn(binary, toArgs(processArgs));
+    const subprocess = spawn(binary, toArgs({ ...anvilArgs, port }));
     let stopped = false;
 
     const stopProcess = () => {

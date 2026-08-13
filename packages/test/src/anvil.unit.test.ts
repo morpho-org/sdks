@@ -18,7 +18,8 @@ type FakeAnvilProcess = EventEmitter & {
   unref: ReturnType<typeof vi.fn>;
 };
 
-const originalMaxProcesses = process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES;
+const originalMaxProcessesPerRpc =
+  process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC;
 const originalRunId = process.env.MORPHO_TEST_ANVIL_RUN_ID;
 
 const restoreEnvironment = (name: string, value: string | undefined) => {
@@ -46,14 +47,17 @@ const createFakeAnvilProcess = () => {
 };
 
 afterEach(() => {
-  restoreEnvironment("MORPHO_TEST_MAX_ANVIL_PROCESSES", originalMaxProcesses);
+  restoreEnvironment(
+    "MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC",
+    originalMaxProcessesPerRpc,
+  );
   restoreEnvironment("MORPHO_TEST_ANVIL_RUN_ID", originalRunId);
   vi.clearAllMocks();
 });
 
 describe.sequential("spawnAnvil", () => {
   test("behavior: tolerates stderr output while Anvil is starting", async () => {
-    process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES = "4";
+    process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "2";
     process.env.MORPHO_TEST_ANVIL_RUN_ID = `unit-${process.pid}`;
     const subprocess = createFakeAnvilProcess();
     spawnMock.mockReturnValue(
@@ -66,9 +70,9 @@ describe.sequential("spawnAnvil", () => {
       forkUrl: "https://rpc.example",
     });
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
-    expect(spawnMock).toHaveBeenCalledWith(
-      "custom-anvil",
-      expect.arrayContaining(["--compute-units-per-second", "82"]),
+    expect(spawnMock).toHaveBeenCalledWith("custom-anvil", expect.any(Array));
+    expect(spawnMock.mock.calls[0]?.[1]).not.toContain(
+      "--compute-units-per-second",
     );
     expect(spawnMock.mock.calls[0]?.[1]).not.toContain("--binary");
 
@@ -86,7 +90,7 @@ describe.sequential("spawnAnvil", () => {
   });
 
   test("error: AnvilStartupError cleans up a failed startup", async () => {
-    process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES = "0";
+    process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "0";
     const subprocess = createFakeAnvilProcess();
     spawnMock.mockReturnValue(
       subprocess as unknown as ChildProcessWithoutNullStreams,
@@ -101,34 +105,54 @@ describe.sequential("spawnAnvil", () => {
     expect(subprocess.unref).toHaveBeenCalledOnce();
   });
 
-  test("behavior: caps Anvil processes without serializing Vitest", async () => {
-    process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES = "1";
+  test("behavior: caps each RPC without serializing other forks", async () => {
+    process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "1";
     process.env.MORPHO_TEST_ANVIL_RUN_ID = `unit-${process.pid}`;
     const firstProcess = createFakeAnvilProcess();
-    const secondProcess = createFakeAnvilProcess();
+    const otherRpcProcess = createFakeAnvilProcess();
+    const secondSameRpcProcess = createFakeAnvilProcess();
     spawnMock
       .mockReturnValueOnce(
         firstProcess as unknown as ChildProcessWithoutNullStreams,
       )
       .mockReturnValueOnce(
-        secondProcess as unknown as ChildProcessWithoutNullStreams,
+        otherRpcProcess as unknown as ChildProcessWithoutNullStreams,
+      )
+      .mockReturnValueOnce(
+        secondSameRpcProcess as unknown as ChildProcessWithoutNullStreams,
       );
 
-    const firstPromise = spawnAnvil({ chainId: 1 });
+    const firstPromise = spawnAnvil({
+      chainId: 1,
+      forkUrl: "https://first-rpc.example",
+    });
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
     firstProcess.stdout.write("Listening on 127.0.0.1:31001\n");
     const first = await firstPromise;
 
-    const secondPromise = spawnAnvil({ chainId: 1 });
+    const secondSameRpcPromise = spawnAnvil({
+      chainId: 1,
+      forkUrl: "https://first-rpc.example",
+    });
     await setTimeout(75);
     expect(spawnMock).toHaveBeenCalledTimes(1);
 
-    first.stop();
+    const otherRpcPromise = spawnAnvil({
+      chainId: 1,
+      forkUrl: "https://other-rpc.example",
+    });
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2));
-    secondProcess.stdout.write("Listening on 127.0.0.1:31002\n");
-    const second = await secondPromise;
+    otherRpcProcess.stdout.write("Listening on 127.0.0.1:31002\n");
+    const otherRpc = await otherRpcPromise;
 
-    expect(second.rpcUrl).toBe("http://localhost:31002");
-    second.stop();
+    first.stop();
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(3));
+    secondSameRpcProcess.stdout.write("Listening on 127.0.0.1:31003\n");
+    const secondSameRpc = await secondSameRpcPromise;
+
+    expect(otherRpc.rpcUrl).toBe("http://localhost:31002");
+    expect(secondSameRpc.rpcUrl).toBe("http://localhost:31003");
+    otherRpc.stop();
+    secondSameRpc.stop();
   });
 });
