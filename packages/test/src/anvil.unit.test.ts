@@ -8,7 +8,8 @@ const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
 
 vi.mock("node:child_process", () => ({ spawn: spawnMock }));
 
-import { AnvilStartupError, spawnAnvil } from "./anvil.js";
+import { spawnAnvil } from "./anvil.js";
+import { AnvilStartupError } from "./errors.js";
 
 type FakeAnvilProcess = EventEmitter & {
   stdout: PassThrough;
@@ -55,6 +56,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+// These tests intentionally share the spawn mock and process environment.
 describe.sequential("spawnAnvil", () => {
   test("behavior: tolerates stderr output while Anvil is starting", async () => {
     process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "2";

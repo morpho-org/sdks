@@ -51,6 +51,8 @@ jobs:
           # Keep pure tests and Vitest workers fully parallel while bounding only the Anvil
           # processes that share the same upstream RPC budget across those workers.
           MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC: 2
+          # All workers use one semaphore; the attempt suffix isolates reruns from stale locks.
+          MORPHO_TEST_ANVIL_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
           IS_LOGGING_DISABLED: true
 
       - name: Save Foundry cache

@@ -1,76 +1,72 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import {
-  closeSync,
-  mkdirSync,
-  openSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout } from "node:timers/promises";
 import _kebabCase from "lodash.kebabcase";
+import { AnvilStartupError } from "./errors.js";
 
 /**
- * Error thrown when Anvil exits or fails before its RPC server starts listening.
+ * Reads the optional limit for Anvil processes sharing one fork URL.
+ * Limiting stays disabled unless the test runner provides a positive value.
  *
+ * @returns The positive process limit, or `undefined` when limiting is disabled.
  * @example
- * ```ts
- * import { AnvilStartupError, spawnAnvil } from "@morpho-org/test";
- *
- * try {
- *   await spawnAnvil({ forkUrl: process.env.MAINNET_RPC_URL });
- * } catch (error) {
- *   if (error instanceof AnvilStartupError) console.error(error.message);
- * }
+ * ```sh
+ * MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC=2 pnpm test
  * ```
  */
-export class AnvilStartupError extends Error {
-  constructor(message: string, options?: ErrorOptions) {
-    super(message, options);
-    this.name = "AnvilStartupError";
-  }
-}
-
 const getMaxConcurrentAnvilProcessesPerRpc = () => {
-  const configuredValue =
-    process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC ??
-    (process.env.CI ? "2" : undefined);
+  const configuredValue = process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC;
   if (configuredValue === undefined) return undefined;
 
   const value = Number.parseInt(configuredValue, 10);
   return Number.isSafeInteger(value) && value > 0 ? value : undefined;
 };
 
-const acquireAnvilProcessSlot = async (
-  maxProcessesPerRpc: number | undefined,
-  forkUrl: string | undefined,
-) => {
+/**
+ * Reserves a cross-process Anvil slot for one fork URL using atomic lock files.
+ * Callers provide a runner-agnostic run ID shared by every worker in the job.
+ *
+ * @param parameters Limit, fork URL, and run identifier used by the semaphore.
+ * @returns An idempotent function that releases the reserved slot.
+ * @example
+ * ```ts
+ * const release = await acquireAnvilProcessSlot({
+ *   maxProcessesPerRpc: 2,
+ *   forkUrl,
+ *   runId: "test-run-42",
+ * });
+ * try {
+ *   // Start and use Anvil.
+ * } finally {
+ *   release();
+ * }
+ * ```
+ */
+const acquireAnvilProcessSlot = async (parameters: {
+  maxProcessesPerRpc: number | undefined;
+  forkUrl: string | undefined;
+  runId: string;
+}) => {
+  const { maxProcessesPerRpc, forkUrl, runId } = parameters;
   if (maxProcessesPerRpc === undefined || forkUrl === undefined)
     return () => {};
 
-  const configuredRunId = process.env.MORPHO_TEST_ANVIL_RUN_ID;
-  const githubRun = process.env.GITHUB_RUN_ID;
-  const githubAttempt = process.env.GITHUB_RUN_ATTEMPT;
-  const runId = (
-    configuredRunId ??
-    (githubRun ? `${githubRun}-${githubAttempt ?? "1"}` : String(process.ppid))
-  ).replaceAll(/[^a-zA-Z0-9_-]/g, "_");
+  // Vitest workers can be separate processes, so an atomic file is the simplest shared semaphore.
+  const safeRunId = runId.replaceAll(/[^a-zA-Z0-9_-]/g, "_") || "default";
+  // Hash the URL so credentials never appear in the temporary directory name.
   const rpcId = createHash("sha256").update(forkUrl).digest("hex").slice(0, 16);
-  const lockDirectory = join(tmpdir(), "morpho-test-anvil", runId, rpcId);
+  const lockDirectory = join(tmpdir(), "morpho-test-anvil", safeRunId, rpcId);
   mkdirSync(lockDirectory, { recursive: true });
 
   while (true) {
     for (let slot = 0; slot < maxProcessesPerRpc; slot++) {
       const lockPath = join(lockDirectory, `${slot}.lock`);
-      let descriptor: number | undefined;
 
       try {
-        descriptor = openSync(lockPath, "wx");
-        writeFileSync(descriptor, `${process.pid}\n`);
-        closeSync(descriptor);
-        descriptor = undefined;
+        writeFileSync(lockPath, `${process.pid}\n`, { flag: "wx" });
 
         let released = false;
         return () => {
@@ -89,7 +85,6 @@ const acquireAnvilProcessSlot = async (
           }
         };
       } catch (error) {
-        if (descriptor !== undefined) closeSync(descriptor);
         if (
           error instanceof Error &&
           "code" in error &&
@@ -100,6 +95,7 @@ const acquireAnvilProcessSlot = async (
       }
     }
 
+    // Every slot is occupied; yield so other workers can finish and release one.
     await setTimeout(25);
   }
 };
@@ -387,9 +383,9 @@ function toArgs(obj: AnvilArgs) {
 
 /**
  * Starts an isolated Anvil process and resolves when its RPC server is listening.
- * CI processes sharing a fork URL also share its bounded RPC budget; set
- * `MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC` to override the default limit of two
- * concurrent processes per upstream RPC. Processes using other fork URLs remain concurrent.
+ * To bound a shared provider without serializing other forks, set
+ * `MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC` and give every worker the same
+ * `MORPHO_TEST_ANVIL_RUN_ID`. The run ID defaults to the parent process ID.
  *
  * @param args Anvil command-line arguments and optional binary path.
  * @returns The local RPC URL and an idempotent process cleanup function.
@@ -413,10 +409,11 @@ export const spawnAnvil = async (
   stop: () => boolean;
 }> => {
   const maxProcessesPerRpc = getMaxConcurrentAnvilProcessesPerRpc();
-  const releaseProcessSlot = await acquireAnvilProcessSlot(
+  const releaseProcessSlot = await acquireAnvilProcessSlot({
     maxProcessesPerRpc,
-    args.forkUrl,
-  );
+    forkUrl: args.forkUrl,
+    runId: process.env.MORPHO_TEST_ANVIL_RUN_ID ?? String(process.ppid),
+  });
   const { binary = "anvil", ...anvilArgs } = args;
   let port = args.port ?? 0;
 
@@ -424,6 +421,7 @@ export const spawnAnvil = async (
     const subprocess = spawn(binary, toArgs({ ...anvilArgs, port }));
     let stopped = false;
 
+    // One idempotent path owns both child-process cleanup and semaphore release.
     const stopProcess = () => {
       if (stopped) return false;
       stopped = true;
@@ -461,6 +459,7 @@ export const spawnAnvil = async (
       };
 
       subprocess.stdout.on("data", (data) => {
+        // Anvil can split its listening message across stdout chunks.
         stdout = `${stdout}${data.toString()}`.slice(-1_024);
         const listenMatch = stdout.match(/Listening on 127.0.0.1:(\d+)/);
         if (!listenMatch || settled) return;
@@ -474,6 +473,7 @@ export const spawnAnvil = async (
       });
 
       subprocess.stderr.on("data", (data) => {
+        // Startup warnings are diagnostic; only timeout, error, or early close is fatal.
         const dataString = data.toString();
         stderr = `${stderr}${dataString}`.slice(-4_096);
         if (settled && !stopped)
