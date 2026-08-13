@@ -21,7 +21,7 @@ import {
   parseUnits,
 } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect } from "vitest";
+import { afterEach, describe, expect, vi } from "vitest";
 import {
   CbbtcUsdcBlue,
   WbtcUsdcSourceMarket,
@@ -63,6 +63,10 @@ const submitAndAccept = async (params: {
 };
 
 describe("MorphoVaultV2.inKindRedeem integration", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   test("accepts the two-field-domain permit and exits with a penalty", async ({
     client,
   }) => {
@@ -216,6 +220,12 @@ describe("MorphoVaultV2.inKindRedeem integration", () => {
     const vault = client
       .extend(morphoViemExtension({ supportSignature: true }))
       .morpho.vaultV2(vaultAddress, mainnet.id);
+    // Keep the SDK wall clock aligned with the pinned fork so its market-accrual preview targets
+    // the same timestamp as the transaction rather than the current date.
+    vi.useFakeTimers({
+      now: Number(await client.timestamp()) * 1_000,
+      toFake: ["Date"],
+    });
     const vaultData = await vault.getData();
     const [adapter] = vaultData.accrualAdapters;
     if (!(adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2)) {
@@ -290,6 +300,7 @@ describe("MorphoVaultV2.inKindRedeem integration", () => {
       mainnet.id,
     );
     await client.deal({ erc20: USDC, account: blue, amount: 0n });
+    vi.setSystemTime(Number(await client.timestamp()) * 1_000);
     const balanceLimitedExit = vault.inKindRedeem({
       amount: 2n,
       marketParamsList: [WbtcUsdcSourceMarket],
@@ -361,6 +372,12 @@ describe("MorphoVaultV2.inKindRedeem integration", () => {
     const vault = client
       .extend(morphoViemExtension({ supportSignature: false }))
       .morpho.vaultV2(vaultAddress, mainnet.id);
+    // Keep the SDK wall clock aligned with the pinned fork for deterministic deadlines and
+    // accrual previews.
+    vi.useFakeTimers({
+      now: Number(await client.timestamp()) * 1_000,
+      toFake: ["Date"],
+    });
     const vaultData = await vault.getData();
     const amount = deposit / 2n;
     const initialVaultShares = await client.readContract({

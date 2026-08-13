@@ -50,7 +50,9 @@ jobs:
           IS_LOGGING_DISABLED: true
 
       - name: Save Foundry cache
-        if: always()
+        # A panicked Anvil can leave a partial shared read cache. Never publish a failed run's
+        # cache as the restore source for later, otherwise independent jobs inherit its damage.
+        if: success()
         uses: actions/cache/save@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6
         with:
           path: ~/.foundry/cache/rpc
