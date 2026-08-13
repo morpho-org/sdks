@@ -1,5 +1,104 @@
 import { spawn } from "node:child_process";
+import {
+  closeSync,
+  mkdirSync,
+  openSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { setTimeout } from "node:timers/promises";
 import _kebabCase from "lodash.kebabcase";
+
+const DEFAULT_PROVIDER_COMPUTE_UNITS_PER_SECOND = 330;
+
+/**
+ * Error thrown when Anvil exits or fails before its RPC server starts listening.
+ *
+ * @example
+ * ```ts
+ * import { AnvilStartupError, spawnAnvil } from "@morpho-org/test";
+ *
+ * try {
+ *   await spawnAnvil({ forkUrl: process.env.MAINNET_RPC_URL });
+ * } catch (error) {
+ *   if (error instanceof AnvilStartupError) console.error(error.message);
+ * }
+ * ```
+ */
+export class AnvilStartupError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "AnvilStartupError";
+  }
+}
+
+const getMaxConcurrentAnvilProcesses = () => {
+  const configuredValue =
+    process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES ??
+    (process.env.CI ? "4" : undefined);
+  if (configuredValue === undefined) return undefined;
+
+  const value = Number.parseInt(configuredValue, 10);
+  return Number.isSafeInteger(value) && value > 0 ? value : undefined;
+};
+
+const acquireAnvilProcessSlot = async (maxProcesses: number | undefined) => {
+  if (maxProcesses === undefined) return () => {};
+
+  const configuredRunId = process.env.MORPHO_TEST_ANVIL_RUN_ID;
+  const githubRun = process.env.GITHUB_RUN_ID;
+  const githubAttempt = process.env.GITHUB_RUN_ATTEMPT;
+  const runId = (
+    configuredRunId ??
+    (githubRun ? `${githubRun}-${githubAttempt ?? "1"}` : String(process.ppid))
+  ).replaceAll(/[^a-zA-Z0-9_-]/g, "_");
+  const lockDirectory = join(tmpdir(), "morpho-test-anvil", runId);
+  mkdirSync(lockDirectory, { recursive: true });
+
+  while (true) {
+    for (let slot = 0; slot < maxProcesses; slot++) {
+      const lockPath = join(lockDirectory, `${slot}.lock`);
+      let descriptor: number | undefined;
+
+      try {
+        descriptor = openSync(lockPath, "wx");
+        writeFileSync(descriptor, `${process.pid}\n`);
+        closeSync(descriptor);
+        descriptor = undefined;
+
+        let released = false;
+        return () => {
+          if (released) return;
+          released = true;
+
+          try {
+            unlinkSync(lockPath);
+          } catch (error) {
+            if (
+              !(error instanceof Error) ||
+              !("code" in error) ||
+              error.code !== "ENOENT"
+            )
+              console.warn(`Failed to release Anvil slot "${slot}".`, error);
+          }
+        };
+      } catch (error) {
+        if (descriptor !== undefined) closeSync(descriptor);
+        if (
+          error instanceof Error &&
+          "code" in error &&
+          error.code === "EEXIST"
+        )
+          continue;
+        throw error;
+      }
+    }
+
+    await setTimeout(25);
+  }
+};
 
 export interface AnvilArgs {
   /**
@@ -282,42 +381,137 @@ function toArgs(obj: AnvilArgs) {
   });
 }
 
+/**
+ * Starts an isolated Anvil process and resolves when its RPC server is listening.
+ * CI processes share a bounded RPC budget; set `MORPHO_TEST_MAX_ANVIL_PROCESSES`
+ * to override the default limit of four concurrent processes.
+ *
+ * @param args Anvil command-line arguments and optional binary path.
+ * @returns The local RPC URL and an idempotent process cleanup function.
+ * @throws {AnvilStartupError} When Anvil cannot start or exits before listening.
+ * @example
+ * ```ts
+ * import { spawnAnvil } from "@morpho-org/test";
+ *
+ * const anvil = await spawnAnvil({ chainId: 1 });
+ * try {
+ *   console.log(anvil.rpcUrl);
+ * } finally {
+ *   anvil.stop();
+ * }
+ * ```
+ */
 export const spawnAnvil = async (
   args: AnvilArgs,
 ): Promise<{
   rpcUrl: `http://localhost:${number}`;
   stop: () => boolean;
 }> => {
-  let started = false;
+  const maxProcesses = getMaxConcurrentAnvilProcesses();
+  const releaseProcessSlot = await acquireAnvilProcessSlot(maxProcesses);
+  const { binary = "anvil", ...anvilArgs } = args;
   let port = args.port ?? 0;
 
-  const stop = await new Promise<() => boolean>((resolve, reject) => {
-    const subprocess = spawn("anvil", toArgs({ ...args, port }));
+  try {
+    const processArgs: AnvilArgs = { ...anvilArgs, port };
+    if (
+      processArgs.forkUrl !== undefined &&
+      processArgs.computeUnitsPerSecond === undefined &&
+      maxProcesses !== undefined
+    )
+      processArgs.computeUnitsPerSecond = Math.max(
+        1,
+        Math.floor(DEFAULT_PROVIDER_COMPUTE_UNITS_PER_SECOND / maxProcesses),
+      );
 
-    subprocess.stdout.on("data", (data) => {
-      const dataStr = data.toString();
+    const subprocess = spawn(binary, toArgs(processArgs));
+    let stopped = false;
 
-      const listenMatch = dataStr.match(/Listening on 127.0.0.1:(\d+)/);
-      if (listenMatch) port = Number.parseInt(listenMatch[1], 10);
+    const stopProcess = () => {
+      if (stopped) return false;
+      stopped = true;
 
-      // console.debug(`[port ${port || "??"}] ${dataStr}`);
-
-      if (listenMatch) {
-        started = true;
-        resolve(() => subprocess.kill("SIGINT"));
+      try {
+        return subprocess.exitCode === null ? subprocess.kill("SIGINT") : false;
+      } finally {
+        subprocess.stdout.destroy();
+        subprocess.stderr.destroy();
+        subprocess.unref();
+        releaseProcessSlot();
       }
+    };
+
+    await new Promise<void>((resolve, reject) => {
+      let settled = false;
+      let stderr = "";
+      let stdout = "";
+      const startupTimeoutMs =
+        Math.max(args.timeout ?? 45_000, 45_000) + 15_000;
+      const startupTimeout = globalThis.setTimeout(() => {
+        fail(
+          new AnvilStartupError(
+            `Anvil did not start listening within "${startupTimeoutMs}" ms. Check the fork URL and Anvil arguments.`,
+          ),
+        );
+      }, startupTimeoutMs);
+
+      const fail = (error: AnvilStartupError) => {
+        if (settled) return;
+        settled = true;
+        globalThis.clearTimeout(startupTimeout);
+        stopProcess();
+        reject(error);
+      };
+
+      subprocess.stdout.on("data", (data) => {
+        stdout = `${stdout}${data.toString()}`.slice(-1_024);
+        const listenMatch = stdout.match(/Listening on 127.0.0.1:(\d+)/);
+        if (!listenMatch || settled) return;
+        const listenedPort = listenMatch[1];
+        if (listenedPort === undefined) return;
+
+        port = Number.parseInt(listenedPort, 10);
+        settled = true;
+        globalThis.clearTimeout(startupTimeout);
+        resolve();
+      });
+
+      subprocess.stderr.on("data", (data) => {
+        const dataString = data.toString();
+        stderr = `${stderr}${dataString}`.slice(-4_096);
+        if (settled && !stopped)
+          console.warn(`[port ${port || "??"}] ${dataString}`);
+      });
+
+      subprocess.once("error", (error) => {
+        fail(
+          new AnvilStartupError(
+            `Anvil failed to start on port "${port || "auto"}". Check that the binary and arguments are valid.`,
+            { cause: error },
+          ),
+        );
+      });
+
+      subprocess.once("close", (code, signal) => {
+        if (settled) return;
+        const rawDetails = stderr.trim();
+        const details = args.forkUrl
+          ? rawDetails.replaceAll(args.forkUrl, "<fork-url>")
+          : rawDetails;
+        fail(
+          new AnvilStartupError(
+            `Anvil exited before listening on port "${port || "auto"}" (code "${code}", signal "${signal}").${details ? ` ${details}` : ""}`,
+          ),
+        );
+      });
     });
 
-    subprocess.stderr.on("data", (data) => {
-      const message = `[port ${port || "??"}] ${data.toString()}`;
-
-      if (!started) reject(message);
-      else console.warn(message);
-    });
-  });
-
-  return {
-    rpcUrl: `http://localhost:${port}`,
-    stop,
-  };
+    return {
+      rpcUrl: `http://localhost:${port}`,
+      stop: stopProcess,
+    };
+  } catch (error) {
+    releaseProcessSlot();
+    throw error;
+  }
 };
