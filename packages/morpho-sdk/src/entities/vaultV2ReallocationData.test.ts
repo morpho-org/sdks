@@ -1,6 +1,10 @@
 import {
+  AccrualPosition,
+  AccrualVault,
   AccrualVaultV2,
+  AccrualVaultV2MorphoMarketV1Adapter,
   AccrualVaultV2MorphoMarketV1AdapterV2,
+  AccrualVaultV2MorphoVaultV1Adapter,
   ChainId,
   type IVaultV2Allocation,
   Market,
@@ -29,6 +33,11 @@ const TARGET_ADAPTER = "0x0000000000000000000000000000000000000003";
 const SOURCE_ADAPTER = "0x0000000000000000000000000000000000000004";
 const LOAN_TOKEN = "0x0000000000000000000000000000000000000005";
 const IRM = "0x0000000000000000000000000000000000000006";
+const SECOND_VAULT = "0x000000000000000000000000000000000000000b";
+const SECOND_TARGET_ADAPTER = "0x000000000000000000000000000000000000000C";
+const LEGACY_MARKET_ADAPTER = "0x000000000000000000000000000000000000000d";
+const VAULT_V1_ADAPTER = "0x000000000000000000000000000000000000000E";
+const NESTED_VAULT = "0x000000000000000000000000000000000000000F";
 
 const targetParams = new MarketParams({
   loanToken: LOAN_TOKEN,
@@ -334,6 +343,298 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
     expect(result.data.getVault(VAULT)._totalAssets).toBe(
       data.getVault(VAULT)._totalAssets,
     );
+  });
+
+  test("behavior: keeps two vault adapters on one canonical market", () => {
+    const { data } = makeFixture({
+      sourceSupply: 0n,
+      targetPositionAssets: 50n,
+      idle: 500n,
+      canPullFromMarket: false,
+      penalty: 0n,
+    });
+    const targetMarket = data.getMarket(targetParams.id);
+    const secondTargetShares = targetMarket.toSupplyShares(50n, "Down");
+    const secondTargetAdapter = new AccrualVaultV2MorphoMarketV1AdapterV2(
+      {
+        address: SECOND_TARGET_ADAPTER,
+        parentVault: SECOND_VAULT,
+        skimRecipient: zeroAddress,
+        marketIds: [targetMarket.id],
+        adaptiveCurveIrm: IRM,
+        supplyShares: { [targetMarket.id]: secondTargetShares },
+      },
+      [targetMarket],
+    );
+    const secondTargetIds = secondTargetAdapter.ids(targetParams);
+    const secondAllocations: Record<Hash, IVaultV2Allocation> = {};
+    for (const id of secondTargetIds) {
+      secondAllocations[id] = {
+        id,
+        absoluteCap: 10_000n,
+        relativeCap: MathLib.WAD,
+        allocation: 50n,
+      };
+    }
+    const firstVault = data.getVault(VAULT);
+    const secondVault = new AccrualVaultV2(
+      {
+        ...firstVault,
+        address: SECOND_VAULT,
+        _totalAssets: 550n,
+        totalSupply: 550n,
+      },
+      undefined,
+      [secondTargetAdapter],
+      500n,
+      {},
+    );
+    const sharedData = new VaultV2ReallocationData({
+      chainId: data.chainId,
+      allocator: data.allocator,
+      markets: data.markets,
+      vaults: {
+        [VAULT]: firstVault,
+        [SECOND_VAULT]: secondVault,
+      },
+      allocations: {
+        [VAULT]: data.allocations[VAULT],
+        [SECOND_VAULT]: secondAllocations,
+      },
+      publicAllocatorConfigs: {
+        [VAULT]: data.publicAllocatorConfigs[VAULT],
+        [SECOND_VAULT]: {
+          allocator: ALLOCATOR,
+          vault: SECOND_VAULT,
+          canPullFromIdle: true,
+          penalty: 0n,
+        },
+      },
+      marketPublicAllocatorConfigs: {
+        [VAULT]: data.marketPublicAllocatorConfigs[VAULT],
+        [SECOND_VAULT]: {
+          [secondTargetIds[2]]: {
+            allocator: ALLOCATOR,
+            vault: SECOND_VAULT,
+            adapter: SECOND_TARGET_ADAPTER,
+            marketParamsId: secondTargetIds[2],
+            absoluteCap: 10_000n,
+            canPullFromMarket: false,
+            isActiveAdapter: true,
+          },
+        },
+      },
+    });
+
+    const initialCanonicalMarket = sharedData.getMarket(targetParams.id);
+    expect(sharedData.getAdapter(VAULT, TARGET_ADAPTER).markets[0]).toBe(
+      initialCanonicalMarket,
+    );
+    expect(
+      sharedData.getAdapter(SECOND_VAULT, SECOND_TARGET_ADAPTER).markets[0],
+    ).toBe(initialCanonicalMarket);
+
+    const result = sharedData.computeVaultV2Reallocations(targetParams.id);
+    const finalCanonicalMarket = result.data.getMarket(targetParams.id);
+
+    expect(result.reallocations).toHaveLength(2);
+    expect(result.data.getAdapter(VAULT, TARGET_ADAPTER).markets[0]).toBe(
+      finalCanonicalMarket,
+    );
+    expect(
+      result.data.getAdapter(SECOND_VAULT, SECOND_TARGET_ADAPTER).markets[0],
+    ).toBe(finalCanonicalMarket);
+  });
+
+  test("behavior: deep-clones legacy and nested accrued adapters", () => {
+    const { data } = makeFixture();
+    const targetMarket = data.getMarket(targetParams.id);
+    const legacyPosition = new AccrualPosition(
+      {
+        user: LEGACY_MARKET_ADAPTER,
+        supplyShares: targetMarket.toSupplyShares(25n, "Down"),
+        borrowShares: 0n,
+        collateral: 0n,
+      },
+      targetMarket,
+    );
+    const legacyAdapter = new AccrualVaultV2MorphoMarketV1Adapter(
+      {
+        address: LEGACY_MARKET_ADAPTER,
+        parentVault: VAULT,
+        skimRecipient: zeroAddress,
+        marketParamsList: [targetParams],
+      },
+      [legacyPosition],
+    );
+    const nestedPosition = new AccrualPosition(
+      {
+        user: NESTED_VAULT,
+        supplyShares: targetMarket.toSupplyShares(30n, "Down"),
+        borrowShares: 0n,
+        collateral: 0n,
+      },
+      targetMarket,
+    );
+    const nestedVault = new AccrualVault(
+      {
+        address: NESTED_VAULT,
+        name: "Nested Vault",
+        symbol: "nv",
+        asset: LOAN_TOKEN,
+        decimalsOffset: 0n,
+        curator: VAULT,
+        owner: VAULT,
+        guardian: VAULT,
+        fee: 0n,
+        feeRecipient: VAULT,
+        skimRecipient: VAULT,
+        pendingTimelock: { value: 1n, validAt: TIMESTAMP + 1n },
+        pendingGuardian: { value: VAULT, validAt: TIMESTAMP + 2n },
+        pendingOwner: VAULT,
+        timelock: 0n,
+        supplyQueue: [targetMarket.id],
+        totalSupply: 30n,
+        lastTotalAssets: 30n,
+        publicAllocatorConfig: {
+          admin: VAULT,
+          fee: 1n,
+          accruedFee: 2n,
+        },
+      },
+      [
+        {
+          config: {
+            vault: NESTED_VAULT,
+            marketId: targetMarket.id,
+            cap: 1_000n,
+            pendingCap: { value: 2_000n, validAt: TIMESTAMP + 3n },
+            removableAt: 0n,
+            enabled: true,
+            publicAllocatorConfig: {
+              vault: NESTED_VAULT,
+              marketId: targetMarket.id,
+              maxIn: 100n,
+              maxOut: 200n,
+            },
+          },
+          position: nestedPosition,
+        },
+      ],
+    );
+    const nestedAdapter = new AccrualVaultV2MorphoVaultV1Adapter(
+      {
+        address: VAULT_V1_ADAPTER,
+        parentVault: VAULT,
+        skimRecipient: zeroAddress,
+        morphoVaultV1: NESTED_VAULT,
+      },
+      nestedVault,
+      30n,
+    );
+    const fixtureVault = data.getVault(VAULT);
+    const inputVault = new AccrualVaultV2(
+      fixtureVault,
+      fixtureVault.accrualLiquidityAdapter,
+      [...fixtureVault.accrualAdapters, legacyAdapter, nestedAdapter],
+      fixtureVault.assetBalance,
+      fixtureVault.forceDeallocatePenalties,
+    );
+    const input = new VaultV2ReallocationData({
+      chainId: data.chainId,
+      allocator: data.allocator,
+      markets: data.markets,
+      vaults: { [VAULT]: inputVault },
+      allocations: data.allocations,
+      publicAllocatorConfigs: data.publicAllocatorConfigs,
+      marketPublicAllocatorConfigs: data.marketPublicAllocatorConfigs,
+    });
+
+    const cloned = input.clone();
+    const inputLegacy = input
+      .getVault(VAULT)
+      .accrualAdapters.find(
+        (adapter) => adapter instanceof AccrualVaultV2MorphoMarketV1Adapter,
+      );
+    const clonedLegacy = cloned
+      .getVault(VAULT)
+      .accrualAdapters.find(
+        (adapter) => adapter instanceof AccrualVaultV2MorphoMarketV1Adapter,
+      );
+    const inputNested = input
+      .getVault(VAULT)
+      .accrualAdapters.find(
+        (adapter) => adapter instanceof AccrualVaultV2MorphoVaultV1Adapter,
+      );
+    const clonedNested = cloned
+      .getVault(VAULT)
+      .accrualAdapters.find(
+        (adapter) => adapter instanceof AccrualVaultV2MorphoVaultV1Adapter,
+      );
+
+    expect(clonedLegacy).not.toBe(inputLegacy);
+    expect(clonedLegacy?.positions[0]).not.toBe(inputLegacy?.positions[0]);
+    expect(clonedLegacy?.positions[0]?.market).not.toBe(
+      inputLegacy?.positions[0]?.market,
+    );
+    expect(clonedNested).not.toBe(inputNested);
+    expect(clonedNested?.accrualVaultV1).not.toBe(inputNested?.accrualVaultV1);
+    expect(clonedNested?.accrualVaultV1.allocations).not.toBe(
+      inputNested?.accrualVaultV1.allocations,
+    );
+
+    const simulated = input.computeVaultV2Reallocations(targetMarket.id).data;
+    const simulatedLegacy = simulated
+      .getVault(VAULT)
+      .accrualAdapters.find(
+        (adapter) => adapter instanceof AccrualVaultV2MorphoMarketV1Adapter,
+      );
+    const simulatedNested = simulated
+      .getVault(VAULT)
+      .accrualAdapters.find(
+        (adapter) => adapter instanceof AccrualVaultV2MorphoVaultV1Adapter,
+      );
+    const simulatedTargetMarket = simulated.getMarket(targetMarket.id);
+    expect(simulatedLegacy?.positions[0]?.market.totalSupplyAssets).toBe(
+      simulatedTargetMarket.totalSupplyAssets,
+    );
+    expect(
+      simulatedNested?.accrualVaultV1.allocations.get(targetMarket.id)?.position
+        .market.totalSupplyAssets,
+    ).toBe(simulatedTargetMarket.totalSupplyAssets);
+
+    clonedLegacy!.positions[0]!.supplyShares += 1n;
+    clonedNested!.accrualVaultV1.pendingTimelock.value = 99n;
+    const clonedNestedAllocation = clonedNested!.accrualVaultV1.allocations.get(
+      targetMarket.id,
+    )!;
+    clonedNestedAllocation.config.pendingCap.value = 88n;
+    clonedNestedAllocation.position.supplyShares += 2n;
+
+    expect(inputLegacy?.positions[0]?.supplyShares).toBe(
+      legacyPosition.supplyShares,
+    );
+    expect(inputNested?.accrualVaultV1.pendingTimelock.value).toBe(1n);
+    expect(
+      inputNested?.accrualVaultV1.allocations.get(targetMarket.id)?.config
+        .pendingCap.value,
+    ).toBe(2_000n);
+    expect(
+      inputNested?.accrualVaultV1.allocations.get(targetMarket.id)?.position
+        .supplyShares,
+    ).toBe(nestedPosition.supplyShares);
+  });
+
+  test("behavior: repeated cap probes are deterministic and isolated", () => {
+    const { data } = makeFixture({ idle: 300n });
+    const initialData = data.clone();
+
+    const first = data.computeVaultV2Reallocations(targetParams.id);
+    const second = data.computeVaultV2Reallocations(targetParams.id);
+
+    expect(second.reallocations).toStrictEqual(first.reallocations);
+    expect(second.data).toStrictEqual(first.data);
+    expect(data).toStrictEqual(initialData);
   });
 
   test("behavior: ranks market liquidity before idle and depletes both sources", () => {

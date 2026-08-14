@@ -206,183 +206,6 @@ const isHexValue = (value: unknown): value is Hex =>
   typeof value === "string" && isHex(value, { strict: true });
 const isHashValue = (value: unknown): value is Hash =>
   isHexValue(value) && size(value) === 32;
-const isNullableDecimalString = (value: unknown): value is string | null =>
-  value === null || isDecimalString(value);
-
-const responseValidators = {
-  vault: (value: unknown): value is VaultV2Response => {
-    if (!isRecord(value) || !isRecord(value.asset) || !isRecord(value.gates))
-      return false;
-    const { asset, gates } = value;
-    return (
-      isInteger(value.chain_id) &&
-      isAddressValue(value.address) &&
-      isDecimalString(value.last_indexed_block) &&
-      typeof value.version === "string" &&
-      typeof value.name === "string" &&
-      typeof value.symbol === "string" &&
-      isAddressValue(asset.address) &&
-      isInteger(asset.decimals) &&
-      typeof asset.name === "string" &&
-      typeof asset.symbol === "string" &&
-      isInteger(value.decimals_offset) &&
-      isAddressValue(value.factory_address) &&
-      isDecimalString(value.creation_block_number) &&
-      isAddressValue(value.owner) &&
-      isAddressValue(value.curator) &&
-      isInteger(value.timelock_seconds) &&
-      isNullableDecimalString(value.management_fee_wad) &&
-      isNullableAddress(value.management_fee_recipient) &&
-      isNullableDecimalString(value.performance_fee_wad) &&
-      isNullableAddress(value.performance_fee_recipient) &&
-      isDecimalString(value.max_rate_per_second_wad) &&
-      isAddressValue(value.adapter_registry) &&
-      isAddressValue(value.liquidity_adapter) &&
-      isHexValue(value.liquidity_data) &&
-      isNullableAddress(gates.send_shares) &&
-      isNullableAddress(gates.receive_shares) &&
-      isNullableAddress(gates.send_assets) &&
-      isNullableAddress(gates.receive_assets)
-    );
-  },
-  vaultState: (value: unknown): value is VaultV2StateResponse =>
-    isRecord(value) &&
-    isInteger(value.chain_id) &&
-    isAddressValue(value.address) &&
-    isDecimalString(value.last_indexed_block) &&
-    isInteger(value.last_accrual_timestamp) &&
-    isDecimalString(value.total_assets) &&
-    isDecimalString(value.total_supply) &&
-    isDecimalString(value.withdrawable_assets) &&
-    isDecimalString(value.allocated_assets) &&
-    isDecimalString(value.idle_assets) &&
-    isDecimalString(value.share_price_ray),
-  vaultAllocations: (value: unknown): value is VaultV2AllocationsResponse => {
-    if (
-      !isRecord(value) ||
-      !isInteger(value.chain_id) ||
-      !isAddressValue(value.vault_address) ||
-      !isDecimalString(value.last_indexed_block) ||
-      !Array.isArray(value.allocations) ||
-      !Array.isArray(value.unscoped_caps)
-    )
-      return false;
-
-    const caps = [...value.unscoped_caps];
-    for (const adapter of value.allocations) {
-      if (
-        !isRecord(adapter) ||
-        !isAddressValue(adapter.adapter_address) ||
-        (adapter.adapter_kind !== "morpho_market_v1" &&
-          adapter.adapter_kind !== "morpho_market_v1_v2" &&
-          adapter.adapter_kind !== "morpho_vault_v1" &&
-          adapter.adapter_kind !== "morpho_vault_v2") ||
-        !Array.isArray(adapter.caps)
-      )
-        return false;
-      caps.push(...adapter.caps);
-    }
-
-    return caps.every((cap) => {
-      if (
-        !isRecord(cap) ||
-        !isHashValue(cap.cap_id) ||
-        !isHexValue(cap.cap_data) ||
-        !isDecimalString(cap.allocated_assets) ||
-        !isDecimalString(cap.absolute_cap) ||
-        !isDecimalString(cap.relative_cap_wad) ||
-        (cap.market_id !== undefined && !isHashValue(cap.market_id)) ||
-        (cap.collateral_address !== undefined &&
-          !isAddressValue(cap.collateral_address))
-      )
-        return false;
-
-      switch (cap.cap_type) {
-        case "adapter":
-          return true;
-        case "collateral":
-          return isAddressValue(cap.collateral_address);
-        case "market_v1":
-          return isHashValue(cap.market_id);
-        default:
-          return false;
-      }
-    });
-  },
-  withdrawalOptions: (
-    value: unknown,
-  ): value is VaultV2WithdrawalOptionsResponse =>
-    isRecord(value) &&
-    isInteger(value.chain_id) &&
-    isAddressValue(value.vault_address) &&
-    isDecimalString(value.liquidity_adapter_available_assets) &&
-    isDecimalString(value.idle_assets) &&
-    Array.isArray(value.adapter_penalties) &&
-    value.adapter_penalties.every(
-      (penalty) =>
-        isRecord(penalty) &&
-        isAddressValue(penalty.adapter_address) &&
-        (penalty.adapter_kind === "blue_market_adapter" ||
-          penalty.adapter_kind === "vault_v1_adapter" ||
-          penalty.adapter_kind === "vault_v2_adapter" ||
-          penalty.adapter_kind === "unknown_adapter") &&
-        isDecimalString(penalty.force_deallocatable_assets) &&
-        isDecimalString(penalty.penalty_rate_wad),
-    ),
-  market: (value: unknown): value is MarketResponse =>
-    isRecord(value) &&
-    isInteger(value.chain_id) &&
-    isHashValue(value.market_id) &&
-    isAddressValue(value.loan_token) &&
-    isAddressValue(value.collateral_token) &&
-    isAddressValue(value.oracle_address) &&
-    isAddressValue(value.irm_address) &&
-    isDecimalString(value.lltv_wad) &&
-    isDecimalString(value.creation_block_number),
-  marketState: (value: unknown): value is MarketStateResponse =>
-    isRecord(value) &&
-    isInteger(value.chain_id) &&
-    isHashValue(value.market_id) &&
-    isDecimalString(value.last_indexed_block) &&
-    isInteger(value.last_accrual_timestamp) &&
-    isDecimalString(value.total_supply_assets) &&
-    isDecimalString(value.total_supply_shares) &&
-    isDecimalString(value.total_borrow_assets) &&
-    isDecimalString(value.total_borrow_shares) &&
-    isDecimalString(value.fee_wad),
-  marketPosition: (value: unknown): value is MarketPositionResponse =>
-    isRecord(value) &&
-    isInteger(value.chain_id) &&
-    isHashValue(value.market_id) &&
-    isAddressValue(value.user_address) &&
-    isDecimalString(value.last_indexed_block) &&
-    isDecimalString(value.collateral_assets) &&
-    isDecimalString(value.supply_shares) &&
-    isDecimalString(value.borrow_shares),
-  oracleState: (value: unknown): value is OracleStateResponse =>
-    isRecord(value) &&
-    isInteger(value.chain_id) &&
-    isAddressValue(value.oracle_address) &&
-    isDecimalString(value.last_indexed_block) &&
-    (value.last_updated_at === undefined ||
-      value.last_updated_at === null ||
-      isDecimalString(value.last_updated_at)) &&
-    (value.price === undefined ||
-      value.price === null ||
-      isDecimalString(value.price)),
-  marketIrm: (value: unknown): value is MarketIrmResponse =>
-    isRecord(value) &&
-    isInteger(value.chainId) &&
-    isHashValue(value.marketId) &&
-    isAddressValue(value.irmAddress) &&
-    isFiniteNumber(value.targetUtilization) &&
-    (value.utilization === null || isFiniteNumber(value.utilization)) &&
-    (value.apyAtTarget === null || isFiniteNumber(value.apyAtTarget)) &&
-    (value.rateAtTarget === undefined ||
-      value.rateAtTarget === null ||
-      isDecimalString(value.rateAtTarget)) &&
-    (value.borrowToTarget === null || isFiniteNumber(value.borrowToTarget)),
-};
 
 async function requestApi<Data>(
   path: string,
@@ -443,10 +266,49 @@ export const fetchRestVaultV2 = (chainId: number, address: Address) =>
   requestApi<VaultV2Response>(
     `/v0/vaults-v2/${apiSelector(chainId, address)}`,
     {
-      validator: (value): value is VaultV2Response =>
-        responseValidators.vault(value) &&
-        value.chain_id === chainId &&
-        isAddressEqual(value.address, address),
+      validator: (value): value is VaultV2Response => {
+        if (
+          !isRecord(value) ||
+          !isRecord(value.asset) ||
+          !isRecord(value.gates)
+        )
+          return false;
+        const { asset, gates } = value;
+        return (
+          isInteger(value.chain_id) &&
+          value.chain_id === chainId &&
+          isAddressValue(value.address) &&
+          isAddressEqual(value.address, address) &&
+          isDecimalString(value.last_indexed_block) &&
+          typeof value.version === "string" &&
+          typeof value.name === "string" &&
+          typeof value.symbol === "string" &&
+          isAddressValue(asset.address) &&
+          isInteger(asset.decimals) &&
+          typeof asset.name === "string" &&
+          typeof asset.symbol === "string" &&
+          isInteger(value.decimals_offset) &&
+          isAddressValue(value.factory_address) &&
+          isDecimalString(value.creation_block_number) &&
+          isAddressValue(value.owner) &&
+          isAddressValue(value.curator) &&
+          isInteger(value.timelock_seconds) &&
+          (value.management_fee_wad === null ||
+            isDecimalString(value.management_fee_wad)) &&
+          isNullableAddress(value.management_fee_recipient) &&
+          (value.performance_fee_wad === null ||
+            isDecimalString(value.performance_fee_wad)) &&
+          isNullableAddress(value.performance_fee_recipient) &&
+          isDecimalString(value.max_rate_per_second_wad) &&
+          isAddressValue(value.adapter_registry) &&
+          isAddressValue(value.liquidity_adapter) &&
+          isHexValue(value.liquidity_data) &&
+          isNullableAddress(gates.send_shares) &&
+          isNullableAddress(gates.receive_shares) &&
+          isNullableAddress(gates.send_assets) &&
+          isNullableAddress(gates.receive_assets)
+        );
+      },
     },
   );
 
@@ -456,9 +318,19 @@ export const fetchRestVaultV2State = (chainId: number, address: Address) =>
     `/v1/vaults-v2/${apiSelector(chainId, address)}/state`,
     {
       validator: (value): value is VaultV2StateResponse =>
-        responseValidators.vaultState(value) &&
+        isRecord(value) &&
+        isInteger(value.chain_id) &&
         value.chain_id === chainId &&
-        isAddressEqual(value.address, address),
+        isAddressValue(value.address) &&
+        isAddressEqual(value.address, address) &&
+        isDecimalString(value.last_indexed_block) &&
+        isInteger(value.last_accrual_timestamp) &&
+        isDecimalString(value.total_assets) &&
+        isDecimalString(value.total_supply) &&
+        isDecimalString(value.withdrawable_assets) &&
+        isDecimalString(value.allocated_assets) &&
+        isDecimalString(value.idle_assets) &&
+        isDecimalString(value.share_price_ray),
     },
   );
 
@@ -470,10 +342,60 @@ export const fetchRestVaultV2Allocations = (
   requestApi<VaultV2AllocationsResponse>(
     `/v0/vaults-v2/${apiSelector(chainId, address)}/allocations`,
     {
-      validator: (value): value is VaultV2AllocationsResponse =>
-        responseValidators.vaultAllocations(value) &&
-        value.chain_id === chainId &&
-        isAddressEqual(value.vault_address, address),
+      validator: (value): value is VaultV2AllocationsResponse => {
+        if (
+          !isRecord(value) ||
+          !isInteger(value.chain_id) ||
+          value.chain_id !== chainId ||
+          !isAddressValue(value.vault_address) ||
+          !isAddressEqual(value.vault_address, address) ||
+          !isDecimalString(value.last_indexed_block) ||
+          !Array.isArray(value.allocations) ||
+          !Array.isArray(value.unscoped_caps)
+        )
+          return false;
+
+        const caps = [...value.unscoped_caps];
+        for (const adapter of value.allocations) {
+          if (
+            !isRecord(adapter) ||
+            !isAddressValue(adapter.adapter_address) ||
+            (adapter.adapter_kind !== "morpho_market_v1" &&
+              adapter.adapter_kind !== "morpho_market_v1_v2" &&
+              adapter.adapter_kind !== "morpho_vault_v1" &&
+              adapter.adapter_kind !== "morpho_vault_v2") ||
+            !Array.isArray(adapter.caps)
+          )
+            return false;
+          caps.push(...adapter.caps);
+        }
+
+        return caps.every((cap) => {
+          if (
+            !isRecord(cap) ||
+            !isHashValue(cap.cap_id) ||
+            !isHexValue(cap.cap_data) ||
+            !isDecimalString(cap.allocated_assets) ||
+            !isDecimalString(cap.absolute_cap) ||
+            !isDecimalString(cap.relative_cap_wad) ||
+            (cap.market_id !== undefined && !isHashValue(cap.market_id)) ||
+            (cap.collateral_address !== undefined &&
+              !isAddressValue(cap.collateral_address))
+          )
+            return false;
+
+          switch (cap.cap_type) {
+            case "adapter":
+              return true;
+            case "collateral":
+              return isAddressValue(cap.collateral_address);
+            case "market_v1":
+              return isHashValue(cap.market_id);
+            default:
+              return false;
+          }
+        });
+      },
     },
   );
 
@@ -486,9 +408,25 @@ export const fetchRestVaultV2WithdrawalOptions = (
     `/v0/vaults-v2/${apiSelector(chainId, address)}/withdrawal-options`,
     {
       validator: (value): value is VaultV2WithdrawalOptionsResponse =>
-        responseValidators.withdrawalOptions(value) &&
+        isRecord(value) &&
+        isInteger(value.chain_id) &&
         value.chain_id === chainId &&
-        isAddressEqual(value.vault_address, address),
+        isAddressValue(value.vault_address) &&
+        isAddressEqual(value.vault_address, address) &&
+        isDecimalString(value.liquidity_adapter_available_assets) &&
+        isDecimalString(value.idle_assets) &&
+        Array.isArray(value.adapter_penalties) &&
+        value.adapter_penalties.every(
+          (penalty) =>
+            isRecord(penalty) &&
+            isAddressValue(penalty.adapter_address) &&
+            (penalty.adapter_kind === "blue_market_adapter" ||
+              penalty.adapter_kind === "vault_v1_adapter" ||
+              penalty.adapter_kind === "vault_v2_adapter" ||
+              penalty.adapter_kind === "unknown_adapter") &&
+            isDecimalString(penalty.force_deallocatable_assets) &&
+            isDecimalString(penalty.penalty_rate_wad),
+        ),
     },
   );
 
@@ -498,9 +436,17 @@ export const fetchRestMarket = (chainId: number, marketId: MarketId) =>
     `/v0/blue/markets/${apiSelector(chainId, marketId)}`,
     {
       validator: (value): value is MarketResponse =>
-        responseValidators.market(value) &&
+        isRecord(value) &&
+        isInteger(value.chain_id) &&
         value.chain_id === chainId &&
-        value.market_id.toLowerCase() === marketId.toLowerCase(),
+        isHashValue(value.market_id) &&
+        value.market_id.toLowerCase() === marketId.toLowerCase() &&
+        isAddressValue(value.loan_token) &&
+        isAddressValue(value.collateral_token) &&
+        isAddressValue(value.oracle_address) &&
+        isAddressValue(value.irm_address) &&
+        isDecimalString(value.lltv_wad) &&
+        isDecimalString(value.creation_block_number),
     },
   );
 
@@ -510,9 +456,18 @@ export const fetchRestMarketState = (chainId: number, marketId: MarketId) =>
     `/v0/blue/markets/${apiSelector(chainId, marketId)}/state`,
     {
       validator: (value): value is MarketStateResponse =>
-        responseValidators.marketState(value) &&
+        isRecord(value) &&
+        isInteger(value.chain_id) &&
         value.chain_id === chainId &&
-        value.market_id.toLowerCase() === marketId.toLowerCase(),
+        isHashValue(value.market_id) &&
+        value.market_id.toLowerCase() === marketId.toLowerCase() &&
+        isDecimalString(value.last_indexed_block) &&
+        isInteger(value.last_accrual_timestamp) &&
+        isDecimalString(value.total_supply_assets) &&
+        isDecimalString(value.total_supply_shares) &&
+        isDecimalString(value.total_borrow_assets) &&
+        isDecimalString(value.total_borrow_shares) &&
+        isDecimalString(value.fee_wad),
     },
   );
 
@@ -526,10 +481,17 @@ export const fetchRestMarketPosition = ({
     `/v0/blue/markets/${apiSelector(chainId, marketId)}/users/${encodeURIComponent(user)}/position`,
     {
       validator: (value): value is MarketPositionResponse =>
-        responseValidators.marketPosition(value) &&
+        isRecord(value) &&
+        isInteger(value.chain_id) &&
         value.chain_id === chainId &&
+        isHashValue(value.market_id) &&
         value.market_id.toLowerCase() === marketId.toLowerCase() &&
-        isAddressEqual(value.user_address, user),
+        isAddressValue(value.user_address) &&
+        isAddressEqual(value.user_address, user) &&
+        isDecimalString(value.last_indexed_block) &&
+        isDecimalString(value.collateral_assets) &&
+        isDecimalString(value.supply_shares) &&
+        isDecimalString(value.borrow_shares),
     },
   );
 
@@ -539,9 +501,18 @@ export const fetchRestOracleState = (chainId: number, address: Address) =>
     `/v0/oracles/${apiSelector(chainId, address)}/state`,
     {
       validator: (value): value is OracleStateResponse =>
-        responseValidators.oracleState(value) &&
+        isRecord(value) &&
+        isInteger(value.chain_id) &&
         value.chain_id === chainId &&
-        isAddressEqual(value.oracle_address, address),
+        isAddressValue(value.oracle_address) &&
+        isAddressEqual(value.oracle_address, address) &&
+        isDecimalString(value.last_indexed_block) &&
+        (value.last_updated_at === undefined ||
+          value.last_updated_at === null ||
+          isDecimalString(value.last_updated_at)) &&
+        (value.price === undefined ||
+          value.price === null ||
+          isDecimalString(value.price)),
     },
   );
 
@@ -551,9 +522,19 @@ export const fetchRestMarketIrm = (chainId: number, marketId: MarketId) =>
     `/consumer/chains/${chainId}/markets/${encodeURIComponent(marketId)}/irm`,
     {
       validator: (value): value is MarketIrmResponse =>
-        responseValidators.marketIrm(value) &&
+        isRecord(value) &&
+        isInteger(value.chainId) &&
         value.chainId === chainId &&
-        value.marketId.toLowerCase() === marketId.toLowerCase(),
+        isHashValue(value.marketId) &&
+        value.marketId.toLowerCase() === marketId.toLowerCase() &&
+        isAddressValue(value.irmAddress) &&
+        isFiniteNumber(value.targetUtilization) &&
+        (value.utilization === null || isFiniteNumber(value.utilization)) &&
+        (value.apyAtTarget === null || isFiniteNumber(value.apyAtTarget)) &&
+        (value.rateAtTarget === undefined ||
+          value.rateAtTarget === null ||
+          isDecimalString(value.rateAtTarget)) &&
+        (value.borrowToTarget === null || isFiniteNumber(value.borrowToTarget)),
       responseKind: "root",
     },
   );
