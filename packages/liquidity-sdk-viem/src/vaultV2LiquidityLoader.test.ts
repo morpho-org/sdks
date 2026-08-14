@@ -1,5 +1,7 @@
 import {
+  AdaptiveCurveIrmLib,
   getChainAddresses,
+  Market,
   MarketParams,
   MathLib,
   VaultV2MorphoMarketV1AdapterV2,
@@ -16,6 +18,8 @@ import { mainnet } from "viem/chains";
 import { beforeEach, describe, expect, test } from "vitest";
 import { fetchRestVaultV2 } from "./api/rest.js";
 import {
+  InconsistentVaultV2LiquiditySnapshotError,
+  InvalidVaultV2LiquidityApiResponseError,
   MissingVaultV2LiquidityApiDataError,
   VaultV2LiquidityApiError,
 } from "./errors.js";
@@ -100,7 +104,33 @@ const vaultConfigResponse = {
   },
 };
 
-const setupApi = (vaultStatus = 200, includePenalty = true) => {
+const defaultMarketState = {
+  lastAccrualTimestamp: BLOCK_TIMESTAMP,
+  totalSupplyAssets: 100n,
+  totalSupplyShares: 100_000_000n,
+  totalBorrowAssets: 95n,
+  totalBorrowShares: 95_000_000n,
+  fee: 0n,
+};
+
+const setupApi = ({
+  vaultStatus = 200,
+  includePenalty = true,
+  marketStateBlock = BLOCK_NUMBER,
+  marketState = {},
+  positionUser = ADAPTER,
+  positionSupplyShares = 0n,
+  rateAtTarget = 0n,
+}: {
+  readonly vaultStatus?: number;
+  readonly includePenalty?: boolean;
+  readonly marketStateBlock?: bigint;
+  readonly marketState?: Partial<typeof defaultMarketState>;
+  readonly positionUser?: Address;
+  readonly positionSupplyShares?: bigint;
+  readonly rateAtTarget?: bigint;
+} = {}) => {
+  const resolvedMarketState = { ...defaultMarketState, ...marketState };
   const rest = nock(BLUE_API_BASE_URL);
   rest
     .get(`/v0/vaults-v2/${mainnet.id}:${VAULT}`)
@@ -182,13 +212,15 @@ const setupApi = (vaultStatus = 200, includePenalty = true) => {
       data: {
         chain_id: mainnet.id,
         market_id: marketParams.id,
-        last_indexed_block: BLOCK_NUMBER.toString(),
-        last_accrual_timestamp: Number(BLOCK_TIMESTAMP),
-        total_supply_assets: "100",
-        total_supply_shares: "100000000",
-        total_borrow_assets: "95",
-        total_borrow_shares: "95000000",
-        fee_wad: "0",
+        last_indexed_block: marketStateBlock.toString(),
+        last_accrual_timestamp: Number(
+          resolvedMarketState.lastAccrualTimestamp,
+        ),
+        total_supply_assets: resolvedMarketState.totalSupplyAssets.toString(),
+        total_supply_shares: resolvedMarketState.totalSupplyShares.toString(),
+        total_borrow_assets: resolvedMarketState.totalBorrowAssets.toString(),
+        total_borrow_shares: resolvedMarketState.totalBorrowShares.toString(),
+        fee_wad: resolvedMarketState.fee.toString(),
       },
     });
 
@@ -200,10 +232,10 @@ const setupApi = (vaultStatus = 200, includePenalty = true) => {
       data: {
         chain_id: mainnet.id,
         market_id: marketParams.id,
-        user_address: ADAPTER,
+        user_address: positionUser,
         last_indexed_block: BLOCK_NUMBER.toString(),
         collateral_assets: "0",
-        supply_shares: "0",
+        supply_shares: positionSupplyShares.toString(),
         borrow_shares: "0",
       },
     });
@@ -225,7 +257,7 @@ const setupApi = (vaultStatus = 200, includePenalty = true) => {
       targetUtilization: 0.9,
       utilization: 0.95,
       apyAtTarget: 0,
-      rateAtTarget: "0",
+      rateAtTarget: rateAtTarget.toString(),
       borrowToTarget: 0,
     });
 
@@ -331,6 +363,62 @@ describe.sequential("VaultV2LiquidityLoader", () => {
     api.done();
   });
 
+  test("behavior: accrues REST-projected market totals only after the indexed block", async () => {
+    const storedTimestamp = BLOCK_TIMESTAMP - 3_600n;
+    const positionSupplyShares = 500_000_000_000_000_000_000_000_000n;
+    // Mirrors the raw market tuple and stored IRM value returned by pinned RPC.
+    const rawRpcMarket = new Market({
+      params: marketParams,
+      totalSupplyAssets: 1_000_000_000_000_000_000_000n,
+      totalSupplyShares: 1_000_000_000_000_000_000_000_000_000n,
+      totalBorrowAssets: 950_000_000_000_000_000_000n,
+      totalBorrowShares: 950_000_000_000_000_000_000_000_000n,
+      lastUpdate: storedTimestamp,
+      fee: 0n,
+      price: ORACLE_PRICE,
+      rateAtTarget: AdaptiveCurveIrmLib.INITIAL_RATE_AT_TARGET,
+    });
+    const indexedMarket = rawRpcMarket.accrueInterest(BLOCK_TIMESTAMP);
+    expect(indexedMarket.totalBorrowAssets).toBeGreaterThan(
+      rawRpcMarket.totalBorrowAssets,
+    );
+
+    const api = setupApi({
+      marketState: {
+        lastAccrualTimestamp: storedTimestamp,
+        totalSupplyAssets: indexedMarket.totalSupplyAssets,
+        totalSupplyShares: indexedMarket.totalSupplyShares,
+        totalBorrowAssets: indexedMarket.totalBorrowAssets,
+        totalBorrowShares: indexedMarket.totalBorrowShares,
+        fee: indexedMarket.fee,
+      },
+      positionSupplyShares,
+      rateAtTarget: indexedMarket.rateAtTarget,
+    });
+    const { client } = setupClient();
+    const loader = new VaultV2LiquidityLoader(client, {
+      allocator: ALLOCATOR,
+      vaults: [VAULT],
+      deployless: false,
+    });
+
+    const result = await loader.fetch(marketParams.id);
+    const executionTimestamp = BLOCK_TIMESTAMP + 3_600n;
+    const expectedMarket = indexedMarket.accrueInterest(executionTimestamp);
+    const hydratedMarket = result.startState.getMarket(marketParams.id);
+
+    expect(hydratedMarket.lastUpdate).toBe(BLOCK_TIMESTAMP);
+    expect(hydratedMarket.accrueInterest(executionTimestamp)).toStrictEqual(
+      expectedMarket,
+    );
+    expect(
+      result.startState
+        .getAdapter(VAULT, ADAPTER)
+        .realAssets(executionTimestamp),
+    ).toBe(expectedMarket.toSupplyAssets(positionSupplyShares));
+    api.done();
+  });
+
   test("behavior: filters vaults above the maximum penalty", async () => {
     const api = setupApi();
     const { client } = setupClient();
@@ -348,7 +436,7 @@ describe.sequential("VaultV2LiquidityLoader", () => {
   });
 
   test("error: VaultV2LiquidityApiError", async () => {
-    setupApi(503);
+    setupApi({ vaultStatus: 503 });
     const { client } = setupClient();
     const loader = new VaultV2LiquidityLoader(client, {
       allocator: ALLOCATOR,
@@ -374,7 +462,7 @@ describe.sequential("VaultV2LiquidityLoader", () => {
   });
 
   test("error: MissingVaultV2LiquidityApiDataError", async () => {
-    setupApi(200, false);
+    setupApi({ includePenalty: false });
     const { client } = setupClient();
     const loader = new VaultV2LiquidityLoader(client, {
       allocator: ALLOCATOR,
@@ -383,6 +471,45 @@ describe.sequential("VaultV2LiquidityLoader", () => {
 
     await expect(loader.fetch(marketParams.id)).rejects.toBeInstanceOf(
       MissingVaultV2LiquidityApiDataError,
+    );
+  });
+
+  test("error: InvalidVaultV2LiquidityApiResponseError", async () => {
+    const api = nock(BLUE_API_BASE_URL)
+      .get(`/v0/vaults-v2/${mainnet.id}:${VAULT}`)
+      .reply(200, { data: { chain_id: mainnet.id, address: VAULT } });
+
+    await expect(fetchRestVaultV2(mainnet.id, VAULT)).rejects.toBeInstanceOf(
+      InvalidVaultV2LiquidityApiResponseError,
+    );
+    api.done();
+  });
+
+  test("error: InconsistentVaultV2LiquiditySnapshotError", async () => {
+    setupApi({ marketStateBlock: BLOCK_NUMBER + 1n });
+    const { client } = setupClient();
+    const loader = new VaultV2LiquidityLoader(client, {
+      allocator: ALLOCATOR,
+      vaults: [VAULT],
+    });
+
+    await expect(loader.fetch(marketParams.id)).rejects.toBeInstanceOf(
+      InconsistentVaultV2LiquiditySnapshotError,
+    );
+  });
+
+  test("error: mismatched adapter-market position is rejected", async () => {
+    setupApi({
+      positionUser: "0x0000000000000000000000000000000000000005",
+    });
+    const { client } = setupClient();
+    const loader = new VaultV2LiquidityLoader(client, {
+      allocator: ALLOCATOR,
+      vaults: [VAULT],
+    });
+
+    await expect(loader.fetch(marketParams.id)).rejects.toBeInstanceOf(
+      InvalidVaultV2LiquidityApiResponseError,
     );
   });
 });

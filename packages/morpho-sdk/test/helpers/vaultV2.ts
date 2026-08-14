@@ -1,7 +1,18 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
-import { vaultV2FactoryAbi } from "@morpho-org/blue-sdk-viem";
+import {
+  morphoMarketV1AdapterV2FactoryAbi,
+  vaultV2Abi,
+  vaultV2FactoryAbi,
+} from "@morpho-org/blue-sdk-viem";
 import type { AnvilTestClient } from "@morpho-org/test";
-import { type Address, decodeEventLog, parseEventLogs, toHex } from "viem";
+import {
+  type Address,
+  decodeEventLog,
+  type Hex,
+  parseEther,
+  parseEventLogs,
+  toHex,
+} from "viem";
 
 export async function createVaultV2(params: {
   client: AnvilTestClient;
@@ -46,3 +57,74 @@ export async function createVaultV2(params: {
 
   return { address: vaultAddress };
 }
+
+export const submitAndAcceptVaultV2Call = async (
+  client: AnvilTestClient,
+  params: { readonly vault: Address; readonly data: Hex },
+) => {
+  const { vault, data } = params;
+  await client.writeContract({
+    address: vault,
+    abi: vaultV2Abi,
+    functionName: "submit",
+    args: [data],
+  });
+  const hash = await client.sendTransaction({ to: vault, data });
+  await client.waitForTransactionReceipt({ hash });
+};
+
+export const deployVaultV2 = async (
+  client: AnvilTestClient,
+  asset: Address,
+) => {
+  await client.deal({ amount: parseEther("1") });
+  const { address: vault } = await createVaultV2({
+    client,
+    asset,
+    chainId: client.chain.id,
+  });
+  await client.writeContract({
+    address: vault,
+    abi: vaultV2Abi,
+    functionName: "setCurator",
+    args: [client.account.address],
+  });
+
+  return vault;
+};
+
+export const deployMorphoMarketV1AdapterV2 = async (
+  client: AnvilTestClient,
+  vault: Address,
+) => {
+  const { morphoMarketV1AdapterV2Factory } = getChainAddresses(client.chain.id);
+  const hash = await client.writeContract({
+    address: morphoMarketV1AdapterV2Factory!,
+    abi: morphoMarketV1AdapterV2FactoryAbi,
+    functionName: "createMorphoMarketV1AdapterV2",
+    args: [vault],
+  });
+  const receipt = await client.waitForTransactionReceipt({ hash });
+  const event = receipt.logs
+    .map((log) => {
+      try {
+        return decodeEventLog({
+          abi: morphoMarketV1AdapterV2FactoryAbi,
+          data: log.data,
+          topics: log.topics,
+        });
+      } catch {
+        return undefined;
+      }
+    })
+    .find(
+      (candidate) =>
+        candidate?.eventName === "CreateMorphoMarketV1AdapterV2" &&
+        "morphoMarketV1AdapterV2" in candidate.args,
+    );
+  if (event?.eventName !== "CreateMorphoMarketV1AdapterV2") {
+    throw new Error("No CreateMorphoMarketV1AdapterV2 event found.");
+  }
+
+  return event.args.morphoMarketV1AdapterV2;
+};

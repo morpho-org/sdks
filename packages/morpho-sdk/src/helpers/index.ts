@@ -2,7 +2,6 @@ export {
   computeReallocations,
   computeVaultV1Reallocations,
 } from "./computeVaultV1Reallocations.js";
-export { computeVaultV2Reallocations } from "./computeVaultV2Reallocations.js";
 export {
   APPROVE_ONLY_ONCE_TOKENS,
   DEFAULT_LLTV_BUFFER,

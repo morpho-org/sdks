@@ -37,9 +37,31 @@ import {
   fetchRestVaultV2State,
   fetchRestVaultV2WithdrawalOptions,
 } from "./api/rest.js";
-import { MissingVaultV2LiquidityApiDataError } from "./errors.js";
+import {
+  InconsistentVaultV2LiquiditySnapshotError,
+  MissingVaultV2LiquidityApiDataError,
+} from "./errors.js";
 
 const REALLOCATION_SIMULATION_DELAY = 3_600n;
+
+const assertSnapshotBlock = ({
+  expectedBlock,
+  indexedBlock,
+  resource,
+}: {
+  readonly expectedBlock: bigint;
+  readonly indexedBlock: string;
+  readonly resource: string;
+}) => {
+  const actualBlock = BigInt(indexedBlock);
+  if (actualBlock !== expectedBlock) {
+    throw new InconsistentVaultV2LiquiditySnapshotError({
+      resource,
+      expectedBlock,
+      actualBlock,
+    });
+  }
+};
 
 /** Represents the configuration for fetching and simulating Vault V2 shared liquidity. */
 export interface VaultV2LiquidityParameters {
@@ -121,21 +143,46 @@ export class VaultV2LiquidityLoader<chain extends Chain = Chain> {
       async (marketIds) => {
         const { client: loaderClient, parameters: loaderParameters } = this;
         const chainId = loaderClient.chain.id;
-        const [block, restVaults] = await Promise.all([
-          getBlock(loaderClient),
-          Promise.all(
-            loaderParameters.vaults.map(async (vault) => {
-              const [config, state, allocations] = await Promise.all([
-                fetchRestVaultV2(chainId, vault),
-                fetchRestVaultV2State(chainId, vault),
-                fetchRestVaultV2Allocations(chainId, vault),
-              ]);
-              return { config, state, allocations };
-            }),
-          ),
-        ]);
+        const restVaults = await Promise.all(
+          loaderParameters.vaults.map(async (vault) => {
+            const [config, state, allocations] = await Promise.all([
+              fetchRestVaultV2(chainId, vault),
+              fetchRestVaultV2State(chainId, vault),
+              fetchRestVaultV2Allocations(chainId, vault),
+            ]);
+            return { config, state, allocations };
+          }),
+        );
+        const prefetchedMarketState =
+          restVaults.length === 0
+            ? await fetchRestMarketState(chainId, marketIds[0]!)
+            : undefined;
+        const indexedBlockNumber = BigInt(
+          restVaults[0]?.config.last_indexed_block ??
+            prefetchedMarketState!.last_indexed_block,
+        );
+        for (const { config, state, allocations } of restVaults) {
+          assertSnapshotBlock({
+            expectedBlock: indexedBlockNumber,
+            indexedBlock: config.last_indexed_block,
+            resource: `vault ${config.address} config`,
+          });
+          assertSnapshotBlock({
+            expectedBlock: indexedBlockNumber,
+            indexedBlock: state.last_indexed_block,
+            resource: `vault ${config.address} state`,
+          });
+          assertSnapshotBlock({
+            expectedBlock: indexedBlockNumber,
+            indexedBlock: allocations.last_indexed_block,
+            resource: `vault ${config.address} allocations`,
+          });
+        }
+        const block = await getBlock(loaderClient, {
+          blockNumber: indexedBlockNumber,
+        });
         const fetchParameters = {
-          blockNumber: block.number,
+          blockNumber: indexedBlockNumber,
           deployless: loaderParameters.deployless,
         } as const;
 
@@ -199,7 +246,10 @@ export class VaultV2LiquidityLoader<chain extends Chain = Chain> {
               allRestMarketIds.map(async (marketId) => {
                 const config = await fetchRestMarket(chainId, marketId);
                 const [state, oracleState, marketIrm] = await Promise.all([
-                  fetchRestMarketState(chainId, marketId),
+                  prefetchedMarketState != null &&
+                  marketId.toLowerCase() === marketIds[0]!.toLowerCase()
+                    ? prefetchedMarketState
+                    : fetchRestMarketState(chainId, marketId),
                   isAddressEqual(config.oracle_address, zeroAddress)
                     ? undefined
                     : fetchRestOracleState(chainId, config.oracle_address),
@@ -218,6 +268,7 @@ export class VaultV2LiquidityLoader<chain extends Chain = Chain> {
                 return {
                   config,
                   state,
+                  oracleState,
                   price:
                     oracleState?.price == null
                       ? undefined
@@ -249,6 +300,28 @@ export class VaultV2LiquidityLoader<chain extends Chain = Chain> {
               ),
             ),
           ]);
+
+        for (const { config, state, oracleState } of restMarkets) {
+          assertSnapshotBlock({
+            expectedBlock: indexedBlockNumber,
+            indexedBlock: state.last_indexed_block,
+            resource: `market ${config.market_id} state`,
+          });
+          if (oracleState != null) {
+            assertSnapshotBlock({
+              expectedBlock: indexedBlockNumber,
+              indexedBlock: oracleState.last_indexed_block,
+              resource: `oracle ${oracleState.oracle_address} state`,
+            });
+          }
+        }
+        for (const position of marketPositions) {
+          assertSnapshotBlock({
+            expectedBlock: indexedBlockNumber,
+            indexedBlock: position.last_indexed_block,
+            resource: `market ${position.market_id} position ${position.user_address}`,
+          });
+        }
 
         const forceDeallocatePenalties = new Map(
           withdrawalOptions.flatMap(({ vaultAddress, data }) =>
@@ -285,7 +358,9 @@ export class VaultV2LiquidityLoader<chain extends Chain = Chain> {
               totalSupplyShares: BigInt(state.total_supply_shares),
               totalBorrowAssets: BigInt(state.total_borrow_assets),
               totalBorrowShares: BigInt(state.total_borrow_shares),
-              lastUpdate: BigInt(state.last_accrual_timestamp),
+              // REST totals and IRM state are projected to the indexed block;
+              // last_accrual_timestamp remains the older onchain storage value.
+              lastUpdate: block.timestamp,
               fee: BigInt(state.fee_wad),
               price,
               rateAtTarget,
@@ -326,12 +401,17 @@ export class VaultV2LiquidityLoader<chain extends Chain = Chain> {
                     marketIds: adapterMarkets.map(({ id }) => id),
                     adaptiveCurveIrm,
                     supplyShares: fromEntries(
-                      adapterMarkets.map((market) => [
-                        market.id,
-                        positionSupplyShares.get(
+                      adapterMarkets.map((market) => {
+                        const supplyShares = positionSupplyShares.get(
                           `${allocation.adapter_address.toLowerCase()}:${market.id.toLowerCase()}`,
-                        ) ?? 0n,
-                      ]),
+                        );
+                        if (supplyShares == null) {
+                          throw new MissingVaultV2LiquidityApiDataError(
+                            `adapter ${allocation.adapter_address} market ${market.id} position`,
+                          );
+                        }
+                        return [market.id, supplyShares] as const;
+                      }),
                     ),
                   },
                   adapterMarkets,
@@ -453,7 +533,9 @@ export class VaultV2LiquidityLoader<chain extends Chain = Chain> {
    * @param marketId - Target market id to plan reallocations for.
    * @returns The start state, simulated end state, action-ready reallocations, and target utilization.
    * @throws {VaultV2LiquidityApiError} when a REST API request fails.
+   * @throws {InvalidVaultV2LiquidityApiResponseError} when a successful REST response is malformed.
    * @throws {MissingVaultV2LiquidityApiDataError} when indexed REST data is incomplete.
+   * @throws {InconsistentVaultV2LiquiditySnapshotError} when REST resources report different indexed blocks.
    * @throws {viem.BaseError} when a BluePublicAllocator read or RPC compatibility fallback fails.
    * @example
    * ```ts

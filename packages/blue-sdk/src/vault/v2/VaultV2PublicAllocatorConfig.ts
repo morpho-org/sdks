@@ -1,4 +1,4 @@
-import type { Address, Hash } from "viem";
+import type { Address, Hash } from "../../types.js";
 
 /** Public allocator configuration for one Vault V2. */
 export interface VaultV2PublicAllocatorConfig {

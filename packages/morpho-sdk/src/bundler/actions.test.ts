@@ -361,7 +361,7 @@ describe("BundlerAction", () => {
         marketArbitrary,
         amountArbitrary,
         penaltyArbitrary,
-        skipRevertArbitrary,
+        fc.constant(false),
       )
       .map(
         (args) =>
@@ -378,7 +378,7 @@ describe("BundlerAction", () => {
         marketArbitrary,
         amountArbitrary,
         penaltyArbitrary,
-        skipRevertArbitrary,
+        fc.constant(false),
       )
       .map(
         (args) =>
@@ -1579,7 +1579,6 @@ describe("BundlerAction", () => {
       market,
       1_000_000n,
       penalty,
-      true,
     );
     expect(approval).toBeDefined();
     expect(call).toBeDefined();
@@ -1592,7 +1591,7 @@ describe("BundlerAction", () => {
     expect(approval).toMatchObject({
       to: market.loanToken,
       value: 0n,
-      skipRevert: true,
+      skipRevert: false,
     });
     const decoded = decodeFunctionData({
       abi: vaultV2BluePublicAllocatorAbi,
@@ -1601,7 +1600,7 @@ describe("BundlerAction", () => {
 
     expect(call!.to).toBe(allocator);
     expect(call!.value).toBe(0n);
-    expect(call!.skipRevert).toBe(true);
+    expect(call!.skipRevert).toBe(false);
     expect(decoded.functionName).toBe("reallocate");
     expect(decoded.args).toEqual([
       vault,
@@ -1648,6 +1647,22 @@ describe("BundlerAction", () => {
     ]);
   });
 
+  test("vaultV2BluePublicAllocatorReallocate rejects a skippable penalty approval", () => {
+    expect(() =>
+      BundlerAction.vaultV2BluePublicAllocatorReallocate(
+        allocator,
+        vault,
+        deallocateAdapter,
+        market,
+        allocateAdapter,
+        market,
+        1_000_000n,
+        1_000_000_000_000_000n,
+        true,
+      ),
+    ).toThrow(BundlerErrors.SkippableAllocatorPenalty);
+  });
+
   test("vaultV2BluePublicAllocatorAllocateFromIdle", () => {
     const penalty = 1_000_000_000_000_000n;
     const [approval, call] =
@@ -1658,7 +1673,6 @@ describe("BundlerAction", () => {
         market,
         1_000_000n,
         penalty,
-        true,
       );
     expect(approval).toBeDefined();
     expect(call).toBeDefined();
@@ -1671,7 +1685,7 @@ describe("BundlerAction", () => {
     expect(approval).toMatchObject({
       to: market.loanToken,
       value: 0n,
-      skipRevert: true,
+      skipRevert: false,
     });
     const decoded = decodeFunctionData({
       abi: vaultV2BluePublicAllocatorAbi,
@@ -1680,7 +1694,7 @@ describe("BundlerAction", () => {
 
     expect(call!.to).toBe(allocator);
     expect(call!.value).toBe(0n);
-    expect(call!.skipRevert).toBe(true);
+    expect(call!.skipRevert).toBe(false);
     expect(decoded.functionName).toBe("allocateFromIdle");
     expect(decoded.args).toEqual([
       vault,
@@ -1713,6 +1727,20 @@ describe("BundlerAction", () => {
     expect(call.skipRevert).toBe(true);
     expect(decoded.functionName).toBe("allocateFromIdle");
     expect(decoded.args).toEqual([vault, allocateAdapter, market, 1n, 0n]);
+  });
+
+  test("vaultV2BluePublicAllocatorAllocateFromIdle rejects a skippable penalty approval", () => {
+    expect(() =>
+      BundlerAction.vaultV2BluePublicAllocatorAllocateFromIdle(
+        allocator,
+        vault,
+        allocateAdapter,
+        market,
+        1_000_000n,
+        1_000_000_000_000_000n,
+        true,
+      ),
+    ).toThrow(BundlerErrors.SkippableAllocatorPenalty);
   });
 
   test("wrapNative", () => {

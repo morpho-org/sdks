@@ -1468,10 +1468,14 @@ export namespace BundlerAction {
    * @param penalty - Vault-configured proportional penalty, scaled by WAD.
    * @param skipRevert - Whether Bundler3 should tolerate a revert.
    * @returns An exact token approval when needed, followed by the allocator call.
+   * @throws {BundlerErrors.SkippableAllocatorPenalty} when `skipRevert` is true and a token approval is required.
    * @example
    * ```ts
    * import type { InputMarketParams } from "@morpho-org/blue-sdk";
-   * import { BundlerAction } from "@morpho-org/morpho-sdk/bundler";
+   * import {
+   *   BundlerAction,
+   *   type BundlerCall,
+   * } from "@morpho-org/morpho-sdk/bundler";
    * import type { Address } from "viem";
    *
    * const allocatorFixture =
@@ -1492,14 +1496,14 @@ export namespace BundlerAction {
    *   collateralToken: weth,
    *   oracle: ethUsdOracle,
    *   irm: adaptiveCurveIrm,
-   *   lltv: 860_000000000000000000n,
+   *   lltv: 860_000_000_000_000_000n,
    * } satisfies InputMarketParams;
    * const targetMarket = {
    *   ...sourceMarket,
    *   collateralToken: wbtc,
    * } satisfies InputMarketParams;
    *
-   * const calls = BundlerAction.vaultV2BluePublicAllocatorReallocate(
+   * const calls: BundlerCall[] = BundlerAction.vaultV2BluePublicAllocatorReallocate(
    *   allocatorFixture,
    *   keyrockUsdcVault,
    *   sourceAdapterFixture,
@@ -1529,6 +1533,9 @@ export namespace BundlerAction {
       assets,
       penalty,
     );
+    if (skipRevert && penaltyAssets > 0n) {
+      throw new BundlerErrors.SkippableAllocatorPenalty(penaltyAssets);
+    }
 
     if (penaltyAssets > 0n) {
       calls.push({
@@ -1581,10 +1588,14 @@ export namespace BundlerAction {
    * @param penalty - Vault-configured proportional penalty, scaled by WAD.
    * @param skipRevert - Whether Bundler3 should tolerate a revert.
    * @returns An exact token approval when needed, followed by the allocator call.
+   * @throws {BundlerErrors.SkippableAllocatorPenalty} when `skipRevert` is true and a token approval is required.
    * @example
    * ```ts
    * import type { InputMarketParams } from "@morpho-org/blue-sdk";
-   * import { BundlerAction } from "@morpho-org/morpho-sdk/bundler";
+   * import {
+   *   BundlerAction,
+   *   type BundlerCall,
+   * } from "@morpho-org/morpho-sdk/bundler";
    * import type { Address } from "viem";
    *
    * const allocatorFixture =
@@ -1602,10 +1613,10 @@ export namespace BundlerAction {
    *   collateralToken: weth,
    *   oracle: ethUsdOracle,
    *   irm: adaptiveCurveIrm,
-   *   lltv: 860_000000000000000000n,
+   *   lltv: 860_000_000_000_000_000n,
    * } satisfies InputMarketParams;
    *
-   * const calls = BundlerAction.vaultV2BluePublicAllocatorAllocateFromIdle(
+   * const calls: BundlerCall[] = BundlerAction.vaultV2BluePublicAllocatorAllocateFromIdle(
    *   allocatorFixture,
    *   keyrockUsdcVault,
    *   targetAdapterFixture,
@@ -1631,6 +1642,9 @@ export namespace BundlerAction {
       assets,
       penalty,
     );
+    if (skipRevert && penaltyAssets > 0n) {
+      throw new BundlerErrors.SkippableAllocatorPenalty(penaltyAssets);
+    }
 
     if (penaltyAssets > 0n) {
       calls.push({

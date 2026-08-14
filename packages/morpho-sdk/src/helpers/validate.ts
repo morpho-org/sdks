@@ -2,12 +2,13 @@ import {
   type AccrualPosition,
   getChainAddresses,
   type MarketId,
+  MarketUtils,
   MathLib,
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
 import type { MarketInput as MidnightMarketInput } from "@morpho-org/midnight-sdk";
 import { isDefined } from "@morpho-org/morpho-ts";
-import { type Address, isAddressEqual, maxUint128 } from "viem";
+import { type Address, isAddress, isAddressEqual, maxUint128 } from "viem";
 import {
   AccrualPositionUserMismatchError,
   AddressMismatchError,
@@ -19,6 +20,7 @@ import {
   ExcessiveSlippageToleranceError,
   InconsistentReallocationPenaltyError,
   InputExceedsMaxError,
+  InvalidReallocationAddressError,
   InvalidReallocationSourceTypeError,
   InvalidReallocationTypeError,
   MarketIdMismatchError,
@@ -338,20 +340,21 @@ export const validateRepayShares = (params: {
  *
  * BluePublicAllocator entries enforce a WAD-bounded `penalty`, one consistent
  * penalty per allocator-vault pair, positive `uint128`-bounded `assets`, and a
- * market source distinct from the target adapter-market pair. Idle sources
+ * market source distinct from the target market. Idle sources
  * have no market or sorting rule.
  *
  * @param reallocations - The reallocations to validate.
- * @param targetMarketId - The operation's target market ID. V1 withdrawals cannot reference it; V2 sources cannot reference it through their target adapter.
+ * @param targetMarketId - The operation's target market ID. Neither V1 nor V2 sources can reference it.
  * @returns Nothing when every reallocation is valid.
  * @throws {NegativeInputError} when a reallocation fee is negative.
  * @throws {EmptyReallocationWithdrawalsError} when a reallocation has no withdrawals.
  * @throws {NonPositiveInputError} when a withdrawal or BluePublicAllocator asset amount is non-positive.
  * @throws {InputExceedsMaxError} when a BluePublicAllocator asset amount exceeds `uint128` or its penalty exceeds WAD.
  * @throws {InconsistentReallocationPenaltyError} when entries for one allocator-vault pair use different penalties.
- * @throws {InvalidReallocationSourceTypeError} when a BluePublicAllocator source discriminator is unknown.
+ * @throws {InvalidReallocationAddressError} when a BluePublicAllocator identity or adapter address is malformed.
+ * @throws {InvalidReallocationSourceTypeError} when a BluePublicAllocator source is absent, incomplete, or has an unknown discriminator.
  * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
- * @throws {ReallocationWithdrawalOnTargetMarketError} when a V1 source references the target market or a V2 source references its target adapter-market pair.
+ * @throws {ReallocationWithdrawalOnTargetMarketError} when a V1 or V2 source references the target market.
  * @throws {UnsortedReallocationWithdrawalsError} when withdrawals are not strictly market-id sorted.
  * @example
  * ```ts
@@ -370,9 +373,47 @@ export const validateReallocations = (
 
   for (const r of reallocations) {
     if (r.type === "bluePublicAllocator") {
-      const sourceType: string = r.from.type;
+      if (typeof r.allocator !== "string" || !isAddress(r.allocator)) {
+        throw new InvalidReallocationAddressError("allocator");
+      }
+      if (typeof r.vault !== "string" || !isAddress(r.vault)) {
+        throw new InvalidReallocationAddressError("vault");
+      }
+      if (
+        r.to == null ||
+        typeof r.to.adapter !== "string" ||
+        !isAddress(r.to.adapter)
+      ) {
+        throw new InvalidReallocationAddressError("to.adapter");
+      }
+
+      const source = r.from;
+      if (source == null) {
+        throw new InvalidReallocationSourceTypeError(undefined);
+      }
+      const sourceType: string | undefined = source.type;
       if (sourceType !== "market" && sourceType !== "idle") {
         throw new InvalidReallocationSourceTypeError(sourceType);
+      }
+      let sourceMarketId: MarketId | undefined;
+      if (source.type === "market") {
+        if (typeof source.adapter !== "string" || !isAddress(source.adapter)) {
+          throw new InvalidReallocationAddressError("from.adapter");
+        }
+        if (
+          source.marketParams == null ||
+          !isAddress(source.marketParams.loanToken) ||
+          !isAddress(source.marketParams.collateralToken) ||
+          !isAddress(source.marketParams.oracle) ||
+          !isAddress(source.marketParams.irm) ||
+          typeof source.marketParams.lltv !== "bigint"
+        ) {
+          throw new InvalidReallocationSourceTypeError(
+            "market",
+            "marketParams",
+          );
+        }
+        sourceMarketId = MarketUtils.getMarketId(source.marketParams);
       }
       if (r.penalty < 0n) {
         throw new NegativeInputError("reallocation.penalty", r.penalty);
@@ -408,13 +449,12 @@ export const validateReallocations = (
       penaltyByAllocatorVault.set(penaltyKey, r.penalty);
 
       if (
-        r.from.type === "market" &&
-        r.from.marketParams.id === targetMarketId &&
-        isAddressEqual(r.from.adapter, r.to.adapter)
+        sourceMarketId !== undefined &&
+        compareMarketIds(sourceMarketId, targetMarketId) === 0
       ) {
         throw new ReallocationWithdrawalOnTargetMarketError(
           r.vault,
-          r.from.marketParams.id,
+          sourceMarketId,
         );
       }
       continue;

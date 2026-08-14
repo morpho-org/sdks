@@ -494,6 +494,31 @@ export namespace BundlerErrors {
       super(`unexpected signature authorizing "${authorized}"`);
     }
   }
+
+  /**
+   * Thrown when a skippable Blue Public Allocator call would leave a usable
+   * token allowance behind after the allocator call reverts.
+   *
+   * @example
+   * ```ts
+   * import { BundlerErrors } from "@morpho-org/morpho-sdk";
+   *
+   * if (error instanceof BundlerErrors.SkippableAllocatorPenalty) {
+   *   // Rebuild the allocator call with skipRevert set to false.
+   * }
+   * ```
+   */
+  export class SkippableAllocatorPenalty extends Error {
+    /**
+     * @param penaltyAssets - Exact token amount approved to the allocator.
+     */
+    public constructor(public readonly penaltyAssets: bigint) {
+      super(
+        `Blue Public Allocator calls with penalty assets cannot skip reverts. Rebuild with skipRevert false for penalty amount "${penaltyAssets}".`,
+      );
+      this.name = "SkippableAllocatorPenalty";
+    }
+  }
 }
 
 /** Requirement signature kind accepted by action-output transaction builders. */
@@ -789,7 +814,7 @@ export class EmptyReallocationWithdrawalsError extends Error {
   }
 }
 
-/** Thrown when a V1 withdrawal references the target market or a V2 source references its exact target adapter-market pair. */
+/** Thrown when a Public Allocator source references the target Blue market. */
 export class ReallocationWithdrawalOnTargetMarketError extends Error {
   constructor(vault: string, marketId: string) {
     super(
@@ -824,7 +849,38 @@ export class InvalidReallocationTypeError extends Error {
 }
 
 /**
- * Thrown when a Blue Public Allocator source has an unknown discriminator.
+ * Thrown when a Blue Public Allocator reallocation contains a malformed
+ * identity or adapter address.
+ *
+ * @example
+ * ```ts
+ * import { InvalidReallocationAddressError } from "@morpho-org/morpho-sdk";
+ *
+ * const error = new InvalidReallocationAddressError("to.adapter");
+ * if (error instanceof InvalidReallocationAddressError) {
+ *   console.error(error.field);
+ * }
+ * ```
+ */
+export class InvalidReallocationAddressError extends Error {
+  /**
+   * @param field - Reallocation address field that is absent or malformed.
+   */
+  public constructor(
+    public readonly field:
+      | "allocator"
+      | "vault"
+      | "from.adapter"
+      | "to.adapter",
+  ) {
+    super(`Reallocation "${field}" must be a valid address.`);
+    this.name = "InvalidReallocationAddressError";
+  }
+}
+
+/**
+ * Thrown when a Blue Public Allocator source is absent, incomplete, or has an
+ * unknown discriminator.
  *
  * @example
  * ```ts
@@ -835,11 +891,20 @@ export class InvalidReallocationTypeError extends Error {
  */
 export class InvalidReallocationSourceTypeError extends Error {
   /**
-   * @param sourceType - Invalid runtime value received for `reallocation.from.type`.
+   * @param sourceType - Invalid runtime value received for `reallocation.from.type`,
+   *   or `undefined` when the source or discriminator is absent.
+   * @param missingField - Required market-source field that is absent or malformed.
    */
-  public constructor(public readonly sourceType: string) {
+  public constructor(
+    public readonly sourceType: string | undefined,
+    public readonly missingField?: "adapter" | "marketParams",
+  ) {
     super(
-      `Reallocation source type must be "market" or "idle", got "${sourceType}".`,
+      missingField == null
+        ? sourceType === undefined
+          ? 'Reallocation source must specify type "market" or "idle".'
+          : `Reallocation source type must be "market" or "idle", got "${sourceType}".`
+        : `Reallocation market source must include a valid "${missingField}".`,
     );
     this.name = "InvalidReallocationSourceTypeError";
   }
@@ -1021,8 +1086,8 @@ export class DisabledReallocationMarketError extends Error {
 }
 
 /**
- * Thrown when shared liquidity selected by `computeVaultV1Reallocations` cannot cover
- * the operation's absolute shortfall on the target market — the resulting
+ * Thrown when shared liquidity selected by a Vault V1 or Vault V2 reallocation planner cannot
+ * cover the operation's absolute shortfall on the target market — the resulting
  * `morphoBorrow` or `morphoWithdraw` would still revert onchain.
  *
  * Pattern-match on the class and inspect `params` to surface the gap to users.
@@ -1416,7 +1481,7 @@ export class WithdrawSharesExceedSupplyError extends Error {
 }
 
 /**
- * Thrown when `computeVaultV1Reallocations` is called with a withdraw `amount` greater
+ * Thrown when a Vault V1 or Vault V2 reallocation planner receives a withdraw `amount` greater
  * than the target market's current `totalSupplyAssets` — the post-withdraw
  * supply would be negative, making the on-chain `morphoWithdraw` revert
  * regardless of any reallocation. Caught here so callers do not pay

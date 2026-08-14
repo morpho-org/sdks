@@ -3,7 +3,14 @@ import type {
   VaultV2BlueReallocation,
 } from "@morpho-org/morpho-sdk";
 import * as viem from "viem";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, expectTypeOf, test, vi } from "vitest";
+import type {
+  MorphoBorrowOptions,
+  MorphoBorrowWithV2ReallocationsOptions,
+  RequirementApproval,
+  RequirementAuthorization,
+  RequirementSignatureRequest,
+} from "./morpho-protocol-evm.js";
 
 const SEED =
   "cook voyage document eight skate token alien guide drink uncle term abuse";
@@ -551,13 +558,50 @@ describe.sequential("MorphoProtocolEvm", () => {
     });
 
     test("should return borrow requirements from morpho-sdk", async () => {
-      const requirements = await protocol.getBorrowRequirements({
+      const options = {
         token: TOKEN,
         amount: 100_000n,
-      });
+      } satisfies MorphoBorrowOptions;
+      const promise = protocol.getBorrowRequirements(options);
+      expectTypeOf(promise).toEqualTypeOf<
+        Promise<(RequirementAuthorization | RequirementSignatureRequest)[]>
+      >();
+      const requirements = await promise;
 
       expect(requirements).toEqual([{ action: { type: "blueAuthorization" } }]);
       expect(borrowAction.getRequirements).toHaveBeenCalled();
+    });
+
+    test("types: Vault V2 borrow requirements opt into approval results", async () => {
+      const options = {
+        token: TOKEN,
+        amount: 100_000n,
+        reallocations: [
+          {
+            allocator: "0x0000000000000000000000000000000000000010",
+            type: "bluePublicAllocator",
+            vault: VAULT,
+            from: { type: "idle" },
+            to: {
+              adapter: "0x0000000000000000000000000000000000000020",
+            },
+            assets: 50_000n,
+            penalty: 1n,
+          },
+        ],
+      } satisfies MorphoBorrowWithV2ReallocationsOptions;
+
+      const promise = protocol.getBorrowRequirements(options);
+      expectTypeOf(promise).toEqualTypeOf<
+        Promise<
+          (
+            | RequirementApproval
+            | RequirementAuthorization
+            | RequirementSignatureRequest
+          )[]
+        >
+      >();
+      await promise;
     });
 
     test("should build the borrow without signatures by default", async () => {

@@ -76,6 +76,7 @@ export {
 } from "./vaultV1ReallocationData.js";
 export { MorphoVaultV2 } from "./vaultV2/index.js";
 export {
+  computeVaultV2Reallocations,
   type InputVaultV2ReallocationData,
   VaultV2ReallocationData,
 } from "./vaultV2ReallocationData.js";

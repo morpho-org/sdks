@@ -171,7 +171,7 @@ export interface BlueWithdrawAction
       /** Native-token fees paid to PublicAllocator V1. */
       reallocationFee: bigint;
       /** Loan-token assets donated as BluePublicAllocator V2 penalties. */
-      reallocationPenaltyAssets: bigint;
+      readonly reallocationPenaltyAssets: bigint;
     }
   > {}
 
@@ -197,7 +197,7 @@ export interface BlueBorrowAction
       /** Native-token fees paid to PublicAllocator V1. */
       reallocationFee: bigint;
       /** Loan-token assets donated as BluePublicAllocator V2 penalties. */
-      reallocationPenaltyAssets: bigint;
+      readonly reallocationPenaltyAssets: bigint;
     }
   > {}
 
@@ -215,7 +215,7 @@ export interface BlueSupplyCollateralBorrowAction
       /** Native-token fees paid to PublicAllocator V1. */
       reallocationFee: bigint;
       /** Loan-token assets donated as BluePublicAllocator V2 penalties. */
-      reallocationPenaltyAssets: bigint;
+      readonly reallocationPenaltyAssets: bigint;
     }
   > {}
 
