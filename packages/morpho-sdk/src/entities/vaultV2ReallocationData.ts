@@ -24,6 +24,7 @@ import type {
 } from "../types/index.js";
 import {
   InsufficientSharedLiquidityError,
+  NonPositiveInputError,
   ReallocationAdapterSupplySharesUnderflowError,
   ReallocationAllocationUnderflowError,
   ReallocationWithdrawExceedsMarketSupplyError,
@@ -140,6 +141,8 @@ const cloneVault = (vault: AccrualVaultV2) => {
 export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
   /** Penalty donations created by this simulation, excluded as fresh shared-liquidity sources. */
   private readonly donatedPenaltyAssets: Record<Address, bigint>;
+  /** Transaction-frozen cap denominator for each vault touched by this plan. */
+  private readonly firstTotalAssets: Record<Address, bigint>;
   /** Chain id associated with this snapshot. */
   public readonly chainId: number;
   /** Explicit BluePublicAllocator address used in returned calls. */
@@ -180,6 +183,10 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
     this.donatedPenaltyAssets =
       input instanceof VaultV2ReallocationData
         ? { ...input.donatedPenaltyAssets }
+        : {};
+    this.firstTotalAssets =
+      input instanceof VaultV2ReallocationData
+        ? { ...input.firstTotalAssets }
         : {};
 
     for (const [marketId, market] of Object.entries(input.markets ?? {}) as [
@@ -423,6 +430,7 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
    * @param params.amount - Borrow or withdraw amount.
    * @param params.options - Optional timestamp, enable flag, vault allowlist, and maximum penalty.
    * @returns Flat Vault V2 reallocations accepted directly by Blue action builders.
+   * @throws {NonPositiveInputError} when `amount <= 0n` and planning is enabled.
    * @throws {UnknownReallocationMarketError} when the target market is absent.
    * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the absolute shortfall.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdraw exceeds market supply.
@@ -448,6 +456,7 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
     readonly options?: VaultV2BluePublicAllocatorOptions;
   }): readonly VaultV2BlueReallocation[] {
     if (options?.enabled === false) return [];
+    if (amount <= 0n) throw new NonPositiveInputError("amount", amount);
 
     const timestamp =
       options?.timestamp == null
@@ -930,11 +939,15 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
         reallocation.to.adapter,
       );
       const targetIds = adapter.ids(postState.getMarket(targetMarketId).params);
+      // Vault V2 checks relative caps against the transient firstTotalAssets,
+      // which stays fixed after the vault's first allocation in a transaction.
+      const firstTotalAssets =
+        postState.firstTotalAssets[reallocation.vault] ?? vault._totalAssets;
       const withinCaps = targetIds.every((id) => {
         const allocation = postState.getAllocation(reallocation.vault, id);
         const capacity = VaultV2Utils.allocationHeadroom(
           { ...allocation, allocation: 0n },
-          vault._totalAssets,
+          firstTotalAssets,
         ).value;
         return allocation.absoluteCap > 0n && allocation.allocation <= capacity;
       });
@@ -1008,8 +1021,25 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
       vault.assetBalance += reallocation.assets;
     }
 
-    vault = vault.accrueInterest(timestamp).vault;
-    data.vaults[reallocation.vault] = vault;
+    if (data.firstTotalAssets[reallocation.vault] == null) {
+      // Vault V2's transient firstTotalAssets tracks the first allocation in a
+      // transaction independently from elapsed time. Later allocations must not
+      // recompute the denominator, even if their simulated balances have changed.
+      if (timestamp === vault.lastUpdate) {
+        // AccrualVaultV2 skips zero-elapsed accruals, but the contract's first
+        // touch still reads real adapter assets. With zero elapsed time, its
+        // growth clamp leaves only existing losses to recognize.
+        const realAssets = vault.accrualAdapters.reduce(
+          (assets, adapter) => assets + adapter.realAssets(timestamp),
+          vault.assetBalance,
+        );
+        vault._totalAssets = MathLib.min(realAssets, vault._totalAssets);
+      } else {
+        vault = vault.accrueInterest(timestamp).vault;
+      }
+      data.vaults[reallocation.vault] = vault;
+      data.firstTotalAssets[reallocation.vault] = vault._totalAssets;
+    }
 
     const targetAdapter = data.getAdapter(
       reallocation.vault,
@@ -1093,6 +1123,7 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
  * @param params.amount - Borrow or withdraw amount.
  * @param params.options - Optional timestamp, enable flag, vault allowlist, and maximum penalty.
  * @returns Flat Vault V2 reallocations accepted directly by Blue action builders.
+ * @throws {NonPositiveInputError} when `amount <= 0n` and planning is enabled.
  * @throws {UnknownReallocationMarketError} when the target market is absent.
  * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the absolute shortfall.
  * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdraw exceeds market supply.
