@@ -6,6 +6,9 @@ import {
 } from "@morpho-org/blue-sdk";
 import {
   blueAbi,
+  fetchAccrualVaultV2,
+  fetchMarket,
+  fetchVaultV2PublicAllocatorData,
   readContractRestructured,
   vaultV2Abi,
 } from "@morpho-org/blue-sdk-viem";
@@ -15,6 +18,7 @@ import {
   encodeAbiParameters,
   encodeFunctionData,
   erc20Abi,
+  keccak256,
   maxUint128,
   parseUnits,
 } from "viem";
@@ -30,6 +34,7 @@ import {
   deployVaultV2,
   submitAndAcceptVaultV2Call,
 } from "../../../test/helpers/vaultV2.js";
+import { VaultV2ReallocationData } from "../../entities/vaultV2ReallocationData.js";
 import {
   isRequirementApproval,
   isRequirementBlueAuthorization,
@@ -361,5 +366,223 @@ describe("Blue actions with Vault V2 reallocations", () => {
     );
     expect(bundlerBalanceAfter).toBe(0n);
     expect(allocatorAllowanceAfter).toBe(0n);
+  });
+
+  test("executes the simulated zero-elapsed relative-cap maximum", async ({
+    client,
+  }) => {
+    const anvilClient = client as AnvilTestClient;
+    const { morpho } = getChainAddresses(base.id);
+    const depositAssets = parseUnits("100", 6);
+    const seedAssets = parseUnits("1", 6);
+    const postLossIdleAssets = parseUnits("89", 6);
+    const relativeCap = MathLib.WAD / 2n;
+
+    const marketState = await readContractRestructured(client, {
+      address: morpho,
+      abi: blueAbi,
+      functionName: "market",
+      args: [targetMarket.id],
+    });
+    if (marketState.lastUpdate === 0n) {
+      await client.writeContract({
+        address: morpho,
+        abi: blueAbi,
+        functionName: "createMarket",
+        args: [targetMarket],
+      });
+    }
+
+    const vault = await deployVaultV2(anvilClient, targetMarket.loanToken);
+    await submitAndAcceptVaultV2Call(anvilClient, {
+      vault,
+      data: encodeFunctionData({
+        abi: vaultV2Abi,
+        functionName: "setIsAllocator",
+        args: [client.account.address, true],
+      }),
+    });
+    const targetAdapter = await deployMorphoMarketV1AdapterV2(
+      anvilClient,
+      vault,
+    );
+    await submitAndAcceptVaultV2Call(anvilClient, {
+      vault,
+      data: encodeFunctionData({
+        abi: vaultV2Abi,
+        functionName: "addAdapter",
+        args: [targetAdapter],
+      }),
+    });
+
+    const targetIdData = [
+      encodeAbiParameters(
+        [{ type: "string" }, { type: "address" }],
+        ["this", targetAdapter],
+      ),
+      encodeAbiParameters(
+        [{ type: "string" }, { type: "address" }],
+        ["collateralToken", targetMarket.collateralToken],
+      ),
+      encodeAbiParameters(
+        [{ type: "string" }, { type: "address" }, marketParamsAbi],
+        ["this/marketParams", targetAdapter, targetMarket],
+      ),
+    ] as const;
+    for (const idData of targetIdData) {
+      await submitAndAcceptVaultV2Call(anvilClient, {
+        vault,
+        data: encodeFunctionData({
+          abi: vaultV2Abi,
+          functionName: "increaseAbsoluteCap",
+          args: [idData, maxUint128],
+        }),
+      });
+      await submitAndAcceptVaultV2Call(anvilClient, {
+        vault,
+        data: encodeFunctionData({
+          abi: vaultV2Abi,
+          functionName: "increaseRelativeCap",
+          args: [idData, relativeCap],
+        }),
+      });
+    }
+
+    const deploymentHash = await client.deployContract({
+      abi: allocatorAbi,
+      bytecode: allocatorCode,
+    });
+    const deploymentReceipt = await client.waitForTransactionReceipt({
+      hash: deploymentHash,
+    });
+    const allocator = deploymentReceipt.contractAddress;
+    assert(allocator != null);
+
+    await submitAndAcceptVaultV2Call(anvilClient, {
+      vault,
+      data: encodeFunctionData({
+        abi: vaultV2Abi,
+        functionName: "setIsAllocator",
+        args: [allocator, true],
+      }),
+    });
+    await client.writeContract({
+      address: allocator,
+      abi: allocatorAbi,
+      functionName: "setIsActiveAdapter",
+      args: [vault, targetAdapter, true],
+    });
+    await client.writeContract({
+      address: allocator,
+      abi: allocatorAbi,
+      functionName: "setAbsoluteCap",
+      args: [vault, targetAdapter, targetMarket, maxUint128],
+    });
+    await client.writeContract({
+      address: allocator,
+      abi: allocatorAbi,
+      functionName: "setCanPullFromIdle",
+      args: [vault, true],
+    });
+
+    await client.deal({
+      account: client.account.address,
+      erc20: targetMarket.loanToken,
+      amount: depositAssets,
+    });
+    await client.approve({
+      address: targetMarket.loanToken,
+      args: [vault, depositAssets],
+    });
+    await client.writeContract({
+      address: vault,
+      abi: vaultV2Abi,
+      functionName: "deposit",
+      args: [depositAssets, client.account.address],
+    });
+    await client.writeContract({
+      address: allocator,
+      abi: allocatorAbi,
+      functionName: "allocateFromIdle",
+      args: [vault, targetAdapter, targetMarket, seedAssets, 0n],
+    });
+
+    // Change the token balance without mining so the snapshot timestamp still
+    // equals lastUpdate while real vault assets are below stored _totalAssets.
+    await client.deal({
+      account: vault,
+      erc20: targetMarket.loanToken,
+      amount: postLossIdleAssets,
+    });
+
+    const [vaultData, targetMarketData, block] = await Promise.all([
+      fetchAccrualVaultV2(vault, client),
+      fetchMarket(targetMarket.id, client),
+      client.getBlock(),
+    ]);
+    const allocatorData = await fetchVaultV2PublicAllocatorData(
+      allocator,
+      vaultData,
+      client,
+    );
+    const targetMarketParamsId = keccak256(targetIdData[2]);
+    const targetAllocation = allocatorData.allocations[targetMarketParamsId];
+    assert(targetAllocation != null);
+    const realTotalAssets = vaultData.accrualAdapters.reduce(
+      (assets, adapter) => assets + adapter.realAssets(block.timestamp),
+      vaultData.assetBalance,
+    );
+    const expectedMaximum =
+      MathLib.wMulDown(realTotalAssets, relativeCap) -
+      targetAllocation.allocation;
+    const reallocationData = new VaultV2ReallocationData({
+      chainId: base.id,
+      allocator,
+      markets: { [targetMarket.id]: targetMarketData },
+      vaults: { [vault]: vaultData },
+      allocations: { [vault]: allocatorData.allocations },
+      publicAllocatorConfigs: {
+        [vault]: allocatorData.publicAllocatorConfig,
+      },
+      marketPublicAllocatorConfigs: {
+        [vault]: allocatorData.marketPublicAllocatorConfigs,
+      },
+    });
+
+    expect(block.timestamp).toBe(vaultData.lastUpdate);
+    expect(realTotalAssets).toBeLessThan(vaultData._totalAssets);
+    const result = reallocationData.computeVaultV2Reallocations(
+      targetMarket.id,
+      { timestamp: block.timestamp },
+    );
+    expect(result.reallocations).toHaveLength(1);
+    expect(result.reallocations[0]?.assets).toBe(expectedMaximum);
+
+    await client.writeContract({
+      address: allocator,
+      abi: allocatorAbi,
+      functionName: "allocateFromIdle",
+      args: [
+        vault,
+        targetAdapter,
+        targetMarket,
+        result.reallocations[0]!.assets,
+        0n,
+      ],
+    });
+
+    const [allocationAfter, vaultAfter] = await Promise.all([
+      client.readContract({
+        address: vault,
+        abi: vaultV2Abi,
+        functionName: "allocation",
+        args: [targetMarketParamsId],
+      }),
+      fetchAccrualVaultV2(vault, client),
+    ]);
+    expect(allocationAfter).toBeGreaterThan(targetAllocation.allocation);
+    expect(allocationAfter).toBeLessThanOrEqual(
+      MathLib.wMulDown(vaultAfter._totalAssets, relativeCap),
+    );
   });
 });

@@ -13,6 +13,7 @@ import { describe, expect, test } from "vitest";
 import { blueBorrow } from "../actions/index.js";
 import {
   InsufficientSharedLiquidityError,
+  NonPositiveInputError,
   ReallocationWithdrawExceedsMarketSupplyError,
   UnknownReallocationMarketError,
 } from "../types/index.js";
@@ -424,6 +425,60 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
     expect(result.data.getVault(VAULT)._totalAssets).toBe(1_000n);
   });
 
+  test("behavior: recognizes zero-elapsed losses at the one-unit relative-cap boundary", () => {
+    const { data, targetIds } = makeFixture({
+      sourceSupply: 0n,
+      targetSupply: 0n,
+      firstTotalAssets: 1_000n,
+      idle: 900n,
+      canPullFromMarket: false,
+      penalty: 0n,
+      targetCaps: [
+        { absoluteCap: 10_000n, relativeCap: MathLib.WAD / 2n },
+        { absoluteCap: 10_000n, relativeCap: MathLib.WAD / 2n },
+        { absoluteCap: 10_000n, relativeCap: MathLib.WAD / 2n },
+      ],
+    });
+
+    const result = data.computeVaultV2Reallocations(targetParams.id);
+
+    expect(result.reallocations).toHaveLength(1);
+    expect(result.reallocations[0]?.assets).toBe(450n);
+    expect(result.data.getAllocation(VAULT, targetIds[2]).allocation).toBe(
+      450n,
+    );
+    expect(result.data.getVault(VAULT)._totalAssets).toBe(900n);
+  });
+
+  test("behavior: reuses firstTotalAssets across two reallocations for one vault", () => {
+    const relativeCap = (MathLib.WAD * 3n) / 4n;
+    const { data } = makeFixture({
+      sourceSupply: 500n,
+      targetSupply: 0n,
+      firstTotalAssets: 1_000n,
+      idle: 400n,
+      penalty: 0n,
+      targetCaps: [
+        { absoluteCap: 10_000n, relativeCap },
+        { absoluteCap: 10_000n, relativeCap },
+        { absoluteCap: 10_000n, relativeCap },
+      ],
+    });
+
+    const result = data.computeVaultV2Reallocations(targetParams.id);
+
+    expect(
+      result.reallocations.map(({ from, assets }) => ({
+        from: from.type,
+        assets,
+      })),
+    ).toStrictEqual([
+      { from: "market", assets: 500n },
+      { from: "idle", assets: 175n },
+    ]);
+    expect(result.data.getVault(VAULT)._totalAssets).toBe(900n);
+  });
+
   test("behavior: caps each call at uint128", () => {
     const sourceSupply = MathLib.MAX_UINT_128 + 10n;
     const { data } = makeFixture({
@@ -730,6 +785,29 @@ describe("computeVaultV2Reallocations", () => {
     ).toThrow(ReallocationWithdrawExceedsMarketSupplyError);
   });
 
+  test.each([
+    { operation: "borrow", amount: 0n },
+    { operation: "borrow", amount: -1n },
+    { operation: "withdraw", amount: 0n },
+    { operation: "withdraw", amount: -1n },
+  ] as const)(
+    "error: NonPositiveInputError for $operation amount $amount",
+    ({ operation, amount }) => {
+      const { data } = makeFixture({ targetSupply: 100n, targetBorrow: 95n });
+      const initialData = data.clone();
+
+      expect(() =>
+        computeVaultV2Reallocations({
+          reallocationData: data,
+          marketId: targetParams.id,
+          operation,
+          amount,
+        }),
+      ).toThrow(NonPositiveInputError);
+      expect(data).toStrictEqual(initialData);
+    },
+  );
+
   test("behavior: disabled planning returns no calls", () => {
     const { data } = makeFixture();
 
@@ -738,7 +816,7 @@ describe("computeVaultV2Reallocations", () => {
         reallocationData: data,
         marketId: targetParams.id,
         operation: "borrow",
-        amount: 1_000n,
+        amount: 0n,
         options: { enabled: false },
       }),
     ).toStrictEqual([]);
