@@ -1,5 +1,9 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { PassThrough } from "node:stream";
 import { setTimeout } from "node:timers/promises";
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -156,5 +160,43 @@ describe.sequential("spawnAnvil", () => {
     expect(secondSameRpc.rpcUrl).toBe("http://localhost:31003");
     otherRpc.stop();
     secondSameRpc.stop();
+  });
+
+  test("behavior: reclaims a slot owned by a dead worker", async () => {
+    process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "1";
+    process.env.MORPHO_TEST_ANVIL_RUN_ID = `unit-stale-${process.pid}`;
+    const forkUrl = "https://stale-rpc.example";
+    const rpcId = createHash("sha256")
+      .update(forkUrl)
+      .digest("hex")
+      .slice(0, 16);
+    const lockPath = join(
+      tmpdir(),
+      "morpho-test-anvil",
+      process.env.MORPHO_TEST_ANVIL_RUN_ID,
+      rpcId,
+      "0.lock",
+    );
+    mkdirSync(dirname(lockPath), { recursive: true });
+    // This PID is above the supported range on CI and local test platforms.
+    writeFileSync(lockPath, "2147483647\n");
+
+    const subprocess = createFakeAnvilProcess();
+    spawnMock.mockReturnValue(
+      subprocess as unknown as ChildProcessWithoutNullStreams,
+    );
+
+    try {
+      const spawnedPromise = spawnAnvil({ chainId: 1, forkUrl });
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+      subprocess.stdout.write("Listening on 127.0.0.1:31004\n");
+      const spawned = await spawnedPromise;
+
+      expect(spawned.rpcUrl).toBe("http://localhost:31004");
+      spawned.stop();
+      expect(existsSync(lockPath)).toBe(false);
+    } finally {
+      rmSync(lockPath, { force: true });
+    }
   });
 });

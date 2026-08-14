@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout } from "node:timers/promises";
@@ -24,6 +24,9 @@ const getMaxConcurrentAnvilProcessesPerRpc = () => {
   const value = Number.parseInt(configuredValue, 10);
   return Number.isSafeInteger(value) && value > 0 ? value : undefined;
 };
+
+const hasErrorCode = (error: unknown, code: string) =>
+  error instanceof Error && "code" in error && error.code === code;
 
 /**
  * Reserves a cross-process Anvil slot for one fork URL using atomic lock files.
@@ -76,22 +79,37 @@ const acquireAnvilProcessSlot = async (parameters: {
           try {
             unlinkSync(lockPath);
           } catch (error) {
-            if (
-              !(error instanceof Error) ||
-              !("code" in error) ||
-              error.code !== "ENOENT"
-            )
+            if (!hasErrorCode(error, "ENOENT"))
               console.warn(`Failed to release Anvil slot "${slot}".`, error);
           }
         };
       } catch (error) {
-        if (
-          error instanceof Error &&
-          "code" in error &&
-          error.code === "EEXIST"
-        )
-          continue;
-        throw error;
+        if (!hasErrorCode(error, "EEXIST")) throw error;
+
+        let ownerPid: number;
+        try {
+          ownerPid = Number(readFileSync(lockPath, "utf8").trim());
+        } catch (readError) {
+          if (hasErrorCode(readError, "ENOENT")) continue;
+          throw readError;
+        }
+
+        if (Number.isSafeInteger(ownerPid) && ownerPid > 0) {
+          try {
+            process.kill(ownerPid, 0);
+            continue;
+          } catch (ownerError) {
+            // Only ESRCH proves the owner exited; permission errors may still mean it is alive.
+            if (!hasErrorCode(ownerError, "ESRCH")) continue;
+          }
+        }
+
+        // A dead or malformed owner cannot release its slot, so make it reusable.
+        try {
+          unlinkSync(lockPath);
+        } catch (unlinkError) {
+          if (!hasErrorCode(unlinkError, "ENOENT")) throw unlinkError;
+        }
       }
     }
 
