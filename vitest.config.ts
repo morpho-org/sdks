@@ -1,16 +1,7 @@
-import { configDefaults, defineConfig } from "vitest/config";
+import { defineConfig } from "vitest/config";
 
 // Fork projects let CI shard RPC-heavy tests separately without throttling pure tests.
 const forkTestTimeout = 120_000;
-const morphoSdkForkTestFiles = [
-  "packages/morpho-sdk/src/**/*.integration.test.ts",
-  "packages/morpho-sdk/src/actions/blue/{borrow,repay,repayWithdrawCollateral,supply,supplyCollateral,supplyCollateralBorrow,withdraw,withdrawCollateral}.test.ts",
-  "packages/morpho-sdk/src/actions/requirements/encode/{encodeErc20Permit,encodeErc20Permit2Approve}.test.ts",
-  "packages/morpho-sdk/src/actions/vaultV1/{deposit,migrateToV2,redeem,withdraw}.test.ts",
-  "packages/morpho-sdk/src/actions/vaultV2/{deposit,forceRedeem,forceWithdraw,redeem,withdraw}.test.ts",
-  "packages/morpho-sdk/src/entities/{blue/blue,vaultV1/vaultV1,vaultV2/vaultV2}.test.ts",
-  "packages/morpho-sdk/test/actions/**/*.test.ts",
-];
 
 export default defineConfig({
   test: {
@@ -70,10 +61,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: "morpho-ts",
-          include: [
-            "packages/morpho-ts/test/**/*.test.ts",
-            "packages/morpho-ts/src/**/*.test.ts",
-          ],
+          include: ["packages/morpho-ts/src/**/*.test.ts"],
         },
       },
       {
@@ -87,7 +75,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: "blue-sdk-fork",
-          include: ["packages/blue-sdk/test/e2e/**/*.test.ts"],
+          include: ["packages/blue-sdk/test/**/*.integration.test.ts"],
           testTimeout: forkTestTimeout,
         },
       },
@@ -102,7 +90,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: "midnight-sdk-fork",
-          include: ["packages/midnight-sdk/test/e2e/**/*.test.ts"],
+          include: ["packages/midnight-sdk/test/**/*.integration.test.ts"],
           testTimeout: forkTestTimeout,
         },
       },
@@ -112,17 +100,16 @@ export default defineConfig({
           name: "morpho-sdk",
           include: [
             "packages/morpho-sdk/src/**/*.test.ts",
-            "packages/morpho-sdk/test/helpers/time.test.ts",
-            "packages/morpho-sdk/test/reallocationData/publicAllocator.test.ts",
+            // Unit tests for test-only support modules stay beside those modules.
+            "packages/morpho-sdk/test/helpers/**/*.test.ts",
           ],
-          exclude: [...configDefaults.exclude, ...morphoSdkForkTestFiles],
         },
       },
       {
         extends: true,
         test: {
           name: "morpho-sdk-fork",
-          include: [...morphoSdkForkTestFiles],
+          include: ["packages/morpho-sdk/test/**/*.integration.test.ts"],
           testTimeout: forkTestTimeout,
         },
       },
@@ -130,18 +117,16 @@ export default defineConfig({
         extends: true,
         test: {
           name: "evm-simulation",
-          include: [
-            "packages/evm-simulation/src/**/*.spec.ts",
-            "packages/evm-simulation/src/**/*.test.ts",
-          ],
-          // Fork specs require MAINNET_RPC_URL (parsed at module load via
-          // test/setup.ts) and a live RPC. Keep them out of the default unit
-          // project so `pnpm --filter @morpho-org/evm-simulation test` runs
-          // offline; they run in the opt-in `evm-simulation-fork` project.
-          exclude: [
-            ...configDefaults.exclude,
-            "packages/evm-simulation/src/**/*.fork.spec.ts",
-          ],
+          include: ["packages/evm-simulation/src/**/*.test.ts"],
+          globals: true,
+          environment: "node",
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "evm-simulation-fork",
+          include: ["packages/evm-simulation/test/**/*.integration.test.ts"],
           globals: true,
           environment: "node",
           testTimeout: forkTestTimeout,
@@ -150,31 +135,15 @@ export default defineConfig({
       {
         extends: true,
         test: {
-          name: "evm-simulation-fork",
-          include: ["packages/evm-simulation/src/**/*.fork.spec.ts"],
-          globals: true,
-          environment: "node",
-        },
-      },
-      {
-        extends: true,
-        test: {
           name: "blue-sdk-viem",
-          include: [
-            "packages/blue-sdk-viem/src/**/*.test.ts",
-            "packages/blue-sdk-viem/test/Permit.test.ts",
-          ],
+          include: ["packages/blue-sdk-viem/src/**/*.test.ts"],
         },
       },
       {
         extends: true,
         test: {
           name: "blue-sdk-viem-fork",
-          include: ["packages/blue-sdk-viem/test/**/*.test.ts"],
-          exclude: [
-            ...configDefaults.exclude,
-            "packages/blue-sdk-viem/test/Permit.test.ts",
-          ],
+          include: ["packages/blue-sdk-viem/test/**/*.integration.test.ts"],
           testTimeout: forkTestTimeout,
         },
       },
@@ -189,7 +158,9 @@ export default defineConfig({
         extends: true,
         test: {
           name: "liquidity-sdk-viem-fork",
-          include: ["packages/liquidity-sdk-viem/test/**/*.test.ts"],
+          include: [
+            "packages/liquidity-sdk-viem/test/**/*.integration.test.ts",
+          ],
           testTimeout: forkTestTimeout,
         },
       },
@@ -198,20 +169,13 @@ export default defineConfig({
         test: {
           name: "test",
           include: ["packages/test/src/**/*.test.ts"],
-          exclude: [
-            ...configDefaults.exclude,
-            "packages/test/src/anvil.test.ts",
-          ],
         },
       },
       {
         extends: true,
         test: {
           name: "test-fork",
-          include: [
-            "packages/test/test/**/*.test.ts",
-            "packages/test/src/anvil.test.ts",
-          ],
+          include: ["packages/test/test/**/*.integration.test.ts"],
           testTimeout: forkTestTimeout,
         },
       },
@@ -236,7 +200,7 @@ export default defineConfig({
         test: {
           name: "wdk-protocol-lending-morpho-evm-fork",
           include: [
-            "packages/wdk-protocol-lending-morpho-evm/tests/**/*.test.ts",
+            "packages/wdk-protocol-lending-morpho-evm/test/**/*.integration.test.ts",
           ],
           testTimeout: forkTestTimeout,
         },

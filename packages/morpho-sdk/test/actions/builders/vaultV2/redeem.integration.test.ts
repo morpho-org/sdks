@@ -1,0 +1,134 @@
+import { parseUnits } from "viem";
+import { describe, expect } from "vitest";
+import { vaultV2Redeem } from "../../../../src/actions/vaultV2/redeem.js";
+import { NonPositiveInputError } from "../../../../src/types/index.js";
+import {
+  KeyrockUsdcVaultV2,
+  KpkWETHVaultV2,
+} from "../../../fixtures/vaultV2.js";
+import { test } from "../../../setup.js";
+
+describe("redeemVaultV2 unit tests", () => {
+  test("should create redeem transaction with USDC vault", async ({
+    client,
+  }) => {
+    const shares = parseUnits("1000", 18); // 1000 shares
+
+    const tx = vaultV2Redeem({
+      vault: {
+        address: KeyrockUsdcVaultV2.address,
+      },
+      args: {
+        shares,
+        recipient: client.account.address,
+        onBehalf: client.account.address,
+      },
+    });
+
+    expect(tx).toBeDefined();
+    expect(tx.action.type).toBe("vaultV2Redeem");
+    expect(tx.action.args.vault).toBe(KeyrockUsdcVaultV2.address);
+    expect(tx.action.args.shares).toBe(shares);
+    expect(tx.action.args.recipient).toBe(client.account.address);
+    expect(tx.to).toBe(KeyrockUsdcVaultV2.address);
+    expect(tx.data).toBeDefined();
+    expect(tx.value).toBe(0n);
+  });
+
+  test("should create redeem transaction with WETH vault", async ({
+    client,
+  }) => {
+    const shares = parseUnits("5", 18); // 5 shares
+
+    const tx = vaultV2Redeem({
+      vault: {
+        address: KpkWETHVaultV2.address,
+      },
+      args: {
+        shares,
+        recipient: client.account.address,
+        onBehalf: client.account.address,
+      },
+    });
+
+    expect(tx).toBeDefined();
+    expect(tx.action.type).toBe("vaultV2Redeem");
+    expect(tx.action.args.vault).toBe(KpkWETHVaultV2.address);
+    expect(tx.action.args.shares).toBe(shares);
+    expect(tx.action.args.recipient).toBe(client.account.address);
+    expect(tx.to).toBe(KpkWETHVaultV2.address);
+    expect(tx.data).toBeDefined();
+    expect(tx.value).toBe(0n);
+  });
+
+  test("should allow different recipient and onBehalf addresses", async ({
+    client,
+  }) => {
+    const shares = parseUnits("100", 18);
+    const differentRecipient =
+      "0x1234567890123456789012345678901234567890" as const;
+
+    const tx = vaultV2Redeem({
+      vault: {
+        address: KeyrockUsdcVaultV2.address,
+      },
+      args: {
+        shares,
+        recipient: differentRecipient,
+        onBehalf: client.account.address,
+      },
+    });
+
+    expect(tx.action.args.recipient).toBe(differentRecipient);
+    expect(tx.to).toBe(KeyrockUsdcVaultV2.address);
+  });
+
+  test("should append metadata to transaction data when provided", async ({
+    client,
+  }) => {
+    const shares = parseUnits("100", 18);
+    const tx = vaultV2Redeem({
+      vault: {
+        address: KeyrockUsdcVaultV2.address,
+      },
+      args: {
+        shares,
+        recipient: client.account.address,
+        onBehalf: client.account.address,
+      },
+      metadata: { origin: "a1b2c3d4" },
+    });
+
+    expect(tx.data.includes("a1b2c3d4")).toBe(true);
+  });
+
+  test("should throw NonPositiveInputError when shares is zero", async () => {
+    expect(() =>
+      vaultV2Redeem({
+        vault: {
+          address: KeyrockUsdcVaultV2.address,
+        },
+        args: {
+          shares: 0n,
+          recipient: "0x1234567890123456789012345678901234567890",
+          onBehalf: "0x1234567890123456789012345678901234567890",
+        },
+      }),
+    ).toThrow(NonPositiveInputError);
+  });
+
+  test("should throw NonPositiveInputError when shares is negative", async () => {
+    expect(() =>
+      vaultV2Redeem({
+        vault: {
+          address: KeyrockUsdcVaultV2.address,
+        },
+        args: {
+          shares: -1n,
+          recipient: "0x1234567890123456789012345678901234567890",
+          onBehalf: "0x1234567890123456789012345678901234567890",
+        },
+      }),
+    ).toThrow(NonPositiveInputError);
+  });
+});

@@ -7,7 +7,7 @@ out-of-scope:
   - Missing tests for CI workflows — see ci-release-security.
   - Mock-vs-fork choice for Web3 paths — see web3-security.
 focus: |
-  Missing or weak tests for changes in `packages/<pkg>/src/`. Enforces the colocation rule from AGENTS.md §5: new unit tests sit next to source (`src/Foo.ts` ↔ `src/Foo.test.ts`), with `*.integration.test.ts` for fork-bound tests that stay. Flags refactors that don't migrate their tests to colocation in the packages where colocation is wired.
+  Missing or weak tests for changes in `packages/<pkg>/src/`. Enforces the universal layout from AGENTS.md §5: unit tests sit next to their modules as `*.test.ts`, while fork/integration tests live only under the package's `test/` directory as `*.integration.test.ts`.
 ---
 
 # Test Coverage Analyzer
@@ -18,40 +18,35 @@ This persona is the enforcer for AGENTS.md §5. The colocation rule lives there 
 
 ## What "in the right place" means
 
-Per AGENTS.md §5, the canonical layout for **new unit tests** is colocation: `src/Foo.ts` ↔ `src/Foo.test.ts` in the same folder.
+Per AGENTS.md §5, every package uses the same layout:
 
-Two layouts coexist in the repo:
-
-- **Colocated** (`src/**/*.test.ts`) — wired today in `morpho-sdk` and `evm-simulation` via their Vitest project glob. `evm-simulation` historically uses `*.spec.ts`; either suffix is acceptable so long as the project glob picks it up.
-- **`packages/<pkg>/test/`** — the older layout. Every other package still uses it because their Vitest project glob does not pick up `src/**/*.test.ts`. **Moving a test next to source in those packages will silently skip it.** This is why the migration is gated on Vitest config changes happening in the same PR (see §5).
-
-Fork-bound tests use **`*.integration.test.ts`** naming when they stay (e.g. a test that depends on a real Anvil fork's contract state). This lets unit-only test runs filter them out cleanly.
+- **Unit tests** are named `*.test.ts` and colocated with the module they exercise (`src/Foo.ts` ↔ `src/Foo.test.ts`). A unit test for a test-only support module under `test/` stays beside that support module instead of moving the helper into published source.
+- **Integration and fork tests** are named `*.integration.test.ts` and live only under `packages/<pkg>/test/`. They never live under `src/`, and packages use singular `test/`, not `tests/`.
+- **Vitest routing** keeps unit and fork projects separate: unit projects include colocated unit files; fork projects include only `test/**/*.integration.test.ts`.
 
 ## What to flag
 
 ### Missing coverage (the always-applies set)
 
-- New public exports without a corresponding test — in colocated layout (`src/Foo.test.ts` next to `src/Foo.ts`) for packages wired for colocation, or `packages/<pkg>/test/Foo.test.ts` for the older layout.
+- New public exports without a corresponding colocated unit test (`src/Foo.test.ts` next to `src/Foo.ts`).
 - New code paths inside existing exports without test cases — branches, error paths, edge cases like `0n`, `MAX_UINT256`, negative `bigint`, empty arrays, NaN-equivalents.
 - Removed or modified public exports without their tests updated (e.g. signature change, behavior change).
-- Onchain code paths (any code calling `viem` / `wagmi` actions) — confirm at least one test exercises the path. Per current AGENTS.md §5, contract round-trips and paths whose correctness depends on real onchain state use Anvil forks via `@morpho-org/test` at pinned blocks. Unit tests for code that calls `viem/actions` but does not depend on real onchain state may use `createMockClient` from `@morpho-org/test/mock`, which mocks the `client.transport` surface those actions use. Do not recommend `vi.mock` / `vi.spyOn` of viem actions for RPC paths. Fork-bound tests should use `*.integration.test.ts` naming so unit-only test runs filter them cleanly.
+- Onchain code paths (any code calling `viem` / `wagmi` actions) — confirm at least one test exercises the path. Per current AGENTS.md §5, contract round-trips and paths whose correctness depends on real onchain state use Anvil forks via `@morpho-org/test` at pinned blocks. Unit tests for code that calls `viem/actions` but does not depend on real onchain state may use `createMockClient` from `@morpho-org/test/mock`, which mocks the `client.transport` surface those actions use. Do not recommend `vi.mock` / `vi.spyOn` of viem actions for RPC paths. Fork-bound tests belong under the package's `test/` directory with `*.integration.test.ts` names.
 - Snapshot or schema tests not updated when generated outputs (GraphQL types, ABIs) change.
 
 ### Wrong-place findings (the colocation enforcer)
 
-These fire only when AGENTS.md §5's colocation rule applies — i.e. either the package is already wired for colocation, or the diff is a refactor / rewrite of a module whose tests should migrate alongside.
-
-- **New `.test.ts` file added under `packages/<pkg>/test/` in a colocation-wired package** (`morpho-sdk`, `evm-simulation`) — should be colocated as `src/Foo.test.ts` instead. Flag as **medium**.
-- **Refactor or rewrite of a module in a non-colocation-wired package, with tests staying in `packages/<pkg>/test/`** — per AGENTS.md §5, refactors are the migration path. The PR should also widen the package's Vitest project glob and move the tests. Flag as **medium**, with the specific config change required (`vitest.config.ts` `include` to add `packages/<pkg>/src/**/*.test.ts`).
-- **Fork-bound test added without `*.integration.test.ts` naming** in a package that has migrated to colocation — flag as **low**; surfaces in unit-only test runs and slows feedback.
-- **Read-only edits** (typo fixes, JSDoc-only changes) do NOT trigger migration — explicit carve-out in §5. Do not flag these.
+- **Unit test for a `src/` module added under `packages/<pkg>/test/`** — move it beside the source module. Flag as **medium**. Do not flag a unit test that is genuinely colocated with test-only support code under `test/`.
+- **Integration or fork test anywhere outside `packages/<pkg>/test/`**, including under `src/` — move it to `test/` and ensure the fork project includes it. Flag as **medium**.
+- **Integration or fork test without a `*.integration.test.ts` name**, or any package using a plural `tests/` directory or `*.spec.ts` naming — flag as **low** when routing is still correct, **medium** when the file leaks into a unit project or is skipped.
+- **Vitest project globs that mix unit and integration files or omit either canonical set** — flag as **medium** because package-level runs may silently skip tests or execute RPC-heavy tests in the unit shard.
 
 ### Severity guidance
 
 - **High** — onchain code path with no test at all (a contract call shipped untested).
 - **High** — removed or modified public export whose tests still describe the old behavior (false negative).
-- **Medium** — missing unit test for a new public export; wrong-place finding (colocation-wired package using `test/`); refactor that skipped its test migration.
-- **Low** — missing edge-case coverage on an export that already has happy-path tests; fork-bound test without `*.integration.test.ts` naming.
+- **Medium** — missing unit test for a new public export; misplaced unit/integration test; incorrect Vitest routing.
+- **Low** — missing edge-case coverage on an export that already has happy-path tests; noncanonical test directory or suffix when routing remains correct.
 
 ## Out-of-scope reminders (for the sub-agent)
 
@@ -59,4 +54,4 @@ These fire only when AGENTS.md §5's colocation rule applies — i.e. either the
 - Do NOT review CI workflow / publish-flow test coverage — that's `ci-release-security`'s job.
 - Do NOT propose new test infrastructure or fixtures — point at the existing helpers in `@morpho-org/test`, including `@morpho-org/test/mock` for transport-boundary unit tests, instead.
 - Do NOT flag missing tests for internal (non-exported) symbols when the public surface covering them is tested.
-- Per AGENTS.md §5, the colocation rule applies **going forward** — do not flag the existing `packages/<pkg>/test/` layouts in non-wired packages as findings on their own. The wrong-place rules above are scoped to NEW files in colocation-wired packages or refactor-driven migrations.
+- Do not recommend moving integration tests beside source for proximity; the package `test/` boundary is intentional and universal.
