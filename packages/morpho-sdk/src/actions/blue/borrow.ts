@@ -49,7 +49,8 @@ export interface BlueBorrowParams {
  *
  * When `reallocations` are provided, Public Allocator V1 entries encode `reallocateTo`, while V2
  * market and idle entries encode `reallocate` and `allocateFromIdle`. The calls run before the
- * borrow, and V1 fees plus V2 native penalties accumulate in `tx.value`.
+ * borrow. V1 fees accumulate in `tx.value`; V2 penalties are paid in the
+ * target loan token and donated directly to each vault.
  *
  * @param params.market.chainId - The chain the market lives on.
  * @param params.market.marketParams - Market params (loanToken, collateralToken, oracle, irm, lltv).
@@ -65,10 +66,11 @@ export interface BlueBorrowParams {
  *   typed `action` discriminator the simulation layer consumes.
  * @throws {NonPositiveInputError} when `amount <= 0n` or any reallocation withdrawal amount
  *   is non-positive.
- * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
+ * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
+ * @throws {InconsistentReallocationPenaltyError} when V2 entries for one allocator-vault pair use different penalties.
  * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
  * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
- * @throws {NegativeInputError} when `minSharePrice < 0n`, a V1 fee, or a V2 native penalty is negative.
+ * @throws {NegativeInputError} when `minSharePrice < 0n`, a V1 fee, or a V2 penalty is negative.
  * @throws {EmptyReallocationWithdrawalsError} from `buildReallocationActions` when any
  *   `reallocation.withdrawals` is empty.
  * @throws {ReallocationWithdrawalOnTargetMarketError} from `buildReallocationActions` when any
@@ -111,15 +113,21 @@ export const blueBorrow = ({
 
   const actions: Action[] = [];
   let reallocationFee = 0n;
+  let reallocationPenaltyAssets = 0n;
 
   if (authorizationSignature) {
     actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
   }
 
   if (reallocations && reallocations.length > 0) {
-    const result = buildReallocationActions(reallocations, marketParams);
+    const result = buildReallocationActions({
+      chainId,
+      reallocations,
+      targetMarketParams: marketParams,
+    });
     actions.push(...result.actions);
     reallocationFee = result.fee;
+    reallocationPenaltyAssets = result.penaltyAssets;
   }
 
   actions.push({
@@ -143,6 +151,7 @@ export const blueBorrow = ({
         receiver,
         minSharePrice,
         reallocationFee,
+        reallocationPenaltyAssets,
       },
     },
   });

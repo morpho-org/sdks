@@ -53,8 +53,9 @@ export interface BlueSupplyCollateralBorrowParams {
  * Routed through bundler3: collateral transfer → `morphoSupplyCollateral` → optional Public
  * Allocator calls → `morphoBorrow`. V1 entries encode `reallocateTo`; V2 market and idle entries
  * encode `reallocate` and `allocateFromIdle`. When `nativeAmount > 0`, native ETH is wrapped via
- * `GeneralAdapter1.wrapNative()` before the supply leg. V1 fees and V2 native penalties add to
- * `tx.value`.
+ * `GeneralAdapter1.wrapNative()` before the supply leg. V1 fees add to
+ * `tx.value`; V2 penalties are paid in the target loan token and donated to
+ * the vaults.
  *
  * Prerequisite: `GeneralAdapter1` must be authorized on Morpho to borrow on behalf of the user.
  * Use `getRequirements()` on the entity to check and obtain the authorization transaction.
@@ -82,10 +83,11 @@ export interface BlueSupplyCollateralBorrowParams {
  * @returns A deep-frozen `Transaction<BlueSupplyCollateralBorrowAction>` with `to`, `value`,
  *   `data`, and the typed `action` discriminator the simulation layer consumes.
  * @throws {NegativeInputError} when `amount`, `nativeAmount`, `minSharePrice`, a V1 fee, or a V2
- *   native penalty is negative.
+ *   penalty is negative.
  * @throws {NonPositiveInputError} when `borrowAmount <= 0n`, both collateral amounts resolve to
  *   zero, or any reallocation withdrawal amount is non-positive.
- * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
+ * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
+ * @throws {InconsistentReallocationPenaltyError} when V2 entries for one allocator-vault pair use different penalties.
  * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
  * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
  * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
@@ -181,11 +183,17 @@ export const blueSupplyCollateralBorrow = ({
   });
 
   let reallocationFee = 0n;
+  let reallocationPenaltyAssets = 0n;
 
   if (reallocations && reallocations.length > 0) {
-    const result = buildReallocationActions(reallocations, marketParams);
+    const result = buildReallocationActions({
+      chainId,
+      reallocations,
+      targetMarketParams: marketParams,
+    });
     actions.push(...result.actions);
     reallocationFee = result.fee;
+    reallocationPenaltyAssets = result.penaltyAssets;
   }
 
   actions.push({
@@ -212,6 +220,7 @@ export const blueSupplyCollateralBorrow = ({
         receiver,
         nativeAmount,
         reallocationFee,
+        reallocationPenaltyAssets,
       },
     },
   });

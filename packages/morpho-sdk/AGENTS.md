@@ -27,7 +27,7 @@ Protocol terms used across this package's docs and JSDoc:
 - **bundler3** — the bundler entry point; receives a sequence of adapter actions in one transaction.
 - **GeneralAdapter1** — the bundler-side adapter that holds approvals/auth and executes Morpho calls on the user's behalf. Required as the spender for ERC-20 approvals on every bundled path; required as authorized operator on Morpho for `borrow`, `supplyCollateralBorrow`, `repayWithdrawCollateral`, and `withdraw` (the supplier-side path).
 - **PublicAllocator V1** — MetaMorpho allocator that moves liquidity from one or more sorted source markets into a target via `reallocateTo(...)`; each call pays one `fee`.
-- **BluePublicAllocator** — Vault V2 allocator that moves one source market or vault idle liquidity into the enclosing Blue action's target market via `reallocate(...)` or `allocateFromIdle(...)`. The caller supplies the allocator and adapter addresses explicitly because no canonical deployment is registered; each call pays its own `nativePenalty`. Its canonical ABI export is `vaultV2BluePublicAllocatorAbi`.
+- **BluePublicAllocator** — Vault V2 allocator that moves one source market or vault idle liquidity into the enclosing Blue action's target market via `reallocate(...)` or `allocateFromIdle(...)`. The caller supplies the allocator and adapter addresses explicitly because no canonical deployment is registered. Each call passes the vault's configured WAD-scaled `uint64 penalty`; the allocator pulls `ceil(assets × penalty / WAD)` of the target loan token from Bundler3 and donates it directly to the vault. Its canonical ABI export is `vaultV2BluePublicAllocatorAbi`.
 - **Shared-liquidity naming** — `VaultV1ReallocationData`, `InputVaultV1ReallocationData`, `computeVaultV1Reallocations`, and `VaultV1BlueReallocation` are canonical for PublicAllocator V1. Their published predecessors (`ReallocationData`, `InputReallocationData`, `computeReallocations`, `getMarketPublicReallocations`, and `VaultReallocation`) remain deprecated aliases. `VaultV2ReallocationData.computeVaultV2Reallocations` and `computeVaultV2Reallocations` accept `VaultV2BluePublicAllocatorOptions` and produce flat, action-ready `VaultV2BlueReallocation` calls.
 
 ### Bundler actions
@@ -41,7 +41,7 @@ The action verbs an integrator sees in the bundle (`BundlerAction.encode...`):
 - **`nativeTransfer` + `wrapNative`** — pair that converts an attached native amount (`tx.value`) into the chain's wNative for a deposit/supply path.
 - **`forceDeallocate`** — VaultV2 multicall entry that pulls liquidity out of a specific adapter before withdraw/redeem.
 - **`reallocateTo`** — PublicAllocator V1 call that shifts liquidity from sorted source markets into the target market.
-- **`vaultV2BluePublicAllocatorReallocate` / `vaultV2BluePublicAllocatorAllocateFromIdle`** — BluePublicAllocator calls that move one market source or vault idle liquidity into the enclosing Blue action's target market. Both target an explicit allocator address and carry one native penalty.
+- **`vaultV2BluePublicAllocatorReallocate` / `vaultV2BluePublicAllocatorAllocateFromIdle`** — BluePublicAllocator calls that move one market source or vault idle liquidity into the enclosing Blue action's target market. Both target an explicit allocator address, approve the exact loan-token penalty from Bundler3, and carry the configured penalty rate in calldata.
 
 ### Constants and conventions
 

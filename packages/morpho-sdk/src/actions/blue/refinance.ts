@@ -103,7 +103,7 @@ export interface BlueRefinanceParams {
  * @param params.args.minBorrowSharePrice - Minimum borrow share price (ray) on the target.
  * @param params.args.maxRepaySharePrice - Maximum repay share price (ray) on the source.
  * @param params.args.targetReallocations - Public Allocator V1 or V2 reallocations into the target,
- *   run before the supply leg. V1 fees and V2 native penalties add to `tx.value`.
+ *   run before the supply leg. V1 fees add to `tx.value`; V2 penalties are paid in the target loan token.
  * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
  *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata appended to `tx.data`.
@@ -112,11 +112,12 @@ export interface BlueRefinanceParams {
  * repay); in shares mode the entity passes both. Caller-facing mutual exclusivity is enforced at the entity layer.
  * @throws {NonPositiveInputError} when `collateralAmount <= 0n`, a repay leg has a non-positive
  *   `maxRepaySharePrice`, or any reallocation withdrawal amount is non-positive.
- * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
+ * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
+ * @throws {InconsistentReallocationPenaltyError} when V2 entries for one allocator-vault pair use different penalties.
  * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
  * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
  * @throws {NegativeInputError} when `borrowAssets`, `borrowShares`, `minBorrowSharePrice`,
- *   `maxRepaySharePrice`, a V1 fee, or a V2 native penalty is negative.
+ *   `maxRepaySharePrice`, a V1 fee, or a V2 penalty is negative.
  * @throws {RefinanceSameMarketError} when source and target market ids are equal.
  * @throws {RefinanceTokenMismatchError} when source and target do not share both tokens.
  * @throws {RefinanceSharesMissingBorrowAssetsError} when `borrowShares > 0n` but `borrowAssets` is omitted or non-positive.
@@ -273,15 +274,21 @@ export const blueRefinance = ({
 
   const actions: Action[] = [];
   let reallocationFee = 0n;
+  let reallocationPenaltyAssets = 0n;
 
   if (authorizationSignature) {
     actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
   }
 
   if (targetReallocations && targetReallocations.length > 0) {
-    const result = buildReallocationActions(targetReallocations, targetParams);
+    const result = buildReallocationActions({
+      chainId,
+      reallocations: targetReallocations,
+      targetMarketParams: targetParams,
+    });
     actions.push(...result.actions);
     reallocationFee = result.fee;
+    reallocationPenaltyAssets = result.penaltyAssets;
   }
 
   actions.push({
@@ -309,6 +316,7 @@ export const blueRefinance = ({
         maxRepaySharePrice,
         user,
         reallocationFee,
+        reallocationPenaltyAssets,
       },
     },
   });

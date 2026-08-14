@@ -56,10 +56,11 @@ export interface VaultV2BluePublicAllocatorOptions {
   readonly reallocatableVaults?: readonly Address[];
 
   /**
-   * Maximum native-token penalty accepted for each BluePublicAllocator call.
-   * Vaults with a higher configured penalty are ignored. Defaults to no limit.
+   * Maximum proportional vault-asset penalty accepted for each
+   * BluePublicAllocator call, scaled by WAD. Vaults with a higher configured
+   * penalty are ignored. Defaults to no limit.
    */
-  readonly maxNativePenalty?: bigint;
+  readonly maxPenalty?: bigint;
 }
 
 /**
@@ -134,8 +135,8 @@ export interface VaultV2BlueReallocation {
   readonly to: { readonly adapter: Address };
   /** Asset amount, which must fit in `uint128`. */
   readonly assets: bigint;
-  /** Native penalty paid for this individual allocator call. */
-  readonly nativePenalty: bigint;
+  /** Vault-configured WAD-scaled penalty rate passed to the allocator. */
+  readonly penalty: bigint;
 }
 
 /**

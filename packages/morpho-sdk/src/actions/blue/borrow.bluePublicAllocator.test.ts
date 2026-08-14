@@ -1,6 +1,6 @@
-import { ChainId, MarketParams } from "@morpho-org/blue-sdk";
+import { ChainId, getChainAddresses, MarketParams } from "@morpho-org/blue-sdk";
 import { vaultV2BluePublicAllocatorAbi as canonicalVaultV2BluePublicAllocatorAbi } from "@morpho-org/blue-sdk-viem";
-import { decodeFunctionData } from "viem";
+import { decodeFunctionData, erc20Abi } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   bundler3Abi,
@@ -8,7 +8,10 @@ import {
   publicAllocatorAbi,
   vaultV2BluePublicAllocatorAbi,
 } from "../../abis.js";
-import type { BlueReallocation } from "../../types/index.js";
+import {
+  type BlueReallocation,
+  InconsistentReallocationPenaltyError,
+} from "../../types/index.js";
 import { blueBorrow } from "./borrow.js";
 
 const allocator = "0x0000000000000000000000000000000000000011";
@@ -36,6 +39,9 @@ const sourceMarket = new MarketParams({
 
 describe("blueBorrow Blue Public Allocator", () => {
   test("default", () => {
+    const {
+      bundler3: { bundler3 },
+    } = getChainAddresses(ChainId.EthMainnet);
     const reallocations: readonly BlueReallocation[] = [
       {
         type: "publicAllocatorV1",
@@ -54,7 +60,7 @@ describe("blueBorrow Blue Public Allocator", () => {
         },
         to: { adapter: targetAdapter },
         assets: 3n,
-        nativePenalty: 5n,
+        penalty: 5n,
       },
       {
         type: "bluePublicAllocator",
@@ -63,7 +69,7 @@ describe("blueBorrow Blue Public Allocator", () => {
         from: { type: "idle" },
         to: { adapter: targetAdapter },
         assets: 7n,
-        nativePenalty: 11n,
+        penalty: 5n,
       },
     ];
 
@@ -77,35 +83,50 @@ describe("blueBorrow Blue Public Allocator", () => {
       },
     });
 
-    expect(tx.value).toBe(18n);
-    expect(tx.action.args.reallocationFee).toBe(18n);
+    expect(tx.value).toBe(2n);
+    expect(tx.action.args.reallocationFee).toBe(2n);
+    expect(tx.action.args.reallocationPenaltyAssets).toBe(2n);
 
     const bundle = decodeFunctionData({ abi: bundler3Abi, data: tx.data });
     const calls = bundle.args[0] ?? [];
-    expect(calls).toHaveLength(4);
-    expect(calls.slice(0, 3).map((call) => call.value)).toEqual([2n, 5n, 11n]);
-    expect(calls.slice(0, 3).map((call) => call.skipRevert)).toEqual([
-      false,
-      false,
-      false,
+    expect(calls).toHaveLength(7);
+    expect(calls.map((call) => call.value)).toEqual([
+      0n,
+      2n,
+      0n,
+      0n,
+      0n,
+      0n,
+      0n,
     ]);
+    expect(calls.every((call) => call.skipRevert === false)).toBe(true);
+
+    expect(
+      decodeFunctionData({ abi: generalAdapter1Abi, data: calls[0]!.data }),
+    ).toMatchObject({
+      functionName: "erc20TransferFrom",
+      args: [targetMarket.loanToken, bundler3, 2n],
+    });
 
     const publicAllocatorCall = decodeFunctionData({
       abi: publicAllocatorAbi,
-      data: calls[0]!.data,
+      data: calls[1]!.data,
     });
     expect(publicAllocatorCall.functionName).toBe("reallocateTo");
     expect(publicAllocatorCall.args[0]).toBe(vaultV1);
     expect(
       decodeFunctionData({
         abi: vaultV2BluePublicAllocatorAbi,
-        data: calls[1]!.data,
+        data: calls[3]!.data,
       }).functionName,
     ).toBe("reallocate");
+    expect(
+      decodeFunctionData({ abi: erc20Abi, data: calls[2]!.data }),
+    ).toMatchObject({ functionName: "approve", args: [allocator, 1n] });
 
     const idleCall = decodeFunctionData({
       abi: vaultV2BluePublicAllocatorAbi,
-      data: calls[2]!.data,
+      data: calls[5]!.data,
     });
     expect(idleCall.functionName).toBe("allocateFromIdle");
     expect(idleCall.args[0]).toBe(vaultV2);
@@ -118,10 +139,51 @@ describe("blueBorrow Blue Public Allocator", () => {
       lltv: targetMarket.lltv,
     });
     expect(idleCall.args[3]).toBe(7n);
+    expect(idleCall.args[4]).toBe(5n);
     expect(
-      decodeFunctionData({ abi: generalAdapter1Abi, data: calls[3]!.data })
+      decodeFunctionData({ abi: erc20Abi, data: calls[4]!.data }),
+    ).toMatchObject({ functionName: "approve", args: [allocator, 1n] });
+    expect(
+      decodeFunctionData({ abi: generalAdapter1Abi, data: calls[6]!.data })
         .functionName,
     ).toBe("morphoBorrow");
+  });
+
+  test("error: InconsistentReallocationPenaltyError", () => {
+    expect(() =>
+      blueBorrow({
+        market: { chainId: ChainId.EthMainnet, marketParams: targetMarket },
+        args: {
+          amount: 1n,
+          minSharePrice: 0n,
+          receiver,
+          reallocations: [
+            {
+              type: "bluePublicAllocator",
+              allocator,
+              vault: vaultV2,
+              from: {
+                type: "market",
+                adapter: sourceAdapter,
+                marketParams: sourceMarket,
+              },
+              to: { adapter: targetAdapter },
+              assets: 3n,
+              penalty: 5n,
+            },
+            {
+              type: "bluePublicAllocator",
+              allocator,
+              vault: vaultV2,
+              from: { type: "idle" },
+              to: { adapter: targetAdapter },
+              assets: 7n,
+              penalty: 11n,
+            },
+          ],
+        },
+      }),
+    ).toThrow(InconsistentReallocationPenaltyError);
   });
 
   test("re-exports the canonical ABI", () => {

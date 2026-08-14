@@ -28,20 +28,22 @@ ERC-20 approval spender is **GeneralAdapter1** for any bundled path — never th
 | `supplyCollateral` (ERC-20) | `erc20TransferFrom → morphoSupplyCollateral` |
 | `supplyCollateral` (native) | `nativeTransfer → wrapNative → [erc20TransferFrom?] → morphoSupplyCollateral` |
 | `borrow` | `morphoBorrow` |
-| `borrow` (with reallocations) | `[allocator reallocation × N] → morphoBorrow` |
+| `borrow` (with reallocations) | `[V2 penalty transfer?] → [allocator reallocation × N] → morphoBorrow` |
 | `supplyCollateralBorrow` | `[nativeWrap?] → [erc20Transfer?] → morphoSupplyCollateral → morphoBorrow` |
-| `supplyCollateralBorrow` (with reallocations) | `[nativeWrap?] → [erc20Transfer?] → morphoSupplyCollateral → [allocator reallocation × N] → morphoBorrow` |
+| `supplyCollateralBorrow` (with reallocations) | `[nativeWrap?] → [collateral transfer?] → morphoSupplyCollateral → [V2 penalty transfer?] → [allocator reallocation × N] → morphoBorrow` |
 | `repay` (ERC-20) | `[erc20TransferFrom \| permit/permit2] → morphoRepay → [erc20Transfer skim (shares mode)]` |
 | `repay` (native) | `nativeTransfer → wrapNative → [erc20TransferFrom?] → morphoRepay → [skim (shares mode)]` |
 | `repayWithdrawCollateral` (ERC-20) | `[erc20TransferFrom \| permit/permit2] → morphoRepay → [skim (shares mode)] → morphoWithdrawCollateral` |
 | `repayWithdrawCollateral` (native) | `nativeTransfer → wrapNative → [erc20TransferFrom?] → morphoRepay → [skim (shares mode)] → morphoWithdrawCollateral` |
 | `withdraw` | `morphoWithdraw` |
-| `withdraw` (with reallocations) | `[allocator reallocation × N] → morphoWithdraw` |
+| `withdraw` (with reallocations) | `[V2 penalty transfer?] → [allocator reallocation × N] → morphoWithdraw` |
 
 An allocator reallocation is PublicAllocator V1 `reallocateTo` or BluePublicAllocator
 `reallocate`/`allocateFromIdle` according to the `BlueReallocation` discriminator. One bundle may
-mix both allocator contracts. `BundlerAction.encodeBundle` derives `tx.value` from native wrapping
-calls, PublicAllocator V1 fees, and BluePublicAllocator native penalties.
+mix both allocator contracts. For non-zero V2 penalties, the builder adds one aggregate loan-token
+`erc20TransferFrom` into Bundler3 and each allocator action expands to an exact token approval plus
+the nonpayable allocator call. `BundlerAction.encodeBundle` derives `tx.value` only from native
+wrapping calls and PublicAllocator V1 native fees.
 
 ## Mode and ordering rules
 

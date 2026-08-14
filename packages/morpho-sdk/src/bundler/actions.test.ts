@@ -16,6 +16,7 @@ import {
   bytesToHex,
   decodeFunctionData,
   encodeAbiParameters,
+  erc20Abi,
   type Hex,
   isAddressEqual,
   keccak256,
@@ -80,6 +81,10 @@ describe("BundlerAction", () => {
     .uint8Array({ minLength: 20, maxLength: 20 })
     .map((bytes) => bytesToHex(bytes) as Address);
   const amountArbitrary = fc.bigInt({ min: 0n, max: 10n ** 24n });
+  const penaltyArbitrary = fc.bigInt({
+    min: 0n,
+    max: 1_000_000_000_000_000_000n,
+  });
   const permitNumberArbitrary = fc.integer({ min: 0, max: 1_000_000 });
   const skipRevertArbitrary = fc.boolean();
   const marketArbitrary = fc.record({
@@ -355,7 +360,7 @@ describe("BundlerAction", () => {
         addressArbitrary,
         marketArbitrary,
         amountArbitrary,
-        amountArbitrary,
+        penaltyArbitrary,
         skipRevertArbitrary,
       )
       .map(
@@ -372,7 +377,7 @@ describe("BundlerAction", () => {
         addressArbitrary,
         marketArbitrary,
         amountArbitrary,
-        amountArbitrary,
+        penaltyArbitrary,
         skipRevertArbitrary,
       )
       .map(
@@ -610,7 +615,7 @@ describe("BundlerAction", () => {
     expect(calls[0]?.value).toBe(5n);
   });
 
-  test("encodeBundle aggregates Blue Public Allocator native penalties", () => {
+  test("encodeBundle keeps Blue Public Allocator calls nonpayable", () => {
     const tx = BundlerAction.encodeBundle(chainId, [
       {
         type: "vaultV2BluePublicAllocatorReallocate",
@@ -632,11 +637,16 @@ describe("BundlerAction", () => {
       },
     ]);
 
-    expect(tx.value).toBe(6n);
+    expect(tx.value).toBe(0n);
 
     const decoded = decodeFunctionData({ abi: bundler3Abi, data: tx.data });
     expect(decoded.functionName).toBe("multicall");
-    expect((decoded.args[0] ?? []).map((call) => call.value)).toEqual([2n, 4n]);
+    expect((decoded.args[0] ?? []).map((call) => call.value)).toEqual([
+      0n,
+      0n,
+      0n,
+      0n,
+    ]);
   });
 
   test("encodeBundle includes callback action values in transaction value", () => {
@@ -1559,6 +1569,52 @@ describe("BundlerAction", () => {
   });
 
   test("vaultV2BluePublicAllocatorReallocate", () => {
+    const penalty = 1_000_000_000_000_000n;
+    const [approval, call] = BundlerAction.vaultV2BluePublicAllocatorReallocate(
+      allocator,
+      vault,
+      deallocateAdapter,
+      market,
+      allocateAdapter,
+      market,
+      1_000_000n,
+      penalty,
+      true,
+    );
+    expect(approval).toBeDefined();
+    expect(call).toBeDefined();
+    expect(
+      decodeFunctionData({ abi: erc20Abi, data: approval!.data }),
+    ).toMatchObject({
+      functionName: "approve",
+      args: [allocator, 1_000n],
+    });
+    expect(approval).toMatchObject({
+      to: market.loanToken,
+      value: 0n,
+      skipRevert: true,
+    });
+    const decoded = decodeFunctionData({
+      abi: vaultV2BluePublicAllocatorAbi,
+      data: call!.data,
+    });
+
+    expect(call!.to).toBe(allocator);
+    expect(call!.value).toBe(0n);
+    expect(call!.skipRevert).toBe(true);
+    expect(decoded.functionName).toBe("reallocate");
+    expect(decoded.args).toEqual([
+      vault,
+      deallocateAdapter,
+      market,
+      allocateAdapter,
+      market,
+      1_000_000n,
+      penalty,
+    ]);
+  });
+
+  test("vaultV2BluePublicAllocatorReallocate with zero penalty", () => {
     const call = onlyCall(
       BundlerAction.vaultV2BluePublicAllocatorReallocate(
         allocator,
@@ -1568,7 +1624,7 @@ describe("BundlerAction", () => {
         allocateAdapter,
         market,
         1n,
-        2n,
+        0n,
         true,
       ),
     );
@@ -1578,7 +1634,7 @@ describe("BundlerAction", () => {
     });
 
     expect(call.to).toBe(allocator);
-    expect(call.value).toBe(2n);
+    expect(call.value).toBe(0n);
     expect(call.skipRevert).toBe(true);
     expect(decoded.functionName).toBe("reallocate");
     expect(decoded.args).toEqual([
@@ -1588,10 +1644,54 @@ describe("BundlerAction", () => {
       allocateAdapter,
       market,
       1n,
+      0n,
     ]);
   });
 
   test("vaultV2BluePublicAllocatorAllocateFromIdle", () => {
+    const penalty = 1_000_000_000_000_000n;
+    const [approval, call] =
+      BundlerAction.vaultV2BluePublicAllocatorAllocateFromIdle(
+        allocator,
+        vault,
+        allocateAdapter,
+        market,
+        1_000_000n,
+        penalty,
+        true,
+      );
+    expect(approval).toBeDefined();
+    expect(call).toBeDefined();
+    expect(
+      decodeFunctionData({ abi: erc20Abi, data: approval!.data }),
+    ).toMatchObject({
+      functionName: "approve",
+      args: [allocator, 1_000n],
+    });
+    expect(approval).toMatchObject({
+      to: market.loanToken,
+      value: 0n,
+      skipRevert: true,
+    });
+    const decoded = decodeFunctionData({
+      abi: vaultV2BluePublicAllocatorAbi,
+      data: call!.data,
+    });
+
+    expect(call!.to).toBe(allocator);
+    expect(call!.value).toBe(0n);
+    expect(call!.skipRevert).toBe(true);
+    expect(decoded.functionName).toBe("allocateFromIdle");
+    expect(decoded.args).toEqual([
+      vault,
+      allocateAdapter,
+      market,
+      1_000_000n,
+      penalty,
+    ]);
+  });
+
+  test("vaultV2BluePublicAllocatorAllocateFromIdle with zero penalty", () => {
     const call = onlyCall(
       BundlerAction.vaultV2BluePublicAllocatorAllocateFromIdle(
         allocator,
@@ -1599,7 +1699,7 @@ describe("BundlerAction", () => {
         allocateAdapter,
         market,
         1n,
-        2n,
+        0n,
         true,
       ),
     );
@@ -1609,10 +1709,10 @@ describe("BundlerAction", () => {
     });
 
     expect(call.to).toBe(allocator);
-    expect(call.value).toBe(2n);
+    expect(call.value).toBe(0n);
     expect(call.skipRevert).toBe(true);
     expect(decoded.functionName).toBe("allocateFromIdle");
-    expect(decoded.args).toEqual([vault, allocateAdapter, market, 1n]);
+    expect(decoded.args).toEqual([vault, allocateAdapter, market, 1n, 0n]);
   });
 
   test("wrapNative", () => {

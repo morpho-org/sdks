@@ -57,9 +57,10 @@ export interface BlueWithdrawParams {
  *   supplier position close; immune to interest accrual between tx construction and execution).
  *
  * When `reallocations` are provided, V1 entries encode `reallocateTo`, while V2 market and idle
- * entries encode `reallocate` and `allocateFromIdle`. The calls run before the withdraw, and V1
- * fees plus V2 native penalties accumulate in `tx.value`. The on-chain `morphoWithdraw` sends
- * the assets computed on-chain directly to `receiver`; no skim is required.
+ * entries encode `reallocate` and `allocateFromIdle`. The calls run before the withdraw. V1
+ * fees accumulate in `tx.value`; V2 penalties are paid in the target loan
+ * token and donated to the vaults. The on-chain `morphoWithdraw` sends the
+ * assets computed on-chain directly to `receiver`; no skim is required.
  *
  * The withdraw is performed on behalf of the transaction initiator (signer) — there is no
  * separate `onBehalf` field; mirror `blueBorrow`. The entity layer keeps `receiver` aligned
@@ -80,11 +81,12 @@ export interface BlueWithdrawParams {
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueWithdrawAction>` with `to`, `value`, `data`, and
  *   the typed `action` discriminator the simulation layer consumes.
- * @throws {NegativeInputError} when `assets`, `shares`, `minSharePrice`, a V1 fee, or a V2 native
+ * @throws {NegativeInputError} when `assets`, `shares`, `minSharePrice`, a V1 fee, or a V2
  *   penalty is negative.
  * @throws {NonPositiveInputError} when both `assets` and `shares` are zero or any reallocation
  *   withdrawal amount is non-positive.
- * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
+ * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
+ * @throws {InconsistentReallocationPenaltyError} when V2 entries for one allocator-vault pair use different penalties.
  * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
  * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
  * @throws {MutuallyExclusiveWithdrawAmountsError} when both `assets` and `shares` are non-zero.
@@ -144,15 +146,21 @@ export const blueWithdraw = ({
 
   const actions: Action[] = [];
   let reallocationFee = 0n;
+  let reallocationPenaltyAssets = 0n;
 
   if (authorizationSignature) {
     actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
   }
 
   if (reallocations && reallocations.length > 0) {
-    const result = buildReallocationActions(reallocations, marketParams);
+    const result = buildReallocationActions({
+      chainId,
+      reallocations,
+      targetMarketParams: marketParams,
+    });
     actions.push(...result.actions);
     reallocationFee = result.fee;
+    reallocationPenaltyAssets = result.penaltyAssets;
   }
 
   actions.push({
@@ -180,6 +188,7 @@ export const blueWithdraw = ({
         receiver,
         minSharePrice,
         reallocationFee,
+        reallocationPenaltyAssets,
       },
     },
   });

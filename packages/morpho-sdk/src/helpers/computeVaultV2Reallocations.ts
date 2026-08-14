@@ -21,7 +21,7 @@ import { DEFAULT_SUPPLY_TARGET_UTILIZATION } from "./constant.js";
  * @param params.marketId - Target Blue market id.
  * @param params.operation - Operation driving the reallocation.
  * @param params.amount - Borrow or withdraw amount.
- * @param params.options - Optional timestamp, enable flag, vault allowlist, and maximum native penalty.
+ * @param params.options - Optional timestamp, enable flag, vault allowlist, and maximum penalty.
  * @returns Flat Vault V2 reallocations accepted directly by Blue action builders.
  * @throws {@link InsufficientSharedLiquidityError} when selected liquidity cannot cover the absolute shortfall.
  * @throws {@link ReallocationWithdrawExceedsMarketSupplyError} when a withdraw exceeds market supply.

@@ -49,8 +49,8 @@ export interface VaultV2LiquidityParameters {
   /** Vault V2 addresses whose reallocatable liquidity should be considered. */
   readonly vaults: readonly Address[];
 
-  /** Maximum native-token penalty accepted per BluePublicAllocator call. */
-  readonly maxNativePenalty?: bigint;
+  /** Maximum WAD-scaled vault-asset penalty accepted per BluePublicAllocator call. */
+  readonly maxPenalty?: bigint;
 
   /** Deployless read mode forwarded to allocator reads and RPC fallbacks. Defaults to `true` with direct-read fallback. */
   readonly deployless?: boolean | "force";
@@ -98,7 +98,7 @@ export interface VaultV2LiquidityResult {
  *   const loader = new VaultV2LiquidityLoader(client, {
  *     allocator,
  *     vaults: [vault],
- *     maxNativePenalty: 1_000_000_000_000_000n,
+ *     maxPenalty: 1_000_000_000_000_000n,
  *   });
  *   return loader.fetch(marketId);
  * }
@@ -432,7 +432,7 @@ export class VaultV2LiquidityLoader<chain extends Chain = Chain> {
             startState.computeVaultV2Reallocations(market.id, {
               timestamp: block.timestamp + REALLOCATION_SIMULATION_DELAY,
               reallocatableVaults: loaderParameters.vaults,
-              maxNativePenalty: loaderParameters.maxNativePenalty,
+              maxPenalty: loaderParameters.maxPenalty,
             });
 
           return {

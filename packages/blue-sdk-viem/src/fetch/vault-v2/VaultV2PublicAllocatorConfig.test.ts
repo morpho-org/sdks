@@ -90,8 +90,8 @@ const expected = {
   publicAllocatorConfig: {
     allocator: ALLOCATOR,
     vault: VAULT,
-    canAllocateFromIdle: true,
-    nativePenalty: 12n,
+    canPullFromIdle: true,
+    penalty: 12n,
   },
   marketPublicAllocatorConfigs: {
     [marketParamsId]: {
@@ -100,7 +100,7 @@ const expected = {
       adapter: ADAPTER,
       marketParamsId,
       absoluteCap: 500n,
-      canDeallocate: true,
+      canPullFromMarket: true,
       isActiveAdapter: true,
     },
   },
@@ -122,7 +122,7 @@ const mockDirectReads = (handle: ReturnType<typeof createMockClient>) => {
     address: ALLOCATOR,
     abi: vaultV2BluePublicAllocatorAbi,
     functionName: "vaultData",
-    result: [true, 12n, 34n],
+    result: [true, 12n],
   });
   mockRead(handle, {
     address: ALLOCATOR,
@@ -133,7 +133,7 @@ const mockDirectReads = (handle: ReturnType<typeof createMockClient>) => {
   mockRead(handle, {
     address: ALLOCATOR,
     abi: vaultV2BluePublicAllocatorAbi,
-    functionName: "canDeallocate",
+    functionName: "canPullFromMarket",
     result: true,
   });
   mockRead(handle, {
@@ -186,14 +186,14 @@ describe("Vault V2 public allocator fetchers", () => {
   test("behavior: deployless batching returns all derived ids", async () => {
     const handle = createMockClient(mainnet);
     mockDeploylessRead(handle, queryAbi, "query", {
-      canAllocateFromIdle: true,
-      nativePenalty: 12n,
+      canPullFromIdle: true,
+      penalty: 12n,
       marketConfigs: [
         {
           adapter: ADAPTER,
           marketParamsId,
           absoluteCap: 500n,
-          canDeallocate: true,
+          canPullFromMarket: true,
           isActiveAdapter: true,
         },
       ],
@@ -262,7 +262,7 @@ describe("Vault V2 public allocator fetchers on fork", () => {
       await client.writeContract({
         address: allocator,
         abi: fixtureAbi,
-        functionName: "setCanDeallocate",
+        functionName: "setCanPullFromMarket",
         args: [forkVault.address, forkMarketParamsId, true],
       });
       await client.writeContract({
@@ -285,8 +285,8 @@ describe("Vault V2 public allocator fetchers on fork", () => {
       expect(deployless.publicAllocatorConfig).toStrictEqual({
         allocator,
         vault: forkVault.address,
-        canAllocateFromIdle: true,
-        nativePenalty: 12n,
+        canPullFromIdle: true,
+        penalty: 12n,
       });
       expect(
         deployless.marketPublicAllocatorConfigs[forkMarketParamsId],
@@ -296,7 +296,7 @@ describe("Vault V2 public allocator fetchers on fork", () => {
         adapter: forkAdapter.address,
         marketParamsId: forkMarketParamsId,
         absoluteCap: 500n,
-        canDeallocate: true,
+        canPullFromMarket: true,
         isActiveAdapter: true,
       });
       expect(

@@ -27,7 +27,7 @@ import type {
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @returns The vault's idle-allocation permission and per-call native penalty.
+ * @returns The vault's idle-pull permission and WAD-scaled vault-asset penalty.
  * @example
  * ```ts
  * import { fetchVaultV2PublicAllocatorConfig } from "@morpho-org/blue-sdk-viem";
@@ -42,7 +42,7 @@ export async function fetchVaultV2PublicAllocatorConfig(
   client: Client,
   parameters: FetchParameters = {},
 ): Promise<VaultV2PublicAllocatorConfig> {
-  const [canAllocateFromIdle, nativePenalty] = await readContract(client, {
+  const [canPullFromIdle, penalty] = await readContract(client, {
     ...parameters,
     address: allocator,
     abi: vaultV2BluePublicAllocatorAbi,
@@ -53,8 +53,8 @@ export async function fetchVaultV2PublicAllocatorConfig(
   return {
     allocator,
     vault,
-    canAllocateFromIdle,
-    nativePenalty,
+    canPullFromIdle,
+    penalty,
   };
 }
 
@@ -93,7 +93,7 @@ export async function fetchVaultV2MarketPublicAllocatorConfig(
   client: Client,
   parameters: FetchParameters = {},
 ): Promise<VaultV2MarketPublicAllocatorConfig> {
-  const [absoluteCap, canDeallocate, isActiveAdapter] = await Promise.all([
+  const [absoluteCap, canPullFromMarket, isActiveAdapter] = await Promise.all([
     readContract(client, {
       ...parameters,
       address: allocator,
@@ -105,7 +105,7 @@ export async function fetchVaultV2MarketPublicAllocatorConfig(
       ...parameters,
       address: allocator,
       abi: vaultV2BluePublicAllocatorAbi,
-      functionName: "canDeallocate",
+      functionName: "canPullFromMarket",
       args: [vault, marketParamsId],
     }),
     readContract(client, {
@@ -123,7 +123,7 @@ export async function fetchVaultV2MarketPublicAllocatorConfig(
     adapter,
     marketParamsId,
     absoluteCap,
-    canDeallocate,
+    canPullFromMarket,
     isActiveAdapter,
   };
 }
@@ -212,8 +212,8 @@ export async function fetchVaultV2PublicAllocatorData(
         publicAllocatorConfig: {
           allocator,
           vault: vault.address,
-          canAllocateFromIdle: result.canAllocateFromIdle,
-          nativePenalty: result.nativePenalty,
+          canPullFromIdle: result.canPullFromIdle,
+          penalty: result.penalty,
         } satisfies VaultV2PublicAllocatorConfig,
         marketPublicAllocatorConfigs,
         allocations,

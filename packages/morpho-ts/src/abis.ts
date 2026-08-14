@@ -4618,7 +4618,7 @@ export const vaultV2BluePublicAllocatorAbi = [
         type: "bytes32",
       },
     ],
-    name: "canDeallocate",
+    name: "canPullFromMarket",
     outputs: [
       {
         internalType: "bool",
@@ -4665,18 +4665,13 @@ export const vaultV2BluePublicAllocatorAbi = [
     outputs: [
       {
         internalType: "bool",
-        name: "canAllocateFromIdle",
+        name: "canPullFromIdle",
         type: "bool",
       },
       {
-        internalType: "uint120",
-        name: "nativePenalty",
-        type: "uint120",
-      },
-      {
-        internalType: "uint120",
-        name: "accruedNativePenalty",
-        type: "uint120",
+        internalType: "uint64",
+        name: "penalty",
+        type: "uint64",
       },
     ],
     stateMutability: "view",
@@ -4716,10 +4711,15 @@ export const vaultV2BluePublicAllocatorAbi = [
         name: "assets",
         type: "uint128",
       },
+      {
+        internalType: "uint64",
+        name: "penalty",
+        type: "uint64",
+      },
     ],
     name: "reallocate",
     outputs: [],
-    stateMutability: "payable",
+    stateMutability: "nonpayable",
     type: "function",
   },
   {
@@ -4745,10 +4745,15 @@ export const vaultV2BluePublicAllocatorAbi = [
         name: "assets",
         type: "uint128",
       },
+      {
+        internalType: "uint64",
+        name: "penalty",
+        type: "uint64",
+      },
     ],
     name: "allocateFromIdle",
     outputs: [],
-    stateMutability: "payable",
+    stateMutability: "nonpayable",
     type: "function",
   },
 ] as const;

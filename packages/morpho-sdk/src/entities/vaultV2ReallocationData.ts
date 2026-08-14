@@ -13,6 +13,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { _try, bigIntComparator } from "@morpho-org/morpho-ts";
 import { type Address, type Hash, isAddressEqual } from "viem";
+import { computeBluePublicAllocatorPenaltyAssets } from "../helpers/bluePublicAllocator.js";
 import {
   DEFAULT_SUPPLY_TARGET_UTILIZATION,
   DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
@@ -134,6 +135,8 @@ const cloneVault = (vault: AccrualVaultV2) => {
  * ```
  */
 export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
+  /** Penalty donations created by this simulation, excluded as fresh shared-liquidity sources. */
+  private readonly donatedPenaltyAssets: Record<Address, bigint>;
   /** Chain id associated with this snapshot. */
   public readonly chainId: number;
   /** Explicit BluePublicAllocator address used in returned calls. */
@@ -171,6 +174,10 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
     this.allocations = {};
     this.publicAllocatorConfigs = {};
     this.marketPublicAllocatorConfigs = {};
+    this.donatedPenaltyAssets =
+      input instanceof VaultV2ReallocationData
+        ? { ...input.donatedPenaltyAssets }
+        : {};
 
     for (const [marketId, market] of Object.entries(input.markets ?? {}) as [
       MarketId,
@@ -372,12 +379,12 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
    *
    * The algorithm ranks action-ready calls by obtainable assets, includes idle
    * liquidity, applies each winner to cloned state, and stops when every
-   * candidate is exhausted. Vaults whose configured native penalty exceeds
-   * `options.maxNativePenalty` are ignored. Source markets are held below the
+   * candidate is exhausted. Vaults whose configured penalty exceeds
+   * `options.maxPenalty` are ignored. Source markets are held below the
    * SDK's default withdrawal-utilization ceiling.
    *
    * @param marketId - Target Blue market id.
-   * @param options - Optional timestamp, enable flag, vault allowlist, and maximum native penalty.
+   * @param options - Optional timestamp, enable flag, vault allowlist, and maximum penalty.
    * @returns Flat action-ready reallocations and their post-simulation state.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
    * @example
@@ -404,7 +411,7 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
    *
    * @param marketId - Target market id.
    * @param maxWithdrawalUtilization - Source-market utilization ceiling.
-   * @param options - Discovery options, including the maximum native penalty.
+   * @param options - Discovery options, including the maximum penalty.
    * @returns Flat action-ready reallocations and post-simulation state.
    * @internal
    */
@@ -446,7 +453,7 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
             vaultAddress: vault,
             marketId,
             maxWithdrawalUtilization,
-            maxNativePenalty: options.maxNativePenalty,
+            maxPenalty: options.maxPenalty,
           }),
         )
         .filter(
@@ -471,7 +478,7 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
    * Sums friendly Vault V2 shared liquidity available to a target market.
    *
    * @param marketId - Target Blue market id.
-   * @param options - Optional timestamp, enable flag, vault allowlist, and maximum native penalty.
+   * @param options - Optional timestamp, enable flag, vault allowlist, and maximum penalty.
    * @returns Reallocatable market and idle assets, or `0n` when none are available.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
    * @example
@@ -495,7 +502,7 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
    *
    * @param marketId - Target Blue market id.
    * @param utilization - Desired utilization, scaled by WAD. Defaults to 90%.
-   * @param options - Optional timestamp, enable flag, vault allowlist, and maximum native penalty.
+   * @param options - Optional timestamp, enable flag, vault allowlist, and maximum penalty.
    * @returns Borrowable assets while remaining at or below `utilization`.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
    * @example
@@ -560,12 +567,12 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
     vaultAddress,
     marketId,
     maxWithdrawalUtilization,
-    maxNativePenalty,
+    maxPenalty,
   }: {
     readonly vaultAddress: Address;
     readonly marketId: MarketId;
     readonly maxWithdrawalUtilization: bigint;
-    readonly maxNativePenalty?: bigint;
+    readonly maxPenalty?: bigint;
   }) {
     return _try(() => {
       const vault = this.getVault(vaultAddress);
@@ -573,8 +580,7 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
       if (
         !isAddressEqual(publicAllocatorConfig.allocator, this.allocator) ||
         !isAddressEqual(publicAllocatorConfig.vault, vaultAddress) ||
-        (maxNativePenalty != null &&
-          publicAllocatorConfig.nativePenalty > maxNativePenalty)
+        (maxPenalty != null && publicAllocatorConfig.penalty > maxPenalty)
       )
         return;
 
@@ -682,7 +688,7 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
           return headroom;
         };
 
-        if (publicAllocatorConfig.canAllocateFromIdle) {
+        if (publicAllocatorConfig.canPullFromIdle) {
           const targetHeadroom = getTargetCapHeadroom(new Set(), 0n);
           if (targetHeadroom != null) {
             const assets = MathLib.min(
@@ -690,7 +696,10 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
               targetSupplyHeadroom,
               allocatorHeadroom,
               targetHeadroom,
-              vault.assetBalance,
+              MathLib.zeroFloorSub(
+                vault.assetBalance,
+                this.donatedPenaltyAssets[vaultAddress] ?? 0n,
+              ),
             );
             if (assets > 0n) {
               candidates.push({
@@ -700,7 +709,7 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
                 from: { type: "idle" },
                 to: { adapter: targetContext.adapter.address },
                 assets,
-                nativePenalty: publicAllocatorConfig.nativePenalty,
+                penalty: publicAllocatorConfig.penalty,
               });
             }
           }
@@ -742,7 +751,7 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
                 !isAddressEqual(sourceConfig.vault, vaultAddress) ||
                 !isAddressEqual(sourceConfig.adapter, sourceAdapter.address) ||
                 !sourceConfig.isActiveAdapter ||
-                !sourceConfig.canDeallocate
+                !sourceConfig.canPullFromMarket
               )
                 return;
 
@@ -788,7 +797,7 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
                 },
                 to: { adapter: targetContext.adapter.address },
                 assets,
-                nativePenalty: publicAllocatorConfig.nativePenalty,
+                penalty: publicAllocatorConfig.penalty,
               } satisfies VaultV2BlueReallocation;
             }, UnknownDataError);
             if (candidate != null) candidates.push(candidate);
@@ -819,6 +828,14 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
     );
     const targetMarket = data.getMarket(targetMarketId);
     const targetIds = targetAdapter.ids(targetMarket.params);
+
+    const penaltyAssets = computeBluePublicAllocatorPenaltyAssets(
+      reallocation.assets,
+      reallocation.penalty,
+    );
+    vault.assetBalance += penaltyAssets;
+    data.donatedPenaltyAssets[reallocation.vault] =
+      (data.donatedPenaltyAssets[reallocation.vault] ?? 0n) + penaltyAssets;
 
     if (reallocation.from.type === "market") {
       const sourceAdapter = data.getAdapter(

@@ -17,6 +17,7 @@ import {
   ChainWNativeMissingError,
   EmptyReallocationWithdrawalsError,
   ExcessiveSlippageToleranceError,
+  InconsistentReallocationPenaltyError,
   InputExceedsMaxError,
   InvalidReallocationSourceTypeError,
   InvalidReallocationTypeError,
@@ -335,20 +336,22 @@ export const validateRepayShares = (params: {
  * - No withdrawal may target `targetMarketId`.
  * - Withdrawal market IDs must be strictly ascending.
  *
- * BluePublicAllocator entries enforce non-negative `nativePenalty`, positive `uint128`-bounded
- * `assets`, and a market source distinct from `targetMarketId`. Idle sources have no market or
- * sorting rule.
+ * BluePublicAllocator entries enforce a WAD-bounded `penalty`, one consistent
+ * penalty per allocator-vault pair, positive `uint128`-bounded `assets`, and a
+ * market source distinct from the target adapter-market pair. Idle sources
+ * have no market or sorting rule.
  *
  * @param reallocations - The reallocations to validate.
- * @param targetMarketId - The ID of the operation's target market. No withdrawal may reference this market.
+ * @param targetMarketId - The operation's target market ID. V1 withdrawals cannot reference it; V2 sources cannot reference it through their target adapter.
  * @returns Nothing when every reallocation is valid.
  * @throws {NegativeInputError} when a reallocation fee is negative.
  * @throws {EmptyReallocationWithdrawalsError} when a reallocation has no withdrawals.
  * @throws {NonPositiveInputError} when a withdrawal or BluePublicAllocator asset amount is non-positive.
- * @throws {InputExceedsMaxError} when a BluePublicAllocator asset amount exceeds `uint128`.
+ * @throws {InputExceedsMaxError} when a BluePublicAllocator asset amount exceeds `uint128` or its penalty exceeds WAD.
+ * @throws {InconsistentReallocationPenaltyError} when entries for one allocator-vault pair use different penalties.
  * @throws {InvalidReallocationSourceTypeError} when a BluePublicAllocator source discriminator is unknown.
  * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
- * @throws {ReallocationWithdrawalOnTargetMarketError} when a source references the target market.
+ * @throws {ReallocationWithdrawalOnTargetMarketError} when a V1 source references the target market or a V2 source references its target adapter-market pair.
  * @throws {UnsortedReallocationWithdrawalsError} when withdrawals are not strictly market-id sorted.
  * @example
  * ```ts
@@ -363,17 +366,23 @@ export const validateReallocations = (
   reallocations: readonly BlueReallocation[],
   targetMarketId: MarketId,
 ): void => {
+  const penaltyByAllocatorVault = new Map<string, bigint>();
+
   for (const r of reallocations) {
     if (r.type === "bluePublicAllocator") {
       const sourceType: string = r.from.type;
       if (sourceType !== "market" && sourceType !== "idle") {
         throw new InvalidReallocationSourceTypeError(sourceType);
       }
-      if (r.nativePenalty < 0n) {
-        throw new NegativeInputError(
-          "reallocation.nativePenalty",
-          r.nativePenalty,
-        );
+      if (r.penalty < 0n) {
+        throw new NegativeInputError("reallocation.penalty", r.penalty);
+      }
+      if (r.penalty > MathLib.WAD) {
+        throw new InputExceedsMaxError({
+          field: "reallocation.penalty",
+          value: r.penalty,
+          max: MathLib.WAD,
+        });
       }
       if (r.assets <= 0n) {
         throw new NonPositiveInputError("reallocation.assets", r.assets);
@@ -385,6 +394,19 @@ export const validateReallocations = (
           max: maxUint128,
         });
       }
+
+      const penaltyKey = `${r.allocator.toLowerCase()}:${r.vault.toLowerCase()}`;
+      const expectedPenalty = penaltyByAllocatorVault.get(penaltyKey);
+      if (expectedPenalty !== undefined && expectedPenalty !== r.penalty) {
+        throw new InconsistentReallocationPenaltyError({
+          allocator: r.allocator,
+          vault: r.vault,
+          expected: expectedPenalty,
+          actual: r.penalty,
+        });
+      }
+      penaltyByAllocatorVault.set(penaltyKey, r.penalty);
+
       if (
         r.from.type === "market" &&
         r.from.marketParams.id === targetMarketId &&

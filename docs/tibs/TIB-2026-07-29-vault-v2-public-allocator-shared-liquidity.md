@@ -41,7 +41,7 @@ This TIB freezes that Vault V2 design.
   planning.
 - Return flat, action-ready `VaultV2BlueReallocation[]`; one entry is exactly
   one `reallocate(...)` or `allocateFromIdle(...)` call and pays one
-  `nativePenalty`.
+  proportional vault-asset penalty.
 - Keep `computeVaultV1Reallocations(...)` as the Vault V1 planner and make the
   versioned V1 discovery/type names canonical.
 - Simulate the allocator target cap, all three Vault V2 allocation caps,
@@ -54,9 +54,9 @@ This TIB freezes that Vault V2 design.
 
 - No BluePublicAllocator address registry entry. The allocator contract is an
   explicit input to fetchers, state, and every returned call.
-- No curator-facing setters such as `setAbsoluteCap`, `setCanDeallocate`, or
-  `setNativePenalty`.
-- No penalty-efficiency optimizer beyond an explicit maximum native-penalty
+- No curator-facing setters such as `setAbsoluteCap`, `setCanPullFromMarket`,
+  or `setPenalty`.
+- No penalty-efficiency optimizer beyond an explicit maximum-penalty
   filter. Retained candidates are ranked by obtainable assets.
 
 ## Public API and naming
@@ -105,14 +105,16 @@ export interface VaultV2BlueReallocation {
   readonly from: BluePublicAllocatorSource;
   readonly to: { readonly adapter: Address };
   readonly assets: bigint;
-  readonly nativePenalty: bigint;
+  readonly penalty: bigint;
 }
 ```
 
 The target market parameters come from the enclosing Blue action. Existing
 borrow, supply-collateral-borrow, loan-asset withdraw, and refinance builders
 expand each V2 entry into an existing Bundler3 allocator action. The bundle's
-native value is the sum of V1 fees and every retained V2 call's penalty.
+native value includes only V1 fees. V2 penalty assets are pulled once in the
+target loan token through GeneralAdapter1, then approved and spent from
+Bundler3 per allocator call.
 
 ## Contract model
 
@@ -121,8 +123,14 @@ the fork fixture documented under Dependencies. The relevant read and write
 surface is:
 
 ```solidity
+struct VaultData {
+    bool canPullFromIdle;
+    uint64 penalty;
+}
+
+address public immutable vaultV2Factory;
 mapping(address vault => mapping(bytes32 id => uint256)) public absoluteCap;
-mapping(address vault => mapping(bytes32 id => bool)) public canDeallocate;
+mapping(address vault => mapping(bytes32 id => bool)) public canPullFromMarket;
 mapping(address vault => mapping(address adapter => bool)) public isActiveAdapter;
 mapping(address vault => VaultData) public vaultData;
 
@@ -132,24 +140,36 @@ function reallocate(
     MarketParams calldata deallocateMarketParams,
     address allocateAdapter,
     MarketParams calldata allocateMarketParams,
-    uint128 assets
-) external payable;
+    uint128 assets,
+    uint64 penalty
+) external;
 
 function allocateFromIdle(
     address vault,
     address adapter,
     MarketParams calldata marketParams,
-    uint128 assets
-) external payable;
+    uint128 assets,
+    uint64 penalty
+) external;
 ```
 
+The write surface has two distinct authorization paths. The BluePublicAllocator
+contract itself must be registered as a Vault V2 allocator so its downstream
+`vault.deallocate(...)` and `vault.allocate(...)` calls are authorized.
+`reallocate(...)` and `allocateFromIdle(...)` are otherwise permissionless to
+their external caller and require the calldata `penalty` to equal the stored
+rate. They pull `ceil(assets × penalty / WAD)` of the target loan token from
+the caller directly to the vault before allocating. Configuration setters
+require the external caller to satisfy `vault.isAllocator(msg.sender)` and
+reject vaults not registered in the constructor-supplied Vault V2 factory.
+
 One call has one source and one target. There is no V1-style withdrawal array,
-ordering requirement, or multi-source fee refund. `nativePenalty` is charged
-per call.
+ordering requirement, or multi-source fee refund. The proportional penalty is
+rounded up and charged per call.
 
 The allocator cap is a post-state ceiling on the target adapter's
-`marketParamsId`, not a consumable flow budget. Source-side allocator state is
-only `canDeallocate`.
+`marketParamsId`, not a consumable flow budget. It must be non-zero before the
+vault call. Source-side allocator state is only `canPullFromMarket`.
 
 ## Derived allocation IDs
 
@@ -185,8 +205,8 @@ export interface InputVaultV2ReallocationData {
 ```
 
 The readonly config projections are self-identifying. Vault-wide state carries
-`allocator`, `vault`, `canAllocateFromIdle`, and `nativePenalty`. Pair state
-also carries `adapter`, `marketParamsId`, `absoluteCap`, `canDeallocate`, and
+`allocator`, `vault`, `canPullFromIdle`, and `penalty`. Pair state also carries
+`adapter`, `marketParamsId`, `absoluteCap`, `canPullFromMarket`, and
 `isActiveAdapter`.
 
 ## Fetching
@@ -253,8 +273,8 @@ A candidate exists only when:
   `adaptiveCurveIrm`;
 - target/source adapters are active, source deallocation is permitted, or
   idle allocation is permitted;
-- the vault's configured `nativePenalty` does not exceed
-  `options.maxNativePenalty` when that threshold is provided;
+- the vault's configured `penalty` does not exceed `options.maxPenalty` when
+  that threshold is provided;
 - all three target vault caps have a positive absolute cap;
 - all three source allocations are non-zero for market sources;
 - the source pair is not the exact target `(adapter, market)` pair. The same
@@ -295,11 +315,15 @@ sources are applied in contract order:
 | target derived IDs | `+= targetUntracked + assets` | same |
 | source market/shares | withdraw first | unchanged |
 | target market/shares | supply second | supply |
-| vault idle balance | receives and then spends the principal assets | spends principal |
+| vault idle balance | `+= penaltyAssets`, then `+= assets`, then `-= assets` | `+= penaltyAssets`, then `-= assets` |
 | vault `_totalAssets` | unchanged | unchanged |
 
-Shared IDs are updated twice in that order. Penalties are never refunded or
-folded into vault accounting.
+Shared IDs are updated twice in that order. Penalties remain as direct vault
+asset donations. The planner records them in the cloned idle balance but does
+not recycle newly donated assets as another shared-liquidity source; otherwise
+round-up dust could create a self-replenishing idle candidate. Source untracked
+interest changes only the derived allocation IDs; it never becomes idle token
+balance.
 
 ## Planner
 
@@ -313,10 +337,11 @@ If the post-operation utilization is at most the fixed 90% target, it returns
 no calls. Otherwise it discovers friendly sources using the fixed 90% source
 ceiling. If the operation would still have `borrow > supply`, it continues
 from the friendly post-state with an internal 100% source ceiling. Both phases
-ignore vaults above the configured `maxNativePenalty` threshold.
+ignore vaults above the configured `maxPenalty` threshold.
 
 The flat calls are capped in discovery order to the required amount. Every
-retained call keeps its full `nativePenalty`. The planner throws:
+retained call keeps its configured `penalty`; its asset cost is recomputed from
+the final capped `assets` amount. The planner throws:
 
 - `ReallocationWithdrawExceedsMarketSupplyError` when a requested withdraw is
   impossible regardless of reallocations;
@@ -326,8 +351,11 @@ retained call keeps its full `nativePenalty`. The planner throws:
 ## Validation and metrics
 
 The existing `validateReallocations` validates the combined `BlueReallocation`
-union. A V2 market source is rejected only when both its adapter and market
-match the target pair. The same market through another adapter is accepted.
+union. V2 penalties must be between zero and WAD (and therefore fit the
+contract's `uint64`), and every call for the same explicit allocator-vault pair
+must use one consistent penalty. A V2 market source is rejected only when both
+its adapter and market match the target pair. The same market through another
+adapter is accepted.
 
 `VaultV2ReallocationData` exposes:
 
@@ -388,8 +416,11 @@ source and target thresholds plus an internal 100% fallback.
 
 - A plan is a block-state simulation, not an execution guarantee. Allocator
   caps, shares, and market liquidity can be front-run.
-- `msg.value` must cover each call's exact native penalty; a reverted call
-  still consumes gas.
+- The caller must approve GeneralAdapter1 for the aggregate V2 penalty assets.
+  `getRequirements()` emits a classic loan-token approval when needed; V2
+  allocator calls themselves are nonpayable.
+- The calldata penalty protects against a curator changing the configured rate
+  between transaction signing and execution: a mismatch reverts.
 - Pass `options.timestamp` from the block used to fetch state so market and
   vault accrual share one reference point.
 - Relative-cap arithmetic rounds down. Overstating by one wei can cause an
@@ -399,19 +430,16 @@ source and target thresholds plus an internal 100% fallback.
 
 ## Dependencies
 
-- `morpho-org/vault-v2` commit
-  `4c7c110a9a3c3ce1ec545fff3b8a832f16cedfcc` for the pinned allocator fixture
-  and surrounding Vault V2 contracts.
-- `BluePublicAllocator.sol` last-touch commit
-  `b41782590d3d33d8d836aedd233aaa72ac8b2aa2` for the allocator interface
-  described here.
+- `morpho-org/vault-v2` `BluePublicAllocator.sol` last-touch commit
+  `a54e96c4cda93d5231df513f8e378653999c0e38` for the allocator interface and
+  behavior described here.
 - Existing `VaultV2MorphoMarketV1AdapterV2.ids`, `AccrualVaultV2`, Morpho Blue
   `Market`, and Bundler3 allocator encoders.
 - Existing Anvil fork harness from `@morpho-org/test`.
 
 ## References
 
-- [`BluePublicAllocator.sol`](https://github.com/morpho-org/vault-v2/blob/main/src/periphery/blue-public-allocator/BluePublicAllocator.sol)
+- [`BluePublicAllocator.sol`](https://github.com/morpho-org/vault-v2/blob/a54e96c4cda93d5231df513f8e378653999c0e38/src/periphery/blue-public-allocator/BluePublicAllocator.sol)
 - [`VaultV2.sol`](https://github.com/morpho-org/vault-v2/blob/main/src/VaultV2.sol)
 - [`MorphoMarketV1AdapterV2.sol`](https://github.com/morpho-org/vault-v2/blob/main/src/adapters/MorphoMarketV1AdapterV2.sol)
 - [TIB-2026-06-16 shared-liquidity target-utilization metric](./TIB-2026-06-16-shared-liquidity-target-utilization-metric.md)

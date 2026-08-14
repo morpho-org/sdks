@@ -24,6 +24,7 @@ import {
   ChainWNativeMissingError,
   EmptyReallocationWithdrawalsError,
   ExcessiveSlippageToleranceError,
+  InconsistentReallocationPenaltyError,
   InputExceedsMaxError,
   InvalidReallocationSourceTypeError,
   InvalidReallocationTypeError,
@@ -566,7 +567,7 @@ describe("validateReallocations", () => {
     from: { type: "idle" },
     to: { adapter: USER_A },
     assets: 1n,
-    nativePenalty: 0n,
+    penalty: 0n,
   };
 
   test("should pass with valid reallocations", () => {
@@ -595,12 +596,20 @@ describe("validateReallocations", () => {
 
   test.each([
     {
-      name: "negative native penalty",
+      name: "negative penalty",
       reallocation: {
         ...validBluePublicAllocatorReallocation,
-        nativePenalty: -1n,
+        penalty: -1n,
       },
       ErrorClass: NegativeInputError,
+    },
+    {
+      name: "penalty above WAD",
+      reallocation: {
+        ...validBluePublicAllocatorReallocation,
+        penalty: MathLib.WAD + 1n,
+      },
+      ErrorClass: InputExceedsMaxError,
     },
     {
       name: "zero assets",
@@ -623,6 +632,34 @@ describe("validateReallocations", () => {
       ).toThrow(ErrorClass);
     },
   );
+
+  test("error: InconsistentReallocationPenaltyError for one allocator-vault pair", () => {
+    expect(() =>
+      validateReallocations(
+        [
+          { ...validBluePublicAllocatorReallocation, penalty: 5n },
+          { ...validBluePublicAllocatorReallocation, penalty: 11n },
+        ],
+        targetMarketId,
+      ),
+    ).toThrow(InconsistentReallocationPenaltyError);
+  });
+
+  test("behavior: allows different penalties for different allocator-vault pairs", () => {
+    expect(() =>
+      validateReallocations(
+        [
+          { ...validBluePublicAllocatorReallocation, penalty: 5n },
+          {
+            ...validBluePublicAllocatorReallocation,
+            allocator: USER_B,
+            penalty: 11n,
+          },
+        ],
+        targetMarketId,
+      ),
+    ).not.toThrow();
+  });
 
   test("error: ReallocationWithdrawalOnTargetMarketError for a Blue Public Allocator target-market source", () => {
     expect(() =>
