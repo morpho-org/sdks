@@ -54,7 +54,7 @@ export const createViemTest = <chain extends Chain>(
   parameters.gasPrice ??= 0n;
   parameters.blockBaseFeePerGas ??= 0n;
 
-  return test.extend<ViemTestContext<chain>>({
+  const viemTest = test.extend<ViemTestContext<chain>>({
     // biome-ignore lint/correctness/noEmptyPattern: required by vitest at runtime
     client: async ({}, use) => {
       const { rpcUrl, stop } = await spawnAnvilWithRetry(parameters);
@@ -107,4 +107,7 @@ export const createViemTest = <chain extends Chain>(
       }
     },
   });
+
+  // Queue cases before fixture setup so waiting for an Anvil slot cannot consume their timeout.
+  return viemTest.sequential as TestAPI<ViemTestContext<chain>>;
 };
