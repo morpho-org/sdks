@@ -88,6 +88,9 @@ export default defineConfig({
         test: {
           name: "blue-sdk-fork",
           include: ["packages/blue-sdk/test/e2e/**/*.test.ts"],
+          sequence: {
+            concurrent: false,
+          },
           testTimeout: forkTestTimeout,
         },
       },
@@ -103,6 +106,9 @@ export default defineConfig({
         test: {
           name: "midnight-sdk-fork",
           include: ["packages/midnight-sdk/test/e2e/**/*.test.ts"],
+          sequence: {
+            concurrent: false,
+          },
           testTimeout: forkTestTimeout,
         },
       },
@@ -123,6 +129,9 @@ export default defineConfig({
         test: {
           name: "morpho-sdk-fork",
           include: [...morphoSdkForkTestFiles],
+          sequence: {
+            concurrent: false,
+          },
           testTimeout: forkTestTimeout,
         },
       },
@@ -181,6 +190,9 @@ export default defineConfig({
             ...configDefaults.exclude,
             "packages/blue-sdk-viem/test/Permit.test.ts",
           ],
+          sequence: {
+            concurrent: false,
+          },
           testTimeout: forkTestTimeout,
         },
       },
@@ -196,6 +208,9 @@ export default defineConfig({
         test: {
           name: "liquidity-sdk-viem-fork",
           include: ["packages/liquidity-sdk-viem/test/**/*.test.ts"],
+          sequence: {
+            concurrent: false,
+          },
           testTimeout: forkTestTimeout,
         },
       },
@@ -218,6 +233,9 @@ export default defineConfig({
             "packages/test/test/**/*.test.ts",
             "packages/test/src/anvil.test.ts",
           ],
+          sequence: {
+            concurrent: false,
+          },
           testTimeout: forkTestTimeout,
         },
       },
@@ -244,6 +262,9 @@ export default defineConfig({
           include: [
             "packages/wdk-protocol-lending-morpho-evm/tests/**/*.test.ts",
           ],
+          sequence: {
+            concurrent: false,
+          },
           testTimeout: forkTestTimeout,
         },
       },
