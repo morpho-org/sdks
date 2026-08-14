@@ -244,7 +244,7 @@ const setupClient = () => {
     address: ALLOCATOR,
     abi: vaultV2BluePublicAllocatorAbi,
     functionName: "vaultData",
-    result: [true, 12n, 0n],
+    result: [true, 12n],
   });
   mockRead(handle, {
     address: ALLOCATOR,
@@ -255,7 +255,7 @@ const setupClient = () => {
   mockRead(handle, {
     address: ALLOCATOR,
     abi: vaultV2BluePublicAllocatorAbi,
-    functionName: "canDeallocate",
+    functionName: "canPullFromMarket",
     result: false,
   });
   mockRead(handle, {
@@ -309,7 +309,7 @@ describe.sequential("VaultV2LiquidityLoader", () => {
         from: { type: "idle" },
         to: { adapter: ADAPTER },
         assets: 100n,
-        nativePenalty: 12n,
+        penalty: 12n,
       },
     ]);
     expect(result.endState.getMarket(marketParams.id).totalSupplyAssets).toBe(
@@ -331,13 +331,13 @@ describe.sequential("VaultV2LiquidityLoader", () => {
     api.done();
   });
 
-  test("behavior: filters vaults above the maximum native penalty", async () => {
+  test("behavior: filters vaults above the maximum penalty", async () => {
     const api = setupApi();
     const { client } = setupClient();
     const loader = new VaultV2LiquidityLoader(client, {
       allocator: ALLOCATOR,
       vaults: [VAULT],
-      maxNativePenalty: 11n,
+      maxPenalty: 11n,
       deployless: false,
     });
 

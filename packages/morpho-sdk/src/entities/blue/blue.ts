@@ -31,6 +31,7 @@ import {
   getBlueAuthorizationRequirement,
   getGeneralAdapterRequirements,
 } from "../../actions/index.js";
+import { computeVaultV2ReallocationPenaltyAssets } from "../../helpers/bluePublicAllocator.js";
 import {
   computeMaxRepaySharePrice,
   computeMaxSupplySharePrice,
@@ -189,18 +190,19 @@ export interface BlueActions {
    * Computes `minSharePrice` from market supply state and `slippageTolerance`.
    *
    * When `reallocations` is provided, V1 `reallocateTo` or V2 `reallocate`/`allocateFromIdle`
-   * actions are prepended to move liquidity before withdrawing. V1 fees and V2 native penalties
-   * add to the transaction value.
+   * actions are prepended to move liquidity before withdrawing. V1 fees add
+   * to the transaction value; V2 penalties are paid in the loan token.
    *
-   * `getRequirements` returns `morpho.setAuthorization(generalAdapter1, true)` if GA1 is not
-   * yet authorized on Morpho (returns `[]` when already authorized), since the bundler calls
-   * `withdraw(...,onBehalf=user,...)`.
+   * `getRequirements` returns the loan-token approval needed for V2 penalties
+   * and `morpho.setAuthorization(generalAdapter1, true)` when GA1 is not yet
+   * authorized on Morpho.
    *
    * **Stale `positionData` may cause unexpected supply share calculations.**
    *
    * @param params - Withdraw parameters including pre-fetched `positionData`.
    * @returns Object with `buildTx` and `getRequirements`.
-   * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
+   * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
+   * @throws {InconsistentReallocationPenaltyError} when V2 entries for one allocator-vault pair use different penalties.
    * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
    * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
    */
@@ -217,7 +219,11 @@ export interface BlueActions {
       signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<BlueWithdrawAction>>;
     getRequirements: () => Promise<
-      (Readonly<Transaction<BlueAuthorizationAction>> | Requirement)[]
+      (
+        | Readonly<Transaction<ERC20ApprovalAction>>
+        | Readonly<Transaction<BlueAuthorizationAction>>
+        | Requirement
+      )[]
     >;
   };
 
@@ -229,17 +235,18 @@ export interface BlueActions {
    * Computes `minSharePrice` from market borrow state and `slippageTolerance`.
    *
    * When `reallocations` is provided, V1 `reallocateTo` or V2 `reallocate`/`allocateFromIdle`
-   * actions are prepended before borrowing. V1 fees and V2 native penalties add to the
-   * transaction value.
+   * actions are prepended before borrowing. V1 fees add to the transaction
+   * value; V2 penalties are paid in the loan token.
    *
-   * `getRequirements` returns `morpho.setAuthorization(generalAdapter1, true)` if not yet authorized,
-   * since borrowing through bundler3 requires GeneralAdapter1 authorization on Morpho.
+   * `getRequirements` returns the loan-token approval needed for V2 penalties
+   * and Morpho authorization for GeneralAdapter1 when needed.
    *
    * **Stale `positionData` may cause unexpected health.**
    *
    * @param params - Borrow parameters including pre-fetched `positionData` for health validation.
    * @returns Object with `buildTx` and `getRequirements`.
-   * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
+   * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
+   * @throws {InconsistentReallocationPenaltyError} when V2 entries for one allocator-vault pair use different penalties.
    * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
    * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
    */
@@ -254,7 +261,11 @@ export interface BlueActions {
       signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<BlueBorrowAction>>;
     getRequirements: () => Promise<
-      (Readonly<Transaction<BlueAuthorizationAction>> | Requirement)[]
+      (
+        | Readonly<Transaction<ERC20ApprovalAction>>
+        | Readonly<Transaction<BlueAuthorizationAction>>
+        | Requirement
+      )[]
     >;
   };
 
@@ -374,18 +385,20 @@ export interface BlueActions {
    * to prevent instant liquidation on new positions near the LLTV threshold.
    *
    * When `reallocations` is provided, V1 `reallocateTo` or V2 `reallocate`/`allocateFromIdle`
-   * actions run between the collateral supply and `morphoBorrow`. V1 fees and V2 native penalties
-   * add to the transaction value.
+   * actions run between the collateral supply and `morphoBorrow`. V1 fees add
+   * to the transaction value; V2 penalties are paid in the loan token.
    *
    * `getRequirements` returns in parallel:
    * - ERC20 approval or permit for collateral token (to GeneralAdapter1).
+   * - Classic ERC20 approval for any V2 loan-token penalties.
    * - `morpho.setAuthorization(generalAdapter1, true)` if adapter is not yet authorized.
    *
    * **Stale `positionData` may cause unexpected health.**
    *
    * @param params - Combined parameters including pre-fetched `positionData` for health validation.
    * @returns Object with `buildTx` and `getRequirements`.
-   * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
+   * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
+   * @throws {InconsistentReallocationPenaltyError} when V2 entries for one allocator-vault pair use different penalties.
    * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
    * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
    */
@@ -426,10 +439,11 @@ export interface BlueActions {
    * markets are forward-accrued to `now`; in shares mode the target borrow is overshot by
    * `slippageTolerance` and the callback sweeps the residual.
    * Target reallocations run first as V1 `reallocateTo` or V2 `reallocate`/`allocateFromIdle`
-   * actions; V1 fees and V2 native penalties add to the transaction value.
+   * actions; V1 fees add to the transaction value and V2 penalties are paid
+   * in the loan token.
    *
-   * `getRequirements` returns `morpho.setAuthorization(generalAdapter1, true)` when GA1 is not yet
-   * authorized (a single global authorization covers both markets).
+   * `getRequirements` returns the loan-token approval needed for V2 penalties
+   * and Morpho authorization for GeneralAdapter1 when needed.
    *
    * @param params.userAddress - Position owner on both markets.
    * @param params.positionData - Pre-fetched source-market accrual position.
@@ -441,7 +455,8 @@ export interface BlueActions {
    * @param params.slippageTolerance - WAD slippage tolerance. Defaults to `DEFAULT_SLIPPAGE_TOLERANCE`.
    * @param params.targetReallocations - Public Allocator V1 or V2 reallocations into the target market.
    * @returns Object with `buildTx` and `getRequirements`.
-   * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128`.
+   * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
+   * @throws {InconsistentReallocationPenaltyError} when V2 entries for one allocator-vault pair use different penalties.
    * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
    * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
    */
@@ -462,7 +477,11 @@ export interface BlueActions {
       signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<BlueRefinanceAction>>;
     getRequirements: () => Promise<
-      (Readonly<Transaction<BlueAuthorizationAction>> | Requirement)[]
+      (
+        | Readonly<Transaction<ERC20ApprovalAction>>
+        | Readonly<Transaction<BlueAuthorizationAction>>
+        | Requirement
+      )[]
     >;
   };
 
@@ -547,6 +566,22 @@ export class MorphoBlue implements BlueActions {
     public readonly marketParams: MarketParams,
     private readonly chainId: number,
   ) {}
+
+  private getReallocationPenaltyRequirements(
+    userAddress: Address,
+    reallocations: readonly BlueReallocation[] | undefined,
+  ) {
+    const amount = computeVaultV2ReallocationPenaltyAssets(reallocations ?? []);
+
+    // Penalty funding always uses the classic GeneralAdapter1 allowance so a
+    // collateral permit and a loan-token penalty can coexist in one bundle.
+    return getGeneralAdapterRequirements(this.client.viemClient, {
+      address: this.marketParams.loanToken,
+      chainId: this.chainId,
+      supportSignature: false,
+      args: { amount, from: userAddress },
+    });
+  }
 
   async getMarketData(parameters?: FetchParameters): Promise<Market> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
@@ -696,6 +731,7 @@ export class MorphoBlue implements BlueActions {
 
     validateSlippageTolerance(slippageTolerance);
     if (reallocations) {
+      // Validate caller-supplied descriptors before reading state; the helper returns void.
       validateReallocations(reallocations, this.marketParams.id);
     }
 
@@ -732,13 +768,16 @@ export class MorphoBlue implements BlueActions {
 
     return {
       getRequirements: async () => {
-        const authTx = await getBlueAuthorizationRequirement({
-          viemClient: this.client.viemClient,
-          chainId: this.chainId,
-          userAddress,
-          supportSignature: this.client.options.supportSignature,
-        });
-        return authTx ? [authTx] : [];
+        const [penaltyRequirements, authTx] = await Promise.all([
+          this.getReallocationPenaltyRequirements(userAddress, reallocations),
+          getBlueAuthorizationRequirement({
+            viemClient: this.client.viemClient,
+            chainId: this.chainId,
+            userAddress,
+            supportSignature: this.client.options.supportSignature,
+          }),
+        ]);
+        return [...penaltyRequirements, ...(authTx ? [authTx] : [])];
       },
 
       buildTx: (signatures?: readonly RequirementSignature[]) => {
@@ -839,6 +878,7 @@ export class MorphoBlue implements BlueActions {
 
     validateSlippageTolerance(slippageTolerance);
     if (reallocations) {
+      // Validate caller-supplied descriptors before reading state; the helper returns void.
       validateReallocations(reallocations, this.marketParams.id);
     }
 
@@ -867,13 +907,16 @@ export class MorphoBlue implements BlueActions {
 
     return {
       getRequirements: async () => {
-        const authTx = await getBlueAuthorizationRequirement({
-          viemClient: this.client.viemClient,
-          chainId: this.chainId,
-          userAddress,
-          supportSignature: this.client.options.supportSignature,
-        });
-        return authTx ? [authTx] : [];
+        const [penaltyRequirements, authTx] = await Promise.all([
+          this.getReallocationPenaltyRequirements(userAddress, reallocations),
+          getBlueAuthorizationRequirement({
+            viemClient: this.client.viemClient,
+            chainId: this.chainId,
+            userAddress,
+            supportSignature: this.client.options.supportSignature,
+          }),
+        ]);
+        return [...penaltyRequirements, ...(authTx ? [authTx] : [])];
       },
 
       buildTx: (signatures?: readonly RequirementSignature[]) => {
@@ -1346,6 +1389,7 @@ export class MorphoBlue implements BlueActions {
 
     validateSlippageTolerance(slippageTolerance);
     if (reallocations) {
+      // Validate caller-supplied descriptors before reading state; the helper returns void.
       validateReallocations(reallocations, this.marketParams.id);
     }
 
@@ -1378,24 +1422,30 @@ export class MorphoBlue implements BlueActions {
     });
     return {
       getRequirements: async (params?: { useSimplePermit?: boolean }) => {
-        const [erc20Requirements, authTx] = await Promise.all([
-          getGeneralAdapterRequirements(this.client.viemClient, {
-            address: this.marketParams.collateralToken,
-            chainId: this.chainId,
-            supportSignature: this.client.options.supportSignature,
-            supportDeployless: this.client.options.supportDeployless,
-            useSimplePermit: params?.useSimplePermit,
-            args: { amount, from: userAddress },
-          }),
-          getBlueAuthorizationRequirement({
-            viemClient: this.client.viemClient,
-            chainId: this.chainId,
-            userAddress,
-            supportSignature: this.client.options.supportSignature,
-          }),
-        ]);
+        const [erc20Requirements, penaltyRequirements, authTx] =
+          await Promise.all([
+            getGeneralAdapterRequirements(this.client.viemClient, {
+              address: this.marketParams.collateralToken,
+              chainId: this.chainId,
+              supportSignature: this.client.options.supportSignature,
+              supportDeployless: this.client.options.supportDeployless,
+              useSimplePermit: params?.useSimplePermit,
+              args: { amount, from: userAddress },
+            }),
+            this.getReallocationPenaltyRequirements(userAddress, reallocations),
+            getBlueAuthorizationRequirement({
+              viemClient: this.client.viemClient,
+              chainId: this.chainId,
+              userAddress,
+              supportSignature: this.client.options.supportSignature,
+            }),
+          ]);
 
-        return [...erc20Requirements, ...(authTx ? [authTx] : [])];
+        return [
+          ...erc20Requirements,
+          ...penaltyRequirements,
+          ...(authTx ? [authTx] : []),
+        ];
       },
 
       buildTx: (signatures?: readonly RequirementSignature[]) => {
@@ -1467,6 +1517,7 @@ export class MorphoBlue implements BlueActions {
       throw new BorrowAmountAndSharesExclusiveError(this.marketParams.id);
     }
     if (targetReallocations) {
+      // Validate caller-supplied descriptors before reading state; the helper returns void.
       validateReallocations(targetReallocations, target.marketParams.id);
     }
 
@@ -1624,13 +1675,19 @@ export class MorphoBlue implements BlueActions {
 
     return {
       getRequirements: async () => {
-        const authTx = await getBlueAuthorizationRequirement({
-          viemClient: this.client.viemClient,
-          chainId: this.chainId,
-          userAddress,
-          supportSignature: this.client.options.supportSignature,
-        });
-        return authTx ? [authTx] : [];
+        const [penaltyRequirements, authTx] = await Promise.all([
+          this.getReallocationPenaltyRequirements(
+            userAddress,
+            targetReallocations,
+          ),
+          getBlueAuthorizationRequirement({
+            viemClient: this.client.viemClient,
+            chainId: this.chainId,
+            userAddress,
+            supportSignature: this.client.options.supportSignature,
+          }),
+        ]);
+        return [...penaltyRequirements, ...(authTx ? [authTx] : [])];
       },
 
       buildTx: (signatures?: readonly RequirementSignature[]) => {

@@ -789,7 +789,7 @@ export class EmptyReallocationWithdrawalsError extends Error {
   }
 }
 
-/** Thrown when a reallocation withdrawal references the operation's target market (which would be a no-op or self-deal). */
+/** Thrown when a V1 withdrawal references the target market or a V2 source references its exact target adapter-market pair. */
 export class ReallocationWithdrawalOnTargetMarketError extends Error {
   constructor(vault: string, marketId: string) {
     super(
@@ -842,6 +842,61 @@ export class InvalidReallocationSourceTypeError extends Error {
       `Reallocation source type must be "market" or "idle", got "${sourceType}".`,
     );
     this.name = "InvalidReallocationSourceTypeError";
+  }
+}
+
+/**
+ * Thrown when one bundle assigns different penalty rates to the same Blue
+ * Public Allocator and Vault V2 pair.
+ *
+ * @example
+ * ```ts
+ * import { InconsistentReallocationPenaltyError } from "@morpho-org/morpho-sdk";
+ * import type { Address } from "viem";
+ *
+ * const allocatorFixture =
+ *   "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" satisfies Address;
+ * const vaultFixture =
+ *   "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" satisfies Address;
+ * const error = new InconsistentReallocationPenaltyError({
+ *   allocator: allocatorFixture,
+ *   vault: vaultFixture,
+ *   expected: 5n,
+ *   actual: 11n,
+ * });
+ * ```
+ */
+export class InconsistentReallocationPenaltyError extends Error {
+  /** Blue Public Allocator contract address. */
+  public readonly allocator: Address;
+  /** Vault whose configured penalty must be reused. */
+  public readonly vault: Address;
+  /** Penalty rate established by the first matching bundle entry. */
+  public readonly expected: bigint;
+  /** Conflicting penalty rate supplied by a later bundle entry. */
+  public readonly actual: bigint;
+
+  /**
+   * @param params - Conflicting allocator-vault penalty details.
+   * @param params.allocator - Blue Public Allocator contract address.
+   * @param params.vault - Vault whose configured penalty applies.
+   * @param params.expected - Penalty rate established by the first matching entry.
+   * @param params.actual - Conflicting penalty rate supplied by a later entry.
+   */
+  public constructor(params: {
+    readonly allocator: Address;
+    readonly vault: Address;
+    readonly expected: bigint;
+    readonly actual: bigint;
+  }) {
+    super(
+      `Penalty for Blue Public Allocator "${params.allocator}" and vault "${params.vault}" must remain "${params.expected}" across the bundle, got "${params.actual}". Use the vault's configured penalty for every call.`,
+    );
+    this.allocator = params.allocator;
+    this.vault = params.vault;
+    this.expected = params.expected;
+    this.actual = params.actual;
+    this.name = "InconsistentReallocationPenaltyError";
   }
 }
 

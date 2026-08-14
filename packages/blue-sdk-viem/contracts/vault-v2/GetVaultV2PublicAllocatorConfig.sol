@@ -13,7 +13,7 @@ struct VaultV2MarketPublicAllocatorResponse {
     address adapter;
     bytes32 marketParamsId;
     uint256 absoluteCap;
-    bool canDeallocate;
+    bool canPullFromMarket;
     bool isActiveAdapter;
 }
 
@@ -25,8 +25,8 @@ struct VaultV2AllocationResponse {
 }
 
 struct VaultV2PublicAllocatorResponse {
-    bool canAllocateFromIdle;
-    uint120 nativePenalty;
+    bool canPullFromIdle;
+    uint64 penalty;
     VaultV2MarketPublicAllocatorResponse[] marketConfigs;
     VaultV2AllocationResponse[] allocations;
 }
@@ -38,7 +38,7 @@ contract GetVaultV2PublicAllocatorConfig {
         VaultV2MarketPublicAllocatorRequest[] calldata marketRequests,
         bytes32[] calldata allocationIds
     ) external view returns (VaultV2PublicAllocatorResponse memory res) {
-        (res.canAllocateFromIdle, res.nativePenalty,) = allocator.vaultData(address(vault));
+        (res.canPullFromIdle, res.penalty) = allocator.vaultData(address(vault));
 
         uint256 marketRequestsLength = marketRequests.length;
         res.marketConfigs = new VaultV2MarketPublicAllocatorResponse[](marketRequestsLength);
@@ -48,7 +48,7 @@ contract GetVaultV2PublicAllocatorConfig {
                 adapter: request.adapter,
                 marketParamsId: request.marketParamsId,
                 absoluteCap: allocator.absoluteCap(address(vault), request.marketParamsId),
-                canDeallocate: allocator.canDeallocate(address(vault), request.marketParamsId),
+                canPullFromMarket: allocator.canPullFromMarket(address(vault), request.marketParamsId),
                 isActiveAdapter: allocator.isActiveAdapter(address(vault), request.adapter)
             });
         }

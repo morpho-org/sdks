@@ -68,7 +68,7 @@ const client = createPublicClient({ chain: mainnet, transport: http() });
 const loader = new VaultV2LiquidityLoader(client, {
   allocator: "0x0000000000000000000000000000000000000001",
   vaults: ["0x0000000000000000000000000000000000000002"],
-  maxNativePenalty: 1_000_000_000_000_000n,
+  maxPenalty: 1_000_000_000_000_000n,
 });
 const marketId =
   "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc" as MarketId;

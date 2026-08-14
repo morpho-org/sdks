@@ -79,9 +79,9 @@ interface FixtureOptions {
   readonly allocatorTargetCap?: bigint;
   readonly firstTotalAssets?: bigint;
   readonly idle?: bigint;
-  readonly canAllocateFromIdle?: boolean;
-  readonly canDeallocate?: boolean;
-  readonly nativePenalty?: bigint;
+  readonly canPullFromIdle?: boolean;
+  readonly canPullFromMarket?: boolean;
+  readonly penalty?: bigint;
 }
 
 const makeFixture = ({
@@ -102,9 +102,9 @@ const makeFixture = ({
   allocatorTargetCap = 10_000n,
   firstTotalAssets,
   idle = 0n,
-  canAllocateFromIdle = true,
-  canDeallocate = true,
-  nativePenalty = 7n,
+  canPullFromIdle = true,
+  canPullFromMarket = true,
+  penalty = 7n,
 }: FixtureOptions = {}) => {
   const sameMarket = sourceMarketParams.id === targetParams.id;
   const targetMarket = makeMarket({
@@ -255,8 +255,8 @@ const makeFixture = ({
         [VAULT]: {
           allocator: ALLOCATOR,
           vault: VAULT,
-          canAllocateFromIdle,
-          nativePenalty,
+          canPullFromIdle,
+          penalty,
         },
       },
       marketPublicAllocatorConfigs: {
@@ -267,7 +267,7 @@ const makeFixture = ({
             adapter: TARGET_ADAPTER,
             marketParamsId: targetIds[2],
             absoluteCap: allocatorTargetCap,
-            canDeallocate: false,
+            canPullFromMarket: false,
             isActiveAdapter: true,
           },
           [sourceIds[2]]: {
@@ -276,7 +276,7 @@ const makeFixture = ({
             adapter: sourceAdapterAddress,
             marketParamsId: sourceIds[2],
             absoluteCap: 0n,
-            canDeallocate,
+            canPullFromMarket,
             isActiveAdapter: true,
           },
         },
@@ -307,7 +307,7 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
         },
         to: { adapter: TARGET_ADAPTER },
         assets: sourceExpectedAssets,
-        nativePenalty: 7n,
+        penalty: 7n,
       },
     ]);
     expect(result.data).not.toBe(data);
@@ -326,16 +326,16 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
     const result = data.computeVaultV2Reallocations(targetParams.id);
 
     expect(
-      result.reallocations.map(({ from, assets, nativePenalty }) => ({
+      result.reallocations.map(({ from, assets, penalty }) => ({
         from: from.type,
         assets,
-        nativePenalty,
+        penalty,
       })),
     ).toStrictEqual([
-      { from: "market", assets: sourceExpectedAssets, nativePenalty: 7n },
-      { from: "idle", assets: 300n, nativePenalty: 7n },
+      { from: "market", assets: sourceExpectedAssets, penalty: 7n },
+      { from: "idle", assets: 300n, penalty: 7n },
     ]);
-    expect(result.data.getVault(VAULT).assetBalance).toBe(0n);
+    expect(result.data.getVault(VAULT).assetBalance).toBe(2n);
   });
 
   test("behavior: permits the target market through a different adapter", () => {
@@ -362,7 +362,7 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
     const result = data.computeVaultV2Reallocations(targetParams.id);
 
     expect(result.reallocations[0]?.assets).toBe(sourceExpectedAssets);
-    expect(result.data.getVault(VAULT).assetBalance).toBe(0n);
+    expect(result.data.getVault(VAULT).assetBalance).toBe(1n);
   });
 
   test("behavior: target untracked interest consumes allocator headroom", () => {
@@ -480,21 +480,21 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
     ).toStrictEqual([]);
   });
 
-  test("behavior: ignores vault liquidity above the native penalty threshold", () => {
+  test("behavior: ignores vault liquidity above the penalty threshold", () => {
     const { data, sourceExpectedAssets } = makeFixture({
       idle: 300n,
-      nativePenalty: 8n,
+      penalty: 8n,
     });
 
     expect(
       data.computeVaultV2Reallocations(targetParams.id, {
-        maxNativePenalty: 7n,
+        maxPenalty: 7n,
       }).reallocations,
     ).toStrictEqual([]);
     expect(
       data
         .computeVaultV2Reallocations(targetParams.id, {
-          maxNativePenalty: 8n,
+          maxPenalty: 8n,
         })
         .reallocations.map(({ from, assets }) => ({
           from: from.type,
@@ -566,7 +566,7 @@ describe("computeVaultV2Reallocations", () => {
     expect(reallocations[0]?.assets).toBe(10n);
   });
 
-  test("behavior: charges nativePenalty for every retained flat call", () => {
+  test("behavior: preserves the configured penalty for every retained flat call", () => {
     const { data } = makeFixture({
       targetSupply: 100n,
       targetBorrow: 100n,
@@ -593,14 +593,15 @@ describe("computeVaultV2Reallocations", () => {
     });
 
     expect(reallocations).toHaveLength(2);
-    expect(tx.value).toBe(14n);
+    expect(tx.value).toBe(0n);
+    expect(tx.action.args.reallocationPenaltyAssets).toBe(2n);
   });
 
-  test("behavior: excludes reallocations above the native penalty threshold", () => {
+  test("behavior: excludes reallocations above the penalty threshold", () => {
     const { data } = makeFixture({
       targetSupply: 100n,
       targetBorrow: 90n,
-      nativePenalty: 7n,
+      penalty: 7n,
     });
 
     expect(
@@ -609,7 +610,7 @@ describe("computeVaultV2Reallocations", () => {
         marketId: targetParams.id,
         operation: "borrow",
         amount: 1n,
-        options: { maxNativePenalty: 6n },
+        options: { maxPenalty: 6n },
       }),
     ).toStrictEqual([]);
     expect(
@@ -618,7 +619,7 @@ describe("computeVaultV2Reallocations", () => {
         marketId: targetParams.id,
         operation: "borrow",
         amount: 1n,
-        options: { maxNativePenalty: 7n },
+        options: { maxPenalty: 7n },
       })[0]?.assets,
     ).toBe(2n);
   });

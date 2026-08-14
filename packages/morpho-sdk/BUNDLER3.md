@@ -41,6 +41,8 @@ Concretely, `blueSupplyCollateralBorrow` is not a new contract: it is simply the
 | Blue `supplyCollateral`             | Bundler3 → GeneralAdapter1   | _(opt)_ `nativeTransfer` + `wrapNative` → `erc20TransferFrom` → `morphoSupplyCollateral`                                 |
 | Blue `borrow`                       | Bundler3 → GeneralAdapter1   | _(opt)_ allocator reallocations → `morphoBorrow` _(requires `setAuthorization` for GA1 on Morpho)_                       |
 | Blue `supplyCollateralBorrow`       | Bundler3 → GeneralAdapter1   | `erc20TransferFrom` → `morphoSupplyCollateral` → _(opt)_ allocator reallocations → `morphoBorrow`                        |
+| Blue `withdraw`                     | Bundler3 → GeneralAdapter1   | _(opt)_ allocator reallocations → `morphoWithdraw`                                                                       |
+| Blue `refinance`                    | Bundler3 → GeneralAdapter1   | _(opt)_ target allocator reallocations → `morphoSupplyCollateral` with the borrow/repay/withdraw callback                |
 | Blue `repay`                        | Bundler3 → GeneralAdapter1   | `erc20TransferFrom` → `morphoRepay` (by `assets` or by `shares`)                                                         |
 | Blue `repayWithdrawCollateral`      | Bundler3 → GeneralAdapter1   | `erc20TransferFrom` → `morphoRepay` → `morphoWithdrawCollateral` _(repay **before** withdraw, order is critical)_        |
 | VaultV1 `withdraw` / `redeem`           | **Direct vault call**        | _(no bundler, no adapter)_                                                                                               |
@@ -71,10 +73,13 @@ For every ERC-4626 deposit (VaultV1 / VaultV2), GeneralAdapter1 calls `erc4626De
 `BlueReallocation`s encode as Public Allocator V1 `reallocateTo` calls or Blue Public Allocator
 `reallocate`/`allocateFromIdle` calls. The same array may contain both, so Vault V1 and Vault V2
 liquidity can be reallocated atomically in one Bundler3 transaction. They are **prepended to the
-bundle** (borrow and withdraw) or **inserted between supply-collateral and borrow**
-(`supplyCollateralBorrow`). `BundlerAction.encodeBundle` aggregates Public Allocator V1 fees and
-Blue Public Allocator native penalties into `tx.value`. No extra off-chain machinery is required:
-everything flows through the same bundler-action composition.
+bundle** for borrow and loan-asset withdraw, **inserted between supply-collateral and borrow** for
+`supplyCollateralBorrow`, and run **before the supply-collateral callback** for `blueRefinance`.
+`BundlerAction.encodeBundle` includes Public Allocator V1 fees in `tx.value`. Blue Public Allocator
+penalties are different: the bundle pulls the aggregate amount in the target loan token through
+GeneralAdapter1, approves each exact per-call amount from Bundler3, and lets the allocator donate
+it directly to the vault. The entity's `getRequirements()` returns the corresponding classic
+loan-token approval when a V2 penalty is non-zero.
 
 ### 5. A single approval surface
 
@@ -109,7 +114,7 @@ This is the main design caveat. For the following operations the SDK emits a **d
 - **Blue authorization for GA1 required for `borrow`, `supplyCollateralBorrow`, `repayWithdrawCollateral`.** A user who has never granted it will receive a requirement through [`getBlueAuthorizationRequirement`](src/actions/requirements/blue/getBlueAuthorizationRequirement.ts). Without signature support, this is a `setAuthorization` transaction to execute beforehand. With `supportSignature`, this is a signable requirement; pass the resulting `AuthorizationRequirementSignature` to `buildTx`, which folds it into the bundle as `setAuthorizationWithSig`.
 - **Critical order in `repayWithdrawCollateral`**: `morphoRepay` **must** precede `morphoWithdrawCollateral` in the bundle, otherwise the position is deemed unhealthy at withdraw time and the tx reverts.
 - **Builder must equal signer.** Bundler actions reference accounts in two different ways: some take an explicit `onBehalf` and act on `userAddress` (e.g. `morphoRepay`), others act implicitly on the **initiator** — the `msg.sender` of `bundler3.multicall`, i.e. the EOA signing the tx, not the adapter — (e.g. `erc20TransferFrom`, `morphoWithdrawCollateral`, the latter exposing no `onBehalf` parameter on GA1). `repayWithdrawCollateral` is the canonical example: the repay leg targets `userAddress` while the transfer-from and the withdraw target the initiator. If the address that built the tx (and filled `userAddress`) is not the address that signs/executes it, the bundle would repay one account's debt while pulling tokens from and withdrawing collateral against the signer. Transaction builders do not validate this at build time — callers MUST keep `userAddress` aligned with the signing account. The signature requirements (`encodeErc20Permit` / `encodeErc20Permit2Approve`) take a `WalletClient` and enforce this at `sign()` time via `validateUserAddress` (throws `MissingClientPropertyError` / `AddressMismatchError`).
-- **Tricky `tx.value`**: whenever a `nativeAmount`, Public Allocator V1 `reallocateTo` fee, or Blue Public Allocator native penalty is involved, `BundlerAction.encodeBundle` computes `tx.value`. Do not overwrite it on the caller side.
+- **Tricky `tx.value`**: `BundlerAction.encodeBundle` computes native value for `nativeAmount` and Public Allocator V1 `reallocateTo` fees. Blue Public Allocator penalties are ERC-20 loan-token amounts and never contribute to `tx.value`. Do not overwrite the encoded value on the caller side.
 - **Chain-specific Bundler3 address**: always resolve through `getChainAddresses(chainId)` and validate that the viem client's `chainId` matches the params.
 
 ## Code references

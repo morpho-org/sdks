@@ -210,7 +210,7 @@ export interface ActionArgs {
     skipRevert?: boolean,
   ];
 
-  /** Vault V2 Blue Public Allocator market-to-market reallocation with an explicit allocator address and native penalty. */
+  /** Vault V2 Blue Public Allocator market-to-market reallocation with an explicit allocator address and WAD-scaled penalty. */
   readonly vaultV2BluePublicAllocatorReallocate: [
     allocator: Address,
     vault: Address,
@@ -219,18 +219,18 @@ export interface ActionArgs {
     allocateAdapter: Address,
     allocateMarket: InputMarketParams,
     assets: bigint,
-    nativePenalty: bigint,
+    penalty: bigint,
     skipRevert?: boolean,
   ];
 
-  /** Vault V2 Blue Public Allocator idle-to-market allocation with an explicit allocator address and native penalty. */
+  /** Vault V2 Blue Public Allocator idle-to-market allocation with an explicit allocator address and WAD-scaled penalty. */
   readonly vaultV2BluePublicAllocatorAllocateFromIdle: [
     allocator: Address,
     vault: Address,
     adapter: Address,
     market: InputMarketParams,
     assets: bigint,
-    nativePenalty: bigint,
+    penalty: bigint,
     skipRevert?: boolean,
   ];
 

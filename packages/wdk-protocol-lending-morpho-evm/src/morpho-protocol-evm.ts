@@ -667,14 +667,22 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * Returns Morpho SDK requirements for a borrow.
    *
    * @param options - The borrow options.
-   * @returns Authorization requirements. When offchain signatures are enabled
-   *   (`supportSignature: true`), the authorization may instead be returned as a
-   *   signable `RequirementSignatureRequest` to fold into the bundle via
+   * @returns Token-approval and authorization requirements. Vault V2 public
+   *   allocator reallocations can require a loan-token approval for their
+   *   penalty donation. When offchain signatures are enabled
+   *   (`supportSignature: true`), the authorization may instead be returned as
+   *   a signable `RequirementSignatureRequest` to fold into the bundle via
    *   `setAuthorizationWithSig`.
    */
   async getBorrowRequirements(
     options: MorphoBorrowOptions,
-  ): Promise<(RequirementAuthorization | RequirementSignatureRequest)[]> {
+  ): Promise<
+    (
+      | RequirementApproval
+      | RequirementAuthorization
+      | RequirementSignatureRequest
+    )[]
+  > {
     const action = await this._getBorrowAction(options);
 
     return await action.getRequirements();

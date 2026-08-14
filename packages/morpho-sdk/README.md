@@ -269,7 +269,8 @@ graph LR
     style MM fill:#fff3e0,stroke:#ff9800
     style V2C fill:#e3f2fd,stroke:#2196f3
     style REQ fill:#f3e5f5,stroke:#9c27b0
-    style PA fill:#fff9c4,stroke:#f9a825
+    style PA1 fill:#fff9c4,stroke:#f9a825
+    style BPA fill:#fff9c4,stroke:#f9a825
 ```
 
 ## Development

@@ -13,6 +13,7 @@ import {
   type Address,
   encodeAbiParameters,
   encodeFunctionData,
+  erc20Abi,
   type Hex,
   isAddressEqual,
   keccak256,
@@ -22,6 +23,7 @@ import {
   zeroHash,
 } from "viem";
 import { bundler3Abi, coreAdapterAbi, generalAdapter1Abi } from "../abis.js";
+import { computeBluePublicAllocatorPenaltyAssets } from "../helpers/bluePublicAllocator.js";
 import { BundlerErrors } from "../types/error.js";
 import type {
   Action,
@@ -1453,6 +1455,9 @@ export namespace BundlerAction {
   /**
    * Encodes a Vault V2 Blue Public Allocator market-to-market reallocation.
    *
+   * @remarks Bundler3 must already hold the computed penalty assets. The
+   * high-level Blue builders add the corresponding GeneralAdapter1 transfer.
+   *
    * @param allocator - Explicit Blue Public Allocator contract address.
    * @param vault - Vault whose liquidity is reallocated.
    * @param deallocateAdapter - Vault V2 adapter supplying the source market.
@@ -1460,40 +1465,51 @@ export namespace BundlerAction {
    * @param allocateAdapter - Vault V2 adapter supplying the target market.
    * @param allocateMarket - Target Morpho Blue market parameters.
    * @param assets - Assets to reallocate, bounded by `uint128` by the high-level action.
-   * @param nativePenalty - Native penalty paid to the allocator.
+   * @param penalty - Vault-configured proportional penalty, scaled by WAD.
    * @param skipRevert - Whether Bundler3 should tolerate a revert.
-   * @returns One encoded call targeting the explicit allocator.
+   * @returns An exact token approval when needed, followed by the allocator call.
    * @example
    * ```ts
+   * import type { InputMarketParams } from "@morpho-org/blue-sdk";
    * import { BundlerAction } from "@morpho-org/morpho-sdk/bundler";
+   * import type { Address } from "viem";
    *
-   * const allocator = "0x0000000000000000000000000000000000000001";
-   * const vault = "0x0000000000000000000000000000000000000002";
-   * const sourceAdapter = "0x0000000000000000000000000000000000000003";
-   * const targetAdapter = "0x0000000000000000000000000000000000000004";
+   * const allocatorFixture =
+   *   "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" satisfies Address;
+   * const keyrockUsdcVault =
+   *   "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145" satisfies Address;
+   * const sourceAdapterFixture =
+   *   "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" satisfies Address;
+   * const targetAdapterFixture =
+   *   "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC" satisfies Address;
+   * const usdc = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" satisfies Address;
+   * const weth = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" satisfies Address;
+   * const wbtc = "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599" satisfies Address;
+   * const ethUsdOracle = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419" satisfies Address;
+   * const adaptiveCurveIrm = "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC" satisfies Address;
    * const sourceMarket = {
-   *   loanToken: "0x0000000000000000000000000000000000000005",
-   *   collateralToken: "0x0000000000000000000000000000000000000006",
-   *   oracle: "0x0000000000000000000000000000000000000007",
-   *   irm: "0x0000000000000000000000000000000000000008",
+   *   loanToken: usdc,
+   *   collateralToken: weth,
+   *   oracle: ethUsdOracle,
+   *   irm: adaptiveCurveIrm,
    *   lltv: 860_000000000000000000n,
-   * };
+   * } satisfies InputMarketParams;
    * const targetMarket = {
    *   ...sourceMarket,
-   *   collateralToken: "0x0000000000000000000000000000000000000009",
-   * };
+   *   collateralToken: wbtc,
+   * } satisfies InputMarketParams;
    *
    * const calls = BundlerAction.vaultV2BluePublicAllocatorReallocate(
-   *   allocator,
-   *   vault,
-   *   sourceAdapter,
+   *   allocatorFixture,
+   *   keyrockUsdcVault,
+   *   sourceAdapterFixture,
    *   sourceMarket,
-   *   targetAdapter,
+   *   targetAdapterFixture,
    *   targetMarket,
    *   1_000_000n,
-   *   10n,
+   *   1_000_000_000_000_000n,
    * );
-   * // calls[0] targets `allocator` with `value: 10n` and `reallocate` calldata.
+   * // Bundler3 approves 1_000 USDC units, then calls `reallocate` with zero native value.
    * ```
    */
   // biome-ignore lint/complexity/useMaxParams: mirrors the protocol call
@@ -1505,66 +1521,99 @@ export namespace BundlerAction {
     allocateAdapter: Address,
     allocateMarket: InputMarketParams,
     assets: bigint,
-    nativePenalty: bigint,
+    penalty: bigint,
     skipRevert = false,
   ): BundlerCall[] {
-    return [
-      {
-        to: allocator,
+    const calls: BundlerCall[] = [];
+    const penaltyAssets = computeBluePublicAllocatorPenaltyAssets(
+      assets,
+      penalty,
+    );
+
+    if (penaltyAssets > 0n) {
+      calls.push({
+        to: allocateMarket.loanToken,
         data: encodeFunctionData({
-          abi: vaultV2BluePublicAllocatorAbi,
-          functionName: "reallocate",
-          args: [
-            vault,
-            deallocateAdapter,
-            deallocateMarket,
-            allocateAdapter,
-            allocateMarket,
-            assets,
-          ],
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [allocator, penaltyAssets],
         }),
-        value: nativePenalty,
+        value: 0n,
         skipRevert,
         callbackHash: zeroHash,
-      },
-    ];
+      });
+    }
+
+    calls.push({
+      to: allocator,
+      data: encodeFunctionData({
+        abi: vaultV2BluePublicAllocatorAbi,
+        functionName: "reallocate",
+        args: [
+          vault,
+          deallocateAdapter,
+          deallocateMarket,
+          allocateAdapter,
+          allocateMarket,
+          assets,
+          penalty,
+        ],
+      }),
+      value: 0n,
+      skipRevert,
+      callbackHash: zeroHash,
+    });
+
+    return calls;
   }
 
   /**
    * Encodes a Vault V2 Blue Public Allocator allocation from vault idle liquidity.
+   *
+   * @remarks Bundler3 must already hold the computed penalty assets. The
+   * high-level Blue builders add the corresponding GeneralAdapter1 transfer.
    *
    * @param allocator - Explicit Blue Public Allocator contract address.
    * @param vault - Vault whose idle liquidity is allocated.
    * @param adapter - Vault V2 adapter supplying the target market.
    * @param market - Target Morpho Blue market parameters.
    * @param assets - Assets to allocate, bounded by `uint128` by the high-level action.
-   * @param nativePenalty - Native penalty paid to the allocator.
+   * @param penalty - Vault-configured proportional penalty, scaled by WAD.
    * @param skipRevert - Whether Bundler3 should tolerate a revert.
-   * @returns One encoded call targeting the explicit allocator.
+   * @returns An exact token approval when needed, followed by the allocator call.
    * @example
    * ```ts
+   * import type { InputMarketParams } from "@morpho-org/blue-sdk";
    * import { BundlerAction } from "@morpho-org/morpho-sdk/bundler";
+   * import type { Address } from "viem";
    *
-   * const allocator = "0x0000000000000000000000000000000000000001";
-   * const vault = "0x0000000000000000000000000000000000000002";
-   * const targetAdapter = "0x0000000000000000000000000000000000000003";
+   * const allocatorFixture =
+   *   "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" satisfies Address;
+   * const keyrockUsdcVault =
+   *   "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145" satisfies Address;
+   * const targetAdapterFixture =
+   *   "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC" satisfies Address;
+   * const usdc = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" satisfies Address;
+   * const weth = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" satisfies Address;
+   * const ethUsdOracle = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419" satisfies Address;
+   * const adaptiveCurveIrm = "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC" satisfies Address;
    * const targetMarket = {
-   *   loanToken: "0x0000000000000000000000000000000000000004",
-   *   collateralToken: "0x0000000000000000000000000000000000000005",
-   *   oracle: "0x0000000000000000000000000000000000000006",
-   *   irm: "0x0000000000000000000000000000000000000007",
+   *   loanToken: usdc,
+   *   collateralToken: weth,
+   *   oracle: ethUsdOracle,
+   *   irm: adaptiveCurveIrm,
    *   lltv: 860_000000000000000000n,
-   * };
+   * } satisfies InputMarketParams;
    *
    * const calls = BundlerAction.vaultV2BluePublicAllocatorAllocateFromIdle(
-   *   allocator,
-   *   vault,
-   *   targetAdapter,
+   *   allocatorFixture,
+   *   keyrockUsdcVault,
+   *   targetAdapterFixture,
    *   targetMarket,
    *   1_000_000n,
-   *   10n,
+   *   1_000_000_000_000_000n,
    * );
-   * // calls[0] targets `allocator` with `value: 10n` and `allocateFromIdle` calldata.
+   * // Bundler3 approves 1_000 USDC units, then calls `allocateFromIdle` with zero native value.
    * ```
    */
   // biome-ignore lint/complexity/useMaxParams: mirrors the protocol call
@@ -1574,22 +1623,42 @@ export namespace BundlerAction {
     adapter: Address,
     market: InputMarketParams,
     assets: bigint,
-    nativePenalty: bigint,
+    penalty: bigint,
     skipRevert = false,
   ): BundlerCall[] {
-    return [
-      {
-        to: allocator,
+    const calls: BundlerCall[] = [];
+    const penaltyAssets = computeBluePublicAllocatorPenaltyAssets(
+      assets,
+      penalty,
+    );
+
+    if (penaltyAssets > 0n) {
+      calls.push({
+        to: market.loanToken,
         data: encodeFunctionData({
-          abi: vaultV2BluePublicAllocatorAbi,
-          functionName: "allocateFromIdle",
-          args: [vault, adapter, market, assets],
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [allocator, penaltyAssets],
         }),
-        value: nativePenalty,
+        value: 0n,
         skipRevert,
         callbackHash: zeroHash,
-      },
-    ];
+      });
+    }
+
+    calls.push({
+      to: allocator,
+      data: encodeFunctionData({
+        abi: vaultV2BluePublicAllocatorAbi,
+        functionName: "allocateFromIdle",
+        args: [vault, adapter, market, assets, penalty],
+      }),
+      value: 0n,
+      skipRevert,
+      callbackHash: zeroHash,
+    });
+
+    return calls;
   }
 
   /**

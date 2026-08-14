@@ -487,7 +487,7 @@ describe.sequential("MorphoProtocolEvm", () => {
           adapter: "0x0000000000000000000000000000000000000020",
         },
         assets: 50_000n,
-        nativePenalty: 1n,
+        penalty: 1n,
       } satisfies VaultV2BlueReallocation;
 
       account.sendTransaction = vi
@@ -748,7 +748,6 @@ describe.sequential("MorphoProtocolEvm", () => {
         chainId: 1,
         provider: "https://dummy-rpc-url.com",
         bundlerUrl: "https://dummy-bundler-url.com",
-        entryPointAddress: "0x0000000000000000000000000000000000000007",
         safeModulesVersion: "0.3.0",
         isSponsored: false,
         useNativeCoins: true,
