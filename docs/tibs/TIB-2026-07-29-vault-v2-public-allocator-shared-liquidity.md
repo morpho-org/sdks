@@ -244,9 +244,11 @@ It returns both the capacity and the binding `CapacityLimitReason`.
 
 ## Accrual and untracked interest
 
-Each considered vault is accrued once at the supplied timestamp. The accrued
-vault's `_totalAssets` becomes the plan's frozen `firstTotalAssets`
-denominator. Reallocation legs never change it.
+Markets are first accrued to the supplied timestamp. For each vault, the first
+simulated allocator call then follows contract order: transfer the penalty,
+deallocate the source when present, and let `VaultV2.allocate()` perform the
+vault's first accrual. The resulting `_totalAssets` becomes the plan's frozen
+`firstTotalAssets` denominator. Later reallocation legs never change it.
 
 For adapter `a` and market `m`:
 
@@ -277,8 +279,8 @@ A candidate exists only when:
   that threshold is provided;
 - all three target vault caps have a positive absolute cap;
 - all three source allocations are non-zero for market sources;
-- the source pair is not the exact target `(adapter, market)` pair. The same
-  Blue market through another adapter is valid.
+- the source Blue market is not the target market. Moving liquidity between
+  adapters of the same market creates no net market liquidity and is ignored.
 
 For each allocation ID shared by the source and target, feasibility is checked
 without principal cancellation:
@@ -289,13 +291,16 @@ allocation[id] + sourceUntracked + targetUntracked
 ```
 
 For non-shared target IDs, principal is bounded by cap headroom after target
-untracked interest. The final obtainable amount is the minimum of:
+untracked interest. A monotonic binary search applies each candidate amount to
+a clone, then checks the exact post-accrual allocations against
+`VaultV2Utils.allocationHeadroom({ ...allocation, allocation: 0n },
+firstTotalAssets)`. This is necessary because the first penalty donation can
+change `firstTotalAssets` as the candidate amount changes. The initial search
+ceiling is the minimum of:
 
 - `MathLib.MAX_UINT_128`;
-- target Morpho market `uint128` supply headroom (unless a same-market source
-  deallocation creates the headroom in the same call);
+- target Morpho market `uint128` supply headroom;
 - allocator target-cap headroom;
-- each non-shared target Vault V2 cap headroom;
 - source expected supply assets;
 - source Blue withdrawal capacity to the configured utilization ceiling; or
 - the vault idle balance for an idle source.
@@ -316,7 +321,7 @@ sources are applied in contract order:
 | source market/shares | withdraw first | unchanged |
 | target market/shares | supply second | supply |
 | vault idle balance | `+= penaltyAssets`, then `+= assets`, then `-= assets` | `+= penaltyAssets`, then `-= assets` |
-| vault `_totalAssets` | unchanged | unchanged |
+| vault `_totalAssets` | first call accrues after penalty + deallocation; then frozen | first call accrues after penalty; then frozen |
 
 Shared IDs are updated twice in that order. Penalties remain as direct vault
 asset donations. The planner records them in the cloned idle balance but does
@@ -353,9 +358,8 @@ the final capped `assets` amount. The planner throws:
 The existing `validateReallocations` validates the combined `BlueReallocation`
 union. V2 penalties must be between zero and WAD (and therefore fit the
 contract's `uint64`), and every call for the same explicit allocator-vault pair
-must use one consistent penalty. A V2 market source is rejected only when both
-its adapter and market match the target pair. The same market through another
-adapter is accepted.
+must use one consistent penalty. A V2 market source is rejected whenever its
+Blue market matches the target, regardless of adapter.
 
 `VaultV2ReallocationData` exposes:
 
@@ -405,24 +409,29 @@ source and target thresholds plus an internal 100% fallback.
   deprecated.
 - `BluePublicAllocatorReallocation` receives no alias because it was not part
   of the published surface relative to `origin/main`.
-- `liquidity-sdk-viem` migrates its public state declarations to
-  `VaultV1ReallocationData`; this is type-compatible with the deprecated class
-  alias and ships as a patch.
-- The feature is minor for `morpho-ts`, `blue-sdk`, `blue-sdk-viem`, and
-  `morpho-sdk`.
+- The compatible `liquidity-sdk-viem` V1 type-name migration would be a patch
+  in isolation. The new public Vault V2 loader makes this package a minor.
+- The feature is minor for `morpho-ts`, `blue-sdk`, `blue-sdk-viem`,
+  `morpho-sdk`, `liquidity-sdk-viem`, and
+  `wdk-protocol-lending-morpho-evm`.
 - `blue-sdk-viem` raises its `blue-sdk` peer range to the new minor.
+- `liquidity-sdk-viem` raises its `blue-sdk`, `blue-sdk-viem`, `morpho-sdk`,
+  and `morpho-ts` peer floors to the versions that introduce the V2 loader's
+  runtime imports.
 
 ## Security and operational constraints
 
 - A plan is a block-state simulation, not an execution guarantee. Allocator
   caps, shares, and market liquidity can be front-run.
-- The caller must approve GeneralAdapter1 for the aggregate V2 penalty assets.
-  `getRequirements()` emits a classic loan-token approval when needed; V2
-  allocator calls themselves are nonpayable.
+- The user approves GeneralAdapter1 for the aggregate V2 penalty assets.
+  `getRequirements()` emits a classic loan-token approval when needed;
+  Bundler3 then grants the BluePublicAllocator an exact, non-skippable per-call
+  allowance before each nonpayable allocator call.
 - The calldata penalty protects against a curator changing the configured rate
   between transaction signing and execution: a mismatch reverts.
-- Pass `options.timestamp` from the block used to fetch state so market and
-  vault accrual share one reference point.
+- The planner defaults to the latest `lastUpdate` in its snapshot. Loaders
+  should pass the intended execution timestamp explicitly when simulating
+  beyond that snapshot so every market and vault shares one reference point.
 - Relative-cap arithmetic rounds down. Overstating by one wei can cause an
   on-chain revert.
 - The upstream ABI and fork fixture must stay pinned to the same Vault V2
@@ -446,6 +455,5 @@ source and target thresholds plus an internal 100% fallback.
 - `packages/morpho-sdk/src/entities/vaultV1ReallocationData.ts`
 - `packages/morpho-sdk/src/entities/vaultV2ReallocationData.ts`
 - `packages/morpho-sdk/src/helpers/computeVaultV1Reallocations.ts`
-- `packages/morpho-sdk/src/helpers/computeVaultV2Reallocations.ts`
 - `packages/blue-sdk/src/vault/v2/VaultV2Utils.ts`
 - `packages/blue-sdk-viem/src/fetch/vault-v2/VaultV2PublicAllocatorConfig.ts`

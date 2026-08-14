@@ -32,6 +32,7 @@ export type {
   Erc4337TransactionConfig,
   MarketPosition,
   MorphoBorrowOptions,
+  MorphoBorrowWithV2ReallocationsOptions,
   MorphoErc20SupplyOptions,
   MorphoEvmAccount,
   MorphoNativeSupplyOptions,

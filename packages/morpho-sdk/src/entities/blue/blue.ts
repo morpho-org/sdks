@@ -203,7 +203,8 @@ export interface BlueActions {
    * @returns Object with `buildTx` and `getRequirements`.
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
    * @throws {InconsistentReallocationPenaltyError} when V2 entries for one allocator-vault pair use different penalties.
-   * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
+   * @throws {InvalidReallocationAddressError} when a V2 identity or adapter address is malformed.
+   * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
    * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
    */
   withdraw: (
@@ -247,7 +248,8 @@ export interface BlueActions {
    * @returns Object with `buildTx` and `getRequirements`.
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
    * @throws {InconsistentReallocationPenaltyError} when V2 entries for one allocator-vault pair use different penalties.
-   * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
+   * @throws {InvalidReallocationAddressError} when a V2 identity or adapter address is malformed.
+   * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
    * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
    */
   borrow: (params: {
@@ -399,7 +401,8 @@ export interface BlueActions {
    * @returns Object with `buildTx` and `getRequirements`.
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
    * @throws {InconsistentReallocationPenaltyError} when V2 entries for one allocator-vault pair use different penalties.
-   * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
+   * @throws {InvalidReallocationAddressError} when a V2 identity or adapter address is malformed.
+   * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
    * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
    */
   supplyCollateralBorrow: (
@@ -457,7 +460,8 @@ export interface BlueActions {
    * @returns Object with `buildTx` and `getRequirements`.
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
    * @throws {InconsistentReallocationPenaltyError} when V2 entries for one allocator-vault pair use different penalties.
-   * @throws {InvalidReallocationSourceTypeError} when a V2 source discriminator is unknown.
+   * @throws {InvalidReallocationAddressError} when a V2 identity or adapter address is malformed.
+   * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
    * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
    */
   refinance: (params: {
@@ -573,8 +577,9 @@ export class MorphoBlue implements BlueActions {
   ) {
     const amount = computeVaultV2ReallocationPenaltyAssets(reallocations ?? []);
 
-    // Penalty funding always uses the classic GeneralAdapter1 allowance so a
-    // collateral permit and a loan-token penalty can coexist in one bundle.
+    // Separate-token penalty funding uses a classic GeneralAdapter1 allowance so a collateral
+    // permit and a loan-token penalty can coexist in one bundle. The shared-token path aggregates
+    // both amounts into the collateral requirement instead.
     return getGeneralAdapterRequirements(this.client.viemClient, {
       address: this.marketParams.loanToken,
       chainId: this.chainId,
@@ -1422,6 +1427,13 @@ export class MorphoBlue implements BlueActions {
     });
     return {
       getRequirements: async (params?: { useSimplePermit?: boolean }) => {
+        const penaltyAssets = computeVaultV2ReallocationPenaltyAssets(
+          reallocations ?? [],
+        );
+        const usesSharedFundingToken = isAddressEqual(
+          this.marketParams.collateralToken,
+          this.marketParams.loanToken,
+        );
         const [erc20Requirements, penaltyRequirements, authTx] =
           await Promise.all([
             getGeneralAdapterRequirements(this.client.viemClient, {
@@ -1430,9 +1442,17 @@ export class MorphoBlue implements BlueActions {
               supportSignature: this.client.options.supportSignature,
               supportDeployless: this.client.options.supportDeployless,
               useSimplePermit: params?.useSimplePermit,
-              args: { amount, from: userAddress },
+              args: {
+                amount: amount + (usesSharedFundingToken ? penaltyAssets : 0n),
+                from: userAddress,
+              },
             }),
-            this.getReallocationPenaltyRequirements(userAddress, reallocations),
+            usesSharedFundingToken
+              ? Promise.resolve([])
+              : this.getReallocationPenaltyRequirements(
+                  userAddress,
+                  reallocations,
+                ),
             getBlueAuthorizationRequirement({
               viemClient: this.client.viemClient,
               chainId: this.chainId,

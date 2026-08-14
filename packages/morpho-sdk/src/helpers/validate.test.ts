@@ -26,6 +26,7 @@ import {
   ExcessiveSlippageToleranceError,
   InconsistentReallocationPenaltyError,
   InputExceedsMaxError,
+  InvalidReallocationAddressError,
   InvalidReallocationSourceTypeError,
   InvalidReallocationTypeError,
   MarketIdMismatchError,
@@ -617,6 +618,11 @@ describe("validateReallocations", () => {
       ErrorClass: NonPositiveInputError,
     },
     {
+      name: "negative assets",
+      reallocation: { ...validBluePublicAllocatorReallocation, assets: -1n },
+      ErrorClass: NonPositiveInputError,
+    },
+    {
       name: "uint128 asset overflow",
       reallocation: {
         ...validBluePublicAllocatorReallocation,
@@ -643,6 +649,20 @@ describe("validateReallocations", () => {
         targetMarketId,
       ),
     ).toThrow(InconsistentReallocationPenaltyError);
+  });
+
+  test("behavior: accepts the maximum uint128 asset amount", () => {
+    expect(() =>
+      validateReallocations(
+        [
+          {
+            ...validBluePublicAllocatorReallocation,
+            assets: maxUint128,
+          },
+        ],
+        targetMarketId,
+      ),
+    ).not.toThrow();
   });
 
   test("behavior: allows different penalties for different allocator-vault pairs", () => {
@@ -679,7 +699,7 @@ describe("validateReallocations", () => {
     ).toThrow(ReallocationWithdrawalOnTargetMarketError);
   });
 
-  test("behavior: allows the target market through a different Vault V2 adapter", () => {
+  test("error: target market through a different Vault V2 adapter", () => {
     expect(() =>
       validateReallocations(
         [
@@ -694,7 +714,48 @@ describe("validateReallocations", () => {
         ],
         targetMarketId,
       ),
-    ).not.toThrow();
+    ).toThrow(ReallocationWithdrawalOnTargetMarketError);
+  });
+
+  test("error: target market supplied as plain market params", () => {
+    const plainMarketParams = {
+      loanToken: marketParams.loanToken,
+      collateralToken: marketParams.collateralToken,
+      oracle: marketParams.oracle,
+      irm: marketParams.irm,
+      lltv: marketParams.lltv,
+    };
+    const reallocation = {
+      ...validBluePublicAllocatorReallocation,
+      from: {
+        type: "market",
+        adapter: USER_A,
+        marketParams: plainMarketParams,
+      },
+    } as unknown as BlueReallocation;
+
+    expect(() => validateReallocations([reallocation], targetMarketId)).toThrow(
+      ReallocationWithdrawalOnTargetMarketError,
+    );
+  });
+
+  test.each([
+    { name: "missing allocator", overrides: { allocator: undefined } },
+    { name: "invalid vault", overrides: { vault: "not-an-address" } },
+    { name: "missing target", overrides: { to: undefined } },
+    {
+      name: "invalid target adapter",
+      overrides: { to: { adapter: "not-an-address" } },
+    },
+  ])("error: InvalidReallocationAddressError for $name", ({ overrides }) => {
+    const reallocation = {
+      ...validBluePublicAllocatorReallocation,
+      ...overrides,
+    } as unknown as BlueReallocation;
+
+    expect(() => validateReallocations([reallocation], targetMarketId)).toThrow(
+      InvalidReallocationAddressError,
+    );
   });
 
   test("error: InvalidReallocationSourceTypeError", () => {
@@ -705,6 +766,35 @@ describe("validateReallocations", () => {
 
     expect(() => validateReallocations([reallocation], targetMarketId)).toThrow(
       InvalidReallocationSourceTypeError,
+    );
+  });
+
+  test.each([
+    { name: "missing source", from: undefined },
+    { name: "null source", from: null },
+    {
+      name: "missing market params",
+      from: { type: "market", adapter: USER_A },
+    },
+  ])("error: InvalidReallocationSourceTypeError for $name", ({ from }) => {
+    const reallocation = {
+      ...validBluePublicAllocatorReallocation,
+      from,
+    } as unknown as BlueReallocation;
+
+    expect(() => validateReallocations([reallocation], targetMarketId)).toThrow(
+      InvalidReallocationSourceTypeError,
+    );
+  });
+
+  test("error: InvalidReallocationAddressError for missing source adapter", () => {
+    const reallocation = {
+      ...validBluePublicAllocatorReallocation,
+      from: { type: "market", marketParams: sourceMarketA },
+    } as unknown as BlueReallocation;
+
+    expect(() => validateReallocations([reallocation], targetMarketId)).toThrow(
+      InvalidReallocationAddressError,
     );
   });
 

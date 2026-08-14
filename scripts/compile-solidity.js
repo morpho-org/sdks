@@ -54,6 +54,18 @@ const packageConfigs = {
       );
     },
   },
+  "morpho-sdk": {
+    bytecodeExportName: "code",
+    describeArtifact(contractName) {
+      return `Test-only \`${contractName}\` contract`;
+    },
+    resolveOutputPath(sourceName) {
+      if (!sourceName.includes("/fixtures/")) return null;
+
+      const parsed = parse(sourceName);
+      return join(packageDir, "test", "fixtures", `${parsed.name}.ts`);
+    },
+  },
 };
 
 const config = packageConfigs[packageName];

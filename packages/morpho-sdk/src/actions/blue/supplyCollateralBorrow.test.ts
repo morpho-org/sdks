@@ -1,5 +1,9 @@
-import { addressesRegistry, MarketParams } from "@morpho-org/blue-sdk";
-import { parseUnits } from "viem";
+import {
+  addressesRegistry,
+  getChainAddresses,
+  MarketParams,
+} from "@morpho-org/blue-sdk";
+import { decodeFunctionData, type Hex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { afterEach, describe, expect, vi } from "vitest";
 import {
@@ -8,13 +12,17 @@ import {
   WethUsdsBlue,
 } from "../../../test/fixtures/blue.js";
 import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
+import { makePermit } from "../../../test/helpers/permit.js";
 import { test } from "../../../test/setup.js";
+import { bundler3Abi, generalAdapter1Abi } from "../../abis.js";
 import {
+  type BlueReallocation,
   isRequirementApproval,
   isRequirementSignature,
   NativeAmountOnNonWNativeAssetError,
   NegativeInputError,
   NonPositiveInputError,
+  type PermitRequirementSignature,
   type VaultReallocation,
 } from "../../types/index.js";
 import { getGeneralAdapterRequirements } from "../requirements/index.js";
@@ -206,6 +214,99 @@ describe("blueSupplyCollateralBorrow unit tests", () => {
     expect(localSpy).toHaveBeenCalled();
     expect(tx).toBeDefined();
     expect(tx.action.type).toBe("blueSupplyCollateralBorrow");
+  });
+
+  test("behavior: shared-token permits fund collateral and V2 penalty with one pull", async ({
+    client,
+  }) => {
+    const {
+      bundler3: { bundler3, generalAdapter1 },
+    } = getChainAddresses(mainnet.id);
+    const sharedTokenMarket = new MarketParams({
+      ...WethUsdsBlue,
+      loanToken: WethUsdsBlue.collateralToken,
+    });
+    const reallocations: readonly BlueReallocation[] = [
+      {
+        type: "bluePublicAllocator",
+        allocator: WethUsdsBlue.irm,
+        vault: WethUsdsBlue.oracle,
+        from: { type: "idle" },
+        to: { adapter: WethUsdsBlue.collateralToken },
+        assets: 10n,
+        penalty: 500_000_000_000_000_000n,
+      },
+    ];
+    const combinedAmount = 105n;
+    const signature = `0x${"11".repeat(64)}1b` as Hex;
+    const requirementSignatures = [
+      makePermit({
+        owner: client.account.address,
+        asset: sharedTokenMarket.loanToken,
+        amount: combinedAmount,
+      }),
+      {
+        args: {
+          owner: client.account.address,
+          asset: sharedTokenMarket.loanToken,
+          amount: combinedAmount,
+          nonce: 0n,
+          deadline: 1_900_000_000n,
+          expiration: 1_900_000_000n,
+          signature,
+        },
+        action: {
+          type: "permit2",
+          args: {
+            spender: generalAdapter1,
+            amount: combinedAmount,
+            deadline: 1_900_000_000n,
+            expiration: 1_900_000_000n,
+          },
+        },
+      },
+    ] satisfies readonly PermitRequirementSignature[];
+
+    for (const requirementSignature of requirementSignatures) {
+      const tx = blueSupplyCollateralBorrow({
+        market: { chainId: mainnet.id, marketParams: sharedTokenMarket },
+        args: {
+          amount: 100n,
+          borrowAmount: 1n,
+          onBehalf: client.account.address,
+          receiver: client.account.address,
+          minSharePrice: 0n,
+          requirementSignature,
+          reallocations,
+        },
+      });
+
+      expect(tx.action.args.reallocationPenaltyAssets).toBe(5n);
+      const bundle = decodeFunctionData({ abi: bundler3Abi, data: tx.data });
+      const calls = bundle.args[0] ?? [];
+      expect(calls).toHaveLength(7);
+      expect(
+        decodeFunctionData({
+          abi: generalAdapter1Abi,
+          data: calls[1]!.data,
+        }),
+      ).toMatchObject({
+        functionName:
+          requirementSignature.action.type === "permit2"
+            ? "permit2TransferFrom"
+            : "erc20TransferFrom",
+        args: [sharedTokenMarket.loanToken, generalAdapter1, combinedAmount],
+      });
+      expect(
+        decodeFunctionData({
+          abi: generalAdapter1Abi,
+          data: calls[3]!.data,
+        }),
+      ).toMatchObject({
+        functionName: "erc20Transfer",
+        args: [sharedTokenMarket.loanToken, bundler3, 5n],
+      });
+    }
   });
 
   test("should throw NegativeInputError when amount is negative", async ({

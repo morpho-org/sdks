@@ -11,12 +11,15 @@ import type { Address, Hash } from "viem";
 import { zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import { blueBorrow } from "../actions/index.js";
-import { computeVaultV2Reallocations } from "../helpers/index.js";
 import {
   InsufficientSharedLiquidityError,
   ReallocationWithdrawExceedsMarketSupplyError,
+  UnknownReallocationMarketError,
 } from "../types/index.js";
-import { VaultV2ReallocationData } from "./vaultV2ReallocationData.js";
+import {
+  computeVaultV2Reallocations,
+  VaultV2ReallocationData,
+} from "./vaultV2ReallocationData.js";
 
 const TIMESTAMP = 1_700_000_000n;
 const ALLOCATOR = "0x0000000000000000000000000000000000000001";
@@ -46,10 +49,12 @@ const makeMarket = ({
   params,
   supply,
   borrow,
+  lastUpdate = TIMESTAMP,
 }: {
   readonly params: MarketParams;
   readonly supply: bigint;
   readonly borrow: bigint;
+  readonly lastUpdate?: bigint;
 }) =>
   new Market({
     params,
@@ -57,7 +62,7 @@ const makeMarket = ({
     totalBorrowAssets: borrow,
     totalSupplyShares: supply * 1_000_000n,
     totalBorrowShares: borrow * 1_000_000n,
-    lastUpdate: TIMESTAMP,
+    lastUpdate,
     fee: 0n,
   });
 
@@ -82,6 +87,10 @@ interface FixtureOptions {
   readonly canPullFromIdle?: boolean;
   readonly canPullFromMarket?: boolean;
   readonly penalty?: bigint;
+  readonly sourceLastUpdate?: bigint;
+  readonly targetLastUpdate?: bigint;
+  readonly vaultLastUpdate?: bigint;
+  readonly maxRate?: bigint;
 }
 
 const makeFixture = ({
@@ -105,12 +114,17 @@ const makeFixture = ({
   canPullFromIdle = true,
   canPullFromMarket = true,
   penalty = 7n,
+  sourceLastUpdate = TIMESTAMP,
+  targetLastUpdate = TIMESTAMP,
+  vaultLastUpdate = TIMESTAMP,
+  maxRate = 0n,
 }: FixtureOptions = {}) => {
   const sameMarket = sourceMarketParams.id === targetParams.id;
   const targetMarket = makeMarket({
     params: targetParams,
     supply: sameMarket ? sourceSupply : targetSupply,
     borrow: sameMarket ? sourceBorrow : targetBorrow,
+    lastUpdate: targetLastUpdate,
   });
   const sourceMarket = sameMarket
     ? targetMarket
@@ -118,6 +132,7 @@ const makeFixture = ({
         params: sourceMarketParams,
         supply: sourceSupply,
         borrow: sourceBorrow,
+        lastUpdate: sourceLastUpdate,
       });
   const targetSupplyShares = targetMarket.toSupplyShares(
     targetPositionAssets,
@@ -225,8 +240,8 @@ const makeFixture = ({
       _totalAssets: totalAssets,
       totalSupply: totalAssets,
       virtualShares: 0n,
-      maxRate: 0n,
-      lastUpdate: TIMESTAMP,
+      maxRate,
+      lastUpdate: vaultLastUpdate,
       liquidityAdapter: zeroAddress,
       liquidityData: "0x",
       liquidityAllocations: undefined,
@@ -338,20 +353,14 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
     expect(result.data.getVault(VAULT).assetBalance).toBe(2n);
   });
 
-  test("behavior: permits the target market through a different adapter", () => {
-    const { data, sourceExpectedAssets } = makeFixture({
+  test("behavior: excludes the target market through a different adapter", () => {
+    const { data } = makeFixture({
       sourceMarketParams: targetParams,
     });
 
     expect(
       data.computeVaultV2Reallocations(targetParams.id).reallocations,
-    ).toMatchObject([
-      {
-        from: { type: "market", adapter: SOURCE_ADAPTER },
-        to: { adapter: TARGET_ADAPTER },
-        assets: sourceExpectedAssets,
-      },
-    ]);
+    ).toStrictEqual([]);
   });
 
   test("behavior: allows deallocation assets to exceed stored allocation", () => {
@@ -452,7 +461,7 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
     ).toStrictEqual([]);
   });
 
-  test("behavior: same-market deallocation creates target supply headroom", () => {
+  test("behavior: same-market deallocation is not counted as target liquidity", () => {
     const { data } = makeFixture({
       sourceMarketParams: targetParams,
       sourceSupply: MathLib.MAX_UINT_128,
@@ -466,9 +475,41 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
     });
 
     expect(
-      data.computeVaultV2Reallocations(targetParams.id).reallocations[0]
-        ?.assets,
-    ).toBe(MathLib.MAX_UINT_128);
+      data.computeVaultV2Reallocations(targetParams.id).reallocations,
+    ).toStrictEqual([]);
+  });
+
+  test("behavior: defaults to the latest market or vault update timestamp", () => {
+    const { data } = makeFixture({
+      sourceLastUpdate: TIMESTAMP + 1n,
+      vaultLastUpdate: TIMESTAMP + 2n,
+    });
+
+    expect(() =>
+      data.computeVaultV2Reallocations(targetParams.id),
+    ).not.toThrow();
+  });
+
+  test("behavior: freezes firstTotalAssets after the first penalty donation", () => {
+    const { data } = makeFixture({
+      sourceSupply: 500n,
+      targetSupply: 0n,
+      firstTotalAssets: 500n,
+      maxRate: MathLib.WAD,
+      vaultLastUpdate: TIMESTAMP - 1n,
+      penalty: MathLib.WAD,
+      allocatorTargetCap: 10_000n,
+      targetCaps: [
+        { absoluteCap: 10_000n, relativeCap: MathLib.WAD / 2n },
+        { absoluteCap: 10_000n, relativeCap: MathLib.WAD / 2n },
+        { absoluteCap: 10_000n, relativeCap: MathLib.WAD / 2n },
+      ],
+    });
+
+    const result = data.computeVaultV2Reallocations(targetParams.id);
+
+    expect(result.reallocations[0]?.assets).toBe(500n);
+    expect(result.data.getVault(VAULT)._totalAssets).toBe(1_000n);
   });
 
   test("behavior: disabled discovery returns no calls", () => {
@@ -478,6 +519,17 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
       data.computeVaultV2Reallocations(targetParams.id, { enabled: false })
         .reallocations,
     ).toStrictEqual([]);
+  });
+
+  test("error: UnknownReallocationMarketError with an explicit timestamp", () => {
+    const { data } = makeFixture();
+    data.markets[targetParams.id] = undefined;
+
+    expect(() =>
+      data.computeVaultV2Reallocations(targetParams.id, {
+        timestamp: TIMESTAMP,
+      }),
+    ).toThrow(UnknownReallocationMarketError);
   });
 
   test("behavior: ignores vault liquidity above the penalty threshold", () => {
@@ -533,6 +585,30 @@ describe("computeVaultV2Reallocations", () => {
     });
 
     expect(reallocations[0]?.assets).toBe(1n);
+  });
+
+  test("behavior: plans at the latest snapshot timestamp by default", () => {
+    const { data } = makeFixture({
+      targetSupply: 100n,
+      targetBorrow: 90n,
+      sourceLastUpdate: TIMESTAMP + 2n,
+    });
+
+    const defaultReallocations = computeVaultV2Reallocations({
+      reallocationData: data,
+      marketId: targetParams.id,
+      operation: "borrow",
+      amount: 20n,
+    });
+    const explicitReallocations = computeVaultV2Reallocations({
+      reallocationData: data,
+      marketId: targetParams.id,
+      operation: "borrow",
+      amount: 20n,
+      options: { timestamp: TIMESTAMP + 2n },
+    });
+
+    expect(defaultReallocations).toStrictEqual(explicitReallocations);
   });
 
   test("behavior: falls back to a 100% source-utilization ceiling", () => {

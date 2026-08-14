@@ -28,11 +28,21 @@ import type {
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
  * @returns The vault's idle-pull permission and WAD-scaled vault-asset penalty.
+ * @throws {viem.BaseError} when the contract read fails.
  * @example
  * ```ts
+ * import type { VaultV2PublicAllocatorConfig } from "@morpho-org/blue-sdk";
  * import { fetchVaultV2PublicAllocatorConfig } from "@morpho-org/blue-sdk-viem";
+ * import { type Address, createPublicClient, http } from "viem";
+ * import { mainnet } from "viem/chains";
  *
- * const config = await fetchVaultV2PublicAllocatorConfig(allocator, vault, client);
+ * const client = createPublicClient({ chain: mainnet, transport: http() });
+ * export async function fetchAllocatorConfig(
+ *   allocator: Address,
+ *   vault: Address,
+ * ): Promise<VaultV2PublicAllocatorConfig> {
+ *   return fetchVaultV2PublicAllocatorConfig(allocator, vault, client);
+ * }
  * ```
  */
 // biome-ignore lint/complexity/useMaxParams: identity fields mirror the allocator's mapping keys
@@ -71,17 +81,29 @@ export async function fetchVaultV2PublicAllocatorConfig(
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
  * @returns The allocator cap and permissions for the adapter-market pair.
+ * @throws {viem.BaseError} when one of the contract reads fails.
  * @example
  * ```ts
+ * import type { VaultV2MarketPublicAllocatorConfig } from "@morpho-org/blue-sdk";
  * import { fetchVaultV2MarketPublicAllocatorConfig } from "@morpho-org/blue-sdk-viem";
+ * import { type Address, createPublicClient, type Hash, http } from "viem";
+ * import { mainnet } from "viem/chains";
  *
- * const config = await fetchVaultV2MarketPublicAllocatorConfig(
- *   allocator,
- *   vault,
- *   adapter,
- *   marketParamsId,
- *   client,
- * );
+ * const client = createPublicClient({ chain: mainnet, transport: http() });
+ * export async function fetchMarketAllocatorConfig(
+ *   allocator: Address,
+ *   vault: Address,
+ *   adapter: Address,
+ *   marketParamsId: Hash,
+ * ): Promise<VaultV2MarketPublicAllocatorConfig> {
+ *   return fetchVaultV2MarketPublicAllocatorConfig(
+ *     allocator,
+ *     vault,
+ *     adapter,
+ *     marketParamsId,
+ *     client,
+ *   );
+ * }
  * ```
  */
 // biome-ignore lint/complexity/useMaxParams: identity fields mirror the allocator's mapping keys
@@ -146,11 +168,27 @@ export async function fetchVaultV2MarketPublicAllocatorConfig(
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.deployless - Deployless mode; defaults to `true`, with direct-read fallback.
  * @returns Vault-wide config, adapter-market configs keyed by `marketParamsId`, and allocations keyed by derived id.
+ * @throws {viem.BaseError} when deployless mode is forced and fails, or when a direct contract read fails.
  * @example
  * ```ts
+ * import type { AccrualVaultV2 } from "@morpho-org/blue-sdk";
  * import { fetchVaultV2PublicAllocatorData } from "@morpho-org/blue-sdk-viem";
+ * import { type Address, createPublicClient, http } from "viem";
+ * import { mainnet } from "viem/chains";
  *
- * const data = await fetchVaultV2PublicAllocatorData(allocator, vault, client);
+ * const client = createPublicClient({ chain: mainnet, transport: http() });
+ * export async function fetchAllocatorData(
+ *   allocator: Address,
+ *   vault: AccrualVaultV2,
+ * ) {
+ *   const data = await fetchVaultV2PublicAllocatorData(
+ *     allocator,
+ *     vault,
+ *     client,
+ *   );
+ *   // data contains publicAllocatorConfig, marketPublicAllocatorConfigs, and allocations.
+ *   return data;
+ * }
  * ```
  */
 // biome-ignore lint/complexity/useMaxParams: follows the package's address/entity/client/options fetcher convention

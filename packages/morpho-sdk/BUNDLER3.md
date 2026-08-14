@@ -20,7 +20,7 @@ Instead of exposing the user directly to target contracts (ERC-4626 vault, Morph
 Bundler3 also calls allocator contracts directly for shared liquidity: `reallocateTo` on Public
 Allocator V1 and `reallocate` or `allocateFromIdle` on Blue Public Allocator.
 
-The **spender** of every approval / permit / permit2 is therefore **always** `generalAdapter1`, never the vault or Morpho directly. See [src/actions/requirements/getRequirements.ts](src/actions/requirements/getRequirements.ts) and the "Requirements System" section of [ARCHITECTURE.md](ARCHITECTURE.md#requirements-system).
+The spender of every **user-supplied** approval / permit / permit2 is `generalAdapter1`, never the vault or Morpho directly. Blue Public Allocator penalties add a separate internal allowance: Bundler3 approves the allocator for each exact penalty amount immediately before the non-skippable allocator call. See [`getGeneralAdapterRequirements`](src/actions/requirements/generalAdapter/getGeneralAdapterRequirements.ts) and the "Requirements System" section of [ARCHITECTURE.md](ARCHITECTURE.md#requirements-system).
 
 ## Composability & modularity
 
@@ -81,9 +81,9 @@ GeneralAdapter1, approves each exact per-call amount from Bundler3, and lets the
 it directly to the vault. The entity's `getRequirements()` returns the corresponding classic
 loan-token approval when a V2 penalty is non-zero.
 
-### 5. A single approval surface
+### 5. A single user approval surface
 
-Whether it's a V1 deposit, a V2 deposit, a `supplyCollateral`, a `repay`, or a `supplyCollateralBorrow`: the spender is **always** `generalAdapter1`. A user who has already approved GA1 for a given token transparently reuses that approval. The approval / permit / permit2 decision is centralized in [`getRequirements`](src/actions/requirements/getRequirements.ts).
+Whether it's a V1 deposit, a V2 deposit, a `supplyCollateral`, a `repay`, or a `supplyCollateralBorrow`, the spender presented to the user is **always** `generalAdapter1`. A user who has already approved GA1 for a given token transparently reuses that approval. The approval / permit / permit2 decision is centralized in [`getGeneralAdapterRequirements`](src/actions/requirements/generalAdapter/getGeneralAdapterRequirements.ts). For Blue Public Allocator penalties, Bundler3 separately grants the allocator an exact per-call allowance; that approval and allocator call cannot be made independently skippable.
 
 ## Dangers & limits
 

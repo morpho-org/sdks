@@ -1,0 +1,365 @@
+import {
+  getChainAddresses,
+  MarketParams,
+  MathLib,
+  marketParamsAbi,
+} from "@morpho-org/blue-sdk";
+import {
+  blueAbi,
+  readContractRestructured,
+  vaultV2Abi,
+} from "@morpho-org/blue-sdk-viem";
+import type { AnvilTestClient } from "@morpho-org/test";
+import { createViemTest } from "@morpho-org/test/vitest";
+import {
+  encodeAbiParameters,
+  encodeFunctionData,
+  erc20Abi,
+  maxUint128,
+  parseUnits,
+} from "viem";
+import { base } from "viem/chains";
+import { assert, describe, expect } from "vitest";
+import {
+  abi as allocatorAbi,
+  code as allocatorCode,
+} from "../../../test/fixtures/BluePublicAllocatorWriteFixture.js";
+import { supplyCollateral } from "../../../test/helpers/blue.js";
+import {
+  deployMorphoMarketV1AdapterV2,
+  deployVaultV2,
+  submitAndAcceptVaultV2Call,
+} from "../../../test/helpers/vaultV2.js";
+import {
+  isRequirementApproval,
+  isRequirementBlueAuthorization,
+  morphoViemExtension,
+} from "../../index.js";
+import type { VaultV2BlueReallocation } from "../../types/index.js";
+
+const test = createViemTest(base, {
+  forkUrl: process.env.BASE_RPC_URL,
+  forkBlockNumber: 41_290_768n,
+  stepsTracing: false,
+});
+
+const sourceMarket = new MarketParams({
+  loanToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  collateralToken: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+  oracle: "0x663BECd10daE6C4A3Dcd89F1d76c1174199639B9",
+  irm: "0x46415998764C29aB2a25CbeA6254146D50D22687",
+  lltv: 860_000_000_000_000_000n,
+});
+
+const targetMarket = new MarketParams({
+  loanToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  collateralToken: "0x4200000000000000000000000000000000000006",
+  oracle: "0xFEa2D58cEfCb9fcb597723c6bAE66fFE4193aFE4",
+  irm: "0x46415998764C29aB2a25CbeA6254146D50D22687",
+  lltv: 860_000_000_000_000_000n,
+});
+
+describe("Blue actions with Vault V2 reallocations", () => {
+  test("executes market and idle reallocations through live Base contracts", async ({
+    client,
+  }) => {
+    const anvilClient = client as AnvilTestClient;
+    const { morpho, bundler3 } = getChainAddresses(base.id);
+    const sourceAssets = parseUnits("20", 6);
+    const idleAssets = parseUnits("10", 6);
+    const sourceDeposit = parseUnits("100", 6);
+    const initialIdleAssets = parseUnits("20", 6);
+    const penalty = parseUnits("0.01", 18);
+    const borrowAmount = parseUnits("1", 6);
+    const collateralAmount = parseUnits("1", 18);
+    const totalPenaltyAssets =
+      MathLib.wMulUp(sourceAssets, penalty) +
+      MathLib.wMulUp(idleAssets, penalty);
+
+    for (const marketParams of [sourceMarket, targetMarket]) {
+      const marketState = await readContractRestructured(client, {
+        address: morpho,
+        abi: blueAbi,
+        functionName: "market",
+        args: [marketParams.id],
+      });
+      if (marketState.lastUpdate === 0n) {
+        await client.writeContract({
+          address: morpho,
+          abi: blueAbi,
+          functionName: "createMarket",
+          args: [marketParams],
+        });
+      }
+    }
+
+    const vault = await deployVaultV2(anvilClient, targetMarket.loanToken);
+    await submitAndAcceptVaultV2Call(anvilClient, {
+      vault,
+      data: encodeFunctionData({
+        abi: vaultV2Abi,
+        functionName: "setIsAllocator",
+        args: [client.account.address, true],
+      }),
+    });
+
+    const sourceAdapter = await deployMorphoMarketV1AdapterV2(
+      anvilClient,
+      vault,
+    );
+    const targetAdapter = sourceAdapter;
+
+    await submitAndAcceptVaultV2Call(anvilClient, {
+      vault,
+      data: encodeFunctionData({
+        abi: vaultV2Abi,
+        functionName: "addAdapter",
+        args: [sourceAdapter],
+      }),
+    });
+
+    const idsData = new Set(
+      [sourceMarket, targetMarket].flatMap((marketParams) => [
+        encodeAbiParameters(
+          [{ type: "string" }, { type: "address" }],
+          ["this", sourceAdapter],
+        ),
+        encodeAbiParameters(
+          [{ type: "string" }, { type: "address" }],
+          ["collateralToken", marketParams.collateralToken],
+        ),
+        encodeAbiParameters(
+          [{ type: "string" }, { type: "address" }, marketParamsAbi],
+          ["this/marketParams", sourceAdapter, marketParams],
+        ),
+      ]),
+    );
+
+    for (const idData of idsData) {
+      await submitAndAcceptVaultV2Call(anvilClient, {
+        vault,
+        data: encodeFunctionData({
+          abi: vaultV2Abi,
+          functionName: "increaseAbsoluteCap",
+          args: [idData, maxUint128],
+        }),
+      });
+      await submitAndAcceptVaultV2Call(anvilClient, {
+        vault,
+        data: encodeFunctionData({
+          abi: vaultV2Abi,
+          functionName: "increaseRelativeCap",
+          args: [idData, MathLib.WAD],
+        }),
+      });
+    }
+
+    await client.writeContract({
+      address: vault,
+      abi: vaultV2Abi,
+      functionName: "setLiquidityAdapterAndData",
+      args: [
+        sourceAdapter,
+        encodeAbiParameters([marketParamsAbi], [sourceMarket]),
+      ],
+    });
+    await client.deal({
+      account: client.account.address,
+      erc20: targetMarket.loanToken,
+      amount: sourceDeposit,
+    });
+    await client.approve({
+      address: targetMarket.loanToken,
+      args: [vault, sourceDeposit],
+    });
+    await client.writeContract({
+      address: vault,
+      abi: vaultV2Abi,
+      functionName: "deposit",
+      args: [sourceDeposit, client.account.address],
+    });
+    await client.deal({
+      account: vault,
+      erc20: targetMarket.loanToken,
+      amount: initialIdleAssets,
+    });
+
+    const deploymentHash = await client.deployContract({
+      abi: allocatorAbi,
+      bytecode: allocatorCode,
+    });
+    const deploymentReceipt = await client.waitForTransactionReceipt({
+      hash: deploymentHash,
+    });
+    const allocator = deploymentReceipt.contractAddress;
+    assert(allocator != null);
+
+    await submitAndAcceptVaultV2Call(anvilClient, {
+      vault,
+      data: encodeFunctionData({
+        abi: vaultV2Abi,
+        functionName: "setIsAllocator",
+        args: [allocator, true],
+      }),
+    });
+    await client.writeContract({
+      address: allocator,
+      abi: allocatorAbi,
+      functionName: "setIsActiveAdapter",
+      args: [vault, sourceAdapter, true],
+    });
+    await client.writeContract({
+      address: allocator,
+      abi: allocatorAbi,
+      functionName: "setAbsoluteCap",
+      args: [vault, targetAdapter, targetMarket, maxUint128],
+    });
+    await client.writeContract({
+      address: allocator,
+      abi: allocatorAbi,
+      functionName: "setCanPullFromMarket",
+      args: [vault, sourceAdapter, sourceMarket, true],
+    });
+    await client.writeContract({
+      address: allocator,
+      abi: allocatorAbi,
+      functionName: "setCanPullFromIdle",
+      args: [vault, true],
+    });
+    await client.writeContract({
+      address: allocator,
+      abi: allocatorAbi,
+      functionName: "setPenalty",
+      args: [vault, penalty],
+    });
+
+    await supplyCollateral({
+      client: anvilClient,
+      chainId: base.id,
+      market: targetMarket,
+      collateralAmount,
+    });
+    await client.deal({
+      account: client.account.address,
+      erc20: targetMarket.loanToken,
+      amount: totalPenaltyAssets,
+    });
+
+    const reallocations: readonly VaultV2BlueReallocation[] = [
+      {
+        allocator,
+        type: "bluePublicAllocator",
+        vault,
+        from: {
+          type: "market",
+          adapter: sourceAdapter,
+          marketParams: sourceMarket,
+        },
+        to: { adapter: targetAdapter },
+        assets: sourceAssets,
+        penalty,
+      },
+      {
+        allocator,
+        type: "bluePublicAllocator",
+        vault,
+        from: { type: "idle" },
+        to: { adapter: targetAdapter },
+        assets: idleAssets,
+        penalty,
+      },
+    ];
+
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
+    const market = morphoClient.blue(targetMarket, base.id);
+    const positionData = await market.getPositionData(client.account.address);
+    const borrow = market.borrow({
+      userAddress: client.account.address,
+      amount: borrowAmount,
+      positionData,
+      reallocations,
+    });
+    const requirements = await borrow.getRequirements();
+    const approval = requirements.find(isRequirementApproval);
+    const authorization = requirements.find(isRequirementBlueAuthorization);
+    assert(approval != null);
+    assert(authorization != null);
+    await client.sendTransaction(approval);
+    await client.sendTransaction(authorization);
+
+    const [sourcePositionBefore, targetPositionBefore, vaultBalanceBefore] =
+      await Promise.all([
+        readContractRestructured(client, {
+          address: morpho,
+          abi: blueAbi,
+          functionName: "position",
+          args: [sourceMarket.id, sourceAdapter],
+        }),
+        readContractRestructured(client, {
+          address: morpho,
+          abi: blueAbi,
+          functionName: "position",
+          args: [targetMarket.id, targetAdapter],
+        }),
+        client.readContract({
+          address: targetMarket.loanToken,
+          abi: erc20Abi,
+          functionName: "balanceOf",
+          args: [vault],
+        }),
+      ]);
+
+    await client.sendTransaction(borrow.buildTx());
+
+    const [
+      sourcePositionAfter,
+      targetPositionAfter,
+      vaultBalanceAfter,
+      bundlerBalanceAfter,
+      allocatorAllowanceAfter,
+    ] = await Promise.all([
+      readContractRestructured(client, {
+        address: morpho,
+        abi: blueAbi,
+        functionName: "position",
+        args: [sourceMarket.id, sourceAdapter],
+      }),
+      readContractRestructured(client, {
+        address: morpho,
+        abi: blueAbi,
+        functionName: "position",
+        args: [targetMarket.id, targetAdapter],
+      }),
+      client.readContract({
+        address: targetMarket.loanToken,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [vault],
+      }),
+      client.readContract({
+        address: targetMarket.loanToken,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [bundler3.bundler3],
+      }),
+      client.readContract({
+        address: targetMarket.loanToken,
+        abi: erc20Abi,
+        functionName: "allowance",
+        args: [bundler3.bundler3, allocator],
+      }),
+    ]);
+
+    expect(sourcePositionAfter.supplyShares).toBeLessThan(
+      sourcePositionBefore.supplyShares,
+    );
+    expect(targetPositionBefore.supplyShares).toBe(0n);
+    expect(targetPositionAfter.supplyShares).toBeGreaterThan(0n);
+    expect(vaultBalanceBefore).toBe(initialIdleAssets);
+    expect(vaultBalanceAfter).toBe(
+      vaultBalanceBefore + totalPenaltyAssets - idleAssets,
+    );
+    expect(bundlerBalanceAfter).toBe(0n);
+    expect(allocatorAllowanceAfter).toBe(0n);
+  });
+});
