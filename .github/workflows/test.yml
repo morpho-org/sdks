@@ -76,8 +76,10 @@ jobs:
         uses: actions/cache/restore@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6
         with:
           path: ~/.foundry/cache/rpc
-          key: foundry-${{ github.job }}-${{ matrix.name }}-${{ github.sha }}
-          restore-keys: foundry-${{ github.job }}-${{ matrix.name }}-
+          key: foundry-${{ github.job }}-${{ matrix.name }}-${{ github.sha }}-${{ github.run_attempt }}
+          restore-keys: |
+            foundry-${{ github.job }}-${{ matrix.name }}-${{ github.sha }}-
+            foundry-${{ github.job }}-${{ matrix.name }}-
 
       - uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1
         if: matrix.uses_foundry
@@ -115,12 +117,12 @@ jobs:
           retention-days: 1
 
       - name: Save Foundry cache
-        # A successful retry has validated and refreshed the cache before it is saved.
+        # Attempts need unique keys because GitHub caches are immutable.
         if: success() && matrix.uses_foundry
         uses: actions/cache/save@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6
         with:
           path: ~/.foundry/cache/rpc
-          key: foundry-${{ github.job }}-${{ matrix.name }}-${{ github.sha }}
+          key: foundry-${{ github.job }}-${{ matrix.name }}-${{ github.sha }}-${{ github.run_attempt }}
 
   vitest:
     name: Vitest
