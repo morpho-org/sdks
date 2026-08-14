@@ -205,13 +205,20 @@ export default defineConfig({
         test: {
           name: "test",
           include: ["packages/test/src/**/*.test.ts"],
+          exclude: [
+            ...configDefaults.exclude,
+            "packages/test/src/anvil.test.ts",
+          ],
         },
       },
       {
         extends: true,
         test: {
           name: "test-fork",
-          include: ["packages/test/test/**/*.test.ts"],
+          include: [
+            "packages/test/test/**/*.test.ts",
+            "packages/test/src/anvil.test.ts",
+          ],
         },
       },
       {
