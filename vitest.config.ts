@@ -1,6 +1,7 @@
 import { configDefaults, defineConfig } from "vitest/config";
 
 // Fork projects let CI shard RPC-heavy tests separately without throttling pure tests.
+const forkTestTimeout = 120_000;
 const morphoSdkForkTestFiles = [
   "packages/morpho-sdk/src/**/*.integration.test.ts",
   "packages/morpho-sdk/src/actions/blue/{borrow,repay,repayWithdrawCollateral,supply,supplyCollateral,supplyCollateralBorrow,withdraw,withdrawCollateral}.test.ts",
@@ -87,6 +88,7 @@ export default defineConfig({
         test: {
           name: "blue-sdk-fork",
           include: ["packages/blue-sdk/test/e2e/**/*.test.ts"],
+          testTimeout: forkTestTimeout,
         },
       },
       {
@@ -101,6 +103,7 @@ export default defineConfig({
         test: {
           name: "midnight-sdk-fork",
           include: ["packages/midnight-sdk/test/e2e/**/*.test.ts"],
+          testTimeout: forkTestTimeout,
         },
       },
       {
@@ -120,10 +123,7 @@ export default defineConfig({
         test: {
           name: "morpho-sdk-fork",
           include: [...morphoSdkForkTestFiles],
-          // Mainnet-fork tests provision an Anvil fork per test; under CI load
-          // fork setup + RPC latency can push a test past 60s and flake. Give
-          // headroom to match the heaviest fork projects.
-          testTimeout: 120_000,
+          testTimeout: forkTestTimeout,
         },
       },
       {
@@ -144,6 +144,7 @@ export default defineConfig({
           ],
           globals: true,
           environment: "node",
+          testTimeout: forkTestTimeout,
           sequence: {
             concurrent: false,
           },
@@ -180,10 +181,7 @@ export default defineConfig({
             ...configDefaults.exclude,
             "packages/blue-sdk-viem/test/Permit.test.ts",
           ],
-          // Mainnet-fork tests provision an Anvil fork per test; under CI load
-          // fork setup + RPC latency can push a test past 60s and flake. Give
-          // headroom to match the heaviest fork projects.
-          testTimeout: 120_000,
+          testTimeout: forkTestTimeout,
         },
       },
       {
@@ -198,6 +196,7 @@ export default defineConfig({
         test: {
           name: "liquidity-sdk-viem-fork",
           include: ["packages/liquidity-sdk-viem/test/**/*.test.ts"],
+          testTimeout: forkTestTimeout,
         },
       },
       {
@@ -219,6 +218,7 @@ export default defineConfig({
             "packages/test/test/**/*.test.ts",
             "packages/test/src/anvil.test.ts",
           ],
+          testTimeout: forkTestTimeout,
         },
       },
       {
@@ -244,7 +244,7 @@ export default defineConfig({
           include: [
             "packages/wdk-protocol-lending-morpho-evm/tests/**/*.test.ts",
           ],
-          testTimeout: 120_000,
+          testTimeout: forkTestTimeout,
         },
       },
     ],
