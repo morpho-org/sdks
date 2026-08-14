@@ -65,22 +65,42 @@ jobs:
           retention-days: 1
 
   fork:
-    name: Fork (${{ matrix.project }})
+    name: Fork (${{ matrix.name }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       # Runner-local semaphores cannot coordinate different GitHub runners.
       max-parallel: 2
       matrix:
-        project:
-          - morpho-sdk-fork
-          - blue-sdk-viem-fork
-          - blue-sdk-fork
-          - midnight-sdk-fork
-          - evm-simulation-fork
-          - liquidity-sdk-viem-fork
-          - test-fork
-          - wdk-protocol-lending-morpho-evm-fork
+        include:
+          # Split the largest project so both permitted RPC slots stay busy.
+          - name: morpho-sdk-fork-1-of-2
+            project: morpho-sdk-fork
+            shard: 1/2
+          - name: morpho-sdk-fork-2-of-2
+            project: morpho-sdk-fork
+            shard: 2/2
+          - name: blue-sdk-viem-fork
+            project: blue-sdk-viem-fork
+            shard: ""
+          - name: blue-sdk-fork
+            project: blue-sdk-fork
+            shard: ""
+          - name: midnight-sdk-fork
+            project: midnight-sdk-fork
+            shard: ""
+          - name: evm-simulation-fork
+            project: evm-simulation-fork
+            shard: ""
+          - name: liquidity-sdk-viem-fork
+            project: liquidity-sdk-viem-fork
+            shard: ""
+          - name: test-fork
+            project: test-fork
+            shard: ""
+          - name: wdk-protocol-lending-morpho-evm-fork
+            project: wdk-protocol-lending-morpho-evm-fork
+            shard: ""
 
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -98,8 +118,8 @@ jobs:
         uses: actions/cache/restore@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6
         with:
           path: ~/.foundry/cache/rpc
-          key: foundry-${{ github.job }}-${{ matrix.project }}-${{ github.sha }}
-          restore-keys: foundry-${{ github.job }}-${{ matrix.project }}-
+          key: foundry-${{ github.job }}-${{ matrix.name }}-${{ github.sha }}
+          restore-keys: foundry-${{ github.job }}-${{ matrix.name }}-
 
       - uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1
         with:
@@ -114,19 +134,25 @@ jobs:
           ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
           # One Anvil per runner plus two fork runners preserves the shared RPC limit.
           MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC: 1
-          MORPHO_TEST_ANVIL_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.project }}
+          MORPHO_TEST_ANVIL_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.name }}
           IS_LOGGING_DISABLED: true
+          VITEST_NAME: ${{ matrix.name }}
           VITEST_PROJECT: ${{ matrix.project }}
-        run: >-
-          pnpm exec vitest run --coverage
-          --project "$VITEST_PROJECT"
-          --reporter=default --reporter=github-actions --reporter=blob
-          --outputFile.blob="vitest-reports/$VITEST_PROJECT.json"
+          VITEST_SHARD: ${{ matrix.shard }}
+        run: |
+          shard_args=()
+          if [[ -n "$VITEST_SHARD" ]]; then
+            shard_args+=(--shard="$VITEST_SHARD")
+          fi
+          pnpm exec vitest run --coverage \
+            --project "$VITEST_PROJECT" "${shard_args[@]}" \
+            --reporter=default --reporter=github-actions --reporter=blob \
+            --outputFile.blob="vitest-reports/$VITEST_NAME.json"
 
       - name: Upload report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: vitest-fork-${{ matrix.project }}
+          name: vitest-fork-${{ matrix.name }}
           path: vitest-reports
           retention-days: 1
 
@@ -136,7 +162,7 @@ jobs:
         uses: actions/cache/save@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6
         with:
           path: ~/.foundry/cache/rpc
-          key: foundry-${{ github.job }}-${{ matrix.project }}-${{ github.sha }}
+          key: foundry-${{ github.job }}-${{ matrix.name }}-${{ github.sha }}
 
   vitest:
     name: Vitest
