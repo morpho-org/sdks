@@ -14,93 +14,50 @@ permissions:
   contents: read
 
 jobs:
-  unit:
-    name: Unit (${{ matrix.project }})
+  package:
+    name: Package (${{ matrix.name }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        project:
-          - scripts
-          - agents-engine
-          - morpho-ts
-          - blue-sdk
-          - midnight-sdk
-          - morpho-sdk
-          - evm-simulation
-          - blue-sdk-viem
-          - liquidity-sdk-viem
-          - test
-          - morpho-test
-          - wdk-protocol-lending-morpho-evm
-
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-        with:
-          persist-credentials: false
-
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
-
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-
-      - name: Test
-        env:
-          VITEST_PROJECT: ${{ matrix.project }}
-        run: >-
-          pnpm exec vitest run --coverage
-          --project "$VITEST_PROJECT"
-          --reporter=default --reporter=github-actions --reporter=blob
-          --outputFile.blob="vitest-reports/$VITEST_PROJECT.json"
-
-      - name: Upload report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: vitest-unit-${{ matrix.project }}
-          path: vitest-reports
-          retention-days: 1
-
-  fork:
-    name: Fork (${{ matrix.name }})
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      # Runner-local semaphores cannot coordinate different GitHub runners.
-      max-parallel: 2
       matrix:
         include:
-          # Split the largest project so both permitted RPC slots stay busy.
-          - name: morpho-sdk-fork-1-of-2
-            project: morpho-sdk-fork
-            shard: 1/2
-          - name: morpho-sdk-fork-2-of-2
-            project: morpho-sdk-fork
-            shard: 2/2
-          - name: blue-sdk-viem-fork
-            project: blue-sdk-viem-fork
-            shard: ""
-          - name: blue-sdk-fork
-            project: blue-sdk-fork
-            shard: ""
-          - name: midnight-sdk-fork
-            project: midnight-sdk-fork
-            shard: ""
-          - name: evm-simulation-fork
-            project: evm-simulation-fork
-            shard: ""
-          - name: liquidity-sdk-viem-fork
-            project: liquidity-sdk-viem-fork
-            shard: ""
-          - name: test-fork
-            project: test-fork
-            shard: ""
-          - name: wdk-protocol-lending-morpho-evm-fork
-            project: wdk-protocol-lending-morpho-evm-fork
-            shard: ""
+          # Pure and fork projects from one package share a single runner.
+          - name: scripts
+            projects: scripts
+            uses_foundry: false
+          - name: agents-engine
+            projects: agents-engine
+            uses_foundry: false
+          - name: morpho-ts
+            projects: morpho-ts
+            uses_foundry: false
+          - name: blue-sdk
+            projects: blue-sdk blue-sdk-fork
+            uses_foundry: true
+          - name: midnight-sdk
+            projects: midnight-sdk midnight-sdk-fork
+            uses_foundry: true
+          - name: morpho-sdk
+            projects: morpho-sdk morpho-sdk-fork
+            uses_foundry: true
+          - name: evm-simulation
+            projects: evm-simulation evm-simulation-fork
+            uses_foundry: true
+          - name: blue-sdk-viem
+            projects: blue-sdk-viem blue-sdk-viem-fork
+            uses_foundry: true
+          - name: liquidity-sdk-viem
+            projects: liquidity-sdk-viem liquidity-sdk-viem-fork
+            uses_foundry: true
+          - name: test
+            projects: test test-fork
+            uses_foundry: true
+          - name: morpho-test
+            projects: morpho-test
+            uses_foundry: false
+          - name: wdk-protocol-lending-morpho-evm
+            projects: wdk-protocol-lending-morpho-evm wdk-protocol-lending-morpho-evm-fork
+            uses_foundry: true
 
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -115,6 +72,7 @@ jobs:
           cache: pnpm
 
       - name: Restore Foundry cache
+        if: matrix.uses_foundry
         uses: actions/cache/restore@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6
         with:
           path: ~/.foundry/cache/rpc
@@ -122,6 +80,7 @@ jobs:
           restore-keys: foundry-${{ github.job }}-${{ matrix.name }}-
 
       - uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1
+        if: matrix.uses_foundry
         with:
           cache: false # Disable built-in cache to always save it.
 
@@ -132,33 +91,32 @@ jobs:
           MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
           BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
           ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
-          # One Anvil per runner plus two fork runners preserves the shared RPC limit.
+          # Bound each package runner without throttling its pure tests.
           MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC: 1
           MORPHO_TEST_ANVIL_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.name }}
           IS_LOGGING_DISABLED: true
           VITEST_NAME: ${{ matrix.name }}
-          VITEST_PROJECT: ${{ matrix.project }}
-          VITEST_SHARD: ${{ matrix.shard }}
+          VITEST_PROJECTS: ${{ matrix.projects }}
         run: |
-          shard_args=()
-          if [[ -n "$VITEST_SHARD" ]]; then
-            shard_args+=(--shard="$VITEST_SHARD")
-          fi
+          project_args=()
+          for project in $VITEST_PROJECTS; do
+            project_args+=(--project "$project")
+          done
           pnpm exec vitest run --coverage \
-            --project "$VITEST_PROJECT" "${shard_args[@]}" \
+            "${project_args[@]}" \
             --reporter=default --reporter=github-actions --reporter=blob \
             --outputFile.blob="vitest-reports/$VITEST_NAME.json"
 
       - name: Upload report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: vitest-fork-${{ matrix.name }}
+          name: vitest-${{ matrix.name }}
           path: vitest-reports
           retention-days: 1
 
       - name: Save Foundry cache
         # A successful retry has validated and refreshed the cache before it is saved.
-        if: success()
+        if: success() && matrix.uses_foundry
         uses: actions/cache/save@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6
         with:
           path: ~/.foundry/cache/rpc
@@ -168,18 +126,14 @@ jobs:
     name: Vitest
     if: always()
     needs:
-      - unit
-      - fork
+      - package
     runs-on: ubuntu-latest
 
     steps:
       - name: Check shards
         env:
-          FORK_RESULT: ${{ needs.fork.result }}
-          UNIT_RESULT: ${{ needs.unit.result }}
-        run: |
-          test "$UNIT_RESULT" = success
-          test "$FORK_RESULT" = success
+          PACKAGE_RESULT: ${{ needs.package.result }}
+        run: test "$PACKAGE_RESULT" = success
 
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
