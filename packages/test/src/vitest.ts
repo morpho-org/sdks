@@ -8,6 +8,8 @@ import {
 import { type TestAPI, test } from "vitest";
 import { type AnvilArgs, spawnAnvil } from "./anvil.js";
 import { type AnvilTestClient, createAnvilTestClient } from "./client.js";
+import { AnvilCleanupError, AnvilStartupError } from "./errors.js";
+import { withSequentialTests } from "./vitestSequential.js";
 
 // Vitest needs to serialize BigInts to JSON, so we need to add a toJSON method to BigInt.prototype.
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/BigInt#use_within_json
@@ -17,21 +19,33 @@ BigInt.prototype.toJSON = function () {
 };
 
 export interface ViemTestContext<chain extends Chain = Chain> {
-  client: AnvilTestClient<chain>;
+  readonly client: AnvilTestClient<chain>;
 }
 
-const spawnAnvilWithRetry = async (parameters: AnvilArgs) => {
+const spawnAnvilWithRetry = async (
+  parameters: AnvilArgs,
+  signal?: AbortSignal | undefined,
+) => {
   const maxAttempts = process.env.CI ? 3 : 1;
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      return await spawnAnvil(parameters);
+      return await spawnAnvil(parameters, { signal });
     } catch (error) {
+      if (!(error instanceof AnvilStartupError)) throw error;
       lastError = error;
 
-      if (attempt === maxAttempts) break;
-      await setTimeout(attempt * 1_000);
+      if (signal?.aborted || attempt === maxAttempts) break;
+      try {
+        if (signal === undefined) await setTimeout(attempt * 1_000);
+        else await setTimeout(attempt * 1_000, undefined, { signal });
+      } catch (waitError) {
+        throw new AnvilStartupError(
+          "Anvil startup retry was cancelled. Retry the test after the competing fork finishes.",
+          { cause: waitError },
+        );
+      }
     }
   }
 
@@ -42,22 +56,31 @@ export const createViemTest = <chain extends Chain>(
   chain: chain,
   parameters: AnvilArgs = {},
 ): TestAPI<ViemTestContext<chain>> => {
-  parameters.forkChainId ??= chain?.id;
-  parameters.forkUrl ??= chain?.rpcUrls.default.http[0];
-  parameters.autoImpersonate ??= true;
-  parameters.order ??= "fifo";
-  parameters.stepsTracing ??= true;
-  parameters.pruneHistory ??= true;
-  parameters.retries ??= process.env.CI ? 10 : undefined;
-  parameters.forkRetryBackoff ??= process.env.CI ? 500 : undefined;
-
-  parameters.gasPrice ??= 0n;
-  parameters.blockBaseFeePerGas ??= 0n;
+  const anvilParameters: AnvilArgs = {
+    ...parameters,
+    forkChainId: parameters.forkChainId ?? chain.id,
+    forkUrl: parameters.forkUrl ?? chain.rpcUrls.default.http[0],
+    autoImpersonate: parameters.autoImpersonate ?? true,
+    order: parameters.order ?? "fifo",
+    stepsTracing: parameters.stepsTracing ?? true,
+    pruneHistory: parameters.pruneHistory ?? true,
+    retries: parameters.retries ?? (process.env.CI ? 10 : undefined),
+    forkRetryBackoff:
+      parameters.forkRetryBackoff ?? (process.env.CI ? 500 : undefined),
+    gasPrice: parameters.gasPrice ?? 0n,
+    blockBaseFeePerGas: parameters.blockBaseFeePerGas ?? 0n,
+  };
 
   const viemTest = test.extend<ViemTestContext<chain>>({
-    // biome-ignore lint/correctness/noEmptyPattern: required by vitest at runtime
-    client: async ({}, use) => {
-      const { rpcUrl, stop } = await spawnAnvilWithRetry(parameters);
+    client: async ({ signal }, use) => {
+      const { rpcUrl, stopAndWait } = await spawnAnvilWithRetry(
+        anvilParameters,
+        signal,
+      );
+      let fixtureFailed = false;
+      let fixtureFailure: unknown;
+      let cleanupFailed = false;
+      let cleanupFailure: unknown;
 
       try {
         const client = createAnvilTestClient(
@@ -102,12 +125,33 @@ export const createViemTest = <chain extends Chain>(
         }
 
         await use(client);
-      } finally {
-        stop();
+      } catch (error) {
+        fixtureFailed = true;
+        fixtureFailure = error;
       }
+
+      try {
+        await stopAndWait();
+      } catch (error) {
+        cleanupFailed = true;
+        cleanupFailure = error;
+      }
+
+      if (fixtureFailed && cleanupFailed)
+        throw new AnvilCleanupError(
+          "The Vitest fixture failed and Anvil cleanup also failed. Inspect both failures and stop the process manually before retrying.",
+          {
+            cause: new AggregateError(
+              [fixtureFailure, cleanupFailure],
+              "Vitest fixture and Anvil cleanup both failed.",
+            ),
+          },
+        );
+      if (fixtureFailed) throw fixtureFailure;
+      if (cleanupFailed) throw cleanupFailure;
     },
   });
 
   // Queue cases before fixture setup so waiting for an Anvil slot cannot consume their timeout.
-  return viemTest.sequential as TestAPI<ViemTestContext<chain>>;
+  return withSequentialTests(viemTest);
 };

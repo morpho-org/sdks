@@ -90,9 +90,9 @@ jobs:
 
       - name: Test
         env:
-          MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
-          BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
-          ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
+          MAINNET_RPC_URL: ${{ matrix.uses_foundry && secrets.MAINNET_RPC_URL || '' }}
+          BASE_RPC_URL: ${{ matrix.uses_foundry && secrets.BASE_RPC_URL || '' }}
+          ARBITRUM_RPC_URL: ${{ matrix.uses_foundry && secrets.ARBITRUM_RPC_URL || '' }}
           # Bound each package runner without throttling its pure tests.
           MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC: 1
           MORPHO_TEST_ANVIL_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.name }}
@@ -108,6 +108,14 @@ jobs:
             "${project_args[@]}" \
             --reporter=default --reporter=github-actions --reporter=blob \
             --outputFile.blob="vitest-reports/$VITEST_NAME.json"
+
+      - name: Redact RPC credentials from fork report
+        if: matrix.uses_foundry
+        env:
+          MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
+          BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
+          ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
+        run: node scripts/redact-vitest-reports.mjs vitest-reports
 
       - name: Upload report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -125,7 +133,7 @@ jobs:
           key: foundry-${{ github.job }}-${{ matrix.name }}-${{ github.sha }}-${{ github.run_attempt }}
 
   vitest:
-    name: Vitest
+    name: vitest
     if: always()
     needs:
       - package

@@ -2,6 +2,7 @@ import { test } from "@playwright/test";
 import { type Chain, formatUnits, http } from "viem";
 import { type AnvilArgs, spawnAnvil } from "./anvil.js";
 import { type AnvilTestClient, createAnvilTestClient } from "./client.js";
+import { AnvilCleanupError } from "./errors.js";
 
 export interface PlaywrightTestContext<chain extends Chain = Chain> {
   client: AnvilTestClient<chain>;
@@ -11,28 +12,57 @@ export const createViemTest = <chain extends Chain>(
   chain: chain,
   parameters: AnvilArgs = {},
 ) => {
-  parameters.forkChainId ??= chain?.id;
-  parameters.forkUrl ??= chain?.rpcUrls.default.http[0];
-  parameters.autoImpersonate ??= true;
-  parameters.order ??= "fifo";
-  parameters.stepsTracing ??= true;
-
-  parameters.gasPrice ??= 0n;
-  parameters.blockBaseFeePerGas ??= 0n;
+  const anvilParameters: AnvilArgs = {
+    ...parameters,
+    forkChainId: parameters.forkChainId ?? chain.id,
+    forkUrl: parameters.forkUrl ?? chain.rpcUrls.default.http[0],
+    autoImpersonate: parameters.autoImpersonate ?? true,
+    order: parameters.order ?? "fifo",
+    stepsTracing: parameters.stepsTracing ?? true,
+    gasPrice: parameters.gasPrice ?? 0n,
+    blockBaseFeePerGas: parameters.blockBaseFeePerGas ?? 0n,
+  };
 
   return test.extend<PlaywrightTestContext<chain>>({
     // biome-ignore lint/correctness/noEmptyPattern: required by playwright at runtime
     client: async ({}, use) => {
-      const { rpcUrl, stop } = await spawnAnvil(parameters);
+      const { rpcUrl, stopAndWait } = await spawnAnvil(anvilParameters);
+      let fixtureFailed = false;
+      let fixtureFailure: unknown;
+      let cleanupFailed = false;
+      let cleanupFailure: unknown;
 
-      const client = createAnvilTestClient(http(rpcUrl), chain);
+      try {
+        const client = createAnvilTestClient(http(rpcUrl), chain);
 
-      // Make block timestamp 100% predictable.
-      await client.setBlockTimestampInterval({ interval: 1 });
+        // Make block timestamp 100% predictable.
+        await client.setBlockTimestampInterval({ interval: 1 });
 
-      await use(client);
+        await use(client);
+      } catch (error) {
+        fixtureFailed = true;
+        fixtureFailure = error;
+      }
 
-      await stop();
+      try {
+        await stopAndWait();
+      } catch (error) {
+        cleanupFailed = true;
+        cleanupFailure = error;
+      }
+
+      if (fixtureFailed && cleanupFailed)
+        throw new AnvilCleanupError(
+          "The Playwright fixture failed and Anvil cleanup also failed. Inspect both failures and stop the process manually before retrying.",
+          {
+            cause: new AggregateError(
+              [fixtureFailure, cleanupFailure],
+              "Playwright fixture and Anvil cleanup both failed.",
+            ),
+          },
+        );
+      if (fixtureFailed) throw fixtureFailure;
+      if (cleanupFailed) throw cleanupFailure;
     },
   });
 };

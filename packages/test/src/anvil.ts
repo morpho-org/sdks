@@ -1,122 +1,27 @@
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { setTimeout } from "node:timers/promises";
+import { randomUUID } from "node:crypto";
 import _kebabCase from "lodash.kebabcase";
-import { AnvilStartupError } from "./errors.js";
+import {
+  ANVIL_PROCESS_IDENTITY_ENV,
+  type AnvilProcessSlot,
+  acquireAnvilProcessSlot,
+} from "./anvilProcessSlot.js";
+import { AnvilCleanupError, AnvilStartupError } from "./errors.js";
 
-/**
- * Reads the optional limit for Anvil processes sharing one fork URL.
- * Limiting stays disabled unless the test runner provides a positive value.
- *
- * @returns The positive process limit, or `undefined` when limiting is disabled.
- * @example
- * ```sh
- * MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC=2 pnpm test
- * ```
- */
-const getMaxConcurrentAnvilProcessesPerRpc = () => {
-  const configuredValue = process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC;
-  if (configuredValue === undefined) return undefined;
+const ANVIL_FORCE_KILL_TIMEOUT_MS = 5_000;
+const ANVIL_PROCESS_CLOSE_TIMEOUT_MS = 10_000;
 
-  const value = Number.parseInt(configuredValue, 10);
-  return Number.isSafeInteger(value) && value > 0 ? value : undefined;
-};
-
-const hasErrorCode = (error: unknown, code: string) =>
-  error instanceof Error && "code" in error && error.code === code;
-
-/**
- * Reserves a cross-process Anvil slot for one fork URL using atomic lock files.
- * Callers provide a runner-agnostic run ID shared by every worker in the job.
- *
- * @param parameters Limit, fork URL, and run identifier used by the semaphore.
- * @returns An idempotent function that releases the reserved slot.
- * @example
- * ```ts
- * const release = await acquireAnvilProcessSlot({
- *   maxProcessesPerRpc: 2,
- *   forkUrl,
- *   runId: "test-run-42",
- * });
- * try {
- *   // Start and use Anvil.
- * } finally {
- *   release();
- * }
- * ```
- */
-const acquireAnvilProcessSlot = async (parameters: {
-  maxProcessesPerRpc: number | undefined;
-  forkUrl: string | undefined;
-  runId: string;
-}) => {
-  const { maxProcessesPerRpc, forkUrl, runId } = parameters;
-  if (maxProcessesPerRpc === undefined || forkUrl === undefined)
-    return () => {};
-
-  // Vitest workers can be separate processes, so an atomic file is the simplest shared semaphore.
-  const safeRunId = runId.replaceAll(/[^a-zA-Z0-9_-]/g, "_") || "default";
-  // Hash the URL so credentials never appear in the temporary directory name.
-  const rpcId = createHash("sha256").update(forkUrl).digest("hex").slice(0, 16);
-  const lockDirectory = join(tmpdir(), "morpho-test-anvil", safeRunId, rpcId);
-  mkdirSync(lockDirectory, { recursive: true });
-
-  while (true) {
-    for (let slot = 0; slot < maxProcessesPerRpc; slot++) {
-      const lockPath = join(lockDirectory, `${slot}.lock`);
-
-      try {
-        writeFileSync(lockPath, `${process.pid}\n`, { flag: "wx" });
-
-        let released = false;
-        return () => {
-          if (released) return;
-          released = true;
-
-          try {
-            unlinkSync(lockPath);
-          } catch (error) {
-            if (!hasErrorCode(error, "ENOENT"))
-              console.warn(`Failed to release Anvil slot "${slot}".`, error);
-          }
-        };
-      } catch (error) {
-        if (!hasErrorCode(error, "EEXIST")) throw error;
-
-        let ownerPid: number;
-        try {
-          ownerPid = Number(readFileSync(lockPath, "utf8").trim());
-        } catch (readError) {
-          if (hasErrorCode(readError, "ENOENT")) continue;
-          throw readError;
-        }
-
-        if (Number.isSafeInteger(ownerPid) && ownerPid > 0) {
-          try {
-            process.kill(ownerPid, 0);
-            continue;
-          } catch (ownerError) {
-            // Only ESRCH proves the owner exited; permission errors may still mean it is alive.
-            if (!hasErrorCode(ownerError, "ESRCH")) continue;
-          }
-        }
-
-        // A dead or malformed owner cannot release its slot, so make it reusable.
-        try {
-          unlinkSync(lockPath);
-        } catch (unlinkError) {
-          if (!hasErrorCode(unlinkError, "ENOENT")) throw unlinkError;
-        }
-      }
-    }
-
-    // Every slot is occupied; yield so other workers can finish and release one.
-    await setTimeout(25);
-  }
-};
+const createAnvilFailureCleanupError = (parameters: {
+  readonly cleanupError: unknown;
+  readonly failure: unknown;
+  readonly message: string;
+}) =>
+  new AnvilCleanupError(parameters.message, {
+    cause: new AggregateError(
+      [parameters.failure, parameters.cleanupError],
+      "Anvil operation and cleanup both failed.",
+    ),
+  });
 
 export interface AnvilArgs {
   /**
@@ -399,6 +304,22 @@ function toArgs(obj: AnvilArgs) {
   });
 }
 
+/** Options controlling the local Anvil process lifecycle. */
+export interface SpawnAnvilOptions {
+  /** Cancels process-slot acquisition and startup when aborted. */
+  readonly signal?: AbortSignal | undefined;
+}
+
+/** An isolated local Anvil process and its cleanup controls. */
+export interface SpawnedAnvil {
+  /** URL of the listening local JSON-RPC server. */
+  readonly rpcUrl: `http://localhost:${number}`;
+  /** Sends the first shutdown signal synchronously. */
+  readonly stop: () => boolean;
+  /** Sends the shutdown signal and waits for process and semaphore cleanup, rejecting with `AnvilCleanupError` when cleanup cannot be confirmed. */
+  readonly stopAndWait: () => Promise<boolean>;
+}
+
 /**
  * Starts an isolated Anvil process and resolves when its RPC server is listening.
  * To bound a shared provider without serializing other forks, set
@@ -406,8 +327,10 @@ function toArgs(obj: AnvilArgs) {
  * `MORPHO_TEST_ANVIL_RUN_ID`. The run ID defaults to the parent process ID.
  *
  * @param args Anvil command-line arguments and optional binary path.
- * @returns The local RPC URL and an idempotent process cleanup function.
- * @throws {AnvilStartupError} When Anvil cannot start or exits before listening.
+ * @param options Cancellation options for process-slot acquisition and startup.
+ * @returns The local RPC URL and idempotent process cleanup controls.
+ * @throws {AnvilStartupError} When Anvil cannot reserve a slot, start, or begin listening.
+ * @throws {AnvilCleanupError} When an abandoned process or failed startup cannot be cleaned safely.
  * @example
  * ```ts
  * import { spawnAnvil } from "@morpho-org/test";
@@ -416,47 +339,151 @@ function toArgs(obj: AnvilArgs) {
  * try {
  *   console.log(anvil.rpcUrl);
  * } finally {
- *   anvil.stop();
+ *   await anvil.stopAndWait();
  * }
  * ```
  */
 export const spawnAnvil = async (
   args: AnvilArgs,
-): Promise<{
-  rpcUrl: `http://localhost:${number}`;
-  stop: () => boolean;
-}> => {
-  const maxProcessesPerRpc = getMaxConcurrentAnvilProcessesPerRpc();
-  const releaseProcessSlot = await acquireAnvilProcessSlot({
-    maxProcessesPerRpc,
-    forkUrl: args.forkUrl,
-    runId: process.env.MORPHO_TEST_ANVIL_RUN_ID ?? String(process.ppid),
-  });
+  options: SpawnAnvilOptions = {},
+): Promise<SpawnedAnvil> => {
+  let processSlot: AnvilProcessSlot;
+  try {
+    processSlot = await acquireAnvilProcessSlot({
+      forkUrl: args.forkUrl,
+      runId: process.env.MORPHO_TEST_ANVIL_RUN_ID ?? String(process.ppid),
+      signal: options.signal,
+    });
+  } catch (error) {
+    if (
+      error instanceof AnvilStartupError ||
+      error instanceof AnvilCleanupError
+    )
+      throw error;
+    throw new AnvilStartupError(
+      "Anvil could not reserve a process slot. Check temporary-directory permissions and retry.",
+      { cause: error },
+    );
+  }
+
+  if (options.signal?.aborted) {
+    const startupError = new AnvilStartupError(
+      "Anvil startup was cancelled before the process launched. Retry after the competing fork finishes.",
+      { cause: options.signal.reason },
+    );
+    try {
+      await processSlot.release();
+    } catch (cleanupError) {
+      throw createAnvilFailureCleanupError({
+        cleanupError,
+        failure: startupError,
+        message:
+          "Anvil startup was cancelled and its reserved process slot could not be released. Inspect both failures and remove stale temporary locks before retrying.",
+      });
+    }
+    throw startupError;
+  }
+
   const { binary = "anvil", ...anvilArgs } = args;
   let port = args.port ?? 0;
+  let childLifecycleOwnsSlot = false;
 
   try {
-    const subprocess = spawn(binary, toArgs({ ...anvilArgs, port }));
-    let stopped = false;
+    const childIdentity = randomUUID();
+    const subprocess = spawn(binary, toArgs({ ...anvilArgs, port }), {
+      env: {
+        ...process.env,
+        [ANVIL_PROCESS_IDENTITY_ENV]: childIdentity,
+      },
+    });
+    let stopRequested = false;
+    let forceKillTimeout: ReturnType<typeof globalThis.setTimeout> | undefined;
+    let processCloseTimeout:
+      | ReturnType<typeof globalThis.setTimeout>
+      | undefined;
+    let processCloseObserved = false;
+    let cleanupAwaited = false;
+    let resolveProcessClosed = () => {};
+    let rejectProcessClosed = (_error: unknown) => {};
+    const processClosed = new Promise<void>((resolve, reject) => {
+      resolveProcessClosed = resolve;
+      rejectProcessClosed = reject;
+    });
+    // Keep `stop()` backward-compatible without hiding a cleanup failure from stop-only callers.
+    void processClosed.catch((error) => {
+      if (!cleanupAwaited)
+        console.warn(
+          "Anvil cleanup failed after stop(). Use stopAndWait() to handle cleanup failures.",
+          error,
+        );
+    });
 
-    // One idempotent path owns both child-process cleanup and semaphore release.
+    // Signal synchronously for API compatibility; close owns cleanup and slot release.
     const stopProcess = () => {
-      if (stopped) return false;
-      stopped = true;
+      if (stopRequested) return false;
+      stopRequested = true;
+      if (processCloseObserved) return false;
 
-      try {
-        return subprocess.exitCode === null ? subprocess.kill("SIGINT") : false;
-      } finally {
-        subprocess.stdout.destroy();
-        subprocess.stderr.destroy();
-        subprocess.unref();
-        releaseProcessSlot();
+      // An exit code can be visible before stdio closes. Keep the slot until `close`.
+      let signalSent = false;
+      if (subprocess.exitCode === null) {
+        try {
+          signalSent = subprocess.kill("SIGINT");
+        } catch (error) {
+          console.warn("Failed to send SIGINT to Anvil.", error);
+        }
+
+        forceKillTimeout = globalThis.setTimeout(() => {
+          if (processCloseObserved || subprocess.exitCode !== null) return;
+
+          try {
+            if (!subprocess.kill("SIGKILL"))
+              console.warn("Failed to send SIGKILL to Anvil after timeout.");
+          } catch (error) {
+            console.warn(
+              "Failed to send SIGKILL to Anvil after timeout.",
+              error,
+            );
+          }
+        }, ANVIL_FORCE_KILL_TIMEOUT_MS);
+        if (
+          typeof forceKillTimeout === "object" &&
+          "unref" in forceKillTimeout
+        ) {
+          forceKillTimeout.unref();
+        }
       }
+
+      processCloseTimeout = globalThis.setTimeout(() => {
+        if (processCloseObserved) return;
+        rejectProcessClosed(
+          new AnvilCleanupError(
+            `Anvil did not close within "${ANVIL_PROCESS_CLOSE_TIMEOUT_MS}" ms after shutdown began. Stop it manually before retrying so its process slot remains reserved.`,
+          ),
+        );
+      }, ANVIL_PROCESS_CLOSE_TIMEOUT_MS);
+      if (
+        typeof processCloseTimeout === "object" &&
+        "unref" in processCloseTimeout
+      ) {
+        processCloseTimeout.unref();
+      }
+
+      return signalSent;
+    };
+
+    const stopAndWait = async () => {
+      cleanupAwaited = true;
+      const signalSent = stopProcess();
+      await processClosed;
+      return signalSent;
     };
 
     await new Promise<void>((resolve, reject) => {
       let settled = false;
       let stderr = "";
+      let forkStderrObserved = false;
+      let forkStderrWarningEmitted = false;
       let stdout = "";
       const startupTimeoutMs =
         Math.max(args.timeout ?? 45_000, 45_000) + 15_000;
@@ -472,10 +499,31 @@ export const spawnAnvil = async (
         if (settled) return;
         settled = true;
         globalThis.clearTimeout(startupTimeout);
+        options.signal?.removeEventListener("abort", abortStartup);
+        cleanupAwaited = true;
         stopProcess();
-        reject(error);
+        void processClosed.then(
+          () => reject(error),
+          (cleanupError) =>
+            reject(
+              createAnvilFailureCleanupError({
+                cleanupError,
+                failure: error,
+                message:
+                  "Anvil failed during startup and cleanup also failed. Inspect both failures and stop the process manually before retrying.",
+              }),
+            ),
+        );
       };
 
+      function abortStartup() {
+        fail(
+          new AnvilStartupError(
+            "Anvil startup was cancelled before its RPC server began listening. Retry after the competing fork finishes.",
+            { cause: options.signal?.reason },
+          ),
+        );
+      }
       subprocess.stdout.on("data", (data) => {
         // Anvil can split its listening message across stdout chunks.
         stdout = `${stdout}${data.toString()}`.slice(-1_024);
@@ -487,46 +535,128 @@ export const spawnAnvil = async (
         port = Number.parseInt(listenedPort, 10);
         settled = true;
         globalThis.clearTimeout(startupTimeout);
+        options.signal?.removeEventListener("abort", abortStartup);
         resolve();
       });
 
       subprocess.stderr.on("data", (data) => {
         // Startup warnings are diagnostic; only timeout, error, or early close is fatal.
+        if (args.forkUrl) {
+          forkStderrObserved = true;
+          if (settled && !stopRequested && !forkStderrWarningEmitted) {
+            forkStderrWarningEmitted = true;
+            console.warn(
+              `[port ${port || "??"}] Anvil emitted stderr output. Details were redacted because a fork URL is configured.`,
+            );
+          }
+          return;
+        }
+
         const dataString = data.toString();
         stderr = `${stderr}${dataString}`.slice(-4_096);
-        if (settled && !stopped)
+        if (settled && !stopRequested)
           console.warn(`[port ${port || "??"}] ${dataString}`);
       });
 
       subprocess.once("error", (error) => {
+        const errorCode =
+          "code" in error &&
+          (typeof error.code === "string" || typeof error.code === "number")
+            ? ` (code "${error.code}")`
+            : "";
+        const cause = args.forkUrl
+          ? new AnvilStartupError(
+              `Anvil subprocess error${errorCode}. Details were redacted because a fork URL is configured.`,
+            )
+          : error;
         fail(
           new AnvilStartupError(
             `Anvil failed to start on port "${port || "auto"}". Check that the binary and arguments are valid.`,
-            { cause: error },
+            { cause },
           ),
         );
       });
 
       subprocess.once("close", (code, signal) => {
+        processCloseObserved = true;
+        void (async () => {
+          if (forceKillTimeout !== undefined)
+            globalThis.clearTimeout(forceKillTimeout);
+          if (processCloseTimeout !== undefined)
+            globalThis.clearTimeout(processCloseTimeout);
+          subprocess.stdout.destroy();
+          subprocess.stderr.destroy();
+          subprocess.unref();
+          await processSlot.release();
+        })().then(resolveProcessClosed, rejectProcessClosed);
         if (settled) return;
-        const rawDetails = stderr.trim();
-        const details = args.forkUrl
-          ? rawDetails.replaceAll(args.forkUrl, "<fork-url>")
-          : rawDetails;
+        const details =
+          args.forkUrl && forkStderrObserved
+            ? "Anvil stderr was redacted because a fork URL is configured."
+            : stderr.trim();
         fail(
           new AnvilStartupError(
             `Anvil exited before listening on port "${port || "auto"}" (code "${code}", signal "${signal}").${details ? ` ${details}` : ""}`,
           ),
         );
       });
+
+      childLifecycleOwnsSlot = true;
+      const childPid = subprocess.pid;
+      if (childPid !== undefined) {
+        try {
+          processSlot.registerChildProcess(childPid, childIdentity);
+        } catch (error) {
+          fail(
+            error instanceof AnvilStartupError
+              ? error
+              : new AnvilStartupError(
+                  "Anvil started but its process identity could not be registered. Stop the process and retry.",
+                  { cause: error },
+                ),
+          );
+        }
+      }
+
+      if (!settled) {
+        options.signal?.addEventListener("abort", abortStartup, { once: true });
+        if (options.signal?.aborted) abortStartup();
+      }
     });
 
     return {
       rpcUrl: `http://localhost:${port}`,
       stop: stopProcess,
+      stopAndWait,
     };
   } catch (error) {
-    releaseProcessSlot();
-    throw error;
+    const failure =
+      error instanceof AnvilStartupError || error instanceof AnvilCleanupError
+        ? error
+        : new AnvilStartupError(
+            "Anvil failed before startup completed. Check the binary, arguments, and temporary directory.",
+            {
+              cause:
+                args.forkUrl && error instanceof Error
+                  ? new AnvilStartupError(
+                      "Anvil subprocess setup failed. Details were redacted because a fork URL is configured.",
+                    )
+                  : error,
+            },
+          );
+
+    if (!childLifecycleOwnsSlot) {
+      try {
+        await processSlot.release();
+      } catch (cleanupError) {
+        throw createAnvilFailureCleanupError({
+          cleanupError,
+          failure,
+          message:
+            "Anvil failed before startup completed and its process slot could not be released. Inspect both failures and remove stale temporary locks before retrying.",
+        });
+      }
+    }
+    throw failure;
   }
 };

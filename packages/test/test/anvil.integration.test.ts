@@ -48,7 +48,7 @@ describe("spawnAnvil", () => {
         ]),
       ).resolves.toEqual([1n, 2n]);
     } finally {
-      for (const node of nodes) node.stop();
+      await Promise.all(nodes.map((node) => node.stopAndWait()));
     }
   });
 });

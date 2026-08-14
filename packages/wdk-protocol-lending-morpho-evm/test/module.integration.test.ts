@@ -58,7 +58,8 @@ maybeDescribe("MorphoProtocolEvm fork e2e", () => {
         functionName: "transfer",
         args: [accountAddress, parseUnits("10", 6)],
       });
-      await client.waitForTransactionReceipt({ hash });
+      const fundingReceipt = await client.waitForTransactionReceipt({ hash });
+      expect(fundingReceipt.status).toBe("success");
     } finally {
       await client.stopImpersonatingAccount({ address: USDT_WHALE });
     }
@@ -71,6 +72,12 @@ maybeDescribe("MorphoProtocolEvm fork e2e", () => {
         args: [accountAddress],
       }),
     ).toBeGreaterThanOrEqual(DEPOSIT_AMOUNT);
+    const sharesBefore = await client.readContract({
+      address: VAULT,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [accountAddress],
+    });
 
     const morpho = new MorphoProtocolEvm(account, {
       chainId: 1,
@@ -88,7 +95,10 @@ maybeDescribe("MorphoProtocolEvm fork e2e", () => {
           value: requirement.value ?? 0n,
           data: requirement.data,
         });
-        await client.waitForTransactionReceipt({ hash: hash as Hash });
+        const requirementReceipt = await client.waitForTransactionReceipt({
+          hash: hash as Hash,
+        });
+        expect(requirementReceipt.status).toBe("success");
       }
     }
 
@@ -98,6 +108,17 @@ maybeDescribe("MorphoProtocolEvm fork e2e", () => {
     });
 
     expect(result.hash).toMatch(/^0x[0-9a-fA-F]{64}$/);
-    await client.waitForTransactionReceipt({ hash: result.hash as Hash });
+    const supplyReceipt = await client.waitForTransactionReceipt({
+      hash: result.hash as Hash,
+    });
+    expect(supplyReceipt.status).toBe("success");
+    expect(
+      await client.readContract({
+        address: VAULT,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [accountAddress],
+      }),
+    ).toBeGreaterThan(sharesBefore);
   });
 });
