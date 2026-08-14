@@ -46,7 +46,7 @@
     "build:cjs": "tsc --build tsconfig.build.cjs.json --noCheck && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
     "build:esm": "tsc --build tsconfig.build.esm.json --noCheck && echo '{\"type\":\"module\"}' > lib/esm/package.json",
     "pretest": "pnpm run check:vault-v2",
-    "test": "vitest --root ../.. --project wdk-protocol-lending-morpho-evm --project wdk-protocol-lending-morpho-evm-fork"
+    "test": "vitest --root ../.. --project wdk-protocol-lending-morpho-evm"
   },
   "dependencies": {
     "@morpho-org/blue-sdk": "workspace:^",

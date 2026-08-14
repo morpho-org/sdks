@@ -38,7 +38,7 @@
     "build:cjs": "tsc --build tsconfig.build.cjs.json && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json",
     "generate:version": "node ../../scripts/release/generate-midnight-package-version.mjs",
-    "test": "vitest --root ../.. --project midnight-sdk --project midnight-sdk-fork"
+    "test": "vitest --root ../.. --project midnight-sdk"
   },
   "peerDependencies": {
     "@morpho-org/morpho-ts": "^2.8.0",

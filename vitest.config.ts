@@ -1,19 +1,5 @@
 import { configDefaults, defineConfig } from "vitest/config";
 
-// Fork-only projects limit semaphore waiters in CI; pure projects keep Vitest's default of five.
-const forkTestMaxConcurrency = process.env.CI ? 2 : 5;
-
-// These files use the Anvil fixture; keeping them in one fork project avoids throttling other files.
-const morphoSdkForkTestFiles = [
-  "packages/morpho-sdk/src/**/*.integration.test.ts",
-  "packages/morpho-sdk/src/actions/blue/{borrow,repay,repayWithdrawCollateral,supply,supplyCollateral,supplyCollateralBorrow,withdraw,withdrawCollateral}.test.ts",
-  "packages/morpho-sdk/src/actions/requirements/encode/{encodeErc20Permit,encodeErc20Permit2Approve}.test.ts",
-  "packages/morpho-sdk/src/actions/vaultV1/{deposit,migrateToV2,redeem,withdraw}.test.ts",
-  "packages/morpho-sdk/src/actions/vaultV2/{deposit,forceRedeem,forceWithdraw,redeem,withdraw}.test.ts",
-  "packages/morpho-sdk/src/entities/{blue/blue,vaultV1/vaultV1,vaultV2/vaultV2}.test.ts",
-  "packages/morpho-sdk/test/actions/**/*.test.ts",
-];
-
 export default defineConfig({
   test: {
     coverage: {
@@ -82,30 +68,20 @@ export default defineConfig({
         extends: true,
         test: {
           name: "blue-sdk",
-          include: ["packages/blue-sdk/src/**/*.test.ts"],
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: "blue-sdk-fork",
-          include: ["packages/blue-sdk/test/e2e/**/*.test.ts"],
-          maxConcurrency: forkTestMaxConcurrency,
+          include: [
+            "packages/blue-sdk/test/**/*.test.ts",
+            "packages/blue-sdk/src/**/*.test.ts",
+          ],
         },
       },
       {
         extends: true,
         test: {
           name: "midnight-sdk",
-          include: ["packages/midnight-sdk/src/**/*.test.ts"],
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: "midnight-sdk-fork",
-          include: ["packages/midnight-sdk/test/e2e/**/*.test.ts"],
-          maxConcurrency: forkTestMaxConcurrency,
+          include: [
+            "packages/midnight-sdk/src/**/*.test.ts",
+            "packages/midnight-sdk/test/**/*.test.ts",
+          ],
         },
       },
       {
@@ -114,22 +90,12 @@ export default defineConfig({
           name: "morpho-sdk",
           include: [
             "packages/morpho-sdk/src/**/*.test.ts",
-            "packages/morpho-sdk/test/helpers/time.test.ts",
-            "packages/morpho-sdk/test/reallocationData/publicAllocator.test.ts",
+            "packages/morpho-sdk/test/**/*.test.ts",
           ],
-          exclude: [...configDefaults.exclude, ...morphoSdkForkTestFiles],
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: "morpho-sdk-fork",
-          include: [...morphoSdkForkTestFiles],
           // Mainnet-fork tests provision an Anvil fork per test; under CI load
           // fork setup + RPC latency can push a test past 60s and flake. Give
           // headroom to match the heaviest fork projects.
           testTimeout: 120_000,
-          maxConcurrency: forkTestMaxConcurrency,
         },
       },
       {
@@ -172,55 +138,33 @@ export default defineConfig({
         test: {
           name: "blue-sdk-viem",
           include: [
+            "packages/blue-sdk-viem/test/**/*.test.ts",
             "packages/blue-sdk-viem/src/**/*.test.ts",
-            "packages/blue-sdk-viem/test/Permit.test.ts",
-          ],
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: "blue-sdk-viem-fork",
-          include: ["packages/blue-sdk-viem/test/**/*.test.ts"],
-          exclude: [
-            ...configDefaults.exclude,
-            "packages/blue-sdk-viem/test/Permit.test.ts",
           ],
           // Mainnet-fork tests provision an Anvil fork per test; under CI load
           // fork setup + RPC latency can push a test past 60s and flake. Give
           // headroom to match the heaviest fork projects.
           testTimeout: 120_000,
-          maxConcurrency: forkTestMaxConcurrency,
         },
       },
       {
         extends: true,
         test: {
           name: "liquidity-sdk-viem",
-          include: ["packages/liquidity-sdk-viem/src/**/*.test.ts"],
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: "liquidity-sdk-viem-fork",
-          include: ["packages/liquidity-sdk-viem/test/**/*.test.ts"],
-          maxConcurrency: forkTestMaxConcurrency,
+          include: [
+            "packages/liquidity-sdk-viem/test/**/*.test.ts",
+            "packages/liquidity-sdk-viem/src/**/*.test.ts",
+          ],
         },
       },
       {
         extends: true,
         test: {
           name: "test",
-          include: ["packages/test/src/**/*.test.ts"],
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: "test-fork",
-          include: ["packages/test/test/**/*.test.ts"],
-          maxConcurrency: forkTestMaxConcurrency,
+          include: [
+            "packages/test/test/**/*.test.ts",
+            "packages/test/src/**/*.test.ts",
+          ],
         },
       },
       {
@@ -236,18 +180,9 @@ export default defineConfig({
           name: "wdk-protocol-lending-morpho-evm",
           include: [
             "packages/wdk-protocol-lending-morpho-evm/src/**/*.test.ts",
-          ],
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: "wdk-protocol-lending-morpho-evm-fork",
-          include: [
             "packages/wdk-protocol-lending-morpho-evm/tests/**/*.test.ts",
           ],
           testTimeout: 120_000,
-          maxConcurrency: forkTestMaxConcurrency,
         },
       },
     ],
