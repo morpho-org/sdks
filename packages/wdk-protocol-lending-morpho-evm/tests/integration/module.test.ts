@@ -1,24 +1,14 @@
-import { type ChildProcess, spawn } from "node:child_process";
-import { createServer } from "node:net";
-import { setTimeout as delay } from "node:timers/promises";
 import { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
 import {
   type Address,
-  createPublicClient,
-  createWalletClient,
   erc20Abi,
-  http,
-  type PublicClient,
+  type Hash,
+  parseEther,
   parseUnits,
 } from "viem";
-import { mainnet } from "viem/chains";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { describe, expect } from "vitest";
 import MorphoProtocolEvm from "../../src/index.js";
-
-type AnvilRpcRequest = (args: {
-  method: string;
-  params?: readonly unknown[];
-}) => Promise<unknown>;
+import { test } from "./setup.js";
 
 const SEED =
   "cook voyage document eight skate token alien guide drink uncle term abuse";
@@ -29,141 +19,52 @@ const DEPOSIT_AMOUNT = 1_000_000n;
 
 const maybeDescribe = process.env.MAINNET_RPC_URL ? describe : describe.skip;
 
-async function getFreePort(): Promise<number> {
-  const server = createServer();
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => resolve());
-  });
-  const address = server.address();
-  if (!address || typeof address === "string") {
-    throw new Error("Unexpected server address shape");
-  }
-  const { port } = address;
-  await new Promise<void>((resolve, reject) =>
-    server.close((error) => (error ? reject(error) : resolve())),
-  );
-  return port;
-}
-
-async function waitForRpc(rpcUrl: string): Promise<void> {
-  for (let i = 0; i < 80; i++) {
-    try {
-      const response = await fetch(rpcUrl, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: 1,
-          method: "eth_chainId",
-          params: [],
-        }),
-      });
-      if (response.ok) return;
-    } catch {
-      // Anvil not ready yet; keep polling.
-    }
-    await delay(250);
-  }
-
-  throw new Error("Timed out waiting for Anvil fork RPC.");
-}
-
-interface RawTx {
-  to: Address;
-  value?: bigint;
-  data: `0x${string}`;
-}
-
-function toWdkTransaction(tx: RawTx) {
-  return {
-    to: tx.to,
-    value: tx.value ?? 0n,
-    data: tx.data,
-  };
-}
-
 maybeDescribe("MorphoProtocolEvm fork e2e", () => {
-  let anvil: ChildProcess | undefined;
-  let rpcUrl = "";
-  let publicClient: PublicClient;
-  let anvilRequest: AnvilRpcRequest;
-
-  beforeAll(async () => {
-    const port = await getFreePort();
-    rpcUrl = `http://127.0.0.1:${port}`;
-    anvil = spawn(
-      "anvil",
-      [
-        "--fork-url",
-        process.env.MAINNET_RPC_URL ?? "",
-        "--chain-id",
-        "1",
-        "--port",
-        String(port),
-        "--silent",
-      ],
-      {
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    );
-
-    await waitForRpc(rpcUrl);
-    publicClient = createPublicClient({
-      chain: mainnet,
-      transport: http(rpcUrl),
-    });
-    // viem's typed `request` only knows the standard JSON-RPC schema, so
-    // anvil-specific methods (`anvil_setBalance`, `anvil_impersonateAccount`,
-    // …) need to be issued through an unchecked request handle.
-    anvilRequest = publicClient.request as unknown as AnvilRpcRequest;
-  }, 60_000);
-
-  afterAll(async () => {
-    if (anvil) {
-      anvil.kill();
-      await new Promise<void>((resolve) =>
-        anvil?.once("close", () => resolve()),
-      );
-    }
-  });
-
-  test("executes requirements and a vault deposit on a mainnet fork", async () => {
+  test("default", async ({ client }) => {
+    const rpcUrl = client.transport.url!;
     const account = new WalletAccountEvm(SEED, "0'/0/0", { provider: rpcUrl });
     const accountAddress = (await account.getAddress()) as Address;
-    const whale = createWalletClient({
-      account: USDT_WHALE,
-      chain: mainnet,
-      transport: http(rpcUrl),
+    let nextNonce = await client.getTransactionCount({
+      address: accountAddress,
+      blockTag: "pending",
     });
+    const sendTransaction = account.sendTransaction.bind(account);
+    // WDK caches pending nonces briefly, so rapid Anvil transactions provide them explicitly.
+    account.sendTransaction = async (transaction) => {
+      if (typeof transaction === "string") return sendTransaction(transaction);
 
-    await anvilRequest({
-      method: "anvil_setBalance",
-      params: [accountAddress, "0x3635C9ADC5DEA00000"],
-    });
-    await anvilRequest({
-      method: "anvil_setBalance",
-      params: [USDT_WHALE, "0x3635C9ADC5DEA00000"],
-    });
-    await anvilRequest({
-      method: "anvil_impersonateAccount",
-      params: [USDT_WHALE],
-    });
+      const result = await sendTransaction({
+        ...transaction,
+        nonce: nextNonce,
+      });
+      nextNonce += 1;
+      return result;
+    };
 
-    const hash = await whale.writeContract({
-      address: USDT,
-      abi: erc20Abi,
-      functionName: "transfer",
-      args: [accountAddress, parseUnits("10", 6)],
+    await client.setBalance({
+      address: accountAddress,
+      value: parseEther("1000"),
     });
-    await publicClient.waitForTransactionReceipt({ hash });
-    await anvilRequest({
-      method: "anvil_stopImpersonatingAccount",
-      params: [USDT_WHALE],
+    await client.setBalance({
+      address: USDT_WHALE,
+      value: parseEther("1000"),
     });
+    await client.impersonateAccount({ address: USDT_WHALE });
+    try {
+      const hash = await client.writeContract({
+        account: USDT_WHALE,
+        address: USDT,
+        abi: erc20Abi,
+        functionName: "transfer",
+        args: [accountAddress, parseUnits("10", 6)],
+      });
+      await client.waitForTransactionReceipt({ hash });
+    } finally {
+      await client.stopImpersonatingAccount({ address: USDT_WHALE });
+    }
 
     expect(
-      await publicClient.readContract({
+      await client.readContract({
         address: USDT,
         abi: erc20Abi,
         functionName: "balanceOf",
@@ -182,7 +83,12 @@ maybeDescribe("MorphoProtocolEvm fork e2e", () => {
 
     for (const requirement of requirements) {
       if ("to" in requirement) {
-        await account.sendTransaction(toWdkTransaction(requirement));
+        const { hash } = await account.sendTransaction({
+          to: requirement.to,
+          value: requirement.value ?? 0n,
+          data: requirement.data,
+        });
+        await client.waitForTransactionReceipt({ hash: hash as Hash });
       }
     }
 
@@ -192,5 +98,6 @@ maybeDescribe("MorphoProtocolEvm fork e2e", () => {
     });
 
     expect(result.hash).toMatch(/^0x[0-9a-fA-F]{64}$/);
-  }, 120_000);
+    await client.waitForTransactionReceipt({ hash: result.hash as Hash });
+  });
 });

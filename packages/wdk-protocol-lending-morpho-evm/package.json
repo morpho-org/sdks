@@ -61,6 +61,7 @@
     "viem": "^2.0.0"
   },
   "devDependencies": {
+    "@morpho-org/test": "workspace:^",
     "typescript": "^7.0.2",
     "viem": "^2.55.10",
     "vitest": "^4.1.10"
