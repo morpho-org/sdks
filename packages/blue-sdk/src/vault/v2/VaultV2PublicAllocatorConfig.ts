@@ -12,7 +12,7 @@ export interface VaultV2PublicAllocatorConfig {
   readonly penalty: bigint;
 }
 
-/** Public allocator permissions and cap for one Vault V2 adapter-market pair. */
+/** Public allocator permission and cap for one Vault V2 adapter-market pair. */
 export interface VaultV2MarketPublicAllocatorConfig {
   /** BluePublicAllocator contract from which the configuration was read. */
   readonly allocator: Address;
@@ -26,6 +26,4 @@ export interface VaultV2MarketPublicAllocatorConfig {
   readonly absoluteCap: bigint;
   /** Whether the allocator may pull assets from this adapter-market pair. */
   readonly canPullFromMarket: boolean;
-  /** Whether the allocator currently recognizes the adapter. */
-  readonly isActiveAdapter: boolean;
 }

@@ -69,7 +69,7 @@ export async function fetchVaultV2PublicAllocatorConfig(
 }
 
 /**
- * Fetches BluePublicAllocator permissions and cap state for one Vault V2 adapter-market pair.
+ * Fetches BluePublicAllocator permission and cap state for one Vault V2 adapter-market pair.
  *
  * @param allocator - Explicit BluePublicAllocator contract address.
  * @param vault - Vault V2 address.
@@ -80,7 +80,7 @@ export async function fetchVaultV2PublicAllocatorConfig(
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
- * @returns The allocator cap and permissions for the adapter-market pair.
+ * @returns The allocator cap and pull permission for the adapter-market pair.
  * @throws {viem.BaseError} when one of the contract reads fails.
  * @example
  * ```ts
@@ -115,7 +115,7 @@ export async function fetchVaultV2MarketPublicAllocatorConfig(
   client: Client,
   parameters: FetchParameters = {},
 ): Promise<VaultV2MarketPublicAllocatorConfig> {
-  const [absoluteCap, canPullFromMarket, isActiveAdapter] = await Promise.all([
+  const [absoluteCap, canPullFromMarket] = await Promise.all([
     readContract(client, {
       ...parameters,
       address: allocator,
@@ -130,13 +130,6 @@ export async function fetchVaultV2MarketPublicAllocatorConfig(
       functionName: "canPullFromMarket",
       args: [vault, marketParamsId],
     }),
-    readContract(client, {
-      ...parameters,
-      address: allocator,
-      abi: vaultV2BluePublicAllocatorAbi,
-      functionName: "isActiveAdapter",
-      args: [vault, adapter],
-    }),
   ]);
 
   return {
@@ -146,7 +139,6 @@ export async function fetchVaultV2MarketPublicAllocatorConfig(
     marketParamsId,
     absoluteCap,
     canPullFromMarket,
-    isActiveAdapter,
   };
 }
 
@@ -167,7 +159,7 @@ export async function fetchVaultV2MarketPublicAllocatorConfig(
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.deployless - Deployless mode; defaults to `true`, with direct-read fallback.
- * @returns Vault-wide config, adapter-market configs keyed by `marketParamsId`, and allocations keyed by derived id.
+ * @returns Vault-wide config, active-adapter set, adapter-market configs keyed by `marketParamsId`, and allocations keyed by derived id.
  * @throws {viem.BaseError} when deployless mode is forced and fails, or when a direct contract read fails.
  * @example
  * ```ts
@@ -186,7 +178,7 @@ export async function fetchVaultV2MarketPublicAllocatorConfig(
  *     vault,
  *     client,
  *   );
- *   // data contains publicAllocatorConfig, marketPublicAllocatorConfigs, and allocations.
+ *   // data contains publicAllocatorConfig, activeAdapters, marketPublicAllocatorConfigs, and allocations.
  *   return data;
  * }
  * ```
@@ -202,10 +194,12 @@ export async function fetchVaultV2PublicAllocatorData(
     readonly adapter: Address;
     readonly marketParamsId: Hash;
   }[] = [];
+  const adapters = new Set<Address>();
   const allocationIds = new Set<Hash>();
 
   for (const adapter of vault.accrualAdapters) {
     if (!(adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2)) continue;
+    adapters.add(adapter.address);
 
     for (const market of adapter.markets) {
       const ids = adapter.ids(market.params);
@@ -217,6 +211,7 @@ export async function fetchVaultV2PublicAllocatorData(
     }
   }
 
+  const adapterList = [...adapters];
   const allocationIdList = [...allocationIds];
 
   if (deployless) {
@@ -226,7 +221,13 @@ export async function fetchVaultV2PublicAllocatorData(
         abi,
         code,
         functionName: "query",
-        args: [allocator, vault.address, marketRequests, allocationIdList],
+        args: [
+          allocator,
+          vault.address,
+          adapterList,
+          marketRequests,
+          allocationIdList,
+        ],
       });
 
       const marketPublicAllocatorConfigs: Record<
@@ -253,6 +254,9 @@ export async function fetchVaultV2PublicAllocatorData(
           canPullFromIdle: result.canPullFromIdle,
           penalty: result.penalty,
         } satisfies VaultV2PublicAllocatorConfig,
+        activeAdapters: new Set(
+          adapterList.filter((_, index) => result.isActiveAdapters[index]),
+        ),
         marketPublicAllocatorConfigs,
         allocations,
       };
@@ -262,56 +266,71 @@ export async function fetchVaultV2PublicAllocatorData(
     }
   }
 
-  const [publicAllocatorConfig, marketConfigs, allocationValues] =
-    await Promise.all([
-      fetchVaultV2PublicAllocatorConfig(
-        allocator,
-        vault.address,
-        client,
-        parameters,
-      ),
-      Promise.all(
-        marketRequests.map(({ adapter, marketParamsId }) =>
-          fetchVaultV2MarketPublicAllocatorConfig(
-            allocator,
-            vault.address,
-            adapter,
-            marketParamsId,
-            client,
-            parameters,
-          ),
-        ),
-      ),
-      Promise.all(
-        allocationIdList.map(async (id) => {
-          const [absoluteCap, relativeCap, allocation] = await Promise.all([
-            readContract(client, {
-              ...parameters,
-              address: vault.address,
-              abi: vaultV2Abi,
-              functionName: "absoluteCap",
-              args: [id],
-            }),
-            readContract(client, {
-              ...parameters,
-              address: vault.address,
-              abi: vaultV2Abi,
-              functionName: "relativeCap",
-              args: [id],
-            }),
-            readContract(client, {
-              ...parameters,
-              address: vault.address,
-              abi: vaultV2Abi,
-              functionName: "allocation",
-              args: [id],
-            }),
-          ]);
-
-          return { id, absoluteCap, relativeCap, allocation };
+  const [
+    publicAllocatorConfig,
+    isActiveAdapters,
+    marketConfigs,
+    allocationValues,
+  ] = await Promise.all([
+    fetchVaultV2PublicAllocatorConfig(
+      allocator,
+      vault.address,
+      client,
+      parameters,
+    ),
+    Promise.all(
+      adapterList.map((adapter) =>
+        readContract(client, {
+          ...parameters,
+          address: allocator,
+          abi: vaultV2BluePublicAllocatorAbi,
+          functionName: "isActiveAdapter",
+          args: [vault.address, adapter],
         }),
       ),
-    ]);
+    ),
+    Promise.all(
+      marketRequests.map(({ adapter, marketParamsId }) =>
+        fetchVaultV2MarketPublicAllocatorConfig(
+          allocator,
+          vault.address,
+          adapter,
+          marketParamsId,
+          client,
+          parameters,
+        ),
+      ),
+    ),
+    Promise.all(
+      allocationIdList.map(async (id) => {
+        const [absoluteCap, relativeCap, allocation] = await Promise.all([
+          readContract(client, {
+            ...parameters,
+            address: vault.address,
+            abi: vaultV2Abi,
+            functionName: "absoluteCap",
+            args: [id],
+          }),
+          readContract(client, {
+            ...parameters,
+            address: vault.address,
+            abi: vaultV2Abi,
+            functionName: "relativeCap",
+            args: [id],
+          }),
+          readContract(client, {
+            ...parameters,
+            address: vault.address,
+            abi: vaultV2Abi,
+            functionName: "allocation",
+            args: [id],
+          }),
+        ]);
+
+        return { id, absoluteCap, relativeCap, allocation };
+      }),
+    ),
+  ]);
 
   const marketPublicAllocatorConfigs: Record<
     Hash,
@@ -328,6 +347,9 @@ export async function fetchVaultV2PublicAllocatorData(
 
   return {
     publicAllocatorConfig,
+    activeAdapters: new Set(
+      adapterList.filter((_, index) => isActiveAdapters[index]),
+    ),
     marketPublicAllocatorConfigs,
     allocations,
   };

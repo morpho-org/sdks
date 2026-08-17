@@ -62,6 +62,10 @@ export interface InputVaultV2ReallocationData {
   readonly publicAllocatorConfigs?: Readonly<
     Record<Address, VaultV2PublicAllocatorConfig | undefined>
   >;
+  /** BluePublicAllocator-active adapters indexed by vault address. */
+  readonly activeAdapters?: Readonly<
+    Record<Address, ReadonlySet<Address> | undefined>
+  >;
   /** Adapter-market BluePublicAllocator configuration indexed by vault and `marketParamsId`. */
   readonly marketPublicAllocatorConfigs?: Readonly<
     Record<
@@ -221,6 +225,11 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
     Address,
     VaultV2PublicAllocatorConfig | undefined
   >;
+  /** BluePublicAllocator-active adapters indexed by vault address. */
+  public readonly activeAdapters: Record<
+    Address,
+    ReadonlySet<Address> | undefined
+  >;
   /** Adapter-market allocator configuration indexed by vault and market-params id. */
   public readonly marketPublicAllocatorConfigs: Record<
     Address,
@@ -239,6 +248,7 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
     this.vaults = {};
     this.allocations = {};
     this.publicAllocatorConfigs = {};
+    this.activeAdapters = {};
     this.marketPublicAllocatorConfigs = {};
     this.donatedPenaltyAssets =
       input instanceof VaultV2ReallocationData
@@ -286,6 +296,13 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
     ) as [Address, VaultV2PublicAllocatorConfig | undefined][]) {
       this.publicAllocatorConfigs[vault] =
         config == null ? undefined : { ...config };
+    }
+
+    for (const [vault, adapters] of Object.entries(
+      input.activeAdapters ?? {},
+    ) as [Address, ReadonlySet<Address> | undefined][]) {
+      this.activeAdapters[vault] =
+        adapters == null ? undefined : new Set(adapters);
     }
 
     for (const [vault, configs] of Object.entries(
@@ -657,6 +674,8 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
                 publicAllocatorConfig.penalty > options.maxPenalty)
             )
               return;
+            const activeAdapters = data.activeAdapters[vaultAddress];
+            if (activeAdapters == null) return;
 
             const targetSupplyHeadroom = MathLib.zeroFloorSub(
               MathLib.MAX_UINT_128,
@@ -701,7 +720,7 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
                     marketPublicAllocatorConfig.adapter,
                     adapter.address,
                   ) ||
-                  !marketPublicAllocatorConfig.isActiveAdapter
+                  !activeAdapters.has(adapter.address)
                 )
                   return;
 
@@ -799,7 +818,7 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
                         sourceConfig.adapter,
                         sourceAdapter.address,
                       ) ||
-                      !sourceConfig.isActiveAdapter ||
+                      !activeAdapters.has(sourceAdapter.address) ||
                       !sourceConfig.canPullFromMarket
                     )
                       return;

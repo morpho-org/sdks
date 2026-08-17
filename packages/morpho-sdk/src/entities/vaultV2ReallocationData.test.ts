@@ -96,6 +96,7 @@ interface FixtureOptions {
   readonly idle?: bigint;
   readonly canPullFromIdle?: boolean;
   readonly canPullFromMarket?: boolean;
+  readonly allocatorActiveAdapters?: ReadonlySet<Address>;
   readonly penalty?: bigint;
   readonly sourceLastUpdate?: bigint;
   readonly targetLastUpdate?: bigint;
@@ -123,6 +124,7 @@ const makeFixture = ({
   idle = 0n,
   canPullFromIdle = true,
   canPullFromMarket = true,
+  allocatorActiveAdapters,
   penalty = 7n,
   sourceLastUpdate = TIMESTAMP,
   targetLastUpdate = TIMESTAMP,
@@ -284,6 +286,11 @@ const makeFixture = ({
           penalty,
         },
       },
+      activeAdapters: {
+        [VAULT]:
+          allocatorActiveAdapters ??
+          new Set(adapters.map((adapter) => adapter.address)),
+      },
       marketPublicAllocatorConfigs: {
         [VAULT]: {
           [targetIds[2]]: {
@@ -293,7 +300,6 @@ const makeFixture = ({
             marketParamsId: targetIds[2],
             absoluteCap: allocatorTargetCap,
             canPullFromMarket: false,
-            isActiveAdapter: true,
           },
           [sourceIds[2]]: {
             allocator: ALLOCATOR,
@@ -302,7 +308,6 @@ const makeFixture = ({
             marketParamsId: sourceIds[2],
             absoluteCap: 0n,
             canPullFromMarket,
-            isActiveAdapter: true,
           },
         },
       },
@@ -343,6 +348,19 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
     expect(result.data.getVault(VAULT)._totalAssets).toBe(
       data.getVault(VAULT)._totalAssets,
     );
+  });
+
+  test("behavior: ignores inactive source and target adapters", () => {
+    for (const allocatorActiveAdapters of [
+      new Set<Address>([TARGET_ADAPTER]),
+      new Set<Address>([SOURCE_ADAPTER]),
+    ]) {
+      const { data } = makeFixture({ allocatorActiveAdapters });
+
+      expect(
+        data.computeVaultV2Reallocations(targetParams.id).reallocations,
+      ).toStrictEqual([]);
+    }
   });
 
   test("behavior: keeps two vault adapters on one canonical market", () => {
@@ -410,6 +428,10 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
           penalty: 0n,
         },
       },
+      activeAdapters: {
+        [VAULT]: data.activeAdapters[VAULT],
+        [SECOND_VAULT]: new Set([SECOND_TARGET_ADAPTER]),
+      },
       marketPublicAllocatorConfigs: {
         [VAULT]: data.marketPublicAllocatorConfigs[VAULT],
         [SECOND_VAULT]: {
@@ -420,7 +442,6 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
             marketParamsId: secondTargetIds[2],
             absoluteCap: 10_000n,
             canPullFromMarket: false,
-            isActiveAdapter: true,
           },
         },
       },
@@ -547,10 +568,15 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
       vaults: { [VAULT]: inputVault },
       allocations: data.allocations,
       publicAllocatorConfigs: data.publicAllocatorConfigs,
+      activeAdapters: data.activeAdapters,
       marketPublicAllocatorConfigs: data.marketPublicAllocatorConfigs,
     });
 
     const cloned = input.clone();
+    expect(cloned.activeAdapters[VAULT]).toStrictEqual(
+      input.activeAdapters[VAULT],
+    );
+    expect(cloned.activeAdapters[VAULT]).not.toBe(input.activeAdapters[VAULT]);
     const inputLegacy = input
       .getVault(VAULT)
       .accrualAdapters.find(

@@ -87,6 +87,7 @@ const expected = {
     canPullFromIdle: true,
     penalty: 12n,
   },
+  activeAdapters: new Set([ADAPTER]),
   marketPublicAllocatorConfigs: {
     [marketParamsId]: {
       allocator: ALLOCATOR,
@@ -95,7 +96,6 @@ const expected = {
       marketParamsId,
       absoluteCap: 500n,
       canPullFromMarket: true,
-      isActiveAdapter: true,
     },
   },
   allocations: Object.fromEntries(
@@ -111,7 +111,10 @@ const expected = {
   ),
 };
 
-const mockDirectReads = (handle: ReturnType<typeof createMockClient>) => {
+const mockDirectReads = (
+  handle: ReturnType<typeof createMockClient>,
+  isActiveAdapter = true,
+) => {
   mockRead(handle, {
     address: ALLOCATOR,
     abi: vaultV2BluePublicAllocatorAbi,
@@ -134,7 +137,7 @@ const mockDirectReads = (handle: ReturnType<typeof createMockClient>) => {
     address: ALLOCATOR,
     abi: vaultV2BluePublicAllocatorAbi,
     functionName: "isActiveAdapter",
-    result: true,
+    result: isActiveAdapter,
   });
   mockRead(handle, {
     address: VAULT,
@@ -182,13 +185,13 @@ describe("Vault V2 public allocator fetchers", () => {
     mockDeploylessRead(handle, queryAbi, "query", {
       canPullFromIdle: true,
       penalty: 12n,
+      isActiveAdapters: [true],
       marketConfigs: [
         {
           adapter: ADAPTER,
           marketParamsId,
           absoluteCap: 500n,
           canPullFromMarket: true,
-          isActiveAdapter: true,
         },
       ],
       allocations: ids.map((id) => ({
@@ -212,5 +215,19 @@ describe("Vault V2 public allocator fetchers", () => {
     await expect(
       fetchVaultV2PublicAllocatorData(ALLOCATOR, vault, handle.client),
     ).resolves.toStrictEqual(expected);
+  });
+
+  test("behavior: omits inactive adapters from the registry", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessReads(handle, [new Error("deployless unavailable")]);
+    mockDirectReads(handle, false);
+
+    const result = await fetchVaultV2PublicAllocatorData(
+      ALLOCATOR,
+      vault,
+      handle.client,
+    );
+
+    expect(result.activeAdapters).toStrictEqual(new Set());
   });
 });

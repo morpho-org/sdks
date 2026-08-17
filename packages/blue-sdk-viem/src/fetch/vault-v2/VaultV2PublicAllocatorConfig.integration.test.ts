@@ -75,6 +75,9 @@ describe("Vault V2 public allocator fetchers on fork", () => {
         canPullFromIdle: true,
         penalty: 12n,
       });
+      expect(deployless.activeAdapters).toStrictEqual(
+        new Set([forkAdapter.address]),
+      );
       expect(
         deployless.marketPublicAllocatorConfigs[forkMarketParamsId],
       ).toStrictEqual({
@@ -84,7 +87,6 @@ describe("Vault V2 public allocator fetchers on fork", () => {
         marketParamsId: forkMarketParamsId,
         absoluteCap: 500n,
         canPullFromMarket: true,
-        isActiveAdapter: true,
       });
       expect(
         Object.values(deployless.allocations).some(

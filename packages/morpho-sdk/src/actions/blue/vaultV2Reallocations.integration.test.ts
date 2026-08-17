@@ -544,6 +544,7 @@ describe("Blue actions with Vault V2 reallocations", () => {
       publicAllocatorConfigs: {
         [vault]: allocatorData.publicAllocatorConfig,
       },
+      activeAdapters: { [vault]: allocatorData.activeAdapters },
       marketPublicAllocatorConfigs: {
         [vault]: allocatorData.marketPublicAllocatorConfigs,
       },
