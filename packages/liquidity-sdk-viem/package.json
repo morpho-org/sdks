@@ -1,6 +1,6 @@
 {
   "name": "@morpho-org/liquidity-sdk-viem",
-  "description": "Viem-based package that calculates shared liquidity through PublicAllocator V1 and the Vault V2 BluePublicAllocator.",
+  "description": "Viem-based package that helps seamlessly calculate the liquidity available through the PublicAllocator.",
   "version": "4.1.1",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
@@ -29,10 +29,10 @@
     "codegen": "graphql-codegen --config codegen.ts"
   },
   "peerDependencies": {
-    "@morpho-org/blue-sdk": "^6.5.0",
-    "@morpho-org/blue-sdk-viem": "^5.3.0",
-    "@morpho-org/morpho-sdk": "^5.5.0",
-    "@morpho-org/morpho-ts": "^2.9.0",
+    "@morpho-org/blue-sdk": "^6.0.0",
+    "@morpho-org/blue-sdk-viem": "^5.0.0",
+    "@morpho-org/morpho-sdk": "^5.4.0",
+    "@morpho-org/morpho-ts": "^2.7.0",
     "dataloader": "^2.2.3",
     "graphql": "^14.0.0 || ^15.0.0 || ^16.0.0",
     "graphql-request": "^6.1.0",

@@ -23,7 +23,7 @@
 
 ## Overview
 
-Viem-based loaders for computing shared liquidity from PublicAllocator V1 and the Vault V2 BluePublicAllocator.
+Viem-based package that provides utilities to build viem-based liquidity bots on Morpho and examples using Flashbots and Morpho's GraphQL API.
 
 ## Installation
 
@@ -37,52 +37,44 @@ yarn add @morpho-org/liquidity-sdk-viem
 
 ## Usage
 
-### Vault V1
+### Fetch from API or RPC
 
 ```typescript
-import type { MarketId } from "@morpho-org/blue-sdk";
 import { LiquidityLoader } from "@morpho-org/liquidity-sdk-viem";
-import { createPublicClient, http } from "viem";
-import { mainnet } from "viem/chains";
 
-const client = createPublicClient({ chain: mainnet, transport: http() });
-const loader = new LiquidityLoader(client);
-const marketId =
-  "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc" as MarketId;
+const loader = new LiquidityLoader(
+  client // viem client.
+);
 
-const { withdrawals, startState, endState, targetBorrowUtilization } =
-  await loader.fetch(marketId);
+const [withdrawals1, withdrawals2] = await Promise.all([
+  loader.fetch(
+    "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc" as MarketId,
+    "api"
+  ),
+  loader.fetch(
+    "0xe475337d11be1db07f7c5a156e511f05d1844308e66e17d2ba5da0839d3b34d9" as MarketId,
+    "rpc"
+  ),
+]);
 ```
 
-`LiquidityLoader` discovers PublicAllocator V1 vaults through the Morpho API, snapshots their state through the viem client, and returns source-market withdrawals.
-
-### Vault V2
+### Fetch only from API
 
 ```typescript
-import type { MarketId } from "@morpho-org/blue-sdk";
-import {
-  type VaultV2LiquidityResult,
-  VaultV2LiquidityLoader,
-} from "@morpho-org/liquidity-sdk-viem";
-import { type Address, createPublicClient, http } from "viem";
-import { mainnet } from "viem/chains";
+import { ChainId } from "@morpho-org/blue-sdk";
+import { LiquidityLoader } from "@morpho-org/liquidity-sdk-viem";
 
-export async function loadVaultV2Liquidity(
-  allocator: Address,
-  vault: Address,
-  marketId: MarketId,
-): Promise<VaultV2LiquidityResult> {
-  const client = createPublicClient({ chain: mainnet, transport: http() });
-  const loader = new VaultV2LiquidityLoader(client, {
-    allocator,
-    vaults: [vault],
-    maxPenalty: 1_000_000_000_000_000n,
-  });
-  return loader.fetch(marketId);
-}
+const loader = new LiquidityLoader({ chainId: ChainId.EthMainnet });
+
+const [withdrawals1, withdrawals2] = await Promise.all([
+  loader.fetch(
+    "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc" as MarketId
+  ),
+  loader.fetch(
+    "0xe475337d11be1db07f7c5a156e511f05d1844308e66e17d2ba5da0839d3b34d9" as MarketId
+  ),
+]);
 ```
-
-`VaultV2LiquidityLoader` is a separate REST-backed loader. It reads Vault V2 configuration, state, allocations, withdrawal penalties, Blue market state, adapter positions, oracle prices, and adaptive-curve IRM state from the Morpho REST APIs. BluePublicAllocator-only configuration remains an onchain read through the supplied viem client. The allocator and participating Vault V2 addresses are explicit because the protocol has no canonical allocator registry entry. Its `reallocations` can be passed directly to Morpho SDK Blue borrow and withdraw actions.
 
 ## Development
 
