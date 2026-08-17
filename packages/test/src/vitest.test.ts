@@ -61,7 +61,7 @@ const extendedViemTest = viemTest.extend<{ readonly label: string }>({
 
 describe("createViemTest", () => {
   viemTest(
-    "behavior: queues the first case before fixture setup",
+    "behavior: provisions the first concurrent case independently",
     async ({ client }) => {
       expect(client).toBe(fakeClient);
       await setTimeout(50);
@@ -69,7 +69,7 @@ describe("createViemTest", () => {
   );
 
   viemTest(
-    "behavior: queues the next case before fixture setup",
+    "behavior: provisions the next concurrent case independently",
     async ({ client }) => {
       expect(client).toBe(fakeClient);
       await setTimeout(25);
@@ -77,7 +77,7 @@ describe("createViemTest", () => {
   );
 
   extendedViemTest(
-    "behavior: keeps an extended API sequential",
+    "behavior: provisions an extended API case independently",
     async ({ client, label }) => {
       expect(client).toBe(fakeClient);
       expect(label).toBe("extended");
@@ -86,7 +86,7 @@ describe("createViemTest", () => {
   );
 
   extendedViemTest(
-    "behavior: keeps the next extended case sequential",
+    "behavior: provisions the next extended case independently",
     async ({ client, label }) => {
       expect(client).toBe(fakeClient);
       expect(label).toBe("extended");
@@ -96,7 +96,7 @@ describe("createViemTest", () => {
 
   afterAll(() => {
     expect(spawnAnvilMock).toHaveBeenCalledTimes(4);
-    expect(peakActiveProcesses).toBe(1);
+    expect(peakActiveProcesses).toBe(4);
     expect(activeProcesses).toBe(0);
   });
 });

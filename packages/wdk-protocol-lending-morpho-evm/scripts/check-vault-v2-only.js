@@ -21,7 +21,7 @@ const checks = [
     patterns: ["vaultV1", "earnVaultVersion", "vaultVersion"],
   },
   {
-    file: "tests/integration/module.test.ts",
+    file: "test/module.integration.test.ts",
     patterns: ["vaultV1", "earnVaultVersion", "vaultVersion"],
   },
   {

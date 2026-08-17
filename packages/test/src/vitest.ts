@@ -9,7 +9,6 @@ import { type TestAPI, test } from "vitest";
 import { type AnvilArgs, spawnAnvil } from "./anvil.js";
 import { type AnvilTestClient, createAnvilTestClient } from "./client.js";
 import { AnvilCleanupError, AnvilStartupError } from "./errors.js";
-import { withSequentialTests } from "./vitestSequential.js";
 
 // Vitest needs to serialize BigInts to JSON, so we need to add a toJSON method to BigInt.prototype.
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/BigInt#use_within_json
@@ -71,7 +70,7 @@ export const createViemTest = <chain extends Chain>(
     blockBaseFeePerGas: parameters.blockBaseFeePerGas ?? 0n,
   };
 
-  const viemTest = test.extend<ViemTestContext<chain>>({
+  return test.extend<ViemTestContext<chain>>({
     client: async ({ signal }, use) => {
       const { rpcUrl, stopAndWait } = await spawnAnvilWithRetry(
         anvilParameters,
@@ -151,7 +150,4 @@ export const createViemTest = <chain extends Chain>(
       if (cleanupFailed) throw cleanupFailure;
     },
   });
-
-  // Queue cases before fixture setup so waiting for an Anvil slot cannot consume their timeout.
-  return withSequentialTests(viemTest);
 };
