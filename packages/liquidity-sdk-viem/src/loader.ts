@@ -6,7 +6,7 @@ import {
   fetchVaultMarketConfig,
 } from "@morpho-org/blue-sdk-viem";
 import type { PublicReallocation } from "@morpho-org/morpho-sdk";
-import { VaultV1ReallocationData } from "@morpho-org/morpho-sdk/entities";
+import { ReallocationData } from "@morpho-org/morpho-sdk/entities";
 import { entries, fromEntries, isDefined } from "@morpho-org/morpho-ts";
 import DataLoader from "dataloader";
 import type { Chain, Client, Transport } from "viem";
@@ -42,8 +42,8 @@ export class LiquidityLoader<chain extends Chain = Chain> {
   protected readonly dataLoader: DataLoader<
     MarketId,
     {
-      startState: VaultV1ReallocationData;
-      endState: VaultV1ReallocationData;
+      startState: ReallocationData;
+      endState: ReallocationData;
       withdrawals: readonly PublicReallocation[];
       targetBorrowUtilization: bigint;
     }
@@ -157,7 +157,7 @@ export class LiquidityLoader<chain extends Chain = Chain> {
           ),
         ]);
 
-        const startState = new VaultV1ReallocationData({
+        const startState = new ReallocationData({
           chainId,
           markets: fromEntries(markets.map((market) => [market.id, market])),
           vaults: fromEntries(vaults.map((vault) => [vault.address, vault])),
@@ -222,7 +222,7 @@ export class LiquidityLoader<chain extends Chain = Chain> {
    * @param marketId - Target market id to plan withdrawals for.
    * @returns The start state, simulated end state, computed withdrawals, and target borrow utilization.
    *
-   * @remarks The returned `endState` is produced by `VaultV1ReallocationData.getMarketPublicReallocations`
+   * @remarks The returned `endState` is produced by `ReallocationData.getMarketPublicReallocations`
    * from onchain inputs fetched at one block, with reallocation headroom evaluated one hour after
    * that block timestamp.
    *
@@ -244,7 +244,7 @@ export class LiquidityLoader<chain extends Chain = Chain> {
    * const { withdrawals, endState } = await loader.fetch(marketId);
    *
    * // withdrawals: readonly PublicReallocation[]
-   * // endState: VaultV1ReallocationData
+   * // endState: ReallocationData
    * ```
    */
   public fetch(marketId: MarketId) {
