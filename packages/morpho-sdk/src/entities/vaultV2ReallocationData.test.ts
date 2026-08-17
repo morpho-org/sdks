@@ -96,7 +96,7 @@ interface FixtureOptions {
   readonly idle?: bigint;
   readonly canPullFromIdle?: boolean;
   readonly canPullFromMarket?: boolean;
-  readonly allocatorActiveAdapters?: ReadonlySet<Address>;
+  readonly allocatorActiveAdapters?: Iterable<Address>;
   readonly penalty?: bigint;
   readonly sourceLastUpdate?: bigint;
   readonly targetLastUpdate?: bigint;
@@ -288,8 +288,7 @@ const makeFixture = ({
       },
       activeAdapters: {
         [VAULT]:
-          allocatorActiveAdapters ??
-          new Set(adapters.map((adapter) => adapter.address)),
+          allocatorActiveAdapters ?? adapters.map((adapter) => adapter.address),
       },
       marketPublicAllocatorConfigs: {
         [VAULT]: {
@@ -323,6 +322,9 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
   test("default: returns an action-ready market reallocation and cloned post-state", () => {
     const { data, sourceExpectedAssets, sourceIds, targetIds } = makeFixture();
 
+    expect(data.activeAdapters[VAULT]).toStrictEqual(
+      new Set([TARGET_ADAPTER, SOURCE_ADAPTER]),
+    );
     const result = data.computeVaultV2Reallocations(targetParams.id);
 
     expect(result.reallocations).toStrictEqual([
@@ -352,9 +354,9 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
 
   test("behavior: ignores inactive source and target adapters", () => {
     for (const allocatorActiveAdapters of [
-      new Set<Address>([TARGET_ADAPTER]),
-      new Set<Address>([SOURCE_ADAPTER]),
-    ]) {
+      [TARGET_ADAPTER],
+      [SOURCE_ADAPTER],
+    ] as const) {
       const { data } = makeFixture({ allocatorActiveAdapters });
 
       expect(
@@ -1006,6 +1008,7 @@ describe("computeVaultV2Reallocations", () => {
       marketId: targetParams.id,
       operation: "borrow",
       amount: 40n,
+      options: { reallocatableVaults: [VAULT as Address].values() },
     });
 
     expect(reallocations[0]?.assets).toBe(40n);

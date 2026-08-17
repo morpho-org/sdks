@@ -213,7 +213,7 @@ export interface BlueActions {
       receiver?: Address;
       positionData: AccrualPosition;
       slippageTolerance?: bigint;
-      reallocations?: readonly BlueReallocation[];
+      reallocations?: Iterable<BlueReallocation>;
     } & AssetsOrSharesArgs,
   ) => {
     buildTx: (
@@ -257,7 +257,7 @@ export interface BlueActions {
     amount: bigint;
     positionData: AccrualPosition;
     slippageTolerance?: bigint;
-    reallocations?: readonly BlueReallocation[];
+    reallocations?: Iterable<BlueReallocation>;
   }) => {
     buildTx: (
       signatures?: readonly RequirementSignature[],
@@ -411,7 +411,7 @@ export interface BlueActions {
       positionData: AccrualPosition;
       borrowAmount: bigint;
       slippageTolerance?: bigint;
-      reallocations?: readonly BlueReallocation[];
+      reallocations?: Iterable<BlueReallocation>;
     } & DepositAmountArgs,
   ) => {
     buildTx: (
@@ -475,7 +475,7 @@ export interface BlueActions {
     borrowAssets?: bigint;
     borrowShares?: bigint;
     slippageTolerance?: bigint;
-    targetReallocations?: readonly BlueReallocation[];
+    targetReallocations?: Iterable<BlueReallocation>;
   }) => {
     buildTx: (
       signatures?: readonly RequirementSignature[],
@@ -573,7 +573,7 @@ export class MorphoBlue implements BlueActions {
 
   private getReallocationPenaltyRequirements(
     userAddress: Address,
-    reallocations: readonly BlueReallocation[] | undefined,
+    reallocations: Iterable<BlueReallocation> | undefined,
   ) {
     const amount = computeVaultV2ReallocationPenaltyAssets(reallocations ?? []);
 
@@ -699,7 +699,7 @@ export class MorphoBlue implements BlueActions {
       receiver?: Address;
       positionData: AccrualPosition;
       slippageTolerance?: bigint;
-      reallocations?: readonly BlueReallocation[];
+      reallocations?: Iterable<BlueReallocation>;
     } & AssetsOrSharesArgs,
   ) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
@@ -711,6 +711,7 @@ export class MorphoBlue implements BlueActions {
       slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
       reallocations,
     } = params;
+    const reallocationList = [...(reallocations ?? [])];
 
     // Mode normalization: a missing or undefined `assets`/`shares` key collapses to `0n`
     // so the mutual-exclusion and positivity checks below are pure value comparisons.
@@ -735,9 +736,9 @@ export class MorphoBlue implements BlueActions {
     }
 
     validateSlippageTolerance(slippageTolerance);
-    if (reallocations) {
+    if (reallocationList.length > 0) {
       // Validate caller-supplied descriptors before reading state; the helper returns void.
-      validateReallocations(reallocations, this.marketParams.id);
+      validateReallocations(reallocationList, this.marketParams.id);
     }
 
     if (!positionData) {
@@ -774,7 +775,10 @@ export class MorphoBlue implements BlueActions {
     return {
       getRequirements: async () => {
         const [penaltyRequirements, authTx] = await Promise.all([
-          this.getReallocationPenaltyRequirements(userAddress, reallocations),
+          this.getReallocationPenaltyRequirements(
+            userAddress,
+            reallocationList,
+          ),
           getBlueAuthorizationRequirement({
             viemClient: this.client.viemClient,
             chainId: this.chainId,
@@ -797,7 +801,7 @@ export class MorphoBlue implements BlueActions {
             shares,
             receiver,
             minSharePrice,
-            reallocations,
+            reallocations: reallocationList,
             authorizationSignature: authorization,
           },
           metadata: this.client.options.metadata,
@@ -873,18 +877,19 @@ export class MorphoBlue implements BlueActions {
     userAddress: Address;
     positionData: AccrualPosition;
     slippageTolerance?: bigint;
-    reallocations?: readonly BlueReallocation[];
+    reallocations?: Iterable<BlueReallocation>;
   }) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    const reallocationList = [...(reallocations ?? [])];
 
     if (amount <= 0n) {
       throw new NonPositiveInputError("amount", amount);
     }
 
     validateSlippageTolerance(slippageTolerance);
-    if (reallocations) {
+    if (reallocationList.length > 0) {
       // Validate caller-supplied descriptors before reading state; the helper returns void.
-      validateReallocations(reallocations, this.marketParams.id);
+      validateReallocations(reallocationList, this.marketParams.id);
     }
 
     if (!positionData) {
@@ -913,7 +918,10 @@ export class MorphoBlue implements BlueActions {
     return {
       getRequirements: async () => {
         const [penaltyRequirements, authTx] = await Promise.all([
-          this.getReallocationPenaltyRequirements(userAddress, reallocations),
+          this.getReallocationPenaltyRequirements(
+            userAddress,
+            reallocationList,
+          ),
           getBlueAuthorizationRequirement({
             viemClient: this.client.viemClient,
             chainId: this.chainId,
@@ -938,7 +946,7 @@ export class MorphoBlue implements BlueActions {
             amount,
             receiver: userAddress,
             minSharePrice,
-            reallocations,
+            reallocations: reallocationList,
             authorizationSignature: authorization,
           },
           metadata: this.client.options.metadata,
@@ -1371,9 +1379,10 @@ export class MorphoBlue implements BlueActions {
     positionData: AccrualPosition;
     borrowAmount: bigint;
     slippageTolerance?: bigint;
-    reallocations?: readonly BlueReallocation[];
+    reallocations?: Iterable<BlueReallocation>;
   } & DepositAmountArgs) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    const reallocationList = [...(reallocations ?? [])];
 
     if (amount < 0n) {
       throw new NegativeInputError("amount", amount);
@@ -1393,9 +1402,9 @@ export class MorphoBlue implements BlueActions {
     }
 
     validateSlippageTolerance(slippageTolerance);
-    if (reallocations) {
+    if (reallocationList.length > 0) {
       // Validate caller-supplied descriptors before reading state; the helper returns void.
-      validateReallocations(reallocations, this.marketParams.id);
+      validateReallocations(reallocationList, this.marketParams.id);
     }
 
     if (!positionData) {
@@ -1427,9 +1436,8 @@ export class MorphoBlue implements BlueActions {
     });
     return {
       getRequirements: async (params?: { useSimplePermit?: boolean }) => {
-        const penaltyAssets = computeVaultV2ReallocationPenaltyAssets(
-          reallocations ?? [],
-        );
+        const penaltyAssets =
+          computeVaultV2ReallocationPenaltyAssets(reallocationList);
         const usesSharedFundingToken = isAddressEqual(
           this.marketParams.collateralToken,
           this.marketParams.loanToken,
@@ -1451,7 +1459,7 @@ export class MorphoBlue implements BlueActions {
               ? Promise.resolve([])
               : this.getReallocationPenaltyRequirements(
                   userAddress,
-                  reallocations,
+                  reallocationList,
                 ),
             getBlueAuthorizationRequirement({
               viemClient: this.client.viemClient,
@@ -1488,7 +1496,7 @@ export class MorphoBlue implements BlueActions {
             minSharePrice,
             requirementSignature: permit,
             authorizationSignature: authorization,
-            reallocations,
+            reallocations: reallocationList,
           },
           metadata: this.client.options.metadata,
         });
@@ -1516,10 +1524,11 @@ export class MorphoBlue implements BlueActions {
     borrowAssets?: bigint;
     borrowShares?: bigint;
     slippageTolerance?: bigint;
-    targetReallocations?: readonly BlueReallocation[];
+    targetReallocations?: Iterable<BlueReallocation>;
   }) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     validateSlippageTolerance(slippageTolerance);
+    const targetReallocationList = [...(targetReallocations ?? [])];
 
     if (collateralAmount <= 0n) {
       throw new NonPositiveInputError("collateralAmount", collateralAmount);
@@ -1536,9 +1545,9 @@ export class MorphoBlue implements BlueActions {
     if (requestedAssets > 0n && requestedShares > 0n) {
       throw new BorrowAmountAndSharesExclusiveError(this.marketParams.id);
     }
-    if (targetReallocations) {
+    if (targetReallocationList.length > 0) {
       // Validate caller-supplied descriptors before reading state; the helper returns void.
-      validateReallocations(targetReallocations, target.marketParams.id);
+      validateReallocations(targetReallocationList, target.marketParams.id);
     }
 
     if (!positionData) {
@@ -1698,7 +1707,7 @@ export class MorphoBlue implements BlueActions {
         const [penaltyRequirements, authTx] = await Promise.all([
           this.getReallocationPenaltyRequirements(
             userAddress,
-            targetReallocations,
+            targetReallocationList,
           ),
           getBlueAuthorizationRequirement({
             viemClient: this.client.viemClient,
@@ -1728,7 +1737,7 @@ export class MorphoBlue implements BlueActions {
             borrowShares: requestedShares,
             minBorrowSharePrice,
             maxRepaySharePrice,
-            targetReallocations,
+            targetReallocations: targetReallocationList,
             authorizationSignature: authorization,
           },
           metadata: this.client.options.metadata,

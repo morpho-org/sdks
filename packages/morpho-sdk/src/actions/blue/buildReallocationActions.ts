@@ -40,7 +40,7 @@ export const buildReallocationActions = ({
   penaltyFundingSource = "initiator",
 }: {
   readonly chainId: number;
-  readonly reallocations?: readonly BlueReallocation[];
+  readonly reallocations?: Iterable<BlueReallocation>;
   readonly targetMarketParams: MarketParams;
   readonly penaltyFundingSource?: "initiator" | "generalAdapter1";
 }): {
@@ -48,12 +48,14 @@ export const buildReallocationActions = ({
   readonly fee: bigint;
   readonly penaltyAssets: bigint;
 } => {
+  const reallocationList = [...reallocations];
   // Validate the action descriptors before encoding; the validator returns void.
-  validateReallocations(reallocations, targetMarketParams.id);
+  validateReallocations(reallocationList, targetMarketParams.id);
 
   let fee = 0n;
   const actions: Action[] = [];
-  const penaltyAssets = computeVaultV2ReallocationPenaltyAssets(reallocations);
+  const penaltyAssets =
+    computeVaultV2ReallocationPenaltyAssets(reallocationList);
 
   if (penaltyAssets > 0n) {
     const {
@@ -83,7 +85,7 @@ export const buildReallocationActions = ({
     );
   }
 
-  for (const reallocation of reallocations) {
+  for (const reallocation of reallocationList) {
     if (reallocation.type === "bluePublicAllocator") {
       if (reallocation.from.type === "market") {
         actions.push({

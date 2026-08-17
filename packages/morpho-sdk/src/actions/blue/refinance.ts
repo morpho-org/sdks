@@ -45,7 +45,7 @@ export interface BlueRefinanceParams {
     /** Maximum repay share price on the source market (in ray); must be > 0 when a repay leg exists. */
     maxRepaySharePrice: bigint;
     /** Public Allocator V1 or V2 reallocations into the target market, run before the supply leg. */
-    targetReallocations?: readonly BlueReallocation[];
+    targetReallocations?: Iterable<BlueReallocation>;
     /**
      * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
      * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a

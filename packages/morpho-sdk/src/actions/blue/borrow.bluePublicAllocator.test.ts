@@ -79,7 +79,7 @@ describe("blueBorrow Blue Public Allocator", () => {
         amount: 1n,
         minSharePrice: 0n,
         receiver,
-        reallocations,
+        reallocations: reallocations.values(),
       },
     });
 

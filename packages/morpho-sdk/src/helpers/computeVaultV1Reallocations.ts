@@ -162,10 +162,19 @@ export const computeVaultV1Reallocations = ({
   readonly options?: ReallocationComputeOptions;
 }): readonly VaultV1BlueReallocation[] => {
   if (options?.enabled === false) return [];
+  const normalizedOptions = {
+    ...options,
+    reallocatableVaults:
+      options?.reallocatableVaults == null
+        ? undefined
+        : [...options.reallocatableVaults],
+  };
 
   // VaultV1ReallocationData does not retain the fetch block; pass that block timestamp
   // to compute against the same accrued state, otherwise Market defaults to lastUpdate.
-  const market = data.getMarket(marketId).accrueInterest(options?.timestamp);
+  const market = data
+    .getMarket(marketId)
+    .accrueInterest(normalizedOptions.timestamp);
 
   // Reject unreachable withdraws before any utilization math: a negative
   // post-supply yields a negative utilization that short-circuits the
@@ -190,7 +199,7 @@ export const computeVaultV1Reallocations = ({
 
   const supplyTargetUtilization = getSupplyTargetUtilization(
     market.params.id,
-    options,
+    normalizedOptions,
   );
 
   if (
@@ -210,7 +219,7 @@ export const computeVaultV1Reallocations = ({
 
   // Phase 1: "friendly" reallocations respecting withdrawal utilization targets.
   const { withdrawals: friendlyWithdrawals, data: friendlyReallocationData } =
-    data.computeVaultV1Reallocations(market.id, options);
+    data.computeVaultV1Reallocations(market.id, normalizedOptions);
 
   const withdrawals = [...friendlyWithdrawals];
 
@@ -233,7 +242,7 @@ export const computeVaultV1Reallocations = ({
     requiredAssets = newTotalBorrowAssets - newTotalSupplyAssets;
     withdrawals.push(
       ...friendlyReallocationData.computeVaultV1Reallocations(market.id, {
-        ...options,
+        ...normalizedOptions,
         defaultMaxWithdrawalUtilization: MathLib.WAD,
         maxWithdrawalUtilization: {},
       }).withdrawals,

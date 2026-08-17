@@ -366,7 +366,7 @@ export const validateRepayShares = (params: {
  * ```
  */
 export const validateReallocations = (
-  reallocations: readonly BlueReallocation[],
+  reallocations: Iterable<BlueReallocation>,
   targetMarketId: MarketId,
 ): void => {
   const penaltyByAllocatorVault = new Map<string, bigint>();

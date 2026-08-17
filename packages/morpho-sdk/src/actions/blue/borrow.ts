@@ -29,7 +29,7 @@ export interface BlueBorrowParams {
     /** Minimum borrow share price (in ray). Protects against share price manipulation. */
     minSharePrice: bigint;
     /** Public Allocator V1 or V2 reallocations to execute before borrowing. */
-    reallocations?: readonly BlueReallocation[];
+    reallocations?: Iterable<BlueReallocation>;
     /**
      * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
      * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a

@@ -16,9 +16,10 @@ export interface PublicAllocatorOptions {
 
   /**
    * Vaults to consider for reallocation. They must have enabled the PublicAllocator.
+   * Arrays, readonly arrays, sets, and other iterables are accepted.
    * Defaults to all vaults present in the reallocation data.
    */
-  readonly reallocatableVaults?: readonly Address[];
+  readonly reallocatableVaults?: Iterable<Address>;
 
   /**
    * The maximum utilization each source market may reach when withdrawing
@@ -52,8 +53,11 @@ export interface VaultV2BluePublicAllocatorOptions {
   /** Timestamp at which market and Vault V2 interest is evaluated. */
   readonly timestamp?: BigIntish;
 
-  /** Vault V2 addresses to consider. Defaults to every vault in the reallocation data. */
-  readonly reallocatableVaults?: readonly Address[];
+  /**
+   * Vault V2 addresses to consider. Arrays, readonly arrays, sets, and other
+   * iterables are accepted. Defaults to every vault in the reallocation data.
+   */
+  readonly reallocatableVaults?: Iterable<Address>;
 
   /**
    * Maximum proportional vault-asset penalty accepted for each

@@ -400,7 +400,7 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
     );
     const vaults = Array.from(
       new Set(
-        (reallocatableVaults ?? configuredVaults)
+        [...(reallocatableVaults ?? configuredVaults)]
           .map((vault) => vaultKeyByLower.get(vault.toLowerCase()))
           .filter((vault): vault is Address => vault != null),
       ),

@@ -62,9 +62,12 @@ export interface InputVaultV2ReallocationData {
   readonly publicAllocatorConfigs?: Readonly<
     Record<Address, VaultV2PublicAllocatorConfig | undefined>
   >;
-  /** BluePublicAllocator-active adapters indexed by vault address. */
+  /**
+   * BluePublicAllocator-active adapters indexed by vault address.
+   * Arrays, readonly arrays, sets, and other iterables are accepted and normalized to sets.
+   */
   readonly activeAdapters?: Readonly<
-    Record<Address, ReadonlySet<Address> | undefined>
+    Record<Address, Iterable<Address> | undefined>
   >;
   /** Adapter-market BluePublicAllocator configuration indexed by vault and `marketParamsId`. */
   readonly marketPublicAllocatorConfigs?: Readonly<
@@ -300,7 +303,7 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
 
     for (const [vault, adapters] of Object.entries(
       input.activeAdapters ?? {},
-    ) as [Address, ReadonlySet<Address> | undefined][]) {
+    ) as [Address, Iterable<Address> | undefined][]) {
       this.activeAdapters[vault] =
         adapters == null ? undefined : new Set(adapters);
     }
@@ -532,7 +535,14 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
       options?.timestamp == null
         ? this.getLatestSnapshotTimestamp()
         : BigInt(options.timestamp);
-    const normalizedOptions = { ...options, timestamp };
+    const normalizedOptions = {
+      ...options,
+      timestamp,
+      reallocatableVaults:
+        options?.reallocatableVaults == null
+          ? undefined
+          : [...options.reallocatableVaults],
+    };
     const market = this.getMarket(marketId).accrueInterest(timestamp);
     if (operation === "withdraw" && amount > market.totalSupplyAssets) {
       throw new ReallocationWithdrawExceedsMarketSupplyError({
@@ -649,7 +659,7 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
     );
     const vaults = Array.from(
       new Set(
-        (options.reallocatableVaults ?? configuredVaults)
+        [...(options.reallocatableVaults ?? configuredVaults)]
           .map((vault) => vaultKeyByLower.get(vault.toLowerCase()))
           .filter((vault): vault is Address => vault != null),
       ),

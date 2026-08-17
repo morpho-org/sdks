@@ -36,7 +36,7 @@ export interface BlueSupplyCollateralBorrowParams {
     /** Optional pre-signed permit/permit2 approval for the collateral transfer. */
     requirementSignature?: PermitRequirementSignature;
     /** Public Allocator V1 or V2 reallocations to execute before borrowing. */
-    reallocations?: readonly BlueReallocation[];
+    reallocations?: Iterable<BlueReallocation>;
     /**
      * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
      * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a

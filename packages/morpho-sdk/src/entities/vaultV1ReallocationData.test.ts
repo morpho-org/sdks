@@ -513,7 +513,7 @@ describe("VaultV1ReallocationData unit coverage", () => {
     ).toEqual([]);
     expect(
       data.getMarketPublicReallocations(targetParams.id, {
-        reallocatableVaults: [zeroAddress],
+        reallocatableVaults: new Set([zeroAddress]),
       }).withdrawals,
     ).toEqual([]);
 

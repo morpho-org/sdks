@@ -36,7 +36,7 @@ export interface BlueWithdrawParams {
      * computed via `MorphoBlue.getReallocations({ operation: "withdraw", amount })` or directly
      * via `computeVaultV1Reallocations({ operation: "withdraw", amount, ... })`.
      */
-    reallocations?: readonly BlueReallocation[];
+    reallocations?: Iterable<BlueReallocation>;
     /**
      * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
      * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a

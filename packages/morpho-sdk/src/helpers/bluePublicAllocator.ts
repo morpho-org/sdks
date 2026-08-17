@@ -41,16 +41,15 @@ export const computeBluePublicAllocatorPenaltyAssets = (
  * @internal
  */
 export const computeVaultV2ReallocationPenaltyAssets = (
-  reallocations: readonly BlueReallocation[],
-) =>
-  reallocations.reduce(
-    (total, reallocation) =>
-      reallocation.type === "bluePublicAllocator"
-        ? total +
-          computeBluePublicAllocatorPenaltyAssets(
-            reallocation.assets,
-            reallocation.penalty,
-          )
-        : total,
-    0n,
-  );
+  reallocations: Iterable<BlueReallocation>,
+) => {
+  let total = 0n;
+  for (const reallocation of reallocations) {
+    if (reallocation.type === "bluePublicAllocator")
+      total += computeBluePublicAllocatorPenaltyAssets(
+        reallocation.assets,
+        reallocation.penalty,
+      );
+  }
+  return total;
+};
