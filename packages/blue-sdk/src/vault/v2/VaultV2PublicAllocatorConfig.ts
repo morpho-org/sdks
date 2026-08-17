@@ -2,8 +2,6 @@ import type { Address, Hash } from "../../types.js";
 
 /** Public allocator configuration for one Vault V2. */
 export interface VaultV2PublicAllocatorConfig {
-  /** BluePublicAllocator contract from which the configuration was read. */
-  readonly allocator: Address;
   /** Configured Vault V2 address. */
   readonly vault: Address;
   /** Whether the allocator may pull the vault's idle assets into a Blue market. */
@@ -14,8 +12,6 @@ export interface VaultV2PublicAllocatorConfig {
 
 /** Public allocator permission and cap for one Vault V2 adapter-market pair. */
 export interface VaultV2MarketPublicAllocatorConfig {
-  /** BluePublicAllocator contract from which the configuration was read. */
-  readonly allocator: Address;
   /** Configured Vault V2 address. */
   readonly vault: Address;
   /** Vault V2 MorphoMarketV1AdapterV2 address. */

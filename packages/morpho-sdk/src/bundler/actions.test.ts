@@ -39,6 +39,7 @@ describe("BundlerAction", () => {
     morpho,
     permit2,
     publicAllocator,
+    bluePublicAllocator: allocator,
     bundler3: { bundler3, generalAdapter1 },
   } = getChainAddresses(chainId);
 
@@ -48,7 +49,6 @@ describe("BundlerAction", () => {
   const adapter = "0x0000000000000000000000000000000000000004";
   const erc4626 = "0x0000000000000000000000000000000000000005";
   const vault = "0x0000000000000000000000000000000000000006";
-  const allocator = "0x0000000000000000000000000000000000000011";
   const deallocateAdapter = "0x0000000000000000000000000000000000000012";
   const allocateAdapter = "0x0000000000000000000000000000000000000013";
   const loanToken = "0x0000000000000000000000000000000000000007";
@@ -355,7 +355,6 @@ describe("BundlerAction", () => {
       .tuple(
         addressArbitrary,
         addressArbitrary,
-        addressArbitrary,
         marketArbitrary,
         addressArbitrary,
         marketArbitrary,
@@ -372,7 +371,6 @@ describe("BundlerAction", () => {
       ),
     fc
       .tuple(
-        addressArbitrary,
         addressArbitrary,
         addressArbitrary,
         marketArbitrary,
@@ -620,7 +618,6 @@ describe("BundlerAction", () => {
       {
         type: "vaultV2BluePublicAllocatorReallocate",
         args: [
-          allocator,
           vault,
           deallocateAdapter,
           market,
@@ -633,7 +630,7 @@ describe("BundlerAction", () => {
       },
       {
         type: "vaultV2BluePublicAllocatorAllocateFromIdle",
-        args: [allocator, vault, allocateAdapter, market, 3n, 4n, false],
+        args: [vault, allocateAdapter, market, 3n, 4n, false],
       },
     ]);
 
@@ -1056,7 +1053,6 @@ describe("BundlerAction", () => {
           {
             type: "vaultV2BluePublicAllocatorReallocate",
             args: [
-              allocator,
               vault,
               deallocateAdapter,
               market,
@@ -1068,7 +1064,7 @@ describe("BundlerAction", () => {
             ],
           },
           BundlerAction.vaultV2BluePublicAllocatorReallocate(
-            allocator,
+            chainId,
             vault,
             deallocateAdapter,
             market,
@@ -1083,10 +1079,10 @@ describe("BundlerAction", () => {
           "vaultV2BluePublicAllocatorAllocateFromIdle",
           {
             type: "vaultV2BluePublicAllocatorAllocateFromIdle",
-            args: [allocator, vault, allocateAdapter, market, 22n, 23n, false],
+            args: [vault, allocateAdapter, market, 22n, 23n, false],
           },
           BundlerAction.vaultV2BluePublicAllocatorAllocateFromIdle(
-            allocator,
+            chainId,
             vault,
             allocateAdapter,
             market,
@@ -1571,7 +1567,7 @@ describe("BundlerAction", () => {
   test("vaultV2BluePublicAllocatorReallocate", () => {
     const penalty = 1_000_000_000_000_000n;
     const [approval, call] = BundlerAction.vaultV2BluePublicAllocatorReallocate(
-      allocator,
+      chainId,
       vault,
       deallocateAdapter,
       market,
@@ -1616,7 +1612,7 @@ describe("BundlerAction", () => {
   test("vaultV2BluePublicAllocatorReallocate with zero penalty", () => {
     const call = onlyCall(
       BundlerAction.vaultV2BluePublicAllocatorReallocate(
-        allocator,
+        chainId,
         vault,
         deallocateAdapter,
         market,
@@ -1650,7 +1646,7 @@ describe("BundlerAction", () => {
   test("vaultV2BluePublicAllocatorReallocate rejects a skippable penalty approval", () => {
     expect(() =>
       BundlerAction.vaultV2BluePublicAllocatorReallocate(
-        allocator,
+        chainId,
         vault,
         deallocateAdapter,
         market,
@@ -1667,7 +1663,7 @@ describe("BundlerAction", () => {
     const penalty = 1_000_000_000_000_000n;
     const [approval, call] =
       BundlerAction.vaultV2BluePublicAllocatorAllocateFromIdle(
-        allocator,
+        chainId,
         vault,
         allocateAdapter,
         market,
@@ -1708,7 +1704,7 @@ describe("BundlerAction", () => {
   test("vaultV2BluePublicAllocatorAllocateFromIdle with zero penalty", () => {
     const call = onlyCall(
       BundlerAction.vaultV2BluePublicAllocatorAllocateFromIdle(
-        allocator,
+        chainId,
         vault,
         allocateAdapter,
         market,
@@ -1732,7 +1728,7 @@ describe("BundlerAction", () => {
   test("vaultV2BluePublicAllocatorAllocateFromIdle rejects a skippable penalty approval", () => {
     expect(() =>
       BundlerAction.vaultV2BluePublicAllocatorAllocateFromIdle(
-        allocator,
+        chainId,
         vault,
         allocateAdapter,
         market,
@@ -1791,6 +1787,30 @@ describe("BundlerAction", () => {
         1n,
         [{ marketParams: market, amount: 2n }],
         market,
+      ),
+    ).toThrow(BundlerErrors.UnexpectedAction);
+
+    expect(() =>
+      BundlerAction.vaultV2BluePublicAllocatorReallocate(
+        ChainId.FraxtalMainnet,
+        vault,
+        deallocateAdapter,
+        market,
+        allocateAdapter,
+        market,
+        1n,
+        0n,
+      ),
+    ).toThrow(BundlerErrors.UnexpectedAction);
+
+    expect(() =>
+      BundlerAction.vaultV2BluePublicAllocatorAllocateFromIdle(
+        ChainId.FraxtalMainnet,
+        vault,
+        allocateAdapter,
+        market,
+        1n,
+        0n,
       ),
     ).toThrow(BundlerErrors.UnexpectedAction);
   });

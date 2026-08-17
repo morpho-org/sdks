@@ -1,4 +1,8 @@
-import { AccrualVaultV2MorphoMarketV1AdapterV2 } from "@morpho-org/blue-sdk";
+import {
+  AccrualVaultV2MorphoMarketV1AdapterV2,
+  ChainId,
+  getChainAddress,
+} from "@morpho-org/blue-sdk";
 import { assert, describe, expect } from "vitest";
 import {
   abi as fixtureAbi,
@@ -29,9 +33,16 @@ describe("Vault V2 public allocator fetchers on fork", () => {
         abi: fixtureAbi,
         bytecode: fixtureCode,
       });
-      const { contractAddress: allocator } =
+      const { contractAddress: fixture } =
         await client.waitForTransactionReceipt({ hash: deploymentHash });
-      assert(allocator != null);
+      assert(fixture != null);
+      const fixtureBytecode = await client.getBytecode({ address: fixture });
+      assert(fixtureBytecode != null);
+      const allocator = getChainAddress(
+        ChainId.EthMainnet,
+        "bluePublicAllocator",
+      );
+      await client.setCode({ address: allocator, bytecode: fixtureBytecode });
 
       const forkMarketParamsId = forkAdapter.ids(forkMarket.params)[2];
       await client.writeContract({
@@ -60,17 +71,16 @@ describe("Vault V2 public allocator fetchers on fork", () => {
       });
 
       const [deployless, direct] = await Promise.all([
-        fetchVaultV2PublicAllocatorData(allocator, forkVault, client, {
+        fetchVaultV2PublicAllocatorData(forkVault, client, {
           deployless: "force",
         }),
-        fetchVaultV2PublicAllocatorData(allocator, forkVault, client, {
+        fetchVaultV2PublicAllocatorData(forkVault, client, {
           deployless: false,
         }),
       ]);
 
       expect(deployless).toStrictEqual(direct);
       expect(deployless.publicAllocatorConfig).toStrictEqual({
-        allocator,
         vault: forkVault.address,
         canPullFromIdle: true,
         penalty: 12n,
@@ -81,7 +91,6 @@ describe("Vault V2 public allocator fetchers on fork", () => {
       expect(
         deployless.marketPublicAllocatorConfigs[forkMarketParamsId],
       ).toStrictEqual({
-        allocator,
         vault: forkVault.address,
         adapter: forkAdapter.address,
         marketParamsId: forkMarketParamsId,

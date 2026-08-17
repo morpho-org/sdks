@@ -88,10 +88,10 @@ export interface BlueSupplyCollateralBorrowParams {
  * @throws {NonPositiveInputError} when `borrowAmount <= 0n`, both collateral amounts resolve to
  *   zero, or any reallocation withdrawal amount is non-positive.
  * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
- * @throws {InconsistentReallocationPenaltyError} when V2 entries for one allocator-vault pair use different penalties.
- * @throws {InvalidReallocationAddressError} when a V2 identity or adapter address is malformed.
+ * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
+ * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
  * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
- * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
+ * @throws {InvalidReallocationShapeError} when an entry matches both or neither V1/V2 shape.
  * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
  * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the collateral
  *   token is not the chain's wNative.

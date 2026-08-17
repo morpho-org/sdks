@@ -486,8 +486,6 @@ describe.sequential("MorphoProtocolEvm", () => {
 
     test("should forward Vault V2 BluePublicAllocator reallocations", async () => {
       const reallocation = {
-        allocator: "0x0000000000000000000000000000000000000010",
-        type: "bluePublicAllocator",
         vault: VAULT,
         from: { type: "idle" },
         to: {
@@ -578,8 +576,6 @@ describe.sequential("MorphoProtocolEvm", () => {
         amount: 100_000n,
         reallocations: [
           {
-            allocator: "0x0000000000000000000000000000000000000010",
-            type: "bluePublicAllocator",
             vault: VAULT,
             from: { type: "idle" },
             to: {

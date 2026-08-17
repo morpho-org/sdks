@@ -55,6 +55,36 @@ export class NonPositiveInputError extends Error {
   }
 }
 
+/** Thrown when an integer input exceeds its protocol-defined maximum. */
+export class InputExceedsMaxError extends Error {
+  /**
+   * @param params - Maximum-bound validation details.
+   * @param params.field - Public input field whose value is invalid.
+   * @param params.value - Supplied value.
+   * @param params.max - Largest accepted value.
+   */
+  public constructor(params: {
+    readonly field: string;
+    readonly value: bigint;
+    readonly max: bigint;
+  }) {
+    super(
+      `Input "${params.field}" must be at most "${params.max}", got "${params.value}".`,
+    );
+    this.field = params.field;
+    this.value = params.value;
+    this.max = params.max;
+    this.name = "InputExceedsMaxError";
+  }
+
+  /** Public input field whose value is invalid. */
+  public readonly field: string;
+  /** Supplied value. */
+  public readonly value: bigint;
+  /** Largest accepted value. */
+  public readonly max: bigint;
+}
+
 /** Thrown when an in-kind redemption does not include any Morpho Blue market parameters. */
 export class EmptyMarketParamsListError extends Error {
   public constructor() {
@@ -282,36 +312,6 @@ export class VaultExitBundlesV1PermitMismatchError extends Error {
     this.actual = params.actual;
     this.name = "VaultExitBundlesV1PermitMismatchError";
   }
-}
-
-/** Thrown when an integer input exceeds its protocol-defined maximum. */
-export class InputExceedsMaxError extends Error {
-  /**
-   * @param params - Maximum-bound validation details.
-   * @param params.field - Public input field whose value is invalid.
-   * @param params.value - Supplied value.
-   * @param params.max - Largest accepted value.
-   */
-  public constructor(params: {
-    readonly field: string;
-    readonly value: bigint;
-    readonly max: bigint;
-  }) {
-    super(
-      `Input "${params.field}" must be at most "${params.max}", got "${params.value}".`,
-    );
-    this.field = params.field;
-    this.value = params.value;
-    this.max = params.max;
-    this.name = "InputExceedsMaxError";
-  }
-
-  /** Public input field whose value is invalid. */
-  public readonly field: string;
-  /** Supplied value. */
-  public readonly value: bigint;
-  /** Largest accepted value. */
-  public readonly max: bigint;
 }
 
 /** @deprecated Use {@link NonPositiveInputError}. */
@@ -824,33 +824,28 @@ export class ReallocationWithdrawalOnTargetMarketError extends Error {
 }
 
 /**
- * Thrown when a Public Allocator reallocation has an unknown top-level discriminator.
+ * Thrown when a Public Allocator reallocation does not match exactly one V1 or
+ * V2 input shape.
  *
  * @example
  * ```ts
- * import { InvalidReallocationTypeError } from "@morpho-org/morpho-sdk";
+ * import { InvalidReallocationShapeError } from "@morpho-org/morpho-sdk";
  *
- * const error = new InvalidReallocationTypeError("publicAllocatorV3");
+ * const error = new InvalidReallocationShapeError();
  * ```
  */
-export class InvalidReallocationTypeError extends Error {
-  /**
-   * @param reallocationType - Invalid runtime value received for `reallocation.type`, or
-   *   `undefined` when an untagged entry lacks the V1 `withdrawals` field.
-   */
-  public constructor(public readonly reallocationType: string | undefined) {
+export class InvalidReallocationShapeError extends Error {
+  public constructor() {
     super(
-      reallocationType === undefined
-        ? 'Reallocation must be an untagged Public Allocator V1 entry with "withdrawals" or specify type "publicAllocatorV1" or "bluePublicAllocator".'
-        : `Reallocation type must be "publicAllocatorV1" or "bluePublicAllocator", got "${reallocationType}".`,
+      'Reallocation must contain either V1 "withdrawals" or V2 "from", but not both.',
     );
-    this.name = "InvalidReallocationTypeError";
+    this.name = "InvalidReallocationShapeError";
   }
 }
 
 /**
- * Thrown when a Blue Public Allocator reallocation contains a malformed
- * identity or adapter address.
+ * Thrown when a Blue Public Allocator reallocation contains a malformed vault
+ * or adapter address.
  *
  * @example
  * ```ts
@@ -867,11 +862,7 @@ export class InvalidReallocationAddressError extends Error {
    * @param field - Reallocation address field that is absent or malformed.
    */
   public constructor(
-    public readonly field:
-      | "allocator"
-      | "vault"
-      | "from.adapter"
-      | "to.adapter",
+    public readonly field: "vault" | "from.adapter" | "to.adapter",
   ) {
     super(`Reallocation "${field}" must be a valid address.`);
     this.name = "InvalidReallocationAddressError";
@@ -911,20 +902,16 @@ export class InvalidReallocationSourceTypeError extends Error {
 }
 
 /**
- * Thrown when one bundle assigns different penalty rates to the same Blue
- * Public Allocator and Vault V2 pair.
+ * Thrown when one bundle assigns different penalty rates to the same Vault V2.
  *
  * @example
  * ```ts
  * import { InconsistentReallocationPenaltyError } from "@morpho-org/morpho-sdk";
  * import type { Address } from "viem";
  *
- * const allocatorFixture =
- *   "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" satisfies Address;
  * const vaultFixture =
  *   "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" satisfies Address;
  * const error = new InconsistentReallocationPenaltyError({
- *   allocator: allocatorFixture,
  *   vault: vaultFixture,
  *   expected: 5n,
  *   actual: 11n,
@@ -932,8 +919,6 @@ export class InvalidReallocationSourceTypeError extends Error {
  * ```
  */
 export class InconsistentReallocationPenaltyError extends Error {
-  /** Blue Public Allocator contract address. */
-  public readonly allocator: Address;
   /** Vault whose configured penalty must be reused. */
   public readonly vault: Address;
   /** Penalty rate established by the first matching bundle entry. */
@@ -942,22 +927,19 @@ export class InconsistentReallocationPenaltyError extends Error {
   public readonly actual: bigint;
 
   /**
-   * @param params - Conflicting allocator-vault penalty details.
-   * @param params.allocator - Blue Public Allocator contract address.
+   * @param params - Conflicting vault penalty details.
    * @param params.vault - Vault whose configured penalty applies.
    * @param params.expected - Penalty rate established by the first matching entry.
    * @param params.actual - Conflicting penalty rate supplied by a later entry.
    */
   public constructor(params: {
-    readonly allocator: Address;
     readonly vault: Address;
     readonly expected: bigint;
     readonly actual: bigint;
   }) {
     super(
-      `Penalty for Blue Public Allocator "${params.allocator}" and vault "${params.vault}" must remain "${params.expected}" across the bundle, got "${params.actual}". Use the vault's configured penalty for every call.`,
+      `Penalty for vault "${params.vault}" must remain "${params.expected}" across the bundle, got "${params.actual}". Use the vault's configured penalty for every call.`,
     );
-    this.allocator = params.allocator;
     this.vault = params.vault;
     this.expected = params.expected;
     this.actual = params.actual;

@@ -45,8 +45,6 @@ import {
 export interface InputVaultV2ReallocationData {
   /** Chain id associated with the fetched state. */
   readonly chainId: number;
-  /** Explicit BluePublicAllocator contract used by every returned call. */
-  readonly allocator: Address;
   /** Markets indexed by market id. */
   readonly markets?: Readonly<Record<MarketId, Market | undefined>>;
   /** Accrued Vault V2 entities indexed by vault address. */
@@ -212,8 +210,6 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
   private readonly firstTotalAssets: Record<Address, bigint>;
   /** Chain id associated with this snapshot. */
   public readonly chainId: number;
-  /** Explicit BluePublicAllocator address used in returned calls. */
-  public readonly allocator: Address;
   /** Markets indexed by market id. */
   public readonly markets: Record<MarketId, Market | undefined>;
   /** Vault V2 entities indexed by address. */
@@ -246,7 +242,6 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
    */
   public constructor(input: InputVaultV2ReallocationData) {
     this.chainId = input.chainId;
-    this.allocator = input.allocator;
     this.markets = {};
     this.vaults = {};
     this.allocations = {};
@@ -674,10 +669,6 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
             const publicAllocatorConfig =
               data.getPublicAllocatorConfig(vaultAddress);
             if (
-              !isAddressEqual(
-                publicAllocatorConfig.allocator,
-                data.allocator,
-              ) ||
               !isAddressEqual(publicAllocatorConfig.vault, vaultAddress) ||
               (options.maxPenalty != null &&
                 publicAllocatorConfig.penalty > options.maxPenalty)
@@ -717,10 +708,6 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
                 const marketPublicAllocatorConfig =
                   data.getMarketPublicAllocatorConfig(vaultAddress, ids[2]);
                 if (
-                  !isAddressEqual(
-                    marketPublicAllocatorConfig.allocator,
-                    data.allocator,
-                  ) ||
                   !isAddressEqual(
                     marketPublicAllocatorConfig.vault,
                     vaultAddress,
@@ -776,8 +763,6 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
                 );
                 if (assets > 0n) {
                   rawCandidates.push({
-                    allocator: data.allocator,
-                    type: "bluePublicAllocator",
                     vault: vaultAddress,
                     from: { type: "idle" },
                     to: { adapter: targetContext.adapter.address },
@@ -821,7 +806,6 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
                       sourceIds[2],
                     );
                     if (
-                      !isAddressEqual(sourceConfig.allocator, data.allocator) ||
                       !isAddressEqual(sourceConfig.vault, vaultAddress) ||
                       !isAddressEqual(
                         sourceConfig.adapter,
@@ -857,8 +841,6 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
                     if (assets <= 0n) return;
 
                     return {
-                      allocator: data.allocator,
-                      type: "bluePublicAllocator",
                       vault: vaultAddress,
                       from: {
                         type: "market",
@@ -1232,7 +1214,6 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
  * });
  * const reallocationData = new VaultV2ReallocationData({
  *   chainId: 1,
- *   allocator: "0x0000000000000000000000000000000000000005",
  *   markets: { [marketParams.id]: market },
  * });
  *

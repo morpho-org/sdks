@@ -1,6 +1,7 @@
 import {
   AccrualVaultV2,
   AccrualVaultV2MorphoMarketV1AdapterV2,
+  getChainAddress,
   Market,
   MarketParams,
   MathLib,
@@ -22,7 +23,7 @@ import {
   fetchVaultV2PublicAllocatorData,
 } from "./VaultV2PublicAllocatorConfig.js";
 
-const ALLOCATOR: Address = "0x0000000000000000000000000000000000000001";
+const ALLOCATOR = getChainAddress(mainnet.id, "bluePublicAllocator");
 const VAULT: Address = "0x0000000000000000000000000000000000000002";
 const ADAPTER: Address = "0x0000000000000000000000000000000000000003";
 const ASSET: Address = "0x0000000000000000000000000000000000000004";
@@ -82,7 +83,6 @@ const marketParamsId = ids[2];
 
 const expected = {
   publicAllocatorConfig: {
-    allocator: ALLOCATOR,
     vault: VAULT,
     canPullFromIdle: true,
     penalty: 12n,
@@ -90,7 +90,6 @@ const expected = {
   activeAdapters: new Set([ADAPTER]),
   marketPublicAllocatorConfigs: {
     [marketParamsId]: {
-      allocator: ALLOCATOR,
       vault: VAULT,
       adapter: ADAPTER,
       marketParamsId,
@@ -160,16 +159,15 @@ const mockDirectReads = (
 };
 
 describe("Vault V2 public allocator fetchers", () => {
-  test("default: leaf fetchers preserve the explicit allocator identity", async () => {
+  test("default: leaf fetchers use the chain allocator", async () => {
     const handle = createMockClient(mainnet);
     mockDirectReads(handle);
 
     await expect(
-      fetchVaultV2PublicAllocatorConfig(ALLOCATOR, VAULT, handle.client),
+      fetchVaultV2PublicAllocatorConfig(VAULT, handle.client),
     ).resolves.toStrictEqual(expected.publicAllocatorConfig);
     await expect(
       fetchVaultV2MarketPublicAllocatorConfig(
-        ALLOCATOR,
         VAULT,
         ADAPTER,
         marketParamsId,
@@ -203,7 +201,7 @@ describe("Vault V2 public allocator fetchers", () => {
     });
 
     await expect(
-      fetchVaultV2PublicAllocatorData(ALLOCATOR, vault, handle.client),
+      fetchVaultV2PublicAllocatorData(vault, handle.client),
     ).resolves.toStrictEqual(expected);
   });
 
@@ -213,7 +211,7 @@ describe("Vault V2 public allocator fetchers", () => {
     mockDirectReads(handle);
 
     await expect(
-      fetchVaultV2PublicAllocatorData(ALLOCATOR, vault, handle.client),
+      fetchVaultV2PublicAllocatorData(vault, handle.client),
     ).resolves.toStrictEqual(expected);
   });
 
@@ -222,11 +220,7 @@ describe("Vault V2 public allocator fetchers", () => {
     mockDeploylessReads(handle, [new Error("deployless unavailable")]);
     mockDirectReads(handle, false);
 
-    const result = await fetchVaultV2PublicAllocatorData(
-      ALLOCATOR,
-      vault,
-      handle.client,
-    );
+    const result = await fetchVaultV2PublicAllocatorData(vault, handle.client);
 
     expect(result.activeAdapters).toStrictEqual(new Set());
   });

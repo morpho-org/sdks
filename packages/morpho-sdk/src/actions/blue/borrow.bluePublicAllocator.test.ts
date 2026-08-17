@@ -14,7 +14,7 @@ import {
 } from "../../types/index.js";
 import { blueBorrow } from "./borrow.js";
 
-const allocator = "0x0000000000000000000000000000000000000011";
+const allocator = getChainAddresses(ChainId.EthMainnet).bluePublicAllocator;
 const vaultV1 = "0x0000000000000000000000000000000000000012";
 const sourceAdapter = "0x0000000000000000000000000000000000000013";
 const targetAdapter = "0x0000000000000000000000000000000000000014";
@@ -44,14 +44,11 @@ describe("blueBorrow Blue Public Allocator", () => {
     } = getChainAddresses(ChainId.EthMainnet);
     const reallocations: readonly BlueReallocation[] = [
       {
-        type: "publicAllocatorV1",
         vault: vaultV1,
         fee: 2n,
         withdrawals: [{ marketParams: sourceMarket, amount: 1n }],
       },
       {
-        type: "bluePublicAllocator",
-        allocator,
         vault: vaultV2,
         from: {
           type: "market",
@@ -63,8 +60,6 @@ describe("blueBorrow Blue Public Allocator", () => {
         penalty: 5n,
       },
       {
-        type: "bluePublicAllocator",
-        allocator,
         vault: vaultV2,
         from: { type: "idle" },
         to: { adapter: targetAdapter },
@@ -159,8 +154,6 @@ describe("blueBorrow Blue Public Allocator", () => {
           receiver,
           reallocations: [
             {
-              type: "bluePublicAllocator",
-              allocator,
               vault: vaultV2,
               from: {
                 type: "market",
@@ -172,8 +165,6 @@ describe("blueBorrow Blue Public Allocator", () => {
               penalty: 5n,
             },
             {
-              type: "bluePublicAllocator",
-              allocator,
               vault: vaultV2,
               from: { type: "idle" },
               to: { adapter: targetAdapter },

@@ -21,8 +21,8 @@ import {
   InconsistentReallocationPenaltyError,
   InputExceedsMaxError,
   InvalidReallocationAddressError,
+  InvalidReallocationShapeError,
   InvalidReallocationSourceTypeError,
-  InvalidReallocationTypeError,
   MarketIdMismatchError,
   MissingClientPropertyError,
   MissingMarketPriceError,
@@ -339,7 +339,7 @@ export const validateRepayShares = (params: {
  * - Withdrawal market IDs must be strictly ascending.
  *
  * BluePublicAllocator entries enforce a WAD-bounded `penalty`, one consistent
- * penalty per allocator-vault pair, positive `uint128`-bounded `assets`, and a
+ * penalty per vault, positive `uint128`-bounded `assets`, and a
  * market source distinct from the target market. Idle sources
  * have no market or sorting rule.
  *
@@ -350,10 +350,10 @@ export const validateRepayShares = (params: {
  * @throws {EmptyReallocationWithdrawalsError} when a reallocation has no withdrawals.
  * @throws {NonPositiveInputError} when a withdrawal or BluePublicAllocator asset amount is non-positive.
  * @throws {InputExceedsMaxError} when a BluePublicAllocator asset amount exceeds `uint128` or its penalty exceeds WAD.
- * @throws {InconsistentReallocationPenaltyError} when entries for one allocator-vault pair use different penalties.
- * @throws {InvalidReallocationAddressError} when a BluePublicAllocator identity or adapter address is malformed.
+ * @throws {InconsistentReallocationPenaltyError} when entries for one vault use different penalties.
+ * @throws {InvalidReallocationAddressError} when a BluePublicAllocator vault or adapter address is malformed.
  * @throws {InvalidReallocationSourceTypeError} when a BluePublicAllocator source is absent, incomplete, or has an unknown discriminator.
- * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
+ * @throws {InvalidReallocationShapeError} when an entry matches both or neither V1/V2 shape.
  * @throws {ReallocationWithdrawalOnTargetMarketError} when a V1 or V2 source references the target market.
  * @throws {UnsortedReallocationWithdrawalsError} when withdrawals are not strictly market-id sorted.
  * @example
@@ -369,13 +369,14 @@ export const validateReallocations = (
   reallocations: Iterable<BlueReallocation>,
   targetMarketId: MarketId,
 ): void => {
-  const penaltyByAllocatorVault = new Map<string, bigint>();
+  const penaltyByVault = new Map<string, bigint>();
 
   for (const r of reallocations) {
-    if (r.type === "bluePublicAllocator") {
-      if (typeof r.allocator !== "string" || !isAddress(r.allocator)) {
-        throw new InvalidReallocationAddressError("allocator");
-      }
+    if ("from" in r === "withdrawals" in r) {
+      throw new InvalidReallocationShapeError();
+    }
+
+    if ("from" in r) {
       if (typeof r.vault !== "string" || !isAddress(r.vault)) {
         throw new InvalidReallocationAddressError("vault");
       }
@@ -436,17 +437,16 @@ export const validateReallocations = (
         });
       }
 
-      const penaltyKey = `${r.allocator.toLowerCase()}:${r.vault.toLowerCase()}`;
-      const expectedPenalty = penaltyByAllocatorVault.get(penaltyKey);
+      const penaltyKey = r.vault.toLowerCase();
+      const expectedPenalty = penaltyByVault.get(penaltyKey);
       if (expectedPenalty !== undefined && expectedPenalty !== r.penalty) {
         throw new InconsistentReallocationPenaltyError({
-          allocator: r.allocator,
           vault: r.vault,
           expected: expectedPenalty,
           actual: r.penalty,
         });
       }
-      penaltyByAllocatorVault.set(penaltyKey, r.penalty);
+      penaltyByVault.set(penaltyKey, r.penalty);
 
       if (
         sourceMarketId !== undefined &&
@@ -458,16 +458,6 @@ export const validateReallocations = (
         );
       }
       continue;
-    }
-    const reallocationType = r.type;
-    if (
-      reallocationType !== undefined &&
-      reallocationType !== "publicAllocatorV1"
-    ) {
-      throw new InvalidReallocationTypeError(reallocationType);
-    }
-    if (!("withdrawals" in r)) {
-      throw new InvalidReallocationTypeError(reallocationType);
     }
     if (r.fee < 0n) {
       throw new NegativeInputError("reallocation.fee", r.fee);

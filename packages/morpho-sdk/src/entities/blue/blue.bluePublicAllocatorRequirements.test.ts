@@ -81,8 +81,6 @@ describe("MorphoBlue BluePublicAllocator requirements", () => {
         positionData,
         reallocations: [
           {
-            type: "bluePublicAllocator",
-            allocator: CbbtcUsdcBlue.irm,
             vault: CbbtcUsdcBlue.oracle,
             from: { type: "idle" },
             to: { adapter: CbbtcUsdcBlue.collateralToken },
@@ -159,8 +157,6 @@ describe("MorphoBlue BluePublicAllocator requirements", () => {
         positionData,
         reallocations: [
           {
-            type: "bluePublicAllocator",
-            allocator: CbbtcUsdcBlue.irm,
             vault: CbbtcUsdcBlue.oracle,
             from: { type: "idle" },
             to: { adapter: CbbtcUsdcBlue.collateralToken },
@@ -243,8 +239,6 @@ describe("MorphoBlue BluePublicAllocator requirements", () => {
         positionData,
         reallocations: [
           {
-            type: "bluePublicAllocator",
-            allocator: CbbtcUsdcBlue.irm,
             vault: CbbtcUsdcBlue.oracle,
             from: { type: "idle" },
             to: { adapter: CbbtcUsdcBlue.collateralToken },

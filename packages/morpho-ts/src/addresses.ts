@@ -64,6 +64,8 @@ export interface ChainAddresses {
   adaptiveCurveIrm: `0x${string}`;
   /** PublicAllocator contract for permissionless MetaMorpho reallocations subject to flow caps and vault fees. */
   publicAllocator?: `0x${string}`;
+  /** BluePublicAllocator contract for permissionless Vault V2 reallocations subject to allocation caps and penalties. */
+  bluePublicAllocator?: `0x${string}`;
   /** MetaMorpho factory that creates and indexes Morpho Vault V1 ERC4626 vaults. */
   metaMorphoFactory?: `0x${string}`;
   /** VaultV2 factory that creates and indexes Morpho Vault V2 ERC4626/ERC2612 vaults. */
@@ -145,6 +147,7 @@ const _addressesRegistry = {
     },
     adaptiveCurveIrm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
     publicAllocator: "0xfd32fA2ca22c76dD6E550706Ad913FC6CE91c75D",
+    bluePublicAllocator: "0x00b8e1509398ED692C3F326CbAf1694F9A881e27",
     metaMorphoFactory: "0x1897A8997241C1cD4bD0698647e4EB7213535c24",
     vaultV2Factory: "0xA1D94F746dEfa1928926b84fB2596c06926C0405",
     morphoMarketV1AdapterFactory: "0xb049465969ac6355127cDf9E88deE63d25204d5D",
@@ -237,6 +240,7 @@ const _addressesRegistry = {
     },
     adaptiveCurveIrm: "0x46415998764C29aB2a25CbeA6254146D50D22687",
     publicAllocator: "0xA090dD1a701408Df1d4d0B85b716c87565f90467",
+    bluePublicAllocator: "0xAED282B8aD9257BB1272e93aE63A32A53621e412",
     metaMorphoFactory: "0xFf62A7c278C62eD665133147129245053Bbf5918",
     vaultV2Factory: "0x4501125508079A99ebBebCE205DeC9593C2b5857",
     morphoMarketV1AdapterFactory: "0x133baC94306B99f6dAD85c381a5be851d8DD717c",
@@ -281,6 +285,7 @@ const _addressesRegistry = {
     },
     adaptiveCurveIrm: "0xe675A2161D4a6E2de2eeD70ac98EEBf257FBF0B0",
     publicAllocator: "0xfac15aff53ADd2ff80C2962127C434E8615Df0d3",
+    bluePublicAllocator: "0xAb06a92cd253Bc12Dec8f719a693a6b472CCDfF4",
     metaMorphoFactory: "0xa9c87daB340631C34BB738625C70499e29ddDC98",
     vaultV2Factory: "0xC11a53eE9B1eCc7a068D8e40F8F17926584F97Cf",
     morphoMarketV1AdapterFactory: "0xD1A0C86F28ecD1657Ad06415c2B230cC89D9b6dd",
@@ -311,6 +316,7 @@ const _addressesRegistry = {
     },
     adaptiveCurveIrm: "0x66F30587FB8D4206918deb78ecA7d5eBbafD06DA",
     publicAllocator: "0x769583Af5e9D03589F159EbEC31Cc2c23E8C355E",
+    bluePublicAllocator: "0x85b66Fe31e6788E5a6825EAe689f4c6c38AF3704",
     metaMorphoFactory: "0x878988f5f561081deEa117717052164ea1Ef0c82",
     vaultV2Factory: "0x6b46fa3cc9EBF8aB230aBAc664E37F2966Bf7971",
     morphoMarketV1AdapterFactory: "0x96456Bf888D4de607Bf3ca0b3C8e4DF9b0d0Ad47",
@@ -339,6 +345,7 @@ const _addressesRegistry = {
     },
     adaptiveCurveIrm: "0x8cD70A8F399428456b29546BC5dBe10ab6a06ef6",
     publicAllocator: "0x0d68a97324E602E02799CD83B42D337207B40658",
+    bluePublicAllocator: "0xc6945A915Bb7e2A365469f120A33D2FA42951cF3",
     metaMorphoFactory: "0x3Bb6A6A0Bc85b367EFE0A5bAc81c5E52C892839a",
     vaultV2Factory: "0x6128b680b277Bf4Df80DFE9D8c55A498660870ef",
     morphoMarketV1AdapterFactory: "0x65956d5Ba4974983ecCe111612FC0A0c22650A11",
@@ -365,6 +372,7 @@ const _addressesRegistry = {
     },
     adaptiveCurveIrm: "0x34E99D604751a72cF8d0CFDf87069292d82De472",
     publicAllocator: "0xef9889B4e443DEd35FA0Bd060f2104Cca94e6A43",
+    bluePublicAllocator: "0x5Fe47f63ACd84f8A69b97E0a5122fCBff08Df48F",
     metaMorphoFactory: "0x4DBB3a642a2146d5413750Cca3647086D9ba5F12",
     vaultV2Factory: "0x6846EA318B6B987Ee6b28eBFd87c3409F1d13108",
     morphoMarketV1AdapterFactory: "0xAf93F2d8508053432659d509b0210fdF1472493D",
@@ -445,6 +453,7 @@ const _addressesRegistry = {
     },
     adaptiveCurveIrm: "0x9a6061d51743B31D2c3Be75D83781Fa423f53F0E",
     publicAllocator: "0xB0c9a107fA17c779B3378210A7a593e88938C7C9",
+    bluePublicAllocator: "0x2b7Bf2f2027bcfE3A1F6Bc93EA80220a883a6851",
     metaMorphoFactory: "0xe9EdE3929F43a7062a007C3e8652e4ACa610Bdc0",
     vaultV2Factory: "0xC9b34c108014B44e5a189A830e7e04c56704a0c9",
     morphoMarketV1AdapterFactory: "0x117b92Ab1C025B175ED38a0CDe5A067a745224a0",
@@ -575,6 +584,7 @@ const _addressesRegistry = {
     },
     adaptiveCurveIrm: "0x4F708C0ae7deD3d74736594C2109C2E3c065B428",
     publicAllocator: "0x39EB6Da5e88194C82B13491Df2e8B3E213eD2412",
+    bluePublicAllocator: "0xd952175e940D97775cBC5a523977a6f091D0d702",
     metaMorphoFactory: "0x1c8De6889acee12257899BFeAa2b7e534de32E16",
     vaultV2Factory: "0xFcb8b57E56787bB29e130Fca67f3c5a1232975D1",
     morphoMarketV1AdapterFactory: "0x2e6BE3a3A27fb45c6AbA2D1833eeA48E8788538e",
@@ -648,6 +658,7 @@ const _addressesRegistry = {
     },
     adaptiveCurveIrm: "0xD4a426F010986dCad727e8dd6eed44cA4A9b7483",
     publicAllocator: "0x517505be22D9068687334e69ae7a02fC77edf4Fc",
+    bluePublicAllocator: "0x056dd7D4B373ED26c788190085CC6C52B8e7479d",
     metaMorphoFactory: "0xec051b19d654C48c357dC974376DeB6272f24e53",
     vaultV2Factory: "0xD7217E5687FF1071356C780b5fe4803D9D967da7",
     morphoMarketV1AdapterFactory: "0xc6b8B565C715134b0Ca3D6fa3D29B25759D0b9e2",
@@ -725,6 +736,7 @@ const _addressesRegistry = {
     },
     adaptiveCurveIrm: "0x09475a3D6eA8c314c592b1a3799bDE044E2F400F",
     publicAllocator: "0xfd70575B732F9482F4197FE1075492e114E97302",
+    bluePublicAllocator: "0x0A503aB026EFACBC0F7feE7795F34B80b5B9a662",
     metaMorphoFactory: "0x33f20973275B2F574488b18929cd7DCBf1AbF275",
     vaultV2Factory: "0x8B2F922162FBb60A6a072cC784A2E4168fB0bb0c",
     morphoMarketV1AdapterFactory: "0x8Da54fbF89B3D6fC6DCC92F31CF75a211ACF3d46",
@@ -749,6 +761,7 @@ const _addressesRegistry = {
     },
     adaptiveCurveIrm: "0x41e846FC8108b8527C1D4EDB4c9564E56442940f",
     publicAllocator: "0xbCB063D4B6D479b209C186e462828CBACaC82DbE",
+    bluePublicAllocator: "0x5C884d4B1510EAd302EC50A2AB4DE9c0b9E407ce",
     metaMorphoFactory: "0xb4ae5673c48621189E2bEfBA96F31912032DD1AE",
     vaultV2Factory: "0x7fc35488803D49D00a94b206A223f7661898BE3a",
     morphoMarketV1AdapterFactory: "0x2A5F218FE4Dac3b1f4E096e8ae83074bB1713833",
@@ -874,6 +887,7 @@ const _addressesRegistry = {
       vaultExitBundlesV1: "0x8225192b8638bDe9D41a6d96aBb824F660Ef57E1",
     },
     adaptiveCurveIrm: "0x112fd4042E442C3C12C67AD23587b0afe36eB74E",
+    bluePublicAllocator: "0xDC9693CE6488640faEf173Ec2635ff99fdC25a07",
     vaultV2Factory: "0x3DE400E3F79113194fa5AF6Ae5C474947E0C82Db",
     morphoMarketV1AdapterV2Factory:
       "0xF85aD5f14cC903533FC409B8098B58b4C2f36697",
@@ -1046,6 +1060,7 @@ const _addressesRegistry = {
       vaultExitBundlesV1: "0xCE29862924756584BBD0D75CA1249d22007E2813",
     },
     adaptiveCurveIrm: "0x2BD3d5965B26B51814AC95127B2b80dD6CcC0fa1",
+    bluePublicAllocator: "0xCe5c1aFa115fF8b1D6913509bfc79D9AE08CC857",
     vaultV2Factory: "0x0FBad98595b0186dA120E41f77C102beb49f803c",
     morphoMarketV1AdapterV2Factory:
       "0x79370Ed003CE325C088E530d5e8655c99c2993e1",

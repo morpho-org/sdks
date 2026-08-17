@@ -394,7 +394,7 @@ describe("blueRefinance", () => {
     });
     const VAULT: Address = "0xBEEf5aFE88eF73337e5070aB2855d37dBF5493A4";
     const REALLOC_FEE = parseUnits("0.01", 18);
-    const V2_ALLOCATOR: Address = "0x0000000000000000000000000000000000000011";
+    const V2_ALLOCATOR = getChainAddresses(mainnet.id).bluePublicAllocator!;
     const V2_VAULT: Address = "0x0000000000000000000000000000000000000012";
     const SOURCE_ADAPTER: Address =
       "0x0000000000000000000000000000000000000013";
@@ -487,8 +487,6 @@ describe("blueRefinance", () => {
       } = getChainAddresses(mainnet.id);
       const targetReallocations: readonly BlueReallocation[] = [
         {
-          type: "bluePublicAllocator",
-          allocator: V2_ALLOCATOR,
           vault: V2_VAULT,
           from: {
             type: "market",
@@ -500,8 +498,6 @@ describe("blueRefinance", () => {
           penalty: 500_000_000_000_000_000n,
         },
         {
-          type: "bluePublicAllocator",
-          allocator: V2_ALLOCATOR,
           vault: V2_VAULT,
           from: { type: "idle" },
           to: { adapter: TARGET_ADAPTER },

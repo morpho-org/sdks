@@ -202,10 +202,10 @@ export interface BlueActions {
    * @param params - Withdraw parameters including pre-fetched `positionData`.
    * @returns Object with `buildTx` and `getRequirements`.
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
-   * @throws {InconsistentReallocationPenaltyError} when V2 entries for one allocator-vault pair use different penalties.
-   * @throws {InvalidReallocationAddressError} when a V2 identity or adapter address is malformed.
+   * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
+   * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
    * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
-   * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
+   * @throws {InvalidReallocationShapeError} when an entry matches both or neither V1/V2 shape.
    */
   withdraw: (
     params: {
@@ -247,10 +247,10 @@ export interface BlueActions {
    * @param params - Borrow parameters including pre-fetched `positionData` for health validation.
    * @returns Object with `buildTx` and `getRequirements`.
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
-   * @throws {InconsistentReallocationPenaltyError} when V2 entries for one allocator-vault pair use different penalties.
-   * @throws {InvalidReallocationAddressError} when a V2 identity or adapter address is malformed.
+   * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
+   * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
    * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
-   * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
+   * @throws {InvalidReallocationShapeError} when an entry matches both or neither V1/V2 shape.
    */
   borrow: (params: {
     userAddress: Address;
@@ -400,10 +400,10 @@ export interface BlueActions {
    * @param params - Combined parameters including pre-fetched `positionData` for health validation.
    * @returns Object with `buildTx` and `getRequirements`.
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
-   * @throws {InconsistentReallocationPenaltyError} when V2 entries for one allocator-vault pair use different penalties.
-   * @throws {InvalidReallocationAddressError} when a V2 identity or adapter address is malformed.
+   * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
+   * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
    * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
-   * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
+   * @throws {InvalidReallocationShapeError} when an entry matches both or neither V1/V2 shape.
    */
   supplyCollateralBorrow: (
     params: {
@@ -459,10 +459,10 @@ export interface BlueActions {
    * @param params.targetReallocations - Public Allocator V1 or V2 reallocations into the target market.
    * @returns Object with `buildTx` and `getRequirements`.
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
-   * @throws {InconsistentReallocationPenaltyError} when V2 entries for one allocator-vault pair use different penalties.
-   * @throws {InvalidReallocationAddressError} when a V2 identity or adapter address is malformed.
+   * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
+   * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
    * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
-   * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
+   * @throws {InvalidReallocationShapeError} when an entry matches both or neither V1/V2 shape.
    */
   refinance: (params: {
     userAddress: Address;

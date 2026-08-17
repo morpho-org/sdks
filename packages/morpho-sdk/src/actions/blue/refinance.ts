@@ -113,10 +113,10 @@ export interface BlueRefinanceParams {
  * @throws {NonPositiveInputError} when `collateralAmount <= 0n`, a repay leg has a non-positive
  *   `maxRepaySharePrice`, or any reallocation withdrawal amount is non-positive.
  * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
- * @throws {InconsistentReallocationPenaltyError} when V2 entries for one allocator-vault pair use different penalties.
- * @throws {InvalidReallocationAddressError} when a V2 identity or adapter address is malformed.
+ * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
+ * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
  * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
- * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
+ * @throws {InvalidReallocationShapeError} when an entry matches both or neither V1/V2 shape.
  * @throws {NegativeInputError} when `borrowAssets`, `borrowShares`, `minBorrowSharePrice`,
  *   `maxRepaySharePrice`, a V1 fee, or a V2 penalty is negative.
  * @throws {RefinanceSameMarketError} when source and target market ids are equal.

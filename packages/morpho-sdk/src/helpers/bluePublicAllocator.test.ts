@@ -33,8 +33,6 @@ describe("computeVaultV2ReallocationPenaltyAssets", () => {
         withdrawals: [{ marketParams, amount: 1n }],
       },
       {
-        type: "bluePublicAllocator",
-        allocator: CbbtcUsdcBlue.irm,
         vault: CbbtcUsdcBlue.oracle,
         from: { type: "idle" },
         to: { adapter: CbbtcUsdcBlue.collateralToken },
@@ -42,8 +40,6 @@ describe("computeVaultV2ReallocationPenaltyAssets", () => {
         penalty: 1n,
       },
       {
-        type: "bluePublicAllocator",
-        allocator: CbbtcUsdcBlue.irm,
         vault: CbbtcUsdcBlue.oracle,
         from: { type: "idle" },
         to: { adapter: CbbtcUsdcBlue.collateralToken },

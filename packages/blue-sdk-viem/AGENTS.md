@@ -12,7 +12,7 @@
 - Normalize unsafe user addresses with `safeGetAddress`, not lowercasing alone.
 - Typed-data helpers return `TypedDataDefinition`, e.g. `getPermitTypedData(...)`.
 - Re-export ABI literals from `@morpho-org/morpho-ts` when they exist there; keep local ABI declarations only for Blue-specific viem surfaces absent from `morpho-ts`.
-- Vault V2 BluePublicAllocator fetchers always accept the allocator address explicitly; there is no chain-address registry entry. The hydrated-vault batch fetch derives supported adapter/market/allocation ids, returns active adapters as a set separate from market configs, defaults to one deployless read, and falls back to direct reads.
+- Vault V2 BluePublicAllocator fetchers resolve the chain's single allocator from `bluePublicAllocator` in the address registry, using `parameters.chainId` or the client chain id. The hydrated-vault batch fetch derives supported adapter/market/allocation ids, returns active adapters as a set separate from market configs, defaults to one deployless read, and falls back to direct reads.
 
 ## Continuous Improvement
 

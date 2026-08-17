@@ -1,12 +1,13 @@
 import {
   type AccrualVaultV2,
   AccrualVaultV2MorphoMarketV1AdapterV2,
+  getChainAddress,
   type IVaultV2Allocation,
   type VaultV2MarketPublicAllocatorConfig,
   type VaultV2PublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
 import type { Address, Client, Hash } from "viem";
-import { readContract } from "viem/actions";
+import { getChainId, readContract } from "viem/actions";
 import { vaultV2Abi, vaultV2BluePublicAllocatorAbi } from "../../abis.js";
 import {
   abi,
@@ -20,14 +21,16 @@ import type {
 /**
  * Fetches a Vault V2's BluePublicAllocator-wide configuration.
  *
- * @param allocator - Explicit BluePublicAllocator contract address.
  * @param vault - Vault V2 address.
  * @param client - Viem client used for the contract read.
  * @param parameters.account - Optional account passed to viem calls.
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
+ * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @returns The vault's idle-pull permission and WAD-scaled vault-asset penalty.
+ * @throws {UnknownAddressError} when the chain has no BluePublicAllocator deployment.
+ * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {viem.BaseError} when the contract read fails.
  * @example
  * ```ts
@@ -38,20 +41,20 @@ import type {
  *
  * const client = createPublicClient({ chain: mainnet, transport: http() });
  * export async function fetchAllocatorConfig(
- *   allocator: Address,
  *   vault: Address,
  * ): Promise<VaultV2PublicAllocatorConfig> {
- *   return fetchVaultV2PublicAllocatorConfig(allocator, vault, client);
+ *   return fetchVaultV2PublicAllocatorConfig(vault, client);
  * }
  * ```
  */
-// biome-ignore lint/complexity/useMaxParams: identity fields mirror the allocator's mapping keys
+// biome-ignore lint/complexity/useMaxParams: follows the package's address/client/options fetcher convention
 export async function fetchVaultV2PublicAllocatorConfig(
-  allocator: Address,
   vault: Address,
   client: Client,
   parameters: FetchParameters = {},
 ): Promise<VaultV2PublicAllocatorConfig> {
+  const chainId = parameters.chainId ?? (await getChainId(client));
+  const allocator = getChainAddress(chainId, "bluePublicAllocator");
   const [canPullFromIdle, penalty] = await readContract(client, {
     ...parameters,
     address: allocator,
@@ -61,7 +64,6 @@ export async function fetchVaultV2PublicAllocatorConfig(
   });
 
   return {
-    allocator,
     vault,
     canPullFromIdle,
     penalty,
@@ -71,7 +73,6 @@ export async function fetchVaultV2PublicAllocatorConfig(
 /**
  * Fetches BluePublicAllocator permission and cap state for one Vault V2 adapter-market pair.
  *
- * @param allocator - Explicit BluePublicAllocator contract address.
  * @param vault - Vault V2 address.
  * @param adapter - MorphoMarketV1AdapterV2 address.
  * @param marketParamsId - Adapter-scoped market-parameters id.
@@ -80,7 +81,10 @@ export async function fetchVaultV2PublicAllocatorConfig(
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
+ * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @returns The allocator cap and pull permission for the adapter-market pair.
+ * @throws {UnknownAddressError} when the chain has no BluePublicAllocator deployment.
+ * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {viem.BaseError} when one of the contract reads fails.
  * @example
  * ```ts
@@ -91,13 +95,11 @@ export async function fetchVaultV2PublicAllocatorConfig(
  *
  * const client = createPublicClient({ chain: mainnet, transport: http() });
  * export async function fetchMarketAllocatorConfig(
- *   allocator: Address,
  *   vault: Address,
  *   adapter: Address,
  *   marketParamsId: Hash,
  * ): Promise<VaultV2MarketPublicAllocatorConfig> {
  *   return fetchVaultV2MarketPublicAllocatorConfig(
- *     allocator,
  *     vault,
  *     adapter,
  *     marketParamsId,
@@ -106,15 +108,16 @@ export async function fetchVaultV2PublicAllocatorConfig(
  * }
  * ```
  */
-// biome-ignore lint/complexity/useMaxParams: identity fields mirror the allocator's mapping keys
+// biome-ignore lint/complexity/useMaxParams: follows the package's vault/adapter/id/client/options fetcher convention
 export async function fetchVaultV2MarketPublicAllocatorConfig(
-  allocator: Address,
   vault: Address,
   adapter: Address,
   marketParamsId: Hash,
   client: Client,
   parameters: FetchParameters = {},
 ): Promise<VaultV2MarketPublicAllocatorConfig> {
+  const chainId = parameters.chainId ?? (await getChainId(client));
+  const allocator = getChainAddress(chainId, "bluePublicAllocator");
   const [absoluteCap, canPullFromMarket] = await Promise.all([
     readContract(client, {
       ...parameters,
@@ -133,7 +136,6 @@ export async function fetchVaultV2MarketPublicAllocatorConfig(
   ]);
 
   return {
-    allocator,
     vault,
     adapter,
     marketParamsId,
@@ -151,45 +153,43 @@ export async function fetchVaultV2MarketPublicAllocatorConfig(
  * hydrated vault, uses one deployless `eth_call` by default, and falls back to
  * direct reads unless deployless mode is forced.
  *
- * @param allocator - Explicit BluePublicAllocator contract address.
  * @param vault - Hydrated Vault V2 whose accrued adapters provide the candidate markets.
  * @param client - Viem client used for deployless or direct reads.
  * @param parameters.account - Optional account passed to viem calls.
  * @param parameters.blockNumber - Optional block number for historical reads.
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
+ * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Deployless mode; defaults to `true`, with direct-read fallback.
  * @returns Vault-wide config, active-adapter set, adapter-market configs keyed by `marketParamsId`, and allocations keyed by derived id.
+ * @throws {UnknownAddressError} when the chain has no BluePublicAllocator deployment.
+ * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {viem.BaseError} when deployless mode is forced and fails, or when a direct contract read fails.
  * @example
  * ```ts
  * import type { AccrualVaultV2 } from "@morpho-org/blue-sdk";
  * import { fetchVaultV2PublicAllocatorData } from "@morpho-org/blue-sdk-viem";
- * import { type Address, createPublicClient, http } from "viem";
+ * import { createPublicClient, http } from "viem";
  * import { mainnet } from "viem/chains";
  *
  * const client = createPublicClient({ chain: mainnet, transport: http() });
  * export async function fetchAllocatorData(
- *   allocator: Address,
  *   vault: AccrualVaultV2,
  * ) {
- *   const data = await fetchVaultV2PublicAllocatorData(
- *     allocator,
- *     vault,
- *     client,
- *   );
+ *   const data = await fetchVaultV2PublicAllocatorData(vault, client);
  *   // data contains publicAllocatorConfig, activeAdapters, marketPublicAllocatorConfigs, and allocations.
  *   return data;
  * }
  * ```
  */
-// biome-ignore lint/complexity/useMaxParams: follows the package's address/entity/client/options fetcher convention
+// biome-ignore lint/complexity/useMaxParams: follows the package's entity/client/options fetcher convention
 export async function fetchVaultV2PublicAllocatorData(
-  allocator: Address,
   vault: AccrualVaultV2,
   client: Client,
   { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
+  const chainId = parameters.chainId ?? (await getChainId(client));
+  const allocator = getChainAddress(chainId, "bluePublicAllocator");
   const marketRequests: {
     readonly adapter: Address;
     readonly marketParamsId: Hash;
@@ -236,7 +236,6 @@ export async function fetchVaultV2PublicAllocatorData(
       > = {};
       for (const config of result.marketConfigs) {
         marketPublicAllocatorConfigs[config.marketParamsId] = {
-          allocator,
           vault: vault.address,
           ...config,
         };
@@ -249,7 +248,6 @@ export async function fetchVaultV2PublicAllocatorData(
 
       return {
         publicAllocatorConfig: {
-          allocator,
           vault: vault.address,
           canPullFromIdle: result.canPullFromIdle,
           penalty: result.penalty,
@@ -272,12 +270,10 @@ export async function fetchVaultV2PublicAllocatorData(
     marketConfigs,
     allocationValues,
   ] = await Promise.all([
-    fetchVaultV2PublicAllocatorConfig(
-      allocator,
-      vault.address,
-      client,
-      parameters,
-    ),
+    fetchVaultV2PublicAllocatorConfig(vault.address, client, {
+      ...parameters,
+      chainId,
+    }),
     Promise.all(
       adapterList.map((adapter) =>
         readContract(client, {
@@ -292,12 +288,11 @@ export async function fetchVaultV2PublicAllocatorData(
     Promise.all(
       marketRequests.map(({ adapter, marketParamsId }) =>
         fetchVaultV2MarketPublicAllocatorConfig(
-          allocator,
           vault.address,
           adapter,
           marketParamsId,
           client,
-          parameters,
+          { ...parameters, chainId },
         ),
       ),
     ),

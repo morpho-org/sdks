@@ -346,10 +346,14 @@ export namespace BundlerAction {
         return BundlerAction.publicAllocatorReallocateTo(chainId, ...args);
       }
       case "vaultV2BluePublicAllocatorReallocate": {
-        return BundlerAction.vaultV2BluePublicAllocatorReallocate(...args);
+        return BundlerAction.vaultV2BluePublicAllocatorReallocate(
+          chainId,
+          ...args,
+        );
       }
       case "vaultV2BluePublicAllocatorAllocateFromIdle": {
         return BundlerAction.vaultV2BluePublicAllocatorAllocateFromIdle(
+          chainId,
           ...args,
         );
       }
@@ -1458,7 +1462,7 @@ export namespace BundlerAction {
    * @remarks Bundler3 must already hold the computed penalty assets. The
    * high-level Blue builders add the corresponding GeneralAdapter1 transfer.
    *
-   * @param allocator - Explicit Blue Public Allocator contract address.
+   * @param chainId - Chain whose canonical Blue Public Allocator is called.
    * @param vault - Vault whose liquidity is reallocated.
    * @param deallocateAdapter - Vault V2 adapter supplying the source market.
    * @param deallocateMarket - Source Morpho Blue market parameters.
@@ -1468,18 +1472,17 @@ export namespace BundlerAction {
    * @param penalty - Vault-configured proportional penalty, scaled by WAD.
    * @param skipRevert - Whether Bundler3 should tolerate a revert.
    * @returns An exact token approval when needed, followed by the allocator call.
+   * @throws {BundlerErrors.UnexpectedAction} when the chain has no Blue Public Allocator deployment.
    * @throws {BundlerErrors.SkippableAllocatorPenalty} when `skipRevert` is true and a token approval is required.
    * @example
    * ```ts
-   * import type { InputMarketParams } from "@morpho-org/blue-sdk";
+   * import { ChainId, type InputMarketParams } from "@morpho-org/blue-sdk";
    * import {
    *   BundlerAction,
    *   type BundlerCall,
    * } from "@morpho-org/morpho-sdk/bundler";
    * import type { Address } from "viem";
    *
-   * const allocatorFixture =
-   *   "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" satisfies Address;
    * const keyrockUsdcVault =
    *   "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145" satisfies Address;
    * const sourceAdapterFixture =
@@ -1504,7 +1507,7 @@ export namespace BundlerAction {
    * } satisfies InputMarketParams;
    *
    * const calls: BundlerCall[] = BundlerAction.vaultV2BluePublicAllocatorReallocate(
-   *   allocatorFixture,
+   *   ChainId.EthMainnet,
    *   keyrockUsdcVault,
    *   sourceAdapterFixture,
    *   sourceMarket,
@@ -1518,7 +1521,7 @@ export namespace BundlerAction {
    */
   // biome-ignore lint/complexity/useMaxParams: mirrors the protocol call
   export function vaultV2BluePublicAllocatorReallocate(
-    allocator: Address,
+    chainId: number,
     vault: Address,
     deallocateAdapter: Address,
     deallocateMarket: InputMarketParams,
@@ -1528,6 +1531,13 @@ export namespace BundlerAction {
     penalty: bigint,
     skipRevert = false,
   ): BundlerCall[] {
+    const { bluePublicAllocator: allocator } = getChainAddresses(chainId);
+    if (allocator == null) {
+      throw new BundlerErrors.UnexpectedAction(
+        "vaultV2BluePublicAllocatorReallocate",
+        chainId,
+      );
+    }
     const calls: BundlerCall[] = [];
     const penaltyAssets = computeBluePublicAllocatorPenaltyAssets(
       assets,
@@ -1580,7 +1590,7 @@ export namespace BundlerAction {
    * @remarks Bundler3 must already hold the computed penalty assets. The
    * high-level Blue builders add the corresponding GeneralAdapter1 transfer.
    *
-   * @param allocator - Explicit Blue Public Allocator contract address.
+   * @param chainId - Chain whose canonical Blue Public Allocator is called.
    * @param vault - Vault whose idle liquidity is allocated.
    * @param adapter - Vault V2 adapter supplying the target market.
    * @param market - Target Morpho Blue market parameters.
@@ -1588,18 +1598,17 @@ export namespace BundlerAction {
    * @param penalty - Vault-configured proportional penalty, scaled by WAD.
    * @param skipRevert - Whether Bundler3 should tolerate a revert.
    * @returns An exact token approval when needed, followed by the allocator call.
+   * @throws {BundlerErrors.UnexpectedAction} when the chain has no Blue Public Allocator deployment.
    * @throws {BundlerErrors.SkippableAllocatorPenalty} when `skipRevert` is true and a token approval is required.
    * @example
    * ```ts
-   * import type { InputMarketParams } from "@morpho-org/blue-sdk";
+   * import { ChainId, type InputMarketParams } from "@morpho-org/blue-sdk";
    * import {
    *   BundlerAction,
    *   type BundlerCall,
    * } from "@morpho-org/morpho-sdk/bundler";
    * import type { Address } from "viem";
    *
-   * const allocatorFixture =
-   *   "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" satisfies Address;
    * const keyrockUsdcVault =
    *   "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145" satisfies Address;
    * const targetAdapterFixture =
@@ -1617,7 +1626,7 @@ export namespace BundlerAction {
    * } satisfies InputMarketParams;
    *
    * const calls: BundlerCall[] = BundlerAction.vaultV2BluePublicAllocatorAllocateFromIdle(
-   *   allocatorFixture,
+   *   ChainId.EthMainnet,
    *   keyrockUsdcVault,
    *   targetAdapterFixture,
    *   targetMarket,
@@ -1629,7 +1638,7 @@ export namespace BundlerAction {
    */
   // biome-ignore lint/complexity/useMaxParams: mirrors the protocol call
   export function vaultV2BluePublicAllocatorAllocateFromIdle(
-    allocator: Address,
+    chainId: number,
     vault: Address,
     adapter: Address,
     market: InputMarketParams,
@@ -1637,6 +1646,13 @@ export namespace BundlerAction {
     penalty: bigint,
     skipRevert = false,
   ): BundlerCall[] {
+    const { bluePublicAllocator: allocator } = getChainAddresses(chainId);
+    if (allocator == null) {
+      throw new BundlerErrors.UnexpectedAction(
+        "vaultV2BluePublicAllocatorAllocateFromIdle",
+        chainId,
+      );
+    }
     const calls: BundlerCall[] = [];
     const penaltyAssets = computeBluePublicAllocatorPenaltyAssets(
       assets,

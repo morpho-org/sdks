@@ -45,7 +45,7 @@ export const computeVaultV2ReallocationPenaltyAssets = (
 ) => {
   let total = 0n;
   for (const reallocation of reallocations) {
-    if (reallocation.type === "bluePublicAllocator")
+    if ("from" in reallocation)
       total += computeBluePublicAllocatorPenaltyAssets(
         reallocation.assets,
         reallocation.penalty,

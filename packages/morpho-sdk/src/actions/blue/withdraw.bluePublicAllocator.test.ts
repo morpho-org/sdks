@@ -14,7 +14,7 @@ import {
 import type { BlueReallocation } from "../../types/index.js";
 import { blueWithdraw } from "./withdraw.js";
 
-const allocator: Address = "0x0000000000000000000000000000000000000011";
+const allocator = getChainAddresses(mainnet.id).bluePublicAllocator!;
 const vault: Address = "0x0000000000000000000000000000000000000012";
 const sourceAdapter: Address = "0x0000000000000000000000000000000000000013";
 const targetAdapter: Address = "0x0000000000000000000000000000000000000014";
@@ -27,8 +27,6 @@ describe("blueWithdraw Blue Public Allocator", () => {
     } = getChainAddresses(mainnet.id);
     const reallocations: readonly BlueReallocation[] = [
       {
-        type: "bluePublicAllocator",
-        allocator,
         vault,
         from: {
           type: "market",
@@ -40,8 +38,6 @@ describe("blueWithdraw Blue Public Allocator", () => {
         penalty: 500_000_000_000_000_000n,
       },
       {
-        type: "bluePublicAllocator",
-        allocator,
         vault,
         from: { type: "idle" },
         to: { adapter: targetAdapter },

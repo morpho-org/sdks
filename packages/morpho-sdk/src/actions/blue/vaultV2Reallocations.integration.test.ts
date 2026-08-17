@@ -69,7 +69,12 @@ describe("Blue actions with Vault V2 reallocations", () => {
     client,
   }) => {
     const anvilClient = client as AnvilTestClient;
-    const { morpho, bundler3 } = getChainAddresses(base.id);
+    const {
+      morpho,
+      bundler3,
+      bluePublicAllocator: allocator,
+    } = getChainAddresses(base.id);
+    assert(allocator != null);
     const sourceAssets = parseUnits("20", 6);
     const idleAssets = parseUnits("10", 6);
     const sourceDeposit = parseUnits("100", 6);
@@ -196,8 +201,11 @@ describe("Blue actions with Vault V2 reallocations", () => {
     const deploymentReceipt = await client.waitForTransactionReceipt({
       hash: deploymentHash,
     });
-    const allocator = deploymentReceipt.contractAddress;
-    assert(allocator != null);
+    const fixture = deploymentReceipt.contractAddress;
+    assert(fixture != null);
+    const fixtureBytecode = await client.getBytecode({ address: fixture });
+    assert(fixtureBytecode != null);
+    await client.setCode({ address: allocator, bytecode: fixtureBytecode });
 
     await submitAndAcceptVaultV2Call(anvilClient, {
       vault,
@@ -252,8 +260,6 @@ describe("Blue actions with Vault V2 reallocations", () => {
 
     const reallocations: readonly VaultV2BlueReallocation[] = [
       {
-        allocator,
-        type: "bluePublicAllocator",
         vault,
         from: {
           type: "market",
@@ -265,8 +271,6 @@ describe("Blue actions with Vault V2 reallocations", () => {
         penalty,
       },
       {
-        allocator,
-        type: "bluePublicAllocator",
         vault,
         from: { type: "idle" },
         to: { adapter: targetAdapter },
@@ -372,7 +376,10 @@ describe("Blue actions with Vault V2 reallocations", () => {
     client,
   }) => {
     const anvilClient = client as AnvilTestClient;
-    const { morpho } = getChainAddresses(base.id);
+    const { morpho, bluePublicAllocator: allocator } = getChainAddresses(
+      base.id,
+    );
+    assert(allocator != null);
     const depositAssets = parseUnits("100", 6);
     const seedAssets = parseUnits("1", 6);
     const postLossIdleAssets = parseUnits("89", 6);
@@ -455,8 +462,11 @@ describe("Blue actions with Vault V2 reallocations", () => {
     const deploymentReceipt = await client.waitForTransactionReceipt({
       hash: deploymentHash,
     });
-    const allocator = deploymentReceipt.contractAddress;
-    assert(allocator != null);
+    const fixture = deploymentReceipt.contractAddress;
+    assert(fixture != null);
+    const fixtureBytecode = await client.getBytecode({ address: fixture });
+    assert(fixtureBytecode != null);
+    await client.setCode({ address: allocator, bytecode: fixtureBytecode });
 
     await submitAndAcceptVaultV2Call(anvilClient, {
       vault,
@@ -521,7 +531,6 @@ describe("Blue actions with Vault V2 reallocations", () => {
       client.getBlock(),
     ]);
     const allocatorData = await fetchVaultV2PublicAllocatorData(
-      allocator,
       vaultData,
       client,
     );
@@ -537,7 +546,6 @@ describe("Blue actions with Vault V2 reallocations", () => {
       targetAllocation.allocation;
     const reallocationData = new VaultV2ReallocationData({
       chainId: base.id,
-      allocator,
       markets: { [targetMarket.id]: targetMarketData },
       vaults: { [vault]: vaultData },
       allocations: { [vault]: allocatorData.allocations },

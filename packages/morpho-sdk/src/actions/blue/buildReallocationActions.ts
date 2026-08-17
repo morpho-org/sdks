@@ -25,10 +25,10 @@ import type { BlueReallocation } from "../../types/index.js";
  * @throws {EmptyReallocationWithdrawalsError} when a PublicAllocator V1 reallocation has no withdrawals.
  * @throws {NonPositiveInputError} when a PublicAllocator V1 withdrawal or BluePublicAllocator asset amount is non-positive.
  * @throws {InputExceedsMaxError} when a BluePublicAllocator asset amount exceeds `uint128` or its penalty exceeds WAD.
- * @throws {InconsistentReallocationPenaltyError} when entries for one allocator-vault pair use different penalties.
- * @throws {InvalidReallocationAddressError} when a BluePublicAllocator identity or adapter address is malformed.
+ * @throws {InconsistentReallocationPenaltyError} when entries for one vault use different penalties.
+ * @throws {InvalidReallocationAddressError} when a BluePublicAllocator vault or adapter address is malformed.
  * @throws {InvalidReallocationSourceTypeError} when a BluePublicAllocator source is absent, incomplete, or has an unknown discriminator.
- * @throws {InvalidReallocationTypeError} when a top-level reallocation variant is unknown.
+ * @throws {InvalidReallocationShapeError} when an entry matches both or neither V1/V2 shape.
  * @throws {ReallocationWithdrawalOnTargetMarketError} when a source references the target market.
  * @throws {UnsortedReallocationWithdrawalsError} when PublicAllocator V1 withdrawals are not strictly market-id sorted.
  * @internal
@@ -86,12 +86,11 @@ export const buildReallocationActions = ({
   }
 
   for (const reallocation of reallocationList) {
-    if (reallocation.type === "bluePublicAllocator") {
+    if ("from" in reallocation) {
       if (reallocation.from.type === "market") {
         actions.push({
           type: "vaultV2BluePublicAllocatorReallocate",
           args: [
-            reallocation.allocator,
             reallocation.vault,
             reallocation.from.adapter,
             reallocation.from.marketParams,
@@ -106,7 +105,6 @@ export const buildReallocationActions = ({
         actions.push({
           type: "vaultV2BluePublicAllocatorAllocateFromIdle",
           args: [
-            reallocation.allocator,
             reallocation.vault,
             reallocation.to.adapter,
             targetMarketParams,

@@ -27,8 +27,8 @@ import {
   InconsistentReallocationPenaltyError,
   InputExceedsMaxError,
   InvalidReallocationAddressError,
+  InvalidReallocationShapeError,
   InvalidReallocationSourceTypeError,
-  InvalidReallocationTypeError,
   MarketIdMismatchError,
   MissingClientPropertyError,
   MissingMarketPriceError,
@@ -562,8 +562,6 @@ describe("validateReallocations", () => {
   };
 
   const validBluePublicAllocatorReallocation: VaultV2BlueReallocation = {
-    type: "bluePublicAllocator",
-    allocator: USER_A,
     vault: USER_B,
     from: { type: "idle" },
     to: { adapter: USER_A },
@@ -574,15 +572,6 @@ describe("validateReallocations", () => {
   test("should pass with valid reallocations", () => {
     expect(() =>
       validateReallocations([validReallocation], targetMarketId),
-    ).not.toThrow();
-  });
-
-  test("behavior: accepts an explicitly tagged V1 reallocation", () => {
-    expect(() =>
-      validateReallocations(
-        [{ ...validReallocation, type: "publicAllocatorV1" }],
-        targetMarketId,
-      ),
     ).not.toThrow();
   });
 
@@ -639,7 +628,7 @@ describe("validateReallocations", () => {
     },
   );
 
-  test("error: InconsistentReallocationPenaltyError for one allocator-vault pair", () => {
+  test("error: InconsistentReallocationPenaltyError for one vault", () => {
     expect(() =>
       validateReallocations(
         [
@@ -665,14 +654,14 @@ describe("validateReallocations", () => {
     ).not.toThrow();
   });
 
-  test("behavior: allows different penalties for different allocator-vault pairs", () => {
+  test("behavior: allows different penalties for different vaults", () => {
     expect(() =>
       validateReallocations(
         [
           { ...validBluePublicAllocatorReallocation, penalty: 5n },
           {
             ...validBluePublicAllocatorReallocation,
-            allocator: USER_B,
+            vault: USER_A,
             penalty: 11n,
           },
         ],
@@ -740,7 +729,6 @@ describe("validateReallocations", () => {
   });
 
   test.each([
-    { name: "missing allocator", overrides: { allocator: undefined } },
     { name: "invalid vault", overrides: { vault: "not-an-address" } },
     { name: "missing target", overrides: { to: undefined } },
     {
@@ -800,22 +788,25 @@ describe("validateReallocations", () => {
 
   test.each([
     {
-      name: "unknown top-level discriminator",
-      reallocation: {
-        ...validReallocation,
-        type: "publicAllocatorV3",
-      } as unknown as BlueReallocation,
-    },
-    {
-      name: "untagged entry without V1 withdrawals",
+      name: "entry matching neither shape",
       reallocation: {
         vault: USER_A,
         fee: 0n,
       } as unknown as BlueReallocation,
     },
-  ])("error: InvalidReallocationTypeError for $name", ({ reallocation }) => {
+    {
+      name: "entry matching both shapes",
+      reallocation: {
+        ...validReallocation,
+        from: { type: "idle" },
+        to: { adapter: USER_A },
+        assets: 1n,
+        penalty: 0n,
+      } as unknown as BlueReallocation,
+    },
+  ])("error: InvalidReallocationShapeError for $name", ({ reallocation }) => {
     expect(() => validateReallocations([reallocation], targetMarketId)).toThrow(
-      InvalidReallocationTypeError,
+      InvalidReallocationShapeError,
     );
   });
 

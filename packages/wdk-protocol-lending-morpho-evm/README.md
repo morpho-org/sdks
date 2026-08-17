@@ -152,8 +152,6 @@ const options = {
   token: usdc,
   amount: 1_000_000n,
   reallocations: [{
-    allocator,
-    type: 'bluePublicAllocator',
     vault,
     from: { type: 'idle' },
     to: { adapter },

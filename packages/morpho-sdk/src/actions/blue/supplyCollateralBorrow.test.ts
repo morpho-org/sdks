@@ -228,8 +228,6 @@ describe("blueSupplyCollateralBorrow unit tests", () => {
     });
     const reallocations: readonly BlueReallocation[] = [
       {
-        type: "bluePublicAllocator",
-        allocator: WethUsdsBlue.irm,
         vault: WethUsdsBlue.oracle,
         from: { type: "idle" },
         to: { adapter: WethUsdsBlue.collateralToken },

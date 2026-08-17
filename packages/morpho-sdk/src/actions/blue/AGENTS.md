@@ -39,7 +39,7 @@ ERC-20 approval spender is **GeneralAdapter1** for any bundled path — never th
 | `withdraw` (with reallocations) | `[V2 penalty transfer?] → [allocator reallocation × N] → morphoWithdraw` |
 
 An allocator reallocation is PublicAllocator V1 `reallocateTo` or BluePublicAllocator
-`reallocate`/`allocateFromIdle` according to the `BlueReallocation` discriminator. One bundle may
+`reallocate`/`allocateFromIdle` according to the `BlueReallocation` shape. One bundle may
 mix both allocator contracts. For non-zero V2 penalties, the builder adds one aggregate loan-token
 `erc20TransferFrom` into Bundler3 and each allocator action expands to an exact token approval plus
 the nonpayable allocator call. `BundlerAction.encodeBundle` derives `tx.value` only from native

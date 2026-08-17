@@ -27,7 +27,6 @@ import {
 } from "./vaultV2ReallocationData.js";
 
 const TIMESTAMP = 1_700_000_000n;
-const ALLOCATOR = "0x0000000000000000000000000000000000000001";
 const VAULT = "0x0000000000000000000000000000000000000002";
 const TARGET_ADAPTER = "0x0000000000000000000000000000000000000003";
 const SOURCE_ADAPTER = "0x0000000000000000000000000000000000000004";
@@ -271,7 +270,6 @@ const makeFixture = ({
   return {
     data: new VaultV2ReallocationData({
       chainId: ChainId.EthMainnet,
-      allocator: ALLOCATOR,
       markets: {
         [targetMarket.id]: targetMarket,
         [sourceMarket.id]: sourceMarket,
@@ -280,7 +278,6 @@ const makeFixture = ({
       allocations: { [VAULT]: allocations },
       publicAllocatorConfigs: {
         [VAULT]: {
-          allocator: ALLOCATOR,
           vault: VAULT,
           canPullFromIdle,
           penalty,
@@ -293,7 +290,6 @@ const makeFixture = ({
       marketPublicAllocatorConfigs: {
         [VAULT]: {
           [targetIds[2]]: {
-            allocator: ALLOCATOR,
             vault: VAULT,
             adapter: TARGET_ADAPTER,
             marketParamsId: targetIds[2],
@@ -301,7 +297,6 @@ const makeFixture = ({
             canPullFromMarket: false,
           },
           [sourceIds[2]]: {
-            allocator: ALLOCATOR,
             vault: VAULT,
             adapter: sourceAdapterAddress,
             marketParamsId: sourceIds[2],
@@ -329,8 +324,6 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
 
     expect(result.reallocations).toStrictEqual([
       {
-        allocator: ALLOCATOR,
-        type: "bluePublicAllocator",
         vault: VAULT,
         from: {
           type: "market",
@@ -411,7 +404,6 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
     );
     const sharedData = new VaultV2ReallocationData({
       chainId: data.chainId,
-      allocator: data.allocator,
       markets: data.markets,
       vaults: {
         [VAULT]: firstVault,
@@ -424,7 +416,6 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
       publicAllocatorConfigs: {
         [VAULT]: data.publicAllocatorConfigs[VAULT],
         [SECOND_VAULT]: {
-          allocator: ALLOCATOR,
           vault: SECOND_VAULT,
           canPullFromIdle: true,
           penalty: 0n,
@@ -438,7 +429,6 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
         [VAULT]: data.marketPublicAllocatorConfigs[VAULT],
         [SECOND_VAULT]: {
           [secondTargetIds[2]]: {
-            allocator: ALLOCATOR,
             vault: SECOND_VAULT,
             adapter: SECOND_TARGET_ADAPTER,
             marketParamsId: secondTargetIds[2],
@@ -565,7 +555,6 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
     );
     const input = new VaultV2ReallocationData({
       chainId: data.chainId,
-      allocator: data.allocator,
       markets: data.markets,
       vaults: { [VAULT]: inputVault },
       allocations: data.allocations,
