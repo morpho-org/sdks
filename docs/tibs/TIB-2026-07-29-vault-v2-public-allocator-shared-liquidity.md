@@ -5,7 +5,7 @@
 | **Status** | Accepted                                                         |
 | **Date**   | 2026-07-29                                                       |
 | **Author** | @foulques                                                        |
-| **Scope**  | `morpho-sdk`, `blue-sdk-viem`, `blue-sdk`, and `morpho-ts` |
+| **Scope**  | `morpho-sdk`, `liquidity-sdk-viem`, `blue-sdk-viem`, `blue-sdk`, and `morpho-ts` |
 
 ## Context
 
@@ -409,9 +409,15 @@ source and target thresholds plus an internal 100% fallback.
   deprecated.
 - `BluePublicAllocatorReallocation` receives no alias because it was not part
   of the published surface relative to `origin/main`.
+- The compatible `liquidity-sdk-viem` V1 type-name migration would be a patch
+  in isolation. The new public Vault V2 loader makes this package a minor.
 - The feature is minor for `morpho-ts`, `blue-sdk`, `blue-sdk-viem`,
-  `morpho-sdk`, and `wdk-protocol-lending-morpho-evm`.
+  `morpho-sdk`, `liquidity-sdk-viem`, and
+  `wdk-protocol-lending-morpho-evm`.
 - `blue-sdk-viem` raises its `blue-sdk` peer range to the new minor.
+- `liquidity-sdk-viem` raises its `blue-sdk`, `blue-sdk-viem`, `morpho-sdk`,
+  and `morpho-ts` peer floors to the versions that introduce the V2 loader's
+  runtime imports.
 
 ## Security and operational constraints
 
