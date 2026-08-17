@@ -6,7 +6,11 @@ import {
   type AnvilProcessSlot,
   acquireAnvilProcessSlot,
 } from "./anvilProcessSlot.js";
-import { AnvilCleanupError, AnvilStartupError } from "./errors.js";
+import {
+  AnvilCleanupError,
+  AnvilProcessError,
+  AnvilStartupError,
+} from "./errors.js";
 
 const ANVIL_FORCE_KILL_TIMEOUT_MS = 5_000;
 const ANVIL_PROCESS_CLOSE_TIMEOUT_MS = 10_000;
@@ -316,7 +320,13 @@ export interface SpawnedAnvil {
   readonly rpcUrl: `http://localhost:${number}`;
   /** Sends the first shutdown signal synchronously. */
   readonly stop: () => boolean;
-  /** Sends the shutdown signal and waits for process and semaphore cleanup, rejecting with `AnvilCleanupError` when cleanup cannot be confirmed. */
+  /**
+   * Sends the shutdown signal and waits for process and semaphore cleanup.
+   *
+   * @returns Whether the initial shutdown signal was sent.
+   * @throws {AnvilProcessError} When Anvil exited before shutdown was requested.
+   * @throws {AnvilCleanupError} When process or semaphore cleanup cannot be confirmed.
+   */
   readonly stopAndWait: () => Promise<boolean>;
 }
 
@@ -396,6 +406,7 @@ export const spawnAnvil = async (
         [ANVIL_PROCESS_IDENTITY_ENV]: childIdentity,
       },
     });
+    let stopInitiated = false;
     let stopRequested = false;
     let forceKillTimeout: ReturnType<typeof globalThis.setTimeout> | undefined;
     let processCloseTimeout:
@@ -413,20 +424,21 @@ export const spawnAnvil = async (
     void processClosed.catch((error) => {
       if (!cleanupAwaited)
         console.warn(
-          "Anvil cleanup failed after stop(). Use stopAndWait() to handle cleanup failures.",
+          "Anvil process lifecycle failed. Use stopAndWait() to handle process and cleanup failures.",
           error,
         );
     });
 
     // Signal synchronously for API compatibility; close owns cleanup and slot release.
     const stopProcess = () => {
-      if (stopRequested) return false;
-      stopRequested = true;
+      if (stopInitiated) return false;
+      stopInitiated = true;
       if (processCloseObserved) return false;
 
       // An exit code can be visible before stdio closes. Keep the slot until `close`.
       let signalSent = false;
       if (subprocess.exitCode === null) {
+        stopRequested = true;
         try {
           signalSent = subprocess.kill("SIGINT");
         } catch (error) {
@@ -579,6 +591,18 @@ export const spawnAnvil = async (
 
       subprocess.once("close", (code, signal) => {
         processCloseObserved = true;
+        const unexpectedExit =
+          settled && !stopRequested
+            ? new AnvilProcessError(
+                `Anvil exited unexpectedly after startup (code "${code}", signal "${signal}"). Retry the test and inspect the process logs.${
+                  args.forkUrl && forkStderrObserved
+                    ? " Anvil stderr was redacted because a fork URL is configured."
+                    : stderr.trim()
+                      ? ` ${stderr.trim()}`
+                      : ""
+                }`,
+              )
+            : undefined;
         void (async () => {
           if (forceKillTimeout !== undefined)
             globalThis.clearTimeout(forceKillTimeout);
@@ -588,7 +612,23 @@ export const spawnAnvil = async (
           subprocess.stderr.destroy();
           subprocess.unref();
           await processSlot.release();
-        })().then(resolveProcessClosed, rejectProcessClosed);
+        })().then(
+          () => {
+            if (unexpectedExit === undefined) resolveProcessClosed();
+            else rejectProcessClosed(unexpectedExit);
+          },
+          (cleanupError) =>
+            rejectProcessClosed(
+              unexpectedExit === undefined
+                ? cleanupError
+                : createAnvilFailureCleanupError({
+                    cleanupError,
+                    failure: unexpectedExit,
+                    message:
+                      "Anvil exited unexpectedly and its process slot could not be released. Inspect both failures and remove stale temporary locks before retrying.",
+                  }),
+            ),
+        );
         if (settled) return;
         const details =
           args.forkUrl && forkStderrObserved

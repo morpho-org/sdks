@@ -32,7 +32,11 @@ vi.mock("node:fs", async (importOriginal) => {
 });
 
 import { spawnAnvil } from "./anvil.js";
-import { AnvilCleanupError, AnvilStartupError } from "./errors.js";
+import {
+  AnvilCleanupError,
+  AnvilProcessError,
+  AnvilStartupError,
+} from "./errors.js";
 
 type FakeAnvilProcess = EventEmitter & {
   stdout: PassThrough;
@@ -91,6 +95,18 @@ afterEach(async () => {
 
 // These tests intentionally share the spawn mock and process environment.
 describe.sequential("spawnAnvil", () => {
+  test.each(["2oops", "oops", "-1"])(
+    "error: AnvilStartupError rejects an invalid process limit (%s)",
+    async (configuredValue) => {
+      process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = configuredValue;
+
+      await expect(
+        spawnAnvil({ chainId: 1, forkUrl: "https://rpc.example" }),
+      ).rejects.toBeInstanceOf(AnvilStartupError);
+      expect(spawnMock).not.toHaveBeenCalled();
+    },
+  );
+
   test("behavior: tolerates stderr output while Anvil is starting", async () => {
     process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "2";
     process.env.MORPHO_TEST_ANVIL_RUN_ID = `unit-${process.pid}`;
@@ -123,7 +139,8 @@ describe.sequential("spawnAnvil", () => {
     await Promise.resolve();
     expect(subprocess.kill).not.toHaveBeenCalled();
 
-    subprocess.stdout.write("Listening on 127.0.0.1:31001\n");
+    subprocess.stdout.write("Listening on 127.0.0.");
+    subprocess.stdout.write("1:31001\n");
     const spawned = await spawnedPromise;
     expect(spawned.rpcUrl).toBe("http://localhost:31001");
 
@@ -161,6 +178,48 @@ describe.sequential("spawnAnvil", () => {
     } finally {
       warning.mockRestore();
     }
+  });
+
+  test("error: AnvilProcessError surfaces an unexpected post-startup exit", async () => {
+    process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "0";
+    const subprocess = createFakeAnvilProcess({ closeOnSignal: false });
+    spawnMock.mockReturnValue(
+      subprocess as unknown as ChildProcessWithoutNullStreams,
+    );
+
+    const spawnedPromise = spawnAnvil({ chainId: 1 });
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+    subprocess.stdout.write("Listening on 127.0.0.1:31013\n");
+    const spawned = await spawnedPromise;
+
+    subprocess.exitCode = 1;
+    subprocess.emit("close", 1, null);
+
+    await expect(spawned.stopAndWait()).rejects.toBeInstanceOf(
+      AnvilProcessError,
+    );
+  });
+
+  test("error: AnvilProcessError surfaces an exit observed before close", async () => {
+    process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "0";
+    const subprocess = createFakeAnvilProcess({ closeOnSignal: false });
+    spawnMock.mockReturnValue(
+      subprocess as unknown as ChildProcessWithoutNullStreams,
+    );
+
+    const spawnedPromise = spawnAnvil({ chainId: 1 });
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+    subprocess.stdout.write("Listening on 127.0.0.1:31014\n");
+    const spawned = await spawnedPromise;
+
+    subprocess.exitCode = 1;
+    const failure = expect(spawned.stopAndWait()).rejects.toBeInstanceOf(
+      AnvilProcessError,
+    );
+    expect(subprocess.kill).not.toHaveBeenCalled();
+    subprocess.emit("close", 1, null);
+
+    await failure;
   });
 
   test("error: AnvilStartupError cleans up a failed startup", async () => {
@@ -350,6 +409,22 @@ describe.sequential("spawnAnvil", () => {
     }
   });
 
+  test("error: AnvilStartupError rejects a pre-aborted launch", async () => {
+    process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "0";
+    const controller = new AbortController();
+    const abortReason = new Error("test timed out");
+    controller.abort(abortReason);
+
+    const error = await spawnAnvil(
+      { chainId: 1 },
+      { signal: controller.signal },
+    ).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(AnvilStartupError);
+    expect(error).toMatchObject({ cause: abortReason });
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
   test("error: AnvilStartupError aborts after launch but before listening", async () => {
     process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "0";
     const subprocess = createFakeAnvilProcess();
@@ -537,6 +612,59 @@ describe.sequential("spawnAnvil", () => {
     }
   });
 
+  test("error: preserves unexpected exit and release failures together", async () => {
+    process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "1";
+    process.env.MORPHO_TEST_ANVIL_RUN_ID = `unit-exit-release-error-${process.pid}`;
+    const forkUrl = "https://exit-release-error-rpc.example";
+    const rpcId = createHash("sha256")
+      .update(forkUrl)
+      .digest("hex")
+      .slice(0, 16);
+    const lockDirectory = join(
+      tmpdir(),
+      "morpho-test-anvil",
+      process.env.MORPHO_TEST_ANVIL_RUN_ID,
+      rpcId,
+    );
+    const lockPath = join(lockDirectory, "0.lock");
+    const actualFs = await vi.importActual<typeof import("node:fs")>("node:fs");
+    renameSyncMock.mockImplementation((oldPath, newPath) => {
+      if (oldPath === lockPath) {
+        const error = new Error("permission denied") as NodeJS.ErrnoException;
+        error.code = "EACCES";
+        throw error;
+      }
+
+      actualFs.renameSync(oldPath, newPath);
+    });
+    const subprocess = createFakeAnvilProcess({ closeOnSignal: false });
+    spawnMock.mockReturnValue(
+      subprocess as unknown as ChildProcessWithoutNullStreams,
+    );
+
+    try {
+      const spawnedPromise = spawnAnvil({ chainId: 1, forkUrl });
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+      subprocess.stdout.write("Listening on 127.0.0.1:31015\n");
+      const spawned = await spawnedPromise;
+
+      subprocess.exitCode = 1;
+      subprocess.emit("close", 1, null);
+      const error = await spawned
+        .stopAndWait()
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(AnvilCleanupError);
+      if (!(error instanceof AnvilCleanupError)) throw error;
+      expect(error.cause).toBeInstanceOf(AggregateError);
+      if (!(error.cause instanceof AggregateError)) throw error.cause;
+      expect(error.cause.errors[0]).toBeInstanceOf(AnvilProcessError);
+      expect(error.cause.errors[1]).toBeInstanceOf(AnvilCleanupError);
+    } finally {
+      rmSync(lockDirectory, { recursive: true, force: true });
+    }
+  });
+
   test("error: preserves startup and cleanup failures together", async () => {
     process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "1";
     process.env.MORPHO_TEST_ANVIL_RUN_ID = `unit-startup-cleanup-error-${process.pid}`;
@@ -625,7 +753,7 @@ describe.sequential("spawnAnvil", () => {
       expect(spawned.stop()).toBe(true);
       await vi.waitFor(() =>
         expect(warning).toHaveBeenCalledWith(
-          "Anvil cleanup failed after stop(). Use stopAndWait() to handle cleanup failures.",
+          "Anvil process lifecycle failed. Use stopAndWait() to handle process and cleanup failures.",
           expect.any(AnvilCleanupError),
         ),
       );

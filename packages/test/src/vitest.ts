@@ -8,7 +8,11 @@ import {
 import { type TestAPI, test } from "vitest";
 import { type AnvilArgs, spawnAnvil } from "./anvil.js";
 import { type AnvilTestClient, createAnvilTestClient } from "./client.js";
-import { AnvilCleanupError, AnvilStartupError } from "./errors.js";
+import {
+  AnvilCleanupError,
+  AnvilProcessError,
+  AnvilStartupError,
+} from "./errors.js";
 
 // Vitest needs to serialize BigInts to JSON, so we need to add a toJSON method to BigInt.prototype.
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/BigInt#use_within_json
@@ -109,15 +113,26 @@ export const createViemTest = <chain extends Chain>(
             try {
               await stopAndWait();
             } catch (cleanupError) {
-              throw new AnvilCleanupError(
-                "The Vitest fixture failed during setup and Anvil cleanup also failed. Inspect both failures and stop the process manually before retrying.",
-                {
-                  cause: new AggregateError(
-                    [setupFailure, cleanupError],
-                    "Vitest fixture setup and Anvil cleanup both failed.",
-                  ),
-                },
-              );
+              if (cleanupError instanceof AnvilProcessError)
+                setupFailure = new AnvilProcessError(
+                  "Anvil exited while the Vitest fixture was being initialized. Retry the test.",
+                  {
+                    cause: new AggregateError(
+                      [error, cleanupError],
+                      "Vitest fixture setup failed because Anvil exited.",
+                    ),
+                  },
+                );
+              else
+                throw new AnvilCleanupError(
+                  "The Vitest fixture failed during setup and Anvil cleanup also failed. Inspect both failures and stop the process manually before retrying.",
+                  {
+                    cause: new AggregateError(
+                      [setupFailure, cleanupError],
+                      "Vitest fixture setup and Anvil cleanup both failed.",
+                    ),
+                  },
+                );
             }
           }
 
@@ -134,7 +149,12 @@ export const createViemTest = <chain extends Chain>(
           } catch (waitError) {
             throw new AnvilStartupError(
               "Anvil setup retry was cancelled. Retry the test after the competing fork finishes.",
-              { cause: waitError },
+              {
+                cause: new AggregateError(
+                  [setupFailure, waitError],
+                  "Vitest fixture setup and retry cancellation both failed.",
+                ),
+              },
             );
           }
         }

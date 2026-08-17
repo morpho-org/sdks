@@ -2,15 +2,18 @@ import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { blueBorrow } from "../../../../src/actions/blue/borrow.js";
+import {
+  WbtcUsdcSourceMarket,
+  WethUsdsBlue,
+} from "../../../test/fixtures/blue.js";
+import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
+import { test } from "../../../test/unit.js";
 import {
   NegativeInputError,
   NonPositiveInputError,
   type VaultReallocation,
-} from "../../../../src/types/index.js";
-import { WbtcUsdcSourceMarket, WethUsdsBlue } from "../../../fixtures/blue.js";
-import { SteakhouseUsdcVaultV1 } from "../../../fixtures/vaultV1.js";
-import { test } from "../../../setup.js";
+} from "../../types/index.js";
+import { blueBorrow } from "./borrow.js";
 
 describe("blueBorrow unit tests", () => {
   const {

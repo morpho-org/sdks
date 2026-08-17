@@ -26,6 +26,34 @@ export class AnvilStartupError extends Error {
 }
 
 /**
+ * Error thrown when a running Anvil process exits before shutdown is requested.
+ *
+ * @example
+ * ```ts
+ * import { AnvilProcessError, spawnAnvil } from "@morpho-org/test";
+ *
+ * const anvil = await spawnAnvil({ chainId: 1 });
+ * try {
+ *   await anvil.stopAndWait();
+ * } catch (error) {
+ *   if (error instanceof AnvilProcessError) console.error(error.message);
+ * }
+ * ```
+ */
+export class AnvilProcessError extends Error {
+  /**
+   * Creates an Anvil process error.
+   *
+   * @param message Actionable description of the unexpected exit.
+   * @param options Standard error options, including the original cause.
+   */
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "AnvilProcessError";
+  }
+}
+
+/**
  * Error thrown when an Anvil process or its shared semaphore slot cannot be cleaned up.
  *
  * @example

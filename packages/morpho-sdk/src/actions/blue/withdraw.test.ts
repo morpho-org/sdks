@@ -2,16 +2,19 @@ import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { blueWithdraw } from "../../../../src/actions/blue/withdraw.js";
+import {
+  CbbtcUsdcBlue,
+  WbtcUsdcSourceMarket,
+} from "../../../test/fixtures/blue.js";
+import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
+import { test } from "../../../test/unit.js";
 import {
   MutuallyExclusiveWithdrawAmountsError,
   NegativeInputError,
   NonPositiveInputError,
   type VaultReallocation,
-} from "../../../../src/types/index.js";
-import { CbbtcUsdcBlue, WbtcUsdcSourceMarket } from "../../../fixtures/blue.js";
-import { SteakhouseUsdcVaultV1 } from "../../../fixtures/vaultV1.js";
-import { test } from "../../../setup.js";
+} from "../../types/index.js";
+import { blueWithdraw } from "./withdraw.js";
 
 describe("blueWithdraw unit tests", () => {
   const {

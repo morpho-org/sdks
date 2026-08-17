@@ -2,10 +2,10 @@ import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { blueWithdrawCollateral } from "../../../../src/actions/blue/withdrawCollateral.js";
-import { NonPositiveInputError } from "../../../../src/types/index.js";
-import { WethUsdsBlue } from "../../../fixtures/blue.js";
-import { test } from "../../../setup.js";
+import { WethUsdsBlue } from "../../../test/fixtures/blue.js";
+import { test } from "../../../test/unit.js";
+import { NonPositiveInputError } from "../../types/index.js";
+import { blueWithdrawCollateral } from "./withdrawCollateral.js";
 
 describe("blueWithdrawCollateral unit tests", () => {
   const { morpho } = getChainAddresses(mainnet.id);

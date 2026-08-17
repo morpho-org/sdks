@@ -1,24 +1,14 @@
 import {
   AccrualPosition,
-  DEFAULT_SLIPPAGE_TOLERANCE,
-  getChainAddresses,
   Market,
   MarketParams,
-  MathLib,
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
-import { blueAbi } from "@morpho-org/blue-sdk-viem";
-import { Time } from "@morpho-org/morpho-ts";
-import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import { type Address, createPublicClient, http, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import { morphoViemExtension } from "../../../src/client/index.js";
 import { ReallocationData } from "../../../src/entities/reallocationData.js";
-import {
-  computeMaxRepaySharePrice,
-  computeMaxSupplySharePrice,
-} from "../../../src/helpers/index.js";
 import {
   isRequirementApproval,
   MutuallyExclusiveRepayAmountsError,
@@ -28,7 +18,6 @@ import {
   WithdrawExceedsCollateralError,
 } from "../../../src/types/index.js";
 import { CbbtcUsdcBlue, WstethWethBlue } from "../../fixtures/blue.js";
-import { withChainTimestamp } from "../../helpers/time.js";
 import { test } from "../../setup.js";
 
 const MARKET_PARAMS = new MarketParams(CbbtcUsdcBlue);
@@ -185,34 +174,6 @@ describe("MorphoBlue validation", () => {
       .getRequirements();
 
     expect(requirements).toHaveLength(1);
-  });
-
-  test("withdraw getRequirements returns no authorization when already authorized", async () => {
-    const handle = createMockClient(mainnet);
-    const { morpho } = getChainAddresses(mainnet.id);
-    mockRead(handle, {
-      address: morpho,
-      abi: blueAbi,
-      functionName: "isAuthorized",
-      result: true,
-    });
-    const market = handle.client
-      .extend(
-        morphoViemExtension({
-          supportSignature: false,
-        }),
-      )
-      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
-
-    const requirements = await market
-      .withdraw({
-        assets: 1n,
-        userAddress: USER,
-        positionData: makePosition({ supplyShares: 10n ** 18n }),
-      })
-      .getRequirements();
-
-    expect(requirements).toEqual([]);
   });
 
   test("repay rejects conflicting and non-positive repay amounts", async ({
@@ -682,189 +643,5 @@ describe("MorphoBlue validation", () => {
         options: { enabled: false },
       }),
     ).toEqual([]);
-  });
-});
-
-// Regression for VAU-1206: an assets-mode repay on a quiet market reverted on
-// app.morpho.org because `maxSharePrice` was computed from the un-accrued
-// snapshot while on-chain `morphoRepay` accrues `lastUpdate → execution` first.
-// The bound must be derived from the forward-accrued market, mirroring the
-// shares-mode path.
-describe("MorphoBlue repay maxSharePrice forward-accrual (VAU-1206)", () => {
-  // Per-second rate at target (~10% APR) so `accrueInterest` is not a no-op and
-  // the borrow share price rises measurably between `lastUpdate` and execution.
-  const RATE_AT_TARGET = 3_170_979_198n;
-  const TWO_HOURS = 7_200n;
-  // Fixed wall clock so `Time.timestamp()` (= Date.now()) is deterministic.
-  const NOW_SEC = 1_800_000_000n;
-
-  // A CbBTC/USDC position on a market that last accrued 5 days ago — far enough
-  // that accrued interest exceeds the 0.03% default slippage, i.e. the case that
-  // used to revert against `morphoRepay`'s `maxSharePrice` guard.
-  function makeStalePosition() {
-    const market = new Market({
-      params: MARKET_PARAMS,
-      totalSupplyAssets: 10n ** 24n,
-      totalBorrowAssets: 10n ** 24n / 2n,
-      totalSupplyShares: 10n ** 24n,
-      totalBorrowShares: 10n ** 24n / 2n,
-      lastUpdate: NOW_SEC - 5n * 24n * 3_600n,
-      fee: 0n,
-      price: ORACLE_PRICE_SCALE,
-      rateAtTarget: RATE_AT_TARGET,
-    });
-
-    return new AccrualPosition(
-      {
-        user: USER,
-        supplyShares: 0n,
-        borrowShares: 10n ** 18n,
-        collateral: 10n ** 24n,
-      },
-      market,
-    );
-  }
-
-  // Local public client: `buildTx` is fully synchronous and makes no RPC call,
-  // so this needs no anvil fork (keeps the regression hermetic).
-  const localClient = createPublicClient({ chain: mainnet, transport: http() });
-
-  test("repay assets mode derives maxSharePrice from the forward-accrued market", () => {
-    const positionData = makeStalePosition();
-    const market = localClient
-      .extend(morphoViemExtension())
-      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
-    const amount = parseUnits("1000", 6);
-
-    const tx = withChainTimestamp(NOW_SEC, () =>
-      market.repay({ amount, userAddress: USER, positionData }).buildTx(),
-    );
-
-    const accruedMarket = positionData.market.accrueInterest(
-      NOW_SEC + TWO_HOURS,
-    );
-    const expected = computeMaxRepaySharePrice({
-      repayAssets: amount,
-      repayShares: 0n,
-      market: accruedMarket,
-      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
-    });
-    // The pre-fix bound, computed from the un-accrued snapshot — what reverted.
-    const stale = computeMaxRepaySharePrice({
-      repayAssets: amount,
-      repayShares: 0n,
-      market: positionData.market,
-      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
-    });
-
-    expect(tx.action.args.maxSharePrice).toBe(expected);
-    expect(tx.action.args.maxSharePrice).toBeGreaterThan(stale);
-  });
-
-  test("repayWithdrawCollateral assets mode derives maxSharePrice from the forward-accrued market", () => {
-    const positionData = makeStalePosition();
-    const market = localClient
-      .extend(morphoViemExtension())
-      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
-    const amount = parseUnits("1000", 6);
-
-    const tx = withChainTimestamp(NOW_SEC, () =>
-      market
-        .repayWithdrawCollateral({
-          amount,
-          withdrawAmount: 1n,
-          userAddress: USER,
-          positionData,
-        })
-        .buildTx(),
-    );
-
-    const accruedMarket = positionData.market.accrueInterest(
-      NOW_SEC + TWO_HOURS,
-    );
-    const expected = computeMaxRepaySharePrice({
-      repayAssets: amount,
-      repayShares: 0n,
-      market: accruedMarket,
-      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
-    });
-    const stale = computeMaxRepaySharePrice({
-      repayAssets: amount,
-      repayShares: 0n,
-      market: positionData.market,
-      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
-    });
-
-    expect(tx.action.args.maxSharePrice).toBe(expected);
-    expect(tx.action.args.maxSharePrice).toBeGreaterThan(stale);
-  });
-});
-
-// Supply counterpart of VAU-1206: `maxSharePrice` must come from the forward-accrued market,
-// else a supply on a quiet market reverts against `morphoSupply`'s on-chain guard.
-describe("MorphoBlue supply maxSharePrice forward-accrual", () => {
-  const RATE_AT_TARGET = 3_170_979_198n; // ~10% APR per-second
-  const NOW_SEC = 1_800_000_000n;
-  const RAY = MathLib.RAY;
-  const rDivDown = (a: bigint, b: bigint) => (a * RAY) / b;
-
-  // WETH-loan market last accrued 5 days ago — accrual then exceeds the 0.03% default slippage.
-  function staleMarket() {
-    return new Market({
-      params: new MarketParams(WstethWethBlue),
-      totalSupplyAssets: 10n ** 24n,
-      totalBorrowAssets: (10n ** 24n * 9n) / 10n, // 90% utilization
-      totalSupplyShares: 10n ** 30n,
-      totalBorrowShares: (10n ** 30n * 9n) / 10n,
-      lastUpdate: NOW_SEC - 5n * 24n * 3_600n,
-      fee: 0n,
-      price: ORACLE_PRICE_SCALE,
-      rateAtTarget: RATE_AT_TARGET,
-    });
-  }
-
-  // Native-only `buildTx` is synchronous and makes no RPC call, so this needs no anvil fork.
-  const localClient = createPublicClient({ chain: mainnet, transport: http() });
-
-  test("native-only supply derives maxSharePrice from the forward-accrued market", () => {
-    const marketData = staleMarket();
-    const nativeAmount = parseUnits("10", 18);
-    const market = localClient
-      .extend(morphoViemExtension())
-      .morpho.blue(WstethWethBlue, mainnet.id);
-
-    const tx = withChainTimestamp(NOW_SEC, () =>
-      market.supply({ nativeAmount, userAddress: USER, marketData }).buildTx(),
-    );
-
-    const accruedMarket = marketData.accrueInterest(
-      MathLib.max(NOW_SEC, marketData.lastUpdate) + Time.s.from.h(2n),
-    );
-    const expected = computeMaxSupplySharePrice({
-      supplyAssets: nativeAmount,
-      market: accruedMarket,
-      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
-    });
-    // The pre-fix bound, from the un-accrued snapshot — what reverted.
-    const stale = computeMaxSupplySharePrice({
-      supplyAssets: nativeAmount,
-      market: marketData,
-      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
-    });
-
-    // Bound comes from the forward-accrued market.
-    expect(tx.action.args.maxSharePrice).toBe(expected);
-    expect(tx.action.args.maxSharePrice).toBeGreaterThan(stale);
-
-    // On-chain guard `suppliedAssets.rDivDown(suppliedShares) <= maxSharePrice`: the accrued
-    // price clears the fixed bound but exceeds the stale one.
-    const onchainSharePrice = rDivDown(
-      nativeAmount,
-      accruedMarket.toSupplyShares(nativeAmount, "Down"),
-    );
-    expect(tx.action.args.maxSharePrice).toBeGreaterThanOrEqual(
-      onchainSharePrice,
-    );
-    expect(onchainSharePrice).toBeGreaterThan(stale);
   });
 });

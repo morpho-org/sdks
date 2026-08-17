@@ -39,7 +39,11 @@ vi.mock("./client.js", async (importOriginal) => {
   };
 });
 
-import { AnvilCleanupError, AnvilStartupError } from "./errors.js";
+import {
+  AnvilCleanupError,
+  AnvilProcessError,
+  AnvilStartupError,
+} from "./errors.js";
 import { createViemTest } from "./vitest.js";
 
 type VitestClientFixture = (
@@ -91,11 +95,15 @@ describe.sequential("createViemTest compatibility", () => {
     expect(stopAndWaitMock).toHaveBeenCalledOnce();
   });
 
-  test("behavior: retries setup before yielding the client", async () => {
+  test("behavior: retries setup after Anvil exits during initialization", async () => {
     const setupError = new Error("temporary setup failure");
+    const processError = new AnvilProcessError("Anvil exited");
     setBlockTimestampIntervalMock
       .mockRejectedValueOnce(setupError)
       .mockResolvedValueOnce(undefined);
+    stopAndWaitMock
+      .mockRejectedValueOnce(processError)
+      .mockResolvedValueOnce(true);
     testState.spawnAnvilMock.mockResolvedValue({
       rpcUrl: "http://localhost:31001",
       stop: vi.fn(),
@@ -123,6 +131,65 @@ describe.sequential("createViemTest compatibility", () => {
     const clientFixture = testState.clientFixture as VitestClientFixture;
     await expect(clientFixture({}, async () => {})).rejects.toBe(cleanupError);
     expect(testState.spawnAnvilMock).toHaveBeenCalledOnce();
+  });
+
+  test("error: preserves setup failure when retry is cancelled", async () => {
+    const setupError = new AnvilStartupError("temporary failure");
+    const abortReason = new Error("test timed out");
+    const controller = new AbortController();
+    testState.spawnAnvilMock.mockRejectedValueOnce(setupError);
+    createViemTest(mainnet, { forkUrl: "https://rpc.example" });
+
+    const clientFixture = testState.clientFixture as VitestClientFixture;
+    const fixture = clientFixture(
+      { signal: controller.signal },
+      async () => {},
+    );
+    await vi.waitFor(() =>
+      expect(testState.spawnAnvilMock).toHaveBeenCalledOnce(),
+    );
+    controller.abort(abortReason);
+    const error = await fixture.catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(AnvilStartupError);
+    if (!(error instanceof AnvilStartupError)) throw error;
+    expect(error.cause).toBeInstanceOf(AggregateError);
+    if (!(error.cause instanceof AggregateError)) throw error.cause;
+    expect(error.cause.errors[0]).toBe(setupError);
+    expect(error.cause.errors[1]).toMatchObject({ cause: abortReason });
+  });
+
+  test("error: preserves a lone use failure", async () => {
+    const useError = new Error("use failed");
+    testState.spawnAnvilMock.mockResolvedValue({
+      rpcUrl: "http://localhost:31001",
+      stop: vi.fn(),
+      stopAndWait: stopAndWaitMock,
+    });
+    createViemTest(mainnet, { forkUrl: "https://rpc.example" });
+
+    const clientFixture = testState.clientFixture as VitestClientFixture;
+    await expect(
+      clientFixture({}, async () => {
+        throw useError;
+      }),
+    ).rejects.toBe(useError);
+    expect(stopAndWaitMock).toHaveBeenCalledOnce();
+  });
+
+  test("error: preserves a lone cleanup failure", async () => {
+    const cleanupError = new AnvilProcessError("Anvil exited");
+    stopAndWaitMock.mockRejectedValueOnce(cleanupError);
+    testState.spawnAnvilMock.mockResolvedValue({
+      rpcUrl: "http://localhost:31001",
+      stop: vi.fn(),
+      stopAndWait: stopAndWaitMock,
+    });
+    createViemTest(mainnet, { forkUrl: "https://rpc.example" });
+
+    const clientFixture = testState.clientFixture as VitestClientFixture;
+    await expect(clientFixture({}, async () => {})).rejects.toBe(cleanupError);
+    expect(stopAndWaitMock).toHaveBeenCalledOnce();
   });
 
   test("error: preserves use and cleanup failures together", async () => {

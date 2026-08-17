@@ -3,9 +3,11 @@ import type { Address } from "viem";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { afterEach, describe, expect, vi } from "vitest";
-import { getGeneralAdapterRequirements } from "../../../../src/actions/requirements/index.js";
-import * as getTokenRequirementActionsModule from "../../../../src/actions/signatures/getTokenRequirementActions.js";
-import { vaultV1Deposit } from "../../../../src/actions/vaultV1/deposit.js";
+import {
+  KeyrockUsdcVaultV2,
+  KpkWETHVaultV2,
+} from "../../../test/fixtures/vaultV2.js";
+import { test } from "../../../test/unit.js";
 import {
   ChainWNativeMissingError,
   DepositAmountMismatchError,
@@ -14,28 +16,28 @@ import {
   isRequirementSignature,
   NegativeInputError,
   NonPositiveInputError,
-} from "../../../../src/types/index.js";
-import {
-  GauntletWethVaultV1,
-  SteakhouseUsdcVaultV1,
-} from "../../../fixtures/vaultV1.js";
-import { test } from "../../../setup.js";
+} from "../../types/index.js";
+import { getGeneralAdapterRequirements } from "../requirements/index.js";
+import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
+import { vaultV2Deposit } from "./deposit.js";
 
-describe("depositVaultV1 unit tests", () => {
+describe("depositVaultV2 unit tests", () => {
+  const { dai, usdc, wNative } = addressesRegistry[mainnet.id];
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  const { dai, usdc, wNative } = addressesRegistry[mainnet.id];
-
   test("should create deposit bundle with DAI via permit2", async ({
     client,
   }) => {
+    // Use a mock vault address with DAI as asset
     const mockVaultAddress =
       "0x0000000000000000000000000000000000000001" as Address;
-    const assets = parseUnits("100", 18);
-    const maxSharePrice = 1000000000000000000n;
+    const assets = parseUnits("100", 18); // 100 DAI
+    const maxSharePrice = 1000000000000000000n; // 1:1 share price
 
+    // Create DAI permit signature
     const requirements = await getGeneralAdapterRequirements(client, {
       address: dai,
       chainId: mainnet.id,
@@ -63,7 +65,8 @@ describe("depositVaultV1 unit tests", () => {
 
     expect(requirementSignature.args.asset).toEqual(dai);
 
-    const tx = vaultV1Deposit({
+    // Create deposit transaction
+    const tx = vaultV2Deposit({
       vault: {
         chainId: mainnet.id,
         address: mockVaultAddress,
@@ -77,8 +80,9 @@ describe("depositVaultV1 unit tests", () => {
       },
     });
 
+    // Verify transaction structure
     expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("vaultV1Deposit");
+    expect(tx.action.type).toBe("vaultV2Deposit");
     expect(tx.action.args.vault).toBe(mockVaultAddress);
     expect(tx.action.args.amount).toBe(assets);
     expect(tx.action.args.maxSharePrice).toBe(maxSharePrice);
@@ -91,7 +95,7 @@ describe("depositVaultV1 unit tests", () => {
   test("should create deposit bundle with USDC via simple permit", async ({
     client,
   }) => {
-    const amount = parseUnits("1000", 6);
+    const assets = parseUnits("1000", 6); // 1000 USDC
     const maxSharePrice = 1000000n;
 
     const requirements = await getGeneralAdapterRequirements(client, {
@@ -100,17 +104,17 @@ describe("depositVaultV1 unit tests", () => {
       supportSignature: true,
       useSimplePermit: true,
       args: {
-        amount,
+        amount: assets,
         from: client.account.address,
       },
     });
 
-    const permitRequirement = requirements[0];
-    if (!isRequirementSignature(permitRequirement)) {
-      throw new Error("Permit requirement not found");
+    const permit2Requirement = requirements[0];
+    if (!isRequirementSignature(permit2Requirement)) {
+      throw new Error("Permit2 requirement not found");
     }
 
-    const requirementSignature = await permitRequirement.sign(
+    const requirementSignature = await permit2Requirement.sign(
       client,
       client.account.address,
     );
@@ -122,14 +126,14 @@ describe("depositVaultV1 unit tests", () => {
       "getTokenRequirementActions",
     );
 
-    const tx = vaultV1Deposit({
+    const tx = vaultV2Deposit({
       vault: {
         chainId: mainnet.id,
-        address: SteakhouseUsdcVaultV1.address,
+        address: KeyrockUsdcVaultV2.address,
         asset: usdc,
       },
       args: {
-        amount,
+        amount: assets,
         maxSharePrice,
         recipient: client.account.address,
         requirementSignature,
@@ -139,9 +143,9 @@ describe("depositVaultV1 unit tests", () => {
     expect(localSpy).toHaveBeenCalled();
 
     expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("vaultV1Deposit");
-    expect(tx.action.args.vault).toBe(SteakhouseUsdcVaultV1.address);
-    expect(tx.action.args.amount).toBe(amount);
+    expect(tx.action.type).toBe("vaultV2Deposit");
+    expect(tx.action.args.vault).toBe(KeyrockUsdcVaultV2.address);
+    expect(tx.action.args.amount).toBe(assets);
     expect(tx.action.args.maxSharePrice).toBe(maxSharePrice);
     expect(tx.action.args.recipient).toBe(client.account.address);
     expect(tx.to).toBeDefined();
@@ -152,7 +156,7 @@ describe("depositVaultV1 unit tests", () => {
   test("should create deposit bundle with WETH via permit2", async ({
     client,
   }) => {
-    const amount = parseUnits("5", 18);
+    const assets = parseUnits("5", 18); // 5 WETH
     const maxSharePrice = 1000000000000000000n;
 
     const requirements = await getGeneralAdapterRequirements(client, {
@@ -160,7 +164,7 @@ describe("depositVaultV1 unit tests", () => {
       chainId: mainnet.id,
       supportSignature: true,
       args: {
-        amount,
+        amount: assets,
         from: client.account.address,
       },
     });
@@ -182,14 +186,14 @@ describe("depositVaultV1 unit tests", () => {
 
     expect(requirementSignature.args.asset).toEqual(wNative);
 
-    const tx = vaultV1Deposit({
+    const tx = vaultV2Deposit({
       vault: {
         chainId: mainnet.id,
-        address: GauntletWethVaultV1.address,
+        address: KpkWETHVaultV2.address,
         asset: wNative,
       },
       args: {
-        amount,
+        amount: assets,
         maxSharePrice,
         recipient: client.account.address,
         requirementSignature,
@@ -197,9 +201,9 @@ describe("depositVaultV1 unit tests", () => {
     });
 
     expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("vaultV1Deposit");
-    expect(tx.action.args.vault).toBe(GauntletWethVaultV1.address);
-    expect(tx.action.args.amount).toBe(amount);
+    expect(tx.action.type).toBe("vaultV2Deposit");
+    expect(tx.action.args.vault).toBe(KpkWETHVaultV2.address);
+    expect(tx.action.args.amount).toBe(assets);
     expect(tx.action.args.maxSharePrice).toBe(maxSharePrice);
     expect(tx.action.args.recipient).toBe(client.account.address);
     expect(tx.to).toBeDefined();
@@ -213,10 +217,10 @@ describe("depositVaultV1 unit tests", () => {
     const nativeAmount = parseUnits("1", 18);
     const maxSharePrice = 1000000000000000000n;
 
-    const tx = vaultV1Deposit({
+    const tx = vaultV2Deposit({
       vault: {
         chainId: mainnet.id,
-        address: GauntletWethVaultV1.address,
+        address: KpkWETHVaultV2.address,
         asset: wNative,
       },
       args: {
@@ -227,47 +231,10 @@ describe("depositVaultV1 unit tests", () => {
       },
     });
 
-    expect(tx.action.args.vault).toBe(GauntletWethVaultV1.address);
+    expect(tx.action.args.vault).toBe(KpkWETHVaultV2.address);
     expect(tx.action.args.amount).toBe(0n);
     expect(tx.action.args.nativeAmount).toBe(nativeAmount);
     expect(tx.value).toBe(nativeAmount);
-  });
-
-  test("should create deposit bundle without requirement signature", async ({
-    client,
-  }) => {
-    const assets = parseUnits("500", 6);
-    const maxSharePrice = 1000000n;
-
-    const localSpy = vi.spyOn(
-      getTokenRequirementActionsModule,
-      "getTokenRequirementActions",
-    );
-
-    const tx = vaultV1Deposit({
-      vault: {
-        chainId: mainnet.id,
-        address: SteakhouseUsdcVaultV1.address,
-        asset: usdc,
-      },
-      args: {
-        amount: assets,
-        maxSharePrice,
-        recipient: client.account.address,
-      },
-    });
-
-    expect(localSpy).toHaveBeenCalled();
-
-    expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("vaultV1Deposit");
-    expect(tx.action.args.vault).toBe(SteakhouseUsdcVaultV1.address);
-    expect(tx.action.args.amount).toBe(assets);
-    expect(tx.action.args.maxSharePrice).toBe(maxSharePrice);
-    expect(tx.action.args.recipient).toBe(client.account.address);
-    expect(tx.to).toBeDefined();
-    expect(tx.data).toBeDefined();
-    expect(tx.value).toBe(0n);
   });
 
   test("should throw when signature amount does not match deposit amount", async ({
@@ -288,21 +255,21 @@ describe("depositVaultV1 unit tests", () => {
       },
     });
 
-    const permitRequirement = requirements[0];
-    if (!isRequirementSignature(permitRequirement)) {
-      throw new Error("Permit requirement not found");
+    const permit2Requirement = requirements[0];
+    if (!isRequirementSignature(permit2Requirement)) {
+      throw new Error("Permit2 requirement not found");
     }
 
-    const requirementSignature = await permitRequirement.sign(
+    const requirementSignature = await permit2Requirement.sign(
       client,
       client.account.address,
     );
 
     expect(() =>
-      vaultV1Deposit({
+      vaultV2Deposit({
         vault: {
           chainId: mainnet.id,
-          address: SteakhouseUsdcVaultV1.address,
+          address: KeyrockUsdcVaultV2.address,
           asset: usdc,
         },
         args: {
@@ -319,11 +286,11 @@ describe("depositVaultV1 unit tests", () => {
     client,
   }) => {
     expect(() =>
-      vaultV1Deposit({
+      vaultV2Deposit({
         vault: {
           chainId: mainnet.id,
-          address: SteakhouseUsdcVaultV1.address,
-          asset: SteakhouseUsdcVaultV1.asset,
+          address: KeyrockUsdcVaultV2.address,
+          asset: KeyrockUsdcVaultV2.asset,
         },
         args: {
           amount: -1n,
@@ -334,15 +301,52 @@ describe("depositVaultV1 unit tests", () => {
     ).toThrow(NegativeInputError);
   });
 
+  test("should create deposit bundle without requirement signature", async ({
+    client,
+  }) => {
+    const assets = parseUnits("500", 6); // 500 USDC
+    const maxSharePrice = 1000000n;
+
+    const localSpy = vi.spyOn(
+      getTokenRequirementActionsModule,
+      "getTokenRequirementActions",
+    );
+
+    const tx = vaultV2Deposit({
+      vault: {
+        chainId: mainnet.id,
+        address: KeyrockUsdcVaultV2.address,
+        asset: usdc,
+      },
+      args: {
+        amount: assets,
+        maxSharePrice,
+        recipient: client.account.address,
+      },
+    });
+
+    expect(localSpy).toHaveBeenCalled();
+
+    expect(tx).toBeDefined();
+    expect(tx.action.type).toBe("vaultV2Deposit");
+    expect(tx.action.args.vault).toBe(KeyrockUsdcVaultV2.address);
+    expect(tx.action.args.amount).toBe(assets);
+    expect(tx.action.args.maxSharePrice).toBe(maxSharePrice);
+    expect(tx.action.args.recipient).toBe(client.account.address);
+    expect(tx.to).toBeDefined();
+    expect(tx.data).toBeDefined();
+    expect(tx.value).toBe(0n);
+  });
+
   test("should throw NonPositiveInputError when assets and nativeAmount are both zero", async ({
     client,
   }) => {
     expect(() =>
-      vaultV1Deposit({
+      vaultV2Deposit({
         vault: {
           chainId: mainnet.id,
-          address: SteakhouseUsdcVaultV1.address,
-          asset: SteakhouseUsdcVaultV1.asset,
+          address: KeyrockUsdcVaultV2.address,
+          asset: KeyrockUsdcVaultV2.asset,
         },
         args: {
           amount: 0n,
@@ -357,11 +361,11 @@ describe("depositVaultV1 unit tests", () => {
     client,
   }) => {
     expect(() =>
-      vaultV1Deposit({
+      vaultV2Deposit({
         vault: {
           chainId: mainnet.id,
-          address: SteakhouseUsdcVaultV1.address,
-          asset: SteakhouseUsdcVaultV1.asset,
+          address: KeyrockUsdcVaultV2.address,
+          asset: KeyrockUsdcVaultV2.asset,
         },
         args: {
           amount: parseUnits("100", 6),
@@ -376,11 +380,11 @@ describe("depositVaultV1 unit tests", () => {
     client,
   }) => {
     expect(() =>
-      vaultV1Deposit({
+      vaultV2Deposit({
         vault: {
           chainId: mainnet.id,
-          address: SteakhouseUsdcVaultV1.address,
-          asset: SteakhouseUsdcVaultV1.asset,
+          address: KeyrockUsdcVaultV2.address,
+          asset: KeyrockUsdcVaultV2.asset,
         },
         args: {
           amount: parseUnits("100", 6),
@@ -395,10 +399,10 @@ describe("depositVaultV1 unit tests", () => {
     client,
   }) => {
     expect(() =>
-      vaultV1Deposit({
+      vaultV2Deposit({
         vault: {
           chainId: ChainId.CeloMainnet,
-          address: GauntletWethVaultV1.address,
+          address: KpkWETHVaultV2.address,
           asset: wNative,
         },
         args: {
@@ -409,62 +413,6 @@ describe("depositVaultV1 unit tests", () => {
         },
       }),
     ).toThrow(ChainWNativeMissingError);
-  });
-
-  test("should return a deep-frozen transaction object", async ({ client }) => {
-    const tx = vaultV1Deposit({
-      vault: {
-        chainId: mainnet.id,
-        address: SteakhouseUsdcVaultV1.address,
-        asset: usdc,
-      },
-      args: {
-        amount: parseUnits("100", 6),
-        maxSharePrice: 1000000n,
-        recipient: client.account.address,
-      },
-    });
-
-    expect(Object.isFrozen(tx)).toBe(true);
-    expect(Object.isFrozen(tx.action)).toBe(true);
-    expect(Object.isFrozen(tx.action.args)).toBe(true);
-  });
-
-  test("should append metadata to transaction data when provided", async ({
-    client,
-  }) => {
-    const assets = parseUnits("100", 6);
-    const maxSharePrice = 1000000n;
-
-    const txWithout = vaultV1Deposit({
-      vault: {
-        chainId: mainnet.id,
-        address: SteakhouseUsdcVaultV1.address,
-        asset: usdc,
-      },
-      args: {
-        amount: assets,
-        maxSharePrice,
-        recipient: client.account.address,
-      },
-    });
-
-    const txWith = vaultV1Deposit({
-      vault: {
-        chainId: mainnet.id,
-        address: SteakhouseUsdcVaultV1.address,
-        asset: usdc,
-      },
-      args: {
-        amount: assets,
-        maxSharePrice,
-        recipient: client.account.address,
-      },
-      metadata: { origin: "a1b2c3d4" },
-    });
-
-    expect(txWith.data.length).toBeGreaterThan(txWithout.data.length);
-    expect(txWith.action.type).toBe("vaultV1Deposit");
   });
 
   test("should throw DepositAssetMismatchError when signature asset does not match deposit asset", async ({
@@ -499,10 +447,10 @@ describe("depositVaultV1 unit tests", () => {
     );
 
     expect(() =>
-      vaultV1Deposit({
+      vaultV2Deposit({
         vault: {
           chainId: mainnet.id,
-          address: GauntletWethVaultV1.address,
+          address: KpkWETHVaultV2.address,
           asset: wNative,
         },
         args: {

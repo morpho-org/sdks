@@ -1,12 +1,12 @@
 import { MarketParams } from "@morpho-org/blue-sdk";
 import { type Address, isHex, parseUnits } from "viem";
 import { describe, expect } from "vitest";
-import { vaultV2ForceRedeem } from "../../../../src/actions/vaultV2/forceRedeem.js";
+import { test } from "../../../test/unit.js";
 import {
   EmptyDeallocationsError,
   NonPositiveInputError,
-} from "../../../../src/types/index.js";
-import { test } from "../../../setup.js";
+} from "../../types/index.js";
+import { vaultV2ForceRedeem } from "./forceRedeem.js";
 
 describe("forceRedeemVaultV2 unit tests", () => {
   const mockVaultAddress: Address =

@@ -38,6 +38,34 @@ describe.sequential("terminateAbandonedAnvilProcess", () => {
     expect(killSpy).not.toHaveBeenCalledWith(pid, "SIGKILL");
   });
 
+  test("error: preserves process identity and liveness failures", async () => {
+    const pid = 41_004;
+    const processDescriptionError = new Error("ps failed");
+    const inspectionError = new Error("permission denied");
+    vi.spyOn(process, "kill")
+      .mockReturnValueOnce(true)
+      .mockImplementationOnce(() => {
+        throw inspectionError;
+      });
+    execFileSyncMock.mockImplementation(() => {
+      throw processDescriptionError;
+    });
+
+    const error = await terminateAbandonedAnvilProcess(
+      pid,
+      "expected-child",
+    ).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(AnvilCleanupError);
+    if (!(error instanceof AnvilCleanupError)) throw error;
+    expect(error.cause).toBeInstanceOf(AggregateError);
+    if (!(error.cause instanceof AggregateError)) throw error.cause;
+    expect(error.cause.errors).toEqual([
+      processDescriptionError,
+      inspectionError,
+    ]);
+  });
+
   test("behavior: force-kills an identified child after graceful timeout", async () => {
     const pid = 41_002;
     const identity = "force-kill-child";

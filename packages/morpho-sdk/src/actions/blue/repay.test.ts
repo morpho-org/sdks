@@ -2,18 +2,18 @@ import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { afterEach, describe, expect, vi } from "vitest";
-import { blueRepay } from "../../../../src/actions/blue/repay.js";
-import * as getTokenRequirementActionsModule from "../../../../src/actions/signatures/getTokenRequirementActions.js";
+import { WethUsdsBlue, WstethWethBlue } from "../../../test/fixtures/blue.js";
+import { makePermit } from "../../../test/helpers/permit.js";
+import { test } from "../../../test/unit.js";
 import {
   MutuallyExclusiveRepayAmountsError,
   NativeAmountOnNonWNativeAssetError,
   NegativeInputError,
   NonPositiveInputError,
   TransferAmountNotEqualToAssetsError,
-} from "../../../../src/types/index.js";
-import { WethUsdsBlue, WstethWethBlue } from "../../../fixtures/blue.js";
-import { makePermit } from "../../../helpers/permit.js";
-import { test } from "../../../setup.js";
+} from "../../types/index.js";
+import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
+import { blueRepay } from "./repay.js";
 
 const MAX_UINT256_HEX = "f".repeat(64);
 

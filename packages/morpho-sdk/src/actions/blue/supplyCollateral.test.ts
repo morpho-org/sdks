@@ -2,18 +2,18 @@ import { addressesRegistry, getChainAddresses } from "@morpho-org/blue-sdk";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { afterEach, describe, expect, vi } from "vitest";
-import { blueSupplyCollateral } from "../../../../src/actions/blue/supplyCollateral.js";
-import { getGeneralAdapterRequirements } from "../../../../src/actions/requirements/index.js";
-import * as getTokenRequirementActionsModule from "../../../../src/actions/signatures/getTokenRequirementActions.js";
+import { UsdcEurcvBlue, WethUsdsBlue } from "../../../test/fixtures/blue.js";
+import { test } from "../../../test/unit.js";
 import {
   isRequirementApproval,
   isRequirementSignature,
   NativeAmountOnNonWNativeAssetError,
   NegativeInputError,
   NonPositiveInputError,
-} from "../../../../src/types/index.js";
-import { UsdcEurcvBlue, WethUsdsBlue } from "../../../fixtures/blue.js";
-import { test } from "../../../setup.js";
+} from "../../types/index.js";
+import { getGeneralAdapterRequirements } from "../requirements/index.js";
+import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
+import { blueSupplyCollateral } from "./supplyCollateral.js";
 
 describe("blueSupplyCollateral unit tests", () => {
   afterEach(() => {

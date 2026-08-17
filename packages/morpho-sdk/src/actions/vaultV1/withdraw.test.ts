@@ -1,12 +1,12 @@
 import { parseUnits } from "viem";
 import { describe, expect } from "vitest";
-import { vaultV1Withdraw } from "../../../../src/actions/vaultV1/withdraw.js";
-import { NonPositiveInputError } from "../../../../src/types/index.js";
 import {
   GauntletWethVaultV1,
   SteakhouseUsdcVaultV1,
-} from "../../../fixtures/vaultV1.js";
-import { test } from "../../../setup.js";
+} from "../../../test/fixtures/vaultV1.js";
+import { test } from "../../../test/unit.js";
+import { NonPositiveInputError } from "../../types/index.js";
+import { vaultV1Withdraw } from "./withdraw.js";
 
 describe("withdrawVaultV1 unit tests", () => {
   test("should create withdraw transaction with USDC vault", async ({

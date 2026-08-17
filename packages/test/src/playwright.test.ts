@@ -130,6 +130,17 @@ describe.sequential("createViemTest", () => {
     expect(stopAndWaitMock).toHaveBeenCalledOnce();
   });
 
+  test("error: preserves a lone cleanup failure", async () => {
+    const cleanupError = new AnvilCleanupError("cleanup failed");
+    stopAndWaitMock.mockRejectedValueOnce(cleanupError);
+    createViemTest(mainnet);
+
+    await expect(clientFixture?.({}, async () => {})).rejects.toBe(
+      cleanupError,
+    );
+    expect(stopAndWaitMock).toHaveBeenCalledOnce();
+  });
+
   test("error: preserves use and cleanup failures together", async () => {
     const useError = new Error("use failed");
     const cleanupError = new AnvilCleanupError("cleanup failed");

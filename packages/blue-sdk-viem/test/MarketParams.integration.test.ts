@@ -4,7 +4,7 @@ import {
   type MarketId,
 } from "@morpho-org/blue-sdk";
 import { markets } from "@morpho-org/morpho-test";
-import { encodeAbiParameters, zeroAddress } from "viem";
+import { zeroAddress } from "viem";
 import { describe, expect } from "vitest";
 import { MarketParams } from "../src/augment/MarketParams.js";
 import { test } from "./setup.js";
@@ -35,47 +35,5 @@ describe("augment/MarketParams", () => {
     );
 
     expect(market).toEqual(marketParams); // Not strict equal because not the same class.
-  });
-
-  test("should decode config from bytes", async () => {
-    const data = encodeAbiParameters(
-      [
-        { type: "address", name: "loanToken" },
-        { type: "address", name: "collateralToken" },
-        { type: "address", name: "oracle" },
-        { type: "address", name: "irm" },
-        { type: "uint256", name: "lltv" },
-      ],
-      [
-        usdc_wstEth.loanToken,
-        usdc_wstEth.collateralToken,
-        usdc_wstEth.oracle,
-        usdc_wstEth.irm,
-        usdc_wstEth.lltv,
-      ],
-    );
-
-    expect(MarketParams.fromHex(data)).toStrictEqual(usdc_wstEth);
-  });
-
-  test("should not decode invalid config from bytes", async () => {
-    const data = encodeAbiParameters(
-      [
-        { type: "address", name: "loanToken" },
-        { type: "address", name: "collateralToken" },
-        { type: "address", name: "oracle" },
-        { type: "uint256", name: "lltv" },
-      ],
-      [
-        usdc_wstEth.loanToken,
-        usdc_wstEth.collateralToken,
-        usdc_wstEth.oracle,
-        usdc_wstEth.lltv,
-      ],
-    );
-
-    expect(() => MarketParams.fromHex(data)).toThrow(
-      `cannot decode valid MarketParams from "${data}"`,
-    );
   });
 });

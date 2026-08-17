@@ -2,9 +2,13 @@ import { addressesRegistry, MarketParams } from "@morpho-org/blue-sdk";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { afterEach, describe, expect, vi } from "vitest";
-import { blueSupplyCollateralBorrow } from "../../../../src/actions/blue/supplyCollateralBorrow.js";
-import { getGeneralAdapterRequirements } from "../../../../src/actions/requirements/index.js";
-import * as getTokenRequirementActionsModule from "../../../../src/actions/signatures/getTokenRequirementActions.js";
+import {
+  UsdcEurcvBlue,
+  WbtcUsdcSourceMarket,
+  WethUsdsBlue,
+} from "../../../test/fixtures/blue.js";
+import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
+import { test } from "../../../test/unit.js";
 import {
   isRequirementApproval,
   isRequirementSignature,
@@ -12,14 +16,10 @@ import {
   NegativeInputError,
   NonPositiveInputError,
   type VaultReallocation,
-} from "../../../../src/types/index.js";
-import {
-  UsdcEurcvBlue,
-  WbtcUsdcSourceMarket,
-  WethUsdsBlue,
-} from "../../../fixtures/blue.js";
-import { SteakhouseUsdcVaultV1 } from "../../../fixtures/vaultV1.js";
-import { test } from "../../../setup.js";
+} from "../../types/index.js";
+import { getGeneralAdapterRequirements } from "../requirements/index.js";
+import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
+import { blueSupplyCollateralBorrow } from "./supplyCollateralBorrow.js";
 
 describe("blueSupplyCollateralBorrow unit tests", () => {
   afterEach(() => {

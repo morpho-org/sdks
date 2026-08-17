@@ -64,15 +64,20 @@ const inspectAbandonedAnvilProcess = (
         stdio: ["ignore", "pipe", "ignore"],
       },
     );
-  } catch {
+  } catch (processDescriptionError) {
+    const message = `Abandoned Anvil process "${pid}" still exists, but its identity could not be verified. Refusing to signal it; inspect the stale lock manually before retrying.`;
     try {
       process.kill(pid, 0);
-    } catch (error) {
-      if (hasErrorCode(error, "ESRCH")) return "absent";
+    } catch (inspectionError) {
+      if (hasErrorCode(inspectionError, "ESRCH")) return "absent";
+      throw new AnvilCleanupError(message, {
+        cause: new AggregateError(
+          [processDescriptionError, inspectionError],
+          "Anvil process identity and liveness checks both failed.",
+        ),
+      });
     }
-    throw new AnvilCleanupError(
-      `Abandoned Anvil process "${pid}" still exists, but its identity could not be verified. Refusing to signal it; inspect the stale lock manually before retrying.`,
-    );
+    throw new AnvilCleanupError(message, { cause: processDescriptionError });
   }
 
   const expectedMarker = `${ANVIL_PROCESS_IDENTITY_ENV}=${identity}`;
@@ -177,12 +182,20 @@ export const acquireAnvilProcessSlot = async (parameters: {
       release: () => Promise.resolve(),
     };
 
-  const maxProcessesPerRpc = Number.parseInt(configuredValue, 10);
-  if (!Number.isSafeInteger(maxProcessesPerRpc) || maxProcessesPerRpc <= 0)
+  if (configuredValue === "0")
     return {
       registerChildProcess: () => {},
       release: () => Promise.resolve(),
     };
+
+  const maxProcessesPerRpc = Number(configuredValue);
+  if (
+    !/^[1-9]\d*$/.test(configuredValue) ||
+    !Number.isSafeInteger(maxProcessesPerRpc)
+  )
+    throw new AnvilStartupError(
+      `MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC must be "0" to disable limiting or a positive safe integer, got "${configuredValue}". Update the environment variable and retry.`,
+    );
 
   const { forkUrl, runId, signal } = parameters;
   const reservationDeadline = Date.now() + ANVIL_PROCESS_SLOT_TIMEOUT_MS;

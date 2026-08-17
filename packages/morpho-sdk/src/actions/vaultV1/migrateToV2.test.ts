@@ -1,8 +1,14 @@
 import { mainnet } from "viem/chains";
 import { afterEach, describe, expect, vi } from "vitest";
-import { getGeneralAdapterRequirements } from "../../../../src/actions/requirements/index.js";
-import * as getTokenRequirementActionsModule from "../../../../src/actions/signatures/getTokenRequirementActions.js";
-import { vaultV1MigrateToV2 } from "../../../../src/actions/vaultV1/migrateToV2.js";
+import {
+  GauntletWethVaultV1,
+  SteakhouseUsdcVaultV1,
+} from "../../../test/fixtures/vaultV1.js";
+import {
+  KeyrockUsdcVaultV2,
+  KpkWETHVaultV2,
+} from "../../../test/fixtures/vaultV2.js";
+import { test } from "../../../test/unit.js";
 import {
   DepositAssetMismatchError,
   isRequirementApproval,
@@ -10,16 +16,10 @@ import {
   NegativeInputError,
   NonPositiveInputError,
   VaultAssetMismatchError,
-} from "../../../../src/types/index.js";
-import {
-  GauntletWethVaultV1,
-  SteakhouseUsdcVaultV1,
-} from "../../../fixtures/vaultV1.js";
-import {
-  KeyrockUsdcVaultV2,
-  KpkWETHVaultV2,
-} from "../../../fixtures/vaultV2.js";
-import { test } from "../../../setup.js";
+} from "../../types/index.js";
+import { getGeneralAdapterRequirements } from "../requirements/index.js";
+import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
+import { vaultV1MigrateToV2 } from "./migrateToV2.js";
 
 describe("vaultV1MigrateToV2 unit tests", () => {
   afterEach(() => {
