@@ -113,23 +113,21 @@ export const blueBorrow = ({
   }
 
   const actions: Action[] = [];
-  let reallocationFee = 0n;
-  let reallocationPenaltyAssets = 0n;
 
   if (authorizationSignature) {
     actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
   }
 
-  if (reallocations && reallocations.length > 0) {
-    const result = buildReallocationActions({
-      chainId,
-      reallocations,
-      targetMarketParams: marketParams,
-    });
-    actions.push(...result.actions);
-    reallocationFee = result.fee;
-    reallocationPenaltyAssets = result.penaltyAssets;
-  }
+  const {
+    actions: reallocationActions,
+    fee: reallocationFee,
+    penaltyAssets: reallocationPenaltyAssets,
+  } = buildReallocationActions({
+    chainId,
+    reallocations,
+    targetMarketParams: marketParams,
+  });
+  actions.push(...reallocationActions);
 
   actions.push({
     type: "morphoBorrow",

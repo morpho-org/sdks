@@ -274,23 +274,21 @@ export const blueRefinance = ({
   });
 
   const actions: Action[] = [];
-  let reallocationFee = 0n;
-  let reallocationPenaltyAssets = 0n;
 
   if (authorizationSignature) {
     actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
   }
 
-  if (targetReallocations && targetReallocations.length > 0) {
-    const result = buildReallocationActions({
-      chainId,
-      reallocations: targetReallocations,
-      targetMarketParams: targetParams,
-    });
-    actions.push(...result.actions);
-    reallocationFee = result.fee;
-    reallocationPenaltyAssets = result.penaltyAssets;
-  }
+  const {
+    actions: reallocationActions,
+    fee: reallocationFee,
+    penaltyAssets: reallocationPenaltyAssets,
+  } = buildReallocationActions({
+    chainId,
+    reallocations: targetReallocations,
+    targetMarketParams: targetParams,
+  });
+  actions.push(...reallocationActions);
 
   actions.push({
     type: "morphoSupplyCollateral",

@@ -15,7 +15,7 @@ import type { BlueReallocation } from "../../types/index.js";
  *
  * @param params - Reallocation encoding inputs.
  * @param params.chainId - Chain where the bundle will execute.
- * @param params.reallocations - PublicAllocator V1 and BluePublicAllocator reallocations in execution order.
+ * @param params.reallocations - Optional PublicAllocator V1 and BluePublicAllocator reallocations in execution order.
  * @param params.targetMarketParams - Target market params derived from the enclosing Blue action.
  * @param params.penaltyFundingSource - Account that already holds the aggregate V2 penalty. Uses
  *   the transaction initiator by default; same-token collateral funding can pre-fund
@@ -35,12 +35,12 @@ import type { BlueReallocation } from "../../types/index.js";
  */
 export const buildReallocationActions = ({
   chainId,
-  reallocations,
+  reallocations = [],
   targetMarketParams,
   penaltyFundingSource = "initiator",
 }: {
   readonly chainId: number;
-  readonly reallocations: readonly BlueReallocation[];
+  readonly reallocations?: readonly BlueReallocation[];
   readonly targetMarketParams: MarketParams;
   readonly penaltyFundingSource?: "initiator" | "generalAdapter1";
 }): {

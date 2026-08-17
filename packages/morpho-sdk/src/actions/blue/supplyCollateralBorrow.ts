@@ -167,17 +167,14 @@ export const blueSupplyCollateralBorrow = ({
     marketParams.collateralToken,
     marketParams.loanToken,
   );
-  const reallocationResult =
-    reallocations && reallocations.length > 0
-      ? buildReallocationActions({
-          chainId,
-          reallocations,
-          targetMarketParams: marketParams,
-          penaltyFundingSource: usesSharedFundingToken
-            ? "generalAdapter1"
-            : "initiator",
-        })
-      : { actions: [], fee: 0n, penaltyAssets: 0n };
+  const reallocationResult = buildReallocationActions({
+    chainId,
+    reallocations,
+    targetMarketParams: marketParams,
+    penaltyFundingSource: usesSharedFundingToken
+      ? "generalAdapter1"
+      : "initiator",
+  });
   const erc20FundingAmount =
     amount + (usesSharedFundingToken ? reallocationResult.penaltyAssets : 0n);
 

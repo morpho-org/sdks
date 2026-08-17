@@ -597,7 +597,6 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
         : 0n;
     const reallocations: VaultV2BlueReallocation[] = [];
     let remainingRequiredAssets = requiredAssets;
-    let totalReallocated = 0n;
 
     for (const reallocation of discovered) {
       const assets = MathLib.min(reallocation.assets, remainingRequiredAssets);
@@ -605,15 +604,15 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
 
       reallocations.push({ ...reallocation, assets });
       remainingRequiredAssets -= assets;
-      totalReallocated += assets;
       if (remainingRequiredAssets === 0n) break;
     }
 
-    if (totalReallocated < absoluteShortfall) {
+    const reallocatedAssets = requiredAssets - remainingRequiredAssets;
+    if (reallocatedAssets < absoluteShortfall) {
       throw new InsufficientSharedLiquidityError({
         marketId,
         shortfall: absoluteShortfall,
-        available: totalReallocated,
+        available: reallocatedAssets,
       });
     }
 
