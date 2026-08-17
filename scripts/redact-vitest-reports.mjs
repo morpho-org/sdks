@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import {
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from "node:fs";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const REDACTION = "<redacted-rpc-url>";
@@ -97,11 +102,12 @@ export function sanitizeVitestReports(directory, secrets) {
     );
   }
 
-  const pendingDirectories = [directory];
   let files = 0;
   let replacements = 0;
 
   try {
+    const reportRoot = realpathSync(resolve(directory));
+    const pendingDirectories = [reportRoot];
     while (pendingDirectories.length > 0) {
       const currentDirectory = pendingDirectories.pop();
       if (currentDirectory === undefined) break;
@@ -109,7 +115,17 @@ export function sanitizeVitestReports(directory, secrets) {
       for (const entry of readdirSync(currentDirectory, {
         withFileTypes: true,
       })) {
-        const path = join(currentDirectory, entry.name);
+        const path = realpathSync(resolve(currentDirectory, entry.name));
+        const relativePath = relative(reportRoot, path);
+        if (
+          relativePath === ".." ||
+          relativePath.startsWith(`..${sep}`) ||
+          isAbsolute(relativePath)
+        ) {
+          throw new VitestReportSanitizationError(
+            `Report entry at "${path}" is outside "${reportRoot}". Do not upload the Vitest report.`,
+          );
+        }
         if (entry.isDirectory()) {
           pendingDirectories.push(path);
           continue;

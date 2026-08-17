@@ -3,6 +3,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -97,6 +98,20 @@ describe("sanitizeVitestReports", () => {
     expect(() =>
       sanitizeVitestReports(createTempDirectory(), ["https://rpc.example"]),
     ).toThrow(VitestReportSanitizationError);
+  });
+
+  test("error: VitestReportSanitizationError rejects links outside the report root", () => {
+    const reportDirectory = createTempDirectory();
+    const outsideDirectory = createTempDirectory();
+    const outsideReport = join(outsideDirectory, "outside.json");
+    const secret = "https://rpc.example/private-key";
+    writeFileSync(outsideReport, secret);
+    symlinkSync(outsideReport, join(reportDirectory, "escape.json"));
+
+    expect(() => sanitizeVitestReports(reportDirectory, [secret])).toThrow(
+      VitestReportSanitizationError,
+    );
+    expect(readFileSync(outsideReport, "utf8")).toBe(secret);
   });
 });
 
