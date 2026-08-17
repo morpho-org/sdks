@@ -91,6 +91,30 @@ describe.sequential("createViemTest compatibility", () => {
     expect(stopAndWaitMock).toHaveBeenCalledOnce();
   });
 
+  test("behavior: retries setup before yielding the client", async () => {
+    const setupError = new Error("temporary setup failure");
+    setBlockTimestampIntervalMock
+      .mockRejectedValueOnce(setupError)
+      .mockResolvedValueOnce(undefined);
+    testState.spawnAnvilMock.mockResolvedValue({
+      rpcUrl: "http://localhost:31001",
+      stop: vi.fn(),
+      stopAndWait: stopAndWaitMock,
+    });
+    createViemTest(mainnet, { forkUrl: "https://rpc.example" });
+
+    const clientFixture = testState.clientFixture as VitestClientFixture;
+    const useMock = vi.fn(async (client) => {
+      expect(client).toBe(fakeClient);
+    });
+    await clientFixture({}, useMock);
+
+    expect(testState.spawnAnvilMock).toHaveBeenCalledTimes(2);
+    expect(setBlockTimestampIntervalMock).toHaveBeenCalledTimes(2);
+    expect(stopAndWaitMock).toHaveBeenCalledTimes(2);
+    expect(useMock).toHaveBeenCalledOnce();
+  });
+
   test("error: AnvilCleanupError is not retried", async () => {
     const cleanupError = new AnvilCleanupError("cleanup failed");
     testState.spawnAnvilMock.mockRejectedValue(cleanupError);
