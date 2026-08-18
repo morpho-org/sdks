@@ -407,7 +407,7 @@ For each file with findings, build a complete understanding before touching anyt
    grep -rn "<exported-symbol-name>" packages/
    ```
 
-5. **If the change is in a public API**, read the corresponding `packages/<pkg>/src/index.ts` re-export entry point AND any test file under `packages/<pkg>/test/` that exercises the symbol.
+5. **If the change is in a public API**, read the corresponding `packages/<pkg>/src/index.ts` re-export entry point, relevant colocated `packages/<pkg>/src/**/*.test.ts` unit tests, and `packages/<pkg>/test/**/*.integration.test.ts` integration tests.
 
 6. **If the comment cites an originating commit/PR** (e.g., "introduced in #1234" or `git blame` output), read the other files touched by that commit for context:
 

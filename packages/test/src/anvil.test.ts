@@ -1,5 +1,4 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
 import {
   existsSync,
@@ -9,7 +8,6 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { setTimeout } from "node:timers/promises";
@@ -32,6 +30,7 @@ vi.mock("node:fs", async (importOriginal) => {
 });
 
 import { spawnAnvil } from "./anvil.js";
+import { anvilSlotLockDirectory } from "./anvilProcessSlot.js";
 import {
   AnvilCleanupError,
   AnvilProcessError,
@@ -125,9 +124,7 @@ describe.sequential("spawnAnvil", () => {
       "custom-anvil",
       expect.any(Array),
       expect.objectContaining({
-        env: expect.objectContaining({
-          MORPHO_TEST_ANVIL_PROCESS_IDENTITY: expect.any(String),
-        }),
+        argv0: expect.stringMatching(/^morpho-test-anvil-/),
       }),
     );
     expect(spawnMock.mock.calls[0]?.[1]).not.toContain(
@@ -139,8 +136,8 @@ describe.sequential("spawnAnvil", () => {
     await Promise.resolve();
     expect(subprocess.kill).not.toHaveBeenCalled();
 
-    subprocess.stdout.write("Listening on 127.0.0.");
-    subprocess.stdout.write("1:31001\n");
+    subprocess.stdout.write("Listening on 127.0.0.1:310");
+    subprocess.stdout.write("01\n");
     const spawned = await spawnedPromise;
     expect(spawned.rpcUrl).toBe("http://localhost:31001");
 
@@ -166,11 +163,11 @@ describe.sequential("spawnAnvil", () => {
 
       const forkUrlSplit = Math.floor(forkUrl.length / 2);
       subprocess.stderr.write(
-        `provider request failed for ${forkUrl.slice(0, forkUrlSplit)}`,
+        `provider request failed for ${forkUrl.slice(0, forkUrlSplit)}\u001b[31m`,
       );
-      subprocess.stderr.write(forkUrl.slice(forkUrlSplit));
+      subprocess.stderr.write(`\u001b[0m${forkUrl.slice(forkUrlSplit)}\n`);
       expect(warning).toHaveBeenCalledWith(
-        "[port 31012] Anvil emitted stderr output. Details were redacted because a fork URL is configured.",
+        "[port 31012] provider request failed for <redacted-rpc-url>",
       );
       expect(warning).toHaveBeenCalledOnce();
       expect(String(warning.mock.calls)).not.toContain(forkUrl);
@@ -182,22 +179,29 @@ describe.sequential("spawnAnvil", () => {
 
   test("error: AnvilProcessError surfaces an unexpected post-startup exit", async () => {
     process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "0";
+    const forkUrl = "https://user:secret@rpc.example/v1/private-key";
     const subprocess = createFakeAnvilProcess({ closeOnSignal: false });
     spawnMock.mockReturnValue(
       subprocess as unknown as ChildProcessWithoutNullStreams,
     );
 
-    const spawnedPromise = spawnAnvil({ chainId: 1 });
+    const spawnedPromise = spawnAnvil({ chainId: 1, forkUrl });
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
     subprocess.stdout.write("Listening on 127.0.0.1:31013\n");
     const spawned = await spawnedPromise;
 
+    subprocess.stderr.write(`provider request failed for ${forkUrl}`);
     subprocess.exitCode = 1;
     subprocess.emit("close", 1, null);
 
-    await expect(spawned.stopAndWait()).rejects.toBeInstanceOf(
-      AnvilProcessError,
+    const error = await spawned
+      .stopAndWait()
+      .catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(AnvilProcessError);
+    expect(String(error)).toContain(
+      "provider request failed for <redacted-rpc-url>",
     );
+    expect(String(error)).not.toContain(forkUrl);
   });
 
   test("error: AnvilProcessError surfaces an exit observed before close", async () => {
@@ -260,7 +264,9 @@ describe.sequential("spawnAnvil", () => {
     const error = await spawnedPromise.catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(AnvilStartupError);
     if (!(error instanceof AnvilStartupError)) throw error;
-    expect(String(error.cause)).toContain("redacted");
+    expect(String(error.cause)).toContain(
+      "failed to spawn --fork-url <redacted-rpc-url>",
+    );
     expect(String(error.cause)).not.toContain(forkUrl);
     expect(error.cause).not.toHaveProperty("spawnargs");
     expect(subprocess.kill).toHaveBeenCalledWith("SIGINT");
@@ -286,7 +292,9 @@ describe.sequential("spawnAnvil", () => {
 
     const error = await spawnedPromise.catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(AnvilStartupError);
-    expect(String(error)).toContain("redacted");
+    expect(String(error)).toContain(
+      "provider request failed for <redacted-rpc-url>",
+    );
     expect(String(error)).not.toContain(forkUrl);
   });
 
@@ -308,16 +316,10 @@ describe.sequential("spawnAnvil", () => {
     process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "1";
     process.env.MORPHO_TEST_ANVIL_RUN_ID = `unit-startup-timeout-${process.pid}`;
     const forkUrl = "https://startup-timeout-rpc.example";
-    const rpcId = createHash("sha256")
-      .update(forkUrl)
-      .digest("hex")
-      .slice(0, 16);
-    const lockDirectory = join(
-      tmpdir(),
-      "morpho-test-anvil",
-      process.env.MORPHO_TEST_ANVIL_RUN_ID,
-      rpcId,
-    );
+    const lockDirectory = anvilSlotLockDirectory({
+      forkUrl,
+      runId: process.env.MORPHO_TEST_ANVIL_RUN_ID,
+    });
     const stalledProcess = createFakeAnvilProcess({ closeOnSignal: false });
     const replacementProcess = createFakeAnvilProcess();
     spawnMock
@@ -362,16 +364,10 @@ describe.sequential("spawnAnvil", () => {
     process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "1";
     process.env.MORPHO_TEST_ANVIL_RUN_ID = `unit-slot-cancel-${process.pid}`;
     const forkUrl = "https://slot-cancel-rpc.example";
-    const rpcId = createHash("sha256")
-      .update(forkUrl)
-      .digest("hex")
-      .slice(0, 16);
-    const lockDirectory = join(
-      tmpdir(),
-      "morpho-test-anvil",
-      process.env.MORPHO_TEST_ANVIL_RUN_ID,
-      rpcId,
-    );
+    const lockDirectory = anvilSlotLockDirectory({
+      forkUrl,
+      runId: process.env.MORPHO_TEST_ANVIL_RUN_ID,
+    });
     const firstProcess = createFakeAnvilProcess({ closeOnSignal: false });
     spawnMock.mockReturnValue(
       firstProcess as unknown as ChildProcessWithoutNullStreams,
@@ -517,16 +513,10 @@ describe.sequential("spawnAnvil", () => {
     process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "1";
     process.env.MORPHO_TEST_ANVIL_RUN_ID = `unit-release-retry-${process.pid}`;
     const forkUrl = "https://release-retry-rpc.example";
-    const rpcId = createHash("sha256")
-      .update(forkUrl)
-      .digest("hex")
-      .slice(0, 16);
-    const lockDirectory = join(
-      tmpdir(),
-      "morpho-test-anvil",
-      process.env.MORPHO_TEST_ANVIL_RUN_ID,
-      rpcId,
-    );
+    const lockDirectory = anvilSlotLockDirectory({
+      forkUrl,
+      runId: process.env.MORPHO_TEST_ANVIL_RUN_ID,
+    });
     const lockPath = join(lockDirectory, "0.lock");
     const actualFs = await vi.importActual<typeof import("node:fs")>("node:fs");
     let releaseAttempts = 0;
@@ -569,16 +559,10 @@ describe.sequential("spawnAnvil", () => {
     process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "1";
     process.env.MORPHO_TEST_ANVIL_RUN_ID = `unit-release-error-${process.pid}`;
     const forkUrl = "https://release-error-rpc.example";
-    const rpcId = createHash("sha256")
-      .update(forkUrl)
-      .digest("hex")
-      .slice(0, 16);
-    const lockDirectory = join(
-      tmpdir(),
-      "morpho-test-anvil",
-      process.env.MORPHO_TEST_ANVIL_RUN_ID,
-      rpcId,
-    );
+    const lockDirectory = anvilSlotLockDirectory({
+      forkUrl,
+      runId: process.env.MORPHO_TEST_ANVIL_RUN_ID,
+    });
     const lockPath = join(lockDirectory, "0.lock");
     const actualFs = await vi.importActual<typeof import("node:fs")>("node:fs");
     let releaseAttempts = 0;
@@ -616,16 +600,10 @@ describe.sequential("spawnAnvil", () => {
     process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "1";
     process.env.MORPHO_TEST_ANVIL_RUN_ID = `unit-exit-release-error-${process.pid}`;
     const forkUrl = "https://exit-release-error-rpc.example";
-    const rpcId = createHash("sha256")
-      .update(forkUrl)
-      .digest("hex")
-      .slice(0, 16);
-    const lockDirectory = join(
-      tmpdir(),
-      "morpho-test-anvil",
-      process.env.MORPHO_TEST_ANVIL_RUN_ID,
-      rpcId,
-    );
+    const lockDirectory = anvilSlotLockDirectory({
+      forkUrl,
+      runId: process.env.MORPHO_TEST_ANVIL_RUN_ID,
+    });
     const lockPath = join(lockDirectory, "0.lock");
     const actualFs = await vi.importActual<typeof import("node:fs")>("node:fs");
     renameSyncMock.mockImplementation((oldPath, newPath) => {
@@ -669,16 +647,10 @@ describe.sequential("spawnAnvil", () => {
     process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "1";
     process.env.MORPHO_TEST_ANVIL_RUN_ID = `unit-startup-cleanup-error-${process.pid}`;
     const forkUrl = "https://startup-cleanup-error-rpc.example";
-    const rpcId = createHash("sha256")
-      .update(forkUrl)
-      .digest("hex")
-      .slice(0, 16);
-    const lockDirectory = join(
-      tmpdir(),
-      "morpho-test-anvil",
-      process.env.MORPHO_TEST_ANVIL_RUN_ID,
-      rpcId,
-    );
+    const lockDirectory = anvilSlotLockDirectory({
+      forkUrl,
+      runId: process.env.MORPHO_TEST_ANVIL_RUN_ID,
+    });
     const lockPath = join(lockDirectory, "0.lock");
     const actualFs = await vi.importActual<typeof import("node:fs")>("node:fs");
     renameSyncMock.mockImplementation((oldPath, newPath) => {
@@ -717,16 +689,10 @@ describe.sequential("spawnAnvil", () => {
     process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "1";
     process.env.MORPHO_TEST_ANVIL_RUN_ID = `unit-stop-release-error-${process.pid}`;
     const forkUrl = "https://stop-release-error-rpc.example";
-    const rpcId = createHash("sha256")
-      .update(forkUrl)
-      .digest("hex")
-      .slice(0, 16);
-    const lockDirectory = join(
-      tmpdir(),
-      "morpho-test-anvil",
-      process.env.MORPHO_TEST_ANVIL_RUN_ID,
-      rpcId,
-    );
+    const lockDirectory = anvilSlotLockDirectory({
+      forkUrl,
+      runId: process.env.MORPHO_TEST_ANVIL_RUN_ID,
+    });
     const lockPath = join(lockDirectory, "0.lock");
     const actualFs = await vi.importActual<typeof import("node:fs")>("node:fs");
     renameSyncMock.mockImplementation((oldPath, newPath) => {
@@ -767,16 +733,10 @@ describe.sequential("spawnAnvil", () => {
     process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "1";
     process.env.MORPHO_TEST_ANVIL_RUN_ID = `unit-release-timeout-${process.pid}`;
     const forkUrl = "https://release-timeout-rpc.example";
-    const rpcId = createHash("sha256")
-      .update(forkUrl)
-      .digest("hex")
-      .slice(0, 16);
-    const lockDirectory = join(
-      tmpdir(),
-      "morpho-test-anvil",
-      process.env.MORPHO_TEST_ANVIL_RUN_ID,
-      rpcId,
-    );
+    const lockDirectory = anvilSlotLockDirectory({
+      forkUrl,
+      runId: process.env.MORPHO_TEST_ANVIL_RUN_ID,
+    });
     const lockPath = join(lockDirectory, "0.lock");
     const actualFs = await vi.importActual<typeof import("node:fs")>("node:fs");
     renameSyncMock.mockImplementation((oldPath, newPath) => {
@@ -867,16 +827,10 @@ describe.sequential("spawnAnvil", () => {
     process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "1";
     process.env.MORPHO_TEST_ANVIL_RUN_ID = `unit-stale-${process.pid}`;
     const forkUrl = "https://stale-rpc.example";
-    const rpcId = createHash("sha256")
-      .update(forkUrl)
-      .digest("hex")
-      .slice(0, 16);
-    const lockDirectory = join(
-      tmpdir(),
-      "morpho-test-anvil",
-      process.env.MORPHO_TEST_ANVIL_RUN_ID,
-      rpcId,
-    );
+    const lockDirectory = anvilSlotLockDirectory({
+      forkUrl,
+      runId: process.env.MORPHO_TEST_ANVIL_RUN_ID,
+    });
     const lockPath = join(lockDirectory, "0.lock");
     mkdirSync(lockPath, { recursive: true });
     // This PID is above the supported range on CI and local test platforms.
@@ -905,16 +859,10 @@ describe.sequential("spawnAnvil", () => {
     process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "1";
     process.env.MORPHO_TEST_ANVIL_RUN_ID = `unit-owner-race-${process.pid}`;
     const forkUrl = "https://owner-race-rpc.example";
-    const rpcId = createHash("sha256")
-      .update(forkUrl)
-      .digest("hex")
-      .slice(0, 16);
-    const lockDirectory = join(
-      tmpdir(),
-      "morpho-test-anvil",
-      process.env.MORPHO_TEST_ANVIL_RUN_ID,
-      rpcId,
-    );
+    const lockDirectory = anvilSlotLockDirectory({
+      forkUrl,
+      runId: process.env.MORPHO_TEST_ANVIL_RUN_ID,
+    });
     const lockPath = join(lockDirectory, "0.lock");
     const ownerPath = join(lockPath, "owner");
     const stalePid = 2_147_483_646;

@@ -1,3 +1,5 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 const { execFileSyncMock } = vi.hoisted(() => ({
@@ -10,7 +12,8 @@ vi.mock("node:child_process", async (importOriginal) => {
 });
 
 import {
-  ANVIL_PROCESS_IDENTITY_ENV,
+  ANVIL_PROCESS_IDENTITY_PREFIX,
+  anvilSlotLockDirectory,
   terminateAbandonedAnvilProcess,
 } from "./anvilProcessSlot.js";
 import { AnvilCleanupError } from "./errors.js";
@@ -21,13 +24,36 @@ afterEach(() => {
   execFileSyncMock.mockReset();
 });
 
+describe("anvilSlotLockDirectory", () => {
+  test("default", () => {
+    const directory = anvilSlotLockDirectory({
+      forkUrl: "https://rpc.example/private-key",
+      runId: "ci/run:123",
+    });
+
+    expect(directory).toBe(
+      join(tmpdir(), "morpho-test-anvil", "ci_run_123", "dcfeeb1a1f01e810"),
+    );
+    expect(directory).not.toContain("private-key");
+  });
+
+  test("behavior: uses the default scope for an empty run identifier", () => {
+    expect(
+      anvilSlotLockDirectory({
+        forkUrl: "https://rpc.example",
+        runId: "",
+      }),
+    ).toBe(join(tmpdir(), "morpho-test-anvil", "default", "b6bbda0d3a898dbb"));
+  });
+});
+
 describe.sequential("terminateAbandonedAnvilProcess", () => {
   test("behavior: never signals a process whose PID was reused", async () => {
     const pid = 41_001;
     const identity = "expected-child";
     const killSpy = vi.spyOn(process, "kill").mockReturnValue(true);
     execFileSyncMock.mockReturnValue(
-      `anvil ${ANVIL_PROCESS_IDENTITY_ENV}=different-child`,
+      `${ANVIL_PROCESS_IDENTITY_PREFIX}different-child`,
     );
 
     await terminateAbandonedAnvilProcess(pid, identity);
@@ -36,11 +62,18 @@ describe.sequential("terminateAbandonedAnvilProcess", () => {
     expect(killSpy).toHaveBeenCalledWith(pid, 0);
     expect(killSpy).not.toHaveBeenCalledWith(pid, "SIGINT");
     expect(killSpy).not.toHaveBeenCalledWith(pid, "SIGKILL");
+    expect(String(execFileSyncMock.mock.calls)).not.toContain("eww");
+    expect(String(execFileSyncMock.mock.calls)).not.toContain("command=");
   });
 
-  test("error: preserves process identity and liveness failures", async () => {
+  test("error: discards process command output from identity failures", async () => {
     const pid = 41_004;
-    const processDescriptionError = new Error("ps failed");
+    const secret = "https://rpc.example/private-key";
+    const processIdentityError = Object.assign(new Error("ps failed"), {
+      output: [null, secret, secret],
+      stderr: secret,
+      stdout: secret,
+    });
     const inspectionError = new Error("permission denied");
     vi.spyOn(process, "kill")
       .mockReturnValueOnce(true)
@@ -48,7 +81,7 @@ describe.sequential("terminateAbandonedAnvilProcess", () => {
         throw inspectionError;
       });
     execFileSyncMock.mockImplementation(() => {
-      throw processDescriptionError;
+      throw processIdentityError;
     });
 
     const error = await terminateAbandonedAnvilProcess(
@@ -60,10 +93,13 @@ describe.sequential("terminateAbandonedAnvilProcess", () => {
     if (!(error instanceof AnvilCleanupError)) throw error;
     expect(error.cause).toBeInstanceOf(AggregateError);
     if (!(error.cause instanceof AggregateError)) throw error.cause;
-    expect(error.cause.errors).toEqual([
-      processDescriptionError,
-      inspectionError,
-    ]);
+    const [identityFailure, livenessFailure] = error.cause.errors;
+    expect(identityFailure).toBeInstanceOf(AnvilCleanupError);
+    expect(identityFailure).not.toHaveProperty("output");
+    expect(identityFailure).not.toHaveProperty("stderr");
+    expect(identityFailure).not.toHaveProperty("stdout");
+    expect(String(identityFailure)).not.toContain(secret);
+    expect(livenessFailure).toBe(inspectionError);
   });
 
   test("behavior: force-kills an identified child after graceful timeout", async () => {
@@ -83,7 +119,7 @@ describe.sequential("terminateAbandonedAnvilProcess", () => {
         return true;
       });
     execFileSyncMock.mockReturnValue(
-      `anvil ${ANVIL_PROCESS_IDENTITY_ENV}=${identity}`,
+      `${ANVIL_PROCESS_IDENTITY_PREFIX}${identity}`,
     );
 
     const termination = terminateAbandonedAnvilProcess(pid, identity);
@@ -99,7 +135,7 @@ describe.sequential("terminateAbandonedAnvilProcess", () => {
     const identity = "unkillable-child";
     const killSpy = vi.spyOn(process, "kill").mockReturnValue(true);
     execFileSyncMock.mockReturnValue(
-      `anvil ${ANVIL_PROCESS_IDENTITY_ENV}=${identity}`,
+      `${ANVIL_PROCESS_IDENTITY_PREFIX}${identity}`,
     );
 
     const termination = terminateAbandonedAnvilProcess(pid, identity);

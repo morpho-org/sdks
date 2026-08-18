@@ -16,7 +16,7 @@ const RPC_SECRET_ENV_NAMES = [
   "ARBITRUM_RPC_URL",
 ];
 
-/** Error thrown when Vitest reports cannot be verified safe for upload. */
+/** Error thrown when Vitest reports cannot be sanitized for upload. */
 export class VitestReportSanitizationError extends Error {
   /**
    * Creates a report-sanitization error.
@@ -31,7 +31,7 @@ export class VitestReportSanitizationError extends Error {
 }
 
 /**
- * Redacts raw, normalized-URL, JSON-escaped, and URL-encoded secret representations.
+ * Redacts raw, normalized, serialized, and identifying URL fragments.
  *
  * @param {string} content Report contents to sanitize.
  * @param {readonly string[]} secrets Secret values that must not remain.
@@ -49,7 +49,17 @@ export function redactSecrets(content, secrets) {
     if (secret === "") continue;
     const serializedValues = new Set([secret]);
     try {
-      serializedValues.add(new URL(secret).href);
+      const url = new URL(secret);
+      serializedValues.add(url.href);
+      serializedValues.add(url.hostname);
+      if (url.host !== url.hostname) serializedValues.add(url.host);
+      if (url.username) serializedValues.add(url.username);
+      if (url.password) serializedValues.add(url.password);
+      const lastPathSegment = url.pathname.split("/").filter(Boolean).at(-1);
+      if (lastPathSegment) serializedValues.add(lastPathSegment);
+      for (const value of url.searchParams.values()) {
+        if (value) serializedValues.add(value);
+      }
     } catch {
       // Non-URL secrets still need their raw serialization variants redacted.
     }
@@ -72,13 +82,6 @@ export function redactSecrets(content, secrets) {
     redacted = redacted.replaceAll(representation, REDACTION);
   }
 
-  for (const representation of representations) {
-    if (!redacted.includes(representation)) continue;
-    throw new VitestReportSanitizationError(
-      "A protected RPC credential remains after redaction. Do not upload the Vitest report.",
-    );
-  }
-
   return { content: redacted, replacements };
 }
 
@@ -88,7 +91,7 @@ export function redactSecrets(content, secrets) {
  * @param {string} directory Report directory to sanitize.
  * @param {readonly string[]} secrets Secret values that must not be uploaded.
  * @returns {{ files: number, replacements: number }} Scanned file and replacement counts.
- * @throws {VitestReportSanitizationError} When reports cannot be read, rewritten, or verified.
+ * @throws {VitestReportSanitizationError} When reports cannot be read or rewritten.
  * @example
  * ```js
  * sanitizeVitestReports("vitest-reports", [process.env.MAINNET_RPC_URL]);
@@ -98,7 +101,7 @@ export function sanitizeVitestReports(directory, secrets) {
   const protectedSecrets = [...new Set(secrets.filter(Boolean))];
   if (protectedSecrets.length === 0) {
     throw new VitestReportSanitizationError(
-      "No RPC credentials were provided for report verification. Do not upload the Vitest report.",
+      "No RPC credentials were provided for report redaction. Do not upload the Vitest report.",
     );
   }
 
@@ -186,7 +189,7 @@ if (
       RPC_SECRET_ENV_NAMES.map((name) => process.env[name] ?? ""),
     );
     process.stdout.write(
-      `Verified ${result.files} Vitest report file(s); redacted ${result.replacements} credential occurrence(s).\n`,
+      `Sanitized ${result.files} Vitest report file(s); redacted ${result.replacements} credential occurrence(s).\n`,
     );
   } catch (error) {
     const message =

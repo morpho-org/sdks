@@ -12,6 +12,7 @@ import {
   AnvilCleanupError,
   AnvilProcessError,
   AnvilStartupError,
+  createAnvilFailureCleanupError,
 } from "./errors.js";
 
 // Vitest needs to serialize BigInts to JSON, so we need to add a toJSON method to BigInt.prototype.
@@ -124,15 +125,14 @@ export const createViemTest = <chain extends Chain>(
                   },
                 );
               else
-                throw new AnvilCleanupError(
-                  "The Vitest fixture failed during setup and Anvil cleanup also failed. Inspect both failures and stop the process manually before retrying.",
-                  {
-                    cause: new AggregateError(
-                      [setupFailure, cleanupError],
-                      "Vitest fixture setup and Anvil cleanup both failed.",
-                    ),
-                  },
-                );
+                throw createAnvilFailureCleanupError({
+                  cleanupError,
+                  failure: setupFailure,
+                  message:
+                    "The Vitest fixture failed during setup and Anvil cleanup also failed. Inspect both failures and stop the process manually before retrying.",
+                  summary:
+                    "Vitest fixture setup and Anvil cleanup both failed.",
+                });
             }
           }
 
@@ -183,15 +183,13 @@ export const createViemTest = <chain extends Chain>(
       }
 
       if (fixtureFailed && cleanupFailed)
-        throw new AnvilCleanupError(
-          "The Vitest fixture failed and Anvil cleanup also failed. Inspect both failures and stop the process manually before retrying.",
-          {
-            cause: new AggregateError(
-              [fixtureFailure, cleanupFailure],
-              "Vitest fixture and Anvil cleanup both failed.",
-            ),
-          },
-        );
+        throw createAnvilFailureCleanupError({
+          cleanupError: cleanupFailure,
+          failure: fixtureFailure,
+          message:
+            "The Vitest fixture failed and Anvil cleanup also failed. Inspect both failures and stop the process manually before retrying.",
+          summary: "Vitest fixture and Anvil cleanup both failed.",
+        });
       if (fixtureFailed) throw fixtureFailure;
       if (cleanupFailed) throw cleanupFailure;
     },

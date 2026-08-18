@@ -2,7 +2,7 @@ import { test } from "@playwright/test";
 import { type Chain, formatUnits, http } from "viem";
 import { type AnvilArgs, spawnAnvil } from "./anvil.js";
 import { type AnvilTestClient, createAnvilTestClient } from "./client.js";
-import { AnvilCleanupError } from "./errors.js";
+import { createAnvilFailureCleanupError } from "./errors.js";
 
 export interface PlaywrightTestContext<chain extends Chain = Chain> {
   client: AnvilTestClient<chain>;
@@ -52,15 +52,13 @@ export const createViemTest = <chain extends Chain>(
       }
 
       if (fixtureFailed && cleanupFailed)
-        throw new AnvilCleanupError(
-          "The Playwright fixture failed and Anvil cleanup also failed. Inspect both failures and stop the process manually before retrying.",
-          {
-            cause: new AggregateError(
-              [fixtureFailure, cleanupFailure],
-              "Playwright fixture and Anvil cleanup both failed.",
-            ),
-          },
-        );
+        throw createAnvilFailureCleanupError({
+          cleanupError: cleanupFailure,
+          failure: fixtureFailure,
+          message:
+            "The Playwright fixture failed and Anvil cleanup also failed. Inspect both failures and stop the process manually before retrying.",
+          summary: "Playwright fixture and Anvil cleanup both failed.",
+        });
       if (fixtureFailed) throw fixtureFailure;
       if (cleanupFailed) throw cleanupFailure;
     },

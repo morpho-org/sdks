@@ -18,8 +18,8 @@ const ANVIL_PROCESS_SLOT_RETRY_DELAY_MS = 25;
 const ANVIL_ABANDONED_PROCESS_GRACE_PERIOD_MS = 1_000;
 const ANVIL_ABANDONED_PROCESS_KILL_TIMEOUT_MS = 5_000;
 
-/** Environment marker used to distinguish an owned Anvil child from a reused PID. @internal */
-export const ANVIL_PROCESS_IDENTITY_ENV = "MORPHO_TEST_ANVIL_PROCESS_IDENTITY";
+/** `argv[0]` prefix used to distinguish an owned Anvil child from a reused PID. @internal */
+export const ANVIL_PROCESS_IDENTITY_PREFIX = "morpho-test-anvil-";
 
 const hasErrorCode = (error: unknown, code: string) =>
   error instanceof Error && "code" in error && error.code === code;
@@ -38,6 +38,42 @@ export interface AnvilProcessSlot {
 
 type AbandonedAnvilProcessState = "absent" | "owned" | "reused";
 
+/**
+ * Derives the temporary directory used to coordinate Anvil slots for one fork provider.
+ *
+ * Sanitizes the run identifier for filesystem use and hashes the fork URL so provider
+ * credentials never appear in the path.
+ *
+ * @param parameters.forkUrl - Remote JSON-RPC URL shared by the coordinated Anvil processes.
+ * @param parameters.runId - Identifier that scopes coordination to one test run. Unsupported
+ *   filesystem characters become underscores; an empty identifier uses `default`.
+ * @returns The absolute run-specific slot directory ending in a 16-character SHA-256 identifier
+ *   for the fork URL. The returned path never contains the URL itself.
+ * @example
+ * ```ts
+ * import { anvilSlotLockDirectory } from "@morpho-org/test";
+ *
+ * const directory = anvilSlotLockDirectory({
+ *   forkUrl: "https://rpc.example",
+ *   runId: "ci-123",
+ * });
+ * // directory is an absolute string path that does not expose the fork URL.
+ * ```
+ */
+export const anvilSlotLockDirectory = (parameters: {
+  readonly forkUrl: string;
+  readonly runId: string;
+}): string => {
+  const safeRunId =
+    parameters.runId.replaceAll(/[^a-zA-Z0-9_-]/g, "_") || "default";
+  const rpcId = createHash("sha256")
+    .update(parameters.forkUrl)
+    .digest("hex")
+    .slice(0, 16);
+
+  return join(tmpdir(), "morpho-test-anvil", safeRunId, rpcId);
+};
+
 const inspectAbandonedAnvilProcess = (
   pid: number,
   identity: string,
@@ -52,45 +88,51 @@ const inspectAbandonedAnvilProcess = (
     );
   }
 
-  let processDescription: string;
+  const expectedMarker = `${ANVIL_PROCESS_IDENTITY_PREFIX}${identity}`;
+  let processIdentity: string;
   try {
-    // `eww` includes the full child environment on both BSD and GNU ps. The
-    // random marker survives exec and distinguishes this child from PID reuse.
-    processDescription = execFileSync(
-      "ps",
-      ["eww", "-p", String(pid), "-o", "command="],
-      {
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "ignore"],
-      },
-    );
-  } catch (processDescriptionError) {
+    // Read only argv[0], never the fork URL or inherited environment.
+    processIdentity =
+      process.platform === "linux"
+        ? execFileSync(
+            "head",
+            ["-c", String(expectedMarker.length + 1), `/proc/${pid}/cmdline`],
+            {
+              encoding: "utf8",
+              stdio: ["ignore", "pipe", "ignore"],
+            },
+          ).replace(/\0.*$/s, "")
+        : execFileSync("ps", ["-ww", "-p", String(pid), "-o", "comm="], {
+            encoding: "utf8",
+            stdio: ["ignore", "pipe", "ignore"],
+          }).trim();
+  } catch {
     const message = `Abandoned Anvil process "${pid}" still exists, but its identity could not be verified. Refusing to signal it; inspect the stale lock manually before retrying.`;
+    const processIdentityError = new AnvilCleanupError(
+      "Anvil process identity lookup failed; command output was discarded.",
+    );
     try {
       process.kill(pid, 0);
     } catch (inspectionError) {
       if (hasErrorCode(inspectionError, "ESRCH")) return "absent";
       throw new AnvilCleanupError(message, {
         cause: new AggregateError(
-          [processDescriptionError, inspectionError],
+          [processIdentityError, inspectionError],
           "Anvil process identity and liveness checks both failed.",
         ),
       });
     }
-    throw new AnvilCleanupError(message, { cause: processDescriptionError });
+    throw new AnvilCleanupError(message, { cause: processIdentityError });
   }
 
-  const expectedMarker = `${ANVIL_PROCESS_IDENTITY_ENV}=${identity}`;
-  return processDescription.split(/\s+/).includes(expectedMarker)
-    ? "owned"
-    : "reused";
+  return processIdentity === expectedMarker ? "owned" : "reused";
 };
 
 /**
  * Stops an Anvil process whose owning worker exited without cleaning it up.
  *
  * @param pid Process identifier recorded by the dead worker.
- * @param identity Random identity recorded in both the lock and child environment.
+ * @param identity Random identity recorded in both the lock and child command line.
  * @returns A promise that resolves only after the process no longer exists.
  * @throws {AnvilCleanupError} When the process cannot be signalled or its exit cannot be confirmed.
  * @internal
@@ -215,10 +257,7 @@ export const acquireAnvilProcessSlot = async (parameters: {
 
   assertReservationActive();
   // Vitest workers can be separate processes, so atomic directories form the shared semaphore.
-  const safeRunId = runId.replaceAll(/[^a-zA-Z0-9_-]/g, "_") || "default";
-  // Hash the URL so credentials never appear in the temporary directory name.
-  const rpcId = createHash("sha256").update(forkUrl).digest("hex").slice(0, 16);
-  const lockDirectory = join(tmpdir(), "morpho-test-anvil", safeRunId, rpcId);
+  const lockDirectory = anvilSlotLockDirectory({ forkUrl, runId });
   mkdirSync(lockDirectory, { recursive: true });
 
   const ownerId = `${process.pid}-${randomUUID()}`;

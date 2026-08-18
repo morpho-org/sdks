@@ -1,8 +1,9 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { stripVTControlCharacters } from "node:util";
 import _kebabCase from "lodash.kebabcase";
 import {
-  ANVIL_PROCESS_IDENTITY_ENV,
+  ANVIL_PROCESS_IDENTITY_PREFIX,
   type AnvilProcessSlot,
   acquireAnvilProcessSlot,
 } from "./anvilProcessSlot.js";
@@ -10,22 +11,11 @@ import {
   AnvilCleanupError,
   AnvilProcessError,
   AnvilStartupError,
+  createAnvilFailureCleanupError,
 } from "./errors.js";
 
 const ANVIL_FORCE_KILL_TIMEOUT_MS = 5_000;
 const ANVIL_PROCESS_CLOSE_TIMEOUT_MS = 10_000;
-
-const createAnvilFailureCleanupError = (parameters: {
-  readonly cleanupError: unknown;
-  readonly failure: unknown;
-  readonly message: string;
-}) =>
-  new AnvilCleanupError(parameters.message, {
-    cause: new AggregateError(
-      [parameters.failure, parameters.cleanupError],
-      "Anvil operation and cleanup both failed.",
-    ),
-  });
 
 export interface AnvilArgs {
   /**
@@ -275,6 +265,27 @@ export interface AnvilArgs {
   transactionBlockKeeper?: number | undefined;
 }
 
+const redactAnvilDiagnostic = (diagnostic: string, args: AnvilArgs) => {
+  let redacted = stripVTControlCharacters(diagnostic);
+  const secrets = [
+    args.forkUrl,
+    ...Object.values(args.forkHeader ?? {}),
+  ].filter((secret): secret is string => Boolean(secret));
+
+  for (const secret of secrets) {
+    const representations = new Set([secret]);
+    try {
+      representations.add(new URL(secret).href);
+    } catch {
+      // Header values and non-standard fork URLs still need exact redaction.
+    }
+    for (const representation of representations)
+      redacted = redacted.replaceAll(representation, "<redacted-rpc-url>");
+  }
+
+  return redacted;
+};
+
 /**
  * Converts an object of options to an array of command line arguments.
  *
@@ -401,10 +412,7 @@ export const spawnAnvil = async (
   try {
     const childIdentity = randomUUID();
     const subprocess = spawn(binary, toArgs({ ...anvilArgs, port }), {
-      env: {
-        ...process.env,
-        [ANVIL_PROCESS_IDENTITY_ENV]: childIdentity,
-      },
+      argv0: `${ANVIL_PROCESS_IDENTITY_PREFIX}${childIdentity}`,
     });
     let stopInitiated = false;
     let stopRequested = false;
@@ -414,12 +422,11 @@ export const spawnAnvil = async (
       | undefined;
     let processCloseObserved = false;
     let cleanupAwaited = false;
-    let resolveProcessClosed = () => {};
-    let rejectProcessClosed = (_error: unknown) => {};
-    const processClosed = new Promise<void>((resolve, reject) => {
-      resolveProcessClosed = resolve;
-      rejectProcessClosed = reject;
-    });
+    const {
+      promise: processClosed,
+      resolve: resolveProcessClosed,
+      reject: rejectProcessClosed,
+    } = Promise.withResolvers<void>();
     // Keep `stop()` backward-compatible without hiding a cleanup failure from stop-only callers.
     void processClosed.catch((error) => {
       if (!cleanupAwaited)
@@ -494,15 +501,15 @@ export const spawnAnvil = async (
     await new Promise<void>((resolve, reject) => {
       let settled = false;
       let stderr = "";
-      let forkStderrObserved = false;
-      let forkStderrWarningEmitted = false;
+      let pendingForkStderr = "";
       let stdout = "";
       const startupTimeoutMs =
         Math.max(args.timeout ?? 45_000, 45_000) + 15_000;
       const startupTimeout = globalThis.setTimeout(() => {
+        const details = redactAnvilDiagnostic(stderr, args).trim();
         fail(
           new AnvilStartupError(
-            `Anvil did not start listening within "${startupTimeoutMs}" ms. Check the fork URL and Anvil arguments.`,
+            `Anvil did not start listening within "${startupTimeoutMs}" ms. Check the fork URL and Anvil arguments.${details ? ` ${details}` : ""}`,
           ),
         );
       }, startupTimeoutMs);
@@ -539,7 +546,9 @@ export const spawnAnvil = async (
       subprocess.stdout.on("data", (data) => {
         // Anvil can split its listening message across stdout chunks.
         stdout = `${stdout}${data.toString()}`.slice(-1_024);
-        const listenMatch = stdout.match(/Listening on 127.0.0.1:(\d+)/);
+        const listenMatch = stdout.match(
+          /Listening on 127\.0\.0\.1:(\d+)\r?\n/,
+        );
         if (!listenMatch || settled) return;
         const listenedPort = listenMatch[1];
         if (listenedPort === undefined) return;
@@ -553,21 +562,23 @@ export const spawnAnvil = async (
 
       subprocess.stderr.on("data", (data) => {
         // Startup warnings are diagnostic; only timeout, error, or early close is fatal.
-        if (args.forkUrl) {
-          forkStderrObserved = true;
-          if (settled && !stopRequested && !forkStderrWarningEmitted) {
-            forkStderrWarningEmitted = true;
-            console.warn(
-              `[port ${port || "??"}] Anvil emitted stderr output. Details were redacted because a fork URL is configured.`,
-            );
-          }
+        const dataString = data.toString();
+        stderr = redactAnvilDiagnostic(`${stderr}${dataString}`, args).slice(
+          -4_096,
+        );
+        if (!settled || stopRequested) return;
+        if (!args.forkUrl) {
+          console.warn(`[port ${port || "??"}] ${dataString}`);
           return;
         }
 
-        const dataString = data.toString();
-        stderr = `${stderr}${dataString}`.slice(-4_096);
-        if (settled && !stopRequested)
-          console.warn(`[port ${port || "??"}] ${dataString}`);
+        // Buffer complete lines so a fork URL split across stream chunks is redacted as one value.
+        const lines = `${pendingForkStderr}${dataString}`.split(/\r?\n/);
+        pendingForkStderr = lines.pop() ?? "";
+        for (const line of lines) {
+          const diagnostic = redactAnvilDiagnostic(line, args).trim();
+          if (diagnostic) console.warn(`[port ${port || "??"}] ${diagnostic}`);
+        }
       });
 
       subprocess.once("error", (error) => {
@@ -578,7 +589,7 @@ export const spawnAnvil = async (
             : "";
         const cause = args.forkUrl
           ? new AnvilStartupError(
-              `Anvil subprocess error${errorCode}. Details were redacted because a fork URL is configured.`,
+              `${redactAnvilDiagnostic(error.message, args)}${errorCode}`,
             )
           : error;
         fail(
@@ -591,15 +602,12 @@ export const spawnAnvil = async (
 
       subprocess.once("close", (code, signal) => {
         processCloseObserved = true;
+        const details = redactAnvilDiagnostic(stderr, args).trim();
         const unexpectedExit =
           settled && !stopRequested
             ? new AnvilProcessError(
                 `Anvil exited unexpectedly after startup (code "${code}", signal "${signal}"). Retry the test and inspect the process logs.${
-                  args.forkUrl && forkStderrObserved
-                    ? " Anvil stderr was redacted because a fork URL is configured."
-                    : stderr.trim()
-                      ? ` ${stderr.trim()}`
-                      : ""
+                  details ? ` ${details}` : ""
                 }`,
               )
             : undefined;
@@ -630,10 +638,6 @@ export const spawnAnvil = async (
             ),
         );
         if (settled) return;
-        const details =
-          args.forkUrl && forkStderrObserved
-            ? "Anvil stderr was redacted because a fork URL is configured."
-            : stderr.trim();
         fail(
           new AnvilStartupError(
             `Anvil exited before listening on port "${port || "auto"}" (code "${code}", signal "${signal}").${details ? ` ${details}` : ""}`,
@@ -679,7 +683,7 @@ export const spawnAnvil = async (
               cause:
                 args.forkUrl && error instanceof Error
                   ? new AnvilStartupError(
-                      "Anvil subprocess setup failed. Details were redacted because a fork URL is configured.",
+                      redactAnvilDiagnostic(error.message, args),
                     )
                   : error,
             },

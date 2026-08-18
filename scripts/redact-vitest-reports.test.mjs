@@ -59,6 +59,19 @@ describe("redactSecrets", () => {
     expect(result.content).not.toContain(normalizedJson);
     expect(result.content).not.toContain(normalizedEncoded);
   });
+
+  test("behavior: redacts identifying fragments from partial URLs", () => {
+    const secret =
+      "https://user:password@rpc.example/v1/private-key?token=query-secret";
+    const result = redactSecrets(
+      "host=rpc.example path=private-key token=query-secret",
+      [secret],
+    );
+
+    expect(result.content).toBe(
+      "host=<redacted-rpc-url> path=<redacted-rpc-url> token=<redacted-rpc-url>",
+    );
+  });
 });
 
 describe("sanitizeVitestReports", () => {

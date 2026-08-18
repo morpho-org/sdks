@@ -80,3 +80,23 @@ export class AnvilCleanupError extends Error {
     this.name = "AnvilCleanupError";
   }
 }
+
+/**
+ * Combines an Anvil operation failure with its cleanup failure.
+ *
+ * @param parameters Operation failure, cleanup failure, actionable message, and optional aggregate summary.
+ * @returns An Anvil cleanup error whose cause preserves both failures.
+ * @internal
+ */
+export const createAnvilFailureCleanupError = (parameters: {
+  readonly cleanupError: unknown;
+  readonly failure: unknown;
+  readonly message: string;
+  readonly summary?: string;
+}) =>
+  new AnvilCleanupError(parameters.message, {
+    cause: new AggregateError(
+      [parameters.failure, parameters.cleanupError],
+      parameters.summary ?? "Anvil operation and cleanup both failed.",
+    ),
+  });

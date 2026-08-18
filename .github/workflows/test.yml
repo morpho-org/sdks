@@ -110,18 +110,24 @@ jobs:
             --outputFile.blob="vitest-reports/$VITEST_NAME.json"
 
       - name: Redact RPC credentials from fork report
-        if: matrix.uses_foundry
+        id: redact_report
+        if: failure() && matrix.uses_foundry && steps.test.outcome == 'failure'
         env:
           MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
           BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
           ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
         run: node scripts/redact-vitest-reports.mjs vitest-reports
 
-      - name: Upload report
+      - name: Upload failed report
+        if: >-
+          failure() &&
+          steps.test.outcome == 'failure' &&
+          (!matrix.uses_foundry || steps.redact_report.outcome == 'success')
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: vitest-${{ matrix.name }}
-          path: vitest-reports
+          name: vitest-failure-${{ matrix.name }}
+          path: vitest-reports/${{ matrix.name }}.json
+          if-no-files-found: error
           retention-days: 1
 
       - name: Save Foundry cache
@@ -148,28 +154,3 @@ jobs:
         env:
           PACKAGE_RESULT: ${{ needs.package.result }}
         run: test "$PACKAGE_RESULT" = success
-
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-        with:
-          persist-credentials: false
-
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
-
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-
-      - name: Download reports
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: vitest-*
-          path: vitest-reports
-          merge-multiple: true
-
-      - name: Merge reports and coverage
-        run: >-
-          pnpm exec vitest --merge-reports=vitest-reports --coverage
-          --reporter=default --reporter=github-actions
