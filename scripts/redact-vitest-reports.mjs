@@ -165,7 +165,7 @@ export function sanitizeVitestReports(directory, secrets) {
 
 if (
   process.argv[1] != null &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
+  import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href
 ) {
   try {
     const directory = process.argv[2];
@@ -194,7 +194,15 @@ if (
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown sanitization failure.";
-    process.stderr.write(`${message}\n`);
+    const cause =
+      error instanceof Error && error.cause !== undefined
+        ? error.cause instanceof Error
+          ? (error.cause.stack ?? error.cause.message)
+          : String(error.cause)
+        : undefined;
+    process.stderr.write(
+      `${message}${cause === undefined ? "" : `\nCaused by: ${cause}`}\n`,
+    );
     process.exitCode = 1;
   }
 }

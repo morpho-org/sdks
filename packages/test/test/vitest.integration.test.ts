@@ -8,7 +8,34 @@ import { promisify } from "node:util";
 import { describe, expect, test } from "vitest";
 import { spawnAnvil } from "../src/anvil.js";
 
+const settleForkTestCleanup = async (
+  operations: readonly (Promise<unknown> | undefined)[],
+) => {
+  const failures: unknown[] = [];
+  for (const result of await Promise.allSettled(operations)) {
+    if (result.status === "rejected") failures.push(result.reason);
+  }
+  if (failures.length > 0)
+    throw new AggregateError(failures, "Fork test cleanup failed.");
+};
+
 describe.sequential("createViemTest cross-worker semaphore", () => {
+  test("error: cleanup surfaces every failure", async () => {
+    const failures = [
+      new Error("first cleanup failed"),
+      new Error("second cleanup failed"),
+    ];
+
+    const error = await settleForkTestCleanup([
+      Promise.reject(failures[0]),
+      Promise.reject(failures[1]),
+    ]).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(AggregateError);
+    if (!(error instanceof AggregateError)) throw error;
+    expect(error.errors).toEqual(failures);
+  });
+
   test("behavior: a second worker starts after the shared slot is released", async () => {
     const upstream = await spawnAnvil({ chainId: 1 });
     const coordinationDirectory = await mkdtemp(
@@ -51,8 +78,10 @@ describe.sequential("createViemTest cross-worker semaphore", () => {
         ]),
       ).resolves.toEqual(["acquired\n", "acquired\n"]);
     } finally {
-      await upstream.stopAndWait();
-      await rm(coordinationDirectory, { recursive: true, force: true });
+      await settleForkTestCleanup([
+        upstream.stopAndWait(),
+        rm(coordinationDirectory, { recursive: true, force: true }),
+      ]);
     }
   });
 
@@ -99,8 +128,10 @@ describe.sequential("createViemTest cross-worker semaphore", () => {
         readFile(join(coordinationDirectory, "waiter-acquired"), "utf8"),
       ).rejects.toMatchObject({ code: "ENOENT" });
     } finally {
-      await upstream.stopAndWait();
-      await rm(coordinationDirectory, { recursive: true, force: true });
+      await settleForkTestCleanup([
+        upstream.stopAndWait(),
+        rm(coordinationDirectory, { recursive: true, force: true }),
+      ]);
     }
   });
 
@@ -235,9 +266,11 @@ describe.sequential("createViemTest cross-worker semaphore", () => {
       if (originalRunId === undefined)
         delete process.env.MORPHO_TEST_ANVIL_RUN_ID;
       else process.env.MORPHO_TEST_ANVIL_RUN_ID = originalRunId;
-      if (replacement !== undefined) await replacement.stopAndWait();
-      await upstream.stopAndWait();
-      await rm(coordinationDirectory, { recursive: true, force: true });
+      await settleForkTestCleanup([
+        replacement?.stopAndWait(),
+        upstream.stopAndWait(),
+        rm(coordinationDirectory, { recursive: true, force: true }),
+      ]);
     }
   });
 });

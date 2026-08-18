@@ -24,6 +24,46 @@ export const ANVIL_PROCESS_IDENTITY_PREFIX = "morpho-test-anvil-";
 const hasErrorCode = (error: unknown, code: string) =>
   error instanceof Error && "code" in error && error.code === code;
 
+const isProcessAlive = (pid: number) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if (hasErrorCode(error, "ESRCH")) return false;
+    throw error;
+  }
+};
+
+const readLockOwner = (lockPath: string) => {
+  try {
+    return readFileSync(join(lockPath, "owner"), "utf8").trim();
+  } catch (error) {
+    if (hasErrorCode(error, "ENOENT")) return undefined;
+    throw error;
+  }
+};
+
+const waitForProcessExit = async (
+  pid: number,
+  options: {
+    readonly inspectionFailureMessage: string;
+    readonly timeoutMs: number;
+  },
+): Promise<boolean> => {
+  const deadline = Date.now() + options.timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      if (!isProcessAlive(pid)) return true;
+    } catch (error) {
+      throw new AnvilCleanupError(options.inspectionFailureMessage, {
+        cause: error,
+      });
+    }
+    await setTimeout(ANVIL_PROCESS_SLOT_RETRY_DELAY_MS);
+  }
+  return false;
+};
+
 /**
  * Controls an acquired Anvil process slot.
  *
@@ -79,9 +119,8 @@ const inspectAbandonedAnvilProcess = (
   identity: string,
 ): AbandonedAnvilProcessState => {
   try {
-    process.kill(pid, 0);
+    if (!isProcessAlive(pid)) return "absent";
   } catch (error) {
-    if (hasErrorCode(error, "ESRCH")) return "absent";
     throw new AnvilCleanupError(
       `Abandoned Anvil process "${pid}" could not be inspected. Check process permissions before retrying.`,
       { cause: error },
@@ -112,9 +151,8 @@ const inspectAbandonedAnvilProcess = (
       "Anvil process identity lookup failed; command output was discarded.",
     );
     try {
-      process.kill(pid, 0);
+      if (!isProcessAlive(pid)) return "absent";
     } catch (inspectionError) {
-      if (hasErrorCode(inspectionError, "ESRCH")) return "absent";
       throw new AnvilCleanupError(message, {
         cause: new AggregateError(
           [processIdentityError, inspectionError],
@@ -153,19 +191,13 @@ export const terminateAbandonedAnvilProcess = async (
     );
   }
 
-  const gracefulDeadline = Date.now() + ANVIL_ABANDONED_PROCESS_GRACE_PERIOD_MS;
-  while (Date.now() < gracefulDeadline) {
-    try {
-      process.kill(pid, 0);
-    } catch (error) {
-      if (hasErrorCode(error, "ESRCH")) return;
-      throw new AnvilCleanupError(
-        `Abandoned Anvil process "${pid}" could not be inspected during shutdown. Check process permissions before retrying.`,
-        { cause: error },
-      );
-    }
-    await setTimeout(ANVIL_PROCESS_SLOT_RETRY_DELAY_MS);
-  }
+  if (
+    await waitForProcessExit(pid, {
+      inspectionFailureMessage: `Abandoned Anvil process "${pid}" could not be inspected during shutdown. Check process permissions before retrying.`,
+      timeoutMs: ANVIL_ABANDONED_PROCESS_GRACE_PERIOD_MS,
+    })
+  )
+    return;
 
   // The original child may have exited and its PID may have been reused while
   // graceful shutdown was pending. Verify the nonce again before SIGKILL.
@@ -183,20 +215,13 @@ export const terminateAbandonedAnvilProcess = async (
 
   if (inspectAbandonedAnvilProcess(pid, identity) !== "owned") return;
 
-  const forceKillDeadline =
-    Date.now() + ANVIL_ABANDONED_PROCESS_KILL_TIMEOUT_MS;
-  while (Date.now() < forceKillDeadline) {
-    try {
-      process.kill(pid, 0);
-    } catch (error) {
-      if (hasErrorCode(error, "ESRCH")) return;
-      throw new AnvilCleanupError(
-        `Abandoned Anvil process "${pid}" could not be inspected after SIGKILL. Check process permissions before retrying.`,
-        { cause: error },
-      );
-    }
-    await setTimeout(ANVIL_PROCESS_SLOT_RETRY_DELAY_MS);
-  }
+  if (
+    await waitForProcessExit(pid, {
+      inspectionFailureMessage: `Abandoned Anvil process "${pid}" could not be inspected after SIGKILL. Check process permissions before retrying.`,
+      timeoutMs: ANVIL_ABANDONED_PROCESS_KILL_TIMEOUT_MS,
+    })
+  )
+    return;
 
   throw new AnvilCleanupError(
     `Abandoned Anvil process "${pid}" did not exit after SIGKILL. Stop it manually before retrying so the shared RPC budget remains bounded.`,
@@ -370,33 +395,31 @@ export const acquireAnvilProcessSlot = async (parameters: {
           )
             throw error;
 
-          let lockedOwner: string;
-          try {
-            lockedOwner = readFileSync(join(lockPath, "owner"), "utf8").trim();
-          } catch (readError) {
-            if (hasErrorCode(readError, "ENOENT")) continue;
-            throw readError;
-          }
+          const lockedOwner = readLockOwner(lockPath);
+          if (lockedOwner === undefined) continue;
 
           const separatorIndex = lockedOwner.indexOf("-");
-          const ownerPid = Number(lockedOwner.slice(0, separatorIndex));
-          if (!Number.isSafeInteger(ownerPid) || ownerPid <= 0) continue;
+          const ownerPidText = lockedOwner.slice(0, separatorIndex);
+          const ownerPid = Number(ownerPidText);
+          if (
+            separatorIndex < 1 ||
+            separatorIndex === lockedOwner.length - 1 ||
+            !/^[1-9]\d*$/.test(ownerPidText) ||
+            !Number.isSafeInteger(ownerPid)
+          )
+            throw new AnvilCleanupError(
+              `Abandoned Anvil slot "${slot}" contains invalid owner token ${JSON.stringify(lockedOwner)}. Remove the stale lock manually before retrying.`,
+            );
 
           try {
-            process.kill(ownerPid, 0);
-            continue;
-          } catch (ownerError) {
+            if (isProcessAlive(ownerPid)) continue;
+          } catch {
             // Only ESRCH proves the owner exited; permission errors may still mean it is alive.
-            if (!hasErrorCode(ownerError, "ESRCH")) continue;
+            continue;
           }
 
-          let currentOwner: string;
-          try {
-            currentOwner = readFileSync(join(lockPath, "owner"), "utf8").trim();
-          } catch (readError) {
-            if (hasErrorCode(readError, "ENOENT")) continue;
-            throw readError;
-          }
+          const currentOwner = readLockOwner(lockPath);
+          if (currentOwner === undefined) continue;
           if (currentOwner !== lockedOwner) continue;
 
           let childProcess:
@@ -446,13 +469,9 @@ export const acquireAnvilProcessSlot = async (parameters: {
               childProcess.identity,
             );
 
-          try {
-            currentOwner = readFileSync(join(lockPath, "owner"), "utf8").trim();
-          } catch (readError) {
-            if (hasErrorCode(readError, "ENOENT")) continue;
-            throw readError;
-          }
-          if (currentOwner !== lockedOwner) continue;
+          const finalOwner = readLockOwner(lockPath);
+          if (finalOwner === undefined) continue;
+          if (finalOwner !== lockedOwner) continue;
 
           // Keep the non-empty tombstone for this owner. If another reclaimer observed the same
           // dead owner before this rename, it cannot rename a replacement over this directory.

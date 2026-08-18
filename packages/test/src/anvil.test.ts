@@ -38,6 +38,7 @@ import {
 } from "./errors.js";
 
 type FakeAnvilProcess = EventEmitter & {
+  pid: number;
   stdout: PassThrough;
   stderr: PassThrough;
   exitCode: number | null;
@@ -58,6 +59,7 @@ const restoreEnvironment = (name: string, value: string | undefined) => {
 const createFakeAnvilProcess = (options: { closeOnSignal?: boolean } = {}) => {
   const { closeOnSignal = true } = options;
   const subprocess = Object.assign(new EventEmitter(), {
+    pid: 2_147_483_645,
     stdout: new PassThrough(),
     stderr: new PassThrough(),
     exitCode: null,

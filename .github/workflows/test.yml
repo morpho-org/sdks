@@ -20,6 +20,8 @@ jobs:
     timeout-minutes: 10
     strategy:
       fail-fast: false
+      # Package shards share RPC credentials, so bound their aggregate fork pressure.
+      max-parallel: 4
       matrix:
         include:
           # Pure and fork projects from one package share a single runner.
@@ -96,6 +98,9 @@ jobs:
           MAINNET_RPC_URL: ${{ matrix.uses_foundry && secrets.MAINNET_RPC_URL || '' }}
           BASE_RPC_URL: ${{ matrix.uses_foundry && secrets.BASE_RPC_URL || '' }}
           ARBITRUM_RPC_URL: ${{ matrix.uses_foundry && secrets.ARBITRUM_RPC_URL || '' }}
+          # Keep fork cases concurrent without overwhelming one RPC endpoint.
+          MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC: "2"
+          MORPHO_TEST_ANVIL_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.name }}
           IS_LOGGING_DISABLED: true
           VITEST_NAME: ${{ matrix.name }}
           VITEST_PROJECTS: ${{ matrix.projects }}
@@ -116,7 +121,10 @@ jobs:
           MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
           BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
           ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
-        run: node scripts/redact-vitest-reports.mjs vitest-reports
+        run: |
+          node scripts/redact-vitest-reports.mjs vitest-reports \
+            | tee /dev/stderr \
+            | grep -q '^Sanitized '
 
       - name: Upload failed report
         if: >-

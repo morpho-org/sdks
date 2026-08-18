@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import {
   mkdirSync,
   mkdtempSync,
@@ -8,6 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
 
 import {
@@ -17,6 +19,15 @@ import {
 } from "./redact-vitest-reports.mjs";
 
 const tempDirectories = [];
+const scriptPath = fileURLToPath(
+  new URL("./redact-vitest-reports.mjs", import.meta.url),
+);
+const rpcEnvironment = {
+  ...process.env,
+  MAINNET_RPC_URL: "https://mainnet.example/private-key",
+  BASE_RPC_URL: "https://base.example/private-key",
+  ARBITRUM_RPC_URL: "https://arbitrum.example/private-key",
+};
 
 afterEach(() => {
   for (const directory of tempDirectories.splice(0)) {
@@ -125,6 +136,45 @@ describe("sanitizeVitestReports", () => {
       VitestReportSanitizationError,
     );
     expect(readFileSync(outsideReport, "utf8")).toBe(secret);
+  });
+});
+
+describe("CLI", () => {
+  test("error: fails closed through a symlink when an RPC credential is missing", () => {
+    const reportDirectory = createTempDirectory();
+    const reportPath = join(reportDirectory, "report.json");
+    const scriptLink = join(createTempDirectory(), "redact-vitest-reports.mjs");
+    const report = `request failed for ${rpcEnvironment.MAINNET_RPC_URL}`;
+    const env = { ...rpcEnvironment };
+    delete env.ARBITRUM_RPC_URL;
+    writeFileSync(reportPath, report);
+    symlinkSync(scriptPath, scriptLink);
+
+    const result = spawnSync(process.execPath, [scriptLink, reportDirectory], {
+      encoding: "utf8",
+      env,
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      "Missing required RPC credentials: ARBITRUM_RPC_URL",
+    );
+    expect(readFileSync(reportPath, "utf8")).toBe(report);
+  });
+
+  test("error: reports the underlying sanitization failure", () => {
+    const missingDirectory = join(createTempDirectory(), "missing");
+
+    const result = spawnSync(process.execPath, [scriptPath, missingDirectory], {
+      encoding: "utf8",
+      env: rpcEnvironment,
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      `Could not sanitize reports in "${missingDirectory}"`,
+    );
+    expect(result.stderr).toContain("Caused by: Error: ENOENT");
   });
 });
 

@@ -1,3 +1,4 @@
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -13,12 +14,35 @@ vi.mock("node:child_process", async (importOriginal) => {
 
 import {
   ANVIL_PROCESS_IDENTITY_PREFIX,
+  acquireAnvilProcessSlot,
   anvilSlotLockDirectory,
   terminateAbandonedAnvilProcess,
 } from "./anvilProcessSlot.js";
-import { AnvilCleanupError } from "./errors.js";
+import { AnvilCleanupError, AnvilStartupError } from "./errors.js";
+
+const originalMaxProcessesPerRpc =
+  process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC;
+const lockDirectories: string[] = [];
+
+const acquireTestProcessSlot = async (runId: string) => {
+  const forkUrl = "https://rpc.example/register-child";
+  process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "1";
+  const lockDirectory = anvilSlotLockDirectory({ forkUrl, runId });
+  lockDirectories.push(lockDirectory);
+  return {
+    lockDirectory,
+    processSlot: await acquireAnvilProcessSlot({ forkUrl, runId }),
+  };
+};
 
 afterEach(() => {
+  if (originalMaxProcessesPerRpc === undefined)
+    delete process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC;
+  else
+    process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC =
+      originalMaxProcessesPerRpc;
+  for (const lockDirectory of lockDirectories.splice(0))
+    rmSync(lockDirectory, { recursive: true, force: true });
   vi.useRealTimers();
   vi.restoreAllMocks();
   execFileSyncMock.mockReset();
@@ -44,6 +68,58 @@ describe("anvilSlotLockDirectory", () => {
         runId: "",
       }),
     ).toBe(join(tmpdir(), "morpho-test-anvil", "default", "b6bbda0d3a898dbb"));
+  });
+});
+
+describe.sequential("acquireAnvilProcessSlot", () => {
+  test("error: AnvilCleanupError rejects a malformed owner token", async () => {
+    const forkUrl = "https://rpc.example/malformed-owner";
+    const runId = "malformed-owner";
+    process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "1";
+    const lockDirectory = anvilSlotLockDirectory({ forkUrl, runId });
+    const lockPath = join(lockDirectory, "0.lock");
+    lockDirectories.push(lockDirectory);
+    mkdirSync(lockPath, { recursive: true });
+    writeFileSync(join(lockPath, "owner"), "corrupt\n");
+
+    await expect(
+      acquireAnvilProcessSlot({
+        forkUrl,
+        runId,
+        signal: AbortSignal.timeout(100),
+      }),
+    ).rejects.toBeInstanceOf(AnvilCleanupError);
+  });
+});
+
+describe.sequential("registerChildProcess", () => {
+  test("error: AnvilStartupError rejects an invalid process identifier", async () => {
+    const { processSlot } = await acquireTestProcessSlot("invalid-pid");
+
+    expect(() => processSlot.registerChildProcess(0, "child")).toThrow(
+      AnvilStartupError,
+    );
+    await processSlot.release();
+  });
+
+  test("error: AnvilStartupError rejects an empty process identity", async () => {
+    const { processSlot } = await acquireTestProcessSlot("empty-identity");
+
+    expect(() => processSlot.registerChildProcess(41_005, "")).toThrow(
+      AnvilStartupError,
+    );
+    await processSlot.release();
+  });
+
+  test("error: AnvilStartupError rejects a lost slot reservation", async () => {
+    const { lockDirectory, processSlot } =
+      await acquireTestProcessSlot("lost-owner");
+    writeFileSync(join(lockDirectory, "0.lock", "owner"), "another-worker\n");
+
+    expect(() => processSlot.registerChildProcess(41_006, "child")).toThrow(
+      AnvilStartupError,
+    );
+    await processSlot.release();
   });
 });
 
