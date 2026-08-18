@@ -21,10 +21,7 @@ import {
   ReallocationWithdrawExceedsMarketSupplyError,
   UnknownReallocationMarketError,
 } from "../types/index.js";
-import {
-  computeVaultV2Reallocations,
-  VaultV2ReallocationData,
-} from "./vaultV2ReallocationData.js";
+import { VaultV2BlueReallocationData } from "./vaultV2BlueReallocationData.js";
 
 const TIMESTAMP = 1_700_000_000n;
 const VAULT = "0x0000000000000000000000000000000000000002";
@@ -268,7 +265,7 @@ const makeFixture = ({
   );
 
   return {
-    data: new VaultV2ReallocationData({
+    data: new VaultV2BlueReallocationData({
       chainId: ChainId.EthMainnet,
       markets: {
         [targetMarket.id]: targetMarket,
@@ -313,14 +310,14 @@ const makeFixture = ({
   };
 };
 
-describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
+describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
   test("default: returns an action-ready market reallocation and cloned post-state", () => {
     const { data, sourceExpectedAssets, sourceIds, targetIds } = makeFixture();
 
     expect(data.activeAdapters[VAULT]).toStrictEqual(
       new Set([TARGET_ADAPTER, SOURCE_ADAPTER]),
     );
-    const result = data.computeVaultV2Reallocations(targetParams.id);
+    const result = data.computeVaultV2BlueReallocations(targetParams.id);
 
     expect(result.reallocations).toStrictEqual([
       {
@@ -353,7 +350,7 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
       const { data } = makeFixture({ allocatorActiveAdapters });
 
       expect(
-        data.computeVaultV2Reallocations(targetParams.id).reallocations,
+        data.computeVaultV2BlueReallocations(targetParams.id).reallocations,
       ).toStrictEqual([]);
     }
   });
@@ -402,7 +399,7 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
       500n,
       {},
     );
-    const sharedData = new VaultV2ReallocationData({
+    const sharedData = new VaultV2BlueReallocationData({
       chainId: data.chainId,
       markets: data.markets,
       vaults: {
@@ -447,7 +444,7 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
       sharedData.getAdapter(SECOND_VAULT, SECOND_TARGET_ADAPTER).markets[0],
     ).toBe(initialCanonicalMarket);
 
-    const result = sharedData.computeVaultV2Reallocations(targetParams.id);
+    const result = sharedData.computeVaultV2BlueReallocations(targetParams.id);
     const finalCanonicalMarket = result.data.getMarket(targetParams.id);
 
     expect(result.reallocations).toHaveLength(2);
@@ -553,7 +550,7 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
       fixtureVault.assetBalance,
       fixtureVault.forceDeallocatePenalties,
     );
-    const input = new VaultV2ReallocationData({
+    const input = new VaultV2BlueReallocationData({
       chainId: data.chainId,
       markets: data.markets,
       vaults: { [VAULT]: inputVault },
@@ -600,7 +597,9 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
       inputNested?.accrualVaultV1.allocations,
     );
 
-    const simulated = input.computeVaultV2Reallocations(targetMarket.id).data;
+    const simulated = input.computeVaultV2BlueReallocations(
+      targetMarket.id,
+    ).data;
     const simulatedLegacy = simulated
       .getVault(VAULT)
       .accrualAdapters.find(
@@ -646,8 +645,8 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
     const { data } = makeFixture({ idle: 300n });
     const initialData = data.clone();
 
-    const first = data.computeVaultV2Reallocations(targetParams.id);
-    const second = data.computeVaultV2Reallocations(targetParams.id);
+    const first = data.computeVaultV2BlueReallocations(targetParams.id);
+    const second = data.computeVaultV2BlueReallocations(targetParams.id);
 
     expect(second.reallocations).toStrictEqual(first.reallocations);
     expect(second.data).toStrictEqual(first.data);
@@ -657,7 +656,7 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
   test("behavior: ranks market liquidity before idle and depletes both sources", () => {
     const { data, sourceExpectedAssets } = makeFixture({ idle: 300n });
 
-    const result = data.computeVaultV2Reallocations(targetParams.id);
+    const result = data.computeVaultV2BlueReallocations(targetParams.id);
 
     expect(
       result.reallocations.map(({ from, assets, penalty }) => ({
@@ -678,7 +677,7 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
     });
 
     expect(
-      data.computeVaultV2Reallocations(targetParams.id).reallocations,
+      data.computeVaultV2BlueReallocations(targetParams.id).reallocations,
     ).toStrictEqual([]);
   });
 
@@ -687,7 +686,7 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
       sourceUntracked: 900n,
     });
 
-    const result = data.computeVaultV2Reallocations(targetParams.id);
+    const result = data.computeVaultV2BlueReallocations(targetParams.id);
 
     expect(result.reallocations[0]?.assets).toBe(sourceExpectedAssets);
     expect(result.data.getVault(VAULT).assetBalance).toBe(1n);
@@ -701,7 +700,7 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
     });
 
     expect(
-      data.computeVaultV2Reallocations(targetParams.id).reallocations,
+      data.computeVaultV2BlueReallocations(targetParams.id).reallocations,
     ).toStrictEqual([]);
   });
 
@@ -723,7 +722,7 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
     });
 
     expect(
-      data.computeVaultV2Reallocations(targetParams.id).reallocations,
+      data.computeVaultV2BlueReallocations(targetParams.id).reallocations,
     ).toStrictEqual([]);
   });
 
@@ -737,7 +736,7 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
       ],
     });
 
-    const result = data.computeVaultV2Reallocations(targetParams.id);
+    const result = data.computeVaultV2BlueReallocations(targetParams.id);
 
     expect(result.reallocations[0]?.assets).toBe(500n);
     expect(result.data.getVault(VAULT)._totalAssets).toBe(1_000n);
@@ -758,7 +757,7 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
       ],
     });
 
-    const result = data.computeVaultV2Reallocations(targetParams.id);
+    const result = data.computeVaultV2BlueReallocations(targetParams.id);
 
     expect(result.reallocations).toHaveLength(1);
     expect(result.reallocations[0]?.assets).toBe(450n);
@@ -783,7 +782,7 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
       ],
     });
 
-    const result = data.computeVaultV2Reallocations(targetParams.id);
+    const result = data.computeVaultV2BlueReallocations(targetParams.id);
 
     expect(
       result.reallocations.map(({ from, assets }) => ({
@@ -812,7 +811,7 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
     });
 
     expect(
-      data.computeVaultV2Reallocations(targetParams.id).reallocations[0]
+      data.computeVaultV2BlueReallocations(targetParams.id).reallocations[0]
         ?.assets,
     ).toBe(MathLib.MAX_UINT_128);
   });
@@ -830,7 +829,7 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
     });
 
     expect(
-      data.computeVaultV2Reallocations(targetParams.id).reallocations,
+      data.computeVaultV2BlueReallocations(targetParams.id).reallocations,
     ).toStrictEqual([]);
   });
 
@@ -848,7 +847,7 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
     });
 
     expect(
-      data.computeVaultV2Reallocations(targetParams.id).reallocations,
+      data.computeVaultV2BlueReallocations(targetParams.id).reallocations,
     ).toStrictEqual([]);
   });
 
@@ -859,7 +858,7 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
     });
 
     expect(() =>
-      data.computeVaultV2Reallocations(targetParams.id),
+      data.computeVaultV2BlueReallocations(targetParams.id),
     ).not.toThrow();
   });
 
@@ -879,7 +878,7 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
       ],
     });
 
-    const result = data.computeVaultV2Reallocations(targetParams.id);
+    const result = data.computeVaultV2BlueReallocations(targetParams.id);
 
     expect(result.reallocations[0]?.assets).toBe(500n);
     expect(result.data.getVault(VAULT)._totalAssets).toBe(1_000n);
@@ -889,7 +888,7 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
     const { data } = makeFixture();
 
     expect(
-      data.computeVaultV2Reallocations(targetParams.id, { enabled: false })
+      data.computeVaultV2BlueReallocations(targetParams.id, { enabled: false })
         .reallocations,
     ).toStrictEqual([]);
   });
@@ -899,7 +898,7 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
     data.markets[targetParams.id] = undefined;
 
     expect(() =>
-      data.computeVaultV2Reallocations(targetParams.id, {
+      data.computeVaultV2BlueReallocations(targetParams.id, {
         timestamp: TIMESTAMP,
       }),
     ).toThrow(UnknownReallocationMarketError);
@@ -912,13 +911,13 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
     });
 
     expect(
-      data.computeVaultV2Reallocations(targetParams.id, {
+      data.computeVaultV2BlueReallocations(targetParams.id, {
         maxPenalty: 7n,
       }).reallocations,
     ).toStrictEqual([]);
     expect(
       data
-        .computeVaultV2Reallocations(targetParams.id, {
+        .computeVaultV2BlueReallocations(targetParams.id, {
           maxPenalty: 8n,
         })
         .reallocations.map(({ from, assets }) => ({
@@ -932,30 +931,26 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
   });
 });
 
-describe("computeVaultV2Reallocations", () => {
+describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation", () => {
   test("default: caps friendly reallocations to the 90% target", () => {
     const { data } = makeFixture({ targetSupply: 100n, targetBorrow: 90n });
 
-    const reallocations = computeVaultV2Reallocations({
-      reallocationData: data,
-      marketId: targetParams.id,
-      operation: "borrow",
-      amount: 20n,
+    const result = data.computeVaultV2BlueReallocations(targetParams.id, {
+      operation: { type: "borrow", amount: 20n },
     });
 
-    expect(reallocations).toHaveLength(1);
-    expect(reallocations[0]?.assets).toBe(23n);
+    expect(result.reallocations).toHaveLength(1);
+    expect(result.reallocations[0]?.assets).toBe(23n);
+    expect(result.data.getMarket(targetParams.id).totalSupplyAssets).toBe(123n);
   });
 
   test("behavior: rounds required supply up to the utilization target", () => {
     const { data } = makeFixture({ targetSupply: 1n, targetBorrow: 0n });
 
-    const reallocations = computeVaultV2Reallocations({
-      reallocationData: data,
-      marketId: targetParams.id,
-      operation: "borrow",
-      amount: 1n,
-    });
+    const { reallocations } = data.computeVaultV2BlueReallocations(
+      targetParams.id,
+      { operation: { type: "borrow", amount: 1n } },
+    );
 
     expect(reallocations[0]?.assets).toBe(1n);
   });
@@ -967,19 +962,17 @@ describe("computeVaultV2Reallocations", () => {
       sourceLastUpdate: TIMESTAMP + 2n,
     });
 
-    const defaultReallocations = computeVaultV2Reallocations({
-      reallocationData: data,
-      marketId: targetParams.id,
-      operation: "borrow",
-      amount: 20n,
-    });
-    const explicitReallocations = computeVaultV2Reallocations({
-      reallocationData: data,
-      marketId: targetParams.id,
-      operation: "borrow",
-      amount: 20n,
-      options: { timestamp: TIMESTAMP + 2n },
-    });
+    const defaultReallocations = data.computeVaultV2BlueReallocations(
+      targetParams.id,
+      { operation: { type: "borrow", amount: 20n } },
+    );
+    const explicitReallocations = data.computeVaultV2BlueReallocations(
+      targetParams.id,
+      {
+        timestamp: TIMESTAMP + 2n,
+        operation: { type: "borrow", amount: 20n },
+      },
+    );
 
     expect(defaultReallocations).toStrictEqual(explicitReallocations);
   });
@@ -992,13 +985,13 @@ describe("computeVaultV2Reallocations", () => {
       sourceBorrow: 950n,
     });
 
-    const reallocations = computeVaultV2Reallocations({
-      reallocationData: data,
-      marketId: targetParams.id,
-      operation: "borrow",
-      amount: 40n,
-      options: { reallocatableVaults: [VAULT as Address].values() },
-    });
+    const { reallocations } = data.computeVaultV2BlueReallocations(
+      targetParams.id,
+      {
+        reallocatableVaults: [VAULT as Address].values(),
+        operation: { type: "borrow", amount: 40n },
+      },
+    );
 
     expect(reallocations[0]?.assets).toBe(40n);
   });
@@ -1006,12 +999,10 @@ describe("computeVaultV2Reallocations", () => {
   test("behavior: plans a loan-asset withdraw", () => {
     const { data } = makeFixture({ targetSupply: 100n, targetBorrow: 90n });
 
-    const reallocations = computeVaultV2Reallocations({
-      reallocationData: data,
-      marketId: targetParams.id,
-      operation: "withdraw",
-      amount: 10n,
-    });
+    const { reallocations } = data.computeVaultV2BlueReallocations(
+      targetParams.id,
+      { operation: { type: "withdraw", amount: 10n } },
+    );
 
     expect(reallocations[0]?.assets).toBe(10n);
   });
@@ -1022,12 +1013,10 @@ describe("computeVaultV2Reallocations", () => {
       targetBorrow: 100n,
       idle: 300n,
     });
-    const reallocations = computeVaultV2Reallocations({
-      reallocationData: data,
-      marketId: targetParams.id,
-      operation: "borrow",
-      amount: 1_100n,
-    });
+    const { reallocations } = data.computeVaultV2BlueReallocations(
+      targetParams.id,
+      { operation: { type: "borrow", amount: 1_100n } },
+    );
 
     const tx = blueBorrow({
       market: {
@@ -1055,22 +1044,16 @@ describe("computeVaultV2Reallocations", () => {
     });
 
     expect(
-      computeVaultV2Reallocations({
-        reallocationData: data,
-        marketId: targetParams.id,
-        operation: "borrow",
-        amount: 1n,
-        options: { maxPenalty: 6n },
-      }),
+      data.computeVaultV2BlueReallocations(targetParams.id, {
+        maxPenalty: 6n,
+        operation: { type: "borrow", amount: 1n },
+      }).reallocations,
     ).toStrictEqual([]);
     expect(
-      computeVaultV2Reallocations({
-        reallocationData: data,
-        marketId: targetParams.id,
-        operation: "borrow",
-        amount: 1n,
-        options: { maxPenalty: 7n },
-      })[0]?.assets,
+      data.computeVaultV2BlueReallocations(targetParams.id, {
+        maxPenalty: 7n,
+        operation: { type: "borrow", amount: 1n },
+      }).reallocations[0]?.assets,
     ).toBe(2n);
   });
 
@@ -1082,11 +1065,8 @@ describe("computeVaultV2Reallocations", () => {
     });
 
     expect(() =>
-      computeVaultV2Reallocations({
-        reallocationData: data,
-        marketId: targetParams.id,
-        operation: "borrow",
-        amount: 100n,
+      data.computeVaultV2BlueReallocations(targetParams.id, {
+        operation: { type: "borrow", amount: 100n },
       }),
     ).toThrow(InsufficientSharedLiquidityError);
   });
@@ -1095,11 +1075,8 @@ describe("computeVaultV2Reallocations", () => {
     const { data } = makeFixture({ targetSupply: 100n });
 
     expect(() =>
-      computeVaultV2Reallocations({
-        reallocationData: data,
-        marketId: targetParams.id,
-        operation: "withdraw",
-        amount: 101n,
+      data.computeVaultV2BlueReallocations(targetParams.id, {
+        operation: { type: "withdraw", amount: 101n },
       }),
     ).toThrow(ReallocationWithdrawExceedsMarketSupplyError);
   });
@@ -1116,11 +1093,8 @@ describe("computeVaultV2Reallocations", () => {
       const initialData = data.clone();
 
       expect(() =>
-        computeVaultV2Reallocations({
-          reallocationData: data,
-          marketId: targetParams.id,
-          operation,
-          amount,
+        data.computeVaultV2BlueReallocations(targetParams.id, {
+          operation: { type: operation, amount },
         }),
       ).toThrow(NonPositiveInputError);
       expect(data).toStrictEqual(initialData);
@@ -1130,19 +1104,17 @@ describe("computeVaultV2Reallocations", () => {
   test("behavior: disabled planning returns no calls", () => {
     const { data } = makeFixture();
 
-    expect(
-      computeVaultV2Reallocations({
-        reallocationData: data,
-        marketId: targetParams.id,
-        operation: "borrow",
-        amount: 0n,
-        options: { enabled: false },
-      }),
-    ).toStrictEqual([]);
+    const result = data.computeVaultV2BlueReallocations(targetParams.id, {
+      enabled: false,
+      operation: { type: "borrow", amount: 0n },
+    });
+
+    expect(result.reallocations).toStrictEqual([]);
+    expect(result.data).toBe(data);
   });
 });
 
-describe("VaultV2ReallocationData liquidity metrics", () => {
+describe("VaultV2BlueReallocationData liquidity metrics", () => {
   test("default: sums idle and market liquidity in target-utilization math", () => {
     const { data, sourceExpectedAssets } = makeFixture({
       targetSupply: 100n,
@@ -1150,14 +1122,14 @@ describe("VaultV2ReallocationData liquidity metrics", () => {
       idle: 300n,
     });
 
-    expect(data.getPublicReallocationLiquidityVaultV2(targetParams.id)).toBe(
+    expect(data.getPublicReallocationLiquidity(targetParams.id)).toBe(
       sourceExpectedAssets + 300n,
     );
+    expect(data.getAvailableLiquidityToUtilization(targetParams.id)).toBe(
+      1_210n,
+    );
     expect(
-      data.getAvailableLiquidityToUtilizationVaultV2(targetParams.id),
-    ).toBe(1_210n);
-    expect(
-      data.getAvailableLiquidityToUtilizationVaultV2(
+      data.getAvailableLiquidityToUtilization(
         targetParams.id,
         (MathLib.WAD * 8n) / 10n,
       ),

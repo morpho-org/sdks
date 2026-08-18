@@ -394,7 +394,8 @@ describe("blueRefinance", () => {
     });
     const VAULT: Address = "0xBEEf5aFE88eF73337e5070aB2855d37dBF5493A4";
     const REALLOC_FEE = parseUnits("0.01", 18);
-    const V2_ALLOCATOR = getChainAddresses(mainnet.id).bluePublicAllocator!;
+    const V2_ALLOCATOR = getChainAddresses(mainnet.id)
+      .vaultV2BluePublicAllocator!;
     const V2_VAULT: Address = "0x0000000000000000000000000000000000000012";
     const SOURCE_ADAPTER: Address =
       "0x0000000000000000000000000000000000000013";

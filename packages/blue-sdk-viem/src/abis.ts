@@ -14,6 +14,7 @@ export {
   publicAllocatorAbi,
   vaultV1AdapterAbi,
   vaultV1AdapterFactoryAbi,
+  vaultV1PublicAllocatorAbi,
   vaultV2Abi,
   vaultV2BluePublicAllocatorAbi,
   vaultV2FactoryAbi,

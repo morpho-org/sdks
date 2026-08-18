@@ -40,7 +40,7 @@ describe("Vault V2 public allocator fetchers on fork", () => {
       assert(fixtureBytecode != null);
       const allocator = getChainAddress(
         ChainId.EthMainnet,
-        "bluePublicAllocator",
+        "vaultV2BluePublicAllocator",
       );
       await client.setCode({ address: allocator, bytecode: fixtureBytecode });
 

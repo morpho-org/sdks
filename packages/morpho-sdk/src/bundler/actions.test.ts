@@ -7,7 +7,7 @@ import {
   blueAbi,
   erc2612Abi,
   permit2Abi,
-  publicAllocatorAbi,
+  vaultV1PublicAllocatorAbi,
   vaultV2BluePublicAllocatorAbi,
 } from "@morpho-org/blue-sdk-viem";
 import fc from "fast-check";
@@ -39,7 +39,7 @@ describe("BundlerAction", () => {
     morpho,
     permit2,
     publicAllocator,
-    bluePublicAllocator: allocator,
+    vaultV2BluePublicAllocator: allocator,
     bundler3: { bundler3, generalAdapter1 },
   } = getChainAddresses(chainId);
 
@@ -1553,7 +1553,7 @@ describe("BundlerAction", () => {
       ),
     );
     const decoded = decodeFunctionData({
-      abi: publicAllocatorAbi,
+      abi: vaultV1PublicAllocatorAbi,
       data: call.data,
     });
 

@@ -142,6 +142,16 @@ describe("addressesRegistry", () => {
     expect("midnight" in addressesRegistry[1]).toBe(false);
   });
 
+  test("behavior: keeps the deprecated Vault V1 PublicAllocator alias", () => {
+    const { publicAllocator, vaultV1PublicAllocator } =
+      addressesRegistry[ChainId.EthMainnet];
+
+    expect(publicAllocator).toBe(vaultV1PublicAllocator);
+    expect(getChainAddress(ChainId.EthMainnet, "publicAllocator")).toBe(
+      vaultV1PublicAllocator,
+    );
+  });
+
   test.each([
     [ChainId.EthMainnet, "0x00b8e1509398ED692C3F326CbAf1694F9A881e27"],
     [ChainId.BaseMainnet, "0xAED282B8aD9257BB1272e93aE63A32A53621e412"],
@@ -158,12 +168,12 @@ describe("addressesRegistry", () => {
     [ChainId.RobinhoodMainnet, "0xCe5c1aFa115fF8b1D6913509bfc79D9AE08CC857"],
   ] as const)(
     "behavior: exposes BluePublicAllocator on chain %i",
-    (chainId, bluePublicAllocator) => {
-      expect(addressesRegistry[chainId].bluePublicAllocator).toBe(
-        bluePublicAllocator,
+    (chainId, vaultV2BluePublicAllocator) => {
+      expect(addressesRegistry[chainId].vaultV2BluePublicAllocator).toBe(
+        vaultV2BluePublicAllocator,
       );
-      expect(getChainAddress(chainId, "bluePublicAllocator")).toBe(
-        bluePublicAllocator,
+      expect(getChainAddress(chainId, "vaultV2BluePublicAllocator")).toBe(
+        vaultV2BluePublicAllocator,
       );
     },
   );
@@ -554,6 +564,27 @@ describe("registerCustomAddresses", () => {
     expect(() => getChainAddress(chainId, "midnightBundles")).toThrow(
       UnknownAddressError,
     );
+  });
+
+  test("behavior: normalizes Vault V1 PublicAllocator aliases", () => {
+    const chainId = 31_337_013;
+    const publicAllocator = randomAddress();
+
+    registerCustomAddresses({
+      addresses: {
+        [chainId]: { ...createBlueAddresses(), publicAllocator },
+      },
+      deployments: {
+        [chainId]: { ...createBlueDeployments(), publicAllocator: 11n },
+      },
+    });
+
+    expect(addressesRegistry[chainId]?.vaultV1PublicAllocator).toBe(
+      publicAllocator,
+    );
+    expect(addressesRegistry[chainId]?.publicAllocator).toBe(publicAllocator);
+    expect(deployments[chainId]?.vaultV1PublicAllocator).toBe(11n);
+    expect(deployments[chainId]?.publicAllocator).toBe(11n);
   });
 
   test("error: RegistryValueAlreadyRegisteredError for addresses", () => {

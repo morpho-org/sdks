@@ -64,7 +64,6 @@ export {
   transformValue,
   values,
 } from "@morpho-org/morpho-ts";
-export { computeVaultV2Reallocations } from "./entities/vaultV2ReallocationData.js";
 export {
   computeReallocations,
   computeVaultV1Reallocations,

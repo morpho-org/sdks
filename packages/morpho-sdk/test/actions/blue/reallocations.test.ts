@@ -1,5 +1,5 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
-import { publicAllocatorAbi } from "@morpho-org/blue-sdk-viem";
+import { vaultV1PublicAllocatorAbi } from "@morpho-org/blue-sdk-viem";
 
 import { type Address, encodeFunctionData, parseUnits } from "viem";
 import { base, mainnet } from "viem/chains";
@@ -209,7 +209,7 @@ describe("Borrow with reallocation fee", () => {
     });
 
     // Impersonate the PA admin to set a fee on the Steakhouse vault
-    const { publicAllocator } = getChainAddresses(mainnet.id);
+    const { vaultV1PublicAllocator } = getChainAddresses(mainnet.id);
     await client.impersonateAccount({ address: PA_ADMIN });
     await client.setBalance({
       address: PA_ADMIN,
@@ -217,9 +217,9 @@ describe("Borrow with reallocation fee", () => {
     });
     await client.sendTransaction({
       account: PA_ADMIN,
-      to: publicAllocator,
+      to: vaultV1PublicAllocator,
       data: encodeFunctionData({
-        abi: publicAllocatorAbi,
+        abi: vaultV1PublicAllocatorAbi,
         functionName: "setFee",
         args: [SteakhouseUsdcVaultV1.address, reallocationFee],
       }),
@@ -241,7 +241,7 @@ describe("Borrow with reallocation fee", () => {
     ];
 
     const publicAllocatorBalanceBefore = await client.getBalance({
-      address: publicAllocator!,
+      address: vaultV1PublicAllocator!,
     });
 
     const {
@@ -299,7 +299,7 @@ describe("Borrow with reallocation fee", () => {
     ).toEqual(reallocationAmount + marketAccruedInterest);
 
     const publicAllocatorBalanceAfter = await client.getBalance({
-      address: publicAllocator!,
+      address: vaultV1PublicAllocator!,
     });
     expect(publicAllocatorBalanceAfter).toEqual(
       publicAllocatorBalanceBefore + reallocationFee,
@@ -505,7 +505,7 @@ describe("SupplyCollateralBorrow with reallocation fee", () => {
     });
 
     // Impersonate the PA admin to set a fee on the Steakhouse vault
-    const { publicAllocator } = getChainAddresses(mainnet.id);
+    const { vaultV1PublicAllocator } = getChainAddresses(mainnet.id);
     await client.impersonateAccount({ address: PA_ADMIN });
     await client.setBalance({
       address: PA_ADMIN,
@@ -513,9 +513,9 @@ describe("SupplyCollateralBorrow with reallocation fee", () => {
     });
     await client.sendTransaction({
       account: PA_ADMIN,
-      to: publicAllocator,
+      to: vaultV1PublicAllocator,
       data: encodeFunctionData({
-        abi: publicAllocatorAbi,
+        abi: vaultV1PublicAllocatorAbi,
         functionName: "setFee",
         args: [SteakhouseUsdcVaultV1.address, reallocationFee],
       }),
@@ -537,7 +537,7 @@ describe("SupplyCollateralBorrow with reallocation fee", () => {
     ];
 
     const publicAllocatorBalanceBefore = await client.getBalance({
-      address: publicAllocator!,
+      address: vaultV1PublicAllocator!,
     });
 
     const {
@@ -608,7 +608,7 @@ describe("SupplyCollateralBorrow with reallocation fee", () => {
     ).toEqual(reallocationAmount + marketAccruedInterest);
 
     const publicAllocatorBalanceAfter = await client.getBalance({
-      address: publicAllocator!,
+      address: vaultV1PublicAllocator!,
     });
     expect(publicAllocatorBalanceAfter).toEqual(
       publicAllocatorBalanceBefore + reallocationFee,
@@ -616,22 +616,22 @@ describe("SupplyCollateralBorrow with reallocation fee", () => {
   });
 });
 
-describe("getReallocationData and getReallocations", () => {
-  test("should reject getReallocationData when the client chain differs from the market chain", async ({
+describe("getVaultV1ReallocationData and getReallocations", () => {
+  test("should reject getVaultV1ReallocationData when the client chain differs from the market chain", async ({
     client,
   }) => {
     const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.blue(CbbtcUsdcBlue, base.id);
 
     await expect(
-      market.getReallocationData({
+      market.getVaultV1ReallocationData({
         vaultAddresses: [SteakhouseUsdcVaultV1.address],
         block: { number: 0n, timestamp: 0n },
       }),
     ).rejects.toBeInstanceOf(ChainIdMismatchError);
   });
 
-  test("should compute reallocations and borrow using getReallocationData + getReallocations", async ({
+  test("should compute reallocations and borrow using getVaultV1ReallocationData + getReallocations", async ({
     client,
   }) => {
     const collateralAmount = parseUnits("1000", 8);
@@ -662,7 +662,7 @@ describe("getReallocationData and getReallocations", () => {
 
         const block = await client.getBlock();
 
-        const reallocationData = await market.getReallocationData({
+        const reallocationData = await market.getVaultV1ReallocationData({
           vaultAddresses: [SteakhouseUsdcVaultV1.address],
           block,
         });
@@ -741,7 +741,7 @@ describe("getReallocationData and getReallocations", () => {
 
         const block = await client.getBlock();
 
-        const reallocationData = await market.getReallocationData({
+        const reallocationData = await market.getVaultV1ReallocationData({
           vaultAddresses: [SteakhouseUsdcVaultV1.address],
           block,
         });
@@ -801,7 +801,7 @@ describe("getReallocationData and getReallocations", () => {
 
     const block = await client.getBlock();
 
-    const reallocationData = await market.getReallocationData({
+    const reallocationData = await market.getVaultV1ReallocationData({
       vaultAddresses: [SteakhouseUsdcVaultV1.address],
       block,
     });

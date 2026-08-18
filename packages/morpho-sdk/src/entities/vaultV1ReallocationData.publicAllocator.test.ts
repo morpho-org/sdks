@@ -14,7 +14,7 @@ import { describe, expect, test } from "vitest";
 import {
   type InputVaultV1ReallocationData,
   VaultV1ReallocationData,
-} from "../../src/entities/vaultV1ReallocationData.js";
+} from "./vaultV1ReallocationData.js";
 
 const timestamp = 12345n;
 

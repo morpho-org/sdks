@@ -7,8 +7,6 @@ import {
 import {
   blueAbi,
   fetchAccrualVaultV2,
-  fetchMarket,
-  fetchVaultV2PublicAllocatorData,
   readContractRestructured,
   vaultV2Abi,
 } from "@morpho-org/blue-sdk-viem";
@@ -34,7 +32,6 @@ import {
   deployVaultV2,
   submitAndAcceptVaultV2Call,
 } from "../../../test/helpers/vaultV2.js";
-import { VaultV2ReallocationData } from "../../entities/vaultV2ReallocationData.js";
 import {
   isRequirementApproval,
   isRequirementBlueAuthorization,
@@ -72,7 +69,7 @@ describe("Blue actions with Vault V2 reallocations", () => {
     const {
       morpho,
       bundler3,
-      bluePublicAllocator: allocator,
+      vaultV2BluePublicAllocator: allocator,
     } = getChainAddresses(base.id);
     assert(allocator != null);
     const sourceAssets = parseUnits("20", 6);
@@ -376,7 +373,7 @@ describe("Blue actions with Vault V2 reallocations", () => {
     client,
   }) => {
     const anvilClient = client as AnvilTestClient;
-    const { morpho, bluePublicAllocator: allocator } = getChainAddresses(
+    const { morpho, vaultV2BluePublicAllocator: allocator } = getChainAddresses(
       base.id,
     );
     assert(allocator != null);
@@ -525,18 +522,20 @@ describe("Blue actions with Vault V2 reallocations", () => {
       amount: postLossIdleAssets,
     });
 
-    const [vaultData, targetMarketData, block] = await Promise.all([
-      fetchAccrualVaultV2(vault, client),
-      fetchMarket(targetMarket.id, client),
-      client.getBlock(),
-    ]);
-    const allocatorData = await fetchVaultV2PublicAllocatorData(
-      vaultData,
-      client,
-    );
+    const block = await client.getBlock();
+    const market = client
+      .extend(morphoViemExtension())
+      .morpho.blue(targetMarket, base.id);
+    const reallocationData = await market.getVaultV2BlueReallocationData({
+      vaultAddresses: [vault],
+      block,
+    });
+    const vaultData = reallocationData.getVault(vault);
     const targetMarketParamsId = keccak256(targetIdData[2]);
-    const targetAllocation = allocatorData.allocations[targetMarketParamsId];
-    assert(targetAllocation != null);
+    const targetAllocation = reallocationData.getAllocation(
+      vault,
+      targetMarketParamsId,
+    );
     const realTotalAssets = vaultData.accrualAdapters.reduce(
       (assets, adapter) => assets + adapter.realAssets(block.timestamp),
       vaultData.assetBalance,
@@ -544,23 +543,9 @@ describe("Blue actions with Vault V2 reallocations", () => {
     const expectedMaximum =
       MathLib.wMulDown(realTotalAssets, relativeCap) -
       targetAllocation.allocation;
-    const reallocationData = new VaultV2ReallocationData({
-      chainId: base.id,
-      markets: { [targetMarket.id]: targetMarketData },
-      vaults: { [vault]: vaultData },
-      allocations: { [vault]: allocatorData.allocations },
-      publicAllocatorConfigs: {
-        [vault]: allocatorData.publicAllocatorConfig,
-      },
-      activeAdapters: { [vault]: allocatorData.activeAdapters },
-      marketPublicAllocatorConfigs: {
-        [vault]: allocatorData.marketPublicAllocatorConfigs,
-      },
-    });
-
     expect(block.timestamp).toBe(vaultData.lastUpdate);
     expect(realTotalAssets).toBeLessThan(vaultData._totalAssets);
-    const result = reallocationData.computeVaultV2Reallocations(
+    const result = reallocationData.computeVaultV2BlueReallocations(
       targetMarket.id,
       { timestamp: block.timestamp },
     );

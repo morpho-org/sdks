@@ -14,7 +14,7 @@ import {
 import type { BlueReallocation } from "../../types/index.js";
 import { blueWithdraw } from "./withdraw.js";
 
-const allocator = getChainAddresses(mainnet.id).bluePublicAllocator!;
+const allocator = getChainAddresses(mainnet.id).vaultV2BluePublicAllocator!;
 const vault: Address = "0x0000000000000000000000000000000000000012";
 const sourceAdapter: Address = "0x0000000000000000000000000000000000000013";
 const targetAdapter: Address = "0x0000000000000000000000000000000000000014";

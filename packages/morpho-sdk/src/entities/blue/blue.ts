@@ -11,10 +11,12 @@ import {
 } from "@morpho-org/blue-sdk";
 import {
   fetchAccrualPosition,
+  fetchAccrualVaultV2,
   fetchMarket,
   fetchPosition,
   fetchVault,
   fetchVaultMarketConfig,
+  fetchVaultV2PublicAllocatorData,
 } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import { type Address, isAddressEqual } from "viem";
@@ -90,6 +92,7 @@ import {
   WithdrawExceedsCollateralError,
 } from "../../types/index.js";
 import { VaultV1ReallocationData } from "../vaultV1ReallocationData.js";
+import { VaultV2BlueReallocationData } from "../vaultV2BlueReallocationData.js";
 
 export interface BlueActions {
   /**
@@ -510,6 +513,24 @@ export interface BlueActions {
    * @returns A VaultV1ReallocationData instance populated with all required data.
    * @throws {ChainIdMismatchError} when the client chain does not match this market.
    */
+  getVaultV1ReallocationData: (params: {
+    vaultAddresses: readonly Address[];
+    block: {
+      readonly number: bigint;
+      readonly timestamp: bigint;
+    };
+  }) => Promise<VaultV1ReallocationData>;
+
+  /**
+   * Fetches Vault V1 PublicAllocator state using the deprecated unversioned name.
+   *
+   * @param params.vaultAddresses - Addresses of MetaMorpho vaults that allocate to this market.
+   * @param params.block.number - Block number used for every RPC read.
+   * @param params.block.timestamp - Timestamp corresponding to the fetched block.
+   * @returns A `VaultV1ReallocationData` snapshot populated from one block.
+   * @throws {ChainIdMismatchError} when the client chain does not match this market.
+   * @deprecated Use {@link getVaultV1ReallocationData} instead.
+   */
   getReallocationData: (params: {
     vaultAddresses: readonly Address[];
     block: {
@@ -517,6 +538,26 @@ export interface BlueActions {
       readonly timestamp: bigint;
     };
   }) => Promise<VaultV1ReallocationData>;
+
+  /**
+   * Fetches Vault V2 BluePublicAllocator state for this target market.
+   *
+   * Reads the target Morpho Blue market, each Vault V2 accrual tree, and each
+   * vault's BluePublicAllocator permissions and allocation caps at one block.
+   *
+   * @param params.vaultAddresses - Vault V2 addresses to inspect for market or idle liquidity.
+   * @param params.block.number - Block number used for every RPC read.
+   * @param params.block.timestamp - Timestamp corresponding to the fetched block.
+   * @returns A `VaultV2BlueReallocationData` snapshot ready for discovery or operation planning.
+   * @throws {ChainIdMismatchError} when the client chain does not match this market.
+   */
+  getVaultV2BlueReallocationData: (params: {
+    vaultAddresses: readonly Address[];
+    block: {
+      readonly number: bigint;
+      readonly timestamp: bigint;
+    };
+  }) => Promise<VaultV2BlueReallocationData>;
 
   /**
    * Computes vault reallocations for a borrow or withdraw on this market.
@@ -527,7 +568,7 @@ export interface BlueActions {
    * Pass `{ borrowAmount }` for a borrow (legacy alias, equivalent to `{ operation: "borrow",
    * amount }`) or `{ operation: "withdraw", amount }` for a loan-asset withdraw.
    *
-   * @param params.reallocationData - The current on-chain state (from {@link getReallocationData}).
+   * @param params.reallocationData - The current on-chain state (from {@link getVaultV1ReallocationData}).
    * @param params.operation - The operation driving the reallocation (`"borrow"` or `"withdraw"`).
    *        Defaults to `"borrow"` when `borrowAmount` is provided.
    * @param params.amount - The borrow or withdraw amount used to compute the post-state utilization.
@@ -1749,13 +1790,30 @@ export class MorphoBlue implements BlueActions {
   /**
    * Fetches all on-chain inputs needed to compute public allocator reallocations.
    *
-   * @param params - Reallocation data fetch parameters.
    * @param params.vaultAddresses - Vaults to inspect for source-market liquidity.
-   * @param params.block - Block number and timestamp used for consistent RPC reads.
+   * @param params.block.number - Block number used for every RPC read.
+   * @param params.block.timestamp - Timestamp corresponding to the fetched block.
    * @returns Reallocation data ready for {@link getReallocations}.
    * @throws {ChainIdMismatchError} when the client chain does not match this market.
+   * @example
+   * ```ts
+   * import { markets, vaults } from "@morpho-org/morpho-test";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * import type { VaultV1ReallocationData } from "@morpho-org/morpho-sdk/entities";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() })
+   *   .extend(morphoViemExtension());
+   * const market = client.morpho.blue(markets[mainnet.id].usdc_wbtc, mainnet.id);
+   * const block = await client.getBlock();
+   * const data: VaultV1ReallocationData = await market.getVaultV1ReallocationData({
+   *   vaultAddresses: [vaults[mainnet.id].steakUsdc.address],
+   *   block,
+   * });
+   * ```
    */
-  async getReallocationData({
+  async getVaultV1ReallocationData({
     vaultAddresses,
     block,
   }: {
@@ -1867,13 +1925,135 @@ export class MorphoBlue implements BlueActions {
   }
 
   /**
+   * Fetches Vault V1 PublicAllocator state using the deprecated unversioned name.
+   *
+   * @param params.vaultAddresses - Addresses of MetaMorpho vaults that allocate to this market.
+   * @param params.block.number - Block number used for every RPC read.
+   * @param params.block.timestamp - Timestamp corresponding to the fetched block.
+   * @returns A `VaultV1ReallocationData` snapshot populated from one block.
+   * @throws {ChainIdMismatchError} when the client chain does not match this market.
+   * @deprecated Use {@link getVaultV1ReallocationData} instead.
+   * @example
+   * ```ts
+   * const data = await market.getReallocationData({ vaultAddresses, block });
+   * // Equivalent to market.getVaultV1ReallocationData({ vaultAddresses, block }).
+   * ```
+   */
+  getReallocationData(params: {
+    vaultAddresses: readonly Address[];
+    block: {
+      readonly number: bigint;
+      readonly timestamp: bigint;
+    };
+  }): Promise<VaultV1ReallocationData> {
+    return this.getVaultV1ReallocationData(params);
+  }
+
+  /**
+   * Fetches Vault V2 BluePublicAllocator state for this target market.
+   *
+   * Reads the target Morpho Blue market, each Vault V2 accrual tree, and each
+   * vault's BluePublicAllocator permissions and allocation caps at one block.
+   *
+   * @param params.vaultAddresses - Vault V2 addresses to inspect for market or idle liquidity.
+   * @param params.block.number - Block number used for every RPC read.
+   * @param params.block.timestamp - Timestamp corresponding to the fetched block.
+   * @returns A `VaultV2BlueReallocationData` snapshot ready for discovery or operation planning.
+   * @throws {ChainIdMismatchError} when the client chain does not match this market.
+   * @example
+   * ```ts
+   * import { markets } from "@morpho-org/morpho-test";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * import type { VaultV2BlueReallocationData } from "@morpho-org/morpho-sdk/entities";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() })
+   *   .extend(morphoViemExtension());
+   * const market = client.morpho.blue(markets[mainnet.id].usdc_wbtc, mainnet.id);
+   * const block = await client.getBlock();
+   * const keyrockUsdcVaultV2 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const data: VaultV2BlueReallocationData =
+   *   await market.getVaultV2BlueReallocationData({
+   *     vaultAddresses: [keyrockUsdcVaultV2],
+   *     block,
+   *   });
+   * ```
+   */
+  async getVaultV2BlueReallocationData({
+    vaultAddresses,
+    block,
+  }: {
+    vaultAddresses: readonly Address[];
+    block: {
+      readonly number: bigint;
+      readonly timestamp: bigint;
+    };
+  }): Promise<VaultV2BlueReallocationData> {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+
+    const client = this.client.viemClient;
+    const fetchParams = {
+      blockNumber: block.number,
+      chainId: this.chainId,
+      deployless: this.client.options.supportDeployless,
+    };
+    const [targetMarket, vaultEntries] = await Promise.all([
+      fetchMarket(this.marketParams.id, client, fetchParams),
+      Promise.all(
+        vaultAddresses.map(async (address) => {
+          const vault = await fetchAccrualVaultV2(address, client, fetchParams);
+          const publicAllocatorData = await fetchVaultV2PublicAllocatorData(
+            vault,
+            client,
+            fetchParams,
+          );
+          return { publicAllocatorData, vault };
+        }),
+      ),
+    ]);
+
+    return new VaultV2BlueReallocationData({
+      chainId: this.chainId,
+      markets: { [targetMarket.id]: targetMarket },
+      vaults: Object.fromEntries(
+        vaultEntries.map(({ vault }) => [vault.address, vault]),
+      ),
+      allocations: Object.fromEntries(
+        vaultEntries.map(({ publicAllocatorData, vault }) => [
+          vault.address,
+          publicAllocatorData.allocations,
+        ]),
+      ),
+      publicAllocatorConfigs: Object.fromEntries(
+        vaultEntries.map(({ publicAllocatorData, vault }) => [
+          vault.address,
+          publicAllocatorData.publicAllocatorConfig,
+        ]),
+      ),
+      activeAdapters: Object.fromEntries(
+        vaultEntries.map(({ publicAllocatorData, vault }) => [
+          vault.address,
+          publicAllocatorData.activeAdapters,
+        ]),
+      ),
+      marketPublicAllocatorConfigs: Object.fromEntries(
+        vaultEntries.map(({ publicAllocatorData, vault }) => [
+          vault.address,
+          publicAllocatorData.marketPublicAllocatorConfigs,
+        ]),
+      ),
+    });
+  }
+
+  /**
    * Computes public allocator reallocations for a borrow or withdraw on this market.
    *
    * Pass `{ borrowAmount }` for a borrow (legacy alias, equivalent to `{ operation: "borrow", amount }`)
    * or `{ operation, amount }` for a borrow or loan-asset withdraw.
    *
    * @param params - Reallocation computation parameters.
-   * @param params.reallocationData - State returned by {@link getReallocationData}.
+   * @param params.reallocationData - State returned by {@link getVaultV1ReallocationData}.
    * @param params.operation - The operation driving the reallocation (`"borrow"` or `"withdraw"`).
    * @param params.amount - The borrow or withdraw amount used to compute the post-state utilization.
    * @param params.borrowAmount - {@deprecated Pass `{ operation: "borrow", amount }` instead.}

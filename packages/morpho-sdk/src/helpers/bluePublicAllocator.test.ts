@@ -2,27 +2,9 @@ import { MarketParams } from "@morpho-org/blue-sdk";
 import { describe, expect, test } from "vitest";
 import { CbbtcUsdcBlue } from "../../test/fixtures/blue.js";
 import type { BlueReallocation } from "../types/index.js";
-import {
-  computeBluePublicAllocatorPenaltyAssets,
-  computeVaultV2ReallocationPenaltyAssets,
-} from "./bluePublicAllocator.js";
+import { computeVaultV2ReallocationPenaltyAssets } from "./bluePublicAllocator.js";
 
 const marketParams = new MarketParams(CbbtcUsdcBlue);
-
-describe("computeBluePublicAllocatorPenaltyAssets", () => {
-  test("default", () => {
-    expect(
-      computeBluePublicAllocatorPenaltyAssets(
-        1_000_000n,
-        1_000_000_000_000_000n,
-      ),
-    ).toBe(1_000n);
-  });
-
-  test("behavior: rounds each positive fractional penalty up", () => {
-    expect(computeBluePublicAllocatorPenaltyAssets(1n, 1n)).toBe(1n);
-  });
-});
 
 describe("computeVaultV2ReallocationPenaltyAssets", () => {
   test("default", () => {

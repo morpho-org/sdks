@@ -1,12 +1,13 @@
 import {
   getChainAddresses,
   type InputMarketParams,
+  MathLib,
 } from "@morpho-org/blue-sdk";
 import {
   blueAbi,
   erc2612Abi,
   permit2Abi,
-  publicAllocatorAbi,
+  vaultV1PublicAllocatorAbi,
   vaultV2BluePublicAllocatorAbi,
 } from "@morpho-org/blue-sdk-viem";
 import {
@@ -23,7 +24,6 @@ import {
   zeroHash,
 } from "viem";
 import { bundler3Abi, coreAdapterAbi, generalAdapter1Abi } from "../abis.js";
-import { computeBluePublicAllocatorPenaltyAssets } from "../helpers/bluePublicAllocator.js";
 import { BundlerErrors } from "../types/error.js";
 import type {
   Action,
@@ -1436,16 +1436,16 @@ export namespace BundlerAction {
     supplyMarketParams: InputMarketParams,
     skipRevert = false,
   ): BundlerCall[] {
-    const { publicAllocator } = getChainAddresses(chainId);
-    if (publicAllocator == null) {
+    const { vaultV1PublicAllocator } = getChainAddresses(chainId);
+    if (vaultV1PublicAllocator == null) {
       throw new BundlerErrors.UnexpectedAction("reallocateTo", chainId);
     }
 
     return [
       {
-        to: publicAllocator,
+        to: vaultV1PublicAllocator,
         data: encodeFunctionData({
-          abi: publicAllocatorAbi,
+          abi: vaultV1PublicAllocatorAbi,
           functionName: "reallocateTo",
           args: [vault, withdrawals, supplyMarketParams],
         }),
@@ -1531,7 +1531,8 @@ export namespace BundlerAction {
     penalty: bigint,
     skipRevert = false,
   ): BundlerCall[] {
-    const { bluePublicAllocator: allocator } = getChainAddresses(chainId);
+    const { vaultV2BluePublicAllocator: allocator } =
+      getChainAddresses(chainId);
     if (allocator == null) {
       throw new BundlerErrors.UnexpectedAction(
         "vaultV2BluePublicAllocatorReallocate",
@@ -1539,10 +1540,7 @@ export namespace BundlerAction {
       );
     }
     const calls: BundlerCall[] = [];
-    const penaltyAssets = computeBluePublicAllocatorPenaltyAssets(
-      assets,
-      penalty,
-    );
+    const penaltyAssets = MathLib.wMulUp(assets, penalty);
     if (skipRevert && penaltyAssets > 0n) {
       throw new BundlerErrors.SkippableAllocatorPenalty(penaltyAssets);
     }
@@ -1646,7 +1644,8 @@ export namespace BundlerAction {
     penalty: bigint,
     skipRevert = false,
   ): BundlerCall[] {
-    const { bluePublicAllocator: allocator } = getChainAddresses(chainId);
+    const { vaultV2BluePublicAllocator: allocator } =
+      getChainAddresses(chainId);
     if (allocator == null) {
       throw new BundlerErrors.UnexpectedAction(
         "vaultV2BluePublicAllocatorAllocateFromIdle",
@@ -1654,10 +1653,7 @@ export namespace BundlerAction {
       );
     }
     const calls: BundlerCall[] = [];
-    const penaltyAssets = computeBluePublicAllocatorPenaltyAssets(
-      assets,
-      penalty,
-    );
+    const penaltyAssets = MathLib.wMulUp(assets, penalty);
     if (skipRevert && penaltyAssets > 0n) {
       throw new BundlerErrors.SkippableAllocatorPenalty(penaltyAssets);
     }

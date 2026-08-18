@@ -18,7 +18,6 @@ import {
 } from "@morpho-org/blue-sdk";
 import { _try, bigIntComparator } from "@morpho-org/morpho-ts";
 import { type Address, type Hash, isAddressEqual } from "viem";
-import { computeBluePublicAllocatorPenaltyAssets } from "../helpers/bluePublicAllocator.js";
 import {
   DEFAULT_SUPPLY_TARGET_UTILIZATION,
   DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
@@ -42,7 +41,7 @@ import {
 } from "../types/index.js";
 
 /** Input state required to simulate Vault V2 BluePublicAllocator reallocations. */
-export interface InputVaultV2ReallocationData {
+export interface InputVaultV2BlueReallocationData {
   /** Chain id associated with the fetched state. */
   readonly chainId: number;
   /** Markets indexed by market id. */
@@ -198,12 +197,14 @@ const cloneVault = (
  *
  * @example
  * ```ts
- * import { VaultV2ReallocationData } from "@morpho-org/morpho-sdk/entities";
+ * import { VaultV2BlueReallocationData } from "@morpho-org/morpho-sdk/entities";
  *
- * const data = new VaultV2ReallocationData(input);
+ * const data = new VaultV2BlueReallocationData(input);
  * ```
  */
-export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
+export class VaultV2BlueReallocationData
+  implements InputVaultV2BlueReallocationData
+{
   /** Penalty donations created by this simulation, excluded as fresh shared-liquidity sources. */
   private readonly donatedPenaltyAssets: Record<Address, bigint>;
   /** Transaction-frozen cap denominator for each vault touched by this plan. */
@@ -240,7 +241,7 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
    *
    * @param input - State fetched at one consistent block.
    */
-  public constructor(input: InputVaultV2ReallocationData) {
+  public constructor(input: InputVaultV2BlueReallocationData) {
     this.chainId = input.chainId;
     this.markets = {};
     this.vaults = {};
@@ -249,11 +250,11 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
     this.activeAdapters = {};
     this.marketPublicAllocatorConfigs = {};
     this.donatedPenaltyAssets =
-      input instanceof VaultV2ReallocationData
+      input instanceof VaultV2BlueReallocationData
         ? { ...input.donatedPenaltyAssets }
         : {};
     this.firstTotalAssets =
-      input instanceof VaultV2ReallocationData
+      input instanceof VaultV2BlueReallocationData
         ? { ...input.firstTotalAssets }
         : {};
 
@@ -333,7 +334,7 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
    * ```
    */
   public clone() {
-    return new VaultV2ReallocationData(this);
+    return new VaultV2BlueReallocationData(this);
   }
 
   /**
@@ -456,94 +457,74 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
   }
 
   /**
-   * Computes every friendly Vault V2 BluePublicAllocator call currently
-   * available for a target market.
+   * Computes Vault V2 BluePublicAllocator calls available for a target market.
    *
-   * The algorithm ranks action-ready calls by obtainable assets, includes idle
-   * liquidity, applies each winner to cloned state, and stops when every
-   * candidate is exhausted. Vaults whose configured penalty exceeds
-   * `options.maxPenalty` are ignored. Source markets are held below the
-   * SDK's default withdrawal-utilization ceiling.
+   * Without `options.operation`, discovers every friendly call. With an
+   * operation, caps the calls to the amount required by that borrow or
+   * loan-asset withdrawal and falls back to 100% source utilization only when
+   * friendly liquidity cannot cover the absolute shortfall. Vaults whose
+   * configured penalty exceeds `options.maxPenalty` are ignored.
    *
    * @param marketId - Target Blue market id.
-   * @param options - Optional timestamp, enable flag, vault allowlist, and maximum penalty.
+   * @param options - Optional discovery controls and operation to support.
    * @returns Flat action-ready reallocations and their post-simulation state.
-   * @throws {UnknownReallocationMarketError} when the target market is absent.
-   * @example
-   * ```ts
-   * import { VaultV2ReallocationData } from "@morpho-org/morpho-sdk/entities";
-   *
-   * const data = new VaultV2ReallocationData(input);
-   * const result = data.computeVaultV2Reallocations(targetMarketId, { timestamp });
-   * ```
-   */
-  public computeVaultV2Reallocations(
-    marketId: MarketId,
-    options: VaultV2BluePublicAllocatorOptions = {},
-  ) {
-    return this.computeVaultV2ReallocationsAtUtilization({
-      marketId,
-      maxWithdrawalUtilization: DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
-      options,
-    });
-  }
-
-  /**
-   * Computes the action-ready Vault V2 reallocations required by a Blue borrow
-   * or loan-asset withdrawal.
-   *
-   * Friendly liquidity is considered first. When it cannot cover the absolute
-   * liquidity shortfall, the planner continues from that post-state up to 100%
-   * source utilization. Fee-bearing partial plans are rejected.
-   *
-   * @param params - Operation and discovery parameters.
-   * @param params.marketId - Target Blue market id.
-   * @param params.operation - Operation driving the reallocation.
-   * @param params.amount - Borrow or withdraw amount.
-   * @param params.options - Optional timestamp, enable flag, vault allowlist, and maximum penalty.
-   * @returns Flat Vault V2 reallocations accepted directly by Blue action builders.
-   * @throws {NonPositiveInputError} when `amount <= 0n` and planning is enabled.
+   * @throws {NonPositiveInputError} when the operation amount is not positive and planning is enabled.
    * @throws {UnknownReallocationMarketError} when the target market is absent.
    * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the absolute shortfall.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdraw exceeds market supply.
    * @example
    * ```ts
-   * const reallocations = data.computeVaultV2ReallocationsForOperation({
-   *   marketId: targetMarketId,
-   *   operation: "borrow",
-   *   amount: 1_000_000n,
-   *   options: { timestamp },
+   * import { VaultV2BlueReallocationData } from "@morpho-org/morpho-sdk/entities";
+   *
+   * const data = new VaultV2BlueReallocationData(input);
+   * const discovery = data.computeVaultV2BlueReallocations(targetMarketId, {
+   *   timestamp,
+   * });
+   * const plan = data.computeVaultV2BlueReallocations(targetMarketId, {
+   *   timestamp,
+   *   operation: { type: "borrow", amount: 1_000_000n },
    * });
    * ```
    */
-  public computeVaultV2ReallocationsForOperation({
-    marketId,
-    operation,
-    amount,
-    options,
-  }: {
-    readonly marketId: MarketId;
-    readonly operation: "borrow" | "withdraw";
-    readonly amount: bigint;
-    readonly options?: VaultV2BluePublicAllocatorOptions;
-  }): readonly VaultV2BlueReallocation[] {
-    if (options?.enabled === false) return [];
+  public computeVaultV2BlueReallocations(
+    marketId: MarketId,
+    options: VaultV2BluePublicAllocatorOptions & {
+      readonly operation?: {
+        readonly type: "borrow" | "withdraw";
+        readonly amount: bigint;
+      };
+    } = {},
+  ): {
+    readonly reallocations: readonly VaultV2BlueReallocation[];
+    readonly data: VaultV2BlueReallocationData;
+  } {
+    if (options.enabled === false) return { reallocations: [], data: this };
+
+    const operation = options.operation;
+    if (operation == null)
+      return this.computeVaultV2BlueReallocationsAtUtilization({
+        marketId,
+        maxWithdrawalUtilization: DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
+        options,
+      });
+
+    const { amount, type } = operation;
     if (amount <= 0n) throw new NonPositiveInputError("amount", amount);
 
     const timestamp =
-      options?.timestamp == null
+      options.timestamp == null
         ? this.getLatestSnapshotTimestamp()
         : BigInt(options.timestamp);
-    const normalizedOptions = {
+    const normalizedOptions: VaultV2BluePublicAllocatorOptions = {
       ...options,
       timestamp,
       reallocatableVaults:
-        options?.reallocatableVaults == null
+        options.reallocatableVaults == null
           ? undefined
           : [...options.reallocatableVaults],
     };
     const market = this.getMarket(marketId).accrueInterest(timestamp);
-    if (operation === "withdraw" && amount > market.totalSupplyAssets) {
+    if (type === "withdraw" && amount > market.totalSupplyAssets) {
       throw new ReallocationWithdrawExceedsMarketSupplyError({
         marketId,
         withdrawAmount: amount,
@@ -552,11 +533,11 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
     }
 
     const newTotalBorrowAssets =
-      operation === "borrow"
+      type === "borrow"
         ? market.totalBorrowAssets + amount
         : market.totalBorrowAssets;
     const newTotalSupplyAssets =
-      operation === "withdraw"
+      type === "withdraw"
         ? market.totalSupplyAssets - amount
         : market.totalSupplyAssets;
 
@@ -566,31 +547,32 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
         totalBorrowAssets: newTotalBorrowAssets,
       }) <= DEFAULT_SUPPLY_TARGET_UTILIZATION
     )
-      return [];
+      return { reallocations: [], data: this };
 
     let requiredAssets =
       MathLib.wDivUp(newTotalBorrowAssets, DEFAULT_SUPPLY_TARGET_UTILIZATION) -
       newTotalSupplyAssets;
 
-    const friendly = this.computeVaultV2Reallocations(
+    const friendly = this.computeVaultV2BlueReallocationsAtUtilization({
       marketId,
-      normalizedOptions,
-    );
+      maxWithdrawalUtilization: DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
+      options: normalizedOptions,
+    });
     const discovered = [...friendly.reallocations];
     const friendlyMarket = friendly.data.getMarket(marketId);
     const friendlyBorrow =
-      operation === "borrow"
+      type === "borrow"
         ? friendlyMarket.totalBorrowAssets + amount
         : friendlyMarket.totalBorrowAssets;
     const friendlySupply =
-      operation === "withdraw"
+      type === "withdraw"
         ? friendlyMarket.totalSupplyAssets - amount
         : friendlyMarket.totalSupplyAssets;
 
     if (friendlyBorrow > friendlySupply) {
       requiredAssets = newTotalBorrowAssets - newTotalSupplyAssets;
       discovered.push(
-        ...friendly.data.computeVaultV2ReallocationsAtUtilization({
+        ...friendly.data.computeVaultV2BlueReallocationsAtUtilization({
           marketId,
           maxWithdrawalUtilization: MathLib.WAD,
           options: normalizedOptions,
@@ -598,7 +580,7 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
       );
     }
 
-    if (requiredAssets <= 0n) return [];
+    if (requiredAssets <= 0n) return { reallocations: [], data: this };
 
     const absoluteShortfall =
       newTotalBorrowAssets > newTotalSupplyAssets
@@ -625,10 +607,23 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
       });
     }
 
-    return reallocations;
+    let data = this.clone();
+    for (const currentMarket of Object.values(data.markets)) {
+      if (currentMarket != null)
+        data.setMarket(currentMarket.accrueInterest(timestamp));
+    }
+    for (const reallocation of reallocations) {
+      data = data.cloneWithPublicReallocation({
+        reallocation,
+        targetMarketId: marketId,
+        timestamp,
+      });
+    }
+
+    return { reallocations, data };
   }
 
-  private computeVaultV2ReallocationsAtUtilization({
+  private computeVaultV2BlueReallocationsAtUtilization({
     marketId,
     maxWithdrawalUtilization,
     options = {},
@@ -638,7 +633,7 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
     readonly options?: VaultV2BluePublicAllocatorOptions;
   }): {
     readonly reallocations: readonly VaultV2BlueReallocation[];
-    readonly data: VaultV2ReallocationData;
+    readonly data: VaultV2BlueReallocationData;
   } {
     if (options.enabled === false) return { reallocations: [], data: this };
 
@@ -863,6 +858,9 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
 
             const capCompatibleCandidates: VaultV2BlueReallocation[] = [];
             for (const reallocation of rawCandidates) {
+              // Cap fit is monotonic but not linear in assets: the amount changes
+              // penalty donations, firstTotalAssets, rounded shares, and possibly
+              // shared allocation IDs. Binary search finds the exact largest fit.
               let lower = 0n;
               let upper = reallocation.assets;
 
@@ -944,14 +942,14 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
    * @throws {UnknownReallocationMarketError} when the target market is absent.
    * @example
    * ```ts
-   * const liquidity = data.getPublicReallocationLiquidityVaultV2(targetMarketId);
+   * const liquidity = data.getPublicReallocationLiquidity(targetMarketId);
    * ```
    */
-  public getPublicReallocationLiquidityVaultV2(
+  public getPublicReallocationLiquidity(
     marketId: MarketId,
     options?: VaultV2BluePublicAllocatorOptions,
   ) {
-    return this.computeVaultV2ReallocationsAtUtilization({
+    return this.computeVaultV2BlueReallocationsAtUtilization({
       marketId,
       maxWithdrawalUtilization: DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
       options,
@@ -969,11 +967,11 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
    * @throws {UnknownReallocationMarketError} when the target market is absent.
    * @example
    * ```ts
-   * const liquidity = data.getAvailableLiquidityToUtilizationVaultV2(targetMarketId);
+   * const liquidity = data.getAvailableLiquidityToUtilization(targetMarketId);
    * ```
    */
   // biome-ignore lint/complexity/useMaxParams: mirrors the existing V1 metric API
-  public getAvailableLiquidityToUtilizationVaultV2(
+  public getAvailableLiquidityToUtilization(
     marketId: MarketId,
     utilization: bigint = DEFAULT_SUPPLY_TARGET_UTILIZATION,
     options?: VaultV2BluePublicAllocatorOptions,
@@ -986,10 +984,10 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
     if (DEFAULT_SUPPLY_TARGET_UTILIZATION > utilization)
       return market.getBorrowToUtilization(utilization);
 
-    const availableLiquidity = this.getPublicReallocationLiquidityVaultV2(
-      marketId,
-      { ...options, timestamp },
-    );
+    const availableLiquidity = this.getPublicReallocationLiquidity(marketId, {
+      ...options,
+      timestamp,
+    });
     return MarketUtils.getBorrowToUtilization(
       {
         totalSupplyAssets: market.totalSupplyAssets + availableLiquidity,
@@ -1023,7 +1021,7 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
     let vault = data.getVault(reallocation.vault);
     const targetMarket = data.getMarket(targetMarketId);
 
-    const penaltyAssets = computeBluePublicAllocatorPenaltyAssets(
+    const penaltyAssets = MathLib.wMulUp(
       reallocation.assets,
       reallocation.penalty,
     );
@@ -1175,72 +1173,3 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
     }
   }
 }
-
-/**
- * Computes action-ready Vault V2 BluePublicAllocator reallocations for a Blue
- * borrow or loan-asset withdraw.
- *
- * @param params.reallocationData - Vault V2 reallocation state fetched at one block.
- * @param params.marketId - Target Blue market id.
- * @param params.operation - Operation driving the reallocation.
- * @param params.amount - Borrow or withdraw amount.
- * @param params.options - Optional timestamp, enable flag, vault allowlist, and maximum penalty.
- * @returns Flat Vault V2 reallocations accepted directly by Blue action builders.
- * @throws {NonPositiveInputError} when `amount <= 0n` and planning is enabled.
- * @throws {UnknownReallocationMarketError} when the target market is absent.
- * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the absolute shortfall.
- * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdraw exceeds market supply.
- * @example
- * ```ts
- * import { Market, MarketParams } from "@morpho-org/blue-sdk";
- * import {
- *   computeVaultV2Reallocations,
- *   type VaultV2BlueReallocation,
- * } from "@morpho-org/morpho-sdk";
- * import { VaultV2ReallocationData } from "@morpho-org/morpho-sdk/entities";
- *
- * const timestamp = 1_700_000_000n;
- * const marketParams = new MarketParams({
- *   loanToken: "0x0000000000000000000000000000000000000001",
- *   collateralToken: "0x0000000000000000000000000000000000000002",
- *   oracle: "0x0000000000000000000000000000000000000003",
- *   irm: "0x0000000000000000000000000000000000000004",
- *   lltv: 860_000_000_000_000_000n,
- * });
- * const market = new Market({
- *   params: marketParams,
- *   totalSupplyAssets: 1_000_000n,
- *   totalBorrowAssets: 500_000n,
- *   totalSupplyShares: 1_000_000n,
- *   totalBorrowShares: 500_000n,
- *   lastUpdate: timestamp,
- *   fee: 0n,
- * });
- * const reallocationData = new VaultV2ReallocationData({
- *   chainId: 1,
- *   markets: { [marketParams.id]: market },
- * });
- *
- * const reallocations: readonly VaultV2BlueReallocation[] =
- *   computeVaultV2Reallocations({
- *     reallocationData,
- *     marketId: marketParams.id,
- *     operation: "borrow",
- *     amount: 100_000n,
- *     options: { timestamp },
- *   });
- *
- * console.log(reallocations); // [] — projected utilization remains below 90%.
- * ```
- */
-export const computeVaultV2Reallocations = ({
-  reallocationData,
-  ...params
-}: {
-  readonly reallocationData: VaultV2ReallocationData;
-  readonly marketId: MarketId;
-  readonly operation: "borrow" | "withdraw";
-  readonly amount: bigint;
-  readonly options?: VaultV2BluePublicAllocatorOptions;
-}): readonly VaultV2BlueReallocation[] =>
-  reallocationData.computeVaultV2ReallocationsForOperation(params);

@@ -360,7 +360,7 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
    * const marketParams = markets[mainnet.id].usdc_wbtc;
    * const market = client.morpho.blue(marketParams, mainnet.id);
    * const block = await client.getBlock();
-   * const reallocationData = await market.getReallocationData({
+   * const reallocationData = await market.getVaultV1ReallocationData({
    *   vaultAddresses: [vaults[mainnet.id].steakUsdc.address],
    *   block: { number: block.number, timestamp: block.timestamp },
    * });
@@ -518,7 +518,7 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
    * const marketParams = markets[mainnet.id].usdc_wbtc;
    * const market = client.morpho.blue(marketParams, mainnet.id);
    * const block = await client.getBlock();
-   * const reallocationData = await market.getReallocationData({
+   * const reallocationData = await market.getVaultV1ReallocationData({
    *   vaultAddresses: [vaults[mainnet.id].steakUsdc.address],
    *   block: { number: block.number, timestamp: block.timestamp },
    * });
@@ -577,7 +577,7 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
    * const marketParams = markets[mainnet.id].usdc_wbtc;
    * const market = client.morpho.blue(marketParams, mainnet.id);
    * const block = await client.getBlock();
-   * const reallocationData = await market.getReallocationData({
+   * const reallocationData = await market.getVaultV1ReallocationData({
    *   vaultAddresses: [vaults[mainnet.id].steakUsdc.address],
    *   block: { number: block.number, timestamp: block.timestamp },
    * });

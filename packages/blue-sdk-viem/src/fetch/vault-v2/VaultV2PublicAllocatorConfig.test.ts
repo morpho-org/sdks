@@ -23,7 +23,7 @@ import {
   fetchVaultV2PublicAllocatorData,
 } from "./VaultV2PublicAllocatorConfig.js";
 
-const ALLOCATOR = getChainAddress(mainnet.id, "bluePublicAllocator");
+const ALLOCATOR = getChainAddress(mainnet.id, "vaultV2BluePublicAllocator");
 const VAULT: Address = "0x0000000000000000000000000000000000000002";
 const ADAPTER: Address = "0x0000000000000000000000000000000000000003";
 const ASSET: Address = "0x0000000000000000000000000000000000000004";

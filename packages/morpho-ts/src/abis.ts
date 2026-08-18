@@ -4050,8 +4050,8 @@ export const marketParamsAbi = {
   ],
 } as const;
 
-/** PublicAllocator ABI used to read vault allocator configuration and flow caps. */
-export const publicAllocatorAbi = [
+/** Vault V1 PublicAllocator ABI used to read vault allocator configuration and flow caps. */
+export const vaultV1PublicAllocatorAbi = [
   {
     inputs: [
       {
@@ -4578,6 +4578,13 @@ export const publicAllocatorAbi = [
     type: "function",
   },
 ] as const;
+
+/**
+ * Deprecated alias for the Vault V1 PublicAllocator ABI.
+ *
+ * @deprecated Use `vaultV1PublicAllocatorAbi` instead.
+ */
+export const publicAllocatorAbi = vaultV1PublicAllocatorAbi;
 
 /** Vault V2 Blue Public Allocator ABI used for market and idle reallocations. */
 export const vaultV2BluePublicAllocatorAbi = [

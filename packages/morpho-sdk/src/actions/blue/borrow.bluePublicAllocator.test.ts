@@ -6,6 +6,7 @@ import {
   bundler3Abi,
   generalAdapter1Abi,
   publicAllocatorAbi,
+  vaultV1PublicAllocatorAbi,
   vaultV2BluePublicAllocatorAbi,
 } from "../../abis.js";
 import {
@@ -14,7 +15,9 @@ import {
 } from "../../types/index.js";
 import { blueBorrow } from "./borrow.js";
 
-const allocator = getChainAddresses(ChainId.EthMainnet).bluePublicAllocator;
+const allocator = getChainAddresses(
+  ChainId.EthMainnet,
+).vaultV2BluePublicAllocator;
 const vaultV1 = "0x0000000000000000000000000000000000000012";
 const sourceAdapter = "0x0000000000000000000000000000000000000013";
 const targetAdapter = "0x0000000000000000000000000000000000000014";
@@ -104,7 +107,7 @@ describe("blueBorrow Blue Public Allocator", () => {
     });
 
     const publicAllocatorCall = decodeFunctionData({
-      abi: publicAllocatorAbi,
+      abi: vaultV1PublicAllocatorAbi,
       data: calls[1]!.data,
     });
     expect(publicAllocatorCall.functionName).toBe("reallocateTo");
@@ -181,5 +184,9 @@ describe("blueBorrow Blue Public Allocator", () => {
     expect(vaultV2BluePublicAllocatorAbi).toBe(
       canonicalVaultV2BluePublicAllocatorAbi,
     );
+  });
+
+  test("keeps the deprecated Vault V1 PublicAllocator ABI alias", () => {
+    expect(publicAllocatorAbi).toBe(vaultV1PublicAllocatorAbi);
   });
 });

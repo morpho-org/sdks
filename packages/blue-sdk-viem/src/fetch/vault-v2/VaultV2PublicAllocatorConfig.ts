@@ -54,7 +54,7 @@ export async function fetchVaultV2PublicAllocatorConfig(
   parameters: FetchParameters = {},
 ): Promise<VaultV2PublicAllocatorConfig> {
   const chainId = parameters.chainId ?? (await getChainId(client));
-  const allocator = getChainAddress(chainId, "bluePublicAllocator");
+  const allocator = getChainAddress(chainId, "vaultV2BluePublicAllocator");
   const [canPullFromIdle, penalty] = await readContract(client, {
     ...parameters,
     address: allocator,
@@ -117,7 +117,7 @@ export async function fetchVaultV2MarketPublicAllocatorConfig(
   parameters: FetchParameters = {},
 ): Promise<VaultV2MarketPublicAllocatorConfig> {
   const chainId = parameters.chainId ?? (await getChainId(client));
-  const allocator = getChainAddress(chainId, "bluePublicAllocator");
+  const allocator = getChainAddress(chainId, "vaultV2BluePublicAllocator");
   const [absoluteCap, canPullFromMarket] = await Promise.all([
     readContract(client, {
       ...parameters,
@@ -189,7 +189,7 @@ export async function fetchVaultV2PublicAllocatorData(
   { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
   const chainId = parameters.chainId ?? (await getChainId(client));
-  const allocator = getChainAddress(chainId, "bluePublicAllocator");
+  const allocator = getChainAddress(chainId, "vaultV2BluePublicAllocator");
   const marketRequests: {
     readonly adapter: Address;
     readonly adapterMarketCapId: Hash;
