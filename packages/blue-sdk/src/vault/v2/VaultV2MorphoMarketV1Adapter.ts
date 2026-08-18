@@ -27,7 +27,17 @@ export class VaultV2MorphoMarketV1Adapter
 {
   public declare readonly type: "VaultV2MorphoMarketV1Adapter";
 
-  static adapterId(address: Address) {
+  /**
+   * Returns the adapter-wide allocation-cap id.
+   *
+   * @param address - Adapter address.
+   * @returns The adapter-wide allocation-cap id.
+   * @example
+   * ```ts
+   * const id = VaultV2MorphoMarketV1Adapter.adapterCapId(adapter);
+   * ```
+   */
+  static adapterCapId(address: Address) {
     return keccak256(
       encodeAbiParameters(
         [{ type: "string" }, { type: "address" }],
@@ -36,7 +46,22 @@ export class VaultV2MorphoMarketV1Adapter
     );
   }
 
-  static collateralId(address: Address) {
+  /** @deprecated Use {@link VaultV2MorphoMarketV1Adapter.adapterCapId}. */
+  static adapterId(address: Address) {
+    return VaultV2MorphoMarketV1Adapter.adapterCapId(address);
+  }
+
+  /**
+   * Returns the collateral-wide allocation-cap id.
+   *
+   * @param address - Collateral token address.
+   * @returns The collateral-wide allocation-cap id.
+   * @example
+   * ```ts
+   * const id = VaultV2MorphoMarketV1Adapter.collateralCapId(collateral);
+   * ```
+   */
+  static collateralCapId(address: Address) {
     return keccak256(
       encodeAbiParameters(
         [{ type: "string" }, { type: "address" }],
@@ -45,13 +70,44 @@ export class VaultV2MorphoMarketV1Adapter
     );
   }
 
-  static marketParamsId(address: Address, params: MarketParams) {
+  /** @deprecated Use {@link VaultV2MorphoMarketV1Adapter.collateralCapId}. */
+  static collateralId(address: Address) {
+    return VaultV2MorphoMarketV1Adapter.collateralCapId(address);
+  }
+
+  /**
+   * Returns the adapter-market allocation-cap id.
+   *
+   * @param address - Adapter address.
+   * @param params - Morpho Blue market parameters.
+   * @returns The adapter-market allocation-cap id.
+   * @example
+   * ```ts
+   * const id = VaultV2MorphoMarketV1Adapter.adapterMarketCapId(
+   *   adapter,
+   *   marketParams,
+   * );
+   * ```
+   */
+  static adapterMarketCapId(address: Address, params: MarketParams) {
     return keccak256(
       encodeAbiParameters(
         [{ type: "string" }, { type: "address" }, marketParamsAbi],
         ["this/marketParams", address, params],
       ),
     );
+  }
+
+  /**
+   * Returns the adapter-market allocation-cap id.
+   *
+   * @param address - Adapter address.
+   * @param params - Morpho Blue market parameters.
+   * @returns The adapter-market allocation-cap id.
+   * @deprecated Use {@link VaultV2MorphoMarketV1Adapter.adapterMarketCapId}.
+   */
+  static marketParamsId(address: Address, params: MarketParams) {
+    return VaultV2MorphoMarketV1Adapter.adapterMarketCapId(address, params);
   }
 
   public marketParamsList: MarketParams[];
@@ -63,7 +119,9 @@ export class VaultV2MorphoMarketV1Adapter
     super({
       ...vaultV2Adapter,
       type: "VaultV2MorphoMarketV1Adapter",
-      adapterId: VaultV2MorphoMarketV1Adapter.adapterId(vaultV2Adapter.address),
+      adapterId: VaultV2MorphoMarketV1Adapter.adapterCapId(
+        vaultV2Adapter.address,
+      ),
     });
 
     this.marketParamsList = marketParamsList.map(
@@ -74,8 +132,8 @@ export class VaultV2MorphoMarketV1Adapter
   public ids(params: MarketParams) {
     return [
       this.adapterId,
-      VaultV2MorphoMarketV1Adapter.collateralId(params.collateralToken),
-      VaultV2MorphoMarketV1Adapter.marketParamsId(this.address, params),
+      VaultV2MorphoMarketV1Adapter.collateralCapId(params.collateralToken),
+      VaultV2MorphoMarketV1Adapter.adapterMarketCapId(this.address, params),
     ];
   }
 }

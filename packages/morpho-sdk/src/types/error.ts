@@ -1164,14 +1164,14 @@ export class UnknownReallocationPublicAllocatorConfigError extends UnknownDataEr
 export class UnknownReallocationMarketPublicAllocatorConfigError extends UnknownDataError {
   /**
    * @param vault - Vault V2 address for the missing configuration.
-   * @param marketParamsId - Missing adapter-scoped market-parameters id.
+   * @param adapterMarketCapId - Missing adapter-scoped market cap id.
    */
   constructor(
     public readonly vault: Address,
-    public readonly marketParamsId: Hash,
+    public readonly adapterMarketCapId: Hash,
   ) {
     super(
-      `unknown public allocator configuration "${marketParamsId}" for vault "${vault}"`,
+      `unknown public allocator configuration "${adapterMarketCapId}" for vault "${vault}"`,
     );
   }
 }

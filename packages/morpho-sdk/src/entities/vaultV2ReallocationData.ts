@@ -67,7 +67,7 @@ export interface InputVaultV2ReallocationData {
   readonly activeAdapters?: Readonly<
     Record<Address, Iterable<Address> | undefined>
   >;
-  /** Adapter-market BluePublicAllocator configuration indexed by vault and `marketParamsId`. */
+  /** Adapter-market BluePublicAllocator configuration indexed by vault and `adapterMarketCapId`. */
   readonly marketPublicAllocatorConfigs?: Readonly<
     Record<
       Address,
@@ -411,20 +411,24 @@ export class VaultV2ReallocationData implements InputVaultV2ReallocationData {
    * Gets one adapter-market BluePublicAllocator configuration.
    *
    * @param vault - Vault V2 address.
-   * @param marketParamsId - Adapter-scoped market-parameters id.
+   * @param adapterMarketCapId - Adapter-scoped market cap id.
    * @returns The allocator cap and permissions.
    * @throws {UnknownReallocationMarketPublicAllocatorConfigError} when it is absent.
    * @example
    * ```ts
-   * const config = data.getMarketPublicAllocatorConfig(vaultAddress, marketParamsId);
+   * const config = data.getMarketPublicAllocatorConfig(vaultAddress, adapterMarketCapId);
    * ```
    */
-  public getMarketPublicAllocatorConfig(vault: Address, marketParamsId: Hash) {
-    const config = this.marketPublicAllocatorConfigs[vault]?.[marketParamsId];
+  public getMarketPublicAllocatorConfig(
+    vault: Address,
+    adapterMarketCapId: Hash,
+  ) {
+    const config =
+      this.marketPublicAllocatorConfigs[vault]?.[adapterMarketCapId];
     if (config == null)
       throw new UnknownReallocationMarketPublicAllocatorConfigError(
         vault,
-        marketParamsId,
+        adapterMarketCapId,
       );
     return config;
   }

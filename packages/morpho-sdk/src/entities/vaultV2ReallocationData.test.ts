@@ -292,14 +292,14 @@ const makeFixture = ({
           [targetIds[2]]: {
             vault: VAULT,
             adapter: TARGET_ADAPTER,
-            marketParamsId: targetIds[2],
+            adapterMarketCapId: targetIds[2],
             absoluteCap: allocatorTargetCap,
             canPullFromMarket: false,
           },
           [sourceIds[2]]: {
             vault: VAULT,
             adapter: sourceAdapterAddress,
-            marketParamsId: sourceIds[2],
+            adapterMarketCapId: sourceIds[2],
             absoluteCap: 0n,
             canPullFromMarket,
           },
@@ -431,7 +431,7 @@ describe("VaultV2ReallocationData.computeVaultV2Reallocations", () => {
           [secondTargetIds[2]]: {
             vault: SECOND_VAULT,
             adapter: SECOND_TARGET_ADAPTER,
-            marketParamsId: secondTargetIds[2],
+            adapterMarketCapId: secondTargetIds[2],
             absoluteCap: 10_000n,
             canPullFromMarket: false,
           },

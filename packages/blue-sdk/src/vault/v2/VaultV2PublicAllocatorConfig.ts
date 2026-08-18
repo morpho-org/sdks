@@ -16,8 +16,8 @@ export interface VaultV2MarketPublicAllocatorConfig {
   readonly vault: Address;
   /** Vault V2 MorphoMarketV1AdapterV2 address. */
   readonly adapter: Address;
-  /** Adapter-scoped `marketParamsId` used by the allocator mappings. */
-  readonly marketParamsId: Hash;
+  /** Adapter-scoped market-parameters id used by the allocator mappings. */
+  readonly adapterMarketCapId: Hash;
   /** Maximum post-state allocation accepted by the allocator. */
   readonly absoluteCap: bigint;
   /** Whether the allocator may pull assets from this adapter-market pair. */

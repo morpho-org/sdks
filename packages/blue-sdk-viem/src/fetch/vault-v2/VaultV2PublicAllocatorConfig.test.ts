@@ -79,7 +79,7 @@ const vault = new AccrualVaultV2(
   {},
 );
 const ids = adapter.ids(marketParams);
-const marketParamsId = ids[2];
+const adapterMarketCapId = ids[2];
 
 const expected = {
   publicAllocatorConfig: {
@@ -89,10 +89,10 @@ const expected = {
   },
   activeAdapters: new Set([ADAPTER]),
   marketPublicAllocatorConfigs: {
-    [marketParamsId]: {
+    [adapterMarketCapId]: {
       vault: VAULT,
       adapter: ADAPTER,
-      marketParamsId,
+      adapterMarketCapId,
       absoluteCap: 500n,
       canPullFromMarket: true,
     },
@@ -170,11 +170,11 @@ describe("Vault V2 public allocator fetchers", () => {
       fetchVaultV2MarketPublicAllocatorConfig(
         VAULT,
         ADAPTER,
-        marketParamsId,
+        adapterMarketCapId,
         handle.client,
       ),
     ).resolves.toStrictEqual(
-      expected.marketPublicAllocatorConfigs[marketParamsId],
+      expected.marketPublicAllocatorConfigs[adapterMarketCapId],
     );
   });
 
@@ -187,7 +187,7 @@ describe("Vault V2 public allocator fetchers", () => {
       marketConfigs: [
         {
           adapter: ADAPTER,
-          marketParamsId,
+          adapterMarketCapId,
           absoluteCap: 500n,
           canPullFromMarket: true,
         },

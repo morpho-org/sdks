@@ -14,4 +14,6 @@ Use coherent versioned names across the V1 and V2 reallocation APIs, including `
 
 Compatibility note: `VaultV2MorphoMarketV1AdapterV2.ids()` now declares its existing three-element result as `readonly [Hash, Hash, Hash]`. The runtime values and ordering are unchanged, and derived allocation identifiers are immutable descriptors. We intentionally accept this TypeScript assignability tightening in the minor release; callers that explicitly require a mutable `Hash[]` can copy the tuple with `[...adapter.ids(params)]`.
 
+Name allocation-cap helpers `adapterCapId`, `collateralCapId`, and `adapterMarketCapId`. Preserve the published `adapterId`, `collateralId`, and `marketParamsId` helpers as deprecated aliases.
+
 Add an explicit `MorphoBorrowWithV2ReallocationsOptions` WDK opt-in for the combined V1/V2 reallocation union and its possible approval requirement while preserving the legacy `MorphoBorrowOptions` input and authorization-only requirement result type.

@@ -23,13 +23,28 @@ export class VaultV2MorphoVaultV1Adapter
 {
   public declare readonly type: "VaultV2MorphoVaultV1Adapter";
 
-  static adapterId(address: Address) {
+  /**
+   * Returns the adapter-wide allocation-cap id.
+   *
+   * @param address - Adapter address.
+   * @returns The adapter-wide allocation-cap id.
+   * @example
+   * ```ts
+   * const id = VaultV2MorphoVaultV1Adapter.adapterCapId(adapter);
+   * ```
+   */
+  static adapterCapId(address: Address) {
     return keccak256(
       encodeAbiParameters(
         [{ type: "string" }, { type: "address" }],
         ["this", address],
       ),
     );
+  }
+
+  /** @deprecated Use {@link VaultV2MorphoVaultV1Adapter.adapterCapId}. */
+  static adapterId(address: Address) {
+    return VaultV2MorphoVaultV1Adapter.adapterCapId(address);
   }
 
   public readonly morphoVaultV1: Address;
@@ -41,7 +56,9 @@ export class VaultV2MorphoVaultV1Adapter
     super({
       ...vaultV2Adapter,
       type: "VaultV2MorphoVaultV1Adapter",
-      adapterId: VaultV2MorphoVaultV1Adapter.adapterId(vaultV2Adapter.address),
+      adapterId: VaultV2MorphoVaultV1Adapter.adapterCapId(
+        vaultV2Adapter.address,
+      ),
     });
 
     this.morphoVaultV1 = morphoVaultV1;

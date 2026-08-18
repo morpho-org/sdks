@@ -6,12 +6,12 @@ import {IVaultV2} from "./interfaces/IVaultV2.sol";
 
 struct VaultV2MarketPublicAllocatorRequest {
     address adapter;
-    bytes32 marketParamsId;
+    bytes32 adapterMarketCapId;
 }
 
 struct VaultV2MarketPublicAllocatorResponse {
     address adapter;
-    bytes32 marketParamsId;
+    bytes32 adapterMarketCapId;
     uint256 absoluteCap;
     bool canPullFromMarket;
 }
@@ -53,9 +53,9 @@ contract GetVaultV2PublicAllocatorConfig {
             VaultV2MarketPublicAllocatorRequest calldata request = marketRequests[i];
             res.marketConfigs[i] = VaultV2MarketPublicAllocatorResponse({
                 adapter: request.adapter,
-                marketParamsId: request.marketParamsId,
-                absoluteCap: allocator.absoluteCap(address(vault), request.marketParamsId),
-                canPullFromMarket: allocator.canPullFromMarket(address(vault), request.marketParamsId)
+                adapterMarketCapId: request.adapterMarketCapId,
+                absoluteCap: allocator.absoluteCap(address(vault), request.adapterMarketCapId),
+                canPullFromMarket: allocator.canPullFromMarket(address(vault), request.adapterMarketCapId)
             });
         }
 

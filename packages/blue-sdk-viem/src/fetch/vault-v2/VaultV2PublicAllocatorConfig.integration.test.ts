@@ -44,7 +44,7 @@ describe("Vault V2 public allocator fetchers on fork", () => {
       );
       await client.setCode({ address: allocator, bytecode: fixtureBytecode });
 
-      const forkMarketParamsId = forkAdapter.ids(forkMarket.params)[2];
+      const forkAdapterMarketCapId = forkAdapter.ids(forkMarket.params)[2];
       await client.writeContract({
         address: allocator,
         abi: fixtureAbi,
@@ -55,13 +55,13 @@ describe("Vault V2 public allocator fetchers on fork", () => {
         address: allocator,
         abi: fixtureAbi,
         functionName: "setAbsoluteCap",
-        args: [forkVault.address, forkMarketParamsId, 500n],
+        args: [forkVault.address, forkAdapterMarketCapId, 500n],
       });
       await client.writeContract({
         address: allocator,
         abi: fixtureAbi,
         functionName: "setCanPullFromMarket",
-        args: [forkVault.address, forkMarketParamsId, true],
+        args: [forkVault.address, forkAdapterMarketCapId, true],
       });
       await client.writeContract({
         address: allocator,
@@ -89,11 +89,11 @@ describe("Vault V2 public allocator fetchers on fork", () => {
         new Set([forkAdapter.address]),
       );
       expect(
-        deployless.marketPublicAllocatorConfigs[forkMarketParamsId],
+        deployless.marketPublicAllocatorConfigs[forkAdapterMarketCapId],
       ).toStrictEqual({
         vault: forkVault.address,
         adapter: forkAdapter.address,
-        marketParamsId: forkMarketParamsId,
+        adapterMarketCapId: forkAdapterMarketCapId,
         absoluteCap: 500n,
         canPullFromMarket: true,
       });
