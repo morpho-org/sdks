@@ -342,6 +342,19 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     );
   });
 
+  test("behavior: honors the configured source-utilization ceiling", () => {
+    const { data } = makeFixture({ sourceBorrow: 900n });
+
+    expect(
+      data.computeVaultV2BlueReallocations(targetParams.id).reallocations,
+    ).toStrictEqual([]);
+    expect(
+      data.computeVaultV2BlueReallocations(targetParams.id, {
+        maxWithdrawalUtilization: MathLib.WAD,
+      }).reallocations[0]?.assets,
+    ).toBe(100n);
+  });
+
   test("behavior: ignores inactive source and target adapters", () => {
     for (const allocatorActiveAdapters of [
       [TARGET_ADAPTER],
@@ -944,6 +957,24 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
     expect(result.data.getMarket(targetParams.id).totalSupplyAssets).toBe(123n);
   });
 
+  test("behavior: applies the configured ceiling during the friendly phase", () => {
+    const { data } = makeFixture({
+      targetSupply: 100n,
+      targetBorrow: 90n,
+      sourceBorrow: 900n,
+    });
+
+    const { reallocations } = data.computeVaultV2BlueReallocations(
+      targetParams.id,
+      {
+        maxWithdrawalUtilization: MathLib.WAD,
+        operation: { type: "borrow", amount: 20n },
+      },
+    );
+
+    expect(reallocations[0]?.assets).toBe(23n);
+  });
+
   test("behavior: rounds required supply up to the utilization target", () => {
     const { data } = makeFixture({ targetSupply: 1n, targetBorrow: 0n });
 
@@ -989,6 +1020,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
       targetParams.id,
       {
         reallocatableVaults: [VAULT as Address].values(),
+        maxWithdrawalUtilization: 950_000_000_000_000_000n,
         operation: { type: "borrow", amount: 40n },
       },
     );
@@ -1134,5 +1166,15 @@ describe("VaultV2BlueReallocationData liquidity metrics", () => {
         (MathLib.WAD * 8n) / 10n,
       ),
     ).toBe(30n);
+  });
+
+  test("behavior: applies the configured source-utilization ceiling", () => {
+    const { data } = makeFixture({ sourceBorrow: 900n });
+
+    expect(
+      data.getPublicReallocationLiquidity(targetParams.id, {
+        maxWithdrawalUtilization: MathLib.WAD,
+      }),
+    ).toBe(100n);
   });
 });

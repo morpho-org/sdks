@@ -20,7 +20,7 @@ Centralized type definitions and error classes. Barrel-exported via `index.ts`. 
 
 - `VaultV1BlueReallocation` — vault address + fee + sorted withdrawals; maps to `reallocateTo()`. `VaultReallocation` is its deprecated compatibility alias.
 - `VaultV2BlueReallocation` — BluePublicAllocator vault/source/target-adapter/assets/WAD-scaled-penalty input; maps 1:1 to `reallocate()` or `allocateFromIdle()` while deriving target market params from the enclosing Blue action.
-- `VaultV2BluePublicAllocatorOptions` — canonical Vault V2 discovery and planner options for timestamp, enablement, vault allowlisting, and the maximum proportional penalty.
+- `VaultV2BluePublicAllocatorOptions` — canonical Vault V2 discovery and planner options for timestamp, enablement, vault allowlisting, friendly source-market utilization, and the maximum proportional penalty.
 - `BlueReallocation` — additive union accepted by Blue action and entity pass-through surfaces; preserves every V1 caller.
 
 ## Errors (`error.ts`)

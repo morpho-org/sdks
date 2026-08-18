@@ -12,9 +12,7 @@ export const MAX_ABSOLUTE_SHARE_PRICE = 100n * MathLib.RAY;
 
 /**
  * The default maximum utilization a source market may reach when withdrawing
- * shared liquidity, scaled by WAD. Still overridable through the deprecated
- * `maxWithdrawalUtilization` / `defaultMaxWithdrawalUtilization` options until
- * the next major.
+ * shared liquidity, scaled by WAD.
  */
 export const DEFAULT_WITHDRAWAL_TARGET_UTILIZATION = 90_0000000000000000n;
 

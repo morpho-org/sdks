@@ -462,8 +462,10 @@ export class VaultV2BlueReallocationData
    * Without `options.operation`, discovers every friendly call. With an
    * operation, caps the calls to the amount required by that borrow or
    * loan-asset withdrawal and falls back to 100% source utilization only when
-   * friendly liquidity cannot cover the absolute shortfall. Vaults whose
-   * configured penalty exceeds `options.maxPenalty` are ignored.
+   * friendly liquidity cannot cover the absolute shortfall. Friendly source
+   * utilization defaults to 90% and is configurable through
+   * `options.maxWithdrawalUtilization`. Vaults whose configured penalty exceeds
+   * `options.maxPenalty` are ignored.
    *
    * @param marketId - Target Blue market id.
    * @param options - Optional discovery controls and operation to support.
@@ -500,11 +502,13 @@ export class VaultV2BlueReallocationData
   } {
     if (options.enabled === false) return { reallocations: [], data: this };
 
+    const maxWithdrawalUtilization =
+      options.maxWithdrawalUtilization ?? DEFAULT_WITHDRAWAL_TARGET_UTILIZATION;
     const operation = options.operation;
     if (operation == null)
       return this.computeVaultV2BlueReallocationsAtUtilization({
         marketId,
-        maxWithdrawalUtilization: DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
+        maxWithdrawalUtilization,
         options,
       });
 
@@ -555,7 +559,7 @@ export class VaultV2BlueReallocationData
 
     const friendly = this.computeVaultV2BlueReallocationsAtUtilization({
       marketId,
-      maxWithdrawalUtilization: DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
+      maxWithdrawalUtilization,
       options: normalizedOptions,
     });
     const discovered = [...friendly.reallocations];
@@ -937,7 +941,7 @@ export class VaultV2BlueReallocationData
    * Sums friendly Vault V2 shared liquidity available to a target market.
    *
    * @param marketId - Target Blue market id.
-   * @param options - Optional timestamp, enable flag, vault allowlist, and maximum penalty.
+   * @param options - Optional timestamp, enable flag, vault allowlist, source utilization ceiling, and maximum penalty.
    * @returns Reallocatable market and idle assets, or `0n` when none are available.
    * @throws {UnknownReallocationMarketError} when the target market is absent.
    * @example
@@ -951,7 +955,9 @@ export class VaultV2BlueReallocationData
   ) {
     return this.computeVaultV2BlueReallocationsAtUtilization({
       marketId,
-      maxWithdrawalUtilization: DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
+      maxWithdrawalUtilization:
+        options?.maxWithdrawalUtilization ??
+        DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
       options,
     }).reallocations.reduce((total, { assets }) => total + assets, 0n);
   }
@@ -962,7 +968,7 @@ export class VaultV2BlueReallocationData
    *
    * @param marketId - Target Blue market id.
    * @param utilization - Desired utilization, scaled by WAD. Defaults to 90%.
-   * @param options - Optional timestamp, enable flag, vault allowlist, and maximum penalty.
+   * @param options - Optional timestamp, enable flag, vault allowlist, source utilization ceiling, and maximum penalty.
    * @returns Borrowable assets while remaining at or below `utilization`.
    * @throws {UnknownReallocationMarketError} when the target market is absent.
    * @example

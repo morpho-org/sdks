@@ -16,24 +16,21 @@ import { apiSdk } from "./api/index.js";
 const REALLOCATION_SIMULATION_DELAY = 3_600n;
 /**
  * Optional tuning for the shared-liquidity source-market withdrawal ceiling.
- *
- * @deprecated The source-market withdrawal ceiling is fixed at 90%
- * (`DEFAULT_WITHDRAWAL_TARGET_UTILIZATION` in `@morpho-org/morpho-sdk`) and will
- * stop being configurable in the next major. Overrides are still honored for now.
  */
 export interface LiquidityParameters {
   /**
    * The default maximum utilization allowed to reach to find shared liquidity (scaled by WAD).
    *
-   * @deprecated Fixed at 90% and will be removed in the next major.
+   * @default 90% (900000000000000000n)
    */
   defaultMaxWithdrawalUtilization?: bigint;
 
   /**
    * If provided, defines the maximum utilization allowed to reach for each market, defaulting to `defaultMaxWithdrawalUtilization`.
    *
-   * @deprecated Fixed at 90% and will be removed in the next major. The Morpho
-   * API's `targetWithdrawUtilization` is no longer consulted.
+   * @deprecated Per-market source ceilings will be removed in the next major.
+   * Use `defaultMaxWithdrawalUtilization` to configure one ceiling for every
+   * source. The Morpho API's `targetWithdrawUtilization` is no longer consulted.
    */
   maxWithdrawalUtilization?: Record<MarketId, bigint>;
 }
@@ -51,10 +48,7 @@ export class LiquidityLoader<chain extends Chain = Chain> {
 
   constructor(
     public client: Client<Transport, chain>,
-    /**
-     * @deprecated The source-market withdrawal ceiling is fixed at 90% and will
-     * stop being configurable in the next major. Overrides are still honored for now.
-     */
+    /** Shared-liquidity source-market withdrawal tuning. */
     public readonly parameters: LiquidityParameters = {},
   ) {
     this.dataLoader = new DataLoader(
@@ -190,8 +184,8 @@ export class LiquidityLoader<chain extends Chain = Chain> {
             // The source-market withdrawal ceiling defaults to 90%
             // (DEFAULT_WITHDRAWAL_TARGET_UTILIZATION) inside
             // `getMarketPublicReallocations`; the API's per-market
-            // `targetWithdrawUtilization` is no longer consulted. Deprecated
-            // `parameters` overrides are still forwarded for backward compatibility.
+            // `targetWithdrawUtilization` is no longer consulted.
+            // Caller `parameters` overrides are forwarded to the planner.
             const { data: endState, withdrawals } =
               startState.getMarketPublicReallocations(uniqueKey, {
                 ...parameters,

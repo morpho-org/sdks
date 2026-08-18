@@ -25,9 +25,8 @@ export interface PublicAllocatorOptions {
    * The maximum utilization each source market may reach when withdrawing
    * shared liquidity, scaled by WAD.
    *
-   * @deprecated The source-market withdrawal ceiling is fixed at 90%
-   * ({@link DEFAULT_WITHDRAWAL_TARGET_UTILIZATION}) and will stop being
-   * configurable in the next major. Per-market overrides are still honored for now.
+   * @deprecated Per-market source ceilings will be removed in the next major.
+   * Use `defaultMaxWithdrawalUtilization` to configure one ceiling for every source.
    */
   readonly maxWithdrawalUtilization?: Readonly<
     Record<MarketId, bigint | undefined>
@@ -38,9 +37,6 @@ export interface PublicAllocatorOptions {
    * shared liquidity, scaled by WAD.
    *
    * @default 90% (900000000000000000n)
-   * @deprecated The source-market withdrawal ceiling is fixed at 90%
-   * ({@link DEFAULT_WITHDRAWAL_TARGET_UTILIZATION}) and will stop being
-   * configurable in the next major. Overrides are still honored for now.
    */
   readonly defaultMaxWithdrawalUtilization?: bigint;
 }
@@ -58,6 +54,15 @@ export interface VaultV2BluePublicAllocatorOptions {
    * iterables are accepted. Defaults to every vault in the reallocation data.
    */
   readonly reallocatableVaults?: Iterable<Address>;
+
+  /**
+   * Maximum utilization source markets may reach during friendly discovery,
+   * scaled by WAD. The amount-aware planner falls back to 100% only when the
+   * friendly phase cannot cover the operation's absolute shortfall.
+   *
+   * @default 90% (900000000000000000n)
+   */
+  readonly maxWithdrawalUtilization?: bigint;
 
   /**
    * Maximum proportional vault-asset penalty accepted for each
