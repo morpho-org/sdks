@@ -11,7 +11,6 @@ focus: |
   2. Markdown documentation accuracy across the repo (README, AGENTS.md, MISSION.md, docs/**, .agents/**).
   3. Pointer / link integrity for every internal reference touched by the diff.
   4. AGENTS.md ↔ persona backlink consistency.
-  5. Immutability of implemented TIBs already present on the target branch.
 canonical-rules: docs/jsdoc-style.md
 ---
 
@@ -46,11 +45,8 @@ Files in scope (read each one whose content is in the diff OR which references s
 - `.agents/pr-review-engine/SKILL.md`, `.agents/pr-review-engine/agents/*.md`, `.agents/pr-review-engine/references/*.md`, `.agents/commands/*.md`.
 - Any `*.md` colocated with a package (`packages/<pkg>/*.md`).
 
-Implemented TIBs already present on the target branch are exempt from current-code freshness and pointer-renaming checks below. Their implementation-time symbols, examples, and paths are historical evidence, even when the current code has moved on.
-
 For each Markdown file affected, flag:
 
-- **Implemented TIB rewrites.** A TIB already present on the target branch is a historical implementation-time record: do not update its prose, examples, symbols, or paths to follow later code. Changed decisions require a new superseding TIB; operational clarifications belong in a dated addendum. A TIB introduced for the current implementation may still be updated before it lands.
 - **Stale prose.** A statement that no longer matches the code after the diff — e.g. README documents a function that was removed/renamed; AGENTS.md lists a rule the code change just violated; an example that no longer compiles.
 - **Out-of-sync inventories.** A file enumerating personas, packages, slash commands, scripts, supported chains, etc. that no longer matches reality after the diff. E.g. a README that lists "supported chains: mainnet, base" while the diff just added arbitrum.
 - **Cross-doc consistency.** When the diff changes a rule in `AGENTS.md`, every persona that enforces it (per the backlink `> Applied by personas: …`) should reflect the new rule. When the diff renames a section heading in `AGENTS.md`, every doc that references that section by title needs an update.
@@ -63,7 +59,7 @@ For every Markdown link, path reference, or symbol pointer in the changed files 
 - **Internal Markdown links must resolve.** `[label](./path/to/file.md)` — the path must exist. Anchors `#section-name` must match a heading in the target file (slugified — GitHub's convention).
 - **Path references in prose must resolve.** Lines like `Reference \`docs/jsdoc-style.md\`` or `Read \`.agents/pr-review-engine/agents/web3-security.md\`` are pointers; the file must exist.
 - **Frontmatter references must resolve.** Persona frontmatter (`applies:`, `trigger:`, `canonical-rules:`, `out-of-scope:` mentions) must reference real `AGENTS.md` sections, real flag names from `.agents/pr-review-engine/SKILL.md` Step 4, and real file paths.
-- **Renames cascade.** If the diff renames or moves a file (detect via `git diff --name-status --find-renames`), every reference to the old path in current Markdown / persona / skill / command files must be updated. Grep for the old basename in the repo and surface unresolved hits, excluding implemented TIBs already present on the target branch.
+- **Renames cascade.** If the diff renames or moves a file (detect via `git diff --name-status --find-renames`), every reference to the old path in any tracked Markdown / persona / skill / command file must be updated. Grep for the old basename in the repo and surface unresolved hits.
 - **Removed exports / removed files.** If the diff removes a public export or a file, grep the repo for references and flag any that survive.
 
 ## 4. AGENTS.md ↔ persona backlink consistency
