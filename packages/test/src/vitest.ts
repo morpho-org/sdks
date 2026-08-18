@@ -5,7 +5,7 @@ import {
   type SendTransactionParameters,
   zeroAddress,
 } from "viem";
-import { type TestAPI, test } from "vitest";
+import { onTestFinished, type TestAPI, test } from "vitest";
 import { type AnvilArgs, spawnAnvil } from "./anvil.js";
 import { type AnvilTestClient, createAnvilTestClient } from "./client.js";
 import {
@@ -185,35 +185,38 @@ export const createViemTest = <chain extends Chain>(
       if (initialized === undefined) throw setupFailure;
 
       const { client, stopAndWait } = initialized;
-      let fixtureFailed = false;
-      let fixtureFailure: unknown;
-      let cleanupFailed = false;
-      let cleanupFailure: unknown;
+      const cleanupState: { failed: boolean; failure: unknown } = {
+        failed: false,
+        failure: undefined,
+      };
+
+      // Report teardown after Vitest removes its fixture cleanup callback so a
+      // retry cannot replay the first attempt's rejected cleanup promise.
+      onTestFinished(() => {
+        if (cleanupState.failed) throw cleanupState.failure;
+      });
 
       try {
         await use(client);
       } catch (error) {
-        fixtureFailed = true;
-        fixtureFailure = error;
+        cleanupState.failed = true;
+        cleanupState.failure = error;
+      } finally {
+        try {
+          await stopAndWait();
+        } catch (error) {
+          if (cleanupState.failed)
+            cleanupState.failure = createAnvilFailureCleanupError({
+              cleanupError: error,
+              failure: cleanupState.failure,
+              message:
+                "The Vitest fixture failed and Anvil cleanup also failed. Inspect both failures and stop the process manually before retrying.",
+              summary: "Vitest fixture and Anvil cleanup both failed.",
+            });
+          else cleanupState.failure = error;
+          cleanupState.failed = true;
+        }
       }
-
-      try {
-        await stopAndWait();
-      } catch (error) {
-        cleanupFailed = true;
-        cleanupFailure = error;
-      }
-
-      if (fixtureFailed && cleanupFailed)
-        throw createAnvilFailureCleanupError({
-          cleanupError: cleanupFailure,
-          failure: fixtureFailure,
-          message:
-            "The Vitest fixture failed and Anvil cleanup also failed. Inspect both failures and stop the process manually before retrying.",
-          summary: "Vitest fixture and Anvil cleanup both failed.",
-        });
-      if (fixtureFailed) throw fixtureFailure;
-      if (cleanupFailed) throw cleanupFailure;
     },
   });
 };

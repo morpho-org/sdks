@@ -98,9 +98,6 @@ jobs:
           MAINNET_RPC_URL: ${{ matrix.uses_foundry && secrets.MAINNET_RPC_URL || '' }}
           BASE_RPC_URL: ${{ matrix.uses_foundry && secrets.BASE_RPC_URL || '' }}
           ARBITRUM_RPC_URL: ${{ matrix.uses_foundry && secrets.ARBITRUM_RPC_URL || '' }}
-          # Keep fork cases concurrent without overwhelming one RPC endpoint.
-          MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC: "2"
-          MORPHO_TEST_ANVIL_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.name }}
           IS_LOGGING_DISABLED: true
           VITEST_NAME: ${{ matrix.name }}
           VITEST_PROJECTS: ${{ matrix.projects }}

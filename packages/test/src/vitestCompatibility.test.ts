@@ -5,6 +5,7 @@ import type { AnvilTestClient } from "./client.js";
 const testState = vi.hoisted(() => ({
   clientFixture: undefined as unknown,
   createAnvilTestClientMock: vi.fn(),
+  onTestFinishedMock: vi.fn(),
   spawnAnvilMock: vi.fn(),
   testExtendMock: vi.fn(),
 }));
@@ -12,12 +13,31 @@ const testState = vi.hoisted(() => ({
 vi.mock("vitest", async (importOriginal) => {
   const actual = await importOriginal<typeof import("vitest")>();
   testState.testExtendMock.mockImplementation((fixtures) => {
-    testState.clientFixture = (fixtures as { client: unknown }).client;
+    const clientFixture = (
+      fixtures as {
+        client: (
+          context: Readonly<Record<string, unknown>>,
+          use: (client: unknown) => Promise<void>,
+        ) => Promise<void>;
+      }
+    ).client;
+    testState.clientFixture = async (
+      context: Readonly<Record<string, unknown>>,
+      use: (client: unknown) => Promise<void>,
+    ) => {
+      const finished: (() => unknown | Promise<unknown>)[] = [];
+      testState.onTestFinishedMock.mockImplementation(
+        (handler: () => unknown | Promise<unknown>) => finished.push(handler),
+      );
+      await clientFixture(context, use);
+      for (const handler of finished.reverse()) await handler();
+    };
     return actual.test;
   });
 
   return {
     ...actual,
+    onTestFinished: testState.onTestFinishedMock,
     test: new Proxy(actual.test, {
       // biome-ignore lint/complexity/useMaxParams: required Proxy handler signature
       get(target, property, receiver) {

@@ -1,7 +1,16 @@
 import { defineConfig } from "vitest/config";
 
-// Fork projects let CI shard RPC-heavy tests separately without throttling pure tests.
-const forkTestTimeout = 120_000;
+// Queue fork tests before their timeout starts while keeping pure tests unconstrained.
+const forkTestConfig = {
+  ...(process.env.CI
+    ? {
+        maxConcurrency: 1,
+        maxWorkers: 2,
+        sequence: { groupOrder: 1 }, // Separate from unconstrained unit projects.
+      }
+    : {}),
+  testTimeout: 120_000,
+} as const;
 
 export default defineConfig({
   test: {
@@ -76,7 +85,7 @@ export default defineConfig({
         test: {
           name: "blue-sdk-fork",
           include: ["packages/blue-sdk/test/**/*.integration.test.ts"],
-          testTimeout: forkTestTimeout,
+          ...forkTestConfig,
         },
       },
       {
@@ -91,7 +100,7 @@ export default defineConfig({
         test: {
           name: "midnight-sdk-fork",
           include: ["packages/midnight-sdk/test/**/*.integration.test.ts"],
-          testTimeout: forkTestTimeout,
+          ...forkTestConfig,
         },
       },
       {
@@ -110,7 +119,7 @@ export default defineConfig({
         test: {
           name: "morpho-sdk-fork",
           include: ["packages/morpho-sdk/test/**/*.integration.test.ts"],
-          testTimeout: forkTestTimeout,
+          ...forkTestConfig,
         },
       },
       {
@@ -129,7 +138,7 @@ export default defineConfig({
           include: ["packages/evm-simulation/test/**/*.integration.test.ts"],
           globals: true,
           environment: "node",
-          testTimeout: forkTestTimeout,
+          ...forkTestConfig,
         },
       },
       {
@@ -144,7 +153,7 @@ export default defineConfig({
         test: {
           name: "blue-sdk-viem-fork",
           include: ["packages/blue-sdk-viem/test/**/*.integration.test.ts"],
-          testTimeout: forkTestTimeout,
+          ...forkTestConfig,
         },
       },
       {
@@ -161,7 +170,7 @@ export default defineConfig({
           include: [
             "packages/liquidity-sdk-viem/test/**/*.integration.test.ts",
           ],
-          testTimeout: forkTestTimeout,
+          ...forkTestConfig,
         },
       },
       {
@@ -176,7 +185,7 @@ export default defineConfig({
         test: {
           name: "test-fork",
           include: ["packages/test/test/**/*.integration.test.ts"],
-          testTimeout: forkTestTimeout,
+          ...forkTestConfig,
         },
       },
       {
@@ -202,7 +211,7 @@ export default defineConfig({
           include: [
             "packages/wdk-protocol-lending-morpho-evm/test/**/*.integration.test.ts",
           ],
-          testTimeout: forkTestTimeout,
+          ...forkTestConfig,
         },
       },
     ],

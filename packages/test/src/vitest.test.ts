@@ -20,11 +20,15 @@ vi.mock("./client.js", async (importOriginal) => {
   };
 });
 
+import { AnvilProcessError } from "./errors.js";
 import { createViemTest } from "./vitest.js";
 
 let activeProcesses = 0;
 let peakActiveProcesses = 0;
 let spawnedProcesses = 0;
+let retryBodies = 0;
+let retryProcesses = 0;
+const retryForkBlockNumber = 1n;
 const fakeClient = {
   account: { address: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" },
   getCode: vi.fn().mockResolvedValue(undefined),
@@ -32,7 +36,20 @@ const fakeClient = {
 } as unknown as AnvilTestClient<typeof mainnet>;
 
 createAnvilTestClientMock.mockReturnValue(fakeClient);
-spawnAnvilMock.mockImplementation(async () => {
+spawnAnvilMock.mockImplementation(async (parameters) => {
+  if (parameters.forkBlockNumber === retryForkBlockNumber) {
+    const attempt = ++retryProcesses;
+    return {
+      rpcUrl: `http://localhost:${32_000 + attempt}` as const,
+      stop: () => true,
+      stopAndWait: async () => {
+        if (attempt === 1)
+          throw new AnvilProcessError("Anvil exited unexpectedly");
+        return true;
+      },
+    };
+  }
+
   activeProcesses += 1;
   peakActiveProcesses = Math.max(peakActiveProcesses, activeProcesses);
   spawnedProcesses += 1;
@@ -57,6 +74,10 @@ const viemTest = createViemTest(mainnet, {
 });
 const extendedViemTest = viemTest.extend<{ readonly label: string }>({
   label: "extended",
+});
+const retryViemTest = createViemTest(mainnet, {
+  forkBlockNumber: retryForkBlockNumber,
+  forkUrl: "https://rpc.example",
 });
 
 describe("createViemTest", () => {
@@ -94,8 +115,19 @@ describe("createViemTest", () => {
     },
   );
 
+  retryViemTest(
+    "behavior: retries with a fresh Anvil after an unexpected exit",
+    { retry: 1 },
+    async ({ client }) => {
+      retryBodies += 1;
+      expect(client).toBe(fakeClient);
+    },
+  );
+
   afterAll(() => {
-    expect(spawnAnvilMock).toHaveBeenCalledTimes(4);
+    expect(spawnedProcesses).toBe(4);
+    expect(retryProcesses).toBe(2);
+    expect(retryBodies).toBe(2);
     expect(peakActiveProcesses).toBe(4);
     expect(activeProcesses).toBe(0);
   });
