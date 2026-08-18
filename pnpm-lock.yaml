@@ -328,8 +328,8 @@ importers:
         specifier: workspace:^
         version: link:../morpho-sdk
       '@tetherto/wdk-wallet':
-        specifier: 1.0.0-beta.15
-        version: 1.0.0-beta.15(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
+        specifier: 1.0.0-beta.17
+        version: 1.0.0-beta.17(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@tetherto/wdk-wallet-evm':
         specifier: 1.0.0-beta.16
         version: 1.0.0-beta.16(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))(bare-url@2.4.6)
@@ -1333,8 +1333,8 @@ packages:
   '@tetherto/wdk-wallet@1.0.0-beta.14':
     resolution: {integrity: sha512-TbihkT8Wne5jLTWSxA4eqmRYKg/W0gJRT81rK2e/RzFTj9or9BpkcfmeX1AKyitrwhUrTFn1OwVV8rMymLKisA==}
 
-  '@tetherto/wdk-wallet@1.0.0-beta.15':
-    resolution: {integrity: sha512-gGfEEwPDgQkRpoXW6O7e9B5O3Ys1ZCoFF8eHHoyPwlRZE2bfWC9UfBT8X4b33iMAOL0ieEaTdn1TVqVx3j33kg==}
+  '@tetherto/wdk-wallet@1.0.0-beta.17':
+    resolution: {integrity: sha512-xar2qggQJEcqtzlBvZDUzg0gtq3CwDtFzbCtFLqKTg2sjFEt8o2Grbl9r/BchEiulMhlYIX4drgLZ+Yf1rR9qw==}
 
   '@tybys/wasm-util@0.10.3':
     resolution: {integrity: sha512-F3fo1MYrRJYL3zER0OUOmkutjr1Vp23m7OsSgp7nq4SP6OqX6C/56XFIPAl5bt3zaBRjmW7SGz3u/6LwFpYcOg==}
@@ -4822,7 +4822,7 @@ snapshots:
       - bare-tcp
       - react-native-b4a
 
-  '@tetherto/wdk-wallet@1.0.0-beta.15(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))':
+  '@tetherto/wdk-wallet@1.0.0-beta.17(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))':
     dependencies:
       bare-node-runtime: 1.5.0(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       bip39: 3.1.0
