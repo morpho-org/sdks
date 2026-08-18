@@ -17,6 +17,7 @@ jobs:
   package:
     name: Package (${{ matrix.name }})
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -72,11 +73,12 @@ jobs:
           cache: pnpm
 
       - name: Restore Foundry cache
+        id: foundry-cache
         if: matrix.uses_foundry
         uses: actions/cache/restore@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6
         with:
           path: ~/.foundry/cache/rpc
-          key: foundry-${{ github.job }}-${{ matrix.name }}-${{ github.sha }}-${{ github.run_attempt }}
+          key: foundry-${{ github.job }}-${{ matrix.name }}-${{ github.sha }}
           restore-keys: |
             foundry-${{ github.job }}-${{ matrix.name }}-${{ github.sha }}-
             foundry-${{ github.job }}-${{ matrix.name }}-
@@ -89,6 +91,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Test
+        id: test
         env:
           MAINNET_RPC_URL: ${{ matrix.uses_foundry && secrets.MAINNET_RPC_URL || '' }}
           BASE_RPC_URL: ${{ matrix.uses_foundry && secrets.BASE_RPC_URL || '' }}
@@ -122,12 +125,15 @@ jobs:
           retention-days: 1
 
       - name: Save Foundry cache
-        # Attempts need unique keys because GitHub caches are immutable.
-        if: success() && matrix.uses_foundry
+        if: >-
+          !cancelled() &&
+          matrix.uses_foundry &&
+          steps.test.outcome != 'skipped' &&
+          steps.foundry-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6
         with:
           path: ~/.foundry/cache/rpc
-          key: foundry-${{ github.job }}-${{ matrix.name }}-${{ github.sha }}-${{ github.run_attempt }}
+          key: ${{ steps.foundry-cache.outputs.cache-primary-key }}
 
   vitest:
     name: vitest
@@ -135,6 +141,7 @@ jobs:
     needs:
       - package
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Check shards
