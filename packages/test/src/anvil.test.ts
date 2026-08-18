@@ -148,9 +148,10 @@ describe.sequential("spawnAnvil", () => {
     expect(subprocess.unref).toHaveBeenCalledOnce();
   });
 
-  test("behavior: redacts fork URLs from running subprocess warnings", async () => {
+  test("behavior: redacts fork credentials from running subprocess warnings", async () => {
     process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "0";
     const forkUrl = "https://user:secret@rpc.example/v1/private-key";
+    const forkHeader = "Bearer private-provider-token";
     const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
     const subprocess = createFakeAnvilProcess();
     spawnMock.mockReturnValue(
@@ -158,7 +159,11 @@ describe.sequential("spawnAnvil", () => {
     );
 
     try {
-      const spawnedPromise = spawnAnvil({ chainId: 1, forkUrl });
+      const spawnedPromise = spawnAnvil({
+        chainId: 1,
+        forkHeader: { Authorization: forkHeader },
+        forkUrl,
+      });
       await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
       subprocess.stdout.write("Listening on 127.0.0.1:31012\n");
       const spawned = await spawnedPromise;
@@ -167,12 +172,15 @@ describe.sequential("spawnAnvil", () => {
       subprocess.stderr.write(
         `provider request failed for ${forkUrl.slice(0, forkUrlSplit)}\u001b[31m`,
       );
-      subprocess.stderr.write(`\u001b[0m${forkUrl.slice(forkUrlSplit)}\n`);
+      subprocess.stderr.write(
+        `\u001b[0m${forkUrl.slice(forkUrlSplit)} with ${forkHeader}\n`,
+      );
       expect(warning).toHaveBeenCalledWith(
-        "[port 31012] provider request failed for <redacted-rpc-url>",
+        "[port 31012] provider request failed for <redacted-rpc-url> with <redacted-rpc-url>",
       );
       expect(warning).toHaveBeenCalledOnce();
       expect(String(warning.mock.calls)).not.toContain(forkUrl);
+      expect(String(warning.mock.calls)).not.toContain(forkHeader);
       await spawned.stopAndWait();
     } finally {
       warning.mockRestore();

@@ -76,6 +76,7 @@ export function redactSecrets(content, secrets) {
   for (const representation of [...representations].sort(
     (left, right) => right.length - left.length,
   )) {
+    if (representation === "") continue;
     const occurrences = redacted.split(representation).length - 1;
     if (occurrences === 0) continue;
     replacements += occurrences;

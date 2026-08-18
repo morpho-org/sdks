@@ -3,13 +3,19 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-const { execFileSyncMock } = vi.hoisted(() => ({
+const { execFileSyncMock, rmSyncMock } = vi.hoisted(() => ({
   execFileSyncMock: vi.fn(),
+  rmSyncMock: vi.fn<typeof import("node:fs").rmSync>(),
 }));
 
 vi.mock("node:child_process", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:child_process")>();
   return { ...actual, execFileSync: execFileSyncMock };
+});
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  rmSyncMock.mockImplementation(actual.rmSync);
+  return { ...actual, rmSync: rmSyncMock };
 });
 
 import {
@@ -89,6 +95,32 @@ describe.sequential("acquireAnvilProcessSlot", () => {
         signal: AbortSignal.timeout(100),
       }),
     ).rejects.toBeInstanceOf(AnvilCleanupError);
+  });
+
+  test("error: preserves reservation and candidate cleanup failures together", async () => {
+    const forkUrl = "https://rpc.example/candidate-cleanup";
+    const runId = "candidate-cleanup";
+    process.env.MORPHO_TEST_MAX_ANVIL_PROCESSES_PER_RPC = "1";
+    const lockDirectory = anvilSlotLockDirectory({ forkUrl, runId });
+    const lockPath = join(lockDirectory, "0.lock");
+    lockDirectories.push(lockDirectory);
+    mkdirSync(lockPath, { recursive: true });
+    writeFileSync(join(lockPath, "owner"), "corrupt\n");
+    const cleanupError = new Error("candidate removal failed");
+    rmSyncMock.mockImplementationOnce(() => {
+      throw cleanupError;
+    });
+
+    const error = await acquireAnvilProcessSlot({ forkUrl, runId }).catch(
+      (caught: unknown) => caught,
+    );
+
+    expect(error).toBeInstanceOf(AnvilCleanupError);
+    if (!(error instanceof AnvilCleanupError)) throw error;
+    expect(error.cause).toBeInstanceOf(AggregateError);
+    if (!(error.cause instanceof AggregateError)) throw error.cause;
+    expect(error.cause.errors[0]).toBeInstanceOf(AnvilCleanupError);
+    expect(error.cause.errors[1]).toBe(cleanupError);
   });
 });
 

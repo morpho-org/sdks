@@ -76,6 +76,41 @@ describe.sequential("createViemTest compatibility", () => {
     else process.env.CI = originalCi;
   });
 
+  test("default", async () => {
+    const parameters = {
+      forkUrl: "https://rpc.example",
+      stepsTracing: false,
+    } as const;
+    const originalParameters = { ...parameters };
+    testState.spawnAnvilMock.mockResolvedValue({
+      rpcUrl: "http://localhost:31001",
+      stop: vi.fn(),
+      stopAndWait: stopAndWaitMock,
+    });
+
+    createViemTest(mainnet, parameters);
+    const clientFixture = testState.clientFixture as VitestClientFixture;
+    await clientFixture({}, async (client) => {
+      expect(client).toBe(fakeClient);
+    });
+
+    expect(parameters).toEqual(originalParameters);
+    expect(testState.spawnAnvilMock).toHaveBeenCalledWith(
+      {
+        ...originalParameters,
+        autoImpersonate: true,
+        blockBaseFeePerGas: 0n,
+        forkChainId: mainnet.id,
+        forkRetryBackoff: 500,
+        gasPrice: 0n,
+        order: "fifo",
+        pruneHistory: true,
+        retries: 10,
+      },
+      { signal: undefined },
+    );
+  });
+
   test("behavior: retries without a Vitest context signal", async () => {
     testState.spawnAnvilMock
       .mockRejectedValueOnce(new AnvilStartupError("temporary failure"))

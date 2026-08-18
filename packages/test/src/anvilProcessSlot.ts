@@ -10,7 +10,11 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout } from "node:timers/promises";
-import { AnvilCleanupError, AnvilStartupError } from "./errors.js";
+import {
+  AnvilCleanupError,
+  AnvilStartupError,
+  createAnvilFailureCleanupError,
+} from "./errors.js";
 
 const ANVIL_PROCESS_SLOT_TIMEOUT_MS = 120_000;
 const ANVIL_PROCESS_SLOT_RELEASE_TIMEOUT_MS = 5_000;
@@ -508,7 +512,19 @@ export const acquireAnvilProcessSlot = async (parameters: {
         );
       }
     }
-  } finally {
-    rmSync(candidatePath, { recursive: true, force: true });
+  } catch (error) {
+    try {
+      rmSync(candidatePath, { recursive: true, force: true });
+    } catch (cleanupError) {
+      throw createAnvilFailureCleanupError({
+        cleanupError,
+        failure: error,
+        message:
+          "Anvil process-slot reservation failed and candidate cleanup also failed. Inspect both failures and remove the stale candidate directory before retrying.",
+        summary:
+          "Anvil process-slot reservation and candidate cleanup both failed.",
+      });
+    }
+    throw error;
   }
 };

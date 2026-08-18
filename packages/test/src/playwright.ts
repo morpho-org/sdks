@@ -4,10 +4,32 @@ import { type AnvilArgs, spawnAnvil } from "./anvil.js";
 import { type AnvilTestClient, createAnvilTestClient } from "./client.js";
 import { createAnvilFailureCleanupError } from "./errors.js";
 
+/** Fixtures exposed by a Playwright test created with {@link createViemTest}. */
 export interface PlaywrightTestContext<chain extends Chain = Chain> {
-  client: AnvilTestClient<chain>;
+  /** An Anvil-backed viem client configured for the selected chain. */
+  readonly client: AnvilTestClient<chain>;
 }
 
+/**
+ * Creates a Playwright test API backed by an isolated Anvil process.
+ *
+ * @param chain - Chain used to configure the viem client and default fork.
+ * @param parameters - Optional Anvil startup and fork parameters.
+ * @returns A Playwright test API with an Anvil-backed `client` fixture.
+ * @throws {AnvilStartupError} When the fixture cannot start Anvil.
+ * @throws {AnvilProcessError} When Anvil exits unexpectedly.
+ * @throws {AnvilCleanupError} When fixture or process cleanup fails.
+ * @example
+ * ```ts
+ * import { createViemTest } from "@morpho-org/test/playwright";
+ * import { mainnet } from "viem/chains";
+ *
+ * export const test = createViemTest(mainnet, {
+ *   forkUrl: process.env.MAINNET_RPC_URL,
+ *   forkBlockNumber: 19_530_000,
+ * });
+ * ```
+ */
 export const createViemTest = <chain extends Chain>(
   chain: chain,
   parameters: AnvilArgs = {},

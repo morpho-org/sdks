@@ -83,6 +83,15 @@ describe("redactSecrets", () => {
       "host=<redacted-rpc-url> path=<redacted-rpc-url> token=<redacted-rpc-url>",
     );
   });
+
+  test("behavior: ignores empty URL representations", () => {
+    const secret = "localhost:8545";
+
+    expect(redactSecrets(`endpoint=${secret}`, [secret])).toEqual({
+      content: "endpoint=<redacted-rpc-url>",
+      replacements: 1,
+    });
+  });
 });
 
 describe("sanitizeVitestReports", () => {
