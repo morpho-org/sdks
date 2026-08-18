@@ -17,7 +17,7 @@ jobs:
   package:
     name: Package (${{ matrix.name }})
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       # Package shards share RPC credentials, so bound their aggregate fork pressure.
@@ -80,7 +80,7 @@ jobs:
         uses: actions/cache/restore@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6
         with:
           path: ~/.foundry/cache/rpc
-          key: foundry-${{ github.job }}-${{ matrix.name }}-${{ github.sha }}
+          key: foundry-${{ github.job }}-${{ matrix.name }}-${{ github.sha }}-${{ github.run_attempt }}
           restore-keys: |
             foundry-${{ github.job }}-${{ matrix.name }}-${{ github.sha }}-
             foundry-${{ github.job }}-${{ matrix.name }}-
