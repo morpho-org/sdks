@@ -9,6 +9,7 @@ import {
   fetchAccrualVaultV2,
   readContractRestructured,
   vaultV2Abi,
+  vaultV2BluePublicAllocatorAbi,
 } from "@morpho-org/blue-sdk-viem";
 import type { AnvilTestClient } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
@@ -22,10 +23,6 @@ import {
 } from "viem";
 import { base } from "viem/chains";
 import { assert, describe, expect } from "vitest";
-import {
-  abi as allocatorAbi,
-  code as allocatorCode,
-} from "../../../test/fixtures/BluePublicAllocatorWriteFixture.js";
 import { supplyCollateral } from "../../../test/helpers/blue.js";
 import {
   deployMorphoMarketV1AdapterV2,
@@ -41,7 +38,7 @@ import type { VaultV2BlueReallocation } from "../../types/index.js";
 
 const test = createViemTest(base, {
   forkUrl: process.env.BASE_RPC_URL,
-  forkBlockNumber: 41_290_768n,
+  forkBlockNumber: 50_063_965n, // BluePublicAllocator deployment block.
   stepsTracing: false,
 });
 
@@ -191,19 +188,6 @@ describe("Blue actions with Vault V2 reallocations", () => {
       amount: initialIdleAssets,
     });
 
-    const deploymentHash = await client.deployContract({
-      abi: allocatorAbi,
-      bytecode: allocatorCode,
-    });
-    const deploymentReceipt = await client.waitForTransactionReceipt({
-      hash: deploymentHash,
-    });
-    const fixture = deploymentReceipt.contractAddress;
-    assert(fixture != null);
-    const fixtureBytecode = await client.getBytecode({ address: fixture });
-    assert(fixtureBytecode != null);
-    await client.setCode({ address: allocator, bytecode: fixtureBytecode });
-
     await submitAndAcceptVaultV2Call(anvilClient, {
       vault,
       data: encodeFunctionData({
@@ -214,31 +198,31 @@ describe("Blue actions with Vault V2 reallocations", () => {
     });
     await client.writeContract({
       address: allocator,
-      abi: allocatorAbi,
+      abi: vaultV2BluePublicAllocatorAbi,
       functionName: "setIsActiveAdapter",
       args: [vault, sourceAdapter, true],
     });
     await client.writeContract({
       address: allocator,
-      abi: allocatorAbi,
+      abi: vaultV2BluePublicAllocatorAbi,
       functionName: "setAbsoluteCap",
       args: [vault, targetAdapter, targetMarket, maxUint128],
     });
     await client.writeContract({
       address: allocator,
-      abi: allocatorAbi,
+      abi: vaultV2BluePublicAllocatorAbi,
       functionName: "setCanPullFromMarket",
       args: [vault, sourceAdapter, sourceMarket, true],
     });
     await client.writeContract({
       address: allocator,
-      abi: allocatorAbi,
+      abi: vaultV2BluePublicAllocatorAbi,
       functionName: "setCanPullFromIdle",
       args: [vault, true],
     });
     await client.writeContract({
       address: allocator,
-      abi: allocatorAbi,
+      abi: vaultV2BluePublicAllocatorAbi,
       functionName: "setPenalty",
       args: [vault, penalty],
     });
@@ -452,19 +436,6 @@ describe("Blue actions with Vault V2 reallocations", () => {
       });
     }
 
-    const deploymentHash = await client.deployContract({
-      abi: allocatorAbi,
-      bytecode: allocatorCode,
-    });
-    const deploymentReceipt = await client.waitForTransactionReceipt({
-      hash: deploymentHash,
-    });
-    const fixture = deploymentReceipt.contractAddress;
-    assert(fixture != null);
-    const fixtureBytecode = await client.getBytecode({ address: fixture });
-    assert(fixtureBytecode != null);
-    await client.setCode({ address: allocator, bytecode: fixtureBytecode });
-
     await submitAndAcceptVaultV2Call(anvilClient, {
       vault,
       data: encodeFunctionData({
@@ -475,19 +446,19 @@ describe("Blue actions with Vault V2 reallocations", () => {
     });
     await client.writeContract({
       address: allocator,
-      abi: allocatorAbi,
+      abi: vaultV2BluePublicAllocatorAbi,
       functionName: "setIsActiveAdapter",
       args: [vault, targetAdapter, true],
     });
     await client.writeContract({
       address: allocator,
-      abi: allocatorAbi,
+      abi: vaultV2BluePublicAllocatorAbi,
       functionName: "setAbsoluteCap",
       args: [vault, targetAdapter, targetMarket, maxUint128],
     });
     await client.writeContract({
       address: allocator,
-      abi: allocatorAbi,
+      abi: vaultV2BluePublicAllocatorAbi,
       functionName: "setCanPullFromIdle",
       args: [vault, true],
     });
@@ -509,7 +480,7 @@ describe("Blue actions with Vault V2 reallocations", () => {
     });
     await client.writeContract({
       address: allocator,
-      abi: allocatorAbi,
+      abi: vaultV2BluePublicAllocatorAbi,
       functionName: "allocateFromIdle",
       args: [vault, targetAdapter, targetMarket, seedAssets, 0n],
     });
@@ -554,7 +525,7 @@ describe("Blue actions with Vault V2 reallocations", () => {
 
     await client.writeContract({
       address: allocator,
-      abi: allocatorAbi,
+      abi: vaultV2BluePublicAllocatorAbi,
       functionName: "allocateFromIdle",
       args: [
         vault,

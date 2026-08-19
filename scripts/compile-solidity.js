@@ -26,9 +26,6 @@ const packageConfigs = {
       if (sourceName.includes("/interfaces/")) return null;
 
       const parsed = parse(sourceName);
-      if (sourceName.includes("/fixtures/")) {
-        return join(packageDir, "test", "fixtures", `${parsed.name}.ts`);
-      }
       return join(
         packageDir,
         "src",
@@ -52,18 +49,6 @@ const packageConfigs = {
         parsed.dir.replaceAll("contracts", "queries"),
         `${parsed.name}.ts`,
       );
-    },
-  },
-  "morpho-sdk": {
-    bytecodeExportName: "code",
-    describeArtifact(contractName) {
-      return `Test-only \`${contractName}\` contract`;
-    },
-    resolveOutputPath(sourceName) {
-      if (!sourceName.includes("/fixtures/")) return null;
-
-      const parsed = parse(sourceName);
-      return join(packageDir, "test", "fixtures", `${parsed.name}.ts`);
     },
   },
 };

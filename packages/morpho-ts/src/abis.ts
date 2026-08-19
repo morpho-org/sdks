@@ -4586,7 +4586,7 @@ export const vaultV1PublicAllocatorAbi = [
  */
 export const publicAllocatorAbi = vaultV1PublicAllocatorAbi;
 
-/** Vault V2 Blue Public Allocator ABI used for market and idle reallocations. */
+/** Vault V2 Blue Public Allocator ABI used for configuration and reallocations. */
 export const vaultV2BluePublicAllocatorAbi = [
   {
     inputs: [
@@ -4610,6 +4610,123 @@ export const vaultV2BluePublicAllocatorAbi = [
       },
     ],
     stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "vault",
+        type: "address",
+      },
+      {
+        internalType: "address",
+        name: "adapter",
+        type: "address",
+      },
+      {
+        internalType: "bool",
+        name: "newIsActiveAdapter",
+        type: "bool",
+      },
+    ],
+    name: "setIsActiveAdapter",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "vault",
+        type: "address",
+      },
+      {
+        internalType: "address",
+        name: "adapter",
+        type: "address",
+      },
+      {
+        components: marketParamsAbi.components,
+        internalType: "struct MarketParams",
+        name: "marketParams",
+        type: "tuple",
+      },
+      {
+        internalType: "uint256",
+        name: "newAbsoluteCap",
+        type: "uint256",
+      },
+    ],
+    name: "setAbsoluteCap",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "vault",
+        type: "address",
+      },
+      {
+        internalType: "address",
+        name: "adapter",
+        type: "address",
+      },
+      {
+        components: marketParamsAbi.components,
+        internalType: "struct MarketParams",
+        name: "marketParams",
+        type: "tuple",
+      },
+      {
+        internalType: "bool",
+        name: "newCanPullFromMarket",
+        type: "bool",
+      },
+    ],
+    name: "setCanPullFromMarket",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "vault",
+        type: "address",
+      },
+      {
+        internalType: "bool",
+        name: "newCanPullFromIdle",
+        type: "bool",
+      },
+    ],
+    name: "setCanPullFromIdle",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "vault",
+        type: "address",
+      },
+      {
+        internalType: "uint64",
+        name: "newPenalty",
+        type: "uint64",
+      },
+    ],
+    name: "setPenalty",
+    outputs: [],
+    stateMutability: "nonpayable",
     type: "function",
   },
   {

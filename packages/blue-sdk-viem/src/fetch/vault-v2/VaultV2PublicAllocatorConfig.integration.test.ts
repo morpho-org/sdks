@@ -1,19 +1,23 @@
 import {
   AccrualVaultV2MorphoMarketV1AdapterV2,
-  ChainId,
   getChainAddress,
 } from "@morpho-org/blue-sdk";
+import { createViemTest } from "@morpho-org/test/vitest";
+import { parseEther } from "viem";
+import { base } from "viem/chains";
 import { assert, describe, expect } from "vitest";
-import {
-  abi as fixtureAbi,
-  code as fixtureCode,
-} from "../../../test/fixtures/BluePublicAllocatorReadFixture.js";
-import { vaultV2Test } from "../../../test/setup.js";
+import { vaultV2Abi, vaultV2BluePublicAllocatorAbi } from "../../abis.js";
 import { fetchAccrualVaultV2 } from "./VaultV2.js";
 import { fetchVaultV2PublicAllocatorData } from "./VaultV2PublicAllocatorConfig.js";
 
+const vaultV2BluePublicAllocatorTest = createViemTest(base, {
+  forkUrl: process.env.BASE_RPC_URL,
+  forkBlockNumber: 50_063_965, // BluePublicAllocator deployment block.
+  stepsTracing: false,
+});
+
 describe("Vault V2 public allocator fetchers on fork", () => {
-  vaultV2Test(
+  vaultV2BluePublicAllocatorTest(
     "default: matches direct reads against the deployless query",
     async ({ client }) => {
       const forkVault = await fetchAccrualVaultV2(
@@ -29,43 +33,57 @@ describe("Vault V2 public allocator fetchers on fork", () => {
       const forkMarket = forkAdapter.markets[0];
       assert(forkMarket != null);
 
-      const deploymentHash = await client.deployContract({
-        abi: fixtureAbi,
-        bytecode: fixtureCode,
+      const allocator = getChainAddress(base.id, "vaultV2BluePublicAllocator");
+      const allocatorAccount = await client.readContract({
+        address: forkVault.address,
+        abi: vaultV2Abi,
+        functionName: "curator",
       });
-      const { contractAddress: fixture } =
-        await client.waitForTransactionReceipt({ hash: deploymentHash });
-      assert(fixture != null);
-      const fixtureBytecode = await client.getBytecode({ address: fixture });
-      assert(fixtureBytecode != null);
-      const allocator = getChainAddress(
-        ChainId.EthMainnet,
-        "vaultV2BluePublicAllocator",
+      assert(
+        await client.readContract({
+          address: forkVault.address,
+          abi: vaultV2Abi,
+          functionName: "isAllocator",
+          args: [allocatorAccount],
+        }),
       );
-      await client.setCode({ address: allocator, bytecode: fixtureBytecode });
-
+      await client.deal({
+        account: allocatorAccount,
+        amount: parseEther("1"),
+      });
       const forkAdapterMarketCapId = forkAdapter.ids(forkMarket.params)[2];
       await client.writeContract({
+        account: allocatorAccount,
         address: allocator,
-        abi: fixtureAbi,
-        functionName: "setVaultData",
-        args: [forkVault.address, true, 12n],
+        abi: vaultV2BluePublicAllocatorAbi,
+        functionName: "setCanPullFromIdle",
+        args: [forkVault.address, true],
       });
       await client.writeContract({
+        account: allocatorAccount,
         address: allocator,
-        abi: fixtureAbi,
+        abi: vaultV2BluePublicAllocatorAbi,
+        functionName: "setPenalty",
+        args: [forkVault.address, 12n],
+      });
+      await client.writeContract({
+        account: allocatorAccount,
+        address: allocator,
+        abi: vaultV2BluePublicAllocatorAbi,
         functionName: "setAbsoluteCap",
-        args: [forkVault.address, forkAdapterMarketCapId, 500n],
+        args: [forkVault.address, forkAdapter.address, forkMarket.params, 500n],
       });
       await client.writeContract({
+        account: allocatorAccount,
         address: allocator,
-        abi: fixtureAbi,
+        abi: vaultV2BluePublicAllocatorAbi,
         functionName: "setCanPullFromMarket",
-        args: [forkVault.address, forkAdapterMarketCapId, true],
+        args: [forkVault.address, forkAdapter.address, forkMarket.params, true],
       });
       await client.writeContract({
+        account: allocatorAccount,
         address: allocator,
-        abi: fixtureAbi,
+        abi: vaultV2BluePublicAllocatorAbi,
         functionName: "setIsActiveAdapter",
         args: [forkVault.address, forkAdapter.address, true],
       });
