@@ -54,7 +54,7 @@ export class AnvilProcessError extends Error {
 }
 
 /**
- * Error thrown when an Anvil process or its shared semaphore slot cannot be cleaned up.
+ * Error thrown when an Anvil process cannot be cleaned up.
  *
  * @example
  * ```ts

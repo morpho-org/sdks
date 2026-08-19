@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       # Package shards share RPC credentials, so bound their aggregate fork pressure.
-      max-parallel: 4
+      max-parallel: 8
       matrix:
         include:
           # Pure and fork projects from one package share a single runner.

@@ -170,7 +170,7 @@ export const createViemTest = <chain extends Chain>(
             else await setTimeout(attempt * 1_000, undefined, { signal });
           } catch (waitError) {
             throw new AnvilStartupError(
-              "Anvil setup retry was cancelled. Retry the test after the competing fork finishes.",
+              "Anvil setup retry was cancelled. Retry when setup can continue.",
               {
                 cause: new AggregateError(
                   [setupFailure, waitError],

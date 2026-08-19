@@ -1,5 +1,4 @@
 export * from "./anvil.js";
-export { anvilSlotLockDirectory } from "./anvilProcessSlot.js";
 export * from "./client.js";
 export {
   AnvilCleanupError,

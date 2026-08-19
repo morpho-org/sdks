@@ -4,8 +4,8 @@ import { defineConfig } from "vitest/config";
 const forkTestConfig = {
   ...(process.env.CI
     ? {
-        maxConcurrency: 1,
-        maxWorkers: 2,
+        maxConcurrency: 2,
+        maxWorkers: 4,
         sequence: { groupOrder: 1 }, // Separate from unconstrained unit projects.
       }
     : {}),
