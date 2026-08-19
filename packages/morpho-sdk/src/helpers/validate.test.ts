@@ -806,6 +806,14 @@ describe("reallocation validation", () => {
         penalty: 0n,
       } as unknown as VaultV2BlueReallocation,
     },
+    {
+      name: "null entry",
+      reallocation: null as unknown as VaultV2BlueReallocation,
+    },
+    {
+      name: "primitive entry",
+      reallocation: 1 as unknown as VaultV2BlueReallocation,
+    },
   ])("error: InvalidReallocationShapeError for $name", ({ reallocation }) => {
     expect(() =>
       validateAndNormalizeReallocations(

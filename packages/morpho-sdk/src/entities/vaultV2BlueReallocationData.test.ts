@@ -27,7 +27,7 @@ import { VaultV2BlueReallocationData } from "./vaultV2BlueReallocationData.js";
 
 const TIMESTAMP = 1_700_000_000n;
 const VAULT = "0x0000000000000000000000000000000000000002";
-const TARGET_ADAPTER = "0x0000000000000000000000000000000000000003";
+const TARGET_ADAPTER = "0x00000000000000000000000000000000000000A3";
 const SOURCE_ADAPTER = "0x0000000000000000000000000000000000000004";
 const LOAN_TOKEN = "0x0000000000000000000000000000000000000005";
 const IRM = "0x0000000000000000000000000000000000000006";
@@ -368,6 +368,22 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
         data.computeVaultV2BlueReallocations(targetParams.id).reallocations,
       ).toStrictEqual([]);
     }
+  });
+
+  test("behavior: matches active adapters regardless of address casing", () => {
+    const sourceAdapter =
+      "0x00000000000000000000000000000000000000AB" as Address;
+    const { data } = makeFixture({
+      sourceAdapter,
+      allocatorActiveAdapters: [
+        `0x${TARGET_ADAPTER.slice(2).toUpperCase()}` as Address,
+        `0x${sourceAdapter.slice(2).toUpperCase()}` as Address,
+      ],
+    });
+
+    expect(
+      data.computeVaultV2BlueReallocations(targetParams.id).reallocations,
+    ).toHaveLength(1);
   });
 
   test("behavior: keeps two vault adapters on one canonical market", () => {

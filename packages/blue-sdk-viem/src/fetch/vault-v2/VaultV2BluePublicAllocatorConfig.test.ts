@@ -220,6 +220,17 @@ describe("Vault V2 BluePublicAllocator fetchers", () => {
     ).resolves.toStrictEqual(expected);
   });
 
+  test("error: forced deployless failure does not fall back", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessReads(handle, [new Error("deployless unavailable")]);
+
+    await expect(
+      fetchVaultV2BluePublicAllocatorData(vault, handle.client, {
+        deployless: "force",
+      }),
+    ).rejects.toThrow();
+  });
+
   test("behavior: omits inactive adapters from the registry", async () => {
     const handle = createMockClient(mainnet);
     mockDeploylessReads(handle, [new Error("deployless unavailable")]);

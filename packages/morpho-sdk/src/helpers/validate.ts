@@ -499,6 +499,9 @@ export const validateAndNormalizeReallocations = (
   const vaultV2Reallocations: VaultV2BlueReallocation[] = [];
 
   for (const reallocation of reallocations ?? []) {
+    if (typeof reallocation !== "object" || reallocation === null) {
+      throw new InvalidReallocationShapeError();
+    }
     if ("from" in reallocation === "withdrawals" in reallocation) {
       throw new InvalidReallocationShapeError();
     }

@@ -308,7 +308,11 @@ export class VaultV2BlueReallocationData
       input.activeAdapters ?? {},
     ) as [Address, Iterable<Address> | undefined][]) {
       this.activeAdapters[vault] =
-        adapters == null ? undefined : new Set(adapters);
+        adapters == null
+          ? undefined
+          : new Set(
+              [...adapters].map((adapter) => adapter.toLowerCase() as Address),
+            );
     }
 
     for (const [vault, configs] of Object.entries(
@@ -730,7 +734,7 @@ export class VaultV2BlueReallocationData
                     marketPublicAllocatorConfig.adapter,
                     adapter.address,
                   ) ||
-                  !activeAdapters.has(adapter.address)
+                  !activeAdapters.has(adapter.address.toLowerCase() as Address)
                 )
                   return;
 
@@ -825,7 +829,9 @@ export class VaultV2BlueReallocationData
                         sourceConfig.adapter,
                         sourceAdapter.address,
                       ) ||
-                      !activeAdapters.has(sourceAdapter.address) ||
+                      !activeAdapters.has(
+                        sourceAdapter.address.toLowerCase() as Address,
+                      ) ||
                       !sourceConfig.canPullFromMarket
                     )
                       return;
