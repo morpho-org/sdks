@@ -5,6 +5,7 @@ import {
   Market,
   MarketParams,
   MathLib,
+  VaultV2BluePublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import type { Address } from "viem";
@@ -82,11 +83,11 @@ const ids = adapter.ids(marketParams);
 const adapterMarketCapId = ids[2];
 
 const expected = {
-  publicAllocatorConfig: {
+  publicAllocatorConfig: new VaultV2BluePublicAllocatorConfig({
     vault: VAULT,
     canPullFromIdle: true,
     penalty: 12n,
-  },
+  }),
   activeAdapters: new Set([ADAPTER]),
   marketPublicAllocatorConfigs: {
     [adapterMarketCapId]: {
@@ -163,9 +164,12 @@ describe("Vault V2 BluePublicAllocator fetchers", () => {
     const handle = createMockClient(mainnet);
     mockDirectReads(handle);
 
-    await expect(
-      fetchVaultV2BluePublicAllocatorConfig(VAULT, handle.client),
-    ).resolves.toStrictEqual(expected.publicAllocatorConfig);
+    const config = await fetchVaultV2BluePublicAllocatorConfig(
+      VAULT,
+      handle.client,
+    );
+    expect(config).toBeInstanceOf(VaultV2BluePublicAllocatorConfig);
+    expect(config).toStrictEqual(expected.publicAllocatorConfig);
     await expect(
       fetchVaultV2BlueMarketPublicAllocatorConfig(
         VAULT,

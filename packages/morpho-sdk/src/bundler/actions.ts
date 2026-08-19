@@ -1,7 +1,7 @@
 import {
   getChainAddresses,
   type InputMarketParams,
-  MathLib,
+  VaultV2BluePublicAllocatorConfigUtils,
 } from "@morpho-org/blue-sdk";
 import {
   blueAbi,
@@ -1540,7 +1540,11 @@ export namespace BundlerAction {
       );
     }
     const calls: BundlerCall[] = [];
-    const penaltyAssets = MathLib.wMulUp(assets, penalty);
+    const penaltyAssets =
+      VaultV2BluePublicAllocatorConfigUtils.getPenaltyAssets(
+        { penalty },
+        assets,
+      );
     if (skipRevert && penaltyAssets > 0n) {
       throw new BundlerErrors.SkippableAllocatorPenalty(penaltyAssets);
     }
@@ -1653,7 +1657,11 @@ export namespace BundlerAction {
       );
     }
     const calls: BundlerCall[] = [];
-    const penaltyAssets = MathLib.wMulUp(assets, penalty);
+    const penaltyAssets =
+      VaultV2BluePublicAllocatorConfigUtils.getPenaltyAssets(
+        { penalty },
+        assets,
+      );
     if (skipRevert && penaltyAssets > 0n) {
       throw new BundlerErrors.SkippableAllocatorPenalty(penaltyAssets);
     }

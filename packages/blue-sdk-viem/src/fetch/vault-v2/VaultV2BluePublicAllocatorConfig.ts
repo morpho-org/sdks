@@ -4,7 +4,7 @@ import {
   getChainAddress,
   type IVaultV2Allocation,
   type VaultV2BlueMarketPublicAllocatorConfig,
-  type VaultV2BluePublicAllocatorConfig,
+  VaultV2BluePublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
 import type { Address, Client, Hash } from "viem";
 import { getChainId, readContract } from "viem/actions";
@@ -28,7 +28,7 @@ import type {
  * @param parameters.blockTag - Optional block tag for historical reads.
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
- * @returns The vault's idle-pull permission and WAD-scaled vault-asset penalty.
+ * @returns Hydrated vault allocator configuration with penalty calculations.
  * @throws {UnknownAddressError} when the chain has no BluePublicAllocator deployment.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {viem.BaseError} when the contract read fails.
@@ -63,11 +63,11 @@ export async function fetchVaultV2BluePublicAllocatorConfig(
     args: [vault],
   });
 
-  return {
+  return new VaultV2BluePublicAllocatorConfig({
     vault,
     canPullFromIdle,
     penalty,
-  };
+  });
 }
 
 /**
@@ -247,11 +247,11 @@ export async function fetchVaultV2BluePublicAllocatorData(
       }
 
       return {
-        publicAllocatorConfig: {
+        publicAllocatorConfig: new VaultV2BluePublicAllocatorConfig({
           vault: vault.address,
           canPullFromIdle: result.canPullFromIdle,
           penalty: result.penalty,
-        } satisfies VaultV2BluePublicAllocatorConfig,
+        }),
         activeAdapters: new Set(
           adapterList.filter((_, index) => result.isActiveAdapters[index]),
         ),

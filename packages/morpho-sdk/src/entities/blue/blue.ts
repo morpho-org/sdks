@@ -8,6 +8,7 @@ import {
   type Position,
   type Vault,
   type VaultMarketConfig,
+  VaultV2BluePublicAllocatorConfigUtils,
 } from "@morpho-org/blue-sdk";
 import {
   fetchAccrualPosition,
@@ -33,7 +34,6 @@ import {
   getBlueAuthorizationRequirement,
   getGeneralAdapterRequirements,
 } from "../../actions/index.js";
-import { computeVaultV2BlueReallocationPenaltyAssets } from "../../helpers/bluePublicAllocator.js";
 import {
   computeMaxRepaySharePrice,
   computeMaxSupplySharePrice,
@@ -619,9 +619,17 @@ export class MorphoBlue implements BlueActions {
 
   private getReallocationPenaltyRequirements(
     userAddress: Address,
-    reallocations: Iterable<VaultV2BlueReallocation>,
+    reallocations: readonly VaultV2BlueReallocation[],
   ) {
-    const amount = computeVaultV2BlueReallocationPenaltyAssets(reallocations);
+    const amount = reallocations.reduce(
+      (total, reallocation) =>
+        total +
+        VaultV2BluePublicAllocatorConfigUtils.getPenaltyAssets(
+          reallocation,
+          reallocation.assets,
+        ),
+      0n,
+    );
 
     // Separate-token penalty funding uses a classic GeneralAdapter1 allowance so a collateral
     // permit and a loan-token penalty can coexist in one bundle. The shared-token path aggregates
@@ -1485,8 +1493,14 @@ export class MorphoBlue implements BlueActions {
       getRequirements: async (params?: { useSimplePermit?: boolean }) => {
         const penaltyAssets =
           reallocationPlan.type === "vaultV2Blue"
-            ? computeVaultV2BlueReallocationPenaltyAssets(
-                reallocationPlan.reallocations,
+            ? reallocationPlan.reallocations.reduce(
+                (total, reallocation) =>
+                  total +
+                  VaultV2BluePublicAllocatorConfigUtils.getPenaltyAssets(
+                    reallocation,
+                    reallocation.assets,
+                  ),
+                0n,
               )
             : 0n;
         const usesSharedFundingToken = isAddressEqual(

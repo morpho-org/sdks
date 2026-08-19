@@ -7,13 +7,15 @@ import {
   AccrualVaultV2MorphoVaultV1Adapter,
   type IAccrualVaultV2Adapter,
   type IVaultV2Allocation,
+  type IVaultV2BluePublicAllocatorConfig,
   Market,
   type MarketId,
   MarketUtils,
   MathLib,
   UnknownDataError,
   type VaultV2BlueMarketPublicAllocatorConfig,
-  type VaultV2BluePublicAllocatorConfig,
+  VaultV2BluePublicAllocatorConfig,
+  VaultV2BluePublicAllocatorConfigUtils,
   VaultV2Utils,
 } from "@morpho-org/blue-sdk";
 import { _try, bigIntComparator } from "@morpho-org/morpho-ts";
@@ -57,7 +59,7 @@ export interface InputVaultV2BlueReallocationData {
   >;
   /** Vault-wide BluePublicAllocator configuration indexed by vault address. */
   readonly publicAllocatorConfigs?: Readonly<
-    Record<Address, VaultV2BluePublicAllocatorConfig | undefined>
+    Record<Address, IVaultV2BluePublicAllocatorConfig | undefined>
   >;
   /**
    * BluePublicAllocator-active adapters indexed by vault address.
@@ -294,9 +296,11 @@ export class VaultV2BlueReallocationData
 
     for (const [vault, config] of Object.entries(
       input.publicAllocatorConfigs ?? {},
-    ) as [Address, VaultV2BluePublicAllocatorConfig | undefined][]) {
+    ) as [Address, IVaultV2BluePublicAllocatorConfig | undefined][]) {
       this.publicAllocatorConfigs[vault] =
-        config == null ? undefined : { ...config };
+        config == null
+          ? undefined
+          : new VaultV2BluePublicAllocatorConfig(config);
     }
 
     for (const [vault, adapters] of Object.entries(
@@ -1031,10 +1035,11 @@ export class VaultV2BlueReallocationData
     let vault = data.getVault(reallocation.vault);
     const targetMarket = data.getMarket(targetMarketId);
 
-    const penaltyAssets = MathLib.wMulUp(
-      reallocation.assets,
-      reallocation.penalty,
-    );
+    const penaltyAssets =
+      VaultV2BluePublicAllocatorConfigUtils.getPenaltyAssets(
+        reallocation,
+        reallocation.assets,
+      );
     vault.assetBalance += penaltyAssets;
     data.donatedPenaltyAssets[reallocation.vault] =
       (data.donatedPenaltyAssets[reallocation.vault] ?? 0n) + penaltyAssets;

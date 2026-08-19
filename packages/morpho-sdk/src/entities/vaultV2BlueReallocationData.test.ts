@@ -10,6 +10,7 @@ import {
   Market,
   MarketParams,
   MathLib,
+  VaultV2BluePublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
 import type { Address, Hash } from "viem";
 import { zeroAddress } from "viem";
@@ -578,6 +579,12 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       input.activeAdapters[VAULT],
     );
     expect(cloned.activeAdapters[VAULT]).not.toBe(input.activeAdapters[VAULT]);
+    expect(cloned.getPublicAllocatorConfig(VAULT)).toBeInstanceOf(
+      VaultV2BluePublicAllocatorConfig,
+    );
+    expect(cloned.getPublicAllocatorConfig(VAULT)).not.toBe(
+      input.getPublicAllocatorConfig(VAULT),
+    );
     const inputLegacy = input
       .getVault(VAULT)
       .accrualAdapters.find(
