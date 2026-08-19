@@ -844,6 +844,25 @@ export class InvalidReallocationShapeError extends Error {
 }
 
 /**
+ * Thrown when one reallocation plan contains both Vault V1 and Vault V2 entries.
+ *
+ * @example
+ * ```ts
+ * import { MixedReallocationVersionsError } from "@morpho-org/morpho-sdk";
+ *
+ * const error = new MixedReallocationVersionsError();
+ * ```
+ */
+export class MixedReallocationVersionsError extends Error {
+  public constructor() {
+    super(
+      "Reallocation plans cannot mix Vault V1 and Vault V2 entries. Submit one version per transaction.",
+    );
+    this.name = "MixedReallocationVersionsError";
+  }
+}
+
+/**
  * Thrown when a Blue Public Allocator reallocation contains a malformed vault
  * or adapter address.
  *

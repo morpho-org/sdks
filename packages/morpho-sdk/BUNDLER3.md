@@ -70,9 +70,9 @@ For every ERC-4626 deposit (VaultV1 / VaultV2), GeneralAdapter1 calls `erc4626De
 
 ### 4. Shared liquidity without an ad-hoc contract
 
-`BlueReallocation`s encode as Public Allocator V1 `reallocateTo` calls or Blue Public Allocator
-`reallocate`/`allocateFromIdle` calls. The same array may contain both, so Vault V1 and Vault V2
-liquidity can be reallocated atomically in one Bundler3 transaction. They are **prepended to the
+`BlueReallocationPlan` encodes either Public Allocator V1 `reallocateTo` calls or Blue Public
+Allocator `reallocate`/`allocateFromIdle` calls. A plan cannot mix allocator versions. Reallocations
+are **prepended to the
 bundle** for borrow and loan-asset withdraw, **inserted between supply-collateral and borrow** for
 `supplyCollateralBorrow`, and run **before the supply-collateral callback** for `blueRefinance`.
 `BundlerAction.encodeBundle` includes Public Allocator V1 fees in `tx.value`. Blue Public Allocator

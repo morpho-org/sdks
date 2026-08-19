@@ -21,7 +21,7 @@ Centralized type definitions and error classes. Barrel-exported via `index.ts`. 
 - `VaultV1Reallocation` — vault address + fee + sorted withdrawals; maps to `reallocateTo()`. `VaultReallocation` is its deprecated compatibility alias.
 - `VaultV2BlueReallocation` — BluePublicAllocator vault/source/target-adapter/assets/WAD-scaled-penalty input; maps 1:1 to `reallocate()` or `allocateFromIdle()` while deriving target market params from the enclosing Blue action.
 - `VaultV2BluePublicAllocatorOptions` — canonical Vault V2 discovery and planner options for timestamp, enablement, vault allowlisting, friendly source-market utilization, and the maximum proportional penalty.
-- `BlueReallocation` — additive union accepted by Blue action and entity pass-through surfaces; preserves every V1 caller.
+- `BlueReallocationPlan` — homogeneous iterable accepted by Blue action and entity pass-through surfaces; a plan contains only V1 or only V2 reallocations.
 
 ## Errors (`error.ts`)
 
@@ -29,7 +29,7 @@ One class per error case. Never throw a generic `Error` from SDK source.
 
 - **Generic input bounds:** `NegativeInputError` for values that must be non-negative, `NonPositiveInputError` for values that must be positive, and `InputExceedsMaxError` for protocol upper bounds such as BluePublicAllocator's `uint128` assets and WAD-scaled `uint64` penalty. All expose the invalid `field` and `value`; reuse them across Vault, Blue, and Midnight instead of adding operation-specific scalar-bound errors.
 - **Market-specific:** `BorrowExceedsSafeLtvError`, `MissingMarketPriceError`, `NativeAmountOnNonWNativeAssetError`, `MutuallyExclusiveWithdrawAmountsError`, `WithdrawExceedsSupplyError`, `WithdrawSharesExceedSupplyError`.
-- **Reallocation-specific:** `EmptyReallocationWithdrawalsError`, `InvalidReallocationShapeError` when an entry matches both or neither V1/V2 shape, `InvalidReallocationAddressError` for malformed BluePublicAllocator vault or adapter addresses, `InvalidReallocationSourceTypeError` for an absent, incomplete, or unknown BluePublicAllocator source, `InconsistentReallocationPenaltyError` for conflicting penalties on one vault, `ReallocationWithdrawalOnTargetMarketError`, `UnsortedReallocationWithdrawalsError`, `ReallocationWithdrawExceedsMarketSupplyError`.
+- **Reallocation-specific:** `EmptyReallocationWithdrawalsError`, `InvalidReallocationShapeError` when an entry matches both or neither V1/V2 shape, `MixedReallocationVersionsError` when one plan contains both versions, `InvalidReallocationAddressError` for malformed BluePublicAllocator vault or adapter addresses, `InvalidReallocationSourceTypeError` for an absent, incomplete, or unknown BluePublicAllocator source, `InconsistentReallocationPenaltyError` for conflicting penalties on one vault, `ReallocationWithdrawalOnTargetMarketError`, `UnsortedReallocationWithdrawalsError`, `ReallocationWithdrawExceedsMarketSupplyError`.
 
 ## Adding a new operation
 

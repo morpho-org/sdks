@@ -3,9 +3,10 @@ import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
 import { type Action, BundlerAction } from "../../bundler/index.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
+import { validateAndNormalizeReallocations } from "../../helpers/validate.js";
 import {
   type AuthorizationRequirementSignature,
-  type BlueReallocation,
+  type BlueReallocationPlan,
   type BlueWithdrawAction,
   type Metadata,
   MutuallyExclusiveWithdrawAmountsError,
@@ -14,7 +15,10 @@ import {
   type Transaction,
 } from "../../types/index.js";
 import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
-import { buildReallocationActions } from "./buildReallocationActions.js";
+import {
+  buildVaultV1ReallocationActions,
+  buildVaultV2BlueReallocationActions,
+} from "./buildReallocationActions.js";
 
 /** Parameters for {@link blueWithdraw}. */
 export interface BlueWithdrawParams {
@@ -32,11 +36,11 @@ export interface BlueWithdrawParams {
     /** Minimum withdraw share price (in ray). Slippage protection. */
     minSharePrice: bigint;
     /**
-     * Public Allocator V1 or V2 reallocations to execute before withdrawing. V1 entries can be
+     * Homogeneous Vault V1 or Vault V2 reallocations to execute before withdrawing. V1 entries can be
      * computed via `MorphoBlue.getReallocations({ operation: "withdraw", amount })` or directly
      * via `computeVaultV1Reallocations({ operation: "withdraw", amount, ... })`.
      */
-    reallocations?: Iterable<BlueReallocation>;
+    reallocations?: BlueReallocationPlan;
     /**
      * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
      * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a
@@ -56,8 +60,8 @@ export interface BlueWithdrawParams {
  * - **By shares** (`assets = 0, shares > 0`): burns an exact share count (typical for a full
  *   supplier position close; immune to interest accrual between tx construction and execution).
  *
- * When `reallocations` are provided, V1 entries encode `reallocateTo`, while V2 market and idle
- * entries encode `reallocate` and `allocateFromIdle`. The calls run before the withdraw. V1
+ * A `reallocations` plan contains either V1 entries or V2 market/idle entries,
+ * never both. The calls run before the withdraw. V1
  * fees accumulate in `tx.value`; V2 penalties are paid in the target loan
  * token and donated to the vaults. The on-chain `morphoWithdraw` sends the
  * assets computed on-chain directly to `receiver`; no skim is required.
@@ -74,8 +78,8 @@ export interface BlueWithdrawParams {
  * @param params.args.receiver - Address that receives the withdrawn assets.
  * @param params.args.minSharePrice - Minimum acceptable withdraw share price (in ray). Slippage
  *   protection.
- * @param params.args.reallocations - Optional Public Allocator V1 or V2 reallocations to execute
- *   before withdrawing.
+ * @param params.args.reallocations - Optional homogeneous Vault V1 or Vault V2 reallocations to
+ *   execute before withdrawing.
  * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
  *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
@@ -90,6 +94,7 @@ export interface BlueWithdrawParams {
  * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
  * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
  * @throws {InvalidReallocationShapeError} when an entry matches both or neither V1/V2 shape.
+ * @throws {MixedReallocationVersionsError} when one plan contains both V1 and V2 entries.
  * @throws {MutuallyExclusiveWithdrawAmountsError} when both `assets` and `shares` are non-zero.
  * @throws {EmptyReallocationWithdrawalsError} when any reallocation has no withdrawals.
  * @throws {ReallocationWithdrawalOnTargetMarketError} when a reallocation withdrawal references
@@ -151,15 +156,24 @@ export const blueWithdraw = ({
     actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
   }
 
+  const reallocationPlan = validateAndNormalizeReallocations(
+    reallocations,
+    marketParams.id,
+  );
   const {
     actions: reallocationActions,
     fee: reallocationFee,
     penaltyAssets: reallocationPenaltyAssets,
-  } = buildReallocationActions({
-    chainId,
-    reallocations,
-    targetMarketParams: marketParams,
-  });
+  } = reallocationPlan.type === "vaultV1"
+    ? buildVaultV1ReallocationActions({
+        reallocations: reallocationPlan.reallocations,
+        targetMarketParams: marketParams,
+      })
+    : buildVaultV2BlueReallocationActions({
+        chainId,
+        reallocations: reallocationPlan.reallocations,
+        targetMarketParams: marketParams,
+      });
   actions.push(...reallocationActions);
 
   actions.push({

@@ -6,7 +6,6 @@ import {
 import { fetchMarket } from "@morpho-org/blue-sdk-viem";
 import {
   type BlueAuthorizationAction,
-  type BlueReallocation,
   type ERC20ApprovalAction,
   type Metadata,
   type MorphoClientType,
@@ -15,6 +14,7 @@ import {
   type RequirementSignature,
   type Transaction,
   type VaultReallocation,
+  type VaultV2BlueReallocation,
 } from "@morpho-org/morpho-sdk";
 import type {
   BorrowResult,
@@ -176,8 +176,8 @@ export type MorphoBorrowWithVaultV2ReallocationsOptions = Omit<
   MorphoBorrowOptions,
   "reallocations"
 > & {
-  /** Vault V1 and Vault V2 reallocations to include in the borrow action. */
-  readonly reallocations: Iterable<BlueReallocation>;
+  /** Vault V2 BluePublicAllocator reallocations to include in the borrow action. */
+  readonly reallocations: Iterable<VaultV2BlueReallocation>;
 };
 
 type MorphoBorrowInput =

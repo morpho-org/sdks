@@ -1,61 +1,57 @@
 import { getChainAddresses, type MarketParams } from "@morpho-org/blue-sdk";
 import type { Action } from "../../bundler/index.js";
 import { computeVaultV2BlueReallocationPenaltyAssets } from "../../helpers/bluePublicAllocator.js";
-import { validateReallocations } from "../../helpers/index.js";
-import type { BlueReallocation } from "../../types/index.js";
+import type {
+  VaultV1Reallocation,
+  VaultV2BlueReallocation,
+} from "../../types/index.js";
 
-/**
- * Builds Public Allocator V1 and Blue Public Allocator actions and their costs.
- *
- * PublicAllocator V1 entries preserve their `reallocateTo` ABI and validation. Each
- * BluePublicAllocator entry maps 1:1 to either `reallocate` for a market source or
- * `allocateFromIdle` for an idle source. The enclosing Blue action supplies the target market
- * parameters. V2 penalties are moved once in the target loan token to Bundler3; each allocator
- * action then approves and spends its independently rounded share.
- *
- * @param params - Reallocation encoding inputs.
- * @param params.chainId - Chain where the bundle will execute.
- * @param params.reallocations - Optional PublicAllocator V1 and BluePublicAllocator reallocations in execution order.
- * @param params.targetMarketParams - Target market params derived from the enclosing Blue action.
- * @param params.penaltyFundingSource - Account that already holds the aggregate V2 penalty. Uses
- *   the transaction initiator by default; same-token collateral funding can pre-fund
- *   `GeneralAdapter1` instead.
- * @returns Encoded actions, the native V1 fee, and the V2 loan-token penalty total.
- * @throws {NegativeInputError} when a PublicAllocator V1 fee or BluePublicAllocator penalty is negative.
- * @throws {EmptyReallocationWithdrawalsError} when a PublicAllocator V1 reallocation has no withdrawals.
- * @throws {NonPositiveInputError} when a PublicAllocator V1 withdrawal or BluePublicAllocator asset amount is non-positive.
- * @throws {InputExceedsMaxError} when a BluePublicAllocator asset amount exceeds `uint128` or its penalty exceeds WAD.
- * @throws {InconsistentReallocationPenaltyError} when entries for one vault use different penalties.
- * @throws {InvalidReallocationAddressError} when a BluePublicAllocator vault or adapter address is malformed.
- * @throws {InvalidReallocationSourceTypeError} when a BluePublicAllocator source is absent, incomplete, or has an unknown discriminator.
- * @throws {InvalidReallocationShapeError} when an entry matches both or neither V1/V2 shape.
- * @throws {ReallocationWithdrawalOnTargetMarketError} when a source references the target market.
- * @throws {UnsortedReallocationWithdrawalsError} when PublicAllocator V1 withdrawals are not strictly market-id sorted.
- * @internal
- */
-export const buildReallocationActions = ({
+/** @internal */
+export const buildVaultV1ReallocationActions = ({
+  reallocations,
+  targetMarketParams,
+}: {
+  readonly reallocations: readonly VaultV1Reallocation[];
+  readonly targetMarketParams: MarketParams;
+}) => {
+  let fee = 0n;
+  const actions: Action[] = [];
+
+  for (const reallocation of reallocations) {
+    actions.push({
+      type: "reallocateTo",
+      args: [
+        reallocation.vault,
+        reallocation.fee,
+        reallocation.withdrawals.map((withdrawal) => ({
+          marketParams: withdrawal.marketParams,
+          amount: withdrawal.amount,
+        })),
+        targetMarketParams,
+        false,
+      ],
+    });
+    fee += reallocation.fee;
+  }
+
+  return { actions, fee, penaltyAssets: 0n };
+};
+
+/** @internal */
+export const buildVaultV2BlueReallocationActions = ({
   chainId,
-  reallocations = [],
+  reallocations,
   targetMarketParams,
   penaltyFundingSource = "initiator",
 }: {
   readonly chainId: number;
-  readonly reallocations?: Iterable<BlueReallocation>;
+  readonly reallocations: readonly VaultV2BlueReallocation[];
   readonly targetMarketParams: MarketParams;
   readonly penaltyFundingSource?: "initiator" | "generalAdapter1";
-}): {
-  readonly actions: Action[];
-  readonly fee: bigint;
-  readonly penaltyAssets: bigint;
-} => {
-  const reallocationList = [...reallocations];
-  // Validate the action descriptors before encoding; the validator returns void.
-  validateReallocations(reallocationList, targetMarketParams.id);
-
-  let fee = 0n;
+}) => {
   const actions: Action[] = [];
   const penaltyAssets =
-    computeVaultV2BlueReallocationPenaltyAssets(reallocationList);
+    computeVaultV2BlueReallocationPenaltyAssets(reallocations);
 
   if (penaltyAssets > 0n) {
     const {
@@ -85,53 +81,35 @@ export const buildReallocationActions = ({
     );
   }
 
-  for (const reallocation of reallocationList) {
-    if ("from" in reallocation) {
-      if (reallocation.from.type === "market") {
-        actions.push({
-          type: "vaultV2BluePublicAllocatorReallocate",
-          args: [
-            reallocation.vault,
-            reallocation.from.adapter,
-            reallocation.from.marketParams,
-            reallocation.to.adapter,
-            targetMarketParams,
-            reallocation.assets,
-            reallocation.penalty,
-            false,
-          ],
-        });
-      } else {
-        actions.push({
-          type: "vaultV2BluePublicAllocatorAllocateFromIdle",
-          args: [
-            reallocation.vault,
-            reallocation.to.adapter,
-            targetMarketParams,
-            reallocation.assets,
-            reallocation.penalty,
-            false,
-          ],
-        });
-      }
-      continue;
-    }
-
-    actions.push({
-      type: "reallocateTo",
-      args: [
-        reallocation.vault,
-        reallocation.fee,
-        reallocation.withdrawals.map((withdrawal) => ({
-          marketParams: withdrawal.marketParams,
-          amount: withdrawal.amount,
-        })),
-        targetMarketParams,
-        false,
-      ],
-    });
-    fee += reallocation.fee;
+  for (const reallocation of reallocations) {
+    actions.push(
+      reallocation.from.type === "market"
+        ? {
+            type: "vaultV2BluePublicAllocatorReallocate",
+            args: [
+              reallocation.vault,
+              reallocation.from.adapter,
+              reallocation.from.marketParams,
+              reallocation.to.adapter,
+              targetMarketParams,
+              reallocation.assets,
+              reallocation.penalty,
+              false,
+            ],
+          }
+        : {
+            type: "vaultV2BluePublicAllocatorAllocateFromIdle",
+            args: [
+              reallocation.vault,
+              reallocation.to.adapter,
+              targetMarketParams,
+              reallocation.assets,
+              reallocation.penalty,
+              false,
+            ],
+          },
+    );
   }
 
-  return { actions, fee, penaltyAssets };
+  return { actions, fee: 0n, penaltyAssets };
 };

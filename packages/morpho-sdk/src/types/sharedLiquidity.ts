@@ -142,13 +142,10 @@ export interface VaultV2BlueReallocation {
   readonly penalty: bigint;
 }
 
-/**
- * Reallocation accepted by Blue actions that support PublicAllocator V1 or BluePublicAllocator.
- *
- * V1 entries are identified by `withdrawals`; V2 entries are identified by
- * `from`.
- */
-export type BlueReallocation = VaultV1Reallocation | VaultV2BlueReallocation;
+/** A homogeneous Blue action plan containing only Vault V1 or only Vault V2 reallocations. */
+export type BlueReallocationPlan =
+  | Iterable<VaultV1Reallocation>
+  | Iterable<VaultV2BlueReallocation>;
 
 /**
  * Deprecated name for a Vault V1 reallocation.

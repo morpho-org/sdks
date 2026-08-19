@@ -1,13 +1,12 @@
 import { MathLib } from "@morpho-org/blue-sdk";
-import type { BlueReallocation } from "../types/index.js";
+import type { VaultV2BlueReallocation } from "../types/index.js";
 
 /**
- * Sums the independently rounded vault-asset penalties in a mixed V1/V2 plan.
+ * Sums the independently rounded vault-asset penalties in a Vault V2 plan.
  *
- * PublicAllocator V1 entries are ignored because their fees are paid in native
- * token. Each V2 call is rounded independently, matching contract execution.
+ * Each call is rounded independently, matching contract execution.
  *
- * @param reallocations - Mixed PublicAllocator V1 and BluePublicAllocator plan.
+ * @param reallocations - Vault V2 BluePublicAllocator plan.
  * @returns Total target loan-token assets needed for V2 penalties.
  * @example
  * ```ts
@@ -16,12 +15,11 @@ import type { BlueReallocation } from "../types/index.js";
  * @internal
  */
 export const computeVaultV2BlueReallocationPenaltyAssets = (
-  reallocations: Iterable<BlueReallocation>,
+  reallocations: Iterable<VaultV2BlueReallocation>,
 ) => {
   let total = 0n;
   for (const reallocation of reallocations) {
-    if ("from" in reallocation)
-      total += MathLib.wMulUp(reallocation.assets, reallocation.penalty);
+    total += MathLib.wMulUp(reallocation.assets, reallocation.penalty);
   }
   return total;
 };

@@ -15,7 +15,6 @@ import {
   vaultV2BluePublicAllocatorAbi,
 } from "../../abis.js";
 import {
-  type BlueReallocation,
   NegativeInputError,
   NonPositiveInputError,
   ReallocationWithdrawalOnTargetMarketError,
@@ -23,6 +22,7 @@ import {
   RefinanceSharesMissingBorrowAssetsError,
   RefinanceTokenMismatchError,
   type VaultReallocation,
+  type VaultV2BlueReallocation,
 } from "../../types/index.js";
 import { blueRefinance } from "./refinance.js";
 
@@ -486,7 +486,7 @@ describe("blueRefinance", () => {
       const {
         bundler3: { bundler3 },
       } = getChainAddresses(mainnet.id);
-      const targetReallocations: readonly BlueReallocation[] = [
+      const targetReallocations: readonly VaultV2BlueReallocation[] = [
         {
           vault: V2_VAULT,
           from: {

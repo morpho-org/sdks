@@ -3,9 +3,10 @@ import { deepFreeze } from "@morpho-org/morpho-ts";
 import { type Address, isAddressEqual } from "viem";
 import { type Action, BundlerAction } from "../../bundler/index.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
+import { validateAndNormalizeReallocations } from "../../helpers/validate.js";
 import {
   type AuthorizationRequirementSignature,
-  type BlueReallocation,
+  type BlueReallocationPlan,
   type BlueSupplyCollateralBorrowAction,
   type DepositAmountArgs,
   type Metadata,
@@ -16,7 +17,10 @@ import {
 } from "../../types/index.js";
 import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
 import { buildAssetFundingActions } from "./buildAssetFundingActions.js";
-import { buildReallocationActions } from "./buildReallocationActions.js";
+import {
+  buildVaultV1ReallocationActions,
+  buildVaultV2BlueReallocationActions,
+} from "./buildReallocationActions.js";
 
 /** Parameters for {@link blueSupplyCollateralBorrow}. */
 export interface BlueSupplyCollateralBorrowParams {
@@ -35,8 +39,8 @@ export interface BlueSupplyCollateralBorrowParams {
     minSharePrice: bigint;
     /** Optional pre-signed permit/permit2 approval for the collateral transfer. */
     requirementSignature?: PermitRequirementSignature;
-    /** Public Allocator V1 or V2 reallocations to execute before borrowing. */
-    reallocations?: Iterable<BlueReallocation>;
+    /** Homogeneous Vault V1 or Vault V2 reallocations to execute before borrowing. */
+    reallocations?: BlueReallocationPlan;
     /**
      * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
      * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a
@@ -51,8 +55,8 @@ export interface BlueSupplyCollateralBorrowParams {
  * Prepares an atomic supply-collateral-and-borrow transaction for a Morpho Blue market.
  *
  * Routed through bundler3: collateral funding → `morphoSupplyCollateral` → optional Public
- * Allocator calls → `morphoBorrow`. V1 entries encode `reallocateTo`; V2 market and idle entries
- * encode `reallocate` and `allocateFromIdle`. When `nativeAmount > 0`, native ETH is wrapped via
+ * Allocator calls → `morphoBorrow`. Each plan contains either V1 or V2 entries,
+ * never both. When `nativeAmount > 0`, native ETH is wrapped via
  * `GeneralAdapter1.wrapNative()` before the supply leg. V1 fees add to
  * `tx.value`; V2 penalties are paid in the target loan token and donated to the vaults. When the
  * collateral and loan tokens match, one combined pull funds both collateral and penalties through
@@ -76,8 +80,8 @@ export interface BlueSupplyCollateralBorrowParams {
  *   collateral funding. When collateral and loan tokens match, its amount includes V2 penalties.
  * @param params.args.nativeAmount - Optional amount of native token to wrap into wNative for the
  *   collateral supply. Requires the collateral token to be the chain's wNative.
- * @param params.args.reallocations - Optional Public Allocator V1 or V2 reallocations to execute
- *   between the supply and borrow legs.
+ * @param params.args.reallocations - Optional homogeneous Vault V1 or Vault V2 reallocations to
+ *   execute between the supply and borrow legs.
  * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
  *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
@@ -92,6 +96,7 @@ export interface BlueSupplyCollateralBorrowParams {
  * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
  * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
  * @throws {InvalidReallocationShapeError} when an entry matches both or neither V1/V2 shape.
+ * @throws {MixedReallocationVersionsError} when one plan contains both V1 and V2 entries.
  * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
  * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the collateral
  *   token is not the chain's wNative.
@@ -101,12 +106,11 @@ export interface BlueSupplyCollateralBorrowParams {
  *   is provided and the signed amount differs from the total ERC-20 funding amount.
  * @throws {Permit2ExpirationMissingError} from `getTokenRequirementActions` when a Permit2 requirement
  *   signature is missing its expiration.
- * @throws {EmptyReallocationWithdrawalsError} from `buildReallocationActions` when any
- *   `reallocation.withdrawals` is empty.
- * @throws {ReallocationWithdrawalOnTargetMarketError} from `buildReallocationActions` when any
- *   reallocation withdrawal references the target market.
- * @throws {UnsortedReallocationWithdrawalsError} from `buildReallocationActions` when
- *   reallocation withdrawals are not strictly sorted by market id.
+ * @throws {EmptyReallocationWithdrawalsError} when any `reallocation.withdrawals` is empty.
+ * @throws {ReallocationWithdrawalOnTargetMarketError} when any reallocation withdrawal references
+ *   the target market.
+ * @throws {UnsortedReallocationWithdrawalsError} when reallocation withdrawals are not strictly
+ *   sorted by market id.
  * @example
  * ```ts
  * import { blueSupplyCollateralBorrow } from "@morpho-org/morpho-sdk";
@@ -167,14 +171,24 @@ export const blueSupplyCollateralBorrow = ({
     marketParams.collateralToken,
     marketParams.loanToken,
   );
-  const reallocationResult = buildReallocationActions({
-    chainId,
+  const reallocationPlan = validateAndNormalizeReallocations(
     reallocations,
-    targetMarketParams: marketParams,
-    penaltyFundingSource: usesSharedFundingToken
-      ? "generalAdapter1"
-      : "initiator",
-  });
+    marketParams.id,
+  );
+  const reallocationResult =
+    reallocationPlan.type === "vaultV1"
+      ? buildVaultV1ReallocationActions({
+          reallocations: reallocationPlan.reallocations,
+          targetMarketParams: marketParams,
+        })
+      : buildVaultV2BlueReallocationActions({
+          chainId,
+          reallocations: reallocationPlan.reallocations,
+          targetMarketParams: marketParams,
+          penaltyFundingSource: usesSharedFundingToken
+            ? "generalAdapter1"
+            : "initiator",
+        });
   const erc20FundingAmount =
     amount + (usesSharedFundingToken ? reallocationResult.penaltyAssets : 0n);
 

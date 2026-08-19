@@ -3,9 +3,10 @@ import { deepFreeze } from "@morpho-org/morpho-ts";
 import { type Address, isAddressEqual, maxUint256 } from "viem";
 import { type Action, BundlerAction } from "../../bundler/index.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
+import { validateAndNormalizeReallocations } from "../../helpers/validate.js";
 import {
   type AuthorizationRequirementSignature,
-  type BlueReallocation,
+  type BlueReallocationPlan,
   type BlueRefinanceAction,
   type Metadata,
   NegativeInputError,
@@ -16,7 +17,10 @@ import {
   type Transaction,
 } from "../../types/index.js";
 import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
-import { buildReallocationActions } from "./buildReallocationActions.js";
+import {
+  buildVaultV1ReallocationActions,
+  buildVaultV2BlueReallocationActions,
+} from "./buildReallocationActions.js";
 
 /** Parameters for {@link blueRefinance}. */
 export interface BlueRefinanceParams {
@@ -44,8 +48,8 @@ export interface BlueRefinanceParams {
     minBorrowSharePrice: bigint;
     /** Maximum repay share price on the source market (in ray); must be > 0 when a repay leg exists. */
     maxRepaySharePrice: bigint;
-    /** Public Allocator V1 or V2 reallocations into the target market, run before the supply leg. */
-    targetReallocations?: Iterable<BlueReallocation>;
+    /** Homogeneous Vault V1 or Vault V2 reallocations into the target market. */
+    targetReallocations?: BlueReallocationPlan;
     /**
      * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
      * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a
@@ -102,8 +106,8 @@ export interface BlueRefinanceParams {
  * @param params.args.borrowShares - Borrow shares to repay on the source; exclusive with `borrowAssets`. Defaults to `0n`.
  * @param params.args.minBorrowSharePrice - Minimum borrow share price (ray) on the target.
  * @param params.args.maxRepaySharePrice - Maximum repay share price (ray) on the source.
- * @param params.args.targetReallocations - Public Allocator V1 or V2 reallocations into the target,
- *   run before the supply leg. V1 fees add to `tx.value`; V2 penalties are paid in the target loan token.
+ * @param params.args.targetReallocations - Homogeneous Vault V1 or Vault V2 reallocations into the
+ *   target, run before the supply leg. V1 fees add to `tx.value`; V2 penalties are paid in the target loan token.
  * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
  *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata appended to `tx.data`.
@@ -117,6 +121,7 @@ export interface BlueRefinanceParams {
  * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
  * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
  * @throws {InvalidReallocationShapeError} when an entry matches both or neither V1/V2 shape.
+ * @throws {MixedReallocationVersionsError} when one plan contains both V1 and V2 entries.
  * @throws {NegativeInputError} when `borrowAssets`, `borrowShares`, `minBorrowSharePrice`,
  *   `maxRepaySharePrice`, a V1 fee, or a V2 penalty is negative.
  * @throws {RefinanceSameMarketError} when source and target market ids are equal.
@@ -279,15 +284,24 @@ export const blueRefinance = ({
     actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
   }
 
+  const reallocationPlan = validateAndNormalizeReallocations(
+    targetReallocations,
+    targetParams.id,
+  );
   const {
     actions: reallocationActions,
     fee: reallocationFee,
     penaltyAssets: reallocationPenaltyAssets,
-  } = buildReallocationActions({
-    chainId,
-    reallocations: targetReallocations,
-    targetMarketParams: targetParams,
-  });
+  } = reallocationPlan.type === "vaultV1"
+    ? buildVaultV1ReallocationActions({
+        reallocations: reallocationPlan.reallocations,
+        targetMarketParams: targetParams,
+      })
+    : buildVaultV2BlueReallocationActions({
+        chainId,
+        reallocations: reallocationPlan.reallocations,
+        targetMarketParams: targetParams,
+      });
   actions.push(...reallocationActions);
 
   actions.push({

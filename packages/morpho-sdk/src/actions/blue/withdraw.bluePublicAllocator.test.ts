@@ -11,7 +11,7 @@ import {
   generalAdapter1Abi,
   vaultV2BluePublicAllocatorAbi,
 } from "../../abis.js";
-import type { BlueReallocation } from "../../types/index.js";
+import type { VaultV2BlueReallocation } from "../../types/index.js";
 import { blueWithdraw } from "./withdraw.js";
 
 const allocator = getChainAddresses(mainnet.id).vaultV2BluePublicAllocator!;
@@ -25,7 +25,7 @@ describe("blueWithdraw Blue Public Allocator", () => {
     const {
       bundler3: { bundler3 },
     } = getChainAddresses(mainnet.id);
-    const reallocations: readonly BlueReallocation[] = [
+    const reallocations: readonly VaultV2BlueReallocation[] = [
       {
         vault,
         from: {

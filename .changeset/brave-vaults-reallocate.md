@@ -17,4 +17,4 @@ Compatibility note: `VaultV2MorphoMarketV1AdapterV2.ids()` now declares its exis
 
 Name allocation-cap helpers `adapterCapId`, `collateralCapId`, and `adapterMarketCapId`. Preserve the published `adapterId`, `collateralId`, and `marketParamsId` helpers as deprecated aliases.
 
-Add an explicit `MorphoBorrowWithVaultV2ReallocationsOptions` WDK opt-in for the combined V1/V2 reallocation union and its possible approval requirement while preserving the legacy `MorphoBorrowOptions` input and authorization-only requirement result type.
+Add an explicit `MorphoBorrowWithVaultV2ReallocationsOptions` WDK opt-in for Vault V2 reallocations and their possible approval requirement while preserving the legacy Vault V1-only `MorphoBorrowOptions` input and authorization-only requirement result type. Reallocation plans must use exactly one vault version per transaction.

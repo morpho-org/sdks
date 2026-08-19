@@ -18,7 +18,7 @@ import {
 import {
   AccrualPositionUserMismatchError,
   AddressMismatchError,
-  type BlueReallocation,
+  type BlueReallocationPlan,
   BorrowExceedsSafeLtvError,
   ChainIdMismatchError,
   ChainWNativeMissingError,
@@ -49,6 +49,7 @@ import {
 import { MAX_SLIPPAGE_TOLERANCE } from "./constant.js";
 import {
   validateAccrualPosition,
+  validateAndNormalizeReallocations,
   validateChainId,
   validateMidnightMarketChainId,
   validateNativeAsset,
@@ -59,6 +60,7 @@ import {
   validateRepayShares,
   validateSlippageTolerance,
   validateUserAddress,
+  validateVaultV2BlueReallocations,
   validateWithdrawAmount,
   validateWithdrawShares,
 } from "./validate.js";
@@ -547,7 +549,7 @@ describe("validateRepayShares", () => {
 // validateReallocations
 // ---------------------------------------------------------------------------
 
-describe("validateReallocations", () => {
+describe("reallocation validation", () => {
   const targetMarketId = marketParams.id;
   const sourceMarketA = new MarketParams(CbbtcUsdcBlue);
   const marketParamsWithId = (id: MarketId) => ({
@@ -577,7 +579,7 @@ describe("validateReallocations", () => {
 
   test("behavior: accepts a valid Blue Public Allocator idle reallocation", () => {
     expect(() =>
-      validateReallocations(
+      validateVaultV2BlueReallocations(
         [validBluePublicAllocatorReallocation],
         targetMarketId,
       ),
@@ -623,14 +625,14 @@ describe("validateReallocations", () => {
     "error: rejects Blue Public Allocator $name",
     ({ reallocation, ErrorClass }) => {
       expect(() =>
-        validateReallocations([reallocation], targetMarketId),
+        validateVaultV2BlueReallocations([reallocation], targetMarketId),
       ).toThrow(ErrorClass);
     },
   );
 
   test("error: InconsistentReallocationPenaltyError for one vault", () => {
     expect(() =>
-      validateReallocations(
+      validateVaultV2BlueReallocations(
         [
           { ...validBluePublicAllocatorReallocation, penalty: 5n },
           { ...validBluePublicAllocatorReallocation, penalty: 11n },
@@ -642,7 +644,7 @@ describe("validateReallocations", () => {
 
   test("behavior: accepts the maximum uint128 asset amount", () => {
     expect(() =>
-      validateReallocations(
+      validateVaultV2BlueReallocations(
         [
           {
             ...validBluePublicAllocatorReallocation,
@@ -656,7 +658,7 @@ describe("validateReallocations", () => {
 
   test("behavior: allows different penalties for different vaults", () => {
     expect(() =>
-      validateReallocations(
+      validateVaultV2BlueReallocations(
         [
           { ...validBluePublicAllocatorReallocation, penalty: 5n },
           {
@@ -672,7 +674,7 @@ describe("validateReallocations", () => {
 
   test("error: ReallocationWithdrawalOnTargetMarketError for a Blue Public Allocator target-market source", () => {
     expect(() =>
-      validateReallocations(
+      validateVaultV2BlueReallocations(
         [
           {
             ...validBluePublicAllocatorReallocation,
@@ -690,7 +692,7 @@ describe("validateReallocations", () => {
 
   test("error: target market through a different Vault V2 adapter", () => {
     expect(() =>
-      validateReallocations(
+      validateVaultV2BlueReallocations(
         [
           {
             ...validBluePublicAllocatorReallocation,
@@ -721,11 +723,11 @@ describe("validateReallocations", () => {
         adapter: USER_A,
         marketParams: plainMarketParams,
       },
-    } as unknown as BlueReallocation;
+    } as unknown as VaultV2BlueReallocation;
 
-    expect(() => validateReallocations([reallocation], targetMarketId)).toThrow(
-      ReallocationWithdrawalOnTargetMarketError,
-    );
+    expect(() =>
+      validateVaultV2BlueReallocations([reallocation], targetMarketId),
+    ).toThrow(ReallocationWithdrawalOnTargetMarketError);
   });
 
   test.each([
@@ -739,22 +741,22 @@ describe("validateReallocations", () => {
     const reallocation = {
       ...validBluePublicAllocatorReallocation,
       ...overrides,
-    } as unknown as BlueReallocation;
+    } as unknown as VaultV2BlueReallocation;
 
-    expect(() => validateReallocations([reallocation], targetMarketId)).toThrow(
-      InvalidReallocationAddressError,
-    );
+    expect(() =>
+      validateVaultV2BlueReallocations([reallocation], targetMarketId),
+    ).toThrow(InvalidReallocationAddressError);
   });
 
   test("error: InvalidReallocationSourceTypeError", () => {
     const reallocation = {
       ...validBluePublicAllocatorReallocation,
       from: { type: "marketTypo" },
-    } as unknown as BlueReallocation;
+    } as unknown as VaultV2BlueReallocation;
 
-    expect(() => validateReallocations([reallocation], targetMarketId)).toThrow(
-      InvalidReallocationSourceTypeError,
-    );
+    expect(() =>
+      validateVaultV2BlueReallocations([reallocation], targetMarketId),
+    ).toThrow(InvalidReallocationSourceTypeError);
   });
 
   test.each([
@@ -768,22 +770,22 @@ describe("validateReallocations", () => {
     const reallocation = {
       ...validBluePublicAllocatorReallocation,
       from,
-    } as unknown as BlueReallocation;
+    } as unknown as VaultV2BlueReallocation;
 
-    expect(() => validateReallocations([reallocation], targetMarketId)).toThrow(
-      InvalidReallocationSourceTypeError,
-    );
+    expect(() =>
+      validateVaultV2BlueReallocations([reallocation], targetMarketId),
+    ).toThrow(InvalidReallocationSourceTypeError);
   });
 
   test("error: InvalidReallocationAddressError for missing source adapter", () => {
     const reallocation = {
       ...validBluePublicAllocatorReallocation,
       from: { type: "market", marketParams: sourceMarketA },
-    } as unknown as BlueReallocation;
+    } as unknown as VaultV2BlueReallocation;
 
-    expect(() => validateReallocations([reallocation], targetMarketId)).toThrow(
-      InvalidReallocationAddressError,
-    );
+    expect(() =>
+      validateVaultV2BlueReallocations([reallocation], targetMarketId),
+    ).toThrow(InvalidReallocationAddressError);
   });
 
   test.each([
@@ -792,7 +794,7 @@ describe("validateReallocations", () => {
       reallocation: {
         vault: USER_A,
         fee: 0n,
-      } as unknown as BlueReallocation,
+      } as unknown as VaultV2BlueReallocation,
     },
     {
       name: "entry matching both shapes",
@@ -802,12 +804,15 @@ describe("validateReallocations", () => {
         to: { adapter: USER_A },
         assets: 1n,
         penalty: 0n,
-      } as unknown as BlueReallocation,
+      } as unknown as VaultV2BlueReallocation,
     },
   ])("error: InvalidReallocationShapeError for $name", ({ reallocation }) => {
-    expect(() => validateReallocations([reallocation], targetMarketId)).toThrow(
-      InvalidReallocationShapeError,
-    );
+    expect(() =>
+      validateAndNormalizeReallocations(
+        [reallocation] as unknown as BlueReallocationPlan,
+        targetMarketId,
+      ),
+    ).toThrow(InvalidReallocationShapeError);
   });
 
   test("should throw NegativeInputError when fee is negative", () => {

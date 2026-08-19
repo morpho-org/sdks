@@ -1,6 +1,5 @@
 export type { InputMarketParams } from "@morpho-org/blue-sdk";
 export type {
-  BlueReallocation,
   RequirementSignature,
   VaultReallocation,
   VaultV1Reallocation,

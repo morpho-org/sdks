@@ -16,7 +16,6 @@ import { makePermit } from "../../../test/helpers/permit.js";
 import { test } from "../../../test/setup.js";
 import { bundler3Abi, generalAdapter1Abi } from "../../abis.js";
 import {
-  type BlueReallocation,
   isRequirementApproval,
   isRequirementSignature,
   NativeAmountOnNonWNativeAssetError,
@@ -24,6 +23,7 @@ import {
   NonPositiveInputError,
   type PermitRequirementSignature,
   type VaultReallocation,
+  type VaultV2BlueReallocation,
 } from "../../types/index.js";
 import { getGeneralAdapterRequirements } from "../requirements/index.js";
 import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
@@ -226,7 +226,7 @@ describe("blueSupplyCollateralBorrow unit tests", () => {
       ...WethUsdsBlue,
       loanToken: WethUsdsBlue.collateralToken,
     });
-    const reallocations: readonly BlueReallocation[] = [
+    const reallocations: readonly VaultV2BlueReallocation[] = [
       {
         vault: WethUsdsBlue.oracle,
         from: { type: "idle" },

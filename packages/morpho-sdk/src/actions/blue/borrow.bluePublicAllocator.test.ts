@@ -10,8 +10,10 @@ import {
   vaultV2BluePublicAllocatorAbi,
 } from "../../abis.js";
 import {
-  type BlueReallocation,
+  type BlueReallocationPlan,
   InconsistentReallocationPenaltyError,
+  MixedReallocationVersionsError,
+  type VaultV2BlueReallocation,
 } from "../../types/index.js";
 import { blueBorrow } from "./borrow.js";
 
@@ -45,12 +47,7 @@ describe("blueBorrow Blue Public Allocator", () => {
     const {
       bundler3: { bundler3 },
     } = getChainAddresses(ChainId.EthMainnet);
-    const reallocations: readonly BlueReallocation[] = [
-      {
-        vault: vaultV1,
-        fee: 2n,
-        withdrawals: [{ marketParams: sourceMarket, amount: 1n }],
-      },
+    const reallocations: readonly VaultV2BlueReallocation[] = [
       {
         vault: vaultV2,
         from: {
@@ -81,22 +78,14 @@ describe("blueBorrow Blue Public Allocator", () => {
       },
     });
 
-    expect(tx.value).toBe(2n);
-    expect(tx.action.args.reallocationFee).toBe(2n);
+    expect(tx.value).toBe(0n);
+    expect(tx.action.args.reallocationFee).toBe(0n);
     expect(tx.action.args.reallocationPenaltyAssets).toBe(2n);
 
     const bundle = decodeFunctionData({ abi: bundler3Abi, data: tx.data });
     const calls = bundle.args[0] ?? [];
-    expect(calls).toHaveLength(7);
-    expect(calls.map((call) => call.value)).toEqual([
-      0n,
-      2n,
-      0n,
-      0n,
-      0n,
-      0n,
-      0n,
-    ]);
+    expect(calls).toHaveLength(6);
+    expect(calls.map((call) => call.value)).toEqual([0n, 0n, 0n, 0n, 0n, 0n]);
     expect(calls.every((call) => call.skipRevert === false)).toBe(true);
 
     expect(
@@ -106,25 +95,19 @@ describe("blueBorrow Blue Public Allocator", () => {
       args: [targetMarket.loanToken, bundler3, 2n],
     });
 
-    const publicAllocatorCall = decodeFunctionData({
-      abi: vaultV1PublicAllocatorAbi,
-      data: calls[1]!.data,
-    });
-    expect(publicAllocatorCall.functionName).toBe("reallocateTo");
-    expect(publicAllocatorCall.args[0]).toBe(vaultV1);
     expect(
       decodeFunctionData({
         abi: vaultV2BluePublicAllocatorAbi,
-        data: calls[3]!.data,
+        data: calls[2]!.data,
       }).functionName,
     ).toBe("reallocate");
     expect(
-      decodeFunctionData({ abi: erc20Abi, data: calls[2]!.data }),
+      decodeFunctionData({ abi: erc20Abi, data: calls[1]!.data }),
     ).toMatchObject({ functionName: "approve", args: [allocator, 1n] });
 
     const idleCall = decodeFunctionData({
       abi: vaultV2BluePublicAllocatorAbi,
-      data: calls[5]!.data,
+      data: calls[4]!.data,
     });
     expect(idleCall.functionName).toBe("allocateFromIdle");
     expect(idleCall.args[0]).toBe(vaultV2);
@@ -139,12 +122,41 @@ describe("blueBorrow Blue Public Allocator", () => {
     expect(idleCall.args[3]).toBe(7n);
     expect(idleCall.args[4]).toBe(5n);
     expect(
-      decodeFunctionData({ abi: erc20Abi, data: calls[4]!.data }),
+      decodeFunctionData({ abi: erc20Abi, data: calls[3]!.data }),
     ).toMatchObject({ functionName: "approve", args: [allocator, 1n] });
     expect(
-      decodeFunctionData({ abi: generalAdapter1Abi, data: calls[6]!.data })
+      decodeFunctionData({ abi: generalAdapter1Abi, data: calls[5]!.data })
         .functionName,
     ).toBe("morphoBorrow");
+  });
+
+  test("error: MixedReallocationVersionsError", () => {
+    const reallocations = [
+      {
+        vault: vaultV1,
+        fee: 2n,
+        withdrawals: [{ marketParams: sourceMarket, amount: 1n }],
+      },
+      {
+        vault: vaultV2,
+        from: { type: "idle" },
+        to: { adapter: targetAdapter },
+        assets: 7n,
+        penalty: 5n,
+      },
+    ] as unknown as BlueReallocationPlan;
+
+    expect(() =>
+      blueBorrow({
+        market: { chainId: ChainId.EthMainnet, marketParams: targetMarket },
+        args: {
+          amount: 1n,
+          minSharePrice: 0n,
+          receiver,
+          reallocations,
+        },
+      }),
+    ).toThrow(MixedReallocationVersionsError);
   });
 
   test("error: InconsistentReallocationPenaltyError", () => {
