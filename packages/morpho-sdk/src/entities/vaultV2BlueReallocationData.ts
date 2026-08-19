@@ -7,13 +7,14 @@ import {
   AccrualVaultV2MorphoVaultV1Adapter,
   type IAccrualVaultV2Adapter,
   type IVaultV2Allocation,
+  type IVaultV2BlueMarketPublicAllocatorConfig,
   type IVaultV2BluePublicAllocatorConfig,
   Market,
   type MarketId,
   MarketUtils,
   MathLib,
   UnknownDataError,
-  type VaultV2BlueMarketPublicAllocatorConfig,
+  VaultV2BlueMarketPublicAllocatorConfig,
   VaultV2BluePublicAllocatorConfig,
   VaultV2BluePublicAllocatorConfigUtils,
   VaultV2Utils,
@@ -73,7 +74,7 @@ export interface InputVaultV2BlueReallocationData {
     Record<
       Address,
       | Readonly<
-          Record<Hash, VaultV2BlueMarketPublicAllocatorConfig | undefined>
+          Record<Hash, IVaultV2BlueMarketPublicAllocatorConfig | undefined>
         >
       | undefined
     >
@@ -316,7 +317,7 @@ export class VaultV2BlueReallocationData
       Address,
       (
         | Readonly<
-            Record<Hash, VaultV2BlueMarketPublicAllocatorConfig | undefined>
+            Record<Hash, IVaultV2BlueMarketPublicAllocatorConfig | undefined>
           >
         | undefined
       ),
@@ -324,10 +325,12 @@ export class VaultV2BlueReallocationData
       this.marketPublicAllocatorConfigs[vault] = {};
       for (const [id, config] of Object.entries(configs ?? {}) as [
         Hash,
-        VaultV2BlueMarketPublicAllocatorConfig | undefined,
+        IVaultV2BlueMarketPublicAllocatorConfig | undefined,
       ][]) {
         this.marketPublicAllocatorConfigs[vault]![id] =
-          config == null ? undefined : { ...config };
+          config == null
+            ? undefined
+            : new VaultV2BlueMarketPublicAllocatorConfig(config);
       }
     }
   }
@@ -756,11 +759,11 @@ export class VaultV2BlueReallocationData
 
               const targetMarketParamsAllocation =
                 targetContext.allocations[2]!;
-              const allocatorHeadroom = MathLib.zeroFloorSub(
-                targetContext.marketPublicAllocatorConfig.absoluteCap,
-                targetMarketParamsAllocation.allocation +
-                  targetContext.untracked,
-              );
+              const allocatorHeadroom =
+                targetContext.marketPublicAllocatorConfig.getMaxIn(
+                  targetMarketParamsAllocation.allocation +
+                    targetContext.untracked,
+                );
 
               if (publicAllocatorConfig.canPullFromIdle) {
                 const assets = MathLib.min(

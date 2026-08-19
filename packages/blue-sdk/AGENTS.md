@@ -11,7 +11,7 @@
 - Protocol entity folders (`market/`, `vault/`, `token/`, `position/`, `holding/`, `user/`) own their classes and folder barrels.
 - Getters may throw typed `Unknown*Error`; nullable lookup paths should use `_try` or `tryGet*`-style helpers deliberately.
 - Vault V2 absolute/relative allocation-cap math is canonical in `VaultV2Utils.allocationHeadroom`; consumers such as `AccrualVaultV2.maxDeposit` and shared-liquidity simulation delegate to it.
-- `VaultV2BluePublicAllocatorConfig` is the hydrated vault-wide config class; its `I*` input remains plain-object compatible and its penalty math delegates to `VaultV2BluePublicAllocatorConfigUtils`. Market-scoped config remains a readonly vault-bearing projection carrying the adapter and derived market-params id. The allocator is canonical per chain and comes from the address registry; adapter activation is normalized separately as a vault-keyed set of adapter addresses.
+- Vault V2 BluePublicAllocator configs are hydrated classes with plain-object-compatible `I*` inputs and math delegated to dedicated `*Utils` namespaces. Vault-wide config computes penalties; market config computes max-in capacity from its absolute cap and effective allocation. The allocator is canonical per chain and comes from the address registry; adapter activation is normalized separately as a vault-keyed set of adapter addresses.
 - `marketParamsAbi` is owned by `@morpho-org/morpho-ts/abis` and re-exported from `MarketParams.ts` for backward compatibility; do not define a second copy in this package.
 
 ## Continuous Improvement

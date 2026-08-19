@@ -5,6 +5,7 @@ import {
   Market,
   MarketParams,
   MathLib,
+  VaultV2BlueMarketPublicAllocatorConfig,
   VaultV2BluePublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
@@ -18,8 +19,8 @@ import {
 } from "../../__test__/viem.js";
 import { vaultV2Abi, vaultV2BluePublicAllocatorAbi } from "../../abis.js";
 import { abi as queryAbi } from "../../queries/vault-v2/GetVaultV2BluePublicAllocatorConfig.js";
+import { fetchVaultV2BlueMarketPublicAllocatorConfig } from "./VaultV2BlueMarketPublicAllocatorConfig.js";
 import {
-  fetchVaultV2BlueMarketPublicAllocatorConfig,
   fetchVaultV2BluePublicAllocatorConfig,
   fetchVaultV2BluePublicAllocatorData,
 } from "./VaultV2BluePublicAllocatorConfig.js";
@@ -90,13 +91,13 @@ const expected = {
   }),
   activeAdapters: new Set([ADAPTER]),
   marketPublicAllocatorConfigs: {
-    [adapterMarketCapId]: {
+    [adapterMarketCapId]: new VaultV2BlueMarketPublicAllocatorConfig({
       vault: VAULT,
       adapter: ADAPTER,
       adapterMarketCapId,
       absoluteCap: 500n,
       canPullFromMarket: true,
-    },
+    }),
   },
   allocations: Object.fromEntries(
     ids.map((id) => [
@@ -170,14 +171,14 @@ describe("Vault V2 BluePublicAllocator fetchers", () => {
     );
     expect(config).toBeInstanceOf(VaultV2BluePublicAllocatorConfig);
     expect(config).toStrictEqual(expected.publicAllocatorConfig);
-    await expect(
-      fetchVaultV2BlueMarketPublicAllocatorConfig(
-        VAULT,
-        ADAPTER,
-        adapterMarketCapId,
-        handle.client,
-      ),
-    ).resolves.toStrictEqual(
+    const marketConfig = await fetchVaultV2BlueMarketPublicAllocatorConfig(
+      VAULT,
+      ADAPTER,
+      adapterMarketCapId,
+      handle.client,
+    );
+    expect(marketConfig).toBeInstanceOf(VaultV2BlueMarketPublicAllocatorConfig);
+    expect(marketConfig).toStrictEqual(
       expected.marketPublicAllocatorConfigs[adapterMarketCapId],
     );
   });

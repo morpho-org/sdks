@@ -1,5 +1,7 @@
 export * from "./VaultV2.js";
 export * from "./VaultV2Adapter.js";
+export * from "./VaultV2BlueMarketPublicAllocatorConfig.js";
+export * from "./VaultV2BlueMarketPublicAllocatorConfigUtils.js";
 export * from "./VaultV2BluePublicAllocatorConfig.js";
 export * from "./VaultV2BluePublicAllocatorConfigUtils.js";
 export * from "./VaultV2MorphoMarketV1Adapter.js";

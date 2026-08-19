@@ -1,4 +1,4 @@
-import type { Address, BigIntish, Hash } from "../../types.js";
+import type { Address, BigIntish } from "../../types.js";
 import { VaultV2BluePublicAllocatorConfigUtils } from "./VaultV2BluePublicAllocatorConfigUtils.js";
 
 /** Plain input shape for one Vault V2's BluePublicAllocator configuration. */
@@ -71,18 +71,4 @@ export class VaultV2BluePublicAllocatorConfig
   public getPenaltyAssets(assets: BigIntish) {
     return VaultV2BluePublicAllocatorConfigUtils.getPenaltyAssets(this, assets);
   }
-}
-
-/** BluePublicAllocator permission and cap for one Vault V2 adapter-market pair. */
-export interface VaultV2BlueMarketPublicAllocatorConfig {
-  /** Configured Vault V2 address. */
-  readonly vault: Address;
-  /** Vault V2 MorphoMarketV1AdapterV2 address. */
-  readonly adapter: Address;
-  /** Adapter-scoped market-parameters id used by the allocator mappings. */
-  readonly adapterMarketCapId: Hash;
-  /** Maximum post-state allocation accepted by the allocator. */
-  readonly absoluteCap: bigint;
-  /** Whether the allocator may pull assets from this adapter-market pair. */
-  readonly canPullFromMarket: boolean;
 }

@@ -10,6 +10,7 @@ import {
   Market,
   MarketParams,
   MathLib,
+  VaultV2BlueMarketPublicAllocatorConfig,
   VaultV2BluePublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
 import type { Address, Hash } from "viem";
@@ -471,7 +472,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
   });
 
   test("behavior: deep-clones legacy and nested accrued adapters", () => {
-    const { data } = makeFixture();
+    const { data, targetIds } = makeFixture();
     const targetMarket = data.getMarket(targetParams.id);
     const legacyPosition = new AccrualPosition(
       {
@@ -584,6 +585,12 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     );
     expect(cloned.getPublicAllocatorConfig(VAULT)).not.toBe(
       input.getPublicAllocatorConfig(VAULT),
+    );
+    expect(
+      cloned.getMarketPublicAllocatorConfig(VAULT, targetIds[2]),
+    ).toBeInstanceOf(VaultV2BlueMarketPublicAllocatorConfig);
+    expect(cloned.getMarketPublicAllocatorConfig(VAULT, targetIds[2])).not.toBe(
+      input.getMarketPublicAllocatorConfig(VAULT, targetIds[2]),
     );
     const inputLegacy = input
       .getVault(VAULT)

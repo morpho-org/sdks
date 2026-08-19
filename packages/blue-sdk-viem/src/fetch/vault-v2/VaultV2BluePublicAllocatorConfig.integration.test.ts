@@ -1,6 +1,7 @@
 import {
   AccrualVaultV2MorphoMarketV1AdapterV2,
   getChainAddress,
+  VaultV2BlueMarketPublicAllocatorConfig,
   VaultV2BluePublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
 import { createViemTest } from "@morpho-org/test/vitest";
@@ -114,13 +115,18 @@ describe("Vault V2 BluePublicAllocator fetchers on fork", () => {
       );
       expect(
         deployless.marketPublicAllocatorConfigs[forkAdapterMarketCapId],
-      ).toStrictEqual({
-        vault: forkVault.address,
-        adapter: forkAdapter.address,
-        adapterMarketCapId: forkAdapterMarketCapId,
-        absoluteCap: 500n,
-        canPullFromMarket: true,
-      });
+      ).toBeInstanceOf(VaultV2BlueMarketPublicAllocatorConfig);
+      expect(
+        deployless.marketPublicAllocatorConfigs[forkAdapterMarketCapId],
+      ).toStrictEqual(
+        new VaultV2BlueMarketPublicAllocatorConfig({
+          vault: forkVault.address,
+          adapter: forkAdapter.address,
+          adapterMarketCapId: forkAdapterMarketCapId,
+          absoluteCap: 500n,
+          canPullFromMarket: true,
+        }),
+      );
       expect(
         Object.values(deployless.allocations).some(
           (allocation) =>
