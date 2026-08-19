@@ -80,6 +80,29 @@ const vault = new AccrualVaultV2(
   0n,
   {},
 );
+const unallocatedTargetAdapter = new AccrualVaultV2MorphoMarketV1AdapterV2(
+  {
+    address: ADAPTER,
+    parentVault: VAULT,
+    skimRecipient: zeroAddress,
+    marketIds: [],
+    adaptiveCurveIrm: IRM,
+    supplyShares: {},
+  },
+  [],
+);
+const unallocatedTargetVault = new AccrualVaultV2(
+  {
+    ...vault,
+    liquidityAllocations: vault.liquidityAllocations?.map((allocation) => ({
+      ...allocation,
+    })),
+  },
+  undefined,
+  [unallocatedTargetAdapter],
+  vault.assetBalance,
+  { ...vault.forceDeallocatePenalties },
+);
 const ids = adapter.ids(marketParams);
 const adapterMarketCapId = ids[2];
 
@@ -189,7 +212,7 @@ describe("Vault V2 BluePublicAllocator fetchers", () => {
     );
   });
 
-  test("behavior: deployless batching returns all derived ids", async () => {
+  test("behavior: deployless batching includes an unallocated target", async () => {
     const handle = createMockClient(mainnet);
     mockDeploylessRead(handle, queryAbi, "query", {
       isAllocator: true,
@@ -213,17 +236,25 @@ describe("Vault V2 BluePublicAllocator fetchers", () => {
     });
 
     await expect(
-      fetchVaultV2BluePublicAllocatorData(vault, handle.client),
+      fetchVaultV2BluePublicAllocatorData(
+        unallocatedTargetVault,
+        handle.client,
+        { targetMarketParams: marketParams },
+      ),
     ).resolves.toStrictEqual(expected);
   });
 
-  test("behavior: direct-read fallback matches deployless output", async () => {
+  test("behavior: direct-read fallback includes an unallocated target", async () => {
     const handle = createMockClient(mainnet);
     mockDeploylessReads(handle, [new Error("deployless unavailable")]);
     mockDirectReads(handle);
 
     await expect(
-      fetchVaultV2BluePublicAllocatorData(vault, handle.client),
+      fetchVaultV2BluePublicAllocatorData(
+        unallocatedTargetVault,
+        handle.client,
+        { targetMarketParams: marketParams },
+      ),
     ).resolves.toStrictEqual(expected);
   });
 

@@ -2031,7 +2031,10 @@ export class MorphoBlue implements BlueActions {
           const publicAllocatorData = await fetchVaultV2BluePublicAllocatorData(
             vault,
             client,
-            fetchParams,
+            {
+              ...fetchParams,
+              targetMarketParams: this.marketParams,
+            },
           );
           return { publicAllocatorData, vault };
         }),

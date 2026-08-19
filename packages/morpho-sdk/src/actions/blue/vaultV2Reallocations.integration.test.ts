@@ -239,6 +239,25 @@ describe("Blue actions with Vault V2 reallocations", () => {
       amount: totalPenaltyAssets,
     });
 
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
+    const market = morphoClient.blue(targetMarket, base.id);
+    const block = await client.getBlock();
+    const reallocationData = await market.getVaultV2BlueReallocationData({
+      vaultAddresses: [vault],
+      block,
+    });
+    expect(
+      reallocationData.getAdapter(vault, targetAdapter).marketIds,
+    ).not.toContain(targetMarket.id);
+    const discovery = reallocationData.computeVaultV2BlueReallocations(
+      targetMarket.id,
+      { timestamp: block.timestamp },
+    );
+    expect(discovery.reallocations.length).toBeGreaterThan(0);
+    expect(discovery.data.getAdapter(vault, targetAdapter).marketIds).toContain(
+      targetMarket.id,
+    );
+
     const reallocations: readonly VaultV2BlueReallocation[] = [
       {
         vault,
@@ -260,8 +279,6 @@ describe("Blue actions with Vault V2 reallocations", () => {
       },
     ];
 
-    const morphoClient = client.extend(morphoViemExtension()).morpho;
-    const market = morphoClient.blue(targetMarket, base.id);
     const positionData = await market.getPositionData(client.account.address);
     const borrow = market.borrow({
       userAddress: client.account.address,

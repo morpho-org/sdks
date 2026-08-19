@@ -3,6 +3,7 @@ import {
   AccrualVaultV2MorphoMarketV1AdapterV2,
   getChainAddress,
   type IVaultV2Allocation,
+  type MarketParams,
   VaultV2BlueMarketPublicAllocatorConfig,
   VaultV2BluePublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
@@ -88,6 +89,7 @@ export async function fetchVaultV2BluePublicAllocatorConfig(
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Deployless mode; defaults to `true`, with direct-read fallback.
+ * @param parameters.targetMarketParams - Optional target market whose config and cap ids are fetched even when the adapter has no current position.
  * @returns Vault-wide config when the BluePublicAllocator is authorized, active-adapter set, adapter-market configs keyed by `adapterMarketCapId`, and allocations keyed by derived id.
  * @throws {UnknownAddressError} when the chain has no BluePublicAllocator deployment.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
@@ -113,7 +115,13 @@ export async function fetchVaultV2BluePublicAllocatorConfig(
 export async function fetchVaultV2BluePublicAllocatorData(
   vault: AccrualVaultV2,
   client: Client,
-  { deployless = true, ...parameters }: DeploylessFetchParameters = {},
+  {
+    deployless = true,
+    targetMarketParams,
+    ...parameters
+  }: DeploylessFetchParameters & {
+    readonly targetMarketParams?: MarketParams;
+  } = {},
 ) {
   const chainId = parameters.chainId ?? (await getChainId(client));
   const allocator = getChainAddress(chainId, "vaultV2BluePublicAllocator");
@@ -128,8 +136,17 @@ export async function fetchVaultV2BluePublicAllocatorData(
     if (!(adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2)) continue;
     adapters.add(adapter.address);
 
-    for (const market of adapter.markets) {
-      const ids = adapter.ids(market.params);
+    const marketParamsList = adapter.markets.map((market) => market.params);
+    if (
+      targetMarketParams != null &&
+      !marketParamsList.some(
+        (marketParams) => marketParams.id === targetMarketParams.id,
+      )
+    )
+      marketParamsList.push(targetMarketParams);
+
+    for (const marketParams of marketParamsList) {
+      const ids = adapter.ids(marketParams);
       marketRequests.push({
         adapter: adapter.address,
         adapterMarketCapId: ids[2],

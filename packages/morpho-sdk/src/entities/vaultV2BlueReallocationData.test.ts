@@ -88,6 +88,7 @@ interface FixtureOptions {
   readonly targetTotalSupplyShares?: bigint;
   readonly targetBorrow?: bigint;
   readonly targetPositionAssets?: bigint;
+  readonly targetTracked?: boolean;
   readonly targetUntracked?: bigint;
   readonly targetCaps?: readonly [
     { readonly absoluteCap: bigint; readonly relativeCap: bigint },
@@ -117,6 +118,7 @@ const makeFixture = ({
   targetTotalSupplyShares,
   targetBorrow = 0n,
   targetPositionAssets = 0n,
+  targetTracked = true,
   targetUntracked = 0n,
   targetCaps = [
     { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
@@ -164,11 +166,13 @@ const makeFixture = ({
       address: TARGET_ADAPTER,
       parentVault: VAULT,
       skimRecipient: zeroAddress,
-      marketIds: [targetMarket.id],
+      marketIds: targetTracked ? [targetMarket.id] : [],
       adaptiveCurveIrm: IRM,
-      supplyShares: { [targetMarket.id]: targetSupplyShares },
+      supplyShares: targetTracked
+        ? { [targetMarket.id]: targetSupplyShares }
+        : {},
     },
-    [targetMarket],
+    targetTracked ? [targetMarket] : [],
   );
   const sourceAdapter = new AccrualVaultV2MorphoMarketV1AdapterV2(
     {
@@ -348,6 +352,29 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     );
     expect(result.data.getVault(VAULT)._totalAssets).toBe(
       data.getVault(VAULT)._totalAssets,
+    );
+  });
+
+  test("behavior: allocates into a configured target with no existing position", () => {
+    const { data, sourceExpectedAssets, targetIds } = makeFixture({
+      targetTracked: false,
+    });
+
+    expect(data.getAdapter(VAULT, TARGET_ADAPTER).marketIds).not.toContain(
+      targetParams.id,
+    );
+
+    const result = data.computeVaultV2BlueReallocations(targetParams.id);
+    const targetAdapter = result.data.getAdapter(VAULT, TARGET_ADAPTER);
+
+    expect(result.reallocations).toHaveLength(1);
+    expect(targetAdapter.marketIds).toContain(targetParams.id);
+    expect(targetAdapter.markets.map(({ id }) => id)).toContain(
+      targetParams.id,
+    );
+    expect(targetAdapter.supplyShares[targetParams.id]).toBeGreaterThan(0n);
+    expect(result.data.getAllocation(VAULT, targetIds[2]).allocation).toBe(
+      sourceExpectedAssets,
     );
   });
 

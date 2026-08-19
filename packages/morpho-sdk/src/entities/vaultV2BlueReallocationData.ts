@@ -815,13 +815,6 @@ export class VaultV2BlueReallocationData
                 )
               )
                 continue;
-              if (
-                !adapter.markets.some(
-                  (market) =>
-                    market.id.toLowerCase() === marketId.toLowerCase(),
-                )
-              )
-                continue;
 
               const targetContext = _try(() => {
                 const ids = adapter.ids(targetMarket.params);
@@ -1262,6 +1255,10 @@ export class VaultV2BlueReallocationData
     const targetSupplyShares =
       (targetAdapter.supplyShares[targetMarket.id] ?? 0n) + supply.shares;
     targetAdapter.supplyShares[targetMarket.id] = targetSupplyShares;
+    if (!targetAdapter.marketIds.includes(targetMarket.id))
+      targetAdapter.marketIds.push(targetMarket.id);
+    if (!targetAdapter.markets.some(({ id }) => id === targetMarket.id))
+      targetAdapter.markets.push(supply.market);
     data.setMarket(supply.market);
 
     const targetChange =

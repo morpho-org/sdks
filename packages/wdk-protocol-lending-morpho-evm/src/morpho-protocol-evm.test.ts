@@ -1,5 +1,6 @@
 import type {
   RequirementSignature,
+  VaultReallocation,
   VaultV2BlueReallocation,
 } from "@morpho-org/morpho-sdk";
 import * as viem from "viem";
@@ -458,6 +459,15 @@ describe.sequential("MorphoProtocolEvm", () => {
   });
 
   describe("borrow", () => {
+    test("types: borrow reallocations require replayable arrays", () => {
+      expectTypeOf<
+        NonNullable<MorphoBorrowOptions["reallocations"]>
+      >().toEqualTypeOf<readonly VaultReallocation[]>();
+      expectTypeOf<
+        MorphoBorrowWithVaultV2ReallocationsOptions["reallocations"]
+      >().toEqualTypeOf<readonly VaultV2BlueReallocation[]>();
+    });
+
     test("should build a market borrow with morpho-sdk and send it", async () => {
       account.sendTransaction = vi
         .fn()
