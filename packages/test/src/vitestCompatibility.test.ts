@@ -26,10 +26,14 @@ vi.mock("vitest", async (importOriginal) => {
       use: (client: unknown) => Promise<void>,
     ) => {
       const finished: (() => unknown | Promise<unknown>)[] = [];
-      testState.onTestFinishedMock.mockImplementation(
-        (handler: () => unknown | Promise<unknown>) => finished.push(handler),
+      await clientFixture(
+        {
+          ...context,
+          onTestFinished: (handler: () => unknown | Promise<unknown>) =>
+            finished.push(handler),
+        },
+        use,
       );
-      await clientFixture(context, use);
       for (const handler of finished.reverse()) await handler();
     };
     return actual.test;
@@ -37,7 +41,9 @@ vi.mock("vitest", async (importOriginal) => {
 
   return {
     ...actual,
-    onTestFinished: testState.onTestFinishedMock,
+    onTestFinished: testState.onTestFinishedMock.mockImplementation(() => {
+      throw new Error("The module-global onTestFinished hook was used.");
+    }),
     test: new Proxy(actual.test, {
       // biome-ignore lint/complexity/useMaxParams: required Proxy handler signature
       get(target, property, receiver) {

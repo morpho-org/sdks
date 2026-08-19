@@ -5,7 +5,7 @@ import {
   type SendTransactionParameters,
   zeroAddress,
 } from "viem";
-import { onTestFinished, type TestAPI, test } from "vitest";
+import { type TestAPI, test } from "vitest";
 import { type AnvilArgs, spawnAnvil } from "./anvil.js";
 import { type AnvilTestClient, createAnvilTestClient } from "./client.js";
 import {
@@ -68,7 +68,7 @@ export const createViemTest = <chain extends Chain>(
   };
 
   return test.extend<ViemTestContext<chain>>({
-    client: async ({ signal }, use) => {
+    client: async ({ signal, onTestFinished }, use) => {
       const maxAttempts = process.env.CI ? 3 : 1;
       let initialized:
         | {
