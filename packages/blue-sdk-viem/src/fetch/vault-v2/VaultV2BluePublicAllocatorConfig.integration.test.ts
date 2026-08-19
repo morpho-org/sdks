@@ -5,7 +5,7 @@ import {
   VaultV2BluePublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
 import { createViemTest } from "@morpho-org/test/vitest";
-import { parseEther } from "viem";
+import { encodeFunctionData, parseEther } from "viem";
 import { base } from "viem/chains";
 import { assert, describe, expect } from "vitest";
 import { vaultV2Abi, vaultV2BluePublicAllocatorAbi } from "../../abis.js";
@@ -52,6 +52,25 @@ describe("Vault V2 BluePublicAllocator fetchers on fork", () => {
       await client.deal({
         account: allocatorAccount,
         amount: parseEther("1"),
+      });
+      const authorizeAllocator = encodeFunctionData({
+        abi: vaultV2Abi,
+        functionName: "setIsAllocator",
+        args: [allocator, true],
+      });
+      await client.writeContract({
+        account: allocatorAccount,
+        address: forkVault.address,
+        abi: vaultV2Abi,
+        functionName: "submit",
+        args: [authorizeAllocator],
+      });
+      await client.writeContract({
+        account: allocatorAccount,
+        address: forkVault.address,
+        abi: vaultV2Abi,
+        functionName: "setIsAllocator",
+        args: [allocator, true],
       });
       const forkAdapterMarketCapId = forkAdapter.ids(forkMarket.params)[2];
       await client.writeContract({

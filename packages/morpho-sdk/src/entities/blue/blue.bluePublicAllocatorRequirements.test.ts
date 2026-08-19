@@ -10,10 +10,14 @@ import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import { erc20Abi } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test, vi } from "vitest";
-import { CbbtcUsdcBlue } from "../../../test/fixtures/blue.js";
+import {
+  CbbtcUsdcBlue,
+  CbbtcUsdcBlueAlt,
+} from "../../../test/fixtures/blue.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
   isRequirementApproval,
+  isRequirementBlueAuthorization,
   isRequirementSignature,
 } from "../../types/index.js";
 
@@ -25,6 +29,32 @@ vi.mock("@morpho-org/blue-sdk-viem", async (importOriginal) => {
 
 const USER = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 const marketParams = new MarketParams(CbbtcUsdcBlue);
+
+const makePosition = (
+  params: MarketParams,
+  {
+    supplyShares = 0n,
+    borrowShares = 0n,
+    collateral = 0n,
+  }: {
+    supplyShares?: bigint;
+    borrowShares?: bigint;
+    collateral?: bigint;
+  },
+) =>
+  new AccrualPosition(
+    { user: USER, supplyShares, borrowShares, collateral },
+    new Market({
+      params,
+      totalSupplyAssets: 10n ** 24n,
+      totalBorrowAssets: 10n ** 24n / 2n,
+      totalSupplyShares: 10n ** 24n,
+      totalBorrowShares: 10n ** 24n / 2n,
+      lastUpdate: 1_700_000_000n,
+      fee: 0n,
+      price: ORACLE_PRICE_SCALE,
+    }),
+  );
 
 describe("MorphoBlue BluePublicAllocator requirements", () => {
   test("default: includes the classic loan-token approval for V2 penalties", async () => {
@@ -52,24 +82,10 @@ describe("MorphoBlue BluePublicAllocator requirements", () => {
       result: 0n,
     });
 
-    const positionData = new AccrualPosition(
-      {
-        user: USER,
-        supplyShares: 0n,
-        borrowShares: 10n ** 18n,
-        collateral: 10n ** 24n,
-      },
-      new Market({
-        params: marketParams,
-        totalSupplyAssets: 10n ** 24n,
-        totalBorrowAssets: 10n ** 24n / 2n,
-        totalSupplyShares: 10n ** 24n,
-        totalBorrowShares: 10n ** 24n / 2n,
-        lastUpdate: 1_700_000_000n,
-        fee: 0n,
-        price: ORACLE_PRICE_SCALE,
-      }),
-    );
+    const positionData = makePosition(marketParams, {
+      borrowShares: 10n ** 18n,
+      collateral: 10n ** 24n,
+    });
     const market = handle.client
       .extend(morphoViemExtension({ supportSignature: true }))
       .morpho.blue(CbbtcUsdcBlue, mainnet.id);
@@ -96,6 +112,118 @@ describe("MorphoBlue BluePublicAllocator requirements", () => {
     expect(approval?.action.args).toStrictEqual({
       spender: generalAdapter1,
       amount: 1n,
+    });
+  });
+
+  test("behavior: withdraw includes V2 penalty approval and Morpho authorization", async () => {
+    const handle = createMockClient(mainnet);
+    const {
+      morpho,
+      bundler3: { generalAdapter1 },
+    } = getChainAddresses(mainnet.id);
+    mockRead(handle, {
+      address: morpho,
+      abi: blueAbi,
+      functionName: "isAuthorized",
+      result: false,
+    });
+    mockRead(handle, {
+      address: marketParams.loanToken,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const market = handle.client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.blue(marketParams, mainnet.id);
+
+    const requirements = await market
+      .withdraw({
+        assets: 1n,
+        userAddress: USER,
+        positionData: makePosition(marketParams, { supplyShares: 10n }),
+        reallocations: [
+          {
+            vault: marketParams.oracle,
+            from: { type: "idle" },
+            to: { adapter: marketParams.collateralToken },
+            assets: 10n,
+            penalty: 500_000_000_000_000_000n,
+          },
+        ],
+      })
+      .getRequirements();
+
+    const approval = requirements.find(isRequirementApproval);
+    const authorization = requirements.find(isRequirementBlueAuthorization);
+    expect(approval?.to).toBe(marketParams.loanToken);
+    expect(approval?.action.args).toStrictEqual({
+      spender: generalAdapter1,
+      amount: 5n,
+    });
+    expect(authorization?.action.args).toStrictEqual({
+      authorized: generalAdapter1,
+      isAuthorized: true,
+    });
+  });
+
+  test("behavior: refinance includes V2 penalty approval and Morpho authorization", async () => {
+    const handle = createMockClient(mainnet);
+    const {
+      morpho,
+      bundler3: { generalAdapter1 },
+    } = getChainAddresses(mainnet.id);
+    mockRead(handle, {
+      address: morpho,
+      abi: blueAbi,
+      functionName: "isAuthorized",
+      result: false,
+    });
+    mockRead(handle, {
+      address: marketParams.loanToken,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const market = handle.client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.blue(marketParams, mainnet.id);
+
+    const requirements = await market
+      .refinance({
+        userAddress: USER,
+        positionData: makePosition(marketParams, {
+          borrowShares: 10n,
+          collateral: 1_000n,
+        }),
+        target: {
+          marketParams: CbbtcUsdcBlueAlt,
+          positionData: makePosition(CbbtcUsdcBlueAlt, {}),
+        },
+        collateralAmount: 100n,
+        borrowAssets: 1n,
+        targetReallocations: [
+          {
+            vault: marketParams.oracle,
+            from: { type: "idle" },
+            to: { adapter: marketParams.collateralToken },
+            assets: 10n,
+            penalty: 500_000_000_000_000_000n,
+          },
+        ],
+      })
+      .getRequirements();
+
+    const approval = requirements.find(isRequirementApproval);
+    const authorization = requirements.find(isRequirementBlueAuthorization);
+    expect(approval?.to).toBe(marketParams.loanToken);
+    expect(approval?.action.args).toStrictEqual({
+      spender: generalAdapter1,
+      amount: 5n,
+    });
+    expect(authorization?.action.args).toStrictEqual({
+      authorized: generalAdapter1,
+      isAuthorized: true,
     });
   });
 

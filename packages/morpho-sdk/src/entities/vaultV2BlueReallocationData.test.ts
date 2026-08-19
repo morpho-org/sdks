@@ -18,7 +18,9 @@ import { zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import { blueBorrow } from "../actions/index.js";
 import {
+  InputExceedsMaxError,
   InsufficientSharedLiquidityError,
+  NegativeInputError,
   NonPositiveInputError,
   ReallocationWithdrawExceedsMarketSupplyError,
   UnknownReallocationMarketError,
@@ -56,11 +58,13 @@ const sourceParams = new MarketParams({
 const makeMarket = ({
   params,
   supply,
+  supplyShares = supply * 1_000_000n,
   borrow,
   lastUpdate = TIMESTAMP,
 }: {
   readonly params: MarketParams;
   readonly supply: bigint;
+  readonly supplyShares?: bigint;
   readonly borrow: bigint;
   readonly lastUpdate?: bigint;
 }) =>
@@ -68,7 +72,7 @@ const makeMarket = ({
     params,
     totalSupplyAssets: supply,
     totalBorrowAssets: borrow,
-    totalSupplyShares: supply * 1_000_000n,
+    totalSupplyShares: supplyShares,
     totalBorrowShares: borrow * 1_000_000n,
     lastUpdate,
     fee: 0n,
@@ -81,6 +85,7 @@ interface FixtureOptions {
   readonly sourceBorrow?: bigint;
   readonly sourceUntracked?: bigint;
   readonly targetSupply?: bigint;
+  readonly targetTotalSupplyShares?: bigint;
   readonly targetBorrow?: bigint;
   readonly targetPositionAssets?: bigint;
   readonly targetUntracked?: bigint;
@@ -109,6 +114,7 @@ const makeFixture = ({
   sourceBorrow = 0n,
   sourceUntracked = 0n,
   targetSupply = 100n,
+  targetTotalSupplyShares,
   targetBorrow = 0n,
   targetPositionAssets = 0n,
   targetUntracked = 0n,
@@ -133,6 +139,7 @@ const makeFixture = ({
   const targetMarket = makeMarket({
     params: targetParams,
     supply: sameMarket ? sourceSupply : targetSupply,
+    supplyShares: targetTotalSupplyShares,
     borrow: sameMarket ? sourceBorrow : targetBorrow,
     lastUpdate: targetLastUpdate,
   });
@@ -317,7 +324,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     const { data, sourceExpectedAssets, sourceIds, targetIds } = makeFixture();
 
     expect(data.activeAdapters[VAULT]).toStrictEqual(
-      new Set([TARGET_ADAPTER, SOURCE_ADAPTER]),
+      new Set([TARGET_ADAPTER.toLowerCase(), SOURCE_ADAPTER.toLowerCase()]),
     );
     const result = data.computeVaultV2BlueReallocations(targetParams.id);
 
@@ -355,6 +362,53 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
         maxWithdrawalUtilization: MathLib.WAD,
       }).reallocations[0]?.assets,
     ).toBe(100n);
+  });
+
+  test.each([0n, MathLib.WAD])(
+    "behavior: accepts maxWithdrawalUtilization boundary %s",
+    (maxWithdrawalUtilization) => {
+      const { data } = makeFixture();
+
+      expect(() =>
+        data.computeVaultV2BlueReallocations(targetParams.id, {
+          maxWithdrawalUtilization,
+        }),
+      ).not.toThrow();
+    },
+  );
+
+  test.each([
+    {
+      maxWithdrawalUtilization: -1n,
+      ErrorClass: NegativeInputError,
+    },
+    {
+      maxWithdrawalUtilization: MathLib.WAD + 1n,
+      ErrorClass: InputExceedsMaxError,
+    },
+  ])(
+    "error: rejects maxWithdrawalUtilization $maxWithdrawalUtilization",
+    ({ maxWithdrawalUtilization, ErrorClass }) => {
+      const { data } = makeFixture();
+
+      expect(() =>
+        data.computeVaultV2BlueReallocations(targetParams.id, {
+          maxWithdrawalUtilization,
+        }),
+      ).toThrow(ErrorClass);
+    },
+  );
+
+  test("behavior: skips targets whose Morpho supply would mint fewer shares than assets", () => {
+    const { data } = makeFixture({
+      targetSupply: 2_000_000n,
+      targetTotalSupplyShares: 0n,
+      idle: 300n,
+    });
+
+    expect(
+      data.computeVaultV2BlueReallocations(targetParams.id).reallocations,
+    ).toStrictEqual([]);
   });
 
   test("behavior: ignores inactive source and target adapters", () => {
@@ -405,7 +459,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
         adaptiveCurveIrm: IRM,
         supplyShares: { [targetMarket.id]: secondTargetShares },
       },
-      [targetMarket],
+      [new Market({ ...targetMarket })],
     );
     const secondTargetIds = secondTargetAdapter.ids(targetParams);
     const secondAllocations: Record<Hash, IVaultV2Allocation> = {};
@@ -424,6 +478,9 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
         address: SECOND_VAULT,
         _totalAssets: 550n,
         totalSupply: 550n,
+        liquidityAllocations: firstVault.liquidityAllocations?.map(
+          (allocation) => ({ ...allocation }),
+        ),
       },
       undefined,
       [secondTargetAdapter],
@@ -575,7 +632,12 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     );
     const fixtureVault = data.getVault(VAULT);
     const inputVault = new AccrualVaultV2(
-      fixtureVault,
+      {
+        ...fixtureVault,
+        liquidityAllocations: fixtureVault.liquidityAllocations?.map(
+          (allocation) => ({ ...allocation }),
+        ),
+      },
       fixtureVault.accrualLiquidityAdapter,
       [...fixtureVault.accrualAdapters, legacyAdapter, nestedAdapter],
       fixtureVault.assetBalance,
@@ -937,8 +999,9 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
   });
 
   test("error: UnknownReallocationMarketError with an explicit timestamp", () => {
-    const { data } = makeFixture();
-    data.markets[targetParams.id] = undefined;
+    const data = new VaultV2BlueReallocationData({
+      chainId: ChainId.EthMainnet,
+    });
 
     expect(() =>
       data.computeVaultV2BlueReallocations(targetParams.id, {
@@ -985,6 +1048,17 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
     expect(result.reallocations).toHaveLength(1);
     expect(result.reallocations[0]?.assets).toBe(23n);
     expect(result.data.getMarket(targetParams.id).totalSupplyAssets).toBe(123n);
+  });
+
+  test("error: validates maxWithdrawalUtilization before an operation early return", () => {
+    const { data } = makeFixture({ targetSupply: 100n, targetBorrow: 0n });
+
+    expect(() =>
+      data.computeVaultV2BlueReallocations(targetParams.id, {
+        maxWithdrawalUtilization: MathLib.WAD + 1n,
+        operation: { type: "borrow", amount: 1n },
+      }),
+    ).toThrow(InputExceedsMaxError);
   });
 
   test("behavior: applies the configured ceiling during the friendly phase", () => {

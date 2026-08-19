@@ -88,7 +88,7 @@ export async function fetchVaultV2BluePublicAllocatorConfig(
  * @param parameters.stateOverride - Optional viem state override.
  * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
  * @param parameters.deployless - Deployless mode; defaults to `true`, with direct-read fallback.
- * @returns Vault-wide config, active-adapter set, adapter-market configs keyed by `adapterMarketCapId`, and allocations keyed by derived id.
+ * @returns Vault-wide config when the BluePublicAllocator is authorized, active-adapter set, adapter-market configs keyed by `adapterMarketCapId`, and allocations keyed by derived id.
  * @throws {UnknownAddressError} when the chain has no BluePublicAllocator deployment.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {viem.BaseError} when deployless mode is forced and fails, or when a direct contract read fails.
@@ -175,11 +175,13 @@ export async function fetchVaultV2BluePublicAllocatorData(
       }
 
       return {
-        publicAllocatorConfig: new VaultV2BluePublicAllocatorConfig({
-          vault: vault.address,
-          canPullFromIdle: result.canPullFromIdle,
-          penalty: result.penalty,
-        }),
+        publicAllocatorConfig: result.isAllocator
+          ? new VaultV2BluePublicAllocatorConfig({
+              vault: vault.address,
+              canPullFromIdle: result.canPullFromIdle,
+              penalty: result.penalty,
+            })
+          : undefined,
         activeAdapters: new Set(
           adapterList.filter((_, index) => result.isActiveAdapters[index]),
         ),
@@ -193,11 +195,19 @@ export async function fetchVaultV2BluePublicAllocatorData(
   }
 
   const [
+    isAllocator,
     publicAllocatorConfig,
     isActiveAdapters,
     marketConfigs,
     allocationValues,
   ] = await Promise.all([
+    readContract(client, {
+      ...parameters,
+      address: vault.address,
+      abi: vaultV2Abi,
+      functionName: "isAllocator",
+      args: [allocator],
+    }),
     fetchVaultV2BluePublicAllocatorConfig(vault.address, client, {
       ...parameters,
       chainId,
@@ -269,7 +279,7 @@ export async function fetchVaultV2BluePublicAllocatorData(
   }
 
   return {
-    publicAllocatorConfig,
+    publicAllocatorConfig: isAllocator ? publicAllocatorConfig : undefined,
     activeAdapters: new Set(
       adapterList.filter((_, index) => isActiveAdapters[index]),
     ),

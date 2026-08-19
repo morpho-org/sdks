@@ -117,6 +117,12 @@ const mockDirectReads = (
   isActiveAdapter = true,
 ) => {
   mockRead(handle, {
+    address: VAULT,
+    abi: vaultV2Abi,
+    functionName: "isAllocator",
+    result: true,
+  });
+  mockRead(handle, {
     address: ALLOCATOR,
     abi: vaultV2BluePublicAllocatorAbi,
     functionName: "vaultData",
@@ -186,6 +192,7 @@ describe("Vault V2 BluePublicAllocator fetchers", () => {
   test("behavior: deployless batching returns all derived ids", async () => {
     const handle = createMockClient(mainnet);
     mockDeploylessRead(handle, queryAbi, "query", {
+      isAllocator: true,
       canPullFromIdle: true,
       penalty: 12n,
       isActiveAdapters: [true],
@@ -218,6 +225,38 @@ describe("Vault V2 BluePublicAllocator fetchers", () => {
     await expect(
       fetchVaultV2BluePublicAllocatorData(vault, handle.client),
     ).resolves.toStrictEqual(expected);
+  });
+
+  test("behavior: deployless batching omits config when the allocator is unauthorized", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessRead(handle, queryAbi, "query", {
+      isAllocator: false,
+      canPullFromIdle: true,
+      penalty: 12n,
+      isActiveAdapters: [true],
+      marketConfigs: [],
+      allocations: [],
+    });
+
+    await expect(
+      fetchVaultV2BluePublicAllocatorData(vault, handle.client),
+    ).resolves.toMatchObject({ publicAllocatorConfig: undefined });
+  });
+
+  test("behavior: direct-read fallback omits config when the allocator is unauthorized", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessReads(handle, [new Error("deployless unavailable")]);
+    mockDirectReads(handle);
+    mockRead(handle, {
+      address: VAULT,
+      abi: vaultV2Abi,
+      functionName: "isAllocator",
+      result: false,
+    });
+
+    await expect(
+      fetchVaultV2BluePublicAllocatorData(vault, handle.client),
+    ).resolves.toMatchObject({ publicAllocatorConfig: undefined });
   });
 
   test("error: forced deployless failure does not fall back", async () => {

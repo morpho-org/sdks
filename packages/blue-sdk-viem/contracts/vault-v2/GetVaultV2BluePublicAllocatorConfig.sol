@@ -24,6 +24,7 @@ struct VaultV2AllocationResponse {
 }
 
 struct VaultV2BluePublicAllocatorResponse {
+    bool isAllocator;
     bool canPullFromIdle;
     uint64 penalty;
     bool[] isActiveAdapters;
@@ -39,6 +40,7 @@ contract GetVaultV2BluePublicAllocatorConfig {
         VaultV2BlueMarketPublicAllocatorRequest[] calldata marketRequests,
         bytes32[] calldata allocationIds
     ) external view returns (VaultV2BluePublicAllocatorResponse memory res) {
+        res.isAllocator = vault.isAllocator(address(allocator));
         (res.canPullFromIdle, res.penalty) = allocator.vaultData(address(vault));
 
         uint256 adaptersLength = adapters.length;
