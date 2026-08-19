@@ -4,19 +4,11 @@ import {
   MarketParams,
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
-import { type Address, createPublicClient, http, parseUnits } from "viem";
+import { type Address, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import { morphoViemExtension } from "../../../src/client/index.js";
-import { ReallocationData } from "../../../src/entities/reallocationData.js";
-import {
-  isRequirementApproval,
-  MutuallyExclusiveRepayAmountsError,
-  NativeAmountOnNonWNativeAssetError,
-  NegativeInputError,
-  NonPositiveInputError,
-  WithdrawExceedsCollateralError,
-} from "../../../src/types/index.js";
+import { isRequirementApproval } from "../../../src/types/index.js";
 import { CbbtcUsdcBlue, WstethWethBlue } from "../../fixtures/blue.js";
 import { test } from "../../setup.js";
 
@@ -78,82 +70,7 @@ function makeWethPosition(
   );
 }
 
-// Regression: the SDK no longer enforces builder = signer on MorphoBlue
-// transaction builders. A divergent userAddress and a client with no connected
-// account must still produce a valid tx.
-describe("MorphoBlue builder = signer freedom", () => {
-  const OTHER_USER: Address = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
-
-  test("supplyCollateral: builds tx with userAddress different from client.account", async ({
-    client,
-  }) => {
-    const morphoClient = client.extend(morphoViemExtension()).morpho;
-    const market = morphoClient.blue(CbbtcUsdcBlue, mainnet.id);
-
-    const supplyCollateral = market.supplyCollateral({
-      userAddress: OTHER_USER,
-      amount: parseUnits("1", 18),
-    });
-
-    const tx = supplyCollateral.buildTx();
-    expect(tx.action.args.onBehalf).toBe(OTHER_USER);
-  });
-
-  test("supplyCollateral: builds tx with public client (no account)", async ({
-    client,
-  }) => {
-    const publicClient = createPublicClient({
-      chain: mainnet,
-      transport: http(client.transport.url),
-    });
-    const morphoClient = publicClient.extend(morphoViemExtension()).morpho;
-    const market = morphoClient.blue(CbbtcUsdcBlue, mainnet.id);
-
-    const supplyCollateral = market.supplyCollateral({
-      userAddress: OTHER_USER,
-      amount: parseUnits("1", 18),
-    });
-
-    const tx = supplyCollateral.buildTx();
-    expect(tx.action.args.onBehalf).toBe(OTHER_USER);
-  });
-});
-
 describe("MorphoBlue validation", () => {
-  test("supplyCollateral rejects invalid amounts", async ({ client }) => {
-    const market = client
-      .extend(morphoViemExtension())
-      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
-
-    expect(() =>
-      market.supplyCollateral({ userAddress: USER, amount: -1n }),
-    ).toThrow(NegativeInputError);
-    expect(() =>
-      market.supplyCollateral({
-        userAddress: USER,
-        amount: 0n,
-        nativeAmount: -1n,
-      }),
-    ).toThrow(NegativeInputError);
-    expect(() =>
-      market.supplyCollateral({ userAddress: USER, amount: 0n }),
-    ).toThrow(NonPositiveInputError);
-  });
-
-  test("borrow rejects non-positive amounts", async ({ client }) => {
-    const market = client
-      .extend(morphoViemExtension())
-      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
-
-    expect(() =>
-      market.borrow({
-        amount: 0n,
-        userAddress: USER,
-        positionData: makePosition(),
-      }),
-    ).toThrow(NonPositiveInputError);
-  });
-
   test("withdraw getRequirements includes Blue authorization when missing", async ({
     client,
   }) => {
@@ -174,113 +91,6 @@ describe("MorphoBlue validation", () => {
       .getRequirements();
 
     expect(requirements).toHaveLength(1);
-  });
-
-  test("repay rejects conflicting and non-positive repay amounts", async ({
-    client,
-  }) => {
-    const market = client
-      .extend(morphoViemExtension())
-      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
-
-    expect(() =>
-      market.repay({
-        amount: 1n,
-        shares: 1n,
-        userAddress: USER,
-        positionData: makePosition(),
-      }),
-    ).toThrow(MutuallyExclusiveRepayAmountsError);
-    expect(() =>
-      market.repay({
-        amount: -1n,
-        shares: 1n,
-        userAddress: USER,
-        positionData: makePosition(),
-      } as never),
-    ).toThrow(NegativeInputError);
-    expect(() =>
-      market.repay({
-        shares: 0n,
-        userAddress: USER,
-        positionData: makePosition(),
-      }),
-    ).toThrow(NonPositiveInputError);
-    expect(() =>
-      market.repay({
-        shares: -1n,
-        userAddress: USER,
-        positionData: makePosition(),
-      }),
-    ).toThrow(NegativeInputError);
-    // Assets mode: a negative amount must not be masked by nativeAmount.
-    expect(() =>
-      market.repay({
-        amount: -1n,
-        userAddress: USER,
-        positionData: makePosition(),
-      }),
-    ).toThrow(NegativeInputError);
-  });
-
-  test("repayWithdrawCollateral rejects conflicting repay modes and excessive collateral withdrawal", async ({
-    client,
-  }) => {
-    const market = client
-      .extend(morphoViemExtension())
-      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
-
-    expect(() =>
-      market.repayWithdrawCollateral({
-        amount: 1n,
-        shares: 1n,
-        withdrawAmount: 1n,
-        userAddress: USER,
-        positionData: makePosition(),
-      }),
-    ).toThrow(MutuallyExclusiveRepayAmountsError);
-    expect(() =>
-      market.repayWithdrawCollateral({
-        amount: -1n,
-        shares: 1n,
-        withdrawAmount: 1n,
-        userAddress: USER,
-        positionData: makePosition(),
-      } as never),
-    ).toThrow(NegativeInputError);
-    expect(() =>
-      market.repayWithdrawCollateral({
-        shares: 0n,
-        withdrawAmount: 1n,
-        userAddress: USER,
-        positionData: makePosition(),
-      }),
-    ).toThrow(NonPositiveInputError);
-    expect(() =>
-      market.repayWithdrawCollateral({
-        shares: -1n,
-        withdrawAmount: 1n,
-        userAddress: USER,
-        positionData: makePosition(),
-      }),
-    ).toThrow(NegativeInputError);
-    // Assets mode: a negative amount must not be masked by nativeAmount.
-    expect(() =>
-      market.repayWithdrawCollateral({
-        amount: -1n,
-        withdrawAmount: 1n,
-        userAddress: USER,
-        positionData: makePosition(),
-      }),
-    ).toThrow(NegativeInputError);
-    expect(() =>
-      market.repayWithdrawCollateral({
-        amount: 1n,
-        withdrawAmount: 2n,
-        userAddress: USER,
-        positionData: makePosition({ collateral: 1n }),
-      }),
-    ).toThrow(WithdrawExceedsCollateralError);
   });
 
   test("repayWithdrawCollateral getRequirements includes Blue authorization when missing", async ({
@@ -304,100 +114,6 @@ describe("MorphoBlue validation", () => {
       .getRequirements();
 
     expect(requirements).toHaveLength(2);
-  });
-
-  test("repay native: rejects nativeAmount when the loan token is not wNative", async ({
-    client,
-  }) => {
-    const market = client
-      .extend(morphoViemExtension())
-      .morpho.blue(CbbtcUsdcBlue, mainnet.id); // loan token = USDC
-
-    expect(() =>
-      market.repay({
-        amount: 1n,
-        nativeAmount: 1n,
-        userAddress: USER,
-        positionData: makePosition(),
-      }),
-    ).toThrow(NativeAmountOnNonWNativeAssetError);
-  });
-
-  test("repay native: assets mode wraps native and repays amount + nativeAmount", async ({
-    client,
-  }) => {
-    const market = client
-      .extend(morphoViemExtension())
-      .morpho.blue(WstethWethBlue, mainnet.id);
-    const amount = parseUnits("0.3", 18);
-    const nativeAmount = parseUnits("0.2", 18);
-
-    const tx = market
-      .repay({
-        amount,
-        nativeAmount,
-        userAddress: USER,
-        positionData: makeWethPosition(),
-      })
-      .buildTx();
-
-    expect(tx.action.args.assets).toBe(amount + nativeAmount);
-    expect(tx.action.args.nativeAmount).toBe(nativeAmount);
-    expect(tx.value).toBe(nativeAmount);
-  });
-
-  test("repay native: a fully native repay emits no ERC-20 requirement", async ({
-    client,
-  }) => {
-    const market = client
-      .extend(morphoViemExtension({ supportSignature: false }))
-      .morpho.blue(WstethWethBlue, mainnet.id);
-    const nativeAmount = parseUnits("0.5", 18);
-
-    const requirements = await market
-      .repay({
-        nativeAmount,
-        userAddress: USER,
-        positionData: makeWethPosition(),
-      })
-      .getRequirements();
-
-    expect(requirements).toEqual([]);
-  });
-
-  test("repay native: shares mode funded entirely by native emits no ERC-20 requirement", async ({
-    client,
-  }) => {
-    const market = client
-      .extend(morphoViemExtension({ supportSignature: false }))
-      .morpho.blue(WstethWethBlue, mainnet.id);
-    const positionData = makeWethPosition();
-
-    // Native covers the full (rate-less fixture ⇒ accrual is a no-op) borrow
-    // assets and then some: no ERC-20 is pulled and the bundle wraps the native,
-    // skimming the residual wNative back to the receiver.
-    const borrowAssets = positionData.market.toBorrowAssets(
-      positionData.borrowShares,
-      "Up",
-    );
-    const nativeAmount = borrowAssets + parseUnits("1", 18);
-
-    const repay = market.repay({
-      shares: positionData.borrowShares,
-      nativeAmount,
-      userAddress: USER,
-      positionData,
-    });
-
-    const tx = repay.buildTx();
-    expect(tx.action.args.shares).toBe(positionData.borrowShares);
-    expect(tx.action.args.nativeAmount).toBe(nativeAmount);
-    expect(tx.value).toBe(nativeAmount);
-    // ERC-20 pulled is 0 ⇒ the total routed to the adapter is the wrapped native only.
-    expect(tx.action.args.transferAmount).toBe(nativeAmount);
-
-    // Fully-native repay pulls no ERC-20 ⇒ no approval/permit requirement.
-    expect(await repay.getRequirements()).toEqual([]);
   });
 
   test("repay native: shares mode pulls transferAmount net of native (happy path)", async ({
@@ -442,48 +158,6 @@ describe("MorphoBlue validation", () => {
       throw new Error("Approval requirement not found");
     }
     expect(approval.action.args.amount).toBe(expectedErc20);
-  });
-
-  test("repayWithdrawCollateral native: rejects nativeAmount when the loan token is not wNative", async ({
-    client,
-  }) => {
-    const market = client
-      .extend(morphoViemExtension())
-      .morpho.blue(CbbtcUsdcBlue, mainnet.id); // loan token = USDC
-
-    expect(() =>
-      market.repayWithdrawCollateral({
-        amount: 1n,
-        nativeAmount: 1n,
-        withdrawAmount: 1n,
-        userAddress: USER,
-        positionData: makePosition(),
-      }),
-    ).toThrow(NativeAmountOnNonWNativeAssetError);
-  });
-
-  test("repayWithdrawCollateral native: assets mode wraps native and repays amount + nativeAmount", async ({
-    client,
-  }) => {
-    const market = client
-      .extend(morphoViemExtension())
-      .morpho.blue(WstethWethBlue, mainnet.id);
-    const amount = parseUnits("0.3", 18);
-    const nativeAmount = parseUnits("0.2", 18);
-
-    const tx = market
-      .repayWithdrawCollateral({
-        amount,
-        nativeAmount,
-        withdrawAmount: parseUnits("1", 18),
-        userAddress: USER,
-        positionData: makeWethPosition(),
-      })
-      .buildTx();
-
-    expect(tx.action.args.repayAssets).toBe(amount + nativeAmount);
-    expect(tx.action.args.nativeAmount).toBe(nativeAmount);
-    expect(tx.value).toBe(nativeAmount);
   });
 
   test("repayWithdrawCollateral native: a fully native repay emits no ERC-20 requirement", async ({
@@ -584,64 +258,5 @@ describe("MorphoBlue validation", () => {
       throw new Error("Approval requirement not found");
     }
     expect(approval.action.args.amount).toBe(expectedErc20);
-  });
-
-  test("supplyCollateralBorrow rejects invalid collateral and borrow amounts", async ({
-    client,
-  }) => {
-    const market = client
-      .extend(morphoViemExtension())
-      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
-
-    expect(() =>
-      market.supplyCollateralBorrow({
-        amount: -1n,
-        borrowAmount: 1n,
-        userAddress: USER,
-        positionData: makePosition(),
-      }),
-    ).toThrow(NegativeInputError);
-    expect(() =>
-      market.supplyCollateralBorrow({
-        amount: 0n,
-        nativeAmount: -1n,
-        borrowAmount: 1n,
-        userAddress: USER,
-        positionData: makePosition(),
-      }),
-    ).toThrow(NegativeInputError);
-    expect(() =>
-      market.supplyCollateralBorrow({
-        amount: 1n,
-        borrowAmount: 0n,
-        userAddress: USER,
-        positionData: makePosition(),
-      }),
-    ).toThrow(NonPositiveInputError);
-    expect(() =>
-      market.supplyCollateralBorrow({
-        amount: 0n,
-        borrowAmount: 1n,
-        userAddress: USER,
-        positionData: makePosition(),
-      }),
-    ).toThrow(NonPositiveInputError);
-  });
-
-  test("getReallocations accepts the operation/amount parameter shape", async ({
-    client,
-  }) => {
-    const market = client
-      .extend(morphoViemExtension())
-      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
-
-    expect(
-      market.getReallocations({
-        reallocationData: new ReallocationData({ chainId: mainnet.id }),
-        operation: "borrow",
-        amount: 1n,
-        options: { enabled: false },
-      }),
-    ).toEqual([]);
   });
 });

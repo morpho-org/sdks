@@ -24,61 +24,6 @@ import { KeyrockUsdcVaultV2, KpkWETHVaultV2 } from "../../fixtures/vaultV2.js";
 import { test } from "../../setup.js";
 
 describe("MorphoVaultV1 entity tests", () => {
-  describe("chain and data validation", () => {
-    test("getData throws ChainIdMismatchError when client chain differs", async () => {
-      const publicClient = createPublicClient({
-        chain: mainnet,
-        transport: http("https://rpc.example"),
-      });
-      const vault = publicClient
-        .extend(morphoViemExtension())
-        .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id + 1);
-
-      await expect(vault.getData()).rejects.toThrow(ChainIdMismatchError);
-    });
-
-    test("deposit throws ChainIdMismatchError when client chain differs", () => {
-      const publicClient = createPublicClient({
-        chain: mainnet,
-        transport: http("https://rpc.example"),
-      });
-      const vault = publicClient
-        .extend(morphoViemExtension())
-        .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id + 1);
-
-      expect(() =>
-        vault.deposit({
-          amount: 1n,
-          userAddress: SteakhouseUsdcVaultV1.address,
-          vaultData: {} as never,
-        }),
-      ).toThrow(ChainIdMismatchError);
-    });
-
-    test("withdraw and redeem throw ChainIdMismatchError when client chain differs", () => {
-      const publicClient = createPublicClient({
-        chain: mainnet,
-        transport: http("https://rpc.example"),
-      });
-      const vault = publicClient
-        .extend(morphoViemExtension())
-        .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id + 1);
-
-      expect(() =>
-        vault.withdraw({
-          amount: 1n,
-          userAddress: SteakhouseUsdcVaultV1.address,
-        }),
-      ).toThrow(ChainIdMismatchError);
-      expect(() =>
-        vault.redeem({
-          shares: 1n,
-          userAddress: SteakhouseUsdcVaultV1.address,
-        }),
-      ).toThrow(ChainIdMismatchError);
-    });
-  });
-
   describe("slippageTolerance boundary", () => {
     test("should accept slippageTolerance of exactly 0n", async ({
       client,

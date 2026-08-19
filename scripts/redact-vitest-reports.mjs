@@ -10,6 +10,7 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const REDACTION = "<redacted-rpc-url>";
+const MIN_DERIVED_SECRET_LENGTH = 8;
 const RPC_SECRET_ENV_NAMES = [
   "MAINNET_RPC_URL",
   "BASE_RPC_URL",
@@ -58,7 +59,9 @@ export function redactSecrets(content, secrets) {
       const lastPathSegment = url.pathname.split("/").filter(Boolean).at(-1);
       if (lastPathSegment) serializedValues.add(lastPathSegment);
       for (const value of url.searchParams.values()) {
-        if (value) serializedValues.add(value);
+        // Short query metadata such as `chain=1` is unsafe to replace globally.
+        if (value.length >= MIN_DERIVED_SECRET_LENGTH)
+          serializedValues.add(value);
       }
     } catch {
       // Non-URL secrets still need their raw serialization variants redacted.
@@ -142,6 +145,14 @@ export function sanitizeVitestReports(directory, secrets) {
 
         const original = readFileSync(path, "utf8");
         const result = redactSecrets(original, protectedSecrets);
+        try {
+          JSON.parse(result.content);
+        } catch (error) {
+          throw new VitestReportSanitizationError(
+            `Sanitized report at "${path}" is not valid JSON. Do not upload the Vitest report.`,
+            { cause: error },
+          );
+        }
         if (result.content !== original) writeFileSync(path, result.content);
         files += 1;
         replacements += result.replacements;

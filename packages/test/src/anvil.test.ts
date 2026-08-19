@@ -90,6 +90,24 @@ describe.sequential("spawnAnvil", () => {
     expect(subprocess.unref).toHaveBeenCalledOnce();
   });
 
+  test("behavior: stop is idempotent", async () => {
+    const subprocess = createFakeAnvilProcess();
+    spawnMock.mockReturnValue(
+      subprocess as unknown as ChildProcessWithoutNullStreams,
+    );
+
+    const spawnedPromise = spawnAnvil({ chainId: 1 });
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+    subprocess.stdout.write("Listening on 127.0.0.1:31002\n");
+    const spawned = await spawnedPromise;
+
+    expect(spawned.stop()).toBe(true);
+    expect(spawned.stop()).toBe(false);
+    expect(subprocess.kill).toHaveBeenCalledOnce();
+    expect(subprocess.kill).toHaveBeenCalledWith("SIGINT");
+    await vi.waitFor(() => expect(subprocess.unref).toHaveBeenCalledOnce());
+  });
+
   test("behavior: redacts fork credentials from running subprocess warnings", async () => {
     const forkUrl = "https://user:secret@rpc.example/v1/private-key";
     const forkHeader = "Bearer private-provider-token";

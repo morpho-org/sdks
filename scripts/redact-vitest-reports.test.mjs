@@ -121,6 +121,36 @@ describe("sanitizeVitestReports", () => {
     ).not.toContain(encodeURIComponent(secret));
   });
 
+  test("behavior: preserves short query metadata in valid JSON", () => {
+    const directory = createTempDirectory();
+    const reportPath = join(directory, "report.json");
+    const secret = "https://rpc.example/private-key?chain=1";
+    writeFileSync(
+      reportPath,
+      JSON.stringify({ chain: 1, error: `request failed for ${secret}` }),
+    );
+
+    sanitizeVitestReports(directory, [secret]);
+
+    const report = readFileSync(reportPath, "utf8");
+    expect(JSON.parse(report)).toEqual({
+      chain: 1,
+      error: "request failed for <redacted-rpc-url>",
+    });
+  });
+
+  test("error: rejects invalid transformed JSON before writing", () => {
+    const directory = createTempDirectory();
+    const reportPath = join(directory, "report.json");
+    const report = JSON.stringify({ attempt: 1 });
+    writeFileSync(reportPath, report);
+
+    expect(() => sanitizeVitestReports(directory, ["1"])).toThrow(
+      VitestReportSanitizationError,
+    );
+    expect(readFileSync(reportPath, "utf8")).toBe(report);
+  });
+
   test("error: VitestReportSanitizationError rejects missing credentials", () => {
     expect(() => sanitizeVitestReports(createTempDirectory(), [])).toThrow(
       VitestReportSanitizationError,

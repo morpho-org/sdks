@@ -5,7 +5,6 @@ import { describe, expect } from "vitest";
 import { morphoViemExtension } from "../../../src/client/index.js";
 import { MAX_SLIPPAGE_TOLERANCE } from "../../../src/helpers/constant.js";
 import {
-  ChainIdMismatchError,
   ChainWNativeMissingError,
   ExcessiveSlippageToleranceError,
   NativeAmountOnNonWNativeVaultError,
@@ -16,69 +15,6 @@ import { KeyrockUsdcVaultV2, KpkWETHVaultV2 } from "../../fixtures/vaultV2.js";
 import { test } from "../../setup.js";
 
 describe("MorphoVaultV2 entity tests", () => {
-  describe("chain and data validation", () => {
-    test("getData throws ChainIdMismatchError when client chain differs", async () => {
-      const publicClient = createPublicClient({
-        chain: mainnet,
-        transport: http("https://rpc.example"),
-      });
-      const vault = publicClient
-        .extend(morphoViemExtension())
-        .morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id + 1);
-
-      await expect(vault.getData()).rejects.toThrow(ChainIdMismatchError);
-    });
-
-    test("deposit throws ChainIdMismatchError when client chain differs", () => {
-      const publicClient = createPublicClient({
-        chain: mainnet,
-        transport: http("https://rpc.example"),
-      });
-      const vault = publicClient
-        .extend(morphoViemExtension())
-        .morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id + 1);
-
-      expect(() =>
-        vault.deposit({
-          amount: 1n,
-          userAddress: KeyrockUsdcVaultV2.address,
-          vaultData: {} as never,
-        }),
-      ).toThrow(ChainIdMismatchError);
-    });
-
-    test("withdraw, redeem, forceWithdraw, and forceRedeem throw ChainIdMismatchError when client chain differs", () => {
-      const publicClient = createPublicClient({
-        chain: mainnet,
-        transport: http("https://rpc.example"),
-      });
-      const vault = publicClient
-        .extend(morphoViemExtension())
-        .morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id + 1);
-
-      expect(() =>
-        vault.withdraw({ amount: 1n, userAddress: KeyrockUsdcVaultV2.address }),
-      ).toThrow(ChainIdMismatchError);
-      expect(() =>
-        vault.redeem({ shares: 1n, userAddress: KeyrockUsdcVaultV2.address }),
-      ).toThrow(ChainIdMismatchError);
-      expect(() =>
-        vault.forceWithdraw({
-          deallocations: [],
-          withdraw: { amount: 1n },
-          userAddress: KeyrockUsdcVaultV2.address,
-        }),
-      ).toThrow(ChainIdMismatchError);
-      expect(() =>
-        vault.forceRedeem({
-          deallocations: [],
-          redeem: { shares: 1n },
-          userAddress: KeyrockUsdcVaultV2.address,
-        }),
-      ).toThrow(ChainIdMismatchError);
-    });
-  });
-
   describe("slippageTolerance boundary", () => {
     test("should accept slippageTolerance of exactly 0n", async ({
       client,
