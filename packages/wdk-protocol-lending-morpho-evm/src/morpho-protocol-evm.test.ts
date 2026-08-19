@@ -6,7 +6,7 @@ import * as viem from "viem";
 import { beforeEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import type {
   MorphoBorrowOptions,
-  MorphoBorrowWithV2ReallocationsOptions,
+  MorphoBorrowWithVaultV2ReallocationsOptions,
   RequirementApproval,
   RequirementAuthorization,
   RequirementSignatureRequest,
@@ -585,7 +585,7 @@ describe.sequential("MorphoProtocolEvm", () => {
             penalty: 1n,
           },
         ],
-      } satisfies MorphoBorrowWithV2ReallocationsOptions;
+      } satisfies MorphoBorrowWithVaultV2ReallocationsOptions;
 
       const promise = protocol.getBorrowRequirements(options);
       expectTypeOf(promise).toEqualTypeOf<

@@ -3,7 +3,7 @@ export type {
   BlueReallocation,
   RequirementSignature,
   VaultReallocation,
-  VaultV1BlueReallocation,
+  VaultV1Reallocation,
   VaultV2BlueReallocation,
 } from "@morpho-org/morpho-sdk";
 export type { TransactionResult } from "@tetherto/wdk-wallet";
@@ -32,7 +32,7 @@ export type {
   Erc4337TransactionConfig,
   MarketPosition,
   MorphoBorrowOptions,
-  MorphoBorrowWithV2ReallocationsOptions,
+  MorphoBorrowWithVaultV2ReallocationsOptions,
   MorphoErc20SupplyOptions,
   MorphoEvmAccount,
   MorphoNativeSupplyOptions,

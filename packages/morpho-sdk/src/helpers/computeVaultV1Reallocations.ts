@@ -7,7 +7,7 @@ import {
   type PublicReallocation,
   type ReallocationComputeOptions,
   ReallocationWithdrawExceedsMarketSupplyError,
-  type VaultV1BlueReallocation,
+  type VaultV1Reallocation,
 } from "../types/index.js";
 import { getSupplyTargetUtilization } from "./utilization.js";
 import { compareMarketIds } from "./validate.js";
@@ -160,7 +160,7 @@ export const computeVaultV1Reallocations = ({
   readonly operation: "borrow" | "withdraw";
   readonly amount: bigint;
   readonly options?: ReallocationComputeOptions;
-}): readonly VaultV1BlueReallocation[] => {
+}): readonly VaultV1Reallocation[] => {
   if (options?.enabled === false) return [];
   const normalizedOptions = {
     ...options,
@@ -292,7 +292,7 @@ export const computeVaultV1Reallocations = ({
     });
   }
 
-  // Transform into VaultV1BlueReallocation[] format.
+  // Transform into VaultV1Reallocation[] format.
   return reallocations
     .filter(({ withdrawals: vaultWithdrawals }) => vaultWithdrawals.length > 0)
     .map(({ vault, withdrawals: vaultWithdrawals }) => ({

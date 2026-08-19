@@ -8,7 +8,7 @@ import { base } from "viem/chains";
 import { assert, describe, expect } from "vitest";
 import { vaultV2Abi, vaultV2BluePublicAllocatorAbi } from "../../abis.js";
 import { fetchAccrualVaultV2 } from "./VaultV2.js";
-import { fetchVaultV2PublicAllocatorData } from "./VaultV2PublicAllocatorConfig.js";
+import { fetchVaultV2BluePublicAllocatorData } from "./VaultV2BluePublicAllocatorConfig.js";
 
 const vaultV2BluePublicAllocatorTest = createViemTest(base, {
   forkUrl: process.env.BASE_RPC_URL,
@@ -16,7 +16,7 @@ const vaultV2BluePublicAllocatorTest = createViemTest(base, {
   stepsTracing: false,
 });
 
-describe("Vault V2 public allocator fetchers on fork", () => {
+describe("Vault V2 BluePublicAllocator fetchers on fork", () => {
   vaultV2BluePublicAllocatorTest(
     "default: matches direct reads against the deployless query",
     async ({ client }) => {
@@ -89,10 +89,10 @@ describe("Vault V2 public allocator fetchers on fork", () => {
       });
 
       const [deployless, direct] = await Promise.all([
-        fetchVaultV2PublicAllocatorData(forkVault, client, {
+        fetchVaultV2BluePublicAllocatorData(forkVault, client, {
           deployless: "force",
         }),
-        fetchVaultV2PublicAllocatorData(forkVault, client, {
+        fetchVaultV2BluePublicAllocatorData(forkVault, client, {
           deployless: false,
         }),
       ]);

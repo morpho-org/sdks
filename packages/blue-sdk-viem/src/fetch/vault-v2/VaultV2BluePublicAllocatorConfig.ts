@@ -3,8 +3,8 @@ import {
   AccrualVaultV2MorphoMarketV1AdapterV2,
   getChainAddress,
   type IVaultV2Allocation,
-  type VaultV2MarketPublicAllocatorConfig,
-  type VaultV2PublicAllocatorConfig,
+  type VaultV2BlueMarketPublicAllocatorConfig,
+  type VaultV2BluePublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
 import type { Address, Client, Hash } from "viem";
 import { getChainId, readContract } from "viem/actions";
@@ -12,7 +12,7 @@ import { vaultV2Abi, vaultV2BluePublicAllocatorAbi } from "../../abis.js";
 import {
   abi,
   code,
-} from "../../queries/vault-v2/GetVaultV2PublicAllocatorConfig.js";
+} from "../../queries/vault-v2/GetVaultV2BluePublicAllocatorConfig.js";
 import type {
   DeploylessFetchParameters,
   FetchParameters,
@@ -34,25 +34,25 @@ import type {
  * @throws {viem.BaseError} when the contract read fails.
  * @example
  * ```ts
- * import type { VaultV2PublicAllocatorConfig } from "@morpho-org/blue-sdk";
- * import { fetchVaultV2PublicAllocatorConfig } from "@morpho-org/blue-sdk-viem";
+ * import type { VaultV2BluePublicAllocatorConfig } from "@morpho-org/blue-sdk";
+ * import { fetchVaultV2BluePublicAllocatorConfig } from "@morpho-org/blue-sdk-viem";
  * import { type Address, createPublicClient, http } from "viem";
  * import { mainnet } from "viem/chains";
  *
  * const client = createPublicClient({ chain: mainnet, transport: http() });
  * export async function fetchAllocatorConfig(
  *   vault: Address,
- * ): Promise<VaultV2PublicAllocatorConfig> {
- *   return fetchVaultV2PublicAllocatorConfig(vault, client);
+ * ): Promise<VaultV2BluePublicAllocatorConfig> {
+ *   return fetchVaultV2BluePublicAllocatorConfig(vault, client);
  * }
  * ```
  */
 // biome-ignore lint/complexity/useMaxParams: follows the package's address/client/options fetcher convention
-export async function fetchVaultV2PublicAllocatorConfig(
+export async function fetchVaultV2BluePublicAllocatorConfig(
   vault: Address,
   client: Client,
   parameters: FetchParameters = {},
-): Promise<VaultV2PublicAllocatorConfig> {
+): Promise<VaultV2BluePublicAllocatorConfig> {
   const chainId = parameters.chainId ?? (await getChainId(client));
   const allocator = getChainAddress(chainId, "vaultV2BluePublicAllocator");
   const [canPullFromIdle, penalty] = await readContract(client, {
@@ -88,8 +88,8 @@ export async function fetchVaultV2PublicAllocatorConfig(
  * @throws {viem.BaseError} when one of the contract reads fails.
  * @example
  * ```ts
- * import type { VaultV2MarketPublicAllocatorConfig } from "@morpho-org/blue-sdk";
- * import { fetchVaultV2MarketPublicAllocatorConfig } from "@morpho-org/blue-sdk-viem";
+ * import type { VaultV2BlueMarketPublicAllocatorConfig } from "@morpho-org/blue-sdk";
+ * import { fetchVaultV2BlueMarketPublicAllocatorConfig } from "@morpho-org/blue-sdk-viem";
  * import { type Address, createPublicClient, type Hash, http } from "viem";
  * import { mainnet } from "viem/chains";
  *
@@ -98,8 +98,8 @@ export async function fetchVaultV2PublicAllocatorConfig(
  *   vault: Address,
  *   adapter: Address,
  *   adapterMarketCapId: Hash,
- * ): Promise<VaultV2MarketPublicAllocatorConfig> {
- *   return fetchVaultV2MarketPublicAllocatorConfig(
+ * ): Promise<VaultV2BlueMarketPublicAllocatorConfig> {
+ *   return fetchVaultV2BlueMarketPublicAllocatorConfig(
  *     vault,
  *     adapter,
  *     adapterMarketCapId,
@@ -109,13 +109,13 @@ export async function fetchVaultV2PublicAllocatorConfig(
  * ```
  */
 // biome-ignore lint/complexity/useMaxParams: follows the package's vault/adapter/id/client/options fetcher convention
-export async function fetchVaultV2MarketPublicAllocatorConfig(
+export async function fetchVaultV2BlueMarketPublicAllocatorConfig(
   vault: Address,
   adapter: Address,
   adapterMarketCapId: Hash,
   client: Client,
   parameters: FetchParameters = {},
-): Promise<VaultV2MarketPublicAllocatorConfig> {
+): Promise<VaultV2BlueMarketPublicAllocatorConfig> {
   const chainId = parameters.chainId ?? (await getChainId(client));
   const allocator = getChainAddress(chainId, "vaultV2BluePublicAllocator");
   const [absoluteCap, canPullFromMarket] = await Promise.all([
@@ -168,7 +168,7 @@ export async function fetchVaultV2MarketPublicAllocatorConfig(
  * @example
  * ```ts
  * import type { AccrualVaultV2 } from "@morpho-org/blue-sdk";
- * import { fetchVaultV2PublicAllocatorData } from "@morpho-org/blue-sdk-viem";
+ * import { fetchVaultV2BluePublicAllocatorData } from "@morpho-org/blue-sdk-viem";
  * import { createPublicClient, http } from "viem";
  * import { mainnet } from "viem/chains";
  *
@@ -176,14 +176,14 @@ export async function fetchVaultV2MarketPublicAllocatorConfig(
  * export async function fetchAllocatorData(
  *   vault: AccrualVaultV2,
  * ) {
- *   const data = await fetchVaultV2PublicAllocatorData(vault, client);
+ *   const data = await fetchVaultV2BluePublicAllocatorData(vault, client);
  *   // data contains publicAllocatorConfig, activeAdapters, marketPublicAllocatorConfigs, and allocations.
  *   return data;
  * }
  * ```
  */
 // biome-ignore lint/complexity/useMaxParams: follows the package's entity/client/options fetcher convention
-export async function fetchVaultV2PublicAllocatorData(
+export async function fetchVaultV2BluePublicAllocatorData(
   vault: AccrualVaultV2,
   client: Client,
   { deployless = true, ...parameters }: DeploylessFetchParameters = {},
@@ -232,7 +232,7 @@ export async function fetchVaultV2PublicAllocatorData(
 
       const marketPublicAllocatorConfigs: Record<
         Hash,
-        VaultV2MarketPublicAllocatorConfig | undefined
+        VaultV2BlueMarketPublicAllocatorConfig | undefined
       > = {};
       for (const config of result.marketConfigs) {
         marketPublicAllocatorConfigs[config.adapterMarketCapId] = {
@@ -251,7 +251,7 @@ export async function fetchVaultV2PublicAllocatorData(
           vault: vault.address,
           canPullFromIdle: result.canPullFromIdle,
           penalty: result.penalty,
-        } satisfies VaultV2PublicAllocatorConfig,
+        } satisfies VaultV2BluePublicAllocatorConfig,
         activeAdapters: new Set(
           adapterList.filter((_, index) => result.isActiveAdapters[index]),
         ),
@@ -270,7 +270,7 @@ export async function fetchVaultV2PublicAllocatorData(
     marketConfigs,
     allocationValues,
   ] = await Promise.all([
-    fetchVaultV2PublicAllocatorConfig(vault.address, client, {
+    fetchVaultV2BluePublicAllocatorConfig(vault.address, client, {
       ...parameters,
       chainId,
     }),
@@ -287,7 +287,7 @@ export async function fetchVaultV2PublicAllocatorData(
     ),
     Promise.all(
       marketRequests.map(({ adapter, adapterMarketCapId }) =>
-        fetchVaultV2MarketPublicAllocatorConfig(
+        fetchVaultV2BlueMarketPublicAllocatorConfig(
           vault.address,
           adapter,
           adapterMarketCapId,
@@ -329,7 +329,7 @@ export async function fetchVaultV2PublicAllocatorData(
 
   const marketPublicAllocatorConfigs: Record<
     Hash,
-    VaultV2MarketPublicAllocatorConfig | undefined
+    VaultV2BlueMarketPublicAllocatorConfig | undefined
   > = {};
   for (const config of marketConfigs) {
     marketPublicAllocatorConfigs[config.adapterMarketCapId] = config;

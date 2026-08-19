@@ -12,8 +12,8 @@ import {
   MarketUtils,
   MathLib,
   UnknownDataError,
-  type VaultV2MarketPublicAllocatorConfig,
-  type VaultV2PublicAllocatorConfig,
+  type VaultV2BlueMarketPublicAllocatorConfig,
+  type VaultV2BluePublicAllocatorConfig,
   VaultV2Utils,
 } from "@morpho-org/blue-sdk";
 import { _try, bigIntComparator } from "@morpho-org/morpho-ts";
@@ -57,7 +57,7 @@ export interface InputVaultV2BlueReallocationData {
   >;
   /** Vault-wide BluePublicAllocator configuration indexed by vault address. */
   readonly publicAllocatorConfigs?: Readonly<
-    Record<Address, VaultV2PublicAllocatorConfig | undefined>
+    Record<Address, VaultV2BluePublicAllocatorConfig | undefined>
   >;
   /**
    * BluePublicAllocator-active adapters indexed by vault address.
@@ -70,7 +70,9 @@ export interface InputVaultV2BlueReallocationData {
   readonly marketPublicAllocatorConfigs?: Readonly<
     Record<
       Address,
-      | Readonly<Record<Hash, VaultV2MarketPublicAllocatorConfig | undefined>>
+      | Readonly<
+          Record<Hash, VaultV2BlueMarketPublicAllocatorConfig | undefined>
+        >
       | undefined
     >
   >;
@@ -223,7 +225,7 @@ export class VaultV2BlueReallocationData
   /** Vault-wide allocator configuration indexed by vault. */
   public readonly publicAllocatorConfigs: Record<
     Address,
-    VaultV2PublicAllocatorConfig | undefined
+    VaultV2BluePublicAllocatorConfig | undefined
   >;
   /** BluePublicAllocator-active adapters indexed by vault address. */
   public readonly activeAdapters: Record<
@@ -233,7 +235,7 @@ export class VaultV2BlueReallocationData
   /** Adapter-market allocator configuration indexed by vault and market-params id. */
   public readonly marketPublicAllocatorConfigs: Record<
     Address,
-    Record<Hash, VaultV2MarketPublicAllocatorConfig | undefined> | undefined
+    Record<Hash, VaultV2BlueMarketPublicAllocatorConfig | undefined> | undefined
   >;
 
   /**
@@ -292,7 +294,7 @@ export class VaultV2BlueReallocationData
 
     for (const [vault, config] of Object.entries(
       input.publicAllocatorConfigs ?? {},
-    ) as [Address, VaultV2PublicAllocatorConfig | undefined][]) {
+    ) as [Address, VaultV2BluePublicAllocatorConfig | undefined][]) {
       this.publicAllocatorConfigs[vault] =
         config == null ? undefined : { ...config };
     }
@@ -309,14 +311,16 @@ export class VaultV2BlueReallocationData
     ) as [
       Address,
       (
-        | Readonly<Record<Hash, VaultV2MarketPublicAllocatorConfig | undefined>>
+        | Readonly<
+            Record<Hash, VaultV2BlueMarketPublicAllocatorConfig | undefined>
+          >
         | undefined
       ),
     ][]) {
       this.marketPublicAllocatorConfigs[vault] = {};
       for (const [id, config] of Object.entries(configs ?? {}) as [
         Hash,
-        VaultV2MarketPublicAllocatorConfig | undefined,
+        VaultV2BlueMarketPublicAllocatorConfig | undefined,
       ][]) {
         this.marketPublicAllocatorConfigs[vault]![id] =
           config == null ? undefined : { ...config };

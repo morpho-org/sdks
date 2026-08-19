@@ -142,11 +142,11 @@ Morpho SDK enforces a builder/executor invariant for bundled actions. For that r
 Existing `MorphoBorrowOptions` callers keep the Vault V1 reallocation input and
 an authorization-only `getBorrowRequirements` result type. To include Vault V2
 BluePublicAllocator calls, type the options as
-`MorphoBorrowWithV2ReallocationsOptions`; this explicitly widens the result to
-include the loan-token approval used for proportional penalty donations:
+`MorphoBorrowWithVaultV2ReallocationsOptions`; this explicitly widens the
+result to include the loan-token approval used for proportional penalty donations:
 
 ```typescript
-import type { MorphoBorrowWithV2ReallocationsOptions } from '@morpho-org/wdk-protocol-lending-morpho-evm'
+import type { MorphoBorrowWithVaultV2ReallocationsOptions } from '@morpho-org/wdk-protocol-lending-morpho-evm'
 
 const options = {
   token: usdc,
@@ -158,7 +158,7 @@ const options = {
     assets: 1_000_000n,
     penalty: 1_000_000_000_000_000n
   }]
-} satisfies MorphoBorrowWithV2ReallocationsOptions
+} satisfies MorphoBorrowWithVaultV2ReallocationsOptions
 
 const requirements = await morpho.getBorrowRequirements(options)
 ```

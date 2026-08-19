@@ -172,7 +172,7 @@ export interface MorphoBorrowOptions {
  * include the loan-token approval that a Vault V2 penalty may require. Legacy
  * {@link MorphoBorrowOptions} callers retain the authorization-only result.
  */
-export type MorphoBorrowWithV2ReallocationsOptions = Omit<
+export type MorphoBorrowWithVaultV2ReallocationsOptions = Omit<
   MorphoBorrowOptions,
   "reallocations"
 > & {
@@ -182,7 +182,7 @@ export type MorphoBorrowWithV2ReallocationsOptions = Omit<
 
 type MorphoBorrowInput =
   | MorphoBorrowOptions
-  | MorphoBorrowWithV2ReallocationsOptions;
+  | MorphoBorrowWithVaultV2ReallocationsOptions;
 
 export interface MorphoRepayOptions {
   /** The address of the token to repay. */
@@ -698,7 +698,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     options: MorphoBorrowOptions,
   ): Promise<(RequirementAuthorization | RequirementSignatureRequest)[]>;
   public getBorrowRequirements(
-    options: MorphoBorrowWithV2ReallocationsOptions,
+    options: MorphoBorrowWithVaultV2ReallocationsOptions,
   ): Promise<
     (
       | RequirementApproval

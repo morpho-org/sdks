@@ -4,12 +4,12 @@ pragma solidity ^0.8.0;
 import {IBluePublicAllocator} from "./interfaces/IBluePublicAllocator.sol";
 import {IVaultV2} from "./interfaces/IVaultV2.sol";
 
-struct VaultV2MarketPublicAllocatorRequest {
+struct VaultV2BlueMarketPublicAllocatorRequest {
     address adapter;
     bytes32 adapterMarketCapId;
 }
 
-struct VaultV2MarketPublicAllocatorResponse {
+struct VaultV2BlueMarketPublicAllocatorResponse {
     address adapter;
     bytes32 adapterMarketCapId;
     uint256 absoluteCap;
@@ -23,22 +23,22 @@ struct VaultV2AllocationResponse {
     uint256 allocation;
 }
 
-struct VaultV2PublicAllocatorResponse {
+struct VaultV2BluePublicAllocatorResponse {
     bool canPullFromIdle;
     uint64 penalty;
     bool[] isActiveAdapters;
-    VaultV2MarketPublicAllocatorResponse[] marketConfigs;
+    VaultV2BlueMarketPublicAllocatorResponse[] marketConfigs;
     VaultV2AllocationResponse[] allocations;
 }
 
-contract GetVaultV2PublicAllocatorConfig {
+contract GetVaultV2BluePublicAllocatorConfig {
     function query(
         IBluePublicAllocator allocator,
         IVaultV2 vault,
         address[] calldata adapters,
-        VaultV2MarketPublicAllocatorRequest[] calldata marketRequests,
+        VaultV2BlueMarketPublicAllocatorRequest[] calldata marketRequests,
         bytes32[] calldata allocationIds
-    ) external view returns (VaultV2PublicAllocatorResponse memory res) {
+    ) external view returns (VaultV2BluePublicAllocatorResponse memory res) {
         (res.canPullFromIdle, res.penalty) = allocator.vaultData(address(vault));
 
         uint256 adaptersLength = adapters.length;
@@ -48,10 +48,10 @@ contract GetVaultV2PublicAllocatorConfig {
         }
 
         uint256 marketRequestsLength = marketRequests.length;
-        res.marketConfigs = new VaultV2MarketPublicAllocatorResponse[](marketRequestsLength);
+        res.marketConfigs = new VaultV2BlueMarketPublicAllocatorResponse[](marketRequestsLength);
         for (uint256 i; i < marketRequestsLength; ++i) {
-            VaultV2MarketPublicAllocatorRequest calldata request = marketRequests[i];
-            res.marketConfigs[i] = VaultV2MarketPublicAllocatorResponse({
+            VaultV2BlueMarketPublicAllocatorRequest calldata request = marketRequests[i];
+            res.marketConfigs[i] = VaultV2BlueMarketPublicAllocatorResponse({
                 adapter: request.adapter,
                 adapterMarketCapId: request.adapterMarketCapId,
                 absoluteCap: allocator.absoluteCap(address(vault), request.adapterMarketCapId),

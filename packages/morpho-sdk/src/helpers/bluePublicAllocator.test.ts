@@ -2,11 +2,11 @@ import { MarketParams } from "@morpho-org/blue-sdk";
 import { describe, expect, test } from "vitest";
 import { CbbtcUsdcBlue } from "../../test/fixtures/blue.js";
 import type { BlueReallocation } from "../types/index.js";
-import { computeVaultV2ReallocationPenaltyAssets } from "./bluePublicAllocator.js";
+import { computeVaultV2BlueReallocationPenaltyAssets } from "./bluePublicAllocator.js";
 
 const marketParams = new MarketParams(CbbtcUsdcBlue);
 
-describe("computeVaultV2ReallocationPenaltyAssets", () => {
+describe("computeVaultV2BlueReallocationPenaltyAssets", () => {
   test("default", () => {
     const reallocations: BlueReallocation[] = [
       {
@@ -30,6 +30,6 @@ describe("computeVaultV2ReallocationPenaltyAssets", () => {
       },
     ];
 
-    expect(computeVaultV2ReallocationPenaltyAssets(reallocations)).toBe(2n);
+    expect(computeVaultV2BlueReallocationPenaltyAssets(reallocations)).toBe(2n);
   });
 });

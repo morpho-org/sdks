@@ -1,6 +1,6 @@
 import { getChainAddresses, type MarketParams } from "@morpho-org/blue-sdk";
 import type { Action } from "../../bundler/index.js";
-import { computeVaultV2ReallocationPenaltyAssets } from "../../helpers/bluePublicAllocator.js";
+import { computeVaultV2BlueReallocationPenaltyAssets } from "../../helpers/bluePublicAllocator.js";
 import { validateReallocations } from "../../helpers/index.js";
 import type { BlueReallocation } from "../../types/index.js";
 
@@ -55,7 +55,7 @@ export const buildReallocationActions = ({
   let fee = 0n;
   const actions: Action[] = [];
   const penaltyAssets =
-    computeVaultV2ReallocationPenaltyAssets(reallocationList);
+    computeVaultV2BlueReallocationPenaltyAssets(reallocationList);
 
   if (penaltyAssets > 0n) {
     const {

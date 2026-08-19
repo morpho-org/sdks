@@ -16,7 +16,7 @@ import {
   fetchPosition,
   fetchVault,
   fetchVaultMarketConfig,
-  fetchVaultV2PublicAllocatorData,
+  fetchVaultV2BluePublicAllocatorData,
 } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import { type Address, isAddressEqual } from "viem";
@@ -33,7 +33,7 @@ import {
   getBlueAuthorizationRequirement,
   getGeneralAdapterRequirements,
 } from "../../actions/index.js";
-import { computeVaultV2ReallocationPenaltyAssets } from "../../helpers/bluePublicAllocator.js";
+import { computeVaultV2BlueReallocationPenaltyAssets } from "../../helpers/bluePublicAllocator.js";
 import {
   computeMaxRepaySharePrice,
   computeMaxSupplySharePrice,
@@ -88,7 +88,7 @@ import {
   type RequirementSignature,
   selectRequirementSignatures,
   type Transaction,
-  type VaultV1BlueReallocation,
+  type VaultV1Reallocation,
   WithdrawExceedsCollateralError,
 } from "../../types/index.js";
 import { VaultV1ReallocationData } from "../vaultV1ReallocationData.js";
@@ -503,7 +503,7 @@ export interface BlueActions {
    * fees) into the resulting bundle.
    *
    * The returned reallocation data can be passed to {@link getReallocations}
-   * to compute the `VaultV1BlueReallocation[]` array for `borrow()` or
+   * to compute the `VaultV1Reallocation[]` array for `borrow()` or
    * `supplyCollateralBorrow()`.
    *
    * **Stale data reverts on-chain (fail-safe).**
@@ -601,7 +601,7 @@ export interface BlueActions {
           amount?: never;
         }
     ),
-  ) => readonly VaultV1BlueReallocation[];
+  ) => readonly VaultV1Reallocation[];
 }
 
 export class MorphoBlue implements BlueActions {
@@ -616,7 +616,9 @@ export class MorphoBlue implements BlueActions {
     userAddress: Address,
     reallocations: Iterable<BlueReallocation> | undefined,
   ) {
-    const amount = computeVaultV2ReallocationPenaltyAssets(reallocations ?? []);
+    const amount = computeVaultV2BlueReallocationPenaltyAssets(
+      reallocations ?? [],
+    );
 
     // Separate-token penalty funding uses a classic GeneralAdapter1 allowance so a collateral
     // permit and a loan-token penalty can coexist in one bundle. The shared-token path aggregates
@@ -1478,7 +1480,7 @@ export class MorphoBlue implements BlueActions {
     return {
       getRequirements: async (params?: { useSimplePermit?: boolean }) => {
         const penaltyAssets =
-          computeVaultV2ReallocationPenaltyAssets(reallocationList);
+          computeVaultV2BlueReallocationPenaltyAssets(reallocationList);
         const usesSharedFundingToken = isAddressEqual(
           this.marketParams.collateralToken,
           this.marketParams.loanToken,
@@ -2003,7 +2005,7 @@ export class MorphoBlue implements BlueActions {
       Promise.all(
         vaultAddresses.map(async (address) => {
           const vault = await fetchAccrualVaultV2(address, client, fetchParams);
-          const publicAllocatorData = await fetchVaultV2PublicAllocatorData(
+          const publicAllocatorData = await fetchVaultV2BluePublicAllocatorData(
             vault,
             client,
             fetchParams,
@@ -2082,7 +2084,7 @@ export class MorphoBlue implements BlueActions {
           amount?: never;
         }
     ),
-  ): readonly VaultV1BlueReallocation[] {
+  ): readonly VaultV1Reallocation[] {
     validateChainId(params.reallocationData.chainId, this.chainId);
 
     const marketId = this.marketParams.id;

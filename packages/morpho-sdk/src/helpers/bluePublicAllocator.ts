@@ -11,11 +11,11 @@ import type { BlueReallocation } from "../types/index.js";
  * @returns Total target loan-token assets needed for V2 penalties.
  * @example
  * ```ts
- * const penaltyAssets = computeVaultV2ReallocationPenaltyAssets(reallocations);
+ * const penaltyAssets = computeVaultV2BlueReallocationPenaltyAssets(reallocations);
  * ```
  * @internal
  */
-export const computeVaultV2ReallocationPenaltyAssets = (
+export const computeVaultV2BlueReallocationPenaltyAssets = (
   reallocations: Iterable<BlueReallocation>,
 ) => {
   let total = 0n;

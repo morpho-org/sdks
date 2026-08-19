@@ -101,7 +101,7 @@ export interface ReallocationWithdrawal {
  * Maps 1:1 to a `PublicAllocator.reallocateTo()` call.
  * Withdraws from source markets and supplies to the target market.
  */
-export interface VaultV1BlueReallocation {
+export interface VaultV1Reallocation {
   readonly vault: Address;
   /** Fee in native token (ETH) paid to the PublicAllocator for this vault. */
   readonly fee: bigint;
@@ -109,8 +109,8 @@ export interface VaultV1BlueReallocation {
   readonly withdrawals: readonly ReallocationWithdrawal[];
 }
 
-/** Source of a Blue Public Allocator reallocation. */
-export type BluePublicAllocatorSource =
+/** Source of a Vault V2 BluePublicAllocator reallocation. */
+export type VaultV2BlueReallocationSource =
   | {
       /** Reallocate from a Morpho Blue market. */
       readonly type: "market";
@@ -133,7 +133,7 @@ export interface VaultV2BlueReallocation {
   /** Vault whose liquidity is moved. */
   readonly vault: Address;
   /** Liquidity source. */
-  readonly from: BluePublicAllocatorSource;
+  readonly from: VaultV2BlueReallocationSource;
   /** Target Vault V2 adapter; the target market comes from the enclosing action. */
   readonly to: { readonly adapter: Address };
   /** Asset amount, which must fit in `uint128`. */
@@ -148,16 +148,14 @@ export interface VaultV2BlueReallocation {
  * V1 entries are identified by `withdrawals`; V2 entries are identified by
  * `from`.
  */
-export type BlueReallocation =
-  | VaultV1BlueReallocation
-  | VaultV2BlueReallocation;
+export type BlueReallocation = VaultV1Reallocation | VaultV2BlueReallocation;
 
 /**
- * Deprecated name for a Vault V1 Blue reallocation.
+ * Deprecated name for a Vault V1 reallocation.
  *
- * @deprecated Use {@link VaultV1BlueReallocation} instead.
+ * @deprecated Use {@link VaultV1Reallocation} instead.
  */
-export type VaultReallocation = VaultV1BlueReallocation;
+export type VaultReallocation = VaultV1Reallocation;
 
 /**
  * Options for computing vault reallocations via the public allocator.
