@@ -5,7 +5,6 @@ const forkTestConfig = {
   ...(process.env.CI
     ? {
         maxConcurrency: 1,
-        maxWorkers: 8,
         sequence: { groupOrder: 1 }, // Separate from unconstrained unit projects.
       }
     : {}),
