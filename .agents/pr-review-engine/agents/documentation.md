@@ -50,6 +50,7 @@ For each Markdown file affected, flag:
 - **Stale prose.** A statement that no longer matches the code after the diff — e.g. README documents a function that was removed/renamed; AGENTS.md lists a rule the code change just violated; an example that no longer compiles.
 - **Out-of-sync inventories.** A file enumerating personas, packages, slash commands, scripts, supported chains, etc. that no longer matches reality after the diff. E.g. a README that lists "supported chains: mainnet, base" while the diff just added arbitrum.
 - **Cross-doc consistency.** When the diff changes a rule in `AGENTS.md`, every persona that enforces it (per the backlink `> Applied by personas: …`) should reflect the new rule. When the diff renames a section heading in `AGENTS.md`, every doc that references that section by title needs an update.
+- **Implemented TIB rewrites.** Treat a TIB already present on the target branch as a historical record. Flag edits that update its implementation-time names or examples; changed decisions require a superseding TIB, while operational clarifications require a dated addendum. A TIB introduced on the current branch may stay in sync with its implementation before landing.
 - **Code blocks that drift from the code.** A bash snippet in a `.md` that uses a flag the script no longer supports; a TypeScript snippet whose imports no longer resolve.
 
 ## 3. Pointer / link integrity

@@ -1028,6 +1028,7 @@ const _addressesRegistry = {
       generalAdapter1: "0x8e36C2c6d7771820BF14a75f725f3cf0374a7823",
     },
     adaptiveCurveIrm: "0xA4E2bA20Fc64D721D95BD5a28FF71844C5bb5cF2",
+    vaultV2BluePublicAllocator: "0x3b369B37eba1655e8c44bC08E3A604D592c4a14F",
     vaultV2Factory: "0xf2Aecd4a4d4C21d08770e34F392C4C271aBD9144",
     morphoMarketV1AdapterV2Factory:
       "0x4d04C39ca604b560c50F4045c558378FD9AEBCF4",
@@ -1061,6 +1062,7 @@ const _addressesRegistry = {
       generalAdapter1: "0xcaeec65c85Fe964c8Bd814cb8E4CaF8B06bde776",
     },
     adaptiveCurveIrm: "0xfB69467De332E03FF502B85bB2249d2f721F3319",
+    vaultV2BluePublicAllocator: "0x20d990D9eBf8003Df8cAD3Aa36aeF4404e3Ccb86",
     vaultV2Factory: "0x7D8BF8B276f967F7539c9e91E1a85a33fefE612B",
     morphoMarketV1AdapterV2Factory:
       "0xa01D7c41cf419405d4DF2e5750d26438DCAC28a6",
@@ -1078,6 +1080,7 @@ const _addressesRegistry = {
       generalAdapter1: "0x74d3cbc721613C8461df92658d0a20dF275Ca31b",
     },
     adaptiveCurveIrm: "0x56875764185548B0ca72A1877b3aE15E44e8A323",
+    vaultV2BluePublicAllocator: "0xB4A1B0EF18d169c19fC7617aCE898A06Dc495a7C",
     vaultV2Factory: "0xf133FA5A78C398B31Cc4a180E6Ae84111D6DCF5B",
     morphoMarketV1AdapterV2Factory:
       "0x00a58b7a9B3E86CB21f5F11f29F4A12346457012",
@@ -1795,6 +1798,7 @@ const _deployments = {
       generalAdapter1: 208021118n,
     },
     adaptiveCurveIrm: 208021118n,
+    vaultV2BluePublicAllocator: 224866814n,
     vaultV2Factory: 213463014n,
     morphoMarketV1AdapterV2Factory: 213463079n,
     registryList: 213463079n,
@@ -1826,6 +1830,7 @@ const _deployments = {
       generalAdapter1: 23180020n,
     },
     adaptiveCurveIrm: 23180020n,
+    vaultV2BluePublicAllocator: 25455933n,
     vaultV2Factory: 23180183n,
     morphoMarketV1AdapterV2Factory: 23180228n,
     registryList: 23180228n,
@@ -1842,6 +1847,7 @@ const _deployments = {
       generalAdapter1: 16408957n,
     },
     adaptiveCurveIrm: 16408957n,
+    vaultV2BluePublicAllocator: 24269516n,
     vaultV2Factory: 16409067n,
     morphoMarketV1AdapterV2Factory: 16409115n,
     registryList: 16409115n,

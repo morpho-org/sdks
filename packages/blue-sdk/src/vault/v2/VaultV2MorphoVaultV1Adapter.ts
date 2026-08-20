@@ -42,7 +42,13 @@ export class VaultV2MorphoVaultV1Adapter
     );
   }
 
-  /** @deprecated Use {@link VaultV2MorphoVaultV1Adapter.adapterCapId}. */
+  /**
+   * Returns the adapter-wide allocation-cap id.
+   *
+   * @param address - Adapter address.
+   * @returns The adapter-wide allocation-cap id.
+   * @deprecated Use {@link VaultV2MorphoVaultV1Adapter.adapterCapId}.
+   */
   static adapterId(address: Address) {
     return VaultV2MorphoVaultV1Adapter.adapterCapId(address);
   }

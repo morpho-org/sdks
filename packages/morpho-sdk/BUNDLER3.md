@@ -79,7 +79,9 @@ bundle** for borrow and loan-asset withdraw, **inserted between supply-collatera
 penalties are different: the bundle pulls the aggregate amount in the target loan token through
 GeneralAdapter1, approves each exact per-call amount from Bundler3, and lets the allocator donate
 it directly to the vault. The entity's `getRequirements()` returns the corresponding classic
-loan-token approval when a V2 penalty is non-zero.
+loan-token approval when a V2 penalty is non-zero, except when `supplyCollateralBorrow` uses the
+same collateral and loan token: that path folds the penalty into its single collateral approval or
+permit and emits no separate penalty requirement.
 
 ### 5. A single user approval surface
 

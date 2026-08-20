@@ -40,10 +40,12 @@ ERC-20 approval spender is **GeneralAdapter1** for any bundled path — never th
 
 An allocator reallocation plan contains only PublicAllocator V1 `reallocateTo` calls or only
 BluePublicAllocator `reallocate`/`allocateFromIdle` calls. Separate builders encode each version;
-mixing versions throws `MixedReallocationVersionsError`. For non-zero V2 penalties, the V2 builder adds one aggregate loan-token
-`erc20TransferFrom` into Bundler3 and each allocator action expands to an exact token approval plus
-the nonpayable allocator call. `BundlerAction.encodeBundle` derives `tx.value` only from native
-wrapping calls and PublicAllocator V1 native fees.
+mixing versions throws `MixedReallocationVersionsError`. For non-zero V2 penalties, the V2 builder
+adds one aggregate loan-token funding action into Bundler3: `erc20TransferFrom` from the initiator by
+default, or `erc20Transfer` from GeneralAdapter1 when `supplyCollateralBorrow` uses the same token for
+collateral and loan funding. Each allocator action expands to an exact token approval plus the
+nonpayable allocator call. `BundlerAction.encodeBundle` derives `tx.value` only from native wrapping
+calls and PublicAllocator V1 native fees.
 
 ## Mode and ordering rules
 

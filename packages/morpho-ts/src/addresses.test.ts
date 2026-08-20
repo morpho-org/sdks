@@ -165,6 +165,9 @@ describe("addressesRegistry", () => {
     [ChainId.MonadMainnet, "0x0A503aB026EFACBC0F7feE7795F34B80b5B9a662"],
     [ChainId.StableMainnet, "0x5C884d4B1510EAd302EC50A2AB4DE9c0b9E407ce"],
     [ChainId.TempoMainnet, "0xDC9693CE6488640faEf173Ec2635ff99fdC25a07"],
+    [ChainId.KaiaMainnet, "0x3b369B37eba1655e8c44bC08E3A604D592c4a14F"],
+    [ChainId.MorphMainnet, "0x20d990D9eBf8003Df8cAD3Aa36aeF4404e3Ccb86"],
+    [ChainId.MegaEthMainnet, "0xB4A1B0EF18d169c19fC7617aCE898A06Dc495a7C"],
     [ChainId.RobinhoodMainnet, "0xCe5c1aFa115fF8b1D6913509bfc79D9AE08CC857"],
   ] as const)(
     "behavior: exposes BluePublicAllocator on chain %i",

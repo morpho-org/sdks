@@ -46,7 +46,13 @@ export class VaultV2MorphoMarketV1Adapter
     );
   }
 
-  /** @deprecated Use {@link VaultV2MorphoMarketV1Adapter.adapterCapId}. */
+  /**
+   * Returns the adapter-wide allocation-cap id.
+   *
+   * @param address - Adapter address.
+   * @returns The adapter-wide allocation-cap id.
+   * @deprecated Use {@link VaultV2MorphoMarketV1Adapter.adapterCapId}.
+   */
   static adapterId(address: Address) {
     return VaultV2MorphoMarketV1Adapter.adapterCapId(address);
   }
@@ -70,7 +76,13 @@ export class VaultV2MorphoMarketV1Adapter
     );
   }
 
-  /** @deprecated Use {@link VaultV2MorphoMarketV1Adapter.collateralCapId}. */
+  /**
+   * Returns the collateral-wide allocation-cap id.
+   *
+   * @param address - Collateral token address.
+   * @returns The collateral-wide allocation-cap id.
+   * @deprecated Use {@link VaultV2MorphoMarketV1Adapter.collateralCapId}.
+   */
   static collateralId(address: Address) {
     return VaultV2MorphoMarketV1Adapter.collateralCapId(address);
   }

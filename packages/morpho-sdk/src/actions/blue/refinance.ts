@@ -3,7 +3,6 @@ import { deepFreeze } from "@morpho-org/morpho-ts";
 import { type Address, isAddressEqual, maxUint256 } from "viem";
 import { type Action, BundlerAction } from "../../bundler/index.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
-import { validateAndNormalizeReallocations } from "../../helpers/validate.js";
 import {
   type AuthorizationRequirementSignature,
   type BlueReallocationPlan,
@@ -17,10 +16,7 @@ import {
   type Transaction,
 } from "../../types/index.js";
 import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
-import {
-  buildVaultV1ReallocationActions,
-  buildVaultV2BlueReallocationActions,
-} from "./buildReallocationActions.js";
+import { buildBlueReallocationActions } from "./buildReallocationActions.js";
 
 /** Parameters for {@link blueRefinance}. */
 export interface BlueRefinanceParams {
@@ -284,24 +280,15 @@ export const blueRefinance = ({
     actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
   }
 
-  const reallocationPlan = validateAndNormalizeReallocations(
-    targetReallocations,
-    targetParams.id,
-  );
   const {
     actions: reallocationActions,
     fee: reallocationFee,
     penaltyAssets: reallocationPenaltyAssets,
-  } = reallocationPlan.type === "vaultV1"
-    ? buildVaultV1ReallocationActions({
-        reallocations: reallocationPlan.reallocations,
-        targetMarketParams: targetParams,
-      })
-    : buildVaultV2BlueReallocationActions({
-        chainId,
-        reallocations: reallocationPlan.reallocations,
-        targetMarketParams: targetParams,
-      });
+  } = buildBlueReallocationActions({
+    chainId,
+    reallocations: targetReallocations,
+    targetMarketParams: targetParams,
+  });
   actions.push(...reallocationActions);
 
   actions.push({

@@ -3,7 +3,6 @@ import { deepFreeze } from "@morpho-org/morpho-ts";
 import { type Address, isAddressEqual } from "viem";
 import { type Action, BundlerAction } from "../../bundler/index.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
-import { validateAndNormalizeReallocations } from "../../helpers/validate.js";
 import {
   type AuthorizationRequirementSignature,
   type BlueReallocationPlan,
@@ -17,10 +16,7 @@ import {
 } from "../../types/index.js";
 import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
 import { buildAssetFundingActions } from "./buildAssetFundingActions.js";
-import {
-  buildVaultV1ReallocationActions,
-  buildVaultV2BlueReallocationActions,
-} from "./buildReallocationActions.js";
+import { buildBlueReallocationActions } from "./buildReallocationActions.js";
 
 /** Parameters for {@link blueSupplyCollateralBorrow}. */
 export interface BlueSupplyCollateralBorrowParams {
@@ -171,24 +167,14 @@ export const blueSupplyCollateralBorrow = ({
     marketParams.collateralToken,
     marketParams.loanToken,
   );
-  const reallocationPlan = validateAndNormalizeReallocations(
+  const reallocationResult = buildBlueReallocationActions({
+    chainId,
     reallocations,
-    marketParams.id,
-  );
-  const reallocationResult =
-    reallocationPlan.type === "vaultV1"
-      ? buildVaultV1ReallocationActions({
-          reallocations: reallocationPlan.reallocations,
-          targetMarketParams: marketParams,
-        })
-      : buildVaultV2BlueReallocationActions({
-          chainId,
-          reallocations: reallocationPlan.reallocations,
-          targetMarketParams: marketParams,
-          penaltyFundingSource: usesSharedFundingToken
-            ? "generalAdapter1"
-            : "initiator",
-        });
+    targetMarketParams: marketParams,
+    penaltyFundingSource: usesSharedFundingToken
+      ? "generalAdapter1"
+      : "initiator",
+  });
   const erc20FundingAmount =
     amount + (usesSharedFundingToken ? reallocationResult.penaltyAssets : 0n);
 
