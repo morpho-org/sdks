@@ -89,7 +89,6 @@ import {
   selectRequirementSignatures,
   type Transaction,
   type VaultV1Reallocation,
-  type VaultV2BlueReallocation,
   WithdrawExceedsCollateralError,
 } from "../../types/index.js";
 import { VaultV1ReallocationData } from "../vaultV1ReallocationData.js";
@@ -619,8 +618,11 @@ export class MorphoBlue implements BlueActions {
 
   private getReallocationPenaltyRequirements(
     userAddress: Address,
-    reallocations: readonly VaultV2BlueReallocation[],
+    reallocationPlan: ReturnType<typeof validateAndNormalizeReallocations>,
   ) {
+    if (reallocationPlan.type === "vaultV1") return [];
+
+    const { reallocations } = reallocationPlan;
     const amount = reallocations.reduce(
       (total, reallocation) =>
         total +
@@ -828,12 +830,10 @@ export class MorphoBlue implements BlueActions {
     return {
       getRequirements: async () => {
         const [penaltyRequirements, authTx] = await Promise.all([
-          reallocationPlan.type === "vaultV2Blue"
-            ? this.getReallocationPenaltyRequirements(
-                userAddress,
-                reallocationPlan.reallocations,
-              )
-            : Promise.resolve([]),
+          this.getReallocationPenaltyRequirements(
+            userAddress,
+            reallocationPlan,
+          ),
           getBlueAuthorizationRequirement({
             viemClient: this.client.viemClient,
             chainId: this.chainId,
@@ -972,12 +972,10 @@ export class MorphoBlue implements BlueActions {
     return {
       getRequirements: async () => {
         const [penaltyRequirements, authTx] = await Promise.all([
-          reallocationPlan.type === "vaultV2Blue"
-            ? this.getReallocationPenaltyRequirements(
-                userAddress,
-                reallocationPlan.reallocations,
-              )
-            : Promise.resolve([]),
+          this.getReallocationPenaltyRequirements(
+            userAddress,
+            reallocationPlan,
+          ),
           getBlueAuthorizationRequirement({
             viemClient: this.client.viemClient,
             chainId: this.chainId,
@@ -1520,11 +1518,11 @@ export class MorphoBlue implements BlueActions {
                 from: userAddress,
               },
             }),
-            usesSharedFundingToken || reallocationPlan.type === "vaultV1"
-              ? Promise.resolve([])
+            usesSharedFundingToken
+              ? []
               : this.getReallocationPenaltyRequirements(
                   userAddress,
-                  reallocationPlan.reallocations,
+                  reallocationPlan,
                 ),
             getBlueAuthorizationRequirement({
               viemClient: this.client.viemClient,
@@ -1769,12 +1767,10 @@ export class MorphoBlue implements BlueActions {
     return {
       getRequirements: async () => {
         const [penaltyRequirements, authTx] = await Promise.all([
-          targetReallocationPlan.type === "vaultV2Blue"
-            ? this.getReallocationPenaltyRequirements(
-                userAddress,
-                targetReallocationPlan.reallocations,
-              )
-            : Promise.resolve([]),
+          this.getReallocationPenaltyRequirements(
+            userAddress,
+            targetReallocationPlan,
+          ),
           getBlueAuthorizationRequirement({
             viemClient: this.client.viemClient,
             chainId: this.chainId,

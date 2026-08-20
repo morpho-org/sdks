@@ -14,7 +14,7 @@ import {
   VaultV2BluePublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
 import type { Address, Hash } from "viem";
-import { zeroAddress } from "viem";
+import { zeroAddress, zeroHash } from "viem";
 import { describe, expect, test } from "vitest";
 import { blueBorrow } from "../actions/index.js";
 import {
@@ -23,7 +23,11 @@ import {
   NegativeInputError,
   NonPositiveInputError,
   ReallocationWithdrawExceedsMarketSupplyError,
+  UnknownReallocationAdapterError,
+  UnknownReallocationAllocationError,
   UnknownReallocationMarketError,
+  UnknownReallocationMarketPublicAllocatorConfigError,
+  UnknownReallocationPublicAllocatorConfigError,
 } from "../types/index.js";
 import { VaultV2BlueReallocationData } from "./vaultV2BlueReallocationData.js";
 
@@ -322,6 +326,40 @@ const makeFixture = ({
     targetIds,
   };
 };
+
+describe("VaultV2BlueReallocationData accessors", () => {
+  test("error: UnknownReallocationAllocationError", () => {
+    const { data } = makeFixture();
+
+    expect(() => data.getAllocation(VAULT, zeroHash)).toThrow(
+      UnknownReallocationAllocationError,
+    );
+  });
+
+  test("error: UnknownReallocationPublicAllocatorConfigError", () => {
+    const { data } = makeFixture();
+
+    expect(() => data.getPublicAllocatorConfig(SECOND_VAULT)).toThrow(
+      UnknownReallocationPublicAllocatorConfigError,
+    );
+  });
+
+  test("error: UnknownReallocationMarketPublicAllocatorConfigError", () => {
+    const { data } = makeFixture();
+
+    expect(() => data.getMarketPublicAllocatorConfig(VAULT, zeroHash)).toThrow(
+      UnknownReallocationMarketPublicAllocatorConfigError,
+    );
+  });
+
+  test("error: UnknownReallocationAdapterError", () => {
+    const { data } = makeFixture();
+
+    expect(() => data.getAdapter(VAULT, zeroAddress)).toThrow(
+      UnknownReallocationAdapterError,
+    );
+  });
+});
 
 describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
   test("default: returns an action-ready market reallocation and cloned post-state", () => {
