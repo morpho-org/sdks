@@ -10,6 +10,7 @@ import {
 
 const ANVIL_FORCE_KILL_TIMEOUT_MS = 5_000;
 const ANVIL_PROCESS_CLOSE_TIMEOUT_MS = 10_000;
+const MIN_DERIVED_SECRET_LENGTH = 8;
 
 export interface AnvilArgs {
   /**
@@ -265,16 +266,38 @@ const redactAnvilDiagnostic = (diagnostic: string, args: AnvilArgs) => {
     args.forkUrl,
     ...Object.values(args.forkHeader ?? {}),
   ].filter((secret): secret is string => Boolean(secret));
-
+  const representations = new Set<string>();
   for (const secret of secrets) {
-    const representations = new Set([secret]);
+    const serializedValues = new Set([secret]);
     try {
-      representations.add(new URL(secret).href);
+      const url = new URL(secret);
+      serializedValues.add(url.href);
+      serializedValues.add(url.hostname);
+      if (url.host !== url.hostname) serializedValues.add(url.host);
+      if (url.username) serializedValues.add(url.username);
+      if (url.password) serializedValues.add(url.password);
+      const lastPathSegment = url.pathname.split("/").filter(Boolean).at(-1);
+      if (lastPathSegment) serializedValues.add(lastPathSegment);
+      for (const value of url.searchParams.values()) {
+        if (value.length >= MIN_DERIVED_SECRET_LENGTH)
+          serializedValues.add(value);
+      }
     } catch {
       // Header values and non-standard fork URLs still need exact redaction.
     }
-    for (const representation of representations)
-      redacted = redacted.replaceAll(representation, "<redacted-rpc-url>");
+
+    for (const value of serializedValues) {
+      representations.add(value);
+      representations.add(JSON.stringify(value).slice(1, -1));
+      representations.add(encodeURIComponent(value));
+    }
+  }
+
+  for (const representation of [...representations].sort(
+    (left, right) => right.length - left.length,
+  )) {
+    if (representation === "") continue;
+    redacted = redacted.replaceAll(representation, "<redacted-rpc-url>");
   }
 
   return redacted;
@@ -520,11 +543,9 @@ export const spawnAnvil = async (
       subprocess.stderr.on("data", (data) => {
         // Startup warnings are diagnostic; only timeout, error, or early close is fatal.
         const dataString = data.toString();
-        stderr = redactAnvilDiagnostic(`${stderr}${dataString}`, args).slice(
-          -4_096,
-        );
-        if (!settled || stopRequested) return;
+        stderr = `${stderr}${dataString}`.slice(-4_096);
         if (!args.forkUrl) {
+          if (!settled || stopRequested) return;
           console.warn(`[port ${port || "??"}] ${dataString}`);
           return;
         }
@@ -532,6 +553,7 @@ export const spawnAnvil = async (
         // Buffer complete lines so a fork URL split across stream chunks is redacted as one value.
         const lines = `${pendingForkStderr}${dataString}`.split(/\r?\n/);
         pendingForkStderr = lines.pop() ?? "";
+        if (!settled || stopRequested) return;
         for (const line of lines) {
           const diagnostic = redactAnvilDiagnostic(line, args).trim();
           if (diagnostic) console.warn(`[port ${port || "??"}] ${diagnostic}`);
@@ -560,6 +582,13 @@ export const spawnAnvil = async (
       subprocess.once("close", (code, signal) => {
         processCloseObserved = true;
         const details = redactAnvilDiagnostic(stderr, args).trim();
+        if (settled && !stopRequested && args.forkUrl) {
+          const diagnostic = redactAnvilDiagnostic(
+            pendingForkStderr,
+            args,
+          ).trim();
+          if (diagnostic) console.warn(`[port ${port || "??"}] ${diagnostic}`);
+        }
         const unexpectedExit =
           settled && !stopRequested
             ? new AnvilProcessError(
