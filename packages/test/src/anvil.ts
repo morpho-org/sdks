@@ -1,5 +1,4 @@
 import { spawn } from "node:child_process";
-import { stripVTControlCharacters } from "node:util";
 import _kebabCase from "lodash.kebabcase";
 import {
   AnvilCleanupError,
@@ -10,7 +9,6 @@ import {
 
 const ANVIL_FORCE_KILL_TIMEOUT_MS = 5_000;
 const ANVIL_PROCESS_CLOSE_TIMEOUT_MS = 10_000;
-const MIN_DERIVED_SECRET_LENGTH = 8;
 
 export interface AnvilArgs {
   /**
@@ -260,49 +258,6 @@ export interface AnvilArgs {
   transactionBlockKeeper?: number | undefined;
 }
 
-const redactAnvilDiagnostic = (diagnostic: string, args: AnvilArgs) => {
-  let redacted = stripVTControlCharacters(diagnostic);
-  const secrets = [
-    args.forkUrl,
-    ...Object.values(args.forkHeader ?? {}),
-  ].filter((secret): secret is string => Boolean(secret));
-  const representations = new Set<string>();
-  for (const secret of secrets) {
-    const serializedValues = new Set([secret]);
-    try {
-      const url = new URL(secret);
-      serializedValues.add(url.href);
-      serializedValues.add(url.hostname);
-      if (url.host !== url.hostname) serializedValues.add(url.host);
-      if (url.username) serializedValues.add(url.username);
-      if (url.password) serializedValues.add(url.password);
-      const lastPathSegment = url.pathname.split("/").filter(Boolean).at(-1);
-      if (lastPathSegment) serializedValues.add(lastPathSegment);
-      for (const value of url.searchParams.values()) {
-        if (value.length >= MIN_DERIVED_SECRET_LENGTH)
-          serializedValues.add(value);
-      }
-    } catch {
-      // Header values and non-standard fork URLs still need exact redaction.
-    }
-
-    for (const value of serializedValues) {
-      representations.add(value);
-      representations.add(JSON.stringify(value).slice(1, -1));
-      representations.add(encodeURIComponent(value));
-    }
-  }
-
-  for (const representation of [...representations].sort(
-    (left, right) => right.length - left.length,
-  )) {
-    if (representation === "") continue;
-    redacted = redacted.replaceAll(representation, "<redacted-rpc-url>");
-  }
-
-  return redacted;
-};
-
 /**
  * Converts an object of options to an array of command line arguments.
  *
@@ -481,12 +436,11 @@ export const spawnAnvil = async (
     await new Promise<void>((resolve, reject) => {
       let settled = false;
       let stderr = "";
-      let pendingForkStderr = "";
       let stdout = "";
       const startupTimeoutMs =
         Math.max(args.timeout ?? 45_000, 45_000) + 15_000;
       const startupTimeout = globalThis.setTimeout(() => {
-        const details = redactAnvilDiagnostic(stderr, args).trim();
+        const details = stderr.trim();
         fail(
           new AnvilStartupError(
             `Anvil did not start listening within "${startupTimeoutMs}" ms. Check the fork URL and Anvil arguments.${details ? ` ${details}` : ""}`,
@@ -544,51 +498,22 @@ export const spawnAnvil = async (
         // Startup warnings are diagnostic; only timeout, error, or early close is fatal.
         const dataString = data.toString();
         stderr = `${stderr}${dataString}`.slice(-4_096);
-        if (!args.forkUrl) {
-          if (!settled || stopRequested) return;
+        if (settled && !stopRequested)
           console.warn(`[port ${port || "??"}] ${dataString}`);
-          return;
-        }
-
-        // Buffer complete lines so a fork URL split across stream chunks is redacted as one value.
-        const lines = `${pendingForkStderr}${dataString}`.split(/\r?\n/);
-        pendingForkStderr = lines.pop() ?? "";
-        if (!settled || stopRequested) return;
-        for (const line of lines) {
-          const diagnostic = redactAnvilDiagnostic(line, args).trim();
-          if (diagnostic) console.warn(`[port ${port || "??"}] ${diagnostic}`);
-        }
       });
 
       subprocess.once("error", (error) => {
-        const errorCode =
-          "code" in error &&
-          (typeof error.code === "string" || typeof error.code === "number")
-            ? ` (code "${error.code}")`
-            : "";
-        const cause = args.forkUrl
-          ? new AnvilStartupError(
-              `${redactAnvilDiagnostic(error.message, args)}${errorCode}`,
-            )
-          : error;
         fail(
           new AnvilStartupError(
             `Anvil failed to start on port "${port || "auto"}". Check that the binary and arguments are valid.`,
-            { cause },
+            { cause: error },
           ),
         );
       });
 
       subprocess.once("close", (code, signal) => {
         processCloseObserved = true;
-        const details = redactAnvilDiagnostic(stderr, args).trim();
-        if (settled && !stopRequested && args.forkUrl) {
-          const diagnostic = redactAnvilDiagnostic(
-            pendingForkStderr,
-            args,
-          ).trim();
-          if (diagnostic) console.warn(`[port ${port || "??"}] ${diagnostic}`);
-        }
+        const details = stderr.trim();
         const unexpectedExit =
           settled && !stopRequested
             ? new AnvilProcessError(
@@ -631,14 +556,7 @@ export const spawnAnvil = async (
         ? error
         : new AnvilStartupError(
             "Anvil failed before startup completed. Check the binary, arguments, and temporary directory.",
-            {
-              cause:
-                args.forkUrl && error instanceof Error
-                  ? new AnvilStartupError(
-                      redactAnvilDiagnostic(error.message, args),
-                    )
-                  : error,
-            },
+            { cause: error },
           );
 
     throw failure;
