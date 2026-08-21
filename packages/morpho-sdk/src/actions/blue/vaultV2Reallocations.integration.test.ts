@@ -251,7 +251,7 @@ describe("Blue actions with Vault V2 reallocations", () => {
     ).not.toContain(targetMarket.id);
     const discovery = reallocationData.computeVaultV2BlueReallocations(
       targetMarket.id,
-      { timestamp: block.timestamp },
+      { timestamp: block.timestamp, maxPenalty: penalty },
     );
     expect(discovery.reallocations.length).toBeGreaterThan(0);
     expect(discovery.data.getAdapter(vault, targetAdapter).marketIds).toContain(
