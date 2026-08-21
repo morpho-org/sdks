@@ -6,23 +6,29 @@ import {
   AccrualVaultV2MorphoMarketV1AdapterV2,
   AccrualVaultV2MorphoVaultV1Adapter,
   ChainId,
+  type IAccrualVaultV2Adapter,
   type IVaultV2Allocation,
   Market,
+  type MarketId,
   MarketParams,
   MathLib,
+  UnsupportedVaultV2AdapterError,
   VaultV2BlueMarketPublicAllocatorConfig,
   VaultV2BluePublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
 import type { Address, Hash } from "viem";
 import { zeroAddress, zeroHash } from "viem";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { blueBorrow } from "../actions/index.js";
 import {
   InputExceedsMaxError,
   InsufficientSharedLiquidityError,
   NegativeInputError,
   NonPositiveInputError,
+  ReallocationAdapterSupplySharesUnderflowError,
+  ReallocationAllocationUnderflowError,
   ReallocationWithdrawExceedsMarketSupplyError,
+  UnknownReallocationActiveAdaptersError,
   UnknownReallocationAdapterError,
   UnknownReallocationAllocationError,
   UnknownReallocationMarketError,
@@ -327,7 +333,62 @@ const makeFixture = ({
   };
 };
 
+describe("VaultV2BlueReallocationData construction", () => {
+  test("error: UnsupportedVaultV2AdapterError", () => {
+    const { data } = makeFixture();
+    const vault = data.getVault(VAULT);
+    const adapter = data.getAdapter(VAULT, TARGET_ADAPTER);
+    const unsupportedAdapter: IAccrualVaultV2Adapter = {
+      type: "UnsupportedAdapter",
+      address: SECOND_TARGET_ADAPTER,
+      parentVault: VAULT,
+      adapterId: adapter.adapterId,
+      skimRecipient: zeroAddress,
+      realAssets: adapter.realAssets.bind(adapter),
+      maxDeposit: adapter.maxDeposit.bind(adapter),
+      maxWithdraw: adapter.maxWithdraw.bind(adapter),
+    };
+    const unsupportedVault = new AccrualVaultV2(
+      {
+        ...vault,
+        liquidityAllocations: vault.liquidityAllocations?.map((allocation) => ({
+          ...allocation,
+        })),
+      },
+      undefined,
+      [unsupportedAdapter],
+      vault.assetBalance,
+      { ...vault.forceDeallocatePenalties },
+    );
+
+    expect(
+      () =>
+        new VaultV2BlueReallocationData({
+          chainId: data.chainId,
+          vaults: { [VAULT]: unsupportedVault },
+        }),
+    ).toThrow(UnsupportedVaultV2AdapterError);
+  });
+});
+
 describe("VaultV2BlueReallocationData accessors", () => {
+  test("behavior: returns a fetched empty active-adapter set", () => {
+    const { data } = makeFixture({ allocatorActiveAdapters: [] });
+
+    expect(data.getActiveAdapters(VAULT)).toStrictEqual(new Set());
+  });
+
+  test("error: UnknownReallocationActiveAdaptersError", () => {
+    const { data } = makeFixture();
+    delete (
+      data.activeAdapters as Record<Address, ReadonlySet<Address> | undefined>
+    )[VAULT];
+
+    expect(() => data.getActiveAdapters(VAULT)).toThrow(
+      UnknownReallocationActiveAdaptersError,
+    );
+  });
+
   test("error: UnknownReallocationAllocationError", () => {
     const { data } = makeFixture();
 
@@ -365,7 +426,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
   test("default: returns an action-ready market reallocation and cloned post-state", () => {
     const { data, sourceExpectedAssets, sourceIds, targetIds } = makeFixture();
 
-    expect(data.activeAdapters[VAULT]).toStrictEqual(
+    expect(data.getActiveAdapters(VAULT)).toStrictEqual(
       new Set([TARGET_ADAPTER.toLowerCase(), SOURCE_ADAPTER.toLowerCase()]),
     );
     const result = data.computeVaultV2BlueReallocations(targetParams.id);
@@ -391,6 +452,59 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     expect(result.data.getVault(VAULT)._totalAssets).toBe(
       data.getVault(VAULT)._totalAssets,
     );
+  });
+
+  test("error: ReallocationAdapterSupplySharesUnderflowError", () => {
+    const { data } = makeFixture();
+    const sourceAdapter = data.getAdapter(VAULT, SOURCE_ADAPTER);
+    (sourceAdapter.supplyShares as Record<MarketId, bigint>)[sourceParams.id] =
+      0n;
+
+    expect(() =>
+      // biome-ignore lint/complexity/useLiteralKeys: exercise the private transition invariant directly.
+      data["cloneWithPublicReallocation"]({
+        reallocation: {
+          vault: VAULT,
+          from: {
+            type: "market",
+            adapter: SOURCE_ADAPTER,
+            marketParams: sourceParams,
+          },
+          to: { adapter: TARGET_ADAPTER },
+          assets: 1n,
+          penalty: 7n,
+        },
+        targetMarketId: targetParams.id,
+        timestamp: TIMESTAMP,
+      }),
+    ).toThrow(ReallocationAdapterSupplySharesUnderflowError);
+  });
+
+  test("error: ReallocationAllocationUnderflowError", () => {
+    const { data, sourceIds } = makeFixture();
+    const allocation = data.getAllocation(VAULT, sourceIds[0]);
+    (data.allocations[VAULT] as Record<Hash, IVaultV2Allocation>)[
+      sourceIds[0]
+    ] = { ...allocation, allocation: 0n };
+
+    expect(() =>
+      // biome-ignore lint/complexity/useLiteralKeys: exercise the private transition invariant directly.
+      data["cloneWithPublicReallocation"]({
+        reallocation: {
+          vault: VAULT,
+          from: {
+            type: "market",
+            adapter: SOURCE_ADAPTER,
+            marketParams: sourceParams,
+          },
+          to: { adapter: TARGET_ADAPTER },
+          assets: 1n,
+          penalty: 7n,
+        },
+        targetMarketId: targetParams.id,
+        timestamp: TIMESTAMP,
+      }),
+    ).toThrow(ReallocationAllocationUnderflowError);
   });
 
   test("behavior: allocates into a configured target with no existing position", () => {
@@ -427,6 +541,28 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
         maxWithdrawalUtilization: MathLib.WAD,
       }).reallocations[0]?.assets,
     ).toBe(100n);
+  });
+
+  test("behavior: refreshes only adapter views for changed markets", () => {
+    const { data } = makeFixture();
+    const targetAdapter = data.getAdapter(VAULT, TARGET_ADAPTER);
+    const sourceAdapter = data.getAdapter(VAULT, SOURCE_ADAPTER);
+    const previousTargetMarkets = targetAdapter.markets;
+    const previousSourceMarkets = sourceAdapter.markets;
+    const targetMarket = data
+      .getMarket(targetParams.id)
+      .accrueInterest(TIMESTAMP + 1n);
+
+    (
+      data as unknown as {
+        setMarkets(markets: Iterable<Market>): void;
+      }
+    ).setMarkets([targetMarket]);
+
+    expect(data.getMarket(targetParams.id)).toBe(targetMarket);
+    expect(targetAdapter.markets).not.toBe(previousTargetMarkets);
+    expect(targetAdapter.markets[0]).toBe(targetMarket);
+    expect(sourceAdapter.markets).toBe(previousSourceMarkets);
   });
 
   test.each([0n, MathLib.WAD])(
@@ -719,22 +855,21 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     });
 
     const cloned = input.clone();
-    expect(cloned.activeAdapters[VAULT]).toStrictEqual(
-      input.activeAdapters[VAULT],
+    expect(cloned.publicAllocatorConfigs).toBe(input.publicAllocatorConfigs);
+    expect(cloned.activeAdapters).toBe(input.activeAdapters);
+    expect(cloned.marketPublicAllocatorConfigs).toBe(
+      input.marketPublicAllocatorConfigs,
     );
-    expect(cloned.activeAdapters[VAULT]).not.toBe(input.activeAdapters[VAULT]);
+    expect(cloned.allocations[VAULT]).not.toBe(input.allocations[VAULT]);
+    expect(cloned.getAllocation(VAULT, targetIds[2])).toBe(
+      input.getAllocation(VAULT, targetIds[2]),
+    );
     expect(cloned.getPublicAllocatorConfig(VAULT)).toBeInstanceOf(
       VaultV2BluePublicAllocatorConfig,
-    );
-    expect(cloned.getPublicAllocatorConfig(VAULT)).not.toBe(
-      input.getPublicAllocatorConfig(VAULT),
     );
     expect(
       cloned.getMarketPublicAllocatorConfig(VAULT, targetIds[2]),
     ).toBeInstanceOf(VaultV2BlueMarketPublicAllocatorConfig);
-    expect(cloned.getMarketPublicAllocatorConfig(VAULT, targetIds[2])).not.toBe(
-      input.getMarketPublicAllocatorConfig(VAULT, targetIds[2]),
-    );
     const inputLegacy = input
       .getVault(VAULT)
       .accrualAdapters.find(
@@ -1073,6 +1208,30 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
         timestamp: TIMESTAMP,
       }),
     ).toThrow(UnknownReallocationMarketError);
+  });
+
+  test("error: UnknownReallocationMarketError for incomplete source state", () => {
+    const { data } = makeFixture();
+    const incompleteData = data.clone();
+    delete (incompleteData.markets as Record<MarketId, Market | undefined>)[
+      sourceParams.id
+    ];
+    vi.spyOn(data, "clone").mockReturnValue(incompleteData);
+
+    expect(() => data.computeVaultV2BlueReallocations(targetParams.id)).toThrow(
+      UnknownReallocationMarketError,
+    );
+  });
+
+  test("error: UnknownReallocationActiveAdaptersError for incomplete vault state", () => {
+    const { data } = makeFixture();
+    delete (
+      data.activeAdapters as Record<Address, ReadonlySet<Address> | undefined>
+    )[VAULT];
+
+    expect(() => data.computeVaultV2BlueReallocations(targetParams.id)).toThrow(
+      UnknownReallocationActiveAdaptersError,
+    );
   });
 
   test("behavior: ignores vault liquidity above the penalty threshold", () => {

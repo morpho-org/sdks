@@ -14,6 +14,7 @@ import {
   MarketUtils,
   MathLib,
   UnknownDataError,
+  UnsupportedVaultV2AdapterError,
   VaultV2BlueMarketPublicAllocatorConfig,
   VaultV2BluePublicAllocatorConfig,
   VaultV2BluePublicAllocatorConfigUtils,
@@ -37,6 +38,7 @@ import {
   ReallocationAdapterSupplySharesUnderflowError,
   ReallocationAllocationUnderflowError,
   ReallocationWithdrawExceedsMarketSupplyError,
+  UnknownReallocationActiveAdaptersError,
   UnknownReallocationAdapterError,
   UnknownReallocationAllocationError,
   UnknownReallocationMarketError,
@@ -212,7 +214,7 @@ const cloneAdapter = (
       adapter.shares,
     );
 
-  return adapter;
+  throw new UnsupportedVaultV2AdapterError(adapter.address);
 };
 
 const cloneVault = (
@@ -318,8 +320,10 @@ export class VaultV2BlueReallocationData
    * Creates a cloned Vault V2 reallocation snapshot.
    *
    * @param input - State fetched at one consistent block.
+   * @throws {UnsupportedVaultV2AdapterError} when a vault contains an unsupported adapter type.
    */
   public constructor(input: InputVaultV2BlueReallocationData) {
+    const isClone = input instanceof VaultV2BlueReallocationData;
     this.chainId = input.chainId;
     this.mutableMarkets = {};
     this.mutableVaults = {};
@@ -327,28 +331,75 @@ export class VaultV2BlueReallocationData
     this.markets = this.mutableMarkets;
     this.vaults = this.mutableVaults;
     this.allocations = this.mutableAllocations;
-    const publicAllocatorConfigs: Record<
-      Address,
-      VaultV2BluePublicAllocatorConfig | undefined
-    > = {};
-    this.publicAllocatorConfigs = publicAllocatorConfigs;
-    const activeAdapters: Record<Address, ReadonlySet<Address> | undefined> =
-      {};
-    this.activeAdapters = activeAdapters;
-    const marketPublicAllocatorConfigs: Record<
-      Address,
-      | Record<Hash, VaultV2BlueMarketPublicAllocatorConfig | undefined>
-      | undefined
-    > = {};
-    this.marketPublicAllocatorConfigs = marketPublicAllocatorConfigs;
-    this.donatedPenaltyAssets =
-      input instanceof VaultV2BlueReallocationData
-        ? { ...input.donatedPenaltyAssets }
-        : {};
-    this.firstTotalAssets =
-      input instanceof VaultV2BlueReallocationData
-        ? { ...input.firstTotalAssets }
-        : {};
+    if (isClone) {
+      this.publicAllocatorConfigs = input.publicAllocatorConfigs;
+      this.activeAdapters = input.activeAdapters;
+      this.marketPublicAllocatorConfigs = input.marketPublicAllocatorConfigs;
+      this.donatedPenaltyAssets = { ...input.donatedPenaltyAssets };
+      this.firstTotalAssets = { ...input.firstTotalAssets };
+    } else {
+      const publicAllocatorConfigs: Record<
+        Address,
+        VaultV2BluePublicAllocatorConfig | undefined
+      > = {};
+      this.publicAllocatorConfigs = publicAllocatorConfigs;
+      const activeAdapters: Record<Address, ReadonlySet<Address> | undefined> =
+        {};
+      this.activeAdapters = activeAdapters;
+      const marketPublicAllocatorConfigs: Record<
+        Address,
+        | Record<Hash, VaultV2BlueMarketPublicAllocatorConfig | undefined>
+        | undefined
+      > = {};
+      this.marketPublicAllocatorConfigs = marketPublicAllocatorConfigs;
+      this.donatedPenaltyAssets = {};
+      this.firstTotalAssets = {};
+
+      for (const [vault, config] of Object.entries(
+        input.publicAllocatorConfigs ?? {},
+      ) as [Address, IVaultV2BluePublicAllocatorConfig | undefined][]) {
+        publicAllocatorConfigs[vault] =
+          config == null
+            ? undefined
+            : new VaultV2BluePublicAllocatorConfig(config);
+      }
+
+      for (const [vault, adapters] of Object.entries(
+        input.activeAdapters ?? {},
+      ) as [Address, Iterable<Address> | undefined][]) {
+        activeAdapters[vault] =
+          adapters == null
+            ? undefined
+            : new Set(
+                [...adapters].map(
+                  (adapter) => adapter.toLowerCase() as Address,
+                ),
+              );
+      }
+
+      for (const [vault, configs] of Object.entries(
+        input.marketPublicAllocatorConfigs ?? {},
+      ) as [
+        Address,
+        (
+          | Readonly<
+              Record<Hash, IVaultV2BlueMarketPublicAllocatorConfig | undefined>
+            >
+          | undefined
+        ),
+      ][]) {
+        marketPublicAllocatorConfigs[vault] = {};
+        for (const [id, config] of Object.entries(configs ?? {}) as [
+          Hash,
+          IVaultV2BlueMarketPublicAllocatorConfig | undefined,
+        ][]) {
+          marketPublicAllocatorConfigs[vault]![id] =
+            config == null
+              ? undefined
+              : new VaultV2BlueMarketPublicAllocatorConfig(config);
+        }
+      }
+    }
 
     for (const [marketId, market] of Object.entries(input.markets ?? {}) as [
       MarketId,
@@ -373,6 +424,10 @@ export class VaultV2BlueReallocationData
       Address,
       Readonly<Record<Hash, IVaultV2Allocation | undefined>> | undefined,
     ][]) {
+      if (isClone) {
+        this.mutableAllocations[vault] = { ...allocations };
+        continue;
+      }
       this.mutableAllocations[vault] = {};
       for (const [id, allocation] of Object.entries(allocations ?? {}) as [
         Hash,
@@ -380,49 +435,6 @@ export class VaultV2BlueReallocationData
       ][]) {
         this.mutableAllocations[vault]![id] =
           allocation == null ? undefined : { ...allocation };
-      }
-    }
-
-    for (const [vault, config] of Object.entries(
-      input.publicAllocatorConfigs ?? {},
-    ) as [Address, IVaultV2BluePublicAllocatorConfig | undefined][]) {
-      publicAllocatorConfigs[vault] =
-        config == null
-          ? undefined
-          : new VaultV2BluePublicAllocatorConfig(config);
-    }
-
-    for (const [vault, adapters] of Object.entries(
-      input.activeAdapters ?? {},
-    ) as [Address, Iterable<Address> | undefined][]) {
-      activeAdapters[vault] =
-        adapters == null
-          ? undefined
-          : new Set(
-              [...adapters].map((adapter) => adapter.toLowerCase() as Address),
-            );
-    }
-
-    for (const [vault, configs] of Object.entries(
-      input.marketPublicAllocatorConfigs ?? {},
-    ) as [
-      Address,
-      (
-        | Readonly<
-            Record<Hash, IVaultV2BlueMarketPublicAllocatorConfig | undefined>
-          >
-        | undefined
-      ),
-    ][]) {
-      marketPublicAllocatorConfigs[vault] = {};
-      for (const [id, config] of Object.entries(configs ?? {}) as [
-        Hash,
-        IVaultV2BlueMarketPublicAllocatorConfig | undefined,
-      ][]) {
-        marketPublicAllocatorConfigs[vault]![id] =
-          config == null
-            ? undefined
-            : new VaultV2BlueMarketPublicAllocatorConfig(config);
       }
     }
   }
@@ -516,6 +528,24 @@ export class VaultV2BlueReallocationData
   }
 
   /**
+   * Gets the BluePublicAllocator-active adapters for a Vault V2.
+   *
+   * @param vault - Vault V2 address.
+   * @returns The active adapter addresses, or an empty set when none are active.
+   * @throws {UnknownReallocationActiveAdaptersError} when the active-adapter state is absent.
+   * @example
+   * ```ts
+   * const activeAdapters = data.getActiveAdapters(vaultAddress);
+   * ```
+   */
+  public getActiveAdapters(vault: Address): ReadonlySet<Address> {
+    const adapters = this.activeAdapters[vault];
+    if (adapters == null)
+      throw new UnknownReallocationActiveAdaptersError(vault);
+    return adapters;
+  }
+
+  /**
    * Gets one adapter-market BluePublicAllocator configuration.
    *
    * @param vault - Vault V2 address.
@@ -587,7 +617,8 @@ export class VaultV2BlueReallocationData
    * @throws {NegativeInputError} when `maxWithdrawalUtilization` is negative.
    * @throws {InputExceedsMaxError} when `maxWithdrawalUtilization` exceeds WAD.
    * @throws {NonPositiveInputError} when the operation amount is not positive and planning is enabled.
-   * @throws {UnknownReallocationMarketError} when the target market is absent.
+   * @throws {UnknownReallocationMarketError} when a required market is absent.
+   * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
    * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the absolute shortfall.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdraw exceeds market supply.
    * @example
@@ -729,10 +760,14 @@ export class VaultV2BlueReallocationData
     }
 
     let data = this.clone();
-    for (const currentMarket of Object.values(data.markets)) {
-      if (currentMarket != null)
-        data.setMarket(currentMarket.accrueInterest(timestamp));
-    }
+    data.setMarkets(
+      Object.values(data.markets)
+        .filter(
+          (currentMarket): currentMarket is ReadonlyMarketSnapshot =>
+            currentMarket != null,
+        )
+        .map((currentMarket) => currentMarket.accrueInterest(timestamp)),
+    );
     for (const reallocation of reallocations) {
       data = data.cloneWithPublicReallocation({
         reallocation,
@@ -764,9 +799,11 @@ export class VaultV2BlueReallocationData
         ? this.getLatestSnapshotTimestamp()
         : BigInt(options.timestamp);
     let data = this.clone();
-    for (const market of Object.values(data.markets)) {
-      if (market != null) data.setMarket(market.accrueInterest(timestamp));
-    }
+    data.setMarkets(
+      Object.values(data.markets)
+        .filter((market): market is ReadonlyMarketSnapshot => market != null)
+        .map((market) => market.accrueInterest(timestamp)),
+    );
     const reallocations: VaultV2BlueReallocation[] = [];
     const configuredVaults = Object.keys(data.vaults) as Address[];
     const vaultKeyByLower = new Map(
@@ -784,259 +821,253 @@ export class VaultV2BlueReallocationData
       const candidates = vaults
         .map((vaultAddress) => {
           const targetMarket = data.getMarket(marketId);
-          return _try(() => {
-            const vault = data.getVault(vaultAddress);
-            const publicAllocatorConfig =
-              data.getPublicAllocatorConfig(vaultAddress);
+          const vaultContext = _try(
+            () => ({
+              vault: data.getVault(vaultAddress),
+              publicAllocatorConfig:
+                data.getPublicAllocatorConfig(vaultAddress),
+            }),
+            UnknownDataError,
+          );
+          if (vaultContext == null) return;
+          const { vault, publicAllocatorConfig } = vaultContext;
+          if (
+            !isAddressEqual(publicAllocatorConfig.vault, vaultAddress) ||
+            (options.maxPenalty != null &&
+              publicAllocatorConfig.penalty > options.maxPenalty)
+          )
+            return;
+          const activeAdapters = data.getActiveAdapters(vaultAddress);
+
+          const targetSupplyHeadroom = MathLib.zeroFloorSub(
+            MathLib.MAX_UINT_128,
+            targetMarket.totalSupplyAssets,
+          );
+          const rawCandidates: VaultV2BlueReallocation[] = [];
+
+          for (const adapter of vault.accrualAdapters) {
+            if (!(adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2))
+              continue;
+            if (!isAddressEqual(adapter.parentVault, vaultAddress)) continue;
             if (
-              !isAddressEqual(publicAllocatorConfig.vault, vaultAddress) ||
-              (options.maxPenalty != null &&
-                publicAllocatorConfig.penalty > options.maxPenalty)
+              !isAddressEqual(targetMarket.params.loanToken, vault.asset) ||
+              !isAddressEqual(targetMarket.params.irm, adapter.adaptiveCurveIrm)
             )
-              return;
-            const activeAdapters = data.activeAdapters[vaultAddress];
-            if (activeAdapters == null) return;
+              continue;
 
-            const targetSupplyHeadroom = MathLib.zeroFloorSub(
-              MathLib.MAX_UINT_128,
-              targetMarket.totalSupplyAssets,
-            );
-            const rawCandidates: VaultV2BlueReallocation[] = [];
-
-            for (const adapter of vault.accrualAdapters) {
-              if (!(adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2))
-                continue;
-              if (!isAddressEqual(adapter.parentVault, vaultAddress)) continue;
+            const targetContext = _try(() => {
+              const ids = adapter.ids(targetMarket.params);
+              const marketPublicAllocatorConfig =
+                data.getMarketPublicAllocatorConfig(vaultAddress, ids[2]);
               if (
-                !isAddressEqual(targetMarket.params.loanToken, vault.asset) ||
                 !isAddressEqual(
-                  targetMarket.params.irm,
-                  adapter.adaptiveCurveIrm,
+                  marketPublicAllocatorConfig.vault,
+                  vaultAddress,
+                ) ||
+                !isAddressEqual(
+                  marketPublicAllocatorConfig.adapter,
+                  adapter.address,
+                ) ||
+                !activeAdapters.has(adapter.address.toLowerCase() as Address)
+              )
+                return;
+
+              const allocations = ids.map((id) =>
+                data.getAllocation(vaultAddress, id),
+              );
+              if (allocations.some(({ absoluteCap }) => absoluteCap === 0n))
+                return;
+
+              const expectedSupplyAssets = targetMarket.toSupplyAssets(
+                adapter.supplyShares[marketId] ?? 0n,
+              );
+              const untracked = MathLib.zeroFloorSub(
+                expectedSupplyAssets,
+                allocations[2]!.allocation,
+              );
+
+              return {
+                adapter,
+                allocations,
+                marketPublicAllocatorConfig,
+                untracked,
+              };
+            }, UnknownDataError);
+            if (targetContext == null) continue;
+
+            const targetMarketParamsAllocation = targetContext.allocations[2]!;
+            const allocatorHeadroom =
+              targetContext.marketPublicAllocatorConfig.getMaxIn(
+                targetMarketParamsAllocation.allocation +
+                  targetContext.untracked,
+              );
+
+            if (publicAllocatorConfig.canPullFromIdle) {
+              const assets = MathLib.min(
+                MathLib.MAX_UINT_128,
+                targetSupplyHeadroom,
+                allocatorHeadroom,
+                MathLib.zeroFloorSub(
+                  vault.assetBalance,
+                  data.donatedPenaltyAssets[vaultAddress] ?? 0n,
+                ),
+              );
+              if (assets > 0n) {
+                rawCandidates.push({
+                  vault: vaultAddress,
+                  from: { type: "idle" },
+                  to: { adapter: targetContext.adapter.address },
+                  assets,
+                  penalty: publicAllocatorConfig.penalty,
+                });
+              }
+            }
+
+            for (const sourceAdapter of vault.accrualAdapters) {
+              if (
+                !(
+                  sourceAdapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2
                 )
               )
                 continue;
+              if (!isAddressEqual(sourceAdapter.parentVault, vaultAddress))
+                continue;
 
-              const targetContext = _try(() => {
-                const ids = adapter.ids(targetMarket.params);
-                const marketPublicAllocatorConfig =
-                  data.getMarketPublicAllocatorConfig(vaultAddress, ids[2]);
+              for (const sourceMarketReference of sourceAdapter.markets) {
+                const sourceMarket = data.getMarket(sourceMarketReference.id);
                 if (
+                  !isAddressEqual(sourceMarket.params.loanToken, vault.asset) ||
                   !isAddressEqual(
-                    marketPublicAllocatorConfig.vault,
-                    vaultAddress,
-                  ) ||
-                  !isAddressEqual(
-                    marketPublicAllocatorConfig.adapter,
-                    adapter.address,
-                  ) ||
-                  !activeAdapters.has(adapter.address.toLowerCase() as Address)
+                    sourceMarket.params.irm,
+                    sourceAdapter.adaptiveCurveIrm,
+                  )
                 )
-                  return;
+                  continue;
+                if (sourceMarket.id.toLowerCase() === marketId.toLowerCase())
+                  continue;
 
-                const allocations = ids.map((id) =>
-                  data.getAllocation(vaultAddress, id),
-                );
-                if (allocations.some(({ absoluteCap }) => absoluteCap === 0n))
-                  return;
+                const candidate = _try(() => {
+                  const sourceIds = sourceAdapter.ids(sourceMarket.params);
+                  const sourceConfig = data.getMarketPublicAllocatorConfig(
+                    vaultAddress,
+                    sourceIds[2],
+                  );
+                  if (
+                    !isAddressEqual(sourceConfig.vault, vaultAddress) ||
+                    !isAddressEqual(
+                      sourceConfig.adapter,
+                      sourceAdapter.address,
+                    ) ||
+                    !activeAdapters.has(
+                      sourceAdapter.address.toLowerCase() as Address,
+                    ) ||
+                    !sourceConfig.canPullFromMarket
+                  )
+                    return;
 
-                const expectedSupplyAssets = targetMarket.toSupplyAssets(
-                  adapter.supplyShares[marketId] ?? 0n,
-                );
-                const untracked = MathLib.zeroFloorSub(
-                  expectedSupplyAssets,
-                  allocations[2]!.allocation,
-                );
+                  const sourceAllocations = sourceIds.map((id) =>
+                    data.getAllocation(vaultAddress, id),
+                  );
+                  if (
+                    sourceAllocations.some(
+                      ({ allocation }) => allocation === 0n,
+                    )
+                  )
+                    return;
 
-                return {
-                  adapter,
-                  allocations,
-                  marketPublicAllocatorConfig,
-                  untracked,
-                };
-              }, UnknownDataError);
-              if (targetContext == null) continue;
+                  const expectedSupplyAssets = sourceMarket.toSupplyAssets(
+                    sourceAdapter.supplyShares[sourceMarket.id] ?? 0n,
+                  );
+                  const assets = MathLib.min(
+                    MathLib.MAX_UINT_128,
+                    targetSupplyHeadroom,
+                    allocatorHeadroom,
+                    expectedSupplyAssets,
+                    sourceMarket.getWithdrawToUtilization(
+                      maxWithdrawalUtilization,
+                    ),
+                  );
+                  if (assets <= 0n) return;
 
-              const targetMarketParamsAllocation =
-                targetContext.allocations[2]!;
-              const allocatorHeadroom =
-                targetContext.marketPublicAllocatorConfig.getMaxIn(
-                  targetMarketParamsAllocation.allocation +
-                    targetContext.untracked,
-                );
-
-              if (publicAllocatorConfig.canPullFromIdle) {
-                const assets = MathLib.min(
-                  MathLib.MAX_UINT_128,
-                  targetSupplyHeadroom,
-                  allocatorHeadroom,
-                  MathLib.zeroFloorSub(
-                    vault.assetBalance,
-                    data.donatedPenaltyAssets[vaultAddress] ?? 0n,
-                  ),
-                );
-                if (assets > 0n) {
-                  rawCandidates.push({
+                  return {
                     vault: vaultAddress,
-                    from: { type: "idle" },
+                    from: {
+                      type: "market",
+                      adapter: sourceAdapter.address,
+                      marketParams: sourceMarket.params,
+                    },
                     to: { adapter: targetContext.adapter.address },
                     assets,
                     penalty: publicAllocatorConfig.penalty,
-                  });
-                }
-              }
-
-              for (const sourceAdapter of vault.accrualAdapters) {
-                if (
-                  !(
-                    sourceAdapter instanceof
-                    AccrualVaultV2MorphoMarketV1AdapterV2
-                  )
-                )
-                  continue;
-                if (!isAddressEqual(sourceAdapter.parentVault, vaultAddress))
-                  continue;
-
-                for (const sourceMarketReference of sourceAdapter.markets) {
-                  const sourceMarket = data.getMarket(sourceMarketReference.id);
-                  if (
-                    !isAddressEqual(
-                      sourceMarket.params.loanToken,
-                      vault.asset,
-                    ) ||
-                    !isAddressEqual(
-                      sourceMarket.params.irm,
-                      sourceAdapter.adaptiveCurveIrm,
-                    )
-                  )
-                    continue;
-                  if (sourceMarket.id.toLowerCase() === marketId.toLowerCase())
-                    continue;
-
-                  const candidate = _try(() => {
-                    const sourceIds = sourceAdapter.ids(sourceMarket.params);
-                    const sourceConfig = data.getMarketPublicAllocatorConfig(
-                      vaultAddress,
-                      sourceIds[2],
-                    );
-                    if (
-                      !isAddressEqual(sourceConfig.vault, vaultAddress) ||
-                      !isAddressEqual(
-                        sourceConfig.adapter,
-                        sourceAdapter.address,
-                      ) ||
-                      !activeAdapters.has(
-                        sourceAdapter.address.toLowerCase() as Address,
-                      ) ||
-                      !sourceConfig.canPullFromMarket
-                    )
-                      return;
-
-                    const sourceAllocations = sourceIds.map((id) =>
-                      data.getAllocation(vaultAddress, id),
-                    );
-                    if (
-                      sourceAllocations.some(
-                        ({ allocation }) => allocation === 0n,
-                      )
-                    )
-                      return;
-
-                    const expectedSupplyAssets = sourceMarket.toSupplyAssets(
-                      sourceAdapter.supplyShares[sourceMarket.id] ?? 0n,
-                    );
-                    const assets = MathLib.min(
-                      MathLib.MAX_UINT_128,
-                      targetSupplyHeadroom,
-                      allocatorHeadroom,
-                      expectedSupplyAssets,
-                      sourceMarket.getWithdrawToUtilization(
-                        maxWithdrawalUtilization,
-                      ),
-                    );
-                    if (assets <= 0n) return;
-
-                    return {
-                      vault: vaultAddress,
-                      from: {
-                        type: "market",
-                        adapter: sourceAdapter.address,
-                        marketParams: sourceMarket.params,
-                      },
-                      to: { adapter: targetContext.adapter.address },
-                      assets,
-                      penalty: publicAllocatorConfig.penalty,
-                    } satisfies VaultV2BlueReallocation;
-                  }, UnknownDataError);
-                  if (candidate != null) rawCandidates.push(candidate);
-                }
+                  } satisfies VaultV2BlueReallocation;
+                }, UnknownDataError);
+                if (candidate != null) rawCandidates.push(candidate);
               }
             }
+          }
 
-            const capCompatibleCandidates: VaultV2BlueReallocation[] = [];
-            for (const reallocation of rawCandidates) {
-              // MorphoMarketV1AdapterV2 rejects supplies that mint fewer shares than assets.
-              if (
-                targetMarket.toSupplyShares(reallocation.assets, "Down") <
-                reallocation.assets
-              )
-                continue;
+          const capCompatibleCandidates: VaultV2BlueReallocation[] = [];
+          for (const reallocation of rawCandidates) {
+            // MorphoMarketV1AdapterV2 rejects supplies that mint fewer shares than assets.
+            if (
+              targetMarket.toSupplyShares(reallocation.assets, "Down") <
+              reallocation.assets
+            )
+              continue;
 
-              // Cap fit is monotonic but not linear in assets: the amount changes
-              // penalty donations, firstTotalAssets, rounded shares, and possibly
-              // shared allocation IDs. Binary search finds the exact largest fit.
-              let lower = 0n;
-              let upper = reallocation.assets;
+            // Cap fit is monotonic but not linear in assets: the amount changes
+            // penalty donations, firstTotalAssets, rounded shares, and possibly
+            // shared allocation IDs. Binary search finds the exact largest fit.
+            let lower = 0n;
+            let upper = reallocation.assets;
+            const reallocationAdapter = data.getAdapter(
+              reallocation.vault,
+              reallocation.to.adapter,
+            );
+            const targetIds = reallocationAdapter.ids(targetMarket.params);
 
-              while (lower < upper) {
-                const assets = (lower + upper + 1n) / 2n;
-                const postState = data.cloneWithPublicReallocation({
-                  reallocation: { ...reallocation, assets },
-                  targetMarketId: marketId,
-                  timestamp: targetMarket.lastUpdate,
-                });
-                const postVault = postState.getVault(reallocation.vault);
-                const postAdapter = postState.getAdapter(
+            while (lower < upper) {
+              const assets = (lower + upper + 1n) / 2n;
+              const postState = data.cloneWithPublicReallocation({
+                reallocation: { ...reallocation, assets },
+                targetMarketId: marketId,
+                timestamp: targetMarket.lastUpdate,
+              });
+              const postVault = postState.getVault(reallocation.vault);
+              // Vault V2 checks relative caps against the transient firstTotalAssets,
+              // which stays fixed after the vault's first allocation in a transaction.
+              const firstTotalAssets =
+                postState.firstTotalAssets[reallocation.vault] ??
+                postVault._totalAssets;
+              const withinCaps = targetIds.every((id) => {
+                const allocation = postState.getAllocation(
                   reallocation.vault,
-                  reallocation.to.adapter,
+                  id,
                 );
-                const targetIds = postAdapter.ids(
-                  postState.getMarket(marketId).params,
+                const capacity = VaultV2Utils.allocationHeadroom(
+                  { ...allocation, allocation: 0n },
+                  firstTotalAssets,
+                ).value;
+                return (
+                  allocation.absoluteCap > 0n &&
+                  allocation.allocation <= capacity
                 );
-                // Vault V2 checks relative caps against the transient firstTotalAssets,
-                // which stays fixed after the vault's first allocation in a transaction.
-                const firstTotalAssets =
-                  postState.firstTotalAssets[reallocation.vault] ??
-                  postVault._totalAssets;
-                const withinCaps = targetIds.every((id) => {
-                  const allocation = postState.getAllocation(
-                    reallocation.vault,
-                    id,
-                  );
-                  const capacity = VaultV2Utils.allocationHeadroom(
-                    { ...allocation, allocation: 0n },
-                    firstTotalAssets,
-                  ).value;
-                  return (
-                    allocation.absoluteCap > 0n &&
-                    allocation.allocation <= capacity
-                  );
-                });
+              });
 
-                if (withinCaps) lower = assets;
-                else upper = assets - 1n;
-              }
-
-              if (lower > 0n)
-                capCompatibleCandidates.push({
-                  ...reallocation,
-                  assets: lower,
-                });
+              if (withinCaps) lower = assets;
+              else upper = assets - 1n;
             }
 
-            return capCompatibleCandidates.sort(
-              bigIntComparator(({ assets }) => assets, "desc"),
-            )[0];
-          }, UnknownDataError);
+            if (lower > 0n)
+              capCompatibleCandidates.push({
+                ...reallocation,
+                assets: lower,
+              });
+          }
+
+          return capCompatibleCandidates.sort(
+            bigIntComparator(({ assets }) => assets, "desc"),
+          )[0];
         })
         .filter(
           (candidate): candidate is VaultV2BlueReallocation =>
@@ -1064,7 +1095,8 @@ export class VaultV2BlueReallocationData
    * @returns Reallocatable market and idle assets, or `0n` when none are available.
    * @throws {NegativeInputError} when `maxWithdrawalUtilization` is negative.
    * @throws {InputExceedsMaxError} when `maxWithdrawalUtilization` exceeds WAD.
-   * @throws {UnknownReallocationMarketError} when the target market is absent.
+   * @throws {UnknownReallocationMarketError} when a required market is absent.
+   * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
    * @example
    * ```ts
    * const liquidity = data.getPublicReallocationLiquidity(targetMarketId);
@@ -1095,7 +1127,8 @@ export class VaultV2BlueReallocationData
    * @returns Borrowable assets while remaining at or below `utilization`.
    * @throws {NegativeInputError} when `maxWithdrawalUtilization` is negative.
    * @throws {InputExceedsMaxError} when `maxWithdrawalUtilization` exceeds WAD.
-   * @throws {UnknownReallocationMarketError} when the target market is absent.
+   * @throws {UnknownReallocationMarketError} when a required market is absent.
+   * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
    * @example
    * ```ts
    * const liquidity = data.getAvailableLiquidityToUtilization(targetMarketId);
@@ -1284,8 +1317,19 @@ export class VaultV2BlueReallocationData
     return data;
   }
 
+  /** Updates one canonical market and its dependent adapter views. */
   private setMarket(market: Market) {
-    this.mutableMarkets[market.id] = market;
+    this.setMarkets([market]);
+  }
+
+  /** Updates canonical markets in bulk and refreshes only dependent adapter views. */
+  private setMarkets(markets: Iterable<Market>) {
+    const changedMarketIds = new Set<MarketId>();
+    for (const market of markets) {
+      this.mutableMarkets[market.id] = market;
+      changedMarketIds.add(market.id);
+    }
+    if (changedMarketIds.size === 0) return;
 
     // A Morpho market is global state shared by every vault position. Legacy
     // AccrualPosition constructors copy their Market, so rebuild those adapter
@@ -1298,14 +1342,28 @@ export class VaultV2BlueReallocationData
 
       for (const adapter of adapters) {
         if (adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2) {
+          if (!adapter.markets.some(({ id }) => changedMarketIds.has(id)))
+            continue;
           adapter.markets = adapter.markets.map((adapterMarket) =>
             getCanonicalMarket(this.mutableMarkets, adapterMarket),
           );
         } else if (adapter instanceof AccrualVaultV2MorphoMarketV1Adapter) {
+          if (
+            !adapter.positions.some(({ marketId }) =>
+              changedMarketIds.has(marketId),
+            )
+          )
+            continue;
           adapter.positions = adapter.positions.map((position) =>
             clonePosition(position, this.mutableMarkets),
           );
         } else if (adapter instanceof AccrualVaultV2MorphoVaultV1Adapter) {
+          if (
+            ![...adapter.accrualVaultV1.allocations.keys()].some((marketId) =>
+              changedMarketIds.has(marketId),
+            )
+          )
+            continue;
           adapter.accrualVaultV1 = cloneAccrualVault(
             adapter.accrualVaultV1,
             this.mutableMarkets,

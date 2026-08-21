@@ -1179,6 +1179,14 @@ export class UnknownReallocationPublicAllocatorConfigError extends UnknownDataEr
   }
 }
 
+/** Thrown when Vault V2 reallocation state lacks the fetched active-adapter set. */
+export class UnknownReallocationActiveAdaptersError extends UnknownDataError {
+  /** @param vault - Vault V2 address with missing active-adapter state. */
+  constructor(public readonly vault: Address) {
+    super(`unknown active adapters for reallocation vault "${vault}"`);
+  }
+}
+
 /** Thrown when Vault V2 reallocation state lacks an adapter-market allocator configuration. */
 export class UnknownReallocationMarketPublicAllocatorConfigError extends UnknownDataError {
   /**
