@@ -9,9 +9,11 @@ import {
   vaultV1PublicAllocatorAbi,
   vaultV2BluePublicAllocatorAbi,
 } from "../../abis.js";
+import { MAX_REALLOCATION_PENALTY } from "../../helpers/constant.js";
 import {
   type BlueReallocationPlan,
   InconsistentReallocationPenaltyError,
+  InputExceedsMaxError,
   MixedReallocationVersionsError,
   type VaultV2BlueReallocation,
 } from "../../types/index.js";
@@ -190,6 +192,28 @@ describe("blueBorrow Blue Public Allocator", () => {
         },
       }),
     ).toThrow(InconsistentReallocationPenaltyError);
+  });
+
+  test("error: InputExceedsMaxError for a penalty above WAD", () => {
+    expect(() =>
+      blueBorrow({
+        market: { chainId: ChainId.EthMainnet, marketParams: targetMarket },
+        args: {
+          amount: 1n,
+          minSharePrice: 0n,
+          receiver,
+          reallocations: [
+            {
+              vault: vaultV2,
+              from: { type: "idle" },
+              to: { adapter: targetAdapter },
+              assets: 1n,
+              penalty: MAX_REALLOCATION_PENALTY + 1n,
+            },
+          ],
+        },
+      }),
+    ).toThrow(InputExceedsMaxError);
   });
 
   test("re-exports the canonical ABI", () => {

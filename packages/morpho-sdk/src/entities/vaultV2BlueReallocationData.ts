@@ -23,8 +23,10 @@ import {
 import { _try, bigIntComparator } from "@morpho-org/morpho-ts";
 import { type Address, type Hash, isAddressEqual } from "viem";
 import {
+  DEFAULT_MAX_REALLOCATION_PENALTY,
   DEFAULT_SUPPLY_TARGET_UTILIZATION,
   DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
+  MAX_REALLOCATION_PENALTY,
 } from "../helpers/constant.js";
 import type {
   VaultV2BluePublicAllocatorOptions,
@@ -137,6 +139,18 @@ const resolveMaxWithdrawalUtilization = (value: bigint | undefined) => {
       max: MathLib.WAD,
     });
   return utilization;
+};
+
+const resolveMaxPenalty = (value: bigint | undefined) => {
+  const penalty = value ?? DEFAULT_MAX_REALLOCATION_PENALTY;
+  if (penalty < 0n) throw new NegativeInputError("maxPenalty", penalty);
+  if (penalty > MAX_REALLOCATION_PENALTY)
+    throw new InputExceedsMaxError({
+      field: "maxPenalty",
+      value: penalty,
+      max: MAX_REALLOCATION_PENALTY,
+    });
+  return penalty;
 };
 
 const getCanonicalMarket = (
@@ -609,13 +623,14 @@ export class VaultV2BlueReallocationData
    * friendly liquidity cannot cover the absolute shortfall. Friendly source
    * utilization defaults to 90% and is configurable through
    * `options.maxWithdrawalUtilization`. Vaults whose configured penalty exceeds
-   * `options.maxPenalty` are ignored.
+   * `options.maxPenalty` are ignored. By default, only zero-penalty vaults are
+   * considered.
    *
    * @param marketId - Target Blue market id.
    * @param options - Optional discovery controls and operation to support.
    * @returns Flat action-ready reallocations and their post-simulation state.
-   * @throws {NegativeInputError} when `maxWithdrawalUtilization` is negative.
-   * @throws {InputExceedsMaxError} when `maxWithdrawalUtilization` exceeds WAD.
+   * @throws {NegativeInputError} when `maxWithdrawalUtilization` or `maxPenalty` is negative.
+   * @throws {InputExceedsMaxError} when `maxWithdrawalUtilization` or `maxPenalty` exceeds WAD.
    * @throws {NonPositiveInputError} when the operation amount is not positive and planning is enabled.
    * @throws {UnknownReallocationMarketError} when a required market is absent.
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
@@ -652,12 +667,14 @@ export class VaultV2BlueReallocationData
     const maxWithdrawalUtilization = resolveMaxWithdrawalUtilization(
       options.maxWithdrawalUtilization,
     );
+    const maxPenalty = resolveMaxPenalty(options.maxPenalty);
+    const resolvedOptions = { ...options, maxPenalty };
     const operation = options.operation;
     if (operation == null)
       return this.computeVaultV2BlueReallocationsAtUtilization({
         marketId,
         maxWithdrawalUtilization,
-        options,
+        options: resolvedOptions,
       });
 
     const { amount, type } = operation;
@@ -668,7 +685,7 @@ export class VaultV2BlueReallocationData
         ? this.getLatestSnapshotTimestamp()
         : BigInt(options.timestamp);
     const normalizedOptions: VaultV2BluePublicAllocatorOptions = {
-      ...options,
+      ...resolvedOptions,
       timestamp,
       reallocatableVaults:
         options.reallocatableVaults == null
@@ -833,8 +850,8 @@ export class VaultV2BlueReallocationData
           const { vault, publicAllocatorConfig } = vaultContext;
           if (
             !isAddressEqual(publicAllocatorConfig.vault, vaultAddress) ||
-            (options.maxPenalty != null &&
-              publicAllocatorConfig.penalty > options.maxPenalty)
+            publicAllocatorConfig.penalty >
+              (options.maxPenalty ?? DEFAULT_MAX_REALLOCATION_PENALTY)
           )
             return;
           const activeAdapters = data.getActiveAdapters(vaultAddress);
@@ -1093,8 +1110,8 @@ export class VaultV2BlueReallocationData
    * @param marketId - Target Blue market id.
    * @param options - Optional timestamp, enable flag, vault allowlist, source utilization ceiling, and maximum penalty.
    * @returns Reallocatable market and idle assets, or `0n` when none are available.
-   * @throws {NegativeInputError} when `maxWithdrawalUtilization` is negative.
-   * @throws {InputExceedsMaxError} when `maxWithdrawalUtilization` exceeds WAD.
+   * @throws {NegativeInputError} when `maxWithdrawalUtilization` or `maxPenalty` is negative.
+   * @throws {InputExceedsMaxError} when `maxWithdrawalUtilization` or `maxPenalty` exceeds WAD.
    * @throws {UnknownReallocationMarketError} when a required market is absent.
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
    * @example
@@ -1108,12 +1125,14 @@ export class VaultV2BlueReallocationData
   ) {
     if (options?.enabled === false) return 0n;
 
+    const maxPenalty = resolveMaxPenalty(options?.maxPenalty);
+
     return this.computeVaultV2BlueReallocationsAtUtilization({
       marketId,
       maxWithdrawalUtilization: resolveMaxWithdrawalUtilization(
         options?.maxWithdrawalUtilization,
       ),
-      options,
+      options: { ...options, maxPenalty },
     }).reallocations.reduce((total, { assets }) => total + assets, 0n);
   }
 
@@ -1125,8 +1144,8 @@ export class VaultV2BlueReallocationData
    * @param utilization - Desired utilization, scaled by WAD. Defaults to 90%.
    * @param options - Optional timestamp, enable flag, vault allowlist, source utilization ceiling, and maximum penalty.
    * @returns Borrowable assets while remaining at or below `utilization`.
-   * @throws {NegativeInputError} when `maxWithdrawalUtilization` is negative.
-   * @throws {InputExceedsMaxError} when `maxWithdrawalUtilization` exceeds WAD.
+   * @throws {NegativeInputError} when `maxWithdrawalUtilization` or `maxPenalty` is negative.
+   * @throws {InputExceedsMaxError} when `maxWithdrawalUtilization` or `maxPenalty` exceeds WAD.
    * @throws {UnknownReallocationMarketError} when a required market is absent.
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
    * @example
@@ -1144,6 +1163,10 @@ export class VaultV2BlueReallocationData
       options?.enabled === false
         ? DEFAULT_WITHDRAWAL_TARGET_UTILIZATION
         : resolveMaxWithdrawalUtilization(options?.maxWithdrawalUtilization);
+    const maxPenalty =
+      options?.enabled === false
+        ? DEFAULT_MAX_REALLOCATION_PENALTY
+        : resolveMaxPenalty(options?.maxPenalty);
     const timestamp =
       options?.timestamp == null
         ? this.getLatestSnapshotTimestamp()
@@ -1156,7 +1179,7 @@ export class VaultV2BlueReallocationData
       this.computeVaultV2BlueReallocationsAtUtilization({
         marketId,
         maxWithdrawalUtilization,
-        options: { ...options, timestamp },
+        options: { ...options, timestamp, maxPenalty },
       }).reallocations.reduce((total, { assets }) => total + assets, 0n);
     return MarketUtils.getBorrowToUtilization(
       {

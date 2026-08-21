@@ -46,7 +46,10 @@ import {
   WithdrawMakesPositionUnhealthyError,
   WithdrawSharesExceedSupplyError,
 } from "../types/index.js";
-import { MAX_SLIPPAGE_TOLERANCE } from "./constant.js";
+import {
+  MAX_REALLOCATION_PENALTY,
+  MAX_SLIPPAGE_TOLERANCE,
+} from "./constant.js";
 import {
   validateAccrualPosition,
   validateAndNormalizeReallocations,
@@ -596,10 +599,10 @@ describe("reallocation validation", () => {
       ErrorClass: NegativeInputError,
     },
     {
-      name: "penalty above WAD",
+      name: "penalty above the SDK maximum",
       reallocation: {
         ...validBluePublicAllocatorReallocation,
-        penalty: MathLib.WAD + 1n,
+        penalty: MAX_REALLOCATION_PENALTY + 1n,
       },
       ErrorClass: InputExceedsMaxError,
     },
@@ -649,6 +652,20 @@ describe("reallocation validation", () => {
           {
             ...validBluePublicAllocatorReallocation,
             assets: maxUint128,
+          },
+        ],
+        targetMarketId,
+      ),
+    ).not.toThrow();
+  });
+
+  test("behavior: accepts the maximum reallocation penalty", () => {
+    expect(() =>
+      validateVaultV2BlueReallocations(
+        [
+          {
+            ...validBluePublicAllocatorReallocation,
+            penalty: MAX_REALLOCATION_PENALTY,
           },
         ],
         targetMarketId,

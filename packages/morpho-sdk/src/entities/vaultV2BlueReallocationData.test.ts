@@ -20,6 +20,7 @@ import type { Address, Hash } from "viem";
 import { zeroAddress, zeroHash } from "viem";
 import { describe, expect, test, vi } from "vitest";
 import { blueBorrow } from "../actions/index.js";
+import { MAX_REALLOCATION_PENALTY } from "../helpers/constant.js";
 import {
   InputExceedsMaxError,
   InsufficientSharedLiquidityError,
@@ -141,7 +142,7 @@ const makeFixture = ({
   canPullFromIdle = true,
   canPullFromMarket = true,
   allocatorActiveAdapters,
-  penalty = 7n,
+  penalty = 0n,
   sourceLastUpdate = TIMESTAMP,
   targetLastUpdate = TIMESTAMP,
   vaultLastUpdate = TIMESTAMP,
@@ -441,7 +442,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
         },
         to: { adapter: TARGET_ADAPTER },
         assets: sourceExpectedAssets,
-        penalty: 7n,
+        penalty: 0n,
       },
     ]);
     expect(result.data).not.toBe(data);
@@ -578,6 +579,17 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     },
   );
 
+  test.each([0n, MAX_REALLOCATION_PENALTY])(
+    "behavior: accepts maxPenalty boundary %s",
+    (maxPenalty) => {
+      const { data } = makeFixture();
+
+      expect(() =>
+        data.computeVaultV2BlueReallocations(targetParams.id, { maxPenalty }),
+      ).not.toThrow();
+    },
+  );
+
   test.each([
     {
       maxWithdrawalUtilization: -1n,
@@ -599,6 +611,20 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       ).toThrow(ErrorClass);
     },
   );
+
+  test.each([
+    { maxPenalty: -1n, ErrorClass: NegativeInputError },
+    {
+      maxPenalty: MAX_REALLOCATION_PENALTY + 1n,
+      ErrorClass: InputExceedsMaxError,
+    },
+  ])("error: rejects maxPenalty $maxPenalty", ({ maxPenalty, ErrorClass }) => {
+    const { data } = makeFixture();
+
+    expect(() =>
+      data.computeVaultV2BlueReallocations(targetParams.id, { maxPenalty }),
+    ).toThrow(ErrorClass);
+  });
 
   test("behavior: skips targets whose Morpho supply would mint fewer shares than assets", () => {
     const { data } = makeFixture({
@@ -970,10 +996,10 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
         penalty,
       })),
     ).toStrictEqual([
-      { from: "market", assets: sourceExpectedAssets, penalty: 7n },
-      { from: "idle", assets: 300n, penalty: 7n },
+      { from: "market", assets: sourceExpectedAssets, penalty: 0n },
+      { from: "idle", assets: 300n, penalty: 0n },
     ]);
-    expect(result.data.getVault(VAULT).assetBalance).toBe(2n);
+    expect(result.data.getVault(VAULT).assetBalance).toBe(0n);
   });
 
   test("behavior: excludes the target market through a different adapter", () => {
@@ -994,7 +1020,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     const result = data.computeVaultV2BlueReallocations(targetParams.id);
 
     expect(result.reallocations[0]?.assets).toBe(sourceExpectedAssets);
-    expect(result.data.getVault(VAULT).assetBalance).toBe(1n);
+    expect(result.data.getVault(VAULT).assetBalance).toBe(0n);
   });
 
   test("behavior: target untracked interest consumes allocator headroom", () => {
@@ -1183,7 +1209,9 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       ],
     });
 
-    const result = data.computeVaultV2BlueReallocations(targetParams.id);
+    const result = data.computeVaultV2BlueReallocations(targetParams.id, {
+      maxPenalty: MathLib.WAD,
+    });
 
     expect(result.reallocations[0]?.assets).toBe(500n);
     expect(result.data.getVault(VAULT)._totalAssets).toBe(1_000n);
@@ -1240,6 +1268,9 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       penalty: 8n,
     });
 
+    expect(
+      data.computeVaultV2BlueReallocations(targetParams.id).reallocations,
+    ).toStrictEqual([]);
     expect(
       data.computeVaultV2BlueReallocations(targetParams.id, {
         maxPenalty: 7n,
@@ -1372,10 +1403,14 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
       targetSupply: 100n,
       targetBorrow: 100n,
       idle: 300n,
+      penalty: 7n,
     });
     const { reallocations } = data.computeVaultV2BlueReallocations(
       targetParams.id,
-      { operation: { type: "borrow", amount: 1_100n } },
+      {
+        maxPenalty: 7n,
+        operation: { type: "borrow", amount: 1_100n },
+      },
     );
 
     const tx = blueBorrow({
@@ -1504,5 +1539,18 @@ describe("VaultV2BlueReallocationData liquidity metrics", () => {
         maxWithdrawalUtilization: MathLib.WAD,
       }),
     ).toBe(100n);
+  });
+
+  test("error: NegativeInputError for a negative maximum penalty", () => {
+    const { data } = makeFixture();
+
+    expect(() =>
+      data.getPublicReallocationLiquidity(targetParams.id, { maxPenalty: -1n }),
+    ).toThrow(NegativeInputError);
+    expect(() =>
+      data.getAvailableLiquidityToUtilization(targetParams.id, MathLib.WAD, {
+        maxPenalty: -1n,
+      }),
+    ).toThrow(NegativeInputError);
   });
 });

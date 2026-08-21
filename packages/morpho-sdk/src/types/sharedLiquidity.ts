@@ -67,7 +67,9 @@ export interface VaultV2BluePublicAllocatorOptions {
   /**
    * Maximum proportional vault-asset penalty accepted for each
    * BluePublicAllocator call, scaled by WAD. Vaults with a higher configured
-   * penalty are ignored. Defaults to no limit.
+   * penalty are ignored. Must not exceed WAD (100%).
+   *
+   * @default 0n
    */
   readonly maxPenalty?: bigint;
 }

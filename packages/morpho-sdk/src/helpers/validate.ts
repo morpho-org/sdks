@@ -41,7 +41,11 @@ import {
   WithdrawMakesPositionUnhealthyError,
   WithdrawSharesExceedSupplyError,
 } from "../types/index.js";
-import { DEFAULT_LLTV_BUFFER, MAX_SLIPPAGE_TOLERANCE } from "./constant.js";
+import {
+  DEFAULT_LLTV_BUFFER,
+  MAX_REALLOCATION_PENALTY,
+  MAX_SLIPPAGE_TOLERANCE,
+} from "./constant.js";
 
 /** @internal */
 export const compareMarketIds = (idA: MarketId, idB: MarketId) => {
@@ -443,11 +447,11 @@ export const validateVaultV2BlueReallocations = (
         reallocation.penalty,
       );
     }
-    if (reallocation.penalty > MathLib.WAD) {
+    if (reallocation.penalty > MAX_REALLOCATION_PENALTY) {
       throw new InputExceedsMaxError({
         field: "reallocation.penalty",
         value: reallocation.penalty,
-        max: MathLib.WAD,
+        max: MAX_REALLOCATION_PENALTY,
       });
     }
     if (reallocation.assets <= 0n) {
