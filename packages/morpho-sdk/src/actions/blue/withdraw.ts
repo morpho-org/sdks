@@ -33,7 +33,7 @@ export interface BlueWithdrawParams {
     minSharePrice: bigint;
     /**
      * Homogeneous Vault V1 or Vault V2 reallocations to execute before withdrawing. V1 entries can be
-     * computed via `MorphoBlue.getReallocations({ operation: "withdraw", amount })` or directly
+     * computed via `MorphoBlue.getVaultV1Reallocations({ operation: "withdraw", amount })` or directly
      * via `computeVaultV1Reallocations({ operation: "withdraw", amount, ... })`.
      */
     reallocations?: BlueReallocationPlan;

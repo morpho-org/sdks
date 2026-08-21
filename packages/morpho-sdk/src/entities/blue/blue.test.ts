@@ -666,7 +666,7 @@ describe("MorphoBlue validation", () => {
     ).toThrow(NonPositiveInputError);
   });
 
-  test("getReallocations accepts the operation/amount parameter shape", async ({
+  test("getVaultV1Reallocations accepts the operation/amount parameter shape", async ({
     client,
   }) => {
     const market = client
@@ -674,7 +674,7 @@ describe("MorphoBlue validation", () => {
       .morpho.blue(CbbtcUsdcBlue, mainnet.id);
 
     expect(
-      market.getReallocations({
+      market.getVaultV1Reallocations({
         reallocationData: new VaultV1ReallocationData({ chainId: mainnet.id }),
         operation: "borrow",
         amount: 1n,

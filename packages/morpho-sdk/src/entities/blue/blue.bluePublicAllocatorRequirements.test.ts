@@ -115,6 +115,74 @@ describe("MorphoBlue BluePublicAllocator requirements", () => {
     });
   });
 
+  test("behavior: supplyCollateralBorrow approves distinct collateral and penalty tokens", async () => {
+    const handle = createMockClient(mainnet);
+    const {
+      morpho,
+      bundler3: { generalAdapter1 },
+    } = getChainAddresses(mainnet.id);
+    mockRead(handle, {
+      address: morpho,
+      abi: blueAbi,
+      functionName: "isAuthorized",
+      result: true,
+    });
+    mockRead(handle, {
+      address: marketParams.collateralToken,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    mockRead(handle, {
+      address: marketParams.loanToken,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const market = handle.client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.blue(marketParams, mainnet.id);
+
+    const requirements = await market
+      .supplyCollateralBorrow({
+        amount: 100n,
+        borrowAmount: 1n,
+        userAddress: USER,
+        positionData: makePosition(marketParams, {
+          borrowShares: 1n,
+          collateral: 1_000_000n,
+        }),
+        reallocations: [
+          {
+            vault: marketParams.oracle,
+            from: { type: "idle" },
+            to: { adapter: marketParams.collateralToken },
+            assets: 10n,
+            penalty: 500_000_000_000_000_000n,
+          },
+        ],
+      })
+      .getRequirements();
+
+    expect(
+      requirements.filter(isRequirementApproval).map((approval) => ({
+        token: approval.to,
+        ...approval.action.args,
+      })),
+    ).toStrictEqual([
+      {
+        token: marketParams.collateralToken,
+        spender: generalAdapter1,
+        amount: 100n,
+      },
+      {
+        token: marketParams.loanToken,
+        spender: generalAdapter1,
+        amount: 5n,
+      },
+    ]);
+  });
+
   test("behavior: withdraw includes V2 penalty approval and Morpho authorization", async () => {
     const handle = createMockClient(mainnet);
     const {

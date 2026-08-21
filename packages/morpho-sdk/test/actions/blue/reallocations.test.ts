@@ -616,7 +616,7 @@ describe("SupplyCollateralBorrow with reallocation fee", () => {
   });
 });
 
-describe("getVaultV1ReallocationData and getReallocations", () => {
+describe("getVaultV1ReallocationData and getVaultV1Reallocations", () => {
   test("should reject getVaultV1ReallocationData when the client chain differs from the market chain", async ({
     client,
   }) => {
@@ -631,7 +631,7 @@ describe("getVaultV1ReallocationData and getReallocations", () => {
     ).rejects.toBeInstanceOf(ChainIdMismatchError);
   });
 
-  test("should compute reallocations and borrow using getVaultV1ReallocationData + getReallocations", async ({
+  test("should compute reallocations and borrow using getVaultV1ReallocationData + getVaultV1Reallocations", async ({
     client,
   }) => {
     const collateralAmount = parseUnits("1000", 8);
@@ -667,9 +667,10 @@ describe("getVaultV1ReallocationData and getReallocations", () => {
           block,
         });
 
-        const reallocations = market.getReallocations({
+        const reallocations = market.getVaultV1Reallocations({
           reallocationData,
-          borrowAmount,
+          operation: "borrow",
+          amount: borrowAmount,
           options: { timestamp: block.timestamp },
         });
 
@@ -746,9 +747,10 @@ describe("getVaultV1ReallocationData and getReallocations", () => {
           block,
         });
 
-        const reallocations = market.getReallocations({
+        const reallocations = market.getVaultV1Reallocations({
           reallocationData,
-          borrowAmount,
+          operation: "borrow",
+          amount: borrowAmount,
           options: { timestamp: block.timestamp },
         });
 
@@ -806,9 +808,10 @@ describe("getVaultV1ReallocationData and getReallocations", () => {
       block,
     });
 
-    const reallocations = market.getReallocations({
+    const reallocations = market.getVaultV1Reallocations({
       reallocationData,
-      borrowAmount,
+      operation: "borrow",
+      amount: borrowAmount,
       options: { timestamp: block.timestamp },
     });
 

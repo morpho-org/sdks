@@ -89,10 +89,39 @@ import {
   selectRequirementSignatures,
   type Transaction,
   type VaultV1Reallocation,
+  type VaultV2BluePublicAllocatorOptions,
+  type VaultV2BlueReallocation,
   WithdrawExceedsCollateralError,
 } from "../../types/index.js";
 import { VaultV1ReallocationData } from "../vaultV1ReallocationData.js";
 import { VaultV2BlueReallocationData } from "../vaultV2BlueReallocationData.js";
+
+type VaultV1ReallocationsParams = {
+  readonly reallocationData: VaultV1ReallocationData;
+  readonly options?: ReallocationComputeOptions;
+} & (
+  | {
+      readonly operation: "borrow" | "withdraw";
+      readonly amount: bigint;
+      readonly borrowAmount?: never;
+    }
+  | {
+      /** @deprecated Pass `{ operation: "borrow", amount }` instead. */
+      readonly borrowAmount: bigint;
+      readonly operation?: never;
+      readonly amount?: never;
+    }
+);
+
+type VaultV2BlueReallocationsParams = {
+  readonly reallocationData: VaultV2BlueReallocationData;
+  readonly options?: VaultV2BluePublicAllocatorOptions & {
+    readonly operation?: {
+      readonly type: "borrow" | "withdraw";
+      readonly amount: bigint;
+    };
+  };
+};
 
 export interface BlueActions {
   /**
@@ -506,7 +535,7 @@ export interface BlueActions {
    * inject unnecessary `reallocateTo` actions (and their PublicAllocator
    * fees) into the resulting bundle.
    *
-   * The returned reallocation data can be passed to {@link getReallocations}
+   * The returned reallocation data can be passed to {@link getVaultV1Reallocations}
    * to compute the `VaultV1Reallocation[]` array for `borrow()` or
    * `supplyCollateralBorrow()`.
    *
@@ -552,7 +581,7 @@ export interface BlueActions {
    * @param params.vaultAddresses - Vault V2 addresses to inspect for market or idle liquidity.
    * @param params.block.number - Block number used for every RPC read.
    * @param params.block.timestamp - Timestamp corresponding to the fetched block.
-   * @returns A `VaultV2BlueReallocationData` snapshot ready for discovery or operation planning.
+   * @returns A `VaultV2BlueReallocationData` snapshot ready for {@link getVaultV2BlueReallocations}.
    * @throws {ChainIdMismatchError} when the client chain does not match this market.
    */
   getVaultV2BlueReallocationData: (params: {
@@ -564,7 +593,7 @@ export interface BlueActions {
   }) => Promise<VaultV2BlueReallocationData>;
 
   /**
-   * Computes vault reallocations for a borrow or withdraw on this market.
+   * Computes Vault V1 PublicAllocator reallocations for this market.
    *
    * Uses the shared-liquidity algorithm to determine which vaults should reallocate liquidity to
    * this market via the PublicAllocator, based on the post-operation utilization target.
@@ -585,27 +614,76 @@ export interface BlueActions {
    *          or `withdraw()`. Empty array if no reallocation is needed.
    * @throws {ChainIdMismatchError} when `reallocationData` belongs to a different chain than this market.
    * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation's absolute shortfall on the target market — preventing fee-bearing reallocations from being attached to a call that would still revert onchain.
+   * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds the target market supply.
    * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
    * @throws {UnknownReallocationMarketError} when the target market is absent from the reallocation data.
+   * @example
+   * ```ts
+   * const reallocations = market.getVaultV1Reallocations({
+   *   reallocationData,
+   *   operation: "borrow",
+   *   amount: 1_000_000n,
+   * });
+   * ```
+   */
+  getVaultV1Reallocations: (
+    params: VaultV1ReallocationsParams,
+  ) => readonly VaultV1Reallocation[];
+
+  /**
+   * Computes Vault V1 PublicAllocator reallocations using the deprecated unversioned name.
+   *
+   * @param params.reallocationData - State returned by {@link getVaultV1ReallocationData}.
+   * @param params.operation - The operation driving the reallocation (`"borrow"` or `"withdraw"`).
+   * @param params.amount - The borrow or withdraw amount used to compute post-state utilization.
+   * @param params.borrowAmount - Deprecated borrow amount alias.
+   * @param params.options - Optional allocator and utilization options.
+   * @returns Vault V1 reallocations ready for a Blue action.
+   * @throws {ChainIdMismatchError} when `reallocationData` belongs to another chain.
+   * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation.
+   * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
+   * @throws {MissingPublicAllocatorConfigError} when a selected vault lacks allocator state.
+   * @throws {UnknownReallocationMarketError} when the target market is absent.
+   * @deprecated Use {@link getVaultV1Reallocations} instead.
+   * @example
+   * ```ts
+   * const reallocations = market.getReallocations({
+   *   reallocationData,
+   *   operation: "borrow",
+   *   amount: 1_000_000n,
+   * });
+   * ```
    */
   getReallocations: (
-    params: {
-      reallocationData: VaultV1ReallocationData;
-      options?: ReallocationComputeOptions;
-    } & (
-      | {
-          operation: "borrow" | "withdraw";
-          amount: bigint;
-          borrowAmount?: never;
-        }
-      | {
-          /** @deprecated Pass `{ operation: "borrow", amount }` instead. */
-          borrowAmount: bigint;
-          operation?: never;
-          amount?: never;
-        }
-    ),
+    params: VaultV1ReallocationsParams,
   ) => readonly VaultV1Reallocation[];
+
+  /**
+   * Computes Vault V2 BluePublicAllocator reallocations for this market.
+   *
+   * @param params.reallocationData - State returned by {@link getVaultV2BlueReallocationData}.
+   * @param params.options - Optional allocator discovery controls and operation to support.
+   * @returns Action-ready reallocations and their post-simulation state.
+   * @throws {ChainIdMismatchError} when `reallocationData` belongs to another chain.
+   * @throws {NegativeInputError} when a utilization or penalty limit is negative.
+   * @throws {InputExceedsMaxError} when a utilization or penalty limit exceeds WAD.
+   * @throws {NonPositiveInputError} when an enabled operation amount is not positive.
+   * @throws {UnknownReallocationMarketError} when a required market is absent.
+   * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent.
+   * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the shortfall.
+   * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
+   * @example
+   * ```ts
+   * const result = market.getVaultV2BlueReallocations({
+   *   reallocationData,
+   *   options: { operation: { type: "borrow", amount: 1_000_000n } },
+   * });
+   * ```
+   */
+  getVaultV2BlueReallocations: (params: VaultV2BlueReallocationsParams) => {
+    readonly reallocations: readonly VaultV2BlueReallocation[];
+    readonly data: VaultV2BlueReallocationData;
+  };
 }
 
 export class MorphoBlue implements BlueActions {
@@ -1814,7 +1892,7 @@ export class MorphoBlue implements BlueActions {
    * @param params.vaultAddresses - Vaults to inspect for source-market liquidity.
    * @param params.block.number - Block number used for every RPC read.
    * @param params.block.timestamp - Timestamp corresponding to the fetched block.
-   * @returns Reallocation data ready for {@link getReallocations}.
+   * @returns Reallocation data ready for {@link getVaultV1Reallocations}.
    * @throws {ChainIdMismatchError} when the client chain does not match this market.
    * @example
    * ```ts
@@ -1979,7 +2057,7 @@ export class MorphoBlue implements BlueActions {
    * @param params.vaultAddresses - Vault V2 addresses to inspect for market or idle liquidity.
    * @param params.block.number - Block number used for every RPC read.
    * @param params.block.timestamp - Timestamp corresponding to the fetched block.
-   * @returns A `VaultV2BlueReallocationData` snapshot ready for discovery or operation planning.
+   * @returns A `VaultV2BlueReallocationData` snapshot ready for {@link getVaultV2BlueReallocations}.
    * @throws {ChainIdMismatchError} when the client chain does not match this market.
    * @example
    * ```ts
@@ -2071,7 +2149,7 @@ export class MorphoBlue implements BlueActions {
   }
 
   /**
-   * Computes public allocator reallocations for a borrow or withdraw on this market.
+   * Computes Vault V1 PublicAllocator reallocations for this market.
    *
    * Pass `{ borrowAmount }` for a borrow (legacy alias, equivalent to `{ operation: "borrow", amount }`)
    * or `{ operation, amount }` for a borrow or loan-asset withdraw.
@@ -2088,24 +2166,17 @@ export class MorphoBlue implements BlueActions {
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when `operation === "withdraw"` and `amount` exceeds the target market's `totalSupplyAssets`.
    * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
    * @throws {UnknownReallocationMarketError} when the target market is absent from the reallocation data.
+   * @example
+   * ```ts
+   * const reallocations = market.getVaultV1Reallocations({
+   *   reallocationData,
+   *   operation: "borrow",
+   *   amount: 1_000_000n,
+   * });
+   * ```
    */
-  getReallocations(
-    params: {
-      reallocationData: VaultV1ReallocationData;
-      options?: ReallocationComputeOptions;
-    } & (
-      | {
-          operation: "borrow" | "withdraw";
-          amount: bigint;
-          borrowAmount?: never;
-        }
-      | {
-          /** @deprecated Pass `{ operation: "borrow", amount }` instead. */
-          borrowAmount: bigint;
-          operation?: never;
-          amount?: never;
-        }
-    ),
+  getVaultV1Reallocations(
+    params: VaultV1ReallocationsParams,
   ): readonly VaultV1Reallocation[] {
     validateChainId(params.reallocationData.chainId, this.chainId);
 
@@ -2129,5 +2200,72 @@ export class MorphoBlue implements BlueActions {
       amount: params.amount,
       options,
     });
+  }
+
+  /**
+   * Computes Vault V1 PublicAllocator reallocations using the deprecated unversioned name.
+   *
+   * @param params.reallocationData - State returned by {@link getVaultV1ReallocationData}.
+   * @param params.operation - The operation driving the reallocation (`"borrow"` or `"withdraw"`).
+   * @param params.amount - The borrow or withdraw amount used to compute post-state utilization.
+   * @param params.borrowAmount - Deprecated borrow amount alias.
+   * @param params.options - Optional allocator and utilization options.
+   * @returns Vault V1 reallocations ready for a Blue action.
+   * @throws {ChainIdMismatchError} when `reallocationData` belongs to another chain.
+   * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation.
+   * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
+   * @throws {MissingPublicAllocatorConfigError} when a selected vault lacks allocator state.
+   * @throws {UnknownReallocationMarketError} when the target market is absent.
+   * @deprecated Use {@link getVaultV1Reallocations} instead.
+   * @example
+   * ```ts
+   * const reallocations = market.getReallocations({
+   *   reallocationData,
+   *   operation: "borrow",
+   *   amount: 1_000_000n,
+   * });
+   * ```
+   */
+  getReallocations(
+    params: VaultV1ReallocationsParams,
+  ): readonly VaultV1Reallocation[] {
+    return this.getVaultV1Reallocations(params);
+  }
+
+  /**
+   * Computes Vault V2 BluePublicAllocator reallocations for this market.
+   *
+   * @param params.reallocationData - State returned by {@link getVaultV2BlueReallocationData}.
+   * @param params.options - Optional allocator discovery controls and operation to support.
+   * @returns Action-ready reallocations and their post-simulation state.
+   * @throws {ChainIdMismatchError} when `reallocationData` belongs to another chain.
+   * @throws {NegativeInputError} when a utilization or penalty limit is negative.
+   * @throws {InputExceedsMaxError} when a utilization or penalty limit exceeds WAD.
+   * @throws {NonPositiveInputError} when an enabled operation amount is not positive.
+   * @throws {UnknownReallocationMarketError} when a required market is absent.
+   * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent.
+   * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the shortfall.
+   * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
+   * @example
+   * ```ts
+   * const result = market.getVaultV2BlueReallocations({
+   *   reallocationData,
+   *   options: { operation: { type: "borrow", amount: 1_000_000n } },
+   * });
+   * ```
+   */
+  getVaultV2BlueReallocations({
+    reallocationData,
+    options,
+  }: VaultV2BlueReallocationsParams): {
+    readonly reallocations: readonly VaultV2BlueReallocation[];
+    readonly data: VaultV2BlueReallocationData;
+  } {
+    validateChainId(reallocationData.chainId, this.chainId);
+
+    return reallocationData.computeVaultV2BlueReallocations(
+      this.marketParams.id,
+      options,
+    );
   }
 }
