@@ -233,6 +233,7 @@ export interface BlueActions {
    *
    * @param params - Withdraw parameters including pre-fetched `positionData`.
    * @returns Object with `buildTx` and `getRequirements`.
+   * @throws {BundlerErrors.UnexpectedAction} when a V2 plan is unsupported on the chain.
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
    * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
    * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
@@ -279,6 +280,7 @@ export interface BlueActions {
    *
    * @param params - Borrow parameters including pre-fetched `positionData` for health validation.
    * @returns Object with `buildTx` and `getRequirements`.
+   * @throws {BundlerErrors.UnexpectedAction} when a V2 plan is unsupported on the chain.
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
    * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
    * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
@@ -433,6 +435,7 @@ export interface BlueActions {
    *
    * @param params - Combined parameters including pre-fetched `positionData` for health validation.
    * @returns Object with `buildTx` and `getRequirements`.
+   * @throws {BundlerErrors.UnexpectedAction} when a V2 plan is unsupported on the chain.
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
    * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
    * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
@@ -493,6 +496,7 @@ export interface BlueActions {
    * @param params.slippageTolerance - WAD slippage tolerance. Defaults to `DEFAULT_SLIPPAGE_TOLERANCE`.
    * @param params.targetReallocations - Homogeneous Vault V1 or Vault V2 reallocations into the target market.
    * @returns Object with `buildTx` and `getRequirements`.
+   * @throws {BundlerErrors.UnexpectedAction} when a V2 plan is unsupported on the chain.
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
    * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
    * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
@@ -845,10 +849,11 @@ export class MorphoBlue implements BlueActions {
       slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
       reallocations,
     } = params;
-    const reallocationPlan = validateAndNormalizeReallocations(
+    const reallocationPlan = validateAndNormalizeReallocations({
       reallocations,
-      this.marketParams.id,
-    );
+      targetMarketId: this.marketParams.id,
+      chainId: this.chainId,
+    });
     const reallocationList = reallocationPlan.reallocations;
 
     // Mode normalization: a missing or undefined `assets`/`shares` key collapses to `0n`
@@ -1013,10 +1018,11 @@ export class MorphoBlue implements BlueActions {
     reallocations?: BlueReallocationPlan;
   }) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    const reallocationPlan = validateAndNormalizeReallocations(
+    const reallocationPlan = validateAndNormalizeReallocations({
       reallocations,
-      this.marketParams.id,
-    );
+      targetMarketId: this.marketParams.id,
+      chainId: this.chainId,
+    });
     const reallocationList = reallocationPlan.reallocations;
 
     if (amount <= 0n) {
@@ -1514,10 +1520,11 @@ export class MorphoBlue implements BlueActions {
     reallocations?: BlueReallocationPlan;
   } & DepositAmountArgs) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    const reallocationPlan = validateAndNormalizeReallocations(
+    const reallocationPlan = validateAndNormalizeReallocations({
       reallocations,
-      this.marketParams.id,
-    );
+      targetMarketId: this.marketParams.id,
+      chainId: this.chainId,
+    });
     const reallocationList = reallocationPlan.reallocations;
 
     if (amount < 0n) {
@@ -1669,10 +1676,11 @@ export class MorphoBlue implements BlueActions {
   }) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     validateSlippageTolerance(slippageTolerance);
-    const targetReallocationPlan = validateAndNormalizeReallocations(
-      targetReallocations,
-      target.marketParams.id,
-    );
+    const targetReallocationPlan = validateAndNormalizeReallocations({
+      reallocations: targetReallocations,
+      targetMarketId: target.marketParams.id,
+      chainId: this.chainId,
+    });
     const targetReallocationList = targetReallocationPlan.reallocations;
 
     if (collateralAmount <= 0n) {

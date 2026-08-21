@@ -173,10 +173,11 @@ export const buildBlueReallocationActions = ({
   readonly targetMarketParams: MarketParams;
   readonly penaltyFundingSource?: "initiator" | "generalAdapter1";
 }) => {
-  const reallocationPlan = validateAndNormalizeReallocations(
+  const reallocationPlan = validateAndNormalizeReallocations({
     reallocations,
-    targetMarketParams.id,
-  );
+    targetMarketId: targetMarketParams.id,
+    chainId,
+  });
 
   return reallocationPlan.type === "vaultV1"
     ? buildVaultV1ReallocationActions({

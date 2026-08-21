@@ -641,6 +641,25 @@ describe("registerCustomAddresses", () => {
     expect(deployments[chainId]?.publicAllocator).toBe(11n);
   });
 
+  test("behavior: backfills deprecated PublicAllocator aliases", () => {
+    const chainId = 31_337_014;
+    const vaultV1PublicAllocator = randomAddress();
+
+    registerCustomAddresses({
+      addresses: {
+        [chainId]: { ...createBlueAddresses(), vaultV1PublicAllocator },
+      },
+      deployments: {
+        [chainId]: { ...createBlueDeployments(), vaultV1PublicAllocator: 11n },
+      },
+    });
+
+    expect(addressesRegistry[chainId]?.publicAllocator).toBe(
+      vaultV1PublicAllocator,
+    );
+    expect(deployments[chainId]?.publicAllocator).toBe(11n);
+  });
+
   test("error: RegistryValueAlreadyRegisteredError for addresses", () => {
     const chainId = 31_337_009;
     const chainAddresses = createChainAddresses();
@@ -664,6 +683,22 @@ describe("registerCustomAddresses", () => {
     ).toThrow(RegistryValueAlreadyRegisteredError);
 
     expect(getChainAddress(chainId, "midnight")).toBe(chainAddresses.midnight);
+  });
+
+  test("error: conflicting PublicAllocator addresses", () => {
+    const chainId = 31_337_015;
+
+    expect(() =>
+      registerCustomAddresses({
+        addresses: {
+          [chainId]: {
+            ...createBlueAddresses(),
+            vaultV1PublicAllocator: randomAddress(),
+            publicAllocator: randomAddress(),
+          },
+        },
+      }),
+    ).toThrow(RegistryValueAlreadyRegisteredError);
   });
 
   test("error: IncompleteChainRegistryError for custom-chain addresses", () => {
@@ -763,6 +798,22 @@ describe("registerCustomAddresses", () => {
     ).toThrow(RegistryValueAlreadyRegisteredError);
 
     expect(deployments[chainId]?.midnight).toBe(chainDeployments.midnight);
+  });
+
+  test("error: conflicting PublicAllocator deployments", () => {
+    const chainId = 31_337_108;
+
+    expect(() =>
+      registerCustomAddresses({
+        deployments: {
+          [chainId]: {
+            ...createBlueDeployments(),
+            vaultV1PublicAllocator: 11n,
+            publicAllocator: 12n,
+          },
+        },
+      }),
+    ).toThrow(RegistryValueAlreadyRegisteredError);
   });
 
   test("behavior: does not freeze caller-owned nested inputs", () => {

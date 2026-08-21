@@ -1,5 +1,6 @@
 import {
   AccrualPosition,
+  ChainId,
   getChainAddresses,
   Market,
   MarketParams,
@@ -16,6 +17,7 @@ import {
 } from "../../../test/fixtures/blue.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
+  BundlerErrors,
   isRequirementApproval,
   isRequirementBlueAuthorization,
   isRequirementSignature,
@@ -57,6 +59,73 @@ const makePosition = (
   );
 
 describe("MorphoBlue BluePublicAllocator requirements", () => {
+  test("error: unsupported V2 deployment across every action flow", () => {
+    const chain = { ...mainnet, id: ChainId.CronosMainnet };
+    const handle = createMockClient(chain);
+    const market = handle.client
+      .extend(morphoViemExtension())
+      .morpho.blue(marketParams, chain.id);
+    const reallocations = [
+      {
+        vault: marketParams.oracle,
+        from: { type: "idle" },
+        to: { adapter: marketParams.collateralToken },
+        assets: 10n,
+        penalty: 0n,
+      },
+    ] as const;
+
+    const actionFlows = [
+      () =>
+        market.borrow({
+          amount: 1n,
+          userAddress: USER,
+          positionData: makePosition(marketParams, {
+            borrowShares: 1n,
+            collateral: 1_000_000n,
+          }),
+          reallocations,
+        }),
+      () =>
+        market.withdraw({
+          assets: 1n,
+          userAddress: USER,
+          positionData: makePosition(marketParams, { supplyShares: 10n }),
+          reallocations,
+        }),
+      () =>
+        market.supplyCollateralBorrow({
+          amount: 100n,
+          borrowAmount: 1n,
+          userAddress: USER,
+          positionData: makePosition(marketParams, {
+            borrowShares: 1n,
+            collateral: 1_000_000n,
+          }),
+          reallocations,
+        }),
+      () =>
+        market.refinance({
+          userAddress: USER,
+          positionData: makePosition(marketParams, {
+            borrowShares: 10n,
+            collateral: 1_000n,
+          }),
+          target: {
+            marketParams: CbbtcUsdcBlueAlt,
+            positionData: makePosition(CbbtcUsdcBlueAlt, {}),
+          },
+          collateralAmount: 100n,
+          borrowAssets: 1n,
+          targetReallocations: reallocations,
+        }),
+    ];
+
+    for (const actionFlow of actionFlows) {
+      expect(actionFlow).toThrow(BundlerErrors.UnexpectedAction);
+    }
+  });
+
   test("default: includes the classic loan-token approval for V2 penalties", async () => {
     const handle = createMockClient(mainnet);
     const {

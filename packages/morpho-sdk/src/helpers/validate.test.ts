@@ -833,10 +833,11 @@ describe("reallocation validation", () => {
     },
   ])("error: InvalidReallocationShapeError for $name", ({ reallocation }) => {
     expect(() =>
-      validateAndNormalizeReallocations(
-        [reallocation] as unknown as BlueReallocationPlan,
+      validateAndNormalizeReallocations({
+        reallocations: [reallocation] as unknown as BlueReallocationPlan,
         targetMarketId,
-      ),
+        chainId: mainnet.id,
+      }),
     ).toThrow(InvalidReallocationShapeError);
   });
 

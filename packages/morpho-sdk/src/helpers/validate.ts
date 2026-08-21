@@ -14,6 +14,7 @@ import {
   AddressMismatchError,
   type BlueReallocationPlan,
   BorrowExceedsSafeLtvError,
+  BundlerErrors,
   ChainIdMismatchError,
   ChainWNativeMissingError,
   EmptyReallocationWithdrawalsError,
@@ -494,11 +495,26 @@ export const validateVaultV2BlueReallocations = (
   }
 };
 
-/** @internal */
-export const validateAndNormalizeReallocations = (
-  reallocations: BlueReallocationPlan | undefined,
-  targetMarketId: MarketId,
-) => {
+/**
+ * Validates and normalizes a homogeneous Blue reallocation plan.
+ *
+ * @param params - Validation parameters.
+ * @param params.reallocations - Optional Vault V1 or Vault V2 reallocation plan.
+ * @param params.targetMarketId - Morpho Blue market receiving the liquidity.
+ * @param params.chainId - Chain whose allocator deployment is required for a V2 plan.
+ * @returns The validated plan tagged with its allocator version.
+ * @throws {BundlerErrors.UnexpectedAction} when a V2 plan is unsupported on the chain.
+ * @internal
+ */
+export const validateAndNormalizeReallocations = ({
+  reallocations,
+  targetMarketId,
+  chainId,
+}: {
+  readonly reallocations: BlueReallocationPlan | undefined;
+  readonly targetMarketId: MarketId;
+  readonly chainId: number;
+}) => {
   const vaultV1Reallocations: VaultV1Reallocation[] = [];
   const vaultV2Reallocations: VaultV2BlueReallocation[] = [];
 
@@ -521,6 +537,14 @@ export const validateAndNormalizeReallocations = (
   }
   if (vaultV2Reallocations.length > 0) {
     validateVaultV2BlueReallocations(vaultV2Reallocations, targetMarketId);
+    if (getChainAddresses(chainId).vaultV2BluePublicAllocator == null) {
+      throw new BundlerErrors.UnexpectedAction(
+        vaultV2Reallocations[0]?.from.type === "market"
+          ? "vaultV2BluePublicAllocatorReallocate"
+          : "vaultV2BluePublicAllocatorAllocateFromIdle",
+        chainId,
+      );
+    }
     return {
       type: "vaultV2Blue" as const,
       reallocations: vaultV2Reallocations,
