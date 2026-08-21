@@ -39,7 +39,7 @@ import {
 import { VaultV2BlueReallocationData } from "./vaultV2BlueReallocationData.js";
 
 const TIMESTAMP = 1_700_000_000n;
-const VAULT = "0x0000000000000000000000000000000000000002";
+const VAULT = "0x00000000000000000000000000000000000000A2";
 const TARGET_ADAPTER = "0x00000000000000000000000000000000000000A3";
 const SOURCE_ADAPTER = "0x0000000000000000000000000000000000000004";
 const LOAN_TOKEN = "0x0000000000000000000000000000000000000005";
@@ -90,6 +90,7 @@ const makeMarket = ({
   });
 
 interface FixtureOptions {
+  readonly recordVault?: Address;
   readonly sourceMarketParams?: MarketParams;
   readonly sourceAdapter?: Address;
   readonly sourceSupply?: bigint;
@@ -120,6 +121,7 @@ interface FixtureOptions {
 }
 
 const makeFixture = ({
+  recordVault = VAULT,
   sourceMarketParams = sourceParams,
   sourceAdapter: sourceAdapterAddress = SOURCE_ADAPTER,
   sourceSupply = 1_000n,
@@ -298,20 +300,20 @@ const makeFixture = ({
         [sourceMarket.id]: sourceMarket,
       },
       vaults: { [VAULT]: vault },
-      allocations: { [VAULT]: allocations },
+      allocations: { [recordVault]: allocations },
       publicAllocatorConfigs: {
-        [VAULT]: {
+        [recordVault]: {
           vault: VAULT,
           canPullFromIdle,
           penalty,
         },
       },
       activeAdapters: {
-        [VAULT]:
+        [recordVault]:
           allocatorActiveAdapters ?? adapters.map((adapter) => adapter.address),
       },
       marketPublicAllocatorConfigs: {
-        [VAULT]: {
+        [recordVault]: {
           [targetAdapterMarketCapId]: {
             vault: VAULT,
             adapter: TARGET_ADAPTER,
@@ -376,6 +378,16 @@ describe("VaultV2BlueReallocationData construction", () => {
 });
 
 describe("VaultV2BlueReallocationData accessors", () => {
+  test("behavior: preserves checksummed address keys and values", () => {
+    const { data } = makeFixture();
+
+    expect(Object.keys(data.vaults)).toStrictEqual([VAULT]);
+    expect(Object.keys(data.activeAdapters)).toStrictEqual([VAULT]);
+    expect(
+      data.getActiveAdapters(VAULT.toLowerCase() as Address),
+    ).toStrictEqual(new Set([TARGET_ADAPTER, SOURCE_ADAPTER]));
+  });
+
   test("behavior: returns a fetched empty active-adapter set", () => {
     const { data } = makeFixture({ allocatorActiveAdapters: [] });
 
@@ -436,7 +448,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     } = makeFixture();
 
     expect(data.getActiveAdapters(VAULT)).toStrictEqual(
-      new Set([TARGET_ADAPTER.toLowerCase(), SOURCE_ADAPTER.toLowerCase()]),
+      new Set([TARGET_ADAPTER, SOURCE_ADAPTER]),
     );
     const result = data.computeVaultV2BlueReallocations(targetParams.id);
 
@@ -463,6 +475,19 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     expect(result.data.getVault(VAULT)._totalAssets).toBe(
       data.getVault(VAULT)._totalAssets,
     );
+  });
+
+  test("behavior: matches differently cased vault record keys", () => {
+    const recordVault = VAULT.toLowerCase() as Address;
+    const { data, sourceExpectedAssets } = makeFixture({ recordVault });
+
+    const result = data.computeVaultV2BlueReallocations(targetParams.id);
+
+    expect(Object.keys(data.vaults)).toStrictEqual([VAULT]);
+    expect(Object.keys(data.allocations)).toStrictEqual([recordVault]);
+    expect(result.reallocations[0]?.assets).toBe(sourceExpectedAssets);
+    expect(Object.keys(result.data.vaults)).toStrictEqual([VAULT]);
+    expect(Object.keys(result.data.allocations)).toStrictEqual([recordVault]);
   });
 
   test("error: ReallocationAdapterSupplySharesUnderflowError", () => {
@@ -516,6 +541,16 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
         timestamp: TIMESTAMP,
       }),
     ).toThrow(ReallocationAllocationUnderflowError);
+  });
+
+  test("behavior: rejects underflowing cap probes without aborting discovery", () => {
+    const { data, sourceAdapterCapId } = makeFixture();
+    const allocation = data.getAllocation(VAULT, sourceAdapterCapId);
+    (data.allocations[VAULT] as Record<Hash, IVaultV2Allocation>)[
+      sourceAdapterCapId
+    ] = { ...allocation, allocation: 1n };
+
+    expect(data.getPublicReallocationLiquidity(targetParams.id)).toBe(1n);
   });
 
   test("behavior: allocates into a configured target with no existing position", () => {
@@ -1272,6 +1307,34 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     expect(() => data.computeVaultV2BlueReallocations(targetParams.id)).toThrow(
       UnknownReallocationActiveAdaptersError,
     );
+  });
+
+  test("error: UnknownReallocationPublicAllocatorConfigError for incomplete vault state", () => {
+    const { data } = makeFixture();
+    delete (
+      data.publicAllocatorConfigs as Record<
+        Address,
+        VaultV2BluePublicAllocatorConfig | undefined
+      >
+    )[VAULT];
+
+    expect(() => data.computeVaultV2BlueReallocations(targetParams.id)).toThrow(
+      UnknownReallocationPublicAllocatorConfigError,
+    );
+  });
+
+  test("behavior: ignores a vault with fetched but absent allocator config", () => {
+    const { data } = makeFixture();
+    (
+      data.publicAllocatorConfigs as Record<
+        Address,
+        VaultV2BluePublicAllocatorConfig | undefined
+      >
+    )[VAULT] = undefined;
+
+    expect(
+      data.computeVaultV2BlueReallocations(targetParams.id).reallocations,
+    ).toStrictEqual([]);
   });
 
   test("behavior: ignores vault liquidity above the penalty threshold", () => {

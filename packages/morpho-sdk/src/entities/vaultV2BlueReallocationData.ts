@@ -83,6 +83,8 @@ type ReadonlyVaultSnapshot = Readonly<
   readonly forceDeallocatePenalties: Readonly<Record<Address, bigint>>;
 };
 
+type AdapterIds = ReturnType<AccrualVaultV2MorphoMarketV1AdapterV2["ids"]>;
+
 /** Input state required to simulate Vault V2 BluePublicAllocator reallocations. */
 export interface InputVaultV2BlueReallocationData {
   /** Chain id associated with the fetched state. */
@@ -108,7 +110,8 @@ export interface InputVaultV2BlueReallocationData {
   >;
   /**
    * BluePublicAllocator-active adapters indexed by vault address.
-   * Arrays, readonly arrays, sets, and other iterables are accepted and normalized to sets.
+   * Arrays, readonly arrays, sets, and other iterables are copied to sets
+   * without changing address casing.
    */
   readonly activeAdapters?: Readonly<
     Record<Address, Iterable<Address> | undefined>
@@ -127,6 +130,48 @@ export interface InputVaultV2BlueReallocationData {
 
 const cloneMarket = (market: ReadonlyMarketSnapshot) =>
   new Market({ ...market });
+
+/**
+ * Finds an address key without changing its supplied casing.
+ *
+ * @param record - Address-keyed record to search.
+ * @param address - Address to match case-insensitively.
+ * @returns The stored key, or `undefined` when no address matches.
+ * @internal
+ */
+const findAddressKey = <T>(
+  record: Readonly<Record<Address, T>>,
+  address: Address,
+) => {
+  if (Object.hasOwn(record, address)) return address;
+  return (Object.keys(record) as Address[]).find((key) =>
+    isAddressEqual(key, address),
+  );
+};
+
+/**
+ * Returns cached allocation ids for one adapter-market pair.
+ *
+ * @param cache - Per-planning-call adapter id cache.
+ * @param adapter - Adapter that derives the allocation ids.
+ * @param market - Market whose params identify the allocations.
+ * @returns The adapter, collateral, and adapter-market cap ids.
+ * @internal
+ */
+// biome-ignore lint/complexity/useMaxParams: cache lookup requires both adapter and market identity.
+const getAdapterIds = (
+  cache: Map<string, AdapterIds>,
+  adapter: ReadonlyMarketAdapterSnapshot,
+  market: ReadonlyMarketSnapshot,
+) => {
+  const key = `${adapter.address}:${market.id}`;
+  const cached = cache.get(key);
+  if (cached != null) return cached;
+
+  const ids = adapter.ids(market.params);
+  cache.set(key, ids);
+  return ids;
+};
 
 const resolveMaxWithdrawalUtilization = (value: bigint | undefined) => {
   const utilization = value ?? DEFAULT_WITHDRAWAL_TARGET_UTILIZATION;
@@ -269,6 +314,8 @@ const cloneVault = (
  * instance. The first allocation for each vault accrues it in contract order
  * after the penalty donation and any source deallocation, then freezes that
  * `_totalAssets` value as `firstTotalAssets` for the rest of the plan.
+ * Address keys and values retain their supplied casing; lookups compare them
+ * case-insensitively.
  *
  * @example
  * ```ts
@@ -315,7 +362,7 @@ export class VaultV2BlueReallocationData
   public readonly publicAllocatorConfigs: Readonly<
     Record<Address, VaultV2BluePublicAllocatorConfig | undefined>
   >;
-  /** BluePublicAllocator-active adapters indexed by vault address. */
+  /** BluePublicAllocator-active adapters indexed by vault address, preserving vault and adapter casing. */
   public readonly activeAdapters: Readonly<
     Record<Address, ReadonlySet<Address> | undefined>
   >;
@@ -382,13 +429,7 @@ export class VaultV2BlueReallocationData
         input.activeAdapters ?? {},
       ) as [Address, Iterable<Address> | undefined][]) {
         activeAdapters[vault] =
-          adapters == null
-            ? undefined
-            : new Set(
-                [...adapters].map(
-                  (adapter) => adapter.toLowerCase() as Address,
-                ),
-              );
+          adapters == null ? undefined : new Set(adapters);
       }
 
       for (const [vault, configs] of Object.entries(
@@ -499,7 +540,8 @@ export class VaultV2BlueReallocationData
   }
 
   private getMutableVault(vault: Address) {
-    const data = this.mutableVaults[vault];
+    const key = findAddressKey(this.mutableVaults, vault);
+    const data = key == null ? undefined : this.mutableVaults[key];
     if (data == null) throw new UnknownReallocationVaultError(vault);
     return data;
   }
@@ -517,7 +559,8 @@ export class VaultV2BlueReallocationData
    * ```
    */
   public getAllocation(vault: Address, id: Hash) {
-    const allocation = this.allocations[vault]?.[id];
+    const key = findAddressKey(this.allocations, vault);
+    const allocation = key == null ? undefined : this.allocations[key]?.[id];
     if (allocation == null)
       throw new UnknownReallocationAllocationError(vault, id);
     return allocation;
@@ -535,17 +578,31 @@ export class VaultV2BlueReallocationData
    * ```
    */
   public getPublicAllocatorConfig(vault: Address) {
-    const config = this.publicAllocatorConfigs[vault];
+    const config = this.getOptionalPublicAllocatorConfig(vault);
     if (config == null)
       throw new UnknownReallocationPublicAllocatorConfigError(vault);
     return config;
   }
 
   /**
+   * Gets fetched allocator authorization state, including an explicit absent value.
+   *
+   * @param vault - Vault V2 address.
+   * @returns The allocator config, or `undefined` when the fetched vault has not authorized it.
+   * @throws {UnknownReallocationPublicAllocatorConfigError} when the fetch state is absent.
+   */
+  private getOptionalPublicAllocatorConfig(vault: Address) {
+    const key = findAddressKey(this.publicAllocatorConfigs, vault);
+    if (key == null)
+      throw new UnknownReallocationPublicAllocatorConfigError(vault);
+    return this.publicAllocatorConfigs[key];
+  }
+
+  /**
    * Gets the BluePublicAllocator-active adapters for a Vault V2.
    *
    * @param vault - Vault V2 address.
-   * @returns The active adapter addresses, or an empty set when none are active.
+   * @returns The active adapter addresses in their supplied casing, or an empty set when none are active.
    * @throws {UnknownReallocationActiveAdaptersError} when the active-adapter state is absent.
    * @example
    * ```ts
@@ -553,7 +610,8 @@ export class VaultV2BlueReallocationData
    * ```
    */
   public getActiveAdapters(vault: Address): ReadonlySet<Address> {
-    const adapters = this.activeAdapters[vault];
+    const key = findAddressKey(this.activeAdapters, vault);
+    const adapters = key == null ? undefined : this.activeAdapters[key];
     if (adapters == null)
       throw new UnknownReallocationActiveAdaptersError(vault);
     return adapters;
@@ -575,8 +633,11 @@ export class VaultV2BlueReallocationData
     vault: Address,
     adapterMarketCapId: Hash,
   ) {
+    const key = findAddressKey(this.marketPublicAllocatorConfigs, vault);
     const config =
-      this.marketPublicAllocatorConfigs[vault]?.[adapterMarketCapId];
+      key == null
+        ? undefined
+        : this.marketPublicAllocatorConfigs[key]?.[adapterMarketCapId];
     if (config == null)
       throw new UnknownReallocationMarketPublicAllocatorConfigError(
         vault,
@@ -633,6 +694,8 @@ export class VaultV2BlueReallocationData
    * @throws {InputExceedsMaxError} when `maxWithdrawalUtilization` or `maxPenalty` exceeds WAD.
    * @throws {NonPositiveInputError} when the operation amount is not positive and planning is enabled.
    * @throws {UnknownReallocationMarketError} when a required market is absent.
+   * @throws {UnknownReallocationVaultError} when configured vault state is absent.
+   * @throws {UnknownReallocationPublicAllocatorConfigError} when allocator authorization state is absent.
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
    * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the absolute shortfall.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdraw exceeds market supply.
@@ -823,38 +886,31 @@ export class VaultV2BlueReallocationData
     );
     const reallocations: VaultV2BlueReallocation[] = [];
     const configuredVaults = Object.keys(data.vaults) as Address[];
-    const vaultKeyByLower = new Map(
-      configuredVaults.map((vault) => [vault.toLowerCase(), vault]),
-    );
     const vaults = Array.from(
       new Set(
         [...(options.reallocatableVaults ?? configuredVaults)]
-          .map((vault) => vaultKeyByLower.get(vault.toLowerCase()))
+          .map((vault) => findAddressKey(data.vaults, vault))
           .filter((vault): vault is Address => vault != null),
       ),
     );
+    const normalizedMarketId = marketId.toLowerCase();
+    const adapterIdsCache = new Map<string, AdapterIds>();
 
     while (true) {
       const candidates = vaults
         .map((vaultAddress) => {
           const targetMarket = data.getMarket(marketId);
-          const vaultContext = _try(
-            () => ({
-              vault: data.getVault(vaultAddress),
-              publicAllocatorConfig:
-                data.getPublicAllocatorConfig(vaultAddress),
-            }),
-            UnknownDataError,
-          );
-          if (vaultContext == null) return;
-          const { vault, publicAllocatorConfig } = vaultContext;
+          const publicAllocatorConfig =
+            data.getOptionalPublicAllocatorConfig(vaultAddress);
+          if (publicAllocatorConfig == null) return;
+          const vault = data.getVault(vaultAddress);
           if (
             !isAddressEqual(publicAllocatorConfig.vault, vaultAddress) ||
             publicAllocatorConfig.penalty >
               (options.maxPenalty ?? DEFAULT_MAX_REALLOCATION_PENALTY)
           )
             return;
-          const activeAdapters = data.getActiveAdapters(vaultAddress);
+          const activeAdapters = [...data.getActiveAdapters(vaultAddress)];
 
           const targetSupplyHeadroom = MathLib.zeroFloorSub(
             MathLib.MAX_UINT_128,
@@ -874,7 +930,7 @@ export class VaultV2BlueReallocationData
 
             const targetContext = _try(() => {
               const [adapterCapId, collateralCapId, adapterMarketCapId] =
-                adapter.ids(targetMarket.params);
+                getAdapterIds(adapterIdsCache, adapter, targetMarket);
               const marketPublicAllocatorConfig =
                 data.getMarketPublicAllocatorConfig(
                   vaultAddress,
@@ -889,7 +945,9 @@ export class VaultV2BlueReallocationData
                   marketPublicAllocatorConfig.adapter,
                   adapter.address,
                 ) ||
-                !activeAdapters.has(adapter.address.toLowerCase() as Address)
+                !activeAdapters.some((activeAdapter) =>
+                  isAddressEqual(activeAdapter, adapter.address),
+                )
               )
                 return;
 
@@ -967,6 +1025,12 @@ export class VaultV2BlueReallocationData
                 continue;
               if (!isAddressEqual(sourceAdapter.parentVault, vaultAddress))
                 continue;
+              if (
+                !activeAdapters.some((activeAdapter) =>
+                  isAddressEqual(activeAdapter, sourceAdapter.address),
+                )
+              )
+                continue;
 
               for (const sourceMarketReference of sourceAdapter.markets) {
                 const sourceMarket = data.getMarket(sourceMarketReference.id);
@@ -978,11 +1042,15 @@ export class VaultV2BlueReallocationData
                   )
                 )
                   continue;
-                if (sourceMarket.id.toLowerCase() === marketId.toLowerCase())
+                if (sourceMarket.id.toLowerCase() === normalizedMarketId)
                   continue;
 
                 const candidate = _try(() => {
-                  const sourceIds = sourceAdapter.ids(sourceMarket.params);
+                  const sourceIds = getAdapterIds(
+                    adapterIdsCache,
+                    sourceAdapter,
+                    sourceMarket,
+                  );
                   const [, , sourceAdapterMarketCapId] = sourceIds;
                   const sourceConfig = data.getMarketPublicAllocatorConfig(
                     vaultAddress,
@@ -993,9 +1061,6 @@ export class VaultV2BlueReallocationData
                     !isAddressEqual(
                       sourceConfig.adapter,
                       sourceAdapter.address,
-                    ) ||
-                    !activeAdapters.has(
-                      sourceAdapter.address.toLowerCase() as Address,
                     ) ||
                     !sourceConfig.canPullFromMarket
                   )
@@ -1056,19 +1121,36 @@ export class VaultV2BlueReallocationData
             // shared allocation IDs. Binary search finds the exact largest fit.
             let lower = 0n;
             let upper = reallocation.assets;
+            let probeUpper = true;
             const reallocationAdapter = data.getAdapter(
               reallocation.vault,
               reallocation.to.adapter,
             );
-            const targetIds = reallocationAdapter.ids(targetMarket.params);
+            const targetIds = getAdapterIds(
+              adapterIdsCache,
+              reallocationAdapter,
+              targetMarket,
+            );
 
             while (lower < upper) {
-              const assets = (lower + upper + 1n) / 2n;
-              const postState = data.cloneWithPublicReallocation({
-                reallocation: { ...reallocation, assets },
-                targetMarketId: marketId,
-                timestamp: targetMarket.lastUpdate,
-              });
+              const assets = probeUpper ? upper : (lower + upper + 1n) / 2n;
+              probeUpper = false;
+              const postState = _try(
+                () =>
+                  data.cloneWithPublicReallocation({
+                    reallocation: { ...reallocation, assets },
+                    targetMarketId: marketId,
+                    timestamp: targetMarket.lastUpdate,
+                    adapterIdsCache,
+                    probe: true,
+                  }),
+                ReallocationAllocationUnderflowError,
+                ReallocationAdapterSupplySharesUnderflowError,
+              );
+              if (postState == null) {
+                upper = assets - 1n;
+                continue;
+              }
               const postVault = postState.getVault(reallocation.vault);
               // Vault V2 checks relative caps against the transient firstTotalAssets,
               // which stays fixed after the vault's first allocation in a transaction.
@@ -1119,6 +1201,7 @@ export class VaultV2BlueReallocationData
         reallocation: largest,
         targetMarketId: marketId,
         timestamp,
+        adapterIdsCache,
       });
     }
   }
@@ -1132,6 +1215,8 @@ export class VaultV2BlueReallocationData
    * @throws {NegativeInputError} when `maxWithdrawalUtilization` or `maxPenalty` is negative.
    * @throws {InputExceedsMaxError} when `maxWithdrawalUtilization` or `maxPenalty` exceeds WAD.
    * @throws {UnknownReallocationMarketError} when a required market is absent.
+   * @throws {UnknownReallocationVaultError} when configured vault state is absent.
+   * @throws {UnknownReallocationPublicAllocatorConfigError} when allocator authorization state is absent.
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
    * @example
    * ```ts
@@ -1166,6 +1251,8 @@ export class VaultV2BlueReallocationData
    * @throws {NegativeInputError} when `maxWithdrawalUtilization` or `maxPenalty` is negative.
    * @throws {InputExceedsMaxError} when `maxWithdrawalUtilization` or `maxPenalty` exceeds WAD.
    * @throws {UnknownReallocationMarketError} when a required market is absent.
+   * @throws {UnknownReallocationVaultError} when configured vault state is absent.
+   * @throws {UnknownReallocationPublicAllocatorConfigError} when allocator authorization state is absent.
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
    * @example
    * ```ts
@@ -1178,27 +1265,28 @@ export class VaultV2BlueReallocationData
     utilization: bigint = DEFAULT_SUPPLY_TARGET_UTILIZATION,
     options?: VaultV2BluePublicAllocatorOptions,
   ) {
-    const maxWithdrawalUtilization =
-      options?.enabled === false
-        ? DEFAULT_WITHDRAWAL_TARGET_UTILIZATION
-        : resolveMaxWithdrawalUtilization(options?.maxWithdrawalUtilization);
-    const maxPenalty =
-      options?.enabled === false
-        ? DEFAULT_MAX_REALLOCATION_PENALTY
-        : resolveMaxPenalty(options?.maxPenalty);
     const timestamp =
       options?.timestamp == null
         ? this.getLatestSnapshotTimestamp()
         : BigInt(options.timestamp);
     const market = this.getMarket(marketId).accrueInterest(timestamp);
-    if (DEFAULT_SUPPLY_TARGET_UTILIZATION > utilization)
+    if (
+      options?.enabled === false ||
+      DEFAULT_SUPPLY_TARGET_UTILIZATION > utilization
+    )
       return market.getBorrowToUtilization(utilization);
 
     const availableLiquidity =
       this.computeVaultV2BlueReallocationsAtUtilization({
         marketId,
-        maxWithdrawalUtilization,
-        options: { ...options, timestamp, maxPenalty },
+        maxWithdrawalUtilization: resolveMaxWithdrawalUtilization(
+          options?.maxWithdrawalUtilization,
+        ),
+        options: {
+          ...options,
+          timestamp,
+          maxPenalty: resolveMaxPenalty(options?.maxPenalty),
+        },
       }).reallocations.reduce((total, { assets }) => total + assets, 0n);
     return MarketUtils.getBorrowToUtilization(
       {
@@ -1224,13 +1312,68 @@ export class VaultV2BlueReallocationData
     reallocation,
     targetMarketId,
     timestamp,
+    adapterIdsCache = new Map(),
+    probe = false,
   }: {
     readonly reallocation: VaultV2BlueReallocation;
     readonly targetMarketId: MarketId;
     readonly timestamp: bigint;
+    readonly adapterIdsCache?: Map<string, AdapterIds>;
+    readonly probe?: boolean;
   }) {
-    const data = this.clone();
-    let vault = data.getMutableVault(reallocation.vault);
+    const sourceVaultKey = findAddressKey(
+      this.mutableVaults,
+      reallocation.vault,
+    );
+    const sourceAllocationsKey = findAddressKey(
+      this.mutableAllocations,
+      reallocation.vault,
+    );
+    const data = probe
+      ? new VaultV2BlueReallocationData({
+          chainId: this.chainId,
+          markets: { [targetMarketId]: this.getMarket(targetMarketId) },
+          vaults:
+            sourceVaultKey == null
+              ? {}
+              : { [sourceVaultKey]: this.mutableVaults[sourceVaultKey] },
+          allocations:
+            sourceAllocationsKey == null
+              ? {}
+              : {
+                  [sourceAllocationsKey]:
+                    this.mutableAllocations[sourceAllocationsKey],
+                },
+        })
+      : this.clone();
+    if (probe) {
+      const sourceDonationKey = findAddressKey(
+        this.donatedPenaltyAssets,
+        reallocation.vault,
+      );
+      if (sourceDonationKey != null)
+        data.donatedPenaltyAssets[sourceDonationKey] =
+          this.donatedPenaltyAssets[sourceDonationKey]!;
+      const sourceFirstTotalAssetsKey = findAddressKey(
+        this.firstTotalAssets,
+        reallocation.vault,
+      );
+      if (sourceFirstTotalAssetsKey != null)
+        data.firstTotalAssets[sourceFirstTotalAssetsKey] =
+          this.firstTotalAssets[sourceFirstTotalAssetsKey]!;
+    }
+
+    const vaultKey =
+      findAddressKey(data.mutableVaults, reallocation.vault) ??
+      reallocation.vault;
+    const allocationsKey =
+      findAddressKey(data.mutableAllocations, reallocation.vault) ??
+      reallocation.vault;
+    const donationKey =
+      findAddressKey(data.donatedPenaltyAssets, reallocation.vault) ?? vaultKey;
+    const firstTotalAssetsKey =
+      findAddressKey(data.firstTotalAssets, reallocation.vault) ?? vaultKey;
+    let vault = data.getMutableVault(vaultKey);
     const targetMarket = data.getMarket(targetMarketId);
 
     const penaltyAssets =
@@ -1239,8 +1382,8 @@ export class VaultV2BlueReallocationData
         reallocation.assets,
       );
     vault.assetBalance += penaltyAssets;
-    data.donatedPenaltyAssets[reallocation.vault] =
-      (data.donatedPenaltyAssets[reallocation.vault] ?? 0n) + penaltyAssets;
+    data.donatedPenaltyAssets[donationKey] =
+      (data.donatedPenaltyAssets[donationKey] ?? 0n) + penaltyAssets;
 
     if (reallocation.from.type === "market") {
       const sourceAdapter = data.getMutableAdapter(
@@ -1248,7 +1391,11 @@ export class VaultV2BlueReallocationData
         reallocation.from.adapter,
       );
       const sourceMarket = data.getMarket(reallocation.from.marketParams.id);
-      const sourceIds = sourceAdapter.ids(sourceMarket.params);
+      const sourceIds = getAdapterIds(
+        adapterIdsCache,
+        sourceAdapter,
+        sourceMarket,
+      );
       const [, , sourceAdapterMarketCapId] = sourceIds;
       const currentSupplyShares =
         sourceAdapter.supplyShares[sourceMarket.id] ?? 0n;
@@ -1286,7 +1433,7 @@ export class VaultV2BlueReallocationData
             change: sourceChange,
           });
         }
-        data.mutableAllocations[reallocation.vault]![id] = {
+        data.mutableAllocations[allocationsKey]![id] = {
           ...allocation,
           allocation: nextAllocation,
         };
@@ -1294,7 +1441,7 @@ export class VaultV2BlueReallocationData
       vault.assetBalance += reallocation.assets;
     }
 
-    if (data.firstTotalAssets[reallocation.vault] == null) {
+    if (data.firstTotalAssets[firstTotalAssetsKey] == null) {
       // Vault V2's transient firstTotalAssets tracks the first allocation in a
       // transaction independently from elapsed time. Later allocations must not
       // recompute the denominator, even if their simulated balances have changed.
@@ -1310,15 +1457,19 @@ export class VaultV2BlueReallocationData
       } else {
         vault = vault.accrueInterest(timestamp).vault;
       }
-      data.mutableVaults[reallocation.vault] = vault;
-      data.firstTotalAssets[reallocation.vault] = vault._totalAssets;
+      data.mutableVaults[vaultKey] = vault;
+      data.firstTotalAssets[firstTotalAssetsKey] = vault._totalAssets;
     }
 
     const targetAdapter = data.getMutableAdapter(
       reallocation.vault,
       reallocation.to.adapter,
     );
-    const targetIds = targetAdapter.ids(targetMarket.params);
+    const targetIds = getAdapterIds(
+      adapterIdsCache,
+      targetAdapter,
+      targetMarket,
+    );
     const [, , targetAdapterMarketCapId] = targetIds;
 
     const currentTargetMarket = data.getMarket(targetMarket.id);
@@ -1353,7 +1504,7 @@ export class VaultV2BlueReallocationData
           change: targetChange,
         });
       }
-      data.mutableAllocations[reallocation.vault]![id] = {
+      data.mutableAllocations[allocationsKey]![id] = {
         ...allocation,
         allocation: nextAllocation,
       };

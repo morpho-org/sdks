@@ -673,6 +673,8 @@ export interface BlueActions {
    * @throws {InputExceedsMaxError} when a utilization or penalty limit exceeds WAD.
    * @throws {NonPositiveInputError} when an enabled operation amount is not positive.
    * @throws {UnknownReallocationMarketError} when a required market is absent.
+   * @throws {UnknownReallocationVaultError} when configured vault state is absent.
+   * @throws {UnknownReallocationPublicAllocatorConfigError} when allocator authorization state is absent.
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent.
    * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the shortfall.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
@@ -2251,6 +2253,8 @@ export class MorphoBlue implements BlueActions {
    * @throws {InputExceedsMaxError} when a utilization or penalty limit exceeds WAD.
    * @throws {NonPositiveInputError} when an enabled operation amount is not positive.
    * @throws {UnknownReallocationMarketError} when a required market is absent.
+   * @throws {UnknownReallocationVaultError} when configured vault state is absent.
+   * @throws {UnknownReallocationPublicAllocatorConfigError} when allocator authorization state is absent.
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent.
    * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the shortfall.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
