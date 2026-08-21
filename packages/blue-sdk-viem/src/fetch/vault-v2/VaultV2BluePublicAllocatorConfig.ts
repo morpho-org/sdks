@@ -147,9 +147,10 @@ export async function fetchVaultV2BluePublicAllocatorData(
 
     for (const marketParams of marketParamsList) {
       const ids = adapter.ids(marketParams);
+      const [, , adapterMarketCapId] = ids;
       marketRequests.push({
         adapter: adapter.address,
-        adapterMarketCapId: ids[2],
+        adapterMarketCapId,
       });
       for (const id of ids) allocationIds.add(id);
     }

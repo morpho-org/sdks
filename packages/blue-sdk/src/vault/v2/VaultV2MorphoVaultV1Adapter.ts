@@ -9,7 +9,7 @@ export interface IVaultV2MorphoVaultV1Adapter
   morphoVaultV1: Address;
 }
 
-import type { BigIntish } from "../../types.js";
+import type { BigIntish, Hash } from "../../types.js";
 import type { AccrualVault } from "../Vault.js";
 import type {
   IAccrualVaultV2Adapter,
@@ -70,7 +70,25 @@ export class VaultV2MorphoVaultV1Adapter
     this.morphoVaultV1 = morphoVaultV1;
   }
 
-  public ids() {
+  /**
+   * Returns this adapter's allocation-cap ids.
+   *
+   * @returns A readonly tuple containing the adapter-wide allocation-cap id.
+   * @example
+   * ```ts
+   * import { VaultV2MorphoVaultV1Adapter } from "@morpho-org/blue-sdk";
+   * import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
+   *
+   * const adapter = new VaultV2MorphoVaultV1Adapter({
+   *   address: ZERO_ADDRESS,
+   *   parentVault: ZERO_ADDRESS,
+   *   skimRecipient: ZERO_ADDRESS,
+   *   morphoVaultV1: ZERO_ADDRESS,
+   * });
+   * const [adapterCapId] = adapter.ids();
+   * ```
+   */
+  public ids(): readonly [adapterCapId: Hash] {
     return [this.adapterId];
   }
 }

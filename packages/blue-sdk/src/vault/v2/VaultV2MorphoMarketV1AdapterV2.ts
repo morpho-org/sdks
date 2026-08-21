@@ -1,16 +1,10 @@
-import {
-  type Address,
-  encodeAbiParameters,
-  type Hash,
-  type Hex,
-  keccak256,
-} from "viem";
+import { type Address, encodeAbiParameters, type Hex, keccak256 } from "viem";
 import {
   type Market,
   MarketParams,
   marketParamsAbi,
 } from "../../market/index.js";
-import type { BigIntish, MarketId } from "../../types.js";
+import type { BigIntish, Hash, MarketId } from "../../types.js";
 import { CapacityLimitReason } from "../../utils.js";
 import type {
   IAccrualVaultV2Adapter,
@@ -152,7 +146,40 @@ export class VaultV2MorphoMarketV1AdapterV2
     this.supplyShares = supplyShares;
   }
 
-  public ids(params: MarketParams): readonly [Hash, Hash, Hash] {
+  /**
+   * Returns this adapter's allocation-cap ids for a Morpho Blue market.
+   *
+   * @param params - Morpho Blue market parameters.
+   * @returns A readonly tuple containing the adapter, collateral, and adapter-market
+   *   allocation-cap ids, in that order.
+   * @example
+   * ```ts
+   * import {
+   *   MarketParams,
+   *   VaultV2MorphoMarketV1AdapterV2,
+   * } from "@morpho-org/blue-sdk";
+   * import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
+   *
+   * const marketParams = MarketParams.idle(ZERO_ADDRESS);
+   * const adapter = new VaultV2MorphoMarketV1AdapterV2({
+   *   address: ZERO_ADDRESS,
+   *   parentVault: ZERO_ADDRESS,
+   *   skimRecipient: ZERO_ADDRESS,
+   *   marketIds: [],
+   *   adaptiveCurveIrm: ZERO_ADDRESS,
+   *   supplyShares: {},
+   * });
+   * const [adapterCapId, collateralCapId, adapterMarketCapId] =
+   *   adapter.ids(marketParams);
+   * ```
+   */
+  public ids(
+    params: MarketParams,
+  ): readonly [
+    adapterCapId: Hash,
+    collateralCapId: Hash,
+    adapterMarketCapId: Hash,
+  ] {
     return [
       this.adapterId,
       VaultV2MorphoMarketV1AdapterV2.collateralCapId(params.collateralToken),

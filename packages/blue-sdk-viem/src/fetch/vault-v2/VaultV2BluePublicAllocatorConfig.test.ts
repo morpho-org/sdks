@@ -104,7 +104,7 @@ const unallocatedTargetVault = new AccrualVaultV2(
   { ...vault.forceDeallocatePenalties },
 );
 const ids = adapter.ids(marketParams);
-const adapterMarketCapId = ids[2];
+const [, , adapterMarketCapId] = ids;
 
 const expected = {
   publicAllocatorConfig: new VaultV2BluePublicAllocatorConfig({

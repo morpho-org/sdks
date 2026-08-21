@@ -197,7 +197,9 @@ const makeFixture = ({
     [sourceMarket],
   );
   const targetIds = targetAdapter.ids(targetMarket.params);
+  const [, , targetAdapterMarketCapId] = targetIds;
   const sourceIds = sourceAdapter.ids(sourceMarket.params);
+  const [sourceAdapterCapId, , sourceAdapterMarketCapId] = sourceIds;
   const allocations: Record<Hash, IVaultV2Allocation | undefined> = {};
 
   const addAllocation = ({
@@ -310,27 +312,28 @@ const makeFixture = ({
       },
       marketPublicAllocatorConfigs: {
         [VAULT]: {
-          [targetIds[2]]: {
+          [targetAdapterMarketCapId]: {
             vault: VAULT,
             adapter: TARGET_ADAPTER,
-            adapterMarketCapId: targetIds[2],
+            adapterMarketCapId: targetAdapterMarketCapId,
             absoluteCap: allocatorTargetCap,
             canPullFromMarket: false,
           },
-          [sourceIds[2]]: {
+          [sourceAdapterMarketCapId]: {
             vault: VAULT,
             adapter: sourceAdapterAddress,
-            adapterMarketCapId: sourceIds[2],
+            adapterMarketCapId: sourceAdapterMarketCapId,
             absoluteCap: 0n,
             canPullFromMarket,
           },
         },
       },
     }),
+    sourceAdapterCapId,
+    sourceAdapterMarketCapId,
     sourceExpectedAssets,
-    sourceIds,
+    targetAdapterMarketCapId,
     targetExpectedAssets,
-    targetIds,
   };
 };
 
@@ -425,7 +428,12 @@ describe("VaultV2BlueReallocationData accessors", () => {
 
 describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
   test("default: returns an action-ready market reallocation and cloned post-state", () => {
-    const { data, sourceExpectedAssets, sourceIds, targetIds } = makeFixture();
+    const {
+      data,
+      sourceAdapterMarketCapId,
+      sourceExpectedAssets,
+      targetAdapterMarketCapId,
+    } = makeFixture();
 
     expect(data.getActiveAdapters(VAULT)).toStrictEqual(
       new Set([TARGET_ADAPTER.toLowerCase(), SOURCE_ADAPTER.toLowerCase()]),
@@ -446,10 +454,12 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       },
     ]);
     expect(result.data).not.toBe(data);
-    expect(result.data.getAllocation(VAULT, sourceIds[2]).allocation).toBe(0n);
-    expect(result.data.getAllocation(VAULT, targetIds[2]).allocation).toBe(
-      sourceExpectedAssets,
-    );
+    expect(
+      result.data.getAllocation(VAULT, sourceAdapterMarketCapId).allocation,
+    ).toBe(0n);
+    expect(
+      result.data.getAllocation(VAULT, targetAdapterMarketCapId).allocation,
+    ).toBe(sourceExpectedAssets);
     expect(result.data.getVault(VAULT)._totalAssets).toBe(
       data.getVault(VAULT)._totalAssets,
     );
@@ -482,10 +492,10 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
   });
 
   test("error: ReallocationAllocationUnderflowError", () => {
-    const { data, sourceIds } = makeFixture();
-    const allocation = data.getAllocation(VAULT, sourceIds[0]);
+    const { data, sourceAdapterCapId } = makeFixture();
+    const allocation = data.getAllocation(VAULT, sourceAdapterCapId);
     (data.allocations[VAULT] as Record<Hash, IVaultV2Allocation>)[
-      sourceIds[0]
+      sourceAdapterCapId
     ] = { ...allocation, allocation: 0n };
 
     expect(() =>
@@ -509,9 +519,10 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
   });
 
   test("behavior: allocates into a configured target with no existing position", () => {
-    const { data, sourceExpectedAssets, targetIds } = makeFixture({
-      targetTracked: false,
-    });
+    const { data, sourceExpectedAssets, targetAdapterMarketCapId } =
+      makeFixture({
+        targetTracked: false,
+      });
 
     expect(data.getAdapter(VAULT, TARGET_ADAPTER).marketIds).not.toContain(
       targetParams.id,
@@ -526,9 +537,9 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       targetParams.id,
     );
     expect(targetAdapter.supplyShares[targetParams.id]).toBeGreaterThan(0n);
-    expect(result.data.getAllocation(VAULT, targetIds[2]).allocation).toBe(
-      sourceExpectedAssets,
-    );
+    expect(
+      result.data.getAllocation(VAULT, targetAdapterMarketCapId).allocation,
+    ).toBe(sourceExpectedAssets);
   });
 
   test("behavior: honors the configured source-utilization ceiling", () => {
@@ -689,6 +700,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       [new Market({ ...targetMarket })],
     );
     const secondTargetIds = secondTargetAdapter.ids(targetParams);
+    const [, , secondTargetAdapterMarketCapId] = secondTargetIds;
     const secondAllocations: Record<Hash, IVaultV2Allocation> = {};
     for (const id of secondTargetIds) {
       secondAllocations[id] = {
@@ -740,10 +752,10 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       marketPublicAllocatorConfigs: {
         [VAULT]: data.marketPublicAllocatorConfigs[VAULT],
         [SECOND_VAULT]: {
-          [secondTargetIds[2]]: {
+          [secondTargetAdapterMarketCapId]: {
             vault: SECOND_VAULT,
             adapter: SECOND_TARGET_ADAPTER,
-            adapterMarketCapId: secondTargetIds[2],
+            adapterMarketCapId: secondTargetAdapterMarketCapId,
             absoluteCap: 10_000n,
             canPullFromMarket: false,
           },
@@ -772,7 +784,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
   });
 
   test("behavior: deep-clones legacy and nested accrued adapters", () => {
-    const { data, targetIds } = makeFixture();
+    const { data, targetAdapterMarketCapId } = makeFixture();
     const targetMarket = data.getMarket(targetParams.id);
     const legacyPosition = new AccrualPosition(
       {
@@ -887,14 +899,14 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       input.marketPublicAllocatorConfigs,
     );
     expect(cloned.allocations[VAULT]).not.toBe(input.allocations[VAULT]);
-    expect(cloned.getAllocation(VAULT, targetIds[2])).toBe(
-      input.getAllocation(VAULT, targetIds[2]),
+    expect(cloned.getAllocation(VAULT, targetAdapterMarketCapId)).toBe(
+      input.getAllocation(VAULT, targetAdapterMarketCapId),
     );
     expect(cloned.getPublicAllocatorConfig(VAULT)).toBeInstanceOf(
       VaultV2BluePublicAllocatorConfig,
     );
     expect(
-      cloned.getMarketPublicAllocatorConfig(VAULT, targetIds[2]),
+      cloned.getMarketPublicAllocatorConfig(VAULT, targetAdapterMarketCapId),
     ).toBeInstanceOf(VaultV2BlueMarketPublicAllocatorConfig);
     const inputLegacy = input
       .getVault(VAULT)
@@ -1074,7 +1086,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
   });
 
   test("behavior: recognizes zero-elapsed losses at the one-unit relative-cap boundary", () => {
-    const { data, targetIds } = makeFixture({
+    const { data, targetAdapterMarketCapId } = makeFixture({
       sourceSupply: 0n,
       targetSupply: 0n,
       firstTotalAssets: 1_000n,
@@ -1092,9 +1104,9 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
 
     expect(result.reallocations).toHaveLength(1);
     expect(result.reallocations[0]?.assets).toBe(450n);
-    expect(result.data.getAllocation(VAULT, targetIds[2]).allocation).toBe(
-      450n,
-    );
+    expect(
+      result.data.getAllocation(VAULT, targetAdapterMarketCapId).allocation,
+    ).toBe(450n);
     expect(result.data.getVault(VAULT)._totalAssets).toBe(900n);
   });
 

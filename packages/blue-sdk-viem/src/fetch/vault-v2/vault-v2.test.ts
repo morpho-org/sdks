@@ -252,6 +252,7 @@ function mockVaultV2AllocationReads(
   handle: ReturnType<typeof createMockClient>,
   ids: readonly `0x${string}`[],
 ) {
+  const [adapterCapId] = ids;
   for (const id of ids) {
     mockRead(handle, {
       address: VAULT,
@@ -269,7 +270,7 @@ function mockVaultV2AllocationReads(
       address: VAULT,
       abi: vaultV2Abi,
       functionName: "allocation",
-      result: id === ids[0] ? 100n : 0n,
+      result: id === adapterCapId ? 100n : 0n,
     });
   }
 }

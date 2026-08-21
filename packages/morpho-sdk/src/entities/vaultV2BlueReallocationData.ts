@@ -873,9 +873,13 @@ export class VaultV2BlueReallocationData
               continue;
 
             const targetContext = _try(() => {
-              const ids = adapter.ids(targetMarket.params);
+              const [adapterCapId, collateralCapId, adapterMarketCapId] =
+                adapter.ids(targetMarket.params);
               const marketPublicAllocatorConfig =
-                data.getMarketPublicAllocatorConfig(vaultAddress, ids[2]);
+                data.getMarketPublicAllocatorConfig(
+                  vaultAddress,
+                  adapterMarketCapId,
+                );
               if (
                 !isAddressEqual(
                   marketPublicAllocatorConfig.vault,
@@ -889,10 +893,25 @@ export class VaultV2BlueReallocationData
               )
                 return;
 
-              const allocations = ids.map((id) =>
-                data.getAllocation(vaultAddress, id),
+              const adapterCapAllocation = data.getAllocation(
+                vaultAddress,
+                adapterCapId,
               );
-              if (allocations.some(({ absoluteCap }) => absoluteCap === 0n))
+              const collateralCapAllocation = data.getAllocation(
+                vaultAddress,
+                collateralCapId,
+              );
+              const adapterMarketCapAllocation = data.getAllocation(
+                vaultAddress,
+                adapterMarketCapId,
+              );
+              if (
+                [
+                  adapterCapAllocation,
+                  collateralCapAllocation,
+                  adapterMarketCapAllocation,
+                ].some(({ absoluteCap }) => absoluteCap === 0n)
+              )
                 return;
 
               const expectedSupplyAssets = targetMarket.toSupplyAssets(
@@ -900,22 +919,21 @@ export class VaultV2BlueReallocationData
               );
               const untracked = MathLib.zeroFloorSub(
                 expectedSupplyAssets,
-                allocations[2]!.allocation,
+                adapterMarketCapAllocation.allocation,
               );
 
               return {
                 adapter,
-                allocations,
+                adapterMarketCapAllocation,
                 marketPublicAllocatorConfig,
                 untracked,
               };
             }, UnknownDataError);
             if (targetContext == null) continue;
 
-            const targetMarketParamsAllocation = targetContext.allocations[2]!;
             const allocatorHeadroom =
               targetContext.marketPublicAllocatorConfig.getMaxIn(
-                targetMarketParamsAllocation.allocation +
+                targetContext.adapterMarketCapAllocation.allocation +
                   targetContext.untracked,
               );
 
@@ -965,9 +983,10 @@ export class VaultV2BlueReallocationData
 
                 const candidate = _try(() => {
                   const sourceIds = sourceAdapter.ids(sourceMarket.params);
+                  const [, , sourceAdapterMarketCapId] = sourceIds;
                   const sourceConfig = data.getMarketPublicAllocatorConfig(
                     vaultAddress,
-                    sourceIds[2],
+                    sourceAdapterMarketCapId,
                   );
                   if (
                     !isAddressEqual(sourceConfig.vault, vaultAddress) ||
@@ -1230,6 +1249,7 @@ export class VaultV2BlueReallocationData
       );
       const sourceMarket = data.getMarket(reallocation.from.marketParams.id);
       const sourceIds = sourceAdapter.ids(sourceMarket.params);
+      const [, , sourceAdapterMarketCapId] = sourceIds;
       const currentSupplyShares =
         sourceAdapter.supplyShares[sourceMarket.id] ?? 0n;
       const withdrawal = sourceMarket.withdraw(
@@ -1252,7 +1272,9 @@ export class VaultV2BlueReallocationData
       const sourceChange =
         withdrawal.market.toSupplyAssets(
           sourceAdapter.supplyShares[sourceMarket.id] ?? 0n,
-        ) - data.getAllocation(reallocation.vault, sourceIds[2]).allocation;
+        ) -
+        data.getAllocation(reallocation.vault, sourceAdapterMarketCapId)
+          .allocation;
       for (const id of sourceIds) {
         const allocation = data.getAllocation(reallocation.vault, id);
         const nextAllocation = allocation.allocation + sourceChange;
@@ -1297,11 +1319,12 @@ export class VaultV2BlueReallocationData
       reallocation.to.adapter,
     );
     const targetIds = targetAdapter.ids(targetMarket.params);
+    const [, , targetAdapterMarketCapId] = targetIds;
 
     const currentTargetMarket = data.getMarket(targetMarket.id);
     const oldTargetAllocation = data.getAllocation(
       reallocation.vault,
-      targetIds[2],
+      targetAdapterMarketCapId,
     ).allocation;
     const supply = currentTargetMarket.supply(
       reallocation.assets,

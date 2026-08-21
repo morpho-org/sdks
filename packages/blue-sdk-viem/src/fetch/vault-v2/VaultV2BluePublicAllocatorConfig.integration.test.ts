@@ -72,7 +72,7 @@ describe("Vault V2 BluePublicAllocator fetchers on fork", () => {
         functionName: "setIsAllocator",
         args: [allocator, true],
       });
-      const forkAdapterMarketCapId = forkAdapter.ids(forkMarket.params)[2];
+      const [, , forkAdapterMarketCapId] = forkAdapter.ids(forkMarket.params);
       await client.writeContract({
         account: allocatorAccount,
         address: allocator,

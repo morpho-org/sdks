@@ -1,5 +1,5 @@
-import type { Address, Hash, Hex } from "viem";
-import type { BigIntish } from "../../types.js";
+import type { Address, Hex } from "viem";
+import type { BigIntish, Hash } from "../../types.js";
 import type { CapacityLimit } from "../../utils.js";
 
 /** Plain input shape for a Morpho Vault V2 adapter. */

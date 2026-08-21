@@ -436,7 +436,14 @@ describe("VaultV2MorphoMarketV1AdapterV2", () => {
     expect(adapter.marketIds).toStrictEqual([m.id]);
     expect(adapter.adaptiveCurveIrm).toBe(ADAPTER);
     expect(adapter.supplyShares[m.id]).toBe(123n);
-    expect(adapter.ids(m.params)[0]).toBe(adapter.adapterId);
+    expect(adapter.ids(m.params)).toStrictEqual([
+      adapter.adapterId,
+      VaultV2MorphoMarketV1AdapterV2.collateralCapId(m.params.collateralToken),
+      VaultV2MorphoMarketV1AdapterV2.adapterMarketCapId(
+        adapter.address,
+        m.params,
+      ),
+    ]);
     expect(
       VaultV2MorphoMarketV1AdapterV2.marketParamsId(adapter.address, m.params),
     ).toBe(
