@@ -79,18 +79,6 @@ const createChainDeployments = () => ({
   ...createMidnightDeployments(),
 });
 
-const getMainnetBlueAddresses = () => {
-  const blueAddresses = addressesRegistry[ChainId.EthMainnet];
-
-  return blueAddresses;
-};
-
-const getMainnetBlueDeployments = () => {
-  const blueDeployments = deployments[ChainId.EthMainnet];
-
-  return blueDeployments;
-};
-
 describe("getChainAddress", () => {
   test("default", () => {
     expect(
@@ -139,7 +127,7 @@ describe("getChainAddress", () => {
 
 describe("addressesRegistry", () => {
   test("default", () => {
-    expect("midnight" in addressesRegistry[1]).toBe(false);
+    expect("midnight" in addressesRegistry[ChainId.EthMainnet]).toBe(true);
   });
 
   test("behavior: keeps the deprecated Vault V1 PublicAllocator alias", () => {
@@ -689,7 +677,7 @@ describe("addressesRegistry", () => {
     ],
   ] as const)(
     "behavior: matches the deployments registry for %i %s",
-    (chainId, label, address, deploymentBlock) => {
+    (...[chainId, label, address, deploymentBlock]) => {
       expect(getChainAddress(chainId, label)).toBe(address);
       const path = label.split(".");
       let deployment: unknown = deployments[chainId];
@@ -794,7 +782,7 @@ describe("addressesRegistry", () => {
 
   test("behavior: registers Blue and Midnight addresses alongside each other", () => {
     const chainId = 31_337_004;
-    const blueAddresses = getMainnetBlueAddresses();
+    const blueAddresses = addressesRegistry[ChainId.ArcMainnet];
     const chainAddresses = {
       ...createMidnightAddresses(),
       permit2: blueAddresses.permit2,
@@ -858,12 +846,12 @@ describe("addressesRegistry", () => {
 
 describe("deployments", () => {
   test("default", () => {
-    expect("midnight" in deployments[1]).toBe(false);
+    expect("midnight" in deployments[ChainId.EthMainnet]).toBe(true);
   });
 
   test("behavior: registers Blue and Midnight deployments alongside each other", () => {
     const chainId = 31_337_102;
-    const blueDeployments = getMainnetBlueDeployments();
+    const blueDeployments = deployments[ChainId.ArcMainnet];
     const chainDeployments = {
       ...createMidnightDeployments(),
       permit2: blueDeployments.permit2,
