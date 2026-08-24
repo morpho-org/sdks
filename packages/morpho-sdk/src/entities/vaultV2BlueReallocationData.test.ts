@@ -1343,6 +1343,33 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     ).toStrictEqual([]);
   });
 
+  test("behavior: finds liquidity between shared lower and target upper caps", () => {
+    const penalty = MathLib.WAD;
+    const { data } = makeFixture({
+      sourceAdapter: TARGET_ADAPTER,
+      sourceSupply: 100n,
+      targetPositionAssets: 0n,
+      firstTotalAssets: 140n,
+      idle: 40n,
+      canPullFromIdle: false,
+      vaultLastUpdate: TIMESTAMP - 1n,
+      maxRate: MathLib.WAD,
+      penalty,
+      targetCaps: [
+        { absoluteCap: 10_000n, relativeCap: MathLib.WAD / 2n },
+        { absoluteCap: 80n, relativeCap: MathLib.WAD },
+        { absoluteCap: 80n, relativeCap: MathLib.WAD },
+      ],
+    });
+
+    const result = data.computeVaultV2BlueReallocations(targetParams.id, {
+      maxPenalty: penalty,
+    });
+
+    expect(result.reallocations).toHaveLength(1);
+    expect(result.reallocations[0]?.assets).toBe(80n);
+  });
+
   test("behavior: freezes firstTotalAssets while applying relative caps", () => {
     const { data } = makeFixture({
       firstTotalAssets: 1_000n,
@@ -1716,6 +1743,37 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
     expect(result.reallocations).toHaveLength(1);
     expect(result.reallocations[0]?.assets).toBe(23n);
     expect(result.data.getMarket(targetParams.id).totalSupplyAssets).toBe(123n);
+  });
+
+  test("error: rejects a remaining amount below a shared-cap lower bound", () => {
+    const penalty = MathLib.WAD;
+    const { data } = makeFixture({
+      sourceAdapter: TARGET_ADAPTER,
+      sourceSupply: 100n,
+      targetBorrow: 90n,
+      targetPositionAssets: 0n,
+      firstTotalAssets: 100n,
+      vaultLastUpdate: TIMESTAMP - 1n,
+      maxRate: MathLib.WAD,
+      penalty,
+      targetCaps: [
+        { absoluteCap: 10_000n, relativeCap: MathLib.WAD / 2n },
+        { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+        { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+      ],
+    });
+
+    expect(
+      data.computeVaultV2BlueReallocations(targetParams.id, {
+        maxPenalty: penalty,
+      }).reallocations[0]?.assets,
+    ).toBe(100n);
+    expect(() =>
+      data.computeVaultV2BlueReallocations(targetParams.id, {
+        maxPenalty: penalty,
+        operation: { type: "borrow", amount: 81n },
+      }),
+    ).toThrow(InsufficientSharedLiquidityError);
   });
 
   test("error: validates maxWithdrawalUtilization before an operation early return", () => {

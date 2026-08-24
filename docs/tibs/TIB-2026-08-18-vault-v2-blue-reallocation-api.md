@@ -53,6 +53,16 @@ linear because the candidate amount changes penalty donations,
 `firstTotalAssets`, rounded market shares, and potentially shared allocation
 IDs. Direct headroom subtraction cannot reproduce the contract-exact boundary.
 
+### Addendum (2026-08-24): shared-cap intervals
+
+The monotonic-prefix statement above applies only to target allocation IDs that
+are not shared with the source. Principal cancels for a shared ID, while a
+positive penalty can increase `firstTotalAssets` and its relative-cap capacity;
+that shared cap therefore imposes a lower bound. Combined feasibility is an
+interval. The planner folds the operation's remaining amount into the initial
+ceiling, bisects only non-shared upper-bound caps, then probes the selected
+amount against every target cap before retaining the call.
+
 The V2 mutation helper remains private and returns a cloned state. It must keep
 penalty accounting, vault accrual, adapter shares, allocations, and canonical
 market references coherent as one transition. V1's protected helper is a

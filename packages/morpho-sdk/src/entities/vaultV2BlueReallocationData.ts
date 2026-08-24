@@ -1308,19 +1308,14 @@ export class VaultV2BlueReallocationData
 
           const capCompatibleCandidates: VaultV2BlueReallocation[] = [];
           for (const reallocation of rawCandidates) {
-            // MorphoMarketV1AdapterV2 rejects supplies that mint fewer shares than assets.
-            if (
-              targetMarket.toSupplyShares(reallocation.assets, "Down") <
-              reallocation.assets
-            )
-              continue;
-
-            // Cap fit is monotonic but not linear in assets: the amount changes
-            // penalty donations, firstTotalAssets, rounded shares, and possibly
-            // shared allocation IDs. Binary search finds the exact largest fit.
             let lower = 0n;
-            let upper = reallocation.assets;
-            let probeUpper = true;
+            let upper = MathLib.min(
+              reallocation.assets,
+              remainingAssets ?? reallocation.assets,
+            );
+            // MorphoMarketV1AdapterV2 rejects supplies that mint fewer shares than assets.
+            if (targetMarket.toSupplyShares(upper, "Down") < upper) continue;
+
             const reallocationAdapter = data.getAdapter(
               reallocation.vault,
               reallocation.to.adapter,
@@ -1330,10 +1325,23 @@ export class VaultV2BlueReallocationData
               reallocationAdapter,
               targetMarket,
             );
-
-            while (lower < upper) {
-              const assets = probeUpper ? upper : (lower + upper + 1n) / 2n;
-              probeUpper = false;
+            const sourceIds = new Set<Hash>();
+            if (reallocation.from.type === "market") {
+              const sourceAdapter = data.getAdapter(
+                reallocation.vault,
+                reallocation.from.adapter,
+              );
+              const sourceMarket = data.getMarket(
+                reallocation.from.marketParams.id,
+              );
+              for (const id of getAdapterIds(
+                adapterIdsCache,
+                sourceAdapter,
+                sourceMarket,
+              ))
+                sourceIds.add(id);
+            }
+            const probeReallocation = (assets: bigint) => {
               const postTransition = _try(
                 () =>
                   data.applyPublicReallocation({
@@ -1347,10 +1355,8 @@ export class VaultV2BlueReallocationData
                 ReallocationAllocationUnderflowError,
                 ReallocationAdapterSupplySharesUnderflowError,
               );
-              if (postTransition == null) {
-                upper = assets - 1n;
-                continue;
-              }
+              if (postTransition == null) return;
+
               const postVault = postTransition.data.getVault(
                 reallocation.vault,
               );
@@ -1366,7 +1372,9 @@ export class VaultV2BlueReallocationData
                   : postTransition.context.firstTotalAssets[
                       firstTotalAssetsKey
                     ]) ?? postVault._totalAssets;
-              const withinCaps = targetIds.every((id) => {
+              let withinUpperBounds = true;
+              let withinAllCaps = true;
+              for (const id of targetIds) {
                 const allocation = postTransition.data.getAllocation(
                   reallocation.vault,
                   id,
@@ -1375,17 +1383,30 @@ export class VaultV2BlueReallocationData
                   { ...allocation, allocation: 0n },
                   firstTotalAssets,
                 ).value;
-                return (
+                const withinCap =
                   allocation.absoluteCap > 0n &&
-                  allocation.allocation <= capacity
-                );
-              });
+                  allocation.allocation <= capacity;
+                if (!withinCap) {
+                  withinAllCaps = false;
+                  if (!sourceIds.has(id)) withinUpperBounds = false;
+                }
+              }
+              return { withinAllCaps, withinUpperBounds };
+            };
 
-              if (withinCaps) lower = assets;
+            // Non-shared target IDs impose monotonic upper bounds. Shared IDs
+            // can impose a lower bound because penalty donations increase
+            // firstTotalAssets, so validate them only at the selected maximum.
+            let probeUpper = true;
+            while (lower < upper) {
+              const assets = probeUpper ? upper : (lower + upper + 1n) / 2n;
+              probeUpper = false;
+              if (probeReallocation(assets)?.withinUpperBounds === true)
+                lower = assets;
               else upper = assets - 1n;
             }
 
-            if (lower > 0n)
+            if (lower > 0n && probeReallocation(lower)?.withinAllCaps === true)
               capCompatibleCandidates.push({
                 ...reallocation,
                 assets: lower,
@@ -1406,10 +1427,7 @@ export class VaultV2BlueReallocationData
       if (largest == null)
         return { reallocations, data, context: simulationContext };
 
-      const reallocation = {
-        ...largest,
-        assets: MathLib.min(largest.assets, remainingAssets ?? largest.assets),
-      };
+      const reallocation = largest;
       reallocations.push(reallocation);
       const transition = data.applyPublicReallocation({
         context: simulationContext,
