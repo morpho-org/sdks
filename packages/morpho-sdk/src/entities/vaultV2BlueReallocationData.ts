@@ -86,11 +86,13 @@ type AdapterIds = ReturnType<AccrualVaultV2MorphoMarketV1AdapterV2["ids"]>;
 
 /** Transaction-scoped state shared by transitions in one simulated call. @internal */
 interface SimulationContext {
+  readonly donatedPenaltyAssets: Readonly<Record<Address, bigint>>;
   readonly firstTotalAssets: Readonly<Record<Address, bigint>>;
 }
 
 /** Creates isolated transaction-scoped state for one simulation. @internal */
 const createSimulationContext = (): SimulationContext => ({
+  donatedPenaltyAssets: {},
   firstTotalAssets: {},
 });
 
@@ -322,7 +324,8 @@ const cloneVault = (
  * Constructor inputs are cloned. Every simulated reallocation returns a new
  * instance. Planning keeps the transaction-scoped `firstTotalAssets`
  * denominator outside the durable snapshot while applying reallocations in
- * contract order. Penalty donations remain available as vault idle liquidity.
+ * contract order. Penalty donations update the simulated vault accounting but
+ * remain unavailable as idle liquidity until a later transaction.
  * Address keys and values retain their supplied casing; lookups compare them
  * case-insensitively.
  *
@@ -862,6 +865,7 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
    * @throws {UnknownReallocationMarketPublicAllocatorConfigError} when an adapter-market allocator configuration is absent.
    * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
+   * @throws {ReallocationAllocationUnderflowError} when an inconsistent allocation snapshot underflows during the final transition.
    * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the absolute shortfall.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdraw exceeds market supply.
    * @example
@@ -1082,6 +1086,21 @@ export class VaultV2BlueReallocationData
               (options.maxPenalty ?? DEFAULT_MAX_REALLOCATION_PENALTY)
           )
             return;
+          const donatedPenaltyAssetsKey = findAddressKey(
+            simulationContext.donatedPenaltyAssets,
+            vaultAddress,
+          );
+          // The whole plan is simulated and executed in one transaction.
+          // Penalty assets are provided only at the end, so planned donations
+          // cannot become idle or available liquidity within that same plan.
+          const availableIdleAssets = MathLib.zeroFloorSub(
+            vault.assetBalance,
+            donatedPenaltyAssetsKey == null
+              ? 0n
+              : simulationContext.donatedPenaltyAssets[
+                  donatedPenaltyAssetsKey
+                ]!,
+          );
           let activeAdapters = activeAdaptersCache.get(vaultAddress);
           if (activeAdapters == null) {
             activeAdapters = new Set(
@@ -1166,25 +1185,13 @@ export class VaultV2BlueReallocationData
 
             if (
               publicAllocatorConfig.canPullFromIdle &&
-              vault.assetBalance > 0n
+              availableIdleAssets > 0n
             ) {
-              // The allocator donates before vault.allocate, so one call may use
-              // both existing idle and its own rounded-up penalty donation. Below
-              // WAD, the largest assets value whose net idle draw fits is
-              // ceil((idle + 1)WAD / (WAD - penalty)) - 1.
-              const idleAssets =
-                publicAllocatorConfig.penalty === MathLib.WAD
-                  ? MathLib.MAX_UINT_128
-                  : MathLib.mulDivUp(
-                      vault.assetBalance + 1n,
-                      MathLib.WAD,
-                      MathLib.WAD - publicAllocatorConfig.penalty,
-                    ) - 1n;
               const assets = MathLib.min(
                 MathLib.MAX_UINT_128,
                 targetSupplyHeadroom,
                 allocatorHeadroom,
-                idleAssets,
+                availableIdleAssets,
               );
               if (assets > 0n) {
                 rawCandidates.push({
@@ -1606,6 +1613,22 @@ export class VaultV2BlueReallocationData
         reallocation.assets,
       );
     vault.assetBalance += penaltyAssets;
+    if (penaltyAssets > 0n) {
+      const donatedPenaltyAssetsKey =
+        findAddressKey(context.donatedPenaltyAssets, reallocation.vault) ??
+        vaultKey;
+      // Keep the donation in simulated post-state accounting, but exclude it
+      // from same-transaction idle candidates because it is provided at the end.
+      nextContext = {
+        ...nextContext,
+        donatedPenaltyAssets: {
+          ...nextContext.donatedPenaltyAssets,
+          [donatedPenaltyAssetsKey]:
+            (nextContext.donatedPenaltyAssets[donatedPenaltyAssetsKey] ?? 0n) +
+            penaltyAssets,
+        },
+      };
+    }
 
     if (reallocation.from.type === "market") {
       const sourceAdapter = data.getMutableAdapter(
@@ -1637,7 +1660,7 @@ export class VaultV2BlueReallocationData
       }
       sourceAdapter.supplyShares[sourceMarket.id] =
         currentSupplyShares - withdrawal.shares;
-      data.setMarket(withdrawal.market);
+      data.setMarkets([withdrawal.market]);
       const sourceChange =
         withdrawal.market.toSupplyAssets(
           sourceAdapter.supplyShares[sourceMarket.id] ?? 0n,
@@ -1681,8 +1704,9 @@ export class VaultV2BlueReallocationData
       }
       data.mutableVaults[vaultKey] = vault;
       nextContext = {
+        ...nextContext,
         firstTotalAssets: {
-          ...context.firstTotalAssets,
+          ...nextContext.firstTotalAssets,
           [firstTotalAssetsKey]: vault._totalAssets,
         },
       };
@@ -1716,7 +1740,7 @@ export class VaultV2BlueReallocationData
       targetAdapter.marketIds.push(targetMarket.id);
     if (!targetAdapter.markets.some(({ id }) => id === targetMarket.id))
       targetAdapter.markets.push(supply.market);
-    data.setMarket(supply.market);
+    data.setMarkets([supply.market]);
 
     const targetChange =
       supply.market.toSupplyAssets(targetSupplyShares) - oldTargetAllocation;
@@ -1739,11 +1763,6 @@ export class VaultV2BlueReallocationData
 
     vault.assetBalance -= reallocation.assets;
     return { data, context: nextContext };
-  }
-
-  /** Updates one canonical market and its dependent adapter views. */
-  private setMarket(market: Market) {
-    this.setMarkets([market]);
   }
 
   /** Updates canonical markets in bulk and refreshes only dependent adapter views. */

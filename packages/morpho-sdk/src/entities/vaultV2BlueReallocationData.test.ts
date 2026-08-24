@@ -587,7 +587,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
 
   test("behavior: returns transaction context separately from durable state", () => {
     const { data } = makeFixture();
-    const context = { firstTotalAssets: {} };
+    const context = { donatedPenaltyAssets: {}, firstTotalAssets: {} };
 
     // biome-ignore lint/complexity/useLiteralKeys: exercise the private transition shape directly.
     const transition = data["applyPublicReallocation"]({
@@ -624,7 +624,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     expect(() =>
       // biome-ignore lint/complexity/useLiteralKeys: exercise the private transition invariant directly.
       data["applyPublicReallocation"]({
-        context: { firstTotalAssets: {} },
+        context: { donatedPenaltyAssets: {}, firstTotalAssets: {} },
         reallocation: {
           vault: VAULT,
           from: {
@@ -653,7 +653,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     expect(() =>
       // biome-ignore lint/complexity/useLiteralKeys: exercise the private transition invariant directly.
       data["applyPublicReallocation"]({
-        context: { firstTotalAssets: {} },
+        context: { donatedPenaltyAssets: {}, firstTotalAssets: {} },
         reallocation: {
           vault: VAULT,
           from: {
@@ -1439,7 +1439,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     expect(result.data.getVault(VAULT)._totalAssets).toBe(1_000n);
   });
 
-  test("behavior: reuses penalty donations as idle liquidity in the same plan", () => {
+  test("behavior: excludes penalty donations from idle liquidity in the same plan", () => {
     const penalty = MathLib.WAD / 10n;
     const cap = { absoluteCap: 110n, relativeCap: MathLib.WAD };
     const { data } = makeFixture({
@@ -1462,14 +1462,11 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
         from: from.type,
         assets,
       })),
-    ).toStrictEqual([
-      { from: "market", assets: 100n },
-      { from: "idle", assets: 10n },
-    ]);
-    expect(result.data.getVault(VAULT).assetBalance).toBe(1n);
+    ).toStrictEqual([{ from: "market", assets: 100n }]);
+    expect(result.data.getVault(VAULT).assetBalance).toBe(10n);
   });
 
-  test("behavior: recomputes firstTotalAssets for a later transaction", () => {
+  test("behavior: makes prior penalty donations available in a later transaction", () => {
     const penalty = MathLib.WAD / 10n;
     const cap = { absoluteCap: 10_000n, relativeCap: MathLib.WAD - 1n };
     const { data } = makeFixture({
@@ -1492,7 +1489,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     expect(first.reallocations).toHaveLength(1);
     expect(second.reallocations[0]).toMatchObject({
       from: { type: "idle" },
-      assets: 11n,
+      assets: 10n,
     });
   });
 
@@ -1637,7 +1634,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
         })),
     ).toStrictEqual([
       { from: "market", assets: sourceExpectedAssets },
-      { from: "idle", assets: 302n },
+      { from: "idle", assets: 300n },
     ]);
     expect(getActiveAdapters).toHaveBeenCalledTimes(1);
     getActiveAdapters.mockRestore();

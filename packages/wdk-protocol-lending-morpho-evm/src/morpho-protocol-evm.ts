@@ -660,12 +660,13 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   /**
    * Borrows assets from the configured Morpho Blue market.
    *
-   * Use `getBorrowRequirements(options)` first if GeneralAdapter1 has not been
-   * authorized on Morpho for this account. When offchain signatures are enabled
-   * (`supportSignature: true`), sign the returned authorization requirement and
-   * pass it back via `options.requirementSignature` to fold the
-   * `setAuthorizationWithSig` call into the same bundle; otherwise submit the
-   * returned `setAuthorization` transaction separately first.
+   * Call `getBorrowRequirements(options)` first and satisfy every returned
+   * requirement. Vault V2 reallocations with a nonzero penalty may require a
+   * loan-token approval in addition to GeneralAdapter1 authorization. When
+   * offchain signatures are enabled (`supportSignature: true`), sign the returned
+   * authorization requirement and pass it via `options.requirementSignature` to
+   * fold `setAuthorizationWithSig` into the bundle; otherwise submit the returned
+   * authorization transaction separately first.
    *
    * @param options - The borrow options.
    * @param config - ERC-4337 transaction config override.

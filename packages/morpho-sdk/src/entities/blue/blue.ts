@@ -587,6 +587,12 @@ export interface BlueActions {
    * @param params.block.timestamp - Timestamp corresponding to the fetched block.
    * @returns A `VaultV2BlueReallocationData` snapshot ready for {@link getVaultV2BlueReallocations}.
    * @throws {ChainIdMismatchError} when the client chain does not match this market.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+   * @throws {UnknownAddressError} when the chain has no BluePublicAllocator deployment.
+   * @throws {UnknownFactory} when the chain has no Vault V2 factory.
+   * @throws {UnknownOfFactory} when a requested address is not a Vault V2 from that factory.
+   * @throws {UnsupportedVaultV2AdapterError} when a vault contains an unsupported adapter.
+   * @throws {viem.BaseError} when an RPC or contract read fails with no fallback left.
    */
   getVaultV2BlueReallocationData: (params: {
     vaultAddresses: readonly Address[];
@@ -678,6 +684,7 @@ export interface BlueActions {
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent.
    * @throws {UnknownReallocationMarketPublicAllocatorConfigError} when an adapter-market allocator configuration is absent.
    * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
+   * @throws {ReallocationAllocationUnderflowError} when an inconsistent allocation snapshot underflows during the final transition.
    * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the shortfall.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
    * @example
@@ -2071,6 +2078,12 @@ export class MorphoBlue implements BlueActions {
    * @param params.block.timestamp - Timestamp corresponding to the fetched block.
    * @returns A `VaultV2BlueReallocationData` snapshot ready for {@link getVaultV2BlueReallocations}.
    * @throws {ChainIdMismatchError} when the client chain does not match this market.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+   * @throws {UnknownAddressError} when the chain has no BluePublicAllocator deployment.
+   * @throws {UnknownFactory} when the chain has no Vault V2 factory.
+   * @throws {UnknownOfFactory} when a requested address is not a Vault V2 from that factory.
+   * @throws {UnsupportedVaultV2AdapterError} when a vault contains an unsupported adapter.
+   * @throws {viem.BaseError} when an RPC or contract read fails with no fallback left.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -2260,6 +2273,7 @@ export class MorphoBlue implements BlueActions {
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent.
    * @throws {UnknownReallocationMarketPublicAllocatorConfigError} when an adapter-market allocator configuration is absent.
    * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
+   * @throws {ReallocationAllocationUnderflowError} when an inconsistent allocation snapshot underflows during the final transition.
    * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the shortfall.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
    * @example
