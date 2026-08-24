@@ -477,6 +477,61 @@ describe("VaultV2BlueReallocationData accessors", () => {
   });
 });
 
+describe("VaultV2BlueReallocationData.clone", () => {
+  test("default: deep-clones liquidity adapter and allocation state", () => {
+    const { data } = makeFixture();
+    const fixtureVault = data.getVault(VAULT);
+    const fixtureLiquidityAdapter = fixtureVault.accrualAdapters.find(
+      ({ address }) => address === TARGET_ADAPTER,
+    )!;
+    const input = new VaultV2BlueReallocationData({
+      chainId: data.chainId,
+      markets: data.markets,
+      vaults: {
+        [VAULT]: new AccrualVaultV2(
+          {
+            ...fixtureVault,
+            liquidityAdapter: fixtureLiquidityAdapter.address,
+            liquidityAllocations: [
+              {
+                id: zeroHash,
+                absoluteCap: 100n,
+                relativeCap: MathLib.WAD,
+                allocation: 10n,
+              },
+            ],
+          },
+          fixtureLiquidityAdapter,
+          [...fixtureVault.accrualAdapters],
+          fixtureVault.assetBalance,
+          fixtureVault.forceDeallocatePenalties,
+        ),
+      },
+    });
+
+    const inputVault = input.getVault(VAULT);
+    const clonedVault = input.clone().getVault(VAULT);
+
+    expect(clonedVault.accrualLiquidityAdapter).toBe(
+      clonedVault.accrualAdapters.find(
+        ({ address }) => address === TARGET_ADAPTER,
+      ),
+    );
+    expect(clonedVault.accrualLiquidityAdapter).not.toBe(
+      inputVault.accrualLiquidityAdapter,
+    );
+    expect(clonedVault.liquidityAllocations).not.toBe(
+      inputVault.liquidityAllocations,
+    );
+
+    const clonedAllocation =
+      clonedVault.liquidityAllocations![0] as IVaultV2Allocation;
+    clonedAllocation.allocation = 99n;
+
+    expect(inputVault.liquidityAllocations?.[0]?.allocation).toBe(10n);
+  });
+});
+
 describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
   test("default: returns an action-ready market reallocation and cloned post-state", () => {
     const {
@@ -537,7 +592,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
 
     expect(() =>
       // biome-ignore lint/complexity/useLiteralKeys: exercise the private transition invariant directly.
-      data["cloneWithPublicReallocation"]({
+      data["applyPublicReallocation"]({
         reallocation: {
           vault: VAULT,
           from: {
@@ -551,6 +606,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
         },
         targetMarketId: targetParams.id,
         timestamp: TIMESTAMP,
+        probe: true,
       }),
     ).toThrow(ReallocationAdapterSupplySharesUnderflowError);
   });
@@ -564,7 +620,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
 
     expect(() =>
       // biome-ignore lint/complexity/useLiteralKeys: exercise the private transition invariant directly.
-      data["cloneWithPublicReallocation"]({
+      data["applyPublicReallocation"]({
         reallocation: {
           vault: VAULT,
           from: {
@@ -578,6 +634,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
         },
         targetMarketId: targetParams.id,
         timestamp: TIMESTAMP,
+        probe: true,
       }),
     ).toThrow(ReallocationAllocationUnderflowError);
   });
@@ -1523,6 +1580,10 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       idle: 300n,
       penalty: 8n,
     });
+    const getActiveAdapters = vi.spyOn(
+      VaultV2BlueReallocationData.prototype,
+      "getActiveAdapters",
+    );
 
     expect(
       data.computeVaultV2BlueReallocations(targetParams.id).reallocations,
@@ -1545,6 +1606,8 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       { from: "market", assets: sourceExpectedAssets },
       { from: "idle", assets: 302n },
     ]);
+    expect(getActiveAdapters).toHaveBeenCalledTimes(1);
+    getActiveAdapters.mockRestore();
   });
 });
 
@@ -1623,24 +1686,28 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
     expect(defaultReallocations).toStrictEqual(explicitReallocations);
   });
 
-  test("behavior: falls back to a 100% source-utilization ceiling", () => {
+  test("behavior: falls back only for the remaining absolute shortfall", () => {
     const { data } = makeFixture({
       targetSupply: 100n,
       targetBorrow: 100n,
       sourceSupply: 1_000n,
-      sourceBorrow: 950n,
+      sourceBorrow: 940n,
+    });
+    const clone = vi.spyOn(VaultV2BlueReallocationData.prototype, "clone");
+
+    const result = data.computeVaultV2BlueReallocations(targetParams.id, {
+      reallocatableVaults: [VAULT as Address].values(),
+      maxWithdrawalUtilization: 950_000_000_000_000_000n,
+      operation: { type: "borrow", amount: 40n },
     });
 
-    const { reallocations } = data.computeVaultV2BlueReallocations(
-      targetParams.id,
-      {
-        reallocatableVaults: [VAULT as Address].values(),
-        maxWithdrawalUtilization: 950_000_000_000_000_000n,
-        operation: { type: "borrow", amount: 40n },
-      },
-    );
-
-    expect(reallocations[0]?.assets).toBe(40n);
+    expect(result.reallocations.map(({ assets }) => assets)).toStrictEqual([
+      10n,
+      30n,
+    ]);
+    expect(result.data.getMarket(targetParams.id).totalSupplyAssets).toBe(140n);
+    expect(clone).toHaveBeenCalledTimes(1);
+    clone.mockRestore();
   });
 
   test("behavior: plans a loan-asset withdraw", () => {

@@ -856,6 +856,8 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationVaultError} when configured vault state is absent.
    * @throws {UnknownReallocationPublicAllocatorConfigError} when allocator authorization state is absent.
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
+   * @throws {UnknownReallocationMarketPublicAllocatorConfigError} when an adapter-market allocator configuration is absent.
+   * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
    * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the absolute shortfall.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdraw exceeds market supply.
    * @example
@@ -908,11 +910,12 @@ export class VaultV2BlueReallocationData
     const resolvedOptions = { ...options, maxPenalty };
     const operation = options.operation;
     if (operation == null) {
-      const result = this.computeVaultV2BlueReallocationsAtUtilization({
-        marketId,
-        maxWithdrawalUtilization,
-        options: resolvedOptions,
-      });
+      const result =
+        this.clone().computeVaultV2BlueReallocationsAtUtilizationInPlace({
+          marketId,
+          maxWithdrawalUtilization,
+          options: resolvedOptions,
+        });
       // Onchain firstTotalAssets is transient: preserve it within this plan,
       // then clear it before exposing post-state for another transaction.
       for (const vault of Object.keys(
@@ -963,16 +966,20 @@ export class VaultV2BlueReallocationData
     )
       return { reallocations: [], data: this };
 
-    let requiredAssets =
+    const requiredAssets =
       MathLib.wDivUp(newTotalBorrowAssets, DEFAULT_SUPPLY_TARGET_UTILIZATION) -
       newTotalSupplyAssets;
+    if (requiredAssets <= 0n) return { reallocations: [], data: this };
 
-    const friendly = this.computeVaultV2BlueReallocationsAtUtilization({
-      marketId,
-      maxWithdrawalUtilization,
-      options: normalizedOptions,
-    });
-    const discovered = [...friendly.reallocations];
+    const friendly =
+      this.clone().computeVaultV2BlueReallocationsAtUtilizationInPlace({
+        marketId,
+        maxWithdrawalUtilization,
+        maxAssets: requiredAssets,
+        options: normalizedOptions,
+      });
+    const reallocations = [...friendly.reallocations];
+    const data = friendly.data;
     const friendlyMarket = friendly.data.getMarket(marketId);
     const friendlyBorrow =
       type === "borrow"
@@ -984,57 +991,30 @@ export class VaultV2BlueReallocationData
         : friendlyMarket.totalSupplyAssets;
 
     if (friendlyBorrow > friendlySupply) {
-      requiredAssets = newTotalBorrowAssets - newTotalSupplyAssets;
-      discovered.push(
-        ...friendly.data.computeVaultV2BlueReallocationsAtUtilization({
+      const fallback = data.computeVaultV2BlueReallocationsAtUtilizationInPlace(
+        {
           marketId,
           maxWithdrawalUtilization: MathLib.WAD,
+          maxAssets: friendlyBorrow - friendlySupply,
           options: normalizedOptions,
-        }).reallocations,
+        },
       );
+      reallocations.push(...fallback.reallocations);
     }
-
-    if (requiredAssets <= 0n) return { reallocations: [], data: this };
 
     const absoluteShortfall =
       newTotalBorrowAssets > newTotalSupplyAssets
         ? newTotalBorrowAssets - newTotalSupplyAssets
         : 0n;
-    const reallocations: VaultV2BlueReallocation[] = [];
-    let remainingRequiredAssets = requiredAssets;
-
-    for (const reallocation of discovered) {
-      const assets = MathLib.min(reallocation.assets, remainingRequiredAssets);
-      if (assets <= 0n) continue;
-
-      reallocations.push({ ...reallocation, assets });
-      remainingRequiredAssets -= assets;
-      if (remainingRequiredAssets === 0n) break;
-    }
-
-    const reallocatedAssets = requiredAssets - remainingRequiredAssets;
+    const reallocatedAssets = reallocations.reduce(
+      (total, { assets }) => total + assets,
+      0n,
+    );
     if (reallocatedAssets < absoluteShortfall) {
       throw new InsufficientSharedLiquidityError({
         marketId,
         shortfall: absoluteShortfall,
         available: reallocatedAssets,
-      });
-    }
-
-    let data = this.clone();
-    data.setMarkets(
-      Object.values(data.markets)
-        .filter(
-          (currentMarket): currentMarket is ReadonlyMarketSnapshot =>
-            currentMarket != null,
-        )
-        .map((currentMarket) => currentMarket.accrueInterest(timestamp)),
-    );
-    for (const reallocation of reallocations) {
-      data = data.cloneWithPublicReallocation({
-        reallocation,
-        targetMarketId: marketId,
-        timestamp,
       });
     }
 
@@ -1045,13 +1025,15 @@ export class VaultV2BlueReallocationData
     return { reallocations, data };
   }
 
-  private computeVaultV2BlueReallocationsAtUtilization({
+  private computeVaultV2BlueReallocationsAtUtilizationInPlace({
     marketId,
     maxWithdrawalUtilization,
+    maxAssets,
     options = {},
   }: {
     readonly marketId: MarketId;
     readonly maxWithdrawalUtilization: bigint;
+    readonly maxAssets?: bigint;
     readonly options?: VaultV2BluePublicAllocatorOptions;
   }): {
     readonly reallocations: readonly VaultV2BlueReallocation[];
@@ -1064,7 +1046,8 @@ export class VaultV2BlueReallocationData
       options.timestamp == null
         ? this.getLatestSnapshotTimestamp()
         : BigInt(options.timestamp);
-    let data = this.clone();
+    // biome-ignore lint/complexity/noUselessThisAlias: distinguishes the planner-owned clone from its public caller.
+    const data = this;
     data.setMarkets(
       Object.values(data.markets)
         .filter((market): market is ReadonlyMarketSnapshot => market != null)
@@ -1081,8 +1064,10 @@ export class VaultV2BlueReallocationData
     );
     const normalizedMarketId = marketId.toLowerCase();
     const adapterIdsCache = new Map<string, AdapterIds>();
+    const activeAdaptersCache = new Map<Address, ReadonlySet<string>>();
+    let remainingAssets = maxAssets;
 
-    while (true) {
+    while (remainingAssets == null || remainingAssets > 0n) {
       const candidates = vaults
         .map((vaultAddress) => {
           const targetMarket = data.getMarket(marketId);
@@ -1096,7 +1081,15 @@ export class VaultV2BlueReallocationData
               (options.maxPenalty ?? DEFAULT_MAX_REALLOCATION_PENALTY)
           )
             return;
-          const activeAdapters = [...data.getActiveAdapters(vaultAddress)];
+          let activeAdapters = activeAdaptersCache.get(vaultAddress);
+          if (activeAdapters == null) {
+            activeAdapters = new Set(
+              [...data.getActiveAdapters(vaultAddress)].map((adapter) =>
+                adapter.toLowerCase(),
+              ),
+            );
+            activeAdaptersCache.set(vaultAddress, activeAdapters);
+          }
 
           const targetSupplyHeadroom = MathLib.zeroFloorSub(
             MathLib.MAX_UINT_128,
@@ -1133,9 +1126,7 @@ export class VaultV2BlueReallocationData
                 marketPublicAllocatorConfig.adapter,
                 adapter.address,
               ) ||
-              !activeAdapters.some((activeAdapter) =>
-                isAddressEqual(activeAdapter, adapter.address),
-              )
+              !activeAdapters.has(adapter.address.toLowerCase())
             )
               continue;
 
@@ -1214,11 +1205,7 @@ export class VaultV2BlueReallocationData
                 continue;
               if (!isAddressEqual(sourceAdapter.parentVault, vaultAddress))
                 continue;
-              if (
-                !activeAdapters.some((activeAdapter) =>
-                  isAddressEqual(activeAdapter, sourceAdapter.address),
-                )
-              )
+              if (!activeAdapters.has(sourceAdapter.address.toLowerCase()))
                 continue;
 
               for (const sourceMarketReference of sourceAdapter.markets) {
@@ -1321,7 +1308,7 @@ export class VaultV2BlueReallocationData
               probeUpper = false;
               const postState = _try(
                 () =>
-                  data.cloneWithPublicReallocation({
+                  data.applyPublicReallocation({
                     reallocation: { ...reallocation, assets },
                     targetMarketId: marketId,
                     timestamp: targetMarket.lastUpdate,
@@ -1380,14 +1367,21 @@ export class VaultV2BlueReallocationData
       const largest = candidates[0];
       if (largest == null) return { reallocations, data };
 
-      reallocations.push(largest);
-      data = data.cloneWithPublicReallocation({
-        reallocation: largest,
+      const reallocation = {
+        ...largest,
+        assets: MathLib.min(largest.assets, remainingAssets ?? largest.assets),
+      };
+      reallocations.push(reallocation);
+      data.applyPublicReallocation({
+        reallocation,
         targetMarketId: marketId,
         timestamp,
         adapterIdsCache,
       });
+      if (remainingAssets != null) remainingAssets -= reallocation.assets;
     }
+
+    return { reallocations, data };
   }
 
   /**
@@ -1402,6 +1396,8 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationVaultError} when configured vault state is absent.
    * @throws {UnknownReallocationPublicAllocatorConfigError} when allocator authorization state is absent.
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
+   * @throws {UnknownReallocationMarketPublicAllocatorConfigError} when an adapter-market allocator configuration is absent.
+   * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -1433,13 +1429,15 @@ export class VaultV2BlueReallocationData
 
     const maxPenalty = resolveMaxPenalty(options?.maxPenalty);
 
-    return this.computeVaultV2BlueReallocationsAtUtilization({
-      marketId,
-      maxWithdrawalUtilization: resolveMaxWithdrawalUtilization(
-        options?.maxWithdrawalUtilization,
-      ),
-      options: { ...options, maxPenalty },
-    }).reallocations.reduce((total, { assets }) => total + assets, 0n);
+    return this.clone()
+      .computeVaultV2BlueReallocationsAtUtilizationInPlace({
+        marketId,
+        maxWithdrawalUtilization: resolveMaxWithdrawalUtilization(
+          options?.maxWithdrawalUtilization,
+        ),
+        options: { ...options, maxPenalty },
+      })
+      .reallocations.reduce((total, { assets }) => total + assets, 0n);
   }
 
   /**
@@ -1456,6 +1454,8 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationVaultError} when configured vault state is absent.
    * @throws {UnknownReallocationPublicAllocatorConfigError} when allocator authorization state is absent.
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
+   * @throws {UnknownReallocationMarketPublicAllocatorConfigError} when an adapter-market allocator configuration is absent.
+   * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -1497,8 +1497,8 @@ export class VaultV2BlueReallocationData
     )
       return market.getBorrowToUtilization(utilization);
 
-    const availableLiquidity =
-      this.computeVaultV2BlueReallocationsAtUtilization({
+    const availableLiquidity = this.clone()
+      .computeVaultV2BlueReallocationsAtUtilizationInPlace({
         marketId,
         maxWithdrawalUtilization: resolveMaxWithdrawalUtilization(
           options?.maxWithdrawalUtilization,
@@ -1508,7 +1508,8 @@ export class VaultV2BlueReallocationData
           timestamp,
           maxPenalty: resolveMaxPenalty(options?.maxPenalty),
         },
-      }).reallocations.reduce((total, { assets }) => total + assets, 0n);
+      })
+      .reallocations.reduce((total, { assets }) => total + assets, 0n);
     return MarketUtils.getBorrowToUtilization(
       {
         totalSupplyAssets: market.totalSupplyAssets + availableLiquidity,
@@ -1529,7 +1530,7 @@ export class VaultV2BlueReallocationData
     return timestamp;
   }
 
-  private cloneWithPublicReallocation({
+  private applyPublicReallocation({
     reallocation,
     targetMarketId,
     timestamp,
@@ -1566,7 +1567,7 @@ export class VaultV2BlueReallocationData
                     this.mutableAllocations[sourceAllocationsKey],
                 },
         })
-      : this.clone();
+      : this;
     if (probe) {
       const sourceFirstTotalAssetsKey = findAddressKey(
         this.firstTotalAssets,

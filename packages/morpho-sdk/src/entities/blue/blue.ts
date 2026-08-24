@@ -676,6 +676,8 @@ export interface BlueActions {
    * @throws {UnknownReallocationVaultError} when configured vault state is absent.
    * @throws {UnknownReallocationPublicAllocatorConfigError} when allocator authorization state is absent.
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent.
+   * @throws {UnknownReallocationMarketPublicAllocatorConfigError} when an adapter-market allocator configuration is absent.
+   * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
    * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the shortfall.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
    * @example
@@ -2256,6 +2258,8 @@ export class MorphoBlue implements BlueActions {
    * @throws {UnknownReallocationVaultError} when configured vault state is absent.
    * @throws {UnknownReallocationPublicAllocatorConfigError} when allocator authorization state is absent.
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent.
+   * @throws {UnknownReallocationMarketPublicAllocatorConfigError} when an adapter-market allocator configuration is absent.
+   * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
    * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the shortfall.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
    * @example
