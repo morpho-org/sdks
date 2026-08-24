@@ -675,6 +675,12 @@ describe("addressesRegistry", () => {
       "0xcAB7C66F7191Ad3Ef1e7fEeb67F3137BC975F8cE",
       26_530_057n,
     ],
+    [
+      ChainId.ArcMainnet,
+      "morphoVaultV1AdapterFactory",
+      "0x77788033B22CEaB8D51Ec8F9dFD4a40E54F380B0",
+      5_314_109n,
+    ],
   ] as const)(
     "behavior: matches the deployments registry for %i %s",
     (...[chainId, label, address, deploymentBlock]) => {
