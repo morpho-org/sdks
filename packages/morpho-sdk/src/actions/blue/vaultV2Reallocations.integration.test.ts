@@ -34,7 +34,6 @@ import {
   isRequirementBlueAuthorization,
   morphoViemExtension,
 } from "../../index.js";
-import type { VaultV2BlueReallocation } from "../../types/index.js";
 
 const test = createViemTest(base, {
   forkUrl: process.env.BASE_RPC_URL,
@@ -69,16 +68,11 @@ describe("Blue actions with Vault V2 reallocations", () => {
       vaultV2BluePublicAllocator: allocator,
     } = getChainAddresses(base.id);
     assert(allocator != null);
-    const sourceAssets = parseUnits("20", 6);
-    const idleAssets = parseUnits("10", 6);
     const sourceDeposit = parseUnits("100", 6);
     const initialIdleAssets = parseUnits("20", 6);
     const penalty = parseUnits("0.01", 18);
     const borrowAmount = parseUnits("1", 6);
     const collateralAmount = parseUnits("1", 18);
-    const totalPenaltyAssets =
-      MathLib.wMulUp(sourceAssets, penalty) +
-      MathLib.wMulUp(idleAssets, penalty);
 
     for (const marketParams of [sourceMarket, targetMarket]) {
       const marketState = await readContractRestructured(client, {
@@ -233,11 +227,6 @@ describe("Blue actions with Vault V2 reallocations", () => {
       market: targetMarket,
       collateralAmount,
     });
-    await client.deal({
-      account: client.account.address,
-      erc20: targetMarket.loanToken,
-      amount: totalPenaltyAssets,
-    });
 
     const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.blue(targetMarket, base.id);
@@ -257,34 +246,33 @@ describe("Blue actions with Vault V2 reallocations", () => {
     expect(discovery.data.getAdapter(vault, targetAdapter).marketIds).toContain(
       targetMarket.id,
     );
-
-    const reallocations: readonly VaultV2BlueReallocation[] = [
-      {
-        vault,
-        from: {
-          type: "market",
-          adapter: sourceAdapter,
-          marketParams: sourceMarket,
-        },
-        to: { adapter: targetAdapter },
-        assets: sourceAssets,
-        penalty,
-      },
-      {
-        vault,
-        from: { type: "idle" },
-        to: { adapter: targetAdapter },
-        assets: idleAssets,
-        penalty,
-      },
-    ];
+    const sourceReallocation = discovery.reallocations.find(
+      ({ from }) => from.type === "market",
+    );
+    const idleReallocation = discovery.reallocations.find(
+      ({ from }) => from.type === "idle",
+    );
+    assert(sourceReallocation != null);
+    assert(idleReallocation != null);
+    expect(sourceReallocation.penalty).toBe(penalty);
+    expect(idleReallocation.penalty).toBe(penalty);
+    const totalPenaltyAssets = discovery.reallocations.reduce(
+      (assets, reallocation) =>
+        assets + MathLib.wMulUp(reallocation.assets, reallocation.penalty),
+      0n,
+    );
+    await client.deal({
+      account: client.account.address,
+      erc20: targetMarket.loanToken,
+      amount: totalPenaltyAssets,
+    });
 
     const positionData = await market.getPositionData(client.account.address);
     const borrow = market.borrow({
       userAddress: client.account.address,
       amount: borrowAmount,
       positionData,
-      reallocations,
+      reallocations: discovery.reallocations,
     });
     const requirements = await borrow.getRequirements();
     const approval = requirements.find(isRequirementApproval);
@@ -364,7 +352,7 @@ describe("Blue actions with Vault V2 reallocations", () => {
     expect(targetPositionAfter.supplyShares).toBeGreaterThan(0n);
     expect(vaultBalanceBefore).toBe(initialIdleAssets);
     expect(vaultBalanceAfter).toBe(
-      vaultBalanceBefore + totalPenaltyAssets - idleAssets,
+      vaultBalanceBefore + totalPenaltyAssets - idleReallocation.assets,
     );
     expect(bundlerBalanceAfter).toBe(0n);
     expect(allocatorAllowanceAfter).toBe(0n);

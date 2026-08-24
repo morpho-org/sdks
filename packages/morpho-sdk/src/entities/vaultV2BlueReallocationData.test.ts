@@ -16,8 +16,13 @@ import {
   VaultV2BlueMarketPublicAllocatorConfig,
   VaultV2BluePublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
-import type { Address, Hash } from "viem";
-import { zeroAddress, zeroHash } from "viem";
+import {
+  type Address,
+  type Hash,
+  isAddressEqual,
+  zeroAddress,
+  zeroHash,
+} from "viem";
 import { describe, expect, test, vi } from "vitest";
 import { blueBorrow } from "../actions/index.js";
 import { MAX_REALLOCATION_PENALTY } from "../helpers/constant.js";
@@ -613,6 +618,65 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       data.getVault(VAULT)._totalAssets,
     );
     expect(transition.data).not.toHaveProperty("firstTotalAssets");
+  });
+
+  test("behavior: probe clones only transition adapters and allocations", () => {
+    const { data } = makeFixture();
+    const untouchedAdapter = new AccrualVaultV2MorphoMarketV1AdapterV2(
+      {
+        address: SECOND_TARGET_ADAPTER,
+        parentVault: VAULT,
+        skimRecipient: zeroAddress,
+        marketIds: [],
+        adaptiveCurveIrm: IRM,
+        supplyShares: {},
+      },
+      [],
+    );
+    (data.getVault(VAULT).accrualAdapters as IAccrualVaultV2Adapter[]).push(
+      untouchedAdapter,
+    );
+    const sourceAdapter = data.getAdapter(VAULT, SOURCE_ADAPTER);
+    const targetAdapter = data.getAdapter(VAULT, TARGET_ADAPTER);
+
+    // biome-ignore lint/complexity/useLiteralKeys: exercise the private probe snapshot directly.
+    const transition = data["applyPublicReallocation"]({
+      context: { donatedPenaltyAssets: {}, firstTotalAssets: {} },
+      reallocation: {
+        vault: VAULT,
+        from: {
+          type: "market",
+          adapter: SOURCE_ADAPTER,
+          marketParams: sourceParams,
+        },
+        to: { adapter: TARGET_ADAPTER },
+        assets: 1n,
+        penalty: 0n,
+      },
+      targetMarketId: targetParams.id,
+      timestamp: TIMESTAMP,
+      probe: true,
+    });
+    const probeVault = transition.data.getVault(VAULT);
+    const expectedAllocationIds = new Set([
+      ...sourceAdapter.ids(sourceParams),
+      ...targetAdapter.ids(targetParams),
+    ]);
+
+    expect(transition.data.getAdapter(VAULT, SOURCE_ADAPTER)).not.toBe(
+      sourceAdapter,
+    );
+    expect(transition.data.getAdapter(VAULT, TARGET_ADAPTER)).not.toBe(
+      targetAdapter,
+    );
+    expect(
+      probeVault.accrualAdapters.find(({ address }) =>
+        isAddressEqual(address, SECOND_TARGET_ADAPTER),
+      ),
+    ).toBe(untouchedAdapter);
+    expect(
+      Object.keys(transition.data.allocations[VAULT] ?? {}).sort(),
+    ).toStrictEqual([...expectedAllocationIds].sort());
   });
 
   test("error: ReallocationAdapterSupplySharesUnderflowError", () => {

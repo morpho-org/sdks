@@ -52,6 +52,8 @@ describe("BundlerAction", () => {
   const deallocateAdapter = "0x0000000000000000000000000000000000000012";
   const allocateAdapter = "0x0000000000000000000000000000000000000013";
   const loanToken = "0x0000000000000000000000000000000000000007";
+  const approveOnlyOnceToken: Address =
+    "0xdAC17F958D2ee523a2206206994597C13D831ec7";
   const collateralToken = "0x0000000000000000000000000000000000000008";
   const oracle = "0x0000000000000000000000000000000000000009";
   const irm = "0x0000000000000000000000000000000000000010";
@@ -1643,6 +1645,35 @@ describe("BundlerAction", () => {
     ]);
   });
 
+  test("vaultV2BluePublicAllocatorReallocate resets approve-once tokens", () => {
+    const penalty = 1_000_000_000_000_000n;
+    const approveOnlyOnceMarket = {
+      ...market,
+      loanToken: approveOnlyOnceToken,
+    };
+    const [reset, approval, call] =
+      BundlerAction.vaultV2BluePublicAllocatorReallocate(
+        chainId,
+        vault,
+        deallocateAdapter,
+        approveOnlyOnceMarket,
+        allocateAdapter,
+        approveOnlyOnceMarket,
+        1_000_000n,
+        penalty,
+      );
+
+    expect(
+      [reset, approval].map((approvalCall) =>
+        decodeFunctionData({ abi: erc20Abi, data: approvalCall!.data }),
+      ),
+    ).toStrictEqual([
+      { functionName: "approve", args: [allocator, 0n] },
+      { functionName: "approve", args: [allocator, 1_000n] },
+    ]);
+    expect(call?.to).toBe(allocator);
+  });
+
   test("vaultV2BluePublicAllocatorReallocate rejects a skippable penalty approval", () => {
     expect(() =>
       BundlerAction.vaultV2BluePublicAllocatorReallocate(
@@ -1723,6 +1754,33 @@ describe("BundlerAction", () => {
     expect(call.skipRevert).toBe(true);
     expect(decoded.functionName).toBe("allocateFromIdle");
     expect(decoded.args).toEqual([vault, allocateAdapter, market, 1n, 0n]);
+  });
+
+  test("vaultV2BluePublicAllocatorAllocateFromIdle resets approve-once tokens", () => {
+    const penalty = 1_000_000_000_000_000n;
+    const approveOnlyOnceMarket = {
+      ...market,
+      loanToken: approveOnlyOnceToken,
+    };
+    const [reset, approval, call] =
+      BundlerAction.vaultV2BluePublicAllocatorAllocateFromIdle(
+        chainId,
+        vault,
+        allocateAdapter,
+        approveOnlyOnceMarket,
+        1_000_000n,
+        penalty,
+      );
+
+    expect(
+      [reset, approval].map((approvalCall) =>
+        decodeFunctionData({ abi: erc20Abi, data: approvalCall!.data }),
+      ),
+    ).toStrictEqual([
+      { functionName: "approve", args: [allocator, 0n] },
+      { functionName: "approve", args: [allocator, 1_000n] },
+    ]);
+    expect(call?.to).toBe(allocator);
   });
 
   test("vaultV2BluePublicAllocatorAllocateFromIdle rejects a skippable penalty approval", () => {

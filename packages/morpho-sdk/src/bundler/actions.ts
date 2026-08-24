@@ -24,6 +24,7 @@ import {
   zeroHash,
 } from "viem";
 import { bundler3Abi, coreAdapterAbi, generalAdapter1Abi } from "../abis.js";
+import { APPROVE_ONLY_ONCE_TOKENS } from "../helpers/constant.js";
 import { BundlerErrors } from "../types/error.js";
 import type {
   Action,
@@ -1471,7 +1472,7 @@ export namespace BundlerAction {
    * @param assets - Assets to reallocate, bounded by `uint128` by the high-level action.
    * @param penalty - Vault-configured proportional penalty, scaled by WAD.
    * @param skipRevert - Whether Bundler3 should tolerate a revert.
-   * @returns An exact token approval when needed, followed by the allocator call.
+   * @returns An optional zero reset for approve-once tokens, the exact approval when needed, then the allocator call.
    * @throws {BundlerErrors.UnexpectedAction} when the chain has no Blue Public Allocator deployment.
    * @throws {BundlerErrors.SkippableAllocatorPenalty} when `skipRevert` is true and a token approval is required.
    * @example
@@ -1550,17 +1551,23 @@ export namespace BundlerAction {
     }
 
     if (penaltyAssets > 0n) {
-      calls.push({
-        to: allocateMarket.loanToken,
-        data: encodeFunctionData({
-          abi: erc20Abi,
-          functionName: "approve",
-          args: [allocator, penaltyAssets],
-        }),
-        value: 0n,
-        skipRevert,
-        callbackHash: zeroHash,
-      });
+      const approvalAmounts = APPROVE_ONLY_ONCE_TOKENS[chainId]?.some((token) =>
+        isAddressEqual(token, allocateMarket.loanToken),
+      )
+        ? [0n, penaltyAssets]
+        : [penaltyAssets];
+      for (const amount of approvalAmounts)
+        calls.push({
+          to: allocateMarket.loanToken,
+          data: encodeFunctionData({
+            abi: erc20Abi,
+            functionName: "approve",
+            args: [allocator, amount],
+          }),
+          value: 0n,
+          skipRevert,
+          callbackHash: zeroHash,
+        });
     }
 
     calls.push({
@@ -1599,7 +1606,7 @@ export namespace BundlerAction {
    * @param assets - Assets to allocate, bounded by `uint128` by the high-level action.
    * @param penalty - Vault-configured proportional penalty, scaled by WAD.
    * @param skipRevert - Whether Bundler3 should tolerate a revert.
-   * @returns An exact token approval when needed, followed by the allocator call.
+   * @returns An optional zero reset for approve-once tokens, the exact approval when needed, then the allocator call.
    * @throws {BundlerErrors.UnexpectedAction} when the chain has no Blue Public Allocator deployment.
    * @throws {BundlerErrors.SkippableAllocatorPenalty} when `skipRevert` is true and a token approval is required.
    * @example
@@ -1667,17 +1674,23 @@ export namespace BundlerAction {
     }
 
     if (penaltyAssets > 0n) {
-      calls.push({
-        to: market.loanToken,
-        data: encodeFunctionData({
-          abi: erc20Abi,
-          functionName: "approve",
-          args: [allocator, penaltyAssets],
-        }),
-        value: 0n,
-        skipRevert,
-        callbackHash: zeroHash,
-      });
+      const approvalAmounts = APPROVE_ONLY_ONCE_TOKENS[chainId]?.some((token) =>
+        isAddressEqual(token, market.loanToken),
+      )
+        ? [0n, penaltyAssets]
+        : [penaltyAssets];
+      for (const amount of approvalAmounts)
+        calls.push({
+          to: market.loanToken,
+          data: encodeFunctionData({
+            abi: erc20Abi,
+            functionName: "approve",
+            args: [allocator, amount],
+          }),
+          value: 0n,
+          skipRevert,
+          callbackHash: zeroHash,
+        });
     }
 
     calls.push({

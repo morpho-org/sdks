@@ -289,10 +289,19 @@ const cloneAdapter = (
 
 const cloneVault = (
   vault: ReadonlyVaultSnapshot,
-  markets: Record<MarketId, Market | undefined>,
+  {
+    markets,
+    adapterKeysToClone,
+  }: {
+    readonly markets: Record<MarketId, Market | undefined>;
+    readonly adapterKeysToClone?: ReadonlySet<string>;
+  },
 ) => {
   const adapters = vault.accrualAdapters.map((adapter) =>
-    cloneAdapter(adapter, markets),
+    adapterKeysToClone == null ||
+    adapterKeysToClone.has(adapter.address.toLowerCase())
+      ? cloneAdapter(adapter, markets)
+      : adapter,
   );
   const liquidityAdapter =
     vault.accrualLiquidityAdapter == null
@@ -302,7 +311,13 @@ const cloneVault = (
             adapter.address,
             vault.accrualLiquidityAdapter!.address,
           ),
-        ) ?? cloneAdapter(vault.accrualLiquidityAdapter, markets));
+        ) ??
+        (adapterKeysToClone == null ||
+        adapterKeysToClone.has(
+          vault.accrualLiquidityAdapter.address.toLowerCase(),
+        )
+          ? cloneAdapter(vault.accrualLiquidityAdapter, markets)
+          : vault.accrualLiquidityAdapter));
 
   return new AccrualVaultV2(
     {
@@ -324,8 +339,9 @@ const cloneVault = (
  * Constructor inputs are cloned. Every simulated reallocation returns a new
  * instance. Planning keeps the transaction-scoped `firstTotalAssets`
  * denominator outside the durable snapshot while applying reallocations in
- * contract order. Penalty donations update the simulated vault accounting but
- * remain unavailable as idle liquidity until a later transaction.
+ * contract order. Penalty donations update simulated vault accounting but are
+ * excluded from same-plan idle liquidity so round-up dust cannot create
+ * self-replenishing candidates.
  * Address keys and values retain their supplied casing; lookups compare them
  * case-insensitively.
  *
@@ -487,7 +503,9 @@ export class VaultV2BlueReallocationData
       ReadonlyVaultSnapshot | undefined,
     ][]) {
       const clonedVault =
-        vault == null ? undefined : cloneVault(vault, this.mutableMarkets);
+        vault == null
+          ? undefined
+          : cloneVault(vault, { markets: this.mutableMarkets });
       this.mutableVaults[address] = clonedVault;
     }
 
@@ -1060,10 +1078,13 @@ export class VaultV2BlueReallocationData
     );
     const reallocations: VaultV2BlueReallocation[] = [];
     const configuredVaults = Object.keys(data.vaults) as Address[];
+    const vaultKeyByLower = new Map<string, Address>(
+      configuredVaults.map((vault) => [vault.toLowerCase(), vault]),
+    );
     const vaults = Array.from(
       new Set(
         [...(options.reallocatableVaults ?? configuredVaults)]
-          .map((vault) => findAddressKey(data.vaults, vault))
+          .map((vault) => vaultKeyByLower.get(vault.toLowerCase()))
           .filter((vault): vault is Address => vault != null),
       ),
     );
@@ -1090,9 +1111,8 @@ export class VaultV2BlueReallocationData
             simulationContext.donatedPenaltyAssets,
             vaultAddress,
           );
-          // The whole plan is simulated and executed in one transaction.
-          // Penalty assets are provided only at the end, so planned donations
-          // cannot become idle or available liquidity within that same plan.
+          // Exclude rounded penalty dust from idle candidates so one donation
+          // cannot replenish liquidity for another same-plan reallocation.
           const availableIdleAssets = MathLib.zeroFloorSub(
             vault.assetBalance,
             donatedPenaltyAssetsKey == null
@@ -1577,23 +1597,55 @@ export class VaultV2BlueReallocationData
       this.mutableAllocations,
       reallocation.vault,
     );
-    const data = probe
-      ? new VaultV2BlueReallocationData({
-          chainId: this.chainId,
-          markets: { [targetMarketId]: this.getMarket(targetMarketId) },
-          vaults:
-            sourceVaultKey == null
-              ? {}
-              : { [sourceVaultKey]: this.mutableVaults[sourceVaultKey] },
-          allocations:
-            sourceAllocationsKey == null
-              ? {}
-              : {
-                  [sourceAllocationsKey]:
-                    this.mutableAllocations[sourceAllocationsKey],
-                },
-        })
-      : this;
+    let data: VaultV2BlueReallocationData = this;
+    if (probe) {
+      const probeMarkets: Record<MarketId, ReadonlyMarketSnapshot | undefined> =
+        { [targetMarketId]: this.getMarket(targetMarketId) };
+      const adapterKeysToClone = new Set<string>([
+        reallocation.to.adapter.toLowerCase(),
+      ]);
+      const allocationIdsToClone = new Set<Hash>(
+        getAdapterIds(
+          adapterIdsCache,
+          this.getMutableAdapter(reallocation.vault, reallocation.to.adapter),
+          this.getMarket(targetMarketId),
+        ),
+      );
+
+      if (reallocation.from.type === "market") {
+        const sourceMarket = this.getMarket(reallocation.from.marketParams.id);
+        probeMarkets[sourceMarket.id] = sourceMarket;
+        adapterKeysToClone.add(reallocation.from.adapter.toLowerCase());
+        for (const id of getAdapterIds(
+          adapterIdsCache,
+          this.getMutableAdapter(reallocation.vault, reallocation.from.adapter),
+          sourceMarket,
+        ))
+          allocationIdsToClone.add(id);
+      }
+
+      data = new VaultV2BlueReallocationData({
+        chainId: this.chainId,
+        markets: probeMarkets,
+      });
+      if (sourceVaultKey != null) {
+        const sourceVault = this.mutableVaults[sourceVaultKey];
+        data.mutableVaults[sourceVaultKey] =
+          sourceVault == null
+            ? undefined
+            : cloneVault(sourceVault, {
+                markets: data.mutableMarkets,
+                adapterKeysToClone,
+              });
+      }
+      if (sourceAllocationsKey != null) {
+        const sourceAllocations = this.mutableAllocations[sourceAllocationsKey];
+        const allocations: Record<Hash, IVaultV2Allocation | undefined> = {};
+        for (const id of allocationIdsToClone)
+          allocations[id] = sourceAllocations?.[id];
+        data.mutableAllocations[sourceAllocationsKey] = allocations;
+      }
+    }
 
     const vaultKey =
       findAddressKey(data.mutableVaults, reallocation.vault) ??
@@ -1617,8 +1669,8 @@ export class VaultV2BlueReallocationData
       const donatedPenaltyAssetsKey =
         findAddressKey(context.donatedPenaltyAssets, reallocation.vault) ??
         vaultKey;
-      // Keep the donation in simulated post-state accounting, but exclude it
-      // from same-transaction idle candidates because it is provided at the end.
+      // Track the donation separately so its rounded dust cannot replenish
+      // same-plan idle candidates while remaining in simulated post-state.
       nextContext = {
         ...nextContext,
         donatedPenaltyAssets: {
@@ -1660,7 +1712,7 @@ export class VaultV2BlueReallocationData
       }
       sourceAdapter.supplyShares[sourceMarket.id] =
         currentSupplyShares - withdrawal.shares;
-      data.setMarkets([withdrawal.market]);
+      data.setMarkets([withdrawal.market], probe ? [sourceAdapter] : undefined);
       const sourceChange =
         withdrawal.market.toSupplyAssets(
           sourceAdapter.supplyShares[sourceMarket.id] ?? 0n,
@@ -1740,7 +1792,7 @@ export class VaultV2BlueReallocationData
       targetAdapter.marketIds.push(targetMarket.id);
     if (!targetAdapter.markets.some(({ id }) => id === targetMarket.id))
       targetAdapter.markets.push(supply.market);
-    data.setMarkets([supply.market]);
+    data.setMarkets([supply.market], probe ? [targetAdapter] : undefined);
 
     const targetChange =
       supply.market.toSupplyAssets(targetSupplyShares) - oldTargetAllocation;
@@ -1766,7 +1818,10 @@ export class VaultV2BlueReallocationData
   }
 
   /** Updates canonical markets in bulk and refreshes only dependent adapter views. */
-  private setMarkets(markets: Iterable<Market>) {
+  private setMarkets(
+    markets: Iterable<Market>,
+    adaptersToRefresh?: Iterable<IAccrualVaultV2Adapter>,
+  ) {
     const changedMarketIds = new Set<MarketId>();
     for (const market of markets) {
       this.mutableMarkets[market.id] = market;
@@ -1774,44 +1829,49 @@ export class VaultV2BlueReallocationData
     }
     if (changedMarketIds.size === 0) return;
 
-    // A Morpho market is global state shared by every vault position. Legacy
-    // AccrualPosition constructors copy their Market, so rebuild those adapter
-    // views as well as repointing V2 adapters whenever the canonical state moves.
-    for (const vault of Object.values(this.mutableVaults)) {
-      if (vault == null) continue;
-      const adapters = new Set(vault.accrualAdapters);
-      if (vault.accrualLiquidityAdapter != null)
-        adapters.add(vault.accrualLiquidityAdapter);
+    const adapters = new Set<IAccrualVaultV2Adapter>();
+    if (adaptersToRefresh == null) {
+      // A Morpho market is global state shared by every vault position. Legacy
+      // AccrualPosition constructors copy their Market, so rebuild those adapter
+      // views as well as repointing V2 adapters whenever the canonical state moves.
+      for (const vault of Object.values(this.mutableVaults)) {
+        if (vault == null) continue;
+        for (const adapter of vault.accrualAdapters) adapters.add(adapter);
+        if (vault.accrualLiquidityAdapter != null)
+          adapters.add(vault.accrualLiquidityAdapter);
+      }
+    } else {
+      for (const adapter of adaptersToRefresh) adapters.add(adapter);
+    }
 
-      for (const adapter of adapters) {
-        if (adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2) {
-          if (!adapter.markets.some(({ id }) => changedMarketIds.has(id)))
-            continue;
-          adapter.markets = adapter.markets.map((adapterMarket) =>
-            getCanonicalMarket(this.mutableMarkets, adapterMarket),
-          );
-        } else if (adapter instanceof AccrualVaultV2MorphoMarketV1Adapter) {
-          if (
-            !adapter.positions.some(({ marketId }) =>
-              changedMarketIds.has(marketId),
-            )
+    for (const adapter of adapters) {
+      if (adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2) {
+        if (!adapter.markets.some(({ id }) => changedMarketIds.has(id)))
+          continue;
+        adapter.markets = adapter.markets.map((adapterMarket) =>
+          getCanonicalMarket(this.mutableMarkets, adapterMarket),
+        );
+      } else if (adapter instanceof AccrualVaultV2MorphoMarketV1Adapter) {
+        if (
+          !adapter.positions.some(({ marketId }) =>
+            changedMarketIds.has(marketId),
           )
-            continue;
-          adapter.positions = adapter.positions.map((position) =>
-            clonePosition(position, this.mutableMarkets),
-          );
-        } else if (adapter instanceof AccrualVaultV2MorphoVaultV1Adapter) {
-          if (
-            ![...adapter.accrualVaultV1.allocations.keys()].some((marketId) =>
-              changedMarketIds.has(marketId),
-            )
+        )
+          continue;
+        adapter.positions = adapter.positions.map((position) =>
+          clonePosition(position, this.mutableMarkets),
+        );
+      } else if (adapter instanceof AccrualVaultV2MorphoVaultV1Adapter) {
+        if (
+          ![...adapter.accrualVaultV1.allocations.keys()].some((marketId) =>
+            changedMarketIds.has(marketId),
           )
-            continue;
-          adapter.accrualVaultV1 = cloneAccrualVault(
-            adapter.accrualVaultV1,
-            this.mutableMarkets,
-          );
-        }
+        )
+          continue;
+        adapter.accrualVaultV1 = cloneAccrualVault(
+          adapter.accrualVaultV1,
+          this.mutableMarkets,
+        );
       }
     }
   }
