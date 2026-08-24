@@ -84,6 +84,16 @@ type ReadonlyVaultSnapshot = Readonly<
 
 type AdapterIds = ReturnType<AccrualVaultV2MorphoMarketV1AdapterV2["ids"]>;
 
+/** Transaction-scoped state shared by transitions in one simulated call. @internal */
+interface SimulationContext {
+  readonly firstTotalAssets: Readonly<Record<Address, bigint>>;
+}
+
+/** Creates isolated transaction-scoped state for one simulation. @internal */
+const createSimulationContext = (): SimulationContext => ({
+  firstTotalAssets: {},
+});
+
 /** Input state required to simulate Vault V2 BluePublicAllocator reallocations. */
 export interface InputVaultV2BlueReallocationData {
   /** Chain id associated with the fetched state. */
@@ -310,11 +320,9 @@ const cloneVault = (
  * Immutable-by-convention state container for Vault V2 BluePublicAllocator simulations.
  *
  * Constructor inputs are cloned. Every simulated reallocation returns a new
- * instance. The first allocation for each vault accrues it in contract order
- * after the penalty donation and any source deallocation, then freezes that
- * `_totalAssets` value as `firstTotalAssets` for the rest of the plan. Penalty
- * donations remain available as vault idle liquidity, and returned post-state
- * clears the transaction-scoped `firstTotalAssets` denominator.
+ * instance. Planning keeps the transaction-scoped `firstTotalAssets`
+ * denominator outside the durable snapshot while applying reallocations in
+ * contract order. Penalty donations remain available as vault idle liquidity.
  * Address keys and values retain their supplied casing; lookups compare them
  * case-insensitively.
  *
@@ -351,8 +359,6 @@ export class VaultV2BlueReallocationData
     Address,
     Record<Hash, IVaultV2Allocation | undefined> | undefined
   >;
-  /** Transaction-frozen cap denominator for each vault touched by this plan. */
-  private readonly firstTotalAssets: Record<Address, bigint>;
   /** Chain id associated with this snapshot. */
   public readonly chainId: number;
   /** Markets indexed by market id. */
@@ -409,7 +415,6 @@ export class VaultV2BlueReallocationData
       this.publicAllocatorConfigs = input.publicAllocatorConfigs;
       this.activeAdapters = input.activeAdapters;
       this.marketPublicAllocatorConfigs = input.marketPublicAllocatorConfigs;
-      this.firstTotalAssets = { ...input.firstTotalAssets };
     } else {
       const publicAllocatorConfigs: Record<
         Address,
@@ -425,7 +430,6 @@ export class VaultV2BlueReallocationData
         | undefined
       > = {};
       this.marketPublicAllocatorConfigs = marketPublicAllocatorConfigs;
-      this.firstTotalAssets = {};
 
       for (const [vault, config] of Object.entries(
         input.publicAllocatorConfigs ?? {},
@@ -910,19 +914,14 @@ export class VaultV2BlueReallocationData
     const resolvedOptions = { ...options, maxPenalty };
     const operation = options.operation;
     if (operation == null) {
-      const result =
+      const { reallocations, data } =
         this.clone().computeVaultV2BlueReallocationsAtUtilizationInPlace({
+          context: createSimulationContext(),
           marketId,
           maxWithdrawalUtilization,
           options: resolvedOptions,
         });
-      // Onchain firstTotalAssets is transient: preserve it within this plan,
-      // then clear it before exposing post-state for another transaction.
-      for (const vault of Object.keys(
-        result.data.firstTotalAssets,
-      ) as Address[])
-        delete result.data.firstTotalAssets[vault];
-      return result;
+      return { reallocations, data };
     }
 
     const { amount, type } = operation;
@@ -973,6 +972,7 @@ export class VaultV2BlueReallocationData
 
     const friendly =
       this.clone().computeVaultV2BlueReallocationsAtUtilizationInPlace({
+        context: createSimulationContext(),
         marketId,
         maxWithdrawalUtilization,
         maxAssets: requiredAssets,
@@ -993,6 +993,7 @@ export class VaultV2BlueReallocationData
     if (friendlyBorrow > friendlySupply) {
       const fallback = data.computeVaultV2BlueReallocationsAtUtilizationInPlace(
         {
+          context: friendly.context,
           marketId,
           maxWithdrawalUtilization: MathLib.WAD,
           maxAssets: friendlyBorrow - friendlySupply,
@@ -1018,19 +1019,17 @@ export class VaultV2BlueReallocationData
       });
     }
 
-    // Onchain firstTotalAssets is transient: preserve it within this plan,
-    // then clear it before exposing post-state for another transaction.
-    for (const vault of Object.keys(data.firstTotalAssets) as Address[])
-      delete data.firstTotalAssets[vault];
     return { reallocations, data };
   }
 
   private computeVaultV2BlueReallocationsAtUtilizationInPlace({
+    context,
     marketId,
     maxWithdrawalUtilization,
     maxAssets,
     options = {},
   }: {
+    readonly context: SimulationContext;
     readonly marketId: MarketId;
     readonly maxWithdrawalUtilization: bigint;
     readonly maxAssets?: bigint;
@@ -1038,16 +1037,18 @@ export class VaultV2BlueReallocationData
   }): {
     readonly reallocations: readonly VaultV2BlueReallocation[];
     readonly data: VaultV2BlueReallocationData;
+    readonly context: SimulationContext;
   } {
-    if (options.enabled === false) return { reallocations: [], data: this };
+    if (options.enabled === false)
+      return { reallocations: [], data: this, context };
 
     this.getMarket(marketId);
     const timestamp =
       options.timestamp == null
         ? this.getLatestSnapshotTimestamp()
         : BigInt(options.timestamp);
-    // biome-ignore lint/complexity/noUselessThisAlias: distinguishes the planner-owned clone from its public caller.
-    const data = this;
+    let data: VaultV2BlueReallocationData = this;
+    let simulationContext = context;
     data.setMarkets(
       Object.values(data.markets)
         .filter((market): market is ReadonlyMarketSnapshot => market != null)
@@ -1306,9 +1307,10 @@ export class VaultV2BlueReallocationData
             while (lower < upper) {
               const assets = probeUpper ? upper : (lower + upper + 1n) / 2n;
               probeUpper = false;
-              const postState = _try(
+              const postTransition = _try(
                 () =>
                   data.applyPublicReallocation({
+                    context: simulationContext,
                     reallocation: { ...reallocation, assets },
                     targetMarketId: marketId,
                     timestamp: targetMarket.lastUpdate,
@@ -1318,18 +1320,27 @@ export class VaultV2BlueReallocationData
                 ReallocationAllocationUnderflowError,
                 ReallocationAdapterSupplySharesUnderflowError,
               );
-              if (postState == null) {
+              if (postTransition == null) {
                 upper = assets - 1n;
                 continue;
               }
-              const postVault = postState.getVault(reallocation.vault);
+              const postVault = postTransition.data.getVault(
+                reallocation.vault,
+              );
               // Vault V2 checks relative caps against the transient firstTotalAssets,
               // which stays fixed after the vault's first allocation in a transaction.
+              const firstTotalAssetsKey = findAddressKey(
+                postTransition.context.firstTotalAssets,
+                reallocation.vault,
+              );
               const firstTotalAssets =
-                postState.firstTotalAssets[reallocation.vault] ??
-                postVault._totalAssets;
+                (firstTotalAssetsKey == null
+                  ? undefined
+                  : postTransition.context.firstTotalAssets[
+                      firstTotalAssetsKey
+                    ]) ?? postVault._totalAssets;
               const withinCaps = targetIds.every((id) => {
-                const allocation = postState.getAllocation(
+                const allocation = postTransition.data.getAllocation(
                   reallocation.vault,
                   id,
                 );
@@ -1365,23 +1376,27 @@ export class VaultV2BlueReallocationData
         .sort(bigIntComparator(({ assets }) => assets, "desc"));
 
       const largest = candidates[0];
-      if (largest == null) return { reallocations, data };
+      if (largest == null)
+        return { reallocations, data, context: simulationContext };
 
       const reallocation = {
         ...largest,
         assets: MathLib.min(largest.assets, remainingAssets ?? largest.assets),
       };
       reallocations.push(reallocation);
-      data.applyPublicReallocation({
+      const transition = data.applyPublicReallocation({
+        context: simulationContext,
         reallocation,
         targetMarketId: marketId,
         timestamp,
         adapterIdsCache,
       });
+      data = transition.data;
+      simulationContext = transition.context;
       if (remainingAssets != null) remainingAssets -= reallocation.assets;
     }
 
-    return { reallocations, data };
+    return { reallocations, data, context: simulationContext };
   }
 
   /**
@@ -1431,6 +1446,7 @@ export class VaultV2BlueReallocationData
 
     return this.clone()
       .computeVaultV2BlueReallocationsAtUtilizationInPlace({
+        context: createSimulationContext(),
         marketId,
         maxWithdrawalUtilization: resolveMaxWithdrawalUtilization(
           options?.maxWithdrawalUtilization,
@@ -1499,6 +1515,7 @@ export class VaultV2BlueReallocationData
 
     const availableLiquidity = this.clone()
       .computeVaultV2BlueReallocationsAtUtilizationInPlace({
+        context: createSimulationContext(),
         marketId,
         maxWithdrawalUtilization: resolveMaxWithdrawalUtilization(
           options?.maxWithdrawalUtilization,
@@ -1531,12 +1548,14 @@ export class VaultV2BlueReallocationData
   }
 
   private applyPublicReallocation({
+    context,
     reallocation,
     targetMarketId,
     timestamp,
     adapterIdsCache = new Map(),
     probe = false,
   }: {
+    readonly context: SimulationContext;
     readonly reallocation: VaultV2BlueReallocation;
     readonly targetMarketId: MarketId;
     readonly timestamp: bigint;
@@ -1568,15 +1587,6 @@ export class VaultV2BlueReallocationData
                 },
         })
       : this;
-    if (probe) {
-      const sourceFirstTotalAssetsKey = findAddressKey(
-        this.firstTotalAssets,
-        reallocation.vault,
-      );
-      if (sourceFirstTotalAssetsKey != null)
-        data.firstTotalAssets[sourceFirstTotalAssetsKey] =
-          this.firstTotalAssets[sourceFirstTotalAssetsKey]!;
-    }
 
     const vaultKey =
       findAddressKey(data.mutableVaults, reallocation.vault) ??
@@ -1585,7 +1595,8 @@ export class VaultV2BlueReallocationData
       findAddressKey(data.mutableAllocations, reallocation.vault) ??
       reallocation.vault;
     const firstTotalAssetsKey =
-      findAddressKey(data.firstTotalAssets, reallocation.vault) ?? vaultKey;
+      findAddressKey(context.firstTotalAssets, reallocation.vault) ?? vaultKey;
+    let nextContext = context;
     let vault = data.getMutableVault(vaultKey);
     const targetMarket = data.getMarket(targetMarketId);
 
@@ -1652,7 +1663,7 @@ export class VaultV2BlueReallocationData
       vault.assetBalance += reallocation.assets;
     }
 
-    if (data.firstTotalAssets[firstTotalAssetsKey] == null) {
+    if (context.firstTotalAssets[firstTotalAssetsKey] == null) {
       // Vault V2's transient firstTotalAssets tracks the first allocation in a
       // transaction independently from elapsed time. Later allocations must not
       // recompute the denominator, even if their simulated balances have changed.
@@ -1669,7 +1680,12 @@ export class VaultV2BlueReallocationData
         vault = vault.accrueInterest(timestamp).vault;
       }
       data.mutableVaults[vaultKey] = vault;
-      data.firstTotalAssets[firstTotalAssetsKey] = vault._totalAssets;
+      nextContext = {
+        firstTotalAssets: {
+          ...context.firstTotalAssets,
+          [firstTotalAssetsKey]: vault._totalAssets,
+        },
+      };
     }
 
     const targetAdapter = data.getMutableAdapter(
@@ -1722,7 +1738,7 @@ export class VaultV2BlueReallocationData
     }
 
     vault.assetBalance -= reallocation.assets;
-    return data;
+    return { data, context: nextContext };
   }
 
   /** Updates one canonical market and its dependent adapter views. */

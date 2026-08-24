@@ -533,7 +533,7 @@ describe("VaultV2BlueReallocationData.clone", () => {
 });
 
 describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
-  test("default: returns an action-ready market reallocation and cloned post-state", () => {
+  test("default: returns an action-ready market reallocation and durable cloned post-state", () => {
     const {
       data,
       sourceAdapterMarketCapId,
@@ -560,6 +560,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       },
     ]);
     expect(result.data).not.toBe(data);
+    expect(result.data).not.toHaveProperty("firstTotalAssets");
     expect(
       result.data.getAllocation(VAULT, sourceAdapterMarketCapId).allocation,
     ).toBe(0n);
@@ -584,6 +585,36 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     expect(Object.keys(result.data.allocations)).toStrictEqual([recordVault]);
   });
 
+  test("behavior: returns transaction context separately from durable state", () => {
+    const { data } = makeFixture();
+    const context = { firstTotalAssets: {} };
+
+    // biome-ignore lint/complexity/useLiteralKeys: exercise the private transition shape directly.
+    const transition = data["applyPublicReallocation"]({
+      context,
+      reallocation: {
+        vault: VAULT,
+        from: {
+          type: "market",
+          adapter: SOURCE_ADAPTER,
+          marketParams: sourceParams,
+        },
+        to: { adapter: TARGET_ADAPTER },
+        assets: 1n,
+        penalty: 0n,
+      },
+      targetMarketId: targetParams.id,
+      timestamp: TIMESTAMP,
+      probe: true,
+    });
+
+    expect(context.firstTotalAssets).toStrictEqual({});
+    expect(transition.context.firstTotalAssets[VAULT]).toBe(
+      data.getVault(VAULT)._totalAssets,
+    );
+    expect(transition.data).not.toHaveProperty("firstTotalAssets");
+  });
+
   test("error: ReallocationAdapterSupplySharesUnderflowError", () => {
     const { data } = makeFixture();
     const sourceAdapter = data.getAdapter(VAULT, SOURCE_ADAPTER);
@@ -593,6 +624,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     expect(() =>
       // biome-ignore lint/complexity/useLiteralKeys: exercise the private transition invariant directly.
       data["applyPublicReallocation"]({
+        context: { firstTotalAssets: {} },
         reallocation: {
           vault: VAULT,
           from: {
@@ -621,6 +653,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     expect(() =>
       // biome-ignore lint/complexity/useLiteralKeys: exercise the private transition invariant directly.
       data["applyPublicReallocation"]({
+        context: { firstTotalAssets: {} },
         reallocation: {
           vault: VAULT,
           from: {
