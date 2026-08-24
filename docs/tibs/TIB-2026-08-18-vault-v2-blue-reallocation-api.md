@@ -6,7 +6,7 @@
 | **Date**       | 2026-08-18                                                |
 | **Author**     | @Rubilmax                                                 |
 | **Scope**      | Package: `morpho-sdk`                                     |
-| **Supersedes** | TIB-2026-07-29 V2 reallocation API naming and entrypoints |
+| **Supersedes** | TIB-2026-07-29 V2 naming, entrypoints, and validator boundary |
 
 ---
 
@@ -67,6 +67,21 @@ The V2 mutation helper remains private and returns a cloned state. It must keep
 penalty accounting, vault accrual, adapter shares, allocations, and canonical
 market references coherent as one transition. V1's protected helper is a
 legacy test seam, not a public extension point to copy.
+
+### Post-implementation addendum (2026-08-24): version-specific validators
+
+Implementation showed that the V1 and V2 action shapes no longer share a
+useful validator boundary. V1 owns fee and sorted-withdrawal rules. V2 owns
+address checks, market/idle source tags, `uint128` asset bounds, and per-vault
+penalty rules. Each version also applies target-market exclusion through its
+own source shape.
+
+`validateReallocations(...)` therefore remains V1-only, while the internal
+`validateVaultV2BlueReallocations(...)` validates V2. The action boundary keeps
+one entry point: `validateAndNormalizeReallocations(...)` rejects mixed plans,
+dispatches homogeneous plans, and returns the tagged version. This supersedes
+the July TIB goal to reuse one combined validator and its rejected “Add a V2
+validator” alternative.
 
 ## Consequences
 
