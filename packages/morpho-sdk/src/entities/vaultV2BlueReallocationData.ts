@@ -319,9 +319,23 @@ const cloneVault = (
  *
  * @example
  * ```ts
- * import { VaultV2BlueReallocationData } from "@morpho-org/morpho-sdk/entities";
+ * import { markets } from "@morpho-org/morpho-test";
+ * import { createPublicClient, http } from "viem";
+ * import { mainnet } from "viem/chains";
+ * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+ * import type { VaultV2BlueReallocationData } from "@morpho-org/morpho-sdk/entities";
  *
- * const data = new VaultV2BlueReallocationData(input);
+ * const client = createPublicClient({ chain: mainnet, transport: http() })
+ *   .extend(morphoViemExtension());
+ * const marketParams = markets[mainnet.id].usdc_wbtc;
+ * const market = client.morpho.blue(marketParams, mainnet.id);
+ * const block = await client.getBlock();
+ * const keyrockUsdcVaultV2 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+ * const data: VaultV2BlueReallocationData =
+ *   await market.getVaultV2BlueReallocationData({
+ *     vaultAddresses: [keyrockUsdcVaultV2],
+ *     block: { number: block.number, timestamp: block.timestamp },
+ *   });
  * ```
  */
 export class VaultV2BlueReallocationData
@@ -500,7 +514,23 @@ export class VaultV2BlueReallocationData
    * @returns A deep clone of this simulation state.
    * @example
    * ```ts
-   * const next = data.clone();
+   * import { markets } from "@morpho-org/morpho-test";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * import type { VaultV2BlueReallocationData } from "@morpho-org/morpho-sdk/entities";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() })
+   *   .extend(morphoViemExtension());
+   * const marketParams = markets[mainnet.id].usdc_wbtc;
+   * const market = client.morpho.blue(marketParams, mainnet.id);
+   * const block = await client.getBlock();
+   * const keyrockUsdcVaultV2 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const data = await market.getVaultV2BlueReallocationData({
+   *   vaultAddresses: [keyrockUsdcVaultV2],
+   *   block: { number: block.number, timestamp: block.timestamp },
+   * });
+   * const cloned: VaultV2BlueReallocationData = data.clone();
    * ```
    */
   public clone() {
@@ -515,7 +545,25 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationMarketError} when the market is absent.
    * @example
    * ```ts
-   * const market = data.getMarket(marketId);
+   * import { markets } from "@morpho-org/morpho-test";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * import type { VaultV2BlueReallocationData } from "@morpho-org/morpho-sdk/entities";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() })
+   *   .extend(morphoViemExtension());
+   * const marketParams = markets[mainnet.id].usdc_wbtc;
+   * const market = client.morpho.blue(marketParams, mainnet.id);
+   * const block = await client.getBlock();
+   * const keyrockUsdcVaultV2 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const data = await market.getVaultV2BlueReallocationData({
+   *   vaultAddresses: [keyrockUsdcVaultV2],
+   *   block: { number: block.number, timestamp: block.timestamp },
+   * });
+   * const targetMarket: ReturnType<
+   *   VaultV2BlueReallocationData["getMarket"]
+   * > = data.getMarket(marketParams.id);
    * ```
    */
   public getMarket(marketId: MarketId): ReadonlyMarketSnapshot {
@@ -532,7 +580,24 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationVaultError} when the vault is absent.
    * @example
    * ```ts
-   * const vault = data.getVault(vaultAddress);
+   * import { markets } from "@morpho-org/morpho-test";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * import type { VaultV2BlueReallocationData } from "@morpho-org/morpho-sdk/entities";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() })
+   *   .extend(morphoViemExtension());
+   * const marketParams = markets[mainnet.id].usdc_wbtc;
+   * const market = client.morpho.blue(marketParams, mainnet.id);
+   * const block = await client.getBlock();
+   * const keyrockUsdcVaultV2 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const data = await market.getVaultV2BlueReallocationData({
+   *   vaultAddresses: [keyrockUsdcVaultV2],
+   *   block: { number: block.number, timestamp: block.timestamp },
+   * });
+   * const vault: ReturnType<VaultV2BlueReallocationData["getVault"]> =
+   *   data.getVault(keyrockUsdcVaultV2);
    * ```
    */
   public getVault(vault: Address): ReadonlyVaultSnapshot {
@@ -555,7 +620,28 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationAllocationError} when the record is absent.
    * @example
    * ```ts
-   * const allocation = data.getAllocation(vaultAddress, allocationId);
+   * import { markets } from "@morpho-org/morpho-test";
+   * import { createPublicClient, http, type Hash } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * import type { VaultV2BlueReallocationData } from "@morpho-org/morpho-sdk/entities";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() })
+   *   .extend(morphoViemExtension());
+   * const marketParams = markets[mainnet.id].usdc_wbtc;
+   * const market = client.morpho.blue(marketParams, mainnet.id);
+   * const block = await client.getBlock();
+   * const keyrockUsdcVaultV2 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const data = await market.getVaultV2BlueReallocationData({
+   *   vaultAddresses: [keyrockUsdcVaultV2],
+   *   block: { number: block.number, timestamp: block.timestamp },
+   * });
+   * const [allocationId] = Object.keys(
+   *   data.allocations[keyrockUsdcVaultV2] ?? {},
+   * ) as Hash[];
+   * const allocation: ReturnType<
+   *   VaultV2BlueReallocationData["getAllocation"]
+   * > = data.getAllocation(keyrockUsdcVaultV2, allocationId!);
    * ```
    */
   public getAllocation(vault: Address, id: Hash) {
@@ -574,7 +660,25 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationPublicAllocatorConfigError} when it is absent.
    * @example
    * ```ts
-   * const config = data.getPublicAllocatorConfig(vaultAddress);
+   * import { markets } from "@morpho-org/morpho-test";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * import type { VaultV2BlueReallocationData } from "@morpho-org/morpho-sdk/entities";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() })
+   *   .extend(morphoViemExtension());
+   * const marketParams = markets[mainnet.id].usdc_wbtc;
+   * const market = client.morpho.blue(marketParams, mainnet.id);
+   * const block = await client.getBlock();
+   * const keyrockUsdcVaultV2 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const data = await market.getVaultV2BlueReallocationData({
+   *   vaultAddresses: [keyrockUsdcVaultV2],
+   *   block: { number: block.number, timestamp: block.timestamp },
+   * });
+   * const config: ReturnType<
+   *   VaultV2BlueReallocationData["getPublicAllocatorConfig"]
+   * > = data.getPublicAllocatorConfig(keyrockUsdcVaultV2);
    * ```
    */
   public getPublicAllocatorConfig(vault: Address) {
@@ -606,7 +710,23 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationActiveAdaptersError} when the active-adapter state is absent.
    * @example
    * ```ts
-   * const activeAdapters = data.getActiveAdapters(vaultAddress);
+   * import { markets } from "@morpho-org/morpho-test";
+   * import { createPublicClient, http, type Address } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() })
+   *   .extend(morphoViemExtension());
+   * const marketParams = markets[mainnet.id].usdc_wbtc;
+   * const market = client.morpho.blue(marketParams, mainnet.id);
+   * const block = await client.getBlock();
+   * const keyrockUsdcVaultV2 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const data = await market.getVaultV2BlueReallocationData({
+   *   vaultAddresses: [keyrockUsdcVaultV2],
+   *   block: { number: block.number, timestamp: block.timestamp },
+   * });
+   * const activeAdapters: ReadonlySet<Address> =
+   *   data.getActiveAdapters(keyrockUsdcVaultV2);
    * ```
    */
   public getActiveAdapters(vault: Address): ReadonlySet<Address> {
@@ -626,7 +746,31 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationMarketPublicAllocatorConfigError} when it is absent.
    * @example
    * ```ts
-   * const config = data.getMarketPublicAllocatorConfig(vaultAddress, adapterMarketCapId);
+   * import { markets } from "@morpho-org/morpho-test";
+   * import { createPublicClient, http, type Hash } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * import type { VaultV2BlueReallocationData } from "@morpho-org/morpho-sdk/entities";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() })
+   *   .extend(morphoViemExtension());
+   * const marketParams = markets[mainnet.id].usdc_wbtc;
+   * const market = client.morpho.blue(marketParams, mainnet.id);
+   * const block = await client.getBlock();
+   * const keyrockUsdcVaultV2 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const data = await market.getVaultV2BlueReallocationData({
+   *   vaultAddresses: [keyrockUsdcVaultV2],
+   *   block: { number: block.number, timestamp: block.timestamp },
+   * });
+   * const [adapterMarketCapId] = Object.keys(
+   *   data.marketPublicAllocatorConfigs[keyrockUsdcVaultV2] ?? {},
+   * ) as Hash[];
+   * const config: ReturnType<
+   *   VaultV2BlueReallocationData["getMarketPublicAllocatorConfig"]
+   * > = data.getMarketPublicAllocatorConfig(
+   *   keyrockUsdcVaultV2,
+   *   adapterMarketCapId!,
+   * );
    * ```
    */
   public getMarketPublicAllocatorConfig(
@@ -655,7 +799,25 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationAdapterError} when it is absent or unsupported.
    * @example
    * ```ts
-   * const adapter = data.getAdapter(vaultAddress, adapterAddress);
+   * import { markets } from "@morpho-org/morpho-test";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * import type { VaultV2BlueReallocationData } from "@morpho-org/morpho-sdk/entities";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() })
+   *   .extend(morphoViemExtension());
+   * const marketParams = markets[mainnet.id].usdc_wbtc;
+   * const market = client.morpho.blue(marketParams, mainnet.id);
+   * const block = await client.getBlock();
+   * const keyrockUsdcVaultV2 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const data = await market.getVaultV2BlueReallocationData({
+   *   vaultAddresses: [keyrockUsdcVaultV2],
+   *   block: { number: block.number, timestamp: block.timestamp },
+   * });
+   * const [adapterAddress] = data.activeAdapters[keyrockUsdcVaultV2] ?? [];
+   * const adapter: ReturnType<VaultV2BlueReallocationData["getAdapter"]> =
+   *   data.getAdapter(keyrockUsdcVaultV2, adapterAddress!);
    * ```
    */
   public getAdapter(
@@ -701,15 +863,30 @@ export class VaultV2BlueReallocationData
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdraw exceeds market supply.
    * @example
    * ```ts
-   * import { VaultV2BlueReallocationData } from "@morpho-org/morpho-sdk/entities";
+   * import { markets } from "@morpho-org/morpho-test";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import {
+   *   morphoViemExtension,
+   *   type VaultV2BlueReallocation,
+   * } from "@morpho-org/morpho-sdk";
+   * import type { VaultV2BlueReallocationData } from "@morpho-org/morpho-sdk/entities";
    *
-   * const data = new VaultV2BlueReallocationData(input);
-   * const discovery = data.computeVaultV2BlueReallocations(targetMarketId, {
-   *   timestamp,
+   * const client = createPublicClient({ chain: mainnet, transport: http() })
+   *   .extend(morphoViemExtension());
+   * const marketParams = markets[mainnet.id].usdc_wbtc;
+   * const market = client.morpho.blue(marketParams, mainnet.id);
+   * const block = await client.getBlock();
+   * const keyrockUsdcVaultV2 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const data = await market.getVaultV2BlueReallocationData({
+   *   vaultAddresses: [keyrockUsdcVaultV2],
+   *   block: { number: block.number, timestamp: block.timestamp },
    * });
-   * const plan = data.computeVaultV2BlueReallocations(targetMarketId, {
-   *   timestamp,
-   *   operation: { type: "borrow", amount: 1_000_000n },
+   * const result: {
+   *   readonly reallocations: readonly VaultV2BlueReallocation[];
+   *   readonly data: VaultV2BlueReallocationData;
+   * } = data.computeVaultV2BlueReallocations(marketParams.id, {
+   *   timestamp: block.timestamp,
    * });
    * ```
    */
@@ -1220,7 +1397,25 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
    * @example
    * ```ts
-   * const liquidity = data.getPublicReallocationLiquidity(targetMarketId);
+   * import { markets } from "@morpho-org/morpho-test";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() })
+   *   .extend(morphoViemExtension());
+   * const marketParams = markets[mainnet.id].usdc_wbtc;
+   * const market = client.morpho.blue(marketParams, mainnet.id);
+   * const block = await client.getBlock();
+   * const keyrockUsdcVaultV2 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const data = await market.getVaultV2BlueReallocationData({
+   *   vaultAddresses: [keyrockUsdcVaultV2],
+   *   block: { number: block.number, timestamp: block.timestamp },
+   * });
+   * const liquidity: bigint = data.getPublicReallocationLiquidity(
+   *   marketParams.id,
+   *   { timestamp: block.timestamp },
+   * );
    * ```
    */
   public getPublicReallocationLiquidity(
@@ -1256,7 +1451,26 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
    * @example
    * ```ts
-   * const liquidity = data.getAvailableLiquidityToUtilization(targetMarketId);
+   * import { markets } from "@morpho-org/morpho-test";
+   * import { createPublicClient, http, parseEther } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() })
+   *   .extend(morphoViemExtension());
+   * const marketParams = markets[mainnet.id].usdc_wbtc;
+   * const market = client.morpho.blue(marketParams, mainnet.id);
+   * const block = await client.getBlock();
+   * const keyrockUsdcVaultV2 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const data = await market.getVaultV2BlueReallocationData({
+   *   vaultAddresses: [keyrockUsdcVaultV2],
+   *   block: { number: block.number, timestamp: block.timestamp },
+   * });
+   * const liquidity: bigint = data.getAvailableLiquidityToUtilization(
+   *   marketParams.id,
+   *   parseEther("0.9"),
+   *   { timestamp: block.timestamp },
+   * );
    * ```
    */
   // biome-ignore lint/complexity/useMaxParams: mirrors the existing V1 metric API

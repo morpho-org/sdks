@@ -44,6 +44,8 @@ const TARGET_ADAPTER = "0x00000000000000000000000000000000000000A3";
 const SOURCE_ADAPTER = "0x0000000000000000000000000000000000000004";
 const LOAN_TOKEN = "0x0000000000000000000000000000000000000005";
 const IRM = "0x0000000000000000000000000000000000000006";
+const OTHER_LOAN_TOKEN = "0x0000000000000000000000000000000000000010";
+const OTHER_IRM = "0x0000000000000000000000000000000000000011";
 const SECOND_VAULT = "0x000000000000000000000000000000000000000b";
 const SECOND_TARGET_ADAPTER = "0x000000000000000000000000000000000000000C";
 const LEGACY_MARKET_ADAPTER = "0x000000000000000000000000000000000000000d";
@@ -64,6 +66,11 @@ const sourceParams = new MarketParams({
   oracle: "0x000000000000000000000000000000000000000A",
   irm: IRM,
   lltv: 860_000_000_000_000_000n,
+});
+
+const sourceParamsWithAnotherLoanToken = new MarketParams({
+  ...sourceParams,
+  loanToken: OTHER_LOAN_TOKEN,
 });
 
 const makeMarket = ({
@@ -93,6 +100,11 @@ interface FixtureOptions {
   readonly recordVault?: Address;
   readonly sourceMarketParams?: MarketParams;
   readonly sourceAdapter?: Address;
+  readonly targetParentVault?: Address;
+  readonly sourceParentVault?: Address;
+  readonly targetAdaptiveCurveIrm?: Address;
+  readonly sourceAdaptiveCurveIrm?: Address;
+  readonly vaultAsset?: Address;
   readonly sourceSupply?: bigint;
   readonly sourceBorrow?: bigint;
   readonly sourceUntracked?: bigint;
@@ -124,6 +136,11 @@ const makeFixture = ({
   recordVault = VAULT,
   sourceMarketParams = sourceParams,
   sourceAdapter: sourceAdapterAddress = SOURCE_ADAPTER,
+  targetParentVault = VAULT,
+  sourceParentVault = VAULT,
+  targetAdaptiveCurveIrm = IRM,
+  sourceAdaptiveCurveIrm = IRM,
+  vaultAsset = LOAN_TOKEN,
   sourceSupply = 1_000n,
   sourceBorrow = 0n,
   sourceUntracked = 0n,
@@ -177,10 +194,10 @@ const makeFixture = ({
   const targetAdapter = new AccrualVaultV2MorphoMarketV1AdapterV2(
     {
       address: TARGET_ADAPTER,
-      parentVault: VAULT,
+      parentVault: targetParentVault,
       skimRecipient: zeroAddress,
       marketIds: targetTracked ? [targetMarket.id] : [],
-      adaptiveCurveIrm: IRM,
+      adaptiveCurveIrm: targetAdaptiveCurveIrm,
       supplyShares: targetTracked
         ? { [targetMarket.id]: targetSupplyShares }
         : {},
@@ -190,10 +207,10 @@ const makeFixture = ({
   const sourceAdapter = new AccrualVaultV2MorphoMarketV1AdapterV2(
     {
       address: sourceAdapterAddress,
-      parentVault: VAULT,
+      parentVault: sourceParentVault,
       skimRecipient: zeroAddress,
       marketIds: [sourceMarket.id],
-      adaptiveCurveIrm: IRM,
+      adaptiveCurveIrm: sourceAdaptiveCurveIrm,
       supplyShares: { [sourceMarket.id]: sourceSupplyShares },
     },
     [sourceMarket],
@@ -249,12 +266,12 @@ const makeFixture = ({
           new AccrualVaultV2MorphoMarketV1AdapterV2(
             {
               address: TARGET_ADAPTER,
-              parentVault: VAULT,
+              parentVault: targetParentVault,
               skimRecipient: zeroAddress,
               marketIds: Array.from(
                 new Set([targetMarket.id, sourceMarket.id]),
               ),
-              adaptiveCurveIrm: IRM,
+              adaptiveCurveIrm: targetAdaptiveCurveIrm,
               supplyShares: {
                 [targetMarket.id]: targetSupplyShares,
                 [sourceMarket.id]: sourceSupplyShares,
@@ -272,7 +289,7 @@ const makeFixture = ({
       name: "Vault V2",
       symbol: "v2",
       decimals: 18,
-      asset: LOAN_TOKEN,
+      asset: vaultAsset,
       _totalAssets: totalAssets,
       totalSupply: totalAssets,
       virtualShares: 0n,
@@ -696,6 +713,52 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       ).toStrictEqual([]);
     }
   });
+
+  test.each([
+    [
+      "a target adapter belonging to another vault",
+      { targetParentVault: SECOND_VAULT },
+    ],
+    [
+      "a source adapter belonging to another vault",
+      { sourceParentVault: SECOND_VAULT },
+    ],
+    [
+      "a target market with another loan token",
+      { vaultAsset: OTHER_LOAN_TOKEN },
+    ],
+    [
+      "a source market with another loan token",
+      { sourceMarketParams: sourceParamsWithAnotherLoanToken },
+    ],
+    [
+      "a target adapter with another adaptive curve IRM",
+      { targetAdaptiveCurveIrm: OTHER_IRM },
+    ],
+    [
+      "a source adapter with another adaptive curve IRM",
+      { sourceAdaptiveCurveIrm: OTHER_IRM },
+    ],
+    [
+      "a target with a zero allocation cap",
+      {
+        targetCaps: [
+          { absoluteCap: 0n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+          { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+        ],
+      },
+    ],
+  ] satisfies readonly (readonly [string, FixtureOptions])[])(
+    "behavior: ignores %s",
+    (_, options) => {
+      const { data } = makeFixture(options);
+
+      expect(
+        data.computeVaultV2BlueReallocations(targetParams.id).reallocations,
+      ).toStrictEqual([]);
+    },
+  );
 
   test("behavior: matches active adapters regardless of address casing", () => {
     const sourceAdapter =
