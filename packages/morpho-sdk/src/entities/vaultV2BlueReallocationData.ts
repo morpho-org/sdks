@@ -1615,6 +1615,8 @@ export class VaultV2BlueReallocationData
       this.mutableAllocations,
       reallocation.vault,
     );
+    const sourceVault =
+      sourceVaultKey == null ? undefined : this.mutableVaults[sourceVaultKey];
     let data: VaultV2BlueReallocationData = this;
     if (probe) {
       const probeMarkets: Record<MarketId, ReadonlyMarketSnapshot | undefined> =
@@ -1634,6 +1636,24 @@ export class VaultV2BlueReallocationData
         const sourceMarket = this.getMarket(reallocation.from.marketParams.id);
         probeMarkets[sourceMarket.id] = sourceMarket;
         adapterKeysToClone.add(reallocation.from.adapter.toLowerCase());
+        if (sourceVault != null) {
+          const adaptersToRefresh = new Set(sourceVault.accrualAdapters);
+          if (sourceVault.accrualLiquidityAdapter != null)
+            adaptersToRefresh.add(sourceVault.accrualLiquidityAdapter);
+          for (const adapter of adaptersToRefresh) {
+            if (
+              (adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2 &&
+                adapter.markets.some(({ id }) => id === sourceMarket.id)) ||
+              (adapter instanceof AccrualVaultV2MorphoMarketV1Adapter &&
+                adapter.positions.some(
+                  ({ marketId }) => marketId === sourceMarket.id,
+                )) ||
+              (adapter instanceof AccrualVaultV2MorphoVaultV1Adapter &&
+                adapter.accrualVaultV1.allocations.has(sourceMarket.id))
+            )
+              adapterKeysToClone.add(adapter.address.toLowerCase());
+          }
+        }
         for (const id of getAdapterIds(
           adapterIdsCache,
           this.getMutableAdapter(reallocation.vault, reallocation.from.adapter),
@@ -1647,7 +1667,6 @@ export class VaultV2BlueReallocationData
         markets: probeMarkets,
       });
       if (sourceVaultKey != null) {
-        const sourceVault = this.mutableVaults[sourceVaultKey];
         data.mutableVaults[sourceVaultKey] =
           sourceVault == null
             ? undefined
@@ -1730,7 +1749,7 @@ export class VaultV2BlueReallocationData
       }
       sourceAdapter.supplyShares[sourceMarket.id] =
         currentSupplyShares - withdrawal.shares;
-      data.setMarkets([withdrawal.market], probe ? [sourceAdapter] : undefined);
+      data.setMarkets([withdrawal.market]);
       const sourceChange =
         withdrawal.market.toSupplyAssets(
           sourceAdapter.supplyShares[sourceMarket.id] ?? 0n,

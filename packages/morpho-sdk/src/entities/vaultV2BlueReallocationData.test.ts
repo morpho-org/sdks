@@ -47,6 +47,7 @@ const TIMESTAMP = 1_700_000_000n;
 const VAULT = "0x00000000000000000000000000000000000000A2";
 const TARGET_ADAPTER = "0x00000000000000000000000000000000000000A3";
 const SOURCE_ADAPTER = "0x0000000000000000000000000000000000000004";
+const SIBLING_SOURCE_ADAPTER = "0x0000000000000000000000000000000000000012";
 const LOAN_TOKEN = "0x0000000000000000000000000000000000000005";
 const IRM = "0x0000000000000000000000000000000000000006";
 const OTHER_LOAN_TOKEN = "0x0000000000000000000000000000000000000010";
@@ -111,6 +112,12 @@ interface FixtureOptions {
   readonly sourceAdaptiveCurveIrm?: Address;
   readonly vaultAsset?: Address;
   readonly sourceSupply?: bigint;
+  readonly sourceTotalSupplyShares?: bigint;
+  readonly sourcePositionShares?: bigint;
+  readonly siblingSourcePosition?: {
+    readonly address: Address;
+    readonly supplyShares: bigint;
+  };
   readonly sourceBorrow?: bigint;
   readonly sourceUntracked?: bigint;
   readonly targetSupply?: bigint;
@@ -147,6 +154,9 @@ const makeFixture = ({
   sourceAdaptiveCurveIrm = IRM,
   vaultAsset = LOAN_TOKEN,
   sourceSupply = 1_000n,
+  sourceTotalSupplyShares,
+  sourcePositionShares,
+  siblingSourcePosition,
   sourceBorrow = 0n,
   sourceUntracked = 0n,
   targetSupply = 100n,
@@ -185,6 +195,7 @@ const makeFixture = ({
     : makeMarket({
         params: sourceMarketParams,
         supply: sourceSupply,
+        supplyShares: sourceTotalSupplyShares,
         borrow: sourceBorrow,
         lastUpdate: sourceLastUpdate,
       });
@@ -192,7 +203,8 @@ const makeFixture = ({
     targetPositionAssets,
     "Down",
   );
-  const sourceSupplyShares = sourceMarket.toSupplyShares(sourceSupply, "Down");
+  const sourceSupplyShares =
+    sourcePositionShares ?? sourceMarket.toSupplyShares(sourceSupply, "Down");
   const targetExpectedAssets = targetMarket.toSupplyAssets(targetSupplyShares);
   const sourceExpectedAssets = sourceMarket.toSupplyAssets(sourceSupplyShares);
 
@@ -220,6 +232,28 @@ const makeFixture = ({
     },
     [sourceMarket],
   );
+  const siblingSourceAdapter =
+    siblingSourcePosition == null
+      ? undefined
+      : new AccrualVaultV2MorphoMarketV1Adapter(
+          {
+            address: siblingSourcePosition.address,
+            parentVault: sourceParentVault,
+            skimRecipient: zeroAddress,
+            marketParamsList: [sourceMarket.params],
+          },
+          [
+            new AccrualPosition(
+              {
+                user: siblingSourcePosition.address,
+                supplyShares: siblingSourcePosition.supplyShares,
+                borrowShares: 0n,
+                collateral: 0n,
+              },
+              sourceMarket,
+            ),
+          ],
+        );
   const targetIds = targetAdapter.ids(targetMarket.params);
   const [, , targetAdapterMarketCapId] = targetIds;
   const sourceIds = sourceAdapter.ids(sourceMarket.params);
@@ -294,10 +328,23 @@ const makeFixture = ({
             },
             sameMarket ? [targetMarket] : [targetMarket, sourceMarket],
           ),
+          ...(siblingSourceAdapter == null ? [] : [siblingSourceAdapter]),
         ]
-      : [targetAdapter, sourceAdapter];
+      : [
+          targetAdapter,
+          sourceAdapter,
+          ...(siblingSourceAdapter == null ? [] : [siblingSourceAdapter]),
+        ];
+  const siblingSourceExpectedAssets =
+    siblingSourcePosition == null
+      ? 0n
+      : sourceMarket.toSupplyAssets(siblingSourcePosition.supplyShares);
   const totalAssets =
-    firstTotalAssets ?? sourceExpectedAssets + targetExpectedAssets + idle;
+    firstTotalAssets ??
+    sourceExpectedAssets +
+      siblingSourceExpectedAssets +
+      targetExpectedAssets +
+      idle;
   const vault = new AccrualVaultV2(
     {
       address: VAULT,
@@ -1268,6 +1315,29 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     expect(second.reallocations).toStrictEqual(first.reallocations);
     expect(second.data).toStrictEqual(first.data);
     expect(data).toStrictEqual(initialData);
+  });
+
+  test("behavior: refreshes sibling adapters sharing the probed source market", () => {
+    const { data } = makeFixture({
+      sourceSupply: 6_464n,
+      sourceTotalSupplyShares: 10_000n,
+      sourcePositionShares: 5_157n,
+      siblingSourcePosition: {
+        address: SIBLING_SOURCE_ADAPTER,
+        supplyShares: 4_843n,
+      },
+      targetSupply: 0n,
+      firstTotalAssets: 100n,
+      targetCaps: [
+        { absoluteCap: 2n, relativeCap: MathLib.WAD / 32n },
+        { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+        { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+      ],
+    });
+
+    const result = data.computeVaultV2BlueReallocations(targetParams.id);
+
+    expect(result.reallocations[0]?.assets).toBe(2n);
   });
 
   test("behavior: ranks market liquidity before idle and depletes both sources", () => {

@@ -1,3 +1,7 @@
+import { marketParamsAbi } from "./abis/marketParams.js";
+
+export { marketParamsAbi };
+
 /** ERC-2612 permit ABI fragment used for nonce reads and permit calldata. */
 export const erc2612Abi = [
   {
@@ -4037,18 +4041,6 @@ export const metaMorphoAbi = [
     inputs: [],
   },
 ] as const;
-
-/** ABI tuple definition for Morpho Blue market params. */
-export const marketParamsAbi = {
-  type: "tuple",
-  components: [
-    { type: "address", name: "loanToken" },
-    { type: "address", name: "collateralToken" },
-    { type: "address", name: "oracle" },
-    { type: "address", name: "irm" },
-    { type: "uint256", name: "lltv" },
-  ],
-} as const;
 
 /** Vault V1 PublicAllocator ABI used to read vault allocator configuration and flow caps. */
 export const vaultV1PublicAllocatorAbi = [

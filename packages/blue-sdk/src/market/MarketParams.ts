@@ -1,5 +1,5 @@
 import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
-import { marketParamsAbi } from "@morpho-org/morpho-ts/abis";
+import { marketParamsAbi } from "@morpho-org/morpho-ts/abis/marketParams";
 import { decodeAbiParameters, type Hex } from "viem";
 import {
   InvalidMarketParamsError,

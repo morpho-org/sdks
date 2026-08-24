@@ -1,7 +1,7 @@
 # morpho-ts Conventions
 
 - Keep this package framework-free and dependency-light; export generic helpers plus cross-protocol SDK primitives that Blue and Midnight both need, including shared math, typed errors, constants, address/hex/call descriptor types, shared ABI literals, and address/deployment registries.
-- `marketParamsAbi` is canonically defined in this package's `abis` subpath; protocol packages may re-export it for compatibility but must not redefine it.
+- `marketParamsAbi` is canonically defined in the `abis/marketParams` leaf subpath and re-exported from `abis`; protocol packages may re-export it for compatibility but must not redefine it.
 - Preserve nullability through helpers, e.g. `transformValue(value, fn)` returns nullish input unchanged.
 - Helpers should preserve input type shape unless their name explicitly signals formatting or conversion.
 - Use type guards for filtering, e.g. `array.filter(isDefined)`.
