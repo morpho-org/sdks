@@ -139,9 +139,6 @@ export interface InputVaultV2BlueReallocationData {
   >;
 }
 
-const cloneMarket = (market: ReadonlyMarketSnapshot) =>
-  new Market({ ...market });
-
 /**
  * Finds an address key without changing its supplied casing.
  *
@@ -212,7 +209,7 @@ const resolveMaxPenalty = (value: bigint | undefined) => {
 const getCanonicalMarket = (
   markets: Record<MarketId, Market | undefined>,
   market: Market,
-) => (markets[market.id] ??= cloneMarket(market));
+) => (markets[market.id] ??= new Market({ ...market }));
 
 const clonePosition = (
   position: AccrualPosition,
@@ -358,7 +355,7 @@ const cloneVault = (
  * const marketParams = markets[mainnet.id].usdc_wbtc;
  * const market = client.morpho.blue(marketParams, mainnet.id);
  * const block = await client.getBlock();
- * const keyrockUsdcVaultV2 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+ * const keyrockUsdcVaultV2 = "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145";
  * const data: VaultV2BlueReallocationData =
  *   await market.getVaultV2BlueReallocationData({
  *     vaultAddresses: [keyrockUsdcVaultV2],
@@ -495,7 +492,7 @@ export class VaultV2BlueReallocationData
       ReadonlyMarketSnapshot | undefined,
     ][]) {
       this.mutableMarkets[marketId] =
-        market == null ? undefined : cloneMarket(market);
+        market == null ? undefined : new Market({ ...market });
     }
 
     for (const [address, vault] of Object.entries(input.vaults ?? {}) as [
@@ -547,7 +544,7 @@ export class VaultV2BlueReallocationData
    * const marketParams = markets[mainnet.id].usdc_wbtc;
    * const market = client.morpho.blue(marketParams, mainnet.id);
    * const block = await client.getBlock();
-   * const keyrockUsdcVaultV2 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const keyrockUsdcVaultV2 = "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145";
    * const data = await market.getVaultV2BlueReallocationData({
    *   vaultAddresses: [keyrockUsdcVaultV2],
    *   block: { number: block.number, timestamp: block.timestamp },
@@ -578,7 +575,7 @@ export class VaultV2BlueReallocationData
    * const marketParams = markets[mainnet.id].usdc_wbtc;
    * const market = client.morpho.blue(marketParams, mainnet.id);
    * const block = await client.getBlock();
-   * const keyrockUsdcVaultV2 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const keyrockUsdcVaultV2 = "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145";
    * const data = await market.getVaultV2BlueReallocationData({
    *   vaultAddresses: [keyrockUsdcVaultV2],
    *   block: { number: block.number, timestamp: block.timestamp },
@@ -613,7 +610,7 @@ export class VaultV2BlueReallocationData
    * const marketParams = markets[mainnet.id].usdc_wbtc;
    * const market = client.morpho.blue(marketParams, mainnet.id);
    * const block = await client.getBlock();
-   * const keyrockUsdcVaultV2 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const keyrockUsdcVaultV2 = "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145";
    * const data = await market.getVaultV2BlueReallocationData({
    *   vaultAddresses: [keyrockUsdcVaultV2],
    *   block: { number: block.number, timestamp: block.timestamp },
@@ -653,7 +650,7 @@ export class VaultV2BlueReallocationData
    * const marketParams = markets[mainnet.id].usdc_wbtc;
    * const market = client.morpho.blue(marketParams, mainnet.id);
    * const block = await client.getBlock();
-   * const keyrockUsdcVaultV2 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const keyrockUsdcVaultV2 = "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145";
    * const data = await market.getVaultV2BlueReallocationData({
    *   vaultAddresses: [keyrockUsdcVaultV2],
    *   block: { number: block.number, timestamp: block.timestamp },
@@ -693,7 +690,7 @@ export class VaultV2BlueReallocationData
    * const marketParams = markets[mainnet.id].usdc_wbtc;
    * const market = client.morpho.blue(marketParams, mainnet.id);
    * const block = await client.getBlock();
-   * const keyrockUsdcVaultV2 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const keyrockUsdcVaultV2 = "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145";
    * const data = await market.getVaultV2BlueReallocationData({
    *   vaultAddresses: [keyrockUsdcVaultV2],
    *   block: { number: block.number, timestamp: block.timestamp },
@@ -742,7 +739,7 @@ export class VaultV2BlueReallocationData
    * const marketParams = markets[mainnet.id].usdc_wbtc;
    * const market = client.morpho.blue(marketParams, mainnet.id);
    * const block = await client.getBlock();
-   * const keyrockUsdcVaultV2 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const keyrockUsdcVaultV2 = "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145";
    * const data = await market.getVaultV2BlueReallocationData({
    *   vaultAddresses: [keyrockUsdcVaultV2],
    *   block: { number: block.number, timestamp: block.timestamp },
@@ -779,7 +776,7 @@ export class VaultV2BlueReallocationData
    * const marketParams = markets[mainnet.id].usdc_wbtc;
    * const market = client.morpho.blue(marketParams, mainnet.id);
    * const block = await client.getBlock();
-   * const keyrockUsdcVaultV2 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const keyrockUsdcVaultV2 = "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145";
    * const data = await market.getVaultV2BlueReallocationData({
    *   vaultAddresses: [keyrockUsdcVaultV2],
    *   block: { number: block.number, timestamp: block.timestamp },
@@ -832,7 +829,7 @@ export class VaultV2BlueReallocationData
    * const marketParams = markets[mainnet.id].usdc_wbtc;
    * const market = client.morpho.blue(marketParams, mainnet.id);
    * const block = await client.getBlock();
-   * const keyrockUsdcVaultV2 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const keyrockUsdcVaultV2 = "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145";
    * const data = await market.getVaultV2BlueReallocationData({
    *   vaultAddresses: [keyrockUsdcVaultV2],
    *   block: { number: block.number, timestamp: block.timestamp },
@@ -883,6 +880,7 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
    * @throws {UnknownReallocationMarketPublicAllocatorConfigError} when an adapter-market allocator configuration is absent.
    * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
+   * @throws {UnknownReallocationAdapterError} when an active or source adapter is absent from the vault snapshot.
    * @throws {ReallocationAllocationUnderflowError} when an inconsistent allocation snapshot underflows during the final transition.
    * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the absolute shortfall.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdraw exceeds market supply.
@@ -902,7 +900,7 @@ export class VaultV2BlueReallocationData
    * const marketParams = markets[mainnet.id].usdc_wbtc;
    * const market = client.morpho.blue(marketParams, mainnet.id);
    * const block = await client.getBlock();
-   * const keyrockUsdcVaultV2 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const keyrockUsdcVaultV2 = "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145";
    * const data = await market.getVaultV2BlueReallocationData({
    *   vaultAddresses: [keyrockUsdcVaultV2],
    *   block: { number: block.number, timestamp: block.timestamp },
@@ -1342,6 +1340,13 @@ export class VaultV2BlueReallocationData
                 sourceIds.add(id);
             }
             const probeReallocation = (assets: bigint) => {
+              if (
+                targetMarket.totalSupplyShares +
+                  targetMarket.toSupplyShares(assets, "Down") >
+                MathLib.MAX_UINT_128
+              )
+                return;
+
               const postTransition = _try(
                 () =>
                   data.applyPublicReallocation({
@@ -1458,6 +1463,7 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
    * @throws {UnknownReallocationMarketPublicAllocatorConfigError} when an adapter-market allocator configuration is absent.
    * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
+   * @throws {UnknownReallocationAdapterError} when an active or source adapter is absent from the vault snapshot.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -1470,7 +1476,7 @@ export class VaultV2BlueReallocationData
    * const marketParams = markets[mainnet.id].usdc_wbtc;
    * const market = client.morpho.blue(marketParams, mainnet.id);
    * const block = await client.getBlock();
-   * const keyrockUsdcVaultV2 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const keyrockUsdcVaultV2 = "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145";
    * const data = await market.getVaultV2BlueReallocationData({
    *   vaultAddresses: [keyrockUsdcVaultV2],
    *   block: { number: block.number, timestamp: block.timestamp },
@@ -1517,6 +1523,7 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
    * @throws {UnknownReallocationMarketPublicAllocatorConfigError} when an adapter-market allocator configuration is absent.
    * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
+   * @throws {UnknownReallocationAdapterError} when an active or source adapter is absent from the vault snapshot.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -1529,7 +1536,7 @@ export class VaultV2BlueReallocationData
    * const marketParams = markets[mainnet.id].usdc_wbtc;
    * const market = client.morpho.blue(marketParams, mainnet.id);
    * const block = await client.getBlock();
-   * const keyrockUsdcVaultV2 = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+   * const keyrockUsdcVaultV2 = "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145";
    * const data = await market.getVaultV2BlueReallocationData({
    *   vaultAddresses: [keyrockUsdcVaultV2],
    *   block: { number: block.number, timestamp: block.timestamp },

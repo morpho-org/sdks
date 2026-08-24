@@ -12,6 +12,7 @@ import {
   type MarketId,
   MarketParams,
   MathLib,
+  SharesMath,
   UnsupportedVaultV2AdapterError,
   VaultV2BlueMarketPublicAllocatorConfig,
   VaultV2BluePublicAllocatorConfig,
@@ -40,6 +41,7 @@ import {
   UnknownReallocationMarketError,
   UnknownReallocationMarketPublicAllocatorConfigError,
   UnknownReallocationPublicAllocatorConfigError,
+  UnknownReallocationVaultError,
 } from "../types/index.js";
 import { VaultV2BlueReallocationData } from "./vaultV2BlueReallocationData.js";
 
@@ -496,6 +498,14 @@ describe("VaultV2BlueReallocationData accessors", () => {
     );
   });
 
+  test("error: UnknownReallocationVaultError", () => {
+    const { data } = makeFixture();
+
+    expect(() => data.getVault(SECOND_VAULT)).toThrow(
+      UnknownReallocationVaultError,
+    );
+  });
+
   test("error: UnknownReallocationAllocationError", () => {
     const { data } = makeFixture();
 
@@ -508,6 +518,20 @@ describe("VaultV2BlueReallocationData accessors", () => {
     const { data } = makeFixture();
 
     expect(() => data.getPublicAllocatorConfig(SECOND_VAULT)).toThrow(
+      UnknownReallocationPublicAllocatorConfigError,
+    );
+  });
+
+  test("error: UnknownReallocationPublicAllocatorConfigError for absent config", () => {
+    const { data } = makeFixture();
+    (
+      data.publicAllocatorConfigs as Record<
+        Address,
+        VaultV2BluePublicAllocatorConfig | undefined
+      >
+    )[VAULT] = undefined;
+
+    expect(() => data.getPublicAllocatorConfig(VAULT)).toThrow(
       UnknownReallocationPublicAllocatorConfigError,
     );
   });
@@ -1510,7 +1534,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     expect(result.data.getVault(VAULT)._totalAssets).toBe(900n);
   });
 
-  test("behavior: caps each call at uint128", () => {
+  test("behavior: caps an empty target at uint128 supply shares", () => {
     const sourceSupply = MathLib.MAX_UINT_128 + 10n;
     const { data } = makeFixture({
       sourceSupply,
@@ -1527,7 +1551,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     expect(
       data.computeVaultV2BlueReallocations(targetParams.id).reallocations[0]
         ?.assets,
-    ).toBe(MathLib.MAX_UINT_128);
+    ).toBe(MathLib.MAX_UINT_128 / SharesMath.VIRTUAL_SHARES);
   });
 
   test("behavior: rejects target market supply overflow", () => {
@@ -1545,6 +1569,21 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     expect(
       data.computeVaultV2BlueReallocations(targetParams.id).reallocations,
     ).toStrictEqual([]);
+  });
+
+  test("behavior: caps target market supply shares at uint128", () => {
+    const { data } = makeFixture({
+      targetSupply: MathLib.MAX_UINT_128 / 2n,
+      targetTotalSupplyShares: MathLib.MAX_UINT_128 - 100n,
+    });
+
+    const result = data.computeVaultV2BlueReallocations(targetParams.id);
+
+    expect(result.reallocations).toHaveLength(1);
+    expect(result.reallocations[0]?.assets).toBe(50n);
+    expect(result.data.getMarket(targetParams.id).totalSupplyShares).toBe(
+      MathLib.MAX_UINT_128,
+    );
   });
 
   test("behavior: same-market deallocation is not counted as target liquidity", () => {
