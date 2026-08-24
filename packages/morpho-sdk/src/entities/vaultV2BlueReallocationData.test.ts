@@ -219,6 +219,8 @@ const makeFixture = ({
   const [, , targetAdapterMarketCapId] = targetIds;
   const sourceIds = sourceAdapter.ids(sourceMarket.params);
   const [sourceAdapterCapId, , sourceAdapterMarketCapId] = sourceIds;
+  const sourceTargetIds = sourceAdapter.ids(targetMarket.params);
+  const [, , sourceTargetAdapterMarketCapId] = sourceTargetIds;
   const allocations: Record<Hash, IVaultV2Allocation | undefined> = {};
 
   const addAllocation = ({
@@ -258,6 +260,14 @@ const makeFixture = ({
       allocation: targetExpectedAssets - targetUntracked,
       cap: targetCaps[index]!,
     });
+  }
+  for (const id of sourceTargetIds) {
+    if (allocations[id] == null)
+      addAllocation({
+        id,
+        allocation: 0n,
+        cap: { absoluteCap: 0n, relativeCap: 0n },
+      });
   }
 
   const adapters =
@@ -345,6 +355,18 @@ const makeFixture = ({
             absoluteCap: 0n,
             canPullFromMarket,
           },
+          ...(sourceTargetAdapterMarketCapId === targetAdapterMarketCapId ||
+          sourceTargetAdapterMarketCapId === sourceAdapterMarketCapId
+            ? {}
+            : {
+                [sourceTargetAdapterMarketCapId]: {
+                  vault: VAULT,
+                  adapter: sourceAdapterAddress,
+                  adapterMarketCapId: sourceTargetAdapterMarketCapId,
+                  absoluteCap: 0n,
+                  canPullFromMarket: false,
+                },
+              }),
         },
       },
     }),
@@ -1327,6 +1349,63 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     expect(result.data.getVault(VAULT)._totalAssets).toBe(1_000n);
   });
 
+  test("behavior: reuses penalty donations as idle liquidity in the same plan", () => {
+    const penalty = MathLib.WAD / 10n;
+    const cap = { absoluteCap: 110n, relativeCap: MathLib.WAD };
+    const { data } = makeFixture({
+      sourceSupply: 100n,
+      targetSupply: 0n,
+      firstTotalAssets: 100n,
+      vaultLastUpdate: TIMESTAMP - 1n,
+      maxRate: MathLib.WAD,
+      penalty,
+      allocatorTargetCap: 110n,
+      targetCaps: [cap, cap, cap],
+    });
+
+    const result = data.computeVaultV2BlueReallocations(targetParams.id, {
+      maxPenalty: penalty,
+    });
+
+    expect(
+      result.reallocations.map(({ from, assets }) => ({
+        from: from.type,
+        assets,
+      })),
+    ).toStrictEqual([
+      { from: "market", assets: 100n },
+      { from: "idle", assets: 10n },
+    ]);
+    expect(result.data.getVault(VAULT).assetBalance).toBe(1n);
+  });
+
+  test("behavior: recomputes firstTotalAssets for a later transaction", () => {
+    const penalty = MathLib.WAD / 10n;
+    const cap = { absoluteCap: 10_000n, relativeCap: MathLib.WAD - 1n };
+    const { data } = makeFixture({
+      sourceSupply: 99n,
+      targetSupply: 0n,
+      firstTotalAssets: 100n,
+      maxRate: MathLib.WAD,
+      penalty,
+      targetCaps: [cap, cap, cap],
+    });
+
+    const first = data.computeVaultV2BlueReallocations(targetParams.id, {
+      maxPenalty: penalty,
+    });
+    const second = first.data.computeVaultV2BlueReallocations(targetParams.id, {
+      timestamp: TIMESTAMP + 1n,
+      maxPenalty: penalty,
+    });
+
+    expect(first.reallocations).toHaveLength(1);
+    expect(second.reallocations[0]).toMatchObject({
+      from: { type: "idle" },
+      assets: 11n,
+    });
+  });
+
   test("behavior: disabled discovery returns no calls", () => {
     const { data } = makeFixture();
 
@@ -1386,6 +1465,45 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     );
   });
 
+  test.each([
+    ["target", "targetAdapterMarketCapId"],
+    ["source", "sourceAdapterMarketCapId"],
+  ] as const)(
+    "error: UnknownReallocationMarketPublicAllocatorConfigError for incomplete %s state",
+    (_, configId) => {
+      const fixture = makeFixture();
+      const { data } = fixture;
+      delete (
+        data.marketPublicAllocatorConfigs[VAULT] as Record<
+          Hash,
+          VaultV2BlueMarketPublicAllocatorConfig | undefined
+        >
+      )[fixture[configId]];
+
+      expect(() =>
+        data.computeVaultV2BlueReallocations(targetParams.id),
+      ).toThrow(UnknownReallocationMarketPublicAllocatorConfigError);
+    },
+  );
+
+  test.each([
+    ["target", "targetAdapterMarketCapId"],
+    ["source", "sourceAdapterMarketCapId"],
+  ] as const)(
+    "error: UnknownReallocationAllocationError for incomplete %s state",
+    (_, allocationId) => {
+      const fixture = makeFixture();
+      const { data } = fixture;
+      delete (
+        data.allocations[VAULT] as Record<Hash, IVaultV2Allocation | undefined>
+      )[fixture[allocationId]];
+
+      expect(() =>
+        data.computeVaultV2BlueReallocations(targetParams.id),
+      ).toThrow(UnknownReallocationAllocationError);
+    },
+  );
+
   test("behavior: ignores a vault with fetched but absent allocator config", () => {
     const { data } = makeFixture();
     (
@@ -1425,7 +1543,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
         })),
     ).toStrictEqual([
       { from: "market", assets: sourceExpectedAssets },
-      { from: "idle", assets: 300n },
+      { from: "idle", assets: 302n },
     ]);
   });
 });
