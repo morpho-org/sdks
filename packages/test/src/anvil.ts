@@ -90,9 +90,18 @@ export interface AnvilArgs {
    *
    * If you want to fetch state from a specific block number, add a block number like `http://localhost:8545@1400000`
    * or use the `forkBlockNumber` option.
-   * In GitHub Actions, pass this as a registered secret so its exact value is masked in workflow logs.
+   * Anvil can repeat this URL in stderr, which may expose it in test logs.
    */
   forkUrl?: string | undefined;
+  /**
+   * Replaces exact occurrences of `forkUrl` in Anvil stderr and process error diagnostics.
+   *
+   * This does not detect altered or encoded forms of the URL.
+   * This wrapper option is not passed to Anvil.
+   *
+   * @defaultValue `true` when `CI` is `"true"`; otherwise `false`
+   */
+  redactForkUrl?: boolean | undefined;
   /**
    * Fetch state from a specific block number over a remote endpoint.
    *
@@ -361,7 +370,42 @@ export const spawnAnvil = async (
     );
   }
 
-  const { binary = "anvil", ...anvilArgs } = args;
+  const {
+    binary = "anvil",
+    redactForkUrl: redactForkUrlOption,
+    ...anvilArgs
+  } = args;
+  const shouldRedactForkUrl = redactForkUrlOption ?? process.env.CI === "true";
+  const formatAnvilDiagnostics = (diagnostics: string) =>
+    shouldRedactForkUrl && args.forkUrl
+      ? diagnostics.replaceAll(args.forkUrl, "<redacted-fork-url>")
+      : diagnostics;
+  const formatAnvilCause = (cause: unknown) => {
+    if (!shouldRedactForkUrl || !args.forkUrl) return cause;
+    if (typeof cause === "string") return formatAnvilDiagnostics(cause);
+    if (!(cause instanceof Error)) return cause;
+
+    // Clone errors before replacing URL-bearing Node spawn metadata.
+    const formattedCause = Object.create(
+      Object.getPrototypeOf(cause),
+      Object.getOwnPropertyDescriptors(cause),
+    ) as Error;
+    for (const property of Reflect.ownKeys(formattedCause)) {
+      const value = Reflect.get(formattedCause, property);
+      if (typeof value === "string")
+        Reflect.set(formattedCause, property, formatAnvilDiagnostics(value));
+      else if (Array.isArray(value))
+        Reflect.set(
+          formattedCause,
+          property,
+          value.map((item) =>
+            typeof item === "string" ? formatAnvilDiagnostics(item) : item,
+          ),
+        );
+    }
+    return formattedCause;
+  };
+
   const forceKillAfterMs =
     options.forceKillAfterMs ??
     (args.dumpState !== undefined || args.state !== undefined
@@ -415,7 +459,10 @@ export const spawnAnvil = async (
         try {
           signalSent = subprocess.kill("SIGINT");
         } catch (error) {
-          console.warn("Failed to send SIGINT to Anvil.", error);
+          console.warn(
+            "Failed to send SIGINT to Anvil.",
+            formatAnvilCause(error),
+          );
         }
 
         if (forceKillAfterMs !== false) {
@@ -429,7 +476,7 @@ export const spawnAnvil = async (
             } catch (error) {
               console.warn(
                 "Failed to send SIGKILL to Anvil after timeout.",
-                error,
+                formatAnvilCause(error),
               );
             }
           }, forceKillAfterMs);
@@ -474,9 +521,10 @@ export const spawnAnvil = async (
     await new Promise<void>((resolve, reject) => {
       let settled = false;
       let stderr = "";
+      let stderrLine = "";
       let stdout = "";
       const startupTimeout = globalThis.setTimeout(() => {
-        const details = stderr.trim();
+        const details = formatAnvilDiagnostics(stderr.trim());
         fail(
           new AnvilStartupError(
             `Anvil did not start listening within "${startupTimeoutMs}" ms. Check the fork URL and Anvil arguments.${details ? ` ${details}` : ""}`,
@@ -532,26 +580,39 @@ export const spawnAnvil = async (
 
       subprocess.stderr.on("data", (data) => {
         // Startup warnings are diagnostic; only timeout, error, or early close is fatal.
-        // This repo registers fork URLs as GitHub Actions secrets, so their exact
-        // values are masked in workflow logs while these diagnostics stay useful.
         const dataString = data.toString();
         stderr = `${stderr}${dataString}`.slice(-4_096);
-        if (settled && !stopRequested)
+        if (!settled || stopRequested) return;
+
+        if (!shouldRedactForkUrl || !args.forkUrl) {
           console.warn(`[port ${port || "??"}] ${dataString}`);
+          return;
+        }
+
+        // Buffer complete lines so stream chunks cannot split the fork URL around replacement.
+        stderrLine += dataString;
+        const lastLineBreak = stderrLine.lastIndexOf("\n");
+        if (lastLineBreak !== -1) {
+          console.warn(
+            `[port ${port || "??"}] ${formatAnvilDiagnostics(stderrLine.slice(0, lastLineBreak + 1))}`,
+          );
+          stderrLine = stderrLine.slice(lastLineBreak + 1);
+        }
       });
 
       subprocess.once("error", (error) => {
+        // Node spawn errors retain raw CLI arguments in `spawnargs`, including the fork URL.
         fail(
           new AnvilStartupError(
             `Anvil failed to start on port "${port || "auto"}". Check that the binary and arguments are valid.`,
-            { cause: error },
+            { cause: formatAnvilCause(error) },
           ),
         );
       });
 
       subprocess.once("close", (code, signal) => {
         processCloseObserved = true;
-        const details = stderr.trim();
+        const details = formatAnvilDiagnostics(stderr.trim());
         const expectedShutdown =
           stopRequested &&
           (code === 0 ||
@@ -600,7 +661,7 @@ export const spawnAnvil = async (
         ? error
         : new AnvilStartupError(
             "Anvil failed before startup completed. Check the binary, arguments, and temporary directory.",
-            { cause: error },
+            { cause: formatAnvilCause(error) },
           );
 
     throw failure;

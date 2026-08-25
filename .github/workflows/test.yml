@@ -44,7 +44,7 @@ jobs:
 
       - run: pnpm run test:ci
         env:
-          # Registered secret values echoed by subprocesses are masked in Actions logs.
+          # `CI=true` makes @morpho-org/test redact exact fork URLs from Anvil diagnostics.
           MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
           BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
           ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
