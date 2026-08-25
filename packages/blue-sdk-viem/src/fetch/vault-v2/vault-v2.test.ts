@@ -337,7 +337,7 @@ describe("fetchVaultV2", () => {
     const { client } = createMockClient(mainnet);
 
     await expect(
-      fetchVaultV2(VAULT, client, { chainId: ChainId.CeloMainnet }),
+      fetchVaultV2(VAULT, client, { chainId: ChainId.CornMainnet }),
     ).rejects.toThrow(UnknownFactory);
   });
 
@@ -629,7 +629,7 @@ describe("fetchVaultV2Adapter", () => {
     const { client } = createMockClient(mainnet);
 
     await expect(
-      fetchVaultV2Adapter(ADAPTER, client, { chainId: ChainId.ZeroGMainnet }),
+      fetchVaultV2Adapter(ADAPTER, client, { chainId: ChainId.CornMainnet }),
     ).rejects.toThrow(UnsupportedVaultV2AdapterError);
   });
 
@@ -817,7 +817,7 @@ describe("fetchVaultV2Adapter", () => {
 
     await expect(
       fetchAccrualVaultV2Adapter(ADAPTER, client, {
-        chainId: ChainId.ZeroGMainnet,
+        chainId: ChainId.CornMainnet,
       }),
     ).rejects.toThrow(UnsupportedVaultV2AdapterError);
   });
@@ -829,7 +829,7 @@ describe("individual adapter fetchers", () => {
 
     await expect(
       fetchVaultV2MorphoVaultV1Adapter(ADAPTER, client, {
-        chainId: ChainId.CeloMainnet,
+        chainId: ChainId.CornMainnet,
       }),
     ).rejects.toThrow(UnknownFactory);
   });
@@ -839,7 +839,7 @@ describe("individual adapter fetchers", () => {
 
     await expect(
       fetchVaultV2MorphoMarketV1Adapter(ADAPTER, client, {
-        chainId: ChainId.CeloMainnet,
+        chainId: ChainId.CornMainnet,
       }),
     ).rejects.toThrow(UnknownFactory);
   });
@@ -849,7 +849,7 @@ describe("individual adapter fetchers", () => {
 
     await expect(
       fetchVaultV2MorphoMarketV1AdapterV2(ADAPTER, client, {
-        chainId: ChainId.CeloMainnet,
+        chainId: ChainId.CornMainnet,
       }),
     ).rejects.toThrow(UnknownFactory);
   });
@@ -1714,7 +1714,7 @@ describe("fetchAccrualVaultV2", () => {
     const { client } = createMockClient(mainnet);
 
     await expect(
-      fetchAccrualVaultV2(VAULT, client, { chainId: ChainId.CeloMainnet }),
+      fetchAccrualVaultV2(VAULT, client, { chainId: ChainId.CornMainnet }),
     ).rejects.toBeInstanceOf(UnknownFactory);
   });
 });
@@ -1967,7 +1967,7 @@ describe("fetchAccrualVaultV2Deployless", () => {
 
     await expect(
       fetchAccrualVaultV2Deployless(VAULT, client, {
-        chainId: ChainId.CeloMainnet,
+        chainId: ChainId.CornMainnet,
       }),
     ).rejects.toBeInstanceOf(UnknownFactory);
   });

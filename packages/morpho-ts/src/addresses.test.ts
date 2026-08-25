@@ -79,18 +79,6 @@ const createChainDeployments = () => ({
   ...createMidnightDeployments(),
 });
 
-const getMainnetBlueAddresses = () => {
-  const blueAddresses = addressesRegistry[ChainId.EthMainnet];
-
-  return blueAddresses;
-};
-
-const getMainnetBlueDeployments = () => {
-  const blueDeployments = deployments[ChainId.EthMainnet];
-
-  return blueDeployments;
-};
-
 describe("getChainAddress", () => {
   test("default", () => {
     expect(
@@ -124,14 +112,14 @@ describe("getChainAddress", () => {
     let error: unknown;
 
     try {
-      getChainAddress(ChainId.EthMainnet, "midnight");
+      getChainAddress(ChainId.ArcMainnet, "midnight");
     } catch (caught) {
       error = caught;
     }
 
     expect(error).toBeInstanceOf(UnknownAddressError);
     expect(error).toMatchObject({
-      chainId: ChainId.EthMainnet,
+      chainId: ChainId.ArcMainnet,
       label: "midnight",
     });
   });
@@ -139,7 +127,7 @@ describe("getChainAddress", () => {
 
 describe("addressesRegistry", () => {
   test("default", () => {
-    expect("midnight" in addressesRegistry[1]).toBe(false);
+    expect("midnight" in addressesRegistry[ChainId.EthMainnet]).toBe(true);
   });
 
   test("behavior: keeps the deprecated Vault V1 PublicAllocator alias", () => {
@@ -338,6 +326,386 @@ describe("addressesRegistry", () => {
     },
   );
 
+  test.each([
+    [
+      ChainId.EthMainnet,
+      "midnight",
+      "0x471686c42792F93528B000beF54bC10E3aa2045f",
+      25_798_183n,
+    ],
+    [
+      ChainId.EthMainnet,
+      "midnightBundles",
+      "0x7c00dBB2b6b6b9B28745332e550dC8782Fcf77EC",
+      25_798_264n,
+    ],
+    [
+      ChainId.EthMainnet,
+      "midnightBlueBuyCallbackFactory",
+      "0x172d1FdC5f79bFe1ED46448f18541E591E5c93a7",
+      25_798_272n,
+    ],
+    [
+      ChainId.BaseMainnet,
+      "midnightBlueBuyCallbackFactory",
+      "0x7337f119Eca028bD39E0e543cEf71631D2333425",
+      49_544_552n,
+    ],
+    [
+      ChainId.EthMainnet,
+      "midnightMempool",
+      "0xde2d62449301a09A51EbF9326EA60d2e8BF4A8F7",
+      25_798_183n,
+    ],
+    [
+      ChainId.EthMainnet,
+      "ecrecoverRatifier",
+      "0xAC439c81CAA6ef4C7B7E8F0110F8CE63A4b6D43e",
+      25_798_183n,
+    ],
+    [
+      ChainId.EthMainnet,
+      "ecrecoverAuthorizer",
+      "0xfC3303119E46AF831CacdBDB6e1A04C9C369ffF7",
+      25_798_183n,
+    ],
+    [
+      ChainId.EthMainnet,
+      "setterRatifier",
+      "0xb72c416382c8A6399D0765CebfB032F040B00B3c",
+      25_798_183n,
+    ],
+    [
+      ChainId.ScrollMainnet,
+      "vaultV2Factory",
+      "0x474cdCF6B3be2eb770065b88d2F7c57A9BC609E0",
+      28_647_107n,
+    ],
+    [
+      ChainId.ScrollMainnet,
+      "morphoMarketV1AdapterV2Factory",
+      "0x3199Ddb2aA394B175a814EB79BB654822Ee1100F",
+      28_647_179n,
+    ],
+    [
+      ChainId.ScrollMainnet,
+      "registryList",
+      "0x0ED73cc76a0ebd7C5a6a95397718D8F1dCC219b1",
+      28_647_179n,
+    ],
+    [
+      ChainId.FraxtalMainnet,
+      "vaultV2Factory",
+      "0x711bCE12269a3a496eFaABB8B9AD5A4485E08A24",
+      31_182_482n,
+    ],
+    [
+      ChainId.FraxtalMainnet,
+      "morphoMarketV1AdapterV2Factory",
+      "0xa036C78AE8e162feD4db4abbD41f79995F28bC4b",
+      31_182_547n,
+    ],
+    [
+      ChainId.FraxtalMainnet,
+      "registryList",
+      "0x50d4e8af118db0D5b301B18Ef37435F987Fe2D2B",
+      31_182_547n,
+    ],
+    [
+      ChainId.InkMainnet,
+      "vaultV2Factory",
+      "0x35587F8d98eA305FB762934a63F3c1564037F9C7",
+      35_682_429n,
+    ],
+    [
+      ChainId.InkMainnet,
+      "morphoMarketV1AdapterV2Factory",
+      "0x92A070b2b4Af436ba4a168451fb360e45b849355",
+      35_682_573n,
+    ],
+    [
+      ChainId.InkMainnet,
+      "registryList",
+      "0xe7D687a017B549fe723E78a6Bc1206216C701821",
+      35_682_573n,
+    ],
+    [
+      ChainId.SonicMainnet,
+      "vaultV2Factory",
+      "0xc8BE2FD6f65FB3ce25Dd6a50F21A9245B9E399d7",
+      60_993_716n,
+    ],
+    [
+      ChainId.SonicMainnet,
+      "morphoMarketV1AdapterV2Factory",
+      "0xc49224e28992E693aFaa778a6F54c329E5Ac9704",
+      60_993_824n,
+    ],
+    [
+      ChainId.SonicMainnet,
+      "registryList",
+      "0x1fbF65D5C905ac9144afbB2f410F4e12F69edF5D",
+      60_993_824n,
+    ],
+    [
+      ChainId.HemiMainnet,
+      "vaultV2Factory",
+      "0x3c75C433e7902193497617EaFCc8385A3D031836",
+      3_609_553n,
+    ],
+    [
+      ChainId.HemiMainnet,
+      "morphoMarketV1AdapterV2Factory",
+      "0x0d9E428075b8A691e12237984b8284E40ab9363A",
+      3_609_563n,
+    ],
+    [
+      ChainId.HemiMainnet,
+      "registryList",
+      "0xbd30B731C881149e2BA23C7fd375D5608208Ecb3",
+      3_609_563n,
+    ],
+    [
+      ChainId.ModeMainnet,
+      "vaultV2Factory",
+      "0x68DCEA6df0f07385946AA0cDA2648c27a050e26e",
+      34_507_011n,
+    ],
+    [
+      ChainId.ModeMainnet,
+      "morphoMarketV1AdapterV2Factory",
+      "0x97CF0f15bf580838900161F2a4D7CE9BC88E8d5D",
+      34_507_081n,
+    ],
+    [
+      ChainId.ModeMainnet,
+      "registryList",
+      "0x8dBDae88260aAE80f195c0CBFBa5b0917E8B3296",
+      34_507_081n,
+    ],
+    [
+      ChainId.TacMainnet,
+      "vaultV2Factory",
+      "0x0437C5B0CF1edFb8309613E4fEBE2a512D9a735d",
+      13_304_185n,
+    ],
+    [
+      ChainId.TacMainnet,
+      "morphoMarketV1AdapterV2Factory",
+      "0xabA00365C6284548F90480993fc46dbB7775FB96",
+      13_304_411n,
+    ],
+    [
+      ChainId.TacMainnet,
+      "registryList",
+      "0x784125737238e058B646FDB502F5B6d940713B95",
+      13_304_411n,
+    ],
+    [
+      ChainId.SoneiumMainnet,
+      "vaultV2Factory",
+      "0x783b4853Da42DBA4A86eFa4b94ABd48100c6D982",
+      18_023_802n,
+    ],
+    [
+      ChainId.SoneiumMainnet,
+      "morphoMarketV1AdapterV2Factory",
+      "0xd25Ae31a2480DF33b7E5F8CfEE4229248309d519",
+      18_023_868n,
+    ],
+    [
+      ChainId.SoneiumMainnet,
+      "registryList",
+      "0x01eD6405cDf9784022c5466eA1091c78f46B829f",
+      18_023_868n,
+    ],
+    [
+      ChainId.LiskMainnet,
+      "vaultV2Factory",
+      "0x8DB1483C64384FA8581D6e6e82C6F44812090c2d",
+      27_226_961n,
+    ],
+    [
+      ChainId.LiskMainnet,
+      "morphoMarketV1AdapterV2Factory",
+      "0x382d00918B744Bd91B906f38CAe54e67649E770C",
+      27_227_042n,
+    ],
+    [
+      ChainId.LiskMainnet,
+      "registryList",
+      "0x3f4A754Af683a1b9AD7E20608630bED3B459d230",
+      27_227_042n,
+    ],
+    [
+      ChainId.EtherlinkMainnet,
+      "vaultV2Factory",
+      "0xDa4C5e0f8830002750f788eA729891B4B38EC1c2",
+      37_474_154n,
+    ],
+    [
+      ChainId.EtherlinkMainnet,
+      "morphoMarketV1AdapterV2Factory",
+      "0x588737013F0302a2fa82Dc03DA06126a81B8be45",
+      37_474_326n,
+    ],
+    [
+      ChainId.EtherlinkMainnet,
+      "registryList",
+      "0xEe583Ac409a12cc6BD97DD5ca6d2c0ecC8fA86FF",
+      37_474_326n,
+    ],
+    [
+      ChainId.AbstractMainnet,
+      "vaultV2Factory",
+      "0xecCd168c7d8e40f7166Fe226B4cf2cA3Db7A9754",
+      36_244_191n,
+    ],
+    [
+      ChainId.AbstractMainnet,
+      "morphoMarketV1AdapterV2Factory",
+      "0xAA2D848d759d872A45e5658B55B02e589101D9C0",
+      36_244_462n,
+    ],
+    [
+      ChainId.AbstractMainnet,
+      "registryList",
+      "0x906A0E39C8329b73011d033A3441d2f013013a1A",
+      36_244_462n,
+    ],
+    [
+      ChainId.CeloMainnet,
+      "vaultV2Factory",
+      "0xB237fdB403992f4AAe0963F5304799242035E22d",
+      57_278_683n,
+    ],
+    [
+      ChainId.CeloMainnet,
+      "morphoMarketV1AdapterV2Factory",
+      "0x8F5C08671A3986b2B0261FF78f5c2F291208BceC",
+      57_278_849n,
+    ],
+    [
+      ChainId.CeloMainnet,
+      "registryList",
+      "0x448Babad091267362fe83588838Ed7b192C1dc5A",
+      57_278_849n,
+    ],
+    [
+      ChainId.BscMainnet,
+      "bundler3.paraswapAdapter",
+      "0xBb12B012Fa31f7FE418236cAf625713Edc852F82",
+      54_346_558n,
+    ],
+    [
+      ChainId.BscMainnet,
+      "vaultV2Factory",
+      "0x29955201601630f686beAF47b0B03be7b86d160F",
+      76_966_373n,
+    ],
+    [
+      ChainId.BscMainnet,
+      "morphoMarketV1AdapterV2Factory",
+      "0x18c1b03ac8007224FE86442a91fEE3135ba767CD",
+      76_966_750n,
+    ],
+    [
+      ChainId.BscMainnet,
+      "registryList",
+      "0x705A9Df14b294E6d4E673520369f289bd48C4cCB",
+      76_966_750n,
+    ],
+    [
+      ChainId.BitlayerMainnet,
+      "vaultV2Factory",
+      "0x20d7eAd4830b53fB29bb4C4e8a80FD5F1f7d7F2c",
+      19_109_598n,
+    ],
+    [
+      ChainId.BitlayerMainnet,
+      "morphoMarketV1AdapterV2Factory",
+      "0x626f8ea9b3B70C03F8cf9a29eFBb9F3b093d1599",
+      19_109_904n,
+    ],
+    [
+      ChainId.BitlayerMainnet,
+      "registryList",
+      "0x9d3ce545ffC4d00e372B9733343f001085b045D2",
+      19_109_904n,
+    ],
+    [
+      ChainId.SeiMainnet,
+      "vaultV2Factory",
+      "0x30f5b078C80bD06fEdc3B40b4a4441a96Dd9cf22",
+      197_444_083n,
+    ],
+    [
+      ChainId.SeiMainnet,
+      "morphoMarketV1AdapterV2Factory",
+      "0xbADd49F7db90f65fF5822681AA6B8548E8356a1D",
+      197_444_447n,
+    ],
+    [
+      ChainId.SeiMainnet,
+      "registryList",
+      "0x26abEaee65A878E9Fe8F99fEb31aec62fbA2624E",
+      197_444_447n,
+    ],
+    [
+      ChainId.ZeroGMainnet,
+      "vaultV2Factory",
+      "0x9c7E1f6fc953aED9C273D8D7B17A654e70721E80",
+      7_527_933n,
+    ],
+    [
+      ChainId.ZeroGMainnet,
+      "morphoMarketV1AdapterFactory",
+      "0xb76A46cC0c4E8B25Df7Df278371b3D78d95D0b2b",
+      7_527_933n,
+    ],
+    [
+      ChainId.ZeroGMainnet,
+      "morphoMarketV1AdapterV2Factory",
+      "0x2614BAEA6aE12117565668720aD92ca0149aBA03",
+      16_385_508n,
+    ],
+    [
+      ChainId.ZeroGMainnet,
+      "morphoVaultV1AdapterFactory",
+      "0x42a147a5af2A699b323168508A039e54f5078092",
+      7_527_933n,
+    ],
+    [
+      ChainId.ZeroGMainnet,
+      "registryList",
+      "0x9749cF858Ef950Eea7fA16a35f8C8817ca65066c",
+      7_528_068n,
+    ],
+    [
+      ChainId.LineaMainnet,
+      "morphoMarketV1AdapterV2Factory",
+      "0xcAB7C66F7191Ad3Ef1e7fEeb67F3137BC975F8cE",
+      26_530_057n,
+    ],
+    [
+      ChainId.ArcMainnet,
+      "morphoVaultV1AdapterFactory",
+      "0x77788033B22CEaB8D51Ec8F9dFD4a40E54F380B0",
+      5_314_109n,
+    ],
+  ] as const)(
+    "behavior: matches the deployments registry for %i %s",
+    (...[chainId, label, address, deploymentBlock]) => {
+      expect(getChainAddress(chainId, label)).toBe(address);
+      const path = label.split(".");
+      let deployment: unknown = deployments[chainId];
+      for (const key of path) {
+        deployment = (deployment as Record<string, unknown>)[key];
+      }
+      expect(deployment).toBe(deploymentBlock);
+    },
+  );
+
   test("behavior: exposes Midnight entries through the unified registry", () => {
     const chainId = 31_337_002;
     const chainAddresses = createChainAddresses();
@@ -432,7 +800,7 @@ describe("addressesRegistry", () => {
 
   test("behavior: registers Blue and Midnight addresses alongside each other", () => {
     const chainId = 31_337_004;
-    const blueAddresses = getMainnetBlueAddresses();
+    const blueAddresses = addressesRegistry[ChainId.ArcMainnet];
     const chainAddresses = {
       ...createMidnightAddresses(),
       permit2: blueAddresses.permit2,
@@ -496,12 +864,12 @@ describe("addressesRegistry", () => {
 
 describe("deployments", () => {
   test("default", () => {
-    expect("midnight" in deployments[1]).toBe(false);
+    expect("midnight" in deployments[ChainId.EthMainnet]).toBe(true);
   });
 
   test("behavior: registers Blue and Midnight deployments alongside each other", () => {
     const chainId = 31_337_102;
-    const blueDeployments = getMainnetBlueDeployments();
+    const blueDeployments = deployments[ChainId.ArcMainnet];
     const chainDeployments = {
       ...createMidnightDeployments(),
       permit2: blueDeployments.permit2,
