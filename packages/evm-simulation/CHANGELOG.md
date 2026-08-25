@@ -1,5 +1,15 @@
 # @morpho-org/evm-simulation
 
+## 4.1.4
+
+### Patch Changes
+
+- [#936](https://github.com/morpho-org/sdks/pull/936) [`cde4052`](https://github.com/morpho-org/sdks/commit/cde4052c5f72e8345aae1b4ae863290e7c5b7f66) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Synchronize maintained chain address and deployment-block registries with the current deployments repository.
+
+- Updated dependencies [[`402175b`](https://github.com/morpho-org/sdks/commit/402175b32cc37e0da9e7b33495080a695941fa71), [`cde4052`](https://github.com/morpho-org/sdks/commit/cde4052c5f72e8345aae1b4ae863290e7c5b7f66)]:
+  - @morpho-org/morpho-ts@2.10.0
+  - @morpho-org/blue-sdk@6.6.0
+
 ## 4.1.3
 
 ### Patch Changes
