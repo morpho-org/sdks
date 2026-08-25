@@ -43,8 +43,9 @@ BluePublicAllocator `reallocate`/`allocateFromIdle` calls. Separate builders enc
 mixing versions throws `MixedReallocationVersionsError`. For non-zero V2 penalties, the V2 builder
 adds one aggregate loan-token funding action into Bundler3: `erc20TransferFrom` from the initiator by
 default, or `erc20Transfer` from GeneralAdapter1 when `supplyCollateralBorrow` uses the same token for
-collateral and loan funding. Each allocator action expands to an exact token approval plus the
-nonpayable allocator call. `BundlerAction.encodeBundle` derives `tx.value` only from native wrapping
+collateral and loan funding. Each allocator action expands to the nonpayable allocator call; when its
+penalty is non-zero, a zero reset and exact token approval precede it.
+`BundlerAction.encodeBundle` derives `tx.value` only from native wrapping
 calls and PublicAllocator V1 native fees.
 
 ## Mode and ordering rules

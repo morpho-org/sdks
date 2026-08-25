@@ -1360,8 +1360,22 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     });
 
     const result = data.computeVaultV2BlueReallocations(targetParams.id);
+    const sourceMarket = result.data.getMarket(sourceParams.id);
+    const siblingAdapter = result.data
+      .getVault(VAULT)
+      .accrualAdapters.find(
+        (adapter): adapter is AccrualVaultV2MorphoMarketV1Adapter =>
+          adapter instanceof AccrualVaultV2MorphoMarketV1Adapter &&
+          isAddressEqual(adapter.address, SIBLING_SOURCE_ADAPTER),
+      );
 
     expect(result.reallocations[0]?.assets).toBe(2n);
+    expect(siblingAdapter?.positions[0]?.market.totalSupplyAssets).toBe(
+      sourceMarket.totalSupplyAssets,
+    );
+    expect(siblingAdapter?.positions[0]?.market.totalSupplyShares).toBe(
+      sourceMarket.totalSupplyShares,
+    );
   });
 
   test("behavior: ranks market liquidity before idle and depletes both sources", () => {

@@ -525,7 +525,7 @@ describe("blueRefinance", () => {
 
       const bundle = decodeFunctionData({ abi: bundler3Abi, data: tx.data });
       const calls = bundle.args[0] ?? [];
-      expect(calls).toHaveLength(6);
+      expect(calls).toHaveLength(8);
       expect(
         decodeFunctionData({ abi: generalAdapter1Abi, data: calls[0]!.data }),
       ).toMatchObject({
@@ -536,16 +536,28 @@ describe("blueRefinance", () => {
         decodeFunctionData({ abi: erc20Abi, data: calls[1]!.data }),
       ).toMatchObject({
         functionName: "approve",
+        args: [V2_ALLOCATOR, 0n],
+      });
+      expect(
+        decodeFunctionData({ abi: erc20Abi, data: calls[2]!.data }),
+      ).toMatchObject({
+        functionName: "approve",
         args: [V2_ALLOCATOR, 5n],
       });
       expect(
         decodeFunctionData({
           abi: vaultV2BluePublicAllocatorAbi,
-          data: calls[2]!.data,
+          data: calls[3]!.data,
         }).functionName,
       ).toBe("reallocate");
       expect(
-        decodeFunctionData({ abi: erc20Abi, data: calls[3]!.data }),
+        decodeFunctionData({ abi: erc20Abi, data: calls[4]!.data }),
+      ).toMatchObject({
+        functionName: "approve",
+        args: [V2_ALLOCATOR, 0n],
+      });
+      expect(
+        decodeFunctionData({ abi: erc20Abi, data: calls[5]!.data }),
       ).toMatchObject({
         functionName: "approve",
         args: [V2_ALLOCATOR, 3n],
@@ -553,13 +565,13 @@ describe("blueRefinance", () => {
       expect(
         decodeFunctionData({
           abi: vaultV2BluePublicAllocatorAbi,
-          data: calls[4]!.data,
+          data: calls[6]!.data,
         }).functionName,
       ).toBe("allocateFromIdle");
       expect(
         decodeFunctionData({
           abi: generalAdapter1Abi,
-          data: calls[5]!.data,
+          data: calls[7]!.data,
         }).functionName,
       ).toBe("morphoSupplyCollateral");
     });

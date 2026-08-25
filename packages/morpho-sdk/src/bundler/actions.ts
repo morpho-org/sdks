@@ -24,7 +24,6 @@ import {
   zeroHash,
 } from "viem";
 import { bundler3Abi, coreAdapterAbi, generalAdapter1Abi } from "../abis.js";
-import { APPROVE_ONLY_ONCE_TOKENS } from "../helpers/constant.js";
 import { BundlerErrors } from "../types/error.js";
 import type {
   Action,
@@ -1472,7 +1471,7 @@ export namespace BundlerAction {
    * @param assets - Assets to reallocate, bounded by `uint128` by the high-level action.
    * @param penalty - Vault-configured proportional penalty, scaled by WAD.
    * @param skipRevert - Whether Bundler3 should tolerate a revert.
-   * @returns An optional zero reset for approve-once tokens, the exact approval when needed, then the allocator call.
+   * @returns A zero reset and exact approval when needed, then the allocator call.
    * @throws {BundlerErrors.UnexpectedAction} when the chain has no Blue Public Allocator deployment.
    * @throws {BundlerErrors.SkippableAllocatorPenalty} when `skipRevert` is true and a token approval is required.
    * @example
@@ -1517,7 +1516,7 @@ export namespace BundlerAction {
    *   1_000_000n,
    *   1_000_000_000_000_000n,
    * );
-   * // Bundler3 approves 1_000 USDC units, then calls `reallocate` with zero native value.
+   * // Bundler3 resets and approves 1_000 USDC units, then calls `reallocate` with zero native value.
    * ```
    */
   // biome-ignore lint/complexity/useMaxParams: mirrors the protocol call
@@ -1551,12 +1550,7 @@ export namespace BundlerAction {
     }
 
     if (penaltyAssets > 0n) {
-      const approvalAmounts = APPROVE_ONLY_ONCE_TOKENS[chainId]?.some((token) =>
-        isAddressEqual(token, allocateMarket.loanToken),
-      )
-        ? [0n, penaltyAssets]
-        : [penaltyAssets];
-      for (const amount of approvalAmounts)
+      for (const amount of [0n, penaltyAssets])
         calls.push({
           to: allocateMarket.loanToken,
           data: encodeFunctionData({
@@ -1606,7 +1600,7 @@ export namespace BundlerAction {
    * @param assets - Assets to allocate, bounded by `uint128` by the high-level action.
    * @param penalty - Vault-configured proportional penalty, scaled by WAD.
    * @param skipRevert - Whether Bundler3 should tolerate a revert.
-   * @returns An optional zero reset for approve-once tokens, the exact approval when needed, then the allocator call.
+   * @returns A zero reset and exact approval when needed, then the allocator call.
    * @throws {BundlerErrors.UnexpectedAction} when the chain has no Blue Public Allocator deployment.
    * @throws {BundlerErrors.SkippableAllocatorPenalty} when `skipRevert` is true and a token approval is required.
    * @example
@@ -1642,7 +1636,7 @@ export namespace BundlerAction {
    *   1_000_000n,
    *   1_000_000_000_000_000n,
    * );
-   * // Bundler3 approves 1_000 USDC units, then calls `allocateFromIdle` with zero native value.
+   * // Bundler3 resets and approves 1_000 USDC units, then calls `allocateFromIdle` with zero native value.
    * ```
    */
   // biome-ignore lint/complexity/useMaxParams: mirrors the protocol call
@@ -1674,12 +1668,7 @@ export namespace BundlerAction {
     }
 
     if (penaltyAssets > 0n) {
-      const approvalAmounts = APPROVE_ONLY_ONCE_TOKENS[chainId]?.some((token) =>
-        isAddressEqual(token, market.loanToken),
-      )
-        ? [0n, penaltyAssets]
-        : [penaltyAssets];
-      for (const amount of approvalAmounts)
+      for (const amount of [0n, penaltyAssets])
         calls.push({
           to: market.loanToken,
           data: encodeFunctionData({

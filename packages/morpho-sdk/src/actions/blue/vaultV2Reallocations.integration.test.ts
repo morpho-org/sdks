@@ -71,6 +71,7 @@ describe("Blue actions with Vault V2 reallocations", () => {
     const sourceDeposit = parseUnits("100", 6);
     const initialIdleAssets = parseUnits("20", 6);
     const penalty = parseUnits("0.01", 18);
+    const sharedRelativeCap = (MathLib.WAD * 9n) / 10n;
     const borrowAmount = parseUnits("1", 6);
     const collateralAmount = parseUnits("1", 18);
 
@@ -116,12 +117,13 @@ describe("Blue actions with Vault V2 reallocations", () => {
       }),
     });
 
-    const idsData = new Set(
-      [sourceMarket, targetMarket].flatMap((marketParams) => [
-        encodeAbiParameters(
-          [{ type: "string" }, { type: "address" }],
-          ["this", sourceAdapter],
-        ),
+    const sharedIdData = encodeAbiParameters(
+      [{ type: "string" }, { type: "address" }],
+      ["this", sourceAdapter],
+    );
+    const idsData = new Set([
+      sharedIdData,
+      ...[sourceMarket, targetMarket].flatMap((marketParams) => [
         encodeAbiParameters(
           [{ type: "string" }, { type: "address" }],
           ["collateralToken", marketParams.collateralToken],
@@ -131,7 +133,7 @@ describe("Blue actions with Vault V2 reallocations", () => {
           ["this/marketParams", sourceAdapter, marketParams],
         ),
       ]),
-    );
+    ]);
 
     for (const idData of idsData) {
       await submitAndAcceptVaultV2Call(anvilClient, {
@@ -164,22 +166,33 @@ describe("Blue actions with Vault V2 reallocations", () => {
     await client.deal({
       account: client.account.address,
       erc20: targetMarket.loanToken,
-      amount: sourceDeposit,
+      amount: sourceDeposit + initialIdleAssets,
     });
     await client.approve({
       address: targetMarket.loanToken,
-      args: [vault, sourceDeposit],
+      args: [vault, sourceDeposit + initialIdleAssets],
     });
     await client.writeContract({
       address: vault,
       abi: vaultV2Abi,
       functionName: "deposit",
-      args: [sourceDeposit, client.account.address],
+      args: [sourceDeposit + initialIdleAssets, client.account.address],
     });
-    await client.deal({
-      account: vault,
-      erc20: targetMarket.loanToken,
-      amount: initialIdleAssets,
+    await client.writeContract({
+      address: vault,
+      abi: vaultV2Abi,
+      functionName: "deallocate",
+      args: [
+        sourceAdapter,
+        encodeAbiParameters([marketParamsAbi], [sourceMarket]),
+        initialIdleAssets,
+      ],
+    });
+    await client.writeContract({
+      address: vault,
+      abi: vaultV2Abi,
+      functionName: "decreaseRelativeCap",
+      args: [sharedIdData, sharedRelativeCap],
     });
 
     await submitAndAcceptVaultV2Call(anvilClient, {
@@ -304,7 +317,22 @@ describe("Blue actions with Vault V2 reallocations", () => {
         }),
       ]);
 
-    await client.sendTransaction(borrow.buildTx());
+    const hash = await client.sendTransaction(borrow.buildTx());
+    const receipt = await client.getTransactionReceipt({ hash });
+    const executionBlock = await client.getBlock({
+      blockNumber: receipt.blockNumber,
+    });
+    const sourceWithdrawal = reallocationData
+      .getMarket(sourceMarket.id)
+      .withdraw(sourceReallocation.assets, 0n, executionBlock.timestamp);
+    const targetSupplyFromMarket = reallocationData
+      .getMarket(targetMarket.id)
+      .supply(sourceReallocation.assets, 0n, executionBlock.timestamp);
+    const targetSupplyFromIdle = targetSupplyFromMarket.market.supply(
+      idleReallocation.assets,
+      0n,
+      executionBlock.timestamp,
+    );
 
     const [
       sourcePositionAfter,
@@ -312,6 +340,8 @@ describe("Blue actions with Vault V2 reallocations", () => {
       vaultBalanceAfter,
       bundlerBalanceAfter,
       allocatorAllowanceAfter,
+      sharedAllocationAfter,
+      vaultAfter,
     ] = await Promise.all([
       readContractRestructured(client, {
         address: morpho,
@@ -343,11 +373,21 @@ describe("Blue actions with Vault V2 reallocations", () => {
         functionName: "allowance",
         args: [bundler3.bundler3, allocator],
       }),
+      client.readContract({
+        address: vault,
+        abi: vaultV2Abi,
+        functionName: "allocation",
+        args: [keccak256(sharedIdData)],
+      }),
+      fetchAccrualVaultV2(vault, client),
     ]);
 
-    expect(sourcePositionAfter.supplyShares).toBeLessThan(
-      sourcePositionBefore.supplyShares,
-    );
+    expect(
+      sourcePositionBefore.supplyShares - sourcePositionAfter.supplyShares,
+    ).toBe(sourceWithdrawal.shares);
+    expect(
+      targetPositionAfter.supplyShares - targetPositionBefore.supplyShares,
+    ).toBe(targetSupplyFromMarket.shares + targetSupplyFromIdle.shares);
     expect(targetPositionBefore.supplyShares).toBe(0n);
     expect(targetPositionAfter.supplyShares).toBeGreaterThan(0n);
     expect(vaultBalanceBefore).toBe(initialIdleAssets);
@@ -356,6 +396,9 @@ describe("Blue actions with Vault V2 reallocations", () => {
     );
     expect(bundlerBalanceAfter).toBe(0n);
     expect(allocatorAllowanceAfter).toBe(0n);
+    expect(sharedAllocationAfter).toBe(
+      MathLib.wMulDown(vaultAfter._totalAssets, sharedRelativeCap),
+    );
   });
 
   test("executes the simulated zero-elapsed relative-cap maximum", async ({

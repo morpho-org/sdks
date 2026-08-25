@@ -282,7 +282,7 @@ describe("blueSupplyCollateralBorrow unit tests", () => {
       expect(tx.action.args.reallocationPenaltyAssets).toBe(5n);
       const bundle = decodeFunctionData({ abi: bundler3Abi, data: tx.data });
       const calls = bundle.args[0] ?? [];
-      expect(calls).toHaveLength(7);
+      expect(calls).toHaveLength(8);
       expect(
         decodeFunctionData({
           abi: generalAdapter1Abi,

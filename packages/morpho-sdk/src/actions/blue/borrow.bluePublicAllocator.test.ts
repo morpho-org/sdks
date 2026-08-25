@@ -86,8 +86,17 @@ describe("blueBorrow Blue Public Allocator", () => {
 
     const bundle = decodeFunctionData({ abi: bundler3Abi, data: tx.data });
     const calls = bundle.args[0] ?? [];
-    expect(calls).toHaveLength(6);
-    expect(calls.map((call) => call.value)).toEqual([0n, 0n, 0n, 0n, 0n, 0n]);
+    expect(calls).toHaveLength(8);
+    expect(calls.map((call) => call.value)).toEqual([
+      0n,
+      0n,
+      0n,
+      0n,
+      0n,
+      0n,
+      0n,
+      0n,
+    ]);
     expect(calls.every((call) => call.skipRevert === false)).toBe(true);
 
     expect(
@@ -100,16 +109,19 @@ describe("blueBorrow Blue Public Allocator", () => {
     expect(
       decodeFunctionData({
         abi: vaultV2BluePublicAllocatorAbi,
-        data: calls[2]!.data,
+        data: calls[3]!.data,
       }).functionName,
     ).toBe("reallocate");
     expect(
       decodeFunctionData({ abi: erc20Abi, data: calls[1]!.data }),
+    ).toMatchObject({ functionName: "approve", args: [allocator, 0n] });
+    expect(
+      decodeFunctionData({ abi: erc20Abi, data: calls[2]!.data }),
     ).toMatchObject({ functionName: "approve", args: [allocator, 1n] });
 
     const idleCall = decodeFunctionData({
       abi: vaultV2BluePublicAllocatorAbi,
-      data: calls[4]!.data,
+      data: calls[6]!.data,
     });
     expect(idleCall.functionName).toBe("allocateFromIdle");
     expect(idleCall.args[0]).toBe(vaultV2);
@@ -124,10 +136,13 @@ describe("blueBorrow Blue Public Allocator", () => {
     expect(idleCall.args[3]).toBe(7n);
     expect(idleCall.args[4]).toBe(5n);
     expect(
-      decodeFunctionData({ abi: erc20Abi, data: calls[3]!.data }),
+      decodeFunctionData({ abi: erc20Abi, data: calls[4]!.data }),
+    ).toMatchObject({ functionName: "approve", args: [allocator, 0n] });
+    expect(
+      decodeFunctionData({ abi: erc20Abi, data: calls[5]!.data }),
     ).toMatchObject({ functionName: "approve", args: [allocator, 1n] });
     expect(
-      decodeFunctionData({ abi: generalAdapter1Abi, data: calls[5]!.data })
+      decodeFunctionData({ abi: generalAdapter1Abi, data: calls[7]!.data })
         .functionName,
     ).toBe("morphoBorrow");
   });

@@ -8,7 +8,7 @@ import {
 import { getRequirementsApproval } from "./getRequirementsApproval.js";
 
 const usdc = getChainAddress(ChainId.EthMainnet, "usdc");
-const usdt = getChainAddress(ChainId.EthMainnet, "usdt");
+const lowercaseUsdt = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
 const generalAdapter1 = getChainAddress(
   ChainId.EthMainnet,
   "bundler3.generalAdapter1",
@@ -48,7 +48,7 @@ describe("getRequirementsApproval", () => {
 
   test("behavior: resets approve-only-once token before approving", () => {
     const requirements = getRequirementsApproval({
-      address: usdt,
+      address: lowercaseUsdt,
       chainId: mainnet.id,
       args: {
         spendAmount: 1_000n,
