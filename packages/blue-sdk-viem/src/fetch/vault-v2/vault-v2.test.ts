@@ -629,7 +629,7 @@ describe("fetchVaultV2Adapter", () => {
     const { client } = createMockClient(mainnet);
 
     await expect(
-      fetchVaultV2Adapter(ADAPTER, client, { chainId: ChainId.ZeroGMainnet }),
+      fetchVaultV2Adapter(ADAPTER, client, { chainId: ChainId.CornMainnet }),
     ).rejects.toThrow(UnsupportedVaultV2AdapterError);
   });
 
@@ -817,7 +817,7 @@ describe("fetchVaultV2Adapter", () => {
 
     await expect(
       fetchAccrualVaultV2Adapter(ADAPTER, client, {
-        chainId: ChainId.ZeroGMainnet,
+        chainId: ChainId.CornMainnet,
       }),
     ).rejects.toThrow(UnsupportedVaultV2AdapterError);
   });
