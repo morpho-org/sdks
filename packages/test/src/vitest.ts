@@ -86,9 +86,7 @@ export const createViemTest = <chain extends Chain>(
           stopAndWait = anvil.stopAndWait;
           const client = createAnvilTestClient(
             http(anvil.rpcUrl, {
-              fetchOptions: {
-                cache: "force-cache",
-              },
+              retryCount: 0,
               timeout: 30_000,
             }),
             chain,

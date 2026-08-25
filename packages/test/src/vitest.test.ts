@@ -28,7 +28,9 @@ let peakActiveProcesses = 0;
 let spawnedProcesses = 0;
 let retryBodies = 0;
 let retryProcesses = 0;
+let timeoutProcesses = 0;
 const retryForkBlockNumber = 1n;
+const timeoutForkBlockNumber = 2n;
 const fakeClient = {
   account: { address: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" },
   getCode: vi.fn().mockResolvedValue(undefined),
@@ -47,6 +49,15 @@ spawnAnvilMock.mockImplementation(async (parameters) => {
           throw new AnvilProcessError("Anvil exited unexpectedly");
         return true;
       },
+    };
+  }
+
+  if (parameters.forkBlockNumber === timeoutForkBlockNumber) {
+    timeoutProcesses += 1;
+    return {
+      rpcUrl: "http://localhost:32003" as const,
+      stop: () => true,
+      stopAndWait: async () => true,
     };
   }
 
@@ -77,6 +88,10 @@ const extendedViemTest = viemTest.extend<{ readonly label: string }>({
 });
 const retryViemTest = createViemTest(mainnet, {
   forkBlockNumber: retryForkBlockNumber,
+  forkUrl: "https://rpc.example",
+});
+const timeoutViemTest = createViemTest(mainnet, {
+  forkBlockNumber: timeoutForkBlockNumber,
   forkUrl: "https://rpc.example",
 });
 
@@ -124,10 +139,20 @@ describe("createViemTest", () => {
     },
   );
 
+  timeoutViemTest(
+    "error: does not retry a timed-out fixture context",
+    { fails: true, timeout: 10 },
+    async ({ client }) => {
+      expect(client).toBe(fakeClient);
+      await new Promise<never>(() => {});
+    },
+  );
+
   afterAll(() => {
     expect(spawnedProcesses).toBe(4);
     expect(retryProcesses).toBe(2);
     expect(retryBodies).toBe(2);
+    expect(timeoutProcesses).toBe(1);
     expect(peakActiveProcesses).toBe(4);
     expect(activeProcesses).toBe(0);
   });

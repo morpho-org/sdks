@@ -4,8 +4,7 @@ import { defineConfig } from "vitest/config";
 const forkTestConfig = {
   ...(process.env.CI
     ? {
-        maxConcurrency: 2,
-        maxWorkers: 8,
+        maxConcurrency: 1,
         sequence: { groupOrder: 1 }, // Separate from unconstrained unit projects.
       }
     : {}),
@@ -41,7 +40,12 @@ export default defineConfig({
       concurrent: true,
     },
     globalSetup: "vitest.setup.ts",
-    retry: process.env.CI ? 2 : 0,
+    retry: process.env.CI
+      ? {
+          count: 2,
+          condition: /^(?!(?:Test|Hook) timed out in \d+ms\.)/,
+        }
+      : 0,
     testTimeout: 30_000,
     projects: [
       {
