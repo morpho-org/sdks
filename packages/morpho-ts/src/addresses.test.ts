@@ -341,6 +341,18 @@ describe("addressesRegistry", () => {
     ],
     [
       ChainId.EthMainnet,
+      "midnightBlueBuyCallbackFactory",
+      "0x172d1FdC5f79bFe1ED46448f18541E591E5c93a7",
+      25_798_272n,
+    ],
+    [
+      ChainId.BaseMainnet,
+      "midnightBlueBuyCallbackFactory",
+      "0x7337f119Eca028bD39E0e543cEf71631D2333425",
+      49_544_552n,
+    ],
+    [
+      ChainId.EthMainnet,
       "midnightMempool",
       "0xde2d62449301a09A51EbF9326EA60d2e8BF4A8F7",
       25_798_183n,

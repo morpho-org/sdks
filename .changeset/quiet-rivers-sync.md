@@ -1,5 +1,5 @@
 ---
-"@morpho-org/morpho-ts": patch
+"@morpho-org/morpho-ts": minor
 "@morpho-org/evm-simulation": patch
 "@morpho-org/morpho-sdk": patch
 ---

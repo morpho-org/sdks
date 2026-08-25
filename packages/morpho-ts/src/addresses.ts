@@ -118,6 +118,8 @@ export interface ChainAddresses {
   midnight?: `0x${string}`;
   /** MidnightBundles periphery contract for batched take, repay, collateral, permit, and referral workflows. */
   midnightBundles?: `0x${string}`;
+  /** BlueBuyCallback factory for parking Midnight buy-offer funds in Morpho Blue markets. */
+  midnightBlueBuyCallbackFactory?: `0x${string}`;
   /** Midnight onchain mempool log contract used by app and orderbook flows for offer payload publication. */
   midnightMempool?: `0x${string}`;
   /** EcrecoverRatifier contract that validates EIP-712 signed Merkle roots of Midnight offers. */
@@ -232,6 +234,8 @@ const _addressesRegistry = {
 
     midnight: "0x471686c42792F93528B000beF54bC10E3aa2045f",
     midnightBundles: "0x7c00dBB2b6b6b9B28745332e550dC8782Fcf77EC",
+    midnightBlueBuyCallbackFactory:
+      "0x172d1FdC5f79bFe1ED46448f18541E591E5c93a7",
     midnightMempool: "0xde2d62449301a09A51EbF9326EA60d2e8BF4A8F7",
     ecrecoverRatifier: "0xAC439c81CAA6ef4C7B7E8F0110F8CE63A4b6D43e",
     ecrecoverAuthorizer: "0xfC3303119E46AF831CacdBDB6e1A04C9C369ffF7",
@@ -278,6 +282,8 @@ const _addressesRegistry = {
 
     midnight: "0xAdedD8ab6dE832766Fedf0FaC4992E5C4D3EA18A",
     midnightBundles: "0x091183d729BE9f808c212b475E387A12E67850A7",
+    midnightBlueBuyCallbackFactory:
+      "0x7337f119Eca028bD39E0e543cEf71631D2333425",
     midnightMempool: "0xdD6DCE32e21f7b020898a8258dA37355b4017993",
     ecrecoverRatifier: "0xd6e70365C8E8DDa9a4ca662C07bbE663b017755E",
     ecrecoverAuthorizer: "0x292bEa9f1443d54E0E509120c919106765c6a493",
@@ -1238,6 +1244,7 @@ const _deployments = {
 
     midnight: 25_798_183n,
     midnightBundles: 25_798_264n,
+    midnightBlueBuyCallbackFactory: 25_798_272n,
     midnightMempool: 25_798_183n,
     ecrecoverRatifier: 25_798_183n,
     ecrecoverAuthorizer: 25_798_183n,
@@ -1271,6 +1278,7 @@ const _deployments = {
 
     midnight: 48286884n,
     midnightBundles: 48286997n,
+    midnightBlueBuyCallbackFactory: 49_544_552n,
     midnightMempool: 48286884n,
     ecrecoverRatifier: 48286884n,
     ecrecoverAuthorizer: 48286884n,
