@@ -26,7 +26,7 @@ export class AnvilStartupError extends Error {
 }
 
 /**
- * Error thrown when a running Anvil process exits before shutdown is requested.
+ * Error thrown when a running Anvil process exits unexpectedly or fails during shutdown.
  *
  * @example
  * ```ts
