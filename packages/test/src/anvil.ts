@@ -519,6 +519,7 @@ export const spawnAnvil = async (
     };
 
     await new Promise<void>((resolve, reject) => {
+      let listening = false;
       let settled = false;
       let stderr = "";
       let stderrLine = "";
@@ -572,6 +573,7 @@ export const spawnAnvil = async (
         if (listenedPort === undefined) return;
 
         port = Number.parseInt(listenedPort, 10);
+        listening = true;
         settled = true;
         globalThis.clearTimeout(startupTimeout);
         options.signal?.removeEventListener("abort", abortStartup);
@@ -620,7 +622,8 @@ export const spawnAnvil = async (
               (signal === "SIGINT" ||
                 (signal === "SIGKILL" && forceKillSent))));
         const processExitError =
-          settled && !expectedShutdown
+          // A close before the listening banner confirms cleanup for a startup failure.
+          listening && !expectedShutdown
             ? new AnvilProcessError(
                 `Anvil ${stopRequested ? "failed during shutdown" : "exited unexpectedly after startup"} (code "${code}", signal "${signal}"). Retry the test and inspect the process logs.${
                   details ? ` ${details}` : ""
