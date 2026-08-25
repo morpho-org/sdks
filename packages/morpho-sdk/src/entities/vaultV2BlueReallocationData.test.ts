@@ -1478,6 +1478,26 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     expect(result.reallocations[0]?.assets).toBe(80n);
   });
 
+  test("behavior: walks below non-monotonic shared-cap rounding", () => {
+    const { data } = makeFixture({
+      sourceAdapter: TARGET_ADAPTER,
+      sourceSupply: 8n,
+      targetSupply: 1n,
+      targetTotalSupplyShares: 1_000_001n,
+      targetPositionAssets: 0n,
+      targetCaps: [
+        { absoluteCap: 7n, relativeCap: MathLib.WAD },
+        { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+        { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+      ],
+    });
+
+    const result = data.computeVaultV2BlueReallocations(targetParams.id);
+
+    expect(result.reallocations[0]?.assets).toBe(7n);
+    expect(data.getPublicReallocationLiquidity(targetParams.id)).toBe(8n);
+  });
+
   test("behavior: freezes firstTotalAssets while applying relative caps", () => {
     const { data } = makeFixture({
       firstTotalAssets: 1_000n,
@@ -1868,7 +1888,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
     expect(result.data.getMarket(targetParams.id).totalSupplyAssets).toBe(123n);
   });
 
-  test("error: rejects a remaining amount below a shared-cap lower bound", () => {
+  test("behavior: overshoots a shared-cap lower bound", () => {
     const penalty = MathLib.WAD;
     const { data } = makeFixture({
       sourceAdapter: TARGET_ADAPTER,
@@ -1891,12 +1911,57 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation"
         maxPenalty: penalty,
       }).reallocations[0]?.assets,
     ).toBe(100n);
-    expect(() =>
+    expect(
       data.computeVaultV2BlueReallocations(targetParams.id, {
         maxPenalty: penalty,
         operation: { type: "borrow", amount: 81n },
+      }).reallocations[0]?.assets,
+    ).toBe(100n);
+  });
+
+  test("behavior: overshoots a shared-cap lower bound at a realistic penalty", () => {
+    const penalty = MathLib.WAD / 1_000n;
+    const sharedCollateralSource = new MarketParams({
+      ...sourceParams,
+      collateralToken: targetParams.collateralToken,
+    });
+    const { data } = makeFixture({
+      sourceMarketParams: sharedCollateralSource,
+      sourceSupply: 10_000n,
+      targetSupply: 1_000n,
+      targetBorrow: 900n,
+      targetPositionAssets: 0n,
+      firstTotalAssets: 19_998n,
+      idle: 9_998n,
+      canPullFromIdle: false,
+      vaultLastUpdate: TIMESTAMP - 1n,
+      maxRate: MathLib.WAD,
+      penalty,
+      targetCaps: [
+        { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+        { absoluteCap: 10_000n, relativeCap: MathLib.WAD / 2n },
+        { absoluteCap: 10_000n, relativeCap: MathLib.WAD },
+      ],
+    });
+
+    expect(
+      data.computeVaultV2BlueReallocations(targetParams.id, {
+        maxPenalty: penalty,
+        operation: { type: "borrow", amount: 200n },
+      }).reallocations[0]?.assets,
+    ).toBe(1_001n);
+    expect(
+      data.getPublicReallocationLiquidity(targetParams.id, {
+        maxPenalty: penalty,
       }),
-    ).toThrow(InsufficientSharedLiquidityError);
+    ).toBe(10_000n);
+    expect(
+      data.getAvailableLiquidityToUtilization(
+        targetParams.id,
+        (MathLib.WAD * 9n) / 10n,
+        { maxPenalty: penalty },
+      ),
+    ).toBe(9_000n);
   });
 
   test("error: validates maxWithdrawalUtilization before an operation early return", () => {

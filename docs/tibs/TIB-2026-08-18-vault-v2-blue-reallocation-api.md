@@ -83,6 +83,14 @@ dispatches homogeneous plans, and returns the tagged version. This supersedes
 the July TIB goal to reuse one combined validator and its rejected “Add a V2
 validator” alternative.
 
+### Post-implementation addendum (2026-08-25): shared-cap candidate selection
+
+An operation's remaining amount is a preferred ceiling, not an absolute one:
+when a shared relative cap requires a larger penalty donation, the planner emits
+the smallest executable candidate it finds above that ceiling. Shared allocation
+rounding can also make exact feasibility non-monotonic, so the planner walks down
+from the non-shared maximum when that maximum itself fails a shared cap.
+
 ## Consequences
 
 - V2 Blue-specific symbols are unambiguous beside future Midnight state APIs.

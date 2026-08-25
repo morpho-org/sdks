@@ -880,7 +880,6 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
    * @throws {UnknownReallocationMarketPublicAllocatorConfigError} when an adapter-market allocator configuration is absent.
    * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
-   * @throws {UnknownReallocationAdapterError} when an active or source adapter is absent from the vault snapshot.
    * @throws {ReallocationAllocationUnderflowError} when an inconsistent allocation snapshot underflows during the final transition.
    * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the absolute shortfall.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdraw exceeds market supply.
@@ -1307,10 +1306,7 @@ export class VaultV2BlueReallocationData
           const capCompatibleCandidates: VaultV2BlueReallocation[] = [];
           for (const reallocation of rawCandidates) {
             let lower = 0n;
-            let upper = MathLib.min(
-              reallocation.assets,
-              remainingAssets ?? reallocation.assets,
-            );
+            let upper = reallocation.assets;
             // MorphoMarketV1AdapterV2 rejects supplies that mint fewer shares than assets.
             if (targetMarket.toSupplyShares(upper, "Down") < upper) continue;
 
@@ -1400,8 +1396,8 @@ export class VaultV2BlueReallocationData
             };
 
             // Non-shared target IDs impose monotonic upper bounds. Shared IDs
-            // can impose a lower bound because penalty donations increase
-            // firstTotalAssets, so validate them only at the selected maximum.
+            // can impose lower bounds and non-monotonic rounding constraints,
+            // so validate them after selecting the non-shared maximum.
             let probeUpper = true;
             while (lower < upper) {
               const assets = probeUpper ? upper : (lower + upper + 1n) / 2n;
@@ -1411,10 +1407,48 @@ export class VaultV2BlueReallocationData
               else upper = assets - 1n;
             }
 
-            if (lower > 0n && probeReallocation(lower)?.withinAllCaps === true)
+            let selectedAssets = MathLib.min(
+              lower,
+              remainingAssets ?? reallocation.assets,
+            );
+            let probe =
+              selectedAssets > 0n
+                ? probeReallocation(selectedAssets)
+                : undefined;
+
+            if (
+              remainingAssets != null &&
+              selectedAssets > 0n &&
+              probe?.withinAllCaps !== true &&
+              lower > selectedAssets &&
+              probeReallocation(lower)?.withinAllCaps === true
+            ) {
+              let infeasible = selectedAssets;
+              let feasible = lower;
+              while (infeasible + 1n < feasible) {
+                const midpoint = (infeasible + feasible) / 2n;
+                if (probeReallocation(midpoint)?.withinAllCaps === true) {
+                  feasible = midpoint;
+                } else {
+                  infeasible = midpoint;
+                }
+              }
+              selectedAssets = feasible;
+              probe = probeReallocation(selectedAssets);
+            }
+
+            while (selectedAssets > 0n && probe?.withinAllCaps !== true) {
+              selectedAssets -= 1n;
+              probe =
+                selectedAssets > 0n
+                  ? probeReallocation(selectedAssets)
+                  : undefined;
+            }
+
+            if (selectedAssets > 0n && probe?.withinAllCaps === true)
               capCompatibleCandidates.push({
                 ...reallocation,
-                assets: lower,
+                assets: selectedAssets,
               });
           }
 
@@ -1463,7 +1497,6 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
    * @throws {UnknownReallocationMarketPublicAllocatorConfigError} when an adapter-market allocator configuration is absent.
    * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
-   * @throws {UnknownReallocationAdapterError} when an active or source adapter is absent from the vault snapshot.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -1523,7 +1556,6 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
    * @throws {UnknownReallocationMarketPublicAllocatorConfigError} when an adapter-market allocator configuration is absent.
    * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
-   * @throws {UnknownReallocationAdapterError} when an active or source adapter is absent from the vault snapshot.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
