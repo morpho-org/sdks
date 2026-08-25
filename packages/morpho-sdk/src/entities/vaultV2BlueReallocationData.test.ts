@@ -1478,8 +1478,8 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     expect(result.reallocations[0]?.assets).toBe(80n);
   });
 
-  test("behavior: walks below non-monotonic shared-cap rounding", () => {
-    const { data } = makeFixture({
+  test("behavior: conservatively omits rounding-only shared-cap liquidity", () => {
+    const { data, sourceAdapterCapId } = makeFixture({
       sourceAdapter: TARGET_ADAPTER,
       sourceSupply: 8n,
       targetSupply: 1n,
@@ -1492,10 +1492,50 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       ],
     });
 
-    const result = data.computeVaultV2BlueReallocations(targetParams.id);
+    // biome-ignore lint/complexity/useLiteralKeys: prove the omitted smaller call is executable in the simulated transition.
+    const transition = data["applyPublicReallocation"]({
+      context: { donatedPenaltyAssets: {}, firstTotalAssets: {} },
+      reallocation: {
+        vault: VAULT,
+        from: {
+          type: "market",
+          adapter: TARGET_ADAPTER,
+          marketParams: sourceParams,
+        },
+        to: { adapter: TARGET_ADAPTER },
+        assets: 7n,
+        penalty: 0n,
+      },
+      targetMarketId: targetParams.id,
+      timestamp: TIMESTAMP,
+      probe: true,
+    });
 
-    expect(result.reallocations[0]?.assets).toBe(7n);
-    expect(data.getPublicReallocationLiquidity(targetParams.id)).toBe(8n);
+    expect(
+      transition.data.getAllocation(VAULT, sourceAdapterCapId).allocation,
+    ).toBe(7n);
+    expect(
+      data.computeVaultV2BlueReallocations(targetParams.id).reallocations,
+    ).toStrictEqual([]);
+    expect(data.getPublicReallocationLiquidity(targetParams.id)).toBe(0n);
+  });
+
+  test("behavior: bounds rejection when no shared-cap amount is valid", () => {
+    const { data } = makeFixture({
+      sourceAdapter: TARGET_ADAPTER,
+      sourceSupply: 1_000_000n,
+      targetPositionAssets: 0n,
+      allocatorTargetCap: 1_000_000n,
+      targetCaps: [
+        { absoluteCap: 999_999n, relativeCap: MathLib.WAD },
+        { absoluteCap: 2_000_000n, relativeCap: MathLib.WAD },
+        { absoluteCap: 2_000_000n, relativeCap: MathLib.WAD },
+      ],
+    });
+
+    expect(
+      data.computeVaultV2BlueReallocations(targetParams.id).reallocations,
+    ).toStrictEqual([]);
   });
 
   test("behavior: freezes firstTotalAssets while applying relative caps", () => {

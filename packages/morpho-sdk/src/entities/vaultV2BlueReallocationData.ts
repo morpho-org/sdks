@@ -860,13 +860,19 @@ export class VaultV2BlueReallocationData
    * Computes Vault V2 BluePublicAllocator calls available for a target market.
    *
    * Without `options.operation`, discovers every friendly call. With an
-   * operation, caps the calls to the amount required by that borrow or
-   * loan-asset withdrawal and falls back to 100% source utilization only when
-   * friendly liquidity cannot cover the absolute shortfall. Friendly source
+   * operation, targets the amount required by that borrow or loan-asset
+   * withdrawal and falls back to 100% source utilization only when friendly
+   * liquidity cannot cover the absolute shortfall. A shared relative-cap lower
+   * bound may require one call to exceed the targeted amount. Friendly source
    * utilization defaults to 90% and is configurable through
    * `options.maxWithdrawalUtilization`. Vaults whose configured penalty exceeds
    * `options.maxPenalty` are ignored. By default, only zero-penalty vaults are
    * considered.
+   *
+   * Shared-cap discovery is conservative: when the non-shared maximum violates
+   * a shared cap, the candidate is omitted instead of scanning smaller base-unit
+   * amounts for a rounding-only fit. This keeps planning bounded but can
+   * understate executable liquidity in an already-at-or-over-cap snapshot.
    *
    * @param marketId - Target Blue market id.
    * @param options - Optional discovery controls and operation to support.
@@ -1397,7 +1403,8 @@ export class VaultV2BlueReallocationData
 
             // Non-shared target IDs impose monotonic upper bounds. Shared IDs
             // can impose lower bounds and non-monotonic rounding constraints,
-            // so validate them after selecting the non-shared maximum.
+            // so validate them after selecting the non-shared maximum. If that
+            // maximum fails, omit the candidate instead of scanning base units.
             let probeUpper = true;
             while (lower < upper) {
               const assets = probeUpper ? upper : (lower + upper + 1n) / 2n;
@@ -1435,14 +1442,6 @@ export class VaultV2BlueReallocationData
               }
               selectedAssets = feasible;
               probe = probeReallocation(selectedAssets);
-            }
-
-            while (selectedAssets > 0n && probe?.withinAllCaps !== true) {
-              selectedAssets -= 1n;
-              probe =
-                selectedAssets > 0n
-                  ? probeReallocation(selectedAssets)
-                  : undefined;
             }
 
             if (selectedAssets > 0n && probe?.withinAllCaps === true)
@@ -1488,7 +1487,7 @@ export class VaultV2BlueReallocationData
    *
    * @param marketId - Target Blue market id.
    * @param options - Optional timestamp, enable flag, vault allowlist, source utilization ceiling, and maximum penalty.
-   * @returns Reallocatable market and idle assets, or `0n` when none are available.
+   * @returns Reallocatable market and idle assets, or `0n` when none are available; rounding-only shared-cap fits may be conservatively omitted.
    * @throws {NegativeInputError} when `maxWithdrawalUtilization` or `maxPenalty` is negative.
    * @throws {InputExceedsMaxError} when `maxWithdrawalUtilization` or `maxPenalty` exceeds WAD.
    * @throws {UnknownReallocationMarketError} when a required market is absent.
@@ -1547,7 +1546,7 @@ export class VaultV2BlueReallocationData
    * @param marketId - Target Blue market id.
    * @param utilization - Desired utilization, scaled by WAD. Defaults to 90%.
    * @param options - Optional timestamp, enable flag, vault allowlist, source utilization ceiling, and maximum penalty.
-   * @returns Borrowable assets while remaining at or below `utilization`.
+   * @returns Borrowable assets while remaining at or below `utilization`; rounding-only shared-cap fits may be conservatively omitted.
    * @throws {NegativeInputError} when `maxWithdrawalUtilization` or `maxPenalty` is negative.
    * @throws {InputExceedsMaxError} when `maxWithdrawalUtilization` or `maxPenalty` exceeds WAD.
    * @throws {UnknownReallocationMarketError} when a required market is absent.

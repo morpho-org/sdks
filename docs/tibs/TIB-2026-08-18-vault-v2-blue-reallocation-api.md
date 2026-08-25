@@ -87,9 +87,12 @@ validator” alternative.
 
 An operation's remaining amount is a preferred ceiling, not an absolute one:
 when a shared relative cap requires a larger penalty donation, the planner emits
-the smallest executable candidate it finds above that ceiling. Shared allocation
-rounding can also make exact feasibility non-monotonic, so the planner walks down
-from the non-shared maximum when that maximum itself fails a shared cap.
+the smallest executable candidate its bounded bisection finds above that ceiling.
+Shared allocation rounding can also make exact feasibility non-monotonic. When
+the non-shared maximum itself fails a shared cap, the planner omits the candidate
+instead of scanning smaller base-unit amounts. This deliberately keeps planning
+bounded and only emits proven-executable calls, at the cost of underreporting
+rounding-only liquidity that can exist in already-at-or-over-cap snapshots.
 
 ## Consequences
 
