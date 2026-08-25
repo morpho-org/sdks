@@ -5,7 +5,7 @@ import {
 import { Time } from "@morpho-org/morpho-ts";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
-import { afterEach, describe, expect, vi } from "vitest";
+import { describe, expect } from "vitest";
 import {
   isRequirementApproval,
   isRequirementBlueAuthorization,
@@ -19,12 +19,10 @@ import {
 import { WethUsdsBlue, WstethWethBlue } from "../../fixtures/blue.js";
 import { borrow, supplyCollateral } from "../../helpers/blue.js";
 import { testInvariants } from "../../helpers/invariants.js";
+import { withChainTimestamp } from "../../helpers/time.js";
 import { test } from "../../setup.js";
 
 describe("RepayWithdrawCollateralBlue", () => {
-  afterEach(() => {
-    vi.useRealTimers();
-  });
   test("should repay and withdraw collateral (by assets)", async ({
     client,
   }) => {
@@ -203,12 +201,6 @@ describe("RepayWithdrawCollateralBlue", () => {
     const fastForwardedTimestamp =
       (await client.timestamp()) + Time.s.from.d(30n);
     await client.setNextBlockTimestamp({ timestamp: fastForwardedTimestamp });
-    // Align wall-clock with chain time so the SDK's `Time.timestamp()` projection
-    // matches the block the repay tx will execute on.
-    vi.useFakeTimers({
-      now: Number(fastForwardedTimestamp) * 1000,
-      toFake: ["Date"],
-    });
 
     await client.deal({
       erc20: WethUsdsBlue.loanToken,
@@ -233,12 +225,14 @@ describe("RepayWithdrawCollateralBlue", () => {
           client.account.address,
         );
 
-        const action = market.repayWithdrawCollateral({
-          userAddress: client.account.address,
-          shares: positionData.borrowShares,
-          withdrawAmount: positionData.collateral,
-          positionData,
-        });
+        const action = withChainTimestamp(fastForwardedTimestamp, () =>
+          market.repayWithdrawCollateral({
+            userAddress: client.account.address,
+            shares: positionData.borrowShares,
+            withdrawAmount: positionData.collateral,
+            positionData,
+          }),
+        );
 
         const requirements = await action.getRequirements();
         for (const req of requirements) {
