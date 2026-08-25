@@ -14,8 +14,52 @@ permissions:
   contents: read
 
 jobs:
-  vitest:
+  package:
+    name: Package (${{ matrix.name }})
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          # Pure and fork projects from one package share a single runner.
+          - name: scripts
+            projects: scripts
+            uses_foundry: false
+          - name: agents-engine
+            projects: agents-engine
+            uses_foundry: false
+          - name: morpho-ts
+            projects: morpho-ts
+            uses_foundry: false
+          - name: blue-sdk
+            projects: blue-sdk blue-sdk-fork
+            uses_foundry: true
+          - name: midnight-sdk
+            projects: midnight-sdk midnight-sdk-fork
+            uses_foundry: true
+          - name: morpho-sdk
+            projects: morpho-sdk morpho-sdk-fork
+            uses_foundry: true
+          - name: evm-simulation
+            projects: evm-simulation evm-simulation-fork
+            uses_foundry: true
+          - name: blue-sdk-viem
+            projects: blue-sdk-viem blue-sdk-viem-fork
+            uses_foundry: true
+          - name: liquidity-sdk-viem
+            projects: liquidity-sdk-viem liquidity-sdk-viem-fork
+            uses_foundry: true
+          - name: test
+            projects: test test-fork
+            uses_foundry: true
+          - name: morpho-test
+            projects: morpho-test
+            uses_foundry: false
+          - name: wdk-protocol-lending-morpho-evm
+            projects: wdk-protocol-lending-morpho-evm wdk-protocol-lending-morpho-evm-fork
+            uses_foundry: true
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -30,28 +74,60 @@ jobs:
           cache: pnpm
 
       - name: Restore Foundry cache
+        id: foundry-cache
+        if: matrix.uses_foundry
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.foundry/cache/rpc
-          key: foundry-${{ github.job }}-${{ github.sha }}
-          restore-keys: foundry-${{ github.job }}-
+          key: foundry-${{ github.job }}-${{ matrix.name }}-${{ github.sha }}-${{ github.run_attempt }}
+          restore-keys: |
+            foundry-${{ github.job }}-${{ matrix.name }}-${{ github.sha }}-
+            foundry-${{ github.job }}-${{ matrix.name }}-
 
       - uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+        if: matrix.uses_foundry
         with:
           cache: false # Disable built-in cache to always save it.
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm run test:ci
+      - name: Test
+        id: test
         env:
-          MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
-          BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
-          ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
+          MAINNET_RPC_URL: ${{ matrix.uses_foundry && secrets.MAINNET_RPC_URL || '' }}
+          BASE_RPC_URL: ${{ matrix.uses_foundry && secrets.BASE_RPC_URL || '' }}
+          ARBITRUM_RPC_URL: ${{ matrix.uses_foundry && secrets.ARBITRUM_RPC_URL || '' }}
           IS_LOGGING_DISABLED: true
+          VITEST_PROJECTS: ${{ matrix.projects }}
+        run: |
+          project_args=()
+          for project in $VITEST_PROJECTS; do
+            project_args+=(--project "$project")
+          done
+          pnpm exec vitest run --coverage \
+            "${project_args[@]}" \
+            --reporter=default --reporter=github-actions
 
       - name: Save Foundry cache
-        if: always()
+        if: >-
+          matrix.uses_foundry &&
+          steps.test.outcome == 'success' &&
+          steps.foundry-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.foundry/cache/rpc
-          key: foundry-${{ github.job }}-${{ github.sha }}
+          key: ${{ steps.foundry-cache.outputs.cache-primary-key }}
+
+  vitest:
+    name: vitest
+    if: always()
+    needs:
+      - package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check shards
+        env:
+          PACKAGE_RESULT: ${{ needs.package.result }}
+        run: test "$PACKAGE_RESULT" = success

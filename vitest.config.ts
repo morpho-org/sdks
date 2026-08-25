@@ -1,7 +1,13 @@
 import { defineConfig } from "vitest/config";
 
-// Fork projects get extra time for Anvil startup and remote RPC reads.
+// Queue fork tests before their timeout starts while keeping pure tests unconstrained.
 const forkTestConfig = {
+  ...(process.env.CI
+    ? {
+        maxConcurrency: 1,
+        sequence: { groupOrder: 1 }, // Separate from unconstrained unit projects.
+      }
+    : {}),
   testTimeout: 120_000,
 } as const;
 
@@ -35,7 +41,12 @@ export default defineConfig({
       concurrent: !process.env.CI,
     },
     globalSetup: "vitest.setup.ts",
-    retry: process.env.CI ? 2 : 0,
+    retry: process.env.CI
+      ? {
+          count: 2,
+          condition: /^(?!(?:Test|Hook) timed out in \d+ms\.)/,
+        }
+      : 0,
     testTimeout: 30_000,
     projects: [
       {
