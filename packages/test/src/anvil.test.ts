@@ -244,9 +244,9 @@ describe.sequential("spawnAnvil", () => {
     expect(subprocess.unref).toHaveBeenCalledOnce();
   });
 
-  test("error: AnvilStartupError preserves subprocess errors", async () => {
+  test("error: AnvilStartupError survives a nonzero close after a subprocess error", async () => {
     const forkUrl = "https://rpc.example/v1/project-id";
-    const subprocess = createFakeAnvilProcess();
+    const subprocess = createFakeAnvilProcess({ closeOnSignal: false });
     const subprocessError = Object.assign(
       new Error(`failed to spawn --fork-url ${forkUrl}`),
       {
@@ -265,6 +265,8 @@ describe.sequential("spawnAnvil", () => {
     });
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
     subprocess.emit("error", subprocessError);
+    subprocess.exitCode = -2;
+    subprocess.emit("close", -2, null);
 
     const error = await spawnedPromise.catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(AnvilStartupError);
