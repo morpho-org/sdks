@@ -160,32 +160,6 @@ describe.sequential("spawnAnvil", () => {
     expect(String(error)).toContain(`provider request failed for ${forkUrl}`);
   });
 
-  test("ci probe: GitHub masks fork URLs in Anvil diagnostics", async () => {
-    if (process.env.GITHUB_ACTIONS !== "true") return;
-
-    const forkUrl = process.env.MAINNET_RPC_URL;
-    expect(forkUrl).toBeDefined();
-    if (forkUrl === undefined) return;
-
-    const subprocess = createFakeAnvilProcess({ closeOnSignal: false });
-    spawnMock.mockReturnValue(
-      subprocess as unknown as ChildProcessWithoutNullStreams,
-    );
-
-    const spawnedPromise = spawnAnvil({ chainId: 1, forkUrl });
-    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
-    subprocess.stdout.write("Listening on 127.0.0.1:31018\n");
-    const spawned = await spawnedPromise;
-
-    subprocess.stderr.write(
-      `MORPHO_CI_MASK_PROBE_START${forkUrl}MORPHO_CI_MASK_PROBE_END`,
-    );
-    subprocess.exitCode = 1;
-    subprocess.emit("close", 1, null);
-
-    await spawned.stopAndWait();
-  });
-
   test("error: AnvilProcessError surfaces an exit observed before close", async () => {
     const subprocess = createFakeAnvilProcess({ closeOnSignal: false });
     spawnMock.mockReturnValue(
