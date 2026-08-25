@@ -1,7 +1,7 @@
 import { MarketParams } from "@morpho-org/blue-sdk";
 import { type Address, isHex, parseUnits } from "viem";
 import { describe, expect } from "vitest";
-import { test } from "../../../test/setup.js";
+import { test } from "../../../test/unit.js";
 import {
   EmptyDeallocationsError,
   NonPositiveInputError,

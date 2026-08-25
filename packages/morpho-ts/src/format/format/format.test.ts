@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { createFormat, Format, format } from "../src/index.js";
+import { createFormat, Format, format } from "../../index.js";
 
 describe("format", () => {
   const number = 12345.6789;

@@ -15,7 +15,7 @@ Transaction builders for VaultV1, VaultV2, Blue, and Midnight, plus shared requi
 
 ## Tests
 
-Per root §5: tests for this package are colocated (`src/**/*.test.ts`). Some legacy tests still live under `packages/morpho-sdk/test/` — migrate them next to source on refactor. Use parameterized fixtures (`randomMarket(...)`); never weaken assertions to make a test pass.
+Per root §5, unit tests are colocated as `src/**/*.test.ts`. Fork and integration tests are named `*.integration.test.ts` and live under `packages/morpho-sdk/test/`; test-only helper units stay beside their helper there. Use parameterized fixtures (`randomMarket(...)`); never weaken assertions to make a test pass.
 
 ## Glossary
 
