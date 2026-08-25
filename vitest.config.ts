@@ -26,7 +26,8 @@ export default defineConfig({
       ],
     },
     sequence: {
-      concurrent: true,
+      // ponytail: serialize within files in CI until fork RPC throughput is reliable.
+      concurrent: !process.env.CI,
     },
     globalSetup: "vitest.setup.ts",
     retry: process.env.CI ? 2 : 0,
