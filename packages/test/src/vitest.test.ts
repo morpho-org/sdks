@@ -83,6 +83,7 @@ const retryViemTest = createViemTest(mainnet, {
 describe("createViemTest", () => {
   viemTest(
     "behavior: provisions the first concurrent case independently",
+    { concurrent: true },
     async ({ client }) => {
       expect(client).toBe(fakeClient);
       await setTimeout(50);
@@ -91,6 +92,7 @@ describe("createViemTest", () => {
 
   viemTest(
     "behavior: provisions the next concurrent case independently",
+    { concurrent: true },
     async ({ client }) => {
       expect(client).toBe(fakeClient);
       await setTimeout(25);
@@ -99,6 +101,7 @@ describe("createViemTest", () => {
 
   extendedViemTest(
     "behavior: provisions an extended API case independently",
+    { concurrent: true },
     async ({ client, label }) => {
       expect(client).toBe(fakeClient);
       expect(label).toBe("extended");
@@ -108,6 +111,7 @@ describe("createViemTest", () => {
 
   extendedViemTest(
     "behavior: provisions the next extended case independently",
+    { concurrent: true },
     async ({ client, label }) => {
       expect(client).toBe(fakeClient);
       expect(label).toBe("extended");
