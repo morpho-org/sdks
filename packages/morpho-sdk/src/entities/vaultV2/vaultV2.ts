@@ -533,8 +533,11 @@ export class MorphoVaultV2 implements VaultV2Actions {
     const assetsByMarket = new Map(
       soleAdapter.markets.map((market) => [
         market.id,
+        // Clamp forward past the market's `lastUpdate`: `accrueInterest` throws
+        // `InvalidInterestAccrual` when the caller's clock lags a block that just accrued the
+        // market (mirrors `previewVaultV2InKindRedeem`).
         market
-          .accrueInterest(now)
+          .accrueInterest(MathLib.max(now, market.lastUpdate))
           .toSupplyAssets(soleAdapter.supplyShares[market.id] ?? 0n),
       ]),
     );

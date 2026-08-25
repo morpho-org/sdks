@@ -76,6 +76,31 @@ describe("MorphoVaultV2.inKindRedeem", () => {
     expect(exit.buildTx().action.type).toBe("vaultV2InKindRedeem");
   });
 
+  test("behavior: tolerates a market lastUpdate ahead of the caller's clock", async () => {
+    const handle = createMockClient(mainnet);
+    mockV2Requirements(handle, { allowance: 0n, blueBalance: 1_000n });
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
+
+    // A vault market accrued in a block whose timestamp leads the caller's clock
+    // (now < lastUpdate): a bare `accrueInterest(now)` throws `InvalidInterestAccrual`
+    // while building `assetsByMarket`.
+    const exit = vault.inKindRedeem({
+      amount: 500n,
+      marketParamsList: [inKindMarketParams],
+      vaultData: inKindVaultV2Data({
+        penalty: 20_000_000_000_000_000n,
+        marketLastUpdate: Time.timestamp() + Time.s.from.h(1n),
+      }),
+      userAddress: IN_KIND_USER,
+    });
+
+    const [approval] = await exit.getRequirements();
+    expect(approval?.action.type).toBe("erc20Approval");
+    expect(exit.buildTx().action.type).toBe("vaultV2InKindRedeem");
+  });
+
   test("behavior: snapshots the ordered market params", () => {
     const handle = createMockClient(mainnet);
     const vault = handle.client

@@ -61,14 +61,16 @@ export const inKindVaultV1Data = (params?: {
   readonly additionalMarket?: boolean;
   readonly fee?: bigint;
   readonly lastTotalAssets?: bigint;
+  readonly marketLastUpdate?: bigint;
 }) => {
+  const lastUpdate = params?.marketLastUpdate ?? snapshotTimestamp();
   const market = new Market({
     params: inKindMarketParams,
     totalSupplyAssets: 1_000n,
     totalBorrowAssets: 900n,
     totalSupplyShares: 1_000_000_000n,
     totalBorrowShares: 900n,
-    lastUpdate: snapshotTimestamp(),
+    lastUpdate,
     fee: 0n,
   });
   const secondMarket = new Market({
@@ -77,7 +79,7 @@ export const inKindVaultV1Data = (params?: {
     totalBorrowAssets: 450n,
     totalSupplyShares: 500_000_000n,
     totalBorrowShares: 450n,
-    lastUpdate: snapshotTimestamp(),
+    lastUpdate,
     fee: 0n,
   });
   const markets = params?.additionalMarket ? [market, secondMarket] : [market];
@@ -163,18 +165,20 @@ export const inKindVaultV2Data = (params?: {
   readonly managementFee?: bigint;
   readonly adapters?: "single" | "empty" | "legacy";
   readonly additionalMarket?: boolean;
+  readonly marketLastUpdate?: bigint;
 }) => {
   const address = params?.address ?? IN_KIND_VAULT;
   const marketTotalAssets = params?.marketTotalAssets ?? 1_000n;
   const marketTotalSupplyShares =
     params?.marketTotalSupplyShares ?? 1_000_000_000n;
+  const lastUpdate = params?.marketLastUpdate ?? snapshotTimestamp();
   const market = new Market({
     params: inKindMarketParams,
     totalSupplyAssets: marketTotalAssets,
     totalBorrowAssets: (marketTotalAssets * 9n) / 10n,
     totalSupplyShares: marketTotalSupplyShares,
     totalBorrowShares: 900n,
-    lastUpdate: snapshotTimestamp(),
+    lastUpdate,
     fee: 0n,
     rateAtTarget: params?.rateAtTarget,
   });
@@ -184,7 +188,7 @@ export const inKindVaultV2Data = (params?: {
     totalBorrowAssets: 450n,
     totalSupplyShares: 500_000_000n,
     totalBorrowShares: 450n,
-    lastUpdate: snapshotTimestamp(),
+    lastUpdate,
     fee: 0n,
   });
   const markets = params?.additionalMarket ? [market, secondMarket] : [market];

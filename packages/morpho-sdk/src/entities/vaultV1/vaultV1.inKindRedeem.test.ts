@@ -1,5 +1,6 @@
 import { addressesRegistry, MarketParams, MathLib } from "@morpho-org/blue-sdk";
 import { blueAbi, erc2612Abi, metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
+import { Time } from "@morpho-org/morpho-ts";
 import { createMockClient } from "@morpho-org/test/mock";
 import { type Address, erc20Abi } from "viem";
 import { mainnet } from "viem/chains";
@@ -84,6 +85,30 @@ describe("MorphoVaultV1.inKindRedeem", () => {
       userAddress: IN_KIND_USER,
     });
 
+    expect(exit.buildTx().action.type).toBe("vaultV1InKindRedeem");
+  });
+
+  test("behavior: tolerates a market lastUpdate ahead of the caller's clock", async () => {
+    const handle = createMockClient(mainnet);
+    mockV1Requirements(handle, { allowance: 0n });
+    const vault = handle.client
+      .extend(morphoViemExtension())
+      .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
+
+    // A vault market accrued in a block whose timestamp leads the caller's clock
+    // (now < lastUpdate): a bare `accrueInterest(now)` throws `InvalidInterestAccrual` in both
+    // the coverage loop and the whole-vault fee accrual before the handle is returned.
+    const exit = vault.inKindRedeem({
+      amount: 500n,
+      marketParamsList: [inKindMarketParams],
+      vaultData: inKindVaultV1Data({
+        marketLastUpdate: Time.timestamp() + Time.s.from.h(1n),
+      }),
+      userAddress: IN_KIND_USER,
+    });
+
+    const [approval] = await exit.getRequirements();
+    expect(approval?.action.type).toBe("erc20Approval");
     expect(exit.buildTx().action.type).toBe("vaultV1InKindRedeem");
   });
 

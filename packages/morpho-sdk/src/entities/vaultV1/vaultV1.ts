@@ -456,6 +456,17 @@ export class MorphoVaultV1 implements VaultV1Actions {
     );
     const addresses = getChainAddresses(this.chainId);
     const blue = addresses.blue ?? addresses.morpho;
+    // `Market.accrueInterest` (and `AccrualVault.accrueInterest`, which accrues every market
+    // position) throws `InvalidInterestAccrual` when its timestamp precedes a market's
+    // `lastUpdate` — reachable when the caller's clock lags a block that just accrued a vault
+    // market. Clamp forward past the latest market update so coverage and the allowance accrue to
+    // one consistent, never-backwards instant.
+    let accrualTimestamp = now;
+    for (const { position } of vaultData.allocations.values())
+      accrualTimestamp = MathLib.max(
+        accrualTimestamp,
+        position.market.lastUpdate,
+      );
     let covered = 0n;
     const assignedByMarket = new Map<string, bigint>();
     for (const marketParams of marketParamsListSnapshot) {
@@ -464,7 +475,8 @@ export class MorphoVaultV1 implements VaultV1Actions {
       const allocation = vaultData.allocations.get(marketId);
       if (allocation?.config.enabled !== true) continue;
 
-      const market = allocation.position.market.accrueInterest(now);
+      const market =
+        allocation.position.market.accrueInterest(accrualTimestamp);
       const available = market.toSupplyAssets(allocation.position.supplyShares);
       const assigned = assignedByMarket.get(marketId) ?? 0n;
       const chunk = MathLib.min(available, amount - covered);
@@ -489,7 +501,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
     // Account for pending performance-fee shares before previewing the burn. Once accrued, future
     // V1 interest cannot lower the share price, so this upper-bounds execution.
     const requiredShareAllowance = vaultData
-      .accrueInterest(now)
+      .accrueInterest(accrualTimestamp)
       .toShares(amount);
 
     return {
