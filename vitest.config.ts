@@ -1,11 +1,11 @@
 import { defineConfig } from "vitest/config";
 
-// Queue fork tests before their timeout starts while keeping pure tests unconstrained.
+// Bound fork RPC demand in CI while leaving local concurrency unrestricted.
 const forkTestConfig = {
   ...(process.env.CI
     ? {
         maxConcurrency: 1,
-        sequence: { groupOrder: 1 }, // Separate from unconstrained unit projects.
+        sequence: { concurrent: false, groupOrder: 1 },
       }
     : {}),
   testTimeout: 120_000,
