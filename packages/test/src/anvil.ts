@@ -8,7 +8,11 @@ import {
 } from "./errors.js";
 
 const ANVIL_FORCE_KILL_TIMEOUT_MS = 5_000;
-const ANVIL_PROCESS_CLOSE_TIMEOUT_MS = 10_000;
+const ANVIL_FORK_REQUEST_RETRIES = 5;
+const ANVIL_FORK_REQUEST_TIMEOUT_MS = 45_000;
+const ANVIL_FORK_RETRY_BACKOFF_MS = 1_000;
+const ANVIL_PROCESS_CLOSE_GRACE_MS = 5_000;
+const ANVIL_STARTUP_GRACE_MS = 15_000;
 
 export interface AnvilArgs {
   /**
@@ -295,6 +299,18 @@ function toArgs(obj: AnvilArgs) {
 export interface SpawnAnvilOptions {
   /** Cancels startup when aborted. */
   readonly signal?: AbortSignal | undefined;
+  /**
+   * Maximum time in milliseconds to wait for Anvil to start listening.
+   *
+   * @defaultValue The configured fork request attempts and backoffs plus 15000; otherwise 60000
+   */
+  readonly startupTimeoutMs?: number | undefined;
+  /**
+   * Delay after `SIGINT` before force-killing Anvil. Set to `false` to wait indefinitely.
+   *
+   * @defaultValue `false` when `dumpState` or `state` is set; otherwise 5000
+   */
+  readonly forceKillAfterMs?: number | false | undefined;
 }
 
 /** An isolated local Anvil process and its cleanup controls. */
@@ -307,7 +323,7 @@ export interface SpawnedAnvil {
    * Sends the shutdown signal and waits for process cleanup.
    *
    * @returns Whether the initial shutdown signal was sent.
-   * @throws {AnvilProcessError} When Anvil exited before shutdown was requested.
+   * @throws {AnvilProcessError} When Anvil exits unexpectedly or reports a failed shutdown.
    * @throws {AnvilCleanupError} When process cleanup cannot be confirmed.
    */
   readonly stopAndWait: () => Promise<boolean>;
@@ -317,7 +333,7 @@ export interface SpawnedAnvil {
  * Starts an isolated Anvil process and resolves when its RPC server is listening.
  *
  * @param args Anvil command-line arguments and optional binary path.
- * @param options Cancellation options for startup.
+ * @param options Startup cancellation and shutdown timeout options.
  * @returns The local RPC URL and idempotent process cleanup controls.
  * @throws {AnvilStartupError} When Anvil cannot start or begin listening.
  * @throws {AnvilCleanupError} When a process or failed startup cannot be cleaned safely.
@@ -345,12 +361,26 @@ export const spawnAnvil = async (
   }
 
   const { binary = "anvil", ...anvilArgs } = args;
+  const forceKillAfterMs =
+    options.forceKillAfterMs ??
+    (args.dumpState !== undefined || args.state !== undefined
+      ? false
+      : ANVIL_FORCE_KILL_TIMEOUT_MS);
+  const retries = args.retries ?? ANVIL_FORK_REQUEST_RETRIES;
+  const startupTimeoutMs =
+    options.startupTimeoutMs ??
+    (args.forkUrl === undefined
+      ? ANVIL_FORK_REQUEST_TIMEOUT_MS + ANVIL_STARTUP_GRACE_MS
+      : (args.timeout ?? ANVIL_FORK_REQUEST_TIMEOUT_MS) * (retries + 1) +
+        (args.forkRetryBackoff ?? ANVIL_FORK_RETRY_BACKOFF_MS) * retries +
+        ANVIL_STARTUP_GRACE_MS);
   let port = args.port ?? 0;
 
   try {
     const subprocess = spawn(binary, toArgs({ ...anvilArgs, port }));
     let stopInitiated = false;
     let stopRequested = false;
+    let forceKillSent = false;
     let forceKillTimeout: ReturnType<typeof globalThis.setTimeout> | undefined;
     let processCloseTimeout:
       | ReturnType<typeof globalThis.setTimeout>
@@ -387,40 +417,47 @@ export const spawnAnvil = async (
           console.warn("Failed to send SIGINT to Anvil.", error);
         }
 
-        forceKillTimeout = globalThis.setTimeout(() => {
-          if (processCloseObserved || subprocess.exitCode !== null) return;
+        if (forceKillAfterMs !== false) {
+          forceKillTimeout = globalThis.setTimeout(() => {
+            if (processCloseObserved || subprocess.exitCode !== null) return;
 
-          try {
-            if (!subprocess.kill("SIGKILL"))
-              console.warn("Failed to send SIGKILL to Anvil after timeout.");
-          } catch (error) {
-            console.warn(
-              "Failed to send SIGKILL to Anvil after timeout.",
-              error,
-            );
+            try {
+              forceKillSent = subprocess.kill("SIGKILL");
+              if (!forceKillSent)
+                console.warn("Failed to send SIGKILL to Anvil after timeout.");
+            } catch (error) {
+              console.warn(
+                "Failed to send SIGKILL to Anvil after timeout.",
+                error,
+              );
+            }
+          }, forceKillAfterMs);
+          if (
+            typeof forceKillTimeout === "object" &&
+            "unref" in forceKillTimeout
+          ) {
+            forceKillTimeout.unref();
           }
-        }, ANVIL_FORCE_KILL_TIMEOUT_MS);
-        if (
-          typeof forceKillTimeout === "object" &&
-          "unref" in forceKillTimeout
-        ) {
-          forceKillTimeout.unref();
         }
       }
 
-      processCloseTimeout = globalThis.setTimeout(() => {
-        if (processCloseObserved) return;
-        rejectProcessClosed(
-          new AnvilCleanupError(
-            `Anvil did not close within "${ANVIL_PROCESS_CLOSE_TIMEOUT_MS}" ms after shutdown began. Stop it manually before retrying.`,
-          ),
-        );
-      }, ANVIL_PROCESS_CLOSE_TIMEOUT_MS);
-      if (
-        typeof processCloseTimeout === "object" &&
-        "unref" in processCloseTimeout
-      ) {
-        processCloseTimeout.unref();
+      if (forceKillAfterMs !== false) {
+        const processCloseTimeoutMs =
+          forceKillAfterMs + ANVIL_PROCESS_CLOSE_GRACE_MS;
+        processCloseTimeout = globalThis.setTimeout(() => {
+          if (processCloseObserved) return;
+          rejectProcessClosed(
+            new AnvilCleanupError(
+              `Anvil did not close within "${processCloseTimeoutMs}" ms after shutdown began. Stop it manually before retrying.`,
+            ),
+          );
+        }, processCloseTimeoutMs);
+        if (
+          typeof processCloseTimeout === "object" &&
+          "unref" in processCloseTimeout
+        ) {
+          processCloseTimeout.unref();
+        }
       }
 
       return signalSent;
@@ -437,8 +474,6 @@ export const spawnAnvil = async (
       let settled = false;
       let stderr = "";
       let stdout = "";
-      const startupTimeoutMs =
-        Math.max(args.timeout ?? 45_000, 45_000) + 15_000;
       const startupTimeout = globalThis.setTimeout(() => {
         const details = stderr.trim();
         fail(
@@ -514,10 +549,16 @@ export const spawnAnvil = async (
       subprocess.once("close", (code, signal) => {
         processCloseObserved = true;
         const details = stderr.trim();
-        const unexpectedExit =
-          settled && !stopRequested
+        const expectedShutdown =
+          stopRequested &&
+          (code === 0 ||
+            (code === null &&
+              (signal === "SIGINT" ||
+                (signal === "SIGKILL" && forceKillSent))));
+        const processExitError =
+          settled && !expectedShutdown
             ? new AnvilProcessError(
-                `Anvil exited unexpectedly after startup (code "${code}", signal "${signal}"). Retry the test and inspect the process logs.${
+                `Anvil ${stopRequested ? "failed during shutdown" : "exited unexpectedly after startup"} (code "${code}", signal "${signal}"). Retry the test and inspect the process logs.${
                   details ? ` ${details}` : ""
                 }`,
               )
@@ -529,8 +570,8 @@ export const spawnAnvil = async (
         subprocess.stdout.destroy();
         subprocess.stderr.destroy();
         subprocess.unref();
-        if (unexpectedExit === undefined) resolveProcessClosed();
-        else rejectProcessClosed(unexpectedExit);
+        if (processExitError === undefined) resolveProcessClosed();
+        else rejectProcessClosed(processExitError);
         if (settled) return;
         fail(
           new AnvilStartupError(

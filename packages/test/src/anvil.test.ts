@@ -243,17 +243,48 @@ describe.sequential("spawnAnvil", () => {
     expect(String(error)).toContain(`provider request failed for ${forkUrl}`);
   });
 
-  test("error: AnvilStartupError bounds startup and cleans up its process", async () => {
+  test("error: AnvilStartupError uses the configured startup deadline", async () => {
     const subprocess = createFakeAnvilProcess({ closeOnSignal: false });
     spawnMock.mockReturnValue(
       subprocess as unknown as ChildProcessWithoutNullStreams,
     );
     vi.useFakeTimers();
 
-    const spawnedPromise = spawnAnvil({ chainId: 1, timeout: 1 });
+    const spawnedPromise = spawnAnvil(
+      { chainId: 1 },
+      { startupTimeoutMs: 1_000 },
+    );
     const rejection =
       expect(spawnedPromise).rejects.toBeInstanceOf(AnvilStartupError);
-    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(subprocess.kill).toHaveBeenCalledWith("SIGINT");
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(subprocess.kill).toHaveBeenLastCalledWith("SIGKILL");
+
+    subprocess.exitCode = 0;
+    subprocess.emit("close", 0, "SIGKILL");
+    await rejection;
+  });
+
+  test("behavior: startup deadline includes the full fork retry budget", async () => {
+    const subprocess = createFakeAnvilProcess({ closeOnSignal: false });
+    spawnMock.mockReturnValue(
+      subprocess as unknown as ChildProcessWithoutNullStreams,
+    );
+    vi.useFakeTimers();
+
+    const spawnedPromise = spawnAnvil({
+      chainId: 1,
+      forkRetryBackoff: 500,
+      forkUrl: "https://rpc.example",
+      retries: 2,
+      timeout: 1_000,
+    });
+    const rejection =
+      expect(spawnedPromise).rejects.toBeInstanceOf(AnvilStartupError);
+    await vi.advanceTimersByTimeAsync(18_999);
+    expect(subprocess.kill).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
     expect(subprocess.kill).toHaveBeenCalledWith("SIGINT");
     await vi.advanceTimersByTimeAsync(5_000);
     expect(subprocess.kill).toHaveBeenLastCalledWith("SIGKILL");
@@ -341,10 +372,84 @@ describe.sequential("spawnAnvil", () => {
     await vi.advanceTimersByTimeAsync(5_000);
     expect(subprocess.kill).toHaveBeenLastCalledWith("SIGKILL");
 
+    subprocess.emit("close", null, "SIGKILL");
+    expect(await cleanup).toBe(true);
+    expect(subprocess.unref).toHaveBeenCalledOnce();
+  });
+
+  test.each([
+    { code: 1, signal: null },
+    { code: null, signal: "SIGTERM" },
+  ])("error: AnvilProcessError surfaces a failed shutdown", async (exit) => {
+    const subprocess = createFakeAnvilProcess({ closeOnSignal: false });
+    spawnMock.mockReturnValue(
+      subprocess as unknown as ChildProcessWithoutNullStreams,
+    );
+
+    const spawnedPromise = spawnAnvil({ chainId: 1 });
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+    subprocess.stdout.write("Listening on 127.0.0.1:31017\n");
+    const spawned = await spawnedPromise;
+
+    const cleanup = spawned.stopAndWait();
+    subprocess.stderr.write("shutdown failed");
+    subprocess.exitCode = exit.code;
+    subprocess.emit("close", exit.code, exit.signal);
+
+    const error = await cleanup.catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(AnvilProcessError);
+    expect(String(error)).toContain("shutdown failed");
+  });
+
+  test.each([
+    { dumpState: "/tmp/anvil-state.json" },
+    { state: "/tmp/anvil-state.json" },
+  ])("behavior: does not force-kill state dumps", async (args) => {
+    const subprocess = createFakeAnvilProcess({ closeOnSignal: false });
+    spawnMock.mockReturnValue(
+      subprocess as unknown as ChildProcessWithoutNullStreams,
+    );
+
+    const spawnedPromise = spawnAnvil({ chainId: 1, ...args });
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+    subprocess.stdout.write("Listening on 127.0.0.1:31015\n");
+    const spawned = await spawnedPromise;
+
+    vi.useFakeTimers();
+    const cleanup = spawned.stopAndWait();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(subprocess.kill).toHaveBeenCalledOnce();
+    expect(subprocess.kill).toHaveBeenCalledWith("SIGINT");
+
+    subprocess.exitCode = 0;
+    subprocess.emit("close", 0, "SIGINT");
+    expect(await cleanup).toBe(true);
+  });
+
+  test("behavior: configures the force-kill delay", async () => {
+    const subprocess = createFakeAnvilProcess({ closeOnSignal: false });
+    spawnMock.mockReturnValue(
+      subprocess as unknown as ChildProcessWithoutNullStreams,
+    );
+
+    const spawnedPromise = spawnAnvil(
+      { chainId: 1, dumpState: "/tmp/anvil-state.json" },
+      { forceKillAfterMs: 30_000 },
+    );
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+    subprocess.stdout.write("Listening on 127.0.0.1:31016\n");
+    const spawned = await spawnedPromise;
+
+    vi.useFakeTimers();
+    const cleanup = spawned.stopAndWait();
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(subprocess.kill).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(subprocess.kill).toHaveBeenLastCalledWith("SIGKILL");
+
     subprocess.exitCode = 0;
     subprocess.emit("close", 0, "SIGKILL");
     expect(await cleanup).toBe(true);
-    expect(subprocess.unref).toHaveBeenCalledOnce();
   });
 
   test("error: AnvilCleanupError bounds a missing close event", async () => {
