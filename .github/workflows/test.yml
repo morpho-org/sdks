@@ -14,31 +14,6 @@ permissions:
   contents: read
 
 jobs:
-  artifact-mask-probe:
-    name: artifact mask probe
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-
-    steps:
-      - name: Write a registered fake fork URL and fail
-        env:
-          PROBE_FORK_URL: https://artifact-mask-probe.invalid/v1/fake-fork-credential-7f4f812d
-        run: |
-          echo "::add-mask::$PROBE_FORK_URL"
-          mkdir -p artifact-mask-probe
-          printf '%s\n' "$PROBE_FORK_URL" > artifact-mask-probe/fork-url.txt
-          echo "MORPHO_ARTIFACT_MASK_PROBE_START${PROBE_FORK_URL}MORPHO_ARTIFACT_MASK_PROBE_END"
-          exit 1
-
-      - name: Upload mask probe
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: fork-url-mask-probe-${{ github.run_id }}
-          path: artifact-mask-probe/fork-url.txt
-          if-no-files-found: error
-          retention-days: 1
-
   package:
     name: Package (${{ matrix.name }})
     runs-on: ubuntu-latest
