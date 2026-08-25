@@ -44,6 +44,7 @@ Fires when `<HAS_CI_RELEASE>` is true. The canonical list of changed-file patter
 ### Secret exposure (HIGH)
 
 - `secrets.*` interpolated into a `run:` block where it lands in logs (shell echo, `set -x`, error paths). Use `env:` to bind the secret, then reference `$VAR` inside the script so GitHub's redaction works.
+- Do not flag unmodified subprocess diagnostics solely because they can repeat an exact registered secret when every in-scope workflow passes that value through `secrets.*` and `env:`; GitHub masks it in workflow logs. Continue to flag transformed or partial values, unregistered credentials, and uploaded artifacts, which log masking does not protect.
 - Secrets passed as arguments to third-party actions whose source is not pinned to a SHA.
 - New secret names introduced without a matching reference in the repo's secrets-management doc (if `SECURITY.md` or similar documents them).
 

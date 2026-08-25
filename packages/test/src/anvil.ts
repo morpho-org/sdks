@@ -90,6 +90,7 @@ export interface AnvilArgs {
    *
    * If you want to fetch state from a specific block number, add a block number like `http://localhost:8545@1400000`
    * or use the `forkBlockNumber` option.
+   * In GitHub Actions, pass this as a registered secret so its exact value is masked in workflow logs.
    */
   forkUrl?: string | undefined;
   /**
@@ -531,6 +532,8 @@ export const spawnAnvil = async (
 
       subprocess.stderr.on("data", (data) => {
         // Startup warnings are diagnostic; only timeout, error, or early close is fatal.
+        // This repo registers fork URLs as GitHub Actions secrets, so their exact
+        // values are masked in workflow logs while these diagnostics stay useful.
         const dataString = data.toString();
         stderr = `${stderr}${dataString}`.slice(-4_096);
         if (settled && !stopRequested)
