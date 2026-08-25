@@ -8,7 +8,7 @@ import {
   type PublicReallocation,
   UnknownReallocationMarketError,
 } from "../types/index.js";
-import { ReallocationData } from "./reallocationData.js";
+import { VaultV1ReallocationData } from "./vaultV1ReallocationData.js";
 
 // --- Constants ---
 
@@ -37,25 +37,25 @@ function makeMarket(overrides?: {
   });
 }
 
-/** Real ReallocationData holding only the target market. */
+/** Real VaultV1ReallocationData holding only the target market. */
 function makeData(targetMarket = makeMarket()) {
-  return new ReallocationData({
+  return new VaultV1ReallocationData({
     chainId: 1,
     markets: { [targetMarket.id]: targetMarket },
   });
 }
 
 /**
- * Stubs `getMarketPublicReallocations` so the metric methods can be unit-tested
+ * Stubs `computeVaultV1Reallocations` so the metric methods can be unit-tested
  * in isolation. The discovery algorithm itself is covered by
  * `reallocationData.test.ts`. The stub mimics the `enabled: false` short-circuit.
  */
 function stubReallocations(
-  data: ReallocationData,
+  data: VaultV1ReallocationData,
   withdrawals: readonly PublicReallocation[],
 ) {
   return vi
-    .spyOn(data, "getMarketPublicReallocations")
+    .spyOn(data, "computeVaultV1Reallocations")
     .mockImplementation((_marketId, options?: PublicAllocatorOptions) => ({
       withdrawals: options?.enabled === false ? [] : withdrawals,
       data,
@@ -64,7 +64,7 @@ function stubReallocations(
 
 // ---------------------------------------------------------------------------
 
-describe("ReallocationData.getPublicReallocationLiquidity", () => {
+describe("VaultV1ReallocationData.getPublicReallocationLiquidity", () => {
   test("default: sums reallocatable withdrawals", () => {
     const data = makeData();
     stubReallocations(data, [
@@ -103,7 +103,7 @@ describe("ReallocationData.getPublicReallocationLiquidity", () => {
   });
 });
 
-describe("ReallocationData.getAvailableLiquidityToUtilization", () => {
+describe("VaultV1ReallocationData.getAvailableLiquidityToUtilization", () => {
   test("default: own headroom + scaled available liquidity", () => {
     // 1000 supply / 500 borrow (50% util). ownHeadroom to 90% = 1000·0.9 − 500 = 400.
     // supplyTarget set to 90% (not > target) → scaled liquidity 0.9·200 = 180 is

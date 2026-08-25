@@ -4,6 +4,12 @@ import { type Address, maxUint96 } from "viem";
 /** Maximum slippage tolerance: 10% */
 export const MAX_SLIPPAGE_TOLERANCE = MathLib.WAD / 10n;
 
+/** Default maximum Vault V2 reallocation penalty: zero. */
+export const DEFAULT_MAX_REALLOCATION_PENALTY = 0n;
+
+/** Maximum Vault V2 reallocation penalty: 100%. */
+export const MAX_REALLOCATION_PENALTY = MathLib.WAD;
+
 /** Default LLTV buffer: 0.5% below LLTV. Prevents instant liquidation on new positions. */
 export const DEFAULT_LLTV_BUFFER = MathLib.WAD / 200n;
 
@@ -12,9 +18,7 @@ export const MAX_ABSOLUTE_SHARE_PRICE = 100n * MathLib.RAY;
 
 /**
  * The default maximum utilization a source market may reach when withdrawing
- * shared liquidity, scaled by WAD. Still overridable through the deprecated
- * `maxWithdrawalUtilization` / `defaultMaxWithdrawalUtilization` options until
- * the next major.
+ * shared liquidity, scaled by WAD.
  */
 export const DEFAULT_WITHDRAWAL_TARGET_UTILIZATION = 90_0000000000000000n;
 

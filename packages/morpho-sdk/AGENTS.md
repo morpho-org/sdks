@@ -26,8 +26,10 @@ Protocol terms used across this package's docs and JSDoc:
 - **VaultV2** — successor vault with adapter-based liquidity routing and `forceDeallocate`.
 - **bundler3** — the bundler entry point; receives a sequence of adapter actions in one transaction.
 - **GeneralAdapter1** — the bundler-side adapter that holds approvals/auth and executes Morpho calls on the user's behalf. Required as the spender for ERC-20 approvals on every bundled path; required as authorized operator on Morpho for `borrow`, `supplyCollateralBorrow`, `repayWithdrawCollateral`, and `withdraw` (the supplier-side path).
-- **PublicAllocator** — Morpho contract that lets vault curators move liquidity between markets within a vault (`reallocateTo(...)`).
+- **PublicAllocator V1** — MetaMorpho allocator that moves liquidity from one or more sorted source markets into a target via `reallocateTo(...)`; each call pays one `fee`.
+- **BluePublicAllocator** — the single canonical Vault V2 allocator registered per chain, which moves one source market or vault idle liquidity into the enclosing Blue action's target market via `reallocate(...)` or `allocateFromIdle(...)`. The caller supplies adapter addresses; the SDK resolves the allocator from the chain registry. Each call passes the vault's configured WAD-scaled `uint64 penalty`; the allocator pulls `ceil(assets × penalty / WAD)` of the target loan token from Bundler3 and donates it directly to the vault. Its canonical ABI export is `vaultV2BluePublicAllocatorAbi`.
 - **VaultExitBundlesV1** — standalone periphery for exiting an illiquid VaultV1 or single-adapter VaultV2 into idle underlying assets and/or Morpho Blue supply positions.
+- **Shared-liquidity naming** — `VaultV1ReallocationData`, `InputVaultV1ReallocationData`, and `VaultV1Reallocation` are canonical for PublicAllocator V1; `ReallocationData`, `InputReallocationData`, and `VaultReallocation` remain their deprecated aliases. The free helper `computeVaultV1Reallocations` replaces deprecated `computeReallocations`. The instance method `VaultV1ReallocationData.computeVaultV1Reallocations` replaces deprecated `getMarketPublicReallocations`. `MorphoBlue.getVaultV1ReallocationData` is the canonical V1 fetcher; unversioned `getReallocationData` is its deprecated alias. `MorphoBlue.getVaultV2BlueReallocationData` fetches the Blue-specific V2 snapshot. `VaultV2BlueReallocationData.computeVaultV2BlueReallocations` discovers every friendly call by default or accepts an optional operation to produce an amount-aware plan; both modes return flat, action-ready `VaultV2BlueReallocation` calls and their simulated state.
 
 ### Bundler actions
 
@@ -39,7 +41,8 @@ The action verbs an integrator sees in the bundle (`BundlerAction.encode...`):
 - **`erc20TransferFrom`** — pulls user-approved tokens into the bundler.
 - **`nativeTransfer` + `wrapNative`** — pair that converts an attached native amount (`tx.value`) into the chain's wNative for a deposit/supply path.
 - **`forceDeallocate`** — VaultV2 multicall entry that pulls liquidity out of a specific adapter before withdraw/redeem.
-- **`reallocateTo`** — `PublicAllocator` call that shifts liquidity between markets in a curator vault before a borrow or a loan-asset withdraw.
+- **`reallocateTo`** — PublicAllocator V1 call that shifts liquidity from sorted source markets into the target market.
+- **`vaultV2BluePublicAllocatorReallocate` / `vaultV2BluePublicAllocatorAllocateFromIdle`** — BluePublicAllocator calls that move one market source or vault idle liquidity into the enclosing Blue action's target market. Both target the chain's registered allocator, approve the exact loan-token penalty from Bundler3, and carry the configured penalty rate in calldata.
 
 ### Constants and conventions
 

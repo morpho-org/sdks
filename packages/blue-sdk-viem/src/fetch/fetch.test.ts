@@ -52,7 +52,7 @@ import {
   permissionedErc20WrapperAbi,
   permit2Abi,
   preLiquidationAbi,
-  publicAllocatorAbi,
+  vaultV1PublicAllocatorAbi,
   whitelistControllerAggregatorV2Abi,
   wrappedBackedTokenAbi,
   wstEthAbi,
@@ -223,7 +223,7 @@ function mockVaultMarketConfigReads(
   });
   mockRead(handle, {
     address: ADDRESSES.publicAllocator,
-    abi: publicAllocatorAbi,
+    abi: vaultV1PublicAllocatorAbi,
     functionName: "flowCaps",
     result: [33n, 34n],
   });
@@ -1171,7 +1171,7 @@ describe("vault fetchers", () => {
     const handle = createMockClient(mainnet);
     mockRead(handle, {
       address: ADDRESSES.publicAllocator,
-      abi: publicAllocatorAbi,
+      abi: vaultV1PublicAllocatorAbi,
       functionName: "flowCaps",
       result: [27n, 28n],
     });
@@ -1527,19 +1527,19 @@ describe("vault fetchers", () => {
     });
     mockRead(handle, {
       address: ADDRESSES.publicAllocator,
-      abi: publicAllocatorAbi,
+      abi: vaultV1PublicAllocatorAbi,
       functionName: "admin",
       result: USER,
     });
     mockRead(handle, {
       address: ADDRESSES.publicAllocator,
-      abi: publicAllocatorAbi,
+      abi: vaultV1PublicAllocatorAbi,
       functionName: "fee",
       result: 56n,
     });
     mockRead(handle, {
       address: ADDRESSES.publicAllocator,
-      abi: publicAllocatorAbi,
+      abi: vaultV1PublicAllocatorAbi,
       functionName: "accruedFee",
       result: 57n,
     });

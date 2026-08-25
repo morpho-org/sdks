@@ -5,16 +5,16 @@ import { type Action, BundlerAction } from "../../bundler/index.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   type AuthorizationRequirementSignature,
+  type BlueReallocationPlan,
   type BlueWithdrawAction,
   type Metadata,
   MutuallyExclusiveWithdrawAmountsError,
   NegativeInputError,
   NonPositiveInputError,
   type Transaction,
-  type VaultReallocation,
 } from "../../types/index.js";
 import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
-import { buildReallocationActions } from "./buildReallocationActions.js";
+import { buildBlueReallocationActions } from "./buildReallocationActions.js";
 
 /** Parameters for {@link blueWithdraw}. */
 export interface BlueWithdrawParams {
@@ -32,11 +32,11 @@ export interface BlueWithdrawParams {
     /** Minimum withdraw share price (in ray). Slippage protection. */
     minSharePrice: bigint;
     /**
-     * Vault reallocations to execute before withdrawing. Compute via
-     * `MorphoBlue.getReallocations({ operation: "withdraw", amount })` or directly via
-     * `computeReallocations({ operation: "withdraw", amount, ... })`.
+     * Homogeneous Vault V1 or Vault V2 reallocations to execute before withdrawing. V1 entries can be
+     * computed via `MorphoBlue.getVaultV1Reallocations({ operation: "withdraw", amount })` or directly
+     * via `computeVaultV1Reallocations({ operation: "withdraw", amount, ... })`.
      */
-    reallocations?: readonly VaultReallocation[];
+    reallocations?: BlueReallocationPlan;
     /**
      * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
      * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a
@@ -56,10 +56,11 @@ export interface BlueWithdrawParams {
  * - **By shares** (`assets = 0, shares > 0`): burns an exact share count (typical for a full
  *   supplier position close; immune to interest accrual between tx construction and execution).
  *
- * When `reallocations` are provided, `reallocateTo` actions are prepended to the bundle, moving
- * liquidity from other markets into this one via the PublicAllocator before withdrawing.
- * Reallocation fees accumulate in `tx.value`. The on-chain `morphoWithdraw` sends the assets
- * computed on-chain directly to `receiver`; no skim is required.
+ * A `reallocations` plan contains either V1 entries or V2 market/idle entries,
+ * never both. The calls run before the withdraw. V1
+ * fees accumulate in `tx.value`; V2 penalties are paid in the target loan
+ * token and donated to the vaults. The on-chain `morphoWithdraw` sends the
+ * assets computed on-chain directly to `receiver`; no skim is required.
  *
  * The withdraw is performed on behalf of the transaction initiator (signer) — there is no
  * separate `onBehalf` field; mirror `blueBorrow`. The entity layer keeps `receiver` aligned
@@ -73,17 +74,23 @@ export interface BlueWithdrawParams {
  * @param params.args.receiver - Address that receives the withdrawn assets.
  * @param params.args.minSharePrice - Minimum acceptable withdraw share price (in ray). Slippage
  *   protection.
- * @param params.args.reallocations - Optional vault reallocations to execute before withdrawing,
- *   computed by the entity layer.
+ * @param params.args.reallocations - Optional homogeneous Vault V1 or Vault V2 reallocations to
+ *   execute before withdrawing.
  * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
  *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueWithdrawAction>` with `to`, `value`, `data`, and
  *   the typed `action` discriminator the simulation layer consumes.
- * @throws {NegativeInputError} when `assets`, `shares`, `minSharePrice`, or any reallocation fee
- *   is negative.
+ * @throws {NegativeInputError} when `assets`, `shares`, `minSharePrice`, a V1 fee, or a V2
+ *   penalty is negative.
  * @throws {NonPositiveInputError} when both `assets` and `shares` are zero or any reallocation
  *   withdrawal amount is non-positive.
+ * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
+ * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
+ * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
+ * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
+ * @throws {InvalidReallocationShapeError} when an entry matches both or neither V1/V2 shape.
+ * @throws {MixedReallocationVersionsError} when one plan contains both V1 and V2 entries.
  * @throws {MutuallyExclusiveWithdrawAmountsError} when both `assets` and `shares` are non-zero.
  * @throws {EmptyReallocationWithdrawalsError} when any reallocation has no withdrawals.
  * @throws {ReallocationWithdrawalOnTargetMarketError} when a reallocation withdrawal references
@@ -140,27 +147,28 @@ export const blueWithdraw = ({
   }
 
   const actions: Action[] = [];
-  let reallocationFee = 0n;
 
   if (authorizationSignature) {
     actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
   }
 
-  if (reallocations && reallocations.length > 0) {
-    const result = buildReallocationActions(reallocations, marketParams);
-    actions.push(...result.actions);
-    reallocationFee = result.fee;
-  }
+  const {
+    actions: reallocationActions,
+    fee: reallocationFee,
+    penaltyAssets: reallocationPenaltyAssets,
+  } = buildBlueReallocationActions({
+    chainId,
+    reallocations,
+    targetMarketParams: marketParams,
+  });
+  actions.push(...reallocationActions);
 
   actions.push({
     type: "morphoWithdraw",
     args: [marketParams, assets, shares, minSharePrice, receiver, false],
   });
 
-  let tx = {
-    ...BundlerAction.encodeBundle(chainId, actions),
-    value: reallocationFee,
-  };
+  let tx = BundlerAction.encodeBundle(chainId, actions);
 
   if (metadata) {
     tx = addTransactionMetadata(tx, metadata);
@@ -177,6 +185,7 @@ export const blueWithdraw = ({
         receiver,
         minSharePrice,
         reallocationFee,
+        reallocationPenaltyAssets,
       },
     },
   });

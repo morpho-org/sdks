@@ -212,7 +212,9 @@ describe("LiquidityAdapter vaultV1", () => {
           abi: vaultV2Abi,
           functionName: "absoluteCap",
           args: [
-            VaultV2MorphoVaultV1Adapter.adapterId(vaultV2AdapterVaultV1Address),
+            VaultV2MorphoVaultV1Adapter.adapterCapId(
+              vaultV2AdapterVaultV1Address,
+            ),
           ],
         }),
         readContract(client, {
@@ -220,7 +222,9 @@ describe("LiquidityAdapter vaultV1", () => {
           abi: vaultV2Abi,
           functionName: "allocation",
           args: [
-            VaultV2MorphoVaultV1Adapter.adapterId(vaultV2AdapterVaultV1Address),
+            VaultV2MorphoVaultV1Adapter.adapterCapId(
+              vaultV2AdapterVaultV1Address,
+            ),
           ],
         }),
       ]);

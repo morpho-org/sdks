@@ -32,9 +32,9 @@ import {
 } from "../types/index.js";
 
 /**
- * Input state required to construct {@link ReallocationData}.
+ * Input state required to construct {@link VaultV1ReallocationData}.
  */
-export interface InputReallocationData {
+export interface InputVaultV1ReallocationData {
   /** Chain id associated with the fetched state. */
   readonly chainId: number;
 
@@ -54,6 +54,13 @@ export interface InputReallocationData {
     Record<Address, Readonly<Record<MarketId, VaultMarketConfig | undefined>>>
   >;
 }
+
+/**
+ * Deprecated input name for Vault V1 reallocation data.
+ *
+ * @deprecated Use {@link InputVaultV1ReallocationData} instead.
+ */
+export type InputReallocationData = InputVaultV1ReallocationData;
 
 /**
  * Clones a market so simulated interest and liquidity changes never mutate caller input.
@@ -110,7 +117,7 @@ const cloneVaultMarketConfig = (config: VaultMarketConfig) =>
  * @remarks
  * The class owns only the market, vault, position, vault-market-config,
  * and chain data needed by the shared-liquidity algorithm. Constructor inputs
- * are cloned, and simulation steps return cloned `ReallocationData` instances
+ * are cloned, and simulation steps return cloned `VaultV1ReallocationData` instances
  * so fetched caller inputs are not mutated.
  *
  * Public records are exposed for inspection and snapshotting only. Treat
@@ -118,7 +125,7 @@ const cloneVaultMarketConfig = (config: VaultMarketConfig) =>
  * contract keyed by market id or address; use the getters for typed absence
  * errors and use simulation methods to produce updated state.
  */
-export class ReallocationData implements InputReallocationData {
+export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
   /** Chain id associated with the fetched reallocation data. */
   public readonly chainId: number;
 
@@ -146,7 +153,7 @@ export class ReallocationData implements InputReallocationData {
    *
    * @param input - Reallocation input data fetched at a consistent chain state.
    */
-  constructor(input: InputReallocationData) {
+  constructor(input: InputVaultV1ReallocationData) {
     const { chainId, markets, vaults, positions, vaultMarketConfigs } = input;
 
     this.chainId = chainId;
@@ -202,14 +209,14 @@ export class ReallocationData implements InputReallocationData {
   /**
    * Creates a deep clone of this reallocation state.
    *
-   * @returns A new `ReallocationData` instance with cloned entity objects.
+   * @returns A new `VaultV1ReallocationData` instance with cloned entity objects.
    */
   public clone() {
-    return new ReallocationData(this);
+    return new VaultV1ReallocationData(this);
   }
 
   private forkAliasedState() {
-    const data = new ReallocationData({ chainId: this.chainId });
+    const data = new VaultV1ReallocationData({ chainId: this.chainId });
 
     Object.assign(data.markets, this.markets);
     Object.assign(data.vaults, this.vaults);
@@ -343,7 +350,7 @@ export class ReallocationData implements InputReallocationData {
    *   morphoViemExtension,
    *   type PublicReallocation,
    * } from "@morpho-org/morpho-sdk";
-   * import type { ReallocationData } from "@morpho-org/morpho-sdk/entities";
+   * import type { VaultV1ReallocationData } from "@morpho-org/morpho-sdk/entities";
    *
    * const client = createPublicClient({
    *   chain: mainnet,
@@ -353,25 +360,25 @@ export class ReallocationData implements InputReallocationData {
    * const marketParams = markets[mainnet.id].usdc_wbtc;
    * const market = client.morpho.blue(marketParams, mainnet.id);
    * const block = await client.getBlock();
-   * const reallocationData = await market.getReallocationData({
+   * const reallocationData = await market.getVaultV1ReallocationData({
    *   vaultAddresses: [vaults[mainnet.id].steakUsdc.address],
    *   block: { number: block.number, timestamp: block.timestamp },
    * });
    *
    * const result: {
    *   withdrawals: readonly PublicReallocation[];
-   *   data: ReallocationData;
-   * } = reallocationData.getMarketPublicReallocations(marketParams.id, {
+   *   data: VaultV1ReallocationData;
+   * } = reallocationData.computeVaultV1Reallocations(marketParams.id, {
    *   timestamp: block.timestamp,
    * });
    * ```
    */
-  public getMarketPublicReallocations(
+  public computeVaultV1Reallocations(
     marketId: MarketId,
     options: PublicAllocatorOptions = {},
   ): {
     readonly withdrawals: readonly PublicReallocation[];
-    data: ReallocationData;
+    data: VaultV1ReallocationData;
   } {
     const {
       enabled = true,
@@ -393,7 +400,7 @@ export class ReallocationData implements InputReallocationData {
     );
     const vaults = Array.from(
       new Set(
-        (reallocatableVaults ?? configuredVaults)
+        [...(reallocatableVaults ?? configuredVaults)]
           .map((vault) => vaultKeyByLower.get(vault.toLowerCase()))
           .filter((vault): vault is Address => vault != null),
       ),
@@ -468,6 +475,22 @@ export class ReallocationData implements InputReallocationData {
   }
 
   /**
+   * Calculates Vault V1 public reallocations that can supply liquidity to `marketId`.
+   *
+   * @param marketId - Target market to supply with shared liquidity.
+   * @param options - Optional allocator discovery options.
+   * @returns Computed source-market withdrawals and the post-reallocation state.
+   * @throws {@link UnknownReallocationMarketError} when the target market is absent.
+   * @deprecated Use {@link computeVaultV1Reallocations} instead.
+   */
+  public getMarketPublicReallocations(
+    marketId: MarketId,
+    options: PublicAllocatorOptions = {},
+  ) {
+    return this.computeVaultV1Reallocations(marketId, options);
+  }
+
+  /**
    * Sums the public-allocator liquidity reallocatable into `marketId` from
    * sibling markets.
    *
@@ -495,7 +518,7 @@ export class ReallocationData implements InputReallocationData {
    * const marketParams = markets[mainnet.id].usdc_wbtc;
    * const market = client.morpho.blue(marketParams, mainnet.id);
    * const block = await client.getBlock();
-   * const reallocationData = await market.getReallocationData({
+   * const reallocationData = await market.getVaultV1ReallocationData({
    *   vaultAddresses: [vaults[mainnet.id].steakUsdc.address],
    *   block: { number: block.number, timestamp: block.timestamp },
    * });
@@ -510,10 +533,7 @@ export class ReallocationData implements InputReallocationData {
     marketId: MarketId,
     options?: PublicAllocatorOptions,
   ): bigint {
-    const { withdrawals } = this.getMarketPublicReallocations(
-      marketId,
-      options,
-    );
+    const { withdrawals } = this.computeVaultV1Reallocations(marketId, options);
 
     return withdrawals.reduce((total, { assets }) => total + assets, 0n);
   }
@@ -557,7 +577,7 @@ export class ReallocationData implements InputReallocationData {
    * const marketParams = markets[mainnet.id].usdc_wbtc;
    * const market = client.morpho.blue(marketParams, mainnet.id);
    * const block = await client.getBlock();
-   * const reallocationData = await market.getReallocationData({
+   * const reallocationData = await market.getVaultV1ReallocationData({
    *   vaultAddresses: [vaults[mainnet.id].steakUsdc.address],
    *   block: { number: block.number, timestamp: block.timestamp },
    * });
@@ -792,3 +812,10 @@ export class ReallocationData implements InputReallocationData {
     return data;
   }
 }
+
+/**
+ * Deprecated class name for Vault V1 reallocation data.
+ *
+ * @deprecated Use {@link VaultV1ReallocationData} instead.
+ */
+export { VaultV1ReallocationData as ReallocationData };

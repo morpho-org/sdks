@@ -6,6 +6,11 @@ import type { BigIntish as SharedBigIntish } from "@morpho-org/morpho-ts";
 export type Address = `0x${string}`;
 
 /**
+ * A 0x-prefixed hash value used for protocol identifiers.
+ */
+export type Hash = `0x${string}`;
+
+/**
  * The id of a market used on the Blue contract
  */
 export type MarketId = `0x${string}` & { __TYPE__: "marketId" };

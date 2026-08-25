@@ -1,13 +1,13 @@
 import { type MarketId, MarketUtils, MathLib } from "@morpho-org/blue-sdk";
 import type { Address } from "viem";
-import type { ReallocationData } from "../entities/reallocationData.js";
+import type { VaultV1ReallocationData } from "../entities/vaultV1ReallocationData.js";
 import {
   InsufficientSharedLiquidityError,
   MissingPublicAllocatorConfigError,
   type PublicReallocation,
   type ReallocationComputeOptions,
   ReallocationWithdrawExceedsMarketSupplyError,
-  type VaultReallocation,
+  type VaultV1Reallocation,
 } from "../types/index.js";
 import { getSupplyTargetUtilization } from "./utilization.js";
 import { compareMarketIds } from "./validate.js";
@@ -113,7 +113,7 @@ const capVaultWithdrawals = (
  * import { mainnet } from "viem/chains";
  * import { markets, vaults } from "@morpho-org/morpho-test";
  * import {
- *   computeReallocations,
+ *   computeVaultV1Reallocations,
  *   morphoViemExtension,
  * } from "@morpho-org/morpho-sdk";
  *
@@ -126,12 +126,12 @@ const capVaultWithdrawals = (
  * const marketParams = markets[mainnet.id].usdc_wbtc;
  * const market = client.morpho.blue(marketParams, mainnet.id);
  * const block = await client.getBlock();
- * const reallocationData = await market.getReallocationData({
+ * const reallocationData = await market.getVaultV1ReallocationData({
  *   vaultAddresses: [vaults[mainnet.id].steakUsdc.address],
  *   block: { number: block.number, timestamp: block.timestamp },
  * });
  * const borrowAmount = parseUnits("1000", 6);
- * const reallocations = computeReallocations({
+ * const reallocations = computeVaultV1Reallocations({
  *   reallocationData,
  *   marketId: marketParams.id,
  *   operation: "borrow",
@@ -148,24 +148,33 @@ const capVaultWithdrawals = (
  * // borrow.buildTx() includes any required PublicAllocator reallocations.
  * ```
  */
-export const computeReallocations = ({
+export const computeVaultV1Reallocations = ({
   reallocationData: data,
   marketId,
   operation,
   amount,
   options,
 }: {
-  readonly reallocationData: ReallocationData;
+  readonly reallocationData: VaultV1ReallocationData;
   readonly marketId: MarketId;
   readonly operation: "borrow" | "withdraw";
   readonly amount: bigint;
   readonly options?: ReallocationComputeOptions;
-}): readonly VaultReallocation[] => {
+}): readonly VaultV1Reallocation[] => {
   if (options?.enabled === false) return [];
+  const normalizedOptions = {
+    ...options,
+    reallocatableVaults:
+      options?.reallocatableVaults == null
+        ? undefined
+        : [...options.reallocatableVaults],
+  };
 
-  // ReallocationData does not retain the fetch block; pass that block timestamp
+  // VaultV1ReallocationData does not retain the fetch block; pass that block timestamp
   // to compute against the same accrued state, otherwise Market defaults to lastUpdate.
-  const market = data.getMarket(marketId).accrueInterest(options?.timestamp);
+  const market = data
+    .getMarket(marketId)
+    .accrueInterest(normalizedOptions.timestamp);
 
   // Reject unreachable withdraws before any utilization math: a negative
   // post-supply yields a negative utilization that short-circuits the
@@ -190,7 +199,7 @@ export const computeReallocations = ({
 
   const supplyTargetUtilization = getSupplyTargetUtilization(
     market.params.id,
-    options,
+    normalizedOptions,
   );
 
   if (
@@ -210,7 +219,7 @@ export const computeReallocations = ({
 
   // Phase 1: "friendly" reallocations respecting withdrawal utilization targets.
   const { withdrawals: friendlyWithdrawals, data: friendlyReallocationData } =
-    data.getMarketPublicReallocations(market.id, options);
+    data.computeVaultV1Reallocations(market.id, normalizedOptions);
 
   const withdrawals = [...friendlyWithdrawals];
 
@@ -232,8 +241,8 @@ export const computeReallocations = ({
     // Phase 2: "aggressive" — fully withdraw from every market (100% utilization).
     requiredAssets = newTotalBorrowAssets - newTotalSupplyAssets;
     withdrawals.push(
-      ...friendlyReallocationData.getMarketPublicReallocations(market.id, {
-        ...options,
+      ...friendlyReallocationData.computeVaultV1Reallocations(market.id, {
+        ...normalizedOptions,
         defaultMaxWithdrawalUtilization: MathLib.WAD,
         maxWithdrawalUtilization: {},
       }).withdrawals,
@@ -283,7 +292,7 @@ export const computeReallocations = ({
     });
   }
 
-  // Transform into VaultReallocation[] format.
+  // Transform into VaultV1Reallocation[] format.
   return reallocations
     .filter(({ withdrawals: vaultWithdrawals }) => vaultWithdrawals.length > 0)
     .map(({ vault, withdrawals: vaultWithdrawals }) => ({
@@ -305,3 +314,10 @@ export const computeReallocations = ({
         })),
     }));
 };
+
+/**
+ * Deprecated name for the Vault V1 amount-aware reallocation planner.
+ *
+ * @deprecated Use {@link computeVaultV1Reallocations} instead.
+ */
+export const computeReallocations = computeVaultV1Reallocations;

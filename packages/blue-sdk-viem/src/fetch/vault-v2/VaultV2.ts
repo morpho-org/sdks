@@ -325,14 +325,16 @@ export async function fetchVaultV2(
   let liquidityAdapterIds: Hash[] | undefined;
   if (hasMorphoVaultV1LiquidityAdapter)
     liquidityAdapterIds = [
-      VaultV2MorphoVaultV1Adapter.adapterId(liquidityAdapter),
+      VaultV2MorphoVaultV1Adapter.adapterCapId(liquidityAdapter),
     ];
   if (hasMorphoMarketV1AdapterV2LiquidityAdapter) {
     const marketParams = MarketParams.fromHex(liquidityData);
     liquidityAdapterIds = [
-      VaultV2MorphoMarketV1AdapterV2.adapterId(liquidityAdapter),
-      VaultV2MorphoMarketV1AdapterV2.collateralId(marketParams.collateralToken),
-      VaultV2MorphoMarketV1AdapterV2.marketParamsId(
+      VaultV2MorphoMarketV1AdapterV2.adapterCapId(liquidityAdapter),
+      VaultV2MorphoMarketV1AdapterV2.collateralCapId(
+        marketParams.collateralToken,
+      ),
+      VaultV2MorphoMarketV1AdapterV2.adapterMarketCapId(
         liquidityAdapter,
         marketParams,
       ),

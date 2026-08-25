@@ -67,9 +67,15 @@ export {
 } from "@morpho-org/blue-sdk";
 export { MorphoBlue } from "./blue/index.js";
 export * from "./midnight/index.js";
+export { MorphoVaultV1 } from "./vaultV1/index.js";
 export {
   type InputReallocationData,
+  type InputVaultV1ReallocationData,
   ReallocationData,
-} from "./reallocationData.js";
-export { MorphoVaultV1 } from "./vaultV1/index.js";
+  VaultV1ReallocationData,
+} from "./vaultV1ReallocationData.js";
 export { MorphoVaultV2 } from "./vaultV2/index.js";
+export {
+  type InputVaultV2BlueReallocationData,
+  VaultV2BlueReallocationData,
+} from "./vaultV2BlueReallocationData.js";

@@ -9,7 +9,7 @@ import {
   blueAbi,
   metaMorphoAbi,
   metaMorphoFactoryAbi,
-  publicAllocatorAbi,
+  vaultV1PublicAllocatorAbi,
 } from "@morpho-org/blue-sdk-viem";
 import { BLUE_API_GRAPHQL_URL } from "@morpho-org/morpho-ts";
 import { createMockClient, type MockClientHandle } from "@morpho-org/test/mock";
@@ -29,11 +29,11 @@ import { mainnet } from "viem/chains";
 import { afterEach, describe, expect, test } from "vitest";
 import { LiquidityLoader } from "./loader.js";
 
-const { morpho, publicAllocator, metaMorphoFactory } = getChainAddresses(
+const { morpho, vaultV1PublicAllocator, metaMorphoFactory } = getChainAddresses(
   ChainId.EthMainnet,
 );
 
-if (publicAllocator == null || metaMorphoFactory == null) {
+if (vaultV1PublicAllocator == null || metaMorphoFactory == null) {
   throw new Error(
     "Ethereum mainnet addresses must include allocator contracts",
   );
@@ -340,7 +340,7 @@ const setupLoaderMockClient = ({
     address: vault,
     abi: metaMorphoAbi,
     functionName: "isAllocator",
-    args: [publicAllocator],
+    args: [vaultV1PublicAllocator],
     result: true,
   });
   addRead({
@@ -380,22 +380,22 @@ const setupLoaderMockClient = ({
   });
 
   addRead({
-    address: publicAllocator,
-    abi: publicAllocatorAbi,
+    address: vaultV1PublicAllocator,
+    abi: vaultV1PublicAllocatorAbi,
     functionName: "admin",
     args: [vault],
     result: owner,
   });
   addRead({
-    address: publicAllocator,
-    abi: publicAllocatorAbi,
+    address: vaultV1PublicAllocator,
+    abi: vaultV1PublicAllocatorAbi,
     functionName: "fee",
     args: [vault],
     result: 0n,
   });
   addRead({
-    address: publicAllocator,
-    abi: publicAllocatorAbi,
+    address: vaultV1PublicAllocator,
+    abi: vaultV1PublicAllocatorAbi,
     functionName: "accruedFee",
     args: [vault],
     result: 0n,
@@ -416,8 +416,8 @@ const setupLoaderMockClient = ({
     result: [targetPendingCapValue, targetPendingCapValidAt],
   });
   addRead({
-    address: publicAllocator,
-    abi: publicAllocatorAbi,
+    address: vaultV1PublicAllocator,
+    abi: vaultV1PublicAllocatorAbi,
     functionName: "flowCaps",
     args: [vault, targetMarketId],
     result: [10_000n, 0n],
@@ -437,8 +437,8 @@ const setupLoaderMockClient = ({
     result: [10_000n, 0n],
   });
   addRead({
-    address: publicAllocator,
-    abi: publicAllocatorAbi,
+    address: vaultV1PublicAllocator,
+    abi: vaultV1PublicAllocatorAbi,
     functionName: "flowCaps",
     args: [vault, sourceMarketId],
     result: [0n, 10_000n],

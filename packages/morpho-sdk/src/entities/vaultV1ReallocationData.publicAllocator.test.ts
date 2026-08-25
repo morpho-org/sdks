@@ -12,9 +12,9 @@ import {
 import { type Address, parseEther, parseUnits, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
-  type InputReallocationData,
-  ReallocationData,
-} from "./reallocationData.js";
+  type InputVaultV1ReallocationData,
+  VaultV1ReallocationData,
+} from "./vaultV1ReallocationData.js";
 
 const timestamp = 12345n;
 
@@ -199,7 +199,7 @@ const makeConfig = ({
   });
 
 const makeFixture = () =>
-  new ReallocationData({
+  new VaultV1ReallocationData({
     chainId: ChainId.EthMainnet,
     markets: {
       [marketA1.id]: marketA1,
@@ -287,12 +287,12 @@ const makeFixture = () =>
         }),
       },
     },
-  } satisfies InputReallocationData);
+  } satisfies InputVaultV1ReallocationData);
 
-const liquidity = (data: ReallocationData, marketId: MarketId) =>
+const liquidity = (data: VaultV1ReallocationData, marketId: MarketId) =>
   data.getMarket(marketId).liquidity;
 
-describe("ReallocationData public allocator integration", () => {
+describe("VaultV1ReallocationData public allocator integration", () => {
   test.each([
     {
       marketId: marketA1.id,
@@ -385,7 +385,7 @@ describe("ReallocationData public allocator integration", () => {
       fee: 0n,
       price: parseUnits("3", 18),
     });
-    const fixture = new ReallocationData({
+    const fixture = new VaultV1ReallocationData({
       chainId: ChainId.EthMainnet,
       markets: {
         [idleMarket.id]: idleMarket,

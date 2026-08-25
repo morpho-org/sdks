@@ -142,6 +142,96 @@ describe("addressesRegistry", () => {
     expect("midnight" in addressesRegistry[1]).toBe(false);
   });
 
+  test("behavior: keeps the deprecated Vault V1 PublicAllocator alias", () => {
+    const { publicAllocator, vaultV1PublicAllocator } =
+      addressesRegistry[ChainId.EthMainnet];
+
+    expect(publicAllocator).toBe(vaultV1PublicAllocator);
+    expect(getChainAddress(ChainId.EthMainnet, "publicAllocator")).toBe(
+      vaultV1PublicAllocator,
+    );
+  });
+
+  test.each([
+    [
+      ChainId.EthMainnet,
+      ["0x00b8e1509398ED692C3F326CbAf1694F9A881e27", 25770408n],
+    ],
+    [
+      ChainId.BaseMainnet,
+      ["0xAED282B8aD9257BB1272e93aE63A32A53621e412", 50063965n],
+    ],
+    [
+      ChainId.ArbitrumMainnet,
+      ["0x85b66Fe31e6788E5a6825EAe689f4c6c38AF3704", 495274087n],
+    ],
+    [
+      ChainId.OptimismMainnet,
+      ["0xc6945A915Bb7e2A365469f120A33D2FA42951cF3", 155659263n],
+    ],
+    [
+      ChainId.PolygonMainnet,
+      ["0xAb06a92cd253Bc12Dec8f719a693a6b472CCDfF4", 92141509n],
+    ],
+    [
+      ChainId.WorldChainMainnet,
+      ["0x5Fe47f63ACd84f8A69b97E0a5122fCBff08Df48F", 33790828n],
+    ],
+    [
+      ChainId.Unichain,
+      ["0x2b7Bf2f2027bcfE3A1F6Bc93EA80220a883a6851", 56168924n],
+    ],
+    [
+      ChainId.HyperliquidMainnet,
+      ["0x056dd7D4B373ED26c788190085CC6C52B8e7479d", 43372279n],
+    ],
+    [
+      ChainId.KatanaMainnet,
+      ["0xd952175e940D97775cBC5a523977a6f091D0d702", 40217302n],
+    ],
+    [
+      ChainId.MonadMainnet,
+      ["0x0A503aB026EFACBC0F7feE7795F34B80b5B9a662", 96602489n],
+    ],
+    [
+      ChainId.StableMainnet,
+      ["0x5C884d4B1510EAd302EC50A2AB4DE9c0b9E407ce", 35817019n],
+    ],
+    [
+      ChainId.TempoMainnet,
+      ["0xDC9693CE6488640faEf173Ec2635ff99fdC25a07", 35177253n],
+    ],
+    [
+      ChainId.KaiaMainnet,
+      ["0x3b369B37eba1655e8c44bC08E3A604D592c4a14F", 224866814n],
+    ],
+    [
+      ChainId.MorphMainnet,
+      ["0x20d990D9eBf8003Df8cAD3Aa36aeF4404e3Ccb86", 25455933n],
+    ],
+    [
+      ChainId.MegaEthMainnet,
+      ["0xB4A1B0EF18d169c19fC7617aCE898A06Dc495a7C", 24269516n],
+    ],
+    [
+      ChainId.RobinhoodMainnet,
+      ["0xCe5c1aFa115fF8b1D6913509bfc79D9AE08CC857", 38318973n],
+    ],
+  ] as const)(
+    "behavior: exposes BluePublicAllocator on chain %i",
+    (chainId, [vaultV2BluePublicAllocator, deploymentBlock]) => {
+      expect(addressesRegistry[chainId].vaultV2BluePublicAllocator).toBe(
+        vaultV2BluePublicAllocator,
+      );
+      expect(getChainAddress(chainId, "vaultV2BluePublicAllocator")).toBe(
+        vaultV2BluePublicAllocator,
+      );
+      expect(deployments[chainId].vaultV2BluePublicAllocator).toBe(
+        deploymentBlock,
+      );
+    },
+  );
+
   test("behavior: exposes World Chain USDC permit v2 token", () => {
     const usdc = "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1";
 
@@ -530,6 +620,46 @@ describe("registerCustomAddresses", () => {
     );
   });
 
+  test("behavior: normalizes Vault V1 PublicAllocator aliases", () => {
+    const chainId = 31_337_013;
+    const publicAllocator = randomAddress();
+
+    registerCustomAddresses({
+      addresses: {
+        [chainId]: { ...createBlueAddresses(), publicAllocator },
+      },
+      deployments: {
+        [chainId]: { ...createBlueDeployments(), publicAllocator: 11n },
+      },
+    });
+
+    expect(addressesRegistry[chainId]?.vaultV1PublicAllocator).toBe(
+      publicAllocator,
+    );
+    expect(addressesRegistry[chainId]?.publicAllocator).toBe(publicAllocator);
+    expect(deployments[chainId]?.vaultV1PublicAllocator).toBe(11n);
+    expect(deployments[chainId]?.publicAllocator).toBe(11n);
+  });
+
+  test("behavior: backfills deprecated PublicAllocator aliases", () => {
+    const chainId = 31_337_014;
+    const vaultV1PublicAllocator = randomAddress();
+
+    registerCustomAddresses({
+      addresses: {
+        [chainId]: { ...createBlueAddresses(), vaultV1PublicAllocator },
+      },
+      deployments: {
+        [chainId]: { ...createBlueDeployments(), vaultV1PublicAllocator: 11n },
+      },
+    });
+
+    expect(addressesRegistry[chainId]?.publicAllocator).toBe(
+      vaultV1PublicAllocator,
+    );
+    expect(deployments[chainId]?.publicAllocator).toBe(11n);
+  });
+
   test("error: RegistryValueAlreadyRegisteredError for addresses", () => {
     const chainId = 31_337_009;
     const chainAddresses = createChainAddresses();
@@ -553,6 +683,22 @@ describe("registerCustomAddresses", () => {
     ).toThrow(RegistryValueAlreadyRegisteredError);
 
     expect(getChainAddress(chainId, "midnight")).toBe(chainAddresses.midnight);
+  });
+
+  test("error: conflicting PublicAllocator addresses", () => {
+    const chainId = 31_337_015;
+
+    expect(() =>
+      registerCustomAddresses({
+        addresses: {
+          [chainId]: {
+            ...createBlueAddresses(),
+            vaultV1PublicAllocator: randomAddress(),
+            publicAllocator: randomAddress(),
+          },
+        },
+      }),
+    ).toThrow(RegistryValueAlreadyRegisteredError);
   });
 
   test("error: IncompleteChainRegistryError for custom-chain addresses", () => {
@@ -652,6 +798,22 @@ describe("registerCustomAddresses", () => {
     ).toThrow(RegistryValueAlreadyRegisteredError);
 
     expect(deployments[chainId]?.midnight).toBe(chainDeployments.midnight);
+  });
+
+  test("error: conflicting PublicAllocator deployments", () => {
+    const chainId = 31_337_108;
+
+    expect(() =>
+      registerCustomAddresses({
+        deployments: {
+          [chainId]: {
+            ...createBlueDeployments(),
+            vaultV1PublicAllocator: 11n,
+            publicAllocator: 12n,
+          },
+        },
+      }),
+    ).toThrow(RegistryValueAlreadyRegisteredError);
   });
 
   test("behavior: does not freeze caller-owned nested inputs", () => {

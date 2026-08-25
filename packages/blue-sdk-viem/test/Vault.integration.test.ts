@@ -8,7 +8,7 @@ import { vaults } from "@morpho-org/morpho-test";
 import { zeroAddress, zeroHash } from "viem";
 import { describe, expect } from "vitest";
 import { Vault } from "../src/augment/Vault.js";
-import { metaMorphoAbi, publicAllocatorAbi } from "../src/index.js";
+import { metaMorphoAbi, vaultV1PublicAllocatorAbi } from "../src/index.js";
 import { test, test2 } from "./setup.js";
 
 const { steakUsdc, steakPaxg } = vaults[ChainId.EthMainnet];
@@ -27,12 +27,15 @@ describe("augment/Vault", () => {
       address: steakUsdc.address,
       abi: metaMorphoAbi,
       functionName: "setIsAllocator",
-      args: [addressesRegistry[ChainId.EthMainnet].publicAllocator, true],
+      args: [
+        addressesRegistry[ChainId.EthMainnet].vaultV1PublicAllocator,
+        true,
+      ],
     });
     await client.writeContract({
       account: owner,
-      address: addressesRegistry[ChainId.EthMainnet].publicAllocator,
-      abi: publicAllocatorAbi,
+      address: addressesRegistry[ChainId.EthMainnet].vaultV1PublicAllocator,
+      abi: vaultV1PublicAllocatorAbi,
       functionName: "setFee",
       args: [steakUsdc.address, 1n],
     });

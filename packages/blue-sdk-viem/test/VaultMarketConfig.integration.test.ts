@@ -6,7 +6,7 @@ import {
 import { markets, vaults } from "@morpho-org/morpho-test";
 import { describe, expect } from "vitest";
 import { VaultMarketConfig } from "../src/augment/VaultMarketConfig.js";
-import { metaMorphoAbi, publicAllocatorAbi } from "../src/index.js";
+import { metaMorphoAbi, vaultV1PublicAllocatorAbi } from "../src/index.js";
 import { test } from "./setup.js";
 
 const { usdc_wstEth } = markets[ChainId.EthMainnet];
@@ -26,19 +26,22 @@ describe("augment/VaultMarketConfig", () => {
       address: steakUsdc.address,
       abi: metaMorphoAbi,
       functionName: "setIsAllocator",
-      args: [addressesRegistry[ChainId.EthMainnet].publicAllocator, true],
+      args: [
+        addressesRegistry[ChainId.EthMainnet].vaultV1PublicAllocator,
+        true,
+      ],
     });
     await client.writeContract({
       account: owner,
-      address: addressesRegistry[ChainId.EthMainnet].publicAllocator,
-      abi: publicAllocatorAbi,
+      address: addressesRegistry[ChainId.EthMainnet].vaultV1PublicAllocator,
+      abi: vaultV1PublicAllocatorAbi,
       functionName: "setFee",
       args: [steakUsdc.address, 1n],
     });
     await client.writeContract({
       account: owner,
-      address: addressesRegistry[ChainId.EthMainnet].publicAllocator,
-      abi: publicAllocatorAbi,
+      address: addressesRegistry[ChainId.EthMainnet].vaultV1PublicAllocator,
+      abi: vaultV1PublicAllocatorAbi,
       functionName: "setFlowCaps",
       args: [
         steakUsdc.address,

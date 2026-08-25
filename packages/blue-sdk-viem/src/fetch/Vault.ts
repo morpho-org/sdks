@@ -15,7 +15,7 @@ import { getChainId, readContract } from "viem/actions";
 import {
   metaMorphoAbi,
   metaMorphoFactoryAbi,
-  publicAllocatorAbi,
+  vaultV1PublicAllocatorAbi,
 } from "../abis.js";
 import { abi, code } from "../queries/GetVault.js";
 import type { DeploylessFetchParameters } from "../types.js";
@@ -60,7 +60,7 @@ export async function fetchVault(
 ) {
   parameters.chainId ??= await getChainId(client);
 
-  const { publicAllocator, metaMorphoFactory } = getChainAddresses(
+  const { vaultV1PublicAllocator, metaMorphoFactory } = getChainAddresses(
     parameters.chainId,
   );
 
@@ -95,7 +95,11 @@ export async function fetchVault(
         abi,
         code,
         functionName: "query",
-        args: [address, publicAllocator ?? zeroAddress, metaMorphoFactory],
+        args: [
+          address,
+          vaultV1PublicAllocator ?? zeroAddress,
+          metaMorphoFactory,
+        ],
       });
 
       return new Vault({
@@ -115,7 +119,7 @@ export async function fetchVault(
         pendingGuardian,
         pendingTimelock,
         publicAllocatorConfig:
-          publicAllocator != null ? publicAllocatorConfig : undefined,
+          vaultV1PublicAllocator != null ? publicAllocatorConfig : undefined,
         supplyQueue: supplyQueue as MarketId[],
         withdrawQueue: withdrawQueue as MarketId[],
         totalSupply,
@@ -247,13 +251,13 @@ export async function fetchVault(
       abi: metaMorphoAbi,
       functionName: "withdrawQueueLength",
     }),
-    publicAllocator != null &&
+    vaultV1PublicAllocator != null &&
       readContract(client, {
         ...parameters,
         address,
         abi: metaMorphoAbi,
         functionName: "isAllocator",
-        args: [publicAllocator],
+        args: [vaultV1PublicAllocator],
       }),
     readContract(client, {
       ...parameters,
@@ -284,22 +288,22 @@ export async function fetchVault(
     publicAllocatorConfigPromise = Promise.all([
       readContract(client, {
         ...parameters,
-        address: publicAllocator!,
-        abi: publicAllocatorAbi,
+        address: vaultV1PublicAllocator!,
+        abi: vaultV1PublicAllocatorAbi,
         functionName: "admin",
         args: [address],
       }),
       readContract(client, {
         ...parameters,
-        address: publicAllocator!,
-        abi: publicAllocatorAbi,
+        address: vaultV1PublicAllocator!,
+        abi: vaultV1PublicAllocatorAbi,
         functionName: "fee",
         args: [address],
       }),
       readContract(client, {
         ...parameters,
-        address: publicAllocator!,
-        abi: publicAllocatorAbi,
+        address: vaultV1PublicAllocator!,
+        abi: vaultV1PublicAllocatorAbi,
         functionName: "accruedFee",
         args: [address],
       }),

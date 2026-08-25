@@ -28,7 +28,7 @@ import {
   NonPositiveInputError,
   WithdrawExceedsCollateralError,
 } from "../../types/index.js";
-import { ReallocationData } from "../reallocationData.js";
+import { VaultV1ReallocationData } from "../vaultV1ReallocationData.js";
 
 const MARKET_PARAMS = new MarketParams(CbbtcUsdcBlue);
 const USER: Address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -455,14 +455,14 @@ describe("MorphoBlue validation", () => {
     ).toThrow(NonPositiveInputError);
   });
 
-  test("getReallocations accepts the operation/amount parameter shape", () => {
+  test("getVaultV1Reallocations accepts the operation/amount parameter shape", () => {
     const market = noRpcClient
       .extend(morphoViemExtension())
       .morpho.blue(CbbtcUsdcBlue, mainnet.id);
 
     expect(
-      market.getReallocations({
-        reallocationData: new ReallocationData({ chainId: mainnet.id }),
+      market.getVaultV1Reallocations({
+        reallocationData: new VaultV1ReallocationData({ chainId: mainnet.id }),
         operation: "borrow",
         amount: 1n,
         options: { enabled: false },

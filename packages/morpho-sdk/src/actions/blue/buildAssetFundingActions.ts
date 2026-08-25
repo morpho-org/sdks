@@ -25,7 +25,7 @@ export interface BuildAssetFundingActionsParams {
  * `blueSupplyCollateral`, `blueSupplyCollateralBorrow`, `blueRepay`, `blueRepayWithdrawCollateral`).
  *
  * Encode-only and synchronous: returns a fresh `Action[]` (never mutates its inputs, mirroring
- * `buildReallocationActions`) and reads no on-chain state. When `nativeAmount > 0n`, validates
+ * `buildVaultV2BlueReallocationActions`) and reads no on-chain state. When `nativeAmount > 0n`, validates
  * `asset` is the chain's wNative and emits `nativeTransfer → wrapNative`. When `erc20Amount > 0n`,
  * pulls the ERC-20 via a signed permit/permit2 (`requirementSignature`) or a plain
  * `erc20TransferFrom` — `getTokenRequirementActions` emits the latter itself when no signature is
