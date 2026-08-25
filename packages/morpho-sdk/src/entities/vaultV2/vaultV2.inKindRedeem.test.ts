@@ -4,7 +4,7 @@ import { Time } from "@morpho-org/morpho-ts";
 import { createMockClient } from "@morpho-org/test/mock";
 import { type Address, erc20Abi } from "viem";
 import { mainnet } from "viem/chains";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 import {
   encodeReadResult,
   IN_KIND_BUNDLER,
@@ -15,6 +15,7 @@ import {
   mockMulticallResults,
   secondInKindMarketParams,
 } from "../../../test/fixtures/inKindRedeem.js";
+import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
   AdapterNotPartOfVaultError,
@@ -57,10 +58,6 @@ const mockV2Requirements = (
 };
 
 describe("MorphoVaultV2.inKindRedeem", () => {
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   test("default", () => {
     const handle = createMockClient(mainnet);
     const vault = handle.client
@@ -288,25 +285,24 @@ describe("MorphoVaultV2.inKindRedeem", () => {
 
   test("error: ExpiredDeadlineError when deadline expires before requirements", async () => {
     const now = 1_800_000_000n;
-    vi.useFakeTimers();
-    vi.setSystemTime(Number(now) * 1_000);
     const handle = createMockClient(mainnet);
     const vault = handle.client
       .extend(morphoViemExtension())
       .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
-    const exit = vault.inKindRedeem({
-      amount: 500n,
-      marketParamsList: [inKindMarketParams],
-      vaultData: inKindVaultV2Data(),
-      userAddress: IN_KIND_USER,
-      deadline: now + 1n,
-    });
-
-    vi.setSystemTime(Number(now + 1n) * 1_000);
-
-    await expect(exit.getRequirements()).rejects.toBeInstanceOf(
-      ExpiredDeadlineError,
+    const exit = withChainTimestamp(now, () =>
+      vault.inKindRedeem({
+        amount: 500n,
+        marketParamsList: [inKindMarketParams],
+        vaultData: inKindVaultV2Data(),
+        userAddress: IN_KIND_USER,
+        deadline: now + 1n,
+      }),
     );
+    const requirements = withChainTimestamp(now + 1n, () =>
+      exit.getRequirements(),
+    );
+
+    await expect(requirements).rejects.toBeInstanceOf(ExpiredDeadlineError);
   });
 
   test("error: InKindRedeemZeroDeallocationError", () => {
@@ -483,8 +479,6 @@ describe("MorphoVaultV2.inKindRedeem", () => {
 
   test("behavior: current preview bounds interest-driven share-price growth", async () => {
     const now = 1_800_000_000n;
-    vi.useFakeTimers();
-    vi.setSystemTime(Number(now) * 1_000);
     const totalAssets = 1_000_000_000_000_000_000n;
     const amount = totalAssets / 2n;
     const handle = createMockClient(mainnet);
@@ -492,20 +486,22 @@ describe("MorphoVaultV2.inKindRedeem", () => {
     const vault = handle.client
       .extend(morphoViemExtension({ supportSignature: false }))
       .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
-    const [approval] = await vault
-      .inKindRedeem({
-        amount,
-        marketParamsList: [inKindMarketParams],
-        vaultData: inKindVaultV2Data({
-          marketTotalAssets: totalAssets,
-          marketTotalSupplyShares: totalAssets,
-          supplyShares: totalAssets,
-          rateAtTarget: MathLib.WAD / Time.s.from.y(1n),
-          maxRate: MathLib.WAD / Time.s.from.y(1n),
-        }),
-        userAddress: IN_KIND_USER,
-      })
-      .getRequirements();
+    const [approval] = await withChainTimestamp(now, () =>
+      vault
+        .inKindRedeem({
+          amount,
+          marketParamsList: [inKindMarketParams],
+          vaultData: inKindVaultV2Data({
+            marketTotalAssets: totalAssets,
+            marketTotalSupplyShares: totalAssets,
+            supplyShares: totalAssets,
+            rateAtTarget: MathLib.WAD / Time.s.from.y(1n),
+            maxRate: MathLib.WAD / Time.s.from.y(1n),
+          }),
+          userAddress: IN_KIND_USER,
+        })
+        .getRequirements(),
+    );
 
     expect(approval?.action).toMatchObject({ args: { amount } });
   });
@@ -513,8 +509,6 @@ describe("MorphoVaultV2.inKindRedeem", () => {
   test("behavior: deadline preview bounds management-fee dilution", async () => {
     const now = 1_800_000_000n;
     const deadline = now + Time.s.from.h(4n);
-    vi.useFakeTimers();
-    vi.setSystemTime(Number(now) * 1_000);
     const totalAssets = 1_000_000_000_000_000_000n;
     const amount = totalAssets / 2n;
     const handle = createMockClient(mainnet);
@@ -528,15 +522,17 @@ describe("MorphoVaultV2.inKindRedeem", () => {
       supplyShares: totalAssets,
       managementFee: 50_000_000_000_000_000n / Time.s.from.y(1n),
     });
-    const [approval] = await vault
-      .inKindRedeem({
-        amount,
-        marketParamsList: [inKindMarketParams],
-        vaultData,
-        userAddress: IN_KIND_USER,
-        deadline,
-      })
-      .getRequirements();
+    const [approval] = await withChainTimestamp(now, () =>
+      vault
+        .inKindRedeem({
+          amount,
+          marketParamsList: [inKindMarketParams],
+          vaultData,
+          userAddress: IN_KIND_USER,
+          deadline,
+        })
+        .getRequirements(),
+    );
 
     const approvalAmount =
       approval?.action.type === "erc20Approval"

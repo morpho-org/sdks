@@ -5,7 +5,7 @@ import {
 import { Time } from "@morpho-org/morpho-ts";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
-import { afterEach, describe, expect, vi } from "vitest";
+import { describe, expect } from "vitest";
 import {
   isRequirementApproval,
   MissingAccrualPositionError,
@@ -18,12 +18,10 @@ import {
 import { WethUsdsBlue, WstethWethBlue } from "../../fixtures/blue.js";
 import { borrow, supplyCollateral } from "../../helpers/blue.js";
 import { testInvariants } from "../../helpers/invariants.js";
+import { withChainTimestamp } from "../../helpers/time.js";
 import { test } from "../../setup.js";
 
 describe("RepayBlue", () => {
-  afterEach(() => {
-    vi.useRealTimers();
-  });
   test("should repay loan token (by assets)", async ({ client }) => {
     const collateralAmount = parseUnits("10", 18);
     const borrowAmount = parseUnits("1000", 18);
@@ -191,12 +189,6 @@ describe("RepayBlue", () => {
     const fastForwardedTimestamp =
       (await client.timestamp()) + Time.s.from.d(30n);
     await client.setNextBlockTimestamp({ timestamp: fastForwardedTimestamp });
-    // Align wall-clock with chain time so the SDK's `Time.timestamp()` projection
-    // matches the block the repay tx will execute on.
-    vi.useFakeTimers({
-      now: Number(fastForwardedTimestamp) * 1000,
-      toFake: ["Date"],
-    });
 
     // Pre-fund a generous loan-token balance; the bundle skim returns any
     // unused buffer to the user, so over-funding here is safe.
@@ -219,11 +211,13 @@ describe("RepayBlue", () => {
           client.account.address,
         );
 
-        const repay = market.repay({
-          userAddress: client.account.address,
-          shares: positionData.borrowShares,
-          positionData,
-        });
+        const repay = withChainTimestamp(fastForwardedTimestamp, () =>
+          market.repay({
+            userAddress: client.account.address,
+            shares: positionData.borrowShares,
+            positionData,
+          }),
+        );
 
         const requirements = await repay.getRequirements();
         const approval = requirements[0];

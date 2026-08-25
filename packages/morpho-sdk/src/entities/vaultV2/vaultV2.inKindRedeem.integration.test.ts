@@ -26,6 +26,7 @@ import {
   CbbtcUsdcBlue,
   WbtcUsdcSourceMarket,
 } from "../../../test/fixtures/blue.js";
+import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { createVaultV2 } from "../../../test/helpers/vaultV2.js";
 import {
   InsufficientBlueBalanceForInKindRedeemError,
@@ -244,13 +245,18 @@ describe("MorphoVaultV2.inKindRedeem integration", () => {
 
     expect(vaultData.forceDeallocatePenalties[adapterAddress]).toBe(penalty);
     expect(marketParamsList).toHaveLength(2);
-    const exit = vault.inKindRedeem({
-      amount,
-      marketParamsList,
-      vaultData,
-      userAddress: client.account.address,
-    });
-    const [permitRequirement] = await exit.getRequirements();
+    const exit = withChainTimestamp(await client.timestamp(), () =>
+      vault.inKindRedeem({
+        amount,
+        marketParamsList,
+        vaultData,
+        userAddress: client.account.address,
+      }),
+    );
+    const [permitRequirement] = await withChainTimestamp(
+      await client.timestamp(),
+      () => exit.getRequirements(),
+    );
     if (!isRequirementSignature(permitRequirement)) {
       throw new Error("Vault V2 shares permit requirement not found");
     }
@@ -290,13 +296,22 @@ describe("MorphoVaultV2.inKindRedeem integration", () => {
       mainnet.id,
     );
     await client.deal({ erc20: USDC, account: blue, amount: 0n });
-    const balanceLimitedExit = vault.inKindRedeem({
-      amount: 2n,
-      marketParamsList: [WbtcUsdcSourceMarket],
-      vaultData: await vault.getData(),
-      userAddress: client.account.address,
-    });
-    await expect(balanceLimitedExit.getRequirements()).rejects.toBeInstanceOf(
+    const balanceLimitedVaultData = await vault.getData();
+    const balanceLimitedExit = withChainTimestamp(
+      await client.timestamp(),
+      () =>
+        vault.inKindRedeem({
+          amount: 2n,
+          marketParamsList: [WbtcUsdcSourceMarket],
+          vaultData: balanceLimitedVaultData,
+          userAddress: client.account.address,
+        }),
+    );
+    const balanceLimitedRequirements = withChainTimestamp(
+      await client.timestamp(),
+      () => balanceLimitedExit.getRequirements(),
+    );
+    await expect(balanceLimitedRequirements).rejects.toBeInstanceOf(
       InsufficientBlueBalanceForInKindRedeemError,
     );
   });
@@ -377,13 +392,17 @@ describe("MorphoVaultV2.inKindRedeem integration", () => {
     });
 
     expect(vaultData.assetBalance).toBe(deposit);
-    const exit = vault.inKindRedeem({
-      amount,
-      marketParamsList: [],
-      vaultData,
-      userAddress: client.account.address,
-    });
-    const [approval] = await exit.getRequirements();
+    const exit = withChainTimestamp(await client.timestamp(), () =>
+      vault.inKindRedeem({
+        amount,
+        marketParamsList: [],
+        vaultData,
+        userAddress: client.account.address,
+      }),
+    );
+    const [approval] = await withChainTimestamp(await client.timestamp(), () =>
+      exit.getRequirements(),
+    );
     if (!isRequirementApproval(approval)) {
       throw new Error("VaultExitBundlesV1 approval requirement not found");
     }
