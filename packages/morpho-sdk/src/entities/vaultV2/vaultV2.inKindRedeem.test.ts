@@ -396,7 +396,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
 
     expect(approval?.action).toEqual({
       type: "erc20Approval",
-      args: { spender: IN_KIND_BUNDLER, amount: 500n },
+      args: { spender: IN_KIND_BUNDLER, amount: 501n },
     });
   });
 
@@ -454,7 +454,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
 
     expect(requirement?.action).toMatchObject({
       type: "permit",
-      args: { spender: IN_KIND_BUNDLER, amount: 500n },
+      args: { spender: IN_KIND_BUNDLER, amount: 501n },
     });
   });
 
@@ -478,7 +478,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
       })
       .getRequirements();
 
-    expect(approval?.action).toMatchObject({ args: { amount: 4n } });
+    expect(approval?.action).toMatchObject({ args: { amount: 6n } });
   });
 
   test("behavior: current preview bounds interest-driven share-price growth", async () => {
@@ -507,7 +507,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
       })
       .getRequirements();
 
-    expect(approval?.action).toMatchObject({ args: { amount } });
+    expect(approval?.action).toMatchObject({ args: { amount: amount + 1n } });
   });
 
   test("behavior: deadline preview bounds management-fee dilution", async () => {
@@ -543,7 +543,9 @@ describe("MorphoVaultV2.inKindRedeem", () => {
         ? approval.action.args.amount
         : 0n;
     const { vault: deadlineVault } = vaultData.accrueInterest(deadline);
-    expect(approvalAmount).toBe(deadlineVault.toShares(amount, "Up"));
+    expect(approvalAmount).toBe(
+      deadlineVault.toShares(amount, "Up") + deadlineVault.toShares(1n, "Up"),
+    );
   });
 
   test("error: InsufficientBlueBalanceForInKindRedeemError", async () => {
@@ -569,7 +571,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
   test("behavior: Blue balance covers the peak market chunk instead of the total", async () => {
     const handle = createMockClient(mainnet);
     mockV2Requirements(handle, {
-      allowance: 1_500n,
+      allowance: 1_502n,
       blueBalance: 1_000n,
     });
     const vault = handle.client
@@ -589,7 +591,7 @@ describe("MorphoVaultV2.inKindRedeem", () => {
 
   test("behavior: exact bounded allowance returns no authorization", async () => {
     const handle = createMockClient(mainnet);
-    mockV2Requirements(handle, { allowance: 500n });
+    mockV2Requirements(handle, { allowance: 501n });
     const vault = handle.client
       .extend(morphoViemExtension())
       .morpho.vaultV2(IN_KIND_VAULT, mainnet.id);
