@@ -2,7 +2,9 @@ import { MathLib } from "@morpho-org/blue-sdk";
 import { describe, expect, test } from "vitest";
 import {
   DEFAULT_LLTV_BUFFER,
+  DEFAULT_MAX_REALLOCATION_PENALTY,
   MAX_ABSOLUTE_SHARE_PRICE,
+  MAX_REALLOCATION_PENALTY,
   MAX_SLIPPAGE_TOLERANCE,
 } from "./constant.js";
 
@@ -19,6 +21,11 @@ describe("morpho-sdk helper constants", () => {
 
   test("MAX_ABSOLUTE_SHARE_PRICE is 100 RAY", () => {
     expect(MAX_ABSOLUTE_SHARE_PRICE).toBe(100n * MathLib.RAY);
+  });
+
+  test("Vault V2 reallocation penalties default to zero and cap at WAD", () => {
+    expect(DEFAULT_MAX_REALLOCATION_PENALTY).toBe(0n);
+    expect(MAX_REALLOCATION_PENALTY).toBe(MathLib.WAD);
   });
 
   test("constants are positive bigints", () => {

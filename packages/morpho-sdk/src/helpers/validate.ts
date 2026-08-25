@@ -2,23 +2,32 @@ import {
   type AccrualPosition,
   getChainAddresses,
   type MarketId,
+  MarketUtils,
   MathLib,
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
 import type { MarketInput as MidnightMarketInput } from "@morpho-org/midnight-sdk";
 import { isDefined } from "@morpho-org/morpho-ts";
-import { type Address, isAddressEqual } from "viem";
+import { type Address, isAddress, isAddressEqual, maxUint128 } from "viem";
 import {
   AccrualPositionUserMismatchError,
   AddressMismatchError,
+  type BlueReallocationPlan,
   BorrowExceedsSafeLtvError,
+  BundlerErrors,
   ChainIdMismatchError,
   ChainWNativeMissingError,
   EmptyReallocationWithdrawalsError,
   ExcessiveSlippageToleranceError,
+  InconsistentReallocationPenaltyError,
+  InputExceedsMaxError,
+  InvalidReallocationAddressError,
+  InvalidReallocationShapeError,
+  InvalidReallocationSourceTypeError,
   MarketIdMismatchError,
   MissingClientPropertyError,
   MissingMarketPriceError,
+  MixedReallocationVersionsError,
   NativeAmountOnNonWNativeAssetError,
   NegativeInputError,
   NonPositiveInputError,
@@ -26,13 +35,18 @@ import {
   RepayExceedsDebtError,
   RepaySharesExceedDebtError,
   UnsortedReallocationWithdrawalsError,
-  type VaultReallocation,
+  type VaultV1Reallocation,
+  type VaultV2BlueReallocation,
   WithdrawExceedsCollateralError,
   WithdrawExceedsSupplyError,
   WithdrawMakesPositionUnhealthyError,
   WithdrawSharesExceedSupplyError,
 } from "../types/index.js";
-import { DEFAULT_LLTV_BUFFER, MAX_SLIPPAGE_TOLERANCE } from "./constant.js";
+import {
+  DEFAULT_LLTV_BUFFER,
+  MAX_REALLOCATION_PENALTY,
+  MAX_SLIPPAGE_TOLERANCE,
+} from "./constant.js";
 
 /** @internal */
 export const compareMarketIds = (idA: MarketId, idB: MarketId) => {
@@ -323,18 +337,10 @@ export const validateRepayShares = (params: {
 };
 
 /**
- * Validates that vault reallocations are well-formed.
+ * Validates that Vault V1 PublicAllocator reallocations are well-formed.
  *
- * Enforces the following invariants for each {@link VaultReallocation}:
- * - `fee` must be non-negative.
- * - `withdrawals` must be non-empty.
- * - Every withdrawal `amount` must be strictly positive.
- * - No withdrawal may target `targetMarketId` (the operation's target market — the market being
- *   borrowed from for `borrow`, or being withdrawn from for `withdraw`).
- * - Withdrawal market IDs must be strictly ascending (required by `PublicAllocator.reallocateTo`).
- *
- * @param reallocations - The reallocations to validate.
- * @param targetMarketId - The ID of the operation's target market. No withdrawal may reference this market.
+ * @param reallocations - Vault V1 reallocations to validate.
+ * @param targetMarketId - The operation's target market ID.
  * @returns Nothing when every reallocation is valid.
  * @throws {NegativeInputError} when a reallocation fee is negative.
  * @throws {EmptyReallocationWithdrawalsError} when a reallocation has no withdrawals.
@@ -351,42 +357,202 @@ export const validateRepayShares = (params: {
  * ```
  */
 export const validateReallocations = (
-  reallocations: readonly VaultReallocation[],
+  reallocations: Iterable<VaultV1Reallocation>,
   targetMarketId: MarketId,
 ): void => {
-  for (const r of reallocations) {
-    if (r.fee < 0n) {
-      throw new NegativeInputError("reallocation.fee", r.fee);
+  for (const reallocation of reallocations) {
+    if (reallocation.fee < 0n) {
+      throw new NegativeInputError("reallocation.fee", reallocation.fee);
     }
-    if (r.withdrawals.length === 0) {
-      throw new EmptyReallocationWithdrawalsError(r.vault);
+    if (reallocation.withdrawals.length === 0) {
+      throw new EmptyReallocationWithdrawalsError(reallocation.vault);
     }
-    let prevId: MarketId | undefined;
-    for (const w of r.withdrawals) {
-      if (w.amount <= 0n) {
+    let previousMarketId: MarketId | undefined;
+    for (const withdrawal of reallocation.withdrawals) {
+      if (withdrawal.amount <= 0n) {
         throw new NonPositiveInputError(
-          `reallocation.withdrawals[${w.marketParams.id}].amount`,
-          w.amount,
+          `reallocation.withdrawals[${withdrawal.marketParams.id}].amount`,
+          withdrawal.amount,
         );
       }
-      if (w.marketParams.id === targetMarketId) {
+      if (withdrawal.marketParams.id === targetMarketId) {
         throw new ReallocationWithdrawalOnTargetMarketError(
-          r.vault,
-          w.marketParams.id,
+          reallocation.vault,
+          withdrawal.marketParams.id,
         );
       }
       if (
-        prevId !== undefined &&
-        compareMarketIds(w.marketParams.id, prevId) <= 0
+        previousMarketId !== undefined &&
+        compareMarketIds(withdrawal.marketParams.id, previousMarketId) <= 0
       ) {
         throw new UnsortedReallocationWithdrawalsError(
-          r.vault,
-          w.marketParams.id,
+          reallocation.vault,
+          withdrawal.marketParams.id,
         );
       }
-      prevId = w.marketParams.id;
+      previousMarketId = withdrawal.marketParams.id;
     }
   }
+};
+
+/** @internal */
+export const validateVaultV2BlueReallocations = (
+  reallocations: Iterable<VaultV2BlueReallocation>,
+  targetMarketId: MarketId,
+): void => {
+  const penaltyByVault = new Map<string, bigint>();
+
+  for (const reallocation of reallocations) {
+    if (
+      typeof reallocation.vault !== "string" ||
+      !isAddress(reallocation.vault)
+    ) {
+      throw new InvalidReallocationAddressError("vault");
+    }
+    if (
+      reallocation.to == null ||
+      typeof reallocation.to.adapter !== "string" ||
+      !isAddress(reallocation.to.adapter)
+    ) {
+      throw new InvalidReallocationAddressError("to.adapter");
+    }
+
+    const source = reallocation.from;
+    if (source == null) {
+      throw new InvalidReallocationSourceTypeError(undefined);
+    }
+    const sourceType: string | undefined = source.type;
+    if (sourceType !== "market" && sourceType !== "idle") {
+      throw new InvalidReallocationSourceTypeError(sourceType);
+    }
+    let sourceMarketId: MarketId | undefined;
+    if (source.type === "market") {
+      if (typeof source.adapter !== "string" || !isAddress(source.adapter)) {
+        throw new InvalidReallocationAddressError("from.adapter");
+      }
+      if (
+        source.marketParams == null ||
+        !isAddress(source.marketParams.loanToken) ||
+        !isAddress(source.marketParams.collateralToken) ||
+        !isAddress(source.marketParams.oracle) ||
+        !isAddress(source.marketParams.irm) ||
+        typeof source.marketParams.lltv !== "bigint"
+      ) {
+        throw new InvalidReallocationSourceTypeError("market", "marketParams");
+      }
+      sourceMarketId = MarketUtils.getMarketId(source.marketParams);
+    }
+    if (reallocation.penalty < 0n) {
+      throw new NegativeInputError(
+        "reallocation.penalty",
+        reallocation.penalty,
+      );
+    }
+    if (reallocation.penalty > MAX_REALLOCATION_PENALTY) {
+      throw new InputExceedsMaxError({
+        field: "reallocation.penalty",
+        value: reallocation.penalty,
+        max: MAX_REALLOCATION_PENALTY,
+      });
+    }
+    if (reallocation.assets <= 0n) {
+      throw new NonPositiveInputError(
+        "reallocation.assets",
+        reallocation.assets,
+      );
+    }
+    if (reallocation.assets > maxUint128) {
+      throw new InputExceedsMaxError({
+        field: "reallocation.assets",
+        value: reallocation.assets,
+        max: maxUint128,
+      });
+    }
+
+    const penaltyKey = reallocation.vault.toLowerCase();
+    const expectedPenalty = penaltyByVault.get(penaltyKey);
+    if (
+      expectedPenalty !== undefined &&
+      expectedPenalty !== reallocation.penalty
+    ) {
+      throw new InconsistentReallocationPenaltyError({
+        vault: reallocation.vault,
+        expected: expectedPenalty,
+        actual: reallocation.penalty,
+      });
+    }
+    penaltyByVault.set(penaltyKey, reallocation.penalty);
+
+    if (
+      sourceMarketId !== undefined &&
+      compareMarketIds(sourceMarketId, targetMarketId) === 0
+    ) {
+      throw new ReallocationWithdrawalOnTargetMarketError(
+        reallocation.vault,
+        sourceMarketId,
+      );
+    }
+  }
+};
+
+/**
+ * Validates and normalizes a homogeneous Blue reallocation plan.
+ *
+ * @param params - Validation parameters.
+ * @param params.reallocations - Optional Vault V1 or Vault V2 reallocation plan.
+ * @param params.targetMarketId - Morpho Blue market receiving the liquidity.
+ * @param params.chainId - Chain whose allocator deployment is required for a V2 plan.
+ * @returns The validated plan tagged with its allocator version.
+ * @throws {BundlerErrors.UnexpectedAction} when a V2 plan is unsupported on the chain.
+ * @internal
+ */
+export const validateAndNormalizeReallocations = ({
+  reallocations,
+  targetMarketId,
+  chainId,
+}: {
+  readonly reallocations: BlueReallocationPlan | undefined;
+  readonly targetMarketId: MarketId;
+  readonly chainId: number;
+}) => {
+  const vaultV1Reallocations: VaultV1Reallocation[] = [];
+  const vaultV2Reallocations: VaultV2BlueReallocation[] = [];
+
+  for (const reallocation of reallocations ?? []) {
+    if (typeof reallocation !== "object" || reallocation === null) {
+      throw new InvalidReallocationShapeError();
+    }
+    if ("from" in reallocation === "withdrawals" in reallocation) {
+      throw new InvalidReallocationShapeError();
+    }
+    if ("withdrawals" in reallocation) {
+      vaultV1Reallocations.push(reallocation);
+    } else {
+      vaultV2Reallocations.push(reallocation);
+    }
+  }
+
+  if (vaultV1Reallocations.length > 0 && vaultV2Reallocations.length > 0) {
+    throw new MixedReallocationVersionsError();
+  }
+  if (vaultV2Reallocations.length > 0) {
+    validateVaultV2BlueReallocations(vaultV2Reallocations, targetMarketId);
+    if (getChainAddresses(chainId).vaultV2BluePublicAllocator == null) {
+      throw new BundlerErrors.UnexpectedAction(
+        vaultV2Reallocations[0]?.from.type === "market"
+          ? "vaultV2BluePublicAllocatorReallocate"
+          : "vaultV2BluePublicAllocatorAllocateFromIdle",
+        chainId,
+      );
+    }
+    return {
+      type: "vaultV2Blue" as const,
+      reallocations: vaultV2Reallocations,
+    };
+  }
+
+  validateReallocations(vaultV1Reallocations, targetMarketId);
+  return { type: "vaultV1" as const, reallocations: vaultV1Reallocations };
 };
 
 /**

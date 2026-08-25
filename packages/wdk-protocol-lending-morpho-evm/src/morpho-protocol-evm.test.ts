@@ -1,6 +1,17 @@
-import type { RequirementSignature } from "@morpho-org/morpho-sdk";
+import type {
+  RequirementSignature,
+  VaultReallocation,
+  VaultV2BlueReallocation,
+} from "@morpho-org/morpho-sdk";
 import * as viem from "viem";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, expectTypeOf, test, vi } from "vitest";
+import type {
+  MorphoBorrowOptions,
+  MorphoBorrowWithVaultV2ReallocationsOptions,
+  RequirementApproval,
+  RequirementAuthorization,
+  RequirementSignatureRequest,
+} from "./morpho-protocol-evm.js";
 
 const SEED =
   "cook voyage document eight skate token alien guide drink uncle term abuse";
@@ -448,6 +459,15 @@ describe.sequential("MorphoProtocolEvm", () => {
   });
 
   describe("borrow", () => {
+    test("types: borrow reallocations require replayable arrays", () => {
+      expectTypeOf<
+        NonNullable<MorphoBorrowOptions["reallocations"]>
+      >().toEqualTypeOf<readonly VaultReallocation[]>();
+      expectTypeOf<
+        MorphoBorrowWithVaultV2ReallocationsOptions["reallocations"]
+      >().toEqualTypeOf<readonly VaultV2BlueReallocation[]>();
+    });
+
     test("should build a market borrow with morpho-sdk and send it", async () => {
       account.sendTransaction = vi
         .fn()
@@ -472,6 +492,36 @@ describe.sequential("MorphoProtocolEvm", () => {
       });
       expect(account.sendTransaction).toHaveBeenCalledWith(BORROW_TX);
       expect(result).toEqual({ hash: "dummy-borrow-hash", fee: 12_345n });
+    });
+
+    test("should forward Vault V2 BluePublicAllocator reallocations", async () => {
+      const reallocation = {
+        vault: VAULT,
+        from: { type: "idle" },
+        to: {
+          adapter: "0x0000000000000000000000000000000000000020",
+        },
+        assets: 50_000n,
+        penalty: 1n,
+      } satisfies VaultV2BlueReallocation;
+
+      account.sendTransaction = vi
+        .fn()
+        .mockResolvedValue({ hash: "dummy-v2-borrow-hash", fee: 12_345n });
+
+      await protocol.borrow({
+        token: TOKEN,
+        amount: 100_000n,
+        reallocations: [reallocation],
+      });
+
+      expect(marketEntity.borrow).toHaveBeenCalledWith({
+        amount: 100_000n,
+        userAddress: ADDRESS,
+        positionData,
+        slippageTolerance: undefined,
+        reallocations: [reallocation],
+      });
     });
 
     test("should fetch market params when only borrowMarketId is configured", async () => {
@@ -516,13 +566,48 @@ describe.sequential("MorphoProtocolEvm", () => {
     });
 
     test("should return borrow requirements from morpho-sdk", async () => {
-      const requirements = await protocol.getBorrowRequirements({
+      const options = {
         token: TOKEN,
         amount: 100_000n,
-      });
+      } satisfies MorphoBorrowOptions;
+      const promise = protocol.getBorrowRequirements(options);
+      expectTypeOf(promise).toEqualTypeOf<
+        Promise<(RequirementAuthorization | RequirementSignatureRequest)[]>
+      >();
+      const requirements = await promise;
 
       expect(requirements).toEqual([{ action: { type: "blueAuthorization" } }]);
       expect(borrowAction.getRequirements).toHaveBeenCalled();
+    });
+
+    test("types: Vault V2 borrow requirements opt into approval results", async () => {
+      const options = {
+        token: TOKEN,
+        amount: 100_000n,
+        reallocations: [
+          {
+            vault: VAULT,
+            from: { type: "idle" },
+            to: {
+              adapter: "0x0000000000000000000000000000000000000020",
+            },
+            assets: 50_000n,
+            penalty: 1n,
+          },
+        ],
+      } satisfies MorphoBorrowWithVaultV2ReallocationsOptions;
+
+      const promise = protocol.getBorrowRequirements(options);
+      expectTypeOf(promise).toEqualTypeOf<
+        Promise<
+          (
+            | RequirementApproval
+            | RequirementAuthorization
+            | RequirementSignatureRequest
+          )[]
+        >
+      >();
+      await promise;
     });
 
     test("should build the borrow without signatures by default", async () => {
@@ -713,7 +798,6 @@ describe.sequential("MorphoProtocolEvm", () => {
         chainId: 1,
         provider: "https://dummy-rpc-url.com",
         bundlerUrl: "https://dummy-bundler-url.com",
-        entryPointAddress: "0x0000000000000000000000000000000000000007",
         safeModulesVersion: "0.3.0",
         isSponsored: false,
         useNativeCoins: true,

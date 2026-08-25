@@ -16,17 +16,17 @@ export interface PublicAllocatorOptions {
 
   /**
    * Vaults to consider for reallocation. They must have enabled the PublicAllocator.
+   * Arrays, readonly arrays, sets, and other iterables are accepted.
    * Defaults to all vaults present in the reallocation data.
    */
-  readonly reallocatableVaults?: readonly Address[];
+  readonly reallocatableVaults?: Iterable<Address>;
 
   /**
    * The maximum utilization each source market may reach when withdrawing
    * shared liquidity, scaled by WAD.
    *
-   * @deprecated The source-market withdrawal ceiling is fixed at 90%
-   * ({@link DEFAULT_WITHDRAWAL_TARGET_UTILIZATION}) and will stop being
-   * configurable in the next major. Per-market overrides are still honored for now.
+   * @deprecated Per-market source ceilings will be removed in the next major.
+   * Use `defaultMaxWithdrawalUtilization` to configure one ceiling for every source.
    */
   readonly maxWithdrawalUtilization?: Readonly<
     Record<MarketId, bigint | undefined>
@@ -37,11 +37,41 @@ export interface PublicAllocatorOptions {
    * shared liquidity, scaled by WAD.
    *
    * @default 90% (900000000000000000n)
-   * @deprecated The source-market withdrawal ceiling is fixed at 90%
-   * ({@link DEFAULT_WITHDRAWAL_TARGET_UTILIZATION}) and will stop being
-   * configurable in the next major. Overrides are still honored for now.
    */
   readonly defaultMaxWithdrawalUtilization?: bigint;
+}
+
+/** Options controlling Vault V2 BluePublicAllocator reallocation discovery. */
+export interface VaultV2BluePublicAllocatorOptions {
+  /** Whether Vault V2 public allocator discovery is enabled. */
+  readonly enabled?: boolean;
+
+  /** Timestamp at which market and Vault V2 interest is evaluated. */
+  readonly timestamp?: BigIntish;
+
+  /**
+   * Vault V2 addresses to consider. Arrays, readonly arrays, sets, and other
+   * iterables are accepted. Defaults to every vault in the reallocation data.
+   */
+  readonly reallocatableVaults?: Iterable<Address>;
+
+  /**
+   * Maximum utilization source markets may reach during friendly discovery,
+   * scaled by WAD. The amount-aware planner falls back to 100% only when the
+   * friendly phase cannot cover the operation's absolute shortfall.
+   *
+   * @default 90% (900000000000000000n)
+   */
+  readonly maxWithdrawalUtilization?: bigint;
+
+  /**
+   * Maximum proportional vault-asset penalty accepted for each
+   * BluePublicAllocator call, scaled by WAD. Vaults with a higher configured
+   * penalty are ignored. Must not exceed WAD (100%).
+   *
+   * @default 0n
+   */
+  readonly maxPenalty?: bigint;
 }
 
 /**
@@ -73,13 +103,58 @@ export interface ReallocationWithdrawal {
  * Maps 1:1 to a `PublicAllocator.reallocateTo()` call.
  * Withdraws from source markets and supplies to the target market.
  */
-export interface VaultReallocation {
+export interface VaultV1Reallocation {
   readonly vault: Address;
   /** Fee in native token (ETH) paid to the PublicAllocator for this vault. */
   readonly fee: bigint;
   /** Source markets to withdraw from before supplying to the target market. */
   readonly withdrawals: readonly ReallocationWithdrawal[];
 }
+
+/** Source of a Vault V2 BluePublicAllocator reallocation. */
+export type VaultV2BlueReallocationSource =
+  | {
+      /** Reallocate from a Morpho Blue market. */
+      readonly type: "market";
+      /** Vault V2 adapter supplying the source market. */
+      readonly adapter: Address;
+      /** Source market parameters. */
+      readonly marketParams: MarketParams;
+    }
+  | {
+      /** Allocate from vault idle liquidity without a synthetic market. */
+      readonly type: "idle";
+    };
+
+/**
+ * One Blue Public Allocator contract call performed before a Blue action.
+ *
+ * The target market parameters are derived from the enclosing Blue action.
+ */
+export interface VaultV2BlueReallocation {
+  /** Vault whose liquidity is moved. */
+  readonly vault: Address;
+  /** Liquidity source. */
+  readonly from: VaultV2BlueReallocationSource;
+  /** Target Vault V2 adapter; the target market comes from the enclosing action. */
+  readonly to: { readonly adapter: Address };
+  /** Asset amount, which must fit in `uint128`. */
+  readonly assets: bigint;
+  /** Vault-configured WAD-scaled penalty rate passed to the allocator. */
+  readonly penalty: bigint;
+}
+
+/** A homogeneous Blue action plan containing only Vault V1 or only Vault V2 reallocations. */
+export type BlueReallocationPlan =
+  | Iterable<VaultV1Reallocation>
+  | Iterable<VaultV2BlueReallocation>;
+
+/**
+ * Deprecated name for a Vault V1 reallocation.
+ *
+ * @deprecated Use {@link VaultV1Reallocation} instead.
+ */
+export type VaultReallocation = VaultV1Reallocation;
 
 /**
  * Options for computing vault reallocations via the public allocator.

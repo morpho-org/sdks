@@ -112,7 +112,7 @@ describe("AccrualVaultV2", () => {
         liquidityData: "0x",
         liquidityAllocations: [
           {
-            id: VaultV2MorphoVaultV1Adapter.adapterId(
+            id: VaultV2MorphoVaultV1Adapter.adapterCapId(
               "0x2C32fF5E1d976015AdbeA8cC73c7Da3A6677C25F",
             ),
             absoluteCap: 1000000000000n,
@@ -150,7 +150,7 @@ describe("AccrualVaultV2", () => {
         liquidityData: "0x",
         liquidityAllocations: [
           {
-            id: VaultV2MorphoVaultV1Adapter.adapterId(
+            id: VaultV2MorphoVaultV1Adapter.adapterCapId(
               "0x2C32fF5E1d976015AdbeA8cC73c7Da3A6677C25F",
             ),
             absoluteCap: 1000000000000n,

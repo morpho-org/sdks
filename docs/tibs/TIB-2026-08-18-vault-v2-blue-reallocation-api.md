@@ -6,7 +6,7 @@
 | **Date**       | 2026-08-18                                                |
 | **Author**     | @Rubilmax                                                 |
 | **Scope**      | Package: `morpho-sdk`                                     |
-| **Supersedes** | TIB-2026-07-29 V2 reallocation API naming and entrypoints |
+| **Supersedes** | TIB-2026-07-29 V2 naming, entrypoints, and validator boundary |
 
 ---
 
@@ -53,10 +53,46 @@ linear because the candidate amount changes penalty donations,
 `firstTotalAssets`, rounded market shares, and potentially shared allocation
 IDs. Direct headroom subtraction cannot reproduce the contract-exact boundary.
 
+### Addendum (2026-08-24): shared-cap intervals
+
+The monotonic-prefix statement above applies only to target allocation IDs that
+are not shared with the source. Principal cancels for a shared ID, while a
+positive penalty can increase `firstTotalAssets` and its relative-cap capacity;
+that shared cap therefore imposes a lower bound. Combined feasibility is an
+interval. The planner folds the operation's remaining amount into the initial
+ceiling, bisects only non-shared upper-bound caps, then probes the selected
+amount against every target cap before retaining the call.
+
 The V2 mutation helper remains private and returns a cloned state. It must keep
 penalty accounting, vault accrual, adapter shares, allocations, and canonical
 market references coherent as one transition. V1's protected helper is a
 legacy test seam, not a public extension point to copy.
+
+### Post-implementation addendum (2026-08-24): version-specific validators
+
+Implementation showed that the V1 and V2 action shapes no longer share a
+useful validator boundary. V1 owns fee and sorted-withdrawal rules. V2 owns
+address checks, market/idle source tags, `uint128` asset bounds, and per-vault
+penalty rules. Each version also applies target-market exclusion through its
+own source shape.
+
+`validateReallocations(...)` therefore remains V1-only, while the internal
+`validateVaultV2BlueReallocations(...)` validates V2. The action boundary keeps
+one entry point: `validateAndNormalizeReallocations(...)` rejects mixed plans,
+dispatches homogeneous plans, and returns the tagged version. This supersedes
+the July TIB goal to reuse one combined validator and its rejected “Add a V2
+validator” alternative.
+
+### Post-implementation addendum (2026-08-25): shared-cap candidate selection
+
+An operation's remaining amount is a preferred ceiling, not an absolute one:
+when a shared relative cap requires a larger penalty donation, the planner emits
+the smallest executable candidate its bounded bisection finds above that ceiling.
+Shared allocation rounding can also make exact feasibility non-monotonic. When
+the non-shared maximum itself fails a shared cap, the planner omits the candidate
+instead of scanning smaller base-unit amounts. This deliberately keeps planning
+bounded and only emits proven-executable calls, at the cost of underreporting
+rounding-only liquidity that can exist in already-at-or-over-cap snapshots.
 
 ## Consequences
 

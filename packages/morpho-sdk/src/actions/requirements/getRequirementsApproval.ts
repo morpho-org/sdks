@@ -1,4 +1,5 @@
 import type { Address } from "@morpho-org/blue-sdk";
+import { isAddressEqual } from "viem";
 import { APPROVE_ONLY_ONCE_TOKENS } from "../../helpers/constant.js";
 import {
   ApprovalAmountLessThanSpendAmountError,
@@ -67,7 +68,9 @@ export const getRequirementsApproval = (params: {
 
   if (allowances < spendAmount) {
     if (
-      APPROVE_ONLY_ONCE_TOKENS[chainId]?.includes(address) &&
+      APPROVE_ONLY_ONCE_TOKENS[chainId]?.some((token) =>
+        isAddressEqual(token, address),
+      ) &&
       allowances > 0n
     ) {
       approvals.push(

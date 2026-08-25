@@ -138,7 +138,7 @@ const vaultV2Result = {
   isLiquidityAdapterKnown: true,
   liquidityAllocations: [
     {
-      id: VaultV2MorphoVaultV1Adapter.adapterId(ADAPTER),
+      id: VaultV2MorphoVaultV1Adapter.adapterCapId(ADAPTER),
       absoluteCap: 1_000n,
       relativeCap: 1_000000000000000000n,
       allocation: 100n,
@@ -252,6 +252,7 @@ function mockVaultV2AllocationReads(
   handle: ReturnType<typeof createMockClient>,
   ids: readonly `0x${string}`[],
 ) {
+  const [adapterCapId] = ids;
   for (const id of ids) {
     mockRead(handle, {
       address: VAULT,
@@ -269,7 +270,7 @@ function mockVaultV2AllocationReads(
       address: VAULT,
       abi: vaultV2Abi,
       functionName: "allocation",
-      result: id === ids[0] ? 100n : 0n,
+      result: id === adapterCapId ? 100n : 0n,
     });
   }
 }
@@ -357,7 +358,7 @@ describe("fetchVaultV2", () => {
       result: false,
     });
     mockVaultV2AllocationReads(handle, [
-      VaultV2MorphoVaultV1Adapter.adapterId(ADAPTER),
+      VaultV2MorphoVaultV1Adapter.adapterCapId(ADAPTER),
     ]);
 
     const vault = await fetchVaultV2(VAULT, handle.client, {
@@ -366,7 +367,7 @@ describe("fetchVaultV2", () => {
 
     expect(vault.liquidityAllocations).toHaveLength(1);
     expect(vault.liquidityAllocations?.[0]?.id).toBe(
-      VaultV2MorphoVaultV1Adapter.adapterId(ADAPTER),
+      VaultV2MorphoVaultV1Adapter.adapterCapId(ADAPTER),
     );
     expect(vault.performanceFeeRecipientCanReceiveShares).toBe(false);
     expect(vault.managementFeeRecipientCanReceiveShares).toBe(false);
@@ -542,9 +543,9 @@ describe("fetchVaultV2", () => {
       result: true,
     });
     mockVaultV2AllocationReads(handle, [
-      VaultV2MorphoMarketV1AdapterV2.adapterId(ADAPTER),
-      VaultV2MorphoMarketV1AdapterV2.collateralId(COLLATERAL),
-      VaultV2MorphoMarketV1AdapterV2.marketParamsId(ADAPTER, MARKET_PARAMS),
+      VaultV2MorphoMarketV1AdapterV2.adapterCapId(ADAPTER),
+      VaultV2MorphoMarketV1AdapterV2.collateralCapId(COLLATERAL),
+      VaultV2MorphoMarketV1AdapterV2.adapterMarketCapId(ADAPTER, MARKET_PARAMS),
     ]);
 
     const vault = await fetchVaultV2(VAULT, handle.client, {
@@ -1816,7 +1817,7 @@ const accrualVaultV2Result = {
   isLiquidityAdapterKnown: true,
   liquidityAllocations: [
     {
-      id: VaultV2MorphoMarketV1AdapterV2.adapterId(ADAPTER),
+      id: VaultV2MorphoMarketV1AdapterV2.adapterCapId(ADAPTER),
       absoluteCap: 1_000n,
       relativeCap: 1_000000000000000000n,
       allocation: 100n,

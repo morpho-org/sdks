@@ -210,6 +210,28 @@ export interface ActionArgs {
     skipRevert?: boolean,
   ];
 
+  /** Vault V2 Blue Public Allocator market-to-market reallocation with a WAD-scaled penalty. */
+  readonly vaultV2BluePublicAllocatorReallocate: [
+    vault: Address,
+    deallocateAdapter: Address,
+    deallocateMarket: InputMarketParams,
+    allocateAdapter: Address,
+    allocateMarket: InputMarketParams,
+    assets: bigint,
+    penalty: bigint,
+    skipRevert?: boolean,
+  ];
+
+  /** Vault V2 Blue Public Allocator idle-to-market allocation with a WAD-scaled penalty. */
+  readonly vaultV2BluePublicAllocatorAllocateFromIdle: [
+    vault: Address,
+    adapter: Address,
+    market: InputMarketParams,
+    assets: bigint,
+    penalty: bigint,
+    skipRevert?: boolean,
+  ];
+
   /** GeneralAdapter1 native wrap of `amount` to `recipient`; `skipRevert` controls Bundler3 revert handling. */
   readonly wrapNative: [
     amount: bigint,

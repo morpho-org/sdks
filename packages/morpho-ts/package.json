@@ -21,12 +21,16 @@
   "main": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./abis": "./src/abis.ts"
+    "./abis": "./src/abis.ts",
+    "./abis/marketParams": "./src/abis/marketParams.ts"
   },
   "typesVersions": {
     "*": {
       "abis": [
         "src/abis.ts"
+      ],
+      "abis/marketParams": [
+        "src/abis/marketParams.ts"
       ]
     }
   },
@@ -54,6 +58,11 @@
         "types": "./lib/esm/abis.d.ts",
         "import": "./lib/esm/abis.js",
         "require": "./lib/cjs/abis.js"
+      },
+      "./abis/marketParams": {
+        "types": "./lib/esm/abis/marketParams.d.ts",
+        "import": "./lib/esm/abis/marketParams.js",
+        "require": "./lib/cjs/abis/marketParams.js"
       }
     },
     "main": "./lib/cjs/index.js",
@@ -62,6 +71,9 @@
       "*": {
         "abis": [
           "lib/esm/abis.d.ts"
+        ],
+        "abis/marketParams": [
+          "lib/esm/abis/marketParams.d.ts"
         ]
       }
     }

@@ -1,7 +1,19 @@
 import { getChainAddresses, MarketParams } from "@morpho-org/blue-sdk";
-import { type Address, maxUint256, parseUnits, toFunctionSelector } from "viem";
+import {
+  type Address,
+  decodeFunctionData,
+  erc20Abi,
+  maxUint256,
+  parseUnits,
+  toFunctionSelector,
+} from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
+import {
+  bundler3Abi,
+  generalAdapter1Abi,
+  vaultV2BluePublicAllocatorAbi,
+} from "../../abis.js";
 import {
   NegativeInputError,
   NonPositiveInputError,
@@ -10,6 +22,7 @@ import {
   RefinanceSharesMissingBorrowAssetsError,
   RefinanceTokenMismatchError,
   type VaultReallocation,
+  type VaultV2BlueReallocation,
 } from "../../types/index.js";
 import { blueRefinance } from "./refinance.js";
 
@@ -381,6 +394,13 @@ describe("blueRefinance", () => {
     });
     const VAULT: Address = "0xBEEf5aFE88eF73337e5070aB2855d37dBF5493A4";
     const REALLOC_FEE = parseUnits("0.01", 18);
+    const V2_ALLOCATOR = getChainAddresses(mainnet.id)
+      .vaultV2BluePublicAllocator!;
+    const V2_VAULT: Address = "0x0000000000000000000000000000000000000012";
+    const SOURCE_ADAPTER: Address =
+      "0x0000000000000000000000000000000000000013";
+    const TARGET_ADAPTER: Address =
+      "0x0000000000000000000000000000000000000014";
 
     const makeReallocations = (): readonly VaultReallocation[] => [
       {
@@ -460,6 +480,100 @@ describe("blueRefinance", () => {
       expect(reallocVaultIdx).toBeGreaterThan(-1);
       expect(supplyIdx).toBeGreaterThan(-1);
       expect(reallocVaultIdx).toBeLessThan(supplyIdx);
+    });
+
+    test("behavior: V2 market and idle reallocations fund penalties before the target supply", () => {
+      const {
+        bundler3: { bundler3 },
+      } = getChainAddresses(mainnet.id);
+      const targetReallocations: readonly VaultV2BlueReallocation[] = [
+        {
+          vault: V2_VAULT,
+          from: {
+            type: "market",
+            adapter: SOURCE_ADAPTER,
+            marketParams: reallocSource,
+          },
+          to: { adapter: TARGET_ADAPTER },
+          assets: 10n,
+          penalty: 500_000_000_000_000_000n,
+        },
+        {
+          vault: V2_VAULT,
+          from: { type: "idle" },
+          to: { adapter: TARGET_ADAPTER },
+          assets: 6n,
+          penalty: 500_000_000_000_000_000n,
+        },
+      ];
+
+      const tx = blueRefinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: {
+          ...baseArgs,
+          borrowAssets: parseUnits("1000", 6),
+          targetReallocations,
+        },
+        metadata: { origin: "a1b2c3d4" },
+      });
+
+      expect(tx.value).toBe(0n);
+      expect(tx.action.args.reallocationFee).toBe(0n);
+      expect(tx.action.args.reallocationPenaltyAssets).toBe(8n);
+      expect(tx.data).toContain("a1b2c3d4");
+
+      const bundle = decodeFunctionData({ abi: bundler3Abi, data: tx.data });
+      const calls = bundle.args[0] ?? [];
+      expect(calls).toHaveLength(8);
+      expect(
+        decodeFunctionData({ abi: generalAdapter1Abi, data: calls[0]!.data }),
+      ).toMatchObject({
+        functionName: "erc20TransferFrom",
+        args: [target.loanToken, bundler3, 8n],
+      });
+      expect(
+        decodeFunctionData({ abi: erc20Abi, data: calls[1]!.data }),
+      ).toMatchObject({
+        functionName: "approve",
+        args: [V2_ALLOCATOR, 0n],
+      });
+      expect(
+        decodeFunctionData({ abi: erc20Abi, data: calls[2]!.data }),
+      ).toMatchObject({
+        functionName: "approve",
+        args: [V2_ALLOCATOR, 5n],
+      });
+      expect(
+        decodeFunctionData({
+          abi: vaultV2BluePublicAllocatorAbi,
+          data: calls[3]!.data,
+        }).functionName,
+      ).toBe("reallocate");
+      expect(
+        decodeFunctionData({ abi: erc20Abi, data: calls[4]!.data }),
+      ).toMatchObject({
+        functionName: "approve",
+        args: [V2_ALLOCATOR, 0n],
+      });
+      expect(
+        decodeFunctionData({ abi: erc20Abi, data: calls[5]!.data }),
+      ).toMatchObject({
+        functionName: "approve",
+        args: [V2_ALLOCATOR, 3n],
+      });
+      expect(
+        decodeFunctionData({
+          abi: vaultV2BluePublicAllocatorAbi,
+          data: calls[6]!.data,
+        }).functionName,
+      ).toBe("allocateFromIdle");
+      expect(
+        decodeFunctionData({
+          abi: generalAdapter1Abi,
+          data: calls[7]!.data,
+        }).functionName,
+      ).toBe("morphoSupplyCollateral");
     });
 
     test("behavior: collat-only refinance accepts reallocations", () => {

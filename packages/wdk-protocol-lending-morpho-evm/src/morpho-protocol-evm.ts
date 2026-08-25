@@ -14,6 +14,7 @@ import {
   type RequirementSignature,
   type Transaction,
   type VaultReallocation,
+  type VaultV2BlueReallocation,
 } from "@morpho-org/morpho-sdk";
 import type {
   BorrowResult,
@@ -156,13 +157,32 @@ export interface MorphoBorrowOptions {
   amount: number | bigint;
   /** The address on behalf of which the borrow operation should be performed. Must match the wallet account address when set. */
   onBehalfOf?: string;
-  /** Optional Morpho Vault V2 reallocations to include in the borrow action. */
+  /** Optional Vault V1 PublicAllocator reallocations to include in the borrow action. */
   reallocations?: readonly VaultReallocation[];
   /** Signature returned by a Morpho SDK authorization requirement, folded into the bundle as `setAuthorizationWithSig`. */
   requirementSignature?: RequirementSignature;
   /** Optional Morpho SDK slippage tolerance in WAD precision. */
   slippageTolerance?: bigint;
 }
+
+/**
+ * Borrow options that opt into Vault V2 BluePublicAllocator reallocations.
+ *
+ * Passing this type widens {@link MorphoProtocolEvm.getBorrowRequirements} to
+ * include the loan-token approval that a Vault V2 penalty may require. Legacy
+ * {@link MorphoBorrowOptions} callers retain the authorization-only result.
+ */
+export type MorphoBorrowWithVaultV2ReallocationsOptions = Omit<
+  MorphoBorrowOptions,
+  "reallocations"
+> & {
+  /** Vault V2 BluePublicAllocator reallocations to include in the borrow action. */
+  readonly reallocations: readonly VaultV2BlueReallocation[];
+};
+
+type MorphoBorrowInput =
+  | MorphoBorrowOptions
+  | MorphoBorrowWithVaultV2ReallocationsOptions;
 
 export interface MorphoRepayOptions {
   /** The address of the token to repay. */
@@ -640,12 +660,13 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   /**
    * Borrows assets from the configured Morpho Blue market.
    *
-   * Use `getBorrowRequirements(options)` first if GeneralAdapter1 has not been
-   * authorized on Morpho for this account. When offchain signatures are enabled
-   * (`supportSignature: true`), sign the returned authorization requirement and
-   * pass it back via `options.requirementSignature` to fold the
-   * `setAuthorizationWithSig` call into the same bundle; otherwise submit the
-   * returned `setAuthorization` transaction separately first.
+   * Call `getBorrowRequirements(options)` first and satisfy every returned
+   * requirement. Vault V2 reallocations with a nonzero penalty may require a
+   * loan-token approval in addition to GeneralAdapter1 authorization. When
+   * offchain signatures are enabled (`supportSignature: true`), sign the returned
+   * authorization requirement and pass it via `options.requirementSignature` to
+   * fold `setAuthorizationWithSig` into the bundle; otherwise submit the returned
+   * authorization transaction separately first.
    *
    * @param options - The borrow options.
    * @param config - ERC-4337 transaction config override.
@@ -653,7 +674,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {Error} If the options are invalid, GeneralAdapter1 is not authorized, or the transaction fails.
    */
   async borrow(
-    options: MorphoBorrowOptions,
+    options: MorphoBorrowInput,
     config?: Erc4337TransactionConfig,
   ): Promise<BorrowResult> {
     this._assertWritable("borrow(options)");
@@ -664,17 +685,43 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   }
 
   /**
-   * Returns Morpho SDK requirements for a borrow.
+   * Returns Morpho SDK authorization requirements for a borrow without Vault V2 reallocations.
    *
    * @param options - The borrow options.
    * @returns Authorization requirements. When offchain signatures are enabled
-   *   (`supportSignature: true`), the authorization may instead be returned as a
-   *   signable `RequirementSignatureRequest` to fold into the bundle via
-   *   `setAuthorizationWithSig`.
+   *   (`supportSignature: true`), the authorization may instead be returned as a signable
+   *   `RequirementSignatureRequest` to fold into the bundle via `setAuthorizationWithSig`.
    */
-  async getBorrowRequirements(
+  public getBorrowRequirements(
     options: MorphoBorrowOptions,
-  ): Promise<(RequirementAuthorization | RequirementSignatureRequest)[]> {
+  ): Promise<(RequirementAuthorization | RequirementSignatureRequest)[]>;
+  /**
+   * Returns Morpho SDK requirements for a borrow with Vault V2 reallocations.
+   *
+   * @param options - The Vault V2 reallocation borrow options.
+   * @returns Authorization requirements and any loan-token approval required for the public
+   *   allocator penalty donation. When offchain signatures are enabled (`supportSignature: true`),
+   *   the authorization may instead be returned as a signable `RequirementSignatureRequest` to
+   *   fold into the bundle via `setAuthorizationWithSig`.
+   */
+  public getBorrowRequirements(
+    options: MorphoBorrowWithVaultV2ReallocationsOptions,
+  ): Promise<
+    (
+      | RequirementApproval
+      | RequirementAuthorization
+      | RequirementSignatureRequest
+    )[]
+  >;
+  public async getBorrowRequirements(
+    options: MorphoBorrowInput,
+  ): Promise<
+    (
+      | RequirementApproval
+      | RequirementAuthorization
+      | RequirementSignatureRequest
+    )[]
+  > {
     const action = await this._getBorrowAction(options);
 
     return await action.getRequirements();
@@ -688,7 +735,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @returns The fee quote.
    */
   async quoteBorrow(
-    options: MorphoBorrowOptions,
+    options: MorphoBorrowInput,
     config?: Erc4337TransactionConfig,
   ): Promise<Omit<BorrowResult, "hash">> {
     const tx = await this._getBorrowTransaction(options);
@@ -702,7 +749,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     onBehalfOf,
     slippageTolerance,
     reallocations,
-  }: MorphoBorrowOptions) {
+  }: MorphoBorrowInput) {
     const normalizedAmount = normalizeAmount(amount);
     this._assertAddress("token", token);
     this._assertOptionalAddress("onBehalfOf", onBehalfOf);
@@ -728,7 +775,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   }
 
   private async _getBorrowTransaction(
-    options: MorphoBorrowOptions,
+    options: MorphoBorrowInput,
   ): Promise<WdkTransaction> {
     const action = await this._getBorrowAction(options);
 
