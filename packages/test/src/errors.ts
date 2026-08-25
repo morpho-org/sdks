@@ -1,0 +1,102 @@
+/**
+ * Error thrown when Anvil exits or fails before its RPC server starts listening.
+ *
+ * @example
+ * ```ts
+ * import { AnvilStartupError, spawnAnvil } from "@morpho-org/test";
+ *
+ * try {
+ *   await spawnAnvil({ forkUrl: process.env.MAINNET_RPC_URL });
+ * } catch (error) {
+ *   if (error instanceof AnvilStartupError) console.error(error.message);
+ * }
+ * ```
+ */
+export class AnvilStartupError extends Error {
+  /**
+   * Creates an Anvil startup error.
+   *
+   * @param message Actionable description of the startup failure.
+   * @param options Standard error options, including the original cause.
+   */
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "AnvilStartupError";
+  }
+}
+
+/**
+ * Error thrown when a running Anvil process exits before shutdown is requested.
+ *
+ * @example
+ * ```ts
+ * import { AnvilProcessError, spawnAnvil } from "@morpho-org/test";
+ *
+ * const anvil = await spawnAnvil({ chainId: 1 });
+ * try {
+ *   await anvil.stopAndWait();
+ * } catch (error) {
+ *   if (error instanceof AnvilProcessError) console.error(error.message);
+ * }
+ * ```
+ */
+export class AnvilProcessError extends Error {
+  /**
+   * Creates an Anvil process error.
+   *
+   * @param message Actionable description of the unexpected exit.
+   * @param options Standard error options, including the original cause.
+   */
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "AnvilProcessError";
+  }
+}
+
+/**
+ * Error thrown when an Anvil process cannot be cleaned up.
+ *
+ * @example
+ * ```ts
+ * import { AnvilCleanupError, spawnAnvil } from "@morpho-org/test";
+ *
+ * const anvil = await spawnAnvil({ chainId: 1 });
+ * try {
+ *   await anvil.stopAndWait();
+ * } catch (error) {
+ *   if (error instanceof AnvilCleanupError) console.error(error.message);
+ * }
+ * ```
+ */
+export class AnvilCleanupError extends Error {
+  /**
+   * Creates an Anvil cleanup error.
+   *
+   * @param message Actionable description of the cleanup failure.
+   * @param options Standard error options, including the original cause.
+   */
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "AnvilCleanupError";
+  }
+}
+
+/**
+ * Combines an Anvil operation failure with its cleanup failure.
+ *
+ * @param parameters Operation failure, cleanup failure, actionable message, and optional aggregate summary.
+ * @returns An Anvil cleanup error whose cause preserves both failures.
+ * @internal
+ */
+export const createAnvilFailureCleanupError = (parameters: {
+  readonly cleanupError: unknown;
+  readonly failure: unknown;
+  readonly message: string;
+  readonly summary?: string;
+}) =>
+  new AnvilCleanupError(parameters.message, {
+    cause: new AggregateError(
+      [parameters.failure, parameters.cleanupError],
+      parameters.summary ?? "Anvil operation and cleanup both failed.",
+    ),
+  });
