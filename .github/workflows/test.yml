@@ -112,23 +112,10 @@ jobs:
             --reporter=default --reporter=github-actions --reporter=blob \
             --outputFile.blob="vitest-reports/$VITEST_NAME.json"
 
-      - name: Redact RPC credentials from fork report
-        id: redact_report
-        if: failure() && matrix.uses_foundry && steps.test.outcome == 'failure'
-        env:
-          MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
-          BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
-          ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
-        run: |
-          node scripts/redact-vitest-reports.mjs vitest-reports \
-            | tee /dev/stderr \
-            | grep -q '^Sanitized '
-
       - name: Upload failed report
-        if: >-
-          failure() &&
-          steps.test.outcome == 'failure' &&
-          (!matrix.uses_foundry || steps.redact_report.outcome == 'success')
+        # Registered RPC secrets are masked in Actions logs, not artifact files.
+        # Keep fork diagnostics in the logs and upload only reports without RPC access.
+        if: failure() && !matrix.uses_foundry && steps.test.outcome == 'failure'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: vitest-failure-${{ matrix.name }}
