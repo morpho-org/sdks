@@ -19,9 +19,11 @@ import {
 
 type FakeAnvilProcess = EventEmitter & {
   pid: number;
+  stdin: PassThrough;
   stdout: PassThrough;
   stderr: PassThrough;
   exitCode: number | null;
+  signalCode: NodeJS.Signals | null;
   kill: ReturnType<typeof vi.fn>;
   unref: ReturnType<typeof vi.fn>;
 };
@@ -30,9 +32,11 @@ const createFakeAnvilProcess = (options: { closeOnSignal?: boolean } = {}) => {
   const { closeOnSignal = true } = options;
   const subprocess = Object.assign(new EventEmitter(), {
     pid: 2_147_483_645,
+    stdin: new PassThrough(),
     stdout: new PassThrough(),
     stderr: new PassThrough(),
     exitCode: null,
+    signalCode: null,
     kill: vi.fn(),
     unref: vi.fn(),
   }) as FakeAnvilProcess;
@@ -109,6 +113,45 @@ describe.sequential("spawnAnvil", () => {
     await vi.waitFor(() => expect(subprocess.unref).toHaveBeenCalledOnce());
   });
 
+  test("error: stop reports an undelivered state-dump signal", async () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const subprocess = createFakeAnvilProcess({ closeOnSignal: false });
+    subprocess.kill.mockReturnValue(false);
+    spawnMock.mockReturnValue(
+      subprocess as unknown as ChildProcessWithoutNullStreams,
+    );
+
+    try {
+      const spawnedPromise = spawnAnvil({
+        chainId: 1,
+        dumpState: "/tmp/anvil-state.json",
+      });
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+      subprocess.stdout.write("Listening on 127.0.0.1:31018\n");
+      const spawned = await spawnedPromise;
+
+      vi.useFakeTimers();
+      expect(spawned.stop()).toBe(false);
+      await vi.advanceTimersByTimeAsync(5_000);
+
+      expect(warning).toHaveBeenCalledWith(
+        "Anvil process lifecycle failed. Use stopAndWait() to handle process and cleanup failures.",
+        expect.any(AnvilCleanupError),
+      );
+      await expect(spawned.stopAndWait()).rejects.toBeInstanceOf(
+        AnvilCleanupError,
+      );
+      expect(subprocess.kill).toHaveBeenCalledOnce();
+      expect(subprocess.kill).toHaveBeenCalledWith("SIGINT");
+      expect(subprocess.stdin.destroyed).toBe(true);
+      expect(subprocess.stdout.destroyed).toBe(true);
+      expect(subprocess.stderr.destroyed).toBe(true);
+      expect(subprocess.unref).toHaveBeenCalledOnce();
+    } finally {
+      warning.mockRestore();
+    }
+  });
+
   test("behavior: forwards fork stderr after startup", async () => {
     vi.stubEnv("CI", "true");
     const forkUrl = "https://rpc.example/v1/project-id";
@@ -141,7 +184,7 @@ describe.sequential("spawnAnvil", () => {
     }
   });
 
-  test("behavior: redacts the exact fork URL from CI diagnostics", async () => {
+  test("behavior: redacts exact fork URL and header values from CI diagnostics", async () => {
     vi.stubEnv("CI", "true");
     const forkUrl = "https://rpc.example/v1/project-id";
     const forkHeader = "test-header-value";
@@ -164,17 +207,48 @@ describe.sequential("spawnAnvil", () => {
       const spawned = await spawnedPromise;
 
       const forkUrlSplit = Math.floor(forkUrl.length / 2);
+      const forkHeaderSplit = Math.floor(forkHeader.length / 2);
       subprocess.stderr.write(
         `provider request failed for ${forkUrl.slice(0, forkUrlSplit)}`,
       );
       expect(warning).not.toHaveBeenCalled();
       subprocess.stderr.write(
-        `${forkUrl.slice(forkUrlSplit)} with ${forkHeader}\n`,
+        `${forkUrl.slice(forkUrlSplit)} with ${forkHeader.slice(0, forkHeaderSplit)}`,
       );
+      expect(warning).not.toHaveBeenCalled();
+      subprocess.stderr.write(`${forkHeader.slice(forkHeaderSplit)}\n`);
       expect(warning).toHaveBeenCalledWith(
-        `[port 31015] provider request failed for <redacted-fork-url> with ${forkHeader}\n`,
+        "[port 31015] provider request failed for <redacted-fork-url> with <redacted-fork-header>\n",
       );
       expect(warning).toHaveBeenCalledOnce();
+      expect(String(warning.mock.calls[0]?.[0])).not.toContain(forkUrl);
+      expect(String(warning.mock.calls[0]?.[0])).not.toContain(forkHeader);
+      await spawned.stopAndWait();
+    } finally {
+      warning.mockRestore();
+    }
+  });
+
+  test("behavior: bounds redacted stderr without a newline", async () => {
+    vi.stubEnv("CI", "true");
+    const forkUrl = "https://rpc.example/v1/project-id";
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const subprocess = createFakeAnvilProcess();
+    spawnMock.mockReturnValue(
+      subprocess as unknown as ChildProcessWithoutNullStreams,
+    );
+
+    try {
+      const spawnedPromise = spawnAnvil({ chainId: 1, forkUrl });
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+      subprocess.stdout.write("Listening on 127.0.0.1:31019\n");
+      const spawned = await spawnedPromise;
+
+      subprocess.stderr.write(`${"x".repeat(4_097)}${forkUrl}`);
+      expect(warning).toHaveBeenCalledOnce();
+      const diagnostics = String(warning.mock.calls[0]?.[0]);
+      expect(diagnostics).toContain("<redacted-fork-url>");
+      expect(diagnostics).not.toContain(forkUrl);
       await spawned.stopAndWait();
     } finally {
       warning.mockRestore();
@@ -208,26 +282,33 @@ describe.sequential("spawnAnvil", () => {
     expect(String(error)).toContain(`provider request failed for ${forkUrl}`);
   });
 
-  test("error: AnvilProcessError surfaces an exit observed before close", async () => {
-    const subprocess = createFakeAnvilProcess({ closeOnSignal: false });
-    spawnMock.mockReturnValue(
-      subprocess as unknown as ChildProcessWithoutNullStreams,
-    );
+  test.each([
+    { code: 1, signal: null },
+    { code: null, signal: "SIGINT" as const },
+  ])(
+    "error: AnvilProcessError surfaces an exit observed before close",
+    async ({ code, signal }) => {
+      const subprocess = createFakeAnvilProcess({ closeOnSignal: false });
+      spawnMock.mockReturnValue(
+        subprocess as unknown as ChildProcessWithoutNullStreams,
+      );
 
-    const spawnedPromise = spawnAnvil({ chainId: 1 });
-    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
-    subprocess.stdout.write("Listening on 127.0.0.1:31014\n");
-    const spawned = await spawnedPromise;
+      const spawnedPromise = spawnAnvil({ chainId: 1 });
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+      subprocess.stdout.write("Listening on 127.0.0.1:31014\n");
+      const spawned = await spawnedPromise;
 
-    subprocess.exitCode = 1;
-    const failure = expect(spawned.stopAndWait()).rejects.toBeInstanceOf(
-      AnvilProcessError,
-    );
-    expect(subprocess.kill).not.toHaveBeenCalled();
-    subprocess.emit("close", 1, null);
+      subprocess.exitCode = code;
+      subprocess.signalCode = signal;
+      const failure = expect(spawned.stopAndWait()).rejects.toBeInstanceOf(
+        AnvilProcessError,
+      );
+      expect(subprocess.kill).not.toHaveBeenCalled();
+      subprocess.emit("close", code, signal);
 
-    await failure;
-  });
+      await failure;
+    },
+  );
 
   test("error: AnvilStartupError cleans up a failed startup", async () => {
     const subprocess = createFakeAnvilProcess();
@@ -275,22 +356,29 @@ describe.sequential("spawnAnvil", () => {
     expect(subprocess.kill).toHaveBeenCalledWith("SIGINT");
   });
 
-  test("error: AnvilStartupError redacts fork URLs from subprocess causes in CI", async () => {
+  test("error: AnvilStartupError redacts fork credentials from subprocess causes in CI", async () => {
     vi.stubEnv("CI", "true");
     const forkUrl = "https://rpc.example/v1/project-id";
+    const forkHeader = "test-header-value";
     const subprocess = createFakeAnvilProcess();
     const subprocessError = Object.assign(
-      new Error(`failed to spawn --fork-url ${forkUrl}`),
+      new Error(
+        `failed to spawn --fork-url ${forkUrl} --fork-header ${forkHeader}`,
+      ),
       {
         code: "ENOENT",
-        spawnargs: ["--fork-url", forkUrl],
+        spawnargs: ["--fork-url", forkUrl, "--fork-header", forkHeader],
       },
     );
     spawnMock.mockReturnValue(
       subprocess as unknown as ChildProcessWithoutNullStreams,
     );
 
-    const spawnedPromise = spawnAnvil({ chainId: 1, forkUrl });
+    const spawnedPromise = spawnAnvil({
+      chainId: 1,
+      forkHeader: { Authorization: forkHeader },
+      forkUrl,
+    });
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
     subprocess.emit("error", subprocessError);
 
@@ -301,14 +389,17 @@ describe.sequential("spawnAnvil", () => {
     expect(error.cause).not.toBe(subprocessError);
     if (!(error.cause instanceof Error)) throw error.cause;
     expect(error.cause.message).toBe(
-      "failed to spawn --fork-url <redacted-fork-url>",
+      "failed to spawn --fork-url <redacted-fork-url> --fork-header <redacted-fork-header>",
     );
     expect(Reflect.get(error.cause, "code")).toBe("ENOENT");
     expect(Reflect.get(error.cause, "spawnargs")).toEqual([
       "--fork-url",
       "<redacted-fork-url>",
+      "--fork-header",
+      "<redacted-fork-header>",
     ]);
     expect(JSON.stringify(error.cause)).not.toContain(forkUrl);
+    expect(JSON.stringify(error.cause)).not.toContain(forkHeader);
     expect(subprocess.kill).toHaveBeenCalledWith("SIGINT");
   });
 
@@ -339,6 +430,32 @@ describe.sequential("spawnAnvil", () => {
       "provider request failed for <redacted-fork-url>",
     );
     expect(String(error)).not.toContain(forkUrl);
+  });
+
+  test("error: redacts repeated fork URLs across the diagnostic-tail boundary", async () => {
+    const forkUrl = "https://rpc.example/v1/super-secret-project-id";
+    const subprocess = createFakeAnvilProcess();
+    spawnMock.mockReturnValue(
+      subprocess as unknown as ChildProcessWithoutNullStreams,
+    );
+
+    const spawnedPromise = spawnAnvil({
+      chainId: 1,
+      forkUrl,
+      redactForkUrl: true,
+    });
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+    subprocess.stderr.write(
+      `${forkUrl}${"x".repeat(4_096 - forkUrl.length * 2)}${forkUrl}${forkUrl}`,
+    );
+    subprocess.exitCode = 1;
+    subprocess.emit("close", 1, null);
+
+    const error = await spawnedPromise.catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(AnvilStartupError);
+    expect(String(error)).toContain("<redacted-fork-url>");
+    expect(String(error)).not.toContain(forkUrl.slice(1));
+    expect(String(error)).not.toContain("super-secret-project-id");
   });
 
   test("error: AnvilStartupError uses the configured startup deadline", async () => {
@@ -569,6 +686,10 @@ describe.sequential("spawnAnvil", () => {
     await cleanupRejection;
     expect(subprocess.kill).toHaveBeenNthCalledWith(1, "SIGINT");
     expect(subprocess.kill).toHaveBeenNthCalledWith(2, "SIGKILL");
+    expect(subprocess.stdin.destroyed).toBe(true);
+    expect(subprocess.stdout.destroyed).toBe(true);
+    expect(subprocess.stderr.destroyed).toBe(true);
+    expect(subprocess.unref).toHaveBeenCalledOnce();
 
     subprocess.exitCode = 0;
     subprocess.emit("close", 0, "SIGKILL");
