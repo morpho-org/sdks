@@ -7,6 +7,7 @@ const testState = vi.hoisted(() => ({
   afterAllMock: vi.fn(),
   clientFixture: undefined as unknown,
   createAnvilTestClientMock: vi.fn(),
+  finishedHandlers: [] as (() => unknown | Promise<unknown>)[],
   onTestFinishedMock: vi.fn(),
   spawnAnvilMock: vi.fn(),
   testExtendMock: vi.fn(),
@@ -27,7 +28,7 @@ vi.mock("vitest", async (importOriginal) => {
       context: Readonly<Record<string, unknown>>,
       use: (client: unknown) => Promise<void>,
     ) => {
-      const finished: (() => unknown | Promise<unknown>)[] = [];
+      const finished = testState.finishedHandlers;
       await clientFixture(
         {
           task: { result: { state: "run" } },
@@ -102,6 +103,7 @@ describe.sequential("createViemTest compatibility", () => {
     vi.clearAllMocks();
     process.env.CI = "true";
     testState.afterAllHandlers.length = 0;
+    testState.finishedHandlers.length = 0;
     testState.clientFixture = undefined;
     testState.createAnvilTestClientMock.mockReturnValue(fakeClient);
     setBlockTimestampIntervalMock.mockResolvedValue(undefined);
@@ -266,6 +268,42 @@ describe.sequential("createViemTest compatibility", () => {
     const clientFixture = testState.clientFixture as VitestClientFixture;
     await expect(clientFixture({}, async () => {})).rejects.toBe(cleanupError);
     expect(stopAndWaitMock).toHaveBeenCalledOnce();
+
+    const fileCleanup = testState.afterAllHandlers[0];
+    if (fileCleanup === undefined) throw new Error("Missing afterAll handler");
+    await expect(Promise.resolve().then(fileCleanup)).resolves.toBeUndefined();
+  });
+
+  test("error: file teardown preserves cleanup hidden by a finished hook", async () => {
+    const cleanupError = new AnvilProcessError("Anvil exited");
+    const finishedError = new Error("user finished hook failed");
+    stopAndWaitMock.mockRejectedValueOnce(cleanupError);
+    testState.spawnAnvilMock.mockResolvedValue({
+      rpcUrl: "http://localhost:31001",
+      stop: vi.fn(),
+      stopAndWait: stopAndWaitMock,
+    });
+    createViemTest(mainnet, { forkUrl: "https://rpc.example" });
+
+    const clientFixture = testState.clientFixture as VitestClientFixture;
+    const error = await clientFixture({}, async () => {
+      testState.finishedHandlers.push(() => {
+        throw finishedError;
+      });
+    }).catch((caught: unknown) => caught);
+    expect(error).toBe(finishedError);
+
+    const fileCleanup = testState.afterAllHandlers[0];
+    if (fileCleanup === undefined) throw new Error("Missing afterAll handler");
+    const teardownError = await Promise.resolve()
+      .then(fileCleanup)
+      .catch((caught: unknown) => caught);
+    expect(teardownError).toBeInstanceOf(AnvilCleanupError);
+    if (!(teardownError instanceof AnvilCleanupError)) throw teardownError;
+    expect(teardownError.cause).toBeInstanceOf(AggregateError);
+    if (!(teardownError.cause instanceof AggregateError))
+      throw teardownError.cause;
+    expect(teardownError.cause.errors).toEqual([cleanupError]);
   });
 
   test("error: reports dynamic-skip cleanup failure from file teardown", async () => {
@@ -289,7 +327,9 @@ describe.sequential("createViemTest compatibility", () => {
 
     const fileCleanup = testState.afterAllHandlers[0];
     if (fileCleanup === undefined) throw new Error("Missing afterAll handler");
-    const error = await fileCleanup().catch((caught: unknown) => caught);
+    const error = await Promise.resolve()
+      .then(fileCleanup)
+      .catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(AnvilCleanupError);
     if (!(error instanceof AnvilCleanupError)) throw error;
     expect(error.cause).toBeInstanceOf(AggregateError);

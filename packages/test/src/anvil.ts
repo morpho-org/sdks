@@ -482,6 +482,7 @@ export const spawnAnvil = async (
       | ReturnType<typeof globalThis.setTimeout>
       | undefined;
     let processCloseObserved = false;
+    let processError: unknown;
     let cleanupAwaited = false;
     const {
       promise: processCloseResult,
@@ -558,6 +559,7 @@ export const spawnAnvil = async (
           rejectProcessClosed(
             new AnvilCleanupError(
               `Anvil did not close within "${processCloseTimeoutMs}" ms after shutdown began. Stop it manually before retrying.`,
+              processError === undefined ? undefined : { cause: processError },
             ),
           );
         }, processCloseTimeoutMs);
@@ -702,12 +704,18 @@ export const spawnAnvil = async (
         }
       });
 
-      subprocess.once("error", (error) => {
+      subprocess.on("error", (error) => {
         // Node spawn errors retain raw CLI arguments in `spawnargs`, including fork credentials.
+        const cause = formatAnvilCause(error);
+        if (listening) {
+          // Keep `close` as cleanup owner so a failed kill cannot unref a live child early.
+          processError ??= cause;
+          return;
+        }
         fail(
           new AnvilStartupError(
             `Anvil failed to start on port "${port || "auto"}". Check that the binary and arguments are valid.`,
-            { cause: formatAnvilCause(error) },
+            { cause },
           ),
         );
       });
@@ -725,11 +733,14 @@ export const spawnAnvil = async (
                 (signal === "SIGKILL" && forceKillSent))));
         const processExitError =
           // A close before the listening banner confirms cleanup for a startup failure.
-          listening && !expectedShutdown
+          listening && (processError !== undefined || !expectedShutdown)
             ? new AnvilProcessError(
                 `Anvil ${stopRequested ? "failed during shutdown" : "exited unexpectedly after startup"} (code "${code}", signal "${signal}"). Retry the test and inspect the process logs.${
                   details ? ` ${details}` : ""
                 }`,
+                processError === undefined
+                  ? undefined
+                  : { cause: processError },
               )
             : undefined;
         if (forceKillTimeout !== undefined)
