@@ -63,7 +63,7 @@ import {
   isBlueUnknownOfFactoryError,
   NegativeValueError,
   RegistryValueAlreadyRegisteredError,
-  UnknownMarketAllocationError,
+  UnknownBlueMarketAllocationError,
   UnsupportedPermitDomainExtensionsError,
 } from "@morpho-org/morpho-sdk/errors";
 import {
@@ -135,7 +135,7 @@ describe("protocol facades", () => {
       RegistryValueAlreadyRegisteredError,
       RawBlueRegistryValueAlreadyRegisteredError,
     ],
-    [UnknownMarketAllocationError, RawBlueUnknownMarketAllocationError],
+    [UnknownBlueMarketAllocationError, RawBlueUnknownMarketAllocationError],
     [
       UnsupportedPermitDomainExtensionsError,
       RawBlueUnsupportedPermitDomainExtensionsError,

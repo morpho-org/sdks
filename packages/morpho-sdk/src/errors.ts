@@ -7,7 +7,7 @@ export {
   UnknownAddressError,
   UnknownDataError,
   UnknownFactory,
-  UnknownMarketAllocationError,
+  UnknownMarketAllocationError as UnknownBlueMarketAllocationError,
   UnknownMarketParamsError as UnknownBlueMarketParamsError,
   /** @deprecated Use UnknownBlueMarketParamsError or the raw protocol subpath. */
   UnknownMarketParamsError,
