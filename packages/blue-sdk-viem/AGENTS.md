@@ -2,7 +2,7 @@
 
 - Fetchers accept a `viem` `Client` and return `blue-sdk` classes, e.g. `fetchMarket(id, client)`.
 - Default deployless reads to `true`; fall back to multicall unless `deployless === "force"`.
-- Set missing chain IDs from the client: `parameters.chainId ??= await getChainId(client)`.
+- Do not add new chain id overrides to fetch parameters. `FetchParameters.chainId` is deprecated; existing fetchers preserve it for compatibility, while new fetchers resolve the chain id from the client.
 - Keep generated deployless query artifacts as `abi` and `code` constants under `src/queries`.
 - Keep non-Blue-specific ABI literals defined in `@morpho-org/morpho-ts` and re-export them from `src/abis.ts` for compatibility. Blue-specific viem ABI literals stay local.
 - Augment classes only in `src/augment`, e.g. `Market.fetch = fetchMarket`.

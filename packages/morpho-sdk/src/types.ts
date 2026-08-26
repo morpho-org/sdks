@@ -26,13 +26,22 @@ export type {
   Permit2Allowance,
 } from "@morpho-org/blue-sdk";
 export type {
+  AuthorizationArgs as BlueAuthorizationTypedDataArgs,
+  DeploylessFetchParameters as BlueDeploylessFetchParameters,
+  /** @deprecated Use `BlueDeploylessFetchParameters` or the raw `/blue/types` subpath. */
   DeploylessFetchParameters,
+  FetchParameters as BlueFetchParameters,
+  /** @deprecated Use `BlueFetchParameters` or the raw `/blue/types` subpath. */
   FetchParameters,
+  Permit2PermitArgs,
+  Permit2TransferFromArgs,
+  PermitArgs as PermitTypedDataArgs,
 } from "@morpho-org/blue-sdk-viem";
 export type {
   BuildFixedRateOfferChainParams as MidnightBuildFixedRateOfferChainParams,
   DecodedEcrecoverRatifierData as MidnightDecodedEcrecoverRatifierData,
   DecodedSetterRatifierData as MidnightDecodedSetterRatifierData,
+  DeploylessFetchParameters as MidnightDeploylessFetchParameters,
   EcrecoverRatificationTypedData as MidnightEcrecoverRatificationTypedData,
   EcrecoverRatifierDataDigestParams as MidnightEcrecoverRatifierDataDigestParams,
   EcrecoverRatifierDataParams as MidnightEcrecoverRatifierDataParams,

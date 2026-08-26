@@ -7,6 +7,7 @@ export {
   UnknownAddressError,
   UnknownDataError,
   UnknownFactory,
+  UnknownMarketAllocationError,
   UnknownMarketParamsError as UnknownBlueMarketParamsError,
   /** @deprecated Use UnknownBlueMarketParamsError or the raw protocol subpath. */
   UnknownMarketParamsError,
@@ -21,6 +22,11 @@ export {
   UnsupportedVaultV2AdapterError,
   VaultV2Errors,
 } from "@morpho-org/blue-sdk";
+export {
+  InvalidPermitDomainChainIdError,
+  InvalidPermitDomainVerifyingContractError,
+  UnsupportedPermitDomainExtensionsError,
+} from "@morpho-org/blue-sdk-viem";
 export {
   ChainIdMismatchError as MidnightChainIdMismatchError,
   InvalidEcrecoverSignatureVError as InvalidMidnightEcrecoverSignatureVError,
@@ -68,4 +74,10 @@ export {
   UnknownCollateralIndexError,
 } from "@morpho-org/midnight-sdk";
 export type { ErrorClass } from "@morpho-org/morpho-ts";
-export { _try } from "@morpho-org/morpho-ts";
+export {
+  _try,
+  DivisionByZeroError,
+  InvalidBitLengthError,
+  NegativeValueError,
+  RegistryValueAlreadyRegisteredError,
+} from "@morpho-org/morpho-ts";

@@ -16,6 +16,10 @@ export type {
   Permit2Allowance,
 } from "@morpho-org/blue-sdk";
 export type {
+  AuthorizationArgs,
   DeploylessFetchParameters,
   FetchParameters,
+  Permit2PermitArgs,
+  Permit2TransferFromArgs,
+  PermitArgs,
 } from "@morpho-org/blue-sdk-viem";

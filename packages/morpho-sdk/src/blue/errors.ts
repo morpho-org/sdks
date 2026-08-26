@@ -1,10 +1,14 @@
 export {
   BlueErrors,
+  DivisionByZeroError,
   IncompleteChainRegistryError,
+  InvalidBitLengthError,
   InvalidMarketParamsError,
+  RegistryValueAlreadyRegisteredError,
   UnknownAddressError,
   UnknownDataError,
   UnknownFactory,
+  UnknownMarketAllocationError,
   UnknownMarketParamsError,
   UnknownOfFactory,
   UnknownTokenError,
@@ -15,3 +19,8 @@ export {
   UnsupportedVaultV2AdapterError,
   VaultV2Errors,
 } from "@morpho-org/blue-sdk";
+export {
+  InvalidPermitDomainChainIdError,
+  InvalidPermitDomainVerifyingContractError,
+  UnsupportedPermitDomainExtensionsError,
+} from "@morpho-org/blue-sdk-viem";

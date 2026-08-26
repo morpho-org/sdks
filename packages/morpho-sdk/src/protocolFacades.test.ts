@@ -7,9 +7,26 @@ import { marketParamsAbi as rawBlueMarketParamsAbi } from "@morpho-org/morpho-sd
 import { addresses as rawBlueAddresses } from "@morpho-org/morpho-sdk/blue/addresses";
 import { LIQUIDATION_CURSOR as rawBlueLiquidationCursor } from "@morpho-org/morpho-sdk/blue/constants";
 import { Market as RawBlueMarket } from "@morpho-org/morpho-sdk/blue/entities";
-import { InvalidMarketParamsError as RawBlueInvalidMarketParamsError } from "@morpho-org/morpho-sdk/blue/errors";
+import {
+  DivisionByZeroError as RawBlueDivisionByZeroError,
+  InvalidBitLengthError as RawBlueInvalidBitLengthError,
+  InvalidMarketParamsError as RawBlueInvalidMarketParamsError,
+  InvalidPermitDomainChainIdError as RawBlueInvalidPermitDomainChainIdError,
+  InvalidPermitDomainVerifyingContractError as RawBlueInvalidPermitDomainVerifyingContractError,
+  RegistryValueAlreadyRegisteredError as RawBlueRegistryValueAlreadyRegisteredError,
+  UnknownMarketAllocationError as RawBlueUnknownMarketAllocationError,
+  UnsupportedPermitDomainExtensionsError as RawBlueUnsupportedPermitDomainExtensionsError,
+} from "@morpho-org/morpho-sdk/blue/errors";
 import { fetchPosition as rawFetchBluePosition } from "@morpho-org/morpho-sdk/blue/fetch";
-import type { MarketId as RawBlueMarketId } from "@morpho-org/morpho-sdk/blue/types";
+import type {
+  AuthorizationArgs as RawBlueAuthorizationArgs,
+  DeploylessFetchParameters as RawBlueDeploylessFetchParameters,
+  FetchParameters as RawBlueFetchParameters,
+  MarketId as RawBlueMarketId,
+  Permit2PermitArgs as RawBluePermit2PermitArgs,
+  Permit2TransferFromArgs as RawBluePermit2TransferFromArgs,
+  PermitArgs as RawBluePermitArgs,
+} from "@morpho-org/morpho-sdk/blue/types";
 import { MarketUtils as RawBlueMarketUtils } from "@morpho-org/morpho-sdk/blue/utils";
 import {
   BLUE_LIQUIDATION_CURSOR,
@@ -21,8 +38,16 @@ import {
   MidnightMarket,
 } from "@morpho-org/morpho-sdk/entities";
 import {
+  DivisionByZeroError,
+  InvalidBitLengthError,
   InvalidBlueMarketParamsError,
   InvalidMidnightOfferGroupError,
+  InvalidPermitDomainChainIdError,
+  InvalidPermitDomainVerifyingContractError,
+  NegativeValueError,
+  RegistryValueAlreadyRegisteredError,
+  UnknownMarketAllocationError,
+  UnsupportedPermitDomainExtensionsError,
 } from "@morpho-org/morpho-sdk/errors";
 import {
   fetchBluePosition,
@@ -33,16 +58,27 @@ import { CBP as rawMidnightCbp } from "@morpho-org/morpho-sdk/midnight/constants
 import { Market as RawMidnightMarket } from "@morpho-org/morpho-sdk/midnight/entities";
 import { InvalidOfferGroupError as RawMidnightInvalidOfferGroupError } from "@morpho-org/morpho-sdk/midnight/errors";
 import { fetchPosition as rawFetchMidnightPosition } from "@morpho-org/morpho-sdk/midnight/fetch";
-import type { RatifierInfo as RawMidnightRatifierInfo } from "@morpho-org/morpho-sdk/midnight/types";
+import type {
+  DeploylessFetchParameters as RawMidnightDeploylessFetchParameters,
+  RatifierInfo as RawMidnightRatifierInfo,
+} from "@morpho-org/morpho-sdk/midnight/types";
 import { MarketUtils as RawMidnightMarketUtils } from "@morpho-org/morpho-sdk/midnight/utils";
 import type {
+  BlueAuthorizationTypedDataArgs,
+  BlueDeploylessFetchParameters,
+  BlueFetchParameters,
   BlueMarketId,
+  MidnightDeploylessFetchParameters,
   MidnightRatifierInfo,
+  Permit2PermitArgs,
+  Permit2TransferFromArgs,
+  PermitTypedDataArgs,
 } from "@morpho-org/morpho-sdk/types";
 import {
   BlueMarketUtils,
   MidnightMarketUtils,
 } from "@morpho-org/morpho-sdk/utils";
+import { NegativeValueError as RawNegativeValueError } from "@morpho-org/morpho-ts";
 import { describe, expect, test } from "vitest";
 
 type Equal<Left, Right> =
@@ -60,6 +96,23 @@ describe("protocol facades", () => {
     [BlueMarket, RawBlueMarket],
     [LegacyBlueMarket, RawBlueMarket],
     [InvalidBlueMarketParamsError, RawBlueInvalidMarketParamsError],
+    [DivisionByZeroError, RawBlueDivisionByZeroError],
+    [InvalidBitLengthError, RawBlueInvalidBitLengthError],
+    [InvalidPermitDomainChainIdError, RawBlueInvalidPermitDomainChainIdError],
+    [
+      InvalidPermitDomainVerifyingContractError,
+      RawBlueInvalidPermitDomainVerifyingContractError,
+    ],
+    [NegativeValueError, RawNegativeValueError],
+    [
+      RegistryValueAlreadyRegisteredError,
+      RawBlueRegistryValueAlreadyRegisteredError,
+    ],
+    [UnknownMarketAllocationError, RawBlueUnknownMarketAllocationError],
+    [
+      UnsupportedPermitDomainExtensionsError,
+      RawBlueUnsupportedPermitDomainExtensionsError,
+    ],
     [fetchBluePosition, rawFetchBluePosition],
     [BlueMarketUtils, RawBlueMarketUtils],
     [midnightEcrecoverRatifierAbi, rawMidnightEcrecoverRatifierAbi],
@@ -75,7 +128,46 @@ describe("protocol facades", () => {
   test("preserves type identities", () => {
     const blue: Equal<BlueMarketId, RawBlueMarketId> = true;
     const midnight: Equal<MidnightRatifierInfo, RawMidnightRatifierInfo> = true;
+    const blueFetch: Equal<BlueFetchParameters, RawBlueFetchParameters> = true;
+    const blueDeployless: Equal<
+      BlueDeploylessFetchParameters,
+      RawBlueDeploylessFetchParameters
+    > = true;
+    const midnightDeployless: Equal<
+      MidnightDeploylessFetchParameters,
+      RawMidnightDeploylessFetchParameters
+    > = true;
+    const blueAuthorization: Equal<
+      BlueAuthorizationTypedDataArgs,
+      RawBlueAuthorizationArgs
+    > = true;
+    const permit: Equal<PermitTypedDataArgs, RawBluePermitArgs> = true;
+    const permit2: Equal<Permit2PermitArgs, RawBluePermit2PermitArgs> = true;
+    const permit2Transfer: Equal<
+      Permit2TransferFromArgs,
+      RawBluePermit2TransferFromArgs
+    > = true;
 
-    expect({ blue, midnight }).toEqual({ blue: true, midnight: true });
+    expect({
+      blue,
+      midnight,
+      blueFetch,
+      blueDeployless,
+      midnightDeployless,
+      blueAuthorization,
+      permit,
+      permit2,
+      permit2Transfer,
+    }).toEqual({
+      blue: true,
+      midnight: true,
+      blueFetch: true,
+      blueDeployless: true,
+      midnightDeployless: true,
+      blueAuthorization: true,
+      permit: true,
+      permit2: true,
+      permit2Transfer: true,
+    });
   });
 });
