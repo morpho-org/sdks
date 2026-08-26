@@ -50,6 +50,8 @@ import {
 
 type ReadonlyMarketSnapshot = Readonly<Market>;
 
+const MAX_SHARED_CAP_SEARCH_STEPS = 1_024n;
+
 type ReadonlyAdapterSnapshot = Readonly<IAccrualVaultV2Adapter>;
 
 type ReadonlyMarketAdapterSnapshot = Readonly<
@@ -869,10 +871,11 @@ export class VaultV2BlueReallocationData
    * `options.maxPenalty` are ignored. By default, only zero-penalty vaults are
    * considered.
    *
-   * Shared-cap discovery is conservative: when the non-shared maximum violates
-   * a shared cap, the candidate is omitted instead of scanning smaller base-unit
-   * amounts for a rounding-only fit. This keeps planning bounded but can
-   * understate executable liquidity in an already-at-or-over-cap snapshot.
+   * Shared-cap discovery is conservative. Operation planning searches at most
+   * 1,024 base units above its targeted amount for the nearest executable fit.
+   * Full-liquidity discovery omits a candidate when its non-shared maximum
+   * violates a shared cap instead of scanning smaller base-unit amounts. These
+   * bounds can understate executable liquidity in rounding-only edge cases.
    *
    * @param marketId - Target Blue market id.
    * @param options - Optional discovery controls and operation to support.
@@ -886,6 +889,7 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
    * @throws {UnknownReallocationMarketPublicAllocatorConfigError} when an adapter-market allocator configuration is absent.
    * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
+   * @throws {ReallocationAdapterSupplySharesUnderflowError} when an inconsistent adapter snapshot underflows during the final transition.
    * @throws {ReallocationAllocationUnderflowError} when an inconsistent allocation snapshot underflows during the final transition.
    * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the absolute shortfall.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdraw exceeds market supply.
@@ -1364,21 +1368,15 @@ export class VaultV2BlueReallocationData
               );
               if (postTransition == null) return;
 
-              const postVault = postTransition.data.getVault(
-                reallocation.vault,
-              );
               // Vault V2 checks relative caps against the transient firstTotalAssets,
               // which stays fixed after the vault's first allocation in a transaction.
-              const firstTotalAssetsKey = findAddressKey(
-                postTransition.context.firstTotalAssets,
-                reallocation.vault,
-              );
               const firstTotalAssets =
-                (firstTotalAssetsKey == null
-                  ? undefined
-                  : postTransition.context.firstTotalAssets[
-                      firstTotalAssetsKey
-                    ]) ?? postVault._totalAssets;
+                postTransition.context.firstTotalAssets[
+                  findAddressKey(
+                    postTransition.context.firstTotalAssets,
+                    reallocation.vault,
+                  )!
+                ]!;
               let withinUpperBounds = true;
               let withinAllCaps = true;
               for (const id of targetIds) {
@@ -1403,8 +1401,7 @@ export class VaultV2BlueReallocationData
 
             // Non-shared target IDs impose monotonic upper bounds. Shared IDs
             // can impose lower bounds and non-monotonic rounding constraints,
-            // so validate them after selecting the non-shared maximum. If that
-            // maximum fails, omit the candidate instead of scanning base units.
+            // so validate them after selecting the non-shared maximum.
             let probeUpper = true;
             while (lower < upper) {
               const assets = probeUpper ? upper : (lower + upper + 1n) / 2n;
@@ -1423,25 +1420,20 @@ export class VaultV2BlueReallocationData
                 ? probeReallocation(selectedAssets)
                 : undefined;
 
-            if (
-              remainingAssets != null &&
-              selectedAssets > 0n &&
-              probe?.withinAllCaps !== true &&
-              lower > selectedAssets &&
-              probeReallocation(lower)?.withinAllCaps === true
-            ) {
-              let infeasible = selectedAssets;
-              let feasible = lower;
-              while (infeasible + 1n < feasible) {
-                const midpoint = (infeasible + feasible) / 2n;
-                if (probeReallocation(midpoint)?.withinAllCaps === true) {
-                  feasible = midpoint;
-                } else {
-                  infeasible = midpoint;
-                }
+            if (remainingAssets != null && probe?.withinAllCaps !== true) {
+              // ponytail: bounded base-unit scan; expose a caller ceiling if wider searches become necessary.
+              const searchUpper = MathLib.min(
+                lower,
+                selectedAssets + MAX_SHARED_CAP_SEARCH_STEPS,
+              );
+              while (
+                selectedAssets > 0n &&
+                selectedAssets < searchUpper &&
+                probe?.withinAllCaps !== true
+              ) {
+                selectedAssets += 1n;
+                probe = probeReallocation(selectedAssets);
               }
-              selectedAssets = feasible;
-              probe = probeReallocation(selectedAssets);
             }
 
             if (selectedAssets > 0n && probe?.withinAllCaps === true)
@@ -1496,6 +1488,8 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
    * @throws {UnknownReallocationMarketPublicAllocatorConfigError} when an adapter-market allocator configuration is absent.
    * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
+   * @throws {ReallocationAdapterSupplySharesUnderflowError} when an inconsistent adapter snapshot underflows during the final transition.
+   * @throws {ReallocationAllocationUnderflowError} when an inconsistent allocation snapshot underflows during the final transition.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -1555,6 +1549,8 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
    * @throws {UnknownReallocationMarketPublicAllocatorConfigError} when an adapter-market allocator configuration is absent.
    * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
+   * @throws {ReallocationAdapterSupplySharesUnderflowError} when an inconsistent adapter snapshot underflows during the final transition.
+   * @throws {ReallocationAllocationUnderflowError} when an inconsistent allocation snapshot underflows during the final transition.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";

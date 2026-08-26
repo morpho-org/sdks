@@ -105,8 +105,9 @@ at the SDK level. The differences are at the protocol layer:
   with an LLTV buffer (default 0.5%) to prevent instant liquidation.
 - **LLTV buffer**: Both `borrow` and `supplyCollateralBorrow` validate that the resulting position
   stays below `LLTV - buffer` (default 0.5%). Throws `BorrowExceedsSafeLtvError` if exceeded.
-- **SDK data**: Fetched via `fetchMarket` / `fetchAccrualPosition`. `AccrualPosition` provides
-  health metrics: `maxBorrowAssets`, `ltv`, `isHealthy`, `borrowAssets`, `collateral`.
+- **SDK data**: Fetched via `fetchBlueMarket` / `fetchBlueAccrualPosition`.
+  `BlueAccrualPosition` provides health metrics: `maxBorrowAssets`, `ltv`, `isHealthy`,
+  `borrowAssets`, `collateral`.
 
 ### Midnight
 
@@ -202,7 +203,7 @@ Provides protocol-level constants and math:
   `bundler3.generalAdapter1`, `permit2`, `dai`, and others.
 - **`MathLib`** — fixed-point arithmetic (`mulDivUp`, `wToRay`, `min`, `WAD`, `RAY`).
 - **`DEFAULT_SLIPPAGE_TOLERANCE`** — the default 0.03% slippage used for deposit `maxSharePrice`.
-- **`MarketParams`** and **`marketParamsAbi`** — used when encoding force-deallocation data
+- **`BlueMarketParams`** and **`blueMarketParamsAbi`** — used when encoding force-deallocation data
   for Morpho Market V1 adapters.
 
 ### `@morpho-org/blue-sdk-viem`

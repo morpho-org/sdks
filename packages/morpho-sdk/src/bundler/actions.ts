@@ -151,7 +151,7 @@ export namespace BundlerAction {
    *
    * @example
    * ```ts
-   * import { getChainAddresses } from "@morpho-org/blue-sdk";
+   * import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
    * import { BundlerAction } from "@morpho-org/morpho-sdk/bundler";
    *
    * const { generalAdapter1 } = getChainAddresses(1).bundler3;
@@ -516,7 +516,7 @@ export namespace BundlerAction {
    *
    * @example
    * ```ts
-   * import { getChainAddresses } from "@morpho-org/blue-sdk";
+   * import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
    * import { BundlerAction } from "@morpho-org/morpho-sdk/bundler";
    *
    * const adapter = getChainAddresses(1).bundler3.generalAdapter1;
@@ -925,7 +925,7 @@ export namespace BundlerAction {
    *
    * @example
    * ```ts
-   * import { getChainAddresses } from "@morpho-org/blue-sdk";
+   * import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
    * import { BundlerAction } from "@morpho-org/morpho-sdk/bundler";
    *
    * const { generalAdapter1 } = getChainAddresses(1).bundler3;
@@ -1476,7 +1476,8 @@ export namespace BundlerAction {
    * @throws {BundlerErrors.SkippableAllocatorPenalty} when `skipRevert` is true and a token approval is required.
    * @example
    * ```ts
-   * import { ChainId, type InputMarketParams } from "@morpho-org/blue-sdk";
+   * import { ChainId } from "@morpho-org/morpho-sdk/constants";
+   * import type { BlueInputMarketParams } from "@morpho-org/morpho-sdk/types";
    * import {
    *   BundlerAction,
    *   type BundlerCall,
@@ -1500,11 +1501,11 @@ export namespace BundlerAction {
    *   oracle: ethUsdOracle,
    *   irm: adaptiveCurveIrm,
    *   lltv: 860_000_000_000_000_000n,
-   * } satisfies InputMarketParams;
+   * } satisfies BlueInputMarketParams;
    * const targetMarket = {
    *   ...sourceMarket,
    *   collateralToken: wbtc,
-   * } satisfies InputMarketParams;
+   * } satisfies BlueInputMarketParams;
    *
    * const calls: BundlerCall[] = BundlerAction.vaultV2BluePublicAllocatorReallocate(
    *   ChainId.EthMainnet,
@@ -1605,7 +1606,8 @@ export namespace BundlerAction {
    * @throws {BundlerErrors.SkippableAllocatorPenalty} when `skipRevert` is true and a token approval is required.
    * @example
    * ```ts
-   * import { ChainId, type InputMarketParams } from "@morpho-org/blue-sdk";
+   * import { ChainId } from "@morpho-org/morpho-sdk/constants";
+   * import type { BlueInputMarketParams } from "@morpho-org/morpho-sdk/types";
    * import {
    *   BundlerAction,
    *   type BundlerCall,
@@ -1626,7 +1628,7 @@ export namespace BundlerAction {
    *   oracle: ethUsdOracle,
    *   irm: adaptiveCurveIrm,
    *   lltv: 860_000_000_000_000_000n,
-   * } satisfies InputMarketParams;
+   * } satisfies BlueInputMarketParams;
    *
    * const calls: BundlerCall[] = BundlerAction.vaultV2BluePublicAllocatorAllocateFromIdle(
    *   ChainId.EthMainnet,

@@ -4,6 +4,8 @@ Transaction builders for VaultV1, VaultV2, Blue, and Midnight, plus shared requi
 
 > Architecture / type / test / doc / release rules apply per the [root `AGENTS.md`](../../AGENTS.md). Subfolder rules: see each `src/<layer>/AGENTS.md`.
 
+> **Dependency facade:** apply root §4 on every `blue-sdk`, `blue-sdk-viem`, or `midnight-sdk` surface change. Raw upstream names live under `/blue/{abis,addresses,constants,entities,errors,fetch,types,utils}` and `/midnight/{abis,constants,entities,errors,fetch,types,utils}`; Midnight has no address surface. The corresponding unprefixed facade qualifies protocol-specific names with `Blue` or `Midnight`, keeps shared infrastructure unqualified, and preserves old ambiguous names only as deprecated compatibility exports. Extend these categories only where an equivalent facade already exists; do not add parity-only upstream internals.
+
 ## Routing summary
 
 - **VaultV1 / VaultV2 deposits** route through bundler3 via GeneralAdapter1 (which enforces `maxSharePrice`, protecting against inflation attacks). VaultV1/V2 `withdraw` and `redeem` are direct vault calls. VaultV2 `forceWithdraw` / `forceRedeem` use `multicall` with `forceDeallocate` calls before the final withdraw/redeem. VaultV1/V2 `inKindRedeem` handles validate their supplied snapshots eagerly and call the standalone VaultExitBundlesV1 periphery directly. Their optional RPC-backed pre-flight checks run only when the caller awaits `getRequirements()`; the pure actions and `buildTx()` remain synchronous and can encode without those reads.
