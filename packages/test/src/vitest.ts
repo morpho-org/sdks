@@ -5,7 +5,7 @@ import {
   type SendTransactionParameters,
   zeroAddress,
 } from "viem";
-import { type TestAPI, test } from "vitest";
+import { afterAll, type TestAPI, test } from "vitest";
 import { type AnvilArgs, spawnAnvil } from "./anvil.js";
 import { type AnvilTestClient, createAnvilTestClient } from "./client.js";
 import {
@@ -66,9 +66,36 @@ export const createViemTest = <chain extends Chain>(
     gasPrice: parameters.gasPrice ?? 0n,
     blockBaseFeePerGas: parameters.blockBaseFeePerGas ?? 0n,
   };
+  const pendingCleanups = new Set<() => Promise<boolean>>();
+  const deferredCleanupFailures: unknown[] = [];
+
+  afterAll(async () => {
+    const cleanupResults = await Promise.allSettled(
+      [...pendingCleanups].map((stopAndWait) => stopAndWait()),
+    );
+    pendingCleanups.clear();
+    const failures = [
+      ...deferredCleanupFailures,
+      ...cleanupResults.flatMap((result) =>
+        result.status === "rejected" ? [result.reason] : [],
+      ),
+    ];
+    deferredCleanupFailures.length = 0;
+
+    if (failures.length > 0)
+      throw new AnvilCleanupError(
+        "Anvil cleanup failed after Vitest finished. Inspect each failure and stop any remaining process manually before retrying.",
+        {
+          cause: new AggregateError(
+            failures,
+            "One or more Vitest Anvil cleanups failed.",
+          ),
+        },
+      );
+  }, Number.POSITIVE_INFINITY);
 
   return test.extend<ViemTestContext<chain>>({
-    client: async ({ signal, onTestFinished }, use) => {
+    client: async ({ signal, onTestFinished, task }, use) => {
       const maxAttempts = process.env.CI ? 3 : 1;
       let initialized:
         | {
@@ -185,7 +212,13 @@ export const createViemTest = <chain extends Chain>(
       if (initialized === undefined) throw setupFailure;
 
       const { client, stopAndWait } = initialized;
-      const cleanupState: { failed: boolean; failure: unknown } = {
+      pendingCleanups.add(stopAndWait);
+      const cleanupState: {
+        deferred: boolean;
+        failed: boolean;
+        failure: unknown;
+      } = {
+        deferred: false,
         failed: false,
         failure: undefined,
       };
@@ -193,7 +226,8 @@ export const createViemTest = <chain extends Chain>(
       // Report teardown after Vitest removes its fixture cleanup callback so a
       // retry cannot replay the first attempt's rejected cleanup promise.
       onTestFinished(() => {
-        if (cleanupState.failed) throw cleanupState.failure;
+        if (cleanupState.failed && !cleanupState.deferred)
+          throw cleanupState.failure;
       });
 
       try {
@@ -202,6 +236,7 @@ export const createViemTest = <chain extends Chain>(
         cleanupState.failed = true;
         cleanupState.failure = error;
       } finally {
+        pendingCleanups.delete(stopAndWait);
         try {
           await stopAndWait();
         } catch (error) {
@@ -215,6 +250,16 @@ export const createViemTest = <chain extends Chain>(
             });
           else cleanupState.failure = error;
           cleanupState.failed = true;
+          if (
+            ("pending" in task && task.pending === true) ||
+            (task.result !== undefined &&
+              "pending" in task.result &&
+              task.result.pending === true) ||
+            task.result?.state === "skip"
+          ) {
+            cleanupState.deferred = true;
+            deferredCleanupFailures.push(cleanupState.failure);
+          }
         }
       }
     },

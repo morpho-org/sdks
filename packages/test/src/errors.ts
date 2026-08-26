@@ -5,8 +5,10 @@
  * ```ts
  * import { AnvilStartupError, spawnAnvil } from "@morpho-org/test";
  *
+ * const controller = new AbortController();
+ * controller.abort();
  * try {
- *   await spawnAnvil({ forkUrl: process.env.MAINNET_RPC_URL });
+ *   await spawnAnvil({ chainId: 1 }, { signal: controller.signal });
  * } catch (error) {
  *   if (error instanceof AnvilStartupError) console.error(error.message);
  * }

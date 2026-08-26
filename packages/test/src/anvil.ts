@@ -8,6 +8,7 @@ import {
 } from "./errors.js";
 
 const ANVIL_FORCE_KILL_TIMEOUT_MS = 5_000;
+const ANVIL_DIAGNOSTICS_MAX_LENGTH = 4_096;
 const ANVIL_FORK_REQUEST_RETRIES = 5;
 const ANVIL_FORK_REQUEST_TIMEOUT_MS = 45_000;
 const ANVIL_FORK_RETRY_BACKOFF_MS = 1_000;
@@ -94,9 +95,9 @@ export interface AnvilArgs {
    */
   forkUrl?: string | undefined;
   /**
-   * Replaces exact occurrences of `forkUrl` in Anvil stderr and process error diagnostics.
+   * Replaces exact occurrences of `forkUrl` and each non-empty `forkHeader` value in Anvil stderr and process error diagnostics.
    *
-   * This does not detect altered or encoded forms of the URL.
+   * Header names and altered or encoded forms of these values are unchanged.
    * This wrapper option is not passed to Anvil.
    *
    * @defaultValue `true` when `CI` is `"true"`; otherwise `false`
@@ -316,7 +317,9 @@ export interface SpawnAnvilOptions {
    */
   readonly startupTimeoutMs?: number | undefined;
   /**
-   * Delay after `SIGINT` before force-killing Anvil. Set to `false` to wait indefinitely.
+   * Delay after `SIGINT` before sending `SIGKILL`. Set to `false` to disable `SIGKILL` escalation.
+   * After `SIGINT` is delivered, `stopAndWait()` waits indefinitely for `close`; if no shutdown signal
+   * can be sent, cleanup still times out after 5000 milliseconds.
    *
    * @defaultValue `false` when `dumpState` or `state` is set; otherwise 5000
    */
@@ -375,17 +378,64 @@ export const spawnAnvil = async (
     redactForkUrl: redactForkUrlOption,
     ...anvilArgs
   } = args;
-  const shouldRedactForkUrl = redactForkUrlOption ?? process.env.CI === "true";
-  const formatAnvilDiagnostics = (diagnostics: string) =>
-    shouldRedactForkUrl && args.forkUrl
-      ? diagnostics.replaceAll(args.forkUrl, "<redacted-fork-url>")
-      : diagnostics;
+  const shouldRedactForkCredentials =
+    redactForkUrlOption ?? process.env.CI === "true";
+  const diagnosticRedactions: {
+    readonly replacement: string;
+    readonly value: string;
+  }[] = [];
+  if (args.forkUrl)
+    diagnosticRedactions.push({
+      replacement: "<redacted-fork-url>",
+      value: args.forkUrl,
+    });
+  for (const value of Object.values(args.forkHeader ?? {})) {
+    if (
+      value !== "" &&
+      !diagnosticRedactions.some((redaction) => redaction.value === value)
+    )
+      diagnosticRedactions.push({
+        replacement: "<redacted-fork-header>",
+        value,
+      });
+  }
+  diagnosticRedactions.sort((a, b) => b.value.length - a.value.length);
+  const maxRedactionLength = shouldRedactForkCredentials
+    ? (diagnosticRedactions[0]?.value.length ?? 0)
+    : 0;
+  const formatAnvilDiagnostics = (diagnostics: string) => {
+    if (!shouldRedactForkCredentials || diagnosticRedactions.length === 0)
+      return diagnostics;
+
+    const formatted: string[] = [];
+    let cursor = 0;
+    let plainStart = 0;
+    while (cursor < diagnostics.length) {
+      const redaction = diagnosticRedactions.find(({ value }) =>
+        diagnostics.startsWith(value, cursor),
+      );
+      if (redaction === undefined) {
+        cursor += 1;
+        continue;
+      }
+
+      formatted.push(
+        diagnostics.slice(plainStart, cursor),
+        redaction.replacement,
+      );
+      cursor += redaction.value.length;
+      plainStart = cursor;
+    }
+    formatted.push(diagnostics.slice(plainStart));
+    return formatted.join("");
+  };
   const formatAnvilCause = (cause: unknown) => {
-    if (!shouldRedactForkUrl || !args.forkUrl) return cause;
+    if (!shouldRedactForkCredentials || diagnosticRedactions.length === 0)
+      return cause;
     if (typeof cause === "string") return formatAnvilDiagnostics(cause);
     if (!(cause instanceof Error)) return cause;
 
-    // Clone errors before replacing URL-bearing Node spawn metadata.
+    // Clone errors before replacing credential-bearing Node spawn metadata.
     const formattedCause = Object.create(
       Object.getPrototypeOf(cause),
       Object.getOwnPropertyDescriptors(cause),
@@ -423,6 +473,7 @@ export const spawnAnvil = async (
 
   try {
     const subprocess = spawn(binary, toArgs({ ...anvilArgs, port }));
+    subprocess.stderr.setEncoding("utf8");
     let stopInitiated = false;
     let stopRequested = false;
     let forceKillSent = false;
@@ -433,10 +484,16 @@ export const spawnAnvil = async (
     let processCloseObserved = false;
     let cleanupAwaited = false;
     const {
-      promise: processClosed,
+      promise: processCloseResult,
       resolve: resolveProcessClosed,
       reject: rejectProcessClosed,
     } = Promise.withResolvers<void>();
+    const processClosed = processCloseResult.finally(() => {
+      subprocess.stdin.destroy();
+      subprocess.stdout.destroy();
+      subprocess.stderr.destroy();
+      subprocess.unref();
+    });
     // Keep `stop()` backward-compatible without hiding a cleanup failure from stop-only callers.
     void processClosed.catch((error) => {
       if (!cleanupAwaited)
@@ -454,7 +511,7 @@ export const spawnAnvil = async (
 
       // An exit code can be visible before stdio closes. Wait for `close`.
       let signalSent = false;
-      if (subprocess.exitCode === null) {
+      if (subprocess.exitCode === null && subprocess.signalCode === null) {
         stopRequested = true;
         try {
           signalSent = subprocess.kill("SIGINT");
@@ -489,9 +546,13 @@ export const spawnAnvil = async (
         }
       }
 
-      if (forceKillAfterMs !== false) {
-        const processCloseTimeoutMs =
-          forceKillAfterMs + ANVIL_PROCESS_CLOSE_GRACE_MS;
+      const processCloseTimeoutMs =
+        forceKillAfterMs === false
+          ? signalSent
+            ? undefined
+            : ANVIL_PROCESS_CLOSE_GRACE_MS
+          : forceKillAfterMs + ANVIL_PROCESS_CLOSE_GRACE_MS;
+      if (processCloseTimeoutMs !== undefined) {
         processCloseTimeout = globalThis.setTimeout(() => {
           if (processCloseObserved) return;
           rejectProcessClosed(
@@ -522,10 +583,16 @@ export const spawnAnvil = async (
       let listening = false;
       let settled = false;
       let stderr = "";
+      let stderrCarry = "";
       let stderrLine = "";
       let stdout = "";
+      const diagnosticCarryLength = Math.max(maxRedactionLength - 1, 0);
+      const stderrLineBufferLength =
+        ANVIL_DIAGNOSTICS_MAX_LENGTH + diagnosticCarryLength;
       const startupTimeout = globalThis.setTimeout(() => {
-        const details = formatAnvilDiagnostics(stderr.trim());
+        const details = `${stderr}${formatAnvilDiagnostics(stderrCarry)}`
+          .slice(-ANVIL_DIAGNOSTICS_MAX_LENGTH)
+          .trim();
         fail(
           new AnvilStartupError(
             `Anvil did not start listening within "${startupTimeoutMs}" ms. Check the fork URL and Anvil arguments.${details ? ` ${details}` : ""}`,
@@ -583,15 +650,34 @@ export const spawnAnvil = async (
       subprocess.stderr.on("data", (data) => {
         // Startup warnings are diagnostic; only timeout, error, or early close is fatal.
         const dataString = data.toString();
-        stderr = `${stderr}${dataString}`.slice(-4_096);
+        if (!shouldRedactForkCredentials || diagnosticRedactions.length === 0) {
+          stderr = `${stderr}${dataString}`.slice(
+            -ANVIL_DIAGNOSTICS_MAX_LENGTH,
+          );
+        } else {
+          const rawDiagnostics = `${stderrCarry}${dataString}`;
+          const safeEnd = rawDiagnostics.length - diagnosticCarryLength;
+          let cursor = 0;
+          while (cursor < safeEnd) {
+            const redaction = diagnosticRedactions.find(({ value }) =>
+              rawDiagnostics.startsWith(value, cursor),
+            );
+            cursor += redaction?.value.length ?? 1;
+          }
+          stderr =
+            `${stderr}${formatAnvilDiagnostics(rawDiagnostics.slice(0, cursor))}`.slice(
+              -ANVIL_DIAGNOSTICS_MAX_LENGTH,
+            );
+          stderrCarry = rawDiagnostics.slice(cursor);
+        }
         if (!settled || stopRequested) return;
 
-        if (!shouldRedactForkUrl || !args.forkUrl) {
+        if (!shouldRedactForkCredentials || diagnosticRedactions.length === 0) {
           console.warn(`[port ${port || "??"}] ${dataString}`);
           return;
         }
 
-        // Buffer complete lines so stream chunks cannot split the fork URL around replacement.
+        // Buffer complete lines so stream chunks cannot split a credential around replacement.
         stderrLine += dataString;
         const lastLineBreak = stderrLine.lastIndexOf("\n");
         if (lastLineBreak !== -1) {
@@ -600,10 +686,24 @@ export const spawnAnvil = async (
           );
           stderrLine = stderrLine.slice(lastLineBreak + 1);
         }
+        if (stderrLine.length > stderrLineBufferLength) {
+          const safeEnd = stderrLine.length - diagnosticCarryLength;
+          let cursor = 0;
+          while (cursor < safeEnd) {
+            const redaction = diagnosticRedactions.find(({ value }) =>
+              stderrLine.startsWith(value, cursor),
+            );
+            cursor += redaction?.value.length ?? 1;
+          }
+          console.warn(
+            `[port ${port || "??"}] ${formatAnvilDiagnostics(stderrLine.slice(0, cursor))}`,
+          );
+          stderrLine = stderrLine.slice(cursor);
+        }
       });
 
       subprocess.once("error", (error) => {
-        // Node spawn errors retain raw CLI arguments in `spawnargs`, including the fork URL.
+        // Node spawn errors retain raw CLI arguments in `spawnargs`, including fork credentials.
         fail(
           new AnvilStartupError(
             `Anvil failed to start on port "${port || "auto"}". Check that the binary and arguments are valid.`,
@@ -614,7 +714,9 @@ export const spawnAnvil = async (
 
       subprocess.once("close", (code, signal) => {
         processCloseObserved = true;
-        const details = formatAnvilDiagnostics(stderr.trim());
+        const details = `${stderr}${formatAnvilDiagnostics(stderrCarry)}`
+          .slice(-ANVIL_DIAGNOSTICS_MAX_LENGTH)
+          .trim();
         const expectedShutdown =
           stopRequested &&
           (code === 0 ||
@@ -634,9 +736,6 @@ export const spawnAnvil = async (
           globalThis.clearTimeout(forceKillTimeout);
         if (processCloseTimeout !== undefined)
           globalThis.clearTimeout(processCloseTimeout);
-        subprocess.stdout.destroy();
-        subprocess.stderr.destroy();
-        subprocess.unref();
         if (processExitError === undefined) resolveProcessClosed();
         else rejectProcessClosed(processExitError);
         if (settled) return;

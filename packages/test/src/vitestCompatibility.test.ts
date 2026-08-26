@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { AnvilTestClient } from "./client.js";
 
 const testState = vi.hoisted(() => ({
+  afterAllHandlers: [] as (() => unknown | Promise<unknown>)[],
+  afterAllMock: vi.fn(),
   clientFixture: undefined as unknown,
   createAnvilTestClientMock: vi.fn(),
   onTestFinishedMock: vi.fn(),
@@ -28,12 +30,14 @@ vi.mock("vitest", async (importOriginal) => {
       const finished: (() => unknown | Promise<unknown>)[] = [];
       await clientFixture(
         {
+          task: { result: { state: "run" } },
           ...context,
           onTestFinished: (handler: () => unknown | Promise<unknown>) =>
             finished.push(handler),
         },
         use,
       );
+      if (context.skipFinishedHooks === true) return;
       for (const handler of finished.reverse()) await handler();
     };
     return actual.test;
@@ -41,6 +45,10 @@ vi.mock("vitest", async (importOriginal) => {
 
   return {
     ...actual,
+    afterAll: testState.afterAllMock.mockImplementation(
+      (handler: () => unknown | Promise<unknown>) =>
+        testState.afterAllHandlers.push(handler),
+    ),
     onTestFinished: testState.onTestFinishedMock.mockImplementation(() => {
       throw new Error("The module-global onTestFinished hook was used.");
     }),
@@ -73,7 +81,9 @@ import {
 import { createViemTest } from "./vitest.js";
 
 type VitestClientFixture = (
-  context: { readonly signal?: AbortSignal | undefined },
+  context: Readonly<Record<string, unknown>> & {
+    readonly signal?: AbortSignal | undefined;
+  },
   use: (client: AnvilTestClient<typeof mainnet>) => Promise<void>,
 ) => Promise<void>;
 
@@ -91,6 +101,7 @@ describe.sequential("createViemTest compatibility", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.CI = "true";
+    testState.afterAllHandlers.length = 0;
     testState.clientFixture = undefined;
     testState.createAnvilTestClientMock.mockReturnValue(fakeClient);
     setBlockTimestampIntervalMock.mockResolvedValue(undefined);
@@ -121,6 +132,10 @@ describe.sequential("createViemTest compatibility", () => {
     });
 
     expect(parameters).toEqual(originalParameters);
+    expect(testState.afterAllMock).toHaveBeenCalledWith(
+      expect.any(Function),
+      Number.POSITIVE_INFINITY,
+    );
     expect(testState.spawnAnvilMock).toHaveBeenCalledWith(
       {
         ...originalParameters,
@@ -251,6 +266,56 @@ describe.sequential("createViemTest compatibility", () => {
     const clientFixture = testState.clientFixture as VitestClientFixture;
     await expect(clientFixture({}, async () => {})).rejects.toBe(cleanupError);
     expect(stopAndWaitMock).toHaveBeenCalledOnce();
+  });
+
+  test("error: reports dynamic-skip cleanup failure from file teardown", async () => {
+    const cleanupError = new AnvilCleanupError("cleanup failed");
+    stopAndWaitMock.mockRejectedValueOnce(cleanupError);
+    testState.spawnAnvilMock.mockResolvedValue({
+      rpcUrl: "http://localhost:31001",
+      stop: vi.fn(),
+      stopAndWait: stopAndWaitMock,
+    });
+    createViemTest(mainnet, { forkUrl: "https://rpc.example" });
+
+    const clientFixture = testState.clientFixture as VitestClientFixture;
+    await clientFixture(
+      {
+        skipFinishedHooks: true,
+        task: { result: { pending: true, state: "run" } },
+      },
+      async () => {},
+    );
+
+    const fileCleanup = testState.afterAllHandlers[0];
+    if (fileCleanup === undefined) throw new Error("Missing afterAll handler");
+    const error = await fileCleanup().catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(AnvilCleanupError);
+    if (!(error instanceof AnvilCleanupError)) throw error;
+    expect(error.cause).toBeInstanceOf(AggregateError);
+    if (!(error.cause instanceof AggregateError)) throw error.cause;
+    expect(error.cause.errors).toEqual([cleanupError]);
+  });
+
+  test("behavior: file teardown cleans a fixture whose teardown was skipped", async () => {
+    testState.spawnAnvilMock.mockResolvedValue({
+      rpcUrl: "http://localhost:31001",
+      stop: vi.fn(),
+      stopAndWait: stopAndWaitMock,
+    });
+    createViemTest(mainnet, { forkUrl: "https://rpc.example" });
+
+    const clientFixture = testState.clientFixture as VitestClientFixture;
+    const fixture = clientFixture({}, () => new Promise<void>(() => {}));
+    await vi.waitFor(() =>
+      expect(setBlockTimestampIntervalMock).toHaveBeenCalledOnce(),
+    );
+
+    const fileCleanup = testState.afterAllHandlers[0];
+    if (fileCleanup === undefined) throw new Error("Missing afterAll handler");
+    await expect(fileCleanup()).resolves.toBeUndefined();
+    expect(stopAndWaitMock).toHaveBeenCalledOnce();
+    void fixture;
   });
 
   test("error: preserves use and cleanup failures together", async () => {
