@@ -34,6 +34,8 @@ export type {
   FetchParameters as BlueFetchParameters,
   /** @deprecated Use `BlueFetchParameters` or the raw `/blue/types` subpath. */
   FetchParameters,
+  InputAllocation as BlueInputAllocation,
+  MetaMorphoCall as BlueMetaMorphoCall,
   Permit2PermitArgs,
   Permit2TransferFromArgs,
   PermitArgs as PermitTypedDataArgs,

@@ -26,13 +26,16 @@ import type {
   DaiPermitArgs as RawBlueDaiPermitArgs,
   DeploylessFetchParameters as RawBlueDeploylessFetchParameters,
   FetchParameters as RawBlueFetchParameters,
+  InputAllocation as RawBlueInputAllocation,
   MarketId as RawBlueMarketId,
+  MetaMorphoCall as RawBlueMetaMorphoCall,
   Permit2PermitArgs as RawBluePermit2PermitArgs,
   Permit2TransferFromArgs as RawBluePermit2TransferFromArgs,
   PermitArgs as RawBluePermitArgs,
 } from "@morpho-org/morpho-sdk/blue/types";
 import {
   MarketUtils as RawBlueMarketUtils,
+  MetaMorphoAction as RawBlueMetaMorphoAction,
   defaultPreLiquidationParamsRegistry as rawBlueDefaultPreLiquidationParamsRegistry,
   getDefaultPreLiquidationParams as rawGetBlueDefaultPreLiquidationParams,
   getDaiPermitTypedData as rawGetDaiPermitTypedData,
@@ -77,7 +80,9 @@ import type {
   BlueAuthorizationTypedDataArgs,
   BlueDeploylessFetchParameters,
   BlueFetchParameters,
+  BlueInputAllocation,
   BlueMarketId,
+  BlueMetaMorphoCall,
   DaiPermitArgs,
   MidnightDeploylessFetchParameters,
   MidnightRatifierInfo,
@@ -87,6 +92,7 @@ import type {
 } from "@morpho-org/morpho-sdk/types";
 import {
   BlueMarketUtils,
+  BlueMetaMorphoAction,
   blueDefaultPreLiquidationParamsRegistry,
   getBlueDefaultPreLiquidationParams,
   getDaiPermitTypedData,
@@ -136,6 +142,7 @@ describe("protocol facades", () => {
     [getBlueDefaultPreLiquidationParams, rawGetBlueDefaultPreLiquidationParams],
     [getDaiPermitTypedData, rawGetDaiPermitTypedData],
     [BlueMarketUtils, RawBlueMarketUtils],
+    [BlueMetaMorphoAction, RawBlueMetaMorphoAction],
     [midnightEcrecoverRatifierAbi, rawMidnightEcrecoverRatifierAbi],
     [MIDNIGHT_CBP, rawMidnightCbp],
     [MidnightMarket, RawMidnightMarket],
@@ -162,6 +169,12 @@ describe("protocol facades", () => {
       BlueAuthorizationTypedDataArgs,
       RawBlueAuthorizationArgs
     > = true;
+    const blueInputAllocation: Equal<
+      BlueInputAllocation,
+      RawBlueInputAllocation
+    > = true;
+    const blueMetaMorphoCall: Equal<BlueMetaMorphoCall, RawBlueMetaMorphoCall> =
+      true;
     const permit: Equal<PermitTypedDataArgs, RawBluePermitArgs> = true;
     const daiPermit: Equal<DaiPermitArgs, RawBlueDaiPermitArgs> = true;
     const permit2: Equal<Permit2PermitArgs, RawBluePermit2PermitArgs> = true;
@@ -177,6 +190,8 @@ describe("protocol facades", () => {
       blueDeployless,
       midnightDeployless,
       blueAuthorization,
+      blueInputAllocation,
+      blueMetaMorphoCall,
       permit,
       daiPermit,
       permit2,
@@ -188,6 +203,8 @@ describe("protocol facades", () => {
       blueDeployless: true,
       midnightDeployless: true,
       blueAuthorization: true,
+      blueInputAllocation: true,
+      blueMetaMorphoCall: true,
       permit: true,
       daiPermit: true,
       permit2: true,

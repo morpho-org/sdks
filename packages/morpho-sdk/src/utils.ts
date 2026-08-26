@@ -27,6 +27,7 @@ export {
   getPermit2PermitTypedData,
   getPermit2TransferFromTypedData,
   getPermitTypedData,
+  MetaMorphoAction as BlueMetaMorphoAction,
   optionalBoolean,
   readContractRestructured,
   restructure,

@@ -20,6 +20,8 @@ export type {
   DaiPermitArgs,
   DeploylessFetchParameters,
   FetchParameters,
+  InputAllocation,
+  MetaMorphoCall,
   Permit2PermitArgs,
   Permit2TransferFromArgs,
   PermitArgs,
