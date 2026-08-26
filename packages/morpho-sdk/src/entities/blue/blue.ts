@@ -589,9 +589,9 @@ export interface BlueActions {
    * @throws {ChainIdMismatchError} when the client chain does not match this market.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when the chain has no BluePublicAllocator deployment.
-   * @throws {UnknownFactory} when the chain has no Vault V2 factory.
-   * @throws {UnknownOfFactory} when a requested address is not a Vault V2 from that factory.
-   * @throws {UnsupportedVaultV2AdapterError} when a vault contains an unsupported adapter.
+   * @throws {UnknownBlueFactory} when the chain has no Vault V2 factory.
+   * @throws {UnknownBlueOfFactory} when a requested address is not a Vault V2 from that factory.
+   * @throws {UnsupportedBlueVaultV2AdapterError} when a vault contains an unsupported adapter.
    * @throws {viem.BaseError} when an RPC or contract read fails with no fallback left.
    */
   getVaultV2BlueReallocationData: (params: {
@@ -2081,9 +2081,9 @@ export class MorphoBlue implements BlueActions {
    * @throws {ChainIdMismatchError} when the client chain does not match this market.
    * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
    * @throws {UnknownAddressError} when the chain has no BluePublicAllocator deployment.
-   * @throws {UnknownFactory} when the chain has no Vault V2 factory.
-   * @throws {UnknownOfFactory} when a requested address is not a Vault V2 from that factory.
-   * @throws {UnsupportedVaultV2AdapterError} when a vault contains an unsupported adapter.
+   * @throws {UnknownBlueFactory} when the chain has no Vault V2 factory.
+   * @throws {UnknownBlueOfFactory} when a requested address is not a Vault V2 from that factory.
+   * @throws {UnsupportedBlueVaultV2AdapterError} when a vault contains an unsupported adapter.
    * @throws {viem.BaseError} when an RPC or contract read fails with no fallback left.
    * @example
    * ```ts

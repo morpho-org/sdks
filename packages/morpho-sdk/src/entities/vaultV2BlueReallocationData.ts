@@ -418,7 +418,7 @@ export class VaultV2BlueReallocationData
    * Creates a cloned Vault V2 reallocation snapshot.
    *
    * @param input - State fetched at one consistent block.
-   * @throws {UnsupportedVaultV2AdapterError} when a vault contains an unsupported adapter type.
+   * @throws {UnsupportedBlueVaultV2AdapterError} when a vault contains an unsupported adapter type.
    */
   public constructor(input: InputVaultV2BlueReallocationData) {
     const isClone = input instanceof VaultV2BlueReallocationData;

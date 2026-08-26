@@ -5,20 +5,34 @@ export {
   /** @deprecated Use InvalidBlueMarketParamsError or the raw protocol subpath. */
   InvalidMarketParamsError,
   UnknownAddressError,
+  UnknownDataError as UnknownBlueDataError,
+  /** @deprecated Use UnknownBlueDataError or the raw protocol subpath. */
   UnknownDataError,
+  UnknownFactory as UnknownBlueFactory,
+  /** @deprecated Use UnknownBlueFactory or the raw protocol subpath. */
   UnknownFactory,
   UnknownMarketAllocationError as UnknownBlueMarketAllocationError,
   UnknownMarketParamsError as UnknownBlueMarketParamsError,
   /** @deprecated Use UnknownBlueMarketParamsError or the raw protocol subpath. */
   UnknownMarketParamsError,
+  UnknownOfFactory as UnknownBlueOfFactory,
+  /** @deprecated Use UnknownBlueOfFactory or the raw protocol subpath. */
   UnknownOfFactory,
+  UnknownTokenError as UnknownBlueTokenError,
+  /** @deprecated Use UnknownBlueTokenError or the raw protocol subpath. */
   UnknownTokenError,
+  UnknownTokenPriceError as UnknownBlueTokenPriceError,
+  /** @deprecated Use UnknownBlueTokenPriceError or the raw protocol subpath. */
   UnknownTokenPriceError,
+  UnknownVaultConfigError as UnknownBlueVaultConfigError,
+  /** @deprecated Use UnknownBlueVaultConfigError or the raw protocol subpath. */
   UnknownVaultConfigError,
   UnsupportedChainIdError,
   UnsupportedPreLiquidationParamsError as UnsupportedBluePreLiquidationParamsError,
   /** @deprecated Use UnsupportedBluePreLiquidationParamsError or the raw protocol subpath. */
   UnsupportedPreLiquidationParamsError,
+  UnsupportedVaultV2AdapterError as UnsupportedBlueVaultV2AdapterError,
+  /** @deprecated Use UnsupportedBlueVaultV2AdapterError or the raw protocol subpath. */
   UnsupportedVaultV2AdapterError,
   VaultV2Errors,
 } from "@morpho-org/blue-sdk";
