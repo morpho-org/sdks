@@ -282,6 +282,35 @@ describe.sequential("spawnAnvil", () => {
     expect(String(error)).toContain(`provider request failed for ${forkUrl}`);
   });
 
+  test("error: AnvilProcessError preserves post-startup process errors", async () => {
+    vi.stubEnv("CI", "true");
+    const forkUrl = "https://rpc.example/v1/project-id";
+    const subprocess = createFakeAnvilProcess({ closeOnSignal: false });
+    spawnMock.mockReturnValue(
+      subprocess as unknown as ChildProcessWithoutNullStreams,
+    );
+
+    const spawnedPromise = spawnAnvil({ chainId: 1, forkUrl });
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+    subprocess.stdout.write("Listening on 127.0.0.1:31020\n");
+    const spawned = await spawnedPromise;
+
+    const cleanup = spawned.stopAndWait();
+    subprocess.emit("error", new Error(`failed to kill ${forkUrl}`));
+    expect(() =>
+      subprocess.emit("error", new Error("second process error")),
+    ).not.toThrow();
+    subprocess.exitCode = 0;
+    subprocess.emit("close", 0, "SIGINT");
+
+    const error = await cleanup.catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(AnvilProcessError);
+    if (!(error instanceof AnvilProcessError)) throw error;
+    expect(error.cause).toBeInstanceOf(Error);
+    expect(String(error.cause)).toContain("<redacted-fork-url>");
+    expect(String(error.cause)).not.toContain(forkUrl);
+  });
+
   test.each([
     { code: 1, signal: null },
     { code: null, signal: "SIGINT" as const },
@@ -679,11 +708,15 @@ describe.sequential("spawnAnvil", () => {
     const spawned = await spawnedPromise;
 
     vi.useFakeTimers();
-    const cleanupRejection = expect(
-      spawned.stopAndWait(),
-    ).rejects.toBeInstanceOf(AnvilCleanupError);
+    const processError = new Error("failed to kill Anvil");
+    const cleanup = spawned.stopAndWait();
+    const cleanupError = cleanup.catch((caught: unknown) => caught);
+    subprocess.emit("error", processError);
     await vi.advanceTimersByTimeAsync(10_000);
-    await cleanupRejection;
+    const error = await cleanupError;
+    expect(error).toBeInstanceOf(AnvilCleanupError);
+    if (!(error instanceof AnvilCleanupError)) throw error;
+    expect(error.cause).toBe(processError);
     expect(subprocess.kill).toHaveBeenNthCalledWith(1, "SIGINT");
     expect(subprocess.kill).toHaveBeenNthCalledWith(2, "SIGKILL");
     expect(subprocess.stdin.destroyed).toBe(true);

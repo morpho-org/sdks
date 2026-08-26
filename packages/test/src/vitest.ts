@@ -67,7 +67,7 @@ export const createViemTest = <chain extends Chain>(
     blockBaseFeePerGas: parameters.blockBaseFeePerGas ?? 0n,
   };
   const pendingCleanups = new Set<() => Promise<boolean>>();
-  const deferredCleanupFailures: unknown[] = [];
+  const pendingFixtureFailures = new Set<{ readonly failure: unknown }>();
 
   afterAll(async () => {
     const cleanupResults = await Promise.allSettled(
@@ -75,12 +75,12 @@ export const createViemTest = <chain extends Chain>(
     );
     pendingCleanups.clear();
     const failures = [
-      ...deferredCleanupFailures,
+      ...Array.from(pendingFixtureFailures, ({ failure }) => failure),
       ...cleanupResults.flatMap((result) =>
         result.status === "rejected" ? [result.reason] : [],
       ),
     ];
-    deferredCleanupFailures.length = 0;
+    pendingFixtureFailures.clear();
 
     if (failures.length > 0)
       throw new AnvilCleanupError(
@@ -226,8 +226,10 @@ export const createViemTest = <chain extends Chain>(
       // Report teardown after Vitest removes its fixture cleanup callback so a
       // retry cannot replay the first attempt's rejected cleanup promise.
       onTestFinished(() => {
-        if (cleanupState.failed && !cleanupState.deferred)
+        if (cleanupState.failed && !cleanupState.deferred) {
+          pendingFixtureFailures.delete(cleanupState);
           throw cleanupState.failure;
+        }
       });
 
       try {
@@ -258,10 +260,12 @@ export const createViemTest = <chain extends Chain>(
             task.result?.state === "skip"
           ) {
             cleanupState.deferred = true;
-            deferredCleanupFailures.push(cleanupState.failure);
           }
         }
       }
+      // Vitest 2 stops finished hooks after the first rejection, so file teardown
+      // owns any failure this reporter cannot reach.
+      if (cleanupState.failed) pendingFixtureFailures.add(cleanupState);
     },
   });
 };
