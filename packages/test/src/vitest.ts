@@ -67,7 +67,11 @@ export const createViemTest = <chain extends Chain>(
     blockBaseFeePerGas: parameters.blockBaseFeePerGas ?? 0n,
   };
   const pendingCleanups = new Set<() => Promise<boolean>>();
-  const pendingFixtureFailures = new Set<{ readonly failure: unknown }>();
+  const pendingFixtureFailures = new Set<{
+    readonly attempt: number;
+    readonly failure: unknown;
+    readonly taskId: string;
+  }>();
 
   afterAll(async () => {
     const cleanupResults = await Promise.allSettled(
@@ -214,13 +218,17 @@ export const createViemTest = <chain extends Chain>(
       const { client, stopAndWait } = initialized;
       pendingCleanups.add(stopAndWait);
       const cleanupState: {
+        attempt: number;
         deferred: boolean;
         failed: boolean;
         failure: unknown;
+        taskId: string;
       } = {
+        attempt: task.result?.retryCount ?? 0,
         deferred: false,
         failed: false,
         failure: undefined,
+        taskId: task.id,
       };
 
       // Report teardown after Vitest removes its fixture cleanup callback so a
@@ -230,6 +238,14 @@ export const createViemTest = <chain extends Chain>(
           pendingFixtureFailures.delete(cleanupState);
           throw cleanupState.failure;
         }
+        // A passing retry supersedes failures that only belonged to earlier attempts.
+        if (!cleanupState.failed && task.result?.state === "pass")
+          for (const pendingFailure of pendingFixtureFailures)
+            if (
+              pendingFailure.taskId === cleanupState.taskId &&
+              pendingFailure.attempt < cleanupState.attempt
+            )
+              pendingFixtureFailures.delete(pendingFailure);
       });
 
       try {

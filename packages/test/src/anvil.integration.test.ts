@@ -48,7 +48,12 @@ describe("spawnAnvil", () => {
         ]),
       ).resolves.toEqual([1n, 2n]);
     } finally {
-      await Promise.all(nodes.map((node) => node.stopAndWait()));
+      const cleanupResults = await Promise.allSettled(
+        nodes.map((node) => node.stopAndWait()),
+      );
+      expect(cleanupResults).toEqual(
+        nodes.map(() => expect.objectContaining({ status: "fulfilled" })),
+      );
     }
   });
 });

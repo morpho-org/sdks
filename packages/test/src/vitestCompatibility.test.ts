@@ -31,7 +31,7 @@ vi.mock("vitest", async (importOriginal) => {
       const finished = testState.finishedHandlers;
       await clientFixture(
         {
-          task: { result: { state: "run" } },
+          task: { id: "test-task", result: { state: "run" } },
           ...context,
           onTestFinished: (handler: () => unknown | Promise<unknown>) =>
             finished.push(handler),
@@ -304,6 +304,40 @@ describe.sequential("createViemTest compatibility", () => {
     if (!(teardownError.cause instanceof AggregateError))
       throw teardownError.cause;
     expect(teardownError.cause.errors).toEqual([cleanupError]);
+  });
+
+  test("behavior: successful retry discards cleanup hidden by a finished hook", async () => {
+    const cleanupError = new AnvilProcessError("Anvil exited");
+    const finishedError = new Error("user finished hook failed");
+    const task = {
+      id: "retrying-test",
+      result: { retryCount: 0, state: "pass" },
+    };
+    stopAndWaitMock.mockRejectedValueOnce(cleanupError);
+    testState.spawnAnvilMock.mockResolvedValue({
+      rpcUrl: "http://localhost:31001",
+      stop: vi.fn(),
+      stopAndWait: stopAndWaitMock,
+    });
+    createViemTest(mainnet, { forkUrl: "https://rpc.example" });
+
+    const clientFixture = testState.clientFixture as VitestClientFixture;
+    const firstAttemptError = await clientFixture({ task }, async () => {
+      testState.finishedHandlers.push(() => {
+        throw finishedError;
+      });
+    }).catch((caught: unknown) => caught);
+    expect(firstAttemptError).toBe(finishedError);
+
+    testState.finishedHandlers.length = 0;
+    task.result.retryCount = 1;
+    await expect(
+      clientFixture({ task }, async () => {}),
+    ).resolves.toBeUndefined();
+
+    const fileCleanup = testState.afterAllHandlers[0];
+    if (fileCleanup === undefined) throw new Error("Missing afterAll handler");
+    await expect(fileCleanup()).resolves.toBeUndefined();
   });
 
   test("error: reports dynamic-skip cleanup failure from file teardown", async () => {
