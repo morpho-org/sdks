@@ -203,7 +203,7 @@ Provides protocol-level constants and math:
   `bundler3.generalAdapter1`, `permit2`, `dai`, and others.
 - **`MathLib`** — fixed-point arithmetic (`mulDivUp`, `wToRay`, `min`, `WAD`, `RAY`).
 - **`DEFAULT_SLIPPAGE_TOLERANCE`** — the default 0.03% slippage used for deposit `maxSharePrice`.
-- **`BlueMarketParams`** and **`blueMarketParamsAbi`** — used when encoding force-deallocation data
+- **`MarketParams`** and **`marketParamsAbi`** — used when encoding force-deallocation data
   for Morpho Market V1 adapters.
 
 ### `@morpho-org/blue-sdk-viem`

@@ -889,8 +889,6 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
    * @throws {UnknownReallocationMarketPublicAllocatorConfigError} when an adapter-market allocator configuration is absent.
    * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
-   * @throws {ReallocationAdapterSupplySharesUnderflowError} when an inconsistent adapter snapshot underflows during the final transition.
-   * @throws {ReallocationAllocationUnderflowError} when an inconsistent allocation snapshot underflows during the final transition.
    * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the absolute shortfall.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdraw exceeds market supply.
    * @example
@@ -1488,8 +1486,6 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
    * @throws {UnknownReallocationMarketPublicAllocatorConfigError} when an adapter-market allocator configuration is absent.
    * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
-   * @throws {ReallocationAdapterSupplySharesUnderflowError} when an inconsistent adapter snapshot underflows during the final transition.
-   * @throws {ReallocationAllocationUnderflowError} when an inconsistent allocation snapshot underflows during the final transition.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -1549,8 +1545,6 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
    * @throws {UnknownReallocationMarketPublicAllocatorConfigError} when an adapter-market allocator configuration is absent.
    * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
-   * @throws {ReallocationAdapterSupplySharesUnderflowError} when an inconsistent adapter snapshot underflows during the final transition.
-   * @throws {ReallocationAllocationUnderflowError} when an inconsistent allocation snapshot underflows during the final transition.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
