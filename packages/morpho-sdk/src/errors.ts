@@ -23,8 +23,10 @@ export {
   VaultV2Errors,
 } from "@morpho-org/blue-sdk";
 export {
+  getUnsupportedVaultV2Adapter as getBlueUnsupportedVaultV2Adapter,
   InvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError,
+  isUnknownOfFactoryError as isBlueUnknownOfFactoryError,
   UnsupportedPermitDomainExtensionsError,
 } from "@morpho-org/blue-sdk-viem";
 export {

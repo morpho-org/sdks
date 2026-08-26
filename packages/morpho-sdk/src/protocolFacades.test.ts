@@ -19,6 +19,8 @@ import {
   RegistryValueAlreadyRegisteredError as RawBlueRegistryValueAlreadyRegisteredError,
   UnknownMarketAllocationError as RawBlueUnknownMarketAllocationError,
   UnsupportedPermitDomainExtensionsError as RawBlueUnsupportedPermitDomainExtensionsError,
+  getUnsupportedVaultV2Adapter as rawGetBlueUnsupportedVaultV2Adapter,
+  isUnknownOfFactoryError as rawIsBlueUnknownOfFactoryError,
 } from "@morpho-org/morpho-sdk/blue/errors";
 import { fetchPosition as rawFetchBluePosition } from "@morpho-org/morpho-sdk/blue/fetch";
 import type {
@@ -52,11 +54,13 @@ import {
 } from "@morpho-org/morpho-sdk/entities";
 import {
   DivisionByZeroError,
+  getBlueUnsupportedVaultV2Adapter,
   InvalidBitLengthError,
   InvalidBlueMarketParamsError,
   InvalidMidnightOfferGroupError,
   InvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError,
+  isBlueUnknownOfFactoryError,
   NegativeValueError,
   RegistryValueAlreadyRegisteredError,
   UnknownMarketAllocationError,
@@ -124,6 +128,8 @@ describe("protocol facades", () => {
       InvalidPermitDomainVerifyingContractError,
       RawBlueInvalidPermitDomainVerifyingContractError,
     ],
+    [getBlueUnsupportedVaultV2Adapter, rawGetBlueUnsupportedVaultV2Adapter],
+    [isBlueUnknownOfFactoryError, rawIsBlueUnknownOfFactoryError],
     [NegativeValueError, RawNegativeValueError],
     [
       RegistryValueAlreadyRegisteredError,
