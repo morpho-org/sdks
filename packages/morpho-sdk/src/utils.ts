@@ -4,6 +4,8 @@ export {
   /** @deprecated Use BlueAdaptiveCurveIrmLib or the raw protocol subpath. */
   AdaptiveCurveIrmLib,
   CapacityLimitReason,
+  defaultPreLiquidationParamsRegistry as blueDefaultPreLiquidationParamsRegistry,
+  getDefaultPreLiquidationParams as getBlueDefaultPreLiquidationParams,
   MarketUtils as BlueMarketUtils,
   /** @deprecated Use BlueMarketUtils or the raw protocol subpath. */
   MarketUtils,
@@ -21,6 +23,7 @@ export {
   getAuthorizationTypedData as getBlueAuthorizationTypedData,
   /** @deprecated Use getBlueAuthorizationTypedData or the raw protocol subpath. */
   getAuthorizationTypedData,
+  getDaiPermitTypedData,
   getPermit2PermitTypedData,
   getPermit2TransferFromTypedData,
   getPermitTypedData,

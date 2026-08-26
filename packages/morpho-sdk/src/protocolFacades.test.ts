@@ -5,7 +5,10 @@ import {
 import { addresses } from "@morpho-org/morpho-sdk/addresses";
 import { marketParamsAbi as rawBlueMarketParamsAbi } from "@morpho-org/morpho-sdk/blue/abis";
 import { addresses as rawBlueAddresses } from "@morpho-org/morpho-sdk/blue/addresses";
-import { LIQUIDATION_CURSOR as rawBlueLiquidationCursor } from "@morpho-org/morpho-sdk/blue/constants";
+import {
+  ERC20_ALLOWANCE_RECIPIENTS as rawBlueErc20AllowanceRecipients,
+  LIQUIDATION_CURSOR as rawBlueLiquidationCursor,
+} from "@morpho-org/morpho-sdk/blue/constants";
 import { Market as RawBlueMarket } from "@morpho-org/morpho-sdk/blue/entities";
 import {
   DivisionByZeroError as RawBlueDivisionByZeroError,
@@ -20,6 +23,7 @@ import {
 import { fetchPosition as rawFetchBluePosition } from "@morpho-org/morpho-sdk/blue/fetch";
 import type {
   AuthorizationArgs as RawBlueAuthorizationArgs,
+  DaiPermitArgs as RawBlueDaiPermitArgs,
   DeploylessFetchParameters as RawBlueDeploylessFetchParameters,
   FetchParameters as RawBlueFetchParameters,
   MarketId as RawBlueMarketId,
@@ -27,9 +31,15 @@ import type {
   Permit2TransferFromArgs as RawBluePermit2TransferFromArgs,
   PermitArgs as RawBluePermitArgs,
 } from "@morpho-org/morpho-sdk/blue/types";
-import { MarketUtils as RawBlueMarketUtils } from "@morpho-org/morpho-sdk/blue/utils";
+import {
+  MarketUtils as RawBlueMarketUtils,
+  defaultPreLiquidationParamsRegistry as rawBlueDefaultPreLiquidationParamsRegistry,
+  getDefaultPreLiquidationParams as rawGetBlueDefaultPreLiquidationParams,
+  getDaiPermitTypedData as rawGetDaiPermitTypedData,
+} from "@morpho-org/morpho-sdk/blue/utils";
 import {
   BLUE_LIQUIDATION_CURSOR,
+  ERC20_ALLOWANCE_RECIPIENTS,
   MIDNIGHT_CBP,
 } from "@morpho-org/morpho-sdk/constants";
 import {
@@ -68,6 +78,7 @@ import type {
   BlueDeploylessFetchParameters,
   BlueFetchParameters,
   BlueMarketId,
+  DaiPermitArgs,
   MidnightDeploylessFetchParameters,
   MidnightRatifierInfo,
   Permit2PermitArgs,
@@ -76,6 +87,9 @@ import type {
 } from "@morpho-org/morpho-sdk/types";
 import {
   BlueMarketUtils,
+  blueDefaultPreLiquidationParamsRegistry,
+  getBlueDefaultPreLiquidationParams,
+  getDaiPermitTypedData,
   MidnightMarketUtils,
 } from "@morpho-org/morpho-sdk/utils";
 import { NegativeValueError as RawNegativeValueError } from "@morpho-org/morpho-ts";
@@ -93,6 +107,7 @@ describe("protocol facades", () => {
     [blueMarketParamsAbi, rawBlueMarketParamsAbi],
     [addresses, rawBlueAddresses],
     [BLUE_LIQUIDATION_CURSOR, rawBlueLiquidationCursor],
+    [ERC20_ALLOWANCE_RECIPIENTS, rawBlueErc20AllowanceRecipients],
     [BlueMarket, RawBlueMarket],
     [LegacyBlueMarket, RawBlueMarket],
     [InvalidBlueMarketParamsError, RawBlueInvalidMarketParamsError],
@@ -114,6 +129,12 @@ describe("protocol facades", () => {
       RawBlueUnsupportedPermitDomainExtensionsError,
     ],
     [fetchBluePosition, rawFetchBluePosition],
+    [
+      blueDefaultPreLiquidationParamsRegistry,
+      rawBlueDefaultPreLiquidationParamsRegistry,
+    ],
+    [getBlueDefaultPreLiquidationParams, rawGetBlueDefaultPreLiquidationParams],
+    [getDaiPermitTypedData, rawGetDaiPermitTypedData],
     [BlueMarketUtils, RawBlueMarketUtils],
     [midnightEcrecoverRatifierAbi, rawMidnightEcrecoverRatifierAbi],
     [MIDNIGHT_CBP, rawMidnightCbp],
@@ -142,6 +163,7 @@ describe("protocol facades", () => {
       RawBlueAuthorizationArgs
     > = true;
     const permit: Equal<PermitTypedDataArgs, RawBluePermitArgs> = true;
+    const daiPermit: Equal<DaiPermitArgs, RawBlueDaiPermitArgs> = true;
     const permit2: Equal<Permit2PermitArgs, RawBluePermit2PermitArgs> = true;
     const permit2Transfer: Equal<
       Permit2TransferFromArgs,
@@ -156,6 +178,7 @@ describe("protocol facades", () => {
       midnightDeployless,
       blueAuthorization,
       permit,
+      daiPermit,
       permit2,
       permit2Transfer,
     }).toEqual({
@@ -166,6 +189,7 @@ describe("protocol facades", () => {
       midnightDeployless: true,
       blueAuthorization: true,
       permit: true,
+      daiPermit: true,
       permit2: true,
       permit2Transfer: true,
     });

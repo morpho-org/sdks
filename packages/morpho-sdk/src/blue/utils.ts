@@ -2,6 +2,8 @@ export type { CapacityLimit, RoundingDirection } from "@morpho-org/blue-sdk";
 export {
   AdaptiveCurveIrmLib,
   CapacityLimitReason,
+  defaultPreLiquidationParamsRegistry,
+  getDefaultPreLiquidationParams,
   MarketUtils,
   MathLib,
   SharesMath,
@@ -13,6 +15,7 @@ export {
 export {
   decodeBytes32String,
   getAuthorizationTypedData,
+  getDaiPermitTypedData,
   getPermit2PermitTypedData,
   getPermit2TransferFromTypedData,
   getPermitTypedData,

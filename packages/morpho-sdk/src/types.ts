@@ -27,6 +27,7 @@ export type {
 } from "@morpho-org/blue-sdk";
 export type {
   AuthorizationArgs as BlueAuthorizationTypedDataArgs,
+  DaiPermitArgs,
   DeploylessFetchParameters as BlueDeploylessFetchParameters,
   /** @deprecated Use `BlueDeploylessFetchParameters` or the raw `/blue/types` subpath. */
   DeploylessFetchParameters,

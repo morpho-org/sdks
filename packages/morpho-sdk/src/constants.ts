@@ -1,6 +1,7 @@
 export {
   DEFAULT_SLIPPAGE_TOLERANCE,
   EIP_712_FIELDS,
+  ERC20_ALLOWANCE_RECIPIENTS,
   isMarketId as isBlueMarketId,
   /** @deprecated Use `isBlueMarketId` or the raw `/blue/constants` subpath. */
   isMarketId,
