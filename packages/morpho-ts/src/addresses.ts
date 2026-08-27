@@ -55,10 +55,14 @@ export interface ChainAddresses {
     /** Bundler3 adapter for migrating Aave V3 Optimizer positions to Morpho. */
     aaveV3OptimizerMigrationAdapter?: `0x${string}`;
   };
-  /** Standalone bundle periphery contracts for composing vault-exit workflows outside Bundler3. */
+  /** Standalone bundle periphery contracts for composing protocol workflows outside Bundler3. */
   readonly bundles?: {
     /** VaultExitBundlesV1 periphery contract for force-withdraw and in-kind redemption vault-exit flows. */
     readonly vaultExitBundlesV1: `0x${string}`;
+    /** VaultBundlesV1 periphery contract for vault deposit, withdraw, and same-asset migrate flows. */
+    readonly vaultBundlesV1?: `0x${string}`;
+    /** BlueBundlesV1 periphery contract for fixed Morpho Blue supply, borrow, repay, withdraw, and migrate flows. */
+    readonly blueBundlesV1?: `0x${string}`;
   };
   /** AdaptiveCurveIrm contract that lets Morpho update utilization-responsive borrow rates per market. */
   adaptiveCurveIrm: `0x${string}`;
@@ -152,6 +156,8 @@ const _addressesRegistry = {
     },
     bundles: {
       vaultExitBundlesV1: "0xaf85aF286637A033BE7d59ED8cC566afa3309B02",
+      vaultBundlesV1: "0x02912516d49dE997db75B9D7858faAE59209650B",
+      blueBundlesV1: "0x38B0C12AB81976e9417D4ebfe2A34DB6DF22e6AD",
     },
     adaptiveCurveIrm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
     vaultV1PublicAllocator: "0xfd32fA2ca22c76dD6E550706Ad913FC6CE91c75D",
@@ -255,6 +261,8 @@ const _addressesRegistry = {
     },
     bundles: {
       vaultExitBundlesV1: "0xE52E169C342C096C4949ABb944DC9f30E3F5Ea84",
+      vaultBundlesV1: "0x2B08A911f48dE25A7e305D910Afb5597aBE8ea7B",
+      blueBundlesV1: "0x4D28D900e381eCE4B351302f1Abe588496793A2b",
     },
     adaptiveCurveIrm: "0x46415998764C29aB2a25CbeA6254146D50D22687",
     vaultV1PublicAllocator: "0xA090dD1a701408Df1d4d0B85b716c87565f90467",
@@ -303,6 +311,8 @@ const _addressesRegistry = {
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundles: {
       vaultExitBundlesV1: "0x7Ae2B7012c82ea18a6BeE98ad09a684C88d6e36a",
+      vaultBundlesV1: "0x386ABE0188b7FADA897cE4dF9d72E8F57915B103",
+      blueBundlesV1: "0x93a1B342f3DF2c2bb5D0d8D5AF819450fFA4bE78",
     },
     adaptiveCurveIrm: "0xe675A2161D4a6E2de2eeD70ac98EEBf257FBF0B0",
     vaultV1PublicAllocator: "0xfac15aff53ADd2ff80C2962127C434E8615Df0d3",
@@ -335,6 +345,8 @@ const _addressesRegistry = {
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundles: {
       vaultExitBundlesV1: "0x7B885a940164eD51A068725f577a12197b76109b",
+      vaultBundlesV1: "0x5afAb0B2414E30c92a708234ea1b383Ce6317ED5",
+      blueBundlesV1: "0x30a388A64b99192702a83D2CA9B95D79702afbf2",
     },
     adaptiveCurveIrm: "0x66F30587FB8D4206918deb78ecA7d5eBbafD06DA",
     vaultV1PublicAllocator: "0x769583Af5e9D03589F159EbEC31Cc2c23E8C355E",
@@ -365,6 +377,8 @@ const _addressesRegistry = {
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundles: {
       vaultExitBundlesV1: "0x80De0F063aC662a4ee86c2F4Db0b52746094ad62",
+      vaultBundlesV1: "0x112088363eE4CcF3F37EaBD98FDDeEd98F0Be485",
+      blueBundlesV1: "0x317ca3534f8Cf92Accb4b4366F48017E596bc34a",
     },
     adaptiveCurveIrm: "0x8cD70A8F399428456b29546BC5dBe10ab6a06ef6",
     vaultV1PublicAllocator: "0x0d68a97324E602E02799CD83B42D337207B40658",
@@ -393,6 +407,8 @@ const _addressesRegistry = {
     },
     bundles: {
       vaultExitBundlesV1: "0xcf7b4a40f25A6b839A93b8A8b45297F2a5383E73",
+      vaultBundlesV1: "0x768BBD5F6c22b2498cC9C19832d3AEE08240755a",
+      blueBundlesV1: "0xEd44094c917D891D68f46E8cc2fd50D790707a65",
     },
     adaptiveCurveIrm: "0x34E99D604751a72cF8d0CFDf87069292d82De472",
     vaultV1PublicAllocator: "0xef9889B4e443DEd35FA0Bd060f2104Cca94e6A43",
@@ -490,6 +506,8 @@ const _addressesRegistry = {
     },
     bundles: {
       vaultExitBundlesV1: "0x0628B860947fA0c195988F65d53850546A489732",
+      vaultBundlesV1: "0x40755e3e2513D71cB79DC3Eeefd8Eb848d9cd899",
+      blueBundlesV1: "0x2c4331BC5EC245da744F35832C8797456cFC8045",
     },
     adaptiveCurveIrm: "0x9a6061d51743B31D2c3Be75D83781Fa423f53F0E",
     vaultV1PublicAllocator: "0xB0c9a107fA17c779B3378210A7a593e88938C7C9",
@@ -640,6 +658,8 @@ const _addressesRegistry = {
     },
     bundles: {
       vaultExitBundlesV1: "0xa434ABcc7e945b804c87B4f3c0a76b20651d4863",
+      vaultBundlesV1: "0x2464F4d0a4481732e7cC90ADD5abF986A48A06Dd",
+      blueBundlesV1: "0xCA52e5B901D9939013Fa8744dCbDeE0B6BdD5B39",
     },
     adaptiveCurveIrm: "0x4F708C0ae7deD3d74736594C2109C2E3c065B428",
     vaultV1PublicAllocator: "0x39EB6Da5e88194C82B13491Df2e8B3E213eD2412",
@@ -730,6 +750,8 @@ const _addressesRegistry = {
     },
     bundles: {
       vaultExitBundlesV1: "0xC1749C8d50bc645D5116ccf4C858Bc45cB981Ac4",
+      vaultBundlesV1: "0xB5173417e28482c61C14A4C2e217b158fF0db666",
+      blueBundlesV1: "0x84849171E1783630E1C4253b9C9d4b4208b0D86A",
     },
     adaptiveCurveIrm: "0xD4a426F010986dCad727e8dd6eed44cA4A9b7483",
     vaultV1PublicAllocator: "0x517505be22D9068687334e69ae7a02fC77edf4Fc",
@@ -825,6 +847,8 @@ const _addressesRegistry = {
     },
     bundles: {
       vaultExitBundlesV1: "0xB04b831893A6E2E02Be347cD259690c5Bc7D0675",
+      vaultBundlesV1: "0xcDDc5311A7ccDb2A7Bf97299149bE1D687F3C76e",
+      blueBundlesV1: "0x9C76E91bf08E712a713e3baB2F5AE01f6ec8845A",
     },
     adaptiveCurveIrm: "0x09475a3D6eA8c314c592b1a3799bDE044E2F400F",
     vaultV1PublicAllocator: "0xfd70575B732F9482F4197FE1075492e114E97302",
@@ -851,6 +875,8 @@ const _addressesRegistry = {
     },
     bundles: {
       vaultExitBundlesV1: "0x258d5c815CCE7017E24c63a7669F51ABcD0Dd4e5",
+      vaultBundlesV1: "0x2b910f5368e4939A2906ADa85c21fc0e51C4A861",
+      blueBundlesV1: "0xFB606389166c04828D6Dba36F77871489673CeA0",
     },
     adaptiveCurveIrm: "0x41e846FC8108b8527C1D4EDB4c9564E56442940f",
     vaultV1PublicAllocator: "0xbCB063D4B6D479b209C186e462828CBACaC82DbE",
@@ -1012,6 +1038,8 @@ const _addressesRegistry = {
     },
     bundles: {
       vaultExitBundlesV1: "0x8225192b8638bDe9D41a6d96aBb824F660Ef57E1",
+      vaultBundlesV1: "0xe8aA1d8f1Cb111B7f52957D662Ee310D6d2Ee9B9",
+      blueBundlesV1: "0xAE863452f44ADD237739A85eb6BB1989E2368362",
     },
     adaptiveCurveIrm: "0x112fd4042E442C3C12C67AD23587b0afe36eB74E",
     vaultV2BluePublicAllocator: "0xDC9693CE6488640faEf173Ec2635ff99fdC25a07",
@@ -1189,6 +1217,8 @@ const _addressesRegistry = {
     },
     bundles: {
       vaultExitBundlesV1: "0xCE29862924756584BBD0D75CA1249d22007E2813",
+      vaultBundlesV1: "0xcC108538f36242D6E0d6B9255f6D9Ccd137D70Fe",
+      blueBundlesV1: "0x53A1eB6589861F686af7c531211E35Aefe30210f",
     },
     adaptiveCurveIrm: "0x2BD3d5965B26B51814AC95127B2b80dD6CcC0fa1",
     vaultV2BluePublicAllocator: "0xCe5c1aFa115fF8b1D6913509bfc79D9AE08CC857",
