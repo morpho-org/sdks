@@ -50,6 +50,8 @@ import {
 
 type ReadonlyMarketSnapshot = Readonly<Market>;
 
+const MAX_SHARED_CAP_SEARCH_STEPS = 1_024n;
+
 type ReadonlyAdapterSnapshot = Readonly<IAccrualVaultV2Adapter>;
 
 type ReadonlyMarketAdapterSnapshot = Readonly<
@@ -416,7 +418,7 @@ export class VaultV2BlueReallocationData
    * Creates a cloned Vault V2 reallocation snapshot.
    *
    * @param input - State fetched at one consistent block.
-   * @throws {UnsupportedVaultV2AdapterError} when a vault contains an unsupported adapter type.
+   * @throws {UnsupportedBlueVaultV2AdapterError} when a vault contains an unsupported adapter type.
    */
   public constructor(input: InputVaultV2BlueReallocationData) {
     const isClone = input instanceof VaultV2BlueReallocationData;
@@ -869,10 +871,11 @@ export class VaultV2BlueReallocationData
    * `options.maxPenalty` are ignored. By default, only zero-penalty vaults are
    * considered.
    *
-   * Shared-cap discovery is conservative: when the non-shared maximum violates
-   * a shared cap, the candidate is omitted instead of scanning smaller base-unit
-   * amounts for a rounding-only fit. This keeps planning bounded but can
-   * understate executable liquidity in an already-at-or-over-cap snapshot.
+   * Shared-cap discovery is conservative. Operation planning searches at most
+   * 1,024 base units above its targeted amount for the nearest executable fit.
+   * Full-liquidity discovery omits a candidate when its non-shared maximum
+   * violates a shared cap instead of scanning smaller base-unit amounts. These
+   * bounds can understate executable liquidity in rounding-only edge cases.
    *
    * @param marketId - Target Blue market id.
    * @param options - Optional discovery controls and operation to support.
@@ -886,7 +889,6 @@ export class VaultV2BlueReallocationData
    * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent for a vault.
    * @throws {UnknownReallocationMarketPublicAllocatorConfigError} when an adapter-market allocator configuration is absent.
    * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
-   * @throws {ReallocationAllocationUnderflowError} when an inconsistent allocation snapshot underflows during the final transition.
    * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the absolute shortfall.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdraw exceeds market supply.
    * @example
@@ -1364,21 +1366,9 @@ export class VaultV2BlueReallocationData
               );
               if (postTransition == null) return;
 
-              const postVault = postTransition.data.getVault(
-                reallocation.vault,
-              );
               // Vault V2 checks relative caps against the transient firstTotalAssets,
               // which stays fixed after the vault's first allocation in a transaction.
-              const firstTotalAssetsKey = findAddressKey(
-                postTransition.context.firstTotalAssets,
-                reallocation.vault,
-              );
-              const firstTotalAssets =
-                (firstTotalAssetsKey == null
-                  ? undefined
-                  : postTransition.context.firstTotalAssets[
-                      firstTotalAssetsKey
-                    ]) ?? postVault._totalAssets;
+              const { firstTotalAssets } = postTransition;
               let withinUpperBounds = true;
               let withinAllCaps = true;
               for (const id of targetIds) {
@@ -1403,8 +1393,7 @@ export class VaultV2BlueReallocationData
 
             // Non-shared target IDs impose monotonic upper bounds. Shared IDs
             // can impose lower bounds and non-monotonic rounding constraints,
-            // so validate them after selecting the non-shared maximum. If that
-            // maximum fails, omit the candidate instead of scanning base units.
+            // so validate them after selecting the non-shared maximum.
             let probeUpper = true;
             while (lower < upper) {
               const assets = probeUpper ? upper : (lower + upper + 1n) / 2n;
@@ -1423,25 +1412,20 @@ export class VaultV2BlueReallocationData
                 ? probeReallocation(selectedAssets)
                 : undefined;
 
-            if (
-              remainingAssets != null &&
-              selectedAssets > 0n &&
-              probe?.withinAllCaps !== true &&
-              lower > selectedAssets &&
-              probeReallocation(lower)?.withinAllCaps === true
-            ) {
-              let infeasible = selectedAssets;
-              let feasible = lower;
-              while (infeasible + 1n < feasible) {
-                const midpoint = (infeasible + feasible) / 2n;
-                if (probeReallocation(midpoint)?.withinAllCaps === true) {
-                  feasible = midpoint;
-                } else {
-                  infeasible = midpoint;
-                }
+            if (remainingAssets != null && probe?.withinAllCaps !== true) {
+              // Bound the base-unit scan; expose a caller ceiling if wider searches become necessary.
+              const searchUpper = MathLib.min(
+                lower,
+                selectedAssets + MAX_SHARED_CAP_SEARCH_STEPS,
+              );
+              while (
+                selectedAssets > 0n &&
+                selectedAssets < searchUpper &&
+                probe?.withinAllCaps !== true
+              ) {
+                selectedAssets += 1n;
+                probe = probeReallocation(selectedAssets);
               }
-              selectedAssets = feasible;
-              probe = probeReallocation(selectedAssets);
             }
 
             if (selectedAssets > 0n && probe?.withinAllCaps === true)
@@ -1730,6 +1714,7 @@ export class VaultV2BlueReallocationData
       reallocation.vault;
     const firstTotalAssetsKey =
       findAddressKey(context.firstTotalAssets, reallocation.vault) ?? vaultKey;
+    let firstTotalAssets = context.firstTotalAssets[firstTotalAssetsKey];
     let nextContext = context;
     let vault = data.getMutableVault(vaultKey);
     const targetMarket = data.getMarket(targetMarketId);
@@ -1813,7 +1798,7 @@ export class VaultV2BlueReallocationData
       vault.assetBalance += reallocation.assets;
     }
 
-    if (context.firstTotalAssets[firstTotalAssetsKey] == null) {
+    if (firstTotalAssets == null) {
       // Vault V2's transient firstTotalAssets tracks the first allocation in a
       // transaction independently from elapsed time. Later allocations must not
       // recompute the denominator, even if their simulated balances have changed.
@@ -1830,11 +1815,12 @@ export class VaultV2BlueReallocationData
         vault = vault.accrueInterest(timestamp).vault;
       }
       data.mutableVaults[vaultKey] = vault;
+      firstTotalAssets = vault._totalAssets;
       nextContext = {
         ...nextContext,
         firstTotalAssets: {
           ...nextContext.firstTotalAssets,
-          [firstTotalAssetsKey]: vault._totalAssets,
+          [firstTotalAssetsKey]: firstTotalAssets,
         },
       };
     }
@@ -1889,7 +1875,7 @@ export class VaultV2BlueReallocationData
     }
 
     vault.assetBalance -= reallocation.assets;
-    return { data, context: nextContext };
+    return { data, context: nextContext, firstTotalAssets };
   }
 
   /** Updates canonical markets in bulk and refreshes only dependent adapter views. */

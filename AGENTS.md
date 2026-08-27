@@ -107,6 +107,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 ## 4. Public API & packaging
 
 - Every public symbol is re-exported explicitly from `src/index.ts`. Nothing else is public.
+- **`morpho-sdk` is the canonical consumer package.** Any PR that adds or changes a consumer-facing ABI, address, constant, entity, error, fetcher, type, or utility in `blue-sdk`, `blue-sdk-viem`, or `midnight-sdk` must audit the matching `morpho-sdk` facade subpath in the same PR. Every established facade category exposes raw dependency names through `/blue/<category>` or `/midnight/<category>`; its unprefixed counterpart uses `Blue`/`Midnight`-qualified names for protocol-specific symbols and leaves genuinely shared symbols unqualified. Deprecate legacy ambiguous names before removal, and do not expand the facade into a new upstream surface solely for parity.
 - **Tree-shakeable.** ESM at source (`"type": "module"`); no top-level side effects. Every package without top-level side effects sets `"sideEffects": false` in `package.json`.
 - **Dual ESM/CJS publish** from `lib/esm` and `lib/cjs`. Recommended build script: `tsc --noEmit && pnpm build:cjs && pnpm build:esm` (test/fixture-only packages may skip the type-check step). `publishConfig.exports` mirrors `types`, `import`, `require`. Subpath exports need both package exports and TS path mapping.
 - **`viem` is the only peer dep of `morpho-sdk`.** Integrators install `morpho-sdk + viem` and they're done. Other packages in the monorepo declare their own peer deps as needed.
