@@ -22,17 +22,42 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: unit
-            projects: >-
-              scripts agents-engine morpho-ts blue-sdk midnight-sdk morpho-sdk
-              evm-simulation blue-sdk-viem liquidity-sdk-viem test morpho-test
-              wdk-protocol-lending-morpho-evm
+          # Pure and fork projects from one package share a single runner.
+          - name: scripts
+            projects: scripts
             uses_foundry: false
-          - name: integration
-            projects: >-
-              blue-sdk-fork midnight-sdk-fork morpho-sdk-fork
-              evm-simulation-fork blue-sdk-viem-fork liquidity-sdk-viem-fork
-              test-fork wdk-protocol-lending-morpho-evm-fork
+          - name: agents-engine
+            projects: agents-engine
+            uses_foundry: false
+          - name: morpho-ts
+            projects: morpho-ts
+            uses_foundry: false
+          - name: blue-sdk
+            projects: blue-sdk blue-sdk-fork
+            uses_foundry: true
+          - name: midnight-sdk
+            projects: midnight-sdk midnight-sdk-fork
+            uses_foundry: true
+          - name: morpho-sdk
+            projects: morpho-sdk morpho-sdk-fork
+            uses_foundry: true
+          - name: evm-simulation
+            projects: evm-simulation evm-simulation-fork
+            uses_foundry: true
+          - name: blue-sdk-viem
+            projects: blue-sdk-viem blue-sdk-viem-fork
+            uses_foundry: true
+          - name: liquidity-sdk-viem
+            projects: liquidity-sdk-viem liquidity-sdk-viem-fork
+            uses_foundry: true
+          - name: test
+            projects: test test-fork
+            uses_foundry: true
+          - name: morpho-test
+            projects: morpho-test
+            uses_foundry: false
+          - name: wdk-protocol-lending-morpho-evm
+            projects: wdk-protocol-lending-morpho-evm wdk-protocol-lending-morpho-evm-fork
             uses_foundry: true
 
     steps:
