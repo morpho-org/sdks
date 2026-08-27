@@ -209,11 +209,22 @@ the Permit2 contract, and a first-time user has none. `getGeneralAdapterRequirem
 resolves this — it reads `allowance(from, permit2)` and, when that is short of `amount`, emits an
 infinite (`MAX_UINT_160`) approval to Permit2 **before** the signature requirement
 (`getGeneralAdapterRequirements.ts:160-182`, `getGeneralAdapterRequirementsPermit2.ts:79-103`).
-`getBundlesTokenRequirements` inherits that behavior unchanged, including the
-`APPROVE_ONLY_ONCE_TOKENS` `approve(0)` reset, so the Permit2 path can return **up to three** ordered
-requirements. Only the spender inside the signature changes: `vaultBundlesV1` instead of
-`generalAdapter1`. Dropping the prerequisite would produce a valid signature and a reverting
-transaction, so the first-time Permit2 depositor is a required authorization test.
+`getBundlesTokenRequirements` inherits that behavior, including the `APPROVE_ONLY_ONCE_TOKENS`
+`approve(0)` reset, so the Permit2 path can return **up to three** ordered requirements. Dropping the
+prerequisite would produce a valid signature and a reverting transaction, so the first-time Permit2
+depositor is a required authorization test.
+
+Two things must change rather than be inherited. The spender inside the signature becomes
+`vaultBundlesV1` instead of `generalAdapter1`; and the approval amount moves from `MAX_UINT_160` to
+`MAX_UINT_256`, because `MAX_UINT_160` is a copy of AllowanceTransfer's `PermitDetails.amount` field
+width and SignatureTransfer's `TokenPermissions.amount` is `uint256` (`morpho-ts/src/abis.ts:576-578`).
+Keeping the narrower cap would make `getRequirementsApproval` throw
+`ApprovalAmountLessThanSpendAmountError` — it rejects `approvalAmount < spendAmount` outright
+(`getRequirementsApproval.ts:63-65`) — for a gross amount the contract itself accepts. A gross above
+`MAX_UINT_160` is economically unreachable at any real token supply, so this is a boundary-correctness
+fix rather than a live risk; it matters because §5 mandates property-based coverage over `bigint`
+inputs, and a generator that does not respect an undocumented `uint160` ceiling will hit the throw.
+The `MAX_UINT_160 + 1n` boundary is therefore an explicit property-test case.
 
 **SignatureTransfer needs its own signature discriminant.** `PermitRequirementSignature` tags
 AllowanceTransfer as `action.type: "permit2"` and carries an `expiration` that SignatureTransfer has
@@ -272,10 +283,34 @@ Allowance sizing is exact, never max, and must **upper-bound** the shares burned
 - redeem / migration-by-shares: exactly `shares` — deterministic;
 - withdraw / migration-by-assets: shares are previewed, so the bound must survive share-price drift.
   Reuse the `inKindRedeem` rule — accrue the vault forward (which mints pending performance-fee
-  shares and therefore *lowers* the share price) before `toShares(assets)` — and, for Vault V2 only,
-  widen by the caller's `slippageTolerance`, because a V2 share price can also fall on loss
-  realization. A V1 share price cannot fall from accrual, so the accrued preview is already an upper
-  bound there.
+  shares and therefore *lowers* the share price) before `toShares(assets)` — and widen by the
+  caller's `slippageTolerance`. The widening applies to **Vault V2 and MetaMorpho 1.0**, not to V2
+  alone, which is a correction to the V1/V2 asymmetry an earlier draft of this TIB asserted.
+
+  Accrual is only one of the two ways a share price moves, and the safe direction is the only one the
+  SDK models. Accrual alone cannot lower a V1 price: market interest is non-negative
+  (`Market.ts:358-360`) and the vault's fee mint charges `feeAssets ≤ totalInterest`
+  (`Vault.ts:466-473`), so the accrued preview does upper-bound the burn *if accrual is the only state
+  change*. Loss realization is the other way, and the SDK does not simulate it — there is no
+  `liquidate()` state transition anywhere, and `totalSupplyAssets` is a plain fetched field
+  (`Market.ts:35,57`). A Blue bad-debt socialization between resolution and inclusion reduces a
+  market's `totalSupplyAssets` with shares unchanged, and `AccrualVault.totalAssets` is exactly the
+  allocation sum (`Vault.ts:238-241`), so it flows straight through.
+
+  What separates the two V1 generations is the `lostAssets` clamp. **MetaMorpho 1.1** has it, and it
+  guarantees `totalAssets ≥ lastTotalAssets` (`Vault.ts:457-464`, asserted at `Vault.test.ts:270-275`),
+  so the price is non-decreasing by construction and the bound survives a loss — but it becomes
+  exactly *tight* rather than conservative, since the price goes flat instead of rising.
+  **MetaMorpho 1.0** has `lostAssets === undefined` (`blue-sdk-viem/src/fetch/Vault.ts:128`), the
+  clamp branch is skipped, and a fetched loss propagates directly into the share price. There, the
+  accrued preview is **not** an upper bound and an exact allowance reverts for insufficient
+  allowance. Since `toShares` rounds `"Up"`, the only existing margin is one wei.
+
+  Note this is a **pre-existing gap, not one this migration introduces**: the shipped `inKindRedeem`
+  V1 path sizes its allowance on the same assumption and carries the same comment
+  (`entities/vaultV1/vaultV1.ts:489-493`). The migration is what makes it load-bearing on the common
+  withdraw path, so the fix belongs in Phase 3 and the comment at that call site must be corrected
+  rather than copied.
 
 **Deadlines.** Same convention as `inKindRedeem`: `deadline?` defaults to `Time.timestamp() + 2h`,
 validated eagerly at handle creation and again inside `getRequirements()` with `ExpiredDeadlineError`.
@@ -462,11 +497,26 @@ No gate error class: gate compatibility is a simulation concern, per §3.
   (`:1068-1076`) but route through Blue, so they belong to the `BlueBundlesV1` sibling TIB, not here.
   Tests must pin `buildTx`'s arguments: today's `describe("withdraw")` block asserts the entity call
   but never the `buildTx` argument (`morpho-protocol-evm.test.ts:429-459`), which is why the gap was
-  invisible. This is an additive WDK API change — a minor.
+  invisible.
+
+  **WDK supply breaks too, and it is not additive.** §5's exclusive funding invalidates every WDK
+  native vault supply, because `normalizeOptionalNonNegativeAmount` turns an omitted `amount` into
+  `0n` (`morpho-protocol-evm.ts:331-335`) and `_getSupplyAction` then forwards **both** keys
+  unconditionally (`:566-568`), so even a purely native supply arrives as
+  `{ amount: 0n, nativeAmount: X }` — a compile error against `BundlesFundingArgs` and
+  `MixedBundlesFundingError` at runtime. Fixing the normalization is necessary but not sufficient:
+  the WDK *public* options advertise the additive behavior the contract removes.
+  `MorphoErc20SupplyOptions` requires `amount` and accepts an optional `nativeAmount`, and
+  `MorphoNativeSupplyOptions` mirrors it (`:119-151`), so both must drop their optional counterpart
+  field to become genuinely exclusive. That is a field removal from a published interface, so
+  **`wdk-protocol-lending-morpho-evm` takes a major, not a minor** — the withdraw work above is
+  additive, but this is not. Options, normalization, `_getSupplyAction`, the supply tests, and a WDK
+  migration-guide entry all land in this phase.
 - **Phase 5 — release surface.** Migration guide entry — led by the `userAddress` semantics change
   and the Permit2 signature-type change — glossary update, `AGENTS.md` routing summary rewrite, and
-  changesets: **major** for `morpho-sdk`, **minor** for `morpho-ts`, **minor** for the WDK API
-  addition, plus an explicit changeset for `liquidity-sdk-viem`. That last one is not an open audit
+  changesets: **major** for `morpho-sdk`, **minor** for `morpho-ts`, **major** for
+  `wdk-protocol-lending-morpho-evm` (the withdraw work is additive but the supply-options change
+  removes fields — see Phase 4), plus an explicit changeset for `liquidity-sdk-viem`. That last one is not an open audit
   item: `packages/liquidity-sdk-viem/package.json:34` pins `"@morpho-org/morpho-sdk": "^5.4.0"` as a
   **peer**, which a `6.0.0` release does not satisfy, and §4 makes internal peer ranges a manual
   obligation — Changesets will not infer it. Its own source consumes only `PublicReallocation` and
@@ -485,7 +535,8 @@ one. `Plan` marks whether the migration plan already tracks the row.
 
 | # | Change | Plan | Mitigation |
 | - | ------ | ---- | ---------- |
-| 1 | Deposit `amount` + `nativeAmount` stop being additive; ETH and WETH become exclusive | tracked | `BundlesFundingArgs` XOR type surfaces it at compile time; migration guide shows the two-transaction fallback |
+| 1 | Deposit `amount` + `nativeAmount` stop being additive; ETH and WETH become exclusive | tracked | `BundlesFundingArgs` XOR type surfaces it at compile time; migration guide shows the two-transaction fallback. Also breaks WDK supply — row 20 |
+| 20 | WDK `MorphoErc20SupplyOptions` / `MorphoNativeSupplyOptions` lose their optional counterpart field, and WDK's normalization can no longer forward both keys | **new — untracked** | Makes `wdk-protocol-lending-morpho-evm` a **major**, not the minor Phase 4 first assumed. Today even a purely native supply reaches the entity as `{ amount: 0n, nativeAmount: X }` (`morpho-protocol-evm.ts:331-335`, `:566-568`) |
 | 2 | Deposit `recipient` removed — shares always mint to `msg.sender` | new | Compile error at the action layer. **Entity callers are not unaffected**: `userAddress` need not be the submitter, so a relayer-submitted deposit mints to the relayer — §2 and row 18 |
 | 3 | Withdraw / redeem `recipient` and `onBehalf` removed | new | Compile error at the action layer. `onBehalf` is the ERC-4626 `owner`, so this removes a real delegated-exit capability (row 16); through the entity it silently changes *whose* shares burn — row 18 |
 | 4 | Withdraw / redeem return `ActionOutput` instead of `{ buildTx }`; `buildTx` takes signatures | new | This is the API face of the share-approval regression; migration guide ships the requirement loop; WDK is updated in Phase 4 |
@@ -537,7 +588,10 @@ Only `VaultBundlesV1`-specific behavior. Existing action validations are inherit
 | Entity handle built with `userAddress != client.account` | `AddressMismatchError` when an account is connected; with a public client the SDK cannot check, and the JSDoc states `userAddress` must be the submitter |
 | Deposit share price moves past the bound | Contract reverts `SlippageExceeded`; bound is computed from the **net** amount |
 | Withdraw with both `assets` and `shares`, or neither | `AmountAndSharesExclusiveError` (contract: `NotExactlyOneZero`) |
-| Withdraw-by-assets after a V2 share-price drop | Allowance must still cover the burn: exact bound plus the caller's slippage tolerance on V2 |
+| Withdraw-by-assets after a V2 share-price drop | Allowance must still cover the burn: exact bound plus the caller's slippage tolerance |
+| Withdraw-by-assets from a **MetaMorpho 1.0** vault across a Blue bad-debt socialization | Same widening as V2 — the accrued preview is not an upper bound without a `lostAssets` clamp; MetaMorpho 1.1's clamp keeps the bound but makes it exactly tight |
+| Permit2 deposit whose gross exceeds `MAX_UINT_160` | Resolves: the ERC-20 approval to Permit2 is sized `MAX_UINT_256`, since `TokenPermissions.amount` is `uint256`. Never `ApprovalAmountLessThanSpendAmountError` |
+| WDK purely native vault supply | Reaches the entity with `nativeAmount` only; the pre-existing `{ amount: 0n, nativeAmount: X }` shape must not survive Phase 4 |
 | Share balance shrinks between quote and inclusion (full exit by shares) | Contract reverts; do not describe a shares exit as saturated |
 | Share balance grows between quote and inclusion | Residual shares remain; the exit is partial by design |
 | Permit already consumed by a third party | `submitPermit` skips it; the existing allowance path must still cover the burn |
@@ -695,7 +749,14 @@ Per §5, and following the `inKindRedeem` test layout:
 - **Fork, pinned block, per chain.** Vault V1 and Vault V2 × deposit / withdraw / redeem /
   migration; permit and approval paths; native deposit; referral fee crediting; `AlreadyInitiated`
   on a double call; full exit by shares; a Permit2 deposit from an owner with zero Permit2 allowance,
-  proving the two-requirement path end to end.
+  proving the two-requirement path end to end. Plus a **MetaMorpho 1.0 withdraw-by-assets across a
+  simulated bad-debt socialization**, asserting the widened allowance still covers the burn — the case
+  that shows why the V1 bound needs the same treatment as V2.
+- **Boundary coverage.** `MAX_UINT_160 + 1n` gross on the Permit2 SignatureTransfer path, asserting
+  the approval is sized `MAX_UINT_256` and no `ApprovalAmountLessThanSpendAmountError` escapes.
+- **WDK funding shape.** A purely native supply must reach the entity with `nativeAmount` only, and a
+  supply passing both an ERC-20 and a native amount must fail at compile time — the two cases that
+  today pass silently through `normalizeDepositAmounts`.
 - **Regression guard.** Existing `BlueBundlesV1` and `VaultExitBundlesV1` tests stay green through
   the Phase 1 rename, with no assertions weakened. The builder ≠ signer regression test
   (`entities/vaultV1/vaultV1.test.ts:737-741`) must still pass — the `userAddress` check is
@@ -709,6 +770,10 @@ Per §5, and following the `inKindRedeem` test layout:
   through the usual sync, as PR #936 did for `vaultExitBundlesV1`. The TIB hardcodes no address.
 - Both Vault V1 and Vault V2 shares implement ERC-2612, so the share-approval regression is always
   mitigable by a signature.
+- No assumption is made that a Vault V1 share price is monotonic. It is monotonic under *accrual*, but
+  the SDK does not model loss realization, and a MetaMorpho 1.0 vault has no `lostAssets` clamp to
+  absorb one — so allowance sizing treats V1.0 like V2 (§3). Correcting an earlier draft of this TIB
+  that asserted a V1/V2 asymmetry here.
 - Vault V2 configurations used with this contract keep to `MorphoMarketV1AdapterV2` or
   `MorphoVaultV1Adapter`, per the contract's own deployment note. The SDK does not enforce it.
 - Curators of gated Vault V2s update `sendAssetsGate` and `receiveAssetsGate` before release. The
@@ -734,7 +799,10 @@ Per §5, and following the `inKindRedeem` test layout:
 
 - The share allowance granted to `VaultBundlesV1` is the new trust delegation on the exit paths.
   Exact, upper-bounded sizing keeps residual allowance to preview rounding; max-approval is
-  rejected.
+  rejected. "Upper-bounded" must hold against loss realization, not only accrual — see §3, and note
+  the shipped `inKindRedeem` V1 path currently assumes otherwise
+  (`entities/vaultV1/vaultV1.ts:489-493`), a pre-existing gap this migration must fix rather than
+  propagate.
 - `validateUserAddress` inside `encodeVaultSharesPermit.sign` must keep holding for the new spender:
   a third party must not be able to authorize someone else's exit.
 - `validateRequirementSpender` must gain the `vaultBundlesV1` key; without it, approvals to the new
@@ -775,8 +843,9 @@ Per §5, and following the `inKindRedeem` test layout:
    off-chain before building?
 3. **Gross vs. net inputs (§4).** Confirm `amount` stays the contract's gross value, with the exact
    gross-up as a helper.
-4. **V2 withdraw-by-assets allowance buffer (§3).** Slippage-widened exact bound, or the user's full
-   share balance for maximum robustness?
+4. **Withdraw-by-assets allowance buffer (§3).** Slippage-widened exact bound, or the user's full
+   share balance for maximum robustness? Now applies to MetaMorpho 1.0 as well as V2, so the answer
+   covers more vaults than the question originally assumed.
 5. **Gate readiness (row 13).** Who owns confirming that every gated Vault V2 has whitelisted
    `VaultBundlesV1` on both gates before the major ships?
 6. **Aave V3 → Vault V2.** Confirm it stays on Bundler3 past the major, or that the flow is dropped
