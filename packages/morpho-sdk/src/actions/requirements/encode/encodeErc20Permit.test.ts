@@ -4,7 +4,7 @@ import { type Address, isHex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
 import { afterEach, describe, expect, vi } from "vitest";
-import { test } from "../../../../test/setup.js";
+import { test } from "../../../../test/unit.js";
 import {
   AddressMismatchError,
   ChainIdMismatchError,

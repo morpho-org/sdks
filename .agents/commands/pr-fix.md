@@ -400,14 +400,14 @@ For each file with findings, build a complete understanding before touching anyt
    - Type definitions, interfaces, or schemas referenced at the flagged location
    - Helper modules used inside the changed function
 
-4. **Find callers** — use the **Grep tool** (preferred over raw grep — it handles regex metacharacters in symbol names safely). Search across `packages/**` (this monorepo has no top-level `test/` directory; tests live under `packages/*/test/` and colocated next to source in `morpho-sdk` / `evm-simulation`):
+4. **Find callers** — use the **Grep tool** (preferred over raw grep — it handles regex metacharacters in symbol names safely). Search across `packages/**` (this monorepo has no top-level `test/` directory; unit tests are colocated beside source and integration tests live under `packages/*/test/`):
 
    ```bash
    # If you must use a shell, scope to packages/:
    grep -rn "<exported-symbol-name>" packages/
    ```
 
-5. **If the change is in a public API**, read the corresponding `packages/<pkg>/src/index.ts` re-export entry point AND any test file under `packages/<pkg>/test/` that exercises the symbol.
+5. **If the change is in a public API**, read the corresponding `packages/<pkg>/src/index.ts` re-export entry point, relevant colocated `packages/<pkg>/src/**/*.test.ts` unit tests, and `packages/<pkg>/test/**/*.integration.test.ts` integration tests.
 
 6. **If the comment cites an originating commit/PR** (e.g., "introduced in #1234" or `git blame` output), read the other files touched by that commit for context:
 
@@ -793,7 +793,7 @@ MERGEEOF
        - if the file is under packages/<pkg>/, also packages/<pkg>/AGENTS.md/README.md/ARCHITECTURE.md,
        - any nested AGENTS.md along the path of the touched file,
        - for files outside packages/ the per-package step is skipped.
-     Then read the FULL file, read all files imported by it, and use the Grep tool to find callers (this monorepo has no top-level test/ directory; tests live under packages/*/test/ and colocated next to source in morpho-sdk/evm-simulation). If the change is in a public API, also read packages/<pkg>/src/index.ts and any test file under packages/<pkg>/test/. You do NOT need to read every transitive import — focus on files directly relevant to the specific fix. Re-discover this context per cycle from THIS cycle's diff/touched files.
+     Then read the FULL file, read all files imported by it, and use the Grep tool to find callers (this monorepo has no top-level test/ directory; unit tests are colocated beside source and integration tests live under packages/*/test/). If the change is in a public API, also read packages/<pkg>/src/index.ts and relevant colocated unit or package `test/` integration files. You do NOT need to read every transitive import — focus on files directly relevant to the specific fix. Re-discover this context per cycle from THIS cycle's diff/touched files.
    - Assign Confidence: HIGH (proceed), Confidence: MEDIUM (proceed but flag in reply), Confidence: LOW (SKIP — record as "skipped: low confidence", reply with what's unclear, leave thread unresolved). Always prefix with `Confidence:` so the tokens never collide with severity.
 
    a. Group actionable + Confidence:HIGH/MEDIUM comments by file. For each file: apply fix with Edit tool per the comment suggestion (using the context already gathered above).

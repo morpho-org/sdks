@@ -3,13 +3,13 @@ import { createViemTest } from "@morpho-org/test/vitest";
 import { erc20Abi, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
-import { withChainTimestamp } from "../../../test/helpers/time.js";
 import {
   isRequirementApproval,
   isRequirementSignature,
   morphoViemExtension,
-} from "../../index.js";
+} from "../../../src/index.js";
+import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
+import { withChainTimestamp } from "../../helpers/time.js";
 
 // VaultExitBundlesV1 is deployed at this block. Keep the newer fork local so the shared fork
 // remains pinned to the historical state expected by the existing Morpho SDK integration suite.

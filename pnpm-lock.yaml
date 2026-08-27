@@ -340,6 +340,9 @@ importers:
         specifier: 1.5.0
         version: 1.5.0(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
     devDependencies:
+      '@morpho-org/test':
+        specifier: workspace:^
+        version: link:../test
       typescript:
         specifier: ^7.0.2
         version: 7.0.2

@@ -165,10 +165,10 @@ const requirements = await morpho.getBorrowRequirements(options)
 
 ## Fork E2E Test
 
-The regular unit test suite is fully mocked and runs as part of the workspace's `pnpm test` command. The Anvil-fork integration suite under `tests/integration/` is gated on `MAINNET_RPC_URL` being set; the corresponding tests are skipped otherwise. To execute the real vault deposit path against a mainnet fork:
+The colocated unit suite runs as part of the workspace's `pnpm test` command. The Anvil-fork integration suite under `test/` uses `*.integration.test.ts` names and is gated on `MAINNET_RPC_URL` being set; the corresponding tests are skipped otherwise. To execute the real vault deposit path against a mainnet fork:
 
 ```bash
-MAINNET_RPC_URL="https://eth-mainnet.g.alchemy.com/v2/<key>" pnpm test --project wdk-protocol-lending-morpho-evm
+MAINNET_RPC_URL="https://eth-mainnet.g.alchemy.com/v2/<key>" pnpm test --project wdk-protocol-lending-morpho-evm-fork
 ```
 
 The fork test impersonates a USDT holder, funds the local test wallet, sends SDK requirements, and executes a Morpho Vault V2 deposit against forked mainnet state.

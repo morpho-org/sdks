@@ -11,8 +11,8 @@ import {
   InvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError,
   UnsupportedPermitDomainExtensionsError,
-} from "../src/error.js";
-import { getPermitTypedData } from "../src/signatures/permit.js";
+} from "../error.js";
+import { getPermitTypedData } from "./permit.js";
 
 const owner = randomAddress();
 
