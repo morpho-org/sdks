@@ -104,8 +104,9 @@ truth), the master PR extracts them once into `src/actions/bundles/`, and PR #94
 | `getBundlesTokenPermit(...)` — reshape a `PermitRequirementSignature` into `TokenPermit{kind,data}` | new (PR #945 accepts an ABI-ready struct and never builds one) | same |
 | `getBundlesSharesPermit(...)` — reshape into `Permit{value,nonce,deadline,v,r,s}` + empty sentinel | `getVaultExitBundlesV1PermitStruct` (kept as a deprecated alias for the in-kind paths) | vault withdraw / redeem / migrate, vault-exit |
 | `resolveBundlesFunding({ amount, nativeAmount, asset, chainId })` — XOR funding resolver returning `{ assets, value }` | inlined `nativeAmount` handling in PR #945 | Blue + vault deposit paths |
-| `getBundlesTokenRequirements(...)` — spender-parameterized approval / ERC-2612 / Permit2-SignatureTransfer resolver | generalizes `getGeneralAdapterRequirements` | all bundles funding paths |
-| `encodeErc20Permit2SignatureTransfer(...)` | new — see §4 | all bundles funding paths |
+| `getBundlesTokenRequirements(...)` — spender-parameterized approval / ERC-2612 / Permit2-SignatureTransfer resolver, including the ERC-20 approval **to Permit2** that a SignatureTransfer signature presupposes | generalizes `getGeneralAdapterRequirements` | all bundles funding paths |
+| `encodeErc20Permit2SignatureTransfer(...)` | new — see §3 | all bundles funding paths |
+| `Permit2SignatureTransferAction` + args — a **distinct** `RequirementSignature` union member | new; reusing `action.type: "permit2"` would collide with AllowanceTransfer (§3) | all bundles funding paths |
 | `computeVaultMaxSharePrice({ vaultData, assets, slippageTolerance })` in `helpers/slippage.ts` | three inline copies in `vaultV1`/`vaultV2` entities | vault deposit, migration destination leg |
 | `grossFromNetAssets({ netAssets, referralFeePct })` | new | referral-fee call sites |
 | `bundles.vaultBundlesV1` registry slot + `vaultBundlesV1Abi` + `RequirementSpenderKey` entry | new | — |
@@ -142,6 +143,44 @@ behind the master PR. Where a parameter disappears (`recipient`, `onBehalf`,
 `minSharePriceVaultV1`), it is a hard compile error rather than a silently-ignored field: quietly
 accepting a `recipient` the contract cannot honor would misroute funds.
 
+**`userAddress` changes meaning, and the compiler cannot catch it.** This is the one breaking change
+in this migration that is silent at compile time *and* at build time. `VaultBundlesV1` hardcodes the
+depositor, the share owner, and the payee to `msg.sender`. Today's actions take `recipient`
+(ERC-4626 `receiver`) and `onBehalf` (ERC-4626 `owner`) as independent addresses, and the entities
+collapse both to `userAddress` (`entities/vaultV1/vaultV1.ts:378-382`,
+`entities/vaultV2/vaultV2.ts:418-422`). Crucially, the SDK **deliberately does not require
+`userAddress` to be the submitting account**: `validateUserAddress` is called on no vault build path,
+`packages/morpho-sdk/src/entities/AGENTS.md:9` states the invariant ("Entities do not enforce
+builder = signer at build time — callers MUST keep `userAddress` aligned with the signing account"),
+and `entities/vaultV1/vaultV1.test.ts:737-741` regression-tests that a public client with a
+divergent `userAddress` still produces a valid transaction.
+
+The same `AGENTS.md` line notes that the invariant *is* enforced at `sign()` time on the signature
+requirements, via `validateUserAddress`. That existing enforcement point does not cover this
+migration: it fires only when a signature requirement exists, and the two cases that misroute funds
+have none — a withdraw whose share allowance is already sufficient returns no requirement at all, and
+the classic-approval path has no `sign()` to hook. So the check must move to where the address is
+consumed, not where a signature happens to be produced.
+
+So rows 2 and 3 below understate the change; entity callers are not safe. A relayer that submits a
+deposit built with `userAddress = user` mints the shares to the **relayer**. A withdrawal built with
+`userAddress = otherHolder` — legal today whenever the submitter holds a share allowance from that
+holder, because `onBehalf` is a real ERC-4626 `owner` parameter — burns the **submitter's** shares
+instead. Both misroute funds and raise no error at any layer. Mitigation:
+
+- `userAddress` is redefined in JSDoc as *the account that must submit the transaction*, not the
+  position owner, on every re-routed vault method;
+- the entities check it opportunistically: when `client.account` is present and differs from
+  `userAddress`, throw the existing `AddressMismatchError` through `validateUserAddress`. With no
+  connected account the check is impossible, which is what preserves the public-client build pattern
+  the regression test above pins;
+- the delegated capability itself is **lost**, not relocated — capability-loss row 16 covers it, and
+  integrations that depend on it must keep a direct vault call.
+
+Enforcing builder = signer unconditionally would be the stronger guarantee, but it would break that
+documented invariant and the public-client pattern with it. See Considered Alternatives and Open
+Question 7.
+
 This diverges from PR #945, which added a parallel chain-scoped `blueBundlesV1(chainId)` entity with
 a `blueBundlesV1*` action vocabulary. The master PR should converge Blue on the same rule. See Open
 Questions.
@@ -155,7 +194,7 @@ spender is `VaultBundlesV1`. All three funding paths the contract accepts must b
 - classic ERC-20 approval — `encodeErc20Approval` with `vaultBundlesV1` added to the allow-list;
 - ERC-2612 — `encodeErc20Permit`, reshaped by `getBundlesTokenPermit` into
   `TokenPermit{kind: ERC2612, data: abi.encode(deadline, v, r, s)}`;
-- Permit2 **SignatureTransfer** — new encoder, see below.
+- Permit2 **SignatureTransfer** — new encoder, and **not a single requirement**: see below.
 
 The Permit2 point is not optional. `TokenLib.pullToken` calls
 `IPermit2.permitTransferFrom(PermitTransferFrom(TokenPermissions(token, amount), nonce, deadline), …)`.
@@ -163,6 +202,35 @@ The SDK's existing `encodeErc20Permit2Approve` produces an **AllowanceTransfer**
 signature; it is a different EIP-712 type and is not consumable by this contract. PR #945 sidestepped
 this by resolving classic approvals only; carrying that choice into vault deposits would turn a
 signature into an extra transaction for every Permit2 user.
+
+**Permit2 is a two-requirement path, not one.** A SignatureTransfer signature is worthless on its
+own: Permit2 executes the `transferFrom` itself, so it needs an ERC-20 allowance from the owner to
+the Permit2 contract, and a first-time user has none. `getGeneralAdapterRequirements` already
+resolves this — it reads `allowance(from, permit2)` and, when that is short of `amount`, emits an
+infinite (`MAX_UINT_160`) approval to Permit2 **before** the signature requirement
+(`getGeneralAdapterRequirements.ts:160-182`, `getGeneralAdapterRequirementsPermit2.ts:79-103`).
+`getBundlesTokenRequirements` inherits that behavior unchanged, including the
+`APPROVE_ONLY_ONCE_TOKENS` `approve(0)` reset, so the Permit2 path can return **up to three** ordered
+requirements. Only the spender inside the signature changes: `vaultBundlesV1` instead of
+`generalAdapter1`. Dropping the prerequisite would produce a valid signature and a reverting
+transaction, so the first-time Permit2 depositor is a required authorization test.
+
+**SignatureTransfer needs its own signature discriminant.** `PermitRequirementSignature` tags
+AllowanceTransfer as `action.type: "permit2"` and carries an `expiration` that SignatureTransfer has
+no equivalent for (`types/action.ts:590-594`, `:631-635`), and `selectRequirementSignatures` matches
+**only** on `action.type`, collapsing `"permit"` and `"permit2"` into one `permit` slot
+(`types/action.ts:901-939`). Reusing the tag would therefore let a stale AllowanceTransfer signature
+reach `getBundlesTokenPermit` and be reshaped into a `TokenPermit` the contract cannot verify, and
+would make a legitimate permit + permit2 pair throw `AmbiguousRequirementSignaturesError` instead of
+resolving. Phase 1 adds a distinct union member — `action.type: "permit2SignatureTransfer"` with
+`{ spender, amount, nonce, deadline }` and no `expiration` — and narrows every consumer
+(`selectRequirementSignatures`, `getBundlesTokenPermit`, `getTokenRequirementActions`) exhaustively,
+so a Bundler3 consumer handed the new kind fails with `UnexpectedRequirementSignatureError` rather
+than mis-encoding. This is not a new decision:
+[TIB-2026-06-03](./TIB-2026-06-03-midnight-action-output-interface.md) already recorded it as the
+required follow-up — "a distinct requirement type for Permit2 SignatureTransfer rather than reusing
+Blue's `action.type === \"permit2\"`" — and deferred it because Midnight shipped approval-only. This
+TIB is where it comes due.
 
 **SignatureTransfer nonces are unordered**, not sequential: Permit2 tracks them in
 `nonceBitmap(owner, wordPos)` — already present in `packages/morpho-ts/src/abis.ts`. A signature
@@ -173,6 +241,19 @@ take the first word with a zero bit, and use `wordPos × 256 + bitPos`. Determin
 the requirement idempotent across retries of the same unsubmitted intent, and the word scan is
 bounded in practice because a user's flipped bits stay dense at the low end. This path must be
 tested with a pre-consumed nonce and with a fully-consumed first word.
+
+**Determinism and concurrency are in tension, and the SDK cannot resolve it alone.** Two requirement
+resolutions for the same owner and token that happen before either transaction lands read the same
+bitmap and select the same bit; Permit2 accepts the first submission and reverts the second with
+`InvalidNonce`. Reserving a bit would require the SDK to remember what it handed out — state, which
+§1 forbids: `morphoViemExtension()` is stateless by construction, with no cache and no warm-up. The
+resolution is therefore to **expose the choice rather than hide it**: `getBundlesTokenRequirements`
+accepts an optional `permit2Nonce`, and the lowest-free-bit scan is the default only when the caller
+supplies none. An app with concurrent outstanding intents owns the allocation — it is the only layer
+that knows how many are in flight — while an app with one intent at a time gets the idempotent
+default and never thinks about nonces. The requirement's `action.args` surface the selected nonce so
+a caller can observe what it got. Covered by a test that resolves twice against one bitmap and
+asserts both the collision under the default and its absence with an explicit nonce.
 
 **Share-side approval (withdraw / redeem / migration).** `IERC4626(vault).withdraw(assets,
 address(this), msg.sender)` and `redeem(shares, address(this), msg.sender)` spend the caller's
@@ -232,9 +313,16 @@ The net-target gross-up the contract documents ships as the exported pure helper
 approximate — `assets − floor(assets × pct / WAD) = ceil(assets × (WAD − pct) / WAD) = W` for every
 integer `W` and every `0 ≤ pct < WAD`. An off-by-one net result is a defect, not tolerable rounding,
 and the property test asserts exact round-tripping rather than a ±1 window. The action args also
-carry `referralFeeAssets` and `netAssets` so simulations and UI can display both. Validation: reject
-`pct >= WAD` (`PctExceeded`) and `pct > 0` with a zero recipient (which would revert in
-`SafeTransferLib`).
+carry `referralFeeAssets` and `netAssets` so simulations and UI can display both.
+
+Validation lives in the builders as well as the entities, since the builders are the exported
+surface, and it has a lower bound as well as an upper one: reject `pct < 0n` with
+`NegativeInputError` — otherwise the `uint256` ABI encoder fails with an untyped viem error and the
+gross-up divides by a value greater than `WAD`, both violating §3's typed-error rule — reject
+`pct >= WAD` with `ReferralFeePctExceededError` (contract: `PctExceeded`), and reject `pct > 0` with
+a zero recipient (which would revert in `SafeTransferLib`). `validateSlippageTolerance`
+(`helpers/validate.ts:575-582`) is the precedent for the pair: `NegativeInputError` below, a
+dedicated class above.
 
 **Deposit share price.** The contract enforces
 `toDeposit.mulDivUp(1e27, shares) <= maxSharePriceE27` on the **net** amount. `maxSharePriceE27` is
@@ -257,8 +345,17 @@ interest accrual.
 
 **Zero and dust.** The contract states that no-ops and zero checks are not systematic. A deposit
 minting zero shares makes `toDeposit.mulDivUp(1e27, shares)` divide by zero and panic. The builders
-therefore reject non-positive `assets` / `shares` with `NonPositiveInputError`, and the entities
-reject a previewed zero share mint, as `deposit` already does today.
+reject non-positive `assets` / `shares` with `NonPositiveInputError`; the **entities** reject a
+previewed zero share mint, as `deposit` already does today (`entities/vaultV1/vaultV1.ts:310-318`).
+
+That split is deliberate, and the guarantee must be stated at the layer that can hold it. The pure
+builders receive only addresses, amounts, and the collapsed `maxSharePrice` scalar — no share
+preview, no vault state, no client (§1, Action layer: no RPC reads) — so they cannot know whether a
+positive net deposit mints zero shares. Passing a precomputed preview into the builder was considered
+and rejected (see Considered Alternatives): it would put a value the builder can neither validate nor
+refresh into its signature, and a stale preview is precisely the case the guard exists to catch. A
+caller that bypasses the entity and encodes `vaultV1Deposit` directly therefore keeps the onchain
+panic as its failure mode; the acceptance matrix scopes the row to the entity accordingly.
 
 ### 5. Native funding is exclusive
 
@@ -278,6 +375,18 @@ keeps the existing `wNative` guards (`ChainWNativeMissingError`,
 `NativeAmountOnNonWNativeVaultError`). Note that with a referral fee the native amount must cover the
 **gross**, fee included. No exit path unwraps to native — see row 10.
 
+The union closes the args side but not the signature side, and that gap changes severity here.
+`buildTx(signatures)` calls `selectRequirementSignatures(signatures, { permit: true })`
+unconditionally, and the builder then **silently drops** the permit when `amount === 0n` — documented
+today as intended behavior at `actions/vaultV1/deposit.ts:66-68`. Under this contract the drop stops
+being harmless: `pullOrWrapNative` requires `permit.kind == None` when value is attached, so a permit
+that *did* reach the encoded `TokenPermit` reverts with `BothNativeAndToken`. A stale or
+hand-assembled signature is the realistic trigger — a user who switches from WETH to ETH after
+signing. The bundles deposit paths therefore **reject** a selected token signature whenever native
+funding is active, reusing `MixedBundlesFundingError` (same contract error, no new class) rather than
+ignoring it. Discarding a signature the contract would reject is the §2 rule-2 antipattern with a
+revert attached.
+
 ### 6. One call per transaction
 
 `initiator` is a transient address set on entry and never cleared, guarded by
@@ -295,14 +404,17 @@ stated in the entity JSDoc and the package glossary.
 
 ### 7. Typed errors
 
-Contract reverts map to named, exported classes (§3). Reused: `NonPositiveInputError`,
-`NegativeInputError`, `ExpiredDeadlineError`, `VaultAssetMismatchError`,
-`VaultAddressMismatchError`, `ChainIdMismatchError`, `ChainWNativeMissingError`,
-`NativeAmountOnNonWNativeVaultError`, `UnknownAddressError`. New:
+Contract reverts map to named, exported classes (§3). Reused — deliberately, so the migration adds no
+class where one already fits: `NonPositiveInputError`, `NegativeInputError` (`referralFeePct < 0n`),
+`ExpiredDeadlineError`, `VaultAssetMismatchError`, `VaultAddressMismatchError`,
+`ChainIdMismatchError`, `ChainWNativeMissingError`, `NativeAmountOnNonWNativeVaultError`,
+`UnknownAddressError`, `AddressMismatchError` (`userAddress` is not the connected account),
+`UnexpectedRequirementSignatureError` (an AllowanceTransfer signature on a bundles path), and
+`AmbiguousRequirementSignaturesError`. New:
 
 | Error | Guards |
 | ----- | ------ |
-| `MixedBundlesFundingError` | `amount` and `nativeAmount` both set (contract: `BothNativeAndToken` / `InconsistentAmountAndNative`) |
+| `MixedBundlesFundingError` | `amount` and `nativeAmount` both set, **or** a token permit selected while native funding is active (contract: `BothNativeAndToken` / `InconsistentAmountAndNative`) |
 | `ReferralFeePctExceededError` | `pct >= WAD` (contract: `PctExceeded`) |
 | `ReferralFeeRecipientMissingError` | `pct > 0` with a zero recipient |
 | `AmountAndSharesExclusiveError` | both or neither set on withdraw / migration (contract: `NotExactlyOneZero`) |
@@ -315,9 +427,13 @@ No gate error class: gate compatibility is a simulation concern, per §3.
 
 - **Phase 1 — shared bricks.** Extract the §1 table into `src/actions/bundles/`, rename PR #945's
   `BlueBundles*` types, add `encodeErc20Permit2SignatureTransfer` with the `nonceBitmap` selection
-  rule, add `computeVaultMaxSharePrice` and `grossFromNetAssets`, add the `bundles.vaultBundlesV1`
-  registry slot, `vaultBundlesV1Abi`, and the `RequirementSpenderKey` entry. Blue bundles paths are
-  migrated onto the shared bricks in this phase, with their tests green and unchanged in intent.
+  rule and the optional `permit2Nonce` override, add the distinct
+  `action.type: "permit2SignatureTransfer"` requirement-signature union member and narrow every
+  consumer exhaustively, carry the ERC-20-approval-to-Permit2 prerequisite into
+  `getBundlesTokenRequirements`, add `computeVaultMaxSharePrice` and `grossFromNetAssets`, add the
+  `bundles.vaultBundlesV1` registry slot, `vaultBundlesV1Abi`, and the `RequirementSpenderKey` entry.
+  Blue bundles paths are migrated onto the shared bricks in this phase, with their tests green and
+  unchanged in intent.
 - **Phase 2 — re-route the pure builders.** Rewrite the bodies of `actions/vaultV1/{deposit,
   withdraw,redeem,migrateToV2}.ts` and `actions/vaultV2/{deposit,withdraw,redeem}.ts` to encode
   `VaultBundlesV1` calls. Names, files, and barrel exports are untouched. Property-based coverage
@@ -326,15 +442,39 @@ No gate error class: gate compatibility is a simulation concern, per §3.
   `ActionOutput` with share-permit / approval requirements; `deposit` moves onto
   `getBundlesTokenRequirements`; `migrateToV2` drops `minSharePriceVaultV1`. Fork tests at pinned
   blocks.
-- **Phase 4 — dependents.** `wdk-protocol-lending-morpho-evm` `withdraw` currently calls
-  `vault.entity.withdraw({...}).buildTx()` directly at `src/morpho-protocol-evm.ts:650-656` and
-  exposes no withdrawal-requirements method, so first-time withdrawals would revert for insufficient
-  share allowance. This phase adds `getWithdrawRequirements` / `getRedeemRequirements` to the WDK
-  protocol surface — mirroring the existing `getBorrowRequirements` shape — and threads the resolved
-  signature into `buildTx`. This is an API addition to WDK, not a version bump.
-- **Phase 5 — release surface.** Migration guide entry, glossary update, `AGENTS.md` routing summary
-  rewrite, changesets (major for `morpho-sdk`, minor for `morpho-ts`, minor for the WDK API
-  addition), and the dependent audit for `liquidity-sdk-viem`.
+- **Phase 4 — dependents.** `wdk-protocol-lending-morpho-evm` `withdraw` calls
+  `vault.entity.withdraw({...}).buildTx()` with no arguments at `src/morpho-protocol-evm.ts:650-656`
+  and exposes no withdrawal-requirements method, so first-time withdrawals would revert for
+  insufficient share allowance. Two pieces are needed, and the second is what makes the first usable:
+  1. `getWithdrawRequirements(options)` on the WDK protocol surface, mirroring the existing
+     `getBorrowRequirements` shape (`morpho-protocol-evm.ts:695-728`). **Withdraw only** — the WDK
+     surface exposes no `redeem`, so there is no `getRedeemRequirements` to add.
+  2. A **signature-bearing options type**, because today there is nowhere to put the signed result:
+     `withdraw` takes upstream `WithdrawOptions` from `@tetherto/wdk-wallet/protocols`
+     (`{ token, amount, to }`), which this repo neither owns nor can extend. Borrow already solved
+     the identical problem by declaring a local superset — `MorphoBorrowOptions` with
+     `requirementSignature?: RequirementSignature` (`morpho-protocol-evm.ts:153-166`), read at the
+     `buildTx` site (`:782-788`). Withdraw follows it exactly: export `MorphoWithdrawOptions`, accept
+     it in `withdraw` **and in `quoteWithdraw`** (which shares the options type, `:616-619`), and
+     pass `options.requirementSignature ? [options.requirementSignature] : undefined` into `buildTx`.
+
+  `withdrawCollateral` / `quoteWithdrawCollateral` have the same no-argument `buildTx` shape
+  (`:1068-1076`) but route through Blue, so they belong to the `BlueBundlesV1` sibling TIB, not here.
+  Tests must pin `buildTx`'s arguments: today's `describe("withdraw")` block asserts the entity call
+  but never the `buildTx` argument (`morpho-protocol-evm.test.ts:429-459`), which is why the gap was
+  invisible. This is an additive WDK API change — a minor.
+- **Phase 5 — release surface.** Migration guide entry — led by the `userAddress` semantics change
+  and the Permit2 signature-type change — glossary update, `AGENTS.md` routing summary rewrite, and
+  changesets: **major** for `morpho-sdk`, **minor** for `morpho-ts`, **minor** for the WDK API
+  addition, plus an explicit changeset for `liquidity-sdk-viem`. That last one is not an open audit
+  item: `packages/liquidity-sdk-viem/package.json:34` pins `"@morpho-org/morpho-sdk": "^5.4.0"` as a
+  **peer**, which a `6.0.0` release does not satisfy, and §4 makes internal peer ranges a manual
+  obligation — Changesets will not infer it. Its own source consumes only `PublicReallocation` and
+  `ReallocationData` (`src/loader.ts:8-9`), neither of which this TIB retypes, so the correct move is
+  to **widen** the range to `"^5.4.0 || ^6.0.0"` and ship a **minor**; narrowing to `"^6.0.0"` would
+  drop 5.x consumers and owe a major, and is justified only if the master PR retypes a symbol it
+  actually uses. `wdk-protocol-lending-morpho-evm` needs no range work — it declares morpho-sdk as a
+  workspace `dependencies` entry (`package.json:54`), which Changesets bumps automatically.
 
 ## Breaking changes, regressions, and new failure modes
 
@@ -346,13 +486,14 @@ one. `Plan` marks whether the migration plan already tracks the row.
 | # | Change | Plan | Mitigation |
 | - | ------ | ---- | ---------- |
 | 1 | Deposit `amount` + `nativeAmount` stop being additive; ETH and WETH become exclusive | tracked | `BundlesFundingArgs` XOR type surfaces it at compile time; migration guide shows the two-transaction fallback |
-| 2 | Deposit `recipient` removed — shares always mint to `msg.sender` | new | Entities already hardcoded `recipient: userAddress`, so only direct action-layer callers break |
-| 3 | Withdraw / redeem `recipient` and `onBehalf` removed | new | Same: entity callers unaffected, action-layer callers get a compile error rather than a misrouted transfer |
+| 2 | Deposit `recipient` removed — shares always mint to `msg.sender` | new | Compile error at the action layer. **Entity callers are not unaffected**: `userAddress` need not be the submitter, so a relayer-submitted deposit mints to the relayer — §2 and row 18 |
+| 3 | Withdraw / redeem `recipient` and `onBehalf` removed | new | Compile error at the action layer. `onBehalf` is the ERC-4626 `owner`, so this removes a real delegated-exit capability (row 16); through the entity it silently changes *whose* shares burn — row 18 |
 | 4 | Withdraw / redeem return `ActionOutput` instead of `{ buildTx }`; `buildTx` takes signatures | new | This is the API face of the share-approval regression; migration guide ships the requirement loop; WDK is updated in Phase 4 |
 | 5 | Withdraw / redeem gain a required-with-default `deadline` and optional referral fields | new | Defaults keep call sites compiling |
 | 6 | `migrateToV2` loses `minSharePriceVaultV1` and `recipient`, and gains an additive assets mode | partially | Name and V1→V2 scope preserved, so no removal and no deprecation window needed; the lost slippage bound is row 11 |
-| 7 | Permit2 AllowanceTransfer signatures are no longer accepted; SignatureTransfer only | new | New encoder ships in Phase 1; the requirement loop hides the difference from apps that use `getRequirements()` |
+| 7 | Permit2 AllowanceTransfer signatures are no longer accepted; SignatureTransfer only, under a **new** `action.type` | new | Encoder plus a distinct union member ship in Phase 1, so a stale AllowanceTransfer signature is rejected by `UnexpectedRequirementSignatureError` instead of mis-encoded; the requirement loop hides the difference from apps that use `getRequirements()`, which now returns up to three ordered entries |
 | 8 | `tx.to` and calldata change for every vault flow; `action.args` shapes change | tracked (Integration/API) | Indexers, Dune queries, and simulation consumers need the new selectors before release; coordinate with the Data and API teams in Phase 5 |
+| 18 | `userAddress` now means "the account that must submit", not "the position owner" | **new — untracked** | The only change here that is silent at compile time *and* build time, and it misroutes funds. JSDoc redefinition, opportunistic `AddressMismatchError` when `client.account` is present, leads the migration guide. Cannot be fully enforced without breaking the documented builder ≠ signer invariant — Open Question 7 |
 
 **UX regressions**
 
@@ -364,7 +505,8 @@ one. `Plan` marks whether the migration plan already tracks the row.
 | 12 | One `VaultBundlesV1` call per transaction | **new — untracked** | Documented; `migrateToV2` covers the main composite case; multi-vault batching is lost |
 | 13 | Gated Vault V2s must allow `VaultBundlesV1` in `sendAssetsGate` (was GA1) **and now also in `receiveAssetsGate`, which exits never needed** because the direct call paid the user | **new — untracked** | Curators of permissioned vaults must update gates **before** the SDK release, or exits break. The SDK cannot pre-check this reliably (§3), so detection is by finalized-transaction simulation. Highest-risk operational item in this migration |
 | 14 | With a referral fee, gross and net diverge and every displayed amount must say which it is | new | Exact gross-up helper (§4); irrelevant at `pct = 0` |
-| 15 | A dust deposit minting zero shares panics onchain instead of reverting typed | new | Entity rejects a previewed zero mint before building |
+| 15 | A dust deposit minting zero shares panics onchain instead of reverting typed | new | Entity rejects a previewed zero mint before building. The pure builder cannot — it holds no share preview — so a direct action caller keeps the panic (§4) |
+| 19 | Two Permit2 deposit intents resolved concurrently pick the same nonce and the second reverts `InvalidNonce` | **new — untracked** | A stateless SDK cannot reserve nonces (§1). `getBundlesTokenRequirements` takes an optional `permit2Nonce`; apps with concurrent intents own the allocation, single-intent apps get the idempotent default (§3) |
 
 **Capability losses**
 
@@ -373,7 +515,9 @@ one. `Plan` marks whether the migration plan already tracks the row.
 | 16 | No deposit-for-another-address and no withdraw-to-another-address | new | None available in this contract. Integrations relying on it must keep a direct vault call |
 | 17 | No composition with other actions in one transaction (Bundler3's core value) | implied | The fixed entrypoints cover the known composite flows; anything else is two transactions |
 
-Row 13 and row 11 are the two findings that most warrant a product decision before implementation.
+Rows 18, 13, and 11 are the three findings that most warrant a decision before implementation — row 18
+because it is the only one that misroutes funds without any diagnostic, rows 13 and 11 because their
+mitigation is operational and product-owned rather than technical.
 
 ## Edge-Behavior Acceptance Matrix
 
@@ -384,7 +528,13 @@ Only `VaultBundlesV1`-specific behavior. Existing action validations are inherit
 | Deposit funded with both ETH and ERC-20 | Reject at the type level; `MixedBundlesFundingError` for untyped callers |
 | Deposit with `nativeAmount != assets` | Structurally impossible — `assets` is derived from the funding side |
 | Deposit into a non-wNative vault with native funding | `NativeAmountOnNonWNativeVaultError`, unchanged from today |
-| Deposit whose net amount mints zero shares | Reject before building; never emit calldata that divides by zero |
+| Deposit whose net amount mints zero shares | **Entity** rejects before building; the pure builder holds no share preview, so a direct action caller keeps the onchain panic (§4) |
+| Deposit with `referralFeePct < 0n` | `NegativeInputError` in the builder, before the `uint256` encoder raises an untyped viem error |
+| Permit2 deposit by an owner who has never approved Permit2 | Requirements include the ERC-20 approval to Permit2 **ordered before** the signature; a signature alone is never presented as sufficient |
+| Two deposit requirements resolved against one `nonceBitmap` | Both select the same bit under the default rule — asserted, not hidden; an explicit `permit2Nonce` makes them distinct |
+| AllowanceTransfer (`action.type: "permit2"`) signature passed to a bundles path | `UnexpectedRequirementSignatureError`; never reshaped into a `TokenPermit` the contract cannot verify |
+| Token permit passed to a native-funded deposit | `MixedBundlesFundingError` at build time; never silently dropped, since the contract reverts `BothNativeAndToken` |
+| Entity handle built with `userAddress != client.account` | `AddressMismatchError` when an account is connected; with a public client the SDK cannot check, and the JSDoc states `userAddress` must be the submitter |
 | Deposit share price moves past the bound | Contract reverts `SlippageExceeded`; bound is computed from the **net** amount |
 | Withdraw with both `assets` and `shares`, or neither | `AmountAndSharesExclusiveError` (contract: `NotExactlyOneZero`) |
 | Withdraw-by-assets after a V2 share-price drop | Allowance must still cover the burn: exact bound plus the caller's slippage tolerance on V2 |
@@ -417,7 +567,16 @@ Only `VaultBundlesV1`-specific behavior. Existing action validations are inherit
 - Native funding is exclusive and expressed in the type system.
 - Do not expose a share-price bound the contract cannot enforce; do surface the simulated outcome.
 - Resolve every funding path the contract accepts from `getRequirements()`, including Permit2
-  SignatureTransfer with deterministic free-bit nonce selection.
+  SignatureTransfer with deterministic free-bit nonce selection, its ERC-20-approval-to-Permit2
+  prerequisite, and an optional caller-supplied nonce for concurrent intents.
+- Give Permit2 SignatureTransfer its own `RequirementSignature` discriminant; never reuse Blue's
+  AllowanceTransfer `"permit2"` tag.
+- Never silently drop a signature the contract would reject; reject it at build time with a typed
+  error.
+- `userAddress` means the submitting account on bundles paths, checked opportunistically rather than
+  enforced, so the documented builder ≠ signer freedom survives.
+- State each guarantee at the layer that can hold it: share-preview checks are entity-level, because
+  a pure builder has no vault state.
 - Size share allowances exactly, upper-bounded for previewed burns; never max-approve by default.
 - Do not pre-check Vault V2 gates. Gate compatibility is a finalized-transaction simulation concern.
 
@@ -475,6 +634,38 @@ Matches the "to receive W, pass …" framing in the contract docs.
 approval and `msg.value` the wallet must cover. The exact gross-up ships as a helper instead.
 Reopenable if product prefers net-first inputs (Open Questions).
 
+### Enforce builder = signer on the bundles paths
+
+Call `validateUserAddress(client.account?.address, userAddress)` unconditionally in every re-routed
+entity method, so the misrouting described in §2 becomes impossible.
+
+**Why rejected:** it would break a documented, regression-tested invariant rather than a stale
+assumption. `packages/morpho-sdk/src/entities/AGENTS.md:9` states that entities do not enforce
+builder = signer, and `entities/vaultV1/vaultV1.test.ts:737-741` pins the public-client case — build a
+transaction with no connected account and a divergent `userAddress`, sign and submit it elsewhere.
+That is a legitimate pattern (quoting services, Safe proposal builders) that this migration has no
+mandate to remove. The opportunistic check keeps the guarantee wherever it is checkable and costs
+nothing where it is not. Revisit under Open Question 7 if product decides the safety is worth the
+pattern.
+
+### Reserve Permit2 nonces inside the SDK
+
+Track handed-out bits so concurrent intents never collide.
+
+**Why rejected:** it requires state, and `morphoViemExtension()` is stateless by construction (§1) —
+no `init()`, no cache, no warm-up. A per-client bitmap would also be wrong across processes, tabs, and
+server replicas, which is exactly where concurrent intents come from. Exposing an optional
+`permit2Nonce` puts the allocation in the only layer that can see all in-flight intents.
+
+### Pass a precomputed share preview into the pure deposit builders
+
+Would let a direct `vaultV1Deposit` caller reject a zero-share mint without an RPC read.
+
+**Why rejected:** it adds a parameter the builder can neither validate nor refresh, so a stale preview
+would pass the guard it exists to satisfy — worse than no guard, because it reads as protection.
+Deriving `maxSharePrice` already collapses the preview into a scalar the contract itself enforces.
+The honest fix is to scope the guarantee to the entity (§4) and say so in the acceptance matrix.
+
 ### Max-approve vault shares once per vault
 
 Removes the per-exit approval entirely for `supportSignature: false` clients.
@@ -495,14 +686,22 @@ Per §5, and following the `inKindRedeem` test layout:
   assets/shares XOR, `computeVaultMaxSharePrice` monotonicity in `slippageTolerance`, and exact
   round-tripping of `grossFromNetAssets` against the contract's floor-fee rule.
 - **Security invariants as tests** — each fails if the guard is removed: exclusive native funding,
-  net-based deposit share-price bound, exact-and-upper-bounded share allowance, `chainId` validation,
-  referral recipient non-zero, Permit2 free-bit selection after a consumed nonce.
+  a token permit rejected on the native path, net-based deposit share-price bound,
+  exact-and-upper-bounded share allowance, `chainId` validation, referral recipient non-zero,
+  `referralFeePct` rejected below zero and at or above `WAD`, Permit2 free-bit selection after a
+  consumed nonce, the ERC-20 approval to Permit2 ordered before the signature on a first-time
+  depositor, an AllowanceTransfer signature rejected on a bundles path, and `AddressMismatchError`
+  when a connected `client.account` differs from `userAddress`.
 - **Fork, pinned block, per chain.** Vault V1 and Vault V2 × deposit / withdraw / redeem /
   migration; permit and approval paths; native deposit; referral fee crediting; `AlreadyInitiated`
-  on a double call; full exit by shares.
+  on a double call; full exit by shares; a Permit2 deposit from an owner with zero Permit2 allowance,
+  proving the two-requirement path end to end.
 - **Regression guard.** Existing `BlueBundlesV1` and `VaultExitBundlesV1` tests stay green through
-  the Phase 1 rename, with no assertions weakened. WDK withdrawal tests cover the new requirements
-  path end to end.
+  the Phase 1 rename, with no assertions weakened. The builder ≠ signer regression test
+  (`entities/vaultV1/vaultV1.test.ts:737-741`) must still pass — the `userAddress` check is
+  opportunistic, not unconditional. WDK tests cover the new withdrawal-requirements path end to end
+  and **assert `buildTx`'s argument**, which today's `describe("withdraw")` block never did
+  (`morpho-protocol-evm.test.ts:429-459`).
 
 ## Assumptions & Constraints
 
@@ -515,6 +714,10 @@ Per §5, and following the `inKindRedeem` test layout:
 - Curators of gated Vault V2s update `sendAssetsGate` and `receiveAssetsGate` before release. The
   SDK cannot detect a stale gate ahead of submission.
 - Referral-fee policy and eligibility stay a product concern outside the core SDK.
+- No shipped integration builds a vault handle with a `userAddress` that differs from the submitting
+  account. This is an **assumption, not a guarantee** — the SDK permits it today and the public-client
+  path cannot be checked (§2, row 18) — so it must be confirmed with the app teams before the major,
+  not asserted here.
 - App-side simulation remains the only protection on the migration source leg, and the only reliable
   gate pre-flight.
 
@@ -539,6 +742,15 @@ Per §5, and following the `inKindRedeem` test layout:
   spender.
 - Permit2 free-bit selection must never reuse a flipped bit, and the signed `TokenPermissions.token`
   and `amount` must equal the pulled asset and gross amount exactly.
+- The signed **spender** must be validated against the expected spender, which no consumer does
+  today: `getTokenRequirementActions` checks asset and amount (`DepositAssetMismatchError`,
+  `DepositAmountMismatchError`) but never the spender, and `selectRequirementSignatures` matches on
+  `action.type` alone. With two live spenders in the tree (`generalAdapter1` and `vaultBundlesV1`)
+  that omission becomes reachable, so the bundles path adds the check.
+- Removing `recipient` / `onBehalf` while `userAddress` stays unvalidated is a fund-misrouting
+  surface, not just a DevEx change (§2, row 18): the transaction is well-formed and pays the wrong
+  account. The opportunistic `AddressMismatchError` and the JSDoc redefinition are the mitigation;
+  neither covers the public-client path, which is why the migration guide leads with it.
 - `TokenLib.forceApproveMax(asset, vault)` leaves a max asset allowance from the bundler to the
   vault by design; the bundler holds no balance between transactions.
 - The contract is unusable with tokens that revert on `approve(0)` then `approve(max)`, and inherits
@@ -569,6 +781,13 @@ Per §5, and following the `inKindRedeem` test layout:
    `VaultBundlesV1` on both gates before the major ships?
 6. **Aave V3 → Vault V2.** Confirm it stays on Bundler3 past the major, or that the flow is dropped
    until a contract exists.
+7. **Builder = signer (row 18).** Accept the opportunistic `AddressMismatchError` and carry the
+   misrouting risk on public-client builds, or enforce `userAddress == client.account` on bundles
+   paths and retire the documented builder ≠ signer freedom (`entities/AGENTS.md:9`) plus the
+   quoting-service and Safe-proposal patterns that rely on it?
+8. **Permit2 nonce ownership (row 19).** Confirm that apps with concurrent outstanding deposit
+   intents own nonce allocation through the optional `permit2Nonce`, rather than the SDK growing
+   state to reserve bits.
 
 ## References
 
@@ -578,6 +797,10 @@ Per §5, and following the `inKindRedeem` test layout:
 - [Bundles repository README](https://github.com/morpho-org/bundles/blob/main/README.md)
 - [Blue and vault bundles audit — Blackthorn, 2026-08-07](https://github.com/morpho-org/bundles/blob/main/audits/2026-08-07-blue-vaults-bundles-blackthorn.pdf)
 - [Permit2 SignatureTransfer](https://docs.uniswap.org/contracts/permit2/reference/signature-transfer)
+- [Permit2 AllowanceTransfer](https://docs.uniswap.org/contracts/permit2/reference/allowance-transfer)
+  — the incompatible type the SDK signs today
+- [TIB-2026-06-03 — Midnight ActionOutput interface](./TIB-2026-06-03-midnight-action-output-interface.md)
+  — records the deferred distinct requirement type for Permit2 SignatureTransfer
 - [TIB-2026-07-27 — VaultExitBundlesV1 in-kind redemption](./TIB-2026-07-27-vault-exit-in-kind-redemption.md)
 - [TIB-2026-08-25 — BlueBundlesV1 SDK action flows](./TIB-2026-08-25-blue-bundles-v1-sdk-actions.md)
 - [Stack base — morpho-org/sdks PR #937](https://github.com/morpho-org/sdks/pull/937)
