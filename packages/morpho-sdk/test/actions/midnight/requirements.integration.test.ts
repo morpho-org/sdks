@@ -36,7 +36,6 @@ import {
 const test = createViemTest(base, {
   forkUrl: process.env.BASE_RPC_URL,
   forkBlockNumber: 48_287_000n,
-  hardfork: "Osaka",
   stepsTracing: false,
 });
 
