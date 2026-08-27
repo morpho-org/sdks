@@ -1,5 +1,18 @@
 # @morpho-org/morpho-sdk
 
+## 5.7.0
+
+### Minor Changes
+
+- [#949](https://github.com/morpho-org/sdks/pull/949) [`67399ed`](https://github.com/morpho-org/sdks/commit/67399ed6eb1b7ffa062828e1f5d970795adce03a) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Expose Vault V2 allocator entities, fetchers, and utilities, plus omitted in-kind redemption and Midnight surfaces. Add raw Blue and Midnight protocol subpaths, qualify protocol-specific exports in the shared facades, and expose the error identities, revert classifiers, permit builders, MetaMorpho encoders, allowance metadata, and PreLiquidation defaults required by those surfaces. Deprecate ambiguous protocol-specific names, Blue's custom fetch `chainId` override, and the redundant deployless-only Vault V2 fetcher.
+
+### Patch Changes
+
+- [#949](https://github.com/morpho-org/sdks/pull/949) [`67399ed`](https://github.com/morpho-org/sdks/commit/67399ed6eb1b7ffa062828e1f5d970795adce03a) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Bound Vault V2 shared-cap operation searches so non-monotonic rounding cannot produce reallocations far above the requested liquidity.
+
+- Updated dependencies [[`67399ed`](https://github.com/morpho-org/sdks/commit/67399ed6eb1b7ffa062828e1f5d970795adce03a)]:
+  - @morpho-org/blue-sdk-viem@5.4.0
+
 ## 5.6.0
 
 ### Minor Changes
