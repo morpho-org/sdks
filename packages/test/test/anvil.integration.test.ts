@@ -1,8 +1,8 @@
 import { http } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
-import { spawnAnvil } from "./anvil.js";
-import { createAnvilTestClient } from "./client.js";
+import { spawnAnvil } from "../src/anvil.js";
+import { createAnvilTestClient } from "../src/client.js";
 
 describe("spawnAnvil", () => {
   test("behavior: isolates state on unique local nodes", async () => {
