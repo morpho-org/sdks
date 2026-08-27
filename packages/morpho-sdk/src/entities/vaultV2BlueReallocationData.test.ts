@@ -686,6 +686,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     });
 
     expect(context.firstTotalAssets).toStrictEqual({});
+    expect(transition.firstTotalAssets).toBe(data.getVault(VAULT)._totalAssets);
     expect(transition.context.firstTotalAssets[VAULT]).toBe(
       data.getVault(VAULT)._totalAssets,
     );

@@ -1368,13 +1368,7 @@ export class VaultV2BlueReallocationData
 
               // Vault V2 checks relative caps against the transient firstTotalAssets,
               // which stays fixed after the vault's first allocation in a transaction.
-              const firstTotalAssets =
-                postTransition.context.firstTotalAssets[
-                  findAddressKey(
-                    postTransition.context.firstTotalAssets,
-                    reallocation.vault,
-                  )!
-                ]!;
+              const { firstTotalAssets } = postTransition;
               let withinUpperBounds = true;
               let withinAllCaps = true;
               for (const id of targetIds) {
@@ -1419,7 +1413,7 @@ export class VaultV2BlueReallocationData
                 : undefined;
 
             if (remainingAssets != null && probe?.withinAllCaps !== true) {
-              // ponytail: bounded base-unit scan; expose a caller ceiling if wider searches become necessary.
+              // Bound the base-unit scan; expose a caller ceiling if wider searches become necessary.
               const searchUpper = MathLib.min(
                 lower,
                 selectedAssets + MAX_SHARED_CAP_SEARCH_STEPS,
@@ -1720,6 +1714,7 @@ export class VaultV2BlueReallocationData
       reallocation.vault;
     const firstTotalAssetsKey =
       findAddressKey(context.firstTotalAssets, reallocation.vault) ?? vaultKey;
+    let firstTotalAssets = context.firstTotalAssets[firstTotalAssetsKey];
     let nextContext = context;
     let vault = data.getMutableVault(vaultKey);
     const targetMarket = data.getMarket(targetMarketId);
@@ -1803,7 +1798,7 @@ export class VaultV2BlueReallocationData
       vault.assetBalance += reallocation.assets;
     }
 
-    if (context.firstTotalAssets[firstTotalAssetsKey] == null) {
+    if (firstTotalAssets == null) {
       // Vault V2's transient firstTotalAssets tracks the first allocation in a
       // transaction independently from elapsed time. Later allocations must not
       // recompute the denominator, even if their simulated balances have changed.
@@ -1820,11 +1815,12 @@ export class VaultV2BlueReallocationData
         vault = vault.accrueInterest(timestamp).vault;
       }
       data.mutableVaults[vaultKey] = vault;
+      firstTotalAssets = vault._totalAssets;
       nextContext = {
         ...nextContext,
         firstTotalAssets: {
           ...nextContext.firstTotalAssets,
-          [firstTotalAssetsKey]: vault._totalAssets,
+          [firstTotalAssetsKey]: firstTotalAssets,
         },
       };
     }
@@ -1879,7 +1875,7 @@ export class VaultV2BlueReallocationData
     }
 
     vault.assetBalance -= reallocation.assets;
-    return { data, context: nextContext };
+    return { data, context: nextContext, firstTotalAssets };
   }
 
   /** Updates canonical markets in bulk and refreshes only dependent adapter views. */
