@@ -84,10 +84,11 @@ export const validateMidnightMarketChainId = (
  * Asserts that the client has a connected account AND that it matches
  * the provided user address.
  *
- * Used internally by the signature requirements (`encodeErc20Permit`,
- * `encodeErc20Permit2Approve`) to enforce builder = signer at `sign()` time:
- * the signing flow is the only path where an account/address mismatch
- * is a real security concern (rather than just an integrator footgun).
+ * Used at `sign()` time by the shared `signAndVerifyTypedData` helper (which
+ * backs the permit, Permit2, and Blue authorization signature flows) and by
+ * `encodeVaultSharesPermit`, to enforce builder = signer: the signing flow is
+ * the only path where an account/address mismatch is a real security concern
+ * (rather than just an integrator footgun).
  *
  * Transaction builders no longer call this helper — callers are
  * responsible for keeping `userAddress` aligned with the signing account
