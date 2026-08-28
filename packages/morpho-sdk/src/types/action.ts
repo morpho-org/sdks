@@ -147,31 +147,35 @@ export interface VaultV1MigrateToV2Action
     }
   > {}
 
+/** Metadata for a direct BlueBundlesV1 loan-asset supply. */
 export interface BlueSupplyAction
   extends BaseAction<
     "blueSupply",
     {
       market: Hex;
-      amount: bigint;
+      assets: bigint;
       onBehalf: Address;
-      maxSharePrice: bigint;
       nativeAmount?: bigint;
+      referralFeePct: bigint;
+      referralFeeRecipient: Address;
+      deadline: bigint;
     }
   > {}
 
+/** Metadata for a direct BlueBundlesV1 loan-asset withdrawal. */
 export interface BlueWithdrawAction
   extends BaseAction<
     "blueWithdraw",
     {
       market: Hex;
-      assets: bigint;
-      shares: bigint;
-      receiver: Address;
-      minSharePrice: bigint;
-      /** Native-token fees paid to PublicAllocator V1. */
-      reallocationFee: bigint;
-      /** Loan-token assets donated as BluePublicAllocator V2 penalties. */
-      readonly reallocationPenaltyAssets: bigint;
+      withdrawAssets: bigint;
+      withdrawShares: bigint;
+      onBehalf: Address;
+      reallocations: number;
+      reallocationPenaltyAssets: bigint;
+      referralFeePct: bigint;
+      referralFeeRecipient: Address;
+      deadline: bigint;
     }
   > {}
 
@@ -555,13 +559,13 @@ export interface Permit2Args {
 
 /**
  * Signed Morpho Blue authorization payload produced when an integrator opts into offchain
- * signatures (`supportSignature: true`). Consumed by the action layer to emit a
- * `setAuthorizationWithSig` bundler call in place of a standalone `setAuthorization` transaction.
+ * signatures (`supportSignature: true`). Bundler3 consumes it through `setAuthorizationWithSig`;
+ * direct BlueBundlesV1 writes encode it into their signed-authorization struct.
  */
 export interface AuthorizationSignatureArgs {
   /** Account granting the authorization (the position owner). */
   owner: Address;
-  /** Account being authorized to operate on Morpho on the owner's behalf (GeneralAdapter1). */
+  /** Account being authorized to operate on Morpho on the owner's behalf. */
   authorized: Address;
   /** Whether the authorization is granted (`true`) or revoked (`false`). */
   isAuthorized: boolean;
@@ -593,9 +597,20 @@ export interface Permit2Action
     { spender: Address; amount: bigint; deadline: bigint; expiration: bigint }
   > {}
 
+/** Signable Permit2 SignatureTransfer requirement for a direct BlueBundlesV1 pull. */
+export interface Permit2TransferFromAction
+  extends BaseAction<
+    "permit2TransferFrom",
+    {
+      spender: Address;
+      amount: bigint;
+      deadline: bigint;
+    }
+  > {}
+
 /**
- * Signable Morpho authorization requirement. Emitted by the entity layer when a bundled path
- * needs GeneralAdapter1 authorized and the client opts into offchain signatures.
+ * Signable Morpho authorization requirement. Its `authorized` operator is route-specific:
+ * GeneralAdapter1 for Bundler3 flows or BlueBundlesV1 for direct Blue writes.
  */
 export interface AuthorizationAction
   extends BaseAction<
@@ -618,6 +633,7 @@ export interface MidnightOfferRootSignatureAction
 export type SignatureRequirementAction =
   | PermitAction
   | Permit2Action
+  | Permit2TransferFromAction
   | AuthorizationAction
   | MidnightOfferRootSignatureAction;
 
@@ -628,13 +644,30 @@ export type RequirementSignatureArgs =
   | AuthorizationSignatureArgs
   | MidnightOfferRootSignatureArgs;
 
-/** A signed ERC-2612 permit or Permit2 approval requirement. */
-export interface PermitRequirementSignature {
-  args: PermitArgs | Permit2Args;
-  action: PermitAction | Permit2Action;
+/** A signed ERC-2612 permit requirement. */
+export interface Erc2612RequirementSignature {
+  args: PermitArgs;
+  action: PermitAction;
 }
 
-/** A signed Morpho authorization requirement (consumed via `setAuthorizationWithSig`). */
+/** A signed Permit2 AllowanceTransfer requirement used by Bundler3. */
+export interface Permit2AllowanceRequirementSignature {
+  args: Permit2Args;
+  action: Permit2Action;
+}
+
+/** A signed ERC-2612 permit or Permit2 AllowanceTransfer requirement. */
+export type PermitRequirementSignature =
+  | Erc2612RequirementSignature
+  | Permit2AllowanceRequirementSignature;
+
+/** A signed Permit2 SignatureTransfer requirement used by BlueBundlesV1. */
+export interface Permit2TransferFromRequirementSignature {
+  args: PermitArgs;
+  action: Permit2TransferFromAction;
+}
+
+/** A signed Morpho authorization consumed by Bundler3 or a direct BlueBundlesV1 call. */
 export interface AuthorizationRequirementSignature {
   args: AuthorizationSignatureArgs;
   action: AuthorizationAction;
@@ -648,8 +681,9 @@ export interface MidnightOfferRootSignature {
 
 /**
  * The deep-frozen output of `Requirement.sign()`. Discriminated on `action.type`:
- * `"permit"` / `"permit2"` carry Bundler3 token-approval args, `"authorization"` carries the
- * signed Morpho authorization, and Midnight adds `"midnightOfferRootSignature"`.
+ * `"permit"` / `"permit2"` carry token-approval args, `"permit2TransferFrom"` carries a
+ * BlueBundlesV1 SignatureTransfer, `"authorization"` carries the signed Morpho authorization,
+ * and Midnight adds `"midnightOfferRootSignature"`.
  */
 export type RequirementSignature<
   TAction extends SignatureRequirementAction | undefined = undefined,
@@ -663,6 +697,7 @@ export type RequirementSignature<
     : never
   :
       | PermitRequirementSignature
+      | Permit2TransferFromRequirementSignature
       | AuthorizationRequirementSignature
       | MidnightOfferRootSignature;
 
@@ -702,20 +737,33 @@ export interface Requirement<
 export type Bundler3TokenSignatureRequirement =
   Requirement<PermitRequirementSignature>;
 
+/** BlueBundlesV1 ERC-2612 or Permit2 SignatureTransfer requirement. */
+export type BlueBundlesV1TokenSignatureRequirement =
+  Requirement<BlueBundlesV1TokenRequirementSignature>;
+
 /** Midnight Ecrecover offer-root signature requirement. */
 export type MidnightOfferRootRequirement = Requirement<
   MidnightOfferRootSignatureAction,
   MidnightOfferRootSignatureArgs
 >;
 
-/** Permit or Permit2 token signature requirement. */
-export type TokenSignatureRequirement = Bundler3TokenSignatureRequirement;
+/** Any token signature requirement supported by an SDK transaction route. */
+export type TokenSignatureRequirement =
+  | Bundler3TokenSignatureRequirement
+  | BlueBundlesV1TokenSignatureRequirement;
 
 /** Bundler3 token signature result. */
 export type Bundler3TokenRequirementSignature = PermitRequirementSignature;
 
-/** Permit or Permit2 token signature result. */
-export type TokenRequirementSignature = Bundler3TokenRequirementSignature;
+/** BlueBundlesV1 token signature result. */
+export type BlueBundlesV1TokenRequirementSignature =
+  | Erc2612RequirementSignature
+  | Permit2TransferFromRequirementSignature;
+
+/** Any token signature result supported by an SDK transaction route. */
+export type TokenRequirementSignature =
+  | Bundler3TokenRequirementSignature
+  | BlueBundlesV1TokenRequirementSignature;
 
 /** Any signature result returned by an action-output signature requirement. */
 export type AnyRequirementSignature =
@@ -838,6 +886,28 @@ export function isPermitSignature(
 }
 
 /**
+ * Narrows a {@link RequirementSignature} to a Permit2 SignatureTransfer result.
+ *
+ * @param signature - The signed requirement to test.
+ * @returns `true` when `signature.action.type` is `"permit2TransferFrom"`.
+ * @example
+ * ```ts
+ * import {
+ *   isPermit2TransferFromSignature,
+ *   type RequirementSignature,
+ * } from "@morpho-org/morpho-sdk";
+ *
+ * const getPermit2Nonce = (signature: RequirementSignature): bigint | undefined =>
+ *   isPermit2TransferFromSignature(signature) ? signature.args.nonce : undefined;
+ * ```
+ */
+export function isPermit2TransferFromSignature(
+  signature: RequirementSignature,
+): signature is Permit2TransferFromRequirementSignature {
+  return signature.action.type === "permit2TransferFrom";
+}
+
+/**
  * Narrows a {@link RequirementSignature} to a signed Morpho authorization.
  *
  * @param signature - The signed requirement to test.
@@ -863,8 +933,10 @@ export function isMidnightOfferRootSignature(
 
 /** The typed requirement-signature slots a transaction builder consumes, split from a `buildTx` array. */
 export interface SelectedRequirementSignatures {
-  /** The single permit / Permit2 signature, when present. */
+  /** The single ERC-2612 or Permit2 AllowanceTransfer signature, when present. */
   permit?: PermitRequirementSignature;
+  /** The single Permit2 SignatureTransfer signature, when present. */
+  permit2TransferFrom?: Permit2TransferFromRequirementSignature;
   /** The single Morpho authorization signature, when present. */
   authorization?: AuthorizationRequirementSignature;
   /** The single Midnight offer-root signature, when present. */
@@ -882,10 +954,11 @@ export interface SelectedRequirementSignatures {
  *
  * @param signatures - The signatures passed to `buildTx`.
  * @param accepts - Which signature kinds this operation consumes.
- * @param accepts.permit - Whether a permit / Permit2 signature is consumed.
+ * @param accepts.permit - Whether an ERC-2612 or Permit2 AllowanceTransfer signature is consumed.
+ * @param accepts.permit2TransferFrom - Whether a Permit2 SignatureTransfer is consumed.
  * @param accepts.authorization - Whether a Morpho authorization signature is consumed.
  * @param accepts.midnightOfferRoot - Whether a Midnight offer-root signature is consumed.
- * @returns The single permit and/or authorization signature, when present.
+ * @returns The accepted signature in each typed slot, when present.
  * @throws {AmbiguousRequirementSignaturesError} when more than one signature of an accepted kind is present.
  * @throws {UnexpectedRequirementSignatureError} when a signature of a kind the operation does not consume is present.
  * @example
@@ -902,6 +975,7 @@ export function selectRequirementSignatures(
   signatures: readonly RequirementSignature[] | undefined,
   accepts: {
     permit?: boolean;
+    permit2TransferFrom?: boolean;
     authorization?: boolean;
     midnightOfferRoot?: boolean;
   },
@@ -909,17 +983,25 @@ export function selectRequirementSignatures(
   if (signatures == null) return {};
 
   const permits = signatures.filter(isPermitSignature);
+  const permit2Transfers = signatures.filter(isPermit2TransferFromSignature);
   const authorizations = signatures.filter(isAuthorizationSignature);
   const midnightOfferRoots = signatures.filter(isMidnightOfferRootSignature);
 
   if (!accepts.permit && permits.length > 0)
     throw new UnexpectedRequirementSignatureError("permit");
+  if (!accepts.permit2TransferFrom && permit2Transfers.length > 0)
+    throw new UnexpectedRequirementSignatureError("permit2TransferFrom");
   if (!accepts.authorization && authorizations.length > 0)
     throw new UnexpectedRequirementSignatureError("authorization");
   if (!accepts.midnightOfferRoot && midnightOfferRoots.length > 0)
     throw new UnexpectedRequirementSignatureError("midnightOfferRootSignature");
   if (permits.length > 1)
     throw new AmbiguousRequirementSignaturesError("permit", permits.length);
+  if (permit2Transfers.length > 1)
+    throw new AmbiguousRequirementSignaturesError(
+      "permit2TransferFrom",
+      permit2Transfers.length,
+    );
   if (authorizations.length > 1)
     throw new AmbiguousRequirementSignaturesError(
       "authorization",
@@ -933,6 +1015,7 @@ export function selectRequirementSignatures(
 
   return {
     permit: permits[0],
+    permit2TransferFrom: permit2Transfers[0],
     authorization: authorizations[0],
     midnightOfferRoot: midnightOfferRoots[0],
   };

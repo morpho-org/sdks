@@ -1,7 +1,9 @@
 import { addressesRegistry } from "@morpho-org/blue-sdk";
-import type { Address, Client } from "viem";
+import { blueAbi } from "@morpho-org/blue-sdk-viem";
+import { createMockClient, mockRead } from "@morpho-org/test/mock";
+import type { Address } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 import {
   ChainIdMismatchError,
   isRequirementSignature,
@@ -9,31 +11,14 @@ import {
 import { getBlueAuthorizationRequirement } from "./getBlueAuthorizationRequirement.js";
 
 const USER: Address = "0x1111111111111111111111111111111111111111";
-
-function makeClient({
-  chainId,
-  isAuthorized,
-  nonce = 0n,
-}: {
-  chainId: number;
-  isAuthorized: boolean;
-  nonce?: bigint;
-}): Client {
-  return {
-    chain: { id: chainId },
-    extend: () => ({
-      readContract: vi.fn(({ functionName }: { functionName: string }) =>
-        Promise.resolve(functionName === "nonce" ? nonce : isAuthorized),
-      ),
-    }),
-  } as unknown as Client;
-}
+const { morpho } = addressesRegistry[mainnet.id];
 
 describe("getBlueAuthorizationRequirement", () => {
   test("throws ChainIdMismatchError when the client chain differs", async () => {
+    const wrongChain = { ...mainnet, id: mainnet.id + 1 };
     await expect(
       getBlueAuthorizationRequirement({
-        viemClient: makeClient({ chainId: mainnet.id + 1, isAuthorized: true }),
+        viemClient: createMockClient(wrongChain).client,
         chainId: mainnet.id,
         userAddress: USER,
       }),
@@ -41,9 +26,16 @@ describe("getBlueAuthorizationRequirement", () => {
   });
 
   test("returns null when GeneralAdapter1 is already authorized", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: morpho,
+      abi: blueAbi,
+      functionName: "isAuthorized",
+      result: true,
+    });
     await expect(
       getBlueAuthorizationRequirement({
-        viemClient: makeClient({ chainId: mainnet.id, isAuthorized: true }),
+        viemClient: handle.client,
         chainId: mainnet.id,
         userAddress: USER,
       }),
@@ -51,8 +43,15 @@ describe("getBlueAuthorizationRequirement", () => {
   });
 
   test("builds an authorization transaction when authorization is missing", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: morpho,
+      abi: blueAbi,
+      functionName: "isAuthorized",
+      result: false,
+    });
     const tx = await getBlueAuthorizationRequirement({
-      viemClient: makeClient({ chainId: mainnet.id, isAuthorized: false }),
+      viemClient: handle.client,
       chainId: mainnet.id,
       userAddress: USER,
     });
@@ -67,13 +66,46 @@ describe("getBlueAuthorizationRequirement", () => {
     );
   });
 
+  test("targets an explicitly selected BlueBundlesV1 operator", async () => {
+    const authorized = addressesRegistry[mainnet.id].bundles?.blueBundlesV1;
+    if (authorized == null) throw new Error("BlueBundlesV1 is not registered");
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: morpho,
+      abi: blueAbi,
+      functionName: "isAuthorized",
+      result: false,
+    });
+
+    const tx = await getBlueAuthorizationRequirement({
+      viemClient: handle.client,
+      chainId: mainnet.id,
+      userAddress: USER,
+      authorized,
+    });
+
+    if (tx == null || isRequirementSignature(tx)) {
+      throw new Error("expected an authorization transaction");
+    }
+    expect(tx.action.args.authorized).toBe(authorized);
+  });
+
   test("behavior: returns a signable requirement when supportSignature is true", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: morpho,
+      abi: blueAbi,
+      functionName: "isAuthorized",
+      result: false,
+    });
+    mockRead(handle, {
+      address: morpho,
+      abi: blueAbi,
+      functionName: "nonce",
+      result: 3n,
+    });
     const requirement = await getBlueAuthorizationRequirement({
-      viemClient: makeClient({
-        chainId: mainnet.id,
-        isAuthorized: false,
-        nonce: 3n,
-      }),
+      viemClient: handle.client,
       chainId: mainnet.id,
       userAddress: USER,
       supportSignature: true,

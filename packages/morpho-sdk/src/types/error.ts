@@ -95,7 +95,7 @@ export class EmptyMarketParamsListError extends Error {
   }
 }
 
-/** Thrown when an in-kind redemption deadline has already passed. */
+/** Thrown when an SDK operation deadline has already passed. */
 export class ExpiredDeadlineError extends Error {
   /**
    * @param deadline - Expired deadline supplied by the caller.
@@ -106,7 +106,7 @@ export class ExpiredDeadlineError extends Error {
     public readonly timestamp: bigint,
   ) {
     super(
-      `Deadline "${deadline}" has expired at timestamp "${timestamp}". Choose a future deadline and rebuild the exit.`,
+      `Deadline "${deadline}" has expired at timestamp "${timestamp}". Choose a future deadline and rebuild the operation.`,
     );
     this.name = "ExpiredDeadlineError";
   }
@@ -311,6 +311,115 @@ export class VaultExitBundlesV1PermitMismatchError extends Error {
     this.expected = params.expected;
     this.actual = params.actual;
     this.name = "VaultExitBundlesV1PermitMismatchError";
+  }
+}
+
+/** Thrown when a signed requirement cannot be safely encoded for BlueBundlesV1. */
+export class BlueBundlesV1RequirementSignatureMismatchError extends Error {
+  /** Field whose signed value or encoding is invalid for the direct BlueBundlesV1 call. */
+  public readonly field:
+    | "type"
+    | "authorized"
+    | "isAuthorized"
+    | "deadline"
+    | "signature";
+  /** Value required by BlueBundlesV1. */
+  public readonly expected: string;
+  /** Value supplied by the signed requirement. */
+  public readonly actual: string;
+
+  /**
+   * @param params - Signature mismatch details.
+   * @param params.field - Field rejected by the converter.
+   * @param params.expected - Value required by the direct route.
+   * @param params.actual - Value supplied by the requirement.
+   * @param params.cause - Original signature parser failure, when applicable.
+   */
+  public constructor(params: {
+    field: "type" | "authorized" | "isAuthorized" | "deadline" | "signature";
+    expected: string;
+    actual: string;
+    cause?: unknown;
+  }) {
+    super(
+      `BlueBundlesV1 requirement ${params.field} mismatch: expected "${params.expected}", got "${params.actual}". Resolve and sign the requirements returned by this Blue action.`,
+      { cause: params.cause },
+    );
+    this.field = params.field;
+    this.expected = params.expected;
+    this.actual = params.actual;
+    this.name = "BlueBundlesV1RequirementSignatureMismatchError";
+  }
+}
+
+/** Thrown when Permit2 SignatureTransfer is selected without an explicit unordered nonce. */
+export class MissingPermit2TransferFromNonceError extends Error {
+  public constructor() {
+    super(
+      "Permit2 SignatureTransfer requires an explicit unused permit2Nonce. Generate a unique uint256 nonce, pass it to getRequirements(), and resolve the requirements again.",
+    );
+    this.name = "MissingPermit2TransferFromNonceError";
+  }
+}
+
+/** Thrown when an explicit Permit2 SignatureTransfer unordered nonce is already consumed. */
+export class Permit2TransferFromNonceAlreadyUsedError extends Error {
+  /**
+   * @param owner - Permit2 token owner whose nonce is unavailable.
+   * @param nonce - Explicit unordered nonce that has already been consumed.
+   */
+  public constructor(
+    public readonly owner: Address,
+    public readonly nonce: bigint,
+  ) {
+    super(
+      `Permit2 nonce "${nonce}" is already used for owner "${owner}". Generate a different uint256 permit2Nonce and resolve the requirements again.`,
+    );
+    this.name = "Permit2TransferFromNonceAlreadyUsedError";
+  }
+}
+
+/** Thrown when native funding does not exactly match the contract's gross token pull. */
+export class NativeFundingAmountMismatchError extends Error {
+  /**
+   * @param nativeAmount - Native value supplied with the transaction.
+   * @param requiredAmount - Gross amount the BlueBundlesV1 entrypoint funds.
+   */
+  public constructor(
+    public readonly nativeAmount: bigint,
+    public readonly requiredAmount: bigint,
+  ) {
+    super(
+      `Native funding must equal the full funded amount: expected "${requiredAmount}", got "${nativeAmount}". Use either native funding or ERC-20 funding, not both.`,
+    );
+    this.name = "NativeFundingAmountMismatchError";
+  }
+}
+
+/** Thrown when a positive referral fee has no recipient. */
+export class MissingReferralFeeRecipientError extends Error {
+  public constructor() {
+    super(
+      "A positive referralFeePct requires referralFeeRecipient. Provide the recipient or set referralFeePct to zero.",
+    );
+    this.name = "MissingReferralFeeRecipientError";
+  }
+}
+
+/** Thrown when a BlueBundlesV1 reallocation source uses another loan token. */
+export class ReallocationLoanTokenMismatchError extends Error {
+  /**
+   * @param expected - Loan token of the operation's target market.
+   * @param actual - Loan token found in the reallocation source market.
+   */
+  public constructor(
+    public readonly expected: Address,
+    public readonly actual: Address,
+  ) {
+    super(
+      `Reallocation source loan token "${actual}" does not match target loan token "${expected}". Recompute reallocations for the target market.`,
+    );
+    this.name = "ReallocationLoanTokenMismatchError";
   }
 }
 
@@ -524,6 +633,7 @@ export namespace BundlerErrors {
 /** Requirement signature kind accepted by action-output transaction builders. */
 export type RequirementSignatureKind =
   | "permit"
+  | "permit2TransferFrom"
   | "authorization"
   | "midnightOfferRootSignature";
 

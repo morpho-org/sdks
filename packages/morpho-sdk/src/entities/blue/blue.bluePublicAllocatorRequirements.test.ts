@@ -7,8 +7,9 @@ import {
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
 import { blueAbi, erc2612Abi, fetchToken } from "@morpho-org/blue-sdk-viem";
+import { getChainAddress } from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
-import { erc20Abi } from "viem";
+import { erc20Abi, maxUint256 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test, vi } from "vitest";
 import {
@@ -59,7 +60,7 @@ const makePosition = (
   );
 
 describe("MorphoBlue BluePublicAllocator requirements", () => {
-  test("error: unsupported V2 deployment across every action flow", () => {
+  test("error: unsupported V2 deployment across the remaining Bundler3 action flows", () => {
     const chain = { ...mainnet, id: ChainId.CronosMainnet };
     const handle = createMockClient(chain);
     const market = handle.client
@@ -84,13 +85,6 @@ describe("MorphoBlue BluePublicAllocator requirements", () => {
             borrowShares: 1n,
             collateral: 1_000_000n,
           }),
-          reallocations,
-        }),
-      () =>
-        market.withdraw({
-          assets: 1n,
-          userAddress: USER,
-          positionData: makePosition(marketParams, { supplyShares: 10n }),
           reallocations,
         }),
       () =>
@@ -252,56 +246,46 @@ describe("MorphoBlue BluePublicAllocator requirements", () => {
     ]);
   });
 
-  test("behavior: withdraw includes V2 penalty approval and Morpho authorization", async () => {
+  test("behavior: withdraw deducts V2 penalties without a token approval", async () => {
     const handle = createMockClient(mainnet);
-    const {
-      morpho,
-      bundler3: { generalAdapter1 },
-    } = getChainAddresses(mainnet.id);
+    const { morpho } = getChainAddresses(mainnet.id);
+    const blueBundlesV1 = getChainAddress(mainnet.id, "bundles.blueBundlesV1");
     mockRead(handle, {
       address: morpho,
       abi: blueAbi,
       functionName: "isAuthorized",
       result: false,
     });
-    mockRead(handle, {
-      address: marketParams.loanToken,
-      abi: erc20Abi,
-      functionName: "allowance",
-      result: 0n,
-    });
     const market = handle.client
       .extend(morphoViemExtension({ supportSignature: false }))
       .morpho.blue(marketParams, mainnet.id);
 
-    const requirements = await market
-      .withdraw({
-        assets: 1n,
-        userAddress: USER,
-        positionData: makePosition(marketParams, { supplyShares: 10n }),
-        reallocations: [
-          {
-            vault: marketParams.oracle,
-            from: { type: "idle" },
-            to: { adapter: marketParams.collateralToken },
-            assets: 10n,
-            penalty: 500_000_000_000_000_000n,
-          },
-        ],
-      })
-      .getRequirements();
-
-    const approval = requirements.find(isRequirementApproval);
-    const authorization = requirements.find(isRequirementBlueAuthorization);
-    expect(approval?.to).toBe(marketParams.loanToken);
-    expect(approval?.action.args).toStrictEqual({
-      spender: generalAdapter1,
-      amount: 5n,
+    const action = market.withdraw({
+      assets: 10n,
+      userAddress: USER,
+      positionData: makePosition(marketParams, {
+        supplyShares: 10n ** 18n,
+      }),
+      reallocations: [
+        {
+          vault: marketParams.oracle,
+          from: { type: "idle" },
+          to: { adapter: marketParams.collateralToken },
+          assets: 10n,
+          penalty: 500_000_000_000_000_000n,
+        },
+      ],
+      deadline: maxUint256,
     });
+    const requirements = await action.getRequirements();
+
+    const authorization = requirements.find(isRequirementBlueAuthorization);
+    expect(requirements.find(isRequirementApproval)).toBeUndefined();
     expect(authorization?.action.args).toStrictEqual({
-      authorized: generalAdapter1,
+      authorized: blueBundlesV1,
       isAuthorized: true,
     });
+    expect(action.buildTx().action.args.reallocationPenaltyAssets).toBe(5n);
   });
 
   test("behavior: refinance includes V2 penalty approval and Morpho authorization", async () => {
