@@ -1,4 +1,6 @@
-import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
+import { getChainAddresses } from "@morpho-org/blue-sdk";
+import { blueAbi, fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
+import { Time } from "@morpho-org/morpho-ts";
 import { createViemTest } from "@morpho-org/test/vitest";
 import { erc20Abi, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
@@ -58,6 +60,103 @@ describe("MorphoVaultV1.inKindRedeem integration", () => {
     );
 
     const exit = withChainTimestamp(await client.timestamp(), () =>
+      vault.inKindRedeem({
+        amount,
+        marketParamsList,
+        vaultData,
+        userAddress: client.account.address,
+      }),
+    );
+    const [approval] = await withChainTimestamp(await client.timestamp(), () =>
+      exit.getRequirements(),
+    );
+    if (!isRequirementApproval(approval)) {
+      throw new Error("VaultExitBundlesV1 approval requirement not found");
+    }
+    await client.sendTransaction(approval);
+    await client.sendTransaction(exit.buildTx());
+
+    const finalVaultShares = await client.readContract({
+      address: SteakhouseUsdcVaultV1.address,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [client.account.address],
+    });
+    const finalSupplyShares = await Promise.all(
+      marketParamsList.map(async ({ id }) => {
+        return (await fetchAccrualPosition(client.account.address, id, client))
+          .supplyShares;
+      }),
+    );
+
+    expect(finalVaultShares).toBeLessThan(initialVaultShares);
+    expect(
+      finalSupplyShares.reduce((total, shares) => total + shares, 0n),
+    ).toBeGreaterThan(
+      initialSupplyShares.reduce((total, shares) => total + shares, 0n),
+    );
+  });
+
+  test("exits when the caller's clock lags a freshly accrued market", async ({
+    client,
+  }) => {
+    // Clear the test account's mainnet EIP-7702 delegation before exercising the bundle.
+    await client.setCode({
+      address: client.account.address,
+      bytecode: "0x",
+    });
+    const vault = client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
+    const amount = parseUnits("1", 6);
+    const { morpho } = getChainAddresses(mainnet.id);
+    if (morpho == null) {
+      throw new Error("Morpho Blue address not found");
+    }
+
+    // The clock we will feed the SDK, captured before warping the fork forward.
+    const laggingClock = await client.timestamp();
+    const marketParamsList = [...(await vault.getData()).allocations.values()]
+      .filter(({ config, position }) => {
+        return config.enabled && position.supplyShares > 0n;
+      })
+      .map(({ position }) => position.market.params);
+
+    // Accrue each vault market an hour ahead of `laggingClock` so their `lastUpdate` leads the
+    // clock. This reproduces the reported skew: a bare `accrueInterest(now)` throws
+    // `InvalidInterestAccrual`, and only the forward clamp lets the handle build and execute.
+    await client.setNextBlockTimestamp({
+      timestamp: laggingClock + Time.s.from.h(1n),
+    });
+    for (const params of marketParamsList) {
+      await client.writeContract({
+        address: morpho,
+        abi: blueAbi,
+        functionName: "accrueInterest",
+        args: [params],
+      });
+    }
+
+    const vaultData = await vault.getData();
+    const userShares = vaultData.toShares(amount * 2n);
+    await client.deal({
+      erc20: SteakhouseUsdcVaultV1.address,
+      amount: userShares,
+    });
+    const initialVaultShares = await client.readContract({
+      address: SteakhouseUsdcVaultV1.address,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [client.account.address],
+    });
+    const initialSupplyShares = await Promise.all(
+      marketParamsList.map(async ({ id }) => {
+        return (await fetchAccrualPosition(client.account.address, id, client))
+          .supplyShares;
+      }),
+    );
+
+    const exit = withChainTimestamp(laggingClock, () =>
       vault.inKindRedeem({
         amount,
         marketParamsList,

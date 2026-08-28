@@ -561,7 +561,14 @@ export class MorphoVaultV2 implements VaultV2Actions {
     let remaining = assetsToDeallocate;
     let peak = 0n;
     const consumedMarketIds = new Set<string>();
-    const { vault: allowanceVault } = vaultData.accrueInterest(deadline);
+    // Clamp the whole-vault fee accrual forward past the markets' `lastUpdate` too: like the
+    // per-market accrual above, `AccrualVaultV2.accrueInterest` sums `Market.accrueInterest` and
+    // throws `InvalidInterestAccrual` when the caller's clock (and thus `deadline`) lags a block
+    // that just accrued a market. Accruing further forward only adds management fees, so the
+    // allowance stays an upper bound of the on-chain burn.
+    const { vault: allowanceVault } = vaultData.accrueInterest(
+      MathLib.max(deadline, ...soleAdapter.markets.map((m) => m.lastUpdate)),
+    );
     // Interest can lower the burn, while management fees can raise it; bound both endpoints.
     const previewAllowance = (assets: bigint) =>
       MathLib.max(

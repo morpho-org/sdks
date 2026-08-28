@@ -461,12 +461,12 @@ export class MorphoVaultV1 implements VaultV1Actions {
     // `lastUpdate` — reachable when the caller's clock lags a block that just accrued a vault
     // market. Clamp forward past the latest market update so coverage and the allowance accrue to
     // one consistent, never-backwards instant.
-    let accrualTimestamp = now;
-    for (const { position } of vaultData.allocations.values())
-      accrualTimestamp = MathLib.max(
-        accrualTimestamp,
-        position.market.lastUpdate,
-      );
+    const accrualTimestamp = MathLib.max(
+      now,
+      ...[...vaultData.allocations.values()].map(
+        ({ position }) => position.market.lastUpdate,
+      ),
+    );
     let covered = 0n;
     const assignedByMarket = new Map<string, bigint>();
     for (const marketParams of marketParamsListSnapshot) {

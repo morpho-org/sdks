@@ -5,10 +5,12 @@ import {
   marketParamsAbi,
 } from "@morpho-org/blue-sdk";
 import {
+  blueAbi,
   fetchAccrualPosition,
   morphoMarketV1AdapterV2FactoryAbi,
   vaultV2Abi,
 } from "@morpho-org/blue-sdk-viem";
+import { Time } from "@morpho-org/morpho-ts";
 import type { AnvilTestClient } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
 import {
@@ -60,6 +62,155 @@ const submitAndAccept = async (params: {
   });
 };
 
+// Deploys a single-adapter Vault V2 with a force-deallocate penalty, funds it, and splits the
+// liquidity across both `setupMarkets`. Shared by the redemption cases so each exercises the SDK
+// path against identical on-chain state without re-inlining the ~140-line curator setup.
+const deployPenaltyVaultV2 = async (client: AnvilTestClient) => {
+  const { address: vaultAddress } = await createVaultV2({
+    client,
+    asset: USDC,
+    chainId: mainnet.id,
+  });
+  await client.writeContract({
+    address: vaultAddress,
+    abi: vaultV2Abi,
+    functionName: "setCurator",
+    args: [client.account.address],
+  });
+  await submitAndAccept({
+    client,
+    vault: vaultAddress,
+    data: encodeFunctionData({
+      abi: vaultV2Abi,
+      functionName: "setIsAllocator",
+      args: [client.account.address, true],
+    }),
+  });
+
+  const { morphoMarketV1AdapterV2Factory } = getChainAddresses(mainnet.id);
+  if (morphoMarketV1AdapterV2Factory == null) {
+    throw new Error("MorphoMarketV1AdapterV2 factory not found");
+  }
+  const adapterHash = await client.writeContract({
+    address: morphoMarketV1AdapterV2Factory,
+    abi: morphoMarketV1AdapterV2FactoryAbi,
+    functionName: "createMorphoMarketV1AdapterV2",
+    args: [vaultAddress],
+  });
+  const adapterReceipt = await client.waitForTransactionReceipt({
+    hash: adapterHash,
+  });
+  const [adapterEvent] = parseEventLogs({
+    abi: morphoMarketV1AdapterV2FactoryAbi,
+    logs: adapterReceipt.logs,
+    eventName: "CreateMorphoMarketV1AdapterV2",
+  });
+  const adapterAddress = adapterEvent?.args.morphoMarketV1AdapterV2;
+  if (adapterAddress == null) {
+    throw new Error("MorphoMarketV1AdapterV2 deployment event not found");
+  }
+
+  await submitAndAccept({
+    client,
+    vault: vaultAddress,
+    data: encodeFunctionData({
+      abi: vaultV2Abi,
+      functionName: "addAdapter",
+      args: [adapterAddress],
+    }),
+  });
+  await client.writeContract({
+    address: vaultAddress,
+    abi: vaultV2Abi,
+    functionName: "setLiquidityAdapterAndData",
+    args: [
+      adapterAddress,
+      encodeAbiParameters([marketParamsAbi], [CbbtcUsdcBlue]),
+    ],
+  });
+
+  const capIds = [
+    encodeAbiParameters(
+      [{ type: "string" }, { type: "address" }],
+      ["this", adapterAddress],
+    ),
+    ...setupMarkets.flatMap((market) => [
+      encodeAbiParameters(
+        [{ type: "string" }, { type: "address" }],
+        ["collateralToken", market.collateralToken],
+      ),
+      encodeAbiParameters(
+        [{ type: "string" }, { type: "address" }, marketParamsAbi],
+        ["this/marketParams", adapterAddress, market],
+      ),
+    ]),
+  ];
+  for (const id of capIds) {
+    await submitAndAccept({
+      client,
+      vault: vaultAddress,
+      data: encodeFunctionData({
+        abi: vaultV2Abi,
+        functionName: "increaseAbsoluteCap",
+        args: [id, maxUint128],
+      }),
+    });
+    await submitAndAccept({
+      client,
+      vault: vaultAddress,
+      data: encodeFunctionData({
+        abi: vaultV2Abi,
+        functionName: "increaseRelativeCap",
+        args: [id, MathLib.WAD],
+      }),
+    });
+  }
+
+  const penalty = parseUnits("0.01", 18);
+  await submitAndAccept({
+    client,
+    vault: vaultAddress,
+    data: encodeFunctionData({
+      abi: vaultV2Abi,
+      functionName: "setForceDeallocatePenalty",
+      args: [adapterAddress, penalty],
+    }),
+  });
+
+  const deposit = parseUnits("1000", 6);
+  await client.deal({ erc20: USDC, amount: deposit });
+  await client.approve({ address: USDC, args: [vaultAddress, deposit] });
+  await client.writeContract({
+    address: vaultAddress,
+    abi: vaultV2Abi,
+    functionName: "deposit",
+    args: [deposit, client.account.address],
+  });
+  const reallocationAmount = deposit / 2n;
+  await client.writeContract({
+    address: vaultAddress,
+    abi: vaultV2Abi,
+    functionName: "deallocate",
+    args: [
+      adapterAddress,
+      encodeAbiParameters([marketParamsAbi], [CbbtcUsdcBlue]),
+      reallocationAmount,
+    ],
+  });
+  await client.writeContract({
+    address: vaultAddress,
+    abi: vaultV2Abi,
+    functionName: "allocate",
+    args: [
+      adapterAddress,
+      encodeAbiParameters([marketParamsAbi], [WbtcUsdcSourceMarket]),
+      reallocationAmount / 2n,
+    ],
+  });
+
+  return { vaultAddress, adapterAddress, penalty };
+};
+
 describe("MorphoVaultV2.inKindRedeem integration", () => {
   test("accepts the two-field-domain permit and exits with a penalty", async ({
     client,
@@ -69,147 +220,8 @@ describe("MorphoVaultV2.inKindRedeem integration", () => {
       address: client.account.address,
       bytecode: "0x",
     });
-    const { address: vaultAddress } = await createVaultV2({
-      client,
-      asset: USDC,
-      chainId: mainnet.id,
-    });
-    await client.writeContract({
-      address: vaultAddress,
-      abi: vaultV2Abi,
-      functionName: "setCurator",
-      args: [client.account.address],
-    });
-    await submitAndAccept({
-      client,
-      vault: vaultAddress,
-      data: encodeFunctionData({
-        abi: vaultV2Abi,
-        functionName: "setIsAllocator",
-        args: [client.account.address, true],
-      }),
-    });
-
-    const { morphoMarketV1AdapterV2Factory } = getChainAddresses(mainnet.id);
-    if (morphoMarketV1AdapterV2Factory == null) {
-      throw new Error("MorphoMarketV1AdapterV2 factory not found");
-    }
-    const adapterHash = await client.writeContract({
-      address: morphoMarketV1AdapterV2Factory,
-      abi: morphoMarketV1AdapterV2FactoryAbi,
-      functionName: "createMorphoMarketV1AdapterV2",
-      args: [vaultAddress],
-    });
-    const adapterReceipt = await client.waitForTransactionReceipt({
-      hash: adapterHash,
-    });
-    const [adapterEvent] = parseEventLogs({
-      abi: morphoMarketV1AdapterV2FactoryAbi,
-      logs: adapterReceipt.logs,
-      eventName: "CreateMorphoMarketV1AdapterV2",
-    });
-    const adapterAddress = adapterEvent?.args.morphoMarketV1AdapterV2;
-    if (adapterAddress == null) {
-      throw new Error("MorphoMarketV1AdapterV2 deployment event not found");
-    }
-
-    await submitAndAccept({
-      client,
-      vault: vaultAddress,
-      data: encodeFunctionData({
-        abi: vaultV2Abi,
-        functionName: "addAdapter",
-        args: [adapterAddress],
-      }),
-    });
-    await client.writeContract({
-      address: vaultAddress,
-      abi: vaultV2Abi,
-      functionName: "setLiquidityAdapterAndData",
-      args: [
-        adapterAddress,
-        encodeAbiParameters([marketParamsAbi], [CbbtcUsdcBlue]),
-      ],
-    });
-
-    const capIds = [
-      encodeAbiParameters(
-        [{ type: "string" }, { type: "address" }],
-        ["this", adapterAddress],
-      ),
-      ...setupMarkets.flatMap((market) => [
-        encodeAbiParameters(
-          [{ type: "string" }, { type: "address" }],
-          ["collateralToken", market.collateralToken],
-        ),
-        encodeAbiParameters(
-          [{ type: "string" }, { type: "address" }, marketParamsAbi],
-          ["this/marketParams", adapterAddress, market],
-        ),
-      ]),
-    ];
-    for (const id of capIds) {
-      await submitAndAccept({
-        client,
-        vault: vaultAddress,
-        data: encodeFunctionData({
-          abi: vaultV2Abi,
-          functionName: "increaseAbsoluteCap",
-          args: [id, maxUint128],
-        }),
-      });
-      await submitAndAccept({
-        client,
-        vault: vaultAddress,
-        data: encodeFunctionData({
-          abi: vaultV2Abi,
-          functionName: "increaseRelativeCap",
-          args: [id, MathLib.WAD],
-        }),
-      });
-    }
-
-    const penalty = parseUnits("0.01", 18);
-    await submitAndAccept({
-      client,
-      vault: vaultAddress,
-      data: encodeFunctionData({
-        abi: vaultV2Abi,
-        functionName: "setForceDeallocatePenalty",
-        args: [adapterAddress, penalty],
-      }),
-    });
-
-    const deposit = parseUnits("1000", 6);
-    await client.deal({ erc20: USDC, amount: deposit });
-    await client.approve({ address: USDC, args: [vaultAddress, deposit] });
-    await client.writeContract({
-      address: vaultAddress,
-      abi: vaultV2Abi,
-      functionName: "deposit",
-      args: [deposit, client.account.address],
-    });
-    const reallocationAmount = deposit / 2n;
-    await client.writeContract({
-      address: vaultAddress,
-      abi: vaultV2Abi,
-      functionName: "deallocate",
-      args: [
-        adapterAddress,
-        encodeAbiParameters([marketParamsAbi], [CbbtcUsdcBlue]),
-        reallocationAmount,
-      ],
-    });
-    await client.writeContract({
-      address: vaultAddress,
-      abi: vaultV2Abi,
-      functionName: "allocate",
-      args: [
-        adapterAddress,
-        encodeAbiParameters([marketParamsAbi], [WbtcUsdcSourceMarket]),
-        reallocationAmount / 2n,
-      ],
-    });
+    const { vaultAddress, adapterAddress, penalty } =
+      await deployPenaltyVaultV2(client);
 
     const vault = client
       .extend(morphoViemExtension({ supportSignature: true }))
@@ -310,6 +322,93 @@ describe("MorphoVaultV2.inKindRedeem integration", () => {
     );
     await expect(balanceLimitedRequirements).rejects.toBeInstanceOf(
       InsufficientBlueBalanceForInKindRedeemError,
+    );
+  });
+
+  test("exits when the caller's clock lags a freshly accrued market", async ({
+    client,
+  }) => {
+    const { vaultAddress } = await deployPenaltyVaultV2(client);
+    const { morpho } = getChainAddresses(mainnet.id);
+    if (morpho == null) {
+      throw new Error("Morpho Blue address not found");
+    }
+    const vault = client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.vaultV2(vaultAddress, mainnet.id);
+
+    // The clock we will feed the SDK, captured before warping the fork forward. Accrue both
+    // allocated markets an hour ahead so their `lastUpdate` leads it: without the forward clamp,
+    // the per-market `accrueInterest(now)` throws `InvalidInterestAccrual` while building the
+    // handle.
+    const laggingClock = await client.timestamp();
+    await client.setNextBlockTimestamp({
+      timestamp: laggingClock + Time.s.from.h(1n),
+    });
+    for (const market of setupMarkets) {
+      await client.writeContract({
+        address: morpho,
+        abi: blueAbi,
+        functionName: "accrueInterest",
+        args: [market],
+      });
+    }
+
+    const vaultData = await vault.getData();
+    const [adapter] = vaultData.accrualAdapters;
+    if (!(adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2)) {
+      throw new Error("Expected a MorphoMarketV1AdapterV2 snapshot");
+    }
+    const marketParamsList = adapter.markets.map(({ params }) => params);
+    const amount = parseUnits("900", 6);
+    const initialVaultShares = await client.readContract({
+      address: vaultAddress,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [client.account.address],
+    });
+    const initialSupplyShares = await Promise.all(
+      setupMarkets.map(async ({ id }) => {
+        return (await fetchAccrualPosition(client.account.address, id, client))
+          .supplyShares;
+      }),
+    );
+
+    const exit = withChainTimestamp(laggingClock, () =>
+      vault.inKindRedeem({
+        amount,
+        marketParamsList,
+        vaultData,
+        userAddress: client.account.address,
+      }),
+    );
+    const [approval] = await withChainTimestamp(await client.timestamp(), () =>
+      exit.getRequirements(),
+    );
+    if (!isRequirementApproval(approval)) {
+      throw new Error("VaultExitBundlesV1 approval requirement not found");
+    }
+    await client.sendTransaction(approval);
+    await client.sendTransaction(exit.buildTx());
+
+    const finalVaultShares = await client.readContract({
+      address: vaultAddress,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [client.account.address],
+    });
+    const finalSupplyShares = await Promise.all(
+      setupMarkets.map(async ({ id }) => {
+        return (await fetchAccrualPosition(client.account.address, id, client))
+          .supplyShares;
+      }),
+    );
+
+    expect(finalVaultShares).toBeLessThan(initialVaultShares);
+    expect(
+      finalSupplyShares.reduce((total, shares) => total + shares, 0n),
+    ).toBeGreaterThan(
+      initialSupplyShares.reduce((total, shares) => total + shares, 0n),
     );
   });
 
