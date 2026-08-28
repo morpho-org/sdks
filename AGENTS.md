@@ -172,12 +172,13 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 - **`main` is always releasable.** Fork suite green per chain matrix.
 - **Pin ABIs and addresses in-package.** No runtime ABI fetch; no address drift between releases.
 - **4-step deprecation flow:** introduce successor → deprecate with `@deprecated` JSDoc → maintain both for one minor → remove in the next major. No silent removals.
+- **BlueBundlesV1 route exception.** The route replacement defined by [`TIB-2026-08-25-blue-bundles-v1-sdk-actions`](./docs/tibs/TIB-2026-08-25-blue-bundles-v1-sdk-actions.md) may skip the prior successor-introduction, `@deprecated`, and one-minor coexistence steps: `morpho-sdk` 6.0.0 may remove the listed Bundler3-backed Blue methods as their listed `BlueBundlesV1` replacements land, and `wdk-protocol-lending-morpho-evm` 2.0.0 may make the Blue input changes listed in that TIB. This exception is limited to those symbols and inputs because carrying both high-level routes would preserve an ambiguous product choice. It does not waive major changesets, migration guides, the maintained-dependent audit and bumps, or continued availability of the previous majors. No other removal inherits this exception.
 - **Migration guides on every major**, with codemods where mechanical.
 - **Cantina audit on every major release**, with the public report linked from the CHANGELOG entry. Critical CVEs trigger out-of-band patches.
 - **Pre-release dogfood on every minor:** at least one internal app and one external partner before the `latest` tag flips.
 - **Respect pnpm minimum release age when bumping releases.** Keep `minimumReleaseAgeStrict` enabled and do not add `minimumReleaseAgeExclude` (or equivalent bypasses) to force freshly-published dependencies through dependency bump PRs. If a dependency is too new, wait for the configured `minimumReleaseAge` window or pin to the latest eligible version; emergency bypasses require explicit maintainer approval and must be removed before merge.
 
-> Applied by personas: [`style-conventions`](./.agents/pr-review-engine/agents/style-conventions.md) (changeset relevance), [`morpho-protocol`](./.agents/pr-review-engine/agents/morpho-protocol.md) (pinned ABI/address release contract), [`ci-release-security`](./.agents/pr-review-engine/agents/ci-release-security.md) (publish-flow integrity, conditional).
+> Applied by personas: [`module-api-architecture`](./.agents/pr-review-engine/agents/module-api-architecture.md) (deprecation lifecycle), [`style-conventions`](./.agents/pr-review-engine/agents/style-conventions.md) (changeset relevance), [`morpho-protocol`](./.agents/pr-review-engine/agents/morpho-protocol.md) (pinned ABI/address release contract), [`ci-release-security`](./.agents/pr-review-engine/agents/ci-release-security.md) (publish-flow integrity, conditional).
 
 ---
 
@@ -223,7 +224,7 @@ Baseline personas (always fire):
 | Persona | Anchors | Focus |
 |---|---|---|
 | [`code-quality`](./.agents/pr-review-engine/agents/code-quality.md) | §2, §3 | Type safety, code smells, naming, cross-file impact on SDK consumers, security primitives. |
-| [`module-api-architecture`](./.agents/pr-review-engine/agents/module-api-architecture.md) | §1, §2 (rule 5), §3, §4 | Package boundaries, public surface, NodeNext import discipline, boundary-level type discipline. |
+| [`module-api-architecture`](./.agents/pr-review-engine/agents/module-api-architecture.md) | §1, §2 (rule 5), §3, §4, §7 | Package boundaries, public surface and deprecation lifecycle, NodeNext import discipline, boundary-level type discipline. |
 | [`morpho-protocol`](./.agents/pr-review-engine/agents/morpho-protocol.md) | §1, §5, §7 | Morpho protocol semantics, ABI/address source-of-truth drift, operation routing, accounting/share-price/LLTV invariants. |
 | [`web3-security`](./.agents/pr-review-engine/agents/web3-security.md) | §1 (Action layer), §2, §5 (security invariants) | Contract interactions, transaction params, permit flows, race conditions. Severity defaults to critical/high. |
 | [`silent-failure-hunter`](./.agents/pr-review-engine/agents/silent-failure-hunter.md) | §2 (handling depth for rule 2 — see persona body) | Swallowed errors, missing error states, dead code paths. |
