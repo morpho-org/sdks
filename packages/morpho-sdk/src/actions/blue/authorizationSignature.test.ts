@@ -7,7 +7,6 @@ import { WethUsdsBlue } from "../../../test/fixtures/blue.js";
 import { bundler3Abi } from "../../abis.js";
 import type { AuthorizationRequirementSignature } from "../../types/index.js";
 import { blueBorrow } from "./borrow.js";
-import { blueWithdraw } from "./withdraw.js";
 
 const USER: Address = "0x1111111111111111111111111111111111111111";
 
@@ -56,43 +55,6 @@ describe("authorization signature wiring", () => {
     const calls = decodeBundle(tx.data);
     expect(calls[0]!.to).toBe(morpho);
     const inner = decodeFunctionData({ abi: blueAbi, data: calls[0]!.data });
-    expect(inner.functionName).toBe("setAuthorizationWithSig");
-  });
-
-  test("behavior: blueWithdraw omits the authorization call when no signature is provided", () => {
-    const tx = blueWithdraw({
-      market: { chainId: mainnet.id, marketParams: WethUsdsBlue },
-      args: {
-        assets: parseUnits("100", 18),
-        shares: 0n,
-        receiver: USER,
-        minSharePrice: 0n,
-      },
-    });
-
-    const calls = decodeBundle(tx.data);
-    for (const call of calls) {
-      if (call.to !== morpho) continue;
-      const inner = decodeFunctionData({ abi: blueAbi, data: call.data });
-      expect(inner.functionName).not.toBe("setAuthorizationWithSig");
-    }
-  });
-
-  test("behavior: blueWithdraw prepends the authorization call before morphoWithdraw", () => {
-    const tx = blueWithdraw({
-      market: { chainId: mainnet.id, marketParams: WethUsdsBlue },
-      args: {
-        assets: parseUnits("100", 18),
-        shares: 0n,
-        receiver: USER,
-        minSharePrice: 0n,
-        authorizationSignature,
-      },
-    });
-
-    const calls = decodeBundle(tx.data);
-    const inner = decodeFunctionData({ abi: blueAbi, data: calls[0]!.data });
-    expect(calls[0]!.to).toBe(morpho);
     expect(inner.functionName).toBe("setAuthorizationWithSig");
   });
 });

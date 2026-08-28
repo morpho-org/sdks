@@ -4,24 +4,28 @@ import {
   getChainAddresses,
   Market,
   MarketParams,
-  MathLib,
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
-import { Time } from "@morpho-org/morpho-ts";
+import { getChainAddress } from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
-import { type Address, createPublicClient, http, parseUnits } from "viem";
+import {
+  type Address,
+  createPublicClient,
+  erc20Abi,
+  http,
+  maxUint256,
+  parseUnits,
+} from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { CbbtcUsdcBlue, WstethWethBlue } from "../../../test/fixtures/blue.js";
 import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { test as unitTest } from "../../../test/unit.js";
 import { morphoViemExtension } from "../../client/index.js";
+import { computeMaxRepaySharePrice } from "../../helpers/index.js";
 import {
-  computeMaxRepaySharePrice,
-  computeMaxSupplySharePrice,
-} from "../../helpers/index.js";
-import {
+  ExpiredDeadlineError,
   MutuallyExclusiveRepayAmountsError,
   NativeAmountOnNonWNativeAssetError,
   NegativeInputError,
@@ -547,86 +551,96 @@ describe("MorphoBlue repay maxSharePrice forward-accrual (VAU-1206)", () => {
 });
 
 describe("MorphoBlue requirements", () => {
-  test("withdraw omits authorization when already authorized", async () => {
+  test("supply and withdraw target BlueBundlesV1 requirements", async () => {
     const handle = createMockClient(mainnet);
     const { morpho } = getChainAddresses(mainnet.id);
+    const blueBundlesV1 = getChainAddress(mainnet.id, "bundles.blueBundlesV1");
+    mockRead(handle, {
+      address: MARKET_PARAMS.loanToken,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
     mockRead(handle, {
       address: morpho,
       abi: blueAbi,
       functionName: "isAuthorized",
-      result: true,
+      result: false,
     });
     const market = handle.client
       .extend(morphoViemExtension({ supportSignature: false }))
       .morpho.blue(CbbtcUsdcBlue, mainnet.id);
 
-    await expect(
-      market
-        .withdraw({
-          assets: 1n,
-          userAddress: USER,
-          positionData: makeStalePosition(10n ** 18n),
-        })
-        .getRequirements(),
-    ).resolves.toEqual([]);
+    const supplyRequirements = await market
+      .supply({
+        assets: 1n,
+        userAddress: USER,
+        deadline: maxUint256,
+      })
+      .getRequirements();
+    const withdrawRequirements = await market
+      .withdraw({
+        assets: 1n,
+        userAddress: USER,
+        positionData: makeStalePosition(10n ** 18n),
+        deadline: maxUint256,
+      })
+      .getRequirements();
+
+    expect(supplyRequirements).toMatchObject([
+      {
+        action: {
+          type: "erc20Approval",
+          args: { spender: blueBundlesV1 },
+        },
+      },
+    ]);
+    expect(withdrawRequirements).toMatchObject([
+      {
+        action: {
+          type: "blueAuthorization",
+          args: { authorized: blueBundlesV1, isAuthorized: true },
+        },
+      },
+    ]);
   });
-});
 
-describe("MorphoBlue supply maxSharePrice forward-accrual", () => {
-  const RAY = MathLib.RAY;
-  const rDivDown = (a: bigint, b: bigint) => (a * RAY) / b;
-
-  function staleMarket() {
-    return new Market({
-      params: new MarketParams(WstethWethBlue),
-      totalSupplyAssets: 10n ** 24n,
-      totalBorrowAssets: (10n ** 24n * 9n) / 10n,
-      totalSupplyShares: 10n ** 30n,
-      totalBorrowShares: (10n ** 30n * 9n) / 10n,
-      lastUpdate: NOW_SEC - 5n * 24n * 3_600n,
-      fee: 0n,
-      price: ORACLE_PRICE_SCALE,
-      rateAtTarget: RATE_AT_TARGET,
-    });
-  }
-
-  const localClient = createPublicClient({ chain: mainnet, transport: http() });
-
-  test("native-only supply derives maxSharePrice from the forward-accrued market", () => {
-    const marketData = staleMarket();
-    const nativeAmount = parseUnits("10", 18);
-    const market = localClient
+  test("supply and withdraw reject expired deadlines", () => {
+    const market = noRpcClient
       .extend(morphoViemExtension())
-      .morpho.blue(WstethWethBlue, mainnet.id);
+      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
 
-    const tx = withChainTimestamp(NOW_SEC, () =>
-      market.supply({ nativeAmount, userAddress: USER, marketData }).buildTx(),
+    expect(() =>
+      market.supply({
+        assets: 1n,
+        userAddress: USER,
+        deadline: 1n,
+      }),
+    ).toThrow(ExpiredDeadlineError);
+    expect(() =>
+      market.withdraw({
+        assets: 1n,
+        userAddress: USER,
+        positionData: makeStalePosition(10n ** 18n),
+        deadline: 1n,
+      }),
+    ).toThrow(ExpiredDeadlineError);
+  });
+
+  test("supply revalidates its deadline before resolving requirements", () => {
+    const market = noRpcClient
+      .extend(morphoViemExtension())
+      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
+    const action = withChainTimestamp(NOW_SEC, () =>
+      market.supply({
+        assets: 1n,
+        userAddress: USER,
+        deadline: NOW_SEC + 1n,
+      }),
     );
 
-    const accruedMarket = marketData.accrueInterest(
-      MathLib.max(NOW_SEC, marketData.lastUpdate) + Time.s.from.h(2n),
-    );
-    const expected = computeMaxSupplySharePrice({
-      supplyAssets: nativeAmount,
-      market: accruedMarket,
-      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
-    });
-    const stale = computeMaxSupplySharePrice({
-      supplyAssets: nativeAmount,
-      market: marketData,
-      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
-    });
-
-    expect(tx.action.args.maxSharePrice).toBe(expected);
-    expect(tx.action.args.maxSharePrice).toBeGreaterThan(stale);
-
-    const onchainSharePrice = rDivDown(
-      nativeAmount,
-      accruedMarket.toSupplyShares(nativeAmount, "Down"),
-    );
-    expect(tx.action.args.maxSharePrice).toBeGreaterThanOrEqual(
-      onchainSharePrice,
-    );
-    expect(onchainSharePrice).toBeGreaterThan(stale);
+    expect(() =>
+      withChainTimestamp(NOW_SEC + 1n, () => action.getRequirements()),
+    ).toThrow(ExpiredDeadlineError);
   });
 });
