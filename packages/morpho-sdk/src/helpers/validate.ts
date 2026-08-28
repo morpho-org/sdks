@@ -558,44 +558,6 @@ export const validateAndNormalizeReallocations = ({
 };
 
 /**
- * Validates and materializes optional Vault V2 reallocations for a high-level Blue write.
- *
- * @param params - Validation parameters.
- * @param params.reallocations - Optional Vault V2 reallocations.
- * @param params.targetMarketId - Morpho Blue market receiving the liquidity.
- * @param params.chainId - Chain whose allocator deployment is required.
- * @returns The validated reallocations as a reusable readonly array.
- * @throws {BundlerErrors.UnexpectedAction} when Vault V2 reallocations are unsupported on the chain.
- * @internal
- */
-export const validateAndNormalizeVaultV2BlueReallocations = ({
-  reallocations,
-  targetMarketId,
-  chainId,
-}: {
-  readonly reallocations: Iterable<VaultV2BlueReallocation> | undefined;
-  readonly targetMarketId: MarketId;
-  readonly chainId: number;
-}): readonly VaultV2BlueReallocation[] => {
-  const normalized = [...(reallocations ?? [])];
-  validateVaultV2BlueReallocations(normalized, targetMarketId);
-
-  if (
-    normalized.length > 0 &&
-    getChainAddresses(chainId).vaultV2BluePublicAllocator == null
-  ) {
-    throw new BundlerErrors.UnexpectedAction(
-      normalized[0]?.from.type === "market"
-        ? "vaultV2BluePublicAllocatorReallocate"
-        : "vaultV2BluePublicAllocatorAllocateFromIdle",
-      chainId,
-    );
-  }
-
-  return normalized;
-};
-
-/**
  * Validates that a slippage tolerance is within an acceptable range.
  *
  * Throws {@link NegativeInputError} if negative.
