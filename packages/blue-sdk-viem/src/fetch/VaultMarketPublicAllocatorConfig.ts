@@ -5,7 +5,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
-import { publicAllocatorAbi } from "../abis.js";
+import { vaultV1PublicAllocatorAbi } from "../abis.js";
 import type { FetchParameters } from "../types.js";
 
 /**
@@ -49,14 +49,14 @@ export async function fetchVaultMarketPublicAllocatorConfig(
 ) {
   parameters.chainId ??= await getChainId(client);
 
-  const { publicAllocator } = getChainAddresses(parameters.chainId);
+  const { vaultV1PublicAllocator } = getChainAddresses(parameters.chainId);
   /* v8 ignore next: V8 does not credit this guard's empty false branch; both paths are tested. */
-  if (publicAllocator == null) return;
+  if (vaultV1PublicAllocator == null) return;
 
   const [maxIn, maxOut] = await readContract(client, {
     ...parameters,
-    address: publicAllocator,
-    abi: publicAllocatorAbi,
+    address: vaultV1PublicAllocator,
+    abi: vaultV1PublicAllocatorAbi,
     functionName: "flowCaps",
     args: [vault, marketId],
   });

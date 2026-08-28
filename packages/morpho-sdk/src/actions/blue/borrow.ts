@@ -6,14 +6,14 @@ import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   type AuthorizationRequirementSignature,
   type BlueBorrowAction,
+  type BlueReallocationPlan,
   type Metadata,
   NegativeInputError,
   NonPositiveInputError,
   type Transaction,
-  type VaultReallocation,
 } from "../../types/index.js";
 import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
-import { buildReallocationActions } from "./buildReallocationActions.js";
+import { buildBlueReallocationActions } from "./buildReallocationActions.js";
 
 /** Parameters for {@link blueBorrow}. */
 export interface BlueBorrowParams {
@@ -28,8 +28,8 @@ export interface BlueBorrowParams {
     receiver: Address;
     /** Minimum borrow share price (in ray). Protects against share price manipulation. */
     minSharePrice: bigint;
-    /** Vault reallocations to execute before borrowing (computed by entity). */
-    reallocations?: readonly VaultReallocation[];
+    /** Homogeneous Vault V1 or Vault V2 reallocations to execute before borrowing. */
+    reallocations?: BlueReallocationPlan;
     /**
      * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
      * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a
@@ -47,17 +47,18 @@ export interface BlueBorrowParams {
  * `onBehalf`. Uses `minSharePrice` to protect against share price manipulation between
  * transaction construction and execution.
  *
- * When `reallocations` are provided, `reallocateTo` actions are prepended to the bundle, moving
- * liquidity from other markets via the PublicAllocator before borrowing. Reallocation fees
- * accumulate in `tx.value`.
+ * A `reallocations` plan contains either PublicAllocator V1 entries or Vault V2
+ * BluePublicAllocator entries, never both. The calls run before the borrow.
+ * V1 fees accumulate in `tx.value`; V2 penalties are paid in the target loan
+ * token and donated directly to each vault.
  *
  * @param params.market.chainId - The chain the market lives on.
  * @param params.market.marketParams - Market params (loanToken, collateralToken, oracle, irm, lltv).
  * @param params.args.amount - Loan asset amount to borrow, in the loan token's smallest unit.
  * @param params.args.receiver - Address that receives the borrowed assets.
  * @param params.args.minSharePrice - Minimum borrow share price (in ray). Slippage protection.
- * @param params.args.reallocations - Optional vault reallocations to execute before borrowing,
- *   computed by the entity layer.
+ * @param params.args.reallocations - Optional homogeneous Vault V1 or Vault V2 reallocations to
+ *   execute before borrowing.
  * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
  *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
@@ -65,13 +66,18 @@ export interface BlueBorrowParams {
  *   typed `action` discriminator the simulation layer consumes.
  * @throws {NonPositiveInputError} when `amount <= 0n` or any reallocation withdrawal amount
  *   is non-positive.
- * @throws {NegativeInputError} when `minSharePrice < 0n` or any reallocation fee is negative.
- * @throws {EmptyReallocationWithdrawalsError} from `buildReallocationActions` when any
- *   `reallocation.withdrawals` is empty.
- * @throws {ReallocationWithdrawalOnTargetMarketError} from `buildReallocationActions` when any
- *   reallocation withdrawal references the target market.
- * @throws {UnsortedReallocationWithdrawalsError} from `buildReallocationActions` when
- *   reallocation withdrawals are not strictly sorted by market id.
+ * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
+ * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
+ * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
+ * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
+ * @throws {InvalidReallocationShapeError} when an entry matches both or neither V1/V2 shape.
+ * @throws {MixedReallocationVersionsError} when one plan contains both V1 and V2 entries.
+ * @throws {NegativeInputError} when `minSharePrice < 0n`, a V1 fee, or a V2 penalty is negative.
+ * @throws {EmptyReallocationWithdrawalsError} when any `reallocation.withdrawals` is empty.
+ * @throws {ReallocationWithdrawalOnTargetMarketError} when any reallocation withdrawal references
+ *   the target market.
+ * @throws {UnsortedReallocationWithdrawalsError} when reallocation withdrawals are not strictly
+ *   sorted by market id.
  * @example
  * ```ts
  * import { blueBorrow } from "@morpho-org/morpho-sdk";
@@ -107,17 +113,21 @@ export const blueBorrow = ({
   }
 
   const actions: Action[] = [];
-  let reallocationFee = 0n;
 
   if (authorizationSignature) {
     actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
   }
 
-  if (reallocations && reallocations.length > 0) {
-    const result = buildReallocationActions(reallocations, marketParams);
-    actions.push(...result.actions);
-    reallocationFee = result.fee;
-  }
+  const {
+    actions: reallocationActions,
+    fee: reallocationFee,
+    penaltyAssets: reallocationPenaltyAssets,
+  } = buildBlueReallocationActions({
+    chainId,
+    reallocations,
+    targetMarketParams: marketParams,
+  });
+  actions.push(...reallocationActions);
 
   actions.push({
     type: "morphoBorrow",
@@ -140,6 +150,7 @@ export const blueBorrow = ({
         receiver,
         minSharePrice,
         reallocationFee,
+        reallocationPenaltyAssets,
       },
     },
   });

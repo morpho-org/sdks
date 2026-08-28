@@ -325,14 +325,16 @@ export async function fetchVaultV2(
   let liquidityAdapterIds: Hash[] | undefined;
   if (hasMorphoVaultV1LiquidityAdapter)
     liquidityAdapterIds = [
-      VaultV2MorphoVaultV1Adapter.adapterId(liquidityAdapter),
+      VaultV2MorphoVaultV1Adapter.adapterCapId(liquidityAdapter),
     ];
   if (hasMorphoMarketV1AdapterV2LiquidityAdapter) {
     const marketParams = MarketParams.fromHex(liquidityData);
     liquidityAdapterIds = [
-      VaultV2MorphoMarketV1AdapterV2.adapterId(liquidityAdapter),
-      VaultV2MorphoMarketV1AdapterV2.collateralId(marketParams.collateralToken),
-      VaultV2MorphoMarketV1AdapterV2.marketParamsId(
+      VaultV2MorphoMarketV1AdapterV2.adapterCapId(liquidityAdapter),
+      VaultV2MorphoMarketV1AdapterV2.collateralCapId(
+        marketParams.collateralToken,
+      ),
+      VaultV2MorphoMarketV1AdapterV2.adapterMarketCapId(
         liquidityAdapter,
         marketParams,
       ),
@@ -402,9 +404,9 @@ export async function fetchVaultV2(
  *
  * Reads all state fetched by `fetchVaultV2`, the vault asset balance, accrual state for the
  * configured liquidity adapter and regular adapters, and force-deallocate penalties. By default it
- * reads the entire tree in a single deployless call via {@link fetchAccrualVaultV2Deployless} and
- * only falls back to sequential multicall reads when that call fails; pass `deployless: "force"` to
- * require the single call, or `deployless: false` to use multicall reads directly.
+ * reads the entire tree in a single deployless call and only falls back to sequential multicall
+ * reads when that call fails; pass `deployless: "force"` to require the single call, or
+ * `deployless: false` to use multicall reads directly.
  *
  * `MorphoMarketV1Adapter` has zero support as a VaultV2 liquidity adapter. This fetcher may hydrate
  * that adapter as an accrual adapter, but liquidity cap allocations remain undefined because
@@ -753,6 +755,8 @@ function toAccrualAdapter(
  * @throws {UnsupportedVaultV2AdapterError} when the vault or one of its adapters uses an unsupported
  *   adapter class.
  * @throws {viem.BaseError} when the deployless `eth_call` or response decoding fails (no fallback).
+ * @deprecated Use {@link fetchAccrualVaultV2}, which is deployless-first with RPC fallback by
+ *   default. Pass `deployless: "force"` to preserve this function's no-fallback behavior.
  * @example
  * ```ts
  * import type { AccrualVaultV2 } from "@morpho-org/blue-sdk";

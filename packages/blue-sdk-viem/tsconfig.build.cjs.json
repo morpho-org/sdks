@@ -3,7 +3,7 @@
   "compilerOptions": {
     "rootDir": "src",
     "module": "CommonJS",
-    "moduleResolution": "node10",
+    "moduleResolution": "bundler",
     "outDir": "./lib/cjs",
     "tsBuildInfoFile": "tsconfig.cjs.tsbuildinfo"
   },

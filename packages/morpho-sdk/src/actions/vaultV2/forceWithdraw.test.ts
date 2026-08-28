@@ -2,7 +2,7 @@ import { MarketParams } from "@morpho-org/blue-sdk";
 import { vaultV2Abi } from "@morpho-org/blue-sdk-viem";
 import { type Address, decodeFunctionData, isHex, parseUnits } from "viem";
 import { describe, expect } from "vitest";
-import { test } from "../../../test/setup.js";
+import { test } from "../../../test/unit.js";
 import {
   EmptyDeallocationsError,
   NonPositiveInputError,

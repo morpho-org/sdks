@@ -1,10 +1,11 @@
-import { type Address, type Hash, type Hex, zeroAddress } from "viem";
+import { type Address, type Hex, zeroAddress } from "viem";
 import { VaultV2Errors } from "../../errors.js";
 import { MathLib, type RoundingDirection } from "../../math/index.js";
 import { type IToken, WrappedToken } from "../../token/index.js";
-import type { BigIntish } from "../../types.js";
+import type { BigIntish, Hash } from "../../types.js";
 import { type CapacityLimit, CapacityLimitReason } from "../../utils.js";
 import type { IAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
+import { VaultV2Utils } from "./VaultV2Utils.js";
 
 /** Plain input shape for one Vault V2 liquidity allocation. */
 export interface IVaultV2Allocation {
@@ -112,8 +113,20 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
     return this._unwrap(shares, "Down");
   }
 
-  public toShares(assets: BigIntish) {
-    return this._wrap(assets, "Down");
+  /**
+   * Converts assets to shares using the stored pre-accrual totals.
+   *
+   * @param assets - Amount of underlying assets.
+   * @param rounding - Optional rounding direction. Defaults to `"Down"`.
+   * @returns The corresponding vault shares.
+   * @example
+   * ```ts
+   * const shares = vault.toShares(100n, "Up");
+   * // shares satisfies bigint
+   * ```
+   */
+  public toShares(assets: BigIntish, rounding: RoundingDirection = "Down") {
+    return this._wrap(assets, rounding);
   }
 
   protected _wrap(amount: BigIntish, rounding: RoundingDirection) {
@@ -177,28 +190,13 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
 
     // At this stage: `liquidityAdapterLimit.value <= assets`
 
-    for (const { absoluteCap, relativeCap, allocation } of this
-      .liquidityAllocations) {
-      // `absoluteCap` can be set lower than `allocation`.
-      const absoluteMaxDeposit = MathLib.zeroFloorSub(absoluteCap, allocation);
-      if (liquidityAdapterLimit.value > absoluteMaxDeposit)
-        liquidityAdapterLimit = {
-          value: absoluteMaxDeposit,
-          limiter: CapacityLimitReason.vaultV2_absoluteCap,
-        };
-
-      if (relativeCap !== MathLib.WAD) {
-        // `relativeCap` can be set lower than `allocation / _totalAssets`.
-        const relativeMaxDeposit = MathLib.zeroFloorSub(
-          MathLib.wMulDown(this._totalAssets, relativeCap),
-          allocation,
-        );
-        if (liquidityAdapterLimit.value > relativeMaxDeposit)
-          liquidityAdapterLimit = {
-            value: relativeMaxDeposit,
-            limiter: CapacityLimitReason.vaultV2_relativeCap,
-          };
-      }
+    for (const allocation of this.liquidityAllocations) {
+      const allocationLimit = VaultV2Utils.allocationHeadroom(
+        allocation,
+        this._totalAssets,
+      );
+      if (liquidityAdapterLimit.value > allocationLimit.value)
+        liquidityAdapterLimit = allocationLimit;
     }
 
     return liquidityAdapterLimit;

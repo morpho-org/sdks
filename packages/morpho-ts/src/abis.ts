@@ -1,3 +1,7 @@
+import { marketParamsAbi } from "./abis/marketParams.js";
+
+export { marketParamsAbi };
+
 /** ERC-2612 permit ABI fragment used for nonce reads and permit calldata. */
 export const erc2612Abi = [
   {
@@ -4038,8 +4042,8 @@ export const metaMorphoAbi = [
   },
 ] as const;
 
-/** PublicAllocator ABI used to read vault allocator configuration and flow caps. */
-export const publicAllocatorAbi = [
+/** Vault V1 PublicAllocator ABI used to read vault allocator configuration and flow caps. */
+export const vaultV1PublicAllocatorAbi = [
   {
     inputs: [
       {
@@ -4442,33 +4446,7 @@ export const publicAllocatorAbi = [
       {
         components: [
           {
-            components: [
-              {
-                internalType: "address",
-                name: "loanToken",
-                type: "address",
-              },
-              {
-                internalType: "address",
-                name: "collateralToken",
-                type: "address",
-              },
-              {
-                internalType: "address",
-                name: "oracle",
-                type: "address",
-              },
-              {
-                internalType: "address",
-                name: "irm",
-                type: "address",
-              },
-              {
-                internalType: "uint256",
-                name: "lltv",
-                type: "uint256",
-              },
-            ],
+            components: marketParamsAbi.components,
             internalType: "struct MarketParams",
             name: "marketParams",
             type: "tuple",
@@ -4484,33 +4462,7 @@ export const publicAllocatorAbi = [
         type: "tuple[]",
       },
       {
-        components: [
-          {
-            internalType: "address",
-            name: "loanToken",
-            type: "address",
-          },
-          {
-            internalType: "address",
-            name: "collateralToken",
-            type: "address",
-          },
-          {
-            internalType: "address",
-            name: "oracle",
-            type: "address",
-          },
-          {
-            internalType: "address",
-            name: "irm",
-            type: "address",
-          },
-          {
-            internalType: "uint256",
-            name: "lltv",
-            type: "uint256",
-          },
-        ],
+        components: marketParamsAbi.components,
         internalType: "struct MarketParams",
         name: "supplyMarketParams",
         type: "tuple",
@@ -4613,6 +4565,309 @@ export const publicAllocatorAbi = [
       },
     ],
     name: "transferFee",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+] as const;
+
+/**
+ * Deprecated alias for the Vault V1 PublicAllocator ABI.
+ *
+ * @deprecated Use `vaultV1PublicAllocatorAbi` instead.
+ */
+export const publicAllocatorAbi = vaultV1PublicAllocatorAbi;
+
+/** Vault V2 Blue Public Allocator ABI used for configuration and reallocations. */
+export const vaultV2BluePublicAllocatorAbi = [
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "vault",
+        type: "address",
+      },
+      {
+        internalType: "bytes32",
+        name: "id",
+        type: "bytes32",
+      },
+    ],
+    name: "absoluteCap",
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "vault",
+        type: "address",
+      },
+      {
+        internalType: "address",
+        name: "adapter",
+        type: "address",
+      },
+      {
+        internalType: "bool",
+        name: "newIsActiveAdapter",
+        type: "bool",
+      },
+    ],
+    name: "setIsActiveAdapter",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "vault",
+        type: "address",
+      },
+      {
+        internalType: "address",
+        name: "adapter",
+        type: "address",
+      },
+      {
+        components: marketParamsAbi.components,
+        internalType: "struct MarketParams",
+        name: "marketParams",
+        type: "tuple",
+      },
+      {
+        internalType: "uint256",
+        name: "newAbsoluteCap",
+        type: "uint256",
+      },
+    ],
+    name: "setAbsoluteCap",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "vault",
+        type: "address",
+      },
+      {
+        internalType: "address",
+        name: "adapter",
+        type: "address",
+      },
+      {
+        components: marketParamsAbi.components,
+        internalType: "struct MarketParams",
+        name: "marketParams",
+        type: "tuple",
+      },
+      {
+        internalType: "bool",
+        name: "newCanPullFromMarket",
+        type: "bool",
+      },
+    ],
+    name: "setCanPullFromMarket",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "vault",
+        type: "address",
+      },
+      {
+        internalType: "bool",
+        name: "newCanPullFromIdle",
+        type: "bool",
+      },
+    ],
+    name: "setCanPullFromIdle",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "vault",
+        type: "address",
+      },
+      {
+        internalType: "uint64",
+        name: "newPenalty",
+        type: "uint64",
+      },
+    ],
+    name: "setPenalty",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "vault",
+        type: "address",
+      },
+      {
+        internalType: "bytes32",
+        name: "id",
+        type: "bytes32",
+      },
+    ],
+    name: "canPullFromMarket",
+    outputs: [
+      {
+        internalType: "bool",
+        name: "",
+        type: "bool",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "vault",
+        type: "address",
+      },
+      {
+        internalType: "address",
+        name: "adapter",
+        type: "address",
+      },
+    ],
+    name: "isActiveAdapter",
+    outputs: [
+      {
+        internalType: "bool",
+        name: "",
+        type: "bool",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "vault",
+        type: "address",
+      },
+    ],
+    name: "vaultData",
+    outputs: [
+      {
+        internalType: "bool",
+        name: "canPullFromIdle",
+        type: "bool",
+      },
+      {
+        internalType: "uint64",
+        name: "penalty",
+        type: "uint64",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "vault",
+        type: "address",
+      },
+      {
+        internalType: "address",
+        name: "deallocateAdapter",
+        type: "address",
+      },
+      {
+        components: marketParamsAbi.components,
+        internalType: "struct MarketParams",
+        name: "deallocateMarketParams",
+        type: "tuple",
+      },
+      {
+        internalType: "address",
+        name: "allocateAdapter",
+        type: "address",
+      },
+      {
+        components: marketParamsAbi.components,
+        internalType: "struct MarketParams",
+        name: "allocateMarketParams",
+        type: "tuple",
+      },
+      {
+        internalType: "uint128",
+        name: "assets",
+        type: "uint128",
+      },
+      {
+        internalType: "uint64",
+        name: "penalty",
+        type: "uint64",
+      },
+    ],
+    name: "reallocate",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "vault",
+        type: "address",
+      },
+      {
+        internalType: "address",
+        name: "adapter",
+        type: "address",
+      },
+      {
+        components: marketParamsAbi.components,
+        internalType: "struct MarketParams",
+        name: "marketParams",
+        type: "tuple",
+      },
+      {
+        internalType: "uint128",
+        name: "assets",
+        type: "uint128",
+      },
+      {
+        internalType: "uint64",
+        name: "penalty",
+        type: "uint64",
+      },
+    ],
+    name: "allocateFromIdle",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",

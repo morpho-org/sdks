@@ -7,7 +7,7 @@ import {
   KeyrockUsdcVaultV2,
   KpkWETHVaultV2,
 } from "../../../test/fixtures/vaultV2.js";
-import { test } from "../../../test/setup.js";
+import { test } from "../../../test/unit.js";
 import {
   ChainWNativeMissingError,
   DepositAmountMismatchError,

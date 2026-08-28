@@ -1,11 +1,9 @@
 {
   "compilerOptions": {
-    "baseUrl": ".",
     "target": "ESNext",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "moduleDetection": "force",
-    "ignoreDeprecations": "6.0",
     "skipLibCheck": true,
     "strict": true,
     "noImplicitAny": true,

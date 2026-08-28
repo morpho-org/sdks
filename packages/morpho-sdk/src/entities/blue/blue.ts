@@ -8,13 +8,16 @@ import {
   type Position,
   type Vault,
   type VaultMarketConfig,
+  VaultV2BluePublicAllocatorConfigUtils,
 } from "@morpho-org/blue-sdk";
 import {
   fetchAccrualPosition,
+  fetchAccrualVaultV2,
   fetchMarket,
   fetchPosition,
   fetchVault,
   fetchVaultMarketConfig,
+  fetchVaultV2BluePublicAllocatorData,
 } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import { type Address, isAddressEqual } from "viem";
@@ -36,24 +39,25 @@ import {
   computeMaxSupplySharePrice,
   computeMinBorrowSharePrice,
   computeMinWithdrawSharePrice,
-  computeReallocations,
+  computeVaultV1Reallocations,
   validateAccrualPosition,
   validateChainId,
   validateNativeAsset,
   validatePositionHealth,
   validatePositionHealthAfterWithdraw,
-  validateReallocations,
   validateRepayAmount,
   validateRepayShares,
   validateSlippageTolerance,
   validateWithdrawAmount,
   validateWithdrawShares,
 } from "../../helpers/index.js";
+import { validateAndNormalizeReallocations } from "../../helpers/validate.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
   type AssetsOrSharesArgs,
   type BlueAuthorizationAction,
   type BlueBorrowAction,
+  type BlueReallocationPlan,
   type BlueRefinanceAction,
   type BlueRepayAction,
   type BlueRepayWithdrawCollateralAction,
@@ -84,10 +88,40 @@ import {
   type RequirementSignature,
   selectRequirementSignatures,
   type Transaction,
-  type VaultReallocation,
+  type VaultV1Reallocation,
+  type VaultV2BluePublicAllocatorOptions,
+  type VaultV2BlueReallocation,
   WithdrawExceedsCollateralError,
 } from "../../types/index.js";
-import { ReallocationData } from "../reallocationData.js";
+import { VaultV1ReallocationData } from "../vaultV1ReallocationData.js";
+import { VaultV2BlueReallocationData } from "../vaultV2BlueReallocationData.js";
+
+type VaultV1ReallocationsParams = {
+  readonly reallocationData: VaultV1ReallocationData;
+  readonly options?: ReallocationComputeOptions;
+} & (
+  | {
+      readonly operation: "borrow" | "withdraw";
+      readonly amount: bigint;
+      readonly borrowAmount?: never;
+    }
+  | {
+      /** @deprecated Pass `{ operation: "borrow", amount }` instead. */
+      readonly borrowAmount: bigint;
+      readonly operation?: never;
+      readonly amount?: never;
+    }
+);
+
+type VaultV2BlueReallocationsParams = {
+  readonly reallocationData: VaultV2BlueReallocationData;
+  readonly options?: VaultV2BluePublicAllocatorOptions & {
+    readonly operation?: {
+      readonly type: "borrow" | "withdraw";
+      readonly amount: bigint;
+    };
+  };
+};
 
 export interface BlueActions {
   /**
@@ -187,18 +221,25 @@ export interface BlueActions {
    *
    * Computes `minSharePrice` from market supply state and `slippageTolerance`.
    *
-   * When `reallocations` is provided, `reallocateTo` actions are prepended to the bundle,
-   * moving liquidity from other markets via the PublicAllocator before withdrawing — used to
-   * unblock withdraws that exceed on-market liquidity.
+   * When `reallocations` is provided, its homogeneous V1 or V2 actions are
+   * prepended to move liquidity before withdrawing. V1 fees add
+   * to the transaction value; V2 penalties are paid in the loan token.
    *
-   * `getRequirements` returns `morpho.setAuthorization(generalAdapter1, true)` if GA1 is not
-   * yet authorized on Morpho (returns `[]` when already authorized), since the bundler calls
-   * `withdraw(...,onBehalf=user,...)`.
+   * `getRequirements` returns the loan-token approval needed for V2 penalties
+   * and `morpho.setAuthorization(generalAdapter1, true)` when GA1 is not yet
+   * authorized on Morpho.
    *
    * **Stale `positionData` may cause unexpected supply share calculations.**
    *
    * @param params - Withdraw parameters including pre-fetched `positionData`.
    * @returns Object with `buildTx` and `getRequirements`.
+   * @throws {BundlerErrors.UnexpectedAction} when a V2 plan is unsupported on the chain.
+   * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
+   * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
+   * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
+   * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
+   * @throws {InvalidReallocationShapeError} when an entry matches both or neither V1/V2 shape.
+   * @throws {MixedReallocationVersionsError} when one plan contains both V1 and V2 entries.
    */
   withdraw: (
     params: {
@@ -206,14 +247,18 @@ export interface BlueActions {
       receiver?: Address;
       positionData: AccrualPosition;
       slippageTolerance?: bigint;
-      reallocations?: readonly VaultReallocation[];
+      reallocations?: BlueReallocationPlan;
     } & AssetsOrSharesArgs,
   ) => {
     buildTx: (
       signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<BlueWithdrawAction>>;
     getRequirements: () => Promise<
-      (Readonly<Transaction<BlueAuthorizationAction>> | Requirement)[]
+      (
+        | Readonly<Transaction<ERC20ApprovalAction>>
+        | Readonly<Transaction<BlueAuthorizationAction>>
+        | Requirement
+      )[]
     >;
   };
 
@@ -224,29 +269,41 @@ export interface BlueActions {
    * Validates position health with LLTV buffer (0.5%) using the pre-fetched `positionData`.
    * Computes `minSharePrice` from market borrow state and `slippageTolerance`.
    *
-   * When `reallocations` is provided, `reallocateTo` actions are prepended to the bundle,
-   * moving liquidity from other markets via the PublicAllocator before borrowing.
+   * When `reallocations` is provided, its homogeneous V1 or V2 actions are
+   * prepended before borrowing. V1 fees add to the transaction
+   * value; V2 penalties are paid in the loan token.
    *
-   * `getRequirements` returns `morpho.setAuthorization(generalAdapter1, true)` if not yet authorized,
-   * since borrowing through bundler3 requires GeneralAdapter1 authorization on Morpho.
+   * `getRequirements` returns the loan-token approval needed for V2 penalties
+   * and Morpho authorization for GeneralAdapter1 when needed.
    *
    * **Stale `positionData` may cause unexpected health.**
    *
    * @param params - Borrow parameters including pre-fetched `positionData` for health validation.
    * @returns Object with `buildTx` and `getRequirements`.
+   * @throws {BundlerErrors.UnexpectedAction} when a V2 plan is unsupported on the chain.
+   * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
+   * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
+   * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
+   * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
+   * @throws {InvalidReallocationShapeError} when an entry matches both or neither V1/V2 shape.
+   * @throws {MixedReallocationVersionsError} when one plan contains both V1 and V2 entries.
    */
   borrow: (params: {
     userAddress: Address;
     amount: bigint;
     positionData: AccrualPosition;
     slippageTolerance?: bigint;
-    reallocations?: readonly VaultReallocation[];
+    reallocations?: BlueReallocationPlan;
   }) => {
     buildTx: (
       signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<BlueBorrowAction>>;
     getRequirements: () => Promise<
-      (Readonly<Transaction<BlueAuthorizationAction>> | Requirement)[]
+      (
+        | Readonly<Transaction<ERC20ApprovalAction>>
+        | Readonly<Transaction<BlueAuthorizationAction>>
+        | Requirement
+      )[]
     >;
   };
 
@@ -365,17 +422,26 @@ export interface BlueActions {
    * Routed through the bundler. Validates position health with LLTV buffer
    * to prevent instant liquidation on new positions near the LLTV threshold.
    *
-   * When `reallocations` is provided, `reallocateTo` actions are prepended before
-   * `morphoBorrow` in the bundle.
+   * When `reallocations` is provided, its homogeneous V1 or V2 actions run
+   * between the collateral supply and `morphoBorrow`. V1 fees add
+   * to the transaction value; V2 penalties are paid in the loan token.
    *
    * `getRequirements` returns in parallel:
    * - ERC20 approval or permit for collateral token (to GeneralAdapter1).
+   * - Classic ERC20 approval for any V2 loan-token penalties.
    * - `morpho.setAuthorization(generalAdapter1, true)` if adapter is not yet authorized.
    *
    * **Stale `positionData` may cause unexpected health.**
    *
    * @param params - Combined parameters including pre-fetched `positionData` for health validation.
    * @returns Object with `buildTx` and `getRequirements`.
+   * @throws {BundlerErrors.UnexpectedAction} when a V2 plan is unsupported on the chain.
+   * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
+   * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
+   * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
+   * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
+   * @throws {InvalidReallocationShapeError} when an entry matches both or neither V1/V2 shape.
+   * @throws {MixedReallocationVersionsError} when one plan contains both V1 and V2 entries.
    */
   supplyCollateralBorrow: (
     params: {
@@ -383,7 +449,7 @@ export interface BlueActions {
       positionData: AccrualPosition;
       borrowAmount: bigint;
       slippageTolerance?: bigint;
-      reallocations?: readonly VaultReallocation[];
+      reallocations?: BlueReallocationPlan;
     } & DepositAmountArgs,
   ) => {
     buildTx: (
@@ -413,9 +479,12 @@ export interface BlueActions {
    * both the residual source and the aggregate target position stay within LLTV − buffer. Both
    * markets are forward-accrued to `now`; in shares mode the target borrow is overshot by
    * `slippageTolerance` and the callback sweeps the residual.
+   * A homogeneous V1 or V2 target reallocation plan runs first; V1 fees add
+   * to the transaction value and V2 penalties are paid
+   * in the loan token.
    *
-   * `getRequirements` returns `morpho.setAuthorization(generalAdapter1, true)` when GA1 is not yet
-   * authorized (a single global authorization covers both markets).
+   * `getRequirements` returns the loan-token approval needed for V2 penalties
+   * and Morpho authorization for GeneralAdapter1 when needed.
    *
    * @param params.userAddress - Position owner on both markets.
    * @param params.positionData - Pre-fetched source-market accrual position.
@@ -425,8 +494,15 @@ export interface BlueActions {
    * @param params.borrowAssets - Loan assets to repay on source; exclusive with `borrowShares`.
    * @param params.borrowShares - Borrow shares to repay on source; exclusive with `borrowAssets`.
    * @param params.slippageTolerance - WAD slippage tolerance. Defaults to `DEFAULT_SLIPPAGE_TOLERANCE`.
-   * @param params.targetReallocations - PublicAllocator reallocations into the target market.
+   * @param params.targetReallocations - Homogeneous Vault V1 or Vault V2 reallocations into the target market.
    * @returns Object with `buildTx` and `getRequirements`.
+   * @throws {BundlerErrors.UnexpectedAction} when a V2 plan is unsupported on the chain.
+   * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
+   * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
+   * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
+   * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
+   * @throws {InvalidReallocationShapeError} when an entry matches both or neither V1/V2 shape.
+   * @throws {MixedReallocationVersionsError} when one plan contains both V1 and V2 entries.
    */
   refinance: (params: {
     userAddress: Address;
@@ -439,18 +515,22 @@ export interface BlueActions {
     borrowAssets?: bigint;
     borrowShares?: bigint;
     slippageTolerance?: bigint;
-    targetReallocations?: readonly VaultReallocation[];
+    targetReallocations?: BlueReallocationPlan;
   }) => {
     buildTx: (
       signatures?: readonly RequirementSignature[],
     ) => Readonly<Transaction<BlueRefinanceAction>>;
     getRequirements: () => Promise<
-      (Readonly<Transaction<BlueAuthorizationAction>> | Requirement)[]
+      (
+        | Readonly<Transaction<ERC20ApprovalAction>>
+        | Readonly<Transaction<BlueAuthorizationAction>>
+        | Requirement
+      )[]
     >;
   };
 
   /**
-   * Fetches all on-chain data needed to construct a {@link ReallocationData}
+   * Fetches all on-chain data needed to construct a {@link VaultV1ReallocationData}
    * for computing vault reallocations via the public allocator.
    *
    * The target market is refetched internally at `block.number` so the
@@ -459,16 +539,34 @@ export interface BlueActions {
    * inject unnecessary `reallocateTo` actions (and their PublicAllocator
    * fees) into the resulting bundle.
    *
-   * The returned reallocation data can be passed to {@link getReallocations}
-   * to compute the `VaultReallocation[]` array for `borrow()` or
+   * The returned reallocation data can be passed to {@link getVaultV1Reallocations}
+   * to compute the `VaultV1Reallocation[]` array for `borrow()` or
    * `supplyCollateralBorrow()`.
    *
    * **Stale data reverts on-chain (fail-safe).**
    *
    * @param params.vaultAddresses - Addresses of MetaMorpho vaults that allocate to this market.
    * @param params.block - The block to fetch data at (number and timestamp).
-   * @returns A ReallocationData instance populated with all required data.
+   * @returns A VaultV1ReallocationData instance populated with all required data.
    * @throws {ChainIdMismatchError} when the client chain does not match this market.
+   */
+  getVaultV1ReallocationData: (params: {
+    vaultAddresses: readonly Address[];
+    block: {
+      readonly number: bigint;
+      readonly timestamp: bigint;
+    };
+  }) => Promise<VaultV1ReallocationData>;
+
+  /**
+   * Fetches Vault V1 PublicAllocator state using the deprecated unversioned name.
+   *
+   * @param params.vaultAddresses - Addresses of MetaMorpho vaults that allocate to this market.
+   * @param params.block.number - Block number used for every RPC read.
+   * @param params.block.timestamp - Timestamp corresponding to the fetched block.
+   * @returns A `VaultV1ReallocationData` snapshot populated from one block.
+   * @throws {ChainIdMismatchError} when the client chain does not match this market.
+   * @deprecated Use {@link getVaultV1ReallocationData} instead.
    */
   getReallocationData: (params: {
     vaultAddresses: readonly Address[];
@@ -476,10 +574,36 @@ export interface BlueActions {
       readonly number: bigint;
       readonly timestamp: bigint;
     };
-  }) => Promise<ReallocationData>;
+  }) => Promise<VaultV1ReallocationData>;
 
   /**
-   * Computes vault reallocations for a borrow or withdraw on this market.
+   * Fetches Vault V2 BluePublicAllocator state for this target market.
+   *
+   * Reads the target Morpho Blue market, each Vault V2 accrual tree, and each
+   * vault's BluePublicAllocator permissions and allocation caps at one block.
+   *
+   * @param params.vaultAddresses - Vault V2 addresses to inspect for market or idle liquidity.
+   * @param params.block.number - Block number used for every RPC read.
+   * @param params.block.timestamp - Timestamp corresponding to the fetched block.
+   * @returns A `VaultV2BlueReallocationData` snapshot ready for {@link getVaultV2BlueReallocations}.
+   * @throws {ChainIdMismatchError} when the client chain does not match this market.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+   * @throws {UnknownAddressError} when the chain has no BluePublicAllocator deployment.
+   * @throws {UnknownBlueFactory} when the chain has no Vault V2 factory.
+   * @throws {UnknownBlueOfFactory} when a requested address is not a Vault V2 from that factory.
+   * @throws {UnsupportedBlueVaultV2AdapterError} when a vault contains an unsupported adapter.
+   * @throws {viem.BaseError} when an RPC or contract read fails with no fallback left.
+   */
+  getVaultV2BlueReallocationData: (params: {
+    vaultAddresses: readonly Address[];
+    block: {
+      readonly number: bigint;
+      readonly timestamp: bigint;
+    };
+  }) => Promise<VaultV2BlueReallocationData>;
+
+  /**
+   * Computes Vault V1 PublicAllocator reallocations for this market.
    *
    * Uses the shared-liquidity algorithm to determine which vaults should reallocate liquidity to
    * this market via the PublicAllocator, based on the post-operation utilization target.
@@ -487,7 +611,7 @@ export interface BlueActions {
    * Pass `{ borrowAmount }` for a borrow (legacy alias, equivalent to `{ operation: "borrow",
    * amount }`) or `{ operation: "withdraw", amount }` for a loan-asset withdraw.
    *
-   * @param params.reallocationData - The current on-chain state (from {@link getReallocationData}).
+   * @param params.reallocationData - The current on-chain state (from {@link getVaultV1ReallocationData}).
    * @param params.operation - The operation driving the reallocation (`"borrow"` or `"withdraw"`).
    *        Defaults to `"borrow"` when `borrowAmount` is provided.
    * @param params.amount - The borrow or withdraw amount used to compute the post-state utilization.
@@ -500,27 +624,82 @@ export interface BlueActions {
    *          or `withdraw()`. Empty array if no reallocation is needed.
    * @throws {ChainIdMismatchError} when `reallocationData` belongs to a different chain than this market.
    * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation's absolute shortfall on the target market — preventing fee-bearing reallocations from being attached to a call that would still revert onchain.
+   * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds the target market supply.
    * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
    * @throws {UnknownReallocationMarketError} when the target market is absent from the reallocation data.
+   * @example
+   * ```ts
+   * const reallocations = market.getVaultV1Reallocations({
+   *   reallocationData,
+   *   operation: "borrow",
+   *   amount: 1_000_000n,
+   * });
+   * ```
+   */
+  getVaultV1Reallocations: (
+    params: VaultV1ReallocationsParams,
+  ) => readonly VaultV1Reallocation[];
+
+  /**
+   * Computes Vault V1 PublicAllocator reallocations using the deprecated unversioned name.
+   *
+   * @param params.reallocationData - State returned by {@link getVaultV1ReallocationData}.
+   * @param params.operation - The operation driving the reallocation (`"borrow"` or `"withdraw"`).
+   * @param params.amount - The borrow or withdraw amount used to compute post-state utilization.
+   * @param params.borrowAmount - Deprecated borrow amount alias.
+   * @param params.options - Optional allocator and utilization options.
+   * @returns Vault V1 reallocations ready for a Blue action.
+   * @throws {ChainIdMismatchError} when `reallocationData` belongs to another chain.
+   * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation.
+   * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
+   * @throws {MissingPublicAllocatorConfigError} when a selected vault lacks allocator state.
+   * @throws {UnknownReallocationMarketError} when the target market is absent.
+   * @deprecated Use {@link getVaultV1Reallocations} instead.
+   * @example
+   * ```ts
+   * const reallocations = market.getReallocations({
+   *   reallocationData,
+   *   operation: "borrow",
+   *   amount: 1_000_000n,
+   * });
+   * ```
    */
   getReallocations: (
-    params: {
-      reallocationData: ReallocationData;
-      options?: ReallocationComputeOptions;
-    } & (
-      | {
-          operation: "borrow" | "withdraw";
-          amount: bigint;
-          borrowAmount?: never;
-        }
-      | {
-          /** @deprecated Pass `{ operation: "borrow", amount }` instead. */
-          borrowAmount: bigint;
-          operation?: never;
-          amount?: never;
-        }
-    ),
-  ) => readonly VaultReallocation[];
+    params: VaultV1ReallocationsParams,
+  ) => readonly VaultV1Reallocation[];
+
+  /**
+   * Computes Vault V2 BluePublicAllocator reallocations for this market.
+   *
+   * @param params.reallocationData - State returned by {@link getVaultV2BlueReallocationData}.
+   * @param params.options - Optional allocator discovery controls and operation to support.
+   * @returns Action-ready reallocations and their post-simulation state.
+   * @throws {ChainIdMismatchError} when `reallocationData` belongs to another chain.
+   * @throws {NegativeInputError} when a utilization or penalty limit is negative.
+   * @throws {InputExceedsMaxError} when a utilization or penalty limit exceeds WAD.
+   * @throws {NonPositiveInputError} when an enabled operation amount is not positive.
+   * @throws {UnknownReallocationMarketError} when a required market is absent.
+   * @throws {UnknownReallocationVaultError} when configured vault state is absent.
+   * @throws {UnknownReallocationPublicAllocatorConfigError} when allocator authorization state is absent.
+   * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent.
+   * @throws {UnknownReallocationMarketPublicAllocatorConfigError} when an adapter-market allocator configuration is absent.
+   * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
+   * @throws {ReallocationAdapterSupplySharesUnderflowError} when an inconsistent adapter snapshot underflows during the final transition.
+   * @throws {ReallocationAllocationUnderflowError} when an inconsistent allocation snapshot underflows during the final transition.
+   * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the shortfall.
+   * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
+   * @example
+   * ```ts
+   * const result = market.getVaultV2BlueReallocations({
+   *   reallocationData,
+   *   options: { operation: { type: "borrow", amount: 1_000_000n } },
+   * });
+   * ```
+   */
+  getVaultV2BlueReallocations: (params: VaultV2BlueReallocationsParams) => {
+    readonly reallocations: readonly VaultV2BlueReallocation[];
+    readonly data: VaultV2BlueReallocationData;
+  };
 }
 
 export class MorphoBlue implements BlueActions {
@@ -530,6 +709,34 @@ export class MorphoBlue implements BlueActions {
     public readonly marketParams: MarketParams,
     private readonly chainId: number,
   ) {}
+
+  private getReallocationPenaltyRequirements(
+    userAddress: Address,
+    reallocationPlan: ReturnType<typeof validateAndNormalizeReallocations>,
+  ) {
+    if (reallocationPlan.type === "vaultV1") return [];
+
+    const { reallocations } = reallocationPlan;
+    const amount = reallocations.reduce(
+      (total, reallocation) =>
+        total +
+        VaultV2BluePublicAllocatorConfigUtils.getPenaltyAssets(
+          reallocation,
+          reallocation.assets,
+        ),
+      0n,
+    );
+
+    // Separate-token penalty funding uses a classic GeneralAdapter1 allowance so a collateral
+    // permit and a loan-token penalty can coexist in one bundle. The shared-token path aggregates
+    // both amounts into the collateral requirement instead.
+    return getGeneralAdapterRequirements(this.client.viemClient, {
+      address: this.marketParams.loanToken,
+      chainId: this.chainId,
+      supportSignature: false,
+      args: { amount, from: userAddress },
+    });
+  }
 
   async getMarketData(parameters?: FetchParameters): Promise<Market> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
@@ -642,7 +849,7 @@ export class MorphoBlue implements BlueActions {
       receiver?: Address;
       positionData: AccrualPosition;
       slippageTolerance?: bigint;
-      reallocations?: readonly VaultReallocation[];
+      reallocations?: BlueReallocationPlan;
     } & AssetsOrSharesArgs,
   ) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
@@ -654,6 +861,12 @@ export class MorphoBlue implements BlueActions {
       slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
       reallocations,
     } = params;
+    const reallocationPlan = validateAndNormalizeReallocations({
+      reallocations,
+      targetMarketId: this.marketParams.id,
+      chainId: this.chainId,
+    });
+    const reallocationList = reallocationPlan.reallocations;
 
     // Mode normalization: a missing or undefined `assets`/`shares` key collapses to `0n`
     // so the mutual-exclusion and positivity checks below are pure value comparisons.
@@ -678,10 +891,6 @@ export class MorphoBlue implements BlueActions {
     }
 
     validateSlippageTolerance(slippageTolerance);
-    if (reallocations) {
-      validateReallocations(reallocations, this.marketParams.id);
-    }
-
     if (!positionData) {
       throw new MissingAccrualPositionError(this.marketParams.id);
     }
@@ -715,13 +924,19 @@ export class MorphoBlue implements BlueActions {
 
     return {
       getRequirements: async () => {
-        const authTx = await getBlueAuthorizationRequirement({
-          viemClient: this.client.viemClient,
-          chainId: this.chainId,
-          userAddress,
-          supportSignature: this.client.options.supportSignature,
-        });
-        return authTx ? [authTx] : [];
+        const [penaltyRequirements, authTx] = await Promise.all([
+          this.getReallocationPenaltyRequirements(
+            userAddress,
+            reallocationPlan,
+          ),
+          getBlueAuthorizationRequirement({
+            viemClient: this.client.viemClient,
+            chainId: this.chainId,
+            userAddress,
+            supportSignature: this.client.options.supportSignature,
+          }),
+        ]);
+        return [...penaltyRequirements, ...(authTx ? [authTx] : [])];
       },
 
       buildTx: (signatures?: readonly RequirementSignature[]) => {
@@ -736,7 +951,7 @@ export class MorphoBlue implements BlueActions {
             shares,
             receiver,
             minSharePrice,
-            reallocations,
+            reallocations: reallocationList,
             authorizationSignature: authorization,
           },
           metadata: this.client.options.metadata,
@@ -812,19 +1027,21 @@ export class MorphoBlue implements BlueActions {
     userAddress: Address;
     positionData: AccrualPosition;
     slippageTolerance?: bigint;
-    reallocations?: readonly VaultReallocation[];
+    reallocations?: BlueReallocationPlan;
   }) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    const reallocationPlan = validateAndNormalizeReallocations({
+      reallocations,
+      targetMarketId: this.marketParams.id,
+      chainId: this.chainId,
+    });
+    const reallocationList = reallocationPlan.reallocations;
 
     if (amount <= 0n) {
       throw new NonPositiveInputError("amount", amount);
     }
 
     validateSlippageTolerance(slippageTolerance);
-    if (reallocations) {
-      validateReallocations(reallocations, this.marketParams.id);
-    }
-
     if (!positionData) {
       throw new MissingAccrualPositionError(this.marketParams.id);
     }
@@ -850,13 +1067,19 @@ export class MorphoBlue implements BlueActions {
 
     return {
       getRequirements: async () => {
-        const authTx = await getBlueAuthorizationRequirement({
-          viemClient: this.client.viemClient,
-          chainId: this.chainId,
-          userAddress,
-          supportSignature: this.client.options.supportSignature,
-        });
-        return authTx ? [authTx] : [];
+        const [penaltyRequirements, authTx] = await Promise.all([
+          this.getReallocationPenaltyRequirements(
+            userAddress,
+            reallocationPlan,
+          ),
+          getBlueAuthorizationRequirement({
+            viemClient: this.client.viemClient,
+            chainId: this.chainId,
+            userAddress,
+            supportSignature: this.client.options.supportSignature,
+          }),
+        ]);
+        return [...penaltyRequirements, ...(authTx ? [authTx] : [])];
       },
 
       buildTx: (signatures?: readonly RequirementSignature[]) => {
@@ -873,7 +1096,7 @@ export class MorphoBlue implements BlueActions {
             amount,
             receiver: userAddress,
             minSharePrice,
-            reallocations,
+            reallocations: reallocationList,
             authorizationSignature: authorization,
           },
           metadata: this.client.options.metadata,
@@ -1306,9 +1529,15 @@ export class MorphoBlue implements BlueActions {
     positionData: AccrualPosition;
     borrowAmount: bigint;
     slippageTolerance?: bigint;
-    reallocations?: readonly VaultReallocation[];
+    reallocations?: BlueReallocationPlan;
   } & DepositAmountArgs) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    const reallocationPlan = validateAndNormalizeReallocations({
+      reallocations,
+      targetMarketId: this.marketParams.id,
+      chainId: this.chainId,
+    });
+    const reallocationList = reallocationPlan.reallocations;
 
     if (amount < 0n) {
       throw new NegativeInputError("amount", amount);
@@ -1328,10 +1557,6 @@ export class MorphoBlue implements BlueActions {
     }
 
     validateSlippageTolerance(slippageTolerance);
-    if (reallocations) {
-      validateReallocations(reallocations, this.marketParams.id);
-    }
-
     if (!positionData) {
       throw new MissingAccrualPositionError(this.marketParams.id);
     }
@@ -1361,24 +1586,54 @@ export class MorphoBlue implements BlueActions {
     });
     return {
       getRequirements: async (params?: { useSimplePermit?: boolean }) => {
-        const [erc20Requirements, authTx] = await Promise.all([
-          getGeneralAdapterRequirements(this.client.viemClient, {
-            address: this.marketParams.collateralToken,
-            chainId: this.chainId,
-            supportSignature: this.client.options.supportSignature,
-            supportDeployless: this.client.options.supportDeployless,
-            useSimplePermit: params?.useSimplePermit,
-            args: { amount, from: userAddress },
-          }),
-          getBlueAuthorizationRequirement({
-            viemClient: this.client.viemClient,
-            chainId: this.chainId,
-            userAddress,
-            supportSignature: this.client.options.supportSignature,
-          }),
-        ]);
+        const penaltyAssets =
+          reallocationPlan.type === "vaultV2Blue"
+            ? reallocationPlan.reallocations.reduce(
+                (total, reallocation) =>
+                  total +
+                  VaultV2BluePublicAllocatorConfigUtils.getPenaltyAssets(
+                    reallocation,
+                    reallocation.assets,
+                  ),
+                0n,
+              )
+            : 0n;
+        const usesSharedFundingToken = isAddressEqual(
+          this.marketParams.collateralToken,
+          this.marketParams.loanToken,
+        );
+        const [erc20Requirements, penaltyRequirements, authTx] =
+          await Promise.all([
+            getGeneralAdapterRequirements(this.client.viemClient, {
+              address: this.marketParams.collateralToken,
+              chainId: this.chainId,
+              supportSignature: this.client.options.supportSignature,
+              supportDeployless: this.client.options.supportDeployless,
+              useSimplePermit: params?.useSimplePermit,
+              args: {
+                amount: amount + (usesSharedFundingToken ? penaltyAssets : 0n),
+                from: userAddress,
+              },
+            }),
+            usesSharedFundingToken
+              ? []
+              : this.getReallocationPenaltyRequirements(
+                  userAddress,
+                  reallocationPlan,
+                ),
+            getBlueAuthorizationRequirement({
+              viemClient: this.client.viemClient,
+              chainId: this.chainId,
+              userAddress,
+              supportSignature: this.client.options.supportSignature,
+            }),
+          ]);
 
-        return [...erc20Requirements, ...(authTx ? [authTx] : [])];
+        return [
+          ...erc20Requirements,
+          ...penaltyRequirements,
+          ...(authTx ? [authTx] : []),
+        ];
       },
 
       buildTx: (signatures?: readonly RequirementSignature[]) => {
@@ -1401,7 +1656,7 @@ export class MorphoBlue implements BlueActions {
             minSharePrice,
             requirementSignature: permit,
             authorizationSignature: authorization,
-            reallocations,
+            reallocations: reallocationList,
           },
           metadata: this.client.options.metadata,
         });
@@ -1429,10 +1684,16 @@ export class MorphoBlue implements BlueActions {
     borrowAssets?: bigint;
     borrowShares?: bigint;
     slippageTolerance?: bigint;
-    targetReallocations?: readonly VaultReallocation[];
+    targetReallocations?: BlueReallocationPlan;
   }) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     validateSlippageTolerance(slippageTolerance);
+    const targetReallocationPlan = validateAndNormalizeReallocations({
+      reallocations: targetReallocations,
+      targetMarketId: target.marketParams.id,
+      chainId: this.chainId,
+    });
+    const targetReallocationList = targetReallocationPlan.reallocations;
 
     if (collateralAmount <= 0n) {
       throw new NonPositiveInputError("collateralAmount", collateralAmount);
@@ -1449,10 +1710,6 @@ export class MorphoBlue implements BlueActions {
     if (requestedAssets > 0n && requestedShares > 0n) {
       throw new BorrowAmountAndSharesExclusiveError(this.marketParams.id);
     }
-    if (targetReallocations) {
-      validateReallocations(targetReallocations, target.marketParams.id);
-    }
-
     if (!positionData) {
       throw new MissingAccrualPositionError(this.marketParams.id);
     }
@@ -1607,13 +1864,19 @@ export class MorphoBlue implements BlueActions {
 
     return {
       getRequirements: async () => {
-        const authTx = await getBlueAuthorizationRequirement({
-          viemClient: this.client.viemClient,
-          chainId: this.chainId,
-          userAddress,
-          supportSignature: this.client.options.supportSignature,
-        });
-        return authTx ? [authTx] : [];
+        const [penaltyRequirements, authTx] = await Promise.all([
+          this.getReallocationPenaltyRequirements(
+            userAddress,
+            targetReallocationPlan,
+          ),
+          getBlueAuthorizationRequirement({
+            viemClient: this.client.viemClient,
+            chainId: this.chainId,
+            userAddress,
+            supportSignature: this.client.options.supportSignature,
+          }),
+        ]);
+        return [...penaltyRequirements, ...(authTx ? [authTx] : [])];
       },
 
       buildTx: (signatures?: readonly RequirementSignature[]) => {
@@ -1634,7 +1897,7 @@ export class MorphoBlue implements BlueActions {
             borrowShares: requestedShares,
             minBorrowSharePrice,
             maxRepaySharePrice,
-            targetReallocations,
+            targetReallocations: targetReallocationList,
             authorizationSignature: authorization,
           },
           metadata: this.client.options.metadata,
@@ -1646,13 +1909,30 @@ export class MorphoBlue implements BlueActions {
   /**
    * Fetches all on-chain inputs needed to compute public allocator reallocations.
    *
-   * @param params - Reallocation data fetch parameters.
    * @param params.vaultAddresses - Vaults to inspect for source-market liquidity.
-   * @param params.block - Block number and timestamp used for consistent RPC reads.
-   * @returns Reallocation data ready for {@link getReallocations}.
+   * @param params.block.number - Block number used for every RPC read.
+   * @param params.block.timestamp - Timestamp corresponding to the fetched block.
+   * @returns Reallocation data ready for {@link getVaultV1Reallocations}.
    * @throws {ChainIdMismatchError} when the client chain does not match this market.
+   * @example
+   * ```ts
+   * import { markets, vaults } from "@morpho-org/morpho-test";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * import type { VaultV1ReallocationData } from "@morpho-org/morpho-sdk/entities";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() })
+   *   .extend(morphoViemExtension());
+   * const market = client.morpho.blue(markets[mainnet.id].usdc_wbtc, mainnet.id);
+   * const block = await client.getBlock();
+   * const data: VaultV1ReallocationData = await market.getVaultV1ReallocationData({
+   *   vaultAddresses: [vaults[mainnet.id].steakUsdc.address],
+   *   block,
+   * });
+   * ```
    */
-  async getReallocationData({
+  async getVaultV1ReallocationData({
     vaultAddresses,
     block,
   }: {
@@ -1661,7 +1941,7 @@ export class MorphoBlue implements BlueActions {
       readonly number: bigint;
       readonly timestamp: bigint;
     };
-  }): Promise<ReallocationData> {
+  }): Promise<VaultV1ReallocationData> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     const client = this.client.viemClient;
@@ -1725,7 +2005,7 @@ export class MorphoBlue implements BlueActions {
       ),
     ]);
 
-    // Assemble records for ReallocationData.
+    // Assemble records for VaultV1ReallocationData.
     const marketsRecord: Record<MarketId, Market | undefined> = {
       [targetMarketId]: targetMarket,
     };
@@ -1754,7 +2034,7 @@ export class MorphoBlue implements BlueActions {
       (positionsRecord[vault] ??= {})[mid] = position;
     }
 
-    return new ReallocationData({
+    return new VaultV1ReallocationData({
       chainId: this.chainId,
       markets: marketsRecord,
       vaults: vaultsRecord,
@@ -1764,13 +2044,144 @@ export class MorphoBlue implements BlueActions {
   }
 
   /**
-   * Computes public allocator reallocations for a borrow or withdraw on this market.
+   * Fetches Vault V1 PublicAllocator state using the deprecated unversioned name.
+   *
+   * @param params.vaultAddresses - Addresses of MetaMorpho vaults that allocate to this market.
+   * @param params.block.number - Block number used for every RPC read.
+   * @param params.block.timestamp - Timestamp corresponding to the fetched block.
+   * @returns A `VaultV1ReallocationData` snapshot populated from one block.
+   * @throws {ChainIdMismatchError} when the client chain does not match this market.
+   * @deprecated Use {@link getVaultV1ReallocationData} instead.
+   * @example
+   * ```ts
+   * const data = await market.getReallocationData({ vaultAddresses, block });
+   * // Equivalent to market.getVaultV1ReallocationData({ vaultAddresses, block }).
+   * ```
+   */
+  getReallocationData(params: {
+    vaultAddresses: readonly Address[];
+    block: {
+      readonly number: bigint;
+      readonly timestamp: bigint;
+    };
+  }): Promise<VaultV1ReallocationData> {
+    return this.getVaultV1ReallocationData(params);
+  }
+
+  /**
+   * Fetches Vault V2 BluePublicAllocator state for this target market.
+   *
+   * Reads the target Morpho Blue market, each Vault V2 accrual tree, and each
+   * vault's BluePublicAllocator permissions and allocation caps at one block.
+   *
+   * @param params.vaultAddresses - Vault V2 addresses to inspect for market or idle liquidity.
+   * @param params.block.number - Block number used for every RPC read.
+   * @param params.block.timestamp - Timestamp corresponding to the fetched block.
+   * @returns A `VaultV2BlueReallocationData` snapshot ready for {@link getVaultV2BlueReallocations}.
+   * @throws {ChainIdMismatchError} when the client chain does not match this market.
+   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
+   * @throws {UnknownAddressError} when the chain has no BluePublicAllocator deployment.
+   * @throws {UnknownBlueFactory} when the chain has no Vault V2 factory.
+   * @throws {UnknownBlueOfFactory} when a requested address is not a Vault V2 from that factory.
+   * @throws {UnsupportedBlueVaultV2AdapterError} when a vault contains an unsupported adapter.
+   * @throws {viem.BaseError} when an RPC or contract read fails with no fallback left.
+   * @example
+   * ```ts
+   * import { markets } from "@morpho-org/morpho-test";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * import type { VaultV2BlueReallocationData } from "@morpho-org/morpho-sdk/entities";
+   *
+   * const client = createPublicClient({ chain: mainnet, transport: http() })
+   *   .extend(morphoViemExtension());
+   * const market = client.morpho.blue(markets[mainnet.id].usdc_wbtc, mainnet.id);
+   * const block = await client.getBlock();
+   * const keyrockUsdcVaultV2 = "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145";
+   * const data: VaultV2BlueReallocationData =
+   *   await market.getVaultV2BlueReallocationData({
+   *     vaultAddresses: [keyrockUsdcVaultV2],
+   *     block,
+   *   });
+   * ```
+   */
+  async getVaultV2BlueReallocationData({
+    vaultAddresses,
+    block,
+  }: {
+    vaultAddresses: readonly Address[];
+    block: {
+      readonly number: bigint;
+      readonly timestamp: bigint;
+    };
+  }): Promise<VaultV2BlueReallocationData> {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+
+    const client = this.client.viemClient;
+    const fetchParams = {
+      blockNumber: block.number,
+      chainId: this.chainId,
+      deployless: this.client.options.supportDeployless,
+    };
+    const [targetMarket, vaultEntries] = await Promise.all([
+      fetchMarket(this.marketParams.id, client, fetchParams),
+      Promise.all(
+        vaultAddresses.map(async (address) => {
+          const vault = await fetchAccrualVaultV2(address, client, fetchParams);
+          const publicAllocatorData = await fetchVaultV2BluePublicAllocatorData(
+            vault,
+            client,
+            {
+              ...fetchParams,
+              targetMarketParams: this.marketParams,
+            },
+          );
+          return { publicAllocatorData, vault };
+        }),
+      ),
+    ]);
+
+    return new VaultV2BlueReallocationData({
+      chainId: this.chainId,
+      markets: { [targetMarket.id]: targetMarket },
+      vaults: Object.fromEntries(
+        vaultEntries.map(({ vault }) => [vault.address, vault]),
+      ),
+      allocations: Object.fromEntries(
+        vaultEntries.map(({ publicAllocatorData, vault }) => [
+          vault.address,
+          publicAllocatorData.allocations,
+        ]),
+      ),
+      publicAllocatorConfigs: Object.fromEntries(
+        vaultEntries.map(({ publicAllocatorData, vault }) => [
+          vault.address,
+          publicAllocatorData.publicAllocatorConfig,
+        ]),
+      ),
+      activeAdapters: Object.fromEntries(
+        vaultEntries.map(({ publicAllocatorData, vault }) => [
+          vault.address,
+          publicAllocatorData.activeAdapters,
+        ]),
+      ),
+      marketPublicAllocatorConfigs: Object.fromEntries(
+        vaultEntries.map(({ publicAllocatorData, vault }) => [
+          vault.address,
+          publicAllocatorData.marketPublicAllocatorConfigs,
+        ]),
+      ),
+    });
+  }
+
+  /**
+   * Computes Vault V1 PublicAllocator reallocations for this market.
    *
    * Pass `{ borrowAmount }` for a borrow (legacy alias, equivalent to `{ operation: "borrow", amount }`)
    * or `{ operation, amount }` for a borrow or loan-asset withdraw.
    *
    * @param params - Reallocation computation parameters.
-   * @param params.reallocationData - State returned by {@link getReallocationData}.
+   * @param params.reallocationData - State returned by {@link getVaultV1ReallocationData}.
    * @param params.operation - The operation driving the reallocation (`"borrow"` or `"withdraw"`).
    * @param params.amount - The borrow or withdraw amount used to compute the post-state utilization.
    * @param params.borrowAmount - {@deprecated Pass `{ operation: "borrow", amount }` instead.}
@@ -1781,32 +2192,25 @@ export class MorphoBlue implements BlueActions {
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when `operation === "withdraw"` and `amount` exceeds the target market's `totalSupplyAssets`.
    * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
    * @throws {UnknownReallocationMarketError} when the target market is absent from the reallocation data.
+   * @example
+   * ```ts
+   * const reallocations = market.getVaultV1Reallocations({
+   *   reallocationData,
+   *   operation: "borrow",
+   *   amount: 1_000_000n,
+   * });
+   * ```
    */
-  getReallocations(
-    params: {
-      reallocationData: ReallocationData;
-      options?: ReallocationComputeOptions;
-    } & (
-      | {
-          operation: "borrow" | "withdraw";
-          amount: bigint;
-          borrowAmount?: never;
-        }
-      | {
-          /** @deprecated Pass `{ operation: "borrow", amount }` instead. */
-          borrowAmount: bigint;
-          operation?: never;
-          amount?: never;
-        }
-    ),
-  ): readonly VaultReallocation[] {
+  getVaultV1Reallocations(
+    params: VaultV1ReallocationsParams,
+  ): readonly VaultV1Reallocation[] {
     validateChainId(params.reallocationData.chainId, this.chainId);
 
     const marketId = this.marketParams.id;
     const options = { enabled: true, ...params.options };
 
     if (params.borrowAmount !== undefined) {
-      return computeReallocations({
+      return computeVaultV1Reallocations({
         reallocationData: params.reallocationData,
         marketId,
         operation: "borrow",
@@ -1815,12 +2219,85 @@ export class MorphoBlue implements BlueActions {
       });
     }
 
-    return computeReallocations({
+    return computeVaultV1Reallocations({
       reallocationData: params.reallocationData,
       marketId,
       operation: params.operation,
       amount: params.amount,
       options,
     });
+  }
+
+  /**
+   * Computes Vault V1 PublicAllocator reallocations using the deprecated unversioned name.
+   *
+   * @param params.reallocationData - State returned by {@link getVaultV1ReallocationData}.
+   * @param params.operation - The operation driving the reallocation (`"borrow"` or `"withdraw"`).
+   * @param params.amount - The borrow or withdraw amount used to compute post-state utilization.
+   * @param params.borrowAmount - Deprecated borrow amount alias.
+   * @param params.options - Optional allocator and utilization options.
+   * @returns Vault V1 reallocations ready for a Blue action.
+   * @throws {ChainIdMismatchError} when `reallocationData` belongs to another chain.
+   * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation.
+   * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
+   * @throws {MissingPublicAllocatorConfigError} when a selected vault lacks allocator state.
+   * @throws {UnknownReallocationMarketError} when the target market is absent.
+   * @deprecated Use {@link getVaultV1Reallocations} instead.
+   * @example
+   * ```ts
+   * const reallocations = market.getReallocations({
+   *   reallocationData,
+   *   operation: "borrow",
+   *   amount: 1_000_000n,
+   * });
+   * ```
+   */
+  getReallocations(
+    params: VaultV1ReallocationsParams,
+  ): readonly VaultV1Reallocation[] {
+    return this.getVaultV1Reallocations(params);
+  }
+
+  /**
+   * Computes Vault V2 BluePublicAllocator reallocations for this market.
+   *
+   * @param params.reallocationData - State returned by {@link getVaultV2BlueReallocationData}.
+   * @param params.options - Optional allocator discovery controls and operation to support.
+   * @returns Action-ready reallocations and their post-simulation state.
+   * @throws {ChainIdMismatchError} when `reallocationData` belongs to another chain.
+   * @throws {NegativeInputError} when a utilization or penalty limit is negative.
+   * @throws {InputExceedsMaxError} when a utilization or penalty limit exceeds WAD.
+   * @throws {NonPositiveInputError} when an enabled operation amount is not positive.
+   * @throws {UnknownReallocationMarketError} when a required market is absent.
+   * @throws {UnknownReallocationVaultError} when configured vault state is absent.
+   * @throws {UnknownReallocationPublicAllocatorConfigError} when allocator authorization state is absent.
+   * @throws {UnknownReallocationActiveAdaptersError} when active-adapter state is absent.
+   * @throws {UnknownReallocationMarketPublicAllocatorConfigError} when an adapter-market allocator configuration is absent.
+   * @throws {UnknownReallocationAllocationError} when required allocation state is absent.
+   * @throws {ReallocationAdapterSupplySharesUnderflowError} when an inconsistent adapter snapshot underflows during the final transition.
+   * @throws {ReallocationAllocationUnderflowError} when an inconsistent allocation snapshot underflows during the final transition.
+   * @throws {InsufficientSharedLiquidityError} when selected liquidity cannot cover the shortfall.
+   * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
+   * @example
+   * ```ts
+   * const result = market.getVaultV2BlueReallocations({
+   *   reallocationData,
+   *   options: { operation: { type: "borrow", amount: 1_000_000n } },
+   * });
+   * ```
+   */
+  getVaultV2BlueReallocations({
+    reallocationData,
+    options,
+  }: VaultV2BlueReallocationsParams): {
+    readonly reallocations: readonly VaultV2BlueReallocation[];
+    readonly data: VaultV2BlueReallocationData;
+  } {
+    validateChainId(reallocationData.chainId, this.chainId);
+
+    return reallocationData.computeVaultV2BlueReallocations(
+      this.marketParams.id,
+      options,
+    );
   }
 }

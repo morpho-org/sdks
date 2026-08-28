@@ -1,5 +1,47 @@
 # @morpho-org/evm-simulation
 
+## 4.1.4
+
+### Patch Changes
+
+- [#936](https://github.com/morpho-org/sdks/pull/936) [`cde4052`](https://github.com/morpho-org/sdks/commit/cde4052c5f72e8345aae1b4ae863290e7c5b7f66) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Synchronize maintained chain address and deployment-block registries with the current deployments repository.
+
+- Updated dependencies [[`402175b`](https://github.com/morpho-org/sdks/commit/402175b32cc37e0da9e7b33495080a695941fa71), [`cde4052`](https://github.com/morpho-org/sdks/commit/cde4052c5f72e8345aae1b4ae863290e7c5b7f66)]:
+  - @morpho-org/morpho-ts@2.10.0
+  - @morpho-org/blue-sdk@6.6.0
+
+## 4.1.3
+
+### Patch Changes
+
+- [#910](https://github.com/morpho-org/sdks/pull/910) [`61eb721`](https://github.com/morpho-org/sdks/commit/61eb721a5e112d164df40dfa501acd7929407914) Thanks [@devin-ai-integration](https://github.com/apps/devin-ai-integration)! - Document `gasUsed` semantics and per-call propagation without changing behavior.
+
+- [#915](https://github.com/morpho-org/sdks/pull/915) [`2c76ea5`](https://github.com/morpho-org/sdks/commit/2c76ea50ee1f29d2c3a5a74f9bddd9e34910378a) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Add a `bundles` group to `ChainAddresses` for standalone bundle periphery contracts, starting with
+  `bundles.vaultExitBundlesV1`. The `AddressLabel` union gains `bundles.vaultExitBundlesV1`, so
+  `getChainAddress(chainId, "bundles.vaultExitBundlesV1")` and `registerCustomAddresses` resolve the
+  new entry like any other registry address. Register the canonical `VaultExitBundlesV1` deployments
+  and deployment blocks on Ethereum, Base, Arbitrum, Optimism, Polygon, World Chain, Unichain,
+  HyperEVM, Katana, Monad, Stable, Tempo, and Robinhood Chain.
+
+  Patch maintained packages with direct runtime dependencies on `@morpho-org/morpho-ts` so their
+  latest releases resolve the new registry entry.
+
+  Add Vault V1 and Vault V2 in-kind redemption actions and entity methods backed by
+  VaultExitBundlesV1, including bounded share permit/approval requirements, Vault V2's two-field
+  permit domain, snapshot coverage validation, and Morpho Blue balance checks.
+  Vault V2's `toShares` now accepts an optional rounding direction so callers can reproduce its
+  rounded-up withdrawal preview without duplicating share-conversion math.
+  Vault V1 exits also reject vaults configured as Morpho Blue's fee recipient, which the periphery
+  cannot safely account for when protocol fee shares accrue.
+  Add a minimal Vault V2 preview helper for frontend eligibility, market capacity, and proceeds.
+  Match the deployed contract at upstream commit `9994e6abe5b18d5f7e0d6bd666f85eb259e3312f`,
+  including its idle-assets-first Vault V2 exit behavior. The deployed ABI is unchanged. Fork tests
+  now use the canonical Ethereum deployment directly.
+
+- Updated dependencies [[`2c76ea5`](https://github.com/morpho-org/sdks/commit/2c76ea50ee1f29d2c3a5a74f9bddd9e34910378a)]:
+  - @morpho-org/morpho-ts@2.9.0
+  - @morpho-org/blue-sdk@6.5.0
+
 ## 4.1.2
 
 ### Patch Changes

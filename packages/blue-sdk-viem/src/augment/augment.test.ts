@@ -111,10 +111,10 @@ describe("blue-sdk augmentations", () => {
     },
   ];
 
-  test.each(wirings)("$label is wired to its fetch function", ({
-    get,
-    expected,
-  }) => {
-    expect(get()).toBe(expected);
-  });
+  test.each(wirings)(
+    "$label is wired to its fetch function",
+    ({ get, expected }) => {
+      expect(get()).toBe(expected);
+    },
+  );
 });

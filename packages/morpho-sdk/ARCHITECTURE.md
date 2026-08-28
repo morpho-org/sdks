@@ -105,8 +105,9 @@ at the SDK level. The differences are at the protocol layer:
   with an LLTV buffer (default 0.5%) to prevent instant liquidation.
 - **LLTV buffer**: Both `borrow` and `supplyCollateralBorrow` validate that the resulting position
   stays below `LLTV - buffer` (default 0.5%). Throws `BorrowExceedsSafeLtvError` if exceeded.
-- **SDK data**: Fetched via `fetchMarket` / `fetchAccrualPosition`. `AccrualPosition` provides
-  health metrics: `maxBorrowAssets`, `ltv`, `isHealthy`, `borrowAssets`, `collateral`.
+- **SDK data**: Fetched via `fetchBlueMarket` / `fetchBlueAccrualPosition`.
+  `BlueAccrualPosition` provides health metrics: `maxBorrowAssets`, `ltv`, `isHealthy`,
+  `borrowAssets`, `collateral`.
 
 ### Midnight
 

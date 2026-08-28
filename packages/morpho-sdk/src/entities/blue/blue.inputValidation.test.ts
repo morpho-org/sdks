@@ -35,7 +35,7 @@ describe("MorphoBlue reallocation input validation", () => {
         assets: 1n,
         userAddress: USER,
         positionData: undefined as never,
-        reallocations: INVALID_REALLOCATIONS,
+        reallocations: INVALID_REALLOCATIONS.values(),
       }),
     ).toThrow(NegativeInputError);
   });
@@ -48,7 +48,7 @@ describe("MorphoBlue reallocation input validation", () => {
         amount: 1n,
         userAddress: USER,
         positionData: undefined as never,
-        reallocations: INVALID_REALLOCATIONS,
+        reallocations: INVALID_REALLOCATIONS.values(),
       }),
     ).toThrow(NegativeInputError);
   });
@@ -62,7 +62,7 @@ describe("MorphoBlue reallocation input validation", () => {
         borrowAmount: 1n,
         userAddress: USER,
         positionData: undefined as never,
-        reallocations: INVALID_REALLOCATIONS,
+        reallocations: INVALID_REALLOCATIONS.values(),
       }),
     ).toThrow(NegativeInputError);
   });
@@ -79,7 +79,7 @@ describe("MorphoBlue reallocation input validation", () => {
           positionData: undefined as never,
         },
         collateralAmount: 1n,
-        targetReallocations: INVALID_REALLOCATIONS,
+        targetReallocations: INVALID_REALLOCATIONS.values(),
       }),
     ).toThrow(NegativeInputError);
   });

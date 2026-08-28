@@ -316,29 +316,26 @@ describe("addresses helpers", () => {
       morphoDeployment: 16_408_957n,
       wNativeDeployment: 0n,
     },
-  ])("exposes era-2 addresses and deployments for chain $chainId", ({
-    chainId,
-    morpho,
-    wNative,
-    morphoDeployment,
-    wNativeDeployment,
-  }) => {
-    expect(getChainAddresses(chainId)).toMatchObject({
-      blue: morpho,
-      morpho,
-      wNative,
-    });
-    expect(
-      (deployments as Record<number, ChainDeployments>)[chainId],
-    ).toMatchObject({
-      blue: morphoDeployment,
-      morpho: morphoDeployment,
-      wNative: wNativeDeployment,
-    });
-    expect(getUnwrappedToken(wNative as `0x${string}`, chainId)).toBe(
-      NATIVE_ADDRESS,
-    );
-  });
+  ])(
+    "exposes era-2 addresses and deployments for chain $chainId",
+    ({ chainId, morpho, wNative, morphoDeployment, wNativeDeployment }) => {
+      expect(getChainAddresses(chainId)).toMatchObject({
+        blue: morpho,
+        morpho,
+        wNative,
+      });
+      expect(
+        (deployments as Record<number, ChainDeployments>)[chainId],
+      ).toMatchObject({
+        blue: morphoDeployment,
+        morpho: morphoDeployment,
+        wNative: wNativeDeployment,
+      });
+      expect(getUnwrappedToken(wNative as `0x${string}`, chainId)).toBe(
+        NATIVE_ADDRESS,
+      );
+    },
+  );
 
   test("exposes era-2 addresses and deployments without wNative for chain 5042", () => {
     const chainAddresses = getChainAddresses(5_042);

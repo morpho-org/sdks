@@ -1,4 +1,5 @@
 import type { Address } from "@morpho-org/blue-sdk";
+import { isAddressEqual } from "viem";
 import { APPROVE_ONLY_ONCE_TOKENS } from "../../helpers/constant.js";
 import {
   ApprovalAmountLessThanSpendAmountError,
@@ -12,7 +13,8 @@ import { encodeErc20Approval } from "./encode/encodeErc20Approval.js";
  * allowance.
  *
  * The spender is validated by {@link encodeErc20Approval}. Supported spenders are the chain's
- * GeneralAdapter1, Permit2, Midnight, and MidnightBundles addresses when configured.
+ * GeneralAdapter1, Permit2, Midnight, MidnightBundles, and VaultExitBundlesV1 addresses when
+ * configured.
  *
  * Returns an empty array when the allowance already covers `spendAmount`. When the token is in
  * `APPROVE_ONLY_ONCE_TOKENS` (e.g. USDT) and the existing allowance is non-zero, prepends a
@@ -26,7 +28,7 @@ import { encodeErc20Approval } from "./encode/encodeErc20Approval.js";
  * @param params.args.approvalAmount - The amount to approve (often equal to `spendAmount`, but
  *   may be `MAX_UINT_160` for Permit2 prerequisites).
  * @param params.args.spender - Address that will be granted the approval. Must be GeneralAdapter1,
- *   Permit2, Midnight, or MidnightBundles for `chainId`.
+ *   Permit2, Midnight, MidnightBundles, or VaultExitBundlesV1 for `chainId`.
  * @param params.allowances - The user's current allowance of `address` for `spender`.
  * @returns Up to two deep-frozen `Transaction<ERC20ApprovalAction>` entries: an optional reset
  *   followed by the new approval. Empty when no approval is needed.
@@ -66,7 +68,9 @@ export const getRequirementsApproval = (params: {
 
   if (allowances < spendAmount) {
     if (
-      APPROVE_ONLY_ONCE_TOKENS[chainId]?.includes(address) &&
+      APPROVE_ONLY_ONCE_TOKENS[chainId]?.some((token) =>
+        isAddressEqual(token, address),
+      ) &&
       allowances > 0n
     ) {
       approvals.push(

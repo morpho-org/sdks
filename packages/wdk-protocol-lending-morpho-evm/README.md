@@ -14,6 +14,7 @@ This module follows Wallet Development Kit lending protocol conventions and acce
 - Withdraw from Morpho Vaults V2.
 - Supply and withdraw collateral in Morpho Blue market.
 - Borrow and repay from a configured Morpho Blue market.
+- Opt into Vault V2 BluePublicAllocator reallocations for borrow liquidity.
 - Expose Morpho SDK approval/signature/authorization requirements.
 - Quote costs before sending.
 - Works with standard EVM accounts and ERC-4337 smart accounts.
@@ -93,7 +94,7 @@ For vault deposits and collateral supply, pass either `amount`, `nativeAmount`, 
 | `getSupplyCollateralRequirements(options)` | Return SDK requirements for collateral supply |
 | `quoteSupplyCollateral(options, config?)` | Quote collateral supply |
 | `borrow(options, config?)` | Borrow from the configured market |
-| `getBorrowRequirements(options)` | Return SDK authorization requirements for borrow |
+| `getBorrowRequirements(options)` | Return SDK authorization requirements, plus a penalty-token approval for the Vault V2 opt-in type |
 | `quoteBorrow(options, config?)` | Quote borrow |
 | `repay(options, config?)` | Repay by assets, or pass `amount: 'max'` to repay current borrow shares |
 | `getRepayRequirements(options)` | Return SDK requirements for repay |
@@ -138,12 +139,36 @@ Requirement entries are one of:
 
 Morpho SDK enforces a builder/executor invariant for bundled actions. For that reason, `onBehalfOf` and vault/collateral withdrawal `to` must equal the connected wallet address in this WDK adapter.
 
+Existing `MorphoBorrowOptions` callers keep the Vault V1 reallocation input and
+an authorization-only `getBorrowRequirements` result type. To include Vault V2
+BluePublicAllocator calls, type the options as
+`MorphoBorrowWithVaultV2ReallocationsOptions`; this explicitly widens the
+result to include the loan-token approval used for proportional penalty donations:
+
+```typescript
+import type { MorphoBorrowWithVaultV2ReallocationsOptions } from '@morpho-org/wdk-protocol-lending-morpho-evm'
+
+const options = {
+  token: usdc,
+  amount: 1_000_000n,
+  reallocations: [{
+    vault,
+    from: { type: 'idle' },
+    to: { adapter },
+    assets: 1_000_000n,
+    penalty: 1_000_000_000_000_000n
+  }]
+} satisfies MorphoBorrowWithVaultV2ReallocationsOptions
+
+const requirements = await morpho.getBorrowRequirements(options)
+```
+
 ## Fork E2E Test
 
-The regular unit test suite is fully mocked and runs as part of the workspace's `pnpm test` command. The Anvil-fork integration suite under `tests/integration/` is gated on `MAINNET_RPC_URL` being set; the corresponding tests are skipped otherwise. To execute the real vault deposit path against a mainnet fork:
+The colocated unit suite runs as part of the workspace's `pnpm test` command. The Anvil-fork integration suite under `test/` uses `*.integration.test.ts` names and is gated on `MAINNET_RPC_URL` being set; the corresponding tests are skipped otherwise. To execute the real vault deposit path against a mainnet fork:
 
 ```bash
-MAINNET_RPC_URL="https://eth-mainnet.g.alchemy.com/v2/<key>" pnpm test --project wdk-protocol-lending-morpho-evm
+MAINNET_RPC_URL="https://eth-mainnet.g.alchemy.com/v2/<key>" pnpm test --project wdk-protocol-lending-morpho-evm-fork
 ```
 
 The fork test impersonates a USDT holder, funds the local test wallet, sends SDK requirements, and executes a Morpho Vault V2 deposit against forked mainnet state.

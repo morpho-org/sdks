@@ -1,17 +1,20 @@
 import {
   getChainAddresses,
   type InputMarketParams,
+  VaultV2BluePublicAllocatorConfigUtils,
 } from "@morpho-org/blue-sdk";
 import {
   blueAbi,
   erc2612Abi,
   permit2Abi,
-  publicAllocatorAbi,
+  vaultV1PublicAllocatorAbi,
+  vaultV2BluePublicAllocatorAbi,
 } from "@morpho-org/blue-sdk-viem";
 import {
   type Address,
   encodeAbiParameters,
   encodeFunctionData,
+  erc20Abi,
   type Hex,
   isAddressEqual,
   keccak256,
@@ -148,7 +151,7 @@ export namespace BundlerAction {
    *
    * @example
    * ```ts
-   * import { getChainAddresses } from "@morpho-org/blue-sdk";
+   * import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
    * import { BundlerAction } from "@morpho-org/morpho-sdk/bundler";
    *
    * const { generalAdapter1 } = getChainAddresses(1).bundler3;
@@ -342,6 +345,18 @@ export namespace BundlerAction {
       case "reallocateTo": {
         return BundlerAction.publicAllocatorReallocateTo(chainId, ...args);
       }
+      case "vaultV2BluePublicAllocatorReallocate": {
+        return BundlerAction.vaultV2BluePublicAllocatorReallocate(
+          chainId,
+          ...args,
+        );
+      }
+      case "vaultV2BluePublicAllocatorAllocateFromIdle": {
+        return BundlerAction.vaultV2BluePublicAllocatorAllocateFromIdle(
+          chainId,
+          ...args,
+        );
+      }
       case "wrapNative": {
         return BundlerAction.wrapNative(chainId, ...args);
       }
@@ -501,7 +516,7 @@ export namespace BundlerAction {
    *
    * @example
    * ```ts
-   * import { getChainAddresses } from "@morpho-org/blue-sdk";
+   * import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
    * import { BundlerAction } from "@morpho-org/morpho-sdk/bundler";
    *
    * const adapter = getChainAddresses(1).bundler3.generalAdapter1;
@@ -910,7 +925,7 @@ export namespace BundlerAction {
    *
    * @example
    * ```ts
-   * import { getChainAddresses } from "@morpho-org/blue-sdk";
+   * import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
    * import { BundlerAction } from "@morpho-org/morpho-sdk/bundler";
    *
    * const { generalAdapter1 } = getChainAddresses(1).bundler3;
@@ -1421,16 +1436,16 @@ export namespace BundlerAction {
     supplyMarketParams: InputMarketParams,
     skipRevert = false,
   ): BundlerCall[] {
-    const { publicAllocator } = getChainAddresses(chainId);
-    if (publicAllocator == null) {
+    const { vaultV1PublicAllocator } = getChainAddresses(chainId);
+    if (vaultV1PublicAllocator == null) {
       throw new BundlerErrors.UnexpectedAction("reallocateTo", chainId);
     }
 
     return [
       {
-        to: publicAllocator,
+        to: vaultV1PublicAllocator,
         data: encodeFunctionData({
-          abi: publicAllocatorAbi,
+          abi: vaultV1PublicAllocatorAbi,
           functionName: "reallocateTo",
           args: [vault, withdrawals, supplyMarketParams],
         }),
@@ -1439,6 +1454,249 @@ export namespace BundlerAction {
         callbackHash: zeroHash,
       },
     ];
+  }
+
+  /**
+   * Encodes a Vault V2 Blue Public Allocator market-to-market reallocation.
+   *
+   * @remarks Bundler3 must already hold the computed penalty assets. The
+   * high-level Blue builders add the corresponding GeneralAdapter1 transfer.
+   *
+   * @param chainId - Chain whose canonical Blue Public Allocator is called.
+   * @param vault - Vault whose liquidity is reallocated.
+   * @param deallocateAdapter - Vault V2 adapter supplying the source market.
+   * @param deallocateMarket - Source Morpho Blue market parameters.
+   * @param allocateAdapter - Vault V2 adapter supplying the target market.
+   * @param allocateMarket - Target Morpho Blue market parameters.
+   * @param assets - Assets to reallocate, bounded by `uint128` by the high-level action.
+   * @param penalty - Vault-configured proportional penalty, scaled by WAD.
+   * @param skipRevert - Whether Bundler3 should tolerate a revert.
+   * @returns A zero reset and exact approval when needed, then the allocator call.
+   * @throws {BundlerErrors.UnexpectedAction} when the chain has no Blue Public Allocator deployment.
+   * @throws {BundlerErrors.SkippableAllocatorPenalty} when `skipRevert` is true and a token approval is required.
+   * @example
+   * ```ts
+   * import { ChainId } from "@morpho-org/morpho-sdk/constants";
+   * import type { BlueInputMarketParams } from "@morpho-org/morpho-sdk/types";
+   * import {
+   *   BundlerAction,
+   *   type BundlerCall,
+   * } from "@morpho-org/morpho-sdk/bundler";
+   * import type { Address } from "viem";
+   *
+   * const keyrockUsdcVault =
+   *   "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145" satisfies Address;
+   * const sourceAdapterFixture =
+   *   "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" satisfies Address;
+   * const targetAdapterFixture =
+   *   "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC" satisfies Address;
+   * const usdc = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" satisfies Address;
+   * const weth = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" satisfies Address;
+   * const wbtc = "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599" satisfies Address;
+   * const ethUsdOracle = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419" satisfies Address;
+   * const adaptiveCurveIrm = "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC" satisfies Address;
+   * const sourceMarket = {
+   *   loanToken: usdc,
+   *   collateralToken: weth,
+   *   oracle: ethUsdOracle,
+   *   irm: adaptiveCurveIrm,
+   *   lltv: 860_000_000_000_000_000n,
+   * } satisfies BlueInputMarketParams;
+   * const targetMarket = {
+   *   ...sourceMarket,
+   *   collateralToken: wbtc,
+   * } satisfies BlueInputMarketParams;
+   *
+   * const calls: BundlerCall[] = BundlerAction.vaultV2BluePublicAllocatorReallocate(
+   *   ChainId.EthMainnet,
+   *   keyrockUsdcVault,
+   *   sourceAdapterFixture,
+   *   sourceMarket,
+   *   targetAdapterFixture,
+   *   targetMarket,
+   *   1_000_000n,
+   *   1_000_000_000_000_000n,
+   * );
+   * // Bundler3 resets and approves 1_000 USDC units, then calls `reallocate` with zero native value.
+   * ```
+   */
+  // biome-ignore lint/complexity/useMaxParams: mirrors the protocol call
+  export function vaultV2BluePublicAllocatorReallocate(
+    chainId: number,
+    vault: Address,
+    deallocateAdapter: Address,
+    deallocateMarket: InputMarketParams,
+    allocateAdapter: Address,
+    allocateMarket: InputMarketParams,
+    assets: bigint,
+    penalty: bigint,
+    skipRevert = false,
+  ): BundlerCall[] {
+    const { vaultV2BluePublicAllocator: allocator } =
+      getChainAddresses(chainId);
+    if (allocator == null) {
+      throw new BundlerErrors.UnexpectedAction(
+        "vaultV2BluePublicAllocatorReallocate",
+        chainId,
+      );
+    }
+    const calls: BundlerCall[] = [];
+    const penaltyAssets =
+      VaultV2BluePublicAllocatorConfigUtils.getPenaltyAssets(
+        { penalty },
+        assets,
+      );
+    if (skipRevert && penaltyAssets > 0n) {
+      throw new BundlerErrors.SkippableAllocatorPenalty(penaltyAssets);
+    }
+
+    if (penaltyAssets > 0n) {
+      for (const amount of [0n, penaltyAssets])
+        calls.push({
+          to: allocateMarket.loanToken,
+          data: encodeFunctionData({
+            abi: erc20Abi,
+            functionName: "approve",
+            args: [allocator, amount],
+          }),
+          value: 0n,
+          skipRevert,
+          callbackHash: zeroHash,
+        });
+    }
+
+    calls.push({
+      to: allocator,
+      data: encodeFunctionData({
+        abi: vaultV2BluePublicAllocatorAbi,
+        functionName: "reallocate",
+        args: [
+          vault,
+          deallocateAdapter,
+          deallocateMarket,
+          allocateAdapter,
+          allocateMarket,
+          assets,
+          penalty,
+        ],
+      }),
+      value: 0n,
+      skipRevert,
+      callbackHash: zeroHash,
+    });
+
+    return calls;
+  }
+
+  /**
+   * Encodes a Vault V2 Blue Public Allocator allocation from vault idle liquidity.
+   *
+   * @remarks Bundler3 must already hold the computed penalty assets. The
+   * high-level Blue builders add the corresponding GeneralAdapter1 transfer.
+   *
+   * @param chainId - Chain whose canonical Blue Public Allocator is called.
+   * @param vault - Vault whose idle liquidity is allocated.
+   * @param adapter - Vault V2 adapter supplying the target market.
+   * @param market - Target Morpho Blue market parameters.
+   * @param assets - Assets to allocate, bounded by `uint128` by the high-level action.
+   * @param penalty - Vault-configured proportional penalty, scaled by WAD.
+   * @param skipRevert - Whether Bundler3 should tolerate a revert.
+   * @returns A zero reset and exact approval when needed, then the allocator call.
+   * @throws {BundlerErrors.UnexpectedAction} when the chain has no Blue Public Allocator deployment.
+   * @throws {BundlerErrors.SkippableAllocatorPenalty} when `skipRevert` is true and a token approval is required.
+   * @example
+   * ```ts
+   * import { ChainId } from "@morpho-org/morpho-sdk/constants";
+   * import type { BlueInputMarketParams } from "@morpho-org/morpho-sdk/types";
+   * import {
+   *   BundlerAction,
+   *   type BundlerCall,
+   * } from "@morpho-org/morpho-sdk/bundler";
+   * import type { Address } from "viem";
+   *
+   * const keyrockUsdcVault =
+   *   "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145" satisfies Address;
+   * const targetAdapterFixture =
+   *   "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC" satisfies Address;
+   * const usdc = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" satisfies Address;
+   * const weth = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" satisfies Address;
+   * const ethUsdOracle = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419" satisfies Address;
+   * const adaptiveCurveIrm = "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC" satisfies Address;
+   * const targetMarket = {
+   *   loanToken: usdc,
+   *   collateralToken: weth,
+   *   oracle: ethUsdOracle,
+   *   irm: adaptiveCurveIrm,
+   *   lltv: 860_000_000_000_000_000n,
+   * } satisfies BlueInputMarketParams;
+   *
+   * const calls: BundlerCall[] = BundlerAction.vaultV2BluePublicAllocatorAllocateFromIdle(
+   *   ChainId.EthMainnet,
+   *   keyrockUsdcVault,
+   *   targetAdapterFixture,
+   *   targetMarket,
+   *   1_000_000n,
+   *   1_000_000_000_000_000n,
+   * );
+   * // Bundler3 resets and approves 1_000 USDC units, then calls `allocateFromIdle` with zero native value.
+   * ```
+   */
+  // biome-ignore lint/complexity/useMaxParams: mirrors the protocol call
+  export function vaultV2BluePublicAllocatorAllocateFromIdle(
+    chainId: number,
+    vault: Address,
+    adapter: Address,
+    market: InputMarketParams,
+    assets: bigint,
+    penalty: bigint,
+    skipRevert = false,
+  ): BundlerCall[] {
+    const { vaultV2BluePublicAllocator: allocator } =
+      getChainAddresses(chainId);
+    if (allocator == null) {
+      throw new BundlerErrors.UnexpectedAction(
+        "vaultV2BluePublicAllocatorAllocateFromIdle",
+        chainId,
+      );
+    }
+    const calls: BundlerCall[] = [];
+    const penaltyAssets =
+      VaultV2BluePublicAllocatorConfigUtils.getPenaltyAssets(
+        { penalty },
+        assets,
+      );
+    if (skipRevert && penaltyAssets > 0n) {
+      throw new BundlerErrors.SkippableAllocatorPenalty(penaltyAssets);
+    }
+
+    if (penaltyAssets > 0n) {
+      for (const amount of [0n, penaltyAssets])
+        calls.push({
+          to: market.loanToken,
+          data: encodeFunctionData({
+            abi: erc20Abi,
+            functionName: "approve",
+            args: [allocator, amount],
+          }),
+          value: 0n,
+          skipRevert,
+          callbackHash: zeroHash,
+        });
+    }
+
+    calls.push({
+      to: allocator,
+      data: encodeFunctionData({
+        abi: vaultV2BluePublicAllocatorAbi,
+        functionName: "allocateFromIdle",
+        args: [vault, adapter, market, assets, penalty],
+      }),
+      value: 0n,
+      skipRevert,
+      callbackHash: zeroHash,
+    });
+
+    return calls;
   }
 
   /**

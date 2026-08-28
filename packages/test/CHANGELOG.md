@@ -1,5 +1,21 @@
 # @morpho-org/test
 
+## 2.9.0
+
+### Minor Changes
+
+- [#944](https://github.com/morpho-org/sdks/pull/944) [`3fe836b`](https://github.com/morpho-org/sdks/commit/3fe836b3374a2d8896d0b7bdbba36fd30aa120b0) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Make unexpected Anvil exits and failed shutdowns surface without poisoning Vitest retries, clean up child processes when startup fails, cover the configured fork retry budget with an overridable startup deadline, let state dumps finish gracefully by default with a configurable force-kill delay, and redact exact fork URLs and header values from Anvil diagnostics in CI unless explicitly disabled.
+
+  Require Vitest 2.1.2 or newer so per-attempt cleanup failures participate in Vitest retries.
+
+  This minor release intentionally makes the existing `spawnAnvil()` result fields (`rpcUrl` and `stop`) and `ViemTestContext.client` readonly. This is a source-level breaking change for consumers that assign those fields; keep mutable wrapper objects locally if reassignment is required.
+
+## 2.8.4
+
+### Patch Changes
+
+- [#914](https://github.com/morpho-org/sdks/pull/914) [`d45fffa`](https://github.com/morpho-org/sdks/commit/d45fffad3b2d6f5182b1a0d31a7d8a55cf4eaad2) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Refresh SDK dependencies and update TypeScript configuration and test helper types for TypeScript 7. No peer range widening was required; GraphQL remains on the latest compatible v16 because its direct consumers do not support v17. Remove the obsolete ox compatibility patch now fixed upstream.
+
 ## 2.8.3
 
 ### Patch Changes

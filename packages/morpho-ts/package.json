@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/morpho-ts",
   "description": "TypeScript package to handle all things time & format-related.",
-  "version": "2.8.0",
+  "version": "2.10.0",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Rubilmax <rmilon@gmail.com>"
@@ -21,12 +21,16 @@
   "main": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./abis": "./src/abis.ts"
+    "./abis": "./src/abis.ts",
+    "./abis/marketParams": "./src/abis/marketParams.ts"
   },
   "typesVersions": {
     "*": {
       "abis": [
         "src/abis.ts"
+      ],
+      "abis/marketParams": [
+        "src/abis/marketParams.ts"
       ]
     }
   },
@@ -40,8 +44,8 @@
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json"
   },
   "devDependencies": {
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.9"
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   },
   "publishConfig": {
     "exports": {
@@ -54,6 +58,11 @@
         "types": "./lib/esm/abis.d.ts",
         "import": "./lib/esm/abis.js",
         "require": "./lib/cjs/abis.js"
+      },
+      "./abis/marketParams": {
+        "types": "./lib/esm/abis/marketParams.d.ts",
+        "import": "./lib/esm/abis/marketParams.js",
+        "require": "./lib/cjs/abis/marketParams.js"
       }
     },
     "main": "./lib/cjs/index.js",
@@ -62,6 +71,9 @@
       "*": {
         "abis": [
           "lib/esm/abis.d.ts"
+        ],
+        "abis/marketParams": [
+          "lib/esm/abis/marketParams.d.ts"
         ]
       }
     }

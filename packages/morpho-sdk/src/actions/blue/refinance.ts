@@ -5,6 +5,7 @@ import { type Action, BundlerAction } from "../../bundler/index.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   type AuthorizationRequirementSignature,
+  type BlueReallocationPlan,
   type BlueRefinanceAction,
   type Metadata,
   NegativeInputError,
@@ -13,10 +14,9 @@ import {
   RefinanceSharesMissingBorrowAssetsError,
   RefinanceTokenMismatchError,
   type Transaction,
-  type VaultReallocation,
 } from "../../types/index.js";
 import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
-import { buildReallocationActions } from "./buildReallocationActions.js";
+import { buildBlueReallocationActions } from "./buildReallocationActions.js";
 
 /** Parameters for {@link blueRefinance}. */
 export interface BlueRefinanceParams {
@@ -44,8 +44,8 @@ export interface BlueRefinanceParams {
     minBorrowSharePrice: bigint;
     /** Maximum repay share price on the source market (in ray); must be > 0 when a repay leg exists. */
     maxRepaySharePrice: bigint;
-    /** PublicAllocator reallocations into the target market, run before the bundle. Fees add to `tx.value`. */
-    targetReallocations?: readonly VaultReallocation[];
+    /** Homogeneous Vault V1 or Vault V2 reallocations into the target market. */
+    targetReallocations?: BlueReallocationPlan;
     /**
      * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
      * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a
@@ -67,8 +67,8 @@ export interface BlueRefinanceParams {
  * Bundle shape (callback contents depend on borrow mode):
  *
  * ```text
- * // optional: one reallocateTo per targetReallocations entry, run first
- * reallocateTo(vault_i, fee_i, withdrawals_i, target, false),
+ * // optional targetReallocations run first:
+ * reallocateTo(...) | reallocate(...) | allocateFromIdle(...),
  *
  * morphoSupplyCollateral(target, collateralAmount, user, [
  *   // omitted in collat-only mode
@@ -102,7 +102,8 @@ export interface BlueRefinanceParams {
  * @param params.args.borrowShares - Borrow shares to repay on the source; exclusive with `borrowAssets`. Defaults to `0n`.
  * @param params.args.minBorrowSharePrice - Minimum borrow share price (ray) on the target.
  * @param params.args.maxRepaySharePrice - Maximum repay share price (ray) on the source.
- * @param params.args.targetReallocations - PublicAllocator reallocations into the target, run before the supply leg.
+ * @param params.args.targetReallocations - Homogeneous Vault V1 or Vault V2 reallocations into the
+ *   target, run before the supply leg. V1 fees add to `tx.value`; V2 penalties are paid in the target loan token.
  * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
  *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata appended to `tx.data`.
@@ -111,8 +112,14 @@ export interface BlueRefinanceParams {
  * repay); in shares mode the entity passes both. Caller-facing mutual exclusivity is enforced at the entity layer.
  * @throws {NonPositiveInputError} when `collateralAmount <= 0n`, a repay leg has a non-positive
  *   `maxRepaySharePrice`, or any reallocation withdrawal amount is non-positive.
+ * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
+ * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
+ * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
+ * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
+ * @throws {InvalidReallocationShapeError} when an entry matches both or neither V1/V2 shape.
+ * @throws {MixedReallocationVersionsError} when one plan contains both V1 and V2 entries.
  * @throws {NegativeInputError} when `borrowAssets`, `borrowShares`, `minBorrowSharePrice`,
- *   `maxRepaySharePrice`, or any reallocation fee is negative.
+ *   `maxRepaySharePrice`, a V1 fee, or a V2 penalty is negative.
  * @throws {RefinanceSameMarketError} when source and target market ids are equal.
  * @throws {RefinanceTokenMismatchError} when source and target do not share both tokens.
  * @throws {RefinanceSharesMissingBorrowAssetsError} when `borrowShares > 0n` but `borrowAssets` is omitted or non-positive.
@@ -268,17 +275,21 @@ export const blueRefinance = ({
   });
 
   const actions: Action[] = [];
-  let reallocationFee = 0n;
 
   if (authorizationSignature) {
     actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
   }
 
-  if (targetReallocations && targetReallocations.length > 0) {
-    const result = buildReallocationActions(targetReallocations, targetParams);
-    actions.push(...result.actions);
-    reallocationFee = result.fee;
-  }
+  const {
+    actions: reallocationActions,
+    fee: reallocationFee,
+    penaltyAssets: reallocationPenaltyAssets,
+  } = buildBlueReallocationActions({
+    chainId,
+    reallocations: targetReallocations,
+    targetMarketParams: targetParams,
+  });
+  actions.push(...reallocationActions);
 
   actions.push({
     type: "morphoSupplyCollateral",
@@ -305,6 +316,7 @@ export const blueRefinance = ({
         maxRepaySharePrice,
         user,
         reallocationFee,
+        reallocationPenaltyAssets,
       },
     },
   });

@@ -38,7 +38,7 @@
     "build:cjs": "tsc --build tsconfig.build.cjs.json && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json",
     "generate:version": "node ../../scripts/release/generate-midnight-package-version.mjs",
-    "test": "vitest --root ../.. --project midnight-sdk"
+    "test": "vitest --root ../.. --project midnight-sdk --project midnight-sdk-fork"
   },
   "peerDependencies": {
     "@morpho-org/morpho-ts": "^2.8.0",
@@ -47,10 +47,10 @@
   "devDependencies": {
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
-    "fast-check": "^4.8.0",
-    "typescript": "^6.0.3",
-    "viem": "^2.54.2",
-    "vitest": "^4.1.9"
+    "fast-check": "^4.9.0",
+    "typescript": "^7.0.2",
+    "viem": "^2.55.10",
+    "vitest": "^4.1.10"
   },
   "publishConfig": {
     "main": "./lib/cjs/index.js",

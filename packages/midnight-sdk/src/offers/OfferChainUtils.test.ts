@@ -47,101 +47,101 @@ describe("OfferChainUtils fixed-rate offer-chain builders", () => {
     }
   });
 
-  test.each([
-    "borrow",
-    "lend",
-  ] as const)("behavior: recovers target rate at every %s display edge", (side) => {
-    const chain = chainBuilders[side](defaultParams);
+  test.each(["borrow", "lend"] as const)(
+    "behavior: recovers target rate at every %s display edge",
+    (side) => {
+      const chain = chainBuilders[side](defaultParams);
 
-    for (const leg of chain) {
-      const displayTimestamp =
-        side === "borrow" ? leg.expiryTimestamp : leg.startTimestamp;
-      const displayRate = rateAt({
-        tick: leg.tick,
-        maturityTimestamp: defaultParams.maturityTimestamp,
-        timestamp: displayTimestamp,
-      });
-
-      expect(Math.abs(displayRate - defaultParams.targetRate)).toBeLessThan(
-        defaultParams.targetRate * 0.005 + 0.00001,
-      );
-    }
-  });
-
-  test.each([
-    "borrow",
-    "lend",
-  ] as const)("behavior: uses simple APR for sub-year %s chains", (side) => {
-    const chainStartTimestamp = MATURITY - 90n * Time.s.from.d(1n);
-    const chainEndTimestamp =
-      OfferChainUtils.getMaxFixedRateOfferChainEndTimestamp({
-        maturityTimestamp: MATURITY,
-        chainStartTimestamp,
-      });
-    const targetRate = 0.5;
-    const chain = chainBuilders[side]({
-      targetRate,
-      tickSpacing: 1n,
-      maturityTimestamp: MATURITY,
-      chainStartTimestamp,
-      chainEndTimestamp,
-    });
-
-    expect(chain.length).toBeGreaterThan(0);
-    for (const leg of chain) {
-      const displayTimestamp =
-        side === "borrow" ? leg.expiryTimestamp : leg.startTimestamp;
-      expect(
-        rateAt({
+      for (const leg of chain) {
+        const displayTimestamp =
+          side === "borrow" ? leg.expiryTimestamp : leg.startTimestamp;
+        const displayRate = rateAt({
           tick: leg.tick,
-          maturityTimestamp: MATURITY,
+          maturityTimestamp: defaultParams.maturityTimestamp,
           timestamp: displayTimestamp,
-        }),
-      ).toBeCloseTo(targetRate, 3);
-    }
-  });
+        });
 
-  test.each([
-    "borrow",
-    "lend",
-  ] as const)("behavior: keeps %s rates on the maker-favorable side", (side) => {
-    const chain = chainBuilders[side](defaultParams);
-
-    for (const leg of chain) {
-      const startRate = rateAt({
-        tick: leg.tick,
-        maturityTimestamp: defaultParams.maturityTimestamp,
-        timestamp: leg.startTimestamp,
-      });
-      const expiryRate = rateAt({
-        tick: leg.tick,
-        maturityTimestamp: defaultParams.maturityTimestamp,
-        timestamp: leg.expiryTimestamp,
-      });
-
-      if (side === "borrow") {
-        expect(startRate).toBeGreaterThanOrEqual(
-          defaultParams.targetRate * (1 - DRIFT) - RATE_EPSILON,
-        );
-        expect(startRate).toBeLessThanOrEqual(
-          defaultParams.targetRate + RATE_EPSILON,
-        );
-        expect(expiryRate).toBeLessThanOrEqual(
-          defaultParams.targetRate + RATE_EPSILON,
-        );
-      } else {
-        expect(startRate).toBeGreaterThanOrEqual(
-          defaultParams.targetRate - RATE_EPSILON,
-        );
-        expect(expiryRate).toBeGreaterThanOrEqual(
-          defaultParams.targetRate - RATE_EPSILON,
-        );
-        expect(expiryRate).toBeLessThanOrEqual(
-          defaultParams.targetRate * (1 + DRIFT) + RATE_EPSILON,
+        expect(Math.abs(displayRate - defaultParams.targetRate)).toBeLessThan(
+          defaultParams.targetRate * 0.005 + 0.00001,
         );
       }
-    }
-  });
+    },
+  );
+
+  test.each(["borrow", "lend"] as const)(
+    "behavior: uses simple APR for sub-year %s chains",
+    (side) => {
+      const chainStartTimestamp = MATURITY - 90n * Time.s.from.d(1n);
+      const chainEndTimestamp =
+        OfferChainUtils.getMaxFixedRateOfferChainEndTimestamp({
+          maturityTimestamp: MATURITY,
+          chainStartTimestamp,
+        });
+      const targetRate = 0.5;
+      const chain = chainBuilders[side]({
+        targetRate,
+        tickSpacing: 1n,
+        maturityTimestamp: MATURITY,
+        chainStartTimestamp,
+        chainEndTimestamp,
+      });
+
+      expect(chain.length).toBeGreaterThan(0);
+      for (const leg of chain) {
+        const displayTimestamp =
+          side === "borrow" ? leg.expiryTimestamp : leg.startTimestamp;
+        expect(
+          rateAt({
+            tick: leg.tick,
+            maturityTimestamp: MATURITY,
+            timestamp: displayTimestamp,
+          }),
+        ).toBeCloseTo(targetRate, 3);
+      }
+    },
+  );
+
+  test.each(["borrow", "lend"] as const)(
+    "behavior: keeps %s rates on the maker-favorable side",
+    (side) => {
+      const chain = chainBuilders[side](defaultParams);
+
+      for (const leg of chain) {
+        const startRate = rateAt({
+          tick: leg.tick,
+          maturityTimestamp: defaultParams.maturityTimestamp,
+          timestamp: leg.startTimestamp,
+        });
+        const expiryRate = rateAt({
+          tick: leg.tick,
+          maturityTimestamp: defaultParams.maturityTimestamp,
+          timestamp: leg.expiryTimestamp,
+        });
+
+        if (side === "borrow") {
+          expect(startRate).toBeGreaterThanOrEqual(
+            defaultParams.targetRate * (1 - DRIFT) - RATE_EPSILON,
+          );
+          expect(startRate).toBeLessThanOrEqual(
+            defaultParams.targetRate + RATE_EPSILON,
+          );
+          expect(expiryRate).toBeLessThanOrEqual(
+            defaultParams.targetRate + RATE_EPSILON,
+          );
+        } else {
+          expect(startRate).toBeGreaterThanOrEqual(
+            defaultParams.targetRate - RATE_EPSILON,
+          );
+          expect(expiryRate).toBeGreaterThanOrEqual(
+            defaultParams.targetRate - RATE_EPSILON,
+          );
+          expect(expiryRate).toBeLessThanOrEqual(
+            defaultParams.targetRate * (1 + DRIFT) + RATE_EPSILON,
+          );
+        }
+      }
+    },
+  );
 
   test("behavior: returns an empty chain when the grid cannot represent the rate", () => {
     expect(
@@ -183,76 +183,79 @@ describe("OfferChainUtils fixed-rate offer-chain builders", () => {
   test.each([
     ["borrow", OfferChainUtils.buildBorrowFixedRateOfferChain],
     ["lend", OfferChainUtils.buildLendFixedRateOfferChain],
-  ] as const)("error: InvalidOfferParameterError for invalid %s inputs", (_, build) => {
-    expect(() =>
-      build({
-        ...defaultParams,
-        targetRate: Number.POSITIVE_INFINITY,
-      }),
-    ).toThrow(InvalidOfferParameterError);
-    expect(() =>
-      build({
-        ...defaultParams,
-        targetRate: 0,
-      }),
-    ).toThrow(InvalidOfferParameterError);
-    expect(() =>
-      build({
-        ...defaultParams,
-        tickSpacing: 0n,
-      }),
-    ).toThrow(InvalidOfferParameterError);
-    expect(() =>
-      build({
-        ...defaultParams,
-        tickSpacing: 3n,
-      }),
-    ).toThrow(InvalidOfferParameterError);
-    expect(() =>
-      build({
-        ...defaultParams,
-        tickSpacing: 64n,
-      }),
-    ).toThrow(InvalidOfferParameterError);
-    expect(() =>
-      build({
-        ...defaultParams,
-        maturityTimestamp: -1n,
-        chainStartTimestamp: -2n,
-        chainEndTimestamp: 0n,
-      }),
-    ).toThrow(InvalidOfferParameterError);
-    expect(() =>
-      build({
-        ...defaultParams,
-        chainStartTimestamp: -1n,
-      }),
-    ).toThrow(InvalidOfferParameterError);
-    expect(() =>
-      build({
-        ...defaultParams,
-        chainEndTimestamp: -1n,
-      }),
-    ).toThrow(InvalidOfferParameterError);
-    expect(() =>
-      build({
-        ...defaultParams,
-        maturityTimestamp: NOW,
-      }),
-    ).toThrow(InvalidOfferParameterError);
-    expect(() =>
-      build({
-        ...defaultParams,
-        chainEndTimestamp: MAX_EXPIRY + 1n,
-      }),
-    ).toThrow(InvalidOfferParameterError);
-    expect(() =>
-      build({
-        ...defaultParams,
-        chainEndTimestamp: NOW,
-      }),
-    ).toThrow(InvalidOfferParameterError);
-  });
+  ] as const)(
+    "error: InvalidOfferParameterError for invalid %s inputs",
+    (_, build) => {
+      expect(() =>
+        build({
+          ...defaultParams,
+          targetRate: Number.POSITIVE_INFINITY,
+        }),
+      ).toThrow(InvalidOfferParameterError);
+      expect(() =>
+        build({
+          ...defaultParams,
+          targetRate: 0,
+        }),
+      ).toThrow(InvalidOfferParameterError);
+      expect(() =>
+        build({
+          ...defaultParams,
+          tickSpacing: 0n,
+        }),
+      ).toThrow(InvalidOfferParameterError);
+      expect(() =>
+        build({
+          ...defaultParams,
+          tickSpacing: 3n,
+        }),
+      ).toThrow(InvalidOfferParameterError);
+      expect(() =>
+        build({
+          ...defaultParams,
+          tickSpacing: 64n,
+        }),
+      ).toThrow(InvalidOfferParameterError);
+      expect(() =>
+        build({
+          ...defaultParams,
+          maturityTimestamp: -1n,
+          chainStartTimestamp: -2n,
+          chainEndTimestamp: 0n,
+        }),
+      ).toThrow(InvalidOfferParameterError);
+      expect(() =>
+        build({
+          ...defaultParams,
+          chainStartTimestamp: -1n,
+        }),
+      ).toThrow(InvalidOfferParameterError);
+      expect(() =>
+        build({
+          ...defaultParams,
+          chainEndTimestamp: -1n,
+        }),
+      ).toThrow(InvalidOfferParameterError);
+      expect(() =>
+        build({
+          ...defaultParams,
+          maturityTimestamp: NOW,
+        }),
+      ).toThrow(InvalidOfferParameterError);
+      expect(() =>
+        build({
+          ...defaultParams,
+          chainEndTimestamp: MAX_EXPIRY + 1n,
+        }),
+      ).toThrow(InvalidOfferParameterError);
+      expect(() =>
+        build({
+          ...defaultParams,
+          chainEndTimestamp: NOW,
+        }),
+      ).toThrow(InvalidOfferParameterError);
+    },
+  );
 
   test("behavior: returns an empty borrow chain when the rate maps outside the tick range", () => {
     const maturityTimestamp = NOW + 10n * YEAR;

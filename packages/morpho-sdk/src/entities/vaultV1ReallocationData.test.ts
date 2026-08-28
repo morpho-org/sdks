@@ -1,0 +1,856 @@
+import {
+  ChainId,
+  Eip5267Domain,
+  type IMarket,
+  type IPosition,
+  type IVault,
+  type IVaultMarketConfig,
+  Market,
+  type MarketId,
+  MarketParams,
+  MathLib,
+  Position,
+  Vault,
+  VaultMarketConfig,
+  VaultMarketPublicAllocatorConfig,
+} from "@morpho-org/blue-sdk";
+import type { Address } from "viem";
+import { zeroAddress } from "viem";
+import { describe, expect, test } from "vitest";
+import {
+  DisabledReallocationMarketError,
+  MissingPublicAllocatorConfigError,
+  type PublicReallocation,
+  UnknownReallocationMarketError,
+  UnknownReallocationPositionError,
+  UnknownReallocationVaultError,
+  UnknownReallocationVaultMarketConfigError,
+} from "../types/index.js";
+import {
+  type InputReallocationData,
+  ReallocationData,
+  VaultV1ReallocationData,
+} from "./vaultV1ReallocationData.js";
+
+const TIMESTAMP = 1_700_000_000n;
+const VAULT: Address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+const OTHER_VAULT: Address = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+const LOAN_TOKEN: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+
+const targetParams = new MarketParams({
+  loanToken: LOAN_TOKEN,
+  collateralToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+  oracle: "0x0000000000000000000000000000000000000001",
+  irm: "0x0000000000000000000000000000000000000002",
+  lltv: 860000000000000000n,
+});
+
+const sourceParams = new MarketParams({
+  loanToken: LOAN_TOKEN,
+  collateralToken: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+  oracle: "0x0000000000000000000000000000000000000003",
+  irm: "0x0000000000000000000000000000000000000002",
+  lltv: 860000000000000000n,
+});
+
+const alternateSourceParams = new MarketParams({
+  loanToken: LOAN_TOKEN,
+  collateralToken: "0xae78736Cd615f374D3085123A210448E74Fc6393",
+  oracle: "0x0000000000000000000000000000000000000004",
+  irm: "0x0000000000000000000000000000000000000002",
+  lltv: 860000000000000000n,
+});
+
+const makeMarket = (
+  params: MarketParams,
+  {
+    supply,
+    borrow,
+  }: {
+    readonly supply: bigint;
+    readonly borrow: bigint;
+  },
+) =>
+  new Market({
+    params,
+    totalSupplyAssets: supply,
+    totalBorrowAssets: borrow,
+    totalSupplyShares: supply,
+    totalBorrowShares: borrow,
+    lastUpdate: TIMESTAMP,
+    fee: 0n,
+    price: 10n ** 36n,
+  });
+
+// biome-ignore lint/complexity/useMaxParams: compact fixture helper for market/user position rows.
+const makePosition = (
+  marketId: MarketId,
+  supplyShares: bigint,
+  user: Address = VAULT,
+) =>
+  new Position({
+    user,
+    marketId,
+    supplyShares,
+    borrowShares: 0n,
+    collateral: 0n,
+  });
+
+const makeVaultMarketConfig = ({
+  vault = VAULT,
+  marketId,
+  cap,
+  maxIn,
+  maxOut,
+  enabled = true,
+  pendingCap = { value: cap, validAt: TIMESTAMP - 1n },
+  withPublicAllocatorConfig = true,
+}: {
+  readonly vault?: Address;
+  readonly marketId: MarketId;
+  readonly cap: bigint;
+  readonly maxIn: bigint;
+  readonly maxOut: bigint;
+  readonly enabled?: boolean;
+  readonly pendingCap?: { readonly value: bigint; readonly validAt: bigint };
+  readonly withPublicAllocatorConfig?: boolean;
+}) =>
+  new VaultMarketConfig({
+    vault,
+    marketId,
+    cap,
+    pendingCap,
+    removableAt: 0n,
+    enabled,
+    publicAllocatorConfig: withPublicAllocatorConfig
+      ? new VaultMarketPublicAllocatorConfig({
+          vault,
+          marketId,
+          maxIn,
+          maxOut,
+        })
+      : undefined,
+  });
+
+const makeVault = ({
+  address = VAULT,
+  publicAllocatorConfig,
+  withoutPublicAllocatorConfig = false,
+  withdrawQueue = [sourceParams.id, targetParams.id],
+}: {
+  readonly address?: Address;
+  readonly publicAllocatorConfig?: Vault["publicAllocatorConfig"];
+  readonly withoutPublicAllocatorConfig?: boolean;
+  readonly withdrawQueue?: readonly MarketId[];
+} = {}) => {
+  const resolvedPublicAllocatorConfig = withoutPublicAllocatorConfig
+    ? undefined
+    : (publicAllocatorConfig ?? {
+        admin: zeroAddress,
+        fee: 13n,
+        accruedFee: 0n,
+      });
+
+  return new Vault({
+    address,
+    name: "Vault",
+    symbol: "vTEST",
+    decimalsOffset: 0n,
+    asset: LOAN_TOKEN,
+    curator: zeroAddress,
+    owner: zeroAddress,
+    guardian: zeroAddress,
+    fee: 0n,
+    feeRecipient: zeroAddress,
+    skimRecipient: zeroAddress,
+    pendingTimelock: { value: 0n, validAt: 0n },
+    pendingGuardian: { value: zeroAddress, validAt: 0n },
+    pendingOwner: zeroAddress,
+    timelock: 0n,
+    supplyQueue: [targetParams.id],
+    withdrawQueue: [...withdrawQueue],
+    totalSupply: 0n,
+    totalAssets: 0n,
+    lastTotalAssets: 0n,
+    publicAllocatorConfig: resolvedPublicAllocatorConfig,
+  });
+};
+
+type MutableReallocationInput = {
+  readonly chainId: number;
+  markets: Record<MarketId, Market | undefined>;
+  vaults: Record<Address, Vault | undefined>;
+  positions: Record<Address, Record<MarketId, Position | undefined>>;
+  vaultMarketConfigs: Record<
+    Address,
+    Record<MarketId, VaultMarketConfig | undefined>
+  >;
+};
+
+const makeInput = ({
+  targetSupply,
+  targetBorrow,
+  sourceSupply,
+  sourceBorrow,
+}: {
+  readonly targetSupply: bigint;
+  readonly targetBorrow: bigint;
+  readonly sourceSupply: bigint;
+  readonly sourceBorrow: bigint;
+}): MutableReallocationInput => ({
+  chainId: ChainId.EthMainnet,
+  markets: {
+    [targetParams.id]: makeMarket(targetParams, {
+      supply: targetSupply,
+      borrow: targetBorrow,
+    }),
+    [sourceParams.id]: makeMarket(sourceParams, {
+      supply: sourceSupply,
+      borrow: sourceBorrow,
+    }),
+  },
+  vaults: {
+    [VAULT]: makeVault(),
+  },
+  positions: {
+    [VAULT]: {
+      [targetParams.id]: makePosition(targetParams.id, 0n),
+      [sourceParams.id]: makePosition(sourceParams.id, sourceSupply),
+    },
+  },
+  vaultMarketConfigs: {
+    [VAULT]: {
+      [targetParams.id]: makeVaultMarketConfig({
+        marketId: targetParams.id,
+        cap: 10_000n * MathLib.WAD,
+        maxIn: 10_000n * MathLib.WAD,
+        maxOut: 0n,
+      }),
+      [sourceParams.id]: makeVaultMarketConfig({
+        marketId: sourceParams.id,
+        cap: 10_000n * MathLib.WAD,
+        maxIn: 0n,
+        maxOut: 10_000n * MathLib.WAD,
+      }),
+    },
+  },
+});
+
+type ApplyPublicReallocationParams = {
+  readonly vault: Address;
+  readonly supplyMarketId: MarketId;
+  readonly withdrawal: PublicReallocation;
+  readonly timestamp: bigint;
+};
+
+class TestReallocationData extends VaultV1ReallocationData {
+  public applyPublicReallocationForTest(params: ApplyPublicReallocationParams) {
+    return this.applyPublicReallocation(params);
+  }
+}
+
+const applyPublicReallocation = (
+  data: VaultV1ReallocationData,
+  withdrawal: PublicReallocation,
+) =>
+  new TestReallocationData(data).applyPublicReallocationForTest({
+    vault: withdrawal.vault,
+    supplyMarketId: targetParams.id,
+    withdrawal,
+    timestamp: TIMESTAMP,
+  });
+
+describe("VaultV1ReallocationData unit coverage", () => {
+  test("behavior: preserves the deprecated Vault V1 class and input aliases", () => {
+    const input = {
+      chainId: ChainId.EthMainnet,
+    } satisfies InputReallocationData;
+
+    expect(ReallocationData).toBe(VaultV1ReallocationData);
+    expect(new ReallocationData(input)).toBeInstanceOf(VaultV1ReallocationData);
+  });
+
+  test("computeVaultV1Reallocations preserves the deprecated alias behavior", () => {
+    const input = {
+      targetSupply: 1_000n * MathLib.WAD,
+      targetBorrow: 500n * MathLib.WAD,
+      sourceSupply: 1_000n * MathLib.WAD,
+      sourceBorrow: 500n * MathLib.WAD,
+    };
+    const canonical = new VaultV1ReallocationData(
+      makeInput(input),
+    ).computeVaultV1Reallocations(targetParams.id, { timestamp: TIMESTAMP });
+    const deprecated = new VaultV1ReallocationData(
+      makeInput(input),
+    ).getMarketPublicReallocations(targetParams.id, { timestamp: TIMESTAMP });
+
+    expect(deprecated.withdrawals).toStrictEqual(canonical.withdrawals);
+    expect(deprecated.data.markets).toStrictEqual(canonical.data.markets);
+    expect(deprecated.data.positions).toStrictEqual(canonical.data.positions);
+    expect(deprecated.data.vaults).toStrictEqual(canonical.data.vaults);
+  });
+
+  test("preserves documented entity fields when cloning inputs", () => {
+    const eip5267Domain = new Eip5267Domain({
+      fields: "0x1f",
+      name: "Clone Vault",
+      version: "1",
+      chainId: BigInt(ChainId.EthMainnet),
+      verifyingContract: VAULT,
+      salt: `0x${"44".repeat(32)}` as `0x${string}`,
+      extensions: [1n, 2n],
+    });
+    const marketInput = {
+      params: targetParams,
+      totalSupplyAssets: 123n,
+      totalBorrowAssets: 45n,
+      totalSupplyShares: 678n,
+      totalBorrowShares: 90n,
+      lastUpdate: TIMESTAMP - 10n,
+      fee: 11n,
+      price: 12n,
+      rateAtTarget: 13n,
+    } satisfies IMarket;
+    const positionInput = {
+      user: VAULT,
+      marketId: targetParams.id,
+      supplyShares: 14n,
+      borrowShares: 15n,
+      collateral: 16n,
+    } satisfies IPosition;
+    const vaultInput = {
+      address: VAULT,
+      name: "Clone Vault",
+      symbol: "cvTEST",
+      decimalsOffset: 2n,
+      asset: LOAN_TOKEN,
+      price: 17n,
+      eip5267Domain,
+      curator: OTHER_VAULT,
+      owner: zeroAddress,
+      guardian: VAULT,
+      fee: 18n,
+      feeRecipient: OTHER_VAULT,
+      skimRecipient: zeroAddress,
+      pendingTimelock: { value: 19n, validAt: 20n },
+      pendingGuardian: { value: OTHER_VAULT, validAt: 21n },
+      pendingOwner: VAULT,
+      timelock: 22n,
+      supplyQueue: [targetParams.id, sourceParams.id],
+      withdrawQueue: [sourceParams.id, targetParams.id],
+      totalSupply: 23n,
+      totalAssets: 24n,
+      lastTotalAssets: 25n,
+      lostAssets: 26n,
+      publicAllocatorConfig: {
+        admin: zeroAddress,
+        fee: 27n,
+        accruedFee: 28n,
+      },
+    } satisfies IVault;
+    const vaultMarketConfigInput = {
+      vault: VAULT,
+      marketId: targetParams.id,
+      cap: 29n,
+      pendingCap: { value: 30n, validAt: 31n },
+      removableAt: 32n,
+      enabled: true,
+      publicAllocatorConfig: new VaultMarketPublicAllocatorConfig({
+        vault: VAULT,
+        marketId: targetParams.id,
+        maxIn: 33n,
+        maxOut: 34n,
+      }),
+    } satisfies IVaultMarketConfig;
+    const market = new Market(marketInput);
+    const position = new Position(positionInput);
+    const vault = new Vault(vaultInput);
+    const vaultMarketConfig = new VaultMarketConfig(vaultMarketConfigInput);
+    const data = new VaultV1ReallocationData({
+      chainId: ChainId.EthMainnet,
+      markets: { [targetParams.id]: market },
+      vaults: { [VAULT]: vault },
+      positions: { [VAULT]: { [targetParams.id]: position } },
+      vaultMarketConfigs: { [VAULT]: { [targetParams.id]: vaultMarketConfig } },
+    });
+
+    const clonedMarket = data.getMarket(targetParams.id);
+    const clonedPosition = data.getPosition(VAULT, targetParams.id);
+    const clonedVault = data.getVault(VAULT);
+    const clonedVaultMarketConfig = data.getVaultMarketConfig(
+      VAULT,
+      targetParams.id,
+    );
+
+    expect(clonedMarket).toEqual(market);
+    expect(clonedPosition).toEqual(position);
+    expect(clonedVault).toEqual(vault);
+    expect(clonedVaultMarketConfig).toEqual(vaultMarketConfig);
+
+    expect(clonedMarket).not.toBe(market);
+    expect(clonedPosition).not.toBe(position);
+    expect(clonedVault).not.toBe(vault);
+    expect(clonedVault.supplyQueue).not.toBe(vault.supplyQueue);
+    expect(clonedVault.withdrawQueue).not.toBe(vault.withdrawQueue);
+    expect(clonedVault.pendingTimelock).not.toBe(vault.pendingTimelock);
+    expect(clonedVault.pendingGuardian).not.toBe(vault.pendingGuardian);
+    expect(clonedVault.publicAllocatorConfig).not.toBe(
+      vault.publicAllocatorConfig,
+    );
+    expect(clonedVaultMarketConfig).not.toBe(vaultMarketConfig);
+    expect(clonedVaultMarketConfig.pendingCap).not.toBe(
+      vaultMarketConfig.pendingCap,
+    );
+    expect(clonedVaultMarketConfig.publicAllocatorConfig).not.toBe(
+      vaultMarketConfig.publicAllocatorConfig,
+    );
+  });
+
+  test("returns empty reallocations when disabled without reading missing target market", () => {
+    const data = new VaultV1ReallocationData({ chainId: ChainId.EthMainnet });
+    const missingMarket = `0x${"55".repeat(32)}` as MarketId;
+
+    expect(
+      data.getMarketPublicReallocations(missingMarket, { enabled: false }),
+    ).toEqual({ withdrawals: [], data });
+  });
+
+  test("clones inputs and exposes getters without sharing mutable entity instances", () => {
+    const emptyData = new VaultV1ReallocationData({
+      chainId: ChainId.EthMainnet,
+    });
+    expect(emptyData.markets).toEqual({});
+    expect(emptyData.vaults).toEqual({});
+    expect(emptyData.positions).toEqual({});
+    expect(emptyData.vaultMarketConfigs).toEqual({});
+
+    const input = makeInput({
+      targetSupply: 1000n * MathLib.WAD,
+      targetBorrow: 500n * MathLib.WAD,
+      sourceSupply: 1000n * MathLib.WAD,
+      sourceBorrow: 500n * MathLib.WAD,
+    });
+    const data = new VaultV1ReallocationData({
+      ...input,
+      markets: { ...input.markets, ["0x00" as MarketId]: undefined },
+      vaults: { ...input.vaults, [zeroAddress]: undefined },
+      positions: {
+        ...input.positions,
+        [zeroAddress]: { ["0x00" as MarketId]: undefined },
+      },
+      vaultMarketConfigs: {
+        ...input.vaultMarketConfigs,
+        [zeroAddress]: { ["0x00" as MarketId]: undefined },
+      },
+    });
+    const clone = data.clone();
+
+    expect(data.chainId).toBe(ChainId.EthMainnet);
+    expect(data.getMarket(targetParams.id)).not.toBe(
+      input.markets![targetParams.id],
+    );
+    expect(data.getVault(VAULT)).not.toBe(input.vaults![VAULT]);
+    expect(data.getPosition(VAULT, sourceParams.id)).not.toBe(
+      input.positions![VAULT]![sourceParams.id],
+    );
+    expect(data.getVaultMarketConfig(VAULT, sourceParams.id)).not.toBe(
+      input.vaultMarketConfigs![VAULT]![sourceParams.id],
+    );
+    expect(clone.getMarket(targetParams.id)).not.toBe(
+      data.getMarket(targetParams.id),
+    );
+    expect(data.getPosition(VAULT, sourceParams.id).supplyShares).toBe(
+      1000n * MathLib.WAD,
+    );
+
+    const missingMarket = `0x${"11".repeat(32)}` as MarketId;
+    const missingAddress =
+      "0x000000000000000000000000000000000000dEaD" as Address;
+    expect(() => data.getMarket(missingMarket)).toThrow(
+      UnknownReallocationMarketError,
+    );
+    expect(() => data.getVault(missingAddress)).toThrow(
+      UnknownReallocationVaultError,
+    );
+    expect(() => data.getPosition(missingAddress, missingMarket)).toThrow(
+      UnknownReallocationPositionError,
+    );
+    expect(() =>
+      data.getVaultMarketConfig(missingAddress, missingMarket),
+    ).toThrow(UnknownReallocationVaultMarketConfigError);
+  });
+
+  test("handles allocator options, filtering, pending caps, and repeated withdrawals", () => {
+    const input = makeInput({
+      targetSupply: 1000n * MathLib.WAD,
+      targetBorrow: 500n * MathLib.WAD,
+      sourceSupply: 1000n * MathLib.WAD,
+      sourceBorrow: 500n * MathLib.WAD,
+    });
+    input.vaultMarketConfigs![VAULT]![targetParams.id] = makeVaultMarketConfig({
+      marketId: targetParams.id,
+      cap: 10_000n * MathLib.WAD,
+      pendingCap: { value: 10n * MathLib.WAD, validAt: TIMESTAMP },
+      maxIn: 10_000n * MathLib.WAD,
+      maxOut: 0n,
+    });
+    input.vaultMarketConfigs![VAULT]![sourceParams.id] = makeVaultMarketConfig({
+      marketId: sourceParams.id,
+      cap: 10_000n * MathLib.WAD,
+      maxIn: 0n,
+      maxOut: 10n * MathLib.WAD,
+    });
+    const data = new VaultV1ReallocationData(input);
+
+    expect(
+      data.getMarketPublicReallocations(targetParams.id, { enabled: false }),
+    ).toEqual({ withdrawals: [], data });
+    expect(
+      data.getMarketPublicReallocations(targetParams.id, {
+        timestamp: TIMESTAMP,
+        reallocatableVaults: [],
+      }).withdrawals,
+    ).toEqual([]);
+    expect(
+      data.getMarketPublicReallocations(targetParams.id, {
+        reallocatableVaults: new Set([zeroAddress]),
+      }).withdrawals,
+    ).toEqual([]);
+
+    const { withdrawals, data: reallocatedData } =
+      data.getMarketPublicReallocations(targetParams.id, {
+        timestamp: TIMESTAMP,
+        defaultMaxWithdrawalUtilization: MathLib.WAD,
+      });
+
+    expect(withdrawals).toEqual([
+      {
+        vault: VAULT,
+        id: sourceParams.id,
+        assets: 10n * MathLib.WAD,
+      },
+    ]);
+    expect(
+      reallocatedData.getMarketPublicReallocations(targetParams.id, {
+        timestamp: TIMESTAMP,
+        defaultMaxWithdrawalUtilization: MathLib.WAD,
+      }).withdrawals,
+    ).toEqual([]);
+    expect(data.getMarket(targetParams.id).totalSupplyAssets).toBe(
+      1000n * MathLib.WAD,
+    );
+    expect(reallocatedData.getMarket(targetParams.id).totalSupplyAssets).toBe(
+      1010n * MathLib.WAD,
+    );
+    expect(
+      reallocatedData.getVault(VAULT).publicAllocatorConfig?.accruedFee,
+    ).toBe(13n);
+  });
+
+  test("skips unusable source markets and missing public allocator limits", () => {
+    const missingMarket = `0x${"22".repeat(32)}` as MarketId;
+    const input = makeInput({
+      targetSupply: 1000n * MathLib.WAD,
+      targetBorrow: 500n * MathLib.WAD,
+      sourceSupply: 1000n * MathLib.WAD,
+      sourceBorrow: 500n * MathLib.WAD,
+    });
+    input.markets![alternateSourceParams.id] = makeMarket(
+      alternateSourceParams,
+      {
+        supply: 1000n * MathLib.WAD,
+        borrow: 100n * MathLib.WAD,
+      },
+    );
+    input.positions![VAULT]![alternateSourceParams.id] = makePosition(
+      alternateSourceParams.id,
+      1000n * MathLib.WAD,
+    );
+    input.vaults![VAULT] = makeVault({
+      withdrawQueue: [
+        missingMarket,
+        sourceParams.id,
+        alternateSourceParams.id,
+        targetParams.id,
+      ],
+    });
+    input.vaultMarketConfigs![VAULT]![targetParams.id] = makeVaultMarketConfig({
+      marketId: targetParams.id,
+      cap: 10_000n * MathLib.WAD,
+      pendingCap: { value: 30n * MathLib.WAD, validAt: TIMESTAMP },
+      maxIn: 30n * MathLib.WAD,
+      maxOut: 0n,
+    });
+    input.vaultMarketConfigs![VAULT]![sourceParams.id] = makeVaultMarketConfig({
+      marketId: sourceParams.id,
+      cap: 10_000n * MathLib.WAD,
+      maxIn: 0n,
+      maxOut: 10n * MathLib.WAD,
+    });
+    input.vaultMarketConfigs![VAULT]![alternateSourceParams.id] =
+      makeVaultMarketConfig({
+        marketId: alternateSourceParams.id,
+        cap: 10_000n * MathLib.WAD,
+        maxIn: 0n,
+        maxOut: 20n * MathLib.WAD,
+      });
+    input.vaults![OTHER_VAULT] = makeVault({
+      address: OTHER_VAULT,
+      withdrawQueue: [sourceParams.id, targetParams.id],
+    });
+    input.positions![OTHER_VAULT] = {
+      [targetParams.id]: makePosition(targetParams.id, 0n, OTHER_VAULT),
+      [sourceParams.id]: makePosition(
+        sourceParams.id,
+        1000n * MathLib.WAD,
+        OTHER_VAULT,
+      ),
+    };
+    input.vaultMarketConfigs![OTHER_VAULT] = {
+      [targetParams.id]: makeVaultMarketConfig({
+        vault: OTHER_VAULT,
+        marketId: targetParams.id,
+        cap: 10_000n * MathLib.WAD,
+        pendingCap: { value: 15n * MathLib.WAD, validAt: TIMESTAMP },
+        maxIn: 15n * MathLib.WAD,
+        maxOut: 0n,
+      }),
+      [sourceParams.id]: makeVaultMarketConfig({
+        vault: OTHER_VAULT,
+        marketId: sourceParams.id,
+        cap: 10_000n * MathLib.WAD,
+        maxIn: 0n,
+        maxOut: 15n * MathLib.WAD,
+      }),
+    };
+
+    const reallocationResult = new VaultV1ReallocationData(
+      input,
+    ).getMarketPublicReallocations(targetParams.id, {
+      timestamp: TIMESTAMP,
+      defaultMaxWithdrawalUtilization: MathLib.WAD,
+    });
+
+    expect(reallocationResult.withdrawals).toEqual([
+      {
+        vault: VAULT,
+        id: alternateSourceParams.id,
+        assets: 20n * MathLib.WAD,
+      },
+      {
+        vault: OTHER_VAULT,
+        id: sourceParams.id,
+        assets: 15n * MathLib.WAD,
+      },
+      {
+        vault: VAULT,
+        id: sourceParams.id,
+        assets: 10n * MathLib.WAD,
+      },
+    ]);
+    expect(
+      reallocationResult.data.getVault(VAULT).publicAllocatorConfig?.accruedFee,
+    ).toBe(13n);
+    expect(
+      reallocationResult.data.getVault(OTHER_VAULT).publicAllocatorConfig
+        ?.accruedFee,
+    ).toBe(13n);
+
+    expect(
+      new VaultV1ReallocationData({
+        ...input,
+        vaultMarketConfigs: {
+          [VAULT]: {
+            ...input.vaultMarketConfigs![VAULT]!,
+            [targetParams.id]: makeVaultMarketConfig({
+              marketId: targetParams.id,
+              cap: 10_000n * MathLib.WAD,
+              maxIn: 30n * MathLib.WAD,
+              maxOut: 0n,
+              withPublicAllocatorConfig: false,
+            }),
+          },
+        },
+      }).getMarketPublicReallocations(targetParams.id, {
+        timestamp: TIMESTAMP,
+      }).withdrawals,
+    ).toEqual([]);
+
+    expect(
+      new VaultV1ReallocationData({
+        ...input,
+        vaultMarketConfigs: {
+          [VAULT]: {
+            ...input.vaultMarketConfigs![VAULT]!,
+            [sourceParams.id]: makeVaultMarketConfig({
+              marketId: sourceParams.id,
+              cap: 10_000n * MathLib.WAD,
+              maxIn: 0n,
+              maxOut: 10n * MathLib.WAD,
+              withPublicAllocatorConfig: false,
+            }),
+          },
+        },
+      }).getMarketPublicReallocations(targetParams.id, {
+        timestamp: TIMESTAMP,
+        defaultMaxWithdrawalUtilization: MathLib.WAD,
+      }).withdrawals,
+    ).toEqual([
+      {
+        vault: VAULT,
+        id: alternateSourceParams.id,
+        assets: 20n * MathLib.WAD,
+      },
+    ]);
+
+    expect(
+      new VaultV1ReallocationData({
+        ...input,
+        vaultMarketConfigs: {
+          [VAULT]: {
+            ...input.vaultMarketConfigs![VAULT]!,
+            [sourceParams.id]: makeVaultMarketConfig({
+              marketId: sourceParams.id,
+              cap: 10_000n * MathLib.WAD,
+              enabled: false,
+              maxIn: 0n,
+              maxOut: 10n * MathLib.WAD,
+            }),
+          },
+        },
+      }).getMarketPublicReallocations(targetParams.id, {
+        timestamp: TIMESTAMP,
+        defaultMaxWithdrawalUtilization: MathLib.WAD,
+      }).withdrawals,
+    ).toEqual([
+      {
+        vault: VAULT,
+        id: alternateSourceParams.id,
+        assets: 20n * MathLib.WAD,
+      },
+    ]);
+  });
+
+  test("throws typed errors for impossible direct apply states", () => {
+    const baseInput = makeInput({
+      targetSupply: 1000n * MathLib.WAD,
+      targetBorrow: 500n * MathLib.WAD,
+      sourceSupply: 1000n * MathLib.WAD,
+      sourceBorrow: 500n * MathLib.WAD,
+    });
+    const withdrawal = {
+      vault: VAULT,
+      id: sourceParams.id,
+      assets: MathLib.WAD,
+    } satisfies PublicReallocation;
+
+    expect(() =>
+      applyPublicReallocation(
+        new VaultV1ReallocationData({
+          ...baseInput,
+          vaults: {
+            [VAULT]: makeVault({ withoutPublicAllocatorConfig: true }),
+          },
+        }),
+        withdrawal,
+      ),
+    ).toThrow(MissingPublicAllocatorConfigError);
+
+    expect(() =>
+      applyPublicReallocation(
+        new VaultV1ReallocationData({
+          ...baseInput,
+          vaultMarketConfigs: {
+            [VAULT]: {
+              ...baseInput.vaultMarketConfigs![VAULT]!,
+              [sourceParams.id]: makeVaultMarketConfig({
+                marketId: sourceParams.id,
+                cap: 10_000n * MathLib.WAD,
+                maxIn: 0n,
+                maxOut: 10_000n * MathLib.WAD,
+                withPublicAllocatorConfig: false,
+              }),
+            },
+          },
+        }),
+        withdrawal,
+      ),
+    ).toThrow(UnknownReallocationVaultMarketConfigError);
+
+    expect(() =>
+      applyPublicReallocation(
+        new VaultV1ReallocationData({
+          ...baseInput,
+          vaultMarketConfigs: {
+            [VAULT]: {
+              ...baseInput.vaultMarketConfigs![VAULT]!,
+              [targetParams.id]: makeVaultMarketConfig({
+                marketId: targetParams.id,
+                cap: 10_000n * MathLib.WAD,
+                maxIn: 10_000n * MathLib.WAD,
+                maxOut: 0n,
+                withPublicAllocatorConfig: false,
+              }),
+            },
+          },
+        }),
+        withdrawal,
+      ),
+    ).toThrow(UnknownReallocationVaultMarketConfigError);
+
+    expect(() =>
+      applyPublicReallocation(
+        new VaultV1ReallocationData({
+          ...baseInput,
+          vaultMarketConfigs: {
+            [VAULT]: {
+              ...baseInput.vaultMarketConfigs![VAULT]!,
+              [sourceParams.id]: makeVaultMarketConfig({
+                marketId: sourceParams.id,
+                cap: 10_000n * MathLib.WAD,
+                enabled: false,
+                maxIn: 0n,
+                maxOut: 10_000n * MathLib.WAD,
+              }),
+            },
+          },
+        }),
+        withdrawal,
+      ),
+    ).toThrow(DisabledReallocationMarketError);
+
+    expect(() =>
+      applyPublicReallocation(
+        new VaultV1ReallocationData({
+          ...baseInput,
+          vaultMarketConfigs: {
+            [VAULT]: {
+              ...baseInput.vaultMarketConfigs![VAULT]!,
+              [targetParams.id]: makeVaultMarketConfig({
+                marketId: targetParams.id,
+                cap: 10_000n * MathLib.WAD,
+                enabled: false,
+                maxIn: 10_000n * MathLib.WAD,
+                maxOut: 0n,
+              }),
+            },
+          },
+        }),
+        withdrawal,
+      ),
+    ).toThrow(DisabledReallocationMarketError);
+
+    const sameMarketData = new TestReallocationData(
+      new VaultV1ReallocationData(baseInput),
+    ).applyPublicReallocationForTest({
+      vault: VAULT,
+      supplyMarketId: sourceParams.id,
+      withdrawal,
+      timestamp: TIMESTAMP,
+    });
+    expect(
+      sameMarketData.getVaultMarketConfig(VAULT, sourceParams.id)
+        .publicAllocatorConfig?.maxOut,
+    ).toBe(10_000n * MathLib.WAD);
+  });
+});

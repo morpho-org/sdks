@@ -3,7 +3,7 @@ import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import { WethUsdsBlue } from "../../../test/fixtures/blue.js";
-import { test } from "../../../test/setup.js";
+import { test } from "../../../test/unit.js";
 import { NonPositiveInputError } from "../../types/index.js";
 import { blueWithdrawCollateral } from "./withdrawCollateral.js";
 

@@ -2,37 +2,87 @@ import { test } from "@playwright/test";
 import { type Chain, formatUnits, http } from "viem";
 import { type AnvilArgs, spawnAnvil } from "./anvil.js";
 import { type AnvilTestClient, createAnvilTestClient } from "./client.js";
+import { createAnvilFailureCleanupError } from "./errors.js";
 
+/** Fixtures exposed by a Playwright test created with {@link createViemTest}. */
 export interface PlaywrightTestContext<chain extends Chain = Chain> {
-  client: AnvilTestClient<chain>;
+  /** An Anvil-backed viem client configured for the selected chain. */
+  readonly client: AnvilTestClient<chain>;
 }
 
+/**
+ * Creates a Playwright test API backed by an isolated Anvil process.
+ *
+ * @param chain - Chain used to configure the viem client and default fork.
+ * @param parameters - Optional Anvil startup and fork parameters.
+ * @returns A Playwright test API with an Anvil-backed `client` fixture.
+ * @throws {AnvilStartupError} When the fixture cannot start Anvil.
+ * @throws {AnvilProcessError} When Anvil exits unexpectedly.
+ * @throws {AnvilCleanupError} When fixture or process cleanup fails.
+ * @example
+ * ```ts
+ * import { createViemTest } from "@morpho-org/test/playwright";
+ * import { mainnet } from "viem/chains";
+ *
+ * export const test = createViemTest(mainnet, {
+ *   forkUrl: process.env.MAINNET_RPC_URL,
+ *   forkBlockNumber: 19_530_000,
+ * });
+ * ```
+ */
 export const createViemTest = <chain extends Chain>(
   chain: chain,
   parameters: AnvilArgs = {},
 ) => {
-  parameters.forkChainId ??= chain?.id;
-  parameters.forkUrl ??= chain?.rpcUrls.default.http[0];
-  parameters.autoImpersonate ??= true;
-  parameters.order ??= "fifo";
-  parameters.stepsTracing ??= true;
-
-  parameters.gasPrice ??= 0n;
-  parameters.blockBaseFeePerGas ??= 0n;
+  const anvilParameters: AnvilArgs = {
+    ...parameters,
+    forkChainId: parameters.forkChainId ?? chain.id,
+    forkUrl: parameters.forkUrl ?? chain.rpcUrls.default.http[0],
+    autoImpersonate: parameters.autoImpersonate ?? true,
+    order: parameters.order ?? "fifo",
+    stepsTracing: parameters.stepsTracing ?? true,
+    gasPrice: parameters.gasPrice ?? 0n,
+    blockBaseFeePerGas: parameters.blockBaseFeePerGas ?? 0n,
+  };
 
   return test.extend<PlaywrightTestContext<chain>>({
     // biome-ignore lint/correctness/noEmptyPattern: required by playwright at runtime
     client: async ({}, use) => {
-      const { rpcUrl, stop } = await spawnAnvil(parameters);
+      const { rpcUrl, stopAndWait } = await spawnAnvil(anvilParameters);
+      let fixtureFailed = false;
+      let fixtureFailure: unknown;
+      let cleanupFailed = false;
+      let cleanupFailure: unknown;
 
-      const client = createAnvilTestClient(http(rpcUrl), chain);
+      try {
+        const client = createAnvilTestClient(http(rpcUrl), chain);
 
-      // Make block timestamp 100% predictable.
-      await client.setBlockTimestampInterval({ interval: 1 });
+        // Make block timestamp 100% predictable.
+        await client.setBlockTimestampInterval({ interval: 1 });
 
-      await use(client);
+        await use(client);
+      } catch (error) {
+        fixtureFailed = true;
+        fixtureFailure = error;
+      }
 
-      await stop();
+      try {
+        await stopAndWait();
+      } catch (error) {
+        cleanupFailed = true;
+        cleanupFailure = error;
+      }
+
+      if (fixtureFailed && cleanupFailed)
+        throw createAnvilFailureCleanupError({
+          cleanupError: cleanupFailure,
+          failure: fixtureFailure,
+          message:
+            "The Playwright fixture failed and Anvil cleanup also failed. Inspect both failures and stop the process manually before retrying.",
+          summary: "Playwright fixture and Anvil cleanup both failed.",
+        });
+      if (fixtureFailed) throw fixtureFailure;
+      if (cleanupFailed) throw cleanupFailure;
     },
   });
 };

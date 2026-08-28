@@ -9,7 +9,7 @@ export interface IVaultV2MorphoVaultV1Adapter
   morphoVaultV1: Address;
 }
 
-import type { BigIntish } from "../../types.js";
+import type { BigIntish, Hash } from "../../types.js";
 import type { AccrualVault } from "../Vault.js";
 import type {
   IAccrualVaultV2Adapter,
@@ -23,13 +23,34 @@ export class VaultV2MorphoVaultV1Adapter
 {
   public declare readonly type: "VaultV2MorphoVaultV1Adapter";
 
-  static adapterId(address: Address) {
+  /**
+   * Returns the adapter-wide allocation-cap id.
+   *
+   * @param address - Adapter address.
+   * @returns The adapter-wide allocation-cap id.
+   * @example
+   * ```ts
+   * const id = VaultV2MorphoVaultV1Adapter.adapterCapId(adapter);
+   * ```
+   */
+  static adapterCapId(address: Address) {
     return keccak256(
       encodeAbiParameters(
         [{ type: "string" }, { type: "address" }],
         ["this", address],
       ),
     );
+  }
+
+  /**
+   * Returns the adapter-wide allocation-cap id.
+   *
+   * @param address - Adapter address.
+   * @returns The adapter-wide allocation-cap id.
+   * @deprecated Use {@link VaultV2MorphoVaultV1Adapter.adapterCapId}.
+   */
+  static adapterId(address: Address) {
+    return VaultV2MorphoVaultV1Adapter.adapterCapId(address);
   }
 
   public readonly morphoVaultV1: Address;
@@ -41,13 +62,33 @@ export class VaultV2MorphoVaultV1Adapter
     super({
       ...vaultV2Adapter,
       type: "VaultV2MorphoVaultV1Adapter",
-      adapterId: VaultV2MorphoVaultV1Adapter.adapterId(vaultV2Adapter.address),
+      adapterId: VaultV2MorphoVaultV1Adapter.adapterCapId(
+        vaultV2Adapter.address,
+      ),
     });
 
     this.morphoVaultV1 = morphoVaultV1;
   }
 
-  public ids() {
+  /**
+   * Returns this adapter's allocation-cap ids.
+   *
+   * @returns A readonly tuple containing the adapter-wide allocation-cap id.
+   * @example
+   * ```ts
+   * import { VaultV2MorphoVaultV1Adapter } from "@morpho-org/blue-sdk";
+   * import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
+   *
+   * const adapter = new VaultV2MorphoVaultV1Adapter({
+   *   address: ZERO_ADDRESS,
+   *   parentVault: ZERO_ADDRESS,
+   *   skimRecipient: ZERO_ADDRESS,
+   *   morphoVaultV1: ZERO_ADDRESS,
+   * });
+   * const [adapterCapId] = adapter.ids();
+   * ```
+   */
+  public ids(): readonly [adapterCapId: Hash] {
     return [this.adapterId];
   }
 }
