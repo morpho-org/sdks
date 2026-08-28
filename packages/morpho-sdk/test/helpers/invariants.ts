@@ -17,8 +17,8 @@ export interface MarketInvariant {
   userLoanTokenBalance: bigint;
   userCollateralTokenBalance: bigint;
   position: AccrualPosition;
-  bundler3LoanTokenBalances: bigint[];
-  bundler3CollateralTokenBalances: bigint[];
+  bundlerLoanTokenBalances: bigint[];
+  bundlerCollateralTokenBalances: bigint[];
 }
 
 export interface VaultInvariant {
@@ -33,15 +33,15 @@ export interface VaultInvariant {
   userNativeBalance: bigint;
   maxWithdraw: bigint;
   maxRedeem: bigint;
-  bundler3AssetBalances: bigint[];
-  bundler3SharesBalances: bigint[];
+  bundlerAssetBalances: bigint[];
+  bundlerSharesBalances: bigint[];
 }
 
 export interface HoldingInvariant {
   block: Block;
   morphoBalance: bigint;
   userBalance: bigint;
-  bundler3Balances: bigint[];
+  bundlerBalances: bigint[];
 }
 
 export type MarketParamsMap<T extends string = string> = {
@@ -121,29 +121,49 @@ export interface InvariantCheck<
 }
 
 /**
- * Validate the balances of the bundler3
+ * Resolve every bundler contract whose balance must be conserved by a bundle:
+ * the Bundler3 executor and its adapters, plus the standalone bundle periphery
+ * contracts (VaultExitBundlesV1, VaultBundlesV1, BlueBundlesV1). Optional
+ * addresses absent on a chain are filtered out so the returned order matches the
+ * balances fetched alongside it.
+ * @param chainId - The chain id to resolve the bundler contracts for
+ * @returns The named, defined bundler and bundle contract addresses
+ */
+const _getBundlerContracts = (
+  chainId: number,
+): { name: string; address: Address }[] => {
+  const { bundler3, bundles } = getChainAddresses(chainId);
+  return [...entries(bundler3), ...entries(bundles)]
+    .map(([name, address]) => ({ name: String(name), address }))
+    .filter(
+      (contract): contract is { name: string; address: Address } =>
+        contract.address != null,
+    );
+};
+
+/**
+ * Validate that every bundler and bundle contract holds no residual balance
+ * after a bundle by asserting each final balance equals its initial snapshot.
+ * @param contracts - The named bundler contracts, in balance order
  * @param initialBalances - The initial balances to validate
  * @param finalBalances - The final balances to validate
- * @param balances - The balances to validate
  * @param balanceType - The type of balance to validate
- * @param chainId - The chain id to validate
  */
-const _validateBundler3Balances = ({
+const _validateBundlerBalances = ({
+  contracts,
   initialBalances,
   finalBalances,
   balanceType,
-  chainId,
 }: {
+  contracts: { name: string; address: Address }[];
   initialBalances: bigint[];
   finalBalances: bigint[];
   balanceType: string;
-  chainId: number;
 }): void => {
-  const { bundler3 } = getChainAddresses(chainId);
   for (const [index, value] of initialBalances.entries()) {
     expect(
       value,
-      `${Object.keys(bundler3)[index]} ${balanceType} should be 0`,
+      `${contracts[index]?.name} ${balanceType} should be 0`,
     ).toEqual(finalBalances[index]);
   }
 };
@@ -163,7 +183,8 @@ const _fetchMarketOperationState = async ({
 }): Promise<MarketInvariant> => {
   const { loanToken, collateralToken } = market;
 
-  const { morpho, bundler3 } = getChainAddresses(client.chain.id);
+  const { morpho } = getChainAddresses(client.chain.id);
+  const bundlerContracts = _getBundlerContracts(client.chain.id);
 
   const [
     block,
@@ -173,8 +194,8 @@ const _fetchMarketOperationState = async ({
     userLoanTokenBalance,
     userCollateralTokenBalance,
     position,
-    bundler3LoanTokenBalances,
-    bundler3CollateralTokenBalances,
+    bundlerLoanTokenBalances,
+    bundlerCollateralTokenBalances,
   ] = await Promise.all([
     client.getBlock(),
     client.balanceOf({ erc20: loanToken, owner: morpho }),
@@ -184,13 +205,13 @@ const _fetchMarketOperationState = async ({
     client.balanceOf({ erc20: collateralToken }),
     fetchAccrualPosition(client.account.address, market.id, client),
     Promise.all(
-      entries(bundler3).map(([, value]) =>
-        client.balanceOf({ erc20: loanToken, owner: value }),
+      bundlerContracts.map(({ address }) =>
+        client.balanceOf({ erc20: loanToken, owner: address }),
       ),
     ),
     Promise.all(
-      entries(bundler3).map(([, value]) =>
-        client.balanceOf({ erc20: collateralToken, owner: value }),
+      bundlerContracts.map(({ address }) =>
+        client.balanceOf({ erc20: collateralToken, owner: address }),
       ),
     ),
   ]);
@@ -203,8 +224,8 @@ const _fetchMarketOperationState = async ({
     userLoanTokenBalance,
     userCollateralTokenBalance,
     position,
-    bundler3LoanTokenBalances,
-    bundler3CollateralTokenBalances,
+    bundlerLoanTokenBalances,
+    bundlerCollateralTokenBalances,
   };
 };
 
@@ -226,7 +247,8 @@ const _fetchVaultOperationState = async ({
 }): Promise<VaultInvariant> => {
   const { asset, address } = vault;
 
-  const { morpho, bundler3 } = getChainAddresses(client.chain.id);
+  const { morpho } = getChainAddresses(client.chain.id);
+  const bundlerContracts = _getBundlerContracts(client.chain.id);
 
   const [
     block,
@@ -236,8 +258,8 @@ const _fetchVaultOperationState = async ({
     userAssetBalance,
     userSharesBalance,
     userNativeBalance,
-    bundler3AssetBalances,
-    bundler3SharesBalances,
+    bundlerAssetBalances,
+    bundlerSharesBalances,
     maxWithdraw,
     maxRedeem,
   ] = await Promise.all([
@@ -249,13 +271,13 @@ const _fetchVaultOperationState = async ({
     client.balanceOf({ erc20: address }),
     client.balanceOf({}),
     Promise.all(
-      entries(bundler3).map(([, value]) =>
-        client.balanceOf({ erc20: asset, owner: value }),
+      bundlerContracts.map(({ address: owner }) =>
+        client.balanceOf({ erc20: asset, owner }),
       ),
     ),
     Promise.all(
-      entries(bundler3).map(([, value]) =>
-        client.balanceOf({ erc20: address, owner: value }),
+      bundlerContracts.map(({ address: owner }) =>
+        client.balanceOf({ erc20: address, owner }),
       ),
     ),
     client.maxWithdraw({ erc4626: address }),
@@ -291,8 +313,8 @@ const _fetchVaultOperationState = async ({
     userNativeBalance,
     maxWithdraw,
     maxRedeem,
-    bundler3AssetBalances,
-    bundler3SharesBalances,
+    bundlerAssetBalances,
+    bundlerSharesBalances,
   };
 };
 
@@ -309,8 +331,9 @@ const _fetchHoldingOperationState = async ({
   client: AnvilTestClient<Chain>;
   address: Address;
 }): Promise<HoldingInvariant> => {
-  const { morpho, bundler3 } = getChainAddresses(client.chain.id);
-  const [block, morphoBalance, userBalance, bundler3Balances] =
+  const { morpho } = getChainAddresses(client.chain.id);
+  const bundlerContracts = _getBundlerContracts(client.chain.id);
+  const [block, morphoBalance, userBalance, bundlerBalances] =
     await Promise.all([
       client.getBlock(),
       client.balanceOf({
@@ -322,8 +345,8 @@ const _fetchHoldingOperationState = async ({
         owner: client.account.address,
       }),
       Promise.all(
-        entries(bundler3).map(([, value]) =>
-          client.balanceOf({ owner: value }),
+        bundlerContracts.map(({ address: owner }) =>
+          client.balanceOf({ owner }),
         ),
       ),
     ]);
@@ -332,7 +355,7 @@ const _fetchHoldingOperationState = async ({
     block,
     morphoBalance,
     userBalance,
-    bundler3Balances,
+    bundlerBalances,
   };
 };
 
@@ -459,18 +482,20 @@ const _buildMarketFinalState = async <TMarketName extends string>({
       market: params,
     });
 
-    _validateBundler3Balances({
-      initialBalances: initialState.bundler3LoanTokenBalances,
-      finalBalances: finalState.bundler3LoanTokenBalances,
+    const bundlerContracts = _getBundlerContracts(client.chain.id);
+
+    _validateBundlerBalances({
+      contracts: bundlerContracts,
+      initialBalances: initialState.bundlerLoanTokenBalances,
+      finalBalances: finalState.bundlerLoanTokenBalances,
       balanceType: "loan token balance",
-      chainId: client.chain.id,
     });
 
-    _validateBundler3Balances({
-      initialBalances: initialState.bundler3CollateralTokenBalances,
-      finalBalances: finalState.bundler3CollateralTokenBalances,
+    _validateBundlerBalances({
+      contracts: bundlerContracts,
+      initialBalances: initialState.bundlerCollateralTokenBalances,
+      finalBalances: finalState.bundlerCollateralTokenBalances,
       balanceType: "collateral token balance",
-      chainId: client.chain.id,
     });
 
     const accrued = initialState.position.accrueInterest(
@@ -515,18 +540,20 @@ const _buildVaultFinalState = async <TVaultName extends string>({
       vault: params,
     });
 
-    _validateBundler3Balances({
-      initialBalances: initialState.bundler3AssetBalances,
-      finalBalances: finalState.bundler3AssetBalances,
+    const bundlerContracts = _getBundlerContracts(client.chain.id);
+
+    _validateBundlerBalances({
+      contracts: bundlerContracts,
+      initialBalances: initialState.bundlerAssetBalances,
+      finalBalances: finalState.bundlerAssetBalances,
       balanceType: "asset balance",
-      chainId: client.chain.id,
     });
 
-    _validateBundler3Balances({
-      initialBalances: initialState.bundler3SharesBalances,
-      finalBalances: finalState.bundler3SharesBalances,
+    _validateBundlerBalances({
+      contracts: bundlerContracts,
+      initialBalances: initialState.bundlerSharesBalances,
+      finalBalances: finalState.bundlerSharesBalances,
       balanceType: "shares balance",
-      chainId: client.chain.id,
     });
 
     results[name] = {
