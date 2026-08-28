@@ -917,7 +917,11 @@ export class AccrualPositionUserMismatchError extends Error {
   }
 }
 
-/** Thrown when a reallocation has no withdrawals. */
+/**
+ * Thrown when a reallocation has no withdrawals.
+ *
+ * @deprecated Vault V1 PublicAllocator support will be removed in the next major.
+ */
 export class EmptyReallocationWithdrawalsError extends Error {
   constructor(vault: string) {
     super(`Reallocation withdrawals list cannot be empty for vault: ${vault}`);
@@ -937,6 +941,8 @@ export class ReallocationWithdrawalOnTargetMarketError extends Error {
  * Thrown when a Public Allocator reallocation does not match exactly one V1 or
  * V2 input shape.
  *
+ * @deprecated Vault V1/V2 reallocation-shape dispatch will be removed in the next major. Use Vault
+ * V2 reallocations.
  * @example
  * ```ts
  * import { InvalidReallocationShapeError } from "@morpho-org/morpho-sdk";
@@ -956,6 +962,8 @@ export class InvalidReallocationShapeError extends Error {
 /**
  * Thrown when one reallocation plan contains both Vault V1 and Vault V2 entries.
  *
+ * @deprecated Vault V1/V2 mixed-plan support will be removed in the next major. Use Vault V2
+ * reallocations.
  * @example
  * ```ts
  * import { MixedReallocationVersionsError } from "@morpho-org/morpho-sdk";
@@ -1076,7 +1084,11 @@ export class InconsistentReallocationPenaltyError extends Error {
   }
 }
 
-/** Thrown when reallocation withdrawals within a vault are not strictly sorted by market id. */
+/**
+ * Thrown when reallocation withdrawals within a vault are not strictly sorted by market id.
+ *
+ * @deprecated Vault V1 PublicAllocator support will be removed in the next major.
+ */
 export class UnsortedReallocationWithdrawalsError extends Error {
   constructor(vault: string, marketId: string) {
     super(
@@ -1175,7 +1187,11 @@ export class RepaySharesExceedDebtError extends Error {
   }
 }
 
-/** Thrown when a vault selected for reallocation has no configured `PublicAllocator`. */
+/**
+ * Thrown when a vault selected for reallocation has no configured `PublicAllocator`.
+ *
+ * @deprecated Vault V1 PublicAllocator support will be removed in the next major.
+ */
 export class MissingPublicAllocatorConfigError extends Error {
   constructor(vault: string) {
     super(
@@ -1184,7 +1200,11 @@ export class MissingPublicAllocatorConfigError extends Error {
   }
 }
 
-/** Thrown when a reallocation attempts to use a disabled vault market. */
+/**
+ * Thrown when a reallocation attempts to use a disabled vault market.
+ *
+ * @deprecated Vault V1 PublicAllocator support will be removed in the next major.
+ */
 export class DisabledReallocationMarketError extends Error {
   constructor(
     public readonly vault: Address,
@@ -1237,7 +1257,11 @@ export class UnknownReallocationVaultError extends UnknownDataError {
   }
 }
 
-/** Thrown when reallocation state does not contain a requested vault-market config. */
+/**
+ * Thrown when reallocation state does not contain a requested vault-market config.
+ *
+ * @deprecated Vault V1 shared-liquidity planning will be removed in the next major.
+ */
 export class UnknownReallocationVaultMarketConfigError extends UnknownDataError {
   /**
    * @param vault - Vault address for the missing config.
@@ -1253,7 +1277,11 @@ export class UnknownReallocationVaultMarketConfigError extends UnknownDataError 
   }
 }
 
-/** Thrown when reallocation state does not contain a requested market position. */
+/**
+ * Thrown when reallocation state does not contain a requested market position.
+ *
+ * @deprecated Vault V1 shared-liquidity planning will be removed in the next major.
+ */
 export class UnknownReallocationPositionError extends UnknownDataError {
   /**
    * @param user - Position owner address.
