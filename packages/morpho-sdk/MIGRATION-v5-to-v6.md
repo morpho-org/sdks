@@ -56,3 +56,22 @@ so they can improve an unhealthy position.
 
 `RepayAmountArgs` and `RepayActionAmountArgs` are removed; use the mutually exclusive
 `repayAssets` / `repayShares` fields instead.
+
+## Blue refinance
+
+`refinance` and `blueRefinance` keep their names but now call BlueBundlesV1's full-position
+migration entrypoint.
+
+- Rename `target` to `destination`.
+- Remove `collateralAmount`, `borrowAssets`, `borrowShares`, slippage, and share-price bounds.
+- Rename V2-only `targetReallocations` to `reallocations`.
+- Add `deadline` and optional referral-fee fields.
+- Pass source and destination position snapshots; the markets must use the same loan and collateral
+  tokens and must not be the same market.
+
+The action metadata replaces `targetMarket`, partial-leg amounts, user, share-price bounds, and the
+V1 fee with `destinationMarket`, `maxLtv`, `onBehalf`, a reallocation count and penalty total,
+referral-fee fields, and `deadline`.
+
+The full live source debt and collateral always move, and Morpho authorization targets
+BlueBundlesV1. Stay on v5 if the product requires partial or collateral-only refinance behavior.
