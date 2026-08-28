@@ -1,7 +1,7 @@
 import { createViemTest } from "@morpho-org/test/vitest";
 import { base } from "viem/chains";
 import { describe, expect } from "vitest";
-import { morphoViemExtension } from "../../client/morphoViemExtension.js";
+import { morphoViemExtension } from "../../../src/client/morphoViemExtension.js";
 
 const forkBlockNumber = 48_673_000n;
 const marketId =

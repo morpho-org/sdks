@@ -7,7 +7,7 @@ import {
   GauntletWethVaultV1,
   SteakhouseUsdcVaultV1,
 } from "../../../test/fixtures/vaultV1.js";
-import { test } from "../../../test/setup.js";
+import { test } from "../../../test/unit.js";
 import {
   ChainWNativeMissingError,
   DepositAmountMismatchError,

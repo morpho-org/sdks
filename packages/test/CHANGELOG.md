@@ -1,5 +1,23 @@
 # @morpho-org/test
 
+## 2.10.0
+
+### Minor Changes
+
+- [#941](https://github.com/morpho-org/sdks/pull/941) [`86bf42c`](https://github.com/morpho-org/sdks/commit/86bf42ca1ecf167da2cb4674d4f05f785d49c5d9) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Stop retrying failed JSON-RPC requests from Vitest clients to local Anvil processes so transport errors surface without duplicating RPC work.
+
+  Support Anvil's Optimism Karst hardfork so Base fork tests can execute Osaka EVM bytecode with Foundry v1.8.0.
+
+## 2.9.0
+
+### Minor Changes
+
+- [#944](https://github.com/morpho-org/sdks/pull/944) [`3fe836b`](https://github.com/morpho-org/sdks/commit/3fe836b3374a2d8896d0b7bdbba36fd30aa120b0) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Make unexpected Anvil exits and failed shutdowns surface without poisoning Vitest retries, clean up child processes when startup fails, cover the configured fork retry budget with an overridable startup deadline, let state dumps finish gracefully by default with a configurable force-kill delay, and redact exact fork URLs and header values from Anvil diagnostics in CI unless explicitly disabled.
+
+  Require Vitest 2.1.2 or newer so per-attempt cleanup failures participate in Vitest retries.
+
+  This minor release intentionally makes the existing `spawnAnvil()` result fields (`rpcUrl` and `stop`) and `ViemTestContext.client` readonly. This is a source-level breaking change for consumers that assign those fields; keep mutable wrapper objects locally if reassignment is required.
+
 ## 2.8.4
 
 ### Patch Changes

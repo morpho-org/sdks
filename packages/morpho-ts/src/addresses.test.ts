@@ -327,6 +327,48 @@ describe("addressesRegistry", () => {
   );
 
   test.each([
+    [ChainId.EthMainnet, "0x02912516d49dE997db75B9D7858faAE59209650B"],
+    [ChainId.BaseMainnet, "0x2B08A911f48dE25A7e305D910Afb5597aBE8ea7B"],
+    [ChainId.ArbitrumMainnet, "0x5afAb0B2414E30c92a708234ea1b383Ce6317ED5"],
+    [ChainId.OptimismMainnet, "0x112088363eE4CcF3F37EaBD98FDDeEd98F0Be485"],
+    [ChainId.PolygonMainnet, "0x386ABE0188b7FADA897cE4dF9d72E8F57915B103"],
+    [ChainId.WorldChainMainnet, "0x768BBD5F6c22b2498cC9C19832d3AEE08240755a"],
+    [ChainId.Unichain, "0x40755e3e2513D71cB79DC3Eeefd8Eb848d9cd899"],
+    [ChainId.HyperliquidMainnet, "0xB5173417e28482c61C14A4C2e217b158fF0db666"],
+    [ChainId.KatanaMainnet, "0x2464F4d0a4481732e7cC90ADD5abF986A48A06Dd"],
+    [ChainId.MonadMainnet, "0xcDDc5311A7ccDb2A7Bf97299149bE1D687F3C76e"],
+    [ChainId.StableMainnet, "0x2b910f5368e4939A2906ADa85c21fc0e51C4A861"],
+    [ChainId.TempoMainnet, "0xe8aA1d8f1Cb111B7f52957D662Ee310D6d2Ee9B9"],
+    [ChainId.RobinhoodMainnet, "0xcC108538f36242D6E0d6B9255f6D9Ccd137D70Fe"],
+  ] as const)(
+    "behavior: exposes VaultBundlesV1 on chain %s",
+    (...[chainId, address]) => {
+      expect(getChainAddress(chainId, "bundles.vaultBundlesV1")).toBe(address);
+    },
+  );
+
+  test.each([
+    [ChainId.EthMainnet, "0x38B0C12AB81976e9417D4ebfe2A34DB6DF22e6AD"],
+    [ChainId.BaseMainnet, "0x4D28D900e381eCE4B351302f1Abe588496793A2b"],
+    [ChainId.ArbitrumMainnet, "0x30a388A64b99192702a83D2CA9B95D79702afbf2"],
+    [ChainId.OptimismMainnet, "0x317ca3534f8Cf92Accb4b4366F48017E596bc34a"],
+    [ChainId.PolygonMainnet, "0x93a1B342f3DF2c2bb5D0d8D5AF819450fFA4bE78"],
+    [ChainId.WorldChainMainnet, "0xEd44094c917D891D68f46E8cc2fd50D790707a65"],
+    [ChainId.Unichain, "0x2c4331BC5EC245da744F35832C8797456cFC8045"],
+    [ChainId.HyperliquidMainnet, "0x84849171E1783630E1C4253b9C9d4b4208b0D86A"],
+    [ChainId.KatanaMainnet, "0xCA52e5B901D9939013Fa8744dCbDeE0B6BdD5B39"],
+    [ChainId.MonadMainnet, "0x9C76E91bf08E712a713e3baB2F5AE01f6ec8845A"],
+    [ChainId.StableMainnet, "0xFB606389166c04828D6Dba36F77871489673CeA0"],
+    [ChainId.TempoMainnet, "0xAE863452f44ADD237739A85eb6BB1989E2368362"],
+    [ChainId.RobinhoodMainnet, "0x53A1eB6589861F686af7c531211E35Aefe30210f"],
+  ] as const)(
+    "behavior: exposes BlueBundlesV1 on chain %s",
+    (...[chainId, address]) => {
+      expect(getChainAddress(chainId, "bundles.blueBundlesV1")).toBe(address);
+    },
+  );
+
+  test.each([
     [
       ChainId.EthMainnet,
       "midnight",

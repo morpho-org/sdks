@@ -42,10 +42,10 @@ export interface MempoolSubmitOffersParams {
  * @throws {InvalidTreeError} when `offers <= 0`.
  * @example
  * ```ts
- * import { Payload } from "@morpho-org/midnight-sdk";
+ * import { MidnightPayload } from "@morpho-org/morpho-sdk/utils";
  * import { mempoolSubmitOffers } from "@morpho-org/morpho-sdk";
  *
- * const payload = await Payload.encode(items);
+ * const payload = await MidnightPayload.encode(items);
  * const tx = mempoolSubmitOffers({
  *   chainId: 8453,
  *   groups,

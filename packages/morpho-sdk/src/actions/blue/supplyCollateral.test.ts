@@ -3,7 +3,7 @@ import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { afterEach, describe, expect, vi } from "vitest";
 import { UsdcEurcvBlue, WethUsdsBlue } from "../../../test/fixtures/blue.js";
-import { test } from "../../../test/setup.js";
+import { test } from "../../../test/unit.js";
 import {
   isRequirementApproval,
   isRequirementSignature,

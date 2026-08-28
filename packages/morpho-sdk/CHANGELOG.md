@@ -1,5 +1,44 @@
 # @morpho-org/morpho-sdk
 
+## 5.8.0
+
+### Minor Changes
+
+- [#953](https://github.com/morpho-org/sdks/pull/953) [`17f430b`](https://github.com/morpho-org/sdks/commit/17f430b15c25c50129ff461a7315a7e1acaa64b1) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Register the canonical `VaultBundlesV1` and `BlueBundlesV1` deployments in the `bundles` group of
+  `ChainAddresses`, alongside the existing `bundles.vaultExitBundlesV1` entry. The `AddressLabel`
+  union gains `bundles.vaultBundlesV1` and `bundles.blueBundlesV1`, so
+  `getChainAddress(chainId, "bundles.vaultBundlesV1")`,
+  `getChainAddress(chainId, "bundles.blueBundlesV1")`, and `registerCustomAddresses` resolve the new
+  entries like any other registry address. Both fields are optional so chains that only expose
+  `vaultExitBundlesV1` remain valid.
+
+  Addresses are sourced from the canonical deployment registry
+  (`morpho-org/deployments` `address-book.json`) and cover Ethereum, Base, Arbitrum, Optimism,
+  Polygon, World Chain, Unichain, HyperEVM, Katana, Monad, Stable, Tempo, and Robinhood Chain — the
+  same thirteen chains that already register `VaultExitBundlesV1`.
+
+  Patch maintained packages with direct runtime dependencies on `@morpho-org/morpho-ts` so their
+  latest releases resolve the new registry entries.
+
+### Patch Changes
+
+- Updated dependencies [[`17f430b`](https://github.com/morpho-org/sdks/commit/17f430b15c25c50129ff461a7315a7e1acaa64b1)]:
+  - @morpho-org/morpho-ts@2.11.0
+  - @morpho-org/blue-sdk@6.7.0
+
+## 5.7.0
+
+### Minor Changes
+
+- [#949](https://github.com/morpho-org/sdks/pull/949) [`67399ed`](https://github.com/morpho-org/sdks/commit/67399ed6eb1b7ffa062828e1f5d970795adce03a) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Expose Vault V2 allocator entities, fetchers, and utilities, plus omitted in-kind redemption and Midnight surfaces. Add raw Blue and Midnight protocol subpaths, qualify protocol-specific exports in the shared facades, and expose the error identities, revert classifiers, permit builders, MetaMorpho encoders, allowance metadata, and PreLiquidation defaults required by those surfaces. Deprecate ambiguous protocol-specific names, Blue's custom fetch `chainId` override, and the redundant deployless-only Vault V2 fetcher.
+
+### Patch Changes
+
+- [#949](https://github.com/morpho-org/sdks/pull/949) [`67399ed`](https://github.com/morpho-org/sdks/commit/67399ed6eb1b7ffa062828e1f5d970795adce03a) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Bound Vault V2 shared-cap operation searches so non-monotonic rounding cannot produce reallocations far above the requested liquidity.
+
+- Updated dependencies [[`67399ed`](https://github.com/morpho-org/sdks/commit/67399ed6eb1b7ffa062828e1f5d970795adce03a)]:
+  - @morpho-org/blue-sdk-viem@5.4.0
+
 ## 5.6.0
 
 ### Minor Changes

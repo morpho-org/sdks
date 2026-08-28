@@ -1,4 +1,5 @@
 import { ChainId, getChainAddress } from "@morpho-org/morpho-ts";
+import type { Address } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
@@ -8,7 +9,8 @@ import {
 import { getRequirementsApproval } from "./getRequirementsApproval.js";
 
 const usdc = getChainAddress(ChainId.EthMainnet, "usdc");
-const lowercaseUsdt = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+const usdt = getChainAddress(ChainId.EthMainnet, "usdt");
+const lowercaseUsdt = usdt.toLowerCase() as Address;
 const generalAdapter1 = getChainAddress(
   ChainId.EthMainnet,
   "bundler3.generalAdapter1",
@@ -46,22 +48,28 @@ describe("getRequirementsApproval", () => {
     ).toEqual([]);
   });
 
-  test("behavior: resets approve-only-once token before approving", () => {
-    const requirements = getRequirementsApproval({
-      address: lowercaseUsdt,
-      chainId: mainnet.id,
-      args: {
-        spendAmount: 1_000n,
-        approvalAmount: 2_000n,
-        spender: generalAdapter1,
-      },
-      allowances: 1n,
-    });
+  test.each([
+    { casing: "lowercase", address: lowercaseUsdt },
+    { casing: "checksummed", address: usdt },
+  ])(
+    "behavior: resets approve-only-once token with $casing address",
+    ({ address }) => {
+      const requirements = getRequirementsApproval({
+        address,
+        chainId: mainnet.id,
+        args: {
+          spendAmount: 1_000n,
+          approvalAmount: 2_000n,
+          spender: generalAdapter1,
+        },
+        allowances: 1n,
+      });
 
-    expect(
-      requirements.map((requirement) => requirement.action.args.amount),
-    ).toEqual([0n, 2_000n]);
-  });
+      expect(
+        requirements.map((requirement) => requirement.action.args.amount),
+      ).toEqual([0n, 2_000n]);
+    },
+  );
 
   test("error: ApprovalAmountLessThanSpendAmountError", () => {
     expect(() =>

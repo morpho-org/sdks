@@ -4,7 +4,7 @@ import { mainnet } from "viem/chains";
 import { afterEach, describe, expect, vi } from "vitest";
 import { WethUsdsBlue, WstethWethBlue } from "../../../test/fixtures/blue.js";
 import { makePermit } from "../../../test/helpers/permit.js";
-import { test } from "../../../test/setup.js";
+import { test } from "../../../test/unit.js";
 import {
   MutuallyExclusiveRepayAmountsError,
   NativeAmountOnNonWNativeAssetError,

@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/morpho-sdk",
   "description": "Abstraction layer for Morpho's complexity.",
-  "version": "5.6.0",
+  "version": "5.8.0",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Foulks-Plb <https://x.com/FoulkPlb>"
@@ -25,6 +25,7 @@
     "./addresses": "./src/addresses.ts",
     "./augment": "./src/augment.ts",
     "./augment/*": "./src/augment/*.ts",
+    "./blue/*": "./src/blue/*.ts",
     "./bundler": "./src/bundler/index.ts",
     "./constants": "./src/constants.ts",
     "./entities": "./src/entities/index.ts",
@@ -32,6 +33,7 @@
     "./fetch": "./src/fetch.ts",
     "./format": "./src/format.ts",
     "./midnight-api": "./src/midnight-api.ts",
+    "./midnight/*": "./src/midnight/*.ts",
     "./types": "./src/types.ts",
     "./utils": "./src/utils.ts"
   },
@@ -48,6 +50,9 @@
       ],
       "augment/*": [
         "src/augment/*.ts"
+      ],
+      "blue/*": [
+        "src/blue/*.ts"
       ],
       "bundler": [
         "src/bundler/index.ts"
@@ -69,6 +74,9 @@
       ],
       "midnight-api": [
         "src/midnight-api.ts"
+      ],
+      "midnight/*": [
+        "src/midnight/*.ts"
       ],
       "types": [
         "src/types.ts"
@@ -92,7 +100,7 @@
     "build": "tsc --noEmit && $npm_execpath build:cjs && $npm_execpath build:esm",
     "build:cjs": "tsc --build tsconfig.build.cjs.json && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json",
-    "test": "vitest --root ../.. --project morpho-sdk"
+    "test": "vitest --root ../.. --project morpho-sdk --project morpho-sdk-fork"
   },
   "dependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
@@ -139,6 +147,11 @@
         "import": "./lib/esm/augment/*.js",
         "require": "./lib/cjs/augment/*.js"
       },
+      "./blue/*": {
+        "types": "./lib/esm/blue/*.d.ts",
+        "import": "./lib/esm/blue/*.js",
+        "require": "./lib/cjs/blue/*.js"
+      },
       "./bundler": {
         "types": "./lib/esm/bundler/index.d.ts",
         "import": "./lib/esm/bundler/index.js",
@@ -174,6 +187,11 @@
         "import": "./lib/esm/midnight-api.js",
         "require": "./lib/cjs/midnight-api.js"
       },
+      "./midnight/*": {
+        "types": "./lib/esm/midnight/*.d.ts",
+        "import": "./lib/esm/midnight/*.js",
+        "require": "./lib/cjs/midnight/*.js"
+      },
       "./types": {
         "types": "./lib/esm/types.d.ts",
         "import": "./lib/esm/types.js",
@@ -201,6 +219,9 @@
         "augment/*": [
           "lib/esm/augment/*.d.ts"
         ],
+        "blue/*": [
+          "lib/esm/blue/*.d.ts"
+        ],
         "bundler": [
           "lib/esm/bundler/index.d.ts"
         ],
@@ -221,6 +242,9 @@
         ],
         "midnight-api": [
           "lib/esm/midnight-api.d.ts"
+        ],
+        "midnight/*": [
+          "lib/esm/midnight/*.d.ts"
         ],
         "types": [
           "lib/esm/types.d.ts"
