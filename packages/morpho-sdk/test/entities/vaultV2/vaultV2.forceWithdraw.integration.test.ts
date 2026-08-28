@@ -28,6 +28,8 @@ import { setUpSingleAdapterVaultV2 } from "../../helpers/vaultV2.js";
 const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const ONE_PERCENT = parseUnits("0.01", 18);
 const TEN_PERCENT = parseUnits("0.1", 18);
+/** Vault V2 rejects a `forceDeallocatePenalty` above 2%. */
+const MAX_FORCE_DEALLOCATE_PENALTY = parseUnits("0.02", 18);
 const setupMarkets = [CbbtcUsdcBlue, WbtcUsdcSourceMarket] as const;
 
 // VaultExitBundlesV1 is deployed at this block. Keep the newer fork local so the shared fork stays
@@ -140,7 +142,7 @@ describe("MorphoVaultV2.forceWithdraw integration", () => {
       await setUpSingleAdapterVaultV2(client, {
         asset: USDC,
         markets: setupMarkets,
-        forceDeallocatePenalty: TEN_PERCENT,
+        forceDeallocatePenalty: MAX_FORCE_DEALLOCATE_PENALTY,
         liquidityMarket: CbbtcUsdcBlue,
       });
     const deposit = parseUnits("1000", 6);
@@ -313,7 +315,7 @@ describe("MorphoVaultV2.forceWithdraw integration", () => {
       await setUpSingleAdapterVaultV2(client, {
         asset: USDC,
         markets: setupMarkets,
-        forceDeallocatePenalty: TEN_PERCENT,
+        forceDeallocatePenalty: MAX_FORCE_DEALLOCATE_PENALTY,
       });
     const deposit = parseUnits("500", 6);
     await depositAndAllocate({
