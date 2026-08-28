@@ -50,6 +50,37 @@ is single-use; a consumed one throws `Permit2TransferFromNonceAlreadyUsedError`)
 for ERC-2612 tokens, pass `getRequirements({ useSimplePermit: true })`, which prefers a one-signature
 ERC-2612 permit and needs no nonce.
 
+## Blue collateral, borrow, repay, and collateral withdrawal
+
+The six established methods below now map to the two BlueBundlesV1 combined entrypoints. Simple
+methods set their inactive leg to zero.
+
+| Flow | v5 input | v6 input |
+| --- | --- | --- |
+| `supplyCollateral` | `amount`, optional additive `nativeAmount` | Rename `amount` to `collateralAssets`; add `deadline` and optional referral-fee fields; native and ERC-20 funding are exclusive. |
+| `borrow` | `amount`, `slippageTolerance`, `reallocations` | Rename `amount` to `borrowAssets`; remove slippage; add `deadline` and optional referral-fee fields. |
+| `supplyCollateralBorrow` | `amount`, `borrowAmount`, required `positionData`, `slippageTolerance`, `reallocations` | Rename the legs to `collateralAssets` and `borrowAssets`; require `positionData` only for a non-zero borrow; remove slippage; add `deadline` and optional referral-fee fields. |
+| `repay` | `amount` or `shares`, optional additive `nativeAmount`, `slippageTolerance` | Use `repayAssets` or `repayShares`; remove slippage; add `deadline` and optional referral-fee fields. Native funding covers the full derived cap. |
+| `withdrawCollateral` | `amount` | Rename `amount` to `collateralAssets`; add `positionData`, `deadline`, and optional referral-fee fields. |
+| `repayWithdrawCollateral` | repay `amount` or `shares`, `withdrawAmount`, optional additive `nativeAmount`, `slippageTolerance` | Use `repayAssets` or `repayShares`, rename `withdrawAmount` to `collateralAssets`, remove slippage, and add `deadline` plus optional referral-fee fields. |
+
+`blueSupplyCollateral`, `blueBorrow`, and `blueSupplyCollateralBorrow` keep their names and share the
+combined action shape: `collateralAssets`, `borrowAssets`, `maxLtv`, `onBehalf`, optional native
+funding and V2 reallocations, referral-fee fields, and `deadline`.
+
+`blueRepay`, `blueWithdrawCollateral`, and `blueRepayWithdrawCollateral` also keep their names and
+share one combined action shape: `repayAssets`, `repayShares`, `maxRepayAssets`,
+`collateralAssets`, `maxLtv`, `onBehalf`, optional native funding, referral-fee fields, and
+`deadline`. Full repay uses saturated `repayShares`; share-mode deadlines are limited to the SDK's
+two-hour funding quote horizon.
+
+Token funding and Morpho authorization target BlueBundlesV1. Borrow and collateral-withdraw legs
+retain the buffered LLTV guard. Pure collateral supply and pure repay disable the onchain LTV cap
+so they can improve an unhealthy position.
+
+`RepayAmountArgs` and `RepayActionAmountArgs` are removed; use the mutually exclusive
+`repayAssets` / `repayShares` fields instead.
+
 ## Removed action-output field: `reallocationFee`
 
 `BlueBorrowAction`, `BlueWithdrawAction`, `BlueSupplyCollateralBorrowAction`, and
