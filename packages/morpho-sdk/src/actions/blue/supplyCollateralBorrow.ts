@@ -1,227 +1,248 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import { deepFreeze } from "@morpho-org/morpho-ts";
-import { type Address, isAddressEqual } from "viem";
-import { type Action, BundlerAction } from "../../bundler/index.js";
-import { addTransactionMetadata } from "../../helpers/index.js";
+import { type Address, encodeFunctionData } from "viem";
+import { blueBundlesV1Abi } from "../../abis.js";
 import {
   type AuthorizationRequirementSignature,
+  type BlueBundlesV1TokenRequirementSignature,
   type BlueSupplyCollateralBorrowAction,
-  type DepositAmountArgs,
+  InputExceedsMaxError,
   type Metadata,
   NegativeInputError,
   NonPositiveInputError,
-  type PermitRequirementSignature,
+  ReallocationsRequireBorrowError,
   type Transaction,
+  UnexpectedRequirementSignatureError,
   type VaultV2BlueReallocation,
 } from "../../types/index.js";
-import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
-import { buildAssetFundingActions } from "./buildAssetFundingActions.js";
-import { buildBlueReallocationActions } from "./buildReallocationActions.js";
+import {
+  type BlueBundlesV1CommonParams,
+  finalizeBlueBundlesV1Transaction,
+  getBlueBundlesV1PenaltyAssets,
+  getBlueBundlesV1PublicAllocations,
+  getBlueBundlesV1SignedAuthorization,
+  getBlueBundlesV1TokenPermit,
+  normalizeBlueBundlesV1CommonParams,
+  validateBlueBundlesV1NativeFunding,
+} from "./common.js";
 
 /** Parameters for {@link blueSupplyCollateralBorrow}. */
 export interface BlueSupplyCollateralBorrowParams {
+  /** Chain and scoped Morpho Blue market. */
   market: {
     readonly chainId: number;
     readonly marketParams: MarketParams;
   };
-  args: DepositAmountArgs & {
-    /** Amount of loan asset to borrow after the collateral is supplied. */
-    borrowAmount: bigint;
-    /** Address whose Morpho collateral and borrow positions are credited. */
-    onBehalf: Address;
-    /** Address that receives the borrowed assets. */
-    receiver: Address;
-    /** Minimum borrow share price (in ray). Protects against share price manipulation. */
-    minSharePrice: bigint;
-    /** Optional pre-signed permit/permit2 approval for the collateral transfer. */
-    requirementSignature?: PermitRequirementSignature;
-    /** Optional Vault V2 BluePublicAllocator reallocations to execute before borrowing. */
+  /** Direct BlueBundlesV1 combined-operation arguments. */
+  args: {
+    /** User whose collateral and debt position is changed. */
+    userAddress: Address;
+    /** Gross collateral supplied; zero selects a pure borrow. */
+    collateralAssets: bigint;
+    /** Loan assets borrowed; zero selects a pure collateral supply. */
+    borrowAssets: bigint;
+    /** Maximum post-operation LTV enforced by BlueBundlesV1. */
+    maxLtv: bigint;
+    /** Full native collateral funding; must equal `collateralAssets`. */
+    nativeAmount?: bigint;
+    /** Optional validated Vault V2 BluePublicAllocator reallocations. */
     reallocations?: Iterable<VaultV2BlueReallocation>;
-    /**
-     * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
-     * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a
-     * standalone `setAuthorization` transaction.
-     */
+    /** Final call deadline in Unix seconds. */
+    deadline: bigint;
+    /** Optional WAD-scaled referral fee, strictly below 100%. */
+    referralFeePct?: bigint;
+    /** Recipient required when `referralFeePct` is positive. */
+    referralFeeRecipient?: Address;
+    /** Optional collateral ERC-2612 or Permit2 SignatureTransfer result. */
+    requirementSignature?: BlueBundlesV1TokenRequirementSignature;
+    /** Optional Morpho authorization signature for BlueBundlesV1. */
     authorizationSignature?: AuthorizationRequirementSignature;
   };
+  /** Optional transaction metadata suffix. */
   metadata?: Metadata;
 }
 
 /**
- * Prepares an atomic supply-collateral-and-borrow transaction for a Morpho Blue market.
+ * Encodes a direct BlueBundlesV1 collateral supply and/or borrow transaction.
  *
- * Routed through bundler3: collateral funding → `morphoSupplyCollateral` → optional Vault V2
- * BluePublicAllocator calls → `morphoBorrow`. When `nativeAmount > 0`, native ETH is wrapped via
- * `GeneralAdapter1.wrapNative()` before the supply leg. Vault V2 penalties are paid in the target
- * loan token and donated to the vaults. When the
- * collateral and loan tokens match, one combined pull funds both collateral and penalties through
- * `GeneralAdapter1`.
+ * Reallocations are Vault V2-only and require a borrow leg. Penalties and referral fees reduce
+ * borrow proceeds. This route has no Bundler3 share-price bound or `slippageTolerance` input.
  *
- * Prerequisite: `GeneralAdapter1` must be authorized on Morpho to borrow on behalf of the user.
- * Use `getRequirements()` on the entity to check and obtain the authorization transaction.
- *
- * Zero loss: all collateral reaches Morpho, all borrowed tokens reach the receiver. No dust left
- * in bundler or adapter.
- *
- * @param params.market.chainId - The chain the market lives on.
- * @param params.market.marketParams - Market params (loanToken, collateralToken, oracle, irm, lltv).
- * @param params.args.amount - Amount of ERC-20 collateral to supply. At least one of `amount` or
- *   `nativeAmount` must be positive. Defaults to `0n`.
- * @param params.args.borrowAmount - Loan asset amount to borrow.
- * @param params.args.onBehalf - Address whose Morpho position is credited with the collateral.
- * @param params.args.receiver - Address that receives the borrowed assets.
- * @param params.args.minSharePrice - Minimum borrow share price (in ray). Slippage protection.
- * @param params.args.requirementSignature - Optional pre-signed permit/permit2 approval for the
- *   collateral funding. When collateral and loan tokens match, its amount includes V2 penalties.
- * @param params.args.nativeAmount - Optional amount of native token to wrap into wNative for the
- *   collateral supply. Requires the collateral token to be the chain's wNative.
- * @param params.args.reallocations - Optional Vault V2 reallocations to execute between the
- *   supply and borrow legs.
- * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
- *   a `setAuthorizationWithSig` call is prepended to the bundle.
- * @param params.metadata - Optional analytics metadata attached to the bundle.
- * @returns A deep-frozen `Transaction<BlueSupplyCollateralBorrowAction>` with `to`, `value`,
- *   `data`, and the typed `action` discriminator the simulation layer consumes.
- * @throws {NegativeInputError} when `amount`, `nativeAmount`, `minSharePrice`, a V1 fee, or a V2
- *   penalty is negative.
- * @throws {NonPositiveInputError} when `borrowAmount <= 0n`, both collateral amounts resolve to
- *   zero, or any reallocation withdrawal amount is non-positive.
- * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
- * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
- * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
- * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
- * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
- * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the collateral
- *   token is not the chain's wNative.
- * @throws {DepositAssetMismatchError} from `getTokenRequirementActions` when `requirementSignature`
- *   is provided and the signed asset differs from `marketParams.collateralToken`.
- * @throws {DepositAmountMismatchError} from `getTokenRequirementActions` when `requirementSignature`
- *   is provided and the signed amount differs from the total ERC-20 funding amount.
- * @throws {Permit2ExpirationMissingError} from `getTokenRequirementActions` when a Permit2 requirement
- *   signature is missing its expiration.
- * @throws {EmptyReallocationWithdrawalsError} when any `reallocation.withdrawals` is empty.
- * @throws {ReallocationWithdrawalOnTargetMarketError} when any reallocation withdrawal references
- *   the target market.
- * @throws {UnsortedReallocationWithdrawalsError} when reallocation withdrawals are not strictly
- *   sorted by market id.
+ * @param params - Combined-operation encoding parameters.
+ * @param params.market.chainId - Chain containing BlueBundlesV1.
+ * @param params.market.marketParams - Scoped Morpho Blue market parameters.
+ * @param params.args.userAddress - User whose position is changed.
+ * @param params.args.collateralAssets - Gross collateral supplied, or zero.
+ * @param params.args.borrowAssets - Loan assets borrowed, or zero.
+ * @param params.args.maxLtv - Maximum post-operation LTV.
+ * @param params.args.nativeAmount - Exclusive native collateral funding.
+ * @param params.args.reallocations - Vault V2 reallocations executed before borrowing.
+ * @param params.args.deadline - Final call deadline in Unix seconds.
+ * @param params.args.referralFeePct - Optional WAD-scaled fee below 100%.
+ * @param params.args.referralFeeRecipient - Recipient required for a positive fee.
+ * @param params.args.requirementSignature - Optional collateral token signature.
+ * @param params.args.authorizationSignature - Optional Blue authorization signature.
+ * @param params.metadata - Optional transaction metadata.
+ * @returns A deep-frozen `Readonly<Transaction<BlueSupplyCollateralBorrowAction>>`
+ *   whose `to` address is BlueBundlesV1 and whose `action` records the normalized inputs.
+ * @throws {NegativeInputError} when an amount, `maxLtv`, native value, or fee is negative.
+ * @throws {NonPositiveInputError} when both operation legs are zero, the deadline is not positive,
+ *   or a reallocation amount is not positive.
+ * @throws {ReallocationsRequireBorrowError} when reallocations accompany no borrow.
+ * @throws {InputExceedsMaxError} when a fee, reallocation amount, or penalty exceeds its ABI bound.
+ * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
+ * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
+ * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.
+ * @throws {InconsistentReallocationPenaltyError} when one vault uses different penalties.
+ * @throws {ReallocationWithdrawalOnTargetMarketError} when a source is the target market.
+ * @throws {ReallocationLoanTokenMismatchError} when a source market uses another loan token.
+ * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
+ * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
+ * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
+ * @throws {UnexpectedRequirementSignatureError} when a signature is supplied for an inactive leg.
+ * @throws {DepositOwnerMismatchError} when a signed owner differs from `userAddress`.
+ * @throws {DepositAssetMismatchError} when the signed asset differs from the collateral token.
+ * @throws {DepositAmountMismatchError} when the signed amount differs from `collateralAssets`.
+ * @throws {DepositSpenderMismatchError} when the signed spender is not BlueBundlesV1.
+ * @throws {BlueBundlesV1RequirementSignatureMismatchError} when a signature cannot be bound safely.
+ * @throws {UnsupportedChainIdError} when the chain is absent from the registry.
+ * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
  * @example
  * ```ts
+ * import { markets } from "@morpho-org/morpho-test";
  * import { blueSupplyCollateralBorrow } from "@morpho-org/morpho-sdk";
+ * import { maxUint256, zeroAddress } from "viem";
+ * import { mainnet } from "viem/chains";
  *
+ * const marketParams = markets[mainnet.id].usdc_wbtc;
  * const tx = blueSupplyCollateralBorrow({
- *   market: { chainId: 1, marketParams },
+ *   market: { chainId: mainnet.id, marketParams },
  *   args: {
- *     amount: 1_000_000_000_000_000_000n,
- *     borrowAmount: 500_000_000n,
- *     onBehalf: borrower,
- *     receiver: borrower,
- *     minSharePrice: 0n, // disables slippage protection — production code should compute via `computeMinBorrowSharePrice` from market state + slippage tolerance
+ *     userAddress: zeroAddress,
+ *     collateralAssets: 1_000_000_000_000_000_000n,
+ *     borrowAssets: 0n,
+ *     maxLtv: maxUint256,
+ *     deadline: 1_900_000_000n,
  *   },
  * });
  * // tx satisfies Readonly<Transaction<BlueSupplyCollateralBorrowAction>>
  * ```
  */
-export const blueSupplyCollateralBorrow = ({
-  market: { chainId, marketParams },
-  args: {
-    amount = 0n,
-    borrowAmount,
-    onBehalf,
-    receiver,
-    minSharePrice,
+export const blueSupplyCollateralBorrow = (
+  params: BlueSupplyCollateralBorrowParams,
+): Readonly<Transaction<BlueSupplyCollateralBorrowAction>> => {
+  const { chainId, marketParams } = params.market;
+  const {
+    userAddress,
+    collateralAssets,
+    borrowAssets,
+    maxLtv,
     requirementSignature,
-    nativeAmount,
-    reallocations,
     authorizationSignature,
-  },
-  metadata,
-}: BlueSupplyCollateralBorrowParams): Readonly<
-  Transaction<BlueSupplyCollateralBorrowAction>
-> => {
-  if (amount < 0n) {
-    throw new NegativeInputError("amount", amount);
+  } = params.args;
+  if (collateralAssets < 0n) {
+    throw new NegativeInputError("collateralAssets", collateralAssets);
+  }
+  if (borrowAssets < 0n) {
+    throw new NegativeInputError("borrowAssets", borrowAssets);
+  }
+  if (maxLtv < 0n) {
+    throw new NegativeInputError("maxLtv", maxLtv);
+  }
+  if (collateralAssets === 0n && borrowAssets === 0n) {
+    throw new NonPositiveInputError("collateralAssets or borrowAssets", 0n);
   }
 
-  if (nativeAmount !== undefined && nativeAmount < 0n) {
-    throw new NegativeInputError("nativeAmount", nativeAmount);
+  const reallocations = [...(params.args.reallocations ?? [])];
+  if (borrowAssets === 0n && reallocations.length > 0) {
+    throw new ReallocationsRequireBorrowError();
+  }
+  if (collateralAssets === 0n && requirementSignature != null) {
+    throw new UnexpectedRequirementSignatureError(
+      requirementSignature.action.type === "permit2TransferFrom"
+        ? "permit2TransferFrom"
+        : "permit",
+    );
+  }
+  if (borrowAssets === 0n && authorizationSignature != null) {
+    throw new UnexpectedRequirementSignatureError("authorization");
   }
 
-  if (borrowAmount <= 0n) {
-    throw new NonPositiveInputError("borrowAmount", borrowAmount);
-  }
-
-  if (minSharePrice < 0n) {
-    throw new NegativeInputError("minSharePrice", minSharePrice);
-  }
-
-  const totalCollateral = amount + (nativeAmount ?? 0n);
-
-  if (totalCollateral === 0n) {
-    throw new NonPositiveInputError("totalCollateral", totalCollateral);
-  }
-
-  const usesSharedFundingToken = isAddressEqual(
-    marketParams.collateralToken,
-    marketParams.loanToken,
-  );
-  const reallocationResult = buildBlueReallocationActions({
+  const common: BlueBundlesV1CommonParams = {
     chainId,
+    userAddress,
+    deadline: params.args.deadline,
+    referralFeePct: params.args.referralFeePct,
+    referralFeeRecipient: params.args.referralFeeRecipient,
+    metadata: params.metadata,
+  };
+  const { referralFeePct, referralFeeRecipient } =
+    normalizeBlueBundlesV1CommonParams(common);
+  const value = validateBlueBundlesV1NativeFunding({
+    chainId,
+    token: marketParams.collateralToken,
+    fundedAmount: collateralAssets,
+    nativeAmount: params.args.nativeAmount,
+    requirementSignature,
+  });
+  const collateralPermit = getBlueBundlesV1TokenPermit({
+    chainId,
+    userAddress,
+    token: marketParams.collateralToken,
+    amount: collateralAssets,
+    requirementSignature,
+  });
+  const signedAuthorization = getBlueBundlesV1SignedAuthorization({
+    chainId,
+    userAddress,
+    authorizationSignature,
+  });
+  const publicAllocations = getBlueBundlesV1PublicAllocations(
     reallocations,
-    targetMarketParams: marketParams,
-    penaltyFundingSource: usesSharedFundingToken
-      ? "generalAdapter1"
-      : "initiator",
-  });
-  const erc20FundingAmount =
-    amount + (usesSharedFundingToken ? reallocationResult.penaltyAssets : 0n);
-
-  const actions: Action[] = [];
-
-  if (authorizationSignature) {
-    actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
-  }
-
-  actions.push(
-    ...buildAssetFundingActions({
-      chainId,
-      asset: marketParams.collateralToken,
-      erc20Amount: erc20FundingAmount,
-      nativeAmount: nativeAmount ?? 0n,
-      requirementSignature,
-    }),
+    marketParams,
   );
-
-  actions.push({
-    type: "morphoSupplyCollateral",
-    args: [marketParams, totalCollateral, onBehalf, [], false],
-  });
-  actions.push(...reallocationResult.actions);
-
-  actions.push({
-    type: "morphoBorrow",
-    args: [marketParams, borrowAmount, 0n, minSharePrice, receiver, false],
-  });
-
-  let tx = BundlerAction.encodeBundle(chainId, actions);
-
-  if (metadata) {
-    tx = addTransactionMetadata(tx, metadata);
+  const reallocationPenaltyAssets =
+    getBlueBundlesV1PenaltyAssets(publicAllocations);
+  if (reallocationPenaltyAssets > borrowAssets) {
+    throw new InputExceedsMaxError({
+      field: "reallocationPenaltyAssets",
+      value: reallocationPenaltyAssets,
+      max: borrowAssets,
+    });
   }
 
-  return deepFreeze({
-    ...tx,
+  return finalizeBlueBundlesV1Transaction({
+    common,
+    value,
+    data: encodeFunctionData({
+      abi: blueBundlesV1Abi,
+      functionName: "blueBundlesV1SupplyCollateralAndBorrow",
+      args: [
+        marketParams,
+        collateralAssets,
+        borrowAssets,
+        maxLtv,
+        collateralPermit,
+        signedAuthorization,
+        publicAllocations,
+        referralFeePct,
+        referralFeeRecipient,
+        params.args.deadline,
+      ],
+    }),
     action: {
       type: "blueSupplyCollateralBorrow",
       args: {
         market: marketParams.id,
-        collateralAmount: totalCollateral,
-        borrowAmount,
-        minSharePrice,
-        onBehalf,
-        receiver,
-        nativeAmount,
-        reallocationFee: reallocationResult.fee,
-        reallocationPenaltyAssets: reallocationResult.penaltyAssets,
+        collateralAssets,
+        borrowAssets,
+        maxLtv,
+        onBehalf: userAddress,
+        nativeAmount: value > 0n ? value : undefined,
+        reallocations: publicAllocations.length,
+        reallocationPenaltyAssets,
+        referralFeePct,
+        referralFeeRecipient,
+        deadline: params.args.deadline,
       },
     },
   });
