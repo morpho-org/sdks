@@ -952,6 +952,8 @@ export interface BlueActions {
    * @param params.block.timestamp - Timestamp corresponding to the fetched block.
    * @returns A VaultV1ReallocationData instance populated with all required data.
    * @throws {ChainIdMismatchError} when the client chain does not match this market.
+   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
+   * {@link getVaultV2BlueReallocationData}.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -985,7 +987,8 @@ export interface BlueActions {
    * @param params.block.timestamp - Timestamp corresponding to the fetched block.
    * @returns A `VaultV1ReallocationData` snapshot populated from one block.
    * @throws {ChainIdMismatchError} when the client chain does not match this market.
-   * @deprecated Use {@link getVaultV1ReallocationData} instead.
+   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
+   * {@link getVaultV2BlueReallocationData}.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";
@@ -1078,6 +1081,8 @@ export interface BlueActions {
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds the target market supply.
    * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
    * @throws {UnknownReallocationMarketError} when the target market is absent from the reallocation data.
+   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
+   * {@link getVaultV2BlueReallocations}.
    * @example
    * ```ts
    * const reallocations = market.getVaultV1Reallocations({
@@ -1105,7 +1110,8 @@ export interface BlueActions {
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
    * @throws {MissingPublicAllocatorConfigError} when a selected vault lacks allocator state.
    * @throws {UnknownReallocationMarketError} when the target market is absent.
-   * @deprecated Use {@link getVaultV1Reallocations} instead.
+   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
+   * {@link getVaultV2BlueReallocations}.
    * @example
    * ```ts
    * const reallocations = market.getReallocations({
@@ -2294,6 +2300,8 @@ export class MorphoBlue implements BlueActions {
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when `operation === "withdraw"` and `amount` exceeds the target market's `totalSupplyAssets`.
    * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
    * @throws {UnknownReallocationMarketError} when the target market is absent from the reallocation data.
+   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
+   * {@link getVaultV2BlueReallocations}.
    * @example
    * ```ts
    * const reallocations = market.getVaultV1Reallocations({
@@ -2344,7 +2352,8 @@ export class MorphoBlue implements BlueActions {
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
    * @throws {MissingPublicAllocatorConfigError} when a selected vault lacks allocator state.
    * @throws {UnknownReallocationMarketError} when the target market is absent.
-   * @deprecated Use {@link getVaultV1Reallocations} instead.
+   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
+   * {@link getVaultV2BlueReallocations}.
    * @example
    * ```ts
    * const reallocations = market.getReallocations({
