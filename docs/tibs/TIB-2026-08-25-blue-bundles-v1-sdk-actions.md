@@ -5,7 +5,7 @@
 | **Status** | Proposed                                   |
 | **Date**   | 2026-08-25                                 |
 | **Author** | @Rubilmax / Carapulse draft                |
-| **Scope**  | `morpho-sdk` 6.0.0, WDK 2.0.0, and `liquidity-sdk-viem` patch |
+| **Scope**  | V1 reallocation deprecation minor, `morpho-sdk` 6.0.0, WDK 2.0.0, and `liquidity-sdk-viem` patch |
 
 ---
 
@@ -20,42 +20,48 @@ for the same user intent. Version 6.0.0 instead makes it the single high-level w
 
 ## Decision
 
-Keep `client.morpho.blue(marketParams, chainId)` as the public Blue entrypoint, but replace its write
-surface with five methods that call the registered `BlueBundlesV1` deployment directly.
+Keep `client.morpho.blue(marketParams, chainId)` and its established write-method names, but replace
+their implementations with calls to the registered `BlueBundlesV1` deployment.
 
 Do not add `client.morpho.blueBundlesV1(...)`, a route flag, or a Bundler3 fallback. Read methods
 and reallocation data helpers remain on the Blue entity.
 
 This migration invokes the narrow `BlueBundlesV1` route exception in [`AGENTS.md`](../../AGENTS.md)
-§7. The listed replacements and downstream WDK input changes land with their removals, without a
-prior deprecation minor, because publishing both routes would preserve the product ambiguity this
-decision removes.
+§7. The route-specific input and output changes, plus downstream WDK input changes, land directly
+because publishing both routes would preserve the product ambiguity this decision removes.
+Established method and action names remain.
+
+Vault V1 reallocations are excluded from that exception. The existing Vault V2 successor is
+promoted while the high-level Blue and WDK Vault V1 reallocation flows are deprecated in a
+published minor. The 6.0.0 and 2.0.0 releases then accept only Vault V2 reallocations. Vault V1
+planning data and low-level Bundler3 composition remain available after the high-level switch.
 
 ## Public interface
 
 The Blue entity owns the source market, so methods do not repeat `marketParams`. Migration receives
 only the destination market.
 
-| Blue method | Replaces | `BlueBundlesV1` entrypoint |
-| ----------- | -------- | -------------------------- |
-| `supply` | `supply` | `supply` |
-| `withdraw` | `withdraw` | `withdraw` |
-| `supplyCollateralAndBorrow` | `supplyCollateral`, `borrow`, `supplyCollateralBorrow` | `supplyCollateralAndBorrow` |
-| `repayAndWithdrawCollateral` | `repay`, `withdrawCollateral`, `repayWithdrawCollateral` | `repayAndWithdrawCollateral` |
-| `migrateBorrowPosition` | `refinance` | `migrateBorrowPosition` |
+| Blue method | `BlueBundlesV1` entrypoint |
+| ----------- | -------------------------- |
+| `supply` | `supply` |
+| `withdraw` | `withdraw` |
+| `supplyCollateral`, `borrow`, `supplyCollateralBorrow` | `supplyCollateralAndBorrow` |
+| `repay`, `withdrawCollateral`, `repayWithdrawCollateral` | `repayAndWithdrawCollateral` |
+| `refinance` | `migrateBorrowPosition` |
 
 The two combined methods accept either leg alone or both legs together. At least one leg must be
-nonzero. `migrateBorrowPosition` uses the scoped market as source and always moves the full live
-borrow position.
+nonzero. The simple methods delegate to the compatible combined call with the inactive leg set to
+zero. `refinance` uses the scoped market as source and always moves the full live borrow position.
 
-All five methods keep the existing lazy action shape:
+All methods keep the existing lazy action shape:
 
 - `getRequirements()` returns only token funding and Blue authorization required by that call;
 - `buildTx(signatures)` stays synchronous and encode-only;
 - the returned transaction targets `BlueBundlesV1`, never Bundler3 or GeneralAdapter1.
 
-The pure action surface follows the same five operations. It encodes direct contract calls rather
-than exposing a `BundlerAction[]` composition.
+The pure action surface keeps the established operation names. Combined actions encode the direct
+contract calls; simple actions delegate to the corresponding combined encoder with a zero inactive
+leg rather than exposing a `BundlerAction[]` composition.
 
 ## Product behavior
 
@@ -65,18 +71,18 @@ than exposing a `BundlerAction[]` composition.
 - Each call accepts the contract deadline and optional referral-fee configuration. Native funding
   remains available only when the funded token is the chain's wrapped native token.
 - `supply` treats `assets` as gross funding; the referral fee reduces the amount supplied.
-- `supplyCollateralAndBorrow` supports pure collateral supply, pure borrow, or both. Allocator
+- `supplyCollateralBorrow` supports pure collateral supply, pure borrow, or both. Allocator
   penalties and referral fees reduce borrow proceeds.
-- `repayAndWithdrawCollateral` supports assets or shares repayment, collateral withdrawal, or both.
+- `repayWithdrawCollateral` supports assets or shares repayment, collateral withdrawal, or both.
   Full repay uses the contract's saturated shares value; `maxRepayAssets` covers debt plus fees and
   unused funding is refunded.
 - `withdraw` supports assets or shares. Fees and allocator penalties reduce assets received; shares
   mode has no onchain minimum-assets guarantee.
-- `migrateBorrowPosition` moves the full live debt and collateral between markets with identical
+- `refinance` moves the full live debt and collateral between markets with identical
   loan and collateral tokens. Fees and allocator penalties increase destination debt. Partial and
   collateral-only migration are not supported.
-- Vault V2 Blue reallocations map directly to the contract's `PublicAllocations`. Vault V1
-  reallocations are no longer accepted by high-level Blue writes.
+- Vault V2 Blue reallocations map directly to the contract's `PublicAllocations`. After a published
+  deprecation minor, Vault V1 reallocations are no longer accepted by high-level Blue writes.
 - Bundler3 share-price bounds and their `slippageTolerance` inputs are removed because
   `BlueBundlesV1` cannot enforce them.
 - For the two combined entrypoints, pure collateral-supply and pure-repay calls pass
@@ -91,25 +97,28 @@ entity layer where compatible with these contract semantics.
 
 This ships in `@morpho-org/morpho-sdk` 6.0.0.
 
-- Replace `supplyCollateral`, `borrow`, and `supplyCollateralBorrow` calls with
-  `supplyCollateralAndBorrow` and set the unused leg to zero.
-- Replace `repay`, `withdrawCollateral`, and `repayWithdrawCollateral` calls with
-  `repayAndWithdrawCollateral` and set the unused leg to zero.
-- Replace `refinance` with `migrateBorrowPosition`; callers requesting partial migration must change
-  product behavior or remain on the previous major.
-- Update transaction discriminators, approval spenders, authorization targets, and simulations for
-  direct `BlueBundlesV1` calls.
-- Remove Bundler3-only share-price and Vault V1 reallocation inputs from Blue write calls.
+- Keep existing method names, but update their parameter and transaction-output shapes for the
+  direct BlueBundlesV1 route. The simple operations now delegate to their combined entrypoint.
+- `refinance` now always migrates the full live borrow position; callers requesting partial or
+  collateral-only migration must change product behavior or remain on the previous major.
+- Keep transaction discriminator names, but update their fields, approval spenders, authorization
+  targets, and simulations for direct `BlueBundlesV1` calls.
+- Remove Bundler3-only share-price inputs from Blue write calls. Remove Vault V1 reallocation inputs
+  only after their high-level SDK and WDK flows have shipped as deprecated for one minor.
 - Migrate the four affected `@morpho-org/wdk-protocol-lending-morpho-evm` call sites (`borrow`,
-  `repay`, `supplyCollateral`, and `withdrawCollateral`) to the combined replacements. Its 2.0.0
+  `repay`, `supplyCollateral`, and `withdrawCollateral`) to their direct BlueBundlesV1-backed SDK
+  methods. Its 2.0.0
   release removes Vault V1 borrow reallocations and borrow/repay slippage inputs, retains Vault V2
   reallocations, scopes its constructor-level slippage tolerance to vault flows, and updates tests
   and migration docs.
 - Widen `@morpho-org/liquidity-sdk-viem`'s `@morpho-org/morpho-sdk` peer range from `^5.4.0` to
   `^5.4.0 || ^6.0.0` after verifying its reallocation APIs against the new major.
 
-The implementation PR audits every maintained direct runtime and peer dependent. Its changeset
-bumps `@morpho-org/morpho-sdk` major, `@morpho-org/wdk-protocol-lending-morpho-evm` major, and
+The intermediate prerequisite PR ships the Permit2 correction, pinned ABI, and V1 high-level
+reallocation deprecations with the applicable patch/minor changesets. That deprecation release must
+be published before the implementation PR lands. The implementation PR audits every maintained
+direct runtime and peer dependent; its changeset bumps `@morpho-org/morpho-sdk` major,
+`@morpho-org/wdk-protocol-lending-morpho-evm` major, and
 `@morpho-org/liquidity-sdk-viem` patch. The release includes migration guides. The previous majors
 remain available for products that still require the Bundler3 route; the new majors do not carry
 both routes.
@@ -123,13 +132,14 @@ both routes.
 
 ## Verification
 
-- Public API checks cover removed methods and the five replacement signatures.
+- Public API checks cover the preserved method names and their replacement signatures.
 - Unit tests cover direct calldata, requirement targets, fees, refunds, and zero-leg composition.
 - Unit and fork tests prove pure collateral supply and pure repay use `maxUint256` and can improve an
   already-unhealthy position; borrow, collateral withdrawal, and migration retain the buffered
   limit.
 - Pinned fork tests execute each entrypoint, including full repay and full-position migration.
-- Existing Blue read and reallocation-planning APIs remain compatible.
+- Existing Blue read and reallocation-planning APIs remain compatible; the Train A minor marks the
+  high-level Vault V1 journey deprecated before Train B makes writes Vault V2-only.
 - WDK tests cover all four migrated call sites, and liquidity-sdk type-checks with the widened peer
   range.
 
