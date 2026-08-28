@@ -153,6 +153,8 @@ describe("createViemTest", () => {
   );
 
   afterAll(() => {
+    const [transport] = createAnvilTestClientMock.mock.calls[0]!;
+    expect(transport({ chain: mainnet }).config.retryCount).toBe(0);
     expect(spawnedProcesses).toBe(4);
     expect(retryProcesses).toBe(2);
     expect(retryBodies).toBe(2);
