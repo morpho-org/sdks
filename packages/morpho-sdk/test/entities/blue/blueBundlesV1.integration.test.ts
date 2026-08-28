@@ -23,21 +23,37 @@ import {
 import { base, mainnet } from "viem/chains";
 import { assert, describe, expect } from "vitest";
 import {
+  type ActionRequirement,
+  isRequirementApproval,
   isRequirementBlueAuthorization,
+  isRequirementSignature,
   morphoViemExtension,
+  type RequirementSignature,
 } from "../../../src/index.js";
 import { CbbtcUsdcBlue, WethUsdsBlue } from "../../fixtures/blue.js";
 import { borrow, supplyCollateral, supplyLoan } from "../../helpers/blue.js";
-import {
-  satisfyBlueBundlesV1Requirements,
-  blueBundlesV1Test as test,
-} from "../../helpers/blueBundlesV1.js";
 import { withChainTimestamp } from "../../helpers/time.js";
 import {
   deployMorphoMarketV1AdapterV2,
   deployVaultV2,
   submitAndAcceptVaultV2Call,
 } from "../../helpers/vaultV2.js";
+
+const migrationSource = new MarketParams({
+  loanToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+  collateralToken: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
+  oracle: "0xbD60A6770b27E084E8617335ddE769241B0e71D8",
+  irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
+  lltv: parseUnits("0.945", 18),
+});
+
+const migrationDestination = new MarketParams({
+  loanToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+  collateralToken: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
+  oracle: "0x2a01EB9496094dA03c4E364Def50f5aD1280AD72",
+  irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
+  lltv: parseUnits("0.945", 18),
+});
 
 const baseTargetMarket = new MarketParams({
   loanToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
@@ -55,11 +71,54 @@ const baseSourceMarket = new MarketParams({
   lltv: 860_000_000_000_000_000n,
 });
 
+const test = createViemTest(mainnet, {
+  forkUrl: process.env.MAINNET_RPC_URL,
+  chainId: mainnet.id,
+  forkBlockNumber: 25_832_676n, // BlueBundlesV1 deployment block.
+}).extend<{ client: AnvilTestClient<typeof mainnet> }>({
+  client: async ({ client }, use) => {
+    await client.setCode({
+      address: client.account.address,
+      bytecode: "0x",
+    });
+    await use(client);
+  },
+});
+
 const baseTest = createViemTest(base, {
   forkUrl: process.env.BASE_RPC_URL,
   forkBlockNumber: 50_438_617n, // BlueBundlesV1 deployment block.
   stepsTracing: false,
 });
+
+const satisfyRequirements = async (
+  client: AnvilTestClient,
+  params: {
+    requirements: readonly ActionRequirement[];
+    approvalFundingToken?: `0x${string}`;
+  },
+) => {
+  const { requirements, approvalFundingToken } = params;
+  const signatures: RequirementSignature[] = [];
+  for (const requirement of requirements) {
+    if (isRequirementApproval(requirement)) {
+      if (approvalFundingToken != null) {
+        await client.deal({
+          erc20: approvalFundingToken,
+          amount: requirement.action.args.amount,
+        });
+      }
+      await client.sendTransaction(requirement);
+    } else if (isRequirementBlueAuthorization(requirement)) {
+      await client.sendTransaction(requirement);
+    } else if (isRequirementSignature(requirement)) {
+      signatures.push(await requirement.sign(client, client.account.address));
+    } else {
+      throw new Error("Unexpected BlueBundlesV1 requirement");
+    }
+  }
+  return signatures;
+};
 
 const getBlueBundlesBalances = async (
   client: AnvilTestClient,
@@ -110,9 +169,7 @@ describe("BlueBundlesV1 Blue writes", () => {
     expect(
       requirements.map(({ action: requirement }) => requirement.type),
     ).toEqual(["permit"]);
-    const signatures = await satisfyBlueBundlesV1Requirements(client, {
-      requirements,
-    });
+    const signatures = await satisfyRequirements(client, { requirements });
     await client.sendTransaction(action.buildTx(signatures));
 
     const afterPosition = await market.getPositionData(client.account.address);
@@ -153,9 +210,7 @@ describe("BlueBundlesV1 Blue writes", () => {
     expect(
       requirements.map(({ action: requirement }) => requirement.type),
     ).toEqual(["authorization"]);
-    const signatures = await satisfyBlueBundlesV1Requirements(client, {
-      requirements,
-    });
+    const signatures = await satisfyRequirements(client, { requirements });
     await client.sendTransaction(action.buildTx(signatures));
 
     const afterPosition = await market.getPositionData(client.account.address);
@@ -210,9 +265,7 @@ describe("BlueBundlesV1 Blue writes", () => {
     expect(
       requirements.map(({ action: requirement }) => requirement.type),
     ).toEqual(["erc20Approval", "permit2TransferFrom", "authorization"]);
-    const signatures = await satisfyBlueBundlesV1Requirements(client, {
-      requirements,
-    });
+    const signatures = await satisfyRequirements(client, { requirements });
     expect(signatures).toMatchObject([
       {
         action: { type: "permit2TransferFrom" },
@@ -271,7 +324,7 @@ describe("BlueBundlesV1 Blue writes", () => {
       }),
     );
 
-    const signatures = await satisfyBlueBundlesV1Requirements(client, {
+    const signatures = await satisfyRequirements(client, {
       requirements: await withChainTimestamp(chainTimestamp, () =>
         action.getRequirements(),
       ),
@@ -348,7 +401,7 @@ describe("BlueBundlesV1 Blue writes", () => {
     );
     expect(requirements.some(isRequirementBlueAuthorization)).toBe(false);
     expect(action.buildTx().action.args.maxLtv).toBe(maxUint256);
-    const signatures = await satisfyBlueBundlesV1Requirements(client, {
+    const signatures = await satisfyRequirements(client, {
       requirements,
       approvalFundingToken: WethUsdsBlue.loanToken,
     });
@@ -362,6 +415,74 @@ describe("BlueBundlesV1 Blue writes", () => {
     expect(await getBlueBundlesBalances(client, [WethUsdsBlue])).toEqual(
       beforeBalances,
     );
+  });
+
+  test("refinance: moves the full live position", async ({ client }) => {
+    const collateralAssets = parseUnits("5", 18);
+    const borrowAssets = parseUnits("1", 18);
+    for (const market of [migrationSource, migrationDestination]) {
+      await supplyLoan({
+        client,
+        chainId: mainnet.id,
+        market,
+        supplyAmount: borrowAssets * 4n,
+      });
+    }
+    await supplyCollateral({
+      client,
+      chainId: mainnet.id,
+      market: migrationSource,
+      collateralAmount: collateralAssets,
+    });
+    await borrow({
+      client,
+      chainId: mainnet.id,
+      market: migrationSource,
+      borrowAmount: borrowAssets,
+    });
+
+    const morpho = client.extend(morphoViemExtension()).morpho;
+    const source = morpho.blue(migrationSource, mainnet.id);
+    const destination = morpho.blue(migrationDestination, mainnet.id);
+    const positionData = await source.getPositionData(client.account.address);
+    const destinationPositionData = await destination.getPositionData(
+      client.account.address,
+    );
+    const beforeBalances = await getBlueBundlesBalances(client, [
+      migrationSource,
+      migrationDestination,
+    ]);
+    const action = source.refinance({
+      userAddress: client.account.address,
+      positionData,
+      destination: {
+        marketParams: migrationDestination,
+        positionData: destinationPositionData,
+      },
+      deadline: maxUint256,
+    });
+
+    const signatures = await satisfyRequirements(client, {
+      requirements: await action.getRequirements(),
+    });
+    await client.sendTransaction(action.buildTx(signatures));
+
+    const sourceAfter = await source.getPositionData(client.account.address);
+    const destinationAfter = await destination.getPositionData(
+      client.account.address,
+    );
+    expect(sourceAfter.borrowShares).toBe(0n);
+    expect(sourceAfter.collateral).toBe(0n);
+    expect(destinationAfter.borrowShares).toBeGreaterThan(0n);
+    expect(destinationAfter.collateral).toBe(
+      destinationPositionData.collateral + collateralAssets,
+    );
+    expect(
+      await getBlueBundlesBalances(client, [
+        migrationSource,
+        migrationDestination,
+      ]),
+    ).toEqual(beforeBalances);
   });
 
   test("supplyCollateral: native-only collateral improves an unhealthy position", async ({
@@ -463,9 +584,7 @@ describe("BlueBundlesV1 Blue writes", () => {
 
     const requirements = await action.getRequirements();
     expect(requirements.some(isRequirementBlueAuthorization)).toBe(true);
-    const signatures = await satisfyBlueBundlesV1Requirements(client, {
-      requirements,
-    });
+    const signatures = await satisfyRequirements(client, { requirements });
     await client.sendTransaction(action.buildTx(signatures));
 
     const afterPosition = await market.getPositionData(client.account.address);
@@ -717,7 +836,7 @@ describe("BlueBundlesV1 Vault V2 reallocations", () => {
         reallocations: discovery.reallocations,
         deadline: maxUint256,
       });
-      const signatures = await satisfyBlueBundlesV1Requirements(anvilClient, {
+      const signatures = await satisfyRequirements(anvilClient, {
         requirements: await action.getRequirements(),
         approvalFundingToken: baseTargetMarket.loanToken,
       });

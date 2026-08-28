@@ -243,22 +243,20 @@ export interface BlueRepayWithdrawCollateralAction
     BlueRepayWithdrawCollateralActionArgs
   > {}
 
+/** Metadata for a direct BlueBundlesV1 full borrow-position migration. */
 export interface BlueRefinanceAction
   extends BaseAction<
     "blueRefinance",
     {
-      readonly sourceMarket: Hex;
-      readonly targetMarket: Hex;
-      readonly collateralAmount: bigint;
-      readonly borrowAssets: bigint;
-      readonly borrowShares: bigint;
-      readonly minBorrowSharePrice: bigint;
-      readonly maxRepaySharePrice: bigint;
-      readonly user: Address;
-      /** Native-token fees paid to PublicAllocator V1. */
-      readonly reallocationFee: bigint;
-      /** Loan-token assets donated as BluePublicAllocator V2 penalties. */
-      readonly reallocationPenaltyAssets: bigint;
+      sourceMarket: Hex;
+      destinationMarket: Hex;
+      maxLtv: bigint;
+      onBehalf: Address;
+      reallocations: number;
+      reallocationPenaltyAssets: bigint;
+      referralFeePct: bigint;
+      referralFeeRecipient: Address;
+      deadline: bigint;
     }
   > {}
 
