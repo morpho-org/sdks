@@ -50,6 +50,7 @@ const VAULT = "0x00000000000000000000000000000000000000A2";
 const TARGET_ADAPTER = "0x00000000000000000000000000000000000000A3";
 const SOURCE_ADAPTER = "0x0000000000000000000000000000000000000004";
 const SIBLING_SOURCE_ADAPTER = "0x0000000000000000000000000000000000000012";
+const SIBLING_SOURCE_ADAPTER_V2 = "0x0000000000000000000000000000000000000013";
 const LOAN_TOKEN = "0x0000000000000000000000000000000000000005";
 const IRM = "0x0000000000000000000000000000000000000006";
 const OTHER_LOAN_TOKEN = "0x0000000000000000000000000000000000000010";
@@ -685,6 +686,7 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     });
 
     expect(context.firstTotalAssets).toStrictEqual({});
+    expect(transition.firstTotalAssets).toBe(data.getVault(VAULT)._totalAssets);
     expect(transition.context.firstTotalAssets[VAULT]).toBe(
       data.getVault(VAULT)._totalAssets,
     );
@@ -1128,9 +1130,10 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     ).toBe(finalCanonicalMarket);
   });
 
-  test("behavior: deep-clones legacy and nested accrued adapters", () => {
+  test("behavior: deep-clones accrued adapters and isolates source-market probes", () => {
     const { data, targetAdapterMarketCapId } = makeFixture();
     const targetMarket = data.getMarket(targetParams.id);
+    const sourceMarket = new Market({ ...data.getMarket(sourceParams.id) });
     const legacyPosition = new AccrualPosition(
       {
         user: LEGACY_MARKET_ADAPTER,
@@ -1149,6 +1152,17 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       },
       [legacyPosition],
     );
+    const siblingV2Adapter = new AccrualVaultV2MorphoMarketV1AdapterV2(
+      {
+        address: SIBLING_SOURCE_ADAPTER_V2,
+        parentVault: VAULT,
+        skimRecipient: zeroAddress,
+        marketIds: [sourceMarket.id],
+        adaptiveCurveIrm: OTHER_IRM,
+        supplyShares: { [sourceMarket.id]: 0n },
+      },
+      [sourceMarket],
+    );
     const nestedPosition = new AccrualPosition(
       {
         user: NESTED_VAULT,
@@ -1157,6 +1171,15 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
         collateral: 0n,
       },
       targetMarket,
+    );
+    const nestedSourcePosition = new AccrualPosition(
+      {
+        user: NESTED_VAULT,
+        supplyShares: 0n,
+        borrowShares: 0n,
+        collateral: 0n,
+      },
+      sourceMarket,
     );
     const nestedVault = new AccrualVault(
       {
@@ -1202,6 +1225,23 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
           },
           position: nestedPosition,
         },
+        {
+          config: {
+            vault: NESTED_VAULT,
+            marketId: sourceMarket.id,
+            cap: 1_000n,
+            pendingCap: { value: 0n, validAt: 0n },
+            removableAt: 0n,
+            enabled: true,
+            publicAllocatorConfig: {
+              vault: NESTED_VAULT,
+              marketId: sourceMarket.id,
+              maxIn: 0n,
+              maxOut: 0n,
+            },
+          },
+          position: nestedSourcePosition,
+        },
       ],
     );
     const nestedAdapter = new AccrualVaultV2MorphoVaultV1Adapter(
@@ -1223,7 +1263,12 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
         ),
       },
       fixtureVault.accrualLiquidityAdapter,
-      [...fixtureVault.accrualAdapters, legacyAdapter, nestedAdapter],
+      [
+        ...fixtureVault.accrualAdapters,
+        siblingV2Adapter,
+        legacyAdapter,
+        nestedAdapter,
+      ],
       fixtureVault.assetBalance,
       fixtureVault.forceDeallocatePenalties,
     );
@@ -1258,6 +1303,13 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
       .accrualAdapters.find(
         (adapter) => adapter instanceof AccrualVaultV2MorphoMarketV1Adapter,
       );
+    const inputSiblingV2 = input
+      .getVault(VAULT)
+      .accrualAdapters.find(
+        (adapter): adapter is AccrualVaultV2MorphoMarketV1AdapterV2 =>
+          adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2 &&
+          isAddressEqual(adapter.address, SIBLING_SOURCE_ADAPTER_V2),
+      );
     const clonedLegacy = cloned
       .getVault(VAULT)
       .accrualAdapters.find(
@@ -1284,6 +1336,50 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
     expect(clonedNested?.accrualVaultV1.allocations).not.toBe(
       inputNested?.accrualVaultV1.allocations,
     );
+
+    // biome-ignore lint/complexity/useLiteralKeys: exercise probe isolation directly.
+    const probe = input["applyPublicReallocation"]({
+      context: { donatedPenaltyAssets: {}, firstTotalAssets: {} },
+      reallocation: {
+        vault: VAULT,
+        from: {
+          type: "market",
+          adapter: SOURCE_ADAPTER,
+          marketParams: sourceParams,
+        },
+        to: { adapter: TARGET_ADAPTER },
+        assets: 2n,
+        penalty: 0n,
+      },
+      targetMarketId: targetMarket.id,
+      timestamp: TIMESTAMP,
+      probe: true,
+    }).data;
+    const probedSourceMarket = probe.getMarket(sourceMarket.id);
+    const probedSiblingV2 = probe
+      .getVault(VAULT)
+      .accrualAdapters.find(
+        (adapter): adapter is AccrualVaultV2MorphoMarketV1AdapterV2 =>
+          adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2 &&
+          isAddressEqual(adapter.address, SIBLING_SOURCE_ADAPTER_V2),
+      );
+    const probedNested = probe
+      .getVault(VAULT)
+      .accrualAdapters.find(
+        (adapter) => adapter instanceof AccrualVaultV2MorphoVaultV1Adapter,
+      );
+    expect(probedSiblingV2?.markets[0]).toStrictEqual(probedSourceMarket);
+    expect(
+      probedNested?.accrualVaultV1.allocations.get(sourceMarket.id)?.position
+        .market,
+    ).toStrictEqual(probedSourceMarket);
+    expect(inputSiblingV2?.markets[0]?.totalSupplyAssets).toBe(
+      sourceMarket.totalSupplyAssets,
+    );
+    expect(
+      inputNested?.accrualVaultV1.allocations.get(sourceMarket.id)?.position
+        .market.totalSupplyAssets,
+    ).toBe(sourceMarket.totalSupplyAssets);
 
     const simulated = input.computeVaultV2BlueReallocations(
       targetMarket.id,
@@ -1916,6 +2012,36 @@ describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations", () => {
 });
 
 describe("VaultV2BlueReallocationData.computeVaultV2BlueReallocations operation", () => {
+  test("behavior: selects the nearest non-monotonic shared-cap fit", () => {
+    const maxCandidate = 2n ** 40n - 1n;
+    const penalty = MathLib.WAD / 1_000n;
+    const { data } = makeFixture({
+      sourceAdapter: TARGET_ADAPTER,
+      sourceSupply: maxCandidate,
+      targetSupply: 1n,
+      targetTotalSupplyShares: 1_000_001n,
+      targetBorrow: 0n,
+      targetPositionAssets: 0n,
+      firstTotalAssets: maxCandidate + 1n,
+      vaultLastUpdate: TIMESTAMP - 1n,
+      maxRate: MathLib.WAD,
+      penalty,
+      allocatorTargetCap: maxCandidate,
+      targetCaps: [
+        { absoluteCap: maxCandidate - 1n, relativeCap: MathLib.WAD },
+        { absoluteCap: 2n * maxCandidate, relativeCap: MathLib.WAD },
+        { absoluteCap: 2n * maxCandidate, relativeCap: MathLib.WAD },
+      ],
+    });
+
+    expect(
+      data.computeVaultV2BlueReallocations(targetParams.id, {
+        maxPenalty: penalty,
+        operation: { type: "borrow", amount: 2n },
+      }).reallocations[0]?.assets,
+    ).toBe(3n);
+  });
+
   test("default: caps friendly reallocations to the 90% target", () => {
     const { data } = makeFixture({ targetSupply: 100n, targetBorrow: 90n });
 

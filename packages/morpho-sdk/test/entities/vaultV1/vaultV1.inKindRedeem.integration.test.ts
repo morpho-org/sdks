@@ -2,13 +2,14 @@ import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
 import { createViemTest } from "@morpho-org/test/vitest";
 import { erc20Abi, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
-import { afterEach, describe, expect, vi } from "vitest";
-import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
+import { describe, expect } from "vitest";
 import {
   isRequirementApproval,
   isRequirementSignature,
   morphoViemExtension,
-} from "../../index.js";
+} from "../../../src/index.js";
+import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
+import { withChainTimestamp } from "../../helpers/time.js";
 
 // VaultExitBundlesV1 is deployed at this block. Keep the newer fork local so the shared fork
 // remains pinned to the historical state expected by the existing Morpho SDK integration suite.
@@ -19,10 +20,6 @@ const test = createViemTest(mainnet, {
 });
 
 describe("MorphoVaultV1.inKindRedeem integration", () => {
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   test("exits vault shares into Morpho Blue supply positions", async ({
     client,
   }) => {
@@ -30,12 +27,6 @@ describe("MorphoVaultV1.inKindRedeem integration", () => {
     await client.setCode({
       address: client.account.address,
       bytecode: "0x",
-    });
-    // Keep the SDK wall clock aligned with the pinned fork so its fee-accrual preview targets the
-    // same timestamp as the transaction rather than the current date.
-    vi.useFakeTimers({
-      now: Number(await client.timestamp()) * 1_000,
-      toFake: ["Date"],
     });
     const vault = client
       .extend(morphoViemExtension({ supportSignature: false }))
@@ -66,13 +57,17 @@ describe("MorphoVaultV1.inKindRedeem integration", () => {
       }),
     );
 
-    const exit = vault.inKindRedeem({
-      amount,
-      marketParamsList,
-      vaultData,
-      userAddress: client.account.address,
-    });
-    const [approval] = await exit.getRequirements();
+    const exit = withChainTimestamp(await client.timestamp(), () =>
+      vault.inKindRedeem({
+        amount,
+        marketParamsList,
+        vaultData,
+        userAddress: client.account.address,
+      }),
+    );
+    const [approval] = await withChainTimestamp(await client.timestamp(), () =>
+      exit.getRequirements(),
+    );
     if (!isRequirementApproval(approval)) {
       throw new Error("VaultExitBundlesV1 approval requirement not found");
     }
@@ -106,12 +101,6 @@ describe("MorphoVaultV1.inKindRedeem integration", () => {
       address: client.account.address,
       bytecode: "0x",
     });
-    // Keep the SDK wall clock aligned with the pinned fork so its fee-accrual preview targets the
-    // same timestamp as the transaction rather than the current date.
-    vi.useFakeTimers({
-      now: Number(await client.timestamp()) * 1_000,
-      toFake: ["Date"],
-    });
     const vault = client
       .extend(morphoViemExtension({ supportSignature: true }))
       .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
@@ -135,13 +124,18 @@ describe("MorphoVaultV1.inKindRedeem integration", () => {
       args: [client.account.address],
     });
 
-    const exit = vault.inKindRedeem({
-      amount,
-      marketParamsList,
-      vaultData,
-      userAddress: client.account.address,
-    });
-    const [permitRequirement] = await exit.getRequirements();
+    const exit = withChainTimestamp(await client.timestamp(), () =>
+      vault.inKindRedeem({
+        amount,
+        marketParamsList,
+        vaultData,
+        userAddress: client.account.address,
+      }),
+    );
+    const [permitRequirement] = await withChainTimestamp(
+      await client.timestamp(),
+      () => exit.getRequirements(),
+    );
     if (!isRequirementSignature(permitRequirement)) {
       throw new Error("VaultExitBundlesV1 permit requirement not found");
     }

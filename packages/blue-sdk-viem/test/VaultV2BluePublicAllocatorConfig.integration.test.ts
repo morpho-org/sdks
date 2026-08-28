@@ -8,9 +8,9 @@ import { createViemTest } from "@morpho-org/test/vitest";
 import { encodeFunctionData, parseEther } from "viem";
 import { base } from "viem/chains";
 import { assert, describe, expect } from "vitest";
-import { vaultV2Abi, vaultV2BluePublicAllocatorAbi } from "../../abis.js";
-import { fetchAccrualVaultV2 } from "./VaultV2.js";
-import { fetchVaultV2BluePublicAllocatorData } from "./VaultV2BluePublicAllocatorConfig.js";
+import { vaultV2Abi, vaultV2BluePublicAllocatorAbi } from "../src/abis.js";
+import { fetchAccrualVaultV2 } from "../src/fetch/vault-v2/VaultV2.js";
+import { fetchVaultV2BluePublicAllocatorData } from "../src/fetch/vault-v2/VaultV2BluePublicAllocatorConfig.js";
 
 const vaultV2BluePublicAllocatorTest = createViemTest(base, {
   forkUrl: process.env.BASE_RPC_URL,

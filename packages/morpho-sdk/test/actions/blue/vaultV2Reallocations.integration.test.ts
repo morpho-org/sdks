@@ -23,17 +23,17 @@ import {
 } from "viem";
 import { base } from "viem/chains";
 import { assert, describe, expect } from "vitest";
-import { supplyCollateral } from "../../../test/helpers/blue.js";
-import {
-  deployMorphoMarketV1AdapterV2,
-  deployVaultV2,
-  submitAndAcceptVaultV2Call,
-} from "../../../test/helpers/vaultV2.js";
 import {
   isRequirementApproval,
   isRequirementBlueAuthorization,
   morphoViemExtension,
-} from "../../index.js";
+} from "../../../src/index.js";
+import { supplyCollateral } from "../../helpers/blue.js";
+import {
+  deployMorphoMarketV1AdapterV2,
+  deployVaultV2,
+  submitAndAcceptVaultV2Call,
+} from "../../helpers/vaultV2.js";
 
 const test = createViemTest(base, {
   forkUrl: process.env.BASE_RPC_URL,

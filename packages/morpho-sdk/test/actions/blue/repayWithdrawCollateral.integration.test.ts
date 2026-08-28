@@ -5,29 +5,31 @@ import {
 import { Time } from "@morpho-org/morpho-ts";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
-import { afterEach, describe, expect, vi } from "vitest";
+import { describe, expect } from "vitest";
 import {
   isRequirementApproval,
+  isRequirementBlueAuthorization,
   MissingAccrualPositionError,
   morphoViemExtension,
   NonPositiveInputError,
   RepayExceedsDebtError,
-  RepaySharesExceedDebtError,
   ShareDivideByZeroError,
+  WithdrawMakesPositionUnhealthyError,
 } from "../../../src/index.js";
 import { WethUsdsBlue, WstethWethBlue } from "../../fixtures/blue.js";
 import { borrow, supplyCollateral } from "../../helpers/blue.js";
 import { testInvariants } from "../../helpers/invariants.js";
+import { withChainTimestamp } from "../../helpers/time.js";
 import { test } from "../../setup.js";
 
-describe("RepayBlue", () => {
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-  test("should repay loan token (by assets)", async ({ client }) => {
+describe("RepayWithdrawCollateralBlue", () => {
+  test("should repay and withdraw collateral (by assets)", async ({
+    client,
+  }) => {
     const collateralAmount = parseUnits("10", 18);
     const borrowAmount = parseUnits("1000", 18);
     const repayAmount = parseUnits("500", 18);
+    const withdrawAmount = parseUnits("1", 18);
 
     await supplyCollateral({
       client,
@@ -52,28 +54,32 @@ describe("RepayBlue", () => {
         markets: { WethUsdsBlue },
       },
       actionFn: async () => {
-        const morphoClient = client.extend(morphoViemExtension()).morpho;
+        const morphoClient = client.extend(
+          morphoViemExtension({
+            supportSignature: false,
+          }),
+        ).morpho;
         const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
         );
 
-        const repay = market.repay({
+        const action = market.repayWithdrawCollateral({
           userAddress: client.account.address,
           amount: repayAmount,
+          withdrawAmount,
           positionData,
         });
 
-        const requirements = await repay.getRequirements();
+        const requirements = await action.getRequirements();
 
-        // Repay should NOT have morpho authorization requirement
         const approval = requirements[0];
         if (!isRequirementApproval(approval)) {
           throw new Error("Approval requirement not found");
         }
         await client.sendTransaction(approval);
 
-        const tx = repay.buildTx();
+        const tx = action.buildTx();
         await client.sendTransaction(tx);
       },
     });
@@ -81,16 +87,17 @@ describe("RepayBlue", () => {
     expect(finalState.userLoanTokenBalance).toEqual(
       initialState.userLoanTokenBalance - repayAmount,
     );
-    expect(finalState.morphoLoanTokenBalance).toEqual(
-      initialState.morphoLoanTokenBalance + repayAmount,
+    expect(finalState.userCollateralTokenBalance).toEqual(
+      initialState.userCollateralTokenBalance + withdrawAmount,
     );
-    // Collateral should not change
     expect(finalState.position.collateral).toEqual(
-      initialState.position.collateral,
+      initialState.position.collateral - withdrawAmount,
     );
   });
 
-  test("should full repay by shares", async ({ client }) => {
+  test("should full repay by shares and withdraw all collateral", async ({
+    client,
+  }) => {
     const collateralAmount = parseUnits("10", 18);
     const borrowAmount = parseUnits("1000", 18);
 
@@ -117,55 +124,62 @@ describe("RepayBlue", () => {
         markets: { WethUsdsBlue },
       },
       actionFn: async () => {
-        const morphoClient = client.extend(morphoViemExtension()).morpho;
+        const morphoClient = client.extend(
+          morphoViemExtension({
+            supportSignature: false,
+          }),
+        ).morpho;
         const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
         );
 
-        const repay = market.repay({
+        const action = market.repayWithdrawCollateral({
           userAddress: client.account.address,
           shares: positionData.borrowShares,
+          withdrawAmount: positionData.collateral,
           positionData,
         });
 
-        const requirements = await repay.getRequirements();
-        const approval = requirements[0];
-        if (!isRequirementApproval(approval)) {
-          throw new Error("Approval requirement not found");
+        const requirements = await action.getRequirements();
+        for (const req of requirements) {
+          if (isRequirementApproval(req)) {
+            // Shares-mode repayments use a forward-accrued transfer amount;
+            // fund the exact requirement instead of a stale fixture estimate.
+            await client.deal({
+              erc20: WethUsdsBlue.loanToken,
+              amount: req.action.args.amount,
+            });
+            await client.sendTransaction(req);
+          } else if (isRequirementBlueAuthorization(req)) {
+            await client.sendTransaction(req);
+          }
         }
-        // Shares-mode repayments use a forward-accrued transfer amount;
-        // fund the exact requirement instead of a stale fixture estimate.
-        await client.deal({
-          erc20: WethUsdsBlue.loanToken,
-          amount: approval.action.args.amount,
-        });
-        await client.sendTransaction(approval);
 
-        const tx = repay.buildTx();
+        const tx = action.buildTx();
         await client.sendTransaction(tx);
       },
     });
 
-    // After full repay, borrow shares should be 0
+    // Position should be fully closed
     expect(finalState.position.borrowShares).toBe(0n);
+    expect(finalState.position.collateral).toBe(0n);
 
     // Morpho should have received loan tokens
     expect(finalState.morphoLoanTokenBalance).toBeGreaterThan(
       initialState.morphoLoanTokenBalance,
     );
 
-    // Collateral should not change
-    expect(finalState.position.collateral).toEqual(
-      initialState.position.collateral,
+    // User should have received collateral back
+    expect(finalState.userCollateralTokenBalance).toEqual(
+      initialState.userCollateralTokenBalance + collateralAmount,
     );
   });
 
-  // Regression: repay-by-shares used to size transferAmount from the stale
-  // (un-accrued) market snapshot. On a market whose lastUpdate lags the
-  // current block, on-chain morphoRepay required more assets than the
-  // bundler had pre-pulled, reverting the supposedly-immune full repay.
-  test("should full repay by shares on a dormant market", async ({
+  // Regression: same accrual bug as repay({ shares }) — transferAmount used
+  // to be sized from the stale market snapshot, so a one-shot deleverage on
+  // a dormant market reverted before collateral could be released.
+  test("should full repay by shares and withdraw all collateral on a dormant market", async ({
     client,
   }) => {
     const collateralAmount = parseUnits("10", 18);
@@ -184,22 +198,10 @@ describe("RepayBlue", () => {
       borrowAmount,
     });
 
-    // Advance chain time so lastUpdate is meaningfully behind block.timestamp.
-    // 30 days of accrual is far larger than DEFAULT_SLIPPAGE_TOLERANCE on any
-    // realistic market, so the stale-sized transfer cannot cover the on-chain
-    // repay amount without the accrual fix.
     const fastForwardedTimestamp =
       (await client.timestamp()) + Time.s.from.d(30n);
     await client.setNextBlockTimestamp({ timestamp: fastForwardedTimestamp });
-    // Align wall-clock with chain time so the SDK's `Time.timestamp()` projection
-    // matches the block the repay tx will execute on.
-    vi.useFakeTimers({
-      now: Number(fastForwardedTimestamp) * 1000,
-      toFake: ["Date"],
-    });
 
-    // Pre-fund a generous loan-token balance; the bundle skim returns any
-    // unused buffer to the user, so over-funding here is safe.
     await client.deal({
       erc20: WethUsdsBlue.loanToken,
       amount: parseUnits("100000", 18),
@@ -207,46 +209,65 @@ describe("RepayBlue", () => {
 
     const {
       markets: {
-        WethUsdsBlue: { finalState },
+        WethUsdsBlue: { initialState, finalState },
       },
     } = await testInvariants({
       client,
       params: { markets: { WethUsdsBlue } },
       actionFn: async () => {
-        const morphoClient = client.extend(morphoViemExtension()).morpho;
+        const morphoClient = client.extend(
+          morphoViemExtension({
+            supportSignature: false,
+          }),
+        ).morpho;
         const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
         );
 
-        const repay = market.repay({
-          userAddress: client.account.address,
-          shares: positionData.borrowShares,
-          positionData,
-        });
+        const action = withChainTimestamp(fastForwardedTimestamp, () =>
+          market.repayWithdrawCollateral({
+            userAddress: client.account.address,
+            shares: positionData.borrowShares,
+            withdrawAmount: positionData.collateral,
+            positionData,
+          }),
+        );
 
-        const requirements = await repay.getRequirements();
-        const approval = requirements[0];
-        if (!isRequirementApproval(approval)) {
-          throw new Error("Approval requirement not found");
+        const requirements = await action.getRequirements();
+        for (const req of requirements) {
+          if (isRequirementApproval(req)) {
+            // Shares-mode repayments use a forward-accrued transfer amount;
+            // fund the exact requirement instead of a stale fixture estimate.
+            await client.deal({
+              erc20: WethUsdsBlue.loanToken,
+              amount: req.action.args.amount,
+            });
+            await client.sendTransaction(req);
+          } else if (isRequirementBlueAuthorization(req)) {
+            await client.sendTransaction(req);
+          }
         }
-        await client.sendTransaction(approval);
 
-        const tx = repay.buildTx();
+        const tx = action.buildTx();
         await client.sendTransaction(tx);
       },
     });
 
     expect(finalState.position.borrowShares).toBe(0n);
-    expect(finalState.position.collateral).toEqual(collateralAmount);
+    expect(finalState.position.collateral).toBe(0n);
+    expect(finalState.userCollateralTokenBalance).toEqual(
+      initialState.userCollateralTokenBalance + collateralAmount,
+    );
   });
 
-  test("should repay end-to-end with native ETH (wNative loan)", async ({
+  test("should repay with native ETH and withdraw collateral (wNative loan)", async ({
     client,
   }) => {
     const collateralAmount = parseUnits("10", 18);
     const borrowAmount = parseUnits("1", 18);
     const nativeAmount = parseUnits("0.5", 18);
+    const withdrawAmount = parseUnits("1", 18);
 
     await supplyCollateral({
       client,
@@ -261,7 +282,7 @@ describe("RepayBlue", () => {
       borrowAmount,
     });
 
-    // Fund the account with native ETH to wrap for the repay.
+    // Fund the account with native ETH to wrap for the repay leg.
     await client.setBalance({
       address: client.account.address,
       value: nativeAmount + parseUnits("10", 18),
@@ -283,53 +304,59 @@ describe("RepayBlue", () => {
           client.account.address,
         );
 
-        // Fully native repay: no ERC-20 pulled, funded entirely by wrapped ETH.
-        const repay = market.repay({
+        // Fully native repay leg (no ERC-20 pulled), then withdraw collateral.
+        const action = market.repayWithdrawCollateral({
           userAddress: client.account.address,
           amount: 0n,
           nativeAmount,
+          withdrawAmount,
           positionData,
         });
 
-        // A fully-native repay pulls no ERC-20, so it needs no approval.
-        const requirements = await repay.getRequirements();
-        expect(requirements.length).toBe(0);
+        const requirements = await action.getRequirements();
+        // A fully-native repay pulls no ERC-20, so there is no approval to make;
+        // GeneralAdapter1 was already authorized when the position was opened.
+        expect(requirements.some(isRequirementApproval)).toBe(false);
+        for (const req of requirements) {
+          if (isRequirementBlueAuthorization(req)) {
+            await client.sendTransaction(req);
+          }
+        }
 
-        const tx = repay.buildTx();
+        const tx = action.buildTx();
         expect(tx.value).toEqual(nativeAmount);
         await client.sendTransaction(tx);
       },
     });
 
-    // The wrapped ETH repaid WETH into Morpho.
+    // The wrapped ETH repaid WETH into Morpho and reduced the debt.
     expect(finalState.morphoLoanTokenBalance).toEqual(
       initialState.morphoLoanTokenBalance + nativeAmount,
     );
-    // Debt was reduced.
     expect(finalState.position.borrowShares).toBeLessThan(
       initialState.position.borrowShares,
     );
-    // Paid in native ETH: the user's ERC-20 loan-token balance is untouched.
-    expect(finalState.userLoanTokenBalance).toEqual(
-      initialState.userLoanTokenBalance,
-    );
-    // Collateral unchanged (repay only).
+    // Collateral was withdrawn to the receiver.
     expect(finalState.position.collateral).toEqual(
-      initialState.position.collateral,
+      initialState.position.collateral - withdrawAmount,
+    );
+    expect(finalState.userCollateralTokenBalance).toEqual(
+      initialState.userCollateralTokenBalance + withdrawAmount,
     );
   });
 
-  test("should repay (assets) funded partly by ERC-20 and partly by native ETH", async ({
+  test("should repay (assets) funded partly by ERC-20 and partly by native ETH, then withdraw collateral", async ({
     client,
   }) => {
-    // WstethWethBlue's loan token is wNative (WETH), so a repay can mix funding:
-    // `amount` is pulled as ERC-20 WETH and `nativeAmount` is wrapped from ETH.
-    // Assets mode is additive (like supply): the repaid total is amount + nativeAmount.
+    // WstethWethBlue's loan token is wNative (WETH): repay is funded by a mix of
+    // `amount` ERC-20 WETH + `nativeAmount` wrapped ETH (additive assets mode),
+    // then collateral is withdrawn in the same bundle.
     const collateralAmount = parseUnits("10", 18);
     const borrowAmount = parseUnits("1", 18);
     const erc20Part = parseUnits("0.3", 18); // pulled as ERC-20 WETH
     const nativePart = parseUnits("0.2", 18); // wrapped from native ETH
     const totalRepaid = erc20Part + nativePart;
+    const withdrawAmount = parseUnits("1", 18);
 
     await supplyCollateral({
       client,
@@ -344,7 +371,7 @@ describe("RepayBlue", () => {
       borrowAmount,
     });
 
-    // Fund the account with native ETH to wrap for the repay (plus gas).
+    // Fund the account with native ETH to wrap for the repay leg (plus gas).
     await client.setBalance({
       address: client.account.address,
       value: nativePart + parseUnits("10", 18),
@@ -360,21 +387,27 @@ describe("RepayBlue", () => {
         markets: { WstethWethBlue },
       },
       actionFn: async () => {
-        const morphoClient = client.extend(morphoViemExtension()).morpho;
+        const morphoClient = client.extend(
+          morphoViemExtension({
+            supportSignature: false,
+          }),
+        ).morpho;
         const market = morphoClient.blue(WstethWethBlue, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
         );
 
-        const repay = market.repay({
+        const action = market.repayWithdrawCollateral({
           userAddress: client.account.address,
           amount: erc20Part,
           nativeAmount: nativePart,
+          withdrawAmount,
           positionData,
         });
 
-        // The approval must cover ONLY the ERC-20 portion, not the wrapped native.
-        const requirements = await repay.getRequirements();
+        // GA1 was authorized when the position opened, so the only requirement is
+        // the ERC-20 approval — and it must cover ONLY the ERC-20 portion.
+        const requirements = await action.getRequirements();
         const approval = requirements[0];
         if (!isRequirementApproval(approval)) {
           throw new Error("Approval requirement not found");
@@ -382,7 +415,7 @@ describe("RepayBlue", () => {
         expect(approval.action.args.amount).toEqual(erc20Part);
         await client.sendTransaction(approval);
 
-        const tx = repay.buildTx();
+        const tx = action.buildTx();
         // Only the native portion rides as tx.value.
         expect(tx.value).toEqual(nativePart);
         await client.sendTransaction(tx);
@@ -397,25 +430,26 @@ describe("RepayBlue", () => {
     expect(finalState.userLoanTokenBalance).toEqual(
       initialState.userLoanTokenBalance - erc20Part,
     );
-    // The wrapped ETH (plus gas) left the user's native balance.
-    expect(finalState.userNativeBalance).toBeLessThan(
-      initialState.userNativeBalance - nativePart,
+    // Collateral was withdrawn to the user.
+    expect(finalState.userCollateralTokenBalance).toEqual(
+      initialState.userCollateralTokenBalance + withdrawAmount,
     );
-    // Partial repay: debt reduced but not closed; collateral untouched.
+    expect(finalState.position.collateral).toEqual(
+      initialState.position.collateral - withdrawAmount,
+    );
+    // Partial repay: debt reduced but not closed.
     expect(finalState.position.borrowShares).toBeLessThan(
       initialState.position.borrowShares,
     );
     expect(finalState.position.borrowShares).toBeGreaterThan(0n);
-    expect(finalState.position.collateral).toEqual(
-      initialState.position.collateral,
-    );
   });
 
-  test("should full repay by shares funded partly by native ETH (net of native)", async ({
+  test("should full repay by shares funded partly by native ETH, then withdraw all collateral", async ({
     client,
   }) => {
-    // Shares mode carves native out of the transfer: the ERC-20 pulled is
-    // `toBorrowAssets(shares) - nativeAmount`, and the wrapped ETH funds the rest.
+    // Shares mode carves native out of the transfer (ERC-20 pulled =
+    // `toBorrowAssets(shares) - nativeAmount`); the wrapped ETH funds the rest,
+    // and the whole position is closed and de-collateralised in one bundle.
     const collateralAmount = parseUnits("10", 18);
     const borrowAmount = parseUnits("1", 18);
     const nativePart = parseUnits("0.4", 18); // wrapped from native ETH
@@ -448,20 +482,25 @@ describe("RepayBlue", () => {
         markets: { WstethWethBlue },
       },
       actionFn: async () => {
-        const morphoClient = client.extend(morphoViemExtension()).morpho;
+        const morphoClient = client.extend(
+          morphoViemExtension({
+            supportSignature: false,
+          }),
+        ).morpho;
         const market = morphoClient.blue(WstethWethBlue, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
         );
 
-        const repay = market.repay({
+        const action = market.repayWithdrawCollateral({
           userAddress: client.account.address,
           shares: positionData.borrowShares,
           nativeAmount: nativePart,
+          withdrawAmount: positionData.collateral,
           positionData,
         });
 
-        const requirements = await repay.getRequirements();
+        const requirements = await action.getRequirements();
         const approval = requirements[0];
         if (!isRequirementApproval(approval)) {
           throw new Error("Approval requirement not found");
@@ -475,14 +514,18 @@ describe("RepayBlue", () => {
         });
         await client.sendTransaction(approval);
 
-        const tx = repay.buildTx();
+        const tx = action.buildTx();
         expect(tx.value).toEqual(nativePart);
         await client.sendTransaction(tx);
       },
     });
 
-    // Full close, funded by ERC-20 + wrapped ETH.
+    // Position fully closed and all collateral returned.
     expect(finalState.position.borrowShares).toBe(0n);
+    expect(finalState.position.collateral).toBe(0n);
+    expect(finalState.userCollateralTokenBalance).toEqual(
+      initialState.userCollateralTokenBalance + collateralAmount,
+    );
     expect(finalState.morphoLoanTokenBalance).toBeGreaterThan(
       initialState.morphoLoanTokenBalance,
     );
@@ -490,97 +533,40 @@ describe("RepayBlue", () => {
     expect(finalState.userNativeBalance).toBeLessThan(
       initialState.userNativeBalance - nativePart,
     );
-    // Collateral untouched (repay only).
-    expect(finalState.position.collateral).toEqual(
-      initialState.position.collateral,
-    );
   });
 
-  test("should full repay by shares funded entirely by native ETH (over-wrapped, residual skimmed)", async ({
+  test("should throw when withdraw makes position unhealthy (even after repay)", async ({
     client,
   }) => {
-    // Shares mode with nativeAmount >= toBorrowAssets(shares): no ERC-20 is
-    // pulled, the whole debt is funded by wrapped ETH, and the wrapped residual
-    // (nativeAmount - the exact on-chain repay) is skimmed back to the receiver.
-    // testInvariants additionally asserts every bundler3 adapter balance returns
-    // to 0 — i.e. nothing is stranded / lost in GeneralAdapter1.
     const collateralAmount = parseUnits("10", 18);
-    const borrowAmount = parseUnits("1", 18);
-    // Comfortably exceeds the 2h-forward-accrued borrow assets (~1 WETH).
-    const nativeAmount = parseUnits("1.5", 18);
+    const borrowAmount = parseUnits("1000", 18);
 
     await supplyCollateral({
       client,
       chainId: mainnet.id,
-      market: WstethWethBlue,
+      market: WethUsdsBlue,
       collateralAmount,
     });
     await borrow({
       client,
       chainId: mainnet.id,
-      market: WstethWethBlue,
+      market: WethUsdsBlue,
       borrowAmount,
     });
 
-    await client.setBalance({
-      address: client.account.address,
-      value: nativeAmount + parseUnits("10", 18),
-    });
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
+    const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
+    const positionData = await market.getPositionData(client.account.address);
 
-    const {
-      markets: {
-        WstethWethBlue: { initialState, finalState },
-      },
-    } = await testInvariants({
-      client,
-      params: {
-        markets: { WstethWethBlue },
-      },
-      actionFn: async () => {
-        const morphoClient = client.extend(morphoViemExtension()).morpho;
-        const market = morphoClient.blue(WstethWethBlue, mainnet.id);
-        const positionData = await market.getPositionData(
-          client.account.address,
-        );
-
-        const repay = market.repay({
-          userAddress: client.account.address,
-          shares: positionData.borrowShares,
-          nativeAmount,
-          positionData,
-        });
-
-        // Native covers the full debt ⇒ no ERC-20 approval/permit requirement.
-        const requirements = await repay.getRequirements();
-        expect(requirements).toEqual([]);
-
-        const tx = repay.buildTx();
-        // Everything is wrapped native; no ERC-20 pulled.
-        expect(tx.value).toEqual(nativeAmount);
-        expect(tx.action.args.transferAmount).toEqual(nativeAmount);
-        await client.sendTransaction(tx);
-      },
-    });
-
-    // Full close.
-    expect(finalState.position.borrowShares).toBe(0n);
-    // Morpho received the repaid loan tokens.
-    expect(finalState.morphoLoanTokenBalance).toBeGreaterThan(
-      initialState.morphoLoanTokenBalance,
-    );
-    // The wrapped ETH (plus gas) left the user's native balance.
-    expect(finalState.userNativeBalance).toBeLessThan(
-      initialState.userNativeBalance - nativeAmount,
-    );
-    // No loss: the over-wrapped residual is returned to the user as wNative, so
-    // their ERC-20 loan-token balance grows (nothing is stranded in the adapter).
-    expect(finalState.userLoanTokenBalance).toBeGreaterThan(
-      initialState.userLoanTokenBalance,
-    );
-    // Collateral untouched (repay only).
-    expect(finalState.position.collateral).toEqual(
-      initialState.position.collateral,
-    );
+    // Small repay + huge withdraw → still unhealthy
+    expect(() =>
+      market.repayWithdrawCollateral({
+        userAddress: client.account.address,
+        amount: parseUnits("10", 18),
+        withdrawAmount: parseUnits("9.99", 18),
+        positionData,
+      }),
+    ).toThrow(WithdrawMakesPositionUnhealthyError);
   });
 
   test("should throw when repay amount exceeds debt", async ({ client }) => {
@@ -605,9 +591,10 @@ describe("RepayBlue", () => {
     const positionData = await market.getPositionData(client.account.address);
 
     expect(() =>
-      market.repay({
+      market.repayWithdrawCollateral({
         userAddress: client.account.address,
         amount: borrowAmount * 2n,
+        withdrawAmount: parseUnits("1", 18),
         positionData,
       }),
     ).toThrow(RepayExceedsDebtError);
@@ -618,10 +605,8 @@ describe("RepayBlue", () => {
   }) => {
     // Construct a market where interest has diverged totalBorrowAssets from
     // totalBorrowShares enough that 1 wei converts to 0 borrow shares.
-    // Formula: shares = mulDivDown(assets, totalBorrowShares + 1e6, totalBorrowAssets + 1)
-    // For shares == 0: totalBorrowAssets must exceed totalBorrowShares + 999_999.
-    const totalBorrowShares = parseUnits("100000000", 18); // 100M shares
-    const totalBorrowAssets = totalBorrowShares + parseUnits("1", 18); // +1e18 gap (>> 1e6 virtual offset)
+    const totalBorrowShares = parseUnits("100000000", 18);
+    const totalBorrowAssets = totalBorrowShares + parseUnits("1", 18);
 
     const positionData = new AccrualPositionClass(
       {
@@ -638,25 +623,41 @@ describe("RepayBlue", () => {
         totalBorrowShares,
         lastUpdate: 0n,
         fee: 0n,
+        price: parseUnits("2000", 36),
       },
     );
 
-    // Verify our setup: 1 wei should round to 0 shares on this market
     expect(positionData.market.toBorrowShares(1n, "Down")).toBe(0n);
 
     const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
 
     expect(() =>
-      market.repay({
+      market.repayWithdrawCollateral({
         userAddress: client.account.address,
         amount: 1n,
+        withdrawAmount: parseUnits("1", 18),
         positionData,
       }),
     ).toThrow(ShareDivideByZeroError);
   });
 
-  test("should throw when repay shares exceed borrow shares", async ({
+  test("should throw when repay amount is non-positive", async ({ client }) => {
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
+    const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
+    const positionData = await market.getPositionData(client.account.address);
+
+    expect(() =>
+      market.repayWithdrawCollateral({
+        userAddress: client.account.address,
+        amount: 0n,
+        withdrawAmount: parseUnits("1", 18),
+        positionData,
+      }),
+    ).toThrow(NonPositiveInputError);
+  });
+
+  test("should throw when withdraw amount is non-positive", async ({
     client,
   }) => {
     const collateralAmount = parseUnits("10", 18);
@@ -680,23 +681,10 @@ describe("RepayBlue", () => {
     const positionData = await market.getPositionData(client.account.address);
 
     expect(() =>
-      market.repay({
+      market.repayWithdrawCollateral({
         userAddress: client.account.address,
-        shares: positionData.borrowShares * 2n,
-        positionData,
-      }),
-    ).toThrow(RepaySharesExceedDebtError);
-  });
-
-  test("should throw when repay amount is non-positive", async ({ client }) => {
-    const morphoClient = client.extend(morphoViemExtension()).morpho;
-    const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
-    const positionData = await market.getPositionData(client.account.address);
-
-    expect(() =>
-      market.repay({
-        userAddress: client.account.address,
-        amount: 0n,
+        amount: parseUnits("500", 18),
+        withdrawAmount: 0n,
         positionData,
       }),
     ).toThrow(NonPositiveInputError);
@@ -709,9 +697,10 @@ describe("RepayBlue", () => {
     const market = morphoClient.blue(WethUsdsBlue, mainnet.id);
 
     expect(() =>
-      market.repay({
+      market.repayWithdrawCollateral({
         userAddress: client.account.address,
         amount: parseUnits("100", 18),
+        withdrawAmount: parseUnits("1", 18),
         positionData: undefined as unknown as AccrualPosition,
       }),
     ).toThrow(MissingAccrualPositionError);

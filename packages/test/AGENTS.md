@@ -1,7 +1,8 @@
 # test Conventions
 
 - This package owns Anvil, viem, Vitest, and Playwright test utilities.
-- `anvil.ts` owns Anvil lifecycle; `client.ts` owns viem client extensions.
+- Keep unit tests beside their `src/` modules as `*.test.ts`; keep process/fork integration tests under `test/` as `*.integration.test.ts`.
+- `anvil.ts` owns each spawned Anvil lifecycle; `client.ts` owns viem client extensions.
 - `createViemTest(chain, parameters)` should set deterministic defaults such as zero gas and timestamp interval.
 - Extend viem clients through `createAnvilTestClient`; keep helpers like `balanceOf` and `approve` on the test client.
 - BigInts are JSON-serialized in the Vitest setup by adding `BigInt.prototype.toJSON`.

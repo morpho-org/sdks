@@ -59,7 +59,7 @@ The full style and packaging rules — NodeNext imports, `.js` extensions, type-
 
 1. Create a focused branch from the target base branch.
 2. Make the smallest coherent change for the PR — one concern per PR (see [`AGENTS.md`](./AGENTS.md) §8).
-3. Add or update tests when behavior changes. Tests are colocated next to source where the package is wired for it; see [`AGENTS.md`](./AGENTS.md) §5.
+3. Add or update tests when behavior changes. Colocate `*.test.ts` unit tests with their modules; put `*.integration.test.ts` fork/integration tests under the package's `test/` directory. See [`AGENTS.md`](./AGENTS.md) §5.
 4. Run `pnpm lint` and `pnpm test`.
 5. Add a changeset only for semver-relevant published package changes (see Changesets below).
 

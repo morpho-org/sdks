@@ -107,6 +107,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 ## 4. Public API & packaging
 
 - Every public symbol is re-exported explicitly from `src/index.ts`. Nothing else is public.
+- **`morpho-sdk` is the canonical consumer package.** Any PR that adds or changes a consumer-facing ABI, address, constant, entity, error, fetcher, type, or utility in `blue-sdk`, `blue-sdk-viem`, or `midnight-sdk` must audit the matching `morpho-sdk` facade subpath in the same PR. Every established facade category exposes raw dependency names through `/blue/<category>` or `/midnight/<category>`; its unprefixed counterpart uses `Blue`/`Midnight`-qualified names for protocol-specific symbols and leaves genuinely shared symbols unqualified. Deprecate legacy ambiguous names before removal, and do not expand the facade into a new upstream surface solely for parity.
 - **Tree-shakeable.** ESM at source (`"type": "module"`); no top-level side effects. Every package without top-level side effects sets `"sideEffects": false` in `package.json`.
 - **Dual ESM/CJS publish** from `lib/esm` and `lib/cjs`. Recommended build script: `tsc --noEmit && pnpm build:cjs && pnpm build:esm` (test/fixture-only packages may skip the type-check step). `publishConfig.exports` mirrors `types`, `import`, `require`. Subpath exports need both package exports and TS path mapping.
 - **`viem` is the only peer dep of `morpho-sdk`.** Integrators install `morpho-sdk + viem` and they're done. Other packages in the monorepo declare their own peer deps as needed.
@@ -120,7 +121,8 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 
 ## 5. Testing
 
-- **Colocate tests with source** going forward: `foo.ts` ↔ `foo.test.ts` in the same folder. `morpho-sdk` and `evm-simulation` are the two packages currently wired for colocation in `vitest.config.ts`. For other packages, tests still live under `packages/*/test/` because their Vitest project glob does not pick up `src/**/*.test.ts` — moving a test next to source there will silently skip it. **When refactoring or rewriting a module in those packages, also widen the package's Vitest project glob to include colocated tests, and migrate that module's tests as part of the same change.** Read-only edits don't have to migrate. `evm-simulation` historically uses `*.spec.ts`; either suffix is acceptable so long as it's colocated and matched by the package's Vitest project glob.
+- **Unit tests are colocated in every package.** Name them `*.test.ts` and place them beside the module they exercise (`foo.ts` ↔ `foo.test.ts`). A unit test for test-only support code under `test/` stays beside that support module so the helper never enters a published `src/` tree.
+- **Integration and fork tests live only under `packages/<pkg>/test/`.** Name them `*.integration.test.ts`; never colocate them under `src/`, and use the singular `test/` directory rather than `tests/`. Each package's Vitest unit and fork projects must route these two sets separately.
 - **Coverage commitment** (review-only — no CI threshold gate today): every exported function has a unit test; every entity fetcher has a fork-based integration test. We aim for 100% on the exported surface.
 - **Property-based tests on calldata encoders.** `fast-check` is the recommended tool, seeded as the convention adopts. Use it for any encoder whose input space is enumerable from primitives — bigints, addresses, tagged unions, fixed-length tuples.
 - **Security invariants are tests.** For each of: deposit routing, inflation-attack guard, LLTV buffer, `chainId` validation, authorization, and accounting — write a test that fails if the invariant is removed.
@@ -141,7 +143,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 - **Mocked viem clients are limited to unit tests via the transport boundary.** Integration / fork tests of contract round-trips use Anvil forks at pinned blocks. Pure-function tests need neither Anvil nor a viem client. Unit tests that need a viem `Client` shape for code that internally calls `viem/actions` (`readContract`, `getChainId`, …) may use `createMockClient` from `@morpho-org/test/mock`, which installs a `vi.fn`-backed `custom()` transport — the same surface `viem/actions` resolves through, so the mock is behaviour-faithful. Do **not** stub `client.readContract` directly with `vi.spyOn`; the actions resolve through `client.transport` and the spy will silently no-op.
 - **Shared test helpers** live in `morpho-test` and `test` — never in published runtime paths of feature packages.
 
-> Applied by personas: [`test-coverage`](./.agents/pr-review-engine/agents/test-coverage.md) (test presence + colocation), [`morpho-protocol`](./.agents/pr-review-engine/agents/morpho-protocol.md) (protocol invariant semantics), [`web3-security`](./.agents/pr-review-engine/agents/web3-security.md) (security invariants — chainId validation, authorization, accounting).
+> Applied by personas: [`test-coverage`](./.agents/pr-review-engine/agents/test-coverage.md) (test presence, placement, and naming), [`morpho-protocol`](./.agents/pr-review-engine/agents/morpho-protocol.md) (protocol invariant semantics), [`web3-security`](./.agents/pr-review-engine/agents/web3-security.md) (security invariants — chainId validation, authorization, accounting).
 
 ---
 
@@ -198,7 +200,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 
 - Existing packages may predate these rules; do not widen divergence when touching them.
 - Move touched code toward the nearest applicable `AGENTS.md` guidance, even when a full cleanup is out of scope.
-- **On refactor, adopt the convention.** Refactors and rewrites are the migration path — don't carry legacy patterns (non-colocated tests, untyped errors, missing JSDoc, framework leakage) forward into refactored code.
+- **On refactor, adopt the convention.** Refactors and rewrites are the migration path — don't carry legacy patterns (misplaced tests, untyped errors, missing JSDoc, framework leakage) forward into refactored code.
 - If a package can't yet meet an applicable rule, keep the exception local and document why in the nearest `AGENTS.md`.
 
 ---

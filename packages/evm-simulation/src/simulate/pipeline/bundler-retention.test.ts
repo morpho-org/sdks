@@ -2,9 +2,26 @@ import { addressesRegistry, getChainAddresses } from "@morpho-org/blue-sdk";
 import { type Address, ethAddress, getAddress } from "viem";
 import { vi } from "vitest";
 
+// Overrides are keyed by chainId rather than queued as `mockReturnValueOnce`,
+// because these cases run concurrently: a call-ordered one-shot would be
+// consumed by whichever sibling case happens to reach getChainAddresses first.
+// Each case below owns a dedicated chainId, so nothing is shared between them.
+const { chainAddressOverrides } = vi.hoisted(() => ({
+  chainAddressOverrides: new Map<
+    number,
+    () => ReturnType<typeof getChainAddresses>
+  >(),
+}));
+
 vi.mock("@morpho-org/blue-sdk", async (importOriginal) => {
   const mod = await importOriginal<typeof import("@morpho-org/blue-sdk")>();
-  return { ...mod, getChainAddresses: vi.fn(mod.getChainAddresses) };
+  return {
+    ...mod,
+    getChainAddresses: vi.fn((chainId: number) => {
+      const override = chainAddressOverrides.get(chainId);
+      return override ? override() : mod.getChainAddresses(chainId);
+    }),
+  };
 });
 
 import { BlacklistViolationError } from "../../errors.js";
@@ -18,6 +35,18 @@ const DAI: Address = "0x6B175474E89094C44Da98b954EedeAC495271d0F";
 const USDC: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 // Pulled from blue-sdk so tests exercise the real Set membership check.
 const BUNDLER = getAddress(getChainAddresses(1).bundler3.bundler3) as Address;
+
+// Synthetic chainIds owned by exactly one case each — see chainAddressOverrides.
+const NO_BUNDLER_CHAIN_ID = 1_000_001;
+const SDK_ERROR_CHAIN_ID = 1_000_002;
+
+chainAddressOverrides.set(NO_BUNDLER_CHAIN_ID, () => ({
+  ...addressesRegistry[1],
+  bundler3: undefined as never,
+}));
+chainAddressOverrides.set(SDK_ERROR_CHAIN_ID, () => {
+  throw new Error("unexpected SDK bug");
+});
 
 describe("assertNoBundlerRetention", () => {
   it("does not throw for transfers to non-blacklisted addresses", () => {
@@ -74,15 +103,11 @@ describe("assertNoBundlerRetention", () => {
   });
 
   it("warns and skips when blue-sdk knows the chain but has no bundler3 config", () => {
-    vi.mocked(getChainAddresses).mockReturnValueOnce({
-      ...addressesRegistry[1],
-      bundler3: undefined as never,
-    });
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     expect(() =>
       assertNoBundlerRetention({
-        chainId: 1,
+        chainId: NO_BUNDLER_CHAIN_ID,
         transfers: [],
         assetChanges: [],
         logger,
@@ -91,15 +116,11 @@ describe("assertNoBundlerRetention", () => {
 
     expect(logger.warn).toHaveBeenCalledWith(
       "Chain known to blue-sdk but has no bundler3 config, retention check skipped",
-      { chainId: 1 },
+      { chainId: NO_BUNDLER_CHAIN_ID },
     );
   });
 
   it("propagates unexpected SDK errors instead of swallowing them", () => {
-    vi.mocked(getChainAddresses).mockImplementationOnce(() => {
-      throw new Error("unexpected SDK bug");
-    });
-
     const transfers = parseTransfers([
       makeCall([
         makeTransferLog({
@@ -112,7 +133,11 @@ describe("assertNoBundlerRetention", () => {
     ]);
 
     expect(() =>
-      assertNoBundlerRetention({ chainId: 1, transfers, assetChanges: [] }),
+      assertNoBundlerRetention({
+        chainId: SDK_ERROR_CHAIN_ID,
+        transfers,
+        assetChanges: [],
+      }),
     ).toThrow("unexpected SDK bug");
   });
 

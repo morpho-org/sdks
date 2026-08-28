@@ -349,11 +349,11 @@ export const validateRepayShares = (params: {
  * @throws {UnsortedReallocationWithdrawalsError} when withdrawals are not strictly market-id sorted.
  * @example
  * ```ts
- * import type { MarketId } from "@morpho-org/blue-sdk";
+ * import type { BlueMarketId } from "@morpho-org/morpho-sdk/types";
  * import { validateReallocations } from "@morpho-org/morpho-sdk";
  * import { zeroHash } from "viem";
  *
- * const result: void = validateReallocations([], zeroHash as MarketId);
+ * const result: void = validateReallocations([], zeroHash as BlueMarketId);
  * ```
  */
 export const validateReallocations = (

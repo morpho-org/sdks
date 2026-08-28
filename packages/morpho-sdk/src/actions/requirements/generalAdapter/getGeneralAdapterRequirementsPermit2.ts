@@ -36,7 +36,7 @@ interface GeneralAdapterPermit2Erc20Allowances {
  *   bookkeeping invariants break (should not happen with the values this function passes).
  * @example
  * ```ts
- * import { getChainAddresses } from "@morpho-org/blue-sdk";
+ * import { getChainAddresses } from "@morpho-org/morpho-sdk/addresses";
  * import { getGeneralAdapterRequirementsPermit2 } from "@morpho-org/morpho-sdk";
  *
  * const { permit2 } = getChainAddresses(1);

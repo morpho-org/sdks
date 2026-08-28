@@ -4,7 +4,7 @@ import { Time } from "@morpho-org/morpho-ts";
 import { createMockClient } from "@morpho-org/test/mock";
 import { type Address, erc20Abi } from "viem";
 import { mainnet } from "viem/chains";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 import {
   encodeReadResult,
   IN_KIND_BUNDLER,
@@ -15,6 +15,7 @@ import {
   mockMulticallResults,
   secondInKindMarketParams,
 } from "../../../test/fixtures/inKindRedeem.js";
+import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
   ChainIdMismatchError,
@@ -69,10 +70,6 @@ const mockV1Requirements = (
 };
 
 describe("MorphoVaultV1.inKindRedeem", () => {
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   test("default: builds the V1 action from distinct market coverage", () => {
     const handle = createMockClient(mainnet);
     const vault = handle.client
@@ -271,25 +268,24 @@ describe("MorphoVaultV1.inKindRedeem", () => {
 
   test("error: ExpiredDeadlineError when deadline expires before requirements", async () => {
     const now = 1_800_000_000n;
-    vi.useFakeTimers();
-    vi.setSystemTime(Number(now) * 1_000);
     const handle = createMockClient(mainnet);
     const vault = handle.client
       .extend(morphoViemExtension())
       .morpho.vaultV1(IN_KIND_VAULT, mainnet.id);
-    const exit = vault.inKindRedeem({
-      amount: 500n,
-      marketParamsList: [inKindMarketParams],
-      vaultData: inKindVaultV1Data(),
-      userAddress: IN_KIND_USER,
-      deadline: now + 1n,
-    });
-
-    vi.setSystemTime(Number(now + 1n) * 1_000);
-
-    await expect(exit.getRequirements()).rejects.toBeInstanceOf(
-      ExpiredDeadlineError,
+    const exit = withChainTimestamp(now, () =>
+      vault.inKindRedeem({
+        amount: 500n,
+        marketParamsList: [inKindMarketParams],
+        vaultData: inKindVaultV1Data(),
+        userAddress: IN_KIND_USER,
+        deadline: now + 1n,
+      }),
     );
+    const requirements = withChainTimestamp(now + 1n, () =>
+      exit.getRequirements(),
+    );
+
+    await expect(requirements).rejects.toBeInstanceOf(ExpiredDeadlineError);
   });
 
   test("behavior: default approve path uses the bounded share amount", async () => {
