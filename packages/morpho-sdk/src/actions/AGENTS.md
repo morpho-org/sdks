@@ -34,7 +34,8 @@ High-level builders pull the aggregate penalty in the target loan token through 
 then each low-level allocator action approves and spends its independently rounded
 `ceil(assets × penalty / WAD)` amount from Bundler3. All high-level allocator calls use
 `skipRevert: false`. Vault V1 planners and encoders remain available for explicit low-level
-Bundler3 composition.
+Bundler3 composition, but those Vault V1 compatibility surfaces are deprecated and will be removed
+in the next major.
 
 ## Discriminated unions
 
