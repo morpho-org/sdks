@@ -159,9 +159,8 @@ const tx = buildTx(signatures);
 
 The LLTV buffer guards against instant liquidation.
 
-> All SDK surfaces for the Vault V1 shared-liquidity algorithm and its PublicAllocator Bundler3
-> composition are deprecated and will be removed in the next major. Use Vault V2
-> BluePublicAllocator reallocations.
+> High-level Blue writes accept only `VaultV2BlueReallocation`. Vault V1 planning and explicit
+> low-level Bundler3 composition remain available.
 
 ### Midnight: take a fixed-rate offer
 

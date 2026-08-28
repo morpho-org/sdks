@@ -6,10 +6,7 @@ import {
   isRequirementBlueAuthorization,
   MAX_SLIPPAGE_TOLERANCE,
   morphoViemExtension,
-  type VaultReallocation,
 } from "../../../src/index.js";
-import { CbbtcUsdcBlue, CbbtcUsdcBlueAlt } from "../../fixtures/blue.js";
-import { YearnUsdcVaultV1 } from "../../fixtures/vaultV1.js";
 import { borrow, supplyCollateral, supplyLoan } from "../../helpers/blue.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
@@ -265,110 +262,4 @@ describe("RefinanceBlue (fork)", () => {
 
   // TODO: same-token refinance (loanToken === collateralToken). None exist on mainnet to pin a
   // fork against; needs a custom 1:1-oracle market to exercise the repay-before-withdraw ordering.
-
-  test("assets-mode: targetReallocations supplies liquidity into the target market", async ({
-    client,
-  }) => {
-    const collateralAmount = parseUnits("1", 8); // cbBTC (8 decimals)
-    const borrowAmount = parseUnits("1000", 6); // USDC (6 decimals)
-    const migrateCollateral = parseUnits("0.4", 8);
-    const migrateBorrow = parseUnits("400", 6);
-    const reallocationAmount = parseUnits("2000", 6);
-
-    await supplyLoan({
-      client,
-      chainId: mainnet.id,
-      market: CbbtcUsdcBlue,
-      supplyAmount: borrowAmount * 4n,
-    });
-    await supplyCollateral({
-      client,
-      chainId: mainnet.id,
-      market: CbbtcUsdcBlue,
-      collateralAmount,
-    });
-    await borrow({
-      client,
-      chainId: mainnet.id,
-      market: CbbtcUsdcBlue,
-      borrowAmount,
-    });
-
-    const reallocations: readonly VaultReallocation[] = [
-      {
-        vault: YearnUsdcVaultV1.address,
-        fee: 0n,
-        withdrawals: [
-          {
-            marketParams: CbbtcUsdcBlue,
-            amount: reallocationAmount,
-          },
-        ],
-      },
-    ];
-
-    const {
-      markets: {
-        target: { initialState: targetInitial, finalState: targetFinal },
-      },
-    } = await testInvariants({
-      client,
-      params: {
-        markets: {
-          source: CbbtcUsdcBlue,
-          target: CbbtcUsdcBlueAlt,
-        },
-      },
-      actionFn: async () => {
-        const morphoClient = client.extend(morphoViemExtension()).morpho;
-        const sourceEntity = morphoClient.blue(CbbtcUsdcBlue, mainnet.id);
-        const sourcePosition = await sourceEntity.getPositionData(
-          client.account.address,
-        );
-        const targetEntity = morphoClient.blue(CbbtcUsdcBlueAlt, mainnet.id);
-        const targetPosition = await targetEntity.getPositionData(
-          client.account.address,
-        );
-
-        const refi = sourceEntity.refinance({
-          userAddress: client.account.address,
-          positionData: sourcePosition,
-          target: {
-            marketParams: CbbtcUsdcBlueAlt,
-            positionData: targetPosition,
-          },
-          collateralAmount: migrateCollateral,
-          borrowAssets: migrateBorrow,
-          slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
-          targetReallocations: reallocations,
-        });
-
-        const requirements = await refi.getRequirements();
-        expect(requirements.length).toBeLessThanOrEqual(1);
-        for (const requirement of requirements) {
-          if (!isRequirementBlueAuthorization(requirement)) {
-            throw new Error("Unexpected non-authorization requirement");
-          }
-          await client.sendTransaction(requirement);
-        }
-
-        const tx = refi.buildTx();
-        expect(tx.value).toBe(0n);
-        expect(tx.action.args.reallocationFee).toBe(0n);
-
-        await client.sendTransaction(tx);
-      },
-    });
-
-    // The PA reallocation supplies reallocationAmount into the target; accrual only inflates the delta.
-    expect(
-      targetFinal.position.market.totalSupplyAssets -
-        targetInitial.position.market.totalSupplyAssets,
-    ).toBeGreaterThanOrEqual(reallocationAmount);
-
-    expect(targetFinal.position.collateral).toBe(
-      targetInitial.position.collateral + migrateCollateral,
-    );
-    expect(targetFinal.position.borrowShares).toBeGreaterThan(0n);
-  });
 });

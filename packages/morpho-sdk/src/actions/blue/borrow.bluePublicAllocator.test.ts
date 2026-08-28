@@ -11,10 +11,8 @@ import {
 } from "../../abis.js";
 import { MAX_REALLOCATION_PENALTY } from "../../helpers/constant.js";
 import {
-  type BlueReallocationPlan,
   InconsistentReallocationPenaltyError,
   InputExceedsMaxError,
-  MixedReallocationVersionsError,
   type VaultV2BlueReallocation,
 } from "../../types/index.js";
 import { blueBorrow } from "./borrow.js";
@@ -22,7 +20,6 @@ import { blueBorrow } from "./borrow.js";
 const allocator = getChainAddresses(
   ChainId.EthMainnet,
 ).vaultV2BluePublicAllocator;
-const vaultV1 = "0x0000000000000000000000000000000000000012";
 const sourceAdapter = "0x0000000000000000000000000000000000000013";
 const targetAdapter = "0x0000000000000000000000000000000000000014";
 const receiver = "0x0000000000000000000000000000000000000015";
@@ -145,35 +142,6 @@ describe("blueBorrow Blue Public Allocator", () => {
       decodeFunctionData({ abi: generalAdapter1Abi, data: calls[7]!.data })
         .functionName,
     ).toBe("morphoBorrow");
-  });
-
-  test("error: MixedReallocationVersionsError", () => {
-    const reallocations = [
-      {
-        vault: vaultV1,
-        fee: 2n,
-        withdrawals: [{ marketParams: sourceMarket, amount: 1n }],
-      },
-      {
-        vault: vaultV2,
-        from: { type: "idle" },
-        to: { adapter: targetAdapter },
-        assets: 7n,
-        penalty: 5n,
-      },
-    ] as unknown as BlueReallocationPlan;
-
-    expect(() =>
-      blueBorrow({
-        market: { chainId: ChainId.EthMainnet, marketParams: targetMarket },
-        args: {
-          amount: 1n,
-          minSharePrice: 0n,
-          receiver,
-          reallocations,
-        },
-      }),
-    ).toThrow(MixedReallocationVersionsError);
   });
 
   test("error: InconsistentReallocationPenaltyError", () => {

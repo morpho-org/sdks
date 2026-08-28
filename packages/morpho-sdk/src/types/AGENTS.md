@@ -18,12 +18,10 @@ Centralized type definitions and error classes. Barrel-exported via `index.ts`. 
 
 ## Shared liquidity (`sharedLiquidity.ts`)
 
-- All Vault V1 shared-liquidity types are deprecated and will be removed in the next major, including
-  `PublicAllocatorOptions`, `PublicReallocation`, `ReallocationWithdrawal`,
-  `VaultV1Reallocation`, `VaultReallocation`, and `ReallocationComputeOptions`.
+- `VaultV1Reallocation` — vault address + fee + sorted withdrawals; maps to `reallocateTo()`. `VaultReallocation` is its deprecated compatibility alias.
 - `VaultV2BlueReallocation` — BluePublicAllocator vault/source/target-adapter/assets/WAD-scaled-penalty input; maps 1:1 to `reallocate()` or `allocateFromIdle()` while deriving target market params from the enclosing Blue action.
 - `VaultV2BluePublicAllocatorOptions` — canonical Vault V2 discovery and planner options for timestamp, enablement, vault allowlisting, friendly source-market utilization, and the maximum proportional penalty.
-- `BlueReallocationPlan` — homogeneous iterable accepted by Blue action and entity pass-through surfaces; a plan contains only V1 or only V2 reallocations. Its V1 branch is deprecated and will be removed in the next major; use V2 for new integrations.
+- `BlueReallocationPlan` — homogeneous V1-or-V2 iterable retained for low-level compatibility helpers. High-level Blue writes accept `VaultV2BlueReallocation` directly.
 
 ## Errors (`error.ts`)
 
