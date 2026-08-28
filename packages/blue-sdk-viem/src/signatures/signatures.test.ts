@@ -176,11 +176,11 @@ describe("getPermit2PermitTypedData", () => {
 });
 
 describe("getPermit2TransferFromTypedData", () => {
-  test("clamps transfer allowance to MAX_UINT_160", () => {
+  test("preserves the full uint256 transfer allowance", () => {
     const typedData = getPermit2TransferFromTypedData(
       {
         erc20: TOKEN,
-        allowance: MathLib.MAX_UINT_160 + 1n,
+        allowance: MathLib.MAX_UINT_256,
         nonce: 14n,
         deadline: 15n,
         spender: SPENDER,
@@ -189,7 +189,7 @@ describe("getPermit2TransferFromTypedData", () => {
     );
 
     expect(typedData.message).toEqual({
-      permitted: { token: TOKEN, amount: MathLib.MAX_UINT_160 },
+      permitted: { token: TOKEN, amount: MathLib.MAX_UINT_256 },
       spender: SPENDER,
       nonce: 14n,
       deadline: 15n,
