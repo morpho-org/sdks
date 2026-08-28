@@ -1,4 +1,9 @@
-import { getChainAddresses } from "@morpho-org/blue-sdk";
+import {
+  getChainAddresses,
+  type MarketParams,
+  MathLib,
+  marketParamsAbi,
+} from "@morpho-org/blue-sdk";
 import {
   morphoMarketV1AdapterV2FactoryAbi,
   vaultV2Abi,
@@ -8,7 +13,10 @@ import type { AnvilTestClient } from "@morpho-org/test";
 import {
   type Address,
   decodeEventLog,
+  encodeAbiParameters,
+  encodeFunctionData,
   type Hex,
+  maxUint128,
   parseEther,
   parseEventLogs,
   toHex,
@@ -91,6 +99,137 @@ export const deployVaultV2 = async (
   });
 
   return vault;
+};
+
+/**
+ * Deploys a Vault V2 with exactly one MorphoMarketV1AdapterV2, uncapped over the given markets.
+ *
+ * Produces the only vault shape `VaultExitBundlesV1` Vault V2 exits accept: `adaptersLength() == 1`
+ * and a markets-based adapter. Returns the vault, its adapter, and a helper that allocates the
+ * caller's deposit across markets.
+ */
+export const setUpSingleAdapterVaultV2 = async (
+  client: AnvilTestClient,
+  params: {
+    readonly asset: Address;
+    readonly markets: readonly MarketParams[];
+    readonly forceDeallocatePenalty?: bigint;
+    readonly liquidityMarket?: MarketParams;
+  },
+) => {
+  const vault = await deployVaultV2(client, params.asset);
+  await submitAndAcceptVaultV2Call(client, {
+    vault,
+    data: encodeFunctionData({
+      abi: vaultV2Abi,
+      functionName: "setIsAllocator",
+      args: [client.account.address, true],
+    }),
+  });
+
+  const adapter = await deployMorphoMarketV1AdapterV2(client, vault);
+  await submitAndAcceptVaultV2Call(client, {
+    vault,
+    data: encodeFunctionData({
+      abi: vaultV2Abi,
+      functionName: "addAdapter",
+      args: [adapter],
+    }),
+  });
+
+  const capIds = [
+    encodeAbiParameters(
+      [{ type: "string" }, { type: "address" }],
+      ["this", adapter],
+    ),
+    ...params.markets.flatMap((market) => [
+      encodeAbiParameters(
+        [{ type: "string" }, { type: "address" }],
+        ["collateralToken", market.collateralToken],
+      ),
+      encodeAbiParameters(
+        [{ type: "string" }, { type: "address" }, marketParamsAbi],
+        ["this/marketParams", adapter, market],
+      ),
+    ]),
+  ];
+  for (const id of capIds) {
+    await submitAndAcceptVaultV2Call(client, {
+      vault,
+      data: encodeFunctionData({
+        abi: vaultV2Abi,
+        functionName: "increaseAbsoluteCap",
+        args: [id, maxUint128],
+      }),
+    });
+    await submitAndAcceptVaultV2Call(client, {
+      vault,
+      data: encodeFunctionData({
+        abi: vaultV2Abi,
+        functionName: "increaseRelativeCap",
+        args: [id, MathLib.WAD],
+      }),
+    });
+  }
+
+  if (params.forceDeallocatePenalty != null) {
+    await submitAndAcceptVaultV2Call(client, {
+      vault,
+      data: encodeFunctionData({
+        abi: vaultV2Abi,
+        functionName: "setForceDeallocatePenalty",
+        args: [adapter, params.forceDeallocatePenalty],
+      }),
+    });
+  }
+
+  // Set last so the deposit below is not auto-allocated through the liquidity adapter.
+  const setLiquidityMarket = async (market: MarketParams) => {
+    await client.writeContract({
+      address: vault,
+      abi: vaultV2Abi,
+      functionName: "setLiquidityAdapterAndData",
+      args: [adapter, encodeAbiParameters([marketParamsAbi], [market])],
+    });
+  };
+
+  /** Deposits `assets` and allocates the given per-market amounts into the adapter. */
+  const depositAndAllocate = async (allocations: {
+    readonly assets: bigint;
+    readonly perMarket: readonly { market: MarketParams; assets: bigint }[];
+  }) => {
+    await client.deal({ erc20: params.asset, amount: allocations.assets });
+    await client.approve({
+      address: params.asset,
+      args: [vault, allocations.assets],
+    });
+    await client.writeContract({
+      address: vault,
+      abi: vaultV2Abi,
+      functionName: "deposit",
+      args: [allocations.assets, client.account.address],
+    });
+    for (const { market, assets } of allocations.perMarket) {
+      if (assets <= 0n) continue;
+      await client.writeContract({
+        address: vault,
+        abi: vaultV2Abi,
+        functionName: "allocate",
+        args: [
+          adapter,
+          encodeAbiParameters([marketParamsAbi], [market]),
+          assets,
+        ],
+      });
+    }
+    if (params.liquidityMarket != null) {
+      await setLiquidityMarket(params.liquidityMarket);
+    }
+    // Leave the account holding only what the exit pays out.
+    await client.deal({ erc20: params.asset, amount: 0n });
+  };
+
+  return { vault, adapter, depositAndAllocate };
 };
 
 export const deployMorphoMarketV1AdapterV2 = async (

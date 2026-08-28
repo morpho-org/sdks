@@ -1,130 +1,156 @@
-import { vaultV2Abi } from "@morpho-org/blue-sdk-viem";
-import { deepFreeze } from "@morpho-org/morpho-ts";
-import { type Address, encodeFunctionData, type Hex } from "viem";
-import { encodeForceDeallocateCall } from "../../helpers/encodeDeallocation.js";
+import { MathLib } from "@morpho-org/blue-sdk";
+import { deepFreeze, getChainAddress } from "@morpho-org/morpho-ts";
+import { type Address, encodeFunctionData, zeroAddress } from "viem";
+import { vaultExitBundlesV1Abi } from "../../abis.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
-  type Deallocation,
-  EmptyDeallocationsError,
+  InputExceedsMaxError,
   type Metadata,
+  MissingReferralFeeRecipientError,
+  NegativeInputError,
   NonPositiveInputError,
+  type PermitRequirementSignature,
   type Transaction,
   type VaultV2ForceWithdrawAction,
 } from "../../types/index.js";
+import { getVaultExitBundlesV1PermitStruct } from "../signatures/getVaultExitBundlesV1PermitStruct.js";
 
 /** Parameters for {@link vaultV2ForceWithdraw}. */
 export interface VaultV2ForceWithdrawParams {
-  vault: {
-    address: Address;
+  readonly vault: { readonly chainId: number; readonly address: Address };
+  readonly args: {
+    readonly adapter: Address;
+    readonly exitAssets: bigint;
+    readonly minSharePriceE27: bigint;
+    readonly userAddress: Address;
+    readonly deadline: bigint;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
+    readonly requirementSignature?: PermitRequirementSignature;
   };
-  args: {
-    deallocations: readonly Deallocation[];
-    withdraw: {
-      amount: bigint;
-      recipient: Address;
-    };
-    onBehalf: Address;
-  };
-  metadata?: Metadata;
+  readonly metadata?: Metadata;
 }
 
 /**
- * Prepares a force-withdraw transaction for a VaultV2 contract via the vault's native `multicall`.
+ * Prepares a Vault V2 force withdrawal through VaultExitBundlesV1.
  *
- * Encodes one or more `forceDeallocate` calls followed by a single `withdraw`, executed
- * atomically through VaultV2's `multicall`. Frees liquidity from non-liquidity adapters and
- * withdraws the resulting assets in one transaction.
+ * The contract first withdraws everything the vault can pay without a penalty — its idle assets
+ * plus the liquidity available through its liquidity adapter — then force-deallocates the remainder
+ * by looping over the adapter's markets.
  *
- * A penalty is taken from `onBehalf` for each deallocation to discourage allocation
- * manipulation. The penalty is applied as a share burn where assets are returned to the vault,
- * so the share price stays stable (except for rounding).
+ * `exitAssets` is **penalty-inclusive**: it is what the contract debits from the user's position,
+ * while the assets actually delivered are
+ * `assetsToWithdraw + floor((exitAssets - assetsToWithdraw) * WAD / (WAD + penalty))` minus the
+ * referral fee. Use `previewVaultV2ForceWithdraw` to quote the split.
  *
- * @param params.vault.address - The VaultV2 address.
- * @param params.args.deallocations - The deallocations to perform before withdrawing. Must be
- *   non-empty.
- * @param params.args.withdraw.amount - Amount of underlying assets to withdraw after the
- *   deallocations complete.
- * @param params.args.withdraw.recipient - Address that receives the withdrawn assets.
- * @param params.args.onBehalf - Address whose shares are burned and from which the deallocation
- *   penalty is taken.
- * @param params.metadata - Optional analytics metadata attached to the multicall transaction.
- * @returns A deep-frozen `Transaction<VaultV2ForceWithdrawAction>` with `to`, `value`, `data`,
- *   and the typed `action` discriminator the simulation layer consumes.
- * @throws {EmptyDeallocationsError} when `deallocations` is empty.
- * @throws {NonPositiveInputError} when `withdraw.amount <= 0n`, or when any
- *   `deallocations[i].amount <= 0n` (raised by `encodeForceDeallocateCall`).
+ * Without a signature this embeds the empty-permit sentinel and requires a sufficient vault-share
+ * approval to VaultExitBundlesV1.
+ *
+ * @param params - Force withdrawal parameters.
+ * @param params.vault.chainId - Chain containing the target Vault V2 and VaultExitBundlesV1.
+ * @param params.vault.address - Target Vault V2 address.
+ * @param params.args.adapter - Vault's sole MorphoMarketV1AdapterV2.
+ * @param params.args.exitAssets - Penalty-inclusive, asset-denominated amount to exit.
+ * @param params.args.minSharePriceE27 - RAY-scaled lower bound on the realized exit share price
+ *   (withdrawn assets per share burned). `0n` disables the on-chain bound; prefer the value the
+ *   entity computes.
+ * @param params.args.userAddress - Expected transaction sender, recorded in action metadata only.
+ *   VaultExitBundlesV1 burns `msg.sender`'s vault shares and pays out to `msg.sender`, so the
+ *   submitting account must equal this address.
+ * @param params.args.deadline - Permit and bundle deadline.
+ * @param params.args.referralFeePct - Optional WAD-scaled share of the withdrawn assets routed to
+ *   `referralFeeRecipient`. Defaults to `0n`. Deducted *after* the `minSharePriceE27` check, so it
+ *   is outside that bound's protection.
+ * @param params.args.referralFeeRecipient - Optional referral fee recipient. Defaults to the zero
+ *   address, which is only valid alongside a zero `referralFeePct`.
+ * @param params.args.requirementSignature - Optional bounded Vault V2 shares permit.
+ * @param params.metadata - Optional analytics metadata.
+ * @returns A deep-frozen `Readonly<Transaction<VaultV2ForceWithdrawAction>>` with `to`, `value`,
+ *   `data`, and the typed action discriminator.
+ * @throws {NonPositiveInputError} when `exitAssets` or `deadline` is not positive.
+ * @throws {InputExceedsMaxError} when `referralFeePct` is not below WAD, which the contract rejects
+ *   with `PctExceeded`.
+ * @throws {NegativeInputError} when `referralFeePct` is negative.
+ * @throws {MissingReferralFeeRecipientError} when a positive `referralFeePct` has no recipient.
+ * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
+ * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
+ * @throws {VaultExitBundlesV1PermitMismatchError} when the requirement has the wrong permit kind, asset, or signature encoding.
  * @example
  * ```ts
  * import { vaultV2ForceWithdraw } from "@morpho-org/morpho-sdk";
  *
  * const tx = vaultV2ForceWithdraw({
- *   vault: { address: vaultAddress },
- *   args: {
- *     deallocations: [{ adapter, marketParams, amount: 500_000n }],
- *     withdraw: { amount: 500_000n, recipient },
- *     onBehalf,
- *   },
+ *   vault: { chainId: 1, address: vault },
+ *   args: { adapter, exitAssets: 1_000_000n, minSharePriceE27, userAddress, deadline },
  * });
  * // tx satisfies Readonly<Transaction<VaultV2ForceWithdrawAction>>
  * ```
  */
 export const vaultV2ForceWithdraw = ({
-  vault: { address: vaultAddress },
-  args: { deallocations, withdraw, onBehalf },
+  vault,
+  args,
   metadata,
 }: VaultV2ForceWithdrawParams): Readonly<
   Transaction<VaultV2ForceWithdrawAction>
 > => {
-  if (deallocations.length === 0) {
-    throw new EmptyDeallocationsError(vaultAddress);
-  }
+  if (args.exitAssets <= 0n)
+    throw new NonPositiveInputError("exitAssets", args.exitAssets);
+  if (args.deadline <= 0n)
+    throw new NonPositiveInputError("deadline", args.deadline);
 
-  const { amount: withdrawAmount, recipient: withdrawRecipient } = withdraw;
+  const referralFeePct = args.referralFeePct ?? 0n;
+  const referralFeeRecipient = args.referralFeeRecipient ?? zeroAddress;
+  if (referralFeePct < 0n)
+    throw new NegativeInputError("referralFeePct", referralFeePct);
+  if (referralFeePct >= MathLib.WAD)
+    throw new InputExceedsMaxError({
+      field: "referralFeePct",
+      value: referralFeePct,
+      max: MathLib.WAD - 1n,
+    });
+  // The contract transfers the fee unconditionally, so a zero recipient either reverts or burns it.
+  if (referralFeePct > 0n && referralFeeRecipient === zeroAddress)
+    throw new MissingReferralFeeRecipientError(referralFeePct);
 
-  if (withdrawAmount <= 0n) {
-    throw new NonPositiveInputError("withdraw.amount", withdrawAmount);
-  }
-
-  const calls: Hex[] = [];
-
-  for (const deallocation of deallocations) {
-    calls.push(encodeForceDeallocateCall(deallocation, onBehalf));
-  }
-
-  calls.push(
-    encodeFunctionData({
-      abi: vaultV2Abi,
-      functionName: "withdraw",
-      args: [withdrawAmount, withdrawRecipient, onBehalf],
-    }),
-  );
-
+  const to = getChainAddress(vault.chainId, "bundles.vaultExitBundlesV1");
+  const sharesPermit = getVaultExitBundlesV1PermitStruct({
+    vault: vault.address,
+    deadline: args.deadline,
+    requirementSignature: args.requirementSignature,
+  });
   let tx = {
-    to: vaultAddress,
-    data: encodeFunctionData({
-      abi: vaultV2Abi,
-      functionName: "multicall",
-      args: [calls],
-    }),
+    to,
     value: 0n,
+    data: encodeFunctionData({
+      abi: vaultExitBundlesV1Abi,
+      functionName: "vaultExitBundlesV1ForceWithdrawVaultV2",
+      args: [
+        vault.address,
+        args.adapter,
+        args.exitAssets,
+        args.minSharePriceE27,
+        sharesPermit,
+        referralFeePct,
+        referralFeeRecipient,
+        args.deadline,
+      ],
+    }),
   };
-
-  if (metadata) {
-    tx = addTransactionMetadata(tx, metadata);
-  }
+  if (metadata) tx = addTransactionMetadata(tx, metadata);
 
   return deepFreeze({
     ...tx,
     action: {
       type: "vaultV2ForceWithdraw",
       args: {
-        vault: vaultAddress,
-        deallocations: deallocations.map((d) => ({ ...d })),
-        withdraw: {
-          amount: withdrawAmount,
-          recipient: withdrawRecipient,
-        },
-        onBehalf,
+        vault: vault.address,
+        adapter: args.adapter,
+        exitAssets: args.exitAssets,
+        minSharePriceE27: args.minSharePriceE27,
+        referralFeePct,
+        referralFeeRecipient,
+        onBehalf: args.userAddress,
+        deadline: args.deadline,
       },
     },
   });

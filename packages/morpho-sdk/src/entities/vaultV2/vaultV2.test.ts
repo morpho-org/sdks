@@ -53,8 +53,8 @@ describe("MorphoVaultV2 chain validation", () => {
     ).toThrow(ChainIdMismatchError);
     expect(() =>
       vault.forceWithdraw({
-        deallocations: [],
-        withdraw: { amount: 1n },
+        exitAssets: 1n,
+        vaultData: {} as never,
         userAddress: KeyrockUsdcVaultV2.address,
       }),
     ).toThrow(ChainIdMismatchError);

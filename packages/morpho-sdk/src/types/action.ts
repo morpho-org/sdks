@@ -67,14 +67,25 @@ export interface VaultV2InKindRedeemAction
     }
   > {}
 
+/**
+ * Metadata for a Vault V2 force withdrawal through VaultExitBundlesV1.
+ *
+ * `exitAssets` is penalty-inclusive: the assets actually delivered are
+ * `assetsToWithdraw + floor((exitAssets - assetsToWithdraw) * WAD / (WAD + penalty))`, minus the
+ * referral fee.
+ */
 export interface VaultV2ForceWithdrawAction
   extends BaseAction<
     "vaultV2ForceWithdraw",
     {
-      vault: Address;
-      deallocations: readonly Deallocation[];
-      withdraw: { amount: bigint; recipient: Address };
-      onBehalf: Address;
+      readonly vault: Address;
+      readonly adapter: Address;
+      readonly exitAssets: bigint;
+      readonly minSharePriceE27: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
+      readonly onBehalf: Address;
+      readonly deadline: bigint;
     }
   > {}
 

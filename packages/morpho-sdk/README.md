@@ -221,7 +221,7 @@ graph LR
         V2W -->|direct call| V2C[VaultV2 Contract]
         V2R -->|direct call| V2C
         V2IKR -->|direct call| VEB
-        V2FW -->|multicall| V2C
+        V2FW -->|direct call| VEB
         V2FR -->|multicall| V2C
     end
 

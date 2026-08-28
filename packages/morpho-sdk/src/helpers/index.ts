@@ -15,6 +15,11 @@ export {
 } from "./constant.js";
 export { addTransactionMetadata } from "./metadata.js";
 export {
+  type PreviewVaultV2ForceWithdrawParams,
+  previewVaultV2ForceWithdraw,
+  type VaultV2ForceWithdrawPreview,
+} from "./previewVaultV2ForceWithdraw.js";
+export {
   type PreviewVaultV2InKindRedeemParams,
   previewVaultV2InKindRedeem,
   type VaultV2InKindRedeemMarketPreview,
@@ -24,6 +29,7 @@ export {
   computeMaxRepaySharePrice,
   computeMaxSupplySharePrice,
   computeMinBorrowSharePrice,
+  computeMinForceWithdrawSharePrice,
   computeMinWithdrawSharePrice,
 } from "./slippage.js";
 export {
@@ -46,3 +52,10 @@ export {
   type RequirementSpenderKey,
   validateRequirementSpender,
 } from "./validateRequirementSpender.js";
+export {
+  computeVaultV2ForceWithdrawPlan,
+  computeVaultV2ForceWithdrawSharesBurnt,
+  resolveVaultV2ForceWithdrawEligibility,
+  type VaultV2ForceWithdrawEligibility,
+  type VaultV2ForceWithdrawPlan,
+} from "./vaultV2ForceWithdrawPlan.js";

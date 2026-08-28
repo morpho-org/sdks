@@ -109,7 +109,9 @@ This is the main design caveat. For the following operations the SDK emits a **d
 
 ### Force deallocation: also not Bundler3
 
-`vaultV2ForceWithdraw` / `vaultV2ForceRedeem` use the **native `multicall`** on the VaultV2 contract, not Bundler3. `forceDeallocate` calls penalize the user (share burn) — this is a degraded-liquidity exit tool, not a normal flow.
+`vaultV2ForceRedeem` uses the **native `multicall`** on the VaultV2 contract, not Bundler3. `forceDeallocate` calls penalize the user (share burn) — this is a degraded-liquidity exit tool, not a normal flow.
+
+`vaultV2ForceWithdraw` is not Bundler3 either: it calls the standalone **VaultExitBundlesV1** periphery, which computes its own `forceDeallocate` sequence on-chain. Two consequences the multicall path did not have: the user must authorize vault shares to VaultExitBundlesV1 (approval or ERC-2612 permit), and the vault's `receiveAssetsGate` must allow that periphery as an asset recipient. In exchange the exit carries a real `minSharePriceE27` slippage bound, which the multicall path never had.
 
 ### Other pitfalls
 

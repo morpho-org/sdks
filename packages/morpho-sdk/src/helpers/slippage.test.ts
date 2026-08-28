@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import { WethUsdsBlue } from "../../test/fixtures/blue.js";
 import {
   ExcessiveSlippageToleranceError,
+  NonPositiveInputError,
   ShareDivideByZeroError,
 } from "../types/index.js";
 import { MAX_ABSOLUTE_SHARE_PRICE } from "./constant.js";
@@ -10,6 +11,7 @@ import {
   computeMaxRepaySharePrice,
   computeMaxSupplySharePrice,
   computeMinBorrowSharePrice,
+  computeMinForceWithdrawSharePrice,
   computeMinWithdrawSharePrice,
 } from "./slippage.js";
 
@@ -344,6 +346,89 @@ describe("computeMinWithdrawSharePrice", () => {
         withdrawShares: 0n,
         market: normalMarket,
         slippageTolerance: MathLib.WAD + 1n,
+      }),
+    ).toThrow(ExcessiveSlippageToleranceError);
+  });
+});
+
+describe("computeMinForceWithdrawSharePrice", () => {
+  test("default", () => {
+    // 1000 assets over 1000 shares at a 0.3% tolerance.
+    expect(
+      computeMinForceWithdrawSharePrice({
+        withdrawnAssets: 1_000n,
+        sharesBurnt: 1_000n,
+        slippageTolerance: slippage03,
+      }),
+    ).toBe(MathLib.wToRay(MathLib.WAD - slippage03));
+  });
+
+  test("behavior: scales down with the tolerance", () => {
+    const tight = computeMinForceWithdrawSharePrice({
+      withdrawnAssets: 1_000n,
+      sharesBurnt: 1_000n,
+      slippageTolerance: 0n,
+    });
+    const loose = computeMinForceWithdrawSharePrice({
+      withdrawnAssets: 1_000n,
+      sharesBurnt: 1_000n,
+      slippageTolerance: slippage03,
+    });
+
+    expect(tight).toBe(MathLib.RAY);
+    expect(loose).toBeLessThan(tight);
+  });
+
+  test("behavior: a penalty lowers the bound below the raw share price", () => {
+    // 51 assets debited, 50 withdrawn: the penalty is deducted from what the user receives.
+    const withPenalty = computeMinForceWithdrawSharePrice({
+      withdrawnAssets: 50n,
+      sharesBurnt: 51n,
+      slippageTolerance: 0n,
+    });
+
+    expect(withPenalty).toBeLessThan(MathLib.RAY);
+  });
+
+  test("behavior: rounds the bound down so a faithful snapshot never trips the check", () => {
+    const minSharePriceE27 = computeMinForceWithdrawSharePrice({
+      withdrawnAssets: 50n,
+      sharesBurnt: 53n,
+      slippageTolerance: 0n,
+    });
+
+    // The on-chain check is `mulDivDown(withdrawn, RAY, sharesBurnt) >= minSharePriceE27`.
+    expect(MathLib.mulDivDown(50n, MathLib.RAY, 53n)).toBeGreaterThanOrEqual(
+      minSharePriceE27,
+    );
+  });
+
+  test("error: NonPositiveInputError on zero withdrawn assets", () => {
+    expect(() =>
+      computeMinForceWithdrawSharePrice({
+        withdrawnAssets: 0n,
+        sharesBurnt: 1_000n,
+        slippageTolerance: slippage03,
+      }),
+    ).toThrow(NonPositiveInputError);
+  });
+
+  test("error: NonPositiveInputError on zero shares burnt", () => {
+    expect(() =>
+      computeMinForceWithdrawSharePrice({
+        withdrawnAssets: 1_000n,
+        sharesBurnt: 0n,
+        slippageTolerance: slippage03,
+      }),
+    ).toThrow(NonPositiveInputError);
+  });
+
+  test("error: ExcessiveSlippageToleranceError when slippage reaches WAD", () => {
+    expect(() =>
+      computeMinForceWithdrawSharePrice({
+        withdrawnAssets: 1_000n,
+        sharesBurnt: 1_000n,
+        slippageTolerance: MathLib.WAD,
       }),
     ).toThrow(ExcessiveSlippageToleranceError);
   });

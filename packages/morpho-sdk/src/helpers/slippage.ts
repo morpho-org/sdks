@@ -1,6 +1,7 @@
 import { type Market, MathLib } from "@morpho-org/blue-sdk";
 import {
   ExcessiveSlippageToleranceError,
+  NonPositiveInputError,
   ShareDivideByZeroError,
 } from "../types/index.js";
 import { MAX_ABSOLUTE_SHARE_PRICE } from "./constant.js";
@@ -141,6 +142,68 @@ export function computeMaxSupplySharePrice(params: {
   );
 
   return MathLib.min(maxSharePrice, MAX_ABSOLUTE_SHARE_PRICE);
+}
+
+/**
+ * Computes the minimum Vault V2 force-withdraw share price (in RAY, 1e27) for slippage protection.
+ *
+ * Mirrors the on-chain check in `VaultExitBundlesV1.vaultExitBundlesV1ForceWithdrawVaultV2`:
+ * ```solidity
+ * require(totalSharesBurnt == 0 || withdrawn.mulDivDown(1e27, totalSharesBurnt) >= minSharePriceE27)
+ * ```
+ *
+ * The realized price sits structurally *below* the vault's share price because the
+ * force-deallocation penalty is debited from the position but never withdrawn, so a bound derived
+ * from the raw share price would reject every penalised exit. Both inputs are therefore taken from
+ * the same plan: `withdrawnAssets` (a lower bound of what the contract pays out) over
+ * `sharesBurnt` (an upper bound of what it burns). The result is conservative on both sides, so a
+ * faithful snapshot never trips the check while a real price drop, a penalty increase, or liquidity
+ * shifting from the penalty-free leg to the penalised leg all do.
+ *
+ * The referral fee is deducted *after* this check, so it is outside the bound's protection.
+ *
+ * @param params - Computation parameters.
+ * @param params.withdrawnAssets - Assets the contract withdraws in total, before the referral fee.
+ * @param params.sharesBurnt - Upper bound of the vault shares the exit burns.
+ * @param params.slippageTolerance - Slippage tolerance in WAD (e.g. `0.003e18` = 0.3%).
+ * @returns `minSharePriceE27` in RAY scale (1e27).
+ * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance >= WAD`.
+ * @throws {NonPositiveInputError} when `sharesBurnt` or `withdrawnAssets` is not positive, which
+ *   would silently nullify the on-chain bound.
+ * @example
+ * ```ts
+ * import { computeMinForceWithdrawSharePrice } from "@morpho-org/morpho-sdk";
+ *
+ * const minSharePriceE27 = computeMinForceWithdrawSharePrice({
+ *   withdrawnAssets: plan.withdrawnAssets,
+ *   sharesBurnt,
+ *   slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
+ * });
+ * ```
+ */
+export function computeMinForceWithdrawSharePrice(params: {
+  withdrawnAssets: bigint;
+  sharesBurnt: bigint;
+  slippageTolerance: bigint;
+}): bigint {
+  const { withdrawnAssets, sharesBurnt, slippageTolerance } = params;
+
+  if (slippageTolerance >= MathLib.WAD) {
+    throw new ExcessiveSlippageToleranceError(slippageTolerance);
+  }
+  // A zero on either side would yield `minSharePriceE27 = 0`, i.e. no bound at all.
+  if (withdrawnAssets <= 0n) {
+    throw new NonPositiveInputError("withdrawnAssets", withdrawnAssets);
+  }
+  if (sharesBurnt <= 0n) {
+    throw new NonPositiveInputError("sharesBurnt", sharesBurnt);
+  }
+
+  return MathLib.mulDivDown(
+    withdrawnAssets,
+    MathLib.wToRay(MathLib.WAD - slippageTolerance),
+    sharesBurnt,
+  );
 }
 
 /**

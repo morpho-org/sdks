@@ -112,8 +112,23 @@ export class ExpiredDeadlineError extends Error {
   }
 }
 
-/** Thrown when Vault V2 in-kind redemption is attempted with anything other than one adapter. */
-export class InKindRedeemRequiresSingleAdapterError extends Error {
+/**
+ * Thrown when a VaultExitBundlesV1 Vault V2 exit targets a vault without exactly one adapter.
+ *
+ * Both `vaultExitBundlesV1InKindRedemptionVaultV2` and
+ * `vaultExitBundlesV1ForceWithdrawVaultV2` require `adaptersLength() == 1`.
+ *
+ * @example
+ * ```ts
+ * import { VaultV2SingleAdapterRequiredError } from "@morpho-org/morpho-sdk";
+ *
+ * const error = new VaultV2SingleAdapterRequiredError(vault, 2);
+ * if (error instanceof VaultV2SingleAdapterRequiredError) {
+ *   console.error(error.vault, error.adapters);
+ * }
+ * ```
+ */
+export class VaultV2SingleAdapterRequiredError extends Error {
   /**
    * @param vault - Vault V2 address.
    * @param adapters - Number of adapters in the supplied vault snapshot.
@@ -123,11 +138,18 @@ export class InKindRedeemRequiresSingleAdapterError extends Error {
     public readonly adapters: number,
   ) {
     super(
-      `Vault "${vault}" has "${adapters}" adapters. In-kind redemption requires exactly one MorphoMarketV1AdapterV2.`,
+      `Vault "${vault}" has "${adapters}" adapters. VaultExitBundlesV1 exits require exactly one MorphoMarketV1AdapterV2.`,
     );
-    this.name = "InKindRedeemRequiresSingleAdapterError";
+    this.name = "VaultV2SingleAdapterRequiredError";
   }
 }
+
+/** @deprecated Use {@link VaultV2SingleAdapterRequiredError}. */
+export const InKindRedeemRequiresSingleAdapterError =
+  VaultV2SingleAdapterRequiredError;
+/** @deprecated Use {@link VaultV2SingleAdapterRequiredError}. */
+export type InKindRedeemRequiresSingleAdapterError =
+  VaultV2SingleAdapterRequiredError;
 
 /** Thrown when a requested in-kind redemption adapter is not part of the Vault V2 snapshot. */
 export class AdapterNotPartOfVaultError extends Error {
@@ -146,16 +168,214 @@ export class AdapterNotPartOfVaultError extends Error {
   }
 }
 
-/** Thrown when the Vault V2 adapter cannot expose MorphoMarketV1AdapterV2 market shares. */
-export class UnsupportedInKindAdapterError extends Error {
+/**
+ * Thrown when the Vault V2 adapter cannot expose MorphoMarketV1AdapterV2 market shares.
+ *
+ * VaultExitBundlesV1 casts the adapter to `IMorphoMarketV1AdapterV2`, so a legacy
+ * positions-based `MorphoMarketV1Adapter` or a `MorphoVaultV1Adapter` cannot be exited.
+ *
+ * @example
+ * ```ts
+ * import { VaultV2UnsupportedExitAdapterError } from "@morpho-org/morpho-sdk";
+ *
+ * const error = new VaultV2UnsupportedExitAdapterError(adapter);
+ * if (error instanceof VaultV2UnsupportedExitAdapterError) {
+ *   console.error(error.adapter);
+ * }
+ * ```
+ */
+export class VaultV2UnsupportedExitAdapterError extends Error {
   /**
    * @param adapter - Unsupported Vault V2 adapter address.
    */
   public constructor(public readonly adapter: Address) {
     super(
-      `Adapter "${adapter}" does not support Vault V2 in-kind redemption. Use a MorphoMarketV1AdapterV2-backed vault.`,
+      `Adapter "${adapter}" does not support Vault V2 exits through VaultExitBundlesV1. Use a MorphoMarketV1AdapterV2-backed vault.`,
     );
-    this.name = "UnsupportedInKindAdapterError";
+    this.name = "VaultV2UnsupportedExitAdapterError";
+  }
+}
+
+/** @deprecated Use {@link VaultV2UnsupportedExitAdapterError}. */
+export const UnsupportedInKindAdapterError = VaultV2UnsupportedExitAdapterError;
+/** @deprecated Use {@link VaultV2UnsupportedExitAdapterError}. */
+export type UnsupportedInKindAdapterError = VaultV2UnsupportedExitAdapterError;
+
+/**
+ * Thrown when a Vault V2 exit cannot resolve the vault's configured liquidity adapter.
+ *
+ * `VaultExitBundlesV1.vaultExitBundlesV1ForceWithdrawVaultV2` casts `liquidityAdapter` to
+ * `IMorphoMarketV1AdapterV2` and ABI-decodes `liquidityData` as `MarketParams`. Because the exit
+ * also requires `adaptersLength() == 1`, the only resolvable configurations are an unset
+ * liquidity adapter or the vault's sole adapter.
+ *
+ * @example
+ * ```ts
+ * import { VaultV2UnsupportedLiquidityAdapterError } from "@morpho-org/morpho-sdk";
+ *
+ * const error = new VaultV2UnsupportedLiquidityAdapterError({
+ *   vault,
+ *   liquidityAdapter,
+ *   adapter,
+ * });
+ * if (error instanceof VaultV2UnsupportedLiquidityAdapterError) {
+ *   console.error(error.liquidityAdapter, error.adapter);
+ * }
+ * ```
+ */
+export class VaultV2UnsupportedLiquidityAdapterError extends Error {
+  /** Vault V2 address. */
+  public readonly vault: Address;
+  /** Liquidity adapter configured on the vault. */
+  public readonly liquidityAdapter: Address;
+  /** Sole adapter the exit targets. */
+  public readonly adapter: Address;
+
+  /**
+   * @param params - Liquidity-adapter mismatch details.
+   * @param params.vault - Vault V2 address.
+   * @param params.liquidityAdapter - Liquidity adapter configured on the vault.
+   * @param params.adapter - Sole adapter the exit targets.
+   */
+  public constructor(params: {
+    readonly vault: Address;
+    readonly liquidityAdapter: Address;
+    readonly adapter: Address;
+  }) {
+    super(
+      `Vault "${params.vault}" routes liquidity through "${params.liquidityAdapter}", which is neither unset nor its sole adapter "${params.adapter}". Use another exit path until the vault routes liquidity through its sole MorphoMarketV1AdapterV2.`,
+    );
+    this.vault = params.vault;
+    this.liquidityAdapter = params.liquidityAdapter;
+    this.adapter = params.adapter;
+    this.name = "VaultV2UnsupportedLiquidityAdapterError";
+  }
+}
+
+/**
+ * Thrown when the adapter's markets cannot cover a Vault V2 force withdrawal.
+ *
+ * `vaultExitBundlesV1ForceWithdrawVaultV2` loops over the adapter's market list without a bound,
+ * so an under-covered request reverts on-chain with a raw `panic 0x32`. This error surfaces that
+ * failure before submission.
+ *
+ * @example
+ * ```ts
+ * import { VaultV2ForceWithdrawCoverageError } from "@morpho-org/morpho-sdk";
+ *
+ * const error = new VaultV2ForceWithdrawCoverageError({
+ *   required: 100n,
+ *   covered: 40n,
+ *   maxExitAssets: 60n,
+ * });
+ * if (error instanceof VaultV2ForceWithdrawCoverageError) {
+ *   console.error(error.maxExitAssets);
+ * }
+ * ```
+ */
+export class VaultV2ForceWithdrawCoverageError extends Error {
+  /** Assets that must be force-deallocated from the adapter's markets. */
+  public readonly required: bigint;
+  /** Assets the adapter's markets can actually release. */
+  public readonly covered: bigint;
+  /** Largest penalty-inclusive `exitAssets` the current vault state supports. */
+  public readonly maxExitAssets: bigint;
+
+  /**
+   * @param params - Coverage values used to explain the rejected exit.
+   * @param params.required - Assets that must be force-deallocated.
+   * @param params.covered - Assets the adapter's markets can release.
+   * @param params.maxExitAssets - Largest supported penalty-inclusive `exitAssets`.
+   */
+  public constructor(params: {
+    readonly required: bigint;
+    readonly covered: bigint;
+    readonly maxExitAssets: bigint;
+  }) {
+    super(
+      `Force withdrawal requires "${params.required}" force-deallocated assets but the adapter's markets only release "${params.covered}". Reduce exitAssets to at most "${params.maxExitAssets}" or wait for market liquidity.`,
+    );
+    this.required = params.required;
+    this.covered = params.covered;
+    this.maxExitAssets = params.maxExitAssets;
+    this.name = "VaultV2ForceWithdrawCoverageError";
+  }
+}
+
+/**
+ * Thrown when a Vault V2 force withdrawal would withdraw nothing while still consuming its permit.
+ *
+ * Happens on a dust `exitAssets` when the vault has no penalty-free liquidity and the
+ * penalty-adjusted remainder rounds down to zero.
+ *
+ * @example
+ * ```ts
+ * import { VaultV2ForceWithdrawZeroWithdrawalError } from "@morpho-org/morpho-sdk";
+ *
+ * const error = new VaultV2ForceWithdrawZeroWithdrawalError({
+ *   vault,
+ *   exitAssets: 1n,
+ *   penalty: 20_000000000000000n,
+ * });
+ * if (error instanceof VaultV2ForceWithdrawZeroWithdrawalError) {
+ *   console.error(error.exitAssets, error.penalty);
+ * }
+ * ```
+ */
+export class VaultV2ForceWithdrawZeroWithdrawalError extends Error {
+  /** Vault V2 address. */
+  public readonly vault: Address;
+  /** Positive penalty-inclusive amount requested by the caller. */
+  public readonly exitAssets: bigint;
+  /** WAD-scaled force-deallocation penalty applied by the adapter. */
+  public readonly penalty: bigint;
+
+  /**
+   * @param params - Values that caused the exit to withdraw nothing.
+   * @param params.vault - Vault V2 address.
+   * @param params.exitAssets - Positive penalty-inclusive amount requested by the caller.
+   * @param params.penalty - WAD-scaled force-deallocation penalty applied by the adapter.
+   */
+  public constructor(params: {
+    readonly vault: Address;
+    readonly exitAssets: bigint;
+    readonly penalty: bigint;
+  }) {
+    super(
+      `Vault "${params.vault}" has no penalty-free liquidity, and force-withdraw exitAssets "${params.exitAssets}" rounds to zero withdrawn assets after applying penalty "${params.penalty}". Increase exitAssets or use another exit path.`,
+    );
+    this.vault = params.vault;
+    this.exitAssets = params.exitAssets;
+    this.penalty = params.penalty;
+    this.name = "VaultV2ForceWithdrawZeroWithdrawalError";
+  }
+}
+
+/**
+ * Thrown when a non-zero referral fee percentage has no recipient to receive it.
+ *
+ * VaultExitBundlesV1 transfers the fee unconditionally, so a zero recipient either reverts or
+ * burns the fee depending on the asset.
+ *
+ * @example
+ * ```ts
+ * import { MissingReferralFeeRecipientError } from "@morpho-org/morpho-sdk";
+ *
+ * const error = new MissingReferralFeeRecipientError(1_0000000000000000n);
+ * if (error instanceof MissingReferralFeeRecipientError) {
+ *   console.error(error.referralFeePct);
+ * }
+ * ```
+ */
+export class MissingReferralFeeRecipientError extends Error {
+  /**
+   * @param referralFeePct - WAD-scaled referral fee percentage supplied without a recipient.
+   */
+  public constructor(public readonly referralFeePct: bigint) {
+    super(
+      `Referral fee percentage "${referralFeePct}" requires a non-zero referralFeeRecipient. Set a recipient or pass referralFeePct "0".`,
+    );
+    this.name = "MissingReferralFeeRecipientError";
   }
 }
 
