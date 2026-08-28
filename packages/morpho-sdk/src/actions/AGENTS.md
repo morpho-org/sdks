@@ -26,6 +26,10 @@ Only valid for assets/collateral configured as wNative. When `nativeAmount > 0`:
 
 `blueBorrow`, `blueSupplyCollateralBorrow`, loan-asset `blueWithdraw`, and refinance target flows accept an optional homogeneous `BlueReallocationPlan` (refinance names the field `targetReallocations`). `VaultV1Reallocation` entries become `reallocateTo(vault, fee, sortedWithdrawals, targetMarket)` before the primary Blue action; `VaultReallocation` remains a deprecated alias. `VaultV2BlueReallocation` entries map 1:1 to `reallocate(...)` for a market source or `allocateFromIdle(...)` for idle liquidity; the enclosing action supplies the target market, the input supplies adapters, the chain registry supplies the allocator, and each call passes the vault's configured WAD-scaled `penalty`. Mixing allocator versions throws `MixedReallocationVersionsError`. BluePublicAllocator sources are not sorted and idle uses no synthetic zero-address market. High-level builders pull the aggregate V2 penalty in the target loan token through GeneralAdapter1, then each low-level allocator action approves and spends its independently rounded `ceil(assets × penalty / WAD)` amount from Bundler3. Only V1 fees contribute to `tx.value`; all high-level allocator calls use `skipRevert: false`. Normalization dispatches to the separate V1 and V2 validators and action builders.
 
+Vault V1 members of `BlueReallocationPlan` are deprecated for high-level Blue writes. New write
+integrations use `VaultV2BlueReallocation`; V1 planning and explicit low-level Bundler3 composition
+remain supported.
+
 ## Discriminated unions
 
 All action interfaces extend `BaseAction<TType, TArgs>` and discriminate on `type`. To add a new operation, see [`types/AGENTS.md`](../types/AGENTS.md#adding-a-new-operation).

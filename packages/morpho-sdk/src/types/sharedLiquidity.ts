@@ -102,6 +102,9 @@ export interface ReallocationWithdrawal {
  *
  * Maps 1:1 to a `PublicAllocator.reallocateTo()` call.
  * Withdraws from source markets and supplies to the target market.
+ *
+ * @deprecated As an input to high-level Blue writes. Use
+ * {@link VaultV2BlueReallocation}; Vault V1 remains available for low-level Bundler3 composition.
  */
 export interface VaultV1Reallocation {
   readonly vault: Address;
@@ -144,7 +147,12 @@ export interface VaultV2BlueReallocation {
   readonly penalty: bigint;
 }
 
-/** A homogeneous Blue action plan containing only Vault V1 or only Vault V2 reallocations. */
+/**
+ * A homogeneous Blue action plan containing only Vault V1 or only Vault V2 reallocations.
+ *
+ * Vault V1 members are deprecated for high-level Blue writes and will stop being accepted in the
+ * next major. Use Vault V2 members for new high-level integrations.
+ */
 export type BlueReallocationPlan =
   | Iterable<VaultV1Reallocation>
   | Iterable<VaultV2BlueReallocation>;

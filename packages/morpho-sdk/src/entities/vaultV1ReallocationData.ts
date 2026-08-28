@@ -341,6 +341,8 @@ export class VaultV1ReallocationData implements InputVaultV1ReallocationData {
    * @param options - Optional allocator discovery options.
    * @returns Computed source-market withdrawals and the post-reallocation state.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
+   * @deprecated Prefer Vault V2 reallocation planning for high-level Blue writes. This V1 method
+   * remains available for low-level Bundler3 composition.
    * @example
    * ```ts
    * import { createPublicClient, http } from "viem";

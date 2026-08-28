@@ -107,6 +107,8 @@ const capVaultWithdrawals = (
  * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation's absolute shortfall on the target market — preventing fee-bearing reallocations from being attached to a call that would still revert onchain.
  * @throws {ReallocationWithdrawExceedsMarketSupplyError} when `operation === "withdraw"` and `amount` exceeds the target market's `totalSupplyAssets` — the on-chain call would revert regardless of reallocations.
  * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
+ * @deprecated Prefer Vault V2 reallocation planning for high-level Blue writes. This V1 helper
+ * remains available for low-level Bundler3 composition.
  * @example
  * ```ts
  * import { createPublicClient, http, parseUnits } from "viem";
