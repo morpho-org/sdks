@@ -159,9 +159,8 @@ const tx = buildTx(signatures);
 
 The LLTV buffer guards against instant liquidation.
 
-> Vault V1 reallocations passed to high-level Blue writes are deprecated. Use
-> `VaultV2BlueReallocation` for new integrations; Vault V1 planning and low-level Bundler3
-> composition remain available.
+> High-level Blue writes accept only `VaultV2BlueReallocation`. Vault V1 planning and explicit
+> low-level Bundler3 composition remain available.
 
 ### Midnight: take a fixed-rate offer
 

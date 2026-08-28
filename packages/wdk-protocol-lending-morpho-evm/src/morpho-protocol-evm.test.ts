@@ -1,13 +1,11 @@
 import type {
   RequirementSignature,
-  VaultReallocation,
   VaultV2BlueReallocation,
 } from "@morpho-org/morpho-sdk";
 import * as viem from "viem";
 import { beforeEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import type {
   MorphoBorrowOptions,
-  MorphoBorrowWithVaultV2ReallocationsOptions,
   RequirementApproval,
   RequirementAuthorization,
   RequirementSignatureRequest,
@@ -462,9 +460,6 @@ describe.sequential("MorphoProtocolEvm", () => {
     test("types: borrow reallocations require replayable arrays", () => {
       expectTypeOf<
         NonNullable<MorphoBorrowOptions["reallocations"]>
-      >().toEqualTypeOf<readonly VaultReallocation[]>();
-      expectTypeOf<
-        MorphoBorrowWithVaultV2ReallocationsOptions["reallocations"]
       >().toEqualTypeOf<readonly VaultV2BlueReallocation[]>();
     });
 
@@ -572,7 +567,13 @@ describe.sequential("MorphoProtocolEvm", () => {
       } satisfies MorphoBorrowOptions;
       const promise = protocol.getBorrowRequirements(options);
       expectTypeOf(promise).toEqualTypeOf<
-        Promise<(RequirementAuthorization | RequirementSignatureRequest)[]>
+        Promise<
+          (
+            | RequirementApproval
+            | RequirementAuthorization
+            | RequirementSignatureRequest
+          )[]
+        >
       >();
       const requirements = await promise;
 
@@ -595,7 +596,7 @@ describe.sequential("MorphoProtocolEvm", () => {
             penalty: 1n,
           },
         ],
-      } satisfies MorphoBorrowWithVaultV2ReallocationsOptions;
+      } satisfies MorphoBorrowOptions;
 
       const promise = protocol.getBorrowRequirements(options);
       expectTypeOf(promise).toEqualTypeOf<

@@ -38,15 +38,14 @@ ERC-20 approval spender is **GeneralAdapter1** for any bundled path — never th
 | `withdraw` | `morphoWithdraw` |
 | `withdraw` (with reallocations) | `[V2 penalty transfer?] → [allocator reallocation × N] → morphoWithdraw` |
 
-An allocator reallocation plan contains only PublicAllocator V1 `reallocateTo` calls or only
-BluePublicAllocator `reallocate`/`allocateFromIdle` calls. Separate builders encode each version;
-mixing versions throws `MixedReallocationVersionsError`. For non-zero V2 penalties, the V2 builder
+High-level allocator inputs contain only BluePublicAllocator V2 `reallocate`/`allocateFromIdle`
+calls. For non-zero penalties, the builder
 adds one aggregate loan-token funding action into Bundler3: `erc20TransferFrom` from the initiator by
 default, or `erc20Transfer` from GeneralAdapter1 when `supplyCollateralBorrow` uses the same token for
 collateral and loan funding. Each allocator action expands to the nonpayable allocator call; when its
 penalty is non-zero, a zero reset and exact token approval precede it.
 `BundlerAction.encodeBundle` derives `tx.value` only from native wrapping
-calls and PublicAllocator V1 native fees.
+calls. PublicAllocator V1 planners and encoders remain available for explicit low-level composition.
 
 ## Mode and ordering rules
 

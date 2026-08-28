@@ -5,7 +5,6 @@ import { type Action, BundlerAction } from "../../bundler/index.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   type AuthorizationRequirementSignature,
-  type BlueReallocationPlan,
   type BlueSupplyCollateralBorrowAction,
   type DepositAmountArgs,
   type Metadata,
@@ -13,6 +12,7 @@ import {
   NonPositiveInputError,
   type PermitRequirementSignature,
   type Transaction,
+  type VaultV2BlueReallocation,
 } from "../../types/index.js";
 import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
 import { buildAssetFundingActions } from "./buildAssetFundingActions.js";
@@ -35,11 +35,8 @@ export interface BlueSupplyCollateralBorrowParams {
     minSharePrice: bigint;
     /** Optional pre-signed permit/permit2 approval for the collateral transfer. */
     requirementSignature?: PermitRequirementSignature;
-    /**
-     * Homogeneous Vault V1 or Vault V2 reallocations to execute before borrowing.
-     * Vault V1 inputs are deprecated for high-level Blue writes; use Vault V2 for new integrations.
-     */
-    reallocations?: BlueReallocationPlan;
+    /** Optional Vault V2 BluePublicAllocator reallocations to execute before borrowing. */
+    reallocations?: Iterable<VaultV2BlueReallocation>;
     /**
      * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
      * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a
@@ -53,11 +50,10 @@ export interface BlueSupplyCollateralBorrowParams {
 /**
  * Prepares an atomic supply-collateral-and-borrow transaction for a Morpho Blue market.
  *
- * Routed through bundler3: collateral funding → `morphoSupplyCollateral` → optional Public
- * Allocator calls → `morphoBorrow`. Each plan contains either V1 or V2 entries,
- * never both. When `nativeAmount > 0`, native ETH is wrapped via
- * `GeneralAdapter1.wrapNative()` before the supply leg. V1 fees add to
- * `tx.value`; V2 penalties are paid in the target loan token and donated to the vaults. When the
+ * Routed through bundler3: collateral funding → `morphoSupplyCollateral` → optional Vault V2
+ * BluePublicAllocator calls → `morphoBorrow`. When `nativeAmount > 0`, native ETH is wrapped via
+ * `GeneralAdapter1.wrapNative()` before the supply leg. Vault V2 penalties are paid in the target
+ * loan token and donated to the vaults. When the
  * collateral and loan tokens match, one combined pull funds both collateral and penalties through
  * `GeneralAdapter1`.
  *
@@ -79,9 +75,8 @@ export interface BlueSupplyCollateralBorrowParams {
  *   collateral funding. When collateral and loan tokens match, its amount includes V2 penalties.
  * @param params.args.nativeAmount - Optional amount of native token to wrap into wNative for the
  *   collateral supply. Requires the collateral token to be the chain's wNative.
- * @param params.args.reallocations - Optional homogeneous Vault V1 or Vault V2 reallocations to
- *   execute between the supply and borrow legs. Vault V1 inputs are deprecated; use Vault V2 for
- *   new integrations.
+ * @param params.args.reallocations - Optional Vault V2 reallocations to execute between the
+ *   supply and borrow legs.
  * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
  *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
@@ -95,8 +90,6 @@ export interface BlueSupplyCollateralBorrowParams {
  * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
  * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
  * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
- * @throws {InvalidReallocationShapeError} when an entry matches both or neither V1/V2 shape.
- * @throws {MixedReallocationVersionsError} when one plan contains both V1 and V2 entries.
  * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
  * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the collateral
  *   token is not the chain's wNative.

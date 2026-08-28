@@ -5,13 +5,13 @@ import { type Action, BundlerAction } from "../../bundler/index.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   type AuthorizationRequirementSignature,
-  type BlueReallocationPlan,
   type BlueWithdrawAction,
   type Metadata,
   MutuallyExclusiveWithdrawAmountsError,
   NegativeInputError,
   NonPositiveInputError,
   type Transaction,
+  type VaultV2BlueReallocation,
 } from "../../types/index.js";
 import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
 import { buildBlueReallocationActions } from "./buildReallocationActions.js";
@@ -31,13 +31,8 @@ export interface BlueWithdrawParams {
     receiver: Address;
     /** Minimum withdraw share price (in ray). Slippage protection. */
     minSharePrice: bigint;
-    /**
-     * Homogeneous Vault V1 or Vault V2 reallocations to execute before withdrawing. V1 entries can be
-     * computed via `MorphoBlue.getVaultV1Reallocations({ operation: "withdraw", amount })` or directly
-     * via `computeVaultV1Reallocations({ operation: "withdraw", amount, ... })`.
-     * Vault V1 inputs are deprecated for high-level Blue writes; use Vault V2 for new integrations.
-     */
-    reallocations?: BlueReallocationPlan;
+    /** Optional Vault V2 BluePublicAllocator reallocations to execute before withdrawing. */
+    reallocations?: Iterable<VaultV2BlueReallocation>;
     /**
      * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
      * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a
@@ -57,10 +52,8 @@ export interface BlueWithdrawParams {
  * - **By shares** (`assets = 0, shares > 0`): burns an exact share count (typical for a full
  *   supplier position close; immune to interest accrual between tx construction and execution).
  *
- * A `reallocations` plan contains either V1 entries or V2 market/idle entries,
- * never both. The calls run before the withdraw. V1
- * fees accumulate in `tx.value`; V2 penalties are paid in the target loan
- * token and donated to the vaults. The on-chain `morphoWithdraw` sends the
+ * Vault V2 market/idle reallocation calls run before the withdraw. Their penalties are paid in
+ * the target loan token and donated to the vaults. The on-chain `morphoWithdraw` sends the
  * assets computed on-chain directly to `receiver`; no skim is required.
  *
  * The withdraw is performed on behalf of the transaction initiator (signer) — there is no
@@ -75,8 +68,7 @@ export interface BlueWithdrawParams {
  * @param params.args.receiver - Address that receives the withdrawn assets.
  * @param params.args.minSharePrice - Minimum acceptable withdraw share price (in ray). Slippage
  *   protection.
- * @param params.args.reallocations - Optional homogeneous Vault V1 or Vault V2 reallocations to
- *   execute before withdrawing. Vault V1 inputs are deprecated; use Vault V2 for new integrations.
+ * @param params.args.reallocations - Optional Vault V2 reallocations to execute before withdrawing.
  * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
  *   a `setAuthorizationWithSig` call is prepended to the bundle.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
@@ -90,8 +82,6 @@ export interface BlueWithdrawParams {
  * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
  * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
  * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
- * @throws {InvalidReallocationShapeError} when an entry matches both or neither V1/V2 shape.
- * @throws {MixedReallocationVersionsError} when one plan contains both V1 and V2 entries.
  * @throws {MutuallyExclusiveWithdrawAmountsError} when both `assets` and `shares` are non-zero.
  * @throws {EmptyReallocationWithdrawalsError} when any reallocation has no withdrawals.
  * @throws {ReallocationWithdrawalOnTargetMarketError} when a reallocation withdrawal references

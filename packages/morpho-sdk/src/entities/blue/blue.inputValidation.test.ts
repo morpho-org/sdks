@@ -7,17 +7,19 @@ import { CbbtcUsdcBlue } from "../../../test/fixtures/blue.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
   NegativeInputError,
-  type VaultReallocation,
+  type VaultV2BlueReallocation,
 } from "../../types/index.js";
 
 const USER: Address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 const INVALID_REALLOCATIONS = [
   {
     vault: USER,
-    fee: -1n,
-    withdrawals: [],
+    from: { type: "idle" },
+    to: { adapter: USER },
+    assets: 1n,
+    penalty: -1n,
   },
-] satisfies readonly VaultReallocation[];
+] satisfies readonly VaultV2BlueReallocation[];
 
 const makeMarket = () => {
   const { client } = createMockClient(mainnet);

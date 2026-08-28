@@ -4,52 +4,8 @@ import {
   VaultV2BluePublicAllocatorConfigUtils,
 } from "@morpho-org/blue-sdk";
 import type { Action } from "../../bundler/index.js";
-import { validateAndNormalizeReallocations } from "../../helpers/validate.js";
-import type {
-  BlueReallocationPlan,
-  VaultV1Reallocation,
-  VaultV2BlueReallocation,
-} from "../../types/index.js";
-
-/**
- * Builds PublicAllocator V1 reallocation actions for a Morpho Blue target market.
- *
- * Preserves the supplied reallocation order and aggregates each allocator call's native fee.
- *
- * @param params.reallocations - Validated Vault V1 reallocations to execute.
- * @param params.targetMarketParams - Morpho Blue market receiving the reallocated liquidity.
- * @returns The reallocation actions and aggregate native fee, with zero V2 penalty assets.
- * @internal
- */
-export const buildVaultV1ReallocationActions = ({
-  reallocations,
-  targetMarketParams,
-}: {
-  readonly reallocations: readonly VaultV1Reallocation[];
-  readonly targetMarketParams: MarketParams;
-}) => {
-  let fee = 0n;
-  const actions: Action[] = [];
-
-  for (const reallocation of reallocations) {
-    actions.push({
-      type: "reallocateTo",
-      args: [
-        reallocation.vault,
-        reallocation.fee,
-        reallocation.withdrawals.map((withdrawal) => ({
-          marketParams: withdrawal.marketParams,
-          amount: withdrawal.amount,
-        })),
-        targetMarketParams,
-        false,
-      ],
-    });
-    fee += reallocation.fee;
-  }
-
-  return { actions, fee, penaltyAssets: 0n };
-};
+import { validateAndNormalizeVaultV2BlueReallocations } from "../../helpers/validate.js";
+import type { VaultV2BlueReallocation } from "../../types/index.js";
 
 /**
  * Builds BluePublicAllocator reallocation actions for a Morpho Blue target market.
@@ -149,17 +105,14 @@ export const buildVaultV2BlueReallocationActions = ({
 };
 
 /**
- * Validates a homogeneous Blue reallocation plan and builds its Bundler actions.
- *
- * Dispatches Vault V1 and Vault V2 plans to their version-specific builders. V1 plans aggregate
- * native fees, while V2 plans aggregate loan-token penalties using the selected funding source.
+ * Validates Vault V2 Blue reallocations and builds their Bundler actions.
  *
  * @param params.chainId - Chain whose registered Bundler3 and allocator addresses are used.
- * @param params.reallocations - Optional homogeneous Vault V1 or Vault V2 reallocation plan.
+ * @param params.reallocations - Optional Vault V2 Blue reallocation plan.
  * @param params.targetMarketParams - Morpho Blue market receiving the reallocated liquidity.
  * @param params.penaltyFundingSource - Optional source of V2 penalty assets. Defaults to the
  *   transaction initiator.
- * @returns The reallocation actions, aggregate V1 native fee, and aggregate V2 penalty assets.
+ * @returns The reallocation actions and aggregate V2 penalty assets, with zero native fee.
  * @internal
  */
 export const buildBlueReallocationActions = ({
@@ -169,25 +122,20 @@ export const buildBlueReallocationActions = ({
   penaltyFundingSource,
 }: {
   readonly chainId: number;
-  readonly reallocations: BlueReallocationPlan | undefined;
+  readonly reallocations: Iterable<VaultV2BlueReallocation> | undefined;
   readonly targetMarketParams: MarketParams;
   readonly penaltyFundingSource?: "initiator" | "generalAdapter1";
 }) => {
-  const reallocationPlan = validateAndNormalizeReallocations({
+  const normalizedReallocations = validateAndNormalizeVaultV2BlueReallocations({
     reallocations,
     targetMarketId: targetMarketParams.id,
     chainId,
   });
 
-  return reallocationPlan.type === "vaultV1"
-    ? buildVaultV1ReallocationActions({
-        reallocations: reallocationPlan.reallocations,
-        targetMarketParams,
-      })
-    : buildVaultV2BlueReallocationActions({
-        chainId,
-        reallocations: reallocationPlan.reallocations,
-        targetMarketParams,
-        penaltyFundingSource,
-      });
+  return buildVaultV2BlueReallocationActions({
+    chainId,
+    reallocations: normalizedReallocations,
+    targetMarketParams,
+    penaltyFundingSource,
+  });
 };

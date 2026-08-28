@@ -148,10 +148,10 @@ export interface VaultV2BlueReallocation {
 }
 
 /**
- * A homogeneous Blue action plan containing only Vault V1 or only Vault V2 reallocations.
+ * A homogeneous Vault V1 or Vault V2 plan retained for low-level compatibility helpers.
  *
- * Vault V1 members are deprecated for high-level Blue writes and will stop being accepted in the
- * next major. Use Vault V2 members for new high-level integrations.
+ * High-level Blue writes accept {@link VaultV2BlueReallocation} directly and do not accept the
+ * Vault V1 branch of this union.
  */
 export type BlueReallocationPlan =
   | Iterable<VaultV1Reallocation>

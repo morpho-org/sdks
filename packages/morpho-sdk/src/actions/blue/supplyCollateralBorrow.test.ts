@@ -6,12 +6,7 @@ import {
 import { decodeFunctionData, type Hex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { afterEach, describe, expect, vi } from "vitest";
-import {
-  UsdcEurcvBlue,
-  WbtcUsdcSourceMarket,
-  WethUsdsBlue,
-} from "../../../test/fixtures/blue.js";
-import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
+import { UsdcEurcvBlue, WethUsdsBlue } from "../../../test/fixtures/blue.js";
 import { makePermit } from "../../../test/helpers/permit.js";
 import { test } from "../../../test/unit.js";
 import { bundler3Abi, generalAdapter1Abi } from "../../abis.js";
@@ -22,7 +17,6 @@ import {
   NegativeInputError,
   NonPositiveInputError,
   type PermitRequirementSignature,
-  type VaultReallocation,
   type VaultV2BlueReallocation,
 } from "../../types/index.js";
 import { getGeneralAdapterRequirements } from "../requirements/index.js";
@@ -91,45 +85,6 @@ describe("blueSupplyCollateralBorrow unit tests", () => {
     expect(tx.action.args.collateralAmount).toBe(nativeAmount);
     expect(tx.action.args.nativeAmount).toBe(nativeAmount);
     expect(tx.value).toBe(nativeAmount);
-  });
-
-  test("should create bundler tx with native wrapping and reallocations", async ({
-    client,
-  }) => {
-    const nativeAmount = parseUnits("0.5", 18);
-    const borrowAmount = parseUnits("1000", 6);
-    const reallocationFee = parseUnits("0.01", 18);
-    const reallocations: readonly VaultReallocation[] = [
-      {
-        vault: SteakhouseUsdcVaultV1.address,
-        fee: reallocationFee,
-        withdrawals: [
-          {
-            marketParams: WbtcUsdcSourceMarket,
-            amount: parseUnits("2000", 6),
-          },
-        ],
-      },
-    ];
-
-    const tx = blueSupplyCollateralBorrow({
-      market: {
-        chainId: mainnet.id,
-        marketParams: WethUsdsBlue,
-      },
-      args: {
-        nativeAmount,
-        borrowAmount,
-        onBehalf: client.account.address,
-        receiver: client.account.address,
-        minSharePrice: 0n,
-        reallocations,
-      },
-    });
-
-    expect(tx.action.args.nativeAmount).toBe(nativeAmount);
-    expect(tx.action.args.reallocationFee).toBe(reallocationFee);
-    expect(tx.value).toBe(nativeAmount + reallocationFee);
   });
 
   test("should create bundler tx with both ERC20 + native amount", async ({
