@@ -1,5 +1,6 @@
 ---
 "@morpho-org/morpho-sdk": major
+"@morpho-org/liquidity-sdk-viem": patch
 ---
 
 Migrate Vault V2 `forceWithdraw` from `VaultV2.multicall` to `VaultExitBundlesV1`.
@@ -43,6 +44,16 @@ bounds the realized exit share price. `forceRedeem` is unchanged and stays on th
   path had no slippage bound at all; the derived one rejects a share-price drop, a penalty increase,
   and liquidity shifting from the penalty-free leg to the penalised leg. It does not cover the
   referral fee, which the contract deducts after the check.
+- The derived bound's denominator is the **snapshot** share burn, not the deadline-inflated allowance
+  bound. A larger denominator only lowers the floor, so reusing the allowance would let a
+  caller-chosen `deadline` silently weaken the price floor; `slippageTolerance` absorbs accrual drift
+  instead.
+- A supplied `minSharePriceE27` override must be positive: the contract reads `0` as "no bound", so
+  an override can no longer opt out of the slippage check. A non-positive override throws
+  `NonPositiveInputError`.
+- Referral-fee inputs are validated eagerly at handle creation, before any RPC: `referralFeePct < 0`
+  throws `NegativeInputError`, `referralFeePct >= WAD` throws `InputExceedsMaxError`, and a positive
+  pct with a missing or zero recipient throws `MissingReferralFeeRecipientError`.
 - `previewVaultV2ForceWithdraw(vaultData, params)` returns the penalty-free leg, penalised leg,
   penalty, referral fee, net payout, and `maxExitAssets`, with no RPC.
 - `resolveVaultV2ForceWithdrawEligibility`, `computeVaultV2ForceWithdrawPlan`,
@@ -50,9 +61,20 @@ bounds the realized exit share price. `forceRedeem` is unchanged and stays on th
   planning core.
 - New errors: `VaultV2ForceWithdrawCoverageError` (replaces the contract's raw `panic 0x32` when the
   adapter's markets cannot cover the exit), `VaultV2ForceWithdrawZeroWithdrawalError`,
-  `VaultV2UnsupportedLiquidityAdapterError`, and `MissingReferralFeeRecipientError`.
-- The authorized share allowance is bounded to the exit's full burn — every penalty leg plus both
-  asset legs, each rounded up independently, over the worse of the current and deadline-accrued
-  previews — instead of an unlimited approval.
+  `VaultV2UnsupportedLiquidityAdapterError`, `VaultV2UndecodableLiquidityDataError`, and
+  `MissingReferralFeeRecipientError`. `VaultV2UndecodableLiquidityDataError` reports a
+  `liquidityData` blob that does not decode as `MarketParams` — the case the contract's `abi.decode`
+  reverts on — separately from `VaultV2UnsupportedLiquidityAdapterError`, which now covers only a
+  liquidity adapter that is not the vault's sole adapter.
+- The new share allowance is bounded to the exit's full burn — every penalty leg plus both asset
+  legs, each rounded up independently, over the worse of the current and deadline-accrued previews.
+  This is a bound on a **newly required** approval, not a replacement for one: the multicall path
+  needed no approval at all, because the vault burned `msg.sender`'s own shares.
+
+**Dependent packages**
+
+- `@morpho-org/liquidity-sdk-viem` widens its `@morpho-org/morpho-sdk` peer range to `^6.0.0` and is
+  released with this bump. The range is explicit rather than `workspace:^`, so Changesets cannot
+  rewrite it automatically.
 
 See `docs/tibs/TIB-2026-08-28-vault-exit-force-withdraw.md` for the full decision record.

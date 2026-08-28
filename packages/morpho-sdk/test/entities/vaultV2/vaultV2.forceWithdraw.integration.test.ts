@@ -1,10 +1,18 @@
 import { AccrualVaultV2MorphoMarketV1AdapterV2 } from "@morpho-org/blue-sdk";
-import { vaultV2Abi } from "@morpho-org/blue-sdk-viem";
 import type { AnvilTestClient } from "@morpho-org/test";
 import { createViemTest } from "@morpho-org/test/vitest";
-import { type Address, erc20Abi, parseUnits } from "viem";
+import {
+  type Address,
+  BaseError,
+  decodeErrorResult,
+  erc20Abi,
+  isHex,
+  parseUnits,
+  RpcRequestError,
+} from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
+import { vaultExitBundlesV1Abi } from "../../../src/abis.js";
 import {
   isRequirementApproval,
   isRequirementSignature,
@@ -108,7 +116,12 @@ describe("MorphoVaultV2.forceWithdraw integration", () => {
 
     const final = await balances(client, vaultAddress);
     expect(final.assets - initial.assets).toBe(preview.netAssets);
-    expect(final.shares).toBeLessThan(initial.shares);
+    // The approved amount is the SDK's derived upper bound on the burn, and it is the only
+    // authorization the exit gets. A real burn above it would mean the bound under-counts what the
+    // contract actually takes from the user's position.
+    const sharesBurnt = initial.shares - final.shares;
+    expect(sharesBurnt).toBeGreaterThan(0n);
+    expect(sharesBurnt).toBeLessThanOrEqual(approval.action.args.amount);
     // Nothing is left stranded in the periphery.
     await expect(
       client.readContract({
@@ -255,6 +268,13 @@ describe("MorphoVaultV2.forceWithdraw integration", () => {
     expect(preview.referralFeeAssets).toBeGreaterThan(0n);
 
     const initial = await balances(client, vaultAddress);
+    // `0x…dEaD` is a public burn address, so only the delta is this test's to assert.
+    const initialRecipientAssets = await client.readContract({
+      address: USDC,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [referralFeeRecipient],
+    });
     const exit = withChainTimestamp(await client.timestamp(), () =>
       vault.forceWithdraw({
         exitAssets,
@@ -275,14 +295,15 @@ describe("MorphoVaultV2.forceWithdraw integration", () => {
 
     const final = await balances(client, vaultAddress);
     expect(final.assets - initial.assets).toBe(preview.netAssets);
-    await expect(
-      client.readContract({
-        address: USDC,
-        abi: erc20Abi,
-        functionName: "balanceOf",
-        args: [referralFeeRecipient],
-      }),
-    ).resolves.toBe(preview.referralFeeAssets);
+    const finalRecipientAssets = await client.readContract({
+      address: USDC,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [referralFeeRecipient],
+    });
+    expect(finalRecipientAssets - initialRecipientAssets).toBe(
+      preview.referralFeeAssets,
+    );
   });
 
   test("behavior: the derived minSharePriceE27 does not reject a faithful exit", async ({
@@ -367,8 +388,8 @@ describe("MorphoVaultV2.forceWithdraw integration", () => {
 
     // Doubling the bound is unreachable: the realized price cannot exceed the vault share price.
     const derived = exit.buildTx().action.args.minSharePriceE27;
-    await expect(
-      client.sendTransaction(
+    const thrown = await client
+      .sendTransaction(
         vaultV2ForceWithdraw({
           vault: { chainId: mainnet.id, address: vaultAddress },
           args: {
@@ -379,22 +400,36 @@ describe("MorphoVaultV2.forceWithdraw integration", () => {
             deadline: (await client.timestamp()) + 3_600n,
           },
         }),
-      ),
-    ).rejects.toThrow();
+      )
+      .then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+    // A bare rejection is also satisfied by a missing allowance, an expired deadline, or a wrong
+    // ABI slot, so the revert payload is decoded back to VaultExitBundlesV1's own error set: this
+    // is the only on-chain proof that the derived bound is what stops the exit.
+    if (!(thrown instanceof BaseError)) {
+      throw new Error(`Expected a reverting exit, got: ${String(thrown)}`);
+    }
+    const revert = thrown.walk((error) => error instanceof RpcRequestError);
+    if (!(revert instanceof RpcRequestError) || !isHex(revert.data)) {
+      throw new Error(`Expected revert data, got: ${thrown.shortMessage}`);
+    }
+    expect(
+      decodeErrorResult({ abi: vaultExitBundlesV1Abi, data: revert.data })
+        .errorName,
+    ).toBe("SlippageExceeded");
   });
 
-  test("error: VaultV2ForceWithdrawCoverageError instead of an on-chain panic", async ({
+  test("error: VaultV2ForceWithdrawCoverageError when the markets cannot cover the exit", async ({
     client,
   }) => {
-    const {
-      vault: vaultAddress,
-      adapter,
-      depositAndAllocate,
-    } = await setUpSingleAdapterVaultV2(client, {
-      asset: USDC,
-      markets: setupMarkets,
-      forceDeallocatePenalty: ONE_PERCENT,
-    });
+    const { vault: vaultAddress, depositAndAllocate } =
+      await setUpSingleAdapterVaultV2(client, {
+        asset: USDC,
+        markets: setupMarkets,
+        forceDeallocatePenalty: ONE_PERCENT,
+      });
     const deposit = parseUnits("500", 6);
     await depositAndAllocate({
       assets: deposit,
@@ -422,42 +457,8 @@ describe("MorphoVaultV2.forceWithdraw integration", () => {
         }),
       ),
     ).toThrow(VaultV2ForceWithdrawCoverageError);
-
-    // The same call, forced past the SDK guard, dies on-chain with an undecodable panic.
-    await client.approve({
-      address: vaultAddress,
-      args: [
-        vaultV2ForceWithdraw({
-          vault: { chainId: mainnet.id, address: vaultAddress },
-          args: {
-            adapter,
-            exitAssets,
-            minSharePriceE27: 0n,
-            userAddress: client.account.address,
-            deadline: (await client.timestamp()) + 3_600n,
-          },
-        }).to,
-        await client.readContract({
-          address: vaultAddress,
-          abi: vaultV2Abi,
-          functionName: "balanceOf",
-          args: [client.account.address],
-        }),
-      ],
-    });
-    await expect(
-      client.sendTransaction(
-        vaultV2ForceWithdraw({
-          vault: { chainId: mainnet.id, address: vaultAddress },
-          args: {
-            adapter,
-            exitAssets,
-            minSharePriceE27: 0n,
-            userAddress: client.account.address,
-            deadline: (await client.timestamp()) + 3_600n,
-          },
-        }),
-      ),
-    ).rejects.toThrow();
+    // The matching on-chain `0x32` panic is deliberately not asserted here: an `exitAssets` above
+    // the user's whole position reverts on shares/allowance long before the contract's unbounded
+    // deallocation loop can overrun, and no fork assertion can tell the two failures apart.
   });
 });

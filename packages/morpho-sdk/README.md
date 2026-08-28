@@ -26,7 +26,8 @@ Each entity exposes a set of actions. Bundled actions route through bundler3 (vi
 | | `inKindRedeem` | VaultExitBundlesV1 |
 | **VaultV2** | `deposit` | Bundler |
 | | `withdraw`, `redeem` | Direct call |
-| | `forceWithdraw`, `forceRedeem` | Vault multicall |
+| | `forceWithdraw` | VaultExitBundlesV1 |
+| | `forceRedeem` | Vault multicall |
 | | `inKindRedeem` | VaultExitBundlesV1 |
 | **Blue** | `supply`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdraw`, `repayWithdrawCollateral`, `refinance` | Bundler |
 | | `withdrawCollateral` | Direct call |
@@ -41,10 +42,11 @@ be configured with `registerCustomAddresses`.
 ## How it works
 
 Actions that pull tokens or touch a position return `{ buildTx, getRequirements }`. Vault
-`inKindRedeem` uses this shape so callers can await `getRequirements()` to check live Blue liquidity
-and share authorization before invoking `buildTx()`. Calling `buildTx()` directly skips those
-RPC-backed pre-flight checks. Other direct calls — vault `withdraw` / `redeem`, `forceWithdraw` /
-`forceRedeem`, and Blue `withdrawCollateral` — have no prerequisites and return only `{ buildTx }`.
+`inKindRedeem` and `forceWithdraw` use this shape so callers can await `getRequirements()` to check
+share authorization to VaultExitBundlesV1 — and, for `inKindRedeem`, live Blue liquidity — before
+invoking `buildTx()`. Calling `buildTx()` directly skips those RPC-backed pre-flight checks. Other
+direct calls — vault `withdraw` / `redeem`, `forceRedeem`, and Blue `withdrawCollateral` — have no
+prerequisites and return only `{ buildTx }`.
 
 - **`getRequirements()`** — async; the on-chain prerequisites to satisfy first: ERC-20 approvals, permit / Permit2 signatures, Morpho authorization, or (for Midnight) operator authorization and offer-root signatures.
 - **`buildTx(signatures?)`** — synchronous; the final, deep-frozen viem transaction. Pass any signatures collected from the requirements.

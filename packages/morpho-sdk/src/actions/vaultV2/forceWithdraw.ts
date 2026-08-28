@@ -108,7 +108,6 @@ export const vaultV2ForceWithdraw = ({
       value: referralFeePct,
       max: MathLib.WAD - 1n,
     });
-  // The contract transfers the fee unconditionally, so a zero recipient either reverts or burns it.
   if (referralFeePct > 0n && referralFeeRecipient === zeroAddress)
     throw new MissingReferralFeeRecipientError(referralFeePct);
 

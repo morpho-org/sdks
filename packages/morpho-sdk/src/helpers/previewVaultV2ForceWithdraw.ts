@@ -51,11 +51,15 @@ export interface VaultV2ForceWithdrawPreview {
  * @param params - Preview parameters.
  * @param params.requestedExitAssets - Penalty-inclusive amount the user wants to exit.
  * @param params.timestamp - Timestamp used to accrue Morpho Blue markets before computing capacity.
+ *   Must not run ahead of the wall clock at the subsequent `forceWithdraw()` call: market accrual
+ *   grows the adapter's position, so a forward timestamp reports a `maxExitAssets` the entity will
+ *   reject.
  * @param params.adapter - Optional adapter override; defaults to the vault's sole adapter.
  * @param params.referralFeePct - Optional WAD-scaled referral fee percentage. Defaults to `0n`.
- * @returns The preview, or `undefined` when the vault cannot be force-withdrawn through
- *   VaultExitBundlesV1 (not exactly one adapter, an adapter that is not a MorphoMarketV1AdapterV2,
- *   an unresolvable liquidity adapter, a non-positive request, or a request that yields nothing).
+ * @returns The preview, or `undefined` when the exit is not previewable: not exactly one adapter, an
+ *   `adapter` override that is not the vault's sole adapter, an adapter that is not a
+ *   MorphoMarketV1AdapterV2, an unresolvable liquidity adapter, undecodable liquidity data, a
+ *   `referralFeePct` outside `[0, WAD)`, a non-positive request, or a request that yields nothing.
  * @example
  * ```ts
  * import { previewVaultV2ForceWithdraw } from "@morpho-org/morpho-sdk";
@@ -79,6 +83,9 @@ export function previewVaultV2ForceWithdraw(
     referralFeePct = 0n,
   } = params;
   if (requestedExitAssets <= 0n) return undefined;
+  // Out of the range the action accepts, `netAssets` would quote a payout the contract can never
+  // deliver — above `withdrawnAssets` for a negative fee, non-positive at or beyond WAD.
+  if (referralFeePct < 0n || referralFeePct >= MathLib.WAD) return undefined;
 
   const eligibility = resolveVaultV2ForceWithdrawEligibility(
     vaultData,

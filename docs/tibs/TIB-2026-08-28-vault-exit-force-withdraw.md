@@ -192,14 +192,17 @@ implementation:
 
 - `resolveVaultV2ForceWithdrawEligibility(vaultData, adapter?)` returns a **discriminated union**
   (`"eligible" | "adapterCount" | "adapterMismatch" | "unsupportedAdapter" |
-  "unsupportedLiquidityAdapter"`). The entity maps each failing tag to a typed error; the preview
-  maps them all to `undefined`. Same source of truth, different failure semantics — which is the
-  whole reason the split exists rather than duplicating the four preconditions.
+  "unsupportedLiquidityAdapter" | "undecodableLiquidityData"`). The entity maps each failing tag to a
+  typed error; the preview maps them all to `undefined`. Same source of truth, different failure
+  semantics — which is the whole reason the split exists rather than duplicating the four
+  preconditions.
 - `computeVaultV2ForceWithdrawPlan({ vaultData, adapter, liquidityMarketId, exitAssets, timestamp })`
   returns every amount the exit needs.
 - `computeVaultV2ForceWithdrawSharesBurnt({ vaultData, deadlineVaultData, plan })` returns the share
-  upper bound, which serves as **both** the authorized allowance and the denominator of the slippage
-  bound. One value, so the permit can never be smaller than the burn the bound assumed.
+  upper bound. It is called twice: with the deadline-accrued snapshot for the authorized allowance,
+  and with the build-time snapshot on both endpoints for the denominator of the slippage bound. One
+  implementation, and the allowance is the larger of the two, so the permit can never be smaller than
+  the burn the bound assumed.
 
 Plus `computeMinForceWithdrawSharePrice` in `src/helpers/slippage.ts` alongits siblings, and
 `previewVaultV2ForceWithdraw` alongside `previewVaultV2InKindRedeem`.
@@ -225,8 +228,16 @@ assetsToDeallocate = mulDivDown(exitAssets - assetsToWithdraw, WAD, WAD + penalt
 drained            = zeroFloorSub(assetsToWithdraw, idle)
 coveredAssets      = Σ available(id), minus `drained` on the liquidity market
 require              coveredAssets >= assetsToDeallocate
-maxExitAssets      = withdrawableAssets + wMulUp(coveredAssets + 1n, WAD + penalty) - 1n
+
+// saturated: excludes the liquidity market outright, so the ceiling is request-independent
+saturatedCovered   = Σ available(id) over id ≠ liquidityMarketId
+maxExitAssets      = withdrawableAssets + wMulUp(saturatedCovered + 1n, WAD + penalty) - 1n
 ```
+
+`maxExitAssets` deliberately sums `saturatedCovered`, not the request-dependent `coveredAssets`: at
+the ceiling the penalty-free leg always drains the liquidity market completely, so that market
+contributes nothing to the force-deallocation loop, whereas a small request leaves part of it behind
+and a `coveredAssets`-based ceiling would overstate the largest exit the snapshot supports.
 
 Two decisions inside this worth recording.
 
@@ -259,16 +270,21 @@ The bound is built from the plan, pessimistically on both sides:
 
 ```
 grossDebited     = withdrawnAssets + penaltyAssets                    // penaltyAssets is an upper bound
-sharesBurnt      = max(vaultData.toShares(grossDebited, "Up"),
-                       deadlineVaultData.toShares(grossDebited, "Up"))
-                 + (penaltyLegs + 2)                                   // one ceil per withdrawal leg
-minSharePriceE27 = mulDivDown(withdrawnAssets, wToRay(WAD - slippageTolerance), sharesBurnt)
+sharesBurnt(v)   = v.toShares(grossDebited, "Up") + (penaltyLegs + 2)  // one ceil per withdrawal leg
+
+allowance        = max(sharesBurnt(vaultData), sharesBurnt(deadlineVaultData))
+minSharePriceE27 = mulDivDown(withdrawnAssets, wToRay(WAD - slippageTolerance),
+                              sharesBurnt(vaultData))                  // snapshot burn, not `allowance`
 ```
 
 `withdrawnAssets` is a lower bound of the payout and `sharesBurnt` an upper bound of the burn, so a
-faithful snapshot never trips the check while the tolerance absorbs benign drift. Both accrual
-endpoints are considered because interest lowers the burn while management fees raise it — the same
-duality the in-kind allowance uses.
+faithful snapshot never trips the check while the tolerance absorbs benign drift.
+
+The **allowance** considers both accrual endpoints because interest lowers the burn while management
+fees raise it — the same duality the in-kind allowance uses. The **price floor** deliberately does
+not: a larger denominator only lowers the floor, so folding in the deadline-accrued burn would let an
+unrelated caller-chosen `deadline` silently weaken the guard. `slippageTolerance` is what absorbs
+accrual drift there.
 
 `penaltyAssets` bounds `Σ ceil(assetsᵢ·penalty/WAD)` by
 `wMulUp(assetsToDeallocate, penalty) + (penaltyLegs − 1)`, using
@@ -305,12 +321,14 @@ Every `require`, every unchecked array index, and every nested call was walked o
 | `AdapterNotPartOfVault` | `adapter === accrualAdapters[0].address` | `AdapterNotPartOfVaultError` *(reused)* |
 | `MorphoMismatch`, or garbage from casting the adapter to `IMorphoMarketV1AdapterV2` | `instanceof AccrualVaultV2MorphoMarketV1AdapterV2` — the factory pins Blue, so a genuine V2 adapter cannot mismatch | `VaultV2UnsupportedExitAdapterError` **(canonical; `UnsupportedInKindAdapterError` kept as a deprecated alias)** |
 | `NotAdapter`, or `supplyShares` missing on the liquidity adapter | `liquidityAdapter ∈ {zeroAddress, adapter}` | `VaultV2UnsupportedLiquidityAdapterError` **(new)** |
-| `abi.decode(liquidityData, MarketParams)` reverts | `MarketParams.fromHex(liquidityData)` | folded into `VaultV2UnsupportedLiquidityAdapterError` |
+| `abi.decode(liquidityData, MarketParams)` reverts | `MarketParams.fromHex(liquidityData)` | `VaultV2UndecodableLiquidityDataError` **(new)** — reported separately from a foreign adapter, which is the only case `VaultV2UnsupportedLiquidityAdapterError` now covers |
 | **`panic 0x32`** — the loop indexes past the market list | `coveredAssets >= assetsToDeallocate` | `VaultV2ForceWithdrawCoverageError { required, covered, maxExitAssets }` **(new)** |
 | silent no-op that still consumes the permit | `withdrawnAssets > 0` | `VaultV2ForceWithdrawZeroWithdrawalError` **(new)** |
+| a negative fee is not an encodable `uint256` | `referralFeePct >= 0` | `NegativeInputError` *(reused)* |
 | `PctExceeded` | `referralFeePct < WAD` | `InputExceedsMaxError` *(reused)* |
 | `safeTransfer` to `address(0)` | `referralFeePct > 0 ⇒ recipient ≠ zeroAddress` | `MissingReferralFeeRecipientError` **(new)** |
 | `DeadlinePassed` / `PermitDeadlineExpired` | `deadline > now`, at creation **and** again before `getRequirements()` reads | `ExpiredDeadlineError` *(reused)* |
+| the `SlippageExceeded` guard silently passes — the contract reads `minSharePriceE27 == 0` as "no bound" | a supplied `minSharePriceE27` override is `> 0` | `NonPositiveInputError` *(reused)* |
 | — | `exitAssets > 0` | `NonPositiveInputError` *(reused)* |
 | — | `slippageTolerance <= MAX_SLIPPAGE_TOLERANCE` | `ExcessiveSlippageToleranceError` *(via `validateSlippageTolerance`)* |
 

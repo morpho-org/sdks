@@ -48,7 +48,8 @@ Concretely, `blueSupplyCollateralBorrow` is not a new contract: it is simply the
 | VaultV1 `withdraw` / `redeem`           | **Direct vault call**        | _(no bundler, no adapter)_                                                                                               |
 | VaultV2 `withdraw` / `redeem`           | **Direct vault call**        | _(no bundler, no adapter)_                                                                                               |
 | Blue `withdrawCollateral`           | **Direct Morpho Blue call**  | _(no bundler, no GA1 auth required — `msg.sender` = `onBehalf`)_                                                         |
-| VaultV2 `forceWithdraw` / `forceRedeem` | VaultV2 `multicall` (native) | `forceDeallocate`×N + `withdraw` / `redeem` — **on the vault contract itself**, not through Bundler3                     |
+| VaultV2 `forceWithdraw`                 | **VaultExitBundlesV1**       | contract-computed `forceDeallocate`×N + `withdraw`, bounded by `minSharePriceE27` — **standalone periphery**, not Bundler3 |
+| VaultV2 `forceRedeem`                   | VaultV2 `multicall` (native) | caller-supplied `forceDeallocate`×N + `redeem` — **on the vault contract itself**, not through Bundler3                  |
 
 ## Strengths
 

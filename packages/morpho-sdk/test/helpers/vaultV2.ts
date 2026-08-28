@@ -183,16 +183,6 @@ export const setUpSingleAdapterVaultV2 = async (
     });
   }
 
-  // Set last so the deposit below is not auto-allocated through the liquidity adapter.
-  const setLiquidityMarket = async (market: MarketParams) => {
-    await client.writeContract({
-      address: vault,
-      abi: vaultV2Abi,
-      functionName: "setLiquidityAdapterAndData",
-      args: [adapter, encodeAbiParameters([marketParamsAbi], [market])],
-    });
-  };
-
   /** Deposits `assets` and allocates the given per-market amounts into the adapter. */
   const depositAndAllocate = async (allocations: {
     readonly assets: bigint;
@@ -222,8 +212,18 @@ export const setUpSingleAdapterVaultV2 = async (
         ],
       });
     }
+    // Set after the deposit and the allocations above so neither is auto-routed through the
+    // liquidity adapter.
     if (params.liquidityMarket != null) {
-      await setLiquidityMarket(params.liquidityMarket);
+      await client.writeContract({
+        address: vault,
+        abi: vaultV2Abi,
+        functionName: "setLiquidityAdapterAndData",
+        args: [
+          adapter,
+          encodeAbiParameters([marketParamsAbi], [params.liquidityMarket]),
+        ],
+      });
     }
     // Leave the account holding only what the exit pays out.
     await client.deal({ erc20: params.asset, amount: 0n });

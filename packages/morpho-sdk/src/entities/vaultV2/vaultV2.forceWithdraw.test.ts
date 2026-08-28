@@ -30,11 +30,13 @@ import {
   InputExceedsMaxError,
   isRequirementApproval,
   MissingReferralFeeRecipientError,
+  NegativeInputError,
   NonPositiveInputError,
   VaultAddressMismatchError,
   VaultV2ForceWithdrawCoverageError,
   VaultV2ForceWithdrawZeroWithdrawalError,
   VaultV2SingleAdapterRequiredError,
+  VaultV2UndecodableLiquidityDataError,
   VaultV2UnsupportedExitAdapterError,
   VaultV2UnsupportedLiquidityAdapterError,
 } from "../../types/index.js";
@@ -184,12 +186,30 @@ describe("MorphoVaultV2.forceWithdraw", () => {
         exitAssets: 51n,
         vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
         userAddress: IN_KIND_USER,
-        minSharePriceE27: 0n,
+        minSharePriceE27: 123n,
       })
       .buildTx();
 
-    expect(tx.action.args.minSharePriceE27).toBe(0n);
+    expect(tx.action.args.minSharePriceE27).toBe(123n);
   });
+
+  // Security invariant: the contract reads `minSharePriceE27 == 0` as "no bound", so an override
+  // must never be able to silently disable the guard this path exists to add.
+  test.each([0n, -1n])(
+    "error: NonPositiveInputError for a minSharePriceE27 override of %s",
+    (minSharePriceE27) => {
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+          userAddress: IN_KIND_USER,
+          minSharePriceE27,
+        }),
+      ).toThrow(NonPositiveInputError);
+    },
+  );
 
   test("behavior: forwards the referral fee split", () => {
     const handle = createMockClient(mainnet);
@@ -501,20 +521,29 @@ describe("MorphoVaultV2.forceWithdraw", () => {
       ).toThrow(VaultV2UnsupportedExitAdapterError);
     });
 
-    test.each(["foreign", "undecodable"] as const)(
-      "error: VaultV2UnsupportedLiquidityAdapterError for a %s liquidity adapter",
-      (liquidityAdapter) => {
-        const handle = createMockClient(mainnet);
+    test("error: VaultV2UnsupportedLiquidityAdapterError for a foreign liquidity adapter", () => {
+      const handle = createMockClient(mainnet);
 
-        expect(() =>
-          vaultFor(handle).forceWithdraw({
-            exitAssets: 51n,
-            vaultData: vaultV2ExitData({ liquidityAdapter }),
-            userAddress: IN_KIND_USER,
-          }),
-        ).toThrow(VaultV2UnsupportedLiquidityAdapterError);
-      },
-    );
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData({ liquidityAdapter: "foreign" }),
+          userAddress: IN_KIND_USER,
+        }),
+      ).toThrow(VaultV2UnsupportedLiquidityAdapterError);
+    });
+
+    test("error: VaultV2UndecodableLiquidityDataError preserves the decode cause", () => {
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData({ liquidityAdapter: "undecodable" }),
+          userAddress: IN_KIND_USER,
+        }),
+      ).toThrow(VaultV2UndecodableLiquidityDataError);
+    });
 
     test("error: VaultV2ForceWithdrawZeroWithdrawalError on a dust exit", () => {
       const handle = createMockClient(mainnet);
@@ -532,35 +561,84 @@ describe("MorphoVaultV2.forceWithdraw", () => {
       const handle = createMockClient(mainnet);
 
       expect(() =>
-        vaultFor(handle)
-          .forceWithdraw({
-            exitAssets: 51n,
-            vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
-            userAddress: IN_KIND_USER,
-            referralFeePct: MathLib.WAD,
-            referralFeeRecipient: IN_KIND_FOREIGN_ADAPTER,
-          })
-          .buildTx(),
+        vaultFor(handle).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+          userAddress: IN_KIND_USER,
+          referralFeePct: MathLib.WAD,
+          referralFeeRecipient: IN_KIND_FOREIGN_ADAPTER,
+        }),
       ).toThrow(InputExceedsMaxError);
+    });
+
+    test("error: NegativeInputError for a negative referral fee", () => {
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+          userAddress: IN_KIND_USER,
+          referralFeePct: -1n,
+        }),
+      ).toThrow(NegativeInputError);
     });
 
     test("error: MissingReferralFeeRecipientError for a fee without a recipient", () => {
       const handle = createMockClient(mainnet);
 
       expect(() =>
-        vaultFor(handle)
-          .forceWithdraw({
-            exitAssets: 51n,
-            vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
-            userAddress: IN_KIND_USER,
-            referralFeePct: 1n,
-          })
-          .buildTx(),
+        vaultFor(handle).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+          userAddress: IN_KIND_USER,
+          referralFeePct: 1n,
+        }),
+      ).toThrow(MissingReferralFeeRecipientError);
+    });
+
+    test("error: MissingReferralFeeRecipientError for a zero-address recipient", () => {
+      const handle = createMockClient(mainnet);
+
+      expect(() =>
+        vaultFor(handle).forceWithdraw({
+          exitAssets: 51n,
+          vaultData: vaultV2ExitData({ penalty: TWO_PERCENT }),
+          userAddress: IN_KIND_USER,
+          referralFeePct: 1n,
+          referralFeeRecipient: zeroAddress,
+        }),
       ).toThrow(MissingReferralFeeRecipientError);
     });
   });
 
   describe("security invariants", () => {
+    // A caller-chosen `deadline` must not be able to weaken the price floor. The allowance is an
+    // upper bound so it legitimately grows with the accrual window, but feeding that same inflated
+    // number in as the bound's denominator would only lower the floor.
+    test("behavior: the derived minSharePriceE27 does not depend on the deadline", () => {
+      const handle = createMockClient(mainnet);
+      // A management fee mints shares over time, so a longer window burns more shares.
+      const vaultData = vaultV2ExitData({
+        penalty: TWO_PERCENT,
+        managementFee: 1_000_000_000_000n,
+      });
+      const boundFor = (deadline: bigint) =>
+        vaultFor(handle)
+          .forceWithdraw({
+            exitAssets: 51n,
+            vaultData,
+            userAddress: IN_KIND_USER,
+            deadline,
+          })
+          .buildTx().action.args.minSharePriceE27;
+
+      const now = Number(Time.timestamp());
+      expect(boundFor(BigInt(now) + Time.s.from.d(365n))).toBe(
+        boundFor(BigInt(now) + Time.s.from.h(2n)),
+      );
+    });
+
     test("behavior: rejects an exit the adapter's markets cannot cover", () => {
       const handle = createMockClient(mainnet);
       const vaultData = vaultV2ExitData({ penalty: TWO_PERCENT });
@@ -616,9 +694,15 @@ describe("MorphoVaultV2.forceWithdraw", () => {
     test("behavior: the approved allowance covers the exit's full share burn", async () => {
       const now = 1_800_000_000n;
       const deadline = now + Time.s.from.h(2n);
+      // A non-unit share price is load-bearing: at ~1:1 the sum of the per-leg ceilings equals the
+      // aggregate ceiling exactly, so the per-leg dust term would go unexercised and this
+      // assertion would still hold with it removed. `additionalMarket` puts total assets at 1500
+      // against a 1000 share supply, which makes each leg's `toShares(_, "Up")` round up.
       const vaultData = vaultV2ExitData({
         assetBalance: 10n,
         penalty: TWO_PERCENT,
+        additionalMarket: true,
+        totalSupply: 1_000n,
       });
       const handle = createMockClient(mainnet);
       mockRequirements(handle);

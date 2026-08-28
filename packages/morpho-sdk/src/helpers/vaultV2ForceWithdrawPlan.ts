@@ -6,7 +6,7 @@ import {
   MarketParams,
   MathLib,
 } from "@morpho-org/blue-sdk";
-import { isAddressEqual, zeroAddress } from "viem";
+import { type Hex, isAddressEqual, zeroAddress } from "viem";
 
 /**
  * Outcome of resolving a Vault V2 snapshot against VaultExitBundlesV1's force-withdraw
@@ -30,6 +30,14 @@ export type VaultV2ForceWithdrawEligibility =
       readonly type: "unsupportedLiquidityAdapter";
       readonly liquidityAdapter: Address;
       readonly adapter: Address;
+    }
+  | {
+      readonly type: "undecodableLiquidityData";
+      readonly liquidityAdapter: Address;
+      /** Raw `liquidityData` that failed to decode as `MarketParams`. */
+      readonly liquidityData: Hex;
+      /** The underlying decode failure, preserved for the caller to wrap as `cause`. */
+      readonly cause: unknown;
     };
 
 /**
@@ -89,10 +97,15 @@ export function resolveVaultV2ForceWithdrawEligibility(
   let liquidityMarketId: MarketId;
   try {
     liquidityMarketId = MarketParams.fromHex(vaultData.liquidityData).id;
-  } catch {
-    // Undecodable `liquidityData` makes the contract's `abi.decode` revert, which is the same
-    // unusable configuration as a foreign liquidity adapter.
-    return { type: "unsupportedLiquidityAdapter", liquidityAdapter, adapter };
+  } catch (cause) {
+    // Undecodable `liquidityData` reverts the contract's `abi.decode`. Reported separately from a
+    // foreign adapter: the adapter here is the right one, only its stored market params are unusable.
+    return {
+      type: "undecodableLiquidityData",
+      liquidityAdapter,
+      liquidityData: vaultData.liquidityData,
+      cause,
+    };
   }
 
   return { type: "eligible", adapter: soleAdapter, liquidityMarketId };
@@ -100,8 +113,8 @@ export function resolveVaultV2ForceWithdrawEligibility(
 
 /** Vault V2 force-withdraw amounts derived from a vault snapshot. */
 export interface VaultV2ForceWithdrawPlan {
-  /** Assets the vault can pay without a force-deallocation penalty (idle plus liquidity adapter). */
-  readonly withdrawableAssets: bigint;
+  /** WAD-scaled force-deallocation penalty the vault charges on this adapter. */
+  readonly penalty: bigint;
   /** Penalty-free leg, withdrawn before any force deallocation. */
   readonly assetsToWithdraw: bigint;
   /** Penalised leg, force-deallocated from the adapter's markets. */
@@ -138,6 +151,13 @@ export interface VaultV2ForceWithdrawPlan {
  * order-independent: the contract's loop visits every market taking `min(available, remaining)`, so
  * total capacity does not depend on the adapter's storage order — which matters because a drained
  * market is removed from that list mid-loop.
+ *
+ * That order-independence assumes `VaultExitBundlesV1` copies `adapter.marketIds` into memory
+ * *before* the loop. If it instead re-read adapter storage each iteration,
+ * `MorphoMarketV1AdapterV2.deallocate`'s swap-and-pop removal of a drained market would make the
+ * loop skip markets, and this sum would overstate real capacity — letting an exit through that
+ * panics on-chain. The claim is load-bearing for the coverage guard and is verified only by the
+ * fork suite, not by any in-repo contract source.
  *
  * @param params - Plan inputs.
  * @param params.vaultData - Pre-fetched Vault V2 accrual snapshot.
@@ -258,7 +278,7 @@ export function computeVaultV2ForceWithdrawPlan(params: {
   }
 
   return {
-    withdrawableAssets,
+    penalty,
     assetsToWithdraw,
     assetsToDeallocate,
     // `sum(ceil(assetsᵢ·penalty/WAD)) <= ceil(sum(assetsᵢ)·penalty/WAD) + legs - 1`.
@@ -286,13 +306,18 @@ export function computeVaultV2ForceWithdrawPlan(params: {
  * Both endpoints of the accrual window are considered because interest lowers the burn while
  * management fees raise it, so neither snapshot alone bounds execution.
  *
- * The same bound serves as the vault-share allowance to authorize and as the denominator of
- * {@link computeMinForceWithdrawSharePrice}: one value, so the permit can never be smaller than the
- * burn the slippage bound assumed.
+ * Callers want two different bounds from this helper, and must not conflate them:
+ * - **The allowance to authorize** takes `deadlineVaultData` accrued to the exit deadline, so the
+ *   approval still covers a burn inflated by fees accrued while the transaction sits pending.
+ * - **The denominator of {@link computeMinForceWithdrawSharePrice}** takes `deadlineVaultData` equal
+ *   to `vaultData`. A larger denominator only lowers the resulting price floor, so passing the
+ *   deadline-accrued bound there would let an unrelated caller-chosen deadline silently weaken the
+ *   slippage guard; `slippageTolerance` is what absorbs accrual drift.
  *
  * @param params - Share-bound inputs.
  * @param params.vaultData - Pre-fetched Vault V2 accrual snapshot.
- * @param params.deadlineVaultData - The same vault accrued to the exit deadline.
+ * @param params.deadlineVaultData - The same vault accrued to the exit deadline, or `vaultData`
+ *   itself for a snapshot-tight bound.
  * @param params.plan - Plan from {@link computeVaultV2ForceWithdrawPlan}.
  * @returns An upper bound, in vault shares, of what the exit burns.
  * @example

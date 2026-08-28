@@ -1,5 +1,5 @@
 import { type MarketId, UnknownDataError } from "@morpho-org/blue-sdk";
-import type { Address, Hash } from "viem";
+import type { Address, Hash, Hex } from "viem";
 
 /**
  * Thrown when a morpho-sdk input that must be non-negative is negative.
@@ -249,6 +249,59 @@ export class VaultV2UnsupportedLiquidityAdapterError extends Error {
     this.liquidityAdapter = params.liquidityAdapter;
     this.adapter = params.adapter;
     this.name = "VaultV2UnsupportedLiquidityAdapterError";
+  }
+}
+
+/**
+ * Thrown when a Vault V2 exit cannot ABI-decode the vault's `liquidityData` as `MarketParams`.
+ *
+ * Distinct from {@link VaultV2UnsupportedLiquidityAdapterError}: the liquidity adapter *is* the
+ * vault's sole adapter, but the market params stored alongside it are unusable, so the contract's
+ * `abi.decode` would revert. Only the vault curator can repair this by re-setting the liquidity
+ * adapter and data.
+ *
+ * @example
+ * ```ts
+ * import { VaultV2UndecodableLiquidityDataError } from "@morpho-org/morpho-sdk";
+ *
+ * try {
+ *   vault.forceWithdraw({ exitAssets: 1_000_000n, vaultData, userAddress });
+ * } catch (error) {
+ *   if (error instanceof VaultV2UndecodableLiquidityDataError) {
+ *     console.error(error.liquidityData, error.cause);
+ *   }
+ * }
+ * ```
+ */
+export class VaultV2UndecodableLiquidityDataError extends Error {
+  /** Vault V2 address. */
+  public readonly vault: Address;
+  /** Liquidity adapter configured on the vault. */
+  public readonly liquidityAdapter: Address;
+  /** Raw `liquidityData` that failed to decode. */
+  public readonly liquidityData: Hex;
+
+  /**
+   * @param params - Undecodable liquidity-data details.
+   * @param params.vault - Vault V2 address.
+   * @param params.liquidityAdapter - Liquidity adapter configured on the vault.
+   * @param params.liquidityData - Raw `liquidityData` that failed to decode.
+   * @param params.cause - Underlying decode failure.
+   */
+  public constructor(params: {
+    readonly vault: Address;
+    readonly liquidityAdapter: Address;
+    readonly liquidityData: Hex;
+    readonly cause?: unknown;
+  }) {
+    super(
+      `Vault "${params.vault}" stores liquidity data "${params.liquidityData}" for adapter "${params.liquidityAdapter}" that does not decode as MarketParams. Use another exit path until the vault curator re-sets its liquidity adapter and data.`,
+      { cause: params.cause },
+    );
+    this.vault = params.vault;
+    this.liquidityAdapter = params.liquidityAdapter;
+    this.liquidityData = params.liquidityData;
+    this.name = "VaultV2UndecodableLiquidityDataError";
   }
 }
 

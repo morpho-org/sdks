@@ -106,10 +106,11 @@ describe("resolveVaultV2ForceWithdrawEligibility", () => {
       resolveVaultV2ForceWithdrawEligibility(
         vaultV2ExitData({ liquidityAdapter: "undecodable" }),
       ),
-    ).toEqual({
-      type: "unsupportedLiquidityAdapter",
+    ).toMatchObject({
+      type: "undecodableLiquidityData",
       liquidityAdapter: IN_KIND_ADAPTER,
-      adapter: IN_KIND_ADAPTER,
+      liquidityData: "0xdead",
+      cause: expect.any(Error),
     });
   });
 });
@@ -123,7 +124,7 @@ describe("computeVaultV2ForceWithdrawPlan", () => {
     });
 
     expect(plan).toEqual({
-      withdrawableAssets: 0n,
+      penalty: TWO_PERCENT,
       assetsToWithdraw: 0n,
       // floor(51 * 1e18 / 1.02e18) === 50
       assetsToDeallocate: 50n,
@@ -144,7 +145,6 @@ describe("computeVaultV2ForceWithdrawPlan", () => {
     });
 
     expect(plan).toMatchObject({
-      withdrawableAssets: 40n,
       assetsToWithdraw: 40n,
       assetsToDeallocate: 0n,
       penaltyAssets: 0n,
@@ -165,7 +165,6 @@ describe("computeVaultV2ForceWithdrawPlan", () => {
 
     // Idle 40 plus the liquidity market's 100 available, all penalty-free.
     expect(plan).toMatchObject({
-      withdrawableAssets: 140n,
       assetsToWithdraw: 140n,
       assetsToDeallocate: 0n,
       penaltyAssets: 0n,
@@ -189,7 +188,6 @@ describe("computeVaultV2ForceWithdrawPlan", () => {
     // Routing the same market through liquidity turns the whole exit penalty-free and leaves
     // nothing behind for the force-deallocation loop.
     expect(plan).toMatchObject({
-      withdrawableAssets: 100n,
       assetsToWithdraw: 51n,
       assetsToDeallocate: 0n,
       coveredAssets: 49n,
@@ -355,7 +353,6 @@ describe("computeVaultV2ForceWithdrawPlan", () => {
     // The second market is not in the single-market adapter snapshot.
     expect(secondInKindMarketParams.id).not.toBe(inKindMarketParams.id);
     expect(plan).toMatchObject({
-      withdrawableAssets: 0n,
       assetsToWithdraw: 0n,
       assetsToDeallocate: 50n,
     });

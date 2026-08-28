@@ -56,10 +56,6 @@ export const secondInKindMarketParams = new MarketParams({
 
 const snapshotTimestamp = () => Time.timestamp();
 
-/** ABI-encodes market params the way Vault V2 stores `liquidityData`. */
-const encodeMarketParams = (marketParams: MarketParams): Hex =>
-  encodeAbiParameters([marketParamsAbi], [marketParams]);
-
 export const inKindVaultV1Data = (params?: {
   readonly address?: Address;
   readonly supplyShares?: bigint;
@@ -166,12 +162,15 @@ export const inKindVaultV2Data = (params?: {
   readonly penalty?: bigint;
   readonly assetBalance?: bigint;
   readonly totalAssets?: bigint;
+  /**
+   * Vault share supply. Defaults to `totalAssets` for a ~1:1 share price; raise it so each
+   * withdraw leg's `toShares(_, "Up")` rounds up independently.
+   */
+  readonly totalSupply?: bigint;
   readonly marketTotalAssets?: bigint;
   readonly marketTotalBorrowAssets?: bigint;
   readonly marketTotalSupplyShares?: bigint;
-  readonly secondMarketTotalAssets?: bigint;
   readonly secondMarketTotalBorrowAssets?: bigint;
-  readonly secondMarketSupplyShares?: bigint;
   readonly rateAtTarget?: bigint;
   readonly maxRate?: bigint;
   readonly managementFee?: bigint;
@@ -201,14 +200,11 @@ export const inKindVaultV2Data = (params?: {
     fee: 0n,
     rateAtTarget: params?.rateAtTarget,
   });
-  const secondMarketTotalAssets = params?.secondMarketTotalAssets ?? 500n;
   const secondMarket = new Market({
     params: secondInKindMarketParams,
-    totalSupplyAssets: secondMarketTotalAssets,
-    totalBorrowAssets:
-      params?.secondMarketTotalBorrowAssets ??
-      (secondMarketTotalAssets * 9n) / 10n,
-    totalSupplyShares: secondMarketTotalAssets * 1_000_000n,
+    totalSupplyAssets: 500n,
+    totalBorrowAssets: params?.secondMarketTotalBorrowAssets ?? 450n,
+    totalSupplyShares: 500_000_000n,
     totalBorrowShares: 450n,
     lastUpdate: snapshotTimestamp(),
     fee: 0n,
@@ -227,10 +223,7 @@ export const inKindVaultV2Data = (params?: {
       supplyShares: {
         [market.id]: params?.supplyShares ?? 1_000_000_000n,
         ...(params?.additionalMarket
-          ? {
-              [secondMarket.id]:
-                params?.secondMarketSupplyShares ?? 500_000_000n,
-            }
+          ? { [secondMarket.id]: 500_000_000n }
           : {}),
       },
     },
@@ -264,15 +257,17 @@ export const inKindVaultV2Data = (params?: {
     params?.liquidityMarket === "second"
       ? secondInKindMarketParams
       : inKindMarketParams;
+  // Encoded the way Vault V2 stores `liquidityData`.
+  const liquidityMarketData = encodeAbiParameters(
+    [marketParamsAbi],
+    [liquidityMarketParams],
+  );
   const [liquidityAdapter, liquidityData] = ((): [Address, Hex] => {
     switch (params?.liquidityAdapter) {
       case "sole":
-        return [IN_KIND_ADAPTER, encodeMarketParams(liquidityMarketParams)];
+        return [IN_KIND_ADAPTER, liquidityMarketData];
       case "foreign":
-        return [
-          IN_KIND_FOREIGN_ADAPTER,
-          encodeMarketParams(liquidityMarketParams),
-        ];
+        return [IN_KIND_FOREIGN_ADAPTER, liquidityMarketData];
       case "undecodable":
         return [IN_KIND_ADAPTER, "0xdead"];
       default:
@@ -288,7 +283,7 @@ export const inKindVaultV2Data = (params?: {
       decimals: 18,
       asset: IN_KIND_ASSET,
       _totalAssets: totalAssets,
-      totalSupply: totalAssets,
+      totalSupply: params?.totalSupply ?? totalAssets,
       virtualShares: 0n,
       maxRate: params?.maxRate ?? 0n,
       lastUpdate: snapshotTimestamp(),

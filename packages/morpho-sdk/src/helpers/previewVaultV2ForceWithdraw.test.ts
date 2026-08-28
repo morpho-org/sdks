@@ -1,3 +1,4 @@
+import { MathLib } from "@morpho-org/blue-sdk";
 import { describe, expect, test } from "vitest";
 import {
   IN_KIND_FOREIGN_ADAPTER,
@@ -171,4 +172,19 @@ describe("previewVaultV2ForceWithdraw", () => {
       }),
     ).toBeUndefined();
   });
+
+  // Out of range the transaction path rejects, so quoting a payout here would overstate what the
+  // user receives (negative fee) or promise a non-positive one (at or above WAD).
+  test.each([-1n, MathLib.WAD, MathLib.WAD + 1n])(
+    "behavior: returns undefined for a referralFeePct of %s",
+    (referralFeePct) => {
+      expect(
+        previewVaultV2ForceWithdraw(vaultV2ExitData({ penalty: TWO_PERCENT }), {
+          requestedExitAssets: 51n,
+          timestamp: 0n,
+          referralFeePct,
+        }),
+      ).toBeUndefined();
+    },
+  );
 });

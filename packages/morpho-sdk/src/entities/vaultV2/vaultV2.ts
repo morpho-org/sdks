@@ -9,7 +9,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { erc2612Abi, fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress, Time } from "@morpho-org/morpho-ts";
-import { type Address, erc20Abi, isAddressEqual } from "viem";
+import { type Address, erc20Abi, isAddressEqual, zeroAddress } from "viem";
 import { multicall } from "viem/actions";
 import {
   encodeErc20Approval,
@@ -42,9 +42,10 @@ import {
   type ERC20ApprovalAction,
   ExpiredDeadlineError,
   InKindRedeemCoverageError,
-  InKindRedeemRequiresSingleAdapterError,
   InKindRedeemZeroDeallocationError,
+  InputExceedsMaxError,
   InsufficientBlueBalanceForInKindRedeemError,
+  MissingReferralFeeRecipientError,
   type MorphoClientType,
   NativeAmountOnNonWNativeVaultError,
   NegativeInputError,
@@ -54,7 +55,6 @@ import {
   type RequirementSignature,
   selectRequirementSignatures,
   type Transaction,
-  UnsupportedInKindAdapterError,
   VaultAddressMismatchError,
   type VaultV2DepositAction,
   type VaultV2ForceRedeemAction,
@@ -64,6 +64,7 @@ import {
   type VaultV2InKindRedeemAction,
   type VaultV2RedeemAction,
   VaultV2SingleAdapterRequiredError,
+  VaultV2UndecodableLiquidityDataError,
   VaultV2UnsupportedExitAdapterError,
   VaultV2UnsupportedLiquidityAdapterError,
   type VaultV2WithdrawAction,
@@ -179,9 +180,9 @@ export interface VaultV2Actions {
    * @throws {EmptyMarketParamsListError} when assets must be deallocated and the market list is empty.
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
    *   requirement resolution.
-   * @throws {InKindRedeemRequiresSingleAdapterError} when the vault does not have one adapter.
+   * @throws {VaultV2SingleAdapterRequiredError} when the vault does not have one adapter.
    * @throws {AdapterNotPartOfVaultError} when `adapter` is not the vault's adapter.
-   * @throws {UnsupportedInKindAdapterError} when the adapter is not a MorphoMarketV1AdapterV2.
+   * @throws {VaultV2UnsupportedExitAdapterError} when the adapter is not a MorphoMarketV1AdapterV2.
    * @throws {InKindRedeemCoverageError} when the deduplicated list cannot cover the exit.
    * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
    * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
@@ -266,8 +267,8 @@ export interface VaultV2Actions {
    * @param params.deadline - Optional shared permit/bundle deadline; defaults to two hours from now.
    * @param params.slippageTolerance - Optional WAD-scaled tolerance applied to the derived share
    *   price bound. Defaults to `DEFAULT_SLIPPAGE_TOLERANCE`, capped at `MAX_SLIPPAGE_TOLERANCE`.
-   * @param params.minSharePriceE27 - Optional RAY-scaled override of the derived bound. `0n`
-   *   disables the on-chain check.
+   * @param params.minSharePriceE27 - Optional RAY-scaled override of the derived bound. Must be
+   *   positive: the contract reads `0` as "no bound", so it cannot be used to opt out.
    * @param params.referralFeePct - Optional WAD-scaled share of the withdrawn assets routed to
    *   `referralFeeRecipient`. Defaults to `0n`.
    * @param params.referralFeeRecipient - Optional referral fee recipient, required when
@@ -275,7 +276,9 @@ export interface VaultV2Actions {
    * @returns Lazy prerequisite resolution and a synchronous transaction builder.
    * @throws {ChainIdMismatchError} when the client and entity target different chains.
    * @throws {VaultAddressMismatchError} when `vaultData` belongs to another vault.
-   * @throws {NonPositiveInputError} when `exitAssets` is not positive.
+   * @throws {NonPositiveInputError} when `exitAssets` or a supplied `minSharePriceE27` is not
+   *   positive.
+   * @throws {NegativeInputError} when `slippageTolerance` or `referralFeePct` is negative.
    * @throws {ExpiredDeadlineError} when `deadline` is not in the future at handle creation or
    *   requirement resolution.
    * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds the SDK maximum.
@@ -283,7 +286,9 @@ export interface VaultV2Actions {
    * @throws {AdapterNotPartOfVaultError} when `adapter` is not the vault's adapter.
    * @throws {VaultV2UnsupportedExitAdapterError} when the adapter is not a MorphoMarketV1AdapterV2.
    * @throws {VaultV2UnsupportedLiquidityAdapterError} when the vault routes liquidity through
-   *   another adapter or stores undecodable liquidity data.
+   *   another adapter.
+   * @throws {VaultV2UndecodableLiquidityDataError} when the vault's `liquidityData` does not decode
+   *   as `MarketParams`.
    * @throws {VaultV2ForceWithdrawZeroWithdrawalError} when the exit would withdraw nothing.
    * @throws {VaultV2ForceWithdrawCoverageError} when the adapter's markets cannot cover the exit,
    *   which would overrun the contract's unbounded loop.
@@ -590,7 +595,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     const deadline = deadlineOverride ?? now + Time.s.from.h(2n);
     if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
     if (vaultData.accrualAdapters.length !== 1) {
-      throw new InKindRedeemRequiresSingleAdapterError(
+      throw new VaultV2SingleAdapterRequiredError(
         this.vault,
         vaultData.accrualAdapters.length,
       );
@@ -598,14 +603,14 @@ export class MorphoVaultV2 implements VaultV2Actions {
 
     const soleAdapter = vaultData.accrualAdapters[0];
     if (soleAdapter == null) {
-      throw new InKindRedeemRequiresSingleAdapterError(this.vault, 0);
+      throw new VaultV2SingleAdapterRequiredError(this.vault, 0);
     }
     const adapter = adapterOverride ?? soleAdapter.address;
     if (!isAddressEqual(adapter, soleAdapter.address)) {
       throw new AdapterNotPartOfVaultError(this.vault, adapter);
     }
     if (!(soleAdapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2)) {
-      throw new UnsupportedInKindAdapterError(adapter);
+      throw new VaultV2UnsupportedExitAdapterError(adapter);
     }
 
     const penalty =
@@ -816,6 +821,30 @@ export class MorphoVaultV2 implements VaultV2Actions {
     if (exitAssets <= 0n)
       throw new NonPositiveInputError("exitAssets", exitAssets);
     validateSlippageTolerance(slippageTolerance);
+    if (referralFeePct < 0n)
+      throw new NegativeInputError("referralFeePct", referralFeePct);
+    if (referralFeePct >= MathLib.WAD) {
+      throw new InputExceedsMaxError({
+        field: "referralFeePct",
+        value: referralFeePct,
+        max: MathLib.WAD - 1n,
+      });
+    }
+    if (
+      referralFeePct > 0n &&
+      (referralFeeRecipient == null ||
+        isAddressEqual(referralFeeRecipient, zeroAddress))
+    ) {
+      throw new MissingReferralFeeRecipientError(referralFeePct);
+    }
+    // An unbounded override reopens the exact hole this path closes: the contract reads
+    // `minSharePriceE27 == 0` as "no bound".
+    if (minSharePriceE27Override != null && minSharePriceE27Override <= 0n) {
+      throw new NonPositiveInputError(
+        "minSharePriceE27",
+        minSharePriceE27Override,
+      );
+    }
 
     const now = Time.timestamp();
     const deadline = deadlineOverride ?? now + Time.s.from.h(2n);
@@ -843,11 +872,17 @@ export class MorphoVaultV2 implements VaultV2Actions {
           liquidityAdapter: eligibility.liquidityAdapter,
           adapter: eligibility.adapter,
         });
+      case "undecodableLiquidityData":
+        throw new VaultV2UndecodableLiquidityDataError({
+          vault: this.vault,
+          liquidityAdapter: eligibility.liquidityAdapter,
+          liquidityData: eligibility.liquidityData,
+          cause: eligibility.cause,
+        });
     }
 
     const { adapter: accrualAdapter, liquidityMarketId } = eligibility;
     const adapter = accrualAdapter.address;
-    const penalty = vaultData.forceDeallocatePenalties[adapter] ?? 0n;
     const plan = computeVaultV2ForceWithdrawPlan({
       vaultData,
       adapter: accrualAdapter,
@@ -860,7 +895,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
       throw new VaultV2ForceWithdrawZeroWithdrawalError({
         vault: this.vault,
         exitAssets,
-        penalty,
+        penalty: plan.penalty,
       });
     }
     // The contract's force-deallocation loop is unbounded: under-coverage panics on-chain.
@@ -872,7 +907,8 @@ export class MorphoVaultV2 implements VaultV2Actions {
       });
     }
 
-    // Interest can lower the burn, while management fees can raise it; bound both endpoints.
+    // The allowance must still cover a burn inflated by management fees accrued up to `deadline`,
+    // so it takes the worse of both endpoints of the accrual window.
     const { vault: deadlineVaultData } = vaultData.accrueInterest(
       MathLib.max(deadline, vaultData.lastUpdate),
     );
@@ -881,11 +917,18 @@ export class MorphoVaultV2 implements VaultV2Actions {
       deadlineVaultData,
       plan,
     });
+    // The price floor takes the *snapshot* burn instead. A larger denominator only lowers the
+    // floor, so reusing the deadline-inflated allowance would let an unrelated caller-chosen
+    // `deadline` silently weaken the guard; `slippageTolerance` is what absorbs accrual drift.
     const minSharePriceE27 =
       minSharePriceE27Override ??
       computeMinForceWithdrawSharePrice({
         withdrawnAssets: plan.withdrawnAssets,
-        sharesBurnt: requiredShareAllowance,
+        sharesBurnt: computeVaultV2ForceWithdrawSharesBurnt({
+          vaultData,
+          deadlineVaultData: vaultData,
+          plan,
+        }),
         slippageTolerance,
       });
 
