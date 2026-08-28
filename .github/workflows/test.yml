@@ -113,9 +113,7 @@ jobs:
             --outputFile.blob="vitest-reports/$VITEST_NAME.json"
 
       - name: Upload failed report
-        # Registered RPC secrets are masked in Actions logs, not artifact files.
-        # Keep fork diagnostics in the logs and upload only reports without RPC access.
-        if: failure() && !matrix.uses_foundry && steps.test.outcome == 'failure'
+        if: failure() && steps.test.outcome == 'failure'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: vitest-failure-${{ matrix.name }}
