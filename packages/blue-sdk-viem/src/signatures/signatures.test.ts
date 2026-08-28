@@ -176,11 +176,11 @@ describe("getPermit2PermitTypedData", () => {
 });
 
 describe("getPermit2TransferFromTypedData", () => {
-  test("preserves the full uint256 transfer allowance", () => {
+  test("clamps transfer allowance to MAX_UINT_256", () => {
     const typedData = getPermit2TransferFromTypedData(
       {
         erc20: TOKEN,
-        allowance: MathLib.MAX_UINT_256,
+        allowance: MathLib.MAX_UINT_256 + 1n,
         nonce: 14n,
         deadline: 15n,
         spender: SPENDER,

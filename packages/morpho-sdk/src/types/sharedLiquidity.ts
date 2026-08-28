@@ -3,6 +3,9 @@ import type { Address } from "viem";
 
 /**
  * Options controlling public allocator withdrawal discovery.
+ *
+ * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
+ * {@link VaultV2BluePublicAllocatorOptions}.
  */
 export interface PublicAllocatorOptions {
   /** Whether public allocator reallocation discovery is enabled. */
@@ -76,6 +79,9 @@ export interface VaultV2BluePublicAllocatorOptions {
 
 /**
  * A computed source-market withdrawal before it is grouped by vault.
+ *
+ * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
+ * {@link VaultV2BlueReallocation}.
  */
 export interface PublicReallocation {
   /** Source market id to withdraw from. */
@@ -88,7 +94,12 @@ export interface PublicReallocation {
   readonly assets: bigint;
 }
 
-/** A single withdrawal from a source market within a vault reallocation. */
+/**
+ * A single withdrawal from a source market within a vault reallocation.
+ *
+ * @deprecated Vault V1 shared-liquidity support will be removed in the next major. Use
+ * {@link VaultV2BlueReallocation}.
+ */
 export interface ReallocationWithdrawal {
   /** Source market parameters to pass to the public allocator. */
   readonly marketParams: MarketParams;
@@ -103,8 +114,8 @@ export interface ReallocationWithdrawal {
  * Maps 1:1 to a `PublicAllocator.reallocateTo()` call.
  * Withdraws from source markets and supplies to the target market.
  *
- * @deprecated As an input to high-level Blue writes. Use
- * {@link VaultV2BlueReallocation}; Vault V1 remains available for low-level Bundler3 composition.
+ * @deprecated Vault V1 shared-liquidity support will be removed in the next major. Use
+ * {@link VaultV2BlueReallocation}.
  */
 export interface VaultV1Reallocation {
   readonly vault: Address;
@@ -160,7 +171,8 @@ export type BlueReallocationPlan =
 /**
  * Deprecated name for a Vault V1 reallocation.
  *
- * @deprecated Use {@link VaultV1Reallocation} instead.
+ * @deprecated Vault V1 shared-liquidity support will be removed in the next major. Use
+ * {@link VaultV2BlueReallocation}.
  */
 export type VaultReallocation = VaultV1Reallocation;
 
@@ -169,6 +181,9 @@ export type VaultReallocation = VaultV1Reallocation;
  *
  * Extends {@link PublicAllocatorOptions} with supply-side utilization targets
  * that determine when reallocation is triggered.
+ *
+ * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
+ * {@link VaultV2BluePublicAllocatorOptions}.
  */
 export interface ReallocationComputeOptions extends PublicAllocatorOptions {
   /**
