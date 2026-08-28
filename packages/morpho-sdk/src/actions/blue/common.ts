@@ -411,6 +411,15 @@ export const getBlueBundlesV1PenaltyAssets = (
   );
 
 /** @internal */
+export const getBlueBundlesV1ReferralFeeAssets = (
+  assets: bigint,
+  referralFeePct: bigint,
+): bigint =>
+  referralFeePct === 0n
+    ? 0n
+    : MathLib.mulDivDown(assets, referralFeePct, MathLib.WAD - referralFeePct);
+
+/** @internal */
 export const selectBlueBundlesV1RequirementSignatures = (
   signatures: readonly RequirementSignature[] | undefined,
   accepts: { token?: boolean; authorization?: boolean },

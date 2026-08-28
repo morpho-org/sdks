@@ -423,6 +423,33 @@ export class ReallocationLoanTokenMismatchError extends Error {
   }
 }
 
+/** Thrown when reallocations are attached to a combined call with no borrow leg. */
+export class ReallocationsRequireBorrowError extends Error {
+  public constructor() {
+    super(
+      "BlueBundlesV1 reallocations require a positive borrowAssets value. Remove the reallocations or add a borrow leg.",
+    );
+    this.name = "ReallocationsRequireBorrowError";
+  }
+}
+
+/** Thrown when repay funding cannot cover the requested assets and referral fee. */
+export class MaxRepayAssetsBelowRepayAssetsError extends Error {
+  /**
+   * @param maxRepayAssets - Maximum loan-token funding supplied to the bundle.
+   * @param repayAssets - Minimum funding required for the repayment and referral fee.
+   */
+  public constructor(
+    public readonly maxRepayAssets: bigint,
+    public readonly repayAssets: bigint,
+  ) {
+    super(
+      `maxRepayAssets "${maxRepayAssets}" cannot cover required repay funding "${repayAssets}". Increase maxRepayAssets to include the repayment and referral fee.`,
+    );
+    this.name = "MaxRepayAssetsBelowRepayAssetsError";
+  }
+}
+
 /** @deprecated Use {@link NonPositiveInputError}. */
 export const NonPositiveAssetAmountError = NonPositiveInputError;
 /** @deprecated Use {@link NonPositiveInputError}. */

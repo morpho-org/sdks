@@ -1,191 +1,118 @@
-import { getChainAddresses, type MarketParams } from "@morpho-org/blue-sdk";
+import type { MarketParams } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import { type Address, maxUint256 } from "viem";
-import { type Action, BundlerAction } from "../../bundler/index.js";
-import { addTransactionMetadata } from "../../helpers/index.js";
 import type {
+  BlueBundlesV1TokenRequirementSignature,
   BlueRepayAction,
   Metadata,
-  PermitRequirementSignature,
-  RepayActionAmountArgs,
   Transaction,
 } from "../../types/index.js";
-import { buildAssetFundingActions } from "./buildAssetFundingActions.js";
-import { resolveRepayFunding } from "./resolveRepayFunding.js";
+import { blueRepayWithdrawCollateral } from "./repayWithdrawCollateral.js";
 
 /** Parameters for {@link blueRepay}. */
 export interface BlueRepayParams {
+  /** Chain and scoped Morpho Blue market. */
   market: {
     readonly chainId: number;
     readonly marketParams: MarketParams;
   };
-  args: RepayActionAmountArgs & {
-    /** Address whose debt is being repaid. */
-    onBehalf: Address;
-    /** Receives residual loan tokens in shares mode. */
-    receiver: Address;
-    /** Maximum repay share price (in ray). Protects against share price manipulation. */
-    maxSharePrice: bigint;
-    /** Optional pre-signed permit/permit2 approval for the loan-token transfer. */
-    requirementSignature?: PermitRequirementSignature;
+  /** Direct BlueBundlesV1 repay arguments. */
+  args: {
+    /** User whose debt is repaid. */
+    userAddress: Address;
+    /** Exact assets repaid, exclusive with `repayShares`. */
+    repayAssets: bigint;
+    /** Exact shares repaid; use `maxUint256` for a saturated full repay. */
+    repayShares: bigint;
+    /** Maximum gross loan-token funding, including referral fees. */
+    maxRepayAssets: bigint;
+    /** Full native repay funding; must equal `maxRepayAssets`. */
+    nativeAmount?: bigint;
+    /** Final call deadline in Unix seconds. */
+    deadline: bigint;
+    /** Optional WAD-scaled referral fee, strictly below 100%. */
+    referralFeePct?: bigint;
+    /** Recipient required when `referralFeePct` is positive. */
+    referralFeeRecipient?: Address;
+    /** Optional loan-token ERC-2612 or Permit2 SignatureTransfer result. */
+    requirementSignature?: BlueBundlesV1TokenRequirementSignature;
   };
+  /** Optional transaction metadata suffix. */
   metadata?: Metadata;
 }
 
 /**
- * Prepares a repay transaction for a Morpho Blue market.
+ * Encodes a pure repayment through BlueBundlesV1.
  *
- * Routed through bundler3 via `GeneralAdapter1`. All amount arithmetic is done upstream (see
- * `MorphoBlue.repay`); this builder just assembles the bundle from the pre-resolved
- * {@link RepayActionAmountArgs}. The mode is discriminated on `shares`, plus optional native wrapping
- * (when `nativeAmount > 0`, native ETH is wrapped via `GeneralAdapter1.wrapNative()` before the
- * repay; the loan token must be the chain's wNative):
+ * Delegates to {@link blueRepayWithdrawCollateral} with a zero collateral-withdrawal leg and an
+ * unrestricted LTV cap. BlueBundlesV1 refunds unused `maxRepayAssets` funding.
  *
- * - **assets mode** (`shares` unset/`0n`): repays `transferAmount` assets (`= amount + nativeAmount`,
- *   additive like `blueSupply`), pulling `amount` ERC-20 and wrapping `nativeAmount`. No residual.
- * - **shares mode** (`shares > 0n`): repays exact shares (full repay), pulling `transferAmount`
- *   ERC-20 (already net of native) and wrapping `nativeAmount`. Residual loan tokens are skimmed
- *   back to `receiver` after the call.
- *
- * Uses `maxSharePrice` to protect against share price manipulation between construction and execution.
- *
- * @param params.market.chainId - The chain the market lives on.
- * @param params.market.marketParams - Market params (loanToken, collateralToken, oracle, irm, lltv).
- * @param params.args.amount - (assets mode) ERC-20 loan tokens pulled from the payer. Defaults to `0n`.
- * @param params.args.shares - (shares mode) Repay amount in borrow shares. Discriminates the mode.
- * @param params.args.transferAmount - Loan tokens routed into `GeneralAdapter1`: assets mode = the
- *   total repaid (`amount + nativeAmount`); shares mode = the ERC-20 pulled (net of native).
- * @param params.args.nativeAmount - Optional native token to wrap into wNative to fund the repay.
- *   Requires the loan token to be the chain's wNative.
- * @param params.args.onBehalf - Address whose Morpho debt is being repaid.
- * @param params.args.receiver - Address that receives residual loan tokens in shares mode.
- * @param params.args.maxSharePrice - Maximum acceptable repay share price (in ray). Slippage
- *   protection.
- * @param params.args.requirementSignature - Optional pre-signed permit/permit2 approval for the
- *   loan-token transfer.
- * @param params.metadata - Optional analytics metadata attached to the bundle.
- * @returns A deep-frozen `Transaction<BlueRepayAction>` with `to`, `value` (= `nativeAmount`),
- *   `data`, and the typed `action` discriminator the simulation layer consumes.
- * @throws {NonPositiveInputError} when `maxSharePrice <= 0n` or the total funding is zero.
- * @throws {NegativeInputError} when `amount`, `shares`, `nativeAmount`, or `transferAmount` is negative.
- * @throws {MutuallyExclusiveRepayAmountsError} when both `amount` and `shares` are `> 0n`.
- * @throws {TransferAmountNotEqualToAssetsError} when in assets mode and
- *   `transferAmount !== amount + nativeAmount`.
- * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
- * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the loan token is not
- *   the chain's wNative.
- * @throws {DepositAssetMismatchError} from `getTokenRequirementActions` when `requirementSignature`
- *   is provided and the signed asset differs from `marketParams.loanToken`.
- * @throws {DepositAmountMismatchError} from `getTokenRequirementActions` when `requirementSignature`
- *   is provided and the signed amount differs from the ERC-20 amount pulled.
- * @throws {Permit2ExpirationMissingError} from `getTokenRequirementActions` when a Permit2 requirement
- *   signature is missing its expiration.
+ * @param params - Repay encoding parameters.
+ * @param params.market.chainId - Chain containing BlueBundlesV1.
+ * @param params.market.marketParams - Scoped Morpho Blue market parameters.
+ * @param params.args.userAddress - User whose debt is repaid.
+ * @param params.args.repayAssets - Exact assets repaid, exclusive with shares.
+ * @param params.args.repayShares - Exact shares or `maxUint256` for full repay.
+ * @param params.args.maxRepayAssets - Gross repayment and fee funding cap.
+ * @param params.args.nativeAmount - Exclusive native repay funding.
+ * @param params.args.deadline - Final call deadline in Unix seconds.
+ * @param params.args.referralFeePct - Optional WAD-scaled referral fee.
+ * @param params.args.referralFeeRecipient - Recipient required for a positive fee.
+ * @param params.args.requirementSignature - Optional loan-token signature.
+ * @param params.metadata - Optional transaction metadata.
+ * @returns A deep-frozen `Readonly<Transaction<BlueRepayAction>>` whose calldata invokes the
+ *   combined BlueBundlesV1 entrypoint with a zero collateral-withdrawal leg.
+ * @throws {NegativeInputError} when an amount or fee is negative.
+ * @throws {MutuallyExclusiveRepayAmountsError} when assets and shares are both nonzero.
+ * @throws {NonPositiveInputError} when repayment, funding, or deadline is not positive.
+ * @throws {MaxRepayAssetsBelowRepayAssetsError} when funding cannot cover repayment and fees.
+ * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
+ * @throws {ChainWNativeMissingError} when native funding is requested without a registered wNative.
+ * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another loan token.
+ * @throws {UnexpectedRequirementSignatureError} when native funding also supplies a token signature.
+ * @throws {DepositOwnerMismatchError} when the signed owner differs from `userAddress`.
+ * @throws {DepositAssetMismatchError} when the signed asset differs from the loan token.
+ * @throws {DepositAmountMismatchError} when the signed amount differs from `maxRepayAssets`.
+ * @throws {DepositSpenderMismatchError} when the signed spender is not BlueBundlesV1.
+ * @throws {BlueBundlesV1RequirementSignatureMismatchError} when a signature cannot be encoded safely.
+ * @throws {InputExceedsMaxError} when the referral fee is at least WAD.
+ * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
+ * @throws {UnsupportedChainIdError} when the chain is absent from the registry.
+ * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
  * @example
  * ```ts
+ * import { markets } from "@morpho-org/morpho-test";
  * import { blueRepay } from "@morpho-org/morpho-sdk";
+ * import { zeroAddress } from "viem";
+ * import { mainnet } from "viem/chains";
  *
- * // Repay 0.5 loan-asset units, 0.2 of them funded by wrapping native ETH.
  * const tx = blueRepay({
- *   market: { chainId: 1, marketParams }, // marketParams.loanToken === wNative
+ *   market: { chainId: mainnet.id, marketParams: markets[mainnet.id].usdc_wbtc },
  *   args: {
- *     amount: 300_000_000_000_000_000n, // ERC-20 part
- *     nativeAmount: 200_000_000_000_000_000n, // wrapped ETH part
- *     transferAmount: 500_000_000_000_000_000n, // total repaid = amount + nativeAmount
- *     onBehalf: borrower,
- *     receiver: borrower,
- *     maxSharePrice: 1_010_000_000_000_000_000_000_000_000n, // RAY-scaled, 1.01x
+ *     userAddress: zeroAddress,
+ *     repayAssets: 1_000_000n,
+ *     repayShares: 0n,
+ *     maxRepayAssets: 1_000_000n,
+ *     deadline: 1_900_000_000n,
  *   },
  * });
- * // tx.value === 200_000_000_000_000_000n
+ * // tx satisfies Readonly<Transaction<BlueRepayAction>>
  * ```
  */
-export const blueRepay = ({
-  market: { chainId, marketParams },
-  args,
-  metadata,
-}: BlueRepayParams): Readonly<Transaction<BlueRepayAction>> => {
-  const {
-    amount = 0n,
-    shares = 0n,
-    nativeAmount = 0n,
-    transferAmount,
-    onBehalf,
-    receiver,
-    maxSharePrice,
-    requirementSignature,
-  } = args;
-
-  const { isSharesMode, repayAssets, repayShares, erc20Amount } =
-    resolveRepayFunding(
-      { amount, shares, nativeAmount, transferAmount, maxSharePrice },
-      marketParams.id,
-    );
-
-  const {
-    bundler3: { generalAdapter1 },
-  } = getChainAddresses(chainId);
-
-  const actions: Action[] = buildAssetFundingActions({
-    chainId,
-    asset: marketParams.loanToken,
-    erc20Amount,
-    nativeAmount,
-    requirementSignature,
+export const blueRepay = (
+  params: BlueRepayParams,
+): Readonly<Transaction<BlueRepayAction>> => {
+  const transaction = blueRepayWithdrawCollateral({
+    ...params,
+    args: {
+      ...params.args,
+      collateralAssets: 0n,
+      maxLtv: maxUint256,
+    },
   });
-
-  actions.push({
-    type: "morphoRepay",
-    args: [
-      marketParams,
-      repayAssets,
-      repayShares,
-      maxSharePrice,
-      onBehalf,
-      [],
-      false,
-    ],
-  });
-
-  // Skim residual loan tokens back to the payer when repaying by shares.
-  // In shares mode, transferAmount is an upper-bound estimate; morphoRepay
-  // consumes only the exact amount needed, leaving a residual in the adapter.
-  if (isSharesMode) {
-    actions.push({
-      type: "erc20Transfer",
-      args: [
-        marketParams.loanToken,
-        receiver,
-        maxUint256,
-        generalAdapter1,
-        false,
-      ],
-    });
-  }
-
-  let tx = {
-    ...BundlerAction.encodeBundle(chainId, actions),
-    value: nativeAmount,
-  };
-
-  if (metadata) {
-    tx = addTransactionMetadata(tx, metadata);
-  }
 
   return deepFreeze({
-    ...tx,
-    action: {
-      type: "blueRepay",
-      args: {
-        market: marketParams.id,
-        assets: repayAssets,
-        shares: repayShares,
-        // Total loan tokens routed to the adapter: ERC-20 pulled + native wrapped.
-        transferAmount: erc20Amount + nativeAmount,
-        onBehalf,
-        receiver,
-        maxSharePrice,
-        nativeAmount: nativeAmount > 0n ? nativeAmount : undefined,
-      },
-    },
+    ...transaction,
+    action: { ...transaction.action, type: "blueRepay" },
   });
 };
