@@ -22,10 +22,11 @@ interface EncodeErc20ApprovalParams {
  * @param params - Encoding parameters.
  * @param params.token - ERC-20 token address to approve.
  * @param params.spender - Address granted the allowance. Must be GeneralAdapter1, Permit2,
- *   Midnight, MidnightBundles, or VaultExitBundlesV1 for the chain.
+ *   Midnight, MidnightBundles, VaultExitBundlesV1, or BlueBundlesV1 for the chain.
  * @param params.amount - Allowance amount before per-token cap.
  * @param params.chainId - The chain the transaction targets (used to resolve supported spenders and the per-token cap).
  * @returns A deep-frozen `Transaction<ERC20ApprovalAction>` with the capped approval amount.
+ * @throws {UnsupportedChainIdError} when `chainId` is absent from the address registry.
  * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not a supported SDK spender for `chainId`.
  * @example
  * ```ts
@@ -54,6 +55,7 @@ export const encodeErc20Approval = (
       "midnight",
       "midnightBundles",
       "vaultExitBundlesV1",
+      "blueBundlesV1",
     ],
   });
 

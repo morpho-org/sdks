@@ -9,6 +9,47 @@ High-level `borrow`, `withdraw`, `supplyCollateralBorrow`, and `refinance` input
 Vault V1 data fetchers, planners, types, and explicit low-level Bundler3 composition remain
 available. Use them only when constructing Bundler3 calls directly.
 
+## Blue supply and withdraw
+
+The established `supply` and `withdraw` methods and pure builder names stay stable, but now encode
+one direct BlueBundlesV1 call.
+
+| Flow | v5 input | v6 input |
+| --- | --- | --- |
+| `supply` | `amount`, `marketData`, optional additive `nativeAmount`, `slippageTolerance` | Rename `amount` to `assets`; remove `marketData` and slippage; add required `deadline` and optional referral-fee fields. Native and ERC-20 funding are exclusive. |
+| `withdraw` | `assets` or `shares`, optional `receiver`, `slippageTolerance`, `reallocations` | Keep the amount modes; remove `receiver` and slippage; add required `deadline` and optional referral-fee fields. |
+
+`blueSupply` and `blueWithdraw` keep their names, but their `args` and action metadata use the new
+BlueBundlesV1 fields. Supply approvals and permits target BlueBundlesV1. Withdraw authorization
+also targets BlueBundlesV1, and proceeds always return to the transaction sender.
+
+> **Chain availability.** The direct BlueBundlesV1 route requires the `bundles.blueBundlesV1`
+> deployment on the target chain. On a registered chain without it (the previous Bundler3-routed
+> flows covered more chains), `supply(...)` and `withdraw(...)` throw `UnknownAddressError`
+> synchronously at handle creation. Confirm coverage before upgrading, for example
+> `getChainAddresses(chainId).bundles?.blueBundlesV1 != null`.
+
+Permit2 uses SignatureTransfer for these direct token pulls: its ERC-20 prerequisite still targets
+canonical Permit2, while the signed payload names BlueBundlesV1 as spender.
+
+### Permit2 SignatureTransfer requires an explicit nonce
+
+SignatureTransfer consumes an owner-global unordered nonce rather than an allowance, so the SDK no
+longer allocates one implicitly. For a client with `supportSignature: true`, the default supply
+requirement path selects Permit2 and `supply(...).getRequirements()` now throws
+`MissingPermit2TransferFromNonceError` when no nonce is supplied. Pass an unused nonce explicitly:
+
+```ts
+const requirements = await market
+  .supply({ userAddress, assets, deadline })
+  .getRequirements({ permit2Nonce });
+```
+
+Allocate any `uint256` whose Permit2 `nonceBitmap` bit is still unset for `userAddress` (each nonce
+is single-use; a consumed one throws `Permit2TransferFromNonceAlreadyUsedError`). To skip Permit2
+for ERC-2612 tokens, pass `getRequirements({ useSimplePermit: true })`, which prefers a one-signature
+ERC-2612 permit and needs no nonce.
+
 ## Removed action-output field: `reallocationFee`
 
 `BlueBorrowAction`, `BlueWithdrawAction`, `BlueSupplyCollateralBorrowAction`, and

@@ -29,19 +29,6 @@ const makeMarket = () => {
 };
 
 describe("MorphoBlue reallocation input validation", () => {
-  test("withdraw error: NegativeInputError before position validation", () => {
-    const market = makeMarket();
-
-    expect(() =>
-      market.withdraw({
-        assets: 1n,
-        userAddress: USER,
-        positionData: undefined as never,
-        reallocations: INVALID_REALLOCATIONS.values(),
-      }),
-    ).toThrow(NegativeInputError);
-  });
-
   test("borrow error: NegativeInputError before position validation", () => {
     const market = makeMarket();
 

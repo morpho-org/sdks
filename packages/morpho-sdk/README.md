@@ -17,7 +17,7 @@ pnpm add @morpho-org/morpho-sdk
 
 ## Actions
 
-Each entity exposes a set of actions. Bundled actions route through bundler3 (via `GeneralAdapter1`); the rest are direct contract calls.
+Each entity exposes a set of actions. Bundled actions route through bundler3 (via `GeneralAdapter1`); loan-asset Blue `supply` and `withdraw` route through the `BlueBundlesV1` periphery; the rest are direct contract calls.
 
 | Entity | Actions | Route |
 | --- | --- | --- |
@@ -28,7 +28,8 @@ Each entity exposes a set of actions. Bundled actions route through bundler3 (vi
 | | `withdraw`, `redeem` | Direct call |
 | | `forceWithdraw`, `forceRedeem` | Vault multicall |
 | | `inKindRedeem` | VaultExitBundlesV1 |
-| **Blue** | `supply`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdraw`, `repayWithdrawCollateral`, `refinance` | Bundler |
+| **Blue** | `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `repayWithdrawCollateral`, `refinance` | Bundler |
+| | `supply`, `withdraw` | BlueBundlesV1 |
 | | `withdrawCollateral` | Direct call |
 | **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `repayWithdrawCollateral` | Midnight Bundles |
 | | `makeLend`, `makeBorrow` | Midnight mempool |
@@ -238,15 +239,16 @@ graph LR
         MM1 --> M1W[blueWithdraw]
         MM1 --> M1RF[blueRefinance]
 
-        M1S -->|nativeWrap? + erc20TransferFrom + morphoSupply| B3[Bundler3]
+        M1S -->|permit/permit2? or native + blueBundlesV1Supply| BB1[BlueBundlesV1]
         M1SC -->|erc20TransferFrom + morphoSupplyCollateral| B3
         M1B -->|allocator reallocation? + morphoBorrow| B3
         M1SCB -->|transfer + supplyCollateral + allocator reallocation? + borrow| B3
-        M1W -->|allocator reallocation? + morphoWithdraw| B3
+        M1W -->|allocator reallocation? + blueBundlesV1Withdraw| BB1
         M1RF -->|allocator reallocation? + supplyCollateral callback: borrow + repay + withdrawCollateral| B3
 
         B3 -.->|reallocateTo| PA1[PublicAllocator V1]
         B3 -.->|reallocate / allocateFromIdle| BPA[Blue Public Allocator]
+        BB1 -.->|reallocate / allocateFromIdle| BPA
     end
 
     subgraph Midnight Flow

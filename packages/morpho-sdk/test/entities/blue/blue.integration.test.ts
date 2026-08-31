@@ -4,11 +4,15 @@ import {
   MarketParams,
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
-import { type Address, parseUnits } from "viem";
+import { getChainAddress } from "@morpho-org/morpho-ts";
+import { type Address, maxUint256, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import { morphoViemExtension } from "../../../src/client/index.js";
-import { isRequirementApproval } from "../../../src/types/index.js";
+import {
+  isRequirementApproval,
+  isRequirementBlueAuthorization,
+} from "../../../src/types/index.js";
 import { CbbtcUsdcBlue, WstethWethBlue } from "../../fixtures/blue.js";
 import { test } from "../../setup.js";
 
@@ -87,10 +91,15 @@ describe("MorphoBlue validation", () => {
         assets: 1n,
         userAddress: USER,
         positionData: makePosition({ supplyShares: 10n ** 18n }),
+        deadline: maxUint256,
       })
       .getRequirements();
 
     expect(requirements).toHaveLength(1);
+    const authorization = requirements.find(isRequirementBlueAuthorization);
+    expect(authorization?.action.args.authorized).toBe(
+      getChainAddress(mainnet.id, "bundles.blueBundlesV1"),
+    );
   });
 
   test("repayWithdrawCollateral getRequirements includes Blue authorization when missing", async ({
