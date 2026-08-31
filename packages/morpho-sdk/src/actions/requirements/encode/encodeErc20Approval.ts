@@ -1,6 +1,6 @@
 import { type Address, MathLib } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import { encodeFunctionData, erc20Abi, maxUint256 } from "viem";
+import { encodeFunctionData, erc20Abi, getAddress, maxUint256 } from "viem";
 import { MAX_TOKEN_APPROVALS } from "../../../helpers/constant.js";
 import { validateRequirementSpender } from "../../../helpers/validateRequirementSpender.js";
 import type { ERC20ApprovalAction, Transaction } from "../../../types/index.js";
@@ -61,7 +61,11 @@ export const encodeErc20Approval = (
 
   const amountValue = MathLib.min(
     amount,
-    MAX_TOKEN_APPROVALS[chainId]?.[token] ?? maxUint256,
+    // Normalize to the EIP-55 checksum the registry is keyed by: a lowercased/differently-cased
+    // token address must still resolve its per-token cap, otherwise the approval would fall back
+    // to `maxUint256` and revert on tokens like UNI/ONDO/COMP/FLUID that reject approvals above
+    // `uint96`.
+    MAX_TOKEN_APPROVALS[chainId]?.[getAddress(token)] ?? maxUint256,
   );
 
   return deepFreeze({

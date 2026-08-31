@@ -180,17 +180,17 @@ export interface BlueWithdrawAction
   > {}
 
 type BlueSupplyCollateralBorrowActionArgs = {
-  market: Hex;
-  collateralAssets: bigint;
-  borrowAssets: bigint;
-  maxLtv: bigint;
-  onBehalf: Address;
-  nativeAmount?: bigint;
-  reallocations: number;
-  reallocationPenaltyAssets: bigint;
-  referralFeePct: bigint;
-  referralFeeRecipient: Address;
-  deadline: bigint;
+  readonly market: Hex;
+  readonly collateralAssets: bigint;
+  readonly borrowAssets: bigint;
+  readonly maxLtv: bigint;
+  readonly onBehalf: Address;
+  readonly nativeAmount?: bigint;
+  readonly reallocations: number;
+  readonly reallocationPenaltyAssets: bigint;
+  readonly referralFeePct: bigint;
+  readonly referralFeeRecipient: Address;
+  readonly deadline: bigint;
 };
 
 /** Metadata for a direct BlueBundlesV1 collateral supply. */
@@ -212,17 +212,17 @@ export interface BlueSupplyCollateralBorrowAction
   > {}
 
 type BlueRepayWithdrawCollateralActionArgs = {
-  market: Hex;
-  repayAssets: bigint;
-  repayShares: bigint;
-  maxRepayAssets: bigint;
-  collateralAssets: bigint;
-  maxLtv: bigint;
-  onBehalf: Address;
-  nativeAmount?: bigint;
-  referralFeePct: bigint;
-  referralFeeRecipient: Address;
-  deadline: bigint;
+  readonly market: Hex;
+  readonly repayAssets: bigint;
+  readonly repayShares: bigint;
+  readonly maxRepayAssets: bigint;
+  readonly collateralAssets: bigint;
+  readonly maxLtv: bigint;
+  readonly onBehalf: Address;
+  readonly nativeAmount?: bigint;
+  readonly referralFeePct: bigint;
+  readonly referralFeeRecipient: Address;
+  readonly deadline: bigint;
 };
 
 /** Metadata for a direct BlueBundlesV1 repayment. */

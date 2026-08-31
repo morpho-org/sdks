@@ -14,13 +14,13 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 ## Common builder pattern
 
 1. Validate inputs with dedicated errors from `src/types/error.ts` (`assets > 0`, `shares > 0`, `maxSharePrice > 0`, `nativeAmount >= 0`).
-2. Encode calldata. **Bundler3 paths** use `BundlerAction.encodeBundle`. **Midnight bundle paths** encode one `MidnightBundles` function call directly. Other **direct calls** (`vaultV1/withdraw`, `vaultV1/redeem`, `vaultV2/withdraw`, `vaultV2/redeem`, `blue/withdrawCollateral`, and Midnight collateral supply, redeem, and offer cancellation) encode their target contract call directly. Vault `inKindRedeem` actions directly encode the standalone `VaultExitBundlesV1` entry point rather than composing a Bundler3 bundle.
+2. Encode calldata. **Bundler3 paths** (vault deposits, `blue/refinance`) use `BundlerAction.encodeBundle`. **Midnight bundle paths** encode one `MidnightBundles` function call directly. **Direct BlueBundlesV1 calls** — every high-level Blue write (`supply`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, `withdraw`) — encode a single `BlueBundlesV1` function call. Other **direct calls** (`vaultV1/withdraw`, `vaultV1/redeem`, `vaultV2/withdraw`, `vaultV2/redeem`, and Midnight collateral supply, redeem, and offer cancellation) encode their target contract call directly. Vault `inKindRedeem` actions directly encode the standalone `VaultExitBundlesV1` entry point rather than composing a Bundler3 bundle.
 3. Call `addTransactionMetadata` only when `metadata` is provided.
 4. `deepFreeze` the return value: `{ to, value, data, action: { type, args } }`.
 
 ## Native wrapping (canonical statement)
 
-Only valid for assets/collateral configured as wNative. When `nativeAmount > 0`: prepend `nativeTransfer` + `wrapNative` to the bundle; `BundlerAction.encodeBundle` derives `tx.value` from the encoded value-carrying calls. Reject native amounts on non-wNative assets with the dedicated error.
+Only valid for assets/collateral configured as wNative; reject native amounts on non-wNative assets with the dedicated error. On **Bundler3 paths** (vault deposits, `refinance`), `nativeAmount > 0` prepends `nativeTransfer` + `wrapNative` and `BundlerAction.encodeBundle` derives `tx.value` from the encoded value-carrying calls. On **direct BlueBundlesV1 paths** (loan-asset `supply`, collateral supply, `repay`, `repayWithdrawCollateral`), the native amount is attached directly as `tx.value` on the single payable call, which the contract wraps.
 
 ## Shared liquidity / reallocations (canonical statement)
 
@@ -31,16 +31,17 @@ liquidity; the enclosing action supplies the target market, the input supplies a
 registry supplies the allocator, and each call passes the vault's configured WAD-scaled `penalty`.
 BluePublicAllocator sources are not sorted and idle uses no synthetic zero-address market.
 
-The Bundler3 flows (`blueBorrow`, `blueSupplyCollateralBorrow`, refinance) pull the aggregate penalty
-in the target loan token through GeneralAdapter1, then each low-level allocator action approves and
-spends its independently rounded `ceil(assets × penalty / WAD)` amount from Bundler3. All high-level
-allocator calls use `skipRevert: false`. Loan-asset `blueWithdraw` instead routes directly through
-`blueBundlesV1Withdraw`, which carries the reallocations array in its own calldata and nets each
-`ceil(assets × penalty / WAD)` penalty from the withdrawn proceeds — so it emits no separate
-Bundler3 penalty-funding action, and (in assets mode) the builder rejects an aggregate penalty that
-would exceed the withdrawn amount. Vault V1 planners and encoders remain available for explicit
-low-level Bundler3 composition, but those Vault V1 compatibility surfaces are deprecated and will be
-removed in the next major.
+`refinance` (still on Bundler3) pulls the aggregate penalty in the target loan token through
+GeneralAdapter1, then each low-level allocator action approves and spends its independently rounded
+`ceil(assets × penalty / WAD)` amount from Bundler3, all with `skipRevert: false`. `blueBorrow`,
+`blueSupplyCollateralBorrow`, and loan-asset `blueWithdraw` instead carry the reallocations array
+inside their single `BlueBundlesV1` call (`blueBundlesV1SupplyCollateralAndBorrow` /
+`blueBundlesV1Withdraw`) and let the contract net each `ceil(assets × penalty / WAD)` penalty from
+the borrow or withdrawn proceeds — so they emit no separate Bundler3 penalty-funding action, and the
+builder rejects an aggregate penalty that would exceed the borrowed amount (or, in withdraw assets
+mode, the withdrawn amount). Vault V1 planners and encoders remain available for explicit low-level
+Bundler3 composition, but those Vault V1 compatibility surfaces are deprecated and will be removed in
+the next major.
 
 ## Discriminated unions
 
