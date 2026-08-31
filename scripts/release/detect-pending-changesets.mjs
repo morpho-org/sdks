@@ -1,10 +1,16 @@
 #!/usr/bin/env node
 
-import { appendFileSync, existsSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import {
+  appendFileSync,
+  existsSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+} from "node:fs";
+import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { getErrorMessage, sanitizeLogLine } from "./helpers.mjs";
+import { getErrorMessage, isPathInside, sanitizeLogLine } from "./helpers.mjs";
 
 const DEFAULT_CHANGESET_DIR = ".changeset";
 const PRE_STATE_FILE = "pre.json";
@@ -23,8 +29,12 @@ export function listPendingChangesets(options = {}) {
   // recorded changesets still drive the final stable version, so they stay
   // pending.
   const prereleasedIds = new Set();
-  const preStatePath = join(changesetDir, PRE_STATE_FILE);
-  if (existsSync(preStatePath)) {
+  const changesetRoot = realpathSync(changesetDir);
+  const preStatePath = resolve(changesetRoot, PRE_STATE_FILE);
+  // `pre.json` is a fixed filename; confirm the resolved path stays inside the
+  // changeset directory before reading it, matching the repo's file-read guard
+  // convention (see apply-version-artifact.mjs).
+  if (isPathInside(changesetRoot, preStatePath) && existsSync(preStatePath)) {
     let preState;
     try {
       preState = JSON.parse(readFileSync(preStatePath, "utf8"));
