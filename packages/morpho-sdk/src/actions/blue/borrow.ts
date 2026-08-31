@@ -13,31 +13,31 @@ import { blueSupplyCollateralBorrow } from "./supplyCollateralBorrow.js";
 /** Parameters for {@link blueBorrow}. */
 export interface BlueBorrowParams {
   /** Chain and scoped Morpho Blue market. */
-  market: {
+  readonly market: {
     readonly chainId: number;
     readonly marketParams: MarketParams;
   };
   /** Direct BlueBundlesV1 borrow arguments. */
-  args: {
+  readonly args: {
     /** User whose debt position is increased. */
-    userAddress: Address;
+    readonly userAddress: Address;
     /** Gross loan assets borrowed before penalties and referral fees. */
-    borrowAssets: bigint;
+    readonly borrowAssets: bigint;
     /** Maximum post-operation LTV enforced by BlueBundlesV1. */
-    maxLtv: bigint;
+    readonly maxLtv: bigint;
     /** Optional validated Vault V2 BluePublicAllocator reallocations. */
-    reallocations?: Iterable<VaultV2BlueReallocation>;
+    readonly reallocations?: Iterable<VaultV2BlueReallocation>;
     /** Final call deadline in Unix seconds. */
-    deadline: bigint;
+    readonly deadline: bigint;
     /** Optional WAD-scaled referral fee, strictly below 100%. */
-    referralFeePct?: bigint;
+    readonly referralFeePct?: bigint;
     /** Recipient required when `referralFeePct` is positive. */
-    referralFeeRecipient?: Address;
+    readonly referralFeeRecipient?: Address;
     /** Optional Morpho authorization signature for BlueBundlesV1. */
-    authorizationSignature?: AuthorizationRequirementSignature;
+    readonly authorizationSignature?: AuthorizationRequirementSignature;
   };
   /** Optional transaction metadata suffix. */
-  metadata?: Metadata;
+  readonly metadata?: Metadata;
 }
 
 /**

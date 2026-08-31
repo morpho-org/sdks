@@ -267,6 +267,28 @@ describe("blueSupplyCollateralBorrow", () => {
     ).toThrow(NegativeInputError);
   });
 
+  test("error: InputExceedsMaxError when a uint256 argument overflows", () => {
+    for (const field of [
+      "collateralAssets",
+      "borrowAssets",
+      "maxLtv",
+    ] as const) {
+      expect(() =>
+        blueSupplyCollateralBorrow({
+          market,
+          args: {
+            userAddress,
+            collateralAssets: 1n,
+            borrowAssets: 1n,
+            maxLtv,
+            deadline,
+            [field]: maxUint256 + 1n,
+          },
+        }),
+      ).toThrow(InputExceedsMaxError);
+    }
+  });
+
   test("behavior: maps Vault V2 reallocations and accounts for rounded-up penalties", () => {
     const vault = getAddress("0x0000000000000000000000000000000000000031");
     const adapter = getAddress("0x0000000000000000000000000000000000000032");
