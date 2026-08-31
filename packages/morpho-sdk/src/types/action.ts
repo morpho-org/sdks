@@ -152,13 +152,13 @@ export interface BlueSupplyAction
   extends BaseAction<
     "blueSupply",
     {
-      market: Hex;
-      assets: bigint;
-      onBehalf: Address;
-      nativeAmount?: bigint;
-      referralFeePct: bigint;
-      referralFeeRecipient: Address;
-      deadline: bigint;
+      readonly market: Hex;
+      readonly assets: bigint;
+      readonly onBehalf: Address;
+      readonly nativeAmount?: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
+      readonly deadline: bigint;
     }
   > {}
 
@@ -167,15 +167,15 @@ export interface BlueWithdrawAction
   extends BaseAction<
     "blueWithdraw",
     {
-      market: Hex;
-      withdrawAssets: bigint;
-      withdrawShares: bigint;
-      onBehalf: Address;
-      reallocations: number;
-      reallocationPenaltyAssets: bigint;
-      referralFeePct: bigint;
-      referralFeeRecipient: Address;
-      deadline: bigint;
+      readonly market: Hex;
+      readonly withdrawAssets: bigint;
+      readonly withdrawShares: bigint;
+      readonly onBehalf: Address;
+      readonly reallocations: number;
+      readonly reallocationPenaltyAssets: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
+      readonly deadline: bigint;
     }
   > {}
 

@@ -1,17 +1,21 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
-import { deepFreeze } from "@morpho-org/morpho-ts";
+import { deepFreeze, Time } from "@morpho-org/morpho-ts";
 import type { Client } from "viem";
 import {
   type Address,
   encodeFunctionData,
   isAddressEqual,
+  maxUint256,
   publicActions,
 } from "viem";
 import {
   type AuthorizationRequirementSignature,
   type BlueAuthorizationAction,
   ChainIdMismatchError,
+  ExpiredDeadlineError,
+  InputExceedsMaxError,
+  NonPositiveInputError,
   type Requirement,
   type Transaction,
   UnsupportedAuthorizationOperatorError,
@@ -108,6 +112,25 @@ export const getBlueAuthorizationRequirement = async (params: {
   const pc = viemClient.extend(publicActions);
 
   if (supportSignature) {
+    // The forwarded deadline is only consumed on the signable path; reject an invalid or expired
+    // one before the RPC reads so the caller never signs an authorization that cannot be encoded
+    // or would revert on-chain. An omitted deadline defaults downstream to two hours from now.
+    if (params.deadline != null) {
+      if (params.deadline <= 0n) {
+        throw new NonPositiveInputError("deadline", params.deadline);
+      }
+      if (params.deadline > maxUint256) {
+        throw new InputExceedsMaxError({
+          field: "deadline",
+          value: params.deadline,
+          max: maxUint256,
+        });
+      }
+      const timestamp = Time.timestamp();
+      if (params.deadline <= timestamp) {
+        throw new ExpiredDeadlineError(params.deadline, timestamp);
+      }
+    }
     // The signable path needs the user's Morpho nonce; fetch it alongside the
     // authorization status so both reads share a round-trip (batched into a
     // single multicall when the client enables batching) instead of

@@ -23,6 +23,12 @@ one direct BlueBundlesV1 call.
 BlueBundlesV1 fields. Supply approvals and permits target BlueBundlesV1. Withdraw authorization
 also targets BlueBundlesV1, and proceeds always return to the transaction sender.
 
+> **Chain availability.** The direct BlueBundlesV1 route requires the `bundles.blueBundlesV1`
+> deployment on the target chain. On a registered chain without it (the previous Bundler3-routed
+> flows covered more chains), `supply(...)` and `withdraw(...)` throw `UnknownAddressError`
+> synchronously at handle creation. Confirm coverage before upgrading, for example
+> `getChainAddresses(chainId).bundles?.blueBundlesV1 != null`.
+
 Permit2 uses SignatureTransfer for these direct token pulls: its ERC-20 prerequisite still targets
 canonical Permit2, while the signed payload names BlueBundlesV1 as spender.
 

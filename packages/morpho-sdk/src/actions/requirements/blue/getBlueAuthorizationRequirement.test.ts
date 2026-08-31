@@ -2,12 +2,15 @@ import { addressesRegistry } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
-import type { Address } from "viem";
+import { type Address, maxUint256 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
   ChainIdMismatchError,
+  ExpiredDeadlineError,
+  InputExceedsMaxError,
   isRequirementSignature,
+  NonPositiveInputError,
   UnsupportedAuthorizationOperatorError,
 } from "../../../types/index.js";
 import { getBlueAuthorizationRequirement } from "./getBlueAuthorizationRequirement.js";
@@ -154,5 +157,25 @@ describe("getBlueAuthorizationRequirement", () => {
         authorized: getChainAddress(mainnet.id, "bundles.blueBundlesV1"),
       }),
     ).resolves.toBeNull();
+  });
+
+  test("error: rejects an invalid signable authorization deadline", async () => {
+    const handle = createMockClient(mainnet);
+    const base = {
+      viemClient: handle.client,
+      chainId: mainnet.id,
+      userAddress: USER,
+      supportSignature: true,
+    } as const;
+    // Validation runs before any RPC read, so no mock is needed.
+    await expect(
+      getBlueAuthorizationRequirement({ ...base, deadline: 0n }),
+    ).rejects.toBeInstanceOf(NonPositiveInputError);
+    await expect(
+      getBlueAuthorizationRequirement({ ...base, deadline: maxUint256 + 1n }),
+    ).rejects.toBeInstanceOf(InputExceedsMaxError);
+    await expect(
+      getBlueAuthorizationRequirement({ ...base, deadline: 1n }),
+    ).rejects.toBeInstanceOf(ExpiredDeadlineError);
   });
 });
