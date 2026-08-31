@@ -82,13 +82,14 @@ export interface BlueSupplyCollateralBorrowParams {
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueSupplyCollateralBorrowAction>` with `to`, `value`,
  *   `data`, and the typed `action` discriminator the simulation layer consumes.
- * @throws {NegativeInputError} when `amount`, `nativeAmount`, `minSharePrice`, a V1 fee, or a V2
- *   penalty is negative.
+ * @throws {NegativeInputError} when `amount`, `nativeAmount`, `minSharePrice`, or a V2 penalty
+ *   is negative.
  * @throws {NonPositiveInputError} when `borrowAmount <= 0n`, both collateral amounts resolve to
- *   zero, or any reallocation withdrawal amount is non-positive.
+ *   zero, or a V2 reallocation asset amount is non-positive.
  * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
  * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
  * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
+ * @throws {InvalidReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
  * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
  * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
  * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the collateral
@@ -99,11 +100,8 @@ export interface BlueSupplyCollateralBorrowParams {
  *   is provided and the signed amount differs from the total ERC-20 funding amount.
  * @throws {Permit2ExpirationMissingError} from `getTokenRequirementActions` when a Permit2 requirement
  *   signature is missing its expiration.
- * @throws {EmptyReallocationWithdrawalsError} when any `reallocation.withdrawals` is empty.
- * @throws {ReallocationWithdrawalOnTargetMarketError} when any reallocation withdrawal references
+ * @throws {ReallocationWithdrawalOnTargetMarketError} when a V2 reallocation source market equals
  *   the target market.
- * @throws {UnsortedReallocationWithdrawalsError} when reallocation withdrawals are not strictly
- *   sorted by market id.
  * @example
  * ```ts
  * import { blueSupplyCollateralBorrow } from "@morpho-org/morpho-sdk";

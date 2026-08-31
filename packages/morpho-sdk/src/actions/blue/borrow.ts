@@ -61,18 +61,16 @@ export interface BlueBorrowParams {
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueBorrowAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator the simulation layer consumes.
- * @throws {NonPositiveInputError} when `amount <= 0n` or any reallocation withdrawal amount
- *   is non-positive.
+ * @throws {NonPositiveInputError} when `amount <= 0n` or a V2 reallocation asset amount is
+ *   non-positive.
  * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
  * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
  * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
+ * @throws {InvalidReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
  * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
- * @throws {NegativeInputError} when `minSharePrice < 0n`, a V1 fee, or a V2 penalty is negative.
- * @throws {EmptyReallocationWithdrawalsError} when any `reallocation.withdrawals` is empty.
- * @throws {ReallocationWithdrawalOnTargetMarketError} when any reallocation withdrawal references
+ * @throws {NegativeInputError} when `minSharePrice < 0n` or a V2 penalty is negative.
+ * @throws {ReallocationWithdrawalOnTargetMarketError} when a V2 reallocation source market equals
  *   the target market.
- * @throws {UnsortedReallocationWithdrawalsError} when reallocation withdrawals are not strictly
- *   sorted by market id.
  * @example
  * ```ts
  * import { blueBorrow } from "@morpho-org/morpho-sdk";

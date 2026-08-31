@@ -111,19 +111,18 @@ export interface BlueRefinanceParams {
  * @remarks `borrowAssets` and `borrowShares` describe different markets (target borrow vs. source
  * repay); in shares mode the entity passes both. Caller-facing mutual exclusivity is enforced at the entity layer.
  * @throws {NonPositiveInputError} when `collateralAmount <= 0n`, a repay leg has a non-positive
- *   `maxRepaySharePrice`, or any reallocation withdrawal amount is non-positive.
+ *   `maxRepaySharePrice`, or a V2 reallocation asset amount is non-positive.
  * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
  * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
  * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
+ * @throws {InvalidReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
  * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
  * @throws {NegativeInputError} when `borrowAssets`, `borrowShares`, `minBorrowSharePrice`,
- *   `maxRepaySharePrice`, a V1 fee, or a V2 penalty is negative.
+ *   `maxRepaySharePrice`, or a V2 penalty is negative.
  * @throws {RefinanceSameMarketError} when source and target market ids are equal.
  * @throws {RefinanceTokenMismatchError} when source and target do not share both tokens.
  * @throws {RefinanceSharesMissingBorrowAssetsError} when `borrowShares > 0n` but `borrowAssets` is omitted or non-positive.
- * @throws {EmptyReallocationWithdrawalsError} when any `reallocation.withdrawals` is empty.
- * @throws {ReallocationWithdrawalOnTargetMarketError} when a reallocation withdrawal references the target market.
- * @throws {UnsortedReallocationWithdrawalsError} when reallocation withdrawals are not strictly sorted by market id.
+ * @throws {ReallocationWithdrawalOnTargetMarketError} when a V2 reallocation source market equals the target market.
  * @example
  * ```ts
  * import { blueRefinance } from "@morpho-org/morpho-sdk";

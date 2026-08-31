@@ -74,20 +74,18 @@ export interface BlueWithdrawParams {
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<BlueWithdrawAction>` with `to`, `value`, `data`, and
  *   the typed `action` discriminator the simulation layer consumes.
- * @throws {NegativeInputError} when `assets`, `shares`, `minSharePrice`, a V1 fee, or a V2
- *   penalty is negative.
- * @throws {NonPositiveInputError} when both `assets` and `shares` are zero or any reallocation
- *   withdrawal amount is non-positive.
+ * @throws {NegativeInputError} when `assets`, `shares`, `minSharePrice`, or a V2 penalty is
+ *   negative.
+ * @throws {NonPositiveInputError} when both `assets` and `shares` are zero or a V2 reallocation
+ *   asset amount is non-positive.
  * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
  * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
  * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
+ * @throws {InvalidReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
  * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
  * @throws {MutuallyExclusiveWithdrawAmountsError} when both `assets` and `shares` are non-zero.
- * @throws {EmptyReallocationWithdrawalsError} when any reallocation has no withdrawals.
- * @throws {ReallocationWithdrawalOnTargetMarketError} when a reallocation withdrawal references
+ * @throws {ReallocationWithdrawalOnTargetMarketError} when a V2 reallocation source market equals
  *   the target market.
- * @throws {UnsortedReallocationWithdrawalsError} when reallocation withdrawals are not strictly
- *   sorted by market id.
  * @example
  * ```ts
  * import { blueWithdraw } from "@morpho-org/morpho-sdk";

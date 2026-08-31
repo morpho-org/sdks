@@ -828,11 +828,10 @@ export class ReallocationWithdrawalOnTargetMarketError extends Error {
 }
 
 /**
- * Thrown when a Public Allocator reallocation does not match exactly one V1 or
- * V2 input shape.
+ * Thrown when a reallocation entry passed to a high-level Blue write is not a valid
+ * {@link VaultV2BlueReallocation}: a non-object entry, or an entry carrying Vault V1
+ * `withdrawals`/`fee` fields that high-level Blue writes no longer accept.
  *
- * @deprecated Vault V1/V2 reallocation-shape dispatch will be removed in the next major. Use Vault
- * V2 reallocations.
  * @example
  * ```ts
  * import { InvalidReallocationShapeError } from "@morpho-org/morpho-sdk";
@@ -843,7 +842,7 @@ export class ReallocationWithdrawalOnTargetMarketError extends Error {
 export class InvalidReallocationShapeError extends Error {
   public constructor() {
     super(
-      'Reallocation must contain either V1 "withdrawals" or V2 "from", but not both.',
+      "Reallocation entry is not a valid Vault V2 reallocation. High-level Blue writes accept only VaultV2BlueReallocation entries (e.g. from getVaultV2BlueReallocations()); compose Vault V1 reallocations via low-level Bundler3 actions.",
     );
     this.name = "InvalidReallocationShapeError";
   }

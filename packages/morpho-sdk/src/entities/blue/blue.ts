@@ -235,6 +235,7 @@ export interface BlueActions {
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
    * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
    * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
+   * @throws {InvalidReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
    * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
    */
   withdraw: (
@@ -280,6 +281,7 @@ export interface BlueActions {
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
    * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
    * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
+   * @throws {InvalidReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
    * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
    */
   borrow: (params: {
@@ -433,6 +435,7 @@ export interface BlueActions {
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
    * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
    * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
+   * @throws {InvalidReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
    * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
    */
   supplyCollateralBorrow: (
@@ -491,6 +494,7 @@ export interface BlueActions {
    * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
    * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
    * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
+   * @throws {InvalidReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
    * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
    */
   refinance: (params: {
