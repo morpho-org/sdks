@@ -186,6 +186,28 @@ describe("getBlueBundlesV1TokenRequirements", () => {
     await expect(
       getBlueBundlesV1TokenRequirements(handle.client, {
         token: usdc,
+        amount: maxUint256 + 1n,
+        owner: account.address,
+        chainId: mainnet.id,
+        deadline: maxUint256,
+        supportSignature: false,
+      }),
+    ).rejects.toBeInstanceOf(InputExceedsMaxError);
+
+    await expect(
+      getBlueBundlesV1TokenRequirements(handle.client, {
+        token: usdc,
+        amount: 1n,
+        owner: account.address,
+        chainId: mainnet.id,
+        deadline: maxUint256 + 1n,
+        supportSignature: false,
+      }),
+    ).rejects.toBeInstanceOf(InputExceedsMaxError);
+
+    await expect(
+      getBlueBundlesV1TokenRequirements(handle.client, {
+        token: usdc,
         amount: 2n,
         approvalAmount: 1n,
         owner: account.address,

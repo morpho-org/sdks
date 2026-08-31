@@ -115,8 +115,24 @@ export const getBlueBundlesV1TokenRequirements = async (
   if (params.amount < 0n) {
     throw new NegativeInputError("amount", params.amount);
   }
+  // Reject oversized inputs before any RPC read so this resolver never asks the user to sign or
+  // submit an approval/permit that the eventual BlueBundlesV1 call (uint256 ABI) would reject.
+  if (params.amount > maxUint256) {
+    throw new InputExceedsMaxError({
+      field: "amount",
+      value: params.amount,
+      max: maxUint256,
+    });
+  }
   if (params.deadline <= 0n) {
     throw new NonPositiveInputError("deadline", params.deadline);
+  }
+  if (params.deadline > maxUint256) {
+    throw new InputExceedsMaxError({
+      field: "deadline",
+      value: params.deadline,
+      max: maxUint256,
+    });
   }
   if (params.amount === 0n) return [];
 

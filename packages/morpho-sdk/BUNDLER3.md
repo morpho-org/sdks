@@ -44,7 +44,8 @@ Concretely, `blueSupplyCollateralBorrow` is not a new contract: it is simply the
 | Blue `supplyCollateral`             | Bundler3 → GeneralAdapter1   | _(opt)_ `nativeTransfer` + `wrapNative` → `erc20TransferFrom` → `morphoSupplyCollateral`                                 |
 | Blue `borrow`                       | Bundler3 → GeneralAdapter1   | _(opt)_ allocator reallocations → `morphoBorrow` _(requires `setAuthorization` for GA1 on Morpho)_                       |
 | Blue `supplyCollateralBorrow`       | Bundler3 → GeneralAdapter1   | `erc20TransferFrom` → `morphoSupplyCollateral` → _(opt)_ allocator reallocations → `morphoBorrow`                        |
-| Blue `withdraw`                     | Bundler3 → GeneralAdapter1   | _(opt)_ allocator reallocations → `morphoWithdraw`                                                                       |
+| Blue `supply` (loan-asset)          | **Direct BlueBundlesV1 call** | one `blueBundlesV1Supply` call with an inline `{kind, data}` permit, or a payable native-funded call                     |
+| Blue `withdraw` (loan-asset)        | **Direct BlueBundlesV1 call** | one `blueBundlesV1Withdraw` call; _(opt)_ reallocations + signed authorization carried in its calldata, penalties netted from proceeds |
 | Blue `refinance`                    | Bundler3 → GeneralAdapter1   | _(opt)_ target allocator reallocations → `morphoSupplyCollateral` with the borrow/repay/withdraw callback                |
 | Blue `repay`                        | Bundler3 → GeneralAdapter1   | `erc20TransferFrom` → `morphoRepay` (by `assets` or by `shares`)                                                         |
 | Blue `repayWithdrawCollateral`      | Bundler3 → GeneralAdapter1   | `erc20TransferFrom` → `morphoRepay` → `morphoWithdrawCollateral` _(repay **before** withdraw, order is critical)_        |
@@ -74,15 +75,18 @@ For every ERC-4626 deposit (VaultV1 / VaultV2), GeneralAdapter1 calls `erc4626De
 ### 4. Shared liquidity without an ad-hoc contract
 
 High-level Blue writes accept only Blue Public Allocator V2 `reallocate`/`allocateFromIdle` calls.
-Reallocations are **prepended to the
-bundle** for borrow and loan-asset withdraw, **inserted between supply-collateral and borrow** for
+For the Bundler3 flows, reallocations are **prepended to the
+bundle** for borrow, **inserted between supply-collateral and borrow** for
 `supplyCollateralBorrow`, and run **before the supply-collateral callback** for `blueRefinance`.
 The bundle pulls the aggregate V2 penalty in the target loan token through
 GeneralAdapter1, approves each exact per-call amount from Bundler3, and lets the allocator donate
 it directly to the vault. The entity's `getRequirements()` returns the corresponding classic
 loan-token approval when a V2 penalty is non-zero, except when `supplyCollateralBorrow` uses the
 same collateral and loan token: that path folds the penalty into its single collateral approval or
-permit and emits no separate penalty requirement.
+permit and emits no separate penalty requirement. Loan-asset `withdraw` is different: it routes
+directly through `blueBundlesV1Withdraw`, carries its reallocations inside that call's own calldata,
+and nets each penalty from the withdrawn proceeds — so it pulls no penalty through GeneralAdapter1
+and emits no separate penalty approval requirement.
 
 Public Allocator V1 planners and `BundlerAction.publicAllocatorReallocateTo` remain available
 for explicit low-level Bundler3 composition, including the allocator's native fee in `tx.value`.
