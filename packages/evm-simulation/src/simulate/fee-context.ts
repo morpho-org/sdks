@@ -41,8 +41,9 @@ export interface ResolvedFeeContext {
  * (`maxFeePerGas` / `maxPriorityFeePerGas`) fee. When the caller sets none,
  * falls back to {@link DEFAULT_SIMULATION_GAS_PRICE} so the call never executes
  * at a zero — impossible on-chain — gas price that would hide a fee-sensitive
- * revert (Cantina finding 1631). Mutual exclusivity of the legacy and EIP-1559
- * forms is enforced upstream by input validation.
+ * revert (Cantina finding 1631). Input validation enforces upstream that any
+ * explicit fee is positive (a zero gas price is rejected, not honored) and that
+ * the legacy and EIP-1559 forms are not mixed, so this only shapes valid input.
  *
  * @param tx - The transaction whose fee fields to resolve.
  * @returns The fee fields to forward to the backend; unset fields are omitted.

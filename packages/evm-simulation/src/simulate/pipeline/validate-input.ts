@@ -1,7 +1,54 @@
 import { isAddress, zeroAddress } from "viem";
 import { SimulationValidationError } from "../../errors.js";
-import type { SimulateParams } from "../../types.js";
+import type { SimulateParams, SimulationTransaction } from "../../types.js";
 import { validateAuthorizations } from "../authorizations/index.js";
+
+/**
+ * Fee-field errors for a single simulated transaction. Extracted (despite two
+ * call sites) so caller transactions and prepended `approval` authorization
+ * transactions — which carry the same fee fields and both reach the backend —
+ * validate against one source of truth.
+ *
+ * Rejects a zero (or negative) effective gas price: that value never occurs
+ * on-chain and would re-open the Cantina 1631 `skipRevert` gap. A legacy
+ * `gasPrice` or an EIP-1559 `maxFeePerGas` must be positive; a `maxPriorityFeePerGas`
+ * tip may be zero but not negative, and not above `maxFeePerGas`. Also rejects
+ * mixing the legacy and EIP-1559 forms.
+ */
+function collectFeeErrors(tx: SimulationTransaction, label: string): string[] {
+  const errors: string[] = [];
+  const { gasPrice, maxFeePerGas, maxPriorityFeePerGas } = tx;
+
+  if (gasPrice !== undefined && gasPrice <= 0n) {
+    errors.push(`${label}.gasPrice: must be a positive gas price`);
+  }
+  if (maxFeePerGas !== undefined && maxFeePerGas <= 0n) {
+    errors.push(`${label}.maxFeePerGas: must be a positive gas price`);
+  }
+  if (maxPriorityFeePerGas !== undefined && maxPriorityFeePerGas < 0n) {
+    errors.push(`${label}.maxPriorityFeePerGas: must be non-negative`);
+  }
+  // Legacy and EIP-1559 fee models are mutually exclusive; a backend serializes
+  // only one. Reject both so the fee context stays unambiguous.
+  if (
+    gasPrice !== undefined &&
+    (maxFeePerGas !== undefined || maxPriorityFeePerGas !== undefined)
+  ) {
+    errors.push(
+      `${label}: set either gasPrice (legacy) or maxFeePerGas/maxPriorityFeePerGas (EIP-1559), not both`,
+    );
+  }
+  // A priority fee above the max fee is unsubmittable; reject it here so it
+  // surfaces as SimulationValidationError, not a backend ExternalServiceError.
+  if (
+    maxFeePerGas !== undefined &&
+    maxPriorityFeePerGas !== undefined &&
+    maxPriorityFeePerGas > maxFeePerGas
+  ) {
+    errors.push(`${label}: maxPriorityFeePerGas must not exceed maxFeePerGas`);
+  }
+  return errors;
+}
 
 /**
  * Stage 1 of the simulate() pipeline.
@@ -37,27 +84,7 @@ export function validateInput(params: SimulateParams): void {
     if (tx.value !== undefined && tx.value < 0n) {
       errors.push(`transactions[${i}].value: must be non-negative`);
     }
-    if (tx.gasPrice !== undefined && tx.gasPrice < 0n) {
-      errors.push(`transactions[${i}].gasPrice: must be non-negative`);
-    }
-    if (tx.maxFeePerGas !== undefined && tx.maxFeePerGas < 0n) {
-      errors.push(`transactions[${i}].maxFeePerGas: must be non-negative`);
-    }
-    if (tx.maxPriorityFeePerGas !== undefined && tx.maxPriorityFeePerGas < 0n) {
-      errors.push(
-        `transactions[${i}].maxPriorityFeePerGas: must be non-negative`,
-      );
-    }
-    // Legacy and EIP-1559 fee models are mutually exclusive; the backends can
-    // serialize only one. Reject both so the fee context stays unambiguous.
-    if (
-      tx.gasPrice !== undefined &&
-      (tx.maxFeePerGas !== undefined || tx.maxPriorityFeePerGas !== undefined)
-    ) {
-      errors.push(
-        `transactions[${i}]: set either gasPrice (legacy) or maxFeePerGas/maxPriorityFeePerGas (EIP-1559), not both`,
-      );
-    }
+    errors.push(...collectFeeErrors(tx, `transactions[${i}]`));
   }
 
   // Same-sender check uses RAW `.from` strings (lowercased) so the invariant
@@ -77,6 +104,20 @@ export function validateInput(params: SimulateParams): void {
 
   if (params.authorizations) {
     errors.push(...validateAuthorizations(params.authorizations));
+    // An `approval` authorization embeds a caller-supplied transaction that
+    // resolveAuthorizations prepends to the bundle as-is, so its fee fields
+    // reach the backend and must pass the same fee checks as params.transactions.
+    for (let i = 0; i < params.authorizations.length; i++) {
+      const auth = params.authorizations[i]!;
+      if (auth.type === "approval") {
+        errors.push(
+          ...collectFeeErrors(
+            auth.transaction,
+            `authorizations[${i}].transaction`,
+          ),
+        );
+      }
+    }
   }
 
   if (errors.length > 0) {

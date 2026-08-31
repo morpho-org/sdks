@@ -40,10 +40,6 @@ describe("resolveFeeContext", () => {
       maxFeePerGas: 9n,
     });
   });
-
-  it("behavior: an explicit zero gasPrice is caller intent, not a default trigger", () => {
-    expect(resolveFeeContext({ ...BASE, gasPrice: 0n })).toEqual({
-      gasPrice: 0n,
-    });
-  });
+  // A zero gas price is not tested here: input validation rejects it upstream
+  // (see validate-input.test.ts), so it never reaches resolveFeeContext.
 });
