@@ -38,7 +38,6 @@ describe("blueWithdraw unit tests", () => {
     expect(tx.action.args.shares).toBe(0n);
     expect(tx.action.args.receiver).toBe(client.account.address);
     expect(tx.action.args.minSharePrice).toBe(0n);
-    expect(tx.action.args.reallocationFee).toBe(0n);
     expect(tx.to).toBe(bundler3);
     expect(tx.value).toBe(0n);
   });

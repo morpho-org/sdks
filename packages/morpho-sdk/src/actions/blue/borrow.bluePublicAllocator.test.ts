@@ -78,7 +78,6 @@ describe("blueBorrow Blue Public Allocator", () => {
     });
 
     expect(tx.value).toBe(0n);
-    expect(tx.action.args.reallocationFee).toBe(0n);
     expect(tx.action.args.reallocationPenaltyAssets).toBe(2n);
 
     const bundle = decodeFunctionData({ abi: bundler3Abi, data: tx.data });

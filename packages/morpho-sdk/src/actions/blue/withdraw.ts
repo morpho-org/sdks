@@ -143,7 +143,6 @@ export const blueWithdraw = ({
 
   const {
     actions: reallocationActions,
-    fee: reallocationFee,
     penaltyAssets: reallocationPenaltyAssets,
   } = buildBlueReallocationActions({
     chainId,
@@ -173,7 +172,6 @@ export const blueWithdraw = ({
         shares,
         receiver,
         minSharePrice,
-        reallocationFee,
         reallocationPenaltyAssets,
       },
     },

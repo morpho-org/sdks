@@ -18,7 +18,7 @@ import type { VaultV2BlueReallocation } from "../../types/index.js";
  * @param params.targetMarketParams - Morpho Blue market receiving the reallocated liquidity.
  * @param params.penaltyFundingSource - Optional source of penalty assets. Defaults to the
  *   transaction initiator.
- * @returns The funding and reallocation actions and aggregate penalty assets, with zero native fee.
+ * @returns The funding and reallocation actions and aggregate penalty assets.
  * @internal
  */
 export const buildVaultV2BlueReallocationActions = ({
@@ -101,7 +101,7 @@ export const buildVaultV2BlueReallocationActions = ({
     );
   }
 
-  return { actions, fee: 0n, penaltyAssets };
+  return { actions, penaltyAssets };
 };
 
 /**
@@ -112,7 +112,7 @@ export const buildVaultV2BlueReallocationActions = ({
  * @param params.targetMarketParams - Morpho Blue market receiving the reallocated liquidity.
  * @param params.penaltyFundingSource - Optional source of V2 penalty assets. Defaults to the
  *   transaction initiator.
- * @returns The reallocation actions and aggregate V2 penalty assets, with zero native fee.
+ * @returns The reallocation actions and aggregate V2 penalty assets.
  * @internal
  */
 export const buildBlueReallocationActions = ({

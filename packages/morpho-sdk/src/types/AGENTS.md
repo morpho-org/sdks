@@ -23,8 +23,6 @@ Centralized type definitions and error classes. Barrel-exported via `index.ts`. 
   `VaultV1Reallocation`, `VaultReallocation`, and `ReallocationComputeOptions`.
 - `VaultV2BlueReallocation` — BluePublicAllocator vault/source/target-adapter/assets/WAD-scaled-penalty input; maps 1:1 to `reallocate()` or `allocateFromIdle()` while deriving target market params from the enclosing Blue action.
 - `VaultV2BluePublicAllocatorOptions` — canonical Vault V2 discovery and planner options for timestamp, enablement, vault allowlisting, friendly source-market utilization, and the maximum proportional penalty.
-- `BlueReallocationPlan` — homogeneous V1-or-V2 iterable retained for deprecated low-level compatibility helpers. High-level Blue writes accept `VaultV2BlueReallocation` directly; the V1 branch will be removed in the next major.
-
 ## Errors (`error.ts`)
 
 One class per error case. Never throw a generic `Error` from SDK source.

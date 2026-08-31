@@ -218,7 +218,6 @@ export const blueSupplyCollateralBorrow = ({
         onBehalf,
         receiver,
         nativeAmount,
-        reallocationFee: reallocationResult.fee,
         reallocationPenaltyAssets: reallocationResult.penaltyAssets,
       },
     },
