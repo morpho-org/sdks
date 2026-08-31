@@ -286,12 +286,13 @@ address(this), msg.sender)` and `redeem(shares, address(this), msg.sender)` spen
 shares, so the bundler needs a share allowance. This is the plan's "approval before each withdraw"
 regression. Mitigation, in order:
 
-1. `supportSignature: true` → `encodeVaultSharesPermit({ spender: vaultBundlesV1, version })`, one
+1. sufficient existing allowance → no requirement;
+2. otherwise, `supportSignature: true` →
+   `encodeVaultSharesPermit({ spender: vaultBundlesV1, version })`, one
    EIP-712 signature, no extra transaction. Both Vault V1 (OZ `ERC20Permit`) and Vault V2 (native
    ERC-2612, `nonces` + `DOMAIN_SEPARATOR`) support this, so **no vault is forced onto an approval
    transaction**;
-2. otherwise `encodeErc20Approval` on the vault share token;
-3. sufficient existing allowance → no requirement.
+3. otherwise `encodeErc20Approval` on the vault share token.
 
 Allowance sizing is exact, never max, and must **upper-bound** the shares burned at execution:
 
@@ -362,8 +363,14 @@ The net-target gross-up the contract documents ships as the exported pure helper
 `grossFromNetAssets`: `assets = floor(W × WAD / (WAD − pct))`. This inverse is **exact**, not
 approximate — `assets − floor(assets × pct / WAD) = ceil(assets × (WAD − pct) / WAD) = W` for every
 integer `W` and every `0 ≤ pct < WAD`. An off-by-one net result is a defect, not tolerable rounding,
-and the property test asserts exact round-tripping rather than a ±1 window. The action args also
-carry `referralFeeAssets` and `netAssets` so simulations and UI can display both.
+and the property test asserts exact round-tripping rather than a ±1 window.
+
+Action args carry exact `referralFeeAssets` and `netAssets` only when the gross asset amount is fixed:
+deposit, withdraw-by-assets, and migration-by-assets. Redeem and migration-by-shares determine their
+asset proceeds from the share price at execution, so those branches omit both derived fields rather
+than embedding an entity preview that can drift before inclusion. Their action args retain the input
+shares and fee configuration; integrations that need proceeds inspect asset deltas from a finalized,
+execution-equivalent transaction simulation and present them as a preview, not an enforced floor.
 
 Validation lives in the builders as well as the entities, since the builders are the exported
 surface, and it has a lower bound as well as an upper one: reject `pct < 0n` with
@@ -590,7 +597,7 @@ one. `Plan` marks whether the migration plan already tracks the row.
 | - | ---------- | ---- | ---------- |
 | 9 | Every withdraw / redeem needs a share allowance the direct call never needed | tracked | ERC-2612 permit on both V1 and V2 shares reduces it to one signature; only `supportSignature: false` clients pay a transaction |
 | 10 | No exit path returns native token, and this contract forecloses adding one | new, low | Already true today — the SDK has no `unwrapNative` bundler action, so no capability is lost, only a future one is closed off |
-| 11 | **Migration loses the source-leg `minSharePrice`** the Bundler3 route enforced | **new — untracked** | Cannot be compensated onchain. Delete the input, document the loss, keep the simulated proceeds in `action.args` so apps can gate on their own simulation. Needs a product decision (Open Questions) |
+| 11 | **Migration loses the source-leg `minSharePrice`** the Bundler3 route enforced | **new — untracked** | Cannot be compensated onchain. Delete the input and document the loss. Share-mode `action.args` omit derived proceeds; apps that gate submission must inspect asset deltas from a finalized transaction simulation, which is still a preview rather than an onchain floor. Needs a product decision (Open Questions) |
 | 12 | One `VaultBundlesV1` call per transaction | **new — untracked** | Documented; `migrateToV2` covers the main composite case; multi-vault batching is lost |
 | 13 | Gated Vault V2s must allow `VaultBundlesV1` in `sendAssetsGate` (was GA1) **and now also in `receiveAssetsGate`, which exits never needed** because the direct call paid the user | **new — untracked** | Curators of permissioned vaults must update gates **before** the SDK release, or exits break. The SDK cannot pre-check this reliably (§3), so detection is by finalized-transaction simulation. Highest-risk operational item in this migration |
 | 14 | With a referral fee, gross and net diverge and every displayed amount must say which it is | new | Exact gross-up helper (§4); irrelevant at `pct = 0` |
@@ -636,7 +643,7 @@ Only `VaultBundlesV1`-specific behavior. Existing action validations are inherit
 | Permit2 nonce bit already flipped | Requirement selects the lowest free bit from `nonceBitmap`; a repeated deposit never reuses a consumed bit |
 | Migration source and destination assets differ | Reject before building (contract: `InconsistentAssets`) |
 | Migration source and destination are the same vault | `SameVaultMigrationError` |
-| Migration source share price drops | No onchain bound exists; disclose the simulated proceeds and the trade-off |
+| Migration source share price drops | No onchain bound exists; share-mode action args claim no fixed proceeds, and integrations disclose the latest finalized-simulation preview and the trade-off |
 | Gated Vault V2 rejects the bundler on entry or exit | Contract reverts; the SDK does **not** pre-check, because a gate reading the transient `initiator` would reject a standalone read that the real call passes |
 | Two bundle calls batched in one transaction | Contract reverts `AlreadyInitiated`; documented, not detected |
 | Net-target gross-up round trip | Exactly the requested net for every input; an off-by-one is a defect |
@@ -658,7 +665,8 @@ Only `VaultBundlesV1`-specific behavior. Existing action validations are inherit
 - `amount` is always the contract's gross value; the net-target gross-up is an exported pure helper
   whose inverse is exact.
 - Native funding is exclusive and expressed in the type system.
-- Do not expose a share-price bound the contract cannot enforce; do surface the simulated outcome.
+- Do not expose a share-price bound the contract cannot enforce or encode mutable share-mode
+  previews as fixed action args; execution-equivalent simulation owns proceeds previews.
 - Keep RPC at the entity boundary: `getBundlesTokenRequirements` reads allowances, permit metadata,
   and `nonceBitmap` under `src/entities/requirements/`, then passes plain state into the synchronous
   Action-layer `resolveBundlesTokenRequirements`.
@@ -777,7 +785,8 @@ that support signatures.
 Per §5, and following the `inKindRedeem` test layout:
 
 - **Unit, colocated.** Calldata equality against `IVaultBundlesV1` for all seven re-routed builders;
-  inline snapshots for transaction shape; every typed error asserted by class identity.
+  inline snapshots for transaction shape, including exact fee/net fields on fixed-assets modes and
+  their absence on redeem / migration-by-shares; every typed error asserted by class identity.
 - **Property-based** (`fast-check`) on **every re-routed calldata builder** — all seven take inputs
   enumerable from primitives (addresses, bigints, tagged amount modes), so §5 requires generated
   ABI-equality properties for each, not only example tests. Also on `resolveBundlesFunding`, the
@@ -894,8 +903,8 @@ Per §5, and following the `inKindRedeem` test layout:
    builders and delete the parallel `blueBundlesV1(chainId)` entity and `blueBundlesV1*` action
    vocabulary, applying the same rule this TIB adopts for vaults?
 2. **Migration source-leg protection (row 11).** Accept the loss of `minSharePrice` on the source
-   exit, or gate migration behind an app-supplied simulated-proceeds floor that the SDK checks
-   off-chain before building?
+   exit, or require integrations to gate submission on a finalized transaction simulation? The
+   result remains a preview and is never encoded as an SDK or onchain floor.
 3. **Gross vs. net inputs (§4).** Confirm `amount` stays the contract's gross value, with the exact
    gross-up as a helper.
 4. **Withdraw-by-assets allowance buffer (§3).** Slippage-widened exact bound, or the user's full
