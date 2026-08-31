@@ -73,18 +73,19 @@ For every ERC-4626 deposit (VaultV1 / VaultV2), GeneralAdapter1 calls `erc4626De
 
 ### 4. Shared liquidity without an ad-hoc contract
 
-`BlueReallocationPlan` encodes either Public Allocator V1 `reallocateTo` calls or Blue Public
-Allocator `reallocate`/`allocateFromIdle` calls. A plan cannot mix allocator versions. Reallocations
-are **prepended to the
+High-level Blue writes accept only Blue Public Allocator V2 `reallocate`/`allocateFromIdle` calls.
+Reallocations are **prepended to the
 bundle** for borrow and loan-asset withdraw, **inserted between supply-collateral and borrow** for
 `supplyCollateralBorrow`, and run **before the supply-collateral callback** for `blueRefinance`.
-`BundlerAction.encodeBundle` includes Public Allocator V1 fees in `tx.value`. Blue Public Allocator
-penalties are different: the bundle pulls the aggregate amount in the target loan token through
+The bundle pulls the aggregate V2 penalty in the target loan token through
 GeneralAdapter1, approves each exact per-call amount from Bundler3, and lets the allocator donate
 it directly to the vault. The entity's `getRequirements()` returns the corresponding classic
 loan-token approval when a V2 penalty is non-zero, except when `supplyCollateralBorrow` uses the
 same collateral and loan token: that path folds the penalty into its single collateral approval or
 permit and emits no separate penalty requirement.
+
+Public Allocator V1 planners and `BundlerAction.publicAllocatorReallocateTo` remain available
+for explicit low-level Bundler3 composition, including the allocator's native fee in `tx.value`.
 
 ### 5. A single user approval surface
 

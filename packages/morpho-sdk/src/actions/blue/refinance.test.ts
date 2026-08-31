@@ -17,11 +17,9 @@ import {
 import {
   NegativeInputError,
   NonPositiveInputError,
-  ReallocationWithdrawalOnTargetMarketError,
   RefinanceSameMarketError,
   RefinanceSharesMissingBorrowAssetsError,
   RefinanceTokenMismatchError,
-  type VaultReallocation,
   type VaultV2BlueReallocation,
 } from "../../types/index.js";
 import { blueRefinance } from "./refinance.js";
@@ -392,8 +390,6 @@ describe("blueRefinance", () => {
       irm: source.irm,
       lltv: 860000000000000000n,
     });
-    const VAULT: Address = "0xBEEf5aFE88eF73337e5070aB2855d37dBF5493A4";
-    const REALLOC_FEE = parseUnits("0.01", 18);
     const V2_ALLOCATOR = getChainAddresses(mainnet.id)
       .vaultV2BluePublicAllocator!;
     const V2_VAULT: Address = "0x0000000000000000000000000000000000000012";
@@ -402,32 +398,28 @@ describe("blueRefinance", () => {
     const TARGET_ADAPTER: Address =
       "0x0000000000000000000000000000000000000014";
 
-    const makeReallocations = (): readonly VaultReallocation[] => [
+    const makeV2Reallocations = (): readonly VaultV2BlueReallocation[] => [
       {
-        vault: VAULT,
-        fee: REALLOC_FEE,
-        withdrawals: [
-          { marketParams: reallocSource, amount: parseUnits("2000", 6) },
-        ],
+        vault: V2_VAULT,
+        from: {
+          type: "market",
+          adapter: SOURCE_ADAPTER,
+          marketParams: reallocSource,
+        },
+        to: { adapter: TARGET_ADAPTER },
+        assets: 10n,
+        penalty: 500_000_000_000_000_000n,
+      },
+      {
+        vault: V2_VAULT,
+        from: { type: "idle" },
+        to: { adapter: TARGET_ADAPTER },
+        assets: 6n,
+        penalty: 500_000_000_000_000_000n,
       },
     ];
 
-    test("default: accumulates the reallocation fee in tx.value and the action discriminator", () => {
-      const tx = blueRefinance({
-        source: { chainId: mainnet.id, marketParams: source },
-        target: { marketParams: target },
-        args: {
-          ...baseArgs,
-          borrowAssets: parseUnits("1000", 6),
-          targetReallocations: makeReallocations(),
-        },
-      });
-
-      expect(tx.value).toBe(REALLOC_FEE);
-      expect(tx.action.args.reallocationFee).toBe(REALLOC_FEE);
-    });
-
-    test("behavior: omitted or empty reallocations leave tx.value and reallocationFee at zero", () => {
+    test("behavior: omitted or empty reallocations leave tx.value at zero", () => {
       const txOmitted = blueRefinance({
         source: { chainId: mainnet.id, marketParams: source },
         target: { marketParams: target },
@@ -444,68 +436,15 @@ describe("blueRefinance", () => {
       });
 
       expect(txOmitted.value).toBe(0n);
-      expect(txOmitted.action.args.reallocationFee).toBe(0n);
       expect(txEmpty.value).toBe(0n);
-      expect(txEmpty.action.args.reallocationFee).toBe(0n);
       expect(txEmpty.data).toBe(txOmitted.data);
-    });
-
-    test("behavior: reallocateTo is encoded BEFORE morphoSupplyCollateral", () => {
-      const txPlain = blueRefinance({
-        source: { chainId: mainnet.id, marketParams: source },
-        target: { marketParams: target },
-        args: { ...baseArgs, borrowAssets: parseUnits("1000", 6) },
-      });
-      const txWithRealloc = blueRefinance({
-        source: { chainId: mainnet.id, marketParams: source },
-        target: { marketParams: target },
-        args: {
-          ...baseArgs,
-          borrowAssets: parseUnits("1000", 6),
-          targetReallocations: makeReallocations(),
-        },
-      });
-
-      expect(txWithRealloc.data.length).toBeGreaterThan(txPlain.data.length);
-
-      const vaultHex = VAULT.slice(2).toLowerCase();
-      const reallocVaultIdx = txWithRealloc.data
-        .toLowerCase()
-        .indexOf(vaultHex);
-      const targetOracleHex = target.oracle.slice(2).toLowerCase();
-      const supplyIdx = txWithRealloc.data
-        .toLowerCase()
-        .indexOf(targetOracleHex);
-
-      expect(reallocVaultIdx).toBeGreaterThan(-1);
-      expect(supplyIdx).toBeGreaterThan(-1);
-      expect(reallocVaultIdx).toBeLessThan(supplyIdx);
     });
 
     test("behavior: V2 market and idle reallocations fund penalties before the target supply", () => {
       const {
         bundler3: { bundler3 },
       } = getChainAddresses(mainnet.id);
-      const targetReallocations: readonly VaultV2BlueReallocation[] = [
-        {
-          vault: V2_VAULT,
-          from: {
-            type: "market",
-            adapter: SOURCE_ADAPTER,
-            marketParams: reallocSource,
-          },
-          to: { adapter: TARGET_ADAPTER },
-          assets: 10n,
-          penalty: 500_000_000_000_000_000n,
-        },
-        {
-          vault: V2_VAULT,
-          from: { type: "idle" },
-          to: { adapter: TARGET_ADAPTER },
-          assets: 6n,
-          penalty: 500_000_000_000_000_000n,
-        },
-      ];
+      const targetReallocations = makeV2Reallocations();
 
       const tx = blueRefinance({
         source: { chainId: mainnet.id, marketParams: source },
@@ -519,7 +458,6 @@ describe("blueRefinance", () => {
       });
 
       expect(tx.value).toBe(0n);
-      expect(tx.action.args.reallocationFee).toBe(0n);
       expect(tx.action.args.reallocationPenaltyAssets).toBe(8n);
       expect(tx.data).toContain("a1b2c3d4");
 
@@ -582,37 +520,14 @@ describe("blueRefinance", () => {
         target: { marketParams: target },
         args: {
           ...baseArgs,
-          targetReallocations: makeReallocations(),
+          targetReallocations: makeV2Reallocations(),
         },
       });
 
-      expect(tx.value).toBe(REALLOC_FEE);
-      expect(tx.action.args.reallocationFee).toBe(REALLOC_FEE);
+      expect(tx.value).toBe(0n);
+      expect(tx.action.args.reallocationPenaltyAssets).toBe(8n);
       expect(tx.action.args.borrowAssets).toBe(0n);
       expect(tx.action.args.borrowShares).toBe(0n);
-    });
-
-    test("error: ReallocationWithdrawalOnTargetMarketError when a withdrawal references the target", () => {
-      const reallocations: readonly VaultReallocation[] = [
-        {
-          vault: VAULT,
-          fee: REALLOC_FEE,
-          withdrawals: [
-            { marketParams: target, amount: parseUnits("2000", 6) },
-          ],
-        },
-      ];
-      expect(() =>
-        blueRefinance({
-          source: { chainId: mainnet.id, marketParams: source },
-          target: { marketParams: target },
-          args: {
-            ...baseArgs,
-            borrowAssets: parseUnits("1000", 6),
-            targetReallocations: reallocations,
-          },
-        }),
-      ).toThrow(ReallocationWithdrawalOnTargetMarketError);
     });
   });
 });
