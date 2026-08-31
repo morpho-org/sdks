@@ -84,7 +84,7 @@ loan-token approval when a V2 penalty is non-zero, except when `supplyCollateral
 same collateral and loan token: that path folds the penalty into its single collateral approval or
 permit and emits no separate penalty requirement.
 
-Public Allocator V1 planners and `BundlerAction.encodePublicAllocatorReallocateTo` remain available
+Public Allocator V1 planners and `BundlerAction.publicAllocatorReallocateTo` remain available
 for explicit low-level Bundler3 composition, including the allocator's native fee in `tx.value`.
 
 ### 5. A single user approval surface
