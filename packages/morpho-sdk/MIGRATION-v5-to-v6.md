@@ -25,3 +25,21 @@ also targets BlueBundlesV1, and proceeds always return to the transaction sender
 
 Permit2 uses SignatureTransfer for these direct token pulls: its ERC-20 prerequisite still targets
 canonical Permit2, while the signed payload names BlueBundlesV1 as spender.
+
+### Permit2 SignatureTransfer requires an explicit nonce
+
+SignatureTransfer consumes an owner-global unordered nonce rather than an allowance, so the SDK no
+longer allocates one implicitly. For a client with `supportSignature: true`, the default supply
+requirement path selects Permit2 and `supply(...).getRequirements()` now throws
+`MissingPermit2TransferFromNonceError` when no nonce is supplied. Pass an unused nonce explicitly:
+
+```ts
+const requirements = await market
+  .supply({ userAddress, assets, deadline })
+  .getRequirements({ permit2Nonce });
+```
+
+Allocate any `uint256` whose Permit2 `nonceBitmap` bit is still unset for `userAddress` (each nonce
+is single-use; a consumed one throws `Permit2TransferFromNonceAlreadyUsedError`). To skip Permit2
+for ERC-2612 tokens, pass `getRequirements({ useSimplePermit: true })`, which prefers a one-signature
+ERC-2612 permit and needs no nonce.

@@ -227,7 +227,12 @@ export const getBlueBundlesV1TokenRequirements = async (
     chainId: params.chainId,
     args: {
       spender: blueBundlesV1,
-      spendAmount: approvalAmount,
+      // The pull the operation actually performs is `amount`; `approvalAmount`
+      // is only the allowance to set when one is needed. Comparing the existing
+      // allowance against `amount` (not `approvalAmount`) avoids emitting a
+      // redundant approval — and a zero-reset on approve-only-once tokens like
+      // USDT — when the current allowance already covers the pull.
+      spendAmount: params.amount,
       approvalAmount,
     },
     allowances: allowance,

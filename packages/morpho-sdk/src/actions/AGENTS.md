@@ -30,12 +30,17 @@ entry maps 1:1 to `reallocate(...)` for a market source or `allocateFromIdle(...
 liquidity; the enclosing action supplies the target market, the input supplies adapters, the chain
 registry supplies the allocator, and each call passes the vault's configured WAD-scaled `penalty`.
 BluePublicAllocator sources are not sorted and idle uses no synthetic zero-address market.
-High-level builders pull the aggregate penalty in the target loan token through GeneralAdapter1,
-then each low-level allocator action approves and spends its independently rounded
-`ceil(assets × penalty / WAD)` amount from Bundler3. All high-level allocator calls use
-`skipRevert: false`. Vault V1 planners and encoders remain available for explicit low-level
-Bundler3 composition, but those Vault V1 compatibility surfaces are deprecated and will be removed
-in the next major.
+
+The Bundler3 flows (`blueBorrow`, `blueSupplyCollateralBorrow`, refinance) pull the aggregate penalty
+in the target loan token through GeneralAdapter1, then each low-level allocator action approves and
+spends its independently rounded `ceil(assets × penalty / WAD)` amount from Bundler3. All high-level
+allocator calls use `skipRevert: false`. Loan-asset `blueWithdraw` instead routes directly through
+`blueBundlesV1Withdraw`, which carries the reallocations array in its own calldata and nets each
+`ceil(assets × penalty / WAD)` penalty from the withdrawn proceeds — so it emits no separate
+Bundler3 penalty-funding action, and (in assets mode) the builder rejects an aggregate penalty that
+would exceed the withdrawn amount. Vault V1 planners and encoders remain available for explicit
+low-level Bundler3 composition, but those Vault V1 compatibility surfaces are deprecated and will be
+removed in the next major.
 
 ## Discriminated unions
 

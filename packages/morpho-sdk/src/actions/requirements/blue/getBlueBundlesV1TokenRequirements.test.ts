@@ -61,11 +61,36 @@ describe("getBlueBundlesV1TokenRequirements", () => {
       args: { spender: blueBundlesV1, amount: 1_000_000n },
     });
 
+    // A reusable `approvalAmount` sets a larger allowance only when one is
+    // actually required: an existing allowance that already covers the pull
+    // must not emit a redundant approval, even if it is below `approvalAmount`.
     mockRead(handle, {
       address: usdc,
       abi: erc20Abi,
       functionName: "allowance",
       result: 2_000_000n,
+    });
+    const coveredRequirements = await getBlueBundlesV1TokenRequirements(
+      handle.client,
+      {
+        token: usdc,
+        amount: 1_000_000n,
+        approvalAmount: maxUint256,
+        owner: account.address,
+        chainId: mainnet.id,
+        deadline: maxUint256,
+        supportSignature: false,
+      },
+    );
+    expect(coveredRequirements).toHaveLength(0);
+
+    // When the existing allowance does not cover the pull, the reusable
+    // `approvalAmount` is the amount set.
+    mockRead(handle, {
+      address: usdc,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
     });
     const reusableRequirements = await getBlueBundlesV1TokenRequirements(
       handle.client,
@@ -79,6 +104,7 @@ describe("getBlueBundlesV1TokenRequirements", () => {
         supportSignature: false,
       },
     );
+    expect(reusableRequirements).toHaveLength(1);
     expect(reusableRequirements[0]?.action).toMatchObject({
       type: "erc20Approval",
       args: { spender: blueBundlesV1, amount: maxUint256 },

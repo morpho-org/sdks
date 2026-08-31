@@ -1,5 +1,5 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import { type Address, encodeFunctionData } from "viem";
+import { type Address, encodeFunctionData, maxUint256 } from "viem";
 import { blueBundlesV1Abi } from "../../abis.js";
 import type {
   BlueBundlesV1TokenRequirementSignature,
@@ -7,7 +7,10 @@ import type {
   Metadata,
   Transaction,
 } from "../../types/index.js";
-import { NonPositiveInputError } from "../../types/index.js";
+import {
+  InputExceedsMaxError,
+  NonPositiveInputError,
+} from "../../types/index.js";
 import {
   type BlueBundlesV1CommonParams,
   finalizeBlueBundlesV1Transaction,
@@ -65,7 +68,7 @@ export interface BlueSupplyParams {
  *   BlueBundlesV1 and whose `action` records the normalized supply inputs.
  * @throws {NonPositiveInputError} when `assets` or `deadline` is not positive.
  * @throws {NegativeInputError} when `nativeAmount` or `referralFeePct` is negative.
- * @throws {InputExceedsMaxError} when `referralFeePct` is at least WAD.
+ * @throws {InputExceedsMaxError} when `assets` exceeds `uint256` or `referralFeePct` is at least WAD.
  * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
  * @throws {NativeFundingAmountMismatchError} when native funding does not equal `assets`.
  * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
@@ -104,6 +107,13 @@ export const blueSupply = (
   const { assets, userAddress, requirementSignature } = params.args;
   if (assets <= 0n) {
     throw new NonPositiveInputError("assets", assets);
+  }
+  if (assets > maxUint256) {
+    throw new InputExceedsMaxError({
+      field: "assets",
+      value: assets,
+      max: maxUint256,
+    });
   }
 
   const common: BlueBundlesV1CommonParams = {

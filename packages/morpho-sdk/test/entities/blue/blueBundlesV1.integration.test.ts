@@ -76,6 +76,48 @@ describe("BlueBundlesV1 Blue writes", () => {
     );
   });
 
+  test("supply: executes with Permit2 SignatureTransfer without retaining assets", async ({
+    client,
+  }) => {
+    const amount = parseUnits("1000", 6);
+    await client.deal({ erc20: CbbtcUsdcBlue.loanToken, amount });
+
+    const market = client
+      .extend(morphoViemExtension({ supportSignature: true }))
+      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
+    const beforePosition = await market.getPositionData(client.account.address);
+    const beforeBalances = await getBlueBundlesBalances(client, [
+      CbbtcUsdcBlue,
+    ]);
+    const action = market.supply({
+      userAddress: client.account.address,
+      assets: amount,
+      deadline: maxUint256,
+    });
+
+    // No `useSimplePermit`: the default signature path selects Permit2
+    // SignatureTransfer, which needs an explicit unused nonce. It emits a
+    // one-time ERC-20 approval to canonical Permit2 plus the signed transfer
+    // naming BlueBundlesV1 as spender — verifying the deployed contract
+    // interprets the `kind: 2` permit payload.
+    const requirements = await action.getRequirements({ permit2Nonce: 0n });
+    expect(
+      requirements.map(({ action: requirement }) => requirement.type),
+    ).toEqual(["erc20Approval", "permit2TransferFrom"]);
+    const signatures = await satisfyBlueBundlesV1Requirements(client, {
+      requirements,
+    });
+    await client.sendTransaction(action.buildTx(signatures));
+
+    const afterPosition = await market.getPositionData(client.account.address);
+    expect(afterPosition.supplyShares).toBeGreaterThan(
+      beforePosition.supplyShares,
+    );
+    expect(await getBlueBundlesBalances(client, [CbbtcUsdcBlue])).toEqual(
+      beforeBalances,
+    );
+  });
+
   test("withdraw: executes with signed BlueBundles authorization", async ({
     client,
   }) => {
