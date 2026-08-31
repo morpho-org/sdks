@@ -104,7 +104,7 @@ as part of the same change:
 | `BundlesPermitKind` (`None` / `ERC2612` / `Permit2`), `BundlesTokenPermit` | `BlueBundlesPermitKind`, `BlueBundlesTokenPermit` | Blue supply/repay/collateral, vault deposit |
 | `BundlesTokenRequirementsOptions` — public readonly `getRequirements()` options shared by every token-funded bundles handle | `BlueTokenRequirementsParams` and the vault entities' inline `{ useSimplePermit? }` shapes | Blue supply/repay/collateral, vault deposit |
 | `getBundlesTokenPermit(...)` — reshape a `PermitRequirementSignature` into `TokenPermit{kind,data}` | new (PR #945 accepts an ABI-ready struct and never builds one) | same |
-| `getBundlesSharesPermit(...)` — reshape into `Permit{value,nonce,deadline,v,r,s}` + empty sentinel | `getVaultExitBundlesV1PermitStruct` (kept as a deprecated alias for the in-kind paths) | vault withdraw / redeem / migrate, vault-exit |
+| `getBundlesSharesPermit(...)` — reshape into `Permit{value,nonce,deadline,v,r,s}` + empty sentinel | `getVaultExitBundlesV1PermitStruct` (kept as a deprecated compatibility wrapper for the in-kind paths) | vault withdraw / redeem / migrate, vault-exit |
 | `resolveBundlesFunding({ amount, nativeAmount, asset, chainId })` — XOR funding resolver returning `{ assets, value }` | inlined `nativeAmount` handling in PR #945 | Blue + vault deposit paths |
 | `resolveBundlesTokenRequirements(...)` — synchronous, spender-parameterized approval / ERC-2612 / Permit2-SignatureTransfer resolver over plain allowance, permit-metadata, and selected-nonce state, including the ERC-20 approval **to Permit2** that a SignatureTransfer signature presupposes | pure successor to the resolution half of `getGeneralAdapterRequirements` | all bundles funding paths |
 | `encodeErc20Permit2SignatureTransfer(...)` | new — see §3 | all bundles funding paths |
@@ -146,6 +146,17 @@ unit/property-test boundary; transport and fork tests cover the entity reader.
 and `nativeAmount` independently, so `{ assets: 100n, nativeAmount: 50n }` encodes cleanly and
 reverts onchain with `InconsistentAmountAndNative`. Deriving the ABI `assets` from whichever funding
 side is set makes `assets == msg.value` structurally true on the native path.
+
+The legacy vault-exit helper and error remain a paired compatibility surface.
+`getVaultExitBundlesV1PermitStruct` and `VaultExitBundlesV1PermitMismatchError` both gain
+`@deprecated` JSDoc pointing to their bundles successors, but remain exported for at least one full
+minor after those successors ship. The wrapper does not replace the legacy error identity with the
+successor alone: when `getBundlesSharesPermit` throws `BundlesPermitMismatchError`, it rethrows
+`VaultExitBundlesV1PermitMismatchError` with the same public mismatch fields and the successor as
+`cause`. The legacy class extends `BundlesPermitMismatchError`, retaining its existing constructor
+and public fields, so callers matching either the old or new class recognize a failure produced by
+the legacy helper. Removal of either deprecated export is allowed only in the subsequent major after
+that coexistence minor.
 
 ### 2. Surface placement: re-route the existing builders in place
 
@@ -382,7 +393,10 @@ The net-target gross-up the contract documents ships as the exported pure helper
 `grossFromNetAssets`: `assets = floor(W × WAD / (WAD − pct))`. This inverse is **exact**, not
 approximate — `assets − floor(assets × pct / WAD) = ceil(assets × (WAD − pct) / WAD) = W` for every
 integer `W` and every `0 ≤ pct < WAD`. An off-by-one net result is a defect, not tolerable rounding,
-and the property test asserts exact round-tripping rather than a ±1 window.
+and the property test asserts exact round-tripping rather than a ±1 window. The helper rejects
+`netAssets < 0n` with `NegativeInputError` before applying the formula; zero remains valid and maps
+to zero. A direct helper caller therefore never receives a negative gross amount that can fail only
+later at a `uint256` encoder.
 
 Action args carry exact `referralFeeAssets` and `netAssets` only when the gross asset amount is fixed:
 deposit, withdraw-by-assets, and migration-by-assets. Redeem and migration-by-shares determine their
@@ -392,13 +406,13 @@ shares and fee configuration; integrations that need proceeds inspect asset delt
 execution-equivalent transaction simulation and present them as a preview, not an enforced floor.
 
 Validation lives in the builders as well as the entities, since the builders are the exported
-surface, and it has a lower bound as well as an upper one: reject `pct < 0n` with
-`NegativeInputError` — otherwise the `uint256` ABI encoder fails with an untyped viem error and the
-gross-up divides by a value greater than `WAD`, both violating §3's typed-error rule — reject
-`pct >= WAD` with `ReferralFeePctExceededError` (contract: `PctExceeded`), and reject `pct > 0` with
-a zero recipient (which would revert in `SafeTransferLib`). `validateSlippageTolerance`
-(`helpers/validate.ts:575-582`) is the precedent for the pair: `NegativeInputError` below, a
-dedicated class above.
+surface, and it has a lower bound as well as an upper one: reject `netAssets < 0n` in the helper and
+`pct < 0n` everywhere with `NegativeInputError` — otherwise a `uint256` ABI encoder can fail with an
+untyped viem error and the gross-up can divide by a value greater than `WAD`, both violating §3's
+typed-error rule — reject `pct >= WAD` with `ReferralFeePctExceededError` (contract:
+`PctExceeded`), and reject `pct > 0` with a zero recipient (which would revert in
+`SafeTransferLib`). `validateSlippageTolerance` (`helpers/validate.ts:575-582`) is the precedent for
+the fee-percentage pair: `NegativeInputError` below, a dedicated class above.
 
 **Deposit share price.** The contract enforces
 `toDeposit.mulDivUp(1e27, shares) <= maxSharePriceE27` on the **net** amount. `maxSharePriceE27` is
@@ -491,7 +505,8 @@ stated in the entity JSDoc and the package glossary.
 ### 7. Typed errors
 
 Contract reverts map to named, exported classes (§3). Reused — deliberately, so the migration adds no
-class where one already fits: `NonPositiveInputError`, `NegativeInputError` (`referralFeePct < 0n`),
+class where one already fits: `NonPositiveInputError`, `NegativeInputError` (`netAssets`,
+`referralFeePct`, or `permit2Nonce` below zero),
 `ExpiredDeadlineError`, `VaultAssetMismatchError`, `VaultAddressMismatchError`,
 `ChainIdMismatchError`, `ChainWNativeMissingError`, `NativeAmountOnNonWNativeVaultError`,
 `UnknownAddressError`, `AddressMismatchError` (`userAddress` is not the connected account),
@@ -507,7 +522,7 @@ class where one already fits: `NonPositiveInputError`, `NegativeInputError` (`re
 | `ReferralFeeRecipientMissingError` | `pct > 0` with a zero recipient |
 | `AmountAndSharesExclusiveError` | both or neither set on migration input received from an untyped caller (contract: `NotExactlyOneZero`) |
 | `SameVaultMigrationError` | source and destination are the same address |
-| `BundlesPermitMismatchError` | generalizes `VaultExitBundlesV1PermitMismatchError` |
+| `BundlesPermitMismatchError` | generalizes `VaultExitBundlesV1PermitMismatchError`; the deprecated vault-exit wrapper preserves the old error identity and fields as described in §1 |
 
 No gate error class: gate compatibility is a simulation concern, per §3.
 
@@ -529,7 +544,10 @@ No gate error class: gate compatibility is a simulation concern, per §3.
   consumer exhaustively, carry the ERC-20-approval-to-Permit2 prerequisite into the pure resolver,
   add `computeVaultMaxSharePrice` and `grossFromNetAssets`, add the
   `bundles.vaultBundlesV1` registry slot, `vaultBundlesV1Abi`, and the `RequirementSpenderKey` entry.
-  No module in this phase reads from a viem client.
+  No module in this phase reads from a viem client. Introduce `BundlesPermitMismatchError`, deprecate
+  but retain both vault-exit compatibility exports, and make the legacy helper translate failures as
+  specified in §1; neither old export may be removed until the required coexistence minor has
+  shipped.
 - **Phase 2 — re-route the pure builders.** Rewrite the bodies of `actions/vaultV1/{deposit,
   withdraw,redeem,migrateToV2}.ts` and `actions/vaultV2/{deposit,withdraw,redeem}.ts` to encode
   `VaultBundlesV1` calls. Names, files, and barrel exports are untouched. Property-based coverage
@@ -580,12 +598,18 @@ No gate error class: gate compatibility is a simulation concern, per §3.
   the withdraw work above is additive, but this is not. Normalization, `_getSupplyAction`, the supply
   tests, and the WDK migration-guide entry change here; the major must not ship if the Phase 0 minor
   has not completed its deprecation window.
-- **Phase 5 — release surface.** Migration guide entry — led by the `userAddress` semantics change
-  and the Permit2 signature-type change — glossary update, `AGENTS.md` routing summary rewrite, and
-  changesets: **major** for `morpho-sdk`, **minor** for `morpho-ts`, **major** for
+- **Phase 5 — audited release surface.** Complete a Cantina audit covering the full major-release
+  changes in `morpho-sdk` and `wdk-protocol-lending-morpho-evm`, remediate its required findings,
+  publish the report, and link that public report from each major package's CHANGELOG entry before
+  either release is tagged. The Blackthorn contract report in References audits the bundle contracts
+  and does **not** satisfy this SDK major-release gate. Then ship the migration guide entry — led by
+  the `userAddress` semantics change and the Permit2 signature-type change — glossary update,
+  `AGENTS.md` routing summary rewrite, and changesets: **major** for `morpho-sdk`, **minor** for
+  `morpho-ts`, **major** for
   `wdk-protocol-lending-morpho-evm` (the withdraw work is additive but the supply-options change
-  removes fields — see Phase 4), plus an explicit changeset for `liquidity-sdk-viem`. That last one is not an open audit
-  item: `packages/liquidity-sdk-viem/package.json:34` pins `"@morpho-org/morpho-sdk": "^5.4.0"` as a
+  removes fields — see Phase 4), plus an explicit changeset for `liquidity-sdk-viem`. That last one
+  is not an open audit item: `packages/liquidity-sdk-viem/package.json:34` pins
+  `"@morpho-org/morpho-sdk": "^5.4.0"` as a
   **peer**, which a `6.0.0` release does not satisfy, and §4 makes internal peer ranges a manual
   obligation — Changesets will not infer it. Its own source consumes only `PublicReallocation` and
   `ReallocationData` (`src/loader.ts:8-9`), neither of which this TIB retypes, so the correct move is
@@ -649,6 +673,7 @@ Only `VaultBundlesV1`-specific behavior. Existing action validations are inherit
 | Deposit into a non-wNative vault with native funding | `NativeAmountOnNonWNativeVaultError`, unchanged from today |
 | Deposit whose net amount mints zero shares | **Entity** rejects before building; the pure builder holds no share preview, so a direct action caller keeps the onchain panic (§4) |
 | Deposit with `referralFeePct < 0n` | `NegativeInputError` in the builder, before the `uint256` encoder raises an untyped viem error |
+| `grossFromNetAssets` called with `netAssets < 0n` | `NegativeInputError` in the helper before arithmetic; never return a negative gross amount |
 | Permit2 deposit by an owner who has never approved Permit2 | Requirements include the ERC-20 approval to Permit2 **ordered before** the signature; a signature alone is never presented as sufficient |
 | Permit2 selected without `permit2Nonce` | `MissingPermit2TransferFromNonceError`; never silently choose a nonce the stateless SDK cannot reserve |
 | `permit2Nonce < 0` or `permit2Nonce > MAX_UINT_256` | `NegativeInputError` or `InputExceedsMaxError`, respectively, before any nonce RPC read or signing step |
@@ -819,7 +844,7 @@ Per §5, and following the `inKindRedeem` test layout:
   ABI-equality properties for each, not only example tests. Also on `resolveBundlesFunding`, the
   pure `resolveBundlesTokenRequirements`, the assets/shares XOR, `computeVaultMaxSharePrice`
   monotonicity in `slippageTolerance`, and exact round-tripping of `grossFromNetAssets` against the
-  contract's floor-fee rule.
+  contract's floor-fee rule for non-negative inputs.
 - **Security invariants as tests** — each fails if the guard is removed: exclusive native funding,
   a token permit rejected on the native path, net-based deposit share-price bound,
   exact-and-upper-bounded share allowance, `chainId` validation, referral recipient non-zero,
@@ -836,7 +861,8 @@ Per §5, and following the `inKindRedeem` test layout:
   that shows why the V1 bound needs the same treatment as V2.
 - **Boundary coverage.** `MAX_UINT_160 + 1n` gross on the Permit2 SignatureTransfer path, asserting
   the approval is sized `MAX_UINT_256` and no `ApprovalAmountLessThanSpendAmountError` escapes;
-  `permit2Nonce = -1n` and `MAX_UINT_256 + 1n` throw their named errors before transport access.
+  `permit2Nonce = -1n` and `MAX_UINT_256 + 1n` throw their named errors before transport access;
+  `grossFromNetAssets({ netAssets: -1n, ... })` throws `NegativeInputError` before arithmetic.
 - **Compile-time API guards.** Pass named values typed as every legacy action-args interface into the
   retyped builders and assert that `recipient`, `onBehalf`, and `minSharePriceVaultV1` are rejected
   through the retained `?: never` keys; fresh-literal-only checks are insufficient. Assert that
@@ -847,7 +873,11 @@ Per §5, and following the `inKindRedeem` test layout:
   separately pins that the deprecated additive overload still compiles and behaves additively for
   its required minor window; Phase 4 removes that fixture with the deprecated surface.
 - **Regression guard.** Existing `BlueBundlesV1` and `VaultExitBundlesV1` tests stay green through
-  the Phase 1 rename, with no assertions weakened. The builder ≠ signer regression test
+  the Phase 1 rename, with no assertions weakened. An invalid input passed through the deprecated
+  `getVaultExitBundlesV1PermitStruct` must still throw an instance of
+  `VaultExitBundlesV1PermitMismatchError` with its existing public mismatch fields, while also being
+  an instance of `BundlesPermitMismatchError` and preserving the translated cause. The builder ≠
+  signer regression test
   (`entities/vaultV1/vaultV1.test.ts:737-741`) must still pass — the `userAddress` check is
   opportunistic, not unconditional. WDK tests cover the new withdrawal-requirements path end to end
   and **assert `buildTx`'s argument**, which today's `describe("withdraw")` block never did
@@ -886,6 +916,9 @@ Per §5, and following the `inKindRedeem` test layout:
   `MorphoExclusiveSupplyOptions`, deprecates the additive supply interfaces / overloads, and leaves
   them available for the required one-minor window before the master PR removes them.
 - Registry sync PR for `bundles.vaultBundlesV1`.
+- A completed Cantina audit of the two major package surfaces, with required findings remediated and
+  the public report URL ready for both major-package CHANGELOG entries. The contract-level
+  Blackthorn report is supporting evidence, not a substitute for this release dependency.
 
 ## Security
 
@@ -924,8 +957,9 @@ Per §5, and following the `inKindRedeem` test layout:
   product asks for the wider pairs the contract already supports.
 - A simulation-backed gate pre-flight helper, which would be execution-equivalent where a standalone
   gate read is not.
-- Retiring `bundles.vaultExitBundlesV1`'s dedicated permit reshaper once every caller uses the
-  shared `getBundlesSharesPermit`.
+- Retiring `bundles.vaultExitBundlesV1`'s dedicated permit reshaper and mismatch error only in a
+  subsequent major after every caller uses `getBundlesSharesPermit` and both deprecated exports have
+  remained available together with their successors for at least one full minor.
 
 ## Open Questions
 
