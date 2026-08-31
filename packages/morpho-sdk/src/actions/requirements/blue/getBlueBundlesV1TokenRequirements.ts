@@ -1,6 +1,6 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { erc2612Abi, permit2Abi } from "@morpho-org/blue-sdk-viem";
-import { getChainAddress, isDefined } from "@morpho-org/morpho-ts";
+import { getChainAddress, isDefined, Time } from "@morpho-org/morpho-ts";
 import {
   type Address,
   type Client,
@@ -14,6 +14,7 @@ import {
   ApprovalAmountLessThanSpendAmountError,
   type BlueBundlesV1TokenSignatureRequirement,
   type ERC20ApprovalAction,
+  ExpiredDeadlineError,
   InputExceedsMaxError,
   MissingPermit2TransferFromNonceError,
   NegativeInputError,
@@ -133,6 +134,13 @@ export const getBlueBundlesV1TokenRequirements = async (
       value: params.deadline,
       max: maxUint256,
     });
+  }
+  // Reject an already-expired deadline before the RPC reads so a direct caller of this resolver
+  // never signs a permit for a supply the BlueBundlesV1 call would revert. The entity validates
+  // this too, but the exported resolver must guard its own callers.
+  const timestamp = Time.timestamp();
+  if (params.deadline <= timestamp) {
+    throw new ExpiredDeadlineError(params.deadline, timestamp);
   }
   if (params.amount === 0n) return [];
 

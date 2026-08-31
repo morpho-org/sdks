@@ -7,6 +7,7 @@ import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
   ApprovalAmountLessThanSpendAmountError,
+  ExpiredDeadlineError,
   InputExceedsMaxError,
   isRequirementApproval,
   isRequirementSignature,
@@ -204,6 +205,17 @@ describe("getBlueBundlesV1TokenRequirements", () => {
         supportSignature: false,
       }),
     ).rejects.toBeInstanceOf(InputExceedsMaxError);
+
+    await expect(
+      getBlueBundlesV1TokenRequirements(handle.client, {
+        token: usdc,
+        amount: 1n,
+        owner: account.address,
+        chainId: mainnet.id,
+        deadline: 1n,
+        supportSignature: false,
+      }),
+    ).rejects.toBeInstanceOf(ExpiredDeadlineError);
 
     await expect(
       getBlueBundlesV1TokenRequirements(handle.client, {
