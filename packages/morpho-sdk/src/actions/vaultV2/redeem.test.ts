@@ -4,8 +4,8 @@ import {
   KeyrockUsdcVaultV2,
   KpkWETHVaultV2,
 } from "../../../test/fixtures/vaultV2.js";
-import { test } from "../../../test/setup.js";
-import { NonPositiveSharesAmountError } from "../../types/index.js";
+import { test } from "../../../test/unit.js";
+import { NonPositiveInputError } from "../../types/index.js";
 import { vaultV2Redeem } from "./redeem.js";
 
 describe("redeemVaultV2 unit tests", () => {
@@ -83,7 +83,26 @@ describe("redeemVaultV2 unit tests", () => {
     expect(tx.to).toBe(KeyrockUsdcVaultV2.address);
   });
 
-  test("should throw NonPositiveSharesAmountError when shares is zero", async () => {
+  test("should append metadata to transaction data when provided", async ({
+    client,
+  }) => {
+    const shares = parseUnits("100", 18);
+    const tx = vaultV2Redeem({
+      vault: {
+        address: KeyrockUsdcVaultV2.address,
+      },
+      args: {
+        shares,
+        recipient: client.account.address,
+        onBehalf: client.account.address,
+      },
+      metadata: { origin: "a1b2c3d4" },
+    });
+
+    expect(tx.data.includes("a1b2c3d4")).toBe(true);
+  });
+
+  test("should throw NonPositiveInputError when shares is zero", async () => {
     expect(() =>
       vaultV2Redeem({
         vault: {
@@ -95,10 +114,10 @@ describe("redeemVaultV2 unit tests", () => {
           onBehalf: "0x1234567890123456789012345678901234567890",
         },
       }),
-    ).toThrow(NonPositiveSharesAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NonPositiveSharesAmountError when shares is negative", async () => {
+  test("should throw NonPositiveInputError when shares is negative", async () => {
     expect(() =>
       vaultV2Redeem({
         vault: {
@@ -110,6 +129,6 @@ describe("redeemVaultV2 unit tests", () => {
           onBehalf: "0x1234567890123456789012345678901234567890",
         },
       }),
-    ).toThrow(NonPositiveSharesAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 });

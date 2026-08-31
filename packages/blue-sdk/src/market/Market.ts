@@ -10,13 +10,16 @@ import { type CapacityLimit, CapacityLimitReason } from "../utils.js";
 import { type IMarketParams, MarketParams } from "./MarketParams.js";
 import { MarketUtils } from "./MarketUtils.js";
 
+/** Options for max borrow capacity calculations. */
 export interface MaxBorrowOptions {
   maxLtv?: bigint;
 }
+/** Options for max withdraw collateral capacity calculations. */
 export interface MaxWithdrawCollateralOptions {
   maxLtv?: bigint;
 }
 
+/** Capacity limits for each market operation available to a position. */
 export interface MaxPositionCapacities {
   supply: CapacityLimit;
   withdraw: CapacityLimit;
@@ -26,6 +29,7 @@ export interface MaxPositionCapacities {
   withdrawCollateral: CapacityLimit | undefined;
 }
 
+/** Plain input shape for a Morpho Blue market. */
 export interface IMarket {
   params: IMarketParams;
   totalSupplyAssets: bigint;

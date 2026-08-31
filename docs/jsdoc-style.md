@@ -4,10 +4,6 @@ This guide is the canonical shape for JSDoc on every exported symbol in this mon
 
 The guide is repo-wide. Every package follows it. Per-package `AGENTS.md` files link here rather than restating the rules.
 
-> Background and rollout sequence: [`docs/tibs/TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md`](./tibs/TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md).
-
----
-
 ## What needs JSDoc
 
 Every symbol re-exported from a package's `src/index.ts`:
@@ -21,7 +17,7 @@ Symbols that **do not** need JSDoc:
 
 - Anything marked `@internal`.
 - Anything not re-exported from `src/index.ts`.
-- Test fixtures and helpers under `morpho-test`, `test`, `test-wagmi`.
+- Test fixtures and helpers under `morpho-test` and `test`.
 - Generated outputs (`packages/*/src/api/sdk.ts`, `packages/*/src/api/types.ts`).
 
 ## What goes in a JSDoc block, in order
@@ -70,7 +66,7 @@ For action builders, name `Readonly<Transaction<TAction>>` and call out that the
 
 ```ts
 /**
- * @returns A deep-frozen `Transaction<MarketV1BorrowAction>` with `to`, `value`, `data`, and the
+ * @returns A deep-frozen `Transaction<BlueBorrowAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator the simulation layer consumes.
  */
 ```
@@ -91,8 +87,8 @@ Format: `@throws {ErrorClass} when <condition that triggers it>.`
 
 ```ts
 /**
- * @throws {NonPositiveBorrowAmountError} when `amount <= 0n`.
- * @throws {NonPositiveMinBorrowSharePriceError} when `minSharePrice < 0n`.
+ * @throws {NonPositiveInputError} when `amount <= 0n`.
+ * @throws {NegativeInputError} when `minSharePrice < 0n`.
  */
 ```
 
@@ -118,13 +114,15 @@ Rules for examples:
  * ```ts
  * import { createWalletClient, http } from "viem";
  * import { mainnet } from "viem/chains";
- * import { MorphoClient } from "@morpho-org/morpho-sdk";
+ * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
  *
- * const client = new MorphoClient(
- *   createWalletClient({ chain: mainnet, transport: http(), account: borrower }),
- * );
+ * const client = createWalletClient({
+ *   chain: mainnet,
+ *   transport: http(),
+ *   account: borrower,
+ * }).extend(morphoViemExtension());
  *
- * const market = client.marketV1(marketParams, 1);
+ * const market = client.morpho.blue(marketParams, 1);
  * const positionData = await market.getPositionData(borrower);
  * const { buildTx } = market.borrow({
  *   userAddress: borrower,
@@ -132,7 +130,7 @@ Rules for examples:
  *   positionData,
  * });
  * const tx = buildTx();
- * // tx satisfies Readonly<Transaction<MarketV1BorrowAction>>
+ * // tx satisfies Readonly<Transaction<BlueBorrowAction>>
  * ```
  */
 ```
@@ -175,7 +173,7 @@ export const MAX_SLIPPAGE_TOLERANCE = 100_000_000_000_000_000n; // 10%
  * @param {Object} params - The borrow parameters.
  * @returns {any} The transaction.
  */
-export const marketV1Borrow = (params: MarketV1BorrowParams) => { … };
+export const blueBorrow = (params: BlueBorrowParams) => { … };
 ```
 
 What's wrong:
@@ -207,15 +205,15 @@ What's wrong:
  * @param params.args.minSharePrice - Minimum borrow share price (in ray). Slippage protection.
  * @param params.args.reallocations - Optional vault reallocations to execute before borrowing.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
- * @returns A deep-frozen `Transaction<MarketV1BorrowAction>` with `to`, `value`, `data`, and the
+ * @returns A deep-frozen `Transaction<BlueBorrowAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator.
- * @throws {NonPositiveBorrowAmountError} when `amount <= 0n`.
- * @throws {NonPositiveMinBorrowSharePriceError} when `minSharePrice < 0n`.
+ * @throws {NonPositiveInputError} when `amount <= 0n`.
+ * @throws {NegativeInputError} when `minSharePrice < 0n`.
  * @example
  * ```ts
- * import { marketV1Borrow } from "@morpho-org/morpho-sdk";
+ * import { blueBorrow } from "@morpho-org/morpho-sdk";
  *
- * const tx = marketV1Borrow({
+ * const tx = blueBorrow({
  *   market: { chainId: 1, marketParams },
  *   args: {
  *     amount: 1_000_000n,
@@ -223,14 +221,14 @@ What's wrong:
  *     minSharePrice: 0n,
  *   },
  * });
- * // tx satisfies Readonly<Transaction<MarketV1BorrowAction>>
+ * // tx satisfies Readonly<Transaction<BlueBorrowAction>>
  * ```
  */
 ```
 
 The two cited reference exemplars in this repo are:
 
-- `packages/morpho-sdk/src/actions/marketV1/borrow.ts` — `marketV1Borrow` (action builder).
+- `packages/morpho-sdk/src/actions/blue/borrow.ts` — `blueBorrow` (action builder).
 - `packages/morpho-sdk/src/actions/vaultV1/deposit.ts` — `vaultV1Deposit` (action builder with nested options bag, including the `nativeAmount` branch).
 
 Copy from those files when in doubt.
@@ -240,6 +238,6 @@ Copy from those files when in doubt.
 ## Operational rules
 
 - **One concern per PR** ([`AGENTS.md`](../AGENTS.md) §8): JSDoc backfill PRs do not mix in feature work or refactors.
-- **Doc-only changesets** are `patch` per [`AGENTS.md`](../AGENTS.md) §7 when the PR's behavior-affecting changes touch a published package. JSDoc-only changes inside `packages/*/src/` — and repo-meta-only PRs (TIB, style guide, root tooling) — may omit a changeset.
+- **Changesets follow semver relevance** per [`AGENTS.md`](../AGENTS.md) §7. JSDoc-only changes to published package source may ship a patch changeset when maintainers want them visible in package release notes. Repo-meta-only PRs (TIB, style guide, root tooling) and tests-only changes do not need a changeset unless they accompany a behavior-affecting published package source change.
 - **Coverage is observable**: run `pnpm jsdoc:coverage` to print the per-package burndown table. Backfill PRs paste the new table into their PR description so reviewers see progress without reading the diff.
-- **Automated enforcement is deferred** — see [TIB-2026-05-04](./tibs/TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md) Considered Alternative 6. Reviewers and the burndown signal hold the line until Biome ships JSDoc rules (or a lighter in-repo gate emerges).
+- **Automated enforcement is deferred** — reviewers and the burndown signal hold the line until Biome ships JSDoc rules or a lighter in-repo gate emerges.

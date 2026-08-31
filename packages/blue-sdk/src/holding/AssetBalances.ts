@@ -1,5 +1,6 @@
 import type { Token } from "../token/Token.js";
 
+/** Balance conversion category for a requested token and related peripheral tokens. */
 export type PeripheralBalanceType =
   | "base" // The balance of the requested token (ETH for ETH, wstETH for wstETH).
   | "wrapped" // The balance of the unwrapped token (none for DAI, wstETH for wstETH).
@@ -36,8 +37,10 @@ export interface PeripheralBalance {
   dstAmount: bigint;
 }
 
+/** Constructor input for `AssetBalances`. */
 export interface IAssetBalances extends Omit<PeripheralBalance, "type"> {}
 
+/** Aggregates balances across a requested token and related peripheral tokens. */
 export class AssetBalances {
   /**
    * The total balance of all types of related tokens.

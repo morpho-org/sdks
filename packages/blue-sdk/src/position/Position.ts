@@ -10,6 +10,7 @@ import { MathLib } from "../math/MathLib.js";
 import type { Address, BigIntish, MarketId } from "../types.js";
 import { CapacityLimitReason } from "../utils.js";
 
+/** Plain input shape for a user's Morpho Blue market position. */
 export interface IPosition {
   user: Address;
   marketId: MarketId;
@@ -18,6 +19,7 @@ export interface IPosition {
   collateral: bigint;
 }
 
+/** Represents a user's supply, borrow, and collateral balances on one market. */
 export class Position implements IPosition {
   /**
    * The user holding this position.
@@ -57,8 +59,10 @@ export class Position implements IPosition {
   }
 }
 
+/** Plain input shape for a position paired with market state for accrual math. */
 export interface IAccrualPosition extends Omit<IPosition, "marketId"> {}
 
+/** Represents a position paired with market state for derived and accrued values. */
 export class AccrualPosition extends Position implements IAccrualPosition {
   protected readonly _market: Market;
 

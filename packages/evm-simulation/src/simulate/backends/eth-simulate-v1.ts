@@ -11,16 +11,28 @@ import {
   SimulationValidationError,
 } from "../../errors.js";
 import type {
+  AccountAssetChanges,
   RawCall,
   RawSimulationResult,
   SimulationTransaction,
+  Transfer,
 } from "../../types.js";
+import { type AssetChangeEntry, groupAssetChanges } from "../asset-changes.js";
+import { parseTransfers } from "../parsing/index.js";
 
 /**
  * Simulate transactions using eth_simulateV1 (viem simulateCalls).
  *
  * Uses stateOverride to set the user's ETH balance high enough to avoid
  * false "insufficient balance for gas" reverts.
+ *
+ * Runs with `traceTransfers` enabled, so the node synthesizes native-ETH moves
+ * (the top-level `value` *and* ETH moved through internal calls — e.g. a
+ * `WETH.withdraw` refund or a swap that pays out ETH) as `Transfer` events from
+ * the native sentinel. Derives `assetChanges` (net per-token deltas grouped by
+ * account) entirely from the emitted transfer logs, with native ETH normalized
+ * to viem's `ethAddress`. Top-level `value` is intentionally *not* added on top:
+ * `traceTransfers` already logs it, so adding it would double-count.
  */
 export async function simulateV1(params: {
   rpcUrl: string;
@@ -75,9 +87,17 @@ export async function simulateV1(params: {
       account: sender,
       calls,
       ...blockParam,
+      // Synthesize native-ETH moves (top-level value + internal calls) as
+      // Transfer logs from the native sentinel, so `parseTransfers` captures
+      // ETH that emits no real log (e.g. a WETH.withdraw refund).
+      traceTransfers: true,
       // Inflate sender ETH balance to prevent false "insufficient gas" reverts.
       // Without this, valid ERC20 flows fail when the sender has low ETH.
-      stateOverrides: [{ address: sender, balance: maxUint256 }],
+      // Use half of uint256 (not the ceiling) so the override leaves headroom
+      // for inbound native ETH — e.g. a WETH.withdraw refund or a swap payout
+      // would overflow the recipient balance and revert the value transfer if
+      // the sender were pinned at maxUint256.
+      stateOverrides: [{ address: sender, balance: maxUint256 / 2n }],
     });
 
     const results = simulationResult.results;
@@ -107,7 +127,10 @@ export async function simulateV1(params: {
       gasUsed: r.gasUsed,
     }));
 
-    return { calls: rawCalls };
+    return {
+      calls: rawCalls,
+      assetChanges: toAssetChanges(parseTransfers(rawCalls)),
+    };
   } catch (error) {
     if (error instanceof SimulationRevertedError) throw error;
     if (error instanceof ExternalServiceError) throw error;
@@ -116,4 +139,21 @@ export async function simulateV1(params: {
       { cause: error },
     );
   }
+}
+
+/**
+ * Reduce parsed transfer logs to net per-token balance changes grouped by
+ * account. With `traceTransfers` enabled, native ETH (top-level and internal)
+ * arrives as transfer logs under viem's `ethAddress`, so no separate top-level
+ * `value` accounting is needed — doing so would double-count.
+ */
+function toAssetChanges(transfers: Transfer[]): AccountAssetChanges[] {
+  const entries: AssetChangeEntry[] = [];
+
+  for (const { token, from, to, amount } of transfers) {
+    entries.push({ account: to, token, diff: amount });
+    entries.push({ account: from, token, diff: -amount });
+  }
+
+  return groupAssetChanges(entries);
 }

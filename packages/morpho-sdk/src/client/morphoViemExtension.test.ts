@@ -1,0 +1,102 @@
+import { MarketParams } from "@morpho-org/blue-sdk";
+import { createPublicClient, http } from "viem";
+import { mainnet } from "viem/chains";
+import { describe, expect, test } from "vitest";
+import { CbbtcUsdcBlue } from "../../test/fixtures/blue.js";
+import { MarketIdMismatchError } from "../types/index.js";
+import { morphoViemExtension } from "./morphoViemExtension.js";
+
+const publicClient = () =>
+  createPublicClient({
+    chain: mainnet,
+    transport: http("http://localhost"),
+  });
+
+describe("morphoViemExtension", () => {
+  test("default", () => {
+    const client = publicClient().extend(morphoViemExtension());
+
+    expect(client.morpho).toBeDefined();
+    expect(client.morpho.viemClient).toBeDefined();
+    expect(typeof client.morpho.vaultV1).toBe("function");
+    expect(typeof client.morpho.vaultV2).toBe("function");
+    expect(typeof client.morpho.blue).toBe("function");
+    expect(typeof client.morpho.midnight).toBe("function");
+  });
+
+  test("behavior: factories return entities bound to the same client", () => {
+    const client = publicClient().extend(morphoViemExtension());
+
+    const vaultV1 = client.morpho.vaultV1(
+      "0x0000000000000000000000000000000000000001",
+      mainnet.id,
+    );
+    const vault = client.morpho.vaultV2(
+      "0x04422053aDDbc9bB2759b248B574e3FCA76Bc145",
+      mainnet.id,
+    );
+    const blue = client.morpho.blue(
+      new MarketParams(CbbtcUsdcBlue),
+      mainnet.id,
+    );
+    const midnight = client.morpho.midnight(mainnet.id);
+
+    expect(vaultV1.getData).toBeDefined();
+    expect(vault).toBeDefined();
+    expect(vault.getData).toBeDefined();
+    expect(vault.deposit).toBeDefined();
+    expect(vault.withdraw).toBeDefined();
+    expect(vault.redeem).toBeDefined();
+    expect(blue.getMarketData).toBeDefined();
+    expect(midnight.getMarketData).toBeDefined();
+  });
+
+  test("behavior: options default supportSignature to false", () => {
+    const client = publicClient().extend(morphoViemExtension());
+
+    expect(client.morpho.options.supportSignature).toBe(false);
+  });
+
+  test("behavior: forwards options to the morpho namespace", () => {
+    const metadata = { origin: "test" };
+    const client = publicClient().extend(
+      morphoViemExtension({ supportSignature: true, metadata }),
+    );
+
+    expect(client.morpho.options.supportSignature).toBe(true);
+    expect(client.morpho.options.metadata).toEqual(metadata);
+  });
+
+  test("behavior: the resolved options bag is frozen", () => {
+    const client = publicClient().extend(
+      morphoViemExtension({ metadata: { origin: "test" } }),
+    );
+
+    expect(Object.isFrozen(client.morpho.options)).toBe(true);
+    expect(Object.isFrozen(client.morpho.options.metadata)).toBe(true);
+  });
+
+  test("behavior: options metadata is copied before freezing", () => {
+    const metadata = { origin: "test" };
+    const client = publicClient().extend(morphoViemExtension({ metadata }));
+
+    expect(client.morpho.options.metadata).toEqual({ origin: "test" });
+    expect(client.morpho.options.metadata).not.toBe(metadata);
+    expect(Object.isFrozen(metadata)).toBe(false);
+
+    metadata.origin = "changed";
+    expect(client.morpho.options.metadata).toEqual({ origin: "test" });
+  });
+
+  test("error: MarketIdMismatchError", () => {
+    const client = publicClient().extend(morphoViemExtension());
+    const marketParams = new MarketParams(CbbtcUsdcBlue);
+    Object.defineProperty(marketParams, "id", {
+      value: `0x${"00".repeat(32)}`,
+    });
+
+    expect(() => client.morpho.blue(marketParams, mainnet.id)).toThrow(
+      MarketIdMismatchError,
+    );
+  });
+});

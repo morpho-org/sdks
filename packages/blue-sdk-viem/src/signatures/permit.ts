@@ -11,6 +11,7 @@ import {
   UnsupportedPermitDomainExtensionsError,
 } from "../error.js";
 
+/** Message fields for ERC-2612 permit typed data. */
 export interface PermitArgs {
   erc20: Token;
   owner: Address;
@@ -94,9 +95,13 @@ export const getPermitTypedData = (
     }
   }
 
+  const isCirclePermitV2Token =
+    (usdc != null && isAddressEqual(erc20.address, usdc)) ||
+    (eurc != null && isAddressEqual(erc20.address, eurc));
+
   const permitDomain = domain ?? {
     name: erc20.name,
-    version: erc20.address === usdc || erc20.address === eurc ? "2" : "1",
+    version: isCirclePermitV2Token ? "2" : "1",
     chainId,
     verifyingContract: erc20.address,
   };
@@ -115,6 +120,7 @@ export const getPermitTypedData = (
   };
 };
 
+/** Message fields for DAI-style permit typed data. */
 export interface DaiPermitArgs {
   owner: Address;
   spender: Address;
@@ -133,6 +139,29 @@ const daiPermitTypes = {
   ],
 } as const;
 
+/**
+ * Builds DAI-style permit typed data for signing.
+ *
+ * @param args - DAI permit message fields.
+ * @param chainId - Chain id whose DAI deployment verifies the signature.
+ * @returns Typed data ready to pass to a wallet for signing.
+ * @example
+ * ```ts
+ * import { ChainId } from "@morpho-org/blue-sdk";
+ * import { getDaiPermitTypedData } from "@morpho-org/blue-sdk-viem";
+ *
+ * const typedData = getDaiPermitTypedData(
+ *   {
+ *     owner: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
+ *     spender: "0x6566194141fF46b819c55E7137D8329898eCd06C",
+ *     allowance: 1_000_000_000_000_000_000n,
+ *     nonce: 0n,
+ *     deadline: 1_900_000_000n,
+ *   },
+ *   ChainId.EthMainnet,
+ * );
+ * ```
+ */
 export const getDaiPermitTypedData = (
   { deadline, owner, nonce, spender, allowance }: DaiPermitArgs,
   chainId: ChainId,

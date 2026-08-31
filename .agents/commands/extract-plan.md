@@ -55,7 +55,7 @@ approach, and actionable work items.
 **Scope detection:** Use the document's scope field (if present) and file path to suggest a target
 team:
 
-- `packages/blue-sdk*`, `packages/morpho-sdk`, `packages/simulation-sdk*` → core SDK
+- `packages/blue-sdk*`, `packages/morpho-sdk`, `packages/evm-simulation` → core SDK
 - `packages/*-viem` or `packages/*-wagmi` → integration packages
 - `scripts/`, root configs, `tsconfig.json`, `pnpm-workspace.yaml`, cross-package → repo-wide
 
@@ -164,7 +164,7 @@ Before creating anything in Linear, present the full plan to the user:
 ### Milestone 2: <name>
 | #  | Title                                              | Priority | Estimate | Blocked By | Blocks |
 | -- | -------------------------------------------------- | -------- | -------- | ---------- | ------ |
-| 5  | feat(simulation-sdk): adopt @morpho-org/observability | Normal   | 2        | #4         | #6     |
+| 5  | feat(evm-simulation): adopt @morpho-org/observability | Normal   | 2        | #4         | #6     |
 
 ### Dependency Graph
 #1 → #2 → #4 → #5 → ...

@@ -1,12 +1,16 @@
 {
   "name": "@morpho-org/test",
   "description": "Viem-based package that exports utilities to build Vitest & Playwright fixtures that spawn anvil forks as child processes.",
-  "version": "2.7.2",
+  "version": "2.10.0",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Rubilmax <rmilon@gmail.com>"
   ],
-  "repository": "github:morpho-org/sdks",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/morpho-org/sdks.git",
+    "directory": "packages/test"
+  },
   "homepage": "https://github.com/morpho-org/sdks",
   "bugs": {
     "url": "https://github.com/morpho-org/sdks/issues",
@@ -22,6 +26,7 @@
     ".": "./src/index.ts",
     "./vitest": "./src/vitest.ts",
     "./fixtures": "./src/fixtures.ts",
+    "./mock": "./src/mock.ts",
     "./playwright": "./src/playwright.ts"
   },
   "typesVersions": {
@@ -31,6 +36,9 @@
       ],
       "fixtures": [
         "src/fixtures.ts"
+      ],
+      "mock": [
+        "src/mock.ts"
       ],
       "playwright": [
         "src/playwright.ts"
@@ -51,7 +59,7 @@
   "peerDependencies": {
     "@playwright/test": "^1.48.1",
     "viem": "^2.21.10",
-    "vitest": ">=2.0.0 <5.0.0"
+    "vitest": ">=2.1.2 <5.0.0"
   },
   "peerDependenciesMeta": {
     "@playwright/test": {
@@ -62,11 +70,11 @@
     }
   },
   "devDependencies": {
-    "@playwright/test": "^1.59.1",
+    "@playwright/test": "^1.62.1",
     "@types/lodash.kebabcase": "^4.1.9",
-    "typescript": "^6.0.3",
-    "viem": "^2.48.11",
-    "vitest": "^4.1.5"
+    "typescript": "^7.0.2",
+    "viem": "^2.55.10",
+    "vitest": "^4.1.10"
   },
   "publishConfig": {
     "exports": {
@@ -85,10 +93,32 @@
         "import": "./lib/esm/fixtures.js",
         "require": "./lib/cjs/fixtures.js"
       },
+      "./mock": {
+        "types": "./lib/esm/mock.d.ts",
+        "import": "./lib/esm/mock.js"
+      },
       "./playwright": {
         "types": "./lib/esm/playwright.d.ts",
         "import": "./lib/esm/playwright.js",
         "require": "./lib/cjs/playwright.js"
+      }
+    },
+    "main": "./lib/cjs/index.js",
+    "types": "./lib/esm/index.d.ts",
+    "typesVersions": {
+      "*": {
+        "vitest": [
+          "lib/esm/vitest.d.ts"
+        ],
+        "fixtures": [
+          "lib/esm/fixtures.d.ts"
+        ],
+        "mock": [
+          "lib/esm/mock.d.ts"
+        ],
+        "playwright": [
+          "lib/esm/playwright.d.ts"
+        ]
       }
     }
   }

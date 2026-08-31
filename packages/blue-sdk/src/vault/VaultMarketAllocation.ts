@@ -6,11 +6,13 @@ import {
   VaultMarketConfig,
 } from "./VaultMarketConfig.js";
 
+/** Plain input shape for a vault allocation on one Morpho Blue market. */
 export interface IVaultMarketAllocation {
   config: IVaultMarketConfig;
   position: AccrualPosition;
 }
 
+/** Represents a vault allocation on one Morpho Blue market. */
 export class VaultMarketAllocation implements IVaultMarketAllocation {
   /**
    * The vault's configuration on the corresponding market.

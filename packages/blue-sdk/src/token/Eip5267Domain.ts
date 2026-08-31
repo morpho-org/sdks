@@ -1,5 +1,6 @@
 import type { Address } from "../types.js";
 
+/** Ordered EIP-712 domain fields exposed by EIP-5267. */
 export const EIP_712_FIELDS = [
   "name",
   "version",
@@ -8,8 +9,10 @@ export const EIP_712_FIELDS = [
   "salt",
 ] as const;
 
+/** EIP-712 domain field name exposed by EIP-5267. */
 export type Eip712Field = (typeof EIP_712_FIELDS)[number];
 
+/** Plain input shape for an EIP-5267 signing domain. */
 export interface IEip5267Domain {
   fields: `0x${string}`;
   name: string;
@@ -20,6 +23,7 @@ export interface IEip5267Domain {
   extensions: readonly bigint[];
 }
 
+/** Represents an EIP-5267 signing domain and derived EIP-712 domain object. */
 export class Eip5267Domain implements IEip5267Domain {
   /**
    * A bit map where bit i is set to 1 if and only if domain field i is present (0 ≤ i ≤ 4).

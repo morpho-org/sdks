@@ -7,62 +7,77 @@ permissions:
   contents: write
   id-token: write
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-publish
-  cancel-in-progress: false
-
 jobs:
   publish:
     if: github.ref_name == 'main' || github.ref_name == 'next'
     name: Publish
     runs-on: ubuntu-latest
+    environment: prod
+    outputs:
+      has_tags: ${{ steps.publish-packages.outputs.has_tags }}
     env:
       CI: true
       HUSKY: 0
+      TARGET_BRANCH: ${{ github.ref_name }}
 
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: pnpm/action-setup@91ab88e2619ed1f46221f0ba42d1492c02baf788 # v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
 
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
-          cache: pnpm
           registry-url: https://registry.npmjs.org
           scope: '@morpho-org'
 
-      # Trusted publishing requires npm >= 11.5.1, but Node 22.22.2's bundled npm 10.9.7
-      # currently fails to self-upgrade directly to npm@latest with MODULE_NOT_FOUND
-      # (missing promise-retry). Pin a known-good npm 11 release instead.
+      # Trusted publishing requires npm >= 11.5.1. Pin a known-good npm 11 release
+      # so hosted-runner npm bundle changes do not affect release provenance.
       - run: npm install -g npm@11.11.0
+
+      - name: Record privileged-step baseline
+        id: privileged-baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Capture this BEFORE `pnpm install` runs dependency lifecycle
+          # scripts. The publish step configures a token-authenticated `origin`
+          # remote and then runs `compute-pending-tag.mjs`, which imports the
+          # other release helper modules, so hash every module reachable from
+          # it. Recording the baseline pre-install means install-time tampering
+          # is caught by the later verification step; recording it post-install
+          # would bake that tampering into the baseline itself.
+          helper_sha="$(
+            find scripts/release -maxdepth 1 -type f -name '*.mjs' -print0 |
+              sort -z |
+              xargs -0 sha256sum |
+              sha256sum |
+              cut -d ' ' -f 1
+          )"
+
+          {
+            echo "helper_sha=${helper_sha}"
+            echo "trusted_path=${PATH}"
+          } >> "${GITHUB_OUTPUT}"
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Configure git identity
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config core.hooksPath /dev/null
+
       - name: Detect pending changesets
         id: pending-changesets
-        shell: bash
-        run: |
-          shopt -s nullglob
-
-          pending=()
-          for changeset in .changeset/*.md; do
-            if [ "$(basename "$changeset")" != "README.md" ]; then
-              pending+=("$changeset")
-            fi
-          done
-
-          if [ "${#pending[@]}" -gt 0 ]; then
-            echo "has_changesets=true" >> "$GITHUB_OUTPUT"
-            echo "Pending changesets:"
-            printf '%s\n' "${pending[@]}"
-          else
-            echo "has_changesets=false" >> "$GITHUB_OUTPUT"
-          fi
+        run: node scripts/release/detect-pending-changesets.mjs
 
       - name: Skip until version PR is merged
         if: steps.pending-changesets.outputs.has_changesets == 'true'
@@ -70,53 +85,346 @@ jobs:
           echo "Pending changesets are present. The version PR workflow will prepare a release branch; skipping publish."
 
       - name: Refuse prerelease mode on main
-        if: github.ref_name == 'main' && hashFiles('.changeset/pre.json') != ''
+        if: env.TARGET_BRANCH == 'main' && hashFiles('.changeset/pre.json') != ''
         run: |
           echo "::error::.changeset/pre.json is present on main. Run pnpm changeset pre exit and commit the result before stable releases."
           exit 1
 
-      - name: Publish packages
-        id: publish-packages
+      - name: Verify release helper scripts
         if: steps.pending-changesets.outputs.has_changesets == 'false'
         shell: bash
+        env:
+          BASH_ENV: /dev/null
+          EXPECTED_HELPER_SHA: ${{ steps.privileged-baseline.outputs.helper_sha }}
+          TRUSTED_PATH: ${{ steps.privileged-baseline.outputs.trusted_path }}
         run: |
           set -euo pipefail
+          PATH="${TRUSTED_PATH}"
+          export PATH
+
+          env -i \
+            BASH_ENV=/dev/null \
+            EXPECTED_HELPER_SHA="${EXPECTED_HELPER_SHA}" \
+            LANG="${LANG:-C.UTF-8}" \
+            PATH="${TRUSTED_PATH}" \
+            PWD="${PWD}" \
+            SHELL="${SHELL:-/bin/bash}" \
+            TMPDIR="${TMPDIR:-/tmp}" \
+            bash --noprofile --norc <<'BASH'
+          set -euo pipefail
+
+          actual_helper_sha="$(
+            find scripts/release -maxdepth 1 -type f -name '*.mjs' -print0 |
+              sort -z |
+              xargs -0 sha256sum |
+              sha256sum |
+              cut -d ' ' -f 1
+          )"
+          if [ "${actual_helper_sha}" != "${EXPECTED_HELPER_SHA}" ]; then
+            echo "::error::Release helper scripts under scripts/release changed after the trusted baseline (during install)."
+            exit 1
+          fi
+          BASH
+
+      - name: Publish packages
+        if: steps.pending-changesets.outputs.has_changesets == 'false'
+        shell: bash
+        env:
+          BASH_ENV: /dev/null
+          TRUSTED_PATH: ${{ steps.privileged-baseline.outputs.trusted_path }}
+        run: |
+          set -euo pipefail
+          PATH="${TRUSTED_PATH}"
+          export PATH
+          : > "$GITHUB_ENV"
+          : > "$GITHUB_PATH"
 
           publish_tag="latest"
-          if [ "${GITHUB_REF_NAME}" = "next" ]; then
+          if [ "${TARGET_BRANCH}" = "next" ]; then
             publish_tag="next"
           fi
 
-          before_tags="$(mktemp)"
-          after_tags="$(mktemp)"
-          new_tags="${RUNNER_TEMP}/new-package-tags.txt"
-          trap 'rm -f "$before_tags" "$after_tags"' EXIT
+          release_env_file="$(mktemp)"
+          trap 'rm -f "$release_env_file"' EXIT
 
-          git tag --list | LC_ALL=C sort > "$before_tags"
-          pnpm release --tag "$publish_tag"
-          git tag --list | LC_ALL=C sort > "$after_tags"
+          # Changesets hardcodes package git tags as `name@version`; disable
+          # those tags and create the repository's `name-vversion` tags below.
+          # Run publish with an explicit environment allowlist and the trusted
+          # pre-install PATH. This drops values persisted by previous steps
+          # through $GITHUB_ENV or $GITHUB_PATH, including Node loader variables
+          # such as NODE_OPTIONS, while preserving the GitHub OIDC/provenance
+          # metadata that pnpm/npm need for trusted publishing.
+          env -i \
+            ACTIONS_ID_TOKEN_REQUEST_TOKEN="${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" \
+            ACTIONS_ID_TOKEN_REQUEST_URL="${ACTIONS_ID_TOKEN_REQUEST_URL:-}" \
+            BASH_ENV=/dev/null \
+            CI="${CI}" \
+            GITHUB_ACTIONS="${GITHUB_ACTIONS:-}" \
+            GITHUB_API_URL="${GITHUB_API_URL:-}" \
+            GITHUB_ENV="$release_env_file" \
+            GITHUB_EVENT_NAME="${GITHUB_EVENT_NAME:-}" \
+            GITHUB_EVENT_PATH="${GITHUB_EVENT_PATH:-}" \
+            GITHUB_GRAPHQL_URL="${GITHUB_GRAPHQL_URL:-}" \
+            GITHUB_REF="${GITHUB_REF:-}" \
+            GITHUB_REF_NAME="${GITHUB_REF_NAME:-}" \
+            GITHUB_REPOSITORY="${GITHUB_REPOSITORY}" \
+            GITHUB_REPOSITORY_ID="${GITHUB_REPOSITORY_ID:-}" \
+            GITHUB_REPOSITORY_OWNER_ID="${GITHUB_REPOSITORY_OWNER_ID:-}" \
+            GITHUB_RUN_ATTEMPT="${GITHUB_RUN_ATTEMPT:-}" \
+            GITHUB_RUN_ID="${GITHUB_RUN_ID:-}" \
+            GITHUB_RUN_NUMBER="${GITHUB_RUN_NUMBER:-}" \
+            GITHUB_SERVER_URL="${GITHUB_SERVER_URL:-}" \
+            GITHUB_SHA="${GITHUB_SHA:-}" \
+            GITHUB_WORKFLOW="${GITHUB_WORKFLOW:-}" \
+            GITHUB_WORKFLOW_REF="${GITHUB_WORKFLOW_REF:-}" \
+            GITHUB_WORKFLOW_SHA="${GITHUB_WORKFLOW_SHA:-}" \
+            GITHUB_WORKSPACE="${GITHUB_WORKSPACE:-$PWD}" \
+            HOME="${HOME}" \
+            HUSKY=0 \
+            LANG="${LANG:-C.UTF-8}" \
+            NPM_CONFIG_PROVENANCE=true \
+            NPM_CONFIG_REGISTRY=https://registry.npmjs.org \
+            PATH="${TRUSTED_PATH}" \
+            PNPM_CONFIG_PROVENANCE=true \
+            PNPM_CONFIG_REGISTRY=https://registry.npmjs.org \
+            PWD="${PWD}" \
+            RUNNER_ENVIRONMENT="${RUNNER_ENVIRONMENT:-}" \
+            RUNNER_TEMP="${RUNNER_TEMP}" \
+            SHELL="${SHELL:-/bin/bash}" \
+            TMPDIR="${TMPDIR:-/tmp}" \
+            npm_config_provenance=true \
+            npm_config_registry=https://registry.npmjs.org \
+            pnpm_config_provenance=true \
+            pnpm_config_registry=https://registry.npmjs.org \
+            pnpm release --tag "$publish_tag" --no-git-tag
 
-          LC_ALL=C comm -13 "$before_tags" "$after_tags" > "$new_tags"
-          if [ -s "$new_tags" ]; then
+      - name: Verify release helper scripts after publish
+        if: steps.pending-changesets.outputs.has_changesets == 'false'
+        shell: bash
+        env:
+          BASH_ENV: /dev/null
+          EXPECTED_HELPER_SHA: ${{ steps.privileged-baseline.outputs.helper_sha }}
+          TRUSTED_PATH: ${{ steps.privileged-baseline.outputs.trusted_path }}
+        run: |
+          set -euo pipefail
+          PATH="${TRUSTED_PATH}"
+          export PATH
+          : > "$GITHUB_ENV"
+          : > "$GITHUB_PATH"
+
+          actual_helper_sha="$(
+            find scripts/release -maxdepth 1 -type f -name '*.mjs' -print0 |
+              sort -z |
+              xargs -0 sha256sum |
+              sha256sum |
+              cut -d ' ' -f 1
+          )"
+          if [ "${actual_helper_sha}" != "${EXPECTED_HELPER_SHA}" ]; then
+            echo "::error::Release helper scripts under scripts/release changed after publish."
+            exit 1
+          fi
+
+      - name: Prepare package tags
+        id: publish-packages
+        if: steps.pending-changesets.outputs.has_changesets == 'false'
+        shell: bash
+        env:
+          BASH_ENV: /dev/null
+          EXPECTED_HELPER_SHA: ${{ steps.privileged-baseline.outputs.helper_sha }}
+          GH_TOKEN: ${{ github.token }}
+          TRUSTED_PATH: ${{ steps.privileged-baseline.outputs.trusted_path }}
+        run: |
+          set -euo pipefail
+          PATH="${TRUSTED_PATH}"
+          export PATH
+
+          env -i \
+            BASH_ENV=/dev/null \
+            EXPECTED_HELPER_SHA="${EXPECTED_HELPER_SHA}" \
+            GH_TOKEN="${GH_TOKEN}" \
+            GITHUB_ENV="${GITHUB_ENV}" \
+            GITHUB_OUTPUT="${GITHUB_OUTPUT}" \
+            GITHUB_PATH="${GITHUB_PATH}" \
+            GITHUB_REPOSITORY="${GITHUB_REPOSITORY}" \
+            HOME="${HOME}" \
+            LANG="${LANG:-C.UTF-8}" \
+            PATH="${TRUSTED_PATH}" \
+            PWD="${PWD}" \
+            RUNNER_TEMP="${RUNNER_TEMP}" \
+            SHELL="${SHELL:-/bin/bash}" \
+            TMPDIR="${TMPDIR:-/tmp}" \
+            bash --noprofile --norc <<'BASH'
+          set -euo pipefail
+          : > "$GITHUB_ENV"
+          : > "$GITHUB_PATH"
+
+          actual_helper_sha="$(
+            find scripts/release -maxdepth 1 -type f -name '*.mjs' -print0 |
+              sort -z |
+              xargs -0 sha256sum |
+              sha256sum |
+              cut -d ' ' -f 1
+          )"
+          if [ "${actual_helper_sha}" != "${EXPECTED_HELPER_SHA}" ]; then
+            echo "::error::Release helper scripts under scripts/release changed before tag preparation."
+            exit 1
+          fi
+
+          local_tags="$(mktemp)"
+          remote_tags="$(mktemp)"
+          pending_tags="${RUNNER_TEMP}/pending-package-tags.txt"
+          trap 'rm -f "$local_tags" "$remote_tags"' EXIT
+
+          reset_origin_url() {
+            git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          }
+
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          trap 'rm -f "$local_tags" "$remote_tags"; reset_origin_url' EXIT
+
+          # Create package git tags after npm publish succeeds. This also
+          # recovers reruns after publish succeeded but tag push failed.
+          if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+            while IFS= read -r -d '' manifest; do
+              tag="$(
+                node scripts/release/compute-pending-tag.mjs "$manifest"
+              )"
+
+              if [ -z "$tag" ]; then
+                continue
+              fi
+
+              if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+                continue
+              fi
+
+              if git ls-remote --exit-code --tags --refs origin "refs/tags/${tag}" >/dev/null 2>&1; then
+                continue
+              fi
+
+              git tag "$tag" -m "$tag"
+            done < <(git diff --name-only -z --diff-filter=ACMRT HEAD^ HEAD -- 'packages/*/package.json')
+          fi
+
+          git tag --list | LC_ALL=C sort > "$local_tags"
+          git ls-remote --tags --refs origin |
+            sed 's#.*refs/tags/##' |
+            LC_ALL=C sort > "$remote_tags"
+
+          LC_ALL=C comm -23 "$local_tags" "$remote_tags" > "$pending_tags"
+          if [ -s "$pending_tags" ]; then
             echo "has_tags=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_tags=false" >> "$GITHUB_OUTPUT"
           fi
+          BASH
 
       - name: Push package tags
         if: steps.publish-packages.outputs.has_tags == 'true'
         shell: bash
         env:
+          BASH_ENV: /dev/null
           GH_TOKEN: ${{ github.token }}
+          TRUSTED_PATH: ${{ steps.privileged-baseline.outputs.trusted_path }}
         run: |
           set -euo pipefail
+          PATH="${TRUSTED_PATH}"
+          export PATH
 
-          mapfile -t tags < "${RUNNER_TEMP}/new-package-tags.txt"
+          env -i \
+            BASH_ENV=/dev/null \
+            GH_TOKEN="${GH_TOKEN}" \
+            GITHUB_ENV="${GITHUB_ENV}" \
+            GITHUB_PATH="${GITHUB_PATH}" \
+            GITHUB_REPOSITORY="${GITHUB_REPOSITORY}" \
+            HOME="${HOME}" \
+            LANG="${LANG:-C.UTF-8}" \
+            PATH="${TRUSTED_PATH}" \
+            PWD="${PWD}" \
+            RUNNER_TEMP="${RUNNER_TEMP}" \
+            SHELL="${SHELL:-/bin/bash}" \
+            TMPDIR="${TMPDIR:-/tmp}" \
+            bash --noprofile --norc <<'BASH'
+          set -euo pipefail
+          : > "$GITHUB_ENV"
+          : > "$GITHUB_PATH"
+
+          mapfile -t tags < "${RUNNER_TEMP}/pending-package-tags.txt"
           refs=()
 
           for tag in "${tags[@]}"; do
             refs+=("refs/tags/${tag}")
           done
 
+          reset_origin_url() {
+            git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          }
+
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git push --atomic origin "${refs[@]}"
+          trap reset_origin_url EXIT
+          git -c core.hooksPath=/dev/null push --no-verify --atomic origin "${refs[@]}"
+          BASH
+
+      - name: Upload package tag list
+        if: steps.publish-packages.outputs.has_tags == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pending-package-tags
+          path: ${{ runner.temp }}/pending-package-tags.txt
+          if-no-files-found: error
+
+  github-releases:
+    if: always() && needs.publish.result == 'success' && needs.publish.outputs.has_tags == 'true'
+    name: GitHub releases
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      CI: true
+      HUSKY: 0
+      TARGET_BRANCH: ${{ github.ref_name }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Download package tag list
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: pending-package-tags
+          path: ${{ runner.temp }}
+
+      - name: Create GitHub releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          mapfile -t tags < "${RUNNER_TEMP}/pending-package-tags.txt"
+          releases_dir="${RUNNER_TEMP}/github-releases"
+          mkdir -p "${releases_dir}"
+
+          prerelease_args=()
+          if [ "${TARGET_BRANCH}" = "next" ]; then
+            prerelease_args=(--prerelease)
+          fi
+
+          for tag in "${tags[@]}"; do
+            body_file="${releases_dir}/${tag//\//__}.md"
+
+            node scripts/release/github-release-body.mjs "${tag}" "${body_file}"
+
+            if gh release view "${tag}" >/dev/null 2>&1; then
+              gh release edit "${tag}" --title "${tag}" --notes-file "${body_file}" "${prerelease_args[@]}"
+            else
+              gh release create "${tag}" --title "${tag}" --notes-file "${body_file}" "${prerelease_args[@]}"
+            fi
+          done

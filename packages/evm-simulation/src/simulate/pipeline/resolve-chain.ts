@@ -1,29 +1,29 @@
 import { UnsupportedChainError } from "../../errors.js";
-import type { SimulationConfig } from "../../types.js";
+import type { SimulationConfig, TenderlyRpcConfig } from "../../types.js";
 
 interface ChainCapability {
-  tenderlySupported: boolean;
+  tenderlyRpc?: TenderlyRpcConfig;
   simulateV1Url?: string;
 }
 
 /**
  * Stage 2 of the simulate() pipeline.
  *
- * Determines which backend(s) are available for a chainId. Throws
- * `UnsupportedChainError` when neither Tenderly nor `eth_simulateV1` is reachable
- * for the requested chain.
+ * Looks up the per-chain `ChainSimulationConfig` and exposes whichever
+ * backends were configured. Throws `UnsupportedChainError` when the chain is
+ * absent from the map or has neither backend wired (defensive — the type
+ * already enforces at least one at construction).
  */
 export function resolveChain(
   config: SimulationConfig,
   chainId: number,
 ): ChainCapability {
-  const tenderlySupported =
-    config.tenderlyRest?.supportedChainIds.has(chainId) ?? false;
-  const simulateV1Url = config.chains.get(chainId)?.simulateV1Url;
-
-  if (!tenderlySupported && !simulateV1Url) {
+  const entry = config.chains.get(chainId);
+  if (!entry || (!entry.tenderlyRpc && !entry.simulateV1Url)) {
     throw new UnsupportedChainError(chainId);
   }
-
-  return { tenderlySupported, simulateV1Url };
+  return {
+    tenderlyRpc: entry.tenderlyRpc,
+    simulateV1Url: entry.simulateV1Url,
+  };
 }

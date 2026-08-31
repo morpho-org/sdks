@@ -1,43 +1,61 @@
 import {
   AccrualPosition,
+  ChainId,
   Market,
+  type MarketId,
   MarketParams,
   MathLib,
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
-import type { Address } from "viem";
+import { type Address, maxUint128 } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
+import { CbbtcUsdcBlue, WethUsdsBlue } from "../../test/fixtures/blue.js";
 import {
-  CbbtcUsdcMarketV1,
-  WethUsdsMarketV1,
-} from "../../test/fixtures/marketV1.js";
+  midnightChainId,
+  midnightMarket,
+} from "../../test/fixtures/midnight.js";
 import {
   AccrualPositionUserMismatchError,
   AddressMismatchError,
+  type BlueReallocationPlan,
   BorrowExceedsSafeLtvError,
   ChainIdMismatchError,
+  ChainWNativeMissingError,
   EmptyReallocationWithdrawalsError,
   ExcessiveSlippageToleranceError,
+  InconsistentReallocationPenaltyError,
+  InputExceedsMaxError,
+  InvalidReallocationAddressError,
+  InvalidReallocationShapeError,
+  InvalidReallocationSourceTypeError,
   MarketIdMismatchError,
   MissingClientPropertyError,
   MissingMarketPriceError,
-  NativeAmountOnNonWNativeCollateralError,
-  NegativeReallocationFeeError,
-  NegativeSlippageToleranceError,
-  NonPositiveReallocationAmountError,
+  NativeAmountOnNonWNativeAssetError,
+  NegativeInputError,
+  NonPositiveInputError,
   ReallocationWithdrawalOnTargetMarketError,
   RepayExceedsDebtError,
   RepaySharesExceedDebtError,
   UnsortedReallocationWithdrawalsError,
   type VaultReallocation,
+  type VaultV2BlueReallocation,
+  WithdrawExceedsCollateralError,
+  WithdrawExceedsSupplyError,
   WithdrawMakesPositionUnhealthyError,
+  WithdrawSharesExceedSupplyError,
 } from "../types/index.js";
-import { MAX_SLIPPAGE_TOLERANCE } from "./constant.js";
+import {
+  MAX_REALLOCATION_PENALTY,
+  MAX_SLIPPAGE_TOLERANCE,
+} from "./constant.js";
 import {
   validateAccrualPosition,
+  validateAndNormalizeReallocations,
   validateChainId,
-  validateNativeCollateral,
+  validateMidnightMarketChainId,
+  validateNativeAsset,
   validatePositionHealth,
   validatePositionHealthAfterWithdraw,
   validateReallocations,
@@ -45,12 +63,38 @@ import {
   validateRepayShares,
   validateSlippageTolerance,
   validateUserAddress,
+  validateVaultV2BlueReallocations,
+  validateWithdrawAmount,
+  validateWithdrawShares,
 } from "./validate.js";
 
 const USER_A: Address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 const USER_B: Address = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 
-const marketParams = new MarketParams(WethUsdsMarketV1);
+// ---------------------------------------------------------------------------
+// validateUserAddress (deprecated, kept for backwards compatibility)
+// ---------------------------------------------------------------------------
+
+describe("validateUserAddress", () => {
+  test("should pass when addresses match", () => {
+    expect(() => validateUserAddress(USER_A, USER_A)).not.toThrow();
+  });
+
+  test("should throw MissingClientPropertyError when clientAccountAddress is undefined", () => {
+    expect(() => validateUserAddress(undefined, USER_A)).toThrow(
+      MissingClientPropertyError,
+    );
+    expect(() => validateUserAddress(undefined, USER_A)).toThrow(/account/);
+  });
+
+  test("should throw AddressMismatchError when addresses differ", () => {
+    expect(() => validateUserAddress(USER_A, USER_B)).toThrow(
+      AddressMismatchError,
+    );
+  });
+});
+
+const marketParams = new MarketParams(WethUsdsBlue);
 
 /** Builds a Market with configurable price. */
 function makeMarket(overrides?: { price?: bigint }) {
@@ -86,31 +130,6 @@ function makePosition(overrides?: {
 }
 
 // ---------------------------------------------------------------------------
-// validateUserAddress
-// ---------------------------------------------------------------------------
-
-describe("validateUserAddress", () => {
-  test("should pass when addresses match", () => {
-    expect(() => validateUserAddress(USER_A, USER_A)).not.toThrow();
-  });
-
-  test("should throw MissingClientPropertyError when clientAccountAddress is undefined", () => {
-    expect(() => validateUserAddress(undefined, USER_A)).toThrow(
-      MissingClientPropertyError,
-    );
-    // Also lock in that the error names the missing property (`account`), so
-    // a refactor swapping to e.g. `MissingClientPropertyError("chain")` fails.
-    expect(() => validateUserAddress(undefined, USER_A)).toThrow(/account/);
-  });
-
-  test("should throw AddressMismatchError when addresses differ", () => {
-    expect(() => validateUserAddress(USER_A, USER_B)).toThrow(
-      AddressMismatchError,
-    );
-  });
-});
-
-// ---------------------------------------------------------------------------
 // validateAccrualPosition
 // ---------------------------------------------------------------------------
 
@@ -128,7 +147,7 @@ describe("validateAccrualPosition", () => {
 
   test("should throw MarketIdMismatchError when market IDs differ", () => {
     const pos = makePosition();
-    const otherMarketId = new MarketParams(CbbtcUsdcMarketV1).id;
+    const otherMarketId = new MarketParams(CbbtcUsdcBlue).id;
     expect(() =>
       validateAccrualPosition({
         positionData: pos,
@@ -155,7 +174,7 @@ describe("validateAccrualPosition", () => {
 // ---------------------------------------------------------------------------
 
 describe("validatePositionHealth", () => {
-  const lltv = WethUsdsMarketV1.lltv; // 86%
+  const lltv = WethUsdsBlue.lltv; // 86%
 
   test("should pass when borrow is within safe LTV", () => {
     const pos = makePosition({
@@ -230,6 +249,24 @@ describe("validatePositionHealth", () => {
       }),
     ).not.toThrow();
   });
+
+  test("should use zero effective LLTV when LLTV is below the buffer", () => {
+    const pos = makePosition({
+      collateral: 10n ** 18n,
+      borrowShares: 0n,
+      market: makeMarket({ price: ORACLE_PRICE_SCALE }),
+    });
+
+    expect(() =>
+      validatePositionHealth({
+        positionData: pos,
+        additionalCollateral: 0n,
+        borrowAmount: 1n,
+        marketId: marketParams.id,
+        lltv: 1n,
+      }),
+    ).toThrow(BorrowExceedsSafeLtvError);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -254,22 +291,63 @@ describe("validateChainId", () => {
   });
 });
 
+describe("validateMidnightMarketChainId", () => {
+  test("default: accepts raw market params on the expected chain", () => {
+    expect(() =>
+      validateMidnightMarketChainId(midnightMarket, midnightChainId),
+    ).not.toThrow();
+  });
+
+  test("behavior: accepts hydrated market state on the expected chain", () => {
+    expect(() =>
+      validateMidnightMarketChainId(
+        {
+          params: midnightMarket,
+          totalUnits: 1_000n,
+          lossFactor: 0n,
+          withdrawable: 500n,
+          continuousFeeCredit: 0n,
+          settlementFeeCbps: [0, 0, 0, 0, 0, 0, 0],
+          continuousFee: 0,
+          tickSpacing: 4,
+        },
+        midnightChainId,
+      ),
+    ).not.toThrow();
+  });
+
+  test("error: ChainIdMismatchError", () => {
+    expect(() =>
+      validateMidnightMarketChainId(
+        { ...midnightMarket, chainId: BigInt(midnightChainId + 1) },
+        midnightChainId,
+      ),
+    ).toThrow(ChainIdMismatchError);
+  });
+});
+
 // ---------------------------------------------------------------------------
-// validateNativeCollateral
+// validateNativeAsset
 // ---------------------------------------------------------------------------
 
-describe("validateNativeCollateral", () => {
+describe("validateNativeAsset", () => {
   // On mainnet, wNative = WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
   const wNative = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as Address;
   const usdc = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as Address;
 
-  test("should pass when collateral is wNative", () => {
-    expect(() => validateNativeCollateral(mainnet.id, wNative)).not.toThrow();
+  test("should pass when asset is wNative", () => {
+    expect(() => validateNativeAsset(mainnet.id, wNative)).not.toThrow();
   });
 
-  test("should throw NativeAmountOnNonWNativeCollateralError when collateral is not wNative", () => {
-    expect(() => validateNativeCollateral(mainnet.id, usdc)).toThrow(
-      NativeAmountOnNonWNativeCollateralError,
+  test("should throw NativeAmountOnNonWNativeAssetError when asset is not wNative", () => {
+    expect(() => validateNativeAsset(mainnet.id, usdc)).toThrow(
+      NativeAmountOnNonWNativeAssetError,
+    );
+  });
+
+  test("should throw ChainWNativeMissingError when the chain has no wNative", () => {
+    expect(() => validateNativeAsset(ChainId.CeloMainnet, usdc)).toThrow(
+      ChainWNativeMissingError,
     );
   });
 });
@@ -279,7 +357,7 @@ describe("validateNativeCollateral", () => {
 // ---------------------------------------------------------------------------
 
 describe("validatePositionHealthAfterWithdraw", () => {
-  const lltv = WethUsdsMarketV1.lltv;
+  const lltv = WethUsdsBlue.lltv;
 
   test("should return immediately when borrowAssets is zero (no debt)", () => {
     // Position with no debt and no price — would throw MissingMarketPriceError
@@ -347,6 +425,51 @@ describe("validatePositionHealthAfterWithdraw", () => {
         positionData: pos,
         withdrawAmount: (9n * 10n ** 17n) / 10n,
         lltv,
+        marketId: marketParams.id,
+      }),
+    ).toThrow(WithdrawMakesPositionUnhealthyError);
+  });
+
+  test("should throw MarketIdMismatchError when the position market differs", () => {
+    const pos = makePosition();
+    const otherMarketId = new MarketParams(CbbtcUsdcBlue).id;
+
+    expect(() =>
+      validatePositionHealthAfterWithdraw({
+        positionData: pos,
+        withdrawAmount: 1n,
+        lltv,
+        marketId: otherMarketId,
+      }),
+    ).toThrow(MarketIdMismatchError);
+  });
+
+  test("should throw WithdrawExceedsCollateralError when withdrawal exceeds collateral", () => {
+    const pos = makePosition({ collateral: 1n });
+
+    expect(() =>
+      validatePositionHealthAfterWithdraw({
+        positionData: pos,
+        withdrawAmount: 2n,
+        lltv,
+        marketId: marketParams.id,
+      }),
+    ).toThrow(WithdrawExceedsCollateralError);
+  });
+
+  test("should use zero effective LLTV when LLTV is below the buffer", () => {
+    const market = makeMarket({ price: ORACLE_PRICE_SCALE });
+    const pos = makePosition({
+      collateral: 10n ** 18n,
+      borrowShares: 1n,
+      market,
+    });
+
+    expect(() =>
+      validatePositionHealthAfterWithdraw({
+        positionData: pos,
+        withdrawAmount: 0n,
+        lltv: 1n,
         marketId: marketParams.id,
       }),
     ).toThrow(WithdrawMakesPositionUnhealthyError);
@@ -429,14 +552,26 @@ describe("validateRepayShares", () => {
 // validateReallocations
 // ---------------------------------------------------------------------------
 
-describe("validateReallocations", () => {
+describe("reallocation validation", () => {
   const targetMarketId = marketParams.id;
-  const sourceMarketA = new MarketParams(CbbtcUsdcMarketV1);
+  const sourceMarketA = new MarketParams(CbbtcUsdcBlue);
+  const marketParamsWithId = (id: MarketId) => ({
+    ...sourceMarketA,
+    id,
+  });
 
   const validReallocation: VaultReallocation = {
     vault: USER_A,
     fee: 0n,
     withdrawals: [{ marketParams: sourceMarketA, amount: 10n ** 18n }],
+  };
+
+  const validBluePublicAllocatorReallocation: VaultV2BlueReallocation = {
+    vault: USER_B,
+    from: { type: "idle" },
+    to: { adapter: USER_A },
+    assets: 1n,
+    penalty: 0n,
   };
 
   test("should pass with valid reallocations", () => {
@@ -445,13 +580,274 @@ describe("validateReallocations", () => {
     ).not.toThrow();
   });
 
-  test("should throw NegativeReallocationFeeError when fee is negative", () => {
+  test("behavior: accepts a valid Blue Public Allocator idle reallocation", () => {
+    expect(() =>
+      validateVaultV2BlueReallocations(
+        [validBluePublicAllocatorReallocation],
+        targetMarketId,
+      ),
+    ).not.toThrow();
+  });
+
+  test.each([
+    {
+      name: "negative penalty",
+      reallocation: {
+        ...validBluePublicAllocatorReallocation,
+        penalty: -1n,
+      },
+      ErrorClass: NegativeInputError,
+    },
+    {
+      name: "penalty above the SDK maximum",
+      reallocation: {
+        ...validBluePublicAllocatorReallocation,
+        penalty: MAX_REALLOCATION_PENALTY + 1n,
+      },
+      ErrorClass: InputExceedsMaxError,
+    },
+    {
+      name: "zero assets",
+      reallocation: { ...validBluePublicAllocatorReallocation, assets: 0n },
+      ErrorClass: NonPositiveInputError,
+    },
+    {
+      name: "negative assets",
+      reallocation: { ...validBluePublicAllocatorReallocation, assets: -1n },
+      ErrorClass: NonPositiveInputError,
+    },
+    {
+      name: "uint128 asset overflow",
+      reallocation: {
+        ...validBluePublicAllocatorReallocation,
+        assets: maxUint128 + 1n,
+      },
+      ErrorClass: InputExceedsMaxError,
+    },
+  ])(
+    "error: rejects Blue Public Allocator $name",
+    ({ reallocation, ErrorClass }) => {
+      expect(() =>
+        validateVaultV2BlueReallocations([reallocation], targetMarketId),
+      ).toThrow(ErrorClass);
+    },
+  );
+
+  test("error: InconsistentReallocationPenaltyError for one vault", () => {
+    expect(() =>
+      validateVaultV2BlueReallocations(
+        [
+          { ...validBluePublicAllocatorReallocation, penalty: 5n },
+          { ...validBluePublicAllocatorReallocation, penalty: 11n },
+        ],
+        targetMarketId,
+      ),
+    ).toThrow(InconsistentReallocationPenaltyError);
+  });
+
+  test("behavior: accepts the maximum uint128 asset amount", () => {
+    expect(() =>
+      validateVaultV2BlueReallocations(
+        [
+          {
+            ...validBluePublicAllocatorReallocation,
+            assets: maxUint128,
+          },
+        ],
+        targetMarketId,
+      ),
+    ).not.toThrow();
+  });
+
+  test("behavior: accepts the maximum reallocation penalty", () => {
+    expect(() =>
+      validateVaultV2BlueReallocations(
+        [
+          {
+            ...validBluePublicAllocatorReallocation,
+            penalty: MAX_REALLOCATION_PENALTY,
+          },
+        ],
+        targetMarketId,
+      ),
+    ).not.toThrow();
+  });
+
+  test("behavior: allows different penalties for different vaults", () => {
+    expect(() =>
+      validateVaultV2BlueReallocations(
+        [
+          { ...validBluePublicAllocatorReallocation, penalty: 5n },
+          {
+            ...validBluePublicAllocatorReallocation,
+            vault: USER_A,
+            penalty: 11n,
+          },
+        ],
+        targetMarketId,
+      ),
+    ).not.toThrow();
+  });
+
+  test("error: ReallocationWithdrawalOnTargetMarketError for a Blue Public Allocator target-market source", () => {
+    expect(() =>
+      validateVaultV2BlueReallocations(
+        [
+          {
+            ...validBluePublicAllocatorReallocation,
+            from: {
+              type: "market",
+              adapter: USER_A,
+              marketParams,
+            },
+          } satisfies VaultV2BlueReallocation,
+        ],
+        targetMarketId,
+      ),
+    ).toThrow(ReallocationWithdrawalOnTargetMarketError);
+  });
+
+  test("error: target market through a different Vault V2 adapter", () => {
+    expect(() =>
+      validateVaultV2BlueReallocations(
+        [
+          {
+            ...validBluePublicAllocatorReallocation,
+            from: {
+              type: "market",
+              adapter: USER_B,
+              marketParams,
+            },
+          } satisfies VaultV2BlueReallocation,
+        ],
+        targetMarketId,
+      ),
+    ).toThrow(ReallocationWithdrawalOnTargetMarketError);
+  });
+
+  test("error: target market supplied as plain market params", () => {
+    const plainMarketParams = {
+      loanToken: marketParams.loanToken,
+      collateralToken: marketParams.collateralToken,
+      oracle: marketParams.oracle,
+      irm: marketParams.irm,
+      lltv: marketParams.lltv,
+    };
+    const reallocation = {
+      ...validBluePublicAllocatorReallocation,
+      from: {
+        type: "market",
+        adapter: USER_A,
+        marketParams: plainMarketParams,
+      },
+    } as unknown as VaultV2BlueReallocation;
+
+    expect(() =>
+      validateVaultV2BlueReallocations([reallocation], targetMarketId),
+    ).toThrow(ReallocationWithdrawalOnTargetMarketError);
+  });
+
+  test.each([
+    { name: "invalid vault", overrides: { vault: "not-an-address" } },
+    { name: "missing target", overrides: { to: undefined } },
+    {
+      name: "invalid target adapter",
+      overrides: { to: { adapter: "not-an-address" } },
+    },
+  ])("error: InvalidReallocationAddressError for $name", ({ overrides }) => {
+    const reallocation = {
+      ...validBluePublicAllocatorReallocation,
+      ...overrides,
+    } as unknown as VaultV2BlueReallocation;
+
+    expect(() =>
+      validateVaultV2BlueReallocations([reallocation], targetMarketId),
+    ).toThrow(InvalidReallocationAddressError);
+  });
+
+  test("error: InvalidReallocationSourceTypeError", () => {
+    const reallocation = {
+      ...validBluePublicAllocatorReallocation,
+      from: { type: "marketTypo" },
+    } as unknown as VaultV2BlueReallocation;
+
+    expect(() =>
+      validateVaultV2BlueReallocations([reallocation], targetMarketId),
+    ).toThrow(InvalidReallocationSourceTypeError);
+  });
+
+  test.each([
+    { name: "missing source", from: undefined },
+    { name: "null source", from: null },
+    {
+      name: "missing market params",
+      from: { type: "market", adapter: USER_A },
+    },
+  ])("error: InvalidReallocationSourceTypeError for $name", ({ from }) => {
+    const reallocation = {
+      ...validBluePublicAllocatorReallocation,
+      from,
+    } as unknown as VaultV2BlueReallocation;
+
+    expect(() =>
+      validateVaultV2BlueReallocations([reallocation], targetMarketId),
+    ).toThrow(InvalidReallocationSourceTypeError);
+  });
+
+  test("error: InvalidReallocationAddressError for missing source adapter", () => {
+    const reallocation = {
+      ...validBluePublicAllocatorReallocation,
+      from: { type: "market", marketParams: sourceMarketA },
+    } as unknown as VaultV2BlueReallocation;
+
+    expect(() =>
+      validateVaultV2BlueReallocations([reallocation], targetMarketId),
+    ).toThrow(InvalidReallocationAddressError);
+  });
+
+  test.each([
+    {
+      name: "entry matching neither shape",
+      reallocation: {
+        vault: USER_A,
+        fee: 0n,
+      } as unknown as VaultV2BlueReallocation,
+    },
+    {
+      name: "entry matching both shapes",
+      reallocation: {
+        ...validReallocation,
+        from: { type: "idle" },
+        to: { adapter: USER_A },
+        assets: 1n,
+        penalty: 0n,
+      } as unknown as VaultV2BlueReallocation,
+    },
+    {
+      name: "null entry",
+      reallocation: null as unknown as VaultV2BlueReallocation,
+    },
+    {
+      name: "primitive entry",
+      reallocation: 1 as unknown as VaultV2BlueReallocation,
+    },
+  ])("error: InvalidReallocationShapeError for $name", ({ reallocation }) => {
+    expect(() =>
+      validateAndNormalizeReallocations({
+        reallocations: [reallocation] as unknown as BlueReallocationPlan,
+        targetMarketId,
+        chainId: mainnet.id,
+      }),
+    ).toThrow(InvalidReallocationShapeError);
+  });
+
+  test("should throw NegativeInputError when fee is negative", () => {
     expect(() =>
       validateReallocations(
         [{ ...validReallocation, fee: -1n }],
         targetMarketId,
       ),
-    ).toThrow(NegativeReallocationFeeError);
+    ).toThrow(NegativeInputError);
   });
 
   test("should throw EmptyReallocationWithdrawalsError when withdrawals is empty", () => {
@@ -463,7 +859,7 @@ describe("validateReallocations", () => {
     ).toThrow(EmptyReallocationWithdrawalsError);
   });
 
-  test("should throw NonPositiveReallocationAmountError when withdrawal amount is zero", () => {
+  test("should throw NonPositiveInputError when withdrawal amount is zero", () => {
     expect(() =>
       validateReallocations(
         [
@@ -474,10 +870,10 @@ describe("validateReallocations", () => {
         ],
         targetMarketId,
       ),
-    ).toThrow(NonPositiveReallocationAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NonPositiveReallocationAmountError when withdrawal amount is negative", () => {
+  test("should throw NonPositiveInputError when withdrawal amount is negative", () => {
     expect(() =>
       validateReallocations(
         [
@@ -488,10 +884,10 @@ describe("validateReallocations", () => {
         ],
         targetMarketId,
       ),
-    ).toThrow(NonPositiveReallocationAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw ReallocationWithdrawalOnTargetMarketError when withdrawal targets borrow market", () => {
+  test("should throw ReallocationWithdrawalOnTargetMarketError when withdrawal targets the target market", () => {
     expect(() =>
       validateReallocations(
         [
@@ -522,6 +918,26 @@ describe("validateReallocations", () => {
       ),
     ).toThrow(UnsortedReallocationWithdrawalsError);
   });
+
+  test("should accept mixed-case withdrawal ids when normalized order is ascending", () => {
+    const mixedSourceA = `0x${"a".repeat(64)}` as MarketId;
+    const mixedSourceB = `0x${"B".repeat(64)}` as MarketId;
+
+    expect(() =>
+      validateReallocations(
+        [
+          {
+            ...validReallocation,
+            withdrawals: [
+              { marketParams: marketParamsWithId(mixedSourceA), amount: 1n },
+              { marketParams: marketParamsWithId(mixedSourceB), amount: 1n },
+            ],
+          },
+        ],
+        targetMarketId,
+      ),
+    ).not.toThrow();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -546,15 +962,101 @@ describe("validateSlippageTolerance", () => {
     ).not.toThrow();
   });
 
-  test("should throw NegativeSlippageToleranceError when slippage is negative", () => {
-    expect(() => validateSlippageTolerance(-1n)).toThrow(
-      NegativeSlippageToleranceError,
-    );
+  test("should throw NegativeInputError when slippage is negative", () => {
+    expect(() => validateSlippageTolerance(-1n)).toThrow(NegativeInputError);
   });
 
   test("should throw ExcessiveSlippageToleranceError just above MAX_SLIPPAGE_TOLERANCE", () => {
     expect(() =>
       validateSlippageTolerance(MAX_SLIPPAGE_TOLERANCE + 1n),
     ).toThrow(ExcessiveSlippageToleranceError);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// validateWithdrawAmount / validateWithdrawShares
+// ---------------------------------------------------------------------------
+
+describe("validateWithdrawAmount", () => {
+  test("should pass when withdraw assets are within supplied assets", () => {
+    const m = makeMarket({ price: ORACLE_PRICE_SCALE });
+    const pos = new AccrualPosition(
+      {
+        user: USER_A,
+        supplyShares: 10n ** 24n,
+        borrowShares: 0n,
+        collateral: 0n,
+      },
+      m,
+    );
+    expect(() =>
+      validateWithdrawAmount({
+        positionData: pos,
+        withdrawAssets: 10n ** 18n,
+        marketId: marketParams.id,
+      }),
+    ).not.toThrow();
+  });
+
+  test("should throw WithdrawExceedsSupplyError when withdraw assets exceed supplied assets", () => {
+    const m = makeMarket({ price: ORACLE_PRICE_SCALE });
+    const pos = new AccrualPosition(
+      {
+        user: USER_A,
+        supplyShares: 10n ** 18n,
+        borrowShares: 0n,
+        collateral: 0n,
+      },
+      m,
+    );
+    expect(() =>
+      validateWithdrawAmount({
+        positionData: pos,
+        withdrawAssets: 10n ** 30n,
+        marketId: marketParams.id,
+      }),
+    ).toThrow(WithdrawExceedsSupplyError);
+  });
+});
+
+describe("validateWithdrawShares", () => {
+  test("should pass when withdraw shares are within owned supply shares", () => {
+    const m = makeMarket({ price: ORACLE_PRICE_SCALE });
+    const pos = new AccrualPosition(
+      {
+        user: USER_A,
+        supplyShares: 10n ** 24n,
+        borrowShares: 0n,
+        collateral: 0n,
+      },
+      m,
+    );
+    expect(() =>
+      validateWithdrawShares({
+        positionData: pos,
+        withdrawShares: 10n ** 18n,
+        marketId: marketParams.id,
+      }),
+    ).not.toThrow();
+  });
+
+  test("should throw WithdrawSharesExceedSupplyError when withdraw shares exceed owned supply shares", () => {
+    const m = makeMarket({ price: ORACLE_PRICE_SCALE });
+    const pos = new AccrualPosition(
+      {
+        user: USER_A,
+        supplyShares: 10n ** 18n,
+        borrowShares: 0n,
+        collateral: 0n,
+      },
+      m,
+    );
+    expect(() =>
+      validateWithdrawShares({
+        positionData: pos,
+        withdrawShares: 10n ** 30n,
+        marketId: marketParams.id,
+      }),
+    ).toThrow(WithdrawSharesExceedSupplyError);
   });
 });

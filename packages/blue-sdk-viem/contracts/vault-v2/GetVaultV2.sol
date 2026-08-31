@@ -28,7 +28,6 @@ struct VaultV2Allocation {
 struct VaultV2Response {
     Token token;
     address asset;
-    uint256 totalAssets;
     uint128 _totalAssets;
     uint256 totalSupply;
     uint256 virtualShares;
@@ -43,6 +42,8 @@ struct VaultV2Response {
     uint96 managementFee;
     address performanceFeeRecipient;
     address managementFeeRecipient;
+    bool performanceFeeRecipientCanReceiveShares;
+    bool managementFeeRecipientCanReceiveShares;
 }
 
 contract GetVaultV2 {
@@ -59,7 +60,6 @@ contract GetVaultV2 {
         res.token =
             Token({asset: vault.asset(), symbol: vault.symbol(), name: vault.name(), decimals: vault.decimals()});
         res.asset = vault.asset();
-        res.totalAssets = vault.totalAssets();
         res._totalAssets = vault._totalAssets();
         res.totalSupply = vault.totalSupply();
         res.virtualShares = vault.virtualShares();
@@ -71,6 +71,10 @@ contract GetVaultV2 {
         res.managementFee = vault.managementFee();
         res.performanceFeeRecipient = vault.performanceFeeRecipient();
         res.managementFeeRecipient = vault.managementFeeRecipient();
+        res.performanceFeeRecipientCanReceiveShares =
+            res.performanceFee > 0 ? vault.canReceiveShares(res.performanceFeeRecipient) : true;
+        res.managementFeeRecipientCanReceiveShares =
+            res.managementFee > 0 ? vault.canReceiveShares(res.managementFeeRecipient) : true;
 
         uint256 adaptersLength = vault.adaptersLength();
         res.adapters = new address[](adaptersLength);

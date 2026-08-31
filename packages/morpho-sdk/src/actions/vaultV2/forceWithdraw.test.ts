@@ -2,10 +2,10 @@ import { MarketParams } from "@morpho-org/blue-sdk";
 import { vaultV2Abi } from "@morpho-org/blue-sdk-viem";
 import { type Address, decodeFunctionData, isHex, parseUnits } from "viem";
 import { describe, expect } from "vitest";
-import { test } from "../../../test/setup.js";
+import { test } from "../../../test/unit.js";
 import {
   EmptyDeallocationsError,
-  NonPositiveAssetAmountError,
+  NonPositiveInputError,
 } from "../../types/index.js";
 import { vaultV2ForceWithdraw } from "./forceWithdraw.js";
 
@@ -200,7 +200,7 @@ describe("forceWithdrawVaultV2 unit tests", () => {
     ).toThrow(EmptyDeallocationsError);
   });
 
-  test("should throw NonPositiveAssetAmountError when withdraw assets is zero", ({
+  test("should throw NonPositiveInputError when withdraw assets is zero", ({
     client,
   }) => {
     expect(() =>
@@ -214,10 +214,10 @@ describe("forceWithdrawVaultV2 unit tests", () => {
           onBehalf: client.account.address,
         },
       }),
-    ).toThrow(NonPositiveAssetAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NonPositiveAssetAmountError when withdraw assets is negative", ({
+  test("should throw NonPositiveInputError when withdraw assets is negative", ({
     client,
   }) => {
     expect(() =>
@@ -231,7 +231,7 @@ describe("forceWithdrawVaultV2 unit tests", () => {
           onBehalf: client.account.address,
         },
       }),
-    ).toThrow(NonPositiveAssetAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
   test("behavior: snapshots withdraw.amount and recipient against getter mutation", ({

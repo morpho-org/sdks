@@ -45,7 +45,18 @@ export class UnsupportedPermitDomainExtensionsError extends Error {
 
 /**
  * Checks if an error is a contract revert with the "UnknownOfFactory" error name.
+ *
  * Used to propagate factory validation errors instead of falling back to multicall.
+ *
+ * @param error - Error thrown by viem or another read path.
+ * @returns `true` when `error` wraps a viem `ContractFunctionRevertedError` named
+ *   `UnknownOfFactory`.
+ * @example
+ * ```ts
+ * import { isUnknownOfFactoryError } from "@morpho-org/blue-sdk-viem";
+ *
+ * if (isUnknownOfFactoryError(error)) throw error;
+ * ```
  */
 export function isUnknownOfFactoryError(error: unknown): boolean {
   if (!(error instanceof BaseError)) return false;
@@ -65,6 +76,17 @@ export function isUnknownOfFactoryError(error: unknown): boolean {
  * error name, returning the offending adapter address if so. Used to propagate
  * adapter validation errors from the deployless `GetVaultV2.query` to the
  * caller as a typed {@link UnsupportedVaultV2AdapterError}.
+ *
+ * @param error - Error thrown by viem or another read path.
+ * @returns The unsupported adapter address when present, or `null` when the error does not match.
+ * @example
+ * ```ts
+ * import { UnsupportedVaultV2AdapterError } from "@morpho-org/blue-sdk";
+ * import { getUnsupportedVaultV2Adapter } from "@morpho-org/blue-sdk-viem";
+ *
+ * const adapter = getUnsupportedVaultV2Adapter(error);
+ * if (adapter != null) throw new UnsupportedVaultV2AdapterError(adapter);
+ * ```
  */
 export function getUnsupportedVaultV2Adapter(error: unknown): Address | null {
   if (!(error instanceof BaseError)) return null;

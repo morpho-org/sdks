@@ -6,7 +6,7 @@ The SDK is a product. It has users (integrators, internal and external, human _a
 
 ## Scope
 
-- **In:** transaction builders for Morpho — VaultV1, VaultV2, MarketV1; entity fetchers for the data those builders need; framework adapters in opt-in `*-wagmi` / `*-viem` packages.
+- **In:** transaction builders for Morpho — VaultV1, VaultV2, Blue; entity fetchers for the data those builders need; framework adapters in opt-in `*-wagmi` / `*-viem` packages.
 - **Out:** framework wrappers (React/Redux/ethers), simulation engines, indexers, hosted infrastructure. Any work that doesn't make Morpho integrations faster or safer is out of scope by design.
 - **One peer dep:** `viem`. Integrators install `morpho-sdk + viem` and they're done.
 
@@ -22,7 +22,7 @@ The SDK team operates under Morpho's Core Values (see internal team handbook). I
 
 ## Specific goals
 
-1. **Build & maintain.** Grow the SDK within the non-negotiable principles. Say no to scope that violates one — write a new TIB if a principle needs to evolve. Absorb rather than re-export types at risk of upstream churn. Patch releases on demand; minors on a rolling cadence; majors with migration guides. Deprecations follow the 4-step flow. `main` is always releasable.
+1. **Build & maintain.** Grow the SDK within the non-negotiable principles. Say no to scope that violates one — write a new TIB if a principle needs to evolve. Absorb rather than re-export types at risk of upstream churn. Patch releases on demand; minors on a rolling cadence; majors with migration guides. Deprecations follow the 4-step flow unless [`AGENTS.md`](./AGENTS.md) §7 codifies a narrow exception. `main` is always releasable.
 2. **Secure, tested & audited.** Security is the posture; tests and audits are the evidence. We codify invariants as tests, pin ABIs and addresses in-package, audit every major release, and treat threat-model review as routine when new protocol surface lands. (Test/audit specifics: see [`AGENTS.md`](./AGENTS.md) §5 and §7.)
 3. **Document & make AI-legible.** Docs are a feature, not an afterthought, and humans and AI agents are equal users. We invest in JSDoc on every exported symbol, runnable single-file recipes as few-shot examples, identical signatures across protocol overlaps, and error messages that read like instructions. (Doc rules: see [`AGENTS.md`](./AGENTS.md) §6.)
 4. **Engage users, drive adoption.** Protocol team in the SDK design loop before any contract change ships. Internal app teams (Vault, Curator, MCP, write/sim APIs) are the SDK's first and hardest users — their friction is our backlog. External integrators get visible roadmap, regular touchpoints, and active support. AI agents are a first-class user class; agent failures feed docs and API-shape backlog the same way human failures do.

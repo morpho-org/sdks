@@ -4,8 +4,8 @@ import {
   KeyrockUsdcVaultV2,
   KpkWETHVaultV2,
 } from "../../../test/fixtures/vaultV2.js";
-import { test } from "../../../test/setup.js";
-import { NonPositiveAssetAmountError } from "../../types/index.js";
+import { test } from "../../../test/unit.js";
+import { NonPositiveInputError } from "../../types/index.js";
 import { vaultV2Withdraw } from "./withdraw.js";
 
 describe("withdrawVaultV2 unit tests", () => {
@@ -61,7 +61,26 @@ describe("withdrawVaultV2 unit tests", () => {
     expect(tx.value).toBe(0n);
   });
 
-  test("should throw NonPositiveAssetAmountError when assets is zero", async () => {
+  test("should append metadata to transaction data when provided", async ({
+    client,
+  }) => {
+    const amount = parseUnits("1000", 6);
+    const tx = vaultV2Withdraw({
+      vault: {
+        address: KeyrockUsdcVaultV2.address,
+      },
+      args: {
+        amount,
+        recipient: client.account.address,
+        onBehalf: client.account.address,
+      },
+      metadata: { origin: "a1b2c3d4" },
+    });
+
+    expect(tx.data.includes("a1b2c3d4")).toBe(true);
+  });
+
+  test("should throw NonPositiveInputError when assets is zero", async () => {
     expect(() =>
       vaultV2Withdraw({
         vault: {
@@ -73,10 +92,10 @@ describe("withdrawVaultV2 unit tests", () => {
           onBehalf: "0x1234567890123456789012345678901234567890",
         },
       }),
-    ).toThrow(NonPositiveAssetAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NonPositiveAssetAmountError when assets is negative", async () => {
+  test("should throw NonPositiveInputError when assets is negative", async () => {
     expect(() =>
       vaultV2Withdraw({
         vault: {
@@ -88,6 +107,6 @@ describe("withdrawVaultV2 unit tests", () => {
           onBehalf: "0x1234567890123456789012345678901234567890",
         },
       }),
-    ).toThrow(NonPositiveAssetAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 });

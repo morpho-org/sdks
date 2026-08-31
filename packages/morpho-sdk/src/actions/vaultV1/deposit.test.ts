@@ -1,27 +1,31 @@
-import { addressesRegistry } from "@morpho-org/blue-sdk";
+import { addressesRegistry, ChainId } from "@morpho-org/blue-sdk";
 import type { Address } from "viem";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect, vi } from "vitest";
+import { afterEach, describe, expect, vi } from "vitest";
 import {
   GauntletWethVaultV1,
   SteakhouseUsdcVaultV1,
 } from "../../../test/fixtures/vaultV1.js";
-import { test } from "../../../test/setup.js";
+import { test } from "../../../test/unit.js";
 import {
+  ChainWNativeMissingError,
   DepositAmountMismatchError,
   DepositAssetMismatchError,
   isRequirementApproval,
   isRequirementSignature,
-  NonPositiveAssetAmountError,
-  NonPositiveMaxSharePriceError,
-  ZeroDepositAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
 } from "../../types/index.js";
-import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
-import { getRequirements } from "../requirements/index.js";
+import { getGeneralAdapterRequirements } from "../requirements/index.js";
+import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
 import { vaultV1Deposit } from "./deposit.js";
 
 describe("depositVaultV1 unit tests", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   const { dai, usdc, wNative } = addressesRegistry[mainnet.id];
 
   test("should create deposit bundle with DAI via permit2", async ({
@@ -32,7 +36,7 @@ describe("depositVaultV1 unit tests", () => {
     const assets = parseUnits("100", 18);
     const maxSharePrice = 1000000000000000000n;
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: dai,
       chainId: mainnet.id,
       supportSignature: true,
@@ -90,7 +94,7 @@ describe("depositVaultV1 unit tests", () => {
     const amount = parseUnits("1000", 6);
     const maxSharePrice = 1000000n;
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: usdc,
       chainId: mainnet.id,
       supportSignature: true,
@@ -114,8 +118,8 @@ describe("depositVaultV1 unit tests", () => {
     expect(requirementSignature.args.asset).toEqual(usdc);
 
     const localSpy = vi.spyOn(
-      getRequirementsActionModule,
-      "getRequirementsAction",
+      getTokenRequirementActionsModule,
+      "getTokenRequirementActions",
     );
 
     const tx = vaultV1Deposit({
@@ -151,7 +155,7 @@ describe("depositVaultV1 unit tests", () => {
     const amount = parseUnits("5", 18);
     const maxSharePrice = 1000000000000000000n;
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: wNative,
       chainId: mainnet.id,
       supportSignature: true,
@@ -203,6 +207,32 @@ describe("depositVaultV1 unit tests", () => {
     expect(tx.value).toBe(0n);
   });
 
+  test("should create deposit bundle with native amount for wNative vault", async ({
+    client,
+  }) => {
+    const nativeAmount = parseUnits("1", 18);
+    const maxSharePrice = 1000000000000000000n;
+
+    const tx = vaultV1Deposit({
+      vault: {
+        chainId: mainnet.id,
+        address: GauntletWethVaultV1.address,
+        asset: wNative,
+      },
+      args: {
+        amount: 0n,
+        nativeAmount,
+        maxSharePrice,
+        recipient: client.account.address,
+      },
+    });
+
+    expect(tx.action.args.vault).toBe(GauntletWethVaultV1.address);
+    expect(tx.action.args.amount).toBe(0n);
+    expect(tx.action.args.nativeAmount).toBe(nativeAmount);
+    expect(tx.value).toBe(nativeAmount);
+  });
+
   test("should create deposit bundle without requirement signature", async ({
     client,
   }) => {
@@ -210,8 +240,8 @@ describe("depositVaultV1 unit tests", () => {
     const maxSharePrice = 1000000n;
 
     const localSpy = vi.spyOn(
-      getRequirementsActionModule,
-      "getRequirementsAction",
+      getTokenRequirementActionsModule,
+      "getTokenRequirementActions",
     );
 
     const tx = vaultV1Deposit({
@@ -227,7 +257,7 @@ describe("depositVaultV1 unit tests", () => {
       },
     });
 
-    expect(localSpy).not.toHaveBeenCalled();
+    expect(localSpy).toHaveBeenCalled();
 
     expect(tx).toBeDefined();
     expect(tx.action.type).toBe("vaultV1Deposit");
@@ -247,7 +277,7 @@ describe("depositVaultV1 unit tests", () => {
     const depositAmount = parseUnits("1000", 6);
     const maxSharePrice = 1000000n;
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: usdc,
       chainId: mainnet.id,
       supportSignature: true,
@@ -285,7 +315,7 @@ describe("depositVaultV1 unit tests", () => {
     ).toThrow(DepositAmountMismatchError);
   });
 
-  test("should throw NonPositiveAssetAmountError when assets is negative", async ({
+  test("should throw NegativeInputError when assets is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -301,10 +331,10 @@ describe("depositVaultV1 unit tests", () => {
           recipient: client.account.address,
         },
       }),
-    ).toThrow(NonPositiveAssetAmountError);
+    ).toThrow(NegativeInputError);
   });
 
-  test("should throw ZeroDepositAmountError when assets and nativeAmount are both zero", async ({
+  test("should throw NonPositiveInputError when assets and nativeAmount are both zero", async ({
     client,
   }) => {
     expect(() =>
@@ -320,10 +350,10 @@ describe("depositVaultV1 unit tests", () => {
           recipient: client.account.address,
         },
       }),
-    ).toThrow(ZeroDepositAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NonPositiveMaxSharePriceError when maxSharePrice is zero", async ({
+  test("should throw NonPositiveInputError when maxSharePrice is zero", async ({
     client,
   }) => {
     expect(() =>
@@ -339,10 +369,10 @@ describe("depositVaultV1 unit tests", () => {
           recipient: client.account.address,
         },
       }),
-    ).toThrow(NonPositiveMaxSharePriceError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NonPositiveMaxSharePriceError when maxSharePrice is negative", async ({
+  test("should throw NonPositiveInputError when maxSharePrice is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -358,7 +388,27 @@ describe("depositVaultV1 unit tests", () => {
           recipient: client.account.address,
         },
       }),
-    ).toThrow(NonPositiveMaxSharePriceError);
+    ).toThrow(NonPositiveInputError);
+  });
+
+  test("should throw ChainWNativeMissingError when nativeAmount is used on a chain without wNative", async ({
+    client,
+  }) => {
+    expect(() =>
+      vaultV1Deposit({
+        vault: {
+          chainId: ChainId.CeloMainnet,
+          address: GauntletWethVaultV1.address,
+          asset: wNative,
+        },
+        args: {
+          amount: 0n,
+          nativeAmount: 1n,
+          maxSharePrice: 1000000n,
+          recipient: client.account.address,
+        },
+      }),
+    ).toThrow(ChainWNativeMissingError);
   });
 
   test("should return a deep-frozen transaction object", async ({ client }) => {
@@ -423,7 +473,7 @@ describe("depositVaultV1 unit tests", () => {
     const assets = parseUnits("100", 18);
     const maxSharePrice = 1000000000000000000n;
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: dai,
       chainId: mainnet.id,
       supportSignature: true,

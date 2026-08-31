@@ -4,6 +4,7 @@ import type { Address } from "../types.js";
 import type { IToken } from "./Token.js";
 import { WrappedToken } from "./WrappedToken.js";
 
+/** Represents a wrapped token whose conversion uses a WAD-scaled exchange rate. */
 export class ExchangeRateWrappedToken extends WrappedToken {
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(

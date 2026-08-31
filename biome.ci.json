@@ -1,0 +1,15 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.6/schema.json",
+  "extends": ["./biome.json"],
+  "files": {
+    "includes": [
+      "**",
+      "!**/lib",
+      "!**/.vscode",
+      "!**/cache",
+      "!**/coverage",
+      "!**/artifacts",
+      "!**/packages/liquidity-sdk-viem/src/api/sdk.ts"
+    ]
+  }
+}

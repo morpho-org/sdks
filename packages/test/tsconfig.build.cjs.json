@@ -3,9 +3,17 @@
   "compilerOptions": {
     "rootDir": "src",
     "module": "CommonJS",
-    "moduleResolution": "node10",
+    "moduleResolution": "bundler",
     "outDir": "./lib/cjs",
     "tsBuildInfoFile": "tsconfig.cjs.tsbuildinfo"
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.test-d.ts",
+    "src/**/__test__/**",
+    "src/**/__mocks__/**",
+    "src/**/__fixtures__/**",
+    "src/mock.ts"
+  ]
 }

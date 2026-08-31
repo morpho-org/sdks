@@ -1,42 +1,10 @@
-import * as Types from './types.js';
+import type * as Types from './types.js';
 
-import { GraphQLClient, RequestOptions } from 'graphql-request';
-import { gql } from 'graphql-tag';
+import { type GraphQLClient, type RequestOptions } from 'graphql-request';
+import type { DocumentNode } from 'graphql';
 type GraphQLClientRequestHeaders = RequestOptions['requestHeaders'];
 
-export const GetMarketsDocument = gql`
-    query getMarkets($chainId: Int!, $marketIds: [String!]) {
-  markets(where: {chainId_in: [$chainId], uniqueKey_in: $marketIds}) {
-    items {
-      uniqueKey
-      targetBorrowUtilization
-      publicAllocatorSharedLiquidity {
-        vault {
-          address
-        }
-        allocationMarket {
-          uniqueKey
-        }
-        assets
-      }
-      supplyingVaults {
-        address
-        state {
-          allocation {
-            market {
-              uniqueKey
-              loanAsset {
-                address
-              }
-              targetWithdrawUtilization
-            }
-          }
-        }
-      }
-    }
-  }
-}
-    `;
+export const GetMarketsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"getMarkets"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"chainId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"marketIds"}},"type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"markets"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"chainId_in"},"value":{"kind":"ListValue","values":[{"kind":"Variable","name":{"kind":"Name","value":"chainId"}}]}},{"kind":"ObjectField","name":{"kind":"Name","value":"uniqueKey_in"},"value":{"kind":"Variable","name":{"kind":"Name","value":"marketIds"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"items"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","alias":{"kind":"Name","value":"uniqueKey"},"name":{"kind":"Name","value":"marketId"}},{"kind":"Field","name":{"kind":"Name","value":"targetBorrowUtilization"}},{"kind":"Field","name":{"kind":"Name","value":"publicAllocatorSharedLiquidity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"vault"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"address"}}]}},{"kind":"Field","alias":{"kind":"Name","value":"allocationMarket"},"name":{"kind":"Name","value":"withdrawMarket"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","alias":{"kind":"Name","value":"uniqueKey"},"name":{"kind":"Name","value":"marketId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"assets"}}]}},{"kind":"Field","name":{"kind":"Name","value":"supplyingVaults"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"address"}},{"kind":"Field","name":{"kind":"Name","value":"state"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"allocation"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"market"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","alias":{"kind":"Name","value":"uniqueKey"},"name":{"kind":"Name","value":"marketId"}},{"kind":"Field","name":{"kind":"Name","value":"loanAsset"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"address"}}]}},{"kind":"Field","name":{"kind":"Name","value":"targetWithdrawUtilization"}}]}}]}}]}}]}}]}}]}}]}}]} as unknown as DocumentNode;
 
 export type SdkFunctionWrapper = <T>(action: (requestHeaders?:Record<string, string>) => Promise<T>, operationName: string, operationType?: string, variables?: any) => Promise<T>;
 
@@ -45,8 +13,8 @@ const defaultWrapper: SdkFunctionWrapper = (action, _operationName, _operationTy
 
 export function getSdk(client: GraphQLClient, withWrapper: SdkFunctionWrapper = defaultWrapper) {
   return {
-    getMarkets(variables: Types.GetMarketsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders): Promise<Types.GetMarketsQuery> {
-      return withWrapper((wrappedRequestHeaders) => client.request<Types.GetMarketsQuery>(GetMarketsDocument, variables, {...requestHeaders, ...wrappedRequestHeaders}), 'getMarkets', 'query', variables);
+    getMarkets(variables: Types.GetMarketsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<Types.GetMarketsQuery> {
+      return withWrapper((wrappedRequestHeaders) => client.request<Types.GetMarketsQuery>({ document: GetMarketsDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'getMarkets', 'query', variables);
     }
   };
 }

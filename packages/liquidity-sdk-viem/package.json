@@ -1,13 +1,17 @@
 {
   "name": "@morpho-org/liquidity-sdk-viem",
   "description": "Viem-based package that helps seamlessly calculate the liquidity available through the PublicAllocator.",
-  "version": "1.4.1",
+  "version": "4.1.2",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Rubilmax <rmilon@gmail.com>"
   ],
   "license": "MIT",
-  "repository": "github:morpho-org/sdks",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/morpho-org/sdks.git",
+    "directory": "packages/liquidity-sdk-viem"
+  },
   "homepage": "https://github.com/morpho-org/sdks",
   "bugs": {
     "url": "https://github.com/morpho-org/sdks/issues",
@@ -25,10 +29,10 @@
     "codegen": "graphql-codegen --config codegen.ts"
   },
   "peerDependencies": {
-    "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/blue-sdk-viem": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^",
-    "@morpho-org/simulation-sdk": "workspace:^",
+    "@morpho-org/blue-sdk": "^6.0.0",
+    "@morpho-org/blue-sdk-viem": "^5.0.0",
+    "@morpho-org/morpho-sdk": "^5.4.0",
+    "@morpho-org/morpho-ts": "^2.7.0",
     "dataloader": "^2.2.3",
     "graphql": "^14.0.0 || ^15.0.0 || ^16.0.0",
     "graphql-request": "^6.1.0",
@@ -36,24 +40,27 @@
     "viem": "^2.0.0"
   },
   "devDependencies": {
-    "@graphql-codegen/cli": "^7.0.0",
+    "@graphql-codegen/cli": "^7.2.0",
     "@graphql-codegen/import-types-preset": "^4.0.1",
-    "@graphql-codegen/typescript": "^6.0.1",
-    "@graphql-codegen/typescript-graphql-request": "^7.0.1",
-    "@graphql-codegen/typescript-operations": "^5.0.9",
+    "@graphql-codegen/typescript": "^6.1.0",
+    "@graphql-codegen/typescript-graphql-request": "^7.1.0",
+    "@graphql-codegen/typescript-operations": "^6.1.2",
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/blue-sdk-viem": "workspace:^",
+    "@morpho-org/morpho-sdk": "workspace:^",
     "@morpho-org/morpho-test": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
-    "@morpho-org/simulation-sdk": "workspace:^",
     "@morpho-org/test": "workspace:^",
-    "graphql": "^16.14.0",
-    "nock": "^14.0.15",
-    "typescript": "^6.0.3",
-    "viem": "^2.48.11",
-    "vitest": "^4.1.5"
+    "dataloader": "^2.2.3",
+    "graphql": "^16.14.2",
+    "nock": "^14.0.17",
+    "typescript": "^7.0.2",
+    "viem": "^2.55.10",
+    "vitest": "^4.1.10"
   },
   "publishConfig": {
+    "main": "./lib/cjs/index.js",
+    "types": "./lib/esm/index.d.ts",
     "exports": {
       ".": {
         "types": "./lib/esm/index.d.ts",

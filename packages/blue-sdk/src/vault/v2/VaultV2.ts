@@ -1,11 +1,13 @@
-import { type Address, type Hash, type Hex, zeroAddress } from "viem";
+import { type Address, type Hex, zeroAddress } from "viem";
 import { VaultV2Errors } from "../../errors.js";
 import { MathLib, type RoundingDirection } from "../../math/index.js";
 import { type IToken, WrappedToken } from "../../token/index.js";
-import type { BigIntish } from "../../types.js";
+import type { BigIntish, Hash } from "../../types.js";
 import { type CapacityLimit, CapacityLimitReason } from "../../utils.js";
 import type { IAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
+import { VaultV2Utils } from "./VaultV2Utils.js";
 
+/** Plain input shape for one Vault V2 liquidity allocation. */
 export interface IVaultV2Allocation {
   id: Hash;
   absoluteCap: bigint;
@@ -13,14 +15,11 @@ export interface IVaultV2Allocation {
   allocation: bigint;
 }
 
+/** Plain input shape for a Morpho Vault V2. */
 export interface IVaultV2 extends IToken {
   asset: Address;
   /**
-   * The total assets, *including* virtually accrued interest.
-   */
-  totalAssets: bigint;
-  /**
-   * The total assets, *excluding* virtually accrued interest.
+   * Stored total assets at `lastUpdate`, excluding virtually accrued interest.
    */
   _totalAssets: bigint;
   /**
@@ -38,12 +37,16 @@ export interface IVaultV2 extends IToken {
   managementFee: bigint;
   performanceFeeRecipient: Address;
   managementFeeRecipient: Address;
+  /** Whether the performance fee recipient can receive vault shares. Defaults to `true`. */
+  performanceFeeRecipientCanReceiveShares?: boolean;
+  /** Whether the management fee recipient can receive vault shares. Defaults to `true`. */
+  managementFeeRecipientCanReceiveShares?: boolean;
 }
 
+/** Represents a Morpho Vault V2 and its fee, adapter, and accounting state. */
 export class VaultV2 extends WrappedToken implements IVaultV2 {
   public readonly asset: Address;
 
-  public totalAssets;
   public _totalAssets;
   public totalSupply;
   public virtualShares;
@@ -60,10 +63,13 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
   public managementFee;
   public performanceFeeRecipient;
   public managementFeeRecipient;
+  /** Whether the performance fee recipient can receive vault shares. */
+  public performanceFeeRecipientCanReceiveShares;
+  /** Whether the management fee recipient can receive vault shares. */
+  public managementFeeRecipientCanReceiveShares;
 
   constructor({
     asset,
-    totalAssets,
     _totalAssets,
     totalSupply,
     virtualShares,
@@ -77,12 +83,13 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
     managementFee,
     performanceFeeRecipient,
     managementFeeRecipient,
+    performanceFeeRecipientCanReceiveShares = true,
+    managementFeeRecipientCanReceiveShares = true,
     ...config
   }: IVaultV2) {
     super(config, asset);
 
     this.asset = asset;
-    this.totalAssets = totalAssets;
     this._totalAssets = _totalAssets;
     this.totalSupply = totalSupply;
     this.virtualShares = virtualShares;
@@ -96,21 +103,38 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
     this.managementFee = managementFee;
     this.performanceFeeRecipient = performanceFeeRecipient;
     this.managementFeeRecipient = managementFeeRecipient;
+    this.performanceFeeRecipientCanReceiveShares =
+      performanceFeeRecipientCanReceiveShares;
+    this.managementFeeRecipientCanReceiveShares =
+      managementFeeRecipientCanReceiveShares;
   }
 
   public toAssets(shares: BigIntish) {
     return this._unwrap(shares, "Down");
   }
 
-  public toShares(assets: BigIntish) {
-    return this._wrap(assets, "Down");
+  /**
+   * Converts assets to shares using the stored pre-accrual totals.
+   *
+   * @param assets - Amount of underlying assets.
+   * @param rounding - Optional rounding direction. Defaults to `"Down"`.
+   * @returns The corresponding vault shares.
+   * @example
+   * ```ts
+   * const shares = vault.toShares(100n, "Up");
+   * // shares satisfies bigint
+   * ```
+   */
+  public toShares(assets: BigIntish, rounding: RoundingDirection = "Down") {
+    return this._wrap(assets, rounding);
   }
 
   protected _wrap(amount: BigIntish, rounding: RoundingDirection) {
+    // Pair pre-accrue `_totalAssets` with pre-accrue `totalSupply`; call `AccrualVaultV2.accrueInterest` for post-accrue math.
     return MathLib.mulDiv(
       amount,
       this.totalSupply + this.virtualShares,
-      this.totalAssets + 1n,
+      this._totalAssets + 1n,
       rounding,
     );
   }
@@ -118,15 +142,17 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
   protected _unwrap(amount: BigIntish, rounding: RoundingDirection) {
     return MathLib.mulDiv(
       amount,
-      this.totalAssets + 1n,
+      this._totalAssets + 1n,
       this.totalSupply + this.virtualShares,
       rounding,
     );
   }
 }
 
+/** Plain input shape for a Morpho Vault V2 paired with accrued adapter state. */
 export interface IAccrualVaultV2 extends Omit<IVaultV2, "adapters"> {}
 
+/** Represents a Morpho Vault V2 with accrued adapter and liquidity state. */
 export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(
@@ -164,28 +190,13 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
 
     // At this stage: `liquidityAdapterLimit.value <= assets`
 
-    for (const { absoluteCap, relativeCap, allocation } of this
-      .liquidityAllocations) {
-      // `absoluteCap` can be set lower than `allocation`.
-      const absoluteMaxDeposit = MathLib.zeroFloorSub(absoluteCap, allocation);
-      if (liquidityAdapterLimit.value > absoluteMaxDeposit)
-        liquidityAdapterLimit = {
-          value: absoluteMaxDeposit,
-          limiter: CapacityLimitReason.vaultV2_absoluteCap,
-        };
-
-      if (relativeCap !== MathLib.WAD) {
-        // `relativeCap` can be set lower than `allocation / totalAssets`.
-        const relativeMaxDeposit = MathLib.zeroFloorSub(
-          MathLib.wMulDown(this.totalAssets, relativeCap),
-          allocation,
-        );
-        if (liquidityAdapterLimit.value > relativeMaxDeposit)
-          liquidityAdapterLimit = {
-            value: relativeMaxDeposit,
-            limiter: CapacityLimitReason.vaultV2_relativeCap,
-          };
-      }
+    for (const allocation of this.liquidityAllocations) {
+      const allocationLimit = VaultV2Utils.allocationHeadroom(
+        allocation,
+        this._totalAssets,
+      );
+      if (liquidityAdapterLimit.value > allocationLimit.value)
+        liquidityAdapterLimit = allocationLimit;
     }
 
     return liquidityAdapterLimit;
@@ -221,6 +232,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
 
   /**
    * Returns a new vault derived from this vault, whose interest has been accrued up to the given timestamp.
+   * Performance and management fee shares are zero when the corresponding fee recipient cannot receive vault shares.
    * @param timestamp The timestamp at which to accrue interest. Must be greater than or equal to the vault's `lastUpdate`.
    */
   public accrueInterest(timestamp: BigIntish) {
@@ -258,11 +270,15 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     const interest = MathLib.zeroFloorSub(newTotalAssets, vault._totalAssets);
 
     const performanceFeeAssets =
-      interest > 0n && vault.performanceFee > 0n
+      interest > 0n &&
+      vault.performanceFee > 0n &&
+      vault.performanceFeeRecipientCanReceiveShares
         ? MathLib.wMulDown(interest, vault.performanceFee)
         : 0n;
     const managementFeeAssets =
-      elapsed > 0n && vault.managementFee > 0n
+      elapsed > 0n &&
+      vault.managementFee > 0n &&
+      vault.managementFeeRecipientCanReceiveShares
         ? MathLib.wMulDown(newTotalAssets * elapsed, vault.managementFee)
         : 0n;
 
@@ -279,7 +295,6 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
       newTotalAssetsWithoutFees + 1n,
     );
 
-    vault.totalAssets = newTotalAssets;
     vault._totalAssets = newTotalAssets;
     if (performanceFeeShares) vault.totalSupply += performanceFeeShares;
     if (managementFeeShares) vault.totalSupply += managementFeeShares;

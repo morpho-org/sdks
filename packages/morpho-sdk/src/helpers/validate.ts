@@ -2,49 +2,96 @@ import {
   type AccrualPosition,
   getChainAddresses,
   type MarketId,
+  MarketUtils,
   MathLib,
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
+import type { MarketInput as MidnightMarketInput } from "@morpho-org/midnight-sdk";
 import { isDefined } from "@morpho-org/morpho-ts";
-import { type Address, isAddressEqual } from "viem";
+import { type Address, isAddress, isAddressEqual, maxUint128 } from "viem";
 import {
   AccrualPositionUserMismatchError,
   AddressMismatchError,
+  type BlueReallocationPlan,
   BorrowExceedsSafeLtvError,
+  BundlerErrors,
   ChainIdMismatchError,
   ChainWNativeMissingError,
   EmptyReallocationWithdrawalsError,
   ExcessiveSlippageToleranceError,
+  InconsistentReallocationPenaltyError,
+  InputExceedsMaxError,
+  InvalidReallocationAddressError,
+  InvalidReallocationShapeError,
+  InvalidReallocationSourceTypeError,
   MarketIdMismatchError,
   MissingClientPropertyError,
   MissingMarketPriceError,
-  MutuallyExclusiveRepayAmountsError,
-  NativeAmountOnNonWNativeCollateralError,
-  NegativeReallocationFeeError,
-  NegativeSlippageToleranceError,
-  NonPositiveReallocationAmountError,
-  NonPositiveRepayAmountError,
-  NonPositiveRepayMaxSharePriceError,
-  NonPositiveTransferAmountError,
+  MixedReallocationVersionsError,
+  NativeAmountOnNonWNativeAssetError,
+  NegativeInputError,
+  NonPositiveInputError,
   ReallocationWithdrawalOnTargetMarketError,
   RepayExceedsDebtError,
   RepaySharesExceedDebtError,
-  TransferAmountNotEqualToAssetsError,
   UnsortedReallocationWithdrawalsError,
-  type VaultReallocation,
+  type VaultV1Reallocation,
+  type VaultV2BlueReallocation,
   WithdrawExceedsCollateralError,
+  WithdrawExceedsSupplyError,
   WithdrawMakesPositionUnhealthyError,
+  WithdrawSharesExceedSupplyError,
 } from "../types/index.js";
-import { DEFAULT_LLTV_BUFFER, MAX_SLIPPAGE_TOLERANCE } from "./constant.js";
+import {
+  DEFAULT_LLTV_BUFFER,
+  MAX_REALLOCATION_PENALTY,
+  MAX_SLIPPAGE_TOLERANCE,
+} from "./constant.js";
+
+/** @internal */
+export const compareMarketIds = (idA: MarketId, idB: MarketId) => {
+  const normalizedIdA = idA.toLowerCase();
+  const normalizedIdB = idB.toLowerCase();
+
+  if (normalizedIdA > normalizedIdB) return 1;
+  if (normalizedIdA < normalizedIdB) return -1;
+  return 0;
+};
 
 /**
- * Validates that the client has a connected account AND that it matches
+ * Validates that a raw or hydrated Midnight market belongs to the expected chain.
+ *
+ * @param market - Midnight market params or hydrated market state.
+ * @param chainId - Expected EIP-155 chain id.
+ * @returns Nothing when the market belongs to `chainId`.
+ * @throws {ChainIdMismatchError} when the market belongs to another chain.
+ * @example
+ * ```ts
+ * import { validateMidnightMarketChainId } from "@morpho-org/morpho-sdk";
+ *
+ * validateMidnightMarketChainId(marketParams, 8453);
+ * ```
+ */
+export const validateMidnightMarketChainId = (
+  market: MidnightMarketInput,
+  chainId: number,
+): void => {
+  const marketParams = "params" in market ? market.params : market;
+  validateChainId(Number(marketParams.chainId), chainId);
+};
+
+/**
+ * Asserts that the client has a connected account AND that it matches
  * the provided user address.
  *
- * Enforces the builder = executor invariant: `userAddress` MUST equal the
- * connected client account. Some bundle actions (e.g. `erc20TransferFrom`,
- * `morphoWithdrawCollateral`) act implicitly on the initiator rather than
- * on `userAddress`, so a divergence can produce mixed-account bundles.
+ * Used internally by the signature requirements (`encodeErc20Permit`,
+ * `encodeErc20Permit2Approve`) to enforce builder = signer at `sign()` time:
+ * the signing flow is the only path where an account/address mismatch
+ * is a real security concern (rather than just an integrator footgun).
+ *
+ * Transaction builders no longer call this helper — callers are
+ * responsible for keeping `userAddress` aligned with the signing account
+ * at the builder layer.
  *
  * Throws {@link MissingClientPropertyError} if the client has no account.
  * Throws {@link AddressMismatchError} if the client account differs from
@@ -54,17 +101,17 @@ import { DEFAULT_LLTV_BUFFER, MAX_SLIPPAGE_TOLERANCE } from "./constant.js";
  *   `MissingClientPropertyError` is thrown.
  * @param userAddress - The user address provided by the caller.
  */
-export const validateUserAddress = (
+export function validateUserAddress(
   clientAccountAddress: Address | undefined,
   userAddress: Address,
-): void => {
+): asserts clientAccountAddress is Address {
   if (clientAccountAddress === undefined) {
     throw new MissingClientPropertyError("account");
   }
   if (!isAddressEqual(clientAccountAddress, userAddress)) {
     throw new AddressMismatchError(clientAccountAddress, userAddress);
   }
-};
+}
 
 /**
  * Validates that the accrual position belongs to the expected market and user.
@@ -161,23 +208,22 @@ export const validateChainId = (
 };
 
 /**
- * Validates that the given collateral token is the chain's wrapped native token.
- * Throws {@link ChainWNativeMissingError} if wNative is not configured for the chain.
- * Throws {@link NativeAmountOnNonWNativeCollateralError} if collateral is not wNative.
+ * Validates that the given asset is the chain's wrapped native token.
+ * Used by any action that may receive `nativeAmount` — the SDK wraps native
+ * into wNative, so the target asset must be wNative for the action to succeed.
  *
  * @param chainId - The chain to look up wNative on.
- * @param collateralToken - The market's collateral token address.
+ * @param asset - The asset address to check (collateral, loan, vault asset…).
+ * @throws {ChainWNativeMissingError} if wNative is not configured for the chain.
+ * @throws {NativeAmountOnNonWNativeAssetError} if the asset is not wNative.
  */
-export const validateNativeCollateral = (
-  chainId: number,
-  collateralToken: Address,
-): void => {
+export const validateNativeAsset = (chainId: number, asset: Address): void => {
   const { wNative } = getChainAddresses(chainId);
   if (!isDefined(wNative)) {
     throw new ChainWNativeMissingError(chainId);
   }
-  if (!isAddressEqual(collateralToken, wNative)) {
-    throw new NativeAmountOnNonWNativeCollateralError(collateralToken, wNative);
+  if (!isAddressEqual(asset, wNative)) {
+    throw new NativeAmountOnNonWNativeAssetError(asset, wNative);
   }
 };
 
@@ -291,116 +337,294 @@ export const validateRepayShares = (params: {
 };
 
 /**
- * Validates the common repay input parameters shared by `marketV1Repay`
- * and `marketV1RepayWithdrawCollateral`.
+ * Validates that Vault V1 PublicAllocator reallocations are well-formed.
+ *
+ * @param reallocations - Vault V1 reallocations to validate.
+ * @param targetMarketId - The operation's target market ID.
+ * @returns Nothing when every reallocation is valid.
+ * @throws {NegativeInputError} when a reallocation fee is negative.
+ * @throws {EmptyReallocationWithdrawalsError} when a reallocation has no withdrawals.
+ * @throws {NonPositiveInputError} when a withdrawal amount is non-positive.
+ * @throws {ReallocationWithdrawalOnTargetMarketError} when a withdrawal references the target market.
+ * @throws {UnsortedReallocationWithdrawalsError} when withdrawals are not strictly market-id sorted.
+ * @example
+ * ```ts
+ * import type { BlueMarketId } from "@morpho-org/morpho-sdk/types";
+ * import { validateReallocations } from "@morpho-org/morpho-sdk";
+ * import { zeroHash } from "viem";
+ *
+ * const result: void = validateReallocations([], zeroHash as BlueMarketId);
+ * ```
+ */
+export const validateReallocations = (
+  reallocations: Iterable<VaultV1Reallocation>,
+  targetMarketId: MarketId,
+): void => {
+  for (const reallocation of reallocations) {
+    if (reallocation.fee < 0n) {
+      throw new NegativeInputError("reallocation.fee", reallocation.fee);
+    }
+    if (reallocation.withdrawals.length === 0) {
+      throw new EmptyReallocationWithdrawalsError(reallocation.vault);
+    }
+    let previousMarketId: MarketId | undefined;
+    for (const withdrawal of reallocation.withdrawals) {
+      if (withdrawal.amount <= 0n) {
+        throw new NonPositiveInputError(
+          `reallocation.withdrawals[${withdrawal.marketParams.id}].amount`,
+          withdrawal.amount,
+        );
+      }
+      if (withdrawal.marketParams.id === targetMarketId) {
+        throw new ReallocationWithdrawalOnTargetMarketError(
+          reallocation.vault,
+          withdrawal.marketParams.id,
+        );
+      }
+      if (
+        previousMarketId !== undefined &&
+        compareMarketIds(withdrawal.marketParams.id, previousMarketId) <= 0
+      ) {
+        throw new UnsortedReallocationWithdrawalsError(
+          reallocation.vault,
+          withdrawal.marketParams.id,
+        );
+      }
+      previousMarketId = withdrawal.marketParams.id;
+    }
+  }
+};
+
+/** @internal */
+export const validateVaultV2BlueReallocations = (
+  reallocations: Iterable<VaultV2BlueReallocation>,
+  targetMarketId: MarketId,
+): void => {
+  const penaltyByVault = new Map<string, bigint>();
+
+  for (const reallocation of reallocations) {
+    if (
+      typeof reallocation.vault !== "string" ||
+      !isAddress(reallocation.vault)
+    ) {
+      throw new InvalidReallocationAddressError("vault");
+    }
+    if (
+      reallocation.to == null ||
+      typeof reallocation.to.adapter !== "string" ||
+      !isAddress(reallocation.to.adapter)
+    ) {
+      throw new InvalidReallocationAddressError("to.adapter");
+    }
+
+    const source = reallocation.from;
+    if (source == null) {
+      throw new InvalidReallocationSourceTypeError(undefined);
+    }
+    const sourceType: string | undefined = source.type;
+    if (sourceType !== "market" && sourceType !== "idle") {
+      throw new InvalidReallocationSourceTypeError(sourceType);
+    }
+    let sourceMarketId: MarketId | undefined;
+    if (source.type === "market") {
+      if (typeof source.adapter !== "string" || !isAddress(source.adapter)) {
+        throw new InvalidReallocationAddressError("from.adapter");
+      }
+      if (
+        source.marketParams == null ||
+        !isAddress(source.marketParams.loanToken) ||
+        !isAddress(source.marketParams.collateralToken) ||
+        !isAddress(source.marketParams.oracle) ||
+        !isAddress(source.marketParams.irm) ||
+        typeof source.marketParams.lltv !== "bigint"
+      ) {
+        throw new InvalidReallocationSourceTypeError("market", "marketParams");
+      }
+      sourceMarketId = MarketUtils.getMarketId(source.marketParams);
+    }
+    if (reallocation.penalty < 0n) {
+      throw new NegativeInputError(
+        "reallocation.penalty",
+        reallocation.penalty,
+      );
+    }
+    if (reallocation.penalty > MAX_REALLOCATION_PENALTY) {
+      throw new InputExceedsMaxError({
+        field: "reallocation.penalty",
+        value: reallocation.penalty,
+        max: MAX_REALLOCATION_PENALTY,
+      });
+    }
+    if (reallocation.assets <= 0n) {
+      throw new NonPositiveInputError(
+        "reallocation.assets",
+        reallocation.assets,
+      );
+    }
+    if (reallocation.assets > maxUint128) {
+      throw new InputExceedsMaxError({
+        field: "reallocation.assets",
+        value: reallocation.assets,
+        max: maxUint128,
+      });
+    }
+
+    const penaltyKey = reallocation.vault.toLowerCase();
+    const expectedPenalty = penaltyByVault.get(penaltyKey);
+    if (
+      expectedPenalty !== undefined &&
+      expectedPenalty !== reallocation.penalty
+    ) {
+      throw new InconsistentReallocationPenaltyError({
+        vault: reallocation.vault,
+        expected: expectedPenalty,
+        actual: reallocation.penalty,
+      });
+    }
+    penaltyByVault.set(penaltyKey, reallocation.penalty);
+
+    if (
+      sourceMarketId !== undefined &&
+      compareMarketIds(sourceMarketId, targetMarketId) === 0
+    ) {
+      throw new ReallocationWithdrawalOnTargetMarketError(
+        reallocation.vault,
+        sourceMarketId,
+      );
+    }
+  }
+};
+
+/**
+ * Validates and normalizes a homogeneous Blue reallocation plan.
  *
  * @param params - Validation parameters.
- * @param params.assets - Repay assets amount (0n when repaying by shares).
- * @param params.shares - Repay shares amount (0n when repaying by assets).
- * @param params.transferAmount - ERC20 amount to transfer to GeneralAdapter1.
- * @param params.maxSharePrice - Maximum repay share price (in ray). Must be positive.
- * @param params.marketId - The market identifier (for error messages).
+ * @param params.reallocations - Optional Vault V1 or Vault V2 reallocation plan.
+ * @param params.targetMarketId - Morpho Blue market receiving the liquidity.
+ * @param params.chainId - Chain whose allocator deployment is required for a V2 plan.
+ * @returns The validated plan tagged with its allocator version.
+ * @throws {BundlerErrors.UnexpectedAction} when a V2 plan is unsupported on the chain.
+ * @internal
  */
-export const validateRepayParams = (params: {
-  assets: bigint;
-  shares: bigint;
-  transferAmount: bigint;
-  maxSharePrice: bigint;
+export const validateAndNormalizeReallocations = ({
+  reallocations,
+  targetMarketId,
+  chainId,
+}: {
+  readonly reallocations: BlueReallocationPlan | undefined;
+  readonly targetMarketId: MarketId;
+  readonly chainId: number;
+}) => {
+  const vaultV1Reallocations: VaultV1Reallocation[] = [];
+  const vaultV2Reallocations: VaultV2BlueReallocation[] = [];
+
+  for (const reallocation of reallocations ?? []) {
+    if (typeof reallocation !== "object" || reallocation === null) {
+      throw new InvalidReallocationShapeError();
+    }
+    if ("from" in reallocation === "withdrawals" in reallocation) {
+      throw new InvalidReallocationShapeError();
+    }
+    if ("withdrawals" in reallocation) {
+      vaultV1Reallocations.push(reallocation);
+    } else {
+      vaultV2Reallocations.push(reallocation);
+    }
+  }
+
+  if (vaultV1Reallocations.length > 0 && vaultV2Reallocations.length > 0) {
+    throw new MixedReallocationVersionsError();
+  }
+  if (vaultV2Reallocations.length > 0) {
+    validateVaultV2BlueReallocations(vaultV2Reallocations, targetMarketId);
+    if (getChainAddresses(chainId).vaultV2BluePublicAllocator == null) {
+      throw new BundlerErrors.UnexpectedAction(
+        vaultV2Reallocations[0]?.from.type === "market"
+          ? "vaultV2BluePublicAllocatorReallocate"
+          : "vaultV2BluePublicAllocatorAllocateFromIdle",
+        chainId,
+      );
+    }
+    return {
+      type: "vaultV2Blue" as const,
+      reallocations: vaultV2Reallocations,
+    };
+  }
+
+  validateReallocations(vaultV1Reallocations, targetMarketId);
+  return { type: "vaultV1" as const, reallocations: vaultV1Reallocations };
+};
+
+/**
+ * Validates that a slippage tolerance is within an acceptable range.
+ *
+ * Throws {@link NegativeInputError} if negative.
+ * Throws {@link ExcessiveSlippageToleranceError} if greater than {@link MAX_SLIPPAGE_TOLERANCE}.
+ *
+ * @param slippageTolerance - The slippage tolerance in WAD.
+ * @returns Nothing when the slippage tolerance is valid.
+ * @throws {NegativeInputError} when `slippageTolerance < 0n`.
+ * @throws {ExcessiveSlippageToleranceError} when the tolerance exceeds the SDK maximum.
+ * @example
+ * ```ts
+ * import { validateSlippageTolerance } from "@morpho-org/morpho-sdk";
+ *
+ * const result: void = validateSlippageTolerance(5_000000000000000n);
+ * ```
+ */
+export const validateSlippageTolerance = (slippageTolerance: bigint): void => {
+  if (slippageTolerance < 0n) {
+    throw new NegativeInputError("slippageTolerance", slippageTolerance);
+  }
+  if (slippageTolerance > MAX_SLIPPAGE_TOLERANCE) {
+    throw new ExcessiveSlippageToleranceError(slippageTolerance);
+  }
+};
+
+/**
+ * Validates that the withdraw assets do not exceed the user's supplied assets in the market.
+ *
+ * @param params - Validation parameters.
+ * @param params.positionData - The current accrual position.
+ * @param params.withdrawAssets - The amount of assets to withdraw.
+ * @param params.marketId - The market identifier (for error messages).
+ * @throws {WithdrawExceedsSupplyError} when `withdrawAssets > positionData.supplyAssets`.
+ */
+export const validateWithdrawAmount = (params: {
+  positionData: AccrualPosition;
+  withdrawAssets: bigint;
   marketId: MarketId;
 }): void => {
-  const { assets, shares, transferAmount, maxSharePrice, marketId } = params;
-
-  if (maxSharePrice <= 0n) {
-    throw new NonPositiveRepayMaxSharePriceError(marketId);
-  }
-
-  if (assets < 0n || shares < 0n) {
-    throw new NonPositiveRepayAmountError(marketId);
-  }
-
-  if (assets > 0n && shares > 0n) {
-    throw new MutuallyExclusiveRepayAmountsError(marketId);
-  }
-
-  if (assets === 0n && shares === 0n) {
-    throw new NonPositiveRepayAmountError(marketId);
-  }
-
-  if (transferAmount <= 0n) {
-    throw new NonPositiveTransferAmountError(marketId);
-  }
-
-  if (assets > 0n && transferAmount !== assets) {
-    throw new TransferAmountNotEqualToAssetsError({
-      transferAmount,
-      assets,
+  const { positionData, withdrawAssets, marketId } = params;
+  if (withdrawAssets > positionData.supplyAssets) {
+    throw new WithdrawExceedsSupplyError({
+      withdrawAmount: withdrawAssets,
+      available: positionData.supplyAssets,
       market: marketId,
     });
   }
 };
 
 /**
- * Validates that vault reallocations are well-formed.
+ * Validates that the withdraw shares do not exceed the user's owned supply shares in the market.
  *
- * Enforces the following invariants for each {@link VaultReallocation}:
- * - `fee` must be non-negative.
- * - `withdrawals` must be non-empty.
- * - Every withdrawal `amount` must be strictly positive.
- * - No withdrawal may target `targetMarketId` (the borrow market).
- * - Withdrawal market IDs must be strictly ascending (required by `PublicAllocator.reallocateTo`).
- *
- * @param reallocations - The reallocations to validate.
- * @param targetMarketId - The ID of the market being borrowed from. No withdrawal may reference this market.
+ * @param params - Validation parameters.
+ * @param params.positionData - The current accrual position.
+ * @param params.withdrawShares - The amount of shares to withdraw.
+ * @param params.marketId - The market identifier (for error messages).
+ * @throws {WithdrawSharesExceedSupplyError} when `withdrawShares > positionData.supplyShares`.
  */
-export const validateReallocations = (
-  reallocations: readonly VaultReallocation[],
-  targetMarketId: MarketId,
-): void => {
-  for (const r of reallocations) {
-    if (r.fee < 0n) {
-      throw new NegativeReallocationFeeError(r.vault);
-    }
-    if (r.withdrawals.length === 0) {
-      throw new EmptyReallocationWithdrawalsError(r.vault);
-    }
-    let prevId: MarketId | undefined;
-    for (const w of r.withdrawals) {
-      if (w.amount <= 0n) {
-        throw new NonPositiveReallocationAmountError(
-          r.vault,
-          w.marketParams.id,
-        );
-      }
-      if (w.marketParams.id === targetMarketId) {
-        throw new ReallocationWithdrawalOnTargetMarketError(
-          r.vault,
-          w.marketParams.id,
-        );
-      }
-      if (prevId !== undefined && w.marketParams.id <= prevId) {
-        throw new UnsortedReallocationWithdrawalsError(
-          r.vault,
-          w.marketParams.id,
-        );
-      }
-      prevId = w.marketParams.id;
-    }
-  }
-};
-
-/**
- * Validates that a slippage tolerance is within an acceptable range.
- *
- * Throws {@link NegativeSlippageToleranceError} if negative.
- * Throws {@link ExcessiveSlippageToleranceError} if greater than {@link MAX_SLIPPAGE_TOLERANCE}.
- *
- * @param slippageTolerance - The slippage tolerance in WAD.
- */
-export const validateSlippageTolerance = (slippageTolerance: bigint): void => {
-  if (slippageTolerance < 0n) {
-    throw new NegativeSlippageToleranceError(slippageTolerance);
-  }
-  if (slippageTolerance > MAX_SLIPPAGE_TOLERANCE) {
-    throw new ExcessiveSlippageToleranceError(slippageTolerance);
+export const validateWithdrawShares = (params: {
+  positionData: AccrualPosition;
+  withdrawShares: bigint;
+  marketId: MarketId;
+}): void => {
+  const { positionData, withdrawShares, marketId } = params;
+  if (withdrawShares > positionData.supplyShares) {
+    throw new WithdrawSharesExceedSupplyError({
+      withdrawShares,
+      supplyShares: positionData.supplyShares,
+      market: marketId,
+    });
   }
 };

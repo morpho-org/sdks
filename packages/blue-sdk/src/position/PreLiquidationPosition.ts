@@ -5,6 +5,7 @@ import { MathLib, SharesMath } from "../math/index.js";
 import type { BigIntish } from "../types.js";
 import { AccrualPosition, type IAccrualPosition } from "./Position.js";
 
+/** Plain input shape for PreLiquidation contract parameters. */
 export interface IPreLiquidationParams {
   preLltv: BigIntish;
   preLCF1: BigIntish;
@@ -14,6 +15,7 @@ export interface IPreLiquidationParams {
   preLiquidationOracle: Address;
 }
 
+/** Represents PreLiquidation contract parameters and factor interpolation helpers. */
 export class PreLiquidationParams implements IPreLiquidationParams {
   public readonly preLltv: bigint;
   public readonly preLCF1: bigint;
@@ -51,6 +53,7 @@ export class PreLiquidationParams implements IPreLiquidationParams {
   }
 }
 
+/** Plain input shape for a position associated with a PreLiquidation contract. */
 export interface IPreLiquidationPosition extends IAccrualPosition {
   /**
    * The pre-liquidation parameters of the associated PreLiquidation contract.
@@ -67,6 +70,7 @@ export interface IPreLiquidationPosition extends IAccrualPosition {
   preLiquidationOraclePrice?: BigIntish;
 }
 
+/** Represents a position evaluated under PreLiquidation-specific risk parameters. */
 export class PreLiquidationPosition
   extends AccrualPosition
   implements IPreLiquidationPosition

@@ -1,4 +1,5 @@
 import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
+import { marketParamsAbi } from "@morpho-org/morpho-ts/abis/marketParams";
 import { decodeAbiParameters, type Hex } from "viem";
 import {
   InvalidMarketParamsError,
@@ -7,6 +8,7 @@ import {
 import type { Address, BigIntish, MarketId } from "../types.js";
 import { MarketUtils } from "./MarketUtils.js";
 
+/** Plain input shape for Morpho Blue market params. */
 export interface IMarketParams {
   loanToken: Address;
   collateralToken: Address;
@@ -15,21 +17,14 @@ export interface IMarketParams {
   lltv: BigIntish;
 }
 
+/** Minimal market params shape accepted by SDK constructors and helpers. */
 export type InputMarketParams = Pick<
   MarketParams,
   "loanToken" | "collateralToken" | "oracle" | "irm" | "lltv"
 >;
 
-export const marketParamsAbi = {
-  type: "tuple",
-  components: [
-    { type: "address", name: "loanToken" },
-    { type: "address", name: "collateralToken" },
-    { type: "address", name: "oracle" },
-    { type: "address", name: "irm" },
-    { type: "uint256", name: "lltv" },
-  ],
-} as const;
+/** ABI tuple definition for Morpho Blue market params. */
+export { marketParamsAbi };
 
 /**
  * Represents a market's configuration (also called market params).

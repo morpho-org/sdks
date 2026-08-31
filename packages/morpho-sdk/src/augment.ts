@@ -1,0 +1,14 @@
+import "./augment/AccrualPosition.js";
+import "./augment/AccrualVault.js";
+import "./augment/Holding.js";
+import "./augment/Market.js";
+import "./augment/MarketParams.js";
+import "./augment/Position.js";
+import "./augment/Token.js";
+import "./augment/User.js";
+import "./augment/Vault.js";
+import "./augment/VaultConfig.js";
+import "./augment/VaultMarketAllocation.js";
+import "./augment/VaultMarketConfig.js";
+import "./augment/VaultMarketPublicAllocatorConfig.js";
+import "./augment/VaultUser.js";

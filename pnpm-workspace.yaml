@@ -1,10 +1,23 @@
 packages:
   - packages/*
 
-onlyBuiltDependencies:
-  - '@biomejs/biome'
-  - bufferutil
-  - esbuild
-  - keccak
-  - secp256k1
-  - utf-8-validate
+autoInstallPeers: true
+linkWorkspacePackages: deep
+preferWorkspacePackages: true
+ignoreWorkspaceCycles: true
+
+overrides:
+  axios: 1.18.1
+  tmp: 0.2.7
+  ws: 8.21.0
+
+allowBuilds:
+  '@biomejs/biome': true
+  bufferutil: true
+  esbuild: true
+  keccak: true
+  secp256k1: true
+  utf-8-validate: true
+
+minimumReleaseAge: 4320
+minimumReleaseAgeStrict: true

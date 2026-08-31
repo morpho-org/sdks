@@ -1,5 +1,5 @@
 import { mainnet } from "viem/chains";
-import { describe, expect, vi } from "vitest";
+import { afterEach, describe, expect, vi } from "vitest";
 import {
   GauntletWethVaultV1,
   SteakhouseUsdcVaultV1,
@@ -8,21 +8,24 @@ import {
   KeyrockUsdcVaultV2,
   KpkWETHVaultV2,
 } from "../../../test/fixtures/vaultV2.js";
-import { test } from "../../../test/setup.js";
+import { test } from "../../../test/unit.js";
 import {
   DepositAssetMismatchError,
   isRequirementApproval,
   isRequirementSignature,
-  NegativeMinSharePriceError,
-  NonPositiveMaxSharePriceError,
-  NonPositiveSharesAmountError,
+  NegativeInputError,
+  NonPositiveInputError,
   VaultAssetMismatchError,
 } from "../../types/index.js";
-import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
-import { getRequirements } from "../requirements/index.js";
+import { getGeneralAdapterRequirements } from "../requirements/index.js";
+import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
 import { vaultV1MigrateToV2 } from "./migrateToV2.js";
 
 describe("vaultV1MigrateToV2 unit tests", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   test("should create migrate transaction for USDC vaults", async ({
     client,
   }) => {
@@ -121,7 +124,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
   }) => {
     const shares = 1000000000000000000000n; // 1000 shares (18 decimals)
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: SteakhouseUsdcVaultV1.address,
       chainId: mainnet.id,
       supportSignature: true,
@@ -147,8 +150,8 @@ describe("vaultV1MigrateToV2 unit tests", () => {
     );
 
     const localSpy = vi.spyOn(
-      getRequirementsActionModule,
-      "getRequirementsAction",
+      getTokenRequirementActionsModule,
+      "getTokenRequirementActions",
     );
 
     const tx = vaultV1MigrateToV2({
@@ -184,7 +187,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
   }) => {
     const shares = 5000000000000000000n; // 5 shares (18 decimals)
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: GauntletWethVaultV1.address,
       chainId: mainnet.id,
       supportSignature: true,
@@ -240,12 +243,12 @@ describe("vaultV1MigrateToV2 unit tests", () => {
     expect(tx.value).toBe(0n);
   });
 
-  test("should not call getRequirementsAction without requirement signature", async ({
+  test("should call getTokenRequirementActions without requirement signature", async ({
     client,
   }) => {
     const localSpy = vi.spyOn(
-      getRequirementsActionModule,
-      "getRequirementsAction",
+      getTokenRequirementActionsModule,
+      "getTokenRequirementActions",
     );
 
     const tx = vaultV1MigrateToV2({
@@ -264,7 +267,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
       },
     });
 
-    expect(localSpy).not.toHaveBeenCalled();
+    expect(localSpy).toHaveBeenCalled();
     expect(tx).toBeDefined();
     expect(tx.action.type).toBe("vaultV1MigrateToV2");
   });
@@ -275,7 +278,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
     const shares = 1000000000000000000000n; // 1000 shares (18 decimals)
 
     // Sign permit for WETH vault shares
-    const requirements = await getRequirements(client, {
+    const requirements = await getGeneralAdapterRequirements(client, {
       address: GauntletWethVaultV1.address,
       chainId: mainnet.id,
       supportSignature: true,
@@ -339,7 +342,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
     ).toThrow(VaultAssetMismatchError);
   });
 
-  test("should throw NonPositiveSharesAmountError when shares is zero", async ({
+  test("should throw NonPositiveInputError when shares is zero", async ({
     client,
   }) => {
     expect(() =>
@@ -358,10 +361,10 @@ describe("vaultV1MigrateToV2 unit tests", () => {
           recipient: client.account.address,
         },
       }),
-    ).toThrow(NonPositiveSharesAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NonPositiveSharesAmountError when shares is negative", async ({
+  test("should throw NonPositiveInputError when shares is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -380,10 +383,10 @@ describe("vaultV1MigrateToV2 unit tests", () => {
           recipient: client.account.address,
         },
       }),
-    ).toThrow(NonPositiveSharesAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NonPositiveMaxSharePriceError when maxSharePriceVaultV2 is zero", async ({
+  test("should throw NonPositiveInputError when maxSharePriceVaultV2 is zero", async ({
     client,
   }) => {
     expect(() =>
@@ -402,10 +405,10 @@ describe("vaultV1MigrateToV2 unit tests", () => {
           recipient: client.account.address,
         },
       }),
-    ).toThrow(NonPositiveMaxSharePriceError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NonPositiveMaxSharePriceError when maxSharePriceVaultV2 is negative", async ({
+  test("should throw NonPositiveInputError when maxSharePriceVaultV2 is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -424,7 +427,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
           recipient: client.account.address,
         },
       }),
-    ).toThrow(NonPositiveMaxSharePriceError);
+    ).toThrow(NonPositiveInputError);
   });
 
   test("should accept minSharePriceVaultV1 of zero (no slippage floor)", async ({
@@ -449,7 +452,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
     ).not.toThrow();
   });
 
-  test("should throw NegativeMinSharePriceError when minSharePriceVaultV1 is negative", async ({
+  test("should throw NegativeInputError when minSharePriceVaultV1 is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -468,7 +471,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
           recipient: client.account.address,
         },
       }),
-    ).toThrow(NegativeMinSharePriceError);
+    ).toThrow(NegativeInputError);
   });
 
   test("should return a deep-frozen transaction object", async ({ client }) => {

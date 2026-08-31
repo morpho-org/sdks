@@ -4,6 +4,7 @@ import { MathLib, type RoundingDirection } from "../math/index.js";
 import type { Address, BigIntish } from "../types.js";
 import type { Eip5267Domain } from "./Eip5267Domain.js";
 
+/** Plain input shape for an ERC-20-like token. */
 export interface IToken {
   address: Address;
   name?: string;
@@ -13,6 +14,7 @@ export interface IToken {
   eip5267Domain?: Eip5267Domain;
 }
 
+/** Represents an ERC-20-like token and optional price/signing metadata. */
 export class Token implements IToken {
   static native(chainId: ChainId) {
     const currency = ChainUtils.CHAIN_METADATA[chainId].nativeCurrency;

@@ -26,36 +26,17 @@ the consuming application decides when and how to send it.
 
 ## Layered Architecture
 
-```
-┌─────────────────────────────────────────────────┐
-│                   Consumer App                  │
-└────────────────────────┬────────────────────────┘
-                         │
-              ┌──────────▼──────────┐
-              │    MorphoClient     │  ← Client layer
-              │  (wraps viem Client,│
-              │   holds options)    │
-              └───┬────────┬────┬───┘
-                  │        │    │
-        .vaultV1()│        │    │.marketV1()
-                  │        │    │
-        ┌─────────▼──┐     │   ┌▼──────────────┐
-        │MorphoVaultV1│    │   │MorphoMarketV1 │  ← Entity layer
-        │(MetaMorpho) │    │   │(Morpho Blue)  │
-        └──────┬──────┘    │   └──────┬────────┘
-               │           │          │
-               │ .vaultV2()│          │  delegates
-               │           │          │
-               │   ┌───────▼────┐     │
-               │   │MorphoVaultV2│    │
-               │   └──────┬─────┘     │
-               │          │           │
-               │delegates │  delegates│
-               │          │           │
-        ┌──────▼───────── ▼───────────▼──┐
-        │         Action functions       │  ← Action layer
-        │  (pure tx builders, no state)  │
-        └────────────────────────────────┘
+```mermaid
+graph TD
+    APP[Consumer App] --> CLIENT[client.morpho on a viem Client]
+    CLIENT -->|vaultV1| V1[MorphoVaultV1]
+    CLIENT -->|vaultV2| V2[MorphoVaultV2]
+    CLIENT -->|blue| BLUE[MorphoBlue]
+    CLIENT -->|midnight| MIDNIGHT[MorphoMidnight]
+    V1 --> ACTIONS[Pure action functions]
+    V2 --> ACTIONS
+    BLUE --> ACTIONS
+    MIDNIGHT --> ACTIONS
 ```
 
 ### Why this layering exists
@@ -64,8 +45,8 @@ Each layer has a single responsibility and a strict boundary:
 
 | Layer      | Responsibility                                                                                                                                  | What it must NOT do                           |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
-| **Client** | Wrap a viem `Client`, normalize SDK options (`supportSignature`, `metadata`, `supportDeployless`), produce vault/market entities                | Call actions directly, hold mutable state     |
-| **Entity** | Fetch on-chain data (vault accrual data for V1/V2, market/position data for MarketV1), compute derived values (e.g. `maxSharePrice`, LLTV buffer), delegate to actions | Encode calldata, know about bundler internals |
+| **Client** | Wrap a viem `Client`, normalize SDK options (`supportSignature`, `metadata`, `supportDeployless`), produce vault, Blue, and Midnight entities                | Call actions directly, hold mutable state     |
+| **Entity** | Fetch on-chain data (vault accrual data for V1/V2, market/position data for Blue and Midnight), compute derived values (e.g. `maxSharePrice`, LLTV buffer), delegate to actions | Encode calldata, know about bundler internals |
 | **Action** | Validate inputs, encode calldata, deep-freeze the result, return a `Transaction<TAction>`                                                       | Fetch data, hold state, mutate anything       |
 
 **Calls flow strictly downward**: Client → Entity → Action. An action never calls an entity;
@@ -107,10 +88,12 @@ at the SDK level. The differences are at the protocol layer:
 - **Contract**: Uses `vaultV2Abi` from `@morpho-org/blue-sdk-viem`.
 - **SDK data**: Fetched via `fetchVaultV2` / `fetchAccrualVaultV2`.
 
-### MarketV1 (Morpho Blue)
+### Blue (Morpho Blue)
 
-- **Market-based lending**: MarketV1 represents Morpho Blue isolated lending markets. Each market
-  has a loan token, collateral token, oracle, IRM, and LLTV (liquidation loan-to-value).
+- **Market-based lending**: Blue (a.k.a. Morpho Blue) is Morpho's immutable, variable-rate
+  lending primitive — isolated markets whose borrow rate floats with utilization via the market's
+  IRM. Each market has a loan token, collateral token, oracle, IRM, and LLTV (liquidation
+  loan-to-value). Formerly referred to as "MarketV1" in this SDK.
 - **Supply collateral**: Users deposit collateral tokens into a market position. Routed through
   bundler3 via GeneralAdapter1 (`erc20TransferFrom` + `morphoSupplyCollateral`). Supports native
   token wrapping when collateral is wNative.
@@ -122,8 +105,20 @@ at the SDK level. The differences are at the protocol layer:
   with an LLTV buffer (default 0.5%) to prevent instant liquidation.
 - **LLTV buffer**: Both `borrow` and `supplyCollateralBorrow` validate that the resulting position
   stays below `LLTV - buffer` (default 0.5%). Throws `BorrowExceedsSafeLtvError` if exceeded.
-- **SDK data**: Fetched via `fetchMarket` / `fetchAccrualPosition`. `AccrualPosition` provides
-  health metrics: `maxBorrowAssets`, `ltv`, `isHealthy`, `borrowAssets`, `collateral`.
+- **SDK data**: Fetched via `fetchBlueMarket` / `fetchBlueAccrualPosition`.
+  `BlueAccrualPosition` provides health metrics: `maxBorrowAssets`, `ltv`, `isHealthy`,
+  `borrowAssets`, `collateral`.
+
+### Midnight
+
+- **Fixed-rate markets**: Midnight represents lending and borrowing through signed or
+  contract-ratified offers with prices fixed until market maturity.
+- **Taker routing**: Asset-targeted takes and repay/withdraw flows call `MidnightBundles`;
+  collateral supply, credit redemption, and cancellation call Midnight directly.
+- **Maker routing**: Maker flows build and validate offer trees, collect an Ecrecover root
+  signature or SetterRatifier transaction, then submit the payload to the Midnight mempool.
+- **SDK data**: `MorphoMidnight` fetches hydrated market and position snapshots and exposes
+  the same lazy `{ getRequirements, buildTx }` contract as the other entities.
 
 
 ### Force Deallocation (V2 only)
@@ -157,8 +152,7 @@ This also makes the UX simpler, since users only need to approve the general ada
 
 **Security invariant:** Never bypass the general adapter for deposits.
 
-The bundle is encoded via `BundlerAction.encodeBundle(chainId, actions)` from
-`@morpho-org/bundler-sdk-viem`. The `to` address of the resulting transaction is always the
+The bundle is encoded via the local `BundlerAction.encodeBundle(chainId, actions)` helper. The `to` address of the resulting transaction is always the
 Bundler3 contract address for the target chain.
 
 ### Withdrawals and Redeems: Direct vault calls
@@ -184,9 +178,9 @@ on the vault contract itself.
 | Redeem (V1 & V2)                      | Direct vault call          | No attack surface, no approval needed                                                                      |
 | Force Withdraw (V2)                   | VaultV2 `multicall`        | Atomic deallocation + withdrawal on the vault contract                                                     |
 | Force Redeem (V2)                     | VaultV2 `multicall`        | Atomic deallocation + redemption on the vault contract                                                     |
-| Supply Collateral (MarketV1)          | Bundler3 (general adapter) | `erc20TransferFrom` + `morphoSupplyCollateral`. Optional native wrapping for wNative collateral.           |
-| Borrow (MarketV1)                     | Bundler3 (general adapter) | `morphoBorrow` with `minSharePrice` slippage protection. Requires GA1 authorization on Morpho.             |
-| Supply Collateral + Borrow (MarketV1) | Bundler3 (general adapter) | Atomic collateral supply + borrow. LLTV buffer prevents instant liquidation.                               |
+| Supply Collateral (Blue)          | Bundler3 (general adapter) | `erc20TransferFrom` + `morphoSupplyCollateral`. Optional native wrapping for wNative collateral.           |
+| Borrow (Blue)                     | Bundler3 (general adapter) | `morphoBorrow` with `minSharePrice` slippage protection. Requires GA1 authorization on Morpho.             |
+| Supply Collateral + Borrow (Blue) | Bundler3 (general adapter) | Atomic collateral supply + borrow. LLTV buffer prevents instant liquidation.                               |
 
 ## Dependency Map
 
@@ -196,9 +190,8 @@ The SDK builds on the Morpho TypeScript ecosystem. Each dependency has a specifi
 morpho-sdk
 ├── @morpho-org/blue-sdk           Core protocol constants and math
 ├── @morpho-org/blue-sdk-viem      On-chain data fetching and ABIs
-├── @morpho-org/bundler-sdk-viem   Bundle encoding for deposits
+├── @morpho-org/midnight-sdk       Midnight market models, offer trees, math, and ABIs
 ├── @morpho-org/morpho-ts          Shared utilities (deepFreeze, Time)
-├── @morpho-org/simulation-sdk     Token approval constants
 └── viem                           Ethereum client and ABI encoding
 ```
 
@@ -226,7 +219,7 @@ On-chain data fetching and contract ABIs:
 - **Typed data helpers**: `getPermitTypedData`, `getPermit2PermitTypedData` — used to build
   EIP-712 signing payloads for permit flows.
 
-### `@morpho-org/bundler-sdk-viem`
+### Local Bundler Encoding
 
 Deposit bundle encoding:
 
@@ -242,14 +235,6 @@ Shared utilities:
 - **`deepFreeze`** — recursively freezes objects. Applied to every returned `Transaction`.
 - **`Time`** — timestamp helpers used for permit deadlines and metadata timestamps.
 - **`isDefined`** — type-narrowing utility used in the requirements decision tree.
-
-### `@morpho-org/simulation-sdk`
-
-Token approval constants:
-
-- **`MAX_TOKEN_APPROVALS`** — per-chain/token cap for approval amounts in `encodeErc20Approval`.
-- **`APPROVE_ONLY_ONCE_TOKENS`** — tokens (like USDT) that require resetting allowance to zero
-  before setting a new value. Used in `getRequirementsApproval` to prepend a reset transaction.
 
 ## Requirements System
 
@@ -298,15 +283,17 @@ getRequirements(viemClient, params)
 
 ### How signatures flow into deposits
 
-When requirements return a `Requirement` object (permit or permit2 path), the consuming
-application calls `requirement.sign(client, userAddress)` to obtain a `RequirementSignature`.
-This signature is then passed to `buildTx(requirementSignature)`:
+When requirements return a `Requirement` object (permit, permit2, or Morpho authorization path),
+the consuming application calls `requirement.sign(client, userAddress)` to obtain a
+`RequirementSignature`. The collected signatures are then passed to `buildTx` as an array
+(`buildTx([...signatures])`), letting a permit and a Morpho authorization signature travel
+together:
 
 ```
-getRequirements() → Requirement { sign() } → RequirementSignature → buildTx(sig)
+getRequirements() → Requirement { sign() } → RequirementSignature → buildTx([sig, ...])
 ```
 
-Inside `buildTx`, `getRequirementsAction()` converts the signature into bundler actions:
+Inside `buildTx`, `getTokenRequirementActions()` converts the signature into bundler actions:
 
 - **Permit path**: `permit` action + `erc20TransferFrom` to generalAdapter1.
 - **Permit2 path**: `approve2` action + `transferFrom2` to generalAdapter1.

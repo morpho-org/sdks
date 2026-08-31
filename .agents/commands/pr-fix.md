@@ -383,13 +383,16 @@ For each file with findings, build a complete understanding before touching anyt
 1. **Read the project rules that govern this file** — these are authoritative; the fix must respect them:
    - Root `AGENTS.md` (canonical engineering rules; `CLAUDE.md` is a symlink — do not also read it).
    - `MISSION.md` (mission, scope, and values — explains *why* the rules exist).
-   - **`docs/jsdoc-style.md`** — if the fix touches an exported symbol from any `packages/<pkg>/src/index.ts` re-export entry, an `@example` block, or any JSDoc comment. This is the canonical JSDoc style guide for the monorepo (operationalizes AGENTS.md §6). Backed by `docs/tibs/TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md`.
+   - **`docs/jsdoc-style.md`** — if the fix touches an exported symbol from any `packages/<pkg>/src/index.ts` re-export entry, an `@example` block, or any JSDoc comment. This is the canonical JSDoc style guide for the monorepo (operationalizes AGENTS.md §6).
    - **If the file lives under `packages/<pkg>/`**:
      - `packages/<pkg>/AGENTS.md` — package-specific refinements (these refine the root for this package; root wins on contradictions).
      - `packages/<pkg>/README.md` — public-facing usage.
      - `packages/<pkg>/ARCHITECTURE.md` — if present.
-   - **If the file lives outside `packages/`** (root files, `.agents/commands/*`, `.github/workflows/*`, `scripts/*`, `docs/*`, etc.): use the root baseline (`AGENTS.md`, `MISSION.md`, `CONTRIBUTING.md`, `biome.json`, plus `docs/jsdoc-style.md` if applicable). Do NOT attempt to derive a synthetic package directory. (Same scope as `.agents/lib/pr-review-base.md` Step 4's "Always read" baseline so the two skills agree on what context applies to outside-packages files.)
-   - Any nested `AGENTS.md` along the path of the touched file (e.g. `packages/morpho-sdk/src/actions/AGENTS.md`, `packages/morpho-sdk/src/actions/marketV1/AGENTS.md`).
+   - **If the file lives outside `packages/`** (root files, `.agents/commands/*`, `.github/workflows/*`, `scripts/*`, `docs/*`, etc.): use the root baseline (`AGENTS.md`, `MISSION.md`, `CONTRIBUTING.md`, `biome.json`, plus `docs/jsdoc-style.md` if applicable). Do NOT attempt to derive a synthetic package directory. (Same scope as `.agents/pr-review-engine/SKILL.md` Step 4's "Always read" baseline so the two skills agree on what context applies to outside-packages files.)
+   - Any nested `AGENTS.md` along the path of the touched file (e.g. `packages/morpho-sdk/src/actions/AGENTS.md`, `packages/morpho-sdk/src/actions/blue/AGENTS.md`).
+   - **CI / release files** — if the fix touches `.github/workflows/**`, `.github/actions/**`, `.changeset/**`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc`, or a `package.json` `scripts.*publish*` / `scripts.*release*` field, AGENTS.md §10 (Review automation & CI/release security) is the source-of-truth rule set. The `ci-release-security` persona at `.agents/pr-review-engine/agents/ci-release-security.md` enforces it at review time; the same rules govern a fix's correctness.
+   - **Persona / spec-layering files** — if the fix touches `AGENTS.md` itself or any file under `.agents/pr-review-engine/agents/`, the bidirectional-backlink invariant from the `documentation` persona at `.agents/pr-review-engine/agents/documentation.md` applies: every persona's `applies:` frontmatter must match the corresponding `> Applied by personas:` callout in AGENTS.md, and vice versa. A fix to one side must atomically update the other. The `skill-authoring` persona at `.agents/pr-review-engine/agents/skill-authoring.md` adds the engine ↔ `agents/` ↔ §10 inventory invariants for the same surface.
+   - **Fix-rubric confidence boundary** — some review agents carry a `## Fix rubric` section spelling out which of their findings are safe to auto-apply versus surface for human review. Discover them with `.agents/pr-review-engine/scripts/list-fix-rubric-agents.sh`; when a comment maps to such a lens (e.g. a `ci-release-security` / `web3-security` / `documentation` finding), read that agent's rubric and stay inside its "do not auto-apply" boundary.
 
 2. **Read the full file** — Use the Read tool. Understand the overall structure, not just the flagged line.
 
@@ -397,14 +400,14 @@ For each file with findings, build a complete understanding before touching anyt
    - Type definitions, interfaces, or schemas referenced at the flagged location
    - Helper modules used inside the changed function
 
-4. **Find callers** — use the **Grep tool** (preferred over raw grep — it handles regex metacharacters in symbol names safely). Search across `packages/**` (this monorepo has no top-level `test/` directory; tests live under `packages/*/test/` and colocated next to source in `morpho-sdk` / `evm-simulation`):
+4. **Find callers** — use the **Grep tool** (preferred over raw grep — it handles regex metacharacters in symbol names safely). Search across `packages/**` (this monorepo has no top-level `test/` directory; unit tests are colocated beside source and integration tests live under `packages/*/test/`):
 
    ```bash
    # If you must use a shell, scope to packages/:
    grep -rn "<exported-symbol-name>" packages/
    ```
 
-5. **If the change is in a public API**, read the corresponding `packages/<pkg>/src/index.ts` re-export entry point AND any test file under `packages/<pkg>/test/` that exercises the symbol.
+5. **If the change is in a public API**, read the corresponding `packages/<pkg>/src/index.ts` re-export entry point, relevant colocated `packages/<pkg>/src/**/*.test.ts` unit tests, and `packages/<pkg>/test/**/*.integration.test.ts` integration tests.
 
 6. **If the comment cites an originating commit/PR** (e.g., "introduced in #1234" or `git blame` output), read the other files touched by that commit for context:
 
@@ -790,7 +793,7 @@ MERGEEOF
        - if the file is under packages/<pkg>/, also packages/<pkg>/AGENTS.md/README.md/ARCHITECTURE.md,
        - any nested AGENTS.md along the path of the touched file,
        - for files outside packages/ the per-package step is skipped.
-     Then read the FULL file, read all files imported by it, and use the Grep tool to find callers (this monorepo has no top-level test/ directory; tests live under packages/*/test/ and colocated next to source in morpho-sdk/evm-simulation). If the change is in a public API, also read packages/<pkg>/src/index.ts and any test file under packages/<pkg>/test/. You do NOT need to read every transitive import — focus on files directly relevant to the specific fix. Re-discover this context per cycle from THIS cycle's diff/touched files.
+     Then read the FULL file, read all files imported by it, and use the Grep tool to find callers (this monorepo has no top-level test/ directory; unit tests are colocated beside source and integration tests live under packages/*/test/). If the change is in a public API, also read packages/<pkg>/src/index.ts and relevant colocated unit or package `test/` integration files. You do NOT need to read every transitive import — focus on files directly relevant to the specific fix. Re-discover this context per cycle from THIS cycle's diff/touched files.
    - Assign Confidence: HIGH (proceed), Confidence: MEDIUM (proceed but flag in reply), Confidence: LOW (SKIP — record as "skipped: low confidence", reply with what's unclear, leave thread unresolved). Always prefix with `Confidence:` so the tokens never collide with severity.
 
    a. Group actionable + Confidence:HIGH/MEDIUM comments by file. For each file: apply fix with Edit tool per the comment suggestion (using the context already gathered above).

@@ -3,9 +3,13 @@ import {
   UnsupportedChainIdError,
 } from "@morpho-org/blue-sdk";
 import { isDefined } from "@morpho-org/morpho-ts";
-import { type Address, getAddress } from "viem";
+import { type Address, ethAddress, getAddress } from "viem";
 import { BlacklistViolationError } from "../../errors.js";
-import type { SimulationLogger, Transfer } from "../../types.js";
+import type {
+  AccountAssetChanges,
+  SimulationLogger,
+  Transfer,
+} from "../../types.js";
 
 /**
  * Dust tolerance for bundler retention, in raw token units.
@@ -62,6 +66,7 @@ function getBundlerAddresses(
 interface AssertNoBundlerRetentionParams {
   chainId: number;
   transfers: Transfer[];
+  assetChanges: readonly AccountAssetChanges[];
   logger?: SimulationLogger;
 }
 
@@ -70,16 +75,31 @@ interface AssertNoBundlerRetentionParams {
  *
  * Uses net flow (inbound minus outbound) per (bundler address, token) pair.
  * Bundler3 legitimately receives tokens as an intermediary (user → bundler3 →
- * vault), so gross inbound would fire false positives. We only flag when
- * `|net| > DUST_THRESHOLD` — catching both **retention** (tokens stuck in
- * bundler, positive net) and **drain** (bundler sending more than it received
- * in this bundle, negative net — which implies a pre-existing or state-override
- * balance is being drawn down, a red flag for pre-broadcast integrity).
+ * vault), so gross inbound would fire false positives. We only block positive
+ * net flow above `DUST_THRESHOLD` — value stuck in a bundler address. Negative
+ * net flow means the simulated bundle sweeps a pre-existing or state-overridden
+ * bundler balance. That is useful telemetry, but not current-bundle retention,
+ * so it is warned instead of raising a blacklist violation.
+ *
+ * **Two flow sources, one per asset class.** ERC20 / WETH9 retention is read
+ * from parsed `transfers` (log-derived, identical across backends). Native ETH
+ * emits no event log, so it can never appear in `transfers` on the Tenderly
+ * primary backend — Tenderly derives native moves into `assetChanges` instead.
+ * Native ETH is therefore read from `assetChanges`, the cross-backend source of
+ * truth for native value: Tenderly derives it from its trace, and
+ * `eth_simulateV1` derives it from the synthetic `traceTransfers` logs. Without
+ * this, native ETH stuck in bundler3 would pass the guard undetected on the
+ * Tenderly path (Cantina finding 1440).
+ *
+ * To avoid double-counting native ETH on `eth_simulateV1` — where the same
+ * native move exists both as a synthetic `ethAddress` transfer log *and* in the
+ * `assetChanges` derived from it — native transfer logs are only used as a
+ * fallback for bundler addresses that carry no native `assetChanges` entry.
  */
 export function assertNoBundlerRetention(
   params: AssertNoBundlerRetentionParams,
 ): void {
-  const { chainId, transfers, logger } = params;
+  const { chainId, transfers, assetChanges, logger } = params;
   const bundlerAddresses = getBundlerAddresses(chainId, logger);
   if (bundlerAddresses.size === 0) return;
 
@@ -101,27 +121,57 @@ export function assertNoBundlerRetention(
     }
   };
 
-  for (const t of transfers) {
-    if (bundlerAddresses.has(t.to)) recordFlow(t.to, t.token, t.amount);
-    if (bundlerAddresses.has(t.from)) recordFlow(t.from, t.token, -t.amount);
+  // Native ETH from `assetChanges` (authoritative, cross-backend). Track which
+  // bundlers already have a native entry here so the transfer-log pass below
+  // does not re-add the same native move on `eth_simulateV1`.
+  const nativeFromAssetChanges = new Set<string>();
+  for (const { account, changes } of assetChanges) {
+    if (!bundlerAddresses.has(account)) continue;
+    for (const change of changes) {
+      if (change.token !== ethAddress) continue;
+      recordFlow(account, ethAddress, change.diff);
+      nativeFromAssetChanges.add(account.toLowerCase());
+    }
   }
 
-  const flagged = [...flow.values()].filter(
-    (e) => absBigInt(e.netChange) > DUST_THRESHOLD,
-  );
+  // ERC20 / WETH9 retention from transfer logs. Native ETH transfers (the
+  // `eth_simulateV1` synthetic sentinel) only backfill a bundler endpoint that
+  // is absent from `nativeFromAssetChanges`, so native is never summed on top
+  // of the `assetChanges` value already recorded for that address.
+  const usesAssetChangeNative = (t: Transfer, addr: Address): boolean =>
+    t.token === ethAddress && nativeFromAssetChanges.has(addr.toLowerCase());
+  for (const t of transfers) {
+    if (bundlerAddresses.has(t.to) && !usesAssetChangeNative(t, t.to))
+      recordFlow(t.to, t.token, t.amount);
+    if (bundlerAddresses.has(t.from) && !usesAssetChangeNative(t, t.from))
+      recordFlow(t.from, t.token, -t.amount);
+  }
 
-  if (flagged.length > 0) {
+  const entries = [...flow.values()];
+  const drained = entries.filter((e) => e.netChange < -DUST_THRESHOLD);
+  if (drained.length > 0) {
+    logger?.warn(
+      "Simulation detected pre-existing bundler balance being swept",
+      {
+        changes: drained.map((e) => ({
+          address: e.address,
+          token: e.token,
+          netSwept: (-e.netChange).toString(),
+        })),
+      },
+    );
+  }
+
+  const retained = entries.filter((e) => e.netChange > DUST_THRESHOLD);
+
+  if (retained.length > 0) {
     throw new BlacklistViolationError(
-      "Simulation detected asset transfers retained or drained by restricted bundler contracts",
-      flagged.map((e) => ({
+      "Simulation detected asset transfers retained by restricted bundler contracts",
+      retained.map((e) => ({
         address: e.address,
         token: e.token,
         netRetained: e.netChange.toString(),
       })),
     );
   }
-}
-
-function absBigInt(x: bigint): bigint {
-  return x < 0n ? -x : x;
 }

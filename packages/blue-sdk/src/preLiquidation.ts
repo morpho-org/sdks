@@ -2,6 +2,7 @@ import { parseEther } from "viem";
 import { UnsupportedPreLiquidationParamsError } from "./errors.js";
 import type { BigIntish } from "./types.js";
 
+/** Default PreLiquidation parameter registry keyed by Morpho Blue LLTV. */
 export const defaultPreLiquidationParamsRegistry = new Map([
   [
     parseEther("0.385"),
@@ -85,6 +86,21 @@ export const defaultPreLiquidationParamsRegistry = new Map([
   ],
 ]);
 
+/**
+ * Returns default PreLiquidation params for a supported Morpho Blue LLTV.
+ *
+ * @param lltv - The Morpho Blue liquidation loan-to-value, scaled by WAD.
+ * @returns The default PreLiquidation parameter set for `lltv`.
+ * @throws {UnsupportedPreLiquidationParamsError} when no default parameters exist for `lltv`.
+ * @example
+ * ```ts
+ * import { getDefaultPreLiquidationParams } from "@morpho-org/blue-sdk";
+ * import { parseEther } from "viem";
+ *
+ * const params = getDefaultPreLiquidationParams(parseEther("0.86"));
+ * // params satisfies { preLltv: bigint; preLCF1: bigint; preLCF2: bigint; preLIF1: bigint; preLIF2: bigint }
+ * ```
+ */
 export const getDefaultPreLiquidationParams = (lltv: BigIntish) => {
   // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
   lltv = BigInt(lltv);

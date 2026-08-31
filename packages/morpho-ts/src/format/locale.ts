@@ -4,6 +4,9 @@ type LocaleSymbols = {
   locale: string;
 };
 
+/**
+ * Represents a localized numeric string and the symbols used to produce it.
+ */
 export type LocaleParts = LocaleSymbols & {
   value: string;
 };
@@ -19,7 +22,17 @@ const _convertEnNumStrToLocale = (
 };
 
 /**
- * @returns the locale symbols for the given locale defaulting to en-US
+ * Returns the decimal and grouping symbols for a locale.
+ *
+ * @param locale - Locale identifier to inspect, falling back to `en-US` when invalid.
+ * @returns The decimal symbol, grouping symbol, and requested locale string.
+ * @example
+ * ```ts
+ * import { getLocaleSymbols } from "@morpho-org/morpho-ts";
+ *
+ * const symbols = getLocaleSymbols("en-US");
+ * // { decimalSymbol: ".", groupSymbol: ",", locale: "en-US" }
+ * ```
  */
 export const getLocaleSymbols = (locale: string): LocaleSymbols => {
   let formatter: Intl.NumberFormat;
@@ -44,7 +57,16 @@ export const getLocaleSymbols = (locale: string): LocaleSymbols => {
 };
 
 /**
- * @returns the effective browser locale
+ * Returns the browser locale when available.
+ *
+ * @returns The effective browser locale, or `en-US` outside a browser or after locale validation fails.
+ * @example
+ * ```ts
+ * import { getEffectiveLocale } from "@morpho-org/morpho-ts";
+ *
+ * const locale = getEffectiveLocale();
+ * // "en-US"
+ * ```
  */
 export const getEffectiveLocale = () => {
   if (typeof window !== "undefined") {
@@ -61,10 +83,19 @@ export const getEffectiveLocale = () => {
 };
 
 /**
- * @returns the value as a string with the given locale symbols
- * @param numStr the number as a string in the "from" locale (e.g. "1,2345.6" for en-US)
- * @param from the locale the numStr is in (e.g. "en-US")
- * @param to the locale to convert to (e.g. "fr-FR")
+ * Converts a localized numeric string from one locale's separators to another.
+ *
+ * @param numStr - Number string formatted in the `from` locale.
+ * @param from - Locale that `numStr` currently uses.
+ * @param to - Locale to convert separators to.
+ * @returns The numeric string with separators from the `to` locale.
+ * @example
+ * ```ts
+ * import { convertNumStrToLocal } from "@morpho-org/morpho-ts";
+ *
+ * const value = convertNumStrToLocal("1,234.6", "en-US", "de-DE");
+ * // "1.234,6"
+ * ```
  */
 // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export const convertNumStrToLocal = (
@@ -83,9 +114,18 @@ export const convertNumStrToLocal = (
 };
 
 /**
- * @returns the value as a string in the effective browser locale
- * @param numStr the number as a string in the effective browser locale (e.g. "1,2345.6" for en-US)
- * @param to the locale to use (e.g. "fr-FR")
+ * Converts a numeric string from the effective locale to another locale.
+ *
+ * @param numStr - Number string formatted in the effective browser locale.
+ * @param to - Locale to convert separators to.
+ * @returns The numeric string with separators from the `to` locale.
+ * @example
+ * ```ts
+ * import { convertNumStrFromEffectiveTo } from "@morpho-org/morpho-ts";
+ *
+ * const value = convertNumStrFromEffectiveTo("1,234.6", "de-DE");
+ * // "1.234,6" when the effective locale is `en-US`
+ * ```
  */
 export const convertNumStrFromEffectiveTo = (numStr: string, to: string) => {
   const from = getEffectiveLocale();
@@ -93,9 +133,18 @@ export const convertNumStrFromEffectiveTo = (numStr: string, to: string) => {
 };
 
 /**
- * @returns the value as a string with the given locale symbols either from the given locale or the effective browser locale
- * @param numStr the number as a string in english format (e.g. "1,2345.6")
- * @param locale optional - the locale to use (e.g. "fr-FR")
+ * Converts an `en-US` numeric string to localized parts.
+ *
+ * @param numStr - Number string formatted with `en-US` separators.
+ * @param locale - Optional locale to convert to. Uses the effective browser locale when omitted.
+ * @returns The localized value with the symbols and locale used for conversion.
+ * @example
+ * ```ts
+ * import { getEnUSNumberToLocalParts } from "@morpho-org/morpho-ts";
+ *
+ * const parts = getEnUSNumberToLocalParts("1,234.6", "en-US");
+ * // { decimalSymbol: ".", groupSymbol: ",", locale: "en-US", value: "1,234.6" }
+ * ```
  */
 export const getEnUSNumberToLocalParts = (
   numStr: string,

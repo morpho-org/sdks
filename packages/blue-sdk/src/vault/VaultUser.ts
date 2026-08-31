@@ -1,5 +1,6 @@
 import type { Address } from "../types.js";
 
+/** Plain input shape for a user's MetaMorpho vault state. */
 export interface IVaultUser {
   vault: Address;
   user: Address;
@@ -7,6 +8,7 @@ export interface IVaultUser {
   allowance: bigint;
 }
 
+/** Represents a user's MetaMorpho vault allocator and allowance state. */
 export class VaultUser implements IVaultUser {
   /**
    * The vault's address.

@@ -1,3 +1,4 @@
+/** Reason why a capacity calculation is capped. */
 export enum CapacityLimitReason {
   liquidity = "Liquidity",
   balance = "Balance",
@@ -8,6 +9,7 @@ export enum CapacityLimitReason {
   vaultV2_relativeCap = "VaultV2_RelativeCap",
 }
 
+/** Bounded capacity value and the reason for the bound. */
 export interface CapacityLimit {
   value: bigint;
   limiter: CapacityLimitReason;

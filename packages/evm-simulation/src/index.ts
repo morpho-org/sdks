@@ -2,7 +2,6 @@
 
 // Errors (for instanceof checks by consumers)
 export {
-  AddressScreeningError,
   BlacklistViolationError,
   ExternalServiceError,
   SimulationPackageError,
@@ -10,10 +9,11 @@ export {
   SimulationValidationError,
   UnsupportedChainError,
 } from "./errors.js";
-export { screenAddresses } from "./screen-addresses/index.js";
 export { simulate } from "./simulate/index.js";
 // Types
 export type {
+  AccountAssetChanges,
+  AssetChange,
   ChainSimulationConfig,
   RawLog,
   SimulateParams,
@@ -23,6 +23,6 @@ export type {
   SimulationLogger,
   SimulationResult,
   SimulationTransaction,
-  TenderlyRestConfig,
+  TenderlyRpcConfig,
   Transfer,
 } from "./types.js";

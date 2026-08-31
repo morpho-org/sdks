@@ -1,12 +1,16 @@
 {
   "name": "@morpho-org/morpho-ts",
   "description": "TypeScript package to handle all things time & format-related.",
-  "version": "2.5.1",
+  "version": "2.11.0",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Rubilmax <rmilon@gmail.com>"
   ],
-  "repository": "github:morpho-org/sdks",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/morpho-org/sdks.git",
+    "directory": "packages/morpho-ts"
+  },
   "homepage": "https://github.com/morpho-org/sdks",
   "bugs": {
     "url": "https://github.com/morpho-org/sdks/issues",
@@ -15,6 +19,21 @@
   "license": "MIT",
   "type": "module",
   "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./abis": "./src/abis.ts",
+    "./abis/marketParams": "./src/abis/marketParams.ts"
+  },
+  "typesVersions": {
+    "*": {
+      "abis": [
+        "src/abis.ts"
+      ],
+      "abis/marketParams": [
+        "src/abis/marketParams.ts"
+      ]
+    }
+  },
   "files": [
     "lib"
   ],
@@ -25,8 +44,8 @@
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json"
   },
   "devDependencies": {
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.5"
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   },
   "publishConfig": {
     "exports": {
@@ -34,6 +53,28 @@
         "types": "./lib/esm/index.d.ts",
         "import": "./lib/esm/index.js",
         "require": "./lib/cjs/index.js"
+      },
+      "./abis": {
+        "types": "./lib/esm/abis.d.ts",
+        "import": "./lib/esm/abis.js",
+        "require": "./lib/cjs/abis.js"
+      },
+      "./abis/marketParams": {
+        "types": "./lib/esm/abis/marketParams.d.ts",
+        "import": "./lib/esm/abis/marketParams.js",
+        "require": "./lib/cjs/abis/marketParams.js"
+      }
+    },
+    "main": "./lib/cjs/index.js",
+    "types": "./lib/esm/index.d.ts",
+    "typesVersions": {
+      "*": {
+        "abis": [
+          "lib/esm/abis.d.ts"
+        ],
+        "abis/marketParams": [
+          "lib/esm/abis/marketParams.d.ts"
+        ]
       }
     }
   }

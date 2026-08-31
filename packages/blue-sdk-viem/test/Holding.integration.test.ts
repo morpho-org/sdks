@@ -1,0 +1,318 @@
+import {
+  addressesRegistry,
+  ChainId,
+  MathLib,
+  NATIVE_ADDRESS,
+} from "@morpho-org/blue-sdk";
+
+import { maxUint256, zeroAddress } from "viem";
+import { describe, expect } from "vitest";
+import { Holding } from "../src/augment/Holding.js";
+import { permit2Abi } from "../src/index.js";
+import {
+  abi as getHoldingAbi,
+  code as getHoldingCode,
+} from "../src/queries/GetHolding.js";
+import { test } from "./setup.js";
+
+const {
+  morpho,
+  bundler3: { generalAdapter1 },
+  permit2,
+  wNative,
+  wbC3M,
+} = addressesRegistry[ChainId.EthMainnet];
+
+describe("augment/Holding", () => {
+  test("should fetch user WETH data with deployless", async ({ client }) => {
+    const expectedData = new Holding({
+      token: wNative,
+      user: client.account.address,
+      erc20Allowances: {
+        morpho: 1n,
+        permit2: 3n,
+        "bundler3.generalAdapter1": 2n,
+      },
+      permit2BundlerAllowance: {
+        amount: 7n,
+        expiration: MathLib.MAX_UINT_48 - 2n,
+        nonce: 0n,
+      },
+      balance: 10n * MathLib.WAD,
+      canTransfer: true,
+    });
+
+    await client.deal({
+      erc20: wNative,
+      amount: expectedData.balance,
+    });
+    await client.approve({
+      address: wNative,
+      args: [morpho, expectedData.erc20Allowances.morpho],
+    });
+    await client.approve({
+      address: wNative,
+      args: [
+        generalAdapter1,
+        expectedData.erc20Allowances["bundler3.generalAdapter1"],
+      ],
+    });
+    await client.approve({
+      address: wNative,
+      args: [permit2, expectedData.erc20Allowances.permit2],
+    });
+    await client.writeContract({
+      address: permit2,
+      abi: permit2Abi,
+      functionName: "approve",
+      args: [
+        wNative,
+        generalAdapter1,
+        expectedData.permit2BundlerAllowance.amount,
+        Number(expectedData.permit2BundlerAllowance.expiration),
+      ],
+    });
+
+    const value = await Holding.fetch(client.account.address, wNative, client);
+
+    expect(value).toStrictEqual(expectedData);
+  });
+
+  test("should fetch user WETH data without deployless", async ({ client }) => {
+    const expectedData = new Holding({
+      token: wNative,
+      user: client.account.address,
+      erc20Allowances: {
+        morpho: 1n,
+        permit2: 3n,
+        "bundler3.generalAdapter1": 2n,
+      },
+      permit2BundlerAllowance: {
+        amount: 7n,
+        expiration: MathLib.MAX_UINT_48 - 2n,
+        nonce: 0n,
+      },
+      balance: 10n * MathLib.WAD,
+      canTransfer: true,
+    });
+
+    await client.deal({
+      erc20: wNative,
+      amount: expectedData.balance,
+    });
+    await client.approve({
+      address: wNative,
+      args: [morpho, expectedData.erc20Allowances.morpho],
+    });
+    await client.approve({
+      address: wNative,
+      args: [
+        generalAdapter1,
+        expectedData.erc20Allowances["bundler3.generalAdapter1"],
+      ],
+    });
+    await client.approve({
+      address: wNative,
+      args: [permit2, expectedData.erc20Allowances.permit2],
+    });
+    await client.writeContract({
+      address: permit2,
+      abi: permit2Abi,
+      functionName: "approve",
+      args: [
+        wNative,
+        generalAdapter1,
+        expectedData.permit2BundlerAllowance.amount,
+        Number(expectedData.permit2BundlerAllowance.expiration),
+      ],
+    });
+
+    const value = await Holding.fetch(client.account.address, wNative, client, {
+      deployless: false,
+    });
+
+    expect(value).toStrictEqual(expectedData);
+  });
+
+  test("should fetch native user holding", async ({ client }) => {
+    const token = NATIVE_ADDRESS;
+
+    const expectedData = new Holding({
+      token,
+      user: client.account.address,
+      erc20Allowances: {
+        morpho: maxUint256,
+        permit2: maxUint256,
+        "bundler3.generalAdapter1": maxUint256,
+      },
+      permit2BundlerAllowance: {
+        amount: 0n,
+        expiration: 0n,
+        nonce: 0n,
+      },
+      balance: 10000000000000000000000n,
+      canTransfer: undefined,
+    });
+
+    const value = await Holding.fetch(client.account.address, token, client);
+
+    expect(value).toStrictEqual(expectedData);
+  });
+
+  test("should fetch backed token user holding with deployless", async ({
+    client,
+  }) => {
+    const expectedData = new Holding({
+      token: wbC3M,
+      user: client.account.address,
+      erc20Allowances: {
+        morpho: 6n,
+        permit2: 5n,
+        "bundler3.generalAdapter1": 4n,
+      },
+      permit2BundlerAllowance: {
+        amount: 8n,
+        expiration: MathLib.MAX_UINT_48 - 7n,
+        nonce: 0n,
+      },
+      balance: 2853958n,
+      erc2612Nonce: 0n,
+      canTransfer: false,
+    });
+
+    await client.deal({
+      erc20: wbC3M,
+      amount: expectedData.balance,
+    });
+    await client.approve({
+      address: wbC3M,
+      args: [morpho, expectedData.erc20Allowances.morpho],
+    });
+    await client.approve({
+      address: wbC3M,
+      args: [
+        generalAdapter1,
+        expectedData.erc20Allowances["bundler3.generalAdapter1"],
+      ],
+    });
+    await client.approve({
+      address: wbC3M,
+      args: [permit2, expectedData.erc20Allowances.permit2],
+    });
+    await client.writeContract({
+      address: permit2,
+      abi: permit2Abi,
+      functionName: "approve",
+      args: [
+        wbC3M,
+        generalAdapter1,
+        expectedData.permit2BundlerAllowance.amount,
+        Number(expectedData.permit2BundlerAllowance.expiration),
+      ],
+    });
+
+    const value = await Holding.fetch(client.account.address, wbC3M, client);
+
+    expect(value).toStrictEqual(expectedData);
+  });
+
+  test("should fetch backed token user holding without deployless", async ({
+    client,
+  }) => {
+    const expectedData = new Holding({
+      token: wbC3M,
+      user: client.account.address,
+      erc20Allowances: {
+        morpho: 6n,
+        permit2: 5n,
+        "bundler3.generalAdapter1": 4n,
+      },
+      permit2BundlerAllowance: {
+        amount: 8n,
+        expiration: MathLib.MAX_UINT_48 - 7n,
+        nonce: 0n,
+      },
+      balance: 2853958n,
+      erc2612Nonce: 0n,
+      canTransfer: false,
+    });
+
+    await client.deal({
+      erc20: wbC3M,
+      amount: expectedData.balance,
+    });
+    await client.approve({
+      address: wbC3M,
+      args: [morpho, expectedData.erc20Allowances.morpho],
+    });
+    await client.approve({
+      address: wbC3M,
+      args: [
+        generalAdapter1,
+        expectedData.erc20Allowances["bundler3.generalAdapter1"],
+      ],
+    });
+    await client.approve({
+      address: wbC3M,
+      args: [permit2, expectedData.erc20Allowances.permit2],
+    });
+    await client.writeContract({
+      address: permit2,
+      abi: permit2Abi,
+      functionName: "approve",
+      args: [
+        wbC3M,
+        generalAdapter1,
+        expectedData.permit2BundlerAllowance.amount,
+        Number(expectedData.permit2BundlerAllowance.expiration),
+      ],
+    });
+
+    const value = await Holding.fetch(client.account.address, wbC3M, client, {
+      deployless: false,
+    });
+
+    expect(value).toStrictEqual(expectedData);
+  });
+
+  test("deployless query does not revert when Permit2 is absent", async ({
+    client,
+  }) => {
+    // Some chains have no Permit2 deployment; `fetchHolding` then passes `address(0)`.
+    // The deployless query must skip both Permit2 reads instead of reverting on an
+    // addressless contract, leaving the Permit2 ERC20 allowance and the bundler allowance
+    // at zero so it matches the multicall fallback (which returns 0 without any read). The
+    // other recipients' allowances must still be reported. Exercised here on mainnet by
+    // passing `zeroAddress` directly as the Permit2 argument.
+    await client.deal({ erc20: wNative, amount: 10n * MathLib.WAD });
+    await client.approve({ address: wNative, args: [morpho, 6n] });
+    await client.approve({ address: wNative, args: [generalAdapter1, 4n] });
+
+    const res = await client.readContract({
+      abi: getHoldingAbi,
+      code: getHoldingCode,
+      functionName: "query",
+      args: [
+        wNative,
+        client.account.address,
+        morpho,
+        zeroAddress,
+        generalAdapter1,
+        false,
+        false,
+      ],
+    });
+
+    expect(res.balance).toBe(10n * MathLib.WAD);
+    expect(res.erc20Allowances).toEqual({
+      morpho: 6n,
+      permit2: 0n,
+      generalAdapter1: 4n,
+    });
+    expect(res.permit2BundlerAllowance).toEqual({
+      amount: 0n,
+      expiration: 0,
+      nonce: 0,
+    });
+  });
+});

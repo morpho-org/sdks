@@ -1,10 +1,10 @@
 import { MarketParams } from "@morpho-org/blue-sdk";
 import { type Address, isHex, parseUnits } from "viem";
 import { describe, expect } from "vitest";
-import { test } from "../../../test/setup.js";
+import { test } from "../../../test/unit.js";
 import {
   EmptyDeallocationsError,
-  NonPositiveSharesAmountError,
+  NonPositiveInputError,
 } from "../../types/index.js";
 import { vaultV2ForceRedeem } from "./forceRedeem.js";
 
@@ -177,7 +177,7 @@ describe("forceRedeemVaultV2 unit tests", () => {
     ).toThrow(EmptyDeallocationsError);
   });
 
-  test("should throw NonPositiveSharesAmountError when redeem shares is zero", ({
+  test("should throw NonPositiveInputError when redeem shares is zero", ({
     client,
   }) => {
     expect(() =>
@@ -191,10 +191,10 @@ describe("forceRedeemVaultV2 unit tests", () => {
           onBehalf: client.account.address,
         },
       }),
-    ).toThrow(NonPositiveSharesAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NonPositiveSharesAmountError when redeem shares is negative", ({
+  test("should throw NonPositiveInputError when redeem shares is negative", ({
     client,
   }) => {
     expect(() =>
@@ -208,6 +208,6 @@ describe("forceRedeemVaultV2 unit tests", () => {
           onBehalf: client.account.address,
         },
       }),
-    ).toThrow(NonPositiveSharesAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 });

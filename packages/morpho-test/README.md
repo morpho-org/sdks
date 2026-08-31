@@ -44,7 +44,7 @@ import { markets } from "@morpho-org/morpho-test";
 const { usdc_wstEth, usdc_idle, eth_wstEth } = markets[ChainId.EthMainnet];
 ```
 
-See more on its internal usage for [E2E tests here](../blue-sdk-viem/test/Market.test.ts).
+See more on its internal usage for [E2E tests here](../blue-sdk-viem/test/Market.integration.test.ts).
 
 ## Development
 

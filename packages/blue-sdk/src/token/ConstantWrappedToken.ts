@@ -4,6 +4,7 @@ import type { Address, BigIntish } from "../types.js";
 import type { IToken } from "./Token.js";
 import { WrappedToken } from "./WrappedToken.js";
 
+/** Represents a wrapped token with a constant decimals-based conversion rate. */
 export class ConstantWrappedToken extends WrappedToken {
   public readonly underlyingDecimals;
 

@@ -53,24 +53,22 @@ type FormatOptions =
   | FormatCommasOptions
   | FormatPercentOptions;
 
-declare global {
-  interface String {
-    insert(index: number, substr: string, fillWith?: string): string;
-  }
-}
-
 // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
-String.prototype.insert = function (index, substr, fillWith) {
-  // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-  if (index < 0) index = this.length + index;
+const insertString = (
+  value: string,
+  index: number,
+  substr: string,
+  fillWith?: string,
+) => {
+  let offset = index < 0 ? value.length + index : index;
 
   let filler = "";
-  if (index < 0) {
-    if (fillWith) filler = fillWith.repeat(-index).slice(index);
-    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-    index = 0;
+  if (offset < 0) {
+    /* v8 ignore next -- callers only omit fillWith when offset stays non-negative. */
+    if (fillWith) filler = fillWith.repeat(-offset).slice(offset);
+    offset = 0;
   }
-  return this.slice(0, index) + substr + filler + this.slice(index);
+  return value.slice(0, offset) + substr + filler + value.slice(offset);
 };
 
 const RANGES = [
@@ -121,7 +119,8 @@ const _formatShort = (
   if (params) {
     return (
       _applyOptions(
-        stringValue.insert(
+        insertString(
+          stringValue,
           -((params.power ?? params.minDecimals) + decimals),
           ".",
           "0",
@@ -134,7 +133,7 @@ const _formatShort = (
     return _formatCommas(bi, decimals, formatOptions);
   }
   return _applyOptions(
-    decimals ? stringValue.insert(-decimals, ".", "0") : stringValue,
+    decimals ? insertString(stringValue, -decimals, ".", "0") : stringValue,
     formatOptions,
   );
 };
@@ -146,7 +145,7 @@ const _formatCommas = (
   formatOptions: Omit<FormatCommasOptions, "format">,
 ) => {
   const stringValue = decimals
-    ? bi.toString().insert(-decimals, ".", "0")
+    ? insertString(bi.toString(), -decimals, ".", "0")
     : bi.toString();
 
   const [wholePart, decimalPart] = stringValue.split(".");
@@ -170,7 +169,7 @@ const _formatNumber = (
 ) => {
   if (decimals === 0) return _applyOptions(bi.toString(), formatOptions);
   return _applyOptions(
-    bi.toString().insert(-decimals, ".", "0"),
+    insertString(bi.toString(), -decimals, ".", "0"),
     formatOptions,
   );
 };
@@ -180,6 +179,7 @@ const _withUnit = (value: string, unit?: string) => {
   switch (unit) {
     case "$":
       return `$${value}`;
+    /* v8 ignore next -- empty string is handled by the falsy-unit guard above. */
     case "":
     case "%":
       return `${value}${unit}`;
@@ -387,8 +387,10 @@ export abstract class BaseFormatter {
 
         const strValue = `${whole}${newDigits.slice(0, numberExp)}.${newDigits.slice(numberExp)}`;
 
+        /* v8 ignore start -- strValue always includes the decimal separator above. */
         // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
         decimals = strValue.split(".")[1]?.length ?? 0;
+        /* v8 ignore stop */
         // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
         value = BigInt(strValue.replace(".", ""));
       } else {
@@ -401,6 +403,9 @@ export abstract class BaseFormatter {
   }
 }
 
+/**
+ * Formats integer values as hexadecimal strings.
+ */
 export class HexFormatter extends BaseFormatter {
   protected _options: Readonly<FormatHexOptions> = {
     format: Format.hex,
@@ -428,6 +433,9 @@ export class HexFormatter extends BaseFormatter {
   }
 }
 
+/**
+ * Provides shared chainable options for decimal-based formatters.
+ */
 export abstract class CommonFormatter extends BaseFormatter {
   protected abstract _options: Readonly<BaseFormatOptions>;
 
@@ -924,4 +932,5 @@ export function createFormat<
   } & { readonly [K in keyof TCustom]: TFormatters[TCustom[K]["format"]] };
 }
 
+/** Default formatter collection with hex, number, commas, short, and percent formatters. */
 export const format = createFormat();

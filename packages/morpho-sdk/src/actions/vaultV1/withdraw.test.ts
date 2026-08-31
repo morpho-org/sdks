@@ -4,8 +4,8 @@ import {
   GauntletWethVaultV1,
   SteakhouseUsdcVaultV1,
 } from "../../../test/fixtures/vaultV1.js";
-import { test } from "../../../test/setup.js";
-import { NonPositiveAssetAmountError } from "../../types/index.js";
+import { test } from "../../../test/unit.js";
+import { NonPositiveInputError } from "../../types/index.js";
 import { vaultV1Withdraw } from "./withdraw.js";
 
 describe("withdrawVaultV1 unit tests", () => {
@@ -83,7 +83,7 @@ describe("withdrawVaultV1 unit tests", () => {
     expect(tx.to).toBe(SteakhouseUsdcVaultV1.address);
   });
 
-  test("should throw NonPositiveAssetAmountError when assets is zero", async () => {
+  test("should throw NonPositiveInputError when assets is zero", async () => {
     expect(() =>
       vaultV1Withdraw({
         vault: {
@@ -95,10 +95,10 @@ describe("withdrawVaultV1 unit tests", () => {
           onBehalf: "0x1234567890123456789012345678901234567890",
         },
       }),
-    ).toThrow(NonPositiveAssetAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
-  test("should throw NonPositiveAssetAmountError when assets is negative", async () => {
+  test("should throw NonPositiveInputError when assets is negative", async () => {
     expect(() =>
       vaultV1Withdraw({
         vault: {
@@ -110,7 +110,7 @@ describe("withdrawVaultV1 unit tests", () => {
           onBehalf: "0x1234567890123456789012345678901234567890",
         },
       }),
-    ).toThrow(NonPositiveAssetAmountError);
+    ).toThrow(NonPositiveInputError);
   });
 
   test("should return a deep-frozen transaction object", async ({ client }) => {

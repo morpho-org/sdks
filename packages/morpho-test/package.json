@@ -1,12 +1,16 @@
 {
   "name": "@morpho-org/morpho-test",
   "description": "Framework-agnostic extension of `@morpho-org/blue-sdk` that exports test fixtures useful for E2E tests on forks.",
-  "version": "2.5.0",
+  "version": "4.0.3",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Rubilmax <rmilon@gmail.com>"
   ],
-  "repository": "github:morpho-org/sdks",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/morpho-org/sdks.git",
+    "directory": "packages/morpho-test"
+  },
   "homepage": "https://github.com/morpho-org/sdks",
   "bugs": {
     "url": "https://github.com/morpho-org/sdks/issues",
@@ -25,19 +29,21 @@
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json"
   },
   "peerDependencies": {
-    "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^",
-    "@morpho-org/test": "workspace:^",
+    "@morpho-org/blue-sdk": "^6.0.0",
+    "@morpho-org/morpho-ts": "^2.7.0",
+    "@morpho-org/test": "^2.8.0",
     "viem": "^2.21.10"
   },
   "devDependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
-    "typescript": "^6.0.3",
-    "viem": "^2.48.11"
+    "typescript": "^7.0.2",
+    "viem": "^2.55.10"
   },
   "publishConfig": {
+    "main": "./lib/cjs/index.js",
+    "types": "./lib/esm/index.d.ts",
     "exports": {
       ".": {
         "types": "./lib/esm/index.d.ts",

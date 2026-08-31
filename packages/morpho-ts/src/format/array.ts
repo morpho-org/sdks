@@ -19,6 +19,13 @@ function formatItemsList(items: string[], lastSeparator: string): string {
  *
  * @param items Array of strings
  * @returns Humanized union
+ * @example
+ * ```ts
+ * import { formatUnion } from "@morpho-org/morpho-ts";
+ *
+ * const value = formatUnion(["supply", "borrow", "withdraw"]);
+ * // "supply, borrow or withdraw"
+ * ```
  */
 export function formatUnion(items: string[]): string {
   return formatItemsList(items, "or");
@@ -30,6 +37,13 @@ export function formatUnion(items: string[]): string {
  *
  * @param items Array of strings
  * @returns Humanized enumeration
+ * @example
+ * ```ts
+ * import { formatEnumeration } from "@morpho-org/morpho-ts";
+ *
+ * const value = formatEnumeration(["supply", "borrow", "withdraw"]);
+ * // "supply, borrow and withdraw"
+ * ```
  */
 export function formatEnumeration(items: string[]): string {
   return formatItemsList(items, "and");

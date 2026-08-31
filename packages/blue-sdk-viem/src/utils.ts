@@ -25,9 +25,35 @@ const toFixed = (x: number, decimals: number) =>
     minimumFractionDigits: decimals,
   }).format(x);
 
+/**
+ * Parses a JavaScript number into token units without scientific notation drift.
+ *
+ * @param value - Decimal number to parse.
+ * @param decimals - Optional token decimals; defaults to 18.
+ * @returns The parsed bigint scaled by `decimals`.
+ * @example
+ * ```ts
+ * import { safeParseNumber } from "@morpho-org/blue-sdk-viem";
+ *
+ * const amount = safeParseNumber(1.25, 6);
+ * ```
+ */
 export const safeParseNumber = (value: number, decimals = 18) =>
   safeParseUnits(toFixed(value, decimals), decimals);
 
+/**
+ * Parses a decimal string into token units, truncating extra fractional digits.
+ *
+ * @param strValue - Decimal string to parse.
+ * @param decimals - Optional token decimals; defaults to 18.
+ * @returns The parsed bigint scaled by `decimals`.
+ * @example
+ * ```ts
+ * import { safeParseUnits } from "@morpho-org/blue-sdk-viem";
+ *
+ * const amount = safeParseUnits("1.25", 6);
+ * ```
+ */
 export const safeParseUnits = (strValue: string, decimals = 18) => {
   if (!/[-+]?[0-9]*\.?[0-9]+/.test(strValue))
     throw Error(`invalid number: ${strValue}`);
@@ -42,6 +68,18 @@ export const safeParseUnits = (strValue: string, decimals = 18) => {
   );
 };
 
+/**
+ * Normalizes an address string through viem checksum validation after lowercasing it.
+ *
+ * @param address - Address string to normalize.
+ * @returns The checksummed viem address.
+ * @example
+ * ```ts
+ * import { safeGetAddress } from "@morpho-org/blue-sdk-viem";
+ *
+ * const address = safeGetAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
+ * ```
+ */
 export const safeGetAddress = (address: string) =>
   getAddress(address.toLowerCase());
 
@@ -74,6 +112,7 @@ function zipParams<
   return params.reduce(
     // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
     (acc, param, index) => {
+      /* v8 ignore next: restructure rejects unnamed ABI outputs before zipping. */
       return typeof param.name === "string"
         ? // biome-ignore lint/performance/noAccumulatingSpread: This keeps type system happy with negligible performance impact
           { ...acc, [param.name]: values[index] }
@@ -131,6 +170,10 @@ function zipParams<
  *   },
  * });
  * ```
+ *
+ * @param outputs - Tuple output returned by viem.
+ * @param parameters - ABI item lookup parameters matching the read that produced `outputs`.
+ * @returns An object whose keys are the named ABI outputs and whose values are the tuple elements.
  */
 export function restructure<
   const abi extends Abi,
@@ -174,6 +217,20 @@ function isTuple<T>(x: T): x is T extends readonly unknown[] ? T : never {
  * types. This wrapper converts viem's arrays back to objects, _as if_ the onchain method returned a struct.
  *
  * @see {@link restructure}
+ * @param client - Viem client used for the read.
+ * @param parameters - Read contract parameters for a view or pure function with named tuple outputs.
+ * @returns An object whose keys are the named ABI outputs and whose values are the tuple elements.
+ * @example
+ * ```ts
+ * import { readContractRestructured } from "@morpho-org/blue-sdk-viem";
+ *
+ * const market = await readContractRestructured(client, {
+ *   address: morpho,
+ *   abi: blueAbi,
+ *   functionName: "market",
+ *   args: [marketId],
+ * });
+ * ```
  */
 export async function readContractRestructured<
   chain extends Chain | undefined,
