@@ -198,4 +198,67 @@ describe("validateInput", () => {
       ),
     ).toThrow(SimulationValidationError);
   });
+
+  it("does not throw on a valid legacy gasPrice or EIP-1559 fee", () => {
+    expect(() =>
+      validateInput(
+        params({
+          transactions: [
+            { from: USER, to: VAULT, data: "0x12" as Hex, gasPrice: 1n },
+          ],
+        }),
+      ),
+    ).not.toThrow();
+    expect(() =>
+      validateInput(
+        params({
+          transactions: [
+            {
+              from: USER,
+              to: VAULT,
+              data: "0x12" as Hex,
+              maxFeePerGas: 2n,
+              maxPriorityFeePerGas: 1n,
+            },
+          ],
+        }),
+      ),
+    ).not.toThrow();
+  });
+
+  it("throws when legacy and EIP-1559 fees are both set", () => {
+    expect(() =>
+      validateInput(
+        params({
+          transactions: [
+            {
+              from: USER,
+              to: VAULT,
+              data: "0x12" as Hex,
+              gasPrice: 1n,
+              maxFeePerGas: 2n,
+            },
+          ],
+        }),
+      ),
+    ).toThrow(SimulationValidationError);
+  });
+
+  it("throws when a fee field is negative", () => {
+    for (const bad of [
+      { gasPrice: -1n },
+      { maxFeePerGas: -1n },
+      { maxPriorityFeePerGas: -1n },
+    ]) {
+      expect(() =>
+        validateInput(
+          params({
+            transactions: [
+              { from: USER, to: VAULT, data: "0x12" as Hex, ...bad },
+            ],
+          }),
+        ),
+      ).toThrow(SimulationValidationError);
+    }
+  });
 });

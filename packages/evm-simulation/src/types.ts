@@ -59,6 +59,28 @@ export interface SimulationTransaction {
   to: Address;
   data: Hex;
   value?: bigint;
+  /**
+   * Legacy gas price (wei) the simulated call runs at, surfaced to the EVM's
+   * `GASPRICE` opcode. Mutually exclusive with `maxFeePerGas` /
+   * `maxPriorityFeePerGas`.
+   *
+   * When no fee field is set, the simulator applies a non-zero default
+   * (`DEFAULT_SIMULATION_GAS_PRICE`) rather than `0`: a zero gas price never
+   * occurs on-chain and would hide a step that reverts only under a positive
+   * fee context (Cantina finding 1631). Pass the transaction's real effective
+   * gas price for an exact preview.
+   */
+  gasPrice?: bigint;
+  /**
+   * EIP-1559 max fee per gas (wei). Mutually exclusive with `gasPrice`.
+   * See {@link SimulationTransaction.gasPrice} for the fee-context rationale.
+   */
+  maxFeePerGas?: bigint;
+  /**
+   * EIP-1559 max priority fee per gas (wei). Mutually exclusive with `gasPrice`.
+   * See {@link SimulationTransaction.gasPrice} for the fee-context rationale.
+   */
+  maxPriorityFeePerGas?: bigint;
 }
 
 /**

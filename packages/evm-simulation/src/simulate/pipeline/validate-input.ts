@@ -37,6 +37,27 @@ export function validateInput(params: SimulateParams): void {
     if (tx.value !== undefined && tx.value < 0n) {
       errors.push(`transactions[${i}].value: must be non-negative`);
     }
+    if (tx.gasPrice !== undefined && tx.gasPrice < 0n) {
+      errors.push(`transactions[${i}].gasPrice: must be non-negative`);
+    }
+    if (tx.maxFeePerGas !== undefined && tx.maxFeePerGas < 0n) {
+      errors.push(`transactions[${i}].maxFeePerGas: must be non-negative`);
+    }
+    if (tx.maxPriorityFeePerGas !== undefined && tx.maxPriorityFeePerGas < 0n) {
+      errors.push(
+        `transactions[${i}].maxPriorityFeePerGas: must be non-negative`,
+      );
+    }
+    // Legacy and EIP-1559 fee models are mutually exclusive; the backends can
+    // serialize only one. Reject both so the fee context stays unambiguous.
+    if (
+      tx.gasPrice !== undefined &&
+      (tx.maxFeePerGas !== undefined || tx.maxPriorityFeePerGas !== undefined)
+    ) {
+      errors.push(
+        `transactions[${i}]: set either gasPrice (legacy) or maxFeePerGas/maxPriorityFeePerGas (EIP-1559), not both`,
+      );
+    }
   }
 
   // Same-sender check uses RAW `.from` strings (lowercased) so the invariant
