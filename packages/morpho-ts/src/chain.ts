@@ -284,7 +284,7 @@ export namespace ChainUtils {
       name: "TAC",
       id: ChainId.TacMainnet,
       nativeCurrency: { name: "TAC", symbol: "TAC", decimals: 18 },
-      explorerUrl: "https://explorer.tac.build/",
+      explorerUrl: "https://explorer.tac.build",
       identifier: "tac",
     },
     [ChainId.LiskMainnet]: {
@@ -347,14 +347,14 @@ export namespace ChainUtils {
       name: "Celo",
       id: ChainId.CeloMainnet,
       nativeCurrency: { name: "Celo", symbol: "CELO", decimals: 18 },
-      explorerUrl: "https://celoscan.io/",
+      explorerUrl: "https://celoscan.io",
       identifier: "celo",
     },
     [ChainId.AbstractMainnet]: {
       name: "Abstract",
       id: ChainId.AbstractMainnet,
       nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-      explorerUrl: "https://abscan.org/",
+      explorerUrl: "https://abscan.org",
       identifier: "abstract",
     },
     [ChainId.BitlayerMainnet]: {
@@ -375,7 +375,7 @@ export namespace ChainUtils {
       name: "Soneium",
       id: ChainId.SoneiumMainnet,
       nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-      explorerUrl: "https://soneium.blockscout.com/",
+      explorerUrl: "https://soneium.blockscout.com",
       identifier: "soneium",
     },
     [ChainId.TempoMainnet]: {
@@ -432,7 +432,7 @@ export namespace ChainUtils {
       name: "Arc",
       id: ChainId.ArcMainnet,
       nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
-      explorerUrl: "http://explorer.arc.io/",
+      explorerUrl: "https://explorer.arc.io",
       identifier: "arc",
     },
     [ChainId.MorphMainnet]: {
