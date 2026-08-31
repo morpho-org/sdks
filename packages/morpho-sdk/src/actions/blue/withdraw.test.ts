@@ -460,4 +460,18 @@ describe("blueWithdraw", () => {
       }),
     ).toThrow(InputExceedsMaxError);
   });
+
+  test("error: InputExceedsMaxError when the deadline exceeds uint256", () => {
+    expect(() =>
+      blueWithdraw({
+        market,
+        args: {
+          userAddress,
+          withdrawAssets: 5n,
+          withdrawShares: 0n,
+          deadline: maxUint256 + 1n,
+        },
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
 });

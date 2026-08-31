@@ -10,6 +10,7 @@ import {
   encodeAbiParameters,
   type Hex,
   isAddressEqual,
+  maxUint256,
   parseCompactSignature,
   parseSignature,
   type Signature,
@@ -89,6 +90,13 @@ export const normalizeBlueBundlesV1CommonParams = (
 ): NormalizedBlueBundlesV1CommonParams => {
   if (params.deadline <= 0n) {
     throw new NonPositiveInputError("deadline", params.deadline);
+  }
+  if (params.deadline > maxUint256) {
+    throw new InputExceedsMaxError({
+      field: "deadline",
+      value: params.deadline,
+      max: maxUint256,
+    });
   }
   const referralFeePct = params.referralFeePct ?? 0n;
   if (referralFeePct < 0n) {

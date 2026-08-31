@@ -596,9 +596,9 @@ export interface Permit2TransferFromAction
   extends BaseAction<
     "permit2TransferFrom",
     {
-      spender: Address;
-      amount: bigint;
-      deadline: bigint;
+      readonly spender: Address;
+      readonly amount: bigint;
+      readonly deadline: bigint;
     }
   > {}
 
@@ -657,8 +657,8 @@ export type PermitRequirementSignature =
 
 /** A signed Permit2 SignatureTransfer requirement used by BlueBundlesV1. */
 export interface Permit2TransferFromRequirementSignature {
-  args: PermitArgs;
-  action: Permit2TransferFromAction;
+  readonly args: PermitArgs;
+  readonly action: Permit2TransferFromAction;
 }
 
 /** A signed Morpho authorization consumed by Bundler3 or a direct BlueBundlesV1 call. */

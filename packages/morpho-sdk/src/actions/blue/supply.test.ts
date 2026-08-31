@@ -451,4 +451,13 @@ describe("blueSupply", () => {
       }),
     ).toThrow(InputExceedsMaxError);
   });
+
+  test("error: InputExceedsMaxError when the deadline exceeds uint256", () => {
+    expect(() =>
+      blueSupply({
+        market,
+        args: { userAddress, assets: 1n, deadline: maxUint256 + 1n },
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
 });
