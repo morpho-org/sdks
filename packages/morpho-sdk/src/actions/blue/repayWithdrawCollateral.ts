@@ -141,10 +141,9 @@ export const blueRepayWithdrawCollateral = (
     requirementSignature,
     authorizationSignature,
   } = params.args;
-  // Bound every uint256 ABI argument here so a direct caller receives the SDK's typed
-  // `InputExceedsMaxError` rather than viem's `IntegerOutOfRangeError` at encode time
-  // (`maxUint256` is a valid `repayShares` saturated-repay and `maxLtv` sentinel, so reject only
-  // above it).
+  // Reject > uint256 so a direct caller gets the SDK's typed `InputExceedsMaxError`, not viem's
+  // `IntegerOutOfRangeError` at encode time. `maxUint256` stays valid as the `repayShares`
+  // (full repay) and `maxLtv` sentinel.
   for (const [field, value] of [
     ["repayAssets", repayAssets],
     ["repayShares", repayShares],
@@ -171,10 +170,9 @@ export const blueRepayWithdrawCollateral = (
     throw new NonPositiveInputError("maxRepayAssets", maxRepayAssets);
   }
   if (!hasRepay && maxRepayAssets > 0n) {
-    // A withdrawal-only call has no repay leg to fund: reject stray funding so a direct caller
-    // can't encode a phantom repay that needlessly pulls/refunds tokens or reverts on a missing
-    // allowance. Native funding is transitively rejected because
-    // `validateBlueBundlesV1NativeFunding` then requires `nativeAmount === maxRepayAssets` (= 0).
+    // Withdrawal-only has no repay leg to fund: reject stray funding that would encode a phantom
+    // repay. Native funding is transitively rejected — `validateBlueBundlesV1NativeFunding`
+    // requires `nativeAmount === maxRepayAssets` (= 0).
     throw new InputExceedsMaxError({
       field: "maxRepayAssets",
       value: maxRepayAssets,

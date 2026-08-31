@@ -139,9 +139,8 @@ export const blueSupplyCollateralBorrow = (
     requirementSignature,
     authorizationSignature,
   } = params.args;
-  // Bound every uint256 ABI argument here so a direct caller receives the SDK's typed
-  // `InputExceedsMaxError` rather than viem's `IntegerOutOfRangeError` at encode time
-  // (`maxUint256` is a valid `maxLtv` sentinel for the inactive-borrow leg, so reject only above it).
+  // Reject > uint256 so a direct caller gets the SDK's typed `InputExceedsMaxError`, not viem's
+  // `IntegerOutOfRangeError` at encode time. `maxUint256` stays valid as the `maxLtv` sentinel.
   for (const [field, value] of [
     ["collateralAssets", collateralAssets],
     ["borrowAssets", borrowAssets],

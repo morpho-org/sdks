@@ -1703,10 +1703,9 @@ export class MorphoBlue implements BlueActions {
                   amount: maxRepayAssets,
                   approvalAmount: saturatedRepay
                     ? (MAX_TOKEN_APPROVALS[this.chainId]?.[
-                        // Normalize to the EIP-55 checksum the registry is keyed by, so a
-                        // lowercased/differently-cased loan token (common from subgraphs/APIs)
-                        // still resolves the per-token cap instead of falling back to maxUint256
-                        // — which would make the classic approval revert on UNI/ONDO/COMP/FLUID.
+                        // Checksum the key so a differently-cased loan token (common from
+                        // subgraphs/APIs) resolves its per-token cap instead of falling back to
+                        // maxUint256, which UNI/ONDO/COMP/FLUID reject.
                         getAddress(this.marketParams.loanToken)
                       ] ?? maxUint256)
                     : undefined,

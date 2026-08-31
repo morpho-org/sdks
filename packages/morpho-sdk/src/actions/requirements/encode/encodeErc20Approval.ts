@@ -61,10 +61,8 @@ export const encodeErc20Approval = (
 
   const amountValue = MathLib.min(
     amount,
-    // Normalize to the EIP-55 checksum the registry is keyed by: a lowercased/differently-cased
-    // token address must still resolve its per-token cap, otherwise the approval would fall back
-    // to `maxUint256` and revert on tokens like UNI/ONDO/COMP/FLUID that reject approvals above
-    // `uint96`.
+    // Checksum the lookup key so a differently-cased token still resolves its per-token cap
+    // instead of falling back to `maxUint256`, which UNI/ONDO/COMP/FLUID reject above `uint96`.
     MAX_TOKEN_APPROVALS[chainId]?.[getAddress(token)] ?? maxUint256,
   );
 
