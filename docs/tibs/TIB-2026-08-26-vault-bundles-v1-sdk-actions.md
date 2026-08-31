@@ -102,6 +102,7 @@ as part of the same change:
 | Shared brick | Replaces | Consumers |
 | ------------ | -------- | --------- |
 | `BundlesPermitKind` (`None` / `ERC2612` / `Permit2`), `BundlesTokenPermit` | `BlueBundlesPermitKind`, `BlueBundlesTokenPermit` | Blue supply/repay/collateral, vault deposit |
+| `BundlesTokenRequirementsOptions` — public readonly `getRequirements()` options shared by every token-funded bundles handle | `BlueTokenRequirementsParams` and the vault entities' inline `{ useSimplePermit? }` shapes | Blue supply/repay/collateral, vault deposit |
 | `getBundlesTokenPermit(...)` — reshape a `PermitRequirementSignature` into `TokenPermit{kind,data}` | new (PR #945 accepts an ABI-ready struct and never builds one) | same |
 | `getBundlesSharesPermit(...)` — reshape into `Permit{value,nonce,deadline,v,r,s}` + empty sentinel | `getVaultExitBundlesV1PermitStruct` (kept as a deprecated alias for the in-kind paths) | vault withdraw / redeem / migrate, vault-exit |
 | `resolveBundlesFunding({ amount, nativeAmount, asset, chainId })` — XOR funding resolver returning `{ assets, value }` | inlined `nativeAmount` handling in PR #945 | Blue + vault deposit paths |
@@ -112,10 +113,30 @@ as part of the same change:
 | `grossFromNetAssets({ netAssets, referralFeePct })` | new | referral-fee call sites |
 | `bundles.vaultBundlesV1` registry slot + `vaultBundlesV1Abi` + `RequirementSpenderKey` entry | new | — |
 
+The public entity-handle option follows the `BlueBundlesV1` implementation's caller-owned nonce
+model and is exported from the package barrel:
+
+```ts
+export interface BundlesTokenRequirementsOptions {
+  /** Prefer ERC-2612 when the funded token exposes a compatible nonce. */
+  readonly useSimplePermit?: boolean;
+  /** Explicit unused Permit2 SignatureTransfer unordered nonce. */
+  readonly permit2Nonce?: bigint;
+}
+```
+
+Every Blue or vault `ActionOutput` whose `getRequirements()` can select a token permit uses
+`BundlesTokenRequirementsOptions` as its requirements-parameter type and forwards both fields to
+the shared coordinator:
+`ActionOutput<TAction, readonly RequirementSignature[], BundlesTokenRequirementsOptions>`.
+Share-only outputs keep their existing requirements type. `permit2Nonce` is optional in the
+TypeScript shape because ERC-2612, classic-approval, and native-funding paths do not consume one; it
+is required at runtime when dispatch reaches Permit2 SignatureTransfer.
+
 `getBundlesTokenRequirements(...)` is deliberately **not** an Action-layer brick. It lives under
 `src/entities/requirements/` and owns the asynchronous boundary: chain validation; direct and
 Permit2 ERC-20 allowance reads; ERC-2612 nonce / domain-metadata reads; and the Permit2
-`nonceBitmap` scan. It passes those results as readonly plain state into
+`nonceBitmap` read for the caller-selected word. It passes those results as readonly plain state into
 `resolveBundlesTokenRequirements`, which performs no RPC and returns the encoded requirement
 descriptors. The shared entity module has multiple Blue and vault entity call sites, so it centralizes
 the reads without letting an Action module depend on a viem client. The pure resolver is also the
@@ -261,25 +282,23 @@ TIB is where it comes due.
 **SignatureTransfer nonces are unordered**, not sequential: Permit2 tracks them in
 `nonceBitmap(owner, wordPos)` — already present in `packages/morpho-ts/src/abis.ts`. A signature
 whose bit is already flipped reverts, and an unsubmitted signature leaves its bit free forever, so
-reusing "the next nonce" is not a strategy. `getBundlesTokenRequirements` therefore reads
-`nonceBitmap` and picks the **lowest free bit deterministically**: scan `wordPos` from `0` upward,
-take the first word with a zero bit, and use `wordPos × 256 + bitPos`. Deterministic selection keeps
-the requirement idempotent across retries of the same unsubmitted intent, and the word scan is
-bounded in practice because a user's flipped bits stay dense at the low end. This path must be
-tested with a pre-consumed nonce and with a fully-consumed first word.
+reusing "the next nonce" is not a strategy. Following the existing `BlueBundlesV1` entity contract,
+Permit2 selection therefore requires the caller to supply an explicit unused `permit2Nonce` through
+`BundlesTokenRequirementsOptions`. Before any nonce RPC read, `getBundlesTokenRequirements` throws
+`NegativeInputError` below zero or `InputExceedsMaxError` above `MAX_UINT_256`; it then derives
+`wordPos = permit2Nonce >> 8` and `bitPos = permit2Nonce & 255`, reads that one bitmap word, and
+throws `Permit2TransferFromNonceAlreadyUsedError` when the bit is already flipped. Omitting the nonce
+when dispatch reaches Permit2 throws `MissingPermit2TransferFromNonceError`; the coordinator does
+not scan for or allocate a replacement.
 
-**Determinism and concurrency are in tension, and the SDK cannot resolve it alone.** Two requirement
-resolutions for the same owner and token that happen before either transaction lands read the same
-bitmap and select the same bit; Permit2 accepts the first submission and reverts the second with
-`InvalidNonce`. Reserving a bit would require the SDK to remember what it handed out — state, which
-§1 forbids: `morphoViemExtension()` is stateless by construction, with no cache and no warm-up. The
-resolution is therefore to **expose the choice rather than hide it**: `getBundlesTokenRequirements`
-accepts an optional `permit2Nonce`, and the lowest-free-bit scan is the default only when the caller
-supplies none. An app with concurrent outstanding intents owns the allocation — it is the only layer
-that knows how many are in flight — while an app with one intent at a time gets the idempotent
-default and never thinks about nonces. The requirement's `action.args` surface the selected nonce so
-a caller can observe what it got. Covered by a test that resolves twice against one bitmap and
-asserts both the collision under the default and its absence with an explicit nonce.
+**Concurrency ownership stays with the application.** Two callers can choose distinct free bits and
+submit the resulting SignatureTransfer permits in either order. If they reuse the same still-free
+nonce before either transaction lands, both requirement resolutions can succeed and Permit2 accepts
+only the first submission. Preventing that would require the SDK to remember what it handed out —
+state, which §1 forbids: `morphoViemExtension()` is stateless by construction, with no cache and no
+warm-up. The requirement's `action.args` surface the caller-selected nonce so the allocation remains
+observable. Tests cover a missing nonce, a consumed nonce, and two concurrent intents supplied with
+distinct nonces.
 
 **Share-side approval (withdraw / redeem / migration).** `IERC4626(vault).withdraw(assets,
 address(this), msg.sender)` and `redeem(shares, address(this), msg.sender)` spend the caller's
@@ -476,6 +495,8 @@ class where one already fits: `NonPositiveInputError`, `NegativeInputError` (`re
 `ExpiredDeadlineError`, `VaultAssetMismatchError`, `VaultAddressMismatchError`,
 `ChainIdMismatchError`, `ChainWNativeMissingError`, `NativeAmountOnNonWNativeVaultError`,
 `UnknownAddressError`, `AddressMismatchError` (`userAddress` is not the connected account),
+`InputExceedsMaxError`, `MissingPermit2TransferFromNonceError`,
+`Permit2TransferFromNonceAlreadyUsedError` (preserved from the Blue bundles requirements path),
 `UnexpectedRequirementSignatureError` (an AllowanceTransfer signature on a bundles path), and
 `AmbiguousRequirementSignaturesError`. New:
 
@@ -515,11 +536,13 @@ No gate error class: gate compatibility is a simulation concern, per §3.
   per §"Verification".
 - **Phase 3 — entity requirements.** Add the shared entity-layer
   `src/entities/requirements/getBundlesTokenRequirements.ts`; it performs the allowance,
-  ERC-2612 metadata / nonce, and Permit2 `nonceBitmap` reads, applies the optional `permit2Nonce`
-  choice, and passes readonly plain state into `resolveBundlesTokenRequirements`. Migrate both Blue
-  and vault funding entities onto that split. `withdraw` / `redeem` change from `{ buildTx }` to a
-  full `ActionOutput` with share-permit / approval requirements; `migrateToV2` drops
-  `minSharePriceVaultV1`. Fork tests run at pinned blocks.
+  ERC-2612 metadata / nonce, and selected Permit2 `nonceBitmap`-word reads; requires and validates
+  `BundlesTokenRequirementsOptions.permit2Nonce` when Permit2 is selected; and passes readonly plain
+  state into `resolveBundlesTokenRequirements`. Migrate both Blue and vault funding entities onto
+  that split and export the readonly shared options type, preserving Blue's existing public nonce
+  control. `withdraw` / `redeem` change from `{ buildTx }` to a full `ActionOutput` with share-permit
+  / approval requirements; `migrateToV2` drops `minSharePriceVaultV1`. Fork tests run at pinned
+  blocks.
 - **Phase 4 — dependents.** `wdk-protocol-lending-morpho-evm` `withdraw` calls
   `vault.entity.withdraw({...}).buildTx()` with no arguments at `src/morpho-protocol-evm.ts:650-656`
   and exposes no withdrawal-requirements method, so first-time withdrawals would revert for
@@ -602,7 +625,7 @@ one. `Plan` marks whether the migration plan already tracks the row.
 | 13 | Gated Vault V2s must allow `VaultBundlesV1` in `sendAssetsGate` (was GA1) **and now also in `receiveAssetsGate`, which exits never needed** because the direct call paid the user | **new — untracked** | Curators of permissioned vaults must update gates **before** the SDK release, or exits break. The SDK cannot pre-check this reliably (§3), so detection is by finalized-transaction simulation. Highest-risk operational item in this migration |
 | 14 | With a referral fee, gross and net diverge and every displayed amount must say which it is | new | Exact gross-up helper (§4); irrelevant at `pct = 0` |
 | 15 | A dust deposit minting zero shares panics onchain instead of reverting typed | new | Entity rejects a previewed zero mint before building. The pure builder cannot — it holds no share preview — so a direct action caller keeps the panic (§4) |
-| 19 | Two Permit2 deposit intents resolved concurrently pick the same nonce and the second reverts `InvalidNonce` | **new — untracked** | A stateless SDK cannot reserve nonces (§1). `getBundlesTokenRequirements` takes an optional `permit2Nonce`; apps with concurrent intents own the allocation, single-intent apps get the idempotent default (§3) |
+| 19 | Permit2 SignatureTransfer requires the caller to allocate an explicit unused unordered nonce | **new — untracked** | Preserve the public `BlueBundlesV1` behavior through `BundlesTokenRequirementsOptions`; the SDK validates the selected bitmap bit, while apps with concurrent intents allocate distinct values because a stateless SDK cannot reserve them (§3) |
 
 **Capability losses**
 
@@ -627,7 +650,10 @@ Only `VaultBundlesV1`-specific behavior. Existing action validations are inherit
 | Deposit whose net amount mints zero shares | **Entity** rejects before building; the pure builder holds no share preview, so a direct action caller keeps the onchain panic (§4) |
 | Deposit with `referralFeePct < 0n` | `NegativeInputError` in the builder, before the `uint256` encoder raises an untyped viem error |
 | Permit2 deposit by an owner who has never approved Permit2 | Requirements include the ERC-20 approval to Permit2 **ordered before** the signature; a signature alone is never presented as sufficient |
-| Two deposit requirements resolved against one `nonceBitmap` | Both select the same bit under the default rule — asserted, not hidden; an explicit `permit2Nonce` makes them distinct |
+| Permit2 selected without `permit2Nonce` | `MissingPermit2TransferFromNonceError`; never silently choose a nonce the stateless SDK cannot reserve |
+| `permit2Nonce < 0` or `permit2Nonce > MAX_UINT_256` | `NegativeInputError` or `InputExceedsMaxError`, respectively, before any nonce RPC read or signing step |
+| Two concurrent Permit2 requirements supplied distinct free nonces | Both resolve with the caller-selected nonce and may execute in either order |
+| Two concurrent Permit2 requirements supplied the same still-free nonce | Both may resolve before chain state changes; the caller owns uniqueness, and Permit2 accepts only the first submission |
 | AllowanceTransfer (`action.type: "permit2"`) signature passed to a bundles path | `UnexpectedRequirementSignatureError`; never reshaped into a `TokenPermit` the contract cannot verify |
 | Token permit passed to a native-funded deposit | `MixedBundlesFundingError` at build time; never silently dropped, since the contract reverts `BothNativeAndToken` |
 | Entity handle built with `userAddress != client.account` | `AddressMismatchError` when an account is connected; with a public client the SDK cannot check, and the JSDoc states `userAddress` must be the submitter |
@@ -640,7 +666,7 @@ Only `VaultBundlesV1`-specific behavior. Existing action validations are inherit
 | Share balance shrinks between quote and inclusion (full exit by shares) | Contract reverts; do not describe a shares exit as saturated |
 | Share balance grows between quote and inclusion | Residual shares remain; the exit is partial by design |
 | Permit already consumed by a third party | `submitPermit` skips it; the existing allowance path must still cover the burn |
-| Permit2 nonce bit already flipped | Requirement selects the lowest free bit from `nonceBitmap`; a repeated deposit never reuses a consumed bit |
+| Permit2 nonce bit already flipped | `Permit2TransferFromNonceAlreadyUsedError`; choose another explicit nonce and resolve again |
 | Migration source and destination assets differ | Reject before building (contract: `InconsistentAssets`) |
 | Migration source and destination are the same vault | `SameVaultMigrationError` |
 | Migration source share price drops | No onchain bound exists; share-mode action args claim no fixed proceeds, and integrations disclose the latest finalized-simulation preview and the trade-off |
@@ -671,8 +697,8 @@ Only `VaultBundlesV1`-specific behavior. Existing action validations are inherit
   and `nonceBitmap` under `src/entities/requirements/`, then passes plain state into the synchronous
   Action-layer `resolveBundlesTokenRequirements`.
 - Resolve every funding path the contract accepts from `getRequirements()`, including Permit2
-  SignatureTransfer with deterministic free-bit nonce selection, its ERC-20-approval-to-Permit2
-  prerequisite, and an optional caller-supplied nonce for concurrent intents.
+  SignatureTransfer with an explicit caller-supplied nonce validated against `nonceBitmap`, plus its
+  ERC-20-approval-to-Permit2 prerequisite.
 - Give Permit2 SignatureTransfer its own `RequirementSignature` discriminant; never reuse Blue's
   AllowanceTransfer `"permit2"` tag.
 - Never silently drop a signature the contract would reject; reject it at build time with a typed
@@ -760,8 +786,9 @@ Track handed-out bits so concurrent intents never collide.
 
 **Why rejected:** it requires state, and `morphoViemExtension()` is stateless by construction (§1) —
 no `init()`, no cache, no warm-up. A per-client bitmap would also be wrong across processes, tabs, and
-server replicas, which is exactly where concurrent intents come from. Exposing an optional
-`permit2Nonce` puts the allocation in the only layer that can see all in-flight intents.
+server replicas, which is exactly where concurrent intents come from. Requiring an explicit
+`permit2Nonce` on the Permit2 path puts the allocation in the only layer that can see all in-flight
+intents.
 
 ### Pass a precomputed share preview into the pure deposit builders
 
@@ -796,10 +823,11 @@ Per §5, and following the `inKindRedeem` test layout:
 - **Security invariants as tests** — each fails if the guard is removed: exclusive native funding,
   a token permit rejected on the native path, net-based deposit share-price bound,
   exact-and-upper-bounded share allowance, `chainId` validation, referral recipient non-zero,
-  `referralFeePct` rejected below zero and at or above `WAD`, Permit2 free-bit selection after a
-  consumed nonce, the ERC-20 approval to Permit2 ordered before the signature on a first-time
-  depositor, an AllowanceTransfer signature rejected on a bundles path, and `AddressMismatchError`
-  when a connected `client.account` differs from `userAddress`.
+  `referralFeePct` rejected below zero and at or above `WAD`, a missing or already-consumed explicit
+  Permit2 nonce rejected, distinct caller-selected nonces preserved, the ERC-20 approval to Permit2
+  ordered before the signature on a first-time depositor, an AllowanceTransfer signature rejected on
+  a bundles path, and `AddressMismatchError` when a connected `client.account` differs from
+  `userAddress`.
 - **Fork, pinned block, per chain.** Vault V1 and Vault V2 × deposit / withdraw / redeem /
   migration; permit and approval paths; native deposit; referral fee crediting; `AlreadyInitiated`
   on a double call; full exit by shares; a Permit2 deposit from an owner with zero Permit2 allowance,
@@ -807,7 +835,8 @@ Per §5, and following the `inKindRedeem` test layout:
   simulated bad-debt socialization**, asserting the widened allowance still covers the burn — the case
   that shows why the V1 bound needs the same treatment as V2.
 - **Boundary coverage.** `MAX_UINT_160 + 1n` gross on the Permit2 SignatureTransfer path, asserting
-  the approval is sized `MAX_UINT_256` and no `ApprovalAmountLessThanSpendAmountError` escapes.
+  the approval is sized `MAX_UINT_256` and no `ApprovalAmountLessThanSpendAmountError` escapes;
+  `permit2Nonce = -1n` and `MAX_UINT_256 + 1n` throw their named errors before transport access.
 - **Compile-time API guards.** Pass named values typed as every legacy action-args interface into the
   retyped builders and assert that `recipient`, `onBehalf`, and `minSharePriceVaultV1` are rejected
   through the retained `?: never` keys; fresh-literal-only checks are insufficient. Assert that
@@ -871,8 +900,9 @@ Per §5, and following the `inKindRedeem` test layout:
 - `validateRequirementSpender` must gain the `vaultBundlesV1` key; without it, approvals to the new
   contract are rejected — and with a wrong key, approvals could be directed at an unintended
   spender.
-- Permit2 free-bit selection must never reuse a flipped bit, and the signed `TokenPermissions.token`
-  and `amount` must equal the pulled asset and gross amount exactly.
+- Permit2 requires an explicit caller-selected nonce; the entity rejects a flipped bit before
+  signing, and the signed `TokenPermissions.token` and `amount` must equal the pulled asset and gross
+  amount exactly.
 - The signed **spender** must be validated against the expected spender, which no consumer does
   today: `getTokenRequirementActions` checks asset and amount (`DepositAssetMismatchError`,
   `DepositAmountMismatchError`) but never the spender, and `selectRequirementSignatures` matches on
@@ -918,10 +948,6 @@ Per §5, and following the `inKindRedeem` test layout:
    misrouting risk on public-client builds, or enforce `userAddress == client.account` on bundles
    paths and retire the documented builder ≠ signer freedom (`entities/AGENTS.md:9`) plus the
    quoting-service and Safe-proposal patterns that rely on it?
-8. **Permit2 nonce ownership (row 19).** Confirm that apps with concurrent outstanding deposit
-   intents own nonce allocation through the optional `permit2Nonce`, rather than the SDK growing
-   state to reserve bits.
-
 ## References
 
 - [VaultBundlesV1 source at reviewed revision](https://github.com/morpho-org/bundles/blob/f27e7bcf744310303e24faa522b71d702e696686/src/vault/VaultBundlesV1.sol)
