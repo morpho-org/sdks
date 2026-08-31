@@ -7,9 +7,9 @@ import {
 } from "./error.js";
 
 /**
- * Discriminated-union base for every transaction action. Each concrete
- * action narrows {@link BaseAction} on its literal `type` tag and carries an
- * operation-specific `args` record surfaced for calldata tracing.
+ * Serves as the discriminated-union base for every transaction action. Each
+ * concrete action narrows {@link BaseAction} on its literal `type` tag and
+ * carries an operation-specific `args` record surfaced for calldata tracing.
  *
  * @typeParam TType - Literal discriminator identifying the action.
  * @typeParam TArgs - The action's argument record.
@@ -491,7 +491,7 @@ export interface MidnightCancelOfferAction
   > {}
 
 /**
- * Union of every action a {@link Transaction} can describe across the VaultV1,
+ * Enumerates every action a {@link Transaction} can describe across the VaultV1,
  * VaultV2, Blue, and Midnight flows. The `type` tag discriminates the union so
  * consumers can `switch` exhaustively on it.
  */
@@ -530,9 +530,9 @@ export type TransactionAction =
   | MidnightCancelOfferAction;
 
 /**
- * Immutable, deep-frozen descriptor of a single transaction to submit on-chain:
+ * Describes a single, immutable, deep-frozen transaction to submit on-chain:
  * the target `to`, native `value`, encoded call `data`, and the originating
- * {@link BaseAction} for tracing. Returned by every action builder.
+ * {@link BaseAction} for tracing. Every action builder returns one.
  *
  * @typeParam TAction - The action that produced this transaction.
  */
@@ -555,9 +555,12 @@ export type DepositAmountArgs =
   | { nativeAmount: bigint; amount?: bigint };
 
 /**
- * Pre-resolved arguments for an ERC-2612 `permit` bundler call: the signed
- * approval of `amount` of `asset` from `owner` to the bundler spender, bounded
- * by the `deadline` timestamp and consuming the given `nonce`.
+ * Holds the pre-resolved arguments for an ERC-2612 `permit`: the signed approval
+ * of `amount` of `asset` from `owner` to the permitted spender, bounded by the
+ * `deadline` timestamp and consuming the given `nonce`. The spender is the
+ * GeneralAdapter1/Bundler3 periphery for bundler permits, or the standalone
+ * `VaultExitBundlesV1` contract for an in-kind vault redemption permit produced
+ * by `encodeVaultSharesPermit`.
  */
 export interface PermitArgs {
   owner: Address;
@@ -569,9 +572,9 @@ export interface PermitArgs {
 }
 
 /**
- * Pre-resolved arguments for a Permit2 `permit` bundler call. Same shape as
- * {@link PermitArgs} but adds the Permit2 allowance `expiration` (when the
- * on-chain allowance lapses) alongside the signature `deadline` (by when the
+ * Holds the pre-resolved arguments for a Permit2 `permit` bundler call. It
+ * mirrors {@link PermitArgs} but adds the Permit2 allowance `expiration` (when
+ * the on-chain allowance lapses) alongside the signature `deadline` (by when the
  * signature must be submitted).
  */
 export interface Permit2Args {

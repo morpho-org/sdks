@@ -94,13 +94,22 @@ export const validateMidnightMarketChainId = (
  * responsible for keeping `userAddress` aligned with the signing account
  * at the builder layer.
  *
- * Throws {@link MissingClientPropertyError} if the client has no account.
- * Throws {@link AddressMismatchError} if the client account differs from
- * `userAddress`.
- *
  * @param clientAccountAddress - The client's account address; if undefined,
  *   `MissingClientPropertyError` is thrown.
  * @param userAddress - The user address provided by the caller.
+ * @returns Nothing; narrows `clientAccountAddress` to a defined `Address` when
+ *   it is present and equal to `userAddress`.
+ * @throws {MissingClientPropertyError} when the client has no connected account.
+ * @throws {AddressMismatchError} when the client account differs from
+ *   `userAddress`.
+ * @example
+ * ```ts
+ * import { validateUserAddress } from "@morpho-org/morpho-sdk";
+ *
+ * // Inside a `sign()` flow, before producing a typed-data signature:
+ * validateUserAddress(walletClient.account?.address, userAddress);
+ * // Throws if the wallet has no account or signs for a different address.
+ * ```
  */
 export function validateUserAddress(
   clientAccountAddress: Address | undefined,
