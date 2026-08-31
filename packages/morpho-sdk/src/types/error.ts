@@ -423,6 +423,27 @@ export class ReallocationLoanTokenMismatchError extends Error {
   }
 }
 
+/**
+ * Thrown when a Blue authorization operator is not one of the chain's registered Morpho operators
+ * (GeneralAdapter1 or BlueBundlesV1). Guards the exported authorization builder so a misconfigured
+ * `authorized` cannot grant an arbitrary address control over the user's Morpho positions.
+ */
+export class UnsupportedAuthorizationOperatorError extends Error {
+  /**
+   * @param authorized - The operator address rejected as unsupported.
+   * @param chainId - Chain whose registry was consulted for the supported operators.
+   */
+  public constructor(
+    public readonly authorized: Address,
+    public readonly chainId: number,
+  ) {
+    super(
+      `Authorization operator "${authorized}" is not a supported Morpho operator on chain ${chainId}. Pass the chain's registered GeneralAdapter1 or BlueBundlesV1 address, or omit \`authorized\` to default to GeneralAdapter1.`,
+    );
+    this.name = "UnsupportedAuthorizationOperatorError";
+  }
+}
+
 /** @deprecated Use {@link NonPositiveInputError}. */
 export const NonPositiveAssetAmountError = NonPositiveInputError;
 /** @deprecated Use {@link NonPositiveInputError}. */

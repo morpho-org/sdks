@@ -605,6 +605,33 @@ describe("MorphoBlue requirements", () => {
     ]);
   });
 
+  test("supply forwards a reusable approvalAmount to the token requirement", async () => {
+    const handle = createMockClient(mainnet);
+    const blueBundlesV1 = getChainAddress(mainnet.id, "bundles.blueBundlesV1");
+    mockRead(handle, {
+      address: MARKET_PARAMS.loanToken,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const market = handle.client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
+
+    const requirements = await market
+      .supply({ assets: 1n, userAddress: USER, deadline: maxUint256 })
+      .getRequirements({ approvalAmount: maxUint256 });
+
+    expect(requirements).toMatchObject([
+      {
+        action: {
+          type: "erc20Approval",
+          args: { spender: blueBundlesV1, amount: maxUint256 },
+        },
+      },
+    ]);
+  });
+
   test("supply and withdraw reject expired deadlines", () => {
     const market = noRpcClient
       .extend(morphoViemExtension())

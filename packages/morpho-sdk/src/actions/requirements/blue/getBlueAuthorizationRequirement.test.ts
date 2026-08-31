@@ -1,5 +1,6 @@
 import { addressesRegistry } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
+import { getChainAddress } from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import type { Address } from "viem";
 import { mainnet } from "viem/chains";
@@ -7,6 +8,7 @@ import { describe, expect, test } from "vitest";
 import {
   ChainIdMismatchError,
   isRequirementSignature,
+  UnsupportedAuthorizationOperatorError,
 } from "../../../types/index.js";
 import { getBlueAuthorizationRequirement } from "./getBlueAuthorizationRequirement.js";
 
@@ -120,5 +122,37 @@ describe("getBlueAuthorizationRequirement", () => {
     expect(requirement.action.args.authorized).toBe(
       addressesRegistry[mainnet.id].bundler3.generalAdapter1,
     );
+  });
+
+  test("error: UnsupportedAuthorizationOperatorError for an unregistered operator", async () => {
+    const handle = createMockClient(mainnet);
+    // Authorization is an SDK security invariant: an arbitrary operator override must be rejected
+    // before any RPC read, so it can never reach setAuthorization.
+    await expect(
+      getBlueAuthorizationRequirement({
+        viemClient: handle.client,
+        chainId: mainnet.id,
+        userAddress: USER,
+        authorized: "0x000000000000000000000000000000000000dEaD",
+      }),
+    ).rejects.toBeInstanceOf(UnsupportedAuthorizationOperatorError);
+  });
+
+  test("behavior: accepts the registered BlueBundlesV1 operator", async () => {
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: morpho,
+      abi: blueAbi,
+      functionName: "isAuthorized",
+      result: true,
+    });
+    await expect(
+      getBlueAuthorizationRequirement({
+        viemClient: handle.client,
+        chainId: mainnet.id,
+        userAddress: USER,
+        authorized: getChainAddress(mainnet.id, "bundles.blueBundlesV1"),
+      }),
+    ).resolves.toBeNull();
   });
 });

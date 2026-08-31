@@ -137,6 +137,11 @@ export interface BlueTokenRequirementsParams {
   useSimplePermit?: boolean;
   /** Explicit unused Permit2 SignatureTransfer unordered nonce. */
   permit2Nonce?: bigint;
+  /**
+   * Classic ERC-20 allowance to set when an approval is needed, enabling a reusable approval (for
+   * example `maxUint256`). Defaults to the exact pulled amount. Ignored by signature paths.
+   */
+  approvalAmount?: bigint;
 }
 
 export interface BlueActions {
@@ -803,12 +808,14 @@ export class MorphoBlue implements BlueActions {
     deadline: bigint;
     referralFeePct?: bigint;
     referralFeeRecipient?: Address;
-  }) {
+  }): void {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     this.validateDeadline(params.deadline);
     // Resolve at handle creation so unsupported deployments fail before any RPC prerequisite work.
     getChainAddress(this.chainId, "bundles.blueBundlesV1");
-    return normalizeBlueBundlesV1CommonParams({
+    // Validate the referral inputs eagerly; the normalized result is intentionally discarded here
+    // because the pure action re-normalizes it at encode time.
+    normalizeBlueBundlesV1CommonParams({
       chainId: this.chainId,
       userAddress: params.userAddress,
       deadline: params.deadline,
@@ -824,6 +831,7 @@ export class MorphoBlue implements BlueActions {
     deadline: bigint;
     useSimplePermit?: boolean;
     permit2Nonce?: bigint;
+    approvalAmount?: bigint;
   }): Promise<readonly ActionRequirement[]> {
     this.validateDeadline(params.deadline);
     return getBlueBundlesV1TokenRequirements(this.client.viemClient, {
@@ -836,6 +844,7 @@ export class MorphoBlue implements BlueActions {
       supportDeployless: this.client.options.supportDeployless,
       useSimplePermit: params.useSimplePermit,
       permit2Nonce: params.permit2Nonce,
+      approvalAmount: params.approvalAmount,
     });
   }
 
@@ -945,6 +954,7 @@ export class MorphoBlue implements BlueActions {
           deadline,
           useSimplePermit: requirementsParams?.useSimplePermit,
           permit2Nonce: requirementsParams?.permit2Nonce,
+          approvalAmount: requirementsParams?.approvalAmount,
         });
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
