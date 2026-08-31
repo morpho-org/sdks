@@ -75,11 +75,12 @@ export interface GetBlueBundlesV1TokenRequirementsParams {
  * @throws {ChainIdMismatchError} when the connected client targets another chain.
  * @throws {NegativeInputError} when `amount` or `permit2Nonce` is negative.
  * @throws {NonPositiveInputError} when `deadline` is not positive.
+ * @throws {ExpiredDeadlineError} when `deadline` is positive but not in the future.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {UnknownAddressError} when BlueBundlesV1 is not registered for the chain.
  * @throws {MissingPermit2TransferFromNonceError} when Permit2 is selected without a nonce.
  * @throws {Permit2TransferFromNonceAlreadyUsedError} when `permit2Nonce` is already consumed.
- * @throws {InputExceedsMaxError} when `permit2Nonce` exceeds uint256.
+ * @throws {InputExceedsMaxError} when `amount`, `deadline`, or `permit2Nonce` exceeds uint256.
  * @throws {ApprovalAmountLessThanSpendAmountError} when `approvalAmount` is below `amount`.
  * @throws {viem.BaseError} when a required allowance, Permit2 nonce-bitmap, or ERC-2612 metadata
  *   read fails. A failed ERC-2612 nonce probe alone falls back to Permit2 or classic approval.

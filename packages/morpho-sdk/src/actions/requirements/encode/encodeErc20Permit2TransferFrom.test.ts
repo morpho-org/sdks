@@ -4,6 +4,11 @@ import { createWalletClient, http, maxUint256, verifyTypedData } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
+import {
+  InputExceedsMaxError,
+  NegativeInputError,
+  NonPositiveInputError,
+} from "../../../types/index.js";
 import { encodeErc20Permit2TransferFrom } from "./encodeErc20Permit2TransferFrom.js";
 
 const account = privateKeyToAccount(
@@ -55,5 +60,55 @@ describe("encodeErc20Permit2TransferFrom", () => {
         signature: signed.args.signature,
       }),
     ).resolves.toBe(true);
+  });
+
+  const base = () => {
+    const { usdc, bundles } = addressesRegistry[mainnet.id];
+    const spender = bundles?.blueBundlesV1;
+    if (spender == null) throw new Error("BlueBundlesV1 is not registered");
+    return {
+      token: usdc,
+      spender,
+      amount: 1_000_000n,
+      chainId: mainnet.id,
+      nonce: 0n,
+      deadline: maxUint256,
+    };
+  };
+
+  test("error: NegativeInputError when amount is negative", () => {
+    expect(() =>
+      encodeErc20Permit2TransferFrom({ ...base(), amount: -1n }),
+    ).toThrow(NegativeInputError);
+  });
+
+  test("error: InputExceedsMaxError when amount exceeds uint256", () => {
+    expect(() =>
+      encodeErc20Permit2TransferFrom({ ...base(), amount: maxUint256 + 1n }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
+  test("error: NegativeInputError when nonce is negative", () => {
+    expect(() =>
+      encodeErc20Permit2TransferFrom({ ...base(), nonce: -1n }),
+    ).toThrow(NegativeInputError);
+  });
+
+  test("error: InputExceedsMaxError when nonce exceeds uint256", () => {
+    expect(() =>
+      encodeErc20Permit2TransferFrom({ ...base(), nonce: maxUint256 + 1n }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
+  test("error: NonPositiveInputError when deadline is not positive", () => {
+    expect(() =>
+      encodeErc20Permit2TransferFrom({ ...base(), deadline: 0n }),
+    ).toThrow(NonPositiveInputError);
+  });
+
+  test("error: InputExceedsMaxError when deadline exceeds uint256", () => {
+    expect(() =>
+      encodeErc20Permit2TransferFrom({ ...base(), deadline: maxUint256 + 1n }),
+    ).toThrow(InputExceedsMaxError);
   });
 });

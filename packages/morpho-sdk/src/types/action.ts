@@ -657,7 +657,7 @@ export type PermitRequirementSignature =
 
 /** A signed Permit2 SignatureTransfer requirement used by BlueBundlesV1. */
 export interface Permit2TransferFromRequirementSignature {
-  readonly args: PermitArgs;
+  readonly args: Readonly<PermitArgs>;
   readonly action: Permit2TransferFromAction;
 }
 
