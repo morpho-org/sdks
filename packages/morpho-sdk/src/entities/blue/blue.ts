@@ -134,14 +134,14 @@ type VaultV2BlueReallocationsParams = {
 /** Options for resolving token-backed BlueBundlesV1 approval or signature prerequisites. */
 export interface BlueTokenRequirementsParams {
   /** Prefer ERC-2612 when the funded token exposes a compatible nonce. */
-  useSimplePermit?: boolean;
+  readonly useSimplePermit?: boolean;
   /** Explicit unused Permit2 SignatureTransfer unordered nonce. */
-  permit2Nonce?: bigint;
+  readonly permit2Nonce?: bigint;
   /**
    * Classic ERC-20 allowance to set when an approval is needed, enabling a reusable approval (for
    * example `maxUint256`). Defaults to the exact pulled amount. Ignored by signature paths.
    */
-  approvalAmount?: bigint;
+  readonly approvalAmount?: bigint;
 }
 
 export interface BlueActions {
@@ -1701,14 +1701,17 @@ export class MorphoBlue implements BlueActions {
               ? this.getTokenRequirements({
                   token: this.marketParams.loanToken,
                   amount: maxRepayAssets,
-                  approvalAmount: saturatedRepay
-                    ? (MAX_TOKEN_APPROVALS[this.chainId]?.[
-                        // Checksum the key so a differently-cased loan token (common from
-                        // subgraphs/APIs) resolves its per-token cap instead of falling back to
-                        // maxUint256, which UNI/ONDO/COMP/FLUID reject.
-                        getAddress(this.marketParams.loanToken)
-                      ] ?? maxUint256)
-                    : undefined,
+                  // A caller-requested reusable approval wins; a full repay otherwise defaults to
+                  // the token's reusable cap. Checksum the key so a differently-cased loan token
+                  // (common from subgraphs/APIs) resolves that cap instead of falling back to
+                  // maxUint256, which UNI/ONDO/COMP/FLUID reject.
+                  approvalAmount:
+                    requirementsParams?.approvalAmount ??
+                    (saturatedRepay
+                      ? (MAX_TOKEN_APPROVALS[this.chainId]?.[
+                          getAddress(this.marketParams.loanToken)
+                        ] ?? maxUint256)
+                      : undefined),
                   userAddress,
                   deadline,
                   useSimplePermit: requirementsParams?.useSimplePermit,
@@ -1846,6 +1849,7 @@ export class MorphoBlue implements BlueActions {
               ? this.getTokenRequirements({
                   token: this.marketParams.collateralToken,
                   amount: collateralAssets,
+                  approvalAmount: requirementsParams?.approvalAmount,
                   userAddress,
                   deadline,
                   useSimplePermit: requirementsParams?.useSimplePermit,

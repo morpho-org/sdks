@@ -367,6 +367,69 @@ describe("MorphoBlue write surface", () => {
       },
     ]);
   });
+
+  test("repay forwards a reusable approvalAmount to the token requirement", async () => {
+    const handle = createMockClient(mainnet);
+    const blueBundlesV1 = getChainAddress(mainnet.id, "bundles.blueBundlesV1");
+    mockRead(handle, {
+      address: marketParams.loanToken,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const market = handle.client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.blue(marketParams, mainnet.id);
+
+    const requirements = await market
+      .repay({
+        userAddress,
+        positionData: makePosition(marketParams),
+        repayAssets: 1n,
+        deadline: maxUint256,
+      })
+      .getRequirements({ approvalAmount: maxUint256 });
+
+    expect(requirements).toMatchObject([
+      {
+        action: {
+          type: "erc20Approval",
+          args: { spender: blueBundlesV1, amount: maxUint256 },
+        },
+      },
+    ]);
+  });
+
+  test("supplyCollateral forwards a reusable approvalAmount to the token requirement", async () => {
+    const handle = createMockClient(mainnet);
+    const blueBundlesV1 = getChainAddress(mainnet.id, "bundles.blueBundlesV1");
+    mockRead(handle, {
+      address: marketParams.collateralToken,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const market = handle.client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.blue(marketParams, mainnet.id);
+
+    const requirements = await market
+      .supplyCollateral({
+        userAddress,
+        collateralAssets: 1n,
+        deadline: maxUint256,
+      })
+      .getRequirements({ approvalAmount: maxUint256 });
+
+    expect(requirements).toMatchObject([
+      {
+        action: {
+          type: "erc20Approval",
+          args: { spender: blueBundlesV1, amount: maxUint256 },
+        },
+      },
+    ]);
+  });
 });
 
 describe("MorphoBlue common write validation", () => {
