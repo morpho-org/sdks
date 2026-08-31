@@ -30,7 +30,18 @@ interface RetainedAsset {
   netRetained: string;
 }
 
-/** Funds would flow to bundler3 contract addresses. Never bypassable. */
+/**
+ * Funds would flow to bundler3 contract addresses. Never bypassable.
+ *
+ * @remarks
+ * The guard proves this for the *simulated* run only. Simulation overrides the
+ * sender's native balance to `maxUint256 / 2` and models no gas price, so it
+ * cannot detect a step that reverts on-chain *only because* the caller's real,
+ * post-gas native balance is too low; when that step carries `skipRevert: true`
+ * the on-chain revert is swallowed and earlier funds are stranded without this
+ * error firing (Cantina finding 1631). Keep native/value-carrying steps
+ * `skipRevert: false` so such a bundle reverts atomically instead.
+ */
 export class BlacklistViolationError extends SimulationPackageError {
   readonly code = "BLACKLIST_ERROR";
 

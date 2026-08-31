@@ -95,6 +95,16 @@ interface AssertNoBundlerRetentionParams {
  * native move exists both as a synthetic `ethAddress` transfer log *and* in the
  * `assetChanges` derived from it — native transfer logs are only used as a
  * fallback for bundler addresses that carry no native `assetChanges` entry.
+ *
+ * **Known limitation (Cantina finding 1631).** This check runs on the simulated
+ * bundle, which executes with the sender's native balance overridden to
+ * `maxUint256 / 2` and no gas price. A step that succeeds here but reverts
+ * on-chain *only because* the caller's real, post-gas native balance is too low
+ * therefore evades this guard: if that step is `skipRevert: true`, Bundler3
+ * skips it on-chain and earlier funds are stranded while this simulation
+ * reports none retained. The Morpho builders keep native/value-carrying steps
+ * `skipRevert: false` so no such divergence exists; raw-bundle callers must do
+ * the same.
  */
 export function assertNoBundlerRetention(
   params: AssertNoBundlerRetentionParams,

@@ -31,6 +31,22 @@ import {
  * - `transfers[k].txIdx` → index into `simulationTxs` of the tx that emitted the
  *   underlying log; consumers map back via `simulationTxs[transfer.txIdx]`.
  *
+ * @remarks
+ * **Simulation fidelity — gas cost & sender balance.** Every backend runs the
+ * bundle with the sender's native balance overridden to `maxUint256 / 2` and
+ * with no gas price (`SimulationTransaction` cannot express one). This
+ * deliberately suppresses false "insufficient funds for gas" reverts, but it
+ * also means the simulation cannot observe a step that reverts on-chain *only
+ * because* the caller's real, post-gas native balance is too low. If such a
+ * step is encoded with `skipRevert: true`, Bundler3 continues past it on-chain
+ * and any funds routed to a `bundler3` address by earlier steps are stranded —
+ * a case the retention guard behind `BlacklistViolationError` cannot
+ * flag, because the step succeeds in simulation (Cantina finding 1631). The
+ * Morpho builders avoid this by keeping every native/value-carrying step
+ * `skipRevert: false` so the bundle reverts atomically; integrators composing
+ * raw bundles must uphold the same invariant, and may additionally reserve
+ * on-chain native value for gas.
+ *
  * @param config - Backend configuration: per-chain Tenderly RPC and/or `eth_simulateV1`
  *   URL, optional logger, and the overall timeout budget.
  * @param params - Per-call simulation input.
