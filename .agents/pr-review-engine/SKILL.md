@@ -246,7 +246,7 @@ This is dropped because: no `WHAT:` clause naming the specific problem, no `FIX:
 Baseline (always fire, 8 agents):
 
 - `code-quality.md` — type safety, code smells, naming, cross-file impact on SDK consumers, security primitives.
-- `module-api-architecture.md` — package boundaries, public surface, NodeNext import discipline.
+- `module-api-architecture.md` — package boundaries, public surface and deprecation lifecycle, NodeNext import discipline.
 - `morpho-protocol.md` — Morpho protocol semantics, ABI/address source-of-truth drift, operation routing, accounting/share-price/LLTV invariants.
 - `web3-security.md` — contract interactions, transaction params, permit flows, race conditions.
 - `silent-failure-hunter.md` — swallowed errors, missing error states, dead code paths.
