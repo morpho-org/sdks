@@ -987,8 +987,9 @@ export interface BlueActions {
    * @param params.block.timestamp - Timestamp corresponding to the fetched block.
    * @returns A `VaultV1ReallocationData` snapshot populated from one block.
    * @throws {ChainIdMismatchError} when the client chain does not match this market.
-   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
-   * {@link getVaultV2BlueReallocationData}.
+   * @deprecated Use {@link getVaultV1ReallocationData} for deprecated low-level Bundler3
+   * planning. Vault V1 shared-liquidity planning will be removed in the next major; use
+   * {@link getVaultV2BlueReallocationData} for high-level Blue writes.
    * @example
    * ```ts
    * import { markets } from "@morpho-org/morpho-test";

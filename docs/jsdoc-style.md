@@ -46,12 +46,12 @@ For nested options bags, document every leaf field with dot notation. Do **not**
 
 ```ts
 /**
- * @param params.market.chainId - The chain the market lives on.
- * @param params.market.marketParams - Market params (loanToken, collateralToken, oracle, irm, lltv).
- * @param params.args.amount - Loan asset amount to borrow, in the loan token's smallest unit.
- * @param params.args.receiver - Address that receives the borrowed assets.
- * @param params.args.minSharePrice - Minimum borrow share price (in ray). Slippage protection.
- * @param params.args.reallocations - Optional vault reallocations to execute before borrowing.
+ * @param params.vault.chainId - The chain the vault lives on.
+ * @param params.vault.address - The VaultV1 contract address.
+ * @param params.vault.asset - The vault's underlying ERC-20 asset.
+ * @param params.args.amount - Asset amount to deposit, in the asset's smallest unit.
+ * @param params.args.maxSharePrice - Maximum accepted vault share price, scaled by RAY.
+ * @param params.args.recipient - Address that receives the minted vault shares.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  */
 ```
@@ -66,7 +66,7 @@ For action builders, name `Readonly<Transaction<TAction>>` and call out that the
 
 ```ts
 /**
- * @returns A deep-frozen `Transaction<BlueBorrowAction>` with `to`, `value`, `data`, and the
+ * @returns A deep-frozen `Transaction<VaultV1DepositAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator the simulation layer consumes.
  */
 ```
@@ -87,8 +87,8 @@ Format: `@throws {ErrorClass} when <condition that triggers it>.`
 
 ```ts
 /**
- * @throws {NonPositiveInputError} when `amount <= 0n`.
- * @throws {NegativeInputError} when `minSharePrice < 0n`.
+ * @throws {NegativeInputError} when `amount < 0n`.
+ * @throws {NonPositiveInputError} when `maxSharePrice <= 0n`.
  */
 ```
 
@@ -112,25 +112,23 @@ Rules for examples:
 /**
  * @example
  * ```ts
- * import { createWalletClient, http } from "viem";
+ * import { vaults } from "@morpho-org/morpho-test";
+ * import { createPublicClient, http, zeroAddress } from "viem";
  * import { mainnet } from "viem/chains";
  * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
  *
- * const client = createWalletClient({
- *   chain: mainnet,
- *   transport: http(),
- *   account: borrower,
- * }).extend(morphoViemExtension());
+ * const client = createPublicClient({ chain: mainnet, transport: http() })
+ *   .extend(morphoViemExtension());
  *
- * const market = client.morpho.blue(marketParams, 1);
- * const positionData = await market.getPositionData(borrower);
- * const { buildTx } = market.borrow({
- *   userAddress: borrower,
+ * const vault = client.morpho.vaultV1(vaults[mainnet.id].steakUsdc.address, mainnet.id);
+ * const vaultData = await vault.getData();
+ * const { buildTx } = vault.deposit({
+ *   userAddress: zeroAddress,
  *   amount: 1_000_000n,
- *   positionData,
+ *   vaultData,
  * });
  * const tx = buildTx();
- * // tx satisfies Readonly<Transaction<BlueBorrowAction>>
+ * // tx satisfies Readonly<Transaction<VaultV1DepositAction>>
  * ```
  */
 ```
@@ -173,7 +171,7 @@ export const MAX_SLIPPAGE_TOLERANCE = 100_000_000_000_000_000n; // 10%
  * @param {Object} params - The borrow parameters.
  * @returns {any} The transaction.
  */
-export const blueBorrow = (params: BlueBorrowParams) => { … };
+export const vaultV1Deposit = (params: VaultV1DepositParams) => { … };
 ```
 
 What's wrong:
@@ -188,48 +186,56 @@ What's wrong:
 
 ```ts
 /**
- * Prepares a borrow transaction for a Morpho Blue market.
+ * Prepares a deposit transaction for a VaultV1 (MetaMorpho) contract.
  *
- * Routed through bundler3 via `morphoBorrow`. The bundler uses the transaction initiator as
- * `onBehalf`. Uses `minSharePrice` to protect against share price manipulation between
- * transaction construction and execution.
+ * Routed through bundler3 so GeneralAdapter1 atomically transfers the assets and enforces the
+ * vault's `maxSharePrice` bound onchain.
  *
- * When `reallocations` are provided, `reallocateTo` actions are prepended to the bundle, moving
- * liquidity from other markets via the PublicAllocator before borrowing. Reallocation fees
- * accumulate in `tx.value`.
- *
- * @param params.market.chainId - The chain the market lives on.
- * @param params.market.marketParams - Market params (loanToken, collateralToken, oracle, irm, lltv).
- * @param params.args.amount - Loan asset amount to borrow, in the loan token's smallest unit.
- * @param params.args.receiver - Address that receives the borrowed assets.
- * @param params.args.minSharePrice - Minimum borrow share price (in ray). Slippage protection.
- * @param params.args.reallocations - Optional vault reallocations to execute before borrowing.
+ * @param params.vault.chainId - The chain the vault lives on.
+ * @param params.vault.address - The VaultV1 contract address.
+ * @param params.vault.asset - The vault's underlying ERC-20 asset.
+ * @param params.args.amount - ERC-20 asset amount to deposit.
+ * @param params.args.maxSharePrice - Maximum accepted share price, scaled by RAY.
+ * @param params.args.recipient - Address that receives the minted vault shares.
+ * @param params.args.requirementSignature - Optional signed token-pull requirement.
+ * @param params.args.nativeAmount - Optional native amount to wrap when the asset is wNative.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
- * @returns A deep-frozen `Transaction<BlueBorrowAction>` with `to`, `value`, `data`, and the
+ * @returns A deep-frozen `Transaction<VaultV1DepositAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator.
- * @throws {NonPositiveInputError} when `amount <= 0n`.
- * @throws {NegativeInputError} when `minSharePrice < 0n`.
+ * @throws {NegativeInputError} when `amount` or `nativeAmount` is negative.
+ * @throws {NonPositiveInputError} when the total deposit or `maxSharePrice` is non-positive.
+ * @throws {ChainWNativeMissingError} when native funding is requested on a chain without a
+ *   configured wNative token.
+ * @throws {NativeAmountOnNonWNativeVaultError} when native funding is requested for a vault whose
+ *   asset is not the chain's wNative token.
+ * @throws {DepositAssetMismatchError} when the signed token requirement names a different asset.
+ * @throws {DepositAmountMismatchError} when the signed token requirement names a different amount.
+ * @throws {Permit2ExpirationMissingError} when a Permit2 requirement signature omits expiration.
  * @example
  * ```ts
- * import { blueBorrow } from "@morpho-org/morpho-sdk";
+ * import { vaults } from "@morpho-org/morpho-test";
+ * import { zeroAddress } from "viem";
+ * import { mainnet } from "viem/chains";
+ * import { vaultV1Deposit } from "@morpho-org/morpho-sdk";
  *
- * const tx = blueBorrow({
- *   market: { chainId: 1, marketParams },
+ * const vault = vaults[mainnet.id].steakUsdc;
+ * const tx = vaultV1Deposit({
+ *   vault: { chainId: mainnet.id, address: vault.address, asset: vault.asset },
  *   args: {
  *     amount: 1_000_000n,
- *     receiver: borrower,
- *     minSharePrice: 0n,
+ *     maxSharePrice: 1_010_000_000_000_000_000_000_000_000n,
+ *     recipient: zeroAddress,
  *   },
  * });
- * // tx satisfies Readonly<Transaction<BlueBorrowAction>>
+ * // tx satisfies Readonly<Transaction<VaultV1DepositAction>>
  * ```
  */
 ```
 
 The two cited reference exemplars in this repo are:
 
-- `packages/morpho-sdk/src/actions/blue/borrow.ts` — `blueBorrow` (action builder).
-- `packages/morpho-sdk/src/actions/vaultV1/deposit.ts` — `vaultV1Deposit` (action builder with nested options bag, including the `nativeAmount` branch).
+- `packages/morpho-sdk/src/actions/vaultV1/deposit.ts` — `vaultV1Deposit` (action builder with a nested options bag and native branch).
+- `packages/morpho-sdk/src/actions/vaultV1/withdraw.ts` — `vaultV1Withdraw` (small direct-call action builder).
 
 Copy from those files when in doubt.
 

@@ -161,24 +161,6 @@ export interface BlueSupplyAction
       deadline: bigint;
     }
   > {}
-
-/** Metadata for a direct BlueBundlesV1 loan-asset withdrawal. */
-export interface BlueWithdrawAction
-  extends BaseAction<
-    "blueWithdraw",
-    {
-      market: Hex;
-      withdrawAssets: bigint;
-      withdrawShares: bigint;
-      onBehalf: Address;
-      reallocations: number;
-      reallocationPenaltyAssets: bigint;
-      referralFeePct: bigint;
-      referralFeeRecipient: Address;
-      deadline: bigint;
-    }
-  > {}
-
 type BlueSupplyCollateralBorrowActionArgs = {
   market: Hex;
   collateralAssets: bigint;
@@ -243,6 +225,22 @@ export interface BlueRepayWithdrawCollateralAction
     BlueRepayWithdrawCollateralActionArgs
   > {}
 
+/** Metadata for a direct BlueBundlesV1 loan-asset withdrawal. */
+export interface BlueWithdrawAction
+  extends BaseAction<
+    "blueWithdraw",
+    {
+      market: Hex;
+      withdrawAssets: bigint;
+      withdrawShares: bigint;
+      onBehalf: Address;
+      reallocations: number;
+      reallocationPenaltyAssets: bigint;
+      referralFeePct: bigint;
+      referralFeeRecipient: Address;
+      deadline: bigint;
+    }
+  > {}
 /** Metadata for a direct BlueBundlesV1 full borrow-position migration. */
 export interface BlueRefinanceAction
   extends BaseAction<
@@ -414,6 +412,7 @@ export interface MidnightCancelOfferAction
     }
   > {}
 
+/** Metadata discriminators carried by transactions returned by the SDK. */
 export type TransactionAction =
   | ERC20ApprovalAction
   | VaultV2DepositAction
@@ -428,13 +427,13 @@ export type TransactionAction =
   | VaultV1InKindRedeemAction
   | VaultV1MigrateToV2Action
   | BlueSupplyAction
-  | BlueWithdrawAction
   | BlueSupplyCollateralAction
   | BlueBorrowAction
   | BlueSupplyCollateralBorrowAction
   | BlueRepayAction
   | BlueWithdrawCollateralAction
   | BlueRepayWithdrawCollateralAction
+  | BlueWithdrawAction
   | BlueRefinanceAction
   | BlueAuthorizationAction
   | MidnightAuthorizationAction

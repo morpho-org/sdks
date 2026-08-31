@@ -6,24 +6,33 @@ Centralized type definitions and error classes. Barrel-exported via `index.ts`. 
 
 - `BaseAction<TType, TArgs>` — discriminated union base, keyed on `type`.
 - `Transaction<TAction>` — immutable `{ to, value, data, action }`. Returned from every action; deep-frozen.
-- `Requirement` / `RequirementSignature` — prerequisite signing flow for permit/permit2 and Midnight offer roots.
+- `Requirement` / `RequirementSignature` — prerequisite signing flow for ERC-2612, Permit2
+  AllowanceTransfer, Permit2 SignatureTransfer, Morpho authorization, and Midnight offer roots.
 - `ActionOutput` — lazy entity output with `getRequirements()` plus synchronous `buildTx(...)`.
 - `Metadata` — optional `{ origin, timestamp? }` for calldata tracing.
-- `DepositAmountArgs` — union enforcing at least one of `amount` / `nativeAmount`. Reused for vault deposits, market collateral supply, and market loan-asset supply.
+- `DepositAmountArgs` — union enforcing at least one of `amount` / `nativeAmount`. Used by vault
+  deposits and public low-level composition. Direct BlueBundlesV1 native funding is exclusive with
+  ERC-20 funding rather than additive.
 - `AssetsOrSharesArgs` — discriminated union `{ assets } | { shares }`. Used by withdraw (supply-side).
-- `RepayAmountArgs` / `RepayActionAmountArgs` — repay funding shapes (native-aware). `RepayAmountArgs` (entity surface) is a union `DepositAmountArgs | { shares }`; the entity derives every amount from live market state. `RepayActionAmountArgs` (action surface) is a **flat, pre-resolved** interface `{ amount?, shares?, nativeAmount?, transferAmount }` — the action does no amount arithmetic. Mode is discriminated on `shares`: assets mode is additive like supply (`transferAmount = amount + nativeAmount`, ERC-20 pulled = `amount`); shares mode repays exact shares (ERC-20 pulled = `transferAmount`, already net of native).
 - `MarketParams` — Morpho Blue market params (`loanToken`, `collateralToken`, `oracle`, `irm`, `lltv`).
-- `BlueAuthorizationAction` — used for `morpho.setAuthorization()` pre-requisite transactions.
+- `BlueAuthorizationAction` — used for `morpho.setAuthorization()` prerequisite transactions.
+  High-level Blue writes authorize BlueBundlesV1; low-level Bundler3 composition may authorize
+  GeneralAdapter1.
 - `Midnight*Action` — Midnight fixed-rate action metadata for bundled taker flows, direct collateral/credit flows, maker-offer submission, and maker prerequisite transactions.
 
 ## Shared liquidity (`sharedLiquidity.ts`)
 
-- All Vault V1 shared-liquidity types are deprecated and will be removed in the next major, including
-  `PublicAllocatorOptions`, `PublicReallocation`, `ReallocationWithdrawal`,
+- All Vault V1 shared-liquidity types are deprecated and will be removed in the next major,
+  including `PublicAllocatorOptions`, `PublicReallocation`, `ReallocationWithdrawal`,
   `VaultV1Reallocation`, `VaultReallocation`, and `ReallocationComputeOptions`.
+- `VaultV1Reallocation` — vault address + fee + sorted withdrawals; maps to `reallocateTo()` for
+  low-level PublicAllocator V1 composition. `VaultReallocation` is its deprecated compatibility
+  alias. Neither is accepted by v6 high-level Blue writes.
 - `VaultV2BlueReallocation` — BluePublicAllocator vault/source/target-adapter/assets/WAD-scaled-penalty input; maps 1:1 to `reallocate()` or `allocateFromIdle()` while deriving target market params from the enclosing Blue action.
 - `VaultV2BluePublicAllocatorOptions` — canonical Vault V2 discovery and planner options for timestamp, enablement, vault allowlisting, friendly source-market utilization, and the maximum proportional penalty.
-- `BlueReallocationPlan` — homogeneous V1-or-V2 iterable retained for deprecated low-level compatibility helpers. High-level Blue writes accept `VaultV2BlueReallocation` directly; the V1 branch will be removed in the next major.
+- `BlueReallocationPlan` — homogeneous V1-or-V2 iterable retained for deprecated low-level
+  compatibility helpers. High-level Blue writes accept `VaultV2BlueReallocation` directly; the V1
+  branch will be removed in the next major.
 
 ## Errors (`error.ts`)
 
