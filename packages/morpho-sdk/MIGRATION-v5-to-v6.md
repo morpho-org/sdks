@@ -43,3 +43,17 @@ Allocate any `uint256` whose Permit2 `nonceBitmap` bit is still unset for `userA
 is single-use; a consumed one throws `Permit2TransferFromNonceAlreadyUsedError`). To skip Permit2
 for ERC-2612 tokens, pass `getRequirements({ useSimplePermit: true })`, which prefers a one-signature
 ERC-2612 permit and needs no nonce.
+
+## Removed action-output field: `reallocationFee`
+
+`BlueBorrowAction`, `BlueWithdrawAction`, `BlueSupplyCollateralBorrowAction`, and
+`BlueRefinanceAction` no longer expose `reallocationFee` in `action.args`. That field only ever
+carried Vault V1 native PublicAllocator fees, which high-level writes no longer emit. Read
+`reallocationPenaltyAssets` for the loan-token penalty donated by Vault V2 BluePublicAllocator
+reallocations.
+
+## Removed type: `BlueReallocationPlan`
+
+The `BlueReallocationPlan` union is removed. High-level Blue write inputs accept
+`Iterable<VaultV2BlueReallocation>` directly; for explicit low-level Vault V1 composition, use
+`VaultV1Reallocation[]`.

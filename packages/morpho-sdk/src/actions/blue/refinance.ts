@@ -279,7 +279,6 @@ export const blueRefinance = ({
 
   const {
     actions: reallocationActions,
-    fee: reallocationFee,
     penaltyAssets: reallocationPenaltyAssets,
   } = buildBlueReallocationActions({
     chainId,
@@ -312,7 +311,6 @@ export const blueRefinance = ({
         minBorrowSharePrice,
         maxRepaySharePrice,
         user,
-        reallocationFee,
         reallocationPenaltyAssets,
       },
     },

@@ -198,8 +198,6 @@ export interface BlueBorrowAction
       amount: bigint;
       receiver: Address;
       minSharePrice: bigint;
-      /** Native-token fees paid to PublicAllocator V1. */
-      reallocationFee: bigint;
       /** Loan-token assets donated as BluePublicAllocator V2 penalties. */
       readonly reallocationPenaltyAssets: bigint;
     }
@@ -216,8 +214,6 @@ export interface BlueSupplyCollateralBorrowAction
       onBehalf: Address;
       receiver: Address;
       nativeAmount?: bigint;
-      /** Native-token fees paid to PublicAllocator V1. */
-      reallocationFee: bigint;
       /** Loan-token assets donated as BluePublicAllocator V2 penalties. */
       readonly reallocationPenaltyAssets: bigint;
     }
@@ -279,8 +275,6 @@ export interface BlueRefinanceAction
       readonly minBorrowSharePrice: bigint;
       readonly maxRepaySharePrice: bigint;
       readonly user: Address;
-      /** Native-token fees paid to PublicAllocator V1. */
-      readonly reallocationFee: bigint;
       /** Loan-token assets donated as BluePublicAllocator V2 penalties. */
       readonly reallocationPenaltyAssets: bigint;
     }

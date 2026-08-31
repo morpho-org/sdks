@@ -159,16 +159,6 @@ export interface VaultV2BlueReallocation {
 }
 
 /**
- * A homogeneous Vault V1 or Vault V2 plan retained for low-level compatibility helpers.
- *
- * High-level Blue writes accept {@link VaultV2BlueReallocation} directly and do not accept the
- * Vault V1 branch of this union.
- */
-export type BlueReallocationPlan =
-  | Iterable<VaultV1Reallocation>
-  | Iterable<VaultV2BlueReallocation>;
-
-/**
  * Deprecated name for a Vault V1 reallocation.
  *
  * @deprecated Vault V1 shared-liquidity support will be removed in the next major. Use

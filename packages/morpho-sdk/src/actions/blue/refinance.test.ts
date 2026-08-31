@@ -419,7 +419,7 @@ describe("blueRefinance", () => {
       },
     ];
 
-    test("behavior: omitted or empty reallocations leave tx.value and reallocationFee at zero", () => {
+    test("behavior: omitted or empty reallocations leave tx.value at zero", () => {
       const txOmitted = blueRefinance({
         source: { chainId: mainnet.id, marketParams: source },
         target: { marketParams: target },
@@ -436,9 +436,7 @@ describe("blueRefinance", () => {
       });
 
       expect(txOmitted.value).toBe(0n);
-      expect(txOmitted.action.args.reallocationFee).toBe(0n);
       expect(txEmpty.value).toBe(0n);
-      expect(txEmpty.action.args.reallocationFee).toBe(0n);
       expect(txEmpty.data).toBe(txOmitted.data);
     });
 
@@ -460,7 +458,6 @@ describe("blueRefinance", () => {
       });
 
       expect(tx.value).toBe(0n);
-      expect(tx.action.args.reallocationFee).toBe(0n);
       expect(tx.action.args.reallocationPenaltyAssets).toBe(8n);
       expect(tx.data).toContain("a1b2c3d4");
 
@@ -528,7 +525,6 @@ describe("blueRefinance", () => {
       });
 
       expect(tx.value).toBe(0n);
-      expect(tx.action.args.reallocationFee).toBe(0n);
       expect(tx.action.args.reallocationPenaltyAssets).toBe(8n);
       expect(tx.action.args.borrowAssets).toBe(0n);
       expect(tx.action.args.borrowShares).toBe(0n);

@@ -113,7 +113,6 @@ export const blueBorrow = ({
 
   const {
     actions: reallocationActions,
-    fee: reallocationFee,
     penaltyAssets: reallocationPenaltyAssets,
   } = buildBlueReallocationActions({
     chainId,
@@ -142,7 +141,6 @@ export const blueBorrow = ({
         amount,
         receiver,
         minSharePrice,
-        reallocationFee,
         reallocationPenaltyAssets,
       },
     },

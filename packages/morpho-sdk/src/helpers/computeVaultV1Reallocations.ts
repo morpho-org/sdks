@@ -140,7 +140,7 @@ const capVaultWithdrawals = (
  *   options: { timestamp: block.timestamp },
  * });
  * // Encode `reallocations` explicitly with
- * // BundlerAction.encodePublicAllocatorReallocateTo(...) when composing a low-level bundle.
+ * // BundlerAction.publicAllocatorReallocateTo(...) when composing a low-level bundle.
  * ```
  */
 export const computeVaultV1Reallocations = ({

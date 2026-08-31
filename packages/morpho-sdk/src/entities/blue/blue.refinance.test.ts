@@ -580,6 +580,5 @@ describe("MorphoBlue.refinance", () => {
 
     const tx = refi.buildTx();
     expect(tx.value).toBe(0n);
-    expect(tx.action.args.reallocationFee).toBe(0n);
   });
 });
