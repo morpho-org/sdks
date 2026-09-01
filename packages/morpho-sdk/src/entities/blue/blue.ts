@@ -1888,16 +1888,16 @@ export class MorphoBlue implements BlueActions {
 
   /** {@inheritDoc BlueActions.refinance} */
   refinance(params: {
-    userAddress: Address;
-    positionData: AccrualPosition;
-    destination: {
-      marketParams: MarketParams;
-      positionData: AccrualPosition;
+    readonly userAddress: Address;
+    readonly positionData: AccrualPosition;
+    readonly destination: {
+      readonly marketParams: MarketParams;
+      readonly positionData: AccrualPosition;
     };
-    reallocations?: Iterable<VaultV2BlueReallocation>;
-    deadline: bigint;
-    referralFeePct?: bigint;
-    referralFeeRecipient?: Address;
+    readonly reallocations?: Iterable<VaultV2BlueReallocation>;
+    readonly deadline: bigint;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
   }) {
     const {
       userAddress,

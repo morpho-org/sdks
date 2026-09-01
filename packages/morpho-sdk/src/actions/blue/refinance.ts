@@ -1,9 +1,15 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import { type Address, encodeFunctionData, isAddressEqual } from "viem";
+import {
+  type Address,
+  encodeFunctionData,
+  isAddressEqual,
+  maxUint256,
+} from "viem";
 import { blueBundlesV1Abi } from "../../abis.js";
 import {
   type AuthorizationRequirementSignature,
   type BlueRefinanceAction,
+  InputExceedsMaxError,
   type Metadata,
   NegativeInputError,
   RefinanceSameMarketError,
@@ -23,30 +29,30 @@ import {
 /** Parameters for {@link blueRefinance}. */
 export interface BlueRefinanceParams {
   /** Chain plus source and destination Morpho Blue markets. */
-  market: {
+  readonly market: {
     readonly chainId: number;
     readonly sourceMarketParams: MarketParams;
     readonly destinationMarketParams: MarketParams;
   };
   /** Direct BlueBundlesV1 full-position migration arguments. */
-  args: {
+  readonly args: {
     /** User whose live source borrow position is migrated. */
-    userAddress: Address;
+    readonly userAddress: Address;
     /** Maximum destination LTV enforced by BlueBundlesV1. */
-    maxLtv: bigint;
+    readonly maxLtv: bigint;
     /** Optional Vault V2 reallocations into the destination market. */
-    reallocations?: Iterable<VaultV2BlueReallocation>;
+    readonly reallocations?: Iterable<VaultV2BlueReallocation>;
     /** Final call deadline in Unix seconds. */
-    deadline: bigint;
+    readonly deadline: bigint;
     /** Optional WAD-scaled referral fee, strictly below 100%. */
-    referralFeePct?: bigint;
+    readonly referralFeePct?: bigint;
     /** Recipient required when `referralFeePct` is positive. */
-    referralFeeRecipient?: Address;
+    readonly referralFeeRecipient?: Address;
     /** Optional Morpho authorization signature for BlueBundlesV1. */
-    authorizationSignature?: AuthorizationRequirementSignature;
+    readonly authorizationSignature?: AuthorizationRequirementSignature;
   };
   /** Optional transaction metadata suffix. */
-  metadata?: Metadata;
+  readonly metadata?: Metadata;
 }
 
 /**
@@ -77,6 +83,7 @@ export interface BlueRefinanceParams {
  * @throws {InputExceedsMaxError} when a fee, reallocation amount, or penalty exceeds its ABI bound.
  * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
  * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
+ * @throws {InvalidReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
  * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.
  * @throws {InconsistentReallocationPenaltyError} when one vault uses different penalties.
  * @throws {ReallocationWithdrawalOnTargetMarketError} when a source is the destination market.
@@ -129,8 +136,17 @@ export const blueRefinance = (
       destinationMarketParams.id,
     );
   }
+  // Reject > uint256 so a direct caller gets the SDK's typed `InputExceedsMaxError`, not viem's
+  // `IntegerOutOfRangeError` at encode time. `maxUint256` stays valid as the `maxLtv` sentinel.
   if (maxLtv < 0n) {
     throw new NegativeInputError("maxLtv", maxLtv);
+  }
+  if (maxLtv > maxUint256) {
+    throw new InputExceedsMaxError({
+      field: "maxLtv",
+      value: maxLtv,
+      max: maxUint256,
+    });
   }
 
   const common: BlueBundlesV1CommonParams = {
