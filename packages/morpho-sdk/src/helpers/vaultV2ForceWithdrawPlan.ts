@@ -309,15 +309,18 @@ export function computeVaultV2ForceWithdrawPlan(params: {
  * Callers want two different bounds from this helper, and must not conflate them:
  * - **The allowance to authorize** takes `deadlineVaultData` accrued to the exit deadline, so the
  *   approval still covers a burn inflated by fees accrued while the transaction sits pending.
- * - **The denominator of {@link computeMinForceWithdrawSharePrice}** takes `deadlineVaultData` equal
- *   to `vaultData`. A larger denominator only lowers the resulting price floor, so passing the
- *   deadline-accrued bound there would let an unrelated caller-chosen deadline silently weaken the
- *   slippage guard; `slippageTolerance` is what absorbs accrual drift.
+ * - **The denominator of {@link computeMinForceWithdrawSharePrice}** takes both endpoints accrued to
+ *   `now` (execution time). The raw `lastUpdate` snapshot underestimates the burn a stale
+ *   fee-bearing vault realizes — the first withdrawal accrues pending management fees before burning
+ *   shares — which lifts the floor above the faithful price and trips `SlippageExceeded`. Accruing
+ *   to `now`, not the caller-chosen `deadline`, tracks execution without letting a long deadline
+ *   silently weaken the guard; `slippageTolerance` absorbs the residual drift until inclusion.
  *
  * @param params - Share-bound inputs.
  * @param params.vaultData - Pre-fetched Vault V2 accrual snapshot.
- * @param params.deadlineVaultData - The same vault accrued to the exit deadline, or `vaultData`
- *   itself for a snapshot-tight bound.
+ * @param params.deadlineVaultData - The same vault accrued to a later timestamp: the exit deadline
+ *   for the allowance, or `now` for the price-floor denominator (with `vaultData` accrued to the
+ *   same `now`).
  * @param params.plan - Plan from {@link computeVaultV2ForceWithdrawPlan}.
  * @returns An upper bound, in vault shares, of what the exit burns.
  * @example

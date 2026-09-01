@@ -32,7 +32,12 @@ export interface VaultV2ForceWithdrawPreview {
   readonly assetsToWithdraw: bigint;
   /** Portion force-deallocated from the adapter's markets, net of the penalty. */
   readonly assetsToDeallocate: bigint;
-  /** Assets charged as the force-deallocation penalty. */
+  /**
+   * Assets charged as the force-deallocation penalty, `ceil(assetsToDeallocate × penalty)`. Exact
+   * for a single-market exit; across multiple markets the contract's per-chunk rounding can add at
+   * most one wei per additional market, which the order-independent plan deliberately does not
+   * attribute. This is the tight quote, never the inflated allowance bound.
+   */
   readonly penaltyAssets: bigint;
   /** Assets routed to the referral fee recipient. */
   readonly referralFeeAssets: bigint;
@@ -127,7 +132,10 @@ export function previewVaultV2ForceWithdraw(
     remainingExitAssets: requestedExitAssets - exitAssets,
     assetsToWithdraw: plan.assetsToWithdraw,
     assetsToDeallocate: plan.assetsToDeallocate,
-    penaltyAssets: plan.penaltyAssets,
+    // The tight per-leg charge `ceil(assetsToDeallocate × penalty)`, not `plan.penaltyAssets`: that
+    // bound carries a `+ (penaltyLegs - 1)` allowance slack, which would overstate the quote and
+    // break reconciliation with `exitAssets` for a multi-market exit.
+    penaltyAssets: MathLib.wMulUp(plan.assetsToDeallocate, plan.penalty),
     referralFeeAssets,
     netAssets: plan.withdrawnAssets - referralFeeAssets,
   };

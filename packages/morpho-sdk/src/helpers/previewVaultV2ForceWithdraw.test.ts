@@ -5,6 +5,10 @@ import {
   vaultV2ExitData,
 } from "../../test/fixtures/inKindRedeem.js";
 import { previewVaultV2ForceWithdraw } from "./previewVaultV2ForceWithdraw.js";
+import {
+  computeVaultV2ForceWithdrawPlan,
+  resolveVaultV2ForceWithdrawEligibility,
+} from "./vaultV2ForceWithdrawPlan.js";
 
 const TWO_PERCENT = 20_000_000_000_000_000n;
 const TEN_PERCENT = 100_000_000_000_000_000n;
@@ -86,6 +90,48 @@ describe("previewVaultV2ForceWithdraw", () => {
       assetsToDeallocate: 50n,
       netAssets: 70n,
     });
+  });
+
+  test("behavior: quotes the tight per-leg penalty, not the allowance bound", () => {
+    // Both markets fully liquid (1000 + 500), so a 1_400 exit spans two force-deallocation legs.
+    const vaultData = vaultV2ExitData({
+      additionalMarket: true,
+      marketTotalBorrowAssets: 0n,
+      secondMarketTotalBorrowAssets: 0n,
+      penalty: TWO_PERCENT,
+    });
+    const preview = previewVaultV2ForceWithdraw(vaultData, {
+      requestedExitAssets: 1_400n,
+      timestamp: 0n,
+    });
+    const eligibility = resolveVaultV2ForceWithdrawEligibility(vaultData);
+    if (eligibility.type !== "eligible") {
+      throw new Error(
+        `Expected an eligible fixture, got "${eligibility.type}"`,
+      );
+    }
+    const plan = computeVaultV2ForceWithdrawPlan({
+      vaultData,
+      adapter: eligibility.adapter,
+      liquidityMarketId: eligibility.liquidityMarketId,
+      exitAssets: preview?.exitAssets ?? 0n,
+      timestamp: 0n,
+    });
+
+    expect(plan.penaltyLegs).toBe(2);
+    // The tight `ceil(assetsToDeallocate × penalty)`, exact for the on-chain single-market charge.
+    expect(preview?.penaltyAssets).toBe(
+      MathLib.wMulUp(plan.assetsToDeallocate, TWO_PERCENT),
+    );
+    // Strictly below the `+ (penaltyLegs - 1)` allowance bound the plan carries for approvals.
+    expect(preview?.penaltyAssets).toBeLessThan(plan.penaltyAssets);
+    // The displayed split never claims a larger debit than the penalty-inclusive exit — the bound
+    // would (1_372 + 29 > 1_400).
+    expect(
+      (preview?.assetsToWithdraw ?? 0n) +
+        (preview?.assetsToDeallocate ?? 0n) +
+        (preview?.penaltyAssets ?? 0n),
+    ).toBeLessThanOrEqual(preview?.exitAssets ?? 0n);
   });
 
   test("behavior: deducts the referral fee from the net assets", () => {

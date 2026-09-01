@@ -13,8 +13,8 @@ import { encodeErc20Approval } from "./encode/encodeErc20Approval.js";
  * allowance.
  *
  * The spender is validated by {@link encodeErc20Approval}. Supported spenders are the chain's
- * GeneralAdapter1, Permit2, Midnight, MidnightBundles, and VaultExitBundlesV1 addresses when
- * configured.
+ * GeneralAdapter1, Permit2, Midnight, MidnightBundles, VaultExitBundlesV1, and BlueBundlesV1
+ * addresses when configured.
  *
  * Returns an empty array when the allowance already covers `spendAmount`. When the token is in
  * `APPROVE_ONLY_ONCE_TOKENS` (e.g. USDT) and the existing allowance is non-zero, prepends a
@@ -26,13 +26,14 @@ import { encodeErc20Approval } from "./encode/encodeErc20Approval.js";
  *   and token approval caps.
  * @param params.args.spendAmount - The amount the bundle will actually pull.
  * @param params.args.approvalAmount - The amount to approve (often equal to `spendAmount`, but
- *   may be `MAX_UINT_160` for Permit2 prerequisites).
+ *   may be `maxUint256` for reusable Permit2 or saturated-share-repay approvals).
  * @param params.args.spender - Address that will be granted the approval. Must be GeneralAdapter1,
- *   Permit2, Midnight, MidnightBundles, or VaultExitBundlesV1 for `chainId`.
+ *   Permit2, Midnight, MidnightBundles, VaultExitBundlesV1, or BlueBundlesV1 for `chainId`.
  * @param params.allowances - The user's current allowance of `address` for `spender`.
  * @returns Up to two deep-frozen `Transaction<ERC20ApprovalAction>` entries: an optional reset
  *   followed by the new approval. Empty when no approval is needed.
  * @throws {ApprovalAmountLessThanSpendAmountError} when `approvalAmount < spendAmount`.
+ * @throws {UnsupportedChainIdError} when `chainId` is absent from the address registry.
  * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not a supported SDK spender for `chainId`.
  * @example
  * ```ts

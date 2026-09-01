@@ -200,9 +200,8 @@ implementation:
   returns every amount the exit needs.
 - `computeVaultV2ForceWithdrawSharesBurnt({ vaultData, deadlineVaultData, plan })` returns the share
   upper bound. It is called twice: with the deadline-accrued snapshot for the authorized allowance,
-  and with the build-time snapshot on both endpoints for the denominator of the slippage bound. One
-  implementation, and the allowance is the larger of the two, so the permit can never be smaller than
-  the burn the bound assumed.
+  and with the `now`-accrued snapshot on both endpoints for the denominator of the slippage bound.
+  One implementation serves both.
 
 Plus `computeMinForceWithdrawSharePrice` in `src/helpers/slippage.ts` alongits siblings, and
 `previewVaultV2ForceWithdraw` alongside `previewVaultV2InKindRedeem`.
@@ -272,19 +271,23 @@ The bound is built from the plan, pessimistically on both sides:
 grossDebited     = withdrawnAssets + penaltyAssets                    // penaltyAssets is an upper bound
 sharesBurnt(v)   = v.toShares(grossDebited, "Up") + (penaltyLegs + 2)  // one ceil per withdrawal leg
 
+nowVaultData     = vaultData.accrueInterest(now)                      // execution-time vault state
 allowance        = max(sharesBurnt(vaultData), sharesBurnt(deadlineVaultData))
 minSharePriceE27 = mulDivDown(withdrawnAssets, wToRay(WAD - slippageTolerance),
-                              sharesBurnt(vaultData))                  // snapshot burn, not `allowance`
+                              sharesBurnt(nowVaultData))              // now-accrued burn, not `allowance`
 ```
 
 `withdrawnAssets` is a lower bound of the payout and `sharesBurnt` an upper bound of the burn, so a
 faithful snapshot never trips the check while the tolerance absorbs benign drift.
 
 The **allowance** considers both accrual endpoints because interest lowers the burn while management
-fees raise it — the same duality the in-kind allowance uses. The **price floor** deliberately does
-not: a larger denominator only lowers the floor, so folding in the deadline-accrued burn would let an
-unrelated caller-chosen `deadline` silently weaken the guard. `slippageTolerance` is what absorbs
-accrual drift there.
+fees raise it — the same duality the in-kind allowance uses. The **price floor** accrues its
+denominator to `now` (execution time) instead: the raw `lastUpdate` snapshot underestimates the burn
+a stale fee-bearing vault realizes once its first withdrawal accrues pending management fees, which
+lifts the floor above the faithful price and reverts a valid exit with `SlippageExceeded`. Accruing
+to `now` rather than the caller-chosen `deadline` fixes that without letting a long deadline weaken
+the guard — a larger denominator only lowers the floor — and `slippageTolerance` absorbs the residual
+drift until inclusion.
 
 `penaltyAssets` bounds `Σ ceil(assetsᵢ·penalty/WAD)` by
 `wMulUp(assetsToDeallocate, penalty) + (penaltyLegs − 1)`, using

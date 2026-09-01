@@ -1,4 +1,4 @@
-import { MathLib } from "@morpho-org/blue-sdk";
+import { DEFAULT_SLIPPAGE_TOLERANCE, MathLib } from "@morpho-org/blue-sdk";
 import { erc2612Abi } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import { createMockClient } from "@morpho-org/test/mock";
@@ -18,6 +18,7 @@ import {
 import { withChainTimestamp } from "../../../test/helpers/time.js";
 import { morphoViemExtension } from "../../client/index.js";
 import {
+  computeMinForceWithdrawSharePrice,
   computeVaultV2ForceWithdrawPlan,
   computeVaultV2ForceWithdrawSharesBurnt,
   resolveVaultV2ForceWithdrawEligibility,
@@ -637,6 +638,71 @@ describe("MorphoVaultV2.forceWithdraw", () => {
       expect(boundFor(BigInt(now) + Time.s.from.d(365n))).toBe(
         boundFor(BigInt(now) + Time.s.from.h(2n)),
       );
+    });
+
+    // A stale, fee-bearing vault accrues pending management fees on the first on-chain withdrawal,
+    // minting shares before the burn. Deriving the floor from the raw `lastUpdate` snapshot ignores
+    // that, lifting the floor above the faithful execution price and reverting a valid exit with
+    // `SlippageExceeded`. Accruing the denominator to `now` tracks execution and prevents it.
+    test("behavior: the derived bound accepts a stale fee-bearing vault's accrued price", () => {
+      // Fixture `lastUpdate` is the wall clock; exit 30 days later so pending fees are material.
+      const vaultData = vaultV2ExitData({
+        penalty: TWO_PERCENT,
+        managementFee: 40_000_000_000n,
+      });
+      const now = vaultData.lastUpdate + Time.s.from.d(30n);
+      const handle = createMockClient(mainnet);
+      const minSharePriceE27 = withChainTimestamp(now, () =>
+        vaultFor(handle)
+          .forceWithdraw({
+            exitAssets: 51n,
+            vaultData,
+            userAddress: IN_KIND_USER,
+          })
+          .buildTx(),
+      ).action.args.minSharePriceE27;
+
+      const eligibility = resolveVaultV2ForceWithdrawEligibility(vaultData);
+      if (eligibility.type !== "eligible") {
+        throw new Error(
+          `Expected an eligible fixture, got "${eligibility.type}"`,
+        );
+      }
+      const plan = computeVaultV2ForceWithdrawPlan({
+        vaultData,
+        adapter: eligibility.adapter,
+        liquidityMarketId: eligibility.liquidityMarketId,
+        exitAssets: 51n,
+        timestamp: now,
+      });
+      const { vault: nowVaultData } = vaultData.accrueInterest(now);
+      const faithfulSharesBurnt = computeVaultV2ForceWithdrawSharesBurnt({
+        vaultData: nowVaultData,
+        deadlineVaultData: nowVaultData,
+        plan,
+      });
+      const staleSharesBurnt = computeVaultV2ForceWithdrawSharesBurnt({
+        vaultData,
+        deadlineVaultData: vaultData,
+        plan,
+      });
+      const staleFloor = computeMinForceWithdrawSharePrice({
+        withdrawnAssets: plan.withdrawnAssets,
+        sharesBurnt: staleSharesBurnt,
+        slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
+      });
+      const faithfulPrice = MathLib.mulDivDown(
+        plan.withdrawnAssets,
+        MathLib.RAY,
+        faithfulSharesBurnt,
+      );
+
+      // Pending fees make the real burn exceed the stale snapshot's.
+      expect(faithfulSharesBurnt).toBeGreaterThan(staleSharesBurnt);
+      // The derived floor clears the faithful price (the on-chain check passes)...
+      expect(faithfulPrice).toBeGreaterThanOrEqual(minSharePriceE27);
+      // ...whereas the old snapshot-based floor would have rejected that same faithful price.
+      expect(faithfulPrice).toBeLessThan(staleFloor);
     });
 
     test("behavior: rejects an exit the adapter's markets cannot cover", () => {

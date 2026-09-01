@@ -1,6 +1,5 @@
 ---
 "@morpho-org/morpho-sdk": major
-"@morpho-org/liquidity-sdk-viem": patch
 ---
 
 Migrate Vault V2 `forceWithdraw` from `VaultV2.multicall` to `VaultExitBundlesV1`.
@@ -44,10 +43,12 @@ bounds the realized exit share price. `forceRedeem` is unchanged and stays on th
   path had no slippage bound at all; the derived one rejects a share-price drop, a penalty increase,
   and liquidity shifting from the penalty-free leg to the penalised leg. It does not cover the
   referral fee, which the contract deducts after the check.
-- The derived bound's denominator is the **snapshot** share burn, not the deadline-inflated allowance
-  bound. A larger denominator only lowers the floor, so reusing the allowance would let a
-  caller-chosen `deadline` silently weaken the price floor; `slippageTolerance` absorbs accrual drift
-  instead.
+- The derived bound's denominator is the share burn accrued to **`now`** (execution time), not the
+  deadline-inflated allowance bound. The raw `lastUpdate` snapshot would underestimate the burn a
+  stale fee-bearing vault realizes on its first withdrawal and lift the floor above the faithful
+  price, tripping `SlippageExceeded`; accruing to `now` — not the caller-chosen `deadline` — tracks
+  execution without letting a long deadline weaken the guard. `slippageTolerance` absorbs the
+  residual drift.
 - A supplied `minSharePriceE27` override must be positive: the contract reads `0` as "no bound", so
   an override can no longer opt out of the slippage check. A non-positive override throws
   `NonPositiveInputError`.
@@ -70,11 +71,5 @@ bounds the realized exit share price. `forceRedeem` is unchanged and stays on th
   legs, each rounded up independently, over the worse of the current and deadline-accrued previews.
   This is a bound on a **newly required** approval, not a replacement for one: the multicall path
   needed no approval at all, because the vault burned `msg.sender`'s own shares.
-
-**Dependent packages**
-
-- `@morpho-org/liquidity-sdk-viem` widens its `@morpho-org/morpho-sdk` peer range to `^6.0.0` and is
-  released with this bump. The range is explicit rather than `workspace:^`, so Changesets cannot
-  rewrite it automatically.
 
 See `docs/tibs/TIB-2026-08-28-vault-exit-force-withdraw.md` for the full decision record.

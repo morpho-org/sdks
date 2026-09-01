@@ -27,6 +27,7 @@ import {
   computeVaultV2ForceWithdrawPlan,
   computeVaultV2ForceWithdrawSharesBurnt,
   resolveVaultV2ForceWithdrawEligibility,
+  validateChainId,
   validateSlippageTolerance,
 } from "../../helpers/index.js";
 import type { FetchParameters } from "../../types/data.js";
@@ -407,12 +408,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     vaultData: AccrualVaultV2;
     slippageTolerance?: bigint;
   } & DepositAmountArgs) {
-    if (this.client.viemClient.chain?.id !== this.chainId) {
-      throw new ChainIdMismatchError(
-        this.client.viemClient.chain?.id,
-        this.chainId,
-      );
-    }
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     if (!isAddressEqual(vaultData.address, this.vault)) {
       throw new VaultAddressMismatchError(this.vault, vaultData.address);
@@ -505,12 +501,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
   }
 
   withdraw({ amount, userAddress }: { amount: bigint; userAddress: Address }) {
-    if (this.client.viemClient.chain?.id !== this.chainId) {
-      throw new ChainIdMismatchError(
-        this.client.viemClient.chain?.id,
-        this.chainId,
-      );
-    }
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     return {
       buildTx: () =>
@@ -527,12 +518,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
   }
 
   redeem({ shares, userAddress }: { shares: bigint; userAddress: Address }) {
-    if (this.client.viemClient.chain?.id !== this.chainId) {
-      throw new ChainIdMismatchError(
-        this.client.viemClient.chain?.id,
-        this.chainId,
-      );
-    }
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     return {
       buildTx: () =>
@@ -568,12 +554,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     readonly RequirementSignature[],
     undefined
   > {
-    if (this.client.viemClient.chain?.id !== this.chainId) {
-      throw new ChainIdMismatchError(
-        this.client.viemClient.chain?.id,
-        this.chainId,
-      );
-    }
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
     if (!isAddressEqual(vaultData.address, this.vault)) {
       throw new VaultAddressMismatchError(this.vault, vaultData.address);
     }
@@ -809,12 +790,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     readonly RequirementSignature[],
     undefined
   > {
-    if (this.client.viemClient.chain?.id !== this.chainId) {
-      throw new ChainIdMismatchError(
-        this.client.viemClient.chain?.id,
-        this.chainId,
-      );
-    }
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
     if (!isAddressEqual(vaultData.address, this.vault)) {
       throw new VaultAddressMismatchError(this.vault, vaultData.address);
     }
@@ -917,16 +893,23 @@ export class MorphoVaultV2 implements VaultV2Actions {
       deadlineVaultData,
       plan,
     });
-    // The price floor takes the *snapshot* burn instead. A larger denominator only lowers the
-    // floor, so reusing the deadline-inflated allowance would let an unrelated caller-chosen
-    // `deadline` silently weaken the guard; `slippageTolerance` is what absorbs accrual drift.
+    // The price floor's denominator must track execution-time vault state, not the possibly stale
+    // snapshot: the first on-chain withdrawal accrues pending management fees before burning shares,
+    // so a snapshot-tight denominator underestimates the burn and lifts the floor above the faithful
+    // price — tripping `SlippageExceeded` on an otherwise valid exit. Accrue to `now`, not
+    // `deadline`: `now` is execution-time and not caller-chosen, so it removes the stale-fee bias
+    // without letting a long `deadline` weaken the guard. `slippageTolerance` absorbs the residual
+    // drift until inclusion.
+    const { vault: nowVaultData } = vaultData.accrueInterest(
+      MathLib.max(now, vaultData.lastUpdate),
+    );
     const minSharePriceE27 =
       minSharePriceE27Override ??
       computeMinForceWithdrawSharePrice({
         withdrawnAssets: plan.withdrawnAssets,
         sharesBurnt: computeVaultV2ForceWithdrawSharesBurnt({
-          vaultData,
-          deadlineVaultData: vaultData,
+          vaultData: nowVaultData,
+          deadlineVaultData: nowVaultData,
           plan,
         }),
         slippageTolerance,
@@ -1021,12 +1004,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     redeem: { shares: bigint };
     userAddress: Address;
   }) {
-    if (this.client.viemClient.chain?.id !== this.chainId) {
-      throw new ChainIdMismatchError(
-        this.client.viemClient.chain?.id,
-        this.chainId,
-      );
-    }
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     return {
       buildTx: () =>

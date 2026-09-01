@@ -1,17 +1,17 @@
 ---
 name: module-api-architecture
 kind: baseline
-applies: AGENTS.md §1 Architecture (layering, modularity), §2 Forbidden patterns (rule 5 — deep cross-package imports), §3 Type discipline (at the boundary), §4 Public API & packaging
+applies: AGENTS.md §1 Architecture (layering, modularity), §2 Forbidden patterns (rule 5 — deep cross-package imports), §3 Type discipline (at the boundary), §4 Public API & packaging, §7 Releases & versioning (deprecation lifecycle)
 out-of-scope:
   - Lint mechanics (2-space indent, organize-imports) — see style-conventions.
   - Type-safety inside a function body — see code-quality.
   - JSDoc on the exported symbols — see documentation.
-focus: Package boundaries, public surface, type/import discipline, NodeNext compatibility.
+focus: Package boundaries, public surface and deprecation lifecycle, type/import discipline, NodeNext compatibility.
 ---
 
 # Module & API Architecture
 
-Focus: package boundaries, public surface, type/import discipline, NodeNext compatibility. The authoritative rules live in [`AGENTS.md`](../../../AGENTS.md) §1 (Architecture), §2 (Forbidden patterns — rule 5: deep cross-package imports), §3 (Type discipline), and §4 (Public API & packaging) — read those first; the bullets below are the application points.
+Focus: package boundaries, public surface and deprecation lifecycle, type/import discipline, NodeNext compatibility. The authoritative rules live in [`AGENTS.md`](../../../AGENTS.md) §1 (Architecture), §2 (Forbidden patterns — rule 5: deep cross-package imports), §3 (Type discipline), §4 (Public API & packaging), and §7 (Releases & versioning) — read those first; the bullets below are the application points.
 
 ## What to flag
 
@@ -28,6 +28,10 @@ Per AGENTS.md §1, §2 (rule 5), and §4 — package boundaries, forbidden deep 
 - A new framework import (`react`, `wagmi`, `redux`, `ethers`) in a core SDK package. Framework adapters live in explicitly named packages (`*-wagmi`, `*-viem`); core packages stay framework-free.
 - Internal workspace dependencies that do not use `workspace:` ranges, except `peerDependencies`: internal peers intentionally use explicit published semver ranges so Changesets does not auto-bump peer dependents. When a package is bumped, check all packages that declare it as a peer dependency; flag missing peer range updates or missing explicit dependent changesets.
 
+Per AGENTS.md §7 — public deprecation lifecycle:
+
+- A removed, renamed, or retyped public symbol that skips the default deprecation flow without an explicitly codified exception. The `BlueBundlesV1` exception applies only to the route-specific input and output changes listed in its linked TIB, preserves the established method and action names, and does not waive that exception's release duties. It does not cover Vault V1 reallocation inputs: those high-level Blue and WDK flows require a published deprecation minor before becoming Vault V2-only in the next majors.
+
 Per AGENTS.md §3 — type discipline at the boundary:
 
 - A public field that should be `readonly` but isn't.
@@ -42,7 +46,7 @@ Per AGENTS.md §8 — NodeNext compatibility on imports (mechanical compliance l
 
 ## Severity guidance
 
-- **High** — public-surface break (changed/removed export without a deprecation flow), framework import in a core package, deep cross-package import.
+- **High** — public-surface break (changed/removed export without the default deprecation flow or an applicable explicit §7 exception), framework import in a core package, deep cross-package import.
 - **Medium** — layering reversal that compiles but violates §1; public `*Utils` factory returning a class instance instead of a static class constructor; class-specific logic duplicated instead of delegating to object-compatible utils; missing `readonly` on a public field; generic `Error` thrown from an exported path.
 - **Low** — internal-only suggestions about how a private helper could be reshaped (often out of scope — defer to `code-quality`).
 
