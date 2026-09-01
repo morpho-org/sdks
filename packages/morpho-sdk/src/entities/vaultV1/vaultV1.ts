@@ -323,7 +323,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
     );
     const maxSharePrice = computeVaultMaxSharePrice({
       vaultData: params.vaultData,
-      timestamp: Time.timestamp(),
+      deadline,
       assets: funding.assets - referralFeeAssets,
       slippageTolerance: params.slippageTolerance ?? DEFAULT_SLIPPAGE_TOLERANCE,
     });
@@ -727,7 +727,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
     );
     const maxSharePriceVaultV2 = computeVaultMaxSharePrice({
       vaultData: params.targetVault,
-      timestamp: Time.timestamp(),
+      deadline,
       assets: grossAssets - referralFeeAssets,
       slippageTolerance,
     });

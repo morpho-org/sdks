@@ -8,6 +8,7 @@ import {
   encodeErc20Approval,
   encodeVaultSharesPermit,
 } from "../../actions/index.js";
+import { validateChainId } from "../../helpers/index.js";
 import {
   type ActionRequirement,
   ExpiredDeadlineError,
@@ -19,6 +20,7 @@ import {
  * @param viemClient - Client used to read the current share allowance and permit nonce.
  * @param params - Vault snapshot, owner, exact allowance, and deadline values.
  * @returns No requirement when allowance is sufficient, otherwise one permit or approval.
+ * @throws {ChainIdMismatchError} when the connected client targets another chain.
  * @throws {ExpiredDeadlineError} when the bundles deadline has elapsed.
  * @throws {viem.BaseError} when an allowance or nonce read fails.
  */
@@ -34,6 +36,7 @@ export const getVaultBundlesSharesRequirements = async (
     readonly supportSignature: boolean;
   },
 ): Promise<readonly ActionRequirement[]> => {
+  validateChainId(viemClient.chain?.id, params.chainId);
   const now = Time.timestamp();
   if (params.deadline <= now) {
     throw new ExpiredDeadlineError(params.deadline, now);

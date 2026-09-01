@@ -357,6 +357,26 @@ describe("computeMinWithdrawSharePrice", () => {
 });
 
 describe("computeVaultMaxSharePrice", () => {
+  test("behavior: accrues through the supplied bundles deadline", () => {
+    const deadline = 1_800_010_800n;
+    let accruedAt: bigint | undefined;
+    const vaultData = {
+      accrueInterest: (timestamp: bigint) => {
+        accruedAt = timestamp;
+        return { toShares: (assets: bigint) => assets };
+      },
+    } as unknown as AccrualVault;
+
+    computeVaultMaxSharePrice({
+      vaultData,
+      deadline,
+      assets: 1n,
+      slippageTolerance: 0n,
+    });
+
+    expect(accruedAt).toBe(deadline);
+  });
+
   test("behavior: is monotonic in slippage tolerance", () => {
     const vaultData = {
       accrueInterest: () => ({ toShares: (assets: bigint) => assets }),
@@ -373,14 +393,14 @@ describe("computeVaultMaxSharePrice", () => {
           expect(
             computeVaultMaxSharePrice({
               vaultData,
-              timestamp: 1_800_000_000n,
+              deadline: 1_800_007_200n,
               assets,
               slippageTolerance: high,
             }),
           ).toBeGreaterThanOrEqual(
             computeVaultMaxSharePrice({
               vaultData,
-              timestamp: 1_800_000_000n,
+              deadline: 1_800_007_200n,
               assets,
               slippageTolerance: low,
             }),
