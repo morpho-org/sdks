@@ -1,7 +1,8 @@
 ---
 "@morpho-org/morpho-sdk": major
+"@morpho-org/wdk-protocol-lending-morpho-evm": major
 ---
 
-Route the established Vault V1 deposit, withdraw, redeem, and V1-to-V2 migration flows directly
-through VaultBundlesV1. Retype their funding, sender, deadline, referral-fee, exit-authorization,
-and migration amount inputs while preserving the existing method and builder names.
+Route established Vault V1 and Vault V2 deposit, withdraw, and redeem flows, plus Vault V1 to
+Vault V2 migration, through VaultBundlesV1. Add exclusive funding, referral fees, deadlines,
+Permit2 SignatureTransfer deposits, exact share requirements, and WDK withdrawal requirements.
