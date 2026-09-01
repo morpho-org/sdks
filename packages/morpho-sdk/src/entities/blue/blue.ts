@@ -812,7 +812,10 @@ export interface BlueActions {
    * complete position is checked against buffered LLTV. Partial and collateral-only migration are
    * unsupported.
    *
-   * @param params.userAddress - Owner of both source and destination positions.
+   * @param params.userAddress - Owner of both source and destination positions. It must also sign the
+   *   Morpho authorization and send the transaction: BlueBundlesV1 migrates the signer's position
+   *   (bound to `msg.sender`), so on-behalf refinance by a relayer is not supported and a mismatched
+   *   sender reverts on-chain.
    * @param params.positionData - Pre-fetched source position with nonzero debt.
    * @param params.destination.marketParams - Distinct destination market with matching tokens.
    * @param params.destination.positionData - User's pre-fetched destination position.
@@ -832,7 +835,8 @@ export interface BlueActions {
    * @throws {MissingMarketPriceError} when destination health cannot be validated without an oracle price.
    * @throws {BorrowExceedsSafeLtvError} when the complete destination exceeds buffered LLTV.
    * @throws {ExpiredDeadlineError} when the deadline is stale.
-   * @throws {InputExceedsMaxError} when a fee or reallocation exceeds its ABI bound.
+   * @throws {InputExceedsMaxError} when a fee or reallocation exceeds its ABI bound, or the rounded
+   *   aggregate reallocation penalty exceeds the migrated source debt.
    * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
    * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
    * @throws {InvalidReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
@@ -1958,6 +1962,21 @@ export class MorphoBlue implements BlueActions {
       destination.marketParams,
     );
     const penaltyAssets = getBlueBundlesV1PenaltyAssets(publicAllocations);
+    // Reject a reallocation plan whose rounded aggregate penalty exceeds the current source debt,
+    // matching the `blueBorrow`/`blueWithdraw` BlueBundlesV1 caps. Bound against the current quoted
+    // debt, not the conservative `now + 2h` health projection below: the on-chain call migrates the
+    // debt live at execution (>= the current quote), so the current quote is the safe floor. Using
+    // the forward projection would let a penalty between the current and forecast debt pass while
+    // still exceeding the debt actually moved, and the health check only adds the penalty to
+    // destination debt, so a collateralized position would silently accept it or encode a reverting
+    // call.
+    if (penaltyAssets > positionData.borrowAssets) {
+      throw new InputExceedsMaxError({
+        field: "reallocationPenaltyAssets",
+        value: penaltyAssets,
+        max: positionData.borrowAssets,
+      });
+    }
     const accrualTimestamp = this.getBlueBundlesV1QuoteTimestamp(
       MathLib.max(
         positionData.market.lastUpdate,
