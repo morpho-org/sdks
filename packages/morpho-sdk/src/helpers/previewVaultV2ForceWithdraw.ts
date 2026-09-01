@@ -109,6 +109,9 @@ export function previewVaultV2ForceWithdraw(
     timestamp,
   });
   const exitAssets = MathLib.min(requestedExitAssets, capacity.maxExitAssets);
+  // A vault with no exitable capacity caps `maxExitAssets` to `0`; the planner rejects a
+  // non-positive amount, so short-circuit to the "not previewable" verdict before re-planning.
+  if (exitAssets <= 0n) return undefined;
   // Re-plan at the capped amount so every returned leg describes the same exit.
   const plan =
     exitAssets === requestedExitAssets

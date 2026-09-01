@@ -7,6 +7,7 @@ import {
   MathLib,
 } from "@morpho-org/blue-sdk";
 import { type Hex, isAddressEqual, zeroAddress } from "viem";
+import { NonPositiveInputError } from "../types/index.js";
 
 /**
  * Outcome of resolving a Vault V2 snapshot against VaultExitBundlesV1's force-withdraw
@@ -170,6 +171,7 @@ export interface VaultV2ForceWithdrawPlan {
  *   adapter shares.
  * @returns The resolved plan. `coveredAssets < assetsToDeallocate` means the exit would overrun the
  *   contract's unbounded loop; the caller decides how to report that.
+ * @throws {NonPositiveInputError} when `exitAssets` is not positive.
  * @example
  * ```ts
  * import {
@@ -199,6 +201,11 @@ export function computeVaultV2ForceWithdrawPlan(params: {
 }): VaultV2ForceWithdrawPlan {
   const { vaultData, adapter, liquidityMarketId, exitAssets, timestamp } =
     params;
+  // Guard the exported planner: a non-positive `exitAssets` would flow a negative through
+  // `min(exitAssets, withdrawable)` and return a plan with negative amounts. The entity and preview
+  // reject it upstream; this protects direct importers of the advertised helper.
+  if (exitAssets <= 0n)
+    throw new NonPositiveInputError("exitAssets", exitAssets);
 
   const penalty = vaultData.forceDeallocatePenalties[adapter.address] ?? 0n;
   const idleAssets = vaultData.assetBalance;

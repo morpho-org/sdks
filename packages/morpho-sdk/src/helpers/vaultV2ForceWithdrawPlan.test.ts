@@ -12,6 +12,7 @@ import {
   secondInKindMarketParams,
   vaultV2ExitData,
 } from "../../test/fixtures/inKindRedeem.js";
+import { NonPositiveInputError } from "../types/index.js";
 import {
   computeVaultV2ForceWithdrawPlan,
   computeVaultV2ForceWithdrawSharesBurnt,
@@ -116,6 +117,15 @@ describe("resolveVaultV2ForceWithdrawEligibility", () => {
 });
 
 describe("computeVaultV2ForceWithdrawPlan", () => {
+  test.each([0n, -1n])(
+    "error: NonPositiveInputError for a non-positive exitAssets of %s",
+    (exitAssets) => {
+      expect(() =>
+        planFor({ vaultData: vaultV2ExitData(), exitAssets }),
+      ).toThrow(NonPositiveInputError);
+    },
+  );
+
   test("default", () => {
     // Market holds 1000 assets with 900 borrowed, so the adapter can only release 100.
     const plan = planFor({
