@@ -2,17 +2,12 @@ import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import {
-  CbbtcUsdcBlue,
-  WbtcUsdcSourceMarket,
-} from "../../../test/fixtures/blue.js";
-import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
+import { CbbtcUsdcBlue } from "../../../test/fixtures/blue.js";
 import { test } from "../../../test/unit.js";
 import {
   MutuallyExclusiveWithdrawAmountsError,
   NegativeInputError,
   NonPositiveInputError,
-  type VaultReallocation,
 } from "../../types/index.js";
 import { blueWithdraw } from "./withdraw.js";
 
@@ -43,7 +38,6 @@ describe("blueWithdraw unit tests", () => {
     expect(tx.action.args.shares).toBe(0n);
     expect(tx.action.args.receiver).toBe(client.account.address);
     expect(tx.action.args.minSharePrice).toBe(0n);
-    expect(tx.action.args.reallocationFee).toBe(0n);
     expect(tx.to).toBe(bundler3);
     expect(tx.value).toBe(0n);
   });
@@ -197,38 +191,6 @@ describe("blueWithdraw unit tests", () => {
     expect(Object.isFrozen(tx)).toBe(true);
     expect(Object.isFrozen(tx.action)).toBe(true);
     expect(Object.isFrozen(tx.action.args)).toBe(true);
-  });
-
-  test("should set tx.value to the summed reallocation fee", async ({
-    client,
-  }) => {
-    const reallocationFee = parseUnits("0.01", 18);
-    const reallocations: readonly VaultReallocation[] = [
-      {
-        vault: SteakhouseUsdcVaultV1.address,
-        fee: reallocationFee,
-        withdrawals: [
-          {
-            marketParams: WbtcUsdcSourceMarket,
-            amount: parseUnits("500", 6),
-          },
-        ],
-      },
-    ];
-
-    const tx = blueWithdraw({
-      market: { chainId: mainnet.id, marketParams: CbbtcUsdcBlue },
-      args: {
-        assets: parseUnits("100", 6),
-        shares: 0n,
-        receiver: client.account.address,
-        minSharePrice: 0n,
-        reallocations,
-      },
-    });
-
-    expect(tx.value).toBe(reallocationFee);
-    expect(tx.action.args.reallocationFee).toBe(reallocationFee);
   });
 
   test("should append metadata to transaction data when provided", async ({

@@ -12,7 +12,7 @@ import {
 
 /** Parameters for {@link encodeBlueSignatureAuthorization}. */
 interface EncodeBlueSignatureAuthorizationParams {
-  /** Account to authorize on Morpho (GeneralAdapter1). */
+  /** Operator to authorize on Morpho, such as GeneralAdapter1 or BlueBundlesV1. */
   authorized: Address;
   /** Target chain id; must match `viemClient.chain.id`. */
   chainId: number;
@@ -26,17 +26,17 @@ interface EncodeBlueSignatureAuthorizationParams {
 
 /**
  * Builds a Morpho authorization `Requirement` that, once signed, lets `authorized` operate on
- * Morpho on the signer's behalf through `setAuthorizationWithSig` — the offchain-signature
- * alternative to a standalone `setAuthorization` transaction.
+ * Morpho on the signer's behalf. Bundler3 consumes the result through `setAuthorizationWithSig`;
+ * BlueBundlesV1 embeds the same signed authorization in its direct-call struct.
  *
  * The returned `Requirement.sign()` produces the EIP-712 signature over Morpho's `Authorization`
  * typed data, verifies it against the connected account, and returns a deep-frozen
- * `RequirementSignature` the bundler action helpers consume. Deadline defaults to two hours from
- * `Time.timestamp()`.
+ * `RequirementSignature` the selected transaction route consumes. Deadline defaults to two hours
+ * from `Time.timestamp()`.
  *
  * @param viemClient - Connected viem `Client` whose `chain.id` matches `params.chainId`.
  * @param params - Authorization encoding parameters.
- * @param params.authorized - Account to authorize (GeneralAdapter1).
+ * @param params.authorized - Operator to authorize, such as GeneralAdapter1 or BlueBundlesV1.
  * @param params.chainId - Target chain id.
  * @param params.nonce - The signer's current Morpho authorization nonce.
  * @param params.isAuthorized - Grant (`true`, default) or revoke (`false`).
