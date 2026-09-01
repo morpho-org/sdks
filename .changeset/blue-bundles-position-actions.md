@@ -14,8 +14,9 @@ and inconsistent withdrawal-only funding inputs in the combined builders with th
 `InputExceedsMaxError`. Forward a caller-supplied reusable `approvalAmount` from
 `getRequirements(...)` on the Blue collateral-supply and repay prerequisite paths (previously
 dropped), while keeping the saturated-repay token cap. Mark the new Blue action argument shapes, the
-combined-builder parameter interfaces, the `BlueTokenRequirementsParams` prerequisite options, and
-the WDK Blue-write option types `readonly`.
+combined-builder parameter interfaces, the `BlueActions` entity write-method parameter shapes (and
+the shared `AssetsOrSharesArgs`), the `BlueTokenRequirementsParams` prerequisite options, and the
+WDK Blue-write option types `readonly`.
 
 Patch `@morpho-org/liquidity-sdk-viem` as a maintained direct dependent of the `morpho-sdk` major
 (its `morpho-sdk` peer range already accepts `^6.0.0`); this is the explicit dependent bump the

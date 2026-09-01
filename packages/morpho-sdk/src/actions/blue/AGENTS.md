@@ -2,7 +2,7 @@
 
 Blue (Morpho Blue) transaction builders. Inherits all rules from [`actions/AGENTS.md`](../AGENTS.md) and [`packages/morpho-sdk/AGENTS.md`](../../../AGENTS.md).
 
-Per-function call signatures (argument order, the `morphoBorrow` tuple shape, the receiver vs initiator distinction) live as JSDoc on each action — that's the canonical source. This file documents only the routing, the bundle ordering, and the pre-conditions the entity layer enforces.
+Per-function call signatures (argument order, the BlueBundlesV1 combined-call arguments, native-funding rules) live as JSDoc on each action — that's the canonical source. This file documents only the routing, the bundle ordering, and the pre-conditions the entity layer enforces.
 
 ## Routing
 
@@ -46,7 +46,7 @@ will be removed in the next major.
 
 ## Mode and ordering rules
 
-- `repay` accepts exactly one mode: assets (partial repay) or shares (full repay, with `maxSharePrice`). Amounts are pre-resolved by the entity and passed flat (`{ amount?, shares?, nativeAmount?, transferAmount }`); the action does no arithmetic. Both modes optionally wrap native ETH (loan token must be wNative): assets mode is additive like `supply` (`transferAmount = amount + nativeAmount` is repaid, ERC-20 pulled = `amount`), shares mode repays exact shares and pulls `transferAmount` ERC-20 (the entity already carved native out via `toBorrowAssets(shares) − nativeAmount`). `repayWithdrawCollateral` mirrors this repay leg, then withdraws.
+- `repay` accepts exactly one mode: assets (`repayAssets`) or shares (`repayShares`), mutually exclusive, with `repayShares = maxUint256` requesting a saturated full repay. The entity pre-resolves the flat action inputs (`{ repayAssets, repayShares, maxRepayAssets, collateralAssets, maxLtv }`) — deriving the `maxRepayAssets` funding cap as the expected repay assets plus the referral fee — and the action does no arithmetic. Native funding (loan token must be wNative) is all-or-nothing: `nativeAmount` must equal `maxRepayAssets`, attached as `tx.value`, so a native repay pulls no ERC-20 — there is no additive assets mode and no share-mode carve. This direct route has no Bundler3 share-price bound. `repayWithdrawCollateral` mirrors this repay leg, then withdraws.
 - `withdraw` accepts exactly one mode: assets (exact asset amount) or shares (full close, immune to interest accrual). `blueBundlesV1Withdraw` sends proceeds to the transaction sender (there is no `receiver` field); reallocation penalties and any referral fee reduce them. This direct route has no Bundler3 share-price bound.
 - `repayWithdrawCollateral` repays first, then withdraws — never the other order.
 - `supply` has no Bundler3 share-price bound on the direct BlueBundlesV1 route: `assets` is the gross funded amount and the referral fee is deducted before supplying.

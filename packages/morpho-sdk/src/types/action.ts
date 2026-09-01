@@ -270,7 +270,9 @@ export interface BlueRefinanceAction
  * Used by BlueBundlesV1 withdrawal; repayment has its own assets-or-shares union because a pure
  * collateral withdrawal has no repay amount.
  */
-export type AssetsOrSharesArgs = { assets: bigint } | { shares: bigint };
+export type AssetsOrSharesArgs =
+  | { readonly assets: bigint }
+  | { readonly shares: bigint };
 
 /** Metadata for a Blue authorization prerequisite transaction. */
 export interface BlueAuthorizationAction

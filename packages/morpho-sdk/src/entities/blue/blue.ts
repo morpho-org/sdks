@@ -220,12 +220,12 @@ export interface BlueActions {
    * ```
    */
   supplyCollateral: (params: {
-    userAddress: Address;
-    collateralAssets: bigint;
-    nativeAmount?: bigint;
-    deadline: bigint;
-    referralFeePct?: bigint;
-    referralFeeRecipient?: Address;
+    readonly userAddress: Address;
+    readonly collateralAssets: bigint;
+    readonly nativeAmount?: bigint;
+    readonly deadline: bigint;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
   }) => ActionOutput<
     BlueSupplyCollateralAction,
     readonly RequirementSignature[],
@@ -291,12 +291,12 @@ export interface BlueActions {
    * ```
    */
   supply: (params: {
-    userAddress: Address;
-    assets: bigint;
-    nativeAmount?: bigint;
-    deadline: bigint;
-    referralFeePct?: bigint;
-    referralFeeRecipient?: Address;
+    readonly userAddress: Address;
+    readonly assets: bigint;
+    readonly nativeAmount?: bigint;
+    readonly deadline: bigint;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
   }) => ActionOutput<
     BlueSupplyAction,
     readonly RequirementSignature[],
@@ -373,12 +373,12 @@ export interface BlueActions {
    */
   withdraw: (
     params: {
-      userAddress: Address;
-      positionData: AccrualPosition;
-      reallocations?: Iterable<VaultV2BlueReallocation>;
-      deadline: bigint;
-      referralFeePct?: bigint;
-      referralFeeRecipient?: Address;
+      readonly userAddress: Address;
+      readonly positionData: AccrualPosition;
+      readonly reallocations?: Iterable<VaultV2BlueReallocation>;
+      readonly deadline: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
     } & AssetsOrSharesArgs,
   ) => ActionOutput<
     BlueWithdrawAction,
@@ -452,13 +452,13 @@ export interface BlueActions {
    * ```
    */
   borrow: (params: {
-    userAddress: Address;
-    borrowAssets: bigint;
-    positionData: AccrualPosition;
-    reallocations?: Iterable<VaultV2BlueReallocation>;
-    deadline: bigint;
-    referralFeePct?: bigint;
-    referralFeeRecipient?: Address;
+    readonly userAddress: Address;
+    readonly borrowAssets: bigint;
+    readonly positionData: AccrualPosition;
+    readonly reallocations?: Iterable<VaultV2BlueReallocation>;
+    readonly deadline: bigint;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
   }) => ActionOutput<
     BlueBorrowAction,
     readonly RequirementSignature[],
@@ -537,15 +537,15 @@ export interface BlueActions {
    */
   repay: (
     params: {
-      userAddress: Address;
-      positionData: AccrualPosition;
-      nativeAmount?: bigint;
-      deadline: bigint;
-      referralFeePct?: bigint;
-      referralFeeRecipient?: Address;
+      readonly userAddress: Address;
+      readonly positionData: AccrualPosition;
+      readonly nativeAmount?: bigint;
+      readonly deadline: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
     } & (
-      | { repayAssets: bigint; repayShares?: never }
-      | { repayShares: bigint; repayAssets?: never }
+      | { readonly repayAssets: bigint; readonly repayShares?: never }
+      | { readonly repayShares: bigint; readonly repayAssets?: never }
     ),
   ) => ActionOutput<
     BlueRepayAction,
@@ -613,12 +613,12 @@ export interface BlueActions {
    * ```
    */
   withdrawCollateral: (params: {
-    userAddress: Address;
-    positionData: AccrualPosition;
-    collateralAssets: bigint;
-    deadline: bigint;
-    referralFeePct?: bigint;
-    referralFeeRecipient?: Address;
+    readonly userAddress: Address;
+    readonly positionData: AccrualPosition;
+    readonly collateralAssets: bigint;
+    readonly deadline: bigint;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
   }) => ActionOutput<
     BlueWithdrawCollateralAction,
     readonly RequirementSignature[],
@@ -709,17 +709,17 @@ export interface BlueActions {
    */
   repayWithdrawCollateral: (
     params: {
-      userAddress: Address;
-      positionData: AccrualPosition;
-      collateralAssets: bigint;
-      nativeAmount?: bigint;
-      deadline: bigint;
-      referralFeePct?: bigint;
-      referralFeeRecipient?: Address;
+      readonly userAddress: Address;
+      readonly positionData: AccrualPosition;
+      readonly collateralAssets: bigint;
+      readonly nativeAmount?: bigint;
+      readonly deadline: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
     } & (
-      | { repayAssets: bigint; repayShares?: never }
-      | { repayShares: bigint; repayAssets?: never }
-      | { repayAssets?: undefined; repayShares?: undefined }
+      | { readonly repayAssets: bigint; readonly repayShares?: never }
+      | { readonly repayShares: bigint; readonly repayAssets?: never }
+      | { readonly repayAssets?: undefined; readonly repayShares?: undefined }
     ),
   ) => ActionOutput<
     BlueRepayWithdrawCollateralAction,
@@ -804,15 +804,15 @@ export interface BlueActions {
    * ```
    */
   supplyCollateralBorrow: (params: {
-    userAddress: Address;
-    collateralAssets: bigint;
-    borrowAssets: bigint;
-    positionData?: AccrualPosition;
-    nativeAmount?: bigint;
-    reallocations?: Iterable<VaultV2BlueReallocation>;
-    deadline: bigint;
-    referralFeePct?: bigint;
-    referralFeeRecipient?: Address;
+    readonly userAddress: Address;
+    readonly collateralAssets: bigint;
+    readonly borrowAssets: bigint;
+    readonly positionData?: AccrualPosition;
+    readonly nativeAmount?: bigint;
+    readonly reallocations?: Iterable<VaultV2BlueReallocation>;
+    readonly deadline: bigint;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
   }) => ActionOutput<
     BlueSupplyCollateralBorrowAction,
     readonly RequirementSignature[],
@@ -850,18 +850,18 @@ export interface BlueActions {
    * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
    */
   refinance: (params: {
-    userAddress: Address;
-    positionData: AccrualPosition;
-    target: {
-      marketParams: MarketParams;
-      positionData: AccrualPosition;
+    readonly userAddress: Address;
+    readonly positionData: AccrualPosition;
+    readonly target: {
+      readonly marketParams: MarketParams;
+      readonly positionData: AccrualPosition;
     };
-    collateralAmount: bigint;
-    borrowAssets?: bigint;
-    borrowShares?: bigint;
-    slippageTolerance?: bigint;
+    readonly collateralAmount: bigint;
+    readonly borrowAssets?: bigint;
+    readonly borrowShares?: bigint;
+    readonly slippageTolerance?: bigint;
     /** Optional Vault V2 BluePublicAllocator reallocations. */
-    targetReallocations?: Iterable<VaultV2BlueReallocation>;
+    readonly targetReallocations?: Iterable<VaultV2BlueReallocation>;
   }) => {
     buildTx: (
       signatures?: readonly RequirementSignature[],
@@ -1191,12 +1191,12 @@ export class MorphoBlue implements BlueActions {
 
   /** {@inheritDoc BlueActions.supply} */
   supply(params: {
-    userAddress: Address;
-    assets: bigint;
-    nativeAmount?: bigint;
-    deadline: bigint;
-    referralFeePct?: bigint;
-    referralFeeRecipient?: Address;
+    readonly userAddress: Address;
+    readonly assets: bigint;
+    readonly nativeAmount?: bigint;
+    readonly deadline: bigint;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
   }) {
     const {
       userAddress,
@@ -1253,12 +1253,12 @@ export class MorphoBlue implements BlueActions {
   /** {@inheritDoc BlueActions.withdraw} */
   withdraw(
     params: {
-      userAddress: Address;
-      positionData: AccrualPosition;
-      reallocations?: Iterable<VaultV2BlueReallocation>;
-      deadline: bigint;
-      referralFeePct?: bigint;
-      referralFeeRecipient?: Address;
+      readonly userAddress: Address;
+      readonly positionData: AccrualPosition;
+      readonly reallocations?: Iterable<VaultV2BlueReallocation>;
+      readonly deadline: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
     } & AssetsOrSharesArgs,
   ) {
     const {
@@ -1348,12 +1348,12 @@ export class MorphoBlue implements BlueActions {
 
   /** {@inheritDoc BlueActions.supplyCollateral} */
   supplyCollateral(params: {
-    userAddress: Address;
-    collateralAssets: bigint;
-    nativeAmount?: bigint;
-    deadline: bigint;
-    referralFeePct?: bigint;
-    referralFeeRecipient?: Address;
+    readonly userAddress: Address;
+    readonly collateralAssets: bigint;
+    readonly nativeAmount?: bigint;
+    readonly deadline: bigint;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
   }): ActionOutput<
     BlueSupplyCollateralAction,
     readonly RequirementSignature[],
@@ -1401,13 +1401,13 @@ export class MorphoBlue implements BlueActions {
 
   /** {@inheritDoc BlueActions.borrow} */
   borrow(params: {
-    userAddress: Address;
-    borrowAssets: bigint;
-    positionData: AccrualPosition;
-    reallocations?: Iterable<VaultV2BlueReallocation>;
-    deadline: bigint;
-    referralFeePct?: bigint;
-    referralFeeRecipient?: Address;
+    readonly userAddress: Address;
+    readonly borrowAssets: bigint;
+    readonly positionData: AccrualPosition;
+    readonly reallocations?: Iterable<VaultV2BlueReallocation>;
+    readonly deadline: bigint;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
   }): ActionOutput<
     BlueBorrowAction,
     readonly RequirementSignature[],
@@ -1461,15 +1461,15 @@ export class MorphoBlue implements BlueActions {
   /** {@inheritDoc BlueActions.repay} */
   repay(
     params: {
-      userAddress: Address;
-      positionData: AccrualPosition;
-      nativeAmount?: bigint;
-      deadline: bigint;
-      referralFeePct?: bigint;
-      referralFeeRecipient?: Address;
+      readonly userAddress: Address;
+      readonly positionData: AccrualPosition;
+      readonly nativeAmount?: bigint;
+      readonly deadline: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
     } & (
-      | { repayAssets: bigint; repayShares?: never }
-      | { repayShares: bigint; repayAssets?: never }
+      | { readonly repayAssets: bigint; readonly repayShares?: never }
+      | { readonly repayShares: bigint; readonly repayAssets?: never }
     ),
   ): ActionOutput<
     BlueRepayAction,
@@ -1517,12 +1517,12 @@ export class MorphoBlue implements BlueActions {
 
   /** {@inheritDoc BlueActions.withdrawCollateral} */
   withdrawCollateral(params: {
-    userAddress: Address;
-    positionData: AccrualPosition;
-    collateralAssets: bigint;
-    deadline: bigint;
-    referralFeePct?: bigint;
-    referralFeeRecipient?: Address;
+    readonly userAddress: Address;
+    readonly positionData: AccrualPosition;
+    readonly collateralAssets: bigint;
+    readonly deadline: bigint;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
   }): ActionOutput<
     BlueWithdrawCollateralAction,
     readonly RequirementSignature[],
@@ -1574,17 +1574,17 @@ export class MorphoBlue implements BlueActions {
   /** {@inheritDoc BlueActions.repayWithdrawCollateral} */
   repayWithdrawCollateral(
     params: {
-      userAddress: Address;
-      positionData: AccrualPosition;
-      collateralAssets: bigint;
-      nativeAmount?: bigint;
-      deadline: bigint;
-      referralFeePct?: bigint;
-      referralFeeRecipient?: Address;
+      readonly userAddress: Address;
+      readonly positionData: AccrualPosition;
+      readonly collateralAssets: bigint;
+      readonly nativeAmount?: bigint;
+      readonly deadline: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
     } & (
-      | { repayAssets: bigint; repayShares?: never }
-      | { repayShares: bigint; repayAssets?: never }
-      | { repayAssets?: undefined; repayShares?: undefined }
+      | { readonly repayAssets: bigint; readonly repayShares?: never }
+      | { readonly repayShares: bigint; readonly repayAssets?: never }
+      | { readonly repayAssets?: undefined; readonly repayShares?: undefined }
     ),
   ) {
     const {
@@ -1764,15 +1764,15 @@ export class MorphoBlue implements BlueActions {
 
   /** {@inheritDoc BlueActions.supplyCollateralBorrow} */
   supplyCollateralBorrow(params: {
-    userAddress: Address;
-    collateralAssets: bigint;
-    borrowAssets: bigint;
-    positionData?: AccrualPosition;
-    nativeAmount?: bigint;
-    reallocations?: Iterable<VaultV2BlueReallocation>;
-    deadline: bigint;
-    referralFeePct?: bigint;
-    referralFeeRecipient?: Address;
+    readonly userAddress: Address;
+    readonly collateralAssets: bigint;
+    readonly borrowAssets: bigint;
+    readonly positionData?: AccrualPosition;
+    readonly nativeAmount?: bigint;
+    readonly reallocations?: Iterable<VaultV2BlueReallocation>;
+    readonly deadline: bigint;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
   }) {
     const {
       userAddress,
@@ -1899,17 +1899,17 @@ export class MorphoBlue implements BlueActions {
     slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
     targetReallocations,
   }: {
-    userAddress: Address;
-    positionData: AccrualPosition;
-    target: {
-      marketParams: MarketParams;
-      positionData: AccrualPosition;
+    readonly userAddress: Address;
+    readonly positionData: AccrualPosition;
+    readonly target: {
+      readonly marketParams: MarketParams;
+      readonly positionData: AccrualPosition;
     };
-    collateralAmount: bigint;
-    borrowAssets?: bigint;
-    borrowShares?: bigint;
-    slippageTolerance?: bigint;
-    targetReallocations?: Iterable<VaultV2BlueReallocation>;
+    readonly collateralAmount: bigint;
+    readonly borrowAssets?: bigint;
+    readonly borrowShares?: bigint;
+    readonly slippageTolerance?: bigint;
+    readonly targetReallocations?: Iterable<VaultV2BlueReallocation>;
   }) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     validateSlippageTolerance(slippageTolerance);
