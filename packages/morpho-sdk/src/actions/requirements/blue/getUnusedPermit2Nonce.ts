@@ -9,11 +9,11 @@ import { NoUnusedPermit2NonceError } from "../../../types/index.js";
 /** Parameters for {@link getUnusedPermit2Nonce}. */
 export interface GetUnusedPermit2NonceParams {
   /** Account that will sign the Permit2 SignatureTransfer. */
-  owner: Address;
+  readonly owner: Address;
   /** Target chain id; must match the connected client chain. */
-  chainId: number;
+  readonly chainId: number;
   /** Lowest nonce to consider; defaults to 0. */
-  startNonce?: bigint;
+  readonly startNonce?: bigint;
 }
 
 /** Highest Permit2 nonce-bitmap word index; each word covers 256 unordered nonces. */

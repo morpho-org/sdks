@@ -571,14 +571,14 @@ export type RequirementSignatureArgs =
 
 /** A signed ERC-2612 permit requirement. */
 export interface Erc2612RequirementSignature {
-  args: PermitArgs;
-  action: PermitAction;
+  readonly args: Readonly<PermitArgs>;
+  readonly action: PermitAction;
 }
 
 /** A signed Permit2 AllowanceTransfer requirement used by Bundler3. */
 export interface Permit2AllowanceRequirementSignature {
-  args: Permit2Args;
-  action: Permit2Action;
+  readonly args: Readonly<Permit2Args>;
+  readonly action: Permit2Action;
 }
 
 /** A signed ERC-2612 permit or Permit2 AllowanceTransfer requirement. */
