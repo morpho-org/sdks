@@ -26,7 +26,7 @@ import { encodeErc20Approval } from "./encode/encodeErc20Approval.js";
  *   and token approval caps.
  * @param params.args.spendAmount - The amount the bundle will actually pull.
  * @param params.args.approvalAmount - The amount to approve (often equal to `spendAmount`, but
- *   may be `maxUint256` for reusable Permit2 prerequisites).
+ *   may be `maxUint256` for reusable Permit2 or saturated-share-repay approvals).
  * @param params.args.spender - Address that will be granted the approval. Must be GeneralAdapter1,
  *   Permit2, Midnight, MidnightBundles, VaultExitBundlesV1, or BlueBundlesV1 for `chainId`.
  * @param params.allowances - The user's current allowance of `address` for `spender`.

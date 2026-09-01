@@ -417,6 +417,7 @@ export interface MidnightCancelOfferAction
     }
   > {}
 
+/** Metadata discriminators carried by transactions returned by the SDK. */
 export type TransactionAction =
   | ERC20ApprovalAction
   | VaultV2DepositAction

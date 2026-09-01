@@ -141,6 +141,7 @@ const capVaultWithdrawals = (
  * });
  * // Encode `reallocations` explicitly with
  * // BundlerAction.publicAllocatorReallocateTo(...) when composing a low-level bundle.
+ * // High-level Blue writes accept Vault V2 reallocations only.
  * ```
  */
 export const computeVaultV1Reallocations = ({

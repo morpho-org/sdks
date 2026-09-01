@@ -940,8 +940,9 @@ export interface BlueActions {
    * @param params.block.timestamp - Timestamp corresponding to the fetched block.
    * @returns A `VaultV1ReallocationData` snapshot populated from one block.
    * @throws {ChainIdMismatchError} when the client chain does not match this market.
-   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
-   * {@link getVaultV2BlueReallocationData}.
+   * @deprecated Use {@link getVaultV1ReallocationData} for deprecated low-level Bundler3
+   * planning. Vault V1 shared-liquidity planning will be removed in the next major; use
+   * {@link getVaultV2BlueReallocationData} for high-level Blue writes.
    */
   getReallocationData: (params: {
     vaultAddresses: readonly Address[];
@@ -1598,9 +1599,8 @@ export class MorphoBlue implements BlueActions {
       referralFeeRecipient,
     } = params;
     this.validateWriteCommon(params);
-    // `validateWriteCommon` returns void (the pure action re-normalizes at encode time), so derive
-    // the effective referral fee locally; it matches `normalizeBlueBundlesV1CommonParams`, which
-    // defaults an omitted `referralFeePct` to `0n` after validating it eagerly above.
+    // `validateWriteCommon` returns void, so default an omitted `referralFeePct` to `0n`
+    // here, matching the pure action's normalization.
     const referralFeePct = params.referralFeePct ?? 0n;
     const repayAssets = params.repayAssets ?? 0n;
     const repayShares = params.repayShares ?? 0n;
@@ -1912,9 +1912,8 @@ export class MorphoBlue implements BlueActions {
       referralFeeRecipient,
     } = params;
     this.validateWriteCommon(params);
-    // `validateWriteCommon` returns void (the pure action re-normalizes at encode time), so derive
-    // the effective referral fee locally; it matches `normalizeBlueBundlesV1CommonParams`, which
-    // defaults an omitted `referralFeePct` to `0n` after validating it eagerly above.
+    // `validateWriteCommon` returns void, so default an omitted `referralFeePct` to `0n`
+    // here, matching the pure action's normalization.
     const referralFeePct = params.referralFeePct ?? 0n;
     if (positionData == null) {
       throw new MissingAccrualPositionError(this.marketParams.id);

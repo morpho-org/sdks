@@ -6,40 +6,57 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 
 - `vaultV1/` — VaultV1 (MetaMorpho) `deposit` / `withdraw` / `redeem` / `inKindRedeem` / `migrateToV2`.
 - `vaultV2/` — VaultV2 `deposit` / `withdraw` / `redeem` / `inKindRedeem` / `forceWithdraw` / `forceRedeem`.
-- `blue/` — Morpho Blue `supplyCollateral` / `borrow` / `supplyCollateralBorrow` / `repay` / `repayWithdrawCollateral` / `withdrawCollateral`. Borrow paths support optional shared liquidity via `reallocations`.
+- `blue/` — direct BlueBundlesV1 write encoders backing the established `supply`, `withdraw`,
+  `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`,
+  `repayWithdrawCollateral`, and `refinance` methods on `client.morpho.blue(...)`.
 - `midnight/` — Midnight fixed-rate direct and bundled transaction encoders plus take normalization for fixed-rate API quote outputs.
 - `requirements/` — async resolvers that read on-chain state and return what the user must do/sign before an action: token approvals, permit/permit2 signature requests, Morpho authorization, Midnight authorization, and SetterRatifier root ratification.
-- `signatures/` — pure helpers that encode signed requirements for their destination: `getTokenRequirementActions` and `getBlueAuthorizationAction` produce bundler `Action`s, while `getVaultExitBundlesV1PermitStruct` reshapes a vault-share permit for the standalone VaultExitBundlesV1 call.
+- `signatures/` — pure helpers that reshape signed requirements for their destination.
+  `getTokenRequirementActions` and `getBlueAuthorizationAction` support low-level Bundler3
+  composition; direct periphery helpers encode BlueBundlesV1 token permits and signed Morpho
+  authorization structs, while `getVaultExitBundlesV1PermitStruct` reshapes a vault-share permit
+  for VaultExitBundlesV1.
 
 ## Common builder pattern
 
 1. Validate inputs with dedicated errors from `src/types/error.ts` (`assets > 0`, `shares > 0`, `maxSharePrice > 0`, `nativeAmount >= 0`).
-2. Encode calldata. **Bundler3 paths** (vault deposits) use `BundlerAction.encodeBundle`. **Midnight bundle paths** encode one `MidnightBundles` function call directly. **Direct BlueBundlesV1 calls** — every high-level Blue write (`supply`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, `withdraw`, `refinance`) — encode a single `BlueBundlesV1` function call. Other **direct calls** (`vaultV1/withdraw`, `vaultV1/redeem`, `vaultV2/withdraw`, `vaultV2/redeem`, and Midnight collateral supply, redeem, and offer cancellation) encode their target contract call directly. Vault `inKindRedeem` actions directly encode the standalone `VaultExitBundlesV1` entry point rather than composing a Bundler3 bundle.
+2. Encode calldata. **Bundler3 paths** use `BundlerAction.encodeBundle`. **Blue write paths** encode
+   one registered `BlueBundlesV1` entrypoint directly. **Midnight bundle paths** encode one
+   `MidnightBundles` function call directly. Other **direct calls** (vault `withdraw` / `redeem`,
+   Midnight collateral supply / redeem / offer cancellation) encode their target contract call
+   directly. Vault `inKindRedeem` actions encode VaultExitBundlesV1 rather than composing a
+   Bundler3 bundle.
 3. Call `addTransactionMetadata` only when `metadata` is provided.
 4. `deepFreeze` the return value: `{ to, value, data, action: { type, args } }`.
 
 ## Native wrapping (canonical statement)
 
-Only valid for assets/collateral configured as wNative; reject native amounts on non-wNative assets with the dedicated error. On **Bundler3 paths** (vault deposits), `nativeAmount > 0` prepends `nativeTransfer` + `wrapNative` and `BundlerAction.encodeBundle` derives `tx.value` from the encoded value-carrying calls. On **direct BlueBundlesV1 paths** (loan-asset `supply`, collateral supply, `repay`, `repayWithdrawCollateral`), the native amount is attached directly as `tx.value` on the single payable call, which the contract wraps. `refinance` moves the existing on-chain position and takes no native funding.
+Only valid for assets/collateral configured as wNative. Vault deposit bundles prepend
+`nativeTransfer` + `wrapNative`, and `BundlerAction.encodeBundle` derives `tx.value`. Direct
+BlueBundlesV1 funding instead sends the native amount as `tx.value`; it is exclusive with an ERC-20
+token permit and must equal the funded entrypoint amount. `refinance` moves an existing on-chain
+position and takes no native funding. Reject native amounts on non-wNative assets with the dedicated
+error.
 
 ## Shared liquidity / reallocations (canonical statement)
 
-`blueBorrow`, `blueSupplyCollateralBorrow`, loan-asset `blueWithdraw`, and `refinance` accept only
-`VaultV2BlueReallocation` inputs (each names the field `reallocations`). Each
-entry maps 1:1 to `reallocate(...)` for a market source or `allocateFromIdle(...)` for idle
-liquidity; the enclosing action supplies the target market, the input supplies adapters, the chain
-registry supplies the allocator, and each call passes the vault's configured WAD-scaled `penalty`.
-BluePublicAllocator sources are not sorted and idle uses no synthetic zero-address market.
+High-level Blue write reallocations are V2-only. `borrow`, `supplyCollateralBorrow`, `withdraw`,
+and `refinance` accept `VaultV2BlueReallocation` entries, which map to BlueBundlesV1
+`PublicAllocations` and then to `reallocate(...)` for a market source or `allocateFromIdle(...)` for
+idle liquidity. The enclosing action supplies the target market, the input supplies adapters, the
+chain registry supplies the allocator, and each call passes the vault's configured WAD-scaled
+`penalty` — the allocator donates `ceil(assets × penalty / WAD)` of the target loan token per call.
+BluePublicAllocator sources are not sorted and idle uses no synthetic zero-address
+market. BlueBundlesV1 executes every allocation unconditionally; aggregate penalties reduce borrow
+or withdrawal proceeds, or increase destination debt during migration, and the builder rejects an
+aggregate penalty above `borrowAssets` (or, in withdraw assets mode, the withdrawn amount). They do
+not add native value or a separate GeneralAdapter1 funding requirement.
 
-`blueBorrow`, `blueSupplyCollateralBorrow`, loan-asset `blueWithdraw`, and `refinance` carry the
-reallocations array inside their single `BlueBundlesV1` call (`blueBundlesV1SupplyCollateralAndBorrow`,
-`blueBundlesV1Withdraw`, `blueBundlesV1MigrateBorrowPosition`) and let the contract apply each
-`ceil(assets × penalty / WAD)` penalty — netted from the borrow or withdrawn proceeds, or added to
-the migrated destination debt for `refinance` — so they emit no separate Bundler3 penalty-funding
-action, and the builder rejects an aggregate penalty that would exceed the borrowed amount (or, in
-withdraw assets mode, the withdrawn amount). Vault V1 planners and encoders remain available for explicit low-level
-Bundler3 composition, but those Vault V1 compatibility surfaces are deprecated and will be removed in
-the next major.
+PublicAllocator V1 types, data fetchers, simulations, planners, and low-level Bundler3 builders
+remain public only for compatibility and advanced composition. All Vault V1 planning and low-level
+composition compatibility surfaces are deprecated and will be removed in the next major. Their
+`VaultV1Reallocation` outputs are not accepted by the high-level Blue write methods; new write
+integrations use `VaultV2BlueReallocation`.
 
 ## Discriminated unions
 
