@@ -1704,15 +1704,6 @@ export class VaultAssetMismatchError extends Error {
   }
 }
 
-/** Thrown when a refinance specifies both `borrowAssets` and `borrowShares` as non-zero (modes are mutually exclusive). */
-export class BorrowAmountAndSharesExclusiveError extends Error {
-  constructor(market: string) {
-    super(
-      `Exactly one of borrowAssets or borrowShares must be non-zero for market: ${market}. Both were provided.`,
-    );
-  }
-}
-
 /** Thrown when a refinance has identical source and target market ids (a refinance to the same market is a costly no-op). */
 export class RefinanceSameMarketError extends Error {
   constructor(market: string) {
@@ -1731,7 +1722,28 @@ export class RefinanceTokenMismatchError extends Error {
   }
 }
 
-/** Thrown when a refinance's `collateralAmount` exceeds the source position's available collateral. */
+/**
+ * Thrown when a refinance specifies both `borrowAssets` and `borrowShares` as non-zero (modes are mutually exclusive).
+ *
+ * @deprecated The BlueBundlesV1 refinance route migrates the full live position and no longer accepts
+ *   partial borrow inputs, so this error is never thrown by `morpho-sdk` v6. It remains exported as a
+ *   compatibility shim for consumers pattern-matching on the v5 surface and will be removed in the next major.
+ */
+export class BorrowAmountAndSharesExclusiveError extends Error {
+  constructor(market: string) {
+    super(
+      `Exactly one of borrowAssets or borrowShares must be non-zero for market: ${market}. Both were provided.`,
+    );
+  }
+}
+
+/**
+ * Thrown when a refinance's `collateralAmount` exceeds the source position's available collateral.
+ *
+ * @deprecated The BlueBundlesV1 refinance route migrates the full live position and no longer accepts
+ *   partial collateral inputs, so this error is never thrown by `morpho-sdk` v6. It remains exported as a
+ *   compatibility shim for consumers pattern-matching on the v5 surface and will be removed in the next major.
+ */
 export class RefinanceExceedsCollateralError extends Error {
   public readonly market: string;
   public readonly requested: bigint;
@@ -1751,7 +1763,13 @@ export class RefinanceExceedsCollateralError extends Error {
   }
 }
 
-/** Thrown when a refinance's `borrowShares` exceeds the source position's outstanding borrow shares. */
+/**
+ * Thrown when a refinance's `borrowShares` exceeds the source position's outstanding borrow shares.
+ *
+ * @deprecated The BlueBundlesV1 refinance route migrates the full live position and no longer accepts
+ *   partial borrow inputs, so this error is never thrown by `morpho-sdk` v6. It remains exported as a
+ *   compatibility shim for consumers pattern-matching on the v5 surface and will be removed in the next major.
+ */
 export class RefinanceExceedsBorrowSharesError extends Error {
   public readonly market: string;
   public readonly requested: bigint;
@@ -1771,7 +1789,13 @@ export class RefinanceExceedsBorrowSharesError extends Error {
   }
 }
 
-/** Thrown when a refinance's `borrowAssets` exceeds the source position's outstanding debt assets. */
+/**
+ * Thrown when a refinance's `borrowAssets` exceeds the source position's outstanding debt assets.
+ *
+ * @deprecated The BlueBundlesV1 refinance route migrates the full live position and no longer accepts
+ *   partial borrow inputs, so this error is never thrown by `morpho-sdk` v6. It remains exported as a
+ *   compatibility shim for consumers pattern-matching on the v5 surface and will be removed in the next major.
+ */
 export class RefinanceExceedsBorrowAssetsError extends Error {
   public readonly market: string;
   public readonly requested: bigint;
@@ -1791,7 +1815,13 @@ export class RefinanceExceedsBorrowAssetsError extends Error {
   }
 }
 
-/** Thrown when a refinance in shares mode (`borrowShares > 0n`) omits the `borrowAssets` overshoot for the target borrow leg. */
+/**
+ * Thrown when a refinance in shares mode (`borrowShares > 0n`) omits the `borrowAssets` overshoot for the target borrow leg.
+ *
+ * @deprecated The BlueBundlesV1 refinance route migrates the full live position and no longer accepts
+ *   partial borrow inputs, so this error is never thrown by `morpho-sdk` v6. It remains exported as a
+ *   compatibility shim for consumers pattern-matching on the v5 surface and will be removed in the next major.
+ */
 export class RefinanceSharesMissingBorrowAssetsError extends Error {
   constructor(market: string) {
     super(

@@ -55,6 +55,22 @@ const baseSourceMarket = new MarketParams({
   lltv: 860_000_000_000_000_000n,
 });
 
+const migrationSource = new MarketParams({
+  loanToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+  collateralToken: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
+  oracle: "0xbD60A6770b27E084E8617335ddE769241B0e71D8",
+  irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
+  lltv: parseUnits("0.945", 18),
+});
+
+const migrationDestination = new MarketParams({
+  loanToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+  collateralToken: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
+  oracle: "0x2a01EB9496094dA03c4E364Def50f5aD1280AD72",
+  irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
+  lltv: parseUnits("0.945", 18),
+});
+
 const baseTest = createViemTest(base, {
   forkUrl: process.env.BASE_RPC_URL,
   forkBlockNumber: 50_438_617n, // BlueBundlesV1 deployment block.
@@ -404,6 +420,74 @@ describe("BlueBundlesV1 Blue writes", () => {
     expect(await getBlueBundlesBalances(client, [WethUsdsBlue])).toEqual(
       beforeBalances,
     );
+  });
+
+  test("refinance: moves the full live position", async ({ client }) => {
+    const collateralAssets = parseUnits("5", 18);
+    const borrowAssets = parseUnits("1", 18);
+    for (const market of [migrationSource, migrationDestination]) {
+      await supplyLoan({
+        client,
+        chainId: mainnet.id,
+        market,
+        supplyAmount: borrowAssets * 4n,
+      });
+    }
+    await supplyCollateral({
+      client,
+      chainId: mainnet.id,
+      market: migrationSource,
+      collateralAmount: collateralAssets,
+    });
+    await borrow({
+      client,
+      chainId: mainnet.id,
+      market: migrationSource,
+      borrowAmount: borrowAssets,
+    });
+
+    const morpho = client.extend(morphoViemExtension()).morpho;
+    const source = morpho.blue(migrationSource, mainnet.id);
+    const destination = morpho.blue(migrationDestination, mainnet.id);
+    const positionData = await source.getPositionData(client.account.address);
+    const destinationPositionData = await destination.getPositionData(
+      client.account.address,
+    );
+    const beforeBalances = await getBlueBundlesBalances(client, [
+      migrationSource,
+      migrationDestination,
+    ]);
+    const action = source.refinance({
+      userAddress: client.account.address,
+      positionData,
+      destination: {
+        marketParams: migrationDestination,
+        positionData: destinationPositionData,
+      },
+      deadline: maxUint256,
+    });
+
+    const signatures = await satisfyBlueBundlesV1Requirements(client, {
+      requirements: await action.getRequirements(),
+    });
+    await client.sendTransaction(action.buildTx(signatures));
+
+    const sourceAfter = await source.getPositionData(client.account.address);
+    const destinationAfter = await destination.getPositionData(
+      client.account.address,
+    );
+    expect(sourceAfter.borrowShares).toBe(0n);
+    expect(sourceAfter.collateral).toBe(0n);
+    expect(destinationAfter.borrowShares).toBeGreaterThan(0n);
+    expect(destinationAfter.collateral).toBe(
+      destinationPositionData.collateral + collateralAssets,
+    );
+    expect(
+      await getBlueBundlesBalances(client, [
+        migrationSource,
+        migrationDestination,
+      ]),
+    ).toEqual(beforeBalances);
   });
 
   test("supplyCollateral: native-only collateral improves an unhealthy position", async ({

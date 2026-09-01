@@ -40,9 +40,8 @@ calldata exactly like the direct `blueBundlesV1Withdraw` route. The contract net
 `ceil(assets × penalty / WAD)` penalty from the borrow proceeds, so no separate Bundler3
 penalty-funding action is emitted; the builder rejects an aggregate penalty that exceeds
 `borrowAssets`. Native funding is attached to the single payable call as `tx.value`.
-PublicAllocator V1 planners and encoders remain available for explicit low-level Bundler3 composition
-(still used by `refinance` until its own migration), but those Vault V1 surfaces are deprecated and
-will be removed in the next major.
+PublicAllocator V1 planners and encoders remain available for explicit low-level Bundler3 composition,
+but those Vault V1 surfaces are deprecated and will be removed in the next major.
 
 ## Mode and ordering rules
 
@@ -56,7 +55,7 @@ will be removed in the next major.
 
 Enforced by the entity layer's `getRequirements`; see [`entities/blue/AGENTS.md`](../../entities/blue/AGENTS.md):
 
-- `borrow`, `supplyCollateralBorrow`, `repayWithdrawCollateral`, and `withdrawCollateral` require **BlueBundlesV1** to be authorized on Morpho (`setAuthorization`) — the same operator loan-asset `withdraw` uses; `refinance` still authorizes **GeneralAdapter1** (its Bundler3 route is unchanged by this migration). When an `authorizationSignature` is passed, the BlueBundlesV1 combined calls embed the signed-authorization struct directly in their calldata (as `blueBundlesV1Withdraw` does), removing the standalone `setAuthorization` transaction; `refinance` instead prepends a `setAuthorizationWithSig` call to its bundle.
+- `borrow`, `supplyCollateralBorrow`, `repayWithdrawCollateral`, `withdrawCollateral`, and `refinance` require **BlueBundlesV1** to be authorized on Morpho (`setAuthorization`) — the same operator loan-asset `withdraw` uses. When an `authorizationSignature` is passed, the BlueBundlesV1 calls embed the signed-authorization struct directly in their calldata (as `blueBundlesV1Withdraw` does), removing the standalone `setAuthorization` transaction; `refinance` embeds it the same way, inside its `blueBundlesV1MigrateBorrowPosition` calldata.
 - Native funding requires the collateral token (collateral-supply paths) or the loan token (`supply`, `repay`, `repayWithdrawCollateral`) to be the configured wNative for the chain; it is attached to the single payable BlueBundlesV1 call as `tx.value`.
 
 Reallocation rules: see [`actions/AGENTS.md`](../AGENTS.md#shared-liquidity--reallocations-canonical-statement) for the canonical contract.
