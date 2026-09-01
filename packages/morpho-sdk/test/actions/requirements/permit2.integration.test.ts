@@ -4,7 +4,7 @@ import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
-  isPermit2SignatureTransferSignature,
+  isPermit2TransferFromSignature,
   isRequirementApproval,
   isRequirementSignature,
   morphoViemExtension,
@@ -94,7 +94,7 @@ describe("Permit2", () => {
           client.account.address,
         );
 
-        if (!isPermit2SignatureTransferSignature(requirementSignature)) {
+        if (!isPermit2TransferFromSignature(requirementSignature)) {
           throw new Error("Unexpected requirement signature");
         }
 
@@ -179,7 +179,7 @@ describe("Permit2", () => {
           client.account.address,
         );
 
-        if (!isPermit2SignatureTransferSignature(requirementSignature)) {
+        if (!isPermit2TransferFromSignature(requirementSignature)) {
           throw new Error("Unexpected requirement signature");
         }
 
@@ -267,8 +267,8 @@ describe("Permit2", () => {
           throw new Error("Requirement is not a signature requirement");
         }
 
-        expect(permit2Requirement.action.type).toBe("permit2SignatureTransfer");
-        if (permit2Requirement.action.type !== "permit2SignatureTransfer") {
+        expect(permit2Requirement.action.type).toBe("permit2TransferFrom");
+        if (permit2Requirement.action.type !== "permit2TransferFrom") {
           throw new Error("Unexpected requirement type");
         }
         expect(permit2Requirement.action.args.spender).toBe(vaultBundlesV1);
@@ -279,7 +279,7 @@ describe("Permit2", () => {
           client.account.address,
         );
 
-        if (!isPermit2SignatureTransferSignature(requirementSignature)) {
+        if (!isPermit2TransferFromSignature(requirementSignature)) {
           throw new Error("Unexpected requirement signature");
         }
 
@@ -369,8 +369,8 @@ describe("Permit2", () => {
           throw new Error("Requirement is not a signature requirement");
         }
 
-        expect(permit2Requirement.action.type).toBe("permit2SignatureTransfer");
-        if (permit2Requirement.action.type !== "permit2SignatureTransfer") {
+        expect(permit2Requirement.action.type).toBe("permit2TransferFrom");
+        if (permit2Requirement.action.type !== "permit2TransferFrom") {
           throw new Error("Unexpected requirement type");
         }
         expect(permit2Requirement.action.args.spender).toBe(vaultBundlesV1);
@@ -381,7 +381,7 @@ describe("Permit2", () => {
           client.account.address,
         );
 
-        if (!isPermit2SignatureTransferSignature(requirementSignature)) {
+        if (!isPermit2TransferFromSignature(requirementSignature)) {
           throw new Error("Unexpected requirement signature");
         }
 
@@ -464,8 +464,8 @@ describe("Permit2", () => {
           throw new Error("Requirement is not a signature requirement");
         }
 
-        expect(permit2Requirement.action.type).toBe("permit2SignatureTransfer");
-        if (permit2Requirement.action.type !== "permit2SignatureTransfer") {
+        expect(permit2Requirement.action.type).toBe("permit2TransferFrom");
+        if (permit2Requirement.action.type !== "permit2TransferFrom") {
           throw new Error("Unexpected requirement type");
         }
         expect(permit2Requirement.action.args.spender).toBe(vaultBundlesV1);
@@ -476,7 +476,7 @@ describe("Permit2", () => {
           client.account.address,
         );
 
-        if (!isPermit2SignatureTransferSignature(requirementSignature)) {
+        if (!isPermit2TransferFromSignature(requirementSignature)) {
           throw new Error("Unexpected requirement signature");
         }
 

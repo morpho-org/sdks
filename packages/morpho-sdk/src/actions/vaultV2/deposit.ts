@@ -4,7 +4,7 @@ import { vaultBundlesV1Abi } from "../../abis.js";
 import { validateNativeVaultAsset } from "../../helpers/validate.js";
 import {
   type BundlesFundingArgs,
-  type BundlesTokenRequirementSignature,
+  type BlueBundlesV1TokenRequirementSignature,
   type Metadata,
   MixedBundlesFundingError,
   NonPositiveInputError,
@@ -30,7 +30,7 @@ export interface VaultV2DepositParams {
     readonly maxSharePrice: bigint;
     readonly userAddress: Address;
     readonly recipient?: never;
-    readonly requirementSignature?: BundlesTokenRequirementSignature;
+    readonly requirementSignature?: BlueBundlesV1TokenRequirementSignature;
     readonly referralFeePct?: bigint;
     readonly referralFeeRecipient?: Address;
     readonly deadline: bigint;

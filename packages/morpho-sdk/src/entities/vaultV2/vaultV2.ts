@@ -15,7 +15,7 @@ import {
   getBundlesReferralFeeAssets,
   normalizeBundlesCommonParams,
   resolveBundlesFunding,
-  selectBundlesTokenRequirementSignature,
+  selectBlueBundlesV1TokenRequirementSignature,
 } from "../../actions/bundles/index.js";
 import {
   encodeErc20Approval,
@@ -356,7 +356,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     );
     const maxSharePrice = computeVaultMaxSharePrice({
       vaultData: params.vaultData,
-      timestamp: Time.timestamp(),
+      deadline,
       assets: funding.assets - referralFeeAssets,
       slippageTolerance: params.slippageTolerance ?? DEFAULT_SLIPPAGE_TOLERANCE,
     });
@@ -383,7 +383,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
         const requirementSignature =
-          selectBundlesTokenRequirementSignature(signatures);
+          selectBlueBundlesV1TokenRequirementSignature(signatures);
         return vaultV2Deposit({
           vault: {
             chainId: this.chainId,

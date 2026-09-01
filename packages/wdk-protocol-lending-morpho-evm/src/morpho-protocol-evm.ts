@@ -7,7 +7,7 @@ import { fetchMarket } from "@morpho-org/blue-sdk-viem";
 import {
   type AuthorizationRequirementSignature,
   type BlueAuthorizationAction,
-  type BundlesTokenRequirementSignature,
+  type BlueBundlesV1TokenRequirementSignature,
   type ERC20ApprovalAction,
   type Metadata,
   MixedBundlesFundingError,
@@ -126,7 +126,7 @@ export type ApprovalOrSignatureRequirement =
 /** A BlueBundlesV1 token approval or ERC-2612/Permit2 SignatureTransfer request. */
 export type BundlesApprovalOrSignatureRequirement =
   | RequirementApproval
-  | RequirementSignatureRequest<BundlesTokenRequirementSignature>;
+  | RequirementSignatureRequest<BlueBundlesV1TokenRequirementSignature>;
 /** @deprecated Use {@link BundlesApprovalOrSignatureRequirement}. */
 export type BlueApprovalOrSignatureRequirement =
   BundlesApprovalOrSignatureRequirement;
@@ -160,7 +160,7 @@ interface MorphoSupplyCommonOptions {
   /** The address on behalf of which the supply operation should be performed. Must match the wallet account address when set. */
   readonly onBehalfOf?: string;
   /** Signature returned by a Morpho SDK approval requirement. */
-  readonly requirementSignature?: BundlesTokenRequirementSignature;
+  readonly requirementSignature?: BlueBundlesV1TokenRequirementSignature;
   /** Optional Morpho SDK slippage tolerance in WAD precision. */
   readonly slippageTolerance?: bigint;
 }
@@ -188,7 +188,7 @@ export type MorphoCollateralSupplyOptions =
     > & {
       readonly amount: number | bigint;
       readonly nativeAmount?: never;
-      readonly requirementSignature?: BundlesTokenRequirementSignature;
+      readonly requirementSignature?: BlueBundlesV1TokenRequirementSignature;
       readonly slippageTolerance?: never;
     })
   | (Omit<
@@ -224,7 +224,7 @@ export interface MorphoRepayOptions {
   /** The address on behalf of which the repay operation should be performed. Must match the wallet account address when set. */
   readonly onBehalfOf?: string;
   /** Signature returned by a Morpho SDK approval requirement. */
-  readonly requirementSignature?: BundlesTokenRequirementSignature;
+  readonly requirementSignature?: BlueBundlesV1TokenRequirementSignature;
 }
 
 /**
@@ -354,7 +354,7 @@ const BLUE_BUNDLES_V1_DEADLINE_WINDOW_SECONDS = 7_200n;
 
 function getBlueBundlesV1Deadline(
   signature?:
-    | BundlesTokenRequirementSignature
+    | BlueBundlesV1TokenRequirementSignature
     | AuthorizationRequirementSignature,
 ): bigint {
   return (
