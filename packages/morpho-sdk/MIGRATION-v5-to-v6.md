@@ -173,6 +173,56 @@ whose rounded aggregate penalty exceeds the migrated source debt (`InputExceedsM
 the combined destination position against the buffered LLTV (`BorrowExceedsSafeLtvError`);
 `RefinanceSameMarketError` and `RefinanceTokenMismatchError` stay.
 
+## Blue refinance
+
+The `refinance` entity method and the `blueRefinance` pure builder keep their names but now call
+BlueBundlesV1's full-position migration entrypoint. Both drop partial and collateral-only migration:
+the full live source debt and collateral always move, the source and destination markets must use the
+same loan and collateral tokens and must not be the same market, and Morpho authorization targets
+BlueBundlesV1.
+
+`userAddress` must be the account that signs the Morpho authorization **and** sends the transaction.
+The BlueBundlesV1 migration calldata carries no owner field: it migrates the position of the
+authorization signer, which the contract binds to `msg.sender`. Unlike the v5 Bundler3 route (where
+`args.user` was encoded as `onBehalf` in every leg), a relayer can no longer migrate a third party's
+position — supplying a `userAddress` other than the sender reverts on-chain. On-behalf refinance is no
+longer supported; the SDK uses `userAddress` only to build the authorization requirement and action
+metadata.
+
+`market.refinance(...)` (entity method):
+
+- Rename `target` to `destination`.
+- Remove `collateralAmount`, `borrowAssets`, `borrowShares`, slippage, and share-price bounds.
+- Rename V2-only `targetReallocations` to `reallocations`.
+- Add `deadline` and optional referral-fee fields.
+- Pass source and destination position snapshots.
+
+`blueRefinance(...)` (pure builder):
+
+- Replace the top-level `{ source: { chainId, marketParams }, target: { marketParams } }` shape with
+  `{ market: { chainId, sourceMarketParams, destinationMarketParams } }`.
+- Rename `args.user` to `args.userAddress` and supply `args.maxLtv` (the buffered destination LTV).
+- Remove `args.collateralAmount`, `args.borrowAssets`, `args.borrowShares`,
+  `args.minBorrowSharePrice`, and `args.maxRepaySharePrice`.
+- Rename `args.targetReallocations` to `args.reallocations`.
+- Add `args.deadline` and optional referral-fee fields.
+
+The action metadata replaces `targetMarket`, partial-leg amounts, user, share-price bounds, and the
+V1 fee with `destinationMarket`, `maxLtv`, `onBehalf`, a reallocation count and penalty total,
+referral-fee fields, and `deadline`.
+
+Stay on v5 if the product requires partial or collateral-only refinance behavior.
+
+The partial-migration error classes `BorrowAmountAndSharesExclusiveError`,
+`RefinanceExceedsCollateralError`, `RefinanceExceedsBorrowSharesError`,
+`RefinanceExceedsBorrowAssetsError`, and `RefinanceSharesMissingBorrowAssetsError` are **deprecated,
+not removed**: they stay exported through v6 (marked `@deprecated`) for consumers pattern-matching on
+the v5 surface, are never thrown by the full-position route, and are removed in the next major. The
+full-position route validates ownership and token/market compatibility, rejects a reallocation plan
+whose rounded aggregate penalty exceeds the migrated source debt (`InputExceedsMaxError`), then checks
+the combined destination position against the buffered LLTV (`BorrowExceedsSafeLtvError`);
+`RefinanceSameMarketError` and `RefinanceTokenMismatchError` stay.
+
 ## Removed action-output field: `reallocationFee`
 
 `BlueBorrowAction`, `BlueWithdrawAction`, `BlueSupplyCollateralBorrowAction`, and
