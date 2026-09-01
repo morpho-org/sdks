@@ -139,9 +139,8 @@ Requirement entries are one of:
 
 Morpho SDK enforces a builder/executor invariant for bundled actions. For that reason, `onBehalfOf` and vault/collateral withdrawal `to` must equal the connected wallet address in this WDK adapter.
 
-Existing `MorphoBorrowOptions` callers keep the Vault V1 reallocation input and
-an authorization-only `getBorrowRequirements` result type. To include Vault V2
-BluePublicAllocator calls, type the options as
+The Vault V1 `MorphoBorrowOptions.reallocations` flow remains compatible but is deprecated and
+will be removed in the next major. For new integrations, type the options as
 `MorphoBorrowWithVaultV2ReallocationsOptions`; this explicitly widens the
 result to include the loan-token approval used for proportional penalty donations:
 
