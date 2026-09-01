@@ -54,12 +54,13 @@ required snapshot cannot prove the buffered position safe.
 - `supply` funds the loan token.
 - `supplyCollateral`, `borrow`, and `supplyCollateralBorrow` fund the collateral token when
   `collateralAssets > 0n` and request Morpho authorization when `borrowAssets > 0n`.
-- `repay`, `withdrawCollateral`, and `repayWithdrawCollateral` fund the bounded loan-token amount
-  derived from the selected repay mode, `positionData`, and deadline, and request Morpho
-  authorization when
+- `repay` and `repayWithdrawCollateral` fund the bounded loan-token amount derived from the
+  selected repay mode, `positionData`, and deadline, and request Morpho authorization when
   `collateralAssets > 0n`. Share-mode deadlines cannot exceed the two-hour funding quote horizon.
   A saturated full repay without signature support requests the token's reusable maximum allowance,
   while the encoded call remains bounded by the derived `maxRepayAssets` and refunds unused funding.
+- `withdrawCollateral` delegates to the repay path with no repay leg, so it funds no loan token; it
+  requests only Morpho authorization.
 - `withdraw` and `refinance` request Morpho authorization.
 
 Classic approvals and ERC-2612 permits name BlueBundlesV1 as spender. A classic approval covers the

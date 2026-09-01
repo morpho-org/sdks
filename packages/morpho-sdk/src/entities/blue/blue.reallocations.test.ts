@@ -1,14 +1,8 @@
 import { MarketParams } from "@morpho-org/blue-sdk";
-import { vaultV2BluePublicAllocatorAbi as canonicalVaultV2BluePublicAllocatorAbi } from "@morpho-org/blue-sdk-viem";
 import { createPublicClient, http } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test, vi } from "vitest";
 import { CbbtcUsdcBlue } from "../../../test/fixtures/blue.js";
-import {
-  publicAllocatorAbi,
-  vaultV1PublicAllocatorAbi,
-  vaultV2BluePublicAllocatorAbi,
-} from "../../abis.js";
 import { morphoViemExtension } from "../../client/index.js";
 import { ChainIdMismatchError } from "../../types/index.js";
 import { VaultV1ReallocationData } from "../vaultV1ReallocationData.js";
@@ -134,17 +128,5 @@ describe("MorphoBlue reallocation APIs", () => {
         }),
       }),
     ).toThrow(ChainIdMismatchError);
-  });
-});
-
-describe("Public allocator ABI exports", () => {
-  test("re-exports the canonical Vault V2 ABI", () => {
-    expect(vaultV2BluePublicAllocatorAbi).toBe(
-      canonicalVaultV2BluePublicAllocatorAbi,
-    );
-  });
-
-  test("keeps the deprecated Vault V1 ABI alias", () => {
-    expect(publicAllocatorAbi).toBe(vaultV1PublicAllocatorAbi);
   });
 });
