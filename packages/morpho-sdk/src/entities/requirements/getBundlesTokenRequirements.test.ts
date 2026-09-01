@@ -78,7 +78,28 @@ describe("getBundlesTokenRequirements", () => {
         supportSignature: false,
       },
     );
-    expect(reusableRequirements[0]?.action).toMatchObject({
+    expect(reusableRequirements).toHaveLength(0);
+
+    mockRead(handle, {
+      address: usdc,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const missingReusableRequirements = await getBundlesTokenRequirements(
+      handle.client,
+      {
+        token: usdc,
+        spender: blueBundlesV1,
+        amount: 1_000_000n,
+        approvalAmount: maxUint256,
+        owner: account.address,
+        chainId: mainnet.id,
+        deadline: maxUint256,
+        supportSignature: false,
+      },
+    );
+    expect(missingReusableRequirements[0]?.action).toMatchObject({
       type: "erc20Approval",
       args: { spender: blueBundlesV1, amount: maxUint256 },
     });

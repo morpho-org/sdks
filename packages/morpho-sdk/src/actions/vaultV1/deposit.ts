@@ -3,8 +3,8 @@ import { type Address, encodeFunctionData } from "viem";
 import { vaultBundlesV1Abi } from "../../abis.js";
 import { validateNativeVaultAsset } from "../../helpers/validate.js";
 import {
-  type BundlesFundingArgs,
   type BlueBundlesV1TokenRequirementSignature,
+  type BundlesFundingArgs,
   type Metadata,
   MixedBundlesFundingError,
   NonPositiveInputError,

@@ -62,7 +62,7 @@ export const resolveBundlesApprovalRequirements = (
     chainId: params.chainId,
     args: {
       spender: params.spender,
-      spendAmount: params.approvalAmount,
+      spendAmount: params.amount,
       approvalAmount: params.approvalAmount,
     },
     allowances: params.allowance,

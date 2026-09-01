@@ -2,8 +2,8 @@ import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
-  type BundlesFundingArgs,
   type BlueBundlesV1TokenRequirementSignature,
+  type BundlesFundingArgs,
   MixedBundlesFundingError,
   morphoViemExtension,
   NativeAmountOnNonWNativeVaultError,
