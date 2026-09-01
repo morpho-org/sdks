@@ -1,5 +1,5 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import { type Address, encodeFunctionData } from "viem";
+import { type Address, encodeFunctionData, maxUint256 } from "viem";
 import { blueBundlesV1Abi } from "../../abis.js";
 import {
   type AuthorizationRequirementSignature,
@@ -76,7 +76,7 @@ export interface BlueWithdrawParams {
  * @throws {MutuallyExclusiveWithdrawAmountsError} when assets and shares are both nonzero.
  * @throws {NonPositiveInputError} when neither mode, no valid deadline, or a non-positive
  *   reallocation amount is provided.
- * @throws {InputExceedsMaxError} when a fee, reallocation amount, or penalty exceeds its ABI bound.
+ * @throws {InputExceedsMaxError} when a withdraw amount, fee, reallocation amount, or penalty exceeds its ABI bound.
  * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
  * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
  * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.
@@ -128,6 +128,20 @@ export const blueWithdraw = (
   }
   if (withdrawAssets === 0n && withdrawShares === 0n) {
     throw new NonPositiveInputError("withdrawAssets or withdrawShares", 0n);
+  }
+  if (withdrawAssets > maxUint256) {
+    throw new InputExceedsMaxError({
+      field: "withdrawAssets",
+      value: withdrawAssets,
+      max: maxUint256,
+    });
+  }
+  if (withdrawShares > maxUint256) {
+    throw new InputExceedsMaxError({
+      field: "withdrawShares",
+      value: withdrawShares,
+      max: maxUint256,
+    });
   }
 
   const common: BlueBundlesV1CommonParams = {

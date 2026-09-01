@@ -17,7 +17,7 @@ pnpm add @morpho-org/morpho-sdk
 
 ## Actions
 
-Each entity exposes a set of actions. Bundled actions route through bundler3 (via `GeneralAdapter1`); the rest are direct contract calls.
+Each entity exposes a set of actions. Vault deposits and Blue `refinance` route through bundler3 (via `GeneralAdapter1`); every other Blue write routes through the `BlueBundlesV1` periphery; the rest are direct contract calls.
 
 | Entity | Actions | Route |
 | --- | --- | --- |
@@ -28,8 +28,8 @@ Each entity exposes a set of actions. Bundled actions route through bundler3 (vi
 | | `withdraw`, `redeem` | Direct call |
 | | `forceWithdraw`, `forceRedeem` | Vault multicall |
 | | `inKindRedeem` | VaultExitBundlesV1 |
-| **Blue** | `supply`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdraw`, `repayWithdrawCollateral`, `refinance` | Bundler |
-| | `withdrawCollateral` | Direct call |
+| **Blue** | `supply`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `repayWithdrawCollateral`, `withdrawCollateral`, `withdraw` | BlueBundlesV1 |
+| | `refinance` | Bundler |
 | **Midnight** | `takeLend`, `takeBorrow`, `supplyCollateralTakeBorrow`, `repayWithdrawCollateral` | Midnight Bundles |
 | | `makeLend`, `makeBorrow` | Midnight mempool |
 | | `supplyCollateral`, `redeem`, `cancelOffer` | Direct call |
@@ -136,14 +136,15 @@ const market = client.morpho.blue(
 const positionData = await market.getPositionData("0xUser...");
 
 const { buildTx, getRequirements } = market.supplyCollateralBorrow({
-  amount: 1000000000000000000n, // collateral
-  borrowAmount: 500000000000000000n, // loan asset
+  collateralAssets: 1000000000000000000n, // collateral
+  borrowAssets: 500000000000000000n, // loan asset
   userAddress: "0xUser...",
   positionData,
+  deadline: BigInt(Math.floor(Date.now() / 1000) + 3600),
 });
 
 // This flow can return more than one requirement — a collateral approval/permit
-// and a one-time Morpho authorization for GeneralAdapter1. Satisfy each and pass
+// and a one-time Morpho authorization for BlueBundlesV1. Satisfy each and pass
 // every collected signature to buildTx.
 const signatures = [];
 for (const requirement of await getRequirements()) {
@@ -238,15 +239,16 @@ graph LR
         MM1 --> M1W[blueWithdraw]
         MM1 --> M1RF[blueRefinance]
 
-        M1S -->|nativeWrap? + erc20TransferFrom + morphoSupply| B3[Bundler3]
-        M1SC -->|erc20TransferFrom + morphoSupplyCollateral| B3
-        M1B -->|allocator reallocation? + morphoBorrow| B3
-        M1SCB -->|transfer + supplyCollateral + allocator reallocation? + borrow| B3
-        M1W -->|allocator reallocation? + morphoWithdraw| B3
-        M1RF -->|allocator reallocation? + supplyCollateral callback: borrow + repay + withdrawCollateral| B3
+        M1S -->|permit/permit2? or native + blueBundlesV1Supply| BB1[BlueBundlesV1]
+        M1SC -->|blueBundlesV1SupplyCollateralAndBorrow: zero borrow leg| BB1
+        M1B -->|blueBundlesV1SupplyCollateralAndBorrow: zero collateral leg + allocator reallocation?| BB1
+        M1SCB -->|blueBundlesV1SupplyCollateralAndBorrow + allocator reallocation?| BB1
+        M1W -->|allocator reallocation? + blueBundlesV1Withdraw| BB1
+        M1RF -->|allocator reallocation? + supplyCollateral callback: borrow + repay + withdrawCollateral| B3[Bundler3]
 
         B3 -.->|reallocateTo| PA1[PublicAllocator V1]
         B3 -.->|reallocate / allocateFromIdle| BPA[Blue Public Allocator]
+        BB1 -.->|reallocate / allocateFromIdle| BPA
     end
 
     subgraph Midnight Flow

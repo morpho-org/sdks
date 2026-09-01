@@ -23,8 +23,34 @@ one direct BlueBundlesV1 call.
 BlueBundlesV1 fields. Supply approvals and permits target BlueBundlesV1. Withdraw authorization
 also targets BlueBundlesV1, and proceeds always return to the transaction sender.
 
+> **Chain availability.** The direct BlueBundlesV1 route requires the `bundles.blueBundlesV1`
+> deployment on the target chain. On a registered chain without it (the previous Bundler3-routed
+> flows covered more chains), **every** Blue write — `supply`, `supplyCollateral`, `borrow`,
+> `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, `withdraw`, and
+> `refinance` — throws `UnknownAddressError` synchronously at handle creation (via
+> `validateWriteCommon`). Confirm coverage before upgrading, for example
+> `getChainAddresses(chainId).bundles?.blueBundlesV1 != null`.
+
 Permit2 uses SignatureTransfer for these direct token pulls: its ERC-20 prerequisite still targets
 canonical Permit2, while the signed payload names BlueBundlesV1 as spender.
+
+### Permit2 SignatureTransfer requires an explicit nonce
+
+SignatureTransfer consumes an owner-global unordered nonce rather than an allowance, so the SDK no
+longer allocates one implicitly. For a client with `supportSignature: true`, the default supply
+requirement path selects Permit2 and `supply(...).getRequirements()` now throws
+`MissingPermit2TransferFromNonceError` when no nonce is supplied. Pass an unused nonce explicitly:
+
+```ts
+const requirements = await market
+  .supply({ userAddress, assets, deadline })
+  .getRequirements({ permit2Nonce });
+```
+
+Allocate any `uint256` whose Permit2 `nonceBitmap` bit is still unset for `userAddress` (each nonce
+is single-use; a consumed one throws `Permit2TransferFromNonceAlreadyUsedError`). To skip Permit2
+for ERC-2612 tokens, pass `getRequirements({ useSimplePermit: true })`, which prefers a one-signature
+ERC-2612 permit and needs no nonce.
 
 ## Blue collateral, borrow, repay, and collateral withdrawal
 
@@ -75,3 +101,17 @@ referral-fee fields, and `deadline`.
 
 The full live source debt and collateral always move, and Morpho authorization targets
 BlueBundlesV1. Stay on v5 if the product requires partial or collateral-only refinance behavior.
+
+## Removed action-output field: `reallocationFee`
+
+`BlueBorrowAction`, `BlueWithdrawAction`, `BlueSupplyCollateralBorrowAction`, and
+`BlueRefinanceAction` no longer expose `reallocationFee` in `action.args`. That field only ever
+carried Vault V1 native PublicAllocator fees, which high-level writes no longer emit. Read
+`reallocationPenaltyAssets` for the loan-token penalty donated by Vault V2 BluePublicAllocator
+reallocations.
+
+## Removed type: `BlueReallocationPlan`
+
+The `BlueReallocationPlan` union is removed. High-level Blue write inputs accept
+`Iterable<VaultV2BlueReallocation>` directly; for explicit low-level Vault V1 composition, use
+`VaultV1Reallocation[]`.

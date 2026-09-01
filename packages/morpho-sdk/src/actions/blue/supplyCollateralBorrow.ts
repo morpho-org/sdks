@@ -1,5 +1,5 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import { type Address, encodeFunctionData } from "viem";
+import { type Address, encodeFunctionData, maxUint256 } from "viem";
 import { blueBundlesV1Abi } from "../../abis.js";
 import {
   type AuthorizationRequirementSignature,
@@ -28,37 +28,37 @@ import {
 /** Parameters for {@link blueSupplyCollateralBorrow}. */
 export interface BlueSupplyCollateralBorrowParams {
   /** Chain and scoped Morpho Blue market. */
-  market: {
+  readonly market: {
     readonly chainId: number;
     readonly marketParams: MarketParams;
   };
   /** Direct BlueBundlesV1 combined-operation arguments. */
-  args: {
+  readonly args: {
     /** User whose collateral and debt position is changed. */
-    userAddress: Address;
+    readonly userAddress: Address;
     /** Gross collateral supplied; zero selects a pure borrow. */
-    collateralAssets: bigint;
+    readonly collateralAssets: bigint;
     /** Loan assets borrowed; zero selects a pure collateral supply. */
-    borrowAssets: bigint;
+    readonly borrowAssets: bigint;
     /** Maximum post-operation LTV enforced by BlueBundlesV1. */
-    maxLtv: bigint;
+    readonly maxLtv: bigint;
     /** Full native collateral funding; must equal `collateralAssets`. */
-    nativeAmount?: bigint;
+    readonly nativeAmount?: bigint;
     /** Optional validated Vault V2 BluePublicAllocator reallocations. */
-    reallocations?: Iterable<VaultV2BlueReallocation>;
+    readonly reallocations?: Iterable<VaultV2BlueReallocation>;
     /** Final call deadline in Unix seconds. */
-    deadline: bigint;
+    readonly deadline: bigint;
     /** Optional WAD-scaled referral fee, strictly below 100%. */
-    referralFeePct?: bigint;
+    readonly referralFeePct?: bigint;
     /** Recipient required when `referralFeePct` is positive. */
-    referralFeeRecipient?: Address;
+    readonly referralFeeRecipient?: Address;
     /** Optional collateral ERC-2612 or Permit2 SignatureTransfer result. */
-    requirementSignature?: BlueBundlesV1TokenRequirementSignature;
+    readonly requirementSignature?: BlueBundlesV1TokenRequirementSignature;
     /** Optional Morpho authorization signature for BlueBundlesV1. */
-    authorizationSignature?: AuthorizationRequirementSignature;
+    readonly authorizationSignature?: AuthorizationRequirementSignature;
   };
   /** Optional transaction metadata suffix. */
-  metadata?: Metadata;
+  readonly metadata?: Metadata;
 }
 
 /**
@@ -139,14 +139,17 @@ export const blueSupplyCollateralBorrow = (
     requirementSignature,
     authorizationSignature,
   } = params.args;
-  if (collateralAssets < 0n) {
-    throw new NegativeInputError("collateralAssets", collateralAssets);
-  }
-  if (borrowAssets < 0n) {
-    throw new NegativeInputError("borrowAssets", borrowAssets);
-  }
-  if (maxLtv < 0n) {
-    throw new NegativeInputError("maxLtv", maxLtv);
+  // Reject > uint256 so a direct caller gets the SDK's typed `InputExceedsMaxError`, not viem's
+  // `IntegerOutOfRangeError` at encode time. `maxUint256` stays valid as the `maxLtv` sentinel.
+  for (const [field, value] of [
+    ["collateralAssets", collateralAssets],
+    ["borrowAssets", borrowAssets],
+    ["maxLtv", maxLtv],
+  ] as const) {
+    if (value < 0n) throw new NegativeInputError(field, value);
+    if (value > maxUint256) {
+      throw new InputExceedsMaxError({ field, value, max: maxUint256 });
+    }
   }
   if (collateralAssets === 0n && borrowAssets === 0n) {
     throw new NonPositiveInputError("collateralAssets or borrowAssets", 0n);

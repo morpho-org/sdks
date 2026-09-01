@@ -16,6 +16,7 @@ import { blueBundlesV1Abi } from "../../abis.js";
 import {
   type AuthorizationRequirementSignature,
   type BlueBundlesV1TokenRequirementSignature,
+  InputExceedsMaxError,
   MaxRepayAssetsBelowRepayAssetsError,
   MutuallyExclusiveRepayAmountsError,
   NativeFundingAmountMismatchError,
@@ -242,6 +243,49 @@ describe("blueRepayWithdrawCollateral", () => {
         },
       }),
     ).toThrow(NonPositiveInputError);
+  });
+
+  test("error: InputExceedsMaxError when a uint256 argument overflows", () => {
+    for (const field of [
+      "repayAssets",
+      "repayShares",
+      "maxRepayAssets",
+      "collateralAssets",
+      "maxLtv",
+    ] as const) {
+      expect(() =>
+        blueRepayWithdrawCollateral({
+          market,
+          args: {
+            userAddress,
+            repayAssets: 5n,
+            repayShares: 0n,
+            maxRepayAssets: 5n,
+            collateralAssets: 2n,
+            maxLtv,
+            deadline,
+            [field]: maxUint256 + 1n,
+          },
+        }),
+      ).toThrow(InputExceedsMaxError);
+    }
+  });
+
+  test("error: InputExceedsMaxError when a withdrawal-only call carries repay funding", () => {
+    expect(() =>
+      blueRepayWithdrawCollateral({
+        market,
+        args: {
+          userAddress,
+          repayAssets: 0n,
+          repayShares: 0n,
+          maxRepayAssets: 1n,
+          collateralAssets: 2n,
+          maxLtv,
+          deadline,
+        },
+      }),
+    ).toThrow(InputExceedsMaxError);
   });
 
   test("behavior: preserves the saturated full-repay sentinel and refund cap", () => {

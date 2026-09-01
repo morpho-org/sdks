@@ -94,15 +94,17 @@ at the SDK level. The differences are at the protocol layer:
   lending primitive — isolated markets whose borrow rate floats with utilization via the market's
   IRM. Each market has a loan token, collateral token, oracle, IRM, and LLTV (liquidation
   loan-to-value). Formerly referred to as "MarketV1" in this SDK.
-- **Supply collateral**: Users deposit collateral tokens into a market position. Routed through
-  bundler3 via GeneralAdapter1 (`erc20TransferFrom` + `morphoSupplyCollateral`). Supports native
-  token wrapping when collateral is wNative.
-- **Borrow**: Users borrow loan tokens against their collateral. Routed through bundler3 via
-  `morphoBorrow`. Requires GeneralAdapter1 authorization on Morpho (`setAuthorization`). Uses
-  `minSharePrice` for slippage protection.
-- **Supply collateral + borrow (atomic)**: Atomic bundler operation combining collateral transfer,
-  `morphoSupplyCollateral`, and `morphoBorrow` in a single transaction. Validates position health
-  with an LLTV buffer (default 0.5%) to prevent instant liquidation.
+- **Supply collateral**: Users deposit collateral tokens into a market position. Routed through the
+  `BlueBundlesV1` periphery (`blueBundlesV1SupplyCollateralAndBorrow` with a zero borrow leg), which
+  is the ERC-20 approval spender. Supports native token wrapping when collateral is wNative (the
+  native amount is attached as `tx.value`).
+- **Borrow**: Users borrow loan tokens against their collateral. Routed through `BlueBundlesV1`
+  (`blueBundlesV1SupplyCollateralAndBorrow` with a zero collateral leg). Requires **BlueBundlesV1**
+  authorization on Morpho (`setAuthorization`). Enforces a post-operation `maxLtv` bound inside
+  BlueBundlesV1 (this direct route has no Bundler3 `minSharePrice`).
+- **Supply collateral + borrow (atomic)**: A single `blueBundlesV1SupplyCollateralAndBorrow` call
+  combining the collateral-supply and borrow legs. Validates position health with an LLTV buffer
+  (default 0.5%) to prevent instant liquidation.
 - **LLTV buffer**: Both `borrow` and `supplyCollateralBorrow` validate that the resulting position
   stays below `LLTV - buffer` (default 0.5%). Throws `BorrowExceedsSafeLtvError` if exceeded.
 - **SDK data**: Fetched via `fetchBlueMarket` / `fetchBlueAccrualPosition`.
@@ -178,9 +180,12 @@ on the vault contract itself.
 | Redeem (V1 & V2)                      | Direct vault call          | No attack surface, no approval needed                                                                      |
 | Force Withdraw (V2)                   | VaultV2 `multicall`        | Atomic deallocation + withdrawal on the vault contract                                                     |
 | Force Redeem (V2)                     | VaultV2 `multicall`        | Atomic deallocation + redemption on the vault contract                                                     |
-| Supply Collateral (Blue)          | Bundler3 (general adapter) | `erc20TransferFrom` + `morphoSupplyCollateral`. Optional native wrapping for wNative collateral.           |
-| Borrow (Blue)                     | Bundler3 (general adapter) | `morphoBorrow` with `minSharePrice` slippage protection. Requires GA1 authorization on Morpho.             |
-| Supply Collateral + Borrow (Blue) | Bundler3 (general adapter) | Atomic collateral supply + borrow. LLTV buffer prevents instant liquidation.                               |
+| Supply Collateral (Blue)          | BlueBundlesV1              | `blueBundlesV1SupplyCollateralAndBorrow` (zero borrow leg). Optional native wrapping for wNative collateral. |
+| Borrow (Blue)                     | BlueBundlesV1              | `blueBundlesV1SupplyCollateralAndBorrow` (zero collateral leg) with a post-op `maxLtv` bound. Requires BlueBundlesV1 authorization on Morpho. |
+| Supply Collateral + Borrow (Blue) | BlueBundlesV1              | Atomic `blueBundlesV1SupplyCollateralAndBorrow`. LLTV buffer prevents instant liquidation.                  |
+| Repay / Withdraw Collateral (Blue) | BlueBundlesV1             | `blueBundlesV1RepayAndWithdrawCollateral` (repay first, then withdraw; either leg zeroable). Withdraw-collateral requires BlueBundlesV1 authorization. |
+| Supply / Withdraw loan asset (Blue) | BlueBundlesV1            | `blueBundlesV1Supply` / `blueBundlesV1Withdraw`. Withdraw requires BlueBundlesV1 authorization; optional Vault V2 reallocations ride in-calldata.       |
+| Refinance (Blue)                  | Bundler3 (general adapter) | Still on Bundler3: authorizes GeneralAdapter1 and pulls Vault V2 penalties through it.                      |
 
 ## Dependency Map
 

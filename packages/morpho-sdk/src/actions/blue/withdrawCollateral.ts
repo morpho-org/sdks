@@ -12,29 +12,29 @@ import { blueRepayWithdrawCollateral } from "./repayWithdrawCollateral.js";
 /** Parameters for {@link blueWithdrawCollateral}. */
 export interface BlueWithdrawCollateralParams {
   /** Chain and scoped Morpho Blue market. */
-  market: {
+  readonly market: {
     readonly chainId: number;
     readonly marketParams: MarketParams;
   };
   /** Direct BlueBundlesV1 collateral-withdrawal arguments. */
-  args: {
+  readonly args: {
     /** User whose collateral position is reduced. */
-    userAddress: Address;
+    readonly userAddress: Address;
     /** Collateral assets withdrawn. */
-    collateralAssets: bigint;
+    readonly collateralAssets: bigint;
     /** Maximum post-operation LTV enforced by BlueBundlesV1. */
-    maxLtv: bigint;
+    readonly maxLtv: bigint;
     /** Final call deadline in Unix seconds. */
-    deadline: bigint;
+    readonly deadline: bigint;
     /** Optional WAD-scaled referral fee, strictly below 100%. */
-    referralFeePct?: bigint;
+    readonly referralFeePct?: bigint;
     /** Recipient required when `referralFeePct` is positive. */
-    referralFeeRecipient?: Address;
+    readonly referralFeeRecipient?: Address;
     /** Optional Morpho authorization signature for BlueBundlesV1. */
-    authorizationSignature?: AuthorizationRequirementSignature;
+    readonly authorizationSignature?: AuthorizationRequirementSignature;
   };
   /** Optional transaction metadata suffix. */
-  metadata?: Metadata;
+  readonly metadata?: Metadata;
 }
 
 /**

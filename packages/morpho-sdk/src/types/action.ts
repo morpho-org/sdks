@@ -152,13 +152,13 @@ export interface BlueSupplyAction
   extends BaseAction<
     "blueSupply",
     {
-      market: Hex;
-      assets: bigint;
-      onBehalf: Address;
-      nativeAmount?: bigint;
-      referralFeePct: bigint;
-      referralFeeRecipient: Address;
-      deadline: bigint;
+      readonly market: Hex;
+      readonly assets: bigint;
+      readonly onBehalf: Address;
+      readonly nativeAmount?: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
+      readonly deadline: bigint;
     }
   > {}
 
@@ -167,30 +167,30 @@ export interface BlueWithdrawAction
   extends BaseAction<
     "blueWithdraw",
     {
-      market: Hex;
-      withdrawAssets: bigint;
-      withdrawShares: bigint;
-      onBehalf: Address;
-      reallocations: number;
-      reallocationPenaltyAssets: bigint;
-      referralFeePct: bigint;
-      referralFeeRecipient: Address;
-      deadline: bigint;
+      readonly market: Hex;
+      readonly withdrawAssets: bigint;
+      readonly withdrawShares: bigint;
+      readonly onBehalf: Address;
+      readonly reallocations: number;
+      readonly reallocationPenaltyAssets: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
+      readonly deadline: bigint;
     }
   > {}
 
 type BlueSupplyCollateralBorrowActionArgs = {
-  market: Hex;
-  collateralAssets: bigint;
-  borrowAssets: bigint;
-  maxLtv: bigint;
-  onBehalf: Address;
-  nativeAmount?: bigint;
-  reallocations: number;
-  reallocationPenaltyAssets: bigint;
-  referralFeePct: bigint;
-  referralFeeRecipient: Address;
-  deadline: bigint;
+  readonly market: Hex;
+  readonly collateralAssets: bigint;
+  readonly borrowAssets: bigint;
+  readonly maxLtv: bigint;
+  readonly onBehalf: Address;
+  readonly nativeAmount?: bigint;
+  readonly reallocations: number;
+  readonly reallocationPenaltyAssets: bigint;
+  readonly referralFeePct: bigint;
+  readonly referralFeeRecipient: Address;
+  readonly deadline: bigint;
 };
 
 /** Metadata for a direct BlueBundlesV1 collateral supply. */
@@ -212,17 +212,17 @@ export interface BlueSupplyCollateralBorrowAction
   > {}
 
 type BlueRepayWithdrawCollateralActionArgs = {
-  market: Hex;
-  repayAssets: bigint;
-  repayShares: bigint;
-  maxRepayAssets: bigint;
-  collateralAssets: bigint;
-  maxLtv: bigint;
-  onBehalf: Address;
-  nativeAmount?: bigint;
-  referralFeePct: bigint;
-  referralFeeRecipient: Address;
-  deadline: bigint;
+  readonly market: Hex;
+  readonly repayAssets: bigint;
+  readonly repayShares: bigint;
+  readonly maxRepayAssets: bigint;
+  readonly collateralAssets: bigint;
+  readonly maxLtv: bigint;
+  readonly onBehalf: Address;
+  readonly nativeAmount?: bigint;
+  readonly referralFeePct: bigint;
+  readonly referralFeeRecipient: Address;
+  readonly deadline: bigint;
 };
 
 /** Metadata for a direct BlueBundlesV1 repayment. */
@@ -243,20 +243,20 @@ export interface BlueRepayWithdrawCollateralAction
     BlueRepayWithdrawCollateralActionArgs
   > {}
 
-/** Metadata for a direct BlueBundlesV1 full borrow-position migration. */
 export interface BlueRefinanceAction
   extends BaseAction<
     "blueRefinance",
     {
-      sourceMarket: Hex;
-      destinationMarket: Hex;
-      maxLtv: bigint;
-      onBehalf: Address;
-      reallocations: number;
-      reallocationPenaltyAssets: bigint;
-      referralFeePct: bigint;
-      referralFeeRecipient: Address;
-      deadline: bigint;
+      readonly sourceMarket: Hex;
+      readonly destinationMarket: Hex;
+      readonly maxLtv: bigint;
+      readonly onBehalf: Address;
+      readonly reallocations: number;
+      /** Loan-token assets donated as BluePublicAllocator V2 penalties. */
+      readonly reallocationPenaltyAssets: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
+      readonly deadline: bigint;
     }
   > {}
 
@@ -270,7 +270,9 @@ export interface BlueRefinanceAction
  * Used by BlueBundlesV1 withdrawal; repayment has its own assets-or-shares union because a pure
  * collateral withdrawal has no repay amount.
  */
-export type AssetsOrSharesArgs = { assets: bigint } | { shares: bigint };
+export type AssetsOrSharesArgs =
+  | { readonly assets: bigint }
+  | { readonly shares: bigint };
 
 /** Metadata for a Blue authorization prerequisite transaction. */
 export interface BlueAuthorizationAction
@@ -530,9 +532,9 @@ export interface Permit2TransferFromAction
   extends BaseAction<
     "permit2TransferFrom",
     {
-      spender: Address;
-      amount: bigint;
-      deadline: bigint;
+      readonly spender: Address;
+      readonly amount: bigint;
+      readonly deadline: bigint;
     }
   > {}
 
@@ -591,8 +593,8 @@ export type PermitRequirementSignature =
 
 /** A signed Permit2 SignatureTransfer requirement used by BlueBundlesV1. */
 export interface Permit2TransferFromRequirementSignature {
-  args: PermitArgs;
-  action: Permit2TransferFromAction;
+  readonly args: Readonly<PermitArgs>;
+  readonly action: Permit2TransferFromAction;
 }
 
 /** A signed Morpho authorization consumed by Bundler3 or a direct BlueBundlesV1 call. */

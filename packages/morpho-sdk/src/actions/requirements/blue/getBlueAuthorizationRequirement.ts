@@ -1,14 +1,24 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
-import { deepFreeze } from "@morpho-org/morpho-ts";
+import { deepFreeze, Time } from "@morpho-org/morpho-ts";
 import type { Client } from "viem";
-import { type Address, encodeFunctionData, publicActions } from "viem";
+import {
+  type Address,
+  encodeFunctionData,
+  isAddressEqual,
+  maxUint256,
+  publicActions,
+} from "viem";
 import {
   type AuthorizationRequirementSignature,
   type BlueAuthorizationAction,
   ChainIdMismatchError,
+  ExpiredDeadlineError,
+  InputExceedsMaxError,
+  NonPositiveInputError,
   type Requirement,
   type Transaction,
+  UnsupportedAuthorizationOperatorError,
 } from "../../../types/index.js";
 import { encodeBlueSignatureAuthorization } from "../encode/encodeBlueSignatureAuthorization.js";
 
@@ -28,7 +38,8 @@ import { encodeBlueSignatureAuthorization } from "../encode/encodeBlueSignatureA
  * @param params.chainId - Target chain id used to resolve Morpho and the default GeneralAdapter1.
  * @param params.userAddress - The user granting authorization.
  * @param params.authorized - Operator to authorize. Defaults to GeneralAdapter1; direct Blue
- *   writes pass the registered BlueBundlesV1 deployment.
+ *   writes pass the registered BlueBundlesV1 deployment. Must be the chain's registered
+ *   GeneralAdapter1 or BlueBundlesV1 operator.
  * @param params.deadline - Optional signature deadline forwarded to the authorization encoder.
  * @param params.supportSignature - When `true`, return a signable `Requirement` instead of a
  *   transaction so the destination route can consume the signed authorization.
@@ -36,6 +47,8 @@ import { encodeBlueSignatureAuthorization } from "../encode/encodeBlueSignatureA
  *   `Requirement` (when `supportSignature` is `true`), or `null` when authorization is already in
  *   place.
  * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`.
+ * @throws {UnsupportedAuthorizationOperatorError} when `authorized` is neither the chain's
+ *   GeneralAdapter1 nor its BlueBundlesV1 operator.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {viem.BaseError} when an authorization or nonce RPC read fails.
  * @example
@@ -80,12 +93,44 @@ export const getBlueAuthorizationRequirement = async (params: {
   const {
     morpho,
     bundler3: { generalAdapter1 },
+    bundles,
   } = getChainAddresses(chainId);
 
   const authorized = params.authorized ?? generalAdapter1;
+  // The SDK only ever authorizes the chain's registered GeneralAdapter1 or BlueBundlesV1 operator;
+  // reject any other override so a misconfigured `authorized` cannot grant an arbitrary address
+  // control over the user's Morpho positions.
+  const supportedOperators: Address[] = [generalAdapter1];
+  if (bundles?.blueBundlesV1 != null) {
+    supportedOperators.push(bundles.blueBundlesV1);
+  }
+  if (
+    !supportedOperators.some((operator) => isAddressEqual(operator, authorized))
+  ) {
+    throw new UnsupportedAuthorizationOperatorError(authorized, chainId);
+  }
   const pc = viemClient.extend(publicActions);
 
   if (supportSignature) {
+    // The forwarded deadline is only consumed on the signable path; reject an invalid or expired
+    // one before the RPC reads so the caller never signs an authorization that cannot be encoded
+    // or would revert on-chain. An omitted deadline defaults downstream to two hours from now.
+    if (params.deadline != null) {
+      if (params.deadline <= 0n) {
+        throw new NonPositiveInputError("deadline", params.deadline);
+      }
+      if (params.deadline > maxUint256) {
+        throw new InputExceedsMaxError({
+          field: "deadline",
+          value: params.deadline,
+          max: maxUint256,
+        });
+      }
+      const timestamp = Time.timestamp();
+      if (params.deadline <= timestamp) {
+        throw new ExpiredDeadlineError(params.deadline, timestamp);
+      }
+    }
     // The signable path needs the user's Morpho nonce; fetch it alongside the
     // authorization status so both reads share a round-trip (batched into a
     // single multicall when the client enables batching) instead of

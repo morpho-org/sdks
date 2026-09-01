@@ -187,47 +187,51 @@ export type MorphoSupplyOptions =
 
 /** Blue collateral supply options with mutually exclusive ERC-20 and native funding. */
 export type MorphoCollateralSupplyOptions =
-  | (Omit<
-      MorphoErc20SupplyOptions,
-      "nativeAmount" | "requirementSignature" | "slippageTolerance"
-    > & {
-      nativeAmount?: never;
-      requirementSignature?: BlueBundlesV1TokenRequirementSignature;
-      slippageTolerance?: never;
-    })
-  | (Omit<
-      MorphoNativeSupplyOptions,
-      "amount" | "requirementSignature" | "slippageTolerance"
-    > & {
-      amount?: never;
-      requirementSignature?: never;
-      slippageTolerance?: never;
-    });
+  | Readonly<
+      Omit<
+        MorphoErc20SupplyOptions,
+        "nativeAmount" | "requirementSignature" | "slippageTolerance"
+      > & {
+        nativeAmount?: never;
+        requirementSignature?: BlueBundlesV1TokenRequirementSignature;
+        slippageTolerance?: never;
+      }
+    >
+  | Readonly<
+      Omit<
+        MorphoNativeSupplyOptions,
+        "amount" | "requirementSignature" | "slippageTolerance"
+      > & {
+        amount?: never;
+        requirementSignature?: never;
+        slippageTolerance?: never;
+      }
+    >;
 
 /** Options for borrowing through BlueBundlesV1 with optional Vault V2 reallocations. */
 export interface MorphoBorrowOptions {
   /** The address of the token to borrow. */
-  token: string;
+  readonly token: string;
   /** The amount of tokens to borrow, in base units. */
-  amount: number | bigint;
+  readonly amount: number | bigint;
   /** The address on behalf of which the borrow operation should be performed. Must match the wallet account address when set. */
-  onBehalfOf?: string;
+  readonly onBehalfOf?: string;
   /** Optional Vault V2 BluePublicAllocator reallocations to include in the borrow action. */
-  reallocations?: readonly VaultV2BlueReallocation[];
+  readonly reallocations?: readonly VaultV2BlueReallocation[];
   /** Signature returned by a Morpho SDK BlueBundlesV1 authorization requirement. */
-  requirementSignature?: AuthorizationRequirementSignature;
+  readonly requirementSignature?: AuthorizationRequirementSignature;
 }
 
 /** Options for an exact or full-share BlueBundlesV1 repayment. */
 export interface MorphoRepayOptions {
   /** The address of the token to repay. */
-  token: string;
+  readonly token: string;
   /** The repayment amount, in base units, or `"max"` to repay all current borrow shares. */
-  amount: number | bigint | "max";
+  readonly amount: number | bigint | "max";
   /** The address on behalf of which the repay operation should be performed. Must match the wallet account address when set. */
-  onBehalfOf?: string;
+  readonly onBehalfOf?: string;
   /** Signature returned by a Morpho SDK approval requirement. */
-  requirementSignature?: BlueBundlesV1TokenRequirementSignature;
+  readonly requirementSignature?: BlueBundlesV1TokenRequirementSignature;
 }
 
 /**
@@ -236,10 +240,12 @@ export interface MorphoRepayOptions {
  * Extends WDK's withdraw options with the authorization signature returned by
  * {@link MorphoProtocolEvm.getWithdrawCollateralRequirements}.
  */
-export type MorphoWithdrawCollateralOptions = WithdrawOptions & {
-  /** Signature returned by a Morpho SDK authorization requirement. */
-  requirementSignature?: AuthorizationRequirementSignature;
-};
+export type MorphoWithdrawCollateralOptions = Readonly<
+  WithdrawOptions & {
+    /** Signature returned by a Morpho SDK authorization requirement. */
+    requirementSignature?: AuthorizationRequirementSignature;
+  }
+>;
 
 export interface Presets {
   /** Key of a curated Morpho Vault V2 preset in `MORPHO_VAULT_PRESETS`. */

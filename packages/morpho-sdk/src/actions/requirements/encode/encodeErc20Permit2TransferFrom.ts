@@ -1,13 +1,16 @@
 import type { Address } from "@morpho-org/blue-sdk";
 import { getPermit2TransferFromTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import type { WalletClient } from "viem";
+import { maxUint256, type WalletClient } from "viem";
 import { signAndVerifyTypedData } from "../../../helpers/signAndVerifyTypedData.js";
 import { validateRequirementSpender } from "../../../helpers/validateRequirementSpender.js";
-import type {
-  Permit2TransferFromAction,
-  Permit2TransferFromRequirementSignature,
-  Requirement,
+import {
+  InputExceedsMaxError,
+  NegativeInputError,
+  NonPositiveInputError,
+  type Permit2TransferFromAction,
+  type Permit2TransferFromRequirementSignature,
+  type Requirement,
 } from "../../../types/index.js";
 
 /** Parameters for {@link encodeErc20Permit2TransferFrom}. */
@@ -40,6 +43,9 @@ export interface EncodeErc20Permit2TransferFromParams {
  * @param params.nonce - Unused Permit2 unordered nonce.
  * @param params.deadline - Signature expiration timestamp in seconds.
  * @returns A requirement whose `sign(client, userAddress)` returns a deep-frozen signature result.
+ * @throws {NegativeInputError} when `amount` or `nonce` is negative.
+ * @throws {NonPositiveInputError} when `deadline` is not positive.
+ * @throws {InputExceedsMaxError} when `amount`, `nonce`, or `deadline` exceeds `uint256`.
  * @throws {UnsupportedChainIdError} when `chainId` is absent from the address registry.
  * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not BlueBundlesV1 for `chainId`.
  * @throws {MissingClientPropertyError} from `sign()` when the wallet client has no account.
@@ -68,6 +74,40 @@ export const encodeErc20Permit2TransferFrom = (
   params: EncodeErc20Permit2TransferFromParams,
 ): Requirement<Permit2TransferFromRequirementSignature> => {
   const { token, spender, amount, chainId, nonce, deadline } = params;
+  // Bound every uint256 field before signing: getPermit2TransferFromTypedData silently clamps an
+  // oversized allowance to maxUint256, which would desync the signed value from the requirement
+  // metadata that blueSupply verifies. Direct callers bypass the token-requirement resolver, so
+  // this public encoder must reject the same out-of-range inputs itself.
+  if (amount < 0n) {
+    throw new NegativeInputError("amount", amount);
+  }
+  if (amount > maxUint256) {
+    throw new InputExceedsMaxError({
+      field: "amount",
+      value: amount,
+      max: maxUint256,
+    });
+  }
+  if (nonce < 0n) {
+    throw new NegativeInputError("nonce", nonce);
+  }
+  if (nonce > maxUint256) {
+    throw new InputExceedsMaxError({
+      field: "nonce",
+      value: nonce,
+      max: maxUint256,
+    });
+  }
+  if (deadline <= 0n) {
+    throw new NonPositiveInputError("deadline", deadline);
+  }
+  if (deadline > maxUint256) {
+    throw new InputExceedsMaxError({
+      field: "deadline",
+      value: deadline,
+      max: maxUint256,
+    });
+  }
   validateRequirementSpender({
     chainId,
     spender,
