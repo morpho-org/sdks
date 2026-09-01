@@ -1721,3 +1721,111 @@ export class RefinanceTokenMismatchError extends Error {
     );
   }
 }
+
+/**
+ * Thrown when a refinance specifies both `borrowAssets` and `borrowShares` as non-zero (modes are mutually exclusive).
+ *
+ * @deprecated The BlueBundlesV1 refinance route migrates the full live position and no longer accepts
+ *   partial borrow inputs, so this error is never thrown by `morpho-sdk` v6. It remains exported as a
+ *   compatibility shim for consumers pattern-matching on the v5 surface and will be removed in the next major.
+ */
+export class BorrowAmountAndSharesExclusiveError extends Error {
+  constructor(market: string) {
+    super(
+      `Exactly one of borrowAssets or borrowShares must be non-zero for market: ${market}. Both were provided.`,
+    );
+  }
+}
+
+/**
+ * Thrown when a refinance's `collateralAmount` exceeds the source position's available collateral.
+ *
+ * @deprecated The BlueBundlesV1 refinance route migrates the full live position and no longer accepts
+ *   partial collateral inputs, so this error is never thrown by `morpho-sdk` v6. It remains exported as a
+ *   compatibility shim for consumers pattern-matching on the v5 surface and will be removed in the next major.
+ */
+export class RefinanceExceedsCollateralError extends Error {
+  public readonly market: string;
+  public readonly requested: bigint;
+  public readonly available: bigint;
+
+  constructor(params: {
+    market: string;
+    requested: bigint;
+    available: bigint;
+  }) {
+    super(
+      `Refinance collateral amount ${params.requested} exceeds available collateral ${params.available} for market: ${params.market}`,
+    );
+    this.market = params.market;
+    this.requested = params.requested;
+    this.available = params.available;
+  }
+}
+
+/**
+ * Thrown when a refinance's `borrowShares` exceeds the source position's outstanding borrow shares.
+ *
+ * @deprecated The BlueBundlesV1 refinance route migrates the full live position and no longer accepts
+ *   partial borrow inputs, so this error is never thrown by `morpho-sdk` v6. It remains exported as a
+ *   compatibility shim for consumers pattern-matching on the v5 surface and will be removed in the next major.
+ */
+export class RefinanceExceedsBorrowSharesError extends Error {
+  public readonly market: string;
+  public readonly requested: bigint;
+  public readonly available: bigint;
+
+  constructor(params: {
+    market: string;
+    requested: bigint;
+    available: bigint;
+  }) {
+    super(
+      `Refinance borrow shares ${params.requested} exceed outstanding borrow shares ${params.available} for market: ${params.market}`,
+    );
+    this.market = params.market;
+    this.requested = params.requested;
+    this.available = params.available;
+  }
+}
+
+/**
+ * Thrown when a refinance's `borrowAssets` exceeds the source position's outstanding debt assets.
+ *
+ * @deprecated The BlueBundlesV1 refinance route migrates the full live position and no longer accepts
+ *   partial borrow inputs, so this error is never thrown by `morpho-sdk` v6. It remains exported as a
+ *   compatibility shim for consumers pattern-matching on the v5 surface and will be removed in the next major.
+ */
+export class RefinanceExceedsBorrowAssetsError extends Error {
+  public readonly market: string;
+  public readonly requested: bigint;
+  public readonly available: bigint;
+
+  constructor(params: {
+    market: string;
+    requested: bigint;
+    available: bigint;
+  }) {
+    super(
+      `Refinance borrow assets ${params.requested} exceed outstanding debt assets ${params.available} for market: ${params.market}`,
+    );
+    this.market = params.market;
+    this.requested = params.requested;
+    this.available = params.available;
+  }
+}
+
+/**
+ * Thrown when a refinance in shares mode (`borrowShares > 0n`) omits the `borrowAssets` overshoot for the target borrow leg.
+ *
+ * @deprecated The BlueBundlesV1 refinance route migrates the full live position and no longer accepts
+ *   partial borrow inputs, so this error is never thrown by `morpho-sdk` v6. It remains exported as a
+ *   compatibility shim for consumers pattern-matching on the v5 surface and will be removed in the next major.
+ */
+export class RefinanceSharesMissingBorrowAssetsError extends Error {
+  constructor(market: string) {
+    super(
+      `Refinance shares mode requires a positive borrowAssets overshoot for the target borrow leg (market: ${market}).`,
+    );
+  }
+}

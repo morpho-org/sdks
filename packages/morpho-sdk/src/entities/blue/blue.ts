@@ -812,7 +812,10 @@ export interface BlueActions {
    * complete position is checked against buffered LLTV. Partial and collateral-only migration are
    * unsupported.
    *
-   * @param params.userAddress - Owner of both source and destination positions.
+   * @param params.userAddress - Owner of both source and destination positions. It must also sign the
+   *   Morpho authorization and send the transaction: BlueBundlesV1 migrates the signer's position
+   *   (bound to `msg.sender`), so on-behalf refinance by a relayer is not supported and a mismatched
+   *   sender reverts on-chain.
    * @param params.positionData - Pre-fetched source position with nonzero debt.
    * @param params.destination.marketParams - Distinct destination market with matching tokens.
    * @param params.destination.positionData - User's pre-fetched destination position.
@@ -832,7 +835,8 @@ export interface BlueActions {
    * @throws {MissingMarketPriceError} when destination health cannot be validated without an oracle price.
    * @throws {BorrowExceedsSafeLtvError} when the complete destination exceeds buffered LLTV.
    * @throws {ExpiredDeadlineError} when the deadline is stale.
-   * @throws {InputExceedsMaxError} when a fee or reallocation exceeds its ABI bound.
+   * @throws {InputExceedsMaxError} when a fee or reallocation exceeds its ABI bound, or the rounded
+   *   aggregate reallocation penalty exceeds the migrated source debt.
    * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
    * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
    * @throws {InvalidReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
@@ -1968,6 +1972,18 @@ export class MorphoBlue implements BlueActions {
     const accruedSourcePosition = positionData.accrueInterest(accrualTimestamp);
     const accruedDestinationPosition =
       destination.positionData.accrueInterest(accrualTimestamp);
+    // Reject a reallocation plan whose rounded aggregate penalty exceeds the migrated source debt,
+    // matching the `blueBorrow`/`blueWithdraw` BlueBundlesV1 caps. The health check below only adds
+    // the penalty to destination debt, so a combined position with spare collateral would otherwise
+    // silently accept an allocator cost larger than the debt moved, or encode a call that only
+    // reverts on-chain.
+    if (penaltyAssets > accruedSourcePosition.borrowAssets) {
+      throw new InputExceedsMaxError({
+        field: "reallocationPenaltyAssets",
+        value: penaltyAssets,
+        max: accruedSourcePosition.borrowAssets,
+      });
+    }
     const referralFeeAssets = getBlueBundlesV1ReferralFeeAssets(
       accruedSourcePosition.borrowAssets,
       referralFeePct,

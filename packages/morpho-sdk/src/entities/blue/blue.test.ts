@@ -32,6 +32,7 @@ import {
   NegativeInputError,
   RepayExceedsDebtError,
   RepaySharesExceedDebtError,
+  type VaultV2BlueReallocation,
   WithdrawExceedsCollateralError,
   WithdrawExceedsSupplyError,
   WithdrawMakesPositionUnhealthyError,
@@ -678,6 +679,38 @@ describe("MorphoBlue position validation", () => {
         referralFeeRecipient: otherUserAddress,
       }),
     ).toThrow(BorrowExceedsSafeLtvError);
+  });
+
+  test("error: InputExceedsMaxError when the migration penalty exceeds migrated debt", () => {
+    const entity = makeEntity();
+    const sourcePosition = makePosition(marketParams, {
+      collateral: 2n * 10n ** 18n,
+    });
+    const destinationPosition = makePosition(destinationMarketParams, {
+      borrowShares: 0n,
+      collateral: 0n,
+    });
+    // penaltyAssets = ceil(assets × penalty / WAD) = 10n ** 24n, far above the migrated source debt.
+    const reallocation = {
+      vault: "0x0000000000000000000000000000000000000031",
+      from: { type: "idle" },
+      to: { adapter: "0x0000000000000000000000000000000000000032" },
+      assets: 10n ** 24n,
+      penalty: MathLib.WAD,
+    } satisfies VaultV2BlueReallocation;
+
+    expect(() =>
+      entity.refinance({
+        userAddress,
+        positionData: sourcePosition,
+        destination: {
+          marketParams: destinationMarketParams,
+          positionData: destinationPosition,
+        },
+        reallocations: [reallocation],
+        deadline: maxUint256,
+      }),
+    ).toThrow(InputExceedsMaxError);
   });
 
   test("error: WithdrawMakesPositionUnhealthyError after collateral withdrawal", () => {
