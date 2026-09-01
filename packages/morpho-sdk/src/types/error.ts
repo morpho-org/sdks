@@ -95,7 +95,7 @@ export class EmptyMarketParamsListError extends Error {
   }
 }
 
-/** Thrown when an in-kind redemption deadline has already passed. */
+/** Thrown when an SDK operation deadline has already passed. */
 export class ExpiredDeadlineError extends Error {
   /**
    * @param deadline - Expired deadline supplied by the caller.
@@ -106,7 +106,7 @@ export class ExpiredDeadlineError extends Error {
     public readonly timestamp: bigint,
   ) {
     super(
-      `Deadline "${deadline}" has expired at timestamp "${timestamp}". Choose a future deadline and rebuild the exit.`,
+      `Deadline "${deadline}" has expired at timestamp "${timestamp}". Choose a future deadline and rebuild the operation.`,
     );
     this.name = "ExpiredDeadlineError";
   }
@@ -311,6 +311,163 @@ export class VaultExitBundlesV1PermitMismatchError extends Error {
     this.expected = params.expected;
     this.actual = params.actual;
     this.name = "VaultExitBundlesV1PermitMismatchError";
+  }
+}
+
+/** Thrown when a signed requirement cannot be safely encoded for BlueBundlesV1. */
+export class BlueBundlesV1RequirementSignatureMismatchError extends Error {
+  /** Field whose signed value or encoding is invalid for the direct BlueBundlesV1 call. */
+  public readonly field:
+    | "type"
+    | "authorized"
+    | "isAuthorized"
+    | "deadline"
+    | "signature";
+  /** Value required by BlueBundlesV1. */
+  public readonly expected: string;
+  /** Value supplied by the signed requirement. */
+  public readonly actual: string;
+
+  /**
+   * @param params - Signature mismatch details.
+   * @param params.field - Field rejected by the converter.
+   * @param params.expected - Value required by the direct route.
+   * @param params.actual - Value supplied by the requirement.
+   * @param params.cause - Original signature parser failure, when applicable.
+   */
+  public constructor(params: {
+    field: "type" | "authorized" | "isAuthorized" | "deadline" | "signature";
+    expected: string;
+    actual: string;
+    cause?: unknown;
+  }) {
+    super(
+      `BlueBundlesV1 requirement ${params.field} mismatch: expected "${params.expected}", got "${params.actual}". Resolve and sign the requirements returned by this Blue action.`,
+      { cause: params.cause },
+    );
+    this.field = params.field;
+    this.expected = params.expected;
+    this.actual = params.actual;
+    this.name = "BlueBundlesV1RequirementSignatureMismatchError";
+  }
+}
+
+/** Thrown when Permit2 SignatureTransfer is selected without an explicit unordered nonce. */
+export class MissingPermit2TransferFromNonceError extends Error {
+  public constructor() {
+    super(
+      "Permit2 SignatureTransfer requires an explicit unused permit2Nonce. Generate a unique uint256 nonce, pass it to getRequirements(), and resolve the requirements again.",
+    );
+    this.name = "MissingPermit2TransferFromNonceError";
+  }
+}
+
+/** Thrown when an explicit Permit2 SignatureTransfer unordered nonce is already consumed. */
+export class Permit2TransferFromNonceAlreadyUsedError extends Error {
+  /**
+   * @param owner - Permit2 token owner whose nonce is unavailable.
+   * @param nonce - Explicit unordered nonce that has already been consumed.
+   */
+  public constructor(
+    public readonly owner: Address,
+    public readonly nonce: bigint,
+  ) {
+    super(
+      `Permit2 nonce "${nonce}" is already used for owner "${owner}". Generate a different uint256 permit2Nonce and resolve the requirements again.`,
+    );
+    this.name = "Permit2TransferFromNonceAlreadyUsedError";
+  }
+}
+
+/** Thrown when native funding does not exactly match the contract's gross token pull. */
+export class NativeFundingAmountMismatchError extends Error {
+  /**
+   * @param nativeAmount - Native value supplied with the transaction.
+   * @param requiredAmount - Gross amount the BlueBundlesV1 entrypoint funds.
+   */
+  public constructor(
+    public readonly nativeAmount: bigint,
+    public readonly requiredAmount: bigint,
+  ) {
+    super(
+      `Native funding must equal the full funded amount: expected "${requiredAmount}", got "${nativeAmount}". Use either native funding or ERC-20 funding, not both.`,
+    );
+    this.name = "NativeFundingAmountMismatchError";
+  }
+}
+
+/** Thrown when a positive referral fee has no recipient. */
+export class MissingReferralFeeRecipientError extends Error {
+  public constructor() {
+    super(
+      "A positive referralFeePct requires referralFeeRecipient. Provide the recipient or set referralFeePct to zero.",
+    );
+    this.name = "MissingReferralFeeRecipientError";
+  }
+}
+
+/** Thrown when a BlueBundlesV1 reallocation source uses another loan token. */
+export class ReallocationLoanTokenMismatchError extends Error {
+  /**
+   * @param expected - Loan token of the operation's target market.
+   * @param actual - Loan token found in the reallocation source market.
+   */
+  public constructor(
+    public readonly expected: Address,
+    public readonly actual: Address,
+  ) {
+    super(
+      `Reallocation source loan token "${actual}" does not match target loan token "${expected}". Recompute reallocations for the target market.`,
+    );
+    this.name = "ReallocationLoanTokenMismatchError";
+  }
+}
+
+/**
+ * Thrown when a Blue authorization operator is not one of the chain's registered Morpho operators
+ * (GeneralAdapter1 or BlueBundlesV1). Guards the exported authorization builder so a misconfigured
+ * `authorized` cannot grant an arbitrary address control over the user's Morpho positions.
+ */
+export class UnsupportedAuthorizationOperatorError extends Error {
+  /**
+   * @param authorized - The operator address rejected as unsupported.
+   * @param chainId - Chain whose registry was consulted for the supported operators.
+   */
+  public constructor(
+    public readonly authorized: Address,
+    public readonly chainId: number,
+  ) {
+    super(
+      `Authorization operator "${authorized}" is not a supported Morpho operator on chain ${chainId}. Pass the chain's registered GeneralAdapter1 or BlueBundlesV1 address, or omit \`authorized\` to default to GeneralAdapter1.`,
+    );
+    this.name = "UnsupportedAuthorizationOperatorError";
+  }
+}
+
+/** Thrown when reallocations are attached to a combined call with no borrow leg. */
+export class ReallocationsRequireBorrowError extends Error {
+  public constructor() {
+    super(
+      "BlueBundlesV1 reallocations require a positive borrowAssets value. Remove the reallocations or add a borrow leg.",
+    );
+    this.name = "ReallocationsRequireBorrowError";
+  }
+}
+
+/** Thrown when repay funding cannot cover the requested assets and referral fee. */
+export class MaxRepayAssetsBelowRepayAssetsError extends Error {
+  /**
+   * @param maxRepayAssets - Maximum loan-token funding supplied to the bundle.
+   * @param repayAssets - Minimum funding required for the repayment and referral fee.
+   */
+  public constructor(
+    public readonly maxRepayAssets: bigint,
+    public readonly repayAssets: bigint,
+  ) {
+    super(
+      `maxRepayAssets "${maxRepayAssets}" cannot cover required repay funding "${repayAssets}". Increase maxRepayAssets to include the repayment and referral fee.`,
+    );
+    this.name = "MaxRepayAssetsBelowRepayAssetsError";
   }
 }
 
@@ -524,6 +681,7 @@ export namespace BundlerErrors {
 /** Requirement signature kind accepted by action-output transaction builders. */
 export type RequirementSignatureKind =
   | "permit"
+  | "permit2TransferFrom"
   | "authorization"
   | "midnightOfferRootSignature";
 
@@ -807,7 +965,11 @@ export class AccrualPositionUserMismatchError extends Error {
   }
 }
 
-/** Thrown when a reallocation has no withdrawals. */
+/**
+ * Thrown when a reallocation has no withdrawals.
+ *
+ * @deprecated Vault V1 PublicAllocator support will be removed in the next major.
+ */
 export class EmptyReallocationWithdrawalsError extends Error {
   constructor(vault: string) {
     super(`Reallocation withdrawals list cannot be empty for vault: ${vault}`);
@@ -824,8 +986,9 @@ export class ReallocationWithdrawalOnTargetMarketError extends Error {
 }
 
 /**
- * Thrown when a Public Allocator reallocation does not match exactly one V1 or
- * V2 input shape.
+ * Thrown when a reallocation entry passed to a high-level Blue write is not a valid
+ * {@link VaultV2BlueReallocation}: a non-object entry, or an entry carrying Vault V1
+ * `withdrawals`/`fee` fields that high-level Blue writes no longer accept.
  *
  * @example
  * ```ts
@@ -837,7 +1000,7 @@ export class ReallocationWithdrawalOnTargetMarketError extends Error {
 export class InvalidReallocationShapeError extends Error {
   public constructor() {
     super(
-      'Reallocation must contain either V1 "withdrawals" or V2 "from", but not both.',
+      "Reallocation entry is not a valid Vault V2 reallocation. High-level Blue writes accept only VaultV2BlueReallocation entries (e.g. from getVaultV2BlueReallocations()); compose Vault V1 reallocations via low-level Bundler3 actions.",
     );
     this.name = "InvalidReallocationShapeError";
   }
@@ -846,6 +1009,8 @@ export class InvalidReallocationShapeError extends Error {
 /**
  * Thrown when one reallocation plan contains both Vault V1 and Vault V2 entries.
  *
+ * @deprecated Vault V1/V2 mixed-plan support will be removed in the next major. Use Vault V2
+ * reallocations.
  * @example
  * ```ts
  * import { MixedReallocationVersionsError } from "@morpho-org/morpho-sdk";
@@ -966,7 +1131,11 @@ export class InconsistentReallocationPenaltyError extends Error {
   }
 }
 
-/** Thrown when reallocation withdrawals within a vault are not strictly sorted by market id. */
+/**
+ * Thrown when reallocation withdrawals within a vault are not strictly sorted by market id.
+ *
+ * @deprecated Vault V1 PublicAllocator support will be removed in the next major.
+ */
 export class UnsortedReallocationWithdrawalsError extends Error {
   constructor(vault: string, marketId: string) {
     super(
@@ -1065,7 +1234,11 @@ export class RepaySharesExceedDebtError extends Error {
   }
 }
 
-/** Thrown when a vault selected for reallocation has no configured `PublicAllocator`. */
+/**
+ * Thrown when a vault selected for reallocation has no configured `PublicAllocator`.
+ *
+ * @deprecated Vault V1 PublicAllocator support will be removed in the next major.
+ */
 export class MissingPublicAllocatorConfigError extends Error {
   constructor(vault: string) {
     super(
@@ -1074,7 +1247,11 @@ export class MissingPublicAllocatorConfigError extends Error {
   }
 }
 
-/** Thrown when a reallocation attempts to use a disabled vault market. */
+/**
+ * Thrown when a reallocation attempts to use a disabled vault market.
+ *
+ * @deprecated Vault V1 PublicAllocator support will be removed in the next major.
+ */
 export class DisabledReallocationMarketError extends Error {
   constructor(
     public readonly vault: Address,
@@ -1127,7 +1304,11 @@ export class UnknownReallocationVaultError extends UnknownDataError {
   }
 }
 
-/** Thrown when reallocation state does not contain a requested vault-market config. */
+/**
+ * Thrown when reallocation state does not contain a requested vault-market config.
+ *
+ * @deprecated Vault V1 shared-liquidity planning will be removed in the next major.
+ */
 export class UnknownReallocationVaultMarketConfigError extends UnknownDataError {
   /**
    * @param vault - Vault address for the missing config.
@@ -1143,7 +1324,11 @@ export class UnknownReallocationVaultMarketConfigError extends UnknownDataError 
   }
 }
 
-/** Thrown when reallocation state does not contain a requested market position. */
+/**
+ * Thrown when reallocation state does not contain a requested market position.
+ *
+ * @deprecated Vault V1 shared-liquidity planning will be removed in the next major.
+ */
 export class UnknownReallocationPositionError extends UnknownDataError {
   /**
    * @param user - Position owner address.
@@ -1519,15 +1704,6 @@ export class VaultAssetMismatchError extends Error {
   }
 }
 
-/** Thrown when a refinance specifies both `borrowAssets` and `borrowShares` as non-zero (modes are mutually exclusive). */
-export class BorrowAmountAndSharesExclusiveError extends Error {
-  constructor(market: string) {
-    super(
-      `Exactly one of borrowAssets or borrowShares must be non-zero for market: ${market}. Both were provided.`,
-    );
-  }
-}
-
 /** Thrown when a refinance has identical source and target market ids (a refinance to the same market is a costly no-op). */
 export class RefinanceSameMarketError extends Error {
   constructor(market: string) {
@@ -1546,7 +1722,28 @@ export class RefinanceTokenMismatchError extends Error {
   }
 }
 
-/** Thrown when a refinance's `collateralAmount` exceeds the source position's available collateral. */
+/**
+ * Thrown when a refinance specifies both `borrowAssets` and `borrowShares` as non-zero (modes are mutually exclusive).
+ *
+ * @deprecated The BlueBundlesV1 refinance route migrates the full live position and no longer accepts
+ *   partial borrow inputs, so this error is never thrown by `morpho-sdk` v6. It remains exported as a
+ *   compatibility shim for consumers pattern-matching on the v5 surface and will be removed in the next major.
+ */
+export class BorrowAmountAndSharesExclusiveError extends Error {
+  constructor(market: string) {
+    super(
+      `Exactly one of borrowAssets or borrowShares must be non-zero for market: ${market}. Both were provided.`,
+    );
+  }
+}
+
+/**
+ * Thrown when a refinance's `collateralAmount` exceeds the source position's available collateral.
+ *
+ * @deprecated The BlueBundlesV1 refinance route migrates the full live position and no longer accepts
+ *   partial collateral inputs, so this error is never thrown by `morpho-sdk` v6. It remains exported as a
+ *   compatibility shim for consumers pattern-matching on the v5 surface and will be removed in the next major.
+ */
 export class RefinanceExceedsCollateralError extends Error {
   public readonly market: string;
   public readonly requested: bigint;
@@ -1566,7 +1763,13 @@ export class RefinanceExceedsCollateralError extends Error {
   }
 }
 
-/** Thrown when a refinance's `borrowShares` exceeds the source position's outstanding borrow shares. */
+/**
+ * Thrown when a refinance's `borrowShares` exceeds the source position's outstanding borrow shares.
+ *
+ * @deprecated The BlueBundlesV1 refinance route migrates the full live position and no longer accepts
+ *   partial borrow inputs, so this error is never thrown by `morpho-sdk` v6. It remains exported as a
+ *   compatibility shim for consumers pattern-matching on the v5 surface and will be removed in the next major.
+ */
 export class RefinanceExceedsBorrowSharesError extends Error {
   public readonly market: string;
   public readonly requested: bigint;
@@ -1586,7 +1789,13 @@ export class RefinanceExceedsBorrowSharesError extends Error {
   }
 }
 
-/** Thrown when a refinance's `borrowAssets` exceeds the source position's outstanding debt assets. */
+/**
+ * Thrown when a refinance's `borrowAssets` exceeds the source position's outstanding debt assets.
+ *
+ * @deprecated The BlueBundlesV1 refinance route migrates the full live position and no longer accepts
+ *   partial borrow inputs, so this error is never thrown by `morpho-sdk` v6. It remains exported as a
+ *   compatibility shim for consumers pattern-matching on the v5 surface and will be removed in the next major.
+ */
 export class RefinanceExceedsBorrowAssetsError extends Error {
   public readonly market: string;
   public readonly requested: bigint;
@@ -1606,7 +1815,13 @@ export class RefinanceExceedsBorrowAssetsError extends Error {
   }
 }
 
-/** Thrown when a refinance in shares mode (`borrowShares > 0n`) omits the `borrowAssets` overshoot for the target borrow leg. */
+/**
+ * Thrown when a refinance in shares mode (`borrowShares > 0n`) omits the `borrowAssets` overshoot for the target borrow leg.
+ *
+ * @deprecated The BlueBundlesV1 refinance route migrates the full live position and no longer accepts
+ *   partial borrow inputs, so this error is never thrown by `morpho-sdk` v6. It remains exported as a
+ *   compatibility shim for consumers pattern-matching on the v5 surface and will be removed in the next major.
+ */
 export class RefinanceSharesMissingBorrowAssetsError extends Error {
   constructor(market: string) {
     super(

@@ -1,509 +1,463 @@
+import { MarketParams, MathLib } from "@morpho-org/blue-sdk";
+import { getChainAddress } from "@morpho-org/morpho-ts";
+import fc from "fast-check";
 import {
-  addressesRegistry,
-  getChainAddresses,
-  MarketParams,
-} from "@morpho-org/blue-sdk";
-import { decodeFunctionData, type Hex, parseUnits } from "viem";
+  decodeFunctionData,
+  getAddress,
+  maxUint256,
+  serializeSignature,
+  toHex,
+  zeroAddress,
+  zeroHash,
+} from "viem";
 import { mainnet } from "viem/chains";
-import { afterEach, describe, expect, vi } from "vitest";
+import { describe, expect, test } from "vitest";
+import { blueBundlesV1Abi } from "../../abis.js";
 import {
-  UsdcEurcvBlue,
-  WbtcUsdcSourceMarket,
-  WethUsdsBlue,
-} from "../../../test/fixtures/blue.js";
-import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
-import { makePermit } from "../../../test/helpers/permit.js";
-import { test } from "../../../test/unit.js";
-import { bundler3Abi, generalAdapter1Abi } from "../../abis.js";
-import {
-  isRequirementApproval,
-  isRequirementSignature,
-  NativeAmountOnNonWNativeAssetError,
+  type AuthorizationRequirementSignature,
+  type BlueBundlesV1TokenRequirementSignature,
+  InputExceedsMaxError,
+  NativeFundingAmountMismatchError,
   NegativeInputError,
   NonPositiveInputError,
-  type PermitRequirementSignature,
-  type VaultReallocation,
+  ReallocationsRequireBorrowError,
+  UnexpectedRequirementSignatureError,
   type VaultV2BlueReallocation,
 } from "../../types/index.js";
-import { getGeneralAdapterRequirements } from "../requirements/index.js";
-import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
 import { blueSupplyCollateralBorrow } from "./supplyCollateralBorrow.js";
 
-describe("blueSupplyCollateralBorrow unit tests", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
+const chainId = mainnet.id;
+const userAddress = getAddress("0x00000000000000000000000000000000000000A1");
+const referralFeeRecipient = getAddress(
+  "0x00000000000000000000000000000000000000f1",
+);
+const marketParamsInput = {
+  loanToken: getAddress("0x0000000000000000000000000000000000000011"),
+  collateralToken: getAddress("0x0000000000000000000000000000000000000012"),
+  oracle: getAddress("0x0000000000000000000000000000000000000013"),
+  irm: getAddress("0x0000000000000000000000000000000000000014"),
+  lltv: 860000000000000000n,
+} as const;
+const marketParams = new MarketParams(marketParamsInput);
+const market = { chainId, marketParams };
+const maxLtv = 850000000000000000n;
+const deadline = 1_900_000_000n;
+const metadata = { origin: "a1b2c3d4" } as const;
+const emptyPermit = { kind: 0, data: "0x" } as const;
+const emptyAuthorization = {
+  signature: { v: 0, r: zeroHash, s: zeroHash },
+  nonce: 0n,
+  deadline: 0n,
+} as const;
+const positiveUint256Arbitrary = fc.bigInt({ min: 1n, max: maxUint256 });
+const ltvArbitrary = fc.bigInt({ min: 0n, max: MathLib.WAD });
 
-  const { wNative } = addressesRegistry[mainnet.id];
-  const marketParams = new MarketParams(WethUsdsBlue);
-  const marketId = marketParams.id;
-
-  test("should create bundler supply collateral + borrow transaction (ERC20 only)", async ({
-    client,
-  }) => {
-    const amount = parseUnits("1", 18);
-    const borrowAmount = parseUnits("1000", 6);
-
-    const tx = blueSupplyCollateralBorrow({
-      market: {
-        chainId: mainnet.id,
-        marketParams: WethUsdsBlue,
-      },
+describe("blueSupplyCollateralBorrow", () => {
+  test("default", () => {
+    const referralFeePct = MathLib.WAD / 10n;
+    const plain = blueSupplyCollateralBorrow({
+      market,
       args: {
-        amount,
-        borrowAmount,
-        onBehalf: client.account.address,
-        receiver: client.account.address,
-        minSharePrice: 0n,
+        userAddress,
+        collateralAssets: 5n,
+        borrowAssets: 7n,
+        maxLtv,
+        deadline,
+        referralFeePct,
+        referralFeeRecipient,
       },
     });
-
-    expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("blueSupplyCollateralBorrow");
-    expect(tx.action.args.market).toBe(marketId);
-    expect(tx.action.args.collateralAmount).toBe(amount);
-    expect(tx.action.args.borrowAmount).toBe(borrowAmount);
-    expect(tx.action.args.onBehalf).toBe(client.account.address);
-    expect(tx.action.args.receiver).toBe(client.account.address);
-    expect(tx.action.args.nativeAmount).toBeUndefined();
-    expect(tx.data).toBeDefined();
-    expect(tx.value).toBe(0n);
-  });
-
-  test("should create bundler tx with native wrapping", async ({ client }) => {
-    const nativeAmount = parseUnits("1", 18);
-    const borrowAmount = parseUnits("1000", 6);
-
-    const tx = blueSupplyCollateralBorrow({
-      market: {
-        chainId: mainnet.id,
-        marketParams: WethUsdsBlue,
-      },
+    const transaction = blueSupplyCollateralBorrow({
+      market,
       args: {
-        nativeAmount,
-        borrowAmount,
-        onBehalf: client.account.address,
-        receiver: client.account.address,
-        minSharePrice: 0n,
+        userAddress,
+        collateralAssets: 5n,
+        borrowAssets: 7n,
+        maxLtv,
+        deadline,
+        referralFeePct,
+        referralFeeRecipient,
       },
+      metadata,
     });
 
-    expect(tx.action.args.collateralAmount).toBe(nativeAmount);
-    expect(tx.action.args.nativeAmount).toBe(nativeAmount);
-    expect(tx.value).toBe(nativeAmount);
-  });
-
-  test("should create bundler tx with native wrapping and reallocations", async ({
-    client,
-  }) => {
-    const nativeAmount = parseUnits("0.5", 18);
-    const borrowAmount = parseUnits("1000", 6);
-    const reallocationFee = parseUnits("0.01", 18);
-    const reallocations: readonly VaultReallocation[] = [
-      {
-        vault: SteakhouseUsdcVaultV1.address,
-        fee: reallocationFee,
-        withdrawals: [
-          {
-            marketParams: WbtcUsdcSourceMarket,
-            amount: parseUnits("2000", 6),
-          },
-        ],
-      },
-    ];
-
-    const tx = blueSupplyCollateralBorrow({
-      market: {
-        chainId: mainnet.id,
-        marketParams: WethUsdsBlue,
-      },
-      args: {
-        nativeAmount,
-        borrowAmount,
-        onBehalf: client.account.address,
-        receiver: client.account.address,
-        minSharePrice: 0n,
-        reallocations,
-      },
-    });
-
-    expect(tx.action.args.nativeAmount).toBe(nativeAmount);
-    expect(tx.action.args.reallocationFee).toBe(reallocationFee);
-    expect(tx.value).toBe(nativeAmount + reallocationFee);
-  });
-
-  test("should create bundler tx with both ERC20 + native amount", async ({
-    client,
-  }) => {
-    const amount = parseUnits("0.5", 18);
-    const nativeAmount = parseUnits("0.5", 18);
-    const borrowAmount = parseUnits("1000", 6);
-    const totalCollateral = amount + nativeAmount;
-
-    const tx = blueSupplyCollateralBorrow({
-      market: {
-        chainId: mainnet.id,
-        marketParams: WethUsdsBlue,
-      },
-      args: {
-        amount,
-        nativeAmount,
-        borrowAmount,
-        onBehalf: client.account.address,
-        receiver: client.account.address,
-        minSharePrice: 0n,
-      },
-    });
-
-    expect(tx.action.args.collateralAmount).toBe(totalCollateral);
-    expect(tx.action.args.nativeAmount).toBe(nativeAmount);
-    expect(tx.value).toBe(nativeAmount);
-  });
-
-  test("should create bundler tx with permit2 signature", async ({
-    client,
-  }) => {
-    const amount = parseUnits("1", 18);
-    const borrowAmount = parseUnits("1000", 6);
-
-    const requirements = await getGeneralAdapterRequirements(client, {
-      address: wNative,
-      chainId: mainnet.id,
-      supportSignature: true,
-      args: {
-        amount,
-        from: client.account.address,
-      },
-    });
-
-    const approvalPermit2 = requirements[0];
-    if (!isRequirementApproval(approvalPermit2)) {
-      throw new Error("Approval requirement not found");
-    }
-
-    const permit2Requirement = requirements[1];
-    if (!isRequirementSignature(permit2Requirement)) {
-      throw new Error("Permit2 requirement not found");
-    }
-
-    const requirementSignature = await permit2Requirement.sign(
-      client,
-      client.account.address,
+    expect(transaction.to).toBe(
+      getChainAddress(chainId, "bundles.blueBundlesV1"),
     );
-
-    const localSpy = vi.spyOn(
-      getTokenRequirementActionsModule,
-      "getTokenRequirementActions",
-    );
-
-    const tx = blueSupplyCollateralBorrow({
-      market: {
-        chainId: mainnet.id,
-        marketParams: WethUsdsBlue,
-      },
+    expect(transaction.value).toBe(0n);
+    expect(transaction.data).toBe(`${plain.data}${metadata.origin}`);
+    expect(
+      decodeFunctionData({ abi: blueBundlesV1Abi, data: transaction.data }),
+    ).toEqual({
+      functionName: "blueBundlesV1SupplyCollateralAndBorrow",
+      args: [
+        marketParamsInput,
+        5n,
+        7n,
+        maxLtv,
+        emptyPermit,
+        emptyAuthorization,
+        [],
+        referralFeePct,
+        referralFeeRecipient,
+        deadline,
+      ],
+    });
+    expect(transaction.action).toEqual({
+      type: "blueSupplyCollateralBorrow",
       args: {
-        amount,
-        borrowAmount,
-        onBehalf: client.account.address,
-        receiver: client.account.address,
-        requirementSignature,
-        minSharePrice: 0n,
+        market: marketParams.id,
+        collateralAssets: 5n,
+        borrowAssets: 7n,
+        maxLtv,
+        onBehalf: userAddress,
+        nativeAmount: undefined,
+        reallocations: 0,
+        reallocationPenaltyAssets: 0n,
+        referralFeePct,
+        referralFeeRecipient,
+        deadline,
       },
     });
-
-    expect(localSpy).toHaveBeenCalled();
-    expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("blueSupplyCollateralBorrow");
+    expect(Object.isFrozen(transaction)).toBe(true);
+    expect(Object.isFrozen(transaction.action.args)).toBe(true);
   });
 
-  test("behavior: shared-token permits fund collateral and V2 penalty with one pull", async ({
-    client,
-  }) => {
-    const {
-      bundler3: { bundler3, generalAdapter1 },
-    } = getChainAddresses(mainnet.id);
-    const sharedTokenMarket = new MarketParams({
-      ...WethUsdsBlue,
-      loanToken: WethUsdsBlue.collateralToken,
-    });
-    const reallocations: readonly VaultV2BlueReallocation[] = [
-      {
-        vault: WethUsdsBlue.oracle,
-        from: { type: "idle" },
-        to: { adapter: WethUsdsBlue.collateralToken },
-        assets: 10n,
-        penalty: 500_000_000_000_000_000n,
-      },
-    ];
-    const combinedAmount = 105n;
-    const signature = `0x${"11".repeat(64)}1b` as Hex;
-    const requirementSignatures = [
-      makePermit({
-        owner: client.account.address,
-        asset: sharedTokenMarket.loanToken,
-        amount: combinedAmount,
-      }),
-      {
-        args: {
-          owner: client.account.address,
-          asset: sharedTokenMarket.loanToken,
-          amount: combinedAmount,
-          nonce: 0n,
-          deadline: 1_900_000_000n,
-          expiration: 1_900_000_000n,
-          signature,
+  test("behavior: calldata round-trips across bounded primitive inputs", () => {
+    fc.assert(
+      fc.property(
+        fc.record({
+          collateralAssets: positiveUint256Arbitrary,
+          borrowAssets: positiveUint256Arbitrary,
+          maxLtv: ltvArbitrary,
+          deadline: positiveUint256Arbitrary,
+        }),
+        ({
+          collateralAssets,
+          borrowAssets,
+          maxLtv: generatedMaxLtv,
+          deadline: generatedDeadline,
+        }) => {
+          const transaction = blueSupplyCollateralBorrow({
+            market,
+            args: {
+              userAddress,
+              collateralAssets,
+              borrowAssets,
+              maxLtv: generatedMaxLtv,
+              deadline: generatedDeadline,
+            },
+          });
+          const decoded = decodeFunctionData({
+            abi: blueBundlesV1Abi,
+            data: transaction.data,
+          });
+          if (
+            decoded.functionName !== "blueBundlesV1SupplyCollateralAndBorrow"
+          ) {
+            throw new TypeError(
+              "Unexpected BlueBundlesV1 collateral supply and borrow function",
+            );
+          }
+
+          expect(decoded.args[0]).toEqual(marketParamsInput);
+          expect(decoded.args.slice(1, 4)).toEqual([
+            collateralAssets,
+            borrowAssets,
+            generatedMaxLtv,
+          ]);
+          expect(decoded.args[9]).toBe(generatedDeadline);
+          expect(transaction.action.args).toMatchObject({
+            collateralAssets,
+            borrowAssets,
+            maxLtv: generatedMaxLtv,
+            deadline: generatedDeadline,
+          });
+          expect(Object.isFrozen(transaction)).toBe(true);
+          expect(Object.isFrozen(transaction.action)).toBe(true);
+          expect(Object.isFrozen(transaction.action.args)).toBe(true);
         },
-        action: {
-          type: "permit2",
+      ),
+      { numRuns: 50, seed: 20_260_828 },
+    );
+  });
+
+  test("behavior: composes either leg independently and normalizes fees", () => {
+    const collateralOnly = decodeFunctionData({
+      abi: blueBundlesV1Abi,
+      data: blueSupplyCollateralBorrow({
+        market,
+        args: {
+          userAddress,
+          collateralAssets: 5n,
+          borrowAssets: 0n,
+          maxLtv: maxUint256,
+          deadline,
+        },
+      }).data,
+    });
+    const borrowOnly = decodeFunctionData({
+      abi: blueBundlesV1Abi,
+      data: blueSupplyCollateralBorrow({
+        market,
+        args: {
+          userAddress,
+          collateralAssets: 0n,
+          borrowAssets: 7n,
+          maxLtv,
+          deadline,
+        },
+      }).data,
+    });
+
+    expect(collateralOnly.args?.slice(1, 4)).toEqual([5n, 0n, maxUint256]);
+    expect(borrowOnly.args?.slice(1, 4)).toEqual([0n, 7n, maxLtv]);
+    expect(collateralOnly.args?.[7]).toBe(0n);
+    expect(collateralOnly.args?.[8]).toBe(zeroAddress);
+    expect(() =>
+      blueSupplyCollateralBorrow({
+        market,
+        args: {
+          userAddress,
+          collateralAssets: 0n,
+          borrowAssets: 0n,
+          maxLtv,
+          deadline,
+        },
+      }),
+    ).toThrow(NonPositiveInputError);
+  });
+
+  test("error: NegativeInputError for negative operation inputs", () => {
+    expect(() =>
+      blueSupplyCollateralBorrow({
+        market,
+        args: {
+          userAddress,
+          collateralAssets: -1n,
+          borrowAssets: 0n,
+          maxLtv,
+          deadline,
+        },
+      }),
+    ).toThrow(NegativeInputError);
+    expect(() =>
+      blueSupplyCollateralBorrow({
+        market,
+        args: {
+          userAddress,
+          collateralAssets: 0n,
+          borrowAssets: -1n,
+          maxLtv,
+          deadline,
+        },
+      }),
+    ).toThrow(NegativeInputError);
+    expect(() =>
+      blueSupplyCollateralBorrow({
+        market,
+        args: {
+          userAddress,
+          collateralAssets: 1n,
+          borrowAssets: 0n,
+          maxLtv: -1n,
+          deadline,
+        },
+      }),
+    ).toThrow(NegativeInputError);
+  });
+
+  test("error: InputExceedsMaxError when a uint256 argument overflows", () => {
+    for (const field of [
+      "collateralAssets",
+      "borrowAssets",
+      "maxLtv",
+    ] as const) {
+      expect(() =>
+        blueSupplyCollateralBorrow({
+          market,
           args: {
-            spender: generalAdapter1,
-            amount: combinedAmount,
-            deadline: 1_900_000_000n,
-            expiration: 1_900_000_000n,
+            userAddress,
+            collateralAssets: 1n,
+            borrowAssets: 1n,
+            maxLtv,
+            deadline,
+            [field]: maxUint256 + 1n,
           },
-        },
-      },
-    ] satisfies readonly PermitRequirementSignature[];
-
-    for (const requirementSignature of requirementSignatures) {
-      const tx = blueSupplyCollateralBorrow({
-        market: { chainId: mainnet.id, marketParams: sharedTokenMarket },
-        args: {
-          amount: 100n,
-          borrowAmount: 1n,
-          onBehalf: client.account.address,
-          receiver: client.account.address,
-          minSharePrice: 0n,
-          requirementSignature,
-          reallocations,
-        },
-      });
-
-      expect(tx.action.args.reallocationPenaltyAssets).toBe(5n);
-      const bundle = decodeFunctionData({ abi: bundler3Abi, data: tx.data });
-      const calls = bundle.args[0] ?? [];
-      expect(calls).toHaveLength(8);
-      expect(
-        decodeFunctionData({
-          abi: generalAdapter1Abi,
-          data: calls[1]!.data,
         }),
-      ).toMatchObject({
-        functionName:
-          requirementSignature.action.type === "permit2"
-            ? "permit2TransferFrom"
-            : "erc20TransferFrom",
-        args: [sharedTokenMarket.loanToken, generalAdapter1, combinedAmount],
-      });
-      expect(
-        decodeFunctionData({
-          abi: generalAdapter1Abi,
-          data: calls[3]!.data,
-        }),
-      ).toMatchObject({
-        functionName: "erc20Transfer",
-        args: [sharedTokenMarket.loanToken, bundler3, 5n],
-      });
+      ).toThrow(InputExceedsMaxError);
     }
   });
 
-  test("should throw NegativeInputError when amount is negative", async ({
-    client,
-  }) => {
-    expect(() =>
-      blueSupplyCollateralBorrow({
-        market: {
-          chainId: mainnet.id,
-          marketParams: WethUsdsBlue,
-        },
-        args: {
-          amount: -1n,
-          borrowAmount: parseUnits("100", 6),
-          onBehalf: client.account.address,
-          receiver: client.account.address,
-          minSharePrice: 0n,
-        },
-      }),
-    ).toThrow(NegativeInputError);
-  });
-
-  test("should throw NonPositiveInputError when borrowAmount is zero", async ({
-    client,
-  }) => {
-    expect(() =>
-      blueSupplyCollateralBorrow({
-        market: {
-          chainId: mainnet.id,
-          marketParams: WethUsdsBlue,
-        },
-        args: {
-          amount: parseUnits("1", 18),
-          borrowAmount: 0n,
-          onBehalf: client.account.address,
-          receiver: client.account.address,
-          minSharePrice: 0n,
-        },
-      }),
-    ).toThrow(NonPositiveInputError);
-  });
-
-  test("should throw NonPositiveInputError when borrowAmount is negative", async ({
-    client,
-  }) => {
-    expect(() =>
-      blueSupplyCollateralBorrow({
-        market: {
-          chainId: mainnet.id,
-          marketParams: WethUsdsBlue,
-        },
-        args: {
-          amount: parseUnits("1", 18),
-          borrowAmount: -1n,
-          onBehalf: client.account.address,
-          receiver: client.account.address,
-          minSharePrice: 0n,
-        },
-      }),
-    ).toThrow(NonPositiveInputError);
-  });
-
-  test("should throw NegativeInputError when minSharePrice is negative", async ({
-    client,
-  }) => {
-    expect(() =>
-      blueSupplyCollateralBorrow({
-        market: {
-          chainId: mainnet.id,
-          marketParams: WethUsdsBlue,
-        },
-        args: {
-          amount: parseUnits("1", 18),
-          borrowAmount: parseUnits("100", 6),
-          onBehalf: client.account.address,
-          receiver: client.account.address,
-          minSharePrice: -1n,
-        },
-      }),
-    ).toThrow(NegativeInputError);
-  });
-
-  test("should throw NonPositiveInputError when total collateral is zero", async ({
-    client,
-  }) => {
-    expect(() =>
-      blueSupplyCollateralBorrow({
-        market: {
-          chainId: mainnet.id,
-          marketParams: WethUsdsBlue,
-        },
-        args: {
-          amount: 0n,
-          borrowAmount: parseUnits("100", 6),
-          onBehalf: client.account.address,
-          receiver: client.account.address,
-          minSharePrice: 0n,
-        },
-      }),
-    ).toThrow(NonPositiveInputError);
-  });
-
-  test("should throw NegativeInputError when nativeAmount is negative", async ({
-    client,
-  }) => {
-    expect(() =>
-      blueSupplyCollateralBorrow({
-        market: {
-          chainId: mainnet.id,
-          marketParams: WethUsdsBlue,
-        },
-        args: {
-          nativeAmount: -1n,
-          borrowAmount: parseUnits("100", 6),
-          onBehalf: client.account.address,
-          receiver: client.account.address,
-          minSharePrice: 0n,
-        },
-      }),
-    ).toThrow(NegativeInputError);
-  });
-
-  test("should throw NativeAmountOnNonWNativeAssetError for non-wNative collateral", async ({
-    client,
-  }) => {
-    expect(() =>
-      blueSupplyCollateralBorrow({
-        market: {
-          chainId: mainnet.id,
-          marketParams: UsdcEurcvBlue,
-        },
-        args: {
-          nativeAmount: parseUnits("1", 18),
-          borrowAmount: parseUnits("100", 6),
-          onBehalf: client.account.address,
-          receiver: client.account.address,
-          minSharePrice: 0n,
-        },
-      }),
-    ).toThrow(NativeAmountOnNonWNativeAssetError);
-  });
-
-  test("should return a deep-frozen transaction object", async ({ client }) => {
-    const tx = blueSupplyCollateralBorrow({
-      market: {
-        chainId: mainnet.id,
-        marketParams: WethUsdsBlue,
-      },
+  test("behavior: maps Vault V2 reallocations and accounts for rounded-up penalties", () => {
+    const vault = getAddress("0x0000000000000000000000000000000000000031");
+    const adapter = getAddress("0x0000000000000000000000000000000000000032");
+    const reallocation = {
+      vault,
+      from: { type: "idle" },
+      to: { adapter },
+      assets: 3n,
+      penalty: MathLib.WAD / 2n,
+    } satisfies VaultV2BlueReallocation;
+    const transaction = blueSupplyCollateralBorrow({
+      market,
       args: {
-        amount: parseUnits("1", 18),
-        borrowAmount: parseUnits("100", 6),
-        onBehalf: client.account.address,
-        receiver: client.account.address,
-        minSharePrice: 0n,
+        userAddress,
+        collateralAssets: 0n,
+        borrowAssets: 5n,
+        maxLtv,
+        reallocations: [reallocation],
+        deadline,
       },
     });
+    const decoded = decodeFunctionData({
+      abi: blueBundlesV1Abi,
+      data: transaction.data,
+    });
 
-    expect(Object.isFrozen(tx)).toBe(true);
-    expect(Object.isFrozen(tx.action)).toBe(true);
-    expect(Object.isFrozen(tx.action.args)).toBe(true);
+    expect(decoded.args?.[6]).toEqual([
+      {
+        vault,
+        adapter,
+        marketParams: marketParamsInput,
+        fromIdle: true,
+        sourceAdapter: zeroAddress,
+        sourceMarketParams: {
+          loanToken: marketParams.loanToken,
+          collateralToken: zeroAddress,
+          oracle: zeroAddress,
+          irm: zeroAddress,
+          lltv: 0n,
+        },
+        assets: 3n,
+        penalty: MathLib.WAD / 2n,
+      },
+    ]);
+    expect(transaction.action.args.reallocationPenaltyAssets).toBe(2n);
+    expect(() =>
+      blueSupplyCollateralBorrow({
+        market,
+        args: {
+          userAddress,
+          collateralAssets: 0n,
+          borrowAssets: 1n,
+          maxLtv,
+          reallocations: [reallocation],
+          deadline,
+        },
+      }),
+    ).toThrow(InputExceedsMaxError);
+    expect(() =>
+      blueSupplyCollateralBorrow({
+        market,
+        args: {
+          userAddress,
+          collateralAssets: 1n,
+          borrowAssets: 0n,
+          maxLtv: maxUint256,
+          reallocations: [reallocation],
+          deadline,
+        },
+      }),
+    ).toThrow(ReallocationsRequireBorrowError);
   });
 
-  test("should append metadata to transaction data when provided", async ({
-    client,
-  }) => {
-    const amount = parseUnits("1", 18);
-    const borrowAmount = parseUnits("100", 6);
-
-    const txWithout = blueSupplyCollateralBorrow({
-      market: {
-        chainId: mainnet.id,
-        marketParams: WethUsdsBlue,
-      },
-      args: {
-        amount,
-        borrowAmount,
-        onBehalf: client.account.address,
-        receiver: client.account.address,
-        minSharePrice: 0n,
-      },
+  test("behavior: native collateral funding equals the full collateral leg", () => {
+    const nativeMarketParams = new MarketParams({
+      ...marketParamsInput,
+      collateralToken: getChainAddress(chainId, "wNative"),
     });
+    const nativeMarket = { chainId, marketParams: nativeMarketParams };
 
-    const txWith = blueSupplyCollateralBorrow({
-      market: {
-        chainId: mainnet.id,
-        marketParams: WethUsdsBlue,
-      },
-      args: {
-        amount,
-        borrowAmount,
-        onBehalf: client.account.address,
-        receiver: client.account.address,
-        minSharePrice: 0n,
-      },
-      metadata: { origin: "a1b2c3d4" },
+    expect(
+      blueSupplyCollateralBorrow({
+        market: nativeMarket,
+        args: {
+          userAddress,
+          collateralAssets: 2n,
+          borrowAssets: 0n,
+          maxLtv: maxUint256,
+          nativeAmount: 2n,
+          deadline,
+        },
+      }).value,
+    ).toBe(2n);
+    expect(() =>
+      blueSupplyCollateralBorrow({
+        market: nativeMarket,
+        args: {
+          userAddress,
+          collateralAssets: 2n,
+          borrowAssets: 0n,
+          maxLtv: maxUint256,
+          nativeAmount: 1n,
+          deadline,
+        },
+      }),
+    ).toThrow(NativeFundingAmountMismatchError);
+  });
+
+  test("error: UnexpectedRequirementSignatureError for inactive legs", () => {
+    const blueBundlesV1 = getChainAddress(chainId, "bundles.blueBundlesV1");
+    const serializedSignature = serializeSignature({
+      r: toHex(1n, { size: 32 }),
+      s: toHex(2n, { size: 32 }),
+      yParity: 0,
     });
+    const tokenSignature = {
+      args: {
+        owner: userAddress,
+        nonce: 1n,
+        asset: marketParams.collateralToken,
+        signature: "0x1234",
+        amount: 5n,
+        deadline,
+      },
+      action: {
+        type: "permit2TransferFrom",
+        args: { spender: blueBundlesV1, amount: 5n, deadline },
+      },
+    } satisfies BlueBundlesV1TokenRequirementSignature;
+    const authorizationSignature = {
+      args: {
+        owner: userAddress,
+        authorized: blueBundlesV1,
+        isAuthorized: true,
+        nonce: 1n,
+        deadline,
+        signature: serializedSignature,
+      },
+      action: {
+        type: "authorization",
+        args: { authorized: blueBundlesV1, isAuthorized: true, deadline },
+      },
+    } satisfies AuthorizationRequirementSignature;
 
-    expect(txWith.data.length).toBeGreaterThan(txWithout.data.length);
-    expect(txWith.data.includes("a1b2c3d4")).toBe(true);
-    expect(txWith.action.type).toBe("blueSupplyCollateralBorrow");
+    expect(() =>
+      blueSupplyCollateralBorrow({
+        market,
+        args: {
+          userAddress,
+          collateralAssets: 0n,
+          borrowAssets: 5n,
+          maxLtv,
+          requirementSignature: tokenSignature,
+          deadline,
+        },
+      }),
+    ).toThrow(UnexpectedRequirementSignatureError);
+    expect(() =>
+      blueSupplyCollateralBorrow({
+        market,
+        args: {
+          userAddress,
+          collateralAssets: 5n,
+          borrowAssets: 0n,
+          maxLtv: maxUint256,
+          authorizationSignature,
+          deadline,
+        },
+      }),
+    ).toThrow(UnexpectedRequirementSignatureError);
   });
 });
