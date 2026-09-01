@@ -835,6 +835,7 @@ export interface BlueActions {
    * @throws {InputExceedsMaxError} when a fee or reallocation exceeds its ABI bound.
    * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
    * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
+   * @throws {InvalidReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
    * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.
    * @throws {InconsistentReallocationPenaltyError} when one vault uses different penalties.
    * @throws {ReallocationWithdrawalOnTargetMarketError} when a source is the destination market.

@@ -85,22 +85,35 @@ so they can improve an unhealthy position.
 
 ## Blue refinance
 
-`refinance` and `blueRefinance` keep their names but now call BlueBundlesV1's full-position
-migration entrypoint.
+The `refinance` entity method and the `blueRefinance` pure builder keep their names but now call
+BlueBundlesV1's full-position migration entrypoint. Both drop partial and collateral-only migration:
+the full live source debt and collateral always move, the source and destination markets must use the
+same loan and collateral tokens and must not be the same market, and Morpho authorization targets
+BlueBundlesV1.
+
+`market.refinance(...)` (entity method):
 
 - Rename `target` to `destination`.
 - Remove `collateralAmount`, `borrowAssets`, `borrowShares`, slippage, and share-price bounds.
 - Rename V2-only `targetReallocations` to `reallocations`.
 - Add `deadline` and optional referral-fee fields.
-- Pass source and destination position snapshots; the markets must use the same loan and collateral
-  tokens and must not be the same market.
+- Pass source and destination position snapshots.
+
+`blueRefinance(...)` (pure builder):
+
+- Replace the top-level `{ source: { chainId, marketParams }, target: { marketParams } }` shape with
+  `{ market: { chainId, sourceMarketParams, destinationMarketParams } }`.
+- Rename `args.user` to `args.userAddress` and supply `args.maxLtv` (the buffered destination LTV).
+- Remove `args.collateralAmount`, `args.borrowAssets`, `args.borrowShares`,
+  `args.minBorrowSharePrice`, and `args.maxRepaySharePrice`.
+- Rename `args.targetReallocations` to `args.reallocations`.
+- Add `args.deadline` and optional referral-fee fields.
 
 The action metadata replaces `targetMarket`, partial-leg amounts, user, share-price bounds, and the
 V1 fee with `destinationMarket`, `maxLtv`, `onBehalf`, a reallocation count and penalty total,
 referral-fee fields, and `deadline`.
 
-The full live source debt and collateral always move, and Morpho authorization targets
-BlueBundlesV1. Stay on v5 if the product requires partial or collateral-only refinance behavior.
+Stay on v5 if the product requires partial or collateral-only refinance behavior.
 
 The partial-migration error classes `BorrowAmountAndSharesExclusiveError`,
 `RefinanceExceedsCollateralError`, `RefinanceExceedsBorrowSharesError`,
