@@ -92,14 +92,25 @@ const expectedSharesBurnt = (params: {
   const { vault: deadlineVaultData } = vaultData.accrueInterest(
     MathLib.max(params.deadline, vaultData.lastUpdate),
   );
+  const { vault: nowVaultData } = vaultData.accrueInterest(
+    MathLib.max(params.timestamp, vaultData.lastUpdate),
+  );
 
   return {
     plan,
-    sharesBurnt: computeVaultV2ForceWithdrawSharesBurnt({
-      vaultData,
-      deadlineVaultData,
-      plan,
-    }),
+    // Mirror the entity: the worst burn across the snapshot, deadline, and execution-time endpoints.
+    sharesBurnt: MathLib.max(
+      computeVaultV2ForceWithdrawSharesBurnt({
+        vaultData,
+        deadlineVaultData,
+        plan,
+      }),
+      computeVaultV2ForceWithdrawSharesBurnt({
+        vaultData: nowVaultData,
+        deadlineVaultData: nowVaultData,
+        plan,
+      }),
+    ),
   };
 };
 

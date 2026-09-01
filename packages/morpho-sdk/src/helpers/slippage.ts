@@ -182,9 +182,9 @@ export function computeMaxSupplySharePrice(params: {
  * ```
  */
 export function computeMinForceWithdrawSharePrice(params: {
-  withdrawnAssets: bigint;
-  sharesBurnt: bigint;
-  slippageTolerance: bigint;
+  readonly withdrawnAssets: bigint;
+  readonly sharesBurnt: bigint;
+  readonly slippageTolerance: bigint;
 }): bigint {
   const { withdrawnAssets, sharesBurnt, slippageTolerance } = params;
 

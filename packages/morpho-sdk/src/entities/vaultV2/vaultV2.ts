@@ -883,35 +883,41 @@ export class MorphoVaultV2 implements VaultV2Actions {
       });
     }
 
-    // The allowance must still cover a burn inflated by management fees accrued up to `deadline`,
-    // so it takes the worse of both endpoints of the accrual window.
+    // Both the allowance and the price floor need the vault accrued to execution time (`now`), not
+    // only to the snapshot and the deadline: a distressed vault can recognize a loss on the first
+    // accrual to `now` and recover by `deadline`, so the execution-time burn can peak strictly
+    // between the two window ends.
     const { vault: deadlineVaultData } = vaultData.accrueInterest(
       MathLib.max(deadline, vaultData.lastUpdate),
     );
-    const requiredShareAllowance = computeVaultV2ForceWithdrawSharesBurnt({
-      vaultData,
-      deadlineVaultData,
-      plan,
-    });
-    // The price floor's denominator must track execution-time vault state, not the possibly stale
-    // snapshot: the first on-chain withdrawal accrues pending management fees before burning shares,
-    // so a snapshot-tight denominator underestimates the burn and lifts the floor above the faithful
-    // price — tripping `SlippageExceeded` on an otherwise valid exit. Accrue to `now`, not
-    // `deadline`: `now` is execution-time and not caller-chosen, so it removes the stale-fee bias
-    // without letting a long `deadline` weaken the guard. `slippageTolerance` absorbs the residual
-    // drift until inclusion.
     const { vault: nowVaultData } = vaultData.accrueInterest(
       MathLib.max(now, vaultData.lastUpdate),
     );
+    const sharesBurntNow = computeVaultV2ForceWithdrawSharesBurnt({
+      vaultData: nowVaultData,
+      deadlineVaultData: nowVaultData,
+      plan,
+    });
+    // The allowance takes the worst burn across all three endpoints, so the exact approval never
+    // underflows the shares the exit actually burns at inclusion.
+    const requiredShareAllowance = MathLib.max(
+      computeVaultV2ForceWithdrawSharesBurnt({
+        vaultData,
+        deadlineVaultData,
+        plan,
+      }),
+      sharesBurntNow,
+    );
+    // The price floor's denominator, by contrast, takes only the `now`-accrued burn: it must track
+    // execution-time state, not the possibly stale snapshot (the first on-chain withdrawal accrues
+    // pending management fees before burning shares, which would otherwise lift the floor above the
+    // faithful price and trip `SlippageExceeded`). Accrue to `now`, not the caller-chosen `deadline`,
+    // so a long deadline cannot weaken the guard; `slippageTolerance` absorbs the residual drift.
     const minSharePriceE27 =
       minSharePriceE27Override ??
       computeMinForceWithdrawSharePrice({
         withdrawnAssets: plan.withdrawnAssets,
-        sharesBurnt: computeVaultV2ForceWithdrawSharesBurnt({
-          vaultData: nowVaultData,
-          deadlineVaultData: nowVaultData,
-          plan,
-        }),
+        sharesBurnt: sharesBurntNow,
         slippageTolerance,
       });
 

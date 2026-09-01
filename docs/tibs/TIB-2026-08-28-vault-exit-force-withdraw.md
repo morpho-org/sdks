@@ -403,8 +403,10 @@ Fewer moving parts, no risk of the SDK computing a bound that spuriously reverts
 **Why rejected:** an unset bound is `0`, i.e. no protection, and that is what every caller would
 ship on day one because the correct value is non-obvious (it is *not* the vault share price). The
 conservative-both-sides construction makes a spurious revert essentially impossible while keeping the
-guard real, and `minSharePriceE27` remains overridable — including to `0n` — for callers who
-genuinely want out.
+guard real, and `minSharePriceE27` remains overridable for callers who genuinely want out. The
+low-level `vaultV2ForceWithdraw` action even accepts `0n` to disable the bound; the high-level
+`MorphoVaultV2.forceWithdraw` entity, however, requires a strictly positive override
+(`NonPositiveInputError` otherwise) so it cannot silently opt out of the guard it exists to add.
 
 ### Alternative 5: hide the referral fee
 
@@ -442,9 +444,12 @@ the in-kind TIB, so no downstream peer-range audit is required.
 - **The slippage bound is the headline.** The multicall path had none. See the drift table above.
 - **The allowance is bounded**, covering the `penaltyLegs + 2` separately rounded legs and accrual
   through the deadline, rather than granting an unlimited approval to the periphery.
-- **The coverage check removes the only opaque revert** in the flow. The fork suite asserts both
-  directions: the SDK rejects `maxExitAssets + 1` before submission, and the same call forced past
-  the guard reverts on-chain.
+- **The coverage check removes the only opaque revert** in the flow. The fork suite asserts the
+  SDK-side direction — `maxExitAssets + 1` is rejected before submission with
+  `VaultV2ForceWithdrawCoverageError`. The matching on-chain `0x32` panic is *not* asserted, because
+  an `exitAssets` above the whole position reverts on shares/allowance long before the contract's
+  unbounded loop; the panic correspondence therefore rests on the contract's unbounded-loop
+  semantics, not a dedicated fork assertion.
 - **The referral fee is outside the slippage guard** — stated in the JSDoc, the action's parameter
   docs, and here, because it is the one way a caller can lose value the bound does not see.
 - **Nothing can strand in the periphery**: the contract transfers the payout and the fee in the same
