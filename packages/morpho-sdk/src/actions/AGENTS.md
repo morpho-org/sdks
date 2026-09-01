@@ -4,7 +4,8 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 
 ## Sub-layers
 
-- `vaultV1/` — VaultV1 (MetaMorpho) `deposit` / `withdraw` / `redeem` / `inKindRedeem` / `migrateToV2`.
+- `vaultV1/` — VaultV1 (MetaMorpho) `deposit` / `withdraw` / `redeem` / `migrateToV2` encode one
+  direct VaultBundlesV1 call; `inKindRedeem` encodes the standalone VaultExitBundlesV1 periphery.
 - `vaultV2/` — VaultV2 `deposit` / `withdraw` / `redeem` / `inKindRedeem` / `forceWithdraw` / `forceRedeem`.
 - `blue/` — direct BlueBundlesV1 write encoders backing the established `supply`, `withdraw`,
   `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`,
@@ -20,23 +21,24 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 ## Common builder pattern
 
 1. Validate inputs with dedicated errors from `src/types/error.ts` (`assets > 0`, `shares > 0`, `maxSharePrice > 0`, `nativeAmount >= 0`).
-2. Encode calldata. **Bundler3 paths** use `BundlerAction.encodeBundle`. **Blue write paths** encode
-   one registered `BlueBundlesV1` entrypoint directly. **Midnight bundle paths** encode one
-   `MidnightBundles` function call directly. Other **direct calls** (vault `withdraw` / `redeem`,
-   Midnight collateral supply / redeem / offer cancellation) encode their target contract call
-   directly. Vault `inKindRedeem` actions encode VaultExitBundlesV1 rather than composing a
+2. Encode calldata. **Bundler3 paths** use `BundlerAction.encodeBundle`. **Vault V1 write paths**
+   encode one registered `VaultBundlesV1` entrypoint directly. **Blue write paths** encode one
+   registered `BlueBundlesV1` entrypoint directly. **Midnight bundle paths** encode one
+   `MidnightBundles` function call directly. Other **direct calls** (Vault V2 `withdraw` /
+   `redeem`, Midnight collateral supply / redeem / offer cancellation) encode their target contract
+   call directly. Vault `inKindRedeem` actions encode VaultExitBundlesV1 rather than composing a
    Bundler3 bundle.
 3. Call `addTransactionMetadata` only when `metadata` is provided.
 4. `deepFreeze` the return value: `{ to, value, data, action: { type, args } }`.
 
 ## Native wrapping (canonical statement)
 
-Only valid for assets/collateral configured as wNative. Vault deposit bundles prepend
+Only valid for assets/collateral configured as wNative. Vault V2 deposit bundles prepend
 `nativeTransfer` + `wrapNative`, and `BundlerAction.encodeBundle` derives `tx.value`. Direct
-BlueBundlesV1 funding instead sends the native amount as `tx.value`; it is exclusive with an ERC-20
-token permit and must equal the funded entrypoint amount. `refinance` moves an existing on-chain
-position and takes no native funding. Reject native amounts on non-wNative assets with the dedicated
-error.
+VaultBundlesV1 and BlueBundlesV1 funding instead sends the native amount as `tx.value`; it is
+exclusive with an ERC-20 token permit and must equal the funded entrypoint amount. Reject native
+amounts on non-wNative assets with the dedicated error. `refinance` moves an existing on-chain
+position and takes no native funding.
 
 ## Shared liquidity / reallocations (canonical statement)
 
@@ -45,12 +47,10 @@ and `refinance` accept `VaultV2BlueReallocation` entries, which map to BlueBundl
 `PublicAllocations` and then to `reallocate(...)` for a market source or `allocateFromIdle(...)` for
 idle liquidity. The enclosing action supplies the target market, the input supplies adapters, the
 chain registry supplies the allocator, and each call passes the vault's configured WAD-scaled
-`penalty` — the allocator donates `ceil(assets × penalty / WAD)` of the target loan token per call.
-BluePublicAllocator sources are not sorted and idle uses no synthetic zero-address
+`penalty`. BluePublicAllocator sources are not sorted and idle uses no synthetic zero-address
 market. BlueBundlesV1 executes every allocation unconditionally; aggregate penalties reduce borrow
-or withdrawal proceeds, or increase destination debt during migration, and the builder rejects an
-aggregate penalty above `borrowAssets` (or, in withdraw assets mode, the withdrawn amount). They do
-not add native value or a separate GeneralAdapter1 funding requirement.
+or withdrawal proceeds, or increase destination debt during migration. They do not add native
+value or a separate GeneralAdapter1 funding requirement.
 
 PublicAllocator V1 types, data fetchers, simulations, planners, and low-level Bundler3 builders
 remain public only for compatibility and advanced composition. All Vault V1 planning and low-level

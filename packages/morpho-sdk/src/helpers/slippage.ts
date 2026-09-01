@@ -217,10 +217,10 @@ export function computeMinWithdrawSharePrice(params: {
 /**
  * Computes the RAY-scaled maximum share price for a VaultBundlesV1 deposit leg.
  *
- * Accrues the supplied Vault V1 or Vault V2 snapshot two hours forward before previewing shares,
- * matching the default bundles execution window.
+ * Accrues the supplied Vault V1 or Vault V2 snapshot through the bundles execution deadline before
+ * previewing shares.
  *
- * @param params - Vault snapshot, boundary-supplied current timestamp, net assets, and slippage.
+ * @param params - Vault snapshot, bundles execution deadline, net assets, and slippage.
  * @returns The capped maximum share price enforced by VaultBundlesV1.
  * @throws {NonPositiveInputError} when `assets` or the previewed shares are not positive.
  * @throws {NegativeInputError} when `slippageTolerance` is negative.
@@ -240,7 +240,7 @@ export function computeMinWithdrawSharePrice(params: {
  * const { timestamp } = await client.getBlock();
  * const maxSharePrice = computeVaultMaxSharePrice({
  *   vaultData,
- *   timestamp,
+ *   deadline: timestamp + 7_200n,
  *   assets: 1_000_000n,
  *   slippageTolerance: 500_000_000_000_000n,
  * });
@@ -249,7 +249,7 @@ export function computeMinWithdrawSharePrice(params: {
  */
 export const computeVaultMaxSharePrice = (params: {
   readonly vaultData: AccrualVault | AccrualVaultV2;
-  readonly timestamp: bigint;
+  readonly deadline: bigint;
   readonly assets: bigint;
   readonly slippageTolerance: bigint;
 }): bigint => {
@@ -259,8 +259,8 @@ export const computeVaultMaxSharePrice = (params: {
   validateSlippageTolerance(params.slippageTolerance);
   const accrualTimestamp =
     params.vaultData instanceof AccrualVaultV2
-      ? MathLib.max(params.timestamp, params.vaultData.lastUpdate) + 7_200n
-      : params.timestamp + 7_200n;
+      ? MathLib.max(params.deadline, params.vaultData.lastUpdate)
+      : params.deadline;
   const accruedVault =
     params.vaultData instanceof AccrualVaultV2
       ? params.vaultData.accrueInterest(accrualTimestamp).vault
