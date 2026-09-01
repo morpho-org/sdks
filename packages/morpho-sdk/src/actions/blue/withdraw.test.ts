@@ -17,6 +17,7 @@ import {
   type AuthorizationRequirementSignature,
   BlueBundlesV1RequirementSignatureMismatchError,
   DepositOwnerMismatchError,
+  InputExceedsMaxError,
   MutuallyExclusiveWithdrawAmountsError,
   ReallocationLoanTokenMismatchError,
   type VaultV2BlueReallocation,
@@ -432,5 +433,45 @@ describe("blueWithdraw", () => {
         },
       }),
     ).toThrow(ReallocationLoanTokenMismatchError);
+  });
+
+  test("error: InputExceedsMaxError when a withdraw amount exceeds uint256", () => {
+    expect(() =>
+      blueWithdraw({
+        market,
+        args: {
+          userAddress,
+          withdrawAssets: maxUint256 + 1n,
+          withdrawShares: 0n,
+          deadline,
+        },
+      }),
+    ).toThrow(InputExceedsMaxError);
+
+    expect(() =>
+      blueWithdraw({
+        market,
+        args: {
+          userAddress,
+          withdrawAssets: 0n,
+          withdrawShares: maxUint256 + 1n,
+          deadline,
+        },
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
+  test("error: InputExceedsMaxError when the deadline exceeds uint256", () => {
+    expect(() =>
+      blueWithdraw({
+        market,
+        args: {
+          userAddress,
+          withdrawAssets: 5n,
+          withdrawShares: 0n,
+          deadline: maxUint256 + 1n,
+        },
+      }),
+    ).toThrow(InputExceedsMaxError);
   });
 });

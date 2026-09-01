@@ -1,10 +1,11 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import { type Address, encodeFunctionData } from "viem";
+import { type Address, encodeFunctionData, maxUint256 } from "viem";
 import { blueBundlesV1Abi } from "../../abis.js";
 import {
   type AuthorizationRequirementSignature,
   type BlueBundlesV1TokenRequirementSignature,
   type BlueRepayWithdrawCollateralAction,
+  InputExceedsMaxError,
   MaxRepayAssetsBelowRepayAssetsError,
   type Metadata,
   MutuallyExclusiveRepayAmountsError,
@@ -26,39 +27,39 @@ import {
 /** Parameters for {@link blueRepayWithdrawCollateral}. */
 export interface BlueRepayWithdrawCollateralParams {
   /** Chain and scoped Morpho Blue market. */
-  market: {
+  readonly market: {
     readonly chainId: number;
     readonly marketParams: MarketParams;
   };
   /** Direct BlueBundlesV1 combined-operation arguments. */
-  args: {
+  readonly args: {
     /** User whose debt and collateral position is changed. */
-    userAddress: Address;
+    readonly userAddress: Address;
     /** Exact assets repaid, exclusive with `repayShares`. */
-    repayAssets: bigint;
+    readonly repayAssets: bigint;
     /** Exact shares repaid; use `maxUint256` for a saturated full repay. */
-    repayShares: bigint;
+    readonly repayShares: bigint;
     /** Maximum gross loan-token funding, including referral fees. */
-    maxRepayAssets: bigint;
+    readonly maxRepayAssets: bigint;
     /** Collateral assets withdrawn; zero selects a pure repay. */
-    collateralAssets: bigint;
+    readonly collateralAssets: bigint;
     /** Maximum post-operation LTV enforced by BlueBundlesV1. */
-    maxLtv: bigint;
+    readonly maxLtv: bigint;
     /** Full native repay funding; must equal `maxRepayAssets`. */
-    nativeAmount?: bigint;
+    readonly nativeAmount?: bigint;
     /** Final call deadline in Unix seconds. */
-    deadline: bigint;
+    readonly deadline: bigint;
     /** Optional WAD-scaled referral fee, strictly below 100%. */
-    referralFeePct?: bigint;
+    readonly referralFeePct?: bigint;
     /** Recipient required when `referralFeePct` is positive. */
-    referralFeeRecipient?: Address;
+    readonly referralFeeRecipient?: Address;
     /** Optional loan-token ERC-2612 or Permit2 SignatureTransfer result. */
-    requirementSignature?: BlueBundlesV1TokenRequirementSignature;
+    readonly requirementSignature?: BlueBundlesV1TokenRequirementSignature;
     /** Optional Morpho authorization signature for BlueBundlesV1. */
-    authorizationSignature?: AuthorizationRequirementSignature;
+    readonly authorizationSignature?: AuthorizationRequirementSignature;
   };
   /** Optional transaction metadata suffix. */
-  metadata?: Metadata;
+  readonly metadata?: Metadata;
 }
 
 /**
@@ -140,6 +141,9 @@ export const blueRepayWithdrawCollateral = (
     requirementSignature,
     authorizationSignature,
   } = params.args;
+  // Reject > uint256 so a direct caller gets the SDK's typed `InputExceedsMaxError`, not viem's
+  // `IntegerOutOfRangeError` at encode time. `maxUint256` stays valid as the `repayShares`
+  // (full repay) and `maxLtv` sentinel.
   for (const [field, value] of [
     ["repayAssets", repayAssets],
     ["repayShares", repayShares],
@@ -148,6 +152,9 @@ export const blueRepayWithdrawCollateral = (
     ["maxLtv", maxLtv],
   ] as const) {
     if (value < 0n) throw new NegativeInputError(field, value);
+    if (value > maxUint256) {
+      throw new InputExceedsMaxError({ field, value, max: maxUint256 });
+    }
   }
   if (repayAssets > 0n && repayShares > 0n) {
     throw new MutuallyExclusiveRepayAmountsError(marketParams.id);
@@ -161,6 +168,16 @@ export const blueRepayWithdrawCollateral = (
   }
   if (hasRepay && maxRepayAssets === 0n) {
     throw new NonPositiveInputError("maxRepayAssets", maxRepayAssets);
+  }
+  if (!hasRepay && maxRepayAssets > 0n) {
+    // Withdrawal-only has no repay leg to fund: reject stray funding that would encode a phantom
+    // repay. Native funding is transitively rejected — `validateBlueBundlesV1NativeFunding`
+    // requires `nativeAmount === maxRepayAssets` (= 0).
+    throw new InputExceedsMaxError({
+      field: "maxRepayAssets",
+      value: maxRepayAssets,
+      max: 0n,
+    });
   }
   if (!hasRepay && requirementSignature != null) {
     throw new UnexpectedRequirementSignatureError(

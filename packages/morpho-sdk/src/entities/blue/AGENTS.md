@@ -62,7 +62,8 @@ required snapshot cannot prove the buffered position safe.
   while the encoded call remains bounded by the derived `maxRepayAssets` and refunds unused funding.
 - `withdraw` and `refinance` request Morpho authorization.
 
-Classic approvals and ERC-2612 permits name BlueBundlesV1 as spender. Permit2 SignatureTransfer has
+Classic approvals and ERC-2612 permits name BlueBundlesV1 as spender. A classic approval covers the
+actual pull amount unless a reusable `approvalAmount` is passed. Permit2 SignatureTransfer has
 two parts: the ERC-20 prerequisite names canonical Permit2, while the signed transfer names
 BlueBundlesV1. Native-only funding emits no token requirement and requires the funded token to be
 the chain's wNative.

@@ -372,6 +372,96 @@ describe("MorphoBlue write surface", () => {
       },
     ]);
   });
+
+  test("supply forwards a reusable approvalAmount to the token requirement", async () => {
+    const handle = createMockClient(mainnet);
+    const blueBundlesV1 = getChainAddress(mainnet.id, "bundles.blueBundlesV1");
+    mockRead(handle, {
+      address: marketParams.loanToken,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const market = handle.client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.blue(marketParams, mainnet.id);
+
+    const requirements = await market
+      .supply({ assets: 1n, userAddress, deadline: maxUint256 })
+      .getRequirements({ approvalAmount: maxUint256 });
+
+    expect(requirements).toMatchObject([
+      {
+        action: {
+          type: "erc20Approval",
+          args: { spender: blueBundlesV1, amount: maxUint256 },
+        },
+      },
+    ]);
+  });
+
+  test("repay forwards a reusable approvalAmount to the token requirement", async () => {
+    const handle = createMockClient(mainnet);
+    const blueBundlesV1 = getChainAddress(mainnet.id, "bundles.blueBundlesV1");
+    mockRead(handle, {
+      address: marketParams.loanToken,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const market = handle.client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.blue(marketParams, mainnet.id);
+
+    const requirements = await market
+      .repay({
+        userAddress,
+        positionData: makePosition(marketParams),
+        repayAssets: 1n,
+        deadline: maxUint256,
+      })
+      .getRequirements({ approvalAmount: maxUint256 });
+
+    expect(requirements).toMatchObject([
+      {
+        action: {
+          type: "erc20Approval",
+          args: { spender: blueBundlesV1, amount: maxUint256 },
+        },
+      },
+    ]);
+  });
+
+  test("supplyCollateral forwards a reusable approvalAmount to the token requirement", async () => {
+    const handle = createMockClient(mainnet);
+    const blueBundlesV1 = getChainAddress(mainnet.id, "bundles.blueBundlesV1");
+    mockRead(handle, {
+      address: marketParams.collateralToken,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const market = handle.client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.blue(marketParams, mainnet.id);
+
+    const requirements = await market
+      .supplyCollateral({
+        userAddress,
+        collateralAssets: 1n,
+        deadline: maxUint256,
+      })
+      .getRequirements({ approvalAmount: maxUint256 });
+
+    expect(requirements).toMatchObject([
+      {
+        action: {
+          type: "erc20Approval",
+          args: { spender: blueBundlesV1, amount: maxUint256 },
+        },
+      },
+    ]);
+  });
 });
 
 describe("MorphoBlue common write validation", () => {
@@ -861,11 +951,15 @@ describe("MorphoBlue position validation", () => {
       }),
     );
     const firstFundingCap = firstAction.buildTx().action.args.maxRepayAssets;
+    // The BlueBundlesV1 token resolver only requests an approval when the current allowance is below
+    // the pull amount (it compares against `amount`, not `approvalAmount`, to avoid a redundant
+    // zero-reset on approve-once tokens). Start from a zero allowance so the saturated repay emits
+    // its reusable max approval, which by construction also covers any later, larger funding cap.
     mockRead(handle, {
       address: marketParams.loanToken,
       abi: erc20Abi,
       functionName: "allowance",
-      result: firstFundingCap,
+      result: 0n,
     });
     const requirements = await withChainTimestamp(now, () =>
       firstAction.getRequirements(),

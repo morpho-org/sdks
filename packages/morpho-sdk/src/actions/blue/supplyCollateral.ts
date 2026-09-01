@@ -12,29 +12,29 @@ import { blueSupplyCollateralBorrow } from "./supplyCollateralBorrow.js";
 /** Parameters for {@link blueSupplyCollateral}. */
 export interface BlueSupplyCollateralParams {
   /** Chain and scoped Morpho Blue market. */
-  market: {
+  readonly market: {
     readonly chainId: number;
     readonly marketParams: MarketParams;
   };
   /** Direct BlueBundlesV1 collateral-supply arguments. */
-  args: {
+  readonly args: {
     /** User whose collateral position is credited. */
-    userAddress: Address;
+    readonly userAddress: Address;
     /** Gross collateral assets supplied. */
-    collateralAssets: bigint;
+    readonly collateralAssets: bigint;
     /** Full native collateral funding; must equal `collateralAssets`. */
-    nativeAmount?: bigint;
+    readonly nativeAmount?: bigint;
     /** Final call deadline in Unix seconds. */
-    deadline: bigint;
+    readonly deadline: bigint;
     /** Optional WAD-scaled referral fee, strictly below 100%. */
-    referralFeePct?: bigint;
+    readonly referralFeePct?: bigint;
     /** Recipient required when `referralFeePct` is positive. */
-    referralFeeRecipient?: Address;
+    readonly referralFeeRecipient?: Address;
     /** Optional collateral ERC-2612 or Permit2 SignatureTransfer result. */
-    requirementSignature?: BlueBundlesV1TokenRequirementSignature;
+    readonly requirementSignature?: BlueBundlesV1TokenRequirementSignature;
   };
   /** Optional transaction metadata suffix. */
-  metadata?: Metadata;
+  readonly metadata?: Metadata;
 }
 
 /**

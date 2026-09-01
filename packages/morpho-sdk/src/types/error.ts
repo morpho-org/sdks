@@ -423,6 +423,27 @@ export class ReallocationLoanTokenMismatchError extends Error {
   }
 }
 
+/**
+ * Thrown when a Blue authorization operator is not one of the chain's registered Morpho operators
+ * (GeneralAdapter1 or BlueBundlesV1). Guards the exported authorization builder so a misconfigured
+ * `authorized` cannot grant an arbitrary address control over the user's Morpho positions.
+ */
+export class UnsupportedAuthorizationOperatorError extends Error {
+  /**
+   * @param authorized - The operator address rejected as unsupported.
+   * @param chainId - Chain whose registry was consulted for the supported operators.
+   */
+  public constructor(
+    public readonly authorized: Address,
+    public readonly chainId: number,
+  ) {
+    super(
+      `Authorization operator "${authorized}" is not a supported Morpho operator on chain ${chainId}. Pass the chain's registered GeneralAdapter1 or BlueBundlesV1 address, or omit \`authorized\` to default to GeneralAdapter1.`,
+    );
+    this.name = "UnsupportedAuthorizationOperatorError";
+  }
+}
+
 /** Thrown when reallocations are attached to a combined call with no borrow leg. */
 export class ReallocationsRequireBorrowError extends Error {
   public constructor() {
@@ -1683,15 +1704,6 @@ export class VaultAssetMismatchError extends Error {
   }
 }
 
-/** Thrown when a refinance specifies both `borrowAssets` and `borrowShares` as non-zero (modes are mutually exclusive). */
-export class BorrowAmountAndSharesExclusiveError extends Error {
-  constructor(market: string) {
-    super(
-      `Exactly one of borrowAssets or borrowShares must be non-zero for market: ${market}. Both were provided.`,
-    );
-  }
-}
-
 /** Thrown when a refinance has identical source and target market ids (a refinance to the same market is a costly no-op). */
 export class RefinanceSameMarketError extends Error {
   constructor(market: string) {
@@ -1706,75 +1718,6 @@ export class RefinanceTokenMismatchError extends Error {
   constructor(sourceMarket: string, targetMarket: string) {
     super(
       `Refinance source market ${sourceMarket} and target market ${targetMarket} must share the same loanToken and collateralToken.`,
-    );
-  }
-}
-
-/** Thrown when a refinance's `collateralAmount` exceeds the source position's available collateral. */
-export class RefinanceExceedsCollateralError extends Error {
-  public readonly market: string;
-  public readonly requested: bigint;
-  public readonly available: bigint;
-
-  constructor(params: {
-    market: string;
-    requested: bigint;
-    available: bigint;
-  }) {
-    super(
-      `Refinance collateral amount ${params.requested} exceeds available collateral ${params.available} for market: ${params.market}`,
-    );
-    this.market = params.market;
-    this.requested = params.requested;
-    this.available = params.available;
-  }
-}
-
-/** Thrown when a refinance's `borrowShares` exceeds the source position's outstanding borrow shares. */
-export class RefinanceExceedsBorrowSharesError extends Error {
-  public readonly market: string;
-  public readonly requested: bigint;
-  public readonly available: bigint;
-
-  constructor(params: {
-    market: string;
-    requested: bigint;
-    available: bigint;
-  }) {
-    super(
-      `Refinance borrow shares ${params.requested} exceed outstanding borrow shares ${params.available} for market: ${params.market}`,
-    );
-    this.market = params.market;
-    this.requested = params.requested;
-    this.available = params.available;
-  }
-}
-
-/** Thrown when a refinance's `borrowAssets` exceeds the source position's outstanding debt assets. */
-export class RefinanceExceedsBorrowAssetsError extends Error {
-  public readonly market: string;
-  public readonly requested: bigint;
-  public readonly available: bigint;
-
-  constructor(params: {
-    market: string;
-    requested: bigint;
-    available: bigint;
-  }) {
-    super(
-      `Refinance borrow assets ${params.requested} exceed outstanding debt assets ${params.available} for market: ${params.market}`,
-    );
-    this.market = params.market;
-    this.requested = params.requested;
-    this.available = params.available;
-  }
-}
-
-/** Thrown when a refinance in shares mode (`borrowShares > 0n`) omits the `borrowAssets` overshoot for the target borrow leg. */
-export class RefinanceSharesMissingBorrowAssetsError extends Error {
-  constructor(market: string) {
-    super(
-      `Refinance shares mode requires a positive borrowAssets overshoot for the target borrow leg (market: ${market}).`,
     );
   }
 }

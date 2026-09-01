@@ -14,6 +14,7 @@ Centralized type definitions and error classes. Barrel-exported via `index.ts`. 
   deposits and public low-level composition. Direct BlueBundlesV1 native funding is exclusive with
   ERC-20 funding rather than additive.
 - `AssetsOrSharesArgs` — discriminated union `{ assets } | { shares }`. Used by withdraw (supply-side).
+- Repay funding is expressed with the operation-specific `repayAssets` / `repayShares` inputs, mutually exclusive (`repayShares = maxUint256` requests a saturated full repay); the entity surface pairs them with a `maxRepayAssets` funding cap and optional `nativeAmount`, deriving every amount from live market state, and the flat action arg shapes (`BlueRepayWithdrawCollateralActionArgs`) carry the pre-resolved `{ repayAssets, repayShares, maxRepayAssets, collateralAssets, maxLtv }` so the action does no arithmetic. The former `RepayAmountArgs` / `RepayActionAmountArgs` shapes were removed with the BlueBundlesV1 migration.
 - `MarketParams` — Morpho Blue market params (`loanToken`, `collateralToken`, `oracle`, `irm`, `lltv`).
 - `BlueAuthorizationAction` — used for `morpho.setAuthorization()` prerequisite transactions.
   High-level Blue writes authorize BlueBundlesV1; low-level Bundler3 composition may authorize
@@ -30,9 +31,6 @@ Centralized type definitions and error classes. Barrel-exported via `index.ts`. 
   alias. Neither is accepted by v6 high-level Blue writes.
 - `VaultV2BlueReallocation` — BluePublicAllocator vault/source/target-adapter/assets/WAD-scaled-penalty input; maps 1:1 to `reallocate()` or `allocateFromIdle()` while deriving target market params from the enclosing Blue action.
 - `VaultV2BluePublicAllocatorOptions` — canonical Vault V2 discovery and planner options for timestamp, enablement, vault allowlisting, friendly source-market utilization, and the maximum proportional penalty.
-- `BlueReallocationPlan` — homogeneous V1-or-V2 iterable retained for deprecated low-level
-  compatibility helpers. High-level Blue writes accept `VaultV2BlueReallocation` directly; the V1
-  branch will be removed in the next major.
 
 ## Errors (`error.ts`)
 

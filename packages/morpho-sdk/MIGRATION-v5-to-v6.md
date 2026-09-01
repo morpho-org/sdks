@@ -5,6 +5,14 @@ write-method names while routing them through five direct BlueBundlesV1 entrypoi
 versioned reallocation-data helpers remain on the same entity. There is no parallel BlueBundlesV1
 extension or automatic fallback to the v5 route.
 
+> **Chain availability.** The direct BlueBundlesV1 route requires the `bundles.blueBundlesV1`
+> deployment on the target chain. On a registered chain without it (the previous Bundler3-routed
+> flows covered more chains), **every** Blue write — `supply`, `supplyCollateral`, `borrow`,
+> `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, `withdraw`, and
+> `refinance` — throws `UnknownAddressError` synchronously at handle creation (via
+> `validateWriteCommon`). Confirm coverage before upgrading, for example
+> `getChainAddresses(chainId).bundles?.blueBundlesV1 != null`.
+
 ## Update Blue methods
 
 | Stable method | v5 input | v6 input |
@@ -60,7 +68,7 @@ The transaction metadata exports and discriminator strings stay stable; their ar
 - Remove Blue `receiver`, `to`, and arbitrary `onBehalf` overrides. BlueBundlesV1 operates on the
   transaction sender and sends proceeds and refunds back to that sender; `userAddress` must be the
   eventual sender used to resolve requirements and position snapshots.
-- Replace PublicAllocator V1 or mixed `BlueReallocationPlan` write inputs with Vault V2
+- Replace PublicAllocator V1 or mixed-version reallocation write inputs with Vault V2
   `VaultV2BlueReallocation` inputs. All Vault V1 reallocation planning, data, input, validation,
   and explicit low-level Bundler3-composition surfaces remain available only as deprecated
   compatibility surfaces and will be removed in the next major; the high-level Blue writes do not
@@ -86,10 +94,7 @@ The destinations are different:
 
 - Classic ERC-20 approvals and ERC-2612 permits now authorize BlueBundlesV1.
 - Permit2 keeps its ERC-20 approval on canonical Permit2, but the SignatureTransfer payload names
-  BlueBundlesV1 as spender.
-- When selecting Permit2 SignatureTransfer, pass an explicit unused `permit2Nonce` to
-  `getRequirements()`; the SDK checks its unordered nonce bitmap before returning the signature
-  request.
+  BlueBundlesV1 as spender. Explicit Permit2 nonces are now required — see the subsection below.
 - Morpho authorization now grants BlueBundlesV1 operator rights instead of GeneralAdapter1.
 - Without signature support, saturated full-repay requirements use the token's reusable maximum
   allowance so a later bounded debt quote remains covered; BlueBundlesV1 still refunds unused
@@ -100,6 +105,24 @@ The destinations are different:
 Update simulations and analytics for the v6 action-field changes. Do not assert
 Bundler3/GeneralAdapter1 destinations or inspect Bundler3 sub-actions for these
 high-level writes.
+
+### Permit2 SignatureTransfer requires an explicit nonce
+
+SignatureTransfer consumes an owner-global unordered nonce rather than an allowance, so the SDK no
+longer allocates one implicitly. For a client with `supportSignature: true`, the default supply
+requirement path selects Permit2 and `supply(...).getRequirements()` now throws
+`MissingPermit2TransferFromNonceError` when no nonce is supplied. Pass an unused nonce explicitly:
+
+```ts
+const requirements = await market
+  .supply({ userAddress, assets, deadline })
+  .getRequirements({ permit2Nonce });
+```
+
+Allocate any `uint256` whose Permit2 `nonceBitmap` bit is still unset for `userAddress` (each nonce
+is single-use; a consumed one throws `Permit2TransferFromNonceAlreadyUsedError`). To skip Permit2
+for ERC-2612 tokens, pass `getRequirements({ useSimplePermit: true })`, which prefers a one-signature
+ERC-2612 permit and needs no nonce.
 
 ## Upgrade checklist
 

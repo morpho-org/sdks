@@ -1,12 +1,15 @@
 import type { Address } from "@morpho-org/blue-sdk";
 import { fetchToken, getPermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
-import type { Client, WalletClient } from "viem";
+import { type Client, maxUint256, type WalletClient } from "viem";
 import { signAndVerifyTypedData } from "../../../helpers/signAndVerifyTypedData.js";
 import { validateRequirementSpender } from "../../../helpers/validateRequirementSpender.js";
 import {
   ChainIdMismatchError,
   type Erc2612RequirementSignature,
+  ExpiredDeadlineError,
+  InputExceedsMaxError,
+  NonPositiveInputError,
   type PermitAction,
   type Requirement,
 } from "../../../types/index.js";
@@ -46,6 +49,9 @@ interface EncodeErc20PermitParams {
  * @throws {UnsupportedChainIdError} when `chainId` is absent from the address registry.
  * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not GeneralAdapter1,
  *   MidnightBundles, or BlueBundlesV1 for `chainId`.
+ * @throws {NonPositiveInputError} when an explicit `deadline` is not positive.
+ * @throws {InputExceedsMaxError} when an explicit `deadline` exceeds `uint256`.
+ * @throws {ExpiredDeadlineError} when an explicit `deadline` is positive but not in the future.
  * @throws {viem.BaseError} when the token metadata read fails with no fallback left.
  * @throws {MissingClientPropertyError} from `sign()` when the client has no `account.address`.
  * @throws {AddressMismatchError} from `sign()` when the client account differs from `userAddress`.
@@ -83,6 +89,24 @@ export const encodeErc20Permit = async (
   });
 
   const now = Time.timestamp();
+  // Validate an explicit deadline before the token-metadata read: this exported encoder can be
+  // called independently of the BlueBundlesV1 resolver, and an out-of-range or already-expired
+  // deadline otherwise surfaces only as a downstream wallet typed-data error or an on-chain revert.
+  if (params.deadline != null) {
+    if (params.deadline <= 0n) {
+      throw new NonPositiveInputError("deadline", params.deadline);
+    }
+    if (params.deadline > maxUint256) {
+      throw new InputExceedsMaxError({
+        field: "deadline",
+        value: params.deadline,
+        max: maxUint256,
+      });
+    }
+    if (params.deadline <= now) {
+      throw new ExpiredDeadlineError(params.deadline, now);
+    }
+  }
   const deadline = params.deadline ?? now + Time.s.from.h(2n);
 
   const tokenData = await fetchToken(token, viemClient, {

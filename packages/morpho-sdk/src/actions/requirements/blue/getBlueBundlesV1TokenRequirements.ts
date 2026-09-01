@@ -1,6 +1,6 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { erc2612Abi, permit2Abi } from "@morpho-org/blue-sdk-viem";
-import { getChainAddress, isDefined } from "@morpho-org/morpho-ts";
+import { getChainAddress, isDefined, Time } from "@morpho-org/morpho-ts";
 import {
   type Address,
   type Client,
@@ -14,6 +14,7 @@ import {
   ApprovalAmountLessThanSpendAmountError,
   type BlueBundlesV1TokenSignatureRequirement,
   type ERC20ApprovalAction,
+  ExpiredDeadlineError,
   InputExceedsMaxError,
   MissingPermit2TransferFromNonceError,
   NegativeInputError,
@@ -74,11 +75,12 @@ export interface GetBlueBundlesV1TokenRequirementsParams {
  * @throws {ChainIdMismatchError} when the connected client targets another chain.
  * @throws {NegativeInputError} when `amount` or `permit2Nonce` is negative.
  * @throws {NonPositiveInputError} when `deadline` is not positive.
+ * @throws {ExpiredDeadlineError} when `deadline` is positive but not in the future.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {UnknownAddressError} when BlueBundlesV1 is not registered for the chain.
  * @throws {MissingPermit2TransferFromNonceError} when Permit2 is selected without a nonce.
  * @throws {Permit2TransferFromNonceAlreadyUsedError} when `permit2Nonce` is already consumed.
- * @throws {InputExceedsMaxError} when `permit2Nonce` exceeds uint256.
+ * @throws {InputExceedsMaxError} when `amount`, `deadline`, or `permit2Nonce` exceeds uint256.
  * @throws {ApprovalAmountLessThanSpendAmountError} when `approvalAmount` is below `amount`.
  * @throws {viem.BaseError} when a required allowance, Permit2 nonce-bitmap, or ERC-2612 metadata
  *   read fails. A failed ERC-2612 nonce probe alone falls back to Permit2 or classic approval.
@@ -115,8 +117,31 @@ export const getBlueBundlesV1TokenRequirements = async (
   if (params.amount < 0n) {
     throw new NegativeInputError("amount", params.amount);
   }
+  // Reject oversized inputs before any RPC read so this resolver never asks the user to sign or
+  // submit an approval/permit that the eventual BlueBundlesV1 call (uint256 ABI) would reject.
+  if (params.amount > maxUint256) {
+    throw new InputExceedsMaxError({
+      field: "amount",
+      value: params.amount,
+      max: maxUint256,
+    });
+  }
   if (params.deadline <= 0n) {
     throw new NonPositiveInputError("deadline", params.deadline);
+  }
+  if (params.deadline > maxUint256) {
+    throw new InputExceedsMaxError({
+      field: "deadline",
+      value: params.deadline,
+      max: maxUint256,
+    });
+  }
+  // Reject an already-expired deadline before the RPC reads so a direct caller of this resolver
+  // never signs a permit for a supply the BlueBundlesV1 call would revert. The entity validates
+  // this too, but the exported resolver must guard its own callers.
+  const timestamp = Time.timestamp();
+  if (params.deadline <= timestamp) {
+    throw new ExpiredDeadlineError(params.deadline, timestamp);
   }
   if (params.amount === 0n) return [];
 
@@ -227,7 +252,12 @@ export const getBlueBundlesV1TokenRequirements = async (
     chainId: params.chainId,
     args: {
       spender: blueBundlesV1,
-      spendAmount: approvalAmount,
+      // The pull the operation actually performs is `amount`; `approvalAmount`
+      // is only the allowance to set when one is needed. Comparing the existing
+      // allowance against `amount` (not `approvalAmount`) avoids emitting a
+      // redundant approval — and a zero-reset on approve-only-once tokens like
+      // USDT — when the current allowance already covers the pull.
+      spendAmount: params.amount,
       approvalAmount,
     },
     allowances: allowance,

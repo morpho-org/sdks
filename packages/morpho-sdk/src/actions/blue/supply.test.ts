@@ -20,6 +20,7 @@ import {
   DepositAssetMismatchError,
   DepositOwnerMismatchError,
   DepositSpenderMismatchError,
+  InputExceedsMaxError,
   MissingReferralFeeRecipientError,
   NativeFundingAmountMismatchError,
   NonPositiveInputError,
@@ -440,5 +441,23 @@ describe("blueSupply", () => {
         args: { userAddress, assets: 0n, deadline: maxUint256 },
       }),
     ).toThrow(NonPositiveInputError);
+  });
+
+  test("error: InputExceedsMaxError when assets exceeds uint256", () => {
+    expect(() =>
+      blueSupply({
+        market,
+        args: { userAddress, assets: maxUint256 + 1n, deadline },
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
+  test("error: InputExceedsMaxError when the deadline exceeds uint256", () => {
+    expect(() =>
+      blueSupply({
+        market,
+        args: { userAddress, assets: 1n, deadline: maxUint256 + 1n },
+      }),
+    ).toThrow(InputExceedsMaxError);
   });
 });
