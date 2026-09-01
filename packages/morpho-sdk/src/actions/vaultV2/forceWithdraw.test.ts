@@ -410,6 +410,36 @@ describe("vaultV2ForceWithdraw", () => {
     },
   );
 
+  test("error: NegativeInputError for a negative minSharePriceE27", () => {
+    expect(() =>
+      vaultV2ForceWithdraw({
+        vault: { chainId, address: vault },
+        args: {
+          adapter,
+          exitAssets: 100n,
+          minSharePriceE27: -1n,
+          userAddress,
+          deadline,
+        },
+      }),
+    ).toThrow(NegativeInputError);
+  });
+
+  test("error: InputExceedsMaxError for a minSharePriceE27 above uint256", () => {
+    expect(() =>
+      vaultV2ForceWithdraw({
+        vault: { chainId, address: vault },
+        args: {
+          adapter,
+          exitAssets: 100n,
+          minSharePriceE27: maxUint256 + 1n,
+          userAddress,
+          deadline,
+        },
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
   test("error: MissingReferralFeeRecipientError for a fee without a recipient", () => {
     expect(() =>
       vaultV2ForceWithdraw({

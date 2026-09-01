@@ -33,10 +33,13 @@ export interface VaultV2ForceWithdrawPreview {
   /** Portion force-deallocated from the adapter's markets, net of the penalty. */
   readonly assetsToDeallocate: bigint;
   /**
-   * Assets charged as the force-deallocation penalty, `ceil(assetsToDeallocate × penalty)`. Exact
-   * for a single-market exit; across multiple markets the contract's per-chunk rounding can add at
-   * most one wei per additional market, which the order-independent plan deliberately does not
-   * attribute. This is the tight quote, never the inflated allowance bound.
+   * Lower-bound estimate of the assets charged as the force-deallocation penalty,
+   * `ceil(assetsToDeallocate × penalty)`. Exact for a single-market exit. Across multiple markets
+   * the contract charges `Σ ceil(chunkᵢ × penalty)`, which this order-independent plan cannot
+   * reproduce without committing to the adapter's execution order (reordered mid-loop by
+   * swap-and-pop); the true charge is at most `penaltyLegs − 1` wei higher. It is never the inflated
+   * allowance bound. `netAssets` is exact and does not depend on this field, so the residual never
+   * affects the quoted payout.
    */
   readonly penaltyAssets: bigint;
   /** Assets routed to the referral fee recipient. */

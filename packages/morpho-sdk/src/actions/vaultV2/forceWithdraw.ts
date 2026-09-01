@@ -68,9 +68,9 @@ export interface VaultV2ForceWithdrawParams {
  * @returns A deep-frozen `Readonly<Transaction<VaultV2ForceWithdrawAction>>` with `to`, `value`,
  *   `data`, and the typed action discriminator.
  * @throws {NonPositiveInputError} when `exitAssets` or `deadline` is not positive.
- * @throws {InputExceedsMaxError} when `referralFeePct` is not below WAD, which the contract rejects
- *   with `PctExceeded`.
- * @throws {NegativeInputError} when `referralFeePct` is negative.
+ * @throws {NegativeInputError} when `referralFeePct` or `minSharePriceE27` is negative.
+ * @throws {InputExceedsMaxError} when `referralFeePct` is not below WAD (the contract rejects it
+ *   with `PctExceeded`), or when `minSharePriceE27` exceeds `uint256`.
  * @throws {MissingReferralFeeRecipientError} when a positive `referralFeePct` has no recipient.
  * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
  * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
@@ -97,6 +97,17 @@ export const vaultV2ForceWithdraw = ({
     throw new NonPositiveInputError("exitAssets", args.exitAssets);
   if (args.deadline <= 0n)
     throw new NonPositiveInputError("deadline", args.deadline);
+  // `0n` stays valid — it is the intentional "no on-chain bound" opt-out — but a value the uint256
+  // slot cannot hold must fail with a dedicated error instead of viem's `IntegerOutOfRangeError`.
+  // The entity never emits these (it forbids a non-positive override); this guards direct callers.
+  if (args.minSharePriceE27 < 0n)
+    throw new NegativeInputError("minSharePriceE27", args.minSharePriceE27);
+  if (args.minSharePriceE27 > MathLib.MAX_UINT_256)
+    throw new InputExceedsMaxError({
+      field: "minSharePriceE27",
+      value: args.minSharePriceE27,
+      max: MathLib.MAX_UINT_256,
+    });
 
   const referralFeePct = args.referralFeePct ?? 0n;
   const referralFeeRecipient = args.referralFeeRecipient ?? zeroAddress;
