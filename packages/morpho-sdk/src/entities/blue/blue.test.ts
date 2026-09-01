@@ -20,8 +20,8 @@ import {
 } from "../../helpers/index.js";
 import {
   AccrualPositionUserMismatchError,
-  BorrowExceedsSafeLtvError,
   type BlueBundlesV1TokenRequirementSignature,
+  BorrowExceedsSafeLtvError,
   ChainIdMismatchError,
   ExpiredDeadlineError,
   InputExceedsMaxError,
@@ -30,7 +30,6 @@ import {
   MissingAccrualPositionError,
   MissingReferralFeeRecipientError,
   NegativeInputError,
-  ReferralFeePctExceededError,
   RepayExceedsDebtError,
   RepaySharesExceedDebtError,
   type VaultV2BlueReallocation,
@@ -514,7 +513,7 @@ describe("MorphoBlue common write validation", () => {
       referralFeePct: MathLib.WAD,
       referralFeeRecipient: otherUserAddress,
     })) {
-      expect(call, method).toThrow(ReferralFeePctExceededError);
+      expect(call, method).toThrow(InputExceedsMaxError);
     }
   });
 });
@@ -967,7 +966,6 @@ describe("MorphoBlue position validation", () => {
           args: {
             spender: getChainAddress(mainnet.id, "bundles.blueBundlesV1"),
             amount,
-            nonce: 1n,
             deadline,
           },
         },

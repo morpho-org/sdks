@@ -15,7 +15,7 @@ import {
   NegativeInputError,
   NonPositiveInputError,
   Permit2TransferFromNonceAlreadyUsedError,
-} from "../../../types/index.js";
+} from "../../types/index.js";
 import { getBlueBundlesV1TokenRequirements } from "./getBlueBundlesV1TokenRequirements.js";
 
 const account = privateKeyToAccount(

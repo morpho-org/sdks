@@ -1,7 +1,8 @@
 import { addressesRegistry, MathLib } from "@morpho-org/blue-sdk";
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import fc from "fast-check";
-import { maxUint256 } from "viem";
+import { createWalletClient, http, maxUint256 } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
@@ -14,7 +15,15 @@ import { resolveBundlesTokenRequirements } from "./resolveBundlesTokenRequiremen
 const chainId = mainnet.id;
 const { usdc, permit2 } = addressesRegistry[chainId];
 const spender = getChainAddress(chainId, "bundles.vaultBundlesV1");
-const owner = "0x0000000000000000000000000000000000000001" as const;
+const account = privateKeyToAccount(
+  "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+);
+const owner = account.address;
+const walletClient = createWalletClient({
+  account,
+  chain: mainnet,
+  transport: http(),
+});
 const deadline = 1_900_000_000n;
 
 describe("resolveBundlesTokenRequirements", () => {
@@ -47,7 +56,7 @@ describe("resolveBundlesTokenRequirements", () => {
     );
   });
 
-  test("behavior: Permit2 approval precedes SignatureTransfer and preserves nonce", () => {
+  test("behavior: Permit2 approval precedes SignatureTransfer and preserves nonce", async () => {
     const amount = MathLib.MAX_UINT_160 + 1n;
     const requirements = resolveBundlesTokenRequirements({
       type: "permit2TransferFrom",
@@ -68,16 +77,22 @@ describe("resolveBundlesTokenRequirements", () => {
       type: "erc20Approval",
       args: { spender: permit2, amount: maxUint256 },
     });
-    expect(isRequirementSignature(requirements[1])).toBe(true);
-    expect(requirements[1]?.action).toEqual({
+    const requirement = requirements[1];
+    expect(isRequirementSignature(requirement)).toBe(true);
+    expect(requirement?.action).toEqual({
       type: "permit2TransferFrom",
-      args: { spender, amount, nonce: 257n, deadline },
+      args: { spender, amount, deadline },
     });
+    if (!isRequirementSignature(requirement)) {
+      throw new Error("SignatureTransfer requirement is missing");
+    }
+    const signed = await requirement.sign(walletClient, owner);
+    expect(signed.args.nonce).toBe(257n);
   });
 
-  test("behavior: distinct caller-selected nonces remain distinct", () => {
-    fc.assert(
-      fc.property(fc.integer({ min: 0, max: 255 }), (nonce) => {
+  test("behavior: distinct caller-selected nonces remain distinct", async () => {
+    await fc.assert(
+      fc.asyncProperty(fc.integer({ min: 0, max: 255 }), async (nonce) => {
         const requirement = resolveBundlesTokenRequirements({
           type: "permit2TransferFrom",
           token: usdc,
@@ -91,10 +106,11 @@ describe("resolveBundlesTokenRequirements", () => {
           nonce: BigInt(nonce),
           nonceBitmap: 0n,
         })[0];
-        expect(requirement?.action).toMatchObject({
-          type: "permit2TransferFrom",
-          args: { nonce: BigInt(nonce) },
-        });
+        if (!isRequirementSignature(requirement)) {
+          throw new Error("SignatureTransfer requirement is missing");
+        }
+        const signed = await requirement.sign(walletClient, owner);
+        expect(signed.args.nonce).toBe(BigInt(nonce));
       }),
       { numRuns: 100, seed: 20_260_911 },
     );

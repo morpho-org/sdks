@@ -415,7 +415,7 @@ describe("blueSupplyCollateralBorrow", () => {
       },
       action: {
         type: "permit2TransferFrom",
-        args: { spender: blueBundlesV1, amount: 5n, nonce: 1n, deadline },
+        args: { spender: blueBundlesV1, amount: 5n, deadline },
       },
     } satisfies BlueBundlesV1TokenRequirementSignature;
     const authorizationSignature = {
