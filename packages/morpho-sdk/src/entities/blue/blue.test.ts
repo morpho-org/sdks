@@ -5,6 +5,7 @@ import {
   MathLib,
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
+import { blueAbi } from "@morpho-org/blue-sdk-viem";
 import { getChainAddress } from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import { type Address, erc20Abi, maxUint256 } from "viem";
@@ -104,6 +105,20 @@ const getCommonWriteCalls = (
   const positionData = makePosition(marketParams);
 
   return [
+    ["supply", () => entity.supply({ userAddress, assets: 1n, ...common })],
+    [
+      "withdraw",
+      () =>
+        entity.withdraw({
+          userAddress,
+          positionData: makePosition(marketParams, {
+            borrowShares: 0n,
+            supplyShares: 10n,
+          }),
+          assets: 1n,
+          ...common,
+        }),
+    ],
     [
       "supplyCollateralBorrow",
       () =>
@@ -133,6 +148,16 @@ const getPositionWriteCalls = (
   positionData: AccrualPosition,
 ) =>
   [
+    [
+      "withdraw",
+      () =>
+        entity.withdraw({
+          userAddress,
+          positionData,
+          assets: 1n,
+          deadline: maxUint256,
+        }),
+    ],
     [
       "supplyCollateralBorrow",
       () =>
@@ -260,6 +285,89 @@ describe("MorphoBlue write surface", () => {
     expect(transaction.action.type).toBe("blueRefinance");
   });
 
+  test("target BlueBundlesV1 for token approval and Morpho authorization", async () => {
+    const handle = createMockClient(mainnet);
+    const blueBundlesV1 = getChainAddress(mainnet.id, "bundles.blueBundlesV1");
+    mockRead(handle, {
+      address: marketParams.loanToken,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    mockRead(handle, {
+      address: getChainAddress(mainnet.id, "morpho"),
+      abi: blueAbi,
+      functionName: "isAuthorized",
+      result: false,
+    });
+    const entity = handle.client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.blue(marketParams, mainnet.id);
+
+    const tokenRequirements = await entity
+      .supply({
+        userAddress,
+        assets: 1n,
+        deadline: maxUint256,
+      })
+      .getRequirements();
+    const authorizationRequirements = await entity
+      .withdraw({
+        userAddress,
+        positionData: makePosition(marketParams, {
+          borrowShares: 0n,
+          supplyShares: 10n ** 18n,
+        }),
+        assets: 1n,
+        deadline: maxUint256,
+      })
+      .getRequirements();
+
+    expect(tokenRequirements).toMatchObject([
+      {
+        action: {
+          type: "erc20Approval",
+          args: { spender: blueBundlesV1 },
+        },
+      },
+    ]);
+    expect(authorizationRequirements).toMatchObject([
+      {
+        action: {
+          type: "blueAuthorization",
+          args: { authorized: blueBundlesV1, isAuthorized: true },
+        },
+      },
+    ]);
+  });
+
+  test("supply forwards a reusable approvalAmount to the token requirement", async () => {
+    const handle = createMockClient(mainnet);
+    const blueBundlesV1 = getChainAddress(mainnet.id, "bundles.blueBundlesV1");
+    mockRead(handle, {
+      address: marketParams.loanToken,
+      abi: erc20Abi,
+      functionName: "allowance",
+      result: 0n,
+    });
+    const market = handle.client
+      .extend(morphoViemExtension({ supportSignature: false }))
+      .morpho.blue(marketParams, mainnet.id);
+
+    const requirements = await market
+      .supply({ assets: 1n, userAddress, deadline: maxUint256 })
+      .getRequirements({ approvalAmount: maxUint256 });
+
+    expect(requirements).toMatchObject([
+      {
+        action: {
+          type: "erc20Approval",
+          args: { spender: blueBundlesV1, amount: maxUint256 },
+        },
+      },
+    ]);
+  });
+
   test("repay forwards a reusable approvalAmount to the token requirement", async () => {
     const handle = createMockClient(mainnet);
     const blueBundlesV1 = getChainAddress(mainnet.id, "bundles.blueBundlesV1");
@@ -339,6 +447,20 @@ describe("MorphoBlue common write validation", () => {
     }
   });
 
+  test("error: ExpiredDeadlineError when a deadline expires before requirements", () => {
+    const now = 1_800_000_000n;
+    const action = withChainTimestamp(now, () =>
+      makeEntity().supply({
+        userAddress,
+        assets: 1n,
+        deadline: now + 1n,
+      }),
+    );
+    expect(() =>
+      withChainTimestamp(now + 1n, () => action.getRequirements()),
+    ).toThrow(ExpiredDeadlineError);
+  });
+
   test("error: referral controls across all direct entrypoint paths", () => {
     const entity = makeEntity();
     for (const [method, call] of getCommonWriteCalls(entity, {
@@ -407,6 +529,7 @@ describe("MorphoBlue position validation", () => {
         userAddress,
         positionData: supplyPosition,
         assets: supplyPosition.supplyAssets + 1n,
+        deadline: maxUint256,
       }),
     ).toThrow(WithdrawExceedsSupplyError);
     expect(() =>
@@ -414,6 +537,7 @@ describe("MorphoBlue position validation", () => {
         userAddress,
         positionData: supplyPosition,
         shares: supplyPosition.supplyShares + 1n,
+        deadline: maxUint256,
       }),
     ).toThrow(WithdrawSharesExceedSupplyError);
     expect(() =>

@@ -152,25 +152,30 @@ export interface BlueSupplyAction
   extends BaseAction<
     "blueSupply",
     {
-      market: Hex;
-      amount: bigint;
-      onBehalf: Address;
-      maxSharePrice: bigint;
-      nativeAmount?: bigint;
+      readonly market: Hex;
+      readonly assets: bigint;
+      readonly onBehalf: Address;
+      readonly nativeAmount?: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
+      readonly deadline: bigint;
     }
   > {}
 
+/** Metadata for a direct BlueBundlesV1 loan-asset withdrawal. */
 export interface BlueWithdrawAction
   extends BaseAction<
     "blueWithdraw",
     {
-      market: Hex;
-      assets: bigint;
-      shares: bigint;
-      receiver: Address;
-      minSharePrice: bigint;
-      /** Loan-token assets donated as BluePublicAllocator V2 penalties. */
+      readonly market: Hex;
+      readonly withdrawAssets: bigint;
+      readonly withdrawShares: bigint;
+      readonly onBehalf: Address;
+      readonly reallocations: number;
       readonly reallocationPenaltyAssets: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
+      readonly deadline: bigint;
     }
   > {}
 
