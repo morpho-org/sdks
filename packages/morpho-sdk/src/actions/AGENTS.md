@@ -34,8 +34,9 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 Only valid for assets/collateral configured as wNative. Vault deposit bundles prepend
 `nativeTransfer` + `wrapNative`, and `BundlerAction.encodeBundle` derives `tx.value`. Direct
 BlueBundlesV1 funding instead sends the native amount as `tx.value`; it is exclusive with an ERC-20
-token permit and must equal the funded entrypoint amount. Reject native amounts on non-wNative
-assets with the dedicated error.
+token permit and must equal the funded entrypoint amount. `refinance` moves an existing on-chain
+position and takes no native funding. Reject native amounts on non-wNative assets with the dedicated
+error.
 
 ## Shared liquidity / reallocations (canonical statement)
 

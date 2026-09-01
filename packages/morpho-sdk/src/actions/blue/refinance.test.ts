@@ -14,6 +14,8 @@ import { describe, expect, test } from "vitest";
 import { blueBundlesV1Abi } from "../../abis.js";
 import {
   type AuthorizationRequirementSignature,
+  InputExceedsMaxError,
+  NegativeInputError,
   RefinanceSameMarketError,
   RefinanceTokenMismatchError,
   type VaultV2BlueReallocation,
@@ -294,5 +296,23 @@ describe("blueRefinance", () => {
         args: { userAddress, maxLtv, deadline },
       }),
     ).toThrow(RefinanceTokenMismatchError);
+  });
+
+  test("error: NegativeInputError when maxLtv is negative", () => {
+    expect(() =>
+      blueRefinance({
+        market,
+        args: { userAddress, maxLtv: -1n, deadline },
+      }),
+    ).toThrow(NegativeInputError);
+  });
+
+  test("error: InputExceedsMaxError when maxLtv overflows uint256", () => {
+    expect(() =>
+      blueRefinance({
+        market,
+        args: { userAddress, maxLtv: maxUint256 + 1n, deadline },
+      }),
+    ).toThrow(InputExceedsMaxError);
   });
 });

@@ -243,6 +243,7 @@ export interface BlueRepayWithdrawCollateralAction
     BlueRepayWithdrawCollateralActionArgs
   > {}
 
+/** Metadata for a direct BlueBundlesV1 full borrow-position migration. */
 export interface BlueRefinanceAction
   extends BaseAction<
     "blueRefinance",

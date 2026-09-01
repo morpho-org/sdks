@@ -27,9 +27,8 @@ extension or automatic fallback to the v5 route.
 | `repayWithdrawCollateral` | `amount` or `shares`, `withdrawAmount`, optional additive `nativeAmount`, `slippageTolerance` | Rename the repay modes to `repayAssets`/`repayShares` and `withdrawAmount` to `collateralAssets`; remove slippage; add `deadline`, `referralFeePct`, and `referralFeeRecipient`. |
 | `refinance` | `target`, `collateralAmount`, `borrowAssets`/`borrowShares`, `slippageTolerance`, `targetReallocations` | Rename `target` to `destination`; remove partial-leg amounts and share-price inputs; rename V2-only `targetReallocations` to `reallocations`; add `deadline`, `referralFeePct`, and `referralFeeRecipient`. The full live position always moves. |
 
-The two combined methods require at least one non-zero leg. `refinance` supports only a
-full debt-and-collateral migration between markets with the same loan and collateral tokens. Stay
-on v5 if the product requires partial or collateral-only refinance behavior.
+The two combined methods require at least one non-zero leg. See the dedicated **Blue refinance**
+section below for that method's larger shape change.
 
 ## Update pure action builder inputs and metadata
 
@@ -123,6 +122,59 @@ Allocate any `uint256` whose Permit2 `nonceBitmap` bit is still unset for `userA
 is single-use; a consumed one throws `Permit2TransferFromNonceAlreadyUsedError`). To skip Permit2
 for ERC-2612 tokens, pass `getRequirements({ useSimplePermit: true })`, which prefers a one-signature
 ERC-2612 permit and needs no nonce.
+
+## Blue refinance
+
+The `refinance` entity method and the `blueRefinance` pure builder keep their names but now call
+BlueBundlesV1's full-position migration entrypoint. Both drop partial and collateral-only migration:
+the full live source debt and collateral always move, the source and destination markets must use the
+same loan and collateral tokens and must not be the same market, and Morpho authorization targets
+BlueBundlesV1.
+
+`market.refinance(...)` (entity method):
+
+- Rename `target` to `destination`.
+- Remove `collateralAmount`, `borrowAssets`, `borrowShares`, slippage, and share-price bounds.
+- Rename V2-only `targetReallocations` to `reallocations`.
+- Add `deadline` and optional referral-fee fields.
+- Pass source and destination position snapshots.
+
+`blueRefinance(...)` (pure builder):
+
+- Replace the top-level `{ source: { chainId, marketParams }, target: { marketParams } }` shape with
+  `{ market: { chainId, sourceMarketParams, destinationMarketParams } }`.
+- Rename `args.user` to `args.userAddress` and supply `args.maxLtv` (the buffered destination LTV).
+- Remove `args.collateralAmount`, `args.borrowAssets`, `args.borrowShares`,
+  `args.minBorrowSharePrice`, and `args.maxRepaySharePrice`.
+- Rename `args.targetReallocations` to `args.reallocations`.
+- Add `args.deadline` and optional referral-fee fields.
+
+The action metadata replaces `targetMarket`, partial-leg amounts, user, share-price bounds, and the
+V1 fee with `destinationMarket`, `maxLtv`, `onBehalf`, a reallocation count and penalty total,
+referral-fee fields, and `deadline`.
+
+Stay on v5 if the product requires partial or collateral-only refinance behavior.
+
+The partial-migration error classes `BorrowAmountAndSharesExclusiveError`,
+`RefinanceExceedsCollateralError`, `RefinanceExceedsBorrowSharesError`,
+`RefinanceExceedsBorrowAssetsError`, and `RefinanceSharesMissingBorrowAssetsError` are removed. The
+full-position route validates ownership and token/market compatibility, then checks the combined
+destination position against the buffered LLTV (`BorrowExceedsSafeLtvError`); `RefinanceSameMarketError`
+and `RefinanceTokenMismatchError` stay.
+
+## Removed action-output field: `reallocationFee`
+
+`BlueBorrowAction`, `BlueWithdrawAction`, `BlueSupplyCollateralBorrowAction`, and
+`BlueRefinanceAction` no longer expose `reallocationFee` in `action.args`. That field only ever
+carried Vault V1 native PublicAllocator fees, which high-level writes no longer emit. Read
+`reallocationPenaltyAssets` for the loan-token penalty donated by Vault V2 BluePublicAllocator
+reallocations.
+
+## Removed type: `BlueReallocationPlan`
+
+The `BlueReallocationPlan` union is removed. High-level Blue write inputs accept
+`Iterable<VaultV2BlueReallocation>` directly; for explicit low-level Vault V1 composition, use
+`VaultV1Reallocation[]`.
 
 ## Upgrade checklist
 
