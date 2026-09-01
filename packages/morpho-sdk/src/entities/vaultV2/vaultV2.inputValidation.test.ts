@@ -25,6 +25,6 @@ describe("MorphoVaultV2 deposit input validation", () => {
     }
 
     expect(error).toBeInstanceOf(NonPositiveInputError);
-    expect(error).toMatchObject({ field: "totalAssets", value: 0n });
+    expect(error).toMatchObject({ field: "amount", value: 0n });
   });
 });

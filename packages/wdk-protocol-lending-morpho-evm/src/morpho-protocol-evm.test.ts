@@ -10,9 +10,10 @@ import type {
   ApprovalOrSignatureRequirement,
   AuthorizationOrSignatureRequirement,
   BlueApprovalOrSignatureRequirement,
+  BundlesApprovalOrSignatureRequirement,
   MorphoBorrowOptions,
   MorphoCollateralSupplyOptions,
-  MorphoSupplyOptions,
+  MorphoExclusiveSupplyOptions,
   RequirementOptions,
 } from "./morpho-protocol-evm.js";
 
@@ -89,6 +90,9 @@ const supplyAction = {
   buildTx: vi.fn().mockReturnValue(SUPPLY_TX),
 };
 const withdrawAction = {
+  getRequirements: vi
+    .fn()
+    .mockResolvedValue([{ action: { type: "erc20Approval" } }]),
   buildTx: vi.fn().mockReturnValue(WITHDRAW_TX),
 };
 const borrowAction = {
@@ -201,6 +205,22 @@ describe.sequential("MorphoProtocolEvm", () => {
   });
 
   describe("supply", () => {
+    test("types: vault funding is ERC-20 or native, never both", () => {
+      expectTypeOf<{
+        token: string;
+        amount: bigint;
+      }>().toMatchTypeOf<MorphoExclusiveSupplyOptions>();
+      expectTypeOf<{
+        token: string;
+        nativeAmount: bigint;
+      }>().toMatchTypeOf<MorphoExclusiveSupplyOptions>();
+      expectTypeOf<{
+        token: string;
+        amount: bigint;
+        nativeAmount: bigint;
+      }>().not.toMatchTypeOf<MorphoExclusiveSupplyOptions>();
+    });
+
     test("should build a vault deposit with morpho-sdk and send it", async () => {
       account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
       account.sendTransaction = vi
@@ -219,7 +239,6 @@ describe.sequential("MorphoProtocolEvm", () => {
       expect(vaultV2Mock).toHaveBeenCalledWith(VAULT, 1);
       expect(vaultV2Entity.deposit).toHaveBeenCalledWith({
         amount: 100_000n,
-        nativeAmount: undefined,
         userAddress: ADDRESS,
         vaultData,
         slippageTolerance: undefined,
@@ -235,11 +254,11 @@ describe.sequential("MorphoProtocolEvm", () => {
         requirementOptions,
       );
       expectTypeOf(promise).toEqualTypeOf<
-        Promise<readonly ApprovalOrSignatureRequirement[]>
+        Promise<readonly BundlesApprovalOrSignatureRequirement[]>
       >();
       expectTypeOf<
-        NonNullable<MorphoSupplyOptions["requirementSignature"]>
-      >().toEqualTypeOf<PermitRequirementSignature>();
+        NonNullable<MorphoExclusiveSupplyOptions["requirementSignature"]>
+      >().toEqualTypeOf<BlueBundlesV1TokenRequirementSignature>();
       const requirements = await promise;
 
       expect(requirements).toEqual([{ action: { type: "erc20Approval" } }]);
@@ -332,7 +351,6 @@ describe.sequential("MorphoProtocolEvm", () => {
 
       expect(account.getTokenBalance).not.toHaveBeenCalled();
       expect(vaultV2Entity.deposit).toHaveBeenCalledWith({
-        amount: 0n,
         nativeAmount: 100_000n,
         userAddress: ADDRESS,
         vaultData: expect.objectContaining({ asset: COLLATERAL }),
@@ -343,9 +361,7 @@ describe.sequential("MorphoProtocolEvm", () => {
     test("should reject zero deposit amount across erc20 and native sources", async () => {
       await expect(
         protocol.supply({ token: TOKEN, amount: 0n }),
-      ).rejects.toThrow(
-        "'amount' or 'nativeAmount' should be greater than zero.",
-      );
+      ).rejects.toThrow("'amount' should be greater than zero.");
     });
 
     test("should use vaultV2 when the selected preset is configured", async () => {
@@ -389,9 +405,7 @@ describe.sequential("MorphoProtocolEvm", () => {
     test("should throw if 'amount' and 'nativeAmount' are zero", async () => {
       await expect(
         protocol.supply({ token: TOKEN, amount: 0n }),
-      ).rejects.toThrow(
-        "'amount' or 'nativeAmount' should be greater than zero.",
-      );
+      ).rejects.toThrow("'amount' should be greater than zero.");
     });
 
     test("should reject 'amount' numbers above Number.MAX_SAFE_INTEGER", async () => {
@@ -462,6 +476,28 @@ describe.sequential("MorphoProtocolEvm", () => {
       });
       expect(account.sendTransaction).toHaveBeenCalledWith(WITHDRAW_TX);
       expect(result).toEqual({ hash: "dummy-withdraw-hash", fee: 12_345n });
+    });
+
+    test("should expose and consume vault-share requirements", async () => {
+      const options = { token: TOKEN, amount: 100_000n };
+      const requirements = await protocol.getWithdrawRequirements(options);
+      expectTypeOf(requirements).toEqualTypeOf<
+        readonly ApprovalOrSignatureRequirement[]
+      >();
+      expect(requirements).toEqual([{ action: { type: "erc20Approval" } }]);
+      expect(withdrawAction.getRequirements).toHaveBeenCalledWith();
+
+      const requirementSignature = {
+        args: { deadline: SIGNATURE_DEADLINE },
+        action: { type: "permit" },
+      } as unknown as PermitRequirementSignature;
+      account.sendTransaction = vi
+        .fn()
+        .mockResolvedValue({ hash: "dummy-withdraw-hash", fee: 12_345n });
+      await protocol.withdraw({ ...options, requirementSignature });
+      expect(withdrawAction.buildTx).toHaveBeenCalledWith([
+        requirementSignature,
+      ]);
     });
 
     test("should throw if 'to' is not the wallet address", async () => {

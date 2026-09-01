@@ -79,7 +79,9 @@ Options:
 
 Built-in presets already carry their expected chain id. If you use `earnVaultAddress`, `borrowMarketParams`, or `borrowMarketId` directly, pass `chainId` so the adapter can fail before building transactions after a browser-wallet chain switch.
 
-Vault deposits accept `amount`, `nativeAmount`, or both. Blue collateral methods accept `MorphoCollateralSupplyOptions`, whose type requires exactly one of `amount` or `nativeAmount`. `nativeAmount` is only valid when the configured vault asset or collateral token is the wrapped native token for the chain.
+Vault deposits accept `MorphoExclusiveSupplyOptions`, and Blue collateral methods accept
+`MorphoCollateralSupplyOptions`. Both require exactly one of `amount` or `nativeAmount`.
+`nativeAmount` is only valid when the configured asset is the wrapped native token for the chain.
 
 ## Methods
 
@@ -89,6 +91,7 @@ Vault deposits accept `amount`, `nativeAmount`, or both. Blue collateral methods
 | `getSupplyRequirements(options)` | Return SDK requirements for vault deposit |
 | `quoteSupply(options, config?)` | Quote vault deposit |
 | `withdraw(options, config?)` | Withdraw assets from the configured vault |
+| `getWithdrawRequirements(options)` | Return the exact vault-share approval or permit requirement |
 | `quoteWithdraw(options, config?)` | Quote vault withdrawal |
 | `supplyCollateral(options, config?)` | Supply collateral to the configured market |
 | `getSupplyCollateralRequirements(options)` | Return SDK requirements for collateral supply |

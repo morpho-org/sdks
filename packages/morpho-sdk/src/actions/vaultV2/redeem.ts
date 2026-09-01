@@ -1,80 +1,99 @@
-import { vaultV2Abi } from "@morpho-org/blue-sdk-viem";
-import { deepFreeze } from "@morpho-org/morpho-ts";
+import { getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData } from "viem";
-import { addTransactionMetadata } from "../../helpers/index.js";
+import { vaultBundlesV1Abi } from "../../abis.js";
 import {
   type Metadata,
   NonPositiveInputError,
+  type PermitRequirementSignature,
   type Transaction,
   type VaultV2RedeemAction,
 } from "../../types/index.js";
+import {
+  finalizeVaultBundlesV1Transaction,
+  getBundlesSharesPermit,
+  normalizeBundlesCommonParams,
+} from "../bundles/index.js";
 
 /** Parameters for {@link vaultV2Redeem}. */
 export interface VaultV2RedeemParams {
-  vault: {
-    address: Address;
+  readonly vault: { readonly chainId: number; readonly address: Address };
+  readonly args: {
+    readonly shares: bigint;
+    readonly userAddress: Address;
+    readonly recipient?: never;
+    readonly onBehalf?: never;
+    readonly requirementSignature?: PermitRequirementSignature;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
+    readonly deadline: bigint;
   };
-  args: {
-    shares: bigint;
-    recipient: Address;
-    onBehalf: Address;
-  };
-  metadata?: Metadata;
+  readonly metadata?: Metadata;
 }
 
 /**
- * Prepares a redeem transaction for a VaultV2 contract.
+ * Encodes an exact-shares Vault V2 redemption through VaultBundlesV1.
  *
- * Direct vault call — not routed through the bundler. Redeem has no inflation-attack surface,
- * so skipping the bundler avoids an unnecessary approval and keeps the UX clean.
- *
- * @param params.vault.address - The VaultV2 address.
- * @param params.args.shares - Amount of vault shares to redeem.
- * @param params.args.recipient - Address that receives the redeemed assets.
- * @param params.args.onBehalf - Address whose shares are burned.
- * @param params.metadata - Optional analytics metadata attached to the transaction.
- * @returns A deep-frozen `Transaction<VaultV2RedeemAction>` with `to`, `value`, `data`, and the
- *   typed `action` discriminator the simulation layer consumes.
- * @throws {NonPositiveInputError} when `shares <= 0n`.
+ * @param params - Vault, shares, share permit, fee, and deadline values.
+ * @returns A deep-frozen VaultBundlesV1 redemption transaction.
+ * @throws {NonPositiveInputError} when `shares` or `deadline` is not positive.
+ * @throws {BundlesPermitMismatchError} when the optional share permit is incompatible.
  * @example
  * ```ts
  * import { vaultV2Redeem } from "@morpho-org/morpho-sdk";
+ * import { zeroAddress } from "viem";
  *
  * const tx = vaultV2Redeem({
- *   vault: { address: vaultAddress },
- *   args: { shares: 1_000_000n, recipient, onBehalf },
+ *   vault: { chainId: 1, address: zeroAddress },
+ *   args: { shares: 1_000_000n, userAddress: zeroAddress, deadline: 1_900_000_000n },
  * });
- * // tx satisfies Readonly<Transaction<VaultV2RedeemAction>>
+ * // tx.action.type === "vaultV2Redeem"
  * ```
  */
-export const vaultV2Redeem = ({
-  vault: { address: vaultAddress },
-  args: { shares, recipient, onBehalf },
-  metadata,
-}: VaultV2RedeemParams): Readonly<Transaction<VaultV2RedeemAction>> => {
-  if (shares <= 0n) {
-    throw new NonPositiveInputError("shares", shares);
+export const vaultV2Redeem = (
+  params: VaultV2RedeemParams,
+): Readonly<Transaction<VaultV2RedeemAction>> => {
+  if (params.args.shares <= 0n) {
+    throw new NonPositiveInputError("shares", params.args.shares);
   }
-
-  let tx = {
-    to: vaultAddress,
-    data: encodeFunctionData({
-      abi: vaultV2Abi,
-      functionName: "redeem",
-      args: [shares, recipient, onBehalf],
-    }),
+  const common = normalizeBundlesCommonParams(params.args);
+  const spender = getChainAddress(
+    params.vault.chainId,
+    "bundles.vaultBundlesV1",
+  );
+  const sharesPermit = getBundlesSharesPermit({
+    vault: params.vault.address,
+    deadline: common.deadline,
+    owner: params.args.userAddress,
+    spender,
+    amount: params.args.shares,
+    requirementSignature: params.args.requirementSignature,
+  });
+  return finalizeVaultBundlesV1Transaction({
+    chainId: params.vault.chainId,
     value: 0n,
-  };
-
-  if (metadata) {
-    tx = addTransactionMetadata(tx, metadata);
-  }
-
-  return deepFreeze({
-    ...tx,
+    data: encodeFunctionData({
+      abi: vaultBundlesV1Abi,
+      functionName: "vaultBundlesV1Withdraw",
+      args: [
+        params.vault.address,
+        0n,
+        params.args.shares,
+        sharesPermit,
+        common.referralFeePct,
+        common.referralFeeRecipient,
+        common.deadline,
+      ],
+    }),
     action: {
       type: "vaultV2Redeem",
-      args: { vault: vaultAddress, shares, recipient },
+      args: {
+        vault: params.vault.address,
+        shares: params.args.shares,
+        referralFeePct: common.referralFeePct,
+        referralFeeRecipient: common.referralFeeRecipient,
+        deadline: common.deadline,
+      },
     },
+    metadata: params.metadata,
   });
 };

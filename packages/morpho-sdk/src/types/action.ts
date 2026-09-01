@@ -25,11 +25,15 @@ export interface VaultV2DepositAction
   extends BaseAction<
     "vaultV2Deposit",
     {
-      vault: Address;
-      amount: bigint;
-      maxSharePrice: bigint;
-      recipient: Address;
-      nativeAmount?: bigint;
+      readonly vault: Address;
+      readonly amount: bigint;
+      readonly maxSharePrice: bigint;
+      readonly nativeAmount?: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
+      readonly referralFeeAssets: bigint;
+      readonly netAssets: bigint;
+      readonly deadline: bigint;
     }
   > {}
 
@@ -37,9 +41,13 @@ export interface VaultV2WithdrawAction
   extends BaseAction<
     "vaultV2Withdraw",
     {
-      vault: Address;
-      amount: bigint;
-      recipient: Address;
+      readonly vault: Address;
+      readonly amount: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
+      readonly referralFeeAssets: bigint;
+      readonly netAssets: bigint;
+      readonly deadline: bigint;
     }
   > {}
 
@@ -47,9 +55,11 @@ export interface VaultV2RedeemAction
   extends BaseAction<
     "vaultV2Redeem",
     {
-      vault: Address;
-      shares: bigint;
-      recipient: Address;
+      readonly vault: Address;
+      readonly shares: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
+      readonly deadline: bigint;
     }
   > {}
 

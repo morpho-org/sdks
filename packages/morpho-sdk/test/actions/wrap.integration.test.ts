@@ -10,16 +10,20 @@ import {
   NegativeInputError,
   NonPositiveInputError,
   vaultV1Deposit,
+  vaultV2Deposit,
 } from "../../src/index.js";
 import {
   GauntletWethVaultV1,
   SteakhouseUsdcVaultV1,
 } from "../fixtures/vaultV1.js";
+import { KeyrockUsdcVaultV2, KpkWETHVaultV2 } from "../fixtures/vaultV2.js";
 import { testInvariants } from "../helpers/invariants.js";
 import { test } from "../setup.js";
 
-describe("VaultBundlesV1 native Vault V1 funding", () => {
-  test("deposits native ETH into a wNative vault", async ({ client }) => {
+describe("VaultBundlesV1 native funding", () => {
+  test("Vault V1 deposits native ETH into a wNative vault", async ({
+    client,
+  }) => {
     const nativeAmount = parseUnits("1", 18);
     await client.setBalance({
       address: client.account.address,
@@ -57,6 +61,45 @@ describe("VaultBundlesV1 native Vault V1 funding", () => {
     expect(finalState.morphoAssetBalance).toBe(initialState.morphoAssetBalance);
   });
 
+  test("Vault V2 deposits native ETH into a wNative vault", async ({
+    client,
+  }) => {
+    const nativeAmount = parseUnits("1", 18);
+    await client.setBalance({
+      address: client.account.address,
+      value: nativeAmount + parseUnits("10", 18),
+    });
+
+    const {
+      vaults: {
+        KpkWETHVaultV2: { initialState, finalState },
+      },
+    } = await testInvariants({
+      client,
+      params: { vaults: { KpkWETHVaultV2 } },
+      actionFn: async () => {
+        const vault = client
+          .extend(morphoViemExtension())
+          .morpho.vaultV2(KpkWETHVaultV2.address, mainnet.id);
+        const deposit = vault.deposit({
+          userAddress: client.account.address,
+          nativeAmount,
+          vaultData: await vault.getData(),
+        });
+        expect(await deposit.getRequirements()).toEqual([]);
+        const transaction = deposit.buildTx();
+        expect(transaction.value).toBe(nativeAmount);
+        expect(transaction.action.args.amount).toBe(nativeAmount);
+        await client.sendTransaction(transaction);
+      },
+    });
+
+    expect(finalState.userNativeBalance).toBeLessThan(
+      initialState.userNativeBalance,
+    );
+    expect(finalState.morphoAssetBalance).toBe(initialState.morphoAssetBalance);
+  });
+
   test("rejects mixed token/native funding and a native-path token signature", () => {
     const mixedFunding = {
       amount: 1n,
@@ -82,11 +125,11 @@ describe("VaultBundlesV1 native Vault V1 funding", () => {
       action: { type: "permit" },
     } as unknown as BlueBundlesV1TokenRequirementSignature;
     expect(() =>
-      vaultV1Deposit({
+      vaultV2Deposit({
         vault: {
           chainId: mainnet.id,
-          address: GauntletWethVaultV1.address,
-          asset: GauntletWethVaultV1.asset,
+          address: KpkWETHVaultV2.address,
+          asset: KpkWETHVaultV2.asset,
         },
         args: {
           nativeAmount: 1n,
@@ -99,7 +142,7 @@ describe("VaultBundlesV1 native Vault V1 funding", () => {
     ).toThrow(MixedBundlesFundingError);
   });
 
-  test("validates the native amount and vault asset", () => {
+  test("rejects non-wNative, zero, and negative native funding", () => {
     expect(() =>
       vaultV1Deposit({
         vault: {
@@ -116,14 +159,14 @@ describe("VaultBundlesV1 native Vault V1 funding", () => {
       }),
     ).toThrow(NativeAmountOnNonWNativeVaultError);
     expect(() =>
-      vaultV1Deposit({
+      vaultV2Deposit({
         vault: {
           chainId: mainnet.id,
-          address: GauntletWethVaultV1.address,
-          asset: GauntletWethVaultV1.asset,
+          address: KeyrockUsdcVaultV2.address,
+          asset: KeyrockUsdcVaultV2.asset,
         },
         args: {
-          nativeAmount: 0n,
+          amount: 0n,
           maxSharePrice: 1n,
           userAddress: "0x0000000000000000000000000000000000000001",
           deadline: 1n,

@@ -141,6 +141,47 @@ The destinations are different:
 - The built transaction's `to` is BlueBundlesV1, not Bundler3, and calldata contains one fixed
   BlueBundlesV1 entrypoint rather than a `BundlerAction[]` multicall.
 
+## Update Vault V1 and Vault V2 writes
+
+Vault V1 and Vault V2 keep their existing `deposit`, `withdraw`, and `redeem` names, while Vault V1
+keeps `migrateToV2`. In v6 these methods encode one direct `VaultBundlesV1` call instead of a direct
+ERC-4626 call or Bundler3 multicall.
+
+- Deposits accept exactly one of `amount` and `nativeAmount`. Split a former additive ETH + WETH
+  deposit into two transactions. Classic approvals and ERC-2612 permits now authorize
+  VaultBundlesV1; Permit2 uses SignatureTransfer and requires an explicit unused `permit2Nonce`.
+- Remove `recipient` from deposits and remove `recipient` and `onBehalf` from exits. VaultBundlesV1
+  always operates for and pays `msg.sender`. `userAddress` now means the account that must submit the
+  transaction. A connected client rejects a different address; accountless public clients can still
+  prepare transactions for another signer.
+- `withdraw` and `redeem` now return a full `ActionOutput`. Call `getRequirements()` and satisfy the
+  exact vault-share approval or ERC-2612 permit before calling `buildTx(signatures)`.
+- Vault calls gain `deadline`, `referralFeePct`, and `referralFeeRecipient`. Entity deadlines default
+  to two hours; pure builder callers provide them explicitly. Amounts remain gross, and fixed-asset
+  action metadata reports `referralFeeAssets` and `netAssets`.
+- `migrateToV2` accepts exactly one of `assets` and `shares`, removes `recipient` and source
+  `minSharePriceVaultV1`, and retains only the destination `maxSharePriceVaultV2` bound.
+
+VaultBundlesV1 permits only one call to itself in a transaction. Do not put two vault calls into one
+Safe multisend or EIP-5792 batch; use `migrateToV2` for an atomic V1-to-V2 move. Permissioned Vault
+V2 deployments must allow VaultBundlesV1 in both send-assets and receive-assets gates. Because gates
+can inspect the bundle's transient initiator, validate them by simulating the finalized transaction
+after satisfying requirements rather than by pre-reading the gate.
+
+```ts
+const withdrawal = vault.withdraw({ amount, userAddress });
+const signatures = [];
+for (const requirement of await withdrawal.getRequirements()) {
+  if ("sign" in requirement) {
+    signatures.push(await requirement.sign(walletClient, userAddress));
+  } else {
+    const hash = await walletClient.sendTransaction(requirement);
+    await publicClient.waitForTransactionReceipt({ hash });
+  }
+}
+const transaction = withdrawal.buildTx(signatures);
+```
+
 Update simulations and analytics for the v6 action-field changes. Do not assert
 Bundler3/GeneralAdapter1 destinations or inspect Bundler3 sub-actions for these
 high-level writes.

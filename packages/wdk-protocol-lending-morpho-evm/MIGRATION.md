@@ -1,6 +1,7 @@
 # Migrating to 2.0
 
-Version 2 routes Morpho Blue writes through `BlueBundlesV1` instead of Bundler3. Vault V2 earn flows are unchanged.
+Version 2 routes Morpho Blue writes through `BlueBundlesV1` and Vault V2 earn writes through
+`VaultBundlesV1` instead of Bundler3 or direct ERC-4626 calls.
 
 ## Required changes
 
@@ -8,7 +9,12 @@ Version 2 routes Morpho Blue writes through `BlueBundlesV1` instead of Bundler3.
 - Replace `MorphoBorrowWithVaultV2ReallocationsOptions` with `MorphoBorrowOptions`. The specialized opt-in type and the package's Vault V1 reallocation re-exports were removed.
 - Remove `slippageTolerance` from `MorphoBorrowOptions`, `MorphoRepayOptions`, and Blue collateral-supply inputs. Constructor-level and vault-supply slippage settings now apply only to Morpho Vault V2 flows because BlueBundlesV1 has no Bundler3 share-price bounds.
 - Call `getWithdrawCollateralRequirements` before `withdrawCollateral`. Send the returned authorization transaction, or sign the requirement and pass its result as `requirementSignature`.
-- Use `MorphoCollateralSupplyOptions` for Blue collateral methods. Its type accepts either `amount` or `nativeAmount`, not both; vault deposits still use additive `MorphoSupplyOptions`.
+- Use `MorphoCollateralSupplyOptions` for Blue collateral methods and
+  `MorphoExclusiveSupplyOptions` for vault deposits. Both accept either `amount` or
+  `nativeAmount`, never both. Split a former additive native + wrapped-native deposit into two
+  transactions.
+- Call `getWithdrawRequirements` before `withdraw`. Send the returned exact vault-share approval,
+  or sign the permit and pass it back through `MorphoWithdrawOptions.requirementSignature`.
 - Pass an explicit unused `permit2Nonce` to token `get*Requirements` calls when selecting Permit2 SignatureTransfer.
 - Recreate cached approvals and Morpho authorizations for Blue writes. Their spender and authorization target is now BlueBundlesV1 instead of GeneralAdapter1.
 - Blue writes now expire after two hours instead of using an unbounded deadline; signed calls preserve the requirement signature's deadline.
@@ -25,10 +31,10 @@ Version 2 routes Morpho Blue writes through `BlueBundlesV1` instead of Bundler3.
   `PermitRequirementSignature`, Blue token requirements use
   `BlueBundlesV1TokenRequirementSignature`, and Blue authorization requirements use
   `AuthorizationRequirementSignature`.
-- Use `ApprovalOrSignatureRequirement` for vault deposits,
+- Use `BundlesApprovalOrSignatureRequirement` for vault deposits,
   `BlueApprovalOrSignatureRequirement` for Blue token-funded writes, and
   `AuthorizationOrSignatureRequirement` for Blue borrow or withdrawal authorization.
-- `requirementSignature` is correspondingly narrowed on `MorphoSupplyOptions`,
+- `requirementSignature` is correspondingly narrowed on `MorphoExclusiveSupplyOptions`,
   `MorphoCollateralSupplyOptions`, `MorphoBorrowOptions`, `MorphoRepayOptions`, and the new
   `MorphoWithdrawCollateralOptions`.
 
@@ -83,6 +89,35 @@ if (requirement && "sign" in requirement) {
     }
   }
   await morpho.withdrawCollateral(options);
+}
+```
+
+## Vault supply and withdrawal
+
+```ts
+const supply = {
+  token: vaultAsset,
+  amount: 1_000_000n,
+} satisfies MorphoExclusiveSupplyOptions;
+await morpho.supply(supply);
+
+const withdrawal = { token: vaultAsset, amount: 1_000_000n };
+const requirements = await morpho.getWithdrawRequirements(withdrawal);
+const signatureRequest = requirements.find(
+  (requirement) => "sign" in requirement,
+);
+
+if (signatureRequest) {
+  const requirementSignature = await signatureRequest.sign(
+    walletClient,
+    userAddress,
+  );
+  await morpho.withdraw({ ...withdrawal, requirementSignature });
+} else {
+  for (const transaction of requirements) {
+    await account.sendTransaction(transaction);
+  }
+  await morpho.withdraw(withdrawal);
 }
 ```
 
