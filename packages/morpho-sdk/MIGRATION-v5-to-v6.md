@@ -47,9 +47,12 @@ their `args` objects as follows. `metadata` is unchanged.
 | `blueRepayWithdrawCollateral` / `BlueRepayWithdrawCollateralParams` | `userAddress`, `repayAssets`, `repayShares`, `maxRepayAssets`, `collateralAssets`, `maxLtv`, optional `nativeAmount`, required `deadline`, optional `referralFeePct`, `referralFeeRecipient`, `requirementSignature`, and `authorizationSignature`. |
 | `blueRefinance` / `BlueRefinanceParams` | `userAddress`, `maxLtv`, optional V2 `reallocations`, required `deadline`, optional `referralFeePct`, `referralFeeRecipient`, and `authorizationSignature`; replace `source`/`target` with `market: { chainId, sourceMarketParams, destinationMarketParams }`. |
 
-The transaction metadata exports and discriminator strings stay stable; their argument fields change:
+The transaction metadata exports and discriminator strings stay stable; their argument fields change
+as below. The table lists only the delta: unchanged fields are retained and omitted. In particular
+every Blue action keeps its `market` (`Hex` market id) field, so a strict decoder must keep matching
+it alongside the added fields.
 
-| Stable action type / discriminator | Removed v5 `action.args` fields | v6 `action.args` fields |
+| Stable action type / discriminator | Removed v5 `action.args` fields | Changed / added v6 `action.args` fields |
 | --- | --- | --- |
 | `BlueSupplyAction` / `"blueSupply"` | `amount`, `maxSharePrice` | `assets`, `onBehalf`, optional `nativeAmount`, `referralFeePct`, `referralFeeRecipient`, `deadline`. |
 | `BlueWithdrawAction` / `"blueWithdraw"` | `assets`, `shares`, `receiver`, `minSharePrice`, `reallocationFee` | `withdrawAssets`, `withdrawShares`, `onBehalf`, `reallocations`, `reallocationPenaltyAssets`, `referralFeePct`, `referralFeeRecipient`, `deadline`. |
