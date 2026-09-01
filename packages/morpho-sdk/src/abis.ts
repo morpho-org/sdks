@@ -2148,3 +2148,741 @@ export const compoundV3MigrationAdapterAbi = [
     stateMutability: "nonpayable",
   },
 ] as const satisfies Abi;
+
+/**
+ * Pinned ABI JSON for the five BlueBundlesV1 entrypoints used by high-level Morpho Blue writes.
+ *
+ * Source: `morpho-org/bundles` commit `dceb05da1c730424e6b36caf445dff808a2d5007`,
+ * `src/blue/interfaces/IBlueBundlesV1.sol`, with `Signature` pinned by that commit's
+ * `morpho-blue` submodule at `1478e9cfe1b4d514f80682b3b60e4e12ff3ee45a` (`v` is `uint8`).
+ *
+ * @see https://github.com/morpho-org/bundles/blob/dceb05da1c730424e6b36caf445dff808a2d5007/src/blue/interfaces/IBlueBundlesV1.sol
+ * @example
+ * ```ts
+ * import { blueBundlesV1Abi } from "@morpho-org/morpho-sdk/abis";
+ *
+ * console.log(blueBundlesV1Abi.length);
+ * ```
+ */
+export const blueBundlesV1Abi = [
+  {
+    type: "function",
+    name: "blueBundlesV1SupplyCollateralAndBorrow",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "marketParams",
+        type: "tuple",
+        components: [
+          {
+            name: "loanToken",
+            type: "address",
+          },
+          {
+            name: "collateralToken",
+            type: "address",
+          },
+          {
+            name: "oracle",
+            type: "address",
+          },
+          {
+            name: "irm",
+            type: "address",
+          },
+          {
+            name: "lltv",
+            type: "uint256",
+          },
+        ],
+      },
+      {
+        name: "collateralAssets",
+        type: "uint256",
+      },
+      {
+        name: "borrowAssets",
+        type: "uint256",
+      },
+      {
+        name: "maxLtv",
+        type: "uint256",
+      },
+      {
+        name: "collateralPermit",
+        type: "tuple",
+        components: [
+          {
+            name: "kind",
+            type: "uint8",
+          },
+          {
+            name: "data",
+            type: "bytes",
+          },
+        ],
+      },
+      {
+        name: "signedAuthorization",
+        type: "tuple",
+        components: [
+          {
+            name: "signature",
+            type: "tuple",
+            components: [
+              {
+                name: "v",
+                type: "uint8",
+              },
+              {
+                name: "r",
+                type: "bytes32",
+              },
+              {
+                name: "s",
+                type: "bytes32",
+              },
+            ],
+          },
+          {
+            name: "nonce",
+            type: "uint256",
+          },
+          {
+            name: "deadline",
+            type: "uint256",
+          },
+        ],
+      },
+      {
+        name: "reallocations",
+        type: "tuple[]",
+        components: [
+          {
+            name: "vault",
+            type: "address",
+          },
+          {
+            name: "adapter",
+            type: "address",
+          },
+          {
+            name: "marketParams",
+            type: "tuple",
+            components: [
+              {
+                name: "loanToken",
+                type: "address",
+              },
+              {
+                name: "collateralToken",
+                type: "address",
+              },
+              {
+                name: "oracle",
+                type: "address",
+              },
+              {
+                name: "irm",
+                type: "address",
+              },
+              {
+                name: "lltv",
+                type: "uint256",
+              },
+            ],
+          },
+          {
+            name: "fromIdle",
+            type: "bool",
+          },
+          {
+            name: "sourceAdapter",
+            type: "address",
+          },
+          {
+            name: "sourceMarketParams",
+            type: "tuple",
+            components: [
+              {
+                name: "loanToken",
+                type: "address",
+              },
+              {
+                name: "collateralToken",
+                type: "address",
+              },
+              {
+                name: "oracle",
+                type: "address",
+              },
+              {
+                name: "irm",
+                type: "address",
+              },
+              {
+                name: "lltv",
+                type: "uint256",
+              },
+            ],
+          },
+          {
+            name: "assets",
+            type: "uint128",
+          },
+          {
+            name: "penalty",
+            type: "uint64",
+          },
+        ],
+      },
+      {
+        name: "referralFeePct",
+        type: "uint256",
+      },
+      {
+        name: "referralFeeRecipient",
+        type: "address",
+      },
+      {
+        name: "deadline",
+        type: "uint256",
+      },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "blueBundlesV1RepayAndWithdrawCollateral",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "marketParams",
+        type: "tuple",
+        components: [
+          {
+            name: "loanToken",
+            type: "address",
+          },
+          {
+            name: "collateralToken",
+            type: "address",
+          },
+          {
+            name: "oracle",
+            type: "address",
+          },
+          {
+            name: "irm",
+            type: "address",
+          },
+          {
+            name: "lltv",
+            type: "uint256",
+          },
+        ],
+      },
+      {
+        name: "repayAssets",
+        type: "uint256",
+      },
+      {
+        name: "repayShares",
+        type: "uint256",
+      },
+      {
+        name: "maxRepayAssets",
+        type: "uint256",
+      },
+      {
+        name: "collateralAssets",
+        type: "uint256",
+      },
+      {
+        name: "maxLtv",
+        type: "uint256",
+      },
+      {
+        name: "loanTokenPermit",
+        type: "tuple",
+        components: [
+          {
+            name: "kind",
+            type: "uint8",
+          },
+          {
+            name: "data",
+            type: "bytes",
+          },
+        ],
+      },
+      {
+        name: "signedAuthorization",
+        type: "tuple",
+        components: [
+          {
+            name: "signature",
+            type: "tuple",
+            components: [
+              {
+                name: "v",
+                type: "uint8",
+              },
+              {
+                name: "r",
+                type: "bytes32",
+              },
+              {
+                name: "s",
+                type: "bytes32",
+              },
+            ],
+          },
+          {
+            name: "nonce",
+            type: "uint256",
+          },
+          {
+            name: "deadline",
+            type: "uint256",
+          },
+        ],
+      },
+      {
+        name: "referralFeePct",
+        type: "uint256",
+      },
+      {
+        name: "referralFeeRecipient",
+        type: "address",
+      },
+      {
+        name: "deadline",
+        type: "uint256",
+      },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "blueBundlesV1Supply",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "marketParams",
+        type: "tuple",
+        components: [
+          {
+            name: "loanToken",
+            type: "address",
+          },
+          {
+            name: "collateralToken",
+            type: "address",
+          },
+          {
+            name: "oracle",
+            type: "address",
+          },
+          {
+            name: "irm",
+            type: "address",
+          },
+          {
+            name: "lltv",
+            type: "uint256",
+          },
+        ],
+      },
+      {
+        name: "assets",
+        type: "uint256",
+      },
+      {
+        name: "loanTokenPermit",
+        type: "tuple",
+        components: [
+          {
+            name: "kind",
+            type: "uint8",
+          },
+          {
+            name: "data",
+            type: "bytes",
+          },
+        ],
+      },
+      {
+        name: "referralFeePct",
+        type: "uint256",
+      },
+      {
+        name: "referralFeeRecipient",
+        type: "address",
+      },
+      {
+        name: "deadline",
+        type: "uint256",
+      },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "blueBundlesV1Withdraw",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "marketParams",
+        type: "tuple",
+        components: [
+          {
+            name: "loanToken",
+            type: "address",
+          },
+          {
+            name: "collateralToken",
+            type: "address",
+          },
+          {
+            name: "oracle",
+            type: "address",
+          },
+          {
+            name: "irm",
+            type: "address",
+          },
+          {
+            name: "lltv",
+            type: "uint256",
+          },
+        ],
+      },
+      {
+        name: "withdrawAssets",
+        type: "uint256",
+      },
+      {
+        name: "withdrawShares",
+        type: "uint256",
+      },
+      {
+        name: "signedAuthorization",
+        type: "tuple",
+        components: [
+          {
+            name: "signature",
+            type: "tuple",
+            components: [
+              {
+                name: "v",
+                type: "uint8",
+              },
+              {
+                name: "r",
+                type: "bytes32",
+              },
+              {
+                name: "s",
+                type: "bytes32",
+              },
+            ],
+          },
+          {
+            name: "nonce",
+            type: "uint256",
+          },
+          {
+            name: "deadline",
+            type: "uint256",
+          },
+        ],
+      },
+      {
+        name: "reallocations",
+        type: "tuple[]",
+        components: [
+          {
+            name: "vault",
+            type: "address",
+          },
+          {
+            name: "adapter",
+            type: "address",
+          },
+          {
+            name: "marketParams",
+            type: "tuple",
+            components: [
+              {
+                name: "loanToken",
+                type: "address",
+              },
+              {
+                name: "collateralToken",
+                type: "address",
+              },
+              {
+                name: "oracle",
+                type: "address",
+              },
+              {
+                name: "irm",
+                type: "address",
+              },
+              {
+                name: "lltv",
+                type: "uint256",
+              },
+            ],
+          },
+          {
+            name: "fromIdle",
+            type: "bool",
+          },
+          {
+            name: "sourceAdapter",
+            type: "address",
+          },
+          {
+            name: "sourceMarketParams",
+            type: "tuple",
+            components: [
+              {
+                name: "loanToken",
+                type: "address",
+              },
+              {
+                name: "collateralToken",
+                type: "address",
+              },
+              {
+                name: "oracle",
+                type: "address",
+              },
+              {
+                name: "irm",
+                type: "address",
+              },
+              {
+                name: "lltv",
+                type: "uint256",
+              },
+            ],
+          },
+          {
+            name: "assets",
+            type: "uint128",
+          },
+          {
+            name: "penalty",
+            type: "uint64",
+          },
+        ],
+      },
+      {
+        name: "referralFeePct",
+        type: "uint256",
+      },
+      {
+        name: "referralFeeRecipient",
+        type: "address",
+      },
+      {
+        name: "deadline",
+        type: "uint256",
+      },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "blueBundlesV1MigrateBorrowPosition",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "sourceMarketParams",
+        type: "tuple",
+        components: [
+          {
+            name: "loanToken",
+            type: "address",
+          },
+          {
+            name: "collateralToken",
+            type: "address",
+          },
+          {
+            name: "oracle",
+            type: "address",
+          },
+          {
+            name: "irm",
+            type: "address",
+          },
+          {
+            name: "lltv",
+            type: "uint256",
+          },
+        ],
+      },
+      {
+        name: "destMarketParams",
+        type: "tuple",
+        components: [
+          {
+            name: "loanToken",
+            type: "address",
+          },
+          {
+            name: "collateralToken",
+            type: "address",
+          },
+          {
+            name: "oracle",
+            type: "address",
+          },
+          {
+            name: "irm",
+            type: "address",
+          },
+          {
+            name: "lltv",
+            type: "uint256",
+          },
+        ],
+      },
+      {
+        name: "maxLtv",
+        type: "uint256",
+      },
+      {
+        name: "signedAuthorization",
+        type: "tuple",
+        components: [
+          {
+            name: "signature",
+            type: "tuple",
+            components: [
+              {
+                name: "v",
+                type: "uint8",
+              },
+              {
+                name: "r",
+                type: "bytes32",
+              },
+              {
+                name: "s",
+                type: "bytes32",
+              },
+            ],
+          },
+          {
+            name: "nonce",
+            type: "uint256",
+          },
+          {
+            name: "deadline",
+            type: "uint256",
+          },
+        ],
+      },
+      {
+        name: "reallocations",
+        type: "tuple[]",
+        components: [
+          {
+            name: "vault",
+            type: "address",
+          },
+          {
+            name: "adapter",
+            type: "address",
+          },
+          {
+            name: "marketParams",
+            type: "tuple",
+            components: [
+              {
+                name: "loanToken",
+                type: "address",
+              },
+              {
+                name: "collateralToken",
+                type: "address",
+              },
+              {
+                name: "oracle",
+                type: "address",
+              },
+              {
+                name: "irm",
+                type: "address",
+              },
+              {
+                name: "lltv",
+                type: "uint256",
+              },
+            ],
+          },
+          {
+            name: "fromIdle",
+            type: "bool",
+          },
+          {
+            name: "sourceAdapter",
+            type: "address",
+          },
+          {
+            name: "sourceMarketParams",
+            type: "tuple",
+            components: [
+              {
+                name: "loanToken",
+                type: "address",
+              },
+              {
+                name: "collateralToken",
+                type: "address",
+              },
+              {
+                name: "oracle",
+                type: "address",
+              },
+              {
+                name: "irm",
+                type: "address",
+              },
+              {
+                name: "lltv",
+                type: "uint256",
+              },
+            ],
+          },
+          {
+            name: "assets",
+            type: "uint128",
+          },
+          {
+            name: "penalty",
+            type: "uint64",
+          },
+        ],
+      },
+      {
+        name: "referralFeePct",
+        type: "uint256",
+      },
+      {
+        name: "referralFeeRecipient",
+        type: "address",
+      },
+      {
+        name: "deadline",
+        type: "uint256",
+      },
+    ],
+    outputs: [],
+  },
+] as const satisfies Abi;
