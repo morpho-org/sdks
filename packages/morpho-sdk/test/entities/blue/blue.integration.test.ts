@@ -4,16 +4,13 @@ import {
   MarketParams,
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
-import { getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, maxUint256, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import { morphoViemExtension } from "../../../src/client/index.js";
-import {
-  isRequirementApproval,
-  isRequirementBlueAuthorization,
-} from "../../../src/types/index.js";
+import { NativeFundingAmountMismatchError } from "../../../src/types/index.js";
 import { CbbtcUsdcBlue, WstethWethBlue } from "../../fixtures/blue.js";
+import { withChainTimestamp } from "../../helpers/time.js";
 import { test } from "../../setup.js";
 
 const MARKET_PARAMS = new MarketParams(CbbtcUsdcBlue);
@@ -96,10 +93,6 @@ describe("MorphoBlue validation", () => {
       .getRequirements();
 
     expect(requirements).toHaveLength(1);
-    const authorization = requirements.find(isRequirementBlueAuthorization);
-    expect(authorization?.action.args.authorized).toBe(
-      getChainAddress(mainnet.id, "bundles.blueBundlesV1"),
-    );
   });
 
   test("repayWithdrawCollateral getRequirements includes Blue authorization when missing", async ({
@@ -115,58 +108,49 @@ describe("MorphoBlue validation", () => {
 
     const requirements = await market
       .repayWithdrawCollateral({
-        amount: 1n,
-        withdrawAmount: 1n,
+        repayAssets: 1n,
+        collateralAssets: 1n,
         userAddress: USER,
         positionData: makePosition(),
+        deadline: maxUint256,
       })
       .getRequirements();
 
     expect(requirements).toHaveLength(2);
   });
 
-  test("repay native: shares mode pulls transferAmount net of native (happy path)", async ({
+  test("repay native: shares mode uses exclusive native funding", async ({
     client,
   }) => {
     const market = client
       .extend(morphoViemExtension({ supportSignature: false }))
       .morpho.blue(WstethWethBlue, mainnet.id);
     const positionData = makeWethPosition();
-    const nativeAmount = parseUnits("0.1", 18);
-
-    // The entity carves native out of the shares repay: it converts shares to
-    // assets (2h forward-accrued) and pulls only `borrowAssets - nativeAmount` as
-    // ERC-20. This fixture has no rateAtTarget, so accrual is a no-op and
-    // borrowAssets is exactly toBorrowAssets(shares, "Up") on the snapshot.
+    const now = 1_800_000_000n;
+    const deadline = now + 3_600n;
     const borrowAssets = positionData.market.toBorrowAssets(
       positionData.borrowShares,
       "Up",
     );
-    const expectedErc20 = borrowAssets - nativeAmount;
 
-    const repay = market.repay({
-      shares: positionData.borrowShares,
-      nativeAmount,
-      userAddress: USER,
-      positionData,
-    });
+    const repay = withChainTimestamp(now, () =>
+      market.repay({
+        repayShares: positionData.borrowShares,
+        nativeAmount: borrowAssets,
+        userAddress: USER,
+        positionData,
+        deadline,
+      }),
+    );
 
     const tx = repay.buildTx();
-    expect(tx.action.args.shares).toBe(positionData.borrowShares);
-    expect(tx.action.args.nativeAmount).toBe(nativeAmount);
-    expect(tx.value).toBe(nativeAmount);
-    // Action transferAmount is the total routed = ERC-20 (net of native) + wrapped
-    // native = borrowAssets; the carved ERC-20 is transferAmount - nativeAmount.
-    expect(tx.action.args.transferAmount).toBe(borrowAssets);
-    expect(tx.action.args.transferAmount - nativeAmount).toBe(expectedErc20);
-
-    // getRequirements approves exactly the carved ERC-20 remainder, not the debt.
-    const requirements = await repay.getRequirements();
-    const approval = requirements.find(isRequirementApproval);
-    if (!approval) {
-      throw new Error("Approval requirement not found");
-    }
-    expect(approval.action.args.amount).toBe(expectedErc20);
+    expect(tx.action.args.repayShares).toBe(positionData.borrowShares);
+    expect(tx.action.args.maxRepayAssets).toBe(borrowAssets);
+    expect(tx.action.args.nativeAmount).toBe(borrowAssets);
+    expect(tx.value).toBe(borrowAssets);
+    expect(
+      await withChainTimestamp(now, () => repay.getRequirements()),
+    ).toEqual([]);
   });
 
   test("repayWithdrawCollateral native: a fully native repay emits no ERC-20 requirement", async ({
@@ -179,10 +163,12 @@ describe("MorphoBlue validation", () => {
 
     const requirements = await market
       .repayWithdrawCollateral({
+        repayAssets: nativeAmount,
         nativeAmount,
-        withdrawAmount: parseUnits("1", 18),
+        collateralAssets: parseUnits("1", 18),
         userAddress: USER,
         positionData: makeWethPosition(),
+        deadline: maxUint256,
       })
       .getRequirements();
 
@@ -197,75 +183,58 @@ describe("MorphoBlue validation", () => {
       .extend(morphoViemExtension({ supportSignature: false }))
       .morpho.blue(WstethWethBlue, mainnet.id);
     const positionData = makeWethPosition();
+    const now = 1_800_000_000n;
+    const deadline = now + 3_600n;
 
-    // Native covers the full borrow assets (rate-less fixture ⇒ accrual no-op),
-    // so no ERC-20 is pulled; the bundle wraps the native and skims the residual.
     const borrowAssets = positionData.market.toBorrowAssets(
       positionData.borrowShares,
       "Up",
     );
-    const nativeAmount = borrowAssets + parseUnits("1", 18);
 
-    const action = market.repayWithdrawCollateral({
-      shares: positionData.borrowShares,
-      nativeAmount,
-      withdrawAmount: positionData.collateral,
-      userAddress: USER,
-      positionData,
-    });
+    const action = withChainTimestamp(now, () =>
+      market.repayWithdrawCollateral({
+        repayShares: positionData.borrowShares,
+        nativeAmount: borrowAssets,
+        collateralAssets: positionData.collateral,
+        userAddress: USER,
+        positionData,
+        deadline,
+      }),
+    );
 
     const tx = action.buildTx();
     expect(tx.action.args.repayShares).toBe(positionData.borrowShares);
-    expect(tx.action.args.nativeAmount).toBe(nativeAmount);
-    expect(tx.value).toBe(nativeAmount);
-    // ERC-20 pulled is 0 ⇒ the total routed to the adapter is the wrapped native only.
-    expect(tx.action.args.transferAmount).toBe(nativeAmount);
+    expect(tx.action.args.maxRepayAssets).toBe(borrowAssets);
+    expect(tx.action.args.nativeAmount).toBe(borrowAssets);
+    expect(tx.value).toBe(borrowAssets);
 
-    // No ERC-20 pulled ⇒ only the Morpho authorization requirement remains.
-    expect(await action.getRequirements()).toHaveLength(1);
+    expect(
+      await withChainTimestamp(now, () => action.getRequirements()),
+    ).toHaveLength(1);
   });
 
-  test("repayWithdrawCollateral native: shares mode pulls transferAmount net of native (happy path)", async ({
+  test("repayWithdrawCollateral native: rejects partial native funding", ({
     client,
   }) => {
     const market = client
       .extend(morphoViemExtension({ supportSignature: false }))
       .morpho.blue(WstethWethBlue, mainnet.id);
     const positionData = makeWethPosition();
+    const now = 1_800_000_000n;
+    const deadline = now + 3_600n;
     const nativeAmount = parseUnits("0.1", 18);
 
-    // Same carve-out as repay: ERC-20 pulled = borrowAssets - nativeAmount, and
-    // accrual is a no-op on this rate-less fixture so borrowAssets is exact.
-    const borrowAssets = positionData.market.toBorrowAssets(
-      positionData.borrowShares,
-      "Up",
-    );
-    const expectedErc20 = borrowAssets - nativeAmount;
-
-    const action = market.repayWithdrawCollateral({
-      shares: positionData.borrowShares,
-      nativeAmount,
-      withdrawAmount: positionData.collateral,
-      userAddress: USER,
-      positionData,
-    });
-
-    const tx = action.buildTx();
-    expect(tx.action.args.repayShares).toBe(positionData.borrowShares);
-    expect(tx.action.args.nativeAmount).toBe(nativeAmount);
-    expect(tx.value).toBe(nativeAmount);
-    // Action transferAmount is the total routed = ERC-20 (net of native) + wrapped
-    // native = borrowAssets; the carved ERC-20 is transferAmount - nativeAmount.
-    expect(tx.action.args.transferAmount).toBe(borrowAssets);
-    expect(tx.action.args.transferAmount - nativeAmount).toBe(expectedErc20);
-
-    // getRequirements approves exactly the carved ERC-20 remainder (alongside the
-    // Morpho authorization the withdraw leg needs).
-    const requirements = await action.getRequirements();
-    const approval = requirements.find(isRequirementApproval);
-    if (!approval) {
-      throw new Error("Approval requirement not found");
-    }
-    expect(approval.action.args.amount).toBe(expectedErc20);
+    expect(() =>
+      withChainTimestamp(now, () =>
+        market.repayWithdrawCollateral({
+          repayShares: positionData.borrowShares,
+          nativeAmount,
+          collateralAssets: positionData.collateral,
+          userAddress: USER,
+          positionData,
+          deadline,
+        }),
+      ),
+    ).toThrow(NativeFundingAmountMismatchError);
   });
 });

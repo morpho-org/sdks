@@ -179,88 +179,68 @@ export interface BlueWithdrawAction
     }
   > {}
 
+type BlueSupplyCollateralBorrowActionArgs = {
+  readonly market: Hex;
+  readonly collateralAssets: bigint;
+  readonly borrowAssets: bigint;
+  readonly maxLtv: bigint;
+  readonly onBehalf: Address;
+  readonly nativeAmount?: bigint;
+  readonly reallocations: number;
+  readonly reallocationPenaltyAssets: bigint;
+  readonly referralFeePct: bigint;
+  readonly referralFeeRecipient: Address;
+  readonly deadline: bigint;
+};
+
+/** Metadata for a direct BlueBundlesV1 collateral supply. */
 export interface BlueSupplyCollateralAction
   extends BaseAction<
     "blueSupplyCollateral",
-    {
-      market: Hex;
-      amount: bigint;
-      onBehalf: Address;
-      nativeAmount?: bigint;
-    }
+    BlueSupplyCollateralBorrowActionArgs
   > {}
 
+/** Metadata for a direct BlueBundlesV1 borrow. */
 export interface BlueBorrowAction
-  extends BaseAction<
-    "blueBorrow",
-    {
-      market: Hex;
-      amount: bigint;
-      receiver: Address;
-      minSharePrice: bigint;
-      /** Loan-token assets donated as BluePublicAllocator V2 penalties. */
-      readonly reallocationPenaltyAssets: bigint;
-    }
-  > {}
+  extends BaseAction<"blueBorrow", BlueSupplyCollateralBorrowActionArgs> {}
 
+/** Metadata for a direct BlueBundlesV1 collateral-supply and/or borrow. */
 export interface BlueSupplyCollateralBorrowAction
   extends BaseAction<
     "blueSupplyCollateralBorrow",
-    {
-      market: Hex;
-      collateralAmount: bigint;
-      borrowAmount: bigint;
-      minSharePrice: bigint;
-      onBehalf: Address;
-      receiver: Address;
-      nativeAmount?: bigint;
-      /** Loan-token assets donated as BluePublicAllocator V2 penalties. */
-      readonly reallocationPenaltyAssets: bigint;
-    }
+    BlueSupplyCollateralBorrowActionArgs
   > {}
 
+type BlueRepayWithdrawCollateralActionArgs = {
+  readonly market: Hex;
+  readonly repayAssets: bigint;
+  readonly repayShares: bigint;
+  readonly maxRepayAssets: bigint;
+  readonly collateralAssets: bigint;
+  readonly maxLtv: bigint;
+  readonly onBehalf: Address;
+  readonly nativeAmount?: bigint;
+  readonly referralFeePct: bigint;
+  readonly referralFeeRecipient: Address;
+  readonly deadline: bigint;
+};
+
+/** Metadata for a direct BlueBundlesV1 repayment. */
 export interface BlueRepayAction
-  extends BaseAction<
-    "blueRepay",
-    {
-      market: Hex;
-      assets: bigint;
-      shares: bigint;
-      transferAmount: bigint;
-      onBehalf: Address;
-      receiver: Address;
-      maxSharePrice: bigint;
-      /** Native token wrapped into wNative to fund the repay. Present when `> 0n`. */
-      nativeAmount?: bigint;
-    }
-  > {}
+  extends BaseAction<"blueRepay", BlueRepayWithdrawCollateralActionArgs> {}
 
+/** Metadata for a direct BlueBundlesV1 collateral withdrawal. */
 export interface BlueWithdrawCollateralAction
   extends BaseAction<
     "blueWithdrawCollateral",
-    {
-      market: Hex;
-      amount: bigint;
-      onBehalf: Address;
-      receiver: Address;
-    }
+    BlueRepayWithdrawCollateralActionArgs
   > {}
 
+/** Metadata for a direct BlueBundlesV1 repay and/or collateral withdrawal. */
 export interface BlueRepayWithdrawCollateralAction
   extends BaseAction<
     "blueRepayWithdrawCollateral",
-    {
-      market: Hex;
-      repayAssets: bigint;
-      repayShares: bigint;
-      transferAmount: bigint;
-      withdrawAmount: bigint;
-      maxSharePrice: bigint;
-      onBehalf: Address;
-      receiver: Address;
-      /** Native token wrapped into wNative to fund the repay. Present when `> 0n`. */
-      nativeAmount?: bigint;
-    }
+    BlueRepayWithdrawCollateralActionArgs
   > {}
 
 export interface BlueRefinanceAction
@@ -287,56 +267,12 @@ export interface BlueRefinanceAction
  * - `shares`: operate on an exact share count (typical for full position closes,
  *   immune to interest accrual between tx construction and execution).
  *
- * Used by withdraw (asserts on supply side). Repay uses {@link RepayAmountArgs},
- * which additionally supports native wrapping.
+ * Used by BlueBundlesV1 withdrawal; repayment has its own assets-or-shares union because a pure
+ * collateral withdrawal has no repay amount.
  */
-export type AssetsOrSharesArgs = { assets: bigint } | { shares: bigint };
-
-/**
- * Repay funding sources for the **entity layer** (`MorphoBlue.repay` /
- * `MorphoBlue.repayWithdrawCollateral`), which computes the loan-token
- * `transferAmount` itself from live market state.
- *
- * - **assets mode** ({@link DepositAmountArgs}): repay an exact asset total of
- *   `amount` (ERC-20) + `nativeAmount` (wrapped native). Additive — mirrors `blueSupply`.
- * - **shares mode** (`{ shares }`): repay an exact borrow-share count (full close,
- *   immune to interest accrual). `nativeAmount` funds part of the transfer.
- *
- * `nativeAmount` requires the market's loan token to be the chain's wNative.
- */
-export type RepayAmountArgs =
-  | DepositAmountArgs
-  | { shares: bigint; nativeAmount?: bigint };
-
-/**
- * Repay funding sources for the **action layer** (`blueRepay` /
- * `blueRepayWithdrawCollateral`) — a flat, pre-resolved shape. The entity layer
- * ({@link RepayAmountArgs}) derives these from live market state; the action does no
- * amount arithmetic. The mode is discriminated on `shares`:
- *
- * - **assets mode** (`shares` unset/`0n`): repays `transferAmount` assets
- *   (`= amount + nativeAmount`, additive like `blueSupply`), pulling `amount` ERC-20
- *   and wrapping `nativeAmount`. No residual.
- * - **shares mode** (`shares > 0n`): repays an exact borrow-share count (full close),
- *   pulling `transferAmount` ERC-20 (already net of native) and wrapping `nativeAmount`;
- *   the residual loan token is skimmed back to `receiver`.
- *
- * `nativeAmount` requires the market's loan token to be the chain's wNative.
- */
-export interface RepayActionAmountArgs {
-  /** Assets-mode ERC-20 loan tokens pulled from the payer. Omit (or `0n`) in shares mode. */
-  amount?: bigint;
-  /** Shares-mode borrow shares to repay (full close). Omit (or `0n`) in assets mode. */
-  shares?: bigint;
-  /** Native ETH wrapped into wNative to help fund the repay. Loan token must be wNative. */
-  nativeAmount?: bigint;
-  /**
-   * Loan tokens routed into `GeneralAdapter1`. Assets mode: the total repaid
-   * (`amount + nativeAmount`). Shares mode: the ERC-20 pulled
-   * (`toBorrowAssets(shares) − nativeAmount`).
-   */
-  transferAmount: bigint;
-}
+export type AssetsOrSharesArgs =
+  | { readonly assets: bigint }
+  | { readonly shares: bigint };
 
 /** Metadata for a Blue authorization prerequisite transaction. */
 export interface BlueAuthorizationAction

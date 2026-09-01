@@ -25,16 +25,20 @@ export {
 export type {
   AccountData,
   ApprovalOrSignatureRequirement,
+  AuthorizationOrSignatureRequirement,
+  BlueApprovalOrSignatureRequirement,
   Eip1193Provider,
   Erc4337TransactionConfig,
   MarketPosition,
   MorphoBorrowOptions,
+  MorphoCollateralSupplyOptions,
   MorphoErc20SupplyOptions,
   MorphoEvmAccount,
   MorphoNativeSupplyOptions,
   MorphoProtocolOptions,
   MorphoRepayOptions,
   MorphoSupplyOptions,
+  MorphoWithdrawCollateralOptions,
   Presets,
   RequirementApproval,
   RequirementAuthorization,
@@ -45,4 +49,5 @@ export type {
 export {
   default,
   default as MorphoProtocolEvm,
+  MixedBlueCollateralFundingError,
 } from "./morpho-protocol-evm.js";
