@@ -379,6 +379,23 @@ export class Permit2TransferFromNonceAlreadyUsedError extends Error {
   }
 }
 
+/** Thrown when no unused Permit2 unordered nonce exists at or after the requested start nonce. */
+export class NoUnusedPermit2NonceError extends Error {
+  /**
+   * @param owner - Permit2 token owner scanned for a free nonce.
+   * @param startNonce - Lowest nonce that was considered.
+   */
+  public constructor(
+    public readonly owner: Address,
+    public readonly startNonce: bigint,
+  ) {
+    super(
+      `No unused Permit2 nonce found for owner "${owner}" at or after "${startNonce}". Pass a lower startNonce.`,
+    );
+    this.name = "NoUnusedPermit2NonceError";
+  }
+}
+
 /** Thrown when native funding does not exactly match the contract's gross token pull. */
 export class NativeFundingAmountMismatchError extends Error {
   /**

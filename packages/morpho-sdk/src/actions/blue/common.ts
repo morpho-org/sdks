@@ -65,8 +65,20 @@ export interface NormalizedBlueBundlesV1CommonParams {
   referralFeeRecipient: Address;
 }
 
+/**
+ * BlueBundlesV1 token-permit discriminator carried in the encoded permit struct: `none` (0) skips
+ * the pull, `erc2612` (1) is an ERC-2612 permit, `permit2TransferFrom` (2) is a Permit2
+ * SignatureTransfer. Named so a transposed literal can't silently route a permit to the wrong branch.
+ * @internal
+ */
+const BLUE_BUNDLES_V1_TOKEN_PERMIT_KIND = {
+  none: 0,
+  erc2612: 1,
+  permit2TransferFrom: 2,
+} as const;
+
 interface BlueBundlesV1TokenPermit {
-  kind: 0 | 1 | 2;
+  kind: (typeof BLUE_BUNDLES_V1_TOKEN_PERMIT_KIND)[keyof typeof BLUE_BUNDLES_V1_TOKEN_PERMIT_KIND];
   data: Hex;
 }
 
@@ -76,7 +88,10 @@ interface BlueBundlesV1SignedAuthorization {
   deadline: bigint;
 }
 
-const EMPTY_TOKEN_PERMIT: BlueBundlesV1TokenPermit = { kind: 0, data: "0x" };
+const EMPTY_TOKEN_PERMIT: BlueBundlesV1TokenPermit = {
+  kind: BLUE_BUNDLES_V1_TOKEN_PERMIT_KIND.none,
+  data: "0x",
+};
 
 const EMPTY_SIGNED_AUTHORIZATION: BlueBundlesV1SignedAuthorization = {
   signature: { v: 0, r: zeroHash, s: zeroHash },
@@ -145,9 +160,7 @@ export const validateBlueBundlesV1NativeFunding = (params: {
   }
   if (params.requirementSignature != null) {
     throw new UnexpectedRequirementSignatureError(
-      params.requirementSignature.action.type === "permit2TransferFrom"
-        ? "permit2TransferFrom"
-        : "permit",
+      params.requirementSignature.action.type,
     );
   }
   return nativeAmount;
@@ -208,7 +221,7 @@ export const getBlueBundlesV1TokenPermit = (params: {
 
   if (requirementSignature.action.type === "permit2TransferFrom") {
     return {
-      kind: 2,
+      kind: BLUE_BUNDLES_V1_TOKEN_PERMIT_KIND.permit2TransferFrom,
       data: encodeAbiParameters(
         [
           { type: "uint256", name: "nonce" },
@@ -259,7 +272,7 @@ export const getBlueBundlesV1TokenPermit = (params: {
     });
   }
   return {
-    kind: 1,
+    kind: BLUE_BUNDLES_V1_TOKEN_PERMIT_KIND.erc2612,
     data: encodeAbiParameters(
       [
         { type: "uint256", name: "deadline" },
@@ -369,6 +382,9 @@ export const getBlueBundlesV1PublicAllocations = (
   targetMarketParams: MarketParams,
 ) => {
   validateVaultV2BlueReallocations(reallocations, targetMarketParams.id);
+  // Hoisted out of the map: idle sources all reference the same synthetic idle market, whose
+  // construction eagerly hashes the market id — computing it once per call instead of per entry.
+  const idleMarketParams = MarketParams.idle(targetMarketParams.loanToken);
   return reallocations.map((reallocation) => {
     if (
       reallocation.from.type === "market" &&
@@ -394,7 +410,7 @@ export const getBlueBundlesV1PublicAllocations = (
       sourceMarketParams:
         reallocation.from.type === "market"
           ? reallocation.from.marketParams
-          : MarketParams.idle(targetMarketParams.loanToken),
+          : idleMarketParams,
       assets: reallocation.assets,
       penalty: reallocation.penalty,
     };

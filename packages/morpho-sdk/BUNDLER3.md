@@ -113,6 +113,10 @@ BlueBundlesV1 writes because they have a different spender.
 - **Do not infer high-level routing from low-level exports.** Morpho and PublicAllocator Bundler3
   primitives remain public for advanced users, but `client.morpho.blue(...)` never falls back to
   them in v6.
+- **Direct vault `withdraw`/`redeem` have no share-price bound.** Unlike GeneralAdapter1 deposits,
+  VaultV1/VaultV2 `withdraw` and `redeem` are direct vault calls that carry no on-chain
+  `minSharePrice`/`maxSharePrice` bound, so callers must weigh share-price movement between
+  transaction construction and inclusion.
 
 ## Code references
 

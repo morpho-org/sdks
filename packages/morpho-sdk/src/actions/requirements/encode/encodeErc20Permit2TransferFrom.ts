@@ -1,12 +1,13 @@
 import type { Address } from "@morpho-org/blue-sdk";
 import { getPermit2TransferFromTypedData } from "@morpho-org/blue-sdk-viem";
-import { deepFreeze } from "@morpho-org/morpho-ts";
+import { deepFreeze, getChainAddress, Time } from "@morpho-org/morpho-ts";
 import { maxUint256, type WalletClient } from "viem";
 import { signAndVerifyTypedData } from "../../../helpers/signAndVerifyTypedData.js";
+import { validateUint256Field } from "../../../helpers/validate.js";
 import { validateRequirementSpender } from "../../../helpers/validateRequirementSpender.js";
 import {
+  ExpiredDeadlineError,
   InputExceedsMaxError,
-  NegativeInputError,
   NonPositiveInputError,
   type Permit2TransferFromAction,
   type Permit2TransferFromRequirementSignature,
@@ -46,7 +47,9 @@ export interface EncodeErc20Permit2TransferFromParams {
  * @throws {NegativeInputError} when `amount` or `nonce` is negative.
  * @throws {NonPositiveInputError} when `deadline` is not positive.
  * @throws {InputExceedsMaxError} when `amount`, `nonce`, or `deadline` exceeds `uint256`.
+ * @throws {ExpiredDeadlineError} when `deadline` is positive but not in the future.
  * @throws {UnsupportedChainIdError} when `chainId` is absent from the address registry.
+ * @throws {UnknownAddressError} when the chain has no registered canonical Permit2 deployment.
  * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not BlueBundlesV1 for `chainId`.
  * @throws {MissingClientPropertyError} from `sign()` when the wallet client has no account.
  * @throws {AddressMismatchError} from `sign()` when the wallet account differs from `userAddress`.
@@ -78,26 +81,8 @@ export const encodeErc20Permit2TransferFrom = (
   // oversized allowance to maxUint256, which would desync the signed value from the requirement
   // metadata that blueSupply verifies. Direct callers bypass the token-requirement resolver, so
   // this public encoder must reject the same out-of-range inputs itself.
-  if (amount < 0n) {
-    throw new NegativeInputError("amount", amount);
-  }
-  if (amount > maxUint256) {
-    throw new InputExceedsMaxError({
-      field: "amount",
-      value: amount,
-      max: maxUint256,
-    });
-  }
-  if (nonce < 0n) {
-    throw new NegativeInputError("nonce", nonce);
-  }
-  if (nonce > maxUint256) {
-    throw new InputExceedsMaxError({
-      field: "nonce",
-      value: nonce,
-      max: maxUint256,
-    });
-  }
+  validateUint256Field("amount", amount);
+  validateUint256Field("nonce", nonce);
   if (deadline <= 0n) {
     throw new NonPositiveInputError("deadline", deadline);
   }
@@ -108,11 +93,24 @@ export const encodeErc20Permit2TransferFrom = (
       max: maxUint256,
     });
   }
+  // Reject an already-expired deadline before signing so a direct caller is never walked through a
+  // wallet EIP-712 prompt for a SignatureTransfer that Permit2 would revert with `SignatureExpired`.
+  // The sibling encodeErc20Permit and the token-requirement resolver enforce the same guard.
+  const timestamp = Time.timestamp();
+  if (deadline <= timestamp) {
+    throw new ExpiredDeadlineError(deadline, timestamp);
+  }
   validateRequirementSpender({
     chainId,
     spender,
     allowed: ["blueBundlesV1"],
   });
+  // getPermit2TransferFromTypedData derives its EIP-712 domain's verifyingContract from
+  // getChainAddresses(chainId).permit2. A chain that registers BlueBundlesV1 but no canonical Permit2
+  // leaves that undefined, and viem drops the undefined field from the domain — the wallet would then
+  // sign a domain-less separator that Permit2 can never accept. The resolver gates on permit2 != null;
+  // this exported encoder is reachable directly, so it must reject the same unsupported chain itself.
+  getChainAddress(chainId, "permit2"); // throws UnknownAddressError when Permit2 is unregistered
 
   const action: Permit2TransferFromAction = {
     type: "permit2TransferFrom",

@@ -1,7 +1,7 @@
 ---
 "@morpho-org/morpho-sdk": major
 "@morpho-org/wdk-protocol-lending-morpho-evm": major
-"@morpho-org/liquidity-sdk-viem": patch
+"@morpho-org/liquidity-sdk-viem": minor
 ---
 
 Accept only Vault V2 BluePublicAllocator reallocations in high-level Morpho Blue write inputs.

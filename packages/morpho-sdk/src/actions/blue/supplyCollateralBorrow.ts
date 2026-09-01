@@ -1,13 +1,13 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import { type Address, encodeFunctionData, maxUint256 } from "viem";
+import { type Address, encodeFunctionData } from "viem";
 import { blueBundlesV1Abi } from "../../abis.js";
+import { validateUint256Field } from "../../helpers/validate.js";
 import {
   type AuthorizationRequirementSignature,
   type BlueBundlesV1TokenRequirementSignature,
   type BlueSupplyCollateralBorrowAction,
   InputExceedsMaxError,
   type Metadata,
-  NegativeInputError,
   NonPositiveInputError,
   ReallocationsRequireBorrowError,
   type Transaction,
@@ -139,17 +139,12 @@ export const blueSupplyCollateralBorrow = (
     requirementSignature,
     authorizationSignature,
   } = params.args;
-  // Reject > uint256 so a direct caller gets the SDK's typed `InputExceedsMaxError`, not viem's
-  // `IntegerOutOfRangeError` at encode time. `maxUint256` stays valid as the `maxLtv` sentinel.
   for (const [field, value] of [
     ["collateralAssets", collateralAssets],
     ["borrowAssets", borrowAssets],
     ["maxLtv", maxLtv],
   ] as const) {
-    if (value < 0n) throw new NegativeInputError(field, value);
-    if (value > maxUint256) {
-      throw new InputExceedsMaxError({ field, value, max: maxUint256 });
-    }
+    validateUint256Field(field, value);
   }
   if (collateralAssets === 0n && borrowAssets === 0n) {
     throw new NonPositiveInputError("collateralAssets or borrowAssets", 0n);
@@ -161,9 +156,7 @@ export const blueSupplyCollateralBorrow = (
   }
   if (collateralAssets === 0n && requirementSignature != null) {
     throw new UnexpectedRequirementSignatureError(
-      requirementSignature.action.type === "permit2TransferFrom"
-        ? "permit2TransferFrom"
-        : "permit",
+      requirementSignature.action.type,
     );
   }
   if (borrowAssets === 0n && authorizationSignature != null) {

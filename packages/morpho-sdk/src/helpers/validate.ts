@@ -8,7 +8,13 @@ import {
 } from "@morpho-org/blue-sdk";
 import type { MarketInput as MidnightMarketInput } from "@morpho-org/midnight-sdk";
 import { isDefined } from "@morpho-org/morpho-ts";
-import { type Address, isAddress, isAddressEqual, maxUint128 } from "viem";
+import {
+  type Address,
+  isAddress,
+  isAddressEqual,
+  maxUint128,
+  maxUint256,
+} from "viem";
 import {
   AccrualPositionUserMismatchError,
   AddressMismatchError,
@@ -53,6 +59,25 @@ export const compareMarketIds = (idA: MarketId, idB: MarketId) => {
   if (normalizedIdA > normalizedIdB) return 1;
   if (normalizedIdA < normalizedIdB) return -1;
   return 0;
+};
+
+/**
+ * Rejects a `bigint` field that falls outside the unsigned 256-bit ABI range so a direct caller
+ * gets the SDK's typed error instead of viem's `IntegerOutOfRangeError` at encode time. `maxUint256`
+ * stays valid — it is the accepted `maxLtv` / full-repay `repayShares` sentinel.
+ *
+ * @param field - Field name surfaced in the thrown error.
+ * @param value - Candidate value; must be in `[0, maxUint256]`.
+ * @returns Nothing when `value` is within range.
+ * @throws {NegativeInputError} when `value` is negative.
+ * @throws {InputExceedsMaxError} when `value` exceeds `maxUint256`.
+ * @internal
+ */
+export const validateUint256Field = (field: string, value: bigint): void => {
+  if (value < 0n) throw new NegativeInputError(field, value);
+  if (value > maxUint256) {
+    throw new InputExceedsMaxError({ field, value, max: maxUint256 });
+  }
 };
 
 /**

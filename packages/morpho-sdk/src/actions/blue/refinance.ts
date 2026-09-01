@@ -1,17 +1,11 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import {
-  type Address,
-  encodeFunctionData,
-  isAddressEqual,
-  maxUint256,
-} from "viem";
+import { type Address, encodeFunctionData, isAddressEqual } from "viem";
 import { blueBundlesV1Abi } from "../../abis.js";
+import { validateUint256Field } from "../../helpers/validate.js";
 import {
   type AuthorizationRequirementSignature,
   type BlueRefinanceAction,
-  InputExceedsMaxError,
   type Metadata,
-  NegativeInputError,
   RefinanceSameMarketError,
   RefinanceTokenMismatchError,
   type Transaction,
@@ -142,18 +136,7 @@ export const blueRefinance = (
       destinationMarketParams.id,
     );
   }
-  // Reject > uint256 so a direct caller gets the SDK's typed `InputExceedsMaxError`, not viem's
-  // `IntegerOutOfRangeError` at encode time. `maxUint256` stays valid as the `maxLtv` sentinel.
-  if (maxLtv < 0n) {
-    throw new NegativeInputError("maxLtv", maxLtv);
-  }
-  if (maxLtv > maxUint256) {
-    throw new InputExceedsMaxError({
-      field: "maxLtv",
-      value: maxLtv,
-      max: maxUint256,
-    });
-  }
+  validateUint256Field("maxLtv", maxLtv);
 
   const common: BlueBundlesV1CommonParams = {
     chainId,

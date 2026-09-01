@@ -1,7 +1,6 @@
 ---
 "@morpho-org/morpho-sdk": major
 "@morpho-org/wdk-protocol-lending-morpho-evm": major
-"@morpho-org/liquidity-sdk-viem": patch
 ---
 
 Route Blue collateral supply, borrow, repay, and collateral withdrawal flows through the compatible
@@ -18,6 +17,6 @@ combined-builder parameter interfaces, the `BlueActions` entity write-method par
 the shared `AssetsOrSharesArgs`), the `BlueTokenRequirementsParams` prerequisite options, and the
 WDK Blue-write option types `readonly`.
 
-Patch `@morpho-org/liquidity-sdk-viem` as a maintained direct dependent of the `morpho-sdk` major
-(its `morpho-sdk` peer range already accepts `^6.0.0`); this is the explicit dependent bump the
-migration plan requires in the implementation changeset.
+The `@morpho-org/liquidity-sdk-viem` dependent bump for this `morpho-sdk` major — a `minor` that
+widens its `morpho-sdk` peer range to `^5.4.0 || ^6.0.0` — is declared in the
+`blue-v2-only-reallocations` changeset that performs the widening.

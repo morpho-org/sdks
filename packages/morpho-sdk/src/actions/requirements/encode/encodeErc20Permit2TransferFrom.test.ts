@@ -1,10 +1,16 @@
 import { addressesRegistry } from "@morpho-org/blue-sdk";
 import { getPermit2TransferFromTypedData } from "@morpho-org/blue-sdk-viem";
+import {
+  ChainId,
+  getChainAddress,
+  UnknownAddressError,
+} from "@morpho-org/morpho-ts";
 import { createWalletClient, http, maxUint256, verifyTypedData } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
+  ExpiredDeadlineError,
   InputExceedsMaxError,
   NegativeInputError,
   NonPositiveInputError,
@@ -110,5 +116,28 @@ describe("encodeErc20Permit2TransferFrom", () => {
     expect(() =>
       encodeErc20Permit2TransferFrom({ ...base(), deadline: maxUint256 + 1n }),
     ).toThrow(InputExceedsMaxError);
+  });
+
+  test("error: ExpiredDeadlineError when deadline is in the past", () => {
+    expect(() =>
+      encodeErc20Permit2TransferFrom({ ...base(), deadline: 1n }),
+    ).toThrow(ExpiredDeadlineError);
+  });
+
+  test("error: UnknownAddressError when the chain has no registered Permit2", () => {
+    // HyperliquidMainnet registers BlueBundlesV1 but no canonical Permit2, so the SignatureTransfer
+    // domain would sign a domain-less separator. The encoder must reject it before signing.
+    const chainId = ChainId.HyperliquidMainnet;
+    const spender = getChainAddress(chainId, "bundles.blueBundlesV1");
+    expect(() =>
+      encodeErc20Permit2TransferFrom({
+        token: "0x0000000000000000000000000000000000000001",
+        spender,
+        amount: 1_000_000n,
+        chainId,
+        nonce: 0n,
+        deadline: maxUint256,
+      }),
+    ).toThrow(UnknownAddressError);
   });
 });

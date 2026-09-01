@@ -6,7 +6,10 @@ import {
   decodeFunctionData,
   getAddress,
   maxUint256,
+  serializeCompactSignature,
   serializeSignature,
+  signatureToCompactSignature,
+  size,
   toHex,
   zeroAddress,
 } from "viem";
@@ -171,6 +174,59 @@ describe("blueSupply", () => {
         },
       }),
     ).toThrow(MissingReferralFeeRecipientError);
+  });
+
+  test("behavior: accepts an ERC-2098 compact (64-byte) ERC-2612 signature", () => {
+    const blueBundlesV1 = getChainAddress(chainId, "bundles.blueBundlesV1");
+    const r = toHex(1n, { size: 32 });
+    const s = toHex(2n, { size: 32 });
+    const compact = serializeCompactSignature(
+      signatureToCompactSignature({ r, s, yParity: 0 }),
+    );
+    expect(size(compact)).toBe(64);
+    const erc2612 = {
+      args: {
+        owner: userAddress,
+        nonce: 3n,
+        asset: marketParams.loanToken,
+        signature: compact,
+        amount: 5n,
+        deadline: 123n,
+      },
+      action: {
+        type: "permit",
+        args: { spender: blueBundlesV1, amount: 5n, deadline: 123n },
+      },
+    } satisfies BlueBundlesV1TokenRequirementSignature;
+
+    const decoded = decodeFunctionData({
+      abi: blueBundlesV1Abi,
+      data: blueSupply({
+        market,
+        args: {
+          userAddress,
+          assets: 5n,
+          deadline,
+          requirementSignature: erc2612,
+        },
+      }).data,
+    });
+    if (decoded.functionName !== "blueBundlesV1Supply") {
+      throw new Error("Unexpected BlueBundlesV1 entrypoint");
+    }
+    // A 64-byte compact signature must decode to the same (deadline, v, r, s) as the 65-byte form.
+    expect(decoded.args[2].kind).toBe(1);
+    expect(
+      decodeAbiParameters(
+        [
+          { type: "uint256" },
+          { type: "uint8" },
+          { type: "bytes32" },
+          { type: "bytes32" },
+        ],
+        decoded.args[2].data,
+      ),
+    ).toEqual([123n, 27, r, s]);
   });
 
   test("behavior: encodes ERC-2612 and Permit2 SignatureTransfer permits", () => {

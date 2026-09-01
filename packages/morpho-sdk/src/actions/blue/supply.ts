@@ -22,29 +22,29 @@ import {
 /** Parameters for {@link blueSupply}. */
 export interface BlueSupplyParams {
   /** Chain and scoped Morpho Blue market. */
-  market: {
+  readonly market: {
     readonly chainId: number;
     readonly marketParams: MarketParams;
   };
   /** Direct BlueBundlesV1 supply arguments. */
-  args: {
+  readonly args: {
     /** User funding and receiving the supply position. */
-    userAddress: Address;
+    readonly userAddress: Address;
     /** Gross loan-token assets funded before any referral fee. */
-    assets: bigint;
+    readonly assets: bigint;
     /** Full native funding amount; must equal `assets` and requires a wNative loan token. */
-    nativeAmount?: bigint;
+    readonly nativeAmount?: bigint;
     /** Final call deadline in Unix seconds. */
-    deadline: bigint;
+    readonly deadline: bigint;
     /** Optional WAD-scaled referral fee, strictly below 100%. */
-    referralFeePct?: bigint;
+    readonly referralFeePct?: bigint;
     /** Recipient required when `referralFeePct` is positive. */
-    referralFeeRecipient?: Address;
+    readonly referralFeeRecipient?: Address;
     /** Optional ERC-2612 or Permit2 SignatureTransfer requirement result. */
-    requirementSignature?: BlueBundlesV1TokenRequirementSignature;
+    readonly requirementSignature?: BlueBundlesV1TokenRequirementSignature;
   };
   /** Optional transaction metadata suffix. */
-  metadata?: Metadata;
+  readonly metadata?: Metadata;
 }
 
 /**

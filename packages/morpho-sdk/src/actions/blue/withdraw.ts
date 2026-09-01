@@ -1,13 +1,13 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import { type Address, encodeFunctionData, maxUint256 } from "viem";
+import { type Address, encodeFunctionData } from "viem";
 import { blueBundlesV1Abi } from "../../abis.js";
+import { validateUint256Field } from "../../helpers/validate.js";
 import {
   type AuthorizationRequirementSignature,
   type BlueWithdrawAction,
   InputExceedsMaxError,
   type Metadata,
   MutuallyExclusiveWithdrawAmountsError,
-  NegativeInputError,
   NonPositiveInputError,
   type Transaction,
   type VaultV2BlueReallocation,
@@ -24,31 +24,31 @@ import {
 /** Parameters for {@link blueWithdraw}. */
 export interface BlueWithdrawParams {
   /** Chain and scoped Morpho Blue market. */
-  market: {
+  readonly market: {
     readonly chainId: number;
     readonly marketParams: MarketParams;
   };
   /** Direct BlueBundlesV1 withdrawal arguments. */
-  args: {
+  readonly args: {
     /** User whose supply position is withdrawn. */
-    userAddress: Address;
+    readonly userAddress: Address;
     /** Exact loan assets withdrawn, exclusive with `withdrawShares`. */
-    withdrawAssets: bigint;
+    readonly withdrawAssets: bigint;
     /** Exact supply shares burned, exclusive with `withdrawAssets`. */
-    withdrawShares: bigint;
+    readonly withdrawShares: bigint;
     /** Optional validated Vault V2 BluePublicAllocator reallocations. */
-    reallocations?: Iterable<VaultV2BlueReallocation>;
+    readonly reallocations?: Iterable<VaultV2BlueReallocation>;
     /** Final call deadline in Unix seconds. */
-    deadline: bigint;
+    readonly deadline: bigint;
     /** Optional WAD-scaled referral fee, strictly below 100%. */
-    referralFeePct?: bigint;
+    readonly referralFeePct?: bigint;
     /** Recipient required when `referralFeePct` is positive. */
-    referralFeeRecipient?: Address;
+    readonly referralFeeRecipient?: Address;
     /** Optional Morpho authorization signature for BlueBundlesV1. */
-    authorizationSignature?: AuthorizationRequirementSignature;
+    readonly authorizationSignature?: AuthorizationRequirementSignature;
   };
   /** Optional transaction metadata suffix. */
-  metadata?: Metadata;
+  readonly metadata?: Metadata;
 }
 
 /**
@@ -117,31 +117,13 @@ export const blueWithdraw = (
     withdrawShares,
     authorizationSignature,
   } = params.args;
-  if (withdrawAssets < 0n) {
-    throw new NegativeInputError("withdrawAssets", withdrawAssets);
-  }
-  if (withdrawShares < 0n) {
-    throw new NegativeInputError("withdrawShares", withdrawShares);
-  }
+  validateUint256Field("withdrawAssets", withdrawAssets);
+  validateUint256Field("withdrawShares", withdrawShares);
   if (withdrawAssets > 0n && withdrawShares > 0n) {
     throw new MutuallyExclusiveWithdrawAmountsError(marketParams.id);
   }
   if (withdrawAssets === 0n && withdrawShares === 0n) {
     throw new NonPositiveInputError("withdrawAssets or withdrawShares", 0n);
-  }
-  if (withdrawAssets > maxUint256) {
-    throw new InputExceedsMaxError({
-      field: "withdrawAssets",
-      value: withdrawAssets,
-      max: maxUint256,
-    });
-  }
-  if (withdrawShares > maxUint256) {
-    throw new InputExceedsMaxError({
-      field: "withdrawShares",
-      value: withdrawShares,
-      max: maxUint256,
-    });
   }
 
   const common: BlueBundlesV1CommonParams = {

@@ -1,6 +1,7 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import { type Address, encodeFunctionData, maxUint256 } from "viem";
+import { type Address, encodeFunctionData } from "viem";
 import { blueBundlesV1Abi } from "../../abis.js";
+import { validateUint256Field } from "../../helpers/validate.js";
 import {
   type AuthorizationRequirementSignature,
   type BlueBundlesV1TokenRequirementSignature,
@@ -9,7 +10,6 @@ import {
   MaxRepayAssetsBelowRepayAssetsError,
   type Metadata,
   MutuallyExclusiveRepayAmountsError,
-  NegativeInputError,
   NonPositiveInputError,
   type Transaction,
   UnexpectedRequirementSignatureError,
@@ -141,9 +141,6 @@ export const blueRepayWithdrawCollateral = (
     requirementSignature,
     authorizationSignature,
   } = params.args;
-  // Reject > uint256 so a direct caller gets the SDK's typed `InputExceedsMaxError`, not viem's
-  // `IntegerOutOfRangeError` at encode time. `maxUint256` stays valid as the `repayShares`
-  // (full repay) and `maxLtv` sentinel.
   for (const [field, value] of [
     ["repayAssets", repayAssets],
     ["repayShares", repayShares],
@@ -151,10 +148,7 @@ export const blueRepayWithdrawCollateral = (
     ["collateralAssets", collateralAssets],
     ["maxLtv", maxLtv],
   ] as const) {
-    if (value < 0n) throw new NegativeInputError(field, value);
-    if (value > maxUint256) {
-      throw new InputExceedsMaxError({ field, value, max: maxUint256 });
-    }
+    validateUint256Field(field, value);
   }
   if (repayAssets > 0n && repayShares > 0n) {
     throw new MutuallyExclusiveRepayAmountsError(marketParams.id);
@@ -181,9 +175,7 @@ export const blueRepayWithdrawCollateral = (
   }
   if (!hasRepay && requirementSignature != null) {
     throw new UnexpectedRequirementSignatureError(
-      requirementSignature.action.type === "permit2TransferFrom"
-        ? "permit2TransferFrom"
-        : "permit",
+      requirementSignature.action.type,
     );
   }
   if (collateralAssets === 0n && authorizationSignature != null) {
