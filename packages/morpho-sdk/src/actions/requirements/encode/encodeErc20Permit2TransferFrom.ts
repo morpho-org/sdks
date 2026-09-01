@@ -17,17 +17,17 @@ import {
 /** Parameters for {@link encodeErc20Permit2TransferFrom}. */
 export interface EncodeErc20Permit2TransferFromParams {
   /** ERC-20 token pulled through Permit2. */
-  token: Address;
+  readonly token: Address;
   /** BlueBundlesV1 deployment receiving permission to pull the token. */
-  spender: Address;
+  readonly spender: Address;
   /** Exact token amount authorized by the one-time transfer. */
-  amount: bigint;
+  readonly amount: bigint;
   /** Target chain id. */
-  chainId: number;
+  readonly chainId: number;
   /** Unused Permit2 unordered nonce. */
-  nonce: bigint;
+  readonly nonce: bigint;
   /** Signature expiration timestamp in seconds. */
-  deadline: bigint;
+  readonly deadline: bigint;
 }
 
 /**
