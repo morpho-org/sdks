@@ -102,6 +102,13 @@ referral-fee fields, and `deadline`.
 The full live source debt and collateral always move, and Morpho authorization targets
 BlueBundlesV1. Stay on v5 if the product requires partial or collateral-only refinance behavior.
 
+The partial-migration error classes `BorrowAmountAndSharesExclusiveError`,
+`RefinanceExceedsCollateralError`, `RefinanceExceedsBorrowSharesError`,
+`RefinanceExceedsBorrowAssetsError`, and `RefinanceSharesMissingBorrowAssetsError` are removed. The
+full-position route validates ownership and token/market compatibility, then checks the combined
+destination position against the buffered LLTV (`BorrowExceedsSafeLtvError`); `RefinanceSameMarketError`
+and `RefinanceTokenMismatchError` stay.
+
 ## Removed action-output field: `reallocationFee`
 
 `BlueBorrowAction`, `BlueWithdrawAction`, `BlueSupplyCollateralBorrowAction`, and

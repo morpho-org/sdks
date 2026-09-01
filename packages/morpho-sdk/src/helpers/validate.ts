@@ -13,7 +13,6 @@ import {
   AccrualPositionUserMismatchError,
   AddressMismatchError,
   BorrowExceedsSafeLtvError,
-  BundlerErrors,
   ChainIdMismatchError,
   ChainWNativeMissingError,
   EmptyReallocationWithdrawalsError,
