@@ -14,8 +14,9 @@ and inconsistent withdrawal-only funding inputs in the combined builders with th
 `getRequirements(...)` on the Blue collateral-supply and repay prerequisite paths (previously
 dropped), while keeping the saturated-repay token cap. Mark the new Blue action argument shapes, the
 combined-builder parameter interfaces, the `BlueActions` entity write-method parameter shapes (and
-the shared `AssetsOrSharesArgs`), the `BlueTokenRequirementsParams` prerequisite options, and the
-WDK Blue-write option types `readonly`.
+the shared `AssetsOrSharesArgs`), the `BlueTokenRequirementsParams` and
+`GetBlueBundlesV1TokenRequirementsParams` prerequisite options, and the WDK Blue-write option types
+`readonly`.
 
 The `@morpho-org/liquidity-sdk-viem` dependent bump for this `morpho-sdk` major — a `minor` that
 widens its `morpho-sdk` peer range to `^5.4.0 || ^6.0.0` — is declared in the
