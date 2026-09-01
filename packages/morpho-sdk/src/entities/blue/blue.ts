@@ -1963,6 +1963,21 @@ export class MorphoBlue implements BlueActions {
       destination.marketParams,
     );
     const penaltyAssets = getBlueBundlesV1PenaltyAssets(publicAllocations);
+    // Reject a reallocation plan whose rounded aggregate penalty exceeds the current source debt,
+    // matching the `blueBorrow`/`blueWithdraw` BlueBundlesV1 caps. Bound against the current quoted
+    // debt, not the conservative `now + 2h` health projection below: the on-chain call migrates the
+    // debt live at execution (>= the current quote), so the current quote is the safe floor. Using
+    // the forward projection would let a penalty between the current and forecast debt pass while
+    // still exceeding the debt actually moved, and the health check only adds the penalty to
+    // destination debt, so a collateralized position would silently accept it or encode a reverting
+    // call.
+    if (penaltyAssets > positionData.borrowAssets) {
+      throw new InputExceedsMaxError({
+        field: "reallocationPenaltyAssets",
+        value: penaltyAssets,
+        max: positionData.borrowAssets,
+      });
+    }
     const accrualTimestamp = this.getBlueBundlesV1QuoteTimestamp(
       MathLib.max(
         positionData.market.lastUpdate,
@@ -1972,18 +1987,6 @@ export class MorphoBlue implements BlueActions {
     const accruedSourcePosition = positionData.accrueInterest(accrualTimestamp);
     const accruedDestinationPosition =
       destination.positionData.accrueInterest(accrualTimestamp);
-    // Reject a reallocation plan whose rounded aggregate penalty exceeds the migrated source debt,
-    // matching the `blueBorrow`/`blueWithdraw` BlueBundlesV1 caps. The health check below only adds
-    // the penalty to destination debt, so a combined position with spare collateral would otherwise
-    // silently accept an allocator cost larger than the debt moved, or encode a call that only
-    // reverts on-chain.
-    if (penaltyAssets > accruedSourcePosition.borrowAssets) {
-      throw new InputExceedsMaxError({
-        field: "reallocationPenaltyAssets",
-        value: penaltyAssets,
-        max: accruedSourcePosition.borrowAssets,
-      });
-    }
     const referralFeeAssets = getBlueBundlesV1ReferralFeeAssets(
       accruedSourcePosition.borrowAssets,
       referralFeePct,
