@@ -59,20 +59,26 @@ const permit2Signature: PermitRequirementSignature = {
   },
 };
 
-const permit2TransferFromSignature: Permit2TransferFromRequirementSignature = {
-  action: {
-    type: "permit2TransferFrom",
-    args: { spender: SPENDER, amount: 1n, deadline: 1_900_000_000n },
-  },
-  args: {
-    owner: OWNER,
-    asset: TOKEN,
-    amount: 1n,
-    nonce: 0n,
-    deadline: 1_900_000_000n,
-    signature: SIGNATURE,
-  },
-};
+const permit2TransferFromSignature: Permit2TransferFromRequirementSignature =
+  {
+    action: {
+      type: "permit2TransferFrom",
+      args: {
+        spender: SPENDER,
+        amount: 1n,
+        nonce: 0n,
+        deadline: 1_900_000_000n,
+      },
+    },
+    args: {
+      owner: OWNER,
+      asset: TOKEN,
+      amount: 1n,
+      nonce: 0n,
+      deadline: 1_900_000_000n,
+      signature: SIGNATURE,
+    },
+  };
 
 const authorizationSignature: AuthorizationRequirementSignature = {
   action: {
@@ -132,9 +138,9 @@ describe("isAuthorizationSignature", () => {
 
 describe("isPermit2TransferFromSignature", () => {
   test("default: true for Permit2 SignatureTransfer", () => {
-    expect(isPermit2TransferFromSignature(permit2TransferFromSignature)).toBe(
-      true,
-    );
+    expect(
+      isPermit2TransferFromSignature(permit2TransferFromSignature),
+    ).toBe(true);
   });
 
   test("behavior: false for Permit2 AllowanceTransfer", () => {

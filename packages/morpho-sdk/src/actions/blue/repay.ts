@@ -2,8 +2,8 @@ import type { MarketParams } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import { type Address, maxUint256 } from "viem";
 import type {
-  BlueBundlesV1TokenRequirementSignature,
   BlueRepayAction,
+  BlueBundlesV1TokenRequirementSignature,
   Metadata,
   Transaction,
 } from "../../types/index.js";
@@ -12,33 +12,33 @@ import { blueRepayWithdrawCollateral } from "./repayWithdrawCollateral.js";
 /** Parameters for {@link blueRepay}. */
 export interface BlueRepayParams {
   /** Chain and scoped Morpho Blue market. */
-  readonly market: {
+  market: {
     readonly chainId: number;
     readonly marketParams: MarketParams;
   };
   /** Direct BlueBundlesV1 repay arguments. */
-  readonly args: {
+  args: {
     /** User whose debt is repaid. */
-    readonly userAddress: Address;
+    userAddress: Address;
     /** Exact assets repaid, exclusive with `repayShares`. */
-    readonly repayAssets: bigint;
+    repayAssets: bigint;
     /** Exact shares repaid; use `maxUint256` for a saturated full repay. */
-    readonly repayShares: bigint;
+    repayShares: bigint;
     /** Maximum gross loan-token funding, including referral fees. */
-    readonly maxRepayAssets: bigint;
+    maxRepayAssets: bigint;
     /** Full native repay funding; must equal `maxRepayAssets`. */
-    readonly nativeAmount?: bigint;
+    nativeAmount?: bigint;
     /** Final call deadline in Unix seconds. */
-    readonly deadline: bigint;
+    deadline: bigint;
     /** Optional WAD-scaled referral fee, strictly below 100%. */
-    readonly referralFeePct?: bigint;
+    referralFeePct?: bigint;
     /** Recipient required when `referralFeePct` is positive. */
-    readonly referralFeeRecipient?: Address;
+    referralFeeRecipient?: Address;
     /** Optional loan-token ERC-2612 or Permit2 SignatureTransfer result. */
-    readonly requirementSignature?: BlueBundlesV1TokenRequirementSignature;
+    requirementSignature?: BlueBundlesV1TokenRequirementSignature;
   };
   /** Optional transaction metadata suffix. */
-  readonly metadata?: Metadata;
+  metadata?: Metadata;
 }
 
 /**

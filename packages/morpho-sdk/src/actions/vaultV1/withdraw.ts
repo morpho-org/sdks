@@ -1,79 +1,105 @@
-import { metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
-import { deepFreeze } from "@morpho-org/morpho-ts";
+import { getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData } from "viem";
-import { addTransactionMetadata } from "../../helpers/index.js";
+import { vaultBundlesV1Abi } from "../../abis.js";
 import {
   type Metadata,
   NonPositiveInputError,
+  type PermitRequirementSignature,
   type Transaction,
   type VaultV1WithdrawAction,
 } from "../../types/index.js";
+import {
+  finalizeVaultBundlesV1Transaction,
+  getBundlesReferralFeeAssets,
+  getBundlesSharesPermit,
+  normalizeBundlesCommonParams,
+} from "../bundles/index.js";
 
 /** Parameters for {@link vaultV1Withdraw}. */
 export interface VaultV1WithdrawParams {
-  vault: {
-    address: Address;
+  readonly vault: { readonly chainId: number; readonly address: Address };
+  readonly args: {
+    readonly amount: bigint;
+    readonly userAddress: Address;
+    readonly recipient?: never;
+    readonly onBehalf?: never;
+    readonly requirementSignature?: PermitRequirementSignature;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
+    readonly deadline: bigint;
   };
-  args: {
-    amount: bigint;
-    recipient: Address;
-    onBehalf: Address;
-  };
-  metadata?: Metadata;
+  readonly metadata?: Metadata;
 }
 
 /**
- * Prepares a withdraw transaction for a VaultV1 (MetaMorpho) contract.
+ * Encodes an exact-assets Vault V1 withdrawal through VaultBundlesV1.
  *
- * Direct vault call — no bundler needed. Withdraw has no inflation-attack surface.
- *
- * @param params.vault.address - The VaultV1 (MetaMorpho) address.
- * @param params.args.amount - Amount of underlying assets to withdraw.
- * @param params.args.recipient - Address that receives the withdrawn assets.
- * @param params.args.onBehalf - Address whose shares are burned.
- * @param params.metadata - Optional analytics metadata attached to the transaction.
- * @returns A deep-frozen `Transaction<VaultV1WithdrawAction>` with `to`, `value`, `data`, and the
- *   typed `action` discriminator the simulation layer consumes.
- * @throws {NonPositiveInputError} when `amount <= 0n`.
+ * @param params - Vault, gross asset amount, share permit, fee, and deadline values.
+ * @returns A deep-frozen VaultBundlesV1 withdrawal transaction.
+ * @throws {NonPositiveInputError} when `amount` or `deadline` is not positive.
+ * @throws {BundlesPermitMismatchError} when the optional share permit is incompatible.
  * @example
  * ```ts
  * import { vaultV1Withdraw } from "@morpho-org/morpho-sdk";
+ * import { zeroAddress } from "viem";
  *
  * const tx = vaultV1Withdraw({
- *   vault: { address: vaultAddress },
- *   args: { amount: 500_000n, recipient, onBehalf },
+ *   vault: { chainId: 1, address: zeroAddress },
+ *   args: { amount: 1_000_000n, userAddress: zeroAddress, deadline: 1_900_000_000n },
  * });
- * // tx satisfies Readonly<Transaction<VaultV1WithdrawAction>>
+ * // tx.action.type === "vaultV1Withdraw"
  * ```
  */
-export const vaultV1Withdraw = ({
-  vault: { address: vaultAddress },
-  args: { amount, recipient, onBehalf },
-  metadata,
-}: VaultV1WithdrawParams): Readonly<Transaction<VaultV1WithdrawAction>> => {
-  if (amount <= 0n) {
-    throw new NonPositiveInputError("amount", amount);
+export const vaultV1Withdraw = (
+  params: VaultV1WithdrawParams,
+): Readonly<Transaction<VaultV1WithdrawAction>> => {
+  if (params.args.amount <= 0n) {
+    throw new NonPositiveInputError("amount", params.args.amount);
   }
-
-  let tx = {
-    to: vaultAddress,
-    data: encodeFunctionData({
-      abi: metaMorphoAbi,
-      functionName: "withdraw",
-      args: [amount, recipient, onBehalf],
-    }),
+  const common = normalizeBundlesCommonParams(params.args);
+  const spender = getChainAddress(
+    params.vault.chainId,
+    "bundles.vaultBundlesV1",
+  );
+  const sharesPermit = getBundlesSharesPermit({
+    vault: params.vault.address,
+    deadline: common.deadline,
+    owner: params.args.userAddress,
+    spender,
+    requirementSignature: params.args.requirementSignature,
+  });
+  const referralFeeAssets = getBundlesReferralFeeAssets(
+    params.args.amount,
+    common.referralFeePct,
+  );
+  return finalizeVaultBundlesV1Transaction({
+    chainId: params.vault.chainId,
     value: 0n,
-  };
-
-  if (metadata) {
-    tx = addTransactionMetadata(tx, metadata);
-  }
-
-  return deepFreeze({
-    ...tx,
+    data: encodeFunctionData({
+      abi: vaultBundlesV1Abi,
+      functionName: "vaultBundlesV1Withdraw",
+      args: [
+        params.vault.address,
+        params.args.amount,
+        0n,
+        sharesPermit,
+        common.referralFeePct,
+        common.referralFeeRecipient,
+        common.deadline,
+      ],
+    }),
     action: {
       type: "vaultV1Withdraw",
-      args: { vault: vaultAddress, amount, recipient },
+      args: {
+        vault: params.vault.address,
+        amount: params.args.amount,
+        referralFeePct: common.referralFeePct,
+        referralFeeRecipient: common.referralFeeRecipient,
+        referralFeeAssets,
+        netAssets: params.args.amount - referralFeeAssets,
+        deadline: common.deadline,
+      },
     },
+    metadata: params.metadata,
   });
 };

@@ -2,6 +2,7 @@ import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
+  isPermitSignature,
   isRequirementSignature,
   morphoViemExtension,
 } from "../../../src/index.js";
@@ -51,6 +52,10 @@ describe("Permit", () => {
           client,
           client.account.address,
         );
+
+        if (!isPermitSignature(requirementSignature)) {
+          throw new Error("Unexpected requirement signature");
+        }
 
         expect(requirementSignature.args.owner).toEqual(client.account.address);
         expect(isHex(requirementSignature.args.signature)).toBe(true);

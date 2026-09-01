@@ -115,11 +115,11 @@ export const encodeVaultSharesPermit = (
             }),
   });
 
-  // Bind the permit to the standalone vault-exit deployment for this chain.
+  // Bind the permit to one of the registered fixed vault bundles deployments.
   validateRequirementSpender({
     chainId,
     spender,
-    allowed: ["vaultExitBundlesV1"],
+    allowed: ["vaultExitBundlesV1", "vaultBundlesV1"],
   });
 
   const action: PermitAction = {

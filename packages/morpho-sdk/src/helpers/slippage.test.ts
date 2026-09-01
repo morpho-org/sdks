@@ -1,4 +1,10 @@
-import { Market, MarketParams, MathLib } from "@morpho-org/blue-sdk";
+import {
+  type AccrualVault,
+  Market,
+  MarketParams,
+  MathLib,
+} from "@morpho-org/blue-sdk";
+import fc from "fast-check";
 import { describe, expect, test } from "vitest";
 import { WethUsdsBlue } from "../../test/fixtures/blue.js";
 import {
@@ -11,6 +17,7 @@ import {
   computeMaxSupplySharePrice,
   computeMinBorrowSharePrice,
   computeMinWithdrawSharePrice,
+  computeVaultMaxSharePrice,
 } from "./slippage.js";
 
 /** 1:1 share-to-asset ratio market for predictable results. */
@@ -346,5 +353,41 @@ describe("computeMinWithdrawSharePrice", () => {
         slippageTolerance: MathLib.WAD + 1n,
       }),
     ).toThrow(ExcessiveSlippageToleranceError);
+  });
+});
+
+describe("computeVaultMaxSharePrice", () => {
+  test("behavior: is monotonic in slippage tolerance", () => {
+    const vaultData = {
+      accrueInterest: () => ({ toShares: (assets: bigint) => assets }),
+    } as unknown as AccrualVault;
+    fc.assert(
+      fc.property(
+        fc.record({
+          assets: fc.bigInt({ min: 1n, max: (1n << 128n) - 1n }),
+          low: fc.bigInt({ min: 0n, max: MathLib.WAD / 20n }),
+          delta: fc.bigInt({ min: 0n, max: MathLib.WAD / 20n }),
+        }),
+        ({ assets, low, delta }) => {
+          const high = low + delta;
+          expect(
+            computeVaultMaxSharePrice({
+              vaultData,
+              timestamp: 1_800_000_000n,
+              assets,
+              slippageTolerance: high,
+            }),
+          ).toBeGreaterThanOrEqual(
+            computeVaultMaxSharePrice({
+              vaultData,
+              timestamp: 1_800_000_000n,
+              assets,
+              slippageTolerance: low,
+            }),
+          );
+        },
+      ),
+      { numRuns: 100, seed: 20_260_912 },
+    );
   });
 });
