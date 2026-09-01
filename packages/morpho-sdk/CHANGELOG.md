@@ -1,5 +1,69 @@
 # @morpho-org/morpho-sdk
 
+## 6.0.0-next.0
+
+### Major Changes
+
+- [#966](https://github.com/morpho-org/sdks/pull/966) [`7ab2813`](https://github.com/morpho-org/sdks/commit/7ab2813be23f4823e8ea069dd79d9c99cef651ac) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Route Blue collateral supply, borrow, repay, and collateral withdrawal flows through the compatible
+  BlueBundlesV1 combined entrypoints. Preserve established names and migrate the WDK adapter.
+
+  Normalize token addresses to their EIP-55 checksum before resolving the per-token approval cap, so a
+  differently-cased loan token still caps the `MAX_TOKEN_APPROVALS` tokens (UNI/ONDO/COMP/FLUID) at
+  `uint96` instead of emitting a `maxUint256` approval those tokens reject. Reject oversized (`> uint256`)
+  and inconsistent withdrawal-only funding inputs in the combined builders with the SDK's typed
+  `InputExceedsMaxError`. Forward a caller-supplied reusable `approvalAmount` from
+  `getRequirements(...)` on the Blue collateral-supply and repay prerequisite paths (previously
+  dropped), while keeping the saturated-repay token cap. Mark the new Blue action argument shapes, the
+  combined-builder parameter interfaces, the `BlueActions` entity write-method parameter shapes (and
+  the shared `AssetsOrSharesArgs`), the `BlueTokenRequirementsParams` prerequisite options, and the
+  WDK Blue-write option types `readonly`.
+
+  Patch `@morpho-org/liquidity-sdk-viem` as a maintained direct dependent of the `morpho-sdk` major
+  (its `morpho-sdk` peer range already accepts `^6.0.0`); this is the explicit dependent bump the
+  migration plan requires in the implementation changeset.
+
+- [#967](https://github.com/morpho-org/sdks/pull/967) [`e69b3fd`](https://github.com/morpho-org/sdks/commit/e69b3fd545a804197467bf4d64cb4f78c3bbcfae) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Route the established Blue refinance flow through BlueBundlesV1 as a full compatible-position
+  migration. Replace partial migration inputs while preserving the method and builder names.
+  `userAddress` must be the account that signs the Morpho authorization and sends the transaction:
+  the migration operates on the `msg.sender` position, so on-behalf refinance is no longer supported.
+  The route rejects a reallocation plan whose rounded aggregate penalty exceeds the migrated source
+  debt (`InputExceedsMaxError`), matching the borrow and withdraw BlueBundlesV1 caps. The v5
+  partial-migration error classes (`BorrowAmountAndSharesExclusiveError`,
+  `RefinanceExceedsCollateralError`, `RefinanceExceedsBorrowSharesError`,
+  `RefinanceExceedsBorrowAssetsError`, `RefinanceSharesMissingBorrowAssetsError`) are deprecated rather
+  than removed and stay exported through v6 for pattern-matching consumers.
+
+- [#965](https://github.com/morpho-org/sdks/pull/965) [`abc1d9b`](https://github.com/morpho-org/sdks/commit/abc1d9b687e3c530f94133d537a4cceb1a939f3a) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Route the established Blue supply and withdraw flows directly through BlueBundlesV1. Update their
+  inputs, requirement targets, and transaction metadata while preserving method and builder names.
+
+- [#964](https://github.com/morpho-org/sdks/pull/964) [`a4f54a5`](https://github.com/morpho-org/sdks/commit/a4f54a5e808ec00425f1b84f3ddc775cb3fa588e) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Accept only Vault V2 BluePublicAllocator reallocations in high-level Morpho Blue write inputs.
+  Vault V1 planners and explicit low-level Bundler3 composition remain available. Update the WDK
+  borrow input and widen liquidity-sdk-viem's morpho-sdk peer range for the next major.
+
+  Remove the now-vestigial `reallocationFee` field from the `blueBorrow`, `blueWithdraw`,
+  `blueSupplyCollateralBorrow`, and `blueRefinance` action outputs (it only ever carried Vault V1
+  native allocator fees, which high-level writes no longer emit; V2 penalties are reported via
+  `reallocationPenaltyAssets`). Remove the now-unused `BlueReallocationPlan` type.
+
+### Minor Changes
+
+- [#962](https://github.com/morpho-org/sdks/pull/962) [`803bd39`](https://github.com/morpho-org/sdks/commit/803bd391a4b8e4833b7db8ff4a721e97e33b1c63) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Publish the pinned BlueBundlesV1 ABI and deprecate all Vault V1 shared-liquidity algorithm and
+  Bundler3 composition surfaces in Morpho SDK, plus the WDK Vault V1 borrow input. Use Vault V2
+  BluePublicAllocator reallocations for new integrations; all deprecated Vault V1 surfaces will be
+  removed in the next major.
+
+### Patch Changes
+
+- [#972](https://github.com/morpho-org/sdks/pull/972) [`8df3e02`](https://github.com/morpho-org/sdks/commit/8df3e02865961b9be15ca7cd130a6693bf3f37ab) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Route the `MorphoVaultV1` and `MorphoVaultV2` action-method chain checks through the shared `validateChainId` helper instead of inlining the `ChainIdMismatchError` guard at each call site. Pure internal maintenance: the thrown error class and arguments are unchanged, and the `getData` guards keep their intentional chainless-client tolerance.
+
+- [#962](https://github.com/morpho-org/sdks/pull/962) [`fce8e25`](https://github.com/morpho-org/sdks/commit/fce8e257cf7f58f334b187fd692e93a447f33cbd) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Clamp Permit2 SignatureTransfer allowances to the full uint256 range instead of the uint160
+  AllowanceTransfer limit.
+
+- [#969](https://github.com/morpho-org/sdks/pull/969) [`8605967`](https://github.com/morpho-org/sdks/commit/86059673fcb1fcd3595ab441a061727597f5b2d6) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Validate the `next` prerelease pipeline end-to-end after making pending-changeset detection prerelease-aware. No runtime behavior change.
+
+- Updated dependencies [[`fce8e25`](https://github.com/morpho-org/sdks/commit/fce8e257cf7f58f334b187fd692e93a447f33cbd)]:
+  - @morpho-org/blue-sdk-viem@5.4.1-next.0
+
 ## 5.8.0
 
 ### Minor Changes

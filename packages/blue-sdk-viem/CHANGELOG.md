@@ -1,5 +1,12 @@
 # @morpho-org/blue-sdk-viem
 
+## 5.4.1-next.0
+
+### Patch Changes
+
+- [#962](https://github.com/morpho-org/sdks/pull/962) [`fce8e25`](https://github.com/morpho-org/sdks/commit/fce8e257cf7f58f334b187fd692e93a447f33cbd) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Clamp Permit2 SignatureTransfer allowances to the full uint256 range instead of the uint160
+  AllowanceTransfer limit.
+
 ## 5.4.0
 
 ### Minor Changes
