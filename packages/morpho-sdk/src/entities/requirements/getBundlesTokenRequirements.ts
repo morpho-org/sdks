@@ -1,6 +1,6 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { erc2612Abi, permit2Abi } from "@morpho-org/blue-sdk-viem";
-import { isDefined } from "@morpho-org/morpho-ts";
+import { isDefined, Time } from "@morpho-org/morpho-ts";
 import {
   type Address,
   type Client,
@@ -16,6 +16,7 @@ import {
   ApprovalAmountLessThanSpendAmountError,
   type BlueBundlesV1TokenSignatureRequirement,
   type ERC20ApprovalAction,
+  ExpiredDeadlineError,
   InputExceedsMaxError,
   MissingPermit2TransferFromNonceError,
   NegativeInputError,
@@ -75,10 +76,11 @@ export interface GetBundlesTokenRequirementsParams {
  * @throws {ChainIdMismatchError} when the connected client targets another chain.
  * @throws {NegativeInputError} when `amount` or `permit2Nonce` is negative.
  * @throws {NonPositiveInputError} when `deadline` is not positive.
+ * @throws {ExpiredDeadlineError} when `deadline` is not in the future.
  * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
  * @throws {MissingPermit2TransferFromNonceError} when Permit2 is selected without a nonce.
  * @throws {Permit2TransferFromNonceAlreadyUsedError} when `permit2Nonce` is already consumed.
- * @throws {InputExceedsMaxError} when `permit2Nonce` exceeds uint256.
+ * @throws {InputExceedsMaxError} when `amount`, `deadline`, or `permit2Nonce` exceeds uint256.
  * @throws {ApprovalAmountLessThanSpendAmountError} when `approvalAmount` is below `amount`.
  * @throws {viem.BaseError} when a required allowance, Permit2 nonce-bitmap, or ERC-2612 metadata
  *   read fails. A failed ERC-2612 nonce probe alone falls back to Permit2 or classic approval.
@@ -118,8 +120,26 @@ export const getBundlesTokenRequirements = async (
   if (params.amount < 0n) {
     throw new NegativeInputError("amount", params.amount);
   }
+  if (params.amount > maxUint256) {
+    throw new InputExceedsMaxError({
+      field: "amount",
+      value: params.amount,
+      max: maxUint256,
+    });
+  }
   if (params.deadline <= 0n) {
     throw new NonPositiveInputError("deadline", params.deadline);
+  }
+  if (params.deadline > maxUint256) {
+    throw new InputExceedsMaxError({
+      field: "deadline",
+      value: params.deadline,
+      max: maxUint256,
+    });
+  }
+  const timestamp = Time.timestamp();
+  if (params.deadline <= timestamp) {
+    throw new ExpiredDeadlineError(params.deadline, timestamp);
   }
   if (params.amount === 0n) return [];
 
@@ -181,19 +201,17 @@ export const getBundlesTokenRequirements = async (
       ]);
 
       return resolveBundlesTokenRequirements({
+        type: "permit2TransferFrom",
         token: params.token,
         spender: params.spender,
         owner: params.owner,
         chainId: params.chainId,
         amount: params.amount,
         deadline: params.deadline,
-        state: {
-          type: "permit2TransferFrom",
-          permit2,
-          permit2Allowance: allowance,
-          permit2Nonce: params.permit2Nonce,
-          nonceBitmap,
-        },
+        permit2,
+        allowance,
+        nonce: params.permit2Nonce,
+        nonceBitmap,
       });
     }
   }
@@ -209,16 +227,12 @@ export const getBundlesTokenRequirements = async (
     args: [params.owner, params.spender],
   });
   return resolveBundlesTokenRequirements({
+    type: "approval",
     token: params.token,
     spender: params.spender,
-    owner: params.owner,
     chainId: params.chainId,
     amount: params.amount,
-    deadline: params.deadline,
-    state: {
-      type: "approval",
-      allowance,
-      approvalAmount,
-    },
+    allowance,
+    approvalAmount,
   });
 };

@@ -25,17 +25,13 @@ describe("resolveBundlesTokenRequirements", () => {
         fc.boolean(),
         (amount, sufficient) => {
           const requirements = resolveBundlesTokenRequirements({
+            type: "approval",
             token: usdc,
             spender,
-            owner,
             chainId,
             amount,
-            deadline,
-            state: {
-              type: "approval",
-              allowance: sufficient ? amount : amount - 1n,
-              approvalAmount: amount,
-            },
+            allowance: sufficient ? amount : amount - 1n,
+            approvalAmount: amount,
           });
           expect(requirements).toHaveLength(sufficient ? 0 : 1);
           if (!sufficient) {
@@ -54,19 +50,17 @@ describe("resolveBundlesTokenRequirements", () => {
   test("behavior: Permit2 approval precedes SignatureTransfer and preserves nonce", () => {
     const amount = MathLib.MAX_UINT_160 + 1n;
     const requirements = resolveBundlesTokenRequirements({
+      type: "permit2TransferFrom",
       token: usdc,
       spender,
       owner,
       chainId,
       amount,
       deadline,
-      state: {
-        type: "permit2TransferFrom",
-        permit2,
-        permit2Allowance: 0n,
-        permit2Nonce: 257n,
-        nonceBitmap: 0n,
-      },
+      permit2,
+      allowance: 0n,
+      nonce: 257n,
+      nonceBitmap: 0n,
     });
 
     expect(isRequirementApproval(requirements[0])).toBe(true);
@@ -85,19 +79,17 @@ describe("resolveBundlesTokenRequirements", () => {
     fc.assert(
       fc.property(fc.integer({ min: 0, max: 255 }), (nonce) => {
         const requirement = resolveBundlesTokenRequirements({
+          type: "permit2TransferFrom",
           token: usdc,
           spender,
           owner,
           chainId,
           amount: 1n,
           deadline,
-          state: {
-            type: "permit2TransferFrom",
-            permit2,
-            permit2Allowance: maxUint256,
-            permit2Nonce: BigInt(nonce),
-            nonceBitmap: 0n,
-          },
+          permit2,
+          allowance: maxUint256,
+          nonce: BigInt(nonce),
+          nonceBitmap: 0n,
         })[0];
         expect(requirement?.action).toMatchObject({
           type: "permit2TransferFrom",
@@ -111,19 +103,17 @@ describe("resolveBundlesTokenRequirements", () => {
   test("error: Permit2TransferFromNonceAlreadyUsedError", () => {
     expect(() =>
       resolveBundlesTokenRequirements({
+        type: "permit2TransferFrom",
         token: usdc,
         spender,
         owner,
         chainId,
         amount: 1n,
         deadline,
-        state: {
-          type: "permit2TransferFrom",
-          permit2,
-          permit2Allowance: maxUint256,
-          permit2Nonce: 7n,
-          nonceBitmap: 1n << 7n,
-        },
+        permit2,
+        allowance: maxUint256,
+        nonce: 7n,
+        nonceBitmap: 1n << 7n,
       }),
     ).toThrow(Permit2TransferFromNonceAlreadyUsedError);
   });

@@ -66,7 +66,6 @@ const permit2TransferFromSignature: Permit2TransferFromRequirementSignature =
       args: {
         spender: SPENDER,
         amount: 1n,
-        nonce: 0n,
         deadline: 1_900_000_000n,
       },
     },

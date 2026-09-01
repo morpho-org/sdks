@@ -6,6 +6,7 @@ import {
   encodeAbiParameters,
   type Hex,
   isAddressEqual,
+  maxUint256,
   parseCompactSignature,
   parseSignature,
   type Signature,
@@ -25,6 +26,7 @@ import {
   DepositAssetMismatchError,
   DepositOwnerMismatchError,
   DepositSpenderMismatchError,
+  InputExceedsMaxError,
   type Metadata,
   MixedBundlesFundingError,
   NegativeInputError,
@@ -106,6 +108,7 @@ const EMPTY_TOKEN_PERMIT: BundlesTokenPermit = {
  * @param params - Common bundles parameters.
  * @returns Validated values with explicit zero defaults.
  * @throws {NonPositiveInputError} when `deadline` is not positive.
+ * @throws {InputExceedsMaxError} when `deadline` exceeds uint256.
  * @throws {NegativeInputError} when `referralFeePct` is negative.
  * @throws {ReferralFeePctExceededError} when `referralFeePct >= WAD`.
  * @throws {ReferralFeeRecipientMissingError} when a positive fee has no recipient.
@@ -115,6 +118,13 @@ export const normalizeBundlesCommonParams = (
 ): NormalizedBundlesCommonParams => {
   if (params.deadline <= 0n) {
     throw new NonPositiveInputError("deadline", params.deadline);
+  }
+  if (params.deadline > maxUint256) {
+    throw new InputExceedsMaxError({
+      field: "deadline",
+      value: params.deadline,
+      max: maxUint256,
+    });
   }
   const referralFeePct = params.referralFeePct ?? 0n;
   if (referralFeePct < 0n) {
@@ -451,7 +461,7 @@ export const getBundlesSharesPermit = (params: {
  * @throws {UnexpectedRequirementSignatureError} when a non-token signature is supplied.
  * @throws {AmbiguousRequirementSignaturesError} when both token signature kinds are supplied.
  */
-export const selectBundlesTokenRequirementSignature = (
+export const selectBlueBundlesV1TokenRequirementSignature = (
   signatures: readonly RequirementSignature[] | undefined,
 ): BlueBundlesV1TokenRequirementSignature | undefined => {
   if (signatures == null || signatures.length === 0) return undefined;

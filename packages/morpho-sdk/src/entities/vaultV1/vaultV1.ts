@@ -20,7 +20,7 @@ import {
   getBundlesReferralFeeAssets,
   normalizeBundlesCommonParams,
   resolveBundlesFunding,
-  selectBundlesTokenRequirementSignature,
+  selectBlueBundlesV1TokenRequirementSignature,
 } from "../../actions/bundles/index.js";
 import {
   encodeErc20Approval,
@@ -350,7 +350,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
         const requirementSignature =
-          selectBundlesTokenRequirementSignature(signatures);
+          selectBlueBundlesV1TokenRequirementSignature(signatures);
         return vaultV1Deposit({
           vault: {
             chainId: this.chainId,
