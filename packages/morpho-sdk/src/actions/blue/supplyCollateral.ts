@@ -2,8 +2,8 @@ import type { MarketParams } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import { type Address, maxUint256 } from "viem";
 import type {
-  BlueBundlesV1TokenRequirementSignature,
   BlueSupplyCollateralAction,
+  BlueBundlesV1TokenRequirementSignature,
   Metadata,
   Transaction,
 } from "../../types/index.js";
@@ -12,29 +12,29 @@ import { blueSupplyCollateralBorrow } from "./supplyCollateralBorrow.js";
 /** Parameters for {@link blueSupplyCollateral}. */
 export interface BlueSupplyCollateralParams {
   /** Chain and scoped Morpho Blue market. */
-  readonly market: {
+  market: {
     readonly chainId: number;
     readonly marketParams: MarketParams;
   };
   /** Direct BlueBundlesV1 collateral-supply arguments. */
-  readonly args: {
+  args: {
     /** User whose collateral position is credited. */
-    readonly userAddress: Address;
+    userAddress: Address;
     /** Gross collateral assets supplied. */
-    readonly collateralAssets: bigint;
+    collateralAssets: bigint;
     /** Full native collateral funding; must equal `collateralAssets`. */
-    readonly nativeAmount?: bigint;
+    nativeAmount?: bigint;
     /** Final call deadline in Unix seconds. */
-    readonly deadline: bigint;
+    deadline: bigint;
     /** Optional WAD-scaled referral fee, strictly below 100%. */
-    readonly referralFeePct?: bigint;
+    referralFeePct?: bigint;
     /** Recipient required when `referralFeePct` is positive. */
-    readonly referralFeeRecipient?: Address;
+    referralFeeRecipient?: Address;
     /** Optional collateral ERC-2612 or Permit2 SignatureTransfer result. */
-    readonly requirementSignature?: BlueBundlesV1TokenRequirementSignature;
+    requirementSignature?: BlueBundlesV1TokenRequirementSignature;
   };
   /** Optional transaction metadata suffix. */
-  readonly metadata?: Metadata;
+  metadata?: Metadata;
 }
 
 /**

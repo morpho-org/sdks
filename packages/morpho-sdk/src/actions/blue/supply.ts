@@ -2,8 +2,8 @@ import type { MarketParams } from "@morpho-org/blue-sdk";
 import { type Address, encodeFunctionData, maxUint256 } from "viem";
 import { blueBundlesV1Abi } from "../../abis.js";
 import type {
-  BlueBundlesV1TokenRequirementSignature,
   BlueSupplyAction,
+  BlueBundlesV1TokenRequirementSignature,
   Metadata,
   Transaction,
 } from "../../types/index.js";

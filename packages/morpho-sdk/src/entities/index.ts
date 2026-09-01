@@ -185,6 +185,7 @@ export {
   type MidnightActions,
   MorphoMidnight,
 } from "./midnight/index.js";
+export * from "./requirements/index.js";
 export { MorphoVaultV1 } from "./vaultV1/index.js";
 export {
   type InputReallocationData,

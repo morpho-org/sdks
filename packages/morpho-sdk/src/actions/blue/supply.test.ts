@@ -261,7 +261,7 @@ describe("blueSupply", () => {
       },
       action: {
         type: "permit2TransferFrom",
-        args: { spender: blueBundlesV1, amount: 5n, deadline: 789n },
+        args: { spender: blueBundlesV1, amount: 5n, nonce: 9n, deadline: 789n },
       },
     } satisfies BlueBundlesV1TokenRequirementSignature;
 
@@ -355,7 +355,7 @@ describe("blueSupply", () => {
           } as unknown as BlueBundlesV1TokenRequirementSignature,
         },
       }),
-    ).toThrow(BlueBundlesV1RequirementSignatureMismatchError);
+    ).toThrow(UnexpectedRequirementSignatureError);
   });
 
   test("error: binds every token signature field", () => {
@@ -460,7 +460,7 @@ describe("blueSupply", () => {
       },
       action: {
         type: "permit2TransferFrom",
-        args: { spender: blueBundlesV1, amount: 2n, deadline },
+        args: { spender: blueBundlesV1, amount: 2n, nonce: 1n, deadline },
       },
     } satisfies BlueBundlesV1TokenRequirementSignature;
 

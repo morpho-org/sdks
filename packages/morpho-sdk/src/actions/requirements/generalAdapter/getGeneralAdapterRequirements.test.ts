@@ -669,6 +669,7 @@ describe("getGeneralAdapterRequirements", () => {
               args: {
                 spender: generalAdapter1,
                 amount: mockAmount,
+                nonce: 0n,
                 deadline: 1n,
                 expiration: 2n,
               },

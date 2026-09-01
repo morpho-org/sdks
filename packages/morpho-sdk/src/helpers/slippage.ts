@@ -1,9 +1,16 @@
-import { type Market, MathLib } from "@morpho-org/blue-sdk";
+import {
+  type AccrualVault,
+  AccrualVaultV2,
+  type Market,
+  MathLib,
+} from "@morpho-org/blue-sdk";
 import {
   ExcessiveSlippageToleranceError,
+  NonPositiveInputError,
   ShareDivideByZeroError,
 } from "../types/index.js";
 import { MAX_ABSOLUTE_SHARE_PRICE } from "./constant.js";
+import { validateSlippageTolerance } from "./validate.js";
 
 /**
  * Computes the minimum borrow share price (in RAY, 1e27) for slippage protection.
@@ -206,3 +213,68 @@ export function computeMinWithdrawSharePrice(params: {
     shares,
   );
 }
+
+/**
+ * Computes the RAY-scaled maximum share price for a VaultBundlesV1 deposit leg.
+ *
+ * Accrues the supplied Vault V1 or Vault V2 snapshot two hours forward before previewing shares,
+ * matching the default bundles execution window.
+ *
+ * @param params - Vault snapshot, boundary-supplied current timestamp, net assets, and slippage.
+ * @returns The capped maximum share price enforced by VaultBundlesV1.
+ * @throws {NonPositiveInputError} when `assets` or the previewed shares are not positive.
+ * @throws {NegativeInputError} when `slippageTolerance` is negative.
+ * @throws {InvalidSlippageToleranceError} when `slippageTolerance` exceeds the SDK maximum.
+ * @example
+ * ```ts
+ * import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
+ * import { computeVaultMaxSharePrice } from "@morpho-org/morpho-sdk";
+ * import { createPublicClient, http } from "viem";
+ * import { mainnet } from "viem/chains";
+ *
+ * const client = createPublicClient({ chain: mainnet, transport: http() });
+ * const vaultData = await fetchAccrualVault(
+ *   "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB",
+ *   client,
+ * );
+ * const { timestamp } = await client.getBlock();
+ * const maxSharePrice = computeVaultMaxSharePrice({
+ *   vaultData,
+ *   timestamp,
+ *   assets: 1_000_000n,
+ *   slippageTolerance: 500_000_000_000_000n,
+ * });
+ * // maxSharePrice satisfies bigint
+ * ```
+ */
+export const computeVaultMaxSharePrice = (params: {
+  readonly vaultData: AccrualVault | AccrualVaultV2;
+  readonly timestamp: bigint;
+  readonly assets: bigint;
+  readonly slippageTolerance: bigint;
+}): bigint => {
+  if (params.assets <= 0n) {
+    throw new NonPositiveInputError("assets", params.assets);
+  }
+  validateSlippageTolerance(params.slippageTolerance);
+  const accrualTimestamp =
+    params.vaultData instanceof AccrualVaultV2
+      ? MathLib.max(params.timestamp, params.vaultData.lastUpdate) + 7_200n
+      : params.timestamp + 7_200n;
+  const accruedVault =
+    params.vaultData instanceof AccrualVaultV2
+      ? params.vaultData.accrueInterest(accrualTimestamp).vault
+      : params.vaultData.accrueInterest(accrualTimestamp);
+  const shares = accruedVault.toShares(params.assets);
+  if (shares <= 0n) {
+    throw new NonPositiveInputError("shares", shares);
+  }
+  return MathLib.min(
+    MathLib.mulDivUp(
+      params.assets,
+      MathLib.wToRay(MathLib.WAD + params.slippageTolerance),
+      shares,
+    ),
+    MAX_ABSOLUTE_SHARE_PRICE,
+  );
+};

@@ -93,11 +93,15 @@ export interface VaultV1DepositAction
   extends BaseAction<
     "vaultV1Deposit",
     {
-      vault: Address;
-      amount: bigint;
-      maxSharePrice: bigint;
-      recipient: Address;
-      nativeAmount?: bigint;
+      readonly vault: Address;
+      readonly amount: bigint;
+      readonly maxSharePrice: bigint;
+      readonly nativeAmount?: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
+      readonly referralFeeAssets: bigint;
+      readonly netAssets: bigint;
+      readonly deadline: bigint;
     }
   > {}
 
@@ -105,9 +109,13 @@ export interface VaultV1WithdrawAction
   extends BaseAction<
     "vaultV1Withdraw",
     {
-      vault: Address;
-      amount: bigint;
-      recipient: Address;
+      readonly vault: Address;
+      readonly amount: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
+      readonly referralFeeAssets: bigint;
+      readonly netAssets: bigint;
+      readonly deadline: bigint;
     }
   > {}
 
@@ -115,9 +123,11 @@ export interface VaultV1RedeemAction
   extends BaseAction<
     "vaultV1Redeem",
     {
-      vault: Address;
-      shares: bigint;
-      recipient: Address;
+      readonly vault: Address;
+      readonly shares: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
+      readonly deadline: bigint;
     }
   > {}
 
@@ -138,12 +148,16 @@ export interface VaultV1MigrateToV2Action
   extends BaseAction<
     "vaultV1MigrateToV2",
     {
-      sourceVault: Address;
-      targetVault: Address;
-      shares: bigint;
-      minSharePriceVaultV1: bigint;
-      maxSharePriceVaultV2: bigint;
-      recipient: Address;
+      readonly sourceVault: Address;
+      readonly targetVault: Address;
+      readonly assets: bigint;
+      readonly shares: bigint;
+      readonly maxSharePriceVaultV2: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
+      readonly referralFeeAssets?: bigint;
+      readonly netAssets?: bigint;
+      readonly deadline: bigint;
     }
   > {}
 
@@ -152,45 +166,27 @@ export interface BlueSupplyAction
   extends BaseAction<
     "blueSupply",
     {
-      readonly market: Hex;
-      readonly assets: bigint;
-      readonly onBehalf: Address;
-      readonly nativeAmount?: bigint;
-      readonly referralFeePct: bigint;
-      readonly referralFeeRecipient: Address;
-      readonly deadline: bigint;
+      market: Hex;
+      assets: bigint;
+      onBehalf: Address;
+      nativeAmount?: bigint;
+      referralFeePct: bigint;
+      referralFeeRecipient: Address;
+      deadline: bigint;
     }
   > {}
-
-/** Metadata for a direct BlueBundlesV1 loan-asset withdrawal. */
-export interface BlueWithdrawAction
-  extends BaseAction<
-    "blueWithdraw",
-    {
-      readonly market: Hex;
-      readonly withdrawAssets: bigint;
-      readonly withdrawShares: bigint;
-      readonly onBehalf: Address;
-      readonly reallocations: number;
-      readonly reallocationPenaltyAssets: bigint;
-      readonly referralFeePct: bigint;
-      readonly referralFeeRecipient: Address;
-      readonly deadline: bigint;
-    }
-  > {}
-
 type BlueSupplyCollateralBorrowActionArgs = {
-  readonly market: Hex;
-  readonly collateralAssets: bigint;
-  readonly borrowAssets: bigint;
-  readonly maxLtv: bigint;
-  readonly onBehalf: Address;
-  readonly nativeAmount?: bigint;
-  readonly reallocations: number;
-  readonly reallocationPenaltyAssets: bigint;
-  readonly referralFeePct: bigint;
-  readonly referralFeeRecipient: Address;
-  readonly deadline: bigint;
+  market: Hex;
+  collateralAssets: bigint;
+  borrowAssets: bigint;
+  maxLtv: bigint;
+  onBehalf: Address;
+  nativeAmount?: bigint;
+  reallocations: number;
+  reallocationPenaltyAssets: bigint;
+  referralFeePct: bigint;
+  referralFeeRecipient: Address;
+  deadline: bigint;
 };
 
 /** Metadata for a direct BlueBundlesV1 collateral supply. */
@@ -212,17 +208,17 @@ export interface BlueSupplyCollateralBorrowAction
   > {}
 
 type BlueRepayWithdrawCollateralActionArgs = {
-  readonly market: Hex;
-  readonly repayAssets: bigint;
-  readonly repayShares: bigint;
-  readonly maxRepayAssets: bigint;
-  readonly collateralAssets: bigint;
-  readonly maxLtv: bigint;
-  readonly onBehalf: Address;
-  readonly nativeAmount?: bigint;
-  readonly referralFeePct: bigint;
-  readonly referralFeeRecipient: Address;
-  readonly deadline: bigint;
+  market: Hex;
+  repayAssets: bigint;
+  repayShares: bigint;
+  maxRepayAssets: bigint;
+  collateralAssets: bigint;
+  maxLtv: bigint;
+  onBehalf: Address;
+  nativeAmount?: bigint;
+  referralFeePct: bigint;
+  referralFeeRecipient: Address;
+  deadline: bigint;
 };
 
 /** Metadata for a direct BlueBundlesV1 repayment. */
@@ -243,21 +239,36 @@ export interface BlueRepayWithdrawCollateralAction
     BlueRepayWithdrawCollateralActionArgs
   > {}
 
+/** Metadata for a direct BlueBundlesV1 loan-asset withdrawal. */
+export interface BlueWithdrawAction
+  extends BaseAction<
+    "blueWithdraw",
+    {
+      market: Hex;
+      withdrawAssets: bigint;
+      withdrawShares: bigint;
+      onBehalf: Address;
+      reallocations: number;
+      reallocationPenaltyAssets: bigint;
+      referralFeePct: bigint;
+      referralFeeRecipient: Address;
+      deadline: bigint;
+    }
+  > {}
 /** Metadata for a direct BlueBundlesV1 full borrow-position migration. */
 export interface BlueRefinanceAction
   extends BaseAction<
     "blueRefinance",
     {
-      readonly sourceMarket: Hex;
-      readonly destinationMarket: Hex;
-      readonly maxLtv: bigint;
-      readonly onBehalf: Address;
-      readonly reallocations: number;
-      /** Loan-token assets donated as BluePublicAllocator V2 penalties. */
-      readonly reallocationPenaltyAssets: bigint;
-      readonly referralFeePct: bigint;
-      readonly referralFeeRecipient: Address;
-      readonly deadline: bigint;
+      sourceMarket: Hex;
+      destinationMarket: Hex;
+      maxLtv: bigint;
+      onBehalf: Address;
+      reallocations: number;
+      reallocationPenaltyAssets: bigint;
+      referralFeePct: bigint;
+      referralFeeRecipient: Address;
+      deadline: bigint;
     }
   > {}
 
@@ -271,9 +282,7 @@ export interface BlueRefinanceAction
  * Used by BlueBundlesV1 withdrawal; repayment has its own assets-or-shares union because a pure
  * collateral withdrawal has no repay amount.
  */
-export type AssetsOrSharesArgs =
-  | { readonly assets: bigint }
-  | { readonly shares: bigint };
+export type AssetsOrSharesArgs = { assets: bigint } | { shares: bigint };
 
 /** Metadata for a Blue authorization prerequisite transaction. */
 export interface BlueAuthorizationAction
@@ -432,13 +441,13 @@ export type TransactionAction =
   | VaultV1InKindRedeemAction
   | VaultV1MigrateToV2Action
   | BlueSupplyAction
-  | BlueWithdrawAction
   | BlueSupplyCollateralAction
   | BlueBorrowAction
   | BlueSupplyCollateralBorrowAction
   | BlueRepayAction
   | BlueWithdrawCollateralAction
   | BlueRepayWithdrawCollateralAction
+  | BlueWithdrawAction
   | BlueRefinanceAction
   | BlueAuthorizationAction
   | MidnightAuthorizationAction
@@ -469,6 +478,24 @@ export interface Transaction<TAction extends BaseAction = TransactionAction> {
 export type DepositAmountArgs =
   | { amount: bigint; nativeAmount?: bigint }
   | { nativeAmount: bigint; amount?: bigint };
+
+/** Mutually exclusive ERC-20 or native funding accepted by fixed bundles entrypoints. */
+export type BundlesFundingArgs =
+  | { readonly amount: bigint; readonly nativeAmount?: never }
+  | { readonly nativeAmount: bigint; readonly amount?: never };
+
+/** Controls token requirements generated for a bundles-funded action. */
+export interface BundlesTokenRequirementsOptions {
+  /** Prefer ERC-2612 when the funded token exposes a compatible nonce. */
+  readonly useSimplePermit?: boolean;
+  /** Explicit unused Permit2 SignatureTransfer unordered nonce. */
+  readonly permit2Nonce?: bigint;
+}
+
+/** Mutually exclusive source amount accepted by a Vault V1 to Vault V2 migration. */
+export type VaultV1MigrateToV2AmountArgs =
+  | { readonly shares: bigint; readonly assets?: never }
+  | { readonly assets: bigint; readonly shares?: never };
 
 export interface PermitArgs {
   owner: Address;
@@ -529,7 +556,7 @@ export interface Permit2Action
     { spender: Address; amount: bigint; deadline: bigint; expiration: bigint }
   > {}
 
-/** Signable Permit2 SignatureTransfer requirement for a direct BlueBundlesV1 pull. */
+/** Signable Permit2 SignatureTransfer requirement for a fixed bundles token pull. */
 export interface Permit2TransferFromAction
   extends BaseAction<
     "permit2TransferFrom",
@@ -593,7 +620,7 @@ export type PermitRequirementSignature =
   | Erc2612RequirementSignature
   | Permit2AllowanceRequirementSignature;
 
-/** A signed Permit2 SignatureTransfer requirement used by BlueBundlesV1. */
+/** A signed Permit2 SignatureTransfer requirement used by fixed bundles contracts. */
 export interface Permit2TransferFromRequirementSignature {
   readonly args: Readonly<PermitArgs>;
   readonly action: Permit2TransferFromAction;
@@ -614,7 +641,7 @@ export interface MidnightOfferRootSignature {
 /**
  * The deep-frozen output of `Requirement.sign()`. Discriminated on `action.type`:
  * `"permit"` / `"permit2"` carry token-approval args, `"permit2TransferFrom"` carries a
- * BlueBundlesV1 SignatureTransfer, `"authorization"` carries the signed Morpho authorization,
+ * bundles SignatureTransfer, `"authorization"` carries the signed Morpho authorization,
  * and Midnight adds `"midnightOfferRootSignature"`.
  */
 export type RequirementSignature<
@@ -669,7 +696,7 @@ export interface Requirement<
 export type Bundler3TokenSignatureRequirement =
   Requirement<PermitRequirementSignature>;
 
-/** BlueBundlesV1 ERC-2612 or Permit2 SignatureTransfer requirement. */
+/** ERC-2612 or Permit2 SignatureTransfer requirement consumed by a fixed bundles contract. */
 export type BlueBundlesV1TokenSignatureRequirement =
   Requirement<BlueBundlesV1TokenRequirementSignature>;
 
@@ -687,7 +714,7 @@ export type TokenSignatureRequirement =
 /** Bundler3 token signature result. */
 export type Bundler3TokenRequirementSignature = PermitRequirementSignature;
 
-/** BlueBundlesV1 token signature result. */
+/** Token signature result consumed by a fixed bundles contract. */
 export type BlueBundlesV1TokenRequirementSignature =
   | Erc2612RequirementSignature
   | Permit2TransferFromRequirementSignature;
@@ -866,13 +893,13 @@ export function isMidnightOfferRootSignature(
 /** The typed requirement-signature slots a transaction builder consumes, split from a `buildTx` array. */
 export interface SelectedRequirementSignatures {
   /** The single ERC-2612 or Permit2 AllowanceTransfer signature, when present. */
-  permit?: PermitRequirementSignature;
+  readonly permit?: PermitRequirementSignature;
   /** The single Permit2 SignatureTransfer signature, when present. */
-  permit2TransferFrom?: Permit2TransferFromRequirementSignature;
+  readonly permit2TransferFrom?: Permit2TransferFromRequirementSignature;
   /** The single Morpho authorization signature, when present. */
-  authorization?: AuthorizationRequirementSignature;
+  readonly authorization?: AuthorizationRequirementSignature;
   /** The single Midnight offer-root signature, when present. */
-  midnightOfferRoot?: MidnightOfferRootSignature;
+  readonly midnightOfferRoot?: MidnightOfferRootSignature;
 }
 
 /**
@@ -906,16 +933,18 @@ export interface SelectedRequirementSignatures {
 export function selectRequirementSignatures(
   signatures: readonly RequirementSignature[] | undefined,
   accepts: {
-    permit?: boolean;
-    permit2TransferFrom?: boolean;
-    authorization?: boolean;
-    midnightOfferRoot?: boolean;
+    readonly permit?: boolean;
+    readonly permit2TransferFrom?: boolean;
+    readonly authorization?: boolean;
+    readonly midnightOfferRoot?: boolean;
   },
 ): SelectedRequirementSignatures {
   if (signatures == null) return {};
 
   const permits = signatures.filter(isPermitSignature);
-  const permit2Transfers = signatures.filter(isPermit2TransferFromSignature);
+  const permit2Transfers = signatures.filter(
+    isPermit2TransferFromSignature,
+  );
   const authorizations = signatures.filter(isAuthorizationSignature);
   const midnightOfferRoots = signatures.filter(isMidnightOfferRootSignature);
 
