@@ -254,8 +254,11 @@ export interface VaultV2Actions {
    * Vault gates are enforced by the final transaction and are not preflighted: the receive-assets
    * gate must allow VaultExitBundlesV1 and may depend on its transient initiator, while a
    * send-shares gate is arbitrary code re-evaluated after each penalty burn. The SDK also does not
-   * validate the user's share balance; size `exitAssets` so
-   * `exitAssets <= vault.previewRedeem(sharesHeld)`.
+   * validate the user's share balance. Per-market penalties and each vault withdrawal round the
+   * share burn up independently, so the exit can burn marginally more shares than `exitAssets` alone
+   * implies; size `exitAssets` a small buffer below `vault.previewRedeem(sharesHeld)` — the approved
+   * share allowance this handle returns is the exact upper bound on the burn — so a full-balance
+   * exit does not revert for insufficient shares.
    *
    * Idle balance, penalty, adapter positions, and market liquidity can drift after the snapshot, so
    * an on-chain revert remains possible if vault state changes between preparation and inclusion.
@@ -883,13 +886,11 @@ export class MorphoVaultV2 implements VaultV2Actions {
       });
     }
 
-    // Both the allowance and the price floor need the vault accrued to execution time (`now`), not
-    // only to the snapshot and the deadline: a distressed vault can recognize a loss on the first
-    // accrual to `now` and recover by `deadline`, so the execution-time burn can peak strictly
-    // between the two window ends.
-    const { vault: deadlineVaultData } = vaultData.accrueInterest(
-      MathLib.max(deadline, vaultData.lastUpdate),
-    );
+    // The price floor's denominator takes the `now`-accrued burn: it must track execution-time
+    // state, not the possibly stale snapshot (the first on-chain withdrawal accrues pending
+    // management fees before burning shares, which would otherwise lift the floor above the faithful
+    // price and trip `SlippageExceeded`). Accrue to `now`, not the caller-chosen `deadline`, so a
+    // long deadline cannot weaken the guard; `slippageTolerance` absorbs the residual drift.
     const { vault: nowVaultData } = vaultData.accrueInterest(
       MathLib.max(now, vaultData.lastUpdate),
     );
@@ -898,21 +899,6 @@ export class MorphoVaultV2 implements VaultV2Actions {
       deadlineVaultData: nowVaultData,
       plan,
     });
-    // The allowance takes the worst burn across all three endpoints, so the exact approval never
-    // underflows the shares the exit actually burns at inclusion.
-    const requiredShareAllowance = MathLib.max(
-      computeVaultV2ForceWithdrawSharesBurnt({
-        vaultData,
-        deadlineVaultData,
-        plan,
-      }),
-      sharesBurntNow,
-    );
-    // The price floor's denominator, by contrast, takes only the `now`-accrued burn: it must track
-    // execution-time state, not the possibly stale snapshot (the first on-chain withdrawal accrues
-    // pending management fees before burning shares, which would otherwise lift the floor above the
-    // faithful price and trip `SlippageExceeded`). Accrue to `now`, not the caller-chosen `deadline`,
-    // so a long deadline cannot weaken the guard; `slippageTolerance` absorbs the residual drift.
     const minSharePriceE27 =
       minSharePriceE27Override ??
       computeMinForceWithdrawSharePrice({
@@ -920,6 +906,18 @@ export class MorphoVaultV2 implements VaultV2Actions {
         sharesBurnt: sharesBurntNow,
         slippageTolerance,
       });
+    // Size the allowance to the price floor, not to the snapshot burn. The on-chain check accepts
+    // any exit whose realized price stays at or above `minSharePriceE27`, so it can burn up to
+    // `mulDivUp(exitAssets, RAY, minSharePriceE27)` shares — `withdrawn <= exitAssets` and
+    // `withdrawn / burnt >= minSharePriceE27`. A snapshot-tight approval would instead revert on
+    // allowance for exactly the within-tolerance price drop the floor is meant to permit (clearest
+    // on a no-fee vault, where every accrual endpoint collapses to the snapshot burn), nullifying
+    // `slippageTolerance`. This ceiling covers every accepted burn, including fee-share accrual.
+    const requiredShareAllowance = MathLib.mulDivUp(
+      exitAssets,
+      MathLib.RAY,
+      minSharePriceE27,
+    );
 
     const vaultExitBundlesV1 = getChainAddress(
       this.chainId,

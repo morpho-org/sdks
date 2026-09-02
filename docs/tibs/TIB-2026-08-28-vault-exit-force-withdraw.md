@@ -68,9 +68,10 @@ registered.
   arithmetic this TIB is trying to remove, not add. `encodeForceDeallocateCall`, the `Deallocation`
   type, and `EmptyDeallocationsError` therefore all stay.
 - **No net-denominated amount mode.** See [Considered Alternatives §1](#alternative-1-keep-the-net-denominated-amount-and-invert-it-in-the-sdk).
-- **No share-sufficiency validation.** Carried over verbatim from the in-kind TIB: a sufficient
-  allowance settles *authorization*, not *balance*. Sizing `exitAssets` against
-  `vault.previewRedeem(sharesHeld)` is the caller's job.
+- **No share-sufficiency validation.** Carried over from the in-kind TIB: a sufficient allowance
+  settles *authorization*, not *balance*. Sizing `exitAssets` against
+  `vault.previewRedeem(sharesHeld)` — with a small buffer, since per-leg penalty and share rounding
+  can burn marginally more than a boundary-exact `exitAssets` implies — is the caller's job.
 - **No gate preflighting.** Also carried over, with one addition specific to this entry point: the
   vault's `receiveAssetsGate` must now allow VaultExitBundlesV1, which it did not have to before.
 - No new runtime dependencies, no new ABI, no new address slot — the in-kind TIB shipped all three.
@@ -199,9 +200,10 @@ implementation:
 - `computeVaultV2ForceWithdrawPlan({ vaultData, adapter, liquidityMarketId, exitAssets, timestamp })`
   returns every amount the exit needs.
 - `computeVaultV2ForceWithdrawSharesBurnt({ vaultData, deadlineVaultData, plan })` returns the share
-  upper bound. It is called twice: with the deadline-accrued snapshot for the authorized allowance,
-  and with the `now`-accrued snapshot on both endpoints for the denominator of the slippage bound.
-  One implementation serves both.
+  upper bound, accrued to `now` on both endpoints, for the denominator of the slippage bound. The
+  authorized allowance is *not* this value — it is read off the price floor itself (see below), so it
+  covers every burn the on-chain check can accept, including the within-tolerance price drop the floor
+  permits.
 
 Plus `computeMinForceWithdrawSharePrice` in `src/helpers/slippage.ts` alongits siblings, and
 `previewVaultV2ForceWithdraw` alongside `previewVaultV2InKindRedeem`.
@@ -272,22 +274,29 @@ grossDebited     = withdrawnAssets + penaltyAssets                    // penalty
 sharesBurnt(v)   = v.toShares(grossDebited, "Up") + (penaltyLegs + 2)  // one ceil per withdrawal leg
 
 nowVaultData     = vaultData.accrueInterest(now)                      // execution-time vault state
-allowance        = max(sharesBurnt(vaultData), sharesBurnt(deadlineVaultData))
 minSharePriceE27 = mulDivDown(withdrawnAssets, wToRay(WAD - slippageTolerance),
-                              sharesBurnt(nowVaultData))              // now-accrued burn, not `allowance`
+                              sharesBurnt(nowVaultData))              // now-accrued burn
+allowance        = mulDivUp(exitAssets, RAY, minSharePriceE27)        // largest burn the price check accepts
 ```
 
 `withdrawnAssets` is a lower bound of the payout and `sharesBurnt` an upper bound of the burn, so a
 faithful snapshot never trips the check while the tolerance absorbs benign drift.
 
-The **allowance** considers both accrual endpoints because interest lowers the burn while management
-fees raise it — the same duality the in-kind allowance uses. The **price floor** accrues its
-denominator to `now` (execution time) instead: the raw `lastUpdate` snapshot underestimates the burn
-a stale fee-bearing vault realizes once its first withdrawal accrues pending management fees, which
-lifts the floor above the faithful price and reverts a valid exit with `SlippageExceeded`. Accruing
-to `now` rather than the caller-chosen `deadline` fixes that without letting a long deadline weaken
-the guard — a larger denominator only lowers the floor — and `slippageTolerance` absorbs the residual
-drift until inclusion.
+The **price floor** accrues its denominator to `now` (execution time): the raw `lastUpdate` snapshot
+underestimates the burn a stale fee-bearing vault realizes once its first withdrawal accrues pending
+management fees, which lifts the floor above the faithful price and reverts a valid exit with
+`SlippageExceeded`. Accruing to `now` rather than the caller-chosen `deadline` fixes that without
+letting a long deadline weaken the guard — a larger denominator only lowers the floor — and
+`slippageTolerance` absorbs the residual drift until inclusion.
+
+The **allowance** is then read straight off that floor. The on-chain check accepts any exit whose
+realized price stays at or above `minSharePriceE27`, so it can burn at most
+`mulDivUp(exitAssets, RAY, minSharePriceE27)` shares — `withdrawn ≤ exitAssets` and
+`withdrawn / burnt ≥ minSharePriceE27`. This one expression is a mechanics-independent ceiling: it
+dominates the burn at every accrual endpoint *and* covers the within-tolerance price drop the floor
+deliberately permits. Sizing the allowance to the snapshot plan alone would instead revert on
+allowance for exactly that permitted drop — clearest on a no-fee vault, where the accrual endpoints
+collapse to the snapshot burn — silently nullifying the advertised `slippageTolerance`.
 
 `penaltyAssets` bounds `Σ ceil(assetsᵢ·penalty/WAD)` by
 `wMulUp(assetsToDeallocate, penalty) + (penaltyLegs − 1)`, using
@@ -442,8 +451,10 @@ the in-kind TIB, so no downstream peer-range audit is required.
 ## Security
 
 - **The slippage bound is the headline.** The multicall path had none. See the drift table above.
-- **The allowance is bounded**, covering the `penaltyLegs + 2` separately rounded legs and accrual
-  through the deadline, rather than granting an unlimited approval to the periphery.
+- **The allowance is bounded** to the largest burn the on-chain price check can accept —
+  `mulDivUp(exitAssets, RAY, minSharePriceE27)` — rather than granting an unlimited approval to the
+  periphery. Deriving it from the floor (not the snapshot plan) keeps a within-tolerance price drop
+  from reverting on allowance and nullifying the slippage guard.
 - **The coverage check removes the only opaque revert** in the flow. The fork suite asserts the
   SDK-side direction — `maxExitAssets + 1` is rejected before submission with
   `VaultV2ForceWithdrawCoverageError`. The matching on-chain `0x32` panic is *not* asserted, because

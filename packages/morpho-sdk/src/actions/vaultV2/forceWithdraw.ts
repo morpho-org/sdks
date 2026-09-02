@@ -70,7 +70,7 @@ export interface VaultV2ForceWithdrawParams {
  * @throws {NonPositiveInputError} when `exitAssets` or `deadline` is not positive.
  * @throws {NegativeInputError} when `referralFeePct` or `minSharePriceE27` is negative.
  * @throws {InputExceedsMaxError} when `referralFeePct` is not below WAD (the contract rejects it
- *   with `PctExceeded`), or when `minSharePriceE27` exceeds `uint256`.
+ *   with `PctExceeded`), or when `exitAssets`, `deadline`, or `minSharePriceE27` exceeds `uint256`.
  * @throws {MissingReferralFeeRecipientError} when a positive `referralFeePct` has no recipient.
  * @throws {UnsupportedChainIdError} when no address registry exists for the target chain.
  * @throws {UnknownAddressError} when VaultExitBundlesV1 is not registered on the target chain.
@@ -95,8 +95,20 @@ export const vaultV2ForceWithdraw = ({
 > => {
   if (args.exitAssets <= 0n)
     throw new NonPositiveInputError("exitAssets", args.exitAssets);
+  if (args.exitAssets > MathLib.MAX_UINT_256)
+    throw new InputExceedsMaxError({
+      field: "exitAssets",
+      value: args.exitAssets,
+      max: MathLib.MAX_UINT_256,
+    });
   if (args.deadline <= 0n)
     throw new NonPositiveInputError("deadline", args.deadline);
+  if (args.deadline > MathLib.MAX_UINT_256)
+    throw new InputExceedsMaxError({
+      field: "deadline",
+      value: args.deadline,
+      max: MathLib.MAX_UINT_256,
+    });
   // `0n` stays valid — it is the intentional "no on-chain bound" opt-out — but a value the uint256
   // slot cannot hold must fail with a dedicated error instead of viem's `IntegerOutOfRangeError`.
   // The entity never emits these (it forbids a non-positive override); this guards direct callers.

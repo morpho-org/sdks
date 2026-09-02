@@ -440,6 +440,26 @@ describe("vaultV2ForceWithdraw", () => {
     ).toThrow(InputExceedsMaxError);
   });
 
+  // A uint256-overflowing `exitAssets` or `deadline` must fail with the SDK's typed error rather
+  // than viem's `IntegerOutOfRangeError` at encode time, matching the `minSharePriceE27` guard.
+  test.each([
+    { field: "exitAssets", exitAssets: maxUint256 + 1n, deadline },
+    { field: "deadline", exitAssets: 100n, deadline: maxUint256 + 1n },
+  ])("error: InputExceedsMaxError for $field above uint256", (input) => {
+    expect(() =>
+      vaultV2ForceWithdraw({
+        vault: { chainId, address: vault },
+        args: {
+          adapter,
+          exitAssets: input.exitAssets,
+          minSharePriceE27,
+          userAddress,
+          deadline: input.deadline,
+        },
+      }),
+    ).toThrow(InputExceedsMaxError);
+  });
+
   test("error: MissingReferralFeeRecipientError for a fee without a recipient", () => {
     expect(() =>
       vaultV2ForceWithdraw({

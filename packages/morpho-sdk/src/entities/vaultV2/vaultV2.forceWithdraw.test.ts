@@ -75,7 +75,6 @@ const expectedSharesBurnt = (params: {
   readonly vaultData: ReturnType<typeof vaultV2ExitData>;
   readonly exitAssets: bigint;
   readonly timestamp: bigint;
-  readonly deadline: bigint;
 }) => {
   const { vaultData } = params;
   const eligibility = resolveVaultV2ForceWithdrawEligibility(vaultData);
@@ -89,30 +88,26 @@ const expectedSharesBurnt = (params: {
     exitAssets: params.exitAssets,
     timestamp: params.timestamp,
   });
-  const { vault: deadlineVaultData } = vaultData.accrueInterest(
-    MathLib.max(params.deadline, vaultData.lastUpdate),
-  );
   const { vault: nowVaultData } = vaultData.accrueInterest(
     MathLib.max(params.timestamp, vaultData.lastUpdate),
   );
 
   return {
     plan,
-    // Mirror the entity: the worst burn across the snapshot, deadline, and execution-time endpoints.
-    sharesBurnt: MathLib.max(
-      computeVaultV2ForceWithdrawSharesBurnt({
-        vaultData,
-        deadlineVaultData,
-        plan,
-      }),
-      computeVaultV2ForceWithdrawSharesBurnt({
-        vaultData: nowVaultData,
-        deadlineVaultData: nowVaultData,
-        plan,
-      }),
-    ),
+    // Mirror the entity's price-floor denominator: the `now`-accrued (execution-time) burn.
+    sharesBurnt: computeVaultV2ForceWithdrawSharesBurnt({
+      vaultData: nowVaultData,
+      deadlineVaultData: nowVaultData,
+      plan,
+    }),
   };
 };
+
+// The allowance the entity approves: the largest share burn the on-chain price check accepts for
+// `exitAssets` (`withdrawn <= exitAssets` and `withdrawn / burnt >= minSharePriceE27`), so a
+// within-tolerance price drop can never revert on allowance.
+const priceFloorCeiling = (exitAssets: bigint, minSharePriceE27: bigint) =>
+  MathLib.mulDivUp(exitAssets, MathLib.RAY, minSharePriceE27);
 
 describe("MorphoVaultV2.forceWithdraw", () => {
   test("default", () => {
@@ -151,7 +146,6 @@ describe("MorphoVaultV2.forceWithdraw", () => {
 
   test("behavior: the derived bound accepts the snapshot's own realized price", () => {
     const now = 1_800_000_000n;
-    const deadline = now + Time.s.from.h(2n);
     const vaultData = vaultV2ExitData({ penalty: TWO_PERCENT });
     const handle = createMockClient(mainnet);
     const tx = withChainTimestamp(now, () =>
@@ -167,7 +161,6 @@ describe("MorphoVaultV2.forceWithdraw", () => {
       vaultData,
       exitAssets: 51n,
       timestamp: now,
-      deadline,
     });
 
     // The on-chain check is `mulDivDown(withdrawn, RAY, sharesBurnt) >= minSharePriceE27`.
@@ -300,59 +293,61 @@ describe("MorphoVaultV2.forceWithdraw", () => {
   });
 
   describe("getRequirements", () => {
-    test("default: approve path uses the bounded share amount", async () => {
+    test("default: approve path uses the price-floor share-burn ceiling", async () => {
       const now = 1_800_000_000n;
-      const deadline = now + Time.s.from.h(2n);
       const vaultData = vaultV2ExitData({ penalty: TWO_PERCENT });
       const handle = createMockClient(mainnet);
       mockRequirements(handle);
-      const [approval] = await withChainTimestamp(now, () =>
-        vaultFor(handle, { supportSignature: false })
-          .forceWithdraw({
-            exitAssets: 51n,
-            vaultData,
-            userAddress: IN_KIND_USER,
-          })
-          .getRequirements(),
+      const exit = withChainTimestamp(now, () =>
+        vaultFor(handle, { supportSignature: false }).forceWithdraw({
+          exitAssets: 51n,
+          vaultData,
+          userAddress: IN_KIND_USER,
+        }),
       );
-      const { sharesBurnt } = expectedSharesBurnt({
-        vaultData,
-        exitAssets: 51n,
-        timestamp: now,
-        deadline,
-      });
+      const [approval] = await withChainTimestamp(now, () =>
+        exit.getRequirements(),
+      );
 
+      // The allowance is the largest burn the on-chain price check accepts for `exitAssets`, not the
+      // snapshot plan — so a within-tolerance price drop can never revert on allowance.
       expect(approval?.action).toEqual({
         type: "erc20Approval",
-        args: { spender: IN_KIND_BUNDLER, amount: sharesBurnt },
+        args: {
+          spender: IN_KIND_BUNDLER,
+          amount: priceFloorCeiling(
+            51n,
+            exit.buildTx().action.args.minSharePriceE27,
+          ),
+        },
       });
     });
 
     test("behavior: signature path emits a bounded V2 permit", async () => {
       const now = 1_800_000_000n;
-      const deadline = now + Time.s.from.h(2n);
       const vaultData = vaultV2ExitData({ penalty: TWO_PERCENT });
       const handle = createMockClient(mainnet);
       mockRequirements(handle);
-      const [requirement] = await withChainTimestamp(now, () =>
-        vaultFor(handle, { supportSignature: true })
-          .forceWithdraw({
-            exitAssets: 51n,
-            vaultData,
-            userAddress: IN_KIND_USER,
-          })
-          .getRequirements(),
+      const exit = withChainTimestamp(now, () =>
+        vaultFor(handle, { supportSignature: true }).forceWithdraw({
+          exitAssets: 51n,
+          vaultData,
+          userAddress: IN_KIND_USER,
+        }),
       );
-      const { sharesBurnt } = expectedSharesBurnt({
-        vaultData,
-        exitAssets: 51n,
-        timestamp: now,
-        deadline,
-      });
+      const [requirement] = await withChainTimestamp(now, () =>
+        exit.getRequirements(),
+      );
 
       expect(requirement?.action).toMatchObject({
         type: "permit",
-        args: { spender: IN_KIND_BUNDLER, amount: sharesBurnt },
+        args: {
+          spender: IN_KIND_BUNDLER,
+          amount: priceFloorCeiling(
+            51n,
+            exit.buildTx().action.args.minSharePriceE27,
+          ),
+        },
       });
     });
 
@@ -373,7 +368,6 @@ describe("MorphoVaultV2.forceWithdraw", () => {
 
     test("behavior: the bound covers the penalty legs on top of the asset legs", async () => {
       const now = 1_800_000_000n;
-      const deadline = now + Time.s.from.h(2n);
       const vaultData = vaultV2ExitData({
         additionalMarket: true,
         marketTotalBorrowAssets: 0n,
@@ -382,27 +376,34 @@ describe("MorphoVaultV2.forceWithdraw", () => {
       });
       const handle = createMockClient(mainnet);
       mockRequirements(handle);
+      const exit = withChainTimestamp(now, () =>
+        vaultFor(handle, { supportSignature: false }).forceWithdraw({
+          exitAssets: 1_400n,
+          vaultData,
+          userAddress: IN_KIND_USER,
+        }),
+      );
       const [approval] = await withChainTimestamp(now, () =>
-        vaultFor(handle, { supportSignature: false })
-          .forceWithdraw({
-            exitAssets: 1_400n,
-            vaultData,
-            userAddress: IN_KIND_USER,
-          })
-          .getRequirements(),
+        exit.getRequirements(),
       );
       const { plan, sharesBurnt } = expectedSharesBurnt({
         vaultData,
         exitAssets: 1_400n,
         timestamp: now,
-        deadline,
       });
+      const ceiling = priceFloorCeiling(
+        1_400n,
+        exit.buildTx().action.args.minSharePriceE27,
+      );
 
       expect(plan.penaltyLegs).toBe(2);
-      expect(approval?.action.args).toMatchObject({ amount: sharesBurnt });
+      expect(approval?.action.args).toMatchObject({ amount: ceiling });
+      // The penalty legs push the faithful-price burn above the naive single conversion, and the
+      // price-floor ceiling then covers that burn in full.
       expect(sharesBurnt).toBeGreaterThan(
         vaultData.toShares(plan.withdrawnAssets, "Up"),
       );
+      expect(ceiling).toBeGreaterThanOrEqual(sharesBurnt);
     });
 
     test("error: ExpiredDeadlineError when the handle goes stale before the reads", async () => {
@@ -723,7 +724,6 @@ describe("MorphoVaultV2.forceWithdraw", () => {
         vaultData,
         exitAssets: 1n,
         timestamp: 0n,
-        deadline: 1n,
       });
 
       // Above `maxExitAssets` the contract's unbounded loop would panic with `0x32`.
@@ -770,7 +770,6 @@ describe("MorphoVaultV2.forceWithdraw", () => {
 
     test("behavior: the approved allowance covers the exit's full share burn", async () => {
       const now = 1_800_000_000n;
-      const deadline = now + Time.s.from.h(2n);
       // A non-unit share price is load-bearing: at ~1:1 the sum of the per-leg ceilings equals the
       // aggregate ceiling exactly, so the per-leg dust term would go unexercised and this
       // assertion would still hold with it removed. `additionalMarket` puts total assets at 1500
@@ -796,7 +795,6 @@ describe("MorphoVaultV2.forceWithdraw", () => {
         vaultData,
         exitAssets: 61n,
         timestamp: now,
-        deadline,
       });
       if (!isRequirementApproval(approval)) {
         throw new Error("Expected an ERC-20 approval requirement");
@@ -822,7 +820,6 @@ describe("MorphoVaultV2.forceWithdraw", () => {
           vaultData,
           exitAssets,
           timestamp: 0n,
-          deadline: 1n,
         });
         expect(plan.withdrawnAssets).toBeLessThanOrEqual(exitAssets);
         expect(() =>
