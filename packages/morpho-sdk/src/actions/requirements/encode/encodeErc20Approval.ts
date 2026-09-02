@@ -55,6 +55,7 @@ export const encodeErc20Approval = (
       "midnight",
       "midnightBundles",
       "vaultExitBundlesV1",
+      "vaultBundlesV1",
       "blueBundlesV1",
     ],
   });

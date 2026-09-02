@@ -1,4 +1,10 @@
-import { Market, MarketParams, MathLib } from "@morpho-org/blue-sdk";
+import {
+  type AccrualVault,
+  Market,
+  MarketParams,
+  MathLib,
+} from "@morpho-org/blue-sdk";
+import fc from "fast-check";
 import { describe, expect, test } from "vitest";
 import { WethUsdsBlue } from "../../test/fixtures/blue.js";
 import {
@@ -11,6 +17,8 @@ import {
   computeMaxSupplySharePrice,
   computeMinBorrowSharePrice,
   computeMinWithdrawSharePrice,
+  computeVaultMaxShareAllowance,
+  computeVaultMaxSharePrice,
 } from "./slippage.js";
 
 /** 1:1 share-to-asset ratio market for predictable results. */
@@ -346,5 +354,92 @@ describe("computeMinWithdrawSharePrice", () => {
         slippageTolerance: MathLib.WAD + 1n,
       }),
     ).toThrow(ExcessiveSlippageToleranceError);
+  });
+});
+
+describe("computeVaultMaxSharePrice", () => {
+  test("behavior: accrues through the supplied bundles deadline", () => {
+    const deadline = 1_800_010_800n;
+    let accruedAt: bigint | undefined;
+    const vaultData = {
+      accrueInterest: (timestamp: bigint) => {
+        accruedAt = timestamp;
+        return { toShares: (assets: bigint) => assets };
+      },
+    } as unknown as AccrualVault;
+
+    computeVaultMaxSharePrice({
+      vaultData,
+      deadline,
+      assets: 1n,
+      slippageTolerance: 0n,
+    });
+
+    expect(accruedAt).toBe(deadline);
+  });
+
+  test("behavior: is monotonic in slippage tolerance", () => {
+    const vaultData = {
+      accrueInterest: () => ({ toShares: (assets: bigint) => assets }),
+    } as unknown as AccrualVault;
+    fc.assert(
+      fc.property(
+        fc.record({
+          assets: fc.bigInt({ min: 1n, max: (1n << 128n) - 1n }),
+          low: fc.bigInt({ min: 0n, max: MathLib.WAD / 20n }),
+          delta: fc.bigInt({ min: 0n, max: MathLib.WAD / 20n }),
+        }),
+        ({ assets, low, delta }) => {
+          const high = low + delta;
+          expect(
+            computeVaultMaxSharePrice({
+              vaultData,
+              deadline: 1_800_007_200n,
+              assets,
+              slippageTolerance: high,
+            }),
+          ).toBeGreaterThanOrEqual(
+            computeVaultMaxSharePrice({
+              vaultData,
+              deadline: 1_800_007_200n,
+              assets,
+              slippageTolerance: low,
+            }),
+          );
+        },
+      ),
+      { numRuns: 100, seed: 20_260_912 },
+    );
+  });
+});
+
+describe("computeVaultMaxShareAllowance", () => {
+  const vaultData = (lostAssets?: bigint) =>
+    ({
+      lostAssets,
+      toShares: () => 10n,
+      accrueInterest: () => ({ toShares: () => 12n }),
+    }) as unknown as AccrualVault;
+
+  test("behavior: widens MetaMorpho 1.0 against loss realization", () => {
+    expect(
+      computeVaultMaxShareAllowance({
+        vaultData: vaultData(),
+        deadline: 1_900_000_000n,
+        assets: 10n,
+        slippageTolerance: MathLib.WAD / 10n,
+      }),
+    ).toBe(14n);
+  });
+
+  test("behavior: keeps the MetaMorpho 1.1 lost-assets-clamped cap exact", () => {
+    expect(
+      computeVaultMaxShareAllowance({
+        vaultData: vaultData(0n),
+        deadline: 1_900_000_000n,
+        assets: 10n,
+        slippageTolerance: MathLib.WAD / 10n,
+      }),
+    ).toBe(12n);
   });
 });

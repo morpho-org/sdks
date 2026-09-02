@@ -4,7 +4,7 @@ import { createWalletClient, http, maxUint256, verifyTypedData } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
-import { encodeErc20Permit2TransferFrom } from "./encodeErc20Permit2TransferFrom.js";
+import { encodeErc20Permit2SignatureTransfer } from "./encodeErc20Permit2SignatureTransfer.js";
 
 const account = privateKeyToAccount(
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
@@ -15,13 +15,13 @@ const walletClient = createWalletClient({
   transport: http(),
 });
 
-describe("encodeErc20Permit2TransferFrom", () => {
+describe("encodeErc20Permit2SignatureTransfer", () => {
   test("signs an exact uint256 SignatureTransfer for BlueBundlesV1", async () => {
     const { usdc, bundles } = addressesRegistry[mainnet.id];
     const spender = bundles?.blueBundlesV1;
     if (spender == null) throw new Error("BlueBundlesV1 is not registered");
 
-    const requirement = encodeErc20Permit2TransferFrom({
+    const requirement = encodeErc20Permit2SignatureTransfer({
       token: usdc,
       spender,
       amount: maxUint256,
@@ -32,8 +32,13 @@ describe("encodeErc20Permit2TransferFrom", () => {
     const signed = await requirement.sign(walletClient, account.address);
 
     expect(signed.action).toEqual({
-      type: "permit2TransferFrom",
-      args: { spender, amount: maxUint256, deadline: maxUint256 },
+      type: "permit2SignatureTransfer",
+      args: {
+        spender,
+        amount: maxUint256,
+        nonce: maxUint256,
+        deadline: maxUint256,
+      },
     });
     expect(signed.args.amount).toBe(maxUint256);
     expect(signed.args.nonce).toBe(maxUint256);

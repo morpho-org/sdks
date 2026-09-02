@@ -8,7 +8,10 @@ Per-function contracts (arguments, return shapes, behavior) live as JSDoc on eac
 
 - **Encoders** (ABI encoding plus input validation, no I/O) — e.g. `encodeForceDeallocateCall(deallocation, onBehalf)`. ABI-encodes a single `VaultV2.forceDeallocate` calldata entry and throws `NonPositiveInputError` on a non-positive `amount`. The `data` field carries ABI-encoded `MarketParams` for the Morpho Market V1 adapter, or empty bytes otherwise. Internal sub-helpers (e.g. `encodeDeallocateData`) are not exported.
 - **Validators** (pure, throw typed errors) — `validateReallocations(...)`, `validateSlippageTolerance(...)`, `validatePositionHealth(...)`. Each enforces a public-API invariant: see the `error.ts` exports for the full list of error classes a caller may pattern-match on.
-- **Math / share-price helpers** — `computeMaxRepaySharePrice`, `computeMinBorrowSharePrice`, etc. Use `MAX_SLIPPAGE_TOLERANCE` and cap at `MAX_ABSOLUTE_SHARE_PRICE`.
+- **Math / share-price helpers** — `computeMaxRepaySharePrice`, `computeMinBorrowSharePrice`, and
+  `computeVaultMaxSharePrice`. Use `MAX_SLIPPAGE_TOLERANCE` and cap at
+  `MAX_ABSOLUTE_SHARE_PRICE`. `grossFromNetAssets` exactly inverts VaultBundlesV1's referral-fee
+  deduction for callers that start from a desired net amount.
 - **Shared-liquidity** — `computeVaultV1Reallocations`, its compatibility alias
   `computeReallocations`, and the PublicAllocator V1 validator are deprecated and will be removed in
   the next major. Vault V2 planning and state transitions live on `VaultV2BlueReallocationData`.

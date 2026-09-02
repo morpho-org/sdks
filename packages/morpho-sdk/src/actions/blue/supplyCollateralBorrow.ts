@@ -3,8 +3,8 @@ import { type Address, encodeFunctionData } from "viem";
 import { blueBundlesV1Abi } from "../../abis.js";
 import {
   type AuthorizationRequirementSignature,
-  type BlueBundlesV1TokenRequirementSignature,
   type BlueSupplyCollateralBorrowAction,
+  type BundlesTokenRequirementSignature,
   InputExceedsMaxError,
   type Metadata,
   NegativeInputError,
@@ -53,7 +53,7 @@ export interface BlueSupplyCollateralBorrowParams {
     /** Recipient required when `referralFeePct` is positive. */
     referralFeeRecipient?: Address;
     /** Optional collateral ERC-2612 or Permit2 SignatureTransfer result. */
-    requirementSignature?: BlueBundlesV1TokenRequirementSignature;
+    requirementSignature?: BundlesTokenRequirementSignature;
     /** Optional Morpho authorization signature for BlueBundlesV1. */
     authorizationSignature?: AuthorizationRequirementSignature;
   };
@@ -103,7 +103,7 @@ export interface BlueSupplyCollateralBorrowParams {
  * @throws {DepositAssetMismatchError} when the signed asset differs from the collateral token.
  * @throws {DepositAmountMismatchError} when the signed amount differs from `collateralAssets`.
  * @throws {DepositSpenderMismatchError} when the signed spender is not BlueBundlesV1.
- * @throws {BlueBundlesV1RequirementSignatureMismatchError} when a signature cannot be bound safely.
+ * @throws {BundlesRequirementSignatureMismatchError} when a signature cannot be bound safely.
  * @throws {UnsupportedChainIdError} when the chain is absent from the registry.
  * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
  * @example
@@ -158,8 +158,8 @@ export const blueSupplyCollateralBorrow = (
   }
   if (collateralAssets === 0n && requirementSignature != null) {
     throw new UnexpectedRequirementSignatureError(
-      requirementSignature.action.type === "permit2TransferFrom"
-        ? "permit2TransferFrom"
+      requirementSignature.action.type === "permit2SignatureTransfer"
+        ? "permit2SignatureTransfer"
         : "permit",
     );
   }

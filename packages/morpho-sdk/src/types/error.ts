@@ -284,8 +284,8 @@ export class VaultIsBlueFeeRecipientError extends Error {
   }
 }
 
-/** Thrown when a vault-shares requirement cannot be safely encoded as an ERC-2612 permit. */
-export class VaultExitBundlesV1PermitMismatchError extends Error {
+/** Thrown when a vault-shares requirement cannot be safely encoded as a bundles permit. */
+export class BundlesPermitMismatchError extends Error {
   /**
    * @param params - Permit mismatch values used to explain the rejection.
    * @param params.field - Permit field that does not match the exit.
@@ -293,37 +293,80 @@ export class VaultExitBundlesV1PermitMismatchError extends Error {
    * @param params.actual - Value supplied by the signature.
    * @param params.cause - Original parser failure when signature decoding is wrapped.
    */
-  public readonly field: "type" | "asset" | "signature";
+  public readonly field:
+    | "type"
+    | "asset"
+    | "owner"
+    | "spender"
+    | "amount"
+    | "nonce"
+    | "deadline"
+    | "signature";
   public readonly expected: string;
   public readonly actual: string;
 
   public constructor(params: {
-    readonly field: "type" | "asset" | "signature";
+    readonly field:
+      | "type"
+      | "asset"
+      | "owner"
+      | "spender"
+      | "amount"
+      | "nonce"
+      | "deadline"
+      | "signature";
     readonly expected: string;
     readonly actual: string;
     readonly cause?: unknown;
   }) {
     super(
-      `VaultExitBundlesV1 permit ${params.field} mismatch: expected "${params.expected}", got "${params.actual}". Rebuild and sign the vault-exit permit.`,
+      `Bundles permit ${params.field} mismatch: expected "${params.expected}", got "${params.actual}". Resolve and sign the requirements returned by this prepared operation.`,
       { cause: params.cause },
     );
     this.field = params.field;
     this.expected = params.expected;
     this.actual = params.actual;
+    this.name = "BundlesPermitMismatchError";
+  }
+}
+
+/**
+ * Thrown by the deprecated VaultExitBundlesV1 permit compatibility helper.
+ *
+ * @deprecated Use {@link BundlesPermitMismatchError} with `getBundlesSharesPermit`.
+ */
+export class VaultExitBundlesV1PermitMismatchError extends BundlesPermitMismatchError {
+  public constructor(params: {
+    readonly field:
+      | "type"
+      | "asset"
+      | "owner"
+      | "spender"
+      | "amount"
+      | "nonce"
+      | "deadline"
+      | "signature";
+    readonly expected: string;
+    readonly actual: string;
+    readonly cause?: unknown;
+  }) {
+    super(params);
+    this.message = `VaultExitBundlesV1 permit ${params.field} mismatch: expected "${params.expected}", got "${params.actual}". Rebuild and sign the vault-exit permit.`;
     this.name = "VaultExitBundlesV1PermitMismatchError";
   }
 }
 
-/** Thrown when a signed requirement cannot be safely encoded for BlueBundlesV1. */
-export class BlueBundlesV1RequirementSignatureMismatchError extends Error {
-  /** Field whose signed value or encoding is invalid for the direct BlueBundlesV1 call. */
+/** Thrown when a signed requirement cannot be safely encoded for a fixed bundles call. */
+export class BundlesRequirementSignatureMismatchError extends Error {
+  /** Field whose signed value or encoding is invalid for the fixed bundles call. */
   public readonly field:
     | "type"
     | "authorized"
     | "isAuthorized"
+    | "nonce"
     | "deadline"
     | "signature";
-  /** Value required by BlueBundlesV1. */
+  /** Value required by the fixed bundles call. */
   public readonly expected: string;
   /** Value supplied by the signed requirement. */
   public readonly actual: string;
@@ -336,34 +379,50 @@ export class BlueBundlesV1RequirementSignatureMismatchError extends Error {
    * @param params.cause - Original signature parser failure, when applicable.
    */
   public constructor(params: {
-    field: "type" | "authorized" | "isAuthorized" | "deadline" | "signature";
+    field:
+      | "type"
+      | "authorized"
+      | "isAuthorized"
+      | "nonce"
+      | "deadline"
+      | "signature";
     expected: string;
     actual: string;
     cause?: unknown;
   }) {
     super(
-      `BlueBundlesV1 requirement ${params.field} mismatch: expected "${params.expected}", got "${params.actual}". Resolve and sign the requirements returned by this Blue action.`,
+      `Bundles requirement ${params.field} mismatch: expected "${params.expected}", got "${params.actual}". Resolve and sign the requirements returned by this prepared operation.`,
       { cause: params.cause },
     );
     this.field = params.field;
     this.expected = params.expected;
     this.actual = params.actual;
-    this.name = "BlueBundlesV1RequirementSignatureMismatchError";
+    this.name = "BundlesRequirementSignatureMismatchError";
   }
 }
 
+/** @deprecated Use {@link BundlesRequirementSignatureMismatchError}. */
+export {
+  BundlesRequirementSignatureMismatchError as BlueBundlesV1RequirementSignatureMismatchError,
+};
+
 /** Thrown when Permit2 SignatureTransfer is selected without an explicit unordered nonce. */
-export class MissingPermit2TransferFromNonceError extends Error {
+export class MissingPermit2SignatureTransferNonceError extends Error {
   public constructor() {
     super(
       "Permit2 SignatureTransfer requires an explicit unused permit2Nonce. Generate a unique uint256 nonce, pass it to getRequirements(), and resolve the requirements again.",
     );
-    this.name = "MissingPermit2TransferFromNonceError";
+    this.name = "MissingPermit2SignatureTransferNonceError";
   }
 }
 
+/** @deprecated Use {@link MissingPermit2SignatureTransferNonceError}. */
+export {
+  MissingPermit2SignatureTransferNonceError as MissingPermit2TransferFromNonceError,
+};
+
 /** Thrown when an explicit Permit2 SignatureTransfer unordered nonce is already consumed. */
-export class Permit2TransferFromNonceAlreadyUsedError extends Error {
+export class Permit2SignatureTransferNonceAlreadyUsedError extends Error {
   /**
    * @param owner - Permit2 token owner whose nonce is unavailable.
    * @param nonce - Explicit unordered nonce that has already been consumed.
@@ -375,9 +434,14 @@ export class Permit2TransferFromNonceAlreadyUsedError extends Error {
     super(
       `Permit2 nonce "${nonce}" is already used for owner "${owner}". Generate a different uint256 permit2Nonce and resolve the requirements again.`,
     );
-    this.name = "Permit2TransferFromNonceAlreadyUsedError";
+    this.name = "Permit2SignatureTransferNonceAlreadyUsedError";
   }
 }
+
+/** @deprecated Use {@link Permit2SignatureTransferNonceAlreadyUsedError}. */
+export {
+  Permit2SignatureTransferNonceAlreadyUsedError as Permit2TransferFromNonceAlreadyUsedError,
+};
 
 /** Thrown when native funding does not exactly match the contract's gross token pull. */
 export class NativeFundingAmountMismatchError extends Error {
@@ -397,12 +461,58 @@ export class NativeFundingAmountMismatchError extends Error {
 }
 
 /** Thrown when a positive referral fee has no recipient. */
-export class MissingReferralFeeRecipientError extends Error {
+export class ReferralFeeRecipientMissingError extends Error {
   public constructor() {
     super(
       "A positive referralFeePct requires referralFeeRecipient. Provide the recipient or set referralFeePct to zero.",
     );
-    this.name = "MissingReferralFeeRecipientError";
+    this.name = "ReferralFeeRecipientMissingError";
+  }
+}
+
+/** @deprecated Use {@link ReferralFeeRecipientMissingError}. */
+export const MissingReferralFeeRecipientError =
+  ReferralFeeRecipientMissingError;
+/** @deprecated Use {@link ReferralFeeRecipientMissingError}. */
+export type MissingReferralFeeRecipientError = ReferralFeeRecipientMissingError;
+
+/** Thrown when a referral fee percentage is outside the contract's `[0, WAD)` range. */
+export class ReferralFeePctExceededError extends Error {
+  public constructor(public readonly referralFeePct: bigint) {
+    super(
+      `Referral fee percentage "${referralFeePct}" must be below WAD. Reduce referralFeePct or disable the referral fee.`,
+    );
+    this.name = "ReferralFeePctExceededError";
+  }
+}
+
+/** Thrown when a fixed bundles call mixes ERC-20 and native funding. */
+export class MixedBundlesFundingError extends Error {
+  public constructor() {
+    super(
+      "Bundles funding accepts either amount or nativeAmount, not both. Choose one funding source and rebuild the transaction.",
+    );
+    this.name = "MixedBundlesFundingError";
+  }
+}
+
+/** Thrown when a vault migration specifies both assets and shares, or neither. */
+export class AmountAndSharesExclusiveError extends Error {
+  public constructor() {
+    super(
+      "Vault migration requires exactly one of assets or shares. Choose the desired withdrawal mode and rebuild the transaction.",
+    );
+    this.name = "AmountAndSharesExclusiveError";
+  }
+}
+
+/** Thrown when a vault migration selects the same source and destination vault. */
+export class SameVaultMigrationError extends Error {
+  public constructor(public readonly vault: Address) {
+    super(
+      `Source and destination vault are both "${vault}". Select a different destination vault.`,
+    );
+    this.name = "SameVaultMigrationError";
   }
 }
 
@@ -660,7 +770,7 @@ export namespace BundlerErrors {
 /** Requirement signature kind accepted by action-output transaction builders. */
 export type RequirementSignatureKind =
   | "permit"
-  | "permit2TransferFrom"
+  | "permit2SignatureTransfer"
   | "authorization"
   | "midnightOfferRootSignature";
 

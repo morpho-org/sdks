@@ -84,7 +84,7 @@ export interface BlueWithdrawParams {
  * @throws {ReallocationWithdrawalOnTargetMarketError} when a source is the target market.
  * @throws {ReallocationLoanTokenMismatchError} when a source market uses another loan token.
  * @throws {DepositOwnerMismatchError} when the signed authorization owner differs from `userAddress`.
- * @throws {BlueBundlesV1RequirementSignatureMismatchError} when authorization cannot be bound safely.
+ * @throws {BundlesRequirementSignatureMismatchError} when authorization cannot be bound safely.
  * @throws {UnsupportedChainIdError} when the chain is absent from the registry.
  * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
  * @example
