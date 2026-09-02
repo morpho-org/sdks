@@ -15,8 +15,8 @@ import {
   Re7UsdtVaultV2,
 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
+import { vaultBundlesV1Test as test } from "../../helpers/vaultBundlesV1.js";
 import { createVaultV2 } from "../../helpers/vaultV2.js";
-import { test } from "../../setup.js";
 
 describe("Permit2", () => {
   const { dai, permit2 } = addressesRegistry[mainnet.id];

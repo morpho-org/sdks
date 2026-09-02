@@ -8,7 +8,7 @@ import {
 } from "../../../src/index.js";
 import { KeyrockUsdcVaultV2 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
-import { test } from "../../setup.js";
+import { vaultBundlesV1Test as test } from "../../helpers/vaultBundlesV1.js";
 
 describe("Permit", () => {
   test("should deposit USDC with permit version 2", async ({ client }) => {
