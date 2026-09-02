@@ -106,7 +106,7 @@ Blue-specific implementations and types that now have multiple consumers become 
 | `BundlesPermitKind` (`None` / `ERC2612` / `Permit2`), `BundlesTokenPermit` | private `BlueBundlesV1TokenPermit` implementation shape | Blue supply/repay/collateral, vault deposit |
 | `BundlesTokenRequirementsOptions` — public readonly `getRequirements()` options shared by every token-funded bundles handle | `BlueTokenRequirementsParams` and the vault entities' inline `{ useSimplePermit? }` shapes | Blue supply/repay/collateral, vault deposit |
 | `getBundlesTokenPermit(...)` — reshape a `TokenRequirementSignature` into `TokenPermit{kind,data}` | private `getBlueBundlesV1TokenPermit` behavior | same |
-| `getBundlesSharesPermit(...)` — reshape into `Permit{value,nonce,deadline,v,r,s}` + empty sentinel | `getVaultExitBundlesV1PermitStruct` (kept as a deprecated compatibility wrapper for the in-kind paths) | vault withdraw / redeem / migrate, vault-exit |
+| `getBundlesSharesPermit({ vault, owner, spender, amount, ... })` — validate the complete exit context, then reshape into `Permit{value,nonce,deadline,v,r,s}` + empty sentinel | `getVaultExitBundlesV1PermitStruct` (kept as a deprecated compatibility wrapper for the in-kind paths) | vault withdraw / redeem / migrate, vault-exit |
 | `resolveBundlesFunding({ amount, nativeAmount, asset, chainId })` — XOR funding resolver returning `{ assets, value }` | inlined `nativeAmount` handling in PR #984 | Blue + vault deposit paths |
 | `resolveBundlesTokenRequirements(...)` — synchronous, spender-parameterized approval / ERC-2612 / Permit2-SignatureTransfer resolver over plain allowance, permit-metadata, and selected-nonce state, including the ERC-20 approval **to Permit2** that a SignatureTransfer signature presupposes | pure successor to the resolution half of `getGeneralAdapterRequirements` | all bundles funding paths |
 | `encodeErc20Permit2TransferFrom(...)` | **reuse unchanged from PR #984** | all bundles funding paths |
@@ -344,6 +344,17 @@ regression. Mitigation, in order:
    ERC-2612, `nonces` + `DOMAIN_SEPARATOR`) support this, so **no vault is forced onto an approval
    transaction**;
 3. otherwise `encodeErc20Approval` on the vault share token.
+
+`getBundlesSharesPermit` is not a shape-only adapter on the new routes. Every VaultBundlesV1
+withdraw, redeem, and migration call supplies the expected vault share token, `userAddress` owner,
+registered VaultBundlesV1 spender, and required share allowance. The helper rejects a selected
+signature whose kind, asset, owner, spender, or amount differs from that captured context with
+`BundlesPermitMismatchError` before ABI encoding. The amount match is exact: redeem and
+migration-by-shares use the requested `shares`; withdraw and migration-by-assets use the widened
+share bound described below, so neither an insufficient permit nor a stale larger permit can weaken
+the handle's cap. It also rejects inconsistent amount or deadline metadata between the requirement
+and its signed action. Only the deprecated `getVaultExitBundlesV1PermitStruct` compatibility wrapper
+may omit the new owner / spender / amount expectations to preserve its published call shape.
 
 Allowance sizing is exact, never max, and must **upper-bound** the shares burned at execution:
 
@@ -894,8 +905,9 @@ Per §5, and following the `inKindRedeem` test layout:
   `referralFeePct` rejected below zero and at or above `WAD`, a missing or already-consumed explicit
   Permit2 nonce rejected, distinct caller-selected nonces preserved, the ERC-20 approval to Permit2
   ordered before the signature on a first-time depositor, an AllowanceTransfer signature rejected on
-  a bundles path, and `AddressMismatchError` when a connected `client.account` differs from
-  `userAddress`.
+  a bundles path, stale or manually assembled share permits rejected for the wrong owner, spender,
+  insufficient amount, or larger-than-bound amount, and `AddressMismatchError` when a connected
+  `client.account` differs from `userAddress`.
 - **Public documentation coverage.** Run `pnpm jsdoc:coverage` and require every new or retyped
   public type, helper, ABI, constant, error, action, and entity method in this migration to have the
   §6 description, parameter / return / typed-throw tags, and working example where applicable.
