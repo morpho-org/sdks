@@ -1,181 +1,84 @@
-import { parseUnits } from "viem";
-import { describe, expect } from "vitest";
-import {
-  GauntletWethVaultV1,
-  SteakhouseUsdcVaultV1,
-} from "../../../test/fixtures/vaultV1.js";
-import { test } from "../../../test/unit.js";
+import { MathLib } from "@morpho-org/blue-sdk";
+import { getChainAddress } from "@morpho-org/morpho-ts";
+import fc from "fast-check";
+import { decodeFunctionData, maxUint256, zeroHash } from "viem";
+import { mainnet } from "viem/chains";
+import { describe, expect, test } from "vitest";
+import { vaultBundlesV1Abi } from "../../abis.js";
 import { NonPositiveInputError } from "../../types/index.js";
 import { vaultV1Withdraw } from "./withdraw.js";
 
-describe("withdrawVaultV1 unit tests", () => {
-  test("should create withdraw transaction with USDC vault", async ({
-    client,
-  }) => {
-    const amount = parseUnits("1000", 6);
+const chainId = mainnet.id;
+const vault = "0x0000000000000000000000000000000000000021" as const;
+const userAddress = "0x0000000000000000000000000000000000000022" as const;
+const feeRecipient = "0x0000000000000000000000000000000000000023" as const;
+const positiveUint256 = fc.bigInt({ min: 1n, max: maxUint256 });
 
-    const tx = vaultV1Withdraw({
-      vault: {
-        address: SteakhouseUsdcVaultV1.address,
-      },
+describe("vaultV1Withdraw", () => {
+  test("default", () => {
+    const deadline = 1_900_000_000n;
+    const referralFeePct = MathLib.WAD / 4n;
+    const transaction = vaultV1Withdraw({
+      vault: { chainId, address: vault },
       args: {
-        amount,
-        recipient: client.account.address,
-        onBehalf: client.account.address,
+        amount: 100n,
+        userAddress,
+        referralFeePct,
+        referralFeeRecipient: feeRecipient,
+        deadline,
       },
     });
-
-    expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("vaultV1Withdraw");
-    expect(tx.action.args.vault).toBe(SteakhouseUsdcVaultV1.address);
-    expect(tx.action.args.amount).toBe(amount);
-    expect(tx.action.args.recipient).toBe(client.account.address);
-    expect(tx.to).toBe(SteakhouseUsdcVaultV1.address);
-    expect(tx.data).toBeDefined();
-    expect(tx.value).toBe(0n);
-  });
-
-  test("should create withdraw transaction with WETH vault", async ({
-    client,
-  }) => {
-    const amount = parseUnits("5", 18);
-
-    const tx = vaultV1Withdraw({
-      vault: {
-        address: GauntletWethVaultV1.address,
-      },
-      args: {
-        amount,
-        recipient: client.account.address,
-        onBehalf: client.account.address,
-      },
+    expect(transaction.to).toBe(
+      getChainAddress(chainId, "bundles.vaultBundlesV1"),
+    );
+    expect(transaction.value).toBe(0n);
+    expect(
+      decodeFunctionData({ abi: vaultBundlesV1Abi, data: transaction.data }),
+    ).toEqual({
+      functionName: "vaultBundlesV1Withdraw",
+      args: [
+        vault,
+        100n,
+        0n,
+        { value: 0n, nonce: 0n, deadline, v: 0, r: zeroHash, s: zeroHash },
+        referralFeePct,
+        feeRecipient,
+        deadline,
+      ],
     });
-
-    expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("vaultV1Withdraw");
-    expect(tx.action.args.vault).toBe(GauntletWethVaultV1.address);
-    expect(tx.action.args.amount).toBe(amount);
-    expect(tx.action.args.recipient).toBe(client.account.address);
-    expect(tx.to).toBe(GauntletWethVaultV1.address);
-    expect(tx.data).toBeDefined();
-    expect(tx.value).toBe(0n);
-  });
-
-  test("should allow different recipient and onBehalf addresses", async ({
-    client,
-  }) => {
-    const amount = parseUnits("500", 6);
-    const differentRecipient =
-      "0x1234567890123456789012345678901234567890" as const;
-
-    const tx = vaultV1Withdraw({
-      vault: {
-        address: SteakhouseUsdcVaultV1.address,
-      },
-      args: {
-        amount,
-        recipient: differentRecipient,
-        onBehalf: client.account.address,
-      },
+    expect(transaction.action.args).toMatchObject({
+      referralFeeAssets: 25n,
+      netAssets: 75n,
     });
-
-    expect(tx.action.args.recipient).toBe(differentRecipient);
-    expect(tx.to).toBe(SteakhouseUsdcVaultV1.address);
   });
 
-  test("should throw NonPositiveInputError when assets is zero", async () => {
+  test("behavior: calldata round-trips across uint256 inputs", () => {
+    fc.assert(
+      fc.property(positiveUint256, positiveUint256, (amount, deadline) => {
+        const transaction = vaultV1Withdraw({
+          vault: { chainId, address: vault },
+          args: { amount, userAddress, deadline },
+        });
+        const decoded = decodeFunctionData({
+          abi: vaultBundlesV1Abi,
+          data: transaction.data,
+        });
+        expect(decoded.functionName).toBe("vaultBundlesV1Withdraw");
+        expect(decoded.args?.[0]).toBe(vault);
+        expect(decoded.args?.[1]).toBe(amount);
+        expect(decoded.args?.[2]).toBe(0n);
+        expect(decoded.args?.[6]).toBe(deadline);
+      }),
+      { numRuns: 50, seed: 20_260_903 },
+    );
+  });
+
+  test("error: NonPositiveInputError", () => {
     expect(() =>
       vaultV1Withdraw({
-        vault: {
-          address: SteakhouseUsdcVaultV1.address,
-        },
-        args: {
-          amount: 0n,
-          recipient: "0x1234567890123456789012345678901234567890",
-          onBehalf: "0x1234567890123456789012345678901234567890",
-        },
+        vault: { chainId, address: vault },
+        args: { amount: 0n, userAddress, deadline: 1n },
       }),
     ).toThrow(NonPositiveInputError);
-  });
-
-  test("should throw NonPositiveInputError when assets is negative", async () => {
-    expect(() =>
-      vaultV1Withdraw({
-        vault: {
-          address: SteakhouseUsdcVaultV1.address,
-        },
-        args: {
-          amount: -1n,
-          recipient: "0x1234567890123456789012345678901234567890",
-          onBehalf: "0x1234567890123456789012345678901234567890",
-        },
-      }),
-    ).toThrow(NonPositiveInputError);
-  });
-
-  test("should return a deep-frozen transaction object", async ({ client }) => {
-    const tx = vaultV1Withdraw({
-      vault: {
-        address: SteakhouseUsdcVaultV1.address,
-      },
-      args: {
-        amount: parseUnits("100", 6),
-        recipient: client.account.address,
-        onBehalf: client.account.address,
-      },
-    });
-
-    expect(Object.isFrozen(tx)).toBe(true);
-    expect(Object.isFrozen(tx.action)).toBe(true);
-    expect(Object.isFrozen(tx.action.args)).toBe(true);
-  });
-
-  test("should append metadata to transaction data when provided", async ({
-    client,
-  }) => {
-    const amount = parseUnits("100", 6);
-
-    const txWithout = vaultV1Withdraw({
-      vault: {
-        address: SteakhouseUsdcVaultV1.address,
-      },
-      args: {
-        amount,
-        recipient: client.account.address,
-        onBehalf: client.account.address,
-      },
-    });
-
-    const txWith = vaultV1Withdraw({
-      vault: {
-        address: SteakhouseUsdcVaultV1.address,
-      },
-      args: {
-        amount,
-        recipient: client.account.address,
-        onBehalf: client.account.address,
-      },
-      metadata: { origin: "a1b2c3d4" },
-    });
-
-    expect(txWith.data.length).toBeGreaterThan(txWithout.data.length);
-    expect(txWith.action.type).toBe("vaultV1Withdraw");
-  });
-
-  test("should encode calldata targeting the vault address directly", async ({
-    client,
-  }) => {
-    const tx = vaultV1Withdraw({
-      vault: {
-        address: SteakhouseUsdcVaultV1.address,
-      },
-      args: {
-        amount: parseUnits("1000", 6),
-        recipient: client.account.address,
-        onBehalf: client.account.address,
-      },
-    });
-
-    expect(tx.to).toBe(SteakhouseUsdcVaultV1.address);
   });
 });

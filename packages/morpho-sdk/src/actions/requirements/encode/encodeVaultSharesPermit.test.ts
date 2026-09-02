@@ -57,7 +57,7 @@ describe("encodeVaultSharesPermit", () => {
 
     expect(signed.action).toEqual({
       type: "permit",
-      args: { spender, amount, deadline: 1_900_000_000n },
+      args: { spender, amount, deadline: 1_900_000_000n, nonce: 9n },
     });
     expect(signed.args).toMatchObject({
       owner: account.address,
@@ -84,6 +84,26 @@ describe("encodeVaultSharesPermit", () => {
     await expect(
       requirement.sign(walletClient, account.address),
     ).resolves.toMatchObject({ args: { amount, nonce: 3n } });
+  });
+
+  test("behavior: accepts the VaultBundlesV1 spender", () => {
+    const vaultBundlesV1 = getChainAddress(
+      mainnet.id,
+      "bundles.vaultBundlesV1",
+    );
+
+    expect(() =>
+      encodeVaultSharesPermit({
+        vault: new Token({ address: vault, name: "Vault V1" }),
+        version: "vaultV1",
+        spender: vaultBundlesV1,
+        owner: account.address,
+        chainId: mainnet.id,
+        nonce: 3n,
+        amount,
+        deadline: 1_900_000_000n,
+      }),
+    ).not.toThrow();
   });
 
   test("behavior: snapshots permit inputs before signing", async () => {

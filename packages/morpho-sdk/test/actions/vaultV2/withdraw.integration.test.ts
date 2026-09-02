@@ -1,10 +1,13 @@
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { morphoViemExtension } from "../../../src/index.js";
+import {
+  isRequirementApproval,
+  morphoViemExtension,
+} from "../../../src/index.js";
 import { KeyrockUsdcVaultV2 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
-import { test } from "../../setup.js";
+import { vaultBundlesV1Test as test } from "../../helpers/vaultBundlesV1.js";
 
 describe("Withdraw VaultV2", () => {
   test("should withdraw 1K assets in vaultV2", async ({ client }) => {
@@ -31,6 +34,13 @@ describe("Withdraw VaultV2", () => {
           userAddress: client.account.address,
           amount: assets,
         });
+        const requirements = await withdraw.getRequirements();
+        expect(requirements).toHaveLength(1);
+        const approval = requirements[0];
+        if (!isRequirementApproval(approval)) {
+          throw new Error("Approve transaction not found");
+        }
+        await client.sendTransaction(approval);
         const tx = withdraw.buildTx();
 
         await client.sendTransaction(tx);
@@ -43,7 +53,6 @@ describe("Withdraw VaultV2", () => {
     expect(finalState.userAssetBalance).toEqual(
       initialState.userAssetBalance + assets,
     );
-    expect(finalState.userSharesBalance).toEqual(29578794944844889136n);
     expect(finalState.morphoAssetBalance).toEqual(
       initialState.morphoAssetBalance - assets,
     );

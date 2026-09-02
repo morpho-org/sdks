@@ -3,6 +3,7 @@ import {
   type AuthorizationRequirementSignature,
   type BundlesTokenRequirementSignature,
   ChainIdMismatchError,
+  type Erc2612RequirementSignature,
   MixedBundlesFundingError,
   NonPositiveInputError,
   type PermitRequirementSignature,
@@ -104,6 +105,9 @@ const legacyRequirementsMock = vi
   .mockResolvedValue([{ action: { type: "erc20Approval" } }]);
 const legacySharePriceMock = vi.fn().mockReturnValue(10n ** 27n);
 const withdrawAction = {
+  getRequirements: vi
+    .fn()
+    .mockResolvedValue([{ action: { type: "erc20Approval" } }]),
   buildTx: vi.fn().mockReturnValue(WITHDRAW_TX),
 };
 const borrowAction = {
@@ -785,6 +789,31 @@ describe.sequential("MorphoProtocolEvm", () => {
       });
       expect(account.sendTransaction).toHaveBeenCalledWith(WITHDRAW_TX);
       expect(result).toEqual({ hash: "dummy-withdraw-hash", fee: 12_345n });
+    });
+
+    test("should expose and consume vault-share requirements", async () => {
+      const options = { token: TOKEN, amount: 100_000n };
+      const prepared = await protocol.prepareWithdraw(options);
+      expect(Object.isFrozen(prepared)).toBe(true);
+      const requirements = await prepared.getRequirements();
+      expectTypeOf(requirements).toEqualTypeOf<
+        readonly ApprovalOrSignatureRequirement[]
+      >();
+      expect(requirements).toEqual([{ action: { type: "erc20Approval" } }]);
+      expect(withdrawAction.getRequirements).toHaveBeenCalledWith();
+
+      const requirementSignature = {
+        args: { deadline: SIGNATURE_DEADLINE },
+        action: { type: "permit" },
+      } as unknown as Erc2612RequirementSignature;
+      account.sendTransaction = vi
+        .fn()
+        .mockResolvedValue({ hash: "dummy-withdraw-hash", fee: 12_345n });
+      await prepared.submit(requirementSignature);
+      expect(withdrawAction.buildTx).toHaveBeenCalledWith([
+        requirementSignature,
+      ]);
+      expect(vaultV2Entity.withdraw).toHaveBeenCalledTimes(1);
     });
 
     test("should throw if 'to' is not the wallet address", async () => {
