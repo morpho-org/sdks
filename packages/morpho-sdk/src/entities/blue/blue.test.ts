@@ -401,6 +401,38 @@ describe("MorphoBlue write surface", () => {
     ]);
   });
 
+  test("supply funds a wrapped-native market with tx value and no requirements", async () => {
+    const nativeMarketParams = new MarketParams({
+      loanToken: getChainAddress(mainnet.id, "wNative"),
+      collateralToken: marketParams.collateralToken,
+      oracle: marketParams.oracle,
+      irm: marketParams.irm,
+      lltv: marketParams.lltv,
+    });
+    const market = createMockClient(mainnet)
+      .client.extend(morphoViemExtension())
+      .morpho.blue(nativeMarketParams, mainnet.id);
+
+    const assets = 10n ** 18n;
+    const action = market.supply({
+      userAddress,
+      assets,
+      nativeAmount: assets,
+      deadline: maxUint256,
+    });
+
+    // The native branch short-circuits before any on-chain read: it emits no
+    // token approval/permit (and no Morpho authorization), rides the funded
+    // amount as `tx.value`, and leaves the encoded token permit empty. A
+    // regression that dropped the branch would demand a token requirement or
+    // omit the value, and would revert on-chain rather than fail here.
+    expect(await action.getRequirements()).toEqual([]);
+    const tx = action.buildTx();
+    expect(tx.value).toBe(assets);
+    expect(tx.action.args.nativeAmount).toBe(assets);
+    expect(tx.action.args.assets).toBe(assets);
+  });
+
   test("repay forwards a reusable approvalAmount to the token requirement", async () => {
     const handle = createMockClient(mainnet);
     const blueBundlesV1 = getChainAddress(mainnet.id, "bundles.blueBundlesV1");
