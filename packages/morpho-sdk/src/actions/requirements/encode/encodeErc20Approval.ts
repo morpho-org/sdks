@@ -1,6 +1,6 @@
 import { type Address, MathLib } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import { encodeFunctionData, erc20Abi, getAddress, maxUint256 } from "viem";
+import { encodeFunctionData, erc20Abi, maxUint256 } from "viem";
 import { MAX_TOKEN_APPROVALS } from "../../../helpers/constant.js";
 import { validateRequirementSpender } from "../../../helpers/validateRequirementSpender.js";
 import type { ERC20ApprovalAction, Transaction } from "../../../types/index.js";
@@ -22,11 +22,10 @@ interface EncodeErc20ApprovalParams {
  * @param params - Encoding parameters.
  * @param params.token - ERC-20 token address to approve.
  * @param params.spender - Address granted the allowance. Must be GeneralAdapter1, Permit2,
- *   Midnight, MidnightBundles, VaultExitBundlesV1, or BlueBundlesV1 for the chain.
+ *   Midnight, MidnightBundles, or VaultExitBundlesV1 for the chain.
  * @param params.amount - Allowance amount before per-token cap.
  * @param params.chainId - The chain the transaction targets (used to resolve supported spenders and the per-token cap).
  * @returns A deep-frozen `Transaction<ERC20ApprovalAction>` with the capped approval amount.
- * @throws {UnsupportedChainIdError} when `chainId` is absent from the address registry.
  * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` is not a supported SDK spender for `chainId`.
  * @example
  * ```ts
@@ -55,15 +54,12 @@ export const encodeErc20Approval = (
       "midnight",
       "midnightBundles",
       "vaultExitBundlesV1",
-      "blueBundlesV1",
     ],
   });
 
   const amountValue = MathLib.min(
     amount,
-    // Checksum the lookup key so a differently-cased token still resolves its per-token cap
-    // instead of falling back to `maxUint256`, which UNI/ONDO/COMP/FLUID reject above `uint96`.
-    MAX_TOKEN_APPROVALS[chainId]?.[getAddress(token)] ?? maxUint256,
+    MAX_TOKEN_APPROVALS[chainId]?.[token] ?? maxUint256,
   );
 
   return deepFreeze({

@@ -93,8 +93,7 @@
     "./lib/*/augment/*.js"
   ],
   "files": [
-    "lib",
-    "MIGRATION-v5-to-v6.md"
+    "lib"
   ],
   "scripts": {
     "prepublish": "$npm_execpath build",

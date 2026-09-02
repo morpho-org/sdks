@@ -77,8 +77,7 @@ function createMorphoNamespace(
  * @param _options.metadata - Optional analytics metadata applied to every transaction the
  *   `morpho` namespace builds.
  * @param _options.supportSignature - Whether the integrator can collect EIP-712 signatures for
- *   ERC-2612, Permit2 AllowanceTransfer or SignatureTransfer, and Morpho authorization.
- *   Defaults to `false` (standalone approvals and authorization calls only).
+ *   permit / permit2. Defaults to `false` (classic approvals only).
  * @param _options.supportDeployless - Whether entity fetchers may use deployless multicall.
  * @returns A viem extension function — `client.extend(morphoViemExtension(...))` adds
  *   `client.morpho`.

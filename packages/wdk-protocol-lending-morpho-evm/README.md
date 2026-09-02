@@ -12,8 +12,8 @@ This module follows Wallet Development Kit lending protocol conventions and acce
 
 - Deposit into Morpho Vault V2 earn targets.
 - Withdraw from Morpho Vaults V2.
-- Supply and withdraw collateral in a Morpho Blue market through BlueBundlesV1.
-- Borrow and repay from a configured Morpho Blue market through BlueBundlesV1.
+- Supply and withdraw collateral in Morpho Blue market.
+- Borrow and repay from a configured Morpho Blue market.
 - Opt into Vault V2 BluePublicAllocator reallocations for borrow liquidity.
 - Expose Morpho SDK approval/signature/authorization requirements.
 - Quote costs before sending.
@@ -73,13 +73,13 @@ Options:
 - `borrowMarketParams` (object): explicit Morpho Blue market params.
 - `borrowMarketId` (string): explicit market id; market params are fetched on-chain.
 - `presets` (object): `{ earn?: string, borrow?: string }`.
-- `slippageTolerance` (bigint): applied to Morpho Vault V2 flows only. BlueBundlesV1 market writes do not expose Bundler3 share-price bounds.
+- `slippageTolerance` (bigint): passed through to `@morpho-org/morpho-sdk`.
 - `supportSignature` (boolean): enable SDK permit/permit2 requirements.
 - `supportDeployless` (boolean): enable SDK deployless reads.
 
 Built-in presets already carry their expected chain id. If you use `earnVaultAddress`, `borrowMarketParams`, or `borrowMarketId` directly, pass `chainId` so the adapter can fail before building transactions after a browser-wallet chain switch.
 
-Vault deposits accept `amount`, `nativeAmount`, or both. Blue collateral methods accept `MorphoCollateralSupplyOptions`, whose type requires exactly one of `amount` or `nativeAmount`. `nativeAmount` is only valid when the configured vault asset or collateral token is the wrapped native token for the chain.
+For vault deposits and collateral supply, pass either `amount`, `nativeAmount`, or both. `nativeAmount` follows Morpho SDK semantics and is only valid when the configured vault asset or collateral token is the wrapped native token for the chain.
 
 ## Methods
 
@@ -94,13 +94,12 @@ Vault deposits accept `amount`, `nativeAmount`, or both. Blue collateral methods
 | `getSupplyCollateralRequirements(options)` | Return SDK requirements for collateral supply |
 | `quoteSupplyCollateral(options, config?)` | Quote collateral supply |
 | `borrow(options, config?)` | Borrow from the configured market |
-| `getBorrowRequirements(options)` | Return BlueBundlesV1 authorization requirements |
+| `getBorrowRequirements(options)` | Return SDK authorization requirements, plus a penalty-token approval for the Vault V2 opt-in type |
 | `quoteBorrow(options, config?)` | Quote borrow |
 | `repay(options, config?)` | Repay by assets, or pass `amount: 'max'` to repay current borrow shares |
 | `getRepayRequirements(options)` | Return SDK requirements for repay |
 | `quoteRepay(options, config?)` | Quote repay |
 | `withdrawCollateral(options, config?)` | Withdraw collateral from the configured market |
-| `getWithdrawCollateralRequirements(options)` | Return BlueBundlesV1 authorization requirements for collateral withdrawal |
 | `quoteWithdrawCollateral(options, config?)` | Quote collateral withdrawal |
 | `getVaultPosition(account?)` | Read configured vault position |
 | `getMarketPosition(account?)` | Read configured market position |
@@ -130,24 +129,24 @@ Borrow presets target Ethereum mainnet USDT loan markets:
 
 Morpho SDK actions can require approvals, permit/permit2 signatures, or Morpho authorization before the final action. This module exposes those requirements through `get*Requirements` methods rather than reimplementing allowance or authorization logic.
 
-When `getRepayRequirements` or `getSupplyCollateralRequirements` selects Permit2 SignatureTransfer, pass an unused explicit `permit2Nonce` in the optional `RequirementOptions` argument. The adapter forwards that nonce to the Morpho SDK; it does not choose one implicitly.
-
 For ERC-4337 accounts you can choose to batch the returned requirement transactions with the final transaction using your account-level flow. For EOA accounts, send requirements before the final operation.
 
 Requirement entries are one of:
 
 - Approval transaction: send the returned transaction before the final action.
-- Morpho authorization transaction: send the returned `setAuthorization` transaction before a borrow or collateral withdrawal that requires BlueBundlesV1 authorization.
-- Signature request: call the returned requirement's `sign(client, userAddress)` method, then pass the resulting `requirementSignature` to the corresponding `supply`, `repay`, `supplyCollateral`, `borrow`, or `withdrawCollateral` call.
-- BlueBundlesV1 calls use a two-hour deadline; signed calls reuse the requirement signature's deadline.
+- Morpho authorization transaction: send the returned `setAuthorization` transaction before borrow flows that require GeneralAdapter1 authorization.
+- Signature request: call the returned requirement's `sign(client, userAddress)` method, then pass the resulting `requirementSignature` to `supply`, `repay`, or `supplyCollateral`.
 
 Morpho SDK enforces a builder/executor invariant for bundled actions. For that reason, `onBehalfOf` and vault/collateral withdrawal `to` must equal the connected wallet address in this WDK adapter.
 
-Borrow reallocations use Vault V2 BluePublicAllocator exclusively. Vault V1
-reallocation types are no longer accepted:
+Existing `MorphoBorrowOptions` callers keep the Vault V1 reallocation input and
+an authorization-only `getBorrowRequirements` result type. To include Vault V2
+BluePublicAllocator calls, type the options as
+`MorphoBorrowWithVaultV2ReallocationsOptions`; this explicitly widens the
+result to include the loan-token approval used for proportional penalty donations:
 
 ```typescript
-import type { MorphoBorrowOptions } from '@morpho-org/wdk-protocol-lending-morpho-evm'
+import type { MorphoBorrowWithVaultV2ReallocationsOptions } from '@morpho-org/wdk-protocol-lending-morpho-evm'
 
 const options = {
   token: usdc,
@@ -159,21 +158,10 @@ const options = {
     assets: 1_000_000n,
     penalty: 1_000_000_000_000_000n
   }]
-} satisfies MorphoBorrowOptions
+} satisfies MorphoBorrowWithVaultV2ReallocationsOptions
 
 const requirements = await morpho.getBorrowRequirements(options)
 ```
-
-Collateral withdrawal now has the same explicit authorization flow:
-
-```typescript
-const requirements = await morpho.getWithdrawCollateralRequirements({
-  token: collateralToken,
-  amount: 1_000_000n
-})
-```
-
-See [Migrating to 2.0](./MIGRATION.md) for the complete breaking-change checklist.
 
 ## Fork E2E Test
 

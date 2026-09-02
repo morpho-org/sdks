@@ -1,108 +1,126 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import { type Address, maxUint256 } from "viem";
-import type {
-  BlueBundlesV1TokenRequirementSignature,
-  BlueSupplyCollateralAction,
-  Metadata,
-  Transaction,
+import type { Address } from "viem";
+import { type Action, BundlerAction } from "../../bundler/index.js";
+import { addTransactionMetadata } from "../../helpers/index.js";
+import {
+  type BlueSupplyCollateralAction,
+  type DepositAmountArgs,
+  type Metadata,
+  NegativeInputError,
+  NonPositiveInputError,
+  type PermitRequirementSignature,
+  type Transaction,
 } from "../../types/index.js";
-import { blueSupplyCollateralBorrow } from "./supplyCollateralBorrow.js";
+import { buildAssetFundingActions } from "./buildAssetFundingActions.js";
 
 /** Parameters for {@link blueSupplyCollateral}. */
 export interface BlueSupplyCollateralParams {
-  /** Chain and scoped Morpho Blue market. */
-  readonly market: {
+  market: {
     readonly chainId: number;
     readonly marketParams: MarketParams;
   };
-  /** Direct BlueBundlesV1 collateral-supply arguments. */
-  readonly args: {
-    /** User whose collateral position is credited. */
-    readonly userAddress: Address;
-    /** Gross collateral assets supplied. */
-    readonly collateralAssets: bigint;
-    /** Full native collateral funding; must equal `collateralAssets`. */
-    readonly nativeAmount?: bigint;
-    /** Final call deadline in Unix seconds. */
-    readonly deadline: bigint;
-    /** Optional WAD-scaled referral fee, strictly below 100%. */
-    readonly referralFeePct?: bigint;
-    /** Recipient required when `referralFeePct` is positive. */
-    readonly referralFeeRecipient?: Address;
-    /** Optional collateral ERC-2612 or Permit2 SignatureTransfer result. */
-    readonly requirementSignature?: BlueBundlesV1TokenRequirementSignature;
+  args: DepositAmountArgs & {
+    /** Address whose Morpho collateral position is credited. */
+    onBehalf: Address;
+    /** Optional pre-signed permit/permit2 approval for the collateral transfer. */
+    requirementSignature?: PermitRequirementSignature;
   };
-  /** Optional transaction metadata suffix. */
-  readonly metadata?: Metadata;
+  metadata?: Metadata;
 }
 
 /**
- * Encodes a pure collateral supply through BlueBundlesV1.
+ * Prepares a supply-collateral transaction for a Morpho Blue market.
  *
- * Delegates to {@link blueSupplyCollateralBorrow} with a zero borrow leg and an unrestricted LTV
- * cap. Native funding is exclusive with ERC-20 funding and no Bundler3 action is encoded.
+ * Routed through bundler3 via `GeneralAdapter1`. When `nativeAmount > 0`, native ETH is wrapped
+ * via `GeneralAdapter1.wrapNative()` before the collateral supply; the collateral token must be
+ * the chain's wNative for that path.
  *
- * @param params - Collateral-supply encoding parameters.
- * @param params.market.chainId - Chain containing BlueBundlesV1.
- * @param params.market.marketParams - Scoped Morpho Blue market parameters.
- * @param params.args.userAddress - User whose collateral position is credited.
- * @param params.args.collateralAssets - Gross collateral assets supplied.
- * @param params.args.nativeAmount - Exclusive native collateral funding.
- * @param params.args.deadline - Final call deadline in Unix seconds.
- * @param params.args.referralFeePct - Optional WAD-scaled referral fee.
- * @param params.args.referralFeeRecipient - Recipient required for a positive fee.
- * @param params.args.requirementSignature - Optional collateral-token signature.
- * @param params.metadata - Optional transaction metadata.
- * @returns A deep-frozen `Readonly<Transaction<BlueSupplyCollateralAction>>` whose calldata
- *   invokes the combined BlueBundlesV1 entrypoint with a zero borrow leg.
- * @throws {NegativeInputError} when an amount or fee is negative.
- * @throws {NonPositiveInputError} when collateral or deadline is not positive.
- * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
- * @throws {ChainWNativeMissingError} when native funding is requested without a registered wNative.
- * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another collateral token.
- * @throws {UnexpectedRequirementSignatureError} when native funding also supplies a token signature.
- * @throws {DepositOwnerMismatchError} when the signed owner differs from `userAddress`.
- * @throws {DepositAssetMismatchError} when the signed asset differs from the collateral token.
- * @throws {DepositAmountMismatchError} when the signed amount differs from `collateralAssets`.
- * @throws {DepositSpenderMismatchError} when the signed spender is not BlueBundlesV1.
- * @throws {BlueBundlesV1RequirementSignatureMismatchError} when a signature cannot be encoded safely.
- * @throws {InputExceedsMaxError} when the referral fee is at least WAD.
- * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
- * @throws {UnsupportedChainIdError} when the chain is absent from the registry.
- * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
+ * Zero loss: all collateral reaches Morpho. No dust left in bundler or adapter.
+ *
+ * @param params.market.chainId - The chain the market lives on.
+ * @param params.market.marketParams - Market params (loanToken, collateralToken, oracle, irm, lltv).
+ * @param params.args.amount - Amount of ERC-20 collateral to supply. At least one of `amount` or
+ *   `nativeAmount` must be positive. Defaults to `0n`.
+ * @param params.args.onBehalf - Address whose Morpho position is credited with the collateral.
+ * @param params.args.requirementSignature - Optional pre-signed permit/permit2 approval.
+ * @param params.args.nativeAmount - Optional amount of native token to wrap into wNative for the
+ *   supply. Requires the collateral token to be the chain's wNative.
+ * @param params.metadata - Optional analytics metadata attached to the bundle.
+ * @returns A deep-frozen `Transaction<BlueSupplyCollateralAction>` with `to`, `value`, `data`,
+ *   and the typed `action` discriminator the simulation layer consumes.
+ * @throws {NegativeInputError} when `amount < 0n` or `nativeAmount < 0n`.
+ * @throws {NonPositiveInputError} when both `amount` and `nativeAmount` resolve to zero.
+ * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
+ * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the collateral
+ *   token is not the chain's wNative.
+ * @throws {DepositAssetMismatchError} from `getTokenRequirementActions` when `requirementSignature`
+ *   is provided and the signed asset differs from `marketParams.collateralToken`.
+ * @throws {DepositAmountMismatchError} from `getTokenRequirementActions` when `requirementSignature`
+ *   is provided and the signed amount differs from `args.amount`.
+ * @throws {Permit2ExpirationMissingError} from `getTokenRequirementActions` when a Permit2 requirement
+ *   signature is missing its expiration.
  * @example
  * ```ts
- * import { markets } from "@morpho-org/morpho-test";
  * import { blueSupplyCollateral } from "@morpho-org/morpho-sdk";
- * import { zeroAddress } from "viem";
- * import { mainnet } from "viem/chains";
  *
  * const tx = blueSupplyCollateral({
- *   market: { chainId: mainnet.id, marketParams: markets[mainnet.id].usdc_wbtc },
- *   args: {
- *     userAddress: zeroAddress,
- *     collateralAssets: 1_000_000_000_000_000_000n,
- *     deadline: 1_900_000_000n,
- *   },
+ *   market: { chainId: 1, marketParams },
+ *   args: { amount: 1_000_000_000_000_000_000n, onBehalf },
  * });
  * // tx satisfies Readonly<Transaction<BlueSupplyCollateralAction>>
  * ```
  */
-export const blueSupplyCollateral = (
-  params: BlueSupplyCollateralParams,
-): Readonly<Transaction<BlueSupplyCollateralAction>> => {
-  const transaction = blueSupplyCollateralBorrow({
-    ...params,
-    args: {
-      ...params.args,
-      borrowAssets: 0n,
-      maxLtv: maxUint256,
-    },
+export const blueSupplyCollateral = ({
+  market: { chainId, marketParams },
+  args: { amount = 0n, onBehalf, requirementSignature, nativeAmount },
+  metadata,
+}: BlueSupplyCollateralParams): Readonly<
+  Transaction<BlueSupplyCollateralAction>
+> => {
+  if (amount < 0n) {
+    throw new NegativeInputError("amount", amount);
+  }
+
+  if (nativeAmount !== undefined && nativeAmount < 0n) {
+    throw new NegativeInputError("nativeAmount", nativeAmount);
+  }
+
+  const totalCollateral = amount + (nativeAmount ?? 0n);
+
+  if (totalCollateral === 0n) {
+    throw new NonPositiveInputError("totalCollateral", totalCollateral);
+  }
+
+  const actions: Action[] = buildAssetFundingActions({
+    chainId,
+    asset: marketParams.collateralToken,
+    erc20Amount: amount,
+    nativeAmount: nativeAmount ?? 0n,
+    requirementSignature,
   });
 
+  actions.push({
+    type: "morphoSupplyCollateral",
+    args: [marketParams, totalCollateral, onBehalf, [], false],
+  });
+
+  let tx = BundlerAction.encodeBundle(chainId, actions);
+
+  if (metadata) {
+    tx = addTransactionMetadata(tx, metadata);
+  }
+
   return deepFreeze({
-    ...transaction,
-    action: { ...transaction.action, type: "blueSupplyCollateral" },
+    ...tx,
+    action: {
+      type: "blueSupplyCollateral",
+      args: {
+        market: marketParams.id,
+        amount: totalCollateral,
+        onBehalf,
+        nativeAmount,
+      },
+    },
   });
 };

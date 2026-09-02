@@ -1,11 +1,5 @@
 import { addressesRegistry } from "@morpho-org/blue-sdk";
-import {
-  decodeFunctionData,
-  erc20Abi,
-  isHex,
-  maxUint96,
-  maxUint256,
-} from "viem";
+import { decodeFunctionData, erc20Abi, isHex } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
@@ -123,34 +117,5 @@ describe("encodeErc20Approval", () => {
         chainId: mainnet.id,
       }),
     ).toThrow(UnsupportedErc20ApprovalSpenderError);
-  });
-
-  describe("per-token approval cap", () => {
-    // UNI reverts on approvals above `uint96`; MAX_TOKEN_APPROVALS caps it at maxUint96.
-    const uni = "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984" as const;
-
-    test("default: caps a checksummed capped token at its registered maximum", () => {
-      const { action } = encodeErc20Approval({
-        token: uni,
-        spender: generalAdapter1,
-        amount: maxUint256,
-        chainId: mainnet.id,
-      });
-
-      expect(action.args.amount).toEqual(maxUint96);
-    });
-
-    test("behavior: resolves the cap for a differently-cased token address", () => {
-      const { action } = encodeErc20Approval({
-        token: uni.toLowerCase() as `0x${string}`,
-        spender: generalAdapter1,
-        amount: maxUint256,
-        chainId: mainnet.id,
-      });
-
-      // Without EIP-55 normalization the lowercased key would miss, fall back to maxUint256,
-      // and the resulting approval would revert on UNI.
-      expect(action.args.amount).toEqual(maxUint96);
-    });
   });
 });

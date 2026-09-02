@@ -1,87 +1,29 @@
 # `entities/blue/`
 
-`MorphoBlue` implements `BlueActions`. Constructor:
-`MorphoBlue(client, marketParams: MarketParams, chainId)`. Inherits
-[`entities/AGENTS.md`](../AGENTS.md).
+`MorphoBlue` implements `BlueActions`. Constructor: `MorphoBlue(client, marketParams: MarketParams, chainId)`. Inherits [`entities/AGENTS.md`](../AGENTS.md).
 
 ## State reads
 
-- `getMarketData` / `getPositionData` fetch state via `fetchMarket` /
-  `fetchAccrualPosition`.
-- `AccrualPosition` exposes `maxBorrowAssets`, `ltv`, `isHealthy`, `borrowAssets`, `collateral`,
-  `supplyShares`, and derived `supplyAssets`.
-- Versioned Vault V1 and Vault V2 reallocation-data fetchers remain readable planning APIs. Only
-  Vault V2 reallocation outputs are accepted by high-level Blue writes.
-
-## Write surface and routing
-
-`client.morpho.blue(marketParams, chainId)` preserves the established high-level write surface:
-
-- `supply`
-- `withdraw`
-- `supplyCollateral`
-- `borrow`
-- `supplyCollateralBorrow`
-- `repay`
-- `withdrawCollateral`
-- `repayWithdrawCollateral`
-- `refinance`
-
-Each lazy action delegates to a pure encoder for one direct BlueBundlesV1 call. The entity does not
-offer Bundler3 fallback, a route flag, or a parallel BlueBundlesV1 factory. Blue write inputs do not
-include `slippageTolerance`, `minSharePrice`, or `maxSharePrice`.
+- `getMarketData` / `getPositionData` fetch state via `fetchMarket` / `fetchAccrualPosition`.
+- `AccrualPosition` exposes `maxBorrowAssets`, `ltv`, `isHealthy`, `borrowAssets`, `collateral`, `supplyShares`, and a derived `supplyAssets` (via `market.toSupplyAssets(supplyShares)`).
 
 ## LLTV buffer (safety guard, asserted in tests)
 
-Borrow, collateral-withdraw, and migration legs enforce a buffer below LLTV:
+`supplyCollateralBorrow` and the post-withdraw safety checks on `withdrawCollateral` and `repayWithdrawCollateral` enforce a buffer below LLTV:
 
-- `maxSafeBorrow = collateralValue × (LLTV − DEFAULT_LLTV_BUFFER)`, where `collateralValue` uses
-  `ORACLE_PRICE_SCALE = 1e36`.
-- `DEFAULT_LLTV_BUFFER` is hardcoded at 0.5% (`WAD / 200`) and is not user-configurable.
-- `borrow` and `supplyCollateralBorrow` enforce the cap when `borrowAssets > 0n`.
-- `withdrawCollateral` and `repayWithdrawCollateral` enforce it when `collateralAssets > 0n`.
-- `refinance` enforces it on the destination position.
-- Pure collateral supply and pure repay pass `maxUint256` to BlueBundlesV1, allowing an unhealthy
-  position to improve incrementally.
+- `maxSafeBorrow = collateralValue × (LLTV − DEFAULT_LLTV_BUFFER)` where `collateralValue` uses `ORACLE_PRICE_SCALE = 1e36`.
+- `DEFAULT_LLTV_BUFFER` is hardcoded at 0.5% (`WAD/200`); not user-configurable.
+- Throws `BorrowExceedsSafeLtvError` (carrying `borrowAmount`, `maxSafeBorrow`) when the post-borrow position would exceed the buffer.
+- Throws `MissingMarketPriceError` when the oracle price is unavailable.
 
-The entity throws the existing typed health and market-price errors before encoding when the
-required snapshot cannot prove the buffered position safe.
+## Authorization requirements
 
-## Requirements
+`getRequirements` returns:
 
-`getRequirements()` returns only prerequisites used by the selected legs:
+- ERC-20 approval for **GeneralAdapter1** on the collateral token (any path that supplies collateral) or the loan token (`supply`, `repay`, `repayWithdrawCollateral`). The approved amount is the **ERC-20 portion actually pulled**, not the total: for a native-funded repay it is `amount` (assets mode) or `max(0, toBorrowAssets(shares) − nativeAmount)` (shares mode — clamped at 0 so a `nativeAmount` that covers or exceeds the borrow assets pulls nothing). A fully-native repay pulls no ERC-20, so no approval requirement is emitted; in shares mode any wrapped native beyond the on-chain repay is skimmed back to the receiver.
+- A classic ERC-20 approval for **GeneralAdapter1** on the loan token when `borrow`, `withdraw`, or `refinance` includes BluePublicAllocator reallocations with a non-zero penalty. `supplyCollateralBorrow` does the same when the collateral and loan tokens differ; when they are identical, it adds the penalty to the single collateral approval or permit and emits no separate penalty requirement. The approved amount is the sum of each call's independently rounded `ceil(assets × penalty / WAD)` donation. The separate-token path deliberately does not return a permit signature, so it can coexist with a collateral-token permit.
+- `morpho.setAuthorization(generalAdapter1, true)` when authorization is not yet set on Morpho — read via `publicActions`. Required for `borrow`, `supplyCollateralBorrow`, `repayWithdrawCollateral`, and `withdraw` (loan-asset).
 
-- `supply` funds the loan token.
-- `supplyCollateral`, `borrow`, and `supplyCollateralBorrow` fund the collateral token when
-  `collateralAssets > 0n` and request Morpho authorization when `borrowAssets > 0n`.
-- `repay` and `repayWithdrawCollateral` fund the bounded loan-token amount derived from the
-  selected repay mode, `positionData`, and deadline, and request Morpho authorization when
-  `collateralAssets > 0n`. Share-mode deadlines cannot exceed the two-hour funding quote horizon.
-  A saturated full repay without signature support requests the token's reusable maximum allowance,
-  while the encoded call remains bounded by the derived `maxRepayAssets` and refunds unused funding.
-- `withdrawCollateral` delegates to the repay path with no repay leg, so it funds no loan token; it
-  requests only Morpho authorization.
-- `withdraw` and `refinance` request Morpho authorization.
+When `supportSignature` is enabled on the client, the authorization requirement is returned as a signable `Requirement` instead of a transaction; signing it produces an `AuthorizationRequirementSignature` that `buildTx` consumes and folds into the bundle as a `setAuthorizationWithSig` call, so no standalone authorization transaction is needed. `buildTx` accepts a `readonly RequirementSignature[]` and splits permit vs. authorization signatures via `isPermitSignature` / `isAuthorizationSignature`.
 
-Classic approvals and ERC-2612 permits name BlueBundlesV1 as spender. A classic approval covers the
-actual pull amount unless a reusable `approvalAmount` is passed. Permit2 SignatureTransfer has
-two parts: the ERC-20 prerequisite names canonical Permit2, while the signed transfer names
-BlueBundlesV1. Native-only funding emits no token requirement and requires the funded token to be
-the chain's wNative.
-
-Morpho authorization also names BlueBundlesV1, not GeneralAdapter1. When `supportSignature` is
-enabled, the entity returns a signable authorization `Requirement`; otherwise it returns the
-standalone `morpho.setAuthorization(blueBundlesV1, true)` transaction. No requirement is returned
-when the corresponding allowance or authorization is already sufficient.
-
-`buildTx` accepts the collected `readonly RequirementSignature[]`, rejects duplicate or unused
-signature kinds, and reshapes accepted signatures into the direct contract's token-permit and
-signed-authorization structs. It stays synchronous and performs no reads.
-
-## Reallocations
-
-`borrow`, `supplyCollateralBorrow`, `withdraw`, and `refinance` accept only
-`VaultV2BlueReallocation` inputs. The entity validates and normalizes them before the lazy output is
-returned. BlueBundlesV1 executes their `PublicAllocations` unconditionally; allocator penalties are
-accounted for in contract proceeds or destination debt, so they do not create a separate
-GeneralAdapter1 approval requirement.
+`withdrawCollateral` has no requirements. `repay` and `supply` need only loan-token approval (native wrapping requires the loan token to be the chain's wNative). Without V2 reallocations, loan-asset `withdraw` needs only the Morpho authorization.

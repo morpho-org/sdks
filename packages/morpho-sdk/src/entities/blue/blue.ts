@@ -1,5 +1,6 @@
 import {
-  type AccrualPosition,
+  AccrualPosition,
+  DEFAULT_SLIPPAGE_TOLERANCE,
   type Market,
   type MarketId,
   type MarketParams,
@@ -7,6 +8,7 @@ import {
   type Position,
   type Vault,
   type VaultMarketConfig,
+  VaultV2BluePublicAllocatorConfigUtils,
 } from "@morpho-org/blue-sdk";
 import {
   fetchAccrualPosition,
@@ -17,16 +19,8 @@ import {
   fetchVaultMarketConfig,
   fetchVaultV2BluePublicAllocatorData,
 } from "@morpho-org/blue-sdk-viem";
-import { getChainAddress, Time } from "@morpho-org/morpho-ts";
-import { type Address, getAddress, isAddressEqual, maxUint256 } from "viem";
-import {
-  getBlueBundlesV1PenaltyAssets,
-  getBlueBundlesV1PublicAllocations,
-  getBlueBundlesV1ReferralFeeAssets,
-  normalizeBlueBundlesV1CommonParams,
-  selectBlueBundlesV1RequirementSignatures,
-  validateBlueBundlesV1NativeFunding,
-} from "../../actions/blue/common.js";
+import { Time } from "@morpho-org/morpho-ts";
+import { type Address, isAddressEqual } from "viem";
 import {
   blueBorrow,
   blueRefinance,
@@ -38,27 +32,32 @@ import {
   blueWithdraw,
   blueWithdrawCollateral,
   getBlueAuthorizationRequirement,
-  getBlueBundlesV1TokenRequirements,
+  getGeneralAdapterRequirements,
 } from "../../actions/index.js";
 import {
+  computeMaxRepaySharePrice,
+  computeMaxSupplySharePrice,
+  computeMinBorrowSharePrice,
+  computeMinWithdrawSharePrice,
   computeVaultV1Reallocations,
-  DEFAULT_LLTV_BUFFER,
-  MAX_TOKEN_APPROVALS,
   validateAccrualPosition,
   validateChainId,
+  validateNativeAsset,
   validatePositionHealth,
   validatePositionHealthAfterWithdraw,
   validateRepayAmount,
   validateRepayShares,
+  validateSlippageTolerance,
   validateWithdrawAmount,
   validateWithdrawShares,
 } from "../../helpers/index.js";
+import { validateAndNormalizeReallocations } from "../../helpers/validate.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
-  type ActionOutput,
-  type ActionRequirement,
   type AssetsOrSharesArgs,
+  type BlueAuthorizationAction,
   type BlueBorrowAction,
+  type BlueReallocationPlan,
   type BlueRefinanceAction,
   type BlueRepayAction,
   type BlueRepayWithdrawCollateralAction,
@@ -67,23 +66,32 @@ import {
   type BlueSupplyCollateralBorrowAction,
   type BlueWithdrawAction,
   type BlueWithdrawCollateralAction,
-  ExpiredDeadlineError,
-  InputExceedsMaxError,
-  MaxRepayAssetsBelowRepayAssetsError,
+  BorrowAmountAndSharesExclusiveError,
+  type DepositAmountArgs,
+  type ERC20ApprovalAction,
+  MarketIdMismatchError,
   MissingAccrualPositionError,
   type MorphoClientType,
   MutuallyExclusiveRepayAmountsError,
   MutuallyExclusiveWithdrawAmountsError,
   NegativeInputError,
   NonPositiveInputError,
+  type PermitRequirementSignature,
   type ReallocationComputeOptions,
-  ReallocationsRequireBorrowError,
+  RefinanceExceedsBorrowAssetsError,
+  RefinanceExceedsBorrowSharesError,
+  RefinanceExceedsCollateralError,
   RefinanceSameMarketError,
   RefinanceTokenMismatchError,
+  type RepayAmountArgs,
+  type Requirement,
   type RequirementSignature,
+  selectRequirementSignatures,
+  type Transaction,
   type VaultV1Reallocation,
   type VaultV2BluePublicAllocatorOptions,
   type VaultV2BlueReallocation,
+  WithdrawExceedsCollateralError,
 } from "../../types/index.js";
 import { VaultV1ReallocationData } from "../vaultV1ReallocationData.js";
 import { VaultV2BlueReallocationData } from "../vaultV2BlueReallocationData.js";
@@ -115,19 +123,6 @@ type VaultV2BlueReallocationsParams = {
   };
 };
 
-/** Options for resolving token-backed BlueBundlesV1 approval or signature prerequisites. */
-export interface BlueTokenRequirementsParams {
-  /** Prefer ERC-2612 when the funded token exposes a compatible nonce. */
-  readonly useSimplePermit?: boolean;
-  /** Explicit unused Permit2 SignatureTransfer unordered nonce. */
-  readonly permit2Nonce?: bigint;
-  /**
-   * Classic ERC-20 allowance to set when an approval is needed, enabling a reusable approval (for
-   * example `maxUint256`). Defaults to the exact pulled amount. Ignored by signature paths.
-   */
-  readonly approvalAmount?: bigint;
-}
-
 export interface BlueActions {
   /**
    * Fetches the latest market data with accrued interest.
@@ -150,757 +145,389 @@ export interface BlueActions {
   ) => Promise<AccrualPosition>;
 
   /**
-   * Prepares a direct BlueBundlesV1 collateral supply.
+   * Prepares a supply-collateral transaction.
    *
-   * This is the single-operation form of {@link BlueActions.supplyCollateralBorrow}; it supplies
-   * `collateralAssets` and fixes the inactive borrow leg to zero. Token requirements target
-   * BlueBundlesV1 unless the collateral is funded exclusively with the chain's native asset.
+   * Routed through bundler via GeneralAdapter1.
+   * `getRequirements` returns ERC20 approval or permit for GeneralAdapter1.
+   * When `nativeAmount` is provided, native token is wrapped; collateral must be wNative.
    *
-   * @param params.userAddress - User funding and receiving the collateral position.
-   * @param params.collateralAssets - Gross collateral assets supplied.
-   * @param params.nativeAmount - Optional full native funding equal to `collateralAssets`.
-   * @param params.deadline - Final call deadline in Unix seconds.
-   * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
-   * @param params.referralFeeRecipient - Recipient required for a positive fee.
-   * @returns Lazy token prerequisite resolution and a synchronous deep-frozen transaction.
-   * @throws {ChainIdMismatchError} when the client targets another chain.
-   * @throws {ExpiredDeadlineError} when the deadline is stale.
-   * @throws {NonPositiveInputError} when `collateralAssets` is not positive.
-   * @throws {NegativeInputError} when collateral, native funding, or the referral fee is negative.
-   * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
-   * @throws {ChainWNativeMissingError} when native funding is requested without registered wNative.
-   * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
-   * @throws {InputExceedsMaxError} when the referral fee is at least WAD.
-   * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
-   * @throws {MissingPermit2TransferFromNonceError} from `getRequirements()` when Permit2 is selected without a nonce.
-   * @throws {Permit2TransferFromNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
-   * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple token signatures are supplied.
-   * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an unsupported signature is supplied.
-   * @throws {DepositOwnerMismatchError} from `buildTx()` when the signed owner differs from `userAddress`.
-   * @throws {DepositAssetMismatchError} from `buildTx()` when the signed asset differs from the collateral token.
-   * @throws {DepositAmountMismatchError} from `buildTx()` when the signed amount differs from `collateralAssets`.
-   * @throws {DepositSpenderMismatchError} from `buildTx()` when the signed spender is not BlueBundlesV1.
-   * @throws {BlueBundlesV1RequirementSignatureMismatchError} from `buildTx()` when a signature cannot be encoded safely.
-   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
-   * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
-   * @throws {viem.BaseError} from `getRequirements()` when an allowance, nonce, or token metadata read fails.
-   * @example
-   * ```ts
-   * import { markets } from "@morpho-org/morpho-test";
-   * import { createPublicClient, http, zeroAddress } from "viem";
-   * import { mainnet } from "viem/chains";
-   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
-   *
-   * const client = createPublicClient({ chain: mainnet, transport: http() })
-   *   .extend(morphoViemExtension());
-   * const market = client.morpho.blue(markets[mainnet.id].usdc_wbtc, mainnet.id);
-   * const action = market.supplyCollateral({
-   *   userAddress: zeroAddress,
-   *   collateralAssets: 10n ** 18n,
-   *   deadline: 1_900_000_000n,
-   * });
-   * const requirements = await action.getRequirements();
-   * const tx = action.buildTx();
-   * ```
+   * @param params - Supply collateral parameters.
+   * @returns Object with `buildTx` and `getRequirements`.
    */
-  supplyCollateral: (params: {
-    readonly userAddress: Address;
-    readonly collateralAssets: bigint;
-    readonly nativeAmount?: bigint;
-    readonly deadline: bigint;
-    readonly referralFeePct?: bigint;
-    readonly referralFeeRecipient?: Address;
-  }) => ActionOutput<
-    BlueSupplyCollateralAction,
-    readonly RequirementSignature[],
-    BlueTokenRequirementsParams
-  >;
+  supplyCollateral: (params: { userAddress: Address } & DepositAmountArgs) => {
+    buildTx: (
+      signatures?: readonly RequirementSignature[],
+    ) => Readonly<Transaction<BlueSupplyCollateralAction>>;
+    getRequirements: (params?: {
+      /**
+       * Prefer the ERC-2612 simple-permit path when the SDK detects support.
+       * Leave unset or set to `false` to force the Permit2/classic approval fallback when
+       * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
+       */
+      useSimplePermit?: boolean;
+    }) => Promise<
+      (
+        | Readonly<Transaction<ERC20ApprovalAction>>
+        | Requirement<PermitRequirementSignature>
+      )[]
+    >;
+  };
 
   /**
-   * Prepares a direct BlueBundlesV1 loan-asset supply.
+   * Prepares a loan-asset supply transaction.
    *
-   * `getRequirements()` reads only the loan-token allowance and selected ERC-2612 or Permit2
-   * nonce state. Direct approvals and ERC-2612 name BlueBundlesV1 as spender; Permit2 keeps its
-   * ERC-20 approval on canonical Permit2. Native funding is exclusive and skips token requirements.
-   * The referral fee is deducted from the gross `assets` supplied. This route exposes no Bundler3
-   * share-price bound or `slippageTolerance`.
+   * Routed through bundler via GeneralAdapter1. Computes `maxSharePrice` from the supply state of
+   * `marketData` forward-accrued to execution and `slippageTolerance` to protect against
+   * share-price inflation.
+   * `getRequirements` returns ERC20 approval or permit for `GeneralAdapter1` on the loan token.
+   * When `nativeAmount` is provided, native token is wrapped; the loan token must be wNative.
    *
-   * @param params.userAddress - User funding and receiving the supply position.
-   * @param params.assets - Gross loan-token assets funded before the referral fee.
-   * @param params.nativeAmount - Optional full native funding; must equal `assets` and requires wNative.
-   * @param params.deadline - Final call deadline in Unix seconds.
-   * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
-   * @param params.referralFeeRecipient - Recipient required for a positive fee.
-   * @returns Lazy prerequisite resolution and a synchronous deep-frozen transaction builder.
-   * @throws {ChainIdMismatchError} when the client targets another chain.
-   * @throws {ExpiredDeadlineError} when the deadline is not in the future at creation or requirement resolution.
-   * @throws {NonPositiveInputError} when `assets` is not positive.
-   * @throws {NegativeInputError} when native funding or the referral fee is negative.
-   * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
-   * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
-   * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
-   * @throws {InputExceedsMaxError} when the referral fee is at least WAD.
-   * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
-   * @throws {MissingPermit2TransferFromNonceError} from `getRequirements()` when Permit2 is selected without an explicit nonce.
-   * @throws {Permit2TransferFromNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
-   * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple token signatures are supplied.
-   * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when the route cannot consume a supplied signature.
-   * @throws {DepositOwnerMismatchError} from `buildTx()` when the signed owner differs from `userAddress`.
-   * @throws {DepositAssetMismatchError} from `buildTx()` when the signed asset differs from the loan token.
-   * @throws {DepositAmountMismatchError} from `buildTx()` when the signed amount differs from `assets`.
-   * @throws {DepositSpenderMismatchError} from `buildTx()` when the signed spender is not BlueBundlesV1.
-   * @throws {BlueBundlesV1RequirementSignatureMismatchError} from `buildTx()` when a signature cannot be encoded safely.
-   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
-   * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
-   * @throws {viem.BaseError} from `getRequirements()` when a required allowance, nonce, or token metadata read fails.
-   * @example
-   * ```ts
-   * import { markets } from "@morpho-org/morpho-test";
-   * import { createPublicClient, http, zeroAddress } from "viem";
-   * import { mainnet } from "viem/chains";
-   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * No Morpho authorization required (supplier is crediting, not withdrawing).
    *
-   * const userAddress = zeroAddress;
-   * const client = createPublicClient({ chain: mainnet, transport: http() })
-   *   .extend(morphoViemExtension());
-   * const market = client.morpho.blue(markets[mainnet.id].usdc_wbtc, mainnet.id);
-   * const action = market.supply({
-   *   userAddress,
-   *   assets: 1_000_000n,
-   *   deadline: BigInt(Math.floor(Date.now() / 1_000) + 3_600),
-   * });
-   * const requirements = await action.getRequirements();
-   * const tx = action.buildTx();
-   * // tx satisfies Readonly<Transaction<BlueSupplyAction>>
-   * ```
+   * @param params - Supply parameters.
+   * @returns Object with `buildTx` and `getRequirements`.
    */
-  supply: (params: {
-    readonly userAddress: Address;
-    readonly assets: bigint;
-    readonly nativeAmount?: bigint;
-    readonly deadline: bigint;
-    readonly referralFeePct?: bigint;
-    readonly referralFeeRecipient?: Address;
-  }) => ActionOutput<
-    BlueSupplyAction,
-    readonly RequirementSignature[],
-    BlueTokenRequirementsParams
-  >;
+  supply: (
+    params: {
+      userAddress: Address;
+      marketData: Market;
+      slippageTolerance?: bigint;
+    } & DepositAmountArgs,
+  ) => {
+    buildTx: (
+      signatures?: readonly RequirementSignature[],
+    ) => Readonly<Transaction<BlueSupplyAction>>;
+    getRequirements: (params?: {
+      /**
+       * Prefer the ERC-2612 simple-permit path when the SDK detects support.
+       * Leave unset or set to `false` to force the Permit2/classic approval fallback when
+       * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
+       */
+      useSimplePermit?: boolean;
+    }) => Promise<
+      (
+        | Readonly<Transaction<ERC20ApprovalAction>>
+        | Requirement<PermitRequirementSignature>
+      )[]
+    >;
+  };
 
   /**
-   * Prepares a direct BlueBundlesV1 loan-asset withdrawal by assets or shares.
+   * Prepares a loan-asset withdraw transaction.
    *
-   * `getRequirements()` reads Morpho authorization state for BlueBundlesV1. Optional reallocations
-   * are Vault V2-only; their penalties and the referral fee reduce withdrawal proceeds. Shares
-   * mode has neither a saturated full-close sentinel nor an onchain minimum-assets guarantee.
-   * This route exposes no Bundler3 share-price bound or `slippageTolerance`.
+   * Routed through bundler3 via `morphoWithdraw`. Supports two modes via {@link AssetsOrSharesArgs}:
+   * - **By assets** (`{ assets }`): withdraws an exact asset amount.
+   * - **By shares** (`{ shares }`): burns an exact share count (full close, immune to interest accrual).
    *
-   * @param params.userAddress - User whose supply position is withdrawn.
-   * @param params.positionData - Pre-fetched position used for ownership and balance validation.
-   * @param params.assets - Exact assets withdrawn, exclusive with `shares`.
-   * @param params.shares - Exact shares burned, exclusive with `assets`.
-   * @param params.reallocations - Optional Vault V2 reallocations executed before withdrawal.
-   * @param params.deadline - Final call deadline in Unix seconds.
-   * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
-   * @param params.referralFeeRecipient - Recipient required for a positive fee.
-   * @returns Lazy authorization resolution and a synchronous deep-frozen transaction builder.
-   * @throws {ChainIdMismatchError} when the client targets another chain.
-   * @throws {ExpiredDeadlineError} when the deadline is stale.
-   * @throws {MissingAccrualPositionError} when no position snapshot is provided at runtime.
-   * @throws {MarketIdMismatchError} when `positionData` belongs to another market.
-   * @throws {AccrualPositionUserMismatchError} when `positionData` belongs to another user.
-   * @throws {NegativeInputError} when an amount, referral fee, or reallocation penalty is negative.
-   * @throws {NonPositiveInputError} when no withdrawal mode or positive reallocation amount is provided.
-   * @throws {MutuallyExclusiveWithdrawAmountsError} when assets and shares are both nonzero.
-   * @throws {WithdrawExceedsSupplyError} when assets exceed the supplied balance.
-   * @throws {WithdrawSharesExceedSupplyError} when shares exceed the owned balance.
-   * @throws {InputExceedsMaxError} when a fee or reallocation exceeds its ABI bound.
-   * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
-   * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
-   * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.
-   * @throws {InconsistentReallocationPenaltyError} when one vault uses different penalties.
-   * @throws {ReallocationWithdrawalOnTargetMarketError} when a source is the target market.
-   * @throws {ReallocationLoanTokenMismatchError} when a source uses another loan token.
-   * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple authorization signatures are supplied.
-   * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-authorization signature is supplied.
-   * @throws {DepositOwnerMismatchError} from `buildTx()` when the signed owner differs from `userAddress`.
-   * @throws {BlueBundlesV1RequirementSignatureMismatchError} from `buildTx()` when authorization cannot be encoded safely.
-   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
-   * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
-   * @throws {viem.BaseError} from `getRequirements()` when authorization reads fail.
-   * @example
-   * ```ts
-   * import { AccrualPosition } from "@morpho-org/blue-sdk";
-   * import { markets } from "@morpho-org/morpho-test";
-   * import { createPublicClient, http, zeroAddress } from "viem";
-   * import { mainnet } from "viem/chains";
-   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * Computes `minSharePrice` from market supply state and `slippageTolerance`.
    *
-   * const userAddress = zeroAddress;
-   * const client = createPublicClient({ chain: mainnet, transport: http() })
-   *   .extend(morphoViemExtension());
-   * const market = client.morpho.blue(markets[mainnet.id].usdc_wbtc, mainnet.id);
-   * const positionData = new AccrualPosition(
-   *   { user: userAddress, supplyShares: 1n, borrowShares: 0n, collateral: 0n },
-   *   await market.getMarketData(),
-   * );
-   * const action = market.withdraw({
-   *   userAddress,
-   *   positionData,
-   *   shares: 1n,
-   *   deadline: BigInt(Math.floor(Date.now() / 1_000) + 3_600),
-   * });
-   * const requirements = await action.getRequirements();
-   * const tx = action.buildTx();
-   * // tx satisfies Readonly<Transaction<BlueWithdrawAction>>
-   * ```
+   * When `reallocations` is provided, its homogeneous V1 or V2 actions are
+   * prepended to move liquidity before withdrawing. V1 fees add
+   * to the transaction value; V2 penalties are paid in the loan token.
+   *
+   * `getRequirements` returns the loan-token approval needed for V2 penalties
+   * and `morpho.setAuthorization(generalAdapter1, true)` when GA1 is not yet
+   * authorized on Morpho.
+   *
+   * **Stale `positionData` may cause unexpected supply share calculations.**
+   *
+   * @param params - Withdraw parameters including pre-fetched `positionData`.
+   * @returns Object with `buildTx` and `getRequirements`.
+   * @throws {BundlerErrors.UnexpectedAction} when a V2 plan is unsupported on the chain.
+   * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
+   * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
+   * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
+   * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
+   * @throws {InvalidReallocationShapeError} when an entry matches both or neither V1/V2 shape.
+   * @throws {MixedReallocationVersionsError} when one plan contains both V1 and V2 entries.
    */
   withdraw: (
     params: {
-      readonly userAddress: Address;
-      readonly positionData: AccrualPosition;
-      readonly reallocations?: Iterable<VaultV2BlueReallocation>;
-      readonly deadline: bigint;
-      readonly referralFeePct?: bigint;
-      readonly referralFeeRecipient?: Address;
+      userAddress: Address;
+      receiver?: Address;
+      positionData: AccrualPosition;
+      slippageTolerance?: bigint;
+      reallocations?: BlueReallocationPlan;
     } & AssetsOrSharesArgs,
-  ) => ActionOutput<
-    BlueWithdrawAction,
-    readonly RequirementSignature[],
-    undefined
-  >;
+  ) => {
+    buildTx: (
+      signatures?: readonly RequirementSignature[],
+    ) => Readonly<Transaction<BlueWithdrawAction>>;
+    getRequirements: () => Promise<
+      (
+        | Readonly<Transaction<ERC20ApprovalAction>>
+        | Readonly<Transaction<BlueAuthorizationAction>>
+        | Requirement
+      )[]
+    >;
+  };
 
   /**
-   * Prepares a direct BlueBundlesV1 loan-asset borrow.
+   * Prepares a borrow transaction.
    *
-   * This is the single-operation form of {@link BlueActions.supplyCollateralBorrow}; it borrows
-   * `borrowAssets` and fixes the inactive collateral-supply leg to zero. The pre-fetched position
-   * is forward-accrued for the buffered LLTV check.
+   * Routed through bundler3 via `morphoBorrow`.
+   * Validates position health with LLTV buffer (0.5%) using the pre-fetched `positionData`.
+   * Computes `minSharePrice` from market borrow state and `slippageTolerance`.
    *
-   * @param params.userAddress - User whose debt position changes.
-   * @param params.borrowAssets - Gross loan assets borrowed before penalties and referral fees.
-   * @param params.positionData - Pre-fetched position used for the health check.
-   * @param params.reallocations - Optional Vault V2 reallocations before borrowing.
-   * @param params.deadline - Final call deadline in Unix seconds.
-   * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
-   * @param params.referralFeeRecipient - Recipient required for a positive fee.
-   * @returns Lazy Blue authorization resolution and a synchronous deep-frozen transaction.
-   * @throws {ChainIdMismatchError} when the client targets another chain.
-   * @throws {ExpiredDeadlineError} when the deadline is stale.
-   * @throws {MissingAccrualPositionError} when no position snapshot is provided.
-   * @throws {MarketIdMismatchError} when `positionData` belongs to another market.
-   * @throws {AccrualPositionUserMismatchError} when `positionData` belongs to another user.
-   * @throws {MissingMarketPriceError} when the health check has no oracle price.
-   * @throws {BorrowExceedsSafeLtvError} when the resulting position exceeds buffered LLTV.
-   * @throws {NonPositiveInputError} when `borrowAssets` is not positive.
-   * @throws {NegativeInputError} when the borrow, fee, or a reallocation value is negative.
-   * @throws {InputExceedsMaxError} when a fee, penalty, or reallocation exceeds its bound.
-   * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
-   * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
-   * @throws {InvalidReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
-   * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.
-   * @throws {InconsistentReallocationPenaltyError} when one vault uses different penalties.
-   * @throws {ReallocationWithdrawalOnTargetMarketError} when a source is the target market.
-   * @throws {ReallocationLoanTokenMismatchError} when a source uses another loan token.
-   * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple authorization signatures are supplied.
-   * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a token signature is supplied.
-   * @throws {DepositOwnerMismatchError} from `buildTx()` when the signed owner differs from `userAddress`.
-   * @throws {BlueBundlesV1RequirementSignatureMismatchError} from `buildTx()` when authorization cannot be encoded safely.
-   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
-   * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
-   * @throws {viem.BaseError} from `getRequirements()` when authorization reads fail.
-   * @example
-   * ```ts
-   * import { AccrualPosition } from "@morpho-org/blue-sdk";
-   * import { markets } from "@morpho-org/morpho-test";
-   * import { createPublicClient, http, zeroAddress } from "viem";
-   * import { mainnet } from "viem/chains";
-   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * When `reallocations` is provided, its homogeneous V1 or V2 actions are
+   * prepended before borrowing. V1 fees add to the transaction
+   * value; V2 penalties are paid in the loan token.
    *
-   * const client = createPublicClient({ chain: mainnet, transport: http() })
-   *   .extend(morphoViemExtension());
-   * const market = client.morpho.blue(markets[mainnet.id].usdc_wbtc, mainnet.id);
-   * const userAddress = zeroAddress;
-   * const positionData = new AccrualPosition(
-   *   { user: userAddress, supplyShares: 0n, borrowShares: 0n, collateral: 10n ** 18n },
-   *   await market.getMarketData(),
-   * );
-   * const action = market.borrow({
-   *   userAddress,
-   *   borrowAssets: 1_000_000n,
-   *   positionData,
-   *   deadline: 1_900_000_000n,
-   * });
-   * const requirements = await action.getRequirements();
-   * const tx = action.buildTx();
-   * ```
+   * `getRequirements` returns the loan-token approval needed for V2 penalties
+   * and Morpho authorization for GeneralAdapter1 when needed.
+   *
+   * **Stale `positionData` may cause unexpected health.**
+   *
+   * @param params - Borrow parameters including pre-fetched `positionData` for health validation.
+   * @returns Object with `buildTx` and `getRequirements`.
+   * @throws {BundlerErrors.UnexpectedAction} when a V2 plan is unsupported on the chain.
+   * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
+   * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
+   * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
+   * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
+   * @throws {InvalidReallocationShapeError} when an entry matches both or neither V1/V2 shape.
+   * @throws {MixedReallocationVersionsError} when one plan contains both V1 and V2 entries.
    */
   borrow: (params: {
-    readonly userAddress: Address;
-    readonly borrowAssets: bigint;
-    readonly positionData: AccrualPosition;
-    readonly reallocations?: Iterable<VaultV2BlueReallocation>;
-    readonly deadline: bigint;
-    readonly referralFeePct?: bigint;
-    readonly referralFeeRecipient?: Address;
-  }) => ActionOutput<
-    BlueBorrowAction,
-    readonly RequirementSignature[],
-    undefined
-  >;
+    userAddress: Address;
+    amount: bigint;
+    positionData: AccrualPosition;
+    slippageTolerance?: bigint;
+    reallocations?: BlueReallocationPlan;
+  }) => {
+    buildTx: (
+      signatures?: readonly RequirementSignature[],
+    ) => Readonly<Transaction<BlueBorrowAction>>;
+    getRequirements: () => Promise<
+      (
+        | Readonly<Transaction<ERC20ApprovalAction>>
+        | Readonly<Transaction<BlueAuthorizationAction>>
+        | Requirement
+      )[]
+    >;
+  };
 
   /**
-   * Prepares a direct BlueBundlesV1 loan-asset repayment.
+   * Prepares a repay transaction.
    *
-   * This is the single-operation form of {@link BlueActions.repayWithdrawCollateral}; it repays
-   * exact assets or shares and fixes the inactive collateral-withdrawal leg to zero. A saturated
-   * `repayShares = maxUint256` closes the live debt using a bounded, refundable funding cap.
+   * Routed through bundler3 via GeneralAdapter1.
+   * Supports two modes via {@link RepayAmountArgs}:
+   * - **By assets** (`{ amount }`): repays an exact asset amount (partial repay).
+   * - **By shares** (`{ shares }`): repays exact shares (full repay, immune to interest accrual).
    *
-   * @param params.userAddress - User whose debt position changes.
-   * @param params.positionData - Pre-fetched position used to validate and quote repayment.
-   * @param params.repayAssets - Exact assets repaid, exclusive with `repayShares`.
-   * @param params.repayShares - Exact shares, or `maxUint256` for a full repay.
-   * @param params.nativeAmount - Optional full native funding equal to the derived repayment cap.
-   * @param params.deadline - Final call deadline in Unix seconds.
-   * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
-   * @param params.referralFeeRecipient - Recipient required for a positive fee.
-   * @returns Lazy token prerequisite resolution and a synchronous deep-frozen transaction.
-   * @throws {ChainIdMismatchError} when the client targets another chain.
-   * @throws {ExpiredDeadlineError} when the deadline is stale.
-   * @throws {MissingAccrualPositionError} when no position snapshot is provided.
-   * @throws {MarketIdMismatchError} when `positionData` belongs to another market.
-   * @throws {AccrualPositionUserMismatchError} when `positionData` belongs to another user.
-   * @throws {NegativeInputError} when an amount, native funding, or referral fee is negative.
-   * @throws {NonPositiveInputError} when no positive repayment is provided.
-   * @throws {MutuallyExclusiveRepayAmountsError} when assets and shares are both nonzero.
-   * @throws {RepayExceedsDebtError} when an exact asset repay exceeds current debt.
-   * @throws {RepaySharesExceedDebtError} when non-saturated shares exceed current debt shares.
-   * @throws {InputExceedsMaxError} when a fee is out of bounds or a share quote deadline is too far away.
-   * @throws {MaxRepayAssetsBelowRepayAssetsError} when a signed share cap no longer covers the fresh quote.
-   * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
-   * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
-   * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
-   * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
-   * @throws {MissingPermit2TransferFromNonceError} from `getRequirements()` when Permit2 is selected without a nonce.
-   * @throws {Permit2TransferFromNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
-   * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple token signatures are supplied.
-   * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an authorization signature is supplied.
-   * @throws {DepositOwnerMismatchError} from `buildTx()` when the signed owner differs from `userAddress`.
-   * @throws {DepositAssetMismatchError} from `buildTx()` when the signed asset differs from the loan token.
-   * @throws {DepositAmountMismatchError} from `buildTx()` when the signed amount differs from the derived funding cap.
-   * @throws {DepositSpenderMismatchError} from `buildTx()` when the signed spender is not BlueBundlesV1.
-   * @throws {BlueBundlesV1RequirementSignatureMismatchError} from `buildTx()` when a signature cannot be encoded safely.
-   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
-   * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
-   * @throws {viem.BaseError} from `getRequirements()` when an allowance, nonce, or token metadata read fails.
-   * @example
-   * ```ts
-   * import { AccrualPosition } from "@morpho-org/blue-sdk";
-   * import { markets } from "@morpho-org/morpho-test";
-   * import { createPublicClient, http, maxUint256, zeroAddress } from "viem";
-   * import { mainnet } from "viem/chains";
-   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * Computes `maxSharePrice` from market borrow state and `slippageTolerance`.
    *
-   * const client = createPublicClient({ chain: mainnet, transport: http() })
-   *   .extend(morphoViemExtension());
-   * const market = client.morpho.blue(markets[mainnet.id].usdc_wbtc, mainnet.id);
-   * const userAddress = zeroAddress;
-   * const positionData = new AccrualPosition(
-   *   { user: userAddress, supplyShares: 0n, borrowShares: 1n, collateral: 10n ** 18n },
-   *   await market.getMarketData(),
-   * );
-   * const action = market.repay({
-   *   userAddress,
-   *   positionData,
-   *   repayShares: maxUint256,
-   *   deadline: 1_900_000_000n,
-   * });
-   * const requirements = await action.getRequirements();
-   * const tx = action.buildTx();
-   * ```
+   * `getRequirements` returns ERC20 approval for loan token to GeneralAdapter1.
+   * Does NOT require Morpho authorization (anyone can repay on behalf of anyone).
+   *
+   * **Shares mode:** `slippageTolerance` also caps `transferAmount`.
+   *
+   * @param params - Repay parameters including pre-fetched `positionData`.
+   * @returns Object with `buildTx` and `getRequirements`.
    */
   repay: (
     params: {
-      readonly userAddress: Address;
-      readonly positionData: AccrualPosition;
-      readonly nativeAmount?: bigint;
-      readonly deadline: bigint;
-      readonly referralFeePct?: bigint;
-      readonly referralFeeRecipient?: Address;
-    } & (
-      | { readonly repayAssets: bigint; readonly repayShares?: never }
-      | { readonly repayShares: bigint; readonly repayAssets?: never }
-    ),
-  ) => ActionOutput<
-    BlueRepayAction,
-    readonly RequirementSignature[],
-    BlueTokenRequirementsParams
-  >;
+      userAddress: Address;
+      positionData: AccrualPosition;
+      slippageTolerance?: bigint;
+    } & RepayAmountArgs,
+  ) => {
+    buildTx: (
+      signatures?: readonly RequirementSignature[],
+    ) => Readonly<Transaction<BlueRepayAction>>;
+    getRequirements: (params?: {
+      /**
+       * Prefer the ERC-2612 simple-permit path when the SDK detects support.
+       * Leave unset or set to `false` to force the Permit2/classic approval fallback when
+       * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
+       */
+      useSimplePermit?: boolean;
+    }) => Promise<
+      (
+        | Readonly<Transaction<ERC20ApprovalAction>>
+        | Requirement<PermitRequirementSignature>
+      )[]
+    >;
+  };
 
   /**
-   * Prepares a direct BlueBundlesV1 collateral withdrawal.
+   * Prepares a withdraw-collateral transaction.
    *
-   * This is the single-operation form of {@link BlueActions.repayWithdrawCollateral}; it withdraws
-   * `collateralAssets` and fixes both inactive repayment fields to zero. The pre-fetched position
-   * is forward-accrued before applying the buffered LLTV health check.
+   * Direct call to `morpho.withdrawCollateral()` — no bundler, no GeneralAdapter1.
+   * The caller (`msg.sender`) must be `onBehalf`.
+   * Validates position health after withdrawal using the LLTV buffer.
    *
-   * @param params.userAddress - User whose collateral position changes.
-   * @param params.positionData - Pre-fetched position used for balance and health validation.
-   * @param params.collateralAssets - Collateral assets withdrawn.
-   * @param params.deadline - Final call deadline in Unix seconds.
-   * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
-   * @param params.referralFeeRecipient - Recipient required for a positive fee.
-   * @returns Lazy Blue authorization resolution and a synchronous deep-frozen transaction.
-   * @throws {ChainIdMismatchError} when the client targets another chain.
-   * @throws {ExpiredDeadlineError} when the deadline is stale.
-   * @throws {MissingAccrualPositionError} when no position snapshot is provided.
-   * @throws {MarketIdMismatchError} when `positionData` belongs to another market.
-   * @throws {AccrualPositionUserMismatchError} when `positionData` belongs to another user.
-   * @throws {WithdrawExceedsCollateralError} when the withdrawal exceeds the position collateral.
-   * @throws {MissingMarketPriceError} when the health check has no oracle price.
-   * @throws {WithdrawMakesPositionUnhealthyError} when the result exceeds buffered LLTV.
-   * @throws {NonPositiveInputError} when `collateralAssets` is not positive.
-   * @throws {NegativeInputError} when collateral or the referral fee is negative.
-   * @throws {InputExceedsMaxError} when the referral fee is at least WAD.
-   * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
-   * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple authorization signatures are supplied.
-   * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a token signature is supplied.
-   * @throws {DepositOwnerMismatchError} from `buildTx()` when the signed owner differs from `userAddress`.
-   * @throws {BlueBundlesV1RequirementSignatureMismatchError} from `buildTx()` when authorization cannot be encoded safely.
-   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
-   * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
-   * @throws {viem.BaseError} from `getRequirements()` when authorization reads fail.
-   * @example
-   * ```ts
-   * import { AccrualPosition } from "@morpho-org/blue-sdk";
-   * import { markets } from "@morpho-org/morpho-test";
-   * import { createPublicClient, http, zeroAddress } from "viem";
-   * import { mainnet } from "viem/chains";
-   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * No `getRequirements` — no ERC20 approval or GeneralAdapter1 authorization needed
+   * (collateral flows out of Morpho, not in).
    *
-   * const client = createPublicClient({ chain: mainnet, transport: http() })
-   *   .extend(morphoViemExtension());
-   * const market = client.morpho.blue(markets[mainnet.id].usdc_wbtc, mainnet.id);
-   * const userAddress = zeroAddress;
-   * const positionData = new AccrualPosition(
-   *   { user: userAddress, supplyShares: 0n, borrowShares: 0n, collateral: 10n ** 18n },
-   *   await market.getMarketData(),
-   * );
-   * const action = market.withdrawCollateral({
-   *   userAddress,
-   *   positionData,
-   *   collateralAssets: 10n ** 17n,
-   *   deadline: 1_900_000_000n,
-   * });
-   * const requirements = await action.getRequirements();
-   * const tx = action.buildTx();
-   * ```
+   * **No on-chain slippage guard — stale `positionData` risks liquidation.**
+   *
+   * @param params - Withdraw collateral parameters including pre-fetched `positionData` for health validation.
+   * @returns Object with `buildTx`.
    */
   withdrawCollateral: (params: {
-    readonly userAddress: Address;
-    readonly positionData: AccrualPosition;
-    readonly collateralAssets: bigint;
-    readonly deadline: bigint;
-    readonly referralFeePct?: bigint;
-    readonly referralFeeRecipient?: Address;
-  }) => ActionOutput<
-    BlueWithdrawCollateralAction,
-    readonly RequirementSignature[],
-    undefined
-  >;
+    userAddress: Address;
+    amount: bigint;
+    positionData: AccrualPosition;
+  }) => {
+    buildTx: () => Readonly<Transaction<BlueWithdrawCollateralAction>>;
+  };
 
   /**
-   * Prepares a direct BlueBundlesV1 repay, collateral withdrawal, or atomic combination.
+   * Prepares an atomic repay-and-withdraw-collateral transaction.
    *
-   * Repayment accepts exact assets or shares. `repayShares = maxUint256` requests the contract's
-   * saturated full close; the entity derives `maxRepayAssets` from debt projected through the
-   * requested deadline plus the referral fee, and the contract refunds unused funding. A
-   * previously signed share-mode cap remains valid when it still covers the fresh derived minimum.
-   * Saturated full-repay requirements use the token's reusable maximum allowance when signatures
-   * are disabled, while the transaction itself remains bounded by the derived cap.
-   * Share-mode deadlines cannot exceed the two-hour quote horizon. Blue authorization is required
-   * only for collateral withdrawal. Pure repay uses `maxLtv = maxUint256`; withdrawals use buffered
-   * LLTV. No Bundler3 share-price or `slippageTolerance` input exists.
+   * Routed through bundler3. Bundle order: repay FIRST, then withdraw.
+   * Validates combined position health: simulates the repay, then checks
+   * that the resulting position can sustain the collateral withdrawal.
    *
-   * @param params.userAddress - User whose debt and collateral position changes.
-   * @param params.positionData - Pre-fetched position used for repayment and health validation.
-   * @param params.repayAssets - Exact assets repaid, exclusive with `repayShares`.
-   * @param params.repayShares - Exact shares, or `maxUint256` for full repay.
-   * @param params.collateralAssets - Collateral withdrawn, or zero for pure repay.
-   * @param params.nativeAmount - Optional full native funding; must equal derived `maxRepayAssets`.
-   * @param params.deadline - Final call deadline in Unix seconds; share mode is limited to the two-hour funding quote horizon.
-   * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
-   * @param params.referralFeeRecipient - Recipient required for a positive fee.
-   * @returns Lazy funding/authorization resolution and a synchronous deep-frozen transaction builder.
-   * @throws {ChainIdMismatchError} when the client targets another chain.
-   * @throws {MissingAccrualPositionError} when no position snapshot is provided at runtime.
-   * @throws {MarketIdMismatchError} when `positionData` belongs to another market.
-   * @throws {AccrualPositionUserMismatchError} when `positionData` belongs to another user.
-   * @throws {NegativeInputError} when an amount, native funding, or referral fee is negative.
-   * @throws {NonPositiveInputError} when no operation leg is provided.
-   * @throws {MutuallyExclusiveRepayAmountsError} when assets and shares are both nonzero.
-   * @throws {RepayExceedsDebtError} when an exact asset repay exceeds current debt.
-   * @throws {RepaySharesExceedDebtError} when non-saturated shares exceed current debt shares.
-   * @throws {WithdrawExceedsCollateralError} when collateral withdrawal exceeds the position.
-   * @throws {MissingMarketPriceError} when withdrawal health cannot be validated without an oracle price.
-   * @throws {WithdrawMakesPositionUnhealthyError} when the post-repay withdrawal exceeds buffered LLTV.
-   * @throws {ExpiredDeadlineError} when the deadline is stale.
-   * @throws {InputExceedsMaxError} when the referral fee is at least WAD or a share-mode deadline exceeds the funding quote horizon.
-   * @throws {MaxRepayAssetsBelowRepayAssetsError} from `buildTx()` when a previously signed share-mode cap no longer covers the fresh derived minimum.
-   * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
-   * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
-   * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
-   * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
-   * @throws {MissingPermit2TransferFromNonceError} from `getRequirements()` when Permit2 is selected without an explicit nonce.
-   * @throws {Permit2TransferFromNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
-   * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple signatures of one kind are supplied.
-   * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an inactive leg cannot consume a supplied signature.
-   * @throws {DepositOwnerMismatchError} from `buildTx()` when a signed owner differs from `userAddress`.
-   * @throws {DepositAssetMismatchError} from `buildTx()` when the signed asset differs from the loan token.
-   * @throws {DepositAmountMismatchError} from `buildTx()` when the signed amount differs from the derived funding cap.
-   * @throws {DepositSpenderMismatchError} from `buildTx()` when the signed spender is not BlueBundlesV1.
-   * @throws {BlueBundlesV1RequirementSignatureMismatchError} from `buildTx()` when a signature cannot be encoded safely.
-   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
-   * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
-   * @throws {viem.BaseError} from `getRequirements()` when a required allowance, nonce, token metadata, or authorization read fails.
-   * @example
-   * ```ts
-   * import { AccrualPosition } from "@morpho-org/blue-sdk";
-   * import { markets } from "@morpho-org/morpho-test";
-   * import { createPublicClient, http, maxUint256, zeroAddress } from "viem";
-   * import { mainnet } from "viem/chains";
-   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * `getRequirements` returns in parallel:
+   * - ERC20 approval for loan token to GeneralAdapter1 (for the repay).
+   * - `morpho.setAuthorization(generalAdapter1, true)` if not yet authorized (for the withdraw).
    *
-   * const userAddress = zeroAddress;
-   * const client = createPublicClient({ chain: mainnet, transport: http() })
-   *   .extend(morphoViemExtension());
-   * const market = client.morpho.blue(markets[mainnet.id].usdc_wbtc, mainnet.id);
-   * const positionData = new AccrualPosition(
-   *   { user: userAddress, supplyShares: 0n, borrowShares: 1n, collateral: 100_000_000n },
-   *   await market.getMarketData(),
-   * );
-   * const action = market.repayWithdrawCollateral({
-   *   userAddress,
-   *   positionData,
-   *   repayShares: maxUint256,
-   *   collateralAssets: 1n,
-   *   deadline: BigInt(Math.floor(Date.now() / 1_000) + 3_600),
-   * });
-   * const requirements = await action.getRequirements(); // Satisfy these first.
-   * const tx = action.buildTx(); // For a client configured with supportSignature: false.
-   * // tx satisfies Readonly<Transaction<BlueRepayWithdrawCollateralAction>>
-   * ```
+   * **Stale `positionData` risks underestimated debt and unsafe withdrawal.**
+   *
+   * @param params - Combined parameters including pre-fetched `positionData`.
+   * @returns Object with `buildTx` and `getRequirements`.
    */
   repayWithdrawCollateral: (
     params: {
-      readonly userAddress: Address;
-      readonly positionData: AccrualPosition;
-      readonly collateralAssets: bigint;
-      readonly nativeAmount?: bigint;
-      readonly deadline: bigint;
-      readonly referralFeePct?: bigint;
-      readonly referralFeeRecipient?: Address;
-    } & (
-      | { readonly repayAssets: bigint; readonly repayShares?: never }
-      | { readonly repayShares: bigint; readonly repayAssets?: never }
-      | { readonly repayAssets?: undefined; readonly repayShares?: undefined }
-    ),
-  ) => ActionOutput<
-    BlueRepayWithdrawCollateralAction,
-    readonly RequirementSignature[],
-    BlueTokenRequirementsParams
-  >;
+      userAddress: Address;
+      withdrawAmount: bigint;
+      positionData: AccrualPosition;
+      slippageTolerance?: bigint;
+    } & RepayAmountArgs,
+  ) => {
+    buildTx: (
+      signatures?: readonly RequirementSignature[],
+    ) => Readonly<Transaction<BlueRepayWithdrawCollateralAction>>;
+    getRequirements: (params?: {
+      /**
+       * Prefer the ERC-2612 simple-permit path when the SDK detects support.
+       * Leave unset or set to `false` to force the Permit2/classic approval fallback when
+       * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
+       */
+      useSimplePermit?: boolean;
+    }) => Promise<
+      (
+        | Readonly<Transaction<ERC20ApprovalAction>>
+        | Readonly<Transaction<BlueAuthorizationAction>>
+        | Requirement
+      )[]
+    >;
+  };
 
   /**
-   * Prepares a direct BlueBundlesV1 collateral supply, borrow, or atomic combination.
+   * Prepares an atomic supply-collateral-and-borrow transaction.
    *
-   * At least one leg must be positive. A borrow requires `positionData` and Blue authorization;
-   * collateral funding requires token approval/signature unless it is exclusively native. Vault V2
-   * reallocations are accepted only with a borrow. Penalties and referral fees reduce borrow
-   * proceeds. The entity uses `maxUint256` for a pure collateral supply and buffered LLTV otherwise.
-   * No Bundler3 share-price or `slippageTolerance` input exists.
+   * Routed through the bundler. Validates position health with LLTV buffer
+   * to prevent instant liquidation on new positions near the LLTV threshold.
    *
-   * @param params.userAddress - User whose collateral and debt position changes.
-   * @param params.collateralAssets - Gross collateral supplied, or zero for pure borrow.
-   * @param params.borrowAssets - Loan assets borrowed, or zero for pure collateral supply.
-   * @param params.positionData - Pre-fetched position; required when `borrowAssets` is positive.
-   * @param params.nativeAmount - Optional full native collateral funding; must equal `collateralAssets`.
-   * @param params.reallocations - Optional Vault V2 reallocations; valid only for a borrow.
-   * @param params.deadline - Final call deadline in Unix seconds.
-   * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
-   * @param params.referralFeeRecipient - Recipient required for a positive fee.
-   * @returns Lazy funding/authorization resolution and a synchronous deep-frozen transaction builder.
-   * @throws {ChainIdMismatchError} when the client targets another chain.
-   * @throws {MissingAccrualPositionError} when a borrow has no position snapshot.
-   * @throws {MarketIdMismatchError} when `positionData` belongs to another market.
-   * @throws {AccrualPositionUserMismatchError} when `positionData` belongs to another user.
-   * @throws {MissingMarketPriceError} when a borrow cannot be validated without an oracle price.
-   * @throws {BorrowExceedsSafeLtvError} when the resulting debt exceeds buffered LLTV.
-   * @throws {ReallocationsRequireBorrowError} when reallocations accompany no borrow.
-   * @throws {ExpiredDeadlineError} when the deadline is stale.
-   * @throws {NegativeInputError} when an amount, native funding, referral fee, or reallocation penalty is negative.
-   * @throws {NonPositiveInputError} when both legs or a reallocation amount is not positive.
-   * @throws {NativeFundingAmountMismatchError} when native funding is partial or mixed.
-   * @throws {ChainWNativeMissingError} when native funding is requested on a chain without wNative.
-   * @throws {NativeAmountOnNonWNativeAssetError} when native funding targets another token.
-   * @throws {InputExceedsMaxError} when a fee or reallocation exceeds its ABI bound.
-   * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
-   * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
-   * @throws {InvalidReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
-   * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.
-   * @throws {InconsistentReallocationPenaltyError} when one vault uses different penalties.
-   * @throws {ReallocationWithdrawalOnTargetMarketError} when a source is the target market.
-   * @throws {ReallocationLoanTokenMismatchError} when a source uses another loan token.
-   * @throws {MissingPermit2TransferFromNonceError} from `getRequirements()` when Permit2 is selected without an explicit nonce.
-   * @throws {Permit2TransferFromNonceAlreadyUsedError} from `getRequirements()` when the explicit Permit2 nonce is consumed.
-   * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple signatures of one kind are supplied.
-   * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when an inactive leg cannot consume a supplied signature.
-   * @throws {DepositOwnerMismatchError} from `buildTx()` when a signed owner differs from `userAddress`.
-   * @throws {DepositAssetMismatchError} from `buildTx()` when the signed asset differs from the collateral token.
-   * @throws {DepositAmountMismatchError} from `buildTx()` when the signed amount differs from `collateralAssets`.
-   * @throws {DepositSpenderMismatchError} from `buildTx()` when the signed spender is not BlueBundlesV1.
-   * @throws {BlueBundlesV1RequirementSignatureMismatchError} from `buildTx()` when a signature cannot be encoded safely.
-   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
-   * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
-   * @throws {viem.BaseError} from `getRequirements()` when a required allowance, nonce, token metadata, or authorization read fails.
-   * @example
-   * ```ts
-   * import { markets } from "@morpho-org/morpho-test";
-   * import { createPublicClient, http, zeroAddress } from "viem";
-   * import { mainnet } from "viem/chains";
-   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * When `reallocations` is provided, its homogeneous V1 or V2 actions run
+   * between the collateral supply and `morphoBorrow`. V1 fees add
+   * to the transaction value; V2 penalties are paid in the loan token.
    *
-   * const userAddress = zeroAddress;
-   * const client = createPublicClient({ chain: mainnet, transport: http() })
-   *   .extend(morphoViemExtension());
-   * const market = client.morpho.blue(markets[mainnet.id].usdc_wbtc, mainnet.id);
-   * const positionData = await market.getPositionData(userAddress);
-   * const action = market.supplyCollateralBorrow({
-   *   userAddress,
-   *   positionData,
-   *   collateralAssets: 100_000_000n,
-   *   borrowAssets: 1_000_000n,
-   *   deadline: BigInt(Math.floor(Date.now() / 1_000) + 3_600),
-   * });
-   * const requirements = await action.getRequirements(); // Satisfy these first.
-   * const tx = action.buildTx(); // For a client configured with supportSignature: false.
-   * // tx satisfies Readonly<Transaction<BlueSupplyCollateralBorrowAction>>
-   * ```
+   * `getRequirements` returns in parallel:
+   * - ERC20 approval or permit for collateral token (to GeneralAdapter1).
+   * - Classic ERC20 approval for any V2 loan-token penalties.
+   * - `morpho.setAuthorization(generalAdapter1, true)` if adapter is not yet authorized.
+   *
+   * **Stale `positionData` may cause unexpected health.**
+   *
+   * @param params - Combined parameters including pre-fetched `positionData` for health validation.
+   * @returns Object with `buildTx` and `getRequirements`.
+   * @throws {BundlerErrors.UnexpectedAction} when a V2 plan is unsupported on the chain.
+   * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
+   * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
+   * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
+   * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
+   * @throws {InvalidReallocationShapeError} when an entry matches both or neither V1/V2 shape.
+   * @throws {MixedReallocationVersionsError} when one plan contains both V1 and V2 entries.
    */
-  supplyCollateralBorrow: (params: {
-    readonly userAddress: Address;
-    readonly collateralAssets: bigint;
-    readonly borrowAssets: bigint;
-    readonly positionData?: AccrualPosition;
-    readonly nativeAmount?: bigint;
-    readonly reallocations?: Iterable<VaultV2BlueReallocation>;
-    readonly deadline: bigint;
-    readonly referralFeePct?: bigint;
-    readonly referralFeeRecipient?: Address;
-  }) => ActionOutput<
-    BlueSupplyCollateralBorrowAction,
-    readonly RequirementSignature[],
-    BlueTokenRequirementsParams
-  >;
+  supplyCollateralBorrow: (
+    params: {
+      userAddress: Address;
+      positionData: AccrualPosition;
+      borrowAmount: bigint;
+      slippageTolerance?: bigint;
+      reallocations?: BlueReallocationPlan;
+    } & DepositAmountArgs,
+  ) => {
+    buildTx: (
+      signatures?: readonly RequirementSignature[],
+    ) => Readonly<Transaction<BlueSupplyCollateralBorrowAction>>;
+    getRequirements: (params?: {
+      /**
+       * Prefer the ERC-2612 simple-permit path when the SDK detects support.
+       * Leave unset or set to `false` to force the Permit2/classic approval fallback when
+       * a token is known to be incompatible despite passing the SDK's shallow nonce probe.
+       */
+      useSimplePermit?: boolean;
+    }) => Promise<
+      (
+        | Readonly<Transaction<ERC20ApprovalAction>>
+        | Readonly<Transaction<BlueAuthorizationAction>>
+        | Requirement
+      )[]
+    >;
+  };
 
   /**
-   * Prepares a direct BlueBundlesV1 full borrow-position migration.
+   * Prepares an atomic refinance migrating this market's position to another Morpho Blue market
+   * that shares the same loan and collateral tokens. See {@link blueRefinance} for the bundle.
    *
-   * The scoped market is the source. BlueBundlesV1 reads the live source debt/collateral at
-   * execution and extends the destination position; zero live debt reverts. The markets must share
-   * both tokens. Referral fees and Vault V2 reallocation penalties increase destination debt, whose
-   * complete position is checked against buffered LLTV. Partial and collateral-only migration are
-   * unsupported.
+   * Validates ownership, token/id match, that amounts do not exceed the source position, and that
+   * both the residual source and the aggregate target position stay within LLTV − buffer. Both
+   * markets are forward-accrued to `now`; in shares mode the target borrow is overshot by
+   * `slippageTolerance` and the callback sweeps the residual.
+   * A homogeneous V1 or V2 target reallocation plan runs first; V1 fees add
+   * to the transaction value and V2 penalties are paid
+   * in the loan token.
    *
-   * @param params.userAddress - Owner of both source and destination positions. It must also sign the
-   *   Morpho authorization and send the transaction: BlueBundlesV1 migrates the signer's position
-   *   (bound to `msg.sender`), so on-behalf refinance by a relayer is not supported and a mismatched
-   *   sender reverts on-chain.
-   * @param params.positionData - Pre-fetched source position with nonzero debt.
-   * @param params.destination.marketParams - Distinct destination market with matching tokens.
-   * @param params.destination.positionData - User's pre-fetched destination position.
-   * @param params.reallocations - Optional Vault V2 reallocations into the destination.
-   * @param params.deadline - Final call deadline in Unix seconds.
-   * @param params.referralFeePct - Optional WAD-scaled referral fee below 100%.
-   * @param params.referralFeeRecipient - Recipient required for a positive fee.
-   * @returns Lazy Blue authorization resolution and a synchronous deep-frozen transaction builder.
-   * @throws {ChainIdMismatchError} when the client targets another chain.
-   * @throws {MissingAccrualPositionError} when either position snapshot is absent at runtime.
-   * @throws {MarketIdMismatchError} when a position snapshot belongs to another market.
-   * @throws {AccrualPositionUserMismatchError} when a position snapshot belongs to another user.
-   * @throws {RefinanceSameMarketError} when source and destination IDs match.
-   * @throws {RefinanceTokenMismatchError} when their loan or collateral tokens differ.
-   * @throws {NegativeInputError} when a referral fee or reallocation penalty is negative.
-   * @throws {NonPositiveInputError} when the source has no borrow shares or a reallocation amount is not positive.
-   * @throws {MissingMarketPriceError} when destination health cannot be validated without an oracle price.
-   * @throws {BorrowExceedsSafeLtvError} when the complete destination exceeds buffered LLTV.
-   * @throws {ExpiredDeadlineError} when the deadline is stale.
-   * @throws {InputExceedsMaxError} when a fee or reallocation exceeds its ABI bound, or the rounded
-   *   aggregate reallocation penalty exceeds the migrated source debt.
-   * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
-   * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
-   * @throws {InvalidReallocationShapeError} when a reallocation entry is not a valid Vault V2 reallocation.
-   * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.
-   * @throws {InconsistentReallocationPenaltyError} when one vault uses different penalties.
-   * @throws {ReallocationWithdrawalOnTargetMarketError} when a source is the destination market.
-   * @throws {ReallocationLoanTokenMismatchError} when a source uses another loan token.
-   * @throws {AmbiguousRequirementSignaturesError} from `buildTx()` when multiple authorization signatures are supplied.
-   * @throws {UnexpectedRequirementSignatureError} from `buildTx()` when a non-authorization signature is supplied.
-   * @throws {DepositOwnerMismatchError} from `buildTx()` when the signed owner differs from `userAddress`.
-   * @throws {BlueBundlesV1RequirementSignatureMismatchError} from `buildTx()` when authorization cannot be encoded safely.
-   * @throws {UnsupportedChainIdError} when the chain is absent from the address registry.
-   * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
-   * @throws {viem.BaseError} from `getRequirements()` when authorization reads fail.
-   * @example
-   * ```ts
-   * import { AccrualPosition } from "@morpho-org/blue-sdk";
-   * import { markets } from "@morpho-org/morpho-test";
-   * import { createPublicClient, http, zeroAddress } from "viem";
-   * import { mainnet } from "viem/chains";
-   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+   * `getRequirements` returns the loan-token approval needed for V2 penalties
+   * and Morpho authorization for GeneralAdapter1 when needed.
    *
-   * const userAddress = zeroAddress;
-   * const client = createPublicClient({ chain: mainnet, transport: http() })
-   *   .extend(morphoViemExtension());
-   * const sourceParams = markets[mainnet.id].eth_wstEth_2;
-   * const destinationParams = markets[mainnet.id].eth_wstEth;
-   * const market = client.morpho.blue(sourceParams, mainnet.id);
-   * const destinationMarket = client.morpho.blue(destinationParams, mainnet.id);
-   * const source = new AccrualPosition(
-   *   { user: userAddress, supplyShares: 0n, borrowShares: 1n, collateral: 10n ** 18n },
-   *   await market.getMarketData(),
-   * );
-   * const destination = new AccrualPosition(
-   *   { user: userAddress, supplyShares: 0n, borrowShares: 0n, collateral: 0n },
-   *   await destinationMarket.getMarketData(),
-   * );
-   * const action = market.refinance({
-   *   userAddress,
-   *   positionData: source,
-   *   destination: { marketParams: destinationParams, positionData: destination },
-   *   deadline: BigInt(Math.floor(Date.now() / 1_000) + 3_600),
-   * });
-   * const requirements = await action.getRequirements(); // Satisfy these first.
-   * const tx = action.buildTx(); // For a client configured with supportSignature: false.
-   * // tx satisfies Readonly<Transaction<BlueRefinanceAction>>
-   * ```
+   * @param params.userAddress - Position owner on both markets.
+   * @param params.positionData - Pre-fetched source-market accrual position.
+   * @param params.target.marketParams - Target market params.
+   * @param params.target.positionData - Pre-fetched target-market accrual position (zero-position if none).
+   * @param params.collateralAmount - Amount of collateral to migrate from source to target.
+   * @param params.borrowAssets - Loan assets to repay on source; exclusive with `borrowShares`.
+   * @param params.borrowShares - Borrow shares to repay on source; exclusive with `borrowAssets`.
+   * @param params.slippageTolerance - WAD slippage tolerance. Defaults to `DEFAULT_SLIPPAGE_TOLERANCE`.
+   * @param params.targetReallocations - Homogeneous Vault V1 or Vault V2 reallocations into the target market.
+   * @returns Object with `buildTx` and `getRequirements`.
+   * @throws {BundlerErrors.UnexpectedAction} when a V2 plan is unsupported on the chain.
+   * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
+   * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
+   * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
+   * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
+   * @throws {InvalidReallocationShapeError} when an entry matches both or neither V1/V2 shape.
+   * @throws {MixedReallocationVersionsError} when one plan contains both V1 and V2 entries.
    */
   refinance: (params: {
-    readonly userAddress: Address;
-    readonly positionData: AccrualPosition;
-    readonly destination: {
-      readonly marketParams: MarketParams;
-      readonly positionData: AccrualPosition;
+    userAddress: Address;
+    positionData: AccrualPosition;
+    target: {
+      marketParams: MarketParams;
+      positionData: AccrualPosition;
     };
-    readonly reallocations?: Iterable<VaultV2BlueReallocation>;
-    readonly deadline: bigint;
-    readonly referralFeePct?: bigint;
-    readonly referralFeeRecipient?: Address;
-  }) => ActionOutput<
-    BlueRefinanceAction,
-    readonly RequirementSignature[],
-    undefined
-  >;
+    collateralAmount: bigint;
+    borrowAssets?: bigint;
+    borrowShares?: bigint;
+    slippageTolerance?: bigint;
+    targetReallocations?: BlueReallocationPlan;
+  }) => {
+    buildTx: (
+      signatures?: readonly RequirementSignature[],
+    ) => Readonly<Transaction<BlueRefinanceAction>>;
+    getRequirements: () => Promise<
+      (
+        | Readonly<Transaction<ERC20ApprovalAction>>
+        | Readonly<Transaction<BlueAuthorizationAction>>
+        | Requirement
+      )[]
+    >;
+  };
 
   /**
    * Fetches all on-chain data needed to construct a {@link VaultV1ReallocationData}
@@ -912,8 +539,9 @@ export interface BlueActions {
    * inject unnecessary `reallocateTo` actions (and their PublicAllocator
    * fees) into the resulting bundle.
    *
-   * The returned data can be passed to {@link getVaultV1Reallocations} for explicit low-level
-   * Bundler3 composition.
+   * The returned reallocation data can be passed to {@link getVaultV1Reallocations}
+   * to compute the `VaultV1Reallocation[]` array for `borrow()` or
+   * `supplyCollateralBorrow()`.
    *
    * **Stale data reverts on-chain (fail-safe).**
    *
@@ -921,8 +549,6 @@ export interface BlueActions {
    * @param params.block - The block to fetch data at (number and timestamp).
    * @returns A VaultV1ReallocationData instance populated with all required data.
    * @throws {ChainIdMismatchError} when the client chain does not match this market.
-   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
-   * {@link getVaultV2BlueReallocationData}.
    */
   getVaultV1ReallocationData: (params: {
     vaultAddresses: readonly Address[];
@@ -940,9 +566,7 @@ export interface BlueActions {
    * @param params.block.timestamp - Timestamp corresponding to the fetched block.
    * @returns A `VaultV1ReallocationData` snapshot populated from one block.
    * @throws {ChainIdMismatchError} when the client chain does not match this market.
-   * @deprecated Use {@link getVaultV1ReallocationData} for deprecated low-level Bundler3
-   * planning. Vault V1 shared-liquidity planning will be removed in the next major; use
-   * {@link getVaultV2BlueReallocationData} for high-level Blue writes.
+   * @deprecated Use {@link getVaultV1ReallocationData} instead.
    */
   getReallocationData: (params: {
     vaultAddresses: readonly Address[];
@@ -996,14 +620,13 @@ export interface BlueActions {
    * @param params.options - Optional reallocation computation options
    *        (timestamp, utilization targets, reallocatable vaults filter, etc.).
    *        Pass the fetched block timestamp to compute reallocations at the same block.
-   * @returns Vault V1 reallocations for explicit low-level Bundler3 composition.
+   * @returns Array of vault reallocations ready to pass to `borrow()`, `supplyCollateralBorrow()`,
+   *          or `withdraw()`. Empty array if no reallocation is needed.
    * @throws {ChainIdMismatchError} when `reallocationData` belongs to a different chain than this market.
    * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation's absolute shortfall on the target market — preventing fee-bearing reallocations from being attached to a call that would still revert onchain.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds the target market supply.
    * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
    * @throws {UnknownReallocationMarketError} when the target market is absent from the reallocation data.
-   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
-   * {@link getVaultV2BlueReallocations}.
    * @example
    * ```ts
    * const reallocations = market.getVaultV1Reallocations({
@@ -1025,14 +648,13 @@ export interface BlueActions {
    * @param params.amount - The borrow or withdraw amount used to compute post-state utilization.
    * @param params.borrowAmount - Deprecated borrow amount alias.
    * @param params.options - Optional allocator and utilization options.
-   * @returns Vault V1 reallocations for explicit low-level Bundler3 composition.
+   * @returns Vault V1 reallocations ready for a Blue action.
    * @throws {ChainIdMismatchError} when `reallocationData` belongs to another chain.
    * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
    * @throws {MissingPublicAllocatorConfigError} when a selected vault lacks allocator state.
    * @throws {UnknownReallocationMarketError} when the target market is absent.
-   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
-   * {@link getVaultV2BlueReallocations}.
+   * @deprecated Use {@link getVaultV1Reallocations} instead.
    * @example
    * ```ts
    * const reallocations = market.getReallocations({
@@ -1088,80 +710,32 @@ export class MorphoBlue implements BlueActions {
     private readonly chainId: number,
   ) {}
 
-  private validateDeadline(deadline: bigint): void {
-    const timestamp = Time.timestamp();
-    if (deadline <= timestamp) {
-      throw new ExpiredDeadlineError(deadline, timestamp);
-    }
-  }
+  private getReallocationPenaltyRequirements(
+    userAddress: Address,
+    reallocationPlan: ReturnType<typeof validateAndNormalizeReallocations>,
+  ) {
+    if (reallocationPlan.type === "vaultV1") return [];
 
-  private validateWriteCommon(params: {
-    userAddress: Address;
-    deadline: bigint;
-    referralFeePct?: bigint;
-    referralFeeRecipient?: Address;
-  }): void {
-    validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    this.validateDeadline(params.deadline);
-    // Resolve at handle creation so unsupported deployments fail before any RPC prerequisite work.
-    getChainAddress(this.chainId, "bundles.blueBundlesV1");
-    // Validate the referral inputs eagerly; the normalized result is intentionally discarded here
-    // because the pure action re-normalizes it at encode time.
-    normalizeBlueBundlesV1CommonParams({
+    const { reallocations } = reallocationPlan;
+    const amount = reallocations.reduce(
+      (total, reallocation) =>
+        total +
+        VaultV2BluePublicAllocatorConfigUtils.getPenaltyAssets(
+          reallocation,
+          reallocation.assets,
+        ),
+      0n,
+    );
+
+    // Separate-token penalty funding uses a classic GeneralAdapter1 allowance so a collateral
+    // permit and a loan-token penalty can coexist in one bundle. The shared-token path aggregates
+    // both amounts into the collateral requirement instead.
+    return getGeneralAdapterRequirements(this.client.viemClient, {
+      address: this.marketParams.loanToken,
       chainId: this.chainId,
-      userAddress: params.userAddress,
-      deadline: params.deadline,
-      referralFeePct: params.referralFeePct,
-      referralFeeRecipient: params.referralFeeRecipient,
+      supportSignature: false,
+      args: { amount, from: userAddress },
     });
-  }
-
-  private getMaxLtv(marketParams: MarketParams = this.marketParams): bigint {
-    return MathLib.zeroFloorSub(marketParams.lltv, DEFAULT_LLTV_BUFFER);
-  }
-
-  private getBlueBundlesV1QuoteTimestamp(lastUpdate: bigint): bigint {
-    return MathLib.max(Time.timestamp(), lastUpdate) + Time.s.from.h(2n);
-  }
-
-  private async getTokenRequirements(params: {
-    token: Address;
-    amount: bigint;
-    userAddress: Address;
-    deadline: bigint;
-    useSimplePermit?: boolean;
-    permit2Nonce?: bigint;
-    approvalAmount?: bigint;
-  }): Promise<readonly ActionRequirement[]> {
-    this.validateDeadline(params.deadline);
-    return getBlueBundlesV1TokenRequirements(this.client.viemClient, {
-      token: params.token,
-      amount: params.amount,
-      owner: params.userAddress,
-      chainId: this.chainId,
-      deadline: params.deadline,
-      supportSignature: this.client.options.supportSignature,
-      supportDeployless: this.client.options.supportDeployless,
-      useSimplePermit: params.useSimplePermit,
-      permit2Nonce: params.permit2Nonce,
-      approvalAmount: params.approvalAmount,
-    });
-  }
-
-  private async getAuthorizationRequirements(params: {
-    userAddress: Address;
-    deadline: bigint;
-  }): Promise<readonly ActionRequirement[]> {
-    this.validateDeadline(params.deadline);
-    const requirement = await getBlueAuthorizationRequirement({
-      viemClient: this.client.viemClient,
-      chainId: this.chainId,
-      userAddress: params.userAddress,
-      supportSignature: this.client.options.supportSignature,
-      authorized: getChainAddress(this.chainId, "bundles.blueBundlesV1"),
-      deadline: params.deadline,
-    });
-    return requirement == null ? [] : [requirement];
   }
 
   async getMarketData(parameters?: FetchParameters): Promise<Market> {
@@ -1192,60 +766,76 @@ export class MorphoBlue implements BlueActions {
     );
   }
 
-  /** {@inheritDoc BlueActions.supply} */
-  supply(params: {
-    readonly userAddress: Address;
-    readonly assets: bigint;
-    readonly nativeAmount?: bigint;
-    readonly deadline: bigint;
-    readonly referralFeePct?: bigint;
-    readonly referralFeeRecipient?: Address;
-  }) {
-    const {
-      userAddress,
-      assets,
-      nativeAmount,
-      deadline,
-      referralFeePct,
-      referralFeeRecipient,
-    } = params;
-    this.validateWriteCommon(params);
-    if (assets <= 0n) throw new NonPositiveInputError("assets", assets);
-    const nativeValue = validateBlueBundlesV1NativeFunding({
-      chainId: this.chainId,
-      token: this.marketParams.loanToken,
-      fundedAmount: assets,
-      nativeAmount,
-    });
+  supply({
+    amount = 0n,
+    userAddress,
+    nativeAmount,
+    marketData,
+    slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
+  }: {
+    userAddress: Address;
+    marketData: Market;
+    slippageTolerance?: bigint;
+  } & DepositAmountArgs) {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
+    if (amount < 0n) {
+      throw new NegativeInputError("amount", amount);
+    }
+
+    if (nativeAmount !== undefined && nativeAmount < 0n) {
+      throw new NegativeInputError("nativeAmount", nativeAmount);
+    }
+
+    const totalAssets = amount + (nativeAmount ?? 0n);
+    if (totalAssets === 0n) {
+      throw new NonPositiveInputError("totalAssets", totalAssets);
+    }
+
+    if (marketData.id !== this.marketParams.id) {
+      throw new MarketIdMismatchError(marketData.id, this.marketParams.id);
+    }
+
+    validateSlippageTolerance(slippageTolerance);
+
+    if (nativeAmount !== undefined && nativeAmount > 0n) {
+      validateNativeAsset(this.chainId, this.marketParams.loanToken);
+    }
+
+    // Forward-accrue (2h) before deriving `maxSharePrice`: on-chain `morphoSupply` accrues `lastUpdate → execution`, raising the supply share price, so an un-accrued bound reverts on quiet markets.
+    const accrualTimestamp =
+      MathLib.max(Time.timestamp(), marketData.lastUpdate) + Time.s.from.h(2n);
+    const marketForSupply = marketData.accrueInterest(accrualTimestamp);
+
+    const maxSharePrice = computeMaxSupplySharePrice({
+      supplyAssets: totalAssets,
+      market: marketForSupply,
+      slippageTolerance,
+    });
     return {
-      getRequirements: (requirementsParams?: BlueTokenRequirementsParams) => {
-        this.validateDeadline(deadline);
-        if (nativeValue > 0n) return Promise.resolve([]);
-        return this.getTokenRequirements({
-          token: this.marketParams.loanToken,
-          amount: assets,
-          userAddress,
-          deadline,
-          useSimplePermit: requirementsParams?.useSimplePermit,
-          permit2Nonce: requirementsParams?.permit2Nonce,
-          approvalAmount: requirementsParams?.approvalAmount,
-        });
-      },
+      getRequirements: (params?: { useSimplePermit?: boolean }) =>
+        getGeneralAdapterRequirements(this.client.viemClient, {
+          address: this.marketParams.loanToken,
+          chainId: this.chainId,
+          supportSignature: this.client.options.supportSignature,
+          supportDeployless: this.client.options.supportDeployless,
+          useSimplePermit: params?.useSimplePermit,
+          args: { amount, from: userAddress },
+        }),
+
       buildTx: (signatures?: readonly RequirementSignature[]) => {
-        const { token } = selectBlueBundlesV1RequirementSignatures(signatures, {
-          token: nativeValue === 0n,
+        const { permit } = selectRequirementSignatures(signatures, {
+          permit: true,
         });
+
         return blueSupply({
           market: { chainId: this.chainId, marketParams: this.marketParams },
           args: {
-            userAddress,
-            assets,
-            nativeAmount: nativeValue > 0n ? nativeValue : undefined,
-            deadline,
-            referralFeePct,
-            referralFeeRecipient,
-            requirementSignature: token,
+            amount,
+            nativeAmount,
+            onBehalf: userAddress,
+            maxSharePrice,
+            requirementSignature: permit,
           },
           metadata: this.client.options.metadata,
         });
@@ -1253,43 +843,64 @@ export class MorphoBlue implements BlueActions {
     };
   }
 
-  /** {@inheritDoc BlueActions.withdraw} */
   withdraw(
     params: {
-      readonly userAddress: Address;
-      readonly positionData: AccrualPosition;
-      readonly reallocations?: Iterable<VaultV2BlueReallocation>;
-      readonly deadline: bigint;
-      readonly referralFeePct?: bigint;
-      readonly referralFeeRecipient?: Address;
+      userAddress: Address;
+      receiver?: Address;
+      positionData: AccrualPosition;
+      slippageTolerance?: bigint;
+      reallocations?: BlueReallocationPlan;
     } & AssetsOrSharesArgs,
   ) {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+
     const {
       userAddress,
+      receiver = userAddress,
       positionData,
-      deadline,
-      referralFeePct,
-      referralFeeRecipient,
+      slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
+      reallocations,
     } = params;
-    this.validateWriteCommon(params);
+    const reallocationPlan = validateAndNormalizeReallocations({
+      reallocations,
+      targetMarketId: this.marketParams.id,
+      chainId: this.chainId,
+    });
+    const reallocationList = reallocationPlan.reallocations;
+
+    // Mode normalization: a missing or undefined `assets`/`shares` key collapses to `0n`
+    // so the mutual-exclusion and positivity checks below are pure value comparisons.
     const assets = ("assets" in params ? params.assets : undefined) ?? 0n;
     const shares = ("shares" in params ? params.shares : undefined) ?? 0n;
-    if (assets < 0n) throw new NegativeInputError("assets", assets);
-    if (shares < 0n) throw new NegativeInputError("shares", shares);
-    if (assets > 0n && shares > 0n) {
+
+    // Mode conflict comes first: detect "both values present" (either non-zero)
+    // before positivity, so `{ assets: -1n, shares: 5n }` reports the actual
+    // mode conflict instead of being misclassified as a positivity error.
+    // Mirrors action layer.
+    if (assets !== 0n && shares !== 0n) {
       throw new MutuallyExclusiveWithdrawAmountsError(this.marketParams.id);
+    }
+    if (assets < 0n) {
+      throw new NegativeInputError("assets", assets);
+    }
+    if (shares < 0n) {
+      throw new NegativeInputError("shares", shares);
     }
     if (assets === 0n && shares === 0n) {
       throw new NonPositiveInputError("assets or shares", 0n);
     }
-    if (positionData == null) {
+
+    validateSlippageTolerance(slippageTolerance);
+    if (!positionData) {
       throw new MissingAccrualPositionError(this.marketParams.id);
     }
+
     validateAccrualPosition({
       positionData,
       expectedMarketId: this.marketParams.id,
       expectedUser: userAddress,
     });
+
     if (shares > 0n) {
       validateWithdrawShares({
         positionData,
@@ -1303,44 +914,44 @@ export class MorphoBlue implements BlueActions {
         marketId: this.marketParams.id,
       });
     }
-    const reallocations = [...(params.reallocations ?? [])];
-    // Validate the exact PublicAllocations mapping before requirement reads.
-    const publicAllocations = getBlueBundlesV1PublicAllocations(
-      reallocations,
-      this.marketParams,
-    );
-    const reallocationPenaltyAssets =
-      getBlueBundlesV1PenaltyAssets(publicAllocations);
-    const expectedWithdrawAssets =
-      assets > 0n ? assets : positionData.market.toSupplyAssets(shares, "Down");
-    if (reallocationPenaltyAssets > expectedWithdrawAssets) {
-      throw new InputExceedsMaxError({
-        field: "reallocationPenaltyAssets",
-        value: reallocationPenaltyAssets,
-        max: expectedWithdrawAssets,
-      });
-    }
+
+    const minSharePrice = computeMinWithdrawSharePrice({
+      withdrawAssets: assets,
+      withdrawShares: shares,
+      market: positionData.market,
+      slippageTolerance,
+    });
 
     return {
-      getRequirements: () =>
-        this.getAuthorizationRequirements({ userAddress, deadline }),
+      getRequirements: async () => {
+        const [penaltyRequirements, authTx] = await Promise.all([
+          this.getReallocationPenaltyRequirements(
+            userAddress,
+            reallocationPlan,
+          ),
+          getBlueAuthorizationRequirement({
+            viemClient: this.client.viemClient,
+            chainId: this.chainId,
+            userAddress,
+            supportSignature: this.client.options.supportSignature,
+          }),
+        ]);
+        return [...penaltyRequirements, ...(authTx ? [authTx] : [])];
+      },
+
       buildTx: (signatures?: readonly RequirementSignature[]) => {
-        const { authorization } = selectBlueBundlesV1RequirementSignatures(
-          signatures,
-          {
-            authorization: true,
-          },
-        );
+        const { authorization } = selectRequirementSignatures(signatures, {
+          authorization: true,
+        });
+
         return blueWithdraw({
           market: { chainId: this.chainId, marketParams: this.marketParams },
           args: {
-            userAddress,
-            withdrawAssets: assets,
-            withdrawShares: shares,
-            reallocations,
-            deadline,
-            referralFeePct,
-            referralFeeRecipient,
+            assets,
+            shares,
+            receiver,
+            minSharePrice,
+            reallocations: reallocationList,
             authorizationSignature: authorization,
           },
           metadata: this.client.options.metadata,
@@ -1349,52 +960,55 @@ export class MorphoBlue implements BlueActions {
     };
   }
 
-  /** {@inheritDoc BlueActions.supplyCollateral} */
-  supplyCollateral(params: {
-    readonly userAddress: Address;
-    readonly collateralAssets: bigint;
-    readonly nativeAmount?: bigint;
-    readonly deadline: bigint;
-    readonly referralFeePct?: bigint;
-    readonly referralFeeRecipient?: Address;
-  }): ActionOutput<
-    BlueSupplyCollateralAction,
-    readonly RequirementSignature[],
-    BlueTokenRequirementsParams
-  > {
-    const {
-      userAddress,
-      collateralAssets,
-      nativeAmount,
-      deadline,
-      referralFeePct,
-      referralFeeRecipient,
-    } = params;
-    const combinedAction = this.supplyCollateralBorrow({
-      userAddress,
-      collateralAssets,
-      borrowAssets: 0n,
-      nativeAmount,
-      deadline,
-      referralFeePct,
-      referralFeeRecipient,
-    });
+  supplyCollateral({
+    amount = 0n,
+    userAddress,
+    nativeAmount,
+  }: { userAddress: Address } & DepositAmountArgs) {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+
+    if (amount < 0n) {
+      throw new NegativeInputError("amount", amount);
+    }
+
+    if (nativeAmount !== undefined && nativeAmount < 0n) {
+      throw new NegativeInputError("nativeAmount", nativeAmount);
+    }
+
+    const totalCollateral = amount + (nativeAmount ?? 0n);
+    if (totalCollateral === 0n) {
+      throw new NonPositiveInputError("totalCollateral", totalCollateral);
+    }
+
+    if (nativeAmount !== undefined && nativeAmount > 0n) {
+      validateNativeAsset(this.chainId, this.marketParams.collateralToken);
+    }
     return {
-      getRequirements: combinedAction.getRequirements,
+      getRequirements: (params?: { useSimplePermit?: boolean }) =>
+        getGeneralAdapterRequirements(this.client.viemClient, {
+          address: this.marketParams.collateralToken,
+          chainId: this.chainId,
+          supportSignature: this.client.options.supportSignature,
+          supportDeployless: this.client.options.supportDeployless,
+          useSimplePermit: params?.useSimplePermit,
+          args: { amount, from: userAddress },
+        }),
+
       buildTx: (signatures?: readonly RequirementSignature[]) => {
-        const { token } = selectBlueBundlesV1RequirementSignatures(signatures, {
-          token: (nativeAmount ?? 0n) === 0n,
+        const { permit } = selectRequirementSignatures(signatures, {
+          permit: true,
         });
+
         return blueSupplyCollateral({
-          market: { chainId: this.chainId, marketParams: this.marketParams },
+          market: {
+            chainId: this.chainId,
+            marketParams: this.marketParams,
+          },
           args: {
-            userAddress,
-            collateralAssets,
+            amount,
             nativeAmount,
-            deadline,
-            referralFeePct,
-            referralFeeRecipient,
-            requirementSignature: token,
+            onBehalf: userAddress,
+            requirementSignature: permit,
           },
           metadata: this.client.options.metadata,
         });
@@ -1402,626 +1016,888 @@ export class MorphoBlue implements BlueActions {
     };
   }
 
-  /** {@inheritDoc BlueActions.borrow} */
-  borrow(params: {
-    readonly userAddress: Address;
-    readonly borrowAssets: bigint;
-    readonly positionData: AccrualPosition;
-    readonly reallocations?: Iterable<VaultV2BlueReallocation>;
-    readonly deadline: bigint;
-    readonly referralFeePct?: bigint;
-    readonly referralFeeRecipient?: Address;
-  }): ActionOutput<
-    BlueBorrowAction,
-    readonly RequirementSignature[],
-    undefined
-  > {
-    const {
-      userAddress,
-      borrowAssets,
-      positionData,
+  borrow({
+    amount,
+    userAddress,
+    positionData,
+    slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
+    reallocations,
+  }: {
+    amount: bigint;
+    userAddress: Address;
+    positionData: AccrualPosition;
+    slippageTolerance?: bigint;
+    reallocations?: BlueReallocationPlan;
+  }) {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    const reallocationPlan = validateAndNormalizeReallocations({
       reallocations,
-      deadline,
-      referralFeePct,
-      referralFeeRecipient,
-    } = params;
-    const normalizedReallocations = [...(reallocations ?? [])];
-    const combinedAction = this.supplyCollateralBorrow({
-      userAddress,
-      collateralAssets: 0n,
-      borrowAssets,
-      positionData,
-      reallocations: normalizedReallocations,
-      deadline,
-      referralFeePct,
-      referralFeeRecipient,
+      targetMarketId: this.marketParams.id,
+      chainId: this.chainId,
     });
-    return {
-      getRequirements: () => combinedAction.getRequirements(),
-      buildTx: (signatures?: readonly RequirementSignature[]) => {
-        const { authorization } = selectBlueBundlesV1RequirementSignatures(
-          signatures,
-          { authorization: true },
-        );
-        return blueBorrow({
-          market: { chainId: this.chainId, marketParams: this.marketParams },
-          args: {
-            userAddress,
-            borrowAssets,
-            maxLtv: this.getMaxLtv(),
-            reallocations: normalizedReallocations,
-            deadline,
-            referralFeePct,
-            referralFeeRecipient,
-            authorizationSignature: authorization,
-          },
-          metadata: this.client.options.metadata,
-        });
-      },
-    };
-  }
+    const reallocationList = reallocationPlan.reallocations;
 
-  /** {@inheritDoc BlueActions.repay} */
-  repay(
-    params: {
-      readonly userAddress: Address;
-      readonly positionData: AccrualPosition;
-      readonly nativeAmount?: bigint;
-      readonly deadline: bigint;
-      readonly referralFeePct?: bigint;
-      readonly referralFeeRecipient?: Address;
-    } & (
-      | { readonly repayAssets: bigint; readonly repayShares?: never }
-      | { readonly repayShares: bigint; readonly repayAssets?: never }
-    ),
-  ): ActionOutput<
-    BlueRepayAction,
-    readonly RequirementSignature[],
-    BlueTokenRequirementsParams
-  > {
-    const combinedAction = this.repayWithdrawCollateral({
-      ...params,
-      collateralAssets: 0n,
-    });
-    return {
-      getRequirements: combinedAction.getRequirements,
-      buildTx: (signatures?: readonly RequirementSignature[]) => {
-        const combinedTransaction = combinedAction.buildTx(signatures);
-        const { token } = selectBlueBundlesV1RequirementSignatures(signatures, {
-          token: combinedTransaction.value === 0n,
-        });
-        const {
-          repayAssets,
-          repayShares,
-          maxRepayAssets,
-          nativeAmount,
-          referralFeePct,
-          referralFeeRecipient,
-          deadline,
-        } = combinedTransaction.action.args;
-        return blueRepay({
-          market: { chainId: this.chainId, marketParams: this.marketParams },
-          args: {
-            userAddress: params.userAddress,
-            repayAssets,
-            repayShares,
-            maxRepayAssets,
-            nativeAmount,
-            deadline,
-            referralFeePct,
-            referralFeeRecipient,
-            requirementSignature: token,
-          },
-          metadata: this.client.options.metadata,
-        });
-      },
-    };
-  }
+    if (amount <= 0n) {
+      throw new NonPositiveInputError("amount", amount);
+    }
 
-  /** {@inheritDoc BlueActions.withdrawCollateral} */
-  withdrawCollateral(params: {
-    readonly userAddress: Address;
-    readonly positionData: AccrualPosition;
-    readonly collateralAssets: bigint;
-    readonly deadline: bigint;
-    readonly referralFeePct?: bigint;
-    readonly referralFeeRecipient?: Address;
-  }): ActionOutput<
-    BlueWithdrawCollateralAction,
-    readonly RequirementSignature[],
-    undefined
-  > {
-    const {
-      userAddress,
-      positionData,
-      collateralAssets,
-      deadline,
-      referralFeePct,
-      referralFeeRecipient,
-    } = params;
-    const combinedAction = this.repayWithdrawCollateral({
-      userAddress,
-      positionData,
-      repayAssets: 0n,
-      collateralAssets,
-      deadline,
-      referralFeePct,
-      referralFeeRecipient,
-    });
-    return {
-      getRequirements: () => combinedAction.getRequirements(),
-      buildTx: (signatures?: readonly RequirementSignature[]) => {
-        const combinedTransaction = combinedAction.buildTx(signatures);
-        const { authorization } = selectBlueBundlesV1RequirementSignatures(
-          signatures,
-          { authorization: true },
-        );
-        const combinedArgs = combinedTransaction.action.args;
-        return blueWithdrawCollateral({
-          market: { chainId: this.chainId, marketParams: this.marketParams },
-          args: {
-            userAddress,
-            collateralAssets: combinedArgs.collateralAssets,
-            maxLtv: combinedArgs.maxLtv,
-            deadline: combinedArgs.deadline,
-            referralFeePct: combinedArgs.referralFeePct,
-            referralFeeRecipient: combinedArgs.referralFeeRecipient,
-            authorizationSignature: authorization,
-          },
-          metadata: this.client.options.metadata,
-        });
-      },
-    };
-  }
-
-  /** {@inheritDoc BlueActions.repayWithdrawCollateral} */
-  repayWithdrawCollateral(
-    params: {
-      readonly userAddress: Address;
-      readonly positionData: AccrualPosition;
-      readonly collateralAssets: bigint;
-      readonly nativeAmount?: bigint;
-      readonly deadline: bigint;
-      readonly referralFeePct?: bigint;
-      readonly referralFeeRecipient?: Address;
-    } & (
-      | { readonly repayAssets: bigint; readonly repayShares?: never }
-      | { readonly repayShares: bigint; readonly repayAssets?: never }
-      | { readonly repayAssets?: undefined; readonly repayShares?: undefined }
-    ),
-  ) {
-    const {
-      userAddress,
-      positionData,
-      collateralAssets,
-      nativeAmount,
-      deadline,
-      referralFeeRecipient,
-    } = params;
-    this.validateWriteCommon(params);
-    // `validateWriteCommon` returns void, so default an omitted `referralFeePct` to `0n`
-    // here, matching the pure action's normalization.
-    const referralFeePct = params.referralFeePct ?? 0n;
-    const repayAssets = params.repayAssets ?? 0n;
-    const repayShares = params.repayShares ?? 0n;
-    if (repayAssets < 0n) {
-      throw new NegativeInputError("repayAssets", repayAssets);
-    }
-    if (repayShares < 0n) {
-      throw new NegativeInputError("repayShares", repayShares);
-    }
-    if (collateralAssets < 0n) {
-      throw new NegativeInputError("collateralAssets", collateralAssets);
-    }
-    if (repayAssets > 0n && repayShares > 0n) {
-      throw new MutuallyExclusiveRepayAmountsError(this.marketParams.id);
-    }
-    const hasRepay = repayAssets > 0n || repayShares > 0n;
-    if (!hasRepay && collateralAssets === 0n) {
-      throw new NonPositiveInputError(
-        "repayAssets, repayShares, or collateralAssets",
-        0n,
-      );
-    }
-    if (positionData == null) {
+    validateSlippageTolerance(slippageTolerance);
+    if (!positionData) {
       throw new MissingAccrualPositionError(this.marketParams.id);
     }
+
     validateAccrualPosition({
       positionData,
       expectedMarketId: this.marketParams.id,
       expectedUser: userAddress,
     });
 
-    const saturatedRepay = repayShares === maxUint256;
-    const simulatedRepayShares = saturatedRepay
-      ? positionData.borrowShares
-      : repayShares;
-    if (repayAssets > 0n) {
+    validatePositionHealth({
+      positionData,
+      additionalCollateral: 0n,
+      borrowAmount: amount,
+      marketId: this.marketParams.id,
+      lltv: this.marketParams.lltv,
+    });
+    const minSharePrice = computeMinBorrowSharePrice({
+      borrowAmount: amount,
+      market: positionData.market,
+      slippageTolerance,
+    });
+
+    return {
+      getRequirements: async () => {
+        const [penaltyRequirements, authTx] = await Promise.all([
+          this.getReallocationPenaltyRequirements(
+            userAddress,
+            reallocationPlan,
+          ),
+          getBlueAuthorizationRequirement({
+            viemClient: this.client.viemClient,
+            chainId: this.chainId,
+            userAddress,
+            supportSignature: this.client.options.supportSignature,
+          }),
+        ]);
+        return [...penaltyRequirements, ...(authTx ? [authTx] : [])];
+      },
+
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { authorization } = selectRequirementSignatures(signatures, {
+          authorization: true,
+        });
+
+        return blueBorrow({
+          market: {
+            chainId: this.chainId,
+            marketParams: this.marketParams,
+          },
+          args: {
+            amount,
+            receiver: userAddress,
+            minSharePrice,
+            reallocations: reallocationList,
+            authorizationSignature: authorization,
+          },
+          metadata: this.client.options.metadata,
+        });
+      },
+    };
+  }
+
+  repay(
+    params: {
+      userAddress: Address;
+      positionData: AccrualPosition;
+      slippageTolerance?: bigint;
+    } & RepayAmountArgs,
+  ) {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+
+    const {
+      userAddress,
+      positionData,
+      slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
+    } = params;
+
+    const nativeAmount = params.nativeAmount ?? 0n;
+    if (nativeAmount < 0n) {
+      throw new NegativeInputError("nativeAmount", nativeAmount);
+    }
+
+    const amount = ("amount" in params ? params.amount : undefined) ?? 0n;
+    const shares = ("shares" in params ? params.shares : undefined) ?? 0n;
+    if (amount < 0n) {
+      throw new NegativeInputError("amount", amount);
+    }
+    if (shares < 0n) {
+      throw new NegativeInputError("shares", shares);
+    }
+    if (amount > 0n && shares > 0n) {
+      throw new MutuallyExclusiveRepayAmountsError(this.marketParams.id);
+    }
+
+    if ("shares" in params) {
+      if (shares === 0n) {
+        throw new NonPositiveInputError("shares", shares);
+      }
+    } else {
+      if (amount + nativeAmount <= 0n) {
+        throw new NonPositiveInputError(
+          "amount + nativeAmount",
+          amount + nativeAmount,
+        );
+      }
+    }
+
+    validateSlippageTolerance(slippageTolerance);
+
+    if (!positionData) {
+      throw new MissingAccrualPositionError(this.marketParams.id);
+    }
+
+    validateAccrualPosition({
+      positionData,
+      expectedMarketId: this.marketParams.id,
+      expectedUser: userAddress,
+    });
+
+    if (nativeAmount > 0n) {
+      validateNativeAsset(this.chainId, this.marketParams.loanToken);
+    }
+
+    let repayAssets: bigint;
+    let repayShares: bigint;
+    let erc20Amount: bigint;
+
+    // Forward-accrue (2h) before deriving `maxSharePrice` (both modes): on-chain `morphoRepay` accrues `lastUpdate → execution`, so an un-accrued bound reverts on quiet markets.
+    const accrualTimestamp =
+      MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
+      Time.s.from.h(2n);
+    const marketForRepay = positionData.market.accrueInterest(accrualTimestamp);
+
+    if ("shares" in params) {
+      validateRepayShares({
+        positionData,
+        repayShares: shares,
+        marketId: this.marketParams.id,
+      });
+      repayAssets = 0n;
+      repayShares = shares;
+      const borrowAssets = marketForRepay.toBorrowAssets(shares, "Up");
+      // Native funds the transfer first; the ERC-20 pulled is the remainder.
+      // When native covers the full (2h-forward-accrued, rounded-up) borrow
+      // assets, nothing is pulled as ERC-20 — the bundle wraps the native and
+      // skims any residual wNative back to the receiver. So a fully-native
+      // shares repay pulls no ERC-20 and emits no loan-token approval requirement.
+      erc20Amount = MathLib.zeroFloorSub(borrowAssets, nativeAmount);
+    } else {
+      // Assets mode is additive, like supply: repaid = amount + nativeAmount.
+      repayAssets = amount + nativeAmount;
       validateRepayAmount({
         positionData,
         repayAssets,
         marketId: this.marketParams.id,
       });
-    } else if (repayShares > 0n && !saturatedRepay) {
-      validateRepayShares({
-        positionData,
-        repayShares,
-        marketId: this.marketParams.id,
-      });
+      repayShares = 0n;
+      erc20Amount = amount;
     }
 
-    const quoteHorizon = this.getBlueBundlesV1QuoteTimestamp(
-      positionData.market.lastUpdate,
-    );
-    if (repayShares > 0n && deadline > quoteHorizon) {
-      throw new InputExceedsMaxError({
-        field: "deadline",
-        value: deadline,
-        max: quoteHorizon,
-      });
-    }
-    const accrualTimestamp = repayShares > 0n ? deadline : quoteHorizon;
-    const accruedPosition = positionData.accrueInterest(accrualTimestamp);
-    const expectedRepayAssets =
-      repayAssets > 0n
-        ? repayAssets
-        : hasRepay
-          ? accruedPosition.market.toBorrowAssets(simulatedRepayShares, "Up")
-          : 0n;
-    const referralFeeAssets = getBlueBundlesV1ReferralFeeAssets(
-      expectedRepayAssets,
-      referralFeePct,
-    );
-    const maxRepayAssets = expectedRepayAssets + referralFeeAssets;
-    const nativeValue = validateBlueBundlesV1NativeFunding({
-      chainId: this.chainId,
-      token: this.marketParams.loanToken,
-      fundedAmount: maxRepayAssets,
-      nativeAmount,
+    const maxSharePrice = computeMaxRepaySharePrice({
+      repayAssets,
+      repayShares,
+      market: marketForRepay,
+      slippageTolerance,
     });
-
-    if (collateralAssets > 0n) {
-      const postRepayPosition = hasRepay
-        ? accruedPosition.repay(repayAssets, simulatedRepayShares).position
-        : accruedPosition;
-      validatePositionHealthAfterWithdraw({
-        positionData: postRepayPosition,
-        withdrawAmount: collateralAssets,
-        lltv: this.marketParams.lltv,
-        marketId: this.marketParams.id,
-      });
-    }
-
     return {
-      getRequirements: async (
-        requirementsParams?: BlueTokenRequirementsParams,
-      ): Promise<readonly ActionRequirement[]> => {
-        this.validateDeadline(deadline);
-        const [tokenRequirements, authorizationRequirements] =
-          await Promise.all([
-            hasRepay && nativeValue === 0n
-              ? this.getTokenRequirements({
-                  token: this.marketParams.loanToken,
-                  amount: maxRepayAssets,
-                  // A caller-requested reusable approval wins; a full repay otherwise defaults to
-                  // the token's reusable cap. Checksum the key so a differently-cased loan token
-                  // (common from subgraphs/APIs) resolves that cap instead of falling back to
-                  // maxUint256, which UNI/ONDO/COMP/FLUID reject.
-                  approvalAmount:
-                    requirementsParams?.approvalAmount ??
-                    (saturatedRepay
-                      ? (MAX_TOKEN_APPROVALS[this.chainId]?.[
-                          getAddress(this.marketParams.loanToken)
-                        ] ?? maxUint256)
-                      : undefined),
-                  userAddress,
-                  deadline,
-                  useSimplePermit: requirementsParams?.useSimplePermit,
-                  permit2Nonce: requirementsParams?.permit2Nonce,
-                })
-              : Promise.resolve([]),
-            collateralAssets > 0n
-              ? this.getAuthorizationRequirements({ userAddress, deadline })
-              : Promise.resolve([]),
-          ]);
-        return [...tokenRequirements, ...authorizationRequirements];
+      getRequirements: (reqParams?: { useSimplePermit?: boolean }) => {
+        // Fully native repay pulls no ERC-20, so it needs no approval/permit.
+        if (erc20Amount === 0n) return Promise.resolve([]);
+        return getGeneralAdapterRequirements(this.client.viemClient, {
+          address: this.marketParams.loanToken,
+          chainId: this.chainId,
+          supportSignature: this.client.options.supportSignature,
+          supportDeployless: this.client.options.supportDeployless,
+          useSimplePermit: reqParams?.useSimplePermit,
+          args: { amount: erc20Amount, from: userAddress },
+        });
       },
+
       buildTx: (signatures?: readonly RequirementSignature[]) => {
-        const { token, authorization } =
-          selectBlueBundlesV1RequirementSignatures(signatures, {
-            token: hasRepay && nativeValue === 0n,
-            authorization: collateralAssets > 0n,
-          });
-        const selectedMaxRepayAssets =
-          repayShares > 0n && token != null
-            ? token.args.amount
-            : maxRepayAssets;
-        if (selectedMaxRepayAssets < maxRepayAssets) {
-          throw new MaxRepayAssetsBelowRepayAssetsError(
-            selectedMaxRepayAssets,
-            maxRepayAssets,
-          );
-        }
-        return blueRepayWithdrawCollateral({
-          market: { chainId: this.chainId, marketParams: this.marketParams },
-          args: {
-            userAddress,
-            repayAssets,
-            repayShares,
-            maxRepayAssets: selectedMaxRepayAssets,
-            collateralAssets,
-            maxLtv: collateralAssets > 0n ? this.getMaxLtv() : maxUint256,
-            nativeAmount: nativeValue > 0n ? nativeValue : undefined,
-            deadline,
-            referralFeePct,
-            referralFeeRecipient,
-            requirementSignature: token,
-            authorizationSignature: authorization,
+        const { permit } = selectRequirementSignatures(signatures, {
+          permit: true,
+        });
+
+        return blueRepay({
+          market: {
+            chainId: this.chainId,
+            marketParams: this.marketParams,
           },
+          // Shares mode: repay `shares`, ERC-20 to pull = `erc20Amount`.
+          // Assets mode: repay `repayAssets` (= amount + native), pull `erc20Amount`.
+          args:
+            repayShares > 0n
+              ? {
+                  shares: repayShares,
+                  transferAmount: erc20Amount,
+                  nativeAmount,
+                  onBehalf: userAddress,
+                  receiver: userAddress,
+                  maxSharePrice,
+                  requirementSignature: permit,
+                }
+              : {
+                  amount: erc20Amount,
+                  transferAmount: repayAssets,
+                  nativeAmount,
+                  onBehalf: userAddress,
+                  receiver: userAddress,
+                  maxSharePrice,
+                  requirementSignature: permit,
+                },
           metadata: this.client.options.metadata,
         });
       },
     };
   }
 
-  /** {@inheritDoc BlueActions.supplyCollateralBorrow} */
-  supplyCollateralBorrow(params: {
-    readonly userAddress: Address;
-    readonly collateralAssets: bigint;
-    readonly borrowAssets: bigint;
-    readonly positionData?: AccrualPosition;
-    readonly nativeAmount?: bigint;
-    readonly reallocations?: Iterable<VaultV2BlueReallocation>;
-    readonly deadline: bigint;
-    readonly referralFeePct?: bigint;
-    readonly referralFeeRecipient?: Address;
+  withdrawCollateral({
+    userAddress,
+    amount,
+    positionData,
+  }: {
+    userAddress: Address;
+    amount: bigint;
+    positionData: AccrualPosition;
   }) {
-    const {
-      userAddress,
-      collateralAssets,
-      borrowAssets,
-      positionData,
-      nativeAmount,
-      deadline,
-      referralFeePct,
-      referralFeeRecipient,
-    } = params;
-    this.validateWriteCommon(params);
-    if (collateralAssets < 0n) {
-      throw new NegativeInputError("collateralAssets", collateralAssets);
-    }
-    if (borrowAssets < 0n) {
-      throw new NegativeInputError("borrowAssets", borrowAssets);
-    }
-    if (collateralAssets === 0n && borrowAssets === 0n) {
-      throw new NonPositiveInputError("collateralAssets or borrowAssets", 0n);
-    }
-    const reallocations = [...(params.reallocations ?? [])];
-    if (borrowAssets === 0n && reallocations.length > 0) {
-      throw new ReallocationsRequireBorrowError();
-    }
-    // Validate the exact PublicAllocations mapping before requirement reads.
-    const publicAllocations = getBlueBundlesV1PublicAllocations(
-      reallocations,
-      this.marketParams,
-    );
-    const reallocationPenaltyAssets =
-      getBlueBundlesV1PenaltyAssets(publicAllocations);
-    if (reallocationPenaltyAssets > borrowAssets) {
-      throw new InputExceedsMaxError({
-        field: "reallocationPenaltyAssets",
-        value: reallocationPenaltyAssets,
-        max: borrowAssets,
-      });
-    }
-    if (borrowAssets > 0n) {
-      if (positionData == null) {
-        throw new MissingAccrualPositionError(this.marketParams.id);
-      }
-      validateAccrualPosition({
-        positionData,
-        expectedMarketId: this.marketParams.id,
-        expectedUser: userAddress,
-      });
-      validatePositionHealth({
-        positionData: positionData.accrueInterest(
-          this.getBlueBundlesV1QuoteTimestamp(positionData.market.lastUpdate),
-        ),
-        additionalCollateral: collateralAssets,
-        borrowAmount: borrowAssets,
-        marketId: this.marketParams.id,
-        lltv: this.marketParams.lltv,
-      });
-    }
-    const nativeValue = validateBlueBundlesV1NativeFunding({
-      chainId: this.chainId,
-      token: this.marketParams.collateralToken,
-      fundedAmount: collateralAssets,
-      nativeAmount,
-    });
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
-    return {
-      getRequirements: async (
-        requirementsParams?: BlueTokenRequirementsParams,
-      ): Promise<readonly ActionRequirement[]> => {
-        this.validateDeadline(deadline);
-        const [tokenRequirements, authorizationRequirements] =
-          await Promise.all([
-            collateralAssets > 0n && nativeValue === 0n
-              ? this.getTokenRequirements({
-                  token: this.marketParams.collateralToken,
-                  amount: collateralAssets,
-                  approvalAmount: requirementsParams?.approvalAmount,
-                  userAddress,
-                  deadline,
-                  useSimplePermit: requirementsParams?.useSimplePermit,
-                  permit2Nonce: requirementsParams?.permit2Nonce,
-                })
-              : Promise.resolve([]),
-            borrowAssets > 0n
-              ? this.getAuthorizationRequirements({ userAddress, deadline })
-              : Promise.resolve([]),
-          ]);
-        return [...tokenRequirements, ...authorizationRequirements];
-      },
-      buildTx: (signatures?: readonly RequirementSignature[]) => {
-        const { token, authorization } =
-          selectBlueBundlesV1RequirementSignatures(signatures, {
-            token: collateralAssets > 0n && nativeValue === 0n,
-            authorization: borrowAssets > 0n,
-          });
-        return blueSupplyCollateralBorrow({
-          market: { chainId: this.chainId, marketParams: this.marketParams },
-          args: {
-            userAddress,
-            collateralAssets,
-            borrowAssets,
-            maxLtv: borrowAssets > 0n ? this.getMaxLtv() : maxUint256,
-            nativeAmount: nativeValue > 0n ? nativeValue : undefined,
-            reallocations,
-            deadline,
-            referralFeePct,
-            referralFeeRecipient,
-            requirementSignature: token,
-            authorizationSignature: authorization,
-          },
-          metadata: this.client.options.metadata,
-        });
-      },
-    };
-  }
+    if (amount <= 0n) {
+      throw new NonPositiveInputError("amount", amount);
+    }
 
-  /** {@inheritDoc BlueActions.refinance} */
-  refinance(params: {
-    readonly userAddress: Address;
-    readonly positionData: AccrualPosition;
-    readonly destination: {
-      readonly marketParams: MarketParams;
-      readonly positionData: AccrualPosition;
-    };
-    readonly reallocations?: Iterable<VaultV2BlueReallocation>;
-    readonly deadline: bigint;
-    readonly referralFeePct?: bigint;
-    readonly referralFeeRecipient?: Address;
-  }) {
-    const {
-      userAddress,
-      positionData,
-      destination,
-      deadline,
-      referralFeeRecipient,
-    } = params;
-    this.validateWriteCommon(params);
-    // `validateWriteCommon` returns void, so default an omitted `referralFeePct` to `0n`
-    // here, matching the pure action's normalization.
-    const referralFeePct = params.referralFeePct ?? 0n;
-    if (positionData == null) {
+    if (!positionData) {
       throw new MissingAccrualPositionError(this.marketParams.id);
     }
+
     validateAccrualPosition({
       positionData,
       expectedMarketId: this.marketParams.id,
       expectedUser: userAddress,
     });
-    if (positionData.borrowShares === 0n) {
-      throw new NonPositiveInputError(
-        "positionData.borrowShares",
-        positionData.borrowShares,
-      );
+
+    if (amount > positionData.collateral) {
+      throw new WithdrawExceedsCollateralError({
+        withdrawAmount: amount,
+        available: positionData.collateral,
+        market: positionData.marketId,
+      });
     }
-    if (this.marketParams.id === destination.marketParams.id) {
+
+    validatePositionHealthAfterWithdraw({
+      positionData,
+      withdrawAmount: amount,
+      lltv: this.marketParams.lltv,
+      marketId: this.marketParams.id,
+    });
+
+    return {
+      buildTx: () =>
+        blueWithdrawCollateral({
+          market: {
+            chainId: this.chainId,
+            marketParams: this.marketParams,
+          },
+          args: {
+            amount,
+            onBehalf: userAddress,
+            receiver: userAddress,
+          },
+          metadata: this.client.options.metadata,
+        }),
+    };
+  }
+
+  repayWithdrawCollateral(
+    params: {
+      userAddress: Address;
+      withdrawAmount: bigint;
+      positionData: AccrualPosition;
+      slippageTolerance?: bigint;
+    } & RepayAmountArgs,
+  ) {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+
+    const {
+      userAddress,
+      withdrawAmount,
+      positionData,
+      slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
+    } = params;
+
+    const nativeAmount = params.nativeAmount ?? 0n;
+    if (nativeAmount < 0n) {
+      throw new NegativeInputError("nativeAmount", nativeAmount);
+    }
+
+    const amount = ("amount" in params ? params.amount : undefined) ?? 0n;
+    const shares = ("shares" in params ? params.shares : undefined) ?? 0n;
+    if (amount < 0n) {
+      throw new NegativeInputError("amount", amount);
+    }
+    if (shares < 0n) {
+      throw new NegativeInputError("shares", shares);
+    }
+    if (amount > 0n && shares > 0n) {
+      throw new MutuallyExclusiveRepayAmountsError(this.marketParams.id);
+    }
+
+    if ("shares" in params) {
+      if (shares === 0n) {
+        throw new NonPositiveInputError("shares", shares);
+      }
+    } else {
+      if (amount + nativeAmount <= 0n) {
+        throw new NonPositiveInputError(
+          "amount + nativeAmount",
+          amount + nativeAmount,
+        );
+      }
+    }
+
+    if (withdrawAmount <= 0n) {
+      throw new NonPositiveInputError("withdrawAmount", withdrawAmount);
+    }
+
+    validateSlippageTolerance(slippageTolerance);
+
+    if (!positionData) {
+      throw new MissingAccrualPositionError(this.marketParams.id);
+    }
+
+    validateAccrualPosition({
+      positionData,
+      expectedMarketId: this.marketParams.id,
+      expectedUser: userAddress,
+    });
+
+    if (nativeAmount > 0n) {
+      validateNativeAsset(this.chainId, this.marketParams.loanToken);
+    }
+
+    let repayAssets: bigint;
+    let repayShares: bigint;
+    let erc20Amount: bigint;
+
+    // Forward-accrue (2h) for `maxSharePrice` (both modes) and the post-repay health check: on-chain `morphoRepay` accrues `lastUpdate → execution`, so an un-accrued bound reverts on quiet markets.
+    const accrualTimestamp =
+      MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
+      Time.s.from.h(2n);
+    const marketForRepay = positionData.market.accrueInterest(accrualTimestamp);
+
+    if ("shares" in params) {
+      validateRepayShares({
+        positionData,
+        repayShares: shares,
+        marketId: this.marketParams.id,
+      });
+      repayAssets = 0n;
+      repayShares = shares;
+      const borrowAssets = marketForRepay.toBorrowAssets(shares, "Up");
+      // Native funds the transfer first; the ERC-20 pulled is the remainder.
+      // When native covers the full (2h-forward-accrued, rounded-up) borrow
+      // assets, nothing is pulled as ERC-20 — the bundle wraps the native and
+      // skims any residual wNative back to the receiver. So a fully-native
+      // shares repay pulls no ERC-20 and emits no loan-token approval requirement.
+      erc20Amount = MathLib.zeroFloorSub(borrowAssets, nativeAmount);
+    } else {
+      // Assets mode is additive, like supply: repaid = amount + nativeAmount.
+      repayAssets = amount + nativeAmount;
+      validateRepayAmount({
+        positionData,
+        repayAssets,
+        marketId: this.marketParams.id,
+      });
+      repayShares = 0n;
+      erc20Amount = amount;
+    }
+
+    if (withdrawAmount > positionData.collateral) {
+      throw new WithdrawExceedsCollateralError({
+        withdrawAmount,
+        available: positionData.collateral,
+        market: positionData.marketId,
+      });
+    }
+
+    const { position: positionAfterRepay } = positionData.repay(
+      repayAssets,
+      repayShares,
+      accrualTimestamp,
+    );
+    validatePositionHealthAfterWithdraw({
+      positionData: positionAfterRepay,
+      withdrawAmount,
+      lltv: this.marketParams.lltv,
+      marketId: this.marketParams.id,
+    });
+
+    const maxSharePrice = computeMaxRepaySharePrice({
+      repayAssets,
+      repayShares,
+      market: marketForRepay,
+      slippageTolerance,
+    });
+    return {
+      getRequirements: async (reqParams?: { useSimplePermit?: boolean }) => {
+        const [erc20Requirements, authTx] = await Promise.all([
+          // Fully native repay pulls no ERC-20, so it needs no approval/permit.
+          erc20Amount === 0n
+            ? Promise.resolve([])
+            : getGeneralAdapterRequirements(this.client.viemClient, {
+                address: this.marketParams.loanToken,
+                chainId: this.chainId,
+                supportSignature: this.client.options.supportSignature,
+                supportDeployless: this.client.options.supportDeployless,
+                useSimplePermit: reqParams?.useSimplePermit,
+                args: { amount: erc20Amount, from: userAddress },
+              }),
+          getBlueAuthorizationRequirement({
+            viemClient: this.client.viemClient,
+            chainId: this.chainId,
+            userAddress,
+            supportSignature: this.client.options.supportSignature,
+          }),
+        ]);
+
+        return [...erc20Requirements, ...(authTx ? [authTx] : [])];
+      },
+
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { permit, authorization } = selectRequirementSignatures(
+          signatures,
+          { permit: true, authorization: true },
+        );
+
+        return blueRepayWithdrawCollateral({
+          market: {
+            chainId: this.chainId,
+            marketParams: this.marketParams,
+          },
+          // Shares mode: repay `shares`, ERC-20 to pull = `erc20Amount`.
+          // Assets mode: repay `repayAssets` (= amount + native), pull `erc20Amount`.
+          args:
+            repayShares > 0n
+              ? {
+                  shares: repayShares,
+                  transferAmount: erc20Amount,
+                  nativeAmount,
+                  withdrawAmount,
+                  onBehalf: userAddress,
+                  receiver: userAddress,
+                  maxSharePrice,
+                  requirementSignature: permit,
+                  authorizationSignature: authorization,
+                }
+              : {
+                  amount: erc20Amount,
+                  transferAmount: repayAssets,
+                  nativeAmount,
+                  withdrawAmount,
+                  onBehalf: userAddress,
+                  receiver: userAddress,
+                  maxSharePrice,
+                  requirementSignature: permit,
+                  authorizationSignature: authorization,
+                },
+          metadata: this.client.options.metadata,
+        });
+      },
+    };
+  }
+
+  supplyCollateralBorrow({
+    amount = 0n,
+    userAddress,
+    positionData,
+    borrowAmount,
+    nativeAmount,
+    slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
+    reallocations,
+  }: {
+    userAddress: Address;
+    positionData: AccrualPosition;
+    borrowAmount: bigint;
+    slippageTolerance?: bigint;
+    reallocations?: BlueReallocationPlan;
+  } & DepositAmountArgs) {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    const reallocationPlan = validateAndNormalizeReallocations({
+      reallocations,
+      targetMarketId: this.marketParams.id,
+      chainId: this.chainId,
+    });
+    const reallocationList = reallocationPlan.reallocations;
+
+    if (amount < 0n) {
+      throw new NegativeInputError("amount", amount);
+    }
+
+    if (nativeAmount !== undefined && nativeAmount < 0n) {
+      throw new NegativeInputError("nativeAmount", nativeAmount);
+    }
+
+    if (borrowAmount <= 0n) {
+      throw new NonPositiveInputError("borrowAmount", borrowAmount);
+    }
+
+    const totalCollateral = amount + (nativeAmount ?? 0n);
+    if (totalCollateral === 0n) {
+      throw new NonPositiveInputError("totalCollateral", totalCollateral);
+    }
+
+    validateSlippageTolerance(slippageTolerance);
+    if (!positionData) {
+      throw new MissingAccrualPositionError(this.marketParams.id);
+    }
+
+    validateAccrualPosition({
+      positionData,
+      expectedMarketId: this.marketParams.id,
+      expectedUser: userAddress,
+    });
+
+    if (nativeAmount !== undefined && nativeAmount > 0n) {
+      validateNativeAsset(this.chainId, this.marketParams.collateralToken);
+    }
+
+    validatePositionHealth({
+      positionData,
+      additionalCollateral: totalCollateral,
+      borrowAmount,
+      marketId: this.marketParams.id,
+      lltv: this.marketParams.lltv,
+    });
+
+    const minSharePrice = computeMinBorrowSharePrice({
+      borrowAmount,
+      market: positionData.market,
+      slippageTolerance,
+    });
+    return {
+      getRequirements: async (params?: { useSimplePermit?: boolean }) => {
+        const penaltyAssets =
+          reallocationPlan.type === "vaultV2Blue"
+            ? reallocationPlan.reallocations.reduce(
+                (total, reallocation) =>
+                  total +
+                  VaultV2BluePublicAllocatorConfigUtils.getPenaltyAssets(
+                    reallocation,
+                    reallocation.assets,
+                  ),
+                0n,
+              )
+            : 0n;
+        const usesSharedFundingToken = isAddressEqual(
+          this.marketParams.collateralToken,
+          this.marketParams.loanToken,
+        );
+        const [erc20Requirements, penaltyRequirements, authTx] =
+          await Promise.all([
+            getGeneralAdapterRequirements(this.client.viemClient, {
+              address: this.marketParams.collateralToken,
+              chainId: this.chainId,
+              supportSignature: this.client.options.supportSignature,
+              supportDeployless: this.client.options.supportDeployless,
+              useSimplePermit: params?.useSimplePermit,
+              args: {
+                amount: amount + (usesSharedFundingToken ? penaltyAssets : 0n),
+                from: userAddress,
+              },
+            }),
+            usesSharedFundingToken
+              ? []
+              : this.getReallocationPenaltyRequirements(
+                  userAddress,
+                  reallocationPlan,
+                ),
+            getBlueAuthorizationRequirement({
+              viemClient: this.client.viemClient,
+              chainId: this.chainId,
+              userAddress,
+              supportSignature: this.client.options.supportSignature,
+            }),
+          ]);
+
+        return [
+          ...erc20Requirements,
+          ...penaltyRequirements,
+          ...(authTx ? [authTx] : []),
+        ];
+      },
+
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { permit, authorization } = selectRequirementSignatures(
+          signatures,
+          { permit: true, authorization: true },
+        );
+
+        return blueSupplyCollateralBorrow({
+          market: {
+            chainId: this.chainId,
+            marketParams: this.marketParams,
+          },
+          args: {
+            amount,
+            nativeAmount,
+            borrowAmount,
+            onBehalf: userAddress,
+            receiver: userAddress,
+            minSharePrice,
+            requirementSignature: permit,
+            authorizationSignature: authorization,
+            reallocations: reallocationList,
+          },
+          metadata: this.client.options.metadata,
+        });
+      },
+    };
+  }
+
+  refinance({
+    userAddress,
+    positionData,
+    target,
+    collateralAmount,
+    borrowAssets,
+    borrowShares,
+    slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
+    targetReallocations,
+  }: {
+    userAddress: Address;
+    positionData: AccrualPosition;
+    target: {
+      marketParams: MarketParams;
+      positionData: AccrualPosition;
+    };
+    collateralAmount: bigint;
+    borrowAssets?: bigint;
+    borrowShares?: bigint;
+    slippageTolerance?: bigint;
+    targetReallocations?: BlueReallocationPlan;
+  }) {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    validateSlippageTolerance(slippageTolerance);
+    const targetReallocationPlan = validateAndNormalizeReallocations({
+      reallocations: targetReallocations,
+      targetMarketId: target.marketParams.id,
+      chainId: this.chainId,
+    });
+    const targetReallocationList = targetReallocationPlan.reallocations;
+
+    if (collateralAmount <= 0n) {
+      throw new NonPositiveInputError("collateralAmount", collateralAmount);
+    }
+
+    const requestedAssets = borrowAssets ?? 0n;
+    const requestedShares = borrowShares ?? 0n;
+    if (requestedAssets < 0n) {
+      throw new NegativeInputError("borrowAssets", requestedAssets);
+    }
+    if (requestedShares < 0n) {
+      throw new NegativeInputError("borrowShares", requestedShares);
+    }
+    if (requestedAssets > 0n && requestedShares > 0n) {
+      throw new BorrowAmountAndSharesExclusiveError(this.marketParams.id);
+    }
+    if (!positionData) {
+      throw new MissingAccrualPositionError(this.marketParams.id);
+    }
+
+    validateAccrualPosition({
+      positionData,
+      expectedMarketId: this.marketParams.id,
+      expectedUser: userAddress,
+    });
+
+    if (this.marketParams.id === target.marketParams.id) {
       throw new RefinanceSameMarketError(this.marketParams.id);
     }
+
     if (
       !isAddressEqual(
-        this.marketParams.loanToken,
-        destination.marketParams.loanToken,
+        this.marketParams.collateralToken,
+        target.marketParams.collateralToken,
       ) ||
       !isAddressEqual(
-        this.marketParams.collateralToken,
-        destination.marketParams.collateralToken,
+        this.marketParams.loanToken,
+        target.marketParams.loanToken,
       )
     ) {
       throw new RefinanceTokenMismatchError(
         this.marketParams.id,
-        destination.marketParams.id,
+        target.marketParams.id,
       );
     }
-    if (destination.positionData == null) {
-      throw new MissingAccrualPositionError(destination.marketParams.id);
-    }
+
     validateAccrualPosition({
-      positionData: destination.positionData,
-      expectedMarketId: destination.marketParams.id,
+      positionData: target.positionData,
+      expectedMarketId: target.marketParams.id,
       expectedUser: userAddress,
     });
 
-    const reallocations = [...(params.reallocations ?? [])];
-    const publicAllocations = getBlueBundlesV1PublicAllocations(
-      reallocations,
-      destination.marketParams,
-    );
-    const penaltyAssets = getBlueBundlesV1PenaltyAssets(publicAllocations);
-    // Reject a reallocation plan whose rounded aggregate penalty exceeds the current source debt,
-    // matching the `blueBorrow`/`blueWithdraw` BlueBundlesV1 caps. Bound against the current quoted
-    // debt, not the conservative `now + 2h` health projection below: the on-chain call migrates the
-    // debt live at execution (>= the current quote), so the current quote is the safe floor. Using
-    // the forward projection would let a penalty between the current and forecast debt pass while
-    // still exceeding the debt actually moved, and the health check only adds the penalty to
-    // destination debt, so a collateralized position would silently accept it or encode a reverting
-    // call.
-    if (penaltyAssets > positionData.borrowAssets) {
-      throw new InputExceedsMaxError({
-        field: "reallocationPenaltyAssets",
-        value: penaltyAssets,
-        max: positionData.borrowAssets,
+    const sharesMode = requestedShares > 0n;
+    const shouldMigrateBorrow = requestedAssets > 0n || sharesMode;
+
+    if (collateralAmount > positionData.collateral) {
+      throw new RefinanceExceedsCollateralError({
+        market: this.marketParams.id,
+        requested: collateralAmount,
+        available: positionData.collateral,
       });
     }
-    const accrualTimestamp = this.getBlueBundlesV1QuoteTimestamp(
-      MathLib.max(
-        positionData.market.lastUpdate,
-        destination.positionData.market.lastUpdate,
-      ),
+
+    if (requestedShares > positionData.borrowShares) {
+      throw new RefinanceExceedsBorrowSharesError({
+        market: this.marketParams.id,
+        requested: requestedShares,
+        available: positionData.borrowShares,
+      });
+    }
+
+    if (requestedAssets > positionData.borrowAssets) {
+      throw new RefinanceExceedsBorrowAssetsError({
+        market: this.marketParams.id,
+        requested: requestedAssets,
+        available: positionData.borrowAssets,
+      });
+    }
+
+    // Forward-accrue both markets to now (clamped to lastUpdate). Source gets a 2h buffer in
+    // shares mode (as in repay()) for repay headroom; target accrues without buffer to avoid
+    // tightening minBorrowSharePrice past on-chain reality.
+    const sourceAccrualTimestamp =
+      MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
+      (sharesMode ? Time.s.from.h(2n) : 0n);
+    const targetAccrualTimestamp = MathLib.max(
+      Time.timestamp(),
+      target.positionData.market.lastUpdate,
     );
-    const accruedSourcePosition = positionData.accrueInterest(accrualTimestamp);
-    const accruedDestinationPosition =
-      destination.positionData.accrueInterest(accrualTimestamp);
-    const referralFeeAssets = getBlueBundlesV1ReferralFeeAssets(
-      accruedSourcePosition.borrowAssets,
-      referralFeePct,
+    const accruedSource = positionData.market.accrueInterest(
+      sourceAccrualTimestamp,
     );
-    validatePositionHealth({
-      positionData: accruedDestinationPosition,
-      additionalCollateral: accruedSourcePosition.collateral,
-      borrowAmount:
-        accruedSourcePosition.borrowAssets + penaltyAssets + referralFeeAssets,
-      marketId: destination.marketParams.id,
-      lltv: destination.marketParams.lltv,
-    });
+    const accruedTarget = target.positionData.market.accrueInterest(
+      targetAccrualTimestamp,
+    );
+
+    // Shares burned by the source repay: exact in shares mode, else mirror Morpho's toSharesDown.
+    const repaidShares = sharesMode
+      ? requestedShares
+      : accruedSource.toBorrowShares(requestedAssets, "Down");
+
+    // Post-state source health: any remaining debt must stay healthy (accrued market).
+    const remainingCollateral = positionData.collateral - collateralAmount;
+    const remainingShares = positionData.borrowShares - repaidShares;
+    if (remainingShares > 0n) {
+      const residualPosition = new AccrualPosition(
+        {
+          user: positionData.user,
+          supplyShares: positionData.supplyShares,
+          borrowShares: remainingShares,
+          collateral: remainingCollateral,
+        },
+        accruedSource,
+      );
+      validatePositionHealth({
+        positionData: residualPosition,
+        additionalCollateral: 0n,
+        borrowAmount: 0n,
+        marketId: this.marketParams.id,
+        lltv: this.marketParams.lltv,
+      });
+    }
+
+    const projectedBorrowAssets = sharesMode
+      ? accruedSource.toBorrowAssets(requestedShares, "Up")
+      : requestedAssets;
+
+    // Shares-mode overshoot covers target drift + accrual on the borrow leg. Computed before the
+    // LLTV check so health validates the actual on-chain borrow, not the smaller projected value.
+    const borrowAssetsAdjusted = sharesMode
+      ? MathLib.wMulUp(projectedBorrowAssets, MathLib.WAD + slippageTolerance)
+      : projectedBorrowAssets;
+
+    // Post-state target health: aggregate must respect LLTV − buffer. Skipped for collat-only
+    // refinances, which can't degrade target health and would fail on missing-oracle markets.
+    if (shouldMigrateBorrow) {
+      const accruedTargetPosition = target.positionData.accrueInterest(
+        targetAccrualTimestamp,
+      );
+      validatePositionHealth({
+        positionData: accruedTargetPosition,
+        additionalCollateral: collateralAmount,
+        borrowAmount: borrowAssetsAdjusted,
+        marketId: target.marketParams.id,
+        lltv: target.marketParams.lltv,
+      });
+    }
+
+    // Share-price bounds only when a debt leg exists (helpers throw on zero inputs); else 0n.
+    // Derived from borrowAssetsAdjusted (the encoded value) so rounding can't push the on-chain
+    // ratio below a guard computed from the smaller projected amount.
+    const minBorrowSharePrice = shouldMigrateBorrow
+      ? computeMinBorrowSharePrice({
+          borrowAmount: borrowAssetsAdjusted,
+          market: accruedTarget,
+          slippageTolerance,
+        })
+      : 0n;
+
+    const maxRepaySharePrice = shouldMigrateBorrow
+      ? computeMaxRepaySharePrice({
+          repayAssets: requestedAssets,
+          repayShares: requestedShares,
+          market: accruedSource,
+          slippageTolerance,
+        })
+      : 0n;
 
     return {
-      getRequirements: () =>
-        this.getAuthorizationRequirements({ userAddress, deadline }),
-      buildTx: (signatures?: readonly RequirementSignature[]) => {
-        const { authorization } = selectBlueBundlesV1RequirementSignatures(
-          signatures,
-          {
-            authorization: true,
-          },
-        );
-        return blueRefinance({
-          market: {
-            chainId: this.chainId,
-            sourceMarketParams: this.marketParams,
-            destinationMarketParams: destination.marketParams,
-          },
-          args: {
+      getRequirements: async () => {
+        const [penaltyRequirements, authTx] = await Promise.all([
+          this.getReallocationPenaltyRequirements(
             userAddress,
-            maxLtv: this.getMaxLtv(destination.marketParams),
-            reallocations,
-            deadline,
-            referralFeePct,
-            referralFeeRecipient,
+            targetReallocationPlan,
+          ),
+          getBlueAuthorizationRequirement({
+            viemClient: this.client.viemClient,
+            chainId: this.chainId,
+            userAddress,
+            supportSignature: this.client.options.supportSignature,
+          }),
+        ]);
+        return [...penaltyRequirements, ...(authTx ? [authTx] : [])];
+      },
+
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const { authorization } = selectRequirementSignatures(signatures, {
+          authorization: true,
+        });
+
+        return blueRefinance({
+          source: {
+            chainId: this.chainId,
+            marketParams: this.marketParams,
+          },
+          target: { marketParams: target.marketParams },
+          args: {
+            user: userAddress,
+            collateralAmount,
+            borrowAssets: borrowAssetsAdjusted,
+            borrowShares: requestedShares,
+            minBorrowSharePrice,
+            maxRepaySharePrice,
+            targetReallocations: targetReallocationList,
             authorizationSignature: authorization,
           },
           metadata: this.client.options.metadata,
@@ -2038,8 +1914,6 @@ export class MorphoBlue implements BlueActions {
    * @param params.block.timestamp - Timestamp corresponding to the fetched block.
    * @returns Reallocation data ready for {@link getVaultV1Reallocations}.
    * @throws {ChainIdMismatchError} when the client chain does not match this market.
-   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
-   * {@link getVaultV2BlueReallocationData}.
    * @example
    * ```ts
    * import { markets, vaults } from "@morpho-org/morpho-test";
@@ -2177,8 +2051,7 @@ export class MorphoBlue implements BlueActions {
    * @param params.block.timestamp - Timestamp corresponding to the fetched block.
    * @returns A `VaultV1ReallocationData` snapshot populated from one block.
    * @throws {ChainIdMismatchError} when the client chain does not match this market.
-   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
-   * {@link getVaultV2BlueReallocationData}.
+   * @deprecated Use {@link getVaultV1ReallocationData} instead.
    * @example
    * ```ts
    * const data = await market.getReallocationData({ vaultAddresses, block });
@@ -2313,14 +2186,12 @@ export class MorphoBlue implements BlueActions {
    * @param params.amount - The borrow or withdraw amount used to compute the post-state utilization.
    * @param params.borrowAmount - {@deprecated Pass `{ operation: "borrow", amount }` instead.}
    * @param params.options - Optional allocator and utilization options.
-   * @returns Vault V1 reallocations for explicit low-level Bundler3 composition.
+   * @returns Vault reallocations ready to pass to `borrow`, `supplyCollateralBorrow`, or `withdraw`.
    * @throws {ChainIdMismatchError} when `reallocationData` belongs to a different chain than this market.
    * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation's absolute shortfall on the target market.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when `operation === "withdraw"` and `amount` exceeds the target market's `totalSupplyAssets`.
    * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
    * @throws {UnknownReallocationMarketError} when the target market is absent from the reallocation data.
-   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
-   * {@link getVaultV2BlueReallocations}.
    * @example
    * ```ts
    * const reallocations = market.getVaultV1Reallocations({
@@ -2365,14 +2236,13 @@ export class MorphoBlue implements BlueActions {
    * @param params.amount - The borrow or withdraw amount used to compute post-state utilization.
    * @param params.borrowAmount - Deprecated borrow amount alias.
    * @param params.options - Optional allocator and utilization options.
-   * @returns Vault V1 reallocations for explicit low-level Bundler3 composition.
+   * @returns Vault V1 reallocations ready for a Blue action.
    * @throws {ChainIdMismatchError} when `reallocationData` belongs to another chain.
    * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation.
    * @throws {ReallocationWithdrawExceedsMarketSupplyError} when a withdrawal exceeds market supply.
    * @throws {MissingPublicAllocatorConfigError} when a selected vault lacks allocator state.
    * @throws {UnknownReallocationMarketError} when the target market is absent.
-   * @deprecated Vault V1 shared-liquidity planning will be removed in the next major. Use
-   * {@link getVaultV2BlueReallocations}.
+   * @deprecated Use {@link getVaultV1Reallocations} instead.
    * @example
    * ```ts
    * const reallocations = market.getReallocations({

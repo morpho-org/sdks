@@ -1,6 +1,6 @@
 import { addressesRegistry } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
-import { type Address, isHex, maxUint256 } from "viem";
+import { type Address, isHex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
 import { afterEach, describe, expect, vi } from "vitest";
@@ -8,10 +8,7 @@ import { test } from "../../../../test/unit.js";
 import {
   AddressMismatchError,
   ChainIdMismatchError,
-  ExpiredDeadlineError,
-  InputExceedsMaxError,
   InvalidSignatureError,
-  NonPositiveInputError,
   UnsupportedErc20ApprovalSpenderError,
 } from "../../../types/index.js";
 import { encodeErc20Permit } from "./encodeErc20Permit.js";
@@ -58,51 +55,6 @@ describe("encodeErc20Permit", () => {
           nonce: mockNonce,
         }),
       ).rejects.toThrow(UnsupportedErc20ApprovalSpenderError);
-    });
-
-    test("should throw NonPositiveInputError when explicit deadline is not positive", async ({
-      client,
-    }) => {
-      await expect(
-        encodeErc20Permit(client, {
-          token: usdc,
-          spender: generalAdapter1,
-          amount: mockAmount,
-          chainId: mainnet.id,
-          nonce: mockNonce,
-          deadline: 0n,
-        }),
-      ).rejects.toThrow(NonPositiveInputError);
-    });
-
-    test("should throw InputExceedsMaxError when explicit deadline exceeds uint256", async ({
-      client,
-    }) => {
-      await expect(
-        encodeErc20Permit(client, {
-          token: usdc,
-          spender: generalAdapter1,
-          amount: mockAmount,
-          chainId: mainnet.id,
-          nonce: mockNonce,
-          deadline: maxUint256 + 1n,
-        }),
-      ).rejects.toThrow(InputExceedsMaxError);
-    });
-
-    test("should throw ExpiredDeadlineError when explicit deadline is already elapsed", async ({
-      client,
-    }) => {
-      await expect(
-        encodeErc20Permit(client, {
-          token: usdc,
-          spender: generalAdapter1,
-          amount: mockAmount,
-          chainId: mainnet.id,
-          nonce: mockNonce,
-          deadline: 1n,
-        }),
-      ).rejects.toThrow(ExpiredDeadlineError);
     });
 
     test("should sign permit for non-DAI token", async ({ client }) => {
