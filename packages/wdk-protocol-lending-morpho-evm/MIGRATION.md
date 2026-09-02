@@ -1,6 +1,7 @@
 # Migrating to 2.0
 
-Version 2 routes Morpho Blue writes through `BlueBundlesV1` instead of Bundler3. Vault V2 earn flows are unchanged.
+Version 2 routes Morpho Blue writes through `BlueBundlesV1` and Vault V2 earn writes through
+`VaultBundlesV1` instead of Bundler3 or direct ERC-4626 calls.
 
 ## Required changes
 
@@ -8,7 +9,13 @@ Version 2 routes Morpho Blue writes through `BlueBundlesV1` instead of Bundler3.
 - Replace `MorphoBorrowWithVaultV2ReallocationsOptions` with `MorphoBorrowOptions`. The specialized opt-in type and the package's Vault V1 reallocation re-exports were removed.
 - Remove `slippageTolerance` from `MorphoBorrowOptions`, `MorphoRepayOptions`, and Blue collateral-supply inputs. Constructor-level and vault-supply slippage settings now apply only to Morpho Vault V2 flows because BlueBundlesV1 has no Bundler3 share-price bounds.
 - Call `getWithdrawCollateralRequirements` before `withdrawCollateral`. Send the returned authorization transaction, or sign the requirement and pass its result as `requirementSignature`.
-- Use `MorphoCollateralSupplyOptions` for Blue collateral methods. Its type accepts either `amount` or `nativeAmount`, not both; vault deposits still use additive `MorphoSupplyOptions`.
+- Use `MorphoCollateralSupplyOptions` for Blue collateral methods and
+  `MorphoExclusiveSupplyOptions` for vault deposits. Both accept either `amount` or
+  `nativeAmount`, never both. Split a former additive native + wrapped-native deposit into two
+  transactions.
+- Use `prepareSupply` and `prepareWithdraw` whenever a vault operation needs requirements. Resolve
+  and satisfy the prepared handle's requirements, then call that same handle's `submit`; do not
+  recreate the operation through `supply` or `withdraw` after signing.
 - Pass an explicit unused `permit2Nonce` to token `get*Requirements` calls when selecting Permit2 SignatureTransfer.
 - Recreate cached approvals and Morpho authorizations for Blue writes. Their spender and authorization target is now BlueBundlesV1 instead of GeneralAdapter1.
 - Blue writes now expire after two hours instead of using an unbounded deadline; signed calls preserve the requirement signature's deadline.
@@ -18,18 +25,19 @@ Version 2 routes Morpho Blue writes through `BlueBundlesV1` instead of Bundler3.
 
 ## TypeScript output changes
 
-- `get*Requirements()` returns a readonly array. Treat it as an immutable result instead of
+- Prepared-handle `getRequirements()` returns a readonly array. Treat it as an immutable result instead of
   pushing requirements into it.
 - `RequirementApproval` and `RequirementAuthorization` are readonly transactions.
 - `RequirementSignatureRequest<TSignature>` is now generic. Vault token requirements use
   `PermitRequirementSignature`, Blue token requirements use
-  `BlueBundlesV1TokenRequirementSignature`, and Blue authorization requirements use
+  `BundlesTokenRequirementSignature`, and Blue authorization requirements use
   `AuthorizationRequirementSignature`.
-- Use `ApprovalOrSignatureRequirement` for vault deposits,
+- Use `BundlesApprovalOrSignatureRequirement` for vault deposits,
   `BlueApprovalOrSignatureRequirement` for Blue token-funded writes, and
   `AuthorizationOrSignatureRequirement` for Blue borrow or withdrawal authorization.
-- `requirementSignature` is correspondingly narrowed on `MorphoSupplyOptions`,
-  `MorphoCollateralSupplyOptions`, `MorphoBorrowOptions`, `MorphoRepayOptions`, and the new
+- Vault token and share signatures move from the intent options to `PreparedMorphoSupply.submit`
+  and `PreparedMorphoWithdraw.submit`. Blue signatures remain narrowed on
+  `MorphoCollateralSupplyOptions`, `MorphoBorrowOptions`, `MorphoRepayOptions`, and
   `MorphoWithdrawCollateralOptions`.
 
 ## Borrow reallocations
@@ -83,6 +91,40 @@ if (requirement && "sign" in requirement) {
     }
   }
   await morpho.withdrawCollateral(options);
+}
+```
+
+## Vault supply and withdrawal
+
+```ts
+const supply = {
+  token: vaultAsset,
+  amount: 1_000_000n,
+} satisfies MorphoExclusiveSupplyOptions;
+const preparedSupply = await morpho.prepareSupply(supply);
+for (const transaction of await preparedSupply.getRequirements()) {
+  if ("to" in transaction) await account.sendTransaction(transaction);
+}
+await preparedSupply.submit();
+
+const withdrawal = { token: vaultAsset, amount: 1_000_000n };
+const preparedWithdrawal = await morpho.prepareWithdraw(withdrawal);
+const requirements = await preparedWithdrawal.getRequirements();
+const signatureRequest = requirements.find(
+  (requirement) => "sign" in requirement,
+);
+
+if (signatureRequest) {
+  const requirementSignature = await signatureRequest.sign(
+    walletClient,
+    userAddress,
+  );
+  await preparedWithdrawal.submit(requirementSignature);
+} else {
+  for (const transaction of requirements) {
+    await account.sendTransaction(transaction);
+  }
+  await preparedWithdrawal.submit();
 }
 ```
 

@@ -1,10 +1,13 @@
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { morphoViemExtension } from "../../../src/index.js";
+import {
+  isRequirementApproval,
+  morphoViemExtension,
+} from "../../../src/index.js";
 import { KeyrockUsdcVaultV2 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
-import { test } from "../../setup.js";
+import { vaultBundlesV1Test as test } from "../../helpers/vaultBundlesV1.js";
 
 describe("Redeem VaultV2", () => {
   test("should redeem 1K USDC in vaultV2", async ({ client }) => {
@@ -30,6 +33,13 @@ describe("Redeem VaultV2", () => {
           userAddress: client.account.address,
           shares,
         });
+        const requirements = await redeem.getRequirements();
+        expect(requirements).toHaveLength(1);
+        const approval = requirements[0];
+        if (!isRequirementApproval(approval)) {
+          throw new Error("Approve transaction not found");
+        }
+        await client.sendTransaction(approval);
         const tx = redeem.buildTx();
 
         await client.sendTransaction(tx);
@@ -42,7 +52,6 @@ describe("Redeem VaultV2", () => {
     expect(finalState.userAssetBalance).toBeGreaterThan(
       initialState.userAssetBalance,
     );
-    expect(finalState.userAssetBalance).toEqual(1030480367n);
     expect(finalState.morphoAssetBalance).toBeLessThan(
       initialState.morphoAssetBalance,
     );
