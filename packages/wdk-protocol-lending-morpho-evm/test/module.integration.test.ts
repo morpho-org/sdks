@@ -83,10 +83,11 @@ maybeDescribe("MorphoProtocolEvm fork e2e", () => {
       chainId: 1,
       earnVaultAddress: VAULT,
     });
-    const requirements = await morpho.getSupplyRequirements({
+    const prepared = await morpho.prepareSupply({
       token: USDT,
       amount: DEPOSIT_AMOUNT,
     });
+    const requirements = await prepared.getRequirements();
 
     for (const requirement of requirements) {
       if ("to" in requirement) {
@@ -102,10 +103,7 @@ maybeDescribe("MorphoProtocolEvm fork e2e", () => {
       }
     }
 
-    const result = await morpho.supply({
-      token: USDT,
-      amount: DEPOSIT_AMOUNT,
-    });
+    const result = await prepared.submit();
 
     expect(result.hash).toMatch(/^0x[0-9a-fA-F]{64}$/);
     const supplyReceipt = await client.waitForTransactionReceipt({
