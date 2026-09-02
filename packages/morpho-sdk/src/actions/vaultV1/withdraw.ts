@@ -11,15 +11,27 @@ import {
 
 /** Parameters for {@link vaultV1Withdraw}. */
 export interface VaultV1WithdrawParams {
-  vault: {
-    address: Address;
+  readonly vault: {
+    readonly address: Address;
   };
-  args: {
-    amount: bigint;
-    recipient: Address;
-    onBehalf: Address;
-  };
-  metadata?: Metadata;
+  readonly args: {
+    readonly amount: bigint;
+  } & (
+    | {
+        /** Account that receives assets, owns the burned shares, and submits the successor route. */
+        readonly userAddress: Address;
+        readonly recipient?: never;
+        readonly onBehalf?: never;
+      }
+    | {
+        /** @deprecated Use `userAddress`; `recipient` is removed in morpho-sdk v6. */
+        readonly recipient: Address;
+        /** @deprecated Use `userAddress`; `onBehalf` is removed in morpho-sdk v6. */
+        readonly onBehalf: Address;
+        readonly userAddress?: never;
+      }
+  );
+  readonly metadata?: Metadata;
 }
 
 /**
@@ -29,8 +41,10 @@ export interface VaultV1WithdrawParams {
  *
  * @param params.vault.address - The VaultV1 (MetaMorpho) address.
  * @param params.args.amount - Amount of underlying assets to withdraw.
- * @param params.args.recipient - Address that receives the withdrawn assets.
- * @param params.args.onBehalf - Address whose shares are burned.
+ * @param params.args.userAddress - Account that receives the withdrawn assets and owns the burned
+ *   shares. This bundles-compatible successor replaces `recipient` and `onBehalf` before v6.
+ * @param params.args.recipient - Deprecated address that receives the withdrawn assets.
+ * @param params.args.onBehalf - Deprecated address whose shares are burned.
  * @param params.metadata - Optional analytics metadata attached to the transaction.
  * @returns A deep-frozen `Transaction<VaultV1WithdrawAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator the simulation layer consumes.
@@ -41,16 +55,19 @@ export interface VaultV1WithdrawParams {
  *
  * const tx = vaultV1Withdraw({
  *   vault: { address: vaultAddress },
- *   args: { amount: 500_000n, recipient, onBehalf },
+ *   args: { amount: 500_000n, userAddress },
  * });
  * // tx satisfies Readonly<Transaction<VaultV1WithdrawAction>>
  * ```
  */
 export const vaultV1Withdraw = ({
   vault: { address: vaultAddress },
-  args: { amount, recipient, onBehalf },
+  args,
   metadata,
 }: VaultV1WithdrawParams): Readonly<Transaction<VaultV1WithdrawAction>> => {
+  const { amount } = args;
+  const recipient = args.userAddress ?? args.recipient;
+  const onBehalf = args.userAddress ?? args.onBehalf;
   if (amount <= 0n) {
     throw new NonPositiveInputError("amount", amount);
   }

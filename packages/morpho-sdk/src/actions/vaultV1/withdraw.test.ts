@@ -20,8 +20,7 @@ describe("withdrawVaultV1 unit tests", () => {
       },
       args: {
         amount,
-        recipient: client.account.address,
-        onBehalf: client.account.address,
+        userAddress: client.account.address,
       },
     });
 

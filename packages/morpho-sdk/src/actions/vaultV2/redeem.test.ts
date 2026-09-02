@@ -20,8 +20,7 @@ describe("redeemVaultV2 unit tests", () => {
       },
       args: {
         shares,
-        recipient: client.account.address,
-        onBehalf: client.account.address,
+        userAddress: client.account.address,
       },
     });
 

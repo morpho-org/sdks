@@ -16,28 +16,41 @@ import { getTokenRequirementActions } from "../signatures/getTokenRequirementAct
 
 /** Parameters for {@link vaultV1MigrateToV2}. */
 export interface VaultV1MigrateToV2Params {
-  vault: {
-    chainId: number;
-    address: Address;
+  readonly vault: {
+    readonly chainId: number;
+    readonly address: Address;
     /** Underlying asset of the source V1 vault. */
-    asset: Address;
+    readonly asset: Address;
   };
-  args: {
-    targetVault: Address;
+  readonly args: {
+    readonly targetVault: Address;
     /** Underlying asset of the target V2 vault. */
-    targetAsset: Address;
+    readonly targetAsset: Address;
     /** Number of V1 shares to migrate. */
-    shares: bigint;
-    /** Minimum acceptable share price for V1 redeem (slippage protection, in RAY). */
-    minSharePriceVaultV1: bigint;
+    readonly shares: bigint;
     /** Maximum acceptable share price for V2 deposit (inflation protection, in RAY). */
-    maxSharePriceVaultV2: bigint;
-    /** Receives the V2 vault shares. */
-    recipient: Address;
+    readonly maxSharePriceVaultV2: bigint;
     /** Pre-signed permit/permit2 approval for V1 share transfer. */
-    requirementSignature?: PermitRequirementSignature;
-  };
-  metadata?: Metadata;
+    readonly requirementSignature?: PermitRequirementSignature;
+  } & (
+    | {
+        /** Account that receives V2 shares and submits the successor bundles route. */
+        readonly userAddress: Address;
+        readonly minSharePriceVaultV1?: never;
+        readonly recipient?: never;
+      }
+    | {
+        /**
+         * @deprecated Omit this field and use `userAddress`; the V1 bound is removed in
+         * morpho-sdk v6 because VaultBundlesV1 cannot enforce it.
+         */
+        readonly minSharePriceVaultV1: bigint;
+        /** @deprecated Use `userAddress`; `recipient` is removed in morpho-sdk v6. */
+        readonly recipient: Address;
+        readonly userAddress?: never;
+      }
+  );
+  readonly metadata?: Metadata;
 }
 
 /**
@@ -60,11 +73,13 @@ export interface VaultV1MigrateToV2Params {
  * @param params.args.targetAsset - The underlying asset of the target V2 vault. Must equal
  *   `vault.asset`.
  * @param params.args.shares - Number of V1 shares to migrate.
- * @param params.args.minSharePriceVaultV1 - Minimum V1 share price in RAY (slippage protection
- *   for the redeem leg).
  * @param params.args.maxSharePriceVaultV2 - Maximum V2 share price in RAY (inflation protection
  *   for the deposit leg).
- * @param params.args.recipient - Address that receives the V2 vault shares.
+ * @param params.args.userAddress - Account that receives the V2 vault shares. This
+ *   bundles-compatible successor replaces `recipient` before morpho-sdk v6.
+ * @param params.args.minSharePriceVaultV1 - Deprecated V1 redeem share-price floor. The successor
+ *   omits it because VaultBundlesV1 cannot enforce it.
+ * @param params.args.recipient - Deprecated address that receives the V2 vault shares.
  * @param params.args.requirementSignature - Optional pre-signed permit/permit2 for the V1 share
  *   transfer.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
@@ -89,9 +104,8 @@ export interface VaultV1MigrateToV2Params {
  *     targetVault,
  *     targetAsset: USDC,
  *     shares: 1_000_000n,
- *     minSharePriceVaultV1: 0n, // disables redeem-leg slippage protection — production code should compute from source vault state + slippage tolerance
  *     maxSharePriceVaultV2: 1_010_000_000_000_000_000_000_000_000n, // RAY-scaled, 1.01x
- *     recipient,
+ *     userAddress,
  *   },
  * });
  * // tx satisfies Readonly<Transaction<VaultV1MigrateToV2Action>>
@@ -99,19 +113,20 @@ export interface VaultV1MigrateToV2Params {
  */
 export const vaultV1MigrateToV2 = ({
   vault: { chainId, address: sourceVault, asset: sourceAsset },
-  args: {
-    targetVault,
-    targetAsset,
-    shares,
-    minSharePriceVaultV1,
-    maxSharePriceVaultV2,
-    recipient,
-    requirementSignature,
-  },
+  args,
   metadata,
 }: VaultV1MigrateToV2Params): Readonly<
   Transaction<VaultV1MigrateToV2Action>
 > => {
+  const {
+    targetVault,
+    targetAsset,
+    shares,
+    maxSharePriceVaultV2,
+    requirementSignature,
+  } = args;
+  const minSharePriceVaultV1 = args.minSharePriceVaultV1 ?? 0n;
+  const recipient = args.userAddress ?? args.recipient;
   // Both bundle legs use maxUint256: an asset mismatch leaves the redeemed
   // source asset stranded on GA1 while the user receives only dust shares.
   if (!isAddressEqual(sourceAsset, targetAsset)) {

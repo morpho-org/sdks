@@ -11,15 +11,27 @@ import {
 
 /** Parameters for {@link vaultV2Redeem}. */
 export interface VaultV2RedeemParams {
-  vault: {
-    address: Address;
+  readonly vault: {
+    readonly address: Address;
   };
-  args: {
-    shares: bigint;
-    recipient: Address;
-    onBehalf: Address;
-  };
-  metadata?: Metadata;
+  readonly args: {
+    readonly shares: bigint;
+  } & (
+    | {
+        /** Account that receives assets, owns the burned shares, and submits the successor route. */
+        readonly userAddress: Address;
+        readonly recipient?: never;
+        readonly onBehalf?: never;
+      }
+    | {
+        /** @deprecated Use `userAddress`; `recipient` is removed in morpho-sdk v6. */
+        readonly recipient: Address;
+        /** @deprecated Use `userAddress`; `onBehalf` is removed in morpho-sdk v6. */
+        readonly onBehalf: Address;
+        readonly userAddress?: never;
+      }
+  );
+  readonly metadata?: Metadata;
 }
 
 /**
@@ -30,8 +42,10 @@ export interface VaultV2RedeemParams {
  *
  * @param params.vault.address - The VaultV2 address.
  * @param params.args.shares - Amount of vault shares to redeem.
- * @param params.args.recipient - Address that receives the redeemed assets.
- * @param params.args.onBehalf - Address whose shares are burned.
+ * @param params.args.userAddress - Account that receives the redeemed assets and owns the burned
+ *   shares. This bundles-compatible successor replaces `recipient` and `onBehalf` before v6.
+ * @param params.args.recipient - Deprecated address that receives the redeemed assets.
+ * @param params.args.onBehalf - Deprecated address whose shares are burned.
  * @param params.metadata - Optional analytics metadata attached to the transaction.
  * @returns A deep-frozen `Transaction<VaultV2RedeemAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator the simulation layer consumes.
@@ -42,16 +56,19 @@ export interface VaultV2RedeemParams {
  *
  * const tx = vaultV2Redeem({
  *   vault: { address: vaultAddress },
- *   args: { shares: 1_000_000n, recipient, onBehalf },
+ *   args: { shares: 1_000_000n, userAddress },
  * });
  * // tx satisfies Readonly<Transaction<VaultV2RedeemAction>>
  * ```
  */
 export const vaultV2Redeem = ({
   vault: { address: vaultAddress },
-  args: { shares, recipient, onBehalf },
+  args,
   metadata,
 }: VaultV2RedeemParams): Readonly<Transaction<VaultV2RedeemAction>> => {
+  const { shares } = args;
+  const recipient = args.userAddress ?? args.recipient;
+  const onBehalf = args.userAddress ?? args.onBehalf;
   if (shares <= 0n) {
     throw new NonPositiveInputError("shares", shares);
   }

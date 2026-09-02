@@ -18,17 +18,27 @@ import { getTokenRequirementActions } from "../signatures/getTokenRequirementAct
 
 /** Parameters for {@link vaultV1Deposit}. */
 export interface VaultV1DepositParams {
-  vault: {
-    chainId: number;
-    address: Address;
-    asset: Address;
+  readonly vault: {
+    readonly chainId: number;
+    readonly address: Address;
+    readonly asset: Address;
   };
-  args: DepositAmountArgs & {
-    maxSharePrice: bigint;
-    recipient: Address;
-    requirementSignature?: PermitRequirementSignature;
-  };
-  metadata?: Metadata;
+  readonly args: DepositAmountArgs & {
+    readonly maxSharePrice: bigint;
+    readonly requirementSignature?: PermitRequirementSignature;
+  } & (
+      | {
+          /** Account that receives the minted shares and submits the successor bundles route. */
+          readonly userAddress: Address;
+          readonly recipient?: never;
+        }
+      | {
+          /** @deprecated Use `userAddress`; `recipient` is removed in morpho-sdk v6. */
+          readonly recipient: Address;
+          readonly userAddress?: never;
+        }
+    );
+  readonly metadata?: Metadata;
 }
 
 /**
@@ -49,7 +59,9 @@ export interface VaultV1DepositParams {
  *   `nativeAmount` must be positive. Defaults to `0n`.
  * @param params.args.maxSharePrice - Maximum acceptable share price (in RAY, slippage
  *   protection enforced on-chain by `GeneralAdapter1`).
- * @param params.args.recipient - Address that receives the minted vault shares.
+ * @param params.args.userAddress - Account that receives the minted vault shares. This
+ *   bundles-compatible successor replaces `recipient` before morpho-sdk v6.
+ * @param params.args.recipient - Deprecated address that receives the minted vault shares.
  * @param params.args.requirementSignature - Optional pre-signed permit/permit2 approval.
  * @param params.args.nativeAmount - Optional amount of native token to wrap into wNative for the
  *   deposit. Requires the vault asset to be the chain's wNative.
@@ -79,7 +91,7 @@ export interface VaultV1DepositParams {
  *   args: {
  *     amount: 1_000_000n,
  *     maxSharePrice: 1_010_000_000_000_000_000_000_000_000n, // RAY-scaled, 1.01x
- *     recipient: depositor,
+ *     userAddress: depositor,
  *   },
  * });
  * // tx satisfies Readonly<Transaction<VaultV1DepositAction>>
@@ -87,15 +99,16 @@ export interface VaultV1DepositParams {
  */
 export const vaultV1Deposit = ({
   vault: { chainId, address: vaultAddress, asset },
-  args: {
-    amount = 0n,
-    maxSharePrice,
-    recipient,
-    requirementSignature,
-    nativeAmount,
-  },
+  args,
   metadata,
 }: VaultV1DepositParams): Readonly<Transaction<VaultV1DepositAction>> => {
+  const {
+    amount = 0n,
+    maxSharePrice,
+    requirementSignature,
+    nativeAmount,
+  } = args;
+  const recipient = args.userAddress ?? args.recipient;
   if (amount < 0n) {
     throw new NegativeInputError("amount", amount);
   }

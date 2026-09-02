@@ -72,7 +72,7 @@ describe("depositVaultV1 unit tests", () => {
       args: {
         amount: assets,
         maxSharePrice,
-        recipient: client.account.address,
+        userAddress: client.account.address,
         requirementSignature,
       },
     });

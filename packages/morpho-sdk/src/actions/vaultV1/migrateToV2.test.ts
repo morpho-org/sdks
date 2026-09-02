@@ -30,7 +30,6 @@ describe("vaultV1MigrateToV2 unit tests", () => {
     client,
   }) => {
     const shares = 1000000000000000000n;
-    const minSharePriceVaultV1 = 1000000000000000000000000000n;
     const maxSharePriceVaultV2 = 1000000000000000000000000000n;
 
     const tx = vaultV1MigrateToV2({
@@ -43,9 +42,8 @@ describe("vaultV1MigrateToV2 unit tests", () => {
         targetVault: KeyrockUsdcVaultV2.address,
         targetAsset: KeyrockUsdcVaultV2.asset,
         shares,
-        minSharePriceVaultV1,
         maxSharePriceVaultV2,
-        recipient: client.account.address,
+        userAddress: client.account.address,
       },
     });
 
@@ -53,7 +51,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
     expect(tx.action.type).toBe("vaultV1MigrateToV2");
     expect(tx.action.args.sourceVault).toBe(SteakhouseUsdcVaultV1.address);
     expect(tx.action.args.targetVault).toBe(KeyrockUsdcVaultV2.address);
-    expect(tx.action.args.minSharePriceVaultV1).toBe(minSharePriceVaultV1);
+    expect(tx.action.args.minSharePriceVaultV1).toBe(0n);
     expect(tx.action.args.maxSharePriceVaultV2).toBe(maxSharePriceVaultV2);
     expect(tx.action.args.recipient).toBe(client.account.address);
     expect(tx.to).toBeDefined();
