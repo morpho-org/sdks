@@ -5,16 +5,17 @@ This document explains the design decisions, protocol context, and internal stru
 ## Purpose and Philosophy
 
 The Consumer SDK is a TypeScript abstraction layer over the Morpho Protocol. Its job is to
-build **ready-to-send transactions** for Morpho protocol operations on EVM-compatible chains.
+build **ready-to-send transactions**
+operations on EVM-compatible chains for Morpho protocol.
 
 **Design principles:**
 
 - **Deterministic transaction building.** Given the same inputs and on-chain state, the SDK
   always produces the same `Transaction` object. No simulation, no gas estimation, no
   sending — the consumer handles those concerns.
-- **Predictable developer experience.** Operations with prerequisites return lazy
-  `{ buildTx, getRequirements }` handles; direct vault operations with no prerequisites return
-  `{ buildTx }`. `getRequirements()` owns reads and `buildTx()` stays synchronous.
+- **Predictable developer experience.** Every operation returns a `{ buildTx, getRequirements }`
+  pair (for deposits) or `{ buildTx }` (for withdrawals/redeems). The interface is identical
+  across V1 and V2 vaults.
 - **Immutability.** Every returned `Transaction` is deep-frozen via `@morpho-org/morpho-ts`'s
   `deepFreeze`. Once built, a transaction object cannot be mutated.
 - **No `any`.** Strict TypeScript throughout, with discriminated unions for action types and
@@ -45,7 +46,7 @@ Each layer has a single responsibility and a strict boundary:
 | Layer      | Responsibility                                                                                                                                  | What it must NOT do                           |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
 | **Client** | Wrap a viem `Client`, normalize SDK options (`supportSignature`, `metadata`, `supportDeployless`), produce vault, Blue, and Midnight entities                | Call actions directly, hold mutable state     |
-| **Entity** | Fetch on-chain data (vault accrual data for V1/V2, market/position data for Blue and Midnight), compute derived values (for example vault `maxSharePrice` and the Blue LLTV buffer), delegate to actions | Encode calldata, know about contract-call internals |
+| **Entity** | Fetch on-chain data (vault accrual data for V1/V2, market/position data for Blue and Midnight), compute derived values (e.g. `maxSharePrice`, LLTV buffer), delegate to actions | Encode calldata, know about bundler internals |
 | **Action** | Validate inputs, encode calldata, deep-freeze the result, return a `Transaction<TAction>`                                                       | Fetch data, hold state, mutate anything       |
 
 **Calls flow strictly downward**: Client → Entity → Action. An action never calls an entity;
@@ -93,21 +94,17 @@ at the SDK level. The differences are at the protocol layer:
   lending primitive — isolated markets whose borrow rate floats with utilization via the market's
   IRM. Each market has a loan token, collateral token, oracle, IRM, and LLTV (liquidation
   loan-to-value). Formerly referred to as "MarketV1" in this SDK.
-- **Write routing**: `client.morpho.blue(marketParams, chainId)` preserves `supply`, `withdraw`,
-  `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`,
-  `repayWithdrawCollateral`, and `refinance`. These methods map to the five registered
-  BlueBundlesV1 entrypoints. There is no Bundler3 fallback or second BlueBundlesV1 entity.
-- **Contract-owned composition**: BlueBundlesV1 enforces token pulls, optional native wrapping,
-  operation ordering, Morpho authorization consumption, referral fees, refunds, and residue
-  handling. Combined methods support either non-zero leg or both legs.
-- **LLTV buffer**: Borrow, collateral-withdraw, and migration legs validate that the resulting
-  position stays below `LLTV - buffer` (default 0.5%). Pure collateral supply and pure repay disable
-  the onchain LTV cap so they can improve an unhealthy position.
-- **No Blue share-price slippage input**: BlueBundlesV1 has no Bundler3 `minSharePrice` /
-  `maxSharePrice` checks, so high-level Blue writes do not accept `slippageTolerance`.
-- **V2-only write reallocations**: Optional high-level Blue reallocations are
-  `VaultV2BlueReallocation` calls mapped to BlueBundlesV1 `PublicAllocations`. PublicAllocator V1
-  data and low-level helpers remain public but are not accepted by these writes.
+- **Supply collateral**: Users deposit collateral tokens into a market position. Routed through
+  bundler3 via GeneralAdapter1 (`erc20TransferFrom` + `morphoSupplyCollateral`). Supports native
+  token wrapping when collateral is wNative.
+- **Borrow**: Users borrow loan tokens against their collateral. Routed through bundler3 via
+  `morphoBorrow`. Requires GeneralAdapter1 authorization on Morpho (`setAuthorization`). Uses
+  `minSharePrice` for slippage protection.
+- **Supply collateral + borrow (atomic)**: Atomic bundler operation combining collateral transfer,
+  `morphoSupplyCollateral`, and `morphoBorrow` in a single transaction. Validates position health
+  with an LLTV buffer (default 0.5%) to prevent instant liquidation.
+- **LLTV buffer**: Both `borrow` and `supplyCollateralBorrow` validate that the resulting position
+  stays below `LLTV - buffer` (default 0.5%). Throws `BorrowExceedsSafeLtvError` if exceeded.
 - **SDK data**: Fetched via `fetchBlueMarket` / `fetchBlueAccrualPosition`.
   `BlueAccrualPosition` provides health metrics: `maxBorrowAssets`, `ltv`, `isHealthy`,
   `borrowAssets`, `collateral`.
@@ -130,14 +127,13 @@ Force deallocation solves the liquidity problem: when vault assets are
 locked in adapters (e.g. lent in a Morpho Blue market with no available liquidity), a user can
 force the vault to pull assets back to vault level and withdraw/redeem after.
 
-## Contract Routing
+## Bundled vs Direct Calls
 
-This is the most important routing decision in the SDK. "Bundled" does not always mean Bundler3:
-Blue and Midnight use fixed, protocol-owned bundle contracts directly.
+This is the most important routing decision in the SDK.
 
-### Vault deposits: Always through the Morpho Bundler
+### Deposits: Always through the Morpho Bundler
 
-All vault deposits — both V1 and V2 — are routed through the **Morpho Bundler** (specifically, its
+All deposits — both V1 and V2 — are routed through the **Morpho Bundler** (specifically, its
 **general adapter**). The bundle atomically:
 
 1. _(If `nativeAmount` is provided)_ Transfers native token to the general adapter via `nativeTransfer`, then wraps it to wNative via `wrapNative`.
@@ -186,17 +182,6 @@ recipient. `tx.to` is VaultExitBundlesV1, not the vault.
 N caller-supplied `forceDeallocate` calls + 1 `redeem` into a single atomic transaction on the vault
 contract itself. It has no on-chain share-price bound, and the caller plans the deallocations.
 
-### Blue writes: direct BlueBundlesV1 calls
-
-The Blue methods build direct BlueBundlesV1 transactions. Requirements authorize the actual
-puller/operator: classic approvals and ERC-2612 permits target BlueBundlesV1; Permit2 keeps its
-ERC-20 prerequisite on canonical Permit2 while its SignatureTransfer payload targets
-BlueBundlesV1; Morpho authorization grants BlueBundlesV1 operator rights.
-
-BlueBundlesV1 entrypoints own the atomic ordering. Vault V2 public allocations are encoded inside
-the fixed call rather than prepended as arbitrary Bundler3 actions. Blue writes therefore have no
-GeneralAdapter1 approval, PublicAllocator V1 plan, or Bundler3 share-price-bound input.
-
 ### Summary
 
 | Operation                             | Route                      | Why                                                                                                        |
@@ -204,13 +189,11 @@ GeneralAdapter1 approval, PublicAllocator V1 plan, or Bundler3 share-price-bound
 | Deposit (V1 & V2)                     | Bundler3 (general adapter) | `maxSharePrice` enforcement prevents inflation attacks. Optional native token wrapping for wNative vaults. |
 | Withdraw (V1 & V2)                    | Direct vault call          | No attack surface, no approval needed                                                                      |
 | Redeem (V1 & V2)                      | Direct vault call          | No attack surface, no approval needed                                                                      |
-| Force Withdraw (V2)                   | VaultExitBundlesV1         | Contract-computed deallocations + `minSharePriceE27` bound. Needs a vault-share allowance or permit.        |
-| Force Redeem (V2)                     | VaultV2 `multicall`        | Atomic caller-supplied deallocation + redemption on the vault contract                                      |
-| `supply` (Blue)                        | BlueBundlesV1             | Pull or wrap loan assets, charge an optional fee, and supply the remainder.                                |
-| `supplyCollateral`, `borrow`, `supplyCollateralBorrow` (Blue) | BlueBundlesV1 | Execute either leg or both; optional Vault V2 allocations on borrow; buffered LLTV on borrow. |
-| `repay`, `withdrawCollateral`, `repayWithdrawCollateral` (Blue) | BlueBundlesV1 | Repay before collateral withdrawal; refund unused bounded repay funding. |
-| `withdraw` (Blue)                      | BlueBundlesV1             | Withdraw by assets or shares; optional Vault V2 allocations.                                               |
-| `refinance` (Blue)                     | BlueBundlesV1             | Move the caller's full compatible debt-and-collateral position.                                            |
+| Force Withdraw (V2)                   | VaultExitBundlesV1         | Contract-computed deallocations + `minSharePriceE27` bound. Needs a vault-share allowance or permit.       |
+| Force Redeem (V2)                     | VaultV2 `multicall`        | Atomic deallocation + redemption on the vault contract                                                     |
+| Supply Collateral (Blue)          | Bundler3 (general adapter) | `erc20TransferFrom` + `morphoSupplyCollateral`. Optional native wrapping for wNative collateral.           |
+| Borrow (Blue)                     | Bundler3 (general adapter) | `morphoBorrow` with `minSharePrice` slippage protection. Requires GA1 authorization on Morpho.             |
+| Supply Collateral + Borrow (Blue) | Bundler3 (general adapter) | Atomic collateral supply + borrow. LLTV buffer prevents instant liquidation.                               |
 
 ## Dependency Map
 
@@ -229,8 +212,8 @@ morpho-sdk
 
 Provides protocol-level constants and math:
 
-- **`getChainAddresses(chainId)`** — resolves contract addresses for the target chain, including
-  `bundler3.generalAdapter1`, `bundles.blueBundlesV1`, `permit2`, `dai`, and others.
+- **`getChainAddresses(chainId)`** — resolves contract addresses for the target chain:
+  `bundler3.generalAdapter1`, `permit2`, `dai`, and others.
 - **`MathLib`** — fixed-point arithmetic (`mulDivUp`, `wToRay`, `min`, `WAD`, `RAY`).
 - **`DEFAULT_SLIPPAGE_TOLERANCE`** — the default 0.03% slippage used for deposit `maxSharePrice`.
 - **`MarketParams`** and **`marketParamsAbi`** — used when encoding force-deallocation data
@@ -246,9 +229,8 @@ On-chain data fetching and contract ABIs:
 - **`fetchHolding`** — reads a user's token allowances, EIP-2612 nonce, and Permit2 state.
   Used by the requirements system to determine what approvals are needed.
 - **`fetchToken`** — token metadata lookups.
-- **Typed data helpers**: `getPermitTypedData`, `getPermit2PermitTypedData`, and
-  `getPermit2TransferFromTypedData` — used to build EIP-712 signing payloads for ERC-2612,
-  Permit2 AllowanceTransfer, and Permit2 SignatureTransfer flows.
+- **Typed data helpers**: `getPermitTypedData`, `getPermit2PermitTypedData` — used to build
+  EIP-712 signing payloads for permit flows.
 
 ### Local Bundler Encoding
 
@@ -269,19 +251,18 @@ Shared utilities:
 
 ## Requirements System
 
-Before a token-funded action, the user may need an approval or signature. The requirements system
-resolves only the prerequisites consumed by the selected route.
+Before a deposit or supply collateral, the user must grant the **general adapter** permission to spend their
+ERC-20 tokens. The requirements system resolves what approvals or signatures are needed.
 
-### Vault deposit requirements target GeneralAdapter1
+### Why requirements target the general adapter, not the vault
 
-Vault deposits flow: **user → general adapter → vault**. The general adapter is the contract
+Deposits always flow: **user → general adapter → vault**. The general adapter is the contract
 that calls `transferFrom` on the user's tokens, then calls `erc4626Deposit` on the vault.
 Therefore, the **spender** in any approval/permit is always `bundler3.generalAdapter1` for the
 target chain — the vault address only determines which contract receives the deposit inside the
-bundle. This statement does not apply to the high-level Blue writes, which target
-BlueBundlesV1 as described above.
+bundle.
 
-### Bundler3 deposit decision tree
+### Decision tree
 
 ```
 getRequirements(viemClient, params)
@@ -313,28 +294,13 @@ getRequirements(viemClient, params)
           └─► getRequirementsApproval() (same as supportSignature: false)
 ```
 
-### BlueBundlesV1 requirement decision
+### How signatures flow into deposits
 
-Blue token requirements resolve against the direct contract route:
-
-- Without signature support, check the ERC-20 allowance to BlueBundlesV1 and return a classic
-  approval only when it is insufficient.
-- With `useSimplePermit`, use ERC-2612 when the token supports the standard permit shape; its
-  spender is BlueBundlesV1.
-- Otherwise, use Permit2 SignatureTransfer when canonical Permit2 is configured. The prerequisite
-  ERC-20 allowance targets Permit2, and the one-shot signature names BlueBundlesV1 as spender.
-- Fall back to a classic BlueBundlesV1 approval when neither signature path is available.
-
-Loan-asset withdrawal, borrow, collateral-withdraw, and migration legs also check
-`Morpho.isAuthorized(userAddress, blueBundlesV1)`. Depending on `supportSignature`, the missing
-authorization is returned as a standalone Morpho transaction or a signable requirement consumed
-inside the BlueBundlesV1 call.
-
-### How signatures flow into Bundler3 deposits
-
-When a vault-deposit requirement returns a token-permit `Requirement`, the consuming application
-calls `requirement.sign(client, userAddress)` to obtain a `RequirementSignature`. The collected
-signature is then passed to `buildTx` as an array (`buildTx([signature])`):
+When requirements return a `Requirement` object (permit, permit2, or Morpho authorization path),
+the consuming application calls `requirement.sign(client, userAddress)` to obtain a
+`RequirementSignature`. The collected signatures are then passed to `buildTx` as an array
+(`buildTx([...signatures])`), letting a permit and a Morpho authorization signature travel
+together:
 
 ```
 getRequirements() → Requirement { sign() } → RequirementSignature → buildTx([sig, ...])
@@ -351,11 +317,6 @@ executes atomically in a single transaction.
 When no signature is provided (classic approval path), `buildTx()` uses a simple
 `erc20TransferFrom` action to move tokens from the user to the general adapter before the
 deposit.
-
-Direct BlueBundlesV1 writes use the same lazy collection workflow but a different encoding step.
-Their `buildTx(signatures)` reshapes accepted ERC-2612 or Permit2 SignatureTransfer signatures and
-Morpho authorization signatures into the fixed BlueBundlesV1 ABI structs; it does not create
-Bundler3 sub-actions.
 
 ### Guard functions
 

@@ -1,7 +1,4 @@
-export type {
-  BlueActions,
-  BlueTokenRequirementsParams,
-} from "../entities/blue/index.js";
+export type { BlueActions } from "../entities/blue/index.js";
 export type { MidnightActions } from "../entities/midnight/index.js";
 export type { VaultV1Actions } from "../entities/vaultV1/index.js";
 export type { VaultV2Actions } from "../entities/vaultV2/index.js";

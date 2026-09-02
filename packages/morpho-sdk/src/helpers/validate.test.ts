@@ -18,6 +18,7 @@ import {
 import {
   AccrualPositionUserMismatchError,
   AddressMismatchError,
+  type BlueReallocationPlan,
   BorrowExceedsSafeLtvError,
   ChainIdMismatchError,
   ChainWNativeMissingError,
@@ -51,6 +52,7 @@ import {
 } from "./constant.js";
 import {
   validateAccrualPosition,
+  validateAndNormalizeReallocations,
   validateChainId,
   validateMidnightMarketChainId,
   validateNativeAsset,
@@ -831,7 +833,11 @@ describe("reallocation validation", () => {
     },
   ])("error: InvalidReallocationShapeError for $name", ({ reallocation }) => {
     expect(() =>
-      validateVaultV2BlueReallocations([reallocation], targetMarketId),
+      validateAndNormalizeReallocations({
+        reallocations: [reallocation] as unknown as BlueReallocationPlan,
+        targetMarketId,
+        chainId: mainnet.id,
+      }),
     ).toThrow(InvalidReallocationShapeError);
   });
 

@@ -8,8 +8,7 @@ export type RequirementSpenderKey =
   | "permit2"
   | "midnight"
   | "midnightBundles"
-  | "vaultExitBundlesV1"
-  | "blueBundlesV1";
+  | "vaultExitBundlesV1";
 
 /**
  * Validates that a requirement encoder spender matches one of the allowed chain addresses.
@@ -19,7 +18,6 @@ export type RequirementSpenderKey =
  * @param params.spender - Spender address to validate.
  * @param params.allowed - Allowed registry slots for this requirement.
  * @returns Nothing after the spender matches an allowed chain address.
- * @throws {UnsupportedChainIdError} when `chainId` is absent from the address registry.
  * @throws {UnsupportedErc20ApprovalSpenderError} when `spender` does not match any allowed slot.
  * @example
  * ```ts
@@ -51,7 +49,6 @@ export const validateRequirementSpender = (params: {
     midnight,
     midnightBundles,
     vaultExitBundlesV1: bundles?.vaultExitBundlesV1,
-    blueBundlesV1: bundles?.blueBundlesV1,
   } satisfies Record<RequirementSpenderKey, Address | undefined>;
   const supportedSpenders = params.allowed.map((key) => addresses[key]);
 

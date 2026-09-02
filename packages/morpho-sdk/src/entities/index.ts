@@ -127,10 +127,6 @@ export {
   Position as MidnightPosition,
   Tree as MidnightTree,
 } from "@morpho-org/midnight-sdk";
-export type {
-  BlueActions,
-  BlueTokenRequirementsParams,
-} from "./blue/index.js";
 export { MorphoBlue } from "./blue/index.js";
 export type {
   GetOffersDataParams as MidnightGetOffersDataParams,

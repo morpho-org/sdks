@@ -103,7 +103,7 @@ describe("ChainUtils explorer URL helpers", () => {
       5_042,
       {
         name: "Arc",
-        explorerUrl: "http://explorer.arc.io/",
+        explorerUrl: "https://explorer.arc.io",
         identifier: "arc",
         nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
       },

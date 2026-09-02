@@ -3,10 +3,8 @@ import type { Action } from "../../bundler/index.js";
 import {
   DepositAmountMismatchError,
   DepositAssetMismatchError,
-  isPermit2TransferFromSignature,
   Permit2ExpirationMissingError,
   type PermitRequirementSignature,
-  UnexpectedRequirementSignatureError,
 } from "../../types/index.js";
 
 interface GetTokenRequirementActionsParams {
@@ -34,7 +32,6 @@ interface GetTokenRequirementActionsParams {
  * @returns Bundler `Action`s needed to pull the token.
  * @throws {DepositAssetMismatchError} when the signed asset differs from `asset`.
  * @throws {DepositAmountMismatchError} when the signed amount differs from `amount`.
- * @throws {UnexpectedRequirementSignatureError} when passed a BlueBundlesV1-only SignatureTransfer result.
  * @throws {Permit2ExpirationMissingError} when `action.type === "permit2"` but `args.expiration` is missing.
  * @example
  * ```ts
@@ -76,10 +73,6 @@ export const getTokenRequirementActions = ({
         args: [asset, amount, recipient, false /* skipRevert */],
       },
     ];
-  }
-
-  if (isPermit2TransferFromSignature(requirementSignature)) {
-    throw new UnexpectedRequirementSignatureError("permit2TransferFrom");
   }
 
   if (!isAddressEqual(requirementSignature.args.asset, asset)) {

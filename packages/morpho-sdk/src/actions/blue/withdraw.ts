@@ -1,207 +1,191 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import { type Address, encodeFunctionData, maxUint256 } from "viem";
-import { blueBundlesV1Abi } from "../../abis.js";
+import { deepFreeze } from "@morpho-org/morpho-ts";
+import type { Address } from "viem";
+import { type Action, BundlerAction } from "../../bundler/index.js";
+import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   type AuthorizationRequirementSignature,
+  type BlueReallocationPlan,
   type BlueWithdrawAction,
-  InputExceedsMaxError,
   type Metadata,
   MutuallyExclusiveWithdrawAmountsError,
   NegativeInputError,
   NonPositiveInputError,
   type Transaction,
-  type VaultV2BlueReallocation,
 } from "../../types/index.js";
-import {
-  type BlueBundlesV1CommonParams,
-  finalizeBlueBundlesV1Transaction,
-  getBlueBundlesV1PenaltyAssets,
-  getBlueBundlesV1PublicAllocations,
-  getBlueBundlesV1SignedAuthorization,
-  normalizeBlueBundlesV1CommonParams,
-} from "./common.js";
+import { getBlueAuthorizationAction } from "../signatures/getBlueAuthorizationAction.js";
+import { buildBlueReallocationActions } from "./buildReallocationActions.js";
 
 /** Parameters for {@link blueWithdraw}. */
 export interface BlueWithdrawParams {
-  /** Chain and scoped Morpho Blue market. */
   market: {
     readonly chainId: number;
     readonly marketParams: MarketParams;
   };
-  /** Direct BlueBundlesV1 withdrawal arguments. */
   args: {
-    /** User whose supply position is withdrawn. */
-    userAddress: Address;
-    /** Exact loan assets withdrawn, exclusive with `withdrawShares`. */
-    withdrawAssets: bigint;
-    /** Exact supply shares burned, exclusive with `withdrawAssets`. */
-    withdrawShares: bigint;
-    /** Optional validated Vault V2 BluePublicAllocator reallocations. */
-    reallocations?: Iterable<VaultV2BlueReallocation>;
-    /** Final call deadline in Unix seconds. */
-    deadline: bigint;
-    /** Optional WAD-scaled referral fee, strictly below 100%. */
-    referralFeePct?: bigint;
-    /** Recipient required when `referralFeePct` is positive. */
-    referralFeeRecipient?: Address;
-    /** Optional Morpho authorization signature for BlueBundlesV1. */
+    /** Withdraw assets amount (`0n` when withdrawing by shares). */
+    assets: bigint;
+    /** Withdraw shares amount (`0n` when withdrawing by assets). */
+    shares: bigint;
+    /** Address that receives the withdrawn assets. */
+    receiver: Address;
+    /** Minimum withdraw share price (in ray). Slippage protection. */
+    minSharePrice: bigint;
+    /**
+     * Homogeneous Vault V1 or Vault V2 reallocations to execute before withdrawing. V1 entries can be
+     * computed via `MorphoBlue.getVaultV1Reallocations({ operation: "withdraw", amount })` or directly
+     * via `computeVaultV1Reallocations({ operation: "withdraw", amount, ... })`.
+     */
+    reallocations?: BlueReallocationPlan;
+    /**
+     * Optional signed Morpho authorization. When provided, a `setAuthorizationWithSig` call is
+     * prepended to the bundle so GeneralAdapter1 is authorized in-bundle instead of via a
+     * standalone `setAuthorization` transaction.
+     */
     authorizationSignature?: AuthorizationRequirementSignature;
   };
-  /** Optional transaction metadata suffix. */
   metadata?: Metadata;
 }
 
 /**
- * Encodes a direct BlueBundlesV1 loan-asset withdrawal transaction.
+ * Prepares a loan-asset withdraw transaction for a Morpho Blue market.
  *
- * Vault V2 allocator penalties and referral fees reduce the assets received. Shares mode has no
- * saturated full-close sentinel or onchain minimum-assets guarantee, and this route has no
- * Bundler3 share-price bound or `slippageTolerance` input.
+ * Routed through bundler3 via `morphoWithdraw`. Supports two modes (exactly one):
  *
- * @param params - Withdrawal encoding parameters.
- * @param params.market.chainId - Chain containing BlueBundlesV1.
- * @param params.market.marketParams - Scoped Morpho Blue market parameters.
- * @param params.args.userAddress - User whose supply position is withdrawn.
- * @param params.args.withdrawAssets - Exact assets withdrawn, exclusive with shares.
- * @param params.args.withdrawShares - Exact shares burned, exclusive with assets.
- * @param params.args.reallocations - Vault V2 reallocations executed before withdrawal.
- * @param params.args.deadline - Final call deadline in Unix seconds.
- * @param params.args.referralFeePct - Optional WAD-scaled fee below 100%.
- * @param params.args.referralFeeRecipient - Recipient required for a positive fee.
- * @param params.args.authorizationSignature - Optional Blue authorization signature.
- * @param params.metadata - Optional transaction metadata.
- * @returns A deep-frozen `Readonly<Transaction<BlueWithdrawAction>>` whose `to` address is
- *   BlueBundlesV1 and whose `action` records the normalized withdrawal inputs.
- * @throws {NegativeInputError} when an amount, fee, or reallocation penalty is negative.
- * @throws {MutuallyExclusiveWithdrawAmountsError} when assets and shares are both nonzero.
- * @throws {NonPositiveInputError} when neither mode, no valid deadline, or a non-positive
- *   reallocation amount is provided.
- * @throws {InputExceedsMaxError} when a withdraw amount, fee, reallocation amount, or penalty exceeds its ABI bound.
- * @throws {MissingReferralFeeRecipientError} when a positive fee has no recipient.
- * @throws {InvalidReallocationAddressError} when a vault or adapter address is malformed.
- * @throws {InvalidReallocationSourceTypeError} when a reallocation source is malformed.
- * @throws {InconsistentReallocationPenaltyError} when one vault uses different penalties.
- * @throws {ReallocationWithdrawalOnTargetMarketError} when a source is the target market.
- * @throws {ReallocationLoanTokenMismatchError} when a source market uses another loan token.
- * @throws {DepositOwnerMismatchError} when the signed authorization owner differs from `userAddress`.
- * @throws {BlueBundlesV1RequirementSignatureMismatchError} when authorization cannot be bound safely.
- * @throws {UnsupportedChainIdError} when the chain is absent from the registry.
- * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
+ * - **By assets** (`assets > 0, shares = 0`): withdraws an exact asset amount.
+ * - **By shares** (`assets = 0, shares > 0`): burns an exact share count (typical for a full
+ *   supplier position close; immune to interest accrual between tx construction and execution).
+ *
+ * A `reallocations` plan contains either V1 entries or V2 market/idle entries,
+ * never both. The calls run before the withdraw. V1
+ * fees accumulate in `tx.value`; V2 penalties are paid in the target loan
+ * token and donated to the vaults. The on-chain `morphoWithdraw` sends the
+ * assets computed on-chain directly to `receiver`; no skim is required.
+ *
+ * The withdraw is performed on behalf of the transaction initiator (signer) — there is no
+ * separate `onBehalf` field; mirror `blueBorrow`. The entity layer keeps `receiver` aligned
+ * with the user when none is provided. Requires the user to have authorized `GeneralAdapter1`
+ * on Morpho.
+ *
+ * @param params.market.chainId - The chain the market lives on.
+ * @param params.market.marketParams - Market params (loanToken, collateralToken, oracle, irm, lltv).
+ * @param params.args.assets - Withdraw amount in loan-token assets. Set to `0n` in shares mode.
+ * @param params.args.shares - Withdraw amount in supply shares. Set to `0n` in assets mode.
+ * @param params.args.receiver - Address that receives the withdrawn assets.
+ * @param params.args.minSharePrice - Minimum acceptable withdraw share price (in ray). Slippage
+ *   protection.
+ * @param params.args.reallocations - Optional homogeneous Vault V1 or Vault V2 reallocations to
+ *   execute before withdrawing.
+ * @param params.args.authorizationSignature - Optional signed Morpho authorization; when present,
+ *   a `setAuthorizationWithSig` call is prepended to the bundle.
+ * @param params.metadata - Optional analytics metadata attached to the bundle.
+ * @returns A deep-frozen `Transaction<BlueWithdrawAction>` with `to`, `value`, `data`, and
+ *   the typed `action` discriminator the simulation layer consumes.
+ * @throws {NegativeInputError} when `assets`, `shares`, `minSharePrice`, a V1 fee, or a V2
+ *   penalty is negative.
+ * @throws {NonPositiveInputError} when both `assets` and `shares` are zero or any reallocation
+ *   withdrawal amount is non-positive.
+ * @throws {InputExceedsMaxError} when a V2 reallocation asset amount exceeds `uint128` or its penalty exceeds WAD.
+ * @throws {InconsistentReallocationPenaltyError} when V2 entries for one vault use different penalties.
+ * @throws {InvalidReallocationAddressError} when a V2 vault or adapter address is malformed.
+ * @throws {InvalidReallocationSourceTypeError} when a V2 source is absent, incomplete, or has an unknown discriminator.
+ * @throws {InvalidReallocationShapeError} when an entry matches both or neither V1/V2 shape.
+ * @throws {MixedReallocationVersionsError} when one plan contains both V1 and V2 entries.
+ * @throws {MutuallyExclusiveWithdrawAmountsError} when both `assets` and `shares` are non-zero.
+ * @throws {EmptyReallocationWithdrawalsError} when any reallocation has no withdrawals.
+ * @throws {ReallocationWithdrawalOnTargetMarketError} when a reallocation withdrawal references
+ *   the target market.
+ * @throws {UnsortedReallocationWithdrawalsError} when reallocation withdrawals are not strictly
+ *   sorted by market id.
  * @example
  * ```ts
- * import { markets } from "@morpho-org/morpho-test";
  * import { blueWithdraw } from "@morpho-org/morpho-sdk";
- * import { zeroAddress } from "viem";
- * import { mainnet } from "viem/chains";
  *
- * const marketParams = markets[mainnet.id].usdc_wbtc;
  * const tx = blueWithdraw({
- *   market: { chainId: mainnet.id, marketParams },
+ *   market: { chainId: 1, marketParams },
  *   args: {
- *     userAddress: zeroAddress,
- *     withdrawAssets: 1_000_000n,
- *     withdrawShares: 0n,
- *     deadline: 1_900_000_000n,
+ *     assets: 1_000_000_000n,
+ *     shares: 0n,
+ *     receiver: supplier,
+ *     minSharePrice: 0n, // disables slippage protection — production code should compute via `computeMinWithdrawSharePrice` from market state + slippage tolerance
  *   },
  * });
  * // tx satisfies Readonly<Transaction<BlueWithdrawAction>>
  * ```
  */
-export const blueWithdraw = (
-  params: BlueWithdrawParams,
-): Readonly<Transaction<BlueWithdrawAction>> => {
-  const { chainId, marketParams } = params.market;
-  const {
-    userAddress,
-    withdrawAssets,
-    withdrawShares,
+export const blueWithdraw = ({
+  market: { chainId, marketParams },
+  args: {
+    assets,
+    shares,
+    receiver,
+    minSharePrice,
+    reallocations,
     authorizationSignature,
-  } = params.args;
-  if (withdrawAssets < 0n) {
-    throw new NegativeInputError("withdrawAssets", withdrawAssets);
-  }
-  if (withdrawShares < 0n) {
-    throw new NegativeInputError("withdrawShares", withdrawShares);
-  }
-  if (withdrawAssets > 0n && withdrawShares > 0n) {
+  },
+  metadata,
+}: BlueWithdrawParams): Readonly<Transaction<BlueWithdrawAction>> => {
+  // Mutual exclusion is detected on "both values present" (either non-zero),
+  // before sign checks — otherwise `{ assets: -1n, shares: 5n }` would be
+  // misreported as a positivity error rather than the actual mode conflict.
+  if (assets !== 0n && shares !== 0n) {
     throw new MutuallyExclusiveWithdrawAmountsError(marketParams.id);
   }
-  if (withdrawAssets === 0n && withdrawShares === 0n) {
-    throw new NonPositiveInputError("withdrawAssets or withdrawShares", 0n);
+
+  if (assets < 0n) {
+    throw new NegativeInputError("assets", assets);
   }
-  if (withdrawAssets > maxUint256) {
-    throw new InputExceedsMaxError({
-      field: "withdrawAssets",
-      value: withdrawAssets,
-      max: maxUint256,
-    });
+  if (shares < 0n) {
+    throw new NegativeInputError("shares", shares);
   }
-  if (withdrawShares > maxUint256) {
-    throw new InputExceedsMaxError({
-      field: "withdrawShares",
-      value: withdrawShares,
-      max: maxUint256,
-    });
+  if (assets === 0n && shares === 0n) {
+    throw new NonPositiveInputError("assets or shares", 0n);
   }
 
-  const common: BlueBundlesV1CommonParams = {
+  if (minSharePrice < 0n) {
+    throw new NegativeInputError("minSharePrice", minSharePrice);
+  }
+
+  const actions: Action[] = [];
+
+  if (authorizationSignature) {
+    actions.push(getBlueAuthorizationAction(chainId, authorizationSignature));
+  }
+
+  const {
+    actions: reallocationActions,
+    fee: reallocationFee,
+    penaltyAssets: reallocationPenaltyAssets,
+  } = buildBlueReallocationActions({
     chainId,
-    userAddress,
-    deadline: params.args.deadline,
-    referralFeePct: params.args.referralFeePct,
-    referralFeeRecipient: params.args.referralFeeRecipient,
-    metadata: params.metadata,
-  };
-  const { referralFeePct, referralFeeRecipient } =
-    normalizeBlueBundlesV1CommonParams(common);
-  const signedAuthorization = getBlueBundlesV1SignedAuthorization({
-    chainId,
-    userAddress,
-    authorizationSignature,
+    reallocations,
+    targetMarketParams: marketParams,
   });
-  const publicAllocations = getBlueBundlesV1PublicAllocations(
-    [...(params.args.reallocations ?? [])],
-    marketParams,
-  );
-  const reallocationPenaltyAssets =
-    getBlueBundlesV1PenaltyAssets(publicAllocations);
-  if (withdrawAssets > 0n && reallocationPenaltyAssets > withdrawAssets) {
-    throw new InputExceedsMaxError({
-      field: "reallocationPenaltyAssets",
-      value: reallocationPenaltyAssets,
-      max: withdrawAssets,
-    });
+  actions.push(...reallocationActions);
+
+  actions.push({
+    type: "morphoWithdraw",
+    args: [marketParams, assets, shares, minSharePrice, receiver, false],
+  });
+
+  let tx = BundlerAction.encodeBundle(chainId, actions);
+
+  if (metadata) {
+    tx = addTransactionMetadata(tx, metadata);
   }
 
-  return finalizeBlueBundlesV1Transaction({
-    common,
-    value: 0n,
-    data: encodeFunctionData({
-      abi: blueBundlesV1Abi,
-      functionName: "blueBundlesV1Withdraw",
-      args: [
-        marketParams,
-        withdrawAssets,
-        withdrawShares,
-        signedAuthorization,
-        publicAllocations,
-        referralFeePct,
-        referralFeeRecipient,
-        params.args.deadline,
-      ],
-    }),
+  return deepFreeze({
+    ...tx,
     action: {
       type: "blueWithdraw",
       args: {
         market: marketParams.id,
-        withdrawAssets,
-        withdrawShares,
-        onBehalf: userAddress,
-        reallocations: publicAllocations.length,
+        assets,
+        shares,
+        receiver,
+        minSharePrice,
+        reallocationFee,
         reallocationPenaltyAssets,
-        referralFeePct,
-        referralFeeRecipient,
-        deadline: params.args.deadline,
       },
     },
   });
