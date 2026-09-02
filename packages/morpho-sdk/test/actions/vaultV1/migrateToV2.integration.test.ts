@@ -125,6 +125,9 @@ describe("MigrateToV2 VaultV1", () => {
         if (!isRequirementSignature(requirements[0])) {
           throw new Error("Requirement is not a signature requirement");
         }
+        if (requirements[0].action.type !== "permit") {
+          throw new Error("Requirement is not a vault-share permit");
+        }
 
         const requirementSignature = await requirements[0].sign(
           client,

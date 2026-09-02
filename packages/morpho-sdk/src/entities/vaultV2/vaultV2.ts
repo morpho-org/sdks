@@ -15,6 +15,7 @@ import {
   getBundlesReferralFeeAssets,
   normalizeBundlesCommonParams,
   resolveBundlesFunding,
+  selectBundlesSharesRequirementSignature,
   selectBundlesTokenRequirementSignature,
 } from "../../actions/bundles/index.js";
 import {
@@ -28,8 +29,10 @@ import {
   vaultV2Withdraw,
 } from "../../actions/index.js";
 import {
+  computeVaultMaxShareAllowance,
   computeVaultMaxSharePrice,
   validateChainId,
+  validateSlippageTolerance,
 } from "../../helpers/index.js";
 import { validateNativeVaultAsset } from "../../helpers/validate.js";
 import type { FetchParameters } from "../../types/data.js";
@@ -64,6 +67,7 @@ import {
   type VaultV2RedeemAction,
   type VaultV2WithdrawAction,
 } from "../../types/index.js";
+import { getVaultBundlesSharesRequirements } from "../requirements/getVaultBundlesSharesRequirements.js";
 import { getBundlesTokenRequirements } from "../requirements/index.js";
 
 export interface VaultV2Actions {
@@ -115,13 +119,21 @@ export interface VaultV2Actions {
    *
    * @param {Object} params - The withdraw parameters.
    * @param {bigint} params.amount - The amount of assets to withdraw.
-   * @param {Address} params.userAddress - User address initiating the withdraw.
-   * @returns {Object} The result object.
-   * @returns {Readonly<Transaction<VaultV2WithdrawAction>>} returns.tx The prepared withdraw transaction.
+   * @param {Address} params.userAddress - Account that must sign and submit the transaction; VaultBundlesV1 burns `msg.sender`'s shares and pays `msg.sender`.
+   * @returns Lazy exact share-allowance requirements and a synchronous transaction builder.
    */
-  withdraw: (params: { amount: bigint; userAddress: Address }) => {
-    buildTx: () => Readonly<Transaction<VaultV2WithdrawAction>>;
-  };
+  withdraw: (params: {
+    readonly amount: bigint;
+    readonly userAddress: Address;
+    readonly slippageTolerance?: bigint;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
+    readonly deadline?: bigint;
+  }) => ActionOutput<
+    VaultV2WithdrawAction,
+    readonly RequirementSignature[],
+    undefined
+  >;
   /**
    * Prepares a redeem transaction for the VaultV2 contract.
    *
@@ -404,26 +416,78 @@ export class MorphoVaultV2 implements VaultV2Actions {
     });
   }
 
-  withdraw({ amount, userAddress }: { amount: bigint; userAddress: Address }) {
-    if (this.client.viemClient.chain?.id !== this.chainId) {
-      throw new ChainIdMismatchError(
-        this.client.viemClient.chain?.id,
-        this.chainId,
-      );
-    }
-
-    return {
-      buildTx: () =>
-        vaultV2Withdraw({
-          vault: { address: this.vault },
+  withdraw(params: {
+    readonly amount: bigint;
+    readonly userAddress: Address;
+    readonly slippageTolerance?: bigint;
+    readonly referralFeePct?: bigint;
+    readonly referralFeeRecipient?: Address;
+    readonly deadline?: bigint;
+  }) {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    if (params.amount <= 0n)
+      throw new NonPositiveInputError("amount", params.amount);
+    const deadline = this.getBundlesDeadline(params.deadline);
+    const common = normalizeBundlesCommonParams({
+      deadline,
+      referralFeePct: params.referralFeePct,
+      referralFeeRecipient: params.referralFeeRecipient,
+    });
+    const slippageTolerance =
+      params.slippageTolerance ?? DEFAULT_SLIPPAGE_TOLERANCE;
+    validateSlippageTolerance(slippageTolerance);
+    getChainAddress(this.chainId, "bundles.vaultBundlesV1");
+    let requiredShareAllowance: bigint | undefined;
+    let resolvedRequirements: readonly ActionRequirement[] | undefined;
+    let expectedRequirement: PermitAction | undefined;
+    return Object.freeze({
+      getRequirements: async () => {
+        if (resolvedRequirements != null) return resolvedRequirements;
+        const vaultData = await this.getData();
+        requiredShareAllowance ??= computeVaultMaxShareAllowance({
+          vaultData,
+          deadline,
+          assets: params.amount,
+          slippageTolerance,
+        });
+        const requirements = await getVaultBundlesSharesRequirements(
+          this.client.viemClient,
+          {
+            vaultData,
+            version: "vaultV2",
+            owner: params.userAddress,
+            chainId: this.chainId,
+            requiredShareAllowance,
+            deadline,
+            supportSignature: this.client.options.supportSignature,
+          },
+        );
+        const signatureRequirement = requirements.find(isRequirementSignature);
+        if (signatureRequirement?.action.type === "permit") {
+          expectedRequirement = signatureRequirement.action;
+        }
+        resolvedRequirements = requirements;
+        return resolvedRequirements;
+      },
+      buildTx: (signatures?: readonly RequirementSignature[]) => {
+        const permit = selectBundlesSharesRequirementSignature(signatures, {
+          requiredShareAllowance,
+          expectedRequirement,
+        });
+        return vaultV2Withdraw({
+          vault: { chainId: this.chainId, address: this.vault },
           args: {
-            amount,
-            recipient: userAddress,
-            onBehalf: userAddress,
+            amount: params.amount,
+            userAddress: params.userAddress,
+            requirementSignature: permit,
+            referralFeePct: common.referralFeePct,
+            referralFeeRecipient: common.referralFeeRecipient,
+            deadline,
           },
           metadata: this.client.options.metadata,
-        }),
-    };
+        });
+      },
+    });
   }
 
   redeem({ shares, userAddress }: { shares: bigint; userAddress: Address }) {
