@@ -49,9 +49,9 @@
     "test": "vitest --root ../.. --project wdk-protocol-lending-morpho-evm --project wdk-protocol-lending-morpho-evm-fork"
   },
   "dependencies": {
-    "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/blue-sdk-viem": "workspace:^",
-    "@morpho-org/morpho-sdk": "workspace:^",
+    "@morpho-org/blue-sdk": "workspace:*",
+    "@morpho-org/blue-sdk-viem": "workspace:*",
+    "@morpho-org/morpho-sdk": "workspace:*",
     "@tetherto/wdk-wallet": "1.0.0-beta.15",
     "@tetherto/wdk-wallet-evm": "1.0.0-beta.16",
     "@tetherto/wdk-wallet-evm-erc-4337": "1.0.0-beta.14",
