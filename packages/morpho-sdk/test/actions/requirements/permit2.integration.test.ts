@@ -115,8 +115,8 @@ describe("Permit2", () => {
     expect(finalState.userAssetBalance).toEqual(
       initialState.userAssetBalance - amount,
     );
-    expect(finalState.morphoAssetBalance).toEqual(
-      initialState.morphoAssetBalance + amount,
+    expect(finalState.vaultBalance + finalState.morphoAssetBalance).toEqual(
+      initialState.vaultBalance + initialState.morphoAssetBalance + amount,
     );
     expect(finalState.userSharesBalance).toBeGreaterThan(
       initialState.userSharesBalance,
@@ -199,8 +199,8 @@ describe("Permit2", () => {
     expect(finalState.userAssetBalance).toEqual(
       initialState.userAssetBalance - amount,
     );
-    expect(finalState.morphoAssetBalance).toEqual(
-      initialState.morphoAssetBalance + amount,
+    expect(finalState.vaultBalance + finalState.morphoAssetBalance).toEqual(
+      initialState.vaultBalance + initialState.morphoAssetBalance + amount,
     );
     expect(finalState.userSharesBalance).toBeGreaterThan(
       initialState.userSharesBalance,
