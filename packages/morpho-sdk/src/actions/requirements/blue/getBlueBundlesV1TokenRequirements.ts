@@ -29,25 +29,25 @@ import { getRequirementsApproval } from "../getRequirementsApproval.js";
 /** Parameters for {@link getBlueBundlesV1TokenRequirements}. */
 export interface GetBlueBundlesV1TokenRequirementsParams {
   /** ERC-20 token funded by the operation. */
-  token: Address;
+  readonly token: Address;
   /** Exact amount BlueBundlesV1 will pull. */
-  amount: bigint;
+  readonly amount: bigint;
   /** Classic approval amount; defaults to the exact pull amount. */
-  approvalAmount?: bigint;
+  readonly approvalAmount?: bigint;
   /** Account funding the operation. */
-  owner: Address;
+  readonly owner: Address;
   /** Target chain id. */
-  chainId: number;
+  readonly chainId: number;
   /** Final-call and signature deadline. */
-  deadline: bigint;
+  readonly deadline: bigint;
   /** Whether the caller can collect offchain token signatures. */
-  supportSignature: boolean;
+  readonly supportSignature: boolean;
   /** Whether token metadata reads may use deployless aggregation. */
-  supportDeployless?: boolean;
+  readonly supportDeployless?: boolean;
   /** Prefer ERC-2612 when the token exposes a compatible nonce. */
-  useSimplePermit?: boolean;
+  readonly useSimplePermit?: boolean;
   /** Explicit unused Permit2 SignatureTransfer unordered nonce. */
-  permit2Nonce?: bigint;
+  readonly permit2Nonce?: bigint;
 }
 
 /**
