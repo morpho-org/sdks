@@ -86,15 +86,17 @@ jobs:
 
           # Pack every non-private workspace package. `pnpm pack` performs the
           # workspace-protocol replacement (workspace:^ -> ^x.y.z) exactly like
-          # `changeset publish` would, and `--ignore-scripts` guarantees no
-          # rebuild happens here: we ship the artifacts built in the step above.
+          # `changeset publish` would. The `lib/` shipped is the one built by the
+          # step above; pnpm 11 runs no rebuild here (packages define only the
+          # legacy `prepublish` hook, which pnpm pack does not run) and strips
+          # lifecycle scripts from the packed manifest by default.
           while IFS= read -r -d '' manifest; do
             dir="$(dirname "$manifest")"
             is_private="$(cd "$dir" && node -p "require('./package.json').private === true")"
             if [ "$is_private" = "true" ]; then
               continue
             fi
-            ( cd "$dir" && pnpm pack --ignore-scripts --pack-destination "$out" )
+            ( cd "$dir" && pnpm pack --pack-destination "$out" )
           done < <(find packages -mindepth 2 -maxdepth 2 -name package.json -not -path '*/node_modules/*' -print0)
 
           # Digest the exact bytes handed to the privileged job. The publish job
@@ -202,6 +204,23 @@ jobs:
             publish_tag="next"
           fi
 
+          # Trusted publish allowlist, derived from the attested source tree
+          # (this job's fresh checkout of github.sha). A tampered pack job cannot
+          # make us publish a name/version that is not declared at this commit.
+          declare -A expected
+          while IFS=$'\t' read -r pkg_name pkg_version; do
+            expected["$pkg_name"]="$pkg_version"
+          done < <(node -e '
+            const { readdirSync, readFileSync, existsSync } = require("node:fs");
+            for (const dir of readdirSync("packages")) {
+              const manifest = `packages/${dir}/package.json`;
+              if (!existsSync(manifest)) continue;
+              const pkg = JSON.parse(readFileSync(manifest, "utf8"));
+              if (pkg.private === true) continue;
+              process.stdout.write(`${pkg.name}\t${pkg.version}\n`);
+            }
+          ')
+
           shopt -s nullglob
           published=0
           for tgz in "${RUNNER_TEMP}/tarballs/"*.tgz; do
@@ -210,6 +229,17 @@ jobs:
             name="$(node -p "require('${tmpd}/package/package.json').name")"
             version="$(node -p "require('${tmpd}/package/package.json').version")"
             rm -rf "$tmpd"
+
+            # Refuse any tarball whose identity is not declared in the source tree.
+            expected_version="${expected[$name]:-}"
+            if [ -z "$expected_version" ]; then
+              echo "::error::Refusing to publish '${name}': not a non-private package at ${GITHUB_SHA}."
+              exit 1
+            fi
+            if [ "$expected_version" != "$version" ]; then
+              echo "::error::Refusing to publish ${name}@${version}: source declares ${name}@${expected_version} at ${GITHUB_SHA}."
+              exit 1
+            fi
 
             # Idempotent reruns: never re-publish a version already on the registry.
             if npm view "${name}@${version}" version >/dev/null 2>&1; then
