@@ -37,7 +37,7 @@ jobs:
         id: claude
         uses: anthropics/claude-code-action@5ef2e550a465a721f4f45e4a7d3c340c873e1dcc # v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_SDK_API_KEY }}
           allowed_bots: 'morpho-apps-git-bot,prime-monorepo-git-bot,devin-ai-integration,prd-carapulse,cursor'
           claude_args: |
             --model fable
