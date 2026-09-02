@@ -310,37 +310,38 @@ export function computeVaultV2ForceWithdrawPlan(params: {
  * one per `forceDeallocate`, and the final deallocated leg). Each rounds its share burn up, so the
  * bound adds one share per leg on top of the penalty-inclusive asset total.
  *
- * Both endpoints of the accrual window are considered because interest lowers the burn while
- * management fees raise it, so neither snapshot alone bounds execution.
+ * The result is the **denominator of {@link computeMinForceWithdrawSharePrice}** — the largest share
+ * burn the realized exit price is measured against. It takes the max over the two supplied snapshots
+ * because interest lowers the burn while management fees raise it, so neither snapshot alone bounds
+ * execution. The entity passes both accrued to `now` (execution time): the raw `lastUpdate` snapshot
+ * underestimates the burn a stale fee-bearing vault realizes — the first withdrawal accrues pending
+ * management fees before burning shares — which lifts the floor above the faithful price and trips
+ * `SlippageExceeded`. Accruing to `now`, not the caller-chosen `deadline`, tracks execution without
+ * letting a long deadline silently weaken the guard; `slippageTolerance` absorbs the residual drift
+ * until inclusion. Pass distinct snapshots to bound the burn across an accrual window.
  *
- * Callers want two different bounds from this helper, and must not conflate them:
- * - **The allowance to authorize** takes `deadlineVaultData` accrued to the exit deadline, so the
- *   approval still covers a burn inflated by fees accrued while the transaction sits pending.
- * - **The denominator of {@link computeMinForceWithdrawSharePrice}** takes both endpoints accrued to
- *   `now` (execution time). The raw `lastUpdate` snapshot underestimates the burn a stale
- *   fee-bearing vault realizes — the first withdrawal accrues pending management fees before burning
- *   shares — which lifts the floor above the faithful price and trips `SlippageExceeded`. Accruing
- *   to `now`, not the caller-chosen `deadline`, tracks execution without letting a long deadline
- *   silently weaken the guard; `slippageTolerance` absorbs the residual drift until inclusion.
+ * This is **not** the share allowance to authorize: derive that from the price floor
+ * (`mulDivUp(exitAssets, RAY, minSharePriceE27)`), the largest burn the on-chain check accepts. This
+ * share-burn bound would under-approve by the slippage band and revert a within-tolerance exit on
+ * allowance.
  *
  * @param params - Share-bound inputs.
  * @param params.vaultData - Pre-fetched Vault V2 accrual snapshot.
- * @param params.deadlineVaultData - The same vault accrued to a later timestamp: the exit deadline
- *   for the allowance, or `now` for the price-floor denominator (with `vaultData` accrued to the
- *   same `now`).
+ * @param params.deadlineVaultData - The same vault accrued to a second timestamp; the max of the two
+ *   share burns is returned. The entity passes the `now`-accrued snapshot for both.
  * @param params.plan - Plan from {@link computeVaultV2ForceWithdrawPlan}.
  * @returns An upper bound, in vault shares, of what the exit burns.
  * @example
  * ```ts
  * import { computeVaultV2ForceWithdrawSharesBurnt } from "@morpho-org/morpho-sdk";
  *
- * const { vault: deadlineVaultData } = vaultData.accrueInterest(deadline);
+ * const { vault: nowVaultData } = vaultData.accrueInterest(now);
  * const sharesBurnt = computeVaultV2ForceWithdrawSharesBurnt({
- *   vaultData,
- *   deadlineVaultData,
+ *   vaultData: nowVaultData,
+ *   deadlineVaultData: nowVaultData,
  *   plan,
  * });
- * // sharesBurnt is the allowance to permit or approve
+ * // sharesBurnt is the denominator for computeMinForceWithdrawSharePrice
  * ```
  */
 export function computeVaultV2ForceWithdrawSharesBurnt(params: {
