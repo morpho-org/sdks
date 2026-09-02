@@ -6,7 +6,7 @@ import {
   type Erc2612RequirementSignature,
   type Permit2AllowanceRequirementSignature,
   Permit2ExpirationMissingError,
-  type Permit2TransferFromRequirementSignature,
+  type Permit2SignatureTransferRequirementSignature,
   type PermitRequirementSignature,
   UnexpectedRequirementSignatureError,
 } from "../../types/index.js";
@@ -118,8 +118,8 @@ describe("getTokenRequirementActions", () => {
   });
 
   test("error: UnexpectedRequirementSignatureError rejects a BlueBundlesV1 SignatureTransfer result", () => {
-    // permit2TransferFrom is a BlueBundlesV1-only result; it must never reach the Bundler3 path.
-    const transferFromSignature: Permit2TransferFromRequirementSignature = {
+    // permit2SignatureTransfer is a BlueBundlesV1-only result; it must never reach the Bundler3 path.
+    const transferFromSignature: Permit2SignatureTransferRequirementSignature = {
       args: {
         owner: OWNER,
         nonce: 0n,
@@ -129,7 +129,7 @@ describe("getTokenRequirementActions", () => {
         deadline: DEADLINE,
       },
       action: {
-        type: "permit2TransferFrom",
+        type: "permit2SignatureTransfer",
         args: { spender: SPENDER, amount: AMOUNT, deadline: DEADLINE },
       },
     };

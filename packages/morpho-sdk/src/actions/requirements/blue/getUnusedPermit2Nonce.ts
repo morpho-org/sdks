@@ -21,7 +21,7 @@ const MAX_PERMIT2_NONCE_WORD = maxUint256 >> 8n;
 
 /**
  * Finds the lowest unused Permit2 unordered nonce for `owner`, ready to pass as `permit2Nonce` to
- * {@link getBlueBundlesV1TokenRequirements} or as `nonce` to {@link encodeErc20Permit2TransferFrom}.
+ * {@link getBundlesTokenRequirements} or as `nonce` to {@link encodeErc20Permit2SignatureTransfer}.
  *
  * Permit2 SignatureTransfer consumes an unordered 256-bit nonce; a nonce is free when its bit in
  * `nonceBitmap(owner, word)` is unset. This scans consecutive bitmap words starting at `startNonce`

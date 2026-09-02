@@ -11,12 +11,12 @@ import {
   InputExceedsMaxError,
   isRequirementApproval,
   isRequirementSignature,
-  MissingPermit2TransferFromNonceError,
+  MissingPermit2SignatureTransferNonceError,
   NegativeInputError,
   NonPositiveInputError,
-  Permit2TransferFromNonceAlreadyUsedError,
-} from "../../../types/index.js";
-import { getBlueBundlesV1TokenRequirements } from "./getBlueBundlesV1TokenRequirements.js";
+  Permit2SignatureTransferNonceAlreadyUsedError,
+} from "../../types/index.js";
+import { getBundlesTokenRequirements } from "./getBundlesTokenRequirements.js";
 
 const account = privateKeyToAccount(
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
@@ -27,7 +27,7 @@ const walletClient = createWalletClient({
   transport: http(),
 });
 
-describe("getBlueBundlesV1TokenRequirements", () => {
+describe("getBundlesTokenRequirements", () => {
   const { usdc, permit2, bundles } = addressesRegistry[mainnet.id];
   if (permit2 == null || bundles?.blueBundlesV1 == null) {
     throw new Error("BlueBundlesV1 requirements are not registered");
@@ -43,17 +43,15 @@ describe("getBlueBundlesV1TokenRequirements", () => {
       result: 0n,
     });
 
-    const requirements = await getBlueBundlesV1TokenRequirements(
-      handle.client,
-      {
-        token: usdc,
-        amount: 1_000_000n,
-        owner: account.address,
-        chainId: mainnet.id,
-        deadline: maxUint256,
-        supportSignature: false,
-      },
-    );
+    const requirements = await getBundlesTokenRequirements(handle.client, {
+      token: usdc,
+      spender: blueBundlesV1,
+      amount: 1_000_000n,
+      owner: account.address,
+      chainId: mainnet.id,
+      deadline: maxUint256,
+      supportSignature: false,
+    });
 
     expect(requirements).toHaveLength(1);
     expect(isRequirementApproval(requirements[0])).toBe(true);
@@ -71,10 +69,11 @@ describe("getBlueBundlesV1TokenRequirements", () => {
       functionName: "allowance",
       result: 2_000_000n,
     });
-    const coveredRequirements = await getBlueBundlesV1TokenRequirements(
+    const coveredRequirements = await getBundlesTokenRequirements(
       handle.client,
       {
         token: usdc,
+        spender: blueBundlesV1,
         amount: 1_000_000n,
         approvalAmount: maxUint256,
         owner: account.address,
@@ -93,10 +92,11 @@ describe("getBlueBundlesV1TokenRequirements", () => {
       functionName: "allowance",
       result: 0n,
     });
-    const reusableRequirements = await getBlueBundlesV1TokenRequirements(
+    const reusableRequirements = await getBundlesTokenRequirements(
       handle.client,
       {
         token: usdc,
+        spender: blueBundlesV1,
         amount: 1_000_000n,
         approvalAmount: maxUint256,
         owner: account.address,
@@ -127,19 +127,17 @@ describe("getBlueBundlesV1TokenRequirements", () => {
       result: 1n,
     });
 
-    const requirements = await getBlueBundlesV1TokenRequirements(
-      handle.client,
-      {
-        token: usdc,
-        amount: maxUint256,
-        owner: account.address,
-        chainId: mainnet.id,
-        deadline: maxUint256,
-        supportSignature: true,
-        useSimplePermit: true,
-        permit2Nonce: maxUint256 - 1n,
-      },
-    );
+    const requirements = await getBundlesTokenRequirements(handle.client, {
+      token: usdc,
+      spender: blueBundlesV1,
+      amount: maxUint256,
+      owner: account.address,
+      chainId: mainnet.id,
+      deadline: maxUint256,
+      supportSignature: true,
+      useSimplePermit: true,
+      permit2Nonce: maxUint256 - 1n,
+    });
     const signatureRequirement = requirements.at(-1);
     if (!isRequirementSignature(signatureRequirement)) {
       throw new Error("SignatureTransfer requirement is missing");
@@ -153,18 +151,19 @@ describe("getBlueBundlesV1TokenRequirements", () => {
       type: "erc20Approval",
       args: { spender: permit2 },
     });
-    if (signed.action.type !== "permit2TransferFrom") {
+    if (signed.action.type !== "permit2SignatureTransfer") {
       throw new Error("Unexpected signature requirement");
     }
-    expect(signed.action.type).toBe("permit2TransferFrom");
+    expect(signed.action.type).toBe("permit2SignatureTransfer");
     expect(signed.args.nonce).toBe(maxUint256 - 1n);
   });
 
   test("rejects invalid amounts and unavailable Permit2 nonces", async () => {
     const handle = createMockClient(mainnet);
     await expect(
-      getBlueBundlesV1TokenRequirements(handle.client, {
+      getBundlesTokenRequirements(handle.client, {
         token: usdc,
+        spender: blueBundlesV1,
         amount: -1n,
         owner: account.address,
         chainId: mainnet.id,
@@ -174,8 +173,9 @@ describe("getBlueBundlesV1TokenRequirements", () => {
     ).rejects.toBeInstanceOf(NegativeInputError);
 
     await expect(
-      getBlueBundlesV1TokenRequirements(handle.client, {
+      getBundlesTokenRequirements(handle.client, {
         token: usdc,
+        spender: blueBundlesV1,
         amount: 1n,
         owner: account.address,
         chainId: mainnet.id,
@@ -185,7 +185,7 @@ describe("getBlueBundlesV1TokenRequirements", () => {
     ).rejects.toBeInstanceOf(NonPositiveInputError);
 
     await expect(
-      getBlueBundlesV1TokenRequirements(handle.client, {
+      getBundlesTokenRequirements(handle.client, {
         token: usdc,
         amount: maxUint256 + 1n,
         owner: account.address,
@@ -196,8 +196,9 @@ describe("getBlueBundlesV1TokenRequirements", () => {
     ).rejects.toBeInstanceOf(InputExceedsMaxError);
 
     await expect(
-      getBlueBundlesV1TokenRequirements(handle.client, {
+      getBundlesTokenRequirements(handle.client, {
         token: usdc,
+        spender: blueBundlesV1,
         amount: 1n,
         owner: account.address,
         chainId: mainnet.id,
@@ -207,8 +208,9 @@ describe("getBlueBundlesV1TokenRequirements", () => {
     ).rejects.toBeInstanceOf(InputExceedsMaxError);
 
     await expect(
-      getBlueBundlesV1TokenRequirements(handle.client, {
+      getBundlesTokenRequirements(handle.client, {
         token: usdc,
+        spender: blueBundlesV1,
         amount: 1n,
         owner: account.address,
         chainId: mainnet.id,
@@ -218,8 +220,9 @@ describe("getBlueBundlesV1TokenRequirements", () => {
     ).rejects.toBeInstanceOf(ExpiredDeadlineError);
 
     await expect(
-      getBlueBundlesV1TokenRequirements(handle.client, {
+      getBundlesTokenRequirements(handle.client, {
         token: usdc,
+        spender: blueBundlesV1,
         amount: 2n,
         approvalAmount: 1n,
         owner: account.address,
@@ -230,19 +233,21 @@ describe("getBlueBundlesV1TokenRequirements", () => {
     ).rejects.toBeInstanceOf(ApprovalAmountLessThanSpendAmountError);
 
     await expect(
-      getBlueBundlesV1TokenRequirements(handle.client, {
+      getBundlesTokenRequirements(handle.client, {
         token: usdc,
+        spender: blueBundlesV1,
         amount: 1n,
         owner: account.address,
         chainId: mainnet.id,
         deadline: maxUint256,
         supportSignature: true,
       }),
-    ).rejects.toBeInstanceOf(MissingPermit2TransferFromNonceError);
+    ).rejects.toBeInstanceOf(MissingPermit2SignatureTransferNonceError);
 
     await expect(
-      getBlueBundlesV1TokenRequirements(handle.client, {
+      getBundlesTokenRequirements(handle.client, {
         token: usdc,
+        spender: blueBundlesV1,
         amount: 1n,
         owner: account.address,
         chainId: mainnet.id,
@@ -253,8 +258,9 @@ describe("getBlueBundlesV1TokenRequirements", () => {
     ).rejects.toBeInstanceOf(NegativeInputError);
 
     await expect(
-      getBlueBundlesV1TokenRequirements(handle.client, {
+      getBundlesTokenRequirements(handle.client, {
         token: usdc,
+        spender: blueBundlesV1,
         amount: 1n,
         owner: account.address,
         chainId: mainnet.id,
@@ -277,8 +283,9 @@ describe("getBlueBundlesV1TokenRequirements", () => {
       result: 1n << 7n,
     });
     await expect(
-      getBlueBundlesV1TokenRequirements(handle.client, {
+      getBundlesTokenRequirements(handle.client, {
         token: usdc,
+        spender: blueBundlesV1,
         amount: 1n,
         owner: account.address,
         chainId: mainnet.id,
@@ -286,6 +293,6 @@ describe("getBlueBundlesV1TokenRequirements", () => {
         supportSignature: true,
         permit2Nonce: 7n,
       }),
-    ).rejects.toBeInstanceOf(Permit2TransferFromNonceAlreadyUsedError);
+    ).rejects.toBeInstanceOf(Permit2SignatureTransferNonceAlreadyUsedError);
   });
 });

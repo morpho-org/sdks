@@ -184,7 +184,7 @@ describe("BlueBundlesV1 Blue writes", () => {
     const requirements = await action.getRequirements({ permit2Nonce: 0n });
     expect(
       requirements.map(({ action: requirement }) => requirement.type),
-    ).toEqual(["erc20Approval", "permit2TransferFrom"]);
+    ).toEqual(["erc20Approval", "permit2SignatureTransfer"]);
     const signatures = await satisfyBlueBundlesV1Requirements(client, {
       requirements,
     });
@@ -507,13 +507,13 @@ describe("BlueBundlesV1 Blue writes", () => {
     const requirements = await action.getRequirements({ permit2Nonce });
     expect(
       requirements.map(({ action: requirement }) => requirement.type),
-    ).toEqual(["erc20Approval", "permit2TransferFrom", "authorization"]);
+    ).toEqual(["erc20Approval", "permit2SignatureTransfer", "authorization"]);
     const signatures = await satisfyBlueBundlesV1Requirements(client, {
       requirements,
     });
     expect(signatures).toMatchObject([
       {
-        action: { type: "permit2TransferFrom" },
+        action: { type: "permit2SignatureTransfer" },
         args: { nonce: permit2Nonce },
       },
       { action: { type: "authorization" } },

@@ -4,9 +4,9 @@ import { blueBundlesV1Abi } from "../../abis.js";
 import { validateUint256Field } from "../../helpers/validate.js";
 import {
   type AuthorizationRequirementSignature,
-  type BlueBundlesV1TokenRequirementSignature,
   type BlueRepayWithdrawCollateralAction,
   InputExceedsMaxError,
+  type BundlesTokenRequirementSignature,
   MaxRepayAssetsBelowRepayAssetsError,
   type Metadata,
   MutuallyExclusiveRepayAmountsError,
@@ -54,7 +54,7 @@ export interface BlueRepayWithdrawCollateralParams {
     /** Recipient required when `referralFeePct` is positive. */
     readonly referralFeeRecipient?: Address;
     /** Optional loan-token ERC-2612 or Permit2 SignatureTransfer result. */
-    readonly requirementSignature?: BlueBundlesV1TokenRequirementSignature;
+    readonly requirementSignature?: BundlesTokenRequirementSignature;
     /** Optional Morpho authorization signature for BlueBundlesV1. */
     readonly authorizationSignature?: AuthorizationRequirementSignature;
   };
@@ -101,7 +101,7 @@ export interface BlueRepayWithdrawCollateralParams {
  * @throws {DepositAssetMismatchError} when the signed asset differs from the loan token.
  * @throws {DepositAmountMismatchError} when the signed amount differs from `maxRepayAssets`.
  * @throws {DepositSpenderMismatchError} when the signed spender is not BlueBundlesV1.
- * @throws {BlueBundlesV1RequirementSignatureMismatchError} when a signature cannot be bound safely.
+ * @throws {BundlesRequirementSignatureMismatchError} when a signature cannot be bound safely.
  * @throws {UnsupportedChainIdError} when the chain is absent from the registry.
  * @throws {UnknownAddressError} when BlueBundlesV1 is not registered.
  * @example
