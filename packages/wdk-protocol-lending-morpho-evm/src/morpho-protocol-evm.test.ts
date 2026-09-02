@@ -1,18 +1,18 @@
 import type {
   AuthorizationRequirementSignature,
-  BlueBundlesV1TokenRequirementSignature,
-  PermitRequirementSignature,
+  BundlesTokenRequirementSignature,
   VaultV2BlueReallocation,
 } from "@morpho-org/morpho-sdk";
 import * as viem from "viem";
 import { beforeEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import type {
-  ApprovalOrSignatureRequirement,
   AuthorizationOrSignatureRequirement,
   BlueApprovalOrSignatureRequirement,
+  BundlesApprovalOrSignatureRequirement,
   MorphoBorrowOptions,
   MorphoCollateralSupplyOptions,
-  MorphoSupplyOptions,
+  MorphoExclusiveSupplyOptions,
+  PreparedMorphoSupply,
   RequirementOptions,
 } from "./morpho-protocol-evm.js";
 
@@ -201,6 +201,22 @@ describe.sequential("MorphoProtocolEvm", () => {
   });
 
   describe("supply", () => {
+    test("types: vault funding is ERC-20 or native, never both", () => {
+      expectTypeOf<{
+        token: string;
+        amount: bigint;
+      }>().toMatchTypeOf<MorphoExclusiveSupplyOptions>();
+      expectTypeOf<{
+        token: string;
+        nativeAmount: bigint;
+      }>().toMatchTypeOf<MorphoExclusiveSupplyOptions>();
+      expectTypeOf<{
+        token: string;
+        amount: bigint;
+        nativeAmount: bigint;
+      }>().not.toMatchTypeOf<MorphoExclusiveSupplyOptions>();
+    });
+
     test("should build a vault deposit with morpho-sdk and send it", async () => {
       account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
       account.sendTransaction = vi
@@ -219,7 +235,6 @@ describe.sequential("MorphoProtocolEvm", () => {
       expect(vaultV2Mock).toHaveBeenCalledWith(VAULT, 1);
       expect(vaultV2Entity.deposit).toHaveBeenCalledWith({
         amount: 100_000n,
-        nativeAmount: undefined,
         userAddress: ADDRESS,
         vaultData,
         slippageTolerance: undefined,
@@ -230,22 +245,23 @@ describe.sequential("MorphoProtocolEvm", () => {
 
     test("should return supply requirements from morpho-sdk", async () => {
       const requirementOptions = { useSimplePermit: true };
-      const promise = protocol.getSupplyRequirements(
-        { token: TOKEN, amount: 100_000n },
-        requirementOptions,
-      );
+      const prepared = await protocol.prepareSupply({
+        token: TOKEN,
+        amount: 100_000n,
+      });
+      expectTypeOf(prepared).toEqualTypeOf<PreparedMorphoSupply>();
+      expect(Object.isFrozen(prepared)).toBe(true);
+      const promise = prepared.getRequirements(requirementOptions);
       expectTypeOf(promise).toEqualTypeOf<
-        Promise<readonly ApprovalOrSignatureRequirement[]>
+        Promise<readonly BundlesApprovalOrSignatureRequirement[]>
       >();
-      expectTypeOf<
-        NonNullable<MorphoSupplyOptions["requirementSignature"]>
-      >().toEqualTypeOf<PermitRequirementSignature>();
       const requirements = await promise;
 
       expect(requirements).toEqual([{ action: { type: "erc20Approval" } }]);
       expect(supplyAction.getRequirements).toHaveBeenCalledWith(
         requirementOptions,
       );
+      expect(vaultV2Entity.deposit).toHaveBeenCalledTimes(1);
     });
 
     test("should use vaultV2 when an explicit vault is configured", async () => {
@@ -332,7 +348,6 @@ describe.sequential("MorphoProtocolEvm", () => {
 
       expect(account.getTokenBalance).not.toHaveBeenCalled();
       expect(vaultV2Entity.deposit).toHaveBeenCalledWith({
-        amount: 0n,
         nativeAmount: 100_000n,
         userAddress: ADDRESS,
         vaultData: expect.objectContaining({ asset: COLLATERAL }),
@@ -343,9 +358,7 @@ describe.sequential("MorphoProtocolEvm", () => {
     test("should reject zero deposit amount across erc20 and native sources", async () => {
       await expect(
         protocol.supply({ token: TOKEN, amount: 0n }),
-      ).rejects.toThrow(
-        "'amount' or 'nativeAmount' should be greater than zero.",
-      );
+      ).rejects.toThrow("'amount' should be greater than zero.");
     });
 
     test("should use vaultV2 when the selected preset is configured", async () => {
@@ -389,9 +402,7 @@ describe.sequential("MorphoProtocolEvm", () => {
     test("should throw if 'amount' and 'nativeAmount' are zero", async () => {
       await expect(
         protocol.supply({ token: TOKEN, amount: 0n }),
-      ).rejects.toThrow(
-        "'amount' or 'nativeAmount' should be greater than zero.",
-      );
+      ).rejects.toThrow("'amount' should be greater than zero.");
     });
 
     test("should reject 'amount' numbers above Number.MAX_SAFE_INTEGER", async () => {
@@ -736,8 +747,8 @@ describe.sequential("MorphoProtocolEvm", () => {
         .mockResolvedValue({ hash: "dummy-repay-hash", fee: 12_345n });
       const requirementSignature = {
         args: { deadline: SIGNATURE_DEADLINE },
-        action: { type: "permit2TransferFrom" },
-      } as unknown as BlueBundlesV1TokenRequirementSignature;
+        action: { type: "permit2SignatureTransfer" },
+      } as unknown as BundlesTokenRequirementSignature;
 
       await protocol.repay({
         token: TOKEN,
