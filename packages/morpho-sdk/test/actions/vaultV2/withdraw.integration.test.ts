@@ -53,8 +53,8 @@ describe("Withdraw VaultV2", () => {
     expect(finalState.userAssetBalance).toEqual(
       initialState.userAssetBalance + assets,
     );
-    expect(finalState.morphoAssetBalance).toEqual(
-      initialState.morphoAssetBalance - assets,
+    expect(finalState.vaultBalance + finalState.morphoAssetBalance).toEqual(
+      initialState.vaultBalance + initialState.morphoAssetBalance - assets,
     );
   });
 });
