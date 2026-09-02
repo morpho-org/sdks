@@ -20,7 +20,7 @@ import {
   SteakhouseUsdcVaultV1,
 } from "../../fixtures/vaultV1.js";
 import { testInvariants } from "../../helpers/invariants.js";
-import { test } from "../../setup.js";
+import { vaultBundlesV1Test as test } from "../../helpers/vaultBundlesV1.js";
 
 describe("DepositVaultV1", () => {
   const vaultBundlesV1 = getChainAddress(mainnet.id, "bundles.vaultBundlesV1");

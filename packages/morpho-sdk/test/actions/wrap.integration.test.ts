@@ -17,46 +17,52 @@ import {
 } from "../fixtures/vaultV1.js";
 import { KpkWETHVaultV2 } from "../fixtures/vaultV2.js";
 import { testInvariants } from "../helpers/invariants.js";
+import { vaultBundlesV1Test } from "../helpers/vaultBundlesV1.js";
 import { test } from "../setup.js";
 
 describe("VaultBundlesV1 native Vault V1 funding", () => {
-  test("deposits native ETH into a wNative vault", async ({ client }) => {
-    const nativeAmount = parseUnits("1", 18);
-    await client.setBalance({
-      address: client.account.address,
-      value: nativeAmount + parseUnits("10", 18),
-    });
+  vaultBundlesV1Test(
+    "deposits native ETH into a wNative vault",
+    async ({ client }) => {
+      const nativeAmount = parseUnits("1", 18);
+      await client.setBalance({
+        address: client.account.address,
+        value: nativeAmount + parseUnits("10", 18),
+      });
 
-    const {
-      vaults: {
-        GauntletWethVaultV1: { initialState, finalState },
-      },
-    } = await testInvariants({
-      client,
-      params: { vaults: { GauntletWethVaultV1 } },
-      actionFn: async () => {
-        const vault = client
-          .extend(morphoViemExtension())
-          .morpho.vaultV1(GauntletWethVaultV1.address, mainnet.id);
-        const deposit = vault.deposit({
-          userAddress: client.account.address,
-          nativeAmount,
-          vaultData: await vault.getData(),
-        });
-        expect(await deposit.getRequirements()).toEqual([]);
-        const transaction = deposit.buildTx();
-        expect(transaction.value).toBe(nativeAmount);
-        expect(transaction.action.args.amount).toBe(nativeAmount);
-        expect(transaction.action.args.nativeAmount).toBe(nativeAmount);
-        await client.sendTransaction(transaction);
-      },
-    });
+      const {
+        vaults: {
+          GauntletWethVaultV1: { initialState, finalState },
+        },
+      } = await testInvariants({
+        client,
+        params: { vaults: { GauntletWethVaultV1 } },
+        actionFn: async () => {
+          const vault = client
+            .extend(morphoViemExtension())
+            .morpho.vaultV1(GauntletWethVaultV1.address, mainnet.id);
+          const deposit = vault.deposit({
+            userAddress: client.account.address,
+            nativeAmount,
+            vaultData: await vault.getData(),
+          });
+          expect(await deposit.getRequirements()).toEqual([]);
+          const transaction = deposit.buildTx();
+          expect(transaction.value).toBe(nativeAmount);
+          expect(transaction.action.args.amount).toBe(nativeAmount);
+          expect(transaction.action.args.nativeAmount).toBe(nativeAmount);
+          await client.sendTransaction(transaction);
+        },
+      });
 
-    expect(finalState.userNativeBalance).toBeLessThan(
-      initialState.userNativeBalance,
-    );
-    expect(finalState.morphoAssetBalance).toBe(initialState.morphoAssetBalance);
-  });
+      expect(finalState.userNativeBalance).toBeLessThan(
+        initialState.userNativeBalance,
+      );
+      expect(finalState.morphoAssetBalance).toBe(
+        initialState.morphoAssetBalance + nativeAmount,
+      );
+    },
+  );
 
   test("rejects mixed token/native funding and a native-path token signature", () => {
     const mixedFunding = {

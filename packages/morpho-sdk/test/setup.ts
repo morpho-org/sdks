@@ -9,8 +9,7 @@ import { env } from "./env.js";
 export const test = createViemTest(mainnet, {
   forkUrl: env().MAINNET_RPC_URL,
   chainId: mainnet.id,
-  // VaultBundlesV1 is deployed at the registered address by this block.
-  forkBlockNumber: 25_730_000n,
+  forkBlockNumber: 24_593_903n,
 }).extend<{ client: AnvilTestClient<typeof mainnet> }>({
   client: async ({ client }, use) => {
     // The test account (0xf39Fd6…) has EIP-7702 delegation code on mainnet at
