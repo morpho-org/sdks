@@ -52,6 +52,7 @@ const prepared = await morpho.prepareSupply({
   token: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
   amount: 1000000n
 })
+const requirements = await prepared.getRequirements()
 
 // Send every approval requirement returned by the Morpho SDK.
 for (const requirement of await prepared.getRequirements()) {

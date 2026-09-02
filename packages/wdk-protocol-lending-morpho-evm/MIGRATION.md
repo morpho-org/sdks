@@ -1,6 +1,7 @@
 # Migrating to 2.0
 
-Version 2 routes Morpho Blue writes through `BlueBundlesV1` and Morpho vault deposits through `VaultBundlesV1`, both instead of Bundler3. Vault withdrawals also route through VaultBundlesV1 instead of a direct vault call.
+Version 2 routes Morpho Blue writes through `BlueBundlesV1` and Vault V2 earn writes through
+`VaultBundlesV1` instead of Bundler3 or direct ERC-4626 calls.
 
 ## Required changes
 
@@ -24,7 +25,7 @@ Version 2 routes Morpho Blue writes through `BlueBundlesV1` and Morpho vault dep
 
 ## TypeScript output changes
 
-- `get*Requirements()` returns a readonly array. Treat it as an immutable result instead of
+- Prepared-handle `getRequirements()` returns a readonly array. Treat it as an immutable result instead of
   pushing requirements into it.
 - `RequirementApproval` and `RequirementAuthorization` are readonly transactions.
 - `RequirementSignatureRequest<TSignature>` is now generic. Vault and Blue token requirements use
@@ -35,7 +36,8 @@ Version 2 routes Morpho Blue writes through `BlueBundlesV1` and Morpho vault dep
   `BlueApprovalOrSignatureRequirement` remains a deprecated alias of the first.
 - `requirementSignature` is correspondingly narrowed on `MorphoCollateralSupplyOptions`,
   `MorphoBorrowOptions`, `MorphoRepayOptions`, and the new `MorphoWithdrawCollateralOptions`.
-  Vault deposits take it as the first argument of `PreparedMorphoSupply.submit` / `.quote`.
+  Vault token and share signatures are passed to `PreparedMorphoSupply.submit` / `.quote`
+  and `PreparedMorphoWithdraw.submit` / `.quote`, respectively.
 
 ## Borrow reallocations
 

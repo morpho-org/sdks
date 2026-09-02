@@ -55,9 +55,11 @@ export interface VaultV2RedeemAction
   extends BaseAction<
     "vaultV2Redeem",
     {
-      vault: Address;
-      shares: bigint;
-      recipient: Address;
+      readonly vault: Address;
+      readonly shares: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
+      readonly deadline: bigint;
     }
   > {}
 
@@ -131,9 +133,11 @@ export interface VaultV1RedeemAction
   extends BaseAction<
     "vaultV1Redeem",
     {
-      vault: Address;
-      shares: bigint;
-      recipient: Address;
+      readonly vault: Address;
+      readonly shares: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
+      readonly deadline: bigint;
     }
   > {}
 
@@ -154,12 +158,16 @@ export interface VaultV1MigrateToV2Action
   extends BaseAction<
     "vaultV1MigrateToV2",
     {
-      sourceVault: Address;
-      targetVault: Address;
-      shares: bigint;
-      minSharePriceVaultV1: bigint;
-      maxSharePriceVaultV2: bigint;
-      recipient: Address;
+      readonly sourceVault: Address;
+      readonly targetVault: Address;
+      readonly assets: bigint;
+      readonly shares: bigint;
+      readonly maxSharePriceVaultV2: bigint;
+      readonly referralFeePct: bigint;
+      readonly referralFeeRecipient: Address;
+      readonly referralFeeAssets?: bigint;
+      readonly netAssets?: bigint;
+      readonly deadline: bigint;
     }
   > {}
 
@@ -259,6 +267,22 @@ export interface BlueRepayWithdrawCollateralAction
     BlueRepayWithdrawCollateralActionArgs
   > {}
 
+/** Metadata for a direct BlueBundlesV1 loan-asset withdrawal. */
+export interface BlueWithdrawAction
+  extends BaseAction<
+    "blueWithdraw",
+    {
+      market: Hex;
+      withdrawAssets: bigint;
+      withdrawShares: bigint;
+      onBehalf: Address;
+      reallocations: number;
+      reallocationPenaltyAssets: bigint;
+      referralFeePct: bigint;
+      referralFeeRecipient: Address;
+      deadline: bigint;
+    }
+  > {}
 /** Metadata for a direct BlueBundlesV1 full borrow-position migration. */
 export interface BlueRefinanceAction
   extends BaseAction<
@@ -448,13 +472,13 @@ export type TransactionAction =
   | VaultV1InKindRedeemAction
   | VaultV1MigrateToV2Action
   | BlueSupplyAction
-  | BlueWithdrawAction
   | BlueSupplyCollateralAction
   | BlueBorrowAction
   | BlueSupplyCollateralBorrowAction
   | BlueRepayAction
   | BlueWithdrawCollateralAction
   | BlueRepayWithdrawCollateralAction
+  | BlueWithdrawAction
   | BlueRefinanceAction
   | BlueAuthorizationAction
   | MidnightAuthorizationAction

@@ -20,19 +20,14 @@ write integrations.
 
 ## Actions
 
-Each entity exposes a set of actions. Vault deposits route through Bundler3 via `GeneralAdapter1`;
-Blue writes call BlueBundlesV1 directly; the remaining rows identify their direct destination.
+Each entity exposes a set of actions. Common vault writes call VaultBundlesV1, Blue writes call
+BlueBundlesV1, and the remaining rows identify their destination.
 
 | Entity | Actions | Route |
 | --- | --- | --- |
-| **VaultV1** (MetaMorpho) | `deposit` | VaultBundlesV1 |
-| | `migrateToV2` | Bundler3 → GeneralAdapter1 |
-| | `withdraw` | VaultBundlesV1 |
-| | `redeem` | Direct call |
+| **VaultV1** (MetaMorpho) | `deposit`, `withdraw`, `redeem`, `migrateToV2` | VaultBundlesV1 |
 | | `inKindRedeem` | VaultExitBundlesV1 |
-| **VaultV2** | `deposit` | VaultBundlesV1 |
-| | `withdraw` | VaultBundlesV1 |
-| | `redeem` | Direct call |
+| **VaultV2** | `deposit`, `withdraw`, `redeem` | VaultBundlesV1 |
 | | `forceWithdraw`, `forceRedeem` | Vault multicall |
 | | `inKindRedeem` | VaultExitBundlesV1 |
 | **Blue** | `supply`, `withdraw`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `withdrawCollateral`, `repayWithdrawCollateral`, `refinance` | BlueBundlesV1 |
@@ -47,14 +42,10 @@ Robinhood Chain. Custom deployments can still be configured with `registerCustom
 ## How it works
 
 Actions that pull tokens or touch a position return `{ buildTx, getRequirements }`. All Blue
-writes use this lazy shape while still encoding one direct BlueBundlesV1 call. Vault
-`inKindRedeem` uses this shape so callers can await `getRequirements()` to check live Blue liquidity
-and share authorization before invoking `buildTx()`. Vault `withdraw` uses it too: VaultBundlesV1
-burns `msg.sender`'s shares, so it needs a vault-share allowance equal to the derived share cap —
-an approval, or an ERC-2612 shares permit folded into the call when `supportSignature` is enabled.
-Calling `buildTx()` directly skips those RPC-backed pre-flight checks. The remaining direct calls —
-vault `redeem`, `forceWithdraw` / `forceRedeem` — have no
-prerequisites and return only `{ buildTx }`.
+writes use this lazy shape while still encoding one direct BlueBundlesV1 call. Vault deposits and
+exits use the same shape for token or exact share authorization. Vault `inKindRedeem` additionally
+checks live Blue liquidity. Calling `buildTx()` directly skips RPC-backed pre-flight checks.
+`forceWithdraw` and `forceRedeem` remain direct Vault V2 multicalls without prerequisites.
 
 - **`getRequirements()`** — async; the on-chain prerequisites to satisfy first: ERC-20 approvals, permit / Permit2 signatures, Morpho authorization, or (for Midnight) operator authorization and offer-root signatures.
 - **`buildTx(signatures?)`** — synchronous; the final, deep-frozen viem transaction. Pass any signatures collected from the requirements.
@@ -69,12 +60,12 @@ const tx = buildTx([permitSignature]);
 
 Enable off-chain approvals (permit / Permit2) with `morphoViemExtension({ supportSignature: true })`.
 
-### `userAddress` must be the signer
+### `userAddress` is the eventual submitter
 
-`userAddress` must be the account that signs and sends the transaction. Builders don't enforce
-this, but the signature helpers do — `sign()` throws `AddressMismatchError` when the wallet's
-account differs. BlueBundlesV1 always operates on `msg.sender`, so a Blue transaction must be sent
-by that same account.
+`userAddress` must be the account that eventually signs and sends the transaction. A connected
+builder account may prepare a direct bundles call for a different submitter; signature helpers
+enforce the expected identity at `sign()`. VaultBundlesV1 and BlueBundlesV1 always operate on
+`msg.sender`.
 
 ## Usage
 
@@ -107,21 +98,22 @@ Create an entity — every factory takes a chain ID as its last argument:
 
 ### Vault deposit / withdraw
 
-Deposit routes through the bundler and may require an approval or permit:
+Deposit routes through VaultBundlesV1 and may require an approval or permit:
 
 ```typescript
 const vault = client.morpho.vaultV2("0xVault...", 1);
+const vaultData = await vault.getData();
 
 const { buildTx, getRequirements } = await vault.deposit({
   amount: 1000000000000000000n,
   userAddress: "0xUser...",
+  vaultData,
 });
 const requirements = await getRequirements();
 const tx = buildTx([permitSignature]);
 ```
 
-Withdraw is a VaultBundlesV1 call that burns the caller's shares, so it needs the exact share
-allowance returned by `getRequirements()`:
+Withdraw needs an exact vault-share approval or permit:
 
 ```typescript
 const { buildTx, getRequirements } = vault.withdraw({

@@ -1,133 +1,62 @@
-import { parseUnits } from "viem";
-import { describe, expect } from "vitest";
-import {
-  KeyrockUsdcVaultV2,
-  KpkWETHVaultV2,
-} from "../../../test/fixtures/vaultV2.js";
-import { test } from "../../../test/unit.js";
+import { getChainAddress } from "@morpho-org/morpho-ts";
+import fc from "fast-check";
+import { decodeFunctionData, maxUint256 } from "viem";
+import { mainnet } from "viem/chains";
+import { describe, expect, test } from "vitest";
+import { vaultBundlesV1Abi } from "../../abis.js";
 import { NonPositiveInputError } from "../../types/index.js";
 import { vaultV2Redeem } from "./redeem.js";
 
-describe("redeemVaultV2 unit tests", () => {
-  test("should create redeem transaction with USDC vault", async ({
-    client,
-  }) => {
-    const shares = parseUnits("1000", 18); // 1000 shares
+const chainId = mainnet.id;
+const vault = "0x0000000000000000000000000000000000000051" as const;
+const userAddress = "0x0000000000000000000000000000000000000052" as const;
+const positiveUint256 = fc.bigInt({ min: 1n, max: maxUint256 });
 
-    const tx = vaultV2Redeem({
-      vault: {
-        address: KeyrockUsdcVaultV2.address,
-      },
-      args: {
-        shares,
-        recipient: client.account.address,
-        onBehalf: client.account.address,
-      },
+describe("vaultV2Redeem", () => {
+  test("default", () => {
+    const transaction = vaultV2Redeem({
+      vault: { chainId, address: vault },
+      args: { shares: 9n, userAddress, deadline: 11n },
     });
-
-    expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("vaultV2Redeem");
-    expect(tx.action.args.vault).toBe(KeyrockUsdcVaultV2.address);
-    expect(tx.action.args.shares).toBe(shares);
-    expect(tx.action.args.recipient).toBe(client.account.address);
-    expect(tx.to).toBe(KeyrockUsdcVaultV2.address);
-    expect(tx.data).toBeDefined();
-    expect(tx.value).toBe(0n);
+    expect(transaction.to).toBe(
+      getChainAddress(chainId, "bundles.vaultBundlesV1"),
+    );
+    const decoded = decodeFunctionData({
+      abi: vaultBundlesV1Abi,
+      data: transaction.data,
+    });
+    expect(decoded.functionName).toBe("vaultBundlesV1Withdraw");
+    expect(decoded.args?.[1]).toBe(0n);
+    expect(decoded.args?.[2]).toBe(9n);
+    expect(transaction.action.args).not.toHaveProperty("referralFeeAssets");
+    expect(transaction.action.args).not.toHaveProperty("netAssets");
   });
 
-  test("should create redeem transaction with WETH vault", async ({
-    client,
-  }) => {
-    const shares = parseUnits("5", 18); // 5 shares
-
-    const tx = vaultV2Redeem({
-      vault: {
-        address: KpkWETHVaultV2.address,
-      },
-      args: {
-        shares,
-        recipient: client.account.address,
-        onBehalf: client.account.address,
-      },
-    });
-
-    expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("vaultV2Redeem");
-    expect(tx.action.args.vault).toBe(KpkWETHVaultV2.address);
-    expect(tx.action.args.shares).toBe(shares);
-    expect(tx.action.args.recipient).toBe(client.account.address);
-    expect(tx.to).toBe(KpkWETHVaultV2.address);
-    expect(tx.data).toBeDefined();
-    expect(tx.value).toBe(0n);
-  });
-
-  test("should allow different recipient and onBehalf addresses", async ({
-    client,
-  }) => {
-    const shares = parseUnits("100", 18);
-    const differentRecipient =
-      "0x1234567890123456789012345678901234567890" as const;
-
-    const tx = vaultV2Redeem({
-      vault: {
-        address: KeyrockUsdcVaultV2.address,
-      },
-      args: {
-        shares,
-        recipient: differentRecipient,
-        onBehalf: client.account.address,
-      },
-    });
-
-    expect(tx.action.args.recipient).toBe(differentRecipient);
-    expect(tx.to).toBe(KeyrockUsdcVaultV2.address);
-  });
-
-  test("should append metadata to transaction data when provided", async ({
-    client,
-  }) => {
-    const shares = parseUnits("100", 18);
-    const tx = vaultV2Redeem({
-      vault: {
-        address: KeyrockUsdcVaultV2.address,
-      },
-      args: {
-        shares,
-        recipient: client.account.address,
-        onBehalf: client.account.address,
-      },
-      metadata: { origin: "a1b2c3d4" },
-    });
-
-    expect(tx.data.includes("a1b2c3d4")).toBe(true);
-  });
-
-  test("should throw NonPositiveInputError when shares is zero", async () => {
-    expect(() =>
-      vaultV2Redeem({
-        vault: {
-          address: KeyrockUsdcVaultV2.address,
-        },
-        args: {
-          shares: 0n,
-          recipient: "0x1234567890123456789012345678901234567890",
-          onBehalf: "0x1234567890123456789012345678901234567890",
-        },
+  test("behavior: calldata round-trips across uint256 inputs", () => {
+    fc.assert(
+      fc.property(positiveUint256, positiveUint256, (shares, deadline) => {
+        const transaction = vaultV2Redeem({
+          vault: { chainId, address: vault },
+          args: { shares, userAddress, deadline },
+        });
+        const decoded = decodeFunctionData({
+          abi: vaultBundlesV1Abi,
+          data: transaction.data,
+        });
+        expect(decoded.functionName).toBe("vaultBundlesV1Withdraw");
+        expect(decoded.args?.[1]).toBe(0n);
+        expect(decoded.args?.[2]).toBe(shares);
+        expect(decoded.args?.[6]).toBe(deadline);
       }),
-    ).toThrow(NonPositiveInputError);
+      { numRuns: 50, seed: 20_260_906 },
+    );
   });
 
-  test("should throw NonPositiveInputError when shares is negative", async () => {
+  test("error: NonPositiveInputError", () => {
     expect(() =>
       vaultV2Redeem({
-        vault: {
-          address: KeyrockUsdcVaultV2.address,
-        },
-        args: {
-          shares: -1n,
-          recipient: "0x1234567890123456789012345678901234567890",
-          onBehalf: "0x1234567890123456789012345678901234567890",
-        },
+        vault: { chainId, address: vault },
+        args: { shares: 0n, userAddress, deadline: 1n },
       }),
     ).toThrow(NonPositiveInputError);
   });
