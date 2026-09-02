@@ -58,7 +58,11 @@ describe("VaultBundlesV1 native funding", () => {
     expect(finalState.userNativeBalance).toBeLessThan(
       initialState.userNativeBalance,
     );
-    expect(finalState.morphoAssetBalance).toBe(initialState.morphoAssetBalance);
+    expect(finalState.vaultBalance + finalState.morphoAssetBalance).toBe(
+      initialState.vaultBalance +
+        initialState.morphoAssetBalance +
+        nativeAmount,
+    );
   });
 
   test("Vault V2 deposits native ETH into a wNative vault", async ({
@@ -97,7 +101,11 @@ describe("VaultBundlesV1 native funding", () => {
     expect(finalState.userNativeBalance).toBeLessThan(
       initialState.userNativeBalance,
     );
-    expect(finalState.morphoAssetBalance).toBe(initialState.morphoAssetBalance);
+    expect(finalState.vaultBalance + finalState.morphoAssetBalance).toBe(
+      initialState.vaultBalance +
+        initialState.morphoAssetBalance +
+        nativeAmount,
+    );
   });
 
   test("rejects mixed token/native funding and a native-path token signature", () => {
