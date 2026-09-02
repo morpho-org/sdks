@@ -16,6 +16,7 @@ import { createViemTest } from "@morpho-org/test/vitest";
 import {
   encodeAbiParameters,
   encodeFunctionData,
+  getAddress,
   maxUint128,
   maxUint256,
   parseUnits,
@@ -166,6 +167,58 @@ describe("BlueBundlesV1 Blue writes", () => {
     );
   });
 
+  test("supply: carves the referral fee to the recipient", async ({
+    client,
+  }) => {
+    const amount = parseUnits("1000", 6);
+    const referralFeePct = MathLib.WAD / 100n;
+    const referralFeeRecipient = getAddress(
+      "0x000000000000000000000000000000000000dead",
+    );
+    await client.deal({ erc20: CbbtcUsdcBlue.loanToken, amount });
+
+    const market = client
+      .extend(morphoViemExtension({ supportSignature: true }))
+      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
+    const beforePosition = await market.getPositionData(client.account.address);
+    const beforeBalances = await getBlueBundlesBalances(client, [
+      CbbtcUsdcBlue,
+    ]);
+    const recipientBefore = await client.balanceOf({
+      erc20: CbbtcUsdcBlue.loanToken,
+      owner: referralFeeRecipient,
+    });
+    // Positive referral fee: BlueBundlesV1 carves it out of the funded `assets`,
+    // credits the recipient, and supplies the remainder — accounting that
+    // calldata-only unit tests cannot verify against the deployed contract.
+    const action = market.supply({
+      userAddress: client.account.address,
+      assets: amount,
+      referralFeePct,
+      referralFeeRecipient,
+      deadline: maxUint256,
+    });
+
+    const signatures = await satisfyBlueBundlesV1Requirements(client, {
+      requirements: await action.getRequirements({ useSimplePermit: true }),
+    });
+    await client.sendTransaction(action.buildTx(signatures));
+
+    const afterPosition = await market.getPositionData(client.account.address);
+    expect(afterPosition.supplyShares).toBeGreaterThan(
+      beforePosition.supplyShares,
+    );
+    expect(
+      await client.balanceOf({
+        erc20: CbbtcUsdcBlue.loanToken,
+        owner: referralFeeRecipient,
+      }),
+    ).toBeGreaterThan(recipientBefore);
+    expect(await getBlueBundlesBalances(client, [CbbtcUsdcBlue])).toEqual(
+      beforeBalances,
+    );
+  });
+
   test("withdraw: executes with signed BlueBundles authorization", async ({
     client,
   }) => {
@@ -267,6 +320,61 @@ describe("BlueBundlesV1 Blue writes", () => {
         owner: client.account.address,
       }),
     ).toBeGreaterThan(userBalanceBefore);
+    expect(await getBlueBundlesBalances(client, [CbbtcUsdcBlue])).toEqual(
+      beforeBalances,
+    );
+  });
+
+  test("withdraw: carves the referral fee from proceeds to the recipient", async ({
+    client,
+  }) => {
+    const supplied = parseUnits("1000", 6);
+    const referralFeePct = MathLib.WAD / 100n;
+    const referralFeeRecipient = getAddress(
+      "0x000000000000000000000000000000000000dead",
+    );
+    await supplyLoan({
+      client,
+      chainId: mainnet.id,
+      market: CbbtcUsdcBlue,
+      supplyAmount: supplied,
+    });
+
+    const market = client
+      .extend(morphoViemExtension({ supportSignature: true }))
+      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
+    const positionData = await market.getPositionData(client.account.address);
+    const beforeBalances = await getBlueBundlesBalances(client, [
+      CbbtcUsdcBlue,
+    ]);
+    const recipientBefore = await client.balanceOf({
+      erc20: CbbtcUsdcBlue.loanToken,
+      owner: referralFeeRecipient,
+    });
+    // Positive referral fee: BlueBundlesV1 deducts it from withdrawal proceeds
+    // and credits the recipient — accounting distinct from the supply route.
+    const action = market.withdraw({
+      userAddress: client.account.address,
+      positionData,
+      assets: supplied / 2n,
+      referralFeePct,
+      referralFeeRecipient,
+      deadline: maxUint256,
+    });
+
+    const signatures = await satisfyBlueBundlesV1Requirements(client, {
+      requirements: await action.getRequirements(),
+    });
+    await client.sendTransaction(action.buildTx(signatures));
+
+    const afterPosition = await market.getPositionData(client.account.address);
+    expect(afterPosition.supplyShares).toBeLessThan(positionData.supplyShares);
+    expect(
+      await client.balanceOf({
+        erc20: CbbtcUsdcBlue.loanToken,
+        owner: referralFeeRecipient,
+      }),
+    ).toBeGreaterThan(recipientBefore);
     expect(await getBlueBundlesBalances(client, [CbbtcUsdcBlue])).toEqual(
       beforeBalances,
     );
