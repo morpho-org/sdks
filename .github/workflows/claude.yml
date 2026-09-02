@@ -41,5 +41,5 @@ jobs:
           allowed_bots: 'morpho-apps-git-bot,prime-monorepo-git-bot,devin-ai-integration,prd-carapulse,cursor'
           claude_args: |
             --model fable
-            --allowedTools Bash,Edit,Write,Read,Glob,Grep,Task,mcp__github_inline_comment__create_inline_comment
+            --allowedTools Bash,Edit,Write,Read,Glob,Grep,Agent,Task,mcp__github_inline_comment__create_inline_comment
             --append-system-prompt "If asked to review a PR, follow .agents/commands/pr-review-ci.md (it delegates to .agents/pr-review-engine/SKILL.md). Otherwise post feedback as inline comments and keep the tracking comment to a short summary."
