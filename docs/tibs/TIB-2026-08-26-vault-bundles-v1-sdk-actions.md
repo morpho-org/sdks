@@ -52,8 +52,9 @@ reviewed deployment revision.
   authorization is bound to the exact prepared owner, vault, spender, share cap, nonce, and deadline.
 - Contract amounts are gross amounts. Fee-adjusted net amounts drive destination and deposit
   protections.
-- The SDK does not invent a source-exit price bound or reliable standalone gate check that the
-  contract cannot enforce.
+- The SDK accepts the contract's source exit without a share-price floor and does not require
+  simulation as a submission gate or invent a reliable standalone gate check that the contract
+  cannot enforce.
 - Public removals and semantic changes follow the repository's deprecation, major-release,
   migration-guide, dependent-audit, and security-audit requirements.
 
@@ -73,7 +74,9 @@ reviewed deployment revision.
 
 - No new `vaultBundlesV1*` public action namespace or parallel vault entity.
 - No version-agnostic migration surface. This decision covers the established V1-to-V2 migration.
-- No changes to the in-kind redemption route, foreign-protocol migrations, or `wrapMorphoLegacy`.
+- No changes to the in-kind redemption route or `wrapMorphoLegacy`.
+- The Aave V3-to-Vault V2 flow remains on its existing route until a compatible fixed contract
+  exists.
 - No generic bundle-call, callback, automatic routing, or multi-vault composition API.
 - No native-token output on exit.
 - No source-exit share-price protection or gate preflight that is not execution-equivalent.
@@ -99,9 +102,13 @@ the action layer.
 The contract fixes depositor, share owner, and proceeds recipient to `msg.sender`. Consequently,
 legacy receiver and owner parameters cannot be honored. They must be deprecated before removal and
 must never be accepted and silently ignored. On the new route, `userAddress` means the account that
-will submit the transaction. When a connected account is available, the SDK rejects a mismatch.
-Public-client and offline builders cannot prove the submitting account, so their documentation must
-make this responsibility explicit.
+will submit the transaction.
+
+Transaction preparation and construction must support a builder whose connected account differs
+from that eventual submitter. The caller is responsible for supplying the eventual submitter as
+`userAddress`, and public documentation must make that responsibility explicit. Signature creation
+remains identity-bound: a requirement may be signed only when the connected signing account matches
+the owner captured by the handle.
 
 Delegated deposits and exits remain possible only through a route whose contract supports distinct
 owner and recipient addresses.
@@ -184,10 +191,11 @@ Withdraw, redeem, and migration make `VaultBundlesV1` spend the submitting accou
 When existing allowance is insufficient, the handle offers an ERC-2612 share permit where supported,
 or a classic share-token approval otherwise.
 
-The authorized amount is exact and bounded:
+The authorization value exactly matches the bounded cap prepared by the handle:
 
 - redeem and share-based migration authorize the requested shares;
-- asset-based withdrawal and migration authorize the prepared upper bound on shares burned.
+- asset-based withdrawal and migration authorize the previewed share burn plus the configured
+  slippage buffer.
 
 The handle accepts a signed share permit only when its authorization kind, vault share token, owner,
 spender, amount, nonce, and deadline exactly match the captured requirement. A larger stale permit is
@@ -197,7 +205,8 @@ onchain.
 The share cap for an asset-based exit must account for the supported ways the share price can move
 between preparation and inclusion, together with the caller's slippage tolerance. This applies to
 Vault V2 and to MetaMorpho 1.0, whose lack of a loss clamp means an accrual-only preview is not a
-complete upper bound. The SDK does not max-approve shares by default.
+complete upper bound. The SDK must not substitute the owner's full share balance or a maximum
+approval for this buffered cap.
 
 If later state movement exceeds the prepared cap, the transaction may revert. The caller then
 prepares a new handle and authorizes its new cap; the SDK does not mutate the old handle.
@@ -232,8 +241,11 @@ Redeem and share-based migration do not claim fixed asset proceeds before execut
 proceeds are simulation previews, not enforced floors.
 
 `VaultBundlesV1` does not enforce a source-exit share-price bound. The SDK must not retain or invent a
-parameter that implies otherwise. This is a capability loss for the existing migration route and
-must be disclosed in the migration guide.
+parameter that implies otherwise. This accepted capability loss for the existing migration route
+must be disclosed in the migration guide. Applications may simulate the finalized transaction as a
+preview, but simulation is not a required submission gate and does not become an encoded floor. A
+drop caused by bad-debt realization is not expected to reverse quickly, so rejecting submission
+solely because a simulation shows that drop would usually defer the exit to similar or worse terms.
 
 Migration accepts exactly one source amount mode: assets or shares. Source and destination must be
 different vaults with the same underlying asset. Non-positive inputs and previewed zero-share
@@ -283,14 +295,14 @@ organize the work differently as long as all gates are satisfied before the brea
 | Token and native deposit amounts stop being additive. | Exclusive public input; typed failure for untyped callers; migration example. |
 | Deposit receiver is no longer selectable. | Deprecate before removal; document that shares mint to the submitter. |
 | Exit owner and recipient are no longer selectable. | Deprecate before removal; document the lost delegated-exit capability. |
-| `userAddress` now identifies the submitting account. | JSDoc, connected-account validation, and prominent migration guidance. |
+| `userAddress` now identifies the submitting account. | JSDoc and prominent migration guidance; keep transaction construction builder-agnostic and validate identity when signing requirements. |
 | Withdraw and redeem may require share authorization. | Expose the prepared requirement/sign/build lifecycle. |
 | Permit2 funding uses SignatureTransfer with an application-owned nonce. | Keep it distinct from AllowanceTransfer and document concurrent nonce ownership. |
-| Migration loses its source-leg price bound. | Remove the misleading input and disclose simulation as preview-only mitigation. |
+| Migration loses its source-leg price bound. | Remove the misleading input and disclose the accepted loss; simulation remains an optional preview, not a required gate. |
 | Migration accepts assets or shares exclusively. | Make invalid combinations unrepresentable for typed callers and reject them at runtime. |
 | Transaction target and calldata change. | Coordinate selector/indexer/simulation consumers before release. |
 | Only one VaultBundlesV1 call may execute per transaction. | Document the batching constraint. |
-| Gated Vault V2 deployments must admit VaultBundlesV1 on entry and exit. | Curator readiness check before release; finalized simulation for detection. |
+| Gated Vault V2 deployments must admit VaultBundlesV1 on entry and exit. | Vault app/product readiness check before enabling the route for a deployment; finalized simulation for detection. |
 | No deposit-for-another-address, exit-to-another-address, or arbitrary Bundler3 composition. | Consumers needing those capabilities retain a compatible route. |
 | Referral fees separate gross and net amounts. | Label previews clearly and apply bounds to post-fee values. |
 
@@ -306,12 +318,15 @@ following externally observable behavior:
   construction.
 - Recreating an operation produces a distinct handle; a signature for the old handle is rejected
   when any captured authorization field differs.
+- Transaction construction permits builder and submitter accounts to differ, while requirement
+  signing rejects a signer that differs from the captured owner.
 - Classic approval, ERC-2612, first-time Permit2, consumed Permit2 nonce, and concurrent distinct
   Permit2 nonce cases behave as specified.
 - Share permits reject wrong owner, vault, spender, amount, nonce, or deadline, including stale
   larger permits.
-- Asset-based exit authorization remains upper-bounded under the supported loss and accrual cases,
-  including MetaMorpho 1.0.
+- Asset-based exit authorization includes the configured share buffer, remains upper-bounded under
+  the supported loss and accrual cases including MetaMorpho 1.0, and never expands to the owner's
+  full share balance.
 - Native/token exclusivity, chain selection, fee validation, same-asset migration, amount-mode
   exclusivity, and post-fee zero-share protection fail with named public errors.
 - Deposit and migration price protection uses net assets, and exact net-target gross-up arithmetic
@@ -356,10 +371,12 @@ Rejected as a replacement for handle preservation. A second resolution cannot ch
 data. Refreshing an intent is valid only when the caller knowingly creates a new handle and signs its
 requirements.
 
-### Max-approve vault shares
+### Authorize the owner's full share balance
 
-Rejected because it expands the periphery contract's authority beyond the prepared exit. ERC-2612
-keeps the exact-approval path usable without an extra transaction where signatures are supported.
+Rejected because it expands the periphery contract's authority beyond the prepared exit. The
+configured slippage buffer makes the asset-based cap robust without granting the full balance, and
+ERC-2612 keeps this bounded path usable without an extra transaction where signatures are
+supported.
 
 ### Reserve Permit2 nonces in the SDK
 
@@ -371,10 +388,11 @@ would violate the stateless extension model. Applications own their in-flight in
 Rejected because a standalone read lacks the transient initiator context visible during bundle
 execution and can produce false negatives.
 
-### Preserve a migration source-price parameter
+### Preserve a migration source-price parameter or require simulation
 
 Rejected because the contract cannot enforce it. Accepting such a parameter would imply protection
-that does not exist.
+that does not exist. Finalized transaction simulation may inform the user, but it remains a preview
+and is not required as a submission gate.
 
 ### Interpret `amount` as net proceeds
 
@@ -387,11 +405,14 @@ from a desired net value can use exact gross-up arithmetic.
 - Vault shares used by the signature path implement compatible ERC-2612 behavior.
 - No monotonic share-price assumption is made for MetaMorpho 1.0 across loss realization.
 - Supported Vault V2 configurations follow the contract's deployment constraints.
-- Curators update both relevant Vault V2 gates before the SDK route changes.
+- The Vault app/product rollout owns confirming that both relevant Vault V2 gates admit
+  `VaultBundlesV1` before enabling the route for a deployment; this readiness check does not change
+  the SDK transaction flow.
 - Referral-fee eligibility and policy remain outside the core SDK.
-- Applications using public clients keep `userAddress` aligned with the eventual submitter.
+- Transaction builders may differ from the eventual signer and submitter, but applications keep
+  `userAddress` aligned with the account that will submit the transaction.
 - Finalized transaction simulation is the only reliable preflight for transient-context gates and
-  remains preview-only protection for the unbounded migration source leg.
+  remains an optional preview, not a required gate, for the unbounded migration source leg.
 
 ## Security
 
@@ -403,8 +424,9 @@ from a desired net value can use exact gross-up arithmetic.
   deadline exactly.
 - Native funding cannot carry a token permit, and no signature may be silently discarded.
 - Removed routing parameters must not remain structurally accepted and ignored.
-- Connected-account validation reduces `userAddress` misrouting risk, but public-client builders
-  cannot eliminate it; documentation and migration guidance are part of the safety boundary.
+- Transaction construction does not reject a builder-account mismatch. Signature creation still
+  requires the connected signer to match the captured owner; unsigned flows rely on correct
+  `userAddress` input, documentation, and migration guidance as their safety boundary.
 - The contract leaves a maximum asset allowance from itself to the vault by design and holds no
   balance between transactions.
 - Token compatibility inherits the vault and contract assumptions around approval behavior.
@@ -420,21 +442,6 @@ from a desired net value can use exact gross-up arithmetic.
 
 These are product, protocol, and release dependencies. The decision is not coupled to a particular
 implementation order.
-
-## Open Questions
-
-1. Accept the loss of the migration source-leg price floor, or require applications to gate
-   submission on a finalized simulation while clearly labeling it as preview-only?
-2. Confirm that gross contract amounts remain the primary SDK input, with exact gross-up available
-   to net-first applications.
-3. For asset-based exits, is the slippage-widened exact share cap preferred over authorizing the
-   full share balance?
-4. Who owns confirming that every gated Vault V2 deployment admits `VaultBundlesV1` on both entry
-   and exit before release?
-5. Does the Aave V3-to-Vault V2 flow remain on its existing route until a compatible fixed contract
-   exists, or is it removed?
-6. Is opportunistic connected-account validation sufficient, or should a future decision require
-   builder and submitter identity and intentionally retire offline/proposal-building patterns?
 
 ## References
 
