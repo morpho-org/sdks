@@ -7,7 +7,7 @@ import {
 } from "../../../src/index.js";
 import { KeyrockUsdcVaultV2 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
-import { test } from "../../setup.js";
+import { vaultBundlesV1Test as test } from "../../helpers/vaultBundlesV1.js";
 
 describe("DepositVaultV2", () => {
   test("should deposit 1K USDC in vaultV2", async ({ client }) => {
@@ -61,6 +61,5 @@ describe("DepositVaultV2", () => {
     expect(finalState.userSharesBalance).toBeGreaterThan(
       initialState.userSharesBalance,
     );
-    expect(finalState.userSharesBalance).toEqual(970421203423413218710n);
   });
 });

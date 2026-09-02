@@ -9,10 +9,12 @@ import {
   type BlueAuthorizationAction,
   type BundlesTokenRequirementSignature,
   type ERC20ApprovalAction,
+  type Erc2612RequirementSignature,
   type Metadata,
+  MixedBundlesFundingError,
   type MorphoClientType,
   morphoViemExtension,
-  type PermitRequirementSignature,
+  NonPositiveInputError,
   type Requirement,
   type RequirementSignature,
   type Transaction,
@@ -117,14 +119,17 @@ export type RequirementAuthorization = Readonly<
 export type RequirementSignatureRequest<
   TSignature extends RequirementSignature = RequirementSignature,
 > = Requirement<TSignature>;
-/** A vault token approval or ERC-2612/Permit2 AllowanceTransfer request. */
+/** A vault-share approval or ERC-2612 permit request. */
 export type ApprovalOrSignatureRequirement =
   | RequirementApproval
-  | RequirementSignatureRequest<PermitRequirementSignature>;
+  | RequirementSignatureRequest<Erc2612RequirementSignature>;
 /** A BlueBundlesV1 token approval or ERC-2612/Permit2 SignatureTransfer request. */
-export type BlueApprovalOrSignatureRequirement =
+export type BundlesApprovalOrSignatureRequirement =
   | RequirementApproval
   | RequirementSignatureRequest<BundlesTokenRequirementSignature>;
+/** @deprecated Use {@link BundlesApprovalOrSignatureRequirement}. */
+export type BlueApprovalOrSignatureRequirement =
+  BundlesApprovalOrSignatureRequirement;
 /** A Blue authorization transaction or authorization-signature request. */
 export type AuthorizationOrSignatureRequirement =
   | RequirementAuthorization
@@ -148,65 +153,45 @@ export interface RequirementOptions {
   readonly permit2Nonce?: bigint;
 }
 
-/** Options for an ERC-20-funded Morpho Vault supply. */
-export interface MorphoErc20SupplyOptions {
+/** Fields shared by ERC-20 and native Morpho Vault supply operations. */
+interface MorphoSupplyCommonOptions {
   /** The ERC-20 token address to supply. */
-  token: string;
-  /** The ERC-20 amount to supply, in base units. */
-  amount: number | bigint;
-  /** Optional native token amount to wrap and supply, in base units. */
-  nativeAmount?: number | bigint;
+  readonly token: string;
   /** The address on behalf of which the supply operation should be performed. Must match the wallet account address when set. */
-  onBehalfOf?: string;
-  /** Signature returned by a Morpho SDK approval requirement. */
-  requirementSignature?: PermitRequirementSignature;
+  readonly onBehalfOf?: string;
   /** Optional Morpho SDK slippage tolerance in WAD precision. */
-  slippageTolerance?: bigint;
+  readonly slippageTolerance?: bigint;
 }
 
-/** Options for a native-funded or mixed-funded Morpho Vault supply. */
-export interface MorphoNativeSupplyOptions {
-  /** The wrapped-native token address expected by the configured vault or market. */
-  token: string;
-  /** Optional ERC-20 amount to supply, in base units. */
-  amount?: number | bigint;
-  /** The native token amount to wrap and supply, in base units. */
-  nativeAmount: number | bigint;
-  /** The address on behalf of which the supply operation should be performed. Must match the wallet account address when set. */
-  onBehalfOf?: string;
-  /** Signature returned by a Morpho SDK approval requirement. */
-  requirementSignature?: PermitRequirementSignature;
-  /** Optional Morpho SDK slippage tolerance in WAD precision. */
-  slippageTolerance?: bigint;
-}
-
-/** Morpho Vault supply options funded by ERC-20 assets, native assets, or both. */
-export type MorphoSupplyOptions =
-  | MorphoErc20SupplyOptions
-  | MorphoNativeSupplyOptions;
+/** Morpho Vault supply options with mutually exclusive ERC-20 or native funding. */
+export type MorphoExclusiveSupplyOptions = MorphoSupplyCommonOptions &
+  (
+    | {
+        /** ERC-20 amount to supply, in base units. */
+        readonly amount: number | bigint;
+        readonly nativeAmount?: never;
+      }
+    | {
+        readonly amount?: never;
+        /** Native amount to wrap and supply, in base units. */
+        readonly nativeAmount: number | bigint;
+      }
+  );
 
 /** Blue collateral supply options with mutually exclusive ERC-20 and native funding. */
 export type MorphoCollateralSupplyOptions =
-  | Readonly<
-      Omit<
-        MorphoErc20SupplyOptions,
-        "nativeAmount" | "requirementSignature" | "slippageTolerance"
-      > & {
-        nativeAmount?: never;
-        requirementSignature?: BundlesTokenRequirementSignature;
-        slippageTolerance?: never;
-      }
-    >
-  | Readonly<
-      Omit<
-        MorphoNativeSupplyOptions,
-        "amount" | "requirementSignature" | "slippageTolerance"
-      > & {
-        amount?: never;
-        requirementSignature?: never;
-        slippageTolerance?: never;
-      }
-    >;
+  | (Omit<MorphoSupplyCommonOptions, "nativeAmount" | "slippageTolerance"> & {
+      readonly amount: number | bigint;
+      readonly nativeAmount?: never;
+      readonly requirementSignature?: BundlesTokenRequirementSignature;
+      readonly slippageTolerance?: never;
+    })
+  | (Omit<MorphoSupplyCommonOptions, "amount" | "slippageTolerance"> & {
+      readonly nativeAmount: number | bigint;
+      readonly amount?: never;
+      readonly requirementSignature?: never;
+      readonly slippageTolerance?: never;
+    });
 
 /** Options for borrowing through BlueBundlesV1 with optional Vault V2 reallocations. */
 export interface MorphoBorrowOptions {
@@ -246,6 +231,24 @@ export type MorphoWithdrawCollateralOptions = Readonly<
     requirementSignature?: AuthorizationRequirementSignature;
   }
 >;
+
+/** A prepared vault deposit whose requirements and transaction share one SDK operation handle. */
+export interface PreparedMorphoSupply {
+  /** Resolves the approval or token signature requirements for this prepared deposit. */
+  readonly getRequirements: (
+    requirementOptions?: RequirementOptions,
+  ) => Promise<readonly BundlesApprovalOrSignatureRequirement[]>;
+  /** Submits this prepared deposit with its optional signed token requirement. */
+  readonly submit: (
+    requirementSignature?: BundlesTokenRequirementSignature,
+    config?: Erc4337TransactionConfig,
+  ) => Promise<SupplyResult>;
+  /** Quotes this prepared deposit with its optional signed token requirement. */
+  readonly quote: (
+    requirementSignature?: BundlesTokenRequirementSignature,
+    config?: Erc4337TransactionConfig,
+  ) => Promise<Omit<SupplyResult, "hash">>;
+}
 
 export interface Presets {
   /** Key of a curated Morpho Vault V2 preset in `MORPHO_VAULT_PRESETS`. */
@@ -391,58 +394,25 @@ function normalizeAmount(amount: number | bigint, field = "amount"): bigint {
   return BigInt(amount);
 }
 
-function normalizeOptionalNonNegativeAmount(
-  amount: number | bigint | undefined,
-  field: string,
-): bigint {
-  if (amount === undefined) return 0n;
-
-  if (typeof amount !== "bigint" && typeof amount !== "number") {
-    throw new Error(`'${field}' must be a number or bigint.`);
-  }
-
-  if (typeof amount === "number" && !Number.isSafeInteger(amount)) {
-    throw new Error(
-      `'${field}' must be a safe integer; pass a bigint for values above Number.MAX_SAFE_INTEGER.`,
-    );
-  }
-
-  if (amount < 0) {
-    throw new Error(`'${field}' should be a non-negative amount.`);
-  }
-
-  return BigInt(amount);
-}
-
-interface NormalizedDepositAmounts {
-  amount: bigint;
-  nativeAmount: bigint | undefined;
-}
+type NormalizedDepositAmounts =
+  | { readonly amount: bigint; readonly nativeAmount?: never }
+  | { readonly nativeAmount: bigint; readonly amount?: never };
 
 function normalizeDepositAmounts({
   amount,
   nativeAmount,
 }: Pick<
-  MorphoSupplyOptions,
+  MorphoExclusiveSupplyOptions,
   "amount" | "nativeAmount"
 >): NormalizedDepositAmounts {
-  const normalizedAmount = normalizeOptionalNonNegativeAmount(amount, "amount");
-  const normalizedNativeAmount = normalizeOptionalNonNegativeAmount(
-    nativeAmount,
-    "nativeAmount",
-  );
-
-  if (normalizedAmount === 0n && normalizedNativeAmount === 0n) {
-    throw new Error("'amount' or 'nativeAmount' should be greater than zero.");
+  if (amount !== undefined && nativeAmount !== undefined) {
+    throw new MixedBundlesFundingError();
   }
-
-  return {
-    amount: normalizedAmount,
-    nativeAmount:
-      normalizedNativeAmount === 0n && nativeAmount === undefined
-        ? undefined
-        : normalizedNativeAmount,
-  };
+  if (amount !== undefined) return { amount: normalizeAmount(amount) };
+  if (nativeAmount !== undefined) {
+    return { nativeAmount: normalizeAmount(nativeAmount, "nativeAmount") };
+  }
+  throw new NonPositiveInputError("amount or nativeAmount", 0n);
 }
 
 function normalizeOptions(
@@ -539,9 +509,9 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   /**
    * Supplies assets into the configured Morpho vault.
    *
-   * The transaction is built by `@morpho-org/morpho-sdk`. Use
-   * `getSupplyRequirements(options)` first if the account has not approved
-   * the required Morpho bundler spender.
+   * The transaction is built by `@morpho-org/morpho-sdk`. Use {@link prepareSupply} when the
+   * operation needs an approval or signature so requirement resolution and submission use one
+   * immutable prepared-operation handle.
    *
    * For direct ERC-20 approvals, use `WalletAccountEvm#approve` or
    * `WalletAccountEvmErc4337#approve` before calling this method.
@@ -552,36 +522,69 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @throws {Error} If the options are invalid, the token does not match the configured vault, the account lacks funds, or the transaction fails.
    */
   async supply(
-    options: MorphoSupplyOptions,
+    options: MorphoExclusiveSupplyOptions,
     config?: Erc4337TransactionConfig,
   ): Promise<SupplyResult> {
     this._assertWritable("supply(options)");
-    const depositAmounts = normalizeDepositAmounts(options);
-    if (depositAmounts.amount > 0n) {
-      await this._assertTokenBalance(options.token, depositAmounts.amount);
-    } else {
-      this._assertAddress("token", options.token);
-    }
-
-    const tx = await this._getSupplyTransaction(options, depositAmounts);
-
-    return await this._sendTransaction(tx, config);
+    return await (await this.prepareSupply(options)).submit(undefined, config);
   }
 
   /**
-   * Returns Morpho SDK requirements for a vault deposit.
+   * Prepares a vault deposit once for requirement discovery, signing, quoting, and submission.
    *
    * @param options - The supply options.
-   * @param requirementOptions - Optional Morpho SDK requirement options.
-   * @returns Approval/signature requirements.
+   * @returns An immutable operation handle that retains the SDK action and its derived share-price bound.
+   * @throws {Error} when the token, amount, vault, or account configuration is invalid.
+   * @example
+   * ```ts
+   * const prepared = await morpho.prepareSupply({ token, amount: 1_000_000n });
+   * const requirements = await prepared.getRequirements({ permit2Nonce: 42n });
+   * const signature = await requirements.find((item) => "sign" in item)?.sign(wallet, user);
+   * const result = await prepared.submit(signature);
+   * ```
    */
-  async getSupplyRequirements(
-    options: MorphoSupplyOptions,
-    requirementOptions?: RequirementOptions,
-  ): Promise<readonly ApprovalOrSignatureRequirement[]> {
-    const action = await this._getSupplyAction(options);
-
-    return await action.getRequirements(requirementOptions);
+  async prepareSupply(
+    options: MorphoExclusiveSupplyOptions,
+  ): Promise<PreparedMorphoSupply> {
+    const depositAmounts = normalizeDepositAmounts(options);
+    const action = await this._getSupplyAction(options, depositAmounts);
+    return Object.freeze({
+      getRequirements: async (requirementOptions?: RequirementOptions) =>
+        (await action.getRequirements(
+          requirementOptions,
+        )) as readonly BundlesApprovalOrSignatureRequirement[],
+      submit: async (
+        requirementSignature?: BundlesTokenRequirementSignature,
+        config?: Erc4337TransactionConfig,
+      ) => {
+        this._assertWritable("preparedSupply.submit()");
+        if (depositAmounts.amount != null) {
+          await this._assertTokenBalance(options.token, depositAmounts.amount);
+        } else {
+          this._assertAddress("token", options.token);
+        }
+        return await this._sendTransaction(
+          toWdkTransaction(
+            action.buildTx(
+              requirementSignature ? [requirementSignature] : undefined,
+            ),
+          ),
+          config,
+        );
+      },
+      quote: async (
+        requirementSignature?: BundlesTokenRequirementSignature,
+        config?: Erc4337TransactionConfig,
+      ) =>
+        await this._quoteTransaction(
+          toWdkTransaction(
+            action.buildTx(
+              requirementSignature ? [requirementSignature] : undefined,
+            ),
+          ),
+          config,
+        ),
+    });
   }
 
   /**
@@ -592,12 +595,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * @returns The fee quote.
    */
   async quoteSupply(
-    options: MorphoSupplyOptions,
+    options: MorphoExclusiveSupplyOptions,
     config?: Erc4337TransactionConfig,
   ): Promise<Omit<SupplyResult, "hash">> {
-    const tx = await this._getSupplyTransaction(options);
-
-    return await this._quoteTransaction(tx, config);
+    return await (await this.prepareSupply(options)).quote(undefined, config);
   }
 
   private async _getSupplyAction(
@@ -607,7 +608,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       nativeAmount,
       onBehalfOf,
       slippageTolerance,
-    }: MorphoSupplyOptions,
+    }: MorphoExclusiveSupplyOptions,
     depositAmounts: NormalizedDepositAmounts = normalizeDepositAmounts({
       amount,
       nativeAmount,
@@ -627,27 +628,11 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     }
 
     return vault.entity.deposit({
-      amount: depositAmounts.amount,
-      nativeAmount: depositAmounts.nativeAmount,
+      ...depositAmounts,
       userAddress,
       vaultData: accrualVault,
       slippageTolerance: slippageTolerance ?? this._options.slippageTolerance,
     });
-  }
-
-  private async _getSupplyTransaction(
-    options: MorphoSupplyOptions,
-    depositAmounts?: NormalizedDepositAmounts,
-  ): Promise<WdkTransaction> {
-    const action = await this._getSupplyAction(options, depositAmounts);
-
-    return toWdkTransaction(
-      action.buildTx(
-        options.requirementSignature
-          ? [options.requirementSignature]
-          : undefined,
-      ),
-    );
   }
 
   /**
@@ -1146,8 +1131,11 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     config?: Erc4337TransactionConfig,
   ): Promise<SupplyResult> {
     this._assertWritable("supplyCollateral(options)");
+    if (options.amount !== undefined && options.nativeAmount !== undefined) {
+      throw new MixedBlueCollateralFundingError();
+    }
     const depositAmounts = normalizeDepositAmounts(options);
-    if (depositAmounts.amount > 0n) {
+    if (depositAmounts.amount != null) {
       await this._assertTokenBalance(options.token, depositAmounts.amount);
     } else {
       this._assertAddress("token", options.token);
@@ -1283,16 +1271,11 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       );
     }
 
-    const normalizedNativeAmount = depositAmounts.nativeAmount ?? 0n;
-    if (depositAmounts.amount > 0n && normalizedNativeAmount > 0n) {
-      throw new MixedBlueCollateralFundingError();
-    }
+    const collateralAssets =
+      depositAmounts.nativeAmount ?? depositAmounts.amount;
 
     return market.entity.supplyCollateral({
-      collateralAssets:
-        normalizedNativeAmount > 0n
-          ? normalizedNativeAmount
-          : depositAmounts.amount,
+      collateralAssets,
       nativeAmount: depositAmounts.nativeAmount,
       userAddress,
       deadline: getBlueBundlesV1Deadline(requirementSignature),
