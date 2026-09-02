@@ -218,6 +218,60 @@ describe("BlueBundlesV1 Blue writes", () => {
     );
   });
 
+  test("withdraw: closes the full position by shares and returns proceeds", async ({
+    client,
+  }) => {
+    const supplied = parseUnits("1000", 6);
+    await supplyLoan({
+      client,
+      chainId: mainnet.id,
+      market: CbbtcUsdcBlue,
+      supplyAmount: supplied,
+    });
+
+    const market = client
+      .extend(morphoViemExtension({ supportSignature: true }))
+      .morpho.blue(CbbtcUsdcBlue, mainnet.id);
+    const positionData = await market.getPositionData(client.account.address);
+    const beforeBalances = await getBlueBundlesBalances(client, [
+      CbbtcUsdcBlue,
+    ]);
+    const userBalanceBefore = await client.balanceOf({
+      erc20: CbbtcUsdcBlue.loanToken,
+      owner: client.account.address,
+    });
+    // Full-close by shares: burns every supply share and verifies the deployed
+    // contract's shares-to-assets conversion, full burn, and returned proceeds,
+    // which the assets-mode fork case above cannot exercise.
+    const action = market.withdraw({
+      userAddress: client.account.address,
+      positionData,
+      shares: positionData.supplyShares,
+      deadline: maxUint256,
+    });
+
+    const requirements = await action.getRequirements();
+    expect(
+      requirements.map(({ action: requirement }) => requirement.type),
+    ).toEqual(["authorization"]);
+    const signatures = await satisfyBlueBundlesV1Requirements(client, {
+      requirements,
+    });
+    await client.sendTransaction(action.buildTx(signatures));
+
+    const afterPosition = await market.getPositionData(client.account.address);
+    expect(afterPosition.supplyShares).toBe(0n);
+    expect(
+      await client.balanceOf({
+        erc20: CbbtcUsdcBlue.loanToken,
+        owner: client.account.address,
+      }),
+    ).toBeGreaterThan(userBalanceBefore);
+    expect(await getBlueBundlesBalances(client, [CbbtcUsdcBlue])).toEqual(
+      beforeBalances,
+    );
+  });
+
   test("supplyCollateralBorrow: executes with explicit-nonce SignatureTransfer", async ({
     client,
   }) => {
