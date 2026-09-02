@@ -15,7 +15,7 @@ import { describe, expect, test } from "vitest";
 import { blueBundlesV1Abi } from "../../abis.js";
 import {
   type AuthorizationRequirementSignature,
-  BlueBundlesV1RequirementSignatureMismatchError,
+  BundlesRequirementSignatureMismatchError,
   DepositOwnerMismatchError,
   InputExceedsMaxError,
   MutuallyExclusiveWithdrawAmountsError,
@@ -243,7 +243,7 @@ describe("blueWithdraw", () => {
           },
         },
       }),
-    ).toThrow(BlueBundlesV1RequirementSignatureMismatchError);
+    ).toThrow(BundlesRequirementSignatureMismatchError);
   });
 
   test("error: binds every authorization signature field", () => {
@@ -285,7 +285,7 @@ describe("blueWithdraw", () => {
           ...authorization,
           args: { ...authorization.args, authorized: otherAddress },
         },
-        BlueBundlesV1RequirementSignatureMismatchError,
+        BundlesRequirementSignatureMismatchError,
       ],
       [
         "action authorized",
@@ -296,7 +296,7 @@ describe("blueWithdraw", () => {
             args: { ...authorization.action.args, authorized: otherAddress },
           },
         },
-        BlueBundlesV1RequirementSignatureMismatchError,
+        BundlesRequirementSignatureMismatchError,
       ],
       [
         "signed isAuthorized",
@@ -304,7 +304,7 @@ describe("blueWithdraw", () => {
           ...authorization,
           args: { ...authorization.args, isAuthorized: false },
         },
-        BlueBundlesV1RequirementSignatureMismatchError,
+        BundlesRequirementSignatureMismatchError,
       ],
       [
         "action isAuthorized",
@@ -315,7 +315,7 @@ describe("blueWithdraw", () => {
             args: { ...authorization.action.args, isAuthorized: false },
           },
         },
-        BlueBundlesV1RequirementSignatureMismatchError,
+        BundlesRequirementSignatureMismatchError,
       ],
       [
         "serialized signature",
@@ -323,7 +323,7 @@ describe("blueWithdraw", () => {
           ...authorization,
           args: { ...authorization.args, signature: "0x12" as const },
         },
-        BlueBundlesV1RequirementSignatureMismatchError,
+        BundlesRequirementSignatureMismatchError,
       ],
     ] as const;
 

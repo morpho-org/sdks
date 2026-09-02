@@ -79,7 +79,7 @@ export const encodeBlueSignatureAuthorization = async (
 
   // Reject an invalid or already-expired caller-supplied deadline before signing, so a direct caller
   // is never walked through a wallet EIP-712 prompt for an authorization Morpho would reject with
-  // `SIGNATURE_EXPIRED`. Mirrors the sibling `encodeErc20Permit2TransferFrom` and the
+  // `SIGNATURE_EXPIRED`. Mirrors the sibling `encodeErc20Permit2SignatureTransfer` and the
   // `getBlueAuthorizationRequirement` resolver guards. An omitted deadline defaults to two hours
   // from now and is always valid.
   if (params.deadline != null) {
