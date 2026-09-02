@@ -204,16 +204,21 @@ describe("BlueBundlesV1 Blue writes", () => {
     });
     await client.sendTransaction(action.buildTx(signatures));
 
+    // BlueBundlesV1 carves `fee = mulDivDown(assets, pct, WAD)` from the funded
+    // `assets` and pays it to the recipient in loan tokens. `1%` of `1000e6`
+    // divides evenly, so the expected fee is exact regardless of the contract's
+    // rounding direction — a wrong base (net, or `pct/(WAD-pct)`) would not match.
+    const expectedFee = MathLib.mulDivDown(amount, referralFeePct, MathLib.WAD);
     const afterPosition = await market.getPositionData(client.account.address);
     expect(afterPosition.supplyShares).toBeGreaterThan(
       beforePosition.supplyShares,
     );
     expect(
-      await client.balanceOf({
+      (await client.balanceOf({
         erc20: CbbtcUsdcBlue.loanToken,
         owner: referralFeeRecipient,
-      }),
-    ).toBeGreaterThan(recipientBefore);
+      })) - recipientBefore,
+    ).toBe(expectedFee);
     expect(await getBlueBundlesBalances(client, [CbbtcUsdcBlue])).toEqual(
       beforeBalances,
     );
@@ -347,16 +352,21 @@ describe("BlueBundlesV1 Blue writes", () => {
     const beforeBalances = await getBlueBundlesBalances(client, [
       CbbtcUsdcBlue,
     ]);
+    const withdrawAssets = supplied / 2n;
     const recipientBefore = await client.balanceOf({
       erc20: CbbtcUsdcBlue.loanToken,
       owner: referralFeeRecipient,
+    });
+    const userBalanceBefore = await client.balanceOf({
+      erc20: CbbtcUsdcBlue.loanToken,
+      owner: client.account.address,
     });
     // Positive referral fee: BlueBundlesV1 deducts it from withdrawal proceeds
     // and credits the recipient — accounting distinct from the supply route.
     const action = market.withdraw({
       userAddress: client.account.address,
       positionData,
-      assets: supplied / 2n,
+      assets: withdrawAssets,
       referralFeePct,
       referralFeeRecipient,
       deadline: maxUint256,
@@ -367,14 +377,29 @@ describe("BlueBundlesV1 Blue writes", () => {
     });
     await client.sendTransaction(action.buildTx(signatures));
 
+    // No reallocations ⇒ zero penalty, so BlueBundlesV1 withdraws exactly
+    // `withdrawAssets`, pays `fee = mulDivDown(withdrawAssets, pct, WAD)` to the
+    // recipient, and returns the remainder to the user. `1%` of `500e6` divides
+    // evenly, so both deltas are exact regardless of the contract's rounding.
+    const expectedFee = MathLib.mulDivDown(
+      withdrawAssets,
+      referralFeePct,
+      MathLib.WAD,
+    );
     const afterPosition = await market.getPositionData(client.account.address);
     expect(afterPosition.supplyShares).toBeLessThan(positionData.supplyShares);
     expect(
-      await client.balanceOf({
+      (await client.balanceOf({
         erc20: CbbtcUsdcBlue.loanToken,
         owner: referralFeeRecipient,
-      }),
-    ).toBeGreaterThan(recipientBefore);
+      })) - recipientBefore,
+    ).toBe(expectedFee);
+    expect(
+      (await client.balanceOf({
+        erc20: CbbtcUsdcBlue.loanToken,
+        owner: client.account.address,
+      })) - userBalanceBefore,
+    ).toBe(withdrawAssets - expectedFee);
     expect(await getBlueBundlesBalances(client, [CbbtcUsdcBlue])).toEqual(
       beforeBalances,
     );
