@@ -6,7 +6,6 @@ import { describe, expect } from "vitest";
 import { morphoViemExtension } from "../../../src/client/index.js";
 import { MAX_SLIPPAGE_TOLERANCE } from "../../../src/helpers/constant.js";
 import {
-  AddressMismatchError,
   ChainIdMismatchError,
   ChainWNativeMissingError,
   ExcessiveSlippageToleranceError,
@@ -673,10 +672,10 @@ describe("MorphoVaultV1 entity tests", () => {
     });
   });
 
-  describe("migrateToV2 submitter validation", () => {
+  describe("migrateToV2 submitter independence", () => {
     const OTHER_USER: Address = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 
-    test("rejects userAddress different from client.account", async ({
+    test("builds for a userAddress different from client.account", async ({
       client,
     }) => {
       const morphoClient = client.extend(
@@ -696,14 +695,16 @@ describe("MorphoVaultV1 entity tests", () => {
         { chainId: mainnet.id },
       );
 
-      expect(() =>
-        vault.migrateToV2({
-          userAddress: OTHER_USER,
-          sourceVault,
-          targetVault,
-          shares: parseUnits("1000", 18),
-        }),
-      ).toThrow(AddressMismatchError);
+      const result = vault.migrateToV2({
+        userAddress: OTHER_USER,
+        sourceVault,
+        targetVault,
+        shares: parseUnits("1000", 18),
+      });
+
+      expect(result.buildTx().action.args.sourceVault).toBe(
+        SteakhouseUsdcVaultV1.address,
+      );
     });
 
     test("builds tx with public client (no account)", async ({ client }) => {
