@@ -1,111 +1,79 @@
-import { parseUnits } from "viem";
-import { describe, expect } from "vitest";
-import {
-  KeyrockUsdcVaultV2,
-  KpkWETHVaultV2,
-} from "../../../test/fixtures/vaultV2.js";
-import { test } from "../../../test/unit.js";
+import { MathLib } from "@morpho-org/blue-sdk";
+import { getChainAddress } from "@morpho-org/morpho-ts";
+import fc from "fast-check";
+import { decodeFunctionData, maxUint256, zeroHash } from "viem";
+import { mainnet } from "viem/chains";
+import { describe, expect, test } from "vitest";
+import { vaultBundlesV1Abi } from "../../abis.js";
 import { NonPositiveInputError } from "../../types/index.js";
 import { vaultV2Withdraw } from "./withdraw.js";
 
-describe("withdrawVaultV2 unit tests", () => {
-  test("should create withdraw transaction with USDC vault", async ({
-    client,
-  }) => {
-    const amount = parseUnits("1000", 6); // 1000 USDC
+const chainId = mainnet.id;
+const vault = "0x0000000000000000000000000000000000000041" as const;
+const userAddress = "0x0000000000000000000000000000000000000042" as const;
+const feeRecipient = "0x0000000000000000000000000000000000000043" as const;
+const positiveUint256 = fc.bigInt({ min: 1n, max: maxUint256 });
 
-    const tx = vaultV2Withdraw({
-      vault: {
-        address: KeyrockUsdcVaultV2.address,
-      },
+describe("vaultV2Withdraw", () => {
+  test("default", () => {
+    const deadline = 1_900_000_000n;
+    const referralFeePct = MathLib.WAD / 2n;
+    const transaction = vaultV2Withdraw({
+      vault: { chainId, address: vault },
       args: {
-        amount,
-        recipient: client.account.address,
-        onBehalf: client.account.address,
+        amount: 100n,
+        userAddress,
+        referralFeePct,
+        referralFeeRecipient: feeRecipient,
+        deadline,
       },
     });
-
-    expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("vaultV2Withdraw");
-    expect(tx.action.args.vault).toBe(KeyrockUsdcVaultV2.address);
-    expect(tx.action.args.amount).toBe(amount);
-    expect(tx.action.args.recipient).toBe(client.account.address);
-    expect(tx.to).toBe(KeyrockUsdcVaultV2.address);
-    expect(tx.data).toBeDefined();
-    expect(tx.value).toBe(0n);
-  });
-
-  test("should create withdraw transaction with WETH vault", async ({
-    client,
-  }) => {
-    const amount = parseUnits("5", 18); // 5 WETH
-
-    const tx = vaultV2Withdraw({
-      vault: {
-        address: KpkWETHVaultV2.address,
-      },
-      args: {
-        amount,
-        recipient: client.account.address,
-        onBehalf: client.account.address,
-      },
+    expect(transaction.to).toBe(
+      getChainAddress(chainId, "bundles.vaultBundlesV1"),
+    );
+    expect(
+      decodeFunctionData({ abi: vaultBundlesV1Abi, data: transaction.data }),
+    ).toEqual({
+      functionName: "vaultBundlesV1Withdraw",
+      args: [
+        vault,
+        100n,
+        0n,
+        { value: 0n, nonce: 0n, deadline, v: 0, r: zeroHash, s: zeroHash },
+        referralFeePct,
+        feeRecipient,
+        deadline,
+      ],
     });
-
-    expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("vaultV2Withdraw");
-    expect(tx.action.args.vault).toBe(KpkWETHVaultV2.address);
-    expect(tx.action.args.amount).toBe(amount);
-    expect(tx.action.args.recipient).toBe(client.account.address);
-    expect(tx.to).toBe(KpkWETHVaultV2.address);
-    expect(tx.data).toBeDefined();
-    expect(tx.value).toBe(0n);
+    expect(transaction.action.args.referralFeeAssets).toBe(50n);
+    expect(transaction.action.args.netAssets).toBe(50n);
   });
 
-  test("should append metadata to transaction data when provided", async ({
-    client,
-  }) => {
-    const amount = parseUnits("1000", 6);
-    const tx = vaultV2Withdraw({
-      vault: {
-        address: KeyrockUsdcVaultV2.address,
-      },
-      args: {
-        amount,
-        recipient: client.account.address,
-        onBehalf: client.account.address,
-      },
-      metadata: { origin: "a1b2c3d4" },
-    });
-
-    expect(tx.data.includes("a1b2c3d4")).toBe(true);
-  });
-
-  test("should throw NonPositiveInputError when assets is zero", async () => {
-    expect(() =>
-      vaultV2Withdraw({
-        vault: {
-          address: KeyrockUsdcVaultV2.address,
-        },
-        args: {
-          amount: 0n,
-          recipient: "0x1234567890123456789012345678901234567890",
-          onBehalf: "0x1234567890123456789012345678901234567890",
-        },
+  test("behavior: calldata round-trips across uint256 inputs", () => {
+    fc.assert(
+      fc.property(positiveUint256, positiveUint256, (amount, deadline) => {
+        const transaction = vaultV2Withdraw({
+          vault: { chainId, address: vault },
+          args: { amount, userAddress, deadline },
+        });
+        const decoded = decodeFunctionData({
+          abi: vaultBundlesV1Abi,
+          data: transaction.data,
+        });
+        expect(decoded.functionName).toBe("vaultBundlesV1Withdraw");
+        expect(decoded.args?.[1]).toBe(amount);
+        expect(decoded.args?.[2]).toBe(0n);
+        expect(decoded.args?.[6]).toBe(deadline);
       }),
-    ).toThrow(NonPositiveInputError);
+      { numRuns: 50, seed: 20_260_905 },
+    );
   });
 
-  test("should throw NonPositiveInputError when assets is negative", async () => {
+  test("error: NonPositiveInputError", () => {
     expect(() =>
       vaultV2Withdraw({
-        vault: {
-          address: KeyrockUsdcVaultV2.address,
-        },
-        args: {
-          amount: -1n,
-          recipient: "0x1234567890123456789012345678901234567890",
-          onBehalf: "0x1234567890123456789012345678901234567890",
-        },
+        vault: { chainId, address: vault },
+        args: { amount: -1n, userAddress, deadline: 1n },
       }),
     ).toThrow(NonPositiveInputError);
   });
