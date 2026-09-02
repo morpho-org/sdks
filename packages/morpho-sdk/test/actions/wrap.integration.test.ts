@@ -15,6 +15,7 @@ import {
   GauntletWethVaultV1,
   SteakhouseUsdcVaultV1,
 } from "../fixtures/vaultV1.js";
+import { KpkWETHVaultV2 } from "../fixtures/vaultV2.js";
 import { testInvariants } from "../helpers/invariants.js";
 import { test } from "../setup.js";
 
@@ -145,5 +146,51 @@ describe("VaultBundlesV1 native Vault V1 funding", () => {
         },
       }),
     ).toThrow(NegativeInputError);
+  });
+});
+
+describe("Bundler3 native Vault V2 funding", () => {
+  test("deposits native ETH into a wNative vault", async ({ client }) => {
+    const nativeAmount = parseUnits("1", 18);
+    await client.setBalance({
+      address: client.account.address,
+      value: nativeAmount + parseUnits("10", 18),
+    });
+
+    const {
+      vaults: {
+        KpkWETHVaultV2: { initialState, finalState },
+      },
+    } = await testInvariants({
+      client,
+      params: { vaults: { KpkWETHVaultV2 } },
+      actionFn: async () => {
+        const vault = client
+          .extend(morphoViemExtension())
+          .morpho.vaultV2(KpkWETHVaultV2.address, mainnet.id);
+        const deposit = vault.deposit({
+          userAddress: client.account.address,
+          amount: 0n,
+          nativeAmount,
+          vaultData: await vault.getData(),
+        });
+        expect(await deposit.getRequirements()).toEqual([]);
+        const transaction = deposit.buildTx();
+        expect(transaction.value).toBe(nativeAmount);
+        expect(transaction.action.args.amount).toBe(0n);
+        expect(transaction.action.args.nativeAmount).toBe(nativeAmount);
+        await client.sendTransaction(transaction);
+      },
+    });
+
+    expect(finalState.userNativeBalance).toBeLessThan(
+      initialState.userNativeBalance,
+    );
+    expect(finalState.morphoAssetBalance).toBe(
+      initialState.morphoAssetBalance + nativeAmount,
+    );
+    expect(finalState.userSharesBalanceInAssets).toBe(
+      initialState.userSharesBalanceInAssets + nativeAmount - 1n,
+    );
   });
 });

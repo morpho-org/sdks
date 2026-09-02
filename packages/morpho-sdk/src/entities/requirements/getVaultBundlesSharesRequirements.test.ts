@@ -14,7 +14,6 @@ describe("getVaultBundlesSharesRequirements", () => {
     await expect(
       getVaultBundlesSharesRequirements(client, {
         vaultData: {} as never,
-        version: "vaultV1",
         owner: "0x0000000000000000000000000000000000000001",
         chainId: base.id,
         requiredShareAllowance: 1n,

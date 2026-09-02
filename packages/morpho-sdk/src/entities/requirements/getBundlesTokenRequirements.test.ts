@@ -5,6 +5,7 @@ import { createWalletClient, erc20Abi, http, maxUint256 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
+import { getBundlesTokenRequirements } from "../../index.js";
 import {
   ApprovalAmountLessThanSpendAmountError,
   InputExceedsMaxError,
@@ -15,7 +16,6 @@ import {
   NonPositiveInputError,
   Permit2TransferFromNonceAlreadyUsedError,
 } from "../../types/index.js";
-import { getBundlesTokenRequirements } from "./getBundlesTokenRequirements.js";
 
 const account = privateKeyToAccount(
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",

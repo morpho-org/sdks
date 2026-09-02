@@ -2,9 +2,9 @@ import { getChainAddress } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData } from "viem";
 import { vaultBundlesV1Abi } from "../../abis.js";
 import {
+  type Erc2612RequirementSignature,
   type Metadata,
   NonPositiveInputError,
-  type PermitRequirementSignature,
   type Transaction,
   type VaultV1WithdrawAction,
 } from "../../types/index.js";
@@ -23,7 +23,7 @@ export interface VaultV1WithdrawParams {
     readonly userAddress: Address;
     readonly recipient?: never;
     readonly onBehalf?: never;
-    readonly requirementSignature?: PermitRequirementSignature;
+    readonly requirementSignature?: Erc2612RequirementSignature;
     readonly referralFeePct?: bigint;
     readonly referralFeeRecipient?: Address;
     readonly deadline: bigint;

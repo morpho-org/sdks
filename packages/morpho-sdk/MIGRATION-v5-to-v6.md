@@ -23,7 +23,7 @@ Version 6 also preserves the Vault V1 method and builder names while routing `de
 | `deposit` | Additive `amount` and `nativeAmount`; Bundler3/GeneralAdapter1 requirements. | Supply exactly one of `amount` or `nativeAmount`; optionally set `deadline`, `referralFeePct`, and `referralFeeRecipient`. Token requirements authorize VaultBundlesV1 and may return Permit2 SignatureTransfer. |
 | `withdraw` | Direct vault withdrawal with no share requirement. | Exact-assets VaultBundlesV1 exit. Optionally set `slippageTolerance`, `deadline`, and referral fields; resolve a vault-share approval or ERC-2612 permit before building. |
 | `redeem` | Direct vault redemption with no share requirement. | Exact-shares VaultBundlesV1 exit. Optionally set `deadline` and referral fields; resolve a vault-share approval or ERC-2612 permit before building. |
-| `migrateToV2` | Asset-denominated Bundler3 migration with a source `minSharePriceVaultV1`. | Supply exactly one of `assets` or `shares`; remove the source share-price bound; optionally set `slippageTolerance`, `deadline`, and referral fields. Resolve source-vault share authorization before building. The destination deposit retains its onchain maximum-share-price bound. |
+| `migrateToV2` | Share-denominated Bundler3 migration with a source `minSharePriceVaultV1`. | Keep the existing `shares` mode or supply the new `assets` alternative; remove the source share-price bound; optionally set `slippageTolerance`, `deadline`, and referral fields. Resolve source-vault share authorization before building. The destination deposit retains its onchain maximum-share-price bound. |
 
 `userAddress` now means the account that will submit the transaction. VaultBundlesV1 always deposits
 for, burns shares from, and pays `msg.sender`; arbitrary `recipient` and `onBehalf` values are no
@@ -149,7 +149,7 @@ high-level writes.
 
 - Update every Vault V1 call for exclusive deposit funding, sender-bound outputs, deadlines,
   referral fields, and the new exit share-authorization workflow.
-- Replace Vault V1 migration's asset-only/source-bound input with the exclusive `assets`/`shares`
+- Update Vault V1 migration's shares-only/source-bound input to the exclusive `assets`/`shares`
   union and destination-only share-price protection.
 - Recreate Vault V1 token and share approvals for VaultBundlesV1, and update transaction decoding
   away from Bundler3/direct-vault destinations.

@@ -1,5 +1,5 @@
-import { getChainAddress } from "@morpho-org/morpho-ts";
-import type { Client } from "viem";
+import { getChainAddress, Time } from "@morpho-org/morpho-ts";
+import { type Client, maxUint256, zeroAddress } from "viem";
 import { validateChainId } from "../../helpers/index.js";
 import {
   type GetBundlesTokenRequirementsParams,
@@ -62,8 +62,15 @@ export const getBlueBundlesV1TokenRequirements = (
 ) => {
   // Preserve the public Blue resolver's chain-mismatch error ordering before registry lookup.
   validateChainId(viemClient.chain?.id, params.chainId);
+  const mustValidateBeforeDeploymentLookup =
+    params.amount <= 0n ||
+    params.amount > maxUint256 ||
+    params.deadline <= Time.timestamp() ||
+    params.deadline > maxUint256;
   return getBundlesTokenRequirements(viemClient, {
     ...params,
-    spender: getChainAddress(params.chainId, "bundles.blueBundlesV1"),
+    spender: mustValidateBeforeDeploymentLookup
+      ? zeroAddress
+      : getChainAddress(params.chainId, "bundles.blueBundlesV1"),
   });
 };

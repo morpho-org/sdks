@@ -44,9 +44,11 @@ import {
   type ActionRequirement,
   AmountAndSharesExclusiveError,
   type BundlesFundingArgs,
+  BundlesPermitMismatchError,
   type BundlesTokenRequirementsOptions,
   ChainIdMismatchError,
   EmptyMarketParamsListError,
+  type Erc2612RequirementSignature,
   ExpiredDeadlineError,
   InKindRedeemCoverageError,
   InsufficientBlueBalanceForInKindRedeemError,
@@ -68,6 +70,37 @@ import {
 } from "../../types/index.js";
 import { getVaultBundlesSharesRequirements } from "../requirements/getVaultBundlesSharesRequirements.js";
 import { getBundlesTokenRequirements } from "../requirements/index.js";
+
+const selectVaultBundlesSharesRequirementSignature = (
+  signatures: readonly RequirementSignature[] | undefined,
+  requiredShareAllowance: bigint | undefined,
+): Erc2612RequirementSignature | undefined => {
+  const { permit } = selectRequirementSignatures(signatures, { permit: true });
+  if (permit == null) return undefined;
+  const { action } = permit;
+  if (action.type !== "permit") {
+    throw new BundlesPermitMismatchError({
+      field: "type",
+      expected: "permit",
+      actual: action.type,
+    });
+  }
+  if (
+    requiredShareAllowance == null ||
+    permit.args.amount !== requiredShareAllowance ||
+    action.args.amount !== requiredShareAllowance
+  ) {
+    throw new BundlesPermitMismatchError({
+      field: "amount",
+      expected:
+        requiredShareAllowance == null
+          ? "the current cap from getRequirements()"
+          : String(requiredShareAllowance),
+      actual: String(permit.args.amount),
+    });
+  }
+  return { args: permit.args, action };
+};
 
 export interface VaultV1Actions {
   /**
@@ -91,6 +124,9 @@ export interface VaultV1Actions {
    * @param {AccrualVault} params.vaultData - Pre-fetched vault data with asset address and share conversion.
    * @param {bigint} [params.slippageTolerance=DEFAULT_SLIPPAGE_TOLERANCE] - Slippage tolerance (default 0.03%, max 10%).
    * @param {bigint} [params.nativeAmount] - Native assets to wrap and deposit; exclusive with `amount` and requires a wNative vault.
+   * @param {bigint} [params.referralFeePct=0n] - WAD-scaled referral fee deducted from the gross deposit.
+   * @param {Address} [params.referralFeeRecipient] - Non-zero recipient required when `referralFeePct` is positive.
+   * @param {bigint} [params.deadline] - VaultBundlesV1 execution deadline; defaults to two hours from now.
    * @returns Lazy token requirements and a synchronous VaultBundlesV1 transaction builder.
    */
   deposit: (
@@ -113,6 +149,10 @@ export interface VaultV1Actions {
    * @param {Object} params - The withdraw parameters.
    * @param {bigint} params.amount - Amount of assets to withdraw.
    * @param {Address} params.userAddress - Account that must sign and submit the transaction; VaultBundlesV1 burns `msg.sender`'s shares and pays `msg.sender`.
+   * @param {bigint} [params.slippageTolerance=DEFAULT_SLIPPAGE_TOLERANCE] - Headroom applied to the computed share-burn allowance cap (default 0.03%, max 10%).
+   * @param {bigint} [params.referralFeePct=0n] - WAD-scaled referral fee deducted from the withdrawn assets.
+   * @param {Address} [params.referralFeeRecipient] - Non-zero recipient required when `referralFeePct` is positive.
+   * @param {bigint} [params.deadline] - VaultBundlesV1 execution deadline; defaults to two hours from now.
    * @returns Lazy exact share-allowance requirements and a synchronous transaction builder.
    */
   withdraw: (params: {
@@ -133,6 +173,9 @@ export interface VaultV1Actions {
    * @param {Object} params - The redeem parameters.
    * @param {bigint} params.shares - Amount of shares to redeem.
    * @param {Address} params.userAddress - Account that must sign and submit the transaction; VaultBundlesV1 burns `msg.sender`'s shares and pays `msg.sender`.
+   * @param {bigint} [params.referralFeePct=0n] - WAD-scaled referral fee deducted from the redeemed assets.
+   * @param {Address} [params.referralFeeRecipient] - Non-zero recipient required when `referralFeePct` is positive.
+   * @param {bigint} [params.deadline] - VaultBundlesV1 execution deadline; defaults to two hours from now.
    * @returns Lazy exact share-allowance requirements and a synchronous transaction builder.
    */
   redeem: (params: {
@@ -233,6 +276,9 @@ export interface VaultV1Actions {
    * @param {bigint} [params.shares] - Exact V1 shares to migrate; exclusive with `assets`.
    * @param {bigint} [params.assets] - Exact V1 assets to withdraw and migrate; exclusive with `shares`.
    * @param {bigint} [params.slippageTolerance=DEFAULT_SLIPPAGE_TOLERANCE] - Slippage tolerance (default 0.03%, max 10%).
+   * @param {bigint} [params.referralFeePct=0n] - WAD-scaled referral fee deducted from source-vault proceeds.
+   * @param {Address} [params.referralFeeRecipient] - Non-zero recipient required when `referralFeePct` is positive.
+   * @param {bigint} [params.deadline] - VaultBundlesV1 execution deadline; defaults to two hours from now.
    * @returns Lazy exact source-share requirements and a synchronous transaction builder.
    */
   migrateToV2: (
@@ -396,11 +442,12 @@ export class MorphoVaultV1 implements VaultV1Actions {
       params.slippageTolerance ?? DEFAULT_SLIPPAGE_TOLERANCE;
     validateSlippageTolerance(slippageTolerance);
     getChainAddress(this.chainId, "bundles.vaultBundlesV1");
+    let requiredShareAllowance: bigint | undefined;
     return {
       getRequirements: async () => {
         const vaultData = await this.getData();
         const accruedVault = vaultData.accrueInterest(deadline);
-        const requiredShareAllowance = MathLib.wMulUp(
+        requiredShareAllowance = MathLib.wMulUp(
           MathLib.max(
             vaultData.toShares(params.amount, "Up"),
             accruedVault.toShares(params.amount, "Up"),
@@ -409,7 +456,6 @@ export class MorphoVaultV1 implements VaultV1Actions {
         );
         return getVaultBundlesSharesRequirements(this.client.viemClient, {
           vaultData,
-          version: "vaultV1",
           owner: params.userAddress,
           chainId: this.chainId,
           requiredShareAllowance,
@@ -418,9 +464,10 @@ export class MorphoVaultV1 implements VaultV1Actions {
         });
       },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
-        const { permit } = selectRequirementSignatures(signatures, {
-          permit: true,
-        });
+        const permit = selectVaultBundlesSharesRequirementSignature(
+          signatures,
+          requiredShareAllowance,
+        );
         return vaultV1Withdraw({
           vault: { chainId: this.chainId, address: this.vault },
           args: {
@@ -459,7 +506,6 @@ export class MorphoVaultV1 implements VaultV1Actions {
       getRequirements: async () =>
         getVaultBundlesSharesRequirements(this.client.viemClient, {
           vaultData: await this.getData(),
-          version: "vaultV1",
           owner: params.userAddress,
           chainId: this.chainId,
           requiredShareAllowance: params.shares,
@@ -467,9 +513,10 @@ export class MorphoVaultV1 implements VaultV1Actions {
           supportSignature: this.client.options.supportSignature,
         }),
       buildTx: (signatures?: readonly RequirementSignature[]) => {
-        const { permit } = selectRequirementSignatures(signatures, {
-          permit: true,
-        });
+        const permit = selectVaultBundlesSharesRequirementSignature(
+          signatures,
+          params.shares,
+        );
         return vaultV1Redeem({
           vault: { chainId: this.chainId, address: this.vault },
           args: {
@@ -746,7 +793,6 @@ export class MorphoVaultV1 implements VaultV1Actions {
       getRequirements: () =>
         getVaultBundlesSharesRequirements(this.client.viemClient, {
           vaultData: params.sourceVault,
-          version: "vaultV1",
           owner: params.userAddress,
           chainId: this.chainId,
           requiredShareAllowance,
@@ -754,9 +800,10 @@ export class MorphoVaultV1 implements VaultV1Actions {
           supportSignature: this.client.options.supportSignature,
         }),
       buildTx: (signatures?: readonly RequirementSignature[]) => {
-        const { permit } = selectRequirementSignatures(signatures, {
-          permit: true,
-        });
+        const permit = selectVaultBundlesSharesRequirementSignature(
+          signatures,
+          requiredShareAllowance,
+        );
         return vaultV1MigrateToV2({
           vault: {
             chainId: this.chainId,

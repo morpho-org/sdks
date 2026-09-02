@@ -224,7 +224,7 @@ export function computeMinWithdrawSharePrice(params: {
  * @returns The capped maximum share price enforced by VaultBundlesV1.
  * @throws {NonPositiveInputError} when `assets` or the previewed shares are not positive.
  * @throws {NegativeInputError} when `slippageTolerance` is negative.
- * @throws {InvalidSlippageToleranceError} when `slippageTolerance` exceeds the SDK maximum.
+ * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds the SDK maximum.
  * @example
  * ```ts
  * import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";

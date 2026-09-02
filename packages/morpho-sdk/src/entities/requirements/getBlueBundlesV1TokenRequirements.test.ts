@@ -3,8 +3,9 @@ import { permit2Abi } from "@morpho-org/blue-sdk-viem";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import { createWalletClient, erc20Abi, http, maxUint256 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { mainnet } from "viem/chains";
+import { mainnet, soneium } from "viem/chains";
 import { describe, expect, test } from "vitest";
+import { getBlueBundlesV1TokenRequirements } from "../../index.js";
 import {
   ApprovalAmountLessThanSpendAmountError,
   ExpiredDeadlineError,
@@ -16,7 +17,6 @@ import {
   NonPositiveInputError,
   Permit2TransferFromNonceAlreadyUsedError,
 } from "../../types/index.js";
-import { getBlueBundlesV1TokenRequirements } from "./getBlueBundlesV1TokenRequirements.js";
 
 const account = privateKeyToAccount(
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
@@ -33,6 +33,58 @@ describe("getBlueBundlesV1TokenRequirements", () => {
     throw new Error("BlueBundlesV1 requirements are not registered");
   }
   const blueBundlesV1 = bundles.blueBundlesV1;
+
+  test("validates amounts and deadlines before resolving BlueBundlesV1", async () => {
+    const handle = createMockClient(soneium);
+    const params = {
+      token: account.address,
+      owner: account.address,
+      chainId: soneium.id,
+      deadline: maxUint256,
+      supportSignature: false,
+    } as const;
+
+    await expect(
+      getBlueBundlesV1TokenRequirements(handle.client, {
+        ...params,
+        amount: 0n,
+      }),
+    ).resolves.toEqual([]);
+    await expect(
+      getBlueBundlesV1TokenRequirements(handle.client, {
+        ...params,
+        amount: -1n,
+      }),
+    ).rejects.toBeInstanceOf(NegativeInputError);
+    await expect(
+      getBlueBundlesV1TokenRequirements(handle.client, {
+        ...params,
+        amount: maxUint256 + 1n,
+      }),
+    ).rejects.toBeInstanceOf(InputExceedsMaxError);
+    await expect(
+      getBlueBundlesV1TokenRequirements(handle.client, {
+        ...params,
+        amount: 1n,
+        deadline: 0n,
+      }),
+    ).rejects.toBeInstanceOf(NonPositiveInputError);
+    await expect(
+      getBlueBundlesV1TokenRequirements(handle.client, {
+        ...params,
+        amount: 1n,
+        deadline: 1n,
+      }),
+    ).rejects.toBeInstanceOf(ExpiredDeadlineError);
+    await expect(
+      getBlueBundlesV1TokenRequirements(handle.client, {
+        ...params,
+        amount: 1n,
+        deadline: maxUint256 + 1n,
+      }),
+    ).rejects.toBeInstanceOf(InputExceedsMaxError);
+    expect(handle.request).not.toHaveBeenCalled();
+  });
 
   test("returns a direct exact approval when signatures are disabled", async () => {
     const handle = createMockClient(mainnet);

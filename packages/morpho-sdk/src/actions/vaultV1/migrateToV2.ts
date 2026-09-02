@@ -3,9 +3,9 @@ import { type Address, encodeFunctionData, isAddressEqual } from "viem";
 import { vaultBundlesV1Abi } from "../../abis.js";
 import {
   AmountAndSharesExclusiveError,
+  type Erc2612RequirementSignature,
   type Metadata,
   NonPositiveInputError,
-  type PermitRequirementSignature,
   SameVaultMigrationError,
   type Transaction,
   VaultAssetMismatchError,
@@ -33,7 +33,7 @@ export interface VaultV1MigrateToV2Params {
     readonly userAddress: Address;
     readonly recipient?: never;
     readonly minSharePriceVaultV1?: never;
-    readonly requirementSignature?: PermitRequirementSignature;
+    readonly requirementSignature?: Erc2612RequirementSignature;
     readonly referralFeePct?: bigint;
     readonly referralFeeRecipient?: Address;
     readonly deadline: bigint;
