@@ -86,6 +86,26 @@ describe("encodeVaultSharesPermit", () => {
     ).resolves.toMatchObject({ args: { amount, nonce: 3n } });
   });
 
+  test("behavior: accepts the VaultBundlesV1 spender", () => {
+    const vaultBundlesV1 = getChainAddress(
+      mainnet.id,
+      "bundles.vaultBundlesV1",
+    );
+
+    expect(() =>
+      encodeVaultSharesPermit({
+        vault: new Token({ address: vault, name: "Vault V1" }),
+        version: "vaultV1",
+        spender: vaultBundlesV1,
+        owner: account.address,
+        chainId: mainnet.id,
+        nonce: 3n,
+        amount,
+        deadline: 1_900_000_000n,
+      }),
+    ).not.toThrow();
+  });
+
   test("behavior: snapshots permit inputs before signing", async () => {
     const params = {
       vault: new Token({ address: vault, name: "Vault V2" }),

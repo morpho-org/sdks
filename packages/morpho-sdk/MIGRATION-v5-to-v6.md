@@ -13,6 +13,41 @@ extension or automatic fallback to the v5 route.
 > `validateWriteCommon`). Confirm coverage before upgrading, for example
 > `getChainAddresses(chainId).bundles?.blueBundlesV1 != null`.
 
+Version 6 also preserves the Vault V1 method and builder names while routing `deposit`, `withdraw`,
+`redeem`, and `migrateToV2` through VaultBundlesV1. Vault V2 methods keep their v5 routes.
+
+## Update Vault V1 methods
+
+| Stable method | v5 input/workflow | v6 input/workflow |
+| --- | --- | --- |
+| `deposit` | Additive `amount` and `nativeAmount`; Bundler3/GeneralAdapter1 requirements. | Supply exactly one of `amount` or `nativeAmount`; optionally set `deadline`, `referralFeePct`, and `referralFeeRecipient`. Token requirements authorize VaultBundlesV1 and may return Permit2 SignatureTransfer. |
+| `withdraw` | Direct vault withdrawal with no share requirement. | Exact-assets VaultBundlesV1 exit. Optionally set `slippageTolerance`, `deadline`, and referral fields; resolve a vault-share approval or ERC-2612 permit before building. |
+| `redeem` | Direct vault redemption with no share requirement. | Exact-shares VaultBundlesV1 exit. Optionally set `deadline` and referral fields; resolve a vault-share approval or ERC-2612 permit before building. |
+| `migrateToV2` | Share-denominated Bundler3 migration with a source `minSharePriceVaultV1`. | Keep the existing `shares` mode or supply the new `assets` alternative; remove the source share-price bound; optionally set `slippageTolerance`, `deadline`, and referral fields. Resolve source-vault share authorization before building. The destination deposit retains its onchain maximum-share-price bound. |
+
+`userAddress` now means the account that will submit the transaction. VaultBundlesV1 always deposits
+for, burns shares from, and pays `msg.sender`; arbitrary `recipient` and `onBehalf` values are no
+longer supported. Keep `userAddress` equal to the eventual signer, including when preparing a
+transaction with a public client.
+
+The lazy workflow now applies to Vault V1 exits as well as deposits: await `getRequirements()`, send
+any returned approval transactions or collect the returned signature, and pass collected signatures
+to `buildTx(signatures)`. Deposit requirement options accept `useSimplePermit` and an explicit
+`permit2Nonce`; exit requirements use the vault share token's ERC-2612 permit. The built transaction
+targets VaultBundlesV1 rather than Bundler3 or the vault itself.
+
+Pure builder names remain stable, but their `args` objects change:
+
+| Stable builder | v6 `args` fields |
+| --- | --- |
+| `vaultV1Deposit` | Exclusive `amount`/`nativeAmount`, `maxSharePrice`, `userAddress`, optional bundles token `requirementSignature`, required `deadline`, and optional referral fields. |
+| `vaultV1Withdraw` | `amount`, `userAddress`, optional vault-share `requirementSignature`, required `deadline`, and optional referral fields. |
+| `vaultV1Redeem` | `shares`, `userAddress`, optional vault-share `requirementSignature`, required `deadline`, and optional referral fields. |
+| `vaultV1MigrateToV2` | Exclusive `assets`/`shares`, `targetVault`, `targetAsset`, `maxSharePriceVaultV2`, `userAddress`, optional vault-share `requirementSignature`, required `deadline`, and optional referral fields. |
+
+Vault V1 deposit and migration destination bounds are forecast through the selected deadline, so an
+explicit deadline beyond the two-hour default remains covered by the computed maximum share price.
+
 ## Update Blue methods
 
 | Stable method | v5 input | v6 input |
@@ -27,8 +62,9 @@ extension or automatic fallback to the v5 route.
 | `repayWithdrawCollateral` | `amount` or `shares`, `withdrawAmount`, optional additive `nativeAmount`, `slippageTolerance` | Rename the repay modes to `repayAssets`/`repayShares` and `withdrawAmount` to `collateralAssets`; remove slippage; add `deadline`, `referralFeePct`, and `referralFeeRecipient`. |
 | `refinance` | `target`, `collateralAmount`, `borrowAssets`/`borrowShares`, `slippageTolerance`, `targetReallocations` | Rename `target` to `destination`; remove partial-leg amounts and share-price inputs; rename V2-only `targetReallocations` to `reallocations`; add `deadline`, `referralFeePct`, and `referralFeeRecipient`. The full live position always moves. |
 
-The two combined methods require at least one non-zero leg. See the dedicated **Blue refinance**
-section below for that method's larger shape change.
+The two combined methods require at least one non-zero leg. `refinance` supports only a
+full debt-and-collateral migration between markets with the same loan and collateral tokens. Stay
+on v5 if the product requires partial or collateral-only refinance behavior.
 
 ## Update pure action builder inputs and metadata
 
@@ -47,12 +83,9 @@ their `args` objects as follows. `metadata` is unchanged.
 | `blueRepayWithdrawCollateral` / `BlueRepayWithdrawCollateralParams` | `userAddress`, `repayAssets`, `repayShares`, `maxRepayAssets`, `collateralAssets`, `maxLtv`, optional `nativeAmount`, required `deadline`, optional `referralFeePct`, `referralFeeRecipient`, `requirementSignature`, and `authorizationSignature`. |
 | `blueRefinance` / `BlueRefinanceParams` | `userAddress`, `maxLtv`, optional V2 `reallocations`, required `deadline`, optional `referralFeePct`, `referralFeeRecipient`, and `authorizationSignature`; replace `source`/`target` with `market: { chainId, sourceMarketParams, destinationMarketParams }`. |
 
-The transaction metadata exports and discriminator strings stay stable; their argument fields change
-as below. The table lists only the delta: unchanged fields are retained and omitted. In particular
-every Blue action keeps its `market` (`Hex` market id) field, so a strict decoder must keep matching
-it alongside the added fields.
+The transaction metadata exports and discriminator strings stay stable; their argument fields change:
 
-| Stable action type / discriminator | Removed v5 `action.args` fields | Changed / added v6 `action.args` fields |
+| Stable action type / discriminator | Removed v5 `action.args` fields | v6 `action.args` fields |
 | --- | --- | --- |
 | `BlueSupplyAction` / `"blueSupply"` | `amount`, `maxSharePrice` | `assets`, `onBehalf`, optional `nativeAmount`, `referralFeePct`, `referralFeeRecipient`, `deadline`. |
 | `BlueWithdrawAction` / `"blueWithdraw"` | `assets`, `shares`, `receiver`, `minSharePrice`, `reallocationFee` | `withdrawAssets`, `withdrawShares`, `onBehalf`, `reallocations`, `reallocationPenaltyAssets`, `referralFeePct`, `referralFeeRecipient`, `deadline`. |
@@ -66,11 +99,12 @@ it alongside the added fields.
 ## Update write inputs
 
 - Remove Blue `slippageTolerance`, `minSharePrice`, and `maxSharePrice` inputs. BlueBundlesV1 does
-  not expose the Bundler3 share-price checks. Vault deposit slippage protection is unchanged.
+  not expose the Bundler3 share-price checks. Vault V2 deposit slippage protection is unchanged;
+  Vault V1 deposits now enforce their computed maximum share price through VaultBundlesV1.
 - Remove Blue `receiver`, `to`, and arbitrary `onBehalf` overrides. BlueBundlesV1 operates on the
   transaction sender and sends proceeds and refunds back to that sender; `userAddress` must be the
   eventual sender used to resolve requirements and position snapshots.
-- Replace PublicAllocator V1 or mixed-version reallocation write inputs with Vault V2
+- Replace PublicAllocator V1 or mixed `BlueReallocationPlan` write inputs with Vault V2
   `VaultV2BlueReallocation` inputs. All Vault V1 reallocation planning, data, input, validation,
   and explicit low-level Bundler3-composition surfaces remain available only as deprecated
   compatibility surfaces and will be removed in the next major; the high-level Blue writes do not
@@ -96,7 +130,10 @@ The destinations are different:
 
 - Classic ERC-20 approvals and ERC-2612 permits now authorize BlueBundlesV1.
 - Permit2 keeps its ERC-20 approval on canonical Permit2, but the SignatureTransfer payload names
-  BlueBundlesV1 as spender. Explicit Permit2 nonces are now required — see the subsection below.
+  BlueBundlesV1 as spender.
+- When selecting Permit2 SignatureTransfer, pass an explicit unused `permit2Nonce` to
+  `getRequirements()`; the SDK checks its unordered nonce bitmap before returning the signature
+  request.
 - Morpho authorization now grants BlueBundlesV1 operator rights instead of GeneralAdapter1.
 - Without signature support, saturated full-repay requirements use the token's reusable maximum
   allowance so a later bounded debt quote remains covered; BlueBundlesV1 still refunds unused
@@ -108,90 +145,14 @@ Update simulations and analytics for the v6 action-field changes. Do not assert
 Bundler3/GeneralAdapter1 destinations or inspect Bundler3 sub-actions for these
 high-level writes.
 
-### Permit2 SignatureTransfer requires an explicit nonce
-
-SignatureTransfer consumes an owner-global unordered nonce rather than an allowance, so the SDK no
-longer allocates one implicitly. For a client with `supportSignature: true`, the default supply
-requirement path selects Permit2 and `supply(...).getRequirements()` now throws
-`MissingPermit2TransferFromNonceError` when no nonce is supplied. Pass an unused nonce explicitly:
-
-```ts
-const requirements = await market
-  .supply({ userAddress, assets, deadline })
-  .getRequirements({ permit2Nonce });
-```
-
-Allocate any `uint256` whose Permit2 `nonceBitmap` bit is still unset for `userAddress` (each nonce
-is single-use; a consumed one throws `Permit2TransferFromNonceAlreadyUsedError`). To skip Permit2
-for ERC-2612 tokens, pass `getRequirements({ useSimplePermit: true })`, which prefers a one-signature
-ERC-2612 permit and needs no nonce.
-
-## Blue refinance
-
-The `refinance` entity method and the `blueRefinance` pure builder keep their names but now call
-BlueBundlesV1's full-position migration entrypoint. Both drop partial and collateral-only migration:
-the full live source debt and collateral always move, the source and destination markets must use the
-same loan and collateral tokens and must not be the same market, and Morpho authorization targets
-BlueBundlesV1.
-
-`userAddress` must be the account that signs the Morpho authorization **and** sends the transaction.
-The BlueBundlesV1 migration calldata carries no owner field: it migrates the position of the
-authorization signer, which the contract binds to `msg.sender`. Unlike the v5 Bundler3 route (where
-`args.user` was encoded as `onBehalf` in every leg), a relayer can no longer migrate a third party's
-position — supplying a `userAddress` other than the sender reverts on-chain. On-behalf refinance is no
-longer supported; the SDK uses `userAddress` only to build the authorization requirement and action
-metadata.
-
-`market.refinance(...)` (entity method):
-
-- Rename `target` to `destination`.
-- Remove `collateralAmount`, `borrowAssets`, `borrowShares`, slippage, and share-price bounds.
-- Rename V2-only `targetReallocations` to `reallocations`.
-- Add `deadline` and optional referral-fee fields.
-- Pass source and destination position snapshots.
-
-`blueRefinance(...)` (pure builder):
-
-- Replace the top-level `{ source: { chainId, marketParams }, target: { marketParams } }` shape with
-  `{ market: { chainId, sourceMarketParams, destinationMarketParams } }`.
-- Rename `args.user` to `args.userAddress` and supply `args.maxLtv` (the buffered destination LTV).
-- Remove `args.collateralAmount`, `args.borrowAssets`, `args.borrowShares`,
-  `args.minBorrowSharePrice`, and `args.maxRepaySharePrice`.
-- Rename `args.targetReallocations` to `args.reallocations`.
-- Add `args.deadline` and optional referral-fee fields.
-
-The action metadata replaces `targetMarket`, partial-leg amounts, user, share-price bounds, and the
-V1 fee with `destinationMarket`, `maxLtv`, `onBehalf`, a reallocation count and penalty total,
-referral-fee fields, and `deadline`.
-
-Stay on v5 if the product requires partial or collateral-only refinance behavior.
-
-The partial-migration error classes `BorrowAmountAndSharesExclusiveError`,
-`RefinanceExceedsCollateralError`, `RefinanceExceedsBorrowSharesError`,
-`RefinanceExceedsBorrowAssetsError`, and `RefinanceSharesMissingBorrowAssetsError` are **deprecated,
-not removed**: they stay exported through v6 (marked `@deprecated`) for consumers pattern-matching on
-the v5 surface, are never thrown by the full-position route, and are removed in the next major. The
-full-position route validates ownership and token/market compatibility, rejects a reallocation plan
-whose rounded aggregate penalty exceeds the migrated source debt (`InputExceedsMaxError`), then checks
-the combined destination position against the buffered LLTV (`BorrowExceedsSafeLtvError`);
-`RefinanceSameMarketError` and `RefinanceTokenMismatchError` stay.
-
-## Removed action-output field: `reallocationFee`
-
-`BlueBorrowAction`, `BlueWithdrawAction`, `BlueSupplyCollateralBorrowAction`, and
-`BlueRefinanceAction` no longer expose `reallocationFee` in `action.args`. That field only ever
-carried Vault V1 native PublicAllocator fees, which high-level writes no longer emit. Read
-`reallocationPenaltyAssets` for the loan-token penalty donated by Vault V2 BluePublicAllocator
-reallocations.
-
-## Removed type: `BlueReallocationPlan`
-
-The `BlueReallocationPlan` union is removed. High-level Blue write inputs accept
-`Iterable<VaultV2BlueReallocation>` directly; for explicit low-level Vault V1 composition, use
-`VaultV1Reallocation[]`.
-
 ## Upgrade checklist
 
+- Update every Vault V1 call for exclusive deposit funding, sender-bound outputs, deadlines,
+  referral fields, and the new exit share-authorization workflow.
+- Update Vault V1 migration's shares-only/source-bound input to the exclusive `assets`/`shares`
+  union and destination-only share-price protection.
+- Recreate Vault V1 token and share approvals for VaultBundlesV1, and update transaction decoding
+  away from Bundler3/direct-vault destinations.
 - Update every Blue write call using the table above; method names remain stable.
 - Remove Blue slippage and PublicAllocator V1 write inputs.
 - Re-run approval and Morpho-authorization setup against the new spender/operator.

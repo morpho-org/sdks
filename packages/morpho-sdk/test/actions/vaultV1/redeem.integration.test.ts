@@ -7,7 +7,7 @@ import {
 } from "../../../src/index.js";
 import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
 import { testInvariants } from "../../helpers/invariants.js";
-import { test } from "../../setup.js";
+import { vaultBundlesV1Test as test } from "../../helpers/vaultBundlesV1.js";
 
 describe("Redeem VaultV1", () => {
   test("should redeem 1K shares in vaultV1", async ({ client }) => {
@@ -36,6 +36,13 @@ describe("Redeem VaultV1", () => {
           userAddress: client.account.address,
           shares,
         });
+        const requirements = await redeem.getRequirements();
+        expect(requirements).toHaveLength(1);
+        const approval = requirements[0];
+        if (!isRequirementApproval(approval)) {
+          throw new Error("Approve transaction not found");
+        }
+        await client.sendTransaction(approval);
         const tx = redeem.buildTx();
 
         await client.sendTransaction(tx);
@@ -101,6 +108,13 @@ describe("Redeem VaultV1", () => {
           userAddress: client.account.address,
           shares,
         });
+        const redeemRequirements = await redeem.getRequirements();
+        expect(redeemRequirements).toHaveLength(1);
+        const redeemApproval = redeemRequirements[0];
+        if (!isRequirementApproval(redeemApproval)) {
+          throw new Error("Approve transaction not found");
+        }
+        await client.sendTransaction(redeemApproval);
         await client.sendTransaction(redeem.buildTx());
       },
     });
@@ -145,6 +159,13 @@ describe("Redeem VaultV1", () => {
           userAddress: client.account.address,
           shares: redeemShares,
         });
+        const requirements = await redeem.getRequirements();
+        expect(requirements).toHaveLength(1);
+        const approval = requirements[0];
+        if (!isRequirementApproval(approval)) {
+          throw new Error("Approve transaction not found");
+        }
+        await client.sendTransaction(approval);
         await client.sendTransaction(redeem.buildTx());
       },
     });

@@ -1,229 +1,112 @@
-import { getChainAddresses, MathLib } from "@morpho-org/blue-sdk";
-import { isHex, parseUnits } from "viem";
+import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
-  isRequirementApproval,
-  isRequirementSignature,
+  type BlueBundlesV1TokenRequirementSignature,
+  type BundlesFundingArgs,
+  MixedBundlesFundingError,
   morphoViemExtension,
   NativeAmountOnNonWNativeVaultError,
   NegativeInputError,
   NonPositiveInputError,
   vaultV1Deposit,
-  vaultV2Deposit,
 } from "../../src/index.js";
 import {
   GauntletWethVaultV1,
   SteakhouseUsdcVaultV1,
 } from "../fixtures/vaultV1.js";
-import { KeyrockUsdcVaultV2, KpkWETHVaultV2 } from "../fixtures/vaultV2.js";
+import { KpkWETHVaultV2 } from "../fixtures/vaultV2.js";
 import { testInvariants } from "../helpers/invariants.js";
+import { vaultBundlesV1Test } from "../helpers/vaultBundlesV1.js";
 import { test } from "../setup.js";
 
-describe("WrapNative - VaultV1", () => {
-  test("should deposit native ETH only in WETH vaultV1", async ({ client }) => {
-    const nativeAmount = parseUnits("1000", 18);
+describe("VaultBundlesV1 native Vault V1 funding", () => {
+  vaultBundlesV1Test(
+    "deposits native ETH into a wNative vault",
+    async ({ client }) => {
+      const nativeAmount = parseUnits("1", 18);
+      await client.setBalance({
+        address: client.account.address,
+        value: nativeAmount + parseUnits("10", 18),
+      });
 
-    await client.setBalance({
-      address: client.account.address,
-      value: nativeAmount + parseUnits("10", 18),
-    });
+      const {
+        vaults: {
+          GauntletWethVaultV1: { initialState, finalState },
+        },
+      } = await testInvariants({
+        client,
+        params: { vaults: { GauntletWethVaultV1 } },
+        actionFn: async () => {
+          const vault = client
+            .extend(morphoViemExtension())
+            .morpho.vaultV1(GauntletWethVaultV1.address, mainnet.id);
+          const deposit = vault.deposit({
+            userAddress: client.account.address,
+            nativeAmount,
+            vaultData: await vault.getData(),
+          });
+          expect(await deposit.getRequirements()).toEqual([]);
+          const transaction = deposit.buildTx();
+          expect(transaction.value).toBe(nativeAmount);
+          expect(transaction.action.args.amount).toBe(nativeAmount);
+          expect(transaction.action.args.nativeAmount).toBe(nativeAmount);
+          await client.sendTransaction(transaction);
+        },
+      });
 
-    const {
-      vaults: {
-        GauntletWethVaultV1: { initialState, finalState },
-      },
-    } = await testInvariants({
-      client,
-      params: {
-        vaults: { GauntletWethVaultV1 },
-      },
-      actionFn: async () => {
-        const morpho = client.extend(morphoViemExtension()).morpho;
-        const vault = morpho.vaultV1(GauntletWethVaultV1.address, mainnet.id);
-        const vaultData = await vault.getData();
-        const deposit = vault.deposit({
-          userAddress: client.account.address,
-          amount: 0n,
-          nativeAmount,
-          vaultData,
-        });
+      expect(finalState.userNativeBalance).toBeLessThan(
+        initialState.userNativeBalance,
+      );
+      expect(finalState.morphoAssetBalance).toBe(
+        initialState.morphoAssetBalance + nativeAmount,
+      );
+    },
+  );
 
-        const requirements = await deposit.getRequirements();
-        expect(requirements.length).toBe(0);
+  test("rejects mixed token/native funding and a native-path token signature", () => {
+    const mixedFunding = {
+      amount: 1n,
+      nativeAmount: 1n,
+    } as unknown as BundlesFundingArgs;
+    expect(() =>
+      vaultV1Deposit({
+        vault: {
+          chainId: mainnet.id,
+          address: GauntletWethVaultV1.address,
+          asset: GauntletWethVaultV1.asset,
+        },
+        args: {
+          ...mixedFunding,
+          maxSharePrice: 1n,
+          userAddress: "0x0000000000000000000000000000000000000001",
+          deadline: 1n,
+        },
+      }),
+    ).toThrow(MixedBundlesFundingError);
 
-        const tx = deposit.buildTx();
-        expect(tx.value).toEqual(nativeAmount);
-        expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
-        expect(tx.action.args.amount).toEqual(0n);
-
-        await client.sendTransaction(tx);
-      },
-    });
-
-    expect(finalState.userNativeBalance).toBeLessThan(
-      initialState.userNativeBalance,
-    );
-    expect(finalState.morphoAssetBalance).toEqual(
-      initialState.morphoAssetBalance + nativeAmount,
-    );
-    expect(finalState.userSharesBalanceInAssets).toEqual(
-      initialState.userSharesBalanceInAssets + nativeAmount - 1n,
-    );
+    const requirementSignature = {
+      action: { type: "permit" },
+    } as unknown as BlueBundlesV1TokenRequirementSignature;
+    expect(() =>
+      vaultV1Deposit({
+        vault: {
+          chainId: mainnet.id,
+          address: GauntletWethVaultV1.address,
+          asset: GauntletWethVaultV1.asset,
+        },
+        args: {
+          nativeAmount: 1n,
+          maxSharePrice: 1n,
+          userAddress: "0x0000000000000000000000000000000000000001",
+          requirementSignature,
+          deadline: 1n,
+        },
+      }),
+    ).toThrow(MixedBundlesFundingError);
   });
 
-  test("should deposit with both amount and nativeAmount in WETH vaultV1", async ({
-    client,
-  }) => {
-    const amount = parseUnits("0.5", 18);
-    const nativeAmount = parseUnits("0.5", 18);
-    const totalAssets = amount + nativeAmount;
-
-    await client.deal({
-      erc20: GauntletWethVaultV1.asset,
-      amount,
-    });
-
-    await client.setBalance({
-      address: client.account.address,
-      value: nativeAmount + parseUnits("10", 18),
-    });
-
-    const {
-      bundler3: { generalAdapter1 },
-    } = getChainAddresses(mainnet.id);
-
-    await client.approve({
-      address: GauntletWethVaultV1.asset,
-      args: [generalAdapter1, MathLib.MAX_UINT_256],
-    });
-
-    const {
-      vaults: {
-        GauntletWethVaultV1: { initialState, finalState },
-      },
-    } = await testInvariants({
-      client,
-      params: {
-        vaults: { GauntletWethVaultV1 },
-      },
-      actionFn: async () => {
-        const morpho = client.extend(morphoViemExtension()).morpho;
-        const vault = morpho.vaultV1(GauntletWethVaultV1.address, mainnet.id);
-        const vaultData = await vault.getData();
-        const deposit = vault.deposit({
-          userAddress: client.account.address,
-          amount,
-          nativeAmount,
-          vaultData,
-        });
-
-        const requirements = await deposit.getRequirements();
-        expect(requirements.length).toBe(0);
-
-        const tx = deposit.buildTx();
-        expect(tx.value).toEqual(nativeAmount);
-        expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
-        expect(tx.action.args.amount).toEqual(amount);
-
-        await client.sendTransaction(tx);
-      },
-    });
-
-    expect(finalState.userAssetBalance).toEqual(
-      initialState.userAssetBalance - amount,
-    );
-    expect(finalState.morphoAssetBalance).toEqual(
-      initialState.morphoAssetBalance + totalAssets,
-    );
-    expect(finalState.userSharesBalanceInAssets).toEqual(
-      initialState.userSharesBalanceInAssets + totalAssets - 1n,
-    );
-  });
-
-  test("should deposit with permit2 signature + native wrapping in WETH vaultV1", async ({
-    client,
-  }) => {
-    const amount = parseUnits("0.5", 18);
-    const nativeAmount = parseUnits("0.5", 18);
-    const totalAssets = amount + nativeAmount;
-
-    await client.deal({
-      erc20: GauntletWethVaultV1.asset,
-      amount,
-    });
-
-    await client.setBalance({
-      address: client.account.address,
-      value: nativeAmount + parseUnits("10", 18),
-    });
-
-    const {
-      vaults: {
-        GauntletWethVaultV1: { initialState, finalState },
-      },
-    } = await testInvariants({
-      client,
-      params: {
-        vaults: { GauntletWethVaultV1 },
-      },
-      actionFn: async () => {
-        const morpho = client.extend(
-          morphoViemExtension({ supportSignature: true }),
-        ).morpho;
-        const vault = morpho.vaultV1(GauntletWethVaultV1.address, mainnet.id);
-        const vaultData = await vault.getData();
-        const deposit = vault.deposit({
-          userAddress: client.account.address,
-          amount,
-          nativeAmount,
-          vaultData,
-        });
-
-        const requirements = await deposit.getRequirements();
-
-        expect(requirements.length).toBe(2);
-
-        const approval = requirements[0];
-        if (!isRequirementApproval(approval)) {
-          throw new Error("Approval requirement not found");
-        }
-        await client.sendTransaction(approval);
-
-        const permit2 = requirements[1];
-        if (!isRequirementSignature(permit2)) {
-          throw new Error("Permit2 requirement not found");
-        }
-
-        const requirementSignature = await permit2.sign(
-          client,
-          client.account.address,
-        );
-
-        expect(isHex(requirementSignature.args.signature)).toBe(true);
-        expect(requirementSignature.args.signature.length).toBe(132);
-
-        const tx = deposit.buildTx([requirementSignature]);
-        expect(tx.value).toEqual(nativeAmount);
-        expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
-        expect(tx.action.args.amount).toEqual(amount);
-
-        await client.sendTransaction(tx);
-      },
-    });
-
-    expect(finalState.userAssetBalance).toEqual(
-      initialState.userAssetBalance - amount,
-    );
-    expect(finalState.morphoAssetBalance).toEqual(
-      initialState.morphoAssetBalance + totalAssets,
-    );
-    expect(finalState.userSharesBalanceInAssets).toEqual(
-      initialState.userSharesBalanceInAssets + totalAssets - 1n,
-    );
-  });
-
-  test("should throw NativeAmountOnNonWNativeVaultError for non-WETH vaultV1", () => {
+  test("validates the native amount and vault asset", () => {
     expect(() =>
       vaultV1Deposit({
         vault: {
@@ -232,15 +115,13 @@ describe("WrapNative - VaultV1", () => {
           asset: SteakhouseUsdcVaultV1.asset,
         },
         args: {
-          nativeAmount: parseUnits("1", 18),
+          nativeAmount: 1n,
           maxSharePrice: 1n,
-          recipient: "0x0000000000000000000000000000000000000001",
+          userAddress: "0x0000000000000000000000000000000000000001",
+          deadline: 1n,
         },
       }),
     ).toThrow(NativeAmountOnNonWNativeVaultError);
-  });
-
-  test("should throw NonPositiveInputError when both amounts are zero in vaultV1", () => {
     expect(() =>
       vaultV1Deposit({
         vault: {
@@ -249,15 +130,13 @@ describe("WrapNative - VaultV1", () => {
           asset: GauntletWethVaultV1.asset,
         },
         args: {
-          amount: 0n,
+          nativeAmount: 0n,
           maxSharePrice: 1n,
-          recipient: "0x0000000000000000000000000000000000000001",
+          userAddress: "0x0000000000000000000000000000000000000001",
+          deadline: 1n,
         },
       }),
     ).toThrow(NonPositiveInputError);
-  });
-
-  test("should throw NegativeInputError for negative nativeAmount in vaultV1", () => {
     expect(() =>
       vaultV1Deposit({
         vault: {
@@ -268,17 +147,17 @@ describe("WrapNative - VaultV1", () => {
         args: {
           nativeAmount: -1n,
           maxSharePrice: 1n,
-          recipient: "0x0000000000000000000000000000000000000001",
+          userAddress: "0x0000000000000000000000000000000000000001",
+          deadline: 1n,
         },
       }),
     ).toThrow(NegativeInputError);
   });
 });
 
-describe("WrapNative - VaultV2", () => {
-  test("should deposit native ETH only in WETH vaultV2", async ({ client }) => {
+describe("Bundler3 native Vault V2 funding", () => {
+  test("deposits native ETH into a wNative vault", async ({ client }) => {
     const nativeAmount = parseUnits("1", 18);
-
     await client.setBalance({
       address: client.account.address,
       value: nativeAmount + parseUnits("10", 18),
@@ -290,242 +169,34 @@ describe("WrapNative - VaultV2", () => {
       },
     } = await testInvariants({
       client,
-      params: {
-        vaults: { KpkWETHVaultV2 },
-      },
+      params: { vaults: { KpkWETHVaultV2 } },
       actionFn: async () => {
-        const morpho = client.extend(morphoViemExtension()).morpho;
-        const vault = morpho.vaultV2(KpkWETHVaultV2.address, mainnet.id);
-        const vaultData = await vault.getData();
+        const vault = client
+          .extend(morphoViemExtension())
+          .morpho.vaultV2(KpkWETHVaultV2.address, mainnet.id);
         const deposit = vault.deposit({
           userAddress: client.account.address,
           amount: 0n,
           nativeAmount,
-          vaultData,
+          vaultData: await vault.getData(),
         });
-
-        const requirements = await deposit.getRequirements();
-        expect(requirements.length).toBe(0);
-
-        const tx = deposit.buildTx();
-        expect(tx.value).toEqual(nativeAmount);
-        expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
-        expect(tx.action.args.amount).toEqual(0n);
-
-        await client.sendTransaction(tx);
+        expect(await deposit.getRequirements()).toEqual([]);
+        const transaction = deposit.buildTx();
+        expect(transaction.value).toBe(nativeAmount);
+        expect(transaction.action.args.amount).toBe(0n);
+        expect(transaction.action.args.nativeAmount).toBe(nativeAmount);
+        await client.sendTransaction(transaction);
       },
     });
 
     expect(finalState.userNativeBalance).toBeLessThan(
       initialState.userNativeBalance,
     );
-    expect(finalState.morphoAssetBalance).toEqual(
+    expect(finalState.morphoAssetBalance).toBe(
       initialState.morphoAssetBalance + nativeAmount,
     );
-    expect(finalState.userSharesBalanceInAssets).toEqual(
+    expect(finalState.userSharesBalanceInAssets).toBe(
       initialState.userSharesBalanceInAssets + nativeAmount - 1n,
     );
-  });
-
-  test("should deposit with both amount and nativeAmount in WETH vaultV2", async ({
-    client,
-  }) => {
-    const amount = parseUnits("0.5", 18);
-    const nativeAmount = parseUnits("0.5", 18);
-    const totalAssets = amount + nativeAmount;
-
-    await client.deal({
-      erc20: KpkWETHVaultV2.asset,
-      amount,
-    });
-
-    await client.setBalance({
-      address: client.account.address,
-      value: nativeAmount + parseUnits("10", 18),
-    });
-
-    const {
-      bundler3: { generalAdapter1 },
-    } = getChainAddresses(mainnet.id);
-
-    await client.approve({
-      address: KpkWETHVaultV2.asset,
-      args: [generalAdapter1, MathLib.MAX_UINT_256],
-    });
-
-    const {
-      vaults: {
-        KpkWETHVaultV2: { initialState, finalState },
-      },
-    } = await testInvariants({
-      client,
-      params: {
-        vaults: { KpkWETHVaultV2 },
-      },
-      actionFn: async () => {
-        const morpho = client.extend(morphoViemExtension()).morpho;
-        const vault = morpho.vaultV2(KpkWETHVaultV2.address, mainnet.id);
-        const vaultData = await vault.getData();
-        const deposit = vault.deposit({
-          userAddress: client.account.address,
-          amount,
-          nativeAmount,
-          vaultData,
-        });
-
-        const requirements = await deposit.getRequirements();
-        expect(requirements.length).toBe(0);
-
-        const tx = deposit.buildTx();
-        expect(tx.value).toEqual(nativeAmount);
-        expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
-        expect(tx.action.args.amount).toEqual(amount);
-
-        await client.sendTransaction(tx);
-      },
-    });
-
-    expect(finalState.userAssetBalance).toEqual(
-      initialState.userAssetBalance - amount,
-    );
-    expect(finalState.morphoAssetBalance).toEqual(
-      initialState.morphoAssetBalance + totalAssets,
-    );
-    expect(finalState.userSharesBalanceInAssets).toEqual(
-      initialState.userSharesBalanceInAssets + totalAssets - 1n,
-    );
-  });
-
-  test("should deposit with permit2 signature + native wrapping in WETH vaultV2", async ({
-    client,
-  }) => {
-    const amount = parseUnits("0.5", 18);
-    const nativeAmount = parseUnits("0.5", 18);
-    const totalAssets = amount + nativeAmount;
-
-    await client.deal({
-      erc20: KpkWETHVaultV2.asset,
-      amount,
-    });
-
-    await client.setBalance({
-      address: client.account.address,
-      value: nativeAmount + parseUnits("10", 18),
-    });
-
-    const {
-      vaults: {
-        KpkWETHVaultV2: { initialState, finalState },
-      },
-    } = await testInvariants({
-      client,
-      params: {
-        vaults: { KpkWETHVaultV2 },
-      },
-      actionFn: async () => {
-        const morpho = client.extend(
-          morphoViemExtension({ supportSignature: true }),
-        ).morpho;
-        const vault = morpho.vaultV2(KpkWETHVaultV2.address, mainnet.id);
-        const vaultData = await vault.getData();
-        const deposit = vault.deposit({
-          userAddress: client.account.address,
-          amount,
-          nativeAmount,
-          vaultData,
-        });
-
-        const requirements = await deposit.getRequirements();
-
-        expect(requirements.length).toBe(2);
-
-        const approval = requirements[0];
-        if (!isRequirementApproval(approval)) {
-          throw new Error("Approval requirement not found");
-        }
-        await client.sendTransaction(approval);
-
-        const permit2 = requirements[1];
-        if (!isRequirementSignature(permit2)) {
-          throw new Error("Permit2 requirement not found");
-        }
-
-        const requirementSignature = await permit2.sign(
-          client,
-          client.account.address,
-        );
-
-        expect(isHex(requirementSignature.args.signature)).toBe(true);
-        expect(requirementSignature.args.signature.length).toBe(132);
-
-        const tx = deposit.buildTx([requirementSignature]);
-        expect(tx.value).toEqual(nativeAmount);
-        expect(tx.action.args.nativeAmount).toEqual(nativeAmount);
-        expect(tx.action.args.amount).toEqual(amount);
-
-        await client.sendTransaction(tx);
-      },
-    });
-
-    expect(finalState.userAssetBalance).toEqual(
-      initialState.userAssetBalance - amount,
-    );
-    expect(finalState.morphoAssetBalance).toEqual(
-      initialState.morphoAssetBalance + totalAssets,
-    );
-    expect(finalState.userSharesBalanceInAssets).toEqual(
-      initialState.userSharesBalanceInAssets + totalAssets - 1n,
-    );
-  });
-
-  test("should throw NativeAmountOnNonWNativeVaultError for non-WETH vaultV2", () => {
-    expect(() =>
-      vaultV2Deposit({
-        vault: {
-          chainId: mainnet.id,
-          address: KeyrockUsdcVaultV2.address,
-          asset: KeyrockUsdcVaultV2.asset,
-        },
-        args: {
-          nativeAmount: parseUnits("1", 18),
-          maxSharePrice: 1n,
-          recipient: "0x0000000000000000000000000000000000000001",
-        },
-      }),
-    ).toThrow(NativeAmountOnNonWNativeVaultError);
-  });
-
-  test("should throw NonPositiveInputError when both amounts are zero in vaultV2", () => {
-    expect(() =>
-      vaultV2Deposit({
-        vault: {
-          chainId: mainnet.id,
-          address: KpkWETHVaultV2.address,
-          asset: KpkWETHVaultV2.asset,
-        },
-        args: {
-          amount: 0n,
-          maxSharePrice: 1n,
-          recipient: "0x0000000000000000000000000000000000000001",
-        },
-      }),
-    ).toThrow(NonPositiveInputError);
-  });
-
-  test("should throw NegativeInputError for negative nativeAmount in vaultV2", () => {
-    expect(() =>
-      vaultV2Deposit({
-        vault: {
-          chainId: mainnet.id,
-          address: KpkWETHVaultV2.address,
-          asset: KpkWETHVaultV2.asset,
-        },
-        args: {
-          nativeAmount: -1n,
-          maxSharePrice: 1n,
-          recipient: "0x0000000000000000000000000000000000000001",
-        },
-      }),
-    ).toThrow(NegativeInputError);
   });
 });

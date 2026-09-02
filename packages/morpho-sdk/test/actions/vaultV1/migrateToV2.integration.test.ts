@@ -2,6 +2,7 @@ import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
+  isPermitSignature,
   isRequirementApproval,
   isRequirementSignature,
   morphoViemExtension,
@@ -9,7 +10,7 @@ import {
 import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
 import { KeyrockUsdcVaultV2 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
-import { test } from "../../setup.js";
+import { vaultBundlesV1Test as test } from "../../helpers/vaultBundlesV1.js";
 
 describe("MigrateToV2 VaultV1", () => {
   test("should migrate full USDC position from V1 to V2", async ({
@@ -130,6 +131,10 @@ describe("MigrateToV2 VaultV1", () => {
           client,
           client.account.address,
         );
+
+        if (!isPermitSignature(requirementSignature)) {
+          throw new Error("Unexpected requirement signature");
+        }
 
         expect(requirementSignature.args.owner).toEqual(client.account.address);
         expect(requirementSignature.args.asset).toEqual(

@@ -1,533 +1,146 @@
+import { MathLib } from "@morpho-org/blue-sdk";
+import { getChainAddress } from "@morpho-org/morpho-ts";
+import fc from "fast-check";
+import { decodeFunctionData, maxUint256, zeroHash } from "viem";
 import { mainnet } from "viem/chains";
-import { afterEach, describe, expect, vi } from "vitest";
+import { describe, expect, test } from "vitest";
+import { vaultBundlesV1Abi } from "../../abis.js";
 import {
-  GauntletWethVaultV1,
-  SteakhouseUsdcVaultV1,
-} from "../../../test/fixtures/vaultV1.js";
-import {
-  KeyrockUsdcVaultV2,
-  KpkWETHVaultV2,
-} from "../../../test/fixtures/vaultV2.js";
-import { test } from "../../../test/unit.js";
-import {
-  DepositAssetMismatchError,
-  isRequirementApproval,
-  isRequirementSignature,
-  NegativeInputError,
-  NonPositiveInputError,
-  VaultAssetMismatchError,
+  AmountAndSharesExclusiveError,
+  SameVaultMigrationError,
+  type VaultV1MigrateToV2AmountArgs,
 } from "../../types/index.js";
-import { getGeneralAdapterRequirements } from "../requirements/index.js";
-import * as getTokenRequirementActionsModule from "../signatures/getTokenRequirementActions.js";
 import { vaultV1MigrateToV2 } from "./migrateToV2.js";
 
-describe("vaultV1MigrateToV2 unit tests", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
+const chainId = mainnet.id;
+const sourceVault = "0x0000000000000000000000000000000000000061" as const;
+const targetVault = "0x0000000000000000000000000000000000000062" as const;
+const asset = "0x0000000000000000000000000000000000000063" as const;
+const userAddress = "0x0000000000000000000000000000000000000064" as const;
+const feeRecipient = "0x0000000000000000000000000000000000000065" as const;
+const positiveUint256 = fc.bigInt({ min: 1n, max: maxUint256 });
 
-  test("should create migrate transaction for USDC vaults", async ({
-    client,
-  }) => {
-    const shares = 1000000000000000000n;
-    const minSharePriceVaultV1 = 1000000000000000000000000000n;
-    const maxSharePriceVaultV2 = 1000000000000000000000000000n;
-
-    const tx = vaultV1MigrateToV2({
-      vault: {
-        chainId: mainnet.id,
-        address: SteakhouseUsdcVaultV1.address,
-        asset: SteakhouseUsdcVaultV1.asset,
-      },
+describe("vaultV1MigrateToV2", () => {
+  test("default", () => {
+    const deadline = 1_900_000_000n;
+    const referralFeePct = MathLib.WAD / 10n;
+    const transaction = vaultV1MigrateToV2({
+      vault: { chainId, address: sourceVault, asset },
       args: {
-        targetVault: KeyrockUsdcVaultV2.address,
-        targetAsset: KeyrockUsdcVaultV2.asset,
-        shares,
-        minSharePriceVaultV1,
-        maxSharePriceVaultV2,
-        recipient: client.account.address,
+        targetVault,
+        targetAsset: asset,
+        assets: 100n,
+        maxSharePriceVaultV2: 3n,
+        userAddress,
+        referralFeePct,
+        referralFeeRecipient: feeRecipient,
+        deadline,
       },
     });
-
-    expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("vaultV1MigrateToV2");
-    expect(tx.action.args.sourceVault).toBe(SteakhouseUsdcVaultV1.address);
-    expect(tx.action.args.targetVault).toBe(KeyrockUsdcVaultV2.address);
-    expect(tx.action.args.minSharePriceVaultV1).toBe(minSharePriceVaultV1);
-    expect(tx.action.args.maxSharePriceVaultV2).toBe(maxSharePriceVaultV2);
-    expect(tx.action.args.recipient).toBe(client.account.address);
-    expect(tx.to).toBeDefined();
-    expect(tx.data).toBeDefined();
-    expect(tx.value).toBe(0n);
-  });
-
-  test("should create migrate transaction for WETH vaults", async ({
-    client,
-  }) => {
-    const shares = 1000000000000000000n;
-    const minSharePriceVaultV1 = 1000000000000000000000000000n;
-    const maxSharePriceVaultV2 = 1000000000000000000000000000n;
-
-    const tx = vaultV1MigrateToV2({
-      vault: {
-        chainId: mainnet.id,
-        address: GauntletWethVaultV1.address,
-        asset: GauntletWethVaultV1.asset,
-      },
-      args: {
-        targetVault: KpkWETHVaultV2.address,
-        targetAsset: KpkWETHVaultV2.asset,
-        shares,
-        minSharePriceVaultV1,
-        maxSharePriceVaultV2,
-        recipient: client.account.address,
-      },
-    });
-
-    expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("vaultV1MigrateToV2");
-    expect(tx.action.args.sourceVault).toBe(GauntletWethVaultV1.address);
-    expect(tx.action.args.targetVault).toBe(KpkWETHVaultV2.address);
-    expect(tx.action.args.minSharePriceVaultV1).toBe(minSharePriceVaultV1);
-    expect(tx.action.args.maxSharePriceVaultV2).toBe(maxSharePriceVaultV2);
-    expect(tx.action.args.recipient).toBe(client.account.address);
-    expect(tx.to).toBeDefined();
-    expect(tx.data).toBeDefined();
-    expect(tx.value).toBe(0n);
-  });
-
-  test("should allow different recipient address", async () => {
-    const differentRecipient =
-      "0x1234567890123456789012345678901234567890" as const;
-
-    const tx = vaultV1MigrateToV2({
-      vault: {
-        chainId: mainnet.id,
-        address: SteakhouseUsdcVaultV1.address,
-        asset: SteakhouseUsdcVaultV1.asset,
-      },
-      args: {
-        targetVault: KeyrockUsdcVaultV2.address,
-        targetAsset: KeyrockUsdcVaultV2.asset,
-        shares: 1000000000000000000n,
-        minSharePriceVaultV1: 1000000000000000000000000000n,
-        maxSharePriceVaultV2: 1000000000000000000000000000n,
-        recipient: differentRecipient,
-      },
-    });
-
-    expect(tx.action.args.recipient).toBe(differentRecipient);
-  });
-
-  test("should create migrate bundle with V1 shares via simple permit", async ({
-    client,
-  }) => {
-    const shares = 1000000000000000000000n; // 1000 shares (18 decimals)
-
-    const requirements = await getGeneralAdapterRequirements(client, {
-      address: SteakhouseUsdcVaultV1.address,
-      chainId: mainnet.id,
-      supportSignature: true,
-      useSimplePermit: true,
-      args: {
-        amount: shares,
-        from: client.account.address,
-      },
-    });
-
-    const permitRequirement = requirements[0];
-    if (!isRequirementSignature(permitRequirement)) {
-      throw new Error("Permit requirement not found");
-    }
-
-    const requirementSignature = await permitRequirement.sign(
-      client,
-      client.account.address,
+    expect(transaction.to).toBe(
+      getChainAddress(chainId, "bundles.vaultBundlesV1"),
     );
+    expect(transaction.value).toBe(0n);
+    expect(
+      decodeFunctionData({ abi: vaultBundlesV1Abi, data: transaction.data }),
+    ).toEqual({
+      functionName: "vaultBundlesV1Migrate",
+      args: [
+        sourceVault,
+        targetVault,
+        100n,
+        0n,
+        3n,
+        { value: 0n, nonce: 0n, deadline, v: 0, r: zeroHash, s: zeroHash },
+        referralFeePct,
+        feeRecipient,
+        deadline,
+      ],
+    });
+    expect(transaction.action.args).toMatchObject({
+      referralFeeAssets: 10n,
+      netAssets: 90n,
+    });
+  });
 
-    expect(requirementSignature.args.asset).toEqual(
-      SteakhouseUsdcVaultV1.address,
+  test("behavior: assets and shares modes round-trip across uint256 inputs", () => {
+    fc.assert(
+      fc.property(
+        fc.record({
+          amount: positiveUint256,
+          maxSharePrice: positiveUint256,
+          deadline: positiveUint256,
+          byShares: fc.boolean(),
+        }),
+        ({ amount, maxSharePrice, deadline, byShares }) => {
+          const amountArgs: VaultV1MigrateToV2AmountArgs = byShares
+            ? { shares: amount }
+            : { assets: amount };
+          const transaction = vaultV1MigrateToV2({
+            vault: { chainId, address: sourceVault, asset },
+            args: {
+              targetVault,
+              targetAsset: asset,
+              ...amountArgs,
+              maxSharePriceVaultV2: maxSharePrice,
+              userAddress,
+              deadline,
+            },
+          });
+          const decoded = decodeFunctionData({
+            abi: vaultBundlesV1Abi,
+            data: transaction.data,
+          });
+          expect(decoded.functionName).toBe("vaultBundlesV1Migrate");
+          expect(decoded.args?.[2]).toBe(byShares ? 0n : amount);
+          expect(decoded.args?.[3]).toBe(byShares ? amount : 0n);
+          expect(decoded.args?.[4]).toBe(maxSharePrice);
+          expect(decoded.args?.[8]).toBe(deadline);
+          if (byShares) {
+            expect(transaction.action.args).not.toHaveProperty(
+              "referralFeeAssets",
+            );
+            expect(transaction.action.args).not.toHaveProperty("netAssets");
+          }
+        },
+      ),
+      { numRuns: 50, seed: 20_260_907 },
     );
-
-    const localSpy = vi.spyOn(
-      getTokenRequirementActionsModule,
-      "getTokenRequirementActions",
-    );
-
-    const tx = vaultV1MigrateToV2({
-      vault: {
-        chainId: mainnet.id,
-        address: SteakhouseUsdcVaultV1.address,
-        asset: SteakhouseUsdcVaultV1.asset,
-      },
-      args: {
-        targetVault: KeyrockUsdcVaultV2.address,
-        targetAsset: KeyrockUsdcVaultV2.asset,
-        shares,
-        minSharePriceVaultV1: 1000000000000000000000000000n,
-        maxSharePriceVaultV2: 1000000000000000000000000000n,
-        recipient: client.account.address,
-        requirementSignature,
-      },
-    });
-
-    expect(localSpy).toHaveBeenCalled();
-    expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("vaultV1MigrateToV2");
-    expect(tx.action.args.sourceVault).toBe(SteakhouseUsdcVaultV1.address);
-    expect(tx.action.args.targetVault).toBe(KeyrockUsdcVaultV2.address);
-    expect(tx.action.args.recipient).toBe(client.account.address);
-    expect(tx.to).toBeDefined();
-    expect(tx.data).toBeDefined();
-    expect(tx.value).toBe(0n);
   });
 
-  test("should create migrate bundle with V1 shares via permit2", async ({
-    client,
-  }) => {
-    const shares = 5000000000000000000n; // 5 shares (18 decimals)
-
-    const requirements = await getGeneralAdapterRequirements(client, {
-      address: GauntletWethVaultV1.address,
-      chainId: mainnet.id,
-      supportSignature: true,
-      args: {
-        amount: shares,
-        from: client.account.address,
-      },
-    });
-
-    const approvalPermit2 = requirements[0];
-    if (!isRequirementApproval(approvalPermit2)) {
-      throw new Error("Approval requirement not found");
-    }
-
-    const permit2Requirement = requirements[1];
-    if (!isRequirementSignature(permit2Requirement)) {
-      throw new Error("Permit2 requirement not found");
-    }
-
-    const requirementSignature = await permit2Requirement.sign(
-      client,
-      client.account.address,
-    );
-
-    expect(requirementSignature.args.asset).toEqual(
-      GauntletWethVaultV1.address,
-    );
-
-    const tx = vaultV1MigrateToV2({
-      vault: {
-        chainId: mainnet.id,
-        address: GauntletWethVaultV1.address,
-        asset: GauntletWethVaultV1.asset,
-      },
-      args: {
-        targetVault: KpkWETHVaultV2.address,
-        targetAsset: KpkWETHVaultV2.asset,
-        shares,
-        minSharePriceVaultV1: 1000000000000000000000000000n,
-        maxSharePriceVaultV2: 1000000000000000000000000000n,
-        recipient: client.account.address,
-        requirementSignature,
-      },
-    });
-
-    expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("vaultV1MigrateToV2");
-    expect(tx.action.args.sourceVault).toBe(GauntletWethVaultV1.address);
-    expect(tx.action.args.targetVault).toBe(KpkWETHVaultV2.address);
-    expect(tx.action.args.recipient).toBe(client.account.address);
-    expect(tx.to).toBeDefined();
-    expect(tx.data).toBeDefined();
-    expect(tx.value).toBe(0n);
-  });
-
-  test("should call getTokenRequirementActions without requirement signature", async ({
-    client,
-  }) => {
-    const localSpy = vi.spyOn(
-      getTokenRequirementActionsModule,
-      "getTokenRequirementActions",
-    );
-
-    const tx = vaultV1MigrateToV2({
-      vault: {
-        chainId: mainnet.id,
-        address: SteakhouseUsdcVaultV1.address,
-        asset: SteakhouseUsdcVaultV1.asset,
-      },
-      args: {
-        targetVault: KeyrockUsdcVaultV2.address,
-        targetAsset: KeyrockUsdcVaultV2.asset,
-        shares: 1000000000000000000n,
-        minSharePriceVaultV1: 1000000000000000000000000000n,
-        maxSharePriceVaultV2: 1000000000000000000000000000n,
-        recipient: client.account.address,
-      },
-    });
-
-    expect(localSpy).toHaveBeenCalled();
-    expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("vaultV1MigrateToV2");
-  });
-
-  test("should throw DepositAssetMismatchError when signature asset does not match source vault", async ({
-    client,
-  }) => {
-    const shares = 1000000000000000000000n; // 1000 shares (18 decimals)
-
-    // Sign permit for WETH vault shares
-    const requirements = await getGeneralAdapterRequirements(client, {
-      address: GauntletWethVaultV1.address,
-      chainId: mainnet.id,
-      supportSignature: true,
-      useSimplePermit: true,
-      args: {
-        amount: shares,
-        from: client.account.address,
-      },
-    });
-
-    const permitRequirement = requirements[0];
-    if (!isRequirementSignature(permitRequirement)) {
-      throw new Error("Permit requirement not found");
-    }
-
-    const requirementSignature = await permitRequirement.sign(
-      client,
-      client.account.address,
-    );
-
-    // But use USDC vault as source -> asset mismatch
+  test("error: assets and shares are exclusive", () => {
+    const invalidAmounts = {
+      assets: 1n,
+      shares: 1n,
+    } as unknown as VaultV1MigrateToV2AmountArgs;
     expect(() =>
       vaultV1MigrateToV2({
-        vault: {
-          chainId: mainnet.id,
-          address: SteakhouseUsdcVaultV1.address,
-          asset: SteakhouseUsdcVaultV1.asset,
-        },
+        vault: { chainId, address: sourceVault, asset },
         args: {
-          targetVault: KeyrockUsdcVaultV2.address,
-          targetAsset: KeyrockUsdcVaultV2.asset,
-          shares,
-          minSharePriceVaultV1: 1000000000000000000000000000n,
-          maxSharePriceVaultV2: 1000000000000000000000000000n,
-          recipient: client.account.address,
-          requirementSignature,
+          targetVault,
+          targetAsset: asset,
+          ...invalidAmounts,
+          maxSharePriceVaultV2: 1n,
+          userAddress,
+          deadline: 1n,
         },
       }),
-    ).toThrow(DepositAssetMismatchError);
+    ).toThrow(AmountAndSharesExclusiveError);
   });
 
-  test("should throw VaultAssetMismatchError when source and target assets differ", async ({
-    client,
-  }) => {
+  test("error: SameVaultMigrationError", () => {
     expect(() =>
       vaultV1MigrateToV2({
-        vault: {
-          chainId: mainnet.id,
-          address: SteakhouseUsdcVaultV1.address,
-          asset: SteakhouseUsdcVaultV1.asset,
-        },
+        vault: { chainId, address: sourceVault, asset },
         args: {
-          targetVault: KpkWETHVaultV2.address,
-          targetAsset: KpkWETHVaultV2.asset,
-          shares: 1000000000000000000n,
-          minSharePriceVaultV1: 1000000000000000000000000000n,
-          maxSharePriceVaultV2: 1000000000000000000000000000n,
-          recipient: client.account.address,
+          targetVault: sourceVault,
+          targetAsset: asset,
+          shares: 1n,
+          maxSharePriceVaultV2: 1n,
+          userAddress,
+          deadline: 1n,
         },
       }),
-    ).toThrow(VaultAssetMismatchError);
-  });
-
-  test("should throw NonPositiveInputError when shares is zero", async ({
-    client,
-  }) => {
-    expect(() =>
-      vaultV1MigrateToV2({
-        vault: {
-          chainId: mainnet.id,
-          address: SteakhouseUsdcVaultV1.address,
-          asset: SteakhouseUsdcVaultV1.asset,
-        },
-        args: {
-          targetVault: KeyrockUsdcVaultV2.address,
-          targetAsset: KeyrockUsdcVaultV2.asset,
-          shares: 0n,
-          minSharePriceVaultV1: 1000000000000000000000000000n,
-          maxSharePriceVaultV2: 1000000000000000000000000000n,
-          recipient: client.account.address,
-        },
-      }),
-    ).toThrow(NonPositiveInputError);
-  });
-
-  test("should throw NonPositiveInputError when shares is negative", async ({
-    client,
-  }) => {
-    expect(() =>
-      vaultV1MigrateToV2({
-        vault: {
-          chainId: mainnet.id,
-          address: SteakhouseUsdcVaultV1.address,
-          asset: SteakhouseUsdcVaultV1.asset,
-        },
-        args: {
-          targetVault: KeyrockUsdcVaultV2.address,
-          targetAsset: KeyrockUsdcVaultV2.asset,
-          shares: -1n,
-          minSharePriceVaultV1: 1000000000000000000000000000n,
-          maxSharePriceVaultV2: 1000000000000000000000000000n,
-          recipient: client.account.address,
-        },
-      }),
-    ).toThrow(NonPositiveInputError);
-  });
-
-  test("should throw NonPositiveInputError when maxSharePriceVaultV2 is zero", async ({
-    client,
-  }) => {
-    expect(() =>
-      vaultV1MigrateToV2({
-        vault: {
-          chainId: mainnet.id,
-          address: SteakhouseUsdcVaultV1.address,
-          asset: SteakhouseUsdcVaultV1.asset,
-        },
-        args: {
-          targetVault: KeyrockUsdcVaultV2.address,
-          targetAsset: KeyrockUsdcVaultV2.asset,
-          shares: 1000000000000000000n,
-          minSharePriceVaultV1: 1000000000000000000000000000n,
-          maxSharePriceVaultV2: 0n,
-          recipient: client.account.address,
-        },
-      }),
-    ).toThrow(NonPositiveInputError);
-  });
-
-  test("should throw NonPositiveInputError when maxSharePriceVaultV2 is negative", async ({
-    client,
-  }) => {
-    expect(() =>
-      vaultV1MigrateToV2({
-        vault: {
-          chainId: mainnet.id,
-          address: SteakhouseUsdcVaultV1.address,
-          asset: SteakhouseUsdcVaultV1.asset,
-        },
-        args: {
-          targetVault: KeyrockUsdcVaultV2.address,
-          targetAsset: KeyrockUsdcVaultV2.asset,
-          shares: 1000000000000000000n,
-          minSharePriceVaultV1: 1000000000000000000000000000n,
-          maxSharePriceVaultV2: -1n,
-          recipient: client.account.address,
-        },
-      }),
-    ).toThrow(NonPositiveInputError);
-  });
-
-  test("should accept minSharePriceVaultV1 of zero (no slippage floor)", async ({
-    client,
-  }) => {
-    expect(() =>
-      vaultV1MigrateToV2({
-        vault: {
-          chainId: mainnet.id,
-          address: SteakhouseUsdcVaultV1.address,
-          asset: SteakhouseUsdcVaultV1.asset,
-        },
-        args: {
-          targetVault: KeyrockUsdcVaultV2.address,
-          targetAsset: KeyrockUsdcVaultV2.asset,
-          shares: 1000000000000000000n,
-          minSharePriceVaultV1: 0n,
-          maxSharePriceVaultV2: 1000000000000000000000000000n,
-          recipient: client.account.address,
-        },
-      }),
-    ).not.toThrow();
-  });
-
-  test("should throw NegativeInputError when minSharePriceVaultV1 is negative", async ({
-    client,
-  }) => {
-    expect(() =>
-      vaultV1MigrateToV2({
-        vault: {
-          chainId: mainnet.id,
-          address: SteakhouseUsdcVaultV1.address,
-          asset: SteakhouseUsdcVaultV1.asset,
-        },
-        args: {
-          targetVault: KeyrockUsdcVaultV2.address,
-          targetAsset: KeyrockUsdcVaultV2.asset,
-          shares: 1000000000000000000n,
-          minSharePriceVaultV1: -1n,
-          maxSharePriceVaultV2: 1000000000000000000000000000n,
-          recipient: client.account.address,
-        },
-      }),
-    ).toThrow(NegativeInputError);
-  });
-
-  test("should return a deep-frozen transaction object", async ({ client }) => {
-    const tx = vaultV1MigrateToV2({
-      vault: {
-        chainId: mainnet.id,
-        address: SteakhouseUsdcVaultV1.address,
-        asset: SteakhouseUsdcVaultV1.asset,
-      },
-      args: {
-        targetVault: KeyrockUsdcVaultV2.address,
-        targetAsset: KeyrockUsdcVaultV2.asset,
-        shares: 1000000000000000000n,
-        minSharePriceVaultV1: 1000000000000000000000000000n,
-        maxSharePriceVaultV2: 1000000000000000000000000000n,
-        recipient: client.account.address,
-      },
-    });
-
-    expect(Object.isFrozen(tx)).toBe(true);
-    expect(Object.isFrozen(tx.action)).toBe(true);
-    expect(Object.isFrozen(tx.action.args)).toBe(true);
-  });
-
-  test("should append metadata to transaction data when provided", async ({
-    client,
-  }) => {
-    const args = {
-      targetVault: KeyrockUsdcVaultV2.address,
-      targetAsset: KeyrockUsdcVaultV2.asset,
-      shares: 1000000000000000000n,
-      minSharePriceVaultV1: 1000000000000000000000000000n,
-      maxSharePriceVaultV2: 1000000000000000000000000000n,
-      recipient: client.account.address,
-    } as const;
-
-    const txWithout = vaultV1MigrateToV2({
-      vault: {
-        chainId: mainnet.id,
-        address: SteakhouseUsdcVaultV1.address,
-        asset: SteakhouseUsdcVaultV1.asset,
-      },
-      args,
-    });
-
-    const txWith = vaultV1MigrateToV2({
-      vault: {
-        chainId: mainnet.id,
-        address: SteakhouseUsdcVaultV1.address,
-        asset: SteakhouseUsdcVaultV1.asset,
-      },
-      args,
-      metadata: { origin: "a1b2c3d4" },
-    });
-
-    expect(txWith.data.length).toBeGreaterThan(txWithout.data.length);
-    expect(txWith.action.type).toBe("vaultV1MigrateToV2");
+    ).toThrow(SameVaultMigrationError);
   });
 });

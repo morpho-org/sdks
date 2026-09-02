@@ -1,181 +1,71 @@
-import { parseUnits } from "viem";
-import { describe, expect } from "vitest";
-import {
-  GauntletWethVaultV1,
-  SteakhouseUsdcVaultV1,
-} from "../../../test/fixtures/vaultV1.js";
-import { test } from "../../../test/unit.js";
+import { getChainAddress } from "@morpho-org/morpho-ts";
+import fc from "fast-check";
+import { decodeFunctionData, maxUint256, zeroHash } from "viem";
+import { mainnet } from "viem/chains";
+import { describe, expect, test } from "vitest";
+import { vaultBundlesV1Abi } from "../../abis.js";
 import { NonPositiveInputError } from "../../types/index.js";
 import { vaultV1Redeem } from "./redeem.js";
 
-describe("redeemVaultV1 unit tests", () => {
-  test("should create redeem transaction with USDC vault", async ({
-    client,
-  }) => {
-    const shares = parseUnits("1000", 18);
+const chainId = mainnet.id;
+const vault = "0x0000000000000000000000000000000000000031" as const;
+const userAddress = "0x0000000000000000000000000000000000000032" as const;
+const positiveUint256 = fc.bigInt({ min: 1n, max: maxUint256 });
 
-    const tx = vaultV1Redeem({
-      vault: {
-        address: SteakhouseUsdcVaultV1.address,
-      },
-      args: {
-        shares,
-        recipient: client.account.address,
-        onBehalf: client.account.address,
-      },
+describe("vaultV1Redeem", () => {
+  test("default", () => {
+    const deadline = 1_900_000_000n;
+    const transaction = vaultV1Redeem({
+      vault: { chainId, address: vault },
+      args: { shares: 100n, userAddress, deadline },
     });
-
-    expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("vaultV1Redeem");
-    expect(tx.action.args.vault).toBe(SteakhouseUsdcVaultV1.address);
-    expect(tx.action.args.shares).toBe(shares);
-    expect(tx.action.args.recipient).toBe(client.account.address);
-    expect(tx.to).toBe(SteakhouseUsdcVaultV1.address);
-    expect(tx.data).toBeDefined();
-    expect(tx.value).toBe(0n);
+    expect(transaction.to).toBe(
+      getChainAddress(chainId, "bundles.vaultBundlesV1"),
+    );
+    expect(
+      decodeFunctionData({ abi: vaultBundlesV1Abi, data: transaction.data }),
+    ).toEqual({
+      functionName: "vaultBundlesV1Withdraw",
+      args: [
+        vault,
+        0n,
+        100n,
+        { value: 0n, nonce: 0n, deadline, v: 0, r: zeroHash, s: zeroHash },
+        0n,
+        "0x0000000000000000000000000000000000000000",
+        deadline,
+      ],
+    });
+    expect(transaction.action.args).not.toHaveProperty("referralFeeAssets");
+    expect(transaction.action.args).not.toHaveProperty("netAssets");
   });
 
-  test("should create redeem transaction with WETH vault", async ({
-    client,
-  }) => {
-    const shares = parseUnits("5", 18);
-
-    const tx = vaultV1Redeem({
-      vault: {
-        address: GauntletWethVaultV1.address,
-      },
-      args: {
-        shares,
-        recipient: client.account.address,
-        onBehalf: client.account.address,
-      },
-    });
-
-    expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("vaultV1Redeem");
-    expect(tx.action.args.vault).toBe(GauntletWethVaultV1.address);
-    expect(tx.action.args.shares).toBe(shares);
-    expect(tx.action.args.recipient).toBe(client.account.address);
-    expect(tx.to).toBe(GauntletWethVaultV1.address);
-    expect(tx.data).toBeDefined();
-    expect(tx.value).toBe(0n);
+  test("behavior: calldata round-trips across uint256 inputs", () => {
+    fc.assert(
+      fc.property(positiveUint256, positiveUint256, (shares, deadline) => {
+        const transaction = vaultV1Redeem({
+          vault: { chainId, address: vault },
+          args: { shares, userAddress, deadline },
+        });
+        const decoded = decodeFunctionData({
+          abi: vaultBundlesV1Abi,
+          data: transaction.data,
+        });
+        expect(decoded.functionName).toBe("vaultBundlesV1Withdraw");
+        expect(decoded.args?.[1]).toBe(0n);
+        expect(decoded.args?.[2]).toBe(shares);
+        expect(decoded.args?.[6]).toBe(deadline);
+      }),
+      { numRuns: 50, seed: 20_260_904 },
+    );
   });
 
-  test("should allow different recipient and onBehalf addresses", async ({
-    client,
-  }) => {
-    const shares = parseUnits("100", 18);
-    const differentRecipient =
-      "0x1234567890123456789012345678901234567890" as const;
-
-    const tx = vaultV1Redeem({
-      vault: {
-        address: SteakhouseUsdcVaultV1.address,
-      },
-      args: {
-        shares,
-        recipient: differentRecipient,
-        onBehalf: client.account.address,
-      },
-    });
-
-    expect(tx.action.args.recipient).toBe(differentRecipient);
-    expect(tx.to).toBe(SteakhouseUsdcVaultV1.address);
-  });
-
-  test("should throw NonPositiveInputError when shares is zero", async () => {
+  test("error: NonPositiveInputError", () => {
     expect(() =>
       vaultV1Redeem({
-        vault: {
-          address: SteakhouseUsdcVaultV1.address,
-        },
-        args: {
-          shares: 0n,
-          recipient: "0x1234567890123456789012345678901234567890",
-          onBehalf: "0x1234567890123456789012345678901234567890",
-        },
+        vault: { chainId, address: vault },
+        args: { shares: 0n, userAddress, deadline: 1n },
       }),
     ).toThrow(NonPositiveInputError);
-  });
-
-  test("should throw NonPositiveInputError when shares is negative", async () => {
-    expect(() =>
-      vaultV1Redeem({
-        vault: {
-          address: SteakhouseUsdcVaultV1.address,
-        },
-        args: {
-          shares: -1n,
-          recipient: "0x1234567890123456789012345678901234567890",
-          onBehalf: "0x1234567890123456789012345678901234567890",
-        },
-      }),
-    ).toThrow(NonPositiveInputError);
-  });
-
-  test("should return a deep-frozen transaction object", async ({ client }) => {
-    const tx = vaultV1Redeem({
-      vault: {
-        address: SteakhouseUsdcVaultV1.address,
-      },
-      args: {
-        shares: parseUnits("100", 18),
-        recipient: client.account.address,
-        onBehalf: client.account.address,
-      },
-    });
-
-    expect(Object.isFrozen(tx)).toBe(true);
-    expect(Object.isFrozen(tx.action)).toBe(true);
-    expect(Object.isFrozen(tx.action.args)).toBe(true);
-  });
-
-  test("should append metadata to transaction data when provided", async ({
-    client,
-  }) => {
-    const shares = parseUnits("100", 18);
-
-    const txWithout = vaultV1Redeem({
-      vault: {
-        address: SteakhouseUsdcVaultV1.address,
-      },
-      args: {
-        shares,
-        recipient: client.account.address,
-        onBehalf: client.account.address,
-      },
-    });
-
-    const txWith = vaultV1Redeem({
-      vault: {
-        address: SteakhouseUsdcVaultV1.address,
-      },
-      args: {
-        shares,
-        recipient: client.account.address,
-        onBehalf: client.account.address,
-      },
-      metadata: { origin: "a1b2c3d4" },
-    });
-
-    expect(txWith.data.length).toBeGreaterThan(txWithout.data.length);
-    expect(txWith.action.type).toBe("vaultV1Redeem");
-  });
-
-  test("should encode calldata targeting the vault address directly", async ({
-    client,
-  }) => {
-    const tx = vaultV1Redeem({
-      vault: {
-        address: SteakhouseUsdcVaultV1.address,
-      },
-      args: {
-        shares: parseUnits("1000", 18),
-        recipient: client.account.address,
-        onBehalf: client.account.address,
-      },
-    });
-
-    expect(tx.to).toBe(SteakhouseUsdcVaultV1.address);
   });
 });

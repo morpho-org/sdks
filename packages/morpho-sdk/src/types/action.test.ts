@@ -62,7 +62,11 @@ const permit2Signature: PermitRequirementSignature = {
 const permit2TransferFromSignature: Permit2TransferFromRequirementSignature = {
   action: {
     type: "permit2TransferFrom",
-    args: { spender: SPENDER, amount: 1n, deadline: 1_900_000_000n },
+    args: {
+      spender: SPENDER,
+      amount: 1n,
+      deadline: 1_900_000_000n,
+    },
   },
   args: {
     owner: OWNER,

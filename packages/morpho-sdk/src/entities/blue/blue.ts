@@ -38,7 +38,6 @@ import {
   blueWithdraw,
   blueWithdrawCollateral,
   getBlueAuthorizationRequirement,
-  getBlueBundlesV1TokenRequirements,
 } from "../../actions/index.js";
 import {
   computeVaultV1Reallocations,
@@ -85,6 +84,7 @@ import {
   type VaultV2BluePublicAllocatorOptions,
   type VaultV2BlueReallocation,
 } from "../../types/index.js";
+import { getBlueBundlesV1TokenRequirements } from "../requirements/index.js";
 import { VaultV1ReallocationData } from "../vaultV1ReallocationData.js";
 import { VaultV2BlueReallocationData } from "../vaultV2BlueReallocationData.js";
 
