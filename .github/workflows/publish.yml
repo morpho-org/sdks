@@ -221,8 +221,11 @@ jobs:
             }
           ')
 
+          # Inventory the received tarballs by reading name/version from inside
+          # each, rejecting duplicates.
+          declare -A received_version
+          declare -A received_tarball
           shopt -s nullglob
-          published=0
           for tgz in "${RUNNER_TEMP}/tarballs/"*.tgz; do
             tmpd="$(mktemp -d)"
             tar -xzf "$tgz" -C "$tmpd" package/package.json
@@ -230,18 +233,39 @@ jobs:
             version="$(node -p "require('${tmpd}/package/package.json').version")"
             rm -rf "$tmpd"
 
-            # Refuse any tarball whose identity is not declared in the source tree.
-            expected_version="${expected[$name]:-}"
-            if [ -z "$expected_version" ]; then
-              echo "::error::Refusing to publish '${name}': not a non-private package at ${GITHUB_SHA}."
+            if [ -n "${received_version[$name]:-}" ]; then
+              echo "::error::Duplicate tarball for ${name} in the artifact."
               exit 1
             fi
-            if [ "$expected_version" != "$version" ]; then
-              echo "::error::Refusing to publish ${name}@${version}: source declares ${name}@${expected_version} at ${GITHUB_SHA}."
-              exit 1
-            fi
+            received_version["$name"]="$version"
+            received_tarball["$name"]="$tgz"
+          done
 
-            # Idempotent reruns: never re-publish a version already on the registry.
+          # Require an exact bijection between the source's non-private packages
+          # and the received tarballs (name AND version), fail-closed BEFORE any
+          # publish or tag. A tampered pack job therefore cannot omit, add, or
+          # re-version a target and still have us publish/tag a partial set
+          # (which would otherwise leave a git tag + GitHub release for a version
+          # that was never published to npm).
+          for name in "${!expected[@]}"; do
+            if [ "${received_version[$name]:-}" != "${expected[$name]}" ]; then
+              echo "::error::Missing or mismatched tarball for ${name}@${expected[$name]} at ${GITHUB_SHA} (got '${received_version[$name]:-<none>}')."
+              exit 1
+            fi
+          done
+          for name in "${!received_version[@]}"; do
+            if [ -z "${expected[$name]:-}" ]; then
+              echo "::error::Unexpected tarball ${name}@${received_version[$name]} not declared in source at ${GITHUB_SHA}."
+              exit 1
+            fi
+          done
+
+          # Publish, skipping versions already on the registry (idempotent reruns).
+          published=0
+          for name in "${!received_version[@]}"; do
+            version="${received_version[$name]}"
+            tgz="${received_tarball[$name]}"
+
             if npm view "${name}@${version}" version >/dev/null 2>&1; then
               echo "Already on registry: ${name}@${version} — skipping."
               continue
