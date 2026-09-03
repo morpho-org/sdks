@@ -1,6 +1,12 @@
 packages:
   - packages/*
 
+# Single source of truth for the TypeScript compiler version across all
+# workspace manifests. Pinned exact (no caret) because `tsc` emits the
+# published `lib` artifacts during `prepublish` — see Cantina finding SDKS-2.
+catalog:
+  typescript: 7.0.2
+
 autoInstallPeers: true
 linkWorkspacePackages: deep
 preferWorkspacePackages: true

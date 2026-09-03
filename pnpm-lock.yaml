@@ -4,6 +4,12 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+catalogs:
+  default:
+    typescript:
+      specifier: 7.0.2
+      version: 7.0.2
+
 overrides:
   axios: 1.18.1
   tmp: 0.2.7
@@ -56,7 +62,7 @@ importers:
         specifier: ^0.28.20
         version: 0.28.20(typescript@7.0.2)
       typescript:
-        specifier: 7.0.2
+        specifier: 'catalog:'
         version: 7.0.2
       undici:
         specifier: ^8.9.0
@@ -84,7 +90,7 @@ importers:
         specifier: workspace:^
         version: link:../test
       typescript:
-        specifier: 7.0.2
+        specifier: 'catalog:'
         version: 7.0.2
       viem:
         specifier: 2.55.10
@@ -108,7 +114,7 @@ importers:
         specifier: workspace:^
         version: link:../test
       typescript:
-        specifier: 7.0.2
+        specifier: 'catalog:'
         version: 7.0.2
       viem:
         specifier: ^2.55.10
@@ -133,7 +139,7 @@ importers:
         specifier: workspace:^
         version: link:../test
       typescript:
-        specifier: 7.0.2
+        specifier: 'catalog:'
         version: 7.0.2
       viem:
         specifier: ^2.55.10
@@ -194,7 +200,7 @@ importers:
         specifier: ^14.0.17
         version: 14.0.17
       typescript:
-        specifier: 7.0.2
+        specifier: 'catalog:'
         version: 7.0.2
       viem:
         specifier: ^2.55.10
@@ -215,7 +221,7 @@ importers:
         specifier: ^4.9.0
         version: 4.9.0
       typescript:
-        specifier: 7.0.2
+        specifier: 'catalog:'
         version: 7.0.2
       viem:
         specifier: ^2.55.10
@@ -252,7 +258,7 @@ importers:
         specifier: ^4.9.0
         version: 4.9.0
       typescript:
-        specifier: 7.0.2
+        specifier: 'catalog:'
         version: 7.0.2
       viem:
         specifier: ^2.55.10
@@ -273,7 +279,7 @@ importers:
         specifier: workspace:^
         version: link:../test
       typescript:
-        specifier: 7.0.2
+        specifier: 'catalog:'
         version: 7.0.2
       viem:
         specifier: ^2.55.10
@@ -282,7 +288,7 @@ importers:
   packages/morpho-ts:
     devDependencies:
       typescript:
-        specifier: 7.0.2
+        specifier: 'catalog:'
         version: 7.0.2
       vitest:
         specifier: ^4.1.10
@@ -307,7 +313,7 @@ importers:
         specifier: ^4.1.9
         version: 4.1.9
       typescript:
-        specifier: 7.0.2
+        specifier: 'catalog:'
         version: 7.0.2
       viem:
         specifier: ^2.55.10
@@ -344,7 +350,7 @@ importers:
         specifier: workspace:^
         version: link:../test
       typescript:
-        specifier: 7.0.2
+        specifier: 'catalog:'
         version: 7.0.2
       viem:
         specifier: ^2.55.10
