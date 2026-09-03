@@ -48,7 +48,7 @@ Extract `<BASE_BRANCH>`, `<HEAD_BRANCH>`, `<HEAD_SHA>`, `state`. Validate that a
 git fetch origin <BASE_BRANCH> "+refs/pull/<PR_NUMBER>/head:refs/remotes/origin/pr/<PR_NUMBER>"
 ```
 
-Verify `git rev-parse origin/pr/<PR_NUMBER>` equals `<HEAD_SHA>`; if not, the PR moved mid-run — stop and report.
+Verify `git rev-parse origin/pr/<PR_NUMBER>` equals `<HEAD_SHA>`; if not, the PR moved mid-run — stop and report. Also verify `git rev-parse HEAD` equals `<HEAD_SHA>` (the engine reads full file contents from the worktree, so it must be at the reviewed revision); if not, run `git checkout --detach <HEAD_SHA>` before continuing.
 
 ## Steps 3–6: Shared review base
 
