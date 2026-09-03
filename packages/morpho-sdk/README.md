@@ -215,11 +215,11 @@ graph LR
         MV1 --> V1IKR[vaultV1InKindRedeem]
         MV1 --> V1M[vaultV1MigrateToV2]
 
-        V1D -->|nativeTransfer + wrapNative + erc4626Deposit| B1[Bundler3]
-        V1W -->|direct call| MM[MetaMorpho]
-        V1R -->|direct call| MM
+        V1D --> VBV1[VaultBundlesV1]
+        V1W --> VBV1
+        V1R --> VBV1
+        V1M --> VBV1
         V1IKR -->|direct call| VEB[VaultExitBundlesV1]
-        V1M -->|erc20TransferFrom + erc4626Redeem + erc4626Deposit| B1
     end
 
     subgraph VaultV2 Flow
@@ -231,11 +231,11 @@ graph LR
         MV2 --> V2FW[vaultV2ForceWithdraw]
         MV2 --> V2FR[vaultV2ForceRedeem]
 
-        V2D -->|nativeTransfer + wrapNative + erc4626Deposit| B2[Bundler3]
-        V2W -->|direct call| V2C[VaultV2 Contract]
-        V2R -->|direct call| V2C
+        V2D --> VBV1
+        V2W --> VBV1
+        V2R --> VBV1
         V2IKR -->|direct call| VEB
-        V2FW -->|multicall| V2C
+        V2FW -->|multicall| V2C[VaultV2 Contract]
         V2FR -->|multicall| V2C
     end
 
@@ -284,10 +284,9 @@ graph LR
     MM1 -.->|approval / permit / authorization| REQ
     MN1 -.->|approval / authorization / root signature or ratification| REQ
 
-    style B1 fill:#e8f5e9,stroke:#4caf50
-    style B2 fill:#e8f5e9,stroke:#4caf50
+    style VBV1 fill:#e8f5e9,stroke:#4caf50
     style BBV1 fill:#e8f5e9,stroke:#4caf50
-    style MM fill:#fff3e0,stroke:#ff9800
+    style VEB fill:#fff3e0,stroke:#ff9800
     style V2C fill:#e3f2fd,stroke:#2196f3
     style REQ fill:#f3e5f5,stroke:#9c27b0
     style BPA fill:#fff9c4,stroke:#f9a825

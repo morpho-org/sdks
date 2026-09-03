@@ -102,10 +102,17 @@ const supply = {
   amount: 1_000_000n,
 } satisfies MorphoExclusiveSupplyOptions;
 const preparedSupply = await morpho.prepareSupply(supply);
-for (const transaction of await preparedSupply.getRequirements()) {
-  if ("to" in transaction) await account.sendTransaction(transaction);
+// With `supportSignature`, Permit2 returns an ERC-20 approval for canonical Permit2 *and* a
+// SignatureTransfer request, so send every transaction and keep the signature for `submit`.
+let supplySignature: BundlesTokenRequirementSignature | undefined;
+for (const requirement of await preparedSupply.getRequirements({ permit2Nonce })) {
+  if ("sign" in requirement) {
+    supplySignature = await requirement.sign(walletClient, userAddress);
+  } else {
+    await account.sendTransaction(requirement);
+  }
 }
-await preparedSupply.submit();
+await preparedSupply.submit(supplySignature);
 
 const withdrawal = { token: vaultAsset, amount: 1_000_000n };
 const preparedWithdrawal = await morpho.prepareWithdraw(withdrawal);
