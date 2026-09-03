@@ -762,6 +762,18 @@ describe("MidnightApi.fetchBook", () => {
       MidnightApi.fetchBook({ marketId: MARKET_ID, fetch }),
     ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
   });
+
+  test("error: InvalidMidnightApiResponseError when the returned market_id is not a hex string", async () => {
+    // A non-string advertised market_id must not leak a raw TypeError from the
+    // hex comparison; it surfaces as a wrapped API response error.
+    const { fetch } = createJsonFetch({
+      data: { ...apiBook, market_id: 12345 },
+    });
+
+    await expect(
+      MidnightApi.fetchBook({ marketId: MARKET_ID, fetch }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
 });
 
 describe("MidnightApi.fetchBookPriceLevels", () => {

@@ -134,6 +134,7 @@ export function mapBookMarket(
   book: ApiBookMarketResponse,
 ): MidnightApiBookMarket {
   let derivedMarketId: Hash;
+  let matchesAdvertisedId: boolean;
   try {
     derivedMarketId = MarketUtils.toId({
       chainId: book.chain_id,
@@ -150,13 +151,16 @@ export function mapBookMarket(
       enterGate: book.enter_gate,
       liquidatorGate: book.liquidator_gate,
     });
+    // Comparison stays inside the try so a malformed advertised `market_id`
+    // (non-hex value) surfaces as a wrapped response error, not a raw TypeError.
+    matchesAdvertisedId = isHexEqual(derivedMarketId, book.market_id);
   } catch (cause) {
     throw new InvalidMidnightApiResponseError(
-      `Midnight API book market_id "${book.market_id}" carries market params from which an id cannot be derived.`,
+      `Midnight API book market_id "${book.market_id}" could not be validated against its market params.`,
       { cause },
     );
   }
-  if (!isHexEqual(derivedMarketId, book.market_id)) {
+  if (!matchesAdvertisedId) {
     throw new InvalidMidnightApiResponseError(
       `Midnight API book market_id "${book.market_id}" does not match the id "${derivedMarketId}" derived from its market params.`,
     );
