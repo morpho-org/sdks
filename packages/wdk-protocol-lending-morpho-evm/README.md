@@ -97,7 +97,7 @@ Prepared vault deposits accept `MorphoExclusiveSupplyOptions` and Blue collatera
 | `getSupplyRequirements(options, requirementOptions?)` | Deprecated: GeneralAdapter1 approval/permit requirements for legacy supply |
 | `prepareSupply(options)` | Prepare one vault deposit handle exposing `getRequirements`, `submit`, and `quote` |
 | `quoteSupply(options, config?)` | Deprecated: quote the legacy deposit with its option-level signature |
-| `withdraw(options, config?)` | Withdraw assets from the configured vault; submits immediately, so it needs the VaultBundlesV1 share allowance already in place |
+| `withdraw(options, config?)` | Withdraw assets from the configured vault; throws `UnresolvedVaultWithdrawRequirementsError` unless the exact VaultBundlesV1 share allowance is already in place |
 | `prepareWithdraw(options)` | Prepare one vault withdrawal handle exposing `getRequirements`, `submit`, and `quote` |
 | `quoteWithdraw(options, config?)` | Quote vault withdrawal |
 | `supplyCollateral(options, config?)` | Supply collateral to the configured market |
