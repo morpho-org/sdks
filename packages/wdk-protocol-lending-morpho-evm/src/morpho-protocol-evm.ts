@@ -145,6 +145,22 @@ export class MixedBlueCollateralFundingError extends Error {
   }
 }
 
+/**
+ * Thrown when an immediate vault withdrawal still has unresolved VaultBundlesV1 share
+ * requirements, so submitting it would burn shares under a stale allowance cap.
+ */
+export class UnresolvedVaultWithdrawRequirementsError extends Error {
+  constructor(
+    /** Number of requirements the SDK still expects to be satisfied. */
+    readonly requirementCount: number,
+  ) {
+    super(
+      `Vault withdrawal has unresolved VaultBundlesV1 share-allowance requirements (count ${requirementCount}). Use prepareWithdraw() to satisfy them, then submit through that prepared handle.`,
+    );
+    this.name = "UnresolvedVaultWithdrawRequirementsError";
+  }
+}
+
 /** Controls token requirements generated for a BlueBundlesV1 action. */
 export interface RequirementOptions {
   /** Prefer the Morpho SDK simple permit flow when generating approval requirements. */
@@ -660,14 +676,17 @@ export default class MorphoProtocolEvm extends LendingProtocol {
    * Withdraws assets from the configured Morpho vault.
    *
    * The withdrawal is routed through VaultBundlesV1, which burns the account's vault shares, so it
-   * needs a share allowance equal to the derived share cap. This method submits immediately and
-   * therefore only succeeds when that exact allowance is already in place. Use
+   * needs a share allowance equal to the derived share cap. That allowance is the only cap on the
+   * burn, so this method resolves the prepared withdrawal's requirements first and submits only
+   * when none are outstanding — a leftover allowance above the cap counts as outstanding. Use
    * {@link prepareWithdraw} otherwise, so requirement resolution and submission share one immutable
    * prepared-operation handle.
    *
    * @param options - The withdraw options.
    * @param config - ERC-4337 transaction config override.
    * @returns The withdraw result.
+   * @throws {UnresolvedVaultWithdrawRequirementsError} when the exact share allowance is not
+   *   already in place, so the withdrawal must go through {@link prepareWithdraw}.
    * @throws {Error} If the options are invalid, the token does not match the configured vault, or the transaction fails.
    */
   async withdraw(
@@ -675,10 +694,11 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     config?: Erc4337TransactionConfig,
   ): Promise<WithdrawResult> {
     this._assertWritable("withdraw(options)");
-    return await (await this.prepareWithdraw(options)).submit(
-      undefined,
-      config,
-    );
+    const prepared = await this.prepareWithdraw(options);
+    const requirements = await prepared.getRequirements();
+    if (requirements.length > 0)
+      throw new UnresolvedVaultWithdrawRequirementsError(requirements.length);
+    return await prepared.submit(undefined, config);
   }
 
   /**

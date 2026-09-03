@@ -8,7 +8,7 @@ Version 2 routes Morpho Blue writes through `BlueBundlesV1` instead of Bundler3,
 - Replace `MorphoBorrowWithVaultV2ReallocationsOptions` with `MorphoBorrowOptions`. The specialized opt-in type and the package's Vault V1 reallocation re-exports were removed.
 - Remove `slippageTolerance` from `MorphoBorrowOptions`, `MorphoRepayOptions`, and Blue collateral-supply inputs. Constructor-level and vault-supply slippage settings now apply only to Morpho Vault V2 flows because BlueBundlesV1 has no Bundler3 share-price bounds.
 - Call `getWithdrawCollateralRequirements` before `withdrawCollateral`. Send the returned authorization transaction, or sign the requirement and pass its result as `requirementSignature`.
-- Use `prepareWithdraw` for vault withdrawals. VaultBundlesV1 burns the account's vault shares, so the withdrawal now needs a vault-share allowance equal to the SDK's derived share cap — a prerequisite version 1 withdrawals did not have. `withdraw(options)` still submits immediately and therefore only succeeds when that exact allowance is already in place.
+- Use `prepareWithdraw` for vault withdrawals. VaultBundlesV1 burns the account's vault shares, so the withdrawal now needs a vault-share allowance equal to the SDK's derived share cap — a prerequisite version 1 withdrawals did not have. `withdraw(options)` resolves that requirement before submitting and throws the new `UnresolvedVaultWithdrawRequirementsError` unless the exact allowance is already in place.
 - Recreate cached vault-share approvals. The new spender is VaultBundlesV1, and an allowance that does not equal the derived cap — including a larger leftover approval — is replaced rather than reused, so the per-withdrawal cap holds.
 - Constructor-level `slippageTolerance` now also bounds vault withdrawals: it widens the derived share cap the same way it widens the vault-deposit share-price bound.
 - Use `MorphoCollateralSupplyOptions` for Blue collateral methods. Its type accepts either `amount` or `nativeAmount`, not both; vault deposits still use additive `MorphoSupplyOptions`.
@@ -88,6 +88,11 @@ if (requirement && "sign" in requirement) {
 
 `getRequirements()` re-validates the withdrawal deadline on every call, so a prepared withdrawal
 reused after its deadline throws `ExpiredDeadlineError` instead of returning stale prerequisites.
+
+The share allowance is the only cap on how many shares the exit burns, so `withdraw(options)`
+resolves the same requirement before submitting and throws
+`UnresolvedVaultWithdrawRequirementsError` when one is outstanding — including when a larger
+leftover allowance would let a share-price loss burn past the derived cap.
 
 ## Collateral withdrawal authorization
 

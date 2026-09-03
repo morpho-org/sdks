@@ -88,7 +88,7 @@ Vault deposits accept `amount`, `nativeAmount`, or both. Blue collateral methods
 | `supply(options, config?)` | Deposit assets into the configured vault |
 | `getSupplyRequirements(options)` | Return SDK requirements for vault deposit |
 | `quoteSupply(options, config?)` | Quote vault deposit |
-| `withdraw(options, config?)` | Withdraw assets from the configured vault; submits immediately, so it needs the VaultBundlesV1 share allowance already in place |
+| `withdraw(options, config?)` | Withdraw assets from the configured vault; throws `UnresolvedVaultWithdrawRequirementsError` unless the exact VaultBundlesV1 share allowance is already in place |
 | `prepareWithdraw(options)` | Prepare one vault withdrawal handle exposing `getRequirements`, `submit`, and `quote` |
 | `quoteWithdraw(options, config?)` | Quote vault withdrawal |
 | `supplyCollateral(options, config?)` | Supply collateral to the configured market |

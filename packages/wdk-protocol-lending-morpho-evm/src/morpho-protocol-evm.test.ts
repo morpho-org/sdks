@@ -179,8 +179,11 @@ const { WalletAccountEvm, WalletAccountReadOnlyEvm } = await import(
 const { WalletAccountEvmErc4337 } = await import(
   "@tetherto/wdk-wallet-evm-erc-4337"
 );
-const { default: MorphoProtocolEvm, MixedBlueCollateralFundingError } =
-  await import("./morpho-protocol-evm.js");
+const {
+  default: MorphoProtocolEvm,
+  MixedBlueCollateralFundingError,
+  UnresolvedVaultWithdrawRequirementsError,
+} = await import("./morpho-protocol-evm.js");
 
 describe.sequential("MorphoProtocolEvm", () => {
   let account: InstanceType<typeof WalletAccountEvm>;
@@ -462,7 +465,16 @@ describe.sequential("MorphoProtocolEvm", () => {
   });
 
   describe("withdraw", () => {
+    beforeEach(() => {
+      // `vi.clearAllMocks()` keeps implementations, so restore the shared default here and let
+      // individual tests opt into an already-satisfied allowance.
+      withdrawAction.getRequirements.mockResolvedValue([
+        { action: { type: "erc20Approval" } },
+      ]);
+    });
+
     test("should build a vault withdraw with morpho-sdk and send it", async () => {
+      withdrawAction.getRequirements.mockResolvedValue([]);
       account.sendTransaction = vi
         .fn()
         .mockResolvedValue({ hash: "dummy-withdraw-hash", fee: 12_345n });
@@ -482,6 +494,7 @@ describe.sequential("MorphoProtocolEvm", () => {
     });
 
     test("behavior: forwards the configured slippage tolerance", async () => {
+      withdrawAction.getRequirements.mockResolvedValue([]);
       const configured = new MorphoProtocolEvm(account, {
         chainId: 1,
         earnVaultAddress: VAULT,
@@ -536,6 +549,17 @@ describe.sequential("MorphoProtocolEvm", () => {
       ).rejects.toThrow(
         "'to' must equal the wallet account address for Morpho vault withdrawals.",
       );
+    });
+
+    test("error: UnresolvedVaultWithdrawRequirementsError", async () => {
+      account.sendTransaction = vi.fn();
+
+      await expect(
+        protocol.withdraw({ token: TOKEN, amount: 100_000n }),
+      ).rejects.toBeInstanceOf(UnresolvedVaultWithdrawRequirementsError);
+      expect(withdrawAction.getRequirements).toHaveBeenCalledWith();
+      expect(withdrawAction.buildTx).not.toHaveBeenCalled();
+      expect(account.sendTransaction).not.toHaveBeenCalled();
     });
   });
 
