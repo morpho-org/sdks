@@ -1,16 +1,14 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import { type Address, encodeFunctionData, maxUint256 } from "viem";
+import { type Address, encodeFunctionData } from "viem";
 import { blueBundlesV1Abi } from "../../abis.js";
+import { validateUint256Field } from "../../helpers/validate.js";
 import type {
   BlueBundlesV1TokenRequirementSignature,
   BlueSupplyAction,
   Metadata,
   Transaction,
 } from "../../types/index.js";
-import {
-  InputExceedsMaxError,
-  NonPositiveInputError,
-} from "../../types/index.js";
+import { NonPositiveInputError } from "../../types/index.js";
 import {
   type BlueBundlesV1CommonParams,
   finalizeBlueBundlesV1Transaction,
@@ -108,13 +106,7 @@ export const blueSupply = (
   if (assets <= 0n) {
     throw new NonPositiveInputError("assets", assets);
   }
-  if (assets > maxUint256) {
-    throw new InputExceedsMaxError({
-      field: "assets",
-      value: assets,
-      max: maxUint256,
-    });
-  }
+  validateUint256Field("assets", assets);
 
   const common: BlueBundlesV1CommonParams = {
     chainId,
