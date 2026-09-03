@@ -1413,6 +1413,8 @@ export namespace BundlerAction {
    * @param skipRevert - Whether Bundler3 should tolerate a revert.
    * @returns Encoded Bundler3 calls.
    * @throws {BundlerErrors.UnexpectedAction} when the PublicAllocator is unavailable on the chain.
+   * @deprecated Vault V1 PublicAllocator composition will be removed in the next major. Use
+   * `vaultV2BluePublicAllocatorReallocate` or `vaultV2BluePublicAllocatorAllocateFromIdle`.
    *
    * @example
    * ```ts
