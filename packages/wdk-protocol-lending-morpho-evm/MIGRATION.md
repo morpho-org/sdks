@@ -28,7 +28,7 @@ that route; legacy GeneralAdapter1 approvals and permits cannot fund a prepared 
 - Prepared vault deposits expire after two hours and enforce the signed permit's deadline; `slippageTolerance` still bounds `maxSharePrice`. Deprecated supply methods retain the legacy Bundler3 execution semantics.
 - Prepared supply methods recheck the live provider chain on every call. Handle `ChainIdMismatchError`, re-exported by this package, if the wallet switches away from the configured vault chain.
 - Pass an explicit unused `permit2Nonce` to token `get*Requirements` calls, and to the prepared deposit's `getRequirements`, when selecting Permit2 SignatureTransfer.
-- Use `prepareWithdraw` for vault withdrawals. VaultBundlesV1 burns the account's vault shares, so the withdrawal now needs a vault-share allowance equal to the SDK's derived share cap — a prerequisite version 1 withdrawals did not have. `withdraw(options)` still submits immediately and therefore only succeeds when that exact allowance is already in place.
+- Use `prepareWithdraw` for vault withdrawals. VaultBundlesV1 burns the account's vault shares, so the withdrawal now needs a vault-share allowance equal to the SDK's derived share cap — a prerequisite version 1 withdrawals did not have. `withdraw(options)` resolves that requirement before submitting and throws the new `UnresolvedVaultWithdrawRequirementsError` unless the exact allowance is already in place.
 - Recreate cached vault-share approvals. The new spender is VaultBundlesV1, and an allowance that does not equal the derived cap — including a larger leftover approval — is replaced rather than reused, so the per-withdrawal cap holds.
 - Constructor-level `slippageTolerance` now also bounds vault withdrawals: it widens the derived share cap the same way it widens the vault-deposit share-price bound.
 - Recreate cached approvals and Morpho authorizations for Blue writes. Their spender and authorization target is now BlueBundlesV1 instead of GeneralAdapter1.
@@ -111,6 +111,11 @@ if (requirement && "sign" in requirement) {
 
 `getRequirements()` re-validates the withdrawal deadline on every call, so a prepared withdrawal
 reused after its deadline throws `ExpiredDeadlineError` instead of returning stale prerequisites.
+
+The share allowance is the only cap on how many shares the exit burns, so `withdraw(options)`
+resolves the same requirement before submitting and throws
+`UnresolvedVaultWithdrawRequirementsError` when one is outstanding — including when a larger
+leftover allowance would let a share-price loss burn past the derived cap.
 
 ## Collateral withdrawal authorization
 

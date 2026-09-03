@@ -56,4 +56,5 @@ export {
   default,
   default as MorphoProtocolEvm,
   MixedBlueCollateralFundingError,
+  UnresolvedVaultWithdrawRequirementsError,
 } from "./morpho-protocol-evm.js";
