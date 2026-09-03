@@ -120,32 +120,29 @@ const apiBook = {
   bids: [],
 };
 
-// Recomputes a book's Midnight id from its own market params, matching the SDK's
-// request/response binding. Used to build coherent foreign-market fixtures.
-function bookMarketId(book: typeof apiBook): Hex {
-  return MarketUtils.toId({
-    chainId: book.chain_id,
-    midnight: book.midnight,
-    loanToken: book.loan_token,
-    collateralParams: book.collaterals.map((collateral) => ({
-      token: collateral.token,
-      lltv: collateral.lltv,
-      liquidationCursor: collateral.liquidation_cursor,
-      oracle: collateral.oracle,
-    })),
-    maturity: book.maturity,
-    rcfThreshold: book.rcf_threshold,
-    enterGate: book.enter_gate,
-    liquidatorGate: book.liquidator_gate,
-  });
-}
-
 // A coherent book for a *different* market: foreign loan token, `market_id`
-// derived to match its own params (so it passes the integrity check but is
-// still outside the requested market).
+// recomputed from its own params (so it passes the integrity check but is still
+// outside the requested market).
 const coherentForeignApiBook = (() => {
   const params = { ...apiBook, loan_token: SECOND_LOAN_TOKEN };
-  return { ...params, market_id: bookMarketId(params) };
+  return {
+    ...params,
+    market_id: MarketUtils.toId({
+      chainId: params.chain_id,
+      midnight: params.midnight,
+      loanToken: params.loan_token,
+      collateralParams: params.collaterals.map((collateral) => ({
+        token: collateral.token,
+        lltv: collateral.lltv,
+        liquidationCursor: collateral.liquidation_cursor,
+        oracle: collateral.oracle,
+      })),
+      maturity: params.maturity,
+      rcfThreshold: params.rcf_threshold,
+      enterGate: params.enter_gate,
+      liquidatorGate: params.liquidator_gate,
+    }) satisfies Hex,
+  };
 })();
 
 // A substituted book: foreign market params relabeled with the requested id.
@@ -743,6 +740,22 @@ describe("MidnightApi.fetchBook", () => {
     // label-only check but must fail the derived-id integrity check.
     const { fetch } = createJsonFetch({
       data: { ...substitutedApiBook, market_id: MARKET_ID },
+    });
+
+    await expect(
+      MidnightApi.fetchBook({ marketId: MARKET_ID, fetch }),
+    ).rejects.toBeInstanceOf(InvalidMidnightApiResponseError);
+  });
+
+  test("error: InvalidMidnightApiResponseError when the returned market params are malformed", async () => {
+    // A JSON response with market params that cannot hash to an id (here a
+    // non-bigint LLTV) must surface as an API response error, not the underlying
+    // InvalidMarketParameterError that blames caller input.
+    const { fetch } = createJsonFetch({
+      data: {
+        ...apiBook,
+        collaterals: [{ ...apiCollateral, lltv: "not-a-bigint" }],
+      },
     });
 
     await expect(
