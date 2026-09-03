@@ -547,6 +547,9 @@ describe("MorphoBlue common write validation", () => {
       referralFeeRecipient: otherUserAddress,
     })) {
       expect(call, method).toThrow(ReferralFeePctExceededError);
+      // The Blue JSDoc has always promised InputExceedsMaxError here; the shared
+      // bundles normalizer must not break integrators pattern-matching it.
+      expect(call, method).toThrow(InputExceedsMaxError);
     }
   });
 });
