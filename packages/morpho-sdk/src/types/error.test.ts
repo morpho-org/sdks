@@ -1,6 +1,8 @@
+import { MathLib } from "@morpho-org/blue-sdk";
 import { describe, expect, test } from "vitest";
 import {
   BorrowAmountAndSharesExclusiveError,
+  InputExceedsMaxError,
   NegativeInputError,
   NegativeNativeAmountError,
   NonPositiveAssetAmountError,
@@ -9,6 +11,7 @@ import {
   RefinanceExceedsBorrowSharesError,
   RefinanceExceedsCollateralError,
   RefinanceSharesMissingBorrowAssetsError,
+  ReferralFeePctExceededError,
 } from "./error.js";
 
 describe("NegativeInputError", () => {
@@ -82,5 +85,26 @@ describe("deprecated refinance partial-migration error exports", () => {
     expect(new RefinanceSharesMissingBorrowAssetsError("0x1")).toBeInstanceOf(
       Error,
     );
+  });
+});
+
+describe("ReferralFeePctExceededError", () => {
+  test("default", () => {
+    const error = new ReferralFeePctExceededError(MathLib.WAD);
+
+    expect(error.name).toBe("ReferralFeePctExceededError");
+    expect(error.referralFeePct).toBe(MathLib.WAD);
+    expect(error.message).toBe(
+      'Referral fee percentage "1000000000000000000" must be below WAD. Reduce referralFeePct or disable the referral fee.',
+    );
+  });
+
+  test("behavior: stays catchable as the generic maximum-bound error", () => {
+    const error = new ReferralFeePctExceededError(MathLib.WAD);
+
+    expect(error).toBeInstanceOf(InputExceedsMaxError);
+    expect(error.field).toBe("referralFeePct");
+    expect(error.value).toBe(MathLib.WAD);
+    expect(error.max).toBe(MathLib.WAD - 1n);
   });
 });
