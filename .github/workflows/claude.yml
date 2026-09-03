@@ -12,20 +12,22 @@ on:
   pull_request:
     types: [opened, ready_for_review, synchronize]
 
-# One review per PR at a time; a new push supersedes the in-flight review.
+# One automatic review per PR at a time; a new push supersedes the in-flight review.
+# @claude-triggered events get their own group so they are never queued/cancelled against each other.
 concurrency:
-  group: claude-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  group: claude-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   claude:
     # Humans must have write access; bots fall through to the action's allowed_bots check.
-    # pull_request events auto-review every non-draft same-repo PR (fork PRs have no secrets; use @claude).
+    # pull_request events auto-review every non-draft same-repo PR (fork and Dependabot PRs have no secrets; use @claude).
     if: |
       (
         github.event_name == 'pull_request' &&
         github.event.pull_request.draft == false &&
-        github.event.pull_request.head.repo.full_name == github.repository
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        github.event.pull_request.user.login != 'dependabot[bot]'
       ) || (
         github.event.sender.type == 'Bot' ||
         contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association || github.event.review.author_association || github.event.issue.author_association)
@@ -59,13 +61,14 @@ jobs:
       - name: Snapshot trusted review instructions
         run: cp -R .agents "$RUNNER_TEMP/trusted-agents"
 
-      # Required by CLAUDE_CODE_SUBPROCESS_ENV_SCRUB (Claude Code sandboxes Bash subprocesses with bwrap).
-      - name: Install bubblewrap
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap
+      # Required by CLAUDE_CODE_SUBPROCESS_ENV_SCRUB (Claude Code sandboxes Bash subprocesses with bwrap + socat).
+      - name: Install sandbox dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap socat
 
       # Codex reviews automatically on open / ready-for-review; re-request it on every push.
       - name: Request Codex re-review
         if: github.event_name == 'pull_request' && github.event.action == 'synchronize'
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
