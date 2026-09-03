@@ -98,24 +98,6 @@ const EMPTY_SIGNED_AUTHORIZATION: BlueBundlesV1SignedAuthorization = {
   deadline: 0n,
 };
 
-/**
- * Splits a serialized signature for a BlueBundlesV1 permit or authorization struct, surfacing every
- * decoding failure as the periphery's own mismatch error.
- */
-const normalizeBlueBundlesV1Signature = (
-  serializedSignature: Hex,
-): NormalizedEcdsaSignature =>
-  normalizeEcdsaSignature(
-    serializedSignature,
-    ({ expected, cause }) =>
-      new BlueBundlesV1RequirementSignatureMismatchError({
-        field: "signature",
-        expected,
-        actual: serializedSignature,
-        cause,
-      }),
-  );
-
 /** @internal */
 export const normalizeBlueBundlesV1CommonParams = (
   params: BlueBundlesV1CommonParams,
@@ -231,8 +213,15 @@ export const getBlueBundlesV1TokenPermit = (params: {
     });
   }
 
-  const { v, r, s } = normalizeBlueBundlesV1Signature(
+  const { v, r, s } = normalizeEcdsaSignature(
     requirementSignature.args.signature,
+    ({ expected, cause }) =>
+      new BlueBundlesV1RequirementSignatureMismatchError({
+        field: "signature",
+        expected,
+        actual: requirementSignature.args.signature,
+        cause,
+      }),
   );
   return {
     kind: BLUE_BUNDLES_V1_TOKEN_PERMIT_KIND.erc2612,
@@ -305,8 +294,15 @@ export const getBlueBundlesV1SignedAuthorization = (params: {
     });
   }
 
-  const signature = normalizeBlueBundlesV1Signature(
+  const signature = normalizeEcdsaSignature(
     authorizationSignature.args.signature,
+    ({ expected, cause }) =>
+      new BlueBundlesV1RequirementSignatureMismatchError({
+        field: "signature",
+        expected,
+        actual: authorizationSignature.args.signature,
+        cause,
+      }),
   );
   return {
     signature,
