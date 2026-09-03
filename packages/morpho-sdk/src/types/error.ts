@@ -1,4 +1,4 @@
-import { type MarketId, UnknownDataError } from "@morpho-org/blue-sdk";
+import { type MarketId, MathLib, UnknownDataError } from "@morpho-org/blue-sdk";
 import type { Address, Hash } from "viem";
 
 /**
@@ -476,12 +476,22 @@ export const MissingReferralFeeRecipientError =
 /** @deprecated Use {@link ReferralFeeRecipientMissingError}. */
 export type MissingReferralFeeRecipientError = ReferralFeeRecipientMissingError;
 
-/** Thrown when a referral fee percentage is outside the contract's `[0, WAD)` range. */
-export class ReferralFeePctExceededError extends Error {
+/**
+ * Thrown when a referral fee percentage is outside the contract's `[0, WAD)` range.
+ *
+ * Extends {@link InputExceedsMaxError} — and reports the same `field`, `value`, and `max` the
+ * generic bound error used to carry for this input — so integrators already pattern-matching
+ * `InputExceedsMaxError` keep catching this failure.
+ */
+export class ReferralFeePctExceededError extends InputExceedsMaxError {
+  /** @param referralFeePct - WAD-scaled referral fee percentage supplied by the caller. */
   public constructor(public readonly referralFeePct: bigint) {
-    super(
-      `Referral fee percentage "${referralFeePct}" must be below WAD. Reduce referralFeePct or disable the referral fee.`,
-    );
+    super({
+      field: "referralFeePct",
+      value: referralFeePct,
+      max: MathLib.WAD - 1n,
+    });
+    this.message = `Referral fee percentage "${referralFeePct}" must be below WAD. Reduce referralFeePct or disable the referral fee.`;
     this.name = "ReferralFeePctExceededError";
   }
 }

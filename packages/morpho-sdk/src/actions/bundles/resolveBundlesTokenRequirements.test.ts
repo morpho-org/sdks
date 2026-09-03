@@ -51,6 +51,46 @@ describe("resolveBundlesTokenRequirements", () => {
     );
   });
 
+  test("behavior: a raised approval target is the allowance level the caller must reach", () => {
+    const amount = 1_000_000n;
+    // A saturated share repay quotes `amount` now but pulls more once interest accrues, so an
+    // allowance covering only the quote must still be raised to the target.
+    const requirements = resolveBundlesTokenRequirements({
+      token: usdc,
+      spender,
+      owner,
+      chainId,
+      amount,
+      deadline,
+      state: {
+        type: "approval",
+        allowance: amount,
+        approvalAmount: maxUint256,
+      },
+    });
+    expect(requirements).toHaveLength(1);
+    expect(requirements[0]?.action).toMatchObject({
+      type: "erc20Approval",
+      args: { spender, amount: maxUint256 },
+    });
+
+    expect(
+      resolveBundlesTokenRequirements({
+        token: usdc,
+        spender,
+        owner,
+        chainId,
+        amount,
+        deadline,
+        state: {
+          type: "approval",
+          allowance: maxUint256,
+          approvalAmount: maxUint256,
+        },
+      }),
+    ).toHaveLength(0);
+  });
+
   test("behavior: Permit2 approval precedes SignatureTransfer and preserves nonce", () => {
     const amount = MathLib.MAX_UINT_160 + 1n;
     const requirements = resolveBundlesTokenRequirements({
