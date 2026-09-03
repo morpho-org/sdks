@@ -1,5 +1,20 @@
 # @morpho-org/wdk-protocol-lending-morpho-evm
 
+## 1.2.0
+
+### Minor Changes
+
+- [#985](https://github.com/morpho-org/sdks/pull/985) [`94dbd38`](https://github.com/morpho-org/sdks/commit/94dbd387337f31a522f339958881d0c5d2326af2) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Publish the pinned BlueBundlesV1 ABI and deprecate all Vault V1 shared-liquidity algorithm and
+  Bundler3 composition surfaces in Morpho SDK, plus the WDK Vault V1 borrow input. Use Vault V2
+  BluePublicAllocator reallocations for new integrations; all deprecated Vault V1 surfaces will be
+  removed in the next major.
+
+### Patch Changes
+
+- Updated dependencies [[`be2ad49`](https://github.com/morpho-org/sdks/commit/be2ad49eb1cde99f5b68528616c244bee590f782), [`55d0ade`](https://github.com/morpho-org/sdks/commit/55d0ade66c7e48aeae478f40df3d2bf2e9b61c0e), [`94dbd38`](https://github.com/morpho-org/sdks/commit/94dbd387337f31a522f339958881d0c5d2326af2), [`014364e`](https://github.com/morpho-org/sdks/commit/014364ee2e9efd45f16ca5104780f4ab041c9d65), [`94dbd38`](https://github.com/morpho-org/sdks/commit/94dbd387337f31a522f339958881d0c5d2326af2)]:
+  - @morpho-org/morpho-sdk@5.9.0
+  - @morpho-org/blue-sdk-viem@5.5.0
+
 ## 1.1.0
 
 ### Minor Changes

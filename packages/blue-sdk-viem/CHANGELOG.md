@@ -1,5 +1,18 @@
 # @morpho-org/blue-sdk-viem
 
+## 5.5.0
+
+### Minor Changes
+
+- [#1007](https://github.com/morpho-org/sdks/pull/1007) [`55d0ade`](https://github.com/morpho-org/sdks/commit/55d0ade66c7e48aeae478f40df3d2bf2e9b61c0e) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Deprecate `getDaiPermitTypedData` and `DaiPermitArgs`. The SDK routes DAI approvals through Permit2 / classic approval internally — DAI's non-standard boolean permit (any positive `allowance` authorizes `type(uint256).max`, not the passed amount) is incompatible with the ERC-2612 simple-permit path — so this standalone helper is unused by every SDK flow. It stays exported for one more minor and will be removed in the next major; prefer the Permit2 flow. The `morpho-sdk` facade re-exports (`utils`, `/blue/utils`, `/blue/types`) carry the same `@deprecated` annotation.
+
+### Patch Changes
+
+- [#985](https://github.com/morpho-org/sdks/pull/985) [`94dbd38`](https://github.com/morpho-org/sdks/commit/94dbd387337f31a522f339958881d0c5d2326af2) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Clamp Permit2 SignatureTransfer allowances to the full uint256 range instead of the uint160
+  AllowanceTransfer limit.
+- Updated dependencies [[`2601458`](https://github.com/morpho-org/sdks/commit/26014581bf7470bc090c4837bd9ed3cf6fc8f31b)]:
+  - @morpho-org/morpho-ts@2.11.1
+
 ## 5.4.0
 
 ### Minor Changes
