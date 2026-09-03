@@ -62,8 +62,15 @@ jobs:
         run: cp -R .agents "$RUNNER_TEMP/trusted-agents"
 
       # Required by CLAUDE_CODE_SUBPROCESS_ENV_SCRUB (Claude Code sandboxes Bash subprocesses with bwrap + socat).
+      # Ubuntu 24.04 runners block unprivileged user namespaces via AppArmor, which bwrap needs.
       - name: Install sandbox dependencies
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap socat
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap socat
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      # Fail fast: a non-functional sandbox would otherwise surface only as per-tool errors inside Claude.
+      - name: Verify sandbox works
+        run: bwrap --ro-bind / / --dev /dev --proc /proc true || { echo "::error::bwrap cannot create sandboxes on this runner"; exit 1; }
 
       # Codex reviews automatically on open / ready-for-review; re-request it on every push.
       - name: Request Codex re-review
@@ -72,7 +79,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body '@codex review'
+        run: gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body '@codex review' || echo "::warning::Failed to request Codex re-review for PR #$PR_NUMBER"
 
       - name: Run Claude Code
         id: claude
