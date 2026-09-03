@@ -105,21 +105,20 @@ export const validateMidnightMarketChainId = (
  *   `userAddress`.
  * @example
  * ```ts
- * import { createWalletClient, custom } from "viem";
+ * import { createWalletClient, http } from "viem";
+ * import { privateKeyToAccount } from "viem/accounts";
  * import { mainnet } from "viem/chains";
  * import { validateUserAddress } from "@morpho-org/morpho-sdk";
  *
- * const [userAddress] = (await window.ethereum.request({
- *   method: "eth_requestAccounts",
- * })) as [`0x${string}`];
+ * const account = privateKeyToAccount("0x...");
  * const walletClient = createWalletClient({
- *   account: userAddress,
+ *   account,
  *   chain: mainnet,
- *   transport: custom(window.ethereum),
+ *   transport: http(),
  * });
  *
  * // Inside a `sign()` flow, before producing a typed-data signature:
- * validateUserAddress(walletClient.account?.address, userAddress);
+ * validateUserAddress(walletClient.account?.address, account.address);
  * // Passes when the connected account equals the expected signer;
  * // throws if the wallet has no account or signs for a different address.
  * ```
