@@ -5,7 +5,7 @@ import { describe, expect } from "vitest";
 import { isRequirementApproval, morphoViemExtension } from "../../src/index.js";
 import { KeyrockUsdcVaultV2 } from "../fixtures/vaultV2.js";
 import { testInvariants } from "../helpers/invariants.js";
-import { test } from "../setup.js";
+import { vaultBundlesV1Test as test } from "../helpers/vaultBundlesV1.js";
 
 describe("Metadata", () => {
   test("should create deposit bundle with origin and timestamp metadata", async ({

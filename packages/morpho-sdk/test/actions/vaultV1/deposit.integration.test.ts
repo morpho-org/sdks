@@ -3,10 +3,13 @@ import {
   getChainAddresses,
   MathLib,
 } from "@morpho-org/blue-sdk";
+import { getChainAddress } from "@morpho-org/morpho-ts";
 import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
+  isPermit2SignatureTransferSignature,
+  isPermitSignature,
   isRequirementApproval,
   isRequirementSignature,
   morphoViemExtension,
@@ -17,9 +20,10 @@ import {
   SteakhouseUsdcVaultV1,
 } from "../../fixtures/vaultV1.js";
 import { testInvariants } from "../../helpers/invariants.js";
-import { test } from "../../setup.js";
+import { vaultBundlesV1Test as test } from "../../helpers/vaultBundlesV1.js";
 
 describe("DepositVaultV1", () => {
+  const vaultBundlesV1 = getChainAddress(mainnet.id, "bundles.vaultBundlesV1");
   test("should deposit 1K USDC in vaultV1", async ({ client }) => {
     const amount = parseUnits("1000", 6);
     await client.deal({
@@ -86,13 +90,9 @@ describe("DepositVaultV1", () => {
       amount: amount,
     });
 
-    const {
-      bundler3: { generalAdapter1 },
-    } = getChainAddresses(mainnet.id);
-
     await client.approve({
       address: SteakhouseUSDTVaultV1.asset,
-      args: [generalAdapter1, 1n],
+      args: [vaultBundlesV1, 1n],
     });
 
     const {
@@ -195,6 +195,10 @@ describe("DepositVaultV1", () => {
           client.account.address,
         );
 
+        if (!isPermitSignature(requirementSignature)) {
+          throw new Error("Unexpected requirement signature");
+        }
+
         expect(requirementSignature.args.owner).toEqual(client.account.address);
         expect(requirementSignature.args.asset).toEqual(
           SteakhouseUsdcVaultV1.asset,
@@ -225,10 +229,7 @@ describe("DepositVaultV1", () => {
   });
 
   test("should deposit USDC with permit2 in vaultV1", async ({ client }) => {
-    const {
-      permit2,
-      bundler3: { generalAdapter1 },
-    } = addressesRegistry[mainnet.id];
+    const { permit2 } = addressesRegistry[mainnet.id];
 
     const amount = parseUnits("1000", 6);
 
@@ -261,6 +262,7 @@ describe("DepositVaultV1", () => {
 
         const requirements = await deposit.getRequirements({
           useSimplePermit: false,
+          permit2Nonce: 0n,
         });
 
         expect(requirements.length).toBe(2);
@@ -271,7 +273,7 @@ describe("DepositVaultV1", () => {
         }
 
         expect(approvalPermit2.action.args.spender).toBe(permit2);
-        expect(approvalPermit2.action.args.amount).toBe(MathLib.MAX_UINT_160);
+        expect(approvalPermit2.action.args.amount).toBe(MathLib.MAX_UINT_256);
         expect(approvalPermit2.action.type).toBe("erc20Approval");
 
         const permit2Requirement = requirements[1];
@@ -280,14 +282,21 @@ describe("DepositVaultV1", () => {
           throw new Error("Requirement is not a signature requirement");
         }
 
-        expect(permit2Requirement.action.type).toBe("permit2");
-        expect(permit2Requirement.action.args.spender).toBe(generalAdapter1);
+        expect(permit2Requirement.action.type).toBe("permit2SignatureTransfer");
+        if (permit2Requirement.action.type !== "permit2SignatureTransfer") {
+          throw new Error("Unexpected requirement type");
+        }
+        expect(permit2Requirement.action.args.spender).toBe(vaultBundlesV1);
         expect(permit2Requirement.action.args.amount).toBe(amount);
 
         const requirementSignature = await permit2Requirement.sign(
           client,
           client.account.address,
         );
+
+        if (!isPermit2SignatureTransferSignature(requirementSignature)) {
+          throw new Error("Unexpected requirement signature");
+        }
 
         expect(requirementSignature.args.owner).toEqual(client.account.address);
         expect(isHex(requirementSignature.args.signature)).toBe(true);
@@ -329,14 +338,11 @@ describe("DepositVaultV1", () => {
       amount,
     });
 
-    const {
-      permit2,
-      bundler3: { generalAdapter1 },
-    } = getChainAddresses(mainnet.id);
+    const { permit2 } = getChainAddresses(mainnet.id);
 
     await client.approve({
       address: GauntletWethVaultV1.asset,
-      args: [generalAdapter1, MathLib.MAX_UINT_256],
+      args: [vaultBundlesV1, MathLib.MAX_UINT_256],
     });
 
     const {
@@ -360,7 +366,9 @@ describe("DepositVaultV1", () => {
           vaultData,
         });
 
-        const requirements = await deposit.getRequirements();
+        const requirements = await deposit.getRequirements({
+          permit2Nonce: 0n,
+        });
 
         expect(requirements.length).toBe(2);
 
@@ -370,7 +378,7 @@ describe("DepositVaultV1", () => {
         }
 
         expect(approvalPermit2.action.args.spender).toBe(permit2);
-        expect(approvalPermit2.action.args.amount).toBe(MathLib.MAX_UINT_160);
+        expect(approvalPermit2.action.args.amount).toBe(MathLib.MAX_UINT_256);
         expect(approvalPermit2.action.type).toBe("erc20Approval");
 
         await client.sendTransaction(approvalPermit2);
@@ -381,14 +389,21 @@ describe("DepositVaultV1", () => {
           throw new Error("Requirement is not a signature requirement");
         }
 
-        expect(permit2Requirement.action.type).toBe("permit2");
-        expect(permit2Requirement.action.args.spender).toBe(generalAdapter1);
+        expect(permit2Requirement.action.type).toBe("permit2SignatureTransfer");
+        if (permit2Requirement.action.type !== "permit2SignatureTransfer") {
+          throw new Error("Unexpected requirement type");
+        }
+        expect(permit2Requirement.action.args.spender).toBe(vaultBundlesV1);
         expect(permit2Requirement.action.args.amount).toBe(amount);
 
         const requirementSignature = await permit2Requirement.sign(
           client,
           client.account.address,
         );
+
+        if (!isPermit2SignatureTransferSignature(requirementSignature)) {
+          throw new Error("Unexpected requirement signature");
+        }
 
         expect(requirementSignature.args.owner).toEqual(client.account.address);
         expect(isHex(requirementSignature.args.signature)).toBe(true);

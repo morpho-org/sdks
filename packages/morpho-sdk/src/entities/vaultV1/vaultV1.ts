@@ -17,6 +17,12 @@ import { getChainAddress, Time } from "@morpho-org/morpho-ts";
 import { type Address, erc20Abi, isAddressEqual } from "viem";
 import { multicall } from "viem/actions";
 import {
+  getBundlesReferralFeeAssets,
+  normalizeBundlesCommonParams,
+  resolveBundlesFunding,
+  selectBundlesTokenRequirementSignature,
+} from "../../actions/bundles/index.js";
+import {
   encodeErc20Approval,
   encodeVaultSharesPermit,
   getGeneralAdapterRequirements,
@@ -28,25 +34,28 @@ import {
 } from "../../actions/index.js";
 import { MAX_ABSOLUTE_SHARE_PRICE } from "../../helpers/constant.js";
 import {
+  computeVaultMaxSharePrice,
   validateChainId,
   validateSlippageTolerance,
 } from "../../helpers/index.js";
+import { validateNativeVaultAsset } from "../../helpers/validate.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
   type ActionOutput,
   type ActionRequirement,
+  type BundlesFundingArgs,
+  type BundlesTokenRequirementsOptions,
   ChainIdMismatchError,
-  ChainWNativeMissingError,
-  type DepositAmountArgs,
   EmptyMarketParamsListError,
   type ERC20ApprovalAction,
   ExpiredDeadlineError,
   InKindRedeemCoverageError,
   InsufficientBlueBalanceForInKindRedeemError,
+  isRequirementSignature,
   type MorphoClientType,
-  NativeAmountOnNonWNativeVaultError,
-  NegativeInputError,
   NonPositiveInputError,
+  type Permit2SignatureTransferAction,
+  type PermitAction,
   type PermitRequirementSignature,
   type Requirement,
   type RequirementSignature,
@@ -62,6 +71,7 @@ import {
   type VaultV1RedeemAction,
   type VaultV1WithdrawAction,
 } from "../../types/index.js";
+import { getBundlesTokenRequirements } from "../requirements/index.js";
 
 export interface VaultV1Actions {
   /**
@@ -80,32 +90,30 @@ export interface VaultV1Actions {
    * then returns `buildTx` and `getRequirements` for lazy evaluation.
    *
    * @param {Object} params - The deposit parameters.
-   * @param {bigint} params.amount - Amount of assets to deposit.
-   * @param {Address} params.userAddress - User address initiating the deposit.
+   * @param {bigint} [params.amount] - ERC-20 assets to deposit; exclusive with `nativeAmount`.
+   * @param {Address} params.userAddress - Account that must sign and submit the transaction; VaultBundlesV1 always mints shares to `msg.sender`.
    * @param {AccrualVault} params.vaultData - Pre-fetched vault data with asset address and share conversion.
    * @param {bigint} [params.slippageTolerance=DEFAULT_SLIPPAGE_TOLERANCE] - Slippage tolerance (default 0.03%, max 10%).
-   * @param {bigint} [params.nativeAmount] - Amount of native ETH to wrap into WETH. Vault asset must be wNative.
-   * @returns {Object} Object with `buildTx` and `getRequirements`.
+   * @param {bigint} [params.nativeAmount] - Native assets to wrap and deposit; exclusive with `amount` and requires a wNative vault.
+   * @param {bigint} [params.referralFeePct=0n] - WAD-scaled referral fee deducted from the gross deposit.
+   * @param {Address} [params.referralFeeRecipient] - Non-zero recipient required when `referralFeePct` is positive.
+   * @param {bigint} [params.deadline] - VaultBundlesV1 execution deadline; defaults to two hours from now.
+   * @returns Lazy token requirements and a synchronous VaultBundlesV1 transaction builder.
    */
   deposit: (
     params: {
-      userAddress: Address;
-      vaultData: AccrualVault;
-      slippageTolerance?: bigint;
-    } & DepositAmountArgs,
-  ) => {
-    buildTx: (
-      signatures?: readonly RequirementSignature[],
-    ) => Readonly<Transaction<VaultV1DepositAction>>;
-    getRequirements: (params?: {
-      useSimplePermit?: boolean;
-    }) => Promise<
-      (
-        | Readonly<Transaction<ERC20ApprovalAction>>
-        | Requirement<PermitRequirementSignature>
-      )[]
-    >;
-  };
+      readonly userAddress: Address;
+      readonly vaultData: AccrualVault;
+      readonly slippageTolerance?: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
+      readonly deadline?: bigint;
+    } & BundlesFundingArgs,
+  ) => ActionOutput<
+    VaultV1DepositAction,
+    readonly RequirementSignature[],
+    BundlesTokenRequirementsOptions
+  >;
   /**
    * Prepares a withdraw from a VaultV1 (MetaMorpho) contract.
    *
@@ -243,6 +251,13 @@ export class MorphoVaultV1 implements VaultV1Actions {
     private readonly chainId: number,
   ) {}
 
+  private getBundlesDeadline(deadlineOverride?: bigint): bigint {
+    const now = Time.timestamp();
+    const deadline = deadlineOverride ?? now + Time.s.from.h(2n);
+    if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
+    return deadline;
+  }
+
   async getData(parameters?: FetchParameters) {
     if (
       this.client.viemClient.chain?.id &&
@@ -261,106 +276,105 @@ export class MorphoVaultV1 implements VaultV1Actions {
     });
   }
 
-  deposit({
-    amount = 0n,
-    userAddress,
-    vaultData,
-    slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
-    nativeAmount,
-  }: {
-    userAddress: Address;
-    vaultData: AccrualVault;
-    slippageTolerance?: bigint;
-  } & DepositAmountArgs) {
-    if (this.client.viemClient.chain?.id !== this.chainId) {
-      throw new ChainIdMismatchError(
-        this.client.viemClient.chain?.id,
-        this.chainId,
-      );
+  deposit(
+    params: {
+      readonly userAddress: Address;
+      readonly vaultData: AccrualVault;
+      readonly slippageTolerance?: bigint;
+      readonly referralFeePct?: bigint;
+      readonly referralFeeRecipient?: Address;
+      readonly deadline?: bigint;
+    } & BundlesFundingArgs,
+  ) {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    if (!isAddressEqual(params.vaultData.address, this.vault)) {
+      throw new VaultAddressMismatchError(this.vault, params.vaultData.address);
     }
-
-    if (!isAddressEqual(vaultData.address, this.vault)) {
-      throw new VaultAddressMismatchError(this.vault, vaultData.address);
+    const deadline = this.getBundlesDeadline(params.deadline);
+    const common = normalizeBundlesCommonParams({
+      deadline,
+      referralFeePct: params.referralFeePct,
+      referralFeeRecipient: params.referralFeeRecipient,
+    });
+    const funding = resolveBundlesFunding(params);
+    if (funding.value > 0n) {
+      // The native path must target the chain's registered wrapped-native asset.
+      validateNativeVaultAsset(this.chainId, params.vaultData.asset);
     }
-
-    if (amount < 0n) {
-      throw new NegativeInputError("amount", amount);
-    }
-
-    if (nativeAmount && nativeAmount < 0n) {
-      throw new NegativeInputError("nativeAmount", nativeAmount);
-    }
-
-    let wNative: Address | undefined;
-    if (nativeAmount) {
-      ({ wNative } = getChainAddresses(this.chainId));
-      if (!wNative) {
-        throw new ChainWNativeMissingError(this.chainId);
-      }
-    }
-
-    validateSlippageTolerance(slippageTolerance);
-
-    if (nativeAmount && wNative) {
-      if (!isAddressEqual(vaultData.asset, wNative)) {
-        throw new NativeAmountOnNonWNativeVaultError(vaultData.asset, wNative);
-      }
-    }
-
-    const totalAssets = amount + (nativeAmount ?? 0n);
-    if (totalAssets === 0n) {
-      throw new NonPositiveInputError("totalAssets", totalAssets);
-    }
-
-    const shares = vaultData.toShares(totalAssets);
-    if (shares <= 0n) {
-      throw new NonPositiveInputError("shares", shares);
-    }
-
-    const maxSharePrice = MathLib.min(
-      MathLib.mulDivUp(
-        totalAssets,
-        MathLib.wToRay(MathLib.WAD + slippageTolerance),
-        shares,
-      ),
-      MAX_ABSOLUTE_SHARE_PRICE,
+    const referralFeeAssets = getBundlesReferralFeeAssets(
+      funding.assets,
+      common.referralFeePct,
     );
-    return {
-      getRequirements: (params?: { useSimplePermit?: boolean }) =>
-        getGeneralAdapterRequirements(this.client.viemClient, {
-          address: vaultData.asset,
-          chainId: this.chainId,
-          supportSignature: this.client.options.supportSignature,
-          supportDeployless: this.client.options.supportDeployless,
-          useSimplePermit: params?.useSimplePermit,
-          args: {
-            amount,
-            from: userAddress,
-          },
-        }),
-
+    const maxSharePrice = computeVaultMaxSharePrice({
+      vaultData: params.vaultData,
+      deadline,
+      assets: funding.assets - referralFeeAssets,
+      slippageTolerance: params.slippageTolerance ?? DEFAULT_SLIPPAGE_TOLERANCE,
+    });
+    const spender = getChainAddress(this.chainId, "bundles.vaultBundlesV1");
+    let resolvedRequirements: readonly ActionRequirement[] | undefined;
+    let expectedRequirement:
+      | PermitAction
+      | Permit2SignatureTransferAction
+      | undefined;
+    return Object.freeze({
+      getRequirements: async (
+        requirementOptions?: BundlesTokenRequirementsOptions,
+      ) => {
+        const now = Time.timestamp();
+        if (deadline <= now) throw new ExpiredDeadlineError(deadline, now);
+        if (resolvedRequirements != null) return resolvedRequirements;
+        const requirements =
+          funding.value > 0n
+            ? []
+            : await getBundlesTokenRequirements(this.client.viemClient, {
+                token: params.vaultData.asset,
+                spender,
+                amount: funding.assets,
+                owner: params.userAddress,
+                chainId: this.chainId,
+                deadline,
+                supportSignature: this.client.options.supportSignature,
+                supportDeployless: this.client.options.supportDeployless,
+                useSimplePermit: requirementOptions?.useSimplePermit,
+                permit2Nonce: requirementOptions?.permit2Nonce,
+              });
+        const signatureRequirement = requirements.find(isRequirementSignature);
+        if (
+          signatureRequirement?.action.type === "permit" ||
+          signatureRequirement?.action.type === "permit2SignatureTransfer"
+        ) {
+          expectedRequirement = signatureRequirement.action;
+        }
+        resolvedRequirements = requirements;
+        return resolvedRequirements;
+      },
       buildTx: (signatures?: readonly RequirementSignature[]) => {
-        const { permit } = selectRequirementSignatures(signatures, {
-          permit: true,
-        });
-
+        const requirementSignature = selectBundlesTokenRequirementSignature(
+          signatures,
+          expectedRequirement,
+        );
         return vaultV1Deposit({
           vault: {
             chainId: this.chainId,
             address: this.vault,
-            asset: vaultData.asset,
+            asset: params.vaultData.asset,
           },
           args: {
-            amount,
+            ...(funding.value > 0n
+              ? { nativeAmount: funding.assets }
+              : { amount: funding.assets }),
             maxSharePrice,
-            recipient: userAddress,
-            requirementSignature: permit,
-            nativeAmount,
+            userAddress: params.userAddress,
+            requirementSignature,
+            referralFeePct: common.referralFeePct,
+            referralFeeRecipient: common.referralFeeRecipient,
+            deadline,
           },
           metadata: this.client.options.metadata,
         });
       },
-    };
+    });
   }
 
   withdraw({ amount, userAddress }: { amount: bigint; userAddress: Address }) {

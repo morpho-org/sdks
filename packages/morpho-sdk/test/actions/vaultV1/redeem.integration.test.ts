@@ -7,7 +7,7 @@ import {
 } from "../../../src/index.js";
 import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
 import { testInvariants } from "../../helpers/invariants.js";
-import { test } from "../../setup.js";
+import { vaultBundlesV1Test as test } from "../../helpers/vaultBundlesV1.js";
 
 describe("Redeem VaultV1", () => {
   test("should redeem 1K shares in vaultV1", async ({ client }) => {
